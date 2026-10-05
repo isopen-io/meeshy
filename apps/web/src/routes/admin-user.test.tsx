@@ -381,9 +381,11 @@ describe('états dessinés et sections en modales (spec 2026-10-04 § 3)', () =>
   test('un MODERATOR ne se voit offrir ni la carte Préférences ni sa modale, même par l’adresse (#8003)', async () => {
     const moderateur = await open({ url: '/probe?open=preferences', identity: adminIdentityFixture({ role: 'MODERATOR' }) });
     expect(moderateur.host.querySelector('[data-admin-fiche]')).not.toBeNull();
-    expect(moderateur.host.querySelector('[data-admin-summary="preferences"]')).toBeNull();
+    /* Un booléen, pas le nœud : en échec, bun ne sait pas imprimer un élément happy-dom et la
+       suite resterait bloquée jusqu'au délai au lieu de rougir (audit adversarial de #9391). */
+    expect(moderateur.host.querySelector('[data-admin-summary="preferences"]') === null).toBe(true);
     expect(moderateur.host.querySelector('[data-admin-summary="security"]')).not.toBeNull();
-    expect(panel('preferences')).toBeNull();
+    expect(panel('preferences') === null).toBe(true);
     expect(moderateur.calls().some((call) => pathOf(call).endsWith('/preferences'))).toBe(false);
   });
 
