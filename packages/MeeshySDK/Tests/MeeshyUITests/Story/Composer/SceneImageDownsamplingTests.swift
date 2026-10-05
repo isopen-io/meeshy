@@ -69,6 +69,32 @@ final class SceneImageDownsamplingTests: XCTestCase {
             source: .zero, tile: CGSize(width: 10, height: 10), scale: 3), 0)
     }
 
+    // MARK: - Recadrage : décoder juste assez grand (pure)
+
+    func test_decodeMaxPixelSize_demiCadre_garderLesPixelsPublies() {
+        // Une photo 4 032 × 3 024 recadrée à la moitié de sa largeur : le cadre
+        // pleine taille fait 2 016 × 3 024, soit 2 048 px de haut une fois
+        // publié. Décoder la source à 2 731 px de grand côté rend ce cadre.
+        let px = SceneImageDownsampling.decodeMaxPixelSize(
+            forCrop: CGSize(width: 0.5, height: 1),
+            sourcePixelSize: CGSize(width: 4032, height: 3024), cap: 2048)
+        XCTAssertEqual(px, 2731)
+    }
+
+    func test_decodeMaxPixelSize_sansCadreValide_rendLePlafond() {
+        XCTAssertEqual(SceneImageDownsampling.decodeMaxPixelSize(
+            forCrop: .zero, sourcePixelSize: CGSize(width: 4032, height: 3024), cap: 2048), 2048)
+        XCTAssertEqual(SceneImageDownsampling.decodeMaxPixelSize(
+            forCrop: CGSize(width: 1, height: 1), sourcePixelSize: .zero, cap: 2048), 2048)
+    }
+
+    func test_pixelSize_litLesMetadonnees_orientationAppliquee() throws {
+        let droite = try Self.writeJPEG(width: 300, height: 100, exifOrientation: .right)
+        XCTAssertEqual(SceneImageDownsampling.pixelSize(fileAt: droite), CGSize(width: 100, height: 300))
+        let pano = try Self.writeJPEG(width: 1600, height: 400)
+        XCTAssertEqual(SceneImageDownsampling.pixelSize(fileAt: pano), CGSize(width: 1600, height: 400))
+    }
+
     // MARK: - Décodage depuis un fichier (ImageIO)
 
     func test_imageFileAt_decodeAuPlafond_sansToucherAuFichier() throws {
@@ -118,6 +144,43 @@ final class SceneImageDownsamplingTests: XCTestCase {
     func test_downsampled_imageDejaPetite_rendLaMemeInstance() {
         let source = Self.makeImage(width: 400, height: 200)
         XCTAssertTrue(SceneImageDownsampling.downsampled(source, maxPixelSize: 2048) === source)
+    }
+
+    // MARK: - Le composer pose ses photos à la taille publiée
+
+    func test_applyContentMedia_tientLaPhotoALaTaillePubliee_etCopieLOriginal() throws {
+        let vm = StoryComposerViewModel()
+        let url = try Self.writeJPEG(width: 4000, height: 1000)
+        let original = try Data(contentsOf: url)
+
+        let poses = vm.applyContentMedia([ComposerContentMedia(sourceURL: url, kind: .image)])
+
+        let objectId = try XCTUnwrap(poses[url])
+        let tenue = try XCTUnwrap(vm.loadedImages[objectId])
+        XCTAssertEqual(Self.pixelSize(tenue), CGSize(width: 2048, height: 512),
+                       "la scène tient la photo à la taille publiée, plus jamais pleine taille")
+        let media = try XCTUnwrap(vm.currentSlide.effects.mediaObjects?.first { $0.id == objectId })
+        XCTAssertEqual(media.aspectRatio, 4.0, accuracy: 0.001,
+                       "le ratio déclaré est celui de la photo")
+        let copie = try XCTUnwrap(media.mediaURL.flatMap(URL.init(string:)))
+        XCTAssertEqual(try Data(contentsOf: copie), original,
+                       "le fichier que la pré-montée enverra est l'original, octet pour octet")
+    }
+
+    func test_troisScenesDeMires_chacuneTenueEntiereSousLePlafond() throws {
+        let vm = StoryComposerViewModel()
+        let mires = [(1600, 400), (900, 1600), (1600, 900)]
+        for (index, (w, h)) in mires.enumerated() {
+            if index > 0 { vm.addSlide() }
+            let url = try Self.writeJPEG(width: w, height: h)
+            let poses = vm.applyContentMedia([ComposerContentMedia(sourceURL: url, kind: .image)],
+                                             intoSlideId: vm.currentSlide.id)
+            let id = try XCTUnwrap(poses[url])
+            XCTAssertEqual(Self.pixelSize(try XCTUnwrap(vm.loadedImages[id])),
+                           CGSize(width: w, height: h),
+                           "une mire sous le plafond garde tous ses pixels")
+        }
+        XCTAssertEqual(vm.slides.count, 3)
     }
 
     // MARK: - Fabriques

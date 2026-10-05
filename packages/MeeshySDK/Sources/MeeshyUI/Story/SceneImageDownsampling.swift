@@ -49,6 +49,34 @@ public nonisolated enum SceneImageDownsampling {
         return (max(source.width, source.height) * facteur * scale).rounded(.up)
     }
 
+    /// Le grand côté auquel décoder une source pour qu'un RECADRAGE de fraction
+    /// `crop` (largeur, hauteur de la source) sorte à `cap` pixels de grand côté.
+    /// Recadrer une source déjà réduite à `cap` perdrait les pixels que la
+    /// publication aurait gardés : un demi-cadre d'une photo de 4 032 px n'en
+    /// aurait plus que 1 024 au lieu de 2 016.
+    public static func decodeMaxPixelSize(forCrop crop: CGSize, sourcePixelSize: CGSize,
+                                          cap: CGFloat) -> CGFloat {
+        guard crop.width.isFinite, crop.height.isFinite, crop.width > 0, crop.height > 0,
+              sourcePixelSize.width.isFinite, sourcePixelSize.height.isFinite,
+              sourcePixelSize.width > 0, sourcePixelSize.height > 0 else { return cap }
+        let cadre = max(sourcePixelSize.width * min(crop.width, 1),
+                        sourcePixelSize.height * min(crop.height, 1))
+        return (max(sourcePixelSize.width, sourcePixelSize.height) * cap / cadre).rounded(.up)
+    }
+
+    /// La taille en pixels d'un fichier image TELLE QU'ELLE S'AFFICHE (orientation
+    /// EXIF appliquée), lue dans ses métadonnées — sans rien décoder.
+    public static func pixelSize(fileAt url: URL) -> CGSize? {
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+              let proprietes = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+              let largeur = (proprietes[kCGImagePropertyPixelWidth] as? NSNumber)?.doubleValue,
+              let hauteur = (proprietes[kCGImagePropertyPixelHeight] as? NSNumber)?.doubleValue
+        else { return nil }
+        let orientation = (proprietes[kCGImagePropertyOrientation] as? NSNumber)?.uint32Value ?? 1
+        let pivotee = (5...8).contains(orientation)
+        return pivotee ? CGSize(width: hauteur, height: largeur) : CGSize(width: largeur, height: hauteur)
+    }
+
     /// Décode un fichier local DIRECTEMENT à la taille voulue (ImageIO), sans
     /// jamais allouer le bitmap pleine taille. L'orientation EXIF est cuite : le
     /// résultat est `.up`, et le canvas n'a plus de copie redressée à fabriquer.
