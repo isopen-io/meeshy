@@ -76,8 +76,8 @@ struct ChestStage: View {
         Text(text)
             .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
             .foregroundColor(ThemeManager.shared.textPrimary)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 4)
+            .padding(.horizontal, MeeshySpacing.smPlus)
+            .padding(.vertical, MeeshySpacing.xs)
             .background(Capsule().fill(MeeshyColors.warning.opacity(0.2)))
     }
 }
