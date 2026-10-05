@@ -2774,6 +2774,32 @@
 		FFC52A43BD762E9875B44AFC /* DeclarationBodyScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7797ECEE2CC89493CF44E97 /* DeclarationBodyScanner.swift */; };
 		FFF3E2F99B328BFE708786E8 /* BookmarksViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C61914589B7116F0DE7CFBF /* BookmarksViewModelTests.swift */; };
 		FFFE290EDA21A3CEDDBADCDF /* ProfileProgressionEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A3E9D78B88F61BF4C7FADAA /* ProfileProgressionEntry.swift */; };
+		AB25AEA6F8DDB304AD8FAA0B /* GameHaptics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64D1947D6965E29A4243B4A5 /* GameHaptics.swift */; };
+		E30EDC1803C59B967DB3B89E /* GameBlock+Replacing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E36215B5E39258568093A42 /* GameBlock+Replacing.swift */; };
+		857E5C6A34234DE88255977C /* GameCopy.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABB2A2205B6B3B9D14B75F70 /* GameCopy.swift */; };
+		ABEED23A3C87A1C0046A0D56 /* GameGuideCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F62AB55FB79B72F7DDA4EBC /* GameGuideCard.swift */; };
+		37DCDDC316440DB471508ECF /* GameGuideCopy.swift in Sources */ = {isa = PBXBuildFile; fileRef = F55C74BFBD92B517552B6F57 /* GameGuideCopy.swift */; };
+		6423C0EDE459E32183F2E029 /* GameGuideEvents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7207FCD9A8680BBF9F4EACE3 /* GameGuideEvents.swift */; };
+		FA7AB2DEE6CB1291B4F96E5E /* GameGuideSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4602468A205FF159C654231B /* GameGuideSession.swift */; };
+		C00D09BBF3E6CE546DE94BA0 /* GameGuideTarget.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA5AEE2E300030980E365758 /* GameGuideTarget.swift */; };
+		ED01A4B0394E83FE5810DB56 /* GameOptimistic.swift in Sources */ = {isa = PBXBuildFile; fileRef = 750089216B7BDBA02E11EB40 /* GameOptimistic.swift */; };
+		5959D3118E1C1B2F562A6C0E /* GamePhotoCamera.swift in Sources */ = {isa = PBXBuildFile; fileRef = 431A184BAF62A6ABE029DBB2 /* GamePhotoCamera.swift */; };
+		D3988E0E8EE38E135F69AAAA /* GamePhotoCanvasView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F8F38F7F347F03B5C433777 /* GamePhotoCanvasView.swift */; };
+		48EE0FD30DEDCABD2936761B /* GamePhotoComposer.swift in Sources */ = {isa = PBXBuildFile; fileRef = C79FB7427900F2C5D87BB470 /* GamePhotoComposer.swift */; };
+		07AB754CF23A9AB668593628 /* GamePhotoCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2BA59ADDE5396AC15C9A97F /* GamePhotoCoordinator.swift */; };
+		4F391EB569C20237636C30F2 /* GamePhotoFlow.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD7870AE47EE85E3FD890163 /* GamePhotoFlow.swift */; };
+		738624F69AB290CCCD89B208 /* GamePhotoLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EB18F5E2FD4A3460397E406 /* GamePhotoLayout.swift */; };
+		0EA47C30A5C3FA8320028335 /* GamePhotoMoments.swift in Sources */ = {isa = PBXBuildFile; fileRef = 301130D48C1F752D18B1616A /* GamePhotoMoments.swift */; };
+		2580FF86F17F930EDBB9E09A /* GamePhotoNotebook.swift in Sources */ = {isa = PBXBuildFile; fileRef = 889007060440EE3EE86A3E6A /* GamePhotoNotebook.swift */; };
+		C4DE8E2274A045DDC94FED60 /* GamePhotoSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F67B1160EDC55776BF551CB /* GamePhotoSession.swift */; };
+		0212C648772F9C1C539A4D02 /* ProgressionViewModel+Game.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4DB1E2556BABAC683EC4C5C /* ProgressionViewModel+Game.swift */; };
+		19FF0A5AC4106823815B7D15 /* GameFixture.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66CA654CFA88FA1D66E91379 /* GameFixture.swift */; };
+		6063ADD1E203CE1A7F453EAC /* GameGuideEventsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E39055BD3579A4A926BDB4BC /* GameGuideEventsTests.swift */; };
+		AB2676062666E92A0DFBF18D /* GameGuideSessionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E642A90233098A9555A390F /* GameGuideSessionTests.swift */; };
+		47442474763AC1E3EF2F7C04 /* GameOptimisticTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4DC974F07A6F6B45F5AA8FDF /* GameOptimisticTests.swift */; };
+		45ECA2FF441AAF3C3E8F0E13 /* ProgressionViewModelGameTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CADEE211F9EF5CB808934F94 /* ProgressionViewModelGameTests.swift */; };
+		D5691591960B23ECC79B8F6B /* MockGameService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEA13DD207E5EEB7DEB1C4D5 /* MockGameService.swift */; };
+		7EA7B6D503A4FB9E6378AFF3 /* InMemoryPhotoNotebook.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B064CA020DE9309E2EE033E /* InMemoryPhotoNotebook.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -5598,6 +5624,32 @@
 		FFB370D94AF63DE7363CCD28 /* P2PWebRTCClientVideoTrackStateSourceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = P2PWebRTCClientVideoTrackStateSourceTests.swift; sourceTree = "<group>"; };
 		FFE35EB51741DD3569F763C1 /* FeedViewStoryPullToRefreshGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedViewStoryPullToRefreshGuardTests.swift; sourceTree = "<group>"; };
 		FFF32E2175A4BE741C369645 /* ForwardPickerViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ForwardPickerViewModel.swift; sourceTree = "<group>"; };
+		64D1947D6965E29A4243B4A5 /* GameHaptics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameHaptics.swift; sourceTree = "<group>"; };
+		0E36215B5E39258568093A42 /* GameBlock+Replacing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "GameBlock+Replacing.swift"; sourceTree = "<group>"; };
+		ABB2A2205B6B3B9D14B75F70 /* GameCopy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameCopy.swift; sourceTree = "<group>"; };
+		6F62AB55FB79B72F7DDA4EBC /* GameGuideCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameGuideCard.swift; sourceTree = "<group>"; };
+		F55C74BFBD92B517552B6F57 /* GameGuideCopy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameGuideCopy.swift; sourceTree = "<group>"; };
+		7207FCD9A8680BBF9F4EACE3 /* GameGuideEvents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameGuideEvents.swift; sourceTree = "<group>"; };
+		4602468A205FF159C654231B /* GameGuideSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameGuideSession.swift; sourceTree = "<group>"; };
+		BA5AEE2E300030980E365758 /* GameGuideTarget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameGuideTarget.swift; sourceTree = "<group>"; };
+		750089216B7BDBA02E11EB40 /* GameOptimistic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameOptimistic.swift; sourceTree = "<group>"; };
+		431A184BAF62A6ABE029DBB2 /* GamePhotoCamera.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GamePhotoCamera.swift; sourceTree = "<group>"; };
+		2F8F38F7F347F03B5C433777 /* GamePhotoCanvasView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GamePhotoCanvasView.swift; sourceTree = "<group>"; };
+		C79FB7427900F2C5D87BB470 /* GamePhotoComposer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GamePhotoComposer.swift; sourceTree = "<group>"; };
+		B2BA59ADDE5396AC15C9A97F /* GamePhotoCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GamePhotoCoordinator.swift; sourceTree = "<group>"; };
+		AD7870AE47EE85E3FD890163 /* GamePhotoFlow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GamePhotoFlow.swift; sourceTree = "<group>"; };
+		4EB18F5E2FD4A3460397E406 /* GamePhotoLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GamePhotoLayout.swift; sourceTree = "<group>"; };
+		301130D48C1F752D18B1616A /* GamePhotoMoments.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GamePhotoMoments.swift; sourceTree = "<group>"; };
+		889007060440EE3EE86A3E6A /* GamePhotoNotebook.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GamePhotoNotebook.swift; sourceTree = "<group>"; };
+		3F67B1160EDC55776BF551CB /* GamePhotoSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GamePhotoSession.swift; sourceTree = "<group>"; };
+		C4DB1E2556BABAC683EC4C5C /* ProgressionViewModel+Game.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ProgressionViewModel+Game.swift"; sourceTree = "<group>"; };
+		66CA654CFA88FA1D66E91379 /* GameFixture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameFixture.swift; sourceTree = "<group>"; };
+		E39055BD3579A4A926BDB4BC /* GameGuideEventsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameGuideEventsTests.swift; sourceTree = "<group>"; };
+		5E642A90233098A9555A390F /* GameGuideSessionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameGuideSessionTests.swift; sourceTree = "<group>"; };
+		4DC974F07A6F6B45F5AA8FDF /* GameOptimisticTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameOptimisticTests.swift; sourceTree = "<group>"; };
+		CADEE211F9EF5CB808934F94 /* ProgressionViewModelGameTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProgressionViewModelGameTests.swift; sourceTree = "<group>"; };
+		BEA13DD207E5EEB7DEB1C4D5 /* MockGameService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockGameService.swift; sourceTree = "<group>"; };
+		3B064CA020DE9309E2EE033E /* InMemoryPhotoNotebook.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InMemoryPhotoNotebook.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -6859,6 +6911,8 @@
 				EF8A66CA1FA5141095888311 /* MockUserService.swift */,
 				8B582A84AEFB2ADD2C520139 /* MockVoiceProfileService.swift */,
 				1F33DD7EFBD73472554C2073 /* MockVoIPTokenStore.swift */,
+				BEA13DD207E5EEB7DEB1C4D5 /* MockGameService.swift */,
+				3B064CA020DE9309E2EE033E /* InMemoryPhotoNotebook.swift */,
 			);
 			path = Mocks;
 			sourceTree = "<group>";
@@ -6896,6 +6950,7 @@
 				645740D72E371F0AA48A7660 /* Stores */,
 				0AC4B5E7C546E23CBD9AFA31 /* ViewModels */,
 				937EE8EE8FCFAC22BCD07F51 /* Views */,
+				17BA41B84224E5384872BDF5 /* Game */,
 			);
 			path = Main;
 			sourceTree = "<group>";
@@ -6959,6 +7014,7 @@
 				D431B818D9A1056ACF67B1B1 /* ViewModels */,
 				0D84F8ADB66F6FE7CE49623D /* Views */,
 				1A05BD6489C319E726C5AE7D /* Vitrine */,
+				7DB82E16EA77DE499C66C61C /* Game */,
 			);
 			path = Unit;
 			sourceTree = "<group>";
@@ -9247,6 +9303,60 @@
 			name = Frameworks;
 			sourceTree = "<group>";
 		};
+		17BA41B84224E5384872BDF5 /* Game */ = {
+			isa = PBXGroup;
+			children = (
+				829FF2F5ADADDF0C2F29205B /* Choreography */,
+				0E36215B5E39258568093A42 /* GameBlock+Replacing.swift */,
+				ABB2A2205B6B3B9D14B75F70 /* GameCopy.swift */,
+				6F62AB55FB79B72F7DDA4EBC /* GameGuideCard.swift */,
+				F55C74BFBD92B517552B6F57 /* GameGuideCopy.swift */,
+				7207FCD9A8680BBF9F4EACE3 /* GameGuideEvents.swift */,
+				4602468A205FF159C654231B /* GameGuideSession.swift */,
+				BA5AEE2E300030980E365758 /* GameGuideTarget.swift */,
+				750089216B7BDBA02E11EB40 /* GameOptimistic.swift */,
+				2E712DDFFEFA4E9408AF4CE7 /* Photo */,
+				C4DB1E2556BABAC683EC4C5C /* ProgressionViewModel+Game.swift */,
+			);
+			path = Game;
+			sourceTree = "<group>";
+		};
+		829FF2F5ADADDF0C2F29205B /* Choreography */ = {
+			isa = PBXGroup;
+			children = (
+				64D1947D6965E29A4243B4A5 /* GameHaptics.swift */,
+			);
+			path = Choreography;
+			sourceTree = "<group>";
+		};
+		2E712DDFFEFA4E9408AF4CE7 /* Photo */ = {
+			isa = PBXGroup;
+			children = (
+				431A184BAF62A6ABE029DBB2 /* GamePhotoCamera.swift */,
+				2F8F38F7F347F03B5C433777 /* GamePhotoCanvasView.swift */,
+				C79FB7427900F2C5D87BB470 /* GamePhotoComposer.swift */,
+				B2BA59ADDE5396AC15C9A97F /* GamePhotoCoordinator.swift */,
+				AD7870AE47EE85E3FD890163 /* GamePhotoFlow.swift */,
+				4EB18F5E2FD4A3460397E406 /* GamePhotoLayout.swift */,
+				301130D48C1F752D18B1616A /* GamePhotoMoments.swift */,
+				889007060440EE3EE86A3E6A /* GamePhotoNotebook.swift */,
+				3F67B1160EDC55776BF551CB /* GamePhotoSession.swift */,
+			);
+			path = Photo;
+			sourceTree = "<group>";
+		};
+		7DB82E16EA77DE499C66C61C /* Game */ = {
+			isa = PBXGroup;
+			children = (
+				66CA654CFA88FA1D66E91379 /* GameFixture.swift */,
+				E39055BD3579A4A926BDB4BC /* GameGuideEventsTests.swift */,
+				5E642A90233098A9555A390F /* GameGuideSessionTests.swift */,
+				4DC974F07A6F6B45F5AA8FDF /* GameOptimisticTests.swift */,
+				CADEE211F9EF5CB808934F94 /* ProgressionViewModelGameTests.swift */,
+			);
+			path = Game;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -9658,6 +9768,25 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				0212C648772F9C1C539A4D02 /* ProgressionViewModel+Game.swift in Sources */,
+				C4DE8E2274A045DDC94FED60 /* GamePhotoSession.swift in Sources */,
+				2580FF86F17F930EDBB9E09A /* GamePhotoNotebook.swift in Sources */,
+				0EA47C30A5C3FA8320028335 /* GamePhotoMoments.swift in Sources */,
+				738624F69AB290CCCD89B208 /* GamePhotoLayout.swift in Sources */,
+				4F391EB569C20237636C30F2 /* GamePhotoFlow.swift in Sources */,
+				07AB754CF23A9AB668593628 /* GamePhotoCoordinator.swift in Sources */,
+				48EE0FD30DEDCABD2936761B /* GamePhotoComposer.swift in Sources */,
+				D3988E0E8EE38E135F69AAAA /* GamePhotoCanvasView.swift in Sources */,
+				5959D3118E1C1B2F562A6C0E /* GamePhotoCamera.swift in Sources */,
+				ED01A4B0394E83FE5810DB56 /* GameOptimistic.swift in Sources */,
+				C00D09BBF3E6CE546DE94BA0 /* GameGuideTarget.swift in Sources */,
+				FA7AB2DEE6CB1291B4F96E5E /* GameGuideSession.swift in Sources */,
+				6423C0EDE459E32183F2E029 /* GameGuideEvents.swift in Sources */,
+				37DCDDC316440DB471508ECF /* GameGuideCopy.swift in Sources */,
+				ABEED23A3C87A1C0046A0D56 /* GameGuideCard.swift in Sources */,
+				857E5C6A34234DE88255977C /* GameCopy.swift in Sources */,
+				E30EDC1803C59B967DB3B89E /* GameBlock+Replacing.swift in Sources */,
+				AB25AEA6F8DDB304AD8FAA0B /* GameHaptics.swift in Sources */,
 				37CB4F0784988D1007142CCA /* AVSampleBufferDisplayLayer+Meeshy.swift in Sources */,
 				CFCA7E77F15FD710284A318D /* AboutView.swift in Sources */,
 				BF1A8C12B4DA8CAF2A665BA0 /* AccountDataRetention.swift in Sources */,
@@ -11024,6 +11153,13 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				7EA7B6D503A4FB9E6378AFF3 /* InMemoryPhotoNotebook.swift in Sources */,
+				D5691591960B23ECC79B8F6B /* MockGameService.swift in Sources */,
+				45ECA2FF441AAF3C3E8F0E13 /* ProgressionViewModelGameTests.swift in Sources */,
+				47442474763AC1E3EF2F7C04 /* GameOptimisticTests.swift in Sources */,
+				AB2676062666E92A0DFBF18D /* GameGuideSessionTests.swift in Sources */,
+				6063ADD1E203CE1A7F453EAC /* GameGuideEventsTests.swift in Sources */,
+				19FF0A5AC4106823815B7D15 /* GameFixture.swift in Sources */,
 				0BE2D0F2157FFBFE635BD16B /* A11yLabelComposerTests.swift in Sources */,
 				7E5598AA054C8B56651FD6B2 /* APIServiceTests.swift in Sources */,
 				6309726100FAB9E3BC8B711B /* AccentVectorTests.swift in Sources */,
