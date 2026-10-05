@@ -36,7 +36,8 @@ final class GameTiltSource: ObservableObject {
 
 /// La règle de l'irisation : elle est la matière du PRISME (édition millième, rang
 /// Mythe) et de lui seul — une pièce d'argent ou d'or n'en reçoit aucune. Le capteur
-/// ne tourne que pour une irisation VISIBLE.
+/// ne tourne que pour une irisation qui bouge à l'écran : figée sous « réduire les
+/// animations » (le SDK la pose à une inclinaison de repos), elle n'en a pas besoin.
 enum GamePrismTilt {
     static let activeIntensity = 0.6
 
@@ -44,8 +45,8 @@ enum GamePrismTilt {
         active ? activeIntensity : 0
     }
 
-    static func sensorRuns(active: Bool, visible: Bool) -> Bool {
-        active && visible
+    static func sensorRuns(active: Bool, visible: Bool, reduceMotion: Bool) -> Bool {
+        active && visible && !reduceMotion
     }
 }
 
@@ -58,23 +59,25 @@ private struct GamePrismTiltModifier: ViewModifier {
     let active: Bool
     @StateObject private var source = GameTiltSource()
     @State private var visible = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func body(content: Content) -> some View {
         content
             .gamePrismIridescence(tilt: active ? source.tilt : 0, intensity: GamePrismTilt.intensity(active: active))
             .onAppear {
                 visible = true
-                syncSensor(active: active, visible: true)
+                syncSensor(active: active, visible: true, reduceMotion: reduceMotion)
             }
             .onDisappear {
                 visible = false
-                syncSensor(active: active, visible: false)
+                syncSensor(active: active, visible: false, reduceMotion: reduceMotion)
             }
-            .adaptiveOnChange(of: active) { _, now in syncSensor(active: now, visible: visible) }
+            .adaptiveOnChange(of: active) { _, now in syncSensor(active: now, visible: visible, reduceMotion: reduceMotion) }
+            .adaptiveOnChange(of: reduceMotion) { _, now in syncSensor(active: active, visible: visible, reduceMotion: now) }
     }
 
-    private func syncSensor(active: Bool, visible: Bool) {
-        if GamePrismTilt.sensorRuns(active: active, visible: visible) {
+    private func syncSensor(active: Bool, visible: Bool, reduceMotion: Bool) {
+        if GamePrismTilt.sensorRuns(active: active, visible: visible, reduceMotion: reduceMotion) {
             source.start()
         } else {
             source.stop()
