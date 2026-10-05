@@ -4,6 +4,7 @@ import CoreGraphics
 
 /// Une animation qui boucle s'arrête hors de la zone visible (#9381) : dans un
 /// `ScrollView` non paresseux, `onDisappear` ne vient jamais, c'est la frame qui le dit.
+@MainActor
 @Suite("Jeu Meeshy — visibilité des animations qui bouclent")
 struct GameOnScreenTests {
 

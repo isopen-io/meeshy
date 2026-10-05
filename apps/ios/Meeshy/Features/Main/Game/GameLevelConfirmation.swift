@@ -9,7 +9,7 @@ import Foundation
 /// dernier niveau CONFIRMÉ — celui lu quand aucun geste n'était en vol — et
 /// l'on ne juge qu'une fois les gestes réglés : une montée vraie arrivée PENDANT un
 /// geste (le coffre) se joue à son règlement, pas avant.
-struct GameLevelConfirmation: Equatable {
+nonisolated struct GameLevelConfirmation: Equatable, Sendable {
     private(set) var confirmed: Int
 
     init(confirmed: Int) {
