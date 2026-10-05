@@ -54,6 +54,9 @@ const log = enhancedLogger.child({ module: 'MissionService' });
  */
 export const GAME_BONUS_AXIS: EngagementAxisKey = 'content.text_message';
 
+/** Trois missions par jour : facile, moyenne, difficile (ou Or). */
+export const DAILY_MISSION_SLOTS = 3;
+
 const USER_GAME_SELECT = { ...FLAME_USER_SELECT, engagementScore: true, levelRecord: true } as const;
 
 /** Pour une lecture qui ne doit rien créditer : toute tentative de paiement échoue bruyamment. */
@@ -160,7 +163,10 @@ export class MissionService {
     const unlocked = record >= MISSIONS_MIN_LEVEL;
 
     const existing = await this.prisma.dailyMission.findMany({ where: { userId, dayKey }, orderBy: { slot: 'asc' } });
-    if (existing.length > 0 || !unlocked) return { dayKey, unlocked, rows: existing };
+    // Un tirage INTERROMPU (une écriture tombée entre deux emplacements) se
+    // COMPLÈTE : les emplacements posés font foi, seuls les manquants s'écrivent.
+    if (existing.length >= DAILY_MISSION_SLOTS || !unlocked) return { dayKey, unlocked, rows: existing };
+    const taken = new Set(existing.map((row) => row.slot));
 
     const facts = flameFactsOf(user ?? {}, now);
     const status = flameStatus({ lastActiveDay: facts.lastActiveDay, today: dayKey, streak: facts.streak, freezes: facts.freezes });
@@ -174,6 +180,7 @@ export class MissionService {
     });
 
     for (const [slot, mission] of draw.missions.entries()) {
+      if (taken.has(slot)) continue;
       try {
         await this.prisma.dailyMission.create({
           data: {
@@ -403,7 +410,7 @@ export class MissionService {
     if (stored?.chestClaimedAt) return this.alreadyClaimed(userId, stored);
 
     const rows = await this.prisma.dailyMission.findMany({ where: { userId, dayKey } });
-    if (rows.length === 0 || rows.some((r) => r.completedAt === null)) throw new GameRefusal('CHEST_NOT_READY');
+    if (rows.length < DAILY_MISSION_SLOTS || rows.some((r) => r.completedAt === null)) throw new GameRefusal('CHEST_NOT_READY');
 
     await this.ensureGameDay(userId, dayKey);
     const reward = this.chestOf({ userId, dayKey });

@@ -91,6 +91,17 @@ describe('MissionService.ensureToday — le tirage paresseux', () => {
     expect(db.dailyMission.rows).toHaveLength(3);
   });
 
+  it('un tirage INTERROMPU (une seule ligne posée) est complété au prochain accès, sans toucher la ligne posée', async () => {
+    const { db, service } = setup();
+    const first = drawDailyMissions({ userId: USER, dayKey: DAY, level: 20, flameDays: 0, treasury: 0 }).missions[0]!;
+    insertMission(db, { templateKey: first.templateKey, signal: first.signal, target: first.target, reward: first.reward, progress: 1 });
+
+    const today = await service.ensureToday(USER, NOW);
+
+    expect(today.rows.map((r) => r.slot)).toEqual([0, 1, 2]);
+    expect(today.rows[0]?.progress).toBe(1);
+  });
+
   it('ne tire rien avant le niveau 5 (les missions s’ouvrent au niveau 5)', async () => {
     const { db, service } = setup({ engagementScore: 10 * 4 * 4, levelRecord: 4 });
 
@@ -358,6 +369,15 @@ describe('MissionService.claimChest — le coffre du jour', () => {
     insertMission(db, { completedAt: NOW, difficulty: 'medium' });
     insertMission(db, { completedAt: NOW, difficulty: 'hard' });
   };
+
+  it('refuse un jour qui ne porte pas ses trois missions, même toutes faites', async () => {
+    const { db, service } = setup();
+    insertMission(db, { completedAt: NOW });
+
+    const error = await refusal(() => service.claimChest({ userId: USER, requestId: 'coffre-0009', now: NOW }));
+
+    expect(error.code).toBe('CHEST_NOT_READY');
+  });
 
   it('refuse tant que les trois missions ne sont pas faites', async () => {
     const { db, service } = setup();
