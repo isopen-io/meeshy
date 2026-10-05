@@ -10,6 +10,11 @@ import MeeshySDK
 @Suite("Jeu Meeshy — shaders Metal et replis")
 struct GameShadersTests {
 
+    /// Deux rendus du MÊME arbre ne sont pas identiques au bit près (crénelage du
+    /// texte, ordre de rastérisation) : « rien ne change » se lit sous ce bruit,
+    /// mesuré à 0,002 — un effet réel s'écarte d'au moins 0,3.
+    private static let noise = 0.05
+
     private func coin() -> some View {
         MeeshCoinView(face: .obverse, edition: .gold, figures: nil).frame(width: 120, height: 120)
     }
@@ -31,30 +36,30 @@ struct GameShadersTests {
     @Test("le reflet hors de son temps ne change rien, ni à 0 ni à 1 ni sans intensité")
     func sheenAtRestIsIdentity() throws {
         let plain = try render(coin())
-        #expect(try render(coin().gameSpecularSheen(progress: 0)).distance(to: plain) == 0)
-        #expect(try render(coin().gameSpecularSheen(progress: 1)).distance(to: plain) == 0)
-        #expect(try render(coin().gameSpecularSheen(progress: 0.5, intensity: 0)).distance(to: plain) == 0)
+        #expect(try render(coin().gameSpecularSheen(progress: 0)).distance(to: plain) < Self.noise)
+        #expect(try render(coin().gameSpecularSheen(progress: 1)).distance(to: plain) < Self.noise)
+        #expect(try render(coin().gameSpecularSheen(progress: 0.5, intensity: 0)).distance(to: plain) < Self.noise)
     }
 
     @Test("l'onde hors de son temps ne change rien")
     func waveAtRestIsIdentity() throws {
         let plain = try render(coin())
-        #expect(try render(coin().gameStrikeWave(progress: 0)).distance(to: plain) == 0)
-        #expect(try render(coin().gameStrikeWave(progress: 1)).distance(to: plain) == 0)
-        #expect(try render(coin().gameStrikeWave(progress: 0.5, amplitude: 0)).distance(to: plain) == 0)
+        #expect(try render(coin().gameStrikeWave(progress: 0)).distance(to: plain) < Self.noise)
+        #expect(try render(coin().gameStrikeWave(progress: 1)).distance(to: plain) < Self.noise)
+        #expect(try render(coin().gameStrikeWave(progress: 0.5, amplitude: 0)).distance(to: plain) < Self.noise)
     }
 
     @Test("l'irisation sans intensité ne change rien")
     func iridescenceWithoutIntensityIsIdentity() throws {
         let plain = try render(coin())
-        #expect(try render(coin().gamePrismIridescence(tilt: 0.3, intensity: 0)).distance(to: plain) == 0)
+        #expect(try render(coin().gamePrismIridescence(tilt: 0.3, intensity: 0)).distance(to: plain) < Self.noise)
     }
 
     @Test("les intensités et amplitudes hors bornes sont ramenées dans leurs bornes")
     func outOfRangeInputsAreClamped() throws {
         let plain = try render(coin())
-        #expect(try render(coin().gameSpecularSheen(progress: 0.5, intensity: -3)).distance(to: plain) == 0)
-        #expect(try render(coin().gameStrikeWave(progress: 0.5, amplitude: -4)).distance(to: plain) == 0)
+        #expect(try render(coin().gameSpecularSheen(progress: 0.5, intensity: -3)).distance(to: plain) < Self.noise)
+        #expect(try render(coin().gameStrikeWave(progress: 0.5, amplitude: -4)).distance(to: plain) < Self.noise)
     }
 
     @Test("le temps d'un effet est l'intervalle ouvert ]0, 1[")
