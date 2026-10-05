@@ -44,11 +44,11 @@ final class ComposerCaptureTapRuleTests: XCTestCase {
     }
 
     func test_session_tapRightAfterArming_focuses() {
-        let session = ComposerCaptureSession()
-        session.arm(mode: .photo)
-        let juste = Date()
-        XCTAssertEqual(session.tapAction(at: juste), .focus)
-        session.disarm()
+        let session = ComposerCaptureSession(stage: .armed, mode: .photo)
+        XCTAssertEqual(session.tapAction(at: t0), .focus)
+        session.armedAt = t0.addingTimeInterval(0.05)
+        XCTAssertEqual(session.tapAction(at: t0.addingTimeInterval(0.1)), .focus,
+                       "un toucher d'avant l'armement n'ouvre pas un double avec le suivant")
     }
 
     func test_chrome_focusesOnASingleTap_andPhotographsOnTheSecond() throws {
