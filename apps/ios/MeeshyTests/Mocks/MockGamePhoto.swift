@@ -1,6 +1,7 @@
 import Foundation
 import AVFoundation
 import UIKit
+import MeeshySDK
 @testable import Meeshy
 
 /// La caméra du moment photo, sans objectif : ce qu'elle rend est décidé par le témoin.

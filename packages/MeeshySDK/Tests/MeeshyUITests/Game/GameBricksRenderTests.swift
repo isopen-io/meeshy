@@ -137,11 +137,13 @@ struct GameBricksRenderTests {
         #expect(gold.coverage > silver.coverage, "le ruban de l'Or ajoute de la matière sous la médaille")
     }
 
-    @Test("l'empreinte d'une médaille éteinte est en creux : bien moins de matière que la médaille allumée")
+    @Test("l'empreinte d'une médaille éteinte est en creux : une plaque sans métal, ni ruban, ni arc")
     func medalImprint() throws {
         let lit = try medal()
         let imprint = try medal(state: .imprint, label: "−37")
-        #expect(imprint.coverage < lit.coverage / 2)
+        // La plaque est PLEINE (la couleur de surface, comme la planche) : ce qui la distingue d'une
+        // médaille allumée n'est pas la part de pixels peints mais leur nature — pas de métal, de ruban ni d'arc.
+        #expect(imprint.coverage < lit.coverage)
         #expect(imprint.distance(to: lit) > 5)
     }
 
