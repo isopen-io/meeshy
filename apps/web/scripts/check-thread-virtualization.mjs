@@ -55,6 +55,24 @@
  * La rangée est repérée par son `data-row` (l'id du message) et jamais par son
  * `data-index` : un préfixage décale TOUS les index.
  *
+ * LA MESURE SE PROLONGE JUSQU'À L'IMMOBILITÉ, ET COUVRE LES DEUX RÉGIMES
+ * D'ARRIVÉE (#9216, #9219). Ce témoin a rougi par intermittence — « 179 px »
+ * sur un commit, « 0 px » sur son voisin, sans un octet du fil changé. La
+ * mesure n'était pas en cause : le saut était RÉEL, et son déclencheur était
+ * l'horloge du virtualiseur. Une page arrivée dans les 150 ms qui suivent le
+ * dernier `scroll` laissait le fil immobile ; arrivée après, elle le faisait
+ * glisser — deux ancrages s'effaçaient l'un l'autre (`use-older-messages.ts`).
+ * Le client de fixtures servant sur-le-champ, seul un agent d'intégration
+ * continue chargé tombait dans le second régime. D'où deux règles :
+ *
+ * - une page sur deux est retenue `NETWORK_LATENCY_MS` (une entrée : la
+ *   latence d'un réseau), pour que les DEUX régimes soient joués à chaque
+ *   passage, quelle que soit la charge ;
+ * - la rangée repérée est suivie, image par image, de l'insertion jusqu'à ce
+ *   qu'elle reste IMMOBILE `STILL_FRAMES` images de suite, et la dérive est le
+ *   pire écart vu sur ce trajet — un saut qui survient une ou deux images
+ *   après l'insertion (une rangée re-mesurée) échappait à la lecture unique.
+ *
  * LA VARIANTE DE BANC. Le fil de 500 n'existe que dans une construction
  * `MEESHY_BENCH=500`, où `__BENCH__` est un littéral. Le build servi aux
  * utilisateurs vaut `__BENCH__ = 0`, la fixture de banc y est éliminée, et le
@@ -72,6 +90,31 @@ import { checkThreadAnchor } from './lib/check-thread-anchor.mjs';
 
 const APP = fileURLToPath(new URL('..', import.meta.url));
 const BENCH = 500;
+/**
+ * LA LATENCE D'UNE PAGE SERVIE PAR LE RÉSEAU (#9216, #9219) — une ENTRÉE du
+ * scénario, jamais une attente avant un verdict. Le client de fixtures sert
+ * l'historique sur-le-champ : la page tombait donc presque toujours dans les
+ * 150 ms où le virtualiseur se croit encore en défilement
+ * (`isScrollingResetDelay` de `@tanstack/virtual-core`) et ne mesure rien au
+ * commit. Sur une machine chargée, elle en sortait — et c'est là seulement
+ * que le fil sautait : 179 px sur la CI de `main`, puis 0 px sur un commit
+ * voisin. Une page sur deux est donc retenue AU-DELÀ de cette fenêtre
+ * (`fixture-hold.ts`, canal `messages-before`) : les deux régimes sont
+ * mesurés à chaque passage, quelle que soit la charge.
+ */
+const NETWORK_LATENCY_MS = 300;
+const OLDER_PAGE_LATENCY = () => {
+  window.__olderPageLatency = 0;
+  window.__meeshyFixtureHold = (channel) => {
+    const latency = window.__olderPageLatency;
+    if (channel !== 'messages-before' || latency === 0) return undefined;
+    return new Promise((resolve) => setTimeout(resolve, latency));
+  };
+};
+/** La rangée lue est IMMOBILE quand sa position n'a pas changé sur autant
+ * d'images consécutives — un FAIT, lu image par image (leçon 634 : un fait
+ * qu'un effet différé peut défaire n'est prouvé qu'une fois STABLE). */
+const STILL_FRAMES = 3;
 /** Le plafond de cellules montées. Généreux : on mesure un ORDRE, pas un réglage. */
 const MAX_CELLS = 60;
 
@@ -92,6 +135,7 @@ const BASE = served.base;
 
 const browser = await launchChromium();
 const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+await context.addInitScript(OLDER_PAGE_LATENCY);
 const page = await context.newPage();
 
 const failures = [];
@@ -175,9 +219,9 @@ expect(
 
 /** Un tour de pagination, mesuré DANS la page — voir le doc-comment du
  * fichier § « COMMENT LA DÉRIVE D'INSERTION EST MESURÉE ». */
-const pullOlderPage = () =>
+const pullOlderPage = (latency) =>
   page.evaluate(
-    () =>
+    ({ latency: pageLatency, stillFrames }) =>
       new Promise((resolve) => {
         const main = document.querySelector('main#contenu');
         const list = main?.querySelector('ol');
@@ -185,15 +229,16 @@ const pullOlderPage = () =>
           resolve({ loaded: false, reason: 'pas de défileur' });
           return;
         }
+        window.__olderPageLatency = pageLatency;
         const sample = () => {
           const box = main.getBoundingClientRect();
           for (const el of main.querySelectorAll('[data-row]')) {
             const r = el.getBoundingClientRect();
             if (r.top >= box.top && r.bottom <= box.bottom) {
-              return { height: list.offsetHeight, row: el.getAttribute('data-row'), top: r.top };
+              return { rows: Number(list.getAttribute('data-thread-rows')), row: el.getAttribute('data-row'), top: r.top };
             }
           }
-          return { height: list.offsetHeight, row: null, top: 0 };
+          return { rows: Number(list.getAttribute('data-thread-rows')), row: null, top: 0 };
         };
 
         /* HORS de la zone de déclenchement (`rootMargin` de cinq rangées) : on
@@ -204,18 +249,53 @@ const pullOlderPage = () =>
            rappel de l'observateur n'a pas pu courir entre les deux. */
         main.scrollTop = 100;
         let last = sample();
-        const baseHeight = last.height;
+        /* L'insertion se lit au NOMBRE de rangées du fil (`data-thread-rows`),
+           jamais à la hauteur de la liste : celle-ci grandit aussi quand les
+           rangées tout juste montées sont mesurées, et une page RETENUE laisse
+           à ces mesures le temps d'arriver avant elle. */
+        const baseRows = last.rows;
+
+        /* APRÈS l'insertion, la rangée repérée est suivie IMAGE PAR IMAGE
+           jusqu'à ce qu'elle soit IMMOBILE (#9216, #9219) : l'image de
+           l'insertion ne suffit pas. Les rangées préfixées se mesurent une à
+           deux images plus tard, l'ancienne tête perd son séparateur de jour,
+           et c'est là que le fil glissait de 40 px sans que l'image de
+           l'insertion le montre. La dérive est le PIRE écart vu sur tout ce
+           trajet — une image déplacée puis reposée a été peinte, donc vue. */
+        const follow = (anchor) => {
+          let worst = 0;
+          let previous = anchor.top;
+          let still = 0;
+          let settleFrames = 0;
+          const track = () => {
+            const el = main.querySelector(`[data-row="${anchor.row}"]`);
+            if (el === null) {
+              resolve({ loaded: true, row: anchor.row, drift: null });
+              return;
+            }
+            const top = el.getBoundingClientRect().top;
+            worst = Math.max(worst, Math.abs(top - anchor.top));
+            still = top === previous ? still + 1 : 0;
+            previous = top;
+            settleFrames += 1;
+            if (still >= stillFrames || settleFrames > 240) {
+              resolve({ loaded: true, row: anchor.row, drift: worst, settled: still >= stillFrames });
+              return;
+            }
+            requestAnimationFrame(track);
+          };
+          track();
+        };
 
         let frames = 0;
         const step = () => {
           const now = sample();
-          if (now.height > baseHeight) {
-            const el = last.row === null ? null : main.querySelector(`[data-row="${last.row}"]`);
-            resolve({
-              loaded: true,
-              row: last.row,
-              drift: el === null ? null : Math.abs(el.getBoundingClientRect().top - last.top),
-            });
+          if (now.rows > baseRows) {
+            if (last.row === null) {
+              resolve({ loaded: true, row: null, drift: null });
+              return;
+            }
+            follow(last);
             return;
           }
           last = now;
@@ -228,6 +308,7 @@ const pullOlderPage = () =>
         };
         requestAnimationFrame(step);
       }),
+    { latency, stillFrames: STILL_FRAMES },
   );
 
 /** Les tirages BRUTS — agrégés par `insertionDrift`, jamais à la main : un
@@ -237,11 +318,13 @@ const pulls = [];
 let olderPages = 0;
 for (let turn = 0; turn < 20; turn += 1) {
   if ((await olderState()) !== 'idle') break;
-  const pull = await pullOlderPage();
+  /* Une page sur deux arrive APRÈS le calme du défilement — voir
+     `NETWORK_LATENCY_MS`. */
+  const latency = turn % 2 === 0 ? 0 : NETWORK_LATENCY_MS;
+  const pull = await pullOlderPage(latency);
   if (pull.loaded !== true) break;
   olderPages += 1;
-  await page.waitForTimeout(150);
-  pulls.push({ drift: pull.drift });
+  pulls.push({ drift: pull.drift, latency });
   const r = await snapshot(`page ancienne ${olderPages}`);
   expect(
     r.cellCount < MAX_CELLS,
@@ -349,6 +432,8 @@ for (const r of readings) {
 }
 console.log(`  pages anciennes chargées ${olderPages}`);
 console.log(`  saut à l'insertion      ${driftLine(drift)}`);
+console.log(`    page servie aussitôt  ${driftLine(insertionDrift(pulls.filter((p) => p.latency === 0)))}`);
+console.log(`    page après ${NETWORK_LATENCY_MS} ms    ${driftLine(insertionDrift(pulls.filter((p) => p.latency !== 0)))}`);
 console.log(`  saut du contenu visible ${Math.round(visualJump)} px`);
 console.log(`  favori ancien           ${anchor.newerPages} page(s) jusqu'au présent, ${anchor.sampled} rangées lues sans écart\n`);
 
