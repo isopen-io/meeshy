@@ -71,6 +71,18 @@ describe('LeagueService.setConsent', () => {
     expect(db.leaguePseudonym.rows).toHaveLength(1);
   });
 
+  it('un pseudonyme REFUSÉ au consentement n’écrit RIEN : ni consentement, ni pseudonyme — un 409 ne laisse pas un accord gravé derrière lui', async () => {
+    const db = fakeGameDb();
+    player(db, USER);
+
+    await expect(
+      service(db).setConsent({ userId: USER, consent: true, policyVersion: 'v1', pseudonym: 'Zebulon', now: NOW }),
+    ).rejects.toMatchObject({ code: 'LEAGUE_PSEUDONYM_FORBIDDEN' });
+
+    expect(db.user.rows[0]!.publicLeagueConsentAt ?? null).toBeNull();
+    expect(db.leaguePseudonym.rows).toHaveLength(0);
+  });
+
   it('consentir de nouveau garde la date d’origine : la preuve du premier accord', async () => {
     const db = fakeGameDb();
     player(db, USER);

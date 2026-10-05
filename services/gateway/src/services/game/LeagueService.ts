@@ -116,6 +116,9 @@ export class LeagueService {
     if (access.status === 'locked') throw new GameRefusal('LEAGUE_LOCKED', { requiredLevel: LEAGUE_MIN_LEVEL });
     if (access.status === 'minor') throw new GameRefusal('LEAGUE_MINOR');
 
+    // Un nom CHOISI se tranche AVANT l'accord : son refus (fermé, réservé, pris)
+    // rend un 409 qui ne laisse aucun consentement gravé derrière lui.
+    const chosen = params.pseudonym ? await this.pseudonyms.choose({ userId, value: params.pseudonym }) : null;
     const alreadyConsented = access.status === 'open';
     await this.prisma.user.update({
       where: { id: userId },
@@ -123,9 +126,7 @@ export class LeagueService {
         ? { publicLeagueConsentVersion: params.policyVersion }
         : { publicLeagueConsentAt: now, publicLeagueConsentVersion: params.policyVersion },
     });
-    const pseudonym = params.pseudonym
-      ? await this.pseudonyms.choose({ userId, value: params.pseudonym })
-      : await this.pseudonyms.ensure(userId, now);
+    const pseudonym = chosen ?? (await this.pseudonyms.ensure(userId, now));
     return { consent: true, pseudonym };
   }
 
