@@ -2,9 +2,11 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
-/// **Une mini-preview par SCÈNE, dans la rangée haute** (constat porteur
+/// **Une vignette par SCÈNE, dans la rangée haute** (constat porteur
 /// 2026-09-06 : « lorsque je crée une nouvelle scène elle n'apparaît pas
-/// immédiatement dans la mini-preview »).
+/// immédiatement dans la mini-preview » ; fusion #5009 + #5037 actée le
+/// 2026-09-03 : « il faut que les rails de slide soient des vignettes de
+/// scène »).
 ///
 /// ## Ce que la rangée montrait, et pourquoi une scène pouvait y manquer
 ///
@@ -17,38 +19,33 @@ import MeeshyUI
 /// fond COLORÉ les sépare — la scène existe, elle n'a aucun média — et la
 /// rangée n'avait alors rien à montrer.
 ///
-/// ## Pourquoi ça ne se voyait pas
+/// > **Retirer un doublon révèle ce que l'autre ne couvrait pas.** La bande de
+/// > pastilles du couloir bas comptait les slides et couvrait ce trou ; elle est
+/// > partie le matin même sur directive porteur.
 ///
-/// La bande de pastilles du couloir bas comptait les slides, elle, et couvrait
-/// donc ce trou. Elle est partie le matin même sur directive porteur (« cet
-/// indicateur est inutile »), et le trou est devenu le seul retour visible.
+/// ## Ce que la tuile peint
 ///
-/// > **Retirer un doublon révèle ce que l'autre ne couvrait pas.** Les deux
-/// > indicateurs n'étaient pas redondants : ils comptaient deux choses
-/// > différentes qui se ressemblaient.
+/// La VIGNETTE de sa scène — fond et objets posés, noire quand la scène est
+/// vide — rendue par le composite partagé (`SceneThumbnailRenderer`, SDK), le
+/// même qui produit la couverture du plateau et le ThumbHash. Elle peignait
+/// auparavant `SlideMiniPreview`, un second chemin de rendu en modifiers
+/// SwiftUI que #5037 nommait comme piège : il approxime les filtres et pouvait
+/// mentir sur le rendu final.
 ///
 /// ## Pourquoi la vue vit ici et non dans `ComposerTopBar`
 ///
-/// Une mini-preview demande les effets VIVANTS de la slide et les bitmaps
-/// chargés — donc le ViewModel. `ComposerTopBar` ne le connaît pas et n'a pas à
-/// le connaître : elle reçoit ce rail en slot opaque, comme `formatFan`.
-///
-/// Les effets sont vivants sans effort : `currentEffects` est une projection de
-/// `currentSlide.effects` (lecture ET écriture), donc composer met à jour la
-/// slide, donc la tuile suit. C'est ce qui rend ce lot petit.
+/// Une vignette demande les effets VIVANTS de la slide et les bitmaps chargés —
+/// donc le ViewModel. `ComposerTopBar` ne le connaît pas et n'a pas à le
+/// connaître : elle reçoit ce rail en slot opaque, comme `formatFan`.
 struct ComposerSlideRail: View {
 
     let slides: [StorySlide]
     let currentIndex: Int
     /// Les fonds de slide déjà chargés, par identifiant de slide.
     let slideImages: [String: UIImage]
-    /// Les bitmaps des objets, par identifiant d'objet.
+    /// Les bitmaps des objets, par identifiant d'objet. Un bitmap remplacé est
+    /// une INSTANCE neuve : l'empreinte de la vignette le voit sans compteur.
     let loadedImages: [String: UIImage]
-    /// **Le bump que SwiftUI ne peut pas voir.** `[String: UIImage]` n'est pas
-    /// `Equatable` : muter un bitmap sous une clé existante ne re-rend rien.
-    /// `loadedImagesVersion` existe pour ça, et la tuile en dépend explicitement
-    /// — sinon une image éditée resterait affichée dans son état d'avant.
-    let imagesVersion: UInt64
     let onSelect: (Int) -> Void
     /// **Supprimer la scène courante** (constat porteur 2026-09-06 : « il
     /// manque la poubelle pour supprimer les scènes »). L'ancienne rangée de
@@ -58,11 +55,14 @@ struct ComposerSlideRail: View {
 
     private static let height: CGFloat = 44
 
+    /// Le rail se monte dès qu'une scène existe (`ComposerHeaderTiles.showsRail`,
+    /// décidé par l'hôte) ; une vignette SEULE est un aperçu, pas un bouton —
+    /// elle ne navigue vers rien (loi 4).
     var body: some View {
-        if slides.count > 1 {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: MeeshySpacing.sm) {
-                    ForEach(Array(slides.enumerated()), id: \.element.id) { index, slide in
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: MeeshySpacing.sm) {
+                ForEach(Array(slides.enumerated()), id: \.element.id) { index, slide in
+                    if ComposerHeaderTiles.tilesNavigate(sceneCount: slides.count) {
                         Button { onSelect(index) } label: {
                             tuile(slide, index: index)
                         }
@@ -70,11 +70,17 @@ struct ComposerSlideRail: View {
                         .overlay(alignment: .topTrailing) { corbeille(index) }
                         .accessibilityLabel(Text(ComposerSlideRailCopy.position(
                             index: index + 1, total: slides.count)))
+                        .accessibilityAddTraits(index == currentIndex ? .isSelected : [])
+                    } else {
+                        tuile(slide, index: index)
+                            .accessibilityElement(children: .ignore)
+                            .accessibilityLabel(Text(ComposerSlideRailCopy.position(
+                                index: index + 1, total: slides.count)))
+                            .accessibilityAddTraits([.isImage, .isSelected])
                     }
                 }
-                .padding(.vertical, MeeshySpacing.xxs)
             }
-            .id(imagesVersion)
+            .padding(.vertical, MeeshySpacing.xxs)
         }
     }
 
@@ -102,22 +108,13 @@ struct ComposerSlideRail: View {
     }
 
     private func tuile(_ slide: StorySlide, index: Int) -> some View {
-        let cote = Self.height
-        return SlideMiniPreview(
-            effects: slide.effects,
-            bgImage: slideImages[slide.id],
-            drawingData: slide.effects.drawingData,
-            loadedImages: loadedImages,
-            index: index,
-            // Une tuile de 44 pt peint une VIGNETTE, jamais la photo entière
-            // de sa scène (#6922) — cache borné, purgé sous pression mémoire.
-            thumbnails: SceneThumbnailCache.shared
-        )
         // La diapositive est une scène : TOUJOURS 9:16 (`SceneShape.aspect`, #6896/#6904).
-        .frame(width: cote * SceneShape.aspect, height: cote)
+        let cote = CGSize(width: Self.height * SceneShape.aspect, height: Self.height)
+        return ComposerSceneThumbnailTile(slide: slide, bgImage: slideImages[slide.id],
+                                          loadedImages: loadedImages, size: cote)
         .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.xxs))
-        // Le rognage ne rogne pas le TOUCHER : la mini-preview déborde, et la
-        // tuile voisine recouvrait la première (#9126).
+        // Le rognage ne rogne pas le TOUCHER : la tuile voisine recouvrait la
+        // première (#9126).
         .contentShape(RoundedRectangle(cornerRadius: MeeshyRadius.xxs))
         .overlay(
             RoundedRectangle(cornerRadius: MeeshyRadius.xxs)
@@ -129,6 +126,83 @@ struct ComposerSlideRail: View {
     }
 }
 
+/// **Une tuile = la vignette de SA scène**, peinte par le composite partagé
+/// (`SceneThumbnailRenderer.thumbnail(`, SDK) depuis des bitmaps réduits à la
+/// tuile — jamais la photo de 1600 px peinte dans 44 points (#6922).
+///
+/// Elle se repeint quand l'EMPREINTE de la scène change, et seulement alors ;
+/// `ComposerSceneThumbnailRefresh` décide si elle attend. Pendant un geste sur
+/// la scène, l'image précédente reste à l'écran — jamais de trou, jamais un
+/// rendu par image du glisser.
+struct ComposerSceneThumbnailTile: View {
+    let slide: StorySlide
+    let bgImage: UIImage?
+    let loadedImages: [String: UIImage]
+    let size: CGSize
+    @Environment(\.displayScale) private var displayScale
+    @State private var shown: UIImage?
+
+    var body: some View {
+        let empreinte = SceneThumbnailFingerprint(slide: slide, bgImage: bgImage, loadedImages: loadedImages,
+                                                  size: size, scale: displayScale)
+        ZStack {
+            // Le noir est l'état VIDE dessiné (#5037), et le fond tant que la
+            // première vignette n'est pas peinte.
+            Color.black
+            if let image = shown ?? SceneThumbnailStore.shared.cached(empreinte) {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+            }
+        }
+        .frame(width: size.width, height: size.height)
+        .task(id: empreinte) { await repaint(empreinte) }
+    }
+
+    private func repaint(_ empreinte: SceneThumbnailFingerprint) async {
+        let attend = ComposerSceneThumbnailRefresh.waits(
+            isShowingImage: shown != nil,
+            isCached: SceneThumbnailStore.shared.cached(empreinte) != nil,
+            isBlank: SceneThumbnailContent.isBlank(slide, bgImage: bgImage))
+        if attend {
+            try? await Task.sleep(nanoseconds: ComposerSceneThumbnailRefresh.debounceNanoseconds)
+            guard !Task.isCancelled else { return }
+        }
+        shown = SceneThumbnailRenderer.thumbnail(slide: slide, bgImage: bgImage, loadedImages: loadedImages,
+                                                 size: size, scale: displayScale)
+    }
+}
+
+/// **Quand repeindre une vignette** — la règle, hors de la vue.
+///
+/// - la PREMIÈRE image d'une tuile se peint tout de suite : attendre ne
+///   montrerait que du noir à la place d'une scène qui en a ;
+/// - une vignette déjà en cache, ou une scène vide (du noir), ne coûtent rien ;
+/// - sinon la scène change sous le doigt : on attend qu'elle se pose, la
+///   vignette précédente restant affichée.
+nonisolated enum ComposerSceneThumbnailRefresh {
+
+    static let debounceNanoseconds: UInt64 = 150_000_000
+
+    static func waits(isShowingImage: Bool, isCached: Bool, isBlank: Bool) -> Bool {
+        isShowingImage && !isCached && !isBlank
+    }
+}
+
+/// **Toucher (+) crée une scène — ou dit pourquoi non** (#5009).
+///
+/// Au plafond de dix (`StoryComposerViewModel.canAddSlide`), `addSlide()` est un
+/// no-op : un geste dont l'effet est invisible se lit exactement comme un
+/// bouton inerte. Le refus s'ANNONCE donc, il ne se tait pas.
+nonisolated enum ComposerSceneAddition: Equatable {
+    case added
+    case refusedAtCap
+
+    static func outcome(canAddSlide: Bool) -> ComposerSceneAddition {
+        canAddSlide ? .added : .refusedAtCap
+    }
+}
+
 /// Le libellé du rail, hors de la vue pour la raison habituelle du dépôt : une
 /// chaîne composée dans un corps de vue échappe au cliquet de complétude.
 @MainActor
@@ -137,6 +211,13 @@ enum ComposerSlideRailCopy {
     /// annonce le conteneur avant de parcourir ses éléments.
     static var rail: String {
         String(localized: "composer.slide.rail", defaultValue: "Scènes de la publication",
+               bundle: .main)
+    }
+
+    /// Le refus du onzième `(+)` (#5009) — dit, jamais tu.
+    static var capReached: String {
+        String(localized: "composer.slide.rail.capReached",
+               defaultValue: "Dix scènes au maximum — supprimez-en une pour en créer une autre",
                bundle: .main)
     }
 
