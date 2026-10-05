@@ -58,6 +58,21 @@ public class MeeshyPlaybackPlugin extends Plugin {
         call.resolve();
     }
 
+    /**
+     * #9410 — l'image dans l'image d'une video, la WebView n'ayant pas l'API :
+     * la page passe la video en plein ecran, puis l'activite flotte. `floated`
+     * faux : le systeme refuse, la page rend la video.
+     */
+    @PluginMethod
+    public void floatVideo(PluginCall call) {
+        getActivity()
+            .runOnUiThread(() -> {
+                JSObject result = new JSObject();
+                result.put("floated", getActivity() instanceof MainActivity && ((MainActivity) getActivity()).floatVideo());
+                call.resolve(result);
+            });
+    }
+
     @PluginMethod
     public void releasePlayback(PluginCall call) {
         PlaybackForegroundService.stop(getContext());
