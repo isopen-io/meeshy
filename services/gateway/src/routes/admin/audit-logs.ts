@@ -238,7 +238,7 @@ export function registerAuditLogRoutes(fastify: FastifyInstance): void {
               ...(named?.participants === undefined ? {} : { participants: named.participants, total: named.total }),
             },
             reason: readAuditReason(row.metadata),
-            changes: readAuditChanges(row.changes, { canSeeContacts: canSeeSensitive }),
+            changes: readAuditChanges(row.changes, { canSeeContacts: canSeeSensitive, action: row.action }),
             ipAddress: canSeeSensitive ? (row.ipAddress ?? null) : null,
             userAgent: canSeeSensitive ? (row.userAgent ?? null) : null,
           };
