@@ -176,10 +176,22 @@ export function AdminErrorState({
   );
 }
 
-/** UN BLOC refusé (403) dans un écran ouvert : le reste de l'écran continue de servir. */
-export function AdminDeniedInline({ language, message }: { readonly language: AdminLanguage; readonly message?: string }) {
+/**
+ * UN BLOC refusé (403) dans un écran ouvert : le reste de l'écran continue de servir. `message`
+ * dit POURQUOI quand l'écran le sait (l'agent : « le droit d'être là, pas celui de lire ceci ») ;
+ * `data` pose l'ancre de l'écran qui le monte.
+ */
+export function AdminDeniedInline({
+  language,
+  message,
+  data,
+}: {
+  readonly language: AdminLanguage;
+  readonly message?: string;
+  readonly data?: Readonly<Record<`data-${string}`, string>>;
+}) {
   return (
-    <div data-admin-denied-inline className="flex items-center gap-3 rounded-card p-4" style={CARD}>
+    <div {...data} data-admin-denied-inline className="flex items-center gap-3 rounded-card p-4" style={CARD}>
       <span aria-hidden="true" style={{ color: INK2 }}>
         <AdminGlyph name="lock" size={20} />
       </span>
@@ -199,18 +211,21 @@ const NOTICE_GLYPH: Readonly<Record<AdminTone, AdminGlyphName>> = {
   danger: 'warningCircle',
 };
 
-/** Un message dans un écran ouvert — ton + glyphe + mot, jamais la couleur seule. */
+/** Un message dans un écran ouvert — ton + glyphe + mot, jamais la couleur seule ; `data` porte l'ancre de l'écran. */
 export function AdminInlineNotice({
   tone,
   text,
   action,
+  data,
 }: {
   readonly tone: AdminTone;
   readonly text: string;
   readonly action?: ReactNode;
+  readonly data?: Readonly<Record<`data-${string}`, string>>;
 }) {
   return (
     <div
+      {...data}
       role={tone === 'danger' ? 'alert' : 'status'}
       data-admin-notice={tone}
       className="flex flex-wrap items-center gap-3 rounded-card px-4 py-3"

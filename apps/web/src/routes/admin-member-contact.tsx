@@ -1,5 +1,8 @@
 import { useState, type ReactNode } from 'react';
 
+import { AdminVerifiedBadge } from '@/components/admin/badges';
+import { AdminButton } from '@/components/admin/button';
+import { AdminFormStatus, AdminTextInput } from '@/components/admin/form';
 import { contactDraftOf, contactEditOf, sectionIsDirty, type ContactDraft } from '@/lib/admin/member-sections';
 import type { AdminDeps } from '@/lib/api/admin';
 import { updateAdminUser } from '@/lib/api/admin-user-actions';
@@ -8,7 +11,7 @@ import { requestAdminUserVerification, type AdminContactChannel } from '@/lib/ap
 import { apiDeps } from '@/lib/api/deps';
 import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
-import { BadgeVerifie, INK2, MemberSection, SectionButton, Texte, useFieldFocus, useMemberWrite } from './admin-member-parts';
+import { MemberSection, useMemberWrite } from './admin-member-parts';
 
 /**
  * **LE CONTACT D'UN MEMBRE** (#8289) — e-mail et téléphone, chacun avec son
@@ -40,7 +43,6 @@ export function AdminMemberContactSection({
      jamais ici une valeur périmée qui ferait croire à une modification. */
   const [touches, setTouches] = useState<Partial<ContactDraft>>({});
   const draft: ContactDraft = { ...contactDraftOf(membre), ...touches };
-  const focus = useFieldFocus();
   const ecriture = useMemberWrite({ userId: membre.id, language, onAnnounce });
   const edit = contactEditOf(membre, draft);
   const dirty = sectionIsDirty(edit);
@@ -72,14 +74,13 @@ export function AdminMemberContactSection({
         deps={deps}
         gesturesWaiting={dirty}
         champ={
-          <Texte
+          <AdminTextInput
             id="admin-member-email"
             type="email"
             label={translateAdmin(language, 'admin.edit.email')}
-            valeur={draft.email}
+            value={draft.email}
             error={ecriture.failure?.code === 'EMAIL_TAKEN' ? translateAdmin(language, 'admin.create.emailTaken') : undefined}
-            {...focus('email')}
-            onValeur={(email) => poser({ email })}
+            onValue={(email) => poser({ email })}
           />
         }
       />
@@ -91,19 +92,21 @@ export function AdminMemberContactSection({
         deps={deps}
         gesturesWaiting={dirty}
         champ={
-          <Texte
+          <AdminTextInput
             id="admin-member-phone"
             type="tel"
             label={translateAdmin(language, 'admin.contact.phone')}
-            valeur={draft.phoneNumber}
-            {...focus('phone')}
-            onValeur={(phoneNumber) => poser({ phoneNumber })}
+            value={draft.phoneNumber}
+            onValue={(phoneNumber) => poser({ phoneNumber })}
           />
         }
       />
     </MemberSection>
   );
 }
+
+/** Le renvoi d'une vérification parle la langue d'état du kit : envoyer, c'est enregistrer. */
+const PHASE_DU_RENVOI = { idle: 'idle', sending: 'saving', sent: 'saved', failed: 'error' } as const;
 
 /** Le membre tel qu'il sera une fois la preuve posée (ou retirée) — l'aperçu optimiste du badge. */
 export function withContactProof(m: AdminUserDetail, channel: AdminContactChannel, verified: boolean): AdminUserDetail {
@@ -154,21 +157,15 @@ function ContactRow({
       {champ}
       {valeur === '' ? null : (
         <div className="flex flex-wrap items-center gap-2">
-          <BadgeVerifie verifie={verifie} language={language} />
+          <AdminVerifiedBadge verified={verifie} language={language} />
           {verifie ? null : (
-            <SectionButton data={{ 'data-admin-contact-resend': channel }} disabled={occupe} onClick={() => void renvoyer()}>
+            <AdminButton data={{ 'data-admin-contact-resend': channel }} disabled={occupe} onClick={() => void renvoyer()}>
               {translateAdmin(language, 'admin.contact.resend')}
-            </SectionButton>
+            </AdminButton>
           )}
-          <p
-            role="status"
-            aria-live="polite"
-            className="min-w-0 basis-full text-caption"
-            data-admin-contact-state={channel}
-            style={{ color: renvoi.phase === 'failed' ? 'var(--color-danger)' : INK2 }}
-          >
-            {statut}
-          </p>
+          <div className="flex min-w-0 basis-full">
+            <AdminFormStatus phase={PHASE_DU_RENVOI[renvoi.phase]} text={statut} data={{ 'data-admin-contact-state': channel }} />
+          </div>
         </div>
       )}
     </div>

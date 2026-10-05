@@ -175,3 +175,29 @@ describe('chaque clé porte son libellé, chaque valeur se dit en mots (#7920)',
     expectNoRawIdentifiers(hote);
   });
 });
+
+describe('un chargement qui échoue a son issue', () => {
+  test('l’erreur offre « Réessayer », et réessayer relit les préférences', async () => {
+    let lectures = 0;
+    const t = (async () => ({ ok: false, status: 0, error: 'jamais appelé' })) as unknown as HttpTransport;
+    t.request = (async (req: HttpRequest): Promise<ApiResult<unknown>> => {
+      if (!req.path.endsWith('/preferences')) return { ok: false, status: 404, error: req.path };
+      lectures += 1;
+      return lectures === 1 ? { ok: false, status: 503, error: 'indisponible' } : { ok: true, data: PREFS };
+    }) as HttpTransport['request'];
+    const hote = await mounter.mount(
+      <QueryClientProvider client={appQueryClient}>
+        <AdminUserPreferencesTab userId="u-echec" language="fr" onAnnounce={() => undefined} deps={{ source: 'gateway', transport: t }} />
+      </QueryClientProvider>,
+    );
+    await attendre();
+    expect(hote.querySelector('[data-admin-error]')?.getAttribute('role')).toBe('alert');
+    expect(hote.querySelector('[data-admin-preferences]')).toBeNull();
+
+    act(() => hote.querySelector<HTMLButtonElement>('[data-admin-retry]')?.click());
+    await attendre();
+    expect(lectures).toBe(2);
+    expect(hote.querySelector('[data-admin-preferences]')).not.toBeNull();
+  });
+});
+

@@ -1,6 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 
+import { AdminFormError, AdminSelect, AdminSwitch } from '@/components/admin/form';
+import { AdminErrorState, AdminSkeleton } from '@/components/admin/states';
+import { EDGE, INK, INK2, SURFACE } from '@/components/admin/tone';
 import { CollapsibleSection } from '@/components/collapsible-section';
 import { interpretPreferenceValue, preferenceLabel, preferenceOptions } from '@/lib/admin/preference-labels';
 import type { AdminDeps } from '@/lib/api/admin';
@@ -19,8 +22,6 @@ import { apiDeps } from '@/lib/api/deps';
 import type { ApiFailure } from '@/lib/api/http';
 import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
-import { AdminSkeleton } from './admin-parts';
-
 /**
  * **LES PRÉFÉRENCES D'UN MEMBRE** (#7845, #7920) — l'onglet, catégorie par
  * catégorie. Chaque clé porte son LIBELLÉ traduit (`lib/admin/preference-labels.ts`)
@@ -34,9 +35,7 @@ import { AdminSkeleton } from './admin-parts';
  * s'écrire. Le nom d'une clé (`showReadReceipts`) n'est jamais lu à l'écran : il ne
  * vit que dans l'ancre de test `data-admin-preference`.
  */
-const INK = 'var(--color-ios-ink)';
-const INK2 = 'var(--color-ios-ink-2)';
-const CARTE = { backgroundColor: 'var(--color-ios-surface)', border: '1px solid var(--color-edge)' } as const;
+const CARTE = { backgroundColor: SURFACE, border: `1px solid ${EDGE}` } as const;
 
 const LIBELLES_CATEGORIES = {
   privacy: 'admin.prefs.privacy',
@@ -118,12 +117,10 @@ export function AdminUserPreferencesTab({
   });
 
   if (preferences.isPending) return <AdminSkeleton rows={6} />;
+  /* Un échec de lecture a son issue (« Réessayer ») : un onglet qui dit « indisponible » sans
+     geste laisse l'administrateur recharger toute la fiche pour relire une seule source. */
   if (preferences.data === undefined) {
-    return (
-      <p className="text-caption" style={{ color: INK2 }}>
-        {translateAdmin(language, 'admin.users.unavailable')}
-      </p>
-    );
+    return <AdminErrorState language={language} message={translateAdmin(language, 'admin.users.unavailable')} onRetry={() => void preferences.refetch()} />;
   }
   const donnees = preferences.data;
 
@@ -132,11 +129,7 @@ export function AdminUserPreferencesTab({
       <p className="text-caption" style={{ color: INK2 }}>
         {translateAdmin(language, 'admin.prefs.notice')}
       </p>
-      {refus === null ? null : (
-        <p role="alert" className="text-caption" style={{ color: 'var(--color-danger)' }} data-admin-preferences-error="">
-          {refus}
-        </p>
-      )}
+      {refus === null ? null : <AdminFormError text={refus} data={{ 'data-admin-preferences-error': '' }} />}
       {ADMIN_PREFERENCE_CATEGORIES.map((categorie) => (
         <CollapsibleSection key={categorie} id={`admin-prefs-${categorie}`} title={translateAdmin(language, LIBELLES_CATEGORIES[categorie])} defaultOpen={categorie === 'privacy'}>
           <ul className="grid gap-1" data-admin-preferences-category={categorie}>
@@ -212,48 +205,27 @@ function Controle({
   readonly onChange: (valeur: AdminPreferenceValue) => void;
 }) {
   const chemin = `${categorie}.${cle}`;
+  /* Les contrôles sont ceux du kit, montés SANS libellé : la rangée nomme déjà la préférence
+     (`label htmlFor`) et dit sa valeur en mots. */
   if (typeof valeur === 'boolean') {
     return (
-      <button
-        id={id}
-        type="button"
-        role="switch"
-        aria-checked={valeur}
-        disabled={desactive}
-        data-admin-preference-switch={chemin}
-        onClick={() => onChange(!valeur)}
-        className="relative h-7 w-12 shrink-0 rounded-full transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-50"
-        style={{ backgroundColor: valeur ? 'var(--color-ios-brand)' : 'color-mix(in srgb, var(--color-ios-ink-3) 35%, transparent)', outlineColor: 'var(--color-ios-brand)' }}
-      >
-        <span
-          aria-hidden="true"
-          className="absolute top-0.5 size-6 rounded-full bg-ios-on-brand transition-all"
-          style={{ insetInlineStart: valeur ? 'calc(100% - 1.625rem)' : '0.125rem' }}
-        />
-      </button>
+      <AdminSwitch id={id} checked={valeur} disabled={desactive} data={{ 'data-admin-preference-switch': chemin }} onToggle={(suivante) => onChange(suivante)} />
     );
   }
   const options = preferenceOptions(categorie, cle, language);
   if (options !== null && typeof valeur === 'string') {
-    /* Une valeur SERVIE hors de la liste (une option plus récente que ce client) reste choisie et
-       visible : la remplacer en silence par la première option ferait « changer » la préférence. */
-    const liste = options.some((option) => option.value === valeur) ? options : [{ value: valeur, label: interpretPreferenceValue(categorie, cle, valeur, language) }, ...options];
     return (
-      <select
-        id={id}
-        value={valeur}
-        disabled={desactive}
-        data-admin-preference-select={chemin}
-        onChange={(event) => onChange(event.currentTarget.value)}
-        className="min-h-11 shrink-0 rounded-chip px-2 text-input focus-visible:outline-2 focus-visible:outline-offset-2"
-        style={{ ...CARTE, color: INK, outlineColor: 'var(--color-ios-brand)' }}
-      >
-        {liste.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
+      <div className="shrink-0">
+        <AdminSelect
+          id={id}
+          value={valeur}
+          options={options}
+          disabled={desactive}
+          data={{ 'data-admin-preference-select': chemin }}
+          fallbackLabel={(servie) => interpretPreferenceValue(categorie, cle, servie, language)}
+          onValue={(suivante) => onChange(suivante)}
+        />
+      </div>
     );
   }
   if (typeof valeur === 'number' || typeof valeur === 'string') {

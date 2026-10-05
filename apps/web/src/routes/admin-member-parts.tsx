@@ -2,7 +2,8 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useId, useState, type ReactNode } from 'react';
 
 import { AdminButton } from '@/components/admin/button';
-import { Field } from '@/components/field';
+import { AdminFormStatus } from '@/components/admin/form';
+import { INK } from '@/components/admin/tone';
 import { adminUserDetailQueryKey, type AdminUserDetail } from '@/lib/api/admin-user-detail';
 import type { ApiFailure, ApiResult } from '@/lib/api/http';
 import { translateAdmin, type AdminPlainCatalogKey, type AdminLanguage } from '@/lib/i18n-admin-catalog';
@@ -15,15 +16,11 @@ import { translateAdmin, type AdminPlainCatalogKey, type AdminLanguage } from '@
  * elle a changé. L'état de l'envoi — en cours, enregistré, refusé et pourquoi
  * — se lit SOUS la section, annoncé aux lecteurs d'écran (`role="status"`).
  *
- * ## Les deux gestes de saisie ne se ressemblent pas
- *
- * `onInput` sur les champs texte, `onChange` sur `<select>` et `<input
- * type="checkbox">` : sous happy-dom, un `input` dispatché ne déclenche jamais
- * `onChange` sur un `<input>` texte (témoin permanent dans `test-support`).
+ * Ce fichier ne garde que le MÉTIER du membre — l'écriture d'une section, le
+ * motif d'un refus, la carte de verre. Les champs, les bascules, les listes, le
+ * badge « vérifié » et le bouton vivent dans le kit (`components/admin`, #9463) :
+ * la fiche les avait écrits pour elle seule, et chaque feuille les recopiait.
  */
-export const INK = 'var(--color-ios-ink)';
-export const INK2 = 'var(--color-ios-ink-2)';
-export const BRAND = 'var(--color-ios-brand)';
 /**
  * LA CARTE DE VERRE (#8289, design validé de l'inscription #8288) — la matière
  * est celle du site UNIQUE `styles/glass.css` (`glass glass-card`, jamais un
@@ -157,21 +154,13 @@ export function MemberSection({
       >
         {children}
         <div className="flex flex-wrap items-center justify-end gap-3">
-          <p
-            role="status"
-            aria-live="polite"
-            className="min-w-0 flex-1 text-caption"
-            data-admin-section-state={state.phase}
-            style={{ color: state.phase === 'error' ? 'var(--color-danger)' : state.phase === 'saved' ? 'var(--color-success)' : INK2 }}
-          >
-            {state.phase === 'saving'
-              ? translateAdmin(language, 'admin.section.saving')
-              : state.phase === 'saved' || state.phase === 'error'
-                ? state.message
-                : ''}
-          </p>
+          <AdminFormStatus
+            phase={state.phase}
+            text={state.phase === 'saving' ? translateAdmin(language, 'admin.section.saving') : state.phase === 'idle' ? '' : state.message}
+            data={{ 'data-admin-section-state': state.phase }}
+          />
           {dirty === null ? null : (
-            <SectionButton
+            <AdminButton
               type="submit"
               tone={saveTone}
               disabled={!dirty || envoi}
@@ -179,203 +168,10 @@ export function MemberSection({
               data={{ 'data-admin-section-save': name }}
             >
               {saveLabel ?? translateAdmin(language, 'admin.edit.save')}
-            </SectionButton>
+            </AdminButton>
           )}
         </div>
       </form>
     </section>
-  );
-}
-
-/** Un bouton COMPACT de section — le bouton commun de l'administration (`AdminButton`), 44 px, jamais étiré. */
-export function SectionButton({
-  type = 'button',
-  tone = 'secondary',
-  disabled = false,
-  label,
-  onClick,
-  data,
-  children,
-}: {
-  readonly type?: 'button' | 'submit';
-  readonly tone?: 'primary' | 'secondary' | 'danger';
-  readonly disabled?: boolean;
-  readonly label?: string;
-  readonly onClick?: () => void;
-  readonly data?: Readonly<Record<`data-${string}`, string>>;
-  readonly children: string;
-}) {
-  return (
-    <AdminButton
-      type={type}
-      tone={tone}
-      disabled={disabled}
-      {...(label === undefined ? {} : { label })}
-      {...(onClick === undefined ? {} : { onClick })}
-      {...(data === undefined ? {} : { data })}
-    >
-      {children}
-    </AdminButton>
-  );
-}
-
-/** Un champ texte d'administration — partagé avec la création d'un compte (#8217). */
-export function Texte({
-  id,
-  label,
-  valeur,
-  type = 'text',
-  focus,
-  error,
-  autoComplete,
-  onFocus,
-  onBlur,
-  onValeur,
-}: {
-  readonly id: string;
-  readonly label: string;
-  readonly valeur: string;
-  readonly type?: 'text' | 'email' | 'password' | 'tel';
-  readonly focus: boolean;
-  readonly error?: string | undefined;
-  readonly autoComplete?: string;
-  readonly onFocus: () => void;
-  readonly onBlur: () => void;
-  readonly onValeur: (valeur: string) => void;
-}) {
-  return (
-    <Field id={id} label={label} tint={BRAND} focused={focus} error={error}>
-      {({ id: champId, describedBy }) => (
-        <input
-          id={champId}
-          type={type}
-          value={valeur}
-          autoCapitalize="none"
-          autoComplete={autoComplete ?? (type === 'password' ? 'new-password' : 'off')}
-          spellCheck={false}
-          aria-describedby={describedBy}
-          aria-invalid={error === undefined ? undefined : true}
-          onInput={(event) => onValeur(event.currentTarget.value)}
-          onFocus={onFocus}
-          onBlur={onBlur}
-          className="w-full bg-transparent text-body outline-none"
-          style={{ minHeight: 44, color: INK }}
-        />
-      )}
-    </Field>
-  );
-}
-
-/** Le focus de plusieurs champs, tenu par UN état : un seul champ l'a à la fois. */
-export function useFieldFocus() {
-  const [focus, setFocus] = useState<string | null>(null);
-  return (name: string) => ({
-    focus: focus === name,
-    onFocus: () => setFocus(name),
-    onBlur: () => setFocus((courant) => (courant === name ? null : courant)),
-  });
-}
-
-export function Choix({
-  id,
-  label,
-  valeur,
-  options,
-  onValeur,
-}: {
-  readonly id: string;
-  readonly label: string;
-  readonly valeur: string;
-  readonly options: readonly { readonly value: string; readonly label: string }[];
-  readonly onValeur: (valeur: string) => void;
-}) {
-  /* Une valeur SERVIE hors de la liste (une langue que ce client ne connaît
-     pas) reste choisie et visible — la remplacer en silence par la première
-     option ferait « changer » la section sans que personne n'y ait touché. */
-  const liste = options.some((option) => option.value === valeur) ? options : [{ value: valeur, label: valeur.toUpperCase() }, ...options];
-  return (
-    <label className="grid gap-1" htmlFor={id}>
-      <span className="text-caption font-medium" style={{ color: 'var(--color-ios-ink-3)' }}>
-        {label}
-      </span>
-      <select
-        id={id}
-        value={valeur}
-        onChange={(event) => onValeur(event.currentTarget.value)}
-        className="rounded-[14px] px-3 text-body"
-        style={{ minHeight: 48, backgroundColor: 'var(--color-ios-card)', border: '1px solid color-mix(in srgb, var(--color-ios-ink-3) 30%, transparent)', color: INK }}
-      >
-        {liste.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
-    </label>
-  );
-}
-
-/** Une bascule ARIA (`role="switch"`) — l'état se lit, jamais la seule couleur. */
-export function Bascule({
-  id,
-  label,
-  actif,
-  disabled = false,
-  hint,
-  onBascule,
-}: {
-  readonly id: string;
-  readonly label: string;
-  readonly actif: boolean;
-  readonly disabled?: boolean;
-  readonly hint?: string;
-  readonly onBascule: (actif: boolean) => void;
-}) {
-  const hintId = `${id}-hint`;
-  return (
-    <div className="flex min-h-11 items-center justify-between gap-3">
-      <div className="min-w-0 flex-1">
-        <label htmlFor={id} className="text-body" style={{ color: INK }}>
-          {label}
-        </label>
-        {hint === undefined ? null : (
-          <p id={hintId} className="text-caption" style={{ color: INK2 }}>
-            {hint}
-          </p>
-        )}
-      </div>
-      <button
-        id={id}
-        type="button"
-        role="switch"
-        aria-checked={actif}
-        aria-describedby={hint === undefined ? undefined : hintId}
-        disabled={disabled}
-        onClick={() => onBascule(!actif)}
-        className="relative h-7 w-12 shrink-0 rounded-full transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-50"
-        style={{ backgroundColor: actif ? BRAND : 'color-mix(in srgb, var(--color-ios-ink-3) 35%, transparent)', outlineColor: BRAND }}
-      >
-        <span aria-hidden="true" className="absolute top-0.5 size-6 rounded-full bg-ios-on-brand transition-all" style={{ insetInlineStart: actif ? 'calc(100% - 1.625rem)' : '0.125rem' }} />
-      </button>
-    </div>
-  );
-}
-
-/** Vérifié ✓ ou non : le MOT porte l'état, la couleur ne fait que l'appuyer. */
-export function BadgeVerifie({ verifie, language }: { readonly verifie: boolean; readonly language: AdminLanguage }) {
-  const teinte = verifie ? 'var(--color-success)' : 'var(--color-ios-ink-2)';
-  return (
-    <span
-      data-admin-verified={verifie ? 'true' : 'false'}
-      className="inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-caption font-semibold"
-      style={{
-        color: teinte,
-        backgroundColor: `color-mix(in srgb, ${teinte} 14%, transparent)`,
-        border: `1px solid color-mix(in srgb, ${teinte} 40%, transparent)`,
-      }}
-    >
-      {verifie ? <span aria-hidden="true">✓</span> : null}
-      {translateAdmin(language, verifie ? 'admin.contact.verified' : 'admin.contact.unverified')}
-    </span>
   );
 }

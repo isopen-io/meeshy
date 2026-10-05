@@ -7,7 +7,7 @@ import { adminIdentityFixture, expectNoRawIdentifiers } from '@/test-support/adm
 import { setupAdminKitTests } from '@/test-support/admin-harness';
 
 import { AdminGlyph } from './admin-glyph';
-import { AdminBadge, AdminInterpretedBadge, AdminLanguageBadge, AdminRoleBadge } from './badges';
+import { AdminBadge, AdminInterpretedBadge, AdminLanguageBadge, AdminRoleBadge, AdminVerifiedBadge } from './badges';
 import { AdminMetaPanel, AdminMetaRow, AdminMomentText, AdminTechnicalId } from './meta';
 import { AdminPageHeader } from './page-header';
 import { AdminAnnouncement } from './announcement';
@@ -307,5 +307,34 @@ describe('les pièces reprises de routes/admin-parts', () => {
     const host = await mount(<AdminEmptyState title="Aucune image publique" data={{ 'data-admin-image-candidates-empty': '' }} />);
     expect(host.querySelector('[data-admin-image-candidates-empty]')?.textContent).toBe('Aucune image publique');
     expect(host.querySelector('[data-admin-empty]')).not.toBeNull();
+  });
+});
+
+describe('les pièces reprises de la fiche d’un membre (LOT-PANELS)', () => {
+  test('le refus d’un bloc dit son propre motif, sous l’ancre de l’écran qui le monte', async () => {
+    const host = await mount(<AdminDeniedInline language="fr" message="Réservé au pilotage de l’agent" data={{ 'data-admin-agent-denied': '' }} />);
+    const bloc = host.querySelector('[data-admin-agent-denied]');
+    expect(bloc?.hasAttribute('data-admin-denied-inline')).toBe(true);
+    expect(bloc?.textContent).toBe('Réservé au pilotage de l’agent');
+  });
+
+  test('un avis porte l’ancre de l’écran, et le danger reste une alerte', async () => {
+    const host = await mount(<AdminInlineNotice tone="danger" text="Le rôle change ses droits" data={{ 'data-admin-edit-warning': 'role' }} />);
+    const avis = host.querySelector('[data-admin-edit-warning="role"]');
+    expect(avis?.getAttribute('role')).toBe('alert');
+    expect(avis?.getAttribute('data-admin-notice')).toBe('danger');
+    expect(avis?.textContent).toBe('Le rôle change ses droits');
+  });
+
+  test('vérifié ou non : le MOT porte l’état, le glyphe ✓ n’appuie que le vérifié', async () => {
+    const host = await mount(
+      <div>
+        <AdminVerifiedBadge verified language="fr" />
+        <AdminVerifiedBadge verified={false} language="fr" />
+      </div>,
+    );
+    const [oui, non] = [...host.querySelectorAll('[data-admin-verified]')];
+    expect([oui?.getAttribute('data-admin-verified'), oui?.textContent]).toEqual(['true', '✓Vérifié']);
+    expect([non?.getAttribute('data-admin-verified'), non?.textContent]).toEqual(['false', 'Non vérifié']);
   });
 });

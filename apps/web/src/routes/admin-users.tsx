@@ -2,6 +2,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 
 import { AdminBadge, AdminInterpretedBadge, AdminRoleBadge } from '@/components/admin/badges';
+import { AdminButton } from '@/components/admin/button';
 import { AdminEntityIdentity } from '@/components/admin/entity-chip';
 import { AdminEntityList, type AdminColumn } from '@/components/admin/entity-list';
 import { AdminListToolbar, type AdminToolbarFilter } from '@/components/admin/list-toolbar';
@@ -24,7 +25,6 @@ import { currentAdminLanguage, suspendForAdminInterfaceCatalog, translateAdmin, 
 import { useRoute } from '@/lib/router';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
 
-import { SectionButton } from './admin-member-parts';
 import { AdminAnnouncement } from './admin-parts';
 import { AdminUserCreateSheet } from './admin-user-create-sheet';
 import { href, navigate } from './route-table';
@@ -282,9 +282,9 @@ export default function AdminUsersScreen() {
             actions={
               /* CRÉER UN COMPTE (#8217) — en haut à droite de l'en-tête (#8289) ; le compte créé
                  s'ouvre aussitôt dans sa fiche. */
-              <SectionButton tone="primary" data={{ 'data-admin-create-open': '' }} onClick={() => setCreation(true)}>
+              <AdminButton tone="primary" data={{ 'data-admin-create-open': '' }} onClick={() => setCreation(true)}>
                 {translateAdmin(language, 'admin.create.open')}
-              </SectionButton>
+              </AdminButton>
             }
           />
           <AdminUsersPanel language={language} />
