@@ -375,8 +375,16 @@ actor MediaCompressor {
     /// Single-pass CGImage downsample using ImageIO. Skips the JPEG@1.0 round-trip
     /// that the data-based variant requires when the caller already holds a CGImage
     /// (via `UIImage.cgImage`). Cuts ~150ms on a 4K source.
+    ///
+    /// **Échelle 1, et ce n'est pas un détail** (#6922) : le format par défaut
+    /// prend l'échelle de l'ÉCRAN, si bien qu'une cible de 2 048 sortait à
+    /// 6 144 px sur un écran ×3 — un bitmap transitoire de 113 Mo par photo et
+    /// un JPEG plus lourd que l'original. `targetSize` est en pixels.
     private func downsample(cgImage: CGImage, maxDimension: CGFloat) -> UIImage? {
-        let renderer = UIGraphicsImageRenderer(size: targetSize(for: cgImage, maxDimension: maxDimension))
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1
+        let renderer = UIGraphicsImageRenderer(size: targetSize(for: cgImage, maxDimension: maxDimension),
+                                               format: format)
         let downsampled = renderer.image { ctx in
             ctx.cgContext.interpolationQuality = .high
             UIImage(cgImage: cgImage).draw(in: CGRect(origin: .zero, size: renderer.format.bounds.size))

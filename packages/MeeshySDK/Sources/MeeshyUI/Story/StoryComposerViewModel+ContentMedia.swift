@@ -229,7 +229,12 @@ public extension StoryComposerViewModel {
             let objectId = UUID().uuidString
             switch item.kind {
             case .image:
-                guard let image = UIImage(contentsOfFile: item.sourceURL.path) else {
+                // **À la taille PUBLIÉE, jamais pleine taille** (#6922) : la
+                // scène gardait sinon chaque photo décodée entière, pour toutes
+                // les scènes à la fois. Le fichier copié plus bas reste
+                // l'original de l'auteur, octet pour octet.
+                guard let image = SceneImageDownsampling.image(
+                    fileAt: item.sourceURL, maxPixelSize: SceneImageDownsampling.workingMaxPixelSize) else {
                     journal.error(
                         "applyContentMedia: image NON DÉCODABLE, ignorée — \(item.sourceURL.lastPathComponent, privacy: .public) mime=\(item.mimeType ?? "nil", privacy: .public)"
                     )

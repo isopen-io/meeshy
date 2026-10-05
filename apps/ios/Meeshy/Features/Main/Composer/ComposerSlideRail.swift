@@ -108,7 +108,10 @@ struct ComposerSlideRail: View {
             bgImage: slideImages[slide.id],
             drawingData: slide.effects.drawingData,
             loadedImages: loadedImages,
-            index: index
+            index: index,
+            // Une tuile de 44 pt peint une VIGNETTE, jamais la photo entière
+            // de sa scène (#6922) — cache borné, purgé sous pression mémoire.
+            thumbnails: SceneThumbnailCache.shared
         )
         // La diapositive est une scène : TOUJOURS 9:16 (`SceneShape.aspect`, #6896/#6904).
         .frame(width: cote * SceneShape.aspect, height: cote)
