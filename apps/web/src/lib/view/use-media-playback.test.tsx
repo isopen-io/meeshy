@@ -481,6 +481,41 @@ describe('useMediaPlayback — image dans l’image (#6359)', () => {
     });
     expect(attr(el, 'data-pip')).toBe('unsupported');
   });
+
+  test('dans la coque Android, sans API du navigateur, la vidéo l’offre et flotte par la coque (#9410)', async () => {
+    Object.defineProperty(pipDocument(), 'pictureInPictureEnabled', { value: false, configurable: true });
+    const appels: string[] = [];
+    const shell = globalThis as { Capacitor?: unknown };
+    shell.Capacitor = {
+      PluginHeaders: [{ name: 'MeeshyPlayback', methods: [{ name: 'floatVideo' }] }],
+      nativePromise: (_plugin: string, methode: string) => {
+        appels.push(methode);
+        return Promise.resolve({ floated: true });
+      },
+    };
+    try {
+      const coordinator = createMediaCoordinator();
+      let playback!: MediaPlayback;
+      const el = mount({ onReady: (p) => (playback = p), attachmentId: 'v', coordinator, tag: 'video', tracksTime: true });
+      const video = mediaOf(el) as HTMLVideoElement;
+      let pleinEcran = 0;
+      video.requestFullscreen = () => {
+        pleinEcran += 1;
+        return Promise.resolve();
+      };
+      await act(async () => {
+        video.dispatchEvent(new Event('loadedmetadata'));
+      });
+      expect(attr(el, 'data-pip')).toBe('inactive');
+      await act(async () => {
+        playback.togglePictureInPicture();
+      });
+      expect(pleinEcran).toBe(1);
+      expect(appels).toEqual(['floatVideo']);
+    } finally {
+      delete shell.Capacitor;
+    }
+  });
 });
 
 describe('useMediaPlayback — démontage (#5805)', () => {
