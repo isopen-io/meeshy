@@ -47,4 +47,18 @@ final class MockComposerCaptureCamera: ComposerCaptureCameraProviding {
     func takePhoto(flash: AVCaptureDevice.FlashMode) {
         photoFlashes.append(flash)
     }
+
+    /// Ce que l'objectif sait régler : `false` ⇒ ni point de netteté ni d'exposition.
+    var focusResult = true
+    private(set) var focusRequests: [(point: CGPoint, smooth: Bool)] = []
+    private(set) var exposureBiases: [Float] = []
+
+    func focus(at devicePoint: CGPoint, smooth: Bool) -> Bool {
+        focusRequests.append((devicePoint, smooth))
+        return focusResult
+    }
+
+    func setExposureBias(_ bias: Float) {
+        exposureBiases.append(bias)
+    }
 }
