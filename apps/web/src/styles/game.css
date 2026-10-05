@@ -129,8 +129,21 @@
   }
 }
 
-[data-game-gl='on'] [data-game-sheen] {
+[data-game-gl='on'] [data-game-sheen],
+[data-game-gl='on'] [data-game-shockwave] {
   display: none;
+}
+
+/* L'anneau de l'onde de frappe : une bordure, invisible au repos. La chorégraphie
+   (`[data-game-shockwave]`) le fait grandir et s'effacer ; quand WebGL2 peint
+   l'onde (`data-game-gl='on'`), il se tait. */
+[data-game-shockwave] {
+  position: absolute;
+  inset: 0;
+  border: 2px solid var(--game-glint);
+  border-radius: 50%;
+  opacity: 0;
+  pointer-events: none;
 }
 
 @keyframes gameSheen {
