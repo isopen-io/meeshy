@@ -46,12 +46,16 @@ import { getSharedNotificationService } from '../notifications/notification-serv
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import type { ServerEmitIO } from '../../socketio/serverEmit';
-import { ONE_DAY_MS, civilDayInTimezone, startOfUtcDay } from './civilDay';
-import { ConversationEngagementRecorder, isDailyCapReached } from './ConversationEngagementRecorder';
+import { ONE_DAY_MS, civilDayInTimezone, civilDayKey } from './civilDay';
+import { ConversationEngagementRecorder, dayCountsFor, isDailyCapReached } from './ConversationEngagementRecorder';
 import { engagementScaleServiceFor, type EngagementScaleSource } from './EngagementScaleService';
 import { getEngagementEmitIO } from './engagement-emit-registry';
 import { memberSignature } from './memberSignature';
 import { EngagementQuotas, dayBucket } from './EngagementQuotas';
+import { EngagementGameHooks, applyTailwind, quarterPoints } from '../game/EngagementGameHooks';
+import { FLAME_USER_SELECT, flameFactsOf, planStreak } from '../game/FlameService';
+import type { MessageSignalInput } from '../game/MessageGameSignals';
+import { levelFromScore } from '@meeshy/shared/utils/game/levels';
 
 const log = enhancedLogger.child({ module: 'EngagementService' });
 
@@ -86,6 +90,8 @@ type ElanInputs = {
   readonly achievementCount: number;
   readonly badgeThresholds: readonly number[];
   readonly engagementScore: number;
+  /** Le plus haut niveau atteint (#9377) — règle le Vent arrière ; `null` pour un compte antérieur au jeu. */
+  readonly levelRecord: number | null;
   readonly timezone: string | null;
   /** Un e-mail ou un téléphone vérifié — ce qui ouvre les gros poids en entier. */
   readonly verified: boolean;
@@ -155,6 +161,7 @@ export type EngagementLinkVisit = {
 export type EngagementServiceDeps = {
   readonly scale?: EngagementScaleSource;
   readonly emitIO?: () => ServerEmitIO | undefined;
+  readonly game?: EngagementGameHooks;
 };
 
 export class EngagementService {
@@ -167,6 +174,9 @@ export class EngagementService {
 
   private readonly quotas: EngagementQuotas;
 
+  /** Le jeu (#9374…#9377) : Vent arrière, frein de l'entre-soi, missions, Gloire. */
+  private readonly game: EngagementGameHooks;
+
   constructor(
     private readonly prisma: PrismaClient,
     deps: EngagementServiceDeps = {},
@@ -174,6 +184,7 @@ export class EngagementService {
     this.scale = deps.scale ?? engagementScaleServiceFor(prisma);
     this.conversationRecorder = new ConversationEngagementRecorder(prisma, deps.emitIO ?? getEngagementEmitIO);
     this.quotas = new EngagementQuotas(prisma);
+    this.game = deps.game ?? new EngagementGameHooks(prisma, (userId, points, axisKey) => this.creditGamePoints(userId, points, axisKey));
   }
 
   /**
@@ -206,7 +217,7 @@ export class EngagementService {
       }),
       this.prisma.user.findUnique({
         where: { id: userId },
-        select: { engagementScore: true, timezone: true, emailVerifiedAt: true, phoneVerifiedAt: true },
+        select: { engagementScore: true, levelRecord: true, timezone: true, emailVerifiedAt: true, phoneVerifiedAt: true },
       }),
     ]);
 
@@ -233,6 +244,7 @@ export class EngagementService {
       achievementCount,
       badgeThresholds,
       engagementScore: typeof compte?.engagementScore === 'number' ? compte.engagementScore : 0,
+      levelRecord: typeof compte?.levelRecord === 'number' ? compte.levelRecord : null,
       timezone: typeof compte?.timezone === 'string' ? compte.timezone : null,
       verified: Boolean(compte?.emailVerifiedAt ?? compte?.phoneVerifiedAt),
       expiresAt: maintenant + ELAN_CACHE_TTL_MS,
@@ -298,7 +310,10 @@ export class EngagementService {
     const heavy = basePointsForOperation(scale, operationKey, options.variant) >= scale.abuse.heavyPoints;
     const earned = pointsForOperation(scale, operationKey, factor, options.variant);
     // Un compte sans contact vérifié ne publie pas au prix fort (#8959).
-    const points = heavy && !inputs.verified ? Math.min(earned, scale.abuse.unverifiedMaxPoints) : earned;
+    const capped = heavy && !inputs.verified ? Math.min(earned, scale.abuse.unverifiedMaxPoints) : earned;
+    // Le Vent arrière (#9377) : +25 % tant que le niveau est sous le niveau
+    // record — le MÊME montant au compteur et au score, l'invariant tient.
+    const boosted = applyTailwind(capped, inputs);
 
     // Le plafond journalier par conversation se lit AVANT toute écriture :
     // atteint, le geste ne crédite RIEN — ni compteur, ni score, ni série.
@@ -312,6 +327,18 @@ export class EngagementService {
     ) {
       return;
     }
+    // Les garde-fous de l'entre-soi (#9377), AVANT de consommer un seau de quota :
+    // rien pour un message à soi, à un compte neuf ou bloqué ; ÷4 au-delà de 50
+    // messages par jour entre deux comptes seuls.
+    const dailyCounts = dayCountsFor(conversationRow, today);
+    const verdict = await this.game.messageVerdict({
+      userId,
+      conversationId,
+      operationKey,
+      dailyMessages: (dailyCounts['content.text_message'] ?? 0) + (dailyCounts['content.audio_message'] ?? 0),
+    });
+    if (verdict === 'none') return;
+    const points = verdict === 'quarter' ? quarterPoints(boosted) : boosted;
     const admitted = await this.quotas.admit({
       userId,
       operationKey,
@@ -337,6 +364,36 @@ export class EngagementService {
         previous: conversationRow,
       });
     }
+
+    await this.game.onCredited({
+      userId,
+      operationKey,
+      dayKey: civilDayKey(today),
+      timezone: inputs.timezone,
+      record: Math.max(levelFromScore(inputs.engagementScore), inputs.levelRecord ?? 0),
+    });
+  }
+
+  /**
+   * Les points du JEU (missions, coffre, réponse reçue) : ils montent le score
+   * et les points d'un axe — débitables comme ceux de cet axe — sans compter une
+   * action de plus ni passer par l'élan, le Vent arrière ou les plafonds : ils
+   * sont DÉJÀ le résultat d'un geste admis. Même invariant que `credit` :
+   * `engagementScore == Σ(EngagementCounter.points)`.
+   */
+  async creditGamePoints(userId: string, points: number, axisKey: EngagementAxisKey): Promise<void> {
+    if (!Number.isInteger(points) || points <= 0) return;
+    await this.prisma.engagementCounter.upsert({
+      where: { userId_axisKey: { userId, axisKey } },
+      create: { userId, axisKey, count: 0, points },
+      update: { points: { increment: points } },
+    });
+    await this.updateEngagementScore(userId, points);
+  }
+
+  /** Un message committé (#9375, #9377) : signaux de mission et réponse reçue. */
+  recordMessageSignals(input: MessageSignalInput): Promise<void> {
+    return this.game.recordMessage(input);
   }
 
   /**
@@ -689,42 +746,32 @@ export class EngagementService {
    * à 1, jamais `NaN`.
    */
   private async updateStreak(scale: EngagementScale, userId: string): Promise<void> {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { currentStreakDays: true, longestStreakDays: true, lastStreakDate: true, timezone: true },
-    });
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: FLAME_USER_SELECT });
     if (!user) return;
 
-    const today = civilDayInTimezone(new Date(), user.timezone);
-    // `lastStreakDate` already stores a CIVIL-DAY MARKER (`Date.UTC(y, m, d)`,
-    // written below) — re-running it through `civilDayInTimezone` would
-    // reinterpret that midnight-UTC instant AS IF it were a fresh moment in the
-    // user's timezone, shifting it a day off for any non-UTC offset. Only
-    // `startOfUtcDay` (idempotent on an already-normalized marker) belongs here.
-    const lastDay = user.lastStreakDate ? startOfUtcDay(user.lastStreakDate) : null;
-
-    if (lastDay && lastDay.getTime() === today.getTime()) {
-      return;
-    }
+    // La transition est la LOI de la Flamme (`advanceFlame`, #9376) : un jour
+    // manqué consomme un gel quand les gels les couvrent TOUS, sinon la Flamme
+    // s'éteint — la série perdue est gardée pour le rallumage de 48 h. Sans gel,
+    // le comportement d'avant est exact : un jour sauté remet la série à 1.
+    //
+    // `lastStreakDate` stocke déjà un MARQUEUR de jour civil (`Date.UTC(y, m, d)`,
+    // écrit par le plan) : `flameFactsOf` le lit tel quel (`civilDayKey`), sans le
+    // refaire passer par le fuseau, qui le décalerait d'un jour hors UTC.
+    const plan = planStreak(flameFactsOf(user, new Date()));
+    if (plan.data === null) return;
 
     const previousStreak = user.currentStreakDays ?? 0;
-    const isConsecutiveDay = lastDay !== null && today.getTime() - lastDay.getTime() === ONE_DAY_MS;
-    const newStreak = isConsecutiveDay ? previousStreak + 1 : 1;
-    const newLongest = Math.max(user.longestStreakDays ?? 0, newStreak);
-
-    await this.prisma.user.update({
-      where: { id: userId },
-      data: { currentStreakDays: newStreak, longestStreakDays: newLongest, lastStreakDate: today },
-    });
+    await this.prisma.user.update({ where: { id: userId }, data: plan.data });
 
     const crossedThresholds = STREAK_THRESHOLDS.filter(
-      (threshold) => threshold > previousStreak && threshold <= newStreak,
+      (threshold) => threshold > previousStreak && threshold <= plan.streak,
     );
 
     for (const threshold of crossedThresholds) {
       await this.tryAwardStreakMilestone(userId, threshold);
     }
-    await this.creditStreakBonus(scale, userId, previousStreak, newStreak);
+    await this.creditStreakBonus(scale, userId, previousStreak, plan.streak);
+    await this.game.onStreak(userId, plan);
   }
 
   /**
@@ -840,8 +887,8 @@ export class EngagementService {
       query: { _id: { $oid: userId } },
       update: [{ $set: { engagementScore: { $add: [{ $ifNull: ['$engagementScore', 0] }, points] } } }],
       new: true,
-      fields: { engagementScore: 1 },
-    } as never)) as unknown as { value?: { engagementScore?: number } | null };
+      fields: { engagementScore: 1, levelRecord: 1 },
+    } as never)) as unknown as { value?: { engagementScore?: number; levelRecord?: number | null } | null };
 
     const newScore = result?.value?.engagementScore;
     // Compte introuvable (supprimé entre l'activité et ce crédit) : rien à
@@ -855,6 +902,9 @@ export class EngagementService {
     for (const threshold of crossedThresholds) {
       await this.tryAwardLevelUp(userId, threshold);
     }
+    // La Gloire du premier passage de chaque niveau (#9374) : le record rendu
+    // par la MÊME commande que le score — aucune lecture de plus sur la voie chaude.
+    await this.game.onScore(userId, newScore, result?.value?.levelRecord ?? null);
   }
 
   /**

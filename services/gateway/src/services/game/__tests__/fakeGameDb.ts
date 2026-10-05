@@ -193,6 +193,7 @@ export type FakeGameDb = {
   readonly engagementMilestone: Model;
   readonly participant: Model;
   readonly message: Model;
+  readonly conversationEngagement: Model;
 };
 
 export function fakeGameDb(): FakeGameDb {
@@ -206,9 +207,31 @@ export function fakeGameDb(): FakeGameDb {
   const engagementMilestone = flattenCompound(new Model({ uniques: [['userId', 'milestoneType', 'milestoneKey']] }));
   const participant = new Model();
   const message = new Model();
-  const models = { user, gloryLedger, meeshLedger, dailyMission, gameDay, engagementCounter, engagementQuota, engagementMilestone, participant, message };
+  const conversationEngagement = flattenCompound(new Model({ uniques: [['userId', 'conversationId']] }));
+  const models = { user, gloryLedger, meeshLedger, dailyMission, gameDay, engagementCounter, engagementQuota, engagementMilestone, participant, message, conversationEngagement };
 
-  const client = { ...models };
+  /**
+   * La seule commande brute que le service émet : `findAndModify` sur `User`
+   * avec un pipeline `$add` / `$ifNull` — l'incrément qui lit l'ABSENCE comme zéro.
+   */
+  const $runCommandRaw = async (command: {
+    findAndModify: string;
+    query: { _id: { $oid: string } };
+    update: { $set: Record<string, { $add: [{ $ifNull: [string, number] }, number] }> }[];
+    fields?: Record<string, number>;
+  }) => {
+    const row = user.rows.find((r) => r.id === command.query._id.$oid);
+    if (!row) return { ok: 1, value: null };
+    for (const [key, expression] of Object.entries(command.update[0]!.$set)) {
+      const before = row[key];
+      row[key] = (typeof before === 'number' ? before : expression.$add[0].$ifNull[1]) + expression.$add[1];
+    }
+    const out: Record<string, unknown> = {};
+    for (const key of Object.keys(command.fields ?? {})) out[key] = row[key] ?? null;
+    return { ok: 1, value: out };
+  };
+
+  const client = { ...models, $runCommandRaw };
   // Les transactions se SÉRIALISENT : Mongo n'en laisse pas deux écrire le même
   // document, la perdante est annulée seule. Sans verrou, l'annulation d'une
   // transaction (restauration de son instantané) effacerait l'écriture d'une
