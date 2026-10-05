@@ -196,6 +196,30 @@ describe('le selfie', () => {
   });
 });
 
+describe('la photo se fige au déclenchement', () => {
+  test('l’image prise reste à l’écran pendant la frappe — une caméra rendue ne laisse pas un écran noir', async () => {
+    const { env: base, log } = env();
+    const frozen = {
+      ...base,
+      captureVideo: () => ({
+        image: { toBlob: (done: (blob: Blob | null) => void) => done(new Blob(['still'], { type: 'image/png' })) } as unknown as CanvasImageSource,
+        width: 1080,
+        height: 1920,
+        mirror: true,
+      }),
+      render: () => new Promise<never>(() => undefined),
+    } as PhotoEnv;
+    const host = await open(rank, frozen, log);
+    await click(choose(host, 'selfie'));
+    await settle();
+    await click(by(host, 'data-photo-shutter'));
+    await settle();
+    const still = host.querySelector('[data-photo-still]');
+    expect(still).not.toBeNull();
+    expect(still?.getAttribute('style') ?? '').toContain('scaleX(-1)');
+  });
+});
+
 describe('une caméra refusée n’est pas une impasse', () => {
   const refused = (reason: 'denied' | 'unsupported' | 'unavailable') => env({ camera: { ok: false, reason } });
 

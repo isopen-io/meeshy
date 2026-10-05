@@ -78,12 +78,14 @@ export function GamePhotoFlow({ moment, env, onClose }: Props) {
   const closed = useRef(false);
   const [galleryFile, setGalleryFile] = useState<File | null>(null);
   const [galleryError, setGalleryError] = useState(false);
+  const [still, setStill] = useState<Blob | null>(null);
   const [files, setFiles] = useState<PhotoFiles | null>(null);
   const [format, setFormat] = useState<PhotoFormat>('story');
   const [notice, setNotice] = useState<{ readonly tone: 'good' | 'error'; readonly text: string } | null>(null);
 
   const dateLabel = useMemo(() => dateLabelOf(env.now()), [env]);
   const galleryUrl = useObjectUrl(galleryFile);
+  const stillUrl = useObjectUrl(still);
   const previewUrl = useObjectUrl(files === null ? null : files[format]);
 
   const stopCamera = useCallback(() => {
@@ -170,6 +172,8 @@ export function GamePhotoFlow({ moment, env, onClose }: Props) {
     }
     element?.pause?.();
     photo.current = captured;
+    /* L'image prise reste à l'écran : une caméra rendue peut laisser un écran noir derrière le cadre. */
+    (captured.image as { toBlob?: (done: (blob: Blob | null) => void) => void }).toBlob?.((blob) => setStill(blob));
     dispatch({ type: 'shutter' });
   }, [env]);
 
@@ -287,6 +291,9 @@ export function GamePhotoFlow({ moment, env, onClose }: Props) {
           >
             {stageMode === 'selfie' ? (
               <video ref={video} playsInline muted autoPlay className="absolute inset-0 size-full object-cover" style={{ transform: 'scaleX(-1)' }} />
+            ) : null}
+            {stageMode === 'selfie' && state.step === 'striking' && stillUrl !== null ? (
+              <img data-photo-still="" src={stillUrl} alt="" className="absolute inset-0 size-full object-cover" style={{ transform: 'scaleX(-1)' }} />
             ) : null}
             {stageMode === 'gallery' && galleryUrl !== null ? <img src={galleryUrl} alt="" className="absolute inset-0 size-full object-cover" /> : null}
             <GamePhotoFrame moment={moment} dateLabel={dateLabel} format="story" />
