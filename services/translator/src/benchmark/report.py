@@ -10,8 +10,9 @@ from .runner import BenchmarkReport, DirectionResult
 
 MARKDOWN_HEADER = (
     "| direction | segments | chrF | COMET | court p50 (ms) | court p95 (ms) "
-    "| long p50 (ms) | long p95 (ms) | échecs |\n"
-    "|---|---|---|---|---|---|---|---|---|"
+    "| long p50 (ms) | long p95 (ms) | échecs | sortie max (car.) | sortie/source max "
+    "| au budget | boucles |\n"
+    "|---|---|---|---|---|---|---|---|---|---|---|---|---|"
 )
 
 
@@ -36,6 +37,10 @@ def _direction(data: Mapping[str, Any]) -> DirectionResult:
         short=_latency(data["short"]),
         long=_latency(data["long"]),
         failures=data["failures"],
+        output_chars_max=data.get("output_chars_max"),
+        output_ratio_max=data.get("output_ratio_max"),
+        budget_hits=data.get("budget_hits"),
+        loop_stops=data.get("loop_stops"),
     )
 
 
@@ -50,6 +55,10 @@ def _cell(value: float | None, digits: int) -> str:
     return "—" if value is None else f"{value:.{digits}f}"
 
 
+def _count(value: int | None) -> str:
+    return "—" if value is None else str(value)
+
+
 def _row(direction: DirectionResult) -> str:
     cells = (
         direction.label,
@@ -61,6 +70,10 @@ def _row(direction: DirectionResult) -> str:
         _cell(direction.long.p50_ms, 0),
         _cell(direction.long.p95_ms, 0),
         str(direction.failures),
+        _count(direction.output_chars_max),
+        _cell(direction.output_ratio_max, 2),
+        _count(direction.budget_hits),
+        _count(direction.loop_stops),
     )
     return f"| {' | '.join(cells)} |"
 
