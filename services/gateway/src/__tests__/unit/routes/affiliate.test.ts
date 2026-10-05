@@ -308,6 +308,17 @@ describe('GET /affiliate/validate/:token', () => {
     expect(body.success).toBe(true);
     expect(body.data.isValid).toBe(true);
   });
+
+  it('ne livre jamais le nom civil du parrain à un appelant public (H-1) : prénom et nom à null, champs gardés', async () => {
+    (app as any).prisma.affiliateToken.findUnique.mockClear();
+    const res = await app.inject({ method: 'GET', url: '/affiliate/validate/' + TOKEN_CODE });
+    const affiliateUser = res.json().data.affiliateUser;
+    expect(affiliateUser).toHaveProperty('firstName', null);
+    expect(affiliateUser).toHaveProperty('lastName', null);
+    const select = (app as any).prisma.affiliateToken.findUnique.mock.calls[0][0].include.creator.select;
+    expect(select).not.toHaveProperty('firstName');
+    expect(select).not.toHaveProperty('lastName');
+  });
 });
 
 // ─── POST /affiliate/track-visit ─────────────────────────────────────────────

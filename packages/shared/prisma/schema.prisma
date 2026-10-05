@@ -5405,6 +5405,27 @@ model AchievementRarityStat {
   measuredAt   DateTime @default(now())
 }
 
+/// Une VISITE d'un lien de parrainage (#7742, conformité H-9) : l'identité de la
+/// session — jamais l'adresse IP, l'agent utilisateur, le référent, le pays ni la
+/// langue du visiteur (RGPD art. 5(1)(c) et (e), 25(1)). Elle remplace les lignes
+/// `UserPreference` « affiliate_session_* » qui portaient ces données EN CLAIR
+/// sous l'identifiant du parrain, sans purge. `expiresAt` porte l'index TTL
+/// (30 jours au plus) : MongoDB la supprime seul, la purge applicative double la
+/// garantie (`cleanupExpiredData`).
+model AffiliateVisitSession {
+  id               String    @id @default(auto()) @map("_id") @db.ObjectId
+  sessionKey       String    @unique
+  affiliateTokenId String    @db.ObjectId
+  affiliateUserId  String    @db.ObjectId
+  /// Posé à l'inscription du visiteur ; `null` tant qu'il n'est pas converti.
+  convertedAt      DateTime?
+  referredUserId   String?   @db.ObjectId
+  createdAt        DateTime  @default(now())
+  expiresAt        DateTime
+
+  @@index([expiresAt])
+}
+
 /// « Mes stickers » — un sticker de BIBLIOTHÈQUE qu'un utilisateur possède (#7938).
 /// Définition partagée : `packages/shared/types/sticker-definition.ts`.
 /// Le fichier vit sous `stickers/<userId>/` du volume d'uploads et se sert par

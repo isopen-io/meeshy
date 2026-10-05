@@ -6,7 +6,7 @@
  *
  * Collections NEUVES : `GameProfile`, `LeaguePseudonym`, `LeagueGroupWeek`,
  * `LeagueMembership`, `GameWeekPoints`, `GameDuo`, `GameDuoSlot`, `GameSeason`,
- * `GameTrophy`, `AtlasStamp`, `AchievementRarityStat`. Les champs ajoutés à
+ * `GameTrophy`, `AtlasStamp`, `AchievementRarityStat`, `AffiliateVisitSession` (avec son index TTL). Les champs ajoutés à
  * `User` (`publicLeagueConsentAt`, `publicLeagueConsentVersion`) sont
  * optionnels : AUCUN index ni backfill — un champ absent se lit « pas de
  * consentement ».
@@ -45,6 +45,9 @@ const specs = [
   { collection: 'GameTrophy', name: 'GameTrophy_userId_key_key', key: { userId: 1, key: 1 }, unique: true },
   { collection: 'GameTrophy', name: 'GameTrophy_userId_awardedAt_idx', key: { userId: 1, awardedAt: 1 } },
   { collection: 'AtlasStamp', name: 'AtlasStamp_userId_language_key', key: { userId: 1, language: 1 }, unique: true },
+  { collection: 'AffiliateVisitSession', name: 'AffiliateVisitSession_sessionKey_key', key: { sessionKey: 1 }, unique: true },
+  // L'index TTL : MongoDB supprime seul une session expirée (conformité H-9, 30 jours au plus).
+  { collection: 'AffiliateVisitSession', name: 'AffiliateVisitSession_expiresAt_ttl', key: { expiresAt: 1 }, expireAfterSeconds: 0 },
   { collection: 'AchievementRarityStat', name: 'AchievementRarityStat_milestoneKey_key', key: { milestoneKey: 1 }, unique: true },
 ];
 
@@ -84,6 +87,7 @@ for (const spec of specs) {
 
   const options = { name: spec.name };
   if (spec.unique) options.unique = true;
+  if (spec.expireAfterSeconds !== undefined) options.expireAfterSeconds = spec.expireAfterSeconds;
   if (spec.partialFilterExpression) options.partialFilterExpression = spec.partialFilterExpression;
 
   if (!dryRun) {

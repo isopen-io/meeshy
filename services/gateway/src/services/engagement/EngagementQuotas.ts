@@ -148,4 +148,17 @@ export class EngagementQuotas {
     });
     return cleared.count > 0 ? row.points : 0;
   }
+
+  /**
+   * Purge les seaux de VISITEUR (`visit:<lien>:<empreinte>`) dont la dernière
+   * visite dépasse `olderThanMs` (conformité H-6, RGPD art. 5(1)(e)) : une fois la
+   * fenêtre de dédoublonnage passée, l'empreinte n'a plus aucune raison d'exister.
+   * Les seaux de COMPTE (`link:`, `day:`, `target:`…) ne sont pas touchés.
+   */
+  async purgeVisitBuckets(olderThanMs: number, now: Date = new Date()): Promise<number> {
+    const result = await this.prisma.engagementQuota.deleteMany({
+      where: { bucket: { startsWith: 'visit:' }, updatedAt: { lt: new Date(now.getTime() - olderThanMs) } },
+    });
+    return result.count;
+  }
 }

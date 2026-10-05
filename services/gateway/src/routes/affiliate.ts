@@ -546,8 +546,6 @@ export default async function affiliateRoutes(fastify: FastifyInstance) {
             select: {
               id: true,
               username: true,
-              firstName: true,
-              lastName: true,
               displayName: true,
               avatar: true
             }
@@ -587,8 +585,11 @@ export default async function affiliateRoutes(fastify: FastifyInstance) {
         affiliateUser: {
           id: affiliateToken.creator.id,
           username: affiliateToken.creator.username,
-          firstName: affiliateToken.creator.firstName,
-          lastName: affiliateToken.creator.lastName,
+          // Le nom civil ne sort JAMAIS d'une porte publique (RGPD art. 5(1)(c), 25(2) ;
+          // conformité H-1) : les champs restent — un ancien client les décode —, à `null`.
+          // Ce que l'invité voit est le nom d'affichage et le pseudo, que le parrain a choisis.
+          firstName: null,
+          lastName: null,
           displayName: affiliateToken.creator.displayName,
           avatar: affiliateToken.creator.avatar
         }
