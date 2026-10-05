@@ -9,7 +9,7 @@ import { mintBadgeImpact, type MintBadgeImpact } from '@/lib/view/game-mint';
 import type { DataSource } from './config';
 import { ENGAGEMENT_PROGRESS_FIXTURE } from './engagement-fixture';
 import { readGameBlock } from './game';
-import { gameBlockFixture } from './game-fixture';
+import { gameBlockWithExtrasFixture } from './game-fixture';
 import type { ApiResult, HttpTransport } from './http';
 
 /**
@@ -86,7 +86,7 @@ export async function loadEngagementProgress(params: {
   readonly signal?: AbortSignal;
 }): Promise<ApiResult<EngagementWithGame>> {
   if (params.source === 'fixtures') {
-    const game = gameBlockFixture();
+    const game = gameBlockWithExtrasFixture();
     return {
       ok: true,
       data: withGame(
