@@ -50,6 +50,23 @@ describe('GameBlockService.build', () => {
     expect(block.boosts.tailwind).toBe(1.25);
   });
 
+  it('quand la journée de jeu ouverte la veille au soir continue, la Flamme se juge sur le jour CIVIL', async () => {
+    const db = fakeGameDb();
+    seedUser(db, { engagementScore: 10 * 20 * 20, levelRecord: 20, currentStreakDays: 4, lastStreakDate: new Date('2026-10-04T00:00:00Z') });
+    for (const [slot, difficulty] of ['easy', 'medium', 'hard'].entries()) {
+      db.dailyMission.rows.push({
+        id: `m${slot}`, userId: USER, dayKey: '2026-10-04', slot, templateKey: 'send-texts', difficulty,
+        signal: 'axis:content.text_message', prism: false, target: 3, progress: 0, reward: 40, glory: 0, seen: [],
+        completedAt: null, paidPoints: null, rerolledAt: null, createdAt: new Date('2026-10-04T23:00:00Z'),
+      });
+    }
+
+    const block = await build(db);
+
+    expect(block.missions.dayKey).toBe('2026-10-04');
+    expect(block.flame.status).toBe('at-risk');
+  });
+
   it('un compte ANTÉRIEUR au jeu (aucun champ) sert un bloc neutre mais valide', async () => {
     const db = fakeGameDb();
     seedUser(db, {});

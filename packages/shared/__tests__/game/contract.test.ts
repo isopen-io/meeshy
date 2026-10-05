@@ -122,6 +122,12 @@ describe('le bloc game', () => {
     expect(b.flame.canRelight).toBe(true);
   });
 
+  it('juge la Flamme sur son jour CIVIL quand la journée de jeu est encore la veille', () => {
+    const b = block({ today: '2026-10-05', flameToday: '2026-10-06', lastActiveDay: '2026-10-05', streak: 4, freezes: 0 });
+    expect(b.flame.status).toBe('at-risk');
+    expect(b.missions.dayKey).toBe('2026-10-05');
+  });
+
   it('verrouille les missions sous le niveau 5', () => {
     const low = block({ score: 100, levelRecord: null, missions: [] });
     expect(low.missions.unlocked).toBe(false);
