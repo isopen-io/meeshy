@@ -10,6 +10,8 @@ import type { PhotoMoment } from '@/lib/game-photo/moments';
 import type { PhotoFiles } from '@/lib/game-photo/render';
 import { dateLabelOf } from '@/lib/game-photo/render';
 import { useObjectUrl } from '@/lib/game-photo/use-object-url';
+import { nextFocusIndex } from '@/lib/view/focus-trap';
+import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 
 import { GamePhotoFrame } from './game-photo-frame';
 import { GAME_BRAND, GAME_ERROR, GAME_GOOD, GAME_INK, GAME_INK_2 } from './game-surface';
@@ -43,13 +45,17 @@ type Props = {
 
 const BUTTON = { minHeight: 44 } as const;
 
+const FOCUSABLE = 'button:not([disabled]), [href], input:not([hidden]), [tabindex]:not([tabindex="-1"])';
+
+const canFocus = (element: Element | null): element is HTMLElement => element !== null && 'focus' in element && typeof element.focus === 'function';
+
 const CAMERA_MESSAGES: Readonly<Record<CameraFailure, string>> = {
   denied: 'La caméra est refusée. Autorise-la dans les réglages de ton appareil, ou choisis une photo dans ta galerie.',
   unsupported: 'Cet appareil ne permet pas la caméra ici. Choisis une photo dans ta galerie, ou garde la carte seule.',
   unavailable: 'La caméra n’est pas disponible (une autre application l’utilise ?). Choisis une photo dans ta galerie, ou garde la carte seule.',
 };
 
-function Button({ attr, primary = false, onClick, children, label, disabled = false }: { readonly attr: Readonly<Record<string, string>>; readonly primary?: boolean; readonly onClick: () => void; readonly children?: ReactNode; readonly label?: string; readonly disabled?: boolean }) {
+function Button({ attr, primary = false, onClick, children, disabled = false }: { readonly attr: Readonly<Record<string, string>>; readonly primary?: boolean; readonly onClick: () => void; readonly children?: ReactNode; readonly disabled?: boolean }) {
   const style: CSSProperties = primary
     ? { ...BUTTON, backgroundColor: GAME_BRAND, color: 'var(--color-ios-surface)' }
     : { ...BUTTON, backgroundColor: 'color-mix(in srgb, var(--color-ios-brand) 12%, transparent)', color: GAME_BRAND };
@@ -57,7 +63,6 @@ function Button({ attr, primary = false, onClick, children, label, disabled = fa
     <button
       type="button"
       {...attr}
-      {...(label === undefined ? {} : { 'aria-label': label })}
       disabled={disabled}
       onClick={onClick}
       className="rounded-chip px-4 text-body font-semibold disabled:opacity-60"
@@ -70,6 +75,10 @@ function Button({ attr, primary = false, onClick, children, label, disabled = fa
 
 export function GamePhotoFlow({ moment, env, onClose }: Props) {
   const [state, dispatch] = useReducer(flowReducer, { step: 'offer' } as FlowState);
+  const panel = useRef<HTMLDivElement>(null);
+  const close = useCallback(() => dispatch({ type: 'close' }), []);
+  /* Le retour matériel (coque Android) et Échap ferment le déroulé, pas l'écran d'en dessous. */
+  useBackDismiss(close, { escape: true });
   const { ref: stage, play } = useChoreography<HTMLDivElement>(env.playOptions);
   const video = useRef<HTMLVideoElement>(null);
   const picker = useRef<HTMLInputElement>(null);
@@ -87,6 +96,15 @@ export function GamePhotoFlow({ moment, env, onClose }: Props) {
   const galleryUrl = useObjectUrl(galleryFile);
   const stillUrl = useObjectUrl(still);
   const previewUrl = useObjectUrl(files === null ? null : files[format]);
+
+  /* Le focus entre dans le dialogue, et revient à ce qui l'a ouvert. */
+  useEffect(() => {
+    const opener = document.activeElement;
+    panel.current?.focus();
+    return () => {
+      if (canFocus(opener)) opener.focus();
+    };
+  }, []);
 
   const stopCamera = useCallback(() => {
     session.current?.stop();
@@ -223,8 +241,15 @@ export function GamePhotoFlow({ moment, env, onClose }: Props) {
     );
   }, [env, files, moment, state]);
 
+  /* Le piège de focus : Tab ne sort jamais du dialogue. */
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (event.key === 'Escape') dispatch({ type: 'close' });
+    if (event.key !== 'Tab' || panel.current === null) return;
+    const focusables = Array.from(panel.current.querySelectorAll<HTMLElement>(FOCUSABLE));
+    if (focusables.length === 0) return;
+    event.preventDefault();
+    const current = focusables.findIndex((element) => element === document.activeElement);
+    const next = current === -1 ? (event.shiftKey ? focusables.length - 1 : 0) : nextFocusIndex(focusables.length, current, event.shiftKey);
+    focusables[next]?.focus();
   };
 
   const showStage = state.step === 'camera' || state.step === 'striking';
@@ -232,6 +257,7 @@ export function GamePhotoFlow({ moment, env, onClose }: Props) {
 
   return (
     <div
+      ref={panel}
       role="dialog"
       aria-modal="true"
       aria-label={`Photo : ${moment.title}`}
@@ -248,7 +274,7 @@ export function GamePhotoFlow({ moment, env, onClose }: Props) {
           <p className="text-check font-semibold uppercase tracking-wide" style={{ color: GAME_INK_2 }}>
             {moment.kicker}
           </p>
-          <Button attr={{ 'data-photo-close': '' }} onClick={() => dispatch({ type: 'close' })}>
+          <Button attr={{ 'data-photo-close': '' }} onClick={close}>
             Fermer
           </Button>
         </div>
@@ -318,8 +344,8 @@ export function GamePhotoFlow({ moment, env, onClose }: Props) {
               </p>
             ) : null}
             {state.camera === 'live' ? (
-              <Button attr={{ 'data-photo-shutter': '' }} primary label="Prendre la photo" onClick={shoot}>
-                Déclencher
+              <Button attr={{ 'data-photo-shutter': '' }} primary onClick={shoot}>
+                Prendre la photo
               </Button>
             ) : null}
             <Button attr={{ 'data-photo-gallery': '' }} onClick={() => picker.current?.click()}>

@@ -142,7 +142,7 @@ describe('le selfie', () => {
     await click(choose(host, 'selfie'));
     await settle();
     expect(log.cameraOpened).toBe(1);
-    expect(by(host, 'data-photo-shutter')?.getAttribute('aria-label')).toBe('Prendre la photo');
+    expect(by(host, 'data-photo-shutter')?.textContent).toBe('Prendre la photo');
     expect(host.querySelector('video')).not.toBeNull();
   });
 
@@ -396,5 +396,81 @@ describe('le clavier', () => {
     for (const button of Array.from(host.querySelectorAll('button'))) {
       expect(button.getAttribute('style') ?? '').toContain('min-height: 44px');
     }
+  });
+});
+
+/**
+ * UNE COUCHE MODALE, PAS SEULEMENT ANNONCÉE (revue #9382) — `aria-modal`
+ * ANNONCE une modale, il n'en fait pas une (`components/sheet.tsx`). Le
+ * déroulé s'ouvre depuis un bouton de la page : le focus doit y entrer, y
+ * rester, et revenir au bouton à la fermeture ; Échap le ferme où que soit le
+ * focus ; et le RETOUR matériel de la coque Android ferme le déroulé au lieu
+ * de quitter l'écran Progression.
+ */
+describe('une vraie couche modale', () => {
+  const opener = () => {
+    const button = document.createElement('button');
+    button.textContent = 'Immortaliser';
+    document.body.append(button);
+    button.focus();
+    return button;
+  };
+
+  test('le focus entre dans le dialogue à l’ouverture, et revient à l’ouvreur à la fermeture', async () => {
+    const { env: e, log } = env();
+    const trigger = opener();
+    const host = await open(rank, e, log);
+    const dialog = host.querySelector<HTMLElement>('[role="dialog"]');
+    expect(dialog?.contains(document.activeElement)).toBe(true);
+    unmountAll();
+    expect(document.activeElement).toBe(trigger);
+    trigger.remove();
+  });
+
+  test('Échap ferme le déroulé même quand le focus est resté hors du dialogue', async () => {
+    const { env: e, log } = env();
+    const trigger = opener();
+    await open(rank, e, log);
+    trigger.focus();
+    await act(() => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    });
+    await settle();
+    expect(log.closed).toEqual([{ deferred: false }]);
+    trigger.remove();
+  });
+
+  test('le retour matériel (popstate) ferme le déroulé, sans rien laisser en attente', async () => {
+    const { env: e, log } = env();
+    await open(rank, e, log);
+    expect(typeof (window.history.state as { backDismiss?: unknown } | null)?.backDismiss).toBe('string');
+    await act(() => {
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    });
+    await settle();
+    expect(log.deferred).toEqual([]);
+    expect(log.closed).toEqual([{ deferred: false }]);
+  });
+
+  test('Tab depuis le dernier bouton revient au premier : le focus ne passe pas derrière', async () => {
+    const { env: e, log } = env();
+    const host = await open(rank, e, log);
+    const dialog = host.querySelector<HTMLElement>('[role="dialog"]');
+    const buttons = Array.from(dialog?.querySelectorAll<HTMLElement>('button') ?? []);
+    buttons.at(-1)?.focus();
+    await act(() => {
+      buttons.at(-1)?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }));
+    });
+    expect(document.activeElement).toBe(buttons[0] ?? null);
+  });
+
+  test('le déclencheur porte son texte visible dans son nom accessible', async () => {
+    const { env: e, log } = env();
+    const host = await open(rank, e, log);
+    await click(choose(host, 'selfie'));
+    await settle();
+    const shutter = by(host, 'data-photo-shutter');
+    const name = shutter?.getAttribute('aria-label') ?? shutter?.textContent ?? '';
+    expect(name).toContain(shutter?.textContent ?? '∅');
   });
 });
