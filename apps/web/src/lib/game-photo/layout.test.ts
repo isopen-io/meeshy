@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { PHOTO_FORMATS, coverFit, photoLayout, type PhotoFormat } from './layout';
+import { PHOTO_FORMATS, containFit, coverFit, photoLayout, type PhotoFormat } from './layout';
 
 /**
  * LA MISE EN PAGE DU CADRE (#9382) — conception, partie VI : « emblème en haut,
@@ -99,5 +99,34 @@ describe('coverFit — la photo remplit le cadre sans se déformer', () => {
 
   test('une source de taille nulle ne divise pas par zéro', () => {
     expect(coverFit({ width: 0, height: 0 }, { width: 1080, height: 1920 })).toEqual({ sx: 0, sy: 0, sw: 0, sh: 0 });
+  });
+});
+
+describe('containFit — un dessin non carré tient dans son cadre carré sans se déformer', () => {
+  const frame = { x: 100, y: 200, w: 400, h: 400 };
+
+  test('un dessin plus large que haut : centré, bandes en haut et en bas', () => {
+    const rect = containFit({ width: 200, height: 100 }, frame);
+    expect(rect).toEqual({ x: 100, y: 300, w: 400, h: 200 });
+  });
+
+  test('un dessin plus haut que large : centré, bandes sur les côtés', () => {
+    const rect = containFit({ width: 100, height: 200 }, frame);
+    expect(rect).toEqual({ x: 200, y: 200, w: 200, h: 400 });
+  });
+
+  test('un dessin carré remplit le cadre', () => {
+    expect(containFit({ width: 50, height: 50 }, frame)).toEqual(frame);
+  });
+
+  test('la proportion de l’emblème de rang (200 × 184) est gardée', () => {
+    const rect = containFit({ width: 200, height: 184 }, frame);
+    expect(rect.w / rect.h).toBeCloseTo(200 / 184, 5);
+    expect(rect.x + rect.w / 2).toBeCloseTo(300, 5);
+    expect(rect.y + rect.h / 2).toBeCloseTo(400, 5);
+  });
+
+  test('une taille nulle rend le cadre tel quel', () => {
+    expect(containFit({ width: 0, height: 0 }, frame)).toEqual(frame);
   });
 });

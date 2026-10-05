@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import { photoLayout } from './layout';
-import { paintPhoto, prepareSvgMarkup, rasterizeSvg, type PaintContext, type PhotoArt, type PhotoPalette } from './compose';
+import { paintPhoto, prepareSvgMarkup, rasterizeSvg, withAlpha, type PaintContext, type PhotoArt, type PhotoPalette } from './compose';
 import { rankMoment } from './moments';
 
 /**
@@ -110,6 +110,20 @@ describe('les couches, dans l’ordre', () => {
   });
 });
 
+describe('les dessins gardent leur proportion', () => {
+  test('un emblème plus large que haut est centré dans son cadre, jamais étiré', () => {
+    const fake = fakeContext();
+    const layout = photoLayout('story');
+    const wide = { ...art(), emblem: { id: 'emblem', width: 200, height: 100 } as unknown as CanvasImageSource };
+    paintPhoto(fake.ctx, { layout, moment, dateLabel: 'x', photo: null, art: wide, palette, fontFamily: 'system-ui' });
+    const call = fake.calls.find((c) => c.op === 'drawImage' && (c.args[0] as { id: string }).id === 'emblem');
+    const [, x, y, w, h] = call?.args ?? [];
+    expect(Number(w) / Number(h)).toBeCloseTo(2, 5);
+    expect(Number(x) + Number(w) / 2).toBeCloseTo(layout.emblem.x + layout.emblem.w / 2, 5);
+    expect(Number(y) + Number(h) / 2).toBeCloseTo(layout.emblem.y + layout.emblem.h / 2, 5);
+  });
+});
+
 describe('la photo', () => {
   test('rognée pour remplir le cadre, sans déformation', () => {
     const { calls, layout } = paint('story', selfie);
@@ -188,6 +202,12 @@ describe('prepareSvgMarkup — un SVG du document devient une image autonome', (
     expect(out.unresolved).toEqual([]);
   });
 
+  test('la hauteur suit la proportion du dessin (viewBox), jamais un carré forcé', () => {
+    const out = prepareSvgMarkup('<svg viewBox="0 0 200 184"><path/></svg>', { size: 400, read });
+    expect(out.markup).toMatch(/width="400"/);
+    expect(out.markup).toMatch(/height="368"/);
+  });
+
   test('un xmlns déjà présent n’est pas doublé', () => {
     const out = prepareSvgMarkup('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"/>', { size: 100, read });
     expect(out.markup.match(/xmlns=/g)).toHaveLength(1);
@@ -248,5 +268,18 @@ describe('rasterizeSvg', () => {
       revokeObjectUrl: () => undefined,
     };
     expect(await rasterizeSvg('<svg/>', failing)).toBeNull();
+  });
+});
+
+describe('withAlpha — le voile ne recouvre jamais la photo', () => {
+  test('un hexadécimal à six chiffres gagne son octet d’opacité', () => {
+    expect(withAlpha('#000000', 0.5)).toBe('#00000080');
+    expect(withAlpha('#0b1020', 0)).toBe('#0b102000');
+    expect(withAlpha('#0b1020', 1)).toBe('#0b1020ff');
+  });
+
+  test('toute autre forme de couleur se mélange à du transparent, elle ne reste pas opaque', () => {
+    expect(withAlpha('oklch(20% 0.05 270)', 0.55)).toBe('color-mix(in srgb, oklch(20% 0.05 270) 55%, transparent)');
+    expect(withAlpha('oklch(20% 0.05 270)', 0)).toBe('color-mix(in srgb, oklch(20% 0.05 270) 0%, transparent)');
   });
 });

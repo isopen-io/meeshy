@@ -84,3 +84,12 @@ export function coverFit(source: { readonly width: number; readonly height: numb
   const sh = source.width / frameRatio;
   return { sx: 0, sy: (source.height - sh) / 2, sw: source.width, sh };
 }
+
+/** Le plus grand rectangle de la proportion de `source` qui tient dans `frame`, centré. */
+export function containFit(source: { readonly width: number; readonly height: number }, frame: Rect): Rect {
+  if (source.width <= 0 || source.height <= 0) return frame;
+  const scale = Math.min(frame.w / source.width, frame.h / source.height);
+  const w = source.width * scale;
+  const h = source.height * scale;
+  return { x: frame.x + (frame.w - w) / 2, y: frame.y + (frame.h - h) / 2, w, h };
+}

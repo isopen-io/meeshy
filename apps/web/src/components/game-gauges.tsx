@@ -42,7 +42,9 @@ function Tile({ id, title, titleId, drawing, children }: { id: string; title: st
       className="flex min-w-0 flex-col items-center gap-2 rounded-card px-3 py-4 text-center"
       style={{ backgroundColor: GAME_CARD }}
     >
-      <div className="grid h-[76px] place-items-center">{drawing}</div>
+      <div className="grid place-items-center" style={{ height: 76 }}>
+        {drawing}
+      </div>
       <h2 id={titleId} className="text-check font-semibold uppercase tracking-wide" style={{ color: GAME_INK_2 }}>
         {title}
       </h2>

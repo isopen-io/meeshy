@@ -1,5 +1,5 @@
 import { resolveCssVars } from './css-vars';
-import { coverFit, type PhotoLayout } from './layout';
+import { containFit, coverFit, type PhotoLayout, type Rect } from './layout';
 import type { PhotoMoment } from './moments';
 
 /**
@@ -73,9 +73,16 @@ export type PaintInput = {
   readonly fontFamily: string;
 };
 
-/** `#rrggbb` + une opacité → `#rrggbbaa` ; toute autre forme est rendue telle quelle. */
-const withAlpha = (color: string, alpha: number): string =>
-  /^#[0-9a-f]{6}$/i.test(color) ? `${color}${Math.round(alpha * 255).toString(16).padStart(2, '0')}` : color;
+/**
+ * Une couleur à une opacité donnée. `#rrggbb` devient `#rrggbbaa` ; toute autre
+ * forme (un jeton résolu en `oklch(…)`, `rgb(…)`) passe par `color-mix` —
+ * jamais rendue telle quelle : un voile « à 0 % » qui resterait opaque
+ * recouvrirait la photo entière.
+ */
+export const withAlpha = (color: string, alpha: number): string =>
+  /^#[0-9a-f]{6}$/i.test(color)
+    ? `${color}${Math.round(alpha * 255).toString(16).padStart(2, '0')}`
+    : `color-mix(in srgb, ${color} ${Math.round(alpha * 100)}%, transparent)`;
 
 function paintBackground(ctx: PaintContext, input: PaintInput): void {
   const { layout, photo, palette } = input;
@@ -133,14 +140,26 @@ function paintText(ctx: PaintContext, input: PaintInput): void {
   ctx.shadowBlur = 0;
 }
 
+/** La taille propre d'une image décodée, quand elle en porte une ; sinon le cadre la remplit. */
+const naturalSize = (image: CanvasImageSource): { width: number; height: number } => {
+  const { width, height } = image as { width?: unknown; height?: unknown };
+  return typeof width === 'number' && typeof height === 'number' ? { width, height } : { width: 0, height: 0 };
+};
+
+/** Un dessin garde SA proportion dans son cadre : l'emblème de rang n'est pas carré (200 × 184). */
+function drawContained(ctx: PaintContext, image: CanvasImageSource, frame: Rect): void {
+  const rect = containFit(naturalSize(image), frame);
+  ctx.drawImage(image, rect.x, rect.y, rect.w, rect.h);
+}
+
 export function paintPhoto(ctx: PaintContext, input: PaintInput): void {
   const { layout, art } = input;
   paintBackground(ctx, input);
-  ctx.drawImage(art.emblem, layout.emblem.x, layout.emblem.y, layout.emblem.w, layout.emblem.h);
+  drawContained(ctx, art.emblem, layout.emblem);
   paintText(ctx, input);
-  ctx.drawImage(art.mee, layout.mee.x, layout.mee.y, layout.mee.w, layout.mee.h);
-  ctx.drawImage(art.meo, layout.meo.x, layout.meo.y, layout.meo.w, layout.meo.h);
-  ctx.drawImage(art.signature, layout.signature.x, layout.signature.y, layout.signature.w, layout.signature.h);
+  drawContained(ctx, art.mee, layout.mee);
+  drawContained(ctx, art.meo, layout.meo);
+  drawContained(ctx, art.signature, layout.signature);
 }
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -158,9 +177,12 @@ export function prepareSvgMarkup(
   const { markup: resolved, unresolved } = resolveCssVars(markup, options.read);
   const root = ROOT_TAG.exec(resolved)?.[0];
   if (root === undefined) return { markup: resolved, unresolved };
+  const box = /viewBox="\s*[-\d.]+[\s,]+[-\d.]+[\s,]+([\d.]+)[\s,]+([\d.]+)\s*"/.exec(root);
+  const ratio = box === null || Number(box[1]) <= 0 ? 1 : Number(box[2]) / Number(box[1]);
+  const height = Math.round(options.size * ratio);
   const sized = root
     .replace(/\s(?:width|height)="[^"]*"/g, '')
-    .replace(/^<svg\b/, `<svg width="${options.size}" height="${options.size}"${root.includes('xmlns=') ? '' : ` xmlns="${SVG_NS}"`}`);
+    .replace(/^<svg\b/, `<svg width="${options.size}" height="${height}"${root.includes('xmlns=') ? '' : ` xmlns="${SVG_NS}"`}`);
   return { markup: resolved.replace(root, sized), unresolved };
 }
 

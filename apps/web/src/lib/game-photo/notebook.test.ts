@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { createNotebook, openIndexedDbBackend, type NotebookBackend, type NotebookEntry } from './notebook';
+import { createNotebook, lazyBackend, openIndexedDbBackend, type NotebookBackend, type NotebookEntry } from './notebook';
 import { flameMoment, rankMoment, startMoment } from './moments';
 
 /**
@@ -242,5 +242,26 @@ describe('le stockage IndexedDB', () => {
       },
     } as unknown as IDBFactory;
     expect(await openIndexedDbBackend(throwing)).toBeNull();
+  });
+});
+
+describe('le carnet à ouverture paresseuse', () => {
+  test('la base ne s’ouvre pas tant que personne ne s’en sert, et une seule fois ensuite', async () => {
+    let opened = 0;
+    const lazy = lazyBackend(async () => {
+      opened += 1;
+      return memoryBackend();
+    });
+    expect(opened).toBe(0);
+    const notebook = createNotebook({ backend: lazy, now: () => new Date(T0) });
+    await notebook.defer(startMoment());
+    await notebook.list();
+    expect(opened).toBe(1);
+  });
+
+  test('une base qui ne s’ouvre pas : « non gardé » et « carnet vide », sans exception', async () => {
+    const notebook = createNotebook({ backend: lazyBackend(async () => null), now: () => new Date(T0) });
+    expect(await notebook.defer(startMoment())).toBe(false);
+    expect(await notebook.list()).toEqual([]);
   });
 });

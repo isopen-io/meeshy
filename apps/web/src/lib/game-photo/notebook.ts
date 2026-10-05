@@ -155,3 +155,25 @@ export async function openIndexedDbBackend(factory: IDBFactory | undefined): Pro
     return null;
   }
 }
+
+/**
+ * Un carnet dont la base ne s'ouvre qu'AU PREMIER GESTE : l'écran Progression
+ * ne paie pas l'ouverture d'IndexedDB tant que personne ne photographie ni ne
+ * consulte. Une base qui ne s'ouvre pas fait lever chaque appel, ce que le
+ * carnet absorbe (« non gardé », « carnet vide »).
+ */
+export function lazyBackend(open: () => Promise<NotebookBackend | null>): NotebookBackend {
+  let opened: Promise<NotebookBackend | null> | null = null;
+  const ready = async (): Promise<NotebookBackend> => {
+    opened ??= open();
+    const backend = await opened;
+    if (backend === null) throw new Error('Carnet indisponible');
+    return backend;
+  };
+  return {
+    put: async (entry) => (await ready()).put(entry),
+    get: async (id) => (await ready()).get(id),
+    all: async () => (await ready()).all(),
+    remove: async (id) => (await ready()).remove(id),
+  };
+}

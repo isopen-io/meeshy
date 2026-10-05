@@ -54,7 +54,7 @@ function Row({ label, children }: { readonly label: string; readonly children: R
   return (
     <div className="flex items-baseline justify-between gap-3">
       <dt style={{ color: GAME_INK_2 }}>{label}</dt>
-      <dd className="text-right font-semibold" style={{ color: GAME_INK }}>
+      <dd className="text-end font-semibold" style={{ color: GAME_INK }}>
         {children}
       </dd>
     </div>
