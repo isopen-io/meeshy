@@ -59,8 +59,11 @@ import { GAME_MUTATION_KEY } from './progression-game-actions';
 
 type Snapshot = { readonly snapshot: EngagementWithGame | undefined };
 
+/** Ce que l'appelant veut savoir de CE geste-ci (un geste composé qui défait sa moitié locale sur un refus). */
+export type GestureHandlers = { readonly onError?: () => void };
+
 type Gesture<V> = {
-  readonly run: (vars: V) => void;
+  readonly run: (vars: V, handlers?: GestureHandlers) => void;
   readonly pending: boolean;
   /** Ce que le geste en vol porte (l'étape réclamée, l'ami invité) ; `undefined` au repos. */
   readonly vars: V | undefined;
@@ -118,7 +121,11 @@ function useGesture<V, R>(config: Config<V, R>, transport: HttpTransport): Gestu
   });
 
   return {
-    run: (vars) => mutation.mutate(vars),
+    run: (vars, handlers) => {
+      const onError = handlers?.onError;
+      if (onError === undefined) mutation.mutate(vars);
+      else mutation.mutate(vars, { onError: () => onError() });
+    },
     pending: mutation.isPending,
     vars: mutation.isPending ? mutation.variables : undefined,
     error: mutation.isError ? messageOf(mutation.error) : undefined,
