@@ -18,7 +18,13 @@ final class ThermalStateMonitor: ThermalStateMonitorProviding {
     // défaut) → double-free `pointer being freed was not allocated` (abrt)
     // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
     // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
-    nonisolated deinit {}
+    // Un propriétaire qui oublie `stopMonitoring()` ne laisse pas l'inscription
+    // dans le NotificationCenter à jamais (#9349).
+    nonisolated deinit {
+        if let thermalObserver {
+            NotificationCenter.default.removeObserver(thermalObserver)
+        }
+    }
     weak var delegate: ThermalStateMonitorDelegate?
     var onStateChange: ((ProcessInfo.ThermalState) -> Void)?
 
@@ -26,7 +32,9 @@ final class ThermalStateMonitor: ThermalStateMonitorProviding {
 
     /// Token de l'observateur bloc (l'API sélecteur ne permet pas de cibler la
     /// queue de livraison ni de hopper sur le main actor).
-    private var thermalObserver: NSObjectProtocol?
+    /// `nonisolated(unsafe)` : posé et retiré sur le MainActor, lu une fois
+    /// par le `deinit` non isolé, quand plus personne ne tient l'objet.
+    nonisolated(unsafe) private var thermalObserver: NSObjectProtocol?
 
     func startMonitoring() {
         currentState = ProcessInfo.processInfo.thermalState

@@ -37,6 +37,18 @@ final class ComposerThermalBudgetTests: XCTestCase {
         session.disarm()
         XCTAssertEqual(thermique.stopCount, 1, "le viseur fermé ne guette plus la température")
     }
+
+    /// La prise posée ferme la session sans passer par `disarm` : elle cesse
+    /// aussi de guetter la température, sinon l'observateur survit au viseur.
+    func test_finishCapture_stopsWatchingTheThermalState() {
+        let thermique = MockThermalStateMonitor(state: .nominal)
+        let session = ComposerCaptureSession(thermal: thermique)
+        session.watchThermalState()
+        session.finishCapture()
+        XCTAssertEqual(thermique.stopCount, 1, "la prise posée ne guette plus la température")
+        thermique.emit(.critical)
+        XCTAssertFalse(session.thermalBudget.systemLayerOnly, "un palier émis après la prise ne touche plus le budget")
+    }
 }
 
 /// La cible de tests compile en isolation `nonisolated` par défaut (`project.yml`) :

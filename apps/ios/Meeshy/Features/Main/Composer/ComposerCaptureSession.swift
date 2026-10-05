@@ -143,6 +143,7 @@ final class ComposerCaptureSession: ObservableObject {
         mode = nil
         extinguishFlash()
         camera.stop()
+        stopWatchingThermalState()
     }
 
     /// **Désarmer** ferme la session et emporte les segments abandonnés ET
