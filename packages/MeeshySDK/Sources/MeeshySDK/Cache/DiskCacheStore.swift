@@ -15,6 +15,12 @@ public actor DiskCacheStore: ReadableCacheStore {
     private let logger = Logger(subsystem: "com.meeshy.sdk", category: "disk-cache")
     private var inFlightTasks: [String: InFlightDownload] = [:]
     private var fileTimestamps: [String: Date] = [:]
+    private let urlSession: URLSession
+
+    /// Clés dont la dernière réponse interdisait le stockage (`no-store` /
+    /// `no-cache`, #9478) : leurs octets ne vont ni sur le disque, ni dans le
+    /// L1, ni dans le cache d'images décodées.
+    private var transientKeys: Set<String> = []
 
     /// Pin registry (R5 offline replay) : fileKey → pin expiry. A file whose
     /// pin is still active is exempt from BOTH `evictOverBudget()` (LRU) and
@@ -48,9 +54,15 @@ public actor DiskCacheStore: ReadableCacheStore {
         memoryCache.setObject(CacheBox(data), forKey: fileKey as NSString, cost: data.count)
     }
 
-    public init(policy: CachePolicy, baseDirectory: URL? = nil, memoryBudgetBytes: Int = 80 * 1024 * 1024) {
+    public init(
+        policy: CachePolicy,
+        baseDirectory: URL? = nil,
+        memoryBudgetBytes: Int = 80 * 1024 * 1024,
+        urlSession: URLSession = .shared
+    ) {
         self.policy = policy
         self.memoryBudgetBytes = memoryBudgetBytes
+        self.urlSession = urlSession
         let subdir: String
         if case .disk(let sub, _) = policy.storageLocation {
             subdir = sub
@@ -151,6 +163,7 @@ public actor DiskCacheStore: ReadableCacheStore {
     public func invalidateAll() async {
         memoryCache.removeAllObjects()
         fileTimestamps.removeAll()
+        transientKeys.removeAll()
         // Le sidecar `.pins.json` part avec le dossier — vider aussi le
         // registre en mémoire, sinon des pins fantômes seraient re-persistés
         // au prochain `pin()` (logout multi-compte).
@@ -174,6 +187,7 @@ public actor DiskCacheStore: ReadableCacheStore {
         }
         cacheInMemory(data, fileKey: fileKey)
         fileTimestamps[fileKey] = Date()
+        transientKeys.remove(fileKey)
 
         // E1 — auto-trigger eviction when the latest write may have
         // pushed the cache over `CachePolicy.storageLocation.maxBytes`.
@@ -386,12 +400,21 @@ public actor DiskCacheStore: ReadableCacheStore {
                 authToken: APIClient.shared.authToken,
                 sessionToken: APIClient.shared.anonymousSessionToken
             )
-            let (data, response) = try await URLSession.shared.data(for: request)
-            guard let httpResponse = response as? HTTPURLResponse,
-                  (200...299).contains(httpResponse.statusCode) else {
+            let (data, response) = try await urlSession.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse else {
                 throw DiskCacheError.notCached(urlString)
             }
-            await save(data, for: urlString)
+            // #9478 — un fichier rappelé, expiré ou consommé rend 404 : la
+            // copie locale échue partirait sinon resservie par
+            // `cachedFileURL(for:)`, qui ne regarde pas la fraîcheur.
+            if MediaCacheDirective.meansGone(statusCode: httpResponse.statusCode) {
+                await evict(urlString)
+                throw DiskCacheError.notCached(urlString)
+            }
+            guard (200...299).contains(httpResponse.statusCode) else {
+                throw DiskCacheError.notCached(urlString)
+            }
+            await store(data, for: urlString, honoring: httpResponse)
             return data
         }
 
@@ -486,6 +509,33 @@ public actor DiskCacheStore: ReadableCacheStore {
 
     public func store(_ data: Data, for key: String) async {
         await save(data, for: key)
+    }
+
+    /// Écrit des octets reçus du RÉSEAU en respectant la fraîcheur que la
+    /// réponse déclare (#9478) : un média `no-store` (vue unique) ou
+    /// `no-cache` (éphémère) n'est pas gardé, et une copie antérieure de la
+    /// même clé est évincée. Rend `true` quand les octets sont sur le disque.
+    /// Les téléchargeurs externes (progression) passent par ici plutôt que
+    /// par `store(_:for:)`, réservé aux octets produits localement.
+    @discardableResult
+    public func store(_ data: Data, for key: String, honoring response: URLResponse?) async -> Bool {
+        guard MediaCacheDirective(response: response).mayPersist else {
+            await evict(key)
+            transientKeys.insert(Self.fileKey(for: key))
+            return false
+        }
+        await save(data, for: key)
+        return true
+    }
+
+    /// Retire une clé de TOUS les niveaux : disque, L1, et variantes décodées.
+    private func evict(_ key: String) async {
+        await invalidate(for: key)
+        let fileKey = Self.fileKey(for: key)
+        Self._imageCache.removeObject(forKey: fileKey as NSString)
+        for bucket in Self.pixelSizeBuckets {
+            Self._imageCache.removeObject(forKey: Self.imageCacheKey(fileKey: fileKey, bucket: bucket))
+        }
     }
 
     public func remove(for key: String) async {
@@ -821,7 +871,9 @@ public actor DiskCacheStore: ReadableCacheStore {
             // persists to disk inside the task.
             let data = try await networkData(for: urlString, url: url)
             guard let image = Self.downsampledImage(data: data, maxPixelSize: decodePixelSize) else { return nil }
-            Self.cacheIfWithinBudget(image, key: cacheKey as String)
+            if !transientKeys.contains(fileKey) {
+                Self.cacheIfWithinBudget(image, key: cacheKey as String)
+            }
             return image
         } catch {
             return nil
