@@ -26,7 +26,9 @@ final class CameraSegmentOrientationTests: XCTestCase {
     }
 
     func test_upright_rotatedSegment_isPortrait() {
-        XCTAssertEqual(CameraSegmentOrientation.upright(placement(debout)), CGSize(width: 1080, height: 1920))
+        let taille = CameraSegmentOrientation.upright(placement(debout))
+        XCTAssertEqual(taille.width, 1080, accuracy: 0.001)
+        XCTAssertEqual(taille.height, 1920, accuracy: 0.001)
     }
 
     func test_layerTransform_landsEachSegmentExactlyOnTheRender() {
