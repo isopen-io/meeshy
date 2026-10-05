@@ -299,6 +299,11 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
     public var lastMessageAttachmentCount: Int = 0
     public var lastMessageId: String? = nil
     public var lastMessageSenderName: String? = nil
+    /// Le `User.id` du PAIR dont `lastMessageSenderName` est le nom (#9359) —
+    /// `nil` quand l'auteur est le lecteur (« Vous ») ou inconnu. C'est ce sur
+    /// quoi `user:updated` apparie l'aperçu « Bob : … » d'un groupe : sans lui,
+    /// le nom resterait figé jusqu'à la synchro suivante.
+    public var lastMessageSenderUserId: String? = nil
     public var lastMessageIsBlurred: Bool = false
     public var lastMessageIsViewOnce: Bool = false
     public var lastMessageExpiresAt: Date? = nil
@@ -467,6 +472,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
             || !lastMessageAttachments.isEmpty
             || lastMessageAttachmentCount != 0
             || lastMessageSenderName != nil
+            || lastMessageSenderUserId != nil
             || lastMessageIsBlurred
             || lastMessageIsViewOnce
             || lastMessageExpiresAt != nil
@@ -481,6 +487,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         lastMessageAttachments = []
         lastMessageAttachmentCount = 0
         lastMessageSenderName = nil
+        lastMessageSenderUserId = nil
         lastMessageIsBlurred = false
         lastMessageIsViewOnce = false
         lastMessageExpiresAt = nil
@@ -652,6 +659,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
                 lastMessageAttachmentCount: Int = 0,
                 lastMessageId: String? = nil,
                 lastMessageSenderName: String? = nil,
+                lastMessageSenderUserId: String? = nil,
                 lastMessageIsBlurred: Bool = false,
                 lastMessageIsViewOnce: Bool = false,
                 lastMessageExpiresAt: Date? = nil,
@@ -682,6 +690,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         self.lastMessageAttachmentCount = lastMessageAttachmentCount
         self.lastMessageId = lastMessageId
         self.lastMessageSenderName = lastMessageSenderName
+        self.lastMessageSenderUserId = lastMessageSenderUserId
         self.lastMessageIsBlurred = lastMessageIsBlurred
         self.lastMessageIsViewOnce = lastMessageIsViewOnce
         self.lastMessageExpiresAt = lastMessageExpiresAt
@@ -728,7 +737,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         case communityId, isActive, memberCount, memberCountCapped, lastMessageAt, encryptionMode, createdAt, updatedAt
         case lastMessagePreview, lastMessageTranslations, lastMessageOriginalLanguage
         case lastMessageAttachments, lastMessageAttachmentCount, lastMessageId
-        case lastMessageSenderName, lastMessageIsBlurred, lastMessageIsViewOnce, lastMessageExpiresAt
+        case lastMessageSenderName, lastMessageSenderUserId, lastMessageIsBlurred, lastMessageIsViewOnce, lastMessageExpiresAt
         case lastMessageLocation
         case lastMessageNature, lastReaction, lastReactionTargetsReader, activeCall, listRankAt
         case viewerEngagement
@@ -782,6 +791,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         self.lastMessageAttachmentCount = try c.decodeIfPresent(Int.self, forKey: .lastMessageAttachmentCount) ?? 0
         self.lastMessageId = try c.decodeIfPresent(String.self, forKey: .lastMessageId)
         self.lastMessageSenderName = try c.decodeIfPresent(String.self, forKey: .lastMessageSenderName)
+        self.lastMessageSenderUserId = try c.decodeIfPresent(String.self, forKey: .lastMessageSenderUserId)
         self.lastMessageIsBlurred = try c.decodeIfPresent(Bool.self, forKey: .lastMessageIsBlurred) ?? false
         self.lastMessageIsViewOnce = try c.decodeIfPresent(Bool.self, forKey: .lastMessageIsViewOnce) ?? false
         self.lastMessageExpiresAt = try c.decodeIfPresent(Date.self, forKey: .lastMessageExpiresAt)
@@ -887,6 +897,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         try c.encode(lastMessageAttachmentCount, forKey: .lastMessageAttachmentCount)
         try c.encodeIfPresent(lastMessageId, forKey: .lastMessageId)
         try c.encodeIfPresent(lastMessageSenderName, forKey: .lastMessageSenderName)
+        try c.encodeIfPresent(lastMessageSenderUserId, forKey: .lastMessageSenderUserId)
         try c.encode(lastMessageIsBlurred, forKey: .lastMessageIsBlurred)
         try c.encode(lastMessageIsViewOnce, forKey: .lastMessageIsViewOnce)
         try c.encodeIfPresent(lastMessageExpiresAt, forKey: .lastMessageExpiresAt)

@@ -1,4 +1,5 @@
 import SwiftUI
+import MeeshySDK
 import MeeshyUI
 
 /// **La bande d'en-tête de conversation, en type NOMINAL** (#6194).
@@ -375,4 +376,30 @@ struct ConversationHeaderState {
     /// La flamme du jour touchée par le lecteur (#9031) — elle revient au
     /// prochain dépliement ; retenue par `ConversationHeaderMemory`.
     var flameDismissed = false
+}
+
+/// **L'en-tête d'un direct ouvert suit son pair** (#9359).
+///
+/// La conversation de l'écran est une valeur FIGÉE à la navigation : la liste
+/// et le cache se repeignent à `user:updated`, pas elle. Cette loi repeint la
+/// conversation AFFICHÉE par la loi de la ligne d'un direct
+/// (`ConversationStore.merging(_:withUserUpdate:)`) — aucune règle parallèle —
+/// et `ConversationView.admitPeerUpdate` en fait l'override de l'écran. Les
+/// annonces successives se replient donc d'elles-mêmes, chacune sur la
+/// précédente.
+enum DirectPeerRepaint {
+
+    /// `nil` quand l'annonce ne vise pas le pair du direct affiché, ou ne lui
+    /// change rien : l'écran ne se redessine pas pour elle.
+    static func repainted(_ displayed: Conversation?, by event: UserUpdatedEvent) -> Conversation? {
+        guard let displayed, displayed.type == .direct,
+              displayed.participantUserId == event.userId,
+              let repainted = ConversationStore.merging(displayed, withUserUpdate: event),
+              repainted.title != displayed.title
+                || repainted.participantUsername != displayed.participantUsername
+                || repainted.participantAvatarURL != displayed.participantAvatarURL
+                || repainted.participantBanner != displayed.participantBanner
+        else { return nil }
+        return repainted
+    }
 }
