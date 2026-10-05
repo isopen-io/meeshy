@@ -94,6 +94,14 @@ nonisolated struct ComposerAutosaveSnapshot: Codable, Sendable {
         let publicationKey: String?
     }
 
+    /// Le format et la disposition ARMÉS au chevron (#9419). Codes et non
+    /// types : une disposition inconnue d'une version plus ancienne retombe
+    /// sur le repli au lieu de faire tomber le brouillon.
+    struct PublishChoice: Codable, Equatable, Sendable {
+        let format: String
+        let layout: String?
+    }
+
     var version: Int = currentVersion
     var savedAt: Date
     var format: String
@@ -120,6 +128,8 @@ nonisolated struct ComposerAutosaveSnapshot: Codable, Sendable {
     var videos: [String: String]
     var audios: [String: String]
     var stickerAnimations: [String: String]
+    /// Absent d'un instantané écrit avant #9419 : il se relit sans choix armé.
+    var publishChoice: PublishChoice?
 }
 
 /// Ce que le meuble tient au moment de la capture — des VALEURS, lues sur le
@@ -144,6 +154,9 @@ nonisolated struct ComposerAutosaveState: @unchecked Sendable {
     var stickerAnimations: [String: Data]
     /// Les fichiers locaux des objets déjà PRÉ-MONTÉS (`postMediaId` → fichier).
     var adoptedLocalMedia: [String: URL] = [:]
+    /// Le choix que l'AUTEUR a armé au chevron (#9419) — `nil` tant qu'il n'a
+    /// rien choisi : une bascule automatique se recalcule depuis la scène.
+    var publishChoice: ComposerPublishChoice?
 
     /// Un fond de palette seul n'est pas une création : le composer en pose un
     /// au hasard à la naissance, et le sauvegarder ferait naître un brouillon

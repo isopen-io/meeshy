@@ -408,4 +408,201 @@ final class ComposerAutosaveTests: XCTestCase {
 
         XCTAssertNil(ComposerEditDraftResumption.draftId(editingPostId: "p1", drafts: drafts))
     }
+
+    // MARK: - La disposition choisie (#9419)
+
+    /// #9419 — « Publish as › Post › Défilement continu » armé, puis l'app
+    /// tuée : le brouillon revenait sans disposition, et le menu ne cochait
+    /// plus rien.
+    func test_save_thenLoad_restoresThePublishChoiceAndItsLayout() throws {
+        let store = makeStore()
+        let compte = makeAccount()
+        var etat = makeState(format: .post)
+        etat.publishChoice = ComposerPublishChoice(format: .post, layout: .reel)
+
+        store.save(ComposerAutosaveCodec.write(from: etat), account: compte, slot: .creation)
+        let relu = try XCTUnwrap(ComposerAutosaveCodec.state(from: XCTUnwrap(store.load(account: compte, slot: .creation))))
+
+        XCTAssertEqual(relu.publishChoice, ComposerPublishChoice(format: .post, layout: .reel))
+    }
+
+    func test_save_thenLoad_withoutPublishChoice_restoresNone() throws {
+        let store = makeStore()
+        let compte = makeAccount()
+
+        store.save(ComposerAutosaveCodec.write(from: makeState(format: .post)), account: compte, slot: .creation)
+        let relu = try XCTUnwrap(ComposerAutosaveCodec.state(from: XCTUnwrap(store.load(account: compte, slot: .creation))))
+
+        XCTAssertNil(relu.publishChoice)
+    }
+
+    /// Rétrocompatibilité : un `snapshot.json` écrit avant #9419 n'a aucune clé
+    /// de disposition, et se relit toujours — sans choix armé.
+    func test_decode_snapshotWrittenBeforeTheLayoutKey_stillDecodesWithoutChoice() throws {
+        var etat = makeState(format: .post)
+        etat.publishChoice = ComposerPublishChoice(format: .post, layout: .hero)
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        let json = try encoder.encode(ComposerAutosaveCodec.write(from: etat).snapshot)
+        var objet = try XCTUnwrap(JSONSerialization.jsonObject(with: json) as? [String: Any])
+        XCTAssertNotNil(objet["publishChoice"], "La disposition doit faire partie de l'instantané écrit.")
+        objet.removeValue(forKey: "publishChoice")
+        let ancien = try JSONSerialization.data(withJSONObject: objet)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+
+        let snapshot = try decoder.decode(ComposerAutosaveSnapshot.self, from: ancien)
+        let relu = try XCTUnwrap(ComposerAutosaveCodec.state(from: ComposerAutosaveRestored(
+            snapshot: snapshot, urlByFile: [:], bitmapByFile: [:], blobByFile: [:])))
+
+        XCTAssertNil(relu.publishChoice)
+        XCTAssertEqual(relu.text, "Bonjour")
+    }
+
+    /// Une disposition inconnue de cette version (écrite par une version
+    /// future) ne fait pas tomber le brouillon : le format reste, la
+    /// disposition retombe sur le repli.
+    func test_state_unknownLayoutCode_keepsTheFormatWithoutLayout() throws {
+        var snapshot = ComposerAutosaveCodec.write(from: makeState(format: .post)).snapshot
+        snapshot.publishChoice = .init(format: "post", layout: "spiral")
+
+        let relu = try XCTUnwrap(ComposerAutosaveCodec.state(from: ComposerAutosaveRestored(
+            snapshot: snapshot, urlByFile: [:], bitmapByFile: [:], blobByFile: [:])))
+
+        XCTAssertEqual(relu.publishChoice, ComposerPublishChoice(format: .post, layout: nil))
+    }
+
+    // MARK: - Une copie par image (#9420)
+
+    private func makeStoreAndRoot() -> (ComposerAutosaveStore, URL) {
+        let racine = makeTempDirectory()
+        let drafts = racine.appendingPathComponent("drafts")
+        return (ComposerAutosaveStore(root: drafts, sessionRoot: racine.appendingPathComponent("session")), drafts)
+    }
+
+    private func mediaDirectory(root: URL, account: ComposerAutosaveAccount) -> URL {
+        root.appendingPathComponent(account.directoryName, isDirectory: true)
+            .appendingPathComponent(ComposerAutosaveSlot.creation.directoryName, isDirectory: true)
+            .appendingPathComponent("media", isDirectory: true)
+    }
+
+    private func mediaFiles(root: URL, account: ComposerAutosaveAccount) -> [String] {
+        ((try? FileManager.default.contentsOfDirectory(
+            atPath: mediaDirectory(root: root, account: account).path)) ?? []).sorted()
+    }
+
+    private func makeJPEGFile(named nom: String, in dossier: URL) -> URL {
+        let url = dossier.appendingPathComponent(nom)
+        try? makeImage().jpegData(compressionQuality: 0.9)?.write(to: url)
+        return url
+    }
+
+    /// Trois photos posées depuis la photothèque, PRÉ-MONTÉES : chaque bitmap
+    /// est rangé sous l'id de l'objet, son `postMediaId` et son adresse
+    /// distante (`relayLoadedImage`) — trois clés, UNE image.
+    private func makeThreeImageState(in dossier: URL, crop: MediaCropRect? = nil) -> ComposerAutosaveState {
+        var etat = makeState(format: .post)
+        let fichiers = (0..<3).map { makeJPEGFile(named: "photo-\($0).jpg", in: dossier) }
+        etat.porters = ComposerMediaPorters(
+            localMedia: fichiers.map { ComposerDocumentMedia(url: $0, mimeType: "image/jpeg", durationMs: nil) },
+            roleByURL: [:], slideIdByMediaURL: [:],
+            objectIdBySource: Dictionary(uniqueKeysWithValues: fichiers.enumerated().map { ($1, "obj-\($0)") }),
+            captions: [:], altsByObjectId: [:], transcriptions: [:], railPosedURLs: [])
+        etat.slides = (0..<3).map { index in
+            var slide = StorySlide(id: "s\(index)")
+            var objet = StoryMediaObject(id: "obj-\(index)", postMediaId: "pm-\(index)",
+                                         mediaURL: "https://cdn.meeshy.me/pm-\(index).jpg",
+                                         mediaType: "image", aspectRatio: 1)
+            objet.crop = crop
+            slide.effects.mediaObjects = [objet]
+            return slide
+        }
+        etat.adoptedLocalMedia = fichiers.enumerated().reduce(into: [:]) { carte, entree in
+            carte["pm-\(entree.offset)"] = entree.element
+            carte["https://cdn.meeshy.me/pm-\(entree.offset).jpg"] = entree.element
+        }
+        etat.images = (0..<3).reduce(into: [:]) { carte, index in
+            let image = makeImage()
+            carte["obj-\(index)"] = image
+            carte["pm-\(index)"] = image
+            carte["https://cdn.meeshy.me/pm-\(index).jpg"] = image
+        }
+        return etat
+    }
+
+    func test_save_threeImagesRepeatedly_writesExactlyThreeMediaFiles() {
+        let (store, racine) = makeStoreAndRoot()
+        let compte = makeAccount()
+        let etat = makeThreeImageState(in: makeTempDirectory())
+
+        (1...4).forEach { _ in
+            store.save(ComposerAutosaveCodec.write(from: etat), account: compte, slot: .creation)
+        }
+        store.waitForPendingWrites()
+
+        let fichiers = mediaFiles(root: racine, account: compte)
+        XCTAssertEqual(fichiers.count, 3, "Une image de scène = UN fichier dans le brouillon : \(fichiers)")
+    }
+
+    func test_load_threeImages_everyAliasKeyGetsItsImageBack() throws {
+        let (store, _) = makeStoreAndRoot()
+        let compte = makeAccount()
+
+        store.save(ComposerAutosaveCodec.write(from: makeThreeImageState(in: makeTempDirectory())),
+                   account: compte, slot: .creation)
+        let relu = try XCTUnwrap(ComposerAutosaveCodec.state(from: XCTUnwrap(store.load(account: compte, slot: .creation))))
+
+        for index in 0..<3 {
+            let image = try XCTUnwrap(relu.images["obj-\(index)"])
+            XCTAssertTrue(relu.images["pm-\(index)"] === image)
+            XCTAssertTrue(relu.images["https://cdn.meeshy.me/pm-\(index).jpg"] === image)
+        }
+    }
+
+    /// Un bitmap RECADRÉ n'est pas son fichier source : il garde sa propre
+    /// copie — une seule pour ses trois clés.
+    func test_save_croppedImages_keepOneBitmapEachBesideTheirSource() {
+        let (store, racine) = makeStoreAndRoot()
+        let compte = makeAccount()
+        let etat = makeThreeImageState(in: makeTempDirectory(),
+                                       crop: MediaCropRect(x: 0, y: 0, width: 0.5, height: 0.5))
+
+        store.save(ComposerAutosaveCodec.write(from: etat), account: compte, slot: .creation)
+        store.save(ComposerAutosaveCodec.write(from: etat), account: compte, slot: .creation)
+        store.waitForPendingWrites()
+
+        XCTAssertEqual(mediaFiles(root: racine, account: compte).count, 6)
+    }
+
+    /// Les copies laissées par une version antérieure (une par clé) sont
+    /// balayées à la sauvegarde suivante.
+    func test_save_orphanCopiesFromAnEarlierSave_areSwept() throws {
+        let (store, racine) = makeStoreAndRoot()
+        let compte = makeAccount()
+        let etat = makeThreeImageState(in: makeTempDirectory())
+        store.save(ComposerAutosaveCodec.write(from: etat), account: compte, slot: .creation)
+        store.waitForPendingWrites()
+        try Data([0x01]).write(to: mediaDirectory(root: racine, account: compte)
+            .appendingPathComponent("i-deadbeef.jpg"))
+
+        store.save(ComposerAutosaveCodec.write(from: etat), account: compte, slot: .creation)
+        store.waitForPendingWrites()
+
+        let fichiers = mediaFiles(root: racine, account: compte)
+        XCTAssertFalse(fichiers.contains("i-deadbeef.jpg"))
+        XCTAssertEqual(fichiers.count, 3)
+    }
+
+    /// « Tout effacer » vide le dossier, médias compris.
+    func test_deleteAll_afterSavingImages_leavesNoMediaFile() {
+        let (store, racine) = makeStoreAndRoot()
+        let compte = makeAccount()
+        store.save(ComposerAutosaveCodec.write(from: makeThreeImageState(in: makeTempDirectory())),
+                   account: compte, slot: .creation)
+
+        store.deleteAll()
+        store.waitForPendingWrites()
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: racine.path))
+    }
 }
