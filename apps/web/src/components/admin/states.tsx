@@ -1,8 +1,10 @@
 import type { ReactNode } from 'react';
 
 import type { AdminTone } from '@/lib/admin/interpret/types';
-import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
+import { currentAdminLanguage, translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
+import { translate } from '@/lib/i18n-catalog';
 import { useOnline } from '@/lib/net/online';
+import { Link } from '@/routes/route-table';
 
 import { AdminGlyph, type AdminGlyphName } from './admin-glyph';
 import { BRAND, EDGE, INK, INK2, SURFACE, TONE_COLOR, toneBackground } from './tone';
@@ -49,20 +51,81 @@ export function AdminLoading({
   );
 }
 
-/** L'état VIDE, dessiné — absolu (« rien à traiter ») ou filtré (« aucun résultat ») : c'est l'appelant qui choisit les mots. */
+/**
+ * **LE SQUELETTE D'ATTENTE** (repris de `routes/admin-parts`, #9463) — jamais un `ProgressView`
+ * (cache-first, dimension 2). C'est `AdminLoading` garni de barres de la hauteur d'une ligne :
+ * l'abstraction reste, pour qu'aucun écran n'ait à redessiner ses barres.
+ */
+export function AdminSkeleton({
+  rows,
+  language = currentAdminLanguage(),
+  label,
+  anchor,
+}: {
+  readonly rows: number;
+  readonly language?: AdminLanguage;
+  readonly label?: string;
+  readonly anchor?: string;
+}) {
+  return (
+    <AdminLoading language={language} {...(label === undefined ? {} : { label })} {...(anchor === undefined ? {} : { anchor })} className="grid gap-3">
+      {Array.from({ length: rows }, (_, index) => (
+        <div key={index} className="h-16 rounded-card" style={{ backgroundColor: 'color-mix(in srgb, var(--color-ios-ink-3) 12%, transparent)' }} />
+      ))}
+    </AdminLoading>
+  );
+}
+
+/**
+ * **LE REFUS PLEIN ÉCRAN** (repris de `routes/admin-parts`, #9463) — un seul écran pour les trois
+ * façons de ne pas entrer : la matrice dit non, la requête a échoué, ou la source est en fixtures.
+ *
+ * Il ne DIT PAS laquelle, et c'est délibéré : distinguer « tu n'as pas le droit » de « le serveur
+ * n'a pas répondu » sur une porte d'administration apprend à un visiteur non autorisé si l'espace
+ * existe et s'il est vivant. Ce n'est pas `AdminDeniedInline`, qui refuse UN bloc dans un écran
+ * ouvert : celui-ci ferme l'écran.
+ */
+export function AdminDeniedScreen({ language }: { readonly language: AdminLanguage }) {
+  return (
+    <div data-admin-denied-screen className="grid flex-1 place-items-center p-6 text-center">
+      <div className="grid gap-3">
+        <p className="text-screen font-bold" style={{ color: INK }}>
+          {translateAdmin(language, 'admin.denied.title')}
+        </p>
+        <p className="text-caption" style={{ color: INK2 }}>
+          {translateAdmin(language, 'admin.denied.message')}
+        </p>
+        <Link
+          to="list"
+          className="mx-auto grid place-items-center rounded-chip px-5 text-body font-semibold text-ios-on-brand"
+          style={{ backgroundColor: BRAND, minHeight: 44 }}
+        >
+          {translate(language, 'pending.back')}
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * L'état VIDE, dessiné — absolu (« rien à traiter ») ou filtré (« aucun résultat ») : c'est l'appelant
+ * qui choisit les mots, et l'ancre (`data`) par laquelle ses témoins le retrouvent.
+ */
 export function AdminEmptyState({
   title,
   hint,
   glyph,
   action,
+  data,
 }: {
   readonly title: string;
   readonly hint?: string;
   readonly glyph?: AdminGlyphName;
   readonly action?: ReactNode;
+  readonly data?: Readonly<Record<`data-${string}`, string>>;
 }) {
   return (
-    <div data-admin-empty className="grid justify-items-center gap-3 rounded-card p-8 text-center" style={CARD}>
+    <div {...data} data-admin-empty className="grid justify-items-center gap-3 rounded-card p-8 text-center" style={CARD}>
       {glyph === undefined ? null : (
         <span className="grid size-12 place-items-center rounded-full" style={{ backgroundColor: toneBackground('neutral'), color: INK2 }}>
           <AdminGlyph name={glyph} size={24} />

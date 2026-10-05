@@ -4,6 +4,7 @@ import { Sheet } from '@/components/sheet';
 import { useAdminReach } from '@/lib/admin/use-admin-reach';
 import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
+import { motiveState } from './form';
 import { BRAND, EDGE, INK, INK2, SURFACE } from './tone';
 
 const FOCUS = 'focus-visible:outline-2 focus-visible:outline-offset-2';
@@ -81,8 +82,11 @@ export function AdminConfirmSheet({
     return () => clearTimeout(timer);
   }, [motive]);
 
-  const trimmed = text.trim();
-  const tooShort = motive !== undefined && (motive.required || trimmed !== '') && trimmed.length < motive.minLength;
+  /* La règle du motif est celle du kit (`motiveState`, #9463) ; le rang souverain est déjà
+     tranché plus haut (`motive` absent), d'où `sovereign: false` ici. */
+  const state = motiveState({ text, minLength: motive?.minLength ?? 0, required: motive?.required ?? false, sovereign: false, whenSovereign: 'optional' });
+  const trimmed = state.trimmed;
+  const tooShort = motive !== undefined && state.tooShort;
   const blocked = busy || tooShort;
 
   return (

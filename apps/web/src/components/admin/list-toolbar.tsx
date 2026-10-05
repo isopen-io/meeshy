@@ -127,11 +127,17 @@ export function AdminFilterChips({
   options,
   value,
   onChange,
+  anchor = 'data-admin-chip',
+  disabled = false,
 }: {
   readonly label: string;
   readonly options: readonly AdminChipOption[];
   readonly value: string;
   readonly onChange: (value: string) => void;
+  /** Le nom de l'attribut qui porte la valeur de chaque puce — l'ancre que l'écran a déjà publiée à ses témoins. */
+  readonly anchor?: `data-${string}`;
+  /** Des puces dont les valeurs ne sont pas encore servies : visibles, mais inertes. */
+  readonly disabled?: boolean;
 }) {
   return (
     <div role="group" aria-label={label} data-admin-chips className="flex flex-wrap gap-2">
@@ -142,9 +148,10 @@ export function AdminFilterChips({
             key={option.value}
             type="button"
             aria-pressed={pressed}
-            data-admin-chip={option.value}
+            {...{ [anchor]: option.value }}
+            disabled={disabled}
             onClick={() => onChange(option.value)}
-            className={`inline-flex items-center gap-2 rounded-chip px-4 text-body font-medium ${FOCUS}`}
+            className={`inline-flex items-center gap-2 rounded-chip px-4 text-body font-medium disabled:opacity-40 ${FOCUS}`}
             style={{
               minHeight: 44,
               outlineColor: BRAND,

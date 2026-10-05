@@ -185,6 +185,18 @@ describe('AdminFilterChips', () => {
     await act(async () => host.querySelector<HTMLButtonElement>('[data-admin-chip="pending"]')?.click());
     expect(choix).toEqual(['pending']);
   });
+
+  test('l’écran nomme l’ancre de ses puces, et les désactive tant que leurs valeurs manquent', async () => {
+    const choix: string[] = [];
+    const host = await mount(
+      <AdminFilterChips label="Niveau" options={options} value="" anchor="data-admin-password-level" disabled onChange={(v) => choix.push(v)} />,
+    );
+    const puce = host.querySelector<HTMLButtonElement>('[data-admin-password-level="pending"]');
+    expect(host.querySelector('[data-admin-chip]')).toBeNull();
+    expect(puce?.disabled).toBe(true);
+    await act(async () => puce?.click());
+    expect(choix).toEqual([]);
+  });
 });
 
 describe('AdminTabs — des onglets ARIA', () => {
