@@ -159,6 +159,7 @@ const previewText = (conversation: Conversation): string =>
     composeConversationPreview(
       previewInputOf(conversation, { viewerId: 'u-viewer', language: 'fr', preferredLanguages: ['fr'], now: Date.parse('2026-10-05T10:00:00.000Z') }),
     ),
+    'fr',
   );
 
 describe('user:updated — la CITATION d’un pair suit son nouveau nom et sa photo (#9372)', () => {
@@ -214,7 +215,7 @@ describe('user:updated — la CITATION d’un pair suit son nouveau nom et sa ph
     expect(cached(queryClient, 'm-reply')?.replyTo?.sender).toMatchObject({ displayName: 'Bob', avatar: 'other.webp' });
   });
 
-  test('une photo seule ne renomme pas la citation ; un avatar retiré (null) n’efface rien', () => {
+  test('une photo seule ne renomme pas la citation', () => {
     const { socket, queryClient } = connect();
     seedThread(queryClient, [
       restMessage({ id: 'm-reply', content: 'Oui', replyToId: 'm-q', replyTo: restMessage({ id: 'm-q', content: 'On part ?', sender: bobAsParticipant() }) }),
@@ -223,6 +224,28 @@ describe('user:updated — la CITATION d’un pair suit son nouveau nom et sa ph
     socket.fire(SERVER_EVENTS.USER_UPDATED, { userId: BOB, changes: { avatar: 'bob-new.webp' } });
     expect(cached(queryClient, 'm-reply')?.replyTo?.sender).toMatchObject({ displayName: 'Bob', avatar: 'bob-new.webp' });
   });
+
+  test('une photo RETIRÉE (`avatar: null`) quitte la citation, le transfert et la dernière ligne ; un avatar ABSENT ne touche rien', () => {
+    const { socket, queryClient } = connect();
+    seedThread(queryClient, [
+      restMessage({ id: 'm-reply', content: 'Oui', replyToId: 'm-q', replyTo: restMessage({ id: 'm-q', content: 'On part ?', sender: bobAsParticipant() }) }),
+      restMessage({
+        id: 'm-fwd',
+        content: 'On part ?',
+        forwardedFromId: 'm-orig',
+        forwardedFrom: { id: 'm-orig', content: 'On part ?', messageType: 'text', createdAt: '2026-10-04T08:00:00.000Z', sender: bobAsParticipant() },
+      }),
+    ]);
+    seedGroupList(queryClient, restMessage({ id: 'm-last', senderId: 'p-bob', content: 'On part ?', sender: bobAsParticipant() }));
+
+    socket.fire(SERVER_EVENTS.USER_UPDATED, { userId: BOB, changes: { banner: 'b.webp' } });
+    expect(cached(queryClient, 'm-reply')?.replyTo?.sender?.avatar).toBe('bob-old.webp');
+
+    socket.fire(SERVER_EVENTS.USER_UPDATED, { userId: BOB, changes: { avatar: null } });
+    expect(cached(queryClient, 'm-reply')?.replyTo?.sender?.avatar).toBeNull();
+    expect(cached(queryClient, 'm-fwd')?.forwardedFrom?.sender?.avatar).toBeNull();
+    expect(groupRow(queryClient)?.lastMessage?.sender?.avatar).toBeNull();
+  });
 });
 
 describe('user:updated — l’aperçu « Bob : … » d’un GROUPE suit le pair renommé (#9396)', () => {
@@ -230,12 +253,12 @@ describe('user:updated — l’aperçu « Bob : … » d’un GROUPE suit le pai
     const { socket, queryClient } = connect();
     seedGroupList(queryClient, restMessage({ id: 'm-last', senderId: 'p-bob', content: 'On part ?', sender: bobAsParticipant() }));
     const before = groupRow(queryClient);
-    expect(before === undefined ? '' : previewText(before)).toContain('Bob');
+    expect(before === undefined ? '' : previewText(before)).toBe('Bob : On part ?');
 
     socket.fire(SERVER_EVENTS.USER_UPDATED, BOB_RENAMED);
 
     const after = groupRow(queryClient);
-    expect(after === undefined ? '' : previewText(after)).toContain('Robert Diallo');
+    expect(after === undefined ? '' : previewText(after)).toBe('Robert Diallo : On part ?');
   });
 
   test('socket : la dernière ligne posée par `message:new` se repeint aussi', () => {

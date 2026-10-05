@@ -19,10 +19,11 @@ import type { QueryClient } from '@tanstack/react-query';
  * reste garde son identité — une requête qui ne le porte pas n'est ni
  * réécrite ni re-rendue.
  *
- * **Le PORTRAIT** (`avatar`, `avatarUrl`, `banner`) : une valeur ABSENTE
- * n'efface rien. Les formes du cache ne s'accordent pas sur le vide (`null`
- * ici, `undefined` là) ; remplacer une copie par un vide ferait mentir une
- * forme.
+ * **Le PORTRAIT** (`avatar`, `avatarUrl`, `banner`) a trois états, comme le
+ * delta de `user:updated` et la loi iOS (#9371) : ABSENT (`undefined`)
+ * n'efface rien ; `null` le RETIRE — la case qui tenait une photo (ou déjà
+ * `null`) passe à `null`, une case absente le reste, pour ne pas faire mentir
+ * une forme qui ne la déclarait pas.
  *
  * **Le NOM** voyage en GROUPE (`displayName`, `firstName`, `lastName`,
  * `username` — règle de `UserUpdatedEventData`), et il a deux formes, que la
@@ -102,10 +103,15 @@ function servedName(key: string, current: unknown, designation: Designation, nam
   }
 }
 
+const portraitServed = (current: unknown, next: string | null | undefined): unknown => {
+  if (next === undefined) return current;
+  return next ?? (current === undefined ? current : null);
+};
+
 function servedFor(key: string, current: unknown, designation: Designation | undefined, update: ProfileRepaint): unknown {
   if (designation === undefined || !isTextSlot(current)) return repaint(current, update);
   const portrait = PORTRAIT_FIELDS[key];
-  if (portrait !== undefined) return update[portrait] ?? current;
+  if (portrait !== undefined) return portraitServed(current, update[portrait]);
   const named = update.name === undefined ? undefined : servedName(key, current, designation, update.name);
   return named === undefined ? current : named;
 }
@@ -134,8 +140,8 @@ export function repaintProfile(queryClient: QueryClient, update: ProfileRepaint)
 
 const textOrNull = (value: unknown): string | null => (typeof value === 'string' ? value : null);
 
-const portraitOf = (changes: Plain, key: 'avatar' | 'banner'): { readonly avatar?: string } | { readonly banner?: string } =>
-  typeof changes[key] === 'string' ? { [key]: changes[key] } : {};
+const portraitOf = (changes: Plain, key: 'avatar' | 'banner'): { readonly avatar?: string | null } | { readonly banner?: string | null } =>
+  typeof changes[key] === 'string' || changes[key] === null ? { [key]: changes[key] } : {};
 
 /**
  * `user:updated` (#8889) → ce que le cache doit repeindre. Seuls les six champs
@@ -163,4 +169,14 @@ export function profileRepaintOfUserUpdated(payload: unknown): ProfileRepaint | 
   };
 }
 
-export const repaintMyPortrait =(queryClient: QueryClient, portrait: MyPortrait): void => repaintProfile(queryClient, portrait);
+/**
+ * Mon portrait CONFIRMÉ (`profile-actions.ts`) porte `null` pour « pas d'image
+ * de ce genre », pas pour « je viens de la retirer » : un `null` n'y devient
+ * jamais un retrait.
+ */
+export const repaintMyPortrait = (queryClient: QueryClient, portrait: MyPortrait): void =>
+  repaintProfile(queryClient, {
+    userId: portrait.userId,
+    ...(portrait.avatar === null ? {} : { avatar: portrait.avatar }),
+    ...(portrait.banner === null ? {} : { banner: portrait.banner }),
+  });
