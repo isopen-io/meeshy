@@ -257,8 +257,14 @@
 // marges) ; `LevelRingView.swift`, `RankBlasonView.swift` et
 // `SignatureMark.swift` lisent désormais ce jeton unique au lieu de
 // `Color(hex:)` répété. Valeur MESURÉE le 2026-10-05.
+//
+// 2026-10-05 (#9471, via #9349) — variables inconnues 445 → 444 :
+// `ComposerFrameBand.swift` lit `StoryBackdrop.solidColor` directement au
+// lieu de recomposer `Color(hex: hex)` depuis `solidHex` — un appel
+// variable de moins. Le littéral `Color(hex: "FB923C")` de la même fonction
+// (dégradé de repli) est inchangé, d'où le cliquet littéral stable à 109.
 const REFERENCE_LITERAL_COLOR_COUNT = 109;
-const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 445;
+const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 444;
 
 import { readFileSync, readdirSync, statSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';
