@@ -105,11 +105,13 @@ struct StoryLanguageQuickBar: View {
         }
     }
 
+    /// Les pastilles sont construites ICI, sur le fil principal : la barre
+    /// est montée dans le rail de la story, candidat d'un `ViewThatFits` que le
+    /// rendu asynchrone d'iOS 26 mesure (#9456, `AsyncRenderRow`).
     private var flagStrip: some View {
         HStack(spacing: MeeshySpacing.xsPlus) {
-            ForEach(languages) { language in
-                chip(language)
-            }
+            ForEach(languages.map { AsyncRenderRow(id: $0.id, content: chip($0)) },
+                    content: asyncRenderRowContent)
         }
     }
 
@@ -188,12 +190,8 @@ struct StoryLanguageQuickBar: View {
     @ViewBuilder
     private func tileFrameReader(index: Int) -> some View {
         if let scrubFrameSpace {
-            GeometryReader { proxy in
-                Color.clear.preference(
-                    key: ScrubTileFramesKey.self,
-                    value: [index: proxy.frame(in: .named(scrubFrameSpace))]
-                )
-            }
+            GeometryReader(content: FramePreferenceProbe(ScrubTileFramesKey.self,
+                                                         in: .named(scrubFrameSpace)) { [index: $0] }.content)
         }
     }
 }
