@@ -80,9 +80,9 @@ nonisolated enum ComposerCaptureFocus {
         CGPoint(x: min(1, max(0, point.x)), y: min(1, max(0, point.y)))
     }
 
-    /// Le double toucher ne vise que quand l'image est là : viseur armé ou
-    /// prise en cours — jamais sur une scène sans caméra.
-    static func focusesOnDoubleTap(stage: ComposerSceneCameraStage) -> Bool {
+    /// Le toucher ne vise que quand l'image est là : viseur armé ou prise en
+    /// cours — jamais sur une scène sans caméra.
+    static func focusesOnTap(stage: ComposerSceneCameraStage) -> Bool {
         stage != .off
     }
 

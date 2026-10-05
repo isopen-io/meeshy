@@ -16303,43 +16303,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "المس مجددًا: صورة"
+            "value": "المس مرتين: صورة"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Erneut tippen: Foto"
+            "value": "Doppeltippen: Foto"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tap again: photo"
+            "value": "Double-tap: photo"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Toca de nuevo: foto"
+            "value": "Toca dos veces: foto"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Toucher encore : photo"
+            "value": "Toucher deux fois : photo"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tocca di nuovo: foto"
+            "value": "Tocca due volte: foto"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Toque de novo: foto"
+            "value": "Toque duas vezes: foto"
           }
         }
       }

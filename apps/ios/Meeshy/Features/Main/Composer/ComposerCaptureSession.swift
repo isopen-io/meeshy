@@ -86,6 +86,10 @@ final class ComposerCaptureSession: ObservableObject {
     private var dismissDragActive = false
     private var dismissDragSpoiled = false
     private var holdTask: Task<Void, Never>?
+    /// L'armement, et le dernier toucher du viseur (#9464) : un double ne
+    /// s'ouvre jamais sur le toucher qui a armé.
+    var armedAt: Date?
+    var lastViewfinderTapAt: Date?
     private let defaults: UserDefaults
     private var relais: AnyCancellable?
 
@@ -139,6 +143,7 @@ final class ComposerCaptureSession: ObservableObject {
     func arm(mode: ComposerSceneCameraMode) {
         self.mode = mode
         stage = .armed
+        armedAt = Date()
         watchThermalState()
         camera.configure()
     }
@@ -482,7 +487,7 @@ final class ComposerCaptureSession: ObservableObject {
     /// paraît pas pour une mise au point qui n'a pas eu lieu.
     @discardableResult
     func focus(atGlobalPoint point: CGPoint) -> Bool {
-        guard ComposerCaptureFocus.focusesOnDoubleTap(stage: stage),
+        guard ComposerCaptureFocus.focusesOnTap(stage: stage),
               let capteur = focusPoints.devicePoint(fromGlobalPoint: point) else { return false }
         camera.focus(at: capteur)
         HapticFeedback.light()
