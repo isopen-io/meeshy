@@ -2,6 +2,7 @@
  * LE DÉCOR ET LES ANIMATIONS DU JEU (#9380, #9381) — la porte d'entrée unique
  * des écrans. Tout dessin est décoratif (`aria-hidden`) : l'hôte porte le texte.
  */
+export { AtlasStamp, stampTone } from './atlas-stamp';
 export { Chest, type ChestState } from './chest';
 export { Flame } from './flame';
 export { GameBadge, type GameBadgeShape } from './game-badge';

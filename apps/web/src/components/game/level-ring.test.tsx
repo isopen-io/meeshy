@@ -162,3 +162,27 @@ describe('LevelRing — palier et record', () => {
     expect(render({ level: 34, tier: 'eclat', progress: 0.7, size: 56, record: 40, showTier: true })).not.toMatch(/ (?:fill|stroke|stop-color)="#/);
   });
 });
+
+describe('LevelRing — les étoiles de Prestige (#9389)', () => {
+  const render = (prestige: number): string => renderToStaticMarkup(<LevelRing level={12} tier="lueur" progress={0.4} size={96} prestige={prestige} />);
+
+  test('autant d’étoiles que de Prestiges, cinq au plus', () => {
+    expect((render(0).match(/data-game-prestige-star/g) ?? []).length).toBe(0);
+    expect((render(2).match(/data-game-prestige-star/g) ?? []).length).toBe(2);
+    expect((render(9).match(/data-game-prestige-star/g) ?? []).length).toBe(5);
+  });
+
+  test('les étoiles gagnent une marge ; sans étoile, l’anneau garde sa boîte d’origine', () => {
+    expect(render(1)).toContain('viewBox="-8 -8 72 72"');
+    expect(render(0)).toContain('viewBox="0 0 56 56"');
+  });
+
+  test('une valeur illisible ne pose aucune étoile', () => {
+    expect((render(Number.NaN).match(/data-game-prestige-star/g) ?? []).length).toBe(0);
+    expect((render(-3).match(/data-game-prestige-star/g) ?? []).length).toBe(0);
+  });
+
+  test('l’étoile est un aplat or, sans littéral de couleur', () => {
+    expect(render(1)).toContain('fill="var(--game-gold-1)"');
+  });
+});

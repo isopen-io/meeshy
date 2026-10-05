@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import { SUPPORTED_INTERFACE_LANGUAGES } from '../inline-interface-language-bootstrap.js';
 import { loadGameCatalog } from '../i18n-game-catalog';
-import { languageName, leagueName, remainingLabel, seasonThemeName, visibilityLabel, weekLabel, zoneLabel } from './game-copy-v2';
+import { awardedDate, dayLabel, awardedMonthLabel, isoWeekNumber, languageName, leagueName, remainingLabel, seasonThemeName, trophyView, visibilityLabel, weekLabel, zoneLabel } from './game-copy-v2';
 
 /**
  * CE QUE LA VAGUE 2 DIT (#9481) — les noms des huit ligues, des zones, des
@@ -77,5 +77,42 @@ describe('les langues', () => {
   test('le thème d’une saison : une langue se nomme, un thème inconnu se tait', () => {
     expect(seasonThemeName('language:sw', 'fr')).toBe('Swahili');
     expect(seasonThemeName('region:antilles', 'fr')).toBeNull();
+  });
+});
+
+describe('les trophées', () => {
+  test('la semaine ISO d’un lundi', () => {
+    expect(isoWeekNumber('2026-10-26')).toBe(44);
+    expect(isoWeekNumber('2026-01-05')).toBe(2);
+    expect(isoWeekNumber('2024-12-30')).toBe(1);
+  });
+
+  test('une coupe de ligue : la matière de la coupe, le titre, la plaque', () => {
+    const view = trophyView('trophy.league-cup.2026-10-26.jade.silver', 'fr');
+    expect(view).toEqual({ kind: 'league', material: 'silver', title: 'Coupe d’argent — ligue Jade, semaine du 26 octobre', plate: 'JADE · S44' });
+  });
+
+  test('la coupe de saison, de Prestige, de Flamme', () => {
+    expect(trophyView('trophy.season-cup.1', 'fr')).toMatchObject({ kind: 'season', title: 'Coupe de la saison 1', plate: 'SAISON 1' });
+    expect(trophyView('trophy.prestige.2', 'fr')).toMatchObject({ kind: 'prestige', title: 'Trophée de Prestige 2', plate: 'PRESTIGE 2' });
+    expect(trophyView('trophy.flame.100', 'fr')).toMatchObject({ kind: 'flame', title: 'Trophée de Flamme, 100 jours', plate: '100 JOURS' });
+  });
+
+  test('une clé inconnue ne se nomme pas', () => {
+    expect(trophyView('trophy.cometa.9', 'fr')).toBeNull();
+    expect(trophyView('n’importe quoi', 'fr')).toBeNull();
+  });
+
+  test('un propriétaire voit la date, un visiteur le mois seulement', () => {
+    expect(awardedDate('2026-10-25T18:00:00.000Z', 'fr')).toMatch(/octobre 2026/);
+    expect(awardedMonthLabel('2026-10', 'fr')).toBe('octobre 2026');
+    expect(awardedMonthLabel('2026-10', 'fr')).not.toMatch(/\d{1,2} octobre/);
+  });
+});
+
+describe('les jours', () => {
+  test('un jour local se dit dans la langue, sans glisser d’un fuseau à l’autre', () => {
+    expect(dayLabel('2026-08-02', 'fr')).toBe('2 août 2026');
+    expect(dayLabel('2026-08-02', 'en')).toBe('August 2, 2026');
   });
 });

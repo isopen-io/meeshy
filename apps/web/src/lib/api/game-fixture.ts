@@ -121,8 +121,20 @@ export const gameExtrasFactsFixture = (patch: Partial<GameBlockExtrasFacts> = {}
   ...patch,
 });
 
-/** Le bloc `game` ET ses sept extensions, tel qu'un serveur de la vague 2 le sert. */
+/**
+ * Le bloc `game` ET ses sept extensions, tel qu'un serveur de la vague 2 le sert.
+ * Le score, le record, le Prestige, le solde et la série des extensions SUIVENT
+ * ceux du bloc (`facts`) : deux lectures du même compte ne se contredisent pas.
+ */
 export const gameBlockWithExtrasFixture = (
   patch: Partial<GameBlockFacts> = {},
   extras: Partial<GameBlockExtrasFacts> = {},
-): GameBlock => ({ ...gameBlockFixture(patch), ...buildGameBlockExtras(gameExtrasFactsFixture(extras)) });
+): GameBlock => {
+  const facts = gameFactsFixture(patch);
+  return {
+    ...buildGameBlock(facts),
+    ...buildGameBlockExtras(
+      gameExtrasFactsFixture({ score: facts.score, levelRecord: facts.levelRecord, prestige: facts.prestige, balance: facts.balance, flameDays: facts.streak, ...extras }),
+    ),
+  };
+};

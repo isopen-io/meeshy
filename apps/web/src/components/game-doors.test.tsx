@@ -53,6 +53,25 @@ describe('les portes du jeu', () => {
     expect(text(renderToStaticMarkup(<GameDoors game={{ ...block, season: null }} />))).toContain('Aucune saison ouverte');
   });
 
+  test('la vitrine annonce le nombre de trophées, l’Atlas ses langues, le Prestige son étape', () => {
+    const html = renderToStaticMarkup(<GameDoors game={gameBlockWithExtrasFixture()} />);
+    expect(html).toContain('href="/me/progression/vitrine"');
+    expect(html).toContain('href="/me/progression/atlas"');
+    expect(html).toContain('href="/me/progression/prestige"');
+    const t = text(html);
+    expect(t).toContain('3 trophées');
+    expect(t).toMatch(/4 langues sur \d+/);
+    expect(t).toContain('Au niveau 100');
+  });
+
+  test('une vitrine vide le dit, un Prestige prêt le propose', () => {
+    const block = gameBlockWithExtrasFixture();
+    const empty = text(renderToStaticMarkup(<GameDoors game={{ ...block, trophies: { items: [], order: [] } }} />));
+    expect(empty).toContain('Pas encore de trophée');
+    const ready = block.prestige === undefined ? block : { ...block, prestige: { ...block.prestige, canPrestige: true } };
+    expect(text(renderToStaticMarkup(<GameDoors game={ready} />))).toContain('Tu peux passer en Prestige');
+  });
+
   test('chaque porte est une cible de 44 points au moins', () => {
     const html = renderToStaticMarkup(<GameDoors game={gameBlockWithExtrasFixture()} />);
     expect(html).toContain('min-height:44px');

@@ -1,7 +1,11 @@
 import type { GameVisibility } from '@meeshy/shared/types/game';
 import type { LeagueKey, LeagueZone } from '@meeshy/shared/utils/game/league';
+import { parseTrophyKey } from '@meeshy/shared/utils/game/trophies';
 
-import { formatGameNumber, translateGame } from '@/lib/i18n-game-catalog';
+import type { TrophyKind } from '@/components/game/trophy';
+import type { GameMaterial } from '@/lib/game/materials';
+
+import { formatGameNumber, translateGame, translateGamePlural } from '@/lib/i18n-game-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 
 /**
@@ -68,4 +72,87 @@ export function languageName(code: string, language: Language = currentInterface
 export function seasonThemeName(themeKey: string, language: Language = currentInterfaceLanguage()): string | null {
   const [kind, value] = themeKey.split(':');
   return kind === 'language' && value !== undefined && value.length > 0 ? languageName(value, language) : null;
+}
+
+/** Le numéro de semaine ISO d'un lundi (`AAAA-MM-JJ`) — l'étiquette courte « S44 » de la plaque d'une coupe de ligue. */
+export function isoWeekNumber(dayKey: string): number {
+  const [year, month, day] = dayKey.split('-').map(Number);
+  const date = new Date(Date.UTC(year ?? 1970, (month ?? 1) - 1, day ?? 1));
+  const weekday = date.getUTCDay() === 0 ? 7 : date.getUTCDay();
+  date.setUTCDate(date.getUTCDate() + 4 - weekday);
+  const yearStart = Date.UTC(date.getUTCFullYear(), 0, 1);
+  return Math.ceil(((date.getTime() - yearStart) / 86_400_000 + 1) / 7);
+}
+
+const dateOf = (dayKey: string, language: Language): string => {
+  const [year, month, day] = dayKey.split('-').map(Number);
+  return new Intl.DateTimeFormat(language, { day: 'numeric', month: 'long', timeZone: 'UTC' }).format(new Date(Date.UTC(year ?? 1970, (month ?? 1) - 1, day ?? 1)));
+};
+
+export type TrophyView = {
+  readonly kind: TrophyKind;
+  /** La matière de la coupe de ligue ; absente des trois autres coupes. */
+  readonly material?: GameMaterial;
+  /** Ce que lit un lecteur d'écran : « Coupe d'or — ligue Jade, semaine du 26 octobre ». */
+  readonly title: string;
+  /** Ce que la plaque grave : « JADE · S44 », en capitales. */
+  readonly plate: string;
+};
+
+/**
+ * Ce qu'une CLÉ de trophée montre : sa coupe, son titre, sa plaque. Une clé que ce
+ * client ne connaît pas (un trophée d'une version plus récente) rend `null` : on
+ * ne nomme pas ce qu'on ne comprend pas, et la vitrine ne le montre pas.
+ */
+export function trophyView(key: string, language: Language = currentInterfaceLanguage()): TrophyView | null {
+  const spec = parseTrophyKey(key);
+  if (spec === null) return null;
+  const count = (value: number): string => formatGameNumber(language, value);
+  const upper = (text: string): string => text.toLocaleUpperCase(language);
+  switch (spec.kind) {
+    case 'league-cup': {
+      const league = leagueName(spec.league, language);
+      return {
+        kind: 'league',
+        material: spec.cup,
+        title: translateGame(language, 'game.trophy.league-cup', { cup: translateGame(language, `game.league.cup.${spec.cup}`), league, date: dateOf(spec.weekKey, language) }),
+        plate: translateGame(language, 'game.trophy.plate.league', { league: upper(league), week: count(isoWeekNumber(spec.weekKey)) }),
+      };
+    }
+    case 'season-cup':
+      return {
+        kind: 'season',
+        title: translateGame(language, 'game.trophy.season-cup', { number: count(spec.season) }),
+        plate: translateGame(language, 'game.trophy.plate.season', { number: count(spec.season) }),
+      };
+    case 'prestige':
+      return {
+        kind: 'prestige',
+        title: translateGame(language, 'game.trophy.prestige', { number: count(spec.number) }),
+        plate: translateGame(language, 'game.trophy.plate.prestige', { number: count(spec.number) }),
+      };
+    case 'flame':
+      return {
+        kind: 'flame',
+        title: translateGame(language, 'game.trophy.flame', { days: translateGamePlural(language, 'game.days', spec.days) }),
+        plate: translateGame(language, 'game.trophy.plate.flame', { days: count(spec.days) }),
+      };
+  }
+}
+
+/** « 26 octobre 2026 », dans la langue — la date d'un trophée vue PAR SON PROPRIÉTAIRE. */
+export function awardedDate(iso: string, language: Language = currentInterfaceLanguage()): string {
+  return new Intl.DateTimeFormat(language, { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(iso));
+}
+
+/** « octobre 2026 » — ce qu'un VISITEUR voit d'un trophée : le mois, jamais le jour (conformité D-3). */
+export function awardedMonthLabel(month: string, language: Language = currentInterfaceLanguage()): string {
+  const [year, m] = month.split('-').map(Number);
+  return new Intl.DateTimeFormat(language, { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(Date.UTC(year ?? 1970, (m ?? 1) - 1, 1)));
+}
+
+/** « 2 août 2026 », dans la langue — une date locale `AAAA-MM-JJ` (un tampon, un jour de saison), lue en UTC pour ne jamais glisser d'un jour. */
+export function dayLabel(dayKey: string, language: Language = currentInterfaceLanguage()): string {
+  const [year, month, day] = dayKey.split('-').map(Number);
+  return new Intl.DateTimeFormat(language, { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(Date.UTC(year ?? 1970, (month ?? 1) - 1, day ?? 1)));
 }

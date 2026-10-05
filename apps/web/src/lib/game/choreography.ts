@@ -27,7 +27,7 @@ import type { HapticName } from './haptics';
  * retrouve l'état du DOM, que la dernière image de chaque chaîne reproduit.
  */
 
-export type ChoreographyKind = 'mint' | 'rank' | 'levelGain' | 'levelLoss' | 'badgeLight' | 'badgeExtinguish' | 'chest';
+export type ChoreographyKind = 'mint' | 'rank' | 'levelGain' | 'levelLoss' | 'badgeLight' | 'badgeExtinguish' | 'chest' | 'prestige';
 
 export const CHOREOGRAPHY_DURATION_MS = {
   mint: 1200,
@@ -37,6 +37,7 @@ export const CHOREOGRAPHY_DURATION_MS = {
   badgeLight: 700,
   badgeExtinguish: 700,
   chest: 1400,
+  prestige: 2000,
 } as const satisfies Readonly<Record<ChoreographyKind, number>>;
 
 export type ChoreographyFill = 'both' | 'forwards';
@@ -210,6 +211,34 @@ const chest = (rewards: number): ChoreographyPlan => {
   };
 };
 
+/**
+ * LE PASSAGE EN PRESTIGE (#9389, conception II.9) — l'anneau se vide (le niveau
+ * repart à 1), le trophée numéroté tombe et se pose, Mee et Meo couronnés
+ * descendent à ses côtés, puis les étoiles de l'anneau s'allument une à une.
+ * Le repère `shine` part quand le trophée se pose : l'hôte y joue l'irisation.
+ */
+const PRESTIGE_TROPHY_MS = 500;
+const PRESTIGE_STAR_FIRST_MS = 1000;
+const PRESTIGE_STAR_STEP_MS = 140;
+const PRESTIGE_STARS = 5;
+
+const prestige = (): ChoreographyPlan => ({
+  kind: 'prestige',
+  durationMs: CHOREOGRAPHY_DURATION_MS.prestige,
+  steps: [
+    gesture('[data-game-ring-sweep]', [{ transform: 'rotate(70deg)', opacity: 0.4 }, { transform: 'rotate(0deg)', opacity: 1 }], { durationMs: 700, easing: CALM }),
+    gesture('[data-game-level-text]', [{ transform: 'translateY(-10px)', opacity: 0 }, { transform: 'translateY(0)', opacity: 1 }], { delayMs: 300, durationMs: 420, easing: CALM }),
+    gesture('[data-game-prestige-trophy]', [{ transform: 'translateY(-36px) scale(0.8)', opacity: 0 }, { transform: 'translateY(0) scale(1)', opacity: 1 }], { delayMs: PRESTIGE_TROPHY_MS, durationMs: 600, easing: SPRING }),
+    gesture('[data-game-pose]', [{ transform: 'translateY(-18px)', opacity: 0 }, { transform: 'translateY(0)', opacity: 1 }], { delayMs: 900, durationMs: 360, easing: SPRING }, { staggerMs: 140, count: 2 }),
+    gesture('[data-game-prestige-star]', [{ transform: 'scale(0)', opacity: 0 }, { transform: 'scale(1)', opacity: 1 }], { delayMs: PRESTIGE_STAR_FIRST_MS, durationMs: 320, easing: SPRING }, { staggerMs: PRESTIGE_STAR_STEP_MS, count: PRESTIGE_STARS }),
+  ],
+  beats: [{ name: 'shine', atMs: PRESTIGE_TROPHY_MS + 400 }],
+  haptics: [
+    { atMs: PRESTIGE_TROPHY_MS, haptic: 'shock' },
+    { atMs: PRESTIGE_STAR_FIRST_MS, haptic: 'tapLight' },
+  ],
+});
+
 export const choreographyPlan = (kind: ChoreographyKind, options: ChoreographyOptions = {}): ChoreographyPlan => {
   switch (kind) {
     case 'mint':
@@ -226,6 +255,8 @@ export const choreographyPlan = (kind: ChoreographyKind, options: ChoreographyOp
       return badgeExtinguish();
     case 'chest':
       return chest(options.rewards ?? 0);
+    case 'prestige':
+      return prestige();
   }
 };
 

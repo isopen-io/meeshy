@@ -1,4 +1,9 @@
-import type { GameBlock, GameDuoBlock, GameLeagueBlock, GamePrestigeBlock, GameSeasonBlock, GameVisibility } from '@meeshy/shared/types/game';
+import type { GameBlock, GameDuoBlock, GameLeagueBlock, GameSeasonBlock, GameVisibility } from '@meeshy/shared/types/game';
+import { tailwindFactor } from '@meeshy/shared/utils/game/boosts';
+import { gloryStanding } from '@meeshy/shared/utils/game/glory';
+import { levelProgress } from '@meeshy/shared/utils/game/levels';
+import { previewMint } from '@meeshy/shared/utils/game/mint';
+import { prestigeTransition } from '@meeshy/shared/utils/game/prestige';
 import { seasonStepReward } from '@meeshy/shared/utils/game/season';
 import { treasuryTier } from '@meeshy/shared/utils/game/treasury';
 
@@ -115,10 +120,48 @@ export const withVisibility = (view: EngagementWithGame, patch: Partial<GameVisi
   return visibility === undefined ? view : onGame(view, (game) => ({ ...game, visibility: { ...visibility, ...patch } }));
 };
 
-/** Une étoile de plus et la proposition se ferme ; le niveau et le score repartent à la relecture. */
+/**
+ * Le passage en Prestige, par la MÊME loi que la passerelle (`prestigeTransition`) :
+ * le niveau et le score repartent à 1 et à 0, l'étoile se pose, la Gloire monte,
+ * le trophée numéroté entre dans la vitrine. Le niveau RECORD retombe à 1 avec le
+ * niveau : la ligue (10) et le duo (20) se referment tant qu'il n'y est pas revenu —
+ * le texte de confirmation l'annonce avant le geste (conformité G-5).
+ *
+ * Refusé (même référence) sans proposition ouverte, ou au maximum.
+ */
 export const afterPrestige = (view: EngagementWithGame): EngagementWithGame => {
-  const prestige = view.game?.prestige;
-  if (prestige === undefined || !prestige.canPrestige || prestige.stars >= prestige.max) return view;
-  const next: GamePrestigeBlock = { ...prestige, stars: prestige.stars + 1, canPrestige: false };
-  return onGame(view, (game) => ({ ...game, prestige: next }));
+  const game = view.game;
+  const prestige = game?.prestige;
+  if (game === undefined || prestige === undefined || !prestige.canPrestige) return view;
+  const transition = prestigeTransition({ score: game.level.score, prestige: game.level.prestige });
+  if (!transition.allowed) return view;
+
+  const progress = levelProgress(transition.scoreAfter);
+  const standing = gloryStanding({ glory: game.glory.glory + transition.gloryGained, mythic: game.glory.rank === 'mythe' });
+  const trophies = game.trophies;
+  return onGame(view, (current) => ({
+    ...current,
+    level: {
+      ...current.level,
+      level: progress.level,
+      tier: progress.tier,
+      score: progress.score,
+      floorScore: progress.floorScore,
+      nextThreshold: progress.nextThreshold,
+      pointsToNext: progress.pointsToNext,
+      progress: progress.progress,
+      record: transition.levelRecordAfter,
+      prestige: transition.prestigeAfter,
+      canPrestige: false,
+    },
+    glory: { glory: standing.glory, rank: standing.rank, division: standing.division, next: standing.next, gloryMissing: standing.gloryMissing, progress: standing.progress },
+    mint: previewMint({ score: transition.scoreAfter, mintedLifetime: current.mint.number, debitablePoints: 0 }),
+    boosts: { ...current.boosts, tailwind: tailwindFactor({ level: progress.level, levelRecord: transition.levelRecordAfter }) },
+    prestige: { ...prestige, stars: transition.prestigeAfter, canPrestige: false },
+    ...(current.league === undefined ? {} : { league: { ...current.league, unlocked: false, access: 'locked' as const, current: null } }),
+    ...(current.duo === undefined ? {} : { duo: { ...current.duo, unlocked: false } }),
+    ...(trophies === undefined
+      ? {}
+      : { trophies: { items: [...trophies.items, { key: transition.trophyKey, awardedAt: new Date().toISOString() }], order: [transition.trophyKey, ...trophies.order] } }),
+  }));
 };

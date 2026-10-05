@@ -4,6 +4,8 @@ import { resolveEngagementProgress } from '@meeshy/shared/utils/engagement-progr
 
 import type { EngagementWithGame } from '@/lib/api/engagement';
 import { ENGAGEMENT_PROGRESS_FIXTURE } from '@/lib/api/engagement-fixture';
+import { levelThreshold } from '@meeshy/shared/utils/game/levels';
+
 import { gameBlockWithExtrasFixture } from '@/lib/api/game-fixture';
 
 import {
@@ -146,16 +148,37 @@ describe('la vitrine et la visibilité', () => {
 });
 
 describe('le Prestige', () => {
-  test('ajoute une étoile et ferme la proposition', () => {
-    const v = view();
-    const open: EngagementWithGame = v.game?.prestige === undefined ? v : { ...v, game: { ...v.game, prestige: { ...v.game.prestige, canPrestige: true } } };
-    const next = afterPrestige(open);
-    expect(next.game?.prestige?.stars).toBe(1);
-    expect(next.game?.prestige?.canPrestige).toBe(false);
+  const atTop = (): EngagementWithGame => ({ ...base, game: gameBlockWithExtrasFixture({ score: levelThreshold(100) + 40, prestige: 1 }) });
+
+  test('le niveau et le score repartent, l’étoile se pose, la Gloire monte, le trophée entre dans la vitrine', () => {
+    const before = atTop();
+    expect(before.game?.prestige?.canPrestige).toBe(true);
+    const next = afterPrestige(before);
+    expect(next.game?.level).toMatchObject({ level: 1, score: 0, record: 1, prestige: 2, canPrestige: false });
+    expect(next.game?.prestige).toMatchObject({ stars: 2, canPrestige: false });
+    expect(next.game?.glory.glory).toBe((before.game?.glory.glory ?? 0) + 1000);
+    expect(next.game?.trophies?.items.map((item) => item.key)).toContain('trophy.prestige.2');
+    expect(next.game?.trophies?.order[0]).toBe('trophy.prestige.2');
   });
 
-  test('sans proposition ouverte : même référence', () => {
+  test('le trésor, lui, ne bouge pas', () => {
+    const before = atTop();
+    expect(afterPrestige(before).game?.treasury).toEqual(before.game?.treasury);
+  });
+
+  test('la ligue et le duo se referment : le record repart à 1', () => {
+    const next = afterPrestige(atTop());
+    expect(next.game?.league).toMatchObject({ unlocked: false, access: 'locked', current: null });
+    expect(next.game?.duo?.unlocked).toBe(false);
+  });
+
+  test('sans proposition ouverte (niveau trop bas) : même référence', () => {
     const v = view();
     expect(afterPrestige(v)).toBe(v);
+  });
+
+  test('un ancien serveur (aucune extension prestige) : même référence', () => {
+    const old: EngagementWithGame = { ...base };
+    expect(afterPrestige(old)).toBe(old);
   });
 });

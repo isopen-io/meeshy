@@ -82,6 +82,15 @@
   --game-league-amethyste: #8b5cf6;
   --game-league-diamant: #bae6fd;
 
+  /* LES ENCRES DES TAMPONS DE L'ATLAS (#9388) : six teintes de cachet, une par
+     langue (stable, `stampTone`). Illustration : pas de variante de thème. */
+  --game-stamp-0: #4f46e5;
+  --game-stamp-1: #e11d48;
+  --game-stamp-2: #10b981;
+  --game-stamp-3: #d97706;
+  --game-stamp-4: #8b5cf6;
+  --game-stamp-5: #0d9488;
+
   --game-tier-etincelle: var(--ios-error);
   --game-tier-lueur: #fb923c;
   --game-tier-lumiere: var(--ios-warning);
