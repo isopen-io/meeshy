@@ -96,6 +96,20 @@ describe('browserFileDeliveryHost — la coque Android partage le FICHIER par so
     ]);
   });
 
+  test('un texte offert avec le fichier (le lien de parrainage) part avec lui, comme `navigator.share({ files, text })` (#9492)', async () => {
+    const { shell, appels } = coqueAndroid({ methodes: ['share', 'shareFile'] });
+    const host = browserFileDeliveryHost({ document: documentLike(), navigator: {}, urls, shell });
+    const file = new File(['Meeshy!'], 'carte.png', { type: 'image/png' });
+    await host.shareFiles?.({ files: [file], text: 'https://meeshy.me/signup/affiliate/aff_1' });
+    expect(appels).toEqual([
+      {
+        plugin: 'MeeshyShare',
+        methode: 'shareFile',
+        options: { fileName: 'carte.png', mimeType: 'image/png', data: btoa('Meeshy!'), text: 'https://meeshy.me/signup/affiliate/aff_1' },
+      },
+    ]);
+  });
+
   test('la feuille fermée sans choix (CANCELED) ⇒ annulé, comme sur le web', async () => {
     const { shell } = coqueAndroid({
       methodes: ['share', 'shareFile'],
