@@ -37,16 +37,20 @@ extension CallView {
         }
     }
 
+    /// Rangée du (…) déployé, donc candidate du `ViewThatFits` de la pilule :
+    /// ses puces sont construites ici, le `ForEach` ne fait que les relire
+    /// (#9456, `AsyncRenderRow`).
     var reactionPanelRows: some View {
-        VStack(spacing: 0) {
+        let chips = CallReactionEmoji.allCases.map { emoji in
+            AsyncRenderRow(id: emoji, content: CallPillChip(art: .emoji(emoji.rawValue), caption: nil, label: emoji.rawValue) {
+                HapticFeedback.light()
+                _ = callControls.react(emoji)
+            })
+        }
+        return VStack(spacing: 0) {
             CallPanelHeader(title: CallControlsCopy.react, onBack: backToMenu, onClose: closePanel)
             CallPillRow {
-                ForEach(CallReactionEmoji.allCases, id: \.self) { emoji in
-                    CallPillChip(art: .emoji(emoji.rawValue), caption: nil, label: emoji.rawValue) {
-                        HapticFeedback.light()
-                        _ = callControls.react(emoji)
-                    }
-                }
+                ForEach(chips, content: asyncRenderRowContent)
             }
         }
     }
