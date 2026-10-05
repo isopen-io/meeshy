@@ -17,7 +17,9 @@ import { CONVERSATIONS_QUERY_KEY, conversationQueryKey } from './conversations';
 import { createHttpTransport } from './http';
 import { hasOlderMessagesOf, messagesOf, resetSentMessagesForTests } from './fixtures';
 import { VIEWER_ID, message } from './fixtures-base';
-import type { Message } from './types';
+import type { Message, MessageTranslation } from './types';
+import { deliveryOf } from '../view/message';
+import { confirmedMessageOf, localMessageOf } from '../send/local-message';
 
 function fakeFetch(response: { readonly status: number; readonly body?: unknown }) {
   const calls: { readonly url: string; readonly init: RequestInit }[] = [];
@@ -655,5 +657,117 @@ describe('sendMessage — fixtures', () => {
     expect(stored?.originalLanguage).toBe('en');
     expect((stored as { readonly clientMessageId?: string } | undefined)?.clientMessageId).toBe('cid_xyz');
     expect(stored?.sender?.userId).toBe(VIEWER_ID);
+  });
+});
+
+/**
+ * #9262 — LA COCHE NE REDESCEND PAS. `upsertThreadMessage` est le site unique
+ * qui pose une rangée, appelé par le temps réel ET par l'accusé REST d'un
+ * envoi. La porte était unifiée, la LOI ne l'était pas : un remplacement
+ * intégral suppose que la charge entrante en sait toujours autant que la
+ * rangée en place, et sur le chemin de l'accusé c'est faux.
+ *
+ * Ces témoins jouent la séquence DANS L'ORDRE QUI CASSE — temps réel d'abord,
+ * accusé ensuite — et assertent sur la coche SERVIE (`deliveryOf`), pas sur
+ * les champs : le jour où `localMessageOf` poserait `recipientCount: 0`, ils
+ * rougiraient sans qu'on ait à réécrire leur raisonnement. L'ordre inverse ne
+ * peut pas tomber : c'est le rang où remplacement et fusion rendent le même
+ * verdict.
+ */
+describe('upsertThreadMessage — #9262, la rangée en place ne régresse pas', () => {
+  const traduction = (targetLanguage: string, translatedContent: string): MessageTranslation => ({
+    id: `tr-${targetLanguage}`,
+    messageId: 'local',
+    targetLanguage,
+    translatedContent,
+    translationModel: 'basic',
+    createdAt: new Date(1_757_000_000_000),
+  });
+
+  const ackRowOf = (overrides: Partial<Message> = {}): Message =>
+    ({
+      ...confirmedMessageOf(
+        localMessageOf({
+          clientMessageId: 'cid_9262',
+          conversationId: 'c-a',
+          viewerId: 'u1',
+          content: 'contenu m-serveur',
+          originalLanguage: 'fr',
+          now: new Date(1_757_000_000_000),
+        }),
+        { id: 'm-serveur', conversationId: 'c-a', createdAt: '2026-10-05T10:00:00.000Z' },
+      ),
+      ...overrides,
+    }) as Message;
+
+  test('temps réel puis accusé ⇒ la coche reste « lu », elle ne redescend pas à « envoyé »', () => {
+    const client = new QueryClient();
+    /* La rangée que `read-status:updated` laisse derrière lui pendant que le
+       POST est en vol — le cas nominal sur le réseau lent que cette
+       application vise. */
+    const vue = msg('local', { clientMessageId: 'cid_9262', recipientCount: 2, deliveredCount: 2, readCount: 2 } as Partial<Message>);
+    seedThread(client, 'c-a', [vue]);
+    expect(deliveryOf(vue)).toBe('read');
+
+    upsertThreadMessage(client, 'c-a', ackRowOf());
+
+    const apres = readThread(client, 'c-a')?.[0];
+    expect(apres?.id).toBe('m-serveur');
+    expect(apres === undefined ? null : deliveryOf(apres)).toBe('read');
+  });
+
+  test('temps réel puis accusé ⇒ la coche reste « distribué »', () => {
+    const client = new QueryClient();
+    const vue = msg('local', { clientMessageId: 'cid_9262', recipientCount: 2, deliveredCount: 2, readCount: 0 } as Partial<Message>);
+    seedThread(client, 'c-a', [vue]);
+    expect(deliveryOf(vue)).toBe('delivered');
+
+    upsertThreadMessage(client, 'c-a', ackRowOf());
+
+    const apres = readThread(client, 'c-a')?.[0];
+    expect(apres === undefined ? null : deliveryOf(apres)).toBe('delivered');
+  });
+
+  test('un accusé qui en sait PLUS que la rangée en place gagne — la fusion n’est pas un gel', () => {
+    const client = new QueryClient();
+    seedThread(client, 'c-a', [msg('local', { clientMessageId: 'cid_9262', recipientCount: 2, deliveredCount: 1, readCount: 0 } as Partial<Message>)]);
+
+    upsertThreadMessage(client, 'c-a', ackRowOf({ deliveredCount: 2, readCount: 2 }));
+
+    const apres = readThread(client, 'c-a')?.[0];
+    expect(apres === undefined ? null : deliveryOf(apres)).toBe('read');
+  });
+
+  test('une rangée que le temps réel a traduite garde ses traductions après l’accusé', () => {
+    const client = new QueryClient();
+    const traduite = msg('local', {
+      clientMessageId: 'cid_9262',
+      translations: [traduction('en', 'content m-serveur')],
+    } as Partial<Message>);
+    seedThread(client, 'c-a', [traduite]);
+
+    upsertThreadMessage(client, 'c-a', ackRowOf());
+
+    expect(readThread(client, 'c-a')?.[0]?.translations.map((t) => t.targetLanguage)).toEqual(['en']);
+  });
+
+  test('une liste de traductions NON vide dans la charge remplace bien celle en place', () => {
+    const client = new QueryClient();
+    seedThread(client, 'c-a', [
+      msg('local', { clientMessageId: 'cid_9262', translations: [traduction('en', 'ancien')] } as Partial<Message>),
+    ]);
+
+    upsertThreadMessage(client, 'c-a', ackRowOf({ translations: [traduction('es', 'nuevo')] }));
+
+    expect(readThread(client, 'c-a')?.[0]?.translations.map((t) => t.targetLanguage)).toEqual(['es']);
+  });
+
+  test('une rangée NEUVE (aucune en place) entre telle quelle — rien à fusionner', () => {
+    const client = new QueryClient();
+    seedThread(client, 'c-a', [msg('m1')]);
+    upsertThreadMessage(client, 'c-a', ackRowOf());
+    const apres = readThread(client, 'c-a');
+    expect(apres?.map((m) => m.id)).toEqual(['m1', 'm-serveur']);
+    expect(apres?.[1]?.deliveredCount).toBe(0);
   });
 });
