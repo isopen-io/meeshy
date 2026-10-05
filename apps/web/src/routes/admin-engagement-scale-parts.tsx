@@ -1,14 +1,17 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 
-import { DEFAULT_ENGAGEMENT_SCALE, type EngagementScaleDocument } from '@meeshy/shared/types/engagement-scale';
+import { DEFAULT_ENGAGEMENT_SCALE, type EngagementScale } from '@meeshy/shared/types/engagement-scale';
 
 import { AdminButton } from '@/components/admin/button';
+import { AdminConfirmSheet } from '@/components/admin/confirm-sheet';
+import { AdminLink } from '@/components/admin/entity-chip';
 import { AdminFicheSection } from '@/components/admin/fiche';
 import { AdminResponsiveRows, type AdminColumn } from '@/components/admin/responsive-rows';
 import { AdminErrorState } from '@/components/admin/states';
 import { INK2 } from '@/components/admin/tone';
 import { adminMoment } from '@/lib/admin/format';
+import { personLabel } from '@/lib/admin/interpret/labels';
 import {
   MULTIPLIER_FIELDS,
   draftOf,
@@ -25,6 +28,7 @@ import {
   ADMIN_ENGAGEMENT_SCALE_QUERY_KEY,
   loadEngagementScale,
   saveEngagementScale,
+  type AdminEngagementScaleDocument,
 } from '@/lib/api/admin-engagement-scale';
 import { translateAdmin, type AdminLanguage, type AdminPlainCatalogKey } from '@/lib/i18n-admin-catalog';
 import { LabeledNumber, NumberField } from '@/routes/admin-engagement-scale-fields';
@@ -134,15 +138,17 @@ function ScaleEditor({
 }: {
   readonly language: AdminLanguage;
   readonly deps: AdminDeps;
-  readonly document: EngagementScaleDocument;
+  readonly document: AdminEngagementScaleDocument;
 }) {
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState<ScaleDraft>(() => draftOf(document.scale));
   const [saving, setSaving] = useState(false);
   const [announcement, setAnnouncement] = useState('');
   const [error, setError] = useState('');
+  /* Le barème VALIDÉ qui attend sa confirmation : il vaut pour tous les membres (audit 2026-10-04). */
+  const [pending, setPending] = useState<EngagementScale | null>(null);
 
-  const save = async (): Promise<void> => {
+  const ask = (): void => {
     const scale = scaleOfDraft(draft);
     if (scale === null) {
       setError(translateAdmin(language, 'admin.scale.invalid'));
@@ -150,9 +156,14 @@ function ScaleEditor({
       return;
     }
     setError('');
+    setPending(scale);
+  };
+
+  const save = async (scale: EngagementScale): Promise<void> => {
     setSaving(true);
     const result = await saveEngagementScale({ ...deps, scale });
     setSaving(false);
+    setPending(null);
     if (!result.ok) {
       setError(translateAdmin(language, 'admin.scale.saveFailed', { error: result.error }));
       return;
@@ -169,69 +180,102 @@ function ScaleEditor({
   };
 
   return (
-    <form
-      className="grid gap-4"
-      data-admin-engagement-scale
-      onSubmit={(event) => {
-        event.preventDefault();
-        void save();
-      }}
-    >
-      <p className="text-caption" style={{ color: INK2 }} data-scale-updated>
-        {document.updatedAt === null
-          ? translateAdmin(language, 'admin.scale.defaults')
-          : translateAdmin(language, 'admin.scale.updated', {
-              date: adminMoment(document.updatedAt, language),
-              by: document.updatedBy ?? '—',
-            })}
-      </p>
-
-      <AdminFicheSection id="scale-operations" title={translateAdmin(language, 'admin.scale.operations.title')}>
-        <OperationsSections language={language} draft={draft} onDraft={setDraft} />
-      </AdminFicheSection>
-
-      <LinkVisitSection language={language} draft={draft} onDraft={setDraft} />
-
-      <StreakBonusSection language={language} draft={draft} onDraft={setDraft} />
-
-      <AbuseSection language={language} draft={draft} onDraft={setDraft} />
-
-      <AdminFicheSection id="scale-multiplier" title={translateAdmin(language, 'admin.scale.multiplier.title')}>
-        <div className="grid gap-3 @2xl:grid-cols-2">
-          {MULTIPLIER_FIELDS.map((field) => (
-            <LabeledNumber key={field} label={translateAdmin(language, MULTIPLIER_LABELS[field])}>
-              <NumberField
-                value={draft.multiplier[field]}
-                label={translateAdmin(language, MULTIPLIER_LABELS[field])}
-                onChange={(value) => setDraft(withMultiplier(draft, field, value))}
-                data={{ 'data-scale-multiplier': field }}
-              />
-            </LabeledNumber>
-          ))}
-        </div>
-      </AdminFicheSection>
-
-      <AdminFicheSection id="scale-levels" title={translateAdmin(language, 'admin.scale.levels.title')}>
-        <LevelCapsTable language={language} draft={draft} onDraft={setDraft} />
-      </AdminFicheSection>
-
-      {error === '' ? null : (
-        <p role="alert" className="text-caption font-medium" style={{ color: 'var(--color-danger)' }} data-scale-error>
-          {error}
+    <>
+      <form
+        className="grid gap-4"
+        data-admin-engagement-scale
+        onSubmit={(event) => {
+          event.preventDefault();
+          ask();
+        }}
+      >
+        <p className="text-caption" style={{ color: INK2 }} data-scale-updated>
+          {document.updatedAt === null ? translateAdmin(language, 'admin.scale.defaults') : <UpdatedBy language={language} document={document} updatedAt={document.updatedAt} />}
         </p>
+
+        <AdminFicheSection id="scale-operations" title={translateAdmin(language, 'admin.scale.operations.title')}>
+          <OperationsSections language={language} draft={draft} onDraft={setDraft} />
+        </AdminFicheSection>
+
+        <LinkVisitSection language={language} draft={draft} onDraft={setDraft} />
+
+        <StreakBonusSection language={language} draft={draft} onDraft={setDraft} />
+
+        <AbuseSection language={language} draft={draft} onDraft={setDraft} />
+
+        <AdminFicheSection id="scale-multiplier" title={translateAdmin(language, 'admin.scale.multiplier.title')}>
+          <div className="grid gap-3 @2xl:grid-cols-2">
+            {MULTIPLIER_FIELDS.map((field) => (
+              <LabeledNumber key={field} label={translateAdmin(language, MULTIPLIER_LABELS[field])}>
+                <NumberField
+                  value={draft.multiplier[field]}
+                  label={translateAdmin(language, MULTIPLIER_LABELS[field])}
+                  onChange={(value) => setDraft(withMultiplier(draft, field, value))}
+                  data={{ 'data-scale-multiplier': field }}
+                />
+              </LabeledNumber>
+            ))}
+          </div>
+        </AdminFicheSection>
+
+        <AdminFicheSection id="scale-levels" title={translateAdmin(language, 'admin.scale.levels.title')}>
+          <LevelCapsTable language={language} draft={draft} onDraft={setDraft} />
+        </AdminFicheSection>
+
+        {error === '' ? null : (
+          <p role="alert" className="text-caption font-medium" style={{ color: 'var(--color-danger)' }} data-scale-error>
+            {error}
+          </p>
+        )}
+
+        <div className="flex flex-wrap items-center gap-3 pb-8">
+          <AdminButton type="submit" tone="primary" busy={saving} data={{ 'data-scale-save': '' }}>
+            {translateAdmin(language, saving ? 'admin.scale.saving' : 'admin.scale.save')}
+          </AdminButton>
+          <AdminButton data={{ 'data-scale-reset': '' }} onClick={reset}>
+            {translateAdmin(language, 'admin.scale.reset')}
+          </AdminButton>
+        </div>
+
+        <AdminAnnouncement text={announcement} />
+      </form>
+      {pending === null ? null : (
+        <AdminConfirmSheet
+          language={language}
+          title={translateAdmin(language, 'admin.scale.confirm.title')}
+          body={translateAdmin(language, 'admin.scale.confirm.body')}
+          confirmLabel={translateAdmin(language, 'admin.scale.save')}
+          tone="primary"
+          busy={saving}
+          onConfirm={() => void save(pending)}
+          onCancel={() => setPending(null)}
+        />
       )}
+    </>
+  );
+}
 
-      <div className="flex flex-wrap items-center gap-3 pb-8">
-        <AdminButton type="submit" tone="primary" busy={saving} data={{ 'data-scale-save': '' }}>
-          {translateAdmin(language, saving ? 'admin.scale.saving' : 'admin.scale.save')}
-        </AdminButton>
-        <AdminButton data={{ 'data-scale-reset': '' }} onClick={reset}>
-          {translateAdmin(language, 'admin.scale.reset')}
-        </AdminButton>
-      </div>
-
-      <AdminAnnouncement text={announcement} />
-    </form>
+/**
+ * « Réglé le … par … » : la personne SERVIE (`updatedByPerson`), nommée et
+ * menant à sa fiche — jamais `updatedBy`, un identifiant. La phrase garde
+ * l'ordre de sa langue : le nom prend la place de `{by}` dans le gabarit traduit.
+ */
+function UpdatedBy({ language, document, updatedAt }: { readonly language: AdminLanguage; readonly document: AdminEngagementScaleDocument; readonly updatedAt: string }) {
+  const SLOT = '\u0000';
+  const [before = '', after = ''] = translateAdmin(language, 'admin.scale.updated', { date: adminMoment(updatedAt, language), by: SLOT }).split(SLOT);
+  const person = document.updatedByPerson;
+  return (
+    <>
+      {before}
+      {person === null ? (
+        personLabel(null, language)
+      ) : (
+        <AdminLink target={{ kind: 'entity', entity: 'user', id: person.id }} anchor="scale-updated-by" className="font-medium underline" style={{ color: 'var(--color-ios-brand)' }}>
+          {personLabel(person, language)}
+        </AdminLink>
+      )}
+      {after}
+    </>
   );
 }
 

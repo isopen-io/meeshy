@@ -1,15 +1,20 @@
+import { isEngagementOperationKey } from '@meeshy/shared/types/engagement-operations';
+
+import type { AdminAuditPerson } from '@/lib/api/admin-audit';
 import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 import {
   interpretConversationType,
   interpretInvitationStatus,
   interpretParticipantRole,
+  interpretReportAction,
   interpretReportStatus,
   interpretReportType,
   interpretReportedEntity,
   interpretRole,
 } from './interpret/enums';
 import { languageName, sentenceCase } from './interpret/language';
+import { personLabel } from './interpret/labels';
 import { formatCount } from './interpret/numbers';
 import { adminMomentOf } from './interpret/time';
 
@@ -58,6 +63,9 @@ export const KNOWN_AUDIT_FIELDS = [
   'type',
   'reportType',
   'reportedType',
+  'actionTaken',
+  'moderatorNotes',
+  'moderatorId',
   'configs',
   'roles',
   'summaries',
@@ -80,8 +88,45 @@ const humanizeSegment = (segment: string): string =>
     .trim()
     .toLowerCase();
 
-export function auditFieldLabel(field: string, language: AdminLanguage): string {
+/* ── Le barème de points : son journal est un diff À PLAT (`operations.<clé>.points`,
+   `multiplier.windowDays`…) ; chaque chemin se dit avec les mots de l'écran du barème. */
+const SCALE_MULTIPLIER_FIELDS = ['windowDays', 'stepPerExtraFamily', 'standingBonus', 'achievementsForStanding', 'highBadgeThreshold', 'highBadgesForStanding', 'maxFactor'] as const;
+const SCALE_LINK_FIELDS = ['basePoints', 'firstTier', 'stepPerDoubling', 'maxPoints', 'dedupHours', 'dailyCapPerCreator'] as const;
+const SCALE_ABUSE_FIELDS = ['heavyPoints', 'clawbackHours', 'unverifiedMaxPoints'] as const;
+const SCALE_VARIANTS = ['public', 'community', 'friends', 'other', 'live', 'static'] as const;
+
+const among = <T extends string>(list: readonly T[], value: string | undefined): value is T => list.some((item) => item === value);
+
+function scaleFieldLabel(field: string, language: AdminLanguage): string | null {
+  const t = (key: Parameters<typeof translateAdmin>[1]) => translateAdmin(language, key as never);
+  const operation = /^operations\.(.+)\.(points|multiplied|cap|variantPoints\.([a-z]+))$/.exec(field);
+  if (operation !== null) {
+    const [, key = '', rule = '', variant] = operation;
+    if (!isEngagementOperationKey(key)) return null;
+    const name = translateAdmin(language, `admin.scale.op.${key}`);
+    if (rule === 'points') return translateAdmin(language, 'admin.scale.pointsFor', { operation: name });
+    if (rule === 'multiplied') return translateAdmin(language, 'admin.scale.multipliedFor', { operation: name });
+    if (rule === 'cap') return translateAdmin(language, 'admin.scale.capFor', { operation: name });
+    const said = among(SCALE_VARIANTS, variant) ? translateAdmin(language, `admin.scale.variant.${variant}`) : (variant ?? '');
+    return translateAdmin(language, 'admin.scale.variantFor', { operation: name, variant: said });
+  }
+  const [section, leaf, ...rest] = field.split('.');
+  if (rest.length > 0) return null;
+  if (section === 'streakBonuses' && leaf === undefined) return t('admin.scale.streak.title');
+  if (section === 'multiplier') {
+    if (leaf === 'levelCaps') return t('admin.scale.levels.title');
+    if (among(SCALE_MULTIPLIER_FIELDS, leaf)) return `${t('admin.scale.multiplier.title')} › ${translateAdmin(language, `admin.scale.field.${leaf}`)}`;
+  }
+  if (section === 'linkVisits' && among(SCALE_LINK_FIELDS, leaf)) return `${t('admin.scale.links.title')} › ${translateAdmin(language, `admin.scale.links.${leaf}`)}`;
+  if (section === 'abuse' && among(SCALE_ABUSE_FIELDS, leaf)) return `${t('admin.scale.abuse.title')} › ${translateAdmin(language, `admin.scale.abuse.${leaf}`)}`;
+  return null;
+}
+
+/** `entity` : le genre de la ligne — le barème lit ses chemins avec ses propres mots. */
+export function auditFieldLabel(field: string, language: AdminLanguage, entity?: string): string {
   if (isKnownField(field)) return translateAdmin(language, `admin.audit.field.${field}`);
+  const scale = entity === 'EngagementScaleConfig' ? scaleFieldLabel(field, language) : null;
+  if (scale !== null) return scale;
   const segments = field.split('.').map(humanizeSegment).filter((segment) => segment !== '');
   return segments.length === 0 ? NONE : sentenceCase(segments.join(' › '), language);
 }
@@ -101,18 +146,28 @@ function enumerated(entity: string, field: string, value: string, language: Admi
   if (field === 'status' && entity === 'FriendRequest') return interpretInvitationStatus(value, language).label;
   if (field === 'reportType') return interpretReportType(value, language).label;
   if (field === 'reportedType') return interpretReportedEntity(value, language).label;
+  if (field === 'actionTaken' && entity === 'Report') return interpretReportAction(value, language).label;
   if (field === 'type' && entity === 'Conversation') return interpretConversationType(value, language).label;
   return null;
 }
 
+/**
+ * `people` : les personnes que la ligne SERT (administrateur, membre concerné) —
+ * un `moderatorId` se nomme par celle qui porte cet identifiant, sinon se dit
+ * « Modérateur » : un ObjectId n'est jamais peint (audit 2026-10-04).
+ */
 export function auditValue(
-  params: { readonly field: string; readonly value: string | null; readonly entity: string },
+  params: { readonly field: string; readonly value: string | null; readonly entity: string; readonly people?: readonly (AdminAuditPerson | null)[] },
   language: AdminLanguage,
   now: Date,
 ): AuditValue {
   const { field, value, entity } = params;
   if (value === null) return { kind: 'empty', text: translateAdmin(language, 'admin.audit.change.none') };
   if (value === MASK) return { kind: 'masked', text: MASK };
+  if (field === 'moderatorId') {
+    const person = (params.people ?? []).find((candidate) => candidate !== null && candidate.id === value) ?? null;
+    return { kind: 'text', text: person === null ? translateAdmin(language, 'admin.audit.value.moderator') : personLabel(person, language) };
+  }
   if (value === 'true') return { kind: 'text', text: translateAdmin(language, 'admin.value.yes') };
   if (value === 'false') return { kind: 'text', text: translateAdmin(language, 'admin.value.no') };
   if (ISO_INSTANT.test(value)) {

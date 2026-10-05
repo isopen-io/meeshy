@@ -228,6 +228,9 @@ export const sovereignMessageSelect = Prisma.validator<Prisma.MessageSelect>()({
   translations: true,
   ...messageContentProtectionSelect,
   ...viewOnceCountersSelect,
+  // La durée d'un message ÉPHÉMÈRE (secondes) : `expiresAt` dit QUAND il
+  // tombe, elle dit POUR COMBIEN il a été écrit (audit 2026-10-04).
+  ephemeralDuration: true,
   sender: { select: sovereignSenderSelect },
   replyTo: { select: sovereignReplyToSelect },
   attachments: {
@@ -470,6 +473,7 @@ export function mapSovereignMessageRow(message: SovereignMessageRow) {
     isBlurred: message.isBlurred,
     effectFlags: message.effectFlags,
     expiresAt: message.expiresAt,
+    ephemeralDuration: message.ephemeralDuration ?? null,
     isEncrypted: message.isEncrypted,
     encryptionMode: message.encryptionMode,
     isProtected: protege,
@@ -638,6 +642,7 @@ export const sovereignMessageSchema = {
     isBlurred: { type: 'boolean', nullable: true },
     effectFlags: { type: 'number', nullable: true },
     expiresAt: { type: 'string', format: 'date-time', nullable: true },
+    ephemeralDuration: { type: 'number', nullable: true, description: 'Durée de vie d’un message éphémère, en secondes' },
     isEncrypted: { type: 'boolean', nullable: true },
     encryptionMode: { type: 'string', nullable: true },
     isProtected: { type: 'boolean' },

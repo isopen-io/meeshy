@@ -35,7 +35,7 @@ import { requirePermission } from '../../middleware/authorize';
 import { validatePagination } from '../../utils/pagination';
 import { sendInternalError, sendPaginatedSuccess } from '../../utils/response';
 import { logError } from '../../utils/logger';
-import { readAuditChanges, readAuditReason } from './audit-logs-changes';
+import { readAuditChanges, readAuditMetadataName, readAuditReason } from './audit-logs-changes';
 import { resolveAuditTargets, targetKey } from './audit-logs-targets';
 import { loadAdminPeople } from './oversight-people';
 import {
@@ -62,6 +62,7 @@ const AUDIT_ENTITIES = [
   'FriendRequest',
   'AgentLlmConfig',
   'Agent',
+  'EngagementScaleConfig',
 ] as const;
 
 const DEFAULT_LIMIT = 30;
@@ -224,11 +225,15 @@ export function registerAuditLogRoutes(fastify: FastifyInstance): void {
             entityId: row.entityId,
             createdAt: row.createdAt,
             admin: people.get(row.adminId) ?? null,
-            subject: people.get(row.userId) ?? null,
+            // Le « sujet » d'une ligne posée sur une cible qui n'est pas un
+            // compte, quand il est l'administrateur lui-même, n'en est pas un :
+            // le servir faisait lire « Awa a agi sur Awa » (audit 2026-10-04).
+            subject: row.userId === row.adminId && row.entity !== 'User' ? null : (people.get(row.userId) ?? null),
             target: {
               type: row.entity,
               id: row.entityId,
-              label: named?.label ?? null,
+              // Une diffusion supprimée n'a plus de ligne : son journal garde son nom.
+              label: named?.label ?? (row.entity === 'Broadcast' ? readAuditMetadataName(row.metadata) : null),
               secondary: named?.secondary ?? null,
               ...(named?.participants === undefined ? {} : { participants: named.participants, total: named.total }),
             },

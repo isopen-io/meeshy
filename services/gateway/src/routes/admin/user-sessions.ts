@@ -185,7 +185,9 @@ export function registerUserSessionRoutes(fastify: FastifyInstance, deps: Deps):
         userId,
         adminId: authContext.registeredUser!.id,
         action: UserAuditAction.REVOKE_SESSION,
-        entityId: sessionId,
+        // entity 'User' : l'identifiant est celui du MEMBRE ; la session est dans metadata.
+        entityId: userId,
+        metadata: { sessionId },
         ipAddress: request.ip,
         userAgent: request.headers['user-agent']
       });

@@ -160,7 +160,8 @@ describe('POST /admin/users/:userId/ban', () => {
         userId: 'user123',
         adminId: 'admin123',
         action: UserAuditAction.BAN_USER,
-        entityId: 'ban1',
+        entityId: 'user123',
+        metadata: expect.objectContaining({ banId: 'ban1' }),
       })
     );
   });
@@ -216,6 +217,44 @@ describe('POST /admin/users/:userId/ban', () => {
   });
 });
 
+// Spec 2026-10-04 § 4 : le rang souverain bannit sans motif ; un motif
+// FOURNI reste validé. ADMIN garde l'exigence (« refuse un motif trop court »
+// ci-dessus, et le motif absent ci-dessous).
+describe('POST /admin/users/:userId/ban — le motif et le rang souverain', () => {
+  beforeEach(resetMocks);
+
+  it('BIGBOSS sans motif : le ban est prononcé et journalisé, motif nul', async () => {
+    const app = buildApp('BIGBOSS');
+    await app.ready();
+    mockBan.createBan.mockResolvedValue(BAN);
+    const res = await app.inject({ method: 'POST', url: '/admin/users/user123/ban', payload: {} });
+    expect(res.statusCode).toBe(200);
+    expect(mockBan.createBan).toHaveBeenCalledWith(expect.objectContaining({ userId: 'user123', reason: '' }));
+    const trace = (mockAudit.createAuditLog as jest.Mock).mock.calls[0][0] as { action: string; metadata: { reason: unknown } };
+    expect(trace.action).toBe(UserAuditAction.BAN_USER);
+    expect(trace.metadata.reason).toBeNull();
+    await app.close();
+  });
+
+  it('BIGBOSS avec un motif fourni trop court : 400, aucun ban', async () => {
+    const app = buildApp('BIGBOSS');
+    await app.ready();
+    const res = await app.inject({ method: 'POST', url: '/admin/users/user123/ban', payload: { reason: 'x' } });
+    expect(res.statusCode).toBe(400);
+    expect(mockBan.createBan).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('ADMIN sans motif : 400 comme hier, aucun ban', async () => {
+    const app = buildApp('ADMIN');
+    await app.ready();
+    const res = await app.inject({ method: 'POST', url: '/admin/users/user123/ban', payload: {} });
+    expect(res.statusCode).toBe(400);
+    expect(mockBan.createBan).not.toHaveBeenCalled();
+    await app.close();
+  });
+});
+
 describe('POST /admin/users/:userId/bans/:banId/lift', () => {
   let app: FastifyInstance;
   beforeAll(async () => {
@@ -239,7 +278,7 @@ describe('POST /admin/users/:userId/bans/:banId/lift', () => {
     expect(res.statusCode).toBe(200);
     expect(mockBan.liftBan).toHaveBeenCalledWith({ banId: 'ban1', liftedById: 'admin123', liftReason: 'Erreur' });
     expect(mockAudit.createAuditLog).toHaveBeenCalledWith(
-      expect.objectContaining({ userId: 'user123', action: UserAuditAction.UNBAN_USER, entityId: 'ban1' })
+      expect.objectContaining({ userId: 'user123', action: UserAuditAction.UNBAN_USER, entityId: 'user123', metadata: expect.objectContaining({ banId: 'ban1' }) })
     );
   });
 

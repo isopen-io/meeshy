@@ -2,10 +2,12 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 
 import { CONVERSATION_TYPES } from '@/lib/admin/conversation-list';
-import { interpretConversationType } from '@/lib/admin/interpret/enums';
+import { AdminBadge } from '@/components/admin/badges';
+import { AdminMomentText } from '@/components/admin/meta';
+import { interpretConversationState, interpretConversationType, interpretParticipantRole } from '@/lib/admin/interpret/enums';
 import { conversationLabel, personLabel } from '@/lib/admin/interpret/labels';
-import { formatBytes } from '@/lib/admin/interpret/numbers';
-import { adminDate, formatDuration } from '@/lib/admin/interpret/time';
+import { formatBytes, formatCount } from '@/lib/admin/interpret/numbers';
+import { adminDate, adminMomentOf, formatDuration } from '@/lib/admin/interpret/time';
 import { usePrismeDuMembreComplet } from '@/lib/admin/prisme-membre-hook';
 
 import { CollapsibleSection } from '@/components/collapsible-section';
@@ -262,9 +264,12 @@ export function AdminUserConversationsSection({
   onAnnounce = () => undefined,
   gerer = null,
   deps = apiDeps,
+  now = () => new Date(),
 }: {
   readonly membre: AdminUserDetail;
   readonly language: AdminLanguage;
+  /** L'horloge, injectable : « il y a 3 h » se fixe dans un témoin. */
+  readonly now?: () => Date;
   /** Le verdict d'une configuration, dit au lecteur d'écran par la fiche. */
   readonly onAnnounce?: (texte: string) => void;
   /** La fiche d'administration d'une conversation, dans l'espace courant — `null` pour qui n'a pas la section des conversations. */
@@ -363,6 +368,7 @@ export function AdminUserConversationsSection({
                   onOpen={() => setOuverte(conversation)}
                   onConfigure={gerer === null ? null : () => setConfiguree(conversation)}
                   gerer={gerer}
+                  now={now()}
                 />
               ))}
             </ul>
@@ -427,13 +433,17 @@ function ConversationRow({
   onOpen,
   onConfigure,
   gerer,
+  now,
 }: {
   readonly conversation: AdminConversation;
   readonly language: AdminLanguage;
   readonly onOpen: () => void;
   readonly onConfigure: (() => void) | null;
   readonly gerer: 'adminConversation' | 'admConversation' | null;
+  readonly now: Date;
 }) {
+  const closed = conversation.closedAt !== null || !conversation.isActive;
+  const adhesion = conversation.membership;
   return (
     <li data-admin-conversation={conversation.id} className="flex items-stretch gap-2">
       <button
@@ -454,6 +464,36 @@ function ConversationRow({
             {interpretConversationType(conversation.type, language).label}
             {' · '}
             {translateAdmin(language, 'admin.conv.members', { count: String(conversation.memberCount) })}
+          </p>
+          {/* Ce que la passerelle sert déjà et que la ligne taisait (audit 2026-10-04) : volume, dernier
+              message, état fermé, et la place du MEMBRE dans la conversation. */}
+          <p data-admin-conversation-facts className="flex flex-wrap items-center gap-x-2 gap-y-1 text-caption" style={{ color: INK2 }}>
+            {conversation.messageCount === null ? null : (
+              <span>{translateAdmin(language, 'admin.people.conv.messages', { count: formatCount(conversation.messageCount, language) })}</span>
+            )}
+            <span>
+              {conversation.lastMessageAt === null ? (
+                translateAdmin(language, 'admin.people.conv.noMessage')
+              ) : (
+                <>
+                  {translateAdmin(language, 'admin.people.conv.lastMessage')}{' '}
+                  <AdminMomentText moment={adminMomentOf(conversation.lastMessageAt, now, language)} />
+                </>
+              )}
+            </span>
+            {adhesion === null ? null : adhesion.isActive ? (
+              <span>
+                {adhesion.joinedAt === null
+                  ? interpretParticipantRole(adhesion.role, language).label
+                  : translateAdmin(language, 'admin.people.conv.membership', {
+                      role: interpretParticipantRole(adhesion.role, language).label,
+                      date: adminDate(adhesion.joinedAt, language),
+                    })}
+              </span>
+            ) : (
+              <AdminBadge tone="neutral">{translateAdmin(language, 'admin.people.conv.left')}</AdminBadge>
+            )}
+            {closed ? <AdminBadge tone="warning">{interpretConversationState('closed', language).label}</AdminBadge> : null}
           </p>
         </div>
       </button>

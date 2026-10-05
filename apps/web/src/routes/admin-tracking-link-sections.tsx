@@ -6,7 +6,14 @@ import { AdminEmptyState, AdminInlineNotice } from '@/components/admin/states';
 import { interpretRedirectStatus, interpretTrackingTarget } from '@/lib/admin/interpret/enums';
 import { countryName } from '@/lib/admin/interpret/language';
 import { adminMomentOf } from '@/lib/admin/interpret/time';
-import { trackingConversationRef, trackingDeviceLabel, trackingLinkState, trackingPlainLabel, trackingTargetRef } from '@/lib/admin/tracking-link-model';
+import {
+  trackingConversationRef,
+  trackingDeviceLabel,
+  trackingLinkState,
+  trackingPlainLabel,
+  trackingShareAddress,
+  trackingTargetRef,
+} from '@/lib/admin/tracking-link-model';
 import type { AdminTrackingClick, AdminTrackingLink } from '@/lib/api/admin-tracking-links';
 import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import type { AnnouncementTone } from '@/lib/view/use-live-announcer';
@@ -30,6 +37,8 @@ const EDGE = 'var(--color-edge)';
 type Announce = (message: string, tone?: AnnouncementTone) => void;
 
 export function DestinationSection({ language, link, onAnnounce }: { readonly language: AdminLanguage; readonly link: AdminTrackingLink; readonly onAnnounce: Announce }) {
+  /* L'adresse à partager est l'ABSOLUE quand la passerelle la sert (`fullUrl`) : la courte est stockée relative. */
+  const share = trackingShareAddress(link);
   return (
     <AdminFicheSection id="destination" title={translateAdmin(language, 'admin.tracking.section.destination')}>
       <dl className="grid gap-3">
@@ -37,12 +46,12 @@ export function DestinationSection({ language, link, onAnnounce }: { readonly la
           anchor="original"
           label={translateAdmin(language, 'admin.tracking.dest.original')}
           value={link.originalUrl === '' ? '—' : <CopyableAddress language={language} value={link.originalUrl} anchor="original" onAnnounce={onAnnounce} />}
-          explain={translateAdmin(language, 'admin.tracking.dest.original.explain')}
+          explain={`${translateAdmin(language, 'admin.tracking.dest.original.explain')} ${translateAdmin(language, 'admin.tracking.dest.original.redacted')}`}
         />
         <AdminMetaRow
           anchor="short"
           label={translateAdmin(language, 'admin.tracking.dest.short')}
-          value={link.shortUrl === '' ? '—' : <CopyableAddress language={language} value={link.shortUrl} anchor="short" onAnnounce={onAnnounce} />}
+          value={share === '' ? '—' : <CopyableAddress language={language} value={share} anchor="short" onAnnounce={onAnnounce} />}
           explain={translateAdmin(language, 'admin.tracking.dest.short.explain')}
         />
       </dl>

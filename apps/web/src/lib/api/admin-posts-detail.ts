@@ -21,7 +21,16 @@ import type { ApiResult } from './http';
  * - l'audience restreinte se dit par sa TAILLE (« visible par 3 personnes »), jamais
  *   par les identifiants des personnes ;
  * - les traductions se COMPTENT (« 2 langues »), leur texte ne se garde pas ;
- * - la position, les métadonnées, les effets, les réactions ne sortent pas ;
+ * - la position et les métadonnées ne sortent pas ; les réactions sortent par
+ *   leur RÉSUMÉ (emoji → nombre), jamais par le détail de qui a réagi ;
+ * - les effets de story sortent par ce qu'un modérateur doit voir — le LIEN
+ *   (adresse, titre, domaine), le nombre d'autocollants, le style (texte,
+ *   filtre, disposition) — jamais le blob de scène ;
+ * - la piste audio d'un statut (`audioUrl`, `audioDuration`), la transcription
+ *   d'un média, les compteurs d'audience (impressions, ouvertures, vues
+ *   qualifiées, lectures, téléchargements), la durée de chaque vue et les
+ *   compteurs de chaque commentaire sont gardés (audit 2026-10-04 : servis,
+ *   jamais affichés) ;
  * - le repartage garde son type et son auteur, pas le texte de l'original (dont
  *   la route ne sert pas l'audience).
  *
@@ -36,6 +45,8 @@ export type AdminPostMedia = {
   readonly alt: string | null;
   readonly fileSize: number | null;
   readonly durationMs: number | null;
+  /** La transcription du média (audio, vidéo) — son TEXTE et sa langue, rien d'autre. */
+  readonly transcription: { readonly text: string; readonly language: string | null } | null;
 };
 
 export type AdminPostComment = {
@@ -43,9 +54,34 @@ export type AdminPostComment = {
   readonly content: string | null;
   readonly author: AdminPersonRef | null;
   readonly createdAt: string | null;
+  readonly likeCount: number;
+  readonly replyCount: number;
+  readonly isEdited: boolean;
 };
 
-export type AdminPostViewer = { readonly user: AdminPersonRef; readonly viewedAt: string | null };
+/** `durationMs` : le temps passé sur la publication (ms), `null` s'il n'est pas mesuré. */
+export type AdminPostViewer = { readonly user: AdminPersonRef; readonly viewedAt: string | null; readonly durationMs: number | null };
+
+/** Ce qu'une story porte et qu'un modérateur doit voir — jamais le blob de scène. */
+export type AdminPostStory = {
+  readonly linkUrl: string | null;
+  readonly linkTitle: string | null;
+  readonly linkDomain: string | null;
+  readonly stickerCount: number;
+  readonly textStyle: string | null;
+  readonly filter: string | null;
+  readonly layout: string | null;
+  readonly sceneCount: number;
+};
+
+/** Les compteurs d'audience que la fiche servait sans écran (audit 2026-10-04). */
+export type AdminPostMetrics = {
+  readonly impressions: number;
+  readonly opens: number;
+  readonly qualifiedViews: number;
+  readonly plays: number;
+  readonly downloads: number;
+};
 
 export type AdminPostFiche = {
   readonly id: string;
@@ -82,6 +118,13 @@ export type AdminPostFiche = {
   readonly media: readonly AdminPostMedia[];
   readonly comments: readonly AdminPostComment[];
   readonly viewers: readonly AdminPostViewer[];
+  /** La piste audio d'un statut ; `null` sans piste. */
+  readonly audio: { readonly url: string; readonly durationMs: number | null } | null;
+  /** `null` : pas d'effets de story servis. */
+  readonly story: AdminPostStory | null;
+  /** Les réactions par emoji, du plus fréquent au plus rare, et leur total servi. */
+  readonly reactionTally: { readonly total: number; readonly byEmoji: readonly { readonly emoji: string; readonly count: number }[] };
+  readonly metrics: AdminPostMetrics;
 };
 
 export const FICHE_COMMENTS = 10;
@@ -111,7 +154,63 @@ function decodeMedia(raw: unknown): AdminPostMedia | null {
     alt: textOrNull(media.alt),
     fileSize: countOrNull(media.fileSize),
     durationMs: countOrNull(media.duration),
+    transcription: decodeTranscription(media.transcription),
   };
+}
+
+function decodeTranscription(raw: unknown): AdminPostMedia['transcription'] {
+  const transcription = asRecord(raw);
+  const text = textOrNull(transcription?.text);
+  return text === null ? null : { text, language: textOrNull(transcription?.language) };
+}
+
+/** Le domaine d'une adresse, lu par `URL` — une adresse illisible n'a pas de domaine. */
+function domainOf(url: string | null): string | null {
+  if (url === null) return null;
+  try {
+    return new URL(url).hostname || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Les effets d'une story, réduits à ce qui se modère. Deux formes cohabitent :
+ * l'ancienne (`linkUrl`, `stickers[]`, `textStyle`, `filter`) et le document de
+ * scènes v3 (`scenes[].objects[]` de genre `sticker`, `layout`). Les deux se
+ * lisent ; rien d'autre ne sort.
+ */
+function decodeStory(raw: unknown): AdminPostStory | null {
+  const effects = asRecord(raw);
+  if (effects === null) return null;
+  const preview = asRecord(effects.linkPreview);
+  const linkUrl = textOrNull(effects.linkUrl);
+  const scenes = listOf(effects.scenes).map(asRecord).filter((scene): scene is Readonly<Record<string, unknown>> => scene !== null);
+  const sceneStickers = scenes.reduce((sum, scene) => sum + listOf(scene.objects).filter((object) => asRecord(object)?.kind === 'sticker').length, 0);
+  return {
+    linkUrl,
+    linkTitle: textOrNull(preview?.title),
+    linkDomain: textOrNull(preview?.domain) ?? domainOf(linkUrl),
+    stickerCount: listOf(effects.stickers).length + sceneStickers,
+    textStyle: textOrNull(effects.textStyle),
+    filter: textOrNull(effects.filter),
+    layout: textOrNull(effects.layout),
+    sceneCount: scenes.length,
+  };
+}
+
+function decodeReactionTally(summary: unknown, total: unknown): AdminPostFiche['reactionTally'] {
+  const byEmoji = Object.entries(asRecord(summary) ?? {})
+    .map(([emoji, count]) => ({ emoji, count: asCount(count) }))
+    .filter((entry) => entry.emoji.trim() !== '' && entry.count > 0)
+    .sort((left, right) => right.count - left.count);
+  const summed = byEmoji.reduce((sum, entry) => sum + entry.count, 0);
+  return { total: countOrNull(total) ?? summed, byEmoji };
+}
+
+function decodeAudio(url: unknown, duration: unknown): AdminPostFiche['audio'] {
+  const src = textOrNull(url);
+  return src === null ? null : { url: src, durationMs: countOrNull(duration) };
 }
 
 function decodeComment(raw: unknown): AdminPostComment | null {
@@ -122,6 +221,9 @@ function decodeComment(raw: unknown): AdminPostComment | null {
     content: excerptOf(asText(comment.content), COMMENT_EXCERPT),
     author: decodeAdminPersonRef(comment.author),
     createdAt: textOrNull(comment.createdAt),
+    likeCount: asCount(comment.likeCount),
+    replyCount: asCount(comment.replyCount),
+    isEdited: comment.isEdited === true,
   };
 }
 
@@ -129,7 +231,7 @@ function decodeComment(raw: unknown): AdminPostComment | null {
 function decodeViewer(raw: unknown): AdminPostViewer | null {
   const view = asRecord(raw);
   const user = decodeAdminPersonRef(view?.user);
-  return view === null || user === null ? null : { user, viewedAt: textOrNull(view.viewedAt) };
+  return view === null || user === null ? null : { user, viewedAt: textOrNull(view.viewedAt), durationMs: countOrNull(view.duration) };
 }
 
 function decodeCommunity(raw: unknown): AdminPostFiche['community'] {
@@ -190,6 +292,16 @@ export function decodeAdminPostFiche(raw: unknown): AdminPostFiche | null {
     media: present(listOf(post.media).map(decodeMedia)),
     comments: comments.slice(0, FICHE_COMMENTS),
     viewers: viewers.slice(0, FICHE_VIEWERS),
+    audio: decodeAudio(post.audioUrl, post.audioDuration),
+    story: decodeStory(post.storyEffects),
+    reactionTally: decodeReactionTally(post.reactionSummary, post.reactionCount),
+    metrics: {
+      impressions: asCount(post.impressionCount),
+      opens: asCount(post.postOpenCount),
+      qualifiedViews: asCount(post.qualifiedViewCount),
+      plays: asCount(post.playCount),
+      downloads: asCount(post.downloadCount),
+    },
   };
 }
 
@@ -214,14 +326,15 @@ export type AdminPostRemoval = { readonly removed: true };
  * **RETIRER UNE PUBLICATION** — `DELETE admin.postsByPostId`, un retrait DOUX
  * (`deletedAt`), sans restauration servie. Le motif part dans `reason` — le nom
  * du fil, que la passerelle consigne dans le journal d'audit.
+ * Un motif ABSENT (`null`/`undefined`) part sans `reason` : la passerelle l'admet du seul rang souverain (spec 2026-10-04 § 4) et refuse les autres.
  */
 export async function removeAdminPost(
-  params: AdminDeps & { readonly postId: string; readonly reason: string },
+  params: AdminDeps & { readonly postId: string; readonly reason?: string | null },
 ): Promise<ApiResult<AdminPostRemoval>> {
   const result = await params.transport.request<unknown>({
     method: 'DELETE',
     path: adminEndpoints.postsByPostId(params.postId),
-    body: { reason: params.reason },
+    body: params.reason === null || params.reason === undefined ? {} : { reason: params.reason },
   });
   if (!result.ok) return result;
   return { ok: true, data: { removed: true } };

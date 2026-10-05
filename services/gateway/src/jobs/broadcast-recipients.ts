@@ -1,3 +1,4 @@
+import { unsetOrNull } from '../utils/prisma-unset';
 import type { Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
 import { resolvePrismTranslation } from '@meeshy/shared/utils/conversation-helpers';
 import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
@@ -36,10 +37,11 @@ export const activityWindow = (targeting: BroadcastTargeting, now: Date): Prisma
   if (targeting.activityStatus === 'inactive') {
     const days = targeting.inactiveDays || DEFAULT_INACTIVE_WINDOW_DAYS;
     const cutoff = new Date(now.getTime() - days * DAY_MS);
-    // Un compte qui n'a JAMAIS été actif (`lastActiveAt` non défini) est
-    // inactif au même titre qu'un compte inactif depuis la fenêtre — sans
-    // ce second membre, `{ lt: cutoff }` seul l'exclut du ciblage.
-    return { OR: [{ lastActiveAt: { lt: cutoff } }, { lastActiveAt: null }] };
+    // `lastActiveAt` est REQUIS (`DateTime @default(now())`) : un compte jamais
+    // actif porte sa date d'inscription, que `lt` apparie. Son filtre généré
+    // ne connaît ni `null` ni `isSet` (leçon 622) : un second membre
+    // `lastActiveAt: null` faisait refuser TOUTE la requête par le client.
+    return { lastActiveAt: { lt: cutoff } };
   }
   if (targeting.activityStatus === 'new') {
     return { createdAt: { gte: new Date(now.getTime() - NEW_REGISTRATION_WINDOW_DAYS * DAY_MS) } };
@@ -126,7 +128,11 @@ export async function buildBroadcastRecipientFilter(
     : null;
   return {
     isActive: true,
-    deletedAt: null,
+    // Non supprimé = `deletedAt` nul OU ABSENT. Un compte jamais supprimé n'a
+    // PAS la colonne : `deletedAt: null` seul n'en appariait aucun, et la
+    // diffusion n'atteignait personne (leçon 318). En `AND` : `activityWindow`
+    // pose son propre `OR`.
+    AND: [unsetOrNull('deletedAt')],
     ...(languageVariants ? { systemLanguage: { in: languageVariants } } : {}),
     ...(targeting.countries && targeting.countries.length > 0
       ? { registrationCountry: { in: [...targeting.countries] } }

@@ -22,6 +22,8 @@ import AdminPostScreen, { AdminPostPanel } from './admin-post';
  */
 const { mount, mounter } = setupAdminKitTests({ languages: ['fr', 'en'] });
 const BIGBOSS = adminIdentityFixture({ role: 'BIGBOSS' });
+/* Le motif écrit se mesure sur un ADMIN : le rang souverain n'en écrit pas (spec 2026-10-04 § 4). */
+const ADMIN = adminIdentityFixture({ role: 'ADMIN' });
 const ID = (n: number) => `64f1c2a9e8b7d6c5b4a3928${n}`;
 const NOW = new Date('2026-09-30T12:00:00.000Z');
 const person = (n: number, name: string, username = name.split(' ')[0]?.toLowerCase() ?? 'x') => ({ id: ID(n), username, displayName: name, avatar: null });
@@ -115,7 +117,9 @@ const click = async (element: Element | null) => {
   await act(async () => (element as HTMLElement | null)?.click());
   await mounter.settle();
 };
-const text = (host: ParentNode, selector: string) => host.querySelector(selector)?.textContent ?? '';
+/* `document` et non l'hôte : le détail de chaque carte monte dans sa modale (spec 2026-10-04 § 3). */
+const text = (_host: ParentNode, selector: string) => document.querySelector(selector)?.textContent ?? '';
+const at = (section: string) => `/admin/posts/${ID(9)}?open=${section}`;
 const confirmer = (host: ParentNode) => host.querySelector<HTMLButtonElement>('[data-admin-action="confirm"]');
 const removals = (gateway: Gateway) => gateway.calls.filter((call) => call.method === 'DELETE');
 
@@ -153,7 +157,7 @@ describe('AdminPostPanel — identité : le nom de la publication, son auteur, s
 
 describe('AdminPostPanel — contenu, langue, médias', () => {
   test('le texte, la langue d’origine NOMMÉE et le nombre de langues traduites', async () => {
-    const { host } = await ouvrir();
+    const { host } = await ouvrir([], at('content'));
     expect(text(host, '[data-admin-fiche-section="content"]')).toContain('Ce soir, on fête ça !');
     expect(text(host, '[data-admin-language]')).toContain('Français');
     expect(text(host, '[data-admin-language]')).toContain('Traduite en 2 langues');
@@ -161,26 +165,26 @@ describe('AdminPostPanel — contenu, langue, médias', () => {
   });
 
   test('une audience restreinte dit pourquoi son texte est lisible ici', async () => {
-    const { host } = await ouvrir();
-    expect(host.querySelector('[data-admin-fiche-section="content"] [data-admin-notice="info"]')?.textContent).toContain('audience restreinte');
+    await ouvrir([], at('content'));
+    expect(document.querySelector('[data-admin-fiche-section="content"] [data-admin-notice="info"]')?.textContent).toContain('audience restreinte');
   });
 
   test('une publication publique n’a pas cet avis', async () => {
-    const { host } = await ouvrir([served({ visibility: 'PUBLIC', visibilityUserIds: [] })]);
-    expect(host.querySelector('[data-admin-fiche-section="content"] [data-admin-notice]')).toBeNull();
+    await ouvrir([served({ visibility: 'PUBLIC', visibilityUserIds: [] })], at('content'));
+    expect(document.querySelector('[data-admin-fiche-section="content"] [data-admin-notice]')).toBeNull();
   });
 
   test('sans texte : l’écran le dit ; sans langue : « Langue non détectée »', async () => {
-    const { host } = await ouvrir([served({ content: null, originalLanguage: null, translations: null, moodEmoji: null })]);
+    const { host } = await ouvrir([served({ content: null, originalLanguage: null, translations: null, moodEmoji: null })], at('content'));
     expect(text(host, '[data-admin-fiche-section="content"]')).toContain('n’a pas de texte');
     expect(text(host, '[data-admin-language]')).toContain('Langue non détectée');
     expect(text(host, '[data-admin-language]')).toContain('Pas encore traduite');
-    expect(host.querySelector('[data-admin-mood]')).toBeNull();
+    expect(document.querySelector('[data-admin-mood]')).toBeNull();
   });
 
   test('les médias : vignette, légende, texte alternatif, genre · poids · durée, et un lien vers le fichier', async () => {
-    const { host } = await ouvrir();
-    const image = host.querySelector('[data-admin-media="m1"]');
+    await ouvrir([], at('media'));
+    const image = document.querySelector('[data-admin-media="m1"]');
     expect(image?.textContent?.replace(/\s/g, ' ')).toContain('Image · 200 ko');
     expect(image?.textContent).toContain('Légende : La scène');
     expect(image?.textContent).toContain('Texte alternatif : Une scène éclairée');
@@ -188,58 +192,59 @@ describe('AdminPostPanel — contenu, langue, médias', () => {
     expect(image?.querySelector('a')?.getAttribute('aria-label')).toBe('Ouvrir le média 1');
     expect(image?.querySelector('a')?.getAttribute('target')).toBe('_blank');
     expect(image?.querySelector('a')?.getAttribute('rel')).toBe('noopener noreferrer');
-    const audio = host.querySelector('[data-admin-media="m2"]');
+    const audio = document.querySelector('[data-admin-media="m2"]');
     expect(audio?.textContent).toContain('Audio');
     expect(audio?.textContent?.replace(/\s/g, ' ')).toContain('13 s');
     expect(audio?.querySelector('img')).toBeNull();
   });
 
-  test('sans média : pas de section « Médias »', async () => {
+  test('sans média : pas de carte ni de section « Médias »', async () => {
     const { host } = await ouvrir([served({ media: [] })]);
-    expect(host.querySelector('[data-admin-fiche-section="media"]')).toBeNull();
+    expect(host.querySelector('[data-admin-summary="media"]')).toBeNull();
+    expect(document.querySelector('[data-admin-fiche-section="media"]')).toBeNull();
   });
 });
 
 describe('AdminPostPanel — contexte, commentaires, spectateurs', () => {
   test('l’auteur ouvre sa fiche, et « Voir ses publications » filtre la liste sur lui', async () => {
-    const { host } = await ouvrir();
-    const links = [...host.querySelectorAll('[data-admin-meta="author"] a')].map((link) => link.getAttribute('href'));
+    await ouvrir([], at('context'));
+    const links = [...document.querySelectorAll('[data-admin-meta="author"] a')].map((link) => link.getAttribute('href'));
     expect(links).toContain(`/admin/users/${ID(1)}`);
     expect(links).toContain(`/admin/posts?authorId=${ID(1)}`);
   });
 
   test('la communauté est une puce qui ouvre sa fiche', async () => {
-    const { host } = await ouvrir();
-    const community = host.querySelector('[data-admin-meta="community"]');
+    await ouvrir([], at('context'));
+    const community = document.querySelector('[data-admin-meta="community"]');
     expect(community?.textContent).toContain('Club de jazz');
     expect(community?.querySelector('a')?.getAttribute('href')).toBe(`/admin/communities/${ID(3)}`);
   });
 
   test('le repartage est une puce de publication, et dit s’il est une citation', async () => {
-    const { host } = await ouvrir();
-    const repost = host.querySelector('[data-admin-meta="repost"]');
+    await ouvrir([], at('context'));
+    const repost = document.querySelector('[data-admin-meta="repost"]');
     expect(repost?.textContent).toContain('Publication de Mariam Nkolo');
     expect(repost?.textContent).toContain('Repartage avec commentaire');
     expect(repost?.querySelector('a')?.getAttribute('href')).toBe(`/admin/posts/${ID(8)}`);
-    expect(host.textContent).not.toContain('texte originel');
+    expect(document.body.textContent).not.toContain('texte originel');
   });
 
   test('un repartage simple le dit', async () => {
-    const { host } = await ouvrir([served({ isQuote: false })]);
+    const { host } = await ouvrir([served({ isQuote: false })], at('context'));
     expect(text(host, '[data-admin-meta="repost"]')).toContain('Repartage simple');
   });
 
   test('sans communauté ni repartage, ces lignes disparaissent', async () => {
-    const { host } = await ouvrir([served({ community: null, repostOf: null })]);
-    expect(host.querySelector('[data-admin-meta="community"]') === null).toBe(true);
-    expect(host.querySelector('[data-admin-meta="repost"]') === null).toBe(true);
+    await ouvrir([served({ community: null, repostOf: null })], at('context'));
+    expect(document.querySelector('[data-admin-meta="community"]') === null).toBe(true);
+    expect(document.querySelector('[data-admin-meta="repost"]') === null).toBe(true);
   });
 
   test('les derniers commentaires : auteur nommé, texte, date relative, et « N sur TOTAL »', async () => {
-    const { host } = await ouvrir();
-    const section = host.querySelector('[data-admin-fiche-section="comments"]');
+    const { host } = await ouvrir([], at('comments'));
+    const section = document.querySelector('[data-admin-fiche-section="comments"]');
     expect(section?.textContent).toContain('Derniers commentaires : 2 sur 31');
-    const first = host.querySelector('[data-admin-comment="c1"]');
+    const first = document.querySelector('[data-admin-comment="c1"]');
     expect(first?.textContent).toContain('Jean Mbarga');
     expect(first?.textContent).toContain('Magnifique, bravo à toute l’équipe');
     expect(first?.textContent).toContain('il y a 2 heures');
@@ -248,21 +253,106 @@ describe('AdminPostPanel — contexte, commentaires, spectateurs', () => {
   });
 
   test('sans commentaire : « Aucun commentaire pour le moment. »', async () => {
-    const { host } = await ouvrir([served({ comments: [] })]);
+    const { host } = await ouvrir([served({ comments: [] })], at('comments'));
     expect(text(host, '[data-admin-fiche-section="comments"]')).toContain('Aucun commentaire pour le moment.');
   });
 
   test('les derniers spectateurs sont des puces nommées, avec « N sur TOTAL »', async () => {
-    const { host } = await ouvrir();
-    const section = host.querySelector('[data-admin-fiche-section="viewers"]');
+    await ouvrir([], at('viewers'));
+    const section = document.querySelector('[data-admin-fiche-section="viewers"]');
     expect(section?.textContent).toContain('Derniers spectateurs : 2 sur 61');
-    expect(host.querySelector(`[data-admin-viewer="${ID(2)}"]`)?.textContent).toContain('Jean Mbarga');
-    expect(host.querySelector(`[data-admin-viewer="${ID(4)}"] a`)?.getAttribute('href')).toBe(`/admin/users/${ID(4)}`);
+    expect(document.querySelector(`[data-admin-viewer="${ID(2)}"]`)?.textContent).toContain('Jean Mbarga');
+    expect(document.querySelector(`[data-admin-viewer="${ID(4)}"] a`)?.getAttribute('href')).toBe(`/admin/users/${ID(4)}`);
   });
 
   test('sans spectateur : « Personne n’a encore vu cette publication. »', async () => {
-    const { host } = await ouvrir([served({ views: [] })]);
+    const { host } = await ouvrir([served({ views: [] })], at('viewers'));
     expect(text(host, '[data-admin-fiche-section="viewers"]')).toContain('Personne n’a encore vu');
+  });
+});
+
+describe('AdminPostPanel — les cartes, et ce que la fiche servait sans écran (audit 2026-10-04)', () => {
+  const STORY = {
+    storyEffects: { textStyle: 'neon', filter: 'bw', linkUrl: 'https://club-jazz.example/soiree', linkPreview: { title: 'La soirée', domain: 'club-jazz.example' }, stickers: [{ emoji: '🎷' }, { emoji: '🎺' }] },
+    audioUrl: 'https://cdn.meeshy.me/statut.mp3',
+    audioDuration: 8000,
+    reactionSummary: { '❤️': 5, '🔥': 9 },
+    reactionCount: 14,
+    impressionCount: 900,
+    postOpenCount: 410,
+    qualifiedViewCount: 220,
+    playCount: 75,
+    downloadCount: 4,
+  };
+
+  test('une grille de cartes, une par section que la publication A ; aucune modale au repos', async () => {
+    const { host } = await ouvrir([served(STORY)]);
+    const cards = [...host.querySelectorAll('[data-admin-post-cards] [data-admin-summary]')].map((card) => card.getAttribute('data-admin-summary'));
+    expect(cards).toEqual(['content', 'media', 'context', 'engagement', 'story', 'comments', 'viewers']);
+    expect(document.querySelector('[data-admin-post-panel]')).toBeNull();
+    expect(text(host, '[data-admin-summary="engagement"]')).toContain('14');
+    expect(text(host, '[data-admin-summary="story"]')).toContain('club-jazz.example');
+    expect(text(host, '[data-admin-summary="story"]')).toContain('Texte néon · Filtre noir et blanc');
+  });
+
+  test('sans effets de story, pas de carte Story', async () => {
+    const { host } = await ouvrir();
+    expect(host.querySelector('[data-admin-summary="story"]')).toBeNull();
+  });
+
+  test('l’audience et les réactions : six compteurs nommés et les réactions par emoji, jamais qui a réagi', async () => {
+    await ouvrir([served({ ...STORY, reactions: [{ userId: ID(5), emoji: '🔥' }] })], at('engagement'));
+    expect(text(document, '[data-admin-meta="metric-impressions"]')).toContain('900');
+    expect(text(document, '[data-admin-meta="metric-opens"]')).toContain('410');
+    expect(text(document, '[data-admin-meta="metric-qualifiedViews"]')).toContain('220');
+    expect(text(document, '[data-admin-meta="metric-plays"]')).toContain('75');
+    expect(text(document, '[data-admin-meta="metric-downloads"]')).toContain('4');
+    expect([...document.querySelectorAll('[data-admin-reaction]')].map((item) => item.getAttribute('data-admin-reaction'))).toEqual(['🔥', '❤️']);
+    expectNoRawIdentifiers(document.body);
+  });
+
+  test('les effets de la story : le lien ouvrable dans un nouvel onglet, les autocollants, le style en mots', async () => {
+    await ouvrir([served(STORY)], at('story'));
+    const link = document.querySelector<HTMLAnchorElement>('[data-admin-meta="story-link"] a');
+    expect(link?.getAttribute('href')).toBe('https://club-jazz.example/soiree');
+    expect(link?.getAttribute('rel')).toBe('noopener noreferrer');
+    expect(link?.textContent).toContain('La soirée');
+    expect(text(document, '[data-admin-meta="story-stickers"]')).toContain('2');
+    expect(text(document, '[data-admin-meta="story-style"]')).toContain('Texte néon · Filtre noir et blanc');
+  });
+
+  test('un lien de story qui n’est pas du web se lit sans s’ouvrir', async () => {
+    await ouvrir([served({ storyEffects: { linkUrl: 'javascript:alert(1)' } })], at('story'));
+    expect(document.querySelector('[data-admin-meta="story-link"] a')).toBeNull();
+    expect(text(document, '[data-admin-story-link-inert]')).toContain('javascript:alert(1)');
+  });
+
+  test('la piste audio d’un statut est JOUABLE : un <audio controls>, avec sa durée', async () => {
+    await ouvrir([served(STORY)], at('content'));
+    const audio = document.querySelector('[data-admin-post-audio] audio');
+    expect(audio?.hasAttribute('controls')).toBe(true);
+    expect(audio?.getAttribute('src')).toContain('statut.mp3');
+    expect(text(document, '[data-admin-post-audio]')).toMatch(/Piste audio · 8\s+s/);
+  });
+
+  test('la transcription d’un média se lit, avec sa langue nommée', async () => {
+    const media = [{ id: 'm2', mimeType: 'audio/mpeg', fileUrl: 'https://cdn.meeshy.me/2.mp3', thumbnailUrl: null, caption: null, alt: null, fileSize: 1024, duration: 12500, transcription: { text: 'Bienvenue à tous', language: 'fr' } }];
+    await ouvrir([served({ media })], at('media'));
+    expect(text(document, '[data-admin-media="m2"] [data-admin-media-transcription]')).toContain('Transcription : Bienvenue à tous');
+    expect(text(document, '[data-admin-media="m2"] [data-admin-media-transcription]')).toContain('Français');
+  });
+
+  test('chaque commentaire dit ses j’aime, ses réponses, et s’il a été modifié', async () => {
+    const comments = [{ id: 'c1', content: 'Bravo', likeCount: 7, replyCount: 2, isEdited: true, createdAt: '2026-09-30T10:00:00.000Z', author: person(2, 'Jean Mbarga') }];
+    await ouvrir([served({ comments })], at('comments'));
+    expect(text(document, '[data-admin-comment="c1"] [data-admin-comment-facts]')).toBe('J’aime : 7 · Réponses : 2 · Modifié');
+  });
+
+  test('chaque spectateur dit QUAND il a vu et COMBIEN DE TEMPS', async () => {
+    await ouvrir([], at('viewers'));
+    const jean = document.querySelector(`[data-admin-viewer="${ID(2)}"]`);
+    expect(jean?.textContent).toContain('il y a 2 heures');
+    expect(jean?.querySelector('[data-admin-viewer-duration]')?.textContent).toMatch(/^Vue pendant 4\s+s$/);
   });
 });
 
@@ -333,7 +423,7 @@ describe('AdminPostPanel — « Retirer la publication »', () => {
   });
 
   test('la feuille DIT l’effet (et qu’aucune restauration n’est offerte), demande un motif de 3 caractères, rien ne part avant', async () => {
-    const { host, gateway } = await ouvrir();
+    const { host, gateway } = await ouvrir([], `/admin/posts/${ID(9)}`, ADMIN);
     await click(host.querySelector('[data-admin-action="remove"]'));
     expect(host.querySelector('dialog h2')?.textContent).toBe('Retirer cette publication ?');
     expect(text(host, '[data-admin-confirm]')).toContain('ne permet pas de la rétablir');
@@ -346,7 +436,7 @@ describe('AdminPostPanel — « Retirer la publication »', () => {
   });
 
   test('confirmer envoie DELETE {reason}, annonce le succès, ferme la feuille, relit la fiche — qui passe à « Retirée »', async () => {
-    const { host, gateway } = await ouvrir();
+    const { host, gateway } = await ouvrir([], `/admin/posts/${ID(9)}`, ADMIN);
     await click(host.querySelector('[data-admin-action="remove"]'));
     mounter.type(host, '[data-admin-motive]', 'Propos haineux signalés');
     expect(confirmer(host)?.textContent).toBe('Retirer la publication');
@@ -363,7 +453,7 @@ describe('AdminPostPanel — « Retirer la publication »', () => {
 
   test('l’effet est IMMÉDIAT : « Retirée » avant la réponse de la passerelle', async () => {
     let release: () => void = () => undefined;
-    const { host } = await ouvrir([served(), { remove: () => new Promise((resolve) => { release = () => resolve(resultatServi({ success: true, message: 'ok' })); }) }]);
+    const { host } = await ouvrir([served(), { remove: () => new Promise((resolve) => { release = () => resolve(resultatServi({ success: true, message: 'ok' })); }) }], `/admin/posts/${ID(9)}`, ADMIN);
     await click(host.querySelector('[data-admin-action="remove"]'));
     mounter.type(host, '[data-admin-motive]', 'Propos haineux signalés');
     await click(confirmer(host));
@@ -374,7 +464,7 @@ describe('AdminPostPanel — « Retirer la publication »', () => {
   });
 
   test('un refus DÉFAIT l’effet immédiat, garde la feuille ouverte et le dit en mots', async () => {
-    const { host } = await ouvrir([served(), { remove: () => ({ ok: false, status: 403, error: 'Permission insuffisante' }) }]);
+    const { host } = await ouvrir([served(), { remove: () => ({ ok: false, status: 403, error: 'Permission insuffisante' }) }], `/admin/posts/${ID(9)}`, ADMIN);
     await click(host.querySelector('[data-admin-action="remove"]'));
     mounter.type(host, '[data-admin-motive]', 'Propos haineux signalés');
     await click(confirmer(host));
@@ -385,12 +475,21 @@ describe('AdminPostPanel — « Retirer la publication »', () => {
   });
 
   test('« déjà retirée » (400) se dit en mots, et l’état n’est pas faussé', async () => {
-    const { host } = await ouvrir([served(), { remove: () => ({ ok: false, status: 400, error: 'Le post est deja supprime' }) }]);
+    const { host } = await ouvrir([served(), { remove: () => ({ ok: false, status: 400, error: 'Le post est deja supprime' }) }], `/admin/posts/${ID(9)}`, ADMIN);
     await click(host.querySelector('[data-admin-action="remove"]'));
     mounter.type(host, '[data-admin-motive]', 'Doublon de signalement');
     await click(confirmer(host));
     await mounter.settle();
     expect(text(host, '[data-admin-confirm-error]')).toBe('Cette publication était déjà retirée.');
+  });
+
+  test('le rang souverain retire SANS motif : aucun champ, DELETE sans `reason`', async () => {
+    const { host, gateway } = await ouvrir();
+    await click(host.querySelector('[data-admin-action="remove"]'));
+    expect(host.querySelector('[data-admin-motive]')).toBeNull();
+    await click(confirmer(host));
+    await mounter.settle();
+    expect(removals(gateway)[0]?.body).toEqual({});
   });
 
   test('annuler ferme la feuille sans rien envoyer', async () => {
@@ -461,8 +560,8 @@ describe('AdminPostScreen — servi par la table des routes, dans les deux espac
 
   test('/adm/posts/$post : la même fiche, le retour et les liens restent dans /adm', async () => {
     seed();
-    const host = await mountAdminAt(mounter, `/adm/posts/${ID(9)}`, BIGBOSS, '[data-admin-screen="post"]');
+    const host = await mountAdminAt(mounter, `/adm/posts/${ID(9)}?open=context`, BIGBOSS, '[data-admin-screen="post"]');
     expect(host.querySelector('[data-admin-back]')?.getAttribute('href')).toBe('/adm/posts');
-    expect(host.querySelector('[data-admin-meta="community"] a')?.getAttribute('href')).toBe(`/adm/communities/${ID(3)}`);
+    expect(document.querySelector('[data-admin-meta="community"] a')?.getAttribute('href')).toBe(`/adm/communities/${ID(3)}`);
   });
 });

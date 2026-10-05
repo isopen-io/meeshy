@@ -1,11 +1,12 @@
 import type { ReactNode } from 'react';
 
+import { AdminLink } from '@/components/admin/entity-chip';
 import { AdminMetaPanel, AdminMetaRow, AdminMomentText, AdminTechnicalId } from '@/components/admin/meta';
 import { interpretPresence, interpretRole } from '@/lib/admin/interpret/enums';
 import { countryName, languageName, sentenceCase } from '@/lib/admin/interpret/language';
 import { formatCount, formatPercent } from '@/lib/admin/interpret/numbers';
 import { adminDate, adminMomentOf } from '@/lib/admin/interpret/time';
-import { ageOf, deviceLabel, formatDays, formatYears } from '@/lib/admin/member-meta';
+import { ageOf, deviceLabel, formatDays, formatYears, lockReasonText } from '@/lib/admin/member-meta';
 import type { AdminMemberMetadata, AdminUserDetail } from '@/lib/api/admin-user-detail';
 import { translateAdmin, type AdminPlainCatalogKey, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
@@ -63,6 +64,9 @@ export function AdminMemberMeta({
         <AdminMetaRow anchor="customLanguage" label={t('admin.meta.customLanguage')} value={rank(membre.customDestinationLanguage)} />
         <AdminMetaRow anchor="timezone" label={t('admin.meta.timezone')} value={membre.timezone === '' ? notProvided : membre.timezone} />
         {sensitive ? <AdminMetaRow anchor="registrationCountry" label={t('admin.people.meta.registrationCountry')} value={countryName(membre.registrationCountry, language)} /> : null}
+        {membre.phoneNumber === '' || membre.phoneCountryCode === '' ? null : (
+          <AdminMetaRow anchor="phoneCountry" label={t('admin.people.meta.phoneCountry')} value={countryName(membre.phoneCountryCode, language)} />
+        )}
         {membre.profileCompletionRate === null ? null : (
           <AdminMetaRow anchor="completion" label={t('admin.meta.completion')} value={formatPercent(membre.profileCompletionRate, 'hundred', language)} />
         )}
@@ -74,6 +78,21 @@ export function AdminMemberMeta({
           explain={membre.lastActiveAt === null ? hidden.explain : null}
         />
         <AdminMetaRow anchor="updatedAt" label={t('admin.meta.updated')} value={when(membre.updatedAt)} />
+        {/* La fin d'un compte, datée et signée — servie et décodée, jamais montrée jusque-là (audit 2026-10-04).
+            L'auteur est un IDENTIFIANT : il ne s'écrit pas, il ouvre la fiche de l'administrateur. */}
+        {membre.deactivatedAt === null ? null : <AdminMetaRow anchor="deactivatedAt" label={t('admin.people.meta.deactivatedAt')} value={when(membre.deactivatedAt)} />}
+        {membre.deletedAt === null ? null : <AdminMetaRow anchor="deletedAt" label={t('admin.people.meta.deletedAt')} value={when(membre.deletedAt)} />}
+        {membre.deletedBy === null ? null : (
+          <AdminMetaRow
+            anchor="deletedBy"
+            label={t('admin.people.meta.deletedBy')}
+            value={
+              <AdminLink target={{ kind: 'entity', entity: 'user', id: membre.deletedBy }} anchor="deleted-by" className="underline" style={{ color: 'var(--color-ios-brand)' }}>
+                {t('admin.people.meta.deletedByLink')}
+              </AdminLink>
+            }
+          />
+        )}
       </AdminMetaPanel>
 
       {metadata === null ? null : <AccountMetadata metadata={metadata} language={language} now={moment} />}
@@ -96,7 +115,7 @@ export function AdminMemberMeta({
                 ? translateAdmin(language, 'admin.people.lock.until', { date: adminDate(membre.lockedUntil, language) })
                 : t('admin.people.meta.lockNone')
             }
-            explain={membre.lockedReason}
+            explain={lockReasonText(membre.lockedReason, language)}
           />
           <AdminMetaRow
             anchor="passwordChanged"
@@ -126,6 +145,7 @@ export function AdminMemberMeta({
           <AdminMetaRow anchor="referralsReceived" label={t('admin.people.meta.referralsReceived')} value={formatCount(membre.counts.referredRelations, language)} />
           <AdminMetaRow anchor="requestsSent" label={t('admin.people.meta.requestsSent')} value={formatCount(membre.counts.sentFriendRequests, language)} />
           <AdminMetaRow anchor="requestsReceived" label={t('admin.people.meta.requestsReceived')} value={formatCount(membre.counts.receivedFriendRequests, language)} />
+          <AdminMetaRow anchor="participations" label={t('admin.people.meta.participations')} value={formatCount(membre.counts.participations, language)} />
         </AdminMetaPanel>
       )}
 

@@ -224,12 +224,18 @@ const FROZEN_UNBOUNDED_FINDMANY: Readonly<Record<string, number>> = {
   // retire le second : `GET /trends` ramenait `select: { createdAt }` sur 7
   // jours pour un histogramme heure/jour-de-semaine — deux repliements MODULO,
   // donc un second `$facet` (`$hour`/`$dayOfWeek`), pas un `count` par tranche
-  // contigue. Le SEUL restant est la relecture des participants du top-10 de
-  // `/stats`, bornee transitivement par le `take: 10` du `groupBy` qui
-  // l'alimente — ce compteur ne sait pas lire une borne transitive.
+  // contigue. Le SEUL restant est la relecture des participants expediteurs de
+  // `/stats` : depuis l'audit du 2026-10-04 le top 10 se prend APRES le repli
+  // par compte, la relecture est donc bornee par les expediteurs de la periode
+  // (un par participant ayant ecrit), plus par un `take: 10`.
   'admin/messages.ts': 1,
   'admin/posts.ts': 1,
-  'admin/system-rankings.ts': 13,
+  // 13 → 11 + 3 (audit 2026-10-04) : les résolutions de personnes d'un
+  // classement (comptes, invités, repli participant → compte) vivent dans
+  // `ranking-people.ts` ; l'unique site neuf est la lecture des INVITÉS,
+  // bornée par les identifiants déjà classés.
+  'admin/ranking-people.ts': 3,
+  'admin/system-rankings.ts': 11,
   'auth/register.ts': 1,
   'communities/membership.ts': 1,
   'community-preferences.ts': 1,

@@ -48,6 +48,7 @@ const KNOWN_TYPES = [
   'FriendRequest',
   'AgentLlmConfig',
   'Agent',
+  'EngagementScaleConfig',
 ] as const;
 
 type KnownType = (typeof KNOWN_TYPES)[number];

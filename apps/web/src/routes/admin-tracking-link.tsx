@@ -1,13 +1,25 @@
 import { useQuery } from '@tanstack/react-query';
+import { useId, type ReactNode } from 'react';
 
+import { AdminDetailSheet } from '@/components/admin/detail-sheet';
 import { AdminLink } from '@/components/admin/entity-chip';
 import { AdminFiche, AdminIdentityHeader, AdminStatStrip } from '@/components/admin/fiche';
 import { AdminPageHeader } from '@/components/admin/page-header';
 import { AdminSectionScreen } from '@/components/admin/section-screen';
 import { AdminDeniedInline, AdminEmptyState, AdminErrorState, AdminOfflineNotice } from '@/components/admin/states';
+import { AdminSummaryCard, AdminSummaryGrid } from '@/components/admin/summary-card';
 import { trackingLinkLabel } from '@/lib/admin/interpret/labels';
 import { formatCount } from '@/lib/admin/interpret/numbers';
 import { adminMomentOf } from '@/lib/admin/interpret/time';
+import { trackingShareAddress } from '@/lib/admin/tracking-link-model';
+import {
+  ADMIN_TRACKING_LINK_SECTION_GLYPHS,
+  ADMIN_TRACKING_LINK_SECTION_TITLES,
+  ADMIN_TRACKING_LINK_SECTIONS,
+  trackingLinkSummaryOf,
+  type AdminTrackingLinkSection,
+} from '@/lib/admin/tracking-link-summaries';
+import { useAdminOpen } from '@/lib/admin/use-admin-open';
 import type { AdminReach } from '@/lib/admin/use-admin-reach';
 import type { AdminDeps } from '@/lib/api/admin';
 import { adminTrackingLinkKey, loadAdminTrackingLink } from '@/lib/api/admin-tracking-links';
@@ -34,6 +46,12 @@ import { CampaignSection, DestinationSection, RecentClicksSection, TargetSection
  * les vingt derniers clics — **sans IP, sans agent utilisateur, sans empreinte**. Puis
  * le geste : désactiver ou réactiver, au rang d'administration.
  *
+ * **Lue par sections** (spec 2026-10-04 § 3) : l'en-tête, le geste, le bandeau et
+ * les métadonnées restent visibles ; la destination, la campagne, la cible, les
+ * graphiques et les derniers clics sont des cartes résumées qui ouvrent chacune
+ * sa modale (`?open=<id>`). L'adresse partagée est l'ABSOLUE (`fullUrl`) quand
+ * la passerelle la sert.
+ *
  * Fail-closed comme la liste (`canViewAnalytics`) ; un 403 malgré tout se rend comme un
  * refus, un 404 comme « ce lien n'existe plus » — jamais comme une panne.
  */
@@ -50,6 +68,8 @@ type TrackingLinkPanelProps = {
 export function AdminTrackingLinkPanel({ language, linkId, reach, deps = apiDeps, now = defaultNow }: TrackingLinkPanelProps) {
   const online = useOnline();
   const announcer = useLiveAnnouncer();
+  const sections = useAdminOpen(ADMIN_TRACKING_LINK_SECTIONS);
+  const cardsTitle = useId();
 
   const query = useQuery({
     queryKey: adminTrackingLinkKey(linkId),
@@ -94,6 +114,23 @@ export function AdminTrackingLinkPanel({ language, linkId, reach, deps = apiDeps
   const clock = now();
   const title = trackingLinkLabel(link, language);
   const lastClick = adminMomentOf(link.lastClickedAt, clock, language);
+  const address = trackingShareAddress(link);
+
+  /** Le contenu de chaque modale : le bloc d'hier, tel quel — monté seulement à l'ouverture. */
+  const detail = (section: AdminTrackingLinkSection): ReactNode => {
+    switch (section) {
+      case 'destination':
+        return <DestinationSection language={language} link={link} onAnnounce={announcer.announce} />;
+      case 'campaign':
+        return <CampaignSection language={language} link={link} />;
+      case 'target':
+        return <TargetSection language={language} link={link} />;
+      case 'stats':
+        return <TrackingCharts language={language} link={link} />;
+      case 'recent':
+        return <RecentClicksSection language={language} link={link} now={clock} />;
+    }
+  };
 
   return (
     <div className="grid gap-6" data-admin-tracking-link-fiche>
@@ -113,7 +150,7 @@ export function AdminTrackingLinkPanel({ language, linkId, reach, deps = apiDeps
           <AdminIdentityHeader
             language={language}
             title={title}
-            {...(link.shortUrl === '' ? {} : { secondary: link.shortUrl })}
+            {...(address === '' ? {} : { secondary: address })}
             glyph="target"
             badges={<TrackingStateBadge language={language} link={link} now={clock} />}
             actions={<TrackingLinkGestures language={language} link={link} reach={reach} deps={deps} online={online} announce={announcer.announce} />}
@@ -135,12 +172,44 @@ export function AdminTrackingLinkPanel({ language, linkId, reach, deps = apiDeps
         }
         aside={<TrackingMeta language={language} link={link} now={clock} onAnnounce={announcer.announce} />}
       >
-        <DestinationSection language={language} link={link} onAnnounce={announcer.announce} />
-        <CampaignSection language={language} link={link} />
-        <TargetSection language={language} link={link} />
-        <TrackingCharts language={language} link={link} />
-        <RecentClicksSection language={language} link={link} now={clock} />
+        <section aria-labelledby={cardsTitle} className="@container grid gap-3" data-admin-tracking-link-cards>
+          <h2 id={cardsTitle} className="text-body font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
+            {translateAdmin(language, 'admin.tracking.cards.title')}
+          </h2>
+          <AdminSummaryGrid>
+            {ADMIN_TRACKING_LINK_SECTIONS.map((section) => {
+              const summary = trackingLinkSummaryOf(section, link, language);
+              return (
+                <AdminSummaryCard
+                  key={section}
+                  language={language}
+                  id={section}
+                  title={translateAdmin(language, ADMIN_TRACKING_LINK_SECTION_TITLES[section])}
+                  glyph={ADMIN_TRACKING_LINK_SECTION_GLYPHS[section]}
+                  values={summary.values}
+                  sentence={summary.sentence}
+                  onOpen={() => sections.open(section)}
+                />
+              );
+            })}
+          </AdminSummaryGrid>
+        </section>
       </AdminFiche>
+      {ADMIN_TRACKING_LINK_SECTIONS.map((section) => (
+        <AdminDetailSheet
+          key={section}
+          language={language}
+          id={`tracking-link-${section}`}
+          title={translateAdmin(language, ADMIN_TRACKING_LINK_SECTION_TITLES[section])}
+          open={sections.active === section}
+          onClose={sections.close}
+          inAddress={sections.inAddress}
+        >
+          <div className="grid gap-6" data-admin-tracking-link-panel={section}>
+            {detail(section)}
+          </div>
+        </AdminDetailSheet>
+      ))}
       <AdminAnnouncement text={announcer.text} />
     </div>
   );

@@ -26,8 +26,11 @@ export const servedTrackingLink = (overrides: Readonly<Record<string, unknown>> 
   campaign: 'rentree-2026',
   source: 'newsletter',
   medium: 'email',
-  originalUrl: 'https://exemple.test/rentree?ref=meeshy',
-  shortUrl: 'https://m.meeshy.me/l/Ab3xYz',
+  /* Comme la passerelle la sert : origine et chemin, sans requête ni fragment (`redactTrackingUrl`). */
+  originalUrl: 'https://exemple.test/rentree',
+  /* Stockée RELATIVE ; l'adresse absolue est `fullUrl` (b980cc5db7). */
+  shortUrl: '/l/Ab3xYz',
+  fullUrl: 'https://meeshy.me/l/Ab3xYz',
   targetType: 'POST',
   target: { type: 'POST', id: OBJECT_ID(4), label: 'Awa Diop' },
   conversation: null,

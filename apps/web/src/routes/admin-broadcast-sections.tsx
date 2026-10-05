@@ -9,7 +9,8 @@ import { AdminTabPanel, AdminTabs, useAdminTab } from '@/components/admin/tabs';
 import { EDGE, INK, INK2 } from '@/components/admin/tone';
 import { ProgressBar } from '@/components/progress-bar';
 import { audienceSentence, breakdownBars } from '@/lib/admin/broadcast-audience';
-import { deliveryProgress, inAppStateOf, type InAppState } from '@/lib/admin/broadcast-gestures';
+import { deliveryProgress, inAppStateOf, recipientsToReach, type InAppState } from '@/lib/admin/broadcast-gestures';
+import { IN_APP_STATE_KEYS, untranslatedNames } from '@/lib/admin/broadcast-summaries';
 import { interpretBroadcastStatus } from '@/lib/admin/interpret/enums';
 import { personLabel, personSecondary } from '@/lib/admin/interpret/labels';
 import { countryName, languageName, sentenceCase } from '@/lib/admin/interpret/language';
@@ -110,10 +111,17 @@ export function TranslationsSection({ language, broadcast }: { readonly language
   const none = broadcast.status === 'DRAFT' ? 'admin.broadcast.translations.none.draft' : 'admin.broadcast.translations.none.prepared';
   return (
     <AdminFicheSection id="translations" title={translateAdmin(language, 'admin.broadcast.section.translations')}>
-      {broadcast.translations.length === 0 ? (
-        <p data-admin-translations-none className="text-body" style={{ color: INK2 }}>
-          {translateAdmin(language, none)}
+      {broadcast.untranslated.length === 0 ? null : (
+        <p data-admin-translations-missing className="text-body" style={{ color: INK2 }}>
+          {translateAdmin(language, 'admin.broadcast.translations.missing', { languages: untranslatedNames(broadcast, language) })}
         </p>
+      )}
+      {broadcast.translations.length === 0 ? (
+        broadcast.untranslated.length > 0 ? null : (
+          <p data-admin-translations-none className="text-body" style={{ color: INK2 }}>
+            {translateAdmin(language, none)}
+          </p>
+        )
       ) : (
         <TranslationTabs language={language} translations={broadcast.translations} />
       )}
@@ -175,7 +183,8 @@ export function AudienceSection({
   readonly preview: AdminBroadcastPreview | undefined;
 }) {
   const known = broadcast.status !== 'DRAFT';
-  const recipients = preview?.recipientCount ?? broadcast.totalRecipients;
+  const recipients = recipientsToReach(broadcast, preview, 'email');
+  const inApp = preview?.inAppRecipients ?? null;
   return (
     <AdminFicheSection id="audience" title={translateAdmin(language, 'admin.broadcast.section.audience')}>
       <p data-admin-audience className="text-body font-semibold" style={{ color: INK }}>
@@ -187,9 +196,13 @@ export function AudienceSection({
       <dl className="grid gap-3">
         <AdminMetaRow
           anchor="recipients"
-          label={translateAdmin(language, 'admin.broadcast.audience.recipients')}
+          label={translateAdmin(language, inApp === null ? 'admin.broadcast.audience.recipients' : 'admin.broadcast.audience.emailRecipients')}
           value={known ? formatCount(recipients, language) : translateAdmin(language, 'admin.broadcast.audience.recipients.draft')}
         />
+        {/* Le compte in-app n'est servi qu'à la préparation, par un serveur à jour (01402058e7). */}
+        {inApp === null ? null : (
+          <AdminMetaRow anchor="inAppRecipients" label={translateAdmin(language, 'admin.broadcast.audience.inAppRecipients')} value={formatCount(inApp, language)} />
+        )}
       </dl>
       {preview === undefined ? null : <PreviewCharts language={language} preview={preview} />}
     </AdminFicheSection>
@@ -245,16 +258,17 @@ export function EmailSection({ language, broadcast, now }: { readonly language: 
   );
 }
 
-const IN_APP_STATE: Readonly<Record<InAppState, { readonly key: AdminPlainCatalogKey; readonly tone: 'neutral' | 'info' | 'success' }>> = {
-  never: { key: 'admin.broadcast.inApp.state.never', tone: 'neutral' },
-  running: { key: 'admin.broadcast.inApp.state.running', tone: 'info' },
-  done: { key: 'admin.broadcast.inApp.state.done', tone: 'success' },
+const IN_APP_TONE: Readonly<Record<InAppState, 'neutral' | 'info' | 'success' | 'danger'>> = {
+  never: 'neutral',
+  running: 'info',
+  done: 'success',
+  failed: 'danger',
 };
 
 export function InAppSection({ language, broadcast, now }: { readonly language: AdminLanguage; readonly broadcast: AdminBroadcast; readonly now: Date }) {
   const t = (key: AdminPlainCatalogKey) => translateAdmin(language, key);
   const state = inAppStateOf(broadcast);
-  const badge = IN_APP_STATE[state];
+  const badge = { key: IN_APP_STATE_KEYS[state], tone: IN_APP_TONE[state] };
   return (
     <AdminFicheSection id="in-app" title={t('admin.broadcast.section.inApp')}>
       <dl className="grid gap-3">
@@ -271,6 +285,9 @@ export function InAppSection({ language, broadcast, now }: { readonly language: 
                 state === 'running' ? t('admin.broadcast.email.running') : <AdminMomentText moment={momentOf(broadcast.inAppCompletedAt, now, language)} variant="both" />
               }
             />
+            {state === 'failed' && broadcast.errorMessage !== null ? (
+              <AdminMetaRow anchor="inAppError" label={t('admin.broadcast.inApp.error')} value={<span dir="auto">{broadcast.errorMessage}</span>} />
+            ) : null}
           </>
         )}
       </dl>

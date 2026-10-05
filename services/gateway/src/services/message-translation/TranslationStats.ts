@@ -19,6 +19,8 @@ export interface TranslationServiceStats {
 export class TranslationStats {
   private stats: TranslationServiceStats;
   private readonly startTime: number;
+  /** Les traductions reçues AVEC une durée mesurée — le dénominateur de la moyenne. */
+  private timedSamples = 0;
 
   constructor() {
     this.startTime = Date.now();
@@ -70,6 +72,20 @@ export class TranslationStats {
    */
   incrementPoolFullRejections(): void {
     this.stats.pool_full_rejections++;
+  }
+
+  /**
+   * Une traduction REÇUE du traducteur : le compte, et sa durée dans la
+   * moyenne. Le traducteur mesure `processingTime` en SECONDES ; la moyenne est
+   * en MILLISECONDES. Une durée absente ou invalide est comptée sans fausser la
+   * moyenne (audit 2026-10-04 : la moyenne n'était jamais alimentée).
+   */
+  recordTranslationReceived(processingTimeSeconds?: unknown): void {
+    this.incrementTranslationsReceived();
+    if (typeof processingTimeSeconds !== 'number' || !Number.isFinite(processingTimeSeconds) || processingTimeSeconds < 0) return;
+    const ms = processingTimeSeconds * 1000;
+    this.timedSamples++;
+    this.stats.avg_processing_time += (ms - this.stats.avg_processing_time) / this.timedSamples;
   }
 
   /**
@@ -130,6 +146,7 @@ export class TranslationStats {
    * Réinitialise toutes les statistiques
    */
   reset(): void {
+    this.timedSamples = 0;
     this.stats = {
       messages_saved: 0,
       translation_requests_sent: 0,

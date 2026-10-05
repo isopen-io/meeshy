@@ -1,20 +1,31 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useId, useState, type ReactNode } from 'react';
 import { useStore } from 'zustand/react';
 
 import { AdminBadge, AdminInterpretedBadge } from '@/components/admin/badges';
-import { AdminLink } from '@/components/admin/entity-chip';
+import { AdminDetailSheet } from '@/components/admin/detail-sheet';
+import { AdminEntityChip, AdminLink } from '@/components/admin/entity-chip';
 import { AdminFiche, AdminFicheSection, AdminIdentityHeader, AdminStatStrip } from '@/components/admin/fiche';
 import { AdminPageHeader } from '@/components/admin/page-header';
 import { AdminSectionScreen } from '@/components/admin/section-screen';
 import { AdminDeniedInline, AdminEmptyState, AdminErrorState, AdminOfflineNotice } from '@/components/admin/states';
+import { AdminSummaryCard, AdminSummaryGrid } from '@/components/admin/summary-card';
 import { agentAccess } from '@/lib/admin/agent-access';
 import { conversationStateOf, ficheNameOf, sheetConversationOf } from '@/lib/admin/conversation-model';
+import {
+  ADMIN_CONVERSATION_SECTION_GLYPHS,
+  ADMIN_CONVERSATION_SECTION_TITLES,
+  ADMIN_CONVERSATION_SECTIONS,
+  conversationSummaryOf,
+  type AdminConversationSection,
+} from '@/lib/admin/conversation-summaries';
 import { interpretConversationType, interpretEncryption } from '@/lib/admin/interpret/enums';
 import { personInitials } from '@/lib/admin/interpret/labels';
 import { formatCount } from '@/lib/admin/interpret/numbers';
+import { useAdminOpen } from '@/lib/admin/use-admin-open';
 import { useAdminReach } from '@/lib/admin/use-admin-reach';
 import type { AdminDeps } from '@/lib/api/admin';
+import { agentLiveQueryKey, loadAgentLive } from '@/lib/api/admin-agent';
 import { adminConversationFicheKey, loadAdminConversationFiche } from '@/lib/api/admin-conversation-fiche';
 import { ADMIN_CONVERSATIONS_ROOT_KEY } from '@/lib/api/admin-conversations';
 import { ApiError, unwrap } from '@/lib/api/client';
@@ -41,6 +52,19 @@ import { AdminAnnouncement, AdminSkeleton } from '@/routes/admin-parts';
  * liens de partage, agent), ses métadonnées INTERPRÉTÉES, ses membres nommés —
  * puis de quoi agir : changer un rôle, retirer un membre, configurer la
  * conversation, piloter son agent, et la LIRE.
+ *
+ * ## La fiche se lit par sections (spec 2026-10-04 § 3)
+ *
+ * L'en-tête d'identité, « Configurer » et le bandeau de chiffres restent
+ * visibles ; membres, réglages et métadonnées, lecture des messages, agent,
+ * communauté et liens de partage sont des CARTES résumées (chiffres déjà lus
+ * par la fiche) qui ouvrent la section d'hier dans une modale (`?open=<id>`).
+ * Rien du détail n'est lu tant que sa modale est fermée — et surtout pas le
+ * CONTENU : même le rang souverain, qui lit sans motif, ne déclenche la lecture
+ * (et sa ligne au journal) qu'en ouvrant la carte. La carte Agent n'existe que
+ * si un agent est configuré (la passerelle rend 404 sur `…/live` sinon : « pas
+ * d'agent », jamais une panne) ; la carte Communauté, que si la conversation en
+ * a une.
  *
  * ## La lecture souveraine ne dépend pas de la fiche
  *
@@ -95,6 +119,23 @@ export function AdminConversationPanel({ language, conversationId, deps = apiDep
 
   const agentControl =
     agentAccess({ permissions: reach.permissions, role: reach.role ?? undefined, chargement: reach.status === 'pending' }) === 'ouvert';
+
+  /**
+   * L'AGENT N'A DE CARTE QUE S'IL EXISTE. La passerelle rend 404 sur `…/live` sans
+   * configuration : c'est « pas d'agent », jamais une panne — la carte ne se pose
+   * pas. Même clé que le bloc de pilotage (`AgentConversationControl`) : la modale
+   * relit le cache au lieu de relancer la requête.
+   */
+  const agentLive = useQuery({
+    queryKey: agentLiveQueryKey(conversationId),
+    queryFn: async ({ signal }) => unwrap(await loadAgentLive({ ...deps, conversationId, signal })),
+    enabled: agentControl,
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
+  const agentStatus = agentLive.error instanceof ApiError ? agentLive.error.status : 0;
+  const sections = useAdminOpen(ADMIN_CONVERSATION_SECTIONS);
+  const cardsTitle = useId();
 
   const listTarget = { kind: 'section', section: 'conversations' } as const;
   const status = query.error instanceof ApiError ? query.error.status : 0;
@@ -187,6 +228,75 @@ export function AdminConversationPanel({ language, conversationId, deps = apiDep
     void queryClient.invalidateQueries({ queryKey: ADMIN_CONVERSATIONS_ROOT_KEY });
   };
 
+  /** Les cartes posées : l'agent seulement s'il est configuré (un 404 n'en dessine aucune), la communauté seulement s'il y en a une. */
+  const shown = ADMIN_CONVERSATION_SECTIONS.filter((section) => {
+    if (section === 'agent') return agentControl && (agentLive.data !== undefined || (agentLive.isError && agentStatus !== 404));
+    if (section === 'community') return fiche.community !== null;
+    return true;
+  });
+  const facts = { fiche, agent: agentLive.data ?? null, sovereign: reach.isSovereign };
+  const cardState = (section: AdminConversationSection): 'ready' | 'error' => (section === 'agent' && agentLive.data === undefined ? 'error' : 'ready');
+  const sectionTitle = (section: AdminConversationSection) => translateAdmin(language, ADMIN_CONVERSATION_SECTION_TITLES[section]);
+
+  /** Le contenu de chaque modale : la section d'hier, telle quelle — montée seulement à l'ouverture. */
+  const detail = (section: AdminConversationSection): ReactNode => {
+    switch (section) {
+      case 'members':
+        /* Le tableau des membres porte ses gestes (rôle, retrait) : la modale large lui rend toute sa largeur. */
+        return (
+          <AdminFicheSection id="members" title={sectionTitle('members')}>
+            <ConversationMembers
+              language={language}
+              conversationId={conversationId}
+              conversationType={fiche.type}
+              deps={deps}
+              online={online}
+              now={clock}
+              announce={announcer.announce}
+            />
+          </AdminFicheSection>
+        );
+      case 'settings':
+        return <ConversationMeta language={language} fiche={fiche} now={clock} onAnnounce={announcer.announce} />;
+      case 'reading':
+        return reading;
+      case 'agent':
+        return <AgentConversationControl conversationId={conversationId} language={language} deps={deps} onAnnounce={announcer.announce} now={now} />;
+      case 'community':
+        return fiche.community === null ? null : (
+          <div className="grid gap-3" data-admin-conversation-community={fiche.community.id}>
+            <AdminEntityChip
+              language={language}
+              entity={{
+                kind: 'community',
+                id: fiche.community.id,
+                label: fiche.community.name,
+                ...(fiche.community.identifier === null ? {} : { secondary: fiche.community.identifier }),
+              }}
+            />
+          </div>
+        );
+      case 'links':
+        return (
+          <div className="grid gap-3" data-admin-conversation-links>
+            <p className="text-body" style={{ color: 'var(--color-ios-ink-2)' }}>
+              {translateAdmin(language, 'admin.conversation.card.links.hint', { count: formatCount(fiche.shareLinkCount, language) })}
+            </p>
+            {reach.opens('shareLinks') ? (
+              <AdminLink
+                target={{ kind: 'section', section: 'shareLinks' }}
+                anchor="conversation-share-links"
+                className="inline-flex w-fit items-center rounded-chip px-4 text-body font-semibold"
+                style={{ minHeight: 44, border: '1px solid var(--color-edge)', color: 'var(--color-ios-brand)' }}
+              >
+                {translateAdmin(language, 'admin.conversation.card.links.open')}
+              </AdminLink>
+            ) : null}
+          </div>
+        );
+    }
+  };
+
   return (
     <div className="grid gap-6" data-admin-conversation-fiche>
       <AdminPageHeader
@@ -232,29 +342,48 @@ export function AdminConversationPanel({ language, conversationId, deps = apiDep
         }
         stats={<AdminStatStrip items={stats} />}
       >
-        {/* Les membres occupent TOUTE la largeur : leur tableau porte les gestes (rôle, retrait), et dans la colonne principale d'une fiche à deux colonnes il n'aurait laissé que 370 px dès 1024 px — les gestes hors de vue, derrière un défilement horizontal. */}
-        <AdminFicheSection id="members" title={translateAdmin(language, 'admin.conversation.members.title')}>
-          <ConversationMembers
-            language={language}
-            conversationId={conversationId}
-            conversationType={fiche.type}
-            deps={deps}
-            online={online}
-            now={clock}
-            announce={announcer.announce}
-          />
-        </AdminFicheSection>
-        {/* La proportion de la fiche du kit (colonne principale + 20 rem de métadonnées), reprise ici pour ce qui suit les membres. */}
-        <div className="grid gap-6 @4xl:grid-cols-[minmax(0,1fr)_20rem]">
-          <div className="grid min-w-0 content-start gap-6">
-            {reading}
-            {agentControl ? <AgentConversationControl conversationId={conversationId} language={language} deps={deps} onAnnounce={announcer.announce} now={now} /> : null}
-          </div>
-          <aside data-admin-fiche-aside className="grid min-w-0 content-start gap-6">
-            <ConversationMeta language={language} fiche={fiche} now={clock} onAnnounce={announcer.announce} />
-          </aside>
-        </div>
+        <section aria-labelledby={cardsTitle} className="@container grid gap-3" data-admin-conversation-cards>
+          <h2 id={cardsTitle} className="text-body font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
+            {translateAdmin(language, 'admin.conversation.cards.title')}
+          </h2>
+          <AdminSummaryGrid>
+            {shown.map((section) => {
+              const summary = conversationSummaryOf(section, facts, language, clock);
+              return (
+                <AdminSummaryCard
+                  key={section}
+                  language={language}
+                  id={section}
+                  title={sectionTitle(section)}
+                  glyph={ADMIN_CONVERSATION_SECTION_GLYPHS[section]}
+                  values={summary.values}
+                  sentence={summary.sentence}
+                  state={cardState(section)}
+                  onRetry={() => void agentLive.refetch()}
+                  onOpen={() => sections.open(section)}
+                />
+              );
+            })}
+          </AdminSummaryGrid>
+        </section>
       </AdminFiche>
+
+      {shown.map((section) => (
+        <AdminDetailSheet
+          key={section}
+          language={language}
+          id={`conversation-${section}`}
+          title={sectionTitle(section)}
+          open={sections.active === section}
+          onClose={sections.close}
+          inAddress={sections.inAddress}
+        >
+          <div className="grid gap-6" data-admin-conversation-panel={section}>
+            {detail(section)}
+          </div>
+        </AdminDetailSheet>
+      ))}
+
       {configuring ? (
         <AdminConversationSettingsSheet
           conversation={sheetConversationOf(fiche)}

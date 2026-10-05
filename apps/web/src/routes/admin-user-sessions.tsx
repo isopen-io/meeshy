@@ -6,7 +6,8 @@ import { AdminBadge } from '@/components/admin/badges';
 import { AdminConfirmSheet } from '@/components/admin/confirm-sheet';
 import { AdminMomentText, AdminNotProvided } from '@/components/admin/meta';
 import type { AdminColumn } from '@/components/admin/responsive-rows';
-import { adminMomentOf } from '@/lib/admin/interpret/time';
+import { interpretSessionEnd } from '@/lib/admin/interpret/enums';
+import { adminDate, adminMomentOf } from '@/lib/admin/interpret/time';
 import { useAdminAction } from '@/lib/admin/use-admin-action';
 import { useAdminReach } from '@/lib/admin/use-admin-reach';
 import type { AdminDeps } from '@/lib/api/admin';
@@ -14,6 +15,7 @@ import {
   adminUserSessionsQueryKey,
   loadAdminUserSessions,
   revokeAdminUserSession,
+  sessionStateOf,
   withoutSession,
   type AdminSession,
 } from '@/lib/api/admin-user-dossier';
@@ -104,12 +106,7 @@ export function AdminUserSessionsList({
     {
       id: 'status',
       header: translateAdmin(language, 'admin.col.status'),
-      cell: (session) =>
-        session.isValid ? (
-          <AdminBadge tone="success">{translateAdmin(language, 'admin.security.valid')}</AdminBadge>
-        ) : (
-          <AdminBadge tone="neutral">{translateAdmin(language, 'admin.security.closed')}</AdminBadge>
-        ),
+      cell: (session) => <SessionStatus session={session} language={language} now={now} />,
     },
     {
       id: 'lastActive',
@@ -121,8 +118,9 @@ export function AdminUserSessionsList({
           {
             id: 'actions',
             header: translateAdmin(language, 'admin.col.actions'),
+            /* Une session EXPIRÉE ne se révoque pas : elle ne donne déjà plus accès. */
             cell: (session: AdminSession) =>
-              session.isValid ? (
+              sessionStateOf(session, now) === 'valid' ? (
                 <button
                   type="button"
                   data-admin-action="revoke-session"
@@ -175,5 +173,50 @@ export function AdminUserSessionsList({
         />
       )}
     </>
+  );
+}
+
+/**
+ * L'ÉTAT D'UNE SESSION, EN MOTS (audit 2026-10-04) — valide (avec son échéance),
+ * EXPIRÉE (échéance passée sans fermeture écrite : `isValid` seul la disait
+ * « Valide »), ou fermée, avec QUAND et POURQUOI (`invalidatedReason` interprété).
+ * Un appareil de confiance le dit.
+ */
+function SessionStatus({ session, language, now }: { readonly session: AdminSession; readonly language: AdminLanguage; readonly now: Date }) {
+  const state = sessionStateOf(session, now);
+  const detail =
+    state === 'closed'
+      ? [
+          session.invalidatedReason === null ? null : interpretSessionEnd(session.invalidatedReason, language).label,
+          session.invalidatedAt === null ? null : translateAdmin(language, 'admin.people.session.closedOn', { date: adminDate(session.invalidatedAt, language) }),
+        ]
+      : [
+          session.expiresAt === null
+            ? null
+            : translateAdmin(language, state === 'expired' ? 'admin.people.session.expiredOn' : 'admin.people.session.expiresOn', { date: adminDate(session.expiresAt, language) }),
+        ];
+  const lines = detail.filter((line): line is string => line !== null);
+  return (
+    <span data-admin-session-state={state} className="inline-grid justify-items-start gap-1 text-start">
+      <span className="inline-flex flex-wrap items-center gap-1">
+        {state === 'valid' ? (
+          <AdminBadge tone="success">{translateAdmin(language, 'admin.security.valid')}</AdminBadge>
+        ) : state === 'expired' ? (
+          <AdminBadge tone="warning">{translateAdmin(language, 'admin.people.session.expired')}</AdminBadge>
+        ) : (
+          <AdminBadge tone="neutral">{translateAdmin(language, 'admin.security.closed')}</AdminBadge>
+        )}
+        {session.isTrusted ? (
+          <AdminBadge tone="info" glyph="shieldCheck">
+            {translateAdmin(language, 'admin.people.session.trusted')}
+          </AdminBadge>
+        ) : null}
+      </span>
+      {lines.length === 0 ? null : (
+        <span className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
+          {lines.join(' · ')}
+        </span>
+      )}
+    </span>
   );
 }

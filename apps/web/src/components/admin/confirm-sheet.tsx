@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 
 import { Sheet } from '@/components/sheet';
+import { useAdminReach } from '@/lib/admin/use-admin-reach';
 import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 import { BRAND, EDGE, INK, INK2, SURFACE } from './tone';
@@ -21,6 +22,20 @@ const FOCUS = 'focus-visible:outline-2 focus-visible:outline-offset-2';
  * `onConfirm` reçoit le motif NETTOYÉ (espaces de bord retirés), ou `null` sans
  * champ de motif. Pendant `busy`, les deux boutons sont désactivés ; une
  * `error` se dit sous le corps, en alerte.
+ *
+ * **LE RANG SOUVERAIN N'ÉCRIT PAS DE MOTIF** (spec 2026-10-04 § 4, directive
+ * porteur : « BIGBOSS n'a besoin de rien justifier »). La feuille lit le rang
+ * SERVI (`useAdminReach().isSovereign`, la lecture unique de la matrice) : pour
+ * lui, le champ n'est pas rendu, quel que soit `motive`, et la confirmation
+ * rend `null` — l'appelant envoie alors le geste SANS `reason`, ce que la
+ * passerelle accepte de ce seul rang (le geste reste consigné au journal). La
+ * décision vit ICI, une fois : chaque écran qui passe par cette feuille en
+ * profite sans la recopier. Tant que la matrice n'est pas lue, le lecteur
+ * n'est pas souverain — le champ s'affiche (fermé par défaut).
+ *
+ * Une NOTE n'est pas un motif (`motive.kind === 'note'`) : les notes d'un
+ * dossier de signalement sont son CONTENU, pas une justification du geste —
+ * elles restent offertes à tous les rangs, souverain compris.
  */
 export function AdminConfirmSheet({
   language,
@@ -28,7 +43,7 @@ export function AdminConfirmSheet({
   body,
   confirmLabel,
   tone,
-  motive,
+  motive: requested,
   busy,
   error,
   onConfirm,
@@ -39,12 +54,20 @@ export function AdminConfirmSheet({
   readonly body: string;
   readonly confirmLabel: string;
   readonly tone: 'danger' | 'primary';
-  readonly motive?: { readonly label: string; readonly minLength: number; readonly required: boolean };
+  readonly motive?: {
+    readonly label: string;
+    readonly minLength: number;
+    readonly required: boolean;
+    /** `'motive'` (défaut) : une justification, que le rang souverain n'écrit pas. `'note'` : un contenu du dossier, offert à tous. */
+    readonly kind?: 'motive' | 'note';
+  };
   readonly busy: boolean;
   readonly error?: string | null;
   readonly onConfirm: (motive: string | null) => void;
   readonly onCancel: () => void;
 }) {
+  const reach = useAdminReach();
+  const motive = reach.isSovereign && requested?.kind !== 'note' ? undefined : requested;
   const [text, setText] = useState('');
   const field = useRef<HTMLTextAreaElement>(null);
   const cancel = useRef<HTMLButtonElement>(null);

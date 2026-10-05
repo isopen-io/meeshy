@@ -44,6 +44,16 @@ describe('ce qui ne va pas — dit dans l’ordre où on le traite', () => {
     expect(healthIssuesOf(odd, 'fr').map((entry) => entry.id)).toEqual(['database']);
   });
 
+  test('un traducteur SERVI mais déclaré injoignable (`reachable: false`) est la même alerte qu’un traducteur absent', () => {
+    const translator = { ...(servedMonitoring().translator as Record<string, unknown>), reachable: false, requestsSent: 0, received: 0, avgProcessingTimeMs: 0 };
+    const issues = healthIssuesOf(monitoring({ translator, circuitBreakers: [] }), 'fr');
+    expect(issues).toEqual([{ id: 'translator', tone: 'warning', text: 'Le service de traduction est injoignable.' }]);
+  });
+
+  test('un ancien serveur sans `reachable` : le traducteur servi est joignable (champ absent ≠ faux)', () => {
+    expect(healthIssuesOf(monitoring({ circuitBreakers: [] }), 'fr')).toEqual([]);
+  });
+
   test('un traducteur injoignable est une alerte ; un coupe-circuit OUVERT est en danger, un en essai en alerte', () => {
     const issues = healthIssuesOf(monitoring({ translator: null }), 'fr');
 

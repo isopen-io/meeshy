@@ -151,9 +151,18 @@ export function BroadcastGestures({
 
   const perform = (gesture: AdminGesture<AdminBroadcastAck>) => settle(() => acknowledge.run(gesture));
 
-  const reachable = recipientsToReach(broadcast, preview);
+  /* Deux canaux, deux comptes (01402058e7) : l'e-mail exige une adresse vérifiée, l'application non. */
+  const reachable = recipientsToReach(broadcast, preview, 'email');
+  const reachableInApp = recipientsToReach(broadcast, preview, 'inApp');
+  /* Le compte in-app n'est CONNU qu'après une préparation servie par un serveur à jour ; sinon la publication n'est pas bloquée à tort. */
+  const inAppKnown = preview !== undefined && preview.inAppRecipients !== null;
   const audience = audienceSentence(broadcast.targeting, language);
-  const blocked = broadcast.status === 'READY' && reachable === 0;
+  const blocked = (gesture: BroadcastGesture): boolean => {
+    if (broadcast.status !== 'READY') return false;
+    if (gesture === 'send') return reachable === 0;
+    if (gesture === 'publishInApp') return inAppKnown && reachableInApp === 0;
+    return false;
+  };
 
   const prepare = async () => {
     const prepared = await settle(() =>
@@ -258,7 +267,11 @@ export function BroadcastGestures({
           <AdminConfirmSheet
             {...common}
             title={t('admin.broadcast.confirm.inApp.title')}
-            body={translateAdmin(language, 'admin.broadcast.confirm.inApp.body', { audience, count })}
+            body={
+              inAppKnown || reachableInApp > 0
+                ? translateAdmin(language, 'admin.broadcast.confirm.inApp.body', { audience, count: formatCount(reachableInApp, language) })
+                : translateAdmin(language, 'admin.broadcast.confirm.inApp.bodyUncounted', { audience })
+            }
             confirmLabel={t('admin.broadcast.confirm.inApp.confirm')}
             tone="primary"
             onConfirm={() => void publishInApp()}
@@ -303,7 +316,7 @@ export function BroadcastGestures({
           anchor={gesture}
           label={label(gesture)}
           variant={VARIANT[gesture]}
-          disabled={!online || running || (blocked && (gesture === 'send' || gesture === 'publishInApp'))}
+          disabled={!online || running || blocked(gesture)}
           onClick={() => open(gesture)}
         />
       ))}

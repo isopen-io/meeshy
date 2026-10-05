@@ -53,6 +53,13 @@ export type AdminTranslatorStats = {
   readonly cacheHitRate: number;
   readonly memoryUsageMb: number;
   readonly uptimeSeconds: number;
+  /**
+   * Le service répond-il ? `false` : la passerelle le SAIT injoignable (ses
+   * chiffres ne sont alors que des zéros) ; `null` : un ancien serveur qui ne
+   * sert pas le champ — absent n'est pas faux, le traducteur servi est réputé
+   * joignable.
+   */
+  readonly reachable: boolean | null;
 };
 
 export type AdminPresenceStats = {
@@ -106,6 +113,7 @@ function decodeTranslator(raw: unknown): AdminTranslatorStats | null {
     cacheHitRate: asCount(translator.cacheHitRate),
     memoryUsageMb: asCount(translator.memoryUsageMb),
     uptimeSeconds: asCount(translator.uptimeSeconds),
+    reachable: typeof translator.reachable === 'boolean' ? translator.reachable : null,
   };
 }
 

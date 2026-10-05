@@ -166,3 +166,16 @@ export function readAuditReason(raw: string | null | undefined): string | null {
   const { reason } = parsed;
   return typeof reason === 'string' && reason.trim() !== '' ? clip(reason) : null;
 }
+
+/**
+ * Le NOM qu'une ligne de journal a gardé dans `metadata` (`name`) — le libellé
+ * de repli d'une cible dont la ligne a disparu. Une diffusion supprimée n'a
+ * plus de `AdminBroadcast`, mais `CREATE_BROADCAST` / `DELETE_BROADCAST`
+ * consignent son nom : sans ce repli, le journal disait « (sans nom) ».
+ */
+export function readAuditMetadataName(raw: string | null | undefined): string | null {
+  const parsed = parseJson(raw);
+  if (!isPlain(parsed)) return null;
+  const { name } = parsed;
+  return typeof name === 'string' && name.trim() !== '' ? clip(name) : null;
+}

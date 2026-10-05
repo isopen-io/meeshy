@@ -339,7 +339,7 @@ describe('PATCH /admin/users/:userId/preferences/:category', () => {
     const prisma = createMockPrisma();
     const res = await call(prisma, 'ADMIN', 'PATCH', url('audio'), { transcriptionEnabled: true });
     expect(res.statusCode).toBe(403);
-    expect(res.json()).toEqual(expect.objectContaining({ error: 'CONSENT_REQUIRED' }));
+    expect(res.json()).toEqual(expect.objectContaining({ error: 'CONSENT_REQUIRED', code: 'CONSENT_REQUIRED' }));
     expect(prisma.userPreferences.upsert).not.toHaveBeenCalled();
   });
 

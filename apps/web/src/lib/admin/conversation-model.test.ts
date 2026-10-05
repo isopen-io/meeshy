@@ -112,6 +112,8 @@ describe('les références d’entité', () => {
     isActive: true,
     isOnline: false,
     joinedAt: null,
+    nickname: null,
+    departure: null,
     ...overrides,
   });
 
@@ -134,6 +136,8 @@ describe('les gestes d’un membre n’existent que s’ils ont un effet servi',
     isActive: true,
     isOnline: false,
     joinedAt: null,
+    nickname: null,
+    departure: null,
     ...overrides,
   });
 

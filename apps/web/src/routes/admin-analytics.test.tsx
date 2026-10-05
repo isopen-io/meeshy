@@ -74,6 +74,8 @@ describe('les statistiques — onglet Activité', () => {
 
     const percent = (value: number) => new Intl.NumberFormat('fr', { style: 'percent' }).format(value);
     expect(statText(host, 'engagement-rate')).toContain(percent(0.42));
+    /* La passerelle compte les comptes qui ÉCRIVENT, rapportés aux actifs (1c62999e1b) : la légende le dit. */
+    expect(statText(host, 'engagement-rate')).toContain('Comptes ayant écrit sur la période, rapportés aux comptes actifs');
     expect(statText(host, 'active-user-rate')).toContain(percent(0.41));
     expect(statText(host, 'growth-rate')).toContain(percent(0.07));
     expect(host.textContent).not.toContain('4 200');

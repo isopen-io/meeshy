@@ -36,6 +36,8 @@ export const servedMonitoring = (overrides: Served = {}): Served => ({
     cacheHitRate: 62.5,
     memoryUsageMb: 150,
     uptimeSeconds: 273_500,
+    /* Servi depuis le 2026-10-04 : la passerelle dit si le service répond (un ancien serveur ne le sert pas). */
+    reachable: true,
   },
   circuitBreakers: [
     { name: 'translator-zmq', state: 'CLOSED', failures: 0, successes: 4_120, totalRequests: 4_120, lastFailureAt: null },

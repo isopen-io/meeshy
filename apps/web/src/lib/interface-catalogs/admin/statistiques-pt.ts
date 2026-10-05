@@ -27,7 +27,7 @@ const f = {
   'admin.analytics.activity.now.conversations.caption': 'Conversas em que se escreveu na última hora',
   'admin.analytics.activity.health.title': 'Saúde do uso',
   'admin.analytics.activity.health.engagement': 'Taxa de engajamento',
-  'admin.analytics.activity.health.engagement.caption': 'Contas ativas em relação ao total de contas',
+  'admin.analytics.activity.health.engagement.caption': 'Contas que escreveram no período, sobre as contas ativas',
   'admin.analytics.activity.health.growth': 'Crescimento',
   'admin.analytics.activity.health.growth.caption': 'Contas novas, como parte do total de contas',
   'admin.analytics.activity.health.perUser': 'Mensagens por conta',

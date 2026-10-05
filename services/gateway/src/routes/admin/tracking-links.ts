@@ -45,6 +45,7 @@
  * `/chat|join|l/<clé>` remplacée — et la recherche ne porte plus sur elle, sans quoi
  * chaque caractère deviendrait un oracle sur une adresse qu'on ne sert pas.
  */
+import { resolveFrontendBaseUrl } from '../../services/TrackingLinkService';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
 import { OBJECT_ID_PATTERN } from '@meeshy/shared/utils/object-id';
@@ -237,6 +238,10 @@ function serveRow(row: LinkRow, names: Named) {
     medium: clean(row.medium),
     originalUrl: redactTrackingUrl(row.originalUrl),
     shortUrl: row.shortUrl,
+    // `shortUrl` est STOCKÉ relatif (`/l/<jeton>`) : `fullUrl` est l'adresse
+    // absolue, de la même source de domaine que les routes de l'app
+    // (`resolveFrontendBaseUrl`, via `buildTrackingUrl`).
+    fullUrl: `${resolveFrontendBaseUrl()}/l/${row.token}`,
     targetType: row.targetType,
     target: serveTarget(row, names),
     conversation: row.conversationId
@@ -271,6 +276,7 @@ const rowSchema = {
     medium: chaineNulle,
     originalUrl: chaine,
     shortUrl: chaine,
+    fullUrl: chaine,
     targetType: chaine,
     target: {
       type: 'object',

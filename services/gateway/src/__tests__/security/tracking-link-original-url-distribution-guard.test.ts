@@ -36,6 +36,7 @@ jest.mock('../../utils/logger-enhanced', () => ({
   },
 }));
 jest.mock('../../services/TrackingLinkService', () => ({
+  resolveFrontendBaseUrl: () => 'https://meeshy.me',
   TrackingLinkService: jest.fn().mockImplementation(() => ({
     getTrackingLinkStats: async () => ({
       confirmedClicks: 0,

@@ -118,15 +118,35 @@ export function trackingDeviceLabel(code: string | null | undefined, language: A
       return translateAdmin(language, 'admin.tracking.device.tablet');
     case 'desktop':
       return translateAdmin(language, 'admin.tracking.device.desktop');
+    case 'unknown':
+      return translateAdmin(language, 'admin.value.unknown');
     default:
       return sentenceCase(raw, language);
   }
 }
 
+/**
+ * Les valeurs GÉNÉRIQUES que la passerelle écrit faute de mieux (`detectBrowser`,
+ * `detectOS` : « Unknown », « Other » ; la source sociale : « Direct ») — des mots
+ * anglais d'une machine, dits dans la langue de l'administration (audit 2026-10-04).
+ */
+const GENERIC_VALUES = {
+  unknown: 'admin.value.unknown',
+  other: 'admin.tracking.value.other',
+  direct: 'admin.tracking.recent.direct',
+} as const;
+
+const isGeneric = (value: string): value is keyof typeof GENERIC_VALUES => Object.hasOwn(GENERIC_VALUES, value);
+
+/** L'adresse À PARTAGER : l'absolue (`fullUrl`) quand la passerelle la sert, sinon la courte stockée (`/l/<jeton>`, relative). */
+export const trackingShareAddress = (link: Pick<AdminTrackingLinkRow, 'fullUrl' | 'shortUrl'>): string => link.fullUrl ?? link.shortUrl;
+
 /** Un nom servi en clair (navigateur, système, source sociale) : posé tel quel, « Non renseigné » quand il manque. */
 export function trackingPlainLabel(value: string | null | undefined, language: AdminLanguage): string {
   const raw = value?.trim() ?? '';
-  return raw === '' ? translateAdmin(language, 'admin.value.notProvided') : raw;
+  if (raw === '') return translateAdmin(language, 'admin.value.notProvided');
+  const lowered = raw.toLowerCase();
+  return isGeneric(lowered) ? translateAdmin(language, GENERIC_VALUES[lowered]) : raw;
 }
 
 const datum = (bucket: AdminTrackingBucket, label: string): TrackingDatum => ({ key: bucket.key, label, value: bucket.count });

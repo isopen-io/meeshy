@@ -32,8 +32,13 @@ beforeAll(async () => {
 
 const isProductionSource = (path: string): boolean => path.endsWith('.ts') && !path.includes('__tests__') && !path.includes('.test.');
 
-const WRITES_AUDIT = /adminAuditLog|withAudit\(|UserAuditAction/;
+/* `auditAgentGesture` (les gestes sur l'agent) et `tracerDiffusion` (modification
+   et préparation d'une diffusion) écrivent aussi au journal : un fichier qui ne
+   les reconnaissait pas laissait passer seize codes sans libellé (audit 2026-10-04). */
+const WRITES_AUDIT = /adminAuditLog|withAudit\(|UserAuditAction|auditAgentGesture\(/;
 const LITERAL_ACTION = /action:\s*(?:[\w.]+\s*\?\s*)?'([A-Z][A-Z0-9_]+)'(?:\s*:\s*'([A-Z][A-Z0-9_]+)')?/g;
+/** Un traceur à code POSITIONNEL : `tracerDiffusion(request, 'UPDATE_BROADCAST', …)`. */
+const POSITIONAL_ACTION = /\w+\(\s*request,\s*'([A-Z][A-Z0-9_]+)'/g;
 const ENUM_ACTION = /UserAuditAction\.([A-Z][A-Z0-9_]+)/g;
 
 function codesWrittenByTheGateway(): ReadonlySet<string> {
@@ -45,6 +50,7 @@ function codesWrittenByTheGateway(): ReadonlySet<string> {
     for (const match of source.matchAll(LITERAL_ACTION)) {
       for (const code of [match[1], match[2]]) if (code !== undefined) codes.add(code);
     }
+    for (const match of source.matchAll(POSITIONAL_ACTION)) if (match[1] !== undefined) codes.add(match[1]);
   }
   return codes;
 }

@@ -38,6 +38,7 @@ type Options = {
   readonly propositions?: ReadonlyArray<Record<string, string>>;
   readonly refusDeReset?: string;
   readonly propositionsEnPanne?: boolean;
+  readonly sovereign?: boolean;
 };
 
 async function monter(options: Options = {}) {
@@ -63,6 +64,7 @@ async function monter(options: Options = {}) {
       language="fr"
       deps={{ source: 'gateway', transport: t.transport }}
       portail={{ copier: async (texte) => void copies.push(texte) }}
+      sovereign={options.sovereign ?? false}
       onAnnounce={(texte) => annonces.push(texte)}
       onClose={() => {
         fermetures += 1;
@@ -181,5 +183,33 @@ describe('ce qui est affiché est ce qui part', () => {
     await mounter.click(copier ?? null);
 
     expect(copies).toEqual(['Alice-choisit-2026']);
+  });
+});
+
+describe('le motif et « Prévenir le membre » (audit 2026-10-04)', () => {
+  const corps = (calls: () => readonly { readonly body?: unknown; readonly path: string }[]) =>
+    calls().find((req) => pathOf(req as never).endsWith('/reset-password'))?.body as Record<string, unknown> | undefined;
+
+  test('le motif écrit et la case cochée partent avec le mot de passe', async () => {
+    const { host, calls } = await monter();
+    mounter.type(host, '[data-admin-password-motive]', 'Compte compromis signalé');
+    await mounter.click(host.querySelector<HTMLInputElement>('[data-admin-password-notify]'));
+    await mounter.click(appliquer(host));
+    expect(corps(calls)).toEqual({ newPassword: PROPOSITIONS.hard, reason: 'Compte compromis signalé', sendEmail: true });
+  });
+
+  test('un motif trop court se dit sous le champ et bloque l’application', async () => {
+    const { host, calls } = await monter();
+    mounter.type(host, '[data-admin-password-motive]', 'court');
+    expect(host.textContent).toContain('Au moins dix caractères');
+    expect(appliquer(host)?.disabled).toBe(true);
+    await mounter.click(appliquer(host));
+    expect(corps(calls)).toBeUndefined();
+  });
+
+  test('le rang souverain ne voit pas de champ de motif ; la case reste offerte', async () => {
+    const { host } = await monter({ sovereign: true });
+    expect(host.querySelector('[data-admin-password-motive]')).toBeNull();
+    expect(host.querySelector('[data-admin-password-notify]')).not.toBeNull();
   });
 });

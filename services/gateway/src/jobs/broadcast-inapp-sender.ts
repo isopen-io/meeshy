@@ -97,9 +97,18 @@ export class BroadcastInAppSenderJob {
         });
       }
 
+      // Aucune livraison réussie sur au moins un échec : la diffusion a ÉCHOUÉ,
+      // et son statut le dit (même règle que `BroadcastSenderJob`, audit
+      // 2026-10-04). Sinon le statut e-mail n'est pas touché.
+      const toutEchoue = tally.failed > 0 && tally.sent === 0;
       await this.prisma.adminBroadcast.update({
         where: { id: broadcastId },
-        data: { inAppSentCount: tally.sent, inAppFailedCount: tally.failed, inAppCompletedAt: new Date() },
+        data: {
+          inAppSentCount: tally.sent,
+          inAppFailedCount: tally.failed,
+          inAppCompletedAt: new Date(),
+          ...(toutEchoue ? { status: 'FAILED', errorMessage: `All ${tally.failed} in-app deliveries failed` } : {}),
+        },
       });
       logger.info(`In-app broadcast ${broadcastId} completed: ${tally.sent} delivered, ${tally.failed} failed, ${totalRecipients} targeted`);
     } catch (error) {
@@ -107,7 +116,8 @@ export class BroadcastInAppSenderJob {
       logger.error(`In-app broadcast job ${broadcastId} crashed: ${msg}`);
       await this.prisma.adminBroadcast.update({
         where: { id: broadcastId },
-        data: { inAppCompletedAt: new Date(), errorMessage: msg },
+        // Une panne du job est un ÉCHEC de la diffusion : le statut le dit.
+        data: { inAppCompletedAt: new Date(), errorMessage: msg, status: 'FAILED' },
       }).catch(() => {});
     }
   }

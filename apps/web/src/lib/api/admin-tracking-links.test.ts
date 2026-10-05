@@ -53,8 +53,9 @@ describe('decodeAdminTrackingLinkRow — la ligne de liste', () => {
       campaign: 'rentree-2026',
       source: 'newsletter',
       medium: 'email',
-      originalUrl: 'https://exemple.test/rentree?ref=meeshy',
-      shortUrl: 'https://m.meeshy.me/l/Ab3xYz',
+      originalUrl: 'https://exemple.test/rentree',
+      shortUrl: '/l/Ab3xYz',
+      fullUrl: 'https://meeshy.me/l/Ab3xYz',
       targetType: 'POST',
       target: { type: 'POST', id: OBJECT_ID(4), label: 'Awa Diop' },
       conversation: null,
@@ -66,6 +67,11 @@ describe('decodeAdminTrackingLinkRow — la ligne de liste', () => {
       lastClickedAt: '2026-09-30T11:40:00.000Z',
       createdAt: '2026-09-01T09:00:00.000Z',
     });
+  });
+
+  test('un ancien serveur sans `fullUrl` : null, jamais une adresse inventée', () => {
+    const { fullUrl: _omitted, ...old } = servedTrackingLink();
+    expect(decodeAdminTrackingLinkRow(old)?.fullUrl).toBeNull();
   });
 
   test('ne lit pas le jeton : l’adresse courte le porte déjà', () => {

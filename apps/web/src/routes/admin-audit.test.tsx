@@ -130,6 +130,15 @@ describe('la liste — nommée, jamais par identifiant', () => {
     expectNoRawIdentifiers(host);
   });
 
+  test('le membre concerné a sa colonne quand la passerelle le sert ; absent, un tiret — jamais « Système »', async () => {
+    const { deps } = scripted(() => page(ROWS));
+    const host = await open(deps);
+
+    expect([...host.querySelectorAll('th')].map((cell) => cell.textContent)).toContain('Membre concerné');
+    expect(host.querySelector(`[data-admin-row="${OBJECT_ID(1)}"] [data-admin-audit-subject]`)?.textContent).toContain('Jean Martin');
+    expect(host.querySelector(`[data-admin-row="${OBJECT_ID(11)}"] [data-admin-audit-subject]`)?.textContent).toBe('—');
+  });
+
   test('une lecture souveraine porte le badge « Lecture souveraine » ; un geste ordinaire non', async () => {
     const { deps } = scripted(() => page(ROWS));
     const host = await open(deps);
@@ -238,6 +247,7 @@ describe('tri, filtres et pagination — dans l’adresse, dans la liste blanche
       'Demande de contact',
       'Modèle de l’agent',
       'Agent',
+      'Barème de points',
     ]);
     expect(names('period')).toEqual(['Toute la période', '24 heures', '7 jours', '30 jours', '90 jours']);
   });
@@ -451,6 +461,48 @@ describe('la feuille de détail — tout ce qu’il faut pour comprendre un gest
     expect([...(row?.children ?? [])].map((cell) => cell.textContent)).toEqual(['Rôle', 'Membre', 'Modérateur']);
     expect(sheet.querySelector('caption')?.textContent).toBe('Changements consignés pour cette entrée');
     expect([...sheet.querySelectorAll('thead th')].map((cell) => cell.textContent)).toEqual(['Champ', 'Avant', 'Après']);
+  });
+
+  test('une décision de signalement : action retenue nommée, notes, modérateur nommé — jamais d’identifiant (audit 2026-10-04)', async () => {
+    const decision = servedAuditEntry({
+      action: 'ADMIN_REPORT_UPDATED',
+      target: { type: 'Report', id: OBJECT_ID(8), label: 'harassment', secondary: 'user' },
+      changes: [
+        { field: 'status', before: 'under_review', after: 'resolved' },
+        { field: 'actionTaken', before: null, after: 'warning_sent' },
+        { field: 'moderatorNotes', before: null, after: 'Avertissement envoyé au membre' },
+        { field: 'moderatorId', before: OBJECT_ID(9), after: OBJECT_ID(2) },
+      ],
+    });
+    const { deps } = scripted(() => page([decision]));
+    const host = await open(deps);
+    const sheet = await openDetail(host, OBJECT_ID(1));
+    const cells = (field: string) => [...(sheet.querySelector(`[data-admin-audit-change="${field}"]`)?.children ?? [])].map((cell) => cell.textContent);
+
+    expect(cells('actionTaken')[0]).toBe('Action retenue');
+    expect(cells('actionTaken')[2]).not.toContain('warning_sent');
+    expect(cells('moderatorNotes')).toEqual(['Notes du modérateur', 'Aucune valeur', 'Avertissement envoyé au membre']);
+    expect(cells('moderatorId')).toEqual(['Modérateur', 'Modérateur', 'Awa Diop']);
+    expect(sheet.querySelector('[data-admin-audit-changes]')?.textContent).not.toContain(OBJECT_ID(9));
+  });
+
+  test('le barème de points : un diff à plat dit par opération, le genre nommé « Barème de points »', async () => {
+    const scale = servedAuditEntry({
+      action: 'UPDATE_ENGAGEMENT_SCALE',
+      subject: null,
+      target: { type: 'EngagementScaleConfig', id: 'engagement-scale', label: null, secondary: null },
+      changes: [{ field: 'operations.content.text_message.points', before: '2', after: '3' }],
+    });
+    const { deps } = scripted(() => page([scale]));
+    const host = await open(deps);
+
+    expect(rowText(host, OBJECT_ID(1))).toContain('Barème de points');
+    const sheet = await openDetail(host, OBJECT_ID(1));
+    expect([...(sheet.querySelector('[data-admin-audit-change="operations.content.text_message.points"]')?.children ?? [])].map((cell) => cell.textContent)).toEqual([
+      'Points — Envoyer un message texte',
+      '2',
+      '3',
+    ]);
   });
 
   test('un booléen se dit en mots, un champ inconnu est humanisé, une valeur absente se dit', async () => {

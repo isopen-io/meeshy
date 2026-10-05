@@ -143,6 +143,9 @@ const f = {
   'admin.scale.abuse.heavyPoints': 'Heavy-weight threshold (points)',
   'admin.scale.abuse.clawbackHours': 'Clawback if deleted within (hours)',
   'admin.scale.abuse.unverifiedMaxPoints': 'Maximum for an unverified account',
+  /* ─── Barème : confirmation avant d’enregistrer (audit 2026-10-04) ─── */
+  'admin.scale.confirm.title': 'Save the points scale?',
+  'admin.scale.confirm.body': 'The new points apply to the next actions of all members. The change is recorded in the audit log, with what changed.',
 } satisfies AdminCatalogFragment<typeof fr>;
 
 export default f;

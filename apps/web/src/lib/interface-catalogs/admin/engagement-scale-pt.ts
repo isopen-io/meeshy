@@ -143,6 +143,9 @@ const f = {
   'admin.scale.abuse.heavyPoints': 'Limiar de peso alto (pontos)',
   'admin.scale.abuse.clawbackHours': 'Estorno se excluído em até (horas)',
   'admin.scale.abuse.unverifiedMaxPoints': 'Máximo para uma conta não verificada',
+  /* ─── Barème : confirmation avant d’enregistrer (audit 2026-10-04) ─── */
+  'admin.scale.confirm.title': 'Salvar a tabela de pontos?',
+  'admin.scale.confirm.body': 'Os novos pontos valem para as próximas ações de todos os membros. O ajuste fica registrado no registro de auditoria, com o que mudou.',
 } satisfies AdminCatalogFragment<typeof fr>;
 
 export default f;

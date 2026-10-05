@@ -59,6 +59,12 @@ export type AdminRankingUserRow = {
   readonly id: string;
   /** `null` : le compte n'existe plus — l'identifiant servi n'ouvre aucune fiche. */
   readonly account: { readonly username: string | null; readonly displayName: string | null; readonly avatar: string | null } | null;
+  /**
+   * Un participant ANONYME classé parmi les membres (`guest: true`, servi depuis le
+   * 2026-10-04) : son nom affiché, l'identifiant de sa participation — jamais un
+   * « compte supprimé ». `null` : pas un invité (ou un ancien serveur).
+   */
+  readonly guest: { readonly displayName: string | null } | null;
   readonly count: number;
   readonly lastActivity: string | null;
 };
@@ -171,7 +177,8 @@ function decodeUserRow(raw: Readonly<Record<string, unknown>>, id: string): Admi
   return {
     kind: 'users',
     id,
-    account: resolved ? { username, displayName, avatar: textOrNull(raw.avatar) } : null,
+    account: resolved && raw.guest !== true ? { username, displayName, avatar: textOrNull(raw.avatar) } : null,
+    guest: raw.guest === true ? { displayName } : null,
     count: asCount(raw.count),
     lastActivity: textOrNull(raw.lastActivity),
   };

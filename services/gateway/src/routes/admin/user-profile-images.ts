@@ -46,6 +46,7 @@ import { getCacheStore } from '../../services/CacheStore';
 import { calculateProfileCompletionRate } from '../../utils/profile-completion';
 import { unsetOrNull } from '../../utils/prisma-unset';
 import { validatePagination } from '../../utils/pagination';
+import { ADMIN_USER_FICHE_INCLUDE } from '../../services/admin/user-management.service';
 import { sendBadRequest, sendError, sendForbidden, sendInternalError, sendNotFound, sendPaginatedSuccess, sendSuccess } from '../../utils/response';
 import { logError } from '../../utils/logger.js';
 import { releaseParticipantAvatarSnapshots } from '../../services/participantAvatarSnapshots';
@@ -239,7 +240,9 @@ export function registerUserProfileImageRoutes(fastify: FastifyInstance, deps: D
         userAgent: request.headers['user-agent'],
       });
 
-      return sendSuccess(reply, sanitizationService.sanitizeUser(aJour as never, moi.role), {
+      // La fiche RELUE (avec `_count`), la forme de `GET /admin/users/:id`.
+      const relue = await fastify.prisma.user.findUnique({ where: { id: userId }, include: ADMIN_USER_FICHE_INCLUDE });
+      return sendSuccess(reply, sanitizationService.sanitizeUser((relue ?? aJour) as never, moi.role, { withAdminMetadata: true }), {
         message: 'Profile image updated',
       });
     } catch (error) {
