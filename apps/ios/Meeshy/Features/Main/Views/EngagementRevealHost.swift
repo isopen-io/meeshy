@@ -41,6 +41,8 @@ private struct RevealItem: Identifiable {
 struct EngagementRevealHost: ViewModifier {
     @ObservedObject var router: Router
     @State private var file = EngagementRevealQueue()
+    /// La carte du succès qu'on vient de célébrer (#7742) : le déroulé photo, ouvert PAR-DESSUS la révélation.
+    @State private var photo: GamePhotoSession?
 
     /// Un seul chemin fait avancer la file — le `set` de ce lien. `onContinue`
     /// y passe aussi (il pose `nil`), ce qui interdit le double avancement qui
@@ -102,8 +104,20 @@ struct EngagementRevealHost: ViewModifier {
                     onVoirProgression: {
                         router.push(.progression)
                         lien.wrappedValue = nil
+                    },
+                    onPhoto: { moment in
+                        photo = GamePhotoSession(
+                            moment: moment,
+                            notebook: GamePhotoNotebook.standard(userId: AuthManager.shared.currentUser?.id ?? "")
+                        )
                     }
                 )
+                .fullScreenCover(item: $photo) { session in
+                    GamePhotoFlowView(session: session) {
+                        session.close()
+                        photo = nil
+                    }
+                }
             }
     }
 }

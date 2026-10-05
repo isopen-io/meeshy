@@ -23,7 +23,8 @@ final class GameSourceGuardTests: XCTestCase {
     /// « La photo reste sur l'appareil tant qu'on ne la partage pas. » — le déroulé photo
     /// n'a aucun chemin vers le réseau : ni client d'API, ni session, ni téléversement.
     func test_thePhotoFlowNeverTouchesTheNetwork() throws {
-        let forbidden = ["URLSession", "APIClient", "TusUpload", "upload(", "MediaUpload", "StoryUpload", "multipart"]
+        let forbidden = ["URLSession", "APIClient", "TusUpload", "upload(", "MediaUpload", "StoryUpload", "multipart",
+                         "AffiliateService", "CacheCoordinator"]
         let files = try swiftFiles(under: "Meeshy/Features/Main/Game/Photo")
         XCTAssertGreaterThan(files.count, 6, "le balayage ne voit presque rien : le dossier a bougé")
         for file in files {

@@ -56,6 +56,10 @@ struct AchievementRevealView: View {
     /// consultation, où l'on VIENT du tableau de bord et où y « aller » n'aurait
     /// aucun sens.
     var onVoirProgression: (() -> Void)?
+    /// **La même carte se propose à la révélation d'un SUCCÈS** (#7742) : la carte 9:16 du moment photo,
+    /// avec le lien de parrainage. `nil` ⇒ pas d'offre (consultation, badge, série, niveau : seuls les
+    /// succès se photographient). Reçoit le moment, dont le titre est celui que la vue affiche.
+    var onPhoto: ((PhotoMoment) -> Void)?
 
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -171,6 +175,19 @@ struct AchievementRevealView: View {
             : String(localized: "reveal.close", defaultValue: "Fermer", bundle: .main)
     }
 
+    private var libellePhoto: String {
+        String(localized: "reveal.achievement.photo", defaultValue: "En faire une carte", bundle: .main)
+    }
+
+    /// Seul un succès OBTENU, célébré, se photographie.
+    private var momentPhoto: PhotoMoment? {
+        guard occasion.estCelebration, onPhoto != nil else { return nil }
+        switch reveal {
+        case .achievement, .composedAchievement: return GamePhotoMoments.achievement(id: reveal.id, title: titre)
+        case .badge, .streak, .level: return nil
+        }
+    }
+
     private var libelleProgression: String {
         String(localized: "reveal.continue", defaultValue: "Voir ma progression", bundle: .main)
     }
@@ -282,6 +299,20 @@ struct AchievementRevealView: View {
                         .background(Capsule().fill(teinte))
                 }
                 .buttonStyle(.plain)
+            }
+
+            if let moment = momentPhoto {
+                Button {
+                    HapticFeedback.light()
+                    onPhoto?(moment)
+                } label: {
+                    Label(libellePhoto, systemImage: "camera.fill")
+                        .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .semibold))
+                        .foregroundColor(teinte)
+                        .frame(maxWidth: .infinity, minHeight: 52)
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("reveal.achievement.photo")
             }
 
             // La fermeture. Pleine quand elle est SEULE (consultation), en

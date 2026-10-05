@@ -14,22 +14,26 @@ final class GamePhotoSessionTests: XCTestCase {
         let notebook: MockGamePhotoNotebook
         let library: MockGamePhotoLibrary
         let haptics: MockGameHaptics
+        let links: MockReferralLink
     }
 
     private let moment = GamePhotoMoments.rank(.voix, division: .ii)
 
-    private func makeRig(cameraFailure: CameraFailure? = nil) -> Rig {
+    private func makeRig(cameraFailure: CameraFailure? = nil, link: String? = nil,
+                         flame: ReferralCard.Flame? = nil) -> Rig {
         let camera = MockGamePhotoCamera()
         camera.startResult = cameraFailure
         let composer = MockGamePhotoComposer()
         let notebook = MockGamePhotoNotebook()
         let library = MockGamePhotoLibrary()
         let haptics = MockGameHaptics()
+        let links = MockReferralLink(link: link)
         let sut = GamePhotoSession(
             moment: moment, camera: camera, composer: composer, notebook: notebook,
-            library: library, haptics: haptics, now: { Date(timeIntervalSince1970: 1_790_000_000) }, strikeDuration: 0
+            library: library, haptics: haptics, now: { Date(timeIntervalSince1970: 1_790_000_000) }, strikeDuration: 0,
+            flame: flame, referralLinks: links
         )
-        return Rig(sut: sut, camera: camera, composer: composer, notebook: notebook, library: library, haptics: haptics)
+        return Rig(sut: sut, camera: camera, composer: composer, notebook: notebook, library: library, haptics: haptics, links: links)
     }
 
     func test_initial_isTheOffer() {
@@ -184,5 +188,72 @@ final class GamePhotoSessionTests: XCTestCase {
         XCTAssertNil(coordinator.active)
         XCTAssertGreaterThanOrEqual(rig.camera.stopCount, 1, "la caméra du déroulé refermé s'arrête")
         XCTAssertEqual(rig.sut.state, .done(deferred: false))
+    }
+
+    // MARK: - Le lien de parrainage et la Flamme (#7742)
+
+    private static let link = "https://meeshy.me/signup/affiliate/AMANI7"
+    private static let flame = ReferralCard.Flame(form: .braise, days: 23)
+
+    func test_withoutALink_theCardIsComposedWithoutABanner_andNothingTravelsAsText() async {
+        let rig = makeRig(link: nil)
+        await rig.sut.prepareReferral()
+        await rig.sut.chooseCard()
+        XCTAssertNil(rig.composer.composed.first?.referral)
+        XCTAssertNil(rig.sut.shareText)
+        XCTAssertEqual(rig.sut.shareItems(square: false).count, 1)
+    }
+
+    func test_aLinkReadBeforeTheShot_isOnTheComposedCard() async {
+        let rig = makeRig(link: Self.link, flame: Self.flame)
+        await rig.sut.prepareReferral()
+        await rig.sut.chooseCard()
+        XCTAssertEqual(rig.composer.composed.first?.referral, ReferralCard(link: Self.link, flame: Self.flame))
+    }
+
+    func test_aLinkThatArrivesAfterTheComposition_recomposesTheCard() async {
+        let rig = makeRig(link: Self.link)
+        await rig.sut.chooseCard()
+        XCTAssertNil(rig.composer.composed.last?.referral)
+        await rig.sut.prepareReferral()
+        XCTAssertEqual(rig.composer.composed.count, 2)
+        XCTAssertEqual(rig.composer.composed.last?.referral?.link, Self.link)
+    }
+
+    func test_theLinkIsReadOnce_howeverManyTimesTheFlowAsks() async {
+        let rig = makeRig(link: Self.link)
+        await rig.sut.prepareReferral()
+        await rig.sut.prepareReferral()
+        XCTAssertEqual(rig.links.calls, 1)
+    }
+
+    func test_theShareCarriesTheImage_thenTheLinkAsText() async {
+        let rig = makeRig(link: Self.link)
+        await rig.sut.prepareReferral()
+        await rig.sut.chooseCard()
+        let items = rig.sut.shareItems(square: true)
+        XCTAssertEqual(items.count, 2)
+        XCTAssertTrue(items[0] is UIImage)
+        XCTAssertTrue((items[1] as? String)?.contains(Self.link) == true)
+    }
+
+    func test_theFlameCanBeTakenOffTheCard_andTheCardIsRecomposed() async {
+        let rig = makeRig(link: Self.link, flame: Self.flame)
+        await rig.sut.prepareReferral()
+        await rig.sut.chooseCard()
+        XCTAssertTrue(rig.sut.hasFlame)
+        rig.sut.setFlameOnCard(false)
+        XCTAssertNil(rig.sut.referral?.flame)
+        XCTAssertNil(rig.composer.composed.last?.referral?.flame)
+        XCTAssertEqual(rig.composer.composed.last?.referral?.link, Self.link)
+        rig.sut.setFlameOnCard(true)
+        XCTAssertEqual(rig.sut.referral?.flame, Self.flame)
+    }
+
+    func test_withoutAFlame_theBannerCarriesTheLinkAlone() async {
+        let rig = makeRig(link: Self.link, flame: nil)
+        await rig.sut.prepareReferral()
+        XCTAssertFalse(rig.sut.hasFlame)
+        XCTAssertNil(rig.sut.referral?.flame)
     }
 }

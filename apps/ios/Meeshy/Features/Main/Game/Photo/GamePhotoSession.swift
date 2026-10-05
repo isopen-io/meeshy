@@ -25,6 +25,10 @@ struct PhotoNotice: Equatable {
 ///     partager, ou garder au carnet.
 ///  5. « Plus tard » laisse le moment en attente 7 jours dans le carnet.
 ///
+/// La carte porte le lien de parrainage court de l'utilisateur et sa Flamme (#7742, `ReferralCard`) ;
+/// le partage transmet aussi le lien en texte. Le lien se lit PENDANT la proposition (cache d'abord) ;
+/// arrivé après la composition, il recompose la carte. Sans lien, la carte part sans lui.
+///
 /// L'étape vit dans `GamePhotoFlow` (réducteur pur) ; cette classe y branche les
 /// effets : la caméra, la composition, le carnet, la photothèque, le haptique.
 /// Chacun est INJECTÉ (`.shared` / réel par défaut) pour que le déroulé se teste
@@ -42,6 +46,10 @@ final class GamePhotoSession: ObservableObject {
     @Published private(set) var notice: PhotoNotice?
     /// Le moment a été reporté (« plus tard ») : l'hôte referme la proposition.
     private(set) var wasDeferred = false
+    /// Ce que la carte porte en plus du moment (le bandeau de parrainage) ; `nil` tant qu'aucun lien n'est lu.
+    @Published private(set) var referral: ReferralCard?
+    /// La Flamme se montre sur la carte tant que l'utilisateur ne l'a pas retirée (conformité H-2).
+    @Published private(set) var flameOnCard = true
 
     let moment: PhotoMoment
     let camera: GamePhotoCameraProviding
@@ -52,6 +60,15 @@ final class GamePhotoSession: ObservableObject {
     private let haptics: GameHapticsProviding
     private let now: () -> Date
     private let strikeDuration: UInt64
+    private let flame: ReferralCard.Flame?
+    private let referralLinks: ReferralLinkProviding
+    private var referralLink: String?
+    private var preparingReferral = false
+    private var composedSource: UIImage?
+    private var composedMode: PhotoMode?
+
+    /// La Flamme de l'utilisateur, quand elle brûle : c'est ce que le bandeau peut montrer.
+    var hasFlame: Bool { flame != nil }
 
     init(
         moment: PhotoMoment,
@@ -61,7 +78,9 @@ final class GamePhotoSession: ObservableObject {
         library: PhotoLibrarySaving = PhotoLibraryManagerAdapter(),
         haptics: GameHapticsProviding = GameHaptics.shared,
         now: @escaping () -> Date = { Date() },
-        strikeDuration: UInt64 = 1_200_000_000
+        strikeDuration: UInt64 = 1_200_000_000,
+        flame: ReferralCard.Flame? = nil,
+        referralLinks: ReferralLinkProviding = ReferralLinkService.shared
     ) {
         self.moment = moment
         self.camera = camera
@@ -71,10 +90,59 @@ final class GamePhotoSession: ObservableObject {
         self.haptics = haptics
         self.now = now
         self.strikeDuration = strikeDuration
+        self.flame = flame
+        self.referralLinks = referralLinks
     }
 
     private func send(_ event: PhotoFlowEvent) {
         state = GamePhotoFlow.reduce(state, event)
+    }
+
+    // MARK: - Le lien de parrainage (#7742)
+
+    /// Lit le lien de l'utilisateur (cache d'abord) et le pose sur la carte. Un lien qui arrive quand la
+    /// carte est déjà composée la recompose : l'aperçu montré est toujours celui qui partira.
+    func prepareReferral() async {
+        guard referralLink == nil, !preparingReferral else { return }
+        preparingReferral = true
+        defer { preparingReferral = false }
+        guard let link = await referralLinks.shareableLink() else { return }
+        referralLink = link
+        refreshCard()
+        recompose()
+    }
+
+    /// « Ma Flamme sur la carte » : l'utilisateur la retire ou la remet, et la carte composée suit.
+    func setFlameOnCard(_ shown: Bool) {
+        guard flameOnCard != shown else { return }
+        flameOnCard = shown
+        refreshCard()
+        recompose()
+    }
+
+    private func refreshCard() {
+        referral = referralLink.map { ReferralCard(link: $0, flame: flameOnCard ? flame : nil) }
+    }
+
+    /// Le texte qui part avec l'image : le lien en clair, pour qu'il se copie. `nil` sans lien.
+    var shareText: String? {
+        referral.map {
+            String(localized: "game.referral.share_text", defaultValue: "Rejoins-moi sur Meeshy : \($0.link)", bundle: .main)
+        }
+    }
+
+    /// Ce que la feuille de partage reçoit : l'image du format choisi, puis le lien en texte quand il existe.
+    func shareItems(square: Bool) -> [Any] {
+        guard let composed else { return [] }
+        let image: Any = square ? composed.square : composed.story
+        return [image] + (shareText.map { [$0 as Any] } ?? [])
+    }
+
+    private func recompose() {
+        guard case .result = state, let mode = composedMode else { return }
+        if let result = composer.compose(moment: moment, source: composedSource, mode: mode, date: now(), referral: referral) {
+            composed = result
+        }
     }
 
     // MARK: - Étape 1 : la proposition
@@ -140,7 +208,9 @@ final class GamePhotoSession: ObservableObject {
         } else {
             strike = 1
         }
-        guard let result = composer.compose(moment: moment, source: source, mode: mode, date: now()) else {
+        composedSource = source
+        composedMode = mode
+        guard let result = composer.compose(moment: moment, source: source, mode: mode, date: now(), referral: referral) else {
             send(.composeFailed)
             return
         }
