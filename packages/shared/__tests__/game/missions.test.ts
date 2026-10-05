@@ -6,6 +6,9 @@
 
 import { describe, it, expect } from 'vitest';
 import {
+  MISSIONS_MIN_LEVEL,
+  MISSION_REROLL_PER_DAY,
+  MISSION_REROLL_PRICE,
   MISSION_DIFFICULTIES,
   MISSION_TEMPLATES,
   drawDailyMissions,
@@ -196,5 +199,13 @@ describe('changer une mission', () => {
 
   it('rend null pour une position qui n\'existe pas', () => {
     expect(reroll(7)).toBeNull();
+  });
+});
+
+describe('les règles autour des missions', () => {
+  it('ouvrent au niveau 5, et un changement coûte une Meesh, une fois par jour', () => {
+    expect(MISSIONS_MIN_LEVEL).toBe(5);
+    expect(MISSION_REROLL_PRICE).toBe(1);
+    expect(MISSION_REROLL_PER_DAY).toBe(1);
   });
 });

@@ -142,7 +142,11 @@ export function canRelight(params: {
   return { allowed: true, price: FLAME_RELIGHT_PRICE };
 }
 
-/** La série d'avant la rupture, à poursuivre par le geste du jour. */
+/**
+ * La série d'avant la rupture, à poursuivre par le geste du jour. Si le joueur a
+ * déjà agi aujourd'hui (sa série repartie à 1), la passerelle rejoue
+ * `advanceFlame` sur ce résultat pour que le geste du jour s'y ajoute.
+ */
 export const relightFlame = (params: { readonly today: string; readonly streakBeforeBreak: number }) => ({
   streak: days0(params.streakBeforeBreak),
   lastActiveDay: addDays(params.today, -1),

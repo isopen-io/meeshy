@@ -9,3 +9,4 @@ export * from './boosts.js';
 export * from './missions.js';
 export * from './chest.js';
 export * from './guide.js';
+export * from './game-block.js';

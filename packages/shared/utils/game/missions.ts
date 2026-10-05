@@ -101,6 +101,12 @@ export const MISSION_TEMPLATES: readonly MissionTemplate[] = [
   template('gold-reply-conversations', 'gold', 'reply-distinct-conversations', 8),
 ];
 
+/** Les missions du jour s'ouvrent au niveau 5. */
+export const MISSIONS_MIN_LEVEL = 5;
+/** Changer une mission : une Meesh, une fois par jour, même difficulté. */
+export const MISSION_REROLL_PRICE = 1;
+export const MISSION_REROLL_PER_DAY = 1;
+
 /** Niveau ou nombre de Meeshes gardées qui ouvre la mission d'Or. */
 export const GOLD_MISSION_MIN_LEVEL = 50;
 export const GOLD_MISSION_MIN_TREASURY = 50;
