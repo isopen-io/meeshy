@@ -664,8 +664,8 @@ describe('broadcastRoutes', () => {
       const res = await app.inject({ method: 'POST', url: `/${VALID_ID}/preview` });
       expect(res.statusCode).toBe(200);
       const whereArg = mockPrisma.user.count.mock.calls[0][0].where;
-      expect(whereArg.OR).toBeDefined();
-      expect(Array.isArray(whereArg.OR)).toBe(true);
+      expect(whereArg.lastActiveAt?.lt).toBeInstanceOf(Date);
+      expect(whereArg.OR).toBeUndefined();
     });
 
     it('applies activityStatus=new filter (registered in last 7 days)', async () => {
@@ -1190,7 +1190,7 @@ describe('adminPostRoutes', () => {
       const res = await app.inject({ method: 'GET', url: '/posts' });
       expect(res.statusCode).toBe(200);
       const whereArg = mockPrisma.post.findMany.mock.calls[0][0].where;
-      expect(whereArg.deletedAt).toBeNull();
+      expect(whereArg.deletedAt).toEqual({ isSet: false }); // NOT_DELETED — leçon 318
     });
 
     it('filters non-deleted posts when isDeleted=false', async () => {
@@ -1199,7 +1199,7 @@ describe('adminPostRoutes', () => {
       const res = await app.inject({ method: 'GET', url: '/posts?isDeleted=false' });
       expect(res.statusCode).toBe(200);
       const whereArg = mockPrisma.post.findMany.mock.calls[0][0].where;
-      expect(whereArg.deletedAt).toBeNull();
+      expect(whereArg.deletedAt).toEqual({ isSet: false });
     });
 
     it('applies search filter', async () => {
@@ -1374,7 +1374,7 @@ describe('adminPostRoutes', () => {
     // The DELETE route defines a JSON body schema in Fastify, so Fastify 5
     // requires either a JSON body or content-type header for body parsing.
     // Use `headers` + empty payload to satisfy the schema validator.
-    const deleteInject = (app: FastifyInstance, postId: string, payload: Record<string, unknown> = {}) =>
+    const deleteInject = (app: FastifyInstance, postId: string, payload: Record<string, unknown> = { reason: 'Contenu signalé' }) =>
       app.inject({
         method: 'DELETE',
         url: `/posts/${postId}`,

@@ -267,18 +267,13 @@ export const callersIn = (contents, nsNames) => {
 // n'est pas morte), et ce script ne balaie que `apps/web` (legacy gelé) et
 // `packages/shared` — pas `apps/web-v2`. Même forme que
 // `posts.byPostIdTranslate`, déjà sans appelant ici pour la même raison.
-// 277 → 278 (#6822) : `admin.usersByUserIdRestore`
-// (`POST /admin/users/:userId/restore`, l'inverse du soft-delete). Morte à la
-// naissance DANS CE COMPTAGE, même raison que les dizaines d'autres entrées
-// `admin.usersByUserId*` déjà mortes ci-dessus : ce script ne balaie pas
-// `apps/web-v2`, seul client de l'administration — voir la note sur
-// `posts.mediaByMediaIdCaptionTranslate`. `restoreUser` existait côté
-// service sans aucun appelant AVANT cette issue ; il en gagne un ici (la
-// route), la console n'ayant pas encore d'action « restaurer ».
+// 277 → 278 (#6822) : une entrée d'administration née sans appelant ici —
+// elle l'a regagné depuis (voir 276 → 275 ci-dessous) ; l'historique git de ce
+// fichier garde la note d'origine.
 // 278 → 279 (#6861) : `admin.conversations`
 // (`GET /admin/conversations`, le listing de l'instance au rang
 // d'administration). Morte à la naissance DANS CE COMPTAGE, même raison que
-// `admin.usersByUserIdRestore` juste au-dessus : ce script ne balaie que
+// l'entrée #6822 juste au-dessus : ce script ne balaie que
 // `apps/web` (legacy gelé) et `packages/shared`, jamais `apps/web-v2` — seul
 // client de l'administration, et qui appelle cette route par son chemin
 // littéral (`lib/api/admin-conversations.ts`, #6862).

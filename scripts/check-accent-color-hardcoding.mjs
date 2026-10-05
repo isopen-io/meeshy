@@ -237,7 +237,15 @@
 // `CountryPicker.swift`, `LanguageSelector.swift`, `ConversationListHelpers.swift`,
 // …) sont antérieurs au lot du jeu (#9373 → #9383) et n'y contribuent pas —
 // vérifié par `git log` sur chacun.
-const REFERENCE_LITERAL_COLOR_COUNT = 110;
+//
+// 2026-10-05 (#9406) — littéraux 110 → 112 : `GameSurface.swift`
+// (`GameColors.warmText` / `.goodText`), deux variantes de CONTRASTE pour des
+// couleurs SÉMANTIQUES (avertissement, réussite) — `MeeshyColors.warning` /
+// `.success`, pensées pour fond sombre, tombent sous le seuil WCAG 4,5:1 sur
+// fond clair (mesuré : 1,6:1). Rien à voir avec `accentColor`/`colorPalette` ;
+// « Semantic colors (error, success) remain static via MeeshyColors »
+// (CLAUDE.md racine, § Conversation Accent Color).
+const REFERENCE_LITERAL_COLOR_COUNT = 112;
 const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 445;
 
 import { readFileSync, readdirSync, statSync, realpathSync } from 'node:fs';

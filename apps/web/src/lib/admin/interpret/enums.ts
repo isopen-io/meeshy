@@ -83,6 +83,24 @@ export const ENUM_FAMILIES = {
   activityBucket: { '0': S, '1': B, '2': I, '3': N },
   friendStatus: { pending: W, accepted: S, rejected: N, blocked: D },
   presence: { online: S, away: W, idle: N, offline: N, unknown: withExplain(N) },
+  /** Le motif d'un verrou de compte (`User.lockedReason`) — écrit par `LoginAttemptService` et `PasswordResetService`. */
+  lockReason: { FAILED_LOGIN: withExplain(W), PASSWORD_RESET_ABUSE: withExplain(D) },
+  /** Pourquoi une session s'est fermée (`UserSession.invalidatedReason`) — les codes écrits par la passerelle. */
+  sessionEnd: {
+    logout: N,
+    expired: N,
+    admin_revoke: W,
+    user_revoked: N,
+    user_revoked_all: N,
+    email_revoke_all: N,
+    password_reset: W,
+    password_changed: N,
+    deactivation: W,
+    deletion: D,
+    security_breach: D,
+    security_concern: W,
+    session_limit_exceeded: N,
+  },
 } as const satisfies Readonly<Record<string, Table>>;
 
 export type AdminEnumFamily = keyof typeof ENUM_FAMILIES;
@@ -175,6 +193,9 @@ export const interpretCallQuality = interpreter('quality');
 export const interpretTranslationQuality = interpreter('quality');
 export const interpretFriendStatus = interpreter('friendStatus');
 export const interpretPresence = interpreter('presence');
+export const interpretLockReason = interpreter('lockReason');
+/** `password reset` est écrit avec une ESPACE par `UserManagementService` : le code se lit espaces ou tirets bas confondus. */
+export const interpretSessionEnd: Interpreter = (code, language) => interpretEnum('sessionEnd', code?.trim().replace(/\s+/g, '_'), language);
 
 /** Par POSITION (0 à 3) : la passerelle sert les tranches d'activité dans un ordre fixe, avec des libellés français que l'on ignore. */
 export const interpretActivityBucket = (index: number, language: AdminLanguage): Interpreted =>

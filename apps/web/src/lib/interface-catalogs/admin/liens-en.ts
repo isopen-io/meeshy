@@ -163,7 +163,7 @@ const f = {
   'admin.tracking.list.onCreator': 'Links created by {name}',
   'admin.tracking.list.onCreatorGeneric': 'Links created by a single member',
   'admin.tracking.list.onCreatorReset': 'See all links',
-  'admin.tracking.search.label': 'Search by name, campaign or address',
+  'admin.tracking.search.label': 'Search by name, campaign or token',
   'admin.tracking.filter.state': 'State',
   'admin.tracking.filter.active': 'Active',
   'admin.tracking.filter.inactive': 'Deactivated',
@@ -250,6 +250,20 @@ const f = {
   'admin.tracking.confirm.motive': 'Reason (optional, recorded in the audit log)',
   'admin.tracking.done.deactivated': 'Tracking link deactivated',
   'admin.tracking.done.reactivated': 'Tracking link reactivated',
+  /* ─── Lien de partage : fiche en cartes (lot Échanges et contenus, 2026-10-05) ─── */
+  'admin.shareLink.cards.title': 'Details, by section',
+  'admin.shareLink.card.outOf': '{count} of {total}',
+  'admin.shareLink.card.allowed': 'Allowed',
+  'admin.shareLink.card.required': 'Required',
+  'admin.shareLink.card.present': 'Present among recent ones',
+  /* ─── Lien de suivi : fiche en cartes, adresse absolue, valeurs génériques (lot Modération, croissance, plateforme, 2026-10-05) ─── */
+  'admin.tracking.cards.title': 'The link, section by section',
+  'admin.tracking.card.share': 'To share: {address}',
+  'admin.tracking.card.countries': 'Countries',
+  'admin.tracking.card.recent': 'Clicks listed',
+  'admin.tracking.card.lastFrom': 'Most recent: {place}',
+  'admin.tracking.dest.original.redacted': 'It is shown without its parameters (anything after “?” or “#”): the copy does not carry them either.',
+  'admin.tracking.value.other': 'Other',
 } satisfies AdminCatalogFragment<typeof fr>;
 
 export default f;

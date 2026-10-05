@@ -140,7 +140,10 @@ async function confirm(written?: string) {
 
 describe('déverrouiller le compte', () => {
   test('n’est proposé que tant que le verrou est FUTUR', async () => {
-    const future = await open(member({ lockedUntil: FUTURE }));
+    const future = await open(member({ lockedUntil: FUTURE, lockedReason: 'FAILED_LOGIN' }));
+    /* Le motif est un CODE : il se lit en mots, jamais `FAILED_LOGIN` (audit 2026-10-04). */
+    expect(textOf(future.host)).toContain('Trop d’essais de connexion');
+    expect(textOf(future.host)).not.toContain('FAILED_LOGIN');
     expect(action(future.host, 'unlock')).not.toBeNull();
     expect(textOf(future.host)).toContain('Verrouillé jusqu’au');
     mounter.unmountAll();
@@ -170,7 +173,8 @@ describe('déverrouiller le compte', () => {
   });
 
   test('un motif écrit part dans la trace', async () => {
-    const { host, calls } = await open(member({ lockedUntil: FUTURE }), { replies: [patch('security', () => ({ ok: true, data: served() }))] });
+    /* Un ADMIN : le rang souverain n'écrit pas de motif (spec 2026-10-04 § 4). */
+    const { host, calls } = await open(member({ lockedUntil: FUTURE }), { identity: ADMIN, replies: [patch('security', () => ({ ok: true, data: served() }))] });
 
     await ask(host, 'unlock');
     await confirm('Demande du membre par téléphone');
@@ -220,7 +224,7 @@ describe('retirer la double authentification', () => {
   });
 
   test('le motif est OBLIGATOIRE (dix caractères) ; le corps envoyé est { twoFactorEnabled: false, reason }', async () => {
-    const { host, calls } = await open(armed(), { replies: [patch('security', () => ({ ok: true, data: served({ twoFactorEnabledAt: null }) }))] });
+    const { host, calls } = await open(armed(), { identity: ADMIN, replies: [patch('security', () => ({ ok: true, data: served({ twoFactorEnabledAt: null }) }))] });
 
     await ask(host, 'remove-two-factor');
     expect(confirmButton()?.disabled).toBe(true);
@@ -231,6 +235,18 @@ describe('retirer la double authentification', () => {
 
     expect(calls().find((request) => request.method === 'PATCH')?.body).toEqual({ twoFactorEnabled: false, reason: 'Appareil perdu, identité vérifiée' });
     expect(cached()?.twoFactorEnabled).toBe(false);
+  });
+});
+
+describe('le rang souverain retire la double authentification sans motif (spec 2026-10-04 § 4)', () => {
+  test('aucun champ ; le corps envoyé est { twoFactorEnabled: false }', async () => {
+    const { host, calls } = await open(member({ twoFactorEnabledAt: '2026-05-01T00:00:00.000Z' }), {
+      replies: [patch('security', () => ({ ok: true, data: served({ twoFactorEnabledAt: null }) }))],
+    });
+    await ask(host, 'remove-two-factor');
+    expect(document.querySelector('[data-admin-motive]')).toBeNull();
+    await confirm();
+    expect(calls().find((request) => request.method === 'PATCH')?.body).toEqual({ twoFactorEnabled: false });
   });
 });
 
@@ -259,7 +275,7 @@ describe('poser ou retirer une preuve', () => {
     expect(action(without.host, 'verify-phone')).toBeNull();
     mounter.unmountAll();
 
-    const { host, calls } = await open(member({ phoneNumber: '+33612345678' }), { replies: [patch('verifications', () => ({ ok: true, data: served({ phoneNumber: '+33612345678' }) }))] });
+    const { host, calls } = await open(member({ phoneNumber: '+33612345678' }), { identity: ADMIN, replies: [patch('verifications', () => ({ ok: true, data: served({ phoneNumber: '+33612345678' }) }))] });
     await ask(host, 'verify-phone');
     await confirm('Appel de contrôle effectué');
     expect(calls().find((request) => request.method === 'PATCH')?.body).toEqual({ phoneVerified: true, reason: 'Appel de contrôle effectué' });
@@ -283,7 +299,7 @@ describe('poser ou retirer une preuve', () => {
   });
 });
 
-describe('les consentements — le rang souverain seulement, motif écrit de dix caractères', () => {
+describe('les consentements — le rang souverain seulement, sans motif à écrire', () => {
   test('un ADMIN ne les voit pas ; le créateur les voit, avec l’état de chacun', async () => {
     const admin = await open(member(), { identity: ADMIN });
     expect(admin.host.querySelector('[data-admin-security="consents"]')).toBeNull();
@@ -301,16 +317,17 @@ describe('les consentements — le rang souverain seulement, motif écrit de dix
     expect(host.querySelector('[data-admin-security="consents"]')).toBeNull();
   });
 
-  test('poser : motif obligatoire, corps { voiceProfile: true, reason }, annonce, détail remplacé', async () => {
+  test('poser : aucun champ de motif (rang souverain, spec 2026-10-04 § 4), corps { voiceProfile: true }, annonce, détail remplacé', async () => {
     const { host, calls, announcements } = await open(member(), {
       replies: [patch('consents', () => ({ ok: true, data: served({ adminMetadata: { ...METADATA, voiceProfileConsentAt: '2026-09-30T12:00:00.000Z' } }) }))],
     });
 
     await ask(host, 'grant-consent-voiceProfile');
-    expect(confirmButton()?.disabled).toBe(true);
-    await confirm('Consentement recueilli par écrit');
+    expect(document.querySelector('[data-admin-motive]')).toBeNull();
+    expect(confirmButton()?.disabled).toBe(false);
+    await confirm();
 
-    expect(calls().find((request) => request.method === 'PATCH')?.body).toEqual({ voiceProfile: true, reason: 'Consentement recueilli par écrit' });
+    expect(calls().find((request) => request.method === 'PATCH')?.body).toEqual({ voiceProfile: true });
     expect(announcements).toContain('Consentement mis à jour');
     expect(cached()?.adminMetadata?.voiceProfileConsentAt).toBe('2026-09-30T12:00:00.000Z');
     expect(action(host, 'revoke-consent-voiceProfile')).not.toBeNull();
@@ -320,9 +337,9 @@ describe('les consentements — le rang souverain seulement, motif écrit de dix
     const { host, calls } = await open(member(), { replies: [patch('consents', () => ({ ok: true, data: served() }))] });
 
     await ask(host, 'revoke-consent-voiceData');
-    await confirm('Retrait demandé par le membre');
+    await confirm();
 
-    expect(calls().find((request) => request.method === 'PATCH')?.body).toEqual({ voiceData: false, reason: 'Retrait demandé par le membre' });
+    expect(calls().find((request) => request.method === 'PATCH')?.body).toEqual({ voiceData: false });
   });
 });
 

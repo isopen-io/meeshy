@@ -51,6 +51,7 @@ type PrismaOpts = {
   messages?: AnyRecord[];
   messagesCount?: number;
   conversationExists?: boolean;
+  memberRemovals?: AnyRecord[];
 };
 
 function createMockPrisma(opts: PrismaOpts) {
@@ -97,6 +98,7 @@ function createMockPrisma(opts: PrismaOpts) {
     },
     adminAuditLog: {
       create: jest.fn(async (args: { data: AnyRecord }) => ({ id: 'audit-1', ...args.data })),
+      groupBy: jest.fn(async () => opts.memberRemovals ?? []),
     },
   } as unknown as PrismaClient;
 }
@@ -194,6 +196,69 @@ describe('GET /admin/users/:userId/conversations', () => {
 });
 
 describe('GET /admin/conversations/:conversationId/participants', () => {
+  // Le modèle Participant ne dit pas QUI a fait sortir un membre : le journal
+  // d'administration le dit. Une seule requête groupée pour la page entière.
+  it('sert removedByAdmin depuis AdminAuditLog, en une requête groupée (pas de N+1)', async () => {
+    const prisma = createMockPrisma({
+      participants: [
+        { id: 'pt1', userId: 'u1', isActive: true, leftAt: null, user: null },
+        { id: 'pt2', userId: 'u2', isActive: false, leftAt: new Date('2026-02-01T00:00:00.000Z'), user: null },
+        { id: 'pt3', userId: 'u3', isActive: false, leftAt: new Date('2026-02-01T00:00:00.000Z'), user: null },
+        // Retiré par l'administration, revenu, puis parti de lui-même : la trace est ANTÉRIEURE au départ.
+        { id: 'pt4', userId: 'u4', isActive: false, leftAt: new Date('2026-03-01T00:00:00.000Z'), user: null },
+      ],
+      memberRemovals: [
+        { userId: 'u2', _max: { createdAt: new Date('2026-02-01T00:00:00.050Z') } },
+        { userId: 'u4', _max: { createdAt: new Date('2026-02-01T00:00:00.050Z') } },
+      ],
+    });
+    const app = await buildApp(prisma, 'ADMIN');
+    const res = await app.inject({ method: 'GET', url: '/api/v1/admin/conversations/conv-1/participants', headers: { authorization: 'Bearer x' } });
+
+    expect(res.statusCode).toBe(200);
+    const byId = Object.fromEntries((res.json().data as AnyRecord[]).map((p) => [p.id, p.removedByAdmin]));
+    expect(byId).toEqual({ pt1: false, pt2: true, pt3: false, pt4: false });
+
+    const groupBy = (prisma as unknown as { adminAuditLog: { groupBy: jest.Mock } }).adminAuditLog.groupBy;
+    expect(groupBy).toHaveBeenCalledTimes(1);
+    expect(groupBy.mock.calls[0][0]).toMatchObject({
+      by: ['userId'],
+      where: {
+        action: 'ADMIN_CONVERSATION_MEMBER_REMOVED',
+        entity: 'Conversation',
+        entityId: 'conv-1',
+        userId: { in: ['u2', 'u3', 'u4'] },
+      },
+      _max: { createdAt: true },
+    });
+    await app.close();
+  });
+
+  it("n'interroge pas le journal quand aucun membre de la page n'est sorti", async () => {
+    const prisma = createMockPrisma({
+      participants: [{ id: 'pt1', userId: 'u1', isActive: true, leftAt: null, user: null }],
+    });
+    const app = await buildApp(prisma, 'ADMIN');
+    const res = await app.inject({ method: 'GET', url: '/api/v1/admin/conversations/conv-1/participants', headers: { authorization: 'Bearer x' } });
+    expect(res.json().data[0].removedByAdmin).toBe(false);
+    expect((prisma as unknown as { adminAuditLog: { groupBy: jest.Mock } }).adminAuditLog.groupBy).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('sert leftAt et bannedAt — un membre parti ou banni se dit, il ne se devine pas', async () => {
+    const prisma = createMockPrisma({
+      participants: [
+        { id: 'pt2', userId: 'u2', type: 'user', displayName: 'Bob', avatar: null, role: 'member', isActive: false, isOnline: false, joinedAt: '2026-01-01T00:00:00.000Z', leftAt: '2026-02-01T00:00:00.000Z', bannedAt: null, nickname: null, user: null },
+      ],
+    });
+    const app = await buildApp(prisma, 'ADMIN');
+    const res = await app.inject({ method: 'GET', url: '/api/v1/admin/conversations/conv-1/participants', headers: { authorization: 'Bearer x' } });
+    const select = ((prisma as unknown as { participant: { findMany: jest.Mock } }).participant.findMany.mock.calls[0][0] as { select: AnyRecord }).select;
+    expect(select).toMatchObject({ leftAt: true, bannedAt: true });
+    expect(res.json().data[0]).toMatchObject({ leftAt: '2026-02-01T00:00:00.000Z', bannedAt: null });
+    await app.close();
+  });
+
   it('returns 404 when the conversation does not exist', async () => {
     const app = await buildApp(createMockPrisma({ conversationExists: false }), 'ADMIN');
     const res = await app.inject({
@@ -478,8 +543,23 @@ describe('GET /admin/conversations/:conversationId/messages', () => {
     await app.close();
   });
 
-  it('refuse BIGBOSS sans motif — 400 au SCHÉMA, avant Prisma', async () => {
-    const app = await buildApp(createMockPrisma({}), 'BIGBOSS');
+  // Spec 2026-10-04 § 4 : le rang souverain n'a rien à justifier — la lecture
+  // a lieu sans motif, et laisse sa ligne d'audit quand même.
+  it('admet BIGBOSS sans motif — la lecture a lieu et reste tracée', async () => {
+    const prisma = createMockPrisma({ messages: [], messagesCount: 0 });
+    const app = await buildApp(prisma, 'BIGBOSS');
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/admin/conversations/conv-1/messages',
+      headers: { authorization: 'Bearer x' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect((prisma as unknown as { adminAuditLog: { create: jest.Mock } }).adminAuditLog.create).toHaveBeenCalledTimes(1);
+    await app.close();
+  });
+
+  it('refuse ADMIN sans motif — 400, avant Prisma', async () => {
+    const app = await buildApp(createMockPrisma({}), 'ADMIN');
     const res = await app.inject({
       method: 'GET',
       url: '/api/v1/admin/conversations/conv-1/messages',
@@ -746,9 +826,10 @@ describe('GET /admin/conversations/:conversationId/messages', () => {
     await app.close();
   });
 
-  it('ne trace RIEN quand le motif est refusé au schéma (400) — l\'audit ne suit qu\'une lecture réussie', async () => {
+  it('ne trace RIEN quand le motif est refusé (400) — l\'audit ne suit qu\'une lecture réussie', async () => {
     const prisma = createMockPrisma({ messages: messagesFixture(), messagesCount: 2 });
-    const app = await buildApp(prisma, 'BIGBOSS');
+    // ADMIN : le motif lui reste obligatoire (le rang souverain en est dispensé).
+    const app = await buildApp(prisma, 'ADMIN');
     await app.inject({
       method: 'GET',
       url: '/api/v1/admin/conversations/conv-1/messages',

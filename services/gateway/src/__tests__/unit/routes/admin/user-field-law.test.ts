@@ -123,7 +123,7 @@ describe('evaluerLoiDesChamps — fail-closed sur ce qu’aucune loi ne nomme', 
   });
 });
 
-describe('les consentements — rang souverain ET motif écrit', () => {
+describe('les consentements — rang souverain, motif facultatif pour lui (spec 2026-10-04 § 4)', () => {
   it.each(champsDeLaFamille('consentement'))('refuse %s à un ADMIN', (champ) => {
     // ADMIN porte `canUpdateUsers` : si la garde passait par la matrice, elle
     // l'admettrait. C'est le RANG qui la retient, et rien ne le délègue.
@@ -131,15 +131,19 @@ describe('les consentements — rang souverain ET motif écrit', () => {
     expect(refus?.cause).toBe('souverain');
   });
 
-  it.each(champsDeLaFamille('consentement'))('refuse %s à un souverain SANS motif', (champ) => {
-    const refus = evaluerLoiDesChamps({ role: UserRoleEnum.BIGBOSS, champs: [champ] });
-    expect(refus?.cause).toBe('motif');
+  it.each(champsDeLaFamille('consentement'))('admet %s à un souverain SANS motif', (champ) => {
+    expect(evaluerLoiDesChamps({ role: UserRoleEnum.BIGBOSS, champs: [champ] })).toBeNull();
   });
 
-  it.each(champsDeLaFamille('consentement'))('refuse %s pour un motif VIDE', (champ) => {
-    // Un motif fait d'espaces n'est pas un motif écrit : sans ce témoin, le
-    // client contourne l'exigence sans jamais rien écrire.
-    const refus = evaluerLoiDesChamps({ role: UserRoleEnum.BIGBOSS, champs: [champ], motif: '   ' });
+  it('un motif obligatoire reste exigé de tout rang non souverain', () => {
+    // Aucun champ d'aujourd'hui n'est à la fois ouvert aux non-souverains ET
+    // à motif obligatoire : la règle se prouve donc sur la fonction, avec une
+    // loi fabriquée par la carte elle-même.
+    const refus = evaluerLoiDesChamps({
+      role: UserRoleEnum.ADMIN,
+      champs: ['voiceData'],
+      lois: { voiceData: { famille: 'consentement', permission: 'canUpdateUsers', souverain: false, motifObligatoire: true } },
+    });
     expect(refus?.cause).toBe('motif');
   });
 

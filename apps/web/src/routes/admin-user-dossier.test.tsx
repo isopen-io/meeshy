@@ -88,6 +88,35 @@ describe('contacts', () => {
   });
 });
 
+describe('contacts — le compte servi, jamais la longueur d’une liste bornée (audit 2026-10-04)', () => {
+  const sent = Array.from({ length: 3 }, (_, index) => ({ id: `s${index}`, status: 'pending', createdAt: '2026-09-27T12:00:00.000Z', receiver: { id: OTHER, username: 'awa', displayName: 'Awa', avatar: '' } }));
+  const served = (totals: unknown) =>
+    at('/activity', { ok: true, data: { contacts: { sent, received: [] }, shareLinks: [], trackingLinks: [], affiliateTokens: [], ...(totals === undefined ? {} : { totals }) } });
+
+  test('le total servi se dit : « 3 demandes affichées sur 212 »', async () => {
+    const host = await open(
+      (deps) => <AdminUserContactsTab userId={USER} language="fr" deps={deps} now={() => NOW} />,
+      served({ shareLinks: 1204, trackingLinks: 0, affiliateTokens: 0, contactsSent: 150, contactsReceived: 62 }),
+    );
+    expect(textOf(host.querySelector('[data-admin-contacts-capped]'))).toContain('3 demandes affichées sur 212');
+    expect(textOf(host)).toContain('1 204 lien(s) de partage');
+  });
+
+  test('un ancien serveur sans totaux : les compteurs de la fiche prennent le relais', async () => {
+    const counts = { shareLinks: 0, trackingLinks: 0, affiliateTokens: 0, affiliateRelations: 0, referredRelations: 0, sentFriendRequests: 80, receivedFriendRequests: 20, participations: 0 };
+    const host = await open((deps) => <AdminUserContactsTab userId={USER} language="fr" deps={deps} now={() => NOW} fallback={counts} />, served(undefined));
+    expect(textOf(host.querySelector('[data-admin-contacts-capped]'))).toContain('sur 100');
+  });
+
+  test('une liste complète ne se dit pas tronquée', async () => {
+    const host = await open(
+      (deps) => <AdminUserContactsTab userId={USER} language="fr" deps={deps} now={() => NOW} />,
+      served({ shareLinks: 0, trackingLinks: 0, affiliateTokens: 0, contactsSent: 3, contactsReceived: 0 }),
+    );
+    expect(host.querySelector('[data-admin-contacts-capped]')).toBeNull();
+  });
+});
+
 describe('communautés', () => {
   test('nom, identifiant public en secondaire, rôle et état en mots, lien vers la communauté si la section est ouverte', async () => {
     const host = await open(
@@ -144,6 +173,78 @@ describe('profil vocal', () => {
     expect(text).toContain('Donné le');
     expect(text).toContain('Non donné');
     expectNoRawIdentifiers(host);
+  });
+});
+
+describe('profil vocal — qualité, analyse, publication (audit 2026-10-04)', () => {
+  test('la qualité se dit en pourcentage et en mot, l’analyse et la publication en dates', async () => {
+    const host = await open(
+      (deps) => <AdminUserVoiceTab userId={USER} language="fr" deps={deps} />,
+      at('/voice-profile', {
+        ok: true,
+        data: {
+          voiceProfile: { audioCount: 5, totalDurationMs: 65_000, embeddingModel: 'xtts-v2', qualityScore: 0.72, voiceAnalysisAt: '2026-08-03T12:00:00.000Z', voicePublicAt: null, createdAt: '2026-08-01T12:00:00.000Z' },
+          consents: {},
+        },
+      }),
+    );
+    expect(textOf(host.querySelector('[data-admin-meta="voice-quality"]'))).toContain('72 % · Excellente');
+    expect(textOf(host.querySelector('[data-admin-meta="voice-analysis"]'))).toContain('2026');
+    expect(textOf(host.querySelector('[data-admin-meta="voice-public"]'))).toContain('Non publique');
+    expectNoRawIdentifiers(host);
+  });
+});
+
+describe('sécurité — l’état réel d’une session, le lieu et l’appareil d’un événement (audit 2026-10-04)', () => {
+  test('une session à l’échéance passée se dit « Expirée » et ne se révoque pas ; une fermée dit pourquoi et quand ; la confiance se dit', async () => {
+    const host = await open(
+      (deps) => <AdminUserSecurityTab userId={USER} language="fr" deps={deps} now={() => NOW} onAnnounce={() => undefined} />,
+      at(
+        '/sessions',
+        page([
+          { id: 's-exp', browserName: 'Safari', isValid: true, isTrusted: true, expiresAt: '2026-09-01T12:00:00.000Z', lastActivityAt: '2026-08-30T11:00:00.000Z' },
+          { id: 's-closed', browserName: 'Chrome', isValid: false, invalidatedAt: '2026-09-20T12:00:00.000Z', invalidatedReason: 'password reset', lastActivityAt: '2026-09-19T11:00:00.000Z' },
+          { id: 's-ok', browserName: 'Firefox', isValid: true, expiresAt: '2026-10-20T12:00:00.000Z', lastActivityAt: '2026-09-30T11:00:00.000Z' },
+        ]),
+      ),
+      at('/security-events', page([{ id: 'e1', eventType: 'LOGIN_SUCCESS', severity: 'LOW', status: 'SUCCESS', geoLocation: 'Dakar, Sénégal', userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Safari/604.1', createdAt: '2026-09-30T10:00:00.000Z' }])),
+    );
+    const expired = host.querySelector('[data-admin-session="s-exp"]');
+    expect(expired?.querySelector('[data-admin-session-state]')?.getAttribute('data-admin-session-state')).toBe('expired');
+    expect(textOf(expired)).toContain('Expirée');
+    expect(textOf(expired)).not.toContain('Ouverte');
+    expect(textOf(expired)).toContain('Appareil de confiance');
+    expect(expired?.querySelector('[data-admin-action="revoke-session"]')).toBeNull();
+    const closed = textOf(host.querySelector('[data-admin-session="s-closed"]'));
+    expect(closed).toContain('Mot de passe réinitialisé');
+    expect(closed).toContain('Fermée le');
+    expect(textOf(host.querySelector('[data-admin-session="s-ok"]'))).toContain('Échéance le');
+    const events = textOf(host.querySelector('[data-admin-security]'));
+    expect(events).toContain('Dakar, Sénégal · Safari · iPhone / iPad');
+    expect(events).not.toContain('Mozilla');
+  });
+});
+
+describe('signalements — message disparu, conversation nommée, suite donnée (audit 2026-10-04)', () => {
+  test('« Message supprimé » n’est pas « texte réservé » ; la conversation est nommée ; le traitement se dit', async () => {
+    const host = await open(
+      (deps) => <AdminUserReportsTab userId={USER} language="fr" deps={deps} now={() => NOW} />,
+      at('/reports', page([{ id: 'r1', reportedType: 'user', reportType: 'spam', reason: 'pub', status: 'resolved', actionTaken: 'warning_sent', resolvedAt: '2026-09-29T12:00:00.000Z', createdAt: '2026-09-28T12:00:00.000Z' }])),
+      at(
+        '/reported-messages',
+        page([
+          { id: 'r2', reporterName: 'Ana', reportType: 'spam', status: 'pending', createdAt: '2026-09-27T12:00:00.000Z', message: null, conversation: null },
+          { id: 'r3', reporterName: 'Ana', reportType: 'spam', status: 'pending', createdAt: '2026-09-27T12:00:00.000Z', message: { id: 'm3', content: null }, conversation: { id: 'c1', title: 'Famille' } },
+        ]),
+      ),
+    );
+    expect(textOf(host.querySelector('[data-admin-report="r2"]'))).toContain('Message supprimé');
+    expect(textOf(host.querySelector('[data-admin-report="r2"]'))).not.toContain('réservé');
+    expect(textOf(host.querySelector('[data-admin-report="r3"]'))).toContain('texte réservé à la modération');
+    expect(textOf(host.querySelector('[data-admin-report="r3"]'))).toContain('Dans « Famille »');
+    const filed = textOf(host.querySelector('[data-admin-report="r1"]'));
+    expect(filed).toContain('Traité le');
+    expect(filed).not.toContain('warning_sent');
   });
 });
 

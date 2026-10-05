@@ -110,9 +110,21 @@ describe('decodeAdminHourlyActivity', () => {
         { hour: '21h', activity: 19 },
       ]),
     ).toEqual([
-      { startHour: 0, messages: 4 },
-      { startHour: 3, messages: 0 },
-      { startHour: 21, messages: 19 },
+      { startHour: 0, startsAt: null, messages: 4 },
+      { startHour: 3, startsAt: null, messages: 0 },
+      { startHour: 21, startsAt: null, messages: 19 },
+    ]);
+  });
+
+  test('`startsAt` (l’instant ISO du début, servi depuis le 2026-10-04) est lu ; illisible, il est absent', () => {
+    expect(
+      decodeAdminHourlyActivity([
+        { hour: '18h', activity: 2, startsAt: '2026-09-30T18:00:00.000Z' },
+        { hour: '21h', activity: 1, startsAt: 'hier soir' },
+      ]),
+    ).toEqual([
+      { startHour: 18, startsAt: '2026-09-30T18:00:00.000Z', messages: 2 },
+      { startHour: 21, startsAt: null, messages: 1 },
     ]);
   });
 
@@ -124,7 +136,7 @@ describe('decodeAdminHourlyActivity', () => {
         { hour: '06h', activity: 3 },
         { hour: '09h', activity: 'beaucoup' },
       ]),
-    ).toEqual([{ startHour: 6, messages: 3 }]);
+    ).toEqual([{ startHour: 6, startsAt: null, messages: 3 }]);
   });
 
   test('autre chose qu’un tableau est illisible', () => {

@@ -89,6 +89,9 @@ describe('decodeAdminPostRow — champ par champ, sans étalement', () => {
       restricted: false,
       excerpt: 'Bonne fête à toute la communauté !',
       mediaCount: 0,
+      thumbnailUrl: null,
+      originalLanguage: 'fr',
+      isEdited: false,
       moodEmoji: null,
       isPinned: true,
       deletedAt: null,
@@ -96,6 +99,9 @@ describe('decodeAdminPostRow — champ par champ, sans étalement', () => {
       likeCount: 12,
       commentCount: 3,
       viewCount: 240,
+      repostCount: 1,
+      shareCount: 0,
+      bookmarkCount: 2,
       createdAt: '2026-09-29T10:00:00.000Z',
       author: { id: ID(1), username: 'awa', displayName: 'Awa Diop', avatar: 'https://cdn.meeshy.me/a/awa.jpg' },
     });
@@ -127,6 +133,12 @@ describe('decodeAdminPostRow — champ par champ, sans étalement', () => {
     expect(JSON.stringify(decoded)).not.toContain('https://x/');
   });
 
+  test('la vignette du premier média qui en a une se garde (audit 2026-10-04) — jamais pour une audience restreinte', () => {
+    const media = [{ id: 'm1', fileUrl: 'https://x/1.mp4', thumbnailUrl: null }, { id: 'm2', fileUrl: 'https://x/2.jpg', thumbnailUrl: 'https://x/2-t.jpg' }];
+    expect(decodeAdminPostRow(row({ media }))?.thumbnailUrl).toBe('https://x/2-t.jpg');
+    expect(decodeAdminPostRow(row({ media, visibility: 'ONLY' }))?.thumbnailUrl).toBeNull();
+  });
+
   test('les compteurs absents valent zéro, un auteur absent vaut null', () => {
     const decoded = decodeAdminPostRow({ id: ID(2), type: 'STATUS', createdAt: '2026-09-29T10:00:00.000Z' });
     expect(decoded).toMatchObject({ likeCount: 0, commentCount: 0, viewCount: 0, author: null, isPinned: false, visibility: null });
@@ -150,6 +162,11 @@ describe('decodeAdminPostsStats — ce que la passerelle compte', () => {
       { id: ID(4), type: 'REEL', content: 'Un texte de tendance', likeCount: 50, commentCount: 9, repostCount: 2, viewCount: 900, shareCount: 1, bookmarkCount: 3, createdAt: '2026-09-28T09:00:00.000Z', author: author(1) },
     ],
   };
+
+  test('« en ligne » (`live`) se lit quand il est servi ; absent d’un ancien serveur, il vaut null — jamais zéro', () => {
+    expect(decodeAdminPostsStats({ ...served, live: 97 }).live).toBe(97);
+    expect(decodeAdminPostsStats(served).live).toBeNull();
+  });
 
   test('le total, les retirées et la répartition par type, du plus fréquent au moins fréquent', () => {
     const stats = decodeAdminPostsStats(served);
@@ -179,6 +196,10 @@ describe('decodeAdminPostsStats — ce que la passerelle compte', () => {
         type: 'REEL',
         likeCount: 50,
         commentCount: 9,
+        viewCount: 900,
+        repostCount: 2,
+        shareCount: 1,
+        createdAt: '2026-09-28T09:00:00.000Z',
         author: { id: ID(1), username: 'awa', displayName: 'Awa Diop', avatar: 'https://cdn.meeshy.me/a/awa.jpg' },
       },
     ]);
@@ -186,7 +207,7 @@ describe('decodeAdminPostsStats — ce que la passerelle compte', () => {
   });
 
   test('une charge illisible rend des statistiques vides, jamais une exception', () => {
-    expect(decodeAdminPostsStats(null)).toEqual({ total: 0, deleted: 0, byType: [], topAuthors: [], trending: [] });
+    expect(decodeAdminPostsStats(null)).toEqual({ total: 0, live: null, deleted: 0, byType: [], topAuthors: [], trending: [] });
   });
 });
 

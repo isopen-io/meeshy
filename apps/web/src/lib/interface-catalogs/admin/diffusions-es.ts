@@ -156,6 +156,20 @@ const f = {
   'admin.broadcast.done.sent': 'Envío de correos iniciado',
   'admin.broadcast.done.inApp': 'Publicación en la aplicación iniciada',
   'admin.broadcast.done.deleted': 'Difusión eliminada',
+  /* ─── Diffusion : fiche en cartes, deux canaux comptés, publication échouée, traductions manquantes (lot Modération, croissance, plateforme, 2026-10-05) ─── */
+  'admin.broadcast.cards.title': 'La difusión, por sección',
+  'admin.broadcast.card.translations': 'Traducciones',
+  'admin.broadcast.card.byEmail': 'Por correo',
+  'admin.broadcast.card.inApp': 'En la aplicación',
+  'admin.broadcast.translations.missing': 'Sin traducción: {languages} — estas cuentas leerán el texto original.',
+  'admin.broadcast.inApp.state.failed': 'Publicación fallida',
+  'admin.broadcast.inApp.error': 'Error devuelto',
+  'admin.broadcast.audience.inAppRecipients': 'Cuentas alcanzables en la aplicación',
+  'admin.broadcast.audience.emailRecipients': 'Cuentas alcanzables por correo (dirección verificada)',
+  'admin.broadcast.notice.inAppFailed': 'La publicación en la aplicación falló: {message}',
+  'admin.broadcast.notice.inAppFailedNoMessage': 'La publicación en la aplicación falló: no se entregó ninguna notificación.',
+  'admin.broadcast.notice.noEmailRecipients': 'Ninguna cuenta de esta audiencia tiene una dirección de correo verificada: el envío por correo no llegaría a nadie. La publicación en la aplicación sigue siendo posible.',
+  'admin.broadcast.confirm.inApp.bodyUncounted': 'Audiencia: {audience}. El número de cuentas alcanzables en la aplicación solo se cuenta en la preparación, y esta página ya no lo conserva. Cada una recibe una notificación en su centro de notificaciones, con un aviso push. No se puede retirar y solo se publica una vez.',
 } satisfies AdminCatalogFragment<typeof fr>;
 
 export default f;

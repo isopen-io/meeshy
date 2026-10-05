@@ -27,12 +27,14 @@ nonisolated extension CallMontageRenderer {
 
     static func layers(style: CallMontageStyle, person: CallFramePerson, caption: CallMontageCaption,
                        size: CGSize) -> CallLiveFrameScene? {
-        guard size.width >= 1, size.height >= 1, let toile = makeContext(size: size) else { return nil }
+        guard size.width >= 1, size.height >= 1,
+              let base = makeContext(size: CGSize(width: 1, height: size.height))?.userSpaceToDeviceSpaceTransform
+        else { return nil }
         let trou = CallMontageHole()
         let portrait = CallMontagePortrait(id: person.id, name: person.name, image: nil, hole: trou)
         guard let calque = render(style: style, portraits: [portrait], canvas: size, caption: caption),
               let chemin = trou.path else { return nil }
-        let versLaToile = trou.toCanvas.concatenating(toile.userSpaceToDeviceSpaceTransform.inverted())
+        let versLaToile = trou.toCanvas.concatenating(base.inverted())
         guard let dessus = CallLiveFrameCompositor.baked(calque),
               let masque = holeMask(path: chemin, inCanvas: versLaToile, size: size) else { return nil }
         let etendue = CGRect(origin: .zero, size: size)
@@ -46,10 +48,10 @@ nonisolated extension CallMontageRenderer {
         return CallLiveFrameScene(inputs: entrees, backdrop: vide, overlay: dessus, slots: [case_])
     }
 
-    /// Le ton de la case : `noir` désature sa photo (mode `.saturation` du CPU),
-    /// les autres la laissent en couleur.
+    /// Le ton de la case : `noir` réduit sa photo à sa luminance (le mode
+    /// `.saturation` du CPU sur un gris), les autres la laissent en couleur.
     static func tone(of style: CallMontageStyle) -> CallFrameTone {
-        style == .noir ? .mono : .color
+        style == .noir ? .luminosity : .color
     }
 
     /// La toile du peintre (y vers le bas) dans le repère de Core Image (y vers le haut).
@@ -57,17 +59,29 @@ nonisolated extension CallMontageRenderer {
         CGAffineTransform(a: 1, b: 0, c: 0, d: -1, tx: 0, ty: canvasHeight)
     }
 
-    /// Le chemin relevé, rempli en blanc sur la toile du peintre — le repère même
-    /// du calque, quelle que soit la convention du périphérique. `inCanvas` porte
-    /// le repère de la case dans celui de la toile.
+    /// La découpe déborde le trou de deux pixels : tout pixel que le bord antialiasé du
+    /// calque laisse en partie transparent — un coin d'arrondi compris — reçoit la vidéo
+    /// PLEINE, sans liseré translucide.
+    static let maskBleed: CGFloat = 2
+
+    /// Le chemin relevé, rempli en blanc sur la toile du peintre — le repère même du
+    /// calque, quelle que soit la convention du périphérique — dans un fragment borné
+    /// au trou : une photo pleine définition ne cuit jamais un masque de toute la toile.
     static func holeMask(path: CGPath, inCanvas: CGAffineTransform, size: CGSize) -> CIImage? {
-        guard let context = makeContext(size: size) else { return nil }
         var transformation = inCanvas
         guard let pose = path.copy(using: &transformation) else { return nil }
-        context.addPath(pose)
-        context.setFillColor(CGColor(gray: 1, alpha: 1))
-        context.fillPath()
-        guard let image = context.makeImage() else { return nil }
-        return CallLiveFrameCompositor.baked(image)
+        let marge = maskBleed * 2
+        let zone = pose.boundingBoxOfPath.insetBy(dx: -marge, dy: -marge).integral
+            .intersection(CGRect(origin: .zero, size: size))
+        guard !zone.isNull, zone.width >= 1, zone.height >= 1 else { return nil }
+        return CallLiveFrameCompositor.paintPatch(zone, canvasHeight: size.height) { context in
+            context.setFillColor(CGColor(gray: 1, alpha: 1))
+            context.addPath(pose)
+            context.fillPath()
+            context.setStrokeColor(CGColor(gray: 1, alpha: 1))
+            context.setLineWidth(maskBleed * 2)
+            context.addPath(pose)
+            context.strokePath()
+        }
     }
 }

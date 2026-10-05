@@ -18,8 +18,9 @@ import type { ApiResult } from './http';
  * porte aussi `_count.members`, qui compte les DÉPARTS — elle n'est jamais lue :
  * un décodeur qui s'en servirait afficherait des membres qui sont partis.
  *
- * Champ par champ, sans étalement ; ni la description ni la bannière ne sont
- * gardées (la liste ne les montre pas — la fiche, oui). Clés sous
+ * Champ par champ, sans étalement ; la bannière n'est pas gardée (la liste ne la
+ * montre pas — la fiche, oui). La description l'est (audit 2026-10-04) : la
+ * liste en montre un extrait sous le nom. Clés sous
  * `['admin', 'community', …]` : jamais persistées sur le disque.
  */
 export type AdminCommunityRow = {
@@ -27,6 +28,8 @@ export type AdminCommunityRow = {
   /** L'identifiant public lisible (« mshy_club-jazz ») : le SECONDAIRE du nom, jamais un ObjectId. */
   readonly identifier: string;
   readonly name: string;
+  /** `null` sans description (ou d'un serveur qui ne la sert pas). */
+  readonly description: string | null;
   readonly avatar: string | null;
   readonly isPrivate: boolean;
   readonly isActive: boolean;
@@ -49,6 +52,7 @@ export function decodeAdminCommunityRow(raw: unknown): AdminCommunityRow | null 
     id: community.id,
     identifier: asText(community.identifier),
     name: asText(community.name),
+    description: textOrNull(community.description),
     avatar: textOrNull(community.avatar),
     /* Une communauté est PRIVÉE par défaut (le schéma) : seul `false` explicite la dit publique. */
     isPrivate: community.isPrivate !== false,

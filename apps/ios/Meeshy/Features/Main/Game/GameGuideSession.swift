@@ -72,6 +72,7 @@ final class GameGuideSession: ObservableObject {
     private var seen = Set<String>()
     private var opened = false
     private var previous: GameBlock?
+    private var previousImpact: MintBadgeImpact?
 
     init(
         service: GameServiceProviding = GameService.shared,
@@ -86,11 +87,13 @@ final class GameGuideSession: ObservableObject {
     }
 
     /// Appelée à chaque lecture du bloc `game` (réseau, cache, geste réglé).
-    func observe(game: GameBlock, settled: Bool) {
+    func observe(game: GameBlock, settled: Bool, badgeImpact: MintBadgeImpact? = nil) {
         guard settled else { return }
         seen.formUnion(game.guideSeen)
         let before = previous
+        let impactBefore = previousImpact
         previous = game
+        previousImpact = badgeImpact
 
         guard opened else {
             opened = true
@@ -101,7 +104,7 @@ final class GameGuideSession: ObservableObject {
             return
         }
         guard let before else { return }
-        let events = GameGuideEvents.transitions(from: before, to: game)
+        let events = GameGuideEvents.transitions(from: before, to: game, badgeImpactBefore: impactBefore)
         guard !events.isEmpty, let moment = GameGuide.chooseMoment(events: events, seen: seen) else { return }
         if card?.step != nil { return }
         show(GameGuideCard.ofMoment(moment))

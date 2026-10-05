@@ -189,7 +189,36 @@ export type AdminConversationMember = {
   readonly isActive: boolean;
   readonly isOnline: boolean;
   readonly joinedAt: string | null;
+  /** Le surnom propre à CETTE conversation — `null` sans surnom. */
+  readonly nickname: string | null;
+  /**
+   * POURQUOI un membre n'est plus là (`d3c89781a5`) — `null` pour un membre actif.
+   *
+   * - `banned` : `bannedAt` posé (la date du bannissement) ;
+   * - `left` : `leftAt` posé — un départ daté, de lui-même OU par un retrait
+   *   (le retrait d'administration écrit aussi `leftAt`) ;
+   * - `removed` : les deux colonnes SERVIES et vides — une sortie que seul
+   *   `isActive: false` a écrite (les retraits d'hier) ;
+   * - `unknown` : un ancien serveur ne sert ni l'une ni l'autre — un champ
+   *   ABSENT n'est pas un champ nul (leçon 318), on n'en déduit rien.
+   */
+  readonly departure: AdminMemberDeparture | null;
 };
+
+export type AdminMemberDeparture = {
+  readonly kind: 'banned' | 'left' | 'removed' | 'unknown';
+  readonly at: string | null;
+};
+
+function departureOf(ligne: Readonly<Record<string, unknown>>): AdminMemberDeparture | null {
+  if (ligne.isActive !== false) return null;
+  const bannedAt = asTextOrNull(ligne.bannedAt);
+  if (bannedAt !== null) return { kind: 'banned', at: bannedAt };
+  const leftAt = asTextOrNull(ligne.leftAt);
+  if (leftAt !== null) return { kind: 'left', at: leftAt };
+  const served = 'leftAt' in ligne || 'bannedAt' in ligne;
+  return { kind: served ? 'removed' : 'unknown', at: null };
+}
 
 const KINDS: readonly AdminParticipantKind[] = ['user', 'anonymous', 'bot'];
 
@@ -209,6 +238,8 @@ export function decodeAdminConversationMember(raw: unknown): AdminConversationMe
     isActive: ligne.isActive !== false,
     isOnline: ligne.isOnline === true,
     joinedAt: asTextOrNull(ligne.joinedAt),
+    nickname: asTextOrNull(typeof ligne.nickname === 'string' ? ligne.nickname.trim() : null),
+    departure: departureOf(ligne),
   };
 }
 

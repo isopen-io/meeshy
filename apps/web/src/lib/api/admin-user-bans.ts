@@ -62,30 +62,39 @@ const decodeActor = (raw: unknown): AdminBanActor | null => {
 const asDateOrNull = (value: unknown): string | null =>
   typeof value === 'string' && value !== '' ? value : null;
 
+function decodeOneBan(entree: unknown): AdminBan | null {
+  const ligne = asRecord(entree);
+  if (ligne === null || typeof ligne.id !== 'string' || ligne.id === '') return null;
+
+  return {
+    id: ligne.id,
+    reason: asText(ligne.reason),
+    createdAt: asDateOrNull(ligne.createdAt),
+    expiresAt: asDateOrNull(ligne.expiresAt),
+    liftedAt: asDateOrNull(ligne.liftedAt),
+    liftReason: asDateOrNull(ligne.liftReason),
+    // Fail-closed : un ban dont la charge ne DIT pas qu'il est en vigueur
+    // ne doit pas se présenter comme tel.
+    active: ligne.active === true,
+    bannedBy: decodeActor(ligne.bannedBy),
+    liftedBy: decodeActor(ligne.liftedBy),
+    liftedBySystem: ligne.liftedBySystem === true,
+  };
+}
+
 export function decodeAdminBans(raw: unknown): readonly AdminBan[] {
   const brut = Array.isArray(raw) ? raw : Array.isArray(asRecord(raw)?.bans) ? (asRecord(raw)!.bans as unknown[]) : [];
+  return brut.map(decodeOneBan).filter((ban): ban is AdminBan => ban !== null);
+}
 
-  return brut
-    .map((entree): AdminBan | null => {
-      const ligne = asRecord(entree);
-      if (ligne === null || typeof ligne.id !== 'string' || ligne.id === '') return null;
-
-      return {
-        id: ligne.id,
-        reason: asText(ligne.reason),
-        createdAt: asDateOrNull(ligne.createdAt),
-        expiresAt: asDateOrNull(ligne.expiresAt),
-        liftedAt: asDateOrNull(ligne.liftedAt),
-        liftReason: asDateOrNull(ligne.liftReason),
-        // Fail-closed : un ban dont la charge ne DIT pas qu'il est en vigueur
-        // ne doit pas se présenter comme tel.
-        active: ligne.active === true,
-        bannedBy: decodeActor(ligne.bannedBy),
-        liftedBy: decodeActor(ligne.liftedBy),
-        liftedBySystem: ligne.liftedBySystem === true,
-      };
-    })
-    .filter((ban): ban is AdminBan => ban !== null);
+/**
+ * LA RÉPONSE D'UN GESTE — bannir et lever rendent UN ban (`sendSuccess(reply, ban)`,
+ * `routes/admin/user-bans.ts`), pas une liste : la lire comme l'historique rendait
+ * toujours `[]` (audit du 2026-10-04). `null` quand la charge est illisible — le
+ * geste a réussi quand même, et la vérité se relit par invalidation.
+ */
+export function decodeServedBan(raw: unknown): AdminBan | null {
+  return decodeOneBan(Array.isArray(raw) ? raw[0] : raw);
 }
 
 export const adminUserBansQueryKey = (userId: string) => ['admin', 'user', userId, 'bans'] as const;
@@ -136,13 +145,14 @@ const MOTIF_MINIMAL = 3;
 export async function banAdminUser(
   params: AdminDeps & {
     readonly userId: string;
-    readonly reason: string;
+    /** Absent (`null`) : sans motif — la passerelle ne l'admet que du rang souverain (spec 2026-10-04 § 4). */
+    readonly reason: string | null;
     readonly expiresAt?: string;
     readonly signal?: AbortSignal;
   },
-): Promise<ApiResult<readonly AdminBan[]>> {
-  const motif = params.reason.trim();
-  if (motif.length < MOTIF_MINIMAL) {
+): Promise<ApiResult<AdminBan | null>> {
+  const motif = params.reason === null ? null : params.reason.trim();
+  if (motif !== null && motif.length < MOTIF_MINIMAL) {
     return { ok: false, status: 0, error: `Le motif doit compter au moins ${MOTIF_MINIMAL} caractères` };
   }
 
@@ -156,7 +166,7 @@ export async function banAdminUser(
     return { ok: false, status: 0, error: "L'échéance doit être dans le futur" };
   }
 
-  const corps: Record<string, unknown> = { reason: motif };
+  const corps: Record<string, unknown> = motif === null ? {} : { reason: motif };
   // Absent = PERMANENT. On n'envoie pas `null` explicite : la passerelle traite
   // les deux pareil, et omettre dit mieux « pas d'échéance » que poser un vide.
   if (params.expiresAt !== undefined) corps.expiresAt = params.expiresAt;
@@ -169,7 +179,7 @@ export async function banAdminUser(
   });
   if (!result.ok) return result;
 
-  return { ok: true, data: decodeAdminBans(result.data) };
+  return { ok: true, data: decodeServedBan(result.data) };
 }
 
 export async function liftAdminUserBan(
@@ -179,7 +189,7 @@ export async function liftAdminUserBan(
     readonly reason?: string;
     readonly signal?: AbortSignal;
   },
-): Promise<ApiResult<readonly AdminBan[]>> {
+): Promise<ApiResult<AdminBan | null>> {
   const motif = params.reason?.trim() ?? '';
   const corps: Record<string, unknown> = {};
   // Lever n'exige AUCUN motif (`leverBanSchema`) — contrairement à bannir.
@@ -193,5 +203,5 @@ export async function liftAdminUserBan(
   });
   if (!result.ok) return result;
 
-  return { ok: true, data: decodeAdminBans(result.data) };
+  return { ok: true, data: decodeServedBan(result.data) };
 }

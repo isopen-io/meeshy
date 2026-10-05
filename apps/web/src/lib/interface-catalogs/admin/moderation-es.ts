@@ -129,7 +129,7 @@ const f = {
   'admin.moderation.confirm.dismiss.title': 'Archivar esta denuncia sin acción',
   'admin.moderation.confirm.dismiss.body': 'La denuncia se cerrará sin acción. No contará para el tiempo medio de resolución.',
   'admin.moderation.confirm.reopen.title': 'Reabrir esta denuncia',
-  'admin.moderation.confirm.reopen.body': 'La denuncia vuelve a «Pendiente» y tú pasas a ser su moderador.',
+  'admin.moderation.confirm.reopen.body': 'La denuncia vuelve a «Pendiente»: se borran su resolución, la acción registrada y su moderador, y regresa a la cola.',
   'admin.moderation.confirm.delete.title': 'Eliminar esta denuncia',
   'admin.moderation.confirm.delete.body': 'La denuncia se elimina para siempre: solo queda la huella de su eliminación en el registro de auditoría. No se puede deshacer.',
 
@@ -149,6 +149,10 @@ const f = {
   'admin.moderation.meta.resolved': 'Resuelta el',
   'admin.moderation.meta.resolvedDismissed': 'Las denuncias archivadas sin acción no tienen fecha de resolución.',
   'admin.moderation.meta.resolvedOpen': 'La denuncia está abierta: todavía no tiene fecha de resolución.',
+  /* ─── Signalement : fiche en cartes (lot Modération, croissance, plateforme, 2026-10-05) ─── */
+  'admin.moderation.cards.title': 'El expediente, por sección',
+  'admin.moderation.card.steps': 'Etapas',
+  'admin.moderation.card.links': 'Fichas donde actuar',
 } satisfies AdminCatalogFragment<typeof fr>;
 
 export default f;

@@ -91,6 +91,27 @@ export type UserManagementServiceDeps = {
  * qui MENT sur ce que la fonction fait de son entrée — retiré plutôt que
  * silencé.
  */
+/**
+ * Ce que la fiche d'administration d'un membre charge EN PLUS de sa ligne :
+ * les compteurs que le web lit dans `_count`. Une seule déclaration, que
+ * `getUserById` et toute écriture qui relit la fiche partagent — une écriture
+ * qui servait la ligne nue de `update` sortait sans (audit du 2026-10-04).
+ */
+export const ADMIN_USER_FICHE_INCLUDE = {
+  _count: {
+    select: {
+      participations: true,
+      createdShareLinks: true,
+      createdTrackingLinks: true,
+      createdAffiliateTokens: true,
+      affiliateRelations: true,
+      referredRelations: true,
+      sentFriendRequests: true,
+      receivedFriendRequests: true,
+    }
+  }
+} as const;
+
 export class UserManagementService {
   constructor(
     private prisma: PrismaClient,
@@ -187,20 +208,7 @@ export class UserManagementService {
   async getUserById(userId: string): Promise<FullUser | null> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      include: {
-        _count: {
-          select: {
-            participations: true,
-            createdShareLinks: true,
-            createdTrackingLinks: true,
-            createdAffiliateTokens: true,
-            affiliateRelations: true,
-            referredRelations: true,
-            sentFriendRequests: true,
-            receivedFriendRequests: true,
-          }
-        }
-      }
+      include: ADMIN_USER_FICHE_INCLUDE
     });
 
     return user as unknown as FullUser | null;
@@ -294,6 +302,7 @@ export class UserManagementService {
 
     const email = data.email === undefined ? undefined : normalizeEmail(data.email);
     const emailChanges = email !== undefined && await this.emailDiffersFromCurrent(userId, email);
+    const phoneChanges = data.phoneNumber !== undefined && await this.phoneDiffersFromCurrent(userId, data.phoneNumber);
     if (email !== undefined) await this.assertEmailAvailable(email, userId);
     if (data.username !== undefined) await this.assertUsernameAvailable(data.username, userId);
 
@@ -307,6 +316,11 @@ export class UserManagementService {
         ...data,
         ...(email !== undefined ? { email } : {}),
         ...(searchTokens ? { searchTokens } : {}),
+        // Une coordonnée CHANGÉE par l'administration n'a pas été prouvée :
+        // elle perd son état vérifié (spec 2026-10-04 § 7). Resoumettre la
+        // même valeur ne touche à rien.
+        ...(emailChanges ? { emailVerifiedAt: null } : {}),
+        ...(phoneChanges ? { phoneVerifiedAt: null } : {}),
         updatedAt: new Date()
       },
     };
@@ -373,6 +387,14 @@ export class UserManagementService {
     } catch {
       return [];
     }
+  }
+
+  private async phoneDiffersFromCurrent(userId: string, phoneNumber: string | null): Promise<boolean> {
+    const current = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { phoneNumber: true },
+    });
+    return (current?.phoneNumber ?? '').trim() !== (phoneNumber ?? '').trim();
   }
 
   private async emailDiffersFromCurrent(userId: string, email: string): Promise<boolean> {

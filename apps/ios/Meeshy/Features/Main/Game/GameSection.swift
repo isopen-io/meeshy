@@ -47,7 +47,8 @@ struct GameSection: View {
                 onClaim: { Task { await viewModel.claimChest() } }
             )
             GameMintPreviewView(
-                game: game, online: viewModel.isOnline, minting: viewModel.isMinting, error: viewModel.mintError,
+                game: game, badgesLost: viewModel.mintBadgeImpact?.lost, online: viewModel.isOnline,
+                minting: viewModel.isMinting, error: viewModel.mintError,
                 celebration: viewModel.celebration, onMint: { Task { await viewModel.mint() } }
             )
             GameFlamePanelView(

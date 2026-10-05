@@ -215,7 +215,12 @@ describe('les classements', () => {
       decodeAdminRankedMembers({
         rankings: [{ id: ID, username: 'awa', displayName: 'Awa Diop', avatar: null, count: 88, lastActivity: '2026-09-30T09:00:00.000Z' }],
       }),
-    ).toEqual([{ id: ID, username: 'awa', displayName: 'Awa Diop', firstName: null, lastName: null, count: 88 }]);
+    ).toEqual([{ id: ID, username: 'awa', displayName: 'Awa Diop', firstName: null, lastName: null, guest: false, count: 88 }]);
+  });
+
+  test('un invité (`guest: true`) est lu comme tel ; un ancien serveur sans le champ sert des comptes', () => {
+    const rows = decodeAdminRankedMembers({ rankings: [{ id: ID, username: 'Unknown', displayName: 'Awa (invitée)', guest: true, count: 3 }] }) ?? [];
+    expect(rows[0]).toMatchObject({ guest: true, displayName: 'Awa (invitée)', username: null });
   });
 
   test('un pseudo « Unknown » (compte disparu) n’est pas un nom : `null`', () => {

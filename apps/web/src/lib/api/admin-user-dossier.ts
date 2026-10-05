@@ -81,7 +81,17 @@ export type AdminActivity = {
   readonly shareLinks: number;
   readonly trackingLinks: number;
   readonly affiliateTokens: number;
+  /**
+   * Les TOTAUX servis (`totals`, audit du 2026-10-04) : chaque liste est bornée à
+   * cinquante lignes, et sa longueur n'est pas le compte. `null` quand la passerelle
+   * ne les sert pas (ancien serveur) — l'écran se rabat alors sur les compteurs de
+   * la fiche, jamais sur la longueur d'une liste plafonnée.
+   */
+  readonly totals: { readonly contactsSent: number; readonly contactsReceived: number } | null;
 };
+
+/** Le plafond de chaque liste de `GET …/activity` (`take: 50`). */
+export const ADMIN_ACTIVITY_LIST_CAP = 50;
 
 function decodeContact(brut: unknown, direction: AdminContact['direction']): AdminContact | null {
   const ligne = asRecord(brut);
@@ -107,11 +117,17 @@ export function decodeAdminActivity(raw: unknown): AdminActivity {
   ]
     .filter(garder)
     .sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''));
+  const totaux = asRecord(charge.totals);
+  const compte = (cle: string, repli: number): number => (totaux !== null && typeof totaux[cle] === 'number' ? asCount(totaux[cle]) : repli);
   return {
     contacts: tous,
-    shareLinks: liste(charge.shareLinks).length,
-    trackingLinks: liste(charge.trackingLinks).length,
-    affiliateTokens: liste(charge.affiliateTokens).length,
+    shareLinks: compte('shareLinks', liste(charge.shareLinks).length),
+    trackingLinks: compte('trackingLinks', liste(charge.trackingLinks).length),
+    affiliateTokens: compte('affiliateTokens', liste(charge.affiliateTokens).length),
+    totals:
+      totaux === null || typeof totaux.contactsSent !== 'number' || typeof totaux.contactsReceived !== 'number'
+        ? null
+        : { contactsSent: asCount(totaux.contactsSent), contactsReceived: asCount(totaux.contactsReceived) },
   };
 }
 
@@ -184,6 +200,11 @@ export type AdminVoiceProfile = {
     readonly audioCount: number;
     readonly totalDurationMs: number;
     readonly model: string;
+    /** Le score de qualité du modèle, de 0 à 1 (`VoiceModel.qualityScore`) — `null` s'il n'est pas servi. */
+    readonly qualityScore: number | null;
+    /** La dernière analyse de la voix, et la date où le membre l'a rendue publique. */
+    readonly analysisAt: string | null;
+    readonly publicAt: string | null;
     readonly createdAt: string | null;
     readonly updatedAt: string | null;
   } | null;
@@ -206,6 +227,9 @@ export function decodeAdminVoiceProfile(raw: unknown): AdminVoiceProfile {
             audioCount: asCount(profil.audioCount),
             totalDurationMs: asCount(profil.totalDurationMs),
             model: asText(profil.embeddingModel),
+            qualityScore: typeof profil.qualityScore === 'number' && Number.isFinite(profil.qualityScore) ? profil.qualityScore : null,
+            analysisAt: dateOuNull(profil.voiceAnalysisAt),
+            publicAt: dateOuNull(profil.voicePublicAt),
             createdAt: dateOuNull(profil.createdAt),
             updatedAt: dateOuNull(profil.updatedAt),
           },
@@ -236,6 +260,11 @@ export type AdminSession = {
   readonly isTrusted: boolean;
   readonly createdAt: string | null;
   readonly lastActivityAt: string | null;
+  /** L'échéance de la session : passée, une session encore `isValid` est EXPIRÉE, pas valide. */
+  readonly expiresAt: string | null;
+  /** Quand et pourquoi elle a été fermée (`logout`, `admin_revoke`, `expired`…) — un CODE, à interpréter. */
+  readonly invalidatedAt: string | null;
+  readonly invalidatedReason: string | null;
 };
 
 function decodeSession(brut: unknown): AdminSession | null {
@@ -256,7 +285,18 @@ function decodeSession(brut: unknown): AdminSession | null {
     isTrusted: ligne.isTrusted === true,
     createdAt: dateOuNull(ligne.createdAt),
     lastActivityAt: dateOuNull(ligne.lastActivityAt),
+    expiresAt: dateOuNull(ligne.expiresAt),
+    invalidatedAt: dateOuNull(ligne.invalidatedAt),
+    invalidatedReason: dateOuNull(ligne.invalidatedReason),
   };
+}
+
+/** L'état d'une session À `now` : fermée, expirée (échéance passée sans fermeture écrite), ou valide. */
+export function sessionStateOf(session: Pick<AdminSession, 'isValid' | 'expiresAt'>, now: Date): 'valid' | 'expired' | 'closed' {
+  if (!session.isValid) return 'closed';
+  if (session.expiresAt === null) return 'valid';
+  const fin = new Date(session.expiresAt).getTime();
+  return !Number.isNaN(fin) && fin <= now.getTime() ? 'expired' : 'valid';
 }
 
 /**
@@ -292,6 +332,10 @@ export type AdminSecurityEvent = {
   readonly status: string;
   readonly description: string;
   readonly ipAddress: string;
+  /** « Ville, Pays », tel que servi — la chaîne vide quand il manque. */
+  readonly geoLocation: string;
+  /** L'agent utilisateur BRUT : l'écran le lit (`deviceLabel`), il ne l'affiche jamais tel quel. */
+  readonly userAgent: string;
   readonly createdAt: string | null;
 };
 
@@ -305,6 +349,8 @@ function decodeSecurityEvent(brut: unknown): AdminSecurityEvent | null {
     status: asText(ligne.status),
     description: asText(ligne.description),
     ipAddress: asText(ligne.ipAddress),
+    geoLocation: asText(ligne.geoLocation),
+    userAgent: asText(ligne.userAgent),
     createdAt: dateOuNull(ligne.createdAt),
   };
 }
@@ -337,8 +383,20 @@ export type AdminReport = {
   readonly reason: string;
   readonly status: string;
   readonly createdAt: string | null;
-  /** Pour un signalement REÇU : le texte du message, `null` quand la passerelle le retient (#4494). */
+  /** Pour un signalement REÇU : le texte du message, `null` quand la passerelle le retient (#4494) ou qu'il a disparu. */
   readonly excerpt: string | null;
+  /**
+   * Ce qu'est devenu le message visé (signalement REÇU) : `shown` (texte servi),
+   * `withheld` (la passerelle retient le texte à ce rôle), `deleted` (`message: null`
+   * — introuvable — ou `deletedAt` posé). Un message disparu n'est pas un contenu
+   * retenu (audit 2026-10-04). `null` pour un signalement FAIT.
+   */
+  readonly messageState: 'shown' | 'withheld' | 'deleted' | null;
+  /** La conversation du message signalé, nommée (`conversation.title`) ; `null` quand elle n'est pas servie. */
+  readonly conversation: { readonly id: string; readonly title: string | null } | null;
+  readonly resolvedAt: string | null;
+  /** La suite donnée (`warning_sent`, `content_removed`…) — un CODE, à interpréter. */
+  readonly actionTaken: string | null;
 };
 
 function decodeReportFiled(brut: unknown): AdminReport | null {
@@ -352,6 +410,10 @@ function decodeReportFiled(brut: unknown): AdminReport | null {
     status: asText(ligne.status),
     createdAt: dateOuNull(ligne.createdAt),
     excerpt: null,
+    messageState: null,
+    conversation: null,
+    resolvedAt: dateOuNull(ligne.resolvedAt),
+    actionTaken: dateOuNull(ligne.actionTaken),
   };
 }
 
@@ -359,7 +421,9 @@ function decodeReportReceived(brut: unknown): AdminReport | null {
   const ligne = asRecord(brut);
   if (ligne === null || typeof ligne.id !== 'string') return null;
   const message = asRecord(ligne.message);
-  const contenu = message === null ? null : typeof message.content === 'string' ? message.content : null;
+  const supprime = message === null || dateOuNull(message.deletedAt) !== null;
+  const contenu = message === null || supprime ? null : typeof message.content === 'string' ? message.content : null;
+  const conversation = asRecord(ligne.conversation);
   return {
     id: ligne.id,
     subject: asText(ligne.reporterName),
@@ -368,6 +432,13 @@ function decodeReportReceived(brut: unknown): AdminReport | null {
     status: asText(ligne.status),
     createdAt: dateOuNull(ligne.createdAt),
     excerpt: contenu,
+    messageState: supprime ? 'deleted' : contenu === null ? 'withheld' : 'shown',
+    conversation:
+      conversation === null || typeof conversation.id !== 'string' || conversation.id === ''
+        ? null
+        : { id: conversation.id, title: dateOuNull(typeof conversation.title === 'string' ? conversation.title.trim() : null) },
+    resolvedAt: dateOuNull(ligne.resolvedAt),
+    actionTaken: dateOuNull(ligne.actionTaken),
   };
 }
 

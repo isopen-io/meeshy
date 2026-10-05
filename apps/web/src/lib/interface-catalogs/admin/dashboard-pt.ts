@@ -11,7 +11,7 @@ const f = {
   'admin.dash.zone.usage': 'Saúde de uso',
   'admin.dash.zone.usage.hint': 'Medida nos últimos 30 dias.',
   'admin.dash.zone.trends': 'Tendências',
-  'admin.dash.zone.trends.hint': 'Os dias e os períodos horários são os do servidor.',
+  'admin.dash.zone.trends.hint': 'Os dias são os do servidor; os períodos horários aparecem no seu fuso horário quando o servidor permite.',
   'admin.dash.zone.todo': 'Para processar',
   'admin.dash.zone.people': 'Pessoas e trocas',
   'admin.dash.zone.system': 'Sistema',
@@ -41,7 +41,7 @@ const f = {
   'admin.dash.platform.admins.caption': 'Administradores e criador',
 
   'admin.dash.usage.engagement': 'Taxa de envolvimento',
-  'admin.dash.usage.engagement.caption': 'Contas vistas durante o período, de todas as contas',
+  'admin.dash.usage.engagement.caption': 'Contas que escreveram no período, sobre as contas ativas',
   'admin.dash.usage.growth': 'Crescimento',
   'admin.dash.usage.growth.caption': 'Novas contas durante o período, de todas as contas',
   'admin.dash.usage.perUser': 'Mensagens por conta',
@@ -110,6 +110,14 @@ const f = {
   'admin.dash.agent.messages.caption': 'Pelo agente, desde o início',
   'admin.dash.agent.last': 'Última atividade',
   'admin.dash.agent.last.none': 'Sem atividade',
+
+  'admin.dash.hourly.titleUtc': 'Atividade por período de 3 horas (últimas 24 horas, horário UTC)',
+  'admin.dash.todo.reports': 'Denúncias pendentes: {count}',
+  'admin.dash.todo.broadcasts': 'Difusões em andamento: {count}',
+  'admin.dash.todo.nothing': 'Nada para processar',
+  'admin.dash.platform.translations': 'Traduções',
+  'admin.dash.platform.reports': 'Denúncias',
+  'admin.dash.system.ok': 'Todos os serviços respondem.',
 } satisfies AdminCatalogFragment<typeof fr>;
 
 export default f;

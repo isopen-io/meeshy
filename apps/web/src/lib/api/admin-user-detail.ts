@@ -59,6 +59,8 @@ export type AdminUserDetail = {
   readonly profileCompletionRate: number | null;
   readonly email: string;
   readonly phoneNumber: string;
+  /** L'indicatif du pays du numéro (`CM`, `FR`…), tel que servi — la chaîne vide quand il manque. */
+  readonly phoneCountryCode: string;
   readonly role: string;
   readonly timezone: string;
   readonly systemLanguage: string;
@@ -152,6 +154,8 @@ export type AdminMemberCounts = {
   readonly referredRelations: number;
   readonly sentFriendRequests: number;
   readonly receivedFriendRequests: number;
+  /** Les conversations où il a une ligne de participation (`_count.participations`). */
+  readonly participations: number;
 };
 
 /** Une chaîne SERVIE ou rien — jamais la chaîne vide, qui ressortirait comme
@@ -209,6 +213,7 @@ function decodeCounts(raw: unknown): AdminMemberCounts | null {
     referredRelations: asCount(compte.referredRelations),
     sentFriendRequests: asCount(compte.sentFriendRequests),
     receivedFriendRequests: asCount(compte.receivedFriendRequests),
+    participations: asCount(compte.participations),
   };
 }
 
@@ -234,6 +239,7 @@ export function decodeAdminUserDetail(raw: unknown): AdminUserDetail | null {
     profileCompletionRate: typeof charge.profileCompletionRate === 'number' ? charge.profileCompletionRate : null,
     email: asText(charge.email),
     phoneNumber: asText(charge.phoneNumber),
+    phoneCountryCode: asText(charge.phoneCountryCode),
     role: asText(charge.role) || 'USER',
     timezone: asText(charge.timezone),
     systemLanguage: asText(charge.systemLanguage),

@@ -68,6 +68,12 @@ async function open(options: { readonly identity?: AdminIdentityFixture; readonl
 }
 
 const textOf = (element: Element | null) => (element?.textContent ?? '').replace(/\s+/g, ' ').trim();
+/** Les permissions se lisent en carte résumée ; leur liste s'ouvre en modale (spec 2026-10-04 § 3). */
+const openPermissions = async (host: HTMLElement) => {
+  await mounter.click(host.querySelector<HTMLButtonElement>('[data-admin-summary="permissions"] [data-admin-summary-open]'));
+  await mounter.settle();
+  return document.querySelector('[data-admin-fiche-section="permissions"]');
+};
 const meta = (host: ParentNode, anchor: string) => textOf(host.querySelector(`[data-admin-meta="${anchor}"]`));
 const opens = (section: 'shareLinks' | 'conversations') => visibleAdminSections(BIGBOSS.permissions, 'BIGBOSS').some((candidate) => candidate.id === section);
 
@@ -180,19 +186,27 @@ describe('AdminAnonymousFiche — conversation et lien d’entrée, nommés', ()
 });
 
 describe('AdminAnonymousFiche — les permissions se disent en phrases', () => {
+  test('la carte dit « 4 sur 8 » ; la liste n’est montée qu’à l’ouverture, dans l’adresse', async () => {
+    const { host } = await open();
+    expect(textOf(host.querySelector('[data-admin-summary="permissions"]'))).toContain('4 sur 8');
+    expect(document.querySelector('[data-admin-fiche-section="permissions"]')).toBeNull();
+    await openPermissions(host);
+    expect(window.location.search).toBe('?open=permissions');
+  });
+
   test('« Peut envoyer des fichiers » / « Ne peut pas envoyer de vidéos » — jamais canSendFiles', async () => {
     const { host } = await open();
-    const section = textOf(host.querySelector('[data-admin-fiche-section="permissions"]'));
+    const section = textOf(await openPermissions(host));
     expect(section).toContain('Peut envoyer des fichiers');
     expect(section).toContain('Ne peut pas envoyer de vidéos');
     expect(section).toContain('Voit les messages écrits avant son arrivée');
     expect(section).not.toMatch(/canSend|canView/);
-    expect(host.querySelectorAll('[data-admin-permission]')).toHaveLength(8);
+    expect(document.querySelectorAll('[data-admin-permission]')).toHaveLength(8);
   });
 
   test('aucune permission servie : la section ne s’affiche pas', async () => {
     const { host } = await open({ reply: { ok: true, data: { ...FICHE, permissions: {} } } });
-    expect(host.querySelector('[data-admin-fiche-section="permissions"]')).toBeNull();
+    expect(host.querySelector('[data-admin-summary="permissions"]')).toBeNull();
   });
 });
 
@@ -225,6 +239,6 @@ describe('AdminAnonymousFiche — aucun geste, des états dessinés', () => {
     const { host } = await open({ language: 'en' });
     expect(textOf(host.querySelector('[data-admin-identity]'))).toContain('Guest without an account');
     expect(meta(host, 'language')).toContain('Spanish');
-    expect(textOf(host.querySelector('[data-admin-fiche-section="permissions"]'))).toContain('Can send files');
+    expect(textOf(await openPermissions(host))).toContain('Can send files');
   });
 });

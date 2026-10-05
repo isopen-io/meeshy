@@ -6,6 +6,7 @@ import { Sheet } from '@/components/sheet';
 import type { AdminDeps } from '@/lib/api/admin';
 import {
   ADMIN_PASSWORD_MIN_LENGTH,
+  ADMIN_PASSWORD_MOTIVE_MIN_LENGTH,
   fetchAdminPasswordProposals,
   resetAdminUserPassword,
   type PasswordProposals,
@@ -46,6 +47,15 @@ import { ActionButton } from '@/routes/link-page-parts';
  * transport, et la route de réinitialisation ne rend qu'un message. Le
  * secret disparaît avec la feuille.
  *
+ * ## Un motif, et prévenir le membre (audit 2026-10-04)
+ *
+ * Le motif est FACULTATIF et consigné au journal quand il est écrit (dix
+ * caractères au minimum, le plancher de la passerelle) ; le rang souverain n'en
+ * voit pas le champ (spec 2026-10-04 § 4). « Prévenir le membre » coche
+ * `sendEmail` : la passerelle lui envoie une alerte de sécurité, sans le secret.
+ * Décochée par défaut — alerter le détenteur d'un compte compromis n'est pas
+ * toujours souhaitable.
+ *
  * ## Le portail est INJECTÉ
  *
  * `portailDuNavigateur()` par défaut, mais remplaçable : c'est ce qui rend la
@@ -80,6 +90,7 @@ export function AdminUserPasswordSheet({
   onAnnounce,
   portail = portailDuNavigateur(),
   deps = apiDeps,
+  sovereign = false,
 }: {
   readonly userId: string;
   readonly language: AdminLanguage;
@@ -87,7 +98,12 @@ export function AdminUserPasswordSheet({
   readonly onAnnounce: (texte: string) => void;
   readonly portail?: PortailPartage;
   readonly deps?: AdminDeps;
+  /** Le rang souverain n'écrit pas de motif : le champ n'est pas rendu (`useAdminReach().isSovereign`, lu par la fiche). */
+  readonly sovereign?: boolean;
 }) {
+  const [motif, setMotif] = useState('');
+  const [focusMotif, setFocusMotif] = useState(false);
+  const [prevenir, setPrevenir] = useState(false);
   const [propositions, setPropositions] = useState<PasswordProposals | null>(null);
   const [chargement, setChargement] = useState<Chargement>('loading');
   const [niveau, setNiveau] = useState<Niveau>(NIVEAU_INITIAL);
@@ -152,10 +168,19 @@ export function AdminUserPasswordSheet({
     }
   }
 
+  const motifSaisi = motif.trim();
+  const motifTropCourt = !sovereign && motifSaisi !== '' && motifSaisi.length < ADMIN_PASSWORD_MOTIVE_MIN_LENGTH;
+
   async function appliquer() {
-    if (envoi || motDePasse.length < ADMIN_PASSWORD_MIN_LENGTH) return;
+    if (envoi || motDePasse.length < ADMIN_PASSWORD_MIN_LENGTH || motifTropCourt) return;
     setEnvoi(true);
-    const resultat = await resetAdminUserPassword({ ...deps, userId, newPassword: motDePasse });
+    const resultat = await resetAdminUserPassword({
+      ...deps,
+      userId,
+      newPassword: motDePasse,
+      ...(sovereign || motifSaisi === '' ? {} : { reason: motifSaisi }),
+      ...(prevenir ? { sendEmail: true } : {}),
+    });
     setEnvoi(false);
 
     if (!resultat.ok) {
@@ -167,7 +192,7 @@ export function AdminUserPasswordSheet({
     onClose();
   }
 
-  const pretAAppliquer = !envoi && motDePasse.length >= ADMIN_PASSWORD_MIN_LENGTH;
+  const pretAAppliquer = !envoi && motDePasse.length >= ADMIN_PASSWORD_MIN_LENGTH && !motifTropCourt;
 
   return (
     <Sheet title={translateAdmin(language, 'admin.password.title')} presentation="centered" closeLabel={translateAdmin(language, 'admin.kit.close')} onClose={onClose}>
@@ -252,6 +277,48 @@ export function AdminUserPasswordSheet({
             {translateAdmin(language, copie === 'copied' ? 'admin.password.copied' : 'admin.password.copy')}
           </ActionButton>
         </div>
+
+        {sovereign ? null : (
+          <Field
+            id="admin-password-motive"
+            label={translateAdmin(language, 'admin.people.password.motive')}
+            tint={BRAND}
+            focused={focusMotif}
+            error={motifTropCourt ? translateAdmin(language, 'admin.people.password.motiveShort') : undefined}
+          >
+            {({ id, describedBy }) => (
+              <input
+                id={id}
+                type="text"
+                data-admin-password-motive
+                value={motif}
+                aria-describedby={describedBy}
+                onInput={(event) => setMotif(event.currentTarget.value)}
+                onFocus={() => setFocusMotif(true)}
+                onBlur={() => setFocusMotif(false)}
+                className="w-full bg-transparent text-body outline-none"
+                style={{ minHeight: 44, color: INK }}
+              />
+            )}
+          </Field>
+        )}
+
+        <label className="flex cursor-pointer items-start gap-3 text-body" style={{ minHeight: 44, color: INK }}>
+          <input
+            type="checkbox"
+            data-admin-password-notify
+            checked={prevenir}
+            onChange={(event) => setPrevenir(event.currentTarget.checked)}
+            className="mt-3 size-5 shrink-0 focus-visible:outline-2 focus-visible:outline-offset-2"
+            style={{ accentColor: BRAND, outlineColor: BRAND }}
+          />
+          <span className="grid gap-1 py-2">
+            <span>{translateAdmin(language, 'admin.people.password.notify')}</span>
+            <span className="text-caption" style={{ color: INK2 }}>
+              {translateAdmin(language, 'admin.people.password.notifyHint')}
+            </span>
+          </span>
+        </label>
 
         <div className="grid gap-2 pt-2">
           <ActionButton tone="danger" disabled={!pretAAppliquer} onClick={() => void appliquer()} data={{ 'data-admin-password-apply': '' }}>

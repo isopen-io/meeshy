@@ -27,7 +27,7 @@ const f = {
   'admin.analytics.activity.now.conversations.caption': 'Conversations where someone wrote in the past hour',
   'admin.analytics.activity.health.title': 'Usage health',
   'admin.analytics.activity.health.engagement': 'Engagement rate',
-  'admin.analytics.activity.health.engagement.caption': 'Active accounts out of all accounts',
+  'admin.analytics.activity.health.engagement.caption': 'Accounts that wrote over the period, out of active accounts',
   'admin.analytics.activity.health.growth': 'Growth',
   'admin.analytics.activity.health.growth.caption': 'New accounts, as a share of all accounts',
   'admin.analytics.activity.health.perUser': 'Messages per account',

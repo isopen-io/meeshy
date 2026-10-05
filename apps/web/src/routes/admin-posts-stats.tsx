@@ -10,6 +10,7 @@ import type { AdminTarget } from '@/lib/admin/admin-routes';
 import { interpretPostType } from '@/lib/admin/interpret/enums';
 import { personSecondary } from '@/lib/admin/interpret/labels';
 import { formatCount, formatPercent } from '@/lib/admin/interpret/numbers';
+import { adminMomentOf } from '@/lib/admin/interpret/time';
 import { periodOf, type PostPeriod } from '@/lib/admin/post-list';
 import { personRef, postRef } from '@/lib/admin/post-entities';
 import type { AdminDeps } from '@/lib/api/admin';
@@ -38,7 +39,7 @@ const listTarget = (search: Readonly<Record<string, string>>): AdminTarget => ({
   ...(Object.keys(search).length === 0 ? {} : { search }),
 });
 
-function Charts({ language, stats }: { readonly language: AdminLanguage; readonly stats: AdminPostsStats }) {
+function Charts({ language, stats, now }: { readonly language: AdminLanguage; readonly stats: AdminPostsStats; readonly now: Date }) {
   const parts = stats.byType.map(({ type, count }) => ({ key: type, label: interpretPostType(type, language).label, value: count }));
   const top = parts[0];
   const authors = stats.topAuthors.flatMap(({ author, postCount }) => {
@@ -47,11 +48,19 @@ function Charts({ language, stats }: { readonly language: AdminLanguage; readonl
     const count = translateAdmin(language, 'admin.posts.stats.authorPosts', { count: formatCount(postCount, language) });
     return [{ ...ref, secondary: [personSecondary(author.username), count].filter((part) => part !== null).join(' · ') }];
   });
+  /* L'engagement ENTIER que la passerelle sert pour une tendance (audit 2026-10-04) — vues, repartages, partages, et quand elle a été publiée. */
   const trending = stats.trending.map((post) =>
     postRef(
       post,
       language,
-      translateAdmin(language, 'admin.posts.stats.engagement', { likes: formatCount(post.likeCount, language), comments: formatCount(post.commentCount, language) }),
+      translateAdmin(language, 'admin.posts.stats.trendingFacts', {
+        likes: formatCount(post.likeCount, language),
+        comments: formatCount(post.commentCount, language),
+        views: formatCount(post.viewCount, language),
+        reposts: formatCount(post.repostCount, language),
+        shares: formatCount(post.shareCount, language),
+        when: adminMomentOf(post.createdAt, now, language)?.relative ?? '—',
+      }),
     ),
   );
   const none = (
@@ -105,11 +114,13 @@ export function AdminPostsStatsBand({
   deps,
   period,
   enabled,
+  now = new Date(),
 }: {
   readonly language: AdminLanguage;
   readonly deps: AdminDeps;
   readonly period: PostPeriod | undefined;
   readonly enabled: boolean;
+  readonly now?: Date;
 }) {
   const query = useQuery({
     queryKey: adminPostsStatsQueryKey(period),
@@ -147,11 +158,14 @@ export function AdminPostsStatsBand({
       ) : (
         <>
           <AdminStatGrid columns={2}>
+            {/* EN LIGNE quand la passerelle le sert (`live` : ni retirées ni expirées) ; d'un ancien
+                serveur, le seul chiffre servi compte encore les stories expirées — il se nomme alors
+                « Non retirées », jamais « en ligne ». */}
             <AdminStatCard
               language={language}
               anchor="posts-total"
-              label={translateAdmin(language, 'admin.posts.stats.total')}
-              value={stats === undefined ? '' : formatCount(stats.total, language)}
+              label={translateAdmin(language, stats?.live === null ? 'admin.posts.stats.notRemoved' : 'admin.posts.stats.total')}
+              value={stats === undefined ? '' : formatCount(stats.live ?? stats.total, language)}
               caption={periodLabel}
               target={listTarget(withPeriod)}
               state={stats === undefined ? 'loading' : 'ready'}
@@ -168,7 +182,7 @@ export function AdminPostsStatsBand({
               state={stats === undefined ? 'loading' : 'ready'}
             />
           </AdminStatGrid>
-          {stats === undefined ? null : <Charts language={language} stats={stats} />}
+          {stats === undefined ? null : <Charts language={language} stats={stats} now={now} />}
         </>
       )}
     </section>

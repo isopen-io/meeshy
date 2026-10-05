@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { act } from 'react';
 
-import { ADMIN_USER_TABS } from '@/lib/admin/user-tabs';
+import { ADMIN_MEMBER_SECTIONS } from '@/lib/admin/member-summaries';
 import { visibleAdminSections } from '@/lib/admin/sections';
 import { useAdminReach } from '@/lib/admin/use-admin-reach';
 import type { AdminDeps } from '@/lib/api/admin';
@@ -201,11 +201,11 @@ describe('le bandeau de chiffres — quinze, dont un que la passerelle retient',
     expect(textOf(host.querySelector('[data-admin-stat="reportsReceived"]'))).toContain('2');
   });
 
-  test('les demandes envoyées mènent aux demandes de contact de ce membre, quand la section est ouverte', async () => {
+  test('les demandes envoyées EN ATTENTE mènent aux demandes en attente de ce membre, quand la section est ouverte', async () => {
     const { host } = await open();
     const link = host.querySelector('[data-admin-stat="pendingFriendRequestsOut"] a');
     const opens = visibleAdminSections(BIGBOSS.permissions, 'BIGBOSS').some((section) => section.id === 'invitations');
-    if (opens) expect(link?.getAttribute('href')).toBe(`/admin/invitations?senderId=${ID}`);
+    if (opens) expect(link?.getAttribute('href')).toBe(`/admin/invitations?senderId=${ID}&status=pending`);
     else expect(link).toBeNull();
   });
 
@@ -280,6 +280,28 @@ describe('les métadonnées interprétées (#8005)', () => {
     expect(host.querySelector('[data-admin-technical-id]')?.textContent).toBe(ID);
   });
 
+  test('la fin d’un compte se date et se signe ; le pays du numéro et les conversations rejointes se disent (audit 2026-10-04)', async () => {
+    const ADMIN_ID = '64f1c2a9e8b7d6c5b4a39299';
+    const { host } = await open({
+      replies: base({
+        ...DETAIL,
+        isActive: false,
+        deactivatedAt: '2026-09-20T12:00:00.000Z',
+        deletedAt: '2026-09-20T12:00:00.000Z',
+        deletedBy: ADMIN_ID,
+        phoneNumber: '+221770000000',
+        phoneCountryCode: 'SN',
+        _count: { ...DETAIL._count, participations: 31 },
+      }),
+    });
+    expect(meta(host, 'deactivatedAt')).toContain('2026');
+    expect(meta(host, 'deletedAt')).toContain('20 sept. 2026');
+    expect(host.querySelector('[data-admin-meta="deletedBy"] a')?.getAttribute('href')).toBe(`/admin/users/${ADMIN_ID}`);
+    expect(meta(host, 'deletedBy')).not.toContain(ADMIN_ID);
+    expect(meta(host, 'phoneCountry')).toContain('Sénégal');
+    expect(meta(host, 'participations')).toContain('31');
+  });
+
   test('sans le bloc sensible (rôle qui ne le reçoit pas) : ni métadonnées de compte, ni connexions, ni pays inventé', async () => {
     const masked = {
       ...DETAIL,
@@ -314,7 +336,7 @@ describe('les métadonnées interprétées (#8005)', () => {
   });
 });
 
-describe('états dessinés et onglets', () => {
+describe('états dessinés et sections en modales (spec 2026-10-04 § 3)', () => {
   test('membre introuvable (404), refus (403) et panne : chacun se dit à sa façon', async () => {
     const notFound = await open({ replies: [at('', { ok: false, status: 404, error: 'User not found' }), at('/stats', { ok: true, data: STATS }), at('/bans', { ok: true, data: [] })] });
     expect(textOf(notFound.host.querySelector('[data-admin-error]'))).toContain('n’existe pas');
@@ -328,47 +350,139 @@ describe('états dessinés et onglets', () => {
     expect(down.host.querySelector('[data-admin-retry]')).not.toBeNull();
   });
 
-  test('les onglets sont un tablist : l’onglet s’écrit dans l’adresse, les ancres de la recette existent', async () => {
-    const { host } = await open();
-    expect(host.querySelector('[role="tablist"]')).not.toBeNull();
-    expect(host.querySelector('[data-admin-user-panel="profile"]')).not.toBeNull();
-    await act(async () => (host.querySelector('[data-admin-user-tab="conversations"]') as HTMLElement | null)?.click());
+  const openSection = async (host: HTMLElement, section: string) => {
+    await act(async () => host.querySelector<HTMLButtonElement>(`[data-admin-summary="${section}"] [data-admin-summary-open]`)?.click());
     await mounter.settle();
-    expect(window.location.search).toBe('?tab=conversations');
-    expect(host.querySelector('[data-admin-user-panel="conversations"]')).not.toBeNull();
-    expect(host.querySelector('[data-collapsible-toggle="admin-conv"]')).not.toBeNull();
+    await mounter.settle();
+  };
+  const panel = (section: string) => document.querySelector(`[data-admin-user-panel="${section}"]`);
+
+  test('le dossier est une grille de cartes, une par section ; aucune modale n’est montée au repos', async () => {
+    const { host } = await open();
+    expect(host.querySelector('[role="tablist"]')).toBeNull();
+    const cards = [...host.querySelectorAll('[data-admin-member-cards] [data-admin-summary]')].map((card) => card.getAttribute('data-admin-summary'));
+    expect(cards).toEqual([...ADMIN_MEMBER_SECTIONS]);
+    expect(document.querySelector('[data-admin-user-panel]')).toBeNull();
+    const button = host.querySelector<HTMLButtonElement>('[data-admin-summary="profile"] [data-admin-summary-open]');
+    expect(button?.getAttribute('aria-label')).toContain('Identité');
+    expect(button?.style.minHeight).toBe('44px');
   });
 
-  test('les onglets de la fiche sont ceux du gabarit commun : contrat d’identifiants, aria-controls, Début/Fin', async () => {
-    const { host } = await open();
-    const tabs = [...host.querySelectorAll<HTMLElement>('[role="tab"]')];
-    expect(tabs.map((tab) => tab.id)).toEqual(ADMIN_USER_TABS.map((onglet) => `admin-user-tab-${onglet}`));
-    expect(tabs.map((tab) => tab.getAttribute('data-admin-user-tab'))).toEqual([...ADMIN_USER_TABS]);
-    expect(tabs.map((tab) => tab.getAttribute('aria-controls'))).toEqual(ADMIN_USER_TABS.map((onglet) => `admin-user-panel-${onglet}`));
-    const panel = host.querySelector('[role="tabpanel"]');
-    expect(panel?.id).toBe('admin-user-panel-profile');
-    expect(panel?.getAttribute('aria-labelledby')).toBe('admin-user-tab-profile');
-    expect(panel?.getAttribute('data-admin-user-panel')).toBe('profile');
-    tabs[0]?.focus();
-    await act(async () => {
-      tabs[0]?.dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true, cancelable: true }));
-    });
-    await mounter.settle();
-    expect(window.location.search).toBe(`?tab=${ADMIN_USER_TABS.at(-1)}`);
-    expect(document.activeElement?.id).toBe(`admin-user-tab-${ADMIN_USER_TABS.at(-1)}`);
-    expect(host.querySelector('[role="tabpanel"]')?.getAttribute('aria-labelledby')).toBe(`admin-user-tab-${ADMIN_USER_TABS.at(-1)}`);
+  test('les cartes disent les chiffres DÉJÀ lus par la fiche — aucune requête de détail avant l’ouverture', async () => {
+    const { host, calls } = await open();
+    expect(textOf(host.querySelector('[data-admin-summary="conversations"]'))).toContain('31');
+    expect(textOf(host.querySelector('[data-admin-summary="conversations"]'))).toContain('1 204');
+    expect(textOf(host.querySelector('[data-admin-summary="contacts"]'))).toContain('22');
+    expect(textOf(host.querySelector('[data-admin-summary="reports"]'))).toContain('Non communiqué');
+    expect(textOf(host.querySelector('[data-admin-summary="role"]'))).toContain('Modérateur');
+    expect(textOf(host.querySelector('[data-admin-summary="access"]'))).toContain('Activée');
+    expect(textOf(host.querySelector('[data-admin-summary="contact"]'))).toContain('Vérifié');
+    const detailReads = calls().filter((call) => /\/(conversations|media|activity|sessions|security-events|voice-profile|preferences|reports|reported-messages|communities)/.test(pathOf(call)));
+    expect(detailReads).toEqual([]);
   });
 
-  test('le profil porte ses sections éditables : images, identité, contact, sécurité, rôle', async () => {
+  test('« Ouvrir » écrit la section dans l’adresse (?open=) et monte SA section — les conversations repliables y sont', async () => {
+    const { host, calls } = await open();
+    await openSection(host, 'conversations');
+    expect(window.location.search).toBe('?open=conversations');
+    expect(panel('conversations')).not.toBeNull();
+    expect(document.querySelector('[data-collapsible-toggle="admin-conv"]')).not.toBeNull();
+    expect(calls().some((call) => pathOf(call) === `/api/v1/admin/users/${ID}/conversations`)).toBe(true);
+  });
+
+  test('un lien d’hier `?tab=security` (la fiche d’un signalement le tire encore) ouvre la modale du même nom', async () => {
+    await open({ url: '/probe?tab=security' });
+    expect(panel('security')).not.toBeNull();
+    expect(document.querySelector('[data-admin-security]')).not.toBeNull();
+  });
+
+  test('le profil s’est scindé : identité (images), contact, mot de passe et protections, rôle — chacun dans sa modale', async () => {
     const { host } = await open();
-    for (const section of ['images', 'identity', 'contact', 'security', 'role']) {
-      expect(host.querySelector(`[data-admin-member-section="${section}"]`)).not.toBeNull();
+    for (const [section, inner] of [
+      ['profile', ['images', 'identity']],
+      ['contact', ['contact']],
+      ['access', ['security']],
+      ['role', ['role']],
+    ] as const) {
+      await openSection(host, section);
+      for (const name of inner) expect(panel(section)?.querySelector(`[data-admin-member-section="${name}"]`)).not.toBeNull();
     }
   });
 
   test('le menu de rôle nomme chaque rôle — jamais BIGBOSS', async () => {
     const { host } = await open();
-    const options = [...(host.querySelectorAll('#admin-member-role option') ?? [])].map((option) => option.textContent);
+    await openSection(host, 'role');
+    const options = [...(document.querySelectorAll('#admin-member-role option') ?? [])].map((option) => option.textContent);
     expect(options).toEqual(['Créateur', 'Administrateur', 'Modérateur', 'Auditeur', 'Analyste', 'Membre']);
+  });
+});
+
+describe('supprimer et restaurer un compte (audit 2026-10-04)', () => {
+  const confirmButton = () => [...document.querySelectorAll<HTMLButtonElement>('[data-admin-confirm] button')].find((button) => /Supprimer|Restaurer/.test(button.textContent ?? '') && button.textContent !== 'Annuler');
+
+  test('le rang souverain supprime sans motif : DELETE part sans corps, la fiche et la liste se relisent, le verdict est annoncé', async () => {
+    let deleted = false;
+    const replies: RoutedReply[] = [
+      (request) => (request.method === 'DELETE' && pathOf(request) === `/api/v1/admin/users/${ID}` ? ((deleted = true), { ok: true, data: { message: 'User deleted successfully' } }) : undefined),
+      (request) =>
+        request.method === 'GET' && pathOf(request) === `/api/v1/admin/users/${ID}`
+          ? { ok: true, data: deleted ? { ...DETAIL, isActive: false, deletedAt: '2026-09-30T12:00:00.000Z', deactivatedAt: '2026-09-30T12:00:00.000Z' } : DETAIL }
+          : undefined,
+      ...base(),
+    ];
+    const { host, calls } = await open({ replies });
+    await act(async () => host.querySelector<HTMLButtonElement>('[data-admin-action="delete-user"]')?.click());
+    await mounter.settle();
+    expect(document.querySelector('[data-admin-confirm] textarea')).toBeNull();
+    await act(async () => confirmButton()?.click());
+    for (let attempt = 0; attempt < 10; attempt += 1) await mounter.settle();
+    const call = calls().find((request) => request.method === 'DELETE');
+    expect(call?.body).toBeUndefined();
+    expect(textOf(host.querySelector('[data-admin-identity]'))).toContain('Supprimé');
+    expect(host.querySelector('[data-admin-action="restore-user"]')).not.toBeNull();
+    expect(host.querySelector('[data-admin-action="delete-user"]')).toBeNull();
+    expect(textOf(host)).toContain('Compte supprimé');
+  });
+
+  test('un administrateur écrit un motif (trois caractères) : il part sous `reason`', async () => {
+    const replies: RoutedReply[] = [(request) => (request.method === 'DELETE' ? { ok: true, data: { message: 'ok' } } : undefined), ...base()];
+    const { host, calls } = await open({ identity: adminIdentityFixture({ role: 'ADMIN' }), replies });
+    await act(async () => host.querySelector<HTMLButtonElement>('[data-admin-action="delete-user"]')?.click());
+    await mounter.settle();
+    expect(confirmButton()?.disabled).toBe(true);
+    const field = document.querySelector<HTMLTextAreaElement>('[data-admin-confirm] textarea');
+    await act(async () => {
+      if (field === null) return;
+      const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
+      setter?.call(field, 'Compte en double');
+      field.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await mounter.settle();
+    await act(async () => confirmButton()?.click());
+    for (let attempt = 0; attempt < 6; attempt += 1) await mounter.settle();
+    expect(calls().find((request) => request.method === 'DELETE')?.body).toEqual({ reason: 'Compte en double' });
+  });
+
+  test('un rang sans `canDeleteUsers` (modérateur) ne voit aucun des deux gestes', async () => {
+    const { host } = await open({ identity: adminIdentityFixture({ role: 'MODERATOR' }) });
+    expect(host.querySelector('[data-admin-lifecycle]')).toBeNull();
+  });
+
+  test('un compte supprimé offre « Restaurer » seul : POST …/restore, la fiche relue remplace la fiche', async () => {
+    const DELETED = { ...DETAIL, isActive: false, deletedAt: '2026-09-20T12:00:00.000Z', deactivatedAt: '2026-09-20T12:00:00.000Z', deletedBy: '64f1c2a9e8b7d6c5b4a39299' };
+    const replies: RoutedReply[] = [
+      (request) => (request.method === 'POST' && pathOf(request) === `/api/v1/admin/users/${ID}/restore` ? { ok: true, data: { ...DETAIL, isActive: true, deletedAt: null, deletedBy: null } } : undefined),
+      ...base(DELETED),
+    ];
+    const { host, calls } = await open({ replies });
+    expect(host.querySelector('[data-admin-action="delete-user"]')).toBeNull();
+    await act(async () => host.querySelector<HTMLButtonElement>('[data-admin-action="restore-user"]')?.click());
+    await mounter.settle();
+    await act(async () => confirmButton()?.click());
+    for (let attempt = 0; attempt < 6; attempt += 1) await mounter.settle();
+    expect(calls().some((request) => request.method === 'POST' && pathOf(request) === `/api/v1/admin/users/${ID}/restore`)).toBe(true);
+    expect(textOf(host.querySelector('[data-admin-identity]'))).toContain('Actif');
+    expect(host.querySelector('[data-admin-action="delete-user"]')).not.toBeNull();
+    expect(textOf(host)).toContain('Compte restauré');
   });
 });

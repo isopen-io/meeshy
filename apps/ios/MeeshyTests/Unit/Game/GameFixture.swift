@@ -1,4 +1,5 @@
 import Foundation
+@testable import Meeshy
 import MeeshySDK
 
 /// UN BLOC `game` COHÉRENT, bâti par la loi elle-même (jamais écrit à la main) :

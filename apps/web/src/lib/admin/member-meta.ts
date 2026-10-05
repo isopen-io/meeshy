@@ -1,5 +1,6 @@
 import type { AdminLanguage } from '@/lib/i18n-admin-catalog';
 
+import { interpretLockReason } from './interpret/enums';
 import { platformLabel } from './interpret/language';
 
 /**
@@ -68,4 +69,15 @@ export function formatDays(days: number, language: AdminLanguage): string {
 /** Des ANNÉES, avec l'unité de la langue (« 31 ans », « 31 years »). */
 export function formatYears(years: number, language: AdminLanguage): string {
   return new Intl.NumberFormat(language, { style: 'unit', unit: 'year', unitDisplay: 'long' }).format(years);
+}
+
+/**
+ * LE MOTIF D'UN VERROU, EN MOTS — `lockedReason` est un CODE (`FAILED_LOGIN`,
+ * `PASSWORD_RESET_ABUSE`) que la fiche peignait tel quel (audit 2026-10-04).
+ * `null` quand aucun motif n'est servi.
+ */
+export function lockReasonText(reason: string | null, language: AdminLanguage): string | null {
+  if (reason === null || reason === '') return null;
+  const value = interpretLockReason(reason, language);
+  return value.explain === null ? value.label : `${value.label} — ${value.explain}`;
 }

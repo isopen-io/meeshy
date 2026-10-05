@@ -33,7 +33,7 @@ const f = {
   'admin.analytics.activity.now.conversations.caption': 'Conversations où l’on a écrit dans l’heure écoulée',
   'admin.analytics.activity.health.title': 'Santé de l’usage',
   'admin.analytics.activity.health.engagement': 'Taux d’engagement',
-  'admin.analytics.activity.health.engagement.caption': 'Comptes actifs, rapportés à l’ensemble des comptes',
+  'admin.analytics.activity.health.engagement.caption': 'Comptes ayant écrit sur la période, rapportés aux comptes actifs',
   'admin.analytics.activity.health.growth': 'Croissance',
   'admin.analytics.activity.health.growth.caption': 'Nouveaux comptes, en part de l’ensemble des comptes',
   'admin.analytics.activity.health.perUser': 'Messages par compte',

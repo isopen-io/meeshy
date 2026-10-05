@@ -33,6 +33,7 @@ function makePrisma() {
   const prisma = {
     engagementScaleConfig: { findUnique: jest.fn(async () => stored), upsert },
     adminAuditLog: { create: auditCreate },
+    user: { findMany: jest.fn(async () => [{ id: ADMIN_ID, username: 'awa', displayName: 'Awa Diop', avatar: null }]) },
   } as unknown as PrismaClient;
   return { prisma, upsert, auditCreate };
 }
@@ -94,7 +95,7 @@ describe('GET /admin/engagement-scale', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({
       success: true,
-      data: { scale: DEFAULT_ENGAGEMENT_SCALE, updatedAt: null, updatedBy: null },
+      data: { scale: DEFAULT_ENGAGEMENT_SCALE, updatedAt: null, updatedBy: null, updatedByPerson: null },
     });
   });
 });
@@ -130,7 +131,13 @@ describe('PUT /admin/engagement-scale', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({
       success: true,
-      data: { scale: tuned, updatedAt: '2026-09-30T12:00:00.000Z', updatedBy: ADMIN_ID },
+      data: {
+        scale: tuned,
+        updatedAt: '2026-09-30T12:00:00.000Z',
+        updatedBy: ADMIN_ID,
+        // « Réglé par » se NOMME (audit 2026-10-04) : un ObjectId nu ne dit rien.
+        updatedByPerson: { id: ADMIN_ID, username: 'awa', displayName: 'Awa Diop', avatar: null },
+      },
     });
     expect(upsert).toHaveBeenCalledWith(expect.objectContaining({ where: { key: 'default' } }));
     expect(auditCreate).toHaveBeenCalledWith({
@@ -142,5 +149,19 @@ describe('PUT /admin/engagement-scale', () => {
       }),
     });
     expect(await creditCache.current()).toEqual(tuned);
+  });
+
+  // Un diff À PLAT : chaque clé pointée qui a CHANGÉ, et elle seule. Le journal
+  // portait les deux barèmes entiers — illisible, et la console n'en tirait rien.
+  it('trace un diff à plat des seules valeurs changées', async () => {
+    const { auditCreate } = await call('ADMIN', 'PUT', { scale: tuned });
+    const changes = JSON.parse((auditCreate.mock.calls[0][0] as { data: { changes: string } }).data.changes);
+    expect(changes['multiplier.maxFactor']).toEqual({ before: DEFAULT_ENGAGEMENT_SCALE.multiplier.maxFactor, after: 3 });
+    expect(changes).not.toHaveProperty(['operations.tool.reaction.points']); // 2 avant comme après : inchangé, absent
+    expect(Object.keys(changes).some((k) => k.startsWith('operations.tool.reaction.'))).toBe(true);
+    expect(Object.keys(changes).every((k) => !['before', 'after'].includes(k))).toBe(true);
+    for (const { before, after } of Object.values(changes) as Array<{ before: unknown; after: unknown }>) {
+      expect(JSON.stringify(before)).not.toBe(JSON.stringify(after));
+    }
   });
 });

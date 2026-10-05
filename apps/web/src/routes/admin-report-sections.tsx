@@ -23,6 +23,7 @@ import {
   type ReportActionLink,
   type ReportTimelineStep,
 } from '@/lib/admin/report-model';
+import { reportStepLabel } from '@/lib/admin/report-summaries';
 import type { AdminReach } from '@/lib/admin/use-admin-reach';
 import { ApiError } from '@/lib/api/client';
 import type { AdminPage } from '@/lib/api/admin-page';
@@ -149,19 +150,7 @@ export function ReasonSection({ language, report }: { readonly language: AdminLa
   );
 }
 
-export function HandlingSection({
-  language,
-  report,
-  editable,
-  actionChoice,
-  onActionChoice,
-}: {
-  readonly language: AdminLanguage;
-  readonly report: AdminReport;
-  readonly editable: boolean;
-  readonly actionChoice: string;
-  readonly onActionChoice: (action: string) => void;
-}) {
+export function HandlingSection({ language, report }: { readonly language: AdminLanguage; readonly report: AdminReport }) {
   const status = interpretReportStatus(report.status, language);
   const recorded = report.actionTaken === null ? null : interpretReportAction(report.actionTaken, language);
 
@@ -205,30 +194,46 @@ export function HandlingSection({
           explain={recorded?.explain ?? null}
         />
       </dl>
-      {editable ? (
-        <label className="grid gap-1">
-          <span className="text-caption font-medium" style={{ color: INK2 }}>
-            {translateAdmin(language, 'admin.moderation.handling.actionChoice')}
-          </span>
-          <select
-            data-admin-action-choice
-            value={actionChoice}
-            onChange={(event) => onActionChoice(event.target.value)}
-            className={`rounded-chip px-3 text-body ${FOCUS}`}
-            style={{ minHeight: 44, backgroundColor: 'var(--color-ios-surface)', border: `1px solid ${EDGE}`, color: INK, outlineColor: 'var(--color-ios-brand)' }}
-          >
-            {REPORT_ACTIONS.map((action) => (
-              <option key={action} value={action}>
-                {interpretReportAction(action, language).label}
-              </option>
-            ))}
-          </select>
-          <span className="text-caption" style={{ color: INK2 }}>
-            {translateAdmin(language, 'admin.moderation.handling.actionHint')}
-          </span>
-        </label>
-      ) : null}
     </AdminFicheSection>
+  );
+}
+
+/**
+ * L'action à consigner avec « Résoudre » — choisie AVANT le geste, donc offerte
+ * sur la carte « Traitement » elle-même (la décision ne se cache pas dans une
+ * modale) tant que le dossier est ouvert.
+ */
+export function ReportActionChoice({
+  language,
+  actionChoice,
+  onActionChoice,
+}: {
+  readonly language: AdminLanguage;
+  readonly actionChoice: string;
+  readonly onActionChoice: (action: string) => void;
+}) {
+  return (
+    <label className="grid gap-1">
+      <span className="text-caption font-medium" style={{ color: INK2 }}>
+        {translateAdmin(language, 'admin.moderation.handling.actionChoice')}
+      </span>
+      <select
+        data-admin-action-choice
+        value={actionChoice}
+        onChange={(event) => onActionChoice(event.target.value)}
+        className={`rounded-chip px-3 text-body ${FOCUS}`}
+        style={{ minHeight: 44, backgroundColor: 'var(--color-ios-surface)', border: `1px solid ${EDGE}`, color: INK, outlineColor: 'var(--color-ios-brand)' }}
+      >
+        {REPORT_ACTIONS.map((action) => (
+          <option key={action} value={action}>
+            {interpretReportAction(action, language).label}
+          </option>
+        ))}
+      </select>
+      <span className="text-caption" style={{ color: INK2 }}>
+        {translateAdmin(language, 'admin.moderation.handling.actionHint')}
+      </span>
+    </label>
   );
 }
 
@@ -238,12 +243,7 @@ function StepView({ language, report, step, now }: { readonly language: AdminLan
   const when = moment(step.at, now, language);
   const tone = step.id === 'closed' ? interpretReportStatus(step.status, language).tone : 'neutral';
   const glyph: AdminGlyphName = step.id === 'received' ? 'flag' : step.id === 'taken' ? 'eye' : STEP_GLYPH[step.status];
-  const label =
-    step.id === 'received'
-      ? translateAdmin(language, 'admin.moderation.timeline.received')
-      : step.id === 'taken'
-        ? translateAdmin(language, 'admin.moderation.timeline.taken', { moderator: reportPersonName(reportModeratorOf(report, language), language) })
-        : translateAdmin(language, 'admin.moderation.timeline.closed', { status: interpretReportStatus(step.status, language).label });
+  const label = reportStepLabel(report, step, language);
 
   return (
     <li data-admin-timeline-step={step.id} className="flex items-start gap-3">

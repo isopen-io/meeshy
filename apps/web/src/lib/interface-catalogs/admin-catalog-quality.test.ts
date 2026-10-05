@@ -198,6 +198,9 @@ const SAME_AS_ENGLISH: Readonly<Record<Language, ReadonlySet<string>>> = {
     'admin.people.prefValue.audioFormat.wav',
     'admin.people.prefValue.audioFormat.ogg',
     'admin.agentPanel.trigger.manual',
+    /* Emprunts courants du portugais brésilien (lot Échanges et contenus) : « link », « downloads ». */
+    'admin.posts.story.link',
+    'admin.posts.metric.downloads',
   ]),
 };
 

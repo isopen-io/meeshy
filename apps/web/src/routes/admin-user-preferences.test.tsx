@@ -81,6 +81,22 @@ describe('les préférences d’un membre, modifiables', () => {
     expect(annonces.at(-1)).toContain('consentement');
   });
 
+  test('l’enveloppe RÉELLE de la passerelle (`error` et `code` = CONSENT_REQUIRED) se lit comme un refus de consentement', async () => {
+    const { hote } = await monter({ ok: false, status: 403, error: 'CONSENT_REQUIRED', code: 'CONSENT_REQUIRED' });
+    act(() => hote.querySelector<HTMLButtonElement>('[data-collapsible-toggle="admin-prefs-audio"]')?.click());
+    act(() => bascule(hote, 'audio.transcriptionEnabled')?.click());
+    await attendre();
+    expect(hote.querySelector('[data-admin-preferences-error]')?.textContent).toContain('consentement');
+  });
+
+  test('un serveur d’avant, sans `code`, est lu par son `error`', async () => {
+    const { hote } = await monter({ ok: false, status: 403, error: 'CONSENT_REQUIRED' });
+    act(() => hote.querySelector<HTMLButtonElement>('[data-collapsible-toggle="admin-prefs-audio"]')?.click());
+    act(() => bascule(hote, 'audio.transcriptionEnabled')?.click());
+    await attendre();
+    expect(hote.querySelector('[data-admin-preferences-error]')?.textContent).toContain('consentement');
+  });
+
   test('le chiffrement se lit sans pouvoir s’écrire', async () => {
     const { hote } = await monter({ ok: true, data: {} });
     const liste = hote.querySelector<HTMLSelectElement>('[data-admin-preference-select="privacy.encryptionPreference"]');

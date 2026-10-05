@@ -14,8 +14,7 @@ import type { AdminDeps } from '@/lib/api/admin';
 import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 /**
- * **LES PIÈCES COMMUNES DU TABLEAU DE BORD** (#8876, § 4) — une ZONE (un titre,
- * une phrase d'aide, ses blocs), un BLOC de cartes, un bloc de liste, et les
+ * **LES PIÈCES COMMUNES DU TABLEAU DE BORD** (#8876, § 4) — un BLOC titré, un BLOC de cartes, un bloc de liste, et les
  * quatre états qu'ils partagent (squelette, vide, erreur avec « Réessayer »,
  * refus). Chaque bloc se rend seul : une erreur ici ne retient jamais la zone
  * d'à côté.
@@ -27,25 +26,6 @@ export type DashContext = {
 };
 
 const SKELETON = 'color-mix(in srgb, var(--color-ios-ink-3) 12%, transparent)';
-
-export function DashZone({ id, title, hint, children }: { readonly id: string; readonly title: string; readonly hint?: string; readonly children: ReactNode }) {
-  const heading = useId();
-  return (
-    <section data-admin-zone={id} aria-labelledby={heading} className="grid content-start gap-3">
-      <div className="grid gap-1">
-        <h2 id={heading} className="text-title font-semibold" style={{ color: INK }}>
-          {title}
-        </h2>
-        {hint === undefined ? null : (
-          <p className="text-caption" style={{ color: INK2 }}>
-            {hint}
-          </p>
-        )}
-      </div>
-      {children}
-    </section>
-  );
-}
 
 /** Un bloc nommé d'une zone : son titre (niveau 3) puis son contenu. `aria-busy` tant que rien n'est arrivé. */
 export function DashSection({ id, title, busy = false, children }: { readonly id: string; readonly title: string; readonly busy?: boolean; readonly children: ReactNode }) {

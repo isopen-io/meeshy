@@ -75,7 +75,7 @@ export function AdminCommunityActions({
   const confirm = async (gesture: CommunityGesture, motive: string | null) => {
     const words = communityGestureWords(gesture.id, language);
     const done = await action.run({
-      call: () => updateAdminCommunity({ ...deps, communityId: fiche.id, change: gesture.change, reason: motive ?? '' }),
+      call: () => updateAdminCommunity({ ...deps, communityId: fiche.id, change: gesture.change, reason: motive }),
       success: words.done,
       optimistic: { key: adminCommunityQueryKey(fiche.id), apply: (before) => withCommunityChange(before, gesture.change, new Date().toISOString()) },
       invalidate: [['admin', 'community']],

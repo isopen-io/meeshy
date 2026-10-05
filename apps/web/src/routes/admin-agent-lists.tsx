@@ -1,11 +1,13 @@
 import { useQuery } from '@tanstack/react-query';
 
+import { AdminGlyph } from '@/components/admin/admin-glyph';
 import { AdminBadge, AdminInterpretedBadge } from '@/components/admin/badges';
+import { AdminButton } from '@/components/admin/button';
 import { AdminEntityChip, AdminEntityIdentity } from '@/components/admin/entity-chip';
 import { AdminEntityList, type AdminColumn } from '@/components/admin/entity-list';
 import { AdminListToolbar, type AdminToolbarFilter } from '@/components/admin/list-toolbar';
 import { AdminMetaPanel, AdminMetaRow, AdminMomentText, AdminTechnicalId } from '@/components/admin/meta';
-import { AdminErrorState } from '@/components/admin/states';
+import { AdminErrorState, AdminInlineNotice } from '@/components/admin/states';
 import { Sheet } from '@/components/sheet';
 import {
   AGENT_OUTCOMES,
@@ -39,9 +41,10 @@ import { AgentRelaunchControl } from './admin-agent-controls';
 
 /**
  * **LES DEUX LISTES DE L'AGENT** (#6733, #8876) — les conversations SUIVIES
- * (recherche par titre, état, membres pilotés, dernière réponse, et le pilotage
- * en ligne) et le JOURNAL des scans (issue et déclencheur en mots, filtrables ;
- * chaque ligne ouvre son détail).
+ * (recherche par titre, état, membres pilotés, dernière réponse, le pilotage
+ * en ligne, et le bouton qui ouvre la fiche de l'agent sur la conversation) et le
+ * JOURNAL des scans (issue et déclencheur en mots, période en jours, restreint à
+ * une conversation depuis sa fiche ; chaque ligne ouvre son détail).
  *
  * ## Nommées, mais pas plus que ce que la passerelle sert
  *
@@ -72,7 +75,12 @@ export function AgentTrackedList({
   deps,
   now = defaultNow,
   announce,
-}: ListProps & { readonly announce: (message: string, tone?: AnnouncementTone) => void }) {
+  onOpenSettings,
+}: ListProps & {
+  readonly announce: (message: string, tone?: AnnouncementTone) => void;
+  /** Ouvre la fiche de l'agent sur cette conversation (réglages, résumé, planning, rôles, messages). */
+  readonly onOpenSettings: (conversation: AgentTrackedConversation) => void;
+}) {
   const list = useLocalAdminList<AgentTrackedConversation, never>({
     queryKey: (state) => agentTrackedQueryKey(state.offset, state.limit, state.q),
     load: (state, signal) => loadAgentTracked({ ...deps, offset: state.offset, limit: state.limit, search: state.q, signal }),
@@ -140,6 +148,11 @@ export function AgentTrackedList({
         />
       ),
     },
+    {
+      id: 'settings',
+      header: translateAdmin(language, 'admin.agentPanel.tracked.col.settings'),
+      cell: (row) => <SettingsOpenCell language={language} row={row} onOpen={() => onOpenSettings(row)} />,
+    },
   ];
 
   const total = list.query.data?.total;
@@ -170,6 +183,31 @@ export function AgentTrackedList({
   );
 }
 
+/** Le bouton qui ouvre la fiche de l'agent sur une conversation — son nom accessible dit LAQUELLE. */
+function SettingsOpenCell({
+  language,
+  row,
+  onOpen,
+}: {
+  readonly language: AdminLanguage;
+  readonly row: AgentTrackedConversation;
+  readonly onOpen: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      data-agent-config-open={row.conversationId}
+      aria-label={translateAdmin(language, 'admin.agentPanel.conv.openNamed', { name: agentConversationRefOf(row, language).label })}
+      onClick={onOpen}
+      className="inline-flex items-center gap-2 rounded-chip px-4 text-body font-semibold focus-visible:outline-2 focus-visible:outline-offset-2"
+      style={{ minHeight: 44, color: 'var(--color-ios-brand)', border: '1px solid var(--color-edge)', outlineColor: 'var(--color-ios-brand)' }}
+    >
+      <AdminGlyph name="gear" size={16} />
+      {translateAdmin(language, 'admin.agentPanel.conv.open')}
+    </button>
+  );
+}
+
 /** Une ligne du journal : la conversation nommée ET un bouton qui ouvre le détail du scan — le clavier y arrive, pas seulement la souris. */
 function LogOpenCell({
   language,
@@ -195,21 +233,31 @@ function LogOpenCell({
   );
 }
 
+/** Restreindre le journal à UNE conversation — posé depuis sa fiche, nommé, et retirable d'un geste. */
+export type AgentLogConversation = { readonly id: string; readonly name: string };
+
 export function AgentLogList({
   language,
   deps,
   now = defaultNow,
   onOpen,
-}: ListProps & { readonly onOpen: (logId: string) => void }) {
-  const list = useLocalAdminList<AgentScanLogRow, 'outcome' | 'trigger'>({
-    queryKey: (state) => agentScanLogsQueryKey(state.offset, state.limit, state.filters.outcome ?? '', state.filters.trigger ?? ''),
+  conversation = null,
+  onClearConversation,
+}: ListProps & {
+  readonly onOpen: (logId: string) => void;
+  readonly conversation?: AgentLogConversation | null;
+  readonly onClearConversation?: () => void;
+}) {
+  const list = useLocalAdminList<AgentScanLogRow, 'outcome' | 'trigger' | 'from' | 'to'>({
+    queryKey: (state) =>
+      agentScanLogsQueryKey(state.offset, state.limit, { ...state.filters, ...(conversation === null ? {} : { conversationId: conversation.id }) }),
     load: (state, signal) =>
       loadAgentScanLogs({
         ...deps,
+        ...state.filters,
+        ...(conversation === null ? {} : { conversationId: conversation.id }),
         offset: state.offset,
         limit: state.limit,
-        outcome: state.filters.outcome ?? '',
-        trigger: state.filters.trigger ?? '',
         signal,
       }),
     pageSizes: ADMIN_AGENT_PAGE_SIZES,
@@ -290,12 +338,53 @@ export function AgentLogList({
         rowTarget={() => null}
         caption={translateAdmin(language, 'admin.agentPanel.logs.caption')}
         toolbar={
-          <AdminListToolbar
-            language={language}
-            filters={filters}
-            onReset={list.reset}
-            {...(total === undefined ? {} : { trailing: translateAdmin(language, 'admin.agentPanel.logs.count', { count: formatCount(total, language) }) })}
-          />
+          <div className="grid gap-3">
+            {conversation === null ? null : (
+              <AdminInlineNotice
+                tone="info"
+                text={translateAdmin(language, 'admin.agentPanel.logs.filter.conversation', { name: conversation.name })}
+                {...(onClearConversation === undefined
+                  ? {}
+                  : {
+                      action: (
+                        <AdminButton onClick={onClearConversation} data={{ 'data-agent-logs-conversation-clear': '' }}>
+                          {translateAdmin(language, 'admin.agentPanel.logs.filter.conversationClear')}
+                        </AdminButton>
+                      ),
+                    })}
+              />
+            )}
+            <AdminListToolbar
+              language={language}
+              filters={filters}
+              onReset={list.reset}
+              {...(total === undefined ? {} : { trailing: translateAdmin(language, 'admin.agentPanel.logs.count', { count: formatCount(total, language) }) })}
+            />
+            <div className="flex flex-wrap gap-3">
+              {(['from', 'to'] as const).map((bound) => (
+                <label key={bound} className="grid gap-1">
+                  <span className="text-caption font-medium" style={{ color: 'var(--color-ios-ink-2)' }}>
+                    {translateAdmin(language, bound === 'from' ? 'admin.agentPanel.logs.filter.from' : 'admin.agentPanel.logs.filter.to')}
+                  </span>
+                  <input
+                    type="date"
+                    data-agent-logs-bound={bound}
+                    value={list.state.filters[bound] ?? ''}
+                    onInput={(event) => list.filter(bound, event.currentTarget.value === '' ? null : event.currentTarget.value)}
+                    onChange={() => undefined}
+                    className="rounded-chip px-3 text-body focus-visible:outline-2 focus-visible:outline-offset-2"
+                    style={{
+                      minHeight: 44,
+                      backgroundColor: 'var(--color-ios-surface)',
+                      border: '1px solid var(--color-edge)',
+                      color: 'var(--color-ios-ink)',
+                      outlineColor: 'var(--color-ios-brand)',
+                    }}
+                  />
+                </label>
+              ))}
+            </div>
+          </div>
         }
         empty={{ title: translateAdmin(language, 'admin.agentPanel.logs.empty'), hint: translateAdmin(language, 'admin.agentPanel.logs.emptyHint') }}
         filteredEmpty={{ title: translateAdmin(language, 'admin.agentPanel.logs.filteredEmpty') }}

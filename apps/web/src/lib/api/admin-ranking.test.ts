@@ -8,6 +8,7 @@ import {
   servedRanking,
   servedShareRank,
   servedTrackingRank,
+  servedGuestRank,
   servedUserRank,
 } from '@/lib/admin/ranking-fixtures';
 import { DEFAULT_RANKING_STATE, withCriterion, withEntityType } from '@/lib/admin/ranking-state';
@@ -27,6 +28,7 @@ describe('decodeAdminRanking — les membres', () => {
         kind: 'users',
         id: OBJECT_ID(1),
         account: { username: 'membre1', displayName: 'Membre 1', avatar: 'https://cdn.exemple/a.png' },
+        guest: null,
         count: 99,
         lastActivity: '2026-09-30T10:00:00.000Z',
       },
@@ -39,7 +41,13 @@ describe('decodeAdminRanking — les membres', () => {
       USERS,
     );
 
-    expect(rows).toEqual([{ kind: 'users', id: OBJECT_ID(2), account: null, count: 98, lastActivity: null }]);
+    expect(rows).toEqual([{ kind: 'users', id: OBJECT_ID(2), account: null, guest: null, count: 98, lastActivity: null }]);
+    expect(JSON.stringify(rows)).not.toContain('Unknown');
+  });
+
+  test('un invité (`guest: true`) garde son nom affiché, sans compte', () => {
+    const { rows } = decodeAdminRanking(servedRanking([servedGuestRank(5)]), USERS);
+    expect(rows[0]).toMatchObject({ kind: 'users', id: OBJECT_ID(5), account: null, guest: { displayName: 'Invité 5' } });
     expect(JSON.stringify(rows)).not.toContain('Unknown');
   });
 

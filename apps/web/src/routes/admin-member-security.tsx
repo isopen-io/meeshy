@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 
 import { AdminBadge } from '@/components/admin/badges';
 import { adminDate } from '@/lib/admin/interpret/time';
+import { lockReasonText } from '@/lib/admin/member-meta';
 import { useAdminReach } from '@/lib/admin/use-admin-reach';
 import type { AdminDeps } from '@/lib/api/admin';
 import type { AdminUserDetail } from '@/lib/api/admin-user-detail';
@@ -151,7 +152,7 @@ export function AdminMemberSecuritySection({
     tone: granted ? 'primary' : 'danger',
     motive: { label: t('admin.people.motive.required'), minLength: MOTIVE_MIN_SOVEREIGN, required: true },
     success: 'admin.people.consent.done',
-    call: (reason) => setAdminUserConsent({ ...deps, userId: membre.id, consent, granted, reason: reason ?? '' }),
+    call: (reason) => setAdminUserConsent({ ...deps, userId: membre.id, consent, granted, reason }),
   });
 
   const proofRows: readonly { readonly channel: AdminProofChannel; readonly at: string | null }[] = [
@@ -191,7 +192,7 @@ export function AdminMemberSecuritySection({
                 {translateAdmin(language, 'admin.people.lock.until', { date: adminDate(membre.lockedUntil, language) })}
               </AdminBadge>
             }
-            hint={membre.lockedReason ?? t('admin.people.lock.explain')}
+            hint={lockReasonText(membre.lockedReason, language) ?? t('admin.people.lock.explain')}
             action={button(unlock, t('admin.people.unlock.confirm'), 'primary')}
           />
         ) : null}

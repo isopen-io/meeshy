@@ -319,13 +319,30 @@ describe('PATCH /admin/users/:userId/consents — le rang souverain', () => {
     await app.close();
   });
 
-  it('refuse un souverain SANS motif écrit', async () => {
+  // Spec 2026-10-04 § 4 : le rang souverain n'a rien à justifier.
+  it('admet un souverain SANS motif, et journalise le geste sans motif', async () => {
     const app = await buildApp('BIGBOSS');
 
     const res = await app.inject({
       method: 'PATCH',
       url: `/admin/users/${CIBLE_ID}/consents`,
       payload: { voiceProfile: true },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(service.toggleVoiceConsent).toHaveBeenCalledWith(CIBLE_ID, 'voiceProfile', true);
+    expect(derniereTrace('UPDATE_CONSENT')?.metadata).toBeNull();
+
+    await app.close();
+  });
+
+  it('refuse un souverain dont le motif FOURNI est trop court', async () => {
+    const app = await buildApp('BIGBOSS');
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/admin/users/${CIBLE_ID}/consents`,
+      payload: { voiceProfile: true, reason: 'RGPD' },
     });
 
     expect(res.statusCode).toBe(400);

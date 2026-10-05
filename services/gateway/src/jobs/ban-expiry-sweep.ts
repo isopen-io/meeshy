@@ -79,7 +79,8 @@ export class BanExpirySweepJob {
             userId: ban.userId,
             adminId: SYSTEM_ACTOR_ID,
             action: UserAuditAction.UNBAN_USER,
-            entityId: ban.id,
+            // entity 'User' : l'identifiant est celui du MEMBRE ; le ban est dans metadata.
+            entityId: ban.userId,
             changes: {},
             metadata: { reason: 'expired', banId: ban.id, expiresAt: ban.expiresAt?.toISOString() ?? null },
           });

@@ -11,7 +11,7 @@ const f = {
   'admin.dash.zone.usage': 'Usage health',
   'admin.dash.zone.usage.hint': 'Measured over the last 30 days.',
   'admin.dash.zone.trends': 'Trends',
-  'admin.dash.zone.trends.hint': 'Days and time slots are the server’s.',
+  'admin.dash.zone.trends.hint': 'Days are the server’s; time slots are shown in your time zone when the server allows it.',
   'admin.dash.zone.todo': 'To handle',
   'admin.dash.zone.people': 'People and exchanges',
   'admin.dash.zone.system': 'System',
@@ -41,7 +41,7 @@ const f = {
   'admin.dash.platform.admins.caption': 'Administrators and creator',
 
   'admin.dash.usage.engagement': 'Engagement rate',
-  'admin.dash.usage.engagement.caption': 'Accounts seen over the period, out of all accounts',
+  'admin.dash.usage.engagement.caption': 'Accounts that wrote over the period, out of active accounts',
   'admin.dash.usage.growth': 'Growth',
   'admin.dash.usage.growth.caption': 'New accounts over the period, out of all accounts',
   'admin.dash.usage.perUser': 'Messages per account',
@@ -110,6 +110,14 @@ const f = {
   'admin.dash.agent.messages.caption': 'By the agent, since the start',
   'admin.dash.agent.last': 'Last activity',
   'admin.dash.agent.last.none': 'No activity',
+
+  'admin.dash.hourly.titleUtc': 'Activity per 3-hour slot (last 24 hours, UTC)',
+  'admin.dash.todo.reports': 'Pending reports: {count}',
+  'admin.dash.todo.broadcasts': 'Broadcasts in progress: {count}',
+  'admin.dash.todo.nothing': 'Nothing to handle',
+  'admin.dash.platform.translations': 'Translations',
+  'admin.dash.platform.reports': 'Reports',
+  'admin.dash.system.ok': 'All services are responding.',
 } satisfies AdminCatalogFragment<typeof fr>;
 
 export default f;

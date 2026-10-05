@@ -37,15 +37,30 @@ export function visibleInterval<T>(every: (data: T | undefined) => number | fals
   return (query: { readonly state: { readonly data: T | undefined } }): number | false => (pageIsVisible() ? every(query.state.data) : false);
 }
 
-export function useDashBlock<T>(spec: {
+/**
+ * UNE LECTURE du tableau de bord : sa clé, son chargement, sa fraîcheur. Écrite UNE
+ * fois (`dashboard-reads.ts`) et partagée par la carte résumée du hub ET le bloc de
+ * sa modale : même clé, donc un seul aller-retour, et la modale s'ouvre sur des
+ * chiffres déjà là.
+ */
+export type DashRead<T> = {
   /** Le nom du bloc, sous `['admin', 'dash', …]` : jamais persisté, invalidé d'un coup par « Recalculer maintenant ». */
   readonly key: readonly string[];
   readonly load: (signal: AbortSignal) => Promise<ApiResult<T>>;
   readonly staleTime: number;
   /** Si posée, la relecture périodique (en ms, ou `false` pour la suspendre) — toujours conditionnée à la visibilité de l'onglet. */
   readonly refetchEvery?: (data: T | undefined) => number | false;
-}): DashBlock<T> {
+};
+
+/**
+ * `enabled: false` : la lecture ne part pas (le lecteur n'a pas la capacité de sa
+ * route) — le bloc reste `loading`, et c'est l'appelant qui sait qu'il ne le
+ * montrera pas. Une carte qui lit DEUX routes sous deux capacités (Système :
+ * santé et agent) appelle les deux crochets, toujours dans le même ordre.
+ */
+export function useDashBlock<T>(spec: DashRead<T>, options: { readonly enabled?: boolean } = {}): DashBlock<T> {
   const query = useQuery<T>({
+    enabled: options.enabled !== false,
     queryKey: [...ADMIN_DASH_QUERY_KEY, ...spec.key],
     queryFn: async ({ signal }) => unwrap(await spec.load(signal)),
     staleTime: spec.staleTime,

@@ -18,7 +18,7 @@ import MeeshySDK
 ///
 /// Ce que le bloc `game` ne sert pas n'est jamais inventé : une Flamme éteinte
 /// ne dit pas combien de jours elle valait (`lostDays: 0`), et « un badge s'est
-/// éteint » n'est pas annoncé tant que le plan de débit n'est pas porté sur iOS.
+/// éteint » n'est annoncé que si le calcul AVANT la frappe existait.
 enum GameGuideEvents {
 
     static let absenceDays = 7
@@ -90,7 +90,9 @@ enum GameGuideEvents {
         return discoveries.filter { !seen.contains($0.key.rawValue) } + urgencies
     }
 
-    static func transitions(from before: GameBlock, to after: GameBlock) -> [GuideEvent] {
+    /// `badgeImpactBefore` : ce que la frappe ALLAIT éteindre, calculé sur la lecture d'AVANT le geste —
+    /// c'est lui qui dit « 11 actions pour le rallumer ». Absent (serveur sans points par axe), rien n'est annoncé.
+    static func transitions(from before: GameBlock, to after: GameBlock, badgeImpactBefore: MintBadgeImpact? = nil) -> [GuideEvent] {
         var events: [GuideEvent] = []
         if before.level.level < 2 && after.level.level >= 2 {
             events.append(.firstLevel(level: after.level.level, pointsToNext: after.level.pointsToNext))
@@ -107,6 +109,9 @@ enum GameGuideEvents {
         }
         if after.mint.price > before.mint.price {
             events.append(.priceRises(nextPrice: after.mint.price))
+        }
+        if after.mint.number > before.mint.number, let impact = badgeImpactBefore, impact.lost > 0 {
+            events.append(.badgeExtinguished(missingActions: impact.regain))
         }
         if standingOrder(after) > standingOrder(before) {
             events.append(rankEvent(after))

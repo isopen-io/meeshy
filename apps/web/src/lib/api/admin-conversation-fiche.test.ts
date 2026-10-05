@@ -129,6 +129,33 @@ describe('decodeAdminConversationMember — nommé, jamais désigné par son ide
       isActive: true,
       isOnline: true,
       joinedAt: '2026-08-01T10:00:00.000Z',
+      nickname: 'Surnom',
+      departure: null,
+    });
+  });
+
+  describe('le départ d’un membre (leftAt / bannedAt, audit 2026-10-04)', () => {
+    const parti = (extra: Readonly<Record<string, unknown>>) =>
+      decodeAdminConversationMember({ id: OBJECT_ID(13), userId: OBJECT_ID(23), type: 'user', role: 'member', isActive: false, ...extra })?.departure;
+
+    test('banni : `bannedAt` prime, avec sa date', () => {
+      expect(parti({ leftAt: '2026-09-01T00:00:00.000Z', bannedAt: '2026-09-02T00:00:00.000Z' })).toEqual({ kind: 'banned', at: '2026-09-02T00:00:00.000Z' });
+    });
+
+    test('parti : `leftAt` posé, avec sa date', () => {
+      expect(parti({ leftAt: '2026-09-01T00:00:00.000Z', bannedAt: null })).toEqual({ kind: 'left', at: '2026-09-01T00:00:00.000Z' });
+    });
+
+    test('retiré : les deux colonnes SERVIES et vides', () => {
+      expect(parti({ leftAt: null, bannedAt: null })).toEqual({ kind: 'removed', at: null });
+    });
+
+    test('un ancien serveur ne sert aucune des deux : un champ absent n’est pas un champ nul', () => {
+      expect(parti({})).toEqual({ kind: 'unknown', at: null });
+    });
+
+    test('un membre actif n’a pas de départ, même avec une date résiduelle', () => {
+      expect(decodeAdminConversationMember({ id: OBJECT_ID(14), userId: OBJECT_ID(24), isActive: true, leftAt: '2026-09-01T00:00:00.000Z' })?.departure).toBe(null);
     });
   });
 

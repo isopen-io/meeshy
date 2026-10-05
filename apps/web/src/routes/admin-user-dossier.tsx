@@ -10,19 +10,23 @@ import { AdminEmptyState } from '@/components/admin/states';
 import type { AdminTarget } from '@/lib/admin/admin-routes';
 import {
   interpretAccountState,
+  interpretCallQuality,
   interpretFriendStatus,
   interpretParticipantRole,
+  interpretReportAction,
   interpretReportStatus,
   interpretReportType,
   interpretReportedEntity,
   interpretSecurityStatus,
   interpretSeverity,
 } from '@/lib/admin/interpret/enums';
-import { formatCount } from '@/lib/admin/interpret/numbers';
+import { formatCount, formatPercent } from '@/lib/admin/interpret/numbers';
+import { deviceLabel } from '@/lib/admin/member-meta';
 import { adminDate, adminMomentOf, formatDuration } from '@/lib/admin/interpret/time';
 import { securityEventLabel } from '@/lib/admin/user-dossier-labels';
 import { userEntityOf } from '@/lib/admin/user-entity';
 import type { AdminDeps } from '@/lib/api/admin';
+import type { AdminMemberCounts } from '@/lib/api/admin-user-detail';
 import {
   adminUserActivityQueryKey,
   adminUserCommunitiesQueryKey,
@@ -36,6 +40,7 @@ import {
   loadAdminUserReportsReceived,
   loadAdminUserSecurityEvents,
   loadAdminUserVoice,
+  type AdminActivity,
   type AdminCommunity,
   type AdminContact,
   type AdminReport,
@@ -103,7 +108,25 @@ const identityColumn = <Row,>(header: string, entityOf: (row: Row) => AdminEntit
   cell: (row) => <AdminEntityIdentity language={language} size="sm" entity={entityOf(row)} />,
 });
 
-export function AdminUserContactsTab({ userId, language, deps = apiDeps, now = () => new Date() }: TabProps) {
+/**
+ * LE COMPTE DES DEMANDES — le total SERVI (`totals`), sinon les compteurs de la fiche
+ * (`_count`), jamais la longueur d'une liste que la passerelle borne à cinquante par
+ * sens : « 50 » laissait croire la liste complète (audit 2026-10-04). `null` quand
+ * aucune source ne le dit.
+ */
+export function contactsTotalOf(totals: AdminActivity['totals'], fallback: AdminMemberCounts | null | undefined): number | null {
+  if (totals !== null) return totals.contactsSent + totals.contactsReceived;
+  if (fallback === null || fallback === undefined) return null;
+  return fallback.sentFriendRequests + fallback.receivedFriendRequests;
+}
+
+export function AdminUserContactsTab({
+  userId,
+  language,
+  deps = apiDeps,
+  now = () => new Date(),
+  fallback = null,
+}: TabProps & { readonly fallback?: AdminMemberCounts | null }) {
   const activite = useQuery({
     queryKey: adminUserActivityQueryKey(userId),
     queryFn: ({ signal }) => servi(loadAdminUserActivity({ ...deps, userId, signal })),
@@ -121,29 +144,37 @@ export function AdminUserContactsTab({ userId, language, deps = apiDeps, now = (
   return (
     <div className="grid gap-3" data-admin-contacts>
       <DossierGate language={language} query={activite} rows={4}>
-        {({ contacts, shareLinks, trackingLinks, affiliateTokens }) => (
-          <>
-            <p className="text-caption" style={{ color: INK2 }}>
-              {translateAdmin(language, 'admin.contacts.links', {
-                share: String(shareLinks),
-                tracking: String(trackingLinks),
-                affiliate: String(affiliateTokens),
-              })}
-            </p>
-            {contacts.length === 0 ? (
-              <AdminEmptyState title={translateAdmin(language, 'admin.dossier.empty')} glyph="list" />
-            ) : (
-              <AdminResponsiveRows
-                columns={columns}
-                rows={contacts}
-                rowKey={(contact) => contact.id}
-                rowTarget={(contact) => targetOf(contactEntity(contact))}
-                rowAttributes={(contact) => ({ 'data-admin-contact': contact.id })}
-                caption={translateAdmin(language, 'admin.tab.contacts')}
-              />
-            )}
-          </>
-        )}
+        {({ contacts, shareLinks, trackingLinks, affiliateTokens, totals }) => {
+          const total = contactsTotalOf(totals, fallback);
+          return (
+            <>
+              <p className="text-caption" style={{ color: INK2 }}>
+                {translateAdmin(language, 'admin.contacts.links', {
+                  share: formatCount(shareLinks, language),
+                  tracking: formatCount(trackingLinks, language),
+                  affiliate: formatCount(affiliateTokens, language),
+                })}
+              </p>
+              {total === null || total <= contacts.length ? null : (
+                <p data-admin-contacts-capped className="text-caption" style={{ color: INK2 }}>
+                  {translateAdmin(language, 'admin.people.dossier.contactsCapped', { shown: formatCount(contacts.length, language), total: formatCount(total, language) })}
+                </p>
+              )}
+              {contacts.length === 0 ? (
+                <AdminEmptyState title={translateAdmin(language, 'admin.dossier.empty')} glyph="list" />
+              ) : (
+                <AdminResponsiveRows
+                  columns={columns}
+                  rows={contacts}
+                  rowKey={(contact) => contact.id}
+                  rowTarget={(contact) => targetOf(contactEntity(contact))}
+                  rowAttributes={(contact) => ({ 'data-admin-contact': contact.id })}
+                  caption={translateAdmin(language, 'admin.tab.contacts')}
+                />
+              )}
+            </>
+          );
+        }}
       </DossierGate>
     </div>
   );
@@ -207,6 +238,14 @@ export function AdminUserCommunitiesTab({ userId, language, deps = apiDeps }: Ta
   );
 }
 
+/** Les paliers du schéma (`VoiceModel.qualityScore`) : < 0,3 faible, < 0,5 moyen, < 0,7 bon, au-delà excellent. */
+export function voiceQualityOf(score: number): 'poor' | 'fair' | 'good' | 'excellent' {
+  if (score < 0.3) return 'poor';
+  if (score < 0.5) return 'fair';
+  if (score < 0.7) return 'good';
+  return 'excellent';
+}
+
 export function AdminUserVoiceTab({ userId, language, deps = apiDeps }: TabProps) {
   const voix = useQuery({
     queryKey: adminUserVoiceQueryKey(userId),
@@ -233,6 +272,30 @@ export function AdminUserVoiceTab({ userId, language, deps = apiDeps }: TabProps
                       <AdminMetaRow label={translateAdmin(language, 'admin.voice.samples')} value={formatCount(profile.audioCount, language)} />
                       <AdminMetaRow label={translateAdmin(language, 'admin.voice.duration')} value={formatDuration(profile.totalDurationMs, 'ms', language)} />
                       <AdminMetaRow label={translateAdmin(language, 'admin.voice.model')} value={textOrNotProvided(profile.model, language)} />
+                      {profile.qualityScore === null ? null : (
+                        <AdminMetaRow
+                          anchor="voice-quality"
+                          label={translateAdmin(language, 'admin.people.voice.quality')}
+                          value={translateAdmin(language, 'admin.people.voice.qualityValue', {
+                            score: formatPercent(profile.qualityScore, 'ratio', language),
+                            label: interpretCallQuality(voiceQualityOf(profile.qualityScore), language).label,
+                          })}
+                        />
+                      )}
+                      <AdminMetaRow
+                        anchor="voice-analysis"
+                        label={translateAdmin(language, 'admin.people.voice.analysis')}
+                        value={profile.analysisAt === null ? translateAdmin(language, 'admin.people.voice.noAnalysis') : adminDate(profile.analysisAt, language)}
+                      />
+                      <AdminMetaRow
+                        anchor="voice-public"
+                        label={translateAdmin(language, 'admin.people.voice.public')}
+                        value={
+                          profile.publicAt === null
+                            ? translateAdmin(language, 'admin.people.voice.notPublic')
+                            : translateAdmin(language, 'admin.people.voice.publicSince', { date: adminDate(profile.publicAt, language) })
+                        }
+                      />
                       <AdminMetaRow label={translateAdmin(language, 'admin.col.createdOn')} value={adminDate(profile.createdAt, language)} />
                     </dl>
                   )}
@@ -288,6 +351,15 @@ export function AdminUserSecurityTab({
     },
     { id: 'severity', header: translateAdmin(language, 'admin.security.severity'), cell: (evenement) => <AdminInterpretedBadge value={interpretSeverity(evenement.severity, language)} /> },
     { id: 'status', header: translateAdmin(language, 'admin.people.dossier.eventStatus'), cell: (evenement) => <AdminInterpretedBadge value={interpretSecurityStatus(evenement.status, language)} /> },
+    {
+      id: 'where',
+      header: translateAdmin(language, 'admin.people.event.where'),
+      /* Le lieu servi (« Ville, Pays ») et l'appareil LU depuis l'agent utilisateur — jamais l'agent brut. */
+      cell: (evenement) => {
+        const parts = [evenement.geoLocation, deviceLabel(evenement.userAgent, language) ?? ''].filter((part) => part !== '');
+        return parts.length === 0 ? <AdminNotProvided language={language} /> : parts.join(' · ');
+      },
+    },
     { id: 'ip', header: translateAdmin(language, 'admin.security.ip'), cell: (evenement) => textOrNotProvided(evenement.ipAddress, language) },
     { id: 'date', header: translateAdmin(language, 'admin.col.date'), cell: (evenement) => moment(evenement.createdAt, instant, language) },
   ];
@@ -333,13 +405,63 @@ const reportColumns = (language: AdminLanguage, recu: boolean, now: Date): reado
         {
           id: 'message',
           header: translateAdmin(language, 'admin.reports.message'),
-          cell: (report: AdminReport) => report.excerpt ?? <span style={{ color: INK2 }}>{translateAdmin(language, 'admin.reports.withheld')}</span>,
+          cell: (report: AdminReport) => <ReportedMessage report={report} language={language} />,
         },
       ]
     : []),
-  { id: 'status', header: translateAdmin(language, 'admin.col.status'), cell: (report) => <AdminInterpretedBadge value={interpretReportStatus(report.status, language)} /> },
+  {
+    id: 'status',
+    header: translateAdmin(language, 'admin.col.status'),
+    /* Le statut, puis QUAND il a été traité et la SUITE donnée — servis, jamais affichés jusque-là (audit 2026-10-04). */
+    cell: (report) => {
+      const suite = [
+        report.resolvedAt === null ? null : translateAdmin(language, 'admin.people.report.resolvedOn', { date: adminDate(report.resolvedAt, language) }),
+        report.actionTaken === null ? null : interpretReportAction(report.actionTaken, language).label,
+      ].filter((part): part is string => part !== null);
+      return (
+        <span className="inline-grid justify-items-start gap-1 text-start">
+          <AdminInterpretedBadge value={interpretReportStatus(report.status, language)} />
+          {suite.length === 0 ? null : (
+            <span data-admin-report-outcome className="text-caption" style={{ color: INK2 }}>
+              {suite.join(' · ')}
+            </span>
+          )}
+        </span>
+      );
+    },
+  },
   { id: 'date', header: translateAdmin(language, 'admin.col.date'), cell: (report) => moment(report.createdAt, now, language) },
 ];
+
+/**
+ * LE MESSAGE SIGNALÉ — son texte, « réservé à la modération » quand la passerelle le
+ * retient à ce rôle, « Message supprimé » quand il a DISPARU (un message disparu n'est
+ * pas un contenu retenu, audit 2026-10-04) ; puis sa conversation, nommée.
+ */
+function ReportedMessage({ report, language }: { readonly report: AdminReport; readonly language: AdminLanguage }) {
+  const conversation =
+    report.conversation === null
+      ? null
+      : report.conversation.title === null
+        ? translateAdmin(language, 'admin.people.report.untitledConversation')
+        : translateAdmin(language, 'admin.people.report.inConversation', { title: report.conversation.title });
+  return (
+    <span data-admin-report-message={report.messageState ?? 'none'} className="inline-grid min-w-0 justify-items-start gap-1 text-start">
+      {report.messageState === 'deleted' ? (
+        <span style={{ color: INK2 }}>{translateAdmin(language, 'admin.people.report.messageDeleted')}</span>
+      ) : report.excerpt === null ? (
+        <span style={{ color: INK2 }}>{translateAdmin(language, 'admin.reports.withheld')}</span>
+      ) : (
+        <span className="break-words">{report.excerpt}</span>
+      )}
+      {conversation === null ? null : (
+        <span className="text-caption" style={{ color: INK2 }}>
+          {conversation}
+        </span>
+      )}
+    </span>
+  );
+}
 
 /** Chaque ligne ouvre SA fiche de signalement — seulement si le lecteur peut ouvrir la modération (`AdminLink`). */
 const reportTarget = (report: AdminReport): AdminTarget => ({ kind: 'entity', entity: 'report', id: report.id });

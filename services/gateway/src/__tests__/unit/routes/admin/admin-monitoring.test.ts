@@ -76,6 +76,8 @@ type Options = {
   socket?: boolean;
   status?: boolean;
   statusMetrics?: Record<string, number>;
+  /** `translationService.healthCheck()` : sa réponse, ou `'pend'` pour une sonde qui ne répond jamais. */
+  health?: boolean | 'pend' | 'throw';
 };
 
 const STATUS_METRICS = {
@@ -95,6 +97,7 @@ async function buildApp({
   socket = true,
   status = false,
   statusMetrics = STATUS_METRICS,
+  health = true,
 }: Options = {}) {
   const app: FastifyInstance = Fastify({ logger: false });
   app.decorate('prisma', {
@@ -122,6 +125,13 @@ async function buildApp({
   if (status) {
     app.decorate('statusService', { getMetrics: () => statusMetrics } as any);
   }
+  app.decorate('translationService', {
+    healthCheck: async () => {
+      if (health === 'pend') return new Promise<boolean>(() => undefined);
+      if (health === 'throw') throw new Error('zmq down');
+      return health;
+    },
+  } as any);
   registerMonitoringRoutes(app);
   await app.ready();
   return app;
@@ -202,6 +212,7 @@ describe('GET /admin/monitoring — ce qu’il sert', () => {
       cacheHitRate: 0.75,
       memoryUsageMb: 512,
       uptimeSeconds: 3600,
+      reachable: true,
     });
 
     expect(data.circuitBreakers).toEqual([
@@ -255,6 +266,22 @@ describe('GET /admin/monitoring — ce qu’il sert', () => {
     });
     const { presenceUpdates } = JSON.parse((await read(app)).body).data;
     expect(presenceUpdates.throttleRate).toBe(0);
+    await app.close();
+  });
+
+  // Un vrai signal de santé (audit 2026-10-04) : les compteurs disent ce que
+  // le traducteur A FAIT, pas s'il RÉPOND maintenant.
+  it.each([
+    ['répond', true, true],
+    ['répond non', false, false],
+    ['lève', 'throw' as const, false],
+    ['ne répond jamais — le délai court tranche', 'pend' as const, false],
+  ])('translator.reachable quand la sonde %s', async (_nom, health, attendu) => {
+    const app = await buildApp({ health });
+    const debut = Date.now();
+    const data = JSON.parse((await read(app)).body).data;
+    expect(data.translator.reachable).toBe(attendu);
+    expect(Date.now() - debut).toBeLessThan(5000);
     await app.close();
   });
 

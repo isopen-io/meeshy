@@ -221,8 +221,15 @@ export async function messagesRoutes(fastify: FastifyInstance) {
         ? Math.round((messagesWithTranslations / totalMessages) * 100)
         : 0;
 
-      // Top utilisateurs les plus actifs (envoi de messages)
-      const topSenders = await fastify.prisma.message.groupBy({
+      // Top utilisateurs les plus actifs (envoi de messages).
+      //
+      // `senderId` est un PARTICIPANT (un par conversation) : on groupe TOUS
+      // les participants de la période, on REPLIE par compte, PUIS on garde
+      // le top 10. Borné avant le repli, un membre était compté une fois par
+      // conversation — sous-compté, parfois en double (audit 2026-10-04). Un
+      // invité (participation sans compte) garde sa propre ligne, nommée par
+      // sa participation et marquée `guest`.
+      const groupesParParticipant = await fastify.prisma.message.groupBy({
         by: ['senderId'],
         where: {
           createdAt: { gte: startDate },
@@ -231,31 +238,37 @@ export async function messagesRoutes(fastify: FastifyInstance) {
         },
         _count: {
           id: true
-        },
-        orderBy: {
-          _count: {
-            id: 'desc'
-          }
-        },
-        take: 10
+        }
       });
 
-      const participantIds = topSenders.map(s => s.senderId!).filter(Boolean);
+      const participantIds = groupesParParticipant.map(s => s.senderId!).filter(Boolean);
       const participants = await fastify.prisma.participant.findMany({
         where: { id: { in: participantIds } },
-        select: { id: true, userId: true, user: { select: { username: true, displayName: true } } }
+        select: { id: true, userId: true, displayName: true, user: { select: { username: true, displayName: true } } }
       });
       const participantMap = new Map(participants.map(p => [p.id, p]));
 
-      const topSendersData = topSenders.map((sender) => {
-        const participant = participantMap.get(sender.senderId!);
-        return {
-          userId: participant?.userId || sender.senderId,
+      const parExpediteur = new Map<string, { userId: string; username: string; displayName: string | null | undefined; guest: boolean; messageCount: number }>();
+      for (const groupe of groupesParParticipant) {
+        const participant = participantMap.get(groupe.senderId!);
+        const cle = participant?.userId || groupe.senderId!;
+        const courant = parExpediteur.get(cle);
+        if (courant) {
+          courant.messageCount += groupe._count.id;
+          continue;
+        }
+        const invite = participant !== undefined && !participant.userId;
+        parExpediteur.set(cle, {
+          userId: cle,
           username: participant?.user?.username || 'Unknown',
-          displayName: participant?.user?.displayName,
-          messageCount: sender._count.id
-        };
-      });
+          displayName: invite ? participant.displayName : participant?.user?.displayName,
+          guest: invite,
+          messageCount: groupe._count.id
+        });
+      }
+      const topSendersData = [...parExpediteur.values()]
+        .sort((a, b) => b.messageCount - a.messageCount)
+        .slice(0, 10);
 
       // Messages avec pièces jointes
       const messagesWithAttachments = await fastify.prisma.message.count({

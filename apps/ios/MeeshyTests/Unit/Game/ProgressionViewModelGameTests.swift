@@ -20,7 +20,7 @@ final class ProgressionViewModelGameTests: XCTestCase {
             gameService: game,
             networkMonitor: FakeNetworkMonitor(isOnline: isOnline),
             currentUserId: "me-\(UUID().uuidString)",
-            notebook: InMemoryPhotoNotebook()
+            notebook: MockGamePhotoNotebook()
         )
         return (sut, engagement, game)
     }
@@ -262,5 +262,25 @@ final class ProgressionViewModelGameTests: XCTestCase {
 
         XCTAssertEqual(service.freezeRequestIds.count, 1)
         XCTAssertNil(sut.game)
+    }
+
+    // MARK: - Ce que la frappe éteindrait
+
+    func test_mintBadgeImpact_isUnknownWhenTheServedCountersCarryNoPoints() async {
+        let (sut, _, _) = makeSUT()
+        await sut.load(forceNetwork: true)
+        XCTAssertNil(sut.mintBadgeImpact, "la charge de test ne sert pas les points par axe")
+    }
+
+    func test_mintBadgeImpact_isComputedFromTheServedCountersAndThePriceOfThisMint() async {
+        let served = APIEngagementProgress(
+            counters: [.init(axisKey: "content.text_message", count: 60, points: 1_500)],
+            milestones: [], streak: .init(currentStreakDays: 1, longestStreakDays: 1),
+            level: .init(engagementScore: 12_180), meesh: GameFixture.meesh(), game: GameFixture.game()
+        )
+        let (sut, _, _) = makeSUT(snapshot: served)
+        await sut.load(forceNetwork: true)
+        XCTAssertNotNil(sut.mintBadgeImpact)
+        XCTAssertEqual(sut.mintBadgeImpact?.lost, 2)
     }
 }

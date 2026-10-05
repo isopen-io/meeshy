@@ -192,7 +192,7 @@ export function ShareLinkGestures({
     }
   };
 
-  const revealSecret = async (reason: string) => {
+  const revealSecret = async (reason: string | null) => {
     setSettling(true);
     try {
       const revealed = await reveal.run({
@@ -264,7 +264,7 @@ export function ShareLinkGestures({
           confirmLabel={t('admin.shareLink.gesture.reveal')}
           tone="danger"
           motive={{ label: t('admin.shareLink.confirm.reveal.motive'), minLength: 10, required: true }}
-          onConfirm={(motive) => void revealSecret(motive ?? '')}
+          onConfirm={(motive) => void revealSecret(motive)}
         />
       ) : null}
       {secret === null ? null : <RevealedSecretSheet language={language} secret={secret} onClose={() => setSecret(null)} onAnnounce={announce} />}

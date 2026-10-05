@@ -10,6 +10,7 @@ import type { UserRoleEnum } from '@meeshy/shared/types';
 import { requirePermission } from '../../middleware/authorize';
 import { trackingUrlHost } from './tracking-link-url';
 import { adminViewer } from './oversight-viewer';
+import { buildUserRankings, fetchUserDetails, foldParticipantCountsToUsers } from './ranking-people';
 import {
   loadConversationNamePreviews,
   servedNamePreview,
@@ -63,40 +64,7 @@ function getPeriodStartDate(period: string): Date | null {
 // HELPERS
 // ═══════════════════════════════════════════════════════════════════
 
-type UserInfo = { id: string; username: string; displayName: string | null; avatar: string | null; lastActiveAt: Date | null };
 type ConvoInfo = { id: string; identifier: string; title: string | null; type: string; avatar: string | null };
-
-async function fetchUserDetails(fastify: FastifyInstance, userIds: string[]): Promise<Map<string, UserInfo>> {
-  if (userIds.length === 0) return new Map();
-  const users = await fastify.prisma.user.findMany({
-    where: { id: { in: userIds } },
-    select: { id: true, username: true, displayName: true, avatar: true, lastActiveAt: true }
-  });
-  return new Map(users.map(u => [u.id, u]));
-}
-
-// Directive produit 2026-08-25 : « les utilisateurs avec le rôle ADMIN et
-// supérieur peuvent constamment avoir l'état de présence » — `requireAdmin`
-// laisse passer AUDIT/ANALYST, qui n'ont plus le droit de voir `lastActivity`
-// (dérivé de `User.lastActiveAt`). `canSeePresence` gouverne la clé : absente
-// (jamais `undefined` ni une date fabriquée) quand le viewer n'y a pas droit.
-function buildUserRankings(
-  sorted: Array<[string, number]>,
-  userMap: Map<string, UserInfo>,
-  canSeePresence: boolean,
-) {
-  return sorted.map(([userId, count]) => {
-    const user = userMap.get(userId);
-    return {
-      id: userId,
-      username: user?.username || 'Unknown',
-      displayName: user?.displayName,
-      avatar: user?.avatar,
-      count,
-      ...(canSeePresence ? { lastActivity: user?.lastActiveAt?.toISOString() } : {})
-    };
-  });
-}
 
 // #8876 (R1) — une conversation SANS titre se nomme par ses membres. `canSeeMembers` (le rang
 // d'administration) gouverne l'aperçu : qui parle à qui est l'inventaire des conversations. Sans
@@ -142,32 +110,6 @@ function dateWhere(startDate: Date | null, field = 'createdAt') {
   return startDate ? { [field]: { gte: startDate } } : {};
 }
 
-// Message.senderId, Reaction.participantId and
-// CallParticipant.participantId all reference Participant.id, and a user holds one
-// Participant per conversation. Counts keyed by those columns must be folded back
-// to the owning userId — summing a user's per-conversation counts — before ranking.
-// Otherwise the same user surfaces once per conversation (duplicated and
-// undercounted), and counts keyed by a raw participant id never resolve to a user
-// (rendered "Unknown"). An orphan participant id with no user keeps its own key so
-// its activity stays visible rather than silently vanishing.
-async function foldParticipantCountsToUsers(
-  fastify: FastifyInstance,
-  participantCounts: Map<string, number>
-): Promise<Map<string, number>> {
-  if (participantCounts.size === 0) return new Map();
-  const participants = await fastify.prisma.participant.findMany({
-    where: { id: { in: [...participantCounts.keys()] } },
-    select: { id: true, userId: true }
-  });
-  const partToUser = new Map(participants.map(p => [p.id, p.userId]));
-  const userCounts = new Map<string, number>();
-  for (const [participantId, count] of participantCounts) {
-    const key = partToUser.get(participantId) || participantId;
-    userCounts.set(key, (userCounts.get(key) || 0) + count);
-  }
-  return userCounts;
-}
-
 // ═══════════════════════════════════════════════════════════════════
 // RANK USERS
 // ═══════════════════════════════════════════════════════════════════
@@ -178,12 +120,11 @@ async function rankUsers(fastify: FastifyInstance, criterion: string, startDate:
   switch (criterion) {
     case 'messages_sent':
     case 'messages': {
+      // SANS `take` : la borne s'applique APRÈS le repli par compte.
       const topSenders = await fastify.prisma.message.groupBy({
         by: ['senderId'],
         where: { ...msgDateFilter, deletedAt: null, senderId: { not: null } },
-        _count: { id: true },
-        orderBy: { _count: { id: 'desc' } },
-        take: limit
+        _count: { id: true }
       });
       const participantCounts = new Map<string, number>();
       for (const s of topSenders) {
@@ -200,9 +141,7 @@ async function rankUsers(fastify: FastifyInstance, criterion: string, startDate:
       const topReactors = await fastify.prisma.reaction.groupBy({
         by: ['participantId'],
         where: { ...msgDateFilter },
-        _count: { id: true },
-        orderBy: { _count: { id: 'desc' } },
-        take: limit
+        _count: { id: true }
       });
       const participantCounts = new Map<string, number>();
       for (const r of topReactors) {
@@ -307,9 +246,10 @@ async function rankUsers(fastify: FastifyInstance, criterion: string, startDate:
 
     case 'conversations_joined':
     case 'conversations': {
+      // Le groupe `userId: null` (les invités) n'est pas une personne.
       const topConversors = await fastify.prisma.participant.groupBy({
         by: ['userId'],
-        where: dateWhere(startDate, 'joinedAt'),
+        where: { ...dateWhere(startDate, 'joinedAt'), userId: { not: null } },
         _count: { id: true },
         orderBy: { _count: { id: 'desc' } },
         take: limit
@@ -373,9 +313,7 @@ async function rankUsers(fastify: FastifyInstance, criterion: string, startDate:
           senderId: { not: null },
           messageType: { in: ['image', 'file', 'video', 'audio'] }
         },
-        _count: { id: true },
-        orderBy: { _count: { id: 'desc' } },
-        take: limit
+        _count: { id: true }
       });
       const participantCounts = new Map<string, number>();
       for (const s of topSenders) {

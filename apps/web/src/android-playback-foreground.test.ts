@@ -62,7 +62,8 @@ describe('la lecture d’un vocal tenue au premier plan dans la coque Android (#
 
   test('le service passe au premier plan avec le type mediaPlayback', () => {
     const service = sansCommentaires(lire(...JAVA, 'PlaybackForegroundService.java'));
-    expect(corpsDe(service, 'int onStartCommand(')).toContain('ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK');
+    expect(corpsDe(service, 'int onStartCommand(')).toContain('foreground()');
+    expect(corpsDe(service, 'private void foreground(')).toContain('ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK');
   });
 
   test('sa notification parle les sept langues de l’app', () => {
@@ -100,9 +101,55 @@ describe('la lecture d’un vocal tenue au premier plan dans la coque Android (#
     const creation = corpsDe(service, 'public void onCreate(');
     expect(creation).toContain('new MediaSession(');
     expect(creation).toContain('setActive(true)');
-    expect(creation).toContain('PlaybackState.STATE_PLAYING');
-    expect(creation).toContain('PlaybackState.ACTION_PAUSE');
+    expect(creation).toContain('setPlaybackState(state(true))');
+    const etat = corpsDe(service, 'PlaybackState state(');
+    expect(etat).toContain('PlaybackState.STATE_PLAYING');
+    expect(etat).toContain('PlaybackState.ACTION_PAUSE');
     expect(corpsDe(service, 'public void onPause(')).toContain('MeeshyPlaybackPlugin.pauseRequested(');
     expect(corpsDe(service, 'public void onDestroy(')).toContain('.release()');
+  });
+
+  test('sa notification est un lecteur lié à la session, pilotable écran verrouillé, comme dans Chrome (#9367)', () => {
+    const service = sansCommentaires(lire(...JAVA, 'PlaybackForegroundService.java'));
+    const notification = corpsDe(service, 'Notification notification(');
+    expect(notification).toContain('new Notification.MediaStyle()');
+    expect(notification).toContain('.setMediaSession(session.getSessionToken())');
+    expect(notification).toContain('.setShowActionsInCompactView(0)');
+  });
+
+  test('une pause garée offre « Lecture », à la notification comme au casque, et la remet à la page (#9394)', () => {
+    const service = sansCommentaires(lire(...JAVA, 'PlaybackForegroundService.java'));
+    expect(service).toContain('ACTION_PLAY');
+    expect(service).toContain('PlaybackState.STATE_PAUSED');
+    expect(service).toContain('PlaybackState.ACTION_PLAY');
+    expect(corpsDe(service, 'public void onPlay(')).toContain('resume(');
+    expect(corpsDe(service, 'void resume(')).toContain('MeeshyPlaybackPlugin.playRequested(');
+    expect(corpsDe(service, 'int onStartCommand(')).toContain('resume(');
+    expect(corpsDe(service, 'Notification notification(')).toContain('R.string.playback_play');
+    expect(corpsDe(service, 'static void park(')).toContain('parked(');
+    expect(corpsDe(service, 'void parked(')).toContain('STOP_FOREGROUND_DETACH');
+    const plugin = sansCommentaires(lire(...JAVA, 'MeeshyPlaybackPlugin.java'));
+    expect(corpsDe(plugin, 'public void parkPlayback(')).toContain('PlaybackForegroundService.park(');
+    expect(corpsDe(plugin, 'static boolean playRequested(')).toContain('notifyListeners("playRequested"');
+    for (const dossier of LANGUES) {
+      const chaines = lire('res', dossier, 'strings_playback.xml');
+      expect(chaines).toContain('name="playback_play"');
+      expect(chaines).toContain('name="playback_paused"');
+    }
+  });
+
+  test('une vidéo passe en image dans l’image d’un appui : plein écran, puis l’activité flotte (#9410)', () => {
+    const plugin = sansCommentaires(lire(...JAVA, 'MeeshyPlaybackPlugin.java'));
+    const flotter = corpsDe(plugin, 'public void floatVideo(');
+    expect(flotter).toContain('runOnUiThread(');
+    expect(flotter).toContain('.floatVideo()');
+    expect(flotter).toContain('"floated"');
+    const activite = sansCommentaires(lire(...JAVA, 'MainActivity.java'));
+    const demande = corpsDe(activite, 'boolean floatVideo(');
+    expect(demande).toContain('FullscreenPictureInPicture.floats(');
+    expect(demande).toContain('floatOnFullscreen = true');
+    expect(corpsDe(activite, 'public void onShowCustomView(')).toContain('floatOnFullscreen');
+    expect(corpsDe(activite, 'public void onHideCustomView(')).toContain('floatOnFullscreen = false');
+    expect(corpsDe(activite, 'private boolean enterFloat(')).toContain('enterPictureInPictureMode(');
   });
 });

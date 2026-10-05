@@ -1,16 +1,27 @@
 import { useQuery } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useId, useState, type ReactNode } from 'react';
 import { useStore } from 'zustand';
 
+import { AdminDetailSheet } from '@/components/admin/detail-sheet';
 import { AdminFiche, AdminIdentityHeader, AdminStatStrip } from '@/components/admin/fiche';
 import { AdminPageHeader } from '@/components/admin/page-header';
 import { AdminSectionScreen } from '@/components/admin/section-screen';
 import { AdminDeniedInline, AdminEmptyState, AdminErrorState, AdminOfflineNotice } from '@/components/admin/states';
+import { AdminSummaryCard, AdminSummaryGrid } from '@/components/admin/summary-card';
+import { sectionOfEntity } from '@/lib/admin/admin-routes';
 import { AdminLink } from '@/components/admin/entity-chip';
 import { formatCount } from '@/lib/admin/interpret/numbers';
 import { adminMomentOf, formatDuration } from '@/lib/admin/interpret/time';
-import { REPORT_ACTIONS, reportPersonName, reportReporterOf, reportTurnaround, reportedTargetOf } from '@/lib/admin/report-model';
+import { REPORT_ACTIONS, reportActionLinks, reportPersonName, reportReporterOf, reportTurnaround, reportedTargetOf } from '@/lib/admin/report-model';
+import {
+  ADMIN_REPORT_SECTION_GLYPHS,
+  ADMIN_REPORT_SECTION_TITLES,
+  ADMIN_REPORT_SECTIONS,
+  reportSummaryOf,
+  type AdminReportSection,
+} from '@/lib/admin/report-summaries';
 import { reportLabel } from '@/lib/admin/interpret/labels';
+import { useAdminOpen } from '@/lib/admin/use-admin-open';
 import { useAdminReach } from '@/lib/admin/use-admin-reach';
 import type { AdminDeps } from '@/lib/api/admin';
 import { ApiError, unwrap } from '@/lib/api/client';
@@ -32,7 +43,16 @@ import { href, navigate } from '@/routes/route-table';
 
 import { ReportGestures } from './admin-report-gestures';
 import { ReportReasonBadge, ReportStatusBadge } from './admin-report-parts';
-import { ActionsSection, HandlingSection, ReasonSection, ReportMeta, ReportedSection, SiblingsSection, TimelineSection } from './admin-report-sections';
+import {
+  ActionsSection,
+  HandlingSection,
+  ReasonSection,
+  ReportActionChoice,
+  ReportMeta,
+  ReportedSection,
+  SiblingsSection,
+  TimelineSection,
+} from './admin-report-sections';
 
 /**
  * **LA FICHE D'UN SIGNALEMENT** (#8876, #6726) — `/admin/reports/$report`.
@@ -43,6 +63,11 @@ import { ActionsSection, HandlingSection, ReasonSection, ReportMeta, ReportedSec
  * chronologie, ce que les autres signalements du même élément disent. Puis les
  * six gestes que la passerelle sert, et des LIENS vers les fiches où l'on agit
  * (bannir, retirer, lire) — le signalement ne duplique aucun de ces gestes.
+ *
+ * **Lue par sections** (spec 2026-10-04 § 3) : l'en-tête, les gestes, le bandeau
+ * de chiffres et les métadonnées restent visibles ; les six blocs sont des
+ * cartes résumées qui ouvrent chacun sa modale (`?open=<id>`). L'action à
+ * consigner se choisit sur la carte « Traitement » : la décision ne se cache pas.
  *
  * Fail-closed comme la liste : `canModerateContent` (décision #6843) ; un 403
  * malgré tout se rend comme un refus, un 404 comme « ce signalement n'existe
@@ -66,6 +91,8 @@ export function AdminReportPanel({ language, reportId, deps = apiDeps, now = def
   const session = useStore(sessionStore, (state) => state.session);
   const viewerId = resolveViewer({ source: deps.source, session }).id;
   const [choice, setChoice] = useState<string | null>(null);
+  const sections = useAdminOpen(ADMIN_REPORT_SECTIONS);
+  const cardsTitle = useId();
 
   const query = useQuery({
     queryKey: adminReportKey(reportId),
@@ -131,6 +158,31 @@ export function AdminReportPanel({ language, reportId, deps = apiDeps, now = def
   const open = report.status === 'pending' || report.status === 'under_review';
   const actionChoice = choice ?? (isAction(report.actionTaken) ? report.actionTaken : 'none');
   const onEntity = siblings.data?.total;
+  const actionLinks = reportActionLinks(report, language).filter((link) => link.target.kind === 'entity' && reach.opens(sectionOfEntity(link.target.entity))).length;
+  const siblingsStatus = siblings.error instanceof ApiError ? siblings.error.status : 0;
+  const cardState = (section: AdminReportSection): 'ready' | 'loading' | 'error' | 'denied' => {
+    if (section !== 'siblings' || siblings.data !== undefined) return 'ready';
+    if (siblings.isPending) return 'loading';
+    return siblingsStatus === 403 ? 'denied' : 'error';
+  };
+
+  /** Le contenu de chaque modale : le bloc d'hier, tel quel — monté seulement à l'ouverture. */
+  const detail = (section: AdminReportSection): ReactNode => {
+    switch (section) {
+      case 'reported':
+        return <ReportedSection language={language} report={report} />;
+      case 'reason':
+        return <ReasonSection language={language} report={report} />;
+      case 'handling':
+        return <HandlingSection language={language} report={report} />;
+      case 'timeline':
+        return <TimelineSection language={language} report={report} now={clock} />;
+      case 'siblings':
+        return <SiblingsSection language={language} report={report} siblings={siblings} now={clock} />;
+      case 'actions':
+        return <ActionsSection language={language} report={report} reach={reach} />;
+    }
+  };
 
   const stats = [
     { id: 'received', label: translateAdmin(language, 'admin.moderation.stat.received'), value: received?.relative ?? '—' },
@@ -194,13 +246,48 @@ export function AdminReportPanel({ language, reportId, deps = apiDeps, now = def
         stats={<AdminStatStrip items={stats} />}
         aside={<ReportMeta language={language} report={report} now={clock} onAnnounce={announcer.announce} />}
       >
-        <ReportedSection language={language} report={report} />
-        <ReasonSection language={language} report={report} />
-        <HandlingSection language={language} report={report} editable={open} actionChoice={actionChoice} onActionChoice={setChoice} />
-        <TimelineSection language={language} report={report} now={clock} />
-        <SiblingsSection language={language} report={report} siblings={siblings} now={clock} />
-        <ActionsSection language={language} report={report} reach={reach} />
+        <section aria-labelledby={cardsTitle} className="@container grid gap-3" data-admin-report-cards>
+          <h2 id={cardsTitle} className="text-body font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
+            {translateAdmin(language, 'admin.moderation.cards.title')}
+          </h2>
+          <AdminSummaryGrid>
+            {ADMIN_REPORT_SECTIONS.map((section) => {
+              const summary = reportSummaryOf(section, report, { siblingsTotal: onEntity, actionLinks }, language);
+              return (
+                <AdminSummaryCard
+                  key={section}
+                  language={language}
+                  id={section}
+                  title={translateAdmin(language, ADMIN_REPORT_SECTION_TITLES[section])}
+                  glyph={ADMIN_REPORT_SECTION_GLYPHS[section]}
+                  values={summary.values}
+                  sentence={summary.sentence}
+                  state={cardState(section)}
+                  {...(section === 'siblings' ? { onRetry: () => void siblings.refetch() } : {})}
+                  onOpen={() => sections.open(section)}
+                >
+                  {section === 'handling' && open ? <ReportActionChoice language={language} actionChoice={actionChoice} onActionChoice={setChoice} /> : null}
+                </AdminSummaryCard>
+              );
+            })}
+          </AdminSummaryGrid>
+        </section>
       </AdminFiche>
+      {ADMIN_REPORT_SECTIONS.map((section) => (
+        <AdminDetailSheet
+          key={section}
+          language={language}
+          id={`report-${section}`}
+          title={translateAdmin(language, ADMIN_REPORT_SECTION_TITLES[section])}
+          open={sections.active === section}
+          onClose={sections.close}
+          inAddress={sections.inAddress}
+        >
+          <div className="grid gap-6" data-admin-report-panel={section}>
+            {detail(section)}
+          </div>
+        </AdminDetailSheet>
+      ))}
       <AdminAnnouncement text={announcer.text} />
     </div>
   );

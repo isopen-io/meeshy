@@ -2,7 +2,7 @@ import { AdminBarChart } from '@/components/admin/charts/bar-chart';
 import { AdminShareChart } from '@/components/admin/charts/share-chart';
 import { AdminTimelineChart } from '@/components/admin/charts/timeline-chart';
 import { useDashBlock } from '@/lib/admin/dashboard-block';
-import { engagementView, hourlyView, languagesView, typesView, volumeView } from '@/lib/admin/dashboard-series';
+import { engagementView, hourlyInUtc, hourlyView, languagesView, typesView, volumeView } from '@/lib/admin/dashboard-series';
 import { formatCount } from '@/lib/admin/interpret/numbers';
 import {
   loadAdminHourlyActivity,
@@ -17,7 +17,8 @@ import { chartStateOf, DashChartFrame, retryOf, type DashContext } from './admin
 
 /**
  * **LES CINQ GRAPHIQUES DES TENDANCES** (#8876, § 4) — le volume des messages
- * sur sept jours, l'activité par tranche de trois heures, l'engagement des
+ * sur sept jours, l'activité par tranche de trois heures (dans le fuseau du
+ * lecteur quand la passerelle sert l'instant de chaque tranche, sinon « UTC »), l'engagement des
  * comptes, les langues, les types de messages. Chacun lit sa route, dit sa
  * série en mots (`dashboard-series.ts`) et se rend dans `AdminChartCard`, qui
  * porte déjà le squelette de même hauteur, l'erreur avec « Réessayer » et le
@@ -60,6 +61,8 @@ export function HourlyChart({ language, deps }: DashContext) {
     staleTime: FIVE_MINUTES,
   });
   const view = block.status === 'ready' ? hourlyView(block.data, language) : { data: [], summary: '' };
+  /* Une tranche sans son instant (ancien serveur) se dit à l'heure du serveur : le titre le dit « UTC ». */
+  const utc = block.status === 'ready' && hourlyInUtc(block.data);
   const retry = retryOf(block);
 
   return (
@@ -67,7 +70,7 @@ export function HourlyChart({ language, deps }: DashContext) {
       <AdminBarChart
         language={language}
         id="hourly"
-        title={translateAdmin(language, 'admin.dash.hourly.title')}
+        title={translateAdmin(language, utc ? 'admin.dash.hourly.titleUtc' : 'admin.dash.hourly.title')}
         data={view.data}
         orientation="vertical"
         format={(value) => formatCount(value, language)}

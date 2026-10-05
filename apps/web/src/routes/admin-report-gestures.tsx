@@ -190,7 +190,8 @@ export function ReportGestures({
   };
 
   const informs = report.reporterId === null ? '' : ` ${t('admin.moderation.confirm.informs')}`;
-  const notesField = { label: t('admin.moderation.confirm.notes'), minLength: 3, required: false } as const;
+  /* Une NOTE du dossier, pas un motif : elle reste offerte au rang souverain (`kind: 'note'`). */
+  const notesField = { label: t('admin.moderation.confirm.notes'), minLength: 3, required: false, kind: 'note' } as const;
   const noteOf = (motive: string | null): string | null => (motive === null || motive === '' ? null : motive);
   const error = action.state.phase === 'error' ? action.state.message : null;
 
@@ -254,7 +255,10 @@ export function ReportGestures({
             body={t('admin.moderation.confirm.reopen.body')}
             confirmLabel={t('admin.moderation.gesture.reopen')}
             tone="primary"
-            onConfirm={() => void decide({ kind: 'reopen' }, 'admin.moderation.done.reopened', { status: 'pending' })}
+            onConfirm={() =>
+              /* La passerelle efface la résolution, l'action et le modérateur (07847730d6) : la fiche le montre aussitôt, puis se relit. */
+              void decide({ kind: 'reopen' }, 'admin.moderation.done.reopened', { status: 'pending', resolvedAt: null, actionTaken: null, moderatorId: null, moderator: null })
+            }
           />
         );
       case 'delete':

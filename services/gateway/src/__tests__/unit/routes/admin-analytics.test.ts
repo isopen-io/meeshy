@@ -50,7 +50,7 @@ function makePrisma(overrides: any = {}) {
       ...overrides.user,
     },
     message: {
-      count: jest.fn<any>().mockResolvedValue(500),
+      count: jest.fn<any>().mockResolvedValue(500), aggregateRaw: jest.fn<any>().mockResolvedValue([]),
       groupBy: jest.fn<any>().mockResolvedValue([{ conversationId: 'conv-1', _count: { _all: 10, id: 10 }, messageType: 'TEXT', originalLanguage: 'fr' }]),
       ...overrides.message,
     },
@@ -546,7 +546,7 @@ describe('GET /kpis — DB error', () => {
   beforeAll(async () => {
     mockCacheGet.mockResolvedValue(null);
     app = await buildApp('ADMIN', {
-      message: { count: jest.fn<any>().mockRejectedValue(new Error('DB crash')) },
+      message: { count: jest.fn<any>().mockRejectedValue(new Error('DB crash')), aggregateRaw: jest.fn<any>().mockResolvedValue([]) },
     });
   });
   afterAll(async () => { await app.close(); });

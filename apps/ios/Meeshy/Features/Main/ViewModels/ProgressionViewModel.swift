@@ -242,10 +242,17 @@ final class ProgressionViewModel: ObservableObject {
         game = previous.game
     }
 
+    /// Ce que la prochaine frappe éteindrait, calculé sur les compteurs servis avec le prix de CETTE
+    /// frappe ; `nil` quand le serveur ne sert pas les points par axe — « inconnu » ne se dit pas « aucun ».
+    var mintBadgeImpact: MintBadgeImpact? {
+        guard let snapshot, let game else { return nil }
+        return GameMintBadgeImpact.impact(counters: snapshot.counters, price: game.mint.price)
+    }
+
     /// Le guide et les propositions de photo lisent le jeu, mais seulement RÉGLÉ.
     func observeGame() {
         guard let game else { return }
-        guide.observe(game: game, settled: isSettled)
+        guide.observe(game: game, settled: isSettled, badgeImpact: mintBadgeImpact)
         photos.observe(game: game, settled: isSettled)
     }
 
@@ -275,7 +282,7 @@ final class ProgressionViewModel: ObservableObject {
         let key = cacheKey
         Task {
             let store = await CacheCoordinator.shared.engagementProgress
-            await store.save([snapshot], for: key)
+            try? await store.save([snapshot], for: key)
         }
     }
 }

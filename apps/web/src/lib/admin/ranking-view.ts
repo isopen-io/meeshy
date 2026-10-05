@@ -70,6 +70,7 @@ function conversationRef(
 function entityRef(row: AdminRankingRow, language: AdminLanguage): AdminEntityRef {
   switch (row.kind) {
     case 'users':
+      if (row.guest !== null) return { kind: 'anonymous', id: row.id, label: guestLabel(row.guest.displayName, language) };
       return row.account === null
         ? { kind: 'user', id: row.id, label: personLabel(null, language), deleted: true }
         : {

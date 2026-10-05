@@ -78,6 +78,8 @@ function fakeServer(options: Options = {}): Fake {
           updatedAt: '2026-09-30T11:00:00.000Z',
           resolvedAt: isTerminal(status) ? '2026-09-30T11:00:00.000Z' : state.report.resolvedAt,
         };
+        /* La passerelle (07847730d6) : rouvrir efface la résolution, l'action et le modérateur. */
+        if (status === 'pending') state.report = { ...state.report, resolvedAt: null, actionTaken: null, moderatorId: null, moderator: null };
       }
       return ok(state.report);
     },
@@ -184,7 +186,7 @@ describe('prendre en charge', () => {
       expect(announcement(host)).toBe('Signalement pris en charge');
       expect(reads(fake).length).toBeGreaterThan(readsBefore);
       expect(badge(host)).toBe('En cours d’examen');
-      expect(host.querySelector('[data-admin-fiche-section="handling"]')?.textContent).toContain('Léa Moreau');
+      expect(host.querySelector('[data-admin-summary="handling"]')?.textContent).toContain('Léa Moreau');
       expect(offered(host)).not.toContain('assign');
     } finally {
       mounter.unmountAll();
@@ -302,8 +304,9 @@ describe('résoudre', () => {
     expect(host.querySelector('dialog')).toBeNull();
     expect(announcement(host)).toBe('Signalement résolu');
     expect(badge(host)).toBe('Résolu');
-    expect(host.querySelector('[data-admin-fiche-section="handling"]')?.textContent).toContain('Message retiré');
-    expect(host.querySelector('[data-admin-timeline-step="closed"]')?.textContent).toContain('Clôturé : Résolu');
+    expect(host.querySelector('[data-admin-summary="handling"]')?.textContent).toContain('Message retiré');
+    expect(host.querySelector('[data-admin-summary="handling"]')?.textContent).toContain('Contenu retiré');
+    expect(host.querySelector('[data-admin-summary="timeline"]')?.textContent).toContain('Clôturé : Résolu');
     expect(offered(host)).toEqual(['reopen', 'delete']);
     expectNoRawIdentifiers(host);
   });
@@ -407,19 +410,29 @@ describe('rejeter, classer sans suite, rouvrir', () => {
     expect(badge(host)).toBe('Classé sans suite');
   });
 
-  test('rouvrir : PATCH { status: pending } ; la feuille dit que le lecteur devient le modérateur', async () => {
-    const fake = fakeServer({ report: servedReport({ status: 'resolved', resolvedAt: '2026-09-30T08:00:00.000Z', moderatorId: MODERATOR.id, moderator: MODERATOR }) });
+  test('rouvrir : PATCH { status: pending } ; la résolution, l’action et le modérateur s’effacent, la fiche se relit (07847730d6)', async () => {
+    const fake = fakeServer({
+      report: servedReport({ status: 'resolved', resolvedAt: '2026-09-30T08:00:00.000Z', moderatorId: MODERATOR.id, moderator: MODERATOR, actionTaken: 'content_removed' }),
+    });
     const host = await open(fake);
+    const readsBefore = reads(fake).length;
 
     await mounter.click(gesture(host, 'reopen'));
-    expect(host.querySelector('[data-admin-confirm]')?.textContent).toContain('vous en devenez le modérateur');
+    expect(host.querySelector('[data-admin-confirm]')?.textContent).toContain('son modérateur sont effacés');
+    expect(host.querySelector('[data-admin-confirm]')?.textContent).not.toContain('vous en devenez le modérateur');
     await mounter.click(confirm(host));
 
     expect(writes(fake)[0]?.body).toEqual({ status: 'pending' });
+    expect(reads(fake).length).toBeGreaterThan(readsBefore);
     expect(announcement(host)).toBe('Signalement rouvert');
     expect(badge(host)).toBe('En attente');
     expect(offered(host)).toContain('resolve');
-    expect(host.querySelector('[data-admin-timeline-step="closed"]')).toBeNull();
+    const handling = host.querySelector('[data-admin-summary="handling"] dl')?.textContent ?? '';
+    expect(handling).not.toContain('Léa Moreau');
+    expect(handling).not.toContain('Contenu retiré');
+    expect(handling).toContain('Aucune action consignée');
+    expect(host.querySelector('[data-admin-summary="timeline"]')?.textContent).not.toContain('Clôturé');
+    expect(host.querySelector('[data-admin-meta="resolved"]')?.textContent).not.toMatch(/30 sept/);
   });
 });
 
