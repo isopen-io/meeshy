@@ -263,11 +263,26 @@ export class LeagueService {
     );
 
     const [days, cut] = await Promise.all([this.points.weekDays(weekKey, [userId, ...friendIds]), presenceCutAmong(this.prisma, friendIds)]);
+    const todayOf = await this.localTodayOf([...cut], now);
     const weekPoints: Record<string, number> = {
       [userId]: totalOfDays(days.get(userId)),
-      ...Object.fromEntries(friendIds.map((id) => [id, totalOfDays(days.get(id), cut.has(id) ? { before: moment.dayKey } : {})])),
+      ...Object.fromEntries(friendIds.map((id) => [id, totalOfDays(days.get(id), cut.has(id) ? { before: todayOf(id) } : {})])),
     };
     return { weekKey, friendIds, weekPoints };
+  }
+
+  /**
+   * Le jour EN COURS de chaque compte, dans SON fuseau : ses points sont rangés
+   * par ses jours locaux, donc « la fin de la veille » se coupe chez lui. Un
+   * fuseau inconnu prend le jour le plus ancien encore en cours sur Terre
+   * (UTC−12) : on retient trop, jamais pas assez.
+   */
+  private async localTodayOf(userIds: readonly string[], now: Date): Promise<(userId: string) => string> {
+    const earliest = dayKeyOf(now, 'Etc/GMT+12');
+    if (userIds.length === 0) return () => earliest;
+    const rows = await this.prisma.user.findMany({ where: { id: { in: [...userIds] } }, select: { id: true, timezone: true }, take: userIds.length });
+    const zones = new Map(rows.map((row) => [row.id, row.timezone ?? null]));
+    return (userId) => (zones.has(userId) ? dayKeyOf(now, zones.get(userId) ?? null) : earliest);
   }
 
   /** La ligue Amis : le MÊME classement restreint au joueur et à ses amis acceptés. */

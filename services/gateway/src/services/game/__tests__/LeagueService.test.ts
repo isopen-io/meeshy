@@ -219,6 +219,18 @@ describe('LeagueService.friendsBoard', () => {
     expect((await service(db).friendsBoard(USER, NOW)).entries.find((e) => e.userId === OTHER)?.weekPoints).toBe(100);
   });
 
+  it('la veille se lit dans le fuseau de l’AMI, jamais dans celui du lecteur : un lecteur à l’est ne voit pas sa journée en cours (B-3)', async () => {
+    const db = fakeGameDb();
+    player(db, USER, { timezone: 'Pacific/Kiritimati' });
+    player(db, OTHER, { timezone: 'America/Los_Angeles' });
+    befriend(db, USER, OTHER);
+    gains(db, OTHER, 60, '2026-10-13');
+    gains(db, OTHER, 40, '2026-10-14');
+    privacy.set(OTHER, { showOnlineStatus: false });
+
+    expect((await service(db).friendsBoard(USER, NOW)).entries.find((e) => e.userId === OTHER)?.weekPoints).toBe(60);
+  });
+
   it('l’opposition et « Jeu masqué » sortent un ami de la ligue ; la mienne me laisse seul', async () => {
     const db = fakeGameDb();
     for (const id of [USER, OTHER, C]) player(db, id);
