@@ -16,6 +16,10 @@ import {
   sealSecret,
   secretHint,
 } from '../../utils/secret-at-rest';
+import {
+  AGENT_LLM_SECRET_COLUMNS,
+  type StoredAgentLlmSecrets,
+} from '../../services/admin/agent-llm-secret-reseal';
 import type { UnifiedAuthRequest } from '../../middleware/auth';
 import { withAudit } from '../../middleware/authorize';
 import { judgeReason } from '../../middleware/sovereign-reason';
@@ -55,18 +59,13 @@ const llmConfigWriteSchema = llmConfigSchema.extend({
 const MOTIF_MINIMAL = 10;
 
 /**
- * Les deux colonnes de clé d'API et le contexte qui scelle chacune (lié en
- * données authentifiées : une valeur d'une colonne ne s'ouvre pas pour l'autre).
- * Le nom `apiKeyEncrypted` est celui de la colonne ET du champ du corps : le
- * client y envoie la clé en clair (TLS), la passerelle la scelle avant Prisma.
+ * Les colonnes de clé d'API et leur contexte de scellement : une source unique
+ * partagée avec le script de re-scellement. Le nom `apiKeyEncrypted` est celui
+ * de la colonne ET du champ du corps : le client y envoie la clé en clair
+ * (TLS), la passerelle la scelle avant Prisma.
  */
-const SECRET_COLUMNS = [
-  { column: 'apiKeyEncrypted', context: 'AgentLlmConfig.apiKey' },
-  { column: 'fallbackApiKeyEncrypted', context: 'AgentLlmConfig.fallbackApiKey' },
-] as const;
-
-type SecretColumn = (typeof SECRET_COLUMNS)[number]['column'];
-type StoredSecrets = Partial<Record<SecretColumn, string | null>>;
+const SECRET_COLUMNS = AGENT_LLM_SECRET_COLUMNS;
+type StoredSecrets = StoredAgentLlmSecrets;
 
 /**
  * Scelle les clés que le corps porte. Une clé déjà en base mais encore en

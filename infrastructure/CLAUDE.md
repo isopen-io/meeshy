@@ -89,7 +89,7 @@ REDIS_URL=redis://redis:6379
 # Auth
 JWT_SECRET=<change-in-production>
 ATTACHMENT_MASTER_KEY=<base64-32-bytes>
-SECRETS_AT_REST_KEY=<base64-32-bytes>   # chiffre la clé d'API LLM de l'agent au repos ; sans elle en prod/staging, son écriture est refusée
+SECRETS_AT_REST_KEY=<base64-32-bytes>   # chiffre la clé d'API LLM de l'agent au repos ; sans elle hors development/test, son écriture est refusée
 
 # Services
 ZMQ_PUSH_URL=tcp://translator:5555
@@ -106,6 +106,12 @@ TTS_MAX_NEW_TOKENS=2048
 HF_TOKEN=<huggingface-token>
 HF_HOME=/workspace/models/huggingface
 ```
+
+**Mise en place de `SECRETS_AT_REST_KEY`** (base64 strict de 32 octets : `openssl rand -base64 32`) :
+1. poser la variable dans l'environnement du gateway (staging d'abord) et redéployer ;
+2. dans le conteneur du gateway, lancer `services/gateway/scripts/reseal-agent-llm-secrets.ts` avec `bunx tsx` : à blanc d'abord (n'affiche que des nombres de lignes), puis avec `--apply` ; relancé, il ne trouve plus rien à re-sceller ;
+3. production : mêmes étapes, seulement APRÈS le feu vert du porteur et une sauvegarde vérifiée ;
+4. faire tourner chez le fournisseur toute clé d'API LLM déjà enregistrée avant cette mise en place : elle a pu être stockée en clair et figurer dans des sauvegardes.
 
 ## Deployment Commands
 ```bash
