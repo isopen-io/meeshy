@@ -389,7 +389,15 @@ export const callersIn = (contents, nsNames) => {
 // la page « Mes liens » web gère les quatre familles d'iOS
 // (`lib/api/my-tracking-links.ts`, `affiliate-tokens.ts`,
 // `community-links.ts`). Valeur MESURÉE le 2026-10-04.
-const BASELINE_DEAD_ENTRIES = 276;
+// 276 → 281 (#9399, 2026-10-05) : les cinq entrées `me.game*`
+// (`.gameChestClaim`, `.gameFlameFreezes`, `.gameFlameRelight`,
+// `.gameGuideSeen`, `.gameMissionsByMissionIdReroll`) GÉNÉRÉES depuis
+// `route-manifest.json` en régénérant `api/endpoints.ts` (resté périmé après
+// le lot du jeu, #9382). Mortes à la naissance PAR CONSTRUCTION, même motif
+// que `stickerPacks.pending`/`bySlugReview` ci-dessus : les routes sont
+// livrées côté gateway, l'écran web qui les appellera est un suivi à part.
+// Valeur MESURÉE le 2026-10-05.
+const BASELINE_DEAD_ENTRIES = 281;
 
 export const readWorld = (root) => {
   const groupFiles = readdirSync(join(root, GROUPS_DIR)).filter((name) => name.endsWith('.ts')).sort();
