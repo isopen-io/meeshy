@@ -23,7 +23,7 @@ final class CallMontageLayersTests: XCTestCase {
     func test_layers_composedOnGPU_matchesTheHistoricalCPURender() throws {
         let photo = Self.photo()
         let contexte = CIContext(options: [.workingColorSpace: CGColorSpaceCreateDeviceRGB()])
-        for style in CallMontageStyle.allCases {
+        let ecarts: [(CallMontageStyle, Double)] = try CallMontageStyle.allCases.map { style in
             let cpu = try XCTUnwrap(CallMontageRenderer.render(
                 style: style,
                 portraits: [CallMontagePortrait(id: personne.id, name: personne.name, image: photo)],
@@ -33,10 +33,12 @@ final class CallMontageLayersTests: XCTestCase {
             let gpu = CallLiveFrameCompositor().compose(scene, videos: [personne.id: CIImage(cgImage: photo)])
             let a = Self.rgba(CIImage(cgImage: cpu), size: toile, context: contexte)
             let b = Self.rgba(gpu, size: toile, context: contexte)
-            let ecart = Self.meanGap(a, b)
+            return (style, Self.meanGap(a, b))
+        }
+        let releve = ecarts.map { "\($0.0.rawValue)=\(String(format: "%.4f", $0.1))" }.joined(separator: " ")
+        for (style, ecart) in ecarts {
             let tolerance = style == .noir ? 0.10 : 0.035
-            print("CallMontageLayers écart \(style.rawValue) = \(ecart)")
-            XCTAssertLessThan(ecart, tolerance, "\(style) : écart moyen \(ecart) entre les couches et le rendu CPU")
+            XCTAssertLessThan(ecart, tolerance, "\(style) : écart moyen \(ecart) entre les couches et le rendu CPU — \(releve)")
         }
     }
 

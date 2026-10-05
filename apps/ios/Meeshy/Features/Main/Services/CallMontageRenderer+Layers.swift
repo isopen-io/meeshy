@@ -27,18 +27,19 @@ nonisolated extension CallMontageRenderer {
 
     static func layers(style: CallMontageStyle, person: CallFramePerson, caption: CallMontageCaption,
                        size: CGSize) -> CallLiveFrameScene? {
-        guard size.width >= 1, size.height >= 1 else { return nil }
+        guard size.width >= 1, size.height >= 1, let toile = makeContext(size: size) else { return nil }
         let trou = CallMontageHole()
         let portrait = CallMontagePortrait(id: person.id, name: person.name, image: nil, hole: trou)
         guard let calque = render(style: style, portraits: [portrait], canvas: size, caption: caption),
-              let chemin = trou.path,
-              let dessus = CallLiveFrameCompositor.baked(calque),
-              let masque = holeMask(path: chemin, toCanvas: trou.toCanvas, size: size) else { return nil }
+              let chemin = trou.path else { return nil }
+        let versLaToile = trou.toCanvas.concatenating(toile.userSpaceToDeviceSpaceTransform.inverted())
+        guard let dessus = CallLiveFrameCompositor.baked(calque),
+              let masque = holeMask(path: chemin, inCanvas: versLaToile, size: size) else { return nil }
         let etendue = CGRect(origin: .zero, size: size)
         let vide = CIImage(color: .clear).cropped(to: etendue)
         let case_ = CallLiveFrameSlot(personId: person.id, photo: trou.frame, rotation: 0, mask: masque,
                                       placeholder: vide, tone: tone(of: style), duotone: nil,
-                                      placement: trou.toCanvas)
+                                      placement: versLaToile.concatenating(coreImage(canvasHeight: size.height)))
         let textes = CallFrameTexts(groupName: nil, isGroup: false, date: caption.subtitle, accentHex: nil)
         let entrees = CallLiveFrameLayerInputs(frameId: "classic-\(style.rawValue)", people: [person],
                                                texts: textes, size: size)
@@ -51,12 +52,17 @@ nonisolated extension CallMontageRenderer {
         style == .noir ? .mono : .color
     }
 
-    /// Le chemin relevé, rempli en blanc dans le repère du périphérique (y vers le
-    /// haut) — celui de Core Image.
-    static func holeMask(path: CGPath, toCanvas: CGAffineTransform, size: CGSize) -> CIImage? {
+    /// La toile du peintre (y vers le bas) dans le repère de Core Image (y vers le haut).
+    static func coreImage(canvasHeight: CGFloat) -> CGAffineTransform {
+        CGAffineTransform(a: 1, b: 0, c: 0, d: -1, tx: 0, ty: canvasHeight)
+    }
+
+    /// Le chemin relevé, rempli en blanc sur la toile du peintre — le repère même
+    /// du calque, quelle que soit la convention du périphérique. `inCanvas` porte
+    /// le repère de la case dans celui de la toile.
+    static func holeMask(path: CGPath, inCanvas: CGAffineTransform, size: CGSize) -> CIImage? {
         guard let context = makeContext(size: size) else { return nil }
-        context.concatenate(context.userSpaceToDeviceSpaceTransform.inverted())
-        var transformation = toCanvas
+        var transformation = inCanvas
         guard let pose = path.copy(using: &transformation) else { return nil }
         context.addPath(pose)
         context.setFillColor(CGColor(gray: 1, alpha: 1))
