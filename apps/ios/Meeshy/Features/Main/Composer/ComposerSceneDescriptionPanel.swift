@@ -183,26 +183,52 @@ struct ComposerSceneDescriptionPanel: View {
     /// côtés s'estompent dans la scène — parce qu'un bord, même arrondi, est
     /// exactement la bulle que la directive retire.
     ///
-    /// `.ultraThinMaterial` est le plus léger des matériaux (iOS 15+) : on
-    /// continue de voir ce qu'on décrit. Il suit le `colorScheme` que le volet
-    /// épingle — matière claire sous une encre sombre sur un fond clair, et
-    /// l'inverse — donc le contraste vient de la MÊME loi que l'encre
-    /// (`CanvasChromeScheme`, #6127), jamais d'une teinte décidée ici.
+    /// **Et un voile de la polarité opposée à l'encre, dans le même fondu**
+    /// (#9450). Le flou `.ultraThinMaterial` seul laissait l'invite à 2,71:1 sur
+    /// le rose `FF2E63` : près de la frontière de schéma, la matière la plus
+    /// fine ne relève pas assez le fond. Le voile est le halo de la loi
+    /// (`CanvasChromeScheme.legibilityHalo`) à `sceneTextVeilOpacity` — c'est
+    /// lui que le témoin de palette mesure, le flou restant dessous sans être
+    /// compté. Aucune teinte ne se décide ici : le schéma, le halo et son
+    /// opacité viennent de la MÊME loi que l'encre.
+    ///
+    /// **Le fondu tient dans la MARGE du calque**, pas dans une fraction du
+    /// volet : en pourcentage, il mordait sur le début de chaque ligne, où le
+    /// voile ne valait plus qu'un tiers de son opacité.
     private var flouDeScene: some View {
-        Rectangle()
-            .fill(.ultraThinMaterial)
-            .mask {
-                Self.fonduDesBords(axe: .vertical)
-                    .mask { Self.fonduDesBords(axe: .horizontal) }
+        GeometryReader { geo in
+            ZStack {
+                Rectangle().fill(.ultraThinMaterial)
+                Rectangle().fill(CanvasChromeScheme.legibilityHalo(for: chromeScheme)
+                    .opacity(CanvasChromeScheme.sceneTextVeilOpacity))
             }
-            .accessibilityHidden(true)
+            .mask {
+                Self.fonduDesBords(axe: .vertical,
+                                   opaqueDes: Self.debutOpaque(fondu: ComposerDescriptionLayer.verticalInset,
+                                                               longueur: geo.size.height))
+                    .mask {
+                        Self.fonduDesBords(axe: .horizontal,
+                                           opaqueDes: Self.debutOpaque(fondu: ComposerDescriptionLayer.horizontalInset,
+                                                                       longueur: geo.size.width))
+                    }
+            }
+        }
+        .accessibilityHidden(true)
+    }
+
+    /// **Où le voile atteint sa pleine opacité**, en fraction du côté : à la
+    /// fin de la marge du texte. Bornée à la moitié — au-delà, les deux fondus
+    /// se croiseraient et le voile n'atteindrait jamais sa pleine valeur.
+    nonisolated static func debutOpaque(fondu: CGFloat, longueur: CGFloat) -> CGFloat {
+        guard longueur > 0 else { return 0.5 }
+        return min(max(fondu / longueur, 0), 0.5)
     }
 
     /// Un masque opaque au centre, transparent aux deux bords de l'axe.
-    private static func fonduDesBords(axe: Axis) -> LinearGradient {
+    private static func fonduDesBords(axe: Axis, opaqueDes debut: CGFloat) -> LinearGradient {
         LinearGradient(stops: [.init(color: .clear, location: 0),
-                               .init(color: .black, location: 0.18),
-                               .init(color: .black, location: 0.82),
+                               .init(color: .black, location: debut),
+                               .init(color: .black, location: 1 - debut),
                                .init(color: .clear, location: 1)],
                        startPoint: axe == .vertical ? .top : .leading,
                        endPoint: axe == .vertical ? .bottom : .trailing)
