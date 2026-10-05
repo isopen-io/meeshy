@@ -11,7 +11,7 @@
 import { describe, it, expect, jest } from '@jest/globals';
 import { DEFAULT_ENGAGEMENT_SCALE } from '@meeshy/shared/types/engagement-scale';
 import { EngagementService } from '../../engagement/EngagementService';
-import { fakeGameDb, seedUser, USER, OTHER, type FakeGameDb } from './fakeGameDb';
+import { fakeGameDb, seedUser, USER, OTHER, writeConflict, type FakeGameDb } from './fakeGameDb';
 
 jest.mock('../../../utils/logger-enhanced', () => ({
   enhancedLogger: { child: () => ({ info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() }) },
@@ -221,6 +221,56 @@ describe('EngagementService.creditGamePoints — les points du jeu', () => {
 
     expect(counter(db)).toMatchObject({ count: 20, points: 160 });
     expect(db.user.rows[0]?.engagementScore).toBe(600);
+  });
+
+  it('ATOMIQUE : si le score ne s’écrit pas, le compteur ne garde rien — un nouvel essai ne crédite qu’une fois', async () => {
+    const db = fakeGameDb();
+    seedUser(db, { engagementScore: 500, levelRecord: 9 });
+    db.engagementCounter.rows.push({ id: 'c', userId: USER, axisKey: 'content.text_message', count: 20, points: 60 });
+    const panne = () => Promise.reject(new Error('score indisponible'));
+    const update = db.user.update.bind(db.user);
+    const raw = (db.prisma as unknown as { $runCommandRaw: unknown }).$runCommandRaw;
+    db.user.update = panne as unknown as typeof db.user.update;
+    (db.prisma as unknown as { $runCommandRaw: unknown }).$runCommandRaw = panne;
+
+    await expect(service(db).creditGamePoints(USER, 100, 'content.text_message')).rejects.toThrow('score indisponible');
+    expect(counter(db)).toMatchObject({ count: 20, points: 60 });
+    expect(db.user.rows[0]?.engagementScore).toBe(500);
+
+    db.user.update = update;
+    (db.prisma as unknown as { $runCommandRaw: unknown }).$runCommandRaw = raw;
+    await service(db).creditGamePoints(USER, 100, 'content.text_message');
+    expect(counter(db)).toMatchObject({ count: 20, points: 160 });
+    expect(db.user.rows[0]?.engagementScore).toBe(600);
+  });
+
+  it('un conflit d’écriture se rejoue en bloc : compteur et score crédités une seule fois', async () => {
+    const db = fakeGameDb();
+    seedUser(db, { engagementScore: 500, levelRecord: 9 });
+    db.engagementCounter.rows.push({ id: 'c', userId: USER, axisKey: 'content.text_message', count: 20, points: 60 });
+    let conflicts = 1;
+    const update = db.user.update.bind(db.user);
+    db.user.update = (async (args: Parameters<typeof update>[0]) => {
+      if (conflicts > 0) {
+        conflicts -= 1;
+        throw writeConflict();
+      }
+      return update(args);
+    }) as typeof db.user.update;
+
+    await service(db).creditGamePoints(USER, 100, 'content.text_message');
+
+    expect(counter(db)).toMatchObject({ count: 20, points: 160 });
+    expect(db.user.rows[0]?.engagementScore).toBe(600);
+  });
+
+  it('un score ABSENT (compte antérieur au barème) se lit zéro, jamais null', async () => {
+    const db = fakeGameDb();
+    seedUser(db, {});
+
+    await service(db).creditGamePoints(USER, 30, 'content.text_message');
+
+    expect(db.user.rows[0]?.engagementScore).toBe(30);
   });
 
   it('un axe jamais touché reçoit une ligne à zéro action et aux points crédités', async () => {

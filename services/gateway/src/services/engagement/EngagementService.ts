@@ -56,6 +56,7 @@ import { EngagementGameHooks, applyTailwind, quarterPoints } from '../game/Engag
 import { FLAME_USER_SELECT, flameFactsOf, planStreak } from '../game/FlameService';
 import type { MessageSignalInput } from '../game/MessageGameSignals';
 import { levelFromScore } from '@meeshy/shared/utils/game/levels';
+import { withRetry } from '../MessageMediaConsumptionService';
 
 const log = enhancedLogger.child({ module: 'EngagementService' });
 
@@ -380,15 +381,43 @@ export class EngagementService {
    * action de plus ni passer par l'élan, le Vent arrière ou les plafonds : ils
    * sont DÉJÀ le résultat d'un geste admis. Même invariant que `credit` :
    * `engagementScore == Σ(EngagementCounter.points)`.
+   *
+   * **Atomique et rejouable.** Le compteur et le score s'écrivent dans UNE
+   * transaction : l'appelant (une mission, un coffre) rend sa réclamation quand
+   * ce crédit échoue, et le prochain geste le rejoue — deux écritures séparées
+   * auraient laissé le compteur crédité une fois par essai. Un conflit
+   * d'écriture (P2034) se rejoue en bloc, depuis la lecture. Le score se lit
+   * puis s'écrit en valeur DANS la transaction : un champ absent se lit zéro
+   * (#6428), et un écrivain concurrent fait annuler la tentative au lieu d'être
+   * écrasé. Les paliers et la Gloire qui suivent ne font jamais échouer un
+   * crédit déjà écrit — ce qui ferait rendre, puis repayer, la mission.
    */
   async creditGamePoints(userId: string, points: number, axisKey: EngagementAxisKey): Promise<void> {
     if (!Number.isInteger(points) || points <= 0) return;
-    await this.prisma.engagementCounter.upsert({
-      where: { userId_axisKey: { userId, axisKey } },
-      create: { userId, axisKey, count: 0, points },
-      update: { points: { increment: points } },
-    });
-    await this.updateEngagementScore(userId, points);
+    const written = await withRetry(() =>
+      this.prisma.$transaction(async (tx) => {
+        const account = await tx.user.findUnique({
+          where: { id: userId },
+          select: { engagementScore: true, levelRecord: true },
+        });
+        if (!account) return null;
+        await tx.engagementCounter.upsert({
+          where: { userId_axisKey: { userId, axisKey } },
+          create: { userId, axisKey, count: 0, points },
+          update: { points: { increment: points } },
+        });
+        const score = (account.engagementScore ?? 0) + points;
+        await tx.user.update({ where: { id: userId }, data: { engagementScore: score } });
+        return { score, levelRecord: account.levelRecord ?? null };
+      }),
+    );
+    if (written === null) return;
+    await this.afterScore(userId, points, written.score, written.levelRecord).catch((error: unknown) =>
+      log.warn('game points credited, level follow-up failed', {
+        userId,
+        error: error instanceof Error ? error.message : String(error),
+      }),
+    );
   }
 
   /** Un message committé (#9375, #9377) : signaux de mission et réponse reçue. */
@@ -894,6 +923,11 @@ export class EngagementService {
     // Compte introuvable (supprimé entre l'activité et ce crédit) : rien à
     // notifier, et surtout pas un palier calculé sur `undefined`.
     if (typeof newScore !== 'number') return;
+    await this.afterScore(userId, points, newScore, result?.value?.levelRecord ?? null);
+  }
+
+  /** Les paliers que `points` vient de franchir, et la Gloire du premier passage. */
+  private async afterScore(userId: string, points: number, newScore: number, levelRecord: number | null): Promise<void> {
     const previousScore = newScore - points;
     const crossedThresholds = LEVEL_THRESHOLDS.filter(
       (threshold) => threshold > previousScore && threshold <= newScore,
@@ -904,7 +938,7 @@ export class EngagementService {
     }
     // La Gloire du premier passage de chaque niveau (#9374) : le record rendu
     // par la MÊME commande que le score — aucune lecture de plus sur la voie chaude.
-    await this.game.onScore(userId, newScore, result?.value?.levelRecord ?? null);
+    await this.game.onScore(userId, newScore, levelRecord);
   }
 
   /**
