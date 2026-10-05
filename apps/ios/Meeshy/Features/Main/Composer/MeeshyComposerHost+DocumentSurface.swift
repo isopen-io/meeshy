@@ -214,17 +214,19 @@ extension MeeshyComposerHost {
     /// scène ne produisait aucun retour tant qu'on ne lui avait pas donné de
     /// photo.
     ///
-    /// `nil` sous deux scènes : un rail d'un seul élément ne navigue vers rien
-    /// (loi 4), et le compte se lit alors sur la scène elle-même.
+    /// Chaque tuile EST la vignette de sa scène (#5009 + #5037) ; le rail se
+    /// monte dès qu'une scène existe et est montée (`showsRail`) — une scène
+    /// neuve y paraît donc tout de suite, noire parce qu'elle est vide.
     var slideRailSlot: AnyView? {
         let scenes = ComposerHeaderTiles.tiles(for: viewModel.slides)
-        guard scenes.count > 1 else { return nil }
+        guard ComposerHeaderTiles.showsRail(sceneCount: scenes.count, scenePresent: sceneIsPresent) else {
+            return nil
+        }
         return AnyView(ComposerSlideRail(
             slides: scenes,
             currentIndex: viewModel.currentSlideIndex,
             slideImages: viewModel.slideImages,
             loadedImages: viewModel.loadedImages,
-            imagesVersion: viewModel.loadedImagesVersion,
             onSelect: { index in
                 if retouchSeries != nil { selectRetouchScene(at: index) } else { viewModel.selectSlide(at: index) }
             },

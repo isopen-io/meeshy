@@ -16,6 +16,15 @@
  *     aucune requête du fil `scope=reels`, que la passerelle refuse à un
  *     visiteur.
  *
+ * La preuve du « réseau lent » se compare à la COUPURE d'autrefois
+ * (`FORMER_CUTOFF_MS`, 2,5 s), jamais au délai du bouchon (`SLOW_MS`, 4 s) :
+ * ce que le gate établit, c'est que la requête a survécu au délai qui la
+ * tuait. Comparer à `SLOW_MS` pariait sur l'horloge — un `setTimeout(4000)`
+ * de Node peut rendre la main quand `Date.now()` n'a compté que 3 999 ms, et
+ * le gate rougissait sans défaut produit (#9370). L'écart de 1,5 s entre les
+ * deux absorbe toute granularité d'horloge ; une réponse rapide échoue
+ * toujours.
+ *
  * Aucun délai fixe suivi d'une lecture (`fixed-delay-ratchet.test.ts`) : le
  * réseau lent est un bouchon RETARDÉ côté Node, et chaque verdict attend son
  * FAIT (`awaitFact`).
@@ -23,7 +32,8 @@
 import { awaitFact } from './await-fact.mjs';
 
 const STORY_ID = '6a0000000000000000009172';
-const SLOW_MS = 4_000;
+export const SLOW_MS = 4_000;
+export const FORMER_CUTOFF_MS = 2_500;
 const SETTLE_MS = SLOW_MS + 8_000;
 
 const hoursFrom = (hours) => new Date(Date.now() + hours * 3_600_000).toISOString();
@@ -40,6 +50,17 @@ const PUBLIC_STORY = {
   content: 'Le lac, ce matin.',
   originalLanguage: 'fr',
 };
+
+const seconds = (ms) => `${(ms / 1_000).toLocaleString('fr-FR')} s`;
+
+/** La requête a-t-elle duré plus longtemps que la coupure qui la tuait ? Le
+ * verdict et son libellé lisent la MÊME constante. */
+export function slowAnswerVerdict(answeredAfterMs) {
+  return {
+    ok: answeredAfterMs > FORMER_CUTOFF_MS,
+    label: `la lecture de la story a bien duré plus de ${seconds(FORMER_CUTOFF_MS)} (${answeredAfterMs} ms)`,
+  };
+}
 
 const json = (status, body) => ({ status, contentType: 'application/json', body: JSON.stringify(body) });
 
@@ -89,7 +110,8 @@ export async function checkVisitor({ browser, base, check }) {
       invited && scene === 1,
       `réseau lent (${answeredAfterMs} ms) : la story d'un lien paraît, l'invitation par-dessus (invitation : ${invited}, scène : ${scene})`,
     );
-    check(answeredAfterMs >= SLOW_MS, `la lecture de la story a bien duré plus de 2,5 s (${answeredAfterMs} ms)`);
+    const slow = slowAnswerVerdict(answeredAfterMs);
+    check(slow.ok, slow.label);
     check(
       !seen.retry && !seen.alert,
       `réseau lent : jamais « Réessayer » ni alerte pendant la requête (Réessayer : ${seen.retry}, alerte : ${seen.alert})`,

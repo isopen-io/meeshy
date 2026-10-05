@@ -80,8 +80,8 @@ struct ComposerSceneDescriptionPanel: View {
     /// Il vient de `CanvasChromeScheme` — luminance WCAG du hex ou du dégradé,
     /// moyenne 8×8 du bitmap pour un fond média — et c'est la MÊME loi que le
     /// reste du chrome du composer consomme déjà. Épinglé ici, il fait suivre
-    /// d'un coup tout ce qui vit dessous : l'encre du calque, sa coche, le verre
-    /// d'`adaptiveGlass` et le chevron lisent tous `\.colorScheme`.
+    /// d'un coup tout ce qui vit dessous : l'encre du calque, sa coche, le flou
+    /// de la scène et le chevron lisent tous `\.colorScheme`.
     ///
     /// > Une couleur décidée ici serait une seconde loi. Le volet n'en pose
     /// > aucune — il branche celle qui existe.
@@ -109,22 +109,41 @@ struct ComposerSceneDescriptionPanel: View {
     /// divergeraient au premier chemin de fermeture oublié.
     @State private var estEnFrappe = false
 
+    /// **La largeur RENDUE de la scène**, servie par la surface qui la mesure
+    /// (#5008). `nil` — l'atelier, qui ne la publie pas — ⇒ le volet se mesure
+    /// lui-même : il est borné à la carte, donc sa largeur la suit.
+    @Environment(\.composerSceneCardWidth) private var largeurServie
+    @State private var largeurPropre: CGFloat = 0
+
+    private var largeurDeScene: CGFloat {
+        guard let largeurServie, largeurServie > 0 else { return largeurPropre }
+        return largeurServie
+    }
+
     var body: some View {
         VStack(spacing: MeeshySpacing.xsPlus) {
             if !isCollapsed { legende }
             if !estEnFrappe { chevron }
         }
         .frame(maxWidth: .infinity)
+        .background {
+            GeometryReader { geo in
+                Color.clear.preference(key: ComposerDescriptionPanelWidthKey.self, value: geo.size.width)
+            }
+        }
+        .onPreferenceChange(ComposerDescriptionPanelWidthKey.self) { largeurPropre = $0 }
         // L'épinglage vaut pour TOUTE la colonne : le calque, sa coche, son
-        // verre et le chevron. Un seul point, donc aucun site à oublier.
+        // flou et le chevron. Un seul point, donc aucun site à oublier.
         .environment(\.colorScheme, chromeScheme)
     }
 
     // MARK: - La légende, écrite en place
 
-    /// **Sur du verre, jamais à nu** (#4993) : le texte se peint sur la scène,
-    /// dont l'auteur choisit la couleur. Un fond OPAQUE cacherait la moitié
-    /// basse de ce qu'on décrit ; le verre laisse voir et contraste quand même.
+    /// **Sur un flou de la scène, jamais à nu ni dans une bulle** (#4993, puis
+    /// #5008) : le texte se peint sur la scène, dont l'auteur choisit la
+    /// couleur. Un fond OPAQUE cacherait la moitié basse de ce qu'on décrit ; la
+    /// capsule de verre de #4993 se voyait plus que la scène — le flou sans bord
+    /// (`flouDeScene`) laisse voir et contraste quand même.
     ///
     /// `opensEditingOnAppear: false` — le volet s'affiche AU REPOS. C'est la
     /// différence exacte avec la zone basse qu'il remplace, qui s'ouvrait en
@@ -150,9 +169,43 @@ struct ComposerSceneDescriptionPanel: View {
             },
             editingRequest: editingRequest
         )
-        .adaptiveGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous))
-        .contentShape(RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous))
+        .background { flouDeScene }
+        .contentShape(Rectangle())
         .transition(.opacity.combined(with: .move(edge: .bottom)))
+    }
+
+    /// **Le texte SEUL, sur un léger flou de la scène** (#5008, directive
+    /// porteur 2026-09-03 : « sans bulle, lorsque déplié ça affiche juste le
+    /// texte en floutant légèrement la scène derrière »).
+    ///
+    /// Le flou est ce qui rend l'absence de bulle possible : sans lui, un texte
+    /// clair sur une photo claire disparaît. Il n'a pas de BORD — ses quatre
+    /// côtés s'estompent dans la scène — parce qu'un bord, même arrondi, est
+    /// exactement la bulle que la directive retire.
+    ///
+    /// `.ultraThinMaterial` est le plus léger des matériaux (iOS 15+) : on
+    /// continue de voir ce qu'on décrit. Il suit le `colorScheme` que le volet
+    /// épingle — matière claire sous une encre sombre sur un fond clair, et
+    /// l'inverse — donc le contraste vient de la MÊME loi que l'encre
+    /// (`CanvasChromeScheme`, #6127), jamais d'une teinte décidée ici.
+    private var flouDeScene: some View {
+        Rectangle()
+            .fill(.ultraThinMaterial)
+            .mask {
+                Self.fonduDesBords(axe: .vertical)
+                    .mask { Self.fonduDesBords(axe: .horizontal) }
+            }
+            .accessibilityHidden(true)
+    }
+
+    /// Un masque opaque au centre, transparent aux deux bords de l'axe.
+    private static func fonduDesBords(axe: Axis) -> LinearGradient {
+        LinearGradient(stops: [.init(color: .clear, location: 0),
+                               .init(color: .black, location: 0.18),
+                               .init(color: .black, location: 0.82),
+                               .init(color: .clear, location: 1)],
+                       startPoint: axe == .vertical ? .top : .leading,
+                       endPoint: axe == .vertical ? .bottom : .trailing)
     }
 
     // MARK: - Le chevron
@@ -161,11 +214,14 @@ struct ComposerSceneDescriptionPanel: View {
     /// dessiné à sa taille naturelle donnerait une cible de 12 pt que personne
     /// n'atteint du pouce.
     ///
-    /// **La CIBLE fait 44 pt, la PASTILLE beaucoup moins** (#4993). Posée sur le
+    /// **La CIBLE fait 44 pt, jamais la pleine largeur** (#4993). Posée sur le
     /// canvas, une cible pleine largeur couvrirait la bande basse de la scène et
-    /// volerait au doigt tout objet qu'on y traîne. La forme de contact suit
-    /// donc la pastille — même arbitrage que les deux rails, qui bornent leur
-    /// contact à leurs entrées.
+    /// volerait au doigt tout objet qu'on y traîne — même arbitrage que les deux
+    /// rails, qui bornent leur contact à leurs entrées.
+    ///
+    /// **Et la pastille est partie** (#5008) : elle se voyait plus que la scène
+    /// qu'elle commente. Le glyphe se pose nu, à l'échelle de la carte, et son
+    /// encre suit le fond (`glassControlForeground`, scheme épinglé).
     ///
     /// **Il s'efface pendant la frappe** (#6126). Clavier levé, il se retrouve à
     /// quelques points du champ : un appui manqué replierait la légende qu'on
@@ -180,7 +236,16 @@ struct ComposerSceneDescriptionPanel: View {
             HapticFeedback.light()
         } label: {
             Image(systemName: Self.chevronSymbol(isCollapsed: isCollapsed))
-                .font(MeeshyFont.relative(13, weight: .semibold))
+                // **À l'échelle de la scène, sans pastille** (#5008). Le dessin
+                // suit la largeur RENDUE de la carte ; la cible, elle, reste à
+                // 44 pt — discret ne veut pas dire petit à toucher. Le glyphe
+                // est REDIMENSIONNÉ, pas typographié : une police suivrait
+                // Dynamic Type par paliers, jamais la carte en continu.
+                .resizable()
+                .scaledToFit()
+                .fontWeight(.semibold)
+                .frame(width: Self.chevronGlyphSize(sceneWidth: largeurDeScene),
+                       height: Self.chevronGlyphSize(sceneWidth: largeurDeScene))
                 // **Adaptatif, plus blanc en dur** (#6127). Le blanc était
                 // justifié ici même par « la pastille flotte sur une scène dont
                 // la couleur est celle de l'auteur, pas celle du thème — une
@@ -190,9 +255,8 @@ struct ComposerSceneDescriptionPanel: View {
                 // une teinte du FOND. `glassControlForeground` la lit dans le
                 // `colorScheme` que ce volet épingle.
                 .glassControlForeground()
-                .frame(width: 44, height: 30)
-                .adaptiveGlass(in: Capsule())
-                .contentShape(Capsule())
+                .frame(width: Self.chevronTapTarget, height: Self.chevronTapTarget)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         // **Le libellé dit l'ACTION, jamais l'état.** « Description repliée »
@@ -212,6 +276,23 @@ struct ComposerSceneDescriptionPanel: View {
         isCollapsed ? "chevron.up" : "chevron.down"
     }
 
+    /// **La taille du DESSIN de la flèche, proportionnelle à la scène rendue**
+    /// (#5008). La carte est encastrée et son côté varie — téléphone, clavier
+    /// levé, iPad, ratio 1:1 —, donc un littéral serait juste sur un seul de
+    /// ces écrans. Bornée des deux côtés : lisible sur une vignette, discrète
+    /// sur un iPad (moins de la moitié de la cible).
+    nonisolated static func chevronGlyphSize(sceneWidth: CGFloat) -> CGFloat {
+        min(max(sceneWidth * chevronScale, chevronGlyphFloor), chevronGlyphCeiling)
+    }
+
+    /// 402 pt de scène ⇒ un glyphe d'environ 14 pt.
+    nonisolated static let chevronScale: CGFloat = 0.034
+    nonisolated static let chevronGlyphFloor: CGFloat = 9
+    nonisolated static let chevronGlyphCeiling: CGFloat = 18
+
+    /// La cible, elle, ne rétrécit jamais (dimension 5).
+    nonisolated static let chevronTapTarget: CGFloat = MeeshyControlSize.tapTarget
+
     /// Le libellé du lecteur d'écran dit l'ACTION, jamais l'ÉTAT. Il ne se dérive
     /// PAS du glyphe : « chevron.up » se prononce mal, et une chaîne qui sert
     /// l'œil ET la voix n'en sert qu'un.
@@ -222,5 +303,39 @@ struct ComposerSceneDescriptionPanel: View {
                      defaultValue: "Afficher la description", bundle: .main)
             : String(localized: "composer.description.collapse",
                      defaultValue: "Replier la description", bundle: .main)
+    }
+}
+
+// MARK: - La largeur rendue de la scène (#5008)
+
+/// La largeur du DESSIN de la scène, que la surface mesure et sert au volet
+/// pour proportionner sa flèche. `nil` hors d'une surface qui la mesure.
+private struct ComposerSceneCardWidthKey: EnvironmentKey {
+    static let defaultValue: CGFloat? = nil
+}
+
+extension EnvironmentValues {
+    var composerSceneCardWidth: CGFloat? {
+        get { self[ComposerSceneCardWidthKey.self] }
+        set { self[ComposerSceneCardWidthKey.self] = newValue }
+    }
+}
+
+/// La même largeur, REMONTÉE par le canvas qui la mesure jusqu'à la surface
+/// qui la sert au volet (frères dans la pile, comme le bord gauche du dessin,
+/// `ComposerSceneCardLeadingKey`).
+struct ComposerSceneCardWidthPreferenceKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
+/// La largeur du volet lui-même — le repli quand aucune surface ne sert celle
+/// de la scène : le volet est borné à la carte, donc il la suit.
+private struct ComposerDescriptionPanelWidthKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
     }
 }

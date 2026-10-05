@@ -80970,6 +80970,53 @@
         }
       }
     },
+    "composer.slide.rail.capReached": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "عشرة مشاهد كحد أقصى — احذف واحدًا لإنشاء آخر"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Höchstens zehn Szenen — lösche eine, um eine neue zu erstellen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ten scenes at most — delete one to create another"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diez escenas como máximo — elimina una para crear otra"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dix scènes au maximum — supprimez-en une pour en créer une autre"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Al massimo dieci scene — eliminane una per crearne un'altra"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No máximo dez cenas — exclua uma para criar outra"
+          }
+        }
+      }
+    },
     "composer.slide.rail.delete": {
       "localizations": {
         "ar": {

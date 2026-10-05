@@ -1,6 +1,7 @@
 {
   "preset": "ts-jest",
   "testEnvironment": "node",
+  "workerIdleMemoryLimit": "2560MB",
   "rootDir": ".",
   "transformIgnorePatterns": [
     "node_modules/(?!@meeshy/shared)"
