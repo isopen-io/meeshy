@@ -136,7 +136,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
             self.frameOutput.alwaysDiscardsLateVideoFrames = true
             self.frameOutput.setSampleBufferDelegate(self.liveFeed, queue: self.liveFeed.queue)
             if self.session.canAddOutput(self.frameOutput) { self.session.addOutput(self.frameOutput) }
-            let installe = Self.installVideoInput(in: self.session, position: .back)
+            let installe = Self.installVideoInput(in: self.session, position: .back, outputs: self.orientedOutputs)
             let micro = armeLeMicro && Self.addAudioInput(to: self.session)
             self.session.commitConfiguration()
             DispatchQueue.main.async {
@@ -209,12 +209,15 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     /// objectif qui ne s'ouvre pas, ou que la session refuse, laisse l'ancien
     /// en place — l'aperçu ne noircit pas et `currentPosition` reste vrai.
     /// Sur la file de la session ; `nil` ⇒ rien n'a changé.
-    nonisolated private static func installVideoInput(in session: AVCaptureSession,
-                                                      position: AVCaptureDevice.Position) -> InstalledCamera? {
+    nonisolated private static func installVideoInput(
+        in session: AVCaptureSession, position: AVCaptureDevice.Position,
+        outputs: [(AVCaptureOutput, ComposerCaptureMirrorRule.Output)]
+    ) -> InstalledCamera? {
         let ancienne = session.inputs.compactMap { $0 as? AVCaptureDeviceInput }.first { $0.device.hasMediaType(.video) }
         let nouvelle = videoInput(position: position)
         guard ComposerCameraInputSwap.swap(in: session, replacing: ancienne, with: nouvelle) == .swapped,
               let device = nouvelle?.device else { return nil }
+        orient(outputs, for: position)
         let echelle = zoomScale(of: device)
         do {
             try device.lockForConfiguration()
@@ -226,6 +229,33 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
         }
         apply(ComposerCaptureFocus.continuous(focusCapabilities(of: device)), to: device)
         return InstalledCamera(device: device, position: position, zoomScale: echelle)
+    }
+
+    /// Les sorties dont chaque entrée neuve redresse et miroite la connexion.
+    nonisolated private var orientedOutputs: [(AVCaptureOutput, ComposerCaptureMirrorRule.Output)] {
+        [(photoOutput, .photo), (videoOutput, .movie), (frameOutput, .frames)]
+    }
+
+    /// **Debout, et en miroir à l'avant** (#9464) — à chaque entrée : une
+    /// connexion neuve reprend les réglages du système.
+    nonisolated private static func orient(_ outputs: [(AVCaptureOutput, ComposerCaptureMirrorRule.Output)],
+                                           for position: AVCaptureDevice.Position) {
+        for (output, sorte) in outputs {
+            guard let connection = output.connection(with: .video) else { continue }
+            if ComposerCaptureMirrorRule.rotatesToPortrait(sorte) { standUp(connection) }
+            guard connection.isVideoMirroringSupported else { continue }
+            connection.automaticallyAdjustsVideoMirroring = false
+            connection.isVideoMirrored = ComposerCaptureMirrorRule.mirrors(sorte, position: position)
+        }
+    }
+
+    nonisolated private static func standUp(_ connection: AVCaptureConnection) {
+        if #available(iOS 17.0, *) {
+            guard connection.isVideoRotationAngleSupported(ComposerCaptureMirrorRule.portraitAngle) else { return }
+            connection.videoRotationAngle = ComposerCaptureMirrorRule.portraitAngle
+        } else if connection.isVideoOrientationSupported {
+            connection.videoOrientation = .portrait
+        }
     }
 
     /// Ce que l'objectif installé change à l'écran — publié APRÈS le commit.
@@ -280,7 +310,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
                     MainActor.assumeIsolated { self.switchCover = couverture.image }
                 }
             }
-            let installe = Self.installVideoInput(in: self.session, position: position)
+            let installe = Self.installVideoInput(in: self.session, position: position, outputs: self.orientedOutputs)
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
                     if let installe { self.adopt(installe) }
