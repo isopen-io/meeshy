@@ -44,9 +44,9 @@ final class ComposerInlineEditTests: XCTestCase {
                        "l'ordre APPRIS des outils du texte, puis la fenêtre de temps et le plan")
     }
 
-    func test_sections_image_filtreActionsDescription() {
+    func test_sections_image_filtreReglagesActionsDescription() {
         XCTAssertEqual(ComposerInlineEditing.sections(for: .image, hasTrimmableSource: false),
-                       [.media(.filter), .media(.actions), .media(.altText)])
+                       [.media(.filter), .media(.adjust), .media(.actions), .media(.altText)])
     }
 
     func test_sections_video_rognageActionsDescription_sansFiltre() {
@@ -55,9 +55,12 @@ final class ComposerInlineEditTests: XCTestCase {
                        "le filtre se cuit dans une image : une vidéo n'en rend aucun")
     }
 
+    /// Sauf les RÉGLAGES (#9175) : `StoryBackgroundLayer` ne les peint pas
+    /// encore, donc le fond ne les offre pas — un curseur sans effet (loi 4).
     func test_sections_fond_lesMemesQuUnMediaPose() {
         XCTAssertEqual(ComposerInlineEditing.sections(for: .background(isVideo: false), hasTrimmableSource: false),
-                       ComposerInlineEditing.sections(for: .image, hasTrimmableSource: false))
+                       ComposerInlineEditing.sections(for: .image, hasTrimmableSource: false)
+                           .filter { $0 != .media(.adjust) })
         XCTAssertEqual(ComposerInlineEditing.sections(for: .background(isVideo: true), hasTrimmableSource: true),
                        ComposerInlineEditing.sections(for: .video, hasTrimmableSource: true))
     }

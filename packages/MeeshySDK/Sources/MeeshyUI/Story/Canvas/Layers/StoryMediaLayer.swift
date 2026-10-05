@@ -618,10 +618,13 @@ public final class StoryMediaLayer: CALayer {
     /// fait pour le filtre de slide (`StoryBackgroundLayer.stampFinalImage`).
     /// La clé de cache suit l'INSTANCE d'image : un bitmap retouché ne resservira
     /// jamais le filtre de l'ancien.
+    /// Les RÉGLAGES de l'objet (#9175) suivent le filtre, dans l'ordre de
+    /// l'éditeur d'image : filtre, puis réglages.
     static func filtered(_ image: UIImage?, for media: StoryMediaObject) -> UIImage? {
-        guard let image, let filtre = media.parsedFilter else { return image }
-        return StoryFilterProcessor.apply(filtre, to: image,
-                                          imageId: "\(media.id)-\(ObjectIdentifier(image).hashValue)")
+        guard let image else { return nil }
+        let instance = "\(media.id)-\(ObjectIdentifier(image).hashValue)"
+        let filtree = media.parsedFilter.map { StoryFilterProcessor.apply($0, to: image, imageId: instance) } ?? image
+        return StoryMediaAdjustmentsProcessor.apply(media.adjustments, to: filtree, imageId: "\(instance)-\(media.filter ?? "")")
     }
 
     // MARK: - Video path
