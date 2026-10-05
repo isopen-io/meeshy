@@ -16,3 +16,4 @@ export * from './duo.js';
 export * from './season.js';
 export * from './trophies.js';
 export * from './atlas.js';
+export * from './prestige.js';
