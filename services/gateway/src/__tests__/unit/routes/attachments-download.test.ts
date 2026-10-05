@@ -77,9 +77,19 @@ const DEFAULT_STAT = {
 // ─── App factory ─────────────────────────────────────────────────────────────
 
 /** Prisma minimal : le contrôle d'accès remonte du message à la participation. */
+/**
+ * La route PAR CHEMIN remonte aussi aux lignes `MessageAttachment` (#9315) :
+ * ici aucune ne porte les clés servies, donc ces fichiers gardent le régime
+ * d'un fichier qui n'est pas une pièce jointe. Le cycle de vie par chemin a
+ * ses témoins dans `attachments-file-route-verdict.test.ts`.
+ */
 function makeAccessPrisma(granted: boolean, message: unknown = { conversationId: 'conv-1' }) {
   return {
-    message: { findUnique: jest.fn<any>().mockResolvedValue(message) },
+    message: { findUnique: jest.fn<any>().mockResolvedValue(message), findMany: jest.fn<any>().mockResolvedValue([]) },
+    messageAttachment: {
+      findMany: jest.fn<any>().mockResolvedValue([]),
+      findUnique: jest.fn<any>().mockResolvedValue(null),
+    },
     participant: { findFirst: jest.fn<any>().mockResolvedValue(granted ? { id: 'part-1' } : null) },
   } as any;
 }
