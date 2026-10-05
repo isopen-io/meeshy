@@ -1,5 +1,6 @@
 import Testing
 import SwiftUI
+import MeeshySDK
 @testable import MeeshyUI
 
 /// Les shaders du jeu (#9381) : la ressource Metal est COMPILÉE dans le module et
