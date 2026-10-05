@@ -129,6 +129,7 @@ struct ComposerViewfinder: View {
         .background(Color.black.ignoresSafeArea())
         .onAppear {
             camera.configure()
+            capture.watchThermalState()
             // La porte qui promet la vidéo arme le micro À L'OUVERTURE : le
             // prompt n'arrive pas sous le doigt qui veut déjà filmer.
             if initialMode == .video {
