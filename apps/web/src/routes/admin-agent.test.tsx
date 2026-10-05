@@ -101,7 +101,13 @@ const DETAIL = {
 type Espion = { readonly transport: HttpTransport; readonly vues: HttpRequest[] };
 
 function transportAgent(
-  options: { readonly scanEnCours?: boolean; readonly relanceEchoue?: boolean; readonly arretEchoue?: boolean } = {},
+  options: {
+    readonly scanEnCours?: boolean;
+    readonly relanceEchoue?: boolean;
+    readonly arretEchoue?: boolean;
+    /** L'agent désactivé : la passerelle répond 200 `triggered: false` et dit pourquoi (2e2842185b). */
+    readonly relanceRefusee?: 'CONVERSATION_DISABLED' | 'GLOBAL_DISABLED';
+  } = {},
 ): Espion {
   const vues: HttpRequest[] = [];
   const transport = (async () => ({ ok: false, status: 0, error: 'jamais appelé' })) as unknown as HttpTransport;
@@ -110,6 +116,9 @@ function transportAgent(
     const { path, method } = requete;
 
     if (method === 'POST' && path.endsWith('/trigger')) {
+      if (options.relanceRefusee !== undefined) {
+        return { ok: true, data: { conversationId: 'c-atelier', triggered: false, reason: options.relanceRefusee, triggeredAt: null } };
+      }
       return options.relanceEchoue === true
         ? { ok: false, status: 404, error: 'Config non trouvée' }
         : { ok: true, data: { conversationId: 'c-atelier', triggered: true, triggeredAt: 1758100000000 } };
@@ -191,7 +200,7 @@ describe('LA RELANCE appelle la bonne adresse et rend son feedback', () => {
     await relancer(host);
 
     const annonce = host.querySelector('[data-admin-announcement]');
-    expect(annonce?.textContent).toBe(translateAdmin('fr', 'admin.agent.done'));
+    expect(annonce?.textContent).toBe('Relance demandée');
     expect(annonce?.getAttribute('aria-live')).toBe('polite');
   });
 
@@ -204,6 +213,30 @@ describe('LA RELANCE appelle la bonne adresse et rend son feedback', () => {
     expect(host.querySelector('[data-admin-announcement]')?.textContent).toBe(
       translateAdmin('fr', 'admin.agent.failed'),
     );
+  });
+
+  test('agent désactivé POUR LA CONVERSATION : « Relance non envoyée », jamais « Relance demandée »', async () => {
+    const host = await monter(transportAgent({ relanceRefusee: 'CONVERSATION_DISABLED' }));
+
+    await relancer(host);
+
+    expect(host.querySelector('[data-admin-announcement]')?.textContent).toBe('Relance non envoyée : l’agent est désactivé pour cette conversation.');
+  });
+
+  test('agent désactivé GLOBALEMENT : la phrase le dit', async () => {
+    const host = await monter(transportAgent({ relanceRefusee: 'GLOBAL_DISABLED' }));
+
+    await relancer(host);
+
+    expect(host.querySelector('[data-admin-announcement]')?.textContent).toBe('Relance non envoyée : l’agent est désactivé globalement.');
+  });
+
+  test('la carte compte les conversations CONFIGURÉES ; la liste, celles que l’agent SUIT', async () => {
+    const host = await monter(transportAgent());
+
+    expect(host.textContent).toContain('sur 4 configurées');
+    expect(host.textContent).not.toContain('sur 4 suivies');
+    expect(host.querySelector('[data-admin-agent-tracked-hint]')?.textContent).toContain('configurée ou non');
   });
 
   test('le bouton se DÉSARME pendant l’envoi — jamais deux cycles pour un geste', async () => {

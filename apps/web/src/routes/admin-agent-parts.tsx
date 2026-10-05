@@ -106,6 +106,10 @@ export function AdminAgentPanel({
       </AdminStatGrid>
 
       <AdminFicheSection id="tracked" title={translateAdmin(language, 'admin.agent.tracked')}>
+        {/* « Suivies » n'est pas « configurées » (la carte) : la liste compte aussi les conversations sans configuration où l'agent a laissé des rôles ou une activité. */}
+        <p data-admin-agent-tracked-hint className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
+          {translateAdmin(language, 'admin.agentPanel.tracked.hint')}
+        </p>
         <AgentTrackedList language={language} deps={deps} now={now} announce={announcer.announce} />
       </AdminFicheSection>
 

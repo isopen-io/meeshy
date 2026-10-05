@@ -111,7 +111,7 @@ const f = {
 
   'admin.agentPanel.subtitle': 'The conversations where the agent takes part: follow its activity, relaunch it or stop a running scan.',
   'admin.agentPanel.stat.tracked': 'Conversations under control',
-  'admin.agentPanel.stat.trackedCaption': 'out of {total} tracked',
+  'admin.agentPanel.stat.trackedCaption': 'out of {total} configured',
   'admin.agentPanel.stat.users': 'Controlled members',
   'admin.agentPanel.stat.messages': 'Messages published',
 
@@ -197,6 +197,13 @@ const f = {
   'admin.conversation.members.state.removed': 'Removed',
   'admin.conversation.reading.missing': 'This conversation no longer exists: there is nothing to read.',
   'admin.conversation.reading.ephemeral': 'Ephemeral · {duration}',
+  /* ─── Agent : étapes servies, relance non envoyée, décomptes nommés (audit 2026-10-04) ─── */
+  'admin.agentPanel.node.observe': 'is reading the conversation',
+  'admin.agentPanel.node.starting': 'is starting the scan',
+  'admin.agentPanel.relaunch.notSent.conversation': 'Run not sent: the agent is disabled for this conversation.',
+  'admin.agentPanel.relaunch.notSent.global': 'Run not sent: the agent is disabled globally.',
+  'admin.agentPanel.relaunch.notSent': 'Run not sent.',
+  'admin.agentPanel.tracked.hint': 'Every conversation where the agent has a configuration, roles or activity — configured or not.',
 } as const satisfies AdminCatalogFragment<typeof fr>;
 
 export default f;

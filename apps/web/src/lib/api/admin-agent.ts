@@ -237,7 +237,8 @@ function decodeControlledUser(raw: unknown): AgentControlledUser | null {
     userId: ligne.userId,
     displayName: name === null || name === ligne.userId || OBJECT_ID.test(name) ? null : name,
     username: asTextOrNull(ligne.username),
-    language: asTextOrNull(ligne.systemLanguage),
+    /* La langue RÉSOLUE (`language`, 2e2842185b) quand le serveur la sert — même `null` : `systemLanguage` y vaut un « fr » inventé, gardé pour les anciens clients. */
+    language: Object.hasOwn(ligne, 'language') ? asTextOrNull(ligne.language) : asTextOrNull(ligne.systemLanguage),
   };
 }
 
@@ -276,6 +277,8 @@ export async function loadAgentLive(
 export type AgentTriggerOutcome = {
   readonly triggered: boolean;
   readonly triggeredAt: number | null;
+  /** Pourquoi RIEN n'a été relancé (2e2842185b) : l'agent est désactivé pour la conversation, ou partout ; `null` sinon. */
+  readonly reason: 'CONVERSATION_DISABLED' | 'GLOBAL_DISABLED' | null;
 };
 
 /**
@@ -301,6 +304,7 @@ export async function relancerAgent(
     data: {
       triggered: charge.triggered === true,
       triggeredAt: typeof charge.triggeredAt === 'number' ? charge.triggeredAt : null,
+      reason: charge.reason === 'CONVERSATION_DISABLED' || charge.reason === 'GLOBAL_DISABLED' ? charge.reason : null,
     },
   };
 }

@@ -618,6 +618,30 @@ describe('configurer, et l’agent', () => {
     expect(document.querySelector(`[data-agent-relaunch-effect="${CONVERSATION}"]`)?.textContent).toContain('publier un message');
   });
 
+  test('un membre piloté se dit par son nom, son @pseudo ET sa langue résolue — jamais le « fr » inventé (2e2842185b)', async () => {
+    const live = (req: HttpRequest): ApiResult<unknown> | undefined =>
+      req.method === 'GET' && pathOf(req) === `/api/v1/admin/agent/configs/${CONVERSATION}/live`
+        ? {
+            ok: true,
+            data: {
+              conversationId: CONVERSATION,
+              isScanning: false,
+              currentNode: null,
+              controlledUsers: [{ userId: 'a'.repeat(24), displayName: 'Awa Diop', username: 'awa', systemLanguage: 'fr', language: 'wo' }],
+            },
+          }
+        : undefined;
+
+    const host = await open(setup(fiche({ agentEnabled: true }), members(MEMBERS), live).deps);
+    await openSection(host, 'agent');
+
+    const users = document.querySelector(`[data-agent-conversation-control="${CONVERSATION}"]`)?.textContent ?? '';
+    expect(users).toContain('Awa Diop');
+    expect(users).toContain('@awa');
+    expect(users).toContain('Wolof');
+    expect(users).not.toContain('Français');
+  });
+
   test('sans configuration, la passerelle rend 404 sur `…/live` : c’est « pas d’agent » — ni carte, ni erreur', async () => {
     const absent = (req: HttpRequest): ApiResult<unknown> | undefined =>
       pathOf(req) === `/api/v1/admin/agent/configs/${CONVERSATION}/live` ? { ok: false, status: 404, error: 'Aucune configuration' } : undefined;

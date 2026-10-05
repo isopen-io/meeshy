@@ -258,6 +258,25 @@ describe('GET /admin/agent/configs/:id/live — l’état vivant', () => {
     ]);
   });
 
+  test('la langue RÉSOLUE par le Prisme (`language`) prime sur `systemLanguage`, que le handler invente « fr » (2e2842185b)', async () => {
+    const { transport } = transportQui(() => ({
+      ok: true,
+      data: {
+        conversationId: 'c1',
+        controlledUsers: [
+          { userId: 'u1', displayName: 'Awa Diop', username: 'awa', systemLanguage: 'fr', language: 'wo' },
+          { userId: 'u2', displayName: 'Jean', username: 'jean', systemLanguage: 'fr', language: null },
+        ],
+      },
+    }));
+
+    const resultat = await loadAgentLive({ ...deps(transport), conversationId: 'c1' });
+
+    expect(resultat.ok).toBe(true);
+    if (!resultat.ok) return;
+    expect(resultat.data.controlledUsers.map((user) => user.language)).toEqual(['wo', null]);
+  });
+
   test('quand le compte n’existe plus, le handler sert l’IDENTIFIANT comme nom : il est jeté, jamais affiché', async () => {
     const objectId = '0123456789abcdef01234567';
     const { transport } = transportQui(() => ({
@@ -306,6 +325,17 @@ describe('POST /admin/agent/configs/:id/trigger — LA RELANCE', () => {
     expect(resultat.ok).toBe(true);
     if (!resultat.ok) return;
     expect(resultat.data.triggered).toBe(false);
+    expect(resultat.data.reason).toBeNull();
+  });
+
+  test('un agent désactivé ne relance rien, et le handler dit POURQUOI (`reason`)', async () => {
+    const { transport } = transportQui(() => ({ ok: true, data: { conversationId: 'c1', triggered: false, reason: 'GLOBAL_DISABLED', triggeredAt: null } }));
+
+    const resultat = await relancerAgent({ ...deps(transport), conversationId: 'c1' });
+
+    expect(resultat.ok).toBe(true);
+    if (!resultat.ok) return;
+    expect(resultat.data).toEqual({ triggered: false, triggeredAt: null, reason: 'GLOBAL_DISABLED' });
   });
 
   test('un refus reste un refus — la relance ne s’invente pas', async () => {

@@ -56,6 +56,8 @@ describe('le déclencheur', () => {
 describe('l’étape du graphe', () => {
   test('dite comme une action, jamais par son nom de nœud', () => {
     expect(agentNodeLabel('observer', 'fr')).toBe('observe la conversation');
+    expect(agentNodeLabel('observe', 'fr')).toBe('observe la conversation');
+    expect(agentNodeLabel('starting', 'fr')).toBe('démarre l’analyse');
     expect(agentNodeLabel('strategist', 'fr')).toBe('choisit quoi dire');
     expect(agentNodeLabel('generator', 'fr')).toBe('rédige un message');
     expect(agentNodeLabel('qualityGate', 'fr')).toBe('contrôle la qualité');
@@ -75,7 +77,7 @@ describe('les quatre langues de l’administration portent chaque code', () => {
         expect({ language, outcome, recognized: interpretAgentOutcome(outcome, language).label !== unrecognized }).toEqual({ language, outcome, recognized: true });
       }
       for (const trigger of AGENT_TRIGGERS) expect(interpretAgentTrigger(trigger, language).label.length).toBeGreaterThan(0);
-      for (const node of ['observer', 'strategist', 'generator', 'qualityGate']) expect(agentNodeLabel(node, language).length).toBeGreaterThan(0);
+      for (const node of ['starting', 'observe', 'observer', 'strategist', 'generator', 'qualityGate']) expect(agentNodeLabel(node, language).length).toBeGreaterThan(0);
     }
   });
 });

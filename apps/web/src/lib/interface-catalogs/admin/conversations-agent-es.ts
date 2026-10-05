@@ -113,7 +113,7 @@ const f = {
 
   'admin.agentPanel.subtitle': 'Las conversaciones en las que interviene el agente: sigue su actividad, vuelve a lanzarlo o detén un escaneo en curso.',
   'admin.agentPanel.stat.tracked': 'Conversaciones controladas',
-  'admin.agentPanel.stat.trackedCaption': 'de {total} seguidas',
+  'admin.agentPanel.stat.trackedCaption': 'de {total} configuradas',
   'admin.agentPanel.stat.users': 'Miembros controlados',
   'admin.agentPanel.stat.messages': 'Mensajes publicados',
 
@@ -199,6 +199,13 @@ const f = {
   'admin.conversation.members.state.removed': 'Retirado',
   'admin.conversation.reading.missing': 'Esta conversación ya no existe: no hay nada que leer.',
   'admin.conversation.reading.ephemeral': 'Efímero · {duration}',
+  /* ─── Agent : étapes servies, relance non envoyée, décomptes nommés (audit 2026-10-04) ─── */
+  'admin.agentPanel.node.observe': 'lee la conversación',
+  'admin.agentPanel.node.starting': 'inicia el análisis',
+  'admin.agentPanel.relaunch.notSent.conversation': 'Relanzamiento no enviado: el agente está desactivado para esta conversación.',
+  'admin.agentPanel.relaunch.notSent.global': 'Relanzamiento no enviado: el agente está desactivado globalmente.',
+  'admin.agentPanel.relaunch.notSent': 'Relanzamiento no enviado.',
+  'admin.agentPanel.tracked.hint': 'Toda conversación donde el agente tiene una configuración, roles o actividad, configurada o no.',
 } as const satisfies AdminCatalogFragment<typeof fr>;
 
 export default f;
