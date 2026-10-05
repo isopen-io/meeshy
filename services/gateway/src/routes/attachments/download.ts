@@ -7,7 +7,11 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { AttachmentService } from '../../services/attachments';
 import { thumbnailContentType } from '../../services/attachments/thumbnail';
 import { resolveAttachmentReadVerdict, denyAttachmentRead } from '../../services/attachments/attachmentReadVerdict';
-import { resolveFileRouteVerdict, type FileRouteVerdictPrisma } from '../../services/attachments/fileRouteVerdict';
+import {
+  resolveAttachmentByIdCacheControl,
+  resolveFileRouteVerdict,
+  type FileRouteVerdictPrisma,
+} from '../../services/attachments/fileRouteVerdict';
 import { createReadStream } from 'fs';
 import { stat } from 'fs/promises';
 import { relative as pathRelative, resolve as pathResolve, sep as pathSep } from 'path';
@@ -72,7 +76,7 @@ export async function registerDownloadRoutes(
       // corrupt Content-Range/Content-Length. Enforced at the proxy layer
       // (Traefik compress@file excludedContentTypes), not in-app.
       schema: {
-        description: 'Stream the original file by attachment ID. Returns the file with appropriate content-type headers for inline display. Supports cross-origin requests with CORS headers. Files are cached for 1 year (immutable).',
+        description: 'Stream the original file by attachment ID. Returns the file with appropriate content-type headers for inline display. Supports cross-origin requests with CORS headers. Ordinary files are cached for 1 year (immutable); view-once and ephemeral files get the same Cache-Control as the by-path route.',
         tags: ['attachments'],
         summary: 'Get attachment file',
         params: {
@@ -148,7 +152,8 @@ export async function registerDownloadRoutes(
           reply.header('Content-Security-Policy', "default-src 'none'; sandbox");
         }
         reply.header('X-Content-Type-Options', 'nosniff');
-        reply.header('Cache-Control', 'private, max-age=31536000, immutable');
+        // #9478 — le même cache que la route par chemin pour un média protégé.
+        reply.header('Cache-Control', await resolveAttachmentByIdCacheControl(attachmentId, prisma, new Date()));
 
         const stream = createReadStream(filePath);
         return reply.send(stream);
@@ -230,7 +235,7 @@ export async function registerDownloadRoutes(
         // (always JPEG bytes whatever their extension) stay image/jpeg.
         reply.header('Content-Type', thumbnailContentType(thumbnailPath));
         reply.header('Content-Disposition', 'inline');
-        reply.header('Cache-Control', 'private, max-age=31536000, immutable');
+        reply.header('Cache-Control', await resolveAttachmentByIdCacheControl(attachmentId, prisma, new Date()));
 
         const stream = createReadStream(thumbnailPath);
         return reply.send(stream);

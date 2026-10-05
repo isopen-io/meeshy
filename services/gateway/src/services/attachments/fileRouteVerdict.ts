@@ -60,6 +60,11 @@ export const ORDINARY_ATTACHMENT_CACHE = 'private, max-age=31536000';
 export const EPHEMERAL_ATTACHMENT_CACHE = 'private, no-cache';
 /** Une vue unique : aucun cache ne doit pouvoir la rejouer. */
 export const VIEW_ONCE_ATTACHMENT_CACHE = 'private, no-store';
+/**
+ * Un média ordinaire servi PAR IDENTIFIANT : l'identifiant ne désigne jamais
+ * d'autres octets, d'où `immutable` en plus du cache long (#9478).
+ */
+export const ORDINARY_ATTACHMENT_BY_ID_CACHE = 'private, max-age=31536000, immutable';
 
 const TRANSLATED_TRACK = /^translated\/([0-9a-f]{24})_[^/]+$/;
 const RESPONSIVE_VARIANT = /^(.+)_\d+w\.webp$/;
@@ -77,9 +82,29 @@ export async function resolveFileRouteVerdict(
   return owners.length === 0 ? { kind: 'not-an-attachment' } : verdictFor(owners, prisma, now);
 }
 
+/**
+ * Le cache d'un fichier servi PAR IDENTIFIANT (`/attachments/:id` et sa
+ * miniature, #9478). Le droit de lecture est déjà jugé ; reste à dire combien
+ * de temps un client peut garder ces octets — et c'est la MÊME loi que la route
+ * par chemin, sur les mêmes porteurs : toutes les lignes qui partagent le
+ * fichier de cette pièce jointe. Une ligne introuvable, ou un verdict qui a
+ * basculé entre les deux lectures, ne promet aucun cache.
+ */
+export async function resolveAttachmentByIdCacheControl(
+  attachmentId: string,
+  prisma: FileRouteVerdictPrisma,
+  now: Date
+): Promise<string> {
+  const owners = await ownerRowsSharingBytesOf(attachmentId, prisma);
+  if (owners.length === 0) return VIEW_ONCE_ATTACHMENT_CACHE;
+  const verdict = await verdictFor(owners, prisma, now);
+  if (verdict.kind !== 'serve') return VIEW_ONCE_ATTACHMENT_CACHE;
+  return verdict.cacheControl === ORDINARY_ATTACHMENT_CACHE ? ORDINARY_ATTACHMENT_BY_ID_CACHE : verdict.cacheControl;
+}
+
 async function ownerRowsOf(storageKey: string, prisma: FileRouteVerdictPrisma): Promise<readonly OwnerRow[]> {
   const track = TRANSLATED_TRACK.exec(storageKey);
-  if (track) return ownerRowsOfTrack(track[1], prisma);
+  if (track) return ownerRowsSharingBytesOf(track[1], prisma);
 
   const direct = await prisma.messageAttachment.findMany({
     where: { OR: [{ filePath: storageKey }, { thumbnailPath: storageKey }] },
@@ -102,7 +127,7 @@ async function ownerRowsOf(storageKey: string, prisma: FileRouteVerdictPrisma): 
  * copies éventuelles ne se retrouvent pas sans balayer la collection, et
  * `deleteAttachment` efface la piste avec le dernier porteur.
  */
-async function ownerRowsOfTrack(attachmentId: string, prisma: FileRouteVerdictPrisma): Promise<readonly OwnerRow[]> {
+async function ownerRowsSharingBytesOf(attachmentId: string, prisma: FileRouteVerdictPrisma): Promise<readonly OwnerRow[]> {
   const origin = await prisma.messageAttachment.findUnique({
     where: { id: attachmentId },
     select: { filePath: true },
