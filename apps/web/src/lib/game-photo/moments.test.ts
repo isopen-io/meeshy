@@ -7,6 +7,7 @@ import { ENGAGEMENT_PROGRESS_FIXTURE } from '@/lib/api/engagement-fixture';
 import { gameBlockFixture } from '@/lib/api/game-fixture';
 
 import {
+  achievementMoment,
   flameMoment,
   levelHundredMoment,
   meeshMoment,
@@ -34,6 +35,22 @@ const gameOf = (v: EngagementWithGame) => {
   if (v.game === undefined) throw new Error('bloc game attendu');
   return v.game;
 };
+
+describe('un succès révélé se photographie (#7742)', () => {
+  test('le moment porte la clé du succès, son titre dans la langue du lecteur et un kicker', () => {
+    const moment = achievementMoment('achievement.first_voice');
+    expect(moment.id).toBe('achievement:achievement.first_voice');
+    expect(moment.emblem).toEqual({ kind: 'achievement', key: 'achievement.first_voice' });
+    expect(moment.kicker).toBe('Succès débloqué');
+    expect(moment.title.length).toBeGreaterThan(0);
+    expect(moment.title).not.toBe(moment.kicker);
+  });
+
+  test('deux succès sont deux moments, un même succès toujours le même', () => {
+    expect(achievementMoment('achievement.editor').id).not.toBe(achievementMoment('achievement.first_voice').id);
+    expect(achievementMoment('achievement.editor')).toEqual(achievementMoment('achievement.editor'));
+  });
+});
 
 describe('chaque moment porte son identité, son emblème et ses mots', () => {
   test('le départ', () => {

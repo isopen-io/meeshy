@@ -335,6 +335,7 @@ const pt = {
   'game.photo.kicker.meesh': 'Meesh cunhada',
   'game.photo.kicker.treasury': 'Tesouro',
   'game.photo.kicker.flame': 'Chama',
+  'game.photo.kicker.achievement': 'Conquista desbloqueada',
   'game.photo.title.flame_days': '{count} dias de Chama',
   'game.photo.notice.kept': 'Guardada no caderno de progresso.',
   'game.photo.notice.keep_failed': 'O caderno não está disponível neste aparelho: a foto não foi guardada.',

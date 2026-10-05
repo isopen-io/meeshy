@@ -335,6 +335,7 @@ const es = {
   'game.photo.kicker.meesh': 'Meesh acuñada',
   'game.photo.kicker.treasury': 'Tesoro',
   'game.photo.kicker.flame': 'Llama',
+  'game.photo.kicker.achievement': 'Logro desbloqueado',
   'game.photo.title.flame_days': '{count} días de Llama',
   'game.photo.notice.kept': 'Guardada en el cuaderno de progreso.',
   'game.photo.notice.keep_failed': 'El cuaderno no está disponible en este dispositivo: la foto no se guardó.',

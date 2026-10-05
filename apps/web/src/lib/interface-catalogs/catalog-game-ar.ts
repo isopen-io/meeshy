@@ -335,6 +335,7 @@ const ar = {
   'game.photo.kicker.meesh': 'Meesh مسكوكة',
   'game.photo.kicker.treasury': 'الكنز',
   'game.photo.kicker.flame': 'اللهب',
+  'game.photo.kicker.achievement': 'تم فتح إنجاز',
   'game.photo.title.flame_days': '{count} يومًا من اللهب',
   'game.photo.notice.kept': 'تم الاحتفاظ بها في دفتر التقدّم.',
   'game.photo.notice.keep_failed': 'الدفتر غير متاح على هذا الجهاز: لم يتم حفظ الصورة.',

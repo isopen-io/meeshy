@@ -335,6 +335,7 @@ const de = {
   'game.photo.kicker.meesh': 'Meesh geprägt',
   'game.photo.kicker.treasury': 'Schatz',
   'game.photo.kicker.flame': 'Flamme',
+  'game.photo.kicker.achievement': 'Erfolg freigeschaltet',
   'game.photo.title.flame_days': '{count} Tage Flamme',
   'game.photo.notice.kept': 'Im Fortschrittsheft gespeichert.',
   'game.photo.notice.keep_failed': 'Das Heft ist auf diesem Gerät nicht verfügbar: Das Foto wurde nicht gespeichert.',

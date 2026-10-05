@@ -335,6 +335,7 @@ const it = {
   'game.photo.kicker.meesh': 'Meesh coniata',
   'game.photo.kicker.treasury': 'Tesoro',
   'game.photo.kicker.flame': 'Fiamma',
+  'game.photo.kicker.achievement': 'Traguardo sbloccato',
   'game.photo.title.flame_days': '{count} giorni di Fiamma',
   'game.photo.notice.kept': 'Conservata nel quaderno dei progressi.',
   'game.photo.notice.keep_failed': 'Il quaderno non è disponibile su questo dispositivo: la foto non è stata conservata.',

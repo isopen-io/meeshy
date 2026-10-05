@@ -1,4 +1,4 @@
-import { Flame, GameBird, LevelRing, MeeshCoin, RankBlason, Signature } from '@/components/game';
+import { Flame, GameBird, LevelRing, MeeshCoin, RankBlason, Signature, Trophy } from '@/components/game';
 import { flameForm } from '@meeshy/shared/utils/game/flame';
 
 import { PHOTO_FORMATS, photoLayout, type BannerLayout, type PhotoFormat, type Rect, type TextLine } from '@/lib/game-photo/layout';
@@ -47,6 +47,8 @@ function PhotoEmblemDrawing({ emblem }: { readonly emblem: PhotoEmblem }) {
       return <MeeshCoin side="obverse" size={512} edition="silver" />;
     case 'flame':
       return <Flame form={emblem.form} size={512} />;
+    case 'achievement':
+      return <Trophy kind="league" material="gold" size={512} />;
   }
 }
 

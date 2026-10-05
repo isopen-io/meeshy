@@ -335,6 +335,7 @@ const en = {
   'game.photo.kicker.meesh': 'Meesh minted',
   'game.photo.kicker.treasury': 'Treasury',
   'game.photo.kicker.flame': 'Flame',
+  'game.photo.kicker.achievement': 'Achievement unlocked',
   'game.photo.title.flame_days': '{count} days of Flame',
   'game.photo.notice.kept': 'Kept in the progress notebook.',
   'game.photo.notice.keep_failed': 'The notebook is not available on this device: the photo was not kept.',

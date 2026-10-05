@@ -1,4 +1,6 @@
 import type { GameBlock } from '@meeshy/shared/types/game';
+import type { EngagementAchievementKey } from '@meeshy/shared/types/engagement';
+import { engagementAchievementTitle } from '@meeshy/shared/utils/engagement-labels';
 import { flameForm, type FlameFormKey } from '@meeshy/shared/utils/game/flame';
 import type { GloryDivision, GloryRankOrMythic } from '@meeshy/shared/utils/game/glory';
 import type { GuideMomentKey } from '@meeshy/shared/utils/game/guide';
@@ -37,7 +39,8 @@ export type PhotoEmblem =
   | { readonly kind: 'level-hundred'; readonly prestige: number }
   | { readonly kind: 'meesh'; readonly number: number; readonly edition: MeeshEdition }
   | { readonly kind: 'treasury'; readonly tier: TreasuryTierKey }
-  | { readonly kind: 'flame'; readonly form: FlameFormKey; readonly days: number };
+  | { readonly kind: 'flame'; readonly form: FlameFormKey; readonly days: number }
+  | { readonly kind: 'achievement'; readonly key: EngagementAchievementKey };
 
 export type PhotoMoment = {
   readonly id: string;
@@ -92,6 +95,8 @@ export function momentLines(
         kicker: translateGame(language, 'game.photo.kicker.flame'),
         title: translateGame(language, 'game.photo.title.flame_days', { count: formatCount(emblem.days, language) }),
       };
+    case 'achievement':
+      return { kicker: translateGame(language, 'game.photo.kicker.achievement'), title: engagementAchievementTitle(language, emblem.key) };
   }
 }
 
@@ -110,6 +115,9 @@ export const levelHundredMoment = (prestige: number): PhotoMoment =>
 
 export const meeshMoment = (params: { readonly number: number; readonly edition: MeeshEdition }): PhotoMoment =>
   moment(`meesh:${params.number}`, { kind: 'meesh', number: params.number, edition: params.edition });
+
+/** Un succès qui vient de se révéler (#7742) : la même carte se propose, avec le bandeau de parrainage. */
+export const achievementMoment = (key: EngagementAchievementKey): PhotoMoment => moment(`achievement:${key}`, { kind: 'achievement', key });
 
 export const treasuryMoment = (tier: TreasuryTierKey): PhotoMoment => moment(`treasury:${tier}`, { kind: 'treasury', tier });
 

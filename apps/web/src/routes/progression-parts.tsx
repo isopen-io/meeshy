@@ -19,6 +19,7 @@ import { PROGRESSION_GLYPHS } from '@/components/glyphs-progression';
 import { milestoneGlyph } from '@/components/milestone-glyph';
 import { ProgressBar } from '@/components/progress-bar';
 import { medalOfAxis } from '@/lib/game/medal';
+import { gameText } from '@/lib/view/game-copy';
 import { meeshMissing } from '@/lib/view/meesh-copy';
 import {
   ACHIEVEMENT_COPY,
@@ -36,6 +37,7 @@ import {
   type EngagementProgress,
   type EngagementTier,
 } from '@meeshy/shared/utils/engagement-progress';
+import type { EngagementAchievementKey } from '@meeshy/shared/types/engagement';
 import type { AchievementSectionView } from '@meeshy/shared/utils/achievement-view';
 
 /**
@@ -180,7 +182,14 @@ export function AxisRow({ axis, medalLabel }: { axis: EngagementAxisProgress; me
   );
 }
 
-export function AchievementsSection({ progress }: { progress: EngagementProgress }) {
+export function AchievementsSection({
+  progress,
+  onPhoto,
+}: {
+  progress: EngagementProgress;
+  /** La révélation d'un succès se photographie (#7742) ; absent : aucun bouton. */
+  onPhoto?: (key: EngagementAchievementKey) => void;
+}) {
   const unlocked = progress.achievements.filter((a) => a.unlocked).length;
   return (
     <section aria-labelledby="progression-achievements" className="flex flex-col gap-2">
@@ -217,6 +226,18 @@ export function AchievementsSection({ progress }: { progress: EngagementProgress
                     {achievement.unlocked ? (dated ?? 'Débloqué') : copy.condition}
                   </span>
                 </div>
+                {achievement.unlocked && onPhoto !== undefined ? (
+                  <button
+                    type="button"
+                    data-achievement-photo={achievement.key}
+                    aria-label={`${gameText('game.photo.offer.start')} — ${copy.title}`}
+                    onClick={() => onPhoto(achievement.key)}
+                    className="grid size-11 shrink-0 place-items-center rounded-chip"
+                    style={{ color: BRAND }}
+                  >
+                    <Glyph name="image" size={18} />
+                  </button>
+                ) : null}
               </li>
             );
           })}

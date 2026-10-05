@@ -349,6 +349,7 @@ const fr = {
   'game.photo.kicker.meesh': 'Meesh frappée',
   'game.photo.kicker.treasury': 'Trésor',
   'game.photo.kicker.flame': 'Flamme',
+  'game.photo.kicker.achievement': 'Succès débloqué',
   'game.photo.title.flame_days': '{count} jours de Flamme',
   'game.photo.notice.kept': 'Gardée au carnet de progression.',
   'game.photo.notice.keep_failed': 'Le carnet n’est pas disponible sur cet appareil : la photo n’a pas été gardée.',
