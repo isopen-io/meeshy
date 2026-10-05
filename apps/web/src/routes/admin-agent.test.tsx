@@ -393,7 +393,7 @@ describe('L’ÉCRAN EST COMPOSÉ DU KIT — deux sections nommées, des chiffre
     expect(detail?.querySelector('[data-admin-technical-id]')).not.toBe(null);
   });
 
-  test('la remise à zéro et le modèle ne sont PAS offerts : aucun de leurs appels ne part, aucun contrôle n’est peint', async () => {
+  test('le modèle et la remise à zéro vivent dans leurs modales : à l’ouverture de l’écran, aucun de leurs appels ne part, aucun de leurs contrôles n’est peint', async () => {
     const espion = transportAgent();
     const host = await monter(espion);
 

@@ -388,7 +388,16 @@ export const callersIn = (contents, nsNames) => {
 // `admin.usersByUserIdRestore` (`POST /admin/users/:userId/restore`) regagne son
 // appelant — la fiche d'un membre supprimé offre « Restaurer »
 // (`lib/api/admin-user-lifecycle.ts`). Valeur MESURÉE le 2026-10-05.
-const BASELINE_DEAD_ENTRIES = 275;
+// 275 → 255 (lot Agent complet de l'administration, #9000–#9005, 2026-10-05) :
+// les vingt entrées `admin.agent*` que l'écran Agent ne lisait pas regagnent
+// leur appelant — activité récente et statistiques du journal
+// (`lib/api/admin-agent-activity.ts`), modèle, configuration globale et remise
+// à zéro totale (`admin-agent-settings.ts`), réglages, résumé, planning, rôles,
+// archétypes, messages et remises à zéro ciblées d'une conversation
+// (`admin-agent-conversation.ts`), sujets et file de livraison
+// (`admin-agent-topics.ts`). Les 27 entrées de l'agent ont désormais toutes un
+// appelant. Valeur MESURÉE le 2026-10-05.
+const BASELINE_DEAD_ENTRIES = 255;
 
 export const readWorld = (root) => {
   const groupFiles = readdirSync(join(root, GROUPS_DIR)).filter((name) => name.endsWith('.ts')).sort();

@@ -71,7 +71,7 @@ describe('les clés de requête sont SOUVERAINES — rien ne part sur le disque'
       agentOverviewQueryKey(),
       agentTrackedQueryKey(0, 20, ''),
       agentLiveQueryKey('c1'),
-      agentScanLogsQueryKey(0, 20, '', ''),
+      agentScanLogsQueryKey(0, 20, {}),
       agentScanLogQueryKey('l1'),
     ]) {
       expect(estClefSouveraine(clef)).toBe(true);
@@ -83,8 +83,10 @@ describe('les clés de requête sont SOUVERAINES — rien ne part sur le disque'
     expect(agentTrackedQueryKey(0, 20, '')).not.toEqual(agentTrackedQueryKey(20, 20, ''));
     expect(agentTrackedQueryKey(0, 20, '')).not.toEqual(agentTrackedQueryKey(0, 50, ''));
     expect(agentTrackedQueryKey(0, 20, 'a')).not.toEqual(agentTrackedQueryKey(0, 20, 'b'));
-    expect(agentScanLogsQueryKey(0, 20, 'error', '')).not.toEqual(agentScanLogsQueryKey(0, 20, 'skipped', ''));
-    expect(agentScanLogsQueryKey(0, 20, '', 'auto')).not.toEqual(agentScanLogsQueryKey(0, 20, '', 'manual'));
+    expect(agentScanLogsQueryKey(0, 20, { outcome: 'error' })).not.toEqual(agentScanLogsQueryKey(0, 20, { outcome: 'skipped' }));
+    expect(agentScanLogsQueryKey(0, 20, { trigger: 'auto' })).not.toEqual(agentScanLogsQueryKey(0, 20, { trigger: 'manual' }));
+    expect(agentScanLogsQueryKey(0, 20, { conversationId: 'c1' })).not.toEqual(agentScanLogsQueryKey(0, 20, { conversationId: 'c2' }));
+    expect(agentScanLogsQueryKey(0, 20, { from: '2026-10-01' })).not.toEqual(agentScanLogsQueryKey(0, 20, { to: '2026-10-01' }));
     expect(agentLiveQueryKey('c1')).not.toEqual(agentLiveQueryKey('c2'));
   });
 });
@@ -98,6 +100,19 @@ describe('GET /admin/agent/stats — la vue d’ensemble', () => {
         activeConfigs: 5,
         totalControlledUsers: 31,
         totalMessagesSent: 840,
+        totalWordsSent: 9100,
+        avgConfidence: 0.62,
+        recentActivity: [
+          {
+            conversationId: 'c1',
+            conversation: { id: 'c1', title: 'Atelier', type: 'group' },
+            messagesSent: 4,
+            totalWordsSent: 60,
+            avgConfidence: 0.7,
+            lastResponseAt: '2026-10-04T08:00:00.000Z',
+          },
+          { conversation: null },
+        ],
       },
     }));
 
@@ -110,7 +125,30 @@ describe('GET /admin/agent/stats — la vue d’ensemble', () => {
       activeConfigs: 5,
       totalControlledUsers: 31,
       totalMessagesSent: 840,
+      totalWordsSent: 9100,
+      avgConfidence: 0.62,
+      recentActivity: [
+        {
+          conversationId: 'c1',
+          title: 'Atelier',
+          conversationType: 'group',
+          enabled: null,
+          messagesSent: 4,
+          totalWordsSent: 60,
+          avgConfidence: 0.7,
+          lastResponseAt: '2026-10-04T08:00:00.000Z',
+          controlledUsersCount: null,
+        },
+      ],
     });
+  });
+
+  test('mots et confiance NON servis se disent absents, jamais zéro', async () => {
+    const { transport } = transportQui(() => ({ ok: true, data: { totalConfigs: 1 } }));
+    const resultat = await loadAgentOverview(deps(transport));
+    expect(resultat.ok && resultat.data.totalWordsSent).toBeNull();
+    expect(resultat.ok && resultat.data.avgConfidence).toBeNull();
+    expect(resultat.ok && resultat.data.recentActivity).toEqual([]);
   });
 
   test('une charge illisible ne fabrique pas de chiffres', async () => {
@@ -392,6 +430,17 @@ describe('GET /admin/agent/scan-logs — le journal des scans', () => {
     expect(vues[0]?.path).not.toContain('offset=');
     expect(vues[1]?.path).not.toContain('outcome=');
     expect(vues[1]?.path).not.toContain('trigger=');
+  });
+
+  test('la conversation et la période — un jour borné à sa journée entière', async () => {
+    const { transport, vues } = transportQui(() => ({ ok: true, data: [], pagination: servedPagination({ total: 0 }) }));
+
+    await loadAgentScanLogs({ ...deps(transport), offset: 0, limit: 20, conversationId: ' c1 ', from: '2026-10-01', to: '2026-10-03' });
+
+    const query = new URLSearchParams(vues[0]?.path.split('?')[1] ?? '');
+    expect(query.get('conversationId')).toBe('c1');
+    expect(query.get('from')).toBe('2026-10-01T00:00:00.000Z');
+    expect(query.get('to')).toBe('2026-10-03T23:59:59.999Z');
   });
 
   test('décode une ligne du journal', async () => {

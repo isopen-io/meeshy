@@ -17,8 +17,15 @@ import { ADMIN_SOUVERAIN_PREFIXE } from './souverain';
  * | `GET /admin/agent/configs/:id/live` | l'état VIVANT d'une conversation |
  * | `POST /admin/agent/configs/:id/trigger` | **la relance du cycle** |
  * | `POST /admin/agent/configs/:id/stop` | l'arrêt d'un scan en cours |
- * | `GET /admin/agent/scan-logs?page&limit&conversationId` | le journal |
+ * | `GET /admin/agent/scan-logs?page&limit&outcome&trigger&conversationId&from&to` | le journal |
  * | `GET /admin/agent/scan-logs/:logId` | le détail d'un scan |
+ *
+ * Les autres routes de l'agent ont leur port, chacun à côté de son écran :
+ * `admin-agent-activity.ts` (activité récente, statistiques du journal),
+ * `admin-agent-settings.ts` (modèle, configuration globale, remise à zéro
+ * totale), `admin-agent-conversation.ts` (réglages, résumé, planning, rôles,
+ * messages, remises à zéro ciblées), `admin-agent-topics.ts` (sujets, file de
+ * livraison).
  *
  * Toutes sont gardées par `requirePermission('canManageAgent')`
  * (`routes/admin/agent-shared.ts`) — le seuil que la v2 lit désormais dans sa
@@ -54,8 +61,8 @@ import { ADMIN_SOUVERAIN_PREFIXE } from './souverain';
  * poids déguisé en feature : il grossit le type, le cache et les témoins, et
  * il donne l'impression qu'une donnée est SERVIE alors qu'elle n'est nulle
  * part à l'écran. Chaque champ ci-dessous a un consommateur dans
- * `admin-agent-parts.tsx` — le second lot (LLM, rôles, facturation) rouvrira
- * les siens AVEC les libellés qui les rendent.
+ * `admin-agent-parts.tsx` ou ses modales — les ports voisins décodent les leurs
+ * AVEC les libellés qui les rendent.
  *
  * ## Le schéma ne gouverne pas la forme
  *
@@ -87,12 +94,31 @@ export const agentTrackedQueryKey = (offset: number, limit: number, search: stri
 
 export const agentLiveQueryKey = (conversationId: string) => [...AGENT_ROOT_KEY, 'live', conversationId] as const;
 
-export const agentScanLogsQueryKey = (offset: number, limit: number, outcome: string, trigger: string) =>
-  [...AGENT_ROOT_KEY, 'scan-logs', offset, limit, outcome, trigger] as const;
+/** Les filtres du journal que la route lit ; `''` n'est pas un filtre. `from`/`to` sont des jours `AAAA-MM-JJ`. */
+export type AgentScanLogFilters = {
+  readonly outcome?: string;
+  readonly trigger?: string;
+  readonly conversationId?: string;
+  readonly from?: string;
+  readonly to?: string;
+};
+
+export const agentScanLogsQueryKey = (offset: number, limit: number, filters: AgentScanLogFilters) =>
+  [
+    ...AGENT_ROOT_KEY,
+    'scan-logs',
+    offset,
+    limit,
+    filters.outcome ?? '',
+    filters.trigger ?? '',
+    filters.conversationId ?? '',
+    filters.from ?? '',
+    filters.to ?? '',
+  ] as const;
 
 export const agentScanLogQueryKey = (logId: string) => [...AGENT_ROOT_KEY, 'scan-log', logId] as const;
 
-const asTextOrNull = (value: unknown): string | null =>
+export const asTextOrNull = (value: unknown): string | null =>
   typeof value === 'string' && value !== '' ? value : null;
 
 /** Une page servie PAR PAGE (`?page=`) devient une page par OFFSET pour la manette commune : l'offset d'une page est `(page − 1) × limit`. */
@@ -102,12 +128,54 @@ const pageOfOffset = (offset: number, limit: number): number => Math.floor(offse
 // LA VUE D'ENSEMBLE — GET /admin/agent/stats
 // ---------------------------------------------------------------------------
 
+/** Une conversation où l'agent a répondu récemment — `GET /stats` (dix) et `GET /recent-activity` servent la même ligne. */
+export type AgentActivityRow = {
+  readonly conversationId: string;
+  readonly title: string | null;
+  readonly conversationType: string | null;
+  /** `null` quand la route ne le sert pas (`/stats`) : ni « activé » ni « désactivé » ne s'inventent. */
+  readonly enabled: boolean | null;
+  readonly messagesSent: number;
+  readonly totalWordsSent: number;
+  /** La confiance moyenne, ratio 0–1 ; `null` si non servie. */
+  readonly avgConfidence: number | null;
+  readonly lastResponseAt: string | null;
+  readonly controlledUsersCount: number | null;
+};
+
 export type AgentOverview = {
   readonly totalConfigs: number;
   readonly activeConfigs: number;
   readonly totalControlledUsers: number;
   readonly totalMessagesSent: number;
+  /** `null` quand la passerelle ne le sert pas — zéro mot affirmerait un agent muet. */
+  readonly totalWordsSent: number | null;
+  readonly avgConfidence: number | null;
+  readonly recentActivity: readonly AgentActivityRow[];
 };
+
+const ratioOrNull = (value: unknown): number | null =>
+  typeof value === 'number' && Number.isFinite(value) && value >= 0 ? Math.min(1, value) : null;
+
+const countOrNull = (value: unknown): number | null =>
+  typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null;
+
+export function decodeAgentActivity(raw: unknown): AgentActivityRow | null {
+  const ligne = asRecord(raw);
+  if (ligne === null || typeof ligne.conversationId !== 'string' || ligne.conversationId === '') return null;
+  const conversation = asRecord(ligne.conversation) ?? {};
+  return {
+    conversationId: ligne.conversationId,
+    title: asTextOrNull(conversation.title),
+    conversationType: asTextOrNull(conversation.type),
+    enabled: typeof ligne.enabled === 'boolean' ? ligne.enabled : null,
+    messagesSent: asCount(ligne.messagesSent),
+    totalWordsSent: asCount(ligne.totalWordsSent),
+    avgConfidence: ratioOrNull(ligne.avgConfidence),
+    lastResponseAt: asTextOrNull(ligne.lastResponseAt),
+    controlledUsersCount: countOrNull(ligne.controlledUsersCount),
+  };
+}
 
 export async function loadAgentOverview(
   params: AdminDeps & { readonly signal?: AbortSignal },
@@ -127,6 +195,11 @@ export async function loadAgentOverview(
       activeConfigs: asCount(charge.activeConfigs),
       totalControlledUsers: asCount(charge.totalControlledUsers),
       totalMessagesSent: asCount(charge.totalMessagesSent),
+      totalWordsSent: countOrNull(charge.totalWordsSent),
+      avgConfidence: ratioOrNull(charge.avgConfidence),
+      recentActivity: (Array.isArray(charge.recentActivity) ? charge.recentActivity : [])
+        .map(decodeAgentActivity)
+        .filter((row): row is AgentActivityRow => row !== null),
     },
   };
 }
@@ -393,18 +466,20 @@ export async function loadAgentScanLogs(
   params: AdminDeps & {
     readonly offset: number;
     readonly limit: number;
-    /** L'issue et le déclencheur que le handler filtre ; `''` n'est pas un filtre. */
-    readonly outcome?: string;
-    readonly trigger?: string;
     readonly signal?: AbortSignal;
-  },
+  } & AgentScanLogFilters,
 ): Promise<ApiResult<AdminPage<AgentScanLogRow>>> {
   const query = new URLSearchParams({
     page: String(pageOfOffset(params.offset, params.limit)),
     limit: String(params.limit),
-    ...(params.outcome === undefined || params.outcome === '' ? {} : { outcome: params.outcome }),
-    ...(params.trigger === undefined || params.trigger === '' ? {} : { trigger: params.trigger }),
   });
+  for (const key of ['outcome', 'trigger', 'conversationId'] as const) {
+    const value = params[key]?.trim() ?? '';
+    if (value !== '') query.set(key, value);
+  }
+  /* Un JOUR, borné à sa journée entière : `from` à minuit, `to` à la dernière milliseconde (UTC, comme `startedAt`). */
+  if (params.from !== undefined && params.from !== '') query.set('from', `${params.from}T00:00:00.000Z`);
+  if (params.to !== undefined && params.to !== '') query.set('to', `${params.to}T23:59:59.999Z`);
 
   const resultat = await params.transport.request<unknown>({
     method: 'GET',
