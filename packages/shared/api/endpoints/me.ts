@@ -52,6 +52,15 @@ export { export_ as export };
 /** POST /api/v1/me/game/chest/claim */
 export const gameChestClaim = '/api/v1/me/game/chest/claim';
 
+/** POST /api/v1/me/game/duo/:duoId/abandon */
+export const gameDuoByDuoIdAbandon = (duoId: string): string => `/api/v1/me/game/duo/${encodeURIComponent(duoId)}/abandon`;
+
+/** POST /api/v1/me/game/duo/:duoId/accept */
+export const gameDuoByDuoIdAccept = (duoId: string): string => `/api/v1/me/game/duo/${encodeURIComponent(duoId)}/accept`;
+
+/** POST /api/v1/me/game/duo/invite */
+export const gameDuoInvite = '/api/v1/me/game/duo/invite';
+
 /** POST /api/v1/me/game/flame/freezes */
 export const gameFlameFreezes = '/api/v1/me/game/flame/freezes';
 
@@ -61,8 +70,38 @@ export const gameFlameRelight = '/api/v1/me/game/flame/relight';
 /** POST /api/v1/me/game/guide/seen */
 export const gameGuideSeen = '/api/v1/me/game/guide/seen';
 
+/** POST /api/v1/me/game/league/consent */
+export const gameLeagueConsent = '/api/v1/me/game/league/consent';
+
+/** GET /api/v1/me/game/league/friends */
+export const gameLeagueFriends = '/api/v1/me/game/league/friends';
+
+/** PUT /api/v1/me/game/league/pseudonym */
+export const gameLeaguePseudonym = '/api/v1/me/game/league/pseudonym';
+
+/** GET /api/v1/me/game/league/week */
+export const gameLeagueWeek = '/api/v1/me/game/league/week';
+
 /** POST /api/v1/me/game/missions/:missionId/reroll */
 export const gameMissionsByMissionIdReroll = (missionId: string): string => `/api/v1/me/game/missions/${encodeURIComponent(missionId)}/reroll`;
+
+/** POST /api/v1/me/game/prestige */
+export const gamePrestige = '/api/v1/me/game/prestige';
+
+/** PUT /api/v1/me/game/privacy */
+export const gamePrivacy = '/api/v1/me/game/privacy';
+
+/** POST /api/v1/me/game/season/seal */
+export const gameSeasonSeal = '/api/v1/me/game/season/seal';
+
+/** POST /api/v1/me/game/season/steps/:step/claim */
+export const gameSeasonStepsByStepClaim = (step: string): string => `/api/v1/me/game/season/steps/${encodeURIComponent(step)}/claim`;
+
+/** PUT /api/v1/me/game/showcase/order */
+export const gameShowcaseOrder = '/api/v1/me/game/showcase/order';
+
+/** PUT /api/v1/me/game/visibility */
+export const gameVisibility = '/api/v1/me/game/visibility';
 
 /** POST /api/v1/me/meesh/mint */
 export const meeshMint = '/api/v1/me/meesh/mint';
