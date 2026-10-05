@@ -71,7 +71,8 @@ import { chromeStyleVars, sceneStyleVars } from '@/lib/reading-mode/metrics';
 import { backdropStyleVars } from '@/lib/view/thread-backdrop';
 import { useThreadChromeSignals } from '@/lib/view/use-thread-chrome-signals';
 import { useThreadInsets } from '@/lib/view/use-thread-insets';
-import { THREAD_ROW_ESTIMATE, useOlderMessages } from '@/lib/view/use-older-messages';
+import { THREAD_ROW_ESTIMATE, useHeadAnchor, useOlderMessages } from '@/lib/view/use-older-messages';
+import { keepReadingInPlace } from '@/lib/view/thread-resize-compensation';
 import { useNewerMessages } from '@/lib/view/use-newer-messages';
 import { useReadTracking } from '@/lib/view/use-read-tracking';
 import { AfterReadSeenContext, useAfterReadConsumption } from '@/lib/view/use-after-read-consumption';
@@ -368,13 +369,18 @@ export default function ThreadScreen({ preview }: { readonly preview?: { readonl
    * que la Lentille — seuls `transform` et `opacity` bougent.
    */
   const scroller = useRef<HTMLElement | null>(null);
+  /* L'ANCRE D'UNE PAGE PRÉFIXÉE est tenue par le virtualiseur lui-même, au
+     rendu qui l'insère (#9216, #9219) — doc-comment de `useOlderMessages`. */
+  const anchorTo = useHeadAnchor(placed[0]?.message.id);
   const virtualizer = useVirtualizer({
     count: placed.length,
     getScrollElement: () => scroller.current,
     estimateSize: () => THREAD_ROW_ESTIMATE,
     overscan: 6,
     getItemKey: (index) => placed[index]?.message.id ?? index,
+    anchorTo,
   });
+  virtualizer.shouldAdjustScrollPositionOnItemSizeChange = keepReadingInPlace;
 
   /**
    * LA SCÈNE DU FIL (#5648) — l'ÉLECTION d'une rangée au défilement soutenu
