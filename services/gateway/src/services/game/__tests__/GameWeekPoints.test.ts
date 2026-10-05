@@ -40,6 +40,25 @@ describe('instantOfLocal', () => {
 });
 
 describe('GameWeekPointsRecorder.record', () => {
+  it('deux premiers gains concurrents du même jour : l’upsert perdant (P2002 de MongoDB) se rejoue, aucun point ne se perd', async () => {
+    const db = fakeGameDb();
+    seedUser(db, { timezone: 'UTC' });
+    const upsert = db.gameWeekPoints.upsert.bind(db.gameWeekPoints);
+    let raced = false;
+    db.gameWeekPoints.upsert = (async (args: Parameters<typeof upsert>[0]) => {
+      if (!raced) {
+        raced = true;
+        db.gameWeekPoints.rows.push({ id: 'racer', userId: USER, weekKey: '2026-10-12', dayKey: '2026-10-14', points: 7 });
+        throw Object.assign(new Error('Unique constraint failed'), { code: 'P2002' });
+      }
+      return upsert(args);
+    }) as typeof upsert;
+
+    await new GameWeekPointsRecorder(db.prisma).record(USER, 5, new Date('2026-10-14T12:00:00Z'));
+
+    expect(db.gameWeekPoints.rows.map((r) => r.points)).toEqual([12]);
+  });
+
   it('additionne les gains d’un jour dans UNE ligne, un jour nouveau en ouvre une autre', async () => {
     const db = fakeGameDb();
     seedUser(db);

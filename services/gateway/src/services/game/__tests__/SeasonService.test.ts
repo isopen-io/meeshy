@@ -37,6 +37,24 @@ describe('SeasonService.addStars', () => {
     expect((await service.state(USER, IN_SEASON)).stars).toBe(1 + 1 + 2 + 3 + 5);
   });
 
+  it('deux premières étoiles concurrentes : l’upsert perdant (P2002 de MongoDB) se rejoue, aucune étoile ne se perd', async () => {
+    const { db, service } = setup();
+    const upsert = db.gameSeason.upsert.bind(db.gameSeason);
+    let raced = false;
+    db.gameSeason.upsert = (async (args: Parameters<typeof upsert>[0]) => {
+      if (!raced) {
+        raced = true;
+        db.gameSeason.rows.push({ id: 'racer', userId: USER, number: 1, stars: 3, claimedSteps: [], sealOwnedAt: null });
+        throw Object.assign(new Error('Unique constraint failed'), { code: 'P2002' });
+      }
+      return upsert(args);
+    }) as typeof upsert;
+
+    await service.addStars(USER, 'easy', IN_SEASON);
+
+    expect(db.gameSeason.rows.map((r) => r.stars)).toEqual([4]);
+  });
+
   it('avant la première saison, rien n’est écrit', async () => {
     const { db, service } = setup();
     await service.addStars(USER, 'gold', BEFORE);

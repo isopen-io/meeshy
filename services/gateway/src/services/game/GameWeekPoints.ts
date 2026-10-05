@@ -36,6 +36,8 @@ export function totalOfDays(days: DayPoints | undefined, options: { readonly bef
     .reduce((sum, [, points]) => sum + points, 0);
 }
 
+const isP2002 = (err: unknown): boolean => typeof err === 'object' && err !== null && (err as { code?: string }).code === 'P2002';
+
 export class GameWeekPointsRecorder {
   private readonly zones = new BoundedTtlCache<string, string | null>({ maxSize: 5000, ttlMs: 10 * 60 * 1000 });
 
@@ -56,12 +58,22 @@ export class GameWeekPointsRecorder {
     const timezone = await this.timezone(userId);
     const weekKey = weekKeyOfInstant(now, timezone);
     const dayKey = dayKeyOf(now, timezone);
-    await this.prisma.gameWeekPoints.upsert({
-      where: { userId_weekKey_dayKey: { userId, weekKey, dayKey } },
-      create: { userId, weekKey, dayKey, points },
-      update: { points: { increment: points } },
-      select: { id: true },
-    });
+    const write = () =>
+      this.prisma.gameWeekPoints.upsert({
+        where: { userId_weekKey_dayKey: { userId, weekKey, dayKey } },
+        create: { userId, weekKey, dayKey, points },
+        update: { points: { increment: points } },
+        select: { id: true },
+      });
+    try {
+      await write();
+    } catch (err) {
+      // Deux premiers gains concurrents du jour : sur MongoDB, l'upsert qui perd la
+      // création lève P2002 au lieu de basculer sur la mise à jour. Le rejouer
+      // trouve la ligne et incrémente — sans quoi le gain se perdrait en silence.
+      if (!isP2002(err)) throw err;
+      await write();
+    }
   }
 
   /** Les points par jour d'une semaine pour plusieurs comptes (absent = aucun jour). */

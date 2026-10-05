@@ -51,6 +51,8 @@ export type SeasonState = {
   readonly sealOwned: boolean;
 };
 
+const isP2002 = (err: unknown): boolean => typeof err === 'object' && err !== null && (err as { code?: string }).code === 'P2002';
+
 const NO_SEASON: SeasonState = { number: null, stars: 0, claimedSteps: [], sealOwned: false };
 
 export class SeasonService {
@@ -80,12 +82,20 @@ export class SeasonService {
     const number = await this.currentNumber(userId, now);
     if (number === null) return;
     const stars = seasonStarsForMission(source);
-    await this.prisma.gameSeason.upsert({
-      where: { userId_number: { userId, number } },
-      create: { userId, number, stars, claimedSteps: [], sealOwnedAt: null, settledAt: null },
-      update: { stars: { increment: stars } },
-      select: { id: true },
-    });
+    const write = () =>
+      this.prisma.gameSeason.upsert({
+        where: { userId_number: { userId, number } },
+        create: { userId, number, stars, claimedSteps: [], sealOwnedAt: null, settledAt: null },
+        update: { stars: { increment: stars } },
+        select: { id: true },
+      });
+    try {
+      await write();
+    } catch (err) {
+      // L'upsert qui perd la création concurrente lève P2002 sur MongoDB : le rejouer incrémente.
+      if (!isP2002(err)) throw err;
+      await write();
+    }
   }
 
   async state(userId: string, now: Date = new Date()): Promise<SeasonState> {
