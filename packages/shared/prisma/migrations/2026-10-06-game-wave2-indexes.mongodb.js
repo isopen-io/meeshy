@@ -72,7 +72,11 @@ for (const spec of specs) {
     : [];
   const match = existing.find((index) => sameKey(index.key, spec.key));
 
-  if (match && (match.unique || !spec.unique)) {
+  // Un index présent ne compte que s'il porte AUSSI ce que la spec exige : l'unicité,
+  // et le délai d'expiration d'un TTL — un index ordinaire sur la clé d'un TTL ne
+  // supprime rien, et passer pour « présent » laisserait la conservation inappliquée.
+  const ttlHonoured = spec.expireAfterSeconds === undefined || (match && match.expireAfterSeconds === spec.expireAfterSeconds);
+  if (match && (match.unique || !spec.unique) && ttlHonoured) {
     report.present.push(`${spec.collection}.${match.name}`);
     continue;
   }
@@ -94,7 +98,7 @@ for (const spec of specs) {
     if (match) db.getCollection(spec.collection).dropIndex(match.name);
     db.getCollection(spec.collection).createIndex(spec.key, options);
   }
-  report.created.push(`${spec.collection}.${spec.name}${match ? ` (remplace ${match.name}, non unique)` : ''}`);
+  report.created.push(`${spec.collection}.${spec.name}${match ? ` (remplace ${match.name}, ${ttlHonoured ? 'non unique' : 'sans expiration'})` : ''}`);
 }
 
 print(dryRun ? '===== SIMULATION — rien n’est écrit =====' : '===== Index du Jeu Meeshy, vague 2 =====');
