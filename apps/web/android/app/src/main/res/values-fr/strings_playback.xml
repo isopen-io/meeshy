@@ -6,4 +6,6 @@
     <string name="playback_ongoing">Lecture audio en cours</string>
     <string name="playback_return">Touchez pour revenir à Meeshy</string>
     <string name="playback_pause">Pause</string>
+    <string name="playback_play">Lecture</string>
+    <string name="playback_paused">Lecture audio en pause</string>
 </resources>

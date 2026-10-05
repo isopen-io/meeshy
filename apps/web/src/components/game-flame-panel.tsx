@@ -3,7 +3,7 @@ import { FLAME_BONUS_PERCENT_MAX, FLAME_BONUS_PERCENT_PER_DAY } from '@meeshy/sh
 
 import { meeshCount } from '@/lib/view/game-copy';
 
-import { GAME_BRAND, GAME_ERROR, GAME_INK, GAME_INK_2, GAME_WARM, GameCard } from './game-surface';
+import { GAME_BRAND, GAME_ERROR, GAME_INK, GAME_INK_2, GAME_ON_WARM, GAME_WARM, GameCard } from './game-surface';
 
 /**
  * LA FLAMME : GELS ET RALLUMAGE (#9383) — ce qu'on fait de ses Meeshes pour la
@@ -41,7 +41,7 @@ function ActionButton({ marker, busy, disabled, onClick, children }: { readonly 
       aria-busy={busy}
       onClick={onClick}
       className="rounded-chip px-4 text-body font-bold disabled:opacity-60"
-      style={{ minHeight: 44, backgroundColor: GAME_WARM, color: 'var(--color-ios-surface)' }}
+      style={{ minHeight: 44, backgroundColor: GAME_WARM, color: GAME_ON_WARM }}
     >
       {children}
     </button>

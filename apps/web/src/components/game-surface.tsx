@@ -15,9 +15,13 @@ export const GAME_BRAND = 'var(--color-ios-brand)';
 export const GAME_INK = 'var(--color-ios-ink)';
 export const GAME_INK_2 = 'var(--color-ios-ink-2)';
 export const GAME_CARD = 'var(--color-ios-card)';
-export const GAME_WARM = 'var(--ios-warning)';
-export const GAME_GOOD = 'var(--ios-success)';
-export const GAME_ERROR = 'var(--ios-error)';
+/* Les couleurs d'ÉTAT suivent le thème : les jetons `--ios-*` bruts sont ceux
+   du thème sombre et tombent sous 3:1 sur la surface claire. */
+export const GAME_WARM = 'var(--color-warn)';
+/** Le texte posé SUR un fond `GAME_WARM` (un bouton de dépense). */
+export const GAME_ON_WARM = 'var(--color-on-state)';
+export const GAME_GOOD = 'var(--color-ok)';
+export const GAME_ERROR = 'var(--color-error)';
 
 export function GameCard({
   id,

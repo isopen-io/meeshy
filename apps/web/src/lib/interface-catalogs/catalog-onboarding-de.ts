@@ -88,6 +88,7 @@ const de = {
   'onboarding.recap.friends': 'Anfragen unterwegs: {count}',
   'onboarding.recap.tomorrow': 'Morgen kann deine Serie auf {next} steigen.',
   'onboarding.recap.explore': 'Weiter entdecken',
+  'onboarding.recap.game': 'Das Spiel mit Mee und Meo entdecken',
   'onboarding.recap.done': 'Genug für heute',
 } satisfies OnboardingCatalog;
 

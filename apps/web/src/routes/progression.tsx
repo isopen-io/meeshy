@@ -13,6 +13,7 @@ import { apiDeps } from '@/lib/api/deps';
 import { ENGAGEMENT_PROGRESS_QUERY_KEY, loadEngagementProgress, type EngagementWithGame } from '@/lib/api/engagement';
 import { useOnline } from '@/lib/net/online';
 import { GameSection, type GameHost } from '@/routes/progression-game';
+import { GameLead } from '@/routes/progression-lead';
 import { useGameActions } from '@/routes/progression-game-actions';
 import { Link } from '@/routes/route-table';
 import {
@@ -699,7 +700,7 @@ export default function ProgressionScreen() {
             isMinting={actions.pending.mint}
             mintError={actions.errors.mint}
             mascotEvent={mascotEvent}
-            game={{ actions, online }}
+            game={{ actions, online, guide: <GameLead view={query.data} /> }}
           />
         ) : query.isError ? (
           <ProgressionError message={query.error.message} online={online} onRetry={() => void query.refetch()} />

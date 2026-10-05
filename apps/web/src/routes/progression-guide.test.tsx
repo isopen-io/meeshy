@@ -50,13 +50,22 @@ const memory = () => {
 type Bench = {
   readonly guide: () => GameGuide;
   readonly show: (next: EngagementWithGame | undefined) => Promise<void>;
+  /** Un geste du jeu est en vol (`settled` faux) : la lecture montrée est l'optimiste. */
+  readonly pending: (next: EngagementWithGame) => Promise<void>;
+  /** Le geste est réglé ; la lecture devient `next` (ou reste celle montrée). */
+  readonly confirm: (next?: EngagementWithGame) => Promise<void>;
   readonly posted: () => readonly string[][];
+  readonly requestIds: () => readonly string[];
   readonly cached: () => EngagementWithGame | undefined;
 };
 
 async function bench(
   initial: EngagementWithGame | undefined,
-  options: { readonly storage?: ReturnType<typeof memory>; readonly reply?: (req: HttpRequest) => ApiResult<unknown> | undefined } = {},
+  options: {
+    readonly storage?: ReturnType<typeof memory>;
+    readonly reply?: (req: HttpRequest) => ApiResult<unknown> | undefined;
+    readonly today?: string;
+  } = {},
 ): Promise<Bench> {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity }, mutations: { retry: false } } });
   if (initial !== undefined) client.setQueryData(ENGAGEMENT_PROGRESS_QUERY_KEY, initial);
@@ -69,10 +78,15 @@ async function bench(
   });
   let current: GameGuide | null = null;
   let setView: (next: EngagementWithGame | undefined) => void = () => undefined;
+  let setSettled: (next: boolean) => void = () => undefined;
+  const storage = options.storage ?? memory();
+  const today = options.today ?? '2026-10-05';
   function Probe() {
     const [shown, set] = useState<EngagementWithGame | undefined>(initial);
+    const [settled, mark] = useState(true);
     setView = set;
-    current = useGameGuide({ view: shown, transport, storage: options.storage ?? memory() });
+    setSettled = mark;
+    current = useGameGuide({ view: shown, transport, storage, settled, today: () => today });
     return null;
   }
   await mount(
@@ -90,7 +104,22 @@ async function bench(
       await act(async () => setView(next));
       await act(() => new Promise<void>((resolve) => setTimeout(resolve, 10)));
     },
+    pending: async (next) => {
+      await act(async () => {
+        setSettled(false);
+        setView(next);
+      });
+      await act(() => new Promise<void>((resolve) => setTimeout(resolve, 10)));
+    },
+    confirm: async (next) => {
+      await act(async () => {
+        if (next !== undefined) setView(next);
+        setSettled(true);
+      });
+      await act(() => new Promise<void>((resolve) => setTimeout(resolve, 10)));
+    },
     posted: () => calls().map((c) => (c.body as { keys: string[] }).keys),
+    requestIds: () => calls().map((c) => (c.body as { requestId: string }).requestId),
     cached: () => client.getQueryData<EngagementWithGame>(ENGAGEMENT_PROGRESS_QUERY_KEY),
   };
 }
@@ -163,6 +192,29 @@ describe('à l’ouverture', () => {
     expect(storage.getItem('meeshy.game.last-visit')).toBe('2026-10-05');
   });
 
+  test('le dernier passage se compte en jours de l’APPAREIL, pas d’après une lecture en cache d’un autre jour', async () => {
+    const storage = memory();
+    storage.setItem('meeshy.game.last-visit', '2026-10-05');
+    const seen = [...ALL_STEPS, 'first-level', 'new-tier', 'missions-unlocked', 'new-rank', 'treasury-tier'];
+    const cachedTenDaysAgo = view({ guideSeen: seen, mintedLifetime: 3 });
+    const b = await bench(cachedTenDaysAgo, { storage, today: '2026-10-15' });
+    expect(key(b.guide().card)).toBe('return-after-absence');
+    expect(storage.getItem('meeshy.game.last-visit')).toBe('2026-10-15');
+  });
+
+  test('sans crypto.randomUUID (ancienne WebView Android, contexte non sécurisé), la clé vue part quand même', async () => {
+    const original = globalThis.crypto;
+    const getRandomValues = original.getRandomValues.bind(original);
+    Object.defineProperty(globalThis, 'crypto', { configurable: true, value: { getRandomValues } });
+    try {
+      const b = await bench(view({ guideSeen: [] }));
+      expect(b.posted()).toEqual([['onboarding.welcome']]);
+      expect(b.requestIds()[0]?.length ?? 0).toBeGreaterThanOrEqual(8);
+    } finally {
+      Object.defineProperty(globalThis, 'crypto', { configurable: true, value: original });
+    }
+  });
+
   test('un serveur qui refuse l’envoi ne retire pas la carte', async () => {
     const b = await bench(view({ guideSeen: [] }), { reply: () => ({ ok: false, status: 503, error: 'réseau' }) });
     expect(key(b.guide().card)).toBe('onboarding.welcome');
@@ -217,6 +269,24 @@ describe('ce qui arrive pendant que l’écran est ouvert', () => {
     const b = await bench(view({ guideSeen: [], score: 10 * 9 * 9 + 5 }));
     await b.show(view({ guideSeen: [], score: 10 * 10 * 10 }));
     expect(key(b.guide().card)).toBe('onboarding.welcome');
+  });
+
+  test('un geste encore en vol ne se célèbre pas : la carte attend la confirmation', async () => {
+    const b = await bench(view({ guideSeen: seen, score: 10 * 9 * 9 + 5, mintedLifetime: 3 }));
+    const optimistic = view({ guideSeen: seen, score: 10 * 10 * 10, mintedLifetime: 3 });
+    await b.pending(optimistic);
+    expect(b.guide().card).toBeNull();
+    await b.confirm();
+    expect(key(b.guide().card)).toBe('new-tier');
+  });
+
+  test('un geste refusé et restauré ne laisse aucune carte ni aucune clé vue', async () => {
+    const before = view({ guideSeen: seen, score: 10 * 9 * 9 + 5, mintedLifetime: 3 });
+    const b = await bench(before);
+    await b.pending(view({ guideSeen: seen, score: 10 * 10 * 10, mintedLifetime: 3 }));
+    await b.confirm(before);
+    expect(b.guide().card).toBeNull();
+    expect(b.posted()).toEqual([]);
   });
 
   test('la première frappe : le niveau avant → après', async () => {

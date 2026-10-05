@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { GameMintPreview, MissionRerollResponse } from '@meeshy/shared/types/game';
 
 import { httpTransport, unwrap, ApiError } from '@/lib/api/client';
+import { newClientMessageId } from '@/lib/api/client-message-id';
 import { ENGAGEMENT_PROGRESS_QUERY_KEY, mintMeesh, type EngagementWithGame, type MeeshMintResult } from '@/lib/api/engagement';
 import { buyFlameFreeze, claimChest, relightFlame, rerollMission } from '@/lib/api/game';
 import type { HttpTransport } from '@/lib/api/http';
@@ -63,6 +64,13 @@ export type GameActions = {
 
 type Snapshot = { readonly snapshot: EngagementWithGame | undefined };
 
+/**
+ * La clé commune des gestes du jeu : tant qu'un geste est EN VOL, la lecture
+ * en cache est l'optimiste — le guide et les propositions de photo attendent
+ * qu'il soit réglé pour célébrer (un geste refusé ne se célèbre pas).
+ */
+export const GAME_MUTATION_KEY = ['game', 'gesture'] as const;
+
 const messageOf = (error: unknown): string => gameErrorMessage(error instanceof ApiError ? error.code : undefined);
 
 export function useGameActions(
@@ -77,7 +85,7 @@ export function useGameActions(
   const idFor = useCallback((key: string): string => {
     const known = ids.current.get(key);
     if (known !== undefined) return known;
-    const fresh = crypto.randomUUID();
+    const fresh = newClientMessageId();
     ids.current.set(key, fresh);
     return fresh;
   }, []);
@@ -109,6 +117,7 @@ export function useGameActions(
   const refresh = useCallback(() => void client.invalidateQueries({ queryKey: ENGAGEMENT_PROGRESS_QUERY_KEY }), [client]);
 
   const mint = useMutation<MeeshMintResult, Error, void, Snapshot & { readonly preview: GameMintPreview | undefined }>({
+    mutationKey: GAME_MUTATION_KEY,
     mutationFn: async () => unwrap(await mintMeesh(transport, idFor('mint'))),
     onMutate: async () => {
       const preview = read()?.game?.mint;
@@ -129,6 +138,7 @@ export function useGameActions(
   });
 
   const reroll = useMutation<MissionRerollResponse, Error, string, Snapshot>({
+    mutationKey: GAME_MUTATION_KEY,
     mutationFn: async (missionId) => unwrap(await rerollMission(transport, missionId, idFor(`reroll:${missionId}`))),
     onMutate: () => begin(afterReroll),
     onError: (_error, _missionId, context) => restore(context),
@@ -140,6 +150,7 @@ export function useGameActions(
   });
 
   const chest = useMutation({
+    mutationKey: GAME_MUTATION_KEY,
     mutationFn: async () => unwrap(await claimChest(transport, idFor('chest'))),
     onMutate: () => begin(afterChestOpening),
     onError: (_error, _vars, context: Snapshot | undefined) => restore(context),
@@ -151,6 +162,7 @@ export function useGameActions(
   });
 
   const freeze = useMutation({
+    mutationKey: GAME_MUTATION_KEY,
     mutationFn: async () => unwrap(await buyFlameFreeze(transport, idFor('freeze'))),
     onMutate: () => begin(afterFreeze),
     onError: (_error, _vars, context: Snapshot | undefined) => restore(context),
@@ -159,6 +171,7 @@ export function useGameActions(
   });
 
   const relight = useMutation({
+    mutationKey: GAME_MUTATION_KEY,
     mutationFn: async () => unwrap(await relightFlame(transport, idFor('relight'))),
     onMutate: () => begin(afterRelight),
     onError: (_error, _vars, context: Snapshot | undefined) => restore(context),

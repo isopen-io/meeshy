@@ -21,13 +21,21 @@ import { appelNatifMethode, coqueCourante, type CoqueNative } from '@/lib/native
  * notification média de Chrome Android : la coque la remet à la page
  * (`pauseRequested`), qui met en pause chaque `<audio>` qui joue.
  *
+ * Et cette pause GARE la lecture au lieu de la rendre (#9394), comme Chrome
+ * garde son lecteur affiché : la notification offre alors « Lecture », que la
+ * coque remet à la page (`playRequested`), qui relance les vocaux garés. Une
+ * pause faite dans l'app rend la lecture, comme avant ; une coque construite
+ * avant `parkPlayback` la rend aussi.
+ *
  * Un navigateur, ou une coque construite avant le plugin, reçoit une prise
  * sans effet ; un refus de la coque ne remonte jamais à la lecture.
  */
 export type PlaybackHold = {
   readonly hold: () => void;
   readonly release: () => void;
+  readonly park: () => void;
   readonly onPauseRequested: (listener: () => void) => () => void;
+  readonly onPlayRequested: (listener: () => void) => () => void;
 };
 
 const PLUGIN = 'MeeshyPlayback';
@@ -53,10 +61,14 @@ function ecoute(coque: CoqueNative | undefined, evenement: string): PlaybackHold
 }
 
 export function shellPlaybackHold(coque: CoqueNative | undefined = coqueCourante()): PlaybackHold {
+  const release = geste(coque, 'releasePlayback');
+  const garable = appelNatifMethode(coque, PLUGIN, 'parkPlayback') !== null;
   return {
     hold: geste(coque, 'holdPlayback'),
-    release: geste(coque, 'releasePlayback'),
+    release,
+    park: garable ? geste(coque, 'parkPlayback') : release,
     onPauseRequested: ecoute(coque, 'pauseRequested'),
+    onPlayRequested: ecoute(coque, 'playRequested'),
   };
 }
 
@@ -71,16 +83,30 @@ const STOPS = ['pause', 'ended', 'error', 'emptied'] as const;
  */
 export function holdWhileAudioPlays(target: MediaEvents, hold: PlaybackHold): () => void {
   const playing = new Set<HTMLAudioElement>();
+  const parking = new Set<HTMLAudioElement>();
+  const parked = new Set<HTMLAudioElement>();
   const audioOf = (event: Event): HTMLAudioElement | null =>
     event.target instanceof HTMLAudioElement ? event.target : null;
+  const settle = (): void => {
+    if (playing.size > 0) return;
+    if (parked.size > 0) hold.park();
+    else hold.release();
+  };
   const take = (audio: HTMLAudioElement): void => {
     if (audio.muted || playing.has(audio)) return;
+    parked.clear();
+    parking.clear();
     playing.add(audio);
     if (playing.size === 1) hold.hold();
   };
-  const drop = (audio: HTMLAudioElement): void => {
-    if (!playing.delete(audio)) return;
-    if (playing.size === 0) hold.release();
+  const drop = (audio: HTMLAudioElement, type: string): void => {
+    const parks = type === 'pause' && parking.delete(audio);
+    if (parks) parked.add(audio);
+    if (playing.delete(audio)) {
+      settle();
+      return;
+    }
+    if (parked.delete(audio) && parked.size === 0) settle();
   };
   const onPlaying = (event: Event): void => {
     const audio = audioOf(event);
@@ -88,26 +114,42 @@ export function holdWhileAudioPlays(target: MediaEvents, hold: PlaybackHold): ()
   };
   const onStop = (event: Event): void => {
     const audio = audioOf(event);
-    if (audio !== null) drop(audio);
+    if (audio !== null) drop(audio, event.type);
   };
   const onVolume = (event: Event): void => {
     const audio = audioOf(event);
     if (audio === null) return;
-    if (audio.muted) drop(audio);
+    if (audio.muted) drop(audio, event.type);
     else if (!audio.paused && !audio.ended) take(audio);
+  };
+  const resume = (): void => {
+    if (parked.size === 0) {
+      hold.release();
+      return;
+    }
+    for (const audio of [...parked]) {
+      void audio.play().catch(() => {
+        if (parked.delete(audio) && parked.size === 0) settle();
+      });
+    }
   };
   target.addEventListener('playing', onPlaying, true);
   target.addEventListener('volumechange', onVolume, true);
   for (const type of STOPS) target.addEventListener(type, onStop, true);
   const stopPauseRequests = hold.onPauseRequested(() => {
+    for (const audio of [...playing]) parking.add(audio);
     for (const audio of [...playing]) audio.pause();
   });
+  const stopPlayRequests = hold.onPlayRequested(resume);
   return () => {
     stopPauseRequests();
+    stopPlayRequests();
     target.removeEventListener('playing', onPlaying, true);
     target.removeEventListener('volumechange', onVolume, true);
     for (const type of STOPS) target.removeEventListener(type, onStop, true);
-    if (playing.size > 0) hold.release();
+    if (playing.size > 0 || parked.size > 0) hold.release();
     playing.clear();
+    parking.clear();
+    parked.clear();
   };
 }

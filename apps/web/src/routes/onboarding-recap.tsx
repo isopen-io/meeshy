@@ -57,12 +57,19 @@ export function RecapCard({
   load,
   onExplore,
   onDone,
+  onGame,
 }: {
   readonly host: CardHost;
   readonly session: JourneyRecap;
   readonly load: () => Promise<RecapNumbers | null>;
   readonly onExplore: () => void;
   readonly onDone: () => void;
+  /**
+   * LA PORTE VERS LE JEU (#9379) — mène à Progression, où Mee ouvre la première
+   * des sept cartes de l'intégration. Facultative : un hôte qui ne la fournit
+   * pas garde le récapitulatif d'avant, avec ses deux sorties.
+   */
+  readonly onGame?: () => void;
 }) {
   const lang = host.lang;
   const [served, setServed] = useState<RecapNumbers | null | 'loading'>('loading');
@@ -95,6 +102,11 @@ export function RecapCard({
           <PrimaryButton id="recap.explore" onClick={onExplore}>
             {translateOnboarding(lang, 'onboarding.recap.explore')}
           </PrimaryButton>
+          {onGame === undefined ? null : (
+            <SecondaryButton id="recap.game" onClick={onGame}>
+              {translateOnboarding(lang, 'onboarding.recap.game')}
+            </SecondaryButton>
+          )}
           <SecondaryButton id="recap.done" onClick={onDone}>
             {translateOnboarding(lang, 'onboarding.recap.done')}
           </SecondaryButton>

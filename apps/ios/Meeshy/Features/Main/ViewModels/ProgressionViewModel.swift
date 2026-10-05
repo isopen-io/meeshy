@@ -26,7 +26,19 @@ final class ProgressionViewModel: ObservableObject {
     }
 
     @Published private(set) var progress: EngagementProgress?
+    /// Le JEU (#9383) — le bloc `game` de la même charge, `nil` devant un ancien
+    /// serveur ou un bloc que ce client ne comprend pas : l'écran d'avant reste
+    /// alors INTACT, il ne reçoit rien à moitié.
+    @Published private(set) var game: GameBlock?
     @Published private(set) var loadState: LoadState = .idle
+    /// Les gestes du jeu EN VOL, un par intention (#9383).
+    @Published var pending = GamePending()
+    /// Le refus du DERNIER geste, dit là où le geste a eu lieu.
+    @Published var gameErrors = GameErrors()
+    /// La dernière pièce frappée, pour la scène ; `nil` tant qu'aucune n'a été frappée depuis l'ouverture.
+    @Published var celebration: MintCelebration?
+    /// En ligne ou non, tel que la coupure le dit — les gestes d'écriture se taisent hors ligne.
+    @Published private(set) var isOnline = true
     /// Une frappe est en vol (#5743) — le bouton reste affiché, avec son état
     /// dit : le faire disparaître au tap donnerait l'impression d'un échec.
     @Published private(set) var isMinting = false
@@ -44,19 +56,57 @@ final class ProgressionViewModel: ObservableObject {
      */
     private var mintRequestId = UUID().uuidString
 
-    private let service: EngagementProgressProviding
+    let service: EngagementProgressProviding
+    let gameService: GameServiceProviding
     private let networkMonitor: any NetworkMonitorProviding
     private let cacheKey: String
+    private let userId: String
     private var revalidationTask: Task<Void, Never>?
+    private var connectivity: AnyCancellable?
+
+    /// La charge servie, telle que le cache la garde : c'est sur elle que les
+    /// mises à jour optimistes travaillent, `progress` et `game` en sont dérivés.
+    private(set) var snapshot: APIEngagementProgress?
+    /// Les gestes du jeu en vol : tant qu'il y en a un, la lecture montrée est
+    /// l'optimiste — le guide et les propositions de photo attendent qu'il soit
+    /// réglé pour célébrer (un geste refusé ne se célèbre pas).
+    var gesturesInFlight = 0
+    var celebrations = 0
+    /// Une clé d'idempotence par INTENTION (frappe, coffre, gel, rallumage, changement de mission) ;
+    /// elle ne se renouvelle qu'après un SUCCÈS.
+    var gestureRequestIds: [String: String] = [:]
+
+    /// Le guide de Mee et Meo (#9379) : une carte par ouverture d'écran.
+    private(set) lazy var guide = GameGuideSession(
+        service: gameService,
+        visits: UserDefaultsGameVisitStore(userId: userId),
+        onSeen: { [weak self] keys in self?.markGuideSeenLocally(keys) }
+    )
+    /// Les propositions de photo (#9382) et le déroulé ouvert.
+    private(set) lazy var photos = GamePhotoCoordinator(notebook: notebook) { [notebook] moment in
+        GamePhotoSession(moment: moment, notebook: notebook)
+    }
+    let notebook: GamePhotoNotebooking
+
+    var isSettled: Bool { gesturesInFlight == 0 }
 
     init(
         service: EngagementProgressProviding = EngagementProgressService.shared,
+        gameService: GameServiceProviding = GameService.shared,
         networkMonitor: any NetworkMonitorProviding = NetworkMonitor.shared,
-        currentUserId: String = AuthManager.shared.currentUser?.id ?? ""
+        currentUserId: String = AuthManager.shared.currentUser?.id ?? "",
+        notebook: GamePhotoNotebooking? = nil
     ) {
         self.service = service
+        self.gameService = gameService
         self.networkMonitor = networkMonitor
         self.cacheKey = "engagement:\(currentUserId)"
+        self.userId = currentUserId
+        self.notebook = notebook ?? GamePhotoNotebook.standard(userId: currentUserId)
+        self.isOnline = networkMonitor.isOnline
+        self.connectivity = networkMonitor.isOfflinePublisher
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] offline in self?.isOnline = !offline }
     }
 
     /// Squelette : cache FROID et rien encore peint — jamais un spinner sur un instantané.
@@ -94,7 +144,10 @@ final class ProgressionViewModel: ObservableObject {
         let apply: @MainActor @Sendable ([APIEngagementProgress]) -> Void = { [weak self] snapshots in
             guard let self, let snapshot = snapshots.first else { return }
             let resolu = EngagementProgressResolver.resolve(snapshot)
+            self.snapshot = snapshot
             self.progress = resolu
+            self.game = snapshot.game
+            self.observeGame()
             // Les rappels de série se REPLANIFIENT à chaque lecture de la
             // progression (#5902) : c'est le seul moment où l'on connaît à la
             // fois le nombre de jours tenus et l'état du geste du jour. Le
@@ -115,6 +168,10 @@ final class ProgressionViewModel: ObservableObject {
 
     /// Frappe une Meesh, puis RELIT depuis le réseau.
     ///
+    /// **Optimiste (#9383)** : l'écran change AVANT la réponse — niveau, trésor,
+    /// rang, prix suivant, recalculés par la MÊME loi que la passerelle
+    /// (`GameOptimistic.afterMint`) ; un échec RESTAURE l'instantané d'avant.
+    ///
     /// La relecture est forcée : la frappe change les compteurs, le score, les
     /// badges et le solde d'un seul coup, et servir le cache après elle
     /// montrerait un écran qui contredit l'action qu'on vient de faire.
@@ -126,17 +183,106 @@ final class ProgressionViewModel: ObservableObject {
         guard !isMinting else { return }
         isMinting = true
         mintError = nil
-        defer { isMinting = false }
+        let preview = game?.mint
+        let before = beginGesture(GameOptimistic.afterMint)
         do {
-            _ = try await service.mintMeesh(requestId: mintRequestId)
+            let result = try await service.mintMeesh(requestId: mintRequestId)
             mintRequestId = UUID().uuidString
+            celebrate(result, preview: preview)
             await load(forceNetwork: true)
         } catch {
+            restore(before)
             mintError = String(
                 localized: "progression.meesh.mint_error",
                 defaultValue: "La frappe n'a pas abouti — réessayez",
                 bundle: .main
             )
+        }
+        endGesture()
+        isMinting = false
+    }
+
+    private func celebrate(_ result: APIMeeshMintResult, preview: GameMintPreview?) {
+        guard result.status == "minted" else { return }
+        guard let number = result.number ?? preview?.number,
+              let edition = result.edition ?? preview?.edition else { return }
+        celebrations += 1
+        celebration = MintCelebration(number: number, edition: edition, key: celebrations)
+    }
+
+    // MARK: - Le socle des gestes du jeu
+
+    /// Capture l'instantané, applique la mise à jour optimiste, annonce le geste en vol.
+    /// Rend l'instantané À RESTAURER — `nil` quand il n'y a pas de bloc `game` (ancien serveur).
+    func beginGesture(_ apply: (GameState) -> GameState) -> APIEngagementProgress? {
+        gesturesInFlight += 1
+        guard let snapshot, let game = snapshot.game else { return nil }
+        commit(apply(GameState(game: game, meesh: snapshot.meesh)), over: snapshot)
+        return snapshot
+    }
+
+    func endGesture() {
+        gesturesInFlight = max(0, gesturesInFlight - 1)
+        observeGame()
+    }
+
+    /// Pose un état du jeu dans la charge servie et republie ce qui en est dérivé.
+    func commit(_ state: GameState, over base: APIEngagementProgress? = nil) {
+        guard let current = base ?? snapshot else { return }
+        let next = current.replacing(game: state.game, meesh: state.meesh)
+        snapshot = next
+        progress = EngagementProgressResolver.resolve(next)
+        game = next.game
+    }
+
+    func restore(_ previous: APIEngagementProgress?) {
+        guard let previous else { return }
+        snapshot = previous
+        progress = EngagementProgressResolver.resolve(previous)
+        game = previous.game
+    }
+
+    /// Ce que la prochaine frappe éteindrait, calculé sur les compteurs servis avec le prix de CETTE
+    /// frappe ; `nil` quand le serveur ne sert pas les points par axe — « inconnu » ne se dit pas « aucun ».
+    var mintBadgeImpact: MintBadgeImpact? {
+        guard let snapshot, let game else { return nil }
+        return GameMintBadgeImpact.impact(counters: snapshot.counters, price: game.mint.price)
+    }
+
+    /// Le guide et les propositions de photo lisent le jeu, mais seulement RÉGLÉ.
+    func observeGame() {
+        guard let game else { return }
+        guide.observe(game: game, settled: isSettled, badgeImpact: mintBadgeImpact)
+        photos.observe(game: game, settled: isSettled)
+    }
+
+    /// L'identifiant d'une intention : généré UNE fois, jamais par requête.
+    func requestId(for intention: String) -> String {
+        if let known = gestureRequestIds[intention] { return known }
+        let fresh = UUID().uuidString
+        gestureRequestIds[intention] = fresh
+        return fresh
+    }
+
+    func spent(_ intention: String) {
+        gestureRequestIds.removeValue(forKey: intention)
+    }
+
+    /// Les clés du guide entrent aussitôt dans l'état ET dans le cache : la prochaine
+    /// ouverture dira la version COURTE même si l'envoi au serveur a échoué.
+    private func markGuideSeenLocally(_ keys: [String]) {
+        guard let snapshot, let game = snapshot.game else { return }
+        let state = GameOptimistic.withGuideSeen(GameState(game: game, meesh: snapshot.meesh), keys: keys)
+        commit(state, over: snapshot)
+        persistSnapshot()
+    }
+
+    func persistSnapshot() {
+        guard let snapshot else { return }
+        let key = cacheKey
+        Task {
+            let store = await CacheCoordinator.shared.engagementProgress
+            try? await store.save([snapshot], for: key)
         }
     }
 }

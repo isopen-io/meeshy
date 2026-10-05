@@ -70,7 +70,7 @@ extension ConversationSyncEngine {
     /* partagé entre les fichiers du moteur (#4172) */ func handleUserUpdated(_ event: UserUpdatedEvent) async {
         await repaintConversationList(with: event)
         await realtimeMessagePersistor?(.senderRepainted(event))
-        await cache.messages.repaintEverywhere { event.repainted($0) }
+        await cache.messages.repaintEverywhere { event.repaintedWithQuotes($0) }
         await cache.participants.repaintEverywhere { event.repainted($0) }
         await cache.friends.repaintEverywhere { event.repainted($0) }
         await cache.friendRequests.repaintEverywhere { event.repainted($0) }

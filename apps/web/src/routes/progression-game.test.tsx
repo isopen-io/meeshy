@@ -73,6 +73,24 @@ describe('un serveur qui sert le bloc game', () => {
     expect(page).toMatch(/<a[^>]*min-height:44px[^>]*>Comment ça marche/);
   });
 
+  test('le carnet de progression est à une porte : « Carnet de progression », d’une cible de 44 points', () => {
+    expect(page).toContain('/me/progression/carnet');
+    expect(page).toMatch(/<a[^>]*min-height:44px[^>]*>Carnet de progression/);
+  });
+
+  test('le guide se pose AU-DESSUS des jauges quand l’hôte en fournit un', () => {
+    const withGuide = renderToStaticMarkup(
+      <ProgressionBody
+        progress={withGame()}
+        onMint={() => undefined}
+        isMinting={false}
+        game={{ actions: idle, online: true, guide: <p data-guide-slot="">Mee</p> }}
+      />,
+    );
+    expect(withGuide.indexOf('data-guide-slot')).toBeGreaterThanOrEqual(0);
+    expect(withGuide.indexOf('data-guide-slot')).toBeLessThan(withGuide.indexOf('data-game-gauges'));
+  });
+
   test('aucune bulle de conversation : la mascotte-bulle cède à la carte du jeu', () => {
     expect(page).not.toContain('data-mascot-coach');
   });

@@ -88,6 +88,7 @@ const pt = {
   'onboarding.recap.friends': 'Pedidos a caminho: {count}',
   'onboarding.recap.tomorrow': 'Amanhã a tua sequência pode chegar a {next}.',
   'onboarding.recap.explore': 'Continuar a explorar',
+  'onboarding.recap.game': 'Descobrir o jogo com Mee e Meo',
   'onboarding.recap.done': 'Chega por hoje',
 } satisfies OnboardingCatalog;
 

@@ -29,6 +29,17 @@ public class MeeshyPlaybackPlugin extends Plugin {
         return true;
     }
 
+    /**
+     * La « Lecture » d'une pause garee (#9394), a la notification ou au
+     * casque, remise a la page qui relance ses vocaux.
+     */
+    static boolean playRequested() {
+        MeeshyPlaybackPlugin plugin = live;
+        if (plugin == null || !plugin.hasListeners("playRequested")) return false;
+        plugin.notifyListeners("playRequested", new JSObject());
+        return true;
+    }
+
     @Override
     public void load() {
         live = this;
@@ -37,6 +48,13 @@ public class MeeshyPlaybackPlugin extends Plugin {
     @PluginMethod
     public void holdPlayback(PluginCall call) {
         PlaybackForegroundService.start(getContext());
+        call.resolve();
+    }
+
+    /** La pause demandee par la coque garde le lecteur et offre « Lecture » (#9394). */
+    @PluginMethod
+    public void parkPlayback(PluginCall call) {
+        PlaybackForegroundService.park();
         call.resolve();
     }
 
