@@ -163,9 +163,9 @@ struct ComposerTrailingRail: View {
     private func entryStack(_ entrees: [ComposerTrailingColumn.Entry]) -> some View {
         VStack(spacing: ComposerRailGeometry.floatingEntrySpacing) {
             // Construites ICI, sur le fil principal : le `ForEach` ne fait que
-            // les relire (#9135, `ComposerRailRow`).
-            ForEach(entrees.map { ComposerRailRow(id: $0.id, content: optionTile($0)) },
-                    content: composerRailRowContent)
+            // les relire (#9135, `AsyncRenderRow`).
+            ForEach(entrees.map { AsyncRenderRow(id: $0.id, content: optionTile($0)) },
+                    content: asyncRenderRowContent)
         }
     }
 
@@ -247,8 +247,8 @@ struct ComposerTrailingRail: View {
                             .overlay(MeeshyColors.textSecondary(isDark: true).opacity(0.25))
                     }
                 }
-                ForEach(actions.map { ComposerRailRow(id: $0, content: actionButton($0)) },
-                        content: composerRailRowContent)
+                ForEach(actions.map { AsyncRenderRow(id: $0, content: actionButton($0)) },
+                        content: asyncRenderRowContent)
                 // **L'historique en BAS, le plus près du pouce.** Défaire est le
                 // geste le plus fréquent du rail, et le ressort qui pousse le
                 // contenu vers le bas met la dernière entrée à portée. Le `[+]`

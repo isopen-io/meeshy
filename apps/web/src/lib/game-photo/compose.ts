@@ -1,3 +1,5 @@
+import { currentInterfaceLanguage } from '@/lib/interface-language';
+
 import { resolveCssVars } from './css-vars';
 import { containFit, coverFit, type PhotoLayout, type Rect } from './layout';
 import type { PhotoMoment } from './moments';
@@ -61,6 +63,12 @@ export type PhotoSource = {
   readonly height: number;
   /** `true` pour un selfie : l'image est retournée comme dans l'aperçu. */
   readonly mirror: boolean;
+  /**
+   * Rend la mémoire de l'image décodée : un `ImageBitmap` la tient jusqu'à
+   * `close()` — le ramasse-miettes ne la rend pas (#9382). Absent pour une
+   * image que le navigateur gère seul (le canvas d'une prise de vue).
+   */
+  readonly release?: () => void;
 };
 
 export type PaintInput = {
@@ -127,7 +135,7 @@ function paintText(ctx: PaintContext, input: PaintInput): void {
 
   ctx.fillStyle = palette.inkSoft;
   ctx.font = `600 ${layout.kicker.size}px ${fontFamily}`;
-  ctx.fillText(moment.kicker.toLocaleUpperCase('fr'), layout.kicker.x, layout.kicker.y);
+  ctx.fillText(moment.kicker.toLocaleUpperCase(currentInterfaceLanguage()), layout.kicker.x, layout.kicker.y);
 
   ctx.fillStyle = palette.ink;
   ctx.font = `700 ${layout.title.size}px ${fontFamily}`;

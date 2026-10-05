@@ -39,6 +39,8 @@ export const GAME_ERROR_CODES = {
   missionRerollUnavailable: 'MISSION_REROLL_UNAVAILABLE',
   missionsLocked: 'MISSIONS_LOCKED',
   chestNotReady: 'CHEST_NOT_READY',
+  /** Le `requestId` a déjà servi à une AUTRE écriture (autre dépense, frappe) : refusé sans effet. */
+  requestIdConflict: 'REQUEST_ID_CONFLICT',
 } as const;
 
 export type GameErrorCode = (typeof GAME_ERROR_CODES)[keyof typeof GAME_ERROR_CODES];

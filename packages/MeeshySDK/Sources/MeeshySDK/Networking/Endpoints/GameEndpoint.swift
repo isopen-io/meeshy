@@ -25,7 +25,7 @@ public enum GameEndpoint: MeeshyEndpoint, Sendable {
 
     public var path: String {
         switch self {
-        case .missionReroll(let missionId): "/api/v1/me/game/missions/\(missionId)/reroll"
+        case .missionReroll(let missionId): "/api/v1" + GameRoutes.missionRerollPath(missionId: missionId)
         case .chestClaim: "/api/v1/me/game/chest/claim"
         case .flameFreezes: "/api/v1/me/game/flame/freezes"
         case .flameRelight: "/api/v1/me/game/flame/relight"

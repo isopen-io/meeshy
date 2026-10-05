@@ -2,6 +2,7 @@ import { useId } from 'react';
 
 import { GameBird } from '@/components/game';
 import type { PhotoMoment } from '@/lib/game-photo/moments';
+import { gameText } from '@/lib/view/game-copy';
 
 import { GAME_BRAND, GAME_INK, GAME_INK_2, GameCard } from './game-surface';
 
@@ -31,7 +32,7 @@ export function GamePhotoOffer({
           <GameBird bird="meeWink" size={64} />
           <div className="min-w-0 flex-1 pb-1">
             <h2 id={titleId} className="text-body font-bold" style={{ color: GAME_INK }}>
-              On immortalise ?
+              {gameText('game.photo.offer.title')}
             </h2>
             <p className="text-caption" style={{ color: GAME_INK_2 }}>
               {moment.title}
@@ -46,7 +47,7 @@ export function GamePhotoOffer({
             className="rounded-chip px-4 text-body font-bold"
             style={{ minHeight: 44, backgroundColor: GAME_BRAND, color: 'var(--color-ios-surface)' }}
           >
-            Photographier
+            {gameText('game.photo.offer.start')}
           </button>
           <button
             type="button"
@@ -55,7 +56,7 @@ export function GamePhotoOffer({
             className="rounded-chip px-3 text-body font-semibold"
             style={{ minHeight: 44, color: GAME_INK_2 }}
           >
-            Plus tard
+            {gameText('game.photo.later')}
           </button>
         </div>
       </div>

@@ -105,3 +105,33 @@ final class GameTimelineTests: XCTestCase {
         XCTAssertFalse(GamePrismTilt.sensorRuns(active: true, visible: true, reduceMotion: true))
     }
 }
+
+/// La tape « niveau gagné » ne joue que pour une montée CONFIRMÉE (#9381) : un niveau
+/// qui remonte parce qu'une frappe refusée l'a rendu n'a rien gagné.
+final class GameLevelConfirmationTests: XCTestCase {
+
+    func test_aRefusedMint_givingTheLevelBack_isNotAGain() {
+        var sut = GameLevelConfirmation(confirmed: 34)
+        XCTAssertFalse(sut.observe(level: 33, settled: false), "la frappe baisse le niveau en vol")
+        XCTAssertFalse(sut.observe(level: 34, settled: false), "le refus le rend, en vol")
+        XCTAssertFalse(sut.observe(level: 34, settled: true), "réglé : le niveau d'avant, rien de gagné")
+    }
+
+    func test_aRealClimbWhileSettled_isAGain_once() {
+        var sut = GameLevelConfirmation(confirmed: 34)
+        XCTAssertTrue(sut.observe(level: 35, settled: true))
+        XCTAssertFalse(sut.observe(level: 35, settled: true))
+    }
+
+    func test_aClimbReadDuringAGesture_isPlayedWhenItSettles() {
+        var sut = GameLevelConfirmation(confirmed: 34)
+        XCTAssertFalse(sut.observe(level: 35, settled: false), "le coffre est ouvert, pas encore réglé")
+        XCTAssertTrue(sut.observe(level: 35, settled: true))
+    }
+
+    func test_aConfirmedLoss_thenClimbingBackToTheOldLevel_isAGain() {
+        var sut = GameLevelConfirmation(confirmed: 34)
+        XCTAssertFalse(sut.observe(level: 33, settled: true))
+        XCTAssertTrue(sut.observe(level: 34, settled: true))
+    }
+}

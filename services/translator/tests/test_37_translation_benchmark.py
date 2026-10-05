@@ -13,6 +13,7 @@ from src.benchmark.latency import summarize_latencies
 from src.benchmark.report import render_markdown, report_from_dict, report_to_dict
 from src.benchmark.runner import run_benchmark
 from src.benchmark.scoring import CometScorer, chrf
+from utils.generation_guard import GenerationOutcome, RepetitionLoopStop, generation_budget
 
 
 SHIPPED_GOLDEN = Path(__file__).parent.parent / "src" / "benchmark" / "golden" / "meeshy-chat.jsonl"
@@ -69,6 +70,53 @@ class SlowFirstCallTranslator(FakeTranslator):
             self.clock.now += self.load_seconds
             self.loaded = True
         return super().translate(text, source_lang, target_lang)
+
+
+class ReportingTranslator(FakeTranslator):
+    def __init__(self, outcomes, **kwargs):
+        super().__init__(**kwargs)
+        self.outcomes = outcomes
+        self.last_generation = None
+
+    def translate(self, text, source_lang, target_lang):
+        self.last_generation = self.outcomes.get(text)
+        return super().translate(text, source_lang, target_lang)
+
+
+class _Rows:
+    def __init__(self, rows):
+        self.rows = rows
+
+    def tolist(self):
+        return self.rows
+
+
+def make_nllb_engine(rows, generate_calls, source_tokens=3):
+    class FakeTokenizer:
+        src_lang = None
+        pad_token_id = 1
+
+        def __call__(self, text, **kwargs):
+            return {"input_ids": [text, self.src_lang], "attention_mask": _Rows([[1] * source_tokens])}
+
+        def convert_tokens_to_ids(self, token):
+            return f"id:{token}"
+
+        def batch_decode(self, outputs, skip_special_tokens):
+            return [" ".join(str(i) for i in row if i > 9) for row in outputs]
+
+    class FakeModel:
+        def generate(self, **kwargs):
+            generate_calls.append(kwargs)
+            return _Rows(rows)
+
+    loads = []
+
+    def load(model_id):
+        loads.append(model_id)
+        return FakeTokenizer(), FakeModel()
+
+    return NllbTranslator(model_id="facebook/nllb-200-distilled-600M", load=load), loads
 
 
 class TickingClock:
@@ -301,42 +349,40 @@ class TestEngines:
 
     def test_nllb_engine_forces_the_target_code_and_decodes_greedily(self):
         generate_calls = []
-
-        class FakeTokenizer:
-            src_lang = None
-
-            def __call__(self, text, **kwargs):
-                return {"input_ids": [text, self.src_lang]}
-
-            def convert_tokens_to_ids(self, token):
-                return f"id:{token}"
-
-            def batch_decode(self, outputs, skip_special_tokens):
-                return [f"decoded {outputs[0]}"]
-
-        class FakeModel:
-            def generate(self, **kwargs):
-                generate_calls.append(kwargs)
-                return [kwargs["input_ids"][0]]
-
-        loads = []
-
-        def load(model_id):
-            loads.append(model_id)
-            return FakeTokenizer(), FakeModel()
-
-        engine = NllbTranslator(model_id="facebook/nllb-200-distilled-600M", load=load)
+        engine, loads = make_nllb_engine([[2, 9, 40, 41, 2]], generate_calls)
 
         first = engine.translate("Salut", "fr", "sw")
         engine.translate("Salut", "fr", "sw")
 
-        assert first == "decoded Salut"
+        assert first == "40 41"
         assert loads == ["facebook/nllb-200-distilled-600M"]
         call = generate_calls[0]
         assert call["input_ids"] == ["Salut", "fra_Latn"]
         assert call["forced_bos_token_id"] == "id:swh_Latn"
-        assert (call["num_beams"], call["do_sample"], call["max_length"]) == (1, False, 256)
+        assert (call["num_beams"], call["do_sample"]) == (1, False)
         assert engine.name == "nllb:facebook/nllb-200-distilled-600M"
+
+    def test_nllb_engine_generates_with_the_production_bounds(self):
+        generate_calls = []
+        engine, _ = make_nllb_engine([[2, 9, 40, 2]], generate_calls, source_tokens=12)
+
+        engine.translate("Salut", "fr", "ff")
+
+        call = generate_calls[0]
+        assert "max_length" not in call
+        assert call["max_new_tokens"] == generation_budget(12)
+        assert [type(c) for c in call["stopping_criteria"]] == [RepetitionLoopStop]
+
+    def test_nllb_engine_reports_what_each_generation_produced(self):
+        looping = [2, 9, 40, 50, 40, 50, 40, 50, 40, 50]
+        engine, _ = make_nllb_engine([looping], [], source_tokens=12)
+
+        text = engine.translate("Salut", "fr", "wo")
+
+        assert text == "40 50"
+        assert engine.last_generation == GenerationOutcome(
+            generated_tokens=9, budget=generation_budget(12), looped=True
+        )
 
     def test_nllb_engine_refuses_a_language_it_cannot_name(self):
         engine = NllbTranslator(
@@ -409,6 +455,44 @@ class TestRunner:
         assert direction.failures == 1
         assert direction.short.count == 1
         assert direction.chrf < 100.0
+
+    def test_the_longest_output_and_its_ratio_to_the_source_are_recorded(self):
+        pairs = (
+            make_pair(id="1", source="Salut", reference="Hi"),
+            make_pair(id="2", source="Merci", reference="Thanks"),
+        )
+        translator = FakeTranslator(answers={"Salut": "Hi there", "Merci": "Thanks"})
+
+        direction = run_benchmark(translator, pairs).directions[0]
+
+        assert direction.output_chars_max == 8
+        assert direction.output_ratio_max == pytest.approx(1.6)
+        assert (direction.budget_hits, direction.loop_stops) == (None, None)
+
+    def test_generations_cut_by_the_budget_or_a_loop_are_counted(self):
+        pairs = (
+            make_pair(id="1", source="Salut"),
+            make_pair(id="2", source="Merci"),
+            make_pair(id="3", source="Bonsoir"),
+        )
+        translator = ReportingTranslator(
+            {
+                "Salut": GenerationOutcome(generated_tokens=40, budget=40, looped=False),
+                "Merci": GenerationOutcome(generated_tokens=12, budget=40, looped=True),
+                "Bonsoir": GenerationOutcome(generated_tokens=5, budget=40, looped=False),
+            }
+        )
+
+        direction = run_benchmark(translator, pairs).directions[0]
+
+        assert (direction.budget_hits, direction.loop_stops) == (1, 1)
+
+    def test_a_failed_segment_counts_no_output(self):
+        pairs = (make_pair(id="1", source="Salut"),)
+
+        direction = run_benchmark(FakeTranslator(failing={"Salut"}), pairs).directions[0]
+
+        assert (direction.output_chars_max, direction.output_ratio_max) == (None, None)
 
     def test_comet_is_computed_per_direction_when_a_scorer_is_given(self):
         seen = []
@@ -495,7 +579,22 @@ class TestReport:
         markdown = render_markdown(make_report(chrf=61.234, comet=0.8123))
 
         assert "nllb" in markdown
-        assert "| fr→en | 1 | 61.2 | 0.812 | 200 | 200 | — | — | 0 |" in markdown
+        assert "| fr→en | 1 | 61.2 | 0.812 | 200 | 200 | — | — | 0 | 2 | 0.40 | — | — |" in markdown
+
+    def test_a_baseline_written_before_output_lengths_still_loads(self):
+        data = report_to_dict(make_report())
+        for field in ("output_chars_max", "output_ratio_max", "budget_hits", "loop_stops"):
+            del data["directions"][0][field]
+
+        direction = report_from_dict(data).directions[0]
+
+        assert (direction.output_chars_max, direction.budget_hits) == (None, None)
+
+    def test_markdown_shows_the_generations_that_were_cut(self):
+        markdown = render_markdown(make_report(budget_hits=2, loop_stops=1))
+
+        assert "| au budget | boucles |" in markdown
+        assert "| 2 | 1 |" in markdown
 
 
 class TestCommandLine:

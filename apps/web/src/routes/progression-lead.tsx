@@ -70,7 +70,9 @@ export function GameLead({
   const act = useCallback(
     (card: GuideCard) => {
       const target = guideActionTarget(card.action);
-      guide.dismiss();
+      /* Une étape qui ATTEND son geste n'est pas consommée par son bouton : il
+         y mène, et la carte avance quand le geste a eu lieu (`gesture.ts`). */
+      if (card.awaiting !== true) guide.dismiss();
       if (target.kind === 'scroll') scrollTo(target.id);
       else if (target.kind === 'route') navigateTo(target.to);
       else {

@@ -59,6 +59,73 @@ const geoCache = new Map<string, { data: GeoIpData; expiry: number }>();
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
 /**
+ * LE CACHE GEOIP A UN SEUL ÉCRIVAIN ET UN SEUL LECTEUR (#9239).
+ *
+ * La table était écrite en ligne depuis `lookupGeoIp`, sans plafond, et les
+ * entrées expirées n'étaient qu'IGNORÉES à la lecture — jamais retirées.
+ * Sa clé est l'IP du client : elle retenait donc une entrée par IP distincte
+ * vue depuis le démarrage du processus, et sa taille n'était pilotée ni par la
+ * charge ni par le TTL. `cleanGeoCache()` existait, son commentaire disait
+ * « call periodically », et personne ne l'appelait.
+ *
+ * Trois fonctions portent désormais toute la vie de cette table, pour qu'un
+ * futur site ne puisse plus y écrire sans passer par le plafond.
+ */
+export function cachedGeo(ip: string, now: number = Date.now()): GeoIpData | null {
+  const entry = geoCache.get(ip);
+  return entry !== undefined && entry.expiry > now ? entry.data : null;
+}
+
+/**
+ * LE PLAFOND, nommé et exporté — un nombre en dur ne se mesure pas.
+ *
+ * Dix mille entrées : chacune porte neuf champs courts, donc l'ordre de
+ * grandeur est le méga-octet, pas la dizaine. Ce qu'il borne n'est pas une
+ * consommation nominale (le TTL de cinq minutes suffirait) mais le cas où le
+ * nombre d'IP distinctes n'est plus corrélé à celui des clients : un balayage,
+ * un proxy qui tourne ses sorties, une botnet.
+ */
+export const MAX_GEO_CACHE_ENTRIES = 10_000;
+
+/**
+ * L'ÉVICTION EST FIFO, et c'est suffisant : la clé la plus anciennement
+ * insérée est aussi la plus proche de son TTL, les entrées ayant toutes la
+ * même durée de vie. Le premier élément d'un `Map` est sa plus ancienne
+ * insertion, donc l'éviction est en O(1) et n'a besoin d'aucune structure de
+ * plus.
+ *
+ * LE PIÈGE, et la raison du `delete` avant le `set` : `Map.set` sur une clé
+ * qui EXISTE ne déplace pas son rang d'insertion. Une entrée revue — donc
+ * vivante, donc utile — garderait son vieux rang et partirait avant une
+ * entrée plus ancienne jamais revue. Le cache aurait son plafond et perdrait
+ * précisément ce qu'il sert à garder.
+ */
+export function rememberGeo(ip: string, data: GeoIpData, now: number = Date.now()): void {
+  geoCache.delete(ip);
+  while (geoCache.size >= MAX_GEO_CACHE_ENTRIES) {
+    const plusAncienne = geoCache.keys().next();
+    if (plusAncienne.done === true) break;
+    geoCache.delete(plusAncienne.value);
+  }
+  geoCache.set(ip, { data, expiry: now + CACHE_TTL_MS });
+}
+
+/** Le nombre d'entrées RETENUES — la seule lecture de taille, pour les témoins. */
+export function geoCacheSize(): number {
+  return geoCache.size;
+}
+
+/**
+ * Remet la table à zéro. Un témoin qui mesure un plafond doit partir d'une
+ * table vide, et un `Map` de module survit d'un cas à l'autre dans le même
+ * fichier de test : sans ce point d'entrée, l'ordre des cas déciderait du
+ * verdict.
+ */
+export function resetGeoCacheForTests(): void {
+  geoCache.clear();
+}
+
+/**
  * Extract real IP from request, handling proxies
  */
 export function extractIpFromRequest(request: FastifyRequest): string {
@@ -176,9 +243,9 @@ export async function lookupGeoIp(
   }
 
   // Check cache
-  const cached = geoCache.get(ip);
-  if (cached && cached.expiry > Date.now()) {
-    return cached.data;
+  const cached = cachedGeo(ip);
+  if (cached !== null) {
+    return cached;
   }
 
   try {
@@ -213,7 +280,7 @@ export async function lookupGeoIp(
     };
 
     // Cache result
-    geoCache.set(ip, { data: geoData, expiry: Date.now() + CACHE_TTL_MS });
+    rememberGeo(ip, geoData);
 
     return geoData;
 
@@ -375,15 +442,22 @@ function isPrivateIpv6(ip: string): boolean {
 }
 
 /**
- * Clear expired cache entries (call periodically)
+ * LIBÈRE les entrées expirées, et rend COMBIEN elle en a retiré (#9239).
+ *
+ * Elle rendait `void`, ce qui ne laissait aucune façon de vérifier qu'elle
+ * avait fait quelque chose : son ordonnancement pouvait être retiré sans que
+ * rien ne le dise. Le nombre rendu sert la trace de l'ordonnanceur ET le
+ * témoin.
  */
-export function cleanGeoCache(): void {
-  const now = Date.now();
+export function cleanGeoCache(now: number = Date.now()): number {
+  let liberees = 0;
   for (const [ip, entry] of geoCache.entries()) {
     if (entry.expiry < now) {
       geoCache.delete(ip);
+      liberees += 1;
     }
   }
+  return liberees;
 }
 
 /**

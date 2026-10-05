@@ -80,13 +80,17 @@ const STOPS = ['pause', 'ended', 'error', 'emptied'] as const;
  * Les événements d'un média ne remontent pas : l'écoute se fait en CAPTURE,
  * au document, pour tous les `<audio>` de la page à la fois. La lecture est
  * tenue dès qu'un audio joue, rendue quand le DERNIER s'arrête.
+ *
+ * Un flux en direct (`srcObject`, le son d'un pair pendant un appel) n'est
+ * jamais une lecture : Chrome Android ne lui ouvre aucune notification média,
+ * et la coque tient déjà l'appel par son propre service (#9455).
  */
 export function holdWhileAudioPlays(target: MediaEvents, hold: PlaybackHold): () => void {
   const playing = new Set<HTMLAudioElement>();
   const parking = new Set<HTMLAudioElement>();
   const parked = new Set<HTMLAudioElement>();
   const audioOf = (event: Event): HTMLAudioElement | null =>
-    event.target instanceof HTMLAudioElement ? event.target : null;
+    event.target instanceof HTMLAudioElement && event.target.srcObject == null ? event.target : null;
   const settle = (): void => {
     if (playing.size > 0) return;
     if (parked.size > 0) hold.park();

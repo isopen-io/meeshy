@@ -4,14 +4,17 @@ import type { GameBlock } from '@meeshy/shared/types/game';
 
 import { Flame, LevelRing, MeeshCoin, RankBlason, useChoreography } from '@/components/game';
 import {
-  FLAME_FORM_NAMES,
-  LEVEL_TIER_NAMES,
-  RANK_NAMES,
-  TREASURY_NAMES,
+  boundedPercent,
+  daysLabel,
+  flameFormName,
   formatCount,
+  gameText,
+  levelTierName,
   meeshCount,
   pointsLabel,
   rankLabel,
+  rankName,
+  treasuryName,
 } from '@/lib/view/game-copy';
 
 import { GAME_CARD, GAME_INK, GAME_INK_2, GAME_WARM, GameChip } from './game-surface';
@@ -32,7 +35,7 @@ import { GAME_CARD, GAME_INK, GAME_INK_2, GAME_WARM, GameChip } from './game-sur
 const nextRankText = (glory: GameBlock['glory']): string | null =>
   glory.next === null || glory.gloryMissing === null
     ? null
-    : `Encore ${formatCount(glory.gloryMissing)} de Gloire avant ${rankLabel(glory.next.rank, glory.next.division)}`;
+    : gameText('game.rank.next', { missing: formatCount(glory.gloryMissing), rank: rankLabel(glory.next.rank, glory.next.division) });
 
 function Tile({ id, title, titleId, drawing, children }: { id: string; title: string; titleId: string; drawing: React.ReactNode; children: React.ReactNode }) {
   return (
@@ -67,7 +70,7 @@ function LevelTile({ game }: { readonly game: GameBlock }) {
   return (
     <Tile
       id="game-level"
-      title="Niveau"
+      title={gameText('game.gauge.level')}
       titleId="game-level-title"
       drawing={
         <div ref={ref}>
@@ -76,15 +79,17 @@ function LevelTile({ game }: { readonly game: GameBlock }) {
       }
     >
       <p className="text-title font-bold" style={{ color: GAME_INK }}>
-        Niveau {level.level} · {LEVEL_TIER_NAMES[level.tier]}
+        {gameText('game.level.title', { level: formatCount(level.level), tier: levelTierName(level.tier) })}
       </p>
       <p className="text-caption" style={{ color: GAME_INK_2 }}>
-        {atTop ? 'Tu es au sommet.' : `Encore ${pointsLabel(level.pointsToNext)} avant le niveau ${level.level + 1}`}
+        {atTop
+          ? gameText('game.level.top')
+          : gameText('game.level.to_next', { points: pointsLabel(level.pointsToNext), level: formatCount(level.level + 1) })}
       </p>
       {level.record > level.level ? (
         <GameChip tint={GAME_WARM}>
-          Record : niveau {level.record}
-          {boosts.tailwind > 1 ? ` · Vent arrière ×${String(boosts.tailwind).replace('.', ',')}` : ''}
+          {gameText('game.level.record', { level: formatCount(level.record) })}
+          {boosts.tailwind > 1 ? gameText('game.level.tailwind', { factor: formatCount(boosts.tailwind) }) : ''}
         </GameChip>
       ) : null}
     </Tile>
@@ -106,11 +111,11 @@ function RankTile({ game }: { readonly game: GameBlock }) {
   return (
     <Tile
       id="game-rank"
-      title="Rang"
+      title={gameText('game.gauge.rank')}
       titleId="game-rank-title"
       drawing={
         <div ref={ref}>
-          <RankBlason rank={glory.rank} division={glory.division} size={80} label={RANK_NAMES[glory.rank]} />
+          <RankBlason rank={glory.rank} division={glory.division} size={80} label={rankName(glory.rank)} />
         </div>
       }
     >
@@ -118,10 +123,10 @@ function RankTile({ game }: { readonly game: GameBlock }) {
         {rankLabel(glory.rank, glory.division)}
       </p>
       <p className="text-caption" style={{ color: GAME_INK_2 }}>
-        Gloire {formatCount(glory.glory)}
+        {gameText('game.rank.glory', { glory: formatCount(glory.glory) })}
       </p>
       <p className="text-caption" style={{ color: GAME_INK_2 }}>
-        {next ?? 'Le rang le plus haut'}
+        {next ?? gameText('game.rank.top')}
       </p>
     </Tile>
   );
@@ -132,7 +137,7 @@ function TreasuryTile({ game }: { readonly game: GameBlock }) {
   return (
     <Tile
       id="game-treasury"
-      title="Trésor"
+      title={gameText('game.gauge.treasury')}
       titleId="game-treasury-title"
       drawing={<MeeshCoin side="obverse" size={64} edition="silver" />}
     >
@@ -140,41 +145,50 @@ function TreasuryTile({ game }: { readonly game: GameBlock }) {
         {meeshCount(treasury.held)}
       </p>
       <p className="text-caption" style={{ color: GAME_INK_2 }}>
-        {treasury.tier === null ? 'Garde tes Meeshes : elles remplissent ton trésor' : TREASURY_NAMES[treasury.tier]}
+        {treasury.tier === null ? gameText('game.treasury.hint') : treasuryName(treasury.tier)}
       </p>
       {treasury.next === null ? null : (
         <p className="text-caption" style={{ color: GAME_INK_2 }}>
-          Encore {treasury.next.missing} pour {TREASURY_NAMES[treasury.next.key]}
+          {gameText('game.treasury.next', { missing: meeshCount(treasury.next.missing), tier: treasuryName(treasury.next.key) })}
         </p>
       )}
     </Tile>
   );
 }
 
-const FLAME_STATUS_TEXT: Readonly<Record<GameBlock['flame']['status'], string | null>> = {
-  none: 'Un geste aujourd’hui allume ta Flamme',
-  lit: null,
-  'at-risk': 'Fais un geste avant minuit',
-  covered: 'Un gel la protège',
-  out: 'Éteinte',
+const flameStatusText = (status: GameBlock['flame']['status']): string | null => {
+  switch (status) {
+    case 'none':
+      return gameText('game.flame.status.none');
+    case 'lit':
+      return null;
+    case 'at-risk':
+      return gameText('game.flame.status.at_risk');
+    case 'covered':
+      return gameText('game.flame.status.covered');
+    case 'out':
+      return gameText('game.flame.status.out');
+  }
 };
 
 function FlameTile({ game }: { readonly game: GameBlock }) {
   const { flame } = game;
   const out = flame.status === 'out';
-  const status = FLAME_STATUS_TEXT[flame.status];
+  const status = flameStatusText(flame.status);
   return (
     <Tile
       id="game-flame"
-      title="Flamme"
+      title={gameText('game.gauge.flame')}
       titleId="game-flame-title"
       drawing={<Flame form={flame.form ?? 'braise'} size={64} out={out || flame.form === null} />}
     >
       <p className="text-title font-bold" style={{ color: GAME_INK }}>
-        {flame.days === 0 ? 'Pas de série' : flame.days === 1 ? '1 jour' : `${flame.days} jours`}
+        {flame.days === 0 ? gameText('game.flame.no_streak') : daysLabel(flame.days)}
       </p>
       <p className="text-caption" style={{ color: GAME_INK_2 }}>
-        {flame.form === null ? 'Flamme éteinte' : `${FLAME_FORM_NAMES[flame.form]} · +${flame.bonusPercent} % sur les missions`}
+        {flame.form === null
+          ? gameText('game.flame.out_line')
+          : gameText('game.flame.form_line', { form: flameFormName(flame.form), bonus: formatCount(boundedPercent(flame.bonusPercent)) })}
       </p>
       {status === null ? null : (
         <p className="text-caption font-semibold" style={{ color: flame.status === 'at-risk' || out ? GAME_WARM : GAME_INK_2 }}>

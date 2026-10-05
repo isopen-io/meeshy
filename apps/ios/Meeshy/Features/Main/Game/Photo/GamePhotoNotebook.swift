@@ -87,8 +87,12 @@ final class GamePhotoNotebook: GamePhotoNotebooking {
 
     // MARK: - API
 
+    /// Toute lecture et toute écriture de l'index passent par UN acteur par dossier : deux
+    /// gestes concurrents (garder deux moments, garder pendant qu'on purge) ne relisent plus
+    /// l'index chacun de leur côté pour le réécrire ensuite — l'un perdait son entrée (#9382).
+    private var disk: NotebookDisk { NotebookDisk.shared(for: directory) }
+
     func postpone(_ moment: PhotoMoment) async -> Bool {
-        let directory = self.directory
         let created = now()
         let entry = NotebookEntry(
             momentId: moment.id, emblem: moment.emblem, kicker: moment.kicker, title: moment.title,
@@ -96,22 +100,10 @@ final class GamePhotoNotebook: GamePhotoNotebooking {
             expiresAt: created.addingTimeInterval(TimeInterval(Self.pendingDays) * 86_400),
             mode: nil, storyFile: nil, squareFile: nil
         )
-        return await Task.detached(priority: .utility) {
-            do {
-                var entries = try Self.readIndex(in: directory)
-                // Une entrée déjà là (en attente ou gardée) ne se remplace pas par une attente.
-                guard !entries.contains(where: { $0.momentId == entry.momentId }) else { return true }
-                entries.append(entry)
-                try Self.writeIndex(entries, in: directory)
-                return true
-            } catch {
-                return false
-            }
-        }.value
+        return await disk.postpone(entry)
     }
 
     func keep(_ moment: PhotoMoment, photo: KeptPhoto) async -> Bool {
-        let directory = self.directory
         let created = now()
         let stem = Self.sanitized(moment.id)
         let storyName = "\(stem)-story.jpg"
@@ -121,59 +113,20 @@ final class GamePhotoNotebook: GamePhotoNotebooking {
             status: .kept, createdAt: created, expiresAt: nil, mode: photo.mode,
             storyFile: storyName, squareFile: squareName
         )
-        return await Task.detached(priority: .utility) {
-            do {
-                try Self.ensureDirectory(directory)
-                try photo.story.write(to: directory.appendingPathComponent(storyName), options: [.atomic, .completeFileProtection])
-                try photo.square.write(to: directory.appendingPathComponent(squareName), options: [.atomic, .completeFileProtection])
-                var entries = try Self.readIndex(in: directory).filter { $0.momentId != entry.momentId }
-                entries.append(entry)
-                try Self.writeIndex(entries, in: directory)
-                return true
-            } catch {
-                return false
-            }
-        }.value
+        return await disk.keep(entry, photo: photo)
     }
 
     func list() async -> [NotebookEntry] {
-        let directory = self.directory
-        let current = now()
-        return await Task.detached(priority: .utility) {
-            guard let entries = try? Self.readIndex(in: directory) else { return [] }
-            let stale = entries.filter { Self.isExpired($0, at: current) }
-            if !stale.isEmpty {
-                let fresh = entries.filter { !Self.isExpired($0, at: current) }
-                try? Self.writeIndex(fresh, in: directory)
-                stale.forEach { Self.removeFiles(of: $0, in: directory) }
-            }
-            return entries
-                .filter { !Self.isExpired($0, at: current) }
-                .sorted { $0.createdAt > $1.createdAt }
-        }.value
+        await disk.list(at: now())
     }
 
     func remove(momentId: String) async -> Bool {
-        let directory = self.directory
-        return await Task.detached(priority: .utility) {
-            do {
-                let entries = try Self.readIndex(in: directory)
-                guard let target = entries.first(where: { $0.momentId == momentId }) else { return true }
-                try Self.writeIndex(entries.filter { $0.momentId != momentId }, in: directory)
-                Self.removeFiles(of: target, in: directory)
-                return true
-            } catch {
-                return false
-            }
-        }.value
+        await disk.remove(momentId: momentId)
     }
 
     func imageData(for entry: NotebookEntry, square: Bool) async -> Data? {
-        let directory = self.directory
         guard let name = square ? entry.squareFile : entry.storyFile else { return nil }
-        return await Task.detached(priority: .utility) {
-            try? Data(contentsOf: directory.appendingPathComponent(name))
-        }.value
+        return await disk.imageData(named: name)
     }
 
     // MARK: - Disque (hors du fil principal)
@@ -186,15 +139,15 @@ final class GamePhotoNotebook: GamePhotoNotebooking {
         entry.status == .pending && (entry.expiresAt.map { $0 <= date } ?? false)
     }
 
-    private nonisolated static func indexURL(in directory: URL) -> URL {
+    fileprivate nonisolated static func indexURL(in directory: URL) -> URL {
         directory.appendingPathComponent("index.json")
     }
 
-    private nonisolated static func ensureDirectory(_ directory: URL) throws {
+    fileprivate nonisolated static func ensureDirectory(_ directory: URL) throws {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     }
 
-    private nonisolated static func readIndex(in directory: URL) throws -> [NotebookEntry] {
+    fileprivate nonisolated static func readIndex(in directory: URL) throws -> [NotebookEntry] {
         let url = indexURL(in: directory)
         guard FileManager.default.fileExists(atPath: url.path) else { return [] }
         let decoder = JSONDecoder()
@@ -202,16 +155,105 @@ final class GamePhotoNotebook: GamePhotoNotebooking {
         return try decoder.decode([NotebookEntry].self, from: Data(contentsOf: url))
     }
 
-    private nonisolated static func writeIndex(_ entries: [NotebookEntry], in directory: URL) throws {
+    fileprivate nonisolated static func writeIndex(_ entries: [NotebookEntry], in directory: URL) throws {
         try ensureDirectory(directory)
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         try encoder.encode(entries).write(to: indexURL(in: directory), options: [.atomic, .completeFileProtection])
     }
 
-    private nonisolated static func removeFiles(of entry: NotebookEntry, in directory: URL) {
+    fileprivate nonisolated static func removeFiles(of entry: NotebookEntry, in directory: URL) {
         [entry.storyFile, entry.squareFile].compactMap { $0 }.forEach {
             try? FileManager.default.removeItem(at: directory.appendingPathComponent($0))
         }
+    }
+}
+
+/// UN ACTEUR PAR DOSSIER : la lecture-modification-écriture de l'index y est sérielle, et le
+/// disque se touche hors du fil principal. Les carnets du même dossier (le `standard` d'un
+/// compte est reconstruit à chaque ouverture) partagent le même acteur.
+fileprivate actor NotebookDisk {
+    private let directory: URL
+
+    init(directory: URL) {
+        self.directory = directory
+    }
+
+    private static let registry = NotebookDiskRegistry()
+
+    static func shared(for directory: URL) -> NotebookDisk {
+        registry.disk(for: directory)
+    }
+
+    func postpone(_ entry: NotebookEntry) -> Bool {
+        do {
+            var entries = try GamePhotoNotebook.readIndex(in: directory)
+            // Une entrée déjà là (en attente ou gardée) ne se remplace pas par une attente.
+            guard !entries.contains(where: { $0.momentId == entry.momentId }) else { return true }
+            entries.append(entry)
+            try GamePhotoNotebook.writeIndex(entries, in: directory)
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    func keep(_ entry: NotebookEntry, photo: KeptPhoto) -> Bool {
+        guard let storyName = entry.storyFile, let squareName = entry.squareFile else { return false }
+        do {
+            try GamePhotoNotebook.ensureDirectory(directory)
+            try photo.story.write(to: directory.appendingPathComponent(storyName), options: [.atomic, .completeFileProtection])
+            try photo.square.write(to: directory.appendingPathComponent(squareName), options: [.atomic, .completeFileProtection])
+            var entries = try GamePhotoNotebook.readIndex(in: directory).filter { $0.momentId != entry.momentId }
+            entries.append(entry)
+            try GamePhotoNotebook.writeIndex(entries, in: directory)
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    func list(at current: Date) -> [NotebookEntry] {
+        guard let entries = try? GamePhotoNotebook.readIndex(in: directory) else { return [] }
+        let stale = entries.filter { GamePhotoNotebook.isExpired($0, at: current) }
+        if !stale.isEmpty {
+            let fresh = entries.filter { !GamePhotoNotebook.isExpired($0, at: current) }
+            try? GamePhotoNotebook.writeIndex(fresh, in: directory)
+            stale.forEach { GamePhotoNotebook.removeFiles(of: $0, in: directory) }
+        }
+        return entries
+            .filter { !GamePhotoNotebook.isExpired($0, at: current) }
+            .sorted { $0.createdAt > $1.createdAt }
+    }
+
+    func remove(momentId: String) -> Bool {
+        do {
+            let entries = try GamePhotoNotebook.readIndex(in: directory)
+            guard let target = entries.first(where: { $0.momentId == momentId }) else { return true }
+            try GamePhotoNotebook.writeIndex(entries.filter { $0.momentId != momentId }, in: directory)
+            GamePhotoNotebook.removeFiles(of: target, in: directory)
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    func imageData(named name: String) -> Data? {
+        try? Data(contentsOf: directory.appendingPathComponent(name))
+    }
+}
+
+fileprivate nonisolated final class NotebookDiskRegistry: @unchecked Sendable {
+    private let lock = NSLock()
+    private var disks: [String: NotebookDisk] = [:]
+
+    func disk(for directory: URL) -> NotebookDisk {
+        lock.lock()
+        defer { lock.unlock() }
+        let key = directory.standardizedFileURL.path
+        if let known = disks[key] { return known }
+        let created = NotebookDisk(directory: directory)
+        disks[key] = created
+        return created
     }
 }

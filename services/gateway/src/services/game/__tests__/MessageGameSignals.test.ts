@@ -8,6 +8,7 @@
 
 import { describe, it, expect, jest } from '@jest/globals';
 import { MessageGameSignals } from '../MessageGameSignals';
+import { REPLY_RECEIVED_DAILY_CAP } from '@meeshy/shared/utils/game/boosts';
 import { GAME_BONUS_AXIS } from '../MissionService';
 import { fakeGameDb, seedUser, USER, OTHER, type FakeGameDb } from './fakeGameDb';
 
@@ -121,6 +122,31 @@ describe('MessageGameSignals — +3 points à l’auteur répondu', () => {
     await signals.record(reply());
 
     expect(creditPoints).toHaveBeenCalledWith(OTHER, 3, GAME_BONUS_AXIS);
+  });
+
+  it('au plus 20 réponses récompensées par auteur et par jour (REPLY_RECEIVED_DAILY_CAP)', async () => {
+    const { db, signals, creditPoints } = setup();
+    const originals = Array.from({ length: REPLY_RECEIVED_DAILY_CAP + 1 }, (_, i) => `orig-${i}`);
+    db.message.rows.push(...originals.map((id) => ({ id, createdAt: new Date('2026-10-05T11:30:00Z') })));
+
+    for (const [i, id] of originals.entries()) {
+      await signals.record(reply({ replyToId: id, messageId: `rep-${i}` }));
+    }
+
+    expect(creditPoints).toHaveBeenCalledTimes(REPLY_RECEIVED_DAILY_CAP);
+  });
+
+  it('le plafond quotidien se réarme le lendemain, dans le fuseau de l’auteur', async () => {
+    const { db, signals, creditPoints } = setup();
+    const originals = Array.from({ length: REPLY_RECEIVED_DAILY_CAP }, (_, i) => `orig-${i}`);
+    db.message.rows.push(...originals.map((id) => ({ id, createdAt: new Date('2026-10-05T11:30:00Z') })));
+    for (const [i, id] of originals.entries()) await signals.record(reply({ replyToId: id, messageId: `rep-${i}` }));
+    const tomorrow = new Date('2026-10-06T12:00:00Z');
+    db.message.rows.push({ id: 'orig-demain', createdAt: new Date('2026-10-06T11:30:00Z') });
+
+    await signals.record(reply({ replyToId: 'orig-demain', messageId: 'rep-demain', now: tomorrow }));
+
+    expect(creditPoints).toHaveBeenCalledTimes(REPLY_RECEIVED_DAILY_CAP + 1);
   });
 
   it('une seule fois par message : une seconde réponse au même message ne rapporte rien', async () => {

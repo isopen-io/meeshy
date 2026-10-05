@@ -8,6 +8,7 @@ from collections.abc import Callable, Mapping
 from typing import Any, Protocol
 
 from config.settings import LANGUAGE_MAPPINGS
+from utils.generation_guard import GenerationOutcome, greedy_generation_kwargs, settle_generation
 
 
 LANGUAGE_NAMES = {
@@ -111,6 +112,7 @@ class NllbTranslator:
         self._load = load
         self._codes = codes
         self._loaded: tuple[Any, Any] | None = None
+        self.last_generation: GenerationOutcome | None = None
 
     def _code(self, language: str) -> str:
         code = self._codes.get(language)
@@ -126,11 +128,14 @@ class NllbTranslator:
         tokenizer, model = self._loaded
         tokenizer.src_lang = source_code
         inputs = tokenizer(text, return_tensors="pt", truncation=True, max_length=NLLB_MAX_TOKENS)
+        source_tokens = sum(inputs["attention_mask"].tolist()[0])
+        bounds = greedy_generation_kwargs(source_tokens, ceiling=NLLB_MAX_TOKENS)
         outputs = model.generate(
             **inputs,
             forced_bos_token_id=tokenizer.convert_tokens_to_ids(target_code),
-            max_length=NLLB_MAX_TOKENS,
-            num_beams=1,
-            do_sample=False,
+            **bounds,
         )
-        return tokenizer.batch_decode(outputs, skip_special_tokens=True)[0]
+        kept, self.last_generation = settle_generation(
+            outputs.tolist()[0], bounds["max_new_tokens"], tokenizer.pad_token_id
+        )
+        return tokenizer.batch_decode([kept], skip_special_tokens=True)[0]

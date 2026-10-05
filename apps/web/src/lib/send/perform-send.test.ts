@@ -4,7 +4,7 @@ import { describe, expect, test } from 'bun:test';
 import { createHttpTransport } from '@/lib/api/http';
 import { CONVERSATIONS_QUERY_KEY } from '@/lib/api/conversations';
 import { messagesQueryKey } from '@/lib/api/messages';
-import type { Conversation, Message } from '@/lib/api/types';
+import type { Conversation, Message, MessageTranslation } from '@/lib/api/types';
 
 import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
 
@@ -70,6 +70,16 @@ const m1: Message = {
   translations: [],
   createdAt: new Date('2026-09-09T09:00:00.000Z'),
   timestamp: new Date('2026-09-09T09:00:00.000Z'),
+};
+
+/** La traduction que seul l'écho socket porte — ce que la greffe de l'accusé ne doit pas effacer (#9262). */
+const echoTranslation: MessageTranslation = {
+  id: 'tr-en',
+  messageId: 'echo',
+  targetLanguage: 'en',
+  translatedContent: 'hi',
+  translationModel: 'basic',
+  createdAt: new Date('2026-09-09T09:00:01.000Z'),
 };
 
 /**
@@ -221,7 +231,19 @@ describe('performSend', () => {
     expect(entry?.message.replyTo).toBe(m1);
   });
 
-  test('pas de doublon : un message clientMessageId déjà présent (écho socket) est REMPLACÉ, jamais dupliqué', async () => {
+  /**
+   * #9262 — l'intitulé disait « REMPLACÉ » et le site FUSIONNE depuis
+   * `mergedThreadRow` (`api/messages.ts`). Ce qu'il mesurait n'a pas changé —
+   * l'identifiant SERVEUR gagne, la rangée reste UNIQUE — mais il dit
+   * désormais ce que la loi dit, et il porte la moitié qui manquait : ce que
+   * l'écho socket portait SEUL survit à la greffe de l'accusé.
+   *
+   * Cette assertion-ci passe par `performSend`, là où celles de
+   * `api/messages.test.ts` appellent `upsertThreadMessage` directement. C'est
+   * la même loi à une altitude de plus : elle garde le fait que le chemin
+   * d'envoi remet bien au site unique la rangée greffée, et pas une autre.
+   */
+  test('pas de doublon : un message clientMessageId déjà présent (écho socket) est FUSIONNÉ, jamais dupliqué', async () => {
     const queryClient = new QueryClient();
     queryClient.setQueryData(messagesQueryKey('c-a'), threadPages([]));
     const outbox = createOutboxStore();
@@ -232,7 +254,10 @@ describe('performSend', () => {
     // `clientMessageId` au moment où le 2xx arrive.
     const impl = (async (_url: RequestInfo | URL, init?: RequestInit) => {
       const cid = JSON.parse(String(init?.body)).clientMessageId as string;
-      queryClient.setQueryData(messagesQueryKey('c-a'), threadPages([{ ...m1, id: 'echo', clientMessageId: cid } as Message]));
+      queryClient.setQueryData(
+        messagesQueryKey('c-a'),
+        threadPages([{ ...m1, id: 'echo', clientMessageId: cid, translations: [echoTranslation] } as Message]),
+      );
       return new Response(JSON.stringify(ackBody('m9', cid)), { status: 200 });
     }) as typeof fetch;
     const deps: SendDeps = {
@@ -253,6 +278,9 @@ describe('performSend', () => {
     const page = threadOf(queryClient, 'c-a');
     expect(page?.messages).toHaveLength(1);
     expect(page?.messages[0]?.id).toBe('m9');
+    // Ce que l'écho socket portait SEUL — la traduction que le Prisme sert —
+    // n'est pas effacé par la liste VIDE que le message local transporte.
+    expect(page?.messages[0]?.translations.map((t) => t.targetLanguage)).toEqual(['en']);
   });
 
   test('4xx (403 USER_BLOCKED) : entrée failed, lastError.status/code posés, page toBe-identique', async () => {

@@ -65,6 +65,7 @@ extension ProgressionViewModel {
             await load(forceNetwork: true)
         } catch {
             restore(before)
+            releaseRequestIdIfConflict(error, intention: intention)
             gameErrors.reroll = GameCopy.errorMessage(for: error)
             await refreshAfterRefusal(error)
         }
@@ -91,6 +92,7 @@ extension ProgressionViewModel {
             await load(forceNetwork: true)
         } catch {
             restore(before)
+            releaseRequestIdIfConflict(error, intention: "chest")
             gameErrors.chest = GameCopy.errorMessage(for: error)
             await refreshAfterRefusal(error)
         }
@@ -111,6 +113,7 @@ extension ProgressionViewModel {
             await load(forceNetwork: true)
         } catch {
             restore(before)
+            releaseRequestIdIfConflict(error, intention: "freeze")
             gameErrors.freeze = GameCopy.errorMessage(for: error)
             await refreshAfterRefusal(error)
         }
@@ -137,11 +140,19 @@ extension ProgressionViewModel {
             await load(forceNetwork: true)
         } catch {
             restore(before)
+            releaseRequestIdIfConflict(error, intention: "relight")
             gameErrors.relight = GameCopy.errorMessage(for: error)
             await refreshAfterRefusal(error)
         }
         pending.relight = false
         endGesture()
+    }
+
+    /// « Identifiant déjà servi à une AUTRE écriture » : le rejouer ne ferait que se heurter au même
+    /// refus. L'intention en reçoit un neuf au prochain geste — c'est le seul refus qui le demande.
+    func releaseRequestIdIfConflict(_ error: Error, intention: String) {
+        guard GameService.refusal(of: error) == .requestIdConflict else { return }
+        spent(intention)
     }
 
     private func refreshAfterRefusal(_ error: Error) async {

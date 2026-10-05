@@ -136,6 +136,18 @@ final class ProgressionViewModelGameTests: XCTestCase {
         XCTAssertEqual(service.rerollRequestIds[0], service.rerollRequestIds[1], "un réessai rejoue la même requête : jamais un second geste")
     }
 
+    func test_reroll_anIdAlreadyServedToAnotherWrite_isReplacedByAFreshOneOnTheNextTry() async {
+        let (sut, _, service) = makeSUT()
+        await sut.load(forceNetwork: true)
+        service.rerollResult = .failure(refusal(.requestIdConflict))
+
+        await sut.reroll(missionId: "m2")
+        await sut.reroll(missionId: "m2")
+
+        XCTAssertEqual(service.rerollRequestIds.count, 2)
+        XCTAssertNotEqual(service.rerollRequestIds[0], service.rerollRequestIds[1], "rejouer l'identifiant refusé se heurterait au même refus")
+    }
+
     func test_reroll_aNewIntentionAfterASuccessGetsAFreshRequestId() async {
         let (sut, _, service) = makeSUT()
         await sut.load(forceNetwork: true)
@@ -286,5 +298,59 @@ final class ProgressionViewModelGameTests: XCTestCase {
         await sut.load(forceNetwork: true)
         XCTAssertNotNil(sut.mintBadgeImpact)
         XCTAssertEqual(sut.mintBadgeImpact?.lost, 2)
+    }
+
+    // MARK: - Le retour arrière ne défait que ce que le geste a changé (#9383)
+
+    func test_reroll_failure_keepsAServedReadingThatLandedWhileTheGestureWasInFlight() async {
+        let (sut, _, service) = makeSUT(snapshot: GameFixture.snapshot(GameFixture.game(held: 5, rerollAvailable: true), meesh: GameFixture.meesh(balance: 5)))
+        await sut.load(forceNetwork: true)
+        let newer = GameFixture.snapshot(GameFixture.game(held: 7, rerollAvailable: true), meesh: GameFixture.meesh(balance: 7))
+        service.rerollResult = .failure(URLError(.networkConnectionLost))
+        service.duringReroll = { sut.adopt(newer) }
+
+        await sut.reroll(missionId: "m2")
+
+        XCTAssertEqual(sut.game, newer.game, "la lecture servie arrivée pendant le vol est la vérité : elle reste")
+    }
+
+    func test_reroll_failure_keepsTheGuideKeysSeenWhileTheGestureWasInFlight() async {
+        let (sut, _, service) = makeSUT(snapshot: GameFixture.snapshot(GameFixture.game(held: 5, rerollAvailable: true), meesh: GameFixture.meesh(balance: 5)))
+        await sut.load(forceNetwork: true)
+        service.rerollResult = .failure(URLError(.networkConnectionLost))
+        service.duringReroll = { sut.guide.skipAll() }
+
+        await sut.reroll(missionId: "m2")
+
+        XCTAssertEqual(sut.game?.missions.rerollAvailable, true, "le changement refusé est défait")
+        XCTAssertEqual(sut.game?.treasury.held, 5)
+        let lastStep = GameGuide.onboardingSteps.last.map { GameGuide.onboardingSeenKey($0.key) }
+        XCTAssertNotNil(lastStep)
+        XCTAssertTrue(sut.game?.guideSeen.contains(lastStep ?? "") ?? false, "ce que le guide a marqué ne dépend pas du geste")
+    }
+
+    func test_guideSeenDuringAGesture_neverWritesTheOptimisticStateIntoTheCache() async throws {
+        let userId = "me-\(UUID().uuidString)"
+        let engagement = MockEngagementProgressService()
+        engagement.fetchProgressResult = .success(GameFixture.snapshot(GameFixture.game(held: 5, rerollAvailable: true), meesh: GameFixture.meesh(balance: 5)))
+        let service = MockGameService()
+        let sut = ProgressionViewModel(
+            service: engagement, gameService: service, networkMonitor: FakeNetworkMonitor(isOnline: true),
+            currentUserId: userId, notebook: MockGamePhotoNotebook()
+        )
+        await sut.load(forceNetwork: true)
+        service.rerollResult = .failure(URLError(.networkConnectionLost))
+        service.duringReroll = { sut.guide.skipAll() }
+
+        await sut.reroll(missionId: "m2")
+
+        let store = await CacheCoordinator.shared.engagementProgress
+        var cached: APIEngagementProgress?
+        for _ in 0..<40 where cached?.game?.guideSeen.isEmpty != false {
+            try await Task.sleep(nanoseconds: 50_000_000)
+            if case .fresh(let items, _) = await store.load(for: "engagement:\(userId)") { cached = items.first }
+        }
+        XCTAssertEqual(cached?.game?.missions.rerollAvailable, true, "le cache ne garde pas le changement refusé")
+        XCTAssertEqual(cached?.meesh?.balance, 5)
     }
 }

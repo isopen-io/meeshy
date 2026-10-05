@@ -76,7 +76,7 @@ function captureVideo(video: HTMLVideoElement): PhotoSource | null {
 async function readGallery(file: File): Promise<PhotoSource | null> {
   try {
     const bitmap = await createImageBitmap(file);
-    return { image: bitmap, width: bitmap.width, height: bitmap.height, mirror: false };
+    return { image: bitmap, width: bitmap.width, height: bitmap.height, mirror: false, release: () => bitmap.close() };
   } catch {
     return null;
   }

@@ -89,6 +89,7 @@ function makeCreditPrisma(options: {
     user: {
       findUnique: jest.fn().mockResolvedValue({ engagementScore: options.engagementScore ?? 0, timezone: null }),
       update: userUpdate,
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
     },
     $runCommandRaw: runCommandRaw,
   } as unknown as PrismaClient;

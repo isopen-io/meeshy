@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   PRISM_HOUR_MULTIPLIER,
+  REPLY_RECEIVED_DAILY_CAP,
   TAILWIND_FACTOR,
   isInPrismHour,
   prismHourWindow,
@@ -16,6 +17,12 @@ describe('le Vent arrière', () => {
   it('retombe à ×1 une fois le record retrouvé', () => {
     expect(tailwindFactor({ level: 36, levelRecord: 36 })).toBe(1);
     expect(tailwindFactor({ level: 40, levelRecord: 36 })).toBe(1);
+  });
+});
+
+describe('la réponse reçue', () => {
+  it('se récompense au plus 20 fois par auteur et par jour', () => {
+    expect(REPLY_RECEIVED_DAILY_CAP).toBe(20);
   });
 });
 

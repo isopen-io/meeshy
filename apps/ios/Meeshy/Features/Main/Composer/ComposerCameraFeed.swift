@@ -1,5 +1,6 @@
 import AVFoundation
 import CoreImage
+import QuartzCore
 
 /// **La dernière trame de l'objectif, pour l'aperçu en direct** (#9329).
 ///
@@ -22,7 +23,7 @@ nonisolated final class ComposerCameraFeed: NSObject, AVCaptureVideoDataOutputSa
     private var active = false
     /// Une source sert PLUSIEURS peintres — l'aperçu et la bande —, chacun
     /// sous son identifiant.
-    private var frameHandlers: [ObjectIdentifier: @Sendable () -> Void] = [:]
+    private var frameHandlers: [ObjectIdentifier: @Sendable (TimeInterval) -> Void] = [:]
 
     override init() {
         super.init()
@@ -90,24 +91,25 @@ nonisolated final class ComposerCameraFeed: NSObject, AVCaptureVideoDataOutputSa
                 .flatMap { CVImageBufferCreateColorSpaceFromAttachments($0)?.takeRetainedValue() }
         }
         lock.unlock()
-        announce()
+        let presentation = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+        announce(at: presentation.isValid ? presentation.seconds : CACurrentMediaTime())
     }
 
     /// Poser ou retirer le sien ne touche jamais celui d'un autre peintre.
-    func setFrameHandler(_ handler: (@Sendable () -> Void)?, for owner: ObjectIdentifier) {
+    func setFrameHandler(_ handler: (@Sendable (_ presentedAt: TimeInterval) -> Void)?, for owner: ObjectIdentifier) {
         lock.lock()
         frameHandlers[owner] = handler
         lock.unlock()
     }
 
-    private func announce() {
+    private func announce(at presentedAt: TimeInterval) {
         lock.lock()
         let prevenir = active ? Array(frameHandlers.values) : []
         lock.unlock()
-        prevenir.forEach { $0() }
+        prevenir.forEach { $0(presentedAt) }
     }
 
     #if DEBUG
-    func announceForTesting() { announce() }
+    func announceForTesting(at presentedAt: TimeInterval = 0) { announce(at: presentedAt) }
     #endif
 }

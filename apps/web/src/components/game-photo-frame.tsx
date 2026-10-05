@@ -1,7 +1,7 @@
 import { Flame, GameBird, LevelRing, MeeshCoin, RankBlason, Signature } from '@/components/game';
 import { PHOTO_FORMATS, photoLayout, type PhotoFormat, type Rect, type TextLine } from '@/lib/game-photo/layout';
 import type { PhotoEmblem, PhotoMoment } from '@/lib/game-photo/moments';
-import { RANK_NAMES } from '@/lib/view/game-copy';
+import { formatCount, gameText, rankName } from '@/lib/view/game-copy';
 
 import '@/styles/game-photo.css';
 
@@ -28,13 +28,13 @@ function PhotoEmblemDrawing({ emblem }: { readonly emblem: PhotoEmblem }) {
     case 'start':
       return <Signature size={512} color="var(--ios-on-brand)" mode="struck" />;
     case 'rank':
-      return <RankBlason rank={emblem.rank} division={emblem.division} size={512} label={RANK_NAMES[emblem.rank]} />;
+      return <RankBlason rank={emblem.rank} division={emblem.division} size={512} label={rankName(emblem.rank)} />;
     case 'tier':
       return <LevelRing level={emblem.level} tier={emblem.tier} progress={1} size={512} showTier />;
     case 'level-hundred':
       return <LevelRing level={100} tier="galaxie" progress={1} size={512} showTier />;
     case 'meesh':
-      return <MeeshCoin side="reverse" size={512} edition={emblem.edition} number={emblem.number} numberLabel={`N° ${emblem.number}`} />;
+      return <MeeshCoin side="reverse" size={512} edition={emblem.edition} number={emblem.number} numberLabel={gameText('game.mint.number_label', { number: formatCount(emblem.number) })} />;
     case 'treasury':
       return <MeeshCoin side="obverse" size={512} edition="silver" />;
     case 'flame':

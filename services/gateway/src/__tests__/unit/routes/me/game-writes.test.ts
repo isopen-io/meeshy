@@ -87,6 +87,21 @@ describe('POST /me/game/flame/freezes', () => {
     await app.close();
   });
 
+  it('409 REQUEST_ID_CONFLICT quand le requestId d’un gel est rejoué sur un rallumage, sans rien débiter', async () => {
+    const db = fakeGameDb();
+    seedUser(db, {});
+    grant(db, 5);
+    const app = await buildApp(db);
+    await post(app, GAME_ROUTES.flameFreezes, { requestId: 'meme-requete-01' });
+
+    const res = await post(app, GAME_ROUTES.flameRelight, { requestId: 'meme-requete-01' });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toMatchObject({ success: false, code: 'REQUEST_ID_CONFLICT' });
+    expect(db.meeshLedger.rows.reduce((s, r) => s + (r.delta as number), 0)).toBe(4);
+    await app.close();
+  });
+
   it('401 sans authentification, 400 sur un requestId trop court', async () => {
     const db = fakeGameDb();
     seedUser(db, {});

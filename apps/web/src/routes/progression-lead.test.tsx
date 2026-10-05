@@ -111,6 +111,39 @@ describe('l’intégration, carte après carte', () => {
     expect(r.log.navigated).toEqual(['list']);
   });
 
+  test('une étape qui attend son geste : son bouton y mène SANS l’écarter — la carte reste jusqu’au geste', async () => {
+    const fresh: EngagementWithGame = {
+      ...resolveEngagementProgress(ENGAGEMENT_PROGRESS_FIXTURE),
+      isEmpty: true,
+      game: gameBlockFixture({ score: 0, debitablePoints: 0, glory: 0, balance: 0, mintedLifetime: 0, streak: 0, lastActiveDay: null, missions: [], guideSeen: [] }),
+    };
+    const r = await render(fresh);
+    await click(by(r.host, 'data-game-guide-action'));
+    await settle();
+    expect(r.log.navigated).toEqual(['list']);
+    expect(r.host.querySelector('[data-game-guide="onboarding.welcome"]')).not.toBeNull();
+  });
+
+  test('la mission facile attendue : le bouton fait défiler jusqu’aux missions, la carte reste', async () => {
+    const seen = ALL_STEPS.slice(0, 4);
+    const waiting: EngagementWithGame = {
+      ...resolveEngagementProgress(ENGAGEMENT_PROGRESS_FIXTURE),
+      game: gameBlockFixture({
+        score: 800,
+        guideSeen: seen,
+        missions: [
+          { id: 'm-easy', difficulty: 'easy', templateKey: 'send-texts', signal: 'axis:content.text_message', prism: false, target: 5, progress: 1, reward: 36, glory: 0, completedAt: null },
+        ],
+      }),
+    };
+    const r = await render(waiting);
+    expect(r.host.querySelector('[data-game-guide="onboarding.missions"]')).not.toBeNull();
+    await click(by(r.host, 'data-game-guide-action'));
+    await settle();
+    expect(r.log.scrolled).toEqual(['game-missions']);
+    expect(r.host.querySelector('[data-game-guide="onboarding.missions"]')).not.toBeNull();
+  });
+
   test('le bouton d’une étape sur l’écran fait défiler jusqu’à la carte visée', async () => {
     const r = await render(view({ guideSeen: ALL_STEPS.slice(0, 1) }));
     expect(r.host.querySelector('[data-game-guide="onboarding.first-points"]')).not.toBeNull();

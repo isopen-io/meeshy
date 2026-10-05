@@ -104,6 +104,29 @@ export const MISSION_TEMPLATES: readonly MissionTemplate[] = [
 /** Les missions du jour s'ouvrent au niveau 5. */
 export const MISSIONS_MIN_LEVEL = 5;
 /** Changer une mission : une Meesh, une fois par jour, même difficulté. */
+/**
+ * Une journée de jeu (missions et coffre) ne s'ouvre pas moins de 20 h après
+ * l'ouverture de la précédente : changer de fuseau ne fait pas gagner un jour.
+ */
+export const GAME_DAY_MIN_GAP_MS = 20 * 60 * 60 * 1000;
+
+/**
+ * La clé de la journée de jeu, MONOTONE : la clé du fuseau (`candidate`) ne
+ * s'impose que si elle est postérieure à la dernière journée ouverte ET que
+ * celle-ci a été ouverte il y a au moins `GAME_DAY_MIN_GAP_MS`. Sinon la journée
+ * ouverte continue — elle ne revient jamais en arrière.
+ */
+export function resolveGameDayKey(params: {
+  readonly candidate: string;
+  readonly latest: { readonly dayKey: string; readonly openedAt: Date } | null;
+  readonly now: Date;
+}): string {
+  const { candidate, latest, now } = params;
+  if (latest === null) return candidate;
+  if (candidate <= latest.dayKey) return latest.dayKey;
+  return now.getTime() - latest.openedAt.getTime() < GAME_DAY_MIN_GAP_MS ? latest.dayKey : candidate;
+}
+
 export const MISSION_REROLL_PRICE = 1;
 export const MISSION_REROLL_PER_DAY = 1;
 

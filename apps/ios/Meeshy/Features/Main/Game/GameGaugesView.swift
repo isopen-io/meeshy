@@ -15,11 +15,13 @@ import MeeshyUI
 struct GameGaugesView: View {
     let game: GameBlock
     var haptics: GameHapticsProviding = GameHaptics.shared
+    /// Aucun geste du jeu n'est en vol : seule une montée lue ALORS est « gagnée ».
+    var settled = true
 
     var body: some View {
         VStack(spacing: MeeshySpacing.md) {
             HStack(alignment: .top, spacing: MeeshySpacing.md) {
-                GameLevelTile(game: game, haptics: haptics)
+                GameLevelTile(game: game, haptics: haptics, settled: settled)
                 GameRankTile(game: game, haptics: haptics)
             }
             HStack(alignment: .top, spacing: MeeshySpacing.md) {
@@ -78,14 +80,18 @@ private func caption(_ text: String, tone: Color? = nil) -> some View {
 private struct GameLevelTile: View {
     let game: GameBlock
     let haptics: GameHapticsProviding
+    let settled: Bool
 
     @State private var shownLevel: Int
     @State private var shownProgress: Double
+    @State private var confirmation: GameLevelConfirmation
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    init(game: GameBlock, haptics: GameHapticsProviding) {
+    init(game: GameBlock, haptics: GameHapticsProviding, settled: Bool) {
         self.game = game
         self.haptics = haptics
+        self.settled = settled
+        _confirmation = State(initialValue: GameLevelConfirmation(confirmed: game.level.level))
         _shownLevel = State(initialValue: game.level.level)
         _shownProgress = State(initialValue: game.level.progress)
     }
@@ -125,7 +131,11 @@ private struct GameLevelTile: View {
                 }
             }
         )
-        .adaptiveOnChange(of: level.level) { old, new in animateLevel(from: old, to: new) }
+        .adaptiveOnChange(of: level.level) { old, new in
+            animateLevel(from: old, to: new)
+            playTapIfConfirmedGain()
+        }
+        .adaptiveOnChange(of: settled) { _, _ in playTapIfConfirmedGain() }
         .adaptiveOnChange(of: level.progress) { _, new in
             if level.level == shownLevel { settle(progress: new) }
         }
@@ -142,16 +152,22 @@ private struct GameLevelTile: View {
         return record + String(localized: "game.level.tailwind", defaultValue: " · Vent arrière ×\(factor)", bundle: .main)
     }
 
+    private func playTapIfConfirmedGain() {
+        if confirmation.observe(level: level.level, settled: settled) {
+            haptics.play(GameHapticPattern.levelGain)
+        }
+    }
+
     private func settle(progress: Double) {
         withAnimation(reduceMotion ? nil : .easeInOut(duration: GameTimeline.levelGainDuration)) { shownProgress = progress }
     }
 
-    /// Gagné : l'anneau se remplit, le chiffre roule (0,6 s, tape légère). Perdu à la
-    /// frappe : il se vide calmement (0,8 s, aucun haptique), le repère du record reste.
+    /// Gagné : l'anneau se remplit, le chiffre roule (0,6 s). Perdu à la frappe : il se
+    /// vide calmement (0,8 s), le repère du record reste. La tape légère n'est PAS jouée
+    /// ici : un niveau qui remonte parce qu'une frappe refusée l'a rendu n'est pas gagné.
     private func animateLevel(from old: Int, to new: Int) {
         let gained = new > old
         let duration = gained ? GameTimeline.levelGainDuration : GameTimeline.levelLossDuration
-        if gained { haptics.play(GameHapticPattern.levelGain) }
         withAnimation(reduceMotion ? nil : .easeInOut(duration: duration)) {
             shownLevel = new
             shownProgress = level.progress

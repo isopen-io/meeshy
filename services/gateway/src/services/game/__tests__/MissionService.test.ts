@@ -136,6 +136,59 @@ describe('MissionService.ensureToday — le tirage paresseux', () => {
   });
 });
 
+describe('la journée de jeu est monotone : changer de fuseau ne fait pas gagner un jour', () => {
+  const EAST = 'Pacific/Kiritimati';
+  const openedDay = (db: FakeGameDb, dayKey: string, openedAt: Date, completed: boolean) => {
+    for (const difficulty of ['easy', 'medium', 'hard']) {
+      insertMission(db, { dayKey, difficulty, createdAt: openedAt, ...(completed ? { completedAt: openedAt } : {}) });
+    }
+  };
+
+  it('passer à l’est moins de 20 h après l’ouverture du jour ne tire pas les missions du lendemain', async () => {
+    const { db, service } = setup();
+    openedDay(db, DAY, NOW, true);
+    db.user.rows[0]!.timezone = EAST;
+
+    const today = await service.ensureToday(USER, new Date('2026-10-05T12:00:00Z'));
+
+    expect(today.dayKey).toBe(DAY);
+    expect(db.dailyMission.rows.filter((r) => r.dayKey !== DAY)).toHaveLength(0);
+  });
+
+  it('passer à l’est ne rouvre pas le coffre du jour : il reste réclamé', async () => {
+    const { db, service, creditPoints } = setup();
+    openedDay(db, DAY, NOW, true);
+    await service.claimChest({ userId: USER, requestId: 'coffre-fuseau-1', now: NOW });
+    db.user.rows[0]!.timezone = EAST;
+
+    const again = await service.claimChest({ userId: USER, requestId: 'coffre-fuseau-2', now: new Date('2026-10-05T12:00:00Z') });
+
+    expect(again.status).toBe('already-claimed');
+    expect(creditPoints).toHaveBeenCalledTimes(1);
+  });
+
+  it('20 h après l’ouverture, la journée du fuseau s’ouvre', async () => {
+    const { db, service } = setup();
+    openedDay(db, DAY, NOW, true);
+    db.user.rows[0]!.timezone = EAST;
+
+    const next = await service.ensureToday(USER, new Date('2026-10-06T06:00:00Z'));
+
+    expect(next.dayKey).toBe('2026-10-06');
+    expect(db.dailyMission.rows.filter((r) => r.dayKey === '2026-10-06')).toHaveLength(3);
+  });
+
+  it('un fuseau qui recule ne revient pas à la veille : le geste fait avancer la journée ouverte', async () => {
+    const { db, service } = setup();
+    insertMission(db, { dayKey: '2026-10-06', createdAt: new Date('2026-10-05T11:00:00Z'), target: 3 });
+
+    await service.onSignal(USER, 'axis:content.text_message', { now: new Date('2026-10-05T12:00:00Z'), dayKey: DAY, timezone: 'UTC' });
+
+    expect(db.dailyMission.rows.find((r) => r.dayKey === '2026-10-06')?.progress).toBe(1);
+    expect(db.dailyMission.rows.filter((r) => r.dayKey === DAY)).toHaveLength(0);
+  });
+});
+
 describe('MissionService.onSignal — la progression au geste', () => {
   it('un geste crédité sur l’axe de la mission la fait avancer', async () => {
     const { db, service } = setup();
@@ -446,15 +499,42 @@ describe('MissionService.claimChest — le coffre du jour', () => {
     });
     allDone(db);
     const update = db.user.update.bind(db.user);
-    db.user.update = (async () => {
+    const updateMany = db.user.updateMany.bind(db.user);
+    const panne = (async () => {
       throw new Error('écriture du gel indisponible');
-    }) as typeof db.user.update;
+    }) as never;
+    db.user.update = panne;
+    db.user.updateMany = panne;
 
     await service.claimChest({ userId: USER, requestId: 'coffre-0007', now: NOW }).catch(() => undefined);
     db.user.update = update;
+    db.user.updateMany = updateMany;
     await service.claimChest({ userId: USER, requestId: 'coffre-0008', now: NOW }).catch(() => undefined);
 
     expect(creditPoints).toHaveBeenCalledTimes(1);
+  });
+
+  it('un gel ACHETÉ pendant l’ouverture du coffre n’est pas écrasé par le gel offert', async () => {
+    const { db, creditPoints } = setup({ flameFreezes: 0 });
+    const service = new MissionService(db.prisma, {
+      creditPoints,
+      chest: () => ({ points: 100, fragment: false, freeze: true }),
+    });
+    allDone(db);
+    const findUnique = db.user.findUnique.bind(db.user);
+    let bought = false;
+    db.user.findUnique = (async (args: Parameters<typeof findUnique>[0]) => {
+      const row = await findUnique(args);
+      if (!bought && args.select?.flameFreezes && !args.select?.lastRelightDay) {
+        bought = true;
+        db.user.rows[0]!.flameFreezes = 1;
+      }
+      return row;
+    }) as typeof db.user.findUnique;
+
+    await service.claimChest({ userId: USER, requestId: 'coffre-0010', now: NOW });
+
+    expect(db.user.rows[0]?.flameFreezes).toBe(2);
   });
 
   it('un gel du coffre emplit la réserve quand il y a de la place', async () => {

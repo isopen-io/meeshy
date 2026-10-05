@@ -7,7 +7,9 @@ import { meeshEdition, type MeeshEdition } from '@meeshy/shared/utils/game/mint'
 import { TREASURY_TIERS, type TreasuryTierKey } from '@meeshy/shared/utils/game/treasury';
 
 import type { EngagementWithGame } from '@/lib/api/engagement';
-import { LEVEL_TIER_NAMES, TREASURY_NAMES, editionName, formatCount, rankLabel } from '@/lib/view/game-copy';
+import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
+import { editionName, formatCount, levelTierName, rankLabel, treasuryName } from '@/lib/view/game-copy';
+import { translateGame } from '@/lib/i18n-game-catalog';
 
 /**
  * LES MOMENTS QUI SE PHOTOGRAPHIENT (#9382) — conception, partie VI : « les
@@ -40,56 +42,76 @@ export type PhotoEmblem =
 export type PhotoMoment = {
   readonly id: string;
   readonly emblem: PhotoEmblem;
-  /** La ligne du dessus : « Nouveau rang ». */
+  /** La ligne du dessus : « Nouveau rang ». Dans la langue de l'interface à la construction ; `momentLines` la redonne dans une autre. */
   readonly kicker: string;
   /** La ligne forte : « Voix II ». */
   readonly title: string;
 };
 
-export const startMoment = (): PhotoMoment => ({
-  id: 'start',
-  emblem: { kind: 'start' },
-  kicker: 'Premiers pas',
-  title: 'Mon départ sur Meeshy',
-});
+/**
+ * Les deux lignes d'un moment, dans la langue de l'interface : elles se DÉDUISENT
+ * de l'emblème, jamais d'un texte gardé. Une entrée du carnet écrite hier en
+ * français se relit donc dans la langue d'aujourd'hui (`progression-carnet.tsx`),
+ * et la carte qu'on photographie dit ce que l'écran dit.
+ */
+export function momentLines(
+  emblem: PhotoEmblem,
+  language: InterfaceLanguage = currentInterfaceLanguage(),
+): { readonly kicker: string; readonly title: string } {
+  switch (emblem.kind) {
+    case 'start':
+      return { kicker: translateGame(language, 'game.photo.kicker.start'), title: translateGame(language, 'game.photo.title.start') };
+    case 'rank':
+      return { kicker: translateGame(language, 'game.photo.kicker.rank'), title: rankLabel(emblem.rank, emblem.division, language) };
+    case 'tier':
+      return {
+        kicker: translateGame(language, 'game.photo.kicker.tier', { level: formatCount(emblem.level, language) }),
+        title: translateGame(language, 'game.photo.title.tier', { tier: levelTierName(emblem.tier, language) }),
+      };
+    case 'level-hundred':
+      return emblem.prestige === 0
+        ? { kicker: translateGame(language, 'game.photo.kicker.summit'), title: translateGame(language, 'game.photo.title.level_100') }
+        : {
+            kicker: translateGame(language, 'game.photo.kicker.new_lap'),
+            title: translateGame(language, 'game.photo.title.prestige', { count: formatCount(emblem.prestige, language) }),
+          };
+    case 'meesh': {
+      const number = formatCount(emblem.number, language);
+      const title =
+        emblem.number === 1
+          ? translateGame(language, 'game.photo.title.meesh_first')
+          : emblem.edition === 'silver'
+            ? translateGame(language, 'game.photo.title.meesh_number', { number })
+            : translateGame(language, 'game.photo.title.meesh_number_edition', { number, edition: editionName(emblem.edition, language) });
+      return { kicker: translateGame(language, 'game.photo.kicker.meesh'), title };
+    }
+    case 'treasury':
+      return { kicker: translateGame(language, 'game.photo.kicker.treasury'), title: treasuryName(emblem.tier, language) };
+    case 'flame':
+      return {
+        kicker: translateGame(language, 'game.photo.kicker.flame'),
+        title: translateGame(language, 'game.photo.title.flame_days', { count: formatCount(emblem.days, language) }),
+      };
+  }
+}
 
-export const rankMoment = (params: { readonly rank: GloryRankOrMythic; readonly division: GloryDivision | null }): PhotoMoment => ({
-  id: `rank:${params.rank}:${params.division ?? 0}`,
-  emblem: { kind: 'rank', rank: params.rank, division: params.division },
-  kicker: 'Nouveau rang',
-  title: rankLabel(params.rank, params.division),
-});
+const moment = (id: string, emblem: PhotoEmblem): PhotoMoment => ({ id, emblem, ...momentLines(emblem) });
 
-export const tierMoment = (params: { readonly tier: LevelTierKey; readonly level: number }): PhotoMoment => ({
-  id: `tier:${params.tier}`,
-  emblem: { kind: 'tier', tier: params.tier, level: params.level },
-  kicker: `Niveau ${params.level}`,
-  title: `Palier ${LEVEL_TIER_NAMES[params.tier]}`,
-});
+export const startMoment = (): PhotoMoment => moment('start', { kind: 'start' });
 
-export const levelHundredMoment = (prestige: number): PhotoMoment => ({
-  id: `level-100:${prestige}`,
-  emblem: { kind: 'level-hundred', prestige },
-  kicker: prestige === 0 ? 'Au sommet' : 'Nouveau tour',
-  title: prestige === 0 ? 'Niveau 100' : `Prestige ${prestige}`,
-});
+export const rankMoment = (params: { readonly rank: GloryRankOrMythic; readonly division: GloryDivision | null }): PhotoMoment =>
+  moment(`rank:${params.rank}:${params.division ?? 0}`, { kind: 'rank', rank: params.rank, division: params.division });
 
-export const meeshMoment = (params: { readonly number: number; readonly edition: MeeshEdition }): PhotoMoment => ({
-  id: `meesh:${params.number}`,
-  emblem: { kind: 'meesh', number: params.number, edition: params.edition },
-  kicker: 'Meesh frappée',
-  title:
-    params.number === 1
-      ? 'Ma première Meesh'
-      : `Meesh n° ${formatCount(params.number)}${params.edition === 'silver' ? '' : ` · ${editionName(params.edition)}`}`,
-});
+export const tierMoment = (params: { readonly tier: LevelTierKey; readonly level: number }): PhotoMoment =>
+  moment(`tier:${params.tier}`, { kind: 'tier', tier: params.tier, level: params.level });
 
-export const treasuryMoment = (tier: TreasuryTierKey): PhotoMoment => ({
-  id: `treasury:${tier}`,
-  emblem: { kind: 'treasury', tier },
-  kicker: 'Trésor',
-  title: TREASURY_NAMES[tier],
-});
+export const levelHundredMoment = (prestige: number): PhotoMoment =>
+  moment(`level-100:${prestige}`, { kind: 'level-hundred', prestige });
+
+export const meeshMoment = (params: { readonly number: number; readonly edition: MeeshEdition }): PhotoMoment =>
+  moment(`meesh:${params.number}`, { kind: 'meesh', number: params.number, edition: params.edition });
+
+export const treasuryMoment = (tier: TreasuryTierKey): PhotoMoment => moment(`treasury:${tier}`, { kind: 'treasury', tier });
 
 const FLAME_THRESHOLDS = [7, 30, 100, 365] as const;
 
@@ -98,12 +120,7 @@ const flameThreshold = (days: number): number | null =>
 
 export const flameMoment = (days: number): PhotoMoment => {
   const threshold = flameThreshold(days) ?? days;
-  return {
-    id: `flame:${threshold}`,
-    emblem: { kind: 'flame', form: flameForm(threshold) ?? 'braise', days: threshold },
-    kicker: 'Flamme',
-    title: `${threshold} jours de Flamme`,
-  };
+  return moment(`flame:${threshold}`, { kind: 'flame', form: flameForm(threshold) ?? 'braise', days: threshold });
 };
 
 const tierLevel = (tier: LevelTierKey): number => LEVEL_TIER_KEYS.indexOf(tier) * 10;

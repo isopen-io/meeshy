@@ -170,6 +170,12 @@ struct ComposerDescriptionLayer: View {
     /// une requête active se voleraient leurs suggestions.
     @StateObject private var mentionBox = ComposerMentionControllerBox()
 
+    /// Les marges du texte dans le calque. Le volet de scène y FOND le bord de
+    /// son voile (#9450) : le fondu vit dans la marge, le texte sur la pleine
+    /// opacité — un fondu plus large que la marge pâlirait le début des lignes.
+    static let horizontalInset: CGFloat = MeeshySpacing.lg
+    static let verticalInset: CGFloat = MeeshySpacing.smPlus
+
     var body: some View {
         Group {
             if isEditing { editor } else { reader }
@@ -177,8 +183,8 @@ struct ComposerDescriptionLayer: View {
         .frame(maxWidth: .infinity,
                maxHeight: fillsAvailableHeight ? .infinity : nil,
                alignment: .topLeading)
-        .padding(.horizontal, MeeshySpacing.lg)
-        .padding(.vertical, MeeshySpacing.smPlus)
+        .padding(.horizontal, Self.horizontalInset)
+        .padding(.vertical, Self.verticalInset)
         .onAppear { if opensEditingOnAppear { isEditing = true } }
         // **Un seul site annonce l'ouverture et la fermeture.** Le poser sur
         // `isEditing` plutôt que dans chacun des deux gestes garantit que
@@ -247,22 +253,31 @@ struct ComposerDescriptionLayer: View {
     /// lisent déjà le même environnement.
     @Environment(\.colorScheme) private var colorScheme
 
-    private var isDark: Bool { colorScheme == .dark }
+    /// **UNE encre pour tout ce que le calque écrit sur la scène** (#9450) :
+    /// l'amorce, le texte, ses mentions et ses hashtags. L'amorce en encre
+    /// secondaire mesurait 2,71:1 sur le rose `FF2E63` ; les teintes indigo des
+    /// mentions, faites pour les fonds de l'app, tombaient à 2,1:1 sur la même
+    /// scène. `CanvasChromeScheme.sceneTextInk` tient 4,5:1 sur toute la
+    /// palette avec le voile que l'hôte pose dessous. L'amorce se distingue par
+    /// l'italique, les entités par leur graisse et leur soulignement — jamais
+    /// par une encre plus pâle.
+    private var encre: Color { CanvasChromeScheme.sceneTextInk(for: colorScheme) }
 
     @ViewBuilder
     private var readerText: some View {
         if text.isEmpty {
             Text(ComposerDescriptionCopy.amorce)
                 .font(MeeshyFont.relative(MeeshyFont.bodySize))
-                .foregroundColor(MeeshyColors.textSecondary(isDark: isDark))
+                .italic()
+                .foregroundColor(encre)
         } else {
             MessageTextRenderer.render(
                 text,
                 fontSize: 15,
-                color: MeeshyColors.textPrimary(isDark: isDark),
-                mentionColor: MeeshyColors.mentionColor(isDark: isDark),
-                hashtagColor: MeeshyColors.hashtagColor(isDark: isDark),
-                accentColor: MeeshyColors.textPrimary(isDark: isDark),
+                color: encre,
+                mentionColor: encre,
+                hashtagColor: encre,
+                accentColor: encre,
                 usesRelativeFont: true
             )
             .lineLimit(collapsedLineLimit)
@@ -355,7 +370,11 @@ struct ComposerDescriptionLayer: View {
 
     private var field: some View {
         HStack(alignment: .bottom, spacing: MeeshySpacing.smPlus) {
-            TextField(placeholder, text: $text, axis: .vertical)
+            // L'invite du champ porte l'encre de scène, comme l'amorce : le
+            // gris système du placeholder ne tient pas 4,5:1 sur la scène.
+            TextField(text: $text,
+                      prompt: Text(placeholder).italic().foregroundColor(encre),
+                      axis: .vertical) { Text(placeholder) }
                 .lineLimit(fillsAvailableHeight ? 1...24 : 1...5)
                 .font(MeeshyFont.relative(MeeshyFont.bodySize))
                 // Adaptatif, pour la même raison que la coche : le calque sert

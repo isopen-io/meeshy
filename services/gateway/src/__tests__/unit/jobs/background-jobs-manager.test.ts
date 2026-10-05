@@ -56,8 +56,16 @@ jest.mock('../../../services/CacheStore', () => ({
   getCacheStore: jest.fn().mockReturnValue({}),
 }));
 
+/**
+ * `cleanGeoCache` est ici parce que `startAll()` l'ORDONNANCE depuis #9239 :
+ * ce double ne portait que le constructeur, et son absence faisait tomber
+ * cinq cas sur `cleanGeoCache is not a function` — un double partiel d'un
+ * module ne dit pas que l'appelant a tort, il dit que le double a vieilli.
+ * Il rend 0 pour que la trace de l'ordonnanceur reste muette ici.
+ */
 jest.mock('../../../services/GeoIPService', () => ({
   GeoIPService: jest.fn().mockImplementation(() => ({})),
+  cleanGeoCache: jest.fn(() => 0),
 }));
 
 jest.mock('../../../services/RedisDeliveryQueue', () => ({
@@ -78,6 +86,7 @@ jest.mock('../../../utils/logger-enhanced', () => ({
 }));
 
 import { BackgroundJobsManager } from '../../../jobs/index';
+import { cleanGeoCache } from '../../../services/GeoIPService';
 
 function makePrisma() {
   return {} as any;
@@ -131,6 +140,25 @@ describe('BackgroundJobsManager', () => {
       const jobs = manager.getJobs();
       // Each job.start() should have been called exactly once
       expect(jobs.cleanupTokens.start).toHaveBeenCalledTimes(1);
+      manager.stopAll();
+    });
+
+    /**
+     * #9239 — l'ordonnancement de la purge du cache GeoIP est mesuré ICI, chez
+     * son hôte, et pas seulement par la garde de source qui vérifie que
+     * `cleanGeoCache()` a un appelant. Une garde de source dit qu'un appel
+     * EXISTE dans l'arbre ; ce cas-ci dit qu'il est bien SUR le chemin de
+     * `startAll()`, et il tombe si quelqu'un le déplace dans une branche
+     * jamais prise.
+     */
+    it('startAll() purge le cache GeoIP tout de suite, sans attendre le premier intervalle', () => {
+      /* Le compteur se remet à zéro ICI, pas dans un `beforeEach` : trois cas
+         de ce bloc appellent déjà `startAll()`, donc une assertion sur le
+         compteur ABSOLU mesurerait l'état que ses voisins lui laissent, et
+         rougirait au premier cas inséré avant elle. */
+      jest.mocked(cleanGeoCache).mockClear();
+      manager.startAll();
+      expect(cleanGeoCache).toHaveBeenCalledTimes(1);
       manager.stopAll();
     });
   });

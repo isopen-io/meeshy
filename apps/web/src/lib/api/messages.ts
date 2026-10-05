@@ -261,9 +261,53 @@ function threadWindowsOf(queryClient: QueryClient, conversationId: string): read
 }
 
 /**
- * `upsertThreadMessage` — REMPLACE par `id` **OU** `clientMessageId` si la
- * rangée existe, sinon APPEND en queue (l'ordre ASCENDANT que ce port
- * établit).
+ * `mergedThreadRow` — LA LOI DE LA FUSION, écrite UNE fois (#9262).
+ *
+ * `upsertThreadMessage` est le site unique qui pose une rangée (#6972), appelé
+ * par le temps réel (`applyMessageNew`) **et** par l'accusé REST d'un envoi
+ * (`perform-send.ts`). La porte a été unifiée ; la loi qu'elle appliquait ne
+ * l'était pas : elle REMPLAÇAIT la rangée trouvée, ce qui suppose que la
+ * charge entrante en sait toujours autant que la rangée en place. Sur le
+ * chemin de l'accusé, c'est faux — `confirmedMessageOf`
+ * (`send/local-message.ts`) ne greffe que l'identifiant serveur et les
+ * compteurs servis, donc `deliveredCount` retombe à **0** et `translations` à
+ * la liste **vide** du message local. Un `read-status:updated` arrivé pendant
+ * que le POST était en vol peignait ✓✓ ; l'accusé le remplaçait par 0/0, et
+ * `deliveryOf` rendait « envoyé » : **la coche redescendait de ✓✓ à ✓**.
+ *
+ * L'ÉTALEMENT porte l'essentiel : une clé ABSENTE de la charge ne touche pas
+ * celle en place, donc `recipientCount`, `readByAllAt` et `deliveredToAllAt`
+ * — que le message local ne porte pas — survivent sans clause dédiée. Deux
+ * champs demandent une loi explicite, parce que la charge les porte À 0 :
+ *
+ *   - `deliveredCount` / `readCount` prennent le **MAXIMUM**. C'est la seule
+ *     lecture qui ne dépende pas de l'ORDRE d'arrivée des deux transports —
+ *     et ces compteurs ne décroissent pas dans la vie d'un message.
+ *   - `translations` : une liste **vide** n'affirme rien, une liste pleine
+ *     si. Vide ⇒ on garde celle en place, qu'`applyMessageTranslation` a
+ *     peut-être déjà remplie.
+ *
+ * LA BORNE DE CETTE LOI : elle vaut parce que les deux seuls appelants de
+ * production portent soit un message serveur COMPLET (temps réel), soit la
+ * rangée locale greffée de son accusé. Un appelant futur qui aurait besoin de
+ * RETIRER une clé ne peut pas passer par ici sans le dire : l'étalement la
+ * garderait.
+ */
+export function mergedThreadRow<T extends Message>(previous: Message, incoming: T): T {
+  const fusionnee = { ...previous, ...incoming } as T & Message;
+  const translations = incoming.translations.length === 0 ? previous.translations : incoming.translations;
+  return {
+    ...fusionnee,
+    deliveredCount: Math.max(previous.deliveredCount, incoming.deliveredCount),
+    readCount: Math.max(previous.readCount, incoming.readCount),
+    translations,
+  };
+}
+
+/**
+ * `upsertThreadMessage` — FUSIONNE par `id` **OU** `clientMessageId` si la
+ * rangée existe (§ `mergedThreadRow` ci-dessus), sinon APPEND en queue
+ * (l'ordre ASCENDANT que ce port établit).
  *
  * La loi était écrite DEUX fois — `applyMessageNew` (`realtime-apply.ts`) et
  * `upsertConfirmed` (`send/perform-send.ts`) — et leurs doc-comments
@@ -290,7 +334,13 @@ export function upsertThreadMessage(
     { queryKey: messagesQueryKey(conversationId), predicate: (query) => query.queryKey.length > 3 },
     (data) => {
       if (data === undefined || !Array.isArray(data.pages) || !data.pages.some((page) => page.messages.some(matches))) return data;
-      return { ...data, pages: data.pages.map((page) => ({ ...page, messages: page.messages.map((m) => (matches(m) ? message : m)) })) };
+      return {
+        ...data,
+        pages: data.pages.map((page) => ({
+          ...page,
+          messages: page.messages.map((m) => (matches(m) ? mergedThreadRow(m, message) : m)),
+        })),
+      };
     },
   );
 
@@ -302,7 +352,9 @@ export function upsertThreadMessage(
       return {
         ...data,
         pages: data.pages.map((page, i) =>
-          i === host ? { ...page, messages: page.messages.map((m) => (matches(m) ? message : m)) } : page,
+          i === host
+            ? { ...page, messages: page.messages.map((m) => (matches(m) ? mergedThreadRow(m, message) : m)) }
+            : page,
         ),
       };
     }

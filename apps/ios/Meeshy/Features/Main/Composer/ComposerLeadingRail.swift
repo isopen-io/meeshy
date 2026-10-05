@@ -244,16 +244,16 @@ struct ComposerLeadingRail: View {
     }
 
     /// Construites ICI, sur le fil principal : le `ForEach` ne fait que les
-    /// relire (#9135, `ComposerRailRow`).
+    /// relire (#9135, `AsyncRenderRow`).
     private func toolEntries(_ controls: [ComposerToolControl]) -> some View {
-        ForEach(controls.map { ComposerRailRow(id: $0.id, content: toolButton($0)) },
-                content: composerRailRowContent)
+        ForEach(controls.map { AsyncRenderRow(id: $0.id, content: toolButton($0)) },
+                content: asyncRenderRowContent)
     }
 
     @ViewBuilder
     private func doorEntries(_ doors: [ComposerRailDoor]) -> some View {
-        ForEach(doors.map { ComposerRailRow(id: $0.rawValue, content: doorSlot($0)) },
-                content: composerRailRowContent)
+        ForEach(doors.map { AsyncRenderRow(id: $0.rawValue, content: doorSlot($0)) },
+                content: asyncRenderRowContent)
         if let systemEntry, systemEntryAfter == nil {
             systemEntry
                 .frame(width: ComposerRailGeometry.railWidth,
@@ -283,8 +283,8 @@ struct ComposerLeadingRail: View {
 
     /// L'éclair puis le Cadre — teintés quand ce qu'ils règlent est actif.
     private var sceneToggleEntries: some View {
-        ForEach(sceneToggles.map { ComposerRailRow(id: $0.id, content: sceneToggleButton($0)) },
-                content: composerRailRowContent)
+        ForEach(sceneToggles.map { AsyncRenderRow(id: $0.id, content: sceneToggleButton($0)) },
+                content: asyncRenderRowContent)
     }
 
     private func sceneToggleButton(_ bouton: ComposerSceneToggleEntry) -> some View {

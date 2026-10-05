@@ -225289,6 +225289,53 @@
         }
       }
     },
+    "game.badge.a11y.imprint": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مُطفأ، بقي %@ لإعادة إشعاله"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erloschen, noch %@, um es neu zu entzünden"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dimmed, %@ more to relight it"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apagado, faltan %@ para reactivarlo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Éteint, encore %@ pour le rallumer"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Spento, ancora %@ per riaccenderlo"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apagado, mais %@ para reacendê-lo"
+          }
+        }
+      }
+    },
     "game.chest.reward.points": {
       "extractionState": "manual",
       "localizations": {
@@ -229703,6 +229750,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Conclua primeiro as missões do dia para abrir o baú."
+          }
+        }
+      }
+    },
+    "game.error.request_id_conflict": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "سبق استخدام هذا الطلب في إجراء آخر — حاول مرة أخرى."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diese Anfrage wurde bereits für eine andere Aktion verwendet – versuche es erneut."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "That request was already used for another action — try again."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esa solicitud ya se usó para otra acción: inténtalo de nuevo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cette demande a déjà servi pour une autre action : réessaie."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Questa richiesta è già stata usata per un’altra azione: riprova."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esse pedido já foi usado em outra ação — tente de novo."
           }
         }
       }

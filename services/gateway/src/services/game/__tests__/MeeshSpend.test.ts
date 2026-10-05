@@ -70,6 +70,35 @@ describe('MeeshSpend.spend', () => {
     expect(sum(db)).toBe(4);
   });
 
+  it('un requestId déjà employé pour une AUTRE dépense est refusé (REQUEST_ID_CONFLICT), sans effet ni débit', async () => {
+    const db = fakeGameDb();
+    withBalance(db, 5);
+    const apply = jest.fn<any>().mockResolvedValue('effet');
+    const service = new MeeshSpend(db.prisma);
+    await service.spend({ userId: USER, requestId: 'depense-08', price: 1, kind: 'flame-freeze' });
+
+    await expect(
+      service.spend({ userId: USER, requestId: 'depense-08', price: 3, kind: 'flame-relight', apply }),
+    ).rejects.toMatchObject({ name: 'GameRefusal', code: 'REQUEST_ID_CONFLICT' });
+
+    expect(apply).not.toHaveBeenCalled();
+    expect(sum(db)).toBe(4);
+  });
+
+  it('un requestId déjà porté par une FRAPPE (ligne non `spend`) est refusé, jamais rendu comme une dépense faite', async () => {
+    const db = fakeGameDb();
+    withBalance(db, 5);
+    db.meeshLedger.rows.push({ id: 'm1', userId: USER, delta: 1, reason: 'mint', requestId: 'frappe-0001', meta: null });
+    const apply = jest.fn<any>();
+
+    await expect(
+      new MeeshSpend(db.prisma).spend({ userId: USER, requestId: 'frappe-0001', price: 1, kind: 'flame-freeze', apply }),
+    ).rejects.toMatchObject({ code: 'REQUEST_ID_CONFLICT' });
+
+    expect(apply).not.toHaveBeenCalled();
+    expect(sum(db)).toBe(6);
+  });
+
   it('deux dépenses concurrentes portant le même requestId ne débitent qu’une fois', async () => {
     const db = fakeGameDb();
     withBalance(db, 5);

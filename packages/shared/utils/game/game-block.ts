@@ -34,8 +34,17 @@ export type GameMissionRecord = GameMission;
 
 export type GameBlockFacts = {
   readonly userId: string;
-  /** Clé de jour `AAAA-MM-JJ` dans le fuseau de l'utilisateur. */
+  /**
+   * Clé de la JOURNÉE DE JEU `AAAA-MM-JJ` (missions, coffre, boosts) : celle du
+   * fuseau de l'utilisateur, rendue monotone (`resolveGameDayKey`).
+   */
   readonly today: string;
+  /**
+   * Clé de jour CIVILE de la Flamme, quand elle diffère de la journée de jeu
+   * (une journée ouverte il y a moins de 20 h continue après minuit) — repli
+   * `today`.
+   */
+  readonly flameToday?: string;
   /** Le score en poche (`User.engagementScore`). */
   readonly score: number;
   readonly levelRecord: number | null;
@@ -77,16 +86,17 @@ export function buildGameBlock(facts: GameBlockFacts): GameBlock {
   const standing = gloryStanding({ glory: facts.glory, mythic: facts.mythic });
   const treasury = treasuryTier(facts.balance);
 
+  const flameToday = facts.flameToday ?? facts.today;
   const status = flameStatus({
     lastActiveDay: facts.lastActiveDay,
-    today: facts.today,
+    today: flameToday,
     streak: facts.streak,
     freezes: facts.freezes,
   });
   const days = status === 'out' ? 0 : Math.max(0, Math.trunc(facts.streak));
   const relight = canRelight({
     lastActiveDay: facts.broken?.lastActiveDay ?? null,
-    today: facts.today,
+    today: flameToday,
     streakBeforeBreak: facts.broken?.streak ?? 0,
     lastRelightDay: facts.lastRelightDay,
     balance: facts.balance,

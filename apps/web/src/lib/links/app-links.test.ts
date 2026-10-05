@@ -66,6 +66,11 @@ describe('App Links de la coque Android', () => {
     );
   });
 
+  test('le lien d’invitation ouvre la coque installée, comme sur iPhone, et y garde son code (#9468)', () => {
+    expect(cheminsReclames()).toContain('/signup/affiliate/x');
+    expect(cheminDuLienEntrant('https://meeshy.me/signup/affiliate/aff_1-ab', isAppPath)).toBe('/signup/affiliate/aff_1-ab');
+  });
+
   test('le schéma court meeshy:// est déclaré, sans vérification (aucun domaine à prouver)', () => {
     expect(schemaCourt?.corps).toContain('android.intent.action.VIEW');
     expect(schemaCourt?.attributs ?? '').not.toContain('autoVerify');

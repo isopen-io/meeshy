@@ -22,6 +22,13 @@ nonisolated enum ComposerCaptureCanvas {
 struct ComposerCapturePreview: View {
     @ObservedObject var session: ComposerCaptureSession
     let size: ComposerSceneCameraSize
+    /// La vue Metal a présenté sa première image : la couche système peut se
+    /// détacher sans laisser un écran noir (#9349).
+    @State private var metalHasFrame = false
+
+    private var showsThermalNotice: Bool {
+        ComposerCaptureSurfaceRule.showsThermalNotice(look: session.look, budget: session.thermalBudget)
+    }
 
     var body: some View {
         ZStack {
@@ -34,7 +41,8 @@ struct ComposerCapturePreview: View {
                     let toile = ComposerCaptureCanvas.fitted(in: CGRect(origin: .zero, size: exterieur.size))
                     ZStack {
                         CameraPreviewLayer(session: session.camera.session, focusPoints: session.focusPoints,
-                                           mirrorsFrames: !session.paintsWithMetal)
+                                           mirrorsFrames: ComposerCaptureSurfaceRule.mirrorsSystemLayer(
+                                               paintsWithMetal: session.paintsWithMetal, metalHasFrame: metalHasFrame))
                             .background(GeometryReader { proxy in
                                 Color.clear.adaptiveOnChange(of: proxy.frame(in: .global), initial: true) { _, cadre in
                                     session.focusPoints.previewFrame = cadre
@@ -45,9 +53,10 @@ struct ComposerCapturePreview: View {
                                                     date: session.lookDate, framing: .identity,
                                                     source: session.camera.liveFeed,
                                                     fps: session.thermalBudget.previewFPS,
-                                                    surfaceScale: session.thermalBudget.surfaceScale)
+                                                    surfaceScale: session.thermalBudget.surfaceScale,
+                                                    onFirstFrame: { metalHasFrame = true })
                         }
-                        if ComposerCaptureSurfaceRule.showsThermalNotice(look: session.look, budget: session.thermalBudget) {
+                        if showsThermalNotice {
                             VStack {
                                 Text(ComposerCaptureCopy.thermalNotice)
                                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
@@ -66,6 +75,12 @@ struct ComposerCapturePreview: View {
             case .permissionRefused:
                 CameraPermissionPanel()
             }
+        }
+        .adaptiveOnChange(of: session.paintsWithMetal) { _, peint in
+            if !peint { metalHasFrame = false }
+        }
+        .adaptiveOnChange(of: showsThermalNotice) { _, montree in
+            if montree { UIAccessibility.post(notification: .announcement, argument: ComposerCaptureCopy.thermalNotice) }
         }
         .clipShape(RoundedRectangle(cornerRadius: ComposerSceneCameraFrame.radius(for: size), style: .continuous))
         .allowsHitTesting(false)
