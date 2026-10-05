@@ -551,6 +551,7 @@ const ar = {
   'game.league.pseudonym.title': 'اسمك المستعار',
   'game.league.pseudonym.new': 'اسم مستعار جديد',
   'game.league.pseudonym.hint_change': 'من 3 إلى 20 حرفًا. لا اسمك ولا معرّفك.',
+  'game.doors.label': 'اللعبة',
 } as const satisfies GameCatalog;
 
 export default ar;

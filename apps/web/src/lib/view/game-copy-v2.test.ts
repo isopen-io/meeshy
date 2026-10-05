@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import { SUPPORTED_INTERFACE_LANGUAGES } from '../inline-interface-language-bootstrap.js';
 import { loadGameCatalog } from '../i18n-game-catalog';
-import { leagueName, remainingLabel, visibilityLabel, weekLabel, zoneLabel } from './game-copy-v2';
+import { languageName, leagueName, remainingLabel, seasonThemeName, visibilityLabel, weekLabel, zoneLabel } from './game-copy-v2';
 
 /**
  * CE QUE LA VAGUE 2 DIT (#9481) — les noms des huit ligues, des zones, des
@@ -60,5 +60,22 @@ describe('les noms', () => {
     await loadGameCatalog('en');
     expect(weekLabel('2026-11-02', 'fr')).toBe('Semaine du 2 novembre');
     expect(weekLabel('2026-11-02', 'en')).toBe('Week of November 2');
+  });
+});
+
+describe('les langues', () => {
+  test('le nom d’une langue se dit dans la langue de l’interface', () => {
+    expect(languageName('sw', 'fr')).toBe('Swahili');
+    expect(languageName('ja', 'en')).toBe('Japanese');
+    expect(languageName('ar', 'es')).toBe('Árabe');
+  });
+
+  test('un code que le moteur ne sait pas nommer reste le code, en capitales', () => {
+    expect(languageName('zz-invalid-code!!', 'fr')).toBe('ZZ-INVALID-CODE!!');
+  });
+
+  test('le thème d’une saison : une langue se nomme, un thème inconnu se tait', () => {
+    expect(seasonThemeName('language:sw', 'fr')).toBe('Swahili');
+    expect(seasonThemeName('region:antilles', 'fr')).toBeNull();
   });
 });

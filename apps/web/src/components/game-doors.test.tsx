@@ -41,6 +41,18 @@ describe('les portes du jeu', () => {
     expect(html).toContain('Classement de la semaine');
   });
 
+  test('la saison annonce son numéro et l’étape atteinte', () => {
+    const html = renderToStaticMarkup(<GameDoors game={gameBlockWithExtrasFixture()} />);
+    expect(html).toContain('href="/me/progression/saison"');
+    expect(text(html)).toContain('Saison 1');
+    expect(text(html)).toContain('Étape 14 sur 40');
+  });
+
+  test('aucune saison ouverte : la porte reste, et le dit', () => {
+    const block = gameBlockWithExtrasFixture();
+    expect(text(renderToStaticMarkup(<GameDoors game={{ ...block, season: null }} />))).toContain('Aucune saison ouverte');
+  });
+
   test('chaque porte est une cible de 44 points au moins', () => {
     const html = renderToStaticMarkup(<GameDoors game={gameBlockWithExtrasFixture()} />);
     expect(html).toContain('min-height:44px');

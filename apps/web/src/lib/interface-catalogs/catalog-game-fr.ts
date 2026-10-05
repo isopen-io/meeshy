@@ -553,6 +553,7 @@ const fr = {
   'game.league.pseudonym.title': 'Ton pseudonyme',
   'game.league.pseudonym.new': 'Nouveau pseudonyme',
   'game.league.pseudonym.hint_change': '3 à 20 caractères. Ni ton nom, ni ton identifiant.',
+  'game.doors.label': 'Le jeu',
 } as const;
 
 export default fr;

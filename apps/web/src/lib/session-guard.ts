@@ -48,6 +48,7 @@ export type RouteKey =
    * en squelette sans fin devant un visiteur.
    */
   | 'progressionLigue'
+  | 'progressionSaison'
   /**
    * LES PUBLICATIONS ENREGISTRÉES (#7286) — PRIVÉE, comme `feed` et pour la
    * même raison : `GET /social/posts?scope=bookmarks` lit la table des favoris
@@ -305,6 +306,7 @@ const PRIVATE_ROUTES: ReadonlySet<string> = new Set<RouteKey>([
   'progression',
   /* LES PAGES DE LA VAGUE 2 DU JEU (#9384 à #9389) — voir la raison écrite sur `RouteKey`. */
   'progressionLigue',
+  'progressionSaison',
   /* LES PUBLICATIONS ENREGISTRÉES (#7286) — voir la raison écrite sur
      `RouteKey` plus haut. */
   'bookmarks',

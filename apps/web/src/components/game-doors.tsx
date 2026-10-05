@@ -8,6 +8,7 @@ import { Link } from '@/routes/route-table';
 
 import { GAME_BRAND, GAME_CARD, GAME_INK, GAME_INK_2 } from './game-surface';
 import { LeagueGem } from './game/league-gem';
+import { SealMark } from './game/seal-mark';
 
 /**
  * LES PORTES DE LA VAGUE 2 SUR « PROGRESSION » (#9481) — Ligue, Saison,
@@ -18,7 +19,7 @@ import { LeagueGem } from './game/league-gem';
  */
 
 type DoorProps = {
-  readonly to: 'progressionLigue';
+  readonly to: 'progressionLigue' | 'progressionSaison';
   readonly icon: ReactNode;
   readonly title: string;
   readonly subtitle: string;
@@ -59,17 +60,31 @@ function leagueSubtitle(league: NonNullable<GameBlock['league']>): string {
   return gameText('game.door.league.open');
 }
 
+function seasonSubtitle(season: NonNullable<GameBlock['season']>): string {
+  return gameText('game.door.season.steps', { steps: formatCount(season.steps), total: formatCount(season.stepsTotal) });
+}
+
 export function GameDoors({ game }: { readonly game: GameBlock }) {
-  const league = game.league;
-  if (league === undefined) return null;
+  const { league, season } = game;
+  if (league === undefined && season === undefined) return null;
   return (
-    <nav aria-label={gameText('game.door.league')} className="flex flex-col gap-2" data-game-doors="">
-      <Door
-        to="progressionLigue"
-        icon={<LeagueGem league={league.current?.league ?? 'quartz'} size={30} />}
-        title={gameText('game.door.league')}
-        subtitle={leagueSubtitle(league)}
-      />
+    <nav aria-label={gameText('game.doors.label')} className="flex flex-col gap-2" data-game-doors="">
+      {league === undefined ? null : (
+        <Door
+          to="progressionLigue"
+          icon={<LeagueGem league={league.current?.league ?? 'quartz'} size={30} />}
+          title={gameText('game.door.league')}
+          subtitle={leagueSubtitle(league)}
+        />
+      )}
+      {season === undefined ? null : (
+        <Door
+          to="progressionSaison"
+          icon={<SealMark owned reached size={30} />}
+          title={season === null ? gameText('game.season.title') : gameText('game.door.season', { number: formatCount(season.number) })}
+          subtitle={season === null ? gameText('game.door.season.none') : seasonSubtitle(season)}
+        />
+      )}
     </nav>
   );
 }

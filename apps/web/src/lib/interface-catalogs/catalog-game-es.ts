@@ -539,6 +539,7 @@ const es = {
   'game.league.pseudonym.title': 'Tu seudónimo',
   'game.league.pseudonym.new': 'Nuevo seudónimo',
   'game.league.pseudonym.hint_change': 'De 3 a 20 caracteres. Ni tu nombre ni tu usuario.',
+  'game.doors.label': 'El juego',
 } as const satisfies GameCatalog;
 
 export default es;

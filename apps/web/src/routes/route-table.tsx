@@ -130,6 +130,8 @@ const progressionScreen = () =>
   Promise.all([import('@/routes/progression'), loadGameCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
 const progressionLigueScreen = () =>
   Promise.all([import('@/routes/progression-ligue'), loadGameCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+const progressionSaisonScreen = () =>
+  Promise.all([import('@/routes/progression-saison'), loadGameCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
 const progressionBadgesScreen = () =>
   Promise.all([import('@/routes/progression-badges'), loadGameCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
 const progressionRulesScreen = () =>
@@ -187,6 +189,8 @@ export const ROUTES = {
   /* LA LIGUE (#9384, #9385) — la ligue publique, la ligue entre amis et la
      mission en duo. PRIVÉE : `session-guard.ts`. */
   progressionLigue: { pattern: '/me/progression/ligue', screen: progressionLigueScreen },
+  /* LA SAISON (#9386) — huit semaines, quarante étapes gratuites, la rangée Sceau. PRIVÉE. */
+  progressionSaison: { pattern: '/me/progression/saison', screen: progressionSaisonScreen },
   progressionDefis: { pattern: '/me/progression/defis', screen: () => import('@/routes/progression-defis') },
   progressionSucces: { pattern: '/me/progression/succes', screen: () => import('@/routes/progression-succes') },
   /* LE CARNET DES RÈGLES (#9379) — « Comment ça marche », depuis Progression :

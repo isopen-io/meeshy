@@ -26,7 +26,7 @@ afterAll(async () => {
 });
 afterEach(unmountAll);
 
-const gesture = <V,>() => ({ run: (_: V) => undefined, pending: false, error: undefined });
+const gesture = <V,>() => ({ run: (_: V) => undefined, pending: false, vars: undefined, error: undefined });
 const actions: GameV2Actions = {
   consent: gesture(),
   pseudonym: gesture(),

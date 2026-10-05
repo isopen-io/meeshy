@@ -48,3 +48,24 @@ export function weekLabel(weekKey: string, language: Language = currentInterface
   const date = new Intl.DateTimeFormat(language, { day: 'numeric', month: 'long', timeZone: 'UTC' }).format(monday);
   return translateGame(language, 'game.league.week', { date });
 }
+
+/**
+ * Le nom d'une langue, DANS la langue de l'interface (« Swahili », « Japonais »),
+ * par `Intl.DisplayNames` — jamais un catalogue de deux cents noms écrit à la main.
+ * Un code que le moteur ne sait pas nommer rend le code lui-même, en capitales.
+ */
+export function languageName(code: string, language: Language = currentInterfaceLanguage()): string {
+  try {
+    const name = new Intl.DisplayNames(language, { type: 'language' }).of(code);
+    if (name === undefined || name === code) return code.toUpperCase();
+    return name.charAt(0).toLocaleUpperCase(language) + name.slice(1);
+  } catch {
+    return code.toUpperCase();
+  }
+}
+
+/** Le thème d'une saison : aujourd'hui une langue (`language:sw`), demain une région — un thème inconnu ne se nomme pas. */
+export function seasonThemeName(themeKey: string, language: Language = currentInterfaceLanguage()): string | null {
+  const [kind, value] = themeKey.split(':');
+  return kind === 'language' && value !== undefined && value.length > 0 ? languageName(value, language) : null;
+}

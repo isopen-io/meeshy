@@ -62,6 +62,8 @@ type Snapshot = { readonly snapshot: EngagementWithGame | undefined };
 type Gesture<V> = {
   readonly run: (vars: V) => void;
   readonly pending: boolean;
+  /** Ce que le geste en vol porte (l'étape réclamée, l'ami invité) ; `undefined` au repos. */
+  readonly vars: V | undefined;
   readonly error: string | undefined;
 };
 
@@ -115,6 +117,7 @@ function useGesture<V, R>(config: Config<V, R>, transport: HttpTransport): Gestu
   return {
     run: (vars) => mutation.mutate(vars),
     pending: mutation.isPending,
+    vars: mutation.isPending ? mutation.variables : undefined,
     error: mutation.isError ? messageOf(mutation.error) : undefined,
   };
 }
