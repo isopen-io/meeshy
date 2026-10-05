@@ -41,6 +41,7 @@ const matchField = (actual: unknown, expected: unknown): boolean => {
     if (op === 'gt') return typeof actual === 'number' ? actual > (value as number) : typeof actual === 'string' && actual > (value as string);
     if (op === 'not') return value === null ? actual !== null && actual !== undefined : !matchField(actual, value);
     if (op === 'has') return Array.isArray(actual) && actual.includes(value);
+    if (op === 'equals') return Array.isArray(value) ? Array.isArray(actual) && actual.length === value.length && actual.every((item, i) => item === value[i]) : matchField(actual, value);
     if (op === 'isSet') return (actual !== undefined) === value;
     throw new Error(`opérateur non reproduit par le faux : ${op}`);
   });

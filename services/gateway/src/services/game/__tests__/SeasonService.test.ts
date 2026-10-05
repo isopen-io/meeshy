@@ -46,6 +46,22 @@ describe('SeasonService.addStars', () => {
 });
 
 describe('SeasonService.claim', () => {
+  it('un paiement qui échoue rend SA seule étape : une étape réclamée en même temps par une autre requête reste réclamée, et ne se paie pas deux fois', async () => {
+    const { db, service, creditPoints } = setup(8);
+    let concurrent: Promise<unknown> | null = null;
+    creditPoints.mockImplementationOnce(async () => {
+      concurrent = service.claim({ userId: USER, step: 2, now: IN_SEASON });
+      await concurrent;
+      throw new Error('credit down');
+    });
+
+    await expect(service.claim({ userId: USER, step: 1, now: IN_SEASON })).rejects.toThrow('credit down');
+    expect(db.gameSeason.rows[0]!.claimedSteps).toEqual([2]);
+
+    expect(await service.claim({ userId: USER, step: 2, now: IN_SEASON })).toMatchObject({ status: 'already-claimed' });
+    expect(creditPoints).toHaveBeenCalledTimes(2);
+  });
+
   it('une étape non atteinte est verrouillée, une étape hors parcours n’existe pas', async () => {
     const { service } = setup(3);
     await expect(service.claim({ userId: USER, step: 1, now: IN_SEASON })).rejects.toMatchObject({ code: 'SEASON_STEP_LOCKED' });

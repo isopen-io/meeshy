@@ -133,10 +133,7 @@ export class SeasonService {
     try {
       await this.pay(userId, verdict.reward);
     } catch (error) {
-      await this.prisma.gameSeason.updateMany({
-        where: { userId, number: season },
-        data: { claimedSteps: state.claimedSteps.filter((s) => s !== step) },
-      });
+      await this.releaseStep(userId, season, step);
       throw error;
     }
 
@@ -160,6 +157,25 @@ export class SeasonService {
       gloryGained,
       score: await this.score(userId),
     };
+  }
+
+  /**
+   * Rend UNE étape réclamée dont le paiement a échoué. Compare-and-write sur la
+   * liste RELUE : réécrire l'instantané lu avant la réclamation effacerait une
+   * étape qu'une requête concurrente vient de réclamer — et de payer —, qui se
+   * paierait alors une seconde fois.
+   */
+  private async releaseStep(userId: string, season: number, step: number): Promise<void> {
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const row = await this.prisma.gameSeason.findUnique({ where: { userId_number: { userId, number: season } }, select: { claimedSteps: true } });
+      const current = row?.claimedSteps ?? [];
+      if (!current.includes(step)) return;
+      const released = await this.prisma.gameSeason.updateMany({
+        where: { userId, number: season, claimedSteps: { equals: current } },
+        data: { claimedSteps: current.filter((s) => s !== step) },
+      });
+      if (released.count === 1) return;
+    }
   }
 
   private async pay(userId: string, reward: { readonly kind: string; readonly amount: number }): Promise<void> {
