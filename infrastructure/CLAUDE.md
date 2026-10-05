@@ -89,6 +89,7 @@ REDIS_URL=redis://redis:6379
 # Auth
 JWT_SECRET=<change-in-production>
 ATTACHMENT_MASTER_KEY=<base64-32-bytes>
+SECRETS_AT_REST_KEY=<base64-32-bytes>   # chiffre la clé d'API LLM de l'agent au repos ; sans elle en prod/staging, son écriture est refusée
 
 # Services
 ZMQ_PUSH_URL=tcp://translator:5555
