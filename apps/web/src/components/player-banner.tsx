@@ -47,20 +47,18 @@ function Gauge({ model, tint }: { readonly model: PlayerBannerModel; readonly ti
   const language = currentInterfaceLanguage();
   const fill = Math.min(1, Math.max(0, Number.isFinite(model.progress) ? model.progress : 0));
   return (
-    <span aria-hidden="true" data-player-banner-gauge={model.nextLevel ?? 'top'} className="flex min-w-0 flex-1 flex-col gap-1">
-      <span className="flex min-w-0 items-baseline justify-between gap-2 leading-tight">
-        <span className="truncate text-check font-bold tabular-nums" style={{ color: INK }}>
-          {translateGame(language, 'game.banner.points', { points: formatCount(model.score, language) })}
-        </span>
-        {model.pointsToNext === null ? null : (
-          <span data-player-banner-missing={model.pointsToNext} className="truncate text-caption tabular-nums" style={{ color: INK_2 }}>
-            {translateGame(language, 'game.banner.missing', { points: formatCount(model.pointsToNext, language) })}
-          </span>
-        )}
+    <span aria-hidden="true" data-player-banner-gauge={model.nextLevel ?? 'top'} className="flex min-w-16 flex-1 flex-col justify-center gap-1 leading-tight">
+      <span className="truncate text-check font-bold tabular-nums" style={{ color: INK }}>
+        {translateGame(language, 'game.banner.points', { points: formatCount(model.score, language) })}
       </span>
       <span className="relative block h-1.5 w-full overflow-hidden rounded-chip" style={{ backgroundColor: `color-mix(in srgb, ${INK} 12%, transparent)` }}>
         <span className="player-banner-fill absolute inset-0 rounded-chip" style={{ transform: `scaleX(${fill.toFixed(3)})`, backgroundColor: tint }} />
       </span>
+      {model.pointsToNext === null ? null : (
+        <span data-player-banner-missing={model.pointsToNext} className="truncate text-caption tabular-nums" style={{ color: INK_2 }}>
+          {translateGame(language, 'game.banner.missing', { points: formatCount(model.pointsToNext, language) })}
+        </span>
+      )}
     </span>
   );
 }
@@ -82,7 +80,7 @@ export function PlayerBanner({ model }: { readonly model: PlayerBannerModel }) {
         to="progression"
         data-player-banner=""
         aria-label={playerBannerLabel(model, language)}
-        className="player-banner pointer-events-auto relative flex w-full items-center gap-3 overflow-hidden rounded-card py-1 pe-3 ps-1 shadow-lg focus-visible:outline-2 focus-visible:outline-offset-2"
+        className="player-banner pointer-events-auto relative flex w-full items-center gap-2.5 overflow-hidden rounded-card py-1 pe-3 ps-1 shadow-lg focus-visible:outline-2 focus-visible:outline-offset-2"
         style={{
           minHeight: 56,
           maxWidth: 560,
@@ -106,7 +104,7 @@ export function PlayerBanner({ model }: { readonly model: PlayerBannerModel }) {
         )}
         {model.rank === null ? null : (
           <Piece name="rank" value={`${model.rank.rank}/${model.rank.division ?? 0}`}>
-            <RankBlason rank={model.rank.rank} division={model.rank.division} size={30} />
+            <RankBlason rank={model.rank.rank} division={model.rank.division} size={34} />
           </Piece>
         )}
         {model.league === null ? null : (
