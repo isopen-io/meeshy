@@ -56,7 +56,8 @@ describe('seulement ce qui existe', () => {
 
   test('la ligue paraît avec le consentement et un groupe : sa gemme et la place', () => {
     const model = playerBannerModel(gameBlockWithExtrasFixture());
-    expect(model.league).toEqual({ league: 'jade', place: expect.any(Number) });
+    expect(model.league?.league).toBe('jade');
+    expect(model.league?.place).toBeGreaterThanOrEqual(1);
   });
 
   test('sans consentement, aucune ligue — même avec un groupe', () => {

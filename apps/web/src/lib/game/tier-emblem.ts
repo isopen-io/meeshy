@@ -150,3 +150,6 @@ export const TIER_EMBLEMS: Readonly<Record<LevelTierKey, TierEmblemDesign>> = {
     ],
   },
 };
+
+/** La teinte d'un palier, en jeton CSS — Galaxie est un spectre : une des couleurs du prisme. */
+export const tierTint = (tier: LevelTierKey): string => (tier === 'galaxie' ? 'var(--game-prism-3)' : `var(--game-tier-${tier})`);

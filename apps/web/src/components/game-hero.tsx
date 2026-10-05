@@ -1,11 +1,11 @@
 import { useEffect, useRef } from 'react';
 
 import type { GameBlock } from '@meeshy/shared/types/game';
-import type { LevelTierKey } from '@meeshy/shared/utils/game/levels';
 
 import { GameBird, LevelRing, MeeshCoin, RankBlason, Signature, useChoreography } from '@/components/game';
 import { earnRules, type EarnRule } from '@/lib/game/earn-rules';
 import { enamelToken } from '@/lib/game/medal';
+import { tierTint } from '@/lib/game/tier-emblem';
 import {
   convertiblePointsLabel,
   familyName,
@@ -60,8 +60,6 @@ export type GameHeroProps = {
   readonly rules?: readonly EarnRule[];
 };
 
-/** Galaxie est un spectre : sa teinte est une des couleurs du prisme. */
-const tintOf = (tier: LevelTierKey): string => (tier === 'galaxie' ? 'var(--game-prism-3)' : `var(--game-tier-${tier})`);
 
 const nextRankText = (glory: GameBlock['glory']): string | null =>
   glory.next === null || glory.gloryMissing === null
@@ -266,7 +264,7 @@ function HowToMint({ game, online, minting, mintError, onMint }: Pick<GameHeroPr
 }
 
 export function GameHero({ game, online, minting, mintError, onMint, guideLine = null, rules }: GameHeroProps) {
-  const tint = tintOf(game.level.tier);
+  const tint = tierTint(game.level.tier);
   return (
     <section
       id="game-level"

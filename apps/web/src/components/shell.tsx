@@ -1,23 +1,25 @@
-import { lazy, Suspense, useEffect, type ReactNode } from 'react';
+import { lazy, Suspense, useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import { useStore } from 'zustand/react';
 
 import { useEmailGatePresenter } from '@/lib/activation/email-gate-presenter';
 import { useActivationInviteArmed } from '@/lib/activation/invite-gate';
 import { useAppUpdateAnnounced } from '@/lib/app-update/pending-store';
+import { apiDeps } from '@/lib/api/deps';
+import { sessionStore } from '@/lib/api/session';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { loadNotificationRowCatalog } from '@/lib/i18n-notification-row-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { conversationPreviewStore } from '@/lib/notifications/conversation-preview';
 import { inAppBannerStore } from '@/lib/notifications/in-app-banner';
-import { audioCarryStore } from '@/lib/view/audio-carry';
 import { showsFloatingMenus } from '@/lib/view/floating-gate';
 import { useSyncPillArmed } from '@/lib/view/sync-pill-gate';
 import { useRoute } from '@/lib/router';
 
-import { CallLayer, CallResumeSlot } from './call-layer';
+import { CallLayer } from './call-layer';
 import { loadConversationPreviewHost } from './conversation-preview-chunks';
 import { ProfilePeekHost } from './profile-peek-host';
 import { SendSheetHost } from './send-sheet-host';
+import { TopBand } from './top-band';
 
 /**
  * LA COQUILLE — deliberement mince.
@@ -177,18 +179,9 @@ const ConversationPreviewHost = lazy(() =>
   })),
 );
 
-/**
- * ...ET LE MINI-LECTEUR (#9256) : le vocal que le lecteur plein écran jouait
- * quand on l'a fermé continue ici, sur toutes les routes, comme
- * `MiniAudioPlayerBar` au-dessus de la racine iOS. Rien n'est chargé tant
- * qu'aucune lecture n'a été confiée.
- */
-const MiniAudioPlayerHost = lazy(() =>
-  Promise.all([import('./mini-audio-player'), loadInterfaceCatalog(currentInterfaceLanguage())]).then(([m]) => m),
-);
-
 export default function Shell({ children }: { children: ReactNode }) {
-  const lectureConfiee = useStore(audioCarryStore, (state) => state.carried !== null);
+  const connecte = useStore(sessionStore, (state) => state.session.status === 'authenticated') || apiDeps.source === 'fixtures';
+  const [bandeau, setBandeau] = useState(0);
   const banniereNotification = useStore(inAppBannerStore, (state) => state.current !== null);
   const apercuOuvert = useStore(conversationPreviewStore, (state) => state.conversationId !== null);
   const pastilleArmee = useSyncPillArmed();
@@ -208,7 +201,7 @@ export default function Shell({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <div className="min-h-dvh">
+    <div className="min-h-dvh" {...(bandeau > 0 ? { 'data-top-band-host': '', style: { '--top-band': `${bandeau}px` } as CSSProperties } : {})}>
       <a
         href="#contenu"
         className="skip-link"
@@ -248,18 +241,12 @@ export default function Shell({ children }: { children: ReactNode }) {
         </Suspense>
       ) : null}
       <CallLayer />
-      {/* LA PILE DU HAUT (#9279) — « Reprendre l'appel » puis le mini-lecteur,
-          dans UNE colonne fixe : l'appel prime et le vocal se range dessous,
-          comme le `VStack` de `CallPresentationLayer` iOS. Chacun posé en
-          `fixed` au même sommet, ils se chevauchaient. */}
-      <div data-top-bars className="pointer-events-none fixed inset-x-0 z-40 flex flex-col gap-2 px-4" style={{ top: 'calc(env(safe-area-inset-top, 0px) + 8px)' }}>
-        <CallResumeSlot />
-        {lectureConfiee ? (
-          <Suspense fallback={null}>
-            <MiniAudioPlayerHost />
-          </Suspense>
-        ) : null}
-      </div>
+      {/* LA PILE DU HAUT (#9279, #9494) — « Reprendre l'appel », le
+          mini-lecteur, puis la bannière du joueur quand rien ne joue : l'appel
+          prime, puis l'audio (`top-band.tsx`). Sur les hubs, elle réserve sa
+          hauteur dans `--top-band`, que l'arbre des écrans ajoute à son
+          `--safe-top`. */}
+      <TopBand routeKey={routeKey} signedIn={connecte} onInset={setBandeau} />
       {invitationArmee ? (
         <Suspense fallback={null}>
           <ActivationInviteHost />
