@@ -259,16 +259,17 @@ final class StoryComposerViewModelTests: XCTestCase {
 
     // MARK: - evictNonVisibleSlideMedia
 
-    func test_evictNonVisibleSlideMedia_purgesOffScreenSlidesAndPreservesActive() {
+    /// **#6922 — ce témoin gardait le DÉFAUT.** Il exigeait qu'une alerte
+    /// mémoire retire les photos, vidéos et sons des scènes non affichées ;
+    /// or la publication lit ces dictionnaires tels quels : un post à trois
+    /// scènes partait avec deux scènes vides. Une alerte mémoire purge des
+    /// caches recalculables, jamais ce que l'auteur a posé.
+    func test_evictNonVisibleSlideMedia_neJetteRienDeLaComposition() {
         let vm = makeSubject()
-        // Slide 0 (active): one image media + one audio. Bitmaps stay.
         let activeImage = vm.addMediaObject(kind: .image)!
         vm.loadedImages[activeImage.id] = makeRedSquareImage()
-        let activeAudio = vm.addAudioObject()!
-        vm.loadedAudioURLs[activeAudio.id] = URL(fileURLWithPath: "/tmp/active-audio.m4a")
         vm.setImage(makeRedSquareImage(), for: vm.slides[0].id)
 
-        // Slide 1 (inactive): one image media + one video + one audio. Bitmaps must be evicted.
         vm.addSlide()
         let inactiveImage = vm.addMediaObject(kind: .image)!
         vm.loadedImages[inactiveImage.id] = makeRedSquareImage()
@@ -280,20 +281,25 @@ final class StoryComposerViewModelTests: XCTestCase {
         let inactiveSlideId = vm.slides[1].id
         vm.setImage(makeRedSquareImage(), for: inactiveSlideId)
 
-        // Bring focus back to slide 0 (the slide we want to preserve).
         vm.selectSlide(at: 0)
-
         vm.evictNonVisibleSlideMedia()
 
-        XCTAssertNotNil(vm.loadedImages[activeImage.id], "active slide bitmaps must survive eviction")
-        XCTAssertNotNil(vm.loadedAudioURLs[activeAudio.id])
+        XCTAssertNotNil(vm.loadedImages[activeImage.id])
         XCTAssertNotNil(vm.slideImages[vm.slides[0].id])
+        XCTAssertNotNil(vm.loadedImages[inactiveImage.id], "la photo d'une autre scène part à la publication")
+        XCTAssertNotNil(vm.loadedVideoURLs[inactiveVideo.id], "sa vidéo aussi")
+        XCTAssertNotNil(vm.mediaAspectRatios[inactiveVideo.id])
+        XCTAssertNotNil(vm.loadedAudioURLs[inactiveAudio.id], "et son son")
+        XCTAssertNotNil(vm.slideImages[inactiveSlideId], "et son fond")
+    }
 
-        XCTAssertNil(vm.loadedImages[inactiveImage.id], "off-screen image must be dropped")
-        XCTAssertNil(vm.loadedVideoURLs[inactiveVideo.id], "off-screen video URL must be dropped")
-        XCTAssertNil(vm.mediaAspectRatios[inactiveVideo.id], "off-screen aspect ratio must be dropped")
-        XCTAssertNil(vm.loadedAudioURLs[inactiveAudio.id], "off-screen audio URL must be dropped")
-        XCTAssertNil(vm.slideImages[inactiveSlideId], "off-screen slide background bitmap must be dropped")
+    func test_evictNonVisibleSlideMedia_videLesVignettesDeScene() {
+        let vm = makeSubject()
+        let source = SceneImageDownsamplingTests.makeImage(width: 1600, height: 900)
+        let avant = SceneThumbnailCache.shared.thumbnail(for: source, maxPixelSize: 300)
+        vm.evictNonVisibleSlideMedia()
+        XCTAssertFalse(SceneThumbnailCache.shared.thumbnail(for: source, maxPixelSize: 300) === avant,
+                       "les vignettes, elles, se recalculent : la pression mémoire les emporte")
     }
 
     // MARK: - commitTimelineToCurrentSlide
