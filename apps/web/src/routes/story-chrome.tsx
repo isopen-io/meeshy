@@ -48,6 +48,7 @@ export function StoryTopBar({
   onClose,
   onSave,
   onOptionsOpenChange,
+  prism,
 }: {
   /** `data-story-author` est la PRISE de mesure du gate de la Lentille : une comparaison d'identifiants, jamais de libellés. */
   readonly authorId: string;
@@ -60,6 +61,8 @@ export function StoryTopBar({
   /** « Enregistrer » du menu « … » — la sauvegarde du rail auteur, offerte à tout lecteur (#8823). */
   readonly onSave?: (() => void) | undefined;
   readonly onOptionsOpenChange?: ((open: boolean) => void) | undefined;
+  /** La pastille du Prisme (D-99, #7114) — entre l'heure et le menu, comme le fil et les commentaires ; absente quand rien n'est traduit. */
+  readonly prism?: ReactNode;
 }) {
   return (
     <ViewerTopBar
@@ -70,12 +73,15 @@ export function StoryTopBar({
       identity={identity}
       exit={{ kind: 'close', label: 'Fermer', onExit: onClose }}
       trailing={
-        <ViewerMenu
-          label={translate(language, 'feed.post.more_options')}
-          probe={{ 'data-story-options': '' }}
-          onOpenChange={onOptionsOpenChange}
-          items={[{ key: 'save', label: translate(language, 'story.action.save'), glyph: <GlyphSvg glyph={GLYPHS.downloadSimple} size={18} />, onSelect: onSave }]}
-        />
+        <>
+          {prism}
+          <ViewerMenu
+            label={translate(language, 'feed.post.more_options')}
+            probe={{ 'data-story-options': '' }}
+            onOpenChange={onOptionsOpenChange}
+            items={[{ key: 'save', label: translate(language, 'story.action.save'), glyph: <GlyphSvg glyph={GLYPHS.downloadSimple} size={18} />, onSelect: onSave }]}
+          />
+        </>
       }
     />
   );
