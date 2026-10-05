@@ -89,6 +89,16 @@ describe('l’historique des bannissements', () => {
     expect(row('b-system')?.querySelector('button')).toBeNull();
   });
 
+  test('hors ligne, « Lever » se désactive comme « Bannir » : toute écriture suit la même règle (#9463)', async () => {
+    Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
+    try {
+      await open();
+      expect(row('b-active')?.querySelector<HTMLButtonElement>('button')?.disabled).toBe(true);
+    } finally {
+      Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
+    }
+  });
+
   test('aucun identifiant ni ISO brut dans l’historique', async () => {
     await open();
     expectNoRawIdentifiers(document.body);

@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
+import { BRAND } from '@/components/admin/tone';
 import { AdminGlyph } from '@/components/admin/admin-glyph';
 import { AdminConfirmSheet } from '@/components/admin/confirm-sheet';
 import { AdminEntityChip } from '@/components/admin/entity-chip';
@@ -54,7 +55,6 @@ import { AdminAnnouncement } from '@/components/admin/announcement';
  * d'un état local qui prétendrait savoir ce que le service agent a fait.
  */
 const FOCUS = 'focus-visible:outline-2 focus-visible:outline-offset-2';
-const BRAND = 'var(--color-ios-brand)';
 
 /**
  * L'ANCRE D'UN BOUTON N'EST PORTÉE QU'UNE FOIS PAR PAGE, SUR L'EXEMPLAIRE VISIBLE —

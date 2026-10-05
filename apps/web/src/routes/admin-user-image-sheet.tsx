@@ -41,7 +41,11 @@ import { PROFILE_IMAGE_ACCEPT } from '@/lib/profile/image-upload';
  * Les candidates qu'on n'a pas pu lire se disent par `AdminErrorState`, avec son
  * « Réessayer » : un échec sans issue obligeait à fermer et rouvrir la feuille.
  * La grille des candidates reste ici : c'est un sélecteur de médias, que le kit
- * n'a pas.
+ * n'a pas. Une RELECTURE en échec ne retire pas les candidates déjà servies : React
+ * Query garde `data` sous `status: 'error'`, et le cache d'abord veut qu'on les montre.
+ *
+ * Hors ligne, chaque écriture (choisir, retirer, téléverser) refuse AVANT de partir
+ * et dit pourquoi (`admin.images.offline`) : la même règle pour les trois gestes.
  */
 
 const TITRES: Readonly<Record<ProfileImageKind, AdminPlainCatalogKey>> = {
@@ -122,6 +126,10 @@ export function AdminUserImageSheet({
 
   async function poser(geste: string, choix: AdminImageChoice, apercu: string | null) {
     if (enVol !== null) return;
+    if (!isOnline()) {
+      echouer('offline');
+      return;
+    }
     setEnVol(geste);
     setRefus(null);
     onPreview?.(kind, apercu);
@@ -208,7 +216,7 @@ export function AdminUserImageSheet({
         </p>
         {candidates.isPending ? (
           <AdminSkeleton rows={2} language={language} />
-        ) : candidates.isError ? (
+        ) : candidates.isError && liste.length === 0 ? (
           <AdminErrorState language={language} message={translateAdmin(language, 'admin.images.candidatesFailed')} onRetry={() => void candidates.refetch()} />
         ) : liste.length === 0 ? (
           <AdminEmptyState title={translateAdmin(language, 'admin.images.noCandidate')} data={{ 'data-admin-image-candidates-empty': '' }} />

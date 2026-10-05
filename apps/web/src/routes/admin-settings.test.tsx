@@ -324,7 +324,7 @@ describe('espace d’administration — « Menu latéral replié par défaut »'
 
     expect(toggle(host)?.getAttribute('role')).toBe('switch');
     expect(toggle(host)?.getAttribute('aria-checked')).toBe('false');
-    expect(toggle(host)?.textContent).toContain('Menu latéral replié par défaut');
+    expect(host.querySelector(`label[for="${toggle(host)?.id ?? ''}"]`)?.textContent).toContain('Menu latéral replié par défaut');
   });
 
   test('une préférence déjà retenue est relue', async () => {

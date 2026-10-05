@@ -197,6 +197,11 @@ export function AdminConversationSettingsSheet({
 
   const edit = conversationEditFrom(conversation, brouillon);
   const champs = conversationEditFieldsOf(edit);
+  const rolesConnus = ROLES_MEMBRE.map((r) => ({ value: r, label: t(LIBELLES_MEMBRE[r]) }));
+  /* Le rôle SERVI hors liste (vide, majuscules héritées) reste une option, quel que
+     soit le choix courant : sinon, une fois un autre rôle choisi, on ne pouvait plus
+     revenir à l'état intact sans fermer la feuille. */
+  const optionsDeRole = estRoleMembre(roleServi) ? rolesConnus : [{ value: roleServi, label: roleServi || '—' }, ...rolesConnus];
   const roleChange = !createur && role !== roleServi && estRoleMembre(role);
   const souverain = useAdminReach().isSovereign;
   const motive = motiveState({ text: motif, minLength: MOTIF_LONGUEUR_MINIMALE, required: true, sovereign: souverain, whenSovereign: 'optional' });
@@ -359,8 +364,7 @@ export function AdminConversationSettingsSheet({
           id="admin-conv-member-role"
           label={t('admin.convSettings.memberRole')}
           value={role}
-          options={ROLES_MEMBRE.map((r) => ({ value: r, label: t(LIBELLES_MEMBRE[r]) }))}
-          fallbackLabel={(valeur) => valeur || '—'}
+          options={optionsDeRole}
           onValue={(valeur) => {
             setRole(valeur);
             confirmation.disarm();
@@ -397,6 +401,7 @@ export function AdminConversationSettingsSheet({
             ? []
             : [
                 {
+                  id: 'remove',
                   label: t(confirme === 'remove' ? 'admin.convSettings.confirm' : 'admin.convSettings.remove'),
                   tone: 'danger',
                   disabled: !motifValide,

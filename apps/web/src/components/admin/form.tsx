@@ -76,12 +76,30 @@ export function motiveState({
 /**
  * **LE REFUS D'UN FORMULAIRE** — une alerte (`role="alert"`) : il s'annonce dès
  * qu'il paraît, sans que le lecteur d'écran ait à le chercher. Vide, il ne rend
- * rien : une alerte montée vide n'annonce rien, et tient une place.
+ * rien : une alerte montée vide n'annonce rien, et tient une place. `tone="neutral"`
+ * sert l'avis qui n'est pas une faute (« rien à enregistrer ») : annoncé pareil,
+ * jamais peint en danger. Un refus de plusieurs lignes garde ses retours à la ligne.
  */
-export function AdminFormError({ id, text, data }: { readonly id?: string; readonly text: string; readonly data?: AdminData }) {
+export function AdminFormError({
+  id,
+  text,
+  tone = 'danger',
+  data,
+}: {
+  readonly id?: string;
+  readonly text: string;
+  readonly tone?: 'danger' | 'neutral';
+  readonly data?: AdminData;
+}) {
   if (text === '') return null;
   return (
-    <p {...data} id={id} role="alert" className="text-caption font-medium" style={{ color: 'var(--color-danger)' }}>
+    <p
+      {...data}
+      id={id}
+      role="alert"
+      className="whitespace-pre-line break-words text-caption font-medium"
+      style={{ color: tone === 'danger' ? 'var(--color-danger)' : INK2 }}
+    >
       {text}
     </p>
   );
@@ -159,6 +177,8 @@ type TextInputProps = {
   readonly type?: 'text' | 'email' | 'password' | 'tel' | 'url' | 'number' | 'date';
   readonly inputMode?: 'text' | 'email' | 'tel' | 'url' | 'numeric' | 'decimal' | 'search' | 'none';
   readonly min?: string | number;
+  readonly step?: string | number;
+  readonly onCommit?: (value: string) => void;
   readonly placeholder?: string;
   readonly autoComplete?: string;
   readonly mono?: boolean;
@@ -176,6 +196,10 @@ type TextInputProps = {
  * posée SANS son propre refus : celui-ci vit dans `AdminField`, où il peut porter
  * l'ancre d'un écran. Le focus est tenu ici : plus aucun écran n'a à suivre quel
  * champ l'a (la fin de `useFieldFocus`).
+ *
+ * `onCommit` sert les champs qui ÉCRIVENT sans bouton (une préférence) : la valeur
+ * part quand on quitte le champ ou sur Entrée, jamais à chaque frappe — un nombre à
+ * demi tapé n'est pas une valeur à enregistrer.
  */
 export function AdminTextInput({
   id,
@@ -185,6 +209,8 @@ export function AdminTextInput({
   type = 'text',
   inputMode,
   min,
+  step,
+  onCommit,
   placeholder,
   autoComplete,
   mono = false,
@@ -217,6 +243,7 @@ export function AdminTextInput({
             disabled={disabled}
             {...(inputMode === undefined ? {} : { inputMode })}
             {...(min === undefined ? {} : { min })}
+            {...(step === undefined ? {} : { step })}
             {...(placeholder === undefined ? {} : { placeholder })}
             autoCapitalize="none"
             autoComplete={autoComplete ?? (type === 'password' ? 'new-password' : 'off')}
@@ -225,7 +252,13 @@ export function AdminTextInput({
             aria-invalid={error === undefined ? undefined : true}
             onInput={(event) => onValue(event.currentTarget.value)}
             onFocus={() => setFocused(true)}
-            onBlur={() => setFocused(false)}
+            onBlur={(event) => {
+              setFocused(false);
+              onCommit?.(event.currentTarget.value);
+            }}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') onCommit?.(event.currentTarget.value);
+            }}
             className={`w-full bg-transparent text-body outline-none disabled:opacity-50 ${mono ? 'font-mono' : ''}`.trim()}
             style={{ minHeight: 44, color: INK }}
           />
@@ -321,7 +354,9 @@ export function AdminSelect({
 /**
  * **UNE BASCULE** (`role="switch"`) — l'état se lit dans `aria-checked`, jamais dans la
  * seule couleur. La piste dessinée fait 28 px ; le BOUTON qui la porte en fait 44 sur
- * 48, la cible tactile que la piste seule n'atteignait pas.
+ * 48, la cible tactile que la piste seule n'atteignait pas. Le bouton glisse par
+ * `insetInlineStart`, jamais par `translateX` : en RTL, la piste se lit à l'envers.
+ * Sans `label`, l'hôte qui dessine son propre libellé le cite par `ariaLabelledBy`.
  */
 export function AdminSwitch({
   id,
@@ -330,11 +365,15 @@ export function AdminSwitch({
   checked,
   onToggle,
   disabled = false,
+  ariaLabelledBy,
+  ariaDescribedBy,
   data,
 }: {
   readonly id: string;
   readonly label?: string;
   readonly hint?: string;
+  readonly ariaLabelledBy?: string;
+  readonly ariaDescribedBy?: string;
   readonly checked: boolean;
   readonly onToggle: (next: boolean) => void;
   readonly disabled?: boolean;
@@ -348,7 +387,8 @@ export function AdminSwitch({
       type="button"
       role="switch"
       aria-checked={checked}
-      aria-describedby={hint === undefined ? undefined : hintId}
+      aria-labelledby={ariaLabelledBy}
+      aria-describedby={describedBy(hint === undefined ? undefined : hintId, ariaDescribedBy)}
       disabled={disabled}
       onClick={() => onToggle(!checked)}
       className={`grid shrink-0 place-items-center rounded-full disabled:opacity-50 ${FOCUS}`}
@@ -495,6 +535,8 @@ export type AdminFormPrimary = {
 };
 
 export type AdminFormSecondary = {
+  /** Clé STABLE du geste : son libellé change quand il s'arme, et une clé qui change remonte le bouton — le focus partait au `<body>`. */
+  readonly id: string;
   readonly label: string;
   readonly tone?: AdminButtonTone;
   readonly disabled?: boolean;
@@ -505,9 +547,10 @@ export type AdminFormSecondary = {
 /**
  * **LES GESTES D'UN FORMULAIRE** — la disposition d'`AdminConfirmSheet` (alignés à
  * droite, jamais étirés). Un geste à la fois : pendant l'envoi, le principal se dit
- * occupé et tout le reste, Annuler compris, attend. Hors ligne, les gestes qui
- * ÉCRIVENT sont désactivés (ce que l'avis `admin.kit.offline` promet) ; Annuler reste
- * offert, puisqu'il n'écrit rien.
+ * occupé et les autres gestes qui ÉCRIVENT attendent. Annuler reste offert, en vol
+ * comme hors ligne, puisqu'il n'écrit rien : on peut toujours renoncer à attendre.
+ * Hors ligne, les gestes qui écrivent sont désactivés (ce que l'avis
+ * `admin.kit.offline` promet).
  *
  * Annuler porte `data-admin-form-cancel`, jamais `data-admin-action="cancel"`, que la
  * feuille de confirmation et les gestes de fiche occupent déjà.
@@ -531,13 +574,13 @@ export function AdminFormActions({
   return (
     <div data-admin-form-actions data-admin-form-offline={online ? 'false' : 'true'} className="flex flex-wrap justify-end gap-3">
       {onCancel === undefined ? null : (
-        <AdminButton disabled={busy} onClick={onCancel} data={{ 'data-admin-form-cancel': '' }}>
+        <AdminButton onClick={onCancel} data={{ 'data-admin-form-cancel': '' }}>
           {cancelLabel ?? translateAdmin(language, 'admin.kit.cancel')}
         </AdminButton>
       )}
       {secondary.map((action) => (
         <AdminButton
-          key={action.label}
+          key={action.id}
           tone={action.tone ?? 'secondary'}
           disabled={writeBlocked || action.disabled === true}
           onClick={action.onClick}

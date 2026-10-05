@@ -115,6 +115,21 @@ describe('AdminField et AdminTextInput — un libellé, une note, un refus, tous
     expect(values).toEqual(['Awa']);
   });
 
+  test('onCommit part quand on quitte le champ, jamais à chaque frappe ; step est posé (#9463)', async () => {
+    const commits: string[] = [];
+    const host = await mount(
+      <AdminTextInput id="admin-test-commit" value="" type="number" step="0.1" onValue={() => undefined} onCommit={(v) => commits.push(v)} />,
+    );
+    const input = host.querySelector('input') as HTMLInputElement;
+    expect(input.getAttribute('step')).toBe('0.1');
+    await typeInto(input, '1.5');
+    expect(commits).toEqual([]);
+    await act(async () => {
+      input.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
+    });
+    expect(commits).toEqual(['1.5']);
+  });
+
   test('AdminField enveloppe un contrôle fourni par l’appelant', async () => {
     const host = await mount(
       <AdminField id="admin-test-custom" label="Personnalisé" note="Aide">
@@ -211,6 +226,18 @@ describe('AdminSwitch — l’état se lit, la cible fait 44 px', () => {
     expect(host.querySelector('label')).toBeNull();
     await click(host.querySelector('[role="switch"]'));
     expect(calls).toEqual([]);
+  });
+
+  test('sans libellé, nommée par l’hôte : aria-labelledby et aria-describedby passent (#9463)', async () => {
+    const host = await mount(
+      <>
+        <span id="admin-test-ext-label">Externe</span>
+        <AdminSwitch id="admin-test-ext" checked={false} ariaLabelledBy="admin-test-ext-label" ariaDescribedBy="admin-test-ext-note" onToggle={() => undefined} />
+      </>,
+    );
+    const button = host.querySelector('[role="switch"]') as HTMLButtonElement;
+    expect(button.getAttribute('aria-labelledby')).toBe('admin-test-ext-label');
+    expect(button.getAttribute('aria-describedby')).toBe('admin-test-ext-note');
   });
 });
 
@@ -319,7 +346,7 @@ describe('AdminFormActions — un geste à la fois, jamais hors ligne', () => {
       <AdminFormActions
         language="fr"
         primary={{ label: 'Enregistrer', type: 'submit' }}
-        secondary={[{ label: 'Retirer', tone: 'danger', onClick: () => (removed += 1), data: { 'data-admin-test-remove': '' } }]}
+        secondary={[{ id: 'remove', label: 'Retirer', tone: 'danger', onClick: () => (removed += 1), data: { 'data-admin-test-remove': '' } }]}
         onCancel={() => (cancelled += 1)}
       />,
     );
@@ -333,12 +360,32 @@ describe('AdminFormActions — un geste à la fois, jamais hors ligne', () => {
     for (const button of host.querySelectorAll('button')) expect((button as HTMLButtonElement).style.minHeight).toBe('44px');
   });
 
-  test('pendant l’envoi : le principal se dit occupé, les autres gestes sont désactivés', async () => {
+  test('armer un secondaire qui change de libellé GARDE le focus sur le même bouton (#9463)', async () => {
+    function Harness() {
+      const [armed, setArmed] = useState(false);
+      return (
+        <AdminFormActions
+          language="fr"
+          secondary={[{ id: 'remove', label: armed ? 'Confirmer' : 'Retirer', onClick: () => setArmed(true), data: { 'data-admin-test-remove': '' } }]}
+        />
+      );
+    }
+    const host = await mount(<Harness />);
+    const before = host.querySelector('[data-admin-test-remove]') as HTMLButtonElement;
+    before.focus();
+    await click(before);
+    const after = host.querySelector('[data-admin-test-remove]') as HTMLButtonElement;
+    expect(after.textContent).toBe('Confirmer');
+    expect(after).toBe(before);
+    expect(document.activeElement).toBe(before);
+  });
+
+  test('pendant l’envoi : le principal se dit occupé, les autres gestes attendent — Annuler reste offert', async () => {
     const host = await mount(
       <AdminFormActions
         language="fr"
         primary={{ label: 'Enregistrer', busy: true, data: { 'data-admin-test-save': '' } }}
-        secondary={[{ label: 'Retirer', onClick: () => undefined, data: { 'data-admin-test-remove': '' } }]}
+        secondary={[{ id: 'remove', label: 'Retirer', onClick: () => undefined, data: { 'data-admin-test-remove': '' } }]}
         onCancel={() => undefined}
       />,
     );
@@ -346,7 +393,7 @@ describe('AdminFormActions — un geste à la fois, jamais hors ligne', () => {
     expect(save.disabled).toBe(true);
     expect(save.getAttribute('aria-busy')).toBe('true');
     expect((host.querySelector('[data-admin-test-remove]') as HTMLButtonElement).disabled).toBe(true);
-    expect((host.querySelector('[data-admin-form-cancel]') as HTMLButtonElement).disabled).toBe(true);
+    expect((host.querySelector('[data-admin-form-cancel]') as HTMLButtonElement).disabled).toBe(false);
   });
 
   test('hors ligne : les gestes sont désactivés, Annuler reste offert', async () => {
@@ -355,7 +402,7 @@ describe('AdminFormActions — un geste à la fois, jamais hors ligne', () => {
         <AdminFormActions
           language="fr"
           primary={{ label: 'Enregistrer', data: { 'data-admin-test-save': '' } }}
-          secondary={[{ label: 'Retirer', onClick: () => undefined, data: { 'data-admin-test-remove': '' } }]}
+          secondary={[{ id: 'remove', label: 'Retirer', onClick: () => undefined, data: { 'data-admin-test-remove': '' } }]}
           onCancel={() => undefined}
         />,
       );

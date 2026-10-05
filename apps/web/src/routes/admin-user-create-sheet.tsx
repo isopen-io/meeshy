@@ -5,6 +5,7 @@ import type { AdminDeps } from '@/lib/api/admin';
 import { createAdminUser, missingCreateFields, type AdminUserCreateInput } from '@/lib/api/admin-user-create';
 import type { AdminUserDetail } from '@/lib/api/admin-user-detail';
 import { apiDeps } from '@/lib/api/deps';
+import { interpretRole } from '@/lib/admin/interpret/enums';
 import { ADMIN_ROLES } from '@/lib/admin/user-list';
 import { translateAdmin, type AdminPlainCatalogKey, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { SUPPORTED_INTERFACE_LANGUAGES } from '@/lib/inline-interface-language-bootstrap.js';
@@ -136,7 +137,7 @@ export function AdminUserCreateSheet({
         id="admin-create-role"
         label={translateAdmin(language, 'admin.user.role')}
         value={saisie.role}
-        options={ADMIN_ROLES.map((role) => ({ value: role, label: role }))}
+        options={ADMIN_ROLES.map((role) => ({ value: role, label: interpretRole(role, language).label }))}
         onValue={(role) => poser({ role })}
         data={{ 'data-admin-create-role': '' }}
       />

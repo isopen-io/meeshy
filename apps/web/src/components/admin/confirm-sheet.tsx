@@ -4,7 +4,7 @@ import { Sheet } from '@/components/sheet';
 import { useAdminReach } from '@/lib/admin/use-admin-reach';
 import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
-import { motiveState } from './form';
+import { AdminFormError, motiveState } from './form';
 import { BRAND, EDGE, INK, INK2, SURFACE } from './tone';
 
 const FOCUS = 'focus-visible:outline-2 focus-visible:outline-offset-2';
@@ -119,11 +119,7 @@ export function AdminConfirmSheet({
           </label>
         )}
 
-        {error === undefined || error === null || error === '' ? null : (
-          <p role="alert" data-admin-confirm-error className="text-caption font-medium" style={{ color: 'var(--color-danger)' }}>
-            {error}
-          </p>
-        )}
+        <AdminFormError text={error ?? ''} data={{ 'data-admin-confirm-error': '' }} />
 
         <div className="flex flex-wrap justify-end gap-3">
           <button

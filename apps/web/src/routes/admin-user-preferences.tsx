@@ -1,9 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 
-import { AdminFormError, AdminSelect, AdminSwitch } from '@/components/admin/form';
+import { AdminFormError, AdminSelect, AdminSwitch, AdminTextInput } from '@/components/admin/form';
 import { AdminErrorState, AdminSkeleton } from '@/components/admin/states';
-import { EDGE, INK, INK2, SURFACE } from '@/components/admin/tone';
+import { INK, INK2 } from '@/components/admin/tone';
 import { CollapsibleSection } from '@/components/collapsible-section';
 import { interpretPreferenceValue, preferenceLabel, preferenceOptions } from '@/lib/admin/preference-labels';
 import type { AdminDeps } from '@/lib/api/admin';
@@ -35,7 +35,6 @@ import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
  * s'écrire. Le nom d'une clé (`showReadReceipts`) n'est jamais lu à l'écran : il ne
  * vit que dans l'ancre de test `data-admin-preference`.
  */
-const CARTE = { backgroundColor: SURFACE, border: `1px solid ${EDGE}` } as const;
 
 const LIBELLES_CATEGORIES = {
   privacy: 'admin.prefs.privacy',
@@ -263,20 +262,17 @@ function ChampLibre({
     onChange(brouillon);
   };
   return (
-    <input
-      id={id}
-      type={typeof valeur === 'number' ? 'number' : 'text'}
-      step="any"
-      value={brouillon}
-      disabled={desactive}
-      data-admin-preference-input={chemin}
-      onInput={(event) => setBrouillon(event.currentTarget.value)}
-      onBlur={valider}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter') valider();
-      }}
-      className="min-h-11 w-32 shrink-0 rounded-chip px-2 text-input tabular-nums focus-visible:outline-2 focus-visible:outline-offset-2"
-      style={{ ...CARTE, color: INK, outlineColor: 'var(--color-ios-brand)' }}
-    />
+    <div className="w-32 shrink-0">
+      <AdminTextInput
+        id={id}
+        type={typeof valeur === 'number' ? 'number' : 'text'}
+        step="any"
+        value={brouillon}
+        disabled={desactive}
+        onValue={setBrouillon}
+        onCommit={valider}
+        data={{ 'data-admin-preference-input': chemin }}
+      />
+    </div>
   );
 }

@@ -21,6 +21,7 @@ import type { AdminDeps } from '@/lib/api/admin';
 import { adminUserDetailQueryKey } from '@/lib/api/admin-user-detail';
 import { apiDeps } from '@/lib/api/deps';
 import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
+import { useOnline } from '@/lib/net/online';
 import { useAdminReach } from '@/lib/admin/use-admin-reach';
 
 /**
@@ -240,6 +241,9 @@ function BanRow({
   readonly envoi: boolean;
   readonly onLift: () => void;
 }) {
+  /* Lever ÉCRIT, comme Bannir : hors ligne, il se désactive comme les gestes
+     d'`AdminFormActions` — la règle que l'avis `admin.kit.offline` promet. */
+  const online = useOnline();
   const etat = etatDe(ban);
   const banner = actorLabel(ban.bannedBy, language);
   const lifter = actorLabel(ban.liftedBy, language);
@@ -284,7 +288,7 @@ function BanRow({
       )}
       {etat === 'active' ? (
         <div className="flex justify-end pt-1">
-          <AdminButton disabled={envoi} onClick={onLift}>
+          <AdminButton disabled={envoi || !online} onClick={onLift}>
             {translateAdmin(language, 'admin.ban.lift')}
           </AdminButton>
         </div>

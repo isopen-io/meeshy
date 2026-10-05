@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useId, useState } from 'react';
 
+import { AdminFormError } from '@/components/admin/form';
 import { AdminBadge } from '@/components/admin/badges';
 import { AdminButton } from '@/components/admin/button';
 import { AdminEntityChip } from '@/components/admin/entity-chip';
@@ -182,11 +183,7 @@ function QueueRow({
               className="w-full rounded-chip px-3 py-2 text-body focus-visible:outline-2 focus-visible:outline-offset-2"
               style={{ minHeight: 44, backgroundColor: SURFACE, border: `1px solid ${EDGE}`, color: INK, outlineColor: BRAND }}
             />
-            {gesture.errorOf(editId) === null ? null : (
-              <p role="alert" className="text-caption font-medium" style={{ color: 'var(--color-danger)' }}>
-                {gesture.errorOf(editId)}
-              </p>
-            )}
+            <AdminFormError text={gesture.errorOf(editId) ?? ''} />
             <div className="flex flex-wrap justify-end gap-2">
               <AdminButton
                 onClick={() => {

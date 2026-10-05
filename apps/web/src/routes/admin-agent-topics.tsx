@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useId, useState } from 'react';
 
+import { AdminFormError } from '@/components/admin/form';
 import { AdminBadge } from '@/components/admin/badges';
 import { AdminButton } from '@/components/admin/button';
 import { AdminFicheSection } from '@/components/admin/fiche';
@@ -341,9 +342,7 @@ function TopicEditor({
         })}
       </div>
       {message === null ? null : (
-        <p role="alert" data-agent-topic-error className="whitespace-pre-line break-words text-caption font-medium" style={{ color: notice !== null && invalid.length === 0 ? INK2 : 'var(--color-danger)' }}>
-          {message}
-        </p>
+        <AdminFormError text={message} tone={notice !== null && invalid.length === 0 ? 'neutral' : 'danger'} data={{ 'data-agent-topic-error': '' }} />
       )}
       <div className="flex justify-end">
         <AdminButton type="submit" tone="primary" disabled={!online} busy={gesture.busy === saveId} data={{ 'data-agent-topic-save': topic?.id ?? 'new' }}>

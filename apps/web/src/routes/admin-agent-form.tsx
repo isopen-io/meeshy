@@ -3,7 +3,8 @@ import { useId, useState, type ReactNode } from 'react';
 
 import { AdminButton } from '@/components/admin/button';
 import { AdminConfirmSheet } from '@/components/admin/confirm-sheet';
-import { BRAND, EDGE, INK, INK2, INK3, SURFACE } from '@/components/admin/tone';
+import { AdminFormError, AdminSwitch } from '@/components/admin/form';
+import { BRAND, EDGE, INK, INK2, SURFACE } from '@/components/admin/tone';
 import {
   changesOf,
   draftOf,
@@ -307,23 +308,14 @@ export function AgentField({
           <span id={`${id}-label`} className="min-w-0 break-words text-body" style={{ color: INK }}>
             {label}
           </span>
-          <button
-            {...anchor}
-            type="button"
-            role="switch"
-            aria-checked={on}
-            aria-labelledby={`${id}-label`}
-            {...describedBy}
-            onClick={() => onChange(!on)}
-            className={`relative inline-flex shrink-0 items-center rounded-full ${FOCUS}`}
-            style={{ width: 52, height: 32, padding: 3, backgroundColor: on ? BRAND : INK3, outlineColor: BRAND }}
-          >
-            <span
-              aria-hidden
-              className="block rounded-full transition-transform motion-reduce:transition-none"
-              style={{ width: 26, height: 26, backgroundColor: SURFACE, transform: on ? 'translateX(20px)' : 'translateX(0)' }}
-            />
-          </button>
+          <AdminSwitch
+            id={id}
+            checked={on}
+            ariaLabelledBy={`${id}-label`}
+            {...(described === '' ? {} : { ariaDescribedBy: described })}
+            onToggle={onChange}
+            data={anchor}
+          />
         </div>
         {notes}
       </div>
@@ -530,9 +522,7 @@ export function AgentSettingsForm({
       )}
       {extra}
       {message === null ? null : (
-        <p role="alert" data-agent-form-error className="text-caption font-medium" style={{ color: notice !== null && invalid.length === 0 ? INK2 : 'var(--color-danger)' }}>
-          {message}
-        </p>
+        <AdminFormError text={message} tone={notice !== null && invalid.length === 0 ? 'neutral' : 'danger'} data={{ 'data-agent-form-error': '' }} />
       )}
       <div className="flex justify-end">
         <AdminButton type="submit" tone="primary" busy={busy} disabled={disabled} data={{ 'data-agent-save': id }}>

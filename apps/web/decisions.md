@@ -4798,3 +4798,11 @@ Au repos, un message flouté qui porte des images montre le voile de son TEXTE e
 - **Le kit ne dépend d'aucun écran** hors le cadre `admin-shell` : le témoin `components/admin/kit-sole-source.test.ts` rougit si l'un des deux modules revient, si un fichier les importe, ou si `components/admin` importe un autre `@/routes/admin-*`.
 
 **Conséquences.** Écarts visibles : les filtres de l'onglet « Conversations » d'un membre prennent la barre commune (anneau de focus, même boîte de 44 px) ; Précédents / Suivants et la taille de page du pied de liste gagnent l'anneau de focus du kit. Aucune clé de catalogue ajoutée.
+
+**Suites de revue (2026-10-05).**
+- **Annuler reste offert pendant un envoi** (`AdminFormActions`), comme avant le passage au kit : seuls les gestes qui ÉCRIVENT attendent. Hors ligne, ils sont désactivés ; « Lever » un ban suit la même règle, et la feuille d'image refuse choisir / retirer hors ligne en le disant (`admin.images.offline`), comme le téléversement.
+- **Un geste secondaire a une clé STABLE** (`AdminFormSecondary.id`) : « Retirer » qui devient « Confirmer » ne remonte plus son bouton, le focus reste dessus.
+- **Une relecture des images candidates en échec garde celles déjà servies** (le cache d'abord) ; l'échec ne se dit que sur une liste vide.
+- **Le rôle servi hors liste** reste une option de la feuille de conversation, quel que soit le choix courant ; la création d'un compte nomme les rôles comme la fiche (`interpretRole`).
+- Les bascules de l'agent et de l'espace passent sur `AdminSwitch` (qui gagne `ariaLabelledBy` / `ariaDescribedBy`, et glisse par `insetInlineStart` en RTL) ; les refus annoncés à la main sur `AdminFormError` (qui gagne `tone="neutral"`) ; le champ libre des préférences sur `AdminTextInput` (qui gagne `onCommit` et `step`) ; le cadre des champs de diffusion sur `AdminField`.
+- **Ce qui reste écrit à la main** — les contrôles bruts de l'agent, de la diffusion et du barème, les boutons d'`AdminConfirmSheet` (focus initial et aplat rouge qu'`AdminButton` ne porte pas) — est suivi par #9473 : « l'ancienne approche a disparu » vaut pour `admin-parts` / `admin-table` et les lots de la spec, pas encore pour ces fichiers.

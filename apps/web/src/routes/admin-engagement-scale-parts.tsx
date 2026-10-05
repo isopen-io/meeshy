@@ -3,6 +3,7 @@ import { useState } from 'react';
 
 import { DEFAULT_ENGAGEMENT_SCALE, type EngagementScale } from '@meeshy/shared/types/engagement-scale';
 
+import { AdminFormError } from '@/components/admin/form';
 import { AdminButton } from '@/components/admin/button';
 import { AdminConfirmSheet } from '@/components/admin/confirm-sheet';
 import { AdminLink } from '@/components/admin/entity-chip';
@@ -222,11 +223,7 @@ function ScaleEditor({
           <LevelCapsTable language={language} draft={draft} onDraft={setDraft} />
         </AdminFicheSection>
 
-        {error === '' ? null : (
-          <p role="alert" className="text-caption font-medium" style={{ color: 'var(--color-danger)' }} data-scale-error>
-            {error}
-          </p>
-        )}
+        <AdminFormError text={error} data={{ 'data-scale-error': '' }} />
 
         <div className="flex flex-wrap items-center gap-3 pb-8">
           <AdminButton type="submit" tone="primary" busy={saving} data={{ 'data-scale-save': '' }}>
