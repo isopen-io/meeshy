@@ -1,0 +1,113 @@
+/**
+ * LE BLOC `game` (#9378) — servi à CÔTÉ des champs actuels de
+ * `GET /me/engagement`, jamais à leur place : un ancien client l'ignore.
+ *
+ * La passerelle sait ce qu'elle PERSISTE (score, record, Gloire, solde, série,
+ * gels, missions, coffre, clés de guide) ; tout le reste se déduit par
+ * `buildGameBlock` (`@meeshy/shared/utils/game/game-block`), écrit une fois :
+ * c'est la recomposition par site qui fait diverger les clients.
+ *
+ * Ce que le service sert est VALIDÉ contre le schéma partagé avant de partir :
+ * un bloc qui ne tient pas le contrat est refusé (`null`) plutôt que servi à
+ * moitié — et le reste de la charge part sans lui.
+ */
+
+import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import type { EngagementAxisKey } from '@meeshy/shared/types/engagement';
+import { ENGAGEMENT_AXES } from '@meeshy/shared/types/engagement';
+import { parseGameBlock, type GameBlock } from '@meeshy/shared/types/game';
+import { buildGameBlock } from '@meeshy/shared/utils/game/game-block';
+import { meeshPrice } from '@meeshy/shared/utils/game/mint';
+import { computeMeeshMintPlan } from '@meeshy/shared/utils/meesh';
+import { enhancedLogger } from '../../utils/logger-enhanced';
+import { meeshTotalsFromLedger } from '../meesh/MeeshService';
+import { FLAME_USER_SELECT, brokenFlame, flameFactsOf } from './FlameService';
+import { gloryTotalFromLedger } from './GloryService';
+import { toGameMission, type MissionService } from './MissionService';
+
+const log = enhancedLogger.child({ module: 'GameBlockService' });
+
+export const GUIDE_SEEN_MAX = 200;
+
+const GAME_USER_SELECT = { ...FLAME_USER_SELECT, engagementScore: true, levelRecord: true, prestige: true, guideSeen: true } as const;
+
+export type AxisRow = { readonly axisKey: string; readonly count: number; readonly points: number };
+
+export class GameBlockService {
+  constructor(
+    private readonly prisma: PrismaClient,
+    private readonly deps: { readonly missions: Pick<MissionService, 'ensureToday' | 'gameDay'> },
+  ) {}
+
+  /**
+   * Le bloc, ou `null` s'il ne tient pas le contrat. `counters` : les lignes que
+   * la route a déjà lues — une relecture ne servirait qu'à payer deux fois.
+   */
+  async build(params: { readonly userId: string; readonly now?: Date; readonly counters?: readonly AxisRow[] }): Promise<GameBlock | null> {
+    const { userId } = params;
+    const now = params.now ?? new Date();
+
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: GAME_USER_SELECT });
+    const [totals, glory, counters] = await Promise.all([
+      meeshTotalsFromLedger(this.prisma, userId),
+      gloryTotalFromLedger(this.prisma, userId),
+      params.counters ??
+        this.prisma.engagementCounter.findMany({ where: { userId }, select: { axisKey: true, count: true, points: true }, take: 100 }),
+    ]);
+    const day = await this.deps.missions.ensureToday(userId, now);
+    const gameDay = await this.deps.missions.gameDay(userId, day.dayKey);
+
+    const facts = flameFactsOf(user ?? {}, now);
+    const plan = computeMeeshMintPlan(
+      counters
+        .filter((c) => (ENGAGEMENT_AXES as readonly string[]).includes(c.axisKey))
+        .map((c) => ({ axisKey: c.axisKey as EngagementAxisKey, count: c.count, points: c.points })),
+      { mintCost: meeshPrice(totals.mintedLifetime + 1) },
+    );
+
+    const block = buildGameBlock({
+      userId,
+      today: day.dayKey,
+      score: user?.engagementScore ?? 0,
+      levelRecord: user?.levelRecord ?? null,
+      prestige: user?.prestige ?? 0,
+      glory,
+      // Le drapeau Mythe (les 100 Légendes les plus glorieuses) n'est pas encore
+      // calculé : il se pose avec les classements de la vague 2.
+      mythic: false,
+      mintedLifetime: totals.mintedLifetime,
+      debitablePoints: plan.debitablePoints,
+      balance: totals.balance,
+      streak: facts.streak,
+      lastActiveDay: facts.lastActiveDay,
+      broken: brokenFlame(facts),
+      freezes: facts.freezes,
+      lastRelightDay: facts.lastRelightDay,
+      missions: day.rows.map(toGameMission),
+      rerollsUsedToday: gameDay?.rerollCount ?? 0,
+      chestClaimed: gameDay?.chestClaimedAt != null,
+      chestReward: gameDay?.chestClaimedAt
+        ? { points: gameDay.chestPoints ?? 0, fragment: gameDay.chestFragment ?? false, freeze: gameDay.chestFreeze ?? false }
+        : null,
+      guideSeen: user?.guideSeen ?? [],
+    });
+
+    const valid = parseGameBlock(block);
+    if (valid === null) log.error('game block refused by the shared schema', { userId });
+    return valid;
+  }
+
+  /**
+   * Mémorise les clés de guide vues — ajout seul, sans doublon, borné aux
+   * `GUIDE_SEEN_MAX` plus récentes. Idempotent : rejouer ne change rien.
+   */
+  async markGuideSeen(userId: string, keys: readonly string[]): Promise<string[]> {
+    const row = await this.prisma.user.findUnique({ where: { id: userId }, select: { guideSeen: true } });
+    const known = row?.guideSeen ?? [];
+    const merged = [...new Set([...known, ...keys])];
+    if (merged.length === known.length) return [...known];
+    const kept = merged.slice(-GUIDE_SEEN_MAX);
+    await this.prisma.user.update({ where: { id: userId }, data: { guideSeen: kept } });
+    return kept;
+  }
+}

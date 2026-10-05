@@ -191,7 +191,12 @@ describe('ROUTE_TABLE (#4278)', () => {
     // stickers sous `/api/v1/sticker-packs` (boutique, installation,
     // proposition par des tiers, modération). Aucun alias, aucune route
     // retirée ni renommée.
-    expect(ROUTE_TABLE.length).toBe(73);
+    // 74 : #9378 ajoute `me-game` — les cinq écritures NEUVES du jeu sous
+    // `/api/v1/me/game` (changer une mission, ouvrir le coffre, acheter un gel,
+    // rallumer la Flamme, mémoriser les clés de guide), montage autonome. Aucun
+    // alias, aucune route retirée ni renommée ; `POST /me/meesh/mint` garde son
+    // adresse et sa forme (sa réponse s'étend, additivement).
+    expect(ROUTE_TABLE.length).toBe(74);
   });
 });
 

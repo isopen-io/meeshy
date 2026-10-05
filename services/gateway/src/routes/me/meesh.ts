@@ -102,7 +102,13 @@ export async function meMeeshRoutes(fastify: FastifyInstance) {
         response: {
           200: mintResponseSchema,
           401: errorResponseSchema,
-          409: errorResponseSchema,
+          // Le manque est servi (`details` s'étale à la racine) : déclaré EN
+          // PLUS du superset, sans quoi le sérialiseur le supprimait et l'écran
+          // devait relire toute la progression pour le dire.
+          409: {
+            ...errorResponseSchema,
+            properties: { ...errorResponseSchema.properties, missingPoints: { type: 'number' } },
+          },
           429: errorResponseSchema,
           500: errorResponseSchema,
         },

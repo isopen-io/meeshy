@@ -56,6 +56,11 @@ export const GAME_BONUS_AXIS: EngagementAxisKey = 'content.text_message';
 
 const USER_GAME_SELECT = { ...FLAME_USER_SELECT, engagementScore: true, levelRecord: true } as const;
 
+/** Pour une lecture qui ne doit rien créditer : toute tentative de paiement échoue bruyamment. */
+export const READ_ONLY_CREDIT: MissionServiceDeps['creditPoints'] = async () => {
+  throw new Error('read-only mission service cannot credit points');
+};
+
 export type MissionServiceDeps = {
   /** Crédite des points de jeu au score et à un axe — `EngagementService.creditGamePoints`. */
   readonly creditPoints: (userId: string, points: number, axisKey: EngagementAxisKey) => Promise<void>;

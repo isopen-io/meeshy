@@ -83,7 +83,7 @@ describe('POST /me/meesh/mint', () => {
     const res = await post(app);
 
     expect(res.statusCode).toBe(409);
-    expect(res.json()).toMatchObject({ success: false, code: 'INSUFFICIENT_POINTS' });
+    expect(res.json()).toMatchObject({ success: false, code: 'INSUFFICIENT_POINTS', missingPoints: 73 });
     await app.close();
   });
 });

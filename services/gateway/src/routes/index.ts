@@ -128,6 +128,7 @@ import { meConsentsRoutes } from './me/consents';
 import { meTermsRoutes } from './me/terms';
 import { meEngagementRoutes } from './me/engagement';
 import { meMeeshRoutes } from './me/meesh';
+import { meGameRoutes } from './me/game';
 import { meOnboardingRoutes } from './me/onboarding';
 import { meStarredMessagesRoutes } from './me/starred-messages';
 import { meStickersRoutes } from './me/stickers';
@@ -303,6 +304,10 @@ export const ROUTE_TABLE_BEFORE_ATTACHMENTS: readonly RouteRegistrationEntry[] =
   // au-dessus.
   { name: 'me-engagement', prefix: `${API_PREFIX}/me`, module: meEngagementRoutes },
   { name: 'me-meesh', prefix: `${API_PREFIX}/me`, module: meMeeshRoutes },
+  // Les écritures du jeu (#9375, #9376, #9378) — changer une mission, ouvrir le
+  // coffre, acheter un gel, rallumer la Flamme, mémoriser les clés de guide.
+  // Montage AUTONOME, même patron que `me-meesh` juste au-dessus.
+  { name: 'me-game', prefix: `${API_PREFIX}/me`, module: meGameRoutes },
   // L'onboarding post-inscription (#7729) — état du parcours et étapes vues.
   // Montage AUTONOME, même patron que `me-engagement` juste au-dessus.
   { name: 'me-onboarding', prefix: `${API_PREFIX}/me`, module: meOnboardingRoutes },
