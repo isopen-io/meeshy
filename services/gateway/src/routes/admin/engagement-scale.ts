@@ -21,6 +21,9 @@ import { requireAdminRank, withAudit } from '../../middleware/authorize';
 import type { UnifiedAuthRequest } from '../../middleware/auth';
 import { sendBadRequest, sendInternalError, sendSuccess, sendUnauthorized } from '../../utils/response';
 import { enhancedLogger } from '../../utils/logger-enhanced';
+import { flatDiff } from '../../utils/flat-diff';
+import { loadAdminPeople } from './oversight-people';
+import { personneSchema } from './oversight-schemas';
 import {
   ENGAGEMENT_SCALE_KEY,
   engagementScaleServiceFor,
@@ -101,6 +104,8 @@ export const engagementScaleDocumentResponseSchema = {
         scale: engagementScaleSchema,
         updatedAt: { type: 'string', nullable: true },
         updatedBy: { type: 'string', nullable: true },
+        // « Réglé par », NOMMÉ : un ObjectId nu ne dit rien à la console.
+        updatedByPerson: personneSchema,
       },
     },
   },
@@ -115,6 +120,13 @@ const refusals = {
 export async function engagementScaleAdminRoutes(fastify: FastifyInstance): Promise<void> {
   const scaleService = () => engagementScaleServiceFor(fastify.prisma);
 
+  /** Le document, avec « réglé par » résolu en personne (côté administration seulement). */
+  async function withUpdatedByPerson<D extends { readonly updatedBy: string | null }>(document: D) {
+    if (!document.updatedBy) return { ...document, updatedByPerson: null };
+    const people = await loadAdminPeople(fastify.prisma, [document.updatedBy]);
+    return { ...document, updatedByPerson: people.get(document.updatedBy) ?? null };
+  }
+
   fastify.get('/engagement-scale', {
     schema: {
       description: "Le barème d'engagement effectif (#8906) — défauts tant qu'il n'a jamais été réglé.",
@@ -126,7 +138,7 @@ export async function engagementScaleAdminRoutes(fastify: FastifyInstance): Prom
   }, async (_request: FastifyRequest, reply: FastifyReply) => {
     try {
       scaleService().invalidate();
-      return sendSuccess(reply, await scaleService().document());
+      return sendSuccess(reply, await withUpdatedByPerson(await scaleService().document()));
     } catch (error) {
       logger.error('engagement scale read failed', { error });
       return sendInternalError(reply, 'Error retrieving engagement scale');
@@ -164,9 +176,11 @@ export async function engagementScaleAdminRoutes(fastify: FastifyInstance): Prom
         entity: 'EngagementScaleConfig',
         entityId: ENGAGEMENT_SCALE_KEY,
         userId: adminId,
-        changes: { before: before.scale, after: document.scale },
+        // Un diff À PLAT des seules valeurs changées : les deux barèmes
+        // entiers étaient illisibles dans le journal (audit 2026-10-04).
+        changes: flatDiff(before.scale, document.scale),
       });
-      return sendSuccess(reply, document);
+      return sendSuccess(reply, await withUpdatedByPerson(document));
     } catch (error) {
       logger.error('engagement scale write failed', { error });
       return sendInternalError(reply, 'Error updating engagement scale');

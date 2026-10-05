@@ -114,6 +114,28 @@ final class ComposerAutosaveTests: XCTestCase {
         XCTAssertNotNil(etat.images["obj-1"])
     }
 
+    /// #6922 — un brouillon relu ne rend pas en mémoire ce que la pose ne prend
+    /// plus : ses photos reviennent à la taille publiée.
+    func test_load_restoresBitmapsAtTheWorkingSize() throws {
+        let store = makeStore()
+        let compte = makeAccount()
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1
+        let grande = UIGraphicsImageRenderer(size: CGSize(width: 4000, height: 1000), format: format)
+            .image { contexte in
+                UIColor.gray.setFill()
+                contexte.fill(CGRect(x: 0, y: 0, width: 4000, height: 1000))
+            }
+
+        store.save(ComposerAutosaveCodec.write(from: makeState(image: grande)), account: compte, slot: .creation)
+        let relu = try XCTUnwrap(store.load(account: compte, slot: .creation))
+        let etat = try XCTUnwrap(ComposerAutosaveCodec.state(from: relu))
+
+        let image = try XCTUnwrap(etat.images["obj-1"])
+        XCTAssertEqual(image.size.width * image.scale, SceneImageDownsampling.workingMaxPixelSize)
+        XCTAssertEqual(image.size.height * image.scale, 512)
+    }
+
     /// Le serveur balaie à 24 h un média pré-monté qu'aucune publication ne
     /// cite : un brouillon relu le lendemain ne doit pas publier son identifiant.
     func test_save_preUploadedObject_becomesLocalAgainAndKeepsItsFile() throws {

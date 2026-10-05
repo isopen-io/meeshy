@@ -3,6 +3,7 @@ import { useState, type ReactNode } from 'react';
 import { Sheet } from '@/components/sheet';
 import { interpretConversationType } from '@/lib/admin/interpret/enums';
 import { conversationLabel } from '@/lib/admin/interpret/labels';
+import { useAdminReach } from '@/lib/admin/use-admin-reach';
 import type { AdminDeps } from '@/lib/api/admin';
 import {
   MOTIF_LONGUEUR_MINIMALE,
@@ -32,6 +33,10 @@ import { ActionButton } from '@/routes/link-page-parts';
  * Enregistrer et Retirer restent inactifs tant que le motif n'atteint pas
  * {@link MOTIF_LONGUEUR_MINIMALE} caractères — le seuil que la passerelle tient
  * en 400. Un bouton actif qui échoue à coup sûr apprendrait à cliquer sans lire.
+ *
+ * **Le rang souverain n'écrit pas de motif** (spec 2026-10-04 § 4) : pour lui,
+ * le champ devient FACULTATIF (« Motif (facultatif) »), les gestes sont actifs
+ * sans lui et partent SANS `reason` ; un motif commencé se valide encore.
  *
  * ## Seul ce qui CHANGE part, et par SA route
  *
@@ -229,7 +234,11 @@ export function AdminConversationSettingsSheet({
   const edit = conversationEditFrom(conversation, brouillon);
   const champs = conversationEditFieldsOf(edit);
   const roleChange = !createur && role !== roleServi && estRoleMembre(role);
-  const motifValide = motif.trim().length >= MOTIF_LONGUEUR_MINIMALE;
+  const souverain = useAdminReach().isSovereign;
+  const motifSaisi = motif.trim();
+  const motifValide = motifSaisi.length >= MOTIF_LONGUEUR_MINIMALE || (souverain && motifSaisi === '');
+  /** Le motif qui part : aucun pour le souverain qui n'en a pas écrit. */
+  const motifEnvoye = souverain && motifSaisi === '' ? null : motif;
   const destructeur = edit.isActive === false || edit.closed === true;
   const peutEnregistrer = motifValide && !envoi && (champs.length > 0 || roleChange);
 
@@ -249,7 +258,7 @@ export function AdminConversationSettingsSheet({
     }
     setEnvoi(true);
     if (champs.length > 0) {
-      const resultat = await updateAdminConversation({ ...deps, conversationId: conversation.id, edit, reason: motif });
+      const resultat = await updateAdminConversation({ ...deps, conversationId: conversation.id, edit, reason: motifEnvoye });
       if (!resultat.ok) {
         setEnvoi(false);
         echec(resultat);
@@ -257,7 +266,7 @@ export function AdminConversationSettingsSheet({
       }
     }
     if (roleChange && estRoleMembre(role)) {
-      const resultat = await setAdminConversationMemberRole({ ...deps, conversationId: conversation.id, userId: memberId, role, reason: motif });
+      const resultat = await setAdminConversationMemberRole({ ...deps, conversationId: conversation.id, userId: memberId, role, reason: motifEnvoye });
       if (!resultat.ok) {
         setEnvoi(false);
         onChanged();
@@ -278,7 +287,7 @@ export function AdminConversationSettingsSheet({
       return;
     }
     setEnvoi(true);
-    const resultat = await removeAdminConversationMember({ ...deps, conversationId: conversation.id, userId: memberId, reason: motif });
+    const resultat = await removeAdminConversationMember({ ...deps, conversationId: conversation.id, userId: memberId, reason: motifEnvoye });
     setEnvoi(false);
     if (!resultat.ok) {
       echec(resultat);
@@ -415,7 +424,7 @@ export function AdminConversationSettingsSheet({
             </Champ>
           )}
 
-          <Champ label={t('admin.convSettings.reason')}>
+          <Champ label={t(souverain ? 'admin.kit.motiveOptional' : 'admin.convSettings.reason')}>
             <input
               data-admin-conv-reason
               value={motif}

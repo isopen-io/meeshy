@@ -182,9 +182,10 @@ export type AdminCommunityUpdate = { readonly fiche: AdminCommunityFiche | null 
  * **CHANGER L'ÉTAT D'UNE COMMUNAUTÉ** — `PATCH admin.communitiesByCommunityId`.
  * Le corps ne porte que ce qui change et le motif (`reason`, ≥ 10 caractères,
  * consigné dans le journal d'audit). La réponse est la fiche à jour.
+ * Un motif ABSENT (`null`/`undefined`) part sans `reason` : la passerelle l'admet du seul rang souverain (spec 2026-10-04 § 4) et refuse les autres.
  */
 export async function updateAdminCommunity(
-  params: AdminDeps & { readonly communityId: string; readonly change: AdminCommunityChange; readonly reason: string },
+  params: AdminDeps & { readonly communityId: string; readonly change: AdminCommunityChange; readonly reason?: string | null },
 ): Promise<ApiResult<AdminCommunityUpdate>> {
   const result = await params.transport.request<unknown>({
     method: 'PATCH',
@@ -192,7 +193,7 @@ export async function updateAdminCommunity(
     body: {
       ...(params.change.isActive === undefined ? {} : { isActive: params.change.isActive }),
       ...(params.change.isPrivate === undefined ? {} : { isPrivate: params.change.isPrivate }),
-      reason: params.reason,
+      ...(params.reason === null || params.reason === undefined ? {} : { reason: params.reason }),
     },
   });
   if (!result.ok) return result;

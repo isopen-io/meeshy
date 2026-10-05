@@ -1,6 +1,7 @@
 import { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { TrackingLinkService } from '../../services/TrackingLinkService';
+import { clickGeo } from './click-geo';
 import { logError } from '../../utils/logger';
 import {
   createUnifiedAuthMiddleware,
@@ -141,6 +142,7 @@ export async function registerTrackingRoutes(fastify: FastifyInstance) {
         browser,
         os,
         device,
+        ...clickGeo(request),
         language,
         referrer,
         visitor: linkVisitorFromRequest(request)

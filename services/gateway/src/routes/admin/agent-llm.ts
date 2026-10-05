@@ -4,12 +4,14 @@
  * fournisseur par défaut, budgets). Point d'entrée : `agent.ts` (#4284).
  */
 
+import { auditAgentGesture } from './agent-audit';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { logError, logWarn } from '../../utils/logger';
 import { sendSuccess, sendBadRequest, sendInternalError } from '../../utils/response';
 import type { UnifiedAuthRequest } from '../../middleware/auth';
 import { withAudit } from '../../middleware/authorize';
+import { judgeReason } from '../../middleware/sovereign-reason';
 import {
   requireAgentAdmin,
   requireAgentSovereign,
@@ -37,9 +39,13 @@ const llmConfigSchema = z.object({
 // que la config (pas un second appel), et se retire AVANT `data:` — Prisma
 // n'a pas de colonne `reason` sur `AgentLlmConfig`, `withAudit` la porte dans
 // `AdminAuditLog.metadata` à la place.
+// Le motif est facultatif pour le rang souverain (le seul qui atteint cette
+// route) et validé s'il est écrit : `judgeReason` en décide, le schéma ne
+// garde que la forme (spec 2026-10-04 § 4).
 const llmConfigWriteSchema = llmConfigSchema.extend({
-  reason: z.string().trim().min(10),
+  reason: z.string().optional(),
 });
+const MOTIF_MINIMAL = 10;
 
 export function registerAgentLlmRoutes(fastify: FastifyInstance, deps: AgentRouteDeps): void {
   const { broadcastInvalidation } = deps;
@@ -76,7 +82,7 @@ export function registerAgentLlmRoutes(fastify: FastifyInstance, deps: AgentRout
   fastify.put('/llm', {
     onRequest: [fastify.authenticate, requireAgentSovereign],
     schema: {
-      description: 'Create or update the LLM provider config (provider, model, API key, budget). Rang souverain (BIGBOSS) et motif écrit requis — #4157.',
+      description: 'Create or update the LLM provider config (provider, model, API key, budget). Rang souverain (BIGBOSS) ; motif écrit facultatif pour lui, validé s\'il est fourni (spec 2026-10-04 § 4) — #4157.',
       tags: ['admin-agent'],
       summary: 'Update LLM config',
       security: securityBearerAuth,
@@ -86,10 +92,12 @@ export function registerAgentLlmRoutes(fastify: FastifyInstance, deps: AgentRout
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const parsed = llmConfigWriteSchema.safeParse(request.body);
-      if (!parsed.success) {
+      const verdict = parsed.success ? judgeReason(request, parsed.data.reason, MOTIF_MINIMAL) : null;
+      if (!parsed.success || !verdict?.ok) {
         return sendBadRequest(reply, 'Données invalides : un motif écrit (10 caractères minimum) est requis pour modifier la configuration LLM');
       }
-      const { reason, ...llmData } = parsed.data;
+      const { reason: _brut, ...llmData } = parsed.data;
+      const reason = verdict.reason;
 
       const authContext = (request as UnifiedAuthRequest).authContext;
       const existing = await fastify.prisma.agentLlmConfig.findFirst();
@@ -218,6 +226,7 @@ export function registerAgentLlmRoutes(fastify: FastifyInstance, deps: AgentRout
         );
       }
 
+      await auditAgentGesture(request, { action: 'AGENT_GLOBAL_CONFIG_UPDATED', entity: 'Agent', entityId: 'global', changes: parsed.data });
       return sendSuccess(reply, { ...config, cacheInvalidation: invalidationStatus });
     } catch (error) {
       logError(fastify.log, 'Error upserting global agent config:', error);

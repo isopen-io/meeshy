@@ -44,6 +44,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
 import { OBJECT_ID_PATTERN } from '@meeshy/shared/utils/object-id';
 import { requirePermission, withAudit } from '../../middleware/authorize';
+import { requireReasonUnlessSovereign } from '../../middleware/sovereign-reason';
 import { adminViewer } from './oversight-viewer';
 import { conversationActiveMemberCountSelect } from '../conversations/utils/active-member-count';
 import { validatePagination } from '../../utils/pagination';
@@ -57,6 +58,7 @@ import {
   sendSuccess,
 } from '../../utils/response';
 import { ADMIN_PERSON_SELECT } from './oversight-people';
+import { NOT_DELETED } from '../../services/posts/softDelete';
 import {
   booleen,
   chaine,
@@ -109,7 +111,8 @@ async function loadFiche(prisma: PrismaClient, id: string, options: { readonly w
     prisma.communityMember.count({ where: { communityId: id, isActive: true } }),
     prisma.communityMember.count({ where: { communityId: id, isActive: false } }),
     prisma.conversation.count({ where: { communityId: id } }),
-    prisma.post.count({ where: { communityId: id, deletedAt: null } }),
+    // NOT_DELETED, jamais `deletedAt: null` : un post vivant n'a pas la colonne (leçon 318).
+    prisma.post.count({ where: { communityId: id, deletedAt: NOT_DELETED } }),
     options.withConversations
       ? prisma.conversation.findMany({
           where: { communityId: id },
@@ -330,6 +333,8 @@ export function registerCommunityOversightRoutes(fastify: FastifyInstance): void
     '/communities/:communityId',
     {
       onRequest: guards,
+      // Motif obligatoire sauf pour le rang souverain (spec 2026-10-04 § 4).
+      preHandler: [requireReasonUnlessSovereign({ source: 'body', min: 10 })],
       schema: {
         description:
           "Désactive / réactive une communauté, ou la rend privée / publique. Motif écrit (10 caractères minimum), tracé. Désactiver la retire des lectures publiques ; ses conversations restent. canAccessAdmin + canManageCommunities ; changer la confidentialité exige en plus le rang d'administration (403 sinon). #8876.",
@@ -339,11 +344,10 @@ export function registerCommunityOversightRoutes(fastify: FastifyInstance): void
         params: communityParams,
         body: {
           type: 'object',
-          required: ['reason'],
           properties: {
             isActive: { type: 'boolean' },
             isPrivate: { type: 'boolean' },
-            reason: { type: 'string', minLength: 10, maxLength: 500, description: 'Motif consigné dans le journal' },
+            reason: { type: 'string', maxLength: 500, description: 'Motif consigné dans le journal (10 caractères minimum s\'il est fourni ; facultatif pour le rang souverain)' },
           },
         },
         response: { 200: enveloppe(ficheSchema), ...reponsesEnErreur },
@@ -355,7 +359,7 @@ export function registerCommunityOversightRoutes(fastify: FastifyInstance): void
         const { isActive, isPrivate, reason } = request.body as {
           isActive?: boolean;
           isPrivate?: boolean;
-          reason: string;
+          reason?: string;
         };
         if (isActive === undefined && isPrivate === undefined) {
           return sendBadRequest(reply, 'Aucun changement demandé : isActive ou isPrivate est requis');

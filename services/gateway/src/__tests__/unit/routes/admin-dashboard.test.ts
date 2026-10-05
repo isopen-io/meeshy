@@ -17,12 +17,14 @@ jest.mock('../../../utils/logger', () => ({
 const mockCacheGet = jest.fn<any>().mockResolvedValue(null);
 const mockCacheSet = jest.fn<any>().mockResolvedValue(undefined);
 const mockCacheDel = jest.fn<any>().mockResolvedValue(undefined);
+const mockCacheKeys = jest.fn<any>().mockResolvedValue([]);
 
 jest.mock('../../../services/CacheStore', () => ({
   getCacheStore: () => ({
     get: (...a: any[]) => mockCacheGet(...a),
     set: (...a: any[]) => mockCacheSet(...a),
     del: (...a: any[]) => mockCacheDel(...a),
+    keys: (...a: any[]) => mockCacheKeys(...a),
   }),
 }));
 
@@ -136,7 +138,7 @@ describe('GET /dashboard — success (ADMIN)', () => {
     const res = await app.inject({ method: 'GET', url: '/dashboard' });
     expect(res.statusCode).toBe(200);
     expect(res.json().success).toBe(true);
-    expect(res.headers['cache-control']).toContain('private');
+    expect(res.headers['cache-control']).toBe('no-store');
   });
 });
 
@@ -194,7 +196,8 @@ describe('GET /dashboard — cached response', () => {
     const res = await app.inject({ method: 'GET', url: '/dashboard' });
     expect(res.statusCode).toBe(200);
     expect(res.json().success).toBe(true);
-    expect(res.headers['cache-control']).toContain('max-age=600');
+    // `no-store` : « Recalculer maintenant » doit pouvoir relire (audit 2026-10-04).
+    expect(res.headers['cache-control']).toBe('no-store');
   });
 });
 
@@ -261,6 +264,16 @@ describe('POST /dashboard/invalidate-cache — success (ADMIN)', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json().success).toBe(true);
     expect(mockCacheDel).toHaveBeenCalled();
+  });
+
+  it('purge aussi les caches des statistiques (admin:analytics:*)', async () => {
+    mockCacheDel.mockClear();
+    mockCacheKeys.mockResolvedValueOnce(['admin:analytics:kpis:7d', 'admin:analytics:hourly-activity']);
+    const res = await app.inject({ method: 'POST', url: '/dashboard/invalidate-cache' });
+    expect(res.statusCode).toBe(200);
+    expect(mockCacheKeys).toHaveBeenCalledWith('admin:analytics:*');
+    const purges = mockCacheDel.mock.calls.map((c: unknown[]) => c[0]);
+    expect(purges).toEqual(expect.arrayContaining(['admin:analytics:kpis:7d', 'admin:analytics:hourly-activity']));
   });
 });
 

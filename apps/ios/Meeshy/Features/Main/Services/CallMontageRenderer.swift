@@ -6,6 +6,9 @@ nonisolated struct CallMontagePortrait: @unchecked Sendable {
     let id: String
     let name: String
     let image: CGImage?
+    /// Peint, ce portrait est un TROU qui relève sa case (#9348) — `nil` pour
+    /// les appels, qui peignent la photo.
+    var hole: CallMontageHole? = nil
 }
 
 nonisolated struct CallMontageCaption: Equatable, Sendable {
@@ -192,7 +195,16 @@ nonisolated enum CallMontageRenderer {
         if slot.rotation != 0, slot.shape != .rectangle {
             rotate(context, around: CGPoint(x: slot.frame.midX, y: slot.frame.midY), degrees: slot.rotation)
         }
-        context.addPath(path(for: slot))
+        let chemin = path(for: slot)
+        if let hole = portrait.hole {
+            hole.record(path: chemin, frame: slot.frame, toCanvas: context.userSpaceToDeviceSpaceTransform)
+            context.addPath(chemin)
+            context.setBlendMode(.clear)
+            context.fillPath()
+            context.restoreGState()
+            return
+        }
+        context.addPath(chemin)
         context.clip()
         if let image = portrait.image {
             drawImage(context, image, aspectFill: slot.frame)

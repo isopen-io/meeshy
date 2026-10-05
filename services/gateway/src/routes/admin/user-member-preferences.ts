@@ -260,6 +260,7 @@ export function registerUserMemberPreferencesRoutes(fastify: FastifyInstance, de
       if (violations.length > 0) {
         return sendForbidden(reply, 'CONSENT_REQUIRED', {
           message: 'Missing required consents for requested preferences',
+          code: 'CONSENT_REQUIRED',
           violations: violations.map((violation) => ({ ...violation, category }))
         });
       }

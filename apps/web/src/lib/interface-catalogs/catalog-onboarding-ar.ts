@@ -88,6 +88,7 @@ const ar = {
   'onboarding.recap.friends': 'طلبات في الطريق: {count}',
   'onboarding.recap.tomorrow': 'غدًا يمكن أن تصل سلسلتك إلى {next}.',
   'onboarding.recap.explore': 'تابع الاستكشاف',
+  'onboarding.recap.game': 'اكتشف اللعبة مع مي وميو',
   'onboarding.recap.done': 'يكفي لهذا اليوم',
 } satisfies OnboardingCatalog;
 

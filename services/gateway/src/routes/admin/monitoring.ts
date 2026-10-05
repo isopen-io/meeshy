@@ -89,7 +89,35 @@ type StatusMetricsLike = {
 type FastifyWithLiveServices = {
   readonly socketIOHandler?: { readonly getManager?: () => { readonly getStats?: () => SocketStatsLike } | null };
   readonly statusService?: { readonly getMetrics?: () => StatusMetricsLike };
+  readonly translationService?: { readonly healthCheck?: () => Promise<boolean> };
 };
+
+/** Le délai de la sonde du traducteur : la supervision ne doit pas attendre un traducteur muet. */
+const TRANSLATOR_PROBE_TIMEOUT_MS = 1500;
+
+/**
+ * Le traducteur RÉPOND-il maintenant ? Les compteurs de `readTranslator` disent
+ * ce qu'il a FAIT depuis le démarrage ; ils ne disent pas s'il est joignable
+ * (audit 2026-10-04). La sonde (`healthCheck`, un ping ZMQ) est bornée par un
+ * délai court : au-delà, il est déclaré injoignable. Toute erreur vaut `false`.
+ */
+async function probeTranslator(fastify: FastifyInstance): Promise<boolean> {
+  const service = (fastify as unknown as FastifyWithLiveServices).translationService;
+  if (typeof service?.healthCheck !== 'function') return false;
+  let minuterie: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      service.healthCheck().then((ok) => ok === true),
+      new Promise<boolean>((resolve) => {
+        minuterie = setTimeout(() => resolve(false), TRANSLATOR_PROBE_TIMEOUT_MS);
+      }),
+    ]);
+  } catch {
+    return false;
+  } finally {
+    if (minuterie) clearTimeout(minuterie);
+  }
+}
 
 const count = (value: number | undefined): number => (typeof value === 'number' && Number.isFinite(value) ? value : 0);
 
@@ -124,10 +152,11 @@ function readPresenceMetrics(fastify: FastifyInstance) {
   }
 }
 
-function readTranslator(stats: SocketStatsLike | null) {
+function readTranslator(stats: SocketStatsLike | null, reachable: boolean) {
   const translation = stats?.translation_service_stats;
   if (!translation) return null;
   return {
+    reachable,
     requestsSent: count(translation.translation_requests_sent),
     received: count(translation.translations_received),
     errors: count(translation.errors),
@@ -176,6 +205,7 @@ const monitoringSchema = {
         errors: nombre,
         poolFullRejections: nombre,
         avgProcessingTimeMs: nombre,
+        reachable: { type: 'boolean', description: 'Le traducteur répond à une sonde (ping ZMQ, délai 1,5 s) au moment de la lecture' },
         cacheHitRate: nombre,
         memoryUsageMb: nombre,
         uptimeSeconds: nombre,
@@ -231,7 +261,11 @@ export function registerMonitoringRoutes(fastify: FastifyInstance): void {
     async (_request: FastifyRequest, reply: FastifyReply) => {
       try {
         const memory = process.memoryUsage();
-        const [databaseLatency, redis] = await Promise.all([pingBase(fastify.prisma), pingCache()]);
+        const [databaseLatency, redis, translatorReachable] = await Promise.all([
+          pingBase(fastify.prisma),
+          pingCache(),
+          probeTranslator(fastify),
+        ]);
         const socketStats = readSocketStats(fastify);
 
         return sendSuccess(reply, {
@@ -249,7 +283,7 @@ export function registerMonitoringRoutes(fastify: FastifyInstance): void {
             translationsSent: count(socketStats?.translations_sent),
             errors: count(socketStats?.errors),
           },
-          translator: readTranslator(socketStats),
+          translator: readTranslator(socketStats, translatorReachable),
           circuitBreakers: servedCircuitBreakers().map(({ lastFailure, ...breaker }) => ({
             ...breaker,
             lastFailureAt: lastFailure,

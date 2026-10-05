@@ -156,6 +156,20 @@ const f = {
   'admin.broadcast.done.sent': 'Envio de e-mails iniciado',
   'admin.broadcast.done.inApp': 'Publicação no aplicativo iniciada',
   'admin.broadcast.done.deleted': 'Difusão excluída',
+  /* ─── Diffusion : fiche en cartes, deux canaux comptés, publication échouée, traductions manquantes (lot Modération, croissance, plateforme, 2026-10-05) ─── */
+  'admin.broadcast.cards.title': 'A difusão, por seção',
+  'admin.broadcast.card.translations': 'Traduções',
+  'admin.broadcast.card.byEmail': 'Por e-mail',
+  'admin.broadcast.card.inApp': 'No aplicativo',
+  'admin.broadcast.translations.missing': 'Sem tradução: {languages} — essas contas lerão o texto original.',
+  'admin.broadcast.inApp.state.failed': 'Publicação falhou',
+  'admin.broadcast.inApp.error': 'Erro informado',
+  'admin.broadcast.audience.inAppRecipients': 'Contas alcançáveis no aplicativo',
+  'admin.broadcast.audience.emailRecipients': 'Contas alcançáveis por e-mail (endereço verificado)',
+  'admin.broadcast.notice.inAppFailed': 'A publicação no aplicativo falhou: {message}',
+  'admin.broadcast.notice.inAppFailedNoMessage': 'A publicação no aplicativo falhou: nenhuma notificação foi entregue.',
+  'admin.broadcast.notice.noEmailRecipients': 'Nenhuma conta desta audiência tem endereço de e-mail verificado: o envio por e-mail não alcançaria ninguém. A publicação no aplicativo continua possível.',
+  'admin.broadcast.confirm.inApp.bodyUncounted': 'Audiência: {audience}. O número de contas alcançáveis no aplicativo só é contado na preparação, e esta página não o guarda mais. Cada uma recebe uma notificação no seu centro de notificações, com um envio push. Não pode ser retirada e só é publicada uma vez.',
 } satisfies AdminCatalogFragment<typeof fr>;
 
 export default f;

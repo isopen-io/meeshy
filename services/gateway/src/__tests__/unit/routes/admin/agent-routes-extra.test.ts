@@ -418,8 +418,8 @@ describe('Agent Admin Routes — extra coverage', () => {
       cacheStoreMock.get.mockResolvedValue(null);
       prisma.agentAnalytic.findUnique.mockResolvedValue(null);
       prisma.agentConversationSummary.findUnique.mockResolvedValue(null);
-      prisma.agentUserRole.findMany.mockResolvedValue([]);
-      prisma.agentConfig.findUnique.mockResolvedValue(null);
+      prisma.agentUserRole.findMany.mockResolvedValue([]); prisma.user.findMany.mockResolvedValue([]);
+      prisma.agentConfig.findUnique.mockResolvedValue({ scanStartedAt: null, currentNode: null });
 
       const res = await app.inject({ method: 'GET', url: `/configs/${CONV_ID}/live` });
       const body = JSON.parse(res.body);
@@ -438,7 +438,7 @@ describe('Agent Admin Routes — extra coverage', () => {
       prisma.agentUserRole.findMany.mockResolvedValue([
         { userId: USER_ID, confidence: 0.5, locked: true },
       ]);
-      prisma.agentConfig.findUnique.mockResolvedValue(null);
+      prisma.agentConfig.findUnique.mockResolvedValue({ scanStartedAt: null, currentNode: null });
       // user not found in DB
       prisma.user.findMany.mockResolvedValue([]);
 
@@ -707,21 +707,18 @@ describe('Agent Admin Routes — extra coverage', () => {
       expect(prisma.$transaction).not.toHaveBeenCalled();
     });
 
-    it('refuse BIGBOSS sans motif écrit — 400 avant toute suppression (#4157)', async () => {
+    // Spec 2026-10-04 § 4 : BIGBOSS sans motif → le reset a lieu, tracé ; un motif FOURNI court → 400.
+    it('admet BIGBOSS sans motif, refuse son motif fourni trop court', async () => {
+      prisma.$transaction.mockImplementation(async (promises: Promise<any>[]) => Promise.all(promises));
+      for (const m of ['agentConfig', 'agentUserRole', 'agentConversationSummary', 'agentAnalytic', 'agentGlobalProfile']) prisma[m].deleteMany.mockResolvedValue({ count: 0 });
+      cacheStoreMock.keys.mockResolvedValue([]);
       app = buildApp(prisma, bigbossUser);
       await app.ready();
-
-      const sansCorps = await app.inject({ method: 'DELETE', url: '/reset' });
-      expect(sansCorps.statusCode).toBe(400);
-
-      const motifCourt = await app.inject({
-        method: 'DELETE',
-        url: '/reset',
-        payload: { reason: 'court' }, // 5 caractères < minLength: 10
-      });
-      expect(motifCourt.statusCode).toBe(400);
-
+      const court = await app.inject({ method: 'DELETE', url: '/reset', payload: { reason: 'court' } });
+      expect(court.statusCode).toBe(400);
       expect(prisma.$transaction).not.toHaveBeenCalled();
+      expect((await app.inject({ method: 'DELETE', url: '/reset', payload: {} })).statusCode).toBe(200);
+      expect(prisma.adminAuditLog.create.mock.calls[0][0].data).toMatchObject({ action: 'AGENT_FULL_RESET', metadata: undefined });
     });
   });
 

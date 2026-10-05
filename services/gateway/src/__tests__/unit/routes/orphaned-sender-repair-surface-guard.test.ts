@@ -202,6 +202,9 @@ const SERVICE_SURFACES: Record<string, Classification> = {
   'onboarding/OnboardingService.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   // #7578 — purge serveur du contenu d'une vue unique : ni expéditeur ni contenu servi.
   'messaging/purgeViewOnceContent.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #9382 — le signal de jeu « réponse reçue » : `select: { createdAt: true }`
+  // seul, pour mesurer la fenêtre d'éligibilité du bonus. Aucun expéditeur servi.
+  'game/MessageGameSignals.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   // #7451 — CELLE-CI sélectionne bien `sender`, et reste pourtant exempte : elle
   // n'en lit que `{ id, userId }` pour NOMMER la room personnelle de
   // l'expéditeur, et retombe explicitement sur `row.senderId` quand la relation

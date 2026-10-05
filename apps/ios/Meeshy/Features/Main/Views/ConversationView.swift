@@ -182,11 +182,21 @@ struct ConversationView: View {
     /// ses champs internes changent. L'override est la seule source vivante.
     @State private var conversationOverride: Conversation?
 
-    /// La conversation à AFFICHER : l'override serveur s'il existe, sinon la
-    /// valeur figée. `internal` (pas `private`) : lue par l'extension
+    /// La conversation à AFFICHER : l'override s'il existe, sinon la valeur
+    /// figée. `internal` (pas `private`) : lue par l'extension
     /// `ConversationView+Header`, qui vit dans un autre fichier — `private` est
     /// à portée de fichier.
     var liveConversation: Conversation? { conversationOverride ?? conversation }
+
+    /// Le pair d'un direct OUVERT renommé ou repeint à `user:updated` (#9359) :
+    /// l'annonce s'applique à la conversation AFFICHÉE et le résultat devient
+    /// l'override — l'override garde la priorité, la valeur figée reste le
+    /// repli, et un enregistrement des réglages repart du pair repeint. Une
+    /// annonce qui ne change rien n'écrit rien : l'écran ne se redessine pas.
+    func admitPeerUpdate(_ event: UserUpdatedEvent) {
+        guard let repainted = DirectPeerRepaint.repainted(liveConversation, by: event) else { return }
+        conversationOverride = repainted
+    }
 
     // NOTE: Properties below are internal (not private) for cross-file extension access.
     // Extensions in ConversationView+MessageRow, +Header, +ScrollIndicators, +Composer.
@@ -583,61 +593,6 @@ struct ConversationView: View {
         case .global: return .global
         case .broadcast: return .broadcast
         }
-    }
-
-    // MARK: - Closed Conversation Banner
-
-    private var closedConversationBanner: some View {
-        HStack(spacing: MeeshySpacing.sm) {
-            Image(systemName: "lock.fill")
-                .foregroundColor(.secondary)
-            Text(String(localized: "conversation.view.closed", bundle: .main))
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, MeeshySpacing.md + 2)
-        .background(.ultraThinMaterial)
-    }
-
-    // MARK: - Blocked Conversation Composer Zone
-
-    /// Replaces the composer for a DM the user has blocked: explains they must
-    /// unblock to write to and receive messages from the user, with a one-tap
-    /// unblock CTA. Mirrors `closedConversationBanner`'s static-zone pattern.
-    private func blockedComposerZone(userId: String) -> some View {
-        VStack(spacing: MeeshySpacing.sm) {
-            HStack(spacing: MeeshySpacing.sm) {
-                Image(systemName: "hand.raised.fill")
-                    .foregroundColor(.secondary)
-                Text(String(localized: "conversation.composer.blocked.title", bundle: .main))
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundColor(.secondary)
-            }
-            Text(String(localized: "conversation.composer.blocked.subtitle", bundle: .main))
-                .font(.caption)
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
-            Button {
-                HapticFeedback.medium()
-                Task {
-                    await BlockActionCoordinator.shared.unblock(userId: userId)
-                    await MainActor.run { HapticFeedback.success() }
-                }
-            } label: {
-                Text(String(localized: "conversation.composer.blocked.unblock", bundle: .main))
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, MeeshySpacing.xxl)
-                    .padding(.vertical, MeeshySpacing.sm + 2)
-                    .background(Capsule().fill(Color(hex: accentColor)))
-            }
-            .accessibilityLabel(String(localized: "conversation.composer.blocked.unblock", bundle: .main))
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, MeeshySpacing.lg)
-        .padding(.horizontal, MeeshySpacing.xxl)
-        .background(.ultraThinMaterial)
     }
 
     // MARK: - Body
@@ -2161,7 +2116,7 @@ struct ConversationView: View {
     private var anonymousHeaderBar: some View {
         HStack {
             ConversationTitleLabel(
-                name: conversation?.displayName ?? "Conversation",
+                name: liveConversation?.displayName ?? "Conversation",
                 favoriteEmoji: conversation?.userState.reaction,
                 font: MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold, design: .rounded),
                 color: .white
@@ -2368,10 +2323,10 @@ struct ConversationView: View {
         // F11 (revue adversariale 2026-08-25) : `liveConversation` — visible
         // sur la même surface que `headerTagsRow` juste en dessous (déjà
         // basculée). Le TITRE rendu par ce même bouton
-        // (`expandedHeaderTitleLabel` → `conversation?.displayName`) reste
-        // délibérément sur la valeur figée — hors du périmètre minimal de ce
-        // correctif, suivi nommé séparément — seul le libellé d'accessibilité
-        // change ici.
+        // (`expandedHeaderTitleLabel`) la lit aussi depuis #9359 : un pair
+        // renommé ou un enregistrement des réglages s'y voit sans quitter le
+        // fil, et le libellé d'accessibilité dit le même nom que l'œil lit.
+        // Une seule source pour les deux.
         .accessibilityLabel(liveConversation?.name ?? "Conversation")
         .accessibilityHint(String(localized: "conversation.view.open_info", bundle: .main))
 
@@ -2402,7 +2357,7 @@ struct ConversationView: View {
     private var expandedHeaderTitleLabel: some View {
         HStack(spacing: MeeshySpacing.xs + 2) {
             ConversationTitleLabel(
-                name: conversation?.displayName ?? "Conversation",
+                name: liveConversation?.displayName ?? "Conversation",
                 favoriteEmoji: conversation?.userState.reaction,
                 font: MeeshyFont.relative(MeeshyFont.subheadSize, weight: .bold, design: .rounded),
                 color: isDark ? .white : MeeshyColors.indigo950, // blanc sur le verre clair était illisible (#8822)

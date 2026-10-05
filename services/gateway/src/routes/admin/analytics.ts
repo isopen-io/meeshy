@@ -6,6 +6,7 @@ import { AnalyticsMessageTypesQuerySchema, AnalyticsLanguageDistQuerySchema, Ana
 import { getCacheStore } from '../../services/CacheStore';
 import { coerceCallAnalytics, coerceCallFeedback, summarizeCallFeedback, summarizeCallReliability } from '../../services/callAnalyticsAggregate';
 import { requirePermission } from '../../middleware/authorize';
+import type { Prisma } from '@meeshy/shared/prisma/client';
 
 const CACHE_TTL = {
   realtime: 60,         // 1 min — "real-time" freshness
@@ -28,6 +29,24 @@ const CACHE_TTL = {
 // admet BIGBOSS/ADMIN/MODERATOR/AUDIT (comme `canViewAnalytics` le faisait
 // déjà pour ces quatre-là) et exclut ANALYST, qui n'a rien à faire ici.
 const requireAnalyticsPermission = requirePermission('canAccessAdmin');
+
+/**
+ * Les COMPTES distincts ayant envoyé au moins un message depuis `since`.
+ * `Message.senderId` est un PARTICIPANT : on le résout en compte, invités
+ * (participation sans `userId`) exclus, puis on compte les comptes distincts.
+ * Même forme que `distinctUsersByLanguagePipeline` (`languages.ts`).
+ */
+function distinctSendersPipeline(since: Date): Prisma.InputJsonValue[] {
+  return [
+    { $match: { createdAt: { $gte: { $date: since.toISOString() } }, deletedAt: null, senderId: { $ne: null } } },
+    { $group: { _id: '$senderId' } },
+    { $lookup: { from: 'Participant', localField: '_id', foreignField: '_id', as: 'sender' } },
+    { $unwind: '$sender' },
+    { $match: { 'sender.userId': { $ne: null } } },
+    { $group: { _id: '$sender.userId' } },
+    { $count: 'total' },
+  ] as unknown as Prisma.InputJsonValue[];
+}
 
 export async function analyticsRoutes(fastify: FastifyInstance) {
   /**
@@ -103,9 +122,11 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
           const bucketEnd = new Date(now.getTime() - i * 3 * 60 * 60 * 1000);
           const bucketStart = new Date(bucketEnd.getTime() - 3 * 60 * 60 * 1000);
           const label = `${String(bucketStart.getHours()).padStart(2, '0')}h`;
+          // `startsAt` (ISO) : le client formate la tranche dans le fuseau du
+          // LECTEUR ; `hour` reste l'étiquette d'hier, au fuseau du serveur.
           return fastify.prisma.message.count({
             where: { createdAt: { gte: bucketStart, lt: bucketEnd }, deletedAt: null }
-          }).then(activity => ({ hour: label, activity }));
+          }).then(activity => ({ hour: label, startsAt: bucketStart.toISOString(), activity }));
         })
       );
 
@@ -200,9 +221,10 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
         fastify.prisma.user.count({
           where: { lastActiveAt: { gte: thirtyDaysAgo, lt: sevenDaysAgo } }
         }),
-        fastify.prisma.user.count({
-          where: { OR: [{ lastActiveAt: { lt: thirtyDaysAgo } }, { lastActiveAt: null }] }
-        }),
+        // `lastActiveAt` est REQUIS (`@default(now())`) : un compte jamais actif
+        // porte sa date d'inscription. `lastActiveAt: null` (ou `isSet`) est
+        // refusé par le client généré et faisait échouer toute la route.
+        fastify.prisma.user.count({ where: { lastActiveAt: { lt: thirtyDaysAgo } } }),
       ]);
 
       const responseBody = {
@@ -292,14 +314,21 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
         default:    startDate.setDate(startDate.getDate() - 30);
       }
 
-      const [totalMessages, totalUsers, activeUsers, newUsers] = await Promise.all([
+      const [totalMessages, totalUsers, activeUsers, newUsers, expediteurs] = await Promise.all([
         fastify.prisma.message.count({ where: { createdAt: { gte: startDate }, deletedAt: null } }),
         fastify.prisma.user.count(),
         fastify.prisma.user.count({ where: { lastActiveAt: { gte: startDate } } }),
-        fastify.prisma.user.count({ where: { createdAt: { gte: startDate } } })
+        fastify.prisma.user.count({ where: { createdAt: { gte: startDate } } }),
+        fastify.prisma.message.aggregateRaw({ pipeline: distinctSendersPipeline(startDate) })
       ]);
+      const sendersInPeriod = Number((expediteurs as unknown as Array<{ total?: number }>)[0]?.total ?? 0);
 
-      const engagementRate = totalUsers > 0 ? Math.round((activeUsers / totalUsers) * 100) : 0;
+      // `engagementRate` = comptes ayant ÉCRIT au moins un message dans la
+      // période / comptes ACTIFS dans la période (`lastActiveAt` dans la
+      // période). Il avait la formule d'`activeUserRate` (actifs / total) :
+      // deux étiquettes pour un seul chiffre (audit 2026-10-04). Borné à 100 :
+      // `lastActiveAt` peut retarder sur un envoi.
+      const engagementRate = activeUsers > 0 ? Math.min(100, Math.round((sendersInPeriod / activeUsers) * 100)) : 0;
       const growthRate     = totalUsers > 0 ? Math.round((newUsers / totalUsers) * 100)    : 0;
 
       const responseBody = {

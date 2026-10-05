@@ -62,6 +62,11 @@ export type AdminPostRow = {
   /** ≤ 120 caractères ; `null` pour une audience restreinte, ou sans texte. */
   readonly excerpt: string | null;
   readonly mediaCount: number;
+  /** La vignette du premier média qui en a une — `null` pour une audience restreinte (c'est du contenu) ou sans vignette. */
+  readonly thumbnailUrl: string | null;
+  /** La langue d'origine (code) : la ligne la NOMME par la bibliothèque d'interprétation. */
+  readonly originalLanguage: string | null;
+  readonly isEdited: boolean;
   /** L'humeur d'un statut (un emoji) : du contenu, donc gardée au même régime que le texte. */
   readonly moodEmoji: string | null;
   readonly isPinned: boolean;
@@ -70,9 +75,21 @@ export type AdminPostRow = {
   readonly likeCount: number;
   readonly commentCount: number;
   readonly viewCount: number;
+  readonly repostCount: number;
+  readonly shareCount: number;
+  readonly bookmarkCount: number;
   readonly createdAt: string | null;
   readonly author: AdminPersonRef | null;
 };
+
+function firstThumbnail(media: unknown): string | null {
+  if (!Array.isArray(media)) return null;
+  for (const entry of media) {
+    const thumbnail = textOrNull(asRecord(entry)?.thumbnailUrl);
+    if (thumbnail !== null) return thumbnail;
+  }
+  return null;
+}
 
 const LIST_EXCERPT = 120;
 
@@ -89,6 +106,9 @@ export function decodeAdminPostRow(raw: unknown): AdminPostRow | null {
     restricted,
     excerpt: restricted ? null : excerptOf(asText(post.content), LIST_EXCERPT),
     mediaCount: Array.isArray(post.media) ? post.media.length : 0,
+    thumbnailUrl: restricted ? null : firstThumbnail(post.media),
+    originalLanguage: textOrNull(post.originalLanguage),
+    isEdited: post.isEdited === true,
     moodEmoji: restricted ? null : textOrNull(post.moodEmoji),
     isPinned: post.isPinned === true,
     deletedAt: textOrNull(post.deletedAt),
@@ -96,13 +116,23 @@ export function decodeAdminPostRow(raw: unknown): AdminPostRow | null {
     likeCount: asCount(post.likeCount),
     commentCount: asCount(post.commentCount),
     viewCount: asCount(post.viewCount),
+    repostCount: asCount(post.repostCount),
+    shareCount: asCount(post.shareCount),
+    bookmarkCount: asCount(post.bookmarkCount),
     createdAt: textOrNull(post.createdAt),
     author: decodeAdminPersonRef(post.author),
   };
 }
 
 export type AdminPostsStats = {
+  /** Non retirées (stories et statuts expirés compris). */
   readonly total: number;
+  /**
+   * EN LIGNE : non retirées ET non expirées (`c54e63d608`). `null` d'un ancien
+   * serveur qui ne le sert pas — un champ absent n'est pas un zéro : l'écran
+   * retombe alors sur `total`, nommé « Non retirées ».
+   */
+  readonly live: number | null;
   readonly deleted: number;
   readonly byType: readonly { readonly type: string; readonly count: number }[];
   readonly topAuthors: readonly { readonly author: AdminPersonRef; readonly postCount: number }[];
@@ -111,11 +141,15 @@ export type AdminPostsStats = {
     readonly type: string | null;
     readonly likeCount: number;
     readonly commentCount: number;
+    readonly viewCount: number;
+    readonly repostCount: number;
+    readonly shareCount: number;
+    readonly createdAt: string | null;
     readonly author: AdminPersonRef | null;
   }[];
 };
 
-const EMPTY_STATS: AdminPostsStats = { total: 0, deleted: 0, byType: [], topAuthors: [], trending: [] };
+const EMPTY_STATS: AdminPostsStats = { total: 0, live: null, deleted: 0, byType: [], topAuthors: [], trending: [] };
 
 function decodeTopAuthor(raw: unknown): AdminPostsStats['topAuthors'][number] | null {
   const entry = asRecord(raw);
@@ -136,6 +170,10 @@ function decodeTrending(raw: unknown): AdminPostsStats['trending'][number] | nul
     type: textOrNull(post.type),
     likeCount: asCount(post.likeCount),
     commentCount: asCount(post.commentCount),
+    viewCount: asCount(post.viewCount),
+    repostCount: asCount(post.repostCount),
+    shareCount: asCount(post.shareCount),
+    createdAt: textOrNull(post.createdAt),
     author: decodeAdminPersonRef(post.author),
   };
 }
@@ -152,6 +190,7 @@ export function decodeAdminPostsStats(raw: unknown): AdminPostsStats {
 
   return {
     total: asCount(stats.total),
+    live: typeof stats.live === 'number' && Number.isFinite(stats.live) && stats.live >= 0 ? stats.live : null,
     deleted: asCount(stats.deleted),
     byType,
     topAuthors: present(Array.isArray(stats.topAuthors) ? stats.topAuthors.map(decodeTopAuthor) : []),

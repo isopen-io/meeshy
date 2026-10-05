@@ -260,7 +260,8 @@ describe('DELETE /admin/users/:userId/sessions/:sessionId', () => {
           userId: 'user123',
           adminId: 'admin123',
           action: UserAuditAction.REVOKE_SESSION,
-          entityId: 'sess-1',
+          entityId: 'user123',
+          metadata: { sessionId: 'sess-1' },
         })
       );
     } finally {

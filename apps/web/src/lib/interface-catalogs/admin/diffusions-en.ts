@@ -156,6 +156,20 @@ const f = {
   'admin.broadcast.done.sent': 'E-mail sending started',
   'admin.broadcast.done.inApp': 'In-app publishing started',
   'admin.broadcast.done.deleted': 'Broadcast deleted',
+  /* ─── Diffusion : fiche en cartes, deux canaux comptés, publication échouée, traductions manquantes (lot Modération, croissance, plateforme, 2026-10-05) ─── */
+  'admin.broadcast.cards.title': 'The broadcast, section by section',
+  'admin.broadcast.card.translations': 'Translations',
+  'admin.broadcast.card.byEmail': 'By e-mail',
+  'admin.broadcast.card.inApp': 'In the app',
+  'admin.broadcast.translations.missing': 'No translation: {languages} — these accounts will read the original text.',
+  'admin.broadcast.inApp.state.failed': 'Publication failed',
+  'admin.broadcast.inApp.error': 'Error reported',
+  'admin.broadcast.audience.inAppRecipients': 'Accounts reachable in the app',
+  'admin.broadcast.audience.emailRecipients': 'Accounts reachable by e-mail (verified address)',
+  'admin.broadcast.notice.inAppFailed': 'The in-app publication failed: {message}',
+  'admin.broadcast.notice.inAppFailedNoMessage': 'The in-app publication failed: no notification was delivered.',
+  'admin.broadcast.notice.noEmailRecipients': 'No account in this audience has a verified e-mail address: sending by e-mail would reach nobody. Publishing in the app remains possible.',
+  'admin.broadcast.confirm.inApp.bodyUncounted': 'Audience: {audience}. The number of accounts reachable in the app is only counted at preparation, and this page no longer holds it. Each one receives a notification in their notification center, with a push. It cannot be withdrawn, and is published only once.',
 } satisfies AdminCatalogFragment<typeof fr>;
 
 export default f;

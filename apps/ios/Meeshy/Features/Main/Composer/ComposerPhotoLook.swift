@@ -85,13 +85,8 @@ nonisolated enum ComposerPhotoLookRule {
         preset != .natural
     }
 
-    /// La toile d'un cadre : celle de la capture d'appel (9:16, 1080 × 1920).
-    static let frameCanvas = CallMontageLayout.captureSize
-
-    /// L'aperçu et les vignettes se peignent petit ; la remise, en pleine taille.
-    static let previewMaxPixel: CGFloat = 1280
+    /// Les vignettes se peignent petit.
     static let thumbnailMaxPixel: CGFloat = 240
-    static let previewFrameCanvas = CallCaptureController.previewCanvas
     static let thumbnailFrameCanvas = CallCaptureController.thumbnailCanvas
 
     /// **L'espace de la photo traverse tout le rendu** (#9327). L'iPhone prend

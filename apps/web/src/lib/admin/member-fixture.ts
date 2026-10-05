@@ -9,6 +9,7 @@ import type { AdminUserDetail } from '@/lib/api/admin-user-detail';
  */
 export const MEMBER_EXTRAS = {
   registrationCountry: '',
+  phoneCountryCode: '',
   lastLoginLocation: '',
   lastLoginDevice: '',
   registrationLocation: '',
@@ -19,6 +20,7 @@ export const MEMBER_EXTRAS = {
 } as const satisfies Pick<
   AdminUserDetail,
   | 'registrationCountry'
+  | 'phoneCountryCode'
   | 'lastLoginLocation'
   | 'lastLoginDevice'
   | 'registrationLocation'

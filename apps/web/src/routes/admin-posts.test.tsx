@@ -201,10 +201,43 @@ describe('AdminPostsPanel — chaque ligne ouvre sa fiche', () => {
   });
 });
 
+describe('AdminPostsPanel — ce que la ligne servait sans écran (audit 2026-10-04)', () => {
+  test('la vignette du premier média, la langue NOMMÉE, « Modifiée », et les repartages, partages, enregistrements', async () => {
+    const { host } = await ouvrir((req) =>
+      (req.path.split('?')[0] ?? '').endsWith('/stats')
+        ? resultatServi({ success: true, data: STATS })
+        : served([post(3, { isEdited: true, originalLanguage: 'wo', repostCount: 4, shareCount: 6, bookmarkCount: 8, media: [{ id: 'm1', thumbnailUrl: 'https://cdn.meeshy.me/3-t.jpg' }] })]),
+    );
+    const line = row(host, 3);
+    expect(line?.querySelector('[data-admin-post-thumbnail]')?.getAttribute('src')).toContain('3-t.jpg');
+    expect(line?.textContent).toContain('Wolof');
+    expect(line?.textContent).toContain('Modifiée');
+    for (const value of ['4', '6', '8']) expect(line?.textContent).toContain(value);
+    expect(line?.textContent).not.toMatch(/\bwo\b/);
+  });
+
+  test('une audience restreinte ne montre pas de vignette', async () => {
+    const { host } = await ouvrir((req) =>
+      (req.path.split('?')[0] ?? '').endsWith('/stats') ? resultatServi({ success: true, data: STATS }) : served([post(4, { visibility: 'ONLY', media: [{ id: 'm1', thumbnailUrl: 'https://cdn.meeshy.me/4-t.jpg' }] })]),
+    );
+    expect(row(host, 4)?.querySelector('[data-admin-post-thumbnail]')).toBeNull();
+  });
+});
+
 describe('AdminPostsPanel — le bandeau de chiffres', () => {
-  test('le total, les retirées et leur part de tout ce qui a été publié', async () => {
+  test('« en ligne » lit `live` quand la passerelle le sert : ni retirées, ni stories expirées (audit 2026-10-04)', async () => {
+    const { host } = await ouvrir((req) => ((req.path.split('?')[0] ?? '').endsWith('/stats') ? resultatServi({ success: true, data: { ...STATS, live: 97 } }) : served(PAGE, 57)));
+    const tile = host.querySelector('[data-admin-stat="posts-total"]')?.textContent ?? '';
+    expect(tile).toContain('Publications en ligne');
+    expect(tile).toContain('97');
+    expect(tile).not.toContain('120');
+  });
+
+  test('le total, les retirées et leur part de tout ce qui a été publié — sans `live` (ancien serveur), « Non retirées »', async () => {
     const { host } = await ouvrir();
     expect(host.querySelector('[data-admin-stat="posts-total"]')?.textContent).toContain('120');
+    expect(host.querySelector('[data-admin-stat="posts-total"]')?.textContent).toContain('Non retirées');
+    expect(host.querySelector('[data-admin-stat="posts-total"]')?.textContent).not.toContain('en ligne');
     const deleted = host.querySelector('[data-admin-stat="posts-deleted"]')?.textContent ?? '';
     expect(deleted).toContain('8');
     expect(deleted).toContain('6,3');
@@ -231,7 +264,8 @@ describe('AdminPostsPanel — le bandeau de chiffres', () => {
     const { host } = await ouvrir();
     const trend = host.querySelector(`[data-admin-trending="${ID(3)}"]`);
     expect(trend?.textContent).toContain('Reel de Awa Diop');
-    expect(trend?.textContent).toContain('J’aime : 50 · Commentaires : 9');
+    expect(trend?.textContent).toContain('J’aime : 50 · Commentaires : 9 · Vues : 900 · Repartages : 2 · Partages : 0');
+    expect(trend?.textContent).toContain('avant-hier');
     expect(trend?.querySelector('a')?.getAttribute('href')).toBe(`/admin/posts/${ID(3)}`);
     expect(host.textContent).not.toContain('Un texte de tendance');
   });

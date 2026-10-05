@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 
 import { Glyph, GlyphSvg } from '@/components/glyph';
 import { MascotCoach } from '@/components/mascot';
@@ -7,11 +7,14 @@ import { PROGRESSION_GLYPHS } from '@/components/glyphs-progression';
 import { GLYPHS } from '@/components/glyphs';
 import { GlassSurface, GlassBack } from '@/components/glass-surface';
 import { ProgressBar } from '@/components/progress-bar';
-import { httpTransport, unwrap } from '@/lib/api/client';
+import { unwrap } from '@/lib/api/client';
 import { meeshMissing } from '@/lib/view/meesh-copy';
 import { apiDeps } from '@/lib/api/deps';
-import { ENGAGEMENT_PROGRESS_QUERY_KEY, loadEngagementProgress, mintMeesh } from '@/lib/api/engagement';
+import { ENGAGEMENT_PROGRESS_QUERY_KEY, loadEngagementProgress, type EngagementWithGame } from '@/lib/api/engagement';
 import { useOnline } from '@/lib/net/online';
+import { GameSection, type GameHost } from '@/routes/progression-game';
+import { GameLead } from '@/routes/progression-lead';
+import { useGameActions } from '@/routes/progression-game-actions';
 import { Link } from '@/routes/route-table';
 import {
   ACHIEVEMENT_COPY,
@@ -363,15 +366,6 @@ export function SectionLink({ section, progress }: { section: ProgressionSection
 }
 
 /**
- * CE QUE L'ÉCHEC DIT (#6470) — un texte, pas un code.
- *
- * La passerelle rejoue désormais les conflits d'écriture (#6467) : ce qui reste
- * est un échec RÉSEAU, et il se retente. Le message le dit, plutôt que de
- * rendre une cause que personne ne peut corriger.
- */
-const MINT_FAILED_MESSAGE = 'La frappe n’a pas abouti — vérifiez votre connexion et réessayez.';
-
-/**
  * LE ROUET de la frappe — le pendant CSS du `ProgressView` d'iOS.
  *
  * `aria-hidden` : l'état est déjà porté par `aria-busy` sur le bouton. Deux
@@ -574,19 +568,31 @@ export function ProgressionBody({
   isMinting,
   mintError,
   mascotEvent = null,
+  game,
 }: {
-  progress: EngagementProgress;
+  progress: EngagementWithGame;
   onMint: () => void;
   isMinting: boolean;
   mintError?: string | undefined;
   /** Ce qui vient de se passer (#8907) — la mascotte le célèbre avant de revenir à l'état. */
   mascotEvent?: MascotEvent | null;
+  /**
+   * LE JEU (#9383) — présent quand l'hôte pilote les gestes ET que la
+   * passerelle sert le bloc `game`. Les jauges, les missions, l'aperçu de
+   * frappe et la Flamme remplacent alors le hero du niveau (à 6 niveaux, il
+   * contredirait les 100 niveaux), le hero Meesh et la série d'avant ; sans
+   * bloc (ancien serveur), l'écran d'avant reste INTACT.
+   */
+  game?: GameHost;
 }) {
+  const playing = game !== undefined && progress.game !== undefined;
   return (
     <div className="flex flex-col gap-4 px-4 py-3">
-      <MascotCoach moment={mascotMoment(progress, mascotEvent)} />
+      {playing ? null : <MascotCoach moment={mascotMoment(progress, mascotEvent)} />}
+      {playing ? <GameSection progress={progress} host={game} /> : null}
       {progressionLayout(progress).map((bloc) => {
         if (bloc.kind === 'last-achievement') return <LastAchievementHero key="dernier" progress={progress} />;
+        if (playing && (bloc.kind === 'level' || bloc.kind === 'meesh' || bloc.kind === 'flamme')) return null;
         if (bloc.kind === 'level') {
           return <LevelHero key="niveau" progress={progress} mintCost={progress.meesh?.mintCost ?? null} />;
         }
@@ -613,14 +619,6 @@ export function ProgressionBody({
 
 export default function ProgressionScreen() {
   const online = useOnline();
-  const queryClient = useQueryClient();
-  /**
-   * L'identifiant d'idempotence est généré UNE fois par intention de frappe,
-   * jamais par requête : sinon un retry deviendrait une seconde frappe, ce que
-   * cet identifiant est justement là pour empêcher (#5743). Il n'est renouvelé
-   * qu'après une frappe RÉUSSIE.
-   */
-  const requestIdRef = useRef<string>(crypto.randomUUID());
 
   /**
    * LA MASCOTTE CÉLÈBRE CE QUI CHANGE (#8907) — jamais l'état de la première
@@ -631,14 +629,18 @@ export default function ProgressionScreen() {
   const [mascotEvent, setMascotEvent] = useState<MascotEvent | null>(null);
   const seenProgressRef = useRef<EngagementProgress | null>(null);
 
-  const mint = useMutation({
-    mutationFn: async () => unwrap(await mintMeesh(httpTransport, requestIdRef.current)),
-    onSuccess: (result) => {
-      requestIdRef.current = crypto.randomUUID();
+  /**
+   * LES GESTES (#9383) — la frappe y est, avec les quatre autres gestes du jeu.
+   * L'identifiant d'idempotence est généré UNE fois par intention de frappe,
+   * jamais par requête : sinon un retry deviendrait une seconde frappe, ce que
+   * cet identifiant est justement là pour empêcher (#5743). Il n'est renouvelé
+   * qu'après une frappe RÉUSSIE (`progression-game-actions.ts`).
+   */
+  const actions = useGameActions({
+    onMinted: (result) => {
       if (result.status === 'minted' && result.balance !== undefined) {
         setMascotEvent({ kind: 'meesh-minted', balance: result.balance });
       }
-      void queryClient.invalidateQueries({ queryKey: ENGAGEMENT_PROGRESS_QUERY_KEY });
     },
   });
 
@@ -672,9 +674,9 @@ export default function ProgressionScreen() {
           {meesh === undefined ? null : (
             <MeeshEntry
               meesh={meesh}
-              onMint={() => mint.mutate()}
-              isMinting={mint.isPending}
-              mintError={mint.isError ? MINT_FAILED_MESSAGE : undefined}
+              onMint={actions.mint}
+              isMinting={actions.pending.mint}
+              mintError={actions.errors.mint}
             />
           )}
         </div>
@@ -694,10 +696,11 @@ export default function ProgressionScreen() {
         {query.data !== undefined ? (
           <ProgressionBody
             progress={query.data}
-            onMint={() => mint.mutate()}
-            isMinting={mint.isPending}
-            mintError={mint.isError ? MINT_FAILED_MESSAGE : undefined}
+            onMint={actions.mint}
+            isMinting={actions.pending.mint}
+            mintError={actions.errors.mint}
             mascotEvent={mascotEvent}
+            game={{ actions, online, guide: <GameLead view={query.data} /> }}
           />
         ) : query.isError ? (
           <ProgressionError message={query.error.message} online={online} onRetry={() => void query.refetch()} />

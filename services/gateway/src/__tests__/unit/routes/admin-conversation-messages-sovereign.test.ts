@@ -305,6 +305,14 @@ describe('GET /admin/conversations/:id/messages — le rang', () => {
 // ---------------------------------------------------------------------------
 
 describe('GET /admin/conversations/:id/messages — la forme SERVIE', () => {
+  it('sert `ephemeralDuration` (la durée d’un message éphémère) — chargée ET déclarée', async () => {
+    const { res, espion } = await lire('ADMIN', [messageFixture({ ephemeralDuration: 3600, expiresAt: new Date('2026-09-01T11:00:00.000Z') })]);
+    expect((espion.findManyArgs?.select as AnyRecord).ephemeralDuration).toBe(true);
+    expect((res.json().data as AnyRecord[])[0].ephemeralDuration).toBe(3600);
+    const libre = await premiereLigne([messageFixture()]);
+    expect(libre.ephemeralDuration).toBeNull();
+  });
+
   it('sert `senderId` au PREMIER NIVEAU, résolu en `User.id` — sans lui le regroupement du fil casse', async () => {
     const ligne = await premiereLigne([messageFixture()]);
     // `continues()` (apps/web/src/lib/grouping.ts) compare `senderId` : en

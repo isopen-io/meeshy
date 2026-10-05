@@ -33,6 +33,7 @@ jest.mock('../../../../utils/logger-enhanced', () => ({
 
 const getTrackingLinkStats = jest.fn<any>();
 jest.mock('../../../../services/TrackingLinkService', () => ({
+  resolveFrontendBaseUrl: () => 'https://meeshy.example',
   TrackingLinkService: jest.fn().mockImplementation(() => ({
     getTrackingLinkStats: (...args: unknown[]) => getTrackingLinkStats(...args),
   })),
@@ -56,7 +57,8 @@ const linkRow = (over: Row = {}): Row => ({
   source: 'newsletter',
   medium: 'email',
   originalUrl: 'https://exemple.fr/promo',
-  shortUrl: 'https://meeshy.me/l/a1b2c3',
+  // La forme STOCKÉE : `TrackingLinkService` n'écrit que le chemin relatif.
+  shortUrl: '/l/a1b2c3',
   targetType: 'POST',
   targetId: POST,
   conversationId: CONVERSATION,
@@ -225,7 +227,10 @@ describe('GET /admin/tracking-links — la liste', () => {
       source: 'newsletter',
       medium: 'email',
       originalUrl: 'https://exemple.fr/promo',
-      shortUrl: 'https://meeshy.me/l/a1b2c3',
+      shortUrl: '/l/a1b2c3',
+      // L'adresse ABSOLUE, partageable telle quelle (audit 2026-10-04) — même
+      // source de domaine que les routes de l'app (`fullUrl`).
+      fullUrl: 'https://meeshy.example/l/a1b2c3',
       targetType: 'POST',
       target: { type: 'POST', id: POST, label: 'Awa Diop' },
       conversation: { id: CONVERSATION, title: 'Famille' },

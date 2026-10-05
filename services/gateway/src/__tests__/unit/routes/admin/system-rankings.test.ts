@@ -267,9 +267,9 @@ describe('systemRankingsRoutes — GET /ranking', () => {
     beforeEach(() => resetMocks());
 
     it('clamps limit to 100 when given 999', async () => {
-      const res = await inject(app, { entityType: 'users', criterion: 'messages_sent', limit: '999' });
+      const res = await inject(app, { entityType: 'users', criterion: 'mentions_received', limit: '999' });
       expect(res.statusCode).toBe(200);
-      const call = mockPrisma.message.groupBy.mock.calls[0]?.[0];
+      const call = mockPrisma.mention.groupBy.mock.calls[0]?.[0];
       if (call) expect(call.take).toBeLessThanOrEqual(100);
     });
 
@@ -279,9 +279,9 @@ describe('systemRankingsRoutes — GET /ranking', () => {
     });
 
     it('defaults limit to 50 when not provided', async () => {
-      const res = await inject(app, { entityType: 'users', criterion: 'messages_sent' });
+      const res = await inject(app, { entityType: 'users', criterion: 'mentions_received' });
       expect(res.statusCode).toBe(200);
-      const call = mockPrisma.message.groupBy.mock.calls[0]?.[0];
+      const call = mockPrisma.mention.groupBy.mock.calls[0]?.[0];
       if (call) expect(call.take).toBe(50);
     });
 

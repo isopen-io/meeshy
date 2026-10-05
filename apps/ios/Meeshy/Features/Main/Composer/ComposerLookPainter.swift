@@ -66,8 +66,9 @@ nonisolated enum ComposerLookPainter {
 
     private static let compositor = CallLiveFrameCompositor()
 
-    /// Les couches statiques d'un look, peintes par le processeur. `nil` sans cadre,
-    /// ou pour un cadre inconnu du catalogue. À appeler HORS du fil principal.
+    /// Les couches statiques d'un look, peintes par le processeur — un cadre du
+    /// catalogue comme un classique du Montage (#9348). `nil` sans cadre, ou pour
+    /// un cadre inconnu du catalogue. À appeler HORS du fil principal.
     static func scene(for look: ComposerPhotoLook, canvas: CGSize, date: Date,
                       person: CallFramePerson) -> CallLiveFrameScene? {
         switch look.frame {
@@ -78,8 +79,9 @@ nonisolated enum ComposerLookPainter {
             let inputs = CallLiveFrameLayerInputs(frameId: design.id, people: [person],
                                                   texts: ComposerPhotoLookSource.texts(at: date), size: canvas)
             return compositor.paint(design: design, inputs: inputs, cachingLayers: cachesLayers(for: canvas))
-        case .montage(.classic):
-            return nil
+        case .montage(.classic(let style)):
+            return CallMontageRenderer.layers(style: style, person: person,
+                                              caption: ComposerPhotoLookSource.caption(at: date), size: canvas)
         }
     }
 

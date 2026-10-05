@@ -29,7 +29,6 @@ const ADMIN = adminIdentityFixture({ role: 'ADMIN' });
 const NOW = new Date('2026-09-30T12:00:00.000Z');
 const LINK_ID = OBJECT_ID(1);
 const SECRET = { linkId: 'mshy_AbCd1234', identifier: 'mshy_voisins-7k2' };
-const REASON = 'Support : le propriétaire a perdu son lien';
 
 type Call = { readonly method: string; readonly path: string; readonly body?: unknown };
 
@@ -77,12 +76,13 @@ function Screen({ deps }: { readonly deps: AdminDeps }) {
   );
 }
 
-async function open(fake: Fake, identity = BIGBOSS) {
+/** `section` : la fiche s'ouvre par un lien `?open=<section>` — le bloc monte dans sa modale (spec 2026-10-04 § 3). */
+async function open(fake: Fake, identity = BIGBOSS, section?: string) {
   const { Router } = createRouter(
     { adminShareLink: { pattern: '/admin/share-links/$link', screen: async () => ({ default: () => <Screen deps={fake.deps} /> }) } },
     () => <p>absent</p>,
   );
-  navigate(`/admin/share-links/${LINK_ID}`, true);
+  navigate(`/admin/share-links/${LINK_ID}${section === undefined ? '' : `?open=${section}`}`, true);
   const host = await mount(<Router wrap={(children) => children} skeleton={null} />, identity);
   for (let attempt = 0; attempt < 30 && host.querySelector('[data-admin-share-link-fiche], [data-admin-error], [data-admin-empty], [data-admin-denied-inline]') === null; attempt += 1) {
     await mounter.settle();
@@ -97,7 +97,11 @@ const confirm = (host: ParentNode) => host.querySelector<HTMLButtonElement>('[da
 const writes = (fake: Fake) => fake.calls.filter((call) => call.method !== 'GET');
 const reads = (fake: Fake) => fake.calls.filter((call) => call.method === 'GET');
 const badge = (host: ParentNode) => host.querySelector('[data-admin-identity] [data-admin-raw]')?.textContent ?? '';
-const section = (host: ParentNode, id: string) => host.querySelector(`[data-admin-fiche-section="${id}"]`)?.textContent ?? '';
+const section = (_host: ParentNode, id: string) => document.querySelector(`[data-admin-fiche-section="${id}"]`)?.textContent ?? '';
+const openCard = async (host: ParentNode, id: string) => {
+  await act(async () => host.querySelector<HTMLButtonElement>(`[data-admin-summary="${id}"] [data-admin-summary-open]`)?.click());
+  await mounter.settle();
+};
 const announcement = (host: ParentNode) => host.querySelector('[data-admin-announcement]')?.textContent ?? '';
 
 describe('la fiche — nommée, métadonnées interprétées', () => {
@@ -126,20 +130,36 @@ describe('la fiche — nommée, métadonnées interprétées', () => {
   });
 
   test('la conversation, le créateur et les invités sont des puces qui mènent à LEUR fiche', async () => {
-    const host = await open(fakeServer());
+    const host = await open(fakeServer(), BIGBOSS, 'conversation');
 
-    const hrefs = [...host.querySelectorAll('a')].map((link) => link.getAttribute('href'));
-    expect(hrefs).toContain(`/admin/conversations/${OBJECT_ID(3)}`);
-    expect(hrefs).toContain(`/admin/users/${OBJECT_ID(2)}`);
-    expect(hrefs).toContain(`/admin/anonymous/${OBJECT_ID(21)}`);
+    const hrefs = () => [...document.querySelectorAll('a')].map((link) => link.getAttribute('href'));
+    expect(hrefs()).toContain(`/admin/conversations/${OBJECT_ID(3)}`);
+    expect(hrefs()).toContain(`/admin/users/${OBJECT_ID(2)}`);
     expect(section(host, 'conversation')).toContain('Les voisins');
     expect(section(host, 'conversation')).toContain('Groupe');
+
+    await openCard(host, 'guests');
+    expect(hrefs()).toContain(`/admin/anonymous/${OBJECT_ID(21)}`);
+  });
+
+  test('le détail est une grille de cinq cartes résumées, déjà chiffrées ; aucune modale au repos', async () => {
+    const host = await open(fakeServer());
+
+    const cards = [...host.querySelectorAll('[data-admin-share-link-cards] [data-admin-summary]')].map((card) => card.getAttribute('data-admin-summary'));
+    expect(cards).toEqual(['conversation', 'permissions', 'requirements', 'restrictions', 'guests']);
+    expect(document.querySelector('[data-admin-share-link-panel]')).toBeNull();
+    expect(host.querySelector('[data-admin-summary="conversation"]')?.textContent).toContain('Les voisins');
+    expect(host.querySelector('[data-admin-summary="permissions"]')?.textContent).toContain('2 sur 4');
+    expect(host.querySelector('[data-admin-summary="restrictions"]')?.textContent).toContain('2');
+    await openCard(host, 'permissions');
+    expect(window.location.search).toBe('?open=permissions');
+    expect(document.querySelector('[data-admin-share-link-panel="permissions"] [data-admin-flags="permissions"]')).not.toBeNull();
   });
 
   test('ce que les invités PEUVENT faire : quatre phrases, jamais true/false', async () => {
-    const host = await open(fakeServer());
+    await open(fakeServer(), BIGBOSS, 'permissions');
 
-    const phrases = [...host.querySelectorAll('[data-admin-flags="permissions"] li')].map((item) => item.textContent);
+    const phrases = [...document.querySelectorAll('[data-admin-flags="permissions"] li')].map((item) => item.textContent);
     expect(phrases).toEqual([
       'Les invités peuvent écrire des messages',
       'Les invités ne peuvent pas envoyer de fichiers',
@@ -149,9 +169,9 @@ describe('la fiche — nommée, métadonnées interprétées', () => {
   });
 
   test('ce que le lien EXIGE : quatre phrases', async () => {
-    const host = await open(fakeServer({ link: servedShareLinkFiche({ requireAccount: true }) }));
+    await open(fakeServer({ link: servedShareLinkFiche({ requireAccount: true }) }), BIGBOSS, 'requirements');
 
-    const phrases = [...host.querySelectorAll('[data-admin-flags="requirements"] li')].map((item) => item.textContent);
+    const phrases = [...document.querySelectorAll('[data-admin-flags="requirements"] li')].map((item) => item.textContent);
     expect(phrases).toEqual([
       'Un compte Meeshy est exigé pour entrer',
       'Les invités doivent choisir un pseudonyme',
@@ -161,9 +181,9 @@ describe('la fiche — nommée, métadonnées interprétées', () => {
   });
 
   test('les restrictions sont des NOMS de pays et de langues — jamais FR, SN, fr, wo', async () => {
-    const host = await open(fakeServer());
+    await open(fakeServer(), BIGBOSS, 'restrictions');
 
-    const restrictions = host.querySelector('[data-admin-fiche-section="restrictions"]');
+    const restrictions = document.querySelector('[data-admin-fiche-section="restrictions"]');
     expect(restrictions?.querySelector('[data-admin-meta="countries"]')?.textContent).toContain('France');
     expect(restrictions?.querySelector('[data-admin-meta="countries"]')?.textContent).toContain('Sénégal');
     expect(restrictions?.querySelector('[data-admin-meta="languages"]')?.textContent).toContain('Français');
@@ -172,23 +192,24 @@ describe('la fiche — nommée, métadonnées interprétées', () => {
   });
 
   test('sans restriction, la fiche dit « Aucune restriction » — deux fois', async () => {
-    const host = await open(fakeServer({ link: servedShareLinkFiche({ allowedCountries: [], allowedLanguages: [] }) }));
+    const host = await open(fakeServer({ link: servedShareLinkFiche({ allowedCountries: [], allowedLanguages: [] }) }), BIGBOSS, 'restrictions');
 
+    expect(host.querySelector('[data-admin-summary="restrictions"]')?.textContent).toContain('Aucune restriction');
     const text = section(host, 'restrictions');
     expect(text.match(/Aucune restriction/g)).toHaveLength(2);
   });
 
   test('les invités récents : leur nom, leur présence, leur arrivée ; sans nom, « Invité sans nom »', async () => {
-    const host = await open(fakeServer());
+    await open(fakeServer(), BIGBOSS, 'guests');
 
-    expect(host.querySelector(`[data-admin-guest="${OBJECT_ID(21)}"]`)?.textContent).toContain('Invité Koffi');
-    expect(host.querySelector(`[data-admin-guest="${OBJECT_ID(21)}"]`)?.textContent).toContain('Présent');
-    expect(host.querySelector(`[data-admin-guest="${OBJECT_ID(22)}"]`)?.textContent).toContain('Invité sans nom');
-    expect(host.querySelector(`[data-admin-guest="${OBJECT_ID(22)}"]`)?.textContent).toContain('Parti');
+    expect(document.querySelector(`[data-admin-guest="${OBJECT_ID(21)}"]`)?.textContent).toContain('Invité Koffi');
+    expect(document.querySelector(`[data-admin-guest="${OBJECT_ID(21)}"]`)?.textContent).toContain('Présent');
+    expect(document.querySelector(`[data-admin-guest="${OBJECT_ID(22)}"]`)?.textContent).toContain('Invité sans nom');
+    expect(document.querySelector(`[data-admin-guest="${OBJECT_ID(22)}"]`)?.textContent).toContain('Parti');
   });
 
   test('aucun invité : la fiche le dit', async () => {
-    const host = await open(fakeServer({ link: servedShareLinkFiche({ recentGuests: [] }) }));
+    const host = await open(fakeServer({ link: servedShareLinkFiche({ recentGuests: [] }) }), BIGBOSS, 'guests');
 
     expect(section(host, 'guests')).toContain('Personne n’est encore entré par ce lien.');
   });
@@ -387,39 +408,33 @@ describe('rouvrir le lien', () => {
   });
 });
 
-describe('révéler le secret — rang souverain, motif écrit, affiché UNE fois, jamais en cache', () => {
-  const reveal = async (host: HTMLDivElement, reason = REASON) => {
+/* Le geste est SOUVERAIN : le rang souverain n'écrit pas de motif (spec 2026-10-04 § 4) — la
+   confirmation n'a plus de champ, et la révélation part sans `reason` (toujours consignée). */
+describe('révéler le secret — rang souverain, sans motif, affiché UNE fois, jamais en cache', () => {
+  const reveal = async (host: HTMLDivElement) => {
     await mounter.click(action(host, 'reveal-secret'));
-    mounter.type(host, '[data-admin-motive]', reason);
     await mounter.settle();
     await mounter.click(confirm(host));
   };
 
-  test('la confirmation demande un motif d’au moins 10 caractères : en dessous, rien ne part', async () => {
+  test('la confirmation DIT le geste et n’a pas de champ de motif ; rien ne part avant de confirmer', async () => {
     const fake = fakeServer();
     const host = await open(fake);
     await mounter.click(action(host, 'reveal-secret'));
 
     expect(host.querySelector('[data-admin-confirm]')?.textContent).toContain('Ce geste est réservé au créateur de la plateforme');
-    expect(confirm(host)?.disabled).toBe(true);
-
-    mounter.type(host, '[data-admin-motive]', 'trop bref');
-    await mounter.settle();
-    expect(confirm(host)?.disabled).toBe(true);
-
-    mounter.type(host, '[data-admin-motive]', REASON);
-    await mounter.settle();
+    expect(host.querySelector('[data-admin-motive]')).toBeNull();
     expect(confirm(host)?.disabled).toBe(false);
     expect(writes(fake)).toEqual([]);
   });
 
-  test('POST avec le motif ; les deux clés s’affichent dans une feuille, avec copie', async () => {
+  test('POST sans motif ; les deux clés s’affichent dans une feuille, avec copie', async () => {
     const fake = fakeServer();
     const host = await open(fake);
 
     await reveal(host);
 
-    expect(writes(fake)).toEqual([{ method: 'POST', path: adminEndpoints.shareLinksByIdReveal(LINK_ID), body: { reason: REASON } }]);
+    expect(writes(fake)).toEqual([{ method: 'POST', path: adminEndpoints.shareLinksByIdReveal(LINK_ID), body: {} }]);
     const sheet = host.querySelector('[data-admin-secret]');
     expect(sheet).not.toBeNull();
     expect(sheet?.textContent).toContain(SECRET.linkId);

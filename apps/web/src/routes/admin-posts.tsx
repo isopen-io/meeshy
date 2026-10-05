@@ -1,4 +1,4 @@
-import { AdminBadge, AdminInterpretedBadge } from '@/components/admin/badges';
+import { AdminBadge, AdminInterpretedBadge, AdminLanguageBadge } from '@/components/admin/badges';
 import { AdminEntityIdentity } from '@/components/admin/entity-chip';
 import { AdminEntityList, type AdminColumn } from '@/components/admin/entity-list';
 import { AdminFilterChips, AdminListToolbar } from '@/components/admin/list-toolbar';
@@ -6,7 +6,7 @@ import { AdminMomentText } from '@/components/admin/meta';
 import { AdminPageHeader } from '@/components/admin/page-header';
 import { AdminSectionScreen } from '@/components/admin/section-screen';
 import { AdminInlineNotice } from '@/components/admin/states';
-import { BRAND, INK2 } from '@/components/admin/tone';
+import { BRAND, EDGE, INK2, SURFACE } from '@/components/admin/tone';
 import { adminGroupOf } from '@/lib/admin/admin-routes';
 import { interpretPostState, interpretPostType, interpretPostVisibility } from '@/lib/admin/interpret/enums';
 import { personLabel } from '@/lib/admin/interpret/labels';
@@ -21,6 +21,7 @@ import { useAdminReach } from '@/lib/admin/use-admin-reach';
 import type { AdminDeps } from '@/lib/api/admin';
 import { adminPostsQueryKey, loadAdminPosts, type AdminPostRow } from '@/lib/api/admin-posts';
 import { apiDeps } from '@/lib/api/deps';
+import { attachmentSrc } from '@/lib/api/media-url';
 import { currentAdminLanguage, suspendForAdminInterfaceCatalog, translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { useSearch } from '@/lib/router';
 
@@ -46,18 +47,37 @@ import { AdminPostsStatsBand } from './admin-posts-stats';
 type SortKey = (typeof POST_LIST_SPEC.sortKeys)[number];
 type FilterKey = keyof typeof POST_LIST_SPEC.filters;
 
+/**
+ * L'EXTRAIT D'UNE LIGNE — sa vignette (le premier média qui en a une ; jamais pour
+ * une audience restreinte, le décodeur ne la garde pas), son texte, et ce que la
+ * passerelle sert à côté (audit 2026-10-04) : la langue d'origine NOMMÉE,
+ * « Modifiée », « Épinglée ».
+ */
 function ExcerptCell({ row, language }: { readonly row: AdminPostRow; readonly language: AdminLanguage }) {
   const excerpt = postExcerptOf(row, language);
   return (
-    <span className="grid max-w-md gap-1">
-      <span className={`break-words${excerpt.kind === 'restricted' || excerpt.kind === 'none' ? ' italic' : ''}`} style={excerpt.kind === 'text' ? undefined : { color: INK2 }}>
-        {excerpt.text}
-      </span>
-      {row.isPinned ? (
-        <span>
-          <AdminBadge tone="brand">{translateAdmin(language, 'admin.posts.pinned')}</AdminBadge>
+    <span className="flex max-w-md items-start gap-3">
+      {row.thumbnailUrl === null ? null : (
+        <img
+          data-admin-post-thumbnail
+          src={attachmentSrc(row.thumbnailUrl)}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          className="block size-11 shrink-0 rounded-chip object-cover"
+          style={{ border: `1px solid ${EDGE}`, backgroundColor: SURFACE }}
+        />
+      )}
+      <span className="grid min-w-0 gap-1">
+        <span className={`break-words${excerpt.kind === 'restricted' || excerpt.kind === 'none' ? ' italic' : ''}`} style={excerpt.kind === 'text' ? undefined : { color: INK2 }}>
+          {excerpt.text}
         </span>
-      ) : null}
+        <span className="flex flex-wrap gap-1">
+          {row.originalLanguage === null ? null : <AdminLanguageBadge language={language} code={row.originalLanguage} />}
+          {row.isEdited ? <AdminBadge tone="neutral">{translateAdmin(language, 'admin.posts.edited')}</AdminBadge> : null}
+          {row.isPinned ? <AdminBadge tone="brand">{translateAdmin(language, 'admin.posts.pinned')}</AdminBadge> : null}
+        </span>
+      </span>
     </span>
   );
 }
@@ -110,6 +130,9 @@ export function AdminPostsPanel({
     { id: 'likes', header: translateAdmin(language, 'admin.posts.col.likes'), align: 'end', cell: (row) => formatCount(row.likeCount, language) },
     { id: 'comments', header: translateAdmin(language, 'admin.posts.col.comments'), align: 'end', priority: 3, cell: (row) => formatCount(row.commentCount, language) },
     { id: 'views', header: translateAdmin(language, 'admin.posts.col.views'), align: 'end', priority: 3, cell: (row) => formatCount(row.viewCount, language) },
+    { id: 'reposts', header: translateAdmin(language, 'admin.posts.stat.reposts'), align: 'end', priority: 3, cell: (row) => formatCount(row.repostCount, language) },
+    { id: 'shares', header: translateAdmin(language, 'admin.posts.stat.shares'), align: 'end', priority: 3, cell: (row) => formatCount(row.shareCount, language) },
+    { id: 'bookmarks', header: translateAdmin(language, 'admin.posts.stat.bookmarks'), align: 'end', priority: 3, cell: (row) => formatCount(row.bookmarkCount, language) },
     {
       id: 'state',
       header: translateAdmin(language, 'admin.posts.col.state'),
@@ -132,7 +155,7 @@ export function AdminPostsPanel({
         subtitle={translateAdmin(language, 'admin.posts.subtitle')}
         crumbs={[{ label: translateAdmin(language, `admin.group.${adminGroupOf('posts')}`) }, { label: translateAdmin(language, 'admin.nav.posts') }]}
       />
-      <AdminPostsStatsBand language={language} deps={deps} period={periodFilter === 'all' ? undefined : periodFilter} enabled={reach.opens('posts')} />
+      <AdminPostsStatsBand language={language} deps={deps} period={periodFilter === 'all' ? undefined : periodFilter} enabled={reach.opens('posts')} now={now} />
       <div className="grid gap-4">
         <AdminFilterChips
           label={translateAdmin(language, 'admin.posts.tabs.label')}

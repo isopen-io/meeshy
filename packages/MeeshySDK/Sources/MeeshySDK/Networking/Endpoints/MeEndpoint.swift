@@ -24,6 +24,11 @@ public enum MeEndpoint: MeeshyEndpoint, Sendable {
     case deleteAccountDeleteNow
     case engagement
     case export
+    case gameChestClaim
+    case gameFlameFreezes
+    case gameFlameRelight
+    case gameGuideSeen
+    case gameMissionsByMissionIdReroll(missionId: String)
     case meeshMint
     case onboarding
     case permissions
@@ -61,6 +66,11 @@ public enum MeEndpoint: MeeshyEndpoint, Sendable {
         case .deleteAccountDeleteNow: return "/api/v1/me/delete-account/delete-now"
         case .engagement: return "/api/v1/me/engagement"
         case .export: return "/api/v1/me/export"
+        case .gameChestClaim: return "/api/v1/me/game/chest/claim"
+        case .gameFlameFreezes: return "/api/v1/me/game/flame/freezes"
+        case .gameFlameRelight: return "/api/v1/me/game/flame/relight"
+        case .gameGuideSeen: return "/api/v1/me/game/guide/seen"
+        case .gameMissionsByMissionIdReroll(let missionId): return "/api/v1/me/game/missions/\(missionId)/reroll"
         case .meeshMint: return "/api/v1/me/meesh/mint"
         case .onboarding: return "/api/v1/me/onboarding"
         case .permissions: return "/api/v1/me/permissions"

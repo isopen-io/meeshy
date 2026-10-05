@@ -128,6 +128,7 @@ describe('decodeAdminUserDetail — codes de secours, lieux, compteurs', () => {
       referredRelations: 5,
       sentFriendRequests: 6,
       receivedFriendRequests: 7,
+      participations: 0,
     });
     expect(decodeAdminUserDetail({ id: 'u-2', username: 'k' })?.counts).toBeNull();
   });

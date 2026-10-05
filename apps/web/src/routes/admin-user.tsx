@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useId, useState, type ReactNode } from 'react';
 
 import { AuthAmbient } from '@/components/auth-chrome';
 import { AdminBadge, AdminInterpretedBadge, AdminRoleBadge } from '@/components/admin/badges';
@@ -8,12 +8,21 @@ import { AdminPageHeader } from '@/components/admin/page-header';
 import { AdminLink } from '@/components/admin/entity-chip';
 import { AdminSectionScreen } from '@/components/admin/section-screen';
 import { AdminDeniedInline, AdminErrorState, AdminOfflineNotice } from '@/components/admin/states';
-import { AdminTabPanel } from '@/components/admin/tabs';
+import { AdminDetailSheet } from '@/components/admin/detail-sheet';
+import { AdminSummaryCard, AdminSummaryGrid } from '@/components/admin/summary-card';
 import { accountStateOf } from '@/lib/admin/interpret/enums';
 import { personInitials } from '@/lib/admin/interpret/labels';
+import {
+  ADMIN_MEMBER_SECTION_GLYPHS,
+  ADMIN_MEMBER_SECTION_TITLES,
+  adminMemberSectionsFor,
+  ADMIN_MEMBER_STAT_SECTIONS,
+  memberSummaryOf,
+  type AdminMemberSection,
+} from '@/lib/admin/member-summaries';
+import { useAdminOpen } from '@/lib/admin/use-admin-open';
 import type { AdminReach } from '@/lib/admin/use-admin-reach';
 import { userEntityOf } from '@/lib/admin/user-entity';
-import { adminUserTabOf, adminUserTabsFor, withAdminUserTab } from '@/lib/admin/user-tabs';
 import type { AdminDeps } from '@/lib/api/admin';
 import { adminUserBansQueryOptions } from '@/lib/api/admin-user-bans';
 import { adminUserDetailQueryOptions, type AdminUserDetail } from '@/lib/api/admin-user-detail';
@@ -21,12 +30,13 @@ import { adminUserStatsQueryOptions } from '@/lib/api/admin-user-member';
 import { ApiError } from '@/lib/api/client';
 import { apiDeps } from '@/lib/api/deps';
 import { currentAdminLanguage, suspendForAdminInterfaceCatalog, translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
-import { useParams, useSearch } from '@/lib/router';
+import { useParams } from '@/lib/router';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
 
 import { AdminMemberContactSection } from './admin-member-contact';
 import { AdminMemberIdentitySection } from './admin-member-identity';
 import { AdminMemberImagesSection } from './admin-member-images';
+import { AdminMemberLifecycle } from './admin-member-lifecycle';
 import { AdminMemberMeta } from './admin-member-meta';
 import { AdminMemberQuickActions } from './admin-member-quick-actions';
 import { AdminMemberRoleSection } from './admin-member-role';
@@ -45,19 +55,24 @@ import { AdminUserGallery } from './admin-user-gallery';
 import { AdminUserConversationsSection, AdminUserMediaSection } from './admin-user-lists';
 import { AdminUserPasswordSheet } from './admin-user-password-sheet';
 import { AdminUserPreferencesTab } from './admin-user-preferences';
-import { ADMIN_USER_TABS_BASE, AdminUserTabs } from './admin-user-tabs';
 
 /**
  * **LA FICHE D'UN MEMBRE** (#6819, #8005) — `/admin/users/$user` et `/adm/users/$user`,
  * la « vue de dieu » sur UNE personne, sur le kit d'administration : en-tête
  * d'identité (vrai nom, `@pseudo`, avatar et présence calculée, rôle, état, preuves
  * et double authentification dits en mots), quinze chiffres, colonne de métadonnées
- * INTERPRÉTÉES, puis les onglets du dossier.
+ * INTERPRÉTÉES, puis le dossier.
+ *
+ * **Le dossier se lit par sections** (spec 2026-10-04 § 3) — l'en-tête, les gestes et
+ * le bandeau de chiffres restent visibles ; chaque section du dossier est une CARTE
+ * résumée (`AdminSummaryCard`, chiffres déjà lus par la fiche) qui ouvre la section
+ * d'hier dans une modale (`AdminDetailSheet`, `?open=<section>`). L'onglet Profil
+ * s'est scindé en quatre cartes — identité, contact, mot de passe et protections,
+ * rôle et statut ; un lien d'hier `?tab=<onglet>` ouvre la modale du même nom.
+ * Aucune section ne lit sa route tant que sa modale est fermée.
  *
  * **Éditée EN PLACE, section par section** (#8289) — plus de bouton « Modifier » :
- * l'onglet Profil montre les images, l'identité (pseudo compris), le contact et ses
- * preuves, la sécurité, le rôle et le statut, et chaque section porte son
- * « Enregistrer ». Les gestes lourds — changer le rôle, suspendre, réinitialiser un
+ * chaque section porte son « Enregistrer ». Les gestes lourds — changer le rôle, suspendre, réinitialiser un
  * mot de passe, bannir, déverrouiller, retirer la double authentification, poser un
  * consentement — gardent chacun leur confirmation : « une écriture d'administration
  * sans sa confirmation serait pire que son absence » (#6432).
@@ -66,8 +81,9 @@ import { ADMIN_USER_TABS_BASE, AdminUserTabs } from './admin-user-tabs';
  * la route : `/adm` ne renvoie jamais vers `/admin`, D-76) et **la garde est celle de la
  * liste**, lue au SERVEUR (`GET /me/permissions`) et jamais déduite d'un rôle côté client.
  *
- * Les ancres `data-admin-user`, `data-admin-user-panel` et `data-admin-user-tab` sont un
- * CONTRAT de la recette `check-admin-souverain` : elles ne se renomment pas.
+ * Les ancres `data-admin-user`, `data-admin-user-panel` (le corps de chaque modale) et
+ * `data-admin-summary` (chaque carte) sont un CONTRAT de la recette
+ * `check-admin-souverain` : elles ne se renomment pas.
  */
 
 /** Un refus se dit comme un refus (403), un membre introuvable comme tel (404) : jamais les deux comme « une panne ». */
@@ -89,15 +105,15 @@ export function AdminUserFiche({
   readonly deps?: AdminDeps;
   readonly now?: () => Date;
 }) {
-  const [search, setSearch] = useSearch();
-  /* #8003 — les préférences ne se lisent que sous `canViewSensitiveData`, que portent les
-     seuls rangs d'administration (BIGBOSS, ADMIN) : la même marque que la révocation des
-     sessions (`admin-user-sessions.tsx`). Un onglet qui mènerait à un 403 n'est pas offert. */
-  const onglets = adminUserTabsFor({ sensitive: reach.hasAdminRank });
-  const onglet = adminUserTabOf(search, onglets);
+  /* #8003 — les préférences ne se lisent que sous `canViewSensitiveData`, que portent les seuls
+     rangs d'administration : la même marque que la révocation des sessions (`admin-user-sessions.tsx`).
+     Une section absente de la liste n'a ni carte, ni modale, et son adresse n'ouvre rien. */
+  const offertes = adminMemberSectionsFor({ sensitive: reach.hasAdminRank });
+  const sections = useAdminOpen(offertes, { legacyTab: true });
   const annonceur = useLiveAnnouncer();
   const [motDePasse, setMotDePasse] = useState(false);
   const [bannissement, setBannissement] = useState(false);
+  const dossierTitle = useId();
 
   const fiche = useQuery(adminUserDetailQueryOptions(deps, userId));
   const chiffres = useQuery(adminUserStatsQueryOptions(deps, userId));
@@ -116,6 +132,74 @@ export function AdminUserFiche({
   const state = accountStateOf({ ...membre, activeBan: (bans.data ?? []).some((ban) => ban.active) }, moment, language);
   const adm = reach.space === 'adm';
   const gererConversation = reach.opens('conversations') ? (adm ? ('admConversation' as const) : ('adminConversation' as const)) : null;
+  const facts = {
+    membre,
+    stats: chiffres.data ?? null,
+    activeBans: bans.data === undefined ? null : bans.data.filter((ban) => ban.active).length,
+  };
+  const cardState = (section: AdminMemberSection): 'ready' | 'loading' | 'error' => {
+    if (!ADMIN_MEMBER_STAT_SECTIONS.has(section) || chiffres.data !== undefined) return 'ready';
+    return chiffres.isPending ? 'loading' : 'error';
+  };
+
+  /** Le contenu de chaque modale : la section d'hier, telle quelle — montée seulement à l'ouverture. */
+  const detail = (section: AdminMemberSection): ReactNode => {
+    switch (section) {
+      case 'profile':
+        return (
+          <>
+            <AdminMemberImagesSection key={`images-${membre.id}`} membre={membre} language={language} onAnnounce={annonceur.announce} deps={deps} />
+            <AdminMemberIdentitySection key={`identity-${membre.id}`} membre={membre} language={language} onAnnounce={annonceur.announce} deps={deps} />
+            <AdminUserGallery membre={membre} language={language} deps={deps} />
+          </>
+        );
+      case 'contact':
+        return <AdminMemberContactSection key={`contact-${membre.id}`} membre={membre} language={language} onAnnounce={annonceur.announce} deps={deps} />;
+      case 'access':
+        return (
+          <AdminMemberSecuritySection
+            membre={membre}
+            language={language}
+            sessions={chiffres.data?.activeSessions ?? null}
+            onAnnounce={annonceur.announce}
+            onOpenPassword={() => setMotDePasse(true)}
+            onOpenSessions={() => sections.open('security')}
+            deps={deps}
+            now={now}
+          />
+        );
+      case 'role':
+        return (
+          <AdminMemberRoleSection
+            key={`role-${membre.id}`}
+            membre={membre}
+            language={language}
+            onAnnounce={annonceur.announce}
+            onOpenBan={() => setBannissement(true)}
+            deps={deps}
+          />
+        );
+      /* Ce que ce membre a créé, et où il parle — en LECTURE. Les routes sont servies jusqu'à AUDIT,
+         plus largement que les gestes d'écriture du profil qui exigent ADMIN+. La modale de lecture
+         rend le fil dans le Prisme DU MEMBRE (#6862). */
+      case 'conversations':
+        return <AdminUserConversationsSection membre={membre} language={language} gerer={gererConversation} onAnnounce={annonceur.announce} deps={deps} now={now} />;
+      case 'media':
+        return <AdminUserMediaSection userId={membre.id} language={language} deps={deps} />;
+      case 'contacts':
+        return <AdminUserContactsTab userId={membre.id} language={language} deps={deps} now={now} fallback={membre.counts} />;
+      case 'communities':
+        return <AdminUserCommunitiesTab userId={membre.id} language={language} deps={deps} />;
+      case 'voice':
+        return <AdminUserVoiceTab userId={membre.id} language={language} deps={deps} />;
+      case 'preferences':
+        return <AdminUserPreferencesTab userId={membre.id} language={language} onAnnounce={annonceur.announce} deps={deps} />;
+      case 'security':
+        return <AdminUserSecurityTab userId={membre.id} language={language} deps={deps} now={now} onAnnounce={annonceur.announce} />;
+      case 'reports':
+        return <AdminUserReportsTab userId={membre.id} language={language} deps={deps} now={now} />;
+    }
+  };
 
   return (
     /* LE HALO DE L'INSCRIPTION (#8288), réutilisé : les cartes de verre de la fiche ne se
@@ -164,52 +248,52 @@ export function AdminUserFiche({
         aside={<AdminMemberMeta membre={membre} language={language} now={now} onAnnounce={annonceur.announce} />}
       >
         <AdminMemberQuickActions membre={membre} language={language} onAnnounce={annonceur.announce} deps={deps} />
-        <AdminUserTabs language={language} actif={onglet} onglets={onglets} onChange={(suivant) => setSearch(withAdminUserTab(search, suivant), true)} />
-        <AdminTabPanel idBase={ADMIN_USER_TABS_BASE} tab={onglet} attributes={{ 'data-admin-user-panel': onglet }}>
-          {onglet === 'profile' ? (
-            <div className="grid gap-6">
-              <AdminMemberImagesSection key={`images-${membre.id}`} membre={membre} language={language} onAnnounce={annonceur.announce} deps={deps} />
-              <AdminMemberIdentitySection key={`identity-${membre.id}`} membre={membre} language={language} onAnnounce={annonceur.announce} deps={deps} />
-              <AdminMemberContactSection key={`contact-${membre.id}`} membre={membre} language={language} onAnnounce={annonceur.announce} deps={deps} />
-              <AdminMemberSecuritySection
-                membre={membre}
-                language={language}
-                sessions={chiffres.data?.activeSessions ?? null}
-                onAnnounce={annonceur.announce}
-                onOpenPassword={() => setMotDePasse(true)}
-                onOpenSessions={() => setSearch(withAdminUserTab(search, 'security'), true)}
-                deps={deps}
-                now={now}
-              />
-              <AdminMemberRoleSection
-                key={`role-${membre.id}`}
-                membre={membre}
-                language={language}
-                onAnnounce={annonceur.announce}
-                onOpenBan={() => setBannissement(true)}
-                deps={deps}
-              />
-              <AdminUserGallery membre={membre} language={language} deps={deps} />
-            </div>
-          ) : null}
-          {/* Ce que ce membre a créé, et où il parle — en LECTURE. Les routes sont servies jusqu'à AUDIT,
-              plus largement que les gestes d'écriture du profil qui exigent ADMIN+. La modale de lecture
-              rend le fil dans le Prisme DU MEMBRE (#6862). */}
-          {onglet === 'conversations' ? (
-            <AdminUserConversationsSection membre={membre} language={language} gerer={gererConversation} onAnnounce={annonceur.announce} deps={deps} />
-          ) : null}
-          {onglet === 'media' ? <AdminUserMediaSection userId={membre.id} language={language} deps={deps} /> : null}
-          {onglet === 'contacts' ? <AdminUserContactsTab userId={membre.id} language={language} deps={deps} now={now} /> : null}
-          {onglet === 'communities' ? <AdminUserCommunitiesTab userId={membre.id} language={language} deps={deps} /> : null}
-          {onglet === 'voice' ? <AdminUserVoiceTab userId={membre.id} language={language} deps={deps} /> : null}
-          {onglet === 'preferences' ? <AdminUserPreferencesTab userId={membre.id} language={language} onAnnounce={annonceur.announce} deps={deps} /> : null}
-          {onglet === 'security' ? <AdminUserSecurityTab userId={membre.id} language={language} deps={deps} now={now} onAnnounce={annonceur.announce} /> : null}
-          {onglet === 'reports' ? <AdminUserReportsTab userId={membre.id} language={language} deps={deps} now={now} /> : null}
-        </AdminTabPanel>
+        <AdminMemberLifecycle membre={membre} language={language} onAnnounce={annonceur.announce} deps={deps} />
+        <section aria-labelledby={dossierTitle} className="@container grid gap-3" data-admin-member-cards>
+          <h2 id={dossierTitle} className="text-body font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
+            {translateAdmin(language, 'admin.people.cards.title')}
+          </h2>
+          <AdminSummaryGrid>
+            {offertes.map((section) => {
+              const summary = memberSummaryOf(section, facts, language, moment);
+              return (
+                <AdminSummaryCard
+                  key={section}
+                  language={language}
+                  id={section}
+                  title={translateAdmin(language, ADMIN_MEMBER_SECTION_TITLES[section])}
+                  glyph={ADMIN_MEMBER_SECTION_GLYPHS[section]}
+                  values={summary.values}
+                  sentence={summary.sentence}
+                  state={cardState(section)}
+                  onRetry={() => void chiffres.refetch()}
+                  onOpen={() => sections.open(section)}
+                />
+              );
+            })}
+          </AdminSummaryGrid>
+        </section>
       </AdminFiche>
 
+      {offertes.map((section) => (
+        <AdminDetailSheet
+          key={section}
+          language={language}
+          id={`user-${section}`}
+          title={translateAdmin(language, ADMIN_MEMBER_SECTION_TITLES[section])}
+          open={sections.active === section}
+          onClose={sections.close}
+          inAddress={sections.inAddress}
+        >
+          {/* `data-admin-user-panel` : l'ancre de la recette `check-admin-souverain`, gardée de la fiche à onglets. */}
+          <div className="grid gap-6" data-admin-user-panel={section}>
+            {detail(section)}
+          </div>
+        </AdminDetailSheet>
+      ))}
+
       {motDePasse ? (
-        <AdminUserPasswordSheet userId={membre.id} language={language} onClose={() => setMotDePasse(false)} onAnnounce={annonceur.announce} />
+        <AdminUserPasswordSheet userId={membre.id} language={language} onClose={() => setMotDePasse(false)} onAnnounce={annonceur.announce} deps={deps} sovereign={reach.isSovereign} />
       ) : null}
 
       {bannissement ? (

@@ -12,11 +12,58 @@ public struct APIMeeshMintResult: Codable, Sendable, Equatable {
     public let status: String
     public let balance: Int?
     public let mintedLifetime: Int?
+    /// La réponse ÉTENDUE du Jeu (#9378) — tous OPTIONNELS : une passerelle
+    /// antérieure ne les sert pas. `number` est le numéro gravé sur la pièce,
+    /// `edition` sa matière (« silver » | « gold » | « prism »), `price` ce que
+    /// la frappe a coûté, `gloryGained` la Gloire créditée, `levelBefore` /
+    /// `levelAfter` les niveaux de part et d'autre.
+    public let number: Int?
+    public let edition: MeeshEdition?
+    public let price: Int?
+    public let gloryGained: Int?
+    public let levelBefore: Int?
+    public let levelAfter: Int?
 
-    public init(status: String, balance: Int? = nil, mintedLifetime: Int? = nil) {
+    public init(
+        status: String,
+        balance: Int? = nil,
+        mintedLifetime: Int? = nil,
+        number: Int? = nil,
+        edition: MeeshEdition? = nil,
+        price: Int? = nil,
+        gloryGained: Int? = nil,
+        levelBefore: Int? = nil,
+        levelAfter: Int? = nil
+    ) {
         self.status = status
         self.balance = balance
         self.mintedLifetime = mintedLifetime
+        self.number = number
+        self.edition = edition
+        self.price = price
+        self.gloryGained = gloryGained
+        self.levelBefore = levelBefore
+        self.levelAfter = levelAfter
+    }
+
+    /// Une matière ajoutée par le serveur avant la mise à jour de l'app ne doit
+    /// pas faire échouer le décodage d'une frappe DÉJÀ faite (la pièce est
+    /// frappée, le solde débité) : elle se lit `nil`, la pièce reste en argent.
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        status = try container.decode(String.self, forKey: .status)
+        balance = try container.decodeIfPresent(Int.self, forKey: .balance)
+        mintedLifetime = try container.decodeIfPresent(Int.self, forKey: .mintedLifetime)
+        number = try container.decodeIfPresent(Int.self, forKey: .number)
+        edition = (try? container.decodeIfPresent(MeeshEdition.self, forKey: .edition)) ?? nil
+        price = try container.decodeIfPresent(Int.self, forKey: .price)
+        gloryGained = try container.decodeIfPresent(Int.self, forKey: .gloryGained)
+        levelBefore = try container.decodeIfPresent(Int.self, forKey: .levelBefore)
+        levelAfter = try container.decodeIfPresent(Int.self, forKey: .levelAfter)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case status, balance, mintedLifetime, number, edition, price, gloryGained, levelBefore, levelAfter
     }
 }
 

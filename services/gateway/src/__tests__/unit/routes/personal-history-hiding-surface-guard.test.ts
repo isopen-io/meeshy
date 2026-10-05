@@ -242,7 +242,9 @@ const SURFACES: Record<string, Classification> = {
       "SOUVERAINE (isViewOnce/isBlurred/effectFlags/expiresAt/encryptionMode, " +
       'appliquée par ce fichier) répondent à deux questions différentes.',
   },
-  'admin/analytics.ts': { kind: 'exempt', reads: 4, why: 'Surface admin/modération.' },
+  // 4 → 5 (audit 2026-10-04) : `engagementRate` compte les comptes EXPÉDITEURS
+  // de la période (`aggregateRaw` sur `Message`) — un dénombrement, aucun contenu.
+  'admin/analytics.ts': { kind: 'exempt', reads: 5, why: 'Surface admin/modération.' },
   'admin/dashboard.ts': { kind: 'exempt', reads: 3, why: 'Surface admin/modération.' },
   // 4 → 3 (#4161) : `GET /users/:userId/stats` recopiait `computeUserStats`
   // agrégation par agrégation, l'une d'elles lisant `Message`. Il DÉLÈGUE

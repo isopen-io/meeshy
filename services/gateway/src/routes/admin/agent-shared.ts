@@ -36,10 +36,11 @@ export const requireAgentAdmin = requirePermission('canManageAgent');
 //   - `DELETE /reset` : efface, sans corps, sans confirmation et sans audit,
 //     TOUTES les configs, rôles, résumés, profils agent et clés Redis
 //     `agent:*` de la PLATEFORME ENTIÈRE — pas un scope, la totalité.
-// Les deux exigent donc `requireSovereign()` (BIGBOSS et lui seul), un motif
-// écrit (imposé au niveau du schéma Fastify/AJV — `body.required: ['reason']`
-// — refusé en 400 avant que le handler ne s'exécute) et une ligne
-// `AdminAuditLog` via `withAudit`, écrite APRÈS le geste réussi.
+// Les deux exigent donc `requireSovereign()` (BIGBOSS et lui seul) et une ligne
+// `AdminAuditLog`. Le motif écrit, autrefois exigé au schéma, est facultatif
+// pour le rang souverain depuis la spec 2026-10-04 § 4 (validé s'il est
+// fourni, `middleware/sovereign-reason.ts`) ; la ligne d'audit, elle, reste
+// écrite via `withAudit`, APRÈS le geste réussi.
 export const requireAgentSovereign = requireSovereign();
 
 // ── Reusable JSON Schema fragments ──────────────────────────────────────────

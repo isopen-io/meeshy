@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { banAdminUser, decodeAdminBans, liftAdminUserBan, loadAdminUserBans } from './admin-user-bans';
+import { banAdminUser, decodeAdminBans, decodeServedBan, liftAdminUserBan, loadAdminUserBans } from './admin-user-bans';
 import type { HttpTransport } from './http';
 
 /**
@@ -104,6 +104,28 @@ describe('liftAdminUserBan — lever n’exige aucun motif', () => {
     expect(appels[0]?.body).toEqual({});
     expect(appels[1]?.body).toEqual({});
     expect((appels[2]?.body as Record<string, unknown>).reason).toBe('erreur de ma part');
+  });
+});
+
+describe('un geste rend UN ban, pas une liste (audit 2026-10-04)', () => {
+  const SERVI = { id: 'b-9', reason: 'spam', createdAt: '2026-09-01T00:00:00.000Z', expiresAt: null, liftedAt: null, active: true };
+
+  test('bannir décode l’OBJET servi par la passerelle', async () => {
+    const { transport } = transportEspion(SERVI);
+    const resultat = await banAdminUser({ ...deps(transport), userId: 'u-1', reason: 'spam répété' });
+    expect(resultat.ok && resultat.data?.id).toBe('b-9');
+    expect(resultat.ok && resultat.data?.active).toBe(true);
+  });
+
+  test('lever décode l’OBJET levé', async () => {
+    const { transport } = transportEspion({ ...SERVI, active: false, liftedAt: '2026-09-02T00:00:00.000Z' });
+    const resultat = await liftAdminUserBan({ ...deps(transport), userId: 'u-1', banId: 'b-9' });
+    expect(resultat.ok && resultat.data?.liftedAt).toBe('2026-09-02T00:00:00.000Z');
+  });
+
+  test('une charge illisible n’est pas un échec : le geste a réussi, `null`', () => {
+    expect(decodeServedBan(null)).toBeNull();
+    expect(decodeServedBan({ reason: 'sans id' })).toBeNull();
   });
 });
 

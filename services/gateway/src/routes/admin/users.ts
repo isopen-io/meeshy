@@ -1,4 +1,5 @@
-import { FastifyInstance } from 'fastify';
+import { countUserActivity } from './user-activity-totals';
+import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import {
   UserRoleEnum,
@@ -17,6 +18,7 @@ import { UserAuditService } from '../../services/admin/user-audit.service';
 import { sanitizationService } from '../../services/admin/user-sanitization.service';
 import { permissionsService } from '../../services/admin/permissions.service';
 import { UnifiedAuthContext, UnifiedAuthRequest } from '../../middleware/auth';
+import { judgeReason, sendReasonRefusal } from '../../middleware/sovereign-reason';
 import {
   requireUserViewAccess,
   requireUserDeleteAccess
@@ -33,6 +35,7 @@ import {
 import { registerConversationMessagesSovereignRoute } from './conversation-messages-sovereign';
 import { registerConversationsSovereignRoute } from './conversations-sovereign';
 import { registerUserReportsRoutes } from './user-reports';
+import { registerConversationParticipantsRoute } from './conversation-participants';
 import { registerUserWriteRoutes } from './users-write';
 import { registerUserBanRoutes } from './user-bans';
 import { registerUserSessionRoutes } from './user-sessions';
@@ -81,6 +84,37 @@ export {
 // Même chemin que `routes/auth/revoke-all-sessions.ts` : le manager est lu à
 // chaque appel, pas capturé ici — il n'existe pas encore quand les routes
 // s'enregistrent.
+/**
+ * Le motif facultatif `{ reason }` d'une suppression ou d'une restauration de
+ * compte : obligatoire (3 caractères) sauf pour le rang souverain, validé s'il
+ * est écrit (`judgeReason`, comme le retrait de publication), borné à 500. Le
+ * corps peut manquer : le web n'en envoie aucun sans motif. Refuse en
+ * répondant ; l'appelant s'arrête sur `ok: false`.
+ */
+const MOTIF_DE_GESTE_MINIMAL = 3;
+const MOTIF_DE_GESTE_MAXIMAL = 500;
+
+function motifDuGeste(
+  request: FastifyRequest<{ Body: { reason?: string } | undefined }>,
+  reply: FastifyReply
+): { ok: boolean; value?: string } {
+  const raw = request.body && typeof request.body === 'object' ? request.body.reason : undefined;
+  if (raw !== undefined && typeof raw !== 'string') {
+    sendBadRequest(reply, 'reason must be a string');
+    return { ok: false };
+  }
+  if (typeof raw === 'string' && raw.length > MOTIF_DE_GESTE_MAXIMAL) {
+    sendBadRequest(reply, `reason must NOT have more than ${MOTIF_DE_GESTE_MAXIMAL} characters`);
+    return { ok: false };
+  }
+  const verdict = judgeReason(request, raw, MOTIF_DE_GESTE_MINIMAL);
+  if (verdict.problem) {
+    sendReasonRefusal(reply, verdict.problem, { source: 'body', min: MOTIF_DE_GESTE_MINIMAL });
+    return { ok: false };
+  }
+  return { ok: true, value: verdict.reason };
+}
+
 function deactivatedUserSessionRevoker(fastify: FastifyInstance): SessionRevoker {
   return (userId) => disconnectRevokedSessions({
     io: fastify.socketIOHandler?.getManager?.()?.getIO(),
@@ -200,7 +234,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
         userId: authContext.registeredUser.id,
         adminId: authContext.registeredUser.id,
         action: UserAuditAction.VIEW_USER_LIST,
-        entityId: 'users',
+        entityId: authContext.registeredUser.id, // entity 'User' : un id de membre, jamais 'users'
         ipAddress: request.ip,
         userAgent: request.headers['user-agent']
       });
@@ -327,8 +361,8 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
         request.headers['user-agent']
       );
 
-      // Sanitize la reponse
-      const sanitizedUser = sanitizationService.sanitizeUser(newUser, adminRole);
+      // La fiche relue (avec `_count`), comme toute écriture sur un membre.
+      const sanitizedUser = sanitizationService.sanitizeUser((await userManagementService.getUserById(newUser.id)) ?? newUser, adminRole, { withAdminMetadata: true });
 
       sendSuccess(reply, sanitizedUser, { statusCode: 201, message: 'User created successfully' });
     } catch (error) {
@@ -414,7 +448,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
         authContext.registeredUser!.id,
         request.params.userId,
         request.ip,
-        request.headers['user-agent']
+        request.headers['user-agent'], validatedData.reason
       );
 
       sendSuccess(reply, { message: 'Password reset successfully' });
@@ -435,6 +469,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
    */
   fastify.delete<{
     Params: { userId: string };
+    Body: { reason?: string } | undefined;
   }>('/admin/users/:userId', {
     preHandler: [fastify.authenticate, requireUserDeleteAccess, requireHierarchy({ param: 'userId' })]
   }, async (request, reply) => {
@@ -456,6 +491,9 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
         return;
       }
 
+      const reason = motifDuGeste(request, reply);
+      if (!reason.ok) return;
+
       // Supprimer l'utilisateur (soft delete)
       await userManagementService.deleteUser(request.params.userId, authContext.registeredUser!.id);
 
@@ -463,7 +501,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       await userAuditService.logDeleteUser(
         authContext.registeredUser!.id,
         request.params.userId,
-        undefined,
+        reason.value,
         request.ip,
         request.headers['user-agent']
       );
@@ -482,6 +520,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
    */
   fastify.post<{
     Params: { userId: string };
+    Body: { reason?: string } | undefined;
   }>('/admin/users/:userId/restore', {
     preHandler: [fastify.authenticate, requireUserDeleteAccess, requireHierarchy({ param: 'userId' })]
   }, async (request, reply) => {
@@ -501,17 +540,21 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
         return;
       }
 
+      const reason = motifDuGeste(request, reply);
+      if (!reason.ok) return;
+
       const restored = await userManagementService.restoreUser(request.params.userId);
 
       await userAuditService.logRestoreUser(
         authContext.registeredUser!.id,
         request.params.userId,
-        undefined,
+        reason.value,
         request.ip,
         request.headers['user-agent']
       );
 
-      sendSuccess(reply, sanitizationService.sanitizeUser(restored, adminRole), { message: 'User restored successfully' });
+      const relu = (await userManagementService.getUserById(request.params.userId)) ?? restored;
+      sendSuccess(reply, sanitizationService.sanitizeUser(relu, adminRole, { withAdminMetadata: true }), { message: 'User restored successfully' });
     } catch (error) {
       logError(fastify.log, 'Error restoring user', error);
       sendInternalError(reply, 'Internal server error', { message: 'Failed to restore user' });
@@ -663,10 +706,8 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
         shareLinks: await withAnonymousParticipantCounts(fastify.prisma, shareLinks),
         trackingLinks,
         affiliateTokens,
-        contacts: {
-          sent: sentRequests,
-          received: receivedRequests,
-        },
+        contacts: { sent: sentRequests, received: receivedRequests },
+        totals: await countUserActivity(fastify.prisma, userId),
       });
     } catch (error) {
       logError(fastify.log, 'Error fetching user activity', error);
@@ -898,74 +939,9 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
   // de taille.
   registerUserReportsRoutes(fastify);
 
-  /**
-   * GET /admin/conversations/:conversationId/participants - Paginated members of
-   * a conversation (for the group members modal in the admin user fiche).
-   * Requires canViewUsers permission.
-   */
-  fastify.get<{
-    Params: { conversationId: string };
-    Querystring: { offset?: string; limit?: string };
-  }>('/admin/conversations/:conversationId/participants', {
-    preHandler: [fastify.authenticate, requireUserViewAccess]
-  }, async (request, reply) => {
-    try {
-      const authContext = (request as UnifiedAuthRequest).authContext as UnifiedAuthContext;
-      const viewerRole = authContext.registeredUser!.role as UserRoleEnum;
-      // Directive produit 2026-08-25 : `requireUserViewAccess` laisse passer
-      // MODERATOR/AUDIT (canViewUsers), qui n'ont plus le droit de voir la
-      // présence — seuil `canViewPresence` (ADMIN/BIGBOSS uniquement).
-      const canSeePresence = permissionsService.canViewPresence(viewerRole);
-
-      const { conversationId } = request.params;
-      const { offset = '0', limit } = request.query;
-      const { offset: offsetNum, limit: limitNum } = validatePagination(offset, limit, { defaultLimit: 30, maxLimit: 100 });
-
-      const conversation = await fastify.prisma.conversation.findUnique({
-        where: { id: conversationId },
-        select: { id: true }
-      });
-      if (!conversation) {
-        return sendNotFound(reply, 'Conversation non trouvée');
-      }
-
-      const where = { conversationId };
-      const [participants, total] = await Promise.all([
-        fastify.prisma.participant.findMany({
-          where,
-          select: {
-            id: true,
-            userId: true,
-            type: true,
-            displayName: true,
-            avatar: true,
-            role: true,
-            isActive: true,
-            isOnline: true,
-            joinedAt: true,
-            nickname: true,
-            user: { select: { id: true, username: true, displayName: true, avatar: true } }
-          },
-          orderBy: { joinedAt: 'asc' },
-          skip: offsetNum,
-          take: limitNum
-        }),
-        fastify.prisma.participant.count({ where })
-      ]);
-
-      const data = canSeePresence ? participants : participants.map((p) => ({ ...p, isOnline: false }));
-
-      return sendPaginatedSuccess(reply, data, {
-        total,
-        offset: offsetNum,
-        limit: limitNum,
-        hasMore: offsetNum + participants.length < total
-      });
-    } catch (error) {
-      logError(fastify.log, 'Error fetching conversation participants', error);
-      return sendInternalError(reply, 'Internal server error', { message: 'Failed to fetch conversation participants' });
-    }
-  });
+  // GET /admin/conversations/:conversationId/participants — extrait vers
+  // `conversation-participants.ts` (budget de taille, `removedByAdmin`).
+  registerConversationParticipantsRoute(fastify);
 
   // GET /admin/conversations/:conversationId/messages — régime SOUVERAIN
   // (#4333 c.3, troisième frère de PUT /admin/agent/llm et DELETE

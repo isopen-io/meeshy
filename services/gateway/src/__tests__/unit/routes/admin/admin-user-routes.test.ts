@@ -104,10 +104,10 @@ const mockUser = {
 };
 
 const mockPrisma: Record<string, Record<string, jest.Mock>> = {
-  conversationShareLink: { findMany: jest.fn() },
-  trackingLink: { findMany: jest.fn() },
-  affiliateToken: { findMany: jest.fn() },
-  friendRequest: { findMany: jest.fn() },
+  conversationShareLink: { findMany: jest.fn(), count: jest.fn().mockResolvedValue(0) },
+  trackingLink: { findMany: jest.fn(), count: jest.fn().mockResolvedValue(0) },
+  affiliateToken: { findMany: jest.fn(), count: jest.fn().mockResolvedValue(0) },
+  friendRequest: { findMany: jest.fn(), count: jest.fn().mockResolvedValue(0) },
   user: { findUnique: jest.fn() },
   conversation: { findMany: jest.fn(), findUnique: jest.fn(), count: jest.fn() },
   postMedia: { findMany: jest.fn(), count: jest.fn() },
@@ -648,37 +648,37 @@ describe('DELETE /admin/users/:userId', () => {
   it('returns 401 when no authContext', async () => {
     const noAuth = buildNoAuthApp();
     await noAuth.ready();
-    const res = await noAuth.inject({ method: 'DELETE', url: '/admin/users/user123' });
+    const res = await noAuth.inject({ method: 'DELETE', url: '/admin/users/user123', payload: { reason: 'Motif de test' } });
     await noAuth.close();
     expect(res.statusCode).toBe(401);
   });
 
   it('returns 403 when hasPermission (delete) is false', async () => {
     (permissionsService.hasPermission as jest.Mock).mockReturnValueOnce(false);
-    const res = await app.inject({ method: 'DELETE', url: '/admin/users/user123' });
+    const res = await app.inject({ method: 'DELETE', url: '/admin/users/user123', payload: { reason: 'Motif de test' } });
     expect(res.statusCode).toBe(403);
   });
 
   it('returns 200 on happy path', async () => {
-    const res = await app.inject({ method: 'DELETE', url: '/admin/users/user123' });
+    const res = await app.inject({ method: 'DELETE', url: '/admin/users/user123', payload: { reason: 'Motif de test' } });
     expect(res.statusCode).toBe(200);
   });
 
   it('returns 404 when user not found', async () => {
     mockUMS.getUserById.mockResolvedValue(null);
-    const res = await app.inject({ method: 'DELETE', url: '/admin/users/user123' });
+    const res = await app.inject({ method: 'DELETE', url: '/admin/users/user123', payload: { reason: 'Motif de test' } });
     expect(res.statusCode).toBe(404);
   });
 
   it('returns 403 when canModifyUser is false', async () => {
     (permissionsService.canModifyUser as jest.Mock).mockReturnValueOnce(false);
-    const res = await app.inject({ method: 'DELETE', url: '/admin/users/user123' });
+    const res = await app.inject({ method: 'DELETE', url: '/admin/users/user123', payload: { reason: 'Motif de test' } });
     expect(res.statusCode).toBe(403);
   });
 
   it('returns 500 when deleteUser throws', async () => {
     mockUMS.deleteUser.mockRejectedValue(new Error('DB error'));
-    const res = await app.inject({ method: 'DELETE', url: '/admin/users/user123' });
+    const res = await app.inject({ method: 'DELETE', url: '/admin/users/user123', payload: { reason: 'Motif de test' } });
     expect(res.statusCode).toBe(500);
   });
 });
@@ -947,14 +947,14 @@ describe('POST /admin/users/:userId/voice-consent', () => {
     expect(mockUMS.toggleVoiceConsent).not.toHaveBeenCalled();
   });
 
-  it('refuse un souverain SANS motif écrit — la trace est une condition, pas un ornement', async () => {
+  it('admet un souverain SANS motif écrit — spec 2026-10-04 § 4', async () => {
     const res = await appSouverain.inject({
       method: 'POST',
       url: '/admin/users/user123/voice-consent',
       payload: { consentType: 'voiceProfile', enabled: true }
     });
-    expect(res.statusCode).toBe(400);
-    expect(mockUMS.toggleVoiceConsent).not.toHaveBeenCalled();
+    expect(res.statusCode).toBe(200);
+    expect(mockUMS.toggleVoiceConsent).toHaveBeenCalledWith('user123', 'voiceProfile', true);
   });
 
   it('returns 400 on invalid consentType (aucune loi ne porte ce champ)', async () => {

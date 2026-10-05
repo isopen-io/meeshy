@@ -68,9 +68,8 @@ export async function invitationRoutes(fastify: FastifyInstance) {
         where.status = query.status;
       }
 
-      if (query.communityId) {
-        where.communityId = query.communityId;
-      }
+      // `communityId` reste ACCEPTÉ (rétrocompatible) mais n'est pas posé :
+      // `FriendRequest` n'a pas cette colonne, et Prisma refusait la requête.
 
       if (query.senderId) {
         where.senderId = query.senderId;

@@ -186,7 +186,7 @@ describe('filtre, recherche et pagination', () => {
     expect(window.location.search).toBe('?status=SENT');
     expect(requests.at(-1)?.path).toContain('status=SENT');
     const labels = [...(host.querySelector<HTMLSelectElement>('[data-admin-filter="status"]')?.options ?? [])].map((option) => option.textContent);
-    expect(labels).toEqual(['Tous', 'Brouillon', 'Traduction en cours', 'Prête à l’envoi', 'Envoi en cours', 'Envoyée', 'Échec']);
+    expect(labels).toEqual(['Tous', 'Brouillon', 'Prête à l’envoi', 'Envoi en cours', 'Envoyée', 'Échec']);
   });
 
   test('l’adresse pose le filtre au chargement', async () => {

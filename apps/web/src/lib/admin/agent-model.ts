@@ -17,7 +17,8 @@ import { translateAdmin, translateAdminMaybe, type AdminLanguage } from '@/lib/i
  */
 export const AGENT_OUTCOMES = ['messages_sent', 'reactions_only', 'skipped', 'error'] as const;
 export const AGENT_TRIGGERS = ['auto', 'manual'] as const;
-const AGENT_NODES = ['observer', 'strategist', 'generator', 'qualityGate'] as const;
+/* L'agent écrit `starting` puis `observe` (`graph.ts`, `traced-node.ts`) ; `observer` reste lu pour les traces d'avant (audit 2026-10-04). */
+const AGENT_NODES = ['starting', 'observe', 'observer', 'strategist', 'generator', 'qualityGate'] as const;
 
 type Entry = { readonly tone: AdminTone; readonly glyph?: AdminGlyphName };
 

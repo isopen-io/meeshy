@@ -25,6 +25,9 @@ const isDown = (status: string): boolean => status.trim().toLowerCase() !== 'up'
 
 const issue = (id: HealthIssue['id'], tone: AdminTone, text: string): HealthIssue => ({ id, tone, text });
 
+/** Le traducteur est injoignable : absent de la charge, ou servi avec `reachable: false`. */
+export const translatorUnreachable = (monitoring: AdminMonitoring): boolean => monitoring.translator === null || monitoring.translator.reachable === false;
+
 /** Ce qui ne va pas, dans l'ordre où un administrateur le traite : les données d'abord, les services ensuite. Vide = tout va bien. */
 export function healthIssuesOf(monitoring: AdminMonitoring, language: AdminLanguage): readonly HealthIssue[] {
   const stateCount = (state: string): number => monitoring.circuitBreakers.filter((breaker) => breaker.state.toUpperCase() === state).length;
@@ -34,7 +37,7 @@ export function healthIssuesOf(monitoring: AdminMonitoring, language: AdminLangu
   return [
     ...(isDown(monitoring.database.status) ? [issue('database', 'danger', translateAdmin(language, 'admin.monitoring.health.issue.database'))] : []),
     ...(isDown(monitoring.redis.status) ? [issue('redis', 'danger', translateAdmin(language, 'admin.monitoring.health.issue.redis'))] : []),
-    ...(monitoring.translator === null ? [issue('translator', 'warning', translateAdmin(language, 'admin.monitoring.health.issue.translator'))] : []),
+    ...(translatorUnreachable(monitoring) ? [issue('translator', 'warning', translateAdmin(language, 'admin.monitoring.health.issue.translator'))] : []),
     ...(open === 0
       ? []
       : [issue('breakersOpen', 'danger', translateAdmin(language, 'admin.monitoring.health.issue.breakersOpen', { count: formatCount(open, language) }))]),

@@ -49,6 +49,21 @@ export const engagement = '/api/v1/me/engagement';
 const export_ = '/api/v1/me/export';
 export { export_ as export };
 
+/** POST /api/v1/me/game/chest/claim */
+export const gameChestClaim = '/api/v1/me/game/chest/claim';
+
+/** POST /api/v1/me/game/flame/freezes */
+export const gameFlameFreezes = '/api/v1/me/game/flame/freezes';
+
+/** POST /api/v1/me/game/flame/relight */
+export const gameFlameRelight = '/api/v1/me/game/flame/relight';
+
+/** POST /api/v1/me/game/guide/seen */
+export const gameGuideSeen = '/api/v1/me/game/guide/seen';
+
+/** POST /api/v1/me/game/missions/:missionId/reroll */
+export const gameMissionsByMissionIdReroll = (missionId: string): string => `/api/v1/me/game/missions/${encodeURIComponent(missionId)}/reroll`;
+
 /** POST /api/v1/me/meesh/mint */
 export const meeshMint = '/api/v1/me/meesh/mint';
 

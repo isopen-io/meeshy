@@ -75,6 +75,12 @@ enum Route: Hashable {
     /// les trois gratuitement — c'est le modèle que servent déjà l'Android et
     /// le web.
     case progressionSection(ProgressionSection)
+    /// « Comment ça marche » (#9379) — les huit règles du jeu et les sept cartes
+    /// de l'intégration, la page que Mee et Meo rouvrent.
+    case progressionRules
+    /// Le carnet de progression (#9382) — les photos des grands moments, sur
+    /// l'appareil.
+    case progressionNotebook
     case links
     case affiliate
     case trackingLinks
@@ -168,6 +174,10 @@ extension Route {
             case .defis: return AchievementCopy.sectionsHeader
             case .succes: return ProgressionCopy.achievementsTitle
             }
+        case .progressionRules:
+            return String(localized: "game.rules.page_title", defaultValue: "Comment ça marche", bundle: .main)
+        case .progressionNotebook:
+            return String(localized: "game.notebook.page_title", defaultValue: "Carnet de progression", bundle: .main)
         case .links:
             return String(localized: "route.title.links", defaultValue: "Liens", bundle: .main)
         case .affiliate:

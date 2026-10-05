@@ -34,6 +34,13 @@ final class ComposerLookPainterTests: XCTestCase {
         XCTAssertEqual(attendu, CGSize(width: 216, height: 384))
     }
 
+    func test_scene_classic_isPaintedInLayersAtTheSessionDate() throws {
+        let look = ComposerPhotoLook(frame: .montage(.classic(.polaroid)))
+        let scene = try XCTUnwrap(ComposerLookPainter.scene(for: look, canvas: CGSize(width: 108, height: 192),
+                                                            date: date, person: auteur))
+        XCTAssertEqual(scene.inputs.texts.date, ComposerPhotoLookSource.caption(at: date).subtitle)
+    }
+
     func test_paint_withoutLook_isTheSourceFilledIntoTheCanvas() throws {
         let image = ComposerLookPainter.paint(Self.source(), look: ComposerPhotoLook(), framing: .identity,
                                               scene: nil, canvas: CGSize(width: 90, height: 160), declared: nil)

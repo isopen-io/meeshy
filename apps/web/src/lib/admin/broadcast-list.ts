@@ -10,7 +10,8 @@ import { defineListSpec, type ListState } from './list-state';
  * effet (loi 4). La spécification garde malgré tout une clé de tri, `createdAt`,
  * parce que `defineListSpec` en exige une : elle n'est ni dessinée ni envoyée.
  */
-export const BROADCAST_STATUSES = ['DRAFT', 'TRANSLATING', 'READY', 'SENDING', 'SENT', 'FAILED'] as const;
+/** Les statuts que la passerelle ÉCRIT — `TRANSLATING` n'est jamais posé (audit 2026-10-04) : un filtre qui ne trouve jamais rien n'est pas offert. */
+export const BROADCAST_STATUSES = ['DRAFT', 'READY', 'SENDING', 'SENT', 'FAILED'] as const;
 
 export const BROADCAST_LIST_SPEC = defineListSpec({
   sortKeys: ['createdAt'],

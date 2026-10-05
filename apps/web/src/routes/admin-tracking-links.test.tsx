@@ -106,7 +106,7 @@ describe('la liste — nommée, jamais par identifiant ni par jeton', () => {
     const first = rowText(host, OBJECT_ID(1));
     for (const expected of [
       'Lancement de rentrée',
-      'https://m.meeshy.me/l/Ab3xYz',
+      'https://meeshy.me/l/Ab3xYz',
       'Campagne : rentree-2026',
       'Source : newsletter',
       'Support : email',
@@ -251,7 +251,7 @@ describe('tri, filtres, recherche et pagination — dans l’adresse, jamais au-
     const { deps, paths } = scripted(() => page(ROWS));
     const host = await open(deps);
 
-    expect(host.querySelector('[data-admin-toolbar] label span')?.textContent).toBe('Rechercher par nom, campagne ou adresse');
+    expect(host.querySelector('[data-admin-toolbar] label span')?.textContent).toBe('Rechercher par nom, campagne ou jeton');
     typeInto(host.querySelector<HTMLInputElement>('[data-admin-search]'), 'rentree');
     await wait(350);
     await mounter.settle();

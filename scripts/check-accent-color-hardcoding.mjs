@@ -221,8 +221,32 @@
 // DOMINANTE du média, servie avec lui — le même fond que la bulle, la galerie
 // et l'aperçu peignent déjà sous chaque média qui charge. La rapporter à
 // `accentColor` peindrait la vignette d'un autre média que le sien.
-const REFERENCE_LITERAL_COLOR_COUNT = 65;
-const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 443;
+//
+// 2026-10-05 (#9397) — littéraux 65 → 110, variables inconnues 443 → 445 : la
+// palette des MATIÈRES DU JEU — `GameMaterial.swift` (33), `LevelRingView.swift`
+// (10), `RankBlasonView.swift` (1), `SignatureMark.swift` (1), soit 45 — et les
+// deux `Color(hex: from|to)` de `GameMaterial.pair()`. Les dégradés de la
+// planche (`<linearGradient id="gCopper">…`), transcrits stop pour stop, pour
+// que les rangs, badges et trophées rendent la MÊME matière héraldique que le
+// design ; ce ne sont PAS des couleurs d'accent (même précédent que #9069,
+// #9171) — cuivre, bronze, argent, or, platine, obsidienne, prisme et flamme
+// sont des matériaux FIXES, volontairement indépendants du thème de
+// conversation. Les autres fichiers listés par le cliquet au moment de la
+// régression (`SyntaxHighlighter.swift`, `StoryFilterGridView.swift`,
+// `TagInputView.swift`, `ConversationAnimatedBackground.swift`,
+// `CountryPicker.swift`, `LanguageSelector.swift`, `ConversationListHelpers.swift`,
+// …) sont antérieurs au lot du jeu (#9373 → #9383) et n'y contribuent pas —
+// vérifié par `git log` sur chacun.
+//
+// 2026-10-05 (#9406) — littéraux 110 → 112 : `GameSurface.swift`
+// (`GameColors.warmText` / `.goodText`), deux variantes de CONTRASTE pour des
+// couleurs SÉMANTIQUES (avertissement, réussite) — `MeeshyColors.warning` /
+// `.success`, pensées pour fond sombre, tombent sous le seuil WCAG 4,5:1 sur
+// fond clair (mesuré : 1,6:1). Rien à voir avec `accentColor`/`colorPalette` ;
+// « Semantic colors (error, success) remain static via MeeshyColors »
+// (CLAUDE.md racine, § Conversation Accent Color).
+const REFERENCE_LITERAL_COLOR_COUNT = 112;
+const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 445;
 
 import { readFileSync, readdirSync, statSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';

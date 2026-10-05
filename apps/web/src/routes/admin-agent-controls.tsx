@@ -122,9 +122,13 @@ export function AgentRelaunchControl({
 
   const relaunch = async (): Promise<void> => {
     setSending('relaunch');
-    onAnnounce(translateAdmin(language, 'admin.agent.done'));
     const outcome = await relancerAgent({ ...deps, conversationId });
-    if (!outcome.ok || !outcome.data.triggered) onAnnounce(translateAdmin(language, 'admin.agent.failed'), 'error');
+    /* L'annonce suit la RÉPONSE : un agent désactivé répond 200 `triggered: false` et dit pourquoi (2e2842185b). */
+    if (!outcome.ok) onAnnounce(translateAdmin(language, 'admin.agent.failed'), 'error');
+    else if (outcome.data.triggered) onAnnounce(translateAdmin(language, 'admin.agent.done'));
+    else if (outcome.data.reason === 'CONVERSATION_DISABLED') onAnnounce(translateAdmin(language, 'admin.agentPanel.relaunch.notSent.conversation'), 'error');
+    else if (outcome.data.reason === 'GLOBAL_DISABLED') onAnnounce(translateAdmin(language, 'admin.agentPanel.relaunch.notSent.global'), 'error');
+    else onAnnounce(translateAdmin(language, 'admin.agentPanel.relaunch.notSent'), 'error');
     setSending('idle');
     setConfirming(false);
     await refresh();
@@ -206,9 +210,12 @@ export function AgentRelaunchControl({
   );
 }
 
+/** Un membre piloté : son nom, puis son @pseudo ET sa langue servis (2e2842185b) — les deux, quand ils sont là. */
 function ControlledUserChip({ language, user }: { readonly language: AdminLanguage; readonly user: AgentControlledUser }) {
-  const secondary = user.language === null ? null : sentenceCase(languageName(user.language, language), language);
+  const spoken = user.language === null ? null : sentenceCase(languageName(user.language, language), language);
   const handle = personSecondary(user.username);
+  const label = personLabel({ displayName: user.displayName, username: user.username }, language);
+  const secondary = [handle === label ? null : handle, spoken].filter((part): part is string => part !== null).join(' · ');
   return (
     <AdminEntityChip
       language={language}
@@ -216,8 +223,8 @@ function ControlledUserChip({ language, user }: { readonly language: AdminLangua
       entity={{
         kind: 'user',
         id: user.userId,
-        label: personLabel({ displayName: user.displayName, username: user.username }, language),
-        ...(secondary === null ? (handle === null ? {} : { secondary: handle }) : { secondary }),
+        label,
+        ...(secondary === '' ? {} : { secondary }),
       }}
     />
   );

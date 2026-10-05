@@ -6,6 +6,7 @@ import { loadAdminInterfaceCatalog } from '@/lib/i18n-admin-catalog';
 import {
   OBJECT_ID,
   servedConversationRank,
+  servedGuestRank,
   servedMessageRank,
   servedRanking,
   servedShareRank,
@@ -51,6 +52,12 @@ describe('la vue d’une ligne — des noms, jamais des identifiants', () => {
     const [view] = viewsOf([servedUserRank(3, { username: 'Unknown', displayName: undefined })], { entityType: 'users', criterion: 'messages_sent' });
 
     expect(view?.entity).toEqual({ kind: 'user', id: OBJECT_ID(3), label: 'Personne inconnue', deleted: true });
+  });
+
+  test('un INVITÉ (`guest: true`) se dit par son nom et ouvre sa fiche d’anonyme — jamais « compte supprimé »', () => {
+    const [view] = viewsOf([servedGuestRank(4)], { entityType: 'users', criterion: 'messages_sent' });
+
+    expect(view?.entity).toEqual({ kind: 'anonymous', id: OBJECT_ID(4), label: 'Invité 4' });
   });
 
   test('une conversation : son titre ; sans titre, « Conversation sans titre » et jamais son identifiant', () => {

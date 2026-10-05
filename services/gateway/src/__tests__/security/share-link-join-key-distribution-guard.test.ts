@@ -189,9 +189,9 @@ function makePrisma() {
       findUnique: jest.fn(async (args: { select?: unknown }) => projeter(shareLinkRow(), args?.select)),
       count: jest.fn(async () => 1),
     },
-    trackingLink: { findMany: jest.fn(async () => []) },
-    affiliateToken: { findMany: jest.fn(async () => []) },
-    friendRequest: { findMany: jest.fn(async () => []) },
+    trackingLink: { findMany: jest.fn(async () => []), count: jest.fn(async () => 0) },
+    affiliateToken: { findMany: jest.fn(async () => []), count: jest.fn(async () => 0) },
+    friendRequest: { findMany: jest.fn(async () => []), count: jest.fn(async () => 0) },
     participant: {
       findMany: jest.fn(async () => []),
       count: jest.fn(async () => 0),
