@@ -258,7 +258,7 @@ struct ComposerObjectEditorView: View {
             selectedTool = ComposerObjectEditorRail.selection(forFamily: nouvelle,
                                                               keeping: demandee,
                                                               hasTrimmableSource: objectHasTrimmableSource,
-                                                              offersFilter: objectOffersFilter)
+                                                              offersFilter: objectOffersFilter, offersAdjust: objectOffersAdjust)
         }
     }
 
@@ -486,7 +486,7 @@ struct ComposerObjectEditorView: View {
                 ForEach(ComposerObjectEditorRail.entries(
                     for: family,
                     hasTrimmableSource: objectHasTrimmableSource,
-                    offersFilter: objectOffersFilter), id: \.self) { entree in
+                    offersFilter: objectOffersFilter, offersAdjust: objectOffersAdjust), id: \.self) { entree in
                     Button {
                         // **La bascule vit dans la RÈGLE** (#5098) : retaper
                         // l'entrée OUVERTE range son panneau, taper une autre
@@ -1001,6 +1001,7 @@ nonisolated enum ComposerObjectEditorCopy {
         case .split:
             return String(localized: "composer.object.editor.split",
                           defaultValue: "Couper", bundle: .main)
+        case .adjust:  return ComposerAdjustCopy.title
         case .filter:
             // La clé du SDK n'est pas réemployable : elle vit dans `.module`,
             // et cet écran lit `.main`. Le MOT, lui, est le même que celui du

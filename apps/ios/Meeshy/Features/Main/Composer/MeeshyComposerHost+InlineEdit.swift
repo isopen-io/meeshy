@@ -96,6 +96,7 @@ extension MeeshyComposerHost {
             viewModel.exitTextEditingMode()
         }
         inlineEdit = nil
+        comparingLookObjectId = nil
         selectedSceneItemId = nil
         selectedSceneItemKind = nil
         HapticFeedback.light()
@@ -117,7 +118,8 @@ extension MeeshyComposerHost {
             section: section,
             plateauTint: tint.color,
             altText: porteUnMedia ? mediaAltBinding(for: edition.objectId) : nil,
-            onSelectText: { beginInlineEdit($0, section: .plan) }))
+            onSelectText: { beginInlineEdit($0, section: .plan) },
+            onCompareLook: { comparingLookObjectId = $0 ? edition.objectId : nil }))
     }
 
     /// Le pied du rail droit suit-il ses sous-outils, sans ressort ?
