@@ -17,8 +17,9 @@
  * Quatre formes de clé atteignent une pièce jointe, et chacune remonte à ses
  * lignes par un index :
  *  - l'original et la miniature : `filePath` / `thumbnailPath`, égalité ;
- *  - la variante WebP `<base>_<largeur>w.webp` : `filePath` qui commence par
- *    `<base>.` (préfixe ancré, servi par le même index) ;
+ *  - la variante WebP `<base>_<largeur>w.webp` : `filePath` égal à `<base>`
+ *    (original sans extension) ou qui commence par `<base>.` (préfixe ancré,
+ *    servi par le même index) ;
  *  - la piste traduite `translated/<attachmentId>_<langue>.<ext>` : la ligne
  *    nommée, puis toutes celles qui partagent ses octets.
  *
@@ -31,7 +32,14 @@
  * Le transfert recopie `filePath` sans dupliquer les octets. Le fichier reste
  * donc servi tant qu'UN porteur vit : rappeler l'original ne doit pas vider la
  * bulle de la conversation où il a été transféré. Une ligne pas encore
- * rattachée (envoi en cours) vit par définition.
+ * rattachée (envoi en cours) vit par définition, sans lever pour autant le
+ * régime de cache d'une vue unique qui partagerait le fichier.
+ *
+ * Une clé dont les lignes ont DÉJÀ été effacées (le chemin nominal de
+ * `deleteAttachment` efface la ligne avant les fichiers) n'est plus
+ * reconnaissable : si ses octets ont survécu — dérivés antérieurs à
+ * ef9db52467, `unlink` en échec — elle est servie comme un fichier qui n'est
+ * pas une pièce jointe. Ce reste se ferme par la purge des orphelins, pas ici.
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { carrierMessageStillServesBytes } from './carrierMessageLifecycle';
@@ -82,7 +90,7 @@ async function ownerRowsOf(storageKey: string, prisma: FileRouteVerdictPrisma): 
   const variant = RESPONSIVE_VARIANT.exec(storageKey);
   if (!variant) return [];
   return prisma.messageAttachment.findMany({
-    where: { filePath: { startsWith: `${variant[1]}.` } },
+    where: { OR: [{ filePath: variant[1] }, { filePath: { startsWith: `${variant[1]}.` } }] },
     select: OWNER_SELECT,
   });
 }
@@ -108,22 +116,19 @@ async function verdictFor(
   prisma: FileRouteVerdictPrisma,
   now: Date
 ): Promise<FileRouteVerdict> {
-  if (owners.some((row) => row.messageId === null)) {
-    return { kind: 'serve', cacheControl: ORDINARY_ATTACHMENT_CACHE };
-  }
-
+  const pending = owners.some((row) => row.messageId === null);
   const messageIds = [...new Set(owners.flatMap((row) => (row.messageId ? [row.messageId] : [])))];
-  const carriers = await prisma.message.findMany({
+  const carriers = messageIds.length === 0 ? [] : await prisma.message.findMany({
     where: { id: { in: messageIds } },
     select: { id: true, deletedAt: true, expiresAt: true, viewOnceBurnAt: true, isViewOnce: true },
   });
   const living = carriers.filter((carrier) => carrierMessageStillServesBytes(carrier, now));
-  if (living.length === 0) return { kind: 'gone' };
+  if (living.length === 0 && !pending) return { kind: 'gone' };
 
   const livingIds = new Set(living.map((carrier) => carrier.id));
   const viewOnce =
     living.some((carrier) => carrier.isViewOnce || carrier.viewOnceBurnAt) ||
-    owners.some((row) => row.isViewOnce && row.messageId !== null && livingIds.has(row.messageId));
+    owners.some((row) => row.isViewOnce && (row.messageId === null || livingIds.has(row.messageId)));
   if (viewOnce) return { kind: 'serve', cacheControl: VIEW_ONCE_ATTACHMENT_CACHE };
 
   const ephemeral = living.some((carrier) => carrier.expiresAt);

@@ -87,15 +87,28 @@ function matches(row: Record<string, unknown>, where: Record<string, unknown>): 
   });
 }
 
+/**
+ * Le faux magasin PROJETTE comme le vrai : une colonne absente du `select` est
+ * absente de la ligne rendue. Sans cela, retirer `viewOnceBurnAt` ou `deletedAt`
+ * de la requête laisserait chaque témoin vert sur une production aveugle.
+ */
+function project<T extends Record<string, unknown>>(row: T, select?: Record<string, boolean>): Partial<T> {
+  if (!select) return row;
+  return Object.fromEntries(Object.entries(row).filter(([key]) => select[key])) as Partial<T>;
+}
+
+type Query = { where: Record<string, unknown>; select?: Record<string, boolean> };
+
 function makePrisma(rows: Row[], carriers: Carrier[]) {
-  const findMany = jest.fn<any>().mockImplementation(async ({ where }: { where: Record<string, unknown> }) =>
-    rows.filter((r) => matches(r, where))
+  const findMany = jest.fn<any>().mockImplementation(async ({ where, select }: Query) =>
+    rows.filter((r) => matches(r, where)).map((r) => project(r, select))
   );
-  const findUnique = jest.fn<any>().mockImplementation(async ({ where }: { where: { id: string } }) =>
-    rows.find((r) => r.id === where.id) ?? null
-  );
-  const messageFindMany = jest.fn<any>().mockImplementation(async ({ where }: { where: Record<string, unknown> }) =>
-    carriers.filter((c) => matches(c, where))
+  const findUnique = jest.fn<any>().mockImplementation(async ({ where, select }: Query) => {
+    const row = rows.find((r) => r.id === (where as { id: string }).id);
+    return row ? project(row, select) : null;
+  });
+  const messageFindMany = jest.fn<any>().mockImplementation(async ({ where, select }: Query) =>
+    carriers.filter((c) => matches(c, where)).map((c) => project(c, select))
   );
   return {
     prisma: {
@@ -300,6 +313,40 @@ describe('#9315 — les octets partagés vivent tant qu’un porteur vit', () =>
   });
 });
 
+describe('#9315 — cas limites du verdict', () => {
+  it('refuse la variante d’un original enregistré sans extension', async () => {
+    const bare = '2026/10/68f2a81417a557e8ce4ddfc1/scan_0b4c1d2e-aaaa-4bbb-8ccc-123456789abc';
+    const { prisma } = makePrisma(
+      [{ id: 'aaaaaaaaaaaaaaaaaaaaaaa5', filePath: bare, thumbnailPath: null, messageId: 'm1' }],
+      [{ id: 'm1', deletedAt: PAST() }]
+    );
+    const app = await buildApp(prisma);
+    const res = await app.inject({ method: 'GET', url: '/api/v1/attachments/file/' + encodeKey(`${bare}_640w.webp`) });
+    expect(res.statusCode).toBe(404);
+    await app.close();
+  });
+
+  it('une ligne pas encore rattachée ne lève pas le no-store d’une vue unique vivante qui partage le fichier', async () => {
+    const pending = { ...photoRow(null), id: 'aaaaaaaaaaaaaaaaaaaaaaa7' };
+    const { prisma } = makePrisma([pending, photoRow('m1', { isViewOnce: true })], [{ id: 'm1', isViewOnce: true }]);
+    const app = await buildApp(prisma);
+    const res = await app.inject({ method: 'GET', url: '/api/v1/attachments/file/' + encodeKey(KEY) });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['cache-control']).toBe('private, no-store');
+    await app.close();
+  });
+
+  it('ne sert rien quand la base ne répond pas — fail-closed', async () => {
+    const { prisma, findMany } = makePrisma([photoRow('m1')], [{ id: 'm1' }]);
+    findMany.mockRejectedValue(new Error('mongo down'));
+    const app = await buildApp(prisma);
+    const res = await app.inject({ method: 'GET', url: '/api/v1/attachments/file/' + encodeKey(KEY) });
+    expect(res.statusCode).toBe(500);
+    expect(res.json()).toMatchObject({ success: false });
+    await app.close();
+  });
+});
+
 describe('#9315 — ce qui n’est pas une pièce jointe garde son régime', () => {
   it('sert un fichier qu’aucune ligne MessageAttachment ne référence (post, sticker, son)', async () => {
     const { prisma } = makePrisma([], []);
@@ -350,14 +397,24 @@ describe('#9315 — une autre écriture du même chemin n’échappe pas au verd
     ['remontée qui revient au même fichier', KEY.replace('2026/10/', '2026/xx/../10/')],
     ['remontée encodée', encodeKey(KEY.replace('2026/10/', '2026/xx/../10/'))],
     ['double encodage', encodeKey(encodeKey(KEY))],
-    ['barre initiale', encodeKey('/' + KEY)],
     ['barre finale', encodeKey(KEY + '/')],
-  ])('refuse le fichier rappelé atteint par %s', async (_l, raw) => {
-    const { prisma } = deleted();
+  ])('refuse en 404 le fichier rappelé atteint par %s, verdict rendu sur la clé normalisée', async (_l, raw) => {
+    const { prisma, findMany } = deleted();
     const app = await buildApp(prisma);
     const res = await app.inject({ method: 'GET', url: '/api/v1/attachments/file/' + raw });
-    expect(res.statusCode).toBeGreaterThanOrEqual(400);
+    expect(res.statusCode).toBe(404);
     expect(res.json()).toMatchObject({ success: false });
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { OR: [{ filePath: KEY }, { thumbnailPath: KEY }] } })
+    );
+    await app.close();
+  });
+
+  it('refuse en 403 une clé à barre initiale — elle sort de la racine des dépôts', async () => {
+    const { prisma } = deleted();
+    const app = await buildApp(prisma);
+    const res = await app.inject({ method: 'GET', url: '/api/v1/attachments/file/' + encodeKey('/' + KEY) });
+    expect(res.statusCode).toBe(403);
     await app.close();
   });
 

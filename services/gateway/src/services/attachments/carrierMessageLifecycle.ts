@@ -45,10 +45,12 @@
  * cette loi, au motif qu'une lecture base coûterait sur la route la plus chaude
  * pour ne gagner que la minute qui sépare l'échéance du balayage. Ce calcul
  * oubliait les fichiers DÉRIVÉS — miniature, variantes WebP, pistes traduites —
- * que le balayage n'effaçait pas : leur fuite était permanente. Depuis #9315,
- * `fileRouteVerdict.ts` remonte de la clé à ses lignes par index et applique ce
- * même prédicat ; seuls les avatars s'en dispensent, n'étant jamais une pièce
- * jointe.
+ * que le balayage n'effaçait pas. Depuis #9315, `fileRouteVerdict.ts` remonte
+ * de la clé à ses lignes par index et applique ce même prédicat tant que ces
+ * lignes existent ; les avatars s'en dispensent, n'étant jamais une pièce
+ * jointe. Un fichier qui SURVIT à ses lignes (dérivés antérieurs à
+ * ef9db52467, `unlink` en échec) n'est plus reconnaissable comme pièce jointe
+ * et reste servi : il relève de la purge des orphelins.
  */
 
 /**
