@@ -85,3 +85,10 @@ export function mascotMoment(progress: EngagementProgress, event: MascotEvent | 
     line: { kind: 'level-missing', missing: level.nextThreshold - level.value, nextLevel: level.level + 1 },
   };
 }
+
+/**
+ * LES GUIDES DU JEU (#9373) — les sept étapes d'intégration et les moments
+ * récurrents de Mee et Meo, dans `game/guide.ts`. La loi ci-dessus reste
+ * intacte ; elle partage seulement ce point d'entrée.
+ */
+export * from './game/guide.js';

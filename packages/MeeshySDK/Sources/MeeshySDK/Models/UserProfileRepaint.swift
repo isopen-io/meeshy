@@ -88,6 +88,33 @@ extension UserUpdatedEvent {
         return unchanged ? nil : repainted
     }
 
+    /// L'auteur de la dernière ligne d'une conversation (« Bob : … », #9359) :
+    /// un EXPÉDITEUR, donc le nom composé. Apparié par
+    /// `lastMessageSenderUserId`, que seul un nom de PAIR accompagne — « Vous »
+    /// n'en porte pas, et le mot du lecteur reste le sien.
+    public func repaintedLastMessageAuthor(of conversation: MeeshyConversation) -> String? {
+        guard conversation.lastMessageSenderUserId == userId,
+              let current = conversation.lastMessageSenderName,
+              current != ConversationListAuthor.readerLabel,
+              let name = composedName, name != current else { return nil }
+        return name
+    }
+
+    /// La fiche d'un participant (`ParticipantProfileSheet`, #9359) : une
+    /// ligne de PARTICIPANT, donc le nom composé dans `displayName`. Un
+    /// visiteur sans compte n'a pas d'`userId` et ne s'apparie jamais.
+    public func repainted(_ profile: ConversationParticipantProfile) -> ConversationParticipantProfile? {
+        guard let profileUserId = profile.userId, profileUserId == userId else { return nil }
+        let repainted = profile.repaintingIdentity(
+            username: hasNameGroup ? username : profile.username,
+            displayName: hasNameGroup ? composedName : profile.displayName,
+            firstName: hasNameGroup ? firstName : profile.firstName,
+            lastName: hasNameGroup ? lastName : profile.lastName,
+            avatar: avatar.applied(to: profile.avatar)
+        )
+        return repainted == profile ? nil : repainted
+    }
+
     public func repainted(_ user: FriendRequestUser) -> FriendRequestUser? {
         guard user.id == userId else { return nil }
         let repainted = FriendRequestUser(
@@ -212,6 +239,30 @@ extension MeeshyUser {
             voiceSampleDurationMs: voiceSampleDurationMs,
             voiceQuality: voiceQuality,
             activation: activation
+        )
+    }
+}
+
+extension ConversationParticipantProfile {
+    /// Copie de la fiche avec les cinq champs d'identité que porte
+    /// `user:updated` remplacés — tout le reste recopié (champs en `let`).
+    func repaintingIdentity(
+        username: String?, displayName: String?,
+        firstName: String?, lastName: String?, avatar: String?
+    ) -> ConversationParticipantProfile {
+        ConversationParticipantProfile(
+            participantId: participantId, conversationId: conversationId,
+            isAnonymous: isAnonymous, userId: userId,
+            username: username, displayName: displayName,
+            firstName: firstName, lastName: lastName, avatar: avatar,
+            language: language, country: country,
+            conversationRole: conversationRole, joinedAt: joinedAt,
+            isOnline: isOnline, lastActiveAt: lastActiveAt,
+            shareLinkName: shareLinkName,
+            hasEmail: hasEmail, hasBirthday: hasBirthday,
+            email: email, birthday: birthday,
+            entryCapabilities: entryCapabilities, entryLink: entryLink,
+            historyVisibleFrom: historyVisibleFrom, canGrantHistory: canGrantHistory
         )
     }
 }

@@ -70,6 +70,21 @@ final class SignupPhoneLaterGuardTests: XCTestCase {
                       "quitter le champ avec une saisie fait dire son refus")
     }
 
+    // MARK: - « S'inscrire » inactif EXPLIQUE, un toucher hors champ le quitte (#9362)
+
+    func test_inactivePrimary_receivesTheTouchAndExplains_andATapOutsideReleasesTheField() throws {
+        let source = try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Auth/Signup/SignupView.swift")
+        XCTAssertFalse(source.contains(".disabled(!isPrimaryEnabled)"),
+                       "un bouton désactivé n'entend pas le toucher : il ne peut rien expliquer")
+        let attempt = try window(from: "func attemptPrimary() {", to: "\n    }", in: source)
+        XCTAssertTrue(attempt.contains("guard enabled else { return explainInactivePrimary() }"),
+                      "« S'inscrire » touché inactif dit pourquoi")
+        XCTAssertTrue(source.contains(".accessibilityHint(viewModel.inactivePrimaryReason"),
+                      "VoiceOver lit le motif sur le bouton")
+        XCTAssertTrue(source.contains(".onTapGesture { focusedField = nil }"),
+                      "un toucher hors des champs leur retire la main")
+    }
+
     // MARK: - Catalogue
 
     func test_catalog_requiredPhoneKeysAreTranslatedInSevenLanguages() throws {

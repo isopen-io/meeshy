@@ -158,6 +158,13 @@ public struct APIEngagementProgress: Codable, Sendable, Equatable, CacheIdentifi
     /// sont masqués, ceux de VOLUME restent visibles.
     public let achievementReach: [String: Int]?
 
+    /// Le JEU (#9378) — OPTIONNEL, et lu en `try?` : une passerelle antérieure ne
+    /// le sert pas, et un bloc que ce client ne comprend pas (une clé de palier
+    /// ajoutée avant la mise à jour de l'app) ne doit pas emporter la charge de
+    /// progression ENTIÈRE. `nil` ⇒ aucun élément du jeu n'est montré, jamais un
+    /// niveau peint depuis un bloc à moitié lu.
+    public let game: GameBlock?
+
     public init(
         counters: [Counter],
         milestones: [Milestone],
@@ -165,7 +172,8 @@ public struct APIEngagementProgress: Codable, Sendable, Equatable, CacheIdentifi
         level: Level,
         meesh: Meesh? = nil,
         elan: Elan? = nil,
-        achievementReach: [String: Int]? = nil
+        achievementReach: [String: Int]? = nil,
+        game: GameBlock? = nil
     ) {
         self.counters = counters
         self.milestones = milestones
@@ -174,6 +182,19 @@ public struct APIEngagementProgress: Codable, Sendable, Equatable, CacheIdentifi
         self.meesh = meesh
         self.elan = elan
         self.achievementReach = achievementReach
+        self.game = game
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        counters = try container.decode([Counter].self, forKey: .counters)
+        milestones = try container.decode([Milestone].self, forKey: .milestones)
+        streak = try container.decode(Streak.self, forKey: .streak)
+        level = try container.decode(Level.self, forKey: .level)
+        meesh = try container.decodeIfPresent(Meesh.self, forKey: .meesh)
+        elan = try container.decodeIfPresent(Elan.self, forKey: .elan)
+        achievementReach = try container.decodeIfPresent([String: Int].self, forKey: .achievementReach)
+        game = (try? container.decodeIfPresent(GameBlock.self, forKey: .game)) ?? nil
     }
 
     /// Aucune activité — la charge qu'un compte neuf reçoit.
@@ -185,6 +206,6 @@ public struct APIEngagementProgress: Codable, Sendable, Equatable, CacheIdentifi
     )
 
     private enum CodingKeys: String, CodingKey {
-        case counters, milestones, streak, level, meesh, elan, achievementReach
+        case counters, milestones, streak, level, meesh, elan, achievementReach, game
     }
 }

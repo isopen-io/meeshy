@@ -442,7 +442,7 @@ describe('EngagementService streak tracking (#5544)', () => {
     );
   });
 
-  it('resets a skipped-day streak to 1 without lowering the recorded longest streak', async () => {
+  it('resets a skipped-day streak to 1 without lowering the recorded longest streak, keeping the lost streak for a relight (#9376)', async () => {
     const userUpdate = jest.fn().mockResolvedValue({});
     const prisma = makeStreakPrisma(
       { currentStreakDays: 10, longestStreakDays: 20, lastStreakDate: THREE_DAYS_AGO_UTC_MIDNIGHT },
@@ -455,7 +455,13 @@ describe('EngagementService streak tracking (#5544)', () => {
 
     expect(userUpdate).toHaveBeenCalledWith({
       where: { id: 'user-1' },
-      data: { currentStreakDays: 1, longestStreakDays: 20, lastStreakDate: TODAY_UTC_MIDNIGHT },
+      data: {
+        currentStreakDays: 1,
+        longestStreakDays: 20,
+        lastStreakDate: TODAY_UTC_MIDNIGHT,
+        brokenStreakDays: 10,
+        brokenStreakLastDay: THREE_DAYS_AGO_UTC_MIDNIGHT.toISOString().slice(0, 10),
+      },
     });
   });
 
@@ -702,7 +708,7 @@ describe('EngagementService level tracking (#5545)', () => {
       query: { _id: { $oid: 'user-1' } },
       update: [{ $set: { engagementScore: { $add: [{ $ifNull: ['$engagementScore', 0] }, attendu] } } }],
       new: true,
-      fields: { engagementScore: 1 },
+      fields: { engagementScore: 1, levelRecord: 1 },
     });
   });
 

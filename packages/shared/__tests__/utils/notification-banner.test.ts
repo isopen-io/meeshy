@@ -4,7 +4,6 @@ import {
   buildNotificationBanner,
   buildNotificationBannerBody,
   buildNotificationHeadline,
-  buildNotificationReactionBadge,
   buildNotificationThumbnail,
   notificationBannerFraming,
   type ConventionsDuClient,
@@ -263,50 +262,46 @@ describe('buildNotificationBannerBody', () => {
   });
 });
 
-describe('buildNotificationReactionBadge', () => {
-  it('ne rend rien pour un type qui n’est pas une réaction', () => {
-    expect(buildNotificationReactionBadge(notification({ type: NotificationTypeEnum.NEW_MESSAGE }), 'Alice')).toBeNull();
+describe('buildNotificationBanner — l’émoji d’une réaction est dit une fois (#9049)', () => {
+  const occurrences = (banner: { headline: string; body: string | null }, needle: string): number =>
+    [banner.headline, banner.body ?? ''].join('\n').split(needle).length - 1;
+
+  it('réaction à un message : la phrase servie porte l’émoji, la bannière n’en ajoute pas', () => {
+    const banner = buildNotificationBanner(
+      notification({
+        type: NotificationTypeEnum.MESSAGE_REACTION,
+        title: 'meeshy sama',
+        content: 'a réagi ❤️ à votre message : « J’attends! »',
+        actor: { ...alice, displayName: 'meeshy sama' },
+        context: { conversationType: 'direct' },
+        metadata: { reactionEmoji: '❤️' },
+      }),
+      t,
+      conventions,
+    );
+
+    expect(banner.headline).toBe('meeshy sama');
+    expect(banner.body).toBe('a réagi ❤️ à votre message : « J’attends! »');
+    expect(occurrences(banner, '❤️')).toBe(1);
+    expect(occurrences(banner, 'meeshy sama')).toBe(1);
+    expect(banner).not.toHaveProperty('reactionBadge');
   });
 
-  it('lit `emoji` pour les réactions de contenu', () => {
-    const badge = buildNotificationReactionBadge(
-      notification({ type: NotificationTypeEnum.STORY_REACTION, metadata: { emoji: '🔥' } }),
-      'Alice a réagi à votre story',
+  it('une phrase sans émoji n’en reçoit aucun : la bannière ne compose pas la réaction', () => {
+    const banner = buildNotificationBanner(
+      notification({
+        type: NotificationTypeEnum.COMMENT_LIKE,
+        title: 'Alice Martin',
+        subtitle: 'a aimé votre commentaire',
+        content: '« Bien vu ! »',
+        actor: alice,
+        metadata: { emoji: '👍' },
+      }),
+      t,
+      conventions,
     );
-    expect(badge).toBe('🔥');
-  });
 
-  it('se tait quand le corps servi porte déjà l’émoji (#9049)', () => {
-    const badge = buildNotificationReactionBadge(
-      notification({ type: NotificationTypeEnum.MESSAGE_REACTION, metadata: { reactionEmoji: '❤️' } }),
-      'meeshy sama',
-      'a réagi ❤️ à votre message : « J’attends! »',
-    );
-    expect(badge).toBeNull();
-  });
-
-  it('lit `reactionEmoji` pour les réactions de message', () => {
-    const badge = buildNotificationReactionBadge(
-      notification({ type: NotificationTypeEnum.MESSAGE_REACTION, metadata: { reactionEmoji: '👍' } }),
-      'Alice',
-    );
-    expect(badge).toBe('👍');
-  });
-
-  it('ne rend rien quand aucun émoji n’est présent', () => {
-    const badge = buildNotificationReactionBadge(
-      notification({ type: NotificationTypeEnum.COMMENT_LIKE, metadata: {} }),
-      'Alice a aimé votre commentaire',
-    );
-    expect(badge).toBeNull();
-  });
-
-  it('ne redouble pas un émoji déjà porté par la phrase', () => {
-    const badge = buildNotificationReactionBadge(
-      notification({ type: NotificationTypeEnum.STORY_REACTION, metadata: { emoji: '🔥' } }),
-      'Alice Martin a réagi 🔥 à votre story',
-    );
-    expect(badge).toBeNull();
+    expect(occurrences(banner, '👍')).toBe(0);
   });
 });
 
@@ -347,7 +342,7 @@ describe('buildNotificationThumbnail', () => {
   });
 });
 
-describe('buildNotificationBanner — assemble les quatre champs', () => {
+describe('buildNotificationBanner — assemble les trois champs', () => {
   it('compose une bannière complète pour une réaction sur contenu', () => {
     const banner = buildNotificationBanner(
       notification({
@@ -365,12 +360,11 @@ describe('buildNotificationBanner — assemble les quatre champs', () => {
     expect(banner).toEqual({
       headline: 'Alice Martin a réagi 🔥 à votre story',
       body: 'Votre story · 📷 Photo',
-      reactionBadge: null,
       thumbnailUrl: 'https://cdn/s.jpg',
     });
   });
 
-  it('transmet le nom de groupe local aux quatre champs', () => {
+  it('transmet le nom de groupe local aux trois champs', () => {
     const banner = buildNotificationBanner(
       notification({
         type: NotificationTypeEnum.NEW_MESSAGE,

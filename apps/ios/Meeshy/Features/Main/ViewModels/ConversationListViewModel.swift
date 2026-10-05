@@ -1104,8 +1104,7 @@ class ConversationListViewModel: ObservableObject {
                     // message est forcément l'autre participant : on résout son nom
                     // depuis les champs déjà en mémoire sur la ligne (aucun aller-
                     // retour réseau/cache), pour que la ligne affiche l'auteur dès
-                    // ce bump au lieu d'attendre la prochaine synchro. Les groupes
-                    // n'ont pas cette info en local — comportement neutre inchangé.
+                    // ce bump au lieu d'attendre la prochaine synchro (#9359 : avec l'id du pair).
                     // #6921 — la règle a QUITTÉ ce site pour `ConversationListAuthor`.
                     // Le repli DM ci-dessus était juste et incomplet : il ne
                     // couvrait pas MON PROPRE message (`senderId == moi`, donc
@@ -1120,6 +1119,7 @@ class ConversationListViewModel: ObservableObject {
                         event, readerId: self.currentUserId,
                         row: self.conversations[index], youLabel: Self.youAuthorLabel
                     ).displayedNameForNewMessage
+                    let resolvedSenderUserId = ConversationListAuthor.peerUserId(senderUserId: event.messageSenderUserId, senderName: resolvedSenderName, readerId: self.currentUserId, youLabel: Self.youAuthorLabel)
                     self.bumpToTop(
                         conversationId: event.conversationId,
                         facet: LastMessageFacet(
@@ -1129,7 +1129,7 @@ class ConversationListViewModel: ObservableObject {
                             // vidage n'avance jamais d'horodatage.
                             id: event.lastMessageIdValue,
                             preview: event.lastMessagePreview,
-                            senderName: resolvedSenderName,
+                            senderName: resolvedSenderName, senderUserId: resolvedSenderUserId,
                             at: newLastAt,
                             // La facette décrit UN message : la carte du message
                             // PRÉCÉDENT n'est pas la sienne, donc `.unchanged`
