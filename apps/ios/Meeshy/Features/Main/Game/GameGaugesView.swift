@@ -280,7 +280,7 @@ private struct GameFlameTile: View {
                     )
                 } ?? String(localized: "game.flame.out_line", defaultValue: "Flamme éteinte", bundle: .main))
                 if let status = statusText {
-                    caption(status, tone: flame.status == .atRisk || isOut ? GameColors.warmText : nil)
+                    caption(status, tone: flame.status == .atRisk || isOut ? ThemeManager.shared.textPrimary : nil)
                 }
             }
         )

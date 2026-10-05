@@ -2,25 +2,6 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
-/// Les couleurs du jeu qui doivent rester LISIBLES dans les deux thèmes.
-enum GameColors {
-    /// Les deux encres profondes ci-dessous n'ont pas de jeton de charte : le contraste de 4,5:1 sur blanc
-    /// exige un ambre et un vert plus sombres que `warning` et `success`, qui restent ceux du thème sombre.
-    ///
-    /// Un texte chaud (avertissement, Flamme en danger) : l'ambre sur fond sombre,
-    /// un ambre profond sur fond clair — #FBBF24 sur blanc tombe à 1,6:1, sous
-    /// le seuil de 4,5:1.
-    static var warmText: Color {
-        ThemeManager.shared.mode.isDark ? MeeshyColors.warning : Color(red: 180 / 255, green: 83 / 255, blue: 9 / 255)
-    }
-
-    /// Un texte de réussite (« +100 de Gloire ») : le vert vif sur fond sombre,
-    /// un vert profond sur fond clair.
-    static var goodText: Color {
-        ThemeManager.shared.mode.isDark ? MeeshyColors.success : Color(red: 4 / 255, green: 120 / 255, blue: 87 / 255)
-    }
-}
-
 /// LA SURFACE COMMUNE DU JEU (#9383) — la carte teintée de l'écran Progression
 /// (`ProgressionCard`), une puce, un bouton d'action. Des vues FEUILLES : aucune
 /// n'observe de singleton, le thème se lit par une propriété calculée (Zero

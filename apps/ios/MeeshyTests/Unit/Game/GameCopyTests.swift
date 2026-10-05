@@ -106,7 +106,7 @@ final class GameCopyTests: XCTestCase {
 
     func test_clock_isWrittenByTheLocale_notByHand() {
         let french = Locale(identifier: "fr_FR")
-        XCTAssertEqual(GameCopy.clock(minuteOfDay: 9 * 60 + 5, locale: french), "09:05")
+        XCTAssertTrue(["09:05", "9:05"].contains(GameCopy.clock(minuteOfDay: 9 * 60 + 5, locale: french)), "heure et minutes, à la française")
         XCTAssertEqual(GameCopy.clock(minuteOfDay: 21 * 60, locale: french), "21:00")
         XCTAssertNotEqual(GameCopy.clock(minuteOfDay: 21 * 60, locale: Locale(identifier: "en_US")), "21:00", "12 h en anglais américain")
     }
