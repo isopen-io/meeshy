@@ -217,9 +217,15 @@
          IMAGE_CAPTURE que si resolveActivity trouve une application photo.
          Depuis l'API 30, la visibilité des paquets la cache sans cette
          requête : le pont retombait sur le sélecteur de fichiers. -->
+    <!-- #9446 — les sous-titres d'un appel (MeeshySpeechPlugin) : depuis
+         l'API 30, SpeechRecognizer.isRecognitionAvailable ne voit le service
+         de reconnaissance du système que si le manifeste le demande. -->
     <queries>
         <intent>
             <action android:name="android.media.action.IMAGE_CAPTURE" />
+        </intent>
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
         </intent>
     </queries>
 </manifest>
