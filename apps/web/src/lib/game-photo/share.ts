@@ -10,6 +10,10 @@
  * du partage retombe sur le téléchargement.
  */
 
+import type { GallerySaver } from '@/lib/gallery/gallery-saver';
+import { saveToGallery } from '@/lib/gallery/save-to-gallery';
+import type { FileDeliveryHost } from '@/lib/media/file-delivery-host';
+
 export type ShareOutcome = 'shared' | 'downloaded' | 'cancelled' | 'failed';
 
 type ShareNavigator = {
@@ -44,14 +48,90 @@ export async function shareImage(params: {
   }
 }
 
-/** Le téléchargement du navigateur : un lien éphémère vers un `Blob`. */
-export function downloadFile(file: File, doc: Document): void {
-  const url = URL.createObjectURL(file);
-  const link = doc.createElement('a');
-  link.href = url;
-  link.download = file.name;
-  doc.body.append(link);
-  link.click();
-  link.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+/**
+ * LES PORTES DE L'HÔTE (revue #9382) — un navigateur partage par
+ * `navigator.share` ou télécharge par une ancre ; la WebView d'une coque n'a NI
+ * l'un NI l'autre, mais le pont `MeeshyShare.shareFile` (la feuille du système)
+ * et, sur Android, la galerie (`@capacitor-community/media`). Sans elles,
+ * « Partager » et « Enregistrer » tombaient sur un téléchargement qui ne
+ * faisait rien, et l'écran annonçait « Image enregistrée ».
+ *
+ * `host` est `browserFileDeliveryHost()` : il ne porte l'ancre que dans un
+ * navigateur, et le pont de partage que dans une coque qui le déclare.
+ */
+export type PhotoDoors = {
+  readonly nav: ShareNavigator;
+  readonly host: FileDeliveryHost;
+  readonly saver: GallerySaver | null;
+};
+
+const anchorDownload = (host: FileDeliveryHost): ((file: File) => void) | null => {
+  const { document: doc, createObjectURL, revokeObjectURL } = host;
+  if (doc === undefined || createObjectURL === undefined || revokeObjectURL === undefined) return null;
+  return (file) => {
+    const url = createObjectURL(file);
+    const link = doc.createElement('a');
+    link.href = url;
+    link.download = file.name;
+    doc.body.appendChild(link);
+    link.click();
+    doc.body.removeChild(link);
+    setTimeout(() => revokeObjectURL(url), 1000);
+  };
+};
+
+const bridgeShare = async (file: File, host: FileDeliveryHost): Promise<ShareOutcome | null> => {
+  const { canShareFiles, shareFiles } = host;
+  if (canShareFiles === undefined || shareFiles === undefined || !canShareFiles({ files: [file] })) return null;
+  try {
+    await shareFiles({ files: [file] });
+    return 'shared';
+  } catch (error) {
+    return error instanceof Error && error.name === 'AbortError' ? 'cancelled' : null;
+  }
+};
+
+const navigatorShares = (nav: ShareNavigator, data: ShareData): boolean =>
+  typeof nav.share === 'function' && typeof nav.canShare === 'function' && nav.canShare(data);
+
+/** Partager : la feuille du navigateur (avec le titre), sinon celle de la coque, sinon un téléchargement — sinon l'échec, dit. */
+export async function sharePhoto(file: File, title: string, doors: PhotoDoors): Promise<ShareOutcome> {
+  const download = anchorDownload(doors.host);
+  if (navigatorShares(doors.nav, { files: [file], title })) {
+    return shareImage({
+      file,
+      title,
+      nav: doors.nav,
+      download: (f) => {
+        if (download === null) throw new Error('Aucun téléchargement');
+        download(f);
+      },
+    });
+  }
+  const bridged = await bridgeShare(file, doors.host);
+  if (bridged !== null) return bridged;
+  if (download === null) return 'failed';
+  try {
+    download(file);
+    return 'downloaded';
+  } catch {
+    return 'failed';
+  }
+}
+
+/** Enregistrer : la galerie de la coque Android, sinon un téléchargement, sinon la feuille du système (qui sait enregistrer l'image). */
+export async function savePhoto(file: File, doors: PhotoDoors): Promise<ShareOutcome> {
+  const mimeType = file.type === '' ? 'image/png' : file.type;
+  const notice = await saveToGallery({ blob: file, fileName: file.name, mimeType, saver: doors.saver }).catch(() => 'media.viewer.save_failed' as const);
+  if (notice !== null) return notice === 'media.viewer.saved' ? 'downloaded' : 'failed';
+  const download = anchorDownload(doors.host);
+  if (download !== null) {
+    try {
+      download(file);
+      return 'downloaded';
+    } catch {
+      return 'failed';
+    }
+  }
+  return (await bridgeShare(file, doors.host)) ?? 'failed';
 }

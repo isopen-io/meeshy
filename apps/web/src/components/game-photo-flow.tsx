@@ -8,6 +8,7 @@ import { flowReducer, type FlowState } from '@/lib/game-photo/flow';
 import type { PhotoFormat } from '@/lib/game-photo/layout';
 import type { PhotoMoment } from '@/lib/game-photo/moments';
 import type { PhotoFiles } from '@/lib/game-photo/render';
+import type { ShareOutcome } from '@/lib/game-photo/share';
 import { dateLabelOf } from '@/lib/game-photo/render';
 import { useObjectUrl } from '@/lib/game-photo/use-object-url';
 import { nextFocusIndex } from '@/lib/view/focus-trap';
@@ -213,22 +214,23 @@ export function GamePhotoFlow({ moment, env, onClose }: Props) {
 
   const chosen = files === null ? null : files[format];
 
-  const share = useCallback(async () => {
-    if (chosen === null) return;
-    const outcome = await env.share(chosen, moment.title);
+  const announce = useCallback((outcome: ShareOutcome, failure: string) => {
     dispatch({ type: 'shared', outcome });
     if (outcome === 'downloaded') setNotice({ tone: 'good', text: 'Image enregistrée.' });
     else if (outcome === 'shared') setNotice({ tone: 'good', text: 'Image partagée.' });
-    else if (outcome === 'failed') setNotice({ tone: 'error', text: 'Le partage n’a pas pu aboutir.' });
+    else if (outcome === 'failed') setNotice({ tone: 'error', text: failure });
     else setNotice(null);
-  }, [chosen, env, moment.title]);
+  }, []);
 
-  const save = useCallback(() => {
+  const share = useCallback(async () => {
     if (chosen === null) return;
-    const ok = env.save(chosen);
-    dispatch({ type: 'shared', outcome: ok ? 'downloaded' : 'failed' });
-    setNotice(ok ? { tone: 'good', text: 'Image enregistrée.' } : { tone: 'error', text: 'L’enregistrement n’a pas pu aboutir.' });
-  }, [chosen, env]);
+    announce(await env.share(chosen, moment.title), 'Le partage n’a pas pu aboutir.');
+  }, [announce, chosen, env, moment.title]);
+
+  const save = useCallback(async () => {
+    if (chosen === null) return;
+    announce(await env.save(chosen), 'L’enregistrement n’a pas pu aboutir.');
+  }, [announce, chosen, env]);
 
   const keep = useCallback(async () => {
     if (files === null || state.step !== 'result') return;
@@ -394,7 +396,7 @@ export function GamePhotoFlow({ moment, env, onClose }: Props) {
             <Button attr={{ 'data-photo-share': '' }} primary onClick={() => void share()}>
               Partager
             </Button>
-            <Button attr={{ 'data-photo-save': '' }} onClick={save}>
+            <Button attr={{ 'data-photo-save': '' }} onClick={() => void save()}>
               Enregistrer
             </Button>
             <Button attr={{ 'data-photo-keep': '' }} onClick={() => void keep()} disabled={state.kept === true}>

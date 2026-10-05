@@ -61,7 +61,7 @@ function env(overrides: Partial<PhotoEnv> & { camera?: CameraResult | 'pending';
     },
     notebook,
     share: async (file, title) => (log.shared.push({ file, title }), overrides.shareOutcome ?? 'shared'),
-    save: (file) => (log.saved.push(file), true),
+    save: async (file) => (log.saved.push(file), 'downloaded'),
     render: async ({ moment, photo }) => {
       log.rendered.push({ moment, mirror: photo === null ? null : photo.mirror });
       return overrides.renderOk === false ? null : files();
@@ -336,6 +336,14 @@ describe('le résultat : partager, enregistrer, garder', () => {
     await settle();
     expect(log.saved.map((f) => f.name)).toEqual(['meeshy-story.png']);
     expect(host.textContent).toContain('Image enregistrée');
+  });
+
+  test('« Enregistrer » sans porte (coque sans galerie ni téléchargement) se dit en alerte, jamais « enregistrée »', async () => {
+    const { host } = await toResult({ save: async () => 'failed' });
+    await click(by(host, 'data-photo-save'));
+    await settle();
+    expect(host.querySelector('[role="alert"]')?.textContent).toContain('L’enregistrement n’a pas pu aboutir');
+    expect(host.textContent).not.toContain('Image enregistrée');
   });
 
   test('« Garder au carnet » garde LES DEUX images, avec le mode, et le dit', async () => {
