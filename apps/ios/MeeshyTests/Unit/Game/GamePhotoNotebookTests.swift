@@ -123,15 +123,14 @@ final class GamePhotoNotebookTests: XCTestCase {
         let moments = (0..<24).map { GamePhotoMoments.levelHundred(prestige: $0) }
         let kept = photo()
 
-        var results: [Bool] = []
-        await withTaskGroup(of: Bool.self) { group in
-            for (index, moment) in moments.enumerated() {
-                group.addTask { @MainActor in
-                    index.isMultiple(of: 2) ? await sut.keep(moment, photo: kept) : await sut.postpone(moment)
-                }
+        let writes = moments.enumerated().map { index, moment in
+            Task<Bool, Never> { @MainActor in
+                if index.isMultiple(of: 2) { return await sut.keep(moment, photo: kept) }
+                return await sut.postpone(moment)
             }
-            for await written in group { results.append(written) }
         }
+        var results: [Bool] = []
+        for write in writes { results.append(await write.value) }
 
         let entries = await sut.list()
         XCTAssertEqual(results.filter { $0 }.count, moments.count)
