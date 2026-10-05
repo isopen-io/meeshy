@@ -37,7 +37,7 @@ function fakePrisma(overrides: Record<string, any> = {}) {
     },
     // Le jeu (#9384) : des collections vides, comme un compte qui n'a jamais joué.
     ...Object.fromEntries(
-      [...GAME_PURGED_MODELS, 'gameDuo'].map((model) => [model, { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }), updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }) }]),
+      [...GAME_PURGED_MODELS, 'gameDuo', 'leagueGroupWeek', 'affiliateVisitSession'].map((model) => [model, { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }), updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }), findMany: jest.fn<any>().mockResolvedValue([]), findUnique: jest.fn<any>().mockResolvedValue(null), count: jest.fn<any>().mockResolvedValue(0) }]),
     ),
     user: { updateMany: jest.fn<any>().mockResolvedValue({ count: 1 }) },
     ...overrides,

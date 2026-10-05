@@ -9,7 +9,7 @@
 import { describe, it, expect } from '@jest/globals';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { GAME_PURGED_MODELS, purgeGameData } from '../GamePurge';
+import { GAME_PURGED_MODELS, GAME_PURGE_EXCEPTIONS, purgeGameData } from '../GamePurge';
 import { fakeGameDb, seedUser, USER, OTHER } from './fakeGameDb';
 
 const lowerFirst = (name: string) => name.charAt(0).toLowerCase() + name.slice(1);
@@ -41,20 +41,31 @@ function schemaModels(): SchemaModel[] {
 
 const MODELS = schemaModels();
 
-/** Les modèles du schéma qui portent une ligne PAR COMPTE et se réclament d'une issue du jeu (#9373 à #9392). */
+/** Les noms qui disent « jeu » même quand leur documentation ne cite pas d'issue. */
+const GAME_NAME = /^(Game|League|Atlas|Achievement|DailyMission|GloryLedger|MeeshLedger|EngagementQuota|AffiliateVisit)/;
+
+/** Les modèles du schéma qui portent une ligne PAR COMPTE et se réclament du jeu (issues #9373 à #9392, ou nom de jeu). */
 const gameModelsInSchema = MODELS
-  .filter((model) => /#93(7[3-9]|[89]\d)\b/.test(model.documentation))
-  .filter((model) => model.fields.some((field) => ['userId', 'inviterId', 'inviteeId'].includes(field)))
+  .filter((model) => /#93(7[3-9]|[89]\d)\b/.test(model.documentation) || GAME_NAME.test(model.name))
+  .filter((model) => model.fields.some((field) => ['userId', 'inviterId', 'inviteeId', 'referredUserId', 'affiliateUserId'].includes(field)))
   .map((model) => lowerFirst(model.name));
 
 describe('exhaustivité de la purge', () => {
-  it('chaque modèle du jeu par compte du schéma est purgé (ou est un duo, purgé par ses deux bouts)', () => {
-    const covered = new Set<string>([...GAME_PURGED_MODELS, 'gameDuo']);
+  it('chaque modèle du jeu par compte du schéma est traité : purgé, ou nommé dans les exceptions justifiées', () => {
+    const covered = new Set<string>([...GAME_PURGED_MODELS, ...Object.keys(GAME_PURGE_EXCEPTIONS)]);
     expect(gameModelsInSchema.filter((name) => !covered.has(name))).toEqual([]);
   });
 
   it('le témoin voit bien les modèles du jeu : il n’est pas vide', () => {
     expect(gameModelsInSchema).toEqual(expect.arrayContaining(['gloryLedger', 'dailyMission', 'gameDay', 'leagueMembership', 'gameTrophy']));
+  });
+
+  it('chaque exception dit pourquoi, et nomme un modèle qui existe', () => {
+    const names = new Set(MODELS.map((model) => lowerFirst(model.name)));
+    for (const [model, reason] of Object.entries(GAME_PURGE_EXCEPTIONS)) {
+      expect(names.has(model)).toBe(true);
+      expect(reason.length).toBeGreaterThan(20);
+    }
   });
 
   it('l’inventaire ne nomme que des modèles qui existent', () => {
@@ -121,5 +132,89 @@ describe('purgeGameData', () => {
     const second = await purgeGameData(db.prisma, USER);
     expect(second.duosDeleted).toBe(0);
     expect(Object.values(second.deleted).every((n) => n === 0)).toBe(true);
+  });
+});
+
+
+describe('intégrité référentielle après la purge', () => {
+  const PARTNER = '68a0000000000000000000aa';
+  const P2 = '68a0000000000000000000bb';
+  const WEEK = '2026-10-12';
+
+  const duoWorld = (partnerDone: boolean) => {
+    const db = fakeGameDb();
+    seedUser(db, { engagementScore: 4000, levelRecord: 20 }, USER);
+    seedUser(db, { engagementScore: 4000, levelRecord: 20 }, PARTNER);
+    db.gameDuo.rows.push({
+      id: 'duo1', weekKey: WEEK, inviterId: USER, inviteeId: PARTNER, status: 'active', templateKey: 'duo-messages', signal: 'axis:content.text_message',
+      prism: false, partTarget: 40, commonTarget: 80, inviterProgress: 10, inviteeProgress: partnerDone ? 40 : 5, inviterPaidAt: null, inviteePaidAt: null,
+      inviterSeen: [], inviteeSeen: [], createdAt: new Date(),
+    });
+    db.gameDuoSlot.rows.push({ id: 's1', userId: USER, weekKey: WEEK, duoId: 'duo1' }, { id: 's2', userId: PARTNER, weekKey: WEEK, duoId: 'duo1' });
+    return db;
+  };
+
+  it('un duo actif est terminé proprement : plus aucun duo ni emplacement ne pointe vers le compte effacé', async () => {
+    const db = duoWorld(false);
+    await purgeGameData(db.prisma, USER);
+    expect(db.gameDuo.rows.filter((d) => d.inviterId === USER || d.inviteeId === USER)).toEqual([]);
+    expect(db.gameDuoSlot.rows).toEqual([]);
+  });
+
+  it('le partenaire qui avait FINI sa part reçoit sa part simple, une fois ; sinon rien n’est payé', async () => {
+    const paid: [string, number][] = [];
+    const creditPoints = async (userId: string, points: number) => void paid.push([userId, points]);
+
+    const done = duoWorld(true);
+    await purgeGameData(done.prisma, USER, { creditPoints });
+    await purgeGameData(done.prisma, USER, { creditPoints });
+    expect(paid.map((p) => p[0])).toEqual([PARTNER]);
+    expect(paid[0]![1]).toBeGreaterThan(0);
+
+    paid.length = 0;
+    const notDone = duoWorld(false);
+    await purgeGameData(notDone.prisma, USER, { creditPoints });
+    expect(paid).toEqual([]);
+  });
+
+  it('une invitation en attente envoyée au compte effacé libère l’emplacement de l’invitant', async () => {
+    const db = fakeGameDb();
+    seedUser(db, {}, USER);
+    seedUser(db, {}, PARTNER);
+    db.gameDuo.rows.push({ id: 'duo2', weekKey: WEEK, inviterId: PARTNER, inviteeId: USER, status: 'invited', inviterProgress: 0, inviteeProgress: 0, createdAt: new Date() });
+    db.gameDuoSlot.rows.push({ id: 's3', userId: PARTNER, weekKey: WEEK, duoId: 'duo2' });
+    await purgeGameData(db.prisma, USER);
+    expect(db.gameDuo.rows).toEqual([]);
+    expect(db.gameDuoSlot.rows).toEqual([]);
+  });
+
+  it('un groupe de ligue ne garde aucun membre fantôme : appartenance, instantané et effectif suivent', async () => {
+    const db = fakeGameDb();
+    for (const id of [USER, PARTNER, P2]) seedUser(db, {}, id);
+    db.leagueGroupWeek.rows.push({ id: 'g', groupId: 'G1', weekKey: WEEK, league: 'jade', memberCount: 3, snapshot: { [USER]: 90, [PARTNER]: 50, [P2]: 10 }, settledAt: null });
+    for (const id of [USER, PARTNER, P2]) db.leagueMembership.rows.push({ id: `m-${id}`, userId: id, weekKey: WEEK, groupId: 'G1', league: 'jade', settledAt: null });
+
+    await purgeGameData(db.prisma, USER);
+
+    expect(db.leagueMembership.rows.map((m) => m.userId).sort()).toEqual([PARTNER, P2].sort());
+    expect(db.leagueGroupWeek.rows[0]).toMatchObject({ memberCount: 2, snapshot: { [PARTNER]: 50, [P2]: 10 } });
+    expect(JSON.stringify(db.leagueGroupWeek.rows[0]!.snapshot)).not.toContain(USER);
+  });
+
+  it('un groupe laissé vide est supprimé : aucune ligne orpheline', async () => {
+    const db = fakeGameDb();
+    seedUser(db, {}, USER);
+    db.leagueGroupWeek.rows.push({ id: 'g', groupId: 'G9', weekKey: WEEK, league: 'quartz', memberCount: 1, snapshot: { [USER]: 5 }, settledAt: null });
+    db.leagueMembership.rows.push({ id: 'm', userId: USER, weekKey: WEEK, groupId: 'G9', league: 'quartz', settledAt: null });
+    await purgeGameData(db.prisma, USER);
+    expect(db.leagueGroupWeek.rows).toEqual([]);
+  });
+
+  it('les visites de parrainage et les tampons ne gardent pas l’identifiant du compte', async () => {
+    const db = fakeGameDb();
+    seedUser(db, {}, USER);
+    db.affiliateVisitSession.rows.push({ id: 'v1', sessionKey: 'k', affiliateUserId: USER, referredUserId: null }, { id: 'v2', sessionKey: 'k2', affiliateUserId: PARTNER, referredUserId: USER });
+    await purgeGameData(db.prisma, USER);
+    expect(db.affiliateVisitSession.rows).toEqual([expect.objectContaining({ id: 'v2', referredUserId: null })]);
   });
 });

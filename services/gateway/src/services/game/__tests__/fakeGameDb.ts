@@ -265,6 +265,7 @@ export type FakeGameDb = {
   readonly friendRequest: Model;
   readonly userPreferences: Model;
   readonly conversation: Model;
+  readonly affiliateVisitSession: Model;
 };
 
 export function fakeGameDb(): FakeGameDb {
@@ -302,6 +303,7 @@ export function fakeGameDb(): FakeGameDb {
   const friendRequest = new Model();
   const userPreferences = new Model();
   const conversation = new Model();
+  const affiliateVisitSession = flattenCompound(new Model({ uniques: [['sessionKey']] }));
   const models = {
     user,
     gloryLedger,
@@ -328,6 +330,7 @@ export function fakeGameDb(): FakeGameDb {
     friendRequest,
     userPreferences,
     conversation,
+    affiliateVisitSession,
   };
 
   /**

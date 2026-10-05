@@ -46,6 +46,8 @@ function table(rows: Row[]) {
     findMany: jest.fn(async (args?: { where?: Record<string, unknown> }) =>
       state.rows.filter((row) => matches(row, args?.where))),
     updateMany: jest.fn(async () => ({ count: 0 })),
+    findUnique: jest.fn(async () => null),
+    count: jest.fn(async () => 0),
     deleteMany: jest.fn(async (args?: { where?: Record<string, unknown> }) => {
       const before = state.rows.length;
       state.rows = state.rows.filter((row) => !matches(row, args?.where));
@@ -84,7 +86,7 @@ function base() {
     notification,
     // Le jeu (#9384) : des collections vides.
     ...Object.fromEntries(
-      [...GAME_PURGED_MODELS, 'gameDuo'].map((model) => [model, table([])]),
+      [...GAME_PURGED_MODELS, 'gameDuo', 'leagueGroupWeek', 'affiliateVisitSession'].map((model) => [model, table([])]),
     ),
     user: { updateMany: async () => ({ count: 1 }) },
   };

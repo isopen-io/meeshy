@@ -466,6 +466,28 @@ export class DuoService {
       partnerProgress,
     };
   }
+
+  /**
+   * La suppression d'un compte (conformité I-1) TERMINE ses duos ouverts proprement :
+   * le partenaire qui avait déjà fini SA part reçoit sa part simple (une fois — la
+   * réclamation est conditionnelle), le duo se ferme et libère les emplacements.
+   * Rien ne reste qui pointe vers le compte effacé. Idempotent.
+   */
+  async settleForDeletedAccount(userId: string, now: Date = new Date()): Promise<number> {
+    const open = (await this.prisma.gameDuo.findMany({
+      where: { OR: [{ inviterId: userId }, { inviteeId: userId }], status: { in: ['invited', 'active'] } },
+      take: 50,
+    })) as DuoRow[];
+    for (const duo of open) {
+      if (duo.status === 'active' && duo.partTarget !== null) {
+        const partnerRole = duo.inviterId === userId ? 'invitee' : 'inviter';
+        const partnerProgress = partnerRole === 'inviter' ? duo.inviterProgress : duo.inviteeProgress;
+        if (partnerProgress >= duo.partTarget) await this.pay(duo, partnerRole, false, now);
+      }
+      await this.end(duo, 'abandoned', now);
+    }
+    return open.length;
+  }
 }
 
 /** La part du partenaire, au quart de la cible vers le bas : 0, 25 %, 50 %, 75 %, 100 %. */
