@@ -24,7 +24,7 @@ nonisolated enum CameraAudioArming {
 }
 
 @MainActor
-final class CameraModel: NSObject, ObservableObject {
+final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProviding {
     // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
     // défaut) → double-free `pointer being freed was not allocated` (abrt)
     // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
@@ -100,6 +100,8 @@ final class CameraModel: NSObject, ObservableObject {
     private var isSwitchingCameraDuringRecording = false
     private var pendingSwitchPosition: AVCaptureDevice.Position?
     private var pendingStopRequested = false
+    /// Ce qui suit une bascule faite PENDANT une prise, prévenu à sa reprise.
+    private var switchFollower: (@MainActor @Sendable (AVCaptureDevice.Position) -> Void)?
 
     /// Demande la caméra puis monte la session. Un refus (au prompt ou déjà
     /// enregistré dans TCC) publie `permission = .denied` au lieu de sortir en
@@ -242,16 +244,26 @@ final class CameraModel: NSObject, ObservableObject {
     /// stopped, and reopens a new segment on the new camera. A no-op while a
     /// previous switch is still settling (guards rapid double-taps).
     func switchCamera() {
+        switchCamera(then: { _ in })
+    }
+
+    /// `then` reçoit l'objectif en place une fois la bascule finie (#9464) —
+    /// la machine de capture y rend le zoom et la lumière.
+    func switchCamera(then: @escaping @MainActor @Sendable (AVCaptureDevice.Position) -> Void) {
         guard ComposerCameraSwitchRule.mayFlip(isSwitching: isSwitchingCamera) else { return }
         guard !isSwitchingCameraDuringRecording else { return }
         isSwitchingCamera = true
         if isRecordingVideo {
             isSwitchingCameraDuringRecording = true
             pendingSwitchPosition = currentPosition == .back ? .front : .back
+            switchFollower = then
             videoOutput.stopRecording()
             return
         }
-        performCameraSwitch(to: currentPosition == .back ? .front : .back)
+        performCameraSwitch(to: currentPosition == .back ? .front : .back) { [weak self] in
+            guard let self else { return }
+            then(self.currentPosition)
+        }
     }
 
     /// La bascule se fait sur la file ; `then` passe sur le fil principal une
@@ -556,6 +568,7 @@ final class CameraModel: NSObject, ObservableObject {
         isSwitchingCameraDuringRecording = false
         isSwitchingCamera = false
         switchCover = nil
+        switchFollower = nil
         isRecordingVideo = false
         recordingTimer?.invalidate()
         recordingTimer = nil
@@ -619,6 +632,9 @@ final class CameraModel: NSObject, ObservableObject {
     /// l'auteur a demandé l'arrêt pendant la bascule.
     private func resumeRecordingAfterSwitch() {
         isSwitchingCameraDuringRecording = false
+        let suite = switchFollower
+        switchFollower = nil
+        suite?(currentPosition)
         if pendingStopRequested {
             pendingStopRequested = false
             Task { @MainActor [weak self] in await self?.deliverRecording() }

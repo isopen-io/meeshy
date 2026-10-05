@@ -25,6 +25,9 @@ final class ComposerCaptureSession: ObservableObject {
     /// Le modèle est construit MUET : `CameraModel` n'ouvre sa session qu'à la
     /// demande.
     let camera: CameraModel
+    /// Les COMMANDES de l'objectif (#9464) — `camera` en temps normal, une
+    /// doublure dans les témoins ; les vues lisent `camera`.
+    let controls: any ComposerCaptureCameraProviding
     /// Le pont toucher → capteur de l'aperçu partagé (#9295) : l'aperçu s'y
     /// accroche, le double toucher du chrome le lit.
     let focusPoints = CameraPreviewFocusPoints()
@@ -69,9 +72,9 @@ final class ComposerCaptureSession: ObservableObject {
     /// La durée du segment en cours, saisie À LA CLÔTURE : l'horloge du modèle
     /// repart à zéro au démarrage suivant, et le fichier n'arrive qu'après.
     private(set) var pendingSegmentDuration: TimeInterval = 0
-    private var zoomAnchor: ComposerCaptureZoomAnchor?
+    var zoomAnchor: ComposerCaptureZoomAnchor?
     /// Le facteur au premier écart des doigts, `nil` hors pincement (#9295).
-    private var pinchAnchor: CGFloat?
+    var pinchAnchor: CGFloat?
     /// Deux doigts sont posés : ni le rangement, ni l'appui long, ni un
     /// toucher ne partent.
     private(set) var isPinching = false
@@ -89,11 +92,13 @@ final class ComposerCaptureSession: ObservableObject {
     init(stage: ComposerSceneCameraStage = .off,
          mode: ComposerSceneCameraMode? = nil,
          camera: CameraModel = CameraModel(),
+         controls: (any ComposerCaptureCameraProviding)? = nil,
          defaults: UserDefaults = .standard,
          thermal: (any ThermalStateMonitorProviding)? = nil) {
         self.stage = stage
         self.mode = mode
         self.camera = camera
+        self.controls = controls ?? camera
         self.defaults = defaults
         self.thermal = thermal ?? ThermalStateMonitor()
         flashIntensity = defaults.object(forKey: ComposerFlashIntensity.storageKey) as? Double
@@ -109,7 +114,7 @@ final class ComposerCaptureSession: ObservableObject {
 
     /// Le sol blanc du flash avant est-il allumé ? (#8653)
     var floorIsLit: Bool {
-        ComposerFrontFlash.lightsFloor(flash: flash, position: camera.currentPosition, stage: stage)
+        ComposerFrontFlash.lightsFloor(flash: flash, position: controls.currentPosition, stage: stage)
     }
 
     var floorWhite: Double {
@@ -186,20 +191,21 @@ final class ComposerCaptureSession: ObservableObject {
     // MARK: - La prise
 
     /// **Un appui bref PREND une photo.** Objectif avant, flash actif : l'ÉCRAN
-    /// est le flash (#8653) — la luminosité monte, l'image part sous elle.
+    /// est le flash (#8653) — la luminosité monte, l'image part sous elle,
+    /// sans le flash de l'objectif : jamais deux éclairs (#9464).
     func takePhoto() {
         guard stage == .armed, !camera.isTakingPhoto else { return }
         mode = .photo
         HapticFeedback.medium()
         let flashDeLaPrise = flash
         guard floorIsLit else {
-            camera.takePhoto(flash: flashDeLaPrise)
+            controls.takePhoto(flash: flashDeLaPrise)
             return
         }
         ComposerScreenFlash.shared.light(level: flashIntensity)
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: UInt64(ComposerFrontFlash.brightnessRamp * 1_000_000_000))
-            camera.takePhoto(flash: flashDeLaPrise)
+            controls.takePhoto(flash: .off)
             try? await Task.sleep(nanoseconds: UInt64(ComposerFrontFlash.photoHold * 1_000_000_000))
             ComposerScreenFlash.shared.restore()
         }
@@ -212,7 +218,7 @@ final class ComposerCaptureSession: ObservableObject {
         guard stage == .armed else { return }
         mode = ComposerShutterGesture.mode(locked: holdPhase == .locked)
         stage = .recording
-        camera.setTorch(ComposerFrontFlash.torch(flash: flash, position: camera.currentPosition),
+        controls.setTorch(ComposerFrontFlash.torch(flash: flash, position: controls.currentPosition),
                         level: flashIntensity)
         if floorIsLit { ComposerScreenFlash.shared.light(level: flashIntensity) }
         Task { @MainActor in
@@ -388,10 +394,10 @@ final class ComposerCaptureSession: ObservableObject {
     /// faite : l'appui long a pu bouger avant que la caméra filme.
     func dragZoom(translationY: CGFloat) {
         guard ComposerCaptureHold.verticalDrag(stage: stage) == .zoom, !isPinching else { return }
-        let ancre = zoomAnchor ?? ComposerCaptureZoomAnchor(factor: camera.zoomFactor, translationY: translationY)
+        let ancre = zoomAnchor ?? ComposerCaptureZoomAnchor(factor: controls.zoomFactor, translationY: translationY)
         zoomAnchor = ancre
-        camera.setZoom(ComposerCaptureZoom.factor(
-            from: ancre.factor, translationY: translationY - ancre.translationY, range: camera.zoomRange))
+        controls.setZoom(ComposerCaptureZoom.factor(
+            from: ancre.factor, translationY: translationY - ancre.translationY, range: controls.zoomRange))
     }
 
     func endZoomDrag() {
@@ -414,9 +420,9 @@ final class ComposerCaptureSession: ObservableObject {
                 resetHold()
             }
         }
-        let ancre = pinchAnchor ?? camera.zoomFactor
+        let ancre = pinchAnchor ?? controls.zoomFactor
         pinchAnchor = ancre
-        camera.setZoom(ComposerCaptureZoom.pinched(from: ancre, scale: scale, range: camera.zoomRange))
+        controls.setZoom(ComposerCaptureZoom.pinched(from: ancre, scale: scale, range: controls.zoomRange))
     }
 
     /// Idempotente : la fin d'un pincement arrive par `onEnded` ET par l'état
@@ -485,7 +491,7 @@ final class ComposerCaptureSession: ObservableObject {
 
     /// VoiceOver ne glisse pas : il incrémente.
     func stepZoom(up: Bool) {
-        camera.setZoom(ComposerCaptureZoom.stepped(camera.zoomFactor, up: up, range: camera.zoomRange))
+        controls.setZoom(ComposerCaptureZoom.stepped(controls.zoomFactor, up: up, range: controls.zoomRange))
     }
 
     func cycleFlash() {
@@ -498,13 +504,13 @@ final class ComposerCaptureSession: ObservableObject {
         flashIntensity = ComposerFlashIntensity.clamped(level)
         defaults.set(flashIntensity, forKey: ComposerFlashIntensity.storageKey)
         ComposerScreenFlash.shared.adjust(level: flashIntensity)
-        guard stage == .recording, camera.currentPosition == .back else { return }
-        camera.setTorch(ComposerFrontFlash.torch(flash: flash, position: .back), level: flashIntensity)
+        guard stage == .recording, controls.currentPosition == .back else { return }
+        controls.setTorch(ComposerFrontFlash.torch(flash: flash, position: .back), level: flashIntensity)
     }
 
     /// Éteint tout ce que le flash a allumé — torche et luminosité.
     func extinguishFlash() {
-        camera.setTorch(.off)
+        controls.setTorch(.off, level: ComposerFlashIntensity.defaultLevel)
         ComposerScreenFlash.shared.restore()
     }
 }

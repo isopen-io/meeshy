@@ -163,7 +163,7 @@ struct ComposerCaptureChrome: View {
                 onCloseTake: { session.closeTake() },
                 flashMode: session.flash,
                 onCycleFlash: { session.cycleFlash() },
-                onFlipCamera: { session.camera.switchCamera() },
+                onFlipCamera: { session.flipCamera() },
                 onDisarm: onDisarm,
                 size: size,
                 onToggleSize: onToggleSize,

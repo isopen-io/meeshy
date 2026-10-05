@@ -60,7 +60,8 @@ final class ComposerCaptureSessionTests: XCTestCase {
             XCTAssertTrue(sites.contains("ComposerCaptureSession.swift"), "`\(loi)` n'est plus câblée par la machine")
             XCTAssertTrue(Set(sites).isDisjoint(with: montages),
                           "`\(loi)` est recâblée par un montage du viseur : \(sites)")
-            XCTAssertTrue(Set(sites).isSubset(of: ["ComposerCaptureSession.swift", "ComposerSceneCameraBar.swift"]),
+            XCTAssertTrue(Set(sites).isSubset(of: ["ComposerCaptureSession.swift", "ComposerCaptureSession+Switch.swift",
+                                                   "ComposerSceneCameraBar.swift"]),
                           "`\(loi)` a un second site de câblage : \(sites) — seule la barre lit le cadenas de SON obturateur")
         }
     }
