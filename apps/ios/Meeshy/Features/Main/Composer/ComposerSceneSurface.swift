@@ -276,6 +276,9 @@ struct ComposerSceneSurface: View {
     /// clavier levé : les rails et les étages du bas lui cèdent la place,
     /// par `ComposerToolFocus.isShown(_:toolIsOpen:writesText:)`.
     var writesText: Bool = false
+    /// **Et ce qu'il écrit est le CORPS du post** (#9448) : le panneau du corps
+    /// recouvre le volet de légende, qui sort alors de l'arbre.
+    var writesPostBody: Bool = false
     /// **Les options du sous-outil ouvert, à droite, depuis le haut** (#9138) —
     /// le panneau entier, déjà composé et placé (`ComposerInlineToolPanel`) ;
     /// la surface le pose sur la scène libre, à côté de la colonne droite.
@@ -556,6 +559,7 @@ struct ComposerSceneSurface: View {
                 .padding(.horizontal, ComposerRailGeometry.descriptionInset(roomy: isRoomy,
                                                                              cardLeading: sceneCardLeading))
                 .padding(.bottom, MeeshySpacing.smPlus)
+                .environment(\.composerSceneCardWidth, sceneCardWidth)
         }
     }
 
@@ -563,9 +567,17 @@ struct ComposerSceneSurface: View {
     /// (#5011). `0` tant que la première passe de mise en page n'a pas eu lieu.
     @State private var sceneCardLeading: CGFloat = 0
 
+    /// La largeur du DESSIN, mesurée par le canvas (#5008) : la flèche du volet
+    /// s'y proportionne. `0` avant la première passe ⇒ le volet se mesure seul.
+    @State private var sceneCardWidth: CGFloat = 0
+
     /// **La hauteur des étages du bas, mesurée** (#8712) — ce qu'un panneau
     /// ouvert y occupe, et donc de combien la scène doit REMONTER.
     @State private var lowerFloorsHeight: CGFloat = 0
+
+    private var writing: ComposerWriting {
+        ComposerWriting.resolve(editsSceneDescription: writesText, editsPostContent: writesPostBody)
+    }
 
     private var sceneLiftInset: CGFloat {
         ComposerSceneLift.bottomInset(
@@ -601,6 +613,7 @@ struct ComposerSceneSurface: View {
             chromeLayer
         }
         .onPreferenceChange(ComposerSceneCardLeadingKey.self) { sceneCardLeading = $0 }
+        .onPreferenceChange(ComposerSceneCardWidthPreferenceKey.self) { sceneCardWidth = $0 }
         .onPreferenceChange(ComposerLowerFloorsHeightKey.self) { lowerFloorsHeight = $0 }
         // **La bascule outil <-> scène se fait en fondu** (#8652), coupé sous
         // Reduce Motion ; VoiceOver est prévenu que l'écran a changé, et son
@@ -608,7 +621,10 @@ struct ComposerSceneSurface: View {
         .animation(ComposerToolFocus.transition(reduceMotion: reduceMotion), value: toolIsOpen)
         // **Écrire efface les rails et les étages du bas, et les rend** (#6131,
         // #6132) — en fondu, à l'aller comme au retour : rien ne saute.
-        .animation(ComposerToolFocus.transition(reduceMotion: reduceMotion), value: writesText)
+        // Au retour, le chrome attend que le panneau du corps soit parti
+        // (#9448) — sinon le panneau sortant passe sur les rangées qui reviennent.
+        .animation(ComposerWritingExit.chromeAnimation(reduceMotion: reduceMotion, writesText: writesText),
+                   value: writesText)
         .adaptiveOnChange(of: toolIsOpen) { _, _ in
             UIAccessibility.post(notification: .layoutChanged, argument: nil)
         }
@@ -777,13 +793,15 @@ struct ComposerSceneSurface: View {
         // contraint.
         .background {
             GeometryReader { geo in
+                let bordGauche = ComposerRailGeometry.sceneLeadingInset(overlay: geo.size,
+                                                                        ratio: aspectRatio,
+                                                                        horizontalInset: edge)
                 Color.clear
-                    .preference(
-                        key: ComposerSceneCardLeadingKey.self,
-                        value: ComposerRailGeometry.sceneLeadingInset(
-                            overlay: geo.size,
-                            ratio: aspectRatio,
-                            horizontalInset: edge))
+                    .preference(key: ComposerSceneCardLeadingKey.self, value: bordGauche)
+                    // La carte se CENTRE : sa largeur est ce que les deux bords
+                    // lui laissent. Le volet en proportionne sa flèche (#5008).
+                    .preference(key: ComposerSceneCardWidthPreferenceKey.self,
+                                value: max(0, geo.size.width - 2 * bordGauche))
             }
         }
         // **La scène se pose ENTRE la barre haute et le socle** (directive
@@ -991,7 +1009,7 @@ struct ComposerSceneSurface: View {
             // (retour porteur 2026-09-28) : la légende s'efface le temps du
             // dessin ou du Cadre, comme la barre canonique sous un panneau.
             if ComposerSceneCameraOverlay.isServed(.description, stage: cameraStage),
-               ComposerToolFocus.isShown(.description, toolIsOpen: toolIsOpen), band == nil {
+               ComposerToolFocus.isShown(.description, toolIsOpen: toolIsOpen, writing: writing), band == nil {
                 descriptionOverlay
             }
             roomyBandCard
