@@ -251,7 +251,7 @@
 // `GameSurface.swift` ajoutés par #9406 ci-dessus, en passant `warmText` et
 // `goodText` par des jetons au lieu de `Color(hex:)`. Valeur MESURÉE le
 // 2026-10-05.
-const REFERENCE_LITERAL_COLOR_COUNT = 110;
+const REFERENCE_LITERAL_COLOR_COUNT = 109;
 const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 445;
 
 import { readFileSync, readdirSync, statSync, realpathSync } from 'node:fs';
