@@ -25,6 +25,10 @@ const setup = () => {
   const onSignal = jest.fn<(userId: string, signal: string, options: Record<string, unknown>) => Promise<void>>().mockResolvedValue(undefined);
   const creditPoints = jest.fn<(userId: string, points: number, axisKey: string) => Promise<void>>().mockResolvedValue(undefined);
   db.message.rows.push({ id: 'msg-1', createdAt: new Date('2026-10-05T11:30:00Z') });
+  db.participant.rows.push(
+    { id: 'p-1', conversationId: CONV, userId: USER, isActive: true },
+    { id: 'p-2', conversationId: CONV, userId: OTHER, isActive: true },
+  );
   const signals = new MessageGameSignals(db.prisma, { missions: { onSignal }, creditPoints });
   return { db, signals, onSignal, creditPoints };
 };
@@ -176,5 +180,68 @@ describe('MessageGameSignals — +3 points à l’auteur répondu', () => {
     await signals.record(reply({ replyToId: 'msg-inconnu' }));
 
     expect(creditPoints).not.toHaveBeenCalled();
+  });
+});
+
+describe('MessageGameSignals — l’entre-soi ne fait avancer aucune mission (#9377)', () => {
+  const alone = (db: FakeGameDb) => {
+    db.participant.rows = db.participant.rows.filter((p) => p.userId === USER);
+  };
+
+  it('écrire SEUL dans une autre langue ne fait pas avancer une mission du Prisme', async () => {
+    const { db, signals, onSignal } = setup();
+    alone(db);
+
+    await signals.record(reply({ replyToId: null, quotedAuthorUserId: null, originalLanguage: 'es' }));
+
+    expect(signalsOf(onSignal, 'foreign-language-message')).toHaveLength(0);
+  });
+
+  it('répondre à un compte de moins de 24 h ne compte pas pour une conversation distincte', async () => {
+    const { db, signals, onSignal } = setup();
+    db.user.rows[1]!.createdAt = new Date('2026-10-05T10:00:00Z');
+
+    await signals.record(reply());
+
+    expect(signalsOf(onSignal, 'reply-distinct-conversations')).toHaveLength(0);
+  });
+
+  it('écrire dans une autre langue à un compte bloqué ne compte pas', async () => {
+    const { db, signals, onSignal } = setup();
+    db.user.rows[1]!.blockedUserIds = [USER];
+
+    await signals.record(reply({ replyToId: null, quotedAuthorUserId: null, originalLanguage: 'es' }));
+
+    expect(signalsOf(onSignal, 'foreign-language-message')).toHaveLength(0);
+  });
+
+  it('au-delà de 50 messages du jour entre deux comptes seuls, la réponse reçue rapporte 3 ÷ 4 (1 point)', async () => {
+    const { db, signals, creditPoints } = setup();
+    db.conversationEngagement.rows.push({
+      id: 'ce-1',
+      userId: USER,
+      conversationId: CONV,
+      day: new Date('2026-10-05T00:00:00Z'),
+      dayCounts: { 'content.text_message': 50 },
+    });
+
+    await signals.record(reply());
+
+    expect(creditPoints).toHaveBeenCalledWith(OTHER, 1, GAME_BONUS_AXIS);
+  });
+
+  it('sous le seuil, la réponse reçue rapporte ses 3 points', async () => {
+    const { db, signals, creditPoints } = setup();
+    db.conversationEngagement.rows.push({
+      id: 'ce-1',
+      userId: USER,
+      conversationId: CONV,
+      day: new Date('2026-10-05T00:00:00Z'),
+      dayCounts: { 'content.text_message': 49 },
+    });
+
+    await signals.record(reply());
+
+    expect(creditPoints).toHaveBeenCalledWith(OTHER, 3, GAME_BONUS_AXIS);
   });
 });

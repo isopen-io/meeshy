@@ -31,6 +31,9 @@ const CACHE_MAX_ENTRIES = 5000;
 /** Les axes qui sont des MESSAGES — les seuls que ces gardes jugent. */
 const MESSAGE_OPERATIONS: ReadonlySet<string> = new Set(['content.text_message', 'content.audio_message']);
 
+/** Points au-delà du plafond d'entre-soi : divisés par 4, jamais zéro. */
+export const quarterPoints = (points: number): number => Math.max(1, Math.round(points / 4));
+
 /** `none` : rien ; `quarter` : points ÷ 4 ; `full` : points entiers. */
 export type MessageVerdict = 'none' | 'quarter' | 'full';
 

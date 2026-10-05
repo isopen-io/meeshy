@@ -15,7 +15,7 @@ import { tailwindFactor } from '@meeshy/shared/utils/game/boosts';
 import { levelFromScore } from '@meeshy/shared/utils/game/levels';
 import { MISSION_TEMPLATES } from '@meeshy/shared/utils/game/missions';
 import { enhancedLogger } from '../../utils/logger-enhanced';
-import { GameAbuseGuard, type MessageVerdict } from './GameAbuseGuard';
+import { GameAbuseGuard, quarterPoints, type MessageVerdict } from './GameAbuseGuard';
 import { GloryService } from './GloryService';
 import { MessageGameSignals, type MessageSignalInput } from './MessageGameSignals';
 import { MissionService } from './MissionService';
@@ -28,8 +28,7 @@ const MISSION_AXIS_SIGNALS: ReadonlySet<string> = new Set(
   MISSION_TEMPLATES.map((template) => template.signal).filter((signal) => signal.startsWith('axis:')),
 );
 
-/** Points d'un message au-delà du plafond d'entre-soi : divisés par 4, jamais zéro. */
-export const quarterPoints = (points: number): number => Math.max(1, Math.round(points / 4));
+export { quarterPoints };
 
 /** Le Vent arrière : ×1,25 tant que le niveau est sous le niveau record. Entier. */
 export function applyTailwind(points: number, account: { readonly engagementScore: number; readonly levelRecord: number | null }): number {

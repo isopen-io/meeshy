@@ -19,8 +19,10 @@
  */
 
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { civilDayInTimezone } from '../engagement/civilDay';
+import { CONVERSATION_ENGAGEMENT_SELECT, dayCountsFor } from '../engagement/ConversationEngagementRecorder';
 import { EngagementQuotas } from '../engagement/EngagementQuotas';
-import { GameAbuseGuard } from './GameAbuseGuard';
+import { GameAbuseGuard, quarterPoints, type MessageVerdict } from './GameAbuseGuard';
 import { GAME_BONUS_AXIS, type MissionService } from './MissionService';
 import { dayKeyOf } from './gameClock';
 import { enhancedLogger } from '../../utils/logger-enhanced';
@@ -72,10 +74,36 @@ export class MessageGameSignals {
 
   async record(input: MessageSignalInput): Promise<void> {
     const now = input.now ?? new Date();
-    await this.isolated('sender signals', () => this.senderSignals(input, now));
+    const sender = await this.prisma.user
+      .findUnique({ where: { id: input.senderUserId }, select: { systemLanguage: true, timezone: true } })
+      .catch(() => null);
+    // Ce que vaut CE message dans sa conversation — la MÊME garde que ses points :
+    // à soi seul, à un compte neuf ou bloqué, il ne fait avancer aucune mission
+    // ni ne paie la réponse reçue ; au-delà de 50 par jour à deux, ÷ 4.
+    const verdict = await this.messageVerdict(input, sender?.timezone ?? null, now);
+    if (verdict === 'none') return;
+    await this.isolated('sender signals', () => this.senderSignals(input, sender, now));
     if (input.replyToId !== null && input.quotedAuthorUserId !== null) {
-      await this.isolated('reply received', () => this.replyReceived(input, input.quotedAuthorUserId as string, now));
+      await this.isolated('reply received', () => this.replyReceived(input, input.quotedAuthorUserId as string, verdict, now));
     }
+  }
+
+  /** Les messages déjà crédités aujourd'hui dans la conversation, puis la garde d'entre-soi. */
+  private async messageVerdict(input: MessageSignalInput, timezone: string | null, now: Date): Promise<MessageVerdict> {
+    const row = await this.prisma.conversationEngagement
+      .findUnique({
+        where: { userId_conversationId: { userId: input.senderUserId, conversationId: input.conversationId } },
+        select: CONVERSATION_ENGAGEMENT_SELECT,
+      })
+      .catch(() => null);
+    const counts = dayCountsFor(row, civilDayInTimezone(now, timezone));
+    return this.guard.assessMessage({
+      userId: input.senderUserId,
+      conversationId: input.conversationId,
+      operationKey: 'content.text_message',
+      dailyMessages: (counts['content.text_message'] ?? 0) + (counts['content.audio_message'] ?? 0),
+      now,
+    });
   }
 
   private async isolated(label: string, work: () => Promise<void>): Promise<void> {
@@ -86,11 +114,11 @@ export class MessageGameSignals {
     }
   }
 
-  private async senderSignals(input: MessageSignalInput, now: Date): Promise<void> {
-    const sender = await this.prisma.user.findUnique({
-      where: { id: input.senderUserId },
-      select: { systemLanguage: true, timezone: true },
-    });
+  private async senderSignals(
+    input: MessageSignalInput,
+    sender: { readonly systemLanguage: string | null; readonly timezone: string | null } | null,
+    now: Date,
+  ): Promise<void> {
     const dayKey = dayKeyOf(now, sender?.timezone);
     const common = { now, dayKey, timezone: sender?.timezone ?? null };
 
@@ -105,7 +133,7 @@ export class MessageGameSignals {
     }
   }
 
-  private async replyReceived(input: MessageSignalInput, authorId: string, now: Date): Promise<void> {
+  private async replyReceived(input: MessageSignalInput, authorId: string, worth: MessageVerdict, now: Date): Promise<void> {
     const original = await this.prisma.message.findUnique({
       where: { id: input.replyToId as string },
       select: { createdAt: true },
@@ -125,6 +153,10 @@ export class MessageGameSignals {
     if (!verdict.withinWindow) return;
     // UNE fois par message d'origine : le seau tranche, jamais une relecture.
     if (!(await this.quotas.claim(authorId, QUOTA_OPERATION, `message:${input.replyToId}`, 1))) return;
-    await this.deps.creditPoints(authorId, REPLY_RECEIVED_POINTS, GAME_BONUS_AXIS);
+    await this.deps.creditPoints(
+      authorId,
+      worth === 'quarter' ? quarterPoints(REPLY_RECEIVED_POINTS) : REPLY_RECEIVED_POINTS,
+      GAME_BONUS_AXIS,
+    );
   }
 }
