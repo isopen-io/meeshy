@@ -29,13 +29,13 @@ import {
   levelMilestoneKey,
   type EngagementAxisKey,
 } from '@meeshy/shared/types/engagement';
-import {
-  computeMeeshMintPlan,
-  MEESH_MINT_COST,
-  type MeeshMintPlan,
-} from '@meeshy/shared/utils/meesh';
+import { computeMeeshMintPlan, type MeeshMintPlan } from '@meeshy/shared/utils/meesh';
+import { GLORY_POINTS } from '@meeshy/shared/utils/game/glory';
+import { levelFromScore } from '@meeshy/shared/utils/game/levels';
+import { meeshEdition, meeshPrice, type MeeshEdition } from '@meeshy/shared/utils/game/mint';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { withRetry } from '../MessageMediaConsumptionService';
+import { GloryService } from '../game/GloryService';
 
 const log = enhancedLogger.child({ module: 'MeeshService' });
 
@@ -55,10 +55,42 @@ const clesNonCouvertes = (
 
 export type MeeshTotals = { readonly balance: number; readonly mintedLifetime: number };
 
+/**
+ * Le REÇU d'une frappe (#9374) : la pièce telle qu'elle a été gravée. Il vit dans
+ * la ligne du registre, donc un rejeu le rend à l'identique, sans rien recalculer.
+ */
+export type MintReceipt = {
+  readonly number: number;
+  readonly edition: MeeshEdition;
+  readonly price: number;
+  readonly gloryGained: number;
+  readonly levelBefore: number;
+  readonly levelAfter: number;
+};
+
 export type MeeshMintOutcome =
-  | ({ readonly status: 'minted'; readonly plan: MeeshMintPlan } & MeeshTotals)
-  | ({ readonly status: 'already-minted' } & MeeshTotals)
+  | ({ readonly status: 'minted'; readonly plan: MeeshMintPlan; readonly receipt: MintReceipt } & MeeshTotals)
+  | ({ readonly status: 'already-minted'; readonly receipt: MintReceipt | null } & MeeshTotals)
   | { readonly status: 'insufficient'; readonly plan: MeeshMintPlan };
+
+const EDITIONS: readonly string[] = ['silver', 'gold', 'prism'];
+
+/** Le reçu gravé dans `meta`, ou `null` pour une frappe d'avant le jeu (aucun champ n'y était). */
+export function receiptFromMeta(meta: unknown): MintReceipt | null {
+  if (typeof meta !== 'object' || meta === null) return null;
+  const m = meta as Record<string, unknown>;
+  const ints = [m.number, m.price, m.gloryGained, m.levelBefore, m.levelAfter];
+  if (!ints.every((v) => typeof v === 'number' && Number.isInteger(v))) return null;
+  if (typeof m.edition !== 'string' || !EDITIONS.includes(m.edition)) return null;
+  return {
+    number: m.number as number,
+    edition: m.edition as MeeshEdition,
+    price: m.price as number,
+    gloryGained: m.gloryGained as number,
+    levelBefore: m.levelBefore as number,
+    levelAfter: m.levelAfter as number,
+  };
+}
 
 /**
  * LE SOLDE SE LIT AU REGISTRE (#6428) — `User.meeshBalance == Σ(delta)`, et
@@ -101,13 +133,17 @@ export class MeeshService {
       .map((l) => ({ axisKey: l.axisKey as EngagementAxisKey, count: l.count, points: l.points }));
   }
 
-  /** Le plan d'une frappe, sans aucune écriture — ce que l'écran montre avant de confirmer. */
+  /**
+   * Le plan d'une frappe, sans aucune écriture — ce que l'écran montre avant de
+   * confirmer. Au PRIX de la prochaine pièce (la rareté croît, #9374).
+   */
   async preview(userId: string): Promise<MeeshMintPlan> {
-    return computeMeeshMintPlan(await this.axisStates(userId));
+    const { mintedLifetime } = await meeshTotalsFromLedger(this.prisma, userId);
+    return computeMeeshMintPlan(await this.axisStates(userId), { mintCost: meeshPrice(mintedLifetime + 1) });
   }
 
   /**
-   * Frappe une Meesh contre `MEESH_MINT_COST` points.
+   * Frappe une Meesh au prix de sa rareté (`meeshPrice`, #9374).
    *
    * Le plan est recalculé DANS la transaction : celui qu'a vu l'écran a pu
    * vieillir entre l'affichage et le tap, et frapper sur un plan périmé
@@ -127,14 +163,42 @@ export class MeeshService {
   private async mintOnce(userId: string, requestId: string): Promise<MeeshMintOutcome> {
     const dejaFrappe = await this.prisma.meeshLedger.findUnique({
       where: { userId_requestId: { userId, requestId } },
-      select: { id: true },
+      select: { id: true, meta: true },
     });
     if (dejaFrappe) {
-      return { status: 'already-minted', ...(await meeshTotalsFromLedger(this.prisma, userId)) };
+      return {
+        status: 'already-minted',
+        receipt: receiptFromMeta(dejaFrappe.meta),
+        ...(await meeshTotalsFromLedger(this.prisma, userId)),
+      };
     }
 
-    const plan = computeMeeshMintPlan(await this.axisStates(userId));
+    // Le PRIX est celui de CETTE pièce : le serveur le recalcule, aucun client
+    // n'en est cru (un ancien client qui croit encore à 1 221 est refusé sans débit).
+    const avant = await meeshTotalsFromLedger(this.prisma, userId);
+    const number = avant.mintedLifetime + 1;
+    const price = meeshPrice(number);
+    const plan = computeMeeshMintPlan(await this.axisStates(userId), { mintCost: price });
     if (!plan.canMint) return { status: 'insufficient', plan };
+
+    // Le record de niveau se pose AVANT le débit : c'est lui que la frappe
+    // laisse derrière elle (Vent arrière), et la Gloire des niveaux déjà
+    // atteints se grave pendant que le score les porte encore.
+    const compteAvant = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { engagementScore: true, levelRecord: true },
+    });
+    const scoreAvant = compteAvant?.engagementScore ?? 0;
+    await new GloryService(this.prisma).creditLevelProgress({
+      userId,
+      score: scoreAvant,
+      previousRecord: compteAvant?.levelRecord ?? null,
+    });
+    // Le niveau d'APRÈS est celui que `previewMint` montrait : le score moins le
+    // prix, lu au même instant que le record.
+    const levelBefore = levelFromScore(scoreAvant);
+    const levelAfter = levelFromScore(Math.max(0, scoreAvant - price));
+    const edition = meeshEdition(number);
 
     try {
       const totaux = await this.prisma.$transaction(async (tx) => {
@@ -168,8 +232,14 @@ export class MeeshService {
           }
         }
 
+        // Le numéro, lui, doit être celui que le prix a supposé : une frappe
+        // concurrente l'aurait décalé. L'annulation est rejouée en bloc.
+        const concurrentes = await tx.meeshLedger.count({ where: { userId, reason: 'mint' } });
+        if (concurrentes !== avant.mintedLifetime) throw Object.assign(new Error('mint number moved'), { code: 'P2034' });
+
         // La ligne AVANT les colonnes : ce sont les totaux du registre, frappe
         // comprise, qui s'écrivent — jamais un incrément de la colonne.
+        const gloryGained = GLORY_POINTS.mint;
         await tx.meeshLedger.create({
           data: {
             userId,
@@ -177,8 +247,18 @@ export class MeeshService {
             reason: 'mint',
             requestId,
             // La mémoire de ce qui a été rendu — les badges éteints n'en
-            // gardent plus trace, le registre est son seul lieu.
-            meta: { cost: MEESH_MINT_COST, debits: plan.debits.map((d) => ({ ...d })) },
+            // gardent plus trace, le registre est son seul lieu. Le reçu y
+            // vit aussi : un rejeu rend la même pièce.
+            meta: {
+              cost: price,
+              debits: plan.debits.map((d) => ({ ...d })),
+              number,
+              edition,
+              price,
+              gloryGained,
+              levelBefore,
+              levelAfter,
+            },
           },
         });
 
@@ -186,11 +266,23 @@ export class MeeshService {
         const compte = await tx.user.update({
           where: { id: userId },
           data: {
-            engagementScore: { decrement: MEESH_MINT_COST },
+            engagementScore: { decrement: price },
             meeshBalance: apres.balance,
             meeshMintedLifetime: apres.mintedLifetime,
           },
           select: { engagementScore: true },
+        });
+
+        // La Gloire dans la MÊME transaction : une frappe qui débite sans la
+        // graver est impossible, et inversement.
+        await tx.gloryLedger.create({
+          data: {
+            userId,
+            delta: gloryGained,
+            reason: 'mint',
+            requestId: `mint:${requestId}`,
+            meta: { number, edition, price, levelBefore, levelAfter },
+          },
         });
 
         // LE NIVEAU redescend avec le score (#6465). Un palier `level:T` gravé
@@ -209,17 +301,31 @@ export class MeeshService {
 
       log.info('Meesh frappée', {
         userId,
-        cost: MEESH_MINT_COST,
+        cost: price,
+        number,
         axes: plan.debits.map((d) => d.axisKey),
         balance: totaux.balance,
       });
-      return { status: 'minted', ...totaux, plan };
+      return {
+        status: 'minted',
+        ...totaux,
+        plan,
+        receipt: { number, edition, price, gloryGained: GLORY_POINTS.mint, levelBefore, levelAfter },
+      };
     } catch (err) {
       // P2002 sur `(userId, requestId)` : deux frappes concurrentes portant le
       // même identifiant — l'index unique a fait son office, la première a
       // gagné. On rend son résultat plutôt qu'une erreur.
       if (err && typeof err === 'object' && 'code' in err && err.code === 'P2002') {
-        return { status: 'already-minted', ...(await meeshTotalsFromLedger(this.prisma, userId)) };
+        const gravee = await this.prisma.meeshLedger.findUnique({
+          where: { userId_requestId: { userId, requestId } },
+          select: { id: true, meta: true },
+        });
+        return {
+          status: 'already-minted',
+          receipt: receiptFromMeta(gravee?.meta),
+          ...(await meeshTotalsFromLedger(this.prisma, userId)),
+        };
       }
       throw err;
     }

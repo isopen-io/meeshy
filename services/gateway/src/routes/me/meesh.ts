@@ -72,6 +72,14 @@ const mintResponseSchema = {
         balance: { type: 'number' },
         mintedLifetime: { type: 'number' },
         missingPoints: { type: 'number' },
+        // Le REÇU de la pièce (#9374) — ajouté à côté de l'ancienne forme : un
+        // ancien client ne lit que les trois premiers champs.
+        number: { type: 'number' },
+        edition: { type: 'string', enum: ['silver', 'gold', 'prism'] },
+        price: { type: 'number' },
+        gloryGained: { type: 'number' },
+        levelBefore: { type: 'number' },
+        levelAfter: { type: 'number' },
       },
     },
   },
@@ -85,7 +93,7 @@ export async function meMeeshRoutes(fastify: FastifyInstance) {
       config: { rateLimit: mintRateLimitConfig() },
       schema: {
         description:
-          'Frappe une Meesh contre 1221 points débitables (#5743). Action MANUELLE ' +
+          'Frappe une Meesh au prix de sa rareté (1221 points pour les dix premières, #5743, #9374). Action MANUELLE ' +
           'et idempotente par `requestId`. Les axes de conversation ne sont jamais ' +
           'débités — ils forment le plancher inaliénable du niveau.',
         tags: ['me', 'meesh'],
@@ -130,6 +138,7 @@ export async function meMeeshRoutes(fastify: FastifyInstance) {
           status: outcome.status,
           balance: outcome.balance,
           mintedLifetime: outcome.mintedLifetime,
+          ...(outcome.receipt ?? {}),
         });
       } catch (error) {
         logError(fastify.log, 'Error minting a Meesh', error);
