@@ -82,6 +82,32 @@ public enum AdjustmentKind: String, Codable, Sendable, CaseIterable, Identifiabl
     }
 }
 
+// MARK: - What a VIDEO paints (#9169)
+
+extension AdjustmentKind {
+
+    /// **Une vidéo posée se règle par la MÊME chaîne qu'une image, moins deux
+    /// étages** (#9169). La netteté accentue les blocs d'une trame compressée,
+    /// qui scintillent alors d'une image à l'autre ; le flou gaussien est
+    /// l'étage le plus coûteux de la chaîne, et une vidéo le paierait à chaque
+    /// trame. Ni l'un ni l'autre n'est servi — et une charge qui les porte sur
+    /// une vidéo ne les fait pas peindre (`ImageAdjustments.served(for:)`).
+    public var isServedForVideo: Bool {
+        switch self {
+        case .sharpness, .blur: return false
+        default: return true
+        }
+    }
+
+    /// Les réglages qu'un média de ce genre offre et peint, dans l'ordre du panneau.
+    public static func served(for kind: StoryMediaKind) -> [AdjustmentKind] {
+        switch kind {
+        case .image: return allCases
+        case .video: return allCases.filter(\.isServedForVideo)
+        }
+    }
+}
+
 // MARK: - Image Adjustments
 
 /// Bag of non-destructive adjustment values. All defaults are neutral, so a
@@ -207,6 +233,21 @@ public struct ImageAdjustments: Codable, Hashable, Sendable {
         var container = encoder.container(keyedBy: Key.self)
         for kind in AdjustmentKind.allCases where isActive(kind) {
             try container.encode(self[kind], forKey: Key(stringValue: kind.rawValue))
+        }
+    }
+}
+
+// MARK: - The projection a renderer paints (#9169)
+
+extension ImageAdjustments {
+
+    /// Ces réglages tels qu'un média de ce genre les PEINT : un réglage non
+    /// servi à ce genre revient au neutre. Tout rendu vidéo (player, export,
+    /// vignette) passe par cette projection — la charge ne décide jamais du coût.
+    public func served(for kind: StoryMediaKind) -> ImageAdjustments {
+        let servis = AdjustmentKind.served(for: kind)
+        return AdjustmentKind.allCases.reduce(into: self) { result, reglage in
+            if !servis.contains(reglage) { result[reglage] = reglage.neutralValue }
         }
     }
 }
