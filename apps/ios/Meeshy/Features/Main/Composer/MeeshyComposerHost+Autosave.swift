@@ -19,6 +19,8 @@ nonisolated struct ComposerAutosaveSignature: Equatable {
     let location: SharedPlace?
     let references: [ComposerReference]
     let format: ComposerFormat
+    /// Le choix armé au chevron (#9419) : le choisir est une mutation.
+    let publishChoice: ComposerPublishChoice?
 }
 
 extension MeeshyComposerHost {
@@ -42,7 +44,8 @@ extension MeeshyComposerHost {
                                   language: documentLanguage,
                                   location: documentLocation,
                                   references: composerReferences,
-                                  format: selectedFormat)
+                                  format: selectedFormat,
+                                  publishChoice: authorPublishChoice)
     }
 
     /// L'état à écrire — `nil` hors du meuble : l'atelier tient son propre
@@ -67,8 +70,15 @@ extension MeeshyComposerHost {
             videos: viewModel.loadedVideoURLs,
             audios: viewModel.loadedAudioURLs,
             stickerAnimations: viewModel.loadedStickerAnimations,
-            adoptedLocalMedia: viewModel.adoptedLocalMedia
+            adoptedLocalMedia: viewModel.adoptedLocalMedia,
+            publishChoice: authorPublishChoice
         )
+    }
+
+    /// Seul le choix de l'AUTEUR voyage dans le brouillon : la bascule
+    /// post → réel (#8793) se recalcule depuis la scène relue.
+    var authorPublishChoice: ComposerPublishChoice? {
+        reelAutoSwitch.authorChose ? armedPublishChoice : nil
     }
 
     /// Le compte ET l'environnement courants : un brouillon n'est jamais relu
@@ -106,9 +116,11 @@ extension MeeshyComposerHost {
         documentLanguage = state.language
         documentLocation = state.location
         composerReferences = state.references
-        // Le FORMAT n'est pas rendu : il se choisit à l'envoi (#6502), et le
-        // format d'ouverture n'a aucun écrivain — la surface ne bouge pas sous
-        // les doigts de l'auteur. La scène, elle, revient entière.
+        // Le format d'OUVERTURE n'est pas rendu : il n'a aucun écrivain, et la
+        // surface ne bouge pas sous les doigts de l'auteur. Ce qu'il avait ARMÉ
+        // à l'envoi (#6502) — format et disposition — revient, lui (#9419), et
+        // reste son choix : aucune bascule automatique ne l'écrase.
+        if let choix = state.publishChoice { chooseArmedPublish(choix) }
     }
 
     func scheduleAutosave() {
