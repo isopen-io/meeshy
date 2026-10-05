@@ -277,9 +277,16 @@ nonisolated enum ComposerWritingExit {
     /// Un fondu long le laisserait suivre le clavier jusque sur la barre.
     static let zoneFadeOut: Double = 0.12
 
+    /// Ce que le chrome attend avant de bouger : rien à l'aller, la fin du
+    /// fondu du panneau au retour.
+    static func chromeDelay(writesText: Bool) -> Double {
+        writesText ? 0 : zoneFadeOut
+    }
+
     static func chromeAnimation(reduceMotion: Bool, writesText: Bool) -> Animation? {
         guard let fondu = ComposerToolFocus.transition(reduceMotion: reduceMotion) else { return nil }
-        return writesText ? fondu : fondu.delay(zoneFadeOut)
+        let attente = chromeDelay(writesText: writesText)
+        return attente > 0 ? fondu.delay(attente) : fondu
     }
 
     /// La transition du panneau d'écriture : un fondu, jamais un glissement.

@@ -559,12 +559,17 @@ struct ComposerSceneSurface: View {
                 .padding(.horizontal, ComposerRailGeometry.descriptionInset(roomy: isRoomy,
                                                                              cardLeading: sceneCardLeading))
                 .padding(.bottom, MeeshySpacing.smPlus)
+                .environment(\.composerSceneCardWidth, sceneCardWidth)
         }
     }
 
     /// Le bord gauche du DESSIN, mesuré par le canvas et lu par l'en-tête son
     /// (#5011). `0` tant que la première passe de mise en page n'a pas eu lieu.
     @State private var sceneCardLeading: CGFloat = 0
+
+    /// La largeur du DESSIN, mesurée par le canvas (#5008) : la flèche du volet
+    /// s'y proportionne. `0` avant la première passe ⇒ le volet se mesure seul.
+    @State private var sceneCardWidth: CGFloat = 0
 
     /// **La hauteur des étages du bas, mesurée** (#8712) — ce qu'un panneau
     /// ouvert y occupe, et donc de combien la scène doit REMONTER.
@@ -608,6 +613,7 @@ struct ComposerSceneSurface: View {
             chromeLayer
         }
         .onPreferenceChange(ComposerSceneCardLeadingKey.self) { sceneCardLeading = $0 }
+        .onPreferenceChange(ComposerSceneCardWidthPreferenceKey.self) { sceneCardWidth = $0 }
         .onPreferenceChange(ComposerLowerFloorsHeightKey.self) { lowerFloorsHeight = $0 }
         // **La bascule outil <-> scène se fait en fondu** (#8652), coupé sous
         // Reduce Motion ; VoiceOver est prévenu que l'écran a changé, et son
@@ -787,13 +793,15 @@ struct ComposerSceneSurface: View {
         // contraint.
         .background {
             GeometryReader { geo in
+                let bordGauche = ComposerRailGeometry.sceneLeadingInset(overlay: geo.size,
+                                                                        ratio: aspectRatio,
+                                                                        horizontalInset: edge)
                 Color.clear
-                    .preference(
-                        key: ComposerSceneCardLeadingKey.self,
-                        value: ComposerRailGeometry.sceneLeadingInset(
-                            overlay: geo.size,
-                            ratio: aspectRatio,
-                            horizontalInset: edge))
+                    .preference(key: ComposerSceneCardLeadingKey.self, value: bordGauche)
+                    // La carte se CENTRE : sa largeur est ce que les deux bords
+                    // lui laissent. Le volet en proportionne sa flèche (#5008).
+                    .preference(key: ComposerSceneCardWidthPreferenceKey.self,
+                                value: max(0, geo.size.width - 2 * bordGauche))
             }
         }
         // **La scène se pose ENTRE la barre haute et le socle** (directive

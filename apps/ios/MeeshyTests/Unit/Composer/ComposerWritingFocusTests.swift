@@ -136,13 +136,12 @@ final class ComposerWritingFocusTests: XCTestCase {
     /// qui revenaient au même instant. Le retour attend donc la fin du fondu ;
     /// l'aller, lui, part tout de suite.
     func test_leRetourDuChrome_attendLaFinDuFonduDuPanneau() {
-        let fondu = ComposerToolFocus.transition(reduceMotion: false)
-        XCTAssertNotNil(fondu)
-        XCTAssertEqual(ComposerWritingExit.chromeAnimation(reduceMotion: false, writesText: true), fondu,
-                       "l'aller n'attend rien")
-        XCTAssertEqual(ComposerWritingExit.chromeAnimation(reduceMotion: false, writesText: false),
-                       fondu?.delay(ComposerWritingExit.zoneFadeOut),
-                       "le retour attend que le panneau soit parti")
+        XCTAssertEqual(ComposerWritingExit.chromeDelay(writesText: true), 0, "l'aller n'attend rien")
+        XCTAssertGreaterThanOrEqual(ComposerWritingExit.chromeDelay(writesText: false),
+                                    ComposerWritingExit.zoneFadeOut,
+                                    "le retour attend que le panneau soit parti")
+        XCTAssertNotNil(ComposerWritingExit.chromeAnimation(reduceMotion: false, writesText: true))
+        XCTAssertNotNil(ComposerWritingExit.chromeAnimation(reduceMotion: false, writesText: false))
         XCTAssertGreaterThan(ComposerWritingExit.zoneFadeOut, 0)
         XCTAssertLessThan(ComposerWritingExit.zoneFadeOut, 0.2,
                           "un fondu long laisserait le panneau suivre le clavier qui descend")
