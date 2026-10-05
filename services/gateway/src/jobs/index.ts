@@ -105,9 +105,22 @@ export class BackgroundJobsManager {
        seule l'expiration libère.
        Toutes les dix minutes : le double du TTL de cinq minutes, de sorte
        qu'aucune entrée ne survive longtemps à sa mort. */
+    /* LE RAPPEL EST GARDÉ (#9474). Il est SYNCHRONE, donc un `throw` dedans
+       n'a aucun `try/catch` englobant à invoquer : la pile d'un rappel de
+       `setInterval` part de la boucle d'événements, pas de `startAll()`. Il
+       deviendrait une exception non interceptée et terminerait le processus —
+       toute la passerelle tombée pour un entretien best-effort. Le balayage
+       des sessions ci-dessus porte la même garde sous sa forme asynchrone
+       (`.catch`) ; celle-ci est sa jumelle synchrone. L'intervalle n'est pas
+       réarmé : il continue de battre, donc la purge se rattrape d'elle-même
+       au tour suivant. */
     const purgerLeCacheGeo = () => {
-      const liberees = cleanGeoCache();
-      if (liberees > 0) logger.info(`${liberees} expired GeoIP cache entr(ies) freed`);
+      try {
+        const liberees = cleanGeoCache();
+        if (liberees > 0) logger.info(`${liberees} expired GeoIP cache entr(ies) freed`);
+      } catch (err) {
+        logger.error('GeoIP cache purge failed', err);
+      }
     };
     purgerLeCacheGeo();
     this.geoCacheInterval = setInterval(purgerLeCacheGeo, 10 * 60 * 1000);
