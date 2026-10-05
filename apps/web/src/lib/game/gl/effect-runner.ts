@@ -111,12 +111,15 @@ export const startEffect = (spec: EffectSpec, env: EffectEnv): EffectController 
     paint(0, tilt);
   };
 
-  const unobserveOrientation = spec.effect === 'iridescence' ? env.observeOrientation((next) => {
-    if (disposed) return;
-    tilt = next;
-    pendingTilt = true;
-    requestFrame(onSensorFrame);
-  }) : null;
+  const unobserveOrientation =
+    spec.effect === 'iridescence'
+      ? env.observeOrientation((next) => {
+          if (disposed) return;
+          tilt = next;
+          pendingTilt = true;
+          requestFrame(onSensorFrame);
+        })
+      : null;
   const sensed = unobserveOrientation !== null;
 
   const unobserveVisibility = env.observeVisibility((next) => {
