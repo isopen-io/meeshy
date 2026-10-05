@@ -33,6 +33,17 @@ nonisolated enum ComposerCameraInputSwap {
         case none
     }
 
+    /// L'objectif dont les connexions se réorientent après la bascule : une
+    /// entrée retirée puis REMISE recrée les siennes, aux réglages du système.
+    static func orientedPosition(after outcome: Outcome, new: AVCaptureDevice.Position,
+                                 old: AVCaptureDevice.Position?) -> AVCaptureDevice.Position? {
+        switch outcome {
+        case .swapped: return new
+        case .kept: return old
+        case .none: return nil
+        }
+    }
+
     static func swap<Graph: ComposerCaptureInputGraph>(in graph: Graph, replacing old: Graph.Input?,
                                                       with new: Graph.Input?) -> Outcome {
         guard let new else { return old == nil ? .none : .kept }

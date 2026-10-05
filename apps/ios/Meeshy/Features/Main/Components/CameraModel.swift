@@ -214,9 +214,12 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     ) -> InstalledCamera? {
         let ancienne = session.inputs.compactMap { $0 as? AVCaptureDeviceInput }.first { $0.device.hasMediaType(.video) }
         let nouvelle = videoInput(position: position)
-        guard ComposerCameraInputSwap.swap(in: session, replacing: ancienne, with: nouvelle) == .swapped,
-              let device = nouvelle?.device else { return nil }
-        orient(outputs, for: position)
+        let issue = ComposerCameraInputSwap.swap(in: session, replacing: ancienne, with: nouvelle)
+        if let objectif = ComposerCameraInputSwap.orientedPosition(after: issue, new: position,
+                                                                   old: ancienne?.device.position) {
+            orient(outputs, for: objectif)
+        }
+        guard issue == .swapped, let device = nouvelle?.device else { return nil }
         let echelle = zoomScale(of: device)
         do {
             try device.lockForConfiguration()
