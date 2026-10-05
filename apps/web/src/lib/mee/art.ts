@@ -111,7 +111,10 @@ export const MEE_PALETTES: Readonly<Record<MeeCharacter, Palette>> = {
   },
 };
 
+/** L'encre des stickers : traits, textes et ombres de la famille Mee — et des Instants des packs (`lib/sticker-packs`). */
 export const INK = '#1c1941';
+/** Le papier des stickers : la découpe blanche autour d'un Mee, le halo autour du texte d'un Instant de pack. */
+export const PAPER = '#ffffff';
 const BEAK_LINE = '#b45309';
 
 /** Échappe une valeur avant de l'écrire dans une chaîne SVG — texte comme attribut. */

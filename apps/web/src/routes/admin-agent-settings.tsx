@@ -6,7 +6,7 @@ import { AdminMetaRow, AdminMomentText } from '@/components/admin/meta';
 import { AdminErrorState, AdminInlineNotice } from '@/components/admin/states';
 import { BRAND, EDGE, INK, INK2, SURFACE } from '@/components/admin/tone';
 import { PasswordInput } from '@/components/password-input';
-import { AGENT_GLOBAL_FIELDS, AGENT_LLM_FIELDS } from '@/lib/admin/agent-settings-form';
+import { AGENT_GLOBAL_FIELDS, AGENT_GLOBAL_SECTIONS, AGENT_LLM_FIELDS } from '@/lib/admin/agent-settings-form';
 import { formatCount } from '@/lib/admin/interpret/numbers';
 import { adminMomentOf } from '@/lib/admin/interpret/time';
 import { useAdminReach } from '@/lib/admin/use-admin-reach';
@@ -18,13 +18,14 @@ import {
   loadAgentLlm,
   saveAgentGlobalConfig,
   saveAgentLlm,
+  SECRETS_UNAVAILABLE_STATUS,
   type AgentLlmConfig,
 } from '@/lib/api/admin-agent-settings';
 import { unwrap } from '@/lib/api/client';
 import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { AdminSkeleton } from '@/routes/admin-parts';
 
-import { AgentSettingsForm, providerName, useAgentConfirm, useAgentGesture } from './admin-agent-form';
+import { AgentSettingsForm, agentVocabulary, providerName, useAgentConfirm, useAgentGesture } from './admin-agent-form';
 
 /**
  * **LA MODALE « MODÈLE ET RÉGLAGES GLOBAUX »** (lot Agent complet) — le modèle de
@@ -72,6 +73,14 @@ type BlockProps = {
 };
 
 const llmLabel = (language: AdminLanguage) => (key: string) => translateAdmin(language, `admin.agentPanel.llm.${key as 'provider' | 'model' | 'dailyBudgetUsd' | 'maxCostPerCall'}`);
+
+/** « Enregistrée · …abcd » quand la passerelle sert les quatre derniers caractères ; jamais plus de la clé. */
+const keyState = (language: AdminLanguage, has: boolean, last4: string | null): string =>
+  !has
+    ? translateAdmin(language, 'admin.agentPanel.llm.keyMissing')
+    : last4 === null
+      ? translateAdmin(language, 'admin.agentPanel.llm.keySet')
+      : translateAdmin(language, 'admin.agentPanel.llm.keySetLast4', { last4 });
 
 function AgentLlmBlock({ language, deps, now, gesture, ask }: BlockProps & { readonly now: () => Date }) {
   const reach = useAdminReach();
@@ -121,6 +130,7 @@ function AgentLlmBlock({ language, deps, now, gesture, ask }: BlockProps & { rea
       withMotive: true,
       act: (reason) => saveAgentLlm({ ...deps, changes, apiKey, reason }),
       success: translateAdmin(language, 'admin.agentPanel.llm.saved'),
+      describeFailure: (failure) => (failure.status === SECRETS_UNAVAILABLE_STATUS ? translateAdmin(language, 'admin.agentPanel.llm.noSecretsKey') : null),
       after: () => {
         setApiKey('');
         setGeneration((value) => value + 1);
@@ -140,8 +150,15 @@ function AgentLlmBlock({ language, deps, now, gesture, ask }: BlockProps & { rea
             <AdminMetaRow
               anchor="llm-key"
               label={translateAdmin(language, 'admin.agentPanel.llm.key')}
-              value={translateAdmin(language, config.hasApiKey ? 'admin.agentPanel.llm.keySet' : 'admin.agentPanel.llm.keyMissing')}
+              value={keyState(language, config.hasApiKey, config.apiKeyLast4)}
             />
+            {config.hasFallbackApiKey ? (
+              <AdminMetaRow
+                anchor="llm-fallback-key"
+                label={translateAdmin(language, 'admin.agentPanel.llm.fallbackKey')}
+                value={keyState(language, true, config.fallbackApiKeyLast4)}
+              />
+            ) : null}
             <AdminMetaRow anchor="llm-tokens" label={translateAdmin(language, 'admin.agentPanel.llm.tokens')} value={formatCount(config.maxTokens, language)} />
             <AdminMetaRow
               anchor="llm-temperature"
@@ -215,12 +232,6 @@ function AgentLlmBlock({ language, deps, now, gesture, ask }: BlockProps & { rea
   );
 }
 
-const globalLabel = (language: AdminLanguage) => (key: string) =>
-  translateAdmin(
-    language,
-    `admin.agentPanel.global.${key as 'enabled' | 'globalScanEnabled' | 'defaultProvider' | 'defaultModel' | 'globalDailyBudgetUsd' | 'maxConcurrentCalls' | 'messageFreshnessHours' | 'weekdayMaxConversations' | 'weekendMaxConversations' | 'systemPrompt'}`,
-  );
-
 function AgentGlobalBlock({ language, deps, gesture, ask }: BlockProps) {
   const global = useQuery({
     queryKey: agentGlobalConfigQueryKey(),
@@ -247,8 +258,9 @@ function AgentGlobalBlock({ language, deps, gesture, ask }: BlockProps) {
             id="global"
             language={language}
             specs={AGENT_GLOBAL_FIELDS}
+            sections={AGENT_GLOBAL_SECTIONS}
             served={data.fields}
-            labelOf={globalLabel(language)}
+            vocabulary={agentVocabulary(language, 'global')}
             saveLabel={translateAdmin(language, 'admin.agentPanel.global.save')}
             busy={gesture.busy === 'global'}
             error={null}

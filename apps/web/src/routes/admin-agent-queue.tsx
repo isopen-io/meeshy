@@ -7,6 +7,7 @@ import { AdminEntityChip } from '@/components/admin/entity-chip';
 import { AdminFicheSection } from '@/components/admin/fiche';
 import { AdminEmptyState, AdminErrorState } from '@/components/admin/states';
 import { BRAND, EDGE, INK, INK2, SURFACE } from '@/components/admin/tone';
+import { conversationLabel, personLabel } from '@/lib/admin/interpret/labels';
 import { formatCount } from '@/lib/admin/interpret/numbers';
 import { adminMomentOf } from '@/lib/admin/interpret/time';
 import type { AdminDeps } from '@/lib/api/admin';
@@ -76,6 +77,56 @@ export function AgentQueueDetail({ language, deps, now }: { readonly language: A
   );
 }
 
+/**
+ * OÙ et AU NOM DE QUI l'élément sera publié : la conversation nommée (lien vers sa
+ * fiche) et le membre joué (nom et @pseudo, lien vers sa fiche). Un serveur d'avant
+ * ne sert ni l'une ni l'autre : la conversation retombe sur le lien générique,
+ * et le membre n'est pas inventé.
+ */
+function QueueWho({ language, item }: { readonly language: AdminLanguage; readonly item: AgentQueueItem }) {
+  const conversationId = item.conversation?.id ?? item.conversationId;
+  const conversationName =
+    item.conversation === null
+      ? translateAdmin(language, 'admin.agentPanel.queue.conversation')
+      : conversationLabel(item.conversation, language);
+  const persona = item.persona;
+  if (conversationId === '' && persona === null) return null;
+
+  return (
+    <dl className="grid gap-1 @lg:grid-cols-2" data-agent-queue-who={item.id}>
+      {conversationId === '' ? null : (
+        <div className="grid min-w-0 gap-0.5" data-agent-queue-conversation={conversationId}>
+          <dt className="text-caption" style={{ color: INK2 }}>
+            {translateAdmin(language, 'admin.agentPanel.queue.in')}
+          </dt>
+          <dd className="min-w-0">
+            <AdminEntityChip language={language} size="sm" entity={{ kind: 'conversation', id: conversationId, label: conversationName }} />
+          </dd>
+        </div>
+      )}
+      {persona === null ? null : (
+        <div className="grid min-w-0 gap-0.5" data-agent-queue-persona={persona.id}>
+          <dt className="text-caption" style={{ color: INK2 }}>
+            {translateAdmin(language, 'admin.agentPanel.queue.as')}
+          </dt>
+          <dd className="min-w-0">
+            <AdminEntityChip
+              language={language}
+              size="sm"
+              entity={{
+                kind: 'user',
+                id: persona.id,
+                label: personLabel(persona, language),
+                secondary: persona.displayName === null ? null : `@${persona.username}`,
+              }}
+            />
+          </dd>
+        </div>
+      )}
+    </dl>
+  );
+}
+
 function QueueRow({
   language,
   deps,
@@ -107,14 +158,8 @@ function QueueRow({
             ? translateAdmin(language, 'admin.agentPanel.queue.message')
             : translateAdmin(language, 'admin.agentPanel.queue.reaction', { emoji: item.content })}
         </AdminBadge>
-        {item.conversationId === '' ? null : (
-          <AdminEntityChip
-            language={language}
-            size="sm"
-            entity={{ kind: 'conversation', id: item.conversationId, label: translateAdmin(language, 'admin.agentPanel.queue.conversation') }}
-          />
-        )}
       </div>
+      <QueueWho language={language} item={item} />
       {moment === null ? null : (
         <time dateTime={moment.iso} title={moment.absolute} className="text-caption" style={{ color: INK2 }}>
           {translateAdmin(language, 'admin.agentPanel.queue.at', { when: moment.relative })}

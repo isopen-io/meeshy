@@ -7,7 +7,7 @@ import { AdminFicheSection } from '@/components/admin/fiche';
 import { AdminMetaRow, AdminMomentText } from '@/components/admin/meta';
 import { AdminErrorState, AdminInlineNotice } from '@/components/admin/states';
 import { EDGE, INK, INK2, SURFACE } from '@/components/admin/tone';
-import { AGENT_CONFIG_FIELDS } from '@/lib/admin/agent-settings-form';
+import { AGENT_CONFIG_FIELDS, AGENT_CONFIG_SECTIONS } from '@/lib/admin/agent-settings-form';
 import { languageName, sentenceCase } from '@/lib/admin/interpret/language';
 import { personLabel } from '@/lib/admin/interpret/labels';
 import { formatCount } from '@/lib/admin/interpret/numbers';
@@ -31,7 +31,7 @@ import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { useOnline } from '@/lib/net/online';
 import { AdminSkeleton } from '@/routes/admin-parts';
 
-import { AgentSettingsForm, useAgentConfirm, useAgentGesture, type AgentGesture } from './admin-agent-form';
+import { AgentSettingsForm, agentVocabulary, useAgentConfirm, useAgentGesture, type AgentGesture } from './admin-agent-form';
 import { AgentRolesBlock } from './admin-agent-roles';
 
 /**
@@ -105,12 +105,6 @@ export function AgentConversationSheet({
 type Ask = ReturnType<typeof useAgentConfirm>['ask'];
 type BlockProps = { readonly language: AdminLanguage; readonly deps: AdminDeps; readonly conversationId: string };
 
-const cfgLabel = (language: AdminLanguage) => (key: string) =>
-  translateAdmin(
-    language,
-    `admin.agentPanel.cfg.${key as 'enabled' | 'autoPickupEnabled' | 'scanIntervalMinutes' | 'maxControlledUsers' | 'minResponsesPerCycle' | 'maxResponsesPerCycle' | 'reactionsEnabled' | 'maxReactionsPerCycle' | 'weekdayMaxMessages' | 'weekendMaxMessages' | 'minWordsPerMessage' | 'maxWordsPerMessage' | 'generationTemperature' | 'qualityGateEnabled' | 'webSearchEnabled' | 'agentInstructions'}`,
-  );
-
 function ConfigBlock({ language, deps, conversationId, gesture }: BlockProps & { readonly gesture: AgentGesture; readonly ask: Ask }) {
   const online = useOnline();
   const config = useQuery({
@@ -134,8 +128,9 @@ function ConfigBlock({ language, deps, conversationId, gesture }: BlockProps & {
             id="conversation"
             language={language}
             specs={AGENT_CONFIG_FIELDS}
+            sections={AGENT_CONFIG_SECTIONS}
             served={config.data?.fields ?? {}}
-            labelOf={cfgLabel(language)}
+            vocabulary={agentVocabulary(language, 'cfg')}
             saveLabel={translateAdmin(language, 'admin.agentPanel.conv.save')}
             busy={gesture.busy === 'config'}
             error={gesture.errorOf('config')}

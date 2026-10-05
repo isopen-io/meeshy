@@ -51,9 +51,9 @@ server.get('/debug/zmq-status', async () => ({
 
 async function buildLlmFromConfig(): Promise<LlmProvider> {
   // Precedence: AgentLlmConfig (admin LLM tab) > AgentGlobalConfig.defaultProvider/Model
-  // (Global tab) > env vars. API keys always come from env — the encrypted
-  // column in AgentLlmConfig is a TODO and storing keys in plaintext Mongo
-  // would be a regression.
+  // (Global tab) > env vars. API keys always come from env: the agent never
+  // reads AgentLlmConfig.apiKeyEncrypted (sealed at rest by the gateway with
+  // SECRETS_AT_REST_KEY, which the agent does not hold).
   const [llmConfig, globalConfig] = await Promise.all([
     prisma.agentLlmConfig.findFirst({ orderBy: { updatedAt: 'desc' } }).catch(() => null),
     prisma.agentGlobalConfig.findFirst({ orderBy: { updatedAt: 'desc' } }).catch(() => null),
