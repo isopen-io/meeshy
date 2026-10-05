@@ -18,6 +18,8 @@ import { GameVisibilityPicker } from './game-visibility-picker';
  * Ranger = monter ou descendre d'un cran : deux boutons de 44 points par coupe,
  * pas un glisser-déposer que ni le clavier ni un lecteur d'écran ne savent faire.
  * Le geste est optimiste (l'ordre change tout de suite) avec retour arrière.
+ * Pendant qu'un ordre part, ranger est SUSPENDU (`aria-disabled`) sans être
+ * désactivé : le bouton que le clavier vient de presser garde le focus.
  *
  * Un trophée ne rapporte JAMAIS de points ni de Gloire : c'est un objet reçu à
  * un moment précis. La visibilité se règle ici (« amis » par défaut).
@@ -65,10 +67,13 @@ export function GameShowcase(props: GameShowcaseProps) {
       <button
         type="button"
         {...{ [marker]: '' }}
-        disabled={disabled || !online || savingOrder}
+        disabled={disabled || !online}
+        aria-disabled={savingOrder || undefined}
         aria-label={label}
-        onClick={() => onOrder(moved(order, index, delta))}
-        className="grid place-items-center rounded-chip text-body font-bold disabled:opacity-40"
+        onClick={() => {
+          if (!savingOrder) onOrder(moved(order, index, delta));
+        }}
+        className="grid place-items-center rounded-chip text-body font-bold disabled:opacity-40 aria-disabled:opacity-60"
         style={{ minHeight: 44, minWidth: 44, color: GAME_INK, backgroundColor: 'color-mix(in srgb, var(--color-ios-ink) 7%, transparent)' }}
       >
         <span aria-hidden="true">{glyph}</span>
@@ -123,7 +128,7 @@ export function GameShowcase(props: GameShowcaseProps) {
         <h2 id="game-showcase-visibility-title" className="text-body font-bold" style={{ color: GAME_INK }}>
           {gameText('game.showcase.visibility')}
         </h2>
-        <GameVisibilityPicker legend={gameText('game.visibility.field.showcase')} value={visibility} disabled={!online || savingVisibility} onChange={onVisibility} />
+        <GameVisibilityPicker legend={gameText('game.visibility.field.showcase')} value={visibility} disabled={!online} busy={savingVisibility} onChange={onVisibility} />
         <p className="text-caption" style={{ color: GAME_INK_2 }}>
           {gameText('game.showcase.visibility_hint')}
         </p>

@@ -12,6 +12,12 @@ import { GAME_BRAND, GAME_INK } from './game-surface';
  * serveur : tout le monde, mes amis, moi seul. Un groupe de boutons radio
  * natifs (clavier, lecteur d'écran) habillés en pastilles de 44 points.
  *
+ * PENDANT L'ENREGISTREMENT, le choix est SUSPENDU sans être désactivé
+ * (`aria-disabled`, et le clic ne change rien) : désactiver le bouton radio que
+ * le clavier vient de cocher jetterait son focus au début de la page. Hors ligne,
+ * il est désactivé pour de bon. La pastille entoure le focus clavier
+ * (`[data-game-level-pill]`, `game.css`) : le bouton radio, lui, est masqué.
+ *
  * Il ne décide rien : il pose le niveau choisi, que le geste (optimiste, avec
  * retour arrière) envoie. Le serveur reste maître : il plafonne (« caché de la
  * recherche » ne dépasse pas « amis ») et répond avec la valeur EFFECTIVE, que
@@ -21,11 +27,14 @@ export function GameVisibilityPicker({
   legend,
   value,
   disabled,
+  busy = false,
   onChange,
 }: {
   readonly legend: string;
   readonly value: GameVisibility['showcase'];
   readonly disabled: boolean;
+  /** Un réglage part : le choix est suspendu, le focus reste où il est. */
+  readonly busy?: boolean;
   readonly onChange: (level: GameVisibility['showcase']) => void;
 }) {
   const name = useId();
@@ -40,6 +49,7 @@ export function GameVisibilityPicker({
           return (
             <label
               key={level}
+              data-game-level-pill=""
               className="flex cursor-pointer items-center justify-center rounded-chip px-3 text-caption font-semibold has-[:disabled]:opacity-60"
               style={{
                 minHeight: 44,
@@ -55,7 +65,13 @@ export function GameVisibilityPicker({
                 value={level}
                 checked={selected}
                 disabled={disabled}
-                onChange={() => onChange(level)}
+                aria-disabled={busy || undefined}
+                onClick={(event) => {
+                  if (busy) event.preventDefault();
+                }}
+                onChange={() => {
+                  if (!busy) onChange(level);
+                }}
                 className="sr-only"
               />
               {visibilityLabel(level)}

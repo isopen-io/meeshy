@@ -125,7 +125,7 @@ export function GameAtlas({ atlas, visibility, online, savingVisibility, error, 
         <h2 id="game-atlas-privacy-title" className="text-body font-bold" style={{ color: GAME_INK }}>
           {gameText('game.atlas.visibility')}
         </h2>
-        <GameVisibilityPicker legend={gameText('game.visibility.field.atlas')} value={visibility} disabled={!online || savingVisibility} onChange={onVisibility} />
+        <GameVisibilityPicker legend={gameText('game.visibility.field.atlas')} value={visibility} disabled={!online} busy={savingVisibility} onChange={onVisibility} />
         <p className="text-caption" style={{ color: GAME_INK_2 }}>
           {gameText('game.atlas.privacy')}
         </p>

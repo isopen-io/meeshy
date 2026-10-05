@@ -114,7 +114,8 @@ export function GameSettings(props: GameSettingsProps) {
               key={field}
               legend={gameText(`game.visibility.field.${field}`)}
               value={visibility[field] ?? DEFAULT_LEVEL[field]}
-              disabled={!online || savingVisibility}
+              disabled={!online}
+              busy={savingVisibility}
               onChange={(level) => props.onVisibility({ [field]: level })}
             />
           ))}

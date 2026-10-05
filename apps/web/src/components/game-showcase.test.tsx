@@ -1,4 +1,5 @@
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
+import { readFileSync } from 'node:fs';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import type { GameTrophiesBlock } from '@meeshy/shared/types/game';
@@ -24,6 +25,7 @@ afterAll(async () => {
 });
 afterEach(unmountAll);
 
+const CSS = readFileSync(new URL('../styles/game.css', import.meta.url), 'utf8');
 const text = (html: string): string => html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
 const trophies = (): GameTrophiesBlock => {
   const block = gameBlockWithExtrasFixture().trophies;
@@ -85,6 +87,16 @@ describe('la vitrine', () => {
     expect(calls).toEqual([[second, first, third]]);
   });
 
+  test('pendant l’enregistrement d’un ordre, ranger est suspendu SANS perdre le focus : le bouton reste focalisable et ne renvoie rien', async () => {
+    const calls: Array<readonly string[]> = [];
+    const host = await mount(<GameShowcase {...props({ savingOrder: true, onOrder: (order) => calls.push(order) })} />);
+    const down = host.querySelector<HTMLButtonElement>('[data-game-trophy-down]');
+    expect(down?.disabled).toBe(false);
+    expect(down?.getAttribute('aria-disabled')).toBe('true');
+    await click(down);
+    expect(calls).toEqual([]);
+  });
+
   test('hors ligne : on ne range pas, et on le dit', async () => {
     const host = await mount(<GameShowcase {...props({ online: false })} />);
     expect(host.querySelector<HTMLButtonElement>('[data-game-trophy-down]')?.disabled).toBe(true);
@@ -131,10 +143,21 @@ describe('qui voit', () => {
     expect(chosen).toEqual(['me']);
   });
 
-  test('en cours d’enregistrement : le choix est suspendu et le dit', async () => {
-    const host = await mount(<GameShowcase {...props({ savingVisibility: true })} />);
-    expect(host.querySelector<HTMLInputElement>('input[value="me"]')?.disabled).toBe(true);
+  test('en cours d’enregistrement : le choix est suspendu et le dit, SANS perdre le focus (aria-disabled, jamais disabled)', async () => {
+    const chosen: string[] = [];
+    const host = await mount(<GameShowcase {...props({ savingVisibility: true, onVisibility: (level) => chosen.push(level) })} />);
+    const radio = host.querySelector<HTMLInputElement>('input[value="me"]');
+    expect(radio?.disabled).toBe(false);
+    expect(radio?.getAttribute('aria-disabled')).toBe('true');
+    await click(radio);
+    expect(chosen).toEqual([]);
     expect(host.textContent).toContain('Enregistrement');
+  });
+
+  test('chaque niveau montre où est le focus clavier : la pastille porte le marqueur que game.css entoure', () => {
+    const html = renderToStaticMarkup(<GameVisibilityPicker legend="Vitrine" value="friends" disabled={false} onChange={() => undefined} />);
+    expect((html.match(/data-game-level-pill=/g) ?? []).length).toBe(3);
+    expect(CSS).toMatch(/\[data-game-level-pill\]:has\(:focus-visible\)\s*\{[^}]*outline:/);
   });
 
   test('le sélecteur seul : sa légende nomme ce qu’il règle', () => {

@@ -213,3 +213,17 @@
     transform: scale(1.4);
   }
 }
+
+/* LE CHOIX DE QUI VOIT (#9481) — le bouton radio est masqué : c'est la PASTILLE
+   qui porte le focus clavier, avec le même couple anneau + contre-anneau que le
+   reste de l'application (règle 17, `app.css`). Un réglage qui part la suspend
+   (`aria-disabled`) sans la désactiver, pour que le focus reste où il est. */
+[data-game-level-pill]:has(:focus-visible) {
+  outline: var(--stroke-focus) solid var(--color-focus);
+  outline-offset: var(--stroke-strong);
+  box-shadow: 0 0 0 var(--stroke-strong) var(--color-focus-contra);
+}
+
+[data-game-level-pill]:has([aria-disabled='true']) {
+  opacity: 0.6;
+}
