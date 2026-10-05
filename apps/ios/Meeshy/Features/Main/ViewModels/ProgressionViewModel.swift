@@ -203,6 +203,7 @@ final class ProgressionViewModel: ObservableObject {
             await load(forceNetwork: true)
         } catch {
             restore(before)
+            if GameService.refusal(of: error) == .requestIdConflict { mintRequestId = UUID().uuidString }
             mintError = String(
                 localized: "progression.meesh.mint_error",
                 defaultValue: "La frappe n'a pas abouti — réessayez",

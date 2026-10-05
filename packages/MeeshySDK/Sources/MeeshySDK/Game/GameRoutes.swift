@@ -46,4 +46,6 @@ public enum GameErrorCode: String, CaseIterable, Sendable, Hashable {
     case missionRerollUnavailable = "MISSION_REROLL_UNAVAILABLE"
     case missionsLocked = "MISSIONS_LOCKED"
     case chestNotReady = "CHEST_NOT_READY"
+    /// Le `requestId` a déjà servi à une AUTRE écriture : refusé sans effet, il faut un identifiant neuf.
+    case requestIdConflict = "REQUEST_ID_CONFLICT"
 }

@@ -245,6 +245,8 @@ enum GameCopy {
             String(localized: "game.error.missions_locked", defaultValue: "Les missions s’ouvrent au niveau 5.", bundle: .main)
         case .chestNotReady:
             String(localized: "game.error.chest_not_ready", defaultValue: "Termine d’abord les missions du jour pour ouvrir le coffre.", bundle: .main)
+        case .requestIdConflict:
+            String(localized: "game.error.request_id_conflict", defaultValue: "Cette demande a déjà servi pour une autre action : réessaie.", bundle: .main)
         case nil:
             String(localized: "game.error.generic", defaultValue: "Ça n’a pas abouti — vérifie ta connexion et réessaie.", bundle: .main)
         }

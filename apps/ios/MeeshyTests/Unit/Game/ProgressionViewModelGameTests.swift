@@ -136,6 +136,18 @@ final class ProgressionViewModelGameTests: XCTestCase {
         XCTAssertEqual(service.rerollRequestIds[0], service.rerollRequestIds[1], "un réessai rejoue la même requête : jamais un second geste")
     }
 
+    func test_reroll_anIdAlreadyServedToAnotherWrite_isReplacedByAFreshOneOnTheNextTry() async {
+        let (sut, _, service) = makeSUT()
+        await sut.load(forceNetwork: true)
+        service.rerollResult = .failure(refusal(.requestIdConflict))
+
+        await sut.reroll(missionId: "m2")
+        await sut.reroll(missionId: "m2")
+
+        XCTAssertEqual(service.rerollRequestIds.count, 2)
+        XCTAssertNotEqual(service.rerollRequestIds[0], service.rerollRequestIds[1], "rejouer l'identifiant refusé se heurterait au même refus")
+    }
+
     func test_reroll_aNewIntentionAfterASuccessGetsAFreshRequestId() async {
         let (sut, _, service) = makeSUT()
         await sut.load(forceNetwork: true)
