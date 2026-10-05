@@ -660,6 +660,17 @@ const en = {
   'game.settings.league.off': 'You are not in the public league. Your friends league stays open.',
   'game.settings.league.manage': 'Manage my league',
   'game.settings.help': 'How it works',
+  'game.profile.title': 'My game',
+  'game.profile.level': 'Level {level} · {tier}',
+  'game.profile.glory': '{glory} Glory',
+  'game.profile.treasury': '{meeshes} · {tier}',
+  'game.profile.flame': 'Flame: {days}',
+  'game.profile.showcase': 'Showcase',
+  'game.profile.medals': 'Medals',
+  'game.profile.see_progress': 'See my progress',
+  'game.profile.see_showcase': 'See the whole showcase',
+  'game.profile.visitor_title': '{name}’s showcase',
+  'game.profile.no_trophy': 'No trophy yet.',
 } as const satisfies GameCatalog;
 
 export default en;

@@ -103,7 +103,8 @@ describe('la fiche se lit par onglets', () => {
     expect(el.querySelector('[data-profile-relation]')).not.toBeNull();
     expect(el.querySelector('[data-profile-stats]')).not.toBeNull();
     expect(el.querySelector('[data-profile-posts]')).toBeNull();
-    expect([...el.querySelectorAll('#contenu section h2')].map((node) => text(node))).toEqual(['CONNEXION', 'STATISTIQUES']);
+    /* Le PANNEAU de l'onglet, pas toute la page : la vitrine du jeu (#9481) se pose AU-DESSUS des onglets, hors de Détails. */
+    expect([...el.querySelectorAll('[role="tabpanel"] section h2')].map((node) => text(node))).toEqual(['CONNEXION', 'STATISTIQUES']);
   });
 
   test('le panneau est nommé par son onglet, et l’onglet pointe son panneau', async () => {

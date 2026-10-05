@@ -660,6 +660,17 @@ const pt = {
   'game.settings.league.off': 'Você não está na liga pública. Sua liga entre amigos continua aberta.',
   'game.settings.league.manage': 'Gerenciar minha liga',
   'game.settings.help': 'Como funciona',
+  'game.profile.title': 'Meu jogo',
+  'game.profile.level': 'Nível {level} · {tier}',
+  'game.profile.glory': '{glory} de Glória',
+  'game.profile.treasury': '{meeshes} · {tier}',
+  'game.profile.flame': 'Chama: {days}',
+  'game.profile.showcase': 'Vitrine',
+  'game.profile.medals': 'Medalhas',
+  'game.profile.see_progress': 'Ver meu progresso',
+  'game.profile.see_showcase': 'Ver toda a vitrine',
+  'game.profile.visitor_title': 'Vitrine de {name}',
+  'game.profile.no_trophy': 'Ainda sem troféus.',
 } as const satisfies GameCatalog;
 
 export default pt;

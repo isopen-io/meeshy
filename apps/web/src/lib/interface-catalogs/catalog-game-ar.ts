@@ -672,6 +672,17 @@ const ar = {
   'game.settings.league.off': 'أنت لست في الدوري العام. يبقى دوري الأصدقاء مفتوحًا.',
   'game.settings.league.manage': 'إدارة دوريّ',
   'game.settings.help': 'كيف تعمل',
+  'game.profile.title': 'لعبتي',
+  'game.profile.level': 'المستوى ⁦{level}⁩ · {tier}',
+  'game.profile.glory': '{glory} من المجد',
+  'game.profile.treasury': '{meeshes} · {tier}',
+  'game.profile.flame': 'الشعلة: {days}',
+  'game.profile.showcase': 'الواجهة',
+  'game.profile.medals': 'الميداليات',
+  'game.profile.see_progress': 'عرض تقدّمي',
+  'game.profile.see_showcase': 'عرض الواجهة كاملة',
+  'game.profile.visitor_title': 'واجهة {name}',
+  'game.profile.no_trophy': 'لا كؤوس بعد.',
 } as const satisfies GameCatalog;
 
 export default ar;

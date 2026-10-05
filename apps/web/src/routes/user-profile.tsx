@@ -4,6 +4,7 @@ import { useStore } from 'zustand/react';
 
 import { LiveAnnouncement } from '@/components/live-announcement';
 import { Glyph } from '@/components/glyph';
+import { GameProfileOwnSlot, GameProfileVisitorSlot } from '@/components/game-profile-slots';
 import { ProfileTabPanel, ProfileTabs, useProfileTab } from '@/components/profile-tabs';
 import { ReportSheet } from '@/components/report-sheet';
 import { apiDeps } from '@/lib/api/deps';
@@ -196,6 +197,12 @@ export function UserProfileView({ username }: { readonly username: string }) {
               <ProfileBlockedCard language={language} name={name} online={online} busy={busy} onAction={onAction} />
             ) : (
               <>
+                {/* LE JEU (#9481) — sur SA fiche, tout ; sur celle d'un autre, ce que SA visibilité autorise (la vitrine), rien sinon. */}
+                {isSelf ? (
+                  <GameProfileOwnSlot enabled={signedIn} />
+                ) : signedIn ? (
+                  <GameProfileVisitorSlot userId={person.id} name={name} enabled />
+                ) : null}
                 <ProfileTabs language={language} tabs={offered} active={tab} onChange={selectTab} idBase={tabBase} accent={accent} />
                 <ProfileTabPanel idBase={tabBase} tab={tab}>
                   {tab === 'posts' ? (

@@ -130,6 +130,7 @@ function WhereIAm({ game }: { readonly game: GameBlock }) {
           size={88}
           record={level.record}
           showTier
+          prestige={level.prestige}
           label={levelRingLabel(level.level, level.tier)}
         />
       </div>

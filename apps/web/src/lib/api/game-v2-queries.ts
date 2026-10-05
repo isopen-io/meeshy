@@ -1,9 +1,10 @@
 import { leagueStandings, leagueWeekClose, leagueSnapshotDay, friendsLeagueRanking } from '@meeshy/shared/utils/game/league';
-import type { LeagueFriendsResponse, LeagueWeekResponse } from '@meeshy/shared/types/game';
+import type { LeagueFriendsResponse, LeagueWeekResponse, UserShowcaseResponse } from '@meeshy/shared/types/game';
+import { visitorAwardedMonth } from '@meeshy/shared/utils/game/trophies';
 
 import type { DataSource } from './config';
 import { GAME_EXTRAS_TODAY, gameExtrasFactsFixture } from './game-fixture';
-import { fetchLeagueFriends, fetchLeagueWeek } from './game-v2';
+import { fetchLeagueFriends, fetchLeagueWeek, fetchUserShowcase } from './game-v2';
 import type { ApiResult, HttpTransport } from './http';
 
 /**
@@ -71,4 +72,26 @@ export async function loadLeagueWeek(deps: Deps): Promise<ApiResult<LeagueWeekRe
 export async function loadLeagueFriends(deps: Deps): Promise<ApiResult<LeagueFriendsResponse>> {
   if (__FIXTURES__ && deps.source === 'fixtures') return { ok: true, data: leagueFriendsFixture() };
   return fetchLeagueFriends(deps.transport, deps.signal);
+}
+
+/**
+ * LA VITRINE D'UN AUTRE (#9387, #9481) — `GET /users/:userId/game/showcase`. Le
+ * serveur la ferme selon le réglage du membre (`visible: false` est une VALEUR :
+ * une erreur dirait qu'elle existe) et ne sert au visiteur que le MOIS d'obtention.
+ * La clé porte l'identifiant : une vitrine par membre, jamais mélangées.
+ */
+export const userShowcaseQueryKey = (userId: string) => [...GAME_V2_QUERY_PREFIX, 'showcase', userId] as const;
+
+export function userShowcaseFixture(): UserShowcaseResponse {
+  const facts = gameExtrasFactsFixture();
+  const items = facts.trophies.flatMap((trophy) => {
+    const month = visitorAwardedMonth(trophy.awardedAt);
+    return month === null ? [] : [{ key: trophy.key, awardedMonth: month }];
+  });
+  return { visible: true, items, order: items.map((item) => item.key) };
+}
+
+export async function loadUserShowcase(deps: Deps & { readonly userId: string }): Promise<ApiResult<UserShowcaseResponse>> {
+  if (__FIXTURES__ && deps.source === 'fixtures') return { ok: true, data: userShowcaseFixture() };
+  return fetchUserShowcase(deps.transport, deps.userId, deps.signal);
 }

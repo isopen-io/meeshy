@@ -660,6 +660,17 @@ const de = {
   'game.settings.league.off': 'Du bist nicht in der öffentlichen Liga. Deine Freundesliga bleibt offen.',
   'game.settings.league.manage': 'Meine Liga verwalten',
   'game.settings.help': 'So funktioniert es',
+  'game.profile.title': 'Mein Spiel',
+  'game.profile.level': 'Level {level} · {tier}',
+  'game.profile.glory': '{glory} Ruhm',
+  'game.profile.treasury': '{meeshes} · {tier}',
+  'game.profile.flame': 'Flamme: {days}',
+  'game.profile.showcase': 'Vitrine',
+  'game.profile.medals': 'Medaillen',
+  'game.profile.see_progress': 'Meinen Fortschritt ansehen',
+  'game.profile.see_showcase': 'Ganze Vitrine ansehen',
+  'game.profile.visitor_title': 'Vitrine von {name}',
+  'game.profile.no_trophy': 'Noch keine Trophäe.',
 } as const satisfies GameCatalog;
 
 export default de;

@@ -674,6 +674,17 @@ const fr = {
   'game.settings.league.off': 'Tu n’es pas dans la ligue publique. Ta ligue entre amis reste ouverte.',
   'game.settings.league.manage': 'Gérer ma ligue',
   'game.settings.help': 'Comment ça marche',
+  'game.profile.title': 'Mon jeu',
+  'game.profile.level': 'Niveau {level} · {tier}',
+  'game.profile.glory': '{glory} de Gloire',
+  'game.profile.treasury': '{meeshes} · {tier}',
+  'game.profile.flame': 'Flamme : {days}',
+  'game.profile.showcase': 'Vitrine',
+  'game.profile.medals': 'Médailles',
+  'game.profile.see_progress': 'Voir ma progression',
+  'game.profile.see_showcase': 'Voir toute la vitrine',
+  'game.profile.visitor_title': 'Vitrine de {name}',
+  'game.profile.no_trophy': 'Pas encore de trophée.',
 } as const;
 
 export default fr;

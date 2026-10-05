@@ -2,6 +2,7 @@ import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import { useStore } from 'zustand/react';
 
+import { GameProfileOwnSlot } from '@/components/game-profile-slots';
 import { LanguageSheet } from '@/components/language-sheet';
 import { ProfileTabPanel, ProfileTabs, useProfileTab } from '@/components/profile-tabs';
 import { apiDeps } from '@/lib/api/deps';
@@ -258,6 +259,8 @@ export default function ProfileScreen() {
             />
           )}
           <StatsSection language={language} stats={statsQuery.data ?? null} />
+          {/* LE JEU (#9481) — l'anneau de niveau, le rang, le trésor, la Flamme, la vitrine, les médailles ; chargé à la demande, après la première peinture. */}
+          <GameProfileOwnSlot enabled={enabled} />
           <ProfileTabs language={language} tabs={MY_PROFILE_TABS} active={tab} onChange={selectTab} idBase={tabBase} badges={badges} />
           <ProfileTabPanel idBase={tabBase} tab={tab}>
             {tab === 'posts' ? (
