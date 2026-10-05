@@ -49,7 +49,7 @@ final class GamePhotoCoordinator: ObservableObject {
             let known = Set(await notebook.list().map(\.momentId))
             let fresh = moments.filter { !known.contains($0.id) }
             guard !fresh.isEmpty else { return }
-            offers.append(contentsOf: fresh)
+            self.offers.append(contentsOf: fresh)
         }
     }
 

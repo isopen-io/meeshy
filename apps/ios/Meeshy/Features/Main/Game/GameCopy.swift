@@ -17,7 +17,7 @@ enum GameCopy {
     // MARK: - Nombres et accords
 
     /// Le zéro est singulier en français et en portugais (« 0 point »).
-    static func isSingular(_ count: Int, languageCode: String? = Locale.current.languageCode) -> Bool {
+    static func isSingular(_ count: Int, languageCode: String? = Locale.current.language.languageCode?.identifier) -> Bool {
         if count == 1 { return true }
         return count == 0 && (languageCode == "fr" || languageCode == "pt")
     }

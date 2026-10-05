@@ -131,10 +131,14 @@ final class GamePhotoSession: ObservableObject {
         guard case .striking = state else { return }
         frozen = source
         strike = 0
-        haptics.play(GameHapticPattern.strike)
-        strike = 1
+        haptics.play(GameHapticPattern.strikeInPlace)
         if strikeDuration > 0 {
+            // Un rendu à 0 d'abord : sans lui, l'emblème naîtrait déjà posé et rien ne s'animerait.
+            try? await Task.sleep(nanoseconds: 40_000_000)
+            strike = 1
             try? await Task.sleep(nanoseconds: strikeDuration)
+        } else {
+            strike = 1
         }
         guard let result = composer.compose(moment: moment, source: source, mode: mode, date: now()) else {
             send(.composeFailed)

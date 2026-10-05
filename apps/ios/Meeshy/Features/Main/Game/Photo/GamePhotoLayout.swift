@@ -43,7 +43,7 @@ nonisolated struct PhotoLayout: Equatable, Sendable {
 nonisolated enum GamePhotoLayout {
 
     /// En fraction de la largeur (tailles) ou de la hauteur (positions verticales).
-    private struct Proportions {
+    private nonisolated struct Proportions {
         let emblemSize: CGFloat
         let emblemTop: CGFloat
         let kickerY: CGFloat

@@ -18,6 +18,7 @@ struct OnboardingOverlay: View {
     let onOpenStory: () -> Void
     var onRetryStory: () -> Void = {}
     let onExplore: () -> Void
+    var onGame: (() -> Void)?
 
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var systemReduce
@@ -39,7 +40,7 @@ struct OnboardingOverlay: View {
                     .padding(.top, MeeshySpacing.sm)
                     .zIndex(1)
                 OnboardingCardView(model: model, isDark: isDark, onOpenStory: onOpenStory,
-                                   onRetryStory: onRetryStory, onExplore: onExplore)
+                                   onRetryStory: onRetryStory, onExplore: onExplore, onGame: onGame)
                     .id(model.card)
                     .transition(reduceMotion
                                 ? .opacity
@@ -153,7 +154,7 @@ struct OnboardingHost: ViewModifier {
             .overlay {
                 if model.isPresented {
                     OnboardingOverlay(model: model, onOpenStory: openStoryComposer,
-                                      onRetryStory: retryStory, onExplore: exploreGlobal)
+                                      onRetryStory: retryStory, onExplore: exploreGlobal, onGame: openGame)
                         .transition(.opacity)
                 }
             }
@@ -236,6 +237,15 @@ struct OnboardingHost: ViewModifier {
     private func retryStory() {
         guard let id = model.trackedStoryUploadId else { return }
         storyViewModel.retryUpload(id: id)
+    }
+
+    /// « Découvrir le jeu avec Mee et Meo » (#9379) : le calque se ferme comme à « Terminer »,
+    /// puis Progression s'ouvre — où Mee dit la première des sept cartes de l'intégration.
+    private func openGame() {
+        Task {
+            await model.finish()
+            router.push(.progression)
+        }
     }
 
     private func exploreGlobal() {

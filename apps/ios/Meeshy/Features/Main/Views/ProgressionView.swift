@@ -130,6 +130,7 @@ struct ProgressionView: View {
     // MARK: - Content
 
     private var content: some View {
+        ScrollViewReader { proxy in
         ScrollView(showsIndicators: false) {
             GeometryReader { geo in
                 Color.clear.preference(
@@ -161,6 +162,30 @@ struct ProgressionView: View {
                         ProgressionNotice(kind: .empty)
                     }
                     /*
+                     * LE JEU (#9383, #9379, #9382) — la carte de Mee et Meo, les
+                     * quatre jauges, les missions et le coffre, l'aperçu de frappe,
+                     * la Flamme. Montée QUE si la passerelle sert le bloc `game` :
+                     * devant un ancien serveur, l'écran d'avant reste INTACT. Quand
+                     * elle l'est, les jauges remplacent le hero du niveau (à six
+                     * paliers, il contredirait les cent niveaux), le hero Meesh et
+                     * la série d'avant.
+                     */
+                    if let game = viewModel.game {
+                        GameSection(
+                            viewModel: viewModel,
+                            guide: viewModel.guide,
+                            photos: viewModel.photos,
+                            game: game,
+                            onScrollTo: { anchor in
+                                withAnimation(.easeInOut(duration: 0.35)) { proxy.scrollTo(anchor, anchor: .top) }
+                            },
+                            onOpenConversations: { router.popToRoot() },
+                            onOpenBadges: { router.push(.progressionSection(.badges)) },
+                            onOpenRules: { router.push(.progressionRules) },
+                            onOpenNotebook: { router.push(.progressionNotebook) }
+                        )
+                    }
+                    /*
                      * LA VUE PARCOURT la séquence, elle ne la compose plus.
                      *
                      * Avant : Meesh → badges → succès → défis, écrit ici ; et
@@ -183,7 +208,9 @@ struct ProgressionView: View {
                                 onReveal: { reveal = $0 }
                             )
                         case .level:
-                            ProgressionLevelHero(progress: progress, isDark: isDark)
+                            if viewModel.game == nil {
+                                ProgressionLevelHero(progress: progress, isDark: isDark)
+                            }
                         case .meesh:
                             // LE SOLDE, SOUS LE NIVEAU (#6497). Le même bloc que
                             // la feuille de l'entrée d'en-tête — pas une jumelle :
@@ -191,7 +218,7 @@ struct ProgressionView: View {
                             // changement. L'action passe par le MÊME `viewModel.mint()`,
                             // donc la même clé d'idempotence : deux portes, une
                             // seule frappe.
-                            if let meesh = progress.meesh {
+                            if viewModel.game == nil, let meesh = progress.meesh {
                                 ProgressionMeeshDetail(
                                     meesh: meesh,
                                     isMinting: viewModel.isMinting,
@@ -207,7 +234,9 @@ struct ProgressionView: View {
                         case .elans:
                             ProgressionElansHero(progress: progress, isDark: isDark)
                         case .flamme:
-                            ProgressionFlammeHero(progress: progress, isDark: isDark)
+                            if viewModel.game == nil {
+                                ProgressionFlammeHero(progress: progress, isDark: isDark)
+                            }
                         case .sectionLink(let section):
                             ProgressionSectionLink(
                                 section: section,
@@ -228,5 +257,6 @@ struct ProgressionView: View {
         .coordinateSpace(name: "scroll")
         .onPreferenceChange(ScrollOffsetPreferenceKey.self) { scrollRelay.offset = $0 }      // iOS 16–17
         .trackScrollContentOffset { scrollRelay.offset = -$0 }                               // iOS 18+
+        }
     }
 }

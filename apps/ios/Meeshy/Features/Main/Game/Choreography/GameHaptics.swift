@@ -22,6 +22,12 @@ nonisolated enum GameHapticPattern {
         GameHapticTap(time: 0.54, intensity: 0.45, sharpness: 0.55),
     ]
 
+    /// La frappe EN PLACE du moment photo : le choc tombe au déclenchement, sans le préambule de la scène.
+    static let strikeInPlace: [GameHapticTap] = [
+        GameHapticTap(time: 0, intensity: 1.0, sharpness: 1.0),
+        GameHapticTap(time: 0.09, intensity: 0.45, sharpness: 0.55),
+    ]
+
     /// Une tape par trait de la Signature qui se grave.
     static let rank: [GameHapticTap] = [
         GameHapticTap(time: 0.55, intensity: 0.55, sharpness: 0.6),
