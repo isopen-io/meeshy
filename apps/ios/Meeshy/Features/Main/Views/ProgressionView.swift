@@ -74,6 +74,10 @@ struct ProgressionView: View {
                 Spacer()
             }
         }
+        // Les shaders se compilent à l'OUVERTURE de l'écran, jamais au moment de la
+        // célébration (#9381) : la frappe qui joue sa première onde ne doit pas
+        // attendre la compilation. Sans effet avant iOS 18, où ils tournent à vide.
+        .task { await GameShaders.precompile() }
         .task {
             await viewModel.load()
             #if DEBUG

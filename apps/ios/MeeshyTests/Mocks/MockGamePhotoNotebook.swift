@@ -4,7 +4,7 @@ import Foundation
 /// Un carnet en mémoire : ce que les propositions et le déroulé y écrivent se lit,
 /// sans disque.
 @MainActor
-final class InMemoryPhotoNotebook: GamePhotoNotebooking {
+final class MockGamePhotoNotebook: GamePhotoNotebooking {
     nonisolated deinit {}
 
     private(set) var entries: [NotebookEntry] = []

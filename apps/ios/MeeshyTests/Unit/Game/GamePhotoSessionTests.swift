@@ -11,7 +11,7 @@ final class GamePhotoSessionTests: XCTestCase {
         let sut: GamePhotoSession
         let camera: MockGamePhotoCamera
         let composer: MockGamePhotoComposer
-        let notebook: InMemoryPhotoNotebook
+        let notebook: MockGamePhotoNotebook
         let library: MockPhotoLibrarySaver
         let haptics: MockGameHaptics
     }
@@ -22,7 +22,7 @@ final class GamePhotoSessionTests: XCTestCase {
         let camera = MockGamePhotoCamera()
         camera.startResult = cameraFailure
         let composer = MockGamePhotoComposer()
-        let notebook = InMemoryPhotoNotebook()
+        let notebook = MockGamePhotoNotebook()
         let library = MockPhotoLibrarySaver()
         let haptics = MockGameHaptics()
         let sut = GamePhotoSession(
