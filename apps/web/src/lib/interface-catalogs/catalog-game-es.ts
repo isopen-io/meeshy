@@ -396,6 +396,9 @@ const es = {
   'game.hero.mint_glory': '+{glory} de Gloria',
   'game.hero.mint_missing': 'Faltan {missing}',
   'game.hero.mee_idle': '¿Una duda? Tócame, te lo explico.',
+  'game.photo.referral.headline': 'Únete a mí en Meeshy',
+  'game.photo.referral.share_text': 'Únete a mí en Meeshy: {link}',
+  'game.photo.referral.flame_days': '{days} d',
 } as const satisfies GameCatalog;
 
 export default es;

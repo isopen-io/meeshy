@@ -116,7 +116,7 @@ export function GameLead({
       {offers.map((offer) => (
         <GamePhotoOffer key={offer.id} moment={offer} onStart={photo.start} onLater={later} />
       ))}
-      {photo.active === null ? null : <GamePhotoFlow moment={photo.active} env={env()} onClose={photo.close} />}
+      {photo.active === null ? null : <GamePhotoFlow moment={photo.active} env={env()} flameDays={game?.flame.days ?? null} onClose={photo.close} />}
     </>
   );
 }

@@ -1,6 +1,9 @@
 import { Flame, GameBird, LevelRing, MeeshCoin, RankBlason, Signature } from '@/components/game';
-import { PHOTO_FORMATS, photoLayout, type PhotoFormat, type Rect, type TextLine } from '@/lib/game-photo/layout';
+import { flameForm } from '@meeshy/shared/utils/game/flame';
+
+import { PHOTO_FORMATS, photoLayout, type BannerLayout, type PhotoFormat, type Rect, type TextLine } from '@/lib/game-photo/layout';
 import type { PhotoEmblem, PhotoMoment } from '@/lib/game-photo/moments';
+import { fitBannerLine, type PhotoReferral } from '@/lib/game-photo/referral';
 import { formatCount, gameText, rankName } from '@/lib/view/game-copy';
 
 import '@/styles/game-photo.css';
@@ -16,6 +19,11 @@ import '@/styles/game-photo.css';
  * cadre qu'on voit au moment de déclencher est celui qu'on obtient. L'emblème
  * est sa propre pièce (`data-game-coin-flip` et son revers), pour que Mee et
  * Meo le « frappent en place » avec la chorégraphie de la frappe.
+ *
+ * Le BANDEAU DE PARRAINAGE (#7742) se pose au pied du cadre quand l'utilisateur
+ * a un lien : la Signature, « Rejoins-moi sur Meeshy », le lien court et la
+ * Flamme — la même mise en page que l'image finale (`layout.banner`). Sans lien,
+ * le cadre est celui d'avant.
  *
  * DÉCORATIF (`aria-hidden`) : le dialogue qui l'héberge dit le moment en toutes
  * lettres. Aucune couleur écrite ici : les dessins lisent les jetons du jeu.
@@ -69,8 +77,88 @@ function Line({ line, width, height, tone, weight, children }: { readonly line: 
   );
 }
 
-export function GamePhotoFrame({ moment, dateLabel, format }: { readonly moment: PhotoMoment; readonly dateLabel: string; readonly format: PhotoFormat }) {
-  const layout = photoLayout(format);
+const SANS_ADVANCE = 0.58;
+const MONO_ADVANCE = 0.62;
+
+/** Une ligne du bandeau, alignée à gauche (`center` : centrée sur `x`), à la taille de la mise en page. */
+function BannerLine({ line, width, height, text, size, weight, tone, center = false, mono = false }: { readonly line: TextLine; readonly width: number; readonly height: number; readonly text: string; readonly size: number; readonly weight: number; readonly tone: string; readonly center?: boolean; readonly mono?: boolean }) {
+  return (
+    <p
+      className="game-photo-text"
+      style={{
+        insetInline: 'auto',
+        left: percent(line.x, width),
+        top: percent(line.y - line.size, height),
+        transform: center ? 'translateX(-50%)' : undefined,
+        textAlign: center ? 'center' : 'start',
+        fontSize: `${((size / width) * 100).toFixed(2)}cqw`,
+        fontWeight: weight,
+        fontFamily: mono ? 'ui-monospace, monospace' : undefined,
+        color: tone,
+      }}
+    >
+      {text}
+    </p>
+  );
+}
+
+function ReferralBanner({ banner, referral, width, height }: { readonly banner: BannerLayout; readonly referral: PhotoReferral; readonly width: number; readonly height: number }) {
+  const headline = fitBannerLine({ text: gameText('game.photo.referral.headline'), size: banner.headline.size, maxWidth: banner.maxTextWidth, minSize: banner.headline.size * 0.6, advance: SANS_ADVANCE });
+  const link = fitBannerLine({ text: referral.display, size: banner.link.size, maxWidth: banner.maxTextWidth, minSize: banner.link.size * 0.7, advance: MONO_ADVANCE });
+  const form = referral.flameDays === null ? null : flameForm(referral.flameDays);
+  const radius = `${(((banner.frame.h * 0.2) / width) * 100).toFixed(2)}cqw`;
+  return (
+    <>
+      <span
+        data-photo-banner=""
+        style={{
+          position: 'absolute',
+          left: percent(banner.frame.x, width),
+          top: percent(banner.frame.y, height),
+          width: percent(banner.frame.w, width),
+          height: percent(banner.frame.h, height),
+          borderRadius: radius,
+          backgroundColor: 'color-mix(in srgb, var(--ios-indigo-950) 86%, transparent)',
+        }}
+      />
+      <BannerLine line={banner.headline} width={width} height={height} text={headline.text} size={headline.size} weight={800} tone="var(--ios-on-brand)" />
+      <BannerLine line={banner.link} width={width} height={height} text={link.text} size={link.size} weight={500} tone="var(--ios-indigo-200)" mono />
+      {form === null || referral.flameDays === null ? null : (
+        <>
+          <Placed rect={banner.flame} width={width} height={height}>
+            <span data-photo-art="flame" className="game-photo-art">
+              <Flame form={form} size={256} />
+            </span>
+          </Placed>
+          <BannerLine
+            line={banner.flameDays}
+            width={width}
+            height={height}
+            text={gameText('game.photo.referral.flame_days', { days: formatCount(referral.flameDays) })}
+            size={banner.flameDays.size}
+            weight={600}
+            tone="var(--ios-on-brand)"
+            center
+          />
+        </>
+      )}
+    </>
+  );
+}
+
+export function GamePhotoFrame({
+  moment,
+  dateLabel,
+  format,
+  referral = null,
+}: {
+  readonly moment: PhotoMoment;
+  readonly dateLabel: string;
+  readonly format: PhotoFormat;
+  /** Le lien de parrainage et la Flamme (#7742) ; `null` : le cadre n'a pas de bandeau. */
+  readonly referral?: PhotoReferral | null;
+}) {
+  const layout = photoLayout(format, { banner: referral !== null });
   const { width, height } = PHOTO_FORMATS[format];
   return (
     <div
@@ -121,6 +209,7 @@ export function GamePhotoFrame({ moment, dateLabel, format }: { readonly moment:
           </span>
         </span>
       </Placed>
+      {layout.banner === undefined || referral === null ? null : <ReferralBanner banner={layout.banner} referral={referral} width={width} height={height} />}
       <Placed rect={layout.signature} width={width} height={height}>
         <span data-photo-art="signature" className="game-photo-art">
           <Signature size={256} color="var(--ios-on-brand)" />

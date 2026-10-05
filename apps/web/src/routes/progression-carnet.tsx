@@ -1,4 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+
+import { ENGAGEMENT_PROGRESS_QUERY_KEY, type EngagementWithGame } from '@/lib/api/engagement';
 
 import { suspendForGameCatalog } from '@/lib/i18n-game-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
@@ -11,6 +14,7 @@ import { appPhotoEnv } from '@/lib/game-photo/app-env';
 import type { PhotoEnv } from '@/lib/game-photo/env';
 import { momentLines, type PhotoMoment } from '@/lib/game-photo/moments';
 import type { NotebookEntry } from '@/lib/game-photo/notebook';
+import { referralOf, referralShareText } from '@/lib/game-photo/referral';
 import { dateLabelOf, fileNameOf } from '@/lib/game-photo/render';
 import { useObjectUrl } from '@/lib/game-photo/use-object-url';
 import { gameText } from '@/lib/view/game-copy';
@@ -57,6 +61,13 @@ function KeptEntry({ entry, env, onRemoved }: { readonly entry: NotebookEntry; r
     return () => clearTimeout(timer);
   }, [confirming]);
 
+  /* L'image gardée redit le lien de parrainage en texte (#7742) ; sans lien, elle part seule. */
+  const share = async (file: File) => {
+    const link = await (env.referral?.() ?? Promise.resolve(null)).catch(() => null);
+    const referral = referralOf(link, null);
+    await env.share(file, title, referral === null ? undefined : referralShareText(referral));
+  };
+
   const remove = async () => {
     if (!confirming) {
       setConfirming(true);
@@ -87,7 +98,7 @@ function KeptEntry({ entry, env, onRemoved }: { readonly entry: NotebookEntry; r
             disabled={entry.story === undefined}
             onClick={() => {
               const file = storyFile(entry);
-              if (file !== null) void env.share(file, title);
+              if (file !== null) void share(file);
             }}
             className="rounded-chip px-3 text-check font-semibold disabled:opacity-60"
             style={{ minHeight: 44, color: GAME_BRAND, backgroundColor: 'color-mix(in srgb, var(--color-ios-brand) 12%, transparent)' }}
@@ -137,7 +148,7 @@ function PendingEntry({ entry, onTake }: { readonly entry: NotebookEntry; readon
   );
 }
 
-export function CarnetBody({ env }: { readonly env: PhotoEnv }) {
+export function CarnetBody({ env, flameDays = null }: { readonly env: PhotoEnv; readonly flameDays?: number | null }) {
   const [entries, setEntries] = useState<readonly NotebookEntry[] | null>(null);
   const [taking, setTaking] = useState<PhotoMoment | null>(null);
 
@@ -199,6 +210,7 @@ export function CarnetBody({ env }: { readonly env: PhotoEnv }) {
         <GamePhotoFlow
           moment={taking}
           env={env}
+          flameDays={flameDays}
           onClose={() => {
             setTaking(null);
             load();
@@ -211,6 +223,8 @@ export function CarnetBody({ env }: { readonly env: PhotoEnv }) {
 
 export default function ProgressionCarnetScreen() {
   suspendForGameCatalog(currentInterfaceLanguage());
+  /* Les jours de la Flamme du bandeau : lus dans le cache de Progression, jamais redemandés. */
+  const flameDays = useQueryClient().getQueryData<EngagementWithGame>(ENGAGEMENT_PROGRESS_QUERY_KEY)?.game?.flame.days ?? null;
   return (
     <div className="flex h-dvh flex-col overflow-hidden pt-safe">
       <header className="glass z-10 shrink-0">
@@ -226,7 +240,7 @@ export default function ProgressionCarnetScreen() {
         </div>
       </header>
       <main id="contenu" className="flex-1 overflow-y-auto pb-safe">
-        <CarnetBody env={appPhotoEnv()} />
+        <CarnetBody env={appPhotoEnv()} flameDays={flameDays} />
       </main>
     </div>
   );

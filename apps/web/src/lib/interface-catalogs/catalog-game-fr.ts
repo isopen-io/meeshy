@@ -410,6 +410,9 @@ const fr = {
   'game.hero.mint_glory': '+{glory} Gloire',
   'game.hero.mint_missing': 'Encore {missing}',
   'game.hero.mee_idle': 'Une question ? Touche-moi, je t’explique.',
+  'game.photo.referral.headline': 'Rejoins-moi sur Meeshy',
+  'game.photo.referral.share_text': 'Rejoins-moi sur Meeshy : {link}',
+  'game.photo.referral.flame_days': '{days} j',
 } as const;
 
 export default fr;

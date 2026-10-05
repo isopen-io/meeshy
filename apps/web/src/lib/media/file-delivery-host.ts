@@ -23,13 +23,13 @@ export type FileDeliveryHost = {
   readonly document?: Pick<Document, 'createElement'> & { readonly body: Pick<HTMLElement, 'appendChild' | 'removeChild'> };
   readonly createObjectURL?: (blob: Blob) => string;
   readonly revokeObjectURL?: (url: string) => void;
-  readonly canShareFiles?: (data: { readonly files: readonly File[] }) => boolean;
-  readonly shareFiles?: (data: { readonly files: readonly File[] }) => Promise<void>;
+  readonly canShareFiles?: (data: { readonly files: readonly File[]; readonly text?: string }) => boolean;
+  readonly shareFiles?: (data: { readonly files: readonly File[]; readonly text?: string }) => Promise<void>;
 };
 
 type FileShareNavigator = {
-  readonly canShare?: (data: { files: File[] }) => boolean;
-  readonly share?: (data: { files: File[] }) => Promise<void>;
+  readonly canShare?: (data: { files: File[]; text?: string }) => boolean;
+  readonly share?: (data: { files: File[]; text?: string }) => Promise<void>;
 };
 
 export type FileDeliveryEnvironment = {
@@ -88,8 +88,10 @@ export function browserFileDeliveryHost(environment: FileDeliveryEnvironment = c
   const fileShare =
     pont.shareFiles === undefined && nav !== undefined && typeof nav.canShare === 'function' && typeof nav.share === 'function'
       ? {
-          canShareFiles: (data: { readonly files: readonly File[] }) => nav.canShare?.({ files: [...data.files] }) === true,
-          shareFiles: (data: { readonly files: readonly File[] }) => nav.share?.({ files: [...data.files] }) ?? Promise.resolve(),
+          canShareFiles: (data: { readonly files: readonly File[]; readonly text?: string }) =>
+            nav.canShare?.({ files: [...data.files], ...(data.text === undefined ? {} : { text: data.text }) }) === true,
+          shareFiles: (data: { readonly files: readonly File[]; readonly text?: string }) =>
+            nav.share?.({ files: [...data.files], ...(data.text === undefined ? {} : { text: data.text }) }) ?? Promise.resolve(),
         }
       : pont;
   const anchor =

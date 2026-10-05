@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import { photoLayout } from '@/lib/game-photo/layout';
+import { referralOf } from '@/lib/game-photo/referral';
 import { flameMoment, levelHundredMoment, meeshMoment, rankMoment, startMoment, tierMoment, treasuryMoment, type PhotoMoment } from '@/lib/game-photo/moments';
 
 import { GamePhotoFrame } from './game-photo-frame';
@@ -90,5 +91,65 @@ describe('l’accessibilité', () => {
     const html = render(rankMoment({ rank: 'voix', division: 2 }));
     expect(html).not.toMatch(/(?:color|background)[^;"]*:[^;"]*#[0-9a-f]{3,8}/i);
     expect(html).toContain('var(--ios-on-brand)');
+  });
+});
+
+/**
+ * LE BANDEAU DE PARRAINAGE (#7742) — l'aperçu en direct porte le même bandeau
+ * que l'image finale : la Signature, « Rejoins-moi sur Meeshy », le lien court
+ * et la Flamme. Sans lien, le cadre est celui d'avant, à l'identique.
+ */
+describe('le bandeau de parrainage', () => {
+  const moment = rankMoment({ rank: 'voix', division: 2 });
+  const referral = referralOf('https://meeshy.me/signup/affiliate/aff_abc', 23);
+  const withBanner = (format: 'story' | 'square' = 'story', link = referral): string =>
+    renderToStaticMarkup(<GamePhotoFrame moment={moment} dateLabel="5 octobre 2026" format={format} referral={link} />);
+
+  test('la phrase, le lien court et les jours de Flamme se lisent dans le cadre', () => {
+    const page = text(withBanner());
+    expect(page).toContain('Rejoins-moi sur Meeshy');
+    expect(page).toContain('meeshy.me/signup/affiliate/aff_abc');
+    expect(page).toContain('23 j');
+  });
+
+  test('le fond du bandeau est posé à la place que la mise en page lui donne', () => {
+    const layout = photoLayout('story', { banner: true });
+    const html = withBanner();
+    const percent = (n: number, of: number) => `${((n / of) * 100).toFixed(2)}%`;
+    const frame = layout.banner?.frame;
+    if (frame === undefined) throw new Error('bandeau attendu');
+    expect(html).toMatch(new RegExp(`data-photo-banner=""[^>]*left:${percent(frame.x, layout.width).replace('.', '\\.')}`));
+  });
+
+  test('la Flamme est un cinquième dessin de la composition, avec le sien', () => {
+    expect(withBanner()).toMatch(/data-photo-art="flame"[^>]*>\s*<svg/);
+    expect(withBanner()).toContain('data-game-flame=');
+  });
+
+  test('il n’y a qu’UNE Signature : celle du bandeau, plus celle du pied de carte', () => {
+    expect(withBanner().match(/data-photo-art="signature"/g)).toHaveLength(1);
+  });
+
+  test('sans lien, aucun bandeau : le cadre d’avant', () => {
+    const html = withBanner('story', null);
+    expect(html).not.toContain('data-photo-banner');
+    expect(html).not.toContain('data-photo-art="flame"');
+    expect(text(html)).not.toContain('Rejoins-moi');
+    expect(html).toBe(render(moment));
+  });
+
+  test('Flamme éteinte : le lien reste, la Flamme et ses jours s’effacent', () => {
+    const html = withBanner('story', referralOf('https://meeshy.me/signup/affiliate/aff_abc', 0));
+    expect(text(html)).toContain('meeshy.me/signup/affiliate/aff_abc');
+    expect(html).not.toContain('data-photo-art="flame"');
+    expect(text(html)).not.toMatch(/\d+ j\b/);
+  });
+
+  test('le carré porte aussi le bandeau', () => {
+    expect(text(withBanner('square'))).toContain('Rejoins-moi sur Meeshy');
+  });
+
+  test('aucune couleur écrite dans le bandeau', () => {
+    expect(withBanner()).not.toMatch(/(?:color|background)[^;"]*:[^;"]*#[0-9a-f]{3,8}/i);
   });
 });

@@ -408,6 +408,9 @@ const ar = {
   'game.hero.mint_glory': '⁦+{glory}⁩ مجد',
   'game.hero.mint_missing': 'بقي {missing}',
   'game.hero.mee_idle': 'عندك سؤال؟ المسني وسأشرح لك.',
+  'game.photo.referral.headline': 'انضم إليّ على Meeshy',
+  'game.photo.referral.share_text': 'انضم إليّ على Meeshy: ⁦{link}⁩',
+  'game.photo.referral.flame_days': '⁦{days}⁩ ي',
 } as const satisfies GameCatalog;
 
 export default ar;

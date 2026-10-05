@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { PHOTO_FORMATS, containFit, coverFit, photoLayout, type PhotoFormat } from './layout';
+import { PHOTO_FORMATS, containFit, coverFit, photoLayout, type PhotoFormat, type Rect } from './layout';
 
 /**
  * LA MISE EN PAGE DU CADRE (#9382) — conception, partie VI : « emblème en haut,
@@ -71,6 +71,76 @@ for (const format of FORMATS) {
       expect(layout.emblem.y).toBeGreaterThanOrEqual(height * 0.04);
       expect(layout.mee.x).toBeGreaterThanOrEqual(width * 0.04);
       expect(layout.meo.x + layout.meo.w).toBeLessThanOrEqual(width * 0.96);
+    });
+  });
+}
+
+/**
+ * LE BANDEAU DE PARRAINAGE (#7742) — au pied de la carte : la Signature, « Rejoins-moi
+ * sur Meeshy », le lien court et la Flamme. Quand il est là, Mee et Meo montent
+ * AU-DESSUS ; sans lien, la carte part comme avant, à l'identique.
+ */
+for (const format of FORMATS) {
+  describe(`le bandeau de parrainage — ${format}`, () => {
+    const plain = photoLayout(format);
+    const layout = photoLayout(format, { banner: true });
+    const { width, height } = PHOTO_FORMATS[format];
+    const banner = layout.banner;
+    const inside = (r: Rect): boolean => r.x >= 0 && r.y >= 0 && r.x + r.w <= width && r.y + r.h <= height;
+    const within = (r: Rect, frame: Rect): boolean => r.x >= frame.x && r.y >= frame.y && r.x + r.w <= frame.x + frame.w && r.y + r.h <= frame.y + frame.h;
+
+    test('sans bandeau, la mise en page est celle d’avant, sans aucun champ de plus', () => {
+      expect(plain.banner).toBeUndefined();
+      expect(photoLayout(format, { banner: false })).toEqual(plain);
+    });
+
+    test('le bandeau est au pied de la carte, centré, dans les marges de sécurité', () => {
+      if (banner === undefined) throw new Error('bandeau attendu');
+      expect(inside(banner.frame)).toBe(true);
+      expect(banner.frame.x + banner.frame.w / 2).toBeCloseTo(width / 2, 5);
+      expect(banner.frame.y + banner.frame.h).toBeGreaterThan(height * 0.9);
+      expect(banner.frame.x).toBeGreaterThanOrEqual(width * 0.04);
+    });
+
+    test('Mee et Meo montent AU-DESSUS du bandeau, sans le toucher', () => {
+      if (banner === undefined) throw new Error('bandeau attendu');
+      for (const bird of [layout.mee, layout.meo]) expect(bird.y + bird.h).toBeLessThanOrEqual(banner.frame.y);
+      expect(layout.mee.y).toBeLessThan(plain.mee.y);
+    });
+
+    test('le texte du cadre reste entre l’emblème et les oiseaux', () => {
+      expect(layout.date.y).toBeLessThan(Math.min(layout.mee.y, layout.meo.y));
+      expect(layout.kicker.y).toBeGreaterThan(layout.emblem.y + layout.emblem.h);
+    });
+
+    test('les quatre pièces du bandeau tiennent dedans : Signature, phrase, lien, Flamme', () => {
+      if (banner === undefined) throw new Error('bandeau attendu');
+      expect(within(banner.signature, banner.frame)).toBe(true);
+      expect(within(banner.flame, banner.frame)).toBe(true);
+      for (const line of [banner.headline, banner.link, banner.flameDays]) {
+        expect(line.x).toBeGreaterThanOrEqual(banner.frame.x);
+        expect(line.x).toBeLessThanOrEqual(banner.frame.x + banner.frame.w);
+        expect(line.y).toBeGreaterThan(banner.frame.y);
+        expect(line.y).toBeLessThanOrEqual(banner.frame.y + banner.frame.h);
+        expect(line.size).toBeGreaterThanOrEqual(width * 0.02);
+      }
+    });
+
+    test('de gauche à droite : la Signature, puis la phrase, puis la Flamme', () => {
+      if (banner === undefined) throw new Error('bandeau attendu');
+      expect(banner.signature.x + banner.signature.w).toBeLessThanOrEqual(banner.headline.x);
+      expect(banner.headline.x).toBeLessThan(banner.flame.x);
+    });
+
+    test('la phrase est au-dessus du lien', () => {
+      if (banner === undefined) throw new Error('bandeau attendu');
+      expect(banner.headline.y).toBeLessThan(banner.link.y);
+    });
+
+    test('la place du lien : il tient entre la Signature et la Flamme', () => {
+      if (banner === undefined) throw new Error('bandeau attendu');
+      expect(banner.maxTextWidth).toBeGreaterThan(width * 0.4);
+      expect(banner.headline.x + banner.maxTextWidth).toBeLessThanOrEqual(banner.flame.x);
     });
   });
 }
