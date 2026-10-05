@@ -207,6 +207,25 @@ nonisolated enum ComposerHeaderTiles {
     static func showsDelete(sceneIndex: Int, currentIndex: Int, sceneCount: Int) -> Bool {
         sceneCount > 1 && sceneIndex == currentIndex
     }
+
+    /// **Le rail se monte dès qu'une scène EXISTE** (#5037 : « dès qu'une scène
+    /// existe » ; #5009 : créer une scène se VOIT).
+    ///
+    /// Il se taisait sous deux scènes, au motif qu'un rail d'un seul élément ne
+    /// navigue vers rien. C'était juste pour un rail de NAVIGATION ; depuis que
+    /// la tuile est la vignette de sa scène, une vignette seule est un APERÇU —
+    /// elle a quelque chose à dire. Une scène seule n'existe pour l'auteur que
+    /// si elle est MONTÉE : le document d'un post sans scène porte une slide
+    /// vide en mémoire, et une vignette noire y annoncerait une scène absente.
+    static func showsRail(sceneCount: Int, scenePresent: Bool) -> Bool {
+        sceneCount > 1 || (sceneCount == 1 && scenePresent)
+    }
+
+    /// Les tuiles sont des BOUTONS à partir de deux scènes — seules, elles
+    /// n'amènent nulle part et ne s'annoncent pas activables (loi 4).
+    static func tilesNavigate(sceneCount: Int) -> Bool {
+        sceneCount > 1
+    }
 }
 
 /// **Quand la scène reste MONTÉE** (#4724, défaut V2 mesuré au simulateur).

@@ -105,6 +105,21 @@ final class SceneThumbnailTests: XCTestCase {
         XCTAssertFalse(c.r == 0 && c.g == 0 && c.b == 0, "la photo de fond se voit dans la vignette")
     }
 
+    /// **Un son POSÉ se voit dans la vignette** (#5037 : « tout ce qui est sur
+    /// la scène ») — le composite partagé ne peint pas la pastille audio.
+    func test_thumbnail_sonPose_marqueSaPlace() {
+        var s = sceneNeuve()
+        s.effects.background = "FFFFFF"
+        s.effects.audioPlayerObjects = [StoryAudioPlayerObject(id: "a", x: 0.5, y: 0.5)]
+        let image = SceneThumbnailRenderer.thumbnail(
+            slide: s, bgImage: nil, loadedImages: [:], size: CGSize(width: 90, height: 160), scale: 2,
+            store: SceneThumbnailStore(), reductions: SceneThumbnailCache())
+        let centre = couleur(image, x: 90, y: 160)
+        let coin = couleur(image, x: 4, y: 4)
+        XCTAssertGreaterThan(coin.r, 240, "le fond blanc reste blanc loin de la pastille")
+        XCTAssertLessThan(min(centre.r, centre.g, centre.b), 200, "la pastille du son se voit à sa place")
+    }
+
     /// **Jamais la photo entière dans 44 points** (#6922) : ce que le composite
     /// reçoit est réduit à la tuile.
     func test_reducedImages_plafonneChaqueBitmapALaTuile() {

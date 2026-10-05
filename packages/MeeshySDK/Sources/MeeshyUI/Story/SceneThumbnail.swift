@@ -181,8 +181,36 @@ public enum SceneThumbnailRenderer {
         let fond = bgImage.map { reduced($0, tile: size, scale: scale, reductions: reductions) }
         let reduites = reducedImages(slide: slide, loadedImages: loadedImages, size: size, scale: scale,
                                      reductions: reductions)
-        return StorySlideRenderer.renderComposite(slide: slide, bgImage: fond, loadedImages: reduites,
-                                                  size: size, scale: scale)
-            ?? UIGraphicsImageRenderer(size: size, format: format).image { _ in }
+        let composite = StorySlideRenderer.renderComposite(slide: slide, bgImage: fond, loadedImages: reduites,
+                                                           size: size, scale: scale)
+        let pastilles = (slide.effects.audioPlayerObjects ?? []).filter { $0.isBackground != true }
+        guard !pastilles.isEmpty else {
+            return composite ?? UIGraphicsImageRenderer(size: size, format: format).image { _ in }
+        }
+        return UIGraphicsImageRenderer(size: size, format: format).image { _ in
+            composite?.draw(in: CGRect(origin: .zero, size: size))
+            pastilles.forEach { drawAudioMarker(at: CGPoint(x: $0.x * size.width, y: $0.y * size.height),
+                                                tileWidth: size.width) }
+        }
+    }
+
+    /// **Le son POSÉ se voit dans la vignette** (#5037 : « tout ce qui est sur la
+    /// scène », puces audio comprises). Le composite partagé ne le peint pas —
+    /// la pastille réelle est une vue vivante (forme d'onde animée) qu'on ne
+    /// peut pas réduire à quelques points sans la rendre illisible. Ce qu'il
+    /// faut dire à cette taille, c'est « il y a du son ICI » : une pastille à
+    /// note, comme la vignette précédente le disait déjà. Un son de FOND n'a
+    /// aucun pixel sur la scène, il n'en a donc pas ici.
+    private static func drawAudioMarker(at centre: CGPoint, tileWidth: CGFloat) {
+        let cote = max(4, tileWidth * 0.16)
+        let cadre = CGRect(x: centre.x - cote / 2, y: centre.y - cote / 2, width: cote, height: cote)
+        UIColor.black.withAlphaComponent(0.55).setFill()
+        UIBezierPath(ovalIn: cadre).fill()
+        let glyphe = UIImage(systemName: "music.note",
+                             withConfiguration: UIImage.SymbolConfiguration(pointSize: cote * 0.62, weight: .bold))?
+            .withTintColor(.white, renderingMode: .alwaysOriginal)
+        guard let glyphe else { return }
+        glyphe.draw(in: CGRect(x: centre.x - glyphe.size.width / 2, y: centre.y - glyphe.size.height / 2,
+                               width: glyphe.size.width, height: glyphe.size.height))
     }
 }
