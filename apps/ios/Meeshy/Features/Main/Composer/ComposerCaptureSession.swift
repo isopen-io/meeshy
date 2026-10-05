@@ -29,7 +29,7 @@ final class ComposerCaptureSession: ObservableObject {
     /// doublure dans les témoins ; les vues lisent `camera`.
     let controls: any ComposerCaptureCameraProviding
     /// Le pont toucher → capteur de l'aperçu partagé (#9295) : l'aperçu s'y
-    /// accroche, le double toucher du chrome le lit.
+    /// accroche, le toucher du chrome le lit.
     let focusPoints = CameraPreviewFocusPoints()
 
     /// L'étape du viseur — la loi est dans `ComposerSceneCamera`.
@@ -482,9 +482,9 @@ final class ComposerCaptureSession: ObservableObject {
 
     // MARK: - La mise au point (#9295)
 
-    /// **Le double toucher vise ce point du repère global.** `false` ⇒ rien
-    /// n'a été visé (pas d'image, toucher hors de l'aperçu) : l'anneau ne
-    /// paraît pas pour une mise au point qui n'a pas eu lieu.
+    /// **Le toucher vise ce point du repère global.** `false` ⇒ rien n'a été
+    /// visé (pas d'image, toucher hors de l'aperçu) : l'anneau ne paraît pas
+    /// pour une mise au point qui n'a pas eu lieu.
     @discardableResult
     func focus(atGlobalPoint point: CGPoint) -> Bool {
         guard let local = focusPoints.localPoint(fromGlobalPoint: point) else { return false }

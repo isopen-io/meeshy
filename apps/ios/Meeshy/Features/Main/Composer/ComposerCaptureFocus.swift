@@ -1,14 +1,14 @@
 import CoreGraphics
 import Foundation
 
-/// **La mise au point du viseur : automatique, et là où l'on touche deux fois**
-/// (#9295, directive porteur 2026-10-04).
+/// **La mise au point du viseur : automatique, et là où l'on touche**
+/// (#9295, directive porteur 2026-10-04 ; le toucher SIMPLE depuis #9464).
 ///
 /// > « L'appareil doit avoir l'auto mise au point et, lorsqu'on double tap à une
 /// > position, elle fait la mise au point à cet emplacement. »
 ///
 /// À l'ouverture, l'objectif suit le sujet tout seul (mise au point et
-/// exposition CONTINUES). Le double toucher fixe les deux sur le point touché,
+/// exposition CONTINUES). Le toucher fixe les deux sur le point touché,
 /// UNE fois, puis surveille la scène : dès qu'elle change (l'auteur bouge,
 /// le sujet sort), l'objectif repart en continu au centre — comme l'appareil
 /// photo du système, et sans que l'auteur ait rien à défaire.
@@ -54,14 +54,14 @@ nonisolated enum ComposerCaptureFocus {
     /// Le centre du capteur — là où repart une mise au point continue.
     static let center = CGPoint(x: 0.5, y: 0.5)
 
-    /// **À l'ouverture, et chaque fois que la scène change après un double toucher.**
+    /// **À l'ouverture, et chaque fois que la scène change après un toucher.**
     static func continuous(_ objectif: Capabilities) -> Plan {
         Plan(focus: objectif.continuousAutoFocus ? .continuous : nil,
              exposure: objectif.continuousAutoExposure ? .continuous : nil,
              watchesSubjectArea: false)
     }
 
-    /// **Le double toucher** : mise au point ET exposition sur le point touché.
+    /// **Le toucher** : mise au point ET exposition sur le point touché.
     /// Un objectif qui ne sait pas viser un point garde son réglage continu —
     /// le geste n'a alors aucun effet plutôt qu'un effet faux.
     static func focusing(at devicePoint: CGPoint, _ objectif: Capabilities, smooth: Bool = false) -> Plan {

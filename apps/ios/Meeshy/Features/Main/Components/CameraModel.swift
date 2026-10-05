@@ -81,7 +81,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     /// La dernière trame de l'ancien objectif, floutée, qui couvre la bascule.
     @Published private(set) var switchCover: CGImage?
     private var recordingTimer: Timer?
-    /// Le guet de la scène après un double toucher (#9295) — `nil` hors session.
+    /// Le guet de la scène après un toucher (#9295) — `nil` hors session.
     /// `nonisolated(unsafe)` : la deinit, non isolée, le retire ; il n'est
     /// écrit que sur le fil principal.
     nonisolated(unsafe) private var subjectAreaObserver: NSObjectProtocol?
@@ -462,10 +462,10 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
 
     // MARK: - La mise au point (#9295)
 
-    /// **Le double toucher vise ce point du capteur** — mise au point et
-    /// exposition, une fois ; la scène qui change rend l'objectif au continu.
-    /// `devicePoint` est en coordonnées capteur (`0...1`), converties par la
-    /// couche d'aperçu (`CameraPreviewFocusPoints`).
+    /// **Le toucher vise ce point du capteur** — mise au point et exposition,
+    /// une fois ; la scène qui change rend l'objectif au continu. `devicePoint`
+    /// est en coordonnées capteur (`0...1`), converties selon l'image affichée
+    /// (`ComposerCaptureFocusGeometry`).
     /// `false` ⇒ l'objectif ne règle ni la netteté ni l'exposition sur un point :
     /// rien n'a été visé, et l'écran ne doit pas le prétendre (#9464).
     @discardableResult
