@@ -105,6 +105,18 @@ final class StoryVideoAdjustmentsRenderTests: XCTestCase {
                       "Aucun CIContext n'est créé par trame.")
     }
 
+    func test_lAfficheDeLaVignette_porteLesReglages() throws {
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1
+        let affiche = UIGraphicsImageRenderer(size: CGSize(width: 8, height: 8), format: format).image { ctx in
+            UIColor(white: 0.4, alpha: 1).setFill()
+            ctx.fill(CGRect(x: 0, y: 0, width: 8, height: 8))
+        }
+        XCTAssertTrue(StoryVideoAdjustmentsProcessor.poster(affiche, for: video(nil)) === affiche)
+        let reglee = StoryVideoAdjustmentsProcessor.poster(affiche, for: video(ImageAdjustments(exposure: 1.5)))
+        XCTAssertGreaterThan(try luminance(reglee.cgImage), try luminance(affiche.cgImage) + 20)
+    }
+
     // MARK: - L'export décode des trames RÉGLÉES
 
     func test_lExport_peintLesReglagesDansLaTrameDecodee() async throws {
