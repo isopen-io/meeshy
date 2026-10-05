@@ -1553,7 +1553,7 @@ struct ConversationView: View {
                 onRequestTranslation: { messageId, targetLang in
                     MessageSocketManager.shared.requestTranslation(messageId: messageId, targetLanguage: targetLang)
                 }
-            )
+            ).equatable()
             // Le flux traverse la zone status bar / Dynamic Island jusqu'au bord
             // haut de l'écran (retour user 2026-08-12) : sans ça, SwiftUI pose le
             // représentable DANS la safe area, la liste s'arrête sous l'îlot et

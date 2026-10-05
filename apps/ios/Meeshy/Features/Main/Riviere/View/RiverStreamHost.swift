@@ -44,10 +44,12 @@ import MeeshyUI
 struct RiverStreamHost: View {
     let geometry: RiverLaneResolver.RiverGeometry
     /// Contenu résolu (texte, nom, heure — le Prisme déjà appliqué par
-    /// l'appelant) pour CHAQUE bulle de `geometry.bubbles`. Une bulle sans
-    /// entrée correspondante reste une cellule vide — jamais un crash, la
-    /// géométrie et le contenu peuvent transiter par des passes différentes.
-    let contents: [RiverBubbleContent]
+    /// l'appelant) pour CHAQUE bulle de `geometry.bubbles`, DÉJÀ indexé par
+    /// rang et par message (#3946) : la grille le lit à chaque rang et chaque
+    /// couloir réalisés, jamais elle ne le réindexe. Une bulle sans entrée
+    /// correspondante reste une cellule vide — jamais un crash, la géométrie
+    /// et le contenu peuvent transiter par des passes différentes.
+    let rendering: RiverRendering
     /// Largeur de couloir — défaut `RiverMetrics.Lane.widthReference`,
     /// abaissable par l'appelant sur un écran étroit (§7ter, jamais une
     /// troncature de texte).
@@ -149,13 +151,9 @@ struct RiverStreamHost: View {
         RiverColumnLayout(laneWidth: laneWidth, gutter: RiverMetrics.Lane.gutter, laneCount: laneCount)
     }
 
-    private var contentByMessageId: [String: RiverBubbleContent] {
-        Dictionary(uniqueKeysWithValues: contents.map { ($0.bubble.messageId, $0) })
-    }
+    private var contentByMessageId: [String: RiverBubbleContent] { rendering.contentByMessageId }
 
-    private var bubbleByRank: [Int: RiverLaneResolver.RiverBubble] {
-        Dictionary(uniqueKeysWithValues: geometry.bubbles.map { ($0.rank, $0) })
-    }
+    private var bubbleByRank: [Int: RiverLaneResolver.RiverBubble] { rendering.bubbleByRank }
 
     /// La frappe porte la couleur de SA VOIX — la MÊME loi que la bande des
     /// couloirs (`RiverLaneHeaderStrip` : `DynamicColorGenerator.colorForName`
@@ -213,12 +211,7 @@ struct RiverStreamHost: View {
 
     /// R-3 — l'échelle du temps, RÉSOLUE par la règle pure depuis ce que la
     /// loi sert (rang + instant) ; `nil` quand il n'y a rien à graduer.
-    private var timeScale: RiverTimeScale? {
-        RiverTimeScale.resolve(
-            ranks: geometry.bubbles.map { RiverTimeScale.RankTime(rank: $0.rank, timeMs: $0.createdAtMs) },
-            calendar: .current
-        )
-    }
+    private var timeScale: RiverTimeScale? { rendering.timeScale }
 
     private var laneHeaders: [RiverLaneResolver.RiverLaneHeader] {
         RiverLaneResolver.resolveRiverLaneHeaders(
