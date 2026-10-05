@@ -46,6 +46,8 @@ export const GAME_ROUTES = {
   userShowcase: '/users/:userId/game/showcase',
   /** Passer en Prestige au niveau 100. POST. */
   prestige: '/me/game/prestige',
+  /** « Jeu masqué » et l'opposition à la ligue Amis : deux interrupteurs. PUT. */
+  privacy: '/me/game/privacy',
 } as const;
 
 export type GameRouteKey = keyof typeof GAME_ROUTES;
@@ -65,6 +67,7 @@ export const GAME_ROUTE_METHODS = {
   showcaseVisibility: 'PUT',
   userShowcase: 'GET',
   prestige: 'POST',
+  privacy: 'PUT',
 } as const satisfies Partial<Record<GameRouteKey, 'GET' | 'POST' | 'PUT'>>;
 
 export const gameMissionRerollPath = (missionId: string): string =>

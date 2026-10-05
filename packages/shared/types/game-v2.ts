@@ -285,6 +285,13 @@ export const userShowcaseResponseSchema = z.object({
   order: z.array(trophyKeySchema).max(500),
 });
 
+// --- « Jeu masqué » et l'opposition à la ligue Amis ---
+
+export const gamePrivacyRequestSchema = writeRequest
+  .extend({ gameHidden: z.boolean().optional(), friendsLeagueOptOut: z.boolean().optional() })
+  .refine((body) => body.gameHidden !== undefined || body.friendsLeagueOptOut !== undefined, { message: 'at least one switch' });
+export const gamePrivacyResponseSchema = z.object({ gameHidden: z.boolean(), friendsLeagueOptOut: z.boolean() });
+
 // --- Le Prestige ---
 
 export const prestigeRequestSchema = writeRequest;
@@ -326,5 +333,7 @@ export type ShowcaseOrderResponse = z.infer<typeof showcaseOrderResponseSchema>;
 export type ShowcaseVisibilityRequest = z.infer<typeof showcaseVisibilityRequestSchema>;
 export type ShowcaseVisibilityResponse = z.infer<typeof showcaseVisibilityResponseSchema>;
 export type UserShowcaseResponse = z.infer<typeof userShowcaseResponseSchema>;
+export type GamePrivacyRequest = z.infer<typeof gamePrivacyRequestSchema>;
+export type GamePrivacyResponse = z.infer<typeof gamePrivacyResponseSchema>;
 export type PrestigeRequest = z.infer<typeof prestigeRequestSchema>;
 export type PrestigeResponse = z.infer<typeof prestigeResponseSchema>;

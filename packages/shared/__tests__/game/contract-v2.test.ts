@@ -17,6 +17,7 @@ import {
 import {
   duoInviteRequestSchema,
   gameBlockSchema,
+  gamePrivacyRequestSchema,
   leagueConsentRequestSchema,
   leagueFriendsResponseSchema,
   leaguePseudonymRequestSchema,
@@ -234,7 +235,7 @@ describe('le duo, la saison, les trophées, l\'Atlas et le Prestige dans le bloc
 });
 
 describe('les routes de la vague 2', () => {
-  it('nomment treize chemins publics nouveaux, sans toucher aux sept actuels', () => {
+  it('nomment quatorze chemins publics nouveaux, sans toucher aux sept actuels', () => {
     expect(GAME_ROUTES).toMatchObject({
       engagement: '/me/engagement',
       mint: '/me/meesh/mint',
@@ -256,8 +257,9 @@ describe('les routes de la vague 2', () => {
       showcaseVisibility: '/me/game/visibility',
       userShowcase: '/users/:userId/game/showcase',
       prestige: '/me/game/prestige',
+      privacy: '/me/game/privacy',
     });
-    expect(Object.keys(GAME_ROUTES)).toHaveLength(20);
+    expect(Object.keys(GAME_ROUTES)).toHaveLength(21);
   });
 
   it('dit la méthode de chaque route nouvelle', () => {
@@ -275,6 +277,7 @@ describe('les routes de la vague 2', () => {
       showcaseVisibility: 'PUT',
       userShowcase: 'GET',
       prestige: 'POST',
+      privacy: 'PUT',
     });
   });
 
@@ -386,5 +389,15 @@ describe('le bloc reste du type GameBlock', () => {
   it('accepte les extensions comme des champs optionnels', () => {
     const block: GameBlock = buildGameBlock(baseFacts());
     expect(block.league).toBeUndefined();
+  });
+});
+
+describe('« Jeu masqué » et l’opposition à la ligue Amis', () => {
+  const requestId = 'privacy-0001';
+
+  it('exige au moins un interrupteur', () => {
+    expect(gamePrivacyRequestSchema.safeParse({ requestId }).success).toBe(false);
+    expect(gamePrivacyRequestSchema.safeParse({ requestId, gameHidden: true }).success).toBe(true);
+    expect(gamePrivacyRequestSchema.safeParse({ requestId, friendsLeagueOptOut: false }).success).toBe(true);
   });
 });
