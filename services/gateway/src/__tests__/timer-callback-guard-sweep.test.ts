@@ -7,8 +7,10 @@
  * d'événements. Une levée synchrone y devient une exception non interceptée,
  * une promesse rendue et abandonnée — même sans `void`, donc hors de portée de
  * l'autre cliquet — y devient un rejet non géré. Les deux terminent la
- * passerelle. #9474 en avait corrigé UN exemplaire, la purge GeoIP ; le
- * balayage en a relevé soixante-quatre autres.
+ * passerelle. #9474 en avait corrigé UN exemplaire, la purge GeoIP, par un
+ * `try/catch` dans son corps ; le balayage a relevé soixante-deux rappels bruts
+ * dans quarante-six fichiers, celui-là compris — la garde d'un corps est une
+ * propriété du collaborateur, pas du site qui arme la minuterie.
  *
  * **Quand ce témoin tombe** : un site NEUF vient d'entrer. La réparation est
  * `guardedInterval` / `guardedTimeout` (`src/utils/guarded-timer.ts`), jamais
