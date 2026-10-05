@@ -209,14 +209,24 @@ export function fakeGameDb(): FakeGameDb {
   const models = { user, gloryLedger, meeshLedger, dailyMission, gameDay, engagementCounter, engagementQuota, engagementMilestone, participant, message };
 
   const client = { ...models };
+  // Les transactions se SÉRIALISENT : Mongo n'en laisse pas deux écrire le même
+  // document, la perdante est annulée seule. Sans verrou, l'annulation d'une
+  // transaction (restauration de son instantané) effacerait l'écriture d'une
+  // autre qui s'est entrelacée — un défaut du faux, pas du code testé.
+  let tail: Promise<unknown> = Promise.resolve();
   const $transaction = async <T>(work: (tx: typeof client) => Promise<T>): Promise<T> => {
-    const saved = Object.entries(models).map(([name, model]) => [name, model.snapshot()] as const);
-    try {
-      return await work(client);
-    } catch (error) {
-      for (const [name, rows] of saved) models[name as keyof typeof models].restore(rows);
-      throw error;
-    }
+    const run = async (): Promise<T> => {
+      const saved = Object.entries(models).map(([name, model]) => [name, model.snapshot()] as const);
+      try {
+        return await work(client);
+      } catch (error) {
+        for (const [name, rows] of saved) models[name as keyof typeof models].restore(rows);
+        throw error;
+      }
+    };
+    const result = tail.then(run, run);
+    tail = result.catch(() => undefined);
+    return result;
   };
   const prisma = { ...client, $transaction } as unknown as PrismaClient;
   return { prisma, ...models };
