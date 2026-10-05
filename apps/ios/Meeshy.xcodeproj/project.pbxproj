@@ -1379,6 +1379,7 @@
 		7F9497DD95FA11660A07F797 /* IslandGeometryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A4648C775EBFA0FB986F4B0 /* IslandGeometryTests.swift */; };
 		7FD7A2A1A7C46A6B1BC4C4D6 /* MockSocialSocket.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA1EBE24B2AF8BE6A57D88D6 /* MockSocialSocket.swift */; };
 		7FF8AFA89C52D2292A713B59 /* ComposerFormatSelectionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6AC7A393D0C6F2C60BE76DBC /* ComposerFormatSelectionTests.swift */; };
+		800476B547A14BF53EB01A73 /* ComposerFramePacing.swift in Sources */ = {isa = PBXBuildFile; fileRef = D05FFF8AA1487DF80AEA28B6 /* ComposerFramePacing.swift */; };
 		8008E9B82AE93B660364D7A1 /* FeedPostCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36B1A5A4D0A6D08BFDB31138 /* FeedPostCard.swift */; };
 		801A35224C571CBED9FEF8AC /* HalfOpenMonitorState.swift in Sources */ = {isa = PBXBuildFile; fileRef = D06AF57CEFBE8BA70850C5E6 /* HalfOpenMonitorState.swift */; };
 		804C07E68A1603B2F501A49C /* ComposerAudienceSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC4F72058B8853226CC3FD7F /* ComposerAudienceSheet.swift */; };
@@ -5138,6 +5139,7 @@
 		D02BF48A4ABB5565E6E4AD2A /* MessageReactionsDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageReactionsDetailView.swift; sourceTree = "<group>"; };
 		D02D1FB29097A44FDC1B2D48 /* EmailVerificationGateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmailVerificationGateTests.swift; sourceTree = "<group>"; };
 		D04B3E337CE9827D1E706EFF /* LentilleFocusCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LentilleFocusCard.swift; sourceTree = "<group>"; };
+		D05FFF8AA1487DF80AEA28B6 /* ComposerFramePacing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerFramePacing.swift; sourceTree = "<group>"; };
 		D06AF57CEFBE8BA70850C5E6 /* HalfOpenMonitorState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HalfOpenMonitorState.swift; sourceTree = "<group>"; };
 		D0973D2CB2545B93E01325E5 /* MockAttachmentTranslationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockAttachmentTranslationService.swift; sourceTree = "<group>"; };
 		D09C6AA96D19B4A30298C70D /* CallFrameCatalogue+Feerique.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CallFrameCatalogue+Feerique.swift"; sourceTree = "<group>"; };
@@ -6318,6 +6320,7 @@
 				E8C81FAABE36B1D128A7D8FE /* ComposerForegroundSound.swift */,
 				2C116208C11B74444A956960 /* ComposerFormatAvailability.swift */,
 				A94C004993BA677CEEEEE731 /* ComposerFrameBand.swift */,
+				D05FFF8AA1487DF80AEA28B6 /* ComposerFramePacing.swift */,
 				CB6212142085617D346842D0 /* ComposerFraming.swift */,
 				6044B15CA8B114464BC07332 /* ComposerHashtags.swift */,
 				D74D237901E7B1AE432268B9 /* ComposerHashtagSheet.swift */,
@@ -10273,6 +10276,7 @@
 				42F0F553E445D2824414C7DD /* ComposerFormatAvailability.swift in Sources */,
 				5223121C6B1A3A0CF4DE7D26 /* ComposerFormatBar.swift in Sources */,
 				78620D6F694DF015BDF3F6F9 /* ComposerFrameBand.swift in Sources */,
+				800476B547A14BF53EB01A73 /* ComposerFramePacing.swift in Sources */,
 				D3A0DFDB1B3EFF8B85BFF3A0 /* ComposerFraming.swift in Sources */,
 				D1786A31883BD3EB24FCF2A0 /* ComposerHashtagSheet.swift in Sources */,
 				246651068F4718350DED0A6D /* ComposerHashtags.swift in Sources */,

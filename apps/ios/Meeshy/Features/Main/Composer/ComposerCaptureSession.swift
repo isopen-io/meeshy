@@ -49,7 +49,7 @@ final class ComposerCaptureSession: ObservableObject {
     /// **Le look choisi EN DIRECT** (#9329) — un filtre et un cadre de l'appel.
     /// Le guet des trames ne s'arme qu'avec lui : sans look, aucune trame retenue.
     @Published var look = ComposerPhotoLook() {
-        didSet { camera.liveFeed.isActive = ComposerLiveLookRule.rendersLive(look) }
+        didSet { refreshFeed() }
     }
     /// Le sélecteur d'effets est déplié.
     @Published var looksOpen = false
@@ -168,6 +168,7 @@ final class ComposerCaptureSession: ObservableObject {
 
     func applyThermal(_ state: ProcessInfo.ThermalState) {
         thermalBudget = ComposerThermalBudget.budget(for: state)
+        refreshFeed()
     }
 
     func discardSegments() {

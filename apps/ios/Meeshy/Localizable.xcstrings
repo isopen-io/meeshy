@@ -241597,6 +241597,53 @@
           }
         }
       }
+    },
+    "composer.capture.thermal.notice": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "معاينة مبسّطة: الجهاز ساخن. تحتفظ اللقطة بالتأثير كاملًا."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vereinfachte Vorschau: Das Gerät wird warm. Die Aufnahme behält den vollen Effekt."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Simplified preview: your device is warm. The capture keeps the full effect."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vista previa simplificada: el dispositivo se calienta. La captura conserva todo el efecto."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aperçu simplifié : l'appareil chauffe. La prise garde tout l'effet."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anteprima semplificata: il dispositivo si scalda. Lo scatto conserva tutto l'effetto."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prévia simplificada: o aparelho está quente. A captura mantém todo o efeito."
+          }
+        }
+      }
     }
   },
   "version": "1.1"

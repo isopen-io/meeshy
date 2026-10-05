@@ -33,16 +33,31 @@ struct ComposerCapturePreview: View {
                 GeometryReader { exterieur in
                     let toile = ComposerCaptureCanvas.fitted(in: CGRect(origin: .zero, size: exterieur.size))
                     ZStack {
-                        CameraPreviewLayer(session: session.camera.session, focusPoints: session.focusPoints)
+                        CameraPreviewLayer(session: session.camera.session, focusPoints: session.focusPoints,
+                                           mirrorsFrames: !session.paintsWithMetal)
                             .background(GeometryReader { proxy in
                                 Color.clear.adaptiveOnChange(of: proxy.frame(in: .global), initial: true) { _, cadre in
                                     session.focusPoints.previewFrame = cadre
                                 }
                             })
-                        if ComposerLiveLookRule.rendersLive(session.look) {
+                        if session.paintsWithMetal {
                             ComposerLiveLookSurface(look: session.look, person: session.lookPerson,
                                                     date: session.lookDate, framing: .identity,
-                                                    source: session.camera.liveFeed)
+                                                    source: session.camera.liveFeed,
+                                                    fps: session.thermalBudget.previewFPS,
+                                                    surfaceScale: session.thermalBudget.surfaceScale)
+                        }
+                        if ComposerCaptureSurfaceRule.showsThermalNotice(look: session.look, budget: session.thermalBudget) {
+                            VStack {
+                                Text(ComposerCaptureCopy.thermalNotice)
+                                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
+                                    .foregroundStyle(.white)
+                                    .padding(.horizontal, MeeshySpacing.md)
+                                    .padding(.vertical, MeeshySpacing.sm)
+                                    .adaptiveLiquidGlass(in: Capsule())
+                                    .padding(.top, MeeshySpacing.xl * 2)
+                                Spacer()
+                            }
                         }
                     }
                     .frame(width: toile.width, height: toile.height)
