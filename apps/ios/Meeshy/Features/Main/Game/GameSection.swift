@@ -51,6 +51,7 @@ struct GameSection: View {
                 minting: viewModel.isMinting, error: viewModel.mintError,
                 celebration: viewModel.celebration, onMint: { Task { await viewModel.mint() } }
             )
+            GameBadgeShelfView(items: viewModel.progress.map(GameBadges.items(for:)) ?? [])
             GameFlamePanelView(
                 game: game, online: viewModel.isOnline, buyingFreeze: viewModel.pending.freeze,
                 relighting: viewModel.pending.relight, errors: viewModel.gameErrors,

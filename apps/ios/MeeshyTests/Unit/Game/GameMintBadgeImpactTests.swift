@@ -1,6 +1,7 @@
 import XCTest
 @testable import Meeshy
 import MeeshySDK
+import MeeshyUI
 
 /// Ce qu'une frappe éteint (#9383, #9379) — le plan de débit de la loi, compté en badges
 /// et en actions à refaire. « Inconnu » ne se dit jamais « aucun ».
@@ -66,5 +67,51 @@ final class GameMintBadgeImpactTests: XCTestCase {
         let counters = [counter("content.text_message", count: 3, points: 2_442)]
         let impact = GameMintBadgeImpact.impact(counters: counters, price: 1_221)
         XCTAssertEqual(impact, MintBadgeImpact(lost: 0, regain: 0), "3 − 2 = 1 : le palier 1 tient encore")
+    }
+}
+
+/// L'étagère des badges d'accumulation (#9380) : ce qui se montre, dans quelle matière,
+/// et si le badge est allumé ou réduit à son empreinte.
+final class GameBadgeShelfTests: XCTestCase {
+
+    private func progress(counters: [APIEngagementProgress.Counter], served: [APIEngagementProgress.Milestone] = []) -> EngagementProgress {
+        EngagementProgressResolver.resolve(APIEngagementProgress(
+            counters: counters, milestones: served,
+            streak: .init(currentStreakDays: 0, longestStreakDays: 0), level: .init(engagementScore: 0)
+        ))
+    }
+
+    func test_theMaterialSaysTheHeightOfTheTier() {
+        XCTAssertEqual(GameBadges.material(forThreshold: 1), .copper)
+        XCTAssertEqual(GameBadges.material(forThreshold: 10), .bronze)
+        XCTAssertEqual(GameBadges.material(forThreshold: 50), .silver)
+        XCTAssertEqual(GameBadges.material(forThreshold: 100), .gold)
+        XCTAssertEqual(GameBadges.material(forThreshold: 500), .platinum)
+        XCTAssertEqual(GameBadges.material(forThreshold: 1_000), .obsidian)
+        XCTAssertEqual(GameBadges.material(forThreshold: 5_000), .prism)
+    }
+
+    func test_onlyEarnedTiersAreShown_eachLitWhileTheCounterHoldsThem() {
+        let items = GameBadges.items(for: progress(counters: [.init(axisKey: "content.text_message", count: 60)]))
+        XCTAssertEqual(items.map(\.threshold), [1, 10, 50])
+        XCTAssertEqual(items.map(\.material), [.copper, .bronze, .silver])
+        XCTAssertTrue(items.allSatisfy(\.lit))
+        XCTAssertTrue(items.allSatisfy { $0.missing == 0 })
+    }
+
+    func test_aTierTheCounterNoLongerHolds_isAnImprintThatSaysWhatIsMissing() {
+        let served = APIEngagementProgress.Milestone(
+            milestoneType: .badge, milestoneKey: EngagementCatalog.badgeMilestoneKey(.textMessage, threshold: 50),
+            reachedAt: "2026-09-01T10:00:00.000Z"
+        )
+        let items = GameBadges.items(for: progress(counters: [.init(axisKey: "content.text_message", count: 13)], served: [served]))
+        let silver = items.first { $0.threshold == 50 }
+        XCTAssertEqual(silver?.lit, false)
+        XCTAssertEqual(silver?.missing, 37)
+        XCTAssertEqual(items.first { $0.threshold == 10 }?.lit, true)
+    }
+
+    func test_nothingEarned_nothingShown() {
+        XCTAssertTrue(GameBadges.items(for: progress(counters: [])).isEmpty)
     }
 }

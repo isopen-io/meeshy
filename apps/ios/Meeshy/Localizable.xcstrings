@@ -225242,6 +225242,53 @@
         }
       }
     },
+    "game.badge.a11y.imprint": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مُطفأ، بقي %@ لإعادة إشعاله"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erloschen, noch %@, um es neu zu entzünden"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dimmed, %@ more to relight it"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apagado, faltan %@ para reactivarlo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Éteint, encore %@ pour le rallumer"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Spento, ancora %@ per riaccenderlo"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apagado, mais %@ para reacendê-lo"
+          }
+        }
+      }
+    },
     "game.chest.reward.points": {
       "extractionState": "manual",
       "localizations": {
