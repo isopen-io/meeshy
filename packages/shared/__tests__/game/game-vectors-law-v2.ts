@@ -34,7 +34,9 @@ import { chooseGuideMomentAny, guideMomentV2, type GuideEventV2 } from '../../ut
 import type { GuideEvent } from '../../utils/game/guide.js';
 import {
   canSeeLeagueMember,
-  defaultLeaguePseudonym,
+  checkLeaguePseudonym,
+  leaguePseudonymFromDraw,
+  leagueSnapshotDay,
   friendsLeagueRanking,
   isLeagueWeekClosed,
   isValidLeaguePseudonym,
@@ -55,7 +57,14 @@ import {
 import type { MissionSignal } from '../../utils/game/missions.js';
 import { photoMomentId, photoMomentOfGuideEvent } from '../../utils/game/photo-moments.js';
 import { prestigeTransition } from '../../utils/game/prestige.js';
-import { achievementGloryAtEarning, measureRarity, mythicUserIds, rarityFromShare, RARITY_BORDERS } from '../../utils/game/rarity.js';
+import {
+  achievementGloryAtEarning,
+  measureRarity,
+  mythicUserIds,
+  rarityFromShare,
+  rarityShareDisplayable,
+  RARITY_BORDERS,
+} from '../../utils/game/rarity.js';
 import {
   canBuySeal,
   claimSeasonStep,
@@ -72,7 +81,9 @@ import {
 } from '../../utils/game/season.js';
 import {
   canViewShowcase,
+  capShowcaseVisibility,
   flameTrophiesEarned,
+  visitorAwardedMonth,
   orderShowcase,
   parseTrophyKey,
   trophyKey,
@@ -87,7 +98,9 @@ export type GameVectorInputV2 =
   | { readonly law: 'league-week-points'; readonly weekKey: string; readonly gains: readonly LeagueGain[] }
   | { readonly law: 'league-access'; readonly levelRecord: number; readonly adultVerified: boolean; readonly consented: boolean }
   | { readonly law: 'league-pseudonym'; readonly value: string }
-  | { readonly law: 'league-default-pseudonym'; readonly userId: string }
+  | { readonly law: 'league-pseudonym-draw'; readonly draw: number }
+  | { readonly law: 'league-pseudonym-check'; readonly value: string; readonly forbidden: readonly string[] }
+  | { readonly law: 'league-snapshot'; readonly dayKey: string; readonly minuteOfDay: number }
   | { readonly law: 'league-groups'; readonly weekKey: string; readonly league: LeagueKey; readonly entrants: readonly LeagueEntrant[] }
   | { readonly law: 'league-settle'; readonly groupId: string; readonly league: LeagueKey; readonly members: readonly LeagueMemberPoints[]; readonly userId: string }
   | {
@@ -132,10 +145,13 @@ export type GameVectorInputV2 =
   | { readonly law: 'trophy-flame'; readonly previousLongest: number; readonly longest: number }
   | { readonly law: 'showcase-order'; readonly owned: readonly TrophyRecord[]; readonly order: readonly string[] }
   | { readonly law: 'showcase-view'; readonly visibility: ShowcaseVisibility; readonly viewer: ShowcaseViewer }
+  | { readonly law: 'showcase-cap'; readonly visibility: ShowcaseVisibility; readonly hideProfileFromSearch: boolean; readonly gameHidden: boolean }
+  | { readonly law: 'trophy-month'; readonly awardedAt: string }
   | { readonly law: 'atlas'; readonly events: readonly (AtlasEvent & { readonly dayKey: string })[] }
   | { readonly law: 'atlas-language'; readonly code: string | null }
   | { readonly law: 'prestige'; readonly score: number; readonly prestige: number }
   | { readonly law: 'rarity'; readonly holders: number; readonly population: number }
+  | { readonly law: 'rarity-display'; readonly holders: number; readonly population: number }
   | { readonly law: 'mythic'; readonly candidates: readonly { readonly userId: string; readonly glory: number }[] }
   | { readonly law: 'badge-tier'; readonly count: number; readonly threshold: number }
   | { readonly law: 'badge-served'; readonly knowsExtendedTiers: boolean }
@@ -148,7 +164,9 @@ export const GAME_VECTOR_LAWS_V2 = [
   'league-week-points',
   'league-access',
   'league-pseudonym',
-  'league-default-pseudonym',
+  'league-pseudonym-draw',
+  'league-pseudonym-check',
+  'league-snapshot',
   'league-groups',
   'league-settle',
   'league-friends',
@@ -171,10 +189,13 @@ export const GAME_VECTOR_LAWS_V2 = [
   'trophy-flame',
   'showcase-order',
   'showcase-view',
+  'showcase-cap',
+  'trophy-month',
   'atlas',
   'atlas-language',
   'prestige',
   'rarity',
+  'rarity-display',
   'mythic',
   'badge-tier',
   'badge-served',
@@ -218,8 +239,12 @@ export function evaluateGameVectorV2(input: GameVectorInputV2): unknown {
       return leagueAccess(input);
     case 'league-pseudonym':
       return { valid: isValidLeaguePseudonym(input.value) };
-    case 'league-default-pseudonym':
-      return { pseudonym: defaultLeaguePseudonym(input.userId) };
+    case 'league-pseudonym-draw':
+      return { pseudonym: leaguePseudonymFromDraw(input.draw) };
+    case 'league-pseudonym-check':
+      return checkLeaguePseudonym(input);
+    case 'league-snapshot':
+      return { snapshotDay: leagueSnapshotDay(input) };
     case 'league-groups':
       return {
         groups: partitionLeagueGroups(input).map((g) => ({
@@ -289,6 +314,10 @@ export function evaluateGameVectorV2(input: GameVectorInputV2): unknown {
       return { order: orderShowcase(input) };
     case 'showcase-view':
       return { visible: canViewShowcase(input) };
+    case 'showcase-cap':
+      return { visibility: capShowcaseVisibility(input) };
+    case 'trophy-month':
+      return { month: visitorAwardedMonth(input.awardedAt) };
     case 'atlas':
       return atlasView(foldAtlas({ state: {}, events: input.events }));
     case 'atlas-language':
@@ -304,6 +333,8 @@ export function evaluateGameVectorV2(input: GameVectorInputV2): unknown {
         glory: achievementGloryAtEarning(measured),
       };
     }
+    case 'rarity-display':
+      return { displayable: rarityShareDisplayable(input) };
     case 'mythic':
       return { ids: mythicUserIds(input.candidates) };
     case 'badge-tier':
@@ -376,9 +407,36 @@ export function buildGameVectorsV2() {
     vector(`pseudonyme « ${value} »`, { law: 'league-pseudonym', value }),
   );
 
-  const defaultPseudonyms = ['u1', '6502f1a2b3c4d5e6f7a8b9c0', '', 'amélie-été'].map((userId) =>
-    vector(`pseudonyme par défaut de « ${userId} »`, { law: 'league-default-pseudonym', userId }),
+  const pseudonymDraws = [0, 1, 35, 36, 1_679_615, 1_679_616, 123_456_789, 4_294_967_295, 2 ** 40, -5, Number.NaN].map((draw) =>
+    vector(`pseudonyme tiré au sort ${draw}`, { law: 'league-pseudonym-draw', draw }),
   );
+
+  const pseudonymChecks = [
+    ['Zephyr', ['amelie.durand', 'Amélie', 'Durand']],
+    ['jean@mail.fr', []],
+    ['Meeshy', []],
+    ['MEE', []],
+    ['Adm.in', []],
+    ['Meeshy-Team', []],
+    ['xxMeeshyxx', []],
+    ['meeting', []],
+    ['Admiral', []],
+    ['Mod-erator', []],
+    ['amelie.durand', ['amelie.durand']],
+    ['DURAND-7', ['Durand']],
+    ['Zéphyr', ['zephyr']],
+    ['Zephyr', ['Li', 'Zé']],
+  ].map(([value, forbidden]) =>
+    vector(`filtre du pseudonyme « ${value} »`, { law: 'league-pseudonym-check', value: value as string, forbidden: forbidden as string[] }),
+  );
+
+  const snapshots = [
+    ['2026-10-14', 239],
+    ['2026-10-14', 240],
+    ['2026-10-14', 1439],
+    ['2026-10-12', 10],
+    ['2027-01-01', 0],
+  ].map(([dayKey, minuteOfDay]) => vector(`instantané de ligue du ${dayKey} à ${minuteOfDay} min`, { law: 'league-snapshot', dayKey: dayKey as string, minuteOfDay: minuteOfDay as number }));
 
   const groups = [
     [1, 'quartz'],
@@ -557,6 +615,24 @@ export function buildGameVectorsV2() {
     (['self', 'friend', 'other', 'admin'] as const).map((viewer) => vector(`vitrine ${visibility} vue par ${viewer}`, { law: 'showcase-view', visibility: visibility as ShowcaseVisibility, viewer })),
   );
 
+  const caps = (['everyone', 'friends', 'me', 'public'] as const).flatMap((visibility) =>
+    [
+      [false, false],
+      [true, false],
+      [false, true],
+      [true, true],
+    ].map(([hideProfileFromSearch, gameHidden]) =>
+      vector(`plafond de la vitrine ${visibility}, caché ${hideProfileFromSearch}, jeu masqué ${gameHidden}`, {
+        law: 'showcase-cap',
+        visibility: visibility as ShowcaseVisibility,
+        hideProfileFromSearch: hideProfileFromSearch as boolean,
+        gameHidden: gameHidden as boolean,
+      }),
+    ),
+  );
+
+  const months = ['2026-11-01T08:42:17.000Z', '2026-12-31T23:59:59.999Z', 'hier', ''].map((awardedAt) => vector(`mois d'un trophée « ${awardedAt} »`, { law: 'trophy-month', awardedAt }));
+
   const atlases = [
     [{ kind: 'sent', language: 'ja', dayKey: '2026-10-12' }, { kind: 'received', language: 'ja', dayKey: '2026-10-13' }],
     [{ kind: 'received', language: 'sw', dayKey: '2026-10-12' }, { kind: 'sent', language: 'sw', dayKey: '2026-10-12' }, { kind: 'received', language: 'sw', dayKey: '2026-11-01' }],
@@ -593,6 +669,13 @@ export function buildGameVectorsV2() {
     [1, 999],
     [3, 1500],
   ].map(([holders, population]) => vector(`rareté de ${holders} détenteurs sur ${population}`, { law: 'rarity', holders: holders!, population: population! }));
+
+  const rarityDisplays = [
+    [19, 50_000],
+    [20, 50_000],
+    [20, 999],
+    [500, 1000],
+  ].map(([holders, population]) => vector(`affichage de la rareté, ${holders} détenteurs sur ${population}`, { law: 'rarity-display', holders: holders!, population: population! }));
 
   const mythics = [
     [],
@@ -646,7 +729,9 @@ export function buildGameVectorsV2() {
     ...weekPoints,
     ...accesses,
     ...pseudonyms,
-    ...defaultPseudonyms,
+    ...pseudonymDraws,
+    ...pseudonymChecks,
+    ...snapshots,
     ...groups,
     ...settles,
     ...friends,
@@ -669,10 +754,13 @@ export function buildGameVectorsV2() {
     ...trophyFlames,
     ...showcases,
     ...views,
+    ...caps,
+    ...months,
     ...atlases,
     ...atlasCodes,
     ...prestiges,
     ...rarities,
+    ...rarityDisplays,
     ...mythics,
     ...badgeTiers,
     ...served,

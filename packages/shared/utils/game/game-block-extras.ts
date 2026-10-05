@@ -91,7 +91,12 @@ export type GameBlockExtrasFacts = {
   readonly trophies: readonly TrophyRecord[];
   readonly showcaseOrder: readonly string[];
   readonly atlas: AtlasState;
-  readonly visibility: { readonly showcase: ShowcaseVisibility; readonly rank: ShowcaseVisibility; readonly treasury: ShowcaseVisibility };
+  readonly visibility: {
+    readonly showcase: ShowcaseVisibility;
+    readonly rank: ShowcaseVisibility;
+    readonly treasury: ShowcaseVisibility;
+    readonly atlas: ShowcaseVisibility;
+  };
 };
 
 export type GameBlockExtras = {

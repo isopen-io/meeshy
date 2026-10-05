@@ -1,6 +1,6 @@
 {
   "$format": {
-    "input": "{ law, ...paramètres } — `law` nomme la loi du Jeu Meeshy (level, level-record, mint-price, mint-preview, glory-standing, glory-gain, treasury, flame-form, flame-advance, flame-status, flame-relight, tailwind, prism-hour, mission-objective, mission-reward, rng, missions-draw, mission-reroll, chest, guide, puis — vague 2, #9384 à #9392 — league-week, league-week-points, league-access, league-pseudonym, league-default-pseudonym, league-groups, league-settle, league-friends, league-visibility, duo-draw, duo-progress, duo-reward, duo-invite, duo-transition, season-calendar, season-at, season-progress, season-reward, season-claim, season-settlement, season-stars, season-seal, trophy-key, trophy-parse, trophy-flame, showcase-order, showcase-view, atlas, atlas-language, prestige, rarity, mythic, badge-tier, badge-served, guide-v2, guide-choose, photo-moment). Les jours sont des clés AAAA-MM-JJ ; le jour, le fuseau et la graine sont des paramètres.",
+    "input": "{ law, ...paramètres } — `law` nomme la loi du Jeu Meeshy (level, level-record, mint-price, mint-preview, glory-standing, glory-gain, treasury, flame-form, flame-advance, flame-status, flame-relight, tailwind, prism-hour, mission-objective, mission-reward, rng, missions-draw, mission-reroll, chest, guide, puis — vague 2, #9384 à #9392 — league-week, league-week-points, league-access, league-pseudonym, league-pseudonym-draw, league-pseudonym-check, league-snapshot, league-groups, league-settle, league-friends, league-visibility, duo-draw, duo-progress, duo-reward, duo-invite, duo-transition, season-calendar, season-at, season-progress, season-reward, season-claim, season-settlement, season-stars, season-seal, trophy-key, trophy-parse, trophy-flame, showcase-order, showcase-view, showcase-cap, trophy-month, atlas, atlas-language, prestige, rarity, rarity-display, mythic, badge-tier, badge-served, guide-v2, guide-choose, photo-moment). Les jours sont des clés AAAA-MM-JJ ; le jour, le fuseau et la graine sont des paramètres.",
     "expected": "La sortie de la loi TS (packages/shared/utils/game/*) : level → {level, tier, floorScore, nextThreshold, pointsToNext, progress, isMax} ; mint-price → {price, edition} ; glory-standing → {rank, division, …} ; flame-* → la transition ou la décision ; rng → {seed FNV-1a 32 bits de « userId|jour|sel », 5 tirages mulberry32} ; missions-draw → {dayKey, prismDay, missions[]} ; guide → le moment ; league-groups → {groups:[{groupId, memberIds}]} ; league-settle → {settled:[{userId, weekPoints, rank, zone, cup, outcome}], pointsToPromotion} ; season-calendar → le calendrier ; atlas → le résumé et les entrées ; rarity → {rarity, measured, border, glory} ; guide-v2 / guide-choose / photo-moment → le moment, la carte choisie, l'emblème. Les fractions sont arrondies à 1e-6 et comparées à 1e-4.",
     "provenance": "Contrat cross-plateforme de la loi du Jeu Meeshy (#9373, vague 2 #9384 à #9392 : les cas de la vague 2 viennent APRÈS ceux de la vague 1, jamais mêlés). TS le produit (__tests__/game/game-vectors-law.ts) et le rejoue (__tests__/vectors/game.vectors.test.ts) ; iOS le rejoue (GameLawVectorTests). Sur divergence, c'est le TS qui a raison — le miroir bouge, jamais le vecteur sans lui. Régénérer : UPDATE_GAME_VECTORS=1 npx vitest run __tests__/vectors/game.vectors.test.ts."
   },
@@ -4346,43 +4346,345 @@
       }
     },
     {
-      "_label": "pseudonyme par défaut de « u1 »",
+      "_label": "pseudonyme tiré au sort 0",
       "input": {
-        "law": "league-default-pseudonym",
-        "userId": "u1"
+        "law": "league-pseudonym-draw",
+        "draw": 0
       },
       "expected": {
-        "pseudonym": "Colibri-qzj7"
+        "pseudonym": "Colibri-0000"
       }
     },
     {
-      "_label": "pseudonyme par défaut de « 6502f1a2b3c4d5e6f7a8b9c0 »",
+      "_label": "pseudonyme tiré au sort 1",
       "input": {
-        "law": "league-default-pseudonym",
-        "userId": "6502f1a2b3c4d5e6f7a8b9c0"
+        "law": "league-pseudonym-draw",
+        "draw": 1
       },
       "expected": {
-        "pseudonym": "Colibri-206u"
+        "pseudonym": "Colibri-0001"
       }
     },
     {
-      "_label": "pseudonyme par défaut de «  »",
+      "_label": "pseudonyme tiré au sort 35",
       "input": {
-        "law": "league-default-pseudonym",
-        "userId": ""
+        "law": "league-pseudonym-draw",
+        "draw": 35
       },
       "expected": {
-        "pseudonym": "Colibri-vl1t"
+        "pseudonym": "Colibri-000z"
       }
     },
     {
-      "_label": "pseudonyme par défaut de « amélie-été »",
+      "_label": "pseudonyme tiré au sort 36",
       "input": {
-        "law": "league-default-pseudonym",
-        "userId": "amélie-été"
+        "law": "league-pseudonym-draw",
+        "draw": 36
       },
       "expected": {
-        "pseudonym": "Colibri-wk64"
+        "pseudonym": "Colibri-0010"
+      }
+    },
+    {
+      "_label": "pseudonyme tiré au sort 1679615",
+      "input": {
+        "law": "league-pseudonym-draw",
+        "draw": 1679615
+      },
+      "expected": {
+        "pseudonym": "Colibri-zzzz"
+      }
+    },
+    {
+      "_label": "pseudonyme tiré au sort 1679616",
+      "input": {
+        "law": "league-pseudonym-draw",
+        "draw": 1679616
+      },
+      "expected": {
+        "pseudonym": "Colibri-0000"
+      }
+    },
+    {
+      "_label": "pseudonyme tiré au sort 123456789",
+      "input": {
+        "law": "league-pseudonym-draw",
+        "draw": 123456789
+      },
+      "expected": {
+        "pseudonym": "Colibri-i3v9"
+      }
+    },
+    {
+      "_label": "pseudonyme tiré au sort 4294967295",
+      "input": {
+        "law": "league-pseudonym-draw",
+        "draw": 4294967295
+      },
+      "expected": {
+        "pseudonym": "Colibri-41z3"
+      }
+    },
+    {
+      "_label": "pseudonyme tiré au sort 1099511627776",
+      "input": {
+        "law": "league-pseudonym-draw",
+        "draw": 1099511627776
+      },
+      "expected": {
+        "pseudonym": "Colibri-u1og"
+      }
+    },
+    {
+      "_label": "pseudonyme tiré au sort -5",
+      "input": {
+        "law": "league-pseudonym-draw",
+        "draw": -5
+      },
+      "expected": {
+        "pseudonym": "Colibri-0005"
+      }
+    },
+    {
+      "_label": "pseudonyme tiré au sort NaN",
+      "input": {
+        "law": "league-pseudonym-draw",
+        "draw": null
+      },
+      "expected": {
+        "pseudonym": "Colibri-0000"
+      }
+    },
+    {
+      "_label": "filtre du pseudonyme « Zephyr »",
+      "input": {
+        "law": "league-pseudonym-check",
+        "value": "Zephyr",
+        "forbidden": [
+          "amelie.durand",
+          "Amélie",
+          "Durand"
+        ]
+      },
+      "expected": {
+        "ok": true
+      }
+    },
+    {
+      "_label": "filtre du pseudonyme « jean@mail.fr »",
+      "input": {
+        "law": "league-pseudonym-check",
+        "value": "jean@mail.fr",
+        "forbidden": []
+      },
+      "expected": {
+        "ok": false,
+        "reason": "shape"
+      }
+    },
+    {
+      "_label": "filtre du pseudonyme « Meeshy »",
+      "input": {
+        "law": "league-pseudonym-check",
+        "value": "Meeshy",
+        "forbidden": []
+      },
+      "expected": {
+        "ok": false,
+        "reason": "reserved"
+      }
+    },
+    {
+      "_label": "filtre du pseudonyme « MEE »",
+      "input": {
+        "law": "league-pseudonym-check",
+        "value": "MEE",
+        "forbidden": []
+      },
+      "expected": {
+        "ok": false,
+        "reason": "reserved"
+      }
+    },
+    {
+      "_label": "filtre du pseudonyme « Adm.in »",
+      "input": {
+        "law": "league-pseudonym-check",
+        "value": "Adm.in",
+        "forbidden": []
+      },
+      "expected": {
+        "ok": false,
+        "reason": "reserved"
+      }
+    },
+    {
+      "_label": "filtre du pseudonyme « Meeshy-Team »",
+      "input": {
+        "law": "league-pseudonym-check",
+        "value": "Meeshy-Team",
+        "forbidden": []
+      },
+      "expected": {
+        "ok": false,
+        "reason": "reserved"
+      }
+    },
+    {
+      "_label": "filtre du pseudonyme « xxMeeshyxx »",
+      "input": {
+        "law": "league-pseudonym-check",
+        "value": "xxMeeshyxx",
+        "forbidden": []
+      },
+      "expected": {
+        "ok": false,
+        "reason": "reserved"
+      }
+    },
+    {
+      "_label": "filtre du pseudonyme « meeting »",
+      "input": {
+        "law": "league-pseudonym-check",
+        "value": "meeting",
+        "forbidden": []
+      },
+      "expected": {
+        "ok": true
+      }
+    },
+    {
+      "_label": "filtre du pseudonyme « Admiral »",
+      "input": {
+        "law": "league-pseudonym-check",
+        "value": "Admiral",
+        "forbidden": []
+      },
+      "expected": {
+        "ok": true
+      }
+    },
+    {
+      "_label": "filtre du pseudonyme « Mod-erator »",
+      "input": {
+        "law": "league-pseudonym-check",
+        "value": "Mod-erator",
+        "forbidden": []
+      },
+      "expected": {
+        "ok": false,
+        "reason": "reserved"
+      }
+    },
+    {
+      "_label": "filtre du pseudonyme « amelie.durand »",
+      "input": {
+        "law": "league-pseudonym-check",
+        "value": "amelie.durand",
+        "forbidden": [
+          "amelie.durand"
+        ]
+      },
+      "expected": {
+        "ok": false,
+        "reason": "identity"
+      }
+    },
+    {
+      "_label": "filtre du pseudonyme « DURAND-7 »",
+      "input": {
+        "law": "league-pseudonym-check",
+        "value": "DURAND-7",
+        "forbidden": [
+          "Durand"
+        ]
+      },
+      "expected": {
+        "ok": false,
+        "reason": "identity"
+      }
+    },
+    {
+      "_label": "filtre du pseudonyme « Zéphyr »",
+      "input": {
+        "law": "league-pseudonym-check",
+        "value": "Zéphyr",
+        "forbidden": [
+          "zephyr"
+        ]
+      },
+      "expected": {
+        "ok": false,
+        "reason": "identity"
+      }
+    },
+    {
+      "_label": "filtre du pseudonyme « Zephyr »",
+      "input": {
+        "law": "league-pseudonym-check",
+        "value": "Zephyr",
+        "forbidden": [
+          "Li",
+          "Zé"
+        ]
+      },
+      "expected": {
+        "ok": true
+      }
+    },
+    {
+      "_label": "instantané de ligue du 2026-10-14 à 239 min",
+      "input": {
+        "law": "league-snapshot",
+        "dayKey": "2026-10-14",
+        "minuteOfDay": 239
+      },
+      "expected": {
+        "snapshotDay": "2026-10-13"
+      }
+    },
+    {
+      "_label": "instantané de ligue du 2026-10-14 à 240 min",
+      "input": {
+        "law": "league-snapshot",
+        "dayKey": "2026-10-14",
+        "minuteOfDay": 240
+      },
+      "expected": {
+        "snapshotDay": "2026-10-14"
+      }
+    },
+    {
+      "_label": "instantané de ligue du 2026-10-14 à 1439 min",
+      "input": {
+        "law": "league-snapshot",
+        "dayKey": "2026-10-14",
+        "minuteOfDay": 1439
+      },
+      "expected": {
+        "snapshotDay": "2026-10-14"
+      }
+    },
+    {
+      "_label": "instantané de ligue du 2026-10-12 à 10 min",
+      "input": {
+        "law": "league-snapshot",
+        "dayKey": "2026-10-12",
+        "minuteOfDay": 10
+      },
+      "expected": {
+        "snapshotDay": "2026-10-11"
+      }
+    },
+    {
+      "_label": "instantané de ligue du 2027-01-01 à 0 min",
+      "input": {
+        "law": "league-snapshot",
+        "dayKey": "2027-01-01",
+        "minuteOfDay": 0
+      },
+      "expected": {
+        "snapshotDay": "2026-12-31"
       }
     },
     {
@@ -9740,6 +10042,238 @@
       }
     },
     {
+      "_label": "plafond de la vitrine everyone, caché false, jeu masqué false",
+      "input": {
+        "law": "showcase-cap",
+        "visibility": "everyone",
+        "hideProfileFromSearch": false,
+        "gameHidden": false
+      },
+      "expected": {
+        "visibility": "everyone"
+      }
+    },
+    {
+      "_label": "plafond de la vitrine everyone, caché true, jeu masqué false",
+      "input": {
+        "law": "showcase-cap",
+        "visibility": "everyone",
+        "hideProfileFromSearch": true,
+        "gameHidden": false
+      },
+      "expected": {
+        "visibility": "friends"
+      }
+    },
+    {
+      "_label": "plafond de la vitrine everyone, caché false, jeu masqué true",
+      "input": {
+        "law": "showcase-cap",
+        "visibility": "everyone",
+        "hideProfileFromSearch": false,
+        "gameHidden": true
+      },
+      "expected": {
+        "visibility": "me"
+      }
+    },
+    {
+      "_label": "plafond de la vitrine everyone, caché true, jeu masqué true",
+      "input": {
+        "law": "showcase-cap",
+        "visibility": "everyone",
+        "hideProfileFromSearch": true,
+        "gameHidden": true
+      },
+      "expected": {
+        "visibility": "me"
+      }
+    },
+    {
+      "_label": "plafond de la vitrine friends, caché false, jeu masqué false",
+      "input": {
+        "law": "showcase-cap",
+        "visibility": "friends",
+        "hideProfileFromSearch": false,
+        "gameHidden": false
+      },
+      "expected": {
+        "visibility": "friends"
+      }
+    },
+    {
+      "_label": "plafond de la vitrine friends, caché true, jeu masqué false",
+      "input": {
+        "law": "showcase-cap",
+        "visibility": "friends",
+        "hideProfileFromSearch": true,
+        "gameHidden": false
+      },
+      "expected": {
+        "visibility": "friends"
+      }
+    },
+    {
+      "_label": "plafond de la vitrine friends, caché false, jeu masqué true",
+      "input": {
+        "law": "showcase-cap",
+        "visibility": "friends",
+        "hideProfileFromSearch": false,
+        "gameHidden": true
+      },
+      "expected": {
+        "visibility": "me"
+      }
+    },
+    {
+      "_label": "plafond de la vitrine friends, caché true, jeu masqué true",
+      "input": {
+        "law": "showcase-cap",
+        "visibility": "friends",
+        "hideProfileFromSearch": true,
+        "gameHidden": true
+      },
+      "expected": {
+        "visibility": "me"
+      }
+    },
+    {
+      "_label": "plafond de la vitrine me, caché false, jeu masqué false",
+      "input": {
+        "law": "showcase-cap",
+        "visibility": "me",
+        "hideProfileFromSearch": false,
+        "gameHidden": false
+      },
+      "expected": {
+        "visibility": "me"
+      }
+    },
+    {
+      "_label": "plafond de la vitrine me, caché true, jeu masqué false",
+      "input": {
+        "law": "showcase-cap",
+        "visibility": "me",
+        "hideProfileFromSearch": true,
+        "gameHidden": false
+      },
+      "expected": {
+        "visibility": "me"
+      }
+    },
+    {
+      "_label": "plafond de la vitrine me, caché false, jeu masqué true",
+      "input": {
+        "law": "showcase-cap",
+        "visibility": "me",
+        "hideProfileFromSearch": false,
+        "gameHidden": true
+      },
+      "expected": {
+        "visibility": "me"
+      }
+    },
+    {
+      "_label": "plafond de la vitrine me, caché true, jeu masqué true",
+      "input": {
+        "law": "showcase-cap",
+        "visibility": "me",
+        "hideProfileFromSearch": true,
+        "gameHidden": true
+      },
+      "expected": {
+        "visibility": "me"
+      }
+    },
+    {
+      "_label": "plafond de la vitrine public, caché false, jeu masqué false",
+      "input": {
+        "law": "showcase-cap",
+        "visibility": "public",
+        "hideProfileFromSearch": false,
+        "gameHidden": false
+      },
+      "expected": {
+        "visibility": "me"
+      }
+    },
+    {
+      "_label": "plafond de la vitrine public, caché true, jeu masqué false",
+      "input": {
+        "law": "showcase-cap",
+        "visibility": "public",
+        "hideProfileFromSearch": true,
+        "gameHidden": false
+      },
+      "expected": {
+        "visibility": "me"
+      }
+    },
+    {
+      "_label": "plafond de la vitrine public, caché false, jeu masqué true",
+      "input": {
+        "law": "showcase-cap",
+        "visibility": "public",
+        "hideProfileFromSearch": false,
+        "gameHidden": true
+      },
+      "expected": {
+        "visibility": "me"
+      }
+    },
+    {
+      "_label": "plafond de la vitrine public, caché true, jeu masqué true",
+      "input": {
+        "law": "showcase-cap",
+        "visibility": "public",
+        "hideProfileFromSearch": true,
+        "gameHidden": true
+      },
+      "expected": {
+        "visibility": "me"
+      }
+    },
+    {
+      "_label": "mois d'un trophée « 2026-11-01T08:42:17.000Z »",
+      "input": {
+        "law": "trophy-month",
+        "awardedAt": "2026-11-01T08:42:17.000Z"
+      },
+      "expected": {
+        "month": "2026-11"
+      }
+    },
+    {
+      "_label": "mois d'un trophée « 2026-12-31T23:59:59.999Z »",
+      "input": {
+        "law": "trophy-month",
+        "awardedAt": "2026-12-31T23:59:59.999Z"
+      },
+      "expected": {
+        "month": "2026-12"
+      }
+    },
+    {
+      "_label": "mois d'un trophée « hier »",
+      "input": {
+        "law": "trophy-month",
+        "awardedAt": "hier"
+      },
+      "expected": {
+        "month": null
+      }
+    },
+    {
+      "_label": "mois d'un trophée «  »",
+      "input": {
+        "law": "trophy-month",
+        "awardedAt": ""
+      },
+      "expected": {
+        "month": null
+      }
+    },
+    {
       "_label": "Atlas, cas 1",
       "input": {
         "law": "atlas",
@@ -10284,6 +10818,50 @@
         "measured": "legendary",
         "border": "gold",
         "glory": 150
+      }
+    },
+    {
+      "_label": "affichage de la rareté, 19 détenteurs sur 50000",
+      "input": {
+        "law": "rarity-display",
+        "holders": 19,
+        "population": 50000
+      },
+      "expected": {
+        "displayable": false
+      }
+    },
+    {
+      "_label": "affichage de la rareté, 20 détenteurs sur 50000",
+      "input": {
+        "law": "rarity-display",
+        "holders": 20,
+        "population": 50000
+      },
+      "expected": {
+        "displayable": true
+      }
+    },
+    {
+      "_label": "affichage de la rareté, 20 détenteurs sur 999",
+      "input": {
+        "law": "rarity-display",
+        "holders": 20,
+        "population": 999
+      },
+      "expected": {
+        "displayable": false
+      }
+    },
+    {
+      "_label": "affichage de la rareté, 500 détenteurs sur 1000",
+      "input": {
+        "law": "rarity-display",
+        "holders": 500,
+        "population": 1000
+      },
+      "expected": {
+        "displayable": true
       }
     },
     {

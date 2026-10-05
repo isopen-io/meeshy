@@ -5,10 +5,16 @@
  */
 
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   LEAGUE_KEYS,
   canSeeLeagueMember,
-  defaultLeaguePseudonym,
+  LEAGUE_PSEUDONYM_RESERVED,
+  checkLeaguePseudonym,
+  leaguePseudonymFromDraw,
+  leagueSnapshotDay,
   friendsLeagueRanking,
   isLeagueWeekClosed,
   isValidLeaguePseudonym,
@@ -115,12 +121,27 @@ describe('l\'accès à la ligue publique', () => {
 });
 
 describe('le pseudonyme', () => {
-  it('se rend sans rien révéler de la personne et reste stable', () => {
-    const a = defaultLeaguePseudonym('6502f1a2b3c4d5e6f7a8b9c0');
+  it('se tire AU HASARD et se stocke : il ne se calcule JAMAIS depuis l\'identifiant du compte', () => {
+    const a = leaguePseudonymFromDraw(123_456_789);
     expect(a).toMatch(/^Colibri-[0-9a-z]{4}$/);
-    expect(defaultLeaguePseudonym('6502f1a2b3c4d5e6f7a8b9c0')).toBe(a);
-    expect(defaultLeaguePseudonym('autre')).not.toBe(a);
+    expect(leaguePseudonymFromDraw(123_456_789)).toBe(a);
+    expect(leaguePseudonymFromDraw(987_654_321)).not.toBe(a);
     expect(isValidLeaguePseudonym(a)).toBe(true);
+    expect(leaguePseudonymFromDraw.length).toBe(1);
+  });
+
+  it('garde témoin : le formateur ne lit aucun identifiant et n\'emploie aucun hachage', () => {
+    const source = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'utils', 'game', 'league.ts'), 'utf-8');
+    const body = source.slice(source.indexOf('export const leaguePseudonymFromDraw'), source.indexOf('export const leaguePseudonymFromDraw') + 400);
+    expect(body).not.toMatch(/userId/);
+    expect(body).not.toMatch(/fnv1a/);
+    expect(source).not.toMatch(/league-pseudonym\|/);
+  });
+
+  it('accepte une entropie illisible sans exception, et reste valide', () => {
+    for (const draw of [Number.NaN, -5, Number.POSITIVE_INFINITY, 2 ** 40, 0]) {
+      expect(isValidLeaguePseudonym(leaguePseudonymFromDraw(draw))).toBe(true);
+    }
   });
 
   it('accepte des lettres de toute langue, des chiffres, le point, le tiret et le tiret bas', () => {
@@ -133,9 +154,54 @@ describe('le pseudonyme', () => {
     }
   });
 
-  it('s\'affiche : le pseudonyme choisi, sinon celui par défaut — jamais le nom', () => {
-    expect(leagueDisplayName({ userId: 'u1', pseudonym: 'Zephyr' })).toBe('Zephyr');
-    expect(leagueDisplayName({ userId: 'u1', pseudonym: null })).toBe(defaultLeaguePseudonym('u1'));
+  it('s\'affiche : le pseudonyme gardé, rien sinon — jamais un nom, jamais un calcul', () => {
+    expect(leagueDisplayName('Zephyr')).toBe('Zephyr');
+    expect(leagueDisplayName(null)).toBeNull();
+    expect(leagueDisplayName('jean@mail.fr')).toBeNull();
+  });
+});
+
+describe('le filtre du pseudonyme choisi', () => {
+  const check = (value: string, forbidden: readonly string[] = []) => checkLeaguePseudonym({ value, forbidden });
+
+  it('laisse passer un pseudonyme ordinaire', () => {
+    expect(check('Zephyr', ['amelie.durand', 'Amélie', 'Durand'])).toEqual({ ok: true });
+  });
+
+  it('refuse une forme invalide avant tout', () => {
+    expect(check('jean@mail.fr')).toEqual({ ok: false, reason: 'shape' });
+  });
+
+  it('refuse les noms réservés, casse, accents, séparateurs et variantes comprises', () => {
+    expect([...LEAGUE_PSEUDONYM_RESERVED]).toEqual(expect.arrayContaining(['meeshy', 'mee', 'meo', 'admin']));
+    for (const reserved of ['Meeshy', 'MEE', 'meo', 'Admin', 'adm.in', 'Mee_', 'Meeshy-Team', 'xxMeeshyxx', 'Mod-erator', 'support']) {
+      expect(check(reserved)).toEqual({ ok: false, reason: 'reserved' });
+    }
+  });
+
+  it('ne refuse pas un mot ordinaire qui CONTIENT un nom court réservé', () => {
+    expect(check('meeting')).toEqual({ ok: true });
+    expect(check('Admiral')).toEqual({ ok: true });
+  });
+
+  it('refuse le nom d\'utilisateur et le nom civil de la personne', () => {
+    expect(check('amelie.durand', ['amelie.durand'])).toEqual({ ok: false, reason: 'identity' });
+    expect(check('Amélie', ['Amélie'])).toEqual({ ok: false, reason: 'identity' });
+    expect(check('DURAND-7', ['Durand'])).toEqual({ ok: false, reason: 'identity' });
+    expect(check('Zéphyr', ['zephyr'])).toEqual({ ok: false, reason: 'identity' });
+  });
+
+  it('ignore un nom trop court pour désigner quelqu\'un', () => {
+    expect(check('Zephyr', ['Li', 'Zé'])).toEqual({ ok: true });
+  });
+});
+
+describe('l\'instantané du classement', () => {
+  it('se fige une fois par jour, à 4 h locales : avant, c\'est celui de la veille', () => {
+    expect(leagueSnapshotDay({ dayKey: '2026-10-14', minuteOfDay: 239 })).toBe('2026-10-13');
+    expect(leagueSnapshotDay({ dayKey: '2026-10-14', minuteOfDay: 240 })).toBe('2026-10-14');
+    expect(leagueSnapshotDay({ dayKey: '2026-10-14', minuteOfDay: 1439 })).toBe('2026-10-14');
+    expect(leagueSnapshotDay({ dayKey: '2026-10-12', minuteOfDay: 10 })).toBe('2026-10-11');
   });
 });
 

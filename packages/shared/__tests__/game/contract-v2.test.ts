@@ -1,6 +1,6 @@
 /**
  * Le contrat d'API de la vague 2 (#9384 à #9392) : sept extensions du bloc
- * `game`, treize routes, dix-sept codes d'erreur, les écritures idempotentes.
+ * `game`, treize routes, dix-huit codes d'erreur, les écritures idempotentes.
  * Le bloc ne casse ni un ancien serveur, ni un ancien client.
  */
 
@@ -65,7 +65,7 @@ const extrasFacts = (over: Partial<GameBlockExtrasFacts> = {}): GameBlockExtrasF
   ],
   showcaseOrder: [],
   atlas: foldAtlas({ state: {}, events: [{ kind: 'sent', language: 'ja', dayKey: '2026-10-12' }, { kind: 'received', language: 'ja', dayKey: '2026-10-13' }] }),
-  visibility: { showcase: 'friends', rank: 'friends', treasury: 'friends' },
+  visibility: { showcase: 'friends', rank: 'friends', treasury: 'friends', atlas: 'me' },
   ...over,
 });
 
@@ -229,7 +229,7 @@ describe('le duo, la saison, les trophées, l\'Atlas et le Prestige dans le bloc
     expect(extras.prestige).toEqual({ stars: 0, max: 5, canPrestige: true, gloryOnPass: 1000 });
     expect(buildGameBlockExtras(extrasFacts()).prestige.canPrestige).toBe(false);
     expect(buildGameBlockExtras(extrasFacts({ score: levelThreshold(100), prestige: 5 })).prestige.canPrestige).toBe(false);
-    expect(extras.visibility).toEqual({ showcase: 'friends', rank: 'friends', treasury: 'friends' });
+    expect(extras.visibility).toEqual({ showcase: 'friends', rank: 'friends', treasury: 'friends', atlas: 'me' });
   });
 });
 
@@ -290,7 +290,7 @@ describe('les routes de la vague 2', () => {
     expect(new Set(values).size).toBe(values.length);
     expect(GAME_ERROR_CODES.insufficientMeeshes).toBe('INSUFFICIENT_MEESHES');
     expect(GAME_ERROR_CODES.requestIdConflict).toBe('REQUEST_ID_CONFLICT');
-    expect(values).toEqual(expect.arrayContaining(['LEAGUE_LOCKED', 'LEAGUE_MINOR', 'LEAGUE_CONSENT_REQUIRED', 'DUO_LOCKED', 'SEASON_STEP_LOCKED', 'PRESTIGE_LEVEL_TOO_LOW']));
+    expect(values).toEqual(expect.arrayContaining(['LEAGUE_LOCKED', 'LEAGUE_MINOR', 'LEAGUE_CONSENT_REQUIRED', 'LEAGUE_PSEUDONYM_FORBIDDEN', 'DUO_LOCKED', 'SEASON_STEP_LOCKED', 'PRESTIGE_LEVEL_TOO_LOW']));
   });
 });
 
@@ -314,6 +314,7 @@ describe('les écritures de la vague 2', () => {
     expect(showcaseVisibilityRequestSchema.safeParse({ requestId }).success).toBe(false);
     expect(showcaseVisibilityRequestSchema.safeParse({ requestId, showcase: 'me' }).success).toBe(true);
     expect(showcaseVisibilityRequestSchema.safeParse({ requestId, rank: 'public' }).success).toBe(false);
+    expect(showcaseVisibilityRequestSchema.safeParse({ requestId, atlas: 'friends' }).success).toBe(true);
   });
 
   it('bornent l\'ordre de la vitrine', () => {
@@ -326,6 +327,7 @@ describe('les réponses de la vague 2', () => {
   it('ne servent aucun identifiant dans la ligue publique — un pseudonyme, un rang, un total', () => {
     const response = {
       weekKey: '2026-10-12',
+      snapshotDay: '2026-10-14',
       closes: { dayKey: '2026-10-18', minuteOfDay: 1200 },
       placed: true,
       league: 'jade',
@@ -347,6 +349,16 @@ describe('les réponses de la vague 2', () => {
 
   it('dit une vitrine fermée par `visible: false`, jamais par une erreur', () => {
     expect(userShowcaseResponseSchema.safeParse({ visible: false, items: [], order: [] }).success).toBe(true);
+  });
+
+  it('ne sert à un visiteur que le MOIS d\'obtention d\'un trophée, jamais l\'horodatage', () => {
+    const parsed = userShowcaseResponseSchema.parse({
+      visible: true,
+      items: [{ key: 'trophy.prestige.1', awardedMonth: '2026-11', awardedAt: '2026-11-01T08:42:17.000Z' }],
+      order: ['trophy.prestige.1'],
+    });
+    expect(parsed.items[0]).toEqual({ key: 'trophy.prestige.1', awardedMonth: '2026-11' });
+    expect(userShowcaseResponseSchema.safeParse({ visible: true, items: [{ key: 'trophy.prestige.1', awardedMonth: '2026-11-01T08:42' }], order: [] }).success).toBe(false);
   });
 
   it('rend la réclamation d\'une étape et le passage en Prestige', () => {

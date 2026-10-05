@@ -101,6 +101,8 @@ export const GAME_ERROR_CODES = {
   leagueConsentRequired: 'LEAGUE_CONSENT_REQUIRED',
   leaguePseudonymInvalid: 'LEAGUE_PSEUDONYM_INVALID',
   leaguePseudonymTaken: 'LEAGUE_PSEUDONYM_TAKEN',
+  /** Un nom réservé, ou le nom d'utilisateur ou le nom civil de la personne (`checkLeaguePseudonym`). */
+  leaguePseudonymForbidden: 'LEAGUE_PSEUDONYM_FORBIDDEN',
   /** Le niveau 20 (record) manque à l'un des deux. */
   duoLocked: 'DUO_LOCKED',
   duoNotFriends: 'DUO_NOT_FRIENDS',

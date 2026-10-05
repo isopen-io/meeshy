@@ -43,6 +43,13 @@
 import { GLORY_RANKS, gloryForAchievement, type AchievementRarity } from './glory.js';
 
 export const RARITY_MIN_POPULATION = 1000;
+/**
+ * Sous ce nombre de TITULAIRES, un succès n'affiche pas son pourcentage : « rareté
+ * en cours de mesure ». À moins de mille comptes, « mythique < 0,2 % » désigne une
+ * ou deux personnes — croisé avec une vitrine ou une langue rare, cela réidentifie
+ * (conformité G-2, RGPD art. 5(1)(c)). La Gloire, elle, reste figée à l'obtention.
+ */
+export const RARITY_MIN_DISPLAY_HOLDERS = 20;
 export const MYTHE_SIZE = 100;
 
 export const RARITY_BORDERS: Readonly<Record<AchievementRarity, 'slate' | 'blue' | 'violet' | 'gold' | 'prism'>> = {
@@ -77,12 +84,20 @@ export function measureRarity(params: { readonly holders: number; readonly popul
   return rarityFromShare({ holders: Math.trunc(holders), population: Math.trunc(population) });
 }
 
+/** `true` quand le pourcentage de détenteurs peut s'afficher ; sinon le client dit « rareté en cours de mesure ». */
+export const rarityShareDisplayable = (params: { readonly holders: number; readonly population: number }): boolean =>
+  Number.isFinite(params.holders) && params.holders >= RARITY_MIN_DISPLAY_HOLDERS && params.population >= RARITY_MIN_POPULATION;
+
 /** La Gloire d'un succès au moment où il est obtenu : celle de la rareté mesurée ce jour-là, commun sinon. */
 export const achievementGloryAtEarning = (measured: AchievementRarity | null): number => gloryForAchievement(measured ?? 'common');
 
 export type MythicCandidate = { readonly userId: string; readonly glory: number };
 
-/** Les 100 Légendes les plus glorieuses — classées par Gloire, puis par identifiant. */
+/**
+ * Les 100 Légendes les plus glorieuses — classées par Gloire, puis par identifiant.
+ * La passerelle n'en tire qu'un DRAPEAU par compte : aucune liste globale n'est
+ * publiée (conformité A-13) — le statut Mythe se montre selon la visibilité du rang.
+ */
 export function mythicUserIds(candidates: readonly MythicCandidate[]): readonly string[] {
   const legendStart = GLORY_RANKS.at(-1)!.minGlory;
   return candidates

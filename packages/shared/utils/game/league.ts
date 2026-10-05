@@ -125,13 +125,78 @@ export function isValidLeaguePseudonym(value: string): boolean {
 
 const BASE36_CAP = 36 ** 4;
 
-/** Le pseudonyme de départ — un colibri et quatre signes dérivés du compte, stable et sans rien du nom. */
-export const defaultLeaguePseudonym = (userId: string): string =>
-  `Colibri-${(fnv1a(`${userId}|league-pseudonym`) % BASE36_CAP).toString(36).padStart(4, '0')}`;
+/**
+ * Le pseudonyme de départ : un colibri et quatre signes tirés d'un NOMBRE
+ * ALÉATOIRE (`draw`) que la passerelle tire au CSPRNG à l'entrée dans la ligue,
+ * STOCKE, et renouvelle à chaque saison. Il ne se calcule JAMAIS depuis
+ * l'identifiant du compte, ni par un hachage sans clé : les identifiants
+ * circulent, et un pseudonyme qu'un tiers peut recalculer n'en est pas un
+ * (conformité A-4, RGPD art. 4(5) et 25(1)). La passerelle seule garantit
+ * l'unicité (un tirage déjà pris se retire).
+ */
+export const leaguePseudonymFromDraw = (draw: number): string =>
+  `Colibri-${(Number.isFinite(draw) ? Math.abs(Math.trunc(draw)) % BASE36_CAP : 0).toString(36).padStart(4, '0')}`;
 
-/** Ce que la ligue publique montre d'un joueur : son pseudonyme, jamais son nom. */
-export const leagueDisplayName = (params: { readonly userId: string; readonly pseudonym: string | null }): string =>
-  params.pseudonym !== null && isValidLeaguePseudonym(params.pseudonym) ? params.pseudonym : defaultLeaguePseudonym(params.userId);
+/** Ce que la ligue publique montre d'un joueur : son pseudonyme gardé, jamais son nom. `null` hors de la ligue. */
+export const leagueDisplayName = (pseudonym: string | null): string | null =>
+  pseudonym !== null && isValidLeaguePseudonym(pseudonym) ? pseudonym : null;
+
+/**
+ * Les noms qu'un pseudonyme de ligue ne prend jamais — ceux de la maison et des
+ * rôles. Les noms courts (« mee », « meo », « admin ») se refusent EXACTS ; les
+ * longs (6 lettres et plus) aussi quand ils sont CONTENUS : « meeting » reste
+ * permis, « xxMeeshyxx » non.
+ */
+export const LEAGUE_PSEUDONYM_RESERVED = ['meeshy', 'mee', 'meo', 'admin', 'administrator', 'moderator', 'support'] as const;
+
+const RESERVED_CONTAINED_MIN = 6;
+const IDENTITY_MIN = 3;
+const IDENTITY_CONTAINED_MIN = 4;
+
+/** Casse, accents et séparateurs (`.` `_` `-`) tombent : « Adm.in », « Admîn » et « admin » sont le même nom. */
+const fold = (value: string): string =>
+  value
+    .normalize('NFKD')
+    .replace(/\p{M}/gu, '')
+    .toLowerCase()
+    .replace(/[._-]/g, '');
+
+export type LeaguePseudonymCheck =
+  | { readonly ok: true }
+  | { readonly ok: false; readonly reason: 'shape' | 'reserved' | 'identity' };
+
+/**
+ * Le filtre d'un pseudonyme CHOISI (conformité A-5) : la forme, puis les noms
+ * réservés, puis l'identité de la personne — `forbidden` porte son nom
+ * d'utilisateur, son prénom et son nom, que la passerelle connaît. Un nom de
+ * moins de trois lettres ne désigne personne et ne bloque rien.
+ */
+export function checkLeaguePseudonym(params: { readonly value: string; readonly forbidden: readonly string[] }): LeaguePseudonymCheck {
+  if (!isValidLeaguePseudonym(params.value)) return { ok: false, reason: 'shape' };
+  const folded = fold(params.value);
+  const reserved = LEAGUE_PSEUDONYM_RESERVED.some(
+    (name) => folded === name || (name.length >= RESERVED_CONTAINED_MIN && folded.includes(name)),
+  );
+  if (reserved) return { ok: false, reason: 'reserved' };
+  const identity = params.forbidden
+    .map(fold)
+    .filter((name) => name.length >= IDENTITY_MIN)
+    .some((name) => folded === name || (name.length >= IDENTITY_CONTAINED_MIN && folded.includes(name)));
+  return identity ? { ok: false, reason: 'identity' } : { ok: true };
+}
+
+/** 4 h locales : l'heure où le classement se fige pour les AUTRES membres. */
+export const LEAGUE_SNAPSHOT_MINUTE = 4 * 60;
+
+/**
+ * Le jour de l'instantané que les autres membres voient. Un total qui monte à
+ * 14 h 03 dit que la personne était active à 14 h 03 : c'est la fuite par ordre
+ * que la loi de présence interdit hors amitié (conformité A-6). Le classement
+ * servi aux autres est donc figé une fois par jour ; seul le joueur voit son
+ * propre total en direct. Avant 4 h, c'est l'instantané de la veille.
+ */
+export const leagueSnapshotDay = (moment: LeagueMoment): string =>
+  moment.minuteOfDay >= LEAGUE_SNAPSHOT_MINUTE ? moment.dayKey : addDays(moment.dayKey, -1);
 
 /**
  * Ce qu'un lecteur apprend d'un joueur de la ligue. La publique ne sert que le

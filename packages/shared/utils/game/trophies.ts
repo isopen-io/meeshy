@@ -135,6 +135,40 @@ export const SHOWCASE_DEFAULT_VISIBILITY: ShowcaseVisibility = 'friends';
 
 export type ShowcaseViewer = 'self' | 'friend' | 'other' | 'admin';
 
+/**
+ * L'Atlas des langues est PRIVÉ par défaut, quel que soit le réglage de la
+ * vitrine : une langue minoritaire, diasporique ou liturgique peut laisser
+ * inférer une origine ou une conviction (RGPD art. 9, conformité E-2). Le
+ * montrer est un choix séparé et explicite.
+ */
+export const ATLAS_DEFAULT_VISIBILITY: ShowcaseVisibility = 'me';
+
+/**
+ * Le réglage de discrétion qui PLAFONNE la vitrine : un profil caché de la
+ * recherche ne la montre qu'aux amis (même règle que #8285), le mode « Jeu
+ * masqué » la ramène à « moi seul ». Une valeur inconnue vaut « moi seul ».
+ */
+export function capShowcaseVisibility(params: {
+  readonly visibility: ShowcaseVisibility;
+  readonly hideProfileFromSearch: boolean;
+  readonly gameHidden: boolean;
+}): ShowcaseVisibility {
+  if (params.gameHidden) return 'me';
+  if (!(SHOWCASE_VISIBILITIES as readonly string[]).includes(params.visibility)) return 'me';
+  return params.hideProfileFromSearch && params.visibility === 'everyone' ? 'friends' : params.visibility;
+}
+
+/**
+ * Ce qu'un visiteur apprend de la date d'un trophée : le MOIS. Une date
+ * précise, croisée avec une Flamme de 365 jours, donne le rythme d'usage
+ * (conformité D-3, leçon 275 : une protection se mesure sur tout ce que la
+ * charge transporte). `null` pour une date illisible.
+ */
+export const visitorAwardedMonth = (awardedAt: string): string | null => {
+  const match = /^(\d{4})-(\d{2})-\d{2}/.exec(awardedAt);
+  return match === null ? null : `${match[1]}-${match[2]}`;
+};
+
 /** Qui voit la vitrine. Une valeur inconnue ne s'ouvre qu'au propriétaire et à l'administration. */
 export function canViewShowcase(params: { readonly visibility: ShowcaseVisibility; readonly viewer: ShowcaseViewer }): boolean {
   if (params.viewer === 'self' || params.viewer === 'admin') return true;

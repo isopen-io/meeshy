@@ -8,7 +8,9 @@ import { describe, it, expect } from 'vitest';
 import {
   MYTHE_SIZE,
   RARITY_BORDERS,
+  RARITY_MIN_DISPLAY_HOLDERS,
   RARITY_MIN_POPULATION,
+  rarityShareDisplayable,
   achievementGloryAtEarning,
   measureRarity,
   mythicUserIds,
@@ -108,5 +110,18 @@ describe('le Mythe', () => {
   it('est vide sans Légende', () => {
     expect(mythicUserIds([candidate('a', 1000)])).toEqual([]);
     expect(mythicUserIds([])).toEqual([]);
+  });
+});
+
+describe('l\'affichage du pourcentage', () => {
+  it('attend assez de titulaires : sous 20, « rareté en cours de mesure », jamais un pourcentage qui désigne une personne', () => {
+    expect(RARITY_MIN_DISPLAY_HOLDERS).toBe(20);
+    expect(rarityShareDisplayable({ holders: 19, population: 50_000 })).toBe(false);
+    expect(rarityShareDisplayable({ holders: 20, population: 50_000 })).toBe(true);
+  });
+
+  it('attend aussi la population minimale', () => {
+    expect(rarityShareDisplayable({ holders: 20, population: RARITY_MIN_POPULATION - 1 })).toBe(false);
+    expect(rarityShareDisplayable({ holders: Number.NaN, population: 50_000 })).toBe(false);
   });
 });

@@ -152,6 +152,8 @@ export const gameVisibilitySchema = z.object({
   showcase: showcaseVisibilityKeys,
   rank: showcaseVisibilityKeys,
   treasury: showcaseVisibilityKeys,
+  /** Privé par défaut (`ATLAS_DEFAULT_VISIBILITY`) : une langue peut révéler une origine ou une conviction. */
+  atlas: showcaseVisibilityKeys,
 });
 
 /**
@@ -192,6 +194,12 @@ export const leagueWeekEntrySchema = z.object({
 
 export const leagueWeekResponseSchema = z.object({
   weekKey: dayKey,
+  /**
+   * Le jour de l'instantané : les AUTRES membres sont servis figés (4 h locales,
+   * `leagueSnapshotDay`) — un total qui bougerait au fil des minutes révélerait
+   * l'activité. Seule la ligne `isMe` est en direct.
+   */
+  snapshotDay: dayKey,
   closes: z.object({ dayKey, minuteOfDay: nonNegativeInt }),
   /** `false` : consenti, mais pas encore placé dans un groupe. */
   placed: z.boolean(),
@@ -250,22 +258,30 @@ export const seasonSealResponseSchema = z.object({ status: z.enum(['bought', 'al
 export const showcaseOrderRequestSchema = writeRequest.extend({ order: z.array(trophyKeySchema).max(200) });
 export const showcaseOrderResponseSchema = z.object({ order: z.array(trophyKeySchema).max(500) });
 
-/** Au moins un des trois réglages. */
+/** Au moins un des quatre réglages. */
 export const showcaseVisibilityRequestSchema = writeRequest
   .extend({
     showcase: showcaseVisibilityKeys.optional(),
     rank: showcaseVisibilityKeys.optional(),
     treasury: showcaseVisibilityKeys.optional(),
+    atlas: showcaseVisibilityKeys.optional(),
   })
-  .refine((body) => body.showcase !== undefined || body.rank !== undefined || body.treasury !== undefined, {
-    message: 'at least one visibility',
-  });
+  .refine(
+    (body) => body.showcase !== undefined || body.rank !== undefined || body.treasury !== undefined || body.atlas !== undefined,
+    { message: 'at least one visibility' },
+  );
 export const showcaseVisibilityResponseSchema = z.object({ visibility: gameVisibilitySchema });
+
+/** Un trophée vu par un VISITEUR : le mois d'obtention, jamais l'horodatage (`visitorAwardedMonth`). */
+export const gameVisitorTrophyItemSchema = z.object({
+  key: trophyKeySchema,
+  awardedMonth: z.string().regex(/^\d{4}-\d{2}$/),
+});
 
 export const userShowcaseResponseSchema = z.object({
   /** `false` : le réglage du membre ferme la vitrine à ce lecteur — jamais une erreur, qui dirait qu'elle existe. */
   visible: z.boolean(),
-  items: z.array(gameTrophyItemSchema).max(500),
+  items: z.array(gameVisitorTrophyItemSchema).max(500),
   order: z.array(trophyKeySchema).max(500),
 });
 
@@ -286,6 +302,7 @@ export type GameLeagueBlock = z.infer<typeof gameLeagueBlockSchema>;
 export type GameDuoBlock = z.infer<typeof gameDuoBlockSchema>;
 export type GameSeasonBlock = z.infer<typeof gameSeasonBlockSchema>;
 export type GameTrophyItem = z.infer<typeof gameTrophyItemSchema>;
+export type GameVisitorTrophyItem = z.infer<typeof gameVisitorTrophyItemSchema>;
 export type GameTrophiesBlock = z.infer<typeof gameTrophiesBlockSchema>;
 export type GameAtlasBlock = z.infer<typeof gameAtlasBlockSchema>;
 export type GamePrestigeBlock = z.infer<typeof gamePrestigeBlockSchema>;

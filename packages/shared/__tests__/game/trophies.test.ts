@@ -7,7 +7,10 @@
 import { describe, it, expect } from 'vitest';
 import {
   FLAME_TROPHY_DAYS,
+  ATLAS_DEFAULT_VISIBILITY,
   SHOWCASE_DEFAULT_VISIBILITY,
+  capShowcaseVisibility,
+  visitorAwardedMonth,
   SHOWCASE_VISIBILITIES,
   canViewShowcase,
   flameTrophiesEarned,
@@ -136,5 +139,45 @@ describe('la visibilité de la vitrine', () => {
   it('ferme tout sur une valeur inconnue — fail-closed', () => {
     expect(canViewShowcase({ visibility: 'public' as never, viewer: 'other' })).toBe(false);
     expect(canViewShowcase({ visibility: 'public' as never, viewer: 'self' })).toBe(true);
+  });
+});
+
+describe('ce qui plafonne la vitrine', () => {
+  it('plafonne à « amis » quand le profil est caché de la recherche (même règle que #8285)', () => {
+    expect(capShowcaseVisibility({ visibility: 'everyone', hideProfileFromSearch: true, gameHidden: false })).toBe('friends');
+    expect(capShowcaseVisibility({ visibility: 'friends', hideProfileFromSearch: true, gameHidden: false })).toBe('friends');
+    expect(capShowcaseVisibility({ visibility: 'me', hideProfileFromSearch: true, gameHidden: false })).toBe('me');
+  });
+
+  it('ramène à « moi seul » quand le jeu est masqué', () => {
+    expect(capShowcaseVisibility({ visibility: 'everyone', hideProfileFromSearch: false, gameHidden: true })).toBe('me');
+    expect(capShowcaseVisibility({ visibility: 'friends', hideProfileFromSearch: true, gameHidden: true })).toBe('me');
+  });
+
+  it('ne change rien sans réglage de discrétion', () => {
+    expect(capShowcaseVisibility({ visibility: 'everyone', hideProfileFromSearch: false, gameHidden: false })).toBe('everyone');
+  });
+
+  it('ferme tout sur une valeur inconnue — fail-closed', () => {
+    expect(capShowcaseVisibility({ visibility: 'public' as never, hideProfileFromSearch: false, gameHidden: false })).toBe('me');
+  });
+});
+
+describe('ce qu\'un trophée révèle à un visiteur', () => {
+  it('ne rend que le MOIS d\'obtention, jamais l\'horodatage précis', () => {
+    expect(visitorAwardedMonth('2026-11-01T08:42:17.000Z')).toBe('2026-11');
+    expect(visitorAwardedMonth('2026-12-31T23:59:59.999Z')).toBe('2026-12');
+  });
+
+  it('ne rend rien d\'une date illisible', () => {
+    expect(visitorAwardedMonth('hier')).toBeNull();
+    expect(visitorAwardedMonth('')).toBeNull();
+  });
+});
+
+describe('l\'Atlas dans la vitrine', () => {
+  it('est PRIVÉ par défaut — une langue peut révéler une origine ou une conviction, quel que soit le réglage de la vitrine', () => {
+    expect(ATLAS_DEFAULT_VISIBILITY).toBe('me');
+    expect(SHOWCASE_DEFAULT_VISIBILITY).toBe('friends');
   });
 });
