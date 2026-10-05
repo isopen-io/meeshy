@@ -180,7 +180,7 @@ final class CameraModel: NSObject, ObservableObject {
         session.inputs.compactMap { $0 as? AVCaptureDeviceInput }.filter { $0.device.hasMediaType(.video) }
             .forEach { session.removeInput($0) }
 
-        guard let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: position) else { return }
+        guard let device = Self.videoDevice(position: position) else { return }
         let input: AVCaptureDeviceInput
         do {
             input = try AVCaptureDeviceInput(device: device)
@@ -193,7 +193,16 @@ final class CameraModel: NSObject, ObservableObject {
         session.addInput(input)
         currentPosition = position
         liveFeed.setPosition(position)
-        zoomFactor = device.videoZoomFactor
+        zoomScale = Self.zoomScale(of: device)
+        do {
+            try device.lockForConfiguration()
+            device.videoZoomFactor = min(device.maxAvailableVideoZoomFactor,
+                                         max(device.minAvailableVideoZoomFactor, zoomScale.opening))
+            device.unlockForConfiguration()
+        } catch {
+            Logger.media.error("Zoom opening failed: \(error.localizedDescription, privacy: .public)")
+        }
+        zoomFactor = 1
         apply(ComposerCaptureFocus.continuous(focusCapabilities(of: device)), to: device)
         watchSubjectArea(of: device)
     }
@@ -294,26 +303,46 @@ final class CameraModel: NSObject, ObservableObject {
     }
 
     /// **Le cadrage de l'objectif actif** (#8671) — publié pour le badge du
-    /// viseur, remis à 1 à chaque changement d'objectif.
+    /// viseur en facteur AFFICHÉ (#9350), remis à ×1 à chaque changement d'objectif.
     @Published private(set) var zoomFactor: CGFloat = 1
 
-    /// Ce que l'objectif sert. Sans objectif (simulateur), `1...1` : le geste
-    /// de zoom n'y a aucun effet.
-    var zoomRange: ClosedRange<CGFloat> {
-        guard let device = activeVideoDevice else { return 1...1 }
-        return ComposerCaptureZoomScale(base: 1).displayedRange(deviceMin: device.minAvailableVideoZoomFactor,
-                                                                deviceMax: device.maxAvailableVideoZoomFactor)
+    /// L'échelle entre le facteur de l'appareil et celui qu'on lit (#9350).
+    private(set) var zoomScale = ComposerCaptureZoomScale(base: 1)
+
+    /// **La caméra virtuelle d'abord** (#9350) : triple, double grand-angle,
+    /// double, puis l'objectif seul — le premier que l'appareil a.
+    nonisolated static func videoDevice(position: AVCaptureDevice.Position) -> AVCaptureDevice? {
+        let types = ComposerCaptureZoomScale.preferredDeviceTypes
+        let trouves = AVCaptureDevice.DiscoverySession(deviceTypes: types, mediaType: .video,
+                                                       position: position).devices
+        return types.lazy.compactMap { type in trouves.first { $0.deviceType == type } }.first
     }
 
+    nonisolated static func zoomScale(of device: AVCaptureDevice) -> ComposerCaptureZoomScale {
+        ComposerCaptureZoomScale(base: ComposerCaptureZoomScale.base(
+            switchOvers: device.virtualDeviceSwitchOverVideoZoomFactors.map { CGFloat(truncating: $0) },
+            hasUltraWide: device.constituentDevices.contains { $0.deviceType == .builtInUltraWideCamera }))
+    }
+
+    /// Ce que l'objectif sert, en facteur AFFICHÉ. Sans objectif (simulateur),
+    /// `1...1` : le geste de zoom n'y a aucun effet.
+    var zoomRange: ClosedRange<CGFloat> {
+        guard let device = activeVideoDevice else { return 1...1 }
+        return zoomScale.displayedRange(deviceMin: device.minAvailableVideoZoomFactor,
+                                        deviceMax: device.maxAvailableVideoZoomFactor)
+    }
+
+    /// `factor` est un facteur AFFICHÉ ; l'appareil reçoit sa conversion.
     /// Affectation directe sous `lockForConfiguration` : le doigt pilote déjà
     /// la progressivité, une rampe ajouterait un retard au geste.
     func setZoom(_ factor: CGFloat) {
         let plage = zoomRange
         let borne = min(plage.upperBound, max(plage.lowerBound, factor))
-        guard let device = activeVideoDevice, borne != device.videoZoomFactor else { return }
+        let appareil = zoomScale.device(borne)
+        guard let device = activeVideoDevice, appareil != device.videoZoomFactor else { return }
         do {
             try device.lockForConfiguration()
-            device.videoZoomFactor = borne
+            device.videoZoomFactor = appareil
             device.unlockForConfiguration()
             zoomFactor = borne
         } catch {

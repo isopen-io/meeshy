@@ -122,6 +122,7 @@ final class ComposerCaptureSession: ObservableObject {
             lockProgress: lockProgress,
             locked: holdPhase == .locked || mode == ComposerShutterGesture.mode(locked: true),
             zoomFactor: camera.zoomFactor,
+            zoomPresets: ComposerCaptureZoomScale.presets(in: camera.zoomRange),
             flashIntensity: flashIntensity)
     }
 

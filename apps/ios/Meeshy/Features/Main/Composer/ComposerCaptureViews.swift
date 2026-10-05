@@ -169,6 +169,7 @@ struct ComposerCaptureChrome: View {
                 onZoomDrag: { session.dragZoom(translationY: $0) },
                 onZoomDragEnded: { session.endZoomDrag() },
                 onZoomStep: { session.stepZoom(up: $0) },
+                onZoomPreset: { session.camera.setZoom($0) },
                 onFlashIntensity: { session.setFlashIntensity($0) },
                 onShutterTouched: { session.releaseStaleHold() },
                 onToggleLooks: session.lookIsLocked ? nil : { toggleLooks() },
