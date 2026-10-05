@@ -93,13 +93,18 @@ final class CallVideoEffectsPerformanceTests: XCTestCase {
         XCTAssertEqual(Set(segmenter.qualities), [.balanced], "sous le budget, le flou garde sa qualité d'origine")
     }
 
-    func test_process_blurFramesAtTheBudget_neverDegrade() {
+    /// Juste SOUS le plafond, et non pile dessus : la durée passe par une
+    /// soustraction de secondes en virgule flottante (`(t + 0,025) − t` vaut
+    /// un cheveu de plus que 25 ms), donc l'égalité exacte ne s'observe pas à
+    /// travers le pipeline. La frontière elle-même est jugée sur la règle pure
+    /// (`CallVideoDegradationTests.test_recording_atTheBudget_neverCounts`).
+    func test_process_blurFramesJustUnderTheBudget_neverDegrade() {
         let segmenter = CountingSegmenter(maskValue: 96)
-        let (sut, clock) = makeScriptedSUT(frameMs: CallVideoDegradation.overBudgetMs, segmenter: segmenter)
+        let (sut, clock) = makeScriptedSUT(frameMs: CallVideoDegradation.overBudgetMs - 1, segmenter: segmenter)
 
         feed(sut, clock: clock, frames: 120)
 
-        XCTAssertFalse(sut.isAutoDegraded, "le budget est un plafond inclus : seule une image AU-DELÀ compte")
+        XCTAssertFalse(sut.isAutoDegraded, "une image sous le plafond ne compte jamais")
         XCTAssertEqual(Set(segmenter.qualities), [.balanced])
     }
 
