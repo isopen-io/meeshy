@@ -1,5 +1,5 @@
 ## 2026-10-04 : une citation gravée ne suit un pair renommé que si elle porte son id — PROPOSÉE, à arbitrer
-**Statut**: Proposé (#9359, suite de #9307). Rien n'est implémenté : la décision touche le format persistant (`messages.replyToJson`, `ForwardReference`) et attend l'arbitrage du porteur.
+**Statut**: Retenu (2026-10-04, coordinateur — #9371). Graver à la réception `authorUserId` / `senderUserId` (optionnels, sans migration, sans modification passerelle) ; les citations anciennes sans id guérissent à la prochaine relecture REST. Implémenté par #9371.
 
 **Contexte**: #9307 a fait de `UserUpdatedEvent.repainted(_:)` (SDK, `Models/UserProfileRepaint.swift`) la loi unique qui repeint un pair à `user:updated`, et #9359 l'a portée à l'aperçu « Bob : … » d'un groupe, à la fiche participant et à l'en-tête d'un direct ouvert. Reste la quatrième surface : le nom et la photo de l'auteur CITÉ dans une réponse, ou de l'expéditeur d'origine d'un transfert, dans d'anciens messages.
 
