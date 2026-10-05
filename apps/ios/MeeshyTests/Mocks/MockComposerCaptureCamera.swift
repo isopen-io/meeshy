@@ -61,4 +61,14 @@ final class MockComposerCaptureCamera: ComposerCaptureCameraProviding {
     func setExposureBias(_ bias: Float) {
         exposureBiases.append(bias)
     }
+
+    /// Prête dès qu'aucune bascule n'est en cours — comme `CameraModel.isCaptureReady`.
+    func waitUntilCaptureReady(timeout: TimeInterval) async -> Bool {
+        let limite = Date().addingTimeInterval(timeout)
+        while isSwitchingCamera {
+            guard !Task.isCancelled, Date() < limite else { return false }
+            try? await Task.sleep(nanoseconds: 10_000_000)
+        }
+        return !Task.isCancelled
+    }
 }
