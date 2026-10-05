@@ -6,6 +6,7 @@ import { resolveReaderLanguages } from '@/lib/reader';
 
 import { createCaptions, type CaptionsContext, type CaptionsPort } from './call-captions-controller';
 import { browserSpeech, recognitionOf } from './call-speech';
+import { shellRecognition } from './shell-speech';
 
 /**
  * **LES SOUS-TITRES DANS LE NAVIGATEUR** (#8048) — l'entrée du chunk
@@ -38,7 +39,7 @@ function utteranceId(): string {
 
 export function createBrowserCaptions(ctx: CaptionsContext): CaptionsPort {
   return createCaptions(ctx, {
-    speech: browserSpeech(typeof window === 'undefined' ? null : recognitionOf(window)),
+    speech: browserSpeech(shellRecognition() ?? (typeof window === 'undefined' ? null : recognitionOf(window))),
     language: spokenLanguage,
     viewerName,
     newId: utteranceId,

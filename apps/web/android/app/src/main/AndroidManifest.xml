@@ -221,5 +221,11 @@
         <intent>
             <action android:name="android.media.action.IMAGE_CAPTURE" />
         </intent>
+        <!-- #9446 — SpeechRecognizer.isRecognitionAvailable ne voit le service
+             de reconnaissance (sous-titres d'appel, MeeshySpeechPlugin) que
+             declare ici depuis l'API 30. -->
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
     </queries>
 </manifest>
