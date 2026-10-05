@@ -28,7 +28,7 @@ public nonisolated enum StoryVideoAdjustmentsProcessor {
 
     /// Le contexte partagé. Les intermédiaires ne sont pas gardés en cache :
     /// une trame vidéo ne se rejoue jamais à l'identique.
-    nonisolated(unsafe) static let context = CIContext(options: [.cacheIntermediates: false])
+    static let context = CIContext(options: [.cacheIntermediates: false])
 
     /// Les réglages que cette vidéo POSÉE peint, `nil` quand il n'y a rien à
     /// peindre — une image, un fond (#9496), une vidéo sans réglage actif ou
@@ -42,17 +42,24 @@ public nonisolated enum StoryVideoAdjustmentsProcessor {
 
     /// Une trame réglée — CIImage → CIImage, pure, dans le cadre de la source.
     public static func frame(_ source: CIImage, _ adjustments: ImageAdjustments) -> CIImage {
-        let peints = adjustments.served(for: .video)
-        guard peints.activeCount > 0 else { return source }
-        return ImageAdjustmentStage.apply(source, peints, extent: source.extent).cropped(to: source.extent)
+        paint(source, adjustments.served(for: .video))
+    }
+
+    /// La chaîne seule, sur des réglages DÉJÀ projetés : c'est ce que la
+    /// composition appelle à chaque trame, la projection ayant été faite une
+    /// fois à sa construction.
+    static func paint(_ source: CIImage, _ projected: ImageAdjustments) -> CIImage {
+        guard !projected.isNeutral else { return source }
+        return ImageAdjustmentStage.apply(source, projected, extent: source.extent).cropped(to: source.extent)
     }
 
     /// La composition qui peint ces réglages sur la première piste vidéo de
     /// `asset` — celle que la lecture pose sur son `AVPlayerItem`.
     public static func composition(for asset: AVAsset,
                                    adjustments: ImageAdjustments) async throws -> AVVideoComposition {
-        try await AVVideoComposition.videoComposition(with: asset, applyingCIFiltersWithHandler: { request in
-            request.finish(with: frame(request.sourceImage, adjustments), context: context)
+        let peints = adjustments.served(for: .video)
+        return try await AVVideoComposition.videoComposition(with: asset, applyingCIFiltersWithHandler: { request in
+            request.finish(with: Self.paint(request.sourceImage, peints), context: Self.context)
         })
     }
 
