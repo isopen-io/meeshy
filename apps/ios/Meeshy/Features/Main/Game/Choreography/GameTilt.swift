@@ -38,7 +38,7 @@ final class GameTiltSource: ObservableObject {
 /// Mythe) et de lui seul — une pièce d'argent ou d'or n'en reçoit aucune. Le capteur
 /// ne tourne que pour une irisation qui bouge à l'écran : figée sous « réduire les
 /// animations » (le SDK la pose à une inclinaison de repos), elle n'en a pas besoin.
-enum GamePrismTilt {
+nonisolated enum GamePrismTilt {
     static let activeIntensity = 0.6
 
     static func intensity(active: Bool) -> Double {
