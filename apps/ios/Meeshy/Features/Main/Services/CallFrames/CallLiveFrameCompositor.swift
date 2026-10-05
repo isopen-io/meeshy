@@ -208,7 +208,20 @@ nonisolated final class CallLiveFrameCompositor: CallLiveFrameCompositing, @unch
             CallLiveFrameGeometry.placed(source: video.extent, photo: slot.photo, toCanvas: $0)
         } ?? CallLiveFrameGeometry.videoTransform(source: video.extent, photo: slot.photo, degrees: slot.rotation,
                                                   canvasHeight: canvasHeight)
-        return Self.toned(video.transformed(by: transform), slot: slot).cropped(to: slot.mask.extent)
+        return Self.toned(Self.opaqueCore(video).clampedToExtent().transformed(by: transform), slot: slot)
+            .cropped(to: slot.mask.extent)
+    }
+
+    /// Les seuls pixels ENTIERS d'une image : un bord fractionnaire (une prise déjà
+    /// recadrée) est en partie transparent, et l'étendre ferait un liseré translucide.
+    static func opaqueCore(_ image: CIImage) -> CIImage {
+        let etendue = image.extent
+        guard !etendue.isInfinite, !etendue.isNull else { return image }
+        let minX = etendue.minX.rounded(.up), minY = etendue.minY.rounded(.up)
+        let coeur = CGRect(x: minX, y: minY, width: etendue.maxX.rounded(.down) - minX,
+                           height: etendue.maxY.rounded(.down) - minY)
+        guard coeur.width >= 1, coeur.height >= 1 else { return image }
+        return image.cropped(to: coeur)
     }
 
     /// Le ton d'une case (§ 4.2 de la spec des cadres) par les filtres intégrés de Core Image —
@@ -219,6 +232,8 @@ nonisolated final class CallLiveFrameCompositor: CallLiveFrameCompositing, @unch
             return image
         case .mono:
             return image.applyingFilter("CIPhotoEffectMono")
+        case .luminosity:
+            return luminance(image)
         case .noir:
             return image.applyingFilter("CIPhotoEffectNoir")
         case .sepia:
@@ -233,6 +248,19 @@ nonisolated final class CallLiveFrameCompositor: CallLiveFrameCompositing, @unch
             let pair = slot.duotone ?? CallFrameDuotone(shadow: "#1E1B4B", light: "#F0ABFC")
             return image.applyingFilter("CIFalseColor", parameters: ["inputColor0": ciColor(pair.shadow), "inputColor1": ciColor(pair.light)])
         }
+    }
+
+    /// La luminance 0,30 R + 0,59 V + 0,11 B sur les valeurs ENCODÉES (sRGB), comme le
+    /// mode `.saturation` du peintre CPU sur un gris — quel que soit l'espace de travail.
+    static func luminance(_ image: CIImage) -> CIImage {
+        guard let srgb = CGColorSpace(name: CGColorSpace.sRGB),
+              let encodee = image.matchedFromWorkingSpace(to: srgb) else { return image }
+        let poids = CIVector(x: 0.30, y: 0.59, z: 0.11, w: 0)
+        let gris = encodee.applyingFilter("CIColorMatrix", parameters: [
+            "inputRVector": poids, "inputGVector": poids, "inputBVector": poids,
+            "inputAVector": CIVector(x: 0, y: 0, z: 0, w: 1), "inputBiasVector": CIVector(x: 0, y: 0, z: 0, w: 0),
+        ])
+        return gris.matchedToWorkingSpace(from: srgb) ?? gris
     }
 
     static func ciColor(_ hex: String) -> CIColor {
