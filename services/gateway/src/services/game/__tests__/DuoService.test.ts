@@ -497,6 +497,46 @@ describe('DuoService — autorisation et nuisance', () => {
   });
 });
 
+describe('DuoService — ce qu’une invitation révèle d’un inconnu, et ce que l’invité voit (#9385)', () => {
+  it('un inconnu sous le niveau 20, un inconnu au-delà et un identifiant inexistant rendent la MÊME réponse : le niveau d’un tiers ne fuit pas', async () => {
+    const { db, service } = setup();
+    const LOW = '68a000000000000000000005';
+    seedUser(db, { engagementScore: SCORE, levelRecord: 20 }, C);
+    seedUser(db, { engagementScore: 0, levelRecord: 3 }, LOW);
+
+    const answers = await Promise.all(
+      [C, LOW, '68a0000000000000000000ff'].map((friendId) =>
+        service.invite({ inviterId: USER, friendId, now: NOW }).then(
+          () => 'accepted',
+          (error: { code?: string; details?: unknown }) => JSON.stringify({ code: error.code, details: error.details ?? null }),
+        ),
+      ),
+    );
+
+    expect(new Set(answers).size).toBe(1);
+    expect(JSON.parse(answers[0]!)).toMatchObject({ code: 'DUO_NOT_FRIENDS' });
+  });
+
+  it('l’invité VOIT l’invitation en attente (rôle invité, statut invited, son identifiant) : sans elle, il ne pourrait jamais l’accepter', async () => {
+    const { service } = setup();
+    const { duoId } = await service.invite({ inviterId: USER, friendId: OTHER, now: NOW });
+
+    const view = await service.current(OTHER, NOW);
+
+    expect(view).toMatchObject({ duoId, status: 'invited', role: 'invitee', partner: { userId: USER }, mine: 0, partnerProgress: 0 });
+    await expect(service.accept({ userId: OTHER, duoId: view!.duoId, now: NOW })).resolves.toEqual({ status: 'active', duoId });
+  });
+
+  it('une invitation en attente d’un ancien ami ou d’un compte bloqué n’est pas servie à l’invité', async () => {
+    const { db, service } = setup();
+    await service.invite({ inviterId: USER, friendId: OTHER, now: NOW });
+    db.user.rows.find((u) => u.id === OTHER)!.blockedUserIds = [USER];
+
+    expect(await service.current(OTHER, NOW)).toBeNull();
+    expect(db.gameDuo.rows[0]!.status).toBe('abandoned');
+  });
+});
+
 describe('DuoService — nuisance et déni de service (#9385)', () => {
   it('une invitation REFUSÉE par l’invité ne se renouvelle pas la même semaine, mais la semaine suivante oui', async () => {
     const { service } = setup();

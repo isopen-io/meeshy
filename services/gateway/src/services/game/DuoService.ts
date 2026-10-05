@@ -131,6 +131,13 @@ export class DuoService {
     const [inviter, invitee] = await Promise.all([this.account(inviterId), this.livingAccount(friendId)]);
     const weekKey = this.weekOf(now, inviter?.timezone);
 
+    // L'amitié se tranche AVANT tout ce qui dépend de l'invité (niveau, emplacement,
+    // invitations en attente) : un inconnu reçoit la même réponse quel que soit le
+    // compte visé — ni son niveau, ni son existence ne fuient (conformité D-3).
+    const self = inviterId === friendId;
+    const areFriends = !self && invitee !== null && (await this.areFriends(inviterId, friendId));
+    if (!self && !areFriends) throw new GameRefusal('DUO_NOT_FRIENDS');
+
     const existing = (await this.prisma.gameDuo.findFirst({
       where: { weekKey, inviterId, inviteeId: friendId, status: { in: ['invited', 'active'] } },
       select: { id: true },
@@ -159,10 +166,10 @@ export class DuoService {
     const verdict = canInviteToDuo({
       inviterLevelRecord: recordOf(inviter),
       inviteeLevelRecord: invitee ? recordOf(invitee) : 0,
-      areFriends: invitee ? await this.areFriends(inviterId, friendId) : false,
+      areFriends: self || areFriends,
       inviterHasDuo: await this.hasSlot(inviterId, weekKey),
       inviteeHasDuo: await this.hasSlot(friendId, weekKey),
-      self: inviterId === friendId,
+      self,
     });
     if (verdict.allowed === false) throw this.refusalOf(verdict.reason);
 
@@ -410,11 +417,23 @@ export class DuoService {
    * — ce qui permettrait de lire QUAND il a agi. Si le partenaire a coupé son
    * statut en ligne, ou masqué son jeu, on ne sert RIEN de sa part (0).
    */
+  /**
+   * L'invitation qui ATTEND ce compte cette semaine : l'invité n'a pas d'emplacement
+   * tant qu'il n'a pas accepté, et sans elle il ne connaîtrait jamais l'identifiant
+   * à accepter. La plus récente seulement — les autres restent en attente.
+   */
+  private async pendingInvitationFor(userId: string, weekKey: string): Promise<DuoRow | null> {
+    return (await this.prisma.gameDuo.findFirst({
+      where: { inviteeId: userId, weekKey, status: 'invited' },
+      orderBy: { createdAt: 'desc' },
+    })) as DuoRow | null;
+  }
+
   async current(userId: string, now: Date = new Date()): Promise<NonNullable<GameBlockExtrasFacts['duo']> | null> {
     const me = await this.account(userId);
     const weekKey = this.weekOf(now, me?.timezone);
     const slot = (await this.prisma.gameDuoSlot.findUnique({ where: { userId_weekKey: { userId, weekKey } }, select: { duoId: true } })) as { duoId: string } | null;
-    const duo = slot === null ? null : await this.load(slot.duoId);
+    const duo = slot === null ? await this.pendingInvitationFor(userId, weekKey) : await this.load(slot.duoId);
     if (duo === null || (duo.status !== 'invited' && duo.status !== 'active')) return null;
 
     const role = this.roleOf(duo, userId);
