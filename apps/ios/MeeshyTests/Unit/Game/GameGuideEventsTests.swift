@@ -100,4 +100,17 @@ final class GameGuideEventsTests: XCTestCase {
         let game = GameFixture.game()
         XCTAssertTrue(GameGuideEvents.transitions(from: game, to: game, badgeImpactBefore: MintBadgeImpact(lost: 3, regain: 5)).isEmpty)
     }
+
+    /// L'écu ne MONTE que sur une marche gagnée : une frappe refusée restaure la Gloire
+    /// d'avant, et la division retrouvée n'est pas une promotion à célébrer.
+    func test_rankClimbed_onlyForAStepUp_neverForTheStepRestoredAfterARefusal() {
+        let voixIII = GameFixture.game(glory: 1_500)
+        let voixII = GameFixture.game(glory: 2_200)
+        let mythe = GameFixture.game(glory: 90_000, mythic: true)
+        let legende = GameFixture.game(glory: 90_000)
+        XCTAssertTrue(GameGuideEvents.rankClimbed(from: voixIII, to: voixII))
+        XCTAssertFalse(GameGuideEvents.rankClimbed(from: voixII, to: voixIII))
+        XCTAssertFalse(GameGuideEvents.rankClimbed(from: voixII, to: voixII))
+        XCTAssertTrue(GameGuideEvents.rankClimbed(from: legende, to: mythe))
+    }
 }

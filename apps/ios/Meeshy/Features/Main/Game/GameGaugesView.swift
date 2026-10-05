@@ -166,19 +166,15 @@ private struct GameRankTile: View {
     let haptics: GameHapticsProviding
 
     @State private var play = 0
-    @State private var seenStanding: String
+    @State private var seenOrder: Int
 
     init(game: GameBlock, haptics: GameHapticsProviding) {
         self.game = game
         self.haptics = haptics
-        _seenStanding = State(initialValue: Self.standing(of: game))
+        _seenOrder = State(initialValue: GameGuideEvents.standingOrder(game))
     }
 
     private var glory: GameBlock.Glory { game.glory }
-
-    private static func standing(of game: GameBlock) -> String {
-        "\(game.glory.rank.rawValue)/\(game.glory.division?.rawValue ?? 0)"
-    }
 
     var body: some View {
         GameTile(
@@ -201,9 +197,12 @@ private struct GameRankTile: View {
                 caption(nextText ?? String(localized: "game.rank.top", defaultValue: "Le rang le plus haut", bundle: .main))
             }
         )
-        .adaptiveOnChange(of: Self.standing(of: game)) { _, now in
-            guard now != seenStanding else { return }
-            seenStanding = now
+        .adaptiveOnChange(of: GameGuideEvents.standingOrder(game)) { _, now in
+            // Seule une marche GAGNÉE joue l'écu : la division retrouvée quand un geste
+            // refusé restaure la Gloire d'avant n'est pas une promotion.
+            let climbed = now > seenOrder
+            seenOrder = now
+            guard climbed else { return }
             play += 1
             haptics.play(GameHapticPattern.rank)
         }
