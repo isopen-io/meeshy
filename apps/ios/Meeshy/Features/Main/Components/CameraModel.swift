@@ -493,7 +493,21 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
 
     private func resumeContinuousFocus() {
         guard let device = activeVideoDevice else { return }
-        Self.apply(ComposerCaptureFocus.continuous(Self.focusCapabilities(of: device)), to: device)
+        Self.apply(ComposerCaptureFocus.continuous(Self.focusCapabilities(of: device), smooth: isRecordingVideo),
+                   to: device)
+    }
+
+    /// **La netteté glisse pendant TOUTE la prise** (#9464) — posée à chaque
+    /// segment (le nouvel objectif d'une bascule compris), retirée à la fin.
+    private func setSmoothFocus(_ lisse: Bool) {
+        guard let device = activeVideoDevice, device.isSmoothAutoFocusSupported else { return }
+        do {
+            try device.lockForConfiguration()
+            device.isSmoothAutoFocusEnabled = lisse
+            device.unlockForConfiguration()
+        } catch {
+            Logger.media.error("Smooth focus failed: \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     nonisolated private static func focusCapabilities(of device: AVCaptureDevice) -> ComposerCaptureFocus.Capabilities {
@@ -607,6 +621,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
             .appendingPathComponent("video_\(UUID().uuidString).mov")
         videoOutput.startRecording(to: tempURL, recordingDelegate: self)
         isRecordingVideo = true
+        setSmoothFocus(true)
         return true
     }
 
@@ -623,6 +638,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
         switchCover = nil
         switchFollower = nil
         isRecordingVideo = false
+        setSmoothFocus(false)
         recordingTimer?.invalidate()
         recordingTimer = nil
         for segment in recordedSegmentURLs {
@@ -702,6 +718,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     /// La prise est close : les segments se rassemblent et partent.
     private func deliverRecording() async {
         isRecordingVideo = false
+        setSmoothFocus(false)
         recordingTimer?.invalidate()
         recordingTimer = nil
 
