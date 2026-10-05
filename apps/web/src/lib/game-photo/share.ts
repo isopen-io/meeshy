@@ -103,8 +103,8 @@ const navigatorShares = (nav: ShareNavigator, data: ShareData): boolean =>
  * Partager : la feuille du navigateur (avec le titre et le texte), sinon celle
  * de la coque, sinon un téléchargement — sinon l'échec, dit. `text` est le lien
  * de parrainage (#7742) : l'image porte déjà son bandeau, le texte le redit.
- * Le pont de la coque (`MeeshyShare.shareFile`) ne porte que les octets : le
- * texte lui est offert, il le laisse tomber.
+ * Le pont de la coque (`MeeshyShare.shareFile`) porte le texte avec les octets
+ * (#9492) ; une coque construite avant l'ignore et ne partage que l'image.
  */
 export async function sharePhoto(file: File, title: string, doors: PhotoDoors, text?: string): Promise<ShareOutcome> {
   const download = anchorDownload(doors.host);

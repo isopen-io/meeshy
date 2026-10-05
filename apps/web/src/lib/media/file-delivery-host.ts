@@ -63,11 +63,11 @@ function partageParLePont(shell: CoqueNative | undefined): Pick<FileDeliveryHost
   if (pont === null) return {};
   return {
     canShareFiles: (data) => data.files.length === 1,
-    shareFiles: async ({ files }) => {
+    shareFiles: async ({ files, text }) => {
       const [file] = files;
       if (file === undefined) return;
       const data = await base64De(file);
-      await pont({ fileName: file.name, mimeType: file.type, data }).catch((erreur: unknown) => {
+      await pont({ fileName: file.name, mimeType: file.type, data, ...(text === undefined ? {} : { text }) }).catch((erreur: unknown) => {
         throw annulationDuPont(erreur);
       });
     },
