@@ -41,6 +41,16 @@ export const ADMIN_MEMBER_SECTIONS = [
 
 export type AdminMemberSection = (typeof ADMIN_MEMBER_SECTIONS)[number];
 
+/**
+ * Les sections OFFERTES à un administrateur (#8003). La passerelle ne sert les
+ * préférences d'un membre qu'à `canViewSensitiveData` (BIGBOSS, ADMIN) : qui ne
+ * la porte pas ne voit ni la carte ni sa modale, plutôt qu'une carte qui mènerait
+ * à un refus. L'ordre des autres ne bouge pas.
+ */
+export function adminMemberSectionsFor({ sensitive }: { readonly sensitive: boolean }): readonly AdminMemberSection[] {
+  return sensitive ? ADMIN_MEMBER_SECTIONS : ADMIN_MEMBER_SECTIONS.filter((section) => section !== 'preferences');
+}
+
 export const ADMIN_MEMBER_SECTION_TITLES = {
   profile: 'admin.people.card.identity',
   contact: 'admin.people.card.contact',
