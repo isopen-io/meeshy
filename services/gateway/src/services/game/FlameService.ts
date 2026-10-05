@@ -170,7 +170,7 @@ export class FlameService {
     const assertRoom = async (db: Pick<PrismaClient, 'user'>): Promise<number> => {
       const freezes = count((await this.userRow(db, userId)).flameFreezes);
       const verdict = canBuyFreeze({ freezes, balance: FLAME_FREEZE_PRICE });
-      if (!verdict.allowed && verdict.reason === 'at-maximum') throw new GameRefusal('FREEZE_AT_MAXIMUM');
+      if (verdict.allowed === false && verdict.reason === 'at-maximum') throw new GameRefusal('FREEZE_AT_MAXIMUM');
       return freezes;
     };
 
@@ -211,7 +211,7 @@ export class FlameService {
         const burning = facts.streak > 0 && facts.lastActiveDay !== null;
         throw new GameRefusal('RELIGHT_NOT_ALLOWED', { reason: burning ? 'not-extinguished' : 'no-streak' });
       }
-      if (!verdict.allowed) throw new GameRefusal('RELIGHT_NOT_ALLOWED', { reason: verdict.reason });
+      if (verdict.allowed === false) throw new GameRefusal('RELIGHT_NOT_ALLOWED', { reason: verdict.reason });
       return { facts, broken };
     };
 
