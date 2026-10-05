@@ -17,14 +17,22 @@ public enum StorySlideRenderer {
         slide: StorySlide,
         bgImage: UIImage?,
         loadedImages: [String: UIImage] = [:],
-        size: CGSize = CGSize(width: 100, height: 178)
+        size: CGSize = CGSize(width: 100, height: 178),
+        scale: CGFloat? = nil
     ) -> UIImage? {
         // Default ~100x178 (9:16) is enough for a ThumbHash (~32x32 avg colours).
         // Callers needing a crisp preview — the story-tray cover thumbnail that must
         // show ALL composer layers (text + drawing + media) — pass a larger `size`.
         // Every layer draw scales relative to `size`, so geometry stays correct.
 
-        let renderer = UIGraphicsImageRenderer(size: size)
+        // `scale` : la densité de la vignette d'une tuile de scène (#5037) ;
+        // `nil` garde celle de l'écran, comme avant.
+        let format = UIGraphicsImageRendererFormat.default()
+        if let scale {
+            format.scale = scale
+            format.preferredRange = .standard
+        }
+        let renderer = UIGraphicsImageRenderer(size: size, format: format)
         let base = renderer.image { ctx in
             let rect = CGRect(origin: .zero, size: size)
             let cgCtx = ctx.cgContext
