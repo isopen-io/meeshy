@@ -113,4 +113,25 @@ describe('la lecture d’un vocal tenue au premier plan dans la coque Android (#
     expect(notification).toContain('.setMediaSession(session.getSessionToken())');
     expect(notification).toContain('.setShowActionsInCompactView(0)');
   });
+
+  test('une pause garée offre « Lecture », à la notification comme au casque, et la remet à la page (#9394)', () => {
+    const service = sansCommentaires(lire(...JAVA, 'PlaybackForegroundService.java'));
+    expect(service).toContain('ACTION_PLAY');
+    expect(service).toContain('PlaybackState.STATE_PAUSED');
+    expect(service).toContain('PlaybackState.ACTION_PLAY');
+    expect(corpsDe(service, 'public void onPlay(')).toContain('resume(');
+    expect(corpsDe(service, 'void resume(')).toContain('MeeshyPlaybackPlugin.playRequested(');
+    expect(corpsDe(service, 'int onStartCommand(')).toContain('resume(');
+    expect(corpsDe(service, 'Notification notification(')).toContain('R.string.playback_play');
+    expect(corpsDe(service, 'static void park(')).toContain('parked(');
+    expect(corpsDe(service, 'void parked(')).toContain('STOP_FOREGROUND_DETACH');
+    const plugin = sansCommentaires(lire(...JAVA, 'MeeshyPlaybackPlugin.java'));
+    expect(corpsDe(plugin, 'public void parkPlayback(')).toContain('PlaybackForegroundService.park(');
+    expect(corpsDe(plugin, 'static boolean playRequested(')).toContain('notifyListeners("playRequested"');
+    for (const dossier of LANGUES) {
+      const chaines = lire('res', dossier, 'strings_playback.xml');
+      expect(chaines).toContain('name="playback_play"');
+      expect(chaines).toContain('name="playback_paused"');
+    }
+  });
 });
