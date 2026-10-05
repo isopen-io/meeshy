@@ -92,14 +92,6 @@ const refusalResponse = {
   },
 } as const;
 
-const responses = {
-  200: okResponse,
-  401: errorResponseSchema,
-  409: refusalResponse,
-  429: errorResponseSchema,
-  500: errorResponseSchema,
-} as const;
-
 export async function meGameRoutes(fastify: FastifyInstance, options: GameRoutesOptions = {}) {
   const engagement = options.engagement ?? new EngagementService(fastify.prisma);
   const creditPoints = (userId: string, points: number, axisKey: EngagementAxisKey) =>
@@ -134,7 +126,7 @@ export async function meGameRoutes(fastify: FastifyInstance, options: GameRoutes
         summary: 'Reroll a daily mission',
         params: { type: 'object', required: ['missionId'], properties: { missionId: { type: 'string', minLength: 1, maxLength: 64 } } },
         body: writeBody,
-        response: responses,
+        response: { 200: okResponse, 401: errorResponseSchema, 409: refusalResponse, 429: errorResponseSchema, 500: errorResponseSchema },
       },
     },
     (request: FastifyRequest<{ Params: { missionId: string }; Body: { requestId: string } }>, reply: FastifyReply) =>
@@ -153,7 +145,7 @@ export async function meGameRoutes(fastify: FastifyInstance, options: GameRoutes
         tags: ['me', 'game'],
         summary: 'Claim the daily chest',
         body: writeBody,
-        response: responses,
+        response: { 200: okResponse, 401: errorResponseSchema, 409: refusalResponse, 429: errorResponseSchema, 500: errorResponseSchema },
       },
     },
     (request: FastifyRequest<{ Body: { requestId: string } }>, reply: FastifyReply) =>
@@ -170,7 +162,7 @@ export async function meGameRoutes(fastify: FastifyInstance, options: GameRoutes
         tags: ['me', 'game'],
         summary: 'Buy a flame freeze',
         body: writeBody,
-        response: responses,
+        response: { 200: okResponse, 401: errorResponseSchema, 409: refusalResponse, 429: errorResponseSchema, 500: errorResponseSchema },
       },
     },
     (request: FastifyRequest<{ Body: { requestId: string } }>, reply: FastifyReply) =>
@@ -187,7 +179,7 @@ export async function meGameRoutes(fastify: FastifyInstance, options: GameRoutes
         tags: ['me', 'game'],
         summary: 'Relight the flame',
         body: writeBody,
-        response: responses,
+        response: { 200: okResponse, 401: errorResponseSchema, 409: refusalResponse, 429: errorResponseSchema, 500: errorResponseSchema },
       },
     },
     (request: FastifyRequest<{ Body: { requestId: string } }>, reply: FastifyReply) =>
@@ -204,7 +196,7 @@ export async function meGameRoutes(fastify: FastifyInstance, options: GameRoutes
         tags: ['me', 'game'],
         summary: 'Mark guide keys as seen',
         body: guideBody,
-        response: responses,
+        response: { 200: okResponse, 401: errorResponseSchema, 409: refusalResponse, 429: errorResponseSchema, 500: errorResponseSchema },
       },
     },
     (request: FastifyRequest<{ Body: { requestId: string; keys: string[] } }>, reply: FastifyReply) =>
