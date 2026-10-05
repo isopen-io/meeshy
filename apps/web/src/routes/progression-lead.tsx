@@ -11,6 +11,7 @@ import type { GuideCard } from '@/lib/game-guide/card';
 import { appPhotoEnv } from '@/lib/game-photo/app-env';
 import type { PhotoEnv } from '@/lib/game-photo/env';
 import { photoMomentFromCard, photoMomentOfEmblemV2, startMoment, type PhotoMoment } from '@/lib/game-photo/moments';
+import { useGamePrefs } from '@/lib/game/preferences';
 import { useViewerId } from '@/routes/game-friends';
 import { useGameGuide } from '@/routes/progression-guide';
 import { GAME_MUTATION_KEY } from '@/routes/progression-game-actions';
@@ -60,8 +61,12 @@ export function GameLead({
 }) {
   const settled = useIsMutating({ mutationKey: GAME_MUTATION_KEY }) === 0;
   const userId = useViewerId();
-  const guide = useGameGuide({ view, settled, userId, ...(transport === undefined ? {} : { transport }) });
-  const photo = usePhotoMoments({ view, env, settled });
+  /* Les célébrations se règlent par appareil (`lib/game/preferences.ts`) : éteintes, ou le jeu masqué, les crochets ne reçoivent
+     aucune lecture — ni carte, ni proposition de photo, et rien n'est marqué « vu » à la place de la personne. */
+  const prefs = useGamePrefs();
+  const awake = prefs.celebrations && !prefs.hidden;
+  const guide = useGameGuide({ view: awake ? view : undefined, settled, userId, ...(transport === undefined ? {} : { transport }) });
+  const photo = usePhotoMoments({ view: awake ? view : undefined, env, settled });
   const game = view.game;
 
   const cardMoment = useCallback(

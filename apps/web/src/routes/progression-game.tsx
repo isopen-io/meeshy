@@ -10,7 +10,9 @@ import { GameFlamePanel } from '@/components/game-flame-panel';
 import { GameGauges } from '@/components/game-gauges';
 import { GameHero } from '@/components/game-hero';
 import { GameMintPreview } from '@/components/game-mint-preview';
+import { GameHiddenCard } from '@/components/game-hidden-card';
 import { GameMissions } from '@/components/game-missions';
+import { useGamePrefs } from '@/lib/game/preferences';
 
 import type { GameActions } from './progression-game-actions';
 
@@ -39,7 +41,9 @@ export type GameHost = {
 
 export function GameSection({ progress, host }: { readonly progress: EngagementWithGame; readonly host: GameHost }) {
   const game = progress.game;
+  const prefs = useGamePrefs();
   if (game === undefined) return null;
+  if (prefs.hidden) return <GameHiddenCard />;
   const { actions, online, guide, guideLine } = host;
 
   return (
@@ -96,6 +100,14 @@ export function GameSection({ progress, host }: { readonly progress: EngagementW
         style={{ minHeight: 44, backgroundColor: GAME_CARD, color: GAME_BRAND }}
       >
         {gameText('game.door.rules')}
+      </Link>
+      <Link
+        to="progressionReglages"
+        data-game-door="progressionReglages"
+        className="flex items-center justify-center rounded-card px-4 text-body font-semibold"
+        style={{ minHeight: 44, backgroundColor: GAME_CARD, color: GAME_BRAND }}
+      >
+        {gameText('game.door.settings')}
       </Link>
       <Link
         to="progressionCarnet"

@@ -490,6 +490,7 @@ const en = {
   'settings.export_data': 'Export my data',
   'settings.section.tools': 'Tools',
   'settings.tools.progression': 'Progress',
+  'settings.tools.game': 'Game',
   'settings.section.about': 'About',
   'settings.terms': 'Terms of Service',
   'settings.privacy_policy': 'Privacy Policy',

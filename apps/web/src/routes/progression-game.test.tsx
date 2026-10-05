@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test';
+import { afterEach, describe, expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import { resolveEngagementProgress } from '@meeshy/shared/utils/engagement-progress';
@@ -6,6 +6,7 @@ import { resolveEngagementProgress } from '@meeshy/shared/utils/engagement-progr
 import type { EngagementWithGame } from '@/lib/api/engagement';
 import { ENGAGEMENT_PROGRESS_FIXTURE } from '@/lib/api/engagement-fixture';
 import { gameBlockFixture, gameBlockWithExtrasFixture } from '@/lib/api/game-fixture';
+import { gamePrefs } from '@/lib/game/preferences';
 
 import { ProgressionBody } from './progression';
 import type { GameActions } from './progression-game-actions';
@@ -159,5 +160,22 @@ describe('la vague 2 sur le hub (#9481)', () => {
 
   test('un ancien serveur : aucune porte de plus', () => {
     expect(body(withGame())).not.toContain('data-game-doors');
+  });
+});
+
+describe('« Jeu masqué » sur le hub (#9481)', () => {
+  afterEach(() => gamePrefs.set({ hidden: false }));
+
+  test('masqué : une carte qui le dit remplace tout le jeu, et rien du reste du jeu ne se peint', () => {
+    gamePrefs.set({ hidden: true });
+    const page = body(withGame());
+    expect(page).toContain('id="game-hidden"');
+    expect(page).not.toContain('data-game-hero');
+    expect(page).not.toContain('id="game-missions"');
+    expect(page).not.toContain('id="game-flame-panel"');
+  });
+
+  test('la porte vers les réglages du jeu est sur le hub', () => {
+    expect(body(withGame())).toContain('href="/me/progression/reglages"');
   });
 });

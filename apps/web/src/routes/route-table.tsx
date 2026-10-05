@@ -138,6 +138,8 @@ const progressionAtlasScreen = () =>
   Promise.all([import('@/routes/progression-atlas'), loadGameCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
 const progressionPrestigeScreen = () =>
   Promise.all([import('@/routes/progression-prestige'), loadGameCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+const progressionReglagesScreen = () =>
+  Promise.all([import('@/routes/progression-reglages'), loadGameCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
 const progressionBadgesScreen = () =>
   Promise.all([import('@/routes/progression-badges'), loadGameCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
 const progressionRulesScreen = () =>
@@ -201,6 +203,8 @@ export const ROUTES = {
   progressionVitrine: { pattern: '/me/progression/vitrine', screen: progressionVitrineScreen },
   progressionAtlas: { pattern: '/me/progression/atlas', screen: progressionAtlasScreen },
   progressionPrestige: { pattern: '/me/progression/prestige', screen: progressionPrestigeScreen },
+  /* LES RÉGLAGES DU JEU (#9481) — célébrations, « Jeu masqué », qui voit quoi, ligue publique. PRIVÉE. */
+  progressionReglages: { pattern: '/me/progression/reglages', screen: progressionReglagesScreen },
   progressionDefis: { pattern: '/me/progression/defis', screen: () => import('@/routes/progression-defis') },
   progressionSucces: { pattern: '/me/progression/succes', screen: () => import('@/routes/progression-succes') },
   /* LE CARNET DES RÈGLES (#9379) — « Comment ça marche », depuis Progression :
