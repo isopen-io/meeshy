@@ -87,6 +87,12 @@ const input = (host: ParentNode, selector: string): HTMLInputElement => {
 
 const puts = (spy: Spy) => spy.requests.filter((request) => request.method === 'PUT');
 
+/** Enregistrer, c'est soumettre PUIS confirmer : un barème vaut pour tous les membres (audit 2026-10-04). */
+async function enregistrer(host: HTMLElement): Promise<void> {
+  await mounter.submit(host);
+  await mounter.click(document.querySelector<HTMLElement>('[data-admin-confirm] [data-admin-action="confirm"]'));
+}
+
 describe('le brouillon — la loi partagée en aller-retour', () => {
   test('les défauts relus depuis le brouillon sont les défauts', () => {
     expect(scaleOfDraft(draftOf(DEFAULT_ENGAGEMENT_SCALE))).toEqual(DEFAULT_ENGAGEMENT_SCALE);
@@ -262,7 +268,7 @@ describe('l’édition et l’enregistrement', () => {
     mounter.type(host, '[data-scale-cap="tool.reaction"]', '');
     await mounter.click(host.querySelector('[data-scale-multiplied="tool.attachment"]'));
     mounter.type(host, '[data-scale-multiplier="maxFactor"]', '4');
-    await mounter.submit(host);
+    await enregistrer(host);
 
     const [put] = puts(spy);
     const body = put?.body as { readonly scale: EngagementScale } | undefined;
@@ -281,7 +287,7 @@ describe('l’édition et l’enregistrement', () => {
     mounter.type(host, '[data-scale-link="stepPerDoubling"]', '3');
     await mounter.click(host.querySelector('[data-scale-streak-remove="0"]'));
     mounter.type(host, '[data-scale-abuse="unverifiedMaxPoints"]', '5');
-    await mounter.submit(host);
+    await enregistrer(host);
 
     const body = puts(spy)[0]?.body as { readonly scale: EngagementScale } | undefined;
     expect(body?.scale.operations['content.story'].variantPoints.friends).toBe(25);
@@ -289,6 +295,41 @@ describe('l’édition et l’enregistrement', () => {
     expect(body?.scale.linkVisits.stepPerDoubling).toBe(3);
     expect(body?.scale.streakBonuses.map((bonus) => bonus.days)).toEqual([30, 100]);
     expect(body?.scale.abuse.unverifiedMaxPoints).toBe(5);
+  });
+
+  test('enregistrer demande CONFIRMATION : rien ne part tant qu’on ne confirme pas, et sans motif à écrire', async () => {
+    const spy = scaleTransport();
+    const host = await mountPanel(spy);
+
+    await mounter.submit(host);
+
+    expect(puts(spy)).toEqual([]);
+    const sheet = document.querySelector('[data-admin-confirm]');
+    expect(sheet?.textContent).toContain('tous les membres');
+    expect(document.querySelector('[data-admin-motive]')).toBeNull();
+    await mounter.click(document.querySelector<HTMLElement>('[data-admin-confirm] [data-admin-action="cancel"]'));
+    expect(puts(spy)).toEqual([]);
+    expect(document.querySelector('[data-admin-confirm]')).toBeNull();
+  });
+
+  test('« Réglé par » NOMME la personne servie et mène à sa fiche — jamais un identifiant', async () => {
+    const person = { id: 'a'.repeat(24), username: 'awa', displayName: 'Awa Diop', avatar: null };
+    appQueryClient.setQueryData(ADMIN_PERMISSIONS_QUERY_KEY, { role: 'BIGBOSS', permissions: MATRICE });
+    const host = await mountPanel(scaleTransport({ getBody: { ...SERVED, updatedAt: '2026-09-30T10:00:00.000Z', updatedBy: person.id, updatedByPerson: person } }));
+
+    const line = host.querySelector('[data-scale-updated]');
+    expect(line?.textContent).toContain('Awa Diop');
+    expect(line?.textContent).not.toContain(person.id);
+    expect(line?.querySelector('a')?.getAttribute('href')).toContain(`/users/${person.id}`);
+  });
+
+  test('un réglage dont la personne n’est pas servie (ancien serveur, compte disparu) ne peint pas l’identifiant', async () => {
+    const id = 'b'.repeat(24);
+    const host = await mountPanel(scaleTransport({ getBody: { ...SERVED, updatedAt: '2026-09-30T10:00:00.000Z', updatedBy: id } }));
+
+    const line = host.querySelector('[data-scale-updated]')?.textContent ?? '';
+    expect(line).not.toContain(id);
+    expect(line).toContain('Personne inconnue');
   });
 
   test('un barème invalide est BLOQUÉ : aucun PUT, l’erreur est dite', async () => {
@@ -318,7 +359,7 @@ describe('l’édition et l’enregistrement', () => {
     const spy = scaleTransport({ putRefused: 'Barème invalide' });
     const host = await mountPanel(spy);
 
-    await mounter.submit(host);
+    await enregistrer(host);
 
     expect(puts(spy).length).toBe(1);
     expect(host.querySelector('[data-scale-error]')?.textContent).toBe(
