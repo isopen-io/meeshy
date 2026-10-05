@@ -120,11 +120,10 @@ final class ComposerSceneShutterWiringTests: XCTestCase {
         XCTAssertTrue(code.contains("onTap:{handleArmedSceneTap()}"),
                       "la nappe du viseur ne transmet pas le second toucher")
         let chrome = try source("ComposerCaptureViews.swift")
-        // #9295 — le double toucher (mise au point) s'intercale entre l'appui
-        // long et le toucher simple ; le toucher simple prend toujours la photo,
-        // sauf à la levée d'un pincement.
-        XCTAssertTrue(chrome.contains("holdGesture.exclusively(before:focusGesture("))
-        XCTAssertTrue(chrome.contains(".exclusively(before:TapGesture().onEnded{guard!session.pinchSpoilsGestureselse{return}onTap()})"))
+        // #9464 — après l'appui long, le toucher : simple il vise, second il
+        // prend la photo par l'hôte — jamais à la levée d'un pincement.
+        XCTAssertTrue(chrome.contains("holdGesture.exclusively(before:tapGesture("))
+        XCTAssertTrue(chrome.contains("case.photo:onTap()"))
     }
 
     /// **La levée sans début ne fait RIEN.** Le canvas émet sa fin même quand
