@@ -82,11 +82,12 @@ final class CallMontageLayersTests: XCTestCase {
         let pose = CallLiveFrameGeometry.placed(
             source: source, photo: photo,
             toCanvas: rotation.concatenating(CallMontageRenderer.coreImage(canvasHeight: 192)))
-        let attendu: (CGPoint) -> CGPoint = { coin in
-            let d = CGPoint(x: coin.x - centre.x, y: coin.y - centre.y)
-            let tourne = CGPoint(x: centre.x + d.x * cos(angle) - d.y * sin(angle),
-                                 y: centre.y + d.x * sin(angle) + d.y * cos(angle))
-            return CGPoint(x: tourne.x, y: 192 - tourne.y)
+        let attendu: (CGPoint) -> CGPoint = { (coin: CGPoint) -> CGPoint in
+            let dx: CGFloat = coin.x - centre.x
+            let dy: CGFloat = coin.y - centre.y
+            let x: CGFloat = centre.x + dx * cos(angle) - dy * sin(angle)
+            let y: CGFloat = centre.y + dx * sin(angle) + dy * cos(angle)
+            return CGPoint(x: x, y: 192 - y)
         }
         let hautGauche = CGPoint(x: 0, y: 400).applying(pose)
         let basDroite = CGPoint(x: 300, y: 0).applying(pose)
@@ -112,10 +113,7 @@ final class CallMontageLayersTests: XCTestCase {
             style: .noir, portraits: [CallMontagePortrait(id: "a", name: "A", image: photo)],
             canvas: toile, caption: legende))
         let pixels = Self.rgba(CIImage(cgImage: noir), size: toile, context: contexte)
-        let colores = stride(from: 0, to: pixels.count, by: 4).filter { i in
-            abs(Int(pixels[i]) - Int(pixels[i + 1])) > 3 || abs(Int(pixels[i + 1]) - Int(pixels[i + 2])) > 3
-        }
-        XCTAssertEqual(colores.count, 0, "noir désature la photo de l'appel : aucun pixel coloré")
+        XCTAssertEqual(Self.colouredPixels(pixels), 0, "noir désature la photo de l'appel : aucun pixel coloré")
     }
 
     func test_tone_noirIsLuminosity_othersInColor() {
@@ -144,7 +142,8 @@ final class CallMontageLayersTests: XCTestCase {
 
     /// L'écart moyen RVB, sur les seuls pixels où la case couvre au moins la moitié.
     static func slotGap(_ a: [UInt8], _ b: [UInt8], mask: [UInt8]) -> Double {
-        let pixels = stride(from: 0, to: min(a.count, b.count, mask.count), by: 4).filter { mask[$0 + 3] >= 128 }
+        let fin: Int = min(a.count, b.count, mask.count)
+        let pixels: [Int] = stride(from: 0, to: fin, by: 4).filter { (i: Int) -> Bool in mask[i + 3] >= 128 }
         let somme: Double = pixels.reduce(0.0) { (total: Double, i: Int) -> Double in
             let r = abs(Double(a[i]) - Double(b[i]))
             let v = abs(Double(a[i + 1]) - Double(b[i + 1]))
@@ -154,8 +153,17 @@ final class CallMontageLayersTests: XCTestCase {
         return pixels.isEmpty ? 1 : somme / Double(pixels.count * 3) / 255
     }
 
+    static func colouredPixels(_ pixels: [UInt8]) -> Int {
+        stride(from: 0, to: pixels.count - 3, by: 4).filter { (i: Int) -> Bool in
+            let rouge = Int(pixels[i])
+            let vert = Int(pixels[i + 1])
+            let bleu = Int(pixels[i + 2])
+            return abs(rouge - vert) > 3 || abs(vert - bleu) > 3
+        }.count
+    }
+
     static func translucentPixels(_ pixels: [UInt8]) -> Int {
-        stride(from: 3, to: pixels.count, by: 4).filter { pixels[$0] != 255 }.count
+        stride(from: 3, to: pixels.count, by: 4).filter { (i: Int) -> Bool in pixels[i] != 255 }.count
     }
 
     static func rgba(_ image: CIImage, size: CGSize, context: CIContext) -> [UInt8] {
