@@ -49,7 +49,7 @@ final class ComposerCaptureSession: ObservableObject {
     /// **Le look choisi EN DIRECT** (#9329) — un filtre et un cadre de l'appel.
     /// Le guet des trames ne s'arme qu'avec lui : sans look, aucune trame retenue.
     @Published var look = ComposerPhotoLook() {
-        didSet { camera.liveFeed.isActive = ComposerLiveLookRule.rendersLive(look) }
+        didSet { refreshFeed() }
     }
     /// Le sélecteur d'effets est déplié.
     @Published var looksOpen = false
@@ -58,6 +58,10 @@ final class ComposerCaptureSession: ObservableObject {
     /// La date de la séance de prise : l'aperçu, la photo et la vidéo écrivent
     /// la MÊME dans leur cadre.
     let lookDate = Date()
+    /// La température de l'appareil (#9349), guettée tant que le viseur vit.
+    let thermal: any ThermalStateMonitorProviding
+    /// Ce que l'aperçu et la bande ont le droit de coûter maintenant.
+    @Published private(set) var thermalBudget = ComposerThermalBudget.budget(for: .nominal)
     /// Chaque désarmement ouvre une nouvelle génération : un rendu lancé avant
     /// ne remet plus rien à un viseur que l'auteur a fermé.
     private var renderGeneration = 0
@@ -85,11 +89,13 @@ final class ComposerCaptureSession: ObservableObject {
     init(stage: ComposerSceneCameraStage = .off,
          mode: ComposerSceneCameraMode? = nil,
          camera: CameraModel = CameraModel(),
-         defaults: UserDefaults = .standard) {
+         defaults: UserDefaults = .standard,
+         thermal: (any ThermalStateMonitorProviding)? = nil) {
         self.stage = stage
         self.mode = mode
         self.camera = camera
         self.defaults = defaults
+        self.thermal = thermal ?? ThermalStateMonitor()
         flashIntensity = defaults.object(forKey: ComposerFlashIntensity.storageKey) as? Double
             ?? ComposerFlashIntensity.defaultLevel
         relais = camera.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }
@@ -126,6 +132,7 @@ final class ComposerCaptureSession: ObservableObject {
     func arm(mode: ComposerSceneCameraMode) {
         self.mode = mode
         stage = .armed
+        watchThermalState()
         camera.configure()
     }
 
@@ -156,6 +163,12 @@ final class ComposerCaptureSession: ObservableObject {
         ComposerLookSceneCache.shared.purge()
         CallFrameRenderer.purgeLayers()
         camera.stop()
+        stopWatchingThermalState()
+    }
+
+    func applyThermal(_ state: ProcessInfo.ThermalState) {
+        thermalBudget = ComposerThermalBudget.budget(for: state)
+        refreshFeed()
     }
 
     func discardSegments() {

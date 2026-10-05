@@ -389,6 +389,32 @@ nonisolated enum ComposerObjectEditorRail {
         !ownsTextField(section)
     }
 
+    /// **Le clavier a bougé : quel panneau ?** (#6156, réciproque de la loi
+    /// #6132 — « à la sortie du geste, tout ce qui a disparu revient »).
+    ///
+    /// Le clavier qui MONTE range le panneau et s'en souvient ; celui qui
+    /// DESCEND rend le panneau qu'IL avait rangé, et lui seul. Un panneau rangé
+    /// par l'auteur (glissement bas #5027, bascule du rail #5098) reste rangé :
+    /// ce geste-là disait « rends-moi la scène », le clavier qui part ensuite
+    /// ne le contredit pas. DÉCRIRE ne bouge ni à l'aller ni au retour.
+    static func panelState(keyboardRises rises: Bool,
+                           section: ComposerObjectEditorSection,
+                           from state: ComposerObjectEditorPanelState) -> ComposerObjectEditorPanelState {
+        guard collapsesWhenKeyboardRises(section) else { return state }
+        if rises {
+            guard !state.optionsAreCollapsed else { return state }
+            return ComposerObjectEditorPanelState(optionsAreCollapsed: true, collapsedByKeyboard: true)
+        }
+        guard state.collapsedByKeyboard else { return state }
+        return ComposerObjectEditorPanelState(optionsAreCollapsed: false, collapsedByKeyboard: false)
+    }
+
+    /// **Un geste EXPLICITE de l'auteur** décide du panneau et efface le
+    /// souvenir du clavier : après lui, le panneau est ce que l'auteur a voulu.
+    static func panelState(explicitlyCollapsed collapsed: Bool) -> ComposerObjectEditorPanelState {
+        ComposerObjectEditorPanelState(optionsAreCollapsed: collapsed, collapsedByKeyboard: false)
+    }
+
     static func collapsed(afterTapping tapped: ComposerObjectEditorSection,
                           selected: ComposerObjectEditorSection,
                           wasCollapsed: Bool) -> Bool {
@@ -469,6 +495,16 @@ nonisolated enum ComposerObjectEditorRail {
             }
         }
     }
+}
+
+/// **L'état du panneau d'options de l'éditeur d'objet** (#5027, #6156) :
+/// rangé ou non, et — s'il l'est — si c'est le CLAVIER qui l'a rangé. Le
+/// second fait n'existe que pour rendre le panneau quand le clavier redescend.
+nonisolated struct ComposerObjectEditorPanelState: Equatable, Sendable {
+    let optionsAreCollapsed: Bool
+    let collapsedByKeyboard: Bool
+
+    static let open = ComposerObjectEditorPanelState(optionsAreCollapsed: false, collapsedByKeyboard: false)
 }
 
 /// **Le geste de retour au bord de tête** (#4997, directive porteur

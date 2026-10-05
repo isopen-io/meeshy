@@ -155,6 +155,10 @@ export const TONE_FILTERS: Readonly<Record<SlotTone, string>> = {
   cool: 'saturate(0.88) brightness(1.02)',
   faded: 'contrast(0.82) brightness(1.08) saturate(0.7)',
   duotone: 'grayscale(1) contrast(1.1)',
+  // Lecture littérale du commentaire Swift (#9348) : la luminance SEULE, sans le
+  // contraste/la luminosité ajoutés du ton `noir` — rendu non vérifié visuellement
+  // contre iOS, voir #9422.
+  luminosity: 'grayscale(1)',
 };
 
 /** Les pellicules posées sur le visage après son filtre, dans la forme de la case. */

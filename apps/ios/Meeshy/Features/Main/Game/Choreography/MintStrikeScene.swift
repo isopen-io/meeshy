@@ -50,7 +50,7 @@ struct MintStrikeScene: View {
             coin(strike: strike, reduced: reduced, fade: fade)
             if let strike, !reduced, strike.burst > 0.05 {
                 Text(String(localized: "game.mint.tchak", defaultValue: "Tchak !", bundle: .main))
-                    .font(.system(size: 15, weight: .heavy, design: .rounded))
+                    .font(MeeshyFont.relative(15, weight: .heavy, design: .rounded))
                     .foregroundColor(MeeshyColors.warning)
                     .opacity(strike.burst)
                     .scaleEffect(0.8 + 0.4 * strike.burst)

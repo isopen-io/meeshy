@@ -1,7 +1,7 @@
 import { STICKER_LINE_HEIGHT, STICKER_PACK_LIMITS, layoutStickerText } from '@meeshy/shared/types/sticker-pack';
 import type { StickerPackItem, StickerTextZone } from '@meeshy/shared/types/sticker-pack';
 
-import { escapeSvg } from '@/lib/mee/art';
+import { PAPER, escapeSvg } from '@/lib/mee/art';
 
 /**
  * LE DESSIN D'UN STICKER DE PACK (#9141).
@@ -44,7 +44,7 @@ export function zoneText(zone: StickerTextZone, value: string, clipId: string): 
     .map((line, i) => `<tspan x="${x}" y="${(top + i * step + layout.fontSize * 0.92).toFixed(1)}">${escapeSvg(line)}</tspan>`)
     .join('');
   const { x: bx, y: by, width, height } = zone.box;
-  return `<clipPath id="${clipId}"><rect x="${bx}" y="${by}" width="${width}" height="${height}"/></clipPath><g clip-path="url(#${clipId})"><text data-zone="${escapeSvg(zone.slot)}" text-anchor="${ANCHOR[zone.align]}" font-family="system-ui,-apple-system,'Segoe UI',Roboto,sans-serif" font-size="${layout.fontSize}" font-weight="${WEIGHT[zone.weight]}" fill="${zone.color}" stroke="#ffffff" stroke-width="${(layout.fontSize * 0.14).toFixed(1)}" stroke-linejoin="round" paint-order="stroke">${lines}</text></g>`;
+  return `<clipPath id="${clipId}"><rect x="${bx}" y="${by}" width="${width}" height="${height}"/></clipPath><g clip-path="url(#${clipId})"><text data-zone="${escapeSvg(zone.slot)}" text-anchor="${ANCHOR[zone.align]}" font-family="system-ui,-apple-system,'Segoe UI',Roboto,sans-serif" font-size="${layout.fontSize}" font-weight="${WEIGHT[zone.weight]}" fill="${zone.color}" stroke="${PAPER}" stroke-width="${(layout.fontSize * 0.14).toFixed(1)}" stroke-linejoin="round" paint-order="stroke">${lines}</text></g>`;
 }
 
 /**

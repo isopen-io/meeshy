@@ -245,7 +245,13 @@
 // fond clair (mesuré : 1,6:1). Rien à voir avec `accentColor`/`colorPalette` ;
 // « Semantic colors (error, success) remain static via MeeshyColors »
 // (CLAUDE.md racine, § Conversation Accent Color).
-const REFERENCE_LITERAL_COLOR_COUNT = 112;
+//
+// 2026-10-05 (#9383 #9381 #9382, via dev) — littéraux 112 → 110 : le lot
+// « le jeu respecte les gardes du dépôt » retire les deux littéraux
+// `GameSurface.swift` ajoutés par #9406 ci-dessus, en passant `warmText` et
+// `goodText` par des jetons au lieu de `Color(hex:)`. Valeur MESURÉE le
+// 2026-10-05.
+const REFERENCE_LITERAL_COLOR_COUNT = 110;
 const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 445;
 
 import { readFileSync, readdirSync, statSync, realpathSync } from 'node:fs';

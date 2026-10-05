@@ -550,6 +550,9 @@ extension MeeshyComposerHost {
                 textEditing: sceneTextEditing && activeInlineEdit == nil)
                 ? AnyView(MeeshyToolOptionsPanel(viewModel: viewModel)) : nil,
             editsInline: activeInlineEdit != nil,
+            // **Écrire cède le bas au clavier** (#6131) — légende ET corps du
+            // post, par le même terme que le socle (`writesText`, #6132).
+            writesText: writesText,
             inlinePanel: sceneInlinePanel,
             trailingFootFollowsOptions: sceneTrailingFootFollowsOptions,
             editingTextId: viewModel.textEditingMode.activeTextId,

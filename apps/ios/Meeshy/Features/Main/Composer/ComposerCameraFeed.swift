@@ -8,7 +8,8 @@ import CoreImage
 /// look est choisi — sans look, l'aperçu reste la couche système et rien n'est
 /// retenu. Une seule trame en mémoire, sous verrou : le pool de la caméra n'est
 /// jamais affamé.
-nonisolated final class ComposerCameraFeed: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, @unchecked Sendable {
+nonisolated final class ComposerCameraFeed: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, ComposerFrameSourcing,
+    @unchecked Sendable {
     let queue = DispatchQueue(label: "me.meeshy.composer.live-look.feed", qos: .userInteractive)
 
     private let lock = NSLock()
@@ -19,6 +20,9 @@ nonisolated final class ComposerCameraFeed: NSObject, AVCaptureVideoDataOutputSa
     private var space: CGColorSpace?
     private var position: AVCaptureDevice.Position = .back
     private var active = false
+    /// Une source sert PLUSIEURS peintres — l'aperçu et la bande —, chacun
+    /// sous son identifiant.
+    private var frameHandlers: [ObjectIdentifier: @Sendable () -> Void] = [:]
 
     override init() {
         super.init()
@@ -76,12 +80,34 @@ nonisolated final class ComposerCameraFeed: NSObject, AVCaptureVideoDataOutputSa
                        from connection: AVCaptureConnection) {
         guard let buffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
         lock.lock()
-        defer { lock.unlock() }
-        guard active else { return }
+        guard active else {
+            lock.unlock()
+            return
+        }
         latest = buffer
         if space == nil {
             space = CVBufferCopyAttachments(buffer, .shouldPropagate)
                 .flatMap { CVImageBufferCreateColorSpaceFromAttachments($0)?.takeRetainedValue() }
         }
+        lock.unlock()
+        announce()
     }
+
+    /// Poser ou retirer le sien ne touche jamais celui d'un autre peintre.
+    func setFrameHandler(_ handler: (@Sendable () -> Void)?, for owner: ObjectIdentifier) {
+        lock.lock()
+        frameHandlers[owner] = handler
+        lock.unlock()
+    }
+
+    private func announce() {
+        lock.lock()
+        let prevenir = active ? Array(frameHandlers.values) : []
+        lock.unlock()
+        prevenir.forEach { $0() }
+    }
+
+    #if DEBUG
+    func announceForTesting() { announce() }
+    #endif
 }

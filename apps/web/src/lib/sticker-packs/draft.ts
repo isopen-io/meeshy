@@ -1,5 +1,5 @@
 import { isStickerAnimated, stickerMimeFromSignature } from '@meeshy/shared/types/sticker-definition';
-import { STICKER_PACK_LIMITS, validateStickerPackManifest } from '@meeshy/shared/types/sticker-pack';
+import { STICKER_PACK_LIMITS, STICKER_TEXT_WEIGHTS, validateStickerPackManifest } from '@meeshy/shared/types/sticker-pack';
 import type {
   StickerKind,
   StickerPackManifest,
@@ -10,6 +10,7 @@ import type {
 } from '@meeshy/shared/types/sticker-pack';
 
 import type { PlainStickerPacksKey } from '@/lib/i18n-sticker-packs-catalog';
+import { INK } from '@/lib/mee/art';
 
 /**
  * **LE BROUILLON D'UN PACK** (#9141) — ce que le tiers remplit dans l'éditeur,
@@ -71,7 +72,14 @@ function freshKey(fileName: string, taken: ReadonlySet<string>): string {
   return `${base}-${n ?? taken.size + 2}`;
 }
 
-/** La zone d'un Instant qui vient d'être créé : un bandeau en bas, une ligne, un texte court — valide d'emblée. */
+/** Le bandeau d'un Instant neuf s'écrit dans le poids le plus gras que le contrat admet (ses poids vont du plus maigre au plus gras). */
+const [, , HEAVIEST_WEIGHT] = STICKER_TEXT_WEIGHTS;
+
+/**
+ * La zone d'un Instant qui vient d'être créé : un bandeau en bas, une ligne, un texte court — valide d'emblée.
+ * Son encre est celle de la famille des stickers (`INK`, `lib/mee/art`) : un pack se dessine dans la même
+ * palette que les stickers de Meeshy, il ne la recopie pas.
+ */
 export function defaultZone(index: number): StickerTextZone {
   return {
     slot: index === 0 ? 'texte' : `texte${index + 1}`,
@@ -82,8 +90,8 @@ export function defaultZone(index: number): StickerTextZone {
     maxLines: 1,
     minFontSize: STICKER_PACK_LIMITS.minFontSize,
     maxFontSize: 64,
-    color: '#1c1941',
-    weight: 'black',
+    color: INK,
+    weight: HEAVIEST_WEIGHT,
     align: 'center',
   };
 }

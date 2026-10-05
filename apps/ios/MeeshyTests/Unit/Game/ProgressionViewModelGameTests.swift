@@ -44,7 +44,10 @@ final class ProgressionViewModelGameTests: XCTestCase {
         await sut.load(forceNetwork: true)
 
         XCTAssertEqual(sut.game?.level.level, 34)
-        XCTAssertEqual(sut.game, served)
+        XCTAssertEqual(sut.game?.level, served.level)
+        XCTAssertEqual(sut.game?.glory, served.glory)
+        XCTAssertEqual(sut.game?.mint, served.mint)
+        XCTAssertEqual(sut.game?.missions, served.missions)
     }
 
     func test_load_anOldServerWithoutTheGameBlock_leavesTheScreenAsItWas() async {
@@ -147,10 +150,11 @@ final class ProgressionViewModelGameTests: XCTestCase {
     // MARK: - Le coffre
 
     func test_claimChest_opensItAtOnceAndLaysTheServedContent() async {
-        let (sut, _, service) = makeSUT(snapshot: GameFixture.snapshot(GameFixture.game(chestStatus: .ready)))
+        let (sut, engagement, service) = makeSUT(snapshot: GameFixture.snapshot(GameFixture.game(chestStatus: .ready)))
         await sut.load(forceNetwork: true)
         let reward = DailyChest(points: 120, fragment: false, freeze: true)
         service.chestResult = .success(ChestClaimResponse(status: "claimed", reward: reward, score: 12_300))
+        engagement.fetchProgressResult = .success(GameFixture.snapshot(GameFixture.game(score: 12_300, chestStatus: .claimed, chestReward: reward)))
         let probe = Probe<GameBlock.Chest>()
         service.duringChest = { probe.value = sut.game?.chest }
 

@@ -78,7 +78,8 @@ final class PhotoCaptureProcessingGuardTests: XCTestCase {
         let sites = swiftSources().filter { url in
             code(of: url).map { code in Self.captureMarkers.contains(where: code.contains) } ?? false
         }
-        XCTAssertEqual(sites.map(\.lastPathComponent), ["CameraModel.swift"],
+        // Le viseur de l'app et la caméra avant du moment photo du jeu (#9382, qui n'enregistre rien dans Photos).
+        XCTAssertEqual(Set(sites.map(\.lastPathComponent)), ["CameraModel.swift", "GamePhotoCamera.swift"],
                        "Un NOUVEAU site de prise photo : le brancher sur \(Self.processorName), puis mettre cette liste à jour.")
     }
 

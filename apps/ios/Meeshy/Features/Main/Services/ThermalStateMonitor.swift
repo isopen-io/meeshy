@@ -5,13 +5,22 @@ protocol ThermalStateMonitorDelegate: AnyObject {
     func thermalStateDidChange(to state: ProcessInfo.ThermalState)
 }
 
-final class ThermalStateMonitor {
+/// Ce que la capture lit de la température de l'appareil (#9349).
+protocol ThermalStateMonitorProviding: AnyObject {
+    var currentState: ProcessInfo.ThermalState { get }
+    var onStateChange: ((ProcessInfo.ThermalState) -> Void)? { get set }
+    func startMonitoring()
+    func stopMonitoring()
+}
+
+final class ThermalStateMonitor: ThermalStateMonitorProviding {
     // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
     // défaut) → double-free `pointer being freed was not allocated` (abrt)
     // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
     // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
     nonisolated deinit {}
     weak var delegate: ThermalStateMonitorDelegate?
+    var onStateChange: ((ProcessInfo.ThermalState) -> Void)?
 
     private(set) var currentState: ProcessInfo.ThermalState = .nominal
 
@@ -21,6 +30,7 @@ final class ThermalStateMonitor {
 
     func startMonitoring() {
         currentState = ProcessInfo.processInfo.thermalState
+        guard thermalObserver == nil else { return }
         // ⚠️ Crash SIGTRAP : le système poste `thermalStateDidChangeNotification`
         // sur une queue de FOND (com.apple.root.user-interactive-qos). Cette classe
         // est @MainActor (target app, SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor) et
@@ -51,6 +61,7 @@ final class ThermalStateMonitor {
         currentState = newState
         Logger.calls.info("Thermal state changed to: \(String(describing: newState))")
         delegate?.thermalStateDidChange(to: newState)
+        onStateChange?(newState)
     }
 
     var recommendedMaxFps: Int {

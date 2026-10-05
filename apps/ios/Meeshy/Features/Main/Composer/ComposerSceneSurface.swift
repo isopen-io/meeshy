@@ -272,6 +272,10 @@ struct ComposerSceneSurface: View {
     /// les familles) : ses sous-outils au rail droit — et tout le reste du
     /// chrome cède, comme à un outil du rail (`ComposerToolFocus.toolIsOpen`).
     var editsInline: Bool = false
+    /// **L'auteur ÉCRIT une légende ou le corps du post** (#6131, #6132) —
+    /// clavier levé : les rails et les étages du bas lui cèdent la place,
+    /// par `ComposerToolFocus.isShown(_:toolIsOpen:writesText:)`.
+    var writesText: Bool = false
     /// **Les options du sous-outil ouvert, à droite, depuis le haut** (#9138) —
     /// le panneau entier, déjà composé et placé (`ComposerInlineToolPanel`) ;
     /// la surface le pose sur la scène libre, à côté de la colonne droite.
@@ -484,7 +488,7 @@ struct ComposerSceneSurface: View {
     /// comme le reste du chrome, et ses réglages vivent au-dessus de
     /// l'historique.
     private var floatingRail: AnyView {
-        guard ComposerToolFocus.isShown(.sceneDoors, toolIsOpen: toolIsOpen),
+        guard ComposerToolFocus.isShown(.sceneDoors, toolIsOpen: toolIsOpen, writesText: writesText),
               case .doors(let servies) = railMode else { return AnyView(EmptyView()) }
         let portes = ComposerSceneFloatingRail.sideRow(from: servies, format: format)
         if portes.isEmpty && sceneToggles.isEmpty { return AnyView(EmptyView()) }
@@ -602,6 +606,9 @@ struct ComposerSceneSurface: View {
         // Reduce Motion ; VoiceOver est prévenu que l'écran a changé, et son
         // curseur rejoint le rail qui porte désormais les réglages et le `(x)`.
         .animation(ComposerToolFocus.transition(reduceMotion: reduceMotion), value: toolIsOpen)
+        // **Écrire efface les rails et les étages du bas, et les rend** (#6131,
+        // #6132) — en fondu, à l'aller comme au retour : rien ne saute.
+        .animation(ComposerToolFocus.transition(reduceMotion: reduceMotion), value: writesText)
         .adaptiveOnChange(of: toolIsOpen) { _, _ in
             UIAccessibility.post(notification: .layoutChanged, argument: nil)
         }
@@ -833,7 +840,9 @@ struct ComposerSceneSurface: View {
             // faire, et deux zones basses se recouvriraient.
             if let timelinePanel {
                 timelinePanel
-            } else {
+            } else if ComposerToolFocus.lowerFloorsAreShown(writesText: writesText) {
+                // **Clavier levé, le bas est au clavier** (#6132) : références,
+                // jetons et rangée basse y seraient couverts ou hors du pouce.
                 lowerFloors
                     .background {
                         GeometryReader { geo in
@@ -953,7 +962,7 @@ struct ComposerSceneSurface: View {
             HStack(alignment: isRoomy ? .center : .bottom, spacing: 0) {
                 floatingRail
                 Spacer(minLength: 0)
-                if ComposerToolFocus.isShown(.trailingRail, toolIsOpen: toolIsOpen) {
+                if ComposerToolFocus.isShown(.trailingRail, toolIsOpen: toolIsOpen, writesText: writesText) {
                 // **Les options EN HAUT, l'historique EN BAS** (#8713, #8714) :
                 // la colonne prend la hauteur de la scène libre dès qu'elle a
                 // des options, et son pied reste au pouce.

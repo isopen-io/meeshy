@@ -26,7 +26,7 @@ export const DUO_ONLY_ARRANGEMENTS: ReadonlySet<FrameArrangement> = new Set(['sp
 export const SLOT_SHAPES = ['rect', 'round', 'circle', 'oval', 'arch', 'hex', 'diamond', 'heart', 'star', 'ticket', 'stamp', 'blob', 'torn', 'polaroid', 'frame-oval'] as const;
 export type SlotShape = (typeof SLOT_SHAPES)[number];
 
-export const SLOT_TONES = ['color', 'mono', 'sepia', 'noir', 'warm', 'cool', 'faded', 'duotone'] as const;
+export const SLOT_TONES = ['color', 'mono', 'sepia', 'noir', 'warm', 'cool', 'faded', 'duotone', 'luminosity'] as const;
 export type SlotTone = (typeof SLOT_TONES)[number];
 
 export const SLOT_TILTS = ['none', 'gentle', 'wild'] as const;

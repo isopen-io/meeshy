@@ -24,11 +24,18 @@ import type { ApiResult } from './http';
  * ne part (sous `apiKeyEncrypted`, le nom de la colonne) que s'il a été saisi —
  * un enregistrement qui ne touche pas la clé la laisse telle quelle.
  *
+ * La passerelle chiffre la clé au repos et ne sert que `hasApiKey` et ses quatre
+ * derniers caractères (`apiKeyLast4`, idem pour le repli). Sans clé de chiffrement
+ * des secrets, elle refuse l'enregistrement d'une clé par un 503 (`SECRETS_UNAVAILABLE_STATUS`).
+ *
  * ## Un DELETE qui déclare un corps reçoit un corps
  *
  * `DELETE /reset` déclare `body: { type: 'object' }` : un corps JSON part
  * toujours, `{}` sans motif, `{ reason }` avec.
  */
+/** Le statut de `PUT /llm` quand le serveur n'a pas de clé de chiffrement des secrets. */
+export const SECRETS_UNAVAILABLE_STATUS = 503;
+
 export const agentLlmQueryKey = () => [...AGENT_ROOT_KEY, 'llm'] as const;
 export const agentGlobalConfigQueryKey = () => [...AGENT_ROOT_KEY, 'global-config'] as const;
 
@@ -36,6 +43,10 @@ export type AgentLlmConfig = {
   /** Les champs que le formulaire réécrit, aux types servis (`AGENT_LLM_FIELDS`). */
   readonly fields: AgentServed;
   readonly hasApiKey: boolean;
+  /** Les quatre derniers caractères de la clé, pour la reconnaître — facultatif, un serveur d'avant ne les sert pas. */
+  readonly apiKeyLast4: string | null;
+  readonly hasFallbackApiKey: boolean;
+  readonly fallbackApiKeyLast4: string | null;
   readonly maxTokens: number | null;
   readonly temperature: number | null;
   readonly fallbackProvider: string | null;
@@ -52,6 +63,9 @@ function decodeLlm(raw: unknown): AgentLlmConfig | null {
   return {
     fields: pickServed(AGENT_LLM_FIELDS, charge),
     hasApiKey: charge.hasApiKey === true,
+    apiKeyLast4: textOrNull(charge.apiKeyLast4),
+    hasFallbackApiKey: charge.hasFallbackApiKey === true,
+    fallbackApiKeyLast4: textOrNull(charge.fallbackApiKeyLast4),
     maxTokens: numberOrNull(charge.maxTokens),
     temperature: numberOrNull(charge.temperature),
     fallbackProvider: textOrNull(charge.fallbackProvider),
