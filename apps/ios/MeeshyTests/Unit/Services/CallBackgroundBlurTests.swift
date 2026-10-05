@@ -160,6 +160,13 @@ final class CallVideoDegradationTests: XCTestCase {
         XCTAssertTrue(off.isExhausted)
     }
 
+    /// Le budget est un plafond INCLUS : seule une image AU-DELÀ compte (#9454).
+    func test_recording_atTheBudget_neverCounts() {
+        let ladder = record(CallVideoDegradation(), elapsedMs: CallVideoDegradation.overBudgetMs, frames: 30)
+        XCTAssertEqual(ladder.tier, .balanced)
+        XCTAssertEqual(ladder.overBudgetStreak, 0)
+    }
+
     func test_recording_overBudgetWithoutBlur_isExhaustedAtOnce() {
         let ladder = record(CallVideoDegradation(), elapsedMs: 30, frames: 10, blurActive: false)
         XCTAssertTrue(ladder.isExhausted)
