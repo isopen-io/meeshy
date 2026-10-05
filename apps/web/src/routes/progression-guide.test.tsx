@@ -298,3 +298,94 @@ describe('ce qui arrive pendant que l’écran est ouvert', () => {
     expect(b.guide().card?.presentation).toBe('full');
   });
 });
+
+describe('les étapes qui attendent leur geste', () => {
+  const fresh = (patch: Parameters<typeof gameBlockFixture>[0] = {}) =>
+    view({ score: 0, debitablePoints: 0, glory: 0, balance: 0, mintedLifetime: 0, streak: 0, lastActiveDay: null, missions: [], ...patch }, { isEmpty: true });
+  const firstGesture = (guideSeen: string[]) =>
+    view({ score: 12, debitablePoints: 12, glory: 0, balance: 0, mintedLifetime: 0, streak: 1, missions: [], guideSeen }, { isEmpty: false });
+  const missionsOpen = (done: boolean, guideSeen: string[]) =>
+    view({
+      score: 800,
+      guideSeen,
+      missions: [
+        { id: 'm-easy', difficulty: 'easy', templateKey: 'send-texts', signal: 'axis:content.text_message', prism: false, target: 5, progress: done ? 5 : 1, reward: 36, glory: 0, completedAt: done ? '2026-10-05T08:00:00.000Z' : null },
+      ],
+    });
+
+  test('la bienvenue vue, le premier geste pas fait : à la réouverture elle se redit, la suite n’arrive pas', async () => {
+    const b = await bench(fresh({ guideSeen: ['onboarding.welcome'] }));
+    expect(key(b.guide().card)).toBe('onboarding.welcome');
+    expect(b.guide().card?.awaiting).toBe(true);
+    expect(b.posted()).toEqual([]);
+  });
+
+  test('la bienvenue vue, le premier geste fait : la suite — « Bravo, tes premiers points »', async () => {
+    const b = await bench(firstGesture(['onboarding.welcome']));
+    expect(key(b.guide().card)).toBe('onboarding.first-points');
+    expect(b.posted()).toEqual([['onboarding.first-points']]);
+  });
+
+  test('le geste a lieu PENDANT que l’écran est ouvert : l’étape avance d’elle-même', async () => {
+    const b = await bench(fresh({ guideSeen: [] }));
+    expect(key(b.guide().card)).toBe('onboarding.welcome');
+    await b.show(firstGesture(['onboarding.welcome']));
+    expect(key(b.guide().card)).toBe('onboarding.first-points');
+    expect(b.posted()).toEqual([['onboarding.welcome'], ['onboarding.first-points']]);
+  });
+
+  test('un geste encore en vol ne fait pas avancer l’étape : elle attend la confirmation', async () => {
+    const b = await bench(fresh({ guideSeen: [] }));
+    await b.pending(firstGesture(['onboarding.welcome']));
+    expect(key(b.guide().card)).toBe('onboarding.welcome');
+    await b.confirm();
+    expect(key(b.guide().card)).toBe('onboarding.first-points');
+  });
+
+  test('un geste refusé et restauré laisse l’étape où elle était', async () => {
+    const before = fresh({ guideSeen: [] });
+    const b = await bench(before);
+    await b.pending(firstGesture(['onboarding.welcome']));
+    await b.confirm(before);
+    expect(key(b.guide().card)).toBe('onboarding.welcome');
+  });
+
+  test('« Passer » sur une étape qui attend montre la suivante, et la suivante devient la dernière vue', async () => {
+    const b = await bench(fresh({ guideSeen: [] }));
+    await act(async () => b.guide().dismiss());
+    await settle();
+    expect(key(b.guide().card)).toBe('onboarding.first-points');
+  });
+
+  test('la mission facile : l’étape des missions attend, puis avance à la Flamme quand elle est faite', async () => {
+    const seen = ['onboarding.welcome', 'onboarding.first-points', 'onboarding.levels', 'onboarding.missions'];
+    const b = await bench(missionsOpen(false, seen));
+    expect(key(b.guide().card)).toBe('onboarding.missions');
+    expect(b.guide().card?.awaiting).toBe(true);
+    await b.show(missionsOpen(true, seen));
+    expect(key(b.guide().card)).toBe('onboarding.flame');
+  });
+
+  test('missions fermées : l’étape ne retient personne, la Flamme suit', async () => {
+    const seen = ['onboarding.welcome', 'onboarding.first-points', 'onboarding.levels', 'onboarding.missions'];
+    const b = await bench(firstGesture(seen));
+    expect(key(b.guide().card)).toBe('onboarding.flame');
+  });
+
+  test('la Flamme : revenir le lendemain (deux jours de série) fait avancer l’étape', async () => {
+    const seen = ['onboarding.welcome', 'onboarding.first-points', 'onboarding.levels', 'onboarding.missions', 'onboarding.flame'];
+    const day1 = view({ score: 800, streak: 1, lastActiveDay: '2026-10-05', guideSeen: seen });
+    const b = await bench(day1);
+    expect(key(b.guide().card)).toBe('onboarding.flame');
+    expect(b.guide().card?.awaiting).toBe(true);
+    await b.show(view({ score: 900, streak: 2, lastActiveDay: '2026-10-06', guideSeen: seen }));
+    expect(key(b.guide().card)).toBe('onboarding.mint');
+  });
+
+  test('« Passer l’intégration » libère aussi une étape qui attend', async () => {
+    const b = await bench(fresh({ guideSeen: [] }));
+    await act(async () => b.guide().skipAll());
+    await settle();
+    expect(b.guide().card).toBeNull();
+  });
+});

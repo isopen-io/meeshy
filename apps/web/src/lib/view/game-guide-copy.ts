@@ -232,9 +232,19 @@ const STEP_COPY: Readonly<Record<OnboardingStep['key'], Omit<GuideCopy, 'action'
   },
 };
 
-export function stepCopy(step: OnboardingStep): GuideCopy {
+/** Ce que dit l'étape qui ATTEND son geste : elle nomme le geste, pas la rubrique suivante. */
+const AWAITING_NEXT: Readonly<Partial<Record<OnboardingStep['key'], string>>> = {
+  missions: 'Fais la mission la plus facile du jour : je t’attends pour la suite.',
+  flame: 'Reviens demain et fais un geste : ta série passera à 2 jours.',
+};
+
+export function stepCopy(
+  step: OnboardingStep,
+  options: { readonly awaiting?: boolean; readonly action?: GuideAction } = {},
+): GuideCopy {
   const parts = STEP_COPY[step.key];
-  return { ...parts, short: parts.what, action: ACTION_LABELS[step.action] };
+  const next = options.awaiting === true ? (AWAITING_NEXT[step.key] ?? parts.next) : parts.next;
+  return { ...parts, next, short: parts.what, action: ACTION_LABELS[options.action ?? step.action] };
 }
 
 export type GameRule = { readonly index: number; readonly title: string; readonly body: string };
