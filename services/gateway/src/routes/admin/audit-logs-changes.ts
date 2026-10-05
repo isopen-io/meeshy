@@ -13,6 +13,11 @@
  *   un endroit où relire un secret, même pour celui qui l'a posé ;
  * - sans `canViewSensitiveData`, les coordonnées (`email`, `phoneNumber`,
  *   `pendingEmail`, `pendingPhoneNumber`) ;
+ * - sans `canViewSensitiveData`, TOUTES les valeurs d'une action dont l'objet
+ *   est sensible en entier (`SENSITIVE_VALUE_ACTIONS`) : les préférences d'un
+ *   membre ne se lisent qu'avec ce droit (#8003), et la valeur AVANT d'une
+ *   modification est le choix du membre lui-même (#9423). Le nom des clés
+ *   reste servi — on sait CE QUI a bougé, pas vers quoi ;
  * - de `metadata`, tout sauf `reason` : les autres clés sont libres, donc
  *   inconnues, donc non servies.
  *
@@ -142,13 +147,22 @@ function fromRecord(record: Plain, canSeeContacts: boolean): AuditChangeEntry[] 
   });
 }
 
+/** Les actions dont chaque valeur gravée est sensible, quelle que soit sa clé (#9423). */
+const SENSITIVE_VALUE_ACTIONS: ReadonlySet<string> = new Set(['UPDATE_PREFERENCES']);
+
+const maskValues = (item: AuditChangeEntry): AuditChangeEntry => ({
+  field: item.field,
+  before: item.before === null ? null : AUDIT_MASK,
+  after: item.after === null ? null : AUDIT_MASK,
+});
+
 /**
  * Les changements d'une ligne, sous UNE forme. `null` quand la ligne n'en porte
  * pas ou qu'on ne sait pas les lire — jamais une exception.
  */
 export function readAuditChanges(
   raw: string | null | undefined,
-  options: { readonly canSeeContacts: boolean }
+  options: { readonly canSeeContacts: boolean; readonly action?: string }
 ): readonly AuditChangeEntry[] | null {
   const parsed = parseJson(raw);
   const entries = Array.isArray(parsed)
@@ -156,7 +170,9 @@ export function readAuditChanges(
     : isPlain(parsed)
       ? fromRecord(parsed, options.canSeeContacts)
       : [];
-  return entries.length === 0 ? null : entries.slice(0, MAX_ENTRIES);
+  const valuesHidden = !options.canSeeContacts && options.action !== undefined && SENSITIVE_VALUE_ACTIONS.has(options.action);
+  const served = valuesHidden ? entries.map(maskValues) : entries;
+  return served.length === 0 ? null : served.slice(0, MAX_ENTRIES);
 }
 
 /** Le motif écrit par l'administrateur — la seule clé de `metadata` que la console sert. */
