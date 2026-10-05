@@ -38,7 +38,7 @@ const matchField = (actual: unknown, expected: unknown): boolean => {
     if (op === 'lte') return typeof actual === 'number' ? actual <= (value as number) : actual instanceof Date && actual <= (value as Date);
     if (op === 'notIn') return !(value as unknown[]).includes(actual);
     if (op === 'startsWith') return typeof actual === 'string' && actual.startsWith(value as string);
-    if (op === 'gt') return typeof actual === 'number' ? actual > (value as number) : typeof actual === 'string' && actual > (value as string);
+    if (op === 'gt') return typeof actual === 'number' ? actual > (value as number) : actual instanceof Date ? actual > (value as Date) : typeof actual === 'string' && actual > (value as string);
     if (op === 'not') return value === null ? actual !== null && actual !== undefined : !matchField(actual, value);
     if (op === 'has') return Array.isArray(actual) && actual.includes(value);
     if (op === 'equals') return Array.isArray(value) ? Array.isArray(actual) && actual.length === value.length && actual.every((item, i) => item === value[i]) : matchField(actual, value);

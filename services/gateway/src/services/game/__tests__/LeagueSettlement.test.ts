@@ -121,8 +121,16 @@ describe('LeagueSettlement.placeWeek', () => {
   it('attend que la semaine précédente soit réglée pour tout le monde', async () => {
     const db = fakeGameDb();
     player(db, 1);
-    db.leagueGroupWeek.rows.push({ id: 'old', groupId: 'g', weekKey: PREVIOUS, league: 'jade', settledAt: null });
+    db.leagueGroupWeek.rows.push({ id: 'old', groupId: 'g', weekKey: PREVIOUS, league: 'jade', settledAt: null, closeAt: new Date(MONDAY.getTime() - 3_600_000) });
     expect(await settlement(db).placeWeek(WEEK, MONDAY)).toBe(0);
+  });
+
+  it('un groupe dont le règlement échoue encore longtemps après sa fermeture ne fige pas la ligue de tout le monde', async () => {
+    const db = fakeGameDb();
+    for (const n of [1, 2]) player(db, n);
+    db.leagueGroupWeek.rows.push({ id: 'poison', groupId: 'g', weekKey: PREVIOUS, league: 'jade', settledAt: null, closeAt: new Date(MONDAY.getTime() - 13 * 3_600_000) });
+
+    expect(await settlement(db).placeWeek(WEEK, MONDAY)).toBe(2);
   });
 
   it('une semaine antérieure à la première saison n’est jamais placée', async () => {

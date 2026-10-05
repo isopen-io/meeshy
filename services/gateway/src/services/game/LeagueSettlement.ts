@@ -64,6 +64,8 @@ const ACTIVITY_WEEKS = 3;
 const PAGE = 500;
 /** La conservation : 4 semaines après la fin de la saison. */
 export const LEAGUE_RETENTION_DAYS = 28;
+/** Combien de temps, après sa fermeture, un groupe non réglé retient le placement de la semaine suivante. */
+export const SETTLEMENT_GRACE_MS = 6 * 3_600_000;
 
 function isP2002(err: unknown): boolean {
   return typeof err === 'object' && err !== null && (err as { code?: string }).code === 'P2002';
@@ -243,7 +245,13 @@ export class LeagueSettlement {
   async placeWeek(weekKey: string, now: Date = new Date()): Promise<number> {
     if (seasonAt(weekKey) === null) return 0;
     if ((await this.prisma.leagueGroupWeek.count({ where: { weekKey } })) > 0) return 0;
-    const pending = await this.prisma.leagueGroupWeek.count({ where: { settledAt: null, weekKey: { lt: weekKey } } });
+    // On attend les groupes pas encore fermés, et ceux qu'on vient de fermer le temps
+    // de les régler ; un groupe dont le règlement échoue encore `SETTLEMENT_GRACE_MS`
+    // après sa fermeture ne retient plus la semaine de tout le monde (ses membres
+    // repartent de leur ligue, sans montée ni descente — il sera réglé à part).
+    const pending = await this.prisma.leagueGroupWeek.count({
+      where: { settledAt: null, weekKey: { lt: weekKey }, closeAt: { gt: new Date(now.getTime() - SETTLEMENT_GRACE_MS) } },
+    });
     if (pending > 0) return 0;
 
     const entrants = await this.loadEntrants(now);
