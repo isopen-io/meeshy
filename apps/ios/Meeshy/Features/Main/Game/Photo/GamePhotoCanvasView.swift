@@ -42,9 +42,9 @@ struct GamePhotoCanvasView: View {
                 .scaleEffect(0.82 + 0.18 * strike)
                 .opacity(0.25 + 0.75 * strike)
                 .offset(x: l.emblem.minX, y: l.emblem.minY)
-            text(l.kicker, text: moment.kicker.uppercased(), weight: .semibold, color: MeeshyColors.indigo200)
-            text(l.title, text: moment.title, weight: .bold, color: .white)
-            text(l.date, text: dateLabel, weight: .medium, color: MeeshyColors.indigo200)
+            text(l.kicker, text: moment.kicker.uppercased(), weight: UIFont.Weight.semibold, color: MeeshyColors.indigo200)
+            text(l.title, text: moment.title, weight: UIFont.Weight.bold, color: .white)
+            text(l.date, text: dateLabel, weight: UIFont.Weight.medium, color: MeeshyColors.indigo200)
             figure(id: "mee-sourire", rect: l.mee, mirrored: false)
             figure(id: "meo-salut", rect: l.meo, mirrored: true)
             SignatureMark(style: .flat, color: .white)
@@ -113,15 +113,24 @@ struct GamePhotoCanvasView: View {
         }
     }
 
-    private func text(_ line: PhotoTextLine, text value: String, weight: Font.Weight, color: Color) -> some View {
+    private func text(_ line: PhotoTextLine, text value: String, weight: UIFont.Weight, color: Color) -> some View {
         Text(value)
-            .font(.system(size: line.size, weight: weight, design: .rounded))
+            .font(Self.fixedFont(line.size, weight))
             .foregroundColor(color)
             .lineLimit(1)
             .minimumScaleFactor(0.5)
             .shadow(color: MeeshyColors.indigo950.opacity(0.6), radius: layout.width * 0.012)
             .frame(width: layout.width * 0.9, height: line.size * 1.3)
             .position(x: line.x, y: line.y - line.size * 0.3)
+    }
+
+    /// **Un CADRE FIXE : la taille du texte est celle de l'image finale, jamais celle de Dynamic Type.**
+    /// Le cadre fait 1 080 px de large et se rend en image : un texte qui grossirait avec les réglages
+    /// de l'appareil sortirait du cadre, et deux appareils ne produiraient pas la même photo.
+    private static func fixedFont(_ size: CGFloat, _ weight: UIFont.Weight) -> Font {
+        let base = UIFont.systemFont(ofSize: size, weight: weight)
+        let rounded = base.fontDescriptor.withDesign(.rounded).map { UIFont(descriptor: $0, size: size) } ?? base
+        return Font(rounded)
     }
 
     @ViewBuilder

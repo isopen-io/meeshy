@@ -28,14 +28,6 @@ nonisolated enum ComposerAutosaveCodec {
         let media = porters.localMedia.map {
             ComposerAutosaveSnapshot.Media(file: name($0.url), mimeType: $0.mimeType, durationMs: $0.durationMs)
         }
-        var bitmaps: [String: UIImage] = [:]
-        func bitmapNames(_ map: [String: UIImage], family: String) -> [String: String] {
-            map.reduce(into: [:]) { carte, entree in
-                let fichier = ComposerAutosaveFileName.forBitmap(key: entree.key, family: family)
-                bitmaps[fichier] = entree.value
-                carte[entree.key] = fichier
-            }
-        }
         var blobs: [String: Data] = [:]
         let stickers: [String: String] = state.stickerAnimations.reduce(into: [:]) { carte, entree in
             let fichier = ComposerAutosaveFileName.forBlob(key: entree.key)
@@ -43,6 +35,8 @@ nonisolated enum ComposerAutosaveCodec {
             carte[entree.key] = fichier
         }
         let slides = portable(state.slides, adopted: state.adoptedLocalMedia, name: name)
+        let table = bitmapTable(images: state.images, slideImages: state.slideImages,
+                                sources: plainImageSources(slides))
         let snapshot = ComposerAutosaveSnapshot(
             savedAt: now,
             format: ComposerAutosaveFormatCode.code(state.format),
@@ -67,13 +61,16 @@ nonisolated enum ComposerAutosaveCodec {
             altsByObjectId: porters.altsByObjectId,
             transcriptionByFile: names(porters.transcriptions),
             railPosedFiles: porters.railPosedURLs.map(name).sorted(),
-            images: bitmapNames(state.images, family: "i"),
-            slideImages: bitmapNames(state.slideImages, family: "b"),
+            images: table.images,
+            slideImages: table.slideImages,
             videos: state.videos.mapValues(name),
             audios: state.audios.mapValues(name),
-            stickerAnimations: stickers
+            stickerAnimations: stickers,
+            publishChoice: state.publishChoice.map {
+                .init(format: ComposerAutosaveFormatCode.code($0.format), layout: $0.layout?.rawValue)
+            }
         )
-        return ComposerAutosaveWrite(snapshot: snapshot, files: files, bitmaps: bitmaps, blobs: blobs)
+        return ComposerAutosaveWrite(snapshot: snapshot, files: files, bitmaps: table.bitmaps, blobs: blobs)
     }
 
     /// Le retour. Une matière perdue (fichier purgé, copie ratée) fait tomber
@@ -129,8 +126,68 @@ nonisolated enum ComposerAutosaveCodec {
             slideImages: bitmaps(snapshot.slideImages),
             videos: snapshot.videos.compactMapValues { urls[$0] },
             audios: snapshot.audios.compactMapValues { urls[$0] },
-            stickerAnimations: snapshot.stickerAnimations.compactMapValues { restored.blobByFile[$0] }
+            stickerAnimations: snapshot.stickerAnimations.compactMapValues { restored.blobByFile[$0] },
+            publishChoice: snapshot.publishChoice.flatMap { choix in
+                ComposerAutosaveFormatCode.format(choix.format).map {
+                    ComposerPublishChoice(format: $0, layout: choix.layout.flatMap(MosaicLayoutMode.init(rawValue:)))
+                }
+            }
         )
+    }
+
+    // MARK: - Une copie par image (#9420)
+
+    /// **Une image de scène = UN fichier du brouillon.**
+    ///
+    /// Un même bitmap est rangé sous plusieurs clés : l'id de l'objet, puis,
+    /// une fois l'objet pré-monté, son `postMediaId` et son adresse distante
+    /// (`relayLoadedImage`) — parfois aussi comme fond de sa slide. Nommé par
+    /// clé, il s'écrivait autant de fois : 15 fichiers pour 3 photos (recette
+    /// #6922). Les clés se regroupent donc par IMAGE, et chaque groupe désigne
+    /// un seul fichier :
+    /// - le fichier SOURCE de l'objet quand le bitmap n'en est que le décodage
+    ///   (image non recadrée) — la relecture le décode à la taille publiée,
+    ///   exactement comme la pose ;
+    /// - sinon un JPEG unique, nommé par la plus petite de ses clés : stable
+    ///   d'une sauvegarde à l'autre, et identique au nom d'avant quand l'image
+    ///   n'a qu'une clé.
+    static func bitmapTable(images: [String: UIImage],
+                            slideImages: [String: UIImage],
+                            sources: [String: String])
+        -> (images: [String: String], slideImages: [String: String], bitmaps: [String: UIImage]) {
+        let entrees = images.map { BitmapEntry(family: "i", key: $0.key, image: $0.value) }
+            + slideImages.map { BitmapEntry(family: "b", key: $0.key, image: $0.value) }
+        let groupes = Dictionary(grouping: entrees) { ObjectIdentifier($0.image) }
+        let fichiers = groupes.mapValues { membres -> (file: String, bitmap: UIImage?) in
+            let source = membres.filter { $0.family == "i" }.compactMap { sources[$0.key] }.min()
+            if let source { return (source, nil) }
+            let canon = membres.min { ($0.family, $0.key) < ($1.family, $1.key) } ?? membres[0]
+            return (ComposerAutosaveFileName.forBitmap(key: canon.key, family: canon.family), canon.image)
+        }
+        func noms(_ map: [String: UIImage]) -> [String: String] {
+            map.compactMapValues { fichiers[ObjectIdentifier($0)]?.file }
+        }
+        let bitmaps = fichiers.values.reduce(into: [String: UIImage]()) { carte, entree in
+            if let image = entree.bitmap { carte[entree.file] = image }
+        }
+        return (noms(images), noms(slideImages), bitmaps)
+    }
+
+    private struct BitmapEntry {
+        let family: String
+        let key: String
+        let image: UIImage
+    }
+
+    /// Les objets IMAGE non recadrés dont le fichier est dans le brouillon :
+    /// leur bitmap se relit depuis ce fichier. Un recadrage (ou une vidéo,
+    /// dont le bitmap est une vignette) garde sa propre copie.
+    static func plainImageSources(_ slides: [StorySlide]) -> [String: String] {
+        slides.flatMap { $0.effects.mediaObjects ?? [] }.reduce(into: [:]) { carte, objet in
+            guard objet.kind == .image, objet.crop.map(\.isFull) ?? true,
+                  let reference = objet.mediaURL, reference.hasPrefix(fileReferencePrefix) else { return }
+            carte[objet.id] = String(reference.dropFirst(fileReferencePrefix.count))
+        }
     }
 
     // MARK: - Des scènes qui ne dépendent d'aucun serveur

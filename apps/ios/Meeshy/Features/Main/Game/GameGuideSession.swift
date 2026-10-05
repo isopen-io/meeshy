@@ -20,6 +20,7 @@ protocol GameVisitStoring: AnyObject {
 }
 
 final class UserDefaultsGameVisitStore: GameVisitStoring {
+    nonisolated deinit {}
     private let defaults: UserDefaults
     private let key: String
 
@@ -62,7 +63,9 @@ final class UserDefaultsGameVisitStore: GameVisitStoring {
 /// Jamais dans une conversation : seul l'écran Progression monte ce guide.
 @MainActor
 final class GameGuideSession: ObservableObject {
-    // iOS 26.1 : voir ProgressionViewModel — pas d'état isolé à démonter ici.
+    // iOS 26.1 : la deinit synthétisée serait ISOLÉE (SE-0466) et double-libère au démontage.
+    nonisolated deinit {}
+
     @Published private(set) var card: GuideCard?
 
     private let service: GameServiceProviding

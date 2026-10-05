@@ -123,6 +123,19 @@ nonisolated enum ComposerPublishMenuRule {
         return chosen
     }
 
+    /// **Le menu COCHE ce qui partira** (#9419). Le format armé est coché ; dans
+    /// le sous-menu des dispositions, la disposition armée — ou, tant que
+    /// l'auteur n'en a choisi aucune, le REPLI que la publication appliquera.
+    /// Un menu qui ne coche rien alors que quelque chose partira ment.
+    static func isChecked(_ entry: Entry, armed: ComposerPublishChoice) -> Bool {
+        armed.format == entry.format
+    }
+
+    static func checkedLayout(in entry: Entry, armed: ComposerPublishChoice) -> MosaicLayoutMode? {
+        guard isChecked(entry, armed: armed), !entry.layouts.isEmpty else { return nil }
+        return armed.layout ?? ComposerMosaicChoice.fallback
+    }
+
     /// **La surface est celle d'OUVERTURE ; le canal suit le GESTE.**
     ///
     /// Sous l'atelier, un choix sans agencement presse la télécommande — c'est
@@ -222,33 +235,37 @@ struct ComposerPublishMenu<Etiquette: View>: View {
     @ViewBuilder
     private func entree(_ entry: ComposerPublishMenuRule.Entry) -> some View {
         if entry.layouts.isEmpty {
-            Button {
-                onChoose(ComposerPublishChoice(format: entry.format, layout: nil))
-            } label: {
-                if armed.format == entry.format {
-                    Label(ComposerPublishMenuCopy.entryTitle(entry), systemImage: "checkmark")
-                } else {
-                    Text(ComposerPublishMenuCopy.entryTitle(entry))
-                }
+            Toggle(isOn: choosing(ComposerPublishChoice(format: entry.format, layout: nil),
+                                  isChecked: ComposerPublishMenuRule.isChecked(entry, armed: armed))) {
+                Text(ComposerPublishMenuCopy.entryTitle(entry))
             }
             .disabled(!entry.isChoosable)
         } else {
             Menu {
                 Section(ComposerMosaicChoice.sectionTitle) {
                     ForEach(entry.layouts, id: \.self) { mode in
-                        Button {
-                            onChoose(ComposerPublishChoice(format: entry.format, layout: mode))
-                        } label: {
-                            Label(ComposerMosaicChoice.label(mode),
-                                  systemImage: armed == ComposerPublishChoice(format: entry.format, layout: mode)
-                                      ? "checkmark" : ComposerMosaicChoice.symbol(mode))
+                        Toggle(isOn: choosing(ComposerPublishChoice(format: entry.format, layout: mode),
+                                              isChecked: ComposerPublishMenuRule.checkedLayout(
+                                                  in: entry, armed: armed) == mode)) {
+                            Label(ComposerMosaicChoice.label(mode), systemImage: ComposerMosaicChoice.symbol(mode))
                         }
                     }
                 }
             } label: {
-                Text(ComposerPublishMenuCopy.entryTitle(entry))
+                if ComposerPublishMenuRule.isChecked(entry, armed: armed) {
+                    Label(ComposerPublishMenuCopy.entryTitle(entry), systemImage: "checkmark")
+                } else {
+                    Text(ComposerPublishMenuCopy.entryTitle(entry))
+                }
             }
             .disabled(!entry.isChoosable)
         }
+    }
+
+    /// Une entrée du menu est un `Toggle` : le système pose la coche en tête,
+    /// à la place où on la cherche, et la garde à côté du glyphe de la
+    /// disposition. Toucher une entrée déjà cochée la réarme, rien d'autre.
+    private func choosing(_ choice: ComposerPublishChoice, isChecked: Bool) -> Binding<Bool> {
+        Binding(get: { isChecked }, set: { _ in onChoose(choice) })
     }
 }
