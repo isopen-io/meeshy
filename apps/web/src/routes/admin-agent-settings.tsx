@@ -5,6 +5,7 @@ import { AdminFicheSection } from '@/components/admin/fiche';
 import { AdminMetaRow, AdminMomentText } from '@/components/admin/meta';
 import { AdminErrorState, AdminInlineNotice } from '@/components/admin/states';
 import { BRAND, EDGE, INK, INK2, SURFACE } from '@/components/admin/tone';
+import { PasswordInput } from '@/components/password-input';
 import { AGENT_GLOBAL_FIELDS, AGENT_LLM_FIELDS } from '@/lib/admin/agent-settings-form';
 import { formatCount } from '@/lib/admin/interpret/numbers';
 import { adminMomentOf } from '@/lib/admin/interpret/time';
@@ -182,18 +183,22 @@ function AgentLlmBlock({ language, deps, now, gesture, ask }: BlockProps & { rea
                 <label htmlFor={keyId} className="text-caption font-medium" style={{ color: INK2 }}>
                   {translateAdmin(language, 'admin.agentPanel.llm.keyField')}
                 </label>
-                <input
-                  id={keyId}
+                <span
                   data-agent-llm-key
-                  type="password"
-                  autoComplete="new-password"
-                  value={apiKey}
-                  onInput={(event) => setApiKey(event.currentTarget.value)}
-                  onChange={() => undefined}
-                  aria-describedby={`${keyId}-hint`}
-                  className="w-full rounded-chip px-3 text-body focus-visible:outline-2 focus-visible:outline-offset-2"
-                  style={{ minHeight: 44, backgroundColor: SURFACE, border: `1px solid ${EDGE}`, color: INK, outlineColor: BRAND }}
-                />
+                  className="flex items-center rounded-chip ps-3 focus-within:outline-2 focus-within:outline-offset-2"
+                  style={{ minHeight: 44, backgroundColor: SURFACE, border: `1px solid ${EDGE}`, outlineColor: BRAND }}
+                >
+                  {/* LE champ de mot de passe de l'application (`PasswordInput`) : masqué, révélable, jamais pré-rempli. */}
+                  <PasswordInput
+                    id={keyId}
+                    value={apiKey}
+                    onValue={setApiKey}
+                    autoComplete="new-password"
+                    describedBy={`${keyId}-hint`}
+                    className="w-full bg-transparent py-2 text-body outline-none"
+                    style={{ color: INK }}
+                  />
+                </span>
                 <span id={`${keyId}-hint`} className="text-caption" style={{ color: INK2 }}>
                   {translateAdmin(language, 'admin.agentPanel.llm.keyHint')}
                 </span>

@@ -142,15 +142,15 @@ describe('le modèle et la configuration globale', () => {
   test('le souverain change la clé : champ mot de passe, envoyée saisie, sans motif, puis vidée', async () => {
     const { calls } = await monter(BIGBOSS);
     await ouvrir('model');
-    const champ = $<HTMLInputElement>('[data-agent-llm-key]');
+    const champ = $<HTMLInputElement>('[data-agent-llm-key] input');
     expect(champ?.type).toBe('password');
-    mounter.type(document, '[data-agent-llm-key]', 'sk-nouvelle');
+    mounter.type(document, '[data-agent-llm-key] input', 'sk-nouvelle');
     await soumettre('[data-agent-form="llm"]');
     expect($('[data-admin-confirm] [data-admin-motive]')).toBeNull();
     await confirmer();
     expect(ecritures(calls)).toEqual([{ method: 'PUT', path: '/api/v1/admin/agent/llm', body: { apiKeyEncrypted: 'sk-nouvelle' } }]);
     expect(annonce()).toContain(translateAdmin('fr', 'admin.agentPanel.llm.saved'));
-    expect($<HTMLInputElement>('[data-agent-llm-key]')?.value).toBe('');
+    expect($<HTMLInputElement>('[data-agent-llm-key] input')?.value).toBe('');
   });
 
   test('la configuration globale n’envoie que le champ changé, après confirmation', async () => {
