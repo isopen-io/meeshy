@@ -42,7 +42,7 @@ function makePrisma(recentAxes: string[], milestones: Array<{ milestoneType: str
     engagementScaleConfig: { findUnique: jest.fn().mockResolvedValue(null) },
     engagementQuota: { upsert: jest.fn().mockResolvedValue({ count: 1 }), update: jest.fn().mockResolvedValue({ count: 1 }), updateMany: jest.fn().mockResolvedValue({ count: 0 }), create: jest.fn().mockResolvedValue({}), findUnique: jest.fn().mockResolvedValue(null) },
     conversationEngagement: { findUnique: jest.fn().mockResolvedValue(null), upsert: jest.fn().mockResolvedValue({}) },
-    user: { findUnique: jest.fn().mockResolvedValue(null), update: jest.fn().mockResolvedValue({}) },
+    user: { findUnique: jest.fn().mockResolvedValue(null), update: jest.fn().mockResolvedValue({}), updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
     $runCommandRaw: runCommandRaw,
   } as unknown as PrismaClient;
   return { prisma, upsert, runCommandRaw };

@@ -446,15 +446,42 @@ describe('MissionService.claimChest — le coffre du jour', () => {
     });
     allDone(db);
     const update = db.user.update.bind(db.user);
-    db.user.update = (async () => {
+    const updateMany = db.user.updateMany.bind(db.user);
+    const panne = (async () => {
       throw new Error('écriture du gel indisponible');
-    }) as typeof db.user.update;
+    }) as never;
+    db.user.update = panne;
+    db.user.updateMany = panne;
 
     await service.claimChest({ userId: USER, requestId: 'coffre-0007', now: NOW }).catch(() => undefined);
     db.user.update = update;
+    db.user.updateMany = updateMany;
     await service.claimChest({ userId: USER, requestId: 'coffre-0008', now: NOW }).catch(() => undefined);
 
     expect(creditPoints).toHaveBeenCalledTimes(1);
+  });
+
+  it('un gel ACHETÉ pendant l’ouverture du coffre n’est pas écrasé par le gel offert', async () => {
+    const { db, creditPoints } = setup({ flameFreezes: 0 });
+    const service = new MissionService(db.prisma, {
+      creditPoints,
+      chest: () => ({ points: 100, fragment: false, freeze: true }),
+    });
+    allDone(db);
+    const findUnique = db.user.findUnique.bind(db.user);
+    let bought = false;
+    db.user.findUnique = (async (args: Parameters<typeof findUnique>[0]) => {
+      const row = await findUnique(args);
+      if (!bought && args.select?.flameFreezes && !args.select?.lastRelightDay) {
+        bought = true;
+        db.user.rows[0]!.flameFreezes = 1;
+      }
+      return row;
+    }) as typeof db.user.findUnique;
+
+    await service.claimChest({ userId: USER, requestId: 'coffre-0010', now: NOW });
+
+    expect(db.user.rows[0]?.flameFreezes).toBe(2);
   });
 
   it('un gel du coffre emplit la réserve quand il y a de la place', async () => {

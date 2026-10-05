@@ -139,6 +139,44 @@ describe('la série : un gel couvre le jour manqué, sinon la Flamme s’éteint
     expect(db.user.rows[0]).toMatchObject({ currentStreakDays: 9, flameFreezes: 0 });
   });
 
+  it('un gel ACHETÉ entre la lecture et l’écriture de la série n’est pas écrasé : la série en consomme un, l’achat reste', async () => {
+    const db = fakeGameDb();
+    seedUser(db, { currentStreakDays: 8, longestStreakDays: 8, lastStreakDate: daysAgo(2), flameFreezes: 1, engagementScore: 500 });
+    const findUnique = db.user.findUnique.bind(db.user);
+    let bought = false;
+    db.user.findUnique = (async (args: Parameters<typeof findUnique>[0]) => {
+      const row = await findUnique(args);
+      if (!bought && args.select?.lastRelightDay) {
+        bought = true;
+        db.user.rows[0]!.flameFreezes = 2;
+      }
+      return row;
+    }) as typeof db.user.findUnique;
+
+    await service(db).recordActivity(USER, 'tool.reaction');
+
+    expect(db.user.rows[0]).toMatchObject({ currentStreakDays: 9, flameFreezes: 1 });
+  });
+
+  it('une série RALLUMÉE entre la lecture et l’écriture n’est pas écrasée par un recalcul périmé', async () => {
+    const db = fakeGameDb();
+    seedUser(db, { currentStreakDays: 8, longestStreakDays: 8, lastStreakDate: daysAgo(3), engagementScore: 500 });
+    const findUnique = db.user.findUnique.bind(db.user);
+    let relit = false;
+    db.user.findUnique = (async (args: Parameters<typeof findUnique>[0]) => {
+      const row = await findUnique(args);
+      if (!relit && args.select?.lastRelightDay) {
+        relit = true;
+        Object.assign(db.user.rows[0]!, { currentStreakDays: 8, lastStreakDate: daysAgo(1), lastRelightDay: dayKeyOf(today()) });
+      }
+      return row;
+    }) as typeof db.user.findUnique;
+
+    await service(db).recordActivity(USER, 'tool.reaction');
+
+    expect(db.user.rows[0]).toMatchObject({ currentStreakDays: 9 });
+  });
+
   it('sans gel : la série repart à 1 et la série perdue est gardée pour le rallumage', async () => {
     const db = fakeGameDb();
     seedUser(db, { currentStreakDays: 8, longestStreakDays: 8, lastStreakDate: daysAgo(2), engagementScore: 500 });

@@ -53,7 +53,7 @@ import { getEngagementEmitIO } from './engagement-emit-registry';
 import { memberSignature } from './memberSignature';
 import { EngagementQuotas, dayBucket } from './EngagementQuotas';
 import { EngagementGameHooks, applyTailwind, quarterPoints } from '../game/EngagementGameHooks';
-import { FLAME_USER_SELECT, flameFactsOf, planStreak } from '../game/FlameService';
+import { writeStreak } from '../game/FlameService';
 import type { MessageSignalInput } from '../game/MessageGameSignals';
 import { levelFromScore } from '@meeshy/shared/utils/game/levels';
 import { withRetry } from '../MessageMediaConsumptionService';
@@ -761,36 +761,26 @@ export class EngagementService {
    * repli UTC si absent — #5734) : plusieurs activités le même jour civil ne
    * l'incrémentent qu'une fois ; un jour sauté la remet à 1.
    *
-   * Lecture puis écriture, pas une transaction : la fenêtre de course (deux
-   * activités du même utilisateur dans le même instant, à cheval sur minuit)
-   * est acceptée — cette mécanique de réengagement n'a pas la même exigence
-   * de justesse que le compteur d'axe (upsert atomique) ou l'anti-rejeu de
-   * palier (contrainte unique), qui la restent.
+   * Lecture puis écriture CONDITIONNELLE (`writeStreak`, #9376) : la série
+   * s'écrit seulement si la Flamme vaut encore ce qu'on a lu. Un gel acheté,
+   * offert par le coffre ou une Flamme rallumée entre les deux fait reprendre
+   * le calcul au lieu d'être écrasé — une Meesh dépensée n'est jamais perdue.
    *
    * `currentStreakDays`/`longestStreakDays` portent un `@default(0)` dans le
    * schéma, qui ne s'applique qu'à la CRÉATION — un `User` créé avant cette
    * migration a ces champs ABSENTS, pas à zéro (même piège que
    * `Conversation.firstMessageSentAt`, cf. `packages/shared/CLAUDE.md`).
-   * D'où les replis `?? 0` : une série pour un compte pré-existant démarre
-   * à 1, jamais `NaN`.
+   * D'où les replis : une série pour un compte pré-existant démarre à 1,
+   * jamais `NaN`.
    */
   private async updateStreak(scale: EngagementScale, userId: string): Promise<void> {
-    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: FLAME_USER_SELECT });
-    if (!user) return;
-
     // La transition est la LOI de la Flamme (`advanceFlame`, #9376) : un jour
     // manqué consomme un gel quand les gels les couvrent TOUS, sinon la Flamme
     // s'éteint — la série perdue est gardée pour le rallumage de 48 h. Sans gel,
     // le comportement d'avant est exact : un jour sauté remet la série à 1.
-    //
-    // `lastStreakDate` stocke déjà un MARQUEUR de jour civil (`Date.UTC(y, m, d)`,
-    // écrit par le plan) : `flameFactsOf` le lit tel quel (`civilDayKey`), sans le
-    // refaire passer par le fuseau, qui le décalerait d'un jour hors UTC.
-    const plan = planStreak(flameFactsOf(user, new Date()));
-    if (plan.data === null) return;
-
-    const previousStreak = user.currentStreakDays ?? 0;
-    await this.prisma.user.update({ where: { id: userId }, data: plan.data });
+    const written = await writeStreak(this.prisma, userId, new Date());
+    if (written === null) return;
+    const { plan, previousStreak } = written;
 
     const crossedThresholds = STREAK_THRESHOLDS.filter(
       (threshold) => threshold > previousStreak && threshold <= plan.streak,

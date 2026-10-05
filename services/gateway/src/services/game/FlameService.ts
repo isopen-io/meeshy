@@ -3,11 +3,13 @@
  * son rallumage. La LOI vit dans `@meeshy/shared/utils/game/flame` ; ce module
  * l'applique contre la base, sans en réécrire une ligne.
  *
- *  - `planStreak` : la transition de série du GESTE du jour (appelée par
- *    `EngagementService.updateStreak`). Un jour manqué consomme un gel
- *    automatiquement quand les gels les couvrent TOUS ; sinon la Flamme
- *    s'éteint et la série perdue est GARDÉE (`brokenStreakDays`) pour le
- *    rallumage de 48 h ;
+ *  - `planStreak` : la transition de série du GESTE du jour, écrite par
+ *    `writeStreak` (appelée par `EngagementService.updateStreak`). Un jour
+ *    manqué consomme un gel automatiquement quand les gels les couvrent TOUS ;
+ *    sinon la Flamme s'éteint et la série perdue est GARDÉE (`brokenStreakDays`)
+ *    pour le rallumage de 48 h. L'écriture est CONDITIONNELLE aux valeurs lues :
+ *    un gel acheté ou une Flamme rallumée entre la lecture et l'écriture fait
+ *    reprendre le calcul, jamais écraser l'achat ;
  *  - `buyFreeze` : 1 Meesh, 2 en réserve au plus ;
  *  - `relight` : 3 Meeshes, dans les 48 h, une fois par mois.
  *
@@ -111,7 +113,7 @@ export type StreakPlan = {
   readonly longest: number;
   readonly previousLongest: number;
   /** Ce que le compte doit porter ensuite ; `null` ⇒ rien à écrire (déjà actif aujourd'hui). */
-  readonly data: Prisma.UserUpdateInput | null;
+  readonly data: Prisma.UserUpdateManyMutationInput | null;
 };
 
 /** La transition de série du geste du jour, appliquée à l'état courant. */
@@ -141,6 +143,72 @@ export function planStreak(facts: FlameFacts): StreakPlan {
         : {}),
     },
   };
+}
+
+/**
+ * « Le champ vaut encore ce qu'on a lu » — y compris ABSENT. Sur MongoDB, Prisma
+ * ne fait matcher `{ f: null }` qu'au champ PRÉSENT à null (leçon 318) : seul
+ * `isSet: false` atteint un compte antérieur au jeu, qui n'a jamais porté le champ.
+ */
+export const flameFreezesUnchanged = (value: number | null | undefined): Prisma.UserWhereInput =>
+  typeof value === 'number' ? { flameFreezes: value } : { OR: [{ flameFreezes: null }, { flameFreezes: { isSet: false } }] };
+
+const lastStreakDateUnchanged = (value: Date | null | undefined): Prisma.UserWhereInput =>
+  value ? { lastStreakDate: value } : { OR: [{ lastStreakDate: null }, { lastStreakDate: { isSet: false } }] };
+
+const lastRelightDayUnchanged = (value: string | null | undefined): Prisma.UserWhereInput =>
+  typeof value === 'string' ? { lastRelightDay: value } : { OR: [{ lastRelightDay: null }, { lastRelightDay: { isSet: false } }] };
+
+const brokenStreakUnchanged = (row: FlameUserRow): Prisma.UserWhereInput[] => [
+  typeof row.brokenStreakDays === 'number'
+    ? { brokenStreakDays: row.brokenStreakDays }
+    : { OR: [{ brokenStreakDays: null }, { brokenStreakDays: { isSet: false } }] },
+  typeof row.brokenStreakLastDay === 'string'
+    ? { brokenStreakLastDay: row.brokenStreakLastDay }
+    : { OR: [{ brokenStreakLastDay: null }, { brokenStreakLastDay: { isSet: false } }] },
+];
+
+/**
+ * La Flamme telle qu'on l'a LUE : la condition d'une écriture comparer-et-écrire.
+ * Chaque écrivain de la série (geste du jour, gel acheté ou offert, rallumage)
+ * change au moins un champ optionnel gardé ici. Les deux compteurs requis
+ * (`currentStreakDays`, `longestStreakDays`) ne se gardent que présents : Prisma
+ * n'offre pas `isSet` sur un champ requis, et leurs écrivains changent toujours
+ * `lastStreakDate` ou `lastRelightDay` avec eux.
+ */
+export function flameUnchanged(row: FlameUserRow): Prisma.UserWhereInput[] {
+  return [
+    lastStreakDateUnchanged(row.lastStreakDate),
+    flameFreezesUnchanged(row.flameFreezes),
+    lastRelightDayUnchanged(row.lastRelightDay),
+    ...brokenStreakUnchanged(row),
+    ...(typeof row.currentStreakDays === 'number' ? [{ currentStreakDays: row.currentStreakDays }] : []),
+    ...(typeof row.longestStreakDays === 'number' ? [{ longestStreakDays: row.longestStreakDays }] : []),
+  ];
+}
+
+/** Un écrivain concurrent ne revient pas quatre fois de suite à l'échelle d'un geste humain. */
+export const STREAK_WRITE_ATTEMPTS = 4;
+
+export type StreakWrite = { readonly plan: StreakPlan; readonly previousStreak: number };
+
+/**
+ * Écrit la transition de série du geste du jour, CONDITIONNELLEMENT à l'état lu.
+ * Si un autre écrivain a changé la Flamme entre-temps (un gel acheté, un
+ * rallumage, un geste concurrent), rien n'est écrit et le calcul reprend depuis
+ * une lecture neuve. `null` : rien à écrire (déjà actif aujourd'hui, compte
+ * introuvable) ou contention persistante.
+ */
+export async function writeStreak(db: Pick<PrismaClient, 'user'>, userId: string, now: Date): Promise<StreakWrite | null> {
+  for (let attempt = 0; attempt < STREAK_WRITE_ATTEMPTS; attempt += 1) {
+    const row = await db.user.findUnique({ where: { id: userId }, select: FLAME_USER_SELECT });
+    if (!row) return null;
+    const plan = planStreak(flameFactsOf(row, now));
+    if (plan.data === null) return null;
+    const written = await db.user.updateMany({ where: { id: userId, AND: flameUnchanged(row) }, data: plan.data });
+    if (written.count === 1) return { plan, previousStreak: count(row.currentStreakDays) };
+  }
+  return null;
 }
 
 export type FreezeResult =

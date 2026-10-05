@@ -37,7 +37,7 @@ import {
   type MissionSignal,
 } from '@meeshy/shared/utils/game/missions';
 import { GameRefusal } from './GameRefusal';
-import { FLAME_USER_SELECT, flameFactsOf } from './FlameService';
+import { FLAME_USER_SELECT, STREAK_WRITE_ATTEMPTS, flameFactsOf, flameFreezesUnchanged } from './FlameService';
 import { GloryService } from './GloryService';
 import { MeeshSpend } from './MeeshSpend';
 import { dayKeyOf, minuteOfDayInTimezone } from './gameClock';
@@ -439,12 +439,24 @@ export class MissionService {
     return { status: 'claimed', reward, score: (await this.userRow(userId))?.engagementScore ?? 0 };
   }
 
-  /** Un gel offert par le coffre ne remplit jamais la réserve au-delà du maximum. */
+  /**
+   * Un gel offert par le coffre ne remplit jamais la réserve au-delà du maximum.
+   * L'écriture est conditionnelle à la réserve LUE : un gel acheté entre-temps
+   * fait relire, jamais écraser l'achat.
+   */
   private async grantFreeze(userId: string): Promise<void> {
-    const row = await this.prisma.user.findUnique({ where: { id: userId }, select: { flameFreezes: true } });
-    const freezes = row?.flameFreezes ?? 0;
-    if (freezes >= FLAME_FREEZE_MAX) return;
-    await this.prisma.user.update({ where: { id: userId }, data: { flameFreezes: freezes + 1 } });
+    for (let attempt = 0; attempt < STREAK_WRITE_ATTEMPTS; attempt += 1) {
+      const row = await this.prisma.user.findUnique({ where: { id: userId }, select: { flameFreezes: true } });
+      if (!row) return;
+      const freezes = row.flameFreezes ?? 0;
+      if (freezes >= FLAME_FREEZE_MAX) return;
+      const written = await this.prisma.user.updateMany({
+        where: { id: userId, ...flameFreezesUnchanged(row.flameFreezes) },
+        data: { flameFreezes: freezes + 1 },
+      });
+      if (written.count === 1) return;
+    }
+    throw new Error('chest freeze contended');
   }
 
   private async alreadyClaimed(
