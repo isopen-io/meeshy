@@ -7,7 +7,7 @@ import type { MeeshEdition } from '@meeshy/shared/utils/game/mint';
 import { MintScene } from '@/components/game';
 import { convertiblePointsLabel, editionName, formatCount, meeshCount, pointsLabel, rankLabel } from '@/lib/view/game-copy';
 
-import { GAME_BRAND, GAME_ERROR, GAME_INK, GAME_INK_2, GAME_WARM, GameCard } from './game-surface';
+import { GAME_BRAND, GAME_ERROR, GAME_INK, GAME_INK_2, GAME_ON_WARM, GAME_WARM, GameCard } from './game-surface';
 
 /**
  * L'APERÇU DE LA FRAPPE (#9383) — conception, partie VII : « la frappe garde
@@ -143,7 +143,7 @@ export function GameMintPreview(props: GameMintPreviewProps) {
             aria-busy={minting}
             onClick={onMint}
             className="mt-1 rounded-chip px-4 text-body font-bold disabled:opacity-80"
-            style={{ minHeight: 44, backgroundColor: GAME_WARM, color: 'var(--color-ios-surface)' }}
+            style={{ minHeight: 44, backgroundColor: GAME_WARM, color: GAME_ON_WARM }}
           >
             {minting ? 'Frappe en cours…' : 'Frapper avec Mee et Meo'}
           </button>

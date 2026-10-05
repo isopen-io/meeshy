@@ -6,7 +6,7 @@ import { Chest, useChoreography } from '@/components/game';
 import { ProgressBar } from '@/components/progress-bar';
 import { DIFFICULTY_NAMES, formatCount, missionTitle, pointsLabel } from '@/lib/view/game-copy';
 
-import { GAME_BRAND, GAME_ERROR, GAME_GOOD, GAME_INK, GAME_INK_2, GAME_WARM, GameCard, GameChip } from './game-surface';
+import { GAME_BRAND, GAME_ERROR, GAME_GOOD, GAME_INK, GAME_INK_2, GAME_ON_WARM, GAME_WARM, GameCard, GameChip } from './game-surface';
 
 /**
  * LES MISSIONS DU JOUR ET LE COFFRE (#9383) — trois missions, leur avancement,
@@ -171,7 +171,7 @@ function ChestCard({ chest, opening, online, onClaim, error }: { readonly chest:
           disabled={!online}
           onClick={onClaim}
           className="rounded-chip px-4 text-body font-bold disabled:opacity-50"
-          style={{ minHeight: 44, backgroundColor: GAME_WARM, color: 'var(--color-ios-surface)' }}
+          style={{ minHeight: 44, backgroundColor: GAME_WARM, color: GAME_ON_WARM }}
         >
           Ouvrir le coffre
         </button>
