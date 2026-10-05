@@ -61,6 +61,12 @@ export type PhotoSource = {
   readonly height: number;
   /** `true` pour un selfie : l'image est retournée comme dans l'aperçu. */
   readonly mirror: boolean;
+  /**
+   * Rend la mémoire de l'image décodée : un `ImageBitmap` la tient jusqu'à
+   * `close()` — le ramasse-miettes ne la rend pas (#9382). Absent pour une
+   * image que le navigateur gère seul (le canvas d'une prise de vue).
+   */
+  readonly release?: () => void;
 };
 
 export type PaintInput = {

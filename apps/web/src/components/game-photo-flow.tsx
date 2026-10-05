@@ -86,6 +86,7 @@ export function GamePhotoFlow({ moment, env, onClose }: Props) {
   const session = useRef<CameraSession | null>(null);
   const photo = useRef<PhotoSource | null>(null);
   const closed = useRef(false);
+  const alive = useRef(true);
   const [galleryFile, setGalleryFile] = useState<File | null>(null);
   const [galleryError, setGalleryError] = useState(false);
   const [still, setStill] = useState<Blob | null>(null);
@@ -106,6 +107,21 @@ export function GamePhotoFlow({ moment, env, onClose }: Props) {
       if (canFocus(opener)) opener.focus();
     };
   }, []);
+
+  /* L'image décodée d'une photo de la galerie tient sa mémoire jusqu'à `release()` :
+     on la rend au remplacement et à la sortie du déroulé (#9382). */
+  const holdPhoto = useCallback((next: PhotoSource | null) => {
+    const previous = photo.current;
+    photo.current = next;
+    if (previous !== null && previous !== next) previous.release?.();
+  }, []);
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+      holdPhoto(null);
+    };
+  }, [holdPhoto]);
 
   const stopCamera = useCallback(() => {
     session.current?.stop();
@@ -190,26 +206,30 @@ export function GamePhotoFlow({ moment, env, onClose }: Props) {
       return;
     }
     element?.pause?.();
-    photo.current = captured;
+    holdPhoto(captured);
     /* L'image prise reste à l'écran : une caméra rendue peut laisser un écran noir derrière le cadre. */
     (captured.image as { toBlob?: (done: (blob: Blob | null) => void) => void }).toBlob?.((blob) => setStill(blob));
     dispatch({ type: 'shutter' });
-  }, [env]);
+  }, [env, holdPhoto]);
 
   const pickFromGallery = useCallback(
     async (file: File | undefined) => {
       if (file === undefined) return;
       const source = await env.readGallery(file);
+      if (!alive.current) {
+        source?.release?.();
+        return;
+      }
       if (source === null) {
         setGalleryError(true);
         return;
       }
       setGalleryError(false);
-      photo.current = source;
+      holdPhoto(source);
       setGalleryFile(file);
       dispatch({ type: 'gallery' });
     },
-    [env],
+    [env, holdPhoto],
   );
 
   const chosen = files === null ? null : files[format];
