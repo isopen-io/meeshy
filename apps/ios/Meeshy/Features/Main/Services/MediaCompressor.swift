@@ -122,7 +122,13 @@ actor MediaCompressor {
             // pixel buffer to JPEG TWICE (~150ms wasted on a 4K image). Now we
             // bypass the round-trip by feeding the CGImage straight to
             // ImageIO via `downsample(cgImage:)`.
-            if let cg = image.cgImage,
+            //
+            // Ce raccourci dessine le CGImage BRUT : il ne vaut que pour une
+            // image `.up`. Une photo d'appareil tenue en portrait (`.right`)
+            // y partait couchée (#9403) ; le chemin par données, lui, écrit
+            // l'orientation EXIF puis la cuit (`WithTransform`).
+            if image.imageOrientation == .up,
+               let cg = image.cgImage,
                let downsampled = downsample(cgImage: cg, maxDimension: maxDimension) {
                 let jpeg = downsampled.jpegData(compressionQuality: quality) ?? Data()
                 return CompressedImageResult(data: jpeg, mimeType: "image/jpeg")
