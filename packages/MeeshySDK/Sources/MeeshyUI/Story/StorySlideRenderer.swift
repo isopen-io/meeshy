@@ -179,7 +179,9 @@ public enum StorySlideRenderer {
             // (1080x1920) then stretched into the composite rect — the same
             // design→bounds mapping the live `MeeshyStrokeCanvas` uses.
             if let strokes = slide.effects.drawingStrokes, !strokes.isEmpty {
-                StoryStrokeRasterizer.image(strokes: strokes, scale: 1)?.draw(in: rect)
+                // Vectoriel, à la résolution du composite : plus de bitmap
+                // 1080×1920 alloué pour une vignette de 44 points (#5037).
+                StoryStrokeRasterizer.draw(strokes: strokes, in: cgCtx, rect: rect)
             } else if let data = slide.effects.drawingData,
                       let drawing = try? PKDrawing(data: data), !drawing.bounds.isEmpty {
                 drawing.image(from: drawing.bounds, scale: 1).draw(in: rect)

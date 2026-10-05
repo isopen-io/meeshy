@@ -120,6 +120,21 @@ final class SceneThumbnailTests: XCTestCase {
         XCTAssertLessThan(min(centre.r, centre.g, centre.b), 200, "la pastille du son se voit à sa place")
     }
 
+    /// **Un dessin se voit dans la vignette**, peint en vectoriel à la taille de
+    /// la tuile — plus de bitmap 1080×1920 alloué pour 44 points.
+    func test_thumbnail_dessin_seVoitALaTailleDeLaTuile() {
+        var s = sceneNeuve()
+        s.effects.background = "000000"
+        let trait = (0...20).map { StoryDrawingStrokePoint(x: Double($0) * 54, y: 960) }
+        s.effects.drawingStrokes = [StoryDrawingStroke(id: "d", points: trait, colorHex: "FFFFFF", width: 60)]
+        let image = SceneThumbnailRenderer.thumbnail(
+            slide: s, bgImage: nil, loadedImages: [:], size: CGSize(width: 90, height: 160), scale: 2,
+            store: SceneThumbnailStore(), reductions: SceneThumbnailCache())
+        XCTAssertEqual(SceneImageDownsamplingTests.pixelSize(image), CGSize(width: 180, height: 320))
+        XCTAssertGreaterThan(couleur(image, x: 90, y: 160).r, 150, "le trait blanc traverse le milieu")
+        XCTAssertLessThan(couleur(image, x: 90, y: 20).r, 40, "loin du trait, le fond noir")
+    }
+
     /// **Jamais la photo entière dans 44 points** (#6922) : ce que le composite
     /// reçoit est réduit à la tuile.
     func test_reducedImages_plafonneChaqueBitmapALaTuile() {
