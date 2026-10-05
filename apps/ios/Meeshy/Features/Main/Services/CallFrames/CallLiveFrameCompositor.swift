@@ -217,7 +217,7 @@ nonisolated final class CallLiveFrameCompositor: CallLiveFrameCompositing, @unch
         switch slot.tone {
         case .color:
             return image
-        case .mono:
+        case .mono, .luminosity:
             return image.applyingFilter("CIPhotoEffectMono")
         case .noir:
             return image.applyingFilter("CIPhotoEffectNoir")
