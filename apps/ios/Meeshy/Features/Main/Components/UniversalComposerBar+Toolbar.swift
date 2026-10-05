@@ -164,24 +164,30 @@ extension UniversalComposerBar {
     // MARK: - Language Selector Pill
     // ========================================================================
 
-    private var languageSelectorPill: some View {
-        Menu {
-            ForEach(availableLanguages) { lang in
-                Button {
-                    currentLanguage = lang.code
-                    onLanguageChange?(lang.code)
-                    if let detected = DetectedLanguage.find(code: lang.code) {
-                        textAnalyzer.lockToLanguage(detected)
-                    }
-                } label: {
-                    HStack {
-                        Text("\(lang.flag) \(lang.name)")
-                        if lang.code == currentLanguage {
-                            Image(systemName: "checkmark")
-                        }
-                    }
+    private func languageChoice(_ lang: LanguageOption) -> some View {
+        Button {
+            currentLanguage = lang.code
+            onLanguageChange?(lang.code)
+            if let detected = DetectedLanguage.find(code: lang.code) {
+                textAnalyzer.lockToLanguage(detected)
+            }
+        } label: {
+            HStack {
+                Text("\(lang.flag) \(lang.name)")
+                if lang.code == currentLanguage {
+                    Image(systemName: "checkmark")
                 }
             }
+        }
+    }
+
+    /// La pastille ferme la bande d'outils, donc vit dans les candidats du
+    /// `ViewThatFits` de `ComposerToolbarStrip` : ses choix sont construits ici,
+    /// le `ForEach` ne fait que les relire (#9456, `AsyncRenderRow`).
+    private var languageSelectorPill: some View {
+        let choices = availableLanguages.map { AsyncRenderRow(id: $0.id, content: languageChoice($0)) }
+        return Menu {
+            ForEach(choices, content: asyncRenderRowContent)
         } label: {
             HStack(spacing: MeeshySpacing.xxs) {
                 Text(currentLangOption.flag)

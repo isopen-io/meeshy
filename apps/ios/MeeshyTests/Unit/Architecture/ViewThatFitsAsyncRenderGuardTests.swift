@@ -108,7 +108,7 @@ final class ViewThatFitsAsyncRenderGuardTests: XCTestCase {
 
     func test_aucunCandidatDeViewThatFitsNAtteintUneFermetureIsolee() throws {
         let files = try Self.sweptFiles()
-        let sites = files.filter { AsyncRenderReachability.blankingStrings($0.source).contains("ViewThatFits(") }
+        let sites = files.filter { AsyncRenderReachability.blankingStrings($0.source).contains("ViewThatFits") }
         XCTAssertGreaterThanOrEqual(sites.count, 10,
                                     "balayage trop maigre — la garde ne mesurerait rien (\(sites.map(\.path)))")
         let violations = AsyncRenderReachability.violations(in: files,
@@ -185,47 +185,59 @@ enum AsyncRenderReachability {
         let end: Int
     }
 
+    private struct Scope {
+        let name: String
+        let unit: Unit
+    }
+
     static func violations(in files: [File],
                            injectedAnchors: [Anchor] = [],
                            injectedTypes: [String] = []) -> [String] {
         let texts = files.map { Array(blankingStrings($0.source).utf8) }
-        let families = files.map { family(of: $0.path) }
+        var scopes: [[Scope]] = []
+        var viewMembers: [[Unit]] = []
         var members: [String: [Unit]] = [:]
         var types: [String: [Unit]] = [:]
-        var enclosing: [Int: [Unit]] = [:]
-        var extensions: [(name: String, unit: Unit)] = []
+        var extensions: [Scope] = []
         for (index, text) in texts.enumerated() {
             let found = declarations(in: text)
-            let viewExtensions = found.filter { $0.kind == .extension && ["View", "SwiftUI.View"].contains($0.name) }
-            for declaration in found {
+            let fileScopes = found.filter { $0.kind != .member }
+                .map { Scope(name: $0.name, unit: Unit(file: index, start: $0.start, end: $0.end)) }
+            scopes.append(fileScopes)
+            var fileMembers: [Unit] = []
+            for declaration in found where declaration.producesView || declaration.kind == .extension {
                 let unit = Unit(file: index, start: declaration.start, end: declaration.end)
                 switch declaration.kind {
                 case .member:
-                    members[families[index] + "." + declaration.name, default: []].append(unit)
-                    enclosing[index, default: []].append(unit)
-                    // Un modificateur maison (`extension View`) s'appelle de partout.
-                    if viewExtensions.contains(where: { $0.start < unit.start && unit.end <= $0.end }) {
-                        members["View." + declaration.name, default: []].append(unit)
-                    }
+                    // Un membre se résout dans SON type (et ses extensions),
+                    // jamais chez un voisin de fichier qui porterait le même nom.
+                    let owner = innermost(fileScopes, containing: unit.start)?.name ?? "file\(index)"
+                    members[owner + "." + declaration.name, default: []].append(unit)
+                    fileMembers.append(unit)
                 case .type:
                     types[declaration.name, default: []].append(unit)
                 case .extension:
-                    extensions.append((declaration.name, unit))
+                    extensions.append(Scope(name: declaration.name, unit: unit))
                 }
             }
+            viewMembers.append(fileMembers)
         }
-        // Les extensions des seuls types DÉCLARÉS ici : `extension View`
+        // Les extensions des seuls types-vues DÉCLARÉS ici : `extension View`
         // n'emporte pas tous les modificateurs du dépôt à chaque `some View`.
-        for (name, unit) in extensions where types[name] != nil {
-            types[name, default: []].append(unit)
+        for scope in extensions where types[scope.name] != nil {
+            types[scope.name, default: []].append(scope.unit)
         }
 
         var roots: [Unit] = []
         for (index, text) in texts.enumerated() {
-            for site in occurrences(of: "ViewThatFits(", in: text) {
-                guard let open = firstIndex(of: UInt8(ascii: "{"), in: text, from: site),
+            for site in occurrences(of: "ViewThatFits", in: text) {
+                let next = text[(site + 12)...].first { !isSpace($0) }
+                guard next == UInt8(ascii: "(") || next == UInt8(ascii: "{"),
+                      let open = text[site...].firstIndex(of: UInt8(ascii: "{")),
                       let close = matching(open, in: text) else { continue }
-                let owner = (enclosing[index] ?? []).filter { $0.start <= site && site < $0.end }.max { $0.start < $1.start }
+                // Le candidat se lit avec ce que son membre pose AVANT lui
+                // (`let rows = …`, `let corpus = …`).
+                let owner = viewMembers[index].filter { $0.start <= site && site < $0.end }.max { $0.start < $1.start }
                 roots.append(Unit(file: index, start: owner?.start ?? site, end: close + 1))
             }
             for anchor in injectedAnchors where files[index].path.hasSuffix(anchor.fileSuffix) {
@@ -242,26 +254,29 @@ enum AsyncRenderReachability {
         var queue = roots
         var found = Set<String>()
         while let unit = queue.popLast() {
-            let key = "\(unit.file):\(unit.start):\(unit.end)"
-            guard visited.insert(key).inserted else { continue }
+            guard visited.insert("\(unit.file):\(unit.start):\(unit.end)").inserted else { continue }
             let text = texts[unit.file]
             let slice = Array(text[unit.start..<unit.end])
             for problem in problems(in: slice) {
                 found.insert("\(files[unit.file].path):\(line(of: unit.start + problem.offset, in: text)) — \(problem.what)")
             }
-            for token in identifiers(in: slice) {
-                if token != "body", let reached = members[families[unit.file] + "." + token] {
-                    queue += reached
-                }
-                if token != "body", let reached = members["View." + token] {
-                    queue += reached
-                }
-                if let first = token.utf8.first, (65...90).contains(first), let reached = types[token] {
-                    queue += reached
-                }
+            let owner = innermost(scopes[unit.file], containing: unit.start)?.name ?? "file\(unit.file)"
+            for token in identifiers(in: slice) where token != "body" {
+                queue += members[owner + "." + token] ?? []
+                // Un modificateur maison (`extension View`) s'appelle de partout.
+                queue += members["View." + token] ?? []
+            }
+            // Un type se suit quand on l'INSTANCIE (`Type(`, `Type {`, `Type<`),
+            // pas quand on lit une de ses constantes (`Type.valeur`).
+            for token in instantiatedTypes(in: slice) {
+                queue += types[token] ?? []
             }
         }
         return found.sorted()
+    }
+
+    private static func innermost(_ scopes: [Scope], containing offset: Int) -> Scope? {
+        scopes.filter { $0.unit.start <= offset && offset < $0.unit.end }.max { $0.unit.start < $1.unit.start }
     }
 
     // MARK: - Ce qui est refusé
@@ -352,24 +367,32 @@ enum AsyncRenderReachability {
 
     private enum Kind { case member, type, `extension` }
 
-    private static func declarations(in text: [UInt8]) -> [(kind: Kind, name: String, start: Int, end: Int)] {
+    private struct Declaration {
+        let kind: Kind
+        let name: String
+        let start: Int
+        let end: Int
+        /// Seul ce qui PRODUIT une vue se suit : une action de bouton qui
+        /// charge des données n'est pas du contenu mis en page.
+        let producesView: Bool
+    }
+
+    private static func declarations(in text: [UInt8]) -> [Declaration] {
         let keywords: [(String, Kind)] = [("var", .member), ("func", .member),
                                           ("struct", .type), ("class", .type), ("enum", .type),
                                           ("extension", .extension)]
         return keywords.flatMap { keyword, kind in
-            occurrences(of: keyword + " ", in: text).compactMap { site -> (Kind, String, Int, Int)? in
+            occurrences(of: keyword + " ", in: text).compactMap { site -> Declaration? in
                 guard site == 0 || !isIdentifier(text[site - 1]) else { return nil }
                 let nameStart = site + keyword.utf8.count + 1
-                let name = String(decoding: text[nameStart...].prefix { isIdentifier($0) || $0 == UInt8(ascii: ".") },
-                                  as: UTF8.self)
-                guard !name.isEmpty,
+                let qualified = String(decoding: text[nameStart...].prefix { isIdentifier($0) || $0 == UInt8(ascii: ".") },
+                                       as: UTF8.self)
+                guard let name = qualified.split(separator: ".").last.map(String.init),
                       let open = bodyOpening(in: text, from: nameStart, stopsAtNewline: keyword == "var"),
                       let close = matching(open, in: text) else { return nil }
-                // Seul ce qui PRODUIT une vue se suit : une action de bouton qui
-                // charge des données n'est pas du contenu mis en page.
                 let signature = String(decoding: text[nameStart..<open], as: UTF8.self)
-                guard kind == .extension || signature.contains("View") else { return nil }
-                return (kind, name, open, close + 1)
+                return Declaration(kind: kind, name: name, start: open, end: close + 1,
+                                   producesView: signature.contains("View"))
             }
         }
     }
@@ -417,10 +440,6 @@ enum AsyncRenderReachability {
         }
     }
 
-    private static func firstIndex(of byte: UInt8, in text: [UInt8], from start: Int) -> Int? {
-        text[start...].firstIndex(of: byte)
-    }
-
     private static func identifiers(in text: [UInt8]) -> Set<String> {
         var result = Set<String>()
         var current: [UInt8] = []
@@ -435,13 +454,26 @@ enum AsyncRenderReachability {
         return result
     }
 
-    private static func line(of offset: Int, in text: [UInt8]) -> Int {
-        text[..<offset].reduce(1) { $0 + ($1 == 10 ? 1 : 0) }
+    private static func instantiatedTypes(in text: [UInt8]) -> Set<String> {
+        var result = Set<String>()
+        var current: [UInt8] = []
+        for (offset, byte) in (text + [32]).enumerated() {
+            if isIdentifier(byte) {
+                current.append(byte)
+                continue
+            }
+            defer { current = [] }
+            guard let first = current.first, (65...90).contains(first) else { continue }
+            let next = text[min(offset, text.count)...].first { !isSpace($0) }
+            if next == UInt8(ascii: "(") || next == UInt8(ascii: "{") || next == UInt8(ascii: "<") {
+                result.insert(String(decoding: current, as: UTF8.self))
+            }
+        }
+        return result
     }
 
-    private static func family(of path: String) -> String {
-        let name = (path as NSString).lastPathComponent
-        return String(name.prefix { $0 != "+" && $0 != "." })
+    private static func line(of offset: Int, in text: [UInt8]) -> Int {
+        text[..<offset].reduce(1) { $0 + ($1 == 10 ? 1 : 0) }
     }
 
     private static func isIdentifier(_ byte: UInt8) -> Bool {
