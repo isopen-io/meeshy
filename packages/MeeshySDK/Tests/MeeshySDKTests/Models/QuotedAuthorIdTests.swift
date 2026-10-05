@@ -25,7 +25,7 @@ final class QuotedAuthorIdTests: XCTestCase {
     // MARK: - Rétro-compatibilité des blobs gravés
 
     func test_decodeReplyReference_blobGravedBeforeTheId_decodesWithoutIt() throws {
-        let legacy = #"{"messageId":"q1","authorName":"Bob","authorColor":"#31B6BA","previewText":"Salut","isMe":false,"isStoryReply":false}"#
+        let legacy = ##"{"messageId":"q1","authorName":"Bob","authorColor":"#31B6BA","previewText":"Salut","isMe":false,"isStoryReply":false}"##
 
         let quote = try decode(ReplyReference.self, legacy)
 
