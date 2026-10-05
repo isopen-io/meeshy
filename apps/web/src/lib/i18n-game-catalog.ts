@@ -152,3 +152,25 @@ export function translateGamePlural(
   const text = forms[`${base}.${gamePluralCategory(language, count)}`] ?? catalog[`${base}.other` as GameCatalogKey];
   return interpolate(text, { count: formatGameNumber(language, count), ...params });
 }
+
+const ordinalRules = new Map<InterfaceLanguage, Intl.PluralRules>();
+
+function gameOrdinalCategory(language: InterfaceLanguage, count: number): Intl.LDMLPluralRule {
+  const known = ordinalRules.get(language);
+  if (known !== undefined) return known.select(count);
+  const created = new Intl.PluralRules(LOCALES[language], { type: 'ordinal' });
+  ordinalRules.set(language, created);
+  return created.select(count);
+}
+
+/**
+ * Un rang ORDINAL (« 4e », « 4th », « 4. ») : la forme de la catégorie
+ * ordinale du nombre dans la langue (`Intl.PluralRules` en `type: 'ordinal'`),
+ * sinon `.other` — même famille de clés que les pluriels, autres règles.
+ */
+export function translateGameOrdinal(language: InterfaceLanguage, base: GamePluralBase, count: number): string {
+  const catalog = catalogOf(language);
+  const forms = catalog as Readonly<Record<string, string | undefined>>;
+  const text = forms[`${base}.${gameOrdinalCategory(language, count)}`] ?? catalog[`${base}.other` as GameCatalogKey];
+  return interpolate(text, { count: formatGameNumber(language, count) });
+}
