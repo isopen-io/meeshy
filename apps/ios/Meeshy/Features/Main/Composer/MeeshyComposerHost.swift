@@ -160,8 +160,8 @@ struct MeeshyComposerHost: View {
     let onPreview: ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL]) -> Void
     let onDismiss: () -> Void
 
-    /// **Rendre le média composé au lieu de le publier** (#8416, #9123) — posé
-    /// par la retouche d'une pièce du brouillon d'un message et par sa caméra.
+    /// **Rendre le média composé au lieu de le publier** (#8416, #9124) — posé
+    /// par la retouche d'une pièce du brouillon d'un message.
     /// `nil` pour toute autre porte, qui publie.
     let onReturnMedia: ((ComposerReturnedMedia) -> Void)?
 

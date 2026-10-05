@@ -2,50 +2,10 @@ import XCTest
 import MeeshySDK
 @testable import Meeshy
 
-/// **La caméra de la barre de composition ouvre le composer plein écran, viseur
-/// ARMÉ** (#9123, demande porteur 2026-10-02) : la prise s'édite dans la scène,
-/// puis « Terminé » la rend au message en attente.
-///
-/// L'armement à l'ouverture est une règle d'ORIGINE, distincte de #4851 : il
-/// répond au geste explicite « caméra » de l'auteur, et aucune autre porte ne
-/// le reçoit — « Ajouter une story » continue d'ouvrir la scène visible.
-final class ComposerConversationCaptureTests: XCTestCase {
-
-    private static let autresPortes: [ComposerOrigin] = [
-        .storyTray, .feedComposer, .moodChip,
-        .repost(ofPostId: "p", sourceFormat: .story),
-        .edit(postId: "p", documentFormat: .story),
-        .draft(id: "d"), .share,
-        .conversationMedia(messageId: "m", attachmentId: "a"),
-        .socialMedia(postId: "p", mediaId: "m"),
-        .conversationDraftMedia(staged: true)
-    ]
-
-    func test_profile_conversationCapture_opensTheSceneWithCaptureAndNoFormatChoice() {
-        let profil = ComposerProfile.profile(for: .conversationCapture)
-        XCTAssertEqual(profil.offeredFormats, [.story])
-        XCTAssertEqual(profil.opensWith, .cameraReady)
-        XCTAssertTrue(profil.allowsCapture)
-        XCTAssertNil(profil.routesToLegacy)
-        XCTAssertFalse(ComposerSurfaceRouting.focusesContentOnAppear(opening: profil.opensWith),
-                       "Un viseur et un clavier ne s'ouvrent jamais ensemble.")
-    }
-
-    func test_armsViewfinderOnOpen_conversationCapture_returnsTrue() {
-        XCTAssertTrue(ComposerConversationCapture.armsViewfinderOnOpen(origin: .conversationCapture))
-    }
-
-    func test_armsViewfinderOnOpen_everyOtherDoor_returnsFalse() {
-        for origine in Self.autresPortes {
-            XCTAssertFalse(ComposerConversationCapture.armsViewfinderOnOpen(origin: origine),
-                           "\(origine) : le viseur ne s'arme plus au montage (#4851)")
-        }
-    }
-
-    func test_opensOnPicker_conversationCapture_returnsFalse() {
-        XCTAssertFalse(ComposerScenePicking.opensOnPicker(origin: .conversationCapture, compositionIsEmpty: true),
-                       "La caméra promet un viseur, pas la photothèque.")
-    }
+/// **Ce que « Terminé » rend au message** (#8416, #9124) — et la caméra de la
+/// barre, qui prend en plein écran, hors scène (#9295). Son ancienne porte du
+/// composer, viseur armé à l'ouverture (#9123), a été retirée (#9298).
+final class ComposerReturnMediaTests: XCTestCase {
 
     // MARK: - Ce que « Terminé » rend
 
@@ -79,10 +39,17 @@ final class ComposerConversationCaptureTests: XCTestCase {
                        .renderVideo)
     }
 
-    func test_returnsUneditedCapture_onlyForTheCaptureDoor() {
-        XCTAssertTrue(ComposerConversationCapture.returnsUntouchedMedia(origin: .conversationCapture))
-        for origine in Self.autresPortes {
-            XCTAssertFalse(ComposerConversationCapture.returnsUntouchedMedia(origin: origine), "\(origine)")
+    func test_returnsUntouchedMedia_everyOtherDoor_returnsFalse() {
+        let portes: [ComposerOrigin] = [
+            .storyTray, .feedComposer, .moodChip,
+            .repost(ofPostId: "p", sourceFormat: .story),
+            .edit(postId: "p", documentFormat: .story),
+            .draft(id: "d"), .share,
+            .conversationMedia(messageId: "m", attachmentId: "a"),
+            .socialMedia(postId: "p", mediaId: "m")
+        ]
+        for origine in portes {
+            XCTAssertFalse(ComposerReturnMedia.returnsUntouchedMedia(origin: origine), "\(origine)")
         }
     }
 
@@ -103,20 +70,20 @@ final class ComposerConversationCaptureTests: XCTestCase {
     /// récents, #9124) repart telle quelle si l'auteur n'y touche pas : sans
     /// cela, « Terminé » refermait sans rien poser dans le message.
     func test_returnsUntouchedMedia_unstagedDraftMedia_returnsTrue() {
-        XCTAssertTrue(ComposerConversationCapture.returnsUntouchedMedia(origin: .conversationDraftMedia(staged: false)))
-        XCTAssertFalse(ComposerConversationCapture.returnsUntouchedMedia(origin: .conversationDraftMedia(staged: true)))
+        XCTAssertTrue(ComposerReturnMedia.returnsUntouchedMedia(origin: .conversationDraftMedia(staged: false)))
+        XCTAssertFalse(ComposerReturnMedia.returnsUntouchedMedia(origin: .conversationDraftMedia(staged: true)))
     }
 
     // MARK: - Câblage
 
-    func test_host_armsTheViewfinderThroughTheOriginRule() throws {
+    func test_host_returnsTheSceneMediaThroughTheReturnRule() throws {
         let code = AppSourceGuard.stripComments(try AppSourceGuard.composerHostSource())
             .components(separatedBy: .whitespacesAndNewlines).joined()
-        XCTAssertTrue(code.contains("ComposerConversationCapture.armsViewfinderOnOpen(origin:intent.origin)"),
-                      "Le meuble arme le viseur par la règle d'origine, jamais par un littéral.")
+        XCTAssertTrue(code.contains("ComposerReturnMedia.returnsUntouchedMedia(origin:intent.origin)"),
+                      "Le meuble lit la règle d'origine, jamais un littéral.")
         XCTAssertTrue(code.contains("returnSceneMedia()"), "« Terminé » rend un MÉDIA, image ou vidéo.")
         XCTAssertTrue(code.contains("returnsToConversation:returnsToConversation"),
-                      "Le brouillon de création reste hors de la retouche et de la caméra du fil.")
+                      "Le brouillon de création reste hors de la retouche.")
     }
 
     /// **#9295 (directive porteur 2026-10-04) — la caméra de la barre prend en

@@ -2,22 +2,15 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
-// **La retouche d'une pièce du fil, et la caméra de sa barre, rendues au
-// message** (#8416, #9123).
+// **La retouche d'une pièce du fil, rendue au message** (#8416, #9124).
 //
 // La même scène plein écran que toute composition ; seul le socle change :
 // ni audience ni menu de formats — le média ne se publie pas —, une capsule
-// « Terminé » qui rend le média à l'hôte, puis referme.
+// « Terminé » qui rend le média à l'hôte, puis referme. La caméra de la barre
+// n'y passe plus : elle prend en plein écran, hors scène (#9295, #9298).
 extension MeeshyComposerHost {
 
     var returnsToConversation: Bool { onReturnMedia != nil || onReturnSeries != nil }
-
-    /// **La caméra de la barre ouvre le viseur ARMÉ** (#9123) — la seule porte
-    /// qui le fasse : l'auteur a touché « caméra ». La règle lit l'ORIGINE.
-    func armViewfinderIfTheDoorAsks() {
-        guard ComposerConversationCapture.armsViewfinderOnOpen(origin: intent.origin) else { return }
-        armSceneCamera()
-    }
 
     /// **Les portes servies sur la scène** — toutes, sauf en retouche d'une
     /// image du fil, où ne restent que celles qui PEIGNENT l'image : ce qui
@@ -63,7 +56,7 @@ extension MeeshyComposerHost {
         // perte de définition sans le moindre geste de l'auteur.
         switch ComposerReturnMedia.action(
             edited: viewModel.canUndoGlobal,
-            returnsCapture: ComposerConversationCapture.returnsUntouchedMedia(origin: intent.origin),
+            returnsCapture: ComposerReturnMedia.returnsUntouchedMedia(origin: intent.origin),
             sceneHoldsMedia: !objets.isEmpty,
             sceneHasVideo: objets.contains { $0.kind == .video }
         ) {
