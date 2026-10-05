@@ -60,14 +60,16 @@ final class ComposerCaptureSessionTests: XCTestCase {
             XCTAssertTrue(sites.contains("ComposerCaptureSession.swift"), "`\(loi)` n'est plus câblée par la machine")
             XCTAssertTrue(Set(sites).isDisjoint(with: montages),
                           "`\(loi)` est recâblée par un montage du viseur : \(sites)")
-            XCTAssertTrue(Set(sites).isSubset(of: ["ComposerCaptureSession.swift", "ComposerSceneCameraBar.swift"]),
+            XCTAssertTrue(Set(sites).isSubset(of: ["ComposerCaptureSession.swift", "ComposerCaptureSession+Switch.swift",
+                                                   "ComposerSceneCameraBar.swift"]),
                           "`\(loi)` a un second site de câblage : \(sites) — seule la barre lit le cadenas de SON obturateur")
         }
     }
 
     func test_laBarreEtLAperçu_sontMontesParLesVuesPartagees() {
         XCTAssertEqual(sitesAppelant("ComposerSceneCameraBar("), ["ComposerCaptureViews.swift"])
-        XCTAssertEqual(sitesAppelant("CameraPreviewLayer(session:"), ["ComposerCaptureViews.swift"])
+        // + la caméra avant du moment photo du jeu (#9382), qui n'est pas un viseur du composer.
+        XCTAssertEqual(Set(sitesAppelant("CameraPreviewLayer(session:")), ["ComposerCaptureViews.swift", "GamePhotoFlowView.swift"])
     }
 
     func test_lesDeuxMontages_serventLaMemeMachine() throws {

@@ -232,6 +232,14 @@ const SUBSTITUTIONS = Object.freeze({
       "getMasterKey() (AttachmentEncryptionService.ts:136) lève en nommant la variable ET la commande qui en " +
       'génère une. Refus explicite, jamais un repli.',
   },
+  SECRETS_AT_REST_KEY: {
+    classe: DEFAUT_ACCEPTABLE,
+    secret: true,
+    raison:
+      "sealSecret() (services/gateway/src/utils/secret-at-rest.ts) LÈVE en production/staging quand elle manque, " +
+      "en la nommant : PUT /admin/agent/llm refuse alors d'enregistrer la clé d'API (503) au lieu de la stocker " +
+      'en clair. Refus explicite, jamais un repli.',
+  },
   HF_TOKEN: {
     classe: DEFAUT_ACCEPTABLE,
     raison: "Optionnelle : seule la diarisation pyannote la lit ; les modèles publics n'en ont pas besoin.",

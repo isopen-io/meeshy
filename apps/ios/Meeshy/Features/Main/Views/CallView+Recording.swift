@@ -37,22 +37,26 @@ extension CallView {
         }
     }
 
+    /// Rangée du (…) déployé, donc candidate du `ViewThatFits` de la pilule :
+    /// ses puces sont construites ici, le `ForEach` ne fait que les relire
+    /// (#9456, `AsyncRenderRow`).
     var recordingPanelRows: some View {
-        VStack(spacing: 0) {
+        let chips = [CallRecordingKind.audio, .video].map { kind in
+            AsyncRenderRow(id: kind, content: CallPillChip(
+                art: .symbol(kind == .video ? "video.circle" : "waveform.circle"),
+                caption: CallRecordingCopy.kindLabel(kind),
+                label: CallRecordingCopy.kindLabel(kind),
+                hint: CallRecordingCopy.kindHint
+            ) {
+                HapticFeedback.light()
+                _ = callManager.recording.request(kind: kind)
+                closePanel()
+            })
+        }
+        return VStack(spacing: 0) {
             CallPanelHeader(title: CallRecordingCopy.label(isActive: false), onBack: backToMenu, onClose: closePanel)
             CallPillRow {
-                ForEach([CallRecordingKind.audio, .video], id: \.self) { kind in
-                    CallPillChip(
-                        art: .symbol(kind == .video ? "video.circle" : "waveform.circle"),
-                        caption: CallRecordingCopy.kindLabel(kind),
-                        label: CallRecordingCopy.kindLabel(kind),
-                        hint: CallRecordingCopy.kindHint
-                    ) {
-                        HapticFeedback.light()
-                        _ = callManager.recording.request(kind: kind)
-                        closePanel()
-                    }
-                }
+                ForEach(chips, content: asyncRenderRowContent)
             }
         }
     }

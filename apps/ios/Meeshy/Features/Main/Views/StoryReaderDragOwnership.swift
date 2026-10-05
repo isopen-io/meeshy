@@ -161,7 +161,7 @@ nonisolated enum StoryReactionStripGesture {
 /// Cadre `.global` de la barre de réactions ouverte — `nil` quand elle est
 /// fermée. Publié AVANT son `.offset`, pour que le cadre soit celui où le doigt
 /// la voit. Un cadre de LAYOUT (ouverture, rotation), jamais de défilement.
-struct StoryReactionStripFrameKey: PreferenceKey {
+nonisolated struct StoryReactionStripFrameKey: PreferenceKey {
     static var defaultValue: CGRect? { nil }
     static func reduce(value: inout CGRect?, nextValue: () -> CGRect?) {
         guard let next = nextValue() else { return }

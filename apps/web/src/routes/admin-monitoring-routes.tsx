@@ -34,7 +34,7 @@ import {
 import { ApiError, unwrap } from '@/lib/api/client';
 import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { useSearch } from '@/lib/router';
-import type { AdminOption } from '@/routes/admin-table';
+import type { AdminOption } from '@/components/admin/list-toolbar';
 
 import { LastSeen, MethodText, MonitoringSection, RefreshButton, RouteText, UsageTable, type UsageColumn } from './admin-monitoring-parts';
 

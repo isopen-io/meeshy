@@ -103,11 +103,19 @@ struct ComposerHostPortal: View {
 
 /// Ce que la racine pose PAR-DESSUS la scène : la zone d'écriture, la feuille
 /// de partage, le voile du bake (`composerChrome`).
+///
+/// **Le meuble porte son propre hôte de toasts** (#4872, #5009). Toutes ses
+/// portes le présentent en `fullScreenCover`, qui COUVRE l'hôte de la racine :
+/// posé porte par porte, il n'avait été posé que sur celle du document, et le
+/// refus du onzième `(+)` de la story se levait derrière l'écran.
 struct ComposerHostChromeLayer: ViewModifier {
     let host: MeeshyComposerHost
     var observation: ComposerHostObservation
 
-    func body(content: Content) -> some View { host.composerChrome(content) }
+    func body(content: Content) -> some View {
+        host.composerChrome(content)
+            .feedbackToastOverlay()
+    }
 }
 
 /// Le cycle de vie du meuble : graines, dérivations, reports

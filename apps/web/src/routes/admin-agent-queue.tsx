@@ -1,12 +1,14 @@
 import { useQuery } from '@tanstack/react-query';
 import { useId, useState } from 'react';
 
+import { AdminFormError } from '@/components/admin/form';
 import { AdminBadge } from '@/components/admin/badges';
 import { AdminButton } from '@/components/admin/button';
 import { AdminEntityChip } from '@/components/admin/entity-chip';
 import { AdminFicheSection } from '@/components/admin/fiche';
-import { AdminEmptyState, AdminErrorState } from '@/components/admin/states';
+import { AdminEmptyState, AdminErrorState, AdminSkeleton } from '@/components/admin/states';
 import { BRAND, EDGE, INK, INK2, SURFACE } from '@/components/admin/tone';
+import { conversationLabel, personLabel } from '@/lib/admin/interpret/labels';
 import { formatCount } from '@/lib/admin/interpret/numbers';
 import { adminMomentOf } from '@/lib/admin/interpret/time';
 import type { AdminDeps } from '@/lib/api/admin';
@@ -14,7 +16,6 @@ import { agentQueueQueryKey, cancelAgentQueueItem, editAgentQueueItem, loadAgent
 import { unwrap } from '@/lib/api/client';
 import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { useOnline } from '@/lib/net/online';
-import { AdminSkeleton } from '@/routes/admin-parts';
 
 import { useAgentConfirm, useAgentGesture, type AgentGesture } from './admin-agent-form';
 
@@ -76,6 +77,56 @@ export function AgentQueueDetail({ language, deps, now }: { readonly language: A
   );
 }
 
+/**
+ * OÙ et AU NOM DE QUI l'élément sera publié : la conversation nommée (lien vers sa
+ * fiche) et le membre joué (nom et @pseudo, lien vers sa fiche). Un serveur d'avant
+ * ne sert ni l'une ni l'autre : la conversation retombe sur le lien générique,
+ * et le membre n'est pas inventé.
+ */
+function QueueWho({ language, item }: { readonly language: AdminLanguage; readonly item: AgentQueueItem }) {
+  const conversationId = item.conversation?.id ?? item.conversationId;
+  const conversationName =
+    item.conversation === null
+      ? translateAdmin(language, 'admin.agentPanel.queue.conversation')
+      : conversationLabel(item.conversation, language);
+  const persona = item.persona;
+  if (conversationId === '' && persona === null) return null;
+
+  return (
+    <dl className="grid gap-1 @lg:grid-cols-2" data-agent-queue-who={item.id}>
+      {conversationId === '' ? null : (
+        <div className="grid min-w-0 gap-0.5" data-agent-queue-conversation={conversationId}>
+          <dt className="text-caption" style={{ color: INK2 }}>
+            {translateAdmin(language, 'admin.agentPanel.queue.in')}
+          </dt>
+          <dd className="min-w-0">
+            <AdminEntityChip language={language} size="sm" entity={{ kind: 'conversation', id: conversationId, label: conversationName }} />
+          </dd>
+        </div>
+      )}
+      {persona === null ? null : (
+        <div className="grid min-w-0 gap-0.5" data-agent-queue-persona={persona.id}>
+          <dt className="text-caption" style={{ color: INK2 }}>
+            {translateAdmin(language, 'admin.agentPanel.queue.as')}
+          </dt>
+          <dd className="min-w-0">
+            <AdminEntityChip
+              language={language}
+              size="sm"
+              entity={{
+                kind: 'user',
+                id: persona.id,
+                label: personLabel(persona, language),
+                secondary: persona.displayName === null ? null : `@${persona.username}`,
+              }}
+            />
+          </dd>
+        </div>
+      )}
+    </dl>
+  );
+}
+
 function QueueRow({
   language,
   deps,
@@ -107,14 +158,8 @@ function QueueRow({
             ? translateAdmin(language, 'admin.agentPanel.queue.message')
             : translateAdmin(language, 'admin.agentPanel.queue.reaction', { emoji: item.content })}
         </AdminBadge>
-        {item.conversationId === '' ? null : (
-          <AdminEntityChip
-            language={language}
-            size="sm"
-            entity={{ kind: 'conversation', id: item.conversationId, label: translateAdmin(language, 'admin.agentPanel.queue.conversation') }}
-          />
-        )}
       </div>
+      <QueueWho language={language} item={item} />
       {moment === null ? null : (
         <time dateTime={moment.iso} title={moment.absolute} className="text-caption" style={{ color: INK2 }}>
           {translateAdmin(language, 'admin.agentPanel.queue.at', { when: moment.relative })}
@@ -138,11 +183,7 @@ function QueueRow({
               className="w-full rounded-chip px-3 py-2 text-body focus-visible:outline-2 focus-visible:outline-offset-2"
               style={{ minHeight: 44, backgroundColor: SURFACE, border: `1px solid ${EDGE}`, color: INK, outlineColor: BRAND }}
             />
-            {gesture.errorOf(editId) === null ? null : (
-              <p role="alert" className="text-caption font-medium" style={{ color: 'var(--color-danger)' }}>
-                {gesture.errorOf(editId)}
-              </p>
-            )}
+            <AdminFormError text={gesture.errorOf(editId) ?? ''} />
             <div className="flex flex-wrap justify-end gap-2">
               <AdminButton
                 onClick={() => {

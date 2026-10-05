@@ -2,6 +2,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 import { act } from 'react';
 
 import type { CameraResult } from '@/lib/game-photo/camera';
+import type { PhotoSource } from '@/lib/game-photo/compose';
 import type { PhotoEnv } from '@/lib/game-photo/env';
 import { rankMoment, startMoment, type PhotoMoment } from '@/lib/game-photo/moments';
 import type { KeptPhoto, Notebook } from '@/lib/game-photo/notebook';
@@ -95,7 +96,7 @@ describe('la proposition', () => {
   test('Mee propose trois choses : le selfie, la carte seule, plus tard — et dit où reste la photo', async () => {
     const { env: e, log } = env();
     const host = await open(rank, e, log);
-    expect(choose(host, 'selfie')?.textContent).toBe('Selfie avec Mee et Meo');
+    expect(choose(host, 'selfie')?.textContent).toBe('Selfie avec nous');
     expect(choose(host, 'card')?.textContent).toBe('Carte seule');
     expect(choose(host, 'later')?.textContent).toBe('Plus tard');
     expect(host.textContent).toContain('On immortalise ?');
@@ -267,6 +268,64 @@ describe('une caméra refusée n’est pas une impasse', () => {
     });
     await settle();
     expect(log.rendered).toEqual([{ moment: rank, mirror: false }]);
+  });
+});
+
+describe('l’image décodée d’une photo de la galerie est rendue (#9382)', () => {
+  const released = (): { readonly sources: { closed: number }[]; readonly make: () => PhotoSource } => {
+    const sources: { closed: number }[] = [];
+    const make = (): PhotoSource => {
+      const record = { closed: 0 };
+      sources.push(record);
+      return { image: {} as CanvasImageSource, width: 800, height: 600, mirror: false, release: () => void (record.closed += 1) };
+    };
+    return { sources, make };
+  };
+
+  const pick = async (host: HTMLElement, count = 1) => {
+    const input = host.querySelector<HTMLInputElement>('input[type="file"]');
+    Object.defineProperty(input, 'files', { value: [new File(['x'], 'moi.jpg', { type: 'image/jpeg' })], configurable: true });
+    await act(async () => {
+      for (let index = 0; index < count; index += 1) input?.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+  };
+
+  const toGallery = async (readGallery: PhotoEnv['readGallery']) => {
+    const bench = env({ camera: { ok: false, reason: 'unsupported' }, readGallery });
+    const host = await open(rank, bench.env, bench.log);
+    await click(choose(host, 'selfie'));
+    await settle();
+    return { ...bench, host };
+  };
+
+  test('fermer le déroulé ferme l’image décodée : un ImageBitmap tient sa mémoire jusqu’à close()', async () => {
+    const bench = released();
+    const { host } = await toGallery(async () => bench.make());
+    await pick(host);
+    await settle();
+    expect(bench.sources).toHaveLength(1);
+    expect(bench.sources[0]?.closed).toBe(0);
+    unmountAll();
+    expect(bench.sources[0]?.closed).toBe(1);
+  });
+
+  test('remplacer la photo ferme la précédente, et seulement elle', async () => {
+    const bench = released();
+    const { host } = await toGallery(async () => bench.make());
+    await pick(host, 2);
+    await settle();
+    expect(bench.sources).toHaveLength(2);
+    expect(bench.sources.map((entry) => entry.closed)).toEqual([1, 0]);
+  });
+
+  test('une image qui arrive APRÈS la fermeture est fermée aussitôt', async () => {
+    const bench = released();
+    let arrive: (source: PhotoSource) => void = () => undefined;
+    const { host } = await toGallery(() => new Promise<PhotoSource>((resolve) => (arrive = resolve)));
+    await pick(host);
+    unmountAll();
+    await act(async () => arrive(bench.make()));
+    expect(bench.sources[0]?.closed).toBe(1);
   });
 });
 

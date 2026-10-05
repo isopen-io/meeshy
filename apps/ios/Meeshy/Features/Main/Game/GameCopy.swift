@@ -245,6 +245,8 @@ enum GameCopy {
             String(localized: "game.error.missions_locked", defaultValue: "Les missions s’ouvrent au niveau 5.", bundle: .main)
         case .chestNotReady:
             String(localized: "game.error.chest_not_ready", defaultValue: "Termine d’abord les missions du jour pour ouvrir le coffre.", bundle: .main)
+        case .requestIdConflict:
+            String(localized: "game.error.request_id_conflict", defaultValue: "Cette demande a déjà servi pour une autre action : réessaie.", bundle: .main)
         case nil:
             String(localized: "game.error.generic", defaultValue: "Ça n’a pas abouti — vérifie ta connexion et réessaie.", bundle: .main)
         }
@@ -256,8 +258,11 @@ enum GameCopy {
 
     // MARK: - Les chiffres lus à voix haute
 
-    static func clock(minuteOfDay: Int) -> String {
-        String(format: "%02d:%02d", minuteOfDay / 60, minuteOfDay % 60)
+    /// Une heure du jour, écrite par la locale (chiffres et 12 h / 24 h de l'appareil), jamais à la main.
+    static func clock(minuteOfDay: Int, locale: Locale = .current, calendar: Calendar = .current) -> String {
+        let midnight = calendar.startOfDay(for: Date(timeIntervalSince1970: 1_790_000_000))
+        let moment = calendar.date(byAdding: .minute, value: minuteOfDay, to: midnight) ?? midnight
+        return moment.formatted(Date.FormatStyle(date: .omitted, time: .shortened, locale: locale, calendar: calendar, timeZone: calendar.timeZone))
     }
 
     /// « 1 chance sur 6 ».

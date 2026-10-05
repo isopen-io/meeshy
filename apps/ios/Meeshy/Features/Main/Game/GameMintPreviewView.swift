@@ -92,7 +92,6 @@ struct GameMintPreviewView: View {
                 coinSide: 56,
                 restsReversed: celebration != nil
             )
-            .gamePrismTilt(active: (celebration?.edition ?? mint.edition) == .prism)
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(String(
                     localized: "game.mint.next_title",
@@ -118,7 +117,7 @@ struct GameMintPreviewView: View {
             row(String(localized: "game.mint.row.level", defaultValue: "Niveau", bundle: .main), levelValue)
             row(String(localized: "game.mint.row.treasury", defaultValue: "Trésor", bundle: .main),
                 "\(GameCopy.formatCount(game.treasury.held)) → \(GameCopy.meeshes(game.treasury.held + 1))")
-            row(String(localized: "game.mint.row.glory", defaultValue: "Gloire", bundle: .main), gloryValue, tone: GameColors.goodText)
+            row(String(localized: "game.mint.row.glory", defaultValue: "Gloire", bundle: .main), gloryValue, tone: theme.textPrimary)
             if let badgesLost {
                 row(String(localized: "game.mint.row.badges", defaultValue: "Badges", bundle: .main), badgesLine(badgesLost))
             }

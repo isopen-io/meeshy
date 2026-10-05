@@ -60,6 +60,17 @@ function remplir(host: ParentNode) {
   mounter.type(host, '#admin-create-password', 'un secret robuste 2026');
 }
 
+
+describe('le rôle se lit comme sur la fiche (#9463)', () => {
+  test('les rôles portent leur libellé, jamais la valeur brute de l’énumération', async () => {
+    const { host } = await monter();
+    const libelles = [...(host.querySelector<HTMLSelectElement>('[data-admin-create-role]')?.options ?? [])].map((o) => o.textContent ?? '');
+    expect(libelles.length).toBeGreaterThan(0);
+    expect(libelles).not.toContain('BIGBOSS');
+    expect(libelles).not.toContain('USER');
+  });
+});
+
 describe('créer un compte', () => {
   test('envoie la saisie émondée, AVEC l’attestation cochée par défaut, et remet le membre créé', async () => {
     const { host, calls, crees, annonces } = await monter();

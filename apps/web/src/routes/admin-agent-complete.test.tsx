@@ -60,7 +60,18 @@ const AGENT: RoutedReply = (req) => {
   if (path === `${p}/scan-logs/stats`) return ok({ buckets: [{ date: '2026-10-04', scans: 3, messagesSent: 1 }], totalLogs: 3, since: '2026-07-05T00:00:00.000Z' });
   if (path === `${p}/llm`) return ok({ provider: 'openai', model: 'gpt-4o-mini', hasApiKey: true, dailyBudgetUsd: 20, maxCostPerCall: 0.05, maxTokens: 1024, temperature: 0.7 });
   if (path === `${p}/global-config`) return ok({ enabled: true, globalScanEnabled: false, defaultProvider: 'openai', defaultModel: 'gpt-4o-mini', maxConcurrentCalls: 5, systemPrompt: 'Anime', updatedAt: '2026-10-01T00:00:00.000Z' });
-  if (path === `${p}/configs/${C}`) return ok({ enabled: true, scanIntervalMinutes: 3, controlledUserIds: [U], updatedAt: '2026-10-01T00:00:00.000Z' });
+  if (path === `${p}/configs/${C}`)
+    return ok({
+      enabled: true,
+      scanIntervalMinutes: 3,
+      burstEnabled: true,
+      timeoutSeconds: 300,
+      excludedRoles: ['AGENT'],
+      freshTopicCategoryHints: [],
+      minDelayMinutes: null,
+      controlledUserIds: [U],
+      updatedAt: '2026-10-01T00:00:00.000Z',
+    });
   if (path === `${p}/configs/${C}/summary`) return ok({ summary: 'On parle cuisine.', currentTopics: ['recettes'], messageCount: 12, healthScore: 80 });
   if (path === `${p}/configs/${C}/schedule`) return ok({ scanIntervalMinutes: 3, lastScan: 0, nextScan: Date.UTC(2026, 9, 5, 9), upcomingScans: [1], budget: { messagesUsed: 1, messagesMax: 10 }, burst: { enabled: true } });
   if (path === `${p}/configs/${C}/roles`) return ok([{ userId: U, origin: 'observed', confidence: 0.4, locked: true }], { pagination: { total: 1, offset: 0, limit: 50 } });
@@ -153,6 +164,31 @@ describe('le modèle et la configuration globale', () => {
     expect($<HTMLInputElement>('[data-agent-llm-key] input')?.value).toBe('');
   });
 
+  test('la clé enregistrée se reconnaît à ses quatre derniers caractères, jamais plus', async () => {
+    const DERNIERS: RoutedReply = (req) =>
+      req.method === 'GET' && pathOf(req) === '/api/v1/admin/agent/llm'
+        ? ok({ provider: 'openai', model: 'gpt-4o-mini', hasApiKey: true, apiKeyLast4: 'abcd', hasFallbackApiKey: true, fallbackApiKeyLast4: 'wxyz' })
+        : undefined;
+    await monter(ADMIN, DERNIERS);
+    await ouvrir('model');
+    expect($('[data-admin-meta="llm-key"]')?.textContent ?? $('[data-agent-llm]')?.textContent).toContain('…abcd');
+    expect($('[data-agent-llm]')?.textContent).toContain('…wxyz');
+  });
+
+  test('un 503 au PUT (pas de clé de chiffrement des secrets sur le serveur) se dit clairement', async () => {
+    const SANS_CHIFFREMENT: RoutedReply = (req) =>
+      req.method === 'PUT' && req.path.endsWith('/admin/agent/llm')
+        ? { ok: false, status: 503, error: 'Le chiffrement des secrets n’est pas configuré' }
+        : undefined;
+    await monter(BIGBOSS, SANS_CHIFFREMENT);
+    await ouvrir('model');
+    mounter.type(document, '[data-agent-llm-key] input', 'sk-nouvelle');
+    await soumettre('[data-agent-form="llm"]');
+    await confirmer();
+    expect(annonce()).toContain(translateAdmin('fr', 'admin.agentPanel.llm.noSecretsKey'));
+    expect($('[data-admin-confirm]')?.textContent).toContain(translateAdmin('fr', 'admin.agentPanel.llm.noSecretsKey'));
+  });
+
   test('la configuration globale n’envoie que le champ changé, après confirmation', async () => {
     const { calls } = await monter(ADMIN);
     await ouvrir('model');
@@ -216,6 +252,57 @@ describe('la fiche de l’agent sur une conversation suivie', () => {
     await soumettre('[data-agent-form="conversation"]');
     expect(ecritures(calls)).toEqual([{ method: 'PUT', path: `/api/v1/admin/agent/configs/${C}`, body: { scanIntervalMinutes: 15 } }]);
     expect(annonce()).toContain(translateAdmin('fr', 'admin.agentPanel.conv.saved'));
+  });
+
+  test('les réglages sont regroupés en sections titrées, chaque champ avec son libellé humain', async () => {
+    await monter();
+    await ouvrirFiche();
+    const sections = [...document.querySelectorAll('[data-agent-form="conversation"] [data-agent-form-section]')].map((node) => node.getAttribute('data-agent-form-section'));
+    expect(sections).toEqual(['general', 'members', 'rhythm', 'budget', 'style', 'triggers', 'topics']);
+    expect(document.querySelectorAll('[data-agent-form="conversation"] [data-agent-field]').length).toBe(45);
+    expect($('[data-agent-form-section="rhythm"] legend')?.textContent).toBe(translateAdmin('fr', 'admin.agentPanel.cfg.section.rhythm'));
+  });
+
+  test('une bascule pour un booléen : basculée, seul ce champ part', async () => {
+    const { calls } = await monter();
+    await ouvrirFiche();
+    const bascule = $('[data-agent-form="conversation"] [data-agent-field="burstEnabled"]');
+    expect(bascule?.getAttribute('role')).toBe('switch');
+    expect(bascule?.getAttribute('aria-checked')).toBe('true');
+    await mounter.click(bascule);
+    expect(bascule?.getAttribute('aria-checked')).toBe('false');
+    await soumettre('[data-agent-form="conversation"]');
+    expect(ecritures(calls)).toEqual([{ method: 'PUT', path: `/api/v1/admin/agent/configs/${C}`, body: { burstEnabled: false } }]);
+  });
+
+  test('une liste nommée pour une énumération, des cases pour un ensemble, des mots-clés pour un tableau de chaînes', async () => {
+    const { calls } = await monter();
+    await ouvrirFiche();
+    expect($<HTMLSelectElement>('[data-agent-field="agentType"]')?.tagName).toBe('SELECT');
+    expect($('[data-agent-field="excludedRoles"] [data-agent-field-option="AGENT"]')?.closest('label')?.textContent).toBe(
+      translateAdmin('fr', 'admin.agentPanel.cfg.excludedRoles.AGENT'),
+    );
+    await mounter.click($('[data-agent-field="excludedRoles"] [data-agent-field-option="ADMIN"]'));
+    mounter.type(document, '[data-agent-field="freshTopicCategoryHints"]', 'cuisine\nfootball');
+    await soumettre('[data-agent-form="conversation"]');
+    expect(ecritures(calls)).toEqual([
+      { method: 'PUT', path: `/api/v1/admin/agent/configs/${C}`, body: { excludedRoles: ['AGENT', 'ADMIN'], freshTopicCategoryHints: ['cuisine', 'football'] } },
+    ]);
+  });
+
+  test('un entier dit ses bornes ; hors bornes, la raison est NOMMÉE sous le champ et rien ne part', async () => {
+    const { calls } = await monter();
+    await ouvrirFiche();
+    const champ = $<HTMLInputElement>('[data-agent-field="timeoutSeconds"]');
+    expect(champ?.type).toBe('number');
+    expect($('[data-agent-field-hint="timeoutSeconds"]')?.textContent?.replace(/\s/g, ' ')).toBe('Entre 30 et 3 600'.replace(/\s/g, ' '));
+    expect($('[data-agent-field-hint="minDelayMinutes"]')?.textContent).toContain(translateAdmin('fr', 'admin.agentPanel.form.emptyDefault'));
+    mounter.type(document, '[data-agent-field="timeoutSeconds"]', '20');
+    await soumettre('[data-agent-form="conversation"]');
+    expect($('[data-agent-field-problem="timeoutSeconds"]')?.textContent).toContain('Hors bornes');
+    expect(champ?.getAttribute('aria-invalid')).toBe('true');
+    expect($('[data-agent-form="conversation"] [data-agent-form-error]')?.textContent).toContain(translateAdmin('fr', 'admin.agentPanel.cfg.timeoutSeconds'));
+    expect(ecritures(calls)).toEqual([]);
   });
 
   test('supprimer la configuration et remettre la conversation à zéro : confirmés, DELETE sans corps', async () => {
@@ -283,6 +370,62 @@ describe('la file de livraison', () => {
       { method: 'DELETE', path: '/api/v1/admin/agent/delivery-queue/q1' },
     ]);
     expect(annonce()).toContain(translateAdmin('fr', 'admin.agentPanel.queue.cancelled'));
+  });
+});
+
+describe('la file de livraison nomme où et au nom de qui', () => {
+  const NOMMEE: RoutedReply = (req) =>
+    req.method === 'GET' && pathOf(req) === '/api/v1/admin/agent/delivery-queue'
+      ? ok([
+          {
+            id: 'q1',
+            conversationId: C,
+            conversation: { id: C, title: 'Atelier cuisine' },
+            persona: { id: U, username: 'awa', displayName: 'Awa Diallo' },
+            scheduledAt: Date.UTC(2026, 9, 5, 12),
+            action: { type: 'message', asUserId: U, content: 'Salut' },
+          },
+        ])
+      : undefined;
+
+  test('la conversation nommée (lien vers sa fiche) et le membre joué (nom et @pseudo), jamais le libellé générique', async () => {
+    await monter(ADMIN, NOMMEE);
+    await ouvrir('queue');
+    const conversation = $('[data-agent-queue-item="q1"] [data-agent-queue-conversation]');
+    expect(conversation?.textContent).toContain('Atelier cuisine');
+    expect(conversation?.querySelector('a')?.getAttribute('href')).toContain(C);
+    const persona = $(`[data-agent-queue-item="q1"] [data-agent-queue-persona="${U}"]`);
+    expect(persona?.textContent).toContain('Awa Diallo');
+    expect(persona?.textContent).toContain('@awa');
+    expect($('[data-agent-queue-item="q1"]')?.textContent).not.toContain(translateAdmin('fr', 'admin.agentPanel.queue.conversation'));
+  });
+
+  test('une conversation sans titre se nomme par ses membres (« Awa, Jean et 5 autres »)', async () => {
+    const SANS_TITRE: RoutedReply = (req) =>
+      req.method === 'GET' && pathOf(req) === '/api/v1/admin/agent/delivery-queue'
+        ? ok([
+            {
+              id: 'q1',
+              conversationId: C,
+              conversation: { id: C, title: null, participants: [{ displayName: 'Awa', username: 'awa' }, { displayName: 'Jean', username: 'jean' }], total: 7 },
+              persona: null,
+              action: { type: 'message', asUserId: U, content: 'Salut' },
+            },
+          ])
+        : undefined;
+    await monter(ADMIN, SANS_TITRE);
+    await ouvrir('queue');
+    const nom = $('[data-agent-queue-item="q1"] [data-agent-queue-conversation]')?.textContent ?? '';
+    expect(nom).toContain('Awa');
+    expect(nom).toContain('Jean');
+    expect(nom).not.toContain(translateAdmin('fr', 'admin.value.conversation.untitled'));
+  });
+
+  test('un serveur d’avant (ni conversation ni persona) : le lien générique reste, aucun membre inventé', async () => {
+    await monter();
+    await ouvrir('queue');
+    expect($('[data-agent-queue-item="q1"] [data-agent-queue-conversation]')?.textContent).toContain(translateAdmin('fr', 'admin.agentPanel.queue.conversation'));
+    expect($('[data-agent-queue-item="q1"] [data-agent-queue-persona]')).toBeNull();
   });
 });
 

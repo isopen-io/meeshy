@@ -7,7 +7,7 @@ import { AdminFiche, AdminIdentityHeader } from '@/components/admin/fiche';
 import { AdminPageHeader } from '@/components/admin/page-header';
 import { AdminLink } from '@/components/admin/entity-chip';
 import { AdminSectionScreen } from '@/components/admin/section-screen';
-import { AdminDeniedInline, AdminErrorState, AdminOfflineNotice } from '@/components/admin/states';
+import { AdminDeniedInline, AdminErrorState, AdminOfflineNotice, AdminSkeleton } from '@/components/admin/states';
 import { AdminDetailSheet } from '@/components/admin/detail-sheet';
 import { AdminSummaryCard, AdminSummaryGrid } from '@/components/admin/summary-card';
 import { accountStateOf } from '@/lib/admin/interpret/enums';
@@ -15,7 +15,7 @@ import { personInitials } from '@/lib/admin/interpret/labels';
 import {
   ADMIN_MEMBER_SECTION_GLYPHS,
   ADMIN_MEMBER_SECTION_TITLES,
-  ADMIN_MEMBER_SECTIONS,
+  adminMemberSectionsFor,
   ADMIN_MEMBER_STAT_SECTIONS,
   memberSummaryOf,
   type AdminMemberSection,
@@ -42,7 +42,7 @@ import { AdminMemberQuickActions } from './admin-member-quick-actions';
 import { AdminMemberRoleSection } from './admin-member-role';
 import { AdminMemberSecuritySection } from './admin-member-security';
 import { AdminMemberStats } from './admin-member-stats';
-import { AdminAnnouncement, AdminSkeleton } from './admin-parts';
+import { AdminAnnouncement } from '@/components/admin/announcement';
 import { AdminUserBanSheet } from './admin-user-ban-sheet';
 import {
   AdminUserCommunitiesTab,
@@ -105,7 +105,11 @@ export function AdminUserFiche({
   readonly deps?: AdminDeps;
   readonly now?: () => Date;
 }) {
-  const sections = useAdminOpen(ADMIN_MEMBER_SECTIONS, { legacyTab: true });
+  /* #8003 — les préférences ne se lisent que sous `canViewSensitiveData`, que portent les seuls
+     rangs d'administration : la même marque que la révocation des sessions (`admin-user-sessions.tsx`).
+     Une section absente de la liste n'a ni carte, ni modale, et son adresse n'ouvre rien. */
+  const offertes = adminMemberSectionsFor({ sensitive: reach.hasAdminRank });
+  const sections = useAdminOpen(offertes, { legacyTab: true });
   const annonceur = useLiveAnnouncer();
   const [motDePasse, setMotDePasse] = useState(false);
   const [bannissement, setBannissement] = useState(false);
@@ -250,7 +254,7 @@ export function AdminUserFiche({
             {translateAdmin(language, 'admin.people.cards.title')}
           </h2>
           <AdminSummaryGrid>
-            {ADMIN_MEMBER_SECTIONS.map((section) => {
+            {offertes.map((section) => {
               const summary = memberSummaryOf(section, facts, language, moment);
               return (
                 <AdminSummaryCard
@@ -271,7 +275,7 @@ export function AdminUserFiche({
         </section>
       </AdminFiche>
 
-      {ADMIN_MEMBER_SECTIONS.map((section) => (
+      {offertes.map((section) => (
         <AdminDetailSheet
           key={section}
           language={language}

@@ -23,7 +23,7 @@ public enum SignatureStyle: Sendable, Equatable {
 enum GameSignature {
 
     private static let dashOpacities: [Double] = [0.7, 1, 0.75]
-    private static let shadow = Color(hex: "2b3342")
+    private static let shadow = GamePalette.signatureShadow
 
     /// Une couche : les trois traits, soit à leurs opacités propres, soit tous à
     /// `uniformOpacity`, décalés de `offset`.

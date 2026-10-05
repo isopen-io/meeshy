@@ -1,6 +1,7 @@
 import AVFoundation
 import UIKit
 import os
+import MeeshySDK
 
 /// Pourquoi la caméra n'a pas pu servir — NOMMÉ dans l'état du déroulé, pour que
 /// l'écran dise quoi faire. Un refus n'est pas une impasse : la galerie comme la
@@ -37,9 +38,19 @@ final class GamePhotoCamera: NSObject, GamePhotoCameraProviding {
     nonisolated deinit {}
 
     nonisolated(unsafe) let session = AVCaptureSession()
+    /// Le traitement UNIQUE de toute prise photo de l'app (#8695) : redressée, bornée, améliorée.
+    nonisolated let photoProcessor: any PhotoCaptureProcessorProviding
     private let output = AVCapturePhotoOutput()
     private var configured = false
+    /// Ce que le déroulé VEUT : démarrage et arrêt partent chacun sur leur tâche, sans
+    /// ordre garanti ; un arrêt demandé pendant le démarrage est rejoué à son issue.
+    private var wantsRunning = false
     private var pending: CheckedContinuation<UIImage?, Never>?
+
+    init(photoProcessor: any PhotoCaptureProcessorProviding = PhotoCaptureProcessor.shared) {
+        self.photoProcessor = photoProcessor
+        super.init()
+    }
 
     func start() async -> CameraFailure? {
         guard await MediaPermissionCoordinator.ensureCamera(announcesRefusal: false) else {
@@ -61,17 +72,27 @@ final class GamePhotoCamera: NSObject, GamePhotoCameraProviding {
             session.commitConfiguration()
             configured = true
         }
+        wantsRunning = true
         Task.detached { [weak self] in
             self?.session.startRunning()
+            await self?.settleAfterStart()
         }
         guard await waitUntilRunning(timeout: 3) else { return .unavailable }
         return nil
     }
 
     func stop() {
+        wantsRunning = false
         Task.detached { [weak self] in
             self?.session.stopRunning()
         }
+    }
+
+    /// Le déroulé s'est refermé pendant que la caméra démarrait : l'arrêt parti avant
+    /// le démarrage n'a rien arrêté, il se rejoue maintenant.
+    private func settleAfterStart() {
+        guard !wantsRunning else { return }
+        stop()
     }
 
     func capture() async -> UIImage? {
@@ -85,7 +106,7 @@ final class GamePhotoCamera: NSObject, GamePhotoCameraProviding {
     private func waitUntilRunning(timeout: TimeInterval) async -> Bool {
         let limit = Date().addingTimeInterval(timeout)
         while !session.isRunning {
-            guard !Task.isCancelled, Date() < limit else { return false }
+            guard wantsRunning, !Task.isCancelled, Date() < limit else { return false }
             try? await Task.sleep(nanoseconds: 50_000_000)
         }
         return true
@@ -100,7 +121,9 @@ final class GamePhotoCamera: NSObject, GamePhotoCameraProviding {
 
 extension GamePhotoCamera: AVCapturePhotoCaptureDelegate {
     nonisolated func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
-        let data = error == nil ? photo.fileDataRepresentation() : nil
+        let original = error == nil ? photo.fileDataRepresentation() : nil
+        // Une prise photo ne sort jamais non traitée : le même processeur que le viseur de l'app.
+        let data = original.map { photoProcessor.process(encoded: $0, settings: .capture)?.data ?? $0 }
         Task { @MainActor in self.finish(with: data) }
     }
 }

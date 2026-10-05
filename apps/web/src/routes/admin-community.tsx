@@ -8,7 +8,7 @@ import { AdminFiche, AdminFicheSection, AdminIdentityHeader, AdminStatStrip } fr
 import { AdminMetaPanel, AdminMetaRow, AdminMomentText, AdminTechnicalId } from '@/components/admin/meta';
 import { AdminPageHeader } from '@/components/admin/page-header';
 import { AdminSectionScreen } from '@/components/admin/section-screen';
-import { AdminDeniedInline, AdminEmptyState, AdminErrorState, AdminInlineNotice, AdminOfflineNotice } from '@/components/admin/states';
+import { AdminDeniedInline, AdminEmptyState, AdminErrorState, AdminInlineNotice, AdminOfflineNotice, AdminSkeleton } from '@/components/admin/states';
 import { AdminSummaryCard, AdminSummaryGrid } from '@/components/admin/summary-card';
 import { BRAND, EDGE, INK2 } from '@/components/admin/tone';
 import { adminGroupOf, type AdminTarget } from '@/lib/admin/admin-routes';
@@ -38,7 +38,7 @@ import { navigate, useParams } from '@/lib/router';
 import { participantAvatarOf } from '@/lib/view/conversation';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
 
-import { AdminAnnouncement, AdminSkeleton } from './admin-parts';
+import { AdminAnnouncement } from '@/components/admin/announcement';
 import { AdminCommunityActions } from './admin-community-actions';
 import { AdminCommunityMembers } from './admin-community-members';
 

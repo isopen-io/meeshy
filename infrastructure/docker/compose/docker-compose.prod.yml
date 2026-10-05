@@ -302,6 +302,9 @@ services:
       - MAILGUN_DOMAIN=${MAILGUN_DOMAIN:-}
       - ENCRYPTION_MASTER_KEY=${ENCRYPTION_MASTER_KEY:-}
       - ATTACHMENT_MASTER_KEY=${ATTACHMENT_MASTER_KEY:-}
+      # Chiffrement au repos des secrets de configuration (clé d'API LLM de
+      # l'agent) — 32 octets base64. Absente : l'écriture d'une clé est refusée.
+      - SECRETS_AT_REST_KEY=${SECRETS_AT_REST_KEY}
       - AGENT_HOST=agent
       - TURN_SECRET=${TURN_SECRET}
       - TURN_SERVERS=${TURN_SERVERS:-meeshy.me:3478}

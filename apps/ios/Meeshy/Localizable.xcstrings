@@ -16303,43 +16303,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "المس مجددًا: صورة"
+            "value": "المس مرتين: صورة"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Erneut tippen: Foto"
+            "value": "Doppeltippen: Foto"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tap again: photo"
+            "value": "Double-tap: photo"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Toca de nuevo: foto"
+            "value": "Toca dos veces: foto"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Toucher encore : photo"
+            "value": "Toucher deux fois : photo"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tocca di nuovo: foto"
+            "value": "Tocca due volte: foto"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Toque de novo: foto"
+            "value": "Toque duas vezes: foto"
           }
         }
       }
@@ -80966,6 +80966,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Cenas da publicação"
+          }
+        }
+      }
+    },
+    "composer.slide.rail.capReached": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "عشرة مشاهد كحد أقصى — احذف واحدًا لإنشاء آخر"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Höchstens zehn Szenen — lösche eine, um eine neue zu erstellen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ten scenes at most — delete one to create another"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diez escenas como máximo — elimina una para crear otra"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dix scènes au maximum — supprimez-en une pour en créer une autre"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Al massimo dieci scene — eliminane una per crearne un'altra"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No máximo dez cenas — exclua uma para criar outra"
           }
         }
       }
@@ -225242,6 +225289,53 @@
         }
       }
     },
+    "game.badge.a11y.imprint": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مُطفأ، بقي %@ لإعادة إشعاله"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erloschen, noch %@, um es neu zu entzünden"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dimmed, %@ more to relight it"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apagado, faltan %@ para reactivarlo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Éteint, encore %@ pour le rallumer"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Spento, ancora %@ per riaccenderlo"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apagado, mais %@ para reacendê-lo"
+          }
+        }
+      }
+    },
     "game.chest.reward.points": {
       "extractionState": "manual",
       "localizations": {
@@ -229656,6 +229750,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Conclua primeiro as missões do dia para abrir o baú."
+          }
+        }
+      }
+    },
+    "game.error.request_id_conflict": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "سبق استخدام هذا الطلب في إجراء آخر — حاول مرة أخرى."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diese Anfrage wurde bereits für eine andere Aktion verwendet – versuche es erneut."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "That request was already used for another action — try again."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esa solicitud ya se usó para otra acción: inténtalo de nuevo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cette demande a déjà servi pour une autre action : réessaie."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Questa richiesta è già stata usata per un’altra azione: riprova."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esse pedido já foi usado em outra ação — tente de novo."
           }
         }
       }
@@ -241594,6 +241735,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "%@ selos descem"
+          }
+        }
+      }
+    },
+    "composer.capture.thermal.notice": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "معاينة مبسّطة: الجهاز ساخن. تحتفظ اللقطة بالتأثير كاملًا."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vereinfachte Vorschau: Das Gerät wird warm. Die Aufnahme behält den vollen Effekt."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Simplified preview: your device is warm. The capture keeps the full effect."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vista previa simplificada: el dispositivo se calienta. La captura conserva todo el efecto."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aperçu simplifié : l'appareil chauffe. La prise garde tout l'effet."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anteprima semplificata: il dispositivo si scalda. Lo scatto conserva tutto l'effetto."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prévia simplificada: o aparelho está quente. A captura mantém todo o efeito."
           }
         }
       }

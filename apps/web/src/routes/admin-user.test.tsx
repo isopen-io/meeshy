@@ -368,6 +368,27 @@ describe('états dessinés et sections en modales (spec 2026-10-04 § 3)', () =>
     expect(button?.style.minHeight).toBe('44px');
   });
 
+  /**
+   * #8003 — la passerelle ne sert les préférences d'un membre qu'à `canViewSensitiveData`
+   * (BIGBOSS, ADMIN). Un MODERATOR ne se voit offrir ni la carte ni sa modale, et une
+   * adresse `?open=preferences` n'ouvre rien ni ne demande rien à la passerelle.
+   */
+  test('au rang d’administration, la carte Préférences est offerte (#8003)', async () => {
+    const { host } = await open();
+    expect(host.querySelector('[data-admin-summary="preferences"]')).not.toBeNull();
+  });
+
+  test('un MODERATOR ne se voit offrir ni la carte Préférences ni sa modale, même par l’adresse (#8003)', async () => {
+    const moderateur = await open({ url: '/probe?open=preferences', identity: adminIdentityFixture({ role: 'MODERATOR' }) });
+    expect(moderateur.host.querySelector('[data-admin-fiche]')).not.toBeNull();
+    /* Un booléen, pas le nœud : en échec, bun ne sait pas imprimer un élément happy-dom et la
+       suite resterait bloquée jusqu'au délai au lieu de rougir (audit adversarial de #9391). */
+    expect(moderateur.host.querySelector('[data-admin-summary="preferences"]') === null).toBe(true);
+    expect(moderateur.host.querySelector('[data-admin-summary="security"]')).not.toBeNull();
+    expect(panel('preferences') === null).toBe(true);
+    expect(moderateur.calls().some((call) => pathOf(call).endsWith('/preferences'))).toBe(false);
+  });
+
   test('les cartes disent les chiffres DÉJÀ lus par la fiche — aucune requête de détail avant l’ouverture', async () => {
     const { host, calls } = await open();
     expect(textOf(host.querySelector('[data-admin-summary="conversations"]'))).toContain('31');

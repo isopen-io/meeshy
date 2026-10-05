@@ -96,6 +96,15 @@ describe('le dessin d’un Instant', () => {
     expect(svg).toContain('clip-path="url(#pk-u1-0)"');
   });
 
+  test('un Instant neuf s’écrit à l’encre des stickers, au poids le plus gras, cerné du papier des stickers', () => {
+    const zone = defaultZone(0);
+    expect(zone).toMatchObject({ color: '#1c1941', weight: 'black' });
+    const svg = renderInstantSvg(instant, { imageHref: 'a', slots: {}, uid: 'u4' });
+    expect(svg).toContain('fill="#1c1941"');
+    expect(svg).toContain('font-weight="900"');
+    expect(svg).toContain('stroke="#ffffff"');
+  });
+
   test('le texte écrit tient dans sa zone, à la taille que la mise en page a choisie', () => {
     const zone = defaultZone(0);
     const svg = renderInstantSvg(instant, { imageHref: 'a', slots: { texte: 'MMMMMMMMMMMMMMMM' }, uid: 'u2' });

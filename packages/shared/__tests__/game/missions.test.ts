@@ -6,6 +6,7 @@
 
 import { describe, it, expect } from 'vitest';
 import {
+  GAME_DAY_MIN_GAP_MS,
   MISSIONS_MIN_LEVEL,
   MISSION_REROLL_PER_DAY,
   MISSION_REROLL_PRICE,
@@ -16,6 +17,7 @@ import {
   missionObjective,
   missionReward,
   rerollDailyMission,
+  resolveGameDayKey,
   type DrawnMission,
   type MissionSignal,
 } from '../../utils/game/missions.js';
@@ -207,5 +209,30 @@ describe('les règles autour des missions', () => {
     expect(MISSIONS_MIN_LEVEL).toBe(5);
     expect(MISSION_REROLL_PRICE).toBe(1);
     expect(MISSION_REROLL_PER_DAY).toBe(1);
+  });
+});
+
+describe('la journée de jeu : une clé monotone, jamais deux ouvertures à moins de 20 h', () => {
+  const opened = (dayKey: string, at: string) => ({ dayKey, openedAt: new Date(at) });
+
+  it('sans journée ouverte, la clé est celle du fuseau', () => {
+    expect(resolveGameDayKey({ candidate: '2026-10-05', latest: null, now: new Date('2026-10-05T08:00:00Z') })).toBe('2026-10-05');
+  });
+
+  it('ne revient jamais en arrière : un fuseau qui recule garde la journée ouverte', () => {
+    const latest = opened('2026-10-06', '2026-10-05T23:30:00Z');
+    expect(resolveGameDayKey({ candidate: '2026-10-05', latest, now: new Date('2026-10-06T10:00:00Z') })).toBe('2026-10-06');
+  });
+
+  it('un fuseau qui avance ne rouvre pas le lendemain moins de 20 h après l’ouverture', () => {
+    const latest = opened('2026-10-05', '2026-10-05T10:00:00Z');
+    expect(resolveGameDayKey({ candidate: '2026-10-06', latest, now: new Date('2026-10-05T12:00:00Z') })).toBe('2026-10-05');
+    expect(resolveGameDayKey({ candidate: '2026-10-06', latest, now: new Date('2026-10-06T05:59:59Z') })).toBe('2026-10-05');
+  });
+
+  it('20 h après l’ouverture, la journée suivante s’ouvre', () => {
+    const latest = opened('2026-10-05', '2026-10-05T10:00:00Z');
+    expect(GAME_DAY_MIN_GAP_MS).toBe(20 * 60 * 60 * 1000);
+    expect(resolveGameDayKey({ candidate: '2026-10-06', latest, now: new Date('2026-10-06T06:00:00Z') })).toBe('2026-10-06');
   });
 });

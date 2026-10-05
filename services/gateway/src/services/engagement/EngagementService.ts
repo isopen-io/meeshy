@@ -53,9 +53,10 @@ import { getEngagementEmitIO } from './engagement-emit-registry';
 import { memberSignature } from './memberSignature';
 import { EngagementQuotas, dayBucket } from './EngagementQuotas';
 import { EngagementGameHooks, applyTailwind, quarterPoints } from '../game/EngagementGameHooks';
-import { FLAME_USER_SELECT, flameFactsOf, planStreak } from '../game/FlameService';
+import { writeStreak } from '../game/FlameService';
 import type { MessageSignalInput } from '../game/MessageGameSignals';
 import { levelFromScore } from '@meeshy/shared/utils/game/levels';
+import { withRetry } from '../MessageMediaConsumptionService';
 
 const log = enhancedLogger.child({ module: 'EngagementService' });
 
@@ -380,15 +381,43 @@ export class EngagementService {
    * action de plus ni passer par l'élan, le Vent arrière ou les plafonds : ils
    * sont DÉJÀ le résultat d'un geste admis. Même invariant que `credit` :
    * `engagementScore == Σ(EngagementCounter.points)`.
+   *
+   * **Atomique et rejouable.** Le compteur et le score s'écrivent dans UNE
+   * transaction : l'appelant (une mission, un coffre) rend sa réclamation quand
+   * ce crédit échoue, et le prochain geste le rejoue — deux écritures séparées
+   * auraient laissé le compteur crédité une fois par essai. Un conflit
+   * d'écriture (P2034) se rejoue en bloc, depuis la lecture. Le score se lit
+   * puis s'écrit en valeur DANS la transaction : un champ absent se lit zéro
+   * (#6428), et un écrivain concurrent fait annuler la tentative au lieu d'être
+   * écrasé. Les paliers et la Gloire qui suivent ne font jamais échouer un
+   * crédit déjà écrit — ce qui ferait rendre, puis repayer, la mission.
    */
   async creditGamePoints(userId: string, points: number, axisKey: EngagementAxisKey): Promise<void> {
     if (!Number.isInteger(points) || points <= 0) return;
-    await this.prisma.engagementCounter.upsert({
-      where: { userId_axisKey: { userId, axisKey } },
-      create: { userId, axisKey, count: 0, points },
-      update: { points: { increment: points } },
-    });
-    await this.updateEngagementScore(userId, points);
+    const written = await withRetry(() =>
+      this.prisma.$transaction(async (tx) => {
+        const account = await tx.user.findUnique({
+          where: { id: userId },
+          select: { engagementScore: true, levelRecord: true },
+        });
+        if (!account) return null;
+        await tx.engagementCounter.upsert({
+          where: { userId_axisKey: { userId, axisKey } },
+          create: { userId, axisKey, count: 0, points },
+          update: { points: { increment: points } },
+        });
+        const score = (account.engagementScore ?? 0) + points;
+        await tx.user.update({ where: { id: userId }, data: { engagementScore: score } });
+        return { score, levelRecord: account.levelRecord ?? null };
+      }),
+    );
+    if (written === null) return;
+    await this.afterScore(userId, points, written.score, written.levelRecord).catch((error: unknown) =>
+      log.warn('game points credited, level follow-up failed', {
+        userId,
+        error: error instanceof Error ? error.message : String(error),
+      }),
+    );
   }
 
   /** Un message committé (#9375, #9377) : signaux de mission et réponse reçue. */
@@ -732,36 +761,26 @@ export class EngagementService {
    * repli UTC si absent — #5734) : plusieurs activités le même jour civil ne
    * l'incrémentent qu'une fois ; un jour sauté la remet à 1.
    *
-   * Lecture puis écriture, pas une transaction : la fenêtre de course (deux
-   * activités du même utilisateur dans le même instant, à cheval sur minuit)
-   * est acceptée — cette mécanique de réengagement n'a pas la même exigence
-   * de justesse que le compteur d'axe (upsert atomique) ou l'anti-rejeu de
-   * palier (contrainte unique), qui la restent.
+   * Lecture puis écriture CONDITIONNELLE (`writeStreak`, #9376) : la série
+   * s'écrit seulement si la Flamme vaut encore ce qu'on a lu. Un gel acheté,
+   * offert par le coffre ou une Flamme rallumée entre les deux fait reprendre
+   * le calcul au lieu d'être écrasé — une Meesh dépensée n'est jamais perdue.
    *
    * `currentStreakDays`/`longestStreakDays` portent un `@default(0)` dans le
    * schéma, qui ne s'applique qu'à la CRÉATION — un `User` créé avant cette
    * migration a ces champs ABSENTS, pas à zéro (même piège que
    * `Conversation.firstMessageSentAt`, cf. `packages/shared/CLAUDE.md`).
-   * D'où les replis `?? 0` : une série pour un compte pré-existant démarre
-   * à 1, jamais `NaN`.
+   * D'où les replis : une série pour un compte pré-existant démarre à 1,
+   * jamais `NaN`.
    */
   private async updateStreak(scale: EngagementScale, userId: string): Promise<void> {
-    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: FLAME_USER_SELECT });
-    if (!user) return;
-
     // La transition est la LOI de la Flamme (`advanceFlame`, #9376) : un jour
     // manqué consomme un gel quand les gels les couvrent TOUS, sinon la Flamme
     // s'éteint — la série perdue est gardée pour le rallumage de 48 h. Sans gel,
     // le comportement d'avant est exact : un jour sauté remet la série à 1.
-    //
-    // `lastStreakDate` stocke déjà un MARQUEUR de jour civil (`Date.UTC(y, m, d)`,
-    // écrit par le plan) : `flameFactsOf` le lit tel quel (`civilDayKey`), sans le
-    // refaire passer par le fuseau, qui le décalerait d'un jour hors UTC.
-    const plan = planStreak(flameFactsOf(user, new Date()));
-    if (plan.data === null) return;
-
-    const previousStreak = user.currentStreakDays ?? 0;
-    await this.prisma.user.update({ where: { id: userId }, data: plan.data });
+    const written = await writeStreak(this.prisma, userId, new Date());
+    if (written === null) return;
+    const { plan, previousStreak } = written;
 
     const crossedThresholds = STREAK_THRESHOLDS.filter(
       (threshold) => threshold > previousStreak && threshold <= plan.streak,
@@ -894,6 +913,11 @@ export class EngagementService {
     // Compte introuvable (supprimé entre l'activité et ce crédit) : rien à
     // notifier, et surtout pas un palier calculé sur `undefined`.
     if (typeof newScore !== 'number') return;
+    await this.afterScore(userId, points, newScore, result?.value?.levelRecord ?? null);
+  }
+
+  /** Les paliers que `points` vient de franchir, et la Gloire du premier passage. */
+  private async afterScore(userId: string, points: number, newScore: number, levelRecord: number | null): Promise<void> {
     const previousScore = newScore - points;
     const crossedThresholds = LEVEL_THRESHOLDS.filter(
       (threshold) => threshold > previousScore && threshold <= newScore,
@@ -904,7 +928,7 @@ export class EngagementService {
     }
     // La Gloire du premier passage de chaque niveau (#9374) : le record rendu
     // par la MÊME commande que le score — aucune lecture de plus sur la voie chaude.
-    await this.game.onScore(userId, newScore, result?.value?.levelRecord ?? null);
+    await this.game.onScore(userId, newScore, levelRecord);
   }
 
   /**

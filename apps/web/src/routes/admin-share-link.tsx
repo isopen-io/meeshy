@@ -6,7 +6,7 @@ import { AdminLink } from '@/components/admin/entity-chip';
 import { AdminFiche, AdminIdentityHeader, AdminStatStrip } from '@/components/admin/fiche';
 import { AdminPageHeader } from '@/components/admin/page-header';
 import { AdminSectionScreen } from '@/components/admin/section-screen';
-import { AdminDeniedInline, AdminEmptyState, AdminErrorState, AdminOfflineNotice } from '@/components/admin/states';
+import { AdminDeniedInline, AdminEmptyState, AdminErrorState, AdminOfflineNotice, AdminSkeleton } from '@/components/admin/states';
 import { AdminSummaryCard, AdminSummaryGrid } from '@/components/admin/summary-card';
 import { excerptOf, personLabel, shareLinkLabel } from '@/lib/admin/interpret/labels';
 import { formatCount } from '@/lib/admin/interpret/numbers';
@@ -29,7 +29,7 @@ import { currentAdminLanguage, suspendForAdminInterfaceCatalog, translateAdmin, 
 import { useOnline } from '@/lib/net/online';
 import { useParams } from '@/lib/router';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
-import { AdminAnnouncement, AdminSkeleton } from '@/routes/admin-parts';
+import { AdminAnnouncement } from '@/components/admin/announcement';
 
 import { ShareLinkGestures } from './admin-share-link-gestures';
 import { ShareLinkStateBadge } from './admin-share-link-parts';

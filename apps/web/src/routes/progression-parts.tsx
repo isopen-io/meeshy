@@ -62,12 +62,15 @@ import type { AchievementSectionView } from '@meeshy/shared/utils/achievement-vi
  */
 
 export const BRAND = 'var(--color-ios-brand)';
-export const STREAK_TINT = 'var(--ios-warning)';
+/* Les teintes d'ÉTAT suivent le thème (`--color-warn|ok|error`) : les jetons
+   `--ios-*` bruts sont ceux du thème sombre et tombent sous 3:1 en clair
+   (#9383, `progression-contrast.test.ts`). */
+export const STREAK_TINT = 'var(--color-warn)';
 /** L'ambre des Meeshes — la même famille que les badges, distincte de la marque. */
-export const MEESH_TINT = 'var(--ios-warning)';
+export const MEESH_TINT = 'var(--color-warn)';
 /** L'argent de la PIÈCE Meesh (#6427) — dérivé de `MeeshyColors.meeshSilver`, jamais recopié. */
 export const MEESH_COIN_TINT = 'var(--ios-meesh-silver)';
-export const UNLOCKED_TINT = 'var(--ios-success)';
+export const UNLOCKED_TINT = 'var(--color-ok)';
 export const INK = 'var(--color-ios-ink)';
 export const INK_2 = 'var(--color-ios-ink-2)';
 export const CARD = 'var(--color-ios-card)';
@@ -184,7 +187,7 @@ export function AchievementsSection({ progress }: { progress: EngagementProgress
                   style={{
                     color: achievement.unlocked ? UNLOCKED_TINT : INK_2,
                     backgroundColor: achievement.unlocked
-                      ? 'color-mix(in srgb, var(--ios-success) 14%, transparent)'
+                      ? 'color-mix(in srgb, var(--color-ok) 14%, transparent)'
                       : 'color-mix(in srgb, var(--color-ios-ink-3) 18%, transparent)',
                   }}
                 >
@@ -302,8 +305,8 @@ export function MeeshHero({
   return (
     <section aria-labelledby="progression-meesh" className="flex flex-col gap-3 rounded-card px-4 py-4"
       style={{
-        backgroundColor: 'color-mix(in srgb, var(--ios-warning) 12%, transparent)',
-        border: '1px solid color-mix(in srgb, var(--ios-warning) 30%, transparent)',
+        backgroundColor: 'color-mix(in srgb, var(--color-warn) 12%, transparent)',
+        border: '1px solid color-mix(in srgb, var(--color-warn) 30%, transparent)',
       }}
     >
       <div className="flex items-center gap-2">
@@ -339,7 +342,7 @@ export function MeeshHero({
             aria-busy={isMinting}
             data-meesh-mint
             className="flex min-h-11 items-center justify-center gap-2 rounded-chip px-4 text-body font-semibold disabled:opacity-80"
-            style={{ backgroundColor: MEESH_TINT, color: 'var(--color-ios-surface)' }}
+            style={{ backgroundColor: MEESH_TINT, color: 'var(--color-on-state)' }}
           >
             {/* MÊME loi que `MeeshDetail` (#6470) : l'activité se VOIT, pas
                 seulement se lit. Deux surfaces qui portent la même action
@@ -354,7 +357,7 @@ export function MeeshHero({
             {isMinting ? 'Frappe en cours…' : `Convertir ${meesh.mintCost} points en une Meesh`}
           </button>
           {mintError !== undefined && !isMinting ? (
-            <p role="alert" data-meesh-mint-error className="text-caption" style={{ color: 'var(--ios-error)' }}>
+            <p role="alert" data-meesh-mint-error className="text-caption" style={{ color: 'var(--color-error)' }}>
               {mintError}
             </p>
           ) : null}

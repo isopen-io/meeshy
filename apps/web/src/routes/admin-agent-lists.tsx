@@ -7,7 +7,7 @@ import { AdminEntityChip, AdminEntityIdentity } from '@/components/admin/entity-
 import { AdminEntityList, type AdminColumn } from '@/components/admin/entity-list';
 import { AdminListToolbar, type AdminToolbarFilter } from '@/components/admin/list-toolbar';
 import { AdminMetaPanel, AdminMetaRow, AdminMomentText, AdminTechnicalId } from '@/components/admin/meta';
-import { AdminErrorState, AdminInlineNotice } from '@/components/admin/states';
+import { AdminErrorState, AdminInlineNotice, AdminSkeleton } from '@/components/admin/states';
 import { Sheet } from '@/components/sheet';
 import {
   AGENT_OUTCOMES,
@@ -34,8 +34,7 @@ import {
 import { unwrap } from '@/lib/api/client';
 import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import type { AnnouncementTone } from '@/lib/view/use-live-announcer';
-import type { AdminOption } from '@/routes/admin-table';
-import { AdminSkeleton } from '@/routes/admin-parts';
+import type { AdminOption } from '@/components/admin/list-toolbar';
 
 import { AgentRelaunchControl } from './admin-agent-controls';
 

@@ -567,13 +567,11 @@ struct StoryActionSidebarView: View {
                     toggleReactionBar()
                 }
                 .mediaChromeGlyph()
+                // Sonde NON isolée (#9456) : ce rail est un candidat de
+                // `ViewThatFits`, mesuré sur le rendu asynchrone d'iOS 26.
                 .background(
-                    GeometryReader { proxy in
-                        Color.clear.preference(
-                            key: StoryHeartFrameKey.self,
-                            value: proxy.frame(in: .named(StoryScrubSpace.name))
-                        )
-                    }
+                    GeometryReader(content: FramePreferenceProbe(StoryHeartFrameKey.self,
+                                                                 in: .named(StoryScrubSpace.name)) { $0 }.content)
                 )
                 .scaleEffect(heartScale)
                 // Bounce on every reaction that LANDS — via the quick strip
@@ -610,12 +608,8 @@ struct StoryActionSidebarView: View {
                         .fixedSize(horizontal: false, vertical: true)
                         .simultaneousGesture(reactionStripDragGesture)
                         .background(
-                            GeometryReader { proxy in
-                                Color.clear.preference(
-                                    key: StoryReactionStripFrameKey.self,
-                                    value: proxy.frame(in: .global)
-                                )
-                            }
+                            GeometryReader(content: FramePreferenceProbe(StoryReactionStripFrameKey.self,
+                                                                         in: .global) { $0 }.content)
                         )
                         .transition(.asymmetric(
                             insertion: .scale(scale: 0.8, anchor: .trailing).combined(with: .opacity),

@@ -72,6 +72,62 @@ final class ComposerObjectEditorKeyboardExclusionTests: XCTestCase {
         }
     }
 
+    // MARK: - La réciproque : ce que le clavier a rangé REVIENT (#6132)
+
+    private typealias Etat = ComposerObjectEditorPanelState
+    private let police: ComposerObjectEditorSection = .tool(.style)
+
+    /// **Le clavier monte sur un panneau ouvert ⇒ il le range, et s'en
+    /// SOUVIENT** — c'est ce souvenir qui permettra de le rendre.
+    func test_panelState_clavierQuiMonte_rangeEtMemorise() {
+        let ouvert = Etat(optionsAreCollapsed: false, collapsedByKeyboard: false)
+        XCTAssertEqual(ComposerObjectEditorRail.panelState(keyboardRises: true, section: police, from: ouvert),
+                       Etat(optionsAreCollapsed: true, collapsedByKeyboard: true))
+    }
+
+    /// **Le clavier redescend ⇒ le panneau qu'IL avait rangé revient** (#6132 :
+    /// « à la sortie du geste, tout ce qui a disparu revient »).
+    func test_panelState_clavierQuiDescend_rendLePanneauQuIlAvaitRange() {
+        let rangeParLeClavier = Etat(optionsAreCollapsed: true, collapsedByKeyboard: true)
+        XCTAssertEqual(ComposerObjectEditorRail.panelState(keyboardRises: false, section: police, from: rangeParLeClavier),
+                       Etat(optionsAreCollapsed: false, collapsedByKeyboard: false))
+    }
+
+    /// **Un panneau rangé par l'AUTEUR reste rangé** — le glissement bas
+    /// (#5027) et la bascule du rail (#5098) disent « rends-moi la scène » ;
+    /// le clavier qui part ensuite ne doit pas les contredire.
+    func test_panelState_clavierQuiDescend_laisseRangeCeQueLAuteurARange() {
+        let rangeParLAuteur = Etat(optionsAreCollapsed: true, collapsedByKeyboard: false)
+        XCTAssertEqual(ComposerObjectEditorRail.panelState(keyboardRises: false, section: police, from: rangeParLAuteur),
+                       rangeParLAuteur)
+    }
+
+    /// **Un panneau déjà rangé par l'auteur ne devient pas « rangé par le
+    /// clavier »** quand celui-ci monte — sinon sa descente le rouvrirait.
+    func test_panelState_clavierQuiMonte_surUnPanneauDejaRange_neSApproprieRien() {
+        let rangeParLAuteur = Etat(optionsAreCollapsed: true, collapsedByKeyboard: false)
+        XCTAssertEqual(ComposerObjectEditorRail.panelState(keyboardRises: true, section: police, from: rangeParLAuteur),
+                       rangeParLAuteur)
+    }
+
+    /// **DÉCRIRE ne range rien et ne rend rien** : son clavier sert SON champ.
+    func test_panelState_decrire_neBougeNiALaMonteeNiALaDescente() {
+        let ouvert = Etat(optionsAreCollapsed: false, collapsedByKeyboard: false)
+        XCTAssertEqual(ComposerObjectEditorRail.panelState(keyboardRises: true, section: .media(.altText), from: ouvert),
+                       ouvert)
+        XCTAssertEqual(ComposerObjectEditorRail.panelState(keyboardRises: false, section: .media(.altText), from: ouvert),
+                       ouvert)
+    }
+
+    /// **Un geste EXPLICITE efface le souvenir** : après lui, le panneau est
+    /// ce que l'auteur a décidé, plus ce que le clavier a fait.
+    func test_panelState_gesteExplicite_oublieLeClavier() {
+        XCTAssertEqual(ComposerObjectEditorRail.panelState(explicitlyCollapsed: true),
+                       Etat(optionsAreCollapsed: true, collapsedByKeyboard: false))
+        XCTAssertEqual(ComposerObjectEditorRail.panelState(explicitlyCollapsed: false),
+                       Etat(optionsAreCollapsed: false, collapsedByKeyboard: false))
+    }
+
     // MARK: - Le BRANCHEMENT, qu'aucune valeur ne voit
 
     private func source(_ chemin: String) throws -> String {
@@ -90,6 +146,20 @@ final class ComposerObjectEditorKeyboardExclusionTests: XCTestCase {
                       "Le sens « le clavier monte » doit être monté sur le body (#6156).")
         XCTAssertTrue(code.contains("section:selectedTool"),
                       "L'exclusion doit recevoir la section OUVERTE — sans elle, l'exception de DÉCRIRE ne peut pas jouer.")
+    }
+
+    /// **La réciproque passe par la règle, dans les deux sens.** Le modifieur
+    /// demande à `panelState(keyboardRises:…)` ; les gestes explicites
+    /// (rail, glissement bas) effacent le souvenir par `panelState(explicitlyCollapsed:)`.
+    func test_laReciproqueEstBranchee() throws {
+        let clavier = compact(try source("Meeshy/Features/Main/Composer/ComposerObjectEditorView+Keyboard.swift"))
+        XCTAssertTrue(clavier.contains("ComposerObjectEditorRail.panelState(keyboardRises:"),
+                      "Le modifieur doit consulter la règle à la montée ET à la descente (#6132).")
+        let vue = compact(try source("Meeshy/Features/Main/Composer/ComposerObjectEditorView.swift"))
+        XCTAssertEqual(vue.components(separatedBy: "ComposerObjectEditorRail.panelState(explicitlyCollapsed:").count - 1, 2,
+                       "Le rail ET le glissement bas effacent le souvenir du clavier.")
+        XCTAssertTrue(vue.contains("panel:$panel"),
+                      "L'exclusion reçoit l'état ENTIER du panneau — sans le souvenir, la réciproque ne peut pas jouer.")
     }
 
     /// **Le geste de rendre le clavier a DEUX appelants.** Il en avait un seul,

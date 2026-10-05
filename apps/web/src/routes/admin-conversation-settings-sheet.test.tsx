@@ -143,6 +143,28 @@ describe('ce qui part', () => {
     expect(role?.body).toEqual({ role: 'moderator', reason: MOTIF });
   });
 
+  test('un rôle SERVI hors liste reste proposé après un autre choix : on peut y revenir (#9463)', async () => {
+    const { t } = await monter(conversation({ membership: { userId: 'u-membre', displayName: 'Le membre', role: 'guest', isActive: true } }));
+    const choix = () => [...(q<HTMLSelectElement>('[data-admin-conv-member-role]')?.options ?? [])].map((o) => o.value);
+    expect(choix()).toContain('guest');
+    typeInto(q<HTMLSelectElement>('[data-admin-conv-member-role]'), 'moderator');
+    expect(choix()).toContain('guest');
+    typeInto(q<HTMLSelectElement>('[data-admin-conv-member-role]'), 'guest');
+    mounter.type(document.body, '[data-admin-conv-reason]', MOTIF);
+    expect(q<HTMLButtonElement>('[data-admin-conv-save]')?.disabled).toBe(true);
+    expect(t.calls()).toHaveLength(0);
+  });
+
+  test('retirer un membre garde le focus sur le bouton qui s’arme (#9463)', async () => {
+    await monter();
+    mounter.type(document.body, '[data-admin-conv-reason]', MOTIF);
+    const bouton = q<HTMLButtonElement>('[data-admin-conv-remove]');
+    bouton?.focus();
+    await mounter.click(bouton);
+    expect(q('[data-admin-conv-remove]')).toBe(bouton);
+    expect(document.activeElement).toBe(bouton);
+  });
+
   test('ARCHIVER se confirme : le premier geste ne part pas', async () => {
     const { t } = await monter();
     await mounter.click(q('[data-admin-conv-toggle="archive"]'));

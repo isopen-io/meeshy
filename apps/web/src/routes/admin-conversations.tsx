@@ -34,7 +34,7 @@ import {
 import { apiDeps } from '@/lib/api/deps';
 import { currentAdminLanguage, suspendForAdminInterfaceCatalog, translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { participantAvatarOf } from '@/lib/view/conversation';
-import type { AdminOption } from '@/routes/admin-table';
+import type { AdminOption } from '@/components/admin/list-toolbar';
 
 /**
  * **L'INVENTAIRE DES CONVERSATIONS** (#6862, #7873, #8876) — `/admin/conversations`.

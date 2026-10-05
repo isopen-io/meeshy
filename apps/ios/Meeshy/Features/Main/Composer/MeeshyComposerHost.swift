@@ -918,8 +918,8 @@ struct MeeshyComposerHost: View {
         // la MÊME mécanique que celle d'une band qui s'ouvre, jamais une
         // seconde.
         .overlay(alignment: .bottom) { textEditingZones }
-        .animation(.spring(response: 0.32, dampingFraction: 0.9), value: editsSceneDescription)
-        .animation(.spring(response: 0.32, dampingFraction: 0.9), value: editsPostContent)
+        // Le socle revient APRÈS le panneau qui part, jamais pendant (#9448).
+        .modifier(ComposerWritingAnimation(writesText: writesText))
         // **La feuille de partage est portée par la RACINE, pas par
         // `surfaceWithIntakePortals`** (#4996). Ce dernier porte déjà un
         // `.sheet(item:)` et un `.fullScreenCover(item:)`, et SwiftUI n'honore

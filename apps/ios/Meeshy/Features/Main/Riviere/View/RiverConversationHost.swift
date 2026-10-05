@@ -117,23 +117,8 @@ struct RiverConversationHost: View {
         ))
     }
 
-    /// Cache de rendu — un type RÉFÉRENCE, délibérément : le muter pendant
-    /// l'évaluation du `body` ne doit RIEN réinvalider. Un `@State` de VALEUR
-    /// écrit ici déclencherait la passe suivante, c'est-à-dire exactement la
-    /// boucle que #3946 corrige.
-    private final class ContentsMemo {
-        var key: RiverConversationMapping.ContentsKey?
-        var value: [RiverBubbleContent] = []
-
-        /// Sous `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`, une deinit
-        /// synthétisée est ISOLÉE et double-libère sur iOS 26.1 quand SwiftUI
-        /// démonte la vue hors tâche (SE-0466,
-        /// `MainActorDeinitSourceGuardTests`). Un corps vide n'a rien à
-        /// toucher : la libération redevient non isolée.
-        nonisolated deinit {}
-    }
-
-    @State private var memo = ContentsMemo()
+    /// Le rendu mémoïsé (#3946) — voir `RiverRenderingMemo`.
+    @State private var memo = RiverRenderingMemo()
 
     /// #8283 — la zone média d'une citation fait ce qu'elle fait en Script :
     /// le geste, la pièce et son verrou sont ceux du Fil
@@ -163,15 +148,15 @@ struct RiverConversationHost: View {
 
     /// `RiverConversationMapping.contents` construit un dictionnaire de TOUS
     /// les messages puis, par bulle, résout nom d'affichage, heure, texte,
-    /// aperçu de réponse, avis système et `ProfileSheetUser`. C'était rejoué à
-    /// chaque passe de `body`, et la Rivière en fait beaucoup — la
-    /// republication des cadres réévalue la racine (#3946, pistes 1 et 2).
+    /// aperçu de réponse, avis système et `ProfileSheetUser` ; la peau
+    /// indexait ensuite le tout par rang et par message. C'était rejoué à
+    /// chaque passe de `body` (#3946).
     ///
-    /// La clé coûte un balayage de closures BON MARCHÉ ; la construction, elle,
-    /// n'a plus lieu que lorsqu'une de ses entrées a réellement changé. Ce que
-    /// la clé doit couvrir — et pourquoi l'empreinte n'y suffit pas — est dit
-    /// une seule fois, sur `RiverConversationMapping.ContentsKey`.
-    private var contents: [RiverBubbleContent] {
+    /// La clé coûte un balayage de closures BON MARCHÉ ; la construction — et
+    /// les index que la peau lit (`RiverRendering`) — n'a plus lieu que
+    /// lorsqu'une de ses entrées a réellement changé. Ce que la clé doit
+    /// couvrir est dit une seule fois, sur `RiverConversationMapping.ContentsKey`.
+    private var rendering: RiverRendering {
         let key = RiverConversationMapping.contentsKey(
             geometry: geometry,
             messages: messages,
@@ -180,20 +165,17 @@ struct RiverConversationHost: View {
             presence: presence,
             storyRing: storyRing
         )
-        if memo.key == key { return memo.value }
-
-        let built = RiverConversationMapping.contents(
-            geometry: geometry,
-            messages: messages,
-            viewerId: viewerId,
-            text: text,
-            time: { TimeStringCache.shared.format($0) },
-            presence: presence,
-            storyRing: storyRing
-        )
-        memo.key = key
-        memo.value = built
-        return built
+        return memo.rendering(for: key, geometry: geometry) {
+            RiverConversationMapping.contents(
+                geometry: geometry,
+                messages: messages,
+                viewerId: viewerId,
+                text: text,
+                time: { TimeStringCache.shared.format($0) },
+                presence: presence,
+                storyRing: storyRing
+            )
+        }
     }
 
     /// **Le pane reçoit une taille MESURÉE, pas une taille négociée.**
@@ -224,7 +206,7 @@ struct RiverConversationHost: View {
         GeometryReader { proxy in
             RiverStreamHost(
                 geometry: geometry,
-                contents: contents,
+                rendering: rendering,
                 laneWidth: laneWidth,
                 paneHeight: proxy.size.height,
                 paneWidth: proxy.size.width,

@@ -20,8 +20,17 @@ public enum GameRoutes {
     /// Marquer des moments du guide comme vus.
     public static let guideSeen = "/me/game/guide/seen"
 
+    /// L'identifiant d'une mission vient d'une charge serveur : il est ENCODÉ avant
+    /// d'entrer dans le chemin, un `/`, un `?` ou un `..` ne peuvent donc pas
+    /// rediriger l'écriture vers une autre route (#9378).
     public static func missionRerollPath(missionId: String) -> String {
-        missionReroll.replacingOccurrences(of: ":missionId", with: missionId)
+        missionReroll.replacingOccurrences(of: ":missionId", with: encodedSegment(missionId))
+    }
+
+    private static let segmentAllowed = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_~")
+
+    private static func encodedSegment(_ value: String) -> String {
+        value.addingPercentEncoding(withAllowedCharacters: segmentAllowed) ?? ""
     }
 }
 
@@ -37,4 +46,6 @@ public enum GameErrorCode: String, CaseIterable, Sendable, Hashable {
     case missionRerollUnavailable = "MISSION_REROLL_UNAVAILABLE"
     case missionsLocked = "MISSIONS_LOCKED"
     case chestNotReady = "CHEST_NOT_READY"
+    /// Le `requestId` a déjà servi à une AUTRE écriture : refusé sans effet, il faut un identifiant neuf.
+    case requestIdConflict = "REQUEST_ID_CONFLICT"
 }

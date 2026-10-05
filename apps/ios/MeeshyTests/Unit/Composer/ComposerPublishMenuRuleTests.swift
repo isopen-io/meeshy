@@ -131,6 +131,53 @@ final class ComposerPublishMenuRuleTests: XCTestCase {
                                         layoutsTravel: true)
     }
 
+    // MARK: - Le menu COCHE ce qui est armé (#9419)
+
+    func test_checkedLayout_armedPostWithLayout_checksThatLayout() throws {
+        let post = try XCTUnwrap(menuTroisFormats().first { $0.format == .post })
+        let arme = ComposerPublishChoice(format: .post, layout: .reel)
+
+        XCTAssertTrue(ComposerPublishMenuRule.isChecked(post, armed: arme))
+        XCTAssertEqual(ComposerPublishMenuRule.checkedLayout(in: post, armed: arme), .reel)
+    }
+
+    /// Avant tout choix, un post à plusieurs scènes part dans le REPLI : le
+    /// menu coche donc le repli — il ne dit pas « rien » quand quelque chose
+    /// partira.
+    func test_checkedLayout_postWithoutChosenLayout_checksTheFallback() throws {
+        let post = try XCTUnwrap(menuTroisFormats().first { $0.format == .post })
+        let arme = ComposerPublishChoice(format: .post, layout: nil)
+
+        XCTAssertTrue(ComposerPublishMenuRule.isChecked(post, armed: arme))
+        XCTAssertEqual(ComposerPublishMenuRule.checkedLayout(in: post, armed: arme), ComposerMosaicChoice.fallback)
+    }
+
+    func test_checkedLayout_armedStory_checksNoPostLayout() throws {
+        let entrees = menuTroisFormats()
+        let post = try XCTUnwrap(entrees.first { $0.format == .post })
+        let story = try XCTUnwrap(entrees.first { $0.format == .story })
+        let arme = ComposerPublishChoice(format: .story, layout: nil)
+
+        XCTAssertFalse(ComposerPublishMenuRule.isChecked(post, armed: arme))
+        XCTAssertNil(ComposerPublishMenuRule.checkedLayout(in: post, armed: arme))
+        XCTAssertTrue(ComposerPublishMenuRule.isChecked(story, armed: arme))
+        XCTAssertNil(ComposerPublishMenuRule.checkedLayout(in: story, armed: arme),
+                     "Une entrée sans sous-menu n'a aucune disposition à cocher.")
+    }
+
+    /// La relance rend le choix armé ; la capsule et le menu le relisent
+    /// tels quels.
+    func test_armed_restoredChoiceStillOffered_isTheArmedChoice() throws {
+        let restaure = ComposerPublishChoice(format: .post, layout: .reel)
+        let entrees = menuTroisFormats()
+
+        let arme = ComposerPublishMenuRule.armed(chosen: restaure, defaultFormat: .post, entries: entrees)
+
+        XCTAssertEqual(arme, restaure)
+        let post = try XCTUnwrap(entrees.first { $0.format == .post })
+        XCTAssertEqual(ComposerPublishMenuRule.checkedLayout(in: post, armed: arme), .reel)
+    }
+
     func test_armed_sansChoix_publieLeFormatDeLaPorte() {
         XCTAssertEqual(ComposerPublishMenuRule.armed(chosen: nil, defaultFormat: .story,
                                                      entries: menuTroisFormats()),

@@ -5,22 +5,40 @@ protocol ThermalStateMonitorDelegate: AnyObject {
     func thermalStateDidChange(to state: ProcessInfo.ThermalState)
 }
 
-final class ThermalStateMonitor {
+/// Ce que la capture lit de la température de l'appareil (#9349).
+protocol ThermalStateMonitorProviding: AnyObject {
+    var currentState: ProcessInfo.ThermalState { get }
+    var onStateChange: ((ProcessInfo.ThermalState) -> Void)? { get set }
+    func startMonitoring()
+    func stopMonitoring()
+}
+
+final class ThermalStateMonitor: ThermalStateMonitorProviding {
     // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
     // défaut) → double-free `pointer being freed was not allocated` (abrt)
     // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
     // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
-    nonisolated deinit {}
+    // Un propriétaire qui oublie `stopMonitoring()` ne laisse pas l'inscription
+    // dans le NotificationCenter à jamais (#9349).
+    nonisolated deinit {
+        if let thermalObserver {
+            NotificationCenter.default.removeObserver(thermalObserver)
+        }
+    }
     weak var delegate: ThermalStateMonitorDelegate?
+    var onStateChange: ((ProcessInfo.ThermalState) -> Void)?
 
     private(set) var currentState: ProcessInfo.ThermalState = .nominal
 
     /// Token de l'observateur bloc (l'API sélecteur ne permet pas de cibler la
     /// queue de livraison ni de hopper sur le main actor).
-    private var thermalObserver: NSObjectProtocol?
+    /// `nonisolated(unsafe)` : posé et retiré sur le MainActor, lu une fois
+    /// par le `deinit` non isolé, quand plus personne ne tient l'objet.
+    nonisolated(unsafe) private var thermalObserver: NSObjectProtocol?
 
     func startMonitoring() {
         currentState = ProcessInfo.processInfo.thermalState
+        guard thermalObserver == nil else { return }
         // ⚠️ Crash SIGTRAP : le système poste `thermalStateDidChangeNotification`
         // sur une queue de FOND (com.apple.root.user-interactive-qos). Cette classe
         // est @MainActor (target app, SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor) et
@@ -51,6 +69,7 @@ final class ThermalStateMonitor {
         currentState = newState
         Logger.calls.info("Thermal state changed to: \(String(describing: newState))")
         delegate?.thermalStateDidChange(to: newState)
+        onStateChange?(newState)
     }
 
     var recommendedMaxFps: Int {

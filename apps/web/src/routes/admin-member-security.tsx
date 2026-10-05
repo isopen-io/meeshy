@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react';
 
 import { AdminBadge } from '@/components/admin/badges';
+import { AdminButton } from '@/components/admin/button';
+import { INK, INK2 } from '@/components/admin/tone';
 import { adminDate } from '@/lib/admin/interpret/time';
 import { lockReasonText } from '@/lib/admin/member-meta';
 import { useAdminReach } from '@/lib/admin/use-admin-reach';
@@ -12,7 +14,7 @@ import { apiDeps } from '@/lib/api/deps';
 import { translateAdmin, type AdminPlainCatalogKey, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 import { useMemberGestures, type MemberGesture } from './admin-member-gestures';
-import { INK, INK2, MemberSection, SectionButton } from './admin-member-parts';
+import { MemberSection } from './admin-member-parts';
 
 /**
  * **LA SÉCURITÉ D'UN MEMBRE** (#8289, #8004) — ce qui protège le compte, dit en mots,
@@ -106,9 +108,9 @@ export function AdminMemberSecuritySection({
 
   const button = (gesture: MemberGesture, label: string, tone: 'primary' | 'secondary' | 'danger' = 'secondary') =>
     writable ? (
-      <SectionButton tone={tone} disabled={gestures.offline} data={{ 'data-admin-action': gesture.id }} onClick={() => gestures.ask(gesture)}>
+      <AdminButton tone={tone} disabled={gestures.offline} data={{ 'data-admin-action': gesture.id }} onClick={() => gestures.ask(gesture)}>
         {label}
-      </SectionButton>
+      </AdminButton>
     ) : null;
 
   const unlock: MemberGesture = {
@@ -177,9 +179,9 @@ export function AdminMemberSecuritySection({
             </span>
           }
           action={
-            <SectionButton tone="danger" data={{ 'data-admin-password-open': '' }} onClick={onOpenPassword}>
+            <AdminButton tone="danger" data={{ 'data-admin-password-open': '' }} onClick={onOpenPassword}>
               {t('admin.password.title')}
-            </SectionButton>
+            </AdminButton>
           }
         />
 
@@ -288,9 +290,9 @@ export function AdminMemberSecuritySection({
             )
           }
           action={
-            <SectionButton data={{ 'data-admin-sessions-open': '' }} onClick={onOpenSessions}>
+            <AdminButton data={{ 'data-admin-sessions-open': '' }} onClick={onOpenSessions}>
               {t('admin.security.sessionsOpen')}
-            </SectionButton>
+            </AdminButton>
           }
         />
       </MemberSection>

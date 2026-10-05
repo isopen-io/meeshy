@@ -12,7 +12,7 @@ final class GamePhotoSessionTests: XCTestCase {
         let camera: MockGamePhotoCamera
         let composer: MockGamePhotoComposer
         let notebook: MockGamePhotoNotebook
-        let library: MockPhotoLibrarySaver
+        let library: MockGamePhotoLibrary
         let haptics: MockGameHaptics
     }
 
@@ -23,7 +23,7 @@ final class GamePhotoSessionTests: XCTestCase {
         camera.startResult = cameraFailure
         let composer = MockGamePhotoComposer()
         let notebook = MockGamePhotoNotebook()
-        let library = MockPhotoLibrarySaver()
+        let library = MockGamePhotoLibrary()
         let haptics = MockGameHaptics()
         let sut = GamePhotoSession(
             moment: moment, camera: camera, composer: composer, notebook: notebook,
@@ -167,5 +167,22 @@ final class GamePhotoSessionTests: XCTestCase {
         XCTAssertNil(rig.sut.notice)
         rig.sut.shared(completed: true)
         XCTAssertEqual(rig.sut.notice?.tone, .good)
+    }
+
+    /// La feuille plein écran peut se refermer SANS passer par la croix (l'écran
+    /// Progression qui part, la liaison qui retombe à `nil`) : la caméra s'arrête quand
+    /// même, et le déroulé est clos — jamais un capteur laissé allumé derrière l'écran.
+    func test_closingTheCoordinator_stopsTheCameraOfTheOpenFlow() async {
+        let rig = makeRig()
+        let coordinator = GamePhotoCoordinator(notebook: rig.notebook) { _ in rig.sut }
+        coordinator.start(moment)
+        await rig.sut.chooseSelfie()
+        XCTAssertEqual(rig.sut.state, .camera(.live))
+
+        coordinator.close()
+
+        XCTAssertNil(coordinator.active)
+        XCTAssertGreaterThanOrEqual(rig.camera.stopCount, 1, "la caméra du déroulé refermé s'arrête")
+        XCTAssertEqual(rig.sut.state, .done(deferred: false))
     }
 }

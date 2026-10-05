@@ -6,6 +6,10 @@ struct CameraPreviewLayer: UIViewRepresentable {
     /// Le pont qui convertit un toucher en point du capteur (#9295) — `nil`
     /// pour un aperçu qui ne vise pas.
     var focusPoints: CameraPreviewFocusPoints? = nil
+    /// Avec un effet, la vue Metal peint seule (#9349) : la couche système se
+    /// détache — un passage par image, jamais deux. Elle reste montée, le pont
+    /// des touchers y convertit toujours ses points.
+    var mirrorsFrames = true
 
     /// **La couche d'aperçu EST la couche de la vue** (#4080).
     ///
@@ -34,6 +38,8 @@ struct CameraPreviewLayer: UIViewRepresentable {
         view.previewLayer.session = session
         view.previewLayer.videoGravity = .resizeAspectFill
         focusPoints?.attach(view)
+        view.previewLayer.connection?.isEnabled = mirrorsFrames
+        view.isHidden = !mirrorsFrames
         return view
     }
 
@@ -44,6 +50,8 @@ struct CameraPreviewLayer: UIViewRepresentable {
             uiView.previewLayer.session = session
         }
         focusPoints?.attach(uiView)
+        uiView.previewLayer.connection?.isEnabled = mirrorsFrames
+        uiView.isHidden = !mirrorsFrames
     }
 }
 
@@ -68,12 +76,13 @@ final class CameraPreviewFocusPoints {
         self.host = host
     }
 
-    /// `nil` quand l'aperçu n'est pas à l'écran, ou que le toucher tombe hors
-    /// de l'image — viser hors champ n'a pas de sens.
-    func devicePoint(fromGlobalPoint point: CGPoint) -> CGPoint? {
-        guard let host, host.window != nil,
-              let local = Self.layerPoint(global: point, previewFrame: previewFrame) else { return nil }
-        return host.previewLayer.captureDevicePointConverted(fromLayerPoint: local)
+    /// Le toucher dans le repère de l'aperçu ; `nil` quand l'aperçu n'est pas
+    /// à l'écran, ou que le toucher tombe hors de lui. La conversion vers le
+    /// capteur suit l'image AFFICHÉE (`ComposerCaptureFocusGeometry`, #9464) —
+    /// pas la couche système, cachée quand la vue Metal peint.
+    func localPoint(fromGlobalPoint point: CGPoint) -> CGPoint? {
+        guard let host, host.window != nil else { return nil }
+        return Self.layerPoint(global: point, previewFrame: previewFrame)
     }
 
     /// Le toucher, ramené au repère de la couche — `nil` hors de l'aperçu.

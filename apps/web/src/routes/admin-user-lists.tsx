@@ -3,7 +3,9 @@ import { useState } from 'react';
 
 import { CONVERSATION_TYPES } from '@/lib/admin/conversation-list';
 import { AdminBadge } from '@/components/admin/badges';
+import { AdminListToolbar } from '@/components/admin/list-toolbar';
 import { AdminMomentText } from '@/components/admin/meta';
+import { AdminSkeleton } from '@/components/admin/states';
 import { interpretConversationState, interpretConversationType, interpretParticipantRole } from '@/lib/admin/interpret/enums';
 import { conversationLabel, personLabel } from '@/lib/admin/interpret/labels';
 import { formatBytes, formatCount } from '@/lib/admin/interpret/numbers';
@@ -34,8 +36,6 @@ import type { Viewer } from '@/lib/api/viewer';
 import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { useOnline } from '@/lib/net/online';
 
-import { AdminSkeleton } from './admin-parts';
-import { AdminFilterBar, AdminSelect } from './admin-table';
 import { Link } from './route-table';
 import { AdminConversationReading } from './admin-conversation-reading';
 import { AdminConversationSettingsSheet } from './admin-conversation-settings-sheet';
@@ -311,44 +311,60 @@ export function AdminUserConversationsSection({
   return (
     <>
       <CollapsibleSection id="admin-conv" title={translateAdmin(language, 'admin.conv.title')} card={false}>
-        <AdminFilterBar>
-          <AdminSelect
-            label={translateAdmin(language, 'admin.list.sort')}
-            value={tri}
-            options={ADMIN_USER_CONVERSATION_SORTS.map((valeur) => ({
-              value: valeur,
-              label: translateAdmin(language, valeur === 'lastMessageAt' ? 'admin.col.lastMessage' : 'admin.col.createdOn'),
-            }))}
-            onChange={(valeur) => {
-              setTri(valeur === 'createdAt' ? 'createdAt' : 'lastMessageAt');
-              setOffset(0);
-            }}
-            anchor="admin-user-conv-sort"
-          />
-          <AdminSelect
-            label={translateAdmin(language, 'admin.list.order')}
-            value={ordre}
-            options={[
-              { value: 'desc', label: translateAdmin(language, 'admin.list.newest') },
-              { value: 'asc', label: translateAdmin(language, 'admin.list.oldest') },
+        {/* La barre du kit : mêmes libellés, même passage à la ligne, et les ancres que cet onglet
+            publiait déjà (`data-admin-user-conv-*`) posées à côté de `data-admin-filter`. Pas de
+            « Réinitialiser » : trier ou filtrer ce volet ne s'est jamais annulé d'un geste. */}
+        <div className="pb-4">
+          <AdminListToolbar
+            language={language}
+            filters={[
+              {
+                id: 'admin-user-conv-sort',
+                anchor: 'data-admin-user-conv-sort',
+                label: translateAdmin(language, 'admin.list.sort'),
+                value: tri,
+                defaultValue: 'lastMessageAt',
+                options: ADMIN_USER_CONVERSATION_SORTS.map((valeur) => ({
+                  value: valeur,
+                  label: translateAdmin(language, valeur === 'lastMessageAt' ? 'admin.col.lastMessage' : 'admin.col.createdOn'),
+                })),
+                onChange: (valeur) => {
+                  setTri(valeur === 'createdAt' ? 'createdAt' : 'lastMessageAt');
+                  setOffset(0);
+                },
+              },
+              {
+                id: 'admin-user-conv-order',
+                anchor: 'data-admin-user-conv-order',
+                label: translateAdmin(language, 'admin.list.order'),
+                value: ordre,
+                defaultValue: 'desc',
+                options: [
+                  { value: 'desc', label: translateAdmin(language, 'admin.list.newest') },
+                  { value: 'asc', label: translateAdmin(language, 'admin.list.oldest') },
+                ],
+                onChange: (valeur) => {
+                  setOrdre(valeur === 'asc' ? 'asc' : 'desc');
+                  setOffset(0);
+                },
+              },
+              {
+                id: 'admin-user-conv-type',
+                anchor: 'data-admin-user-conv-type',
+                label: translateAdmin(language, 'admin.col.type'),
+                value: type,
+                options: [
+                  { value: '', label: translateAdmin(language, 'admin.list.all') },
+                  ...CONVERSATION_TYPES.map((valeur) => ({ value: valeur, label: interpretConversationType(valeur, language).label })),
+                ],
+                onChange: (valeur) => {
+                  setType(valeur);
+                  setOffset(0);
+                },
+              },
             ]}
-            onChange={(valeur) => {
-              setOrdre(valeur === 'asc' ? 'asc' : 'desc');
-              setOffset(0);
-            }}
-            anchor="admin-user-conv-order"
           />
-          <AdminSelect
-            label={translateAdmin(language, 'admin.col.type')}
-            value={type}
-            options={[{ value: '', label: translateAdmin(language, 'admin.list.all') }, ...CONVERSATION_TYPES.map((valeur) => ({ value: valeur, label: interpretConversationType(valeur, language).label }))]}
-            onChange={(valeur) => {
-              setType(valeur);
-              setOffset(0);
-            }}
-            anchor="admin-user-conv-type"
-          />
-        </AdminFilterBar>
+        </div>
         {page.isPending ? (
           <AdminSkeleton rows={3} />
         ) : page.data === undefined ? (

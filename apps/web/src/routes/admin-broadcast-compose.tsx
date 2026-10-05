@@ -1,5 +1,6 @@
 import { useId, useMemo, useState, type FormEvent } from 'react';
 
+import { AdminFormError } from '@/components/admin/form';
 import { AdminButton } from '@/components/admin/button';
 import { EDGE, INK, INK2, SURFACE } from '@/components/admin/tone';
 import { Sheet } from '@/components/sheet';
@@ -203,16 +204,8 @@ export function BroadcastComposerSheet({
 
         <div className="shrink-0 px-4 py-3" style={{ borderTop: `1px solid ${EDGE}`, backgroundColor: SURFACE }}>
           <div className="mx-auto grid w-full max-w-3xl gap-3">
-            {shown.length > 0 ? (
-              <p role="alert" data-admin-compose-summary className="text-caption font-medium" style={{ color: 'var(--color-danger)' }}>
-                {t('admin.broadcast.compose.error.summary')}
-              </p>
-            ) : null}
-            {error === null ? null : (
-              <p role="alert" data-admin-compose-error className="text-caption font-medium" style={{ color: 'var(--color-danger)' }}>
-                {error}
-              </p>
-            )}
+            {shown.length > 0 ? <AdminFormError text={t('admin.broadcast.compose.error.summary')} data={{ 'data-admin-compose-summary': '' }} /> : null}
+            <AdminFormError text={error ?? ''} data={{ 'data-admin-compose-error': '' }} />
             <div className="flex flex-wrap justify-end gap-3">
               <AdminButton data={{ 'data-admin-action': 'cancel' }} disabled={busy} onClick={onCancel}>
                 {t('admin.kit.cancel')}

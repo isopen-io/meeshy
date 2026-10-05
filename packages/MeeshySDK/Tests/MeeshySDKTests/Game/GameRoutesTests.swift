@@ -51,6 +51,14 @@ struct GameRoutesTests {
         #expect(Set(shared.values) == Set(GameErrorCode.allCases.map(\.rawValue)))
     }
 
+    @Test("un identifiant de mission est encodé : aucun caractère ne sort de son segment")
+    func missionIdIsEncodedIntoItsSegment() {
+        #expect(GameEndpoint.missionReroll(missionId: "../chest/claim?x=1#y").path
+            == "/api/v1/me/game/missions/%2E%2E%2Fchest%2Fclaim%3Fx%3D1%23y/reroll")
+        #expect(GameEndpoint.missionReroll(missionId: "65a1b2c3d4e5f60718293a4b").path
+            == "/api/v1/me/game/missions/65a1b2c3d4e5f60718293a4b/reroll")
+    }
+
     @Test("les adresses typées complètent le préfixe public sans rien redéfinir")
     func endpointsPrefixTheSharedRoutes() {
         #expect(GameEndpoint.chestClaim.path == "/api/v1" + GameRoutes.chestClaim)

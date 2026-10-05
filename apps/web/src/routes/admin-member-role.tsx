@@ -1,5 +1,8 @@
 import { useState } from 'react';
 
+import { AdminButton } from '@/components/admin/button';
+import { AdminReasonField, AdminSelect, AdminSwitch, motiveState, useArmedConfirm } from '@/components/admin/form';
+import { AdminInlineNotice } from '@/components/admin/states';
 import { interpretRole } from '@/lib/admin/interpret/enums';
 import { ADMIN_ROLES } from '@/lib/admin/user-list';
 import { roleDraftOf, roleEditOf, sectionIsDirty, type RoleDraft } from '@/lib/admin/member-sections';
@@ -10,7 +13,7 @@ import type { AdminUserDetail } from '@/lib/api/admin-user-detail';
 import { apiDeps } from '@/lib/api/deps';
 import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
-import { Bascule, Choix, MemberSection, SectionButton, Texte, useFieldFocus, useMemberWrite } from './admin-member-parts';
+import { MemberSection, useMemberWrite } from './admin-member-parts';
 
 /**
  * **LE RÔLE ET LE STATUT D'UN MEMBRE** (#8289).
@@ -21,6 +24,12 @@ import { Bascule, Choix, MemberSection, SectionButton, Texte, useFieldFocus, use
  * « Confirmer » ; toute modification postérieure remet la confirmation à zéro
  * — on ne confirme pas un geste, puis un autre sous le même « oui ».
  */
+/**
+ * Le motif de ce panneau est FACULTATIF à tout rang et sans minimum : la règle commune
+ * (`motiveState`) le dit par ses réglages, et rend le texte nettoyé qui part — ou rien.
+ */
+const REGLE_MOTIF = { minLength: 0, required: false, sovereign: false, whenSovereign: 'optional' } as const;
+
 export function AdminMemberRoleSection({
   membre,
   language,
@@ -40,29 +49,27 @@ export function AdminMemberRoleSection({
   const [touches, setTouches] = useState<Partial<RoleDraft>>({});
   const draft: RoleDraft = { ...roleDraftOf(membre), ...touches };
   const [motif, setMotif] = useState('');
-  const [confirme, setConfirme] = useState(false);
-  const focus = useFieldFocus();
+  const confirmation = useArmedConfirm<'save'>();
   const ecriture = useMemberWrite({ userId: membre.id, language, onAnnounce });
 
   const edit = roleEditOf(membre, draft);
   const sensibles = sensitiveChangesOf(edit);
-  const doitConfirmer = sensibles.length > 0 && !confirme;
+  const doitConfirmer = sensibles.length > 0 && confirmation.armed === null;
+  const motifEnvoye = motiveState({ text: motif, ...REGLE_MOTIF }).sent;
 
   const poser = (partie: Partial<RoleDraft>) => {
     setTouches((precedent) => ({ ...precedent, ...partie }));
-    setConfirme(false);
+    confirmation.disarm();
     ecriture.reset();
   };
 
   async function enregistrer() {
     if (doitConfirmer) {
-      setConfirme(true);
+      confirmation.arm('save');
       return;
     }
-    const aJour = await ecriture.run(() =>
-      updateAdminUser({ ...deps, userId: membre.id, edit, ...(motif.trim() === '' ? {} : { reason: motif }) }),
-    );
-    setConfirme(false);
+    const aJour = await ecriture.run(() => updateAdminUser({ ...deps, userId: membre.id, edit, ...(motifEnvoye === null ? {} : { reason: motifEnvoye }) }));
+    confirmation.disarm();
     if (aJour === null) return;
     setTouches({});
     setMotif('');
@@ -80,33 +87,37 @@ export function AdminMemberRoleSection({
       onSave={() => void enregistrer()}
     >
       <div className="grid gap-4 @xl:grid-cols-2">
-        <Choix
+        <AdminSelect
           id="admin-member-role"
           label={translateAdmin(language, 'admin.user.role')}
-          valeur={draft.role}
+          value={draft.role}
           options={ADMIN_ROLES.map((role) => ({ value: role, label: interpretRole(role, language).label }))}
-          onValeur={(role) => poser({ role })}
+          onValue={(role) => poser({ role })}
         />
         <div className="self-end">
-          <Bascule id="admin-member-active" label={translateAdmin(language, 'admin.edit.active')} actif={draft.isActive} onBascule={(isActive) => poser({ isActive })} />
+          <AdminSwitch id="admin-member-active" label={translateAdmin(language, 'admin.edit.active')} checked={draft.isActive} onToggle={(isActive) => poser({ isActive })} />
         </div>
       </div>
-      <Texte id="admin-member-reason" label={translateAdmin(language, 'admin.edit.reason')} valeur={motif} {...focus('reason')} onValeur={setMotif} />
+      <AdminReasonField
+        id="admin-member-reason"
+        language={language}
+        label={translateAdmin(language, 'admin.edit.reason')}
+        value={motif}
+        onValue={setMotif}
+        {...REGLE_MOTIF}
+      />
       {sensibles.map((sensible) => (
-        <p
+        <AdminInlineNotice
           key={sensible}
-          role="alert"
-          data-admin-edit-warning={sensible}
-          className="rounded-card px-4 py-3 text-caption"
-          style={{ backgroundColor: 'color-mix(in srgb, var(--color-danger) 10%, transparent)', color: 'var(--color-danger)' }}
-        >
-          {translateAdmin(language, sensible === 'role' ? 'admin.edit.warnRole' : 'admin.edit.warnDeactivate')}
-        </p>
+          tone="danger"
+          text={translateAdmin(language, sensible === 'role' ? 'admin.edit.warnRole' : 'admin.edit.warnDeactivate')}
+          data={{ 'data-admin-edit-warning': sensible }}
+        />
       ))}
       <div className="flex justify-start">
-        <SectionButton tone="danger" data={{ 'data-admin-ban-open': '' }} onClick={onOpenBan}>
+        <AdminButton tone="danger" data={{ 'data-admin-ban-open': '' }} onClick={onOpenBan}>
           {translateAdmin(language, 'admin.ban.open')}
-        </SectionButton>
+        </AdminButton>
       </div>
     </MemberSection>
   );

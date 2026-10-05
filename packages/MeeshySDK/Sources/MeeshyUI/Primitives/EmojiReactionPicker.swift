@@ -58,7 +58,7 @@ public struct EmojiCategory: Identifiable, Sendable {
 /// terminal porte l'index `count`). Publiés dans le coordinateSpace nommé
 /// fourni par l'appelant via `scrubFrameSpace` — le SDK reste agnostique :
 /// il publie des cadres, l'app décide quoi en faire (hit-testing du scrub).
-public struct ScrubTileFramesKey: PreferenceKey {
+public nonisolated struct ScrubTileFramesKey: PreferenceKey {
     public static let defaultValue: [Int: CGRect] = [:]
     public static func reduce(value: inout [Int: CGRect], nextValue: () -> [Int: CGRect]) {
         value.merge(nextValue()) { _, new in new }
@@ -183,25 +183,32 @@ public struct EmojiReactionPicker: View {
         }
     }
 
+    /// Les tuiles sont construites ICI, sur le fil principal : la barre est
+    /// montée dans le rail d'une story, candidat d'un `ViewThatFits` que le
+    /// rendu asynchrone d'iOS 26 mesure — un `ForEach` n'y appelle aucune
+    /// fermeture isolée (#9456, `AsyncRenderRow`).
     private var emojiList: some View {
         HStack(spacing: 6 * scale) {
-            ForEach(Array(quickEmojis.enumerated()), id: \.element) { index, emoji in
-                Button {
-                    reactToEmoji(emoji)
-                } label: {
-                    Text(emoji)
-                        .font(.system(size: (reactedEmoji == emoji ? 28 : 22) * scale))
-                        .scaleEffect(tileScale(for: index, reactedTo: emoji))
-                        .animation(.spring(response: 0.25, dampingFraction: 0.5), value: reactedEmoji)
-                        .animation(.spring(response: 0.25, dampingFraction: 0.5), value: highlightedIndex)
-                        .background(tileFrameReader(index: index))
-                }
-                // Entree en vague sinusoidale : la tuile `index` apparait
-                // apres celles a sa gauche, en suivant une courbe d'ease
-                // ondulante (cf. `WaveTileModifier`).
-                .modifier(WaveTileModifier(index: index, hasEntered: hasEntered))
-            }
+            ForEach(quickEmojis.enumerated().map { AsyncRenderRow(id: $0.element, content: emojiTile(index: $0.offset, emoji: $0.element)) },
+                    content: asyncRenderRowContent)
         }
+    }
+
+    private func emojiTile(index: Int, emoji: String) -> some View {
+        Button {
+            reactToEmoji(emoji)
+        } label: {
+            Text(emoji)
+                .font(.system(size: (reactedEmoji == emoji ? 28 : 22) * scale))
+                .scaleEffect(tileScale(for: index, reactedTo: emoji))
+                .animation(.spring(response: 0.25, dampingFraction: 0.5), value: reactedEmoji)
+                .animation(.spring(response: 0.25, dampingFraction: 0.5), value: highlightedIndex)
+                .background(tileFrameReader(index: index))
+        }
+        // Entree en vague sinusoidale : la tuile `index` apparait
+        // apres celles a sa gauche, en suivant une courbe d'ease
+        // ondulante (cf. `WaveTileModifier`).
+        .modifier(WaveTileModifier(index: index, hasEntered: hasEntered))
     }
 
     @ViewBuilder
@@ -302,12 +309,8 @@ public struct EmojiReactionPicker: View {
     @ViewBuilder
     private func tileFrameReader(index: Int) -> some View {
         if let scrubFrameSpace {
-            GeometryReader { proxy in
-                Color.clear.preference(
-                    key: ScrubTileFramesKey.self,
-                    value: [index: proxy.frame(in: .named(scrubFrameSpace))]
-                )
-            }
+            GeometryReader(content: FramePreferenceProbe(ScrubTileFramesKey.self,
+                                                         in: .named(scrubFrameSpace)) { [index: $0] }.content)
         }
     }
 }

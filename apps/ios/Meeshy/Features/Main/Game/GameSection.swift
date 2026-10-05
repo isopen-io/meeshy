@@ -39,7 +39,7 @@ struct GameSection: View {
             ForEach(photos.offers.filter { $0.id != cardPhoto?.id }) { offer in
                 GamePhotoOfferView(moment: offer, onStart: { photos.start($0) }, onLater: { photos.later($0) })
             }
-            GameGaugesView(game: game)
+            GameGaugesView(game: game, settled: viewModel.isSettled)
             GameMissionsView(
                 game: game, online: viewModel.isOnline, pendingRerollId: viewModel.pending.rerollMissionId,
                 chestOpening: viewModel.pending.chest, errors: viewModel.gameErrors,
@@ -51,6 +51,7 @@ struct GameSection: View {
                 minting: viewModel.isMinting, error: viewModel.mintError,
                 celebration: viewModel.celebration, onMint: { Task { await viewModel.mint() } }
             )
+            GameBadgeShelfView(items: viewModel.progress.map(GameBadges.items(for:)) ?? [])
             GameFlamePanelView(
                 game: game, online: viewModel.isOnline, buyingFreeze: viewModel.pending.freeze,
                 relighting: viewModel.pending.relight, errors: viewModel.gameErrors,

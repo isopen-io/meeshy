@@ -3,6 +3,9 @@
  * `GameDay`. La LOI (tirage, objectifs, récompenses, Heure du Prisme, coffre)
  * vit dans `@meeshy/shared/utils/game` ; ce service l'applique contre la base.
  *
+ *  - **journée monotone** — la clé du jour vient du fuseau de l'utilisateur,
+ *    mais ne recule jamais et ne s'ouvre pas moins de 20 h après la précédente
+ *    (`resolveGameDayKey`) : changer de fuseau ne fait gagner ni missions ni coffre ;
  *  - **tirage paresseux** — au premier accès du jour dans le fuseau de
  *    l'utilisateur (la lecture de `GET /me/engagement`, ou le premier geste), par
  *    la graine déterministe de la loi : les trois clients lisent le même tirage.
@@ -32,12 +35,13 @@ import {
   MISSION_REROLL_PRICE,
   drawDailyMissions,
   rerollDailyMission,
+  resolveGameDayKey,
   type DrawnMission,
   type MissionDifficulty,
   type MissionSignal,
 } from '@meeshy/shared/utils/game/missions';
 import { GameRefusal } from './GameRefusal';
-import { FLAME_USER_SELECT, flameFactsOf } from './FlameService';
+import { FLAME_USER_SELECT, STREAK_WRITE_ATTEMPTS, flameFactsOf, flameFreezesUnchanged } from './FlameService';
 import { GloryService } from './GloryService';
 import { MeeshSpend } from './MeeshSpend';
 import { dayKeyOf, minuteOfDayInTimezone } from './gameClock';
@@ -134,6 +138,21 @@ const drawnOf = (row: DailyMission): DrawnMission => ({
   glory: row.glory,
 });
 
+type RecentMission = Pick<DailyMission, 'dayKey' | 'createdAt'>;
+
+/**
+ * La dernière journée OUVERTE parmi des lignes triées par `dayKey` décroissant :
+ * sa clé et son ouverture (le premier tirage de ses emplacements).
+ */
+function latestOpenedDay(rows: readonly RecentMission[]): { readonly dayKey: string; readonly openedAt: Date } | null {
+  const top = rows[0];
+  if (!top) return null;
+  const openedAt = rows
+    .filter((row) => row.dayKey === top.dayKey)
+    .reduce((earliest, row) => Math.min(earliest, row.createdAt?.getTime() ?? 0), Number.POSITIVE_INFINITY);
+  return { dayKey: top.dayKey, openedAt: new Date(Number.isFinite(openedAt) ? openedAt : 0) };
+}
+
 export class MissionService {
   private readonly glory: GloryService;
 
@@ -154,15 +173,26 @@ export class MissionService {
     return this.prisma.user.findUnique({ where: { id: userId }, select: USER_GAME_SELECT });
   }
 
+  /** Les lignes de la dernière journée tirée (au plus un tirage), les plus récentes d'abord. */
+  private async recentMissions(userId: string): Promise<DailyMission[]> {
+    return this.prisma.dailyMission.findMany({ where: { userId }, orderBy: { dayKey: 'desc' }, take: DAILY_MISSION_SLOTS });
+  }
+
+  /** La clé de la journée de jeu : celle du fuseau, rendue monotone. */
+  private async gameDayKey(userId: string, timezone: string | null | undefined, now: Date): Promise<string> {
+    return resolveGameDayKey({ candidate: dayKeyOf(now, timezone), latest: latestOpenedDay(await this.recentMissions(userId)), now });
+  }
+
   /** Le jour et ses missions — tirées au premier accès du jour, jamais retirées. */
   async ensureToday(userId: string, now: Date = new Date()): Promise<MissionDay> {
     const user = await this.userRow(userId);
-    const dayKey = dayKeyOf(now, user?.timezone);
+    const recent = await this.recentMissions(userId);
+    const dayKey = resolveGameDayKey({ candidate: dayKeyOf(now, user?.timezone), latest: latestOpenedDay(recent), now });
     const level = levelFromScore(user?.engagementScore ?? 0);
     const record = Math.max(level, user?.levelRecord ?? 0);
     const unlocked = record >= MISSIONS_MIN_LEVEL;
 
-    const existing = await this.prisma.dailyMission.findMany({ where: { userId, dayKey }, orderBy: { slot: 'asc' } });
+    const existing = recent.filter((row) => row.dayKey === dayKey).sort((a, b) => a.slot - b.slot);
     // Un tirage INTERROMPU (une écriture tombée entre deux emplacements) se
     // COMPLÈTE : les emplacements posés font foi, seuls les manquants s'écrivent.
     if (existing.length >= DAILY_MISSION_SLOTS || !unlocked) return { dayKey, unlocked, rows: existing };
@@ -218,13 +248,17 @@ export class MissionService {
    */
   async onSignal(userId: string, signal: MissionSignal | string, options: SignalOptions = {}): Promise<void> {
     const now = options.now ?? new Date();
-    let { dayKey, timezone } = options;
-    if (dayKey === undefined) {
+    let { dayKey: candidate, timezone } = options;
+    if (candidate === undefined) {
       timezone = (await this.userRow(userId))?.timezone ?? null;
-      dayKey = dayKeyOf(now, timezone);
+      candidate = dayKeyOf(now, timezone);
     }
 
-    let rows = await this.prisma.dailyMission.findMany({ where: { userId, dayKey } });
+    // Une lecture indexée de ≤ 3 lignes rend À LA FOIS la journée ouverte et ses
+    // missions : la clé du fuseau n'ouvre une journée que si la loi le permet.
+    const recent = await this.recentMissions(userId);
+    const dayKey = resolveGameDayKey({ candidate, latest: latestOpenedDay(recent), now });
+    let rows = recent.filter((row) => row.dayKey === dayKey);
     if (rows.length === 0) {
       // Le geste précède toute lecture du jour : on tire ici, sinon il serait perdu.
       if (options.record !== undefined && options.record < MISSIONS_MIN_LEVEL) return;
@@ -324,7 +358,7 @@ export class MissionService {
     const { userId, missionId, requestId } = params;
     const now = params.now ?? new Date();
     const user = await this.userRow(userId);
-    const dayKey = dayKeyOf(now, user?.timezone);
+    const dayKey = await this.gameDayKey(userId, user?.timezone, now);
     await this.ensureGameDay(userId, dayKey);
 
     const assertAllowed = async (db: Pick<PrismaClient, 'dailyMission' | 'gameDay' | 'user'>): Promise<DailyMission> => {
@@ -404,7 +438,7 @@ export class MissionService {
     const { userId } = params;
     const now = params.now ?? new Date();
     const user = await this.userRow(userId);
-    const dayKey = dayKeyOf(now, user?.timezone);
+    const dayKey = await this.gameDayKey(userId, user?.timezone, now);
 
     const stored = await this.gameDay(userId, dayKey);
     if (stored?.chestClaimedAt) return this.alreadyClaimed(userId, stored);
@@ -439,12 +473,24 @@ export class MissionService {
     return { status: 'claimed', reward, score: (await this.userRow(userId))?.engagementScore ?? 0 };
   }
 
-  /** Un gel offert par le coffre ne remplit jamais la réserve au-delà du maximum. */
+  /**
+   * Un gel offert par le coffre ne remplit jamais la réserve au-delà du maximum.
+   * L'écriture est conditionnelle à la réserve LUE : un gel acheté entre-temps
+   * fait relire, jamais écraser l'achat.
+   */
   private async grantFreeze(userId: string): Promise<void> {
-    const row = await this.prisma.user.findUnique({ where: { id: userId }, select: { flameFreezes: true } });
-    const freezes = row?.flameFreezes ?? 0;
-    if (freezes >= FLAME_FREEZE_MAX) return;
-    await this.prisma.user.update({ where: { id: userId }, data: { flameFreezes: freezes + 1 } });
+    for (let attempt = 0; attempt < STREAK_WRITE_ATTEMPTS; attempt += 1) {
+      const row = await this.prisma.user.findUnique({ where: { id: userId }, select: { flameFreezes: true } });
+      if (!row) return;
+      const freezes = row.flameFreezes ?? 0;
+      if (freezes >= FLAME_FREEZE_MAX) return;
+      const written = await this.prisma.user.updateMany({
+        where: { id: userId, ...flameFreezesUnchanged(row.flameFreezes) },
+        data: { flameFreezes: freezes + 1 },
+      });
+      if (written.count === 1) return;
+    }
+    throw new Error('chest freeze contended');
   }
 
   private async alreadyClaimed(

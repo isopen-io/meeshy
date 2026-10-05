@@ -284,6 +284,9 @@ services:
       - FIREBASE_ADMIN_CREDENTIALS_PATH=/app/secrets/firebase-admin-sdk.json
       - ATTACHMENT_MASTER_KEY=${ATTACHMENT_MASTER_KEY}
       - ENCRYPTION_MASTER_KEY=${ENCRYPTION_MASTER_KEY:-}
+      # Chiffrement au repos des secrets de configuration (clé d'API LLM de
+      # l'agent) — 32 octets base64. Absente : l'écriture d'une clé est refusée.
+      - SECRETS_AT_REST_KEY=${SECRETS_AT_REST_KEY}
       # E-mails de staging (#8036) — de VRAIS envois, marqués « [STAGING] » au
       # sujet et d'un bandeau dans le corps (`services/email/staging-marker.ts`).
       # Sans BREVO_API_KEY sur l'hôte, rien ne part (la passerelle le journalise).

@@ -2,8 +2,9 @@ import { useId, useState } from 'react';
 
 import { AdminGlyph } from '@/components/admin/admin-glyph';
 import { AdminFicheSection } from '@/components/admin/fiche';
+import { AdminSwitch } from '@/components/admin/form';
 import { AdminInlineNotice } from '@/components/admin/states';
-import { BRAND, EDGE, INK, INK2, SURFACE } from '@/components/admin/tone';
+import { BRAND, INK2 } from '@/components/admin/tone';
 import { readSidebarFolded, writeSidebarFolded } from '@/lib/admin/admin-space';
 import { useAdminAction } from '@/lib/admin/use-admin-action';
 import type { AdminDeps } from '@/lib/api/admin';
@@ -101,8 +102,7 @@ export function DashboardBlock({
  */
 export function SpaceBlock({ language, announce }: { readonly language: AdminLanguage; readonly announce: Announce }) {
   const [folded, setFolded] = useState(readSidebarFolded);
-  const labelId = useId();
-  const hintId = useId();
+  const switchId = useId();
 
   const toggle = () => {
     const next = !folded;
@@ -113,34 +113,14 @@ export function SpaceBlock({ language, announce }: { readonly language: AdminLan
 
   return (
     <AdminFicheSection id="settings-space" title={translateAdmin(language, 'admin.settings.space.title')}>
-      <button
-        type="button"
-        role="switch"
-        aria-checked={folded}
-        aria-labelledby={labelId}
-        aria-describedby={hintId}
-        data-admin-action="toggle-folded-sidebar"
-        onClick={toggle}
-        className={`flex w-full items-center gap-3 rounded-chip text-start ${FOCUS}`}
-        style={{ minHeight: 44, color: INK, outlineColor: BRAND }}
-      >
-        <span
-          aria-hidden="true"
-          className="relative inline-block h-7 w-12 shrink-0 rounded-full transition-colors"
-          style={{ backgroundColor: folded ? BRAND : 'color-mix(in srgb, var(--color-ios-ink-3) 30%, transparent)', border: `1px solid ${EDGE}` }}
-        >
-          <span
-            className="absolute top-0.5 size-6 rounded-full transition-all"
-            style={{ backgroundColor: SURFACE, insetInlineStart: folded ? '1.375rem' : '0.125rem' }}
-          />
-        </span>
-        <span id={labelId} className="min-w-0 break-words text-body font-medium">
-          {translateAdmin(language, 'admin.settings.space.folded')}
-        </span>
-      </button>
-      <p id={hintId} className="text-caption" style={{ color: INK2 }}>
-        {translateAdmin(language, 'admin.settings.space.foldedHint')}
-      </p>
+      <AdminSwitch
+        id={switchId}
+        label={translateAdmin(language, 'admin.settings.space.folded')}
+        hint={translateAdmin(language, 'admin.settings.space.foldedHint')}
+        checked={folded}
+        onToggle={toggle}
+        data={{ 'data-admin-action': 'toggle-folded-sidebar' }}
+      />
     </AdminFicheSection>
   );
 }

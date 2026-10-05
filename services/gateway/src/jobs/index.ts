@@ -15,7 +15,7 @@ import { EmailService } from '../services/EmailService';
 import { RedisDeliveryQueue } from '../services/RedisDeliveryQueue';
 import { MagicLinkService } from '../services/MagicLinkService';
 import { getCacheStore } from '../services/CacheStore';
-import { GeoIPService } from '../services/GeoIPService';
+import { GeoIPService, cleanGeoCache } from '../services/GeoIPService';
 import { BanService } from '../services/admin/ban.service';
 import { UserAuditService } from '../services/admin/user-audit.service';
 import { UserManagementService } from '../services/admin/user-management.service';
@@ -36,6 +36,13 @@ export class BackgroundJobsManager {
    * à tenir (#5712).
    */
   private sessionSweepInterval: NodeJS.Timeout | null = null;
+  /**
+   * La purge du cache GeoIP n'a pas de classe non plus : c'est UNE boucle
+   * synchrone sur un `Map` de module, sans état ni dépendance (#9239). Un
+   * fichier de job dédié n'ajouterait qu'un emballage à tenir — même
+   * raisonnement que le balayage des sessions ci-dessus (#5712).
+   */
+  private geoCacheInterval: NodeJS.Timeout | null = null;
   private isRunning: boolean = false;
 
   private prismaClient: PrismaClient;
@@ -88,6 +95,24 @@ export class BackgroundJobsManager {
     this.sessionSweepInterval = setInterval(balayerLesSessions, 6 * 60 * 60 * 1000);
     this.sessionSweepInterval.unref();
 
+    /* LE CACHE GEOIP SE LIBÈRE (#9239). Ses entrées expirées n'étaient
+       qu'IGNORÉES à la lecture : la table, indexée par l'IP du client,
+       retenait une entrée par IP distincte vue depuis le démarrage.
+       `cleanGeoCache()` existait et son commentaire disait « call
+       periodically » — personne ne l'appelait. Le plafond de
+       `rememberGeo` borne désormais le pire cas ; cette purge-ci rend la
+       mémoire du cas NOMINAL, où le plafond n'est jamais atteint et où
+       seule l'expiration libère.
+       Toutes les dix minutes : le double du TTL de cinq minutes, de sorte
+       qu'aucune entrée ne survive longtemps à sa mort. */
+    const purgerLeCacheGeo = () => {
+      const liberees = cleanGeoCache();
+      if (liberees > 0) logger.info(`${liberees} expired GeoIP cache entr(ies) freed`);
+    };
+    purgerLeCacheGeo();
+    this.geoCacheInterval = setInterval(purgerLeCacheGeo, 10 * 60 * 1000);
+    this.geoCacheInterval.unref();
+
     this.isRunning = true;
     logger.info('All background jobs started successfully');
   }
@@ -113,6 +138,11 @@ export class BackgroundJobsManager {
     if (this.sessionSweepInterval) {
       clearInterval(this.sessionSweepInterval);
       this.sessionSweepInterval = null;
+    }
+
+    if (this.geoCacheInterval) {
+      clearInterval(this.geoCacheInterval);
+      this.geoCacheInterval = null;
     }
 
     this.isRunning = false;

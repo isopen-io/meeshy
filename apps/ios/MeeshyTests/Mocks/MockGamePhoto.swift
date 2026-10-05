@@ -71,7 +71,7 @@ final class MockGameHaptics: GameHapticsProviding {
 }
 
 /// La photothèque : ce qui lui est confié se relit, un refus se simule.
-final class MockPhotoLibrarySaver: PhotoLibrarySaving, @unchecked Sendable {
+final class MockGamePhotoLibrary: PhotoLibrarySaving, @unchecked Sendable {
     var fails = false
     private(set) var savedImages: [Data] = []
 

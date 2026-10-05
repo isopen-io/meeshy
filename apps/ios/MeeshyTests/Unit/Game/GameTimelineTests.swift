@@ -88,4 +88,50 @@ final class GameTimelineTests: XCTestCase {
         XCTAssertEqual(GameTimeline.window(5, from: 0, to: 1), 1)
         XCTAssertEqual(GameTimeline.window(0.5, from: 0, to: 1), 0.5)
     }
+
+    /// L'irisation est la matière du PRISME (édition millième, rang Mythe) : une pièce
+    /// d'argent ou d'or n'en reçoit aucune, et seule la pièce la porte — pas Mee et Meo.
+    func test_prismTilt_paintsNothingOnACoinThatIsNotPrism() {
+        XCTAssertEqual(GamePrismTilt.intensity(active: false), 0)
+        XCTAssertGreaterThan(GamePrismTilt.intensity(active: true), 0)
+    }
+
+    /// Le capteur ne tourne que pour une irisation qui BOUGE à l'écran : ni hors écran, ni pour une
+    /// matière qui n'en a pas, ni sous « réduire les animations » (l'irisation y est figée).
+    func test_prismTilt_theSensorRunsOnlyWhenActiveVisibleAndMoving() {
+        XCTAssertTrue(GamePrismTilt.sensorRuns(active: true, visible: true, reduceMotion: false))
+        XCTAssertFalse(GamePrismTilt.sensorRuns(active: true, visible: false, reduceMotion: false))
+        XCTAssertFalse(GamePrismTilt.sensorRuns(active: false, visible: true, reduceMotion: false))
+        XCTAssertFalse(GamePrismTilt.sensorRuns(active: true, visible: true, reduceMotion: true))
+    }
+}
+
+/// La tape « niveau gagné » ne joue que pour une montée CONFIRMÉE (#9381) : un niveau
+/// qui remonte parce qu'une frappe refusée l'a rendu n'a rien gagné.
+final class GameLevelConfirmationTests: XCTestCase {
+
+    func test_aRefusedMint_givingTheLevelBack_isNotAGain() {
+        var sut = GameLevelConfirmation(confirmed: 34)
+        XCTAssertFalse(sut.observe(level: 33, settled: false), "la frappe baisse le niveau en vol")
+        XCTAssertFalse(sut.observe(level: 34, settled: false), "le refus le rend, en vol")
+        XCTAssertFalse(sut.observe(level: 34, settled: true), "réglé : le niveau d'avant, rien de gagné")
+    }
+
+    func test_aRealClimbWhileSettled_isAGain_once() {
+        var sut = GameLevelConfirmation(confirmed: 34)
+        XCTAssertTrue(sut.observe(level: 35, settled: true))
+        XCTAssertFalse(sut.observe(level: 35, settled: true))
+    }
+
+    func test_aClimbReadDuringAGesture_isPlayedWhenItSettles() {
+        var sut = GameLevelConfirmation(confirmed: 34)
+        XCTAssertFalse(sut.observe(level: 35, settled: false), "le coffre est ouvert, pas encore réglé")
+        XCTAssertTrue(sut.observe(level: 35, settled: true))
+    }
+
+    func test_aConfirmedLoss_thenClimbingBackToTheOldLevel_isAGain() {
+        var sut = GameLevelConfirmation(confirmed: 34)
+        XCTAssertFalse(sut.observe(level: 33, settled: true))
+        XCTAssertTrue(sut.observe(level: 34, settled: true))
+    }
 }

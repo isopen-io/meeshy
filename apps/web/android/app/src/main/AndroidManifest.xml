@@ -47,6 +47,9 @@
                 <data android:pathPrefix="/story/" />
                 <data android:pathPrefix="/reel/" />
                 <data android:pathPrefix="/communities/" />
+                <!-- #9468 — le lien d'invitation, réclamé par l'AASA depuis #8075 :
+                     ouvert dans la coque, le code est retenu par l'app qui inscrira. -->
+                <data android:pathPrefix="/signup/affiliate/" />
                 <data android:pathPrefix="/auth/magic-link" />
                 <data android:path="/auth/verify-email" />
                 <data android:path="/me" />
@@ -217,9 +220,15 @@
          IMAGE_CAPTURE que si resolveActivity trouve une application photo.
          Depuis l'API 30, la visibilité des paquets la cache sans cette
          requête : le pont retombait sur le sélecteur de fichiers. -->
+    <!-- #9446 — les sous-titres d'un appel (MeeshySpeechPlugin) : depuis
+         l'API 30, SpeechRecognizer.isRecognitionAvailable ne voit le service
+         de reconnaissance du système que si le manifeste le demande. -->
     <queries>
         <intent>
             <action android:name="android.media.action.IMAGE_CAPTURE" />
+        </intent>
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
         </intent>
     </queries>
 </manifest>

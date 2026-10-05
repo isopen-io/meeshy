@@ -7,7 +7,7 @@ import { BRAND, EDGE, INK, INK2, INK3, SURFACE, TONE_COLOR } from '@/components/
 import { formatDuration } from '@/lib/admin/interpret/time';
 import type { AdminMoment, Interpreted } from '@/lib/admin/interpret/types';
 import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
-import { PlainTh, Td } from '@/routes/admin-table';
+import { PlainTh, Td } from '@/components/admin/table-cells';
 
 /**
  * **LES PIÈCES DE LA SUPERVISION** (#8876, #6734) — un bloc titré, le bouton

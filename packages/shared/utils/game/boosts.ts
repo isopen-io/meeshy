@@ -11,6 +11,13 @@ export const TAILWIND_FACTOR = 1.25;
 export const tailwindFactor = (params: { readonly level: number; readonly levelRecord: number }): number =>
   params.level < params.levelRecord ? TAILWIND_FACTOR : 1;
 
+/**
+ * La réponse reçue (+3 points à l'auteur répondu) se récompense au plus 20 fois
+ * par auteur et par jour civil de l'auteur : au-delà, la réponse fait toujours
+ * avancer les missions, mais ne paie plus de points.
+ */
+export const REPLY_RECEIVED_DAILY_CAP = 20;
+
 /** Les missions comptent double pendant l'Heure du Prisme. */
 export const PRISM_HOUR_MULTIPLIER = 2;
 

@@ -1,8 +1,11 @@
-import type { GuideAction, GuideMood, GuideMoment, GuideMomentKey, GuideSpeaker, OnboardingStep } from '@meeshy/shared/utils/game/guide';
+import type { GuideAction, GuideMood, GuideMoment, GuideMomentKey, GuideSpeaker, OnboardingStep, OnboardingStepKey } from '@meeshy/shared/utils/game/guide';
 import { ONBOARDING_STEPS, onboardingStepSeenKey } from '@meeshy/shared/utils/game/guide';
 
 import type { GameBirdKey } from '@/lib/game/birds';
+import type { EngagementWithGame } from '@/lib/api/engagement';
 import { momentCopy, stepCopy, type GuideCopy } from '@/lib/view/game-guide-copy';
+
+import { awaitingGesture, stepGesture } from './gesture';
 
 /**
  * LE MODÈLE DE LA CARTE DU GUIDE (#9379) — ce que `GameGuideCard` affiche, bâti
@@ -21,6 +24,13 @@ export type GuideCard = {
   readonly presentation: 'full' | 'short';
   /** Présent pour une étape d'intégration : « Étape 3 sur 7 ». */
   readonly step?: { readonly index: number; readonly total: number };
+  /** Présent pour une étape d'intégration : sa clé, pour la retrouver dans la loi. */
+  readonly stepKey?: OnboardingStepKey;
+  /**
+   * L'étape attend un GESTE du joueur (`gesture.ts`) : son bouton mène là où il
+   * se fait sans l'écarter, et elle avance quand le geste a eu lieu.
+   */
+  readonly awaiting?: boolean;
   /** Le moment se photographie (conception, partie VI) : la carte propose « Immortaliser ». */
   readonly photo: boolean;
 };
@@ -87,15 +97,19 @@ export function cardOfMoment(moment: GuideMoment): GuideCard {
   };
 }
 
-export function cardOfStep(step: OnboardingStep): GuideCard {
+export function cardOfStep(step: OnboardingStep, view?: EngagementWithGame): GuideCard {
+  const awaiting = view !== undefined && awaitingGesture(step.key, view);
+  const action = awaiting ? (stepGesture(step.key)?.action ?? step.action) : step.action;
   return {
     key: onboardingStepSeenKey(step.key),
     speaker: step.speaker,
     mood: step.mood,
-    copy: stepCopy(step),
-    action: step.action,
+    copy: stepCopy(step, { awaiting, action }),
+    action,
     presentation: 'full',
     step: { index: step.index, total: ONBOARDING_STEPS.length },
+    stepKey: step.key,
+    awaiting,
     photo: false,
   };
 }

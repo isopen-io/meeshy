@@ -75,6 +75,10 @@ struct ComposerSceneCameraBar: View {
         var lockProgress: Double = 0
         var locked = false
         var zoomFactor: CGFloat = 1
+        /// Les crans du zoom que l'objectif sert (#9350) — vide sans zoom.
+        var zoomPresets: [CGFloat] = []
+        /// Une bascule d'objectif est en cours : le bouton se tait (#9464).
+        var flipping = false
         var flashIntensity: Double = ComposerFlashIntensity.defaultLevel
     }
 
@@ -84,6 +88,8 @@ struct ComposerSceneCameraBar: View {
     var onZoomDragEnded: () -> Void = {}
     /// Un pas de zoom VoiceOver : `true` rapproche.
     var onZoomStep: (Bool) -> Void = { _ in }
+    /// Un cran de la pastille touché — un facteur AFFICHÉ (#9350).
+    var onZoomPreset: (CGFloat) -> Void = { _ in }
     var onFlashIntensity: (Double) -> Void = { _ in }
     var onShutterTouched: () -> Void = {}
     /// Le sélecteur de filtres et de cadres en direct (#9329) ; `nil` ⇒ pas de
@@ -157,6 +163,7 @@ struct ComposerSceneCameraBar: View {
                          label: ComposerSceneCameraCopy.flipLabel,
                          tint: .white,
                          action: onFlipCamera)
+                .disabled(capture.flipping)
         }
     }
 
@@ -311,7 +318,13 @@ struct ComposerSceneCameraBar: View {
         HStack(spacing: MeeshySpacing.smPlus) {
             ZStack(alignment: .trailing) {
                 Color.clear
-                if stage == .recording || ComposerCaptureZoom.showsBadge(capture.zoomFactor) {
+                if stage == .recording {
+                    ComposerCaptureZoomChip(factor: capture.zoomFactor, onStep: onZoomStep)
+                        .transition(.opacity)
+                } else if capture.zoomPresets.count > 1 {
+                    ComposerCaptureZoomPresets(factor: capture.zoomFactor, presets: capture.zoomPresets,
+                                               onSelect: onZoomPreset)
+                } else if ComposerCaptureZoom.showsBadge(capture.zoomFactor) {
                     ComposerCaptureZoomChip(factor: capture.zoomFactor, onStep: onZoomStep)
                         .transition(.opacity)
                 }
@@ -559,5 +572,35 @@ struct ComposerCaptureZoomChip: View {
             @unknown default: break
             }
         }
+    }
+}
+
+/// **Les crans du zoom** (#9350) : ×0,5 / ×1 / ×2, ceux que l'objectif sert. Le
+/// cran courant est jaune ; chacun est une cible de 44 pt, nommée à la voix.
+struct ComposerCaptureZoomPresets: View {
+    let factor: CGFloat
+    let presets: [CGFloat]
+    let onSelect: (CGFloat) -> Void
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(presets, id: \.self) { cran in
+                Button {
+                    onSelect(cran)
+                    HapticFeedback.light()
+                } label: {
+                    Text(ComposerSceneCameraCopy.zoomPresetValue(cran))
+                        .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold, design: .rounded))
+                        .foregroundStyle(abs(factor - cran) < 0.05 ? Color.yellow : .white)
+                        .frame(minWidth: MeeshyControlSize.tapTarget, minHeight: MeeshyControlSize.tapTarget)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(ComposerSceneCameraCopy.zoomLabel)
+                .accessibilityValue(ComposerSceneCameraCopy.zoomValue(cran))
+                .accessibilityAddTraits(abs(factor - cran) < 0.05 ? .isSelected : [])
+            }
+        }
+        .adaptiveLiquidGlass(in: Capsule())
     }
 }

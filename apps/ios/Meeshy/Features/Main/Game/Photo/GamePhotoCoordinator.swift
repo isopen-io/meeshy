@@ -64,7 +64,10 @@ final class GamePhotoCoordinator: ObservableObject {
         Task { [notebook] in _ = await notebook.postpone(moment) }
     }
 
+    /// Toute fermeture passe ici, la croix comme la feuille qui retombe : le déroulé
+    /// ouvert est CLOS d'abord, ce qui arrête sa caméra.
     func close() {
+        active?.close()
         active = nil
     }
 }

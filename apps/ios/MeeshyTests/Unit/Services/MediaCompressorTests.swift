@@ -2,6 +2,7 @@ import XCTest
 import ImageIO
 import AVFoundation
 import CoreMedia
+import MeeshyUI
 @testable import Meeshy
 
 @MainActor
@@ -73,6 +74,39 @@ final class MediaCompressorTests: XCTestCase {
         XCTAssertFalse(result.data.isEmpty)
         XCTAssertEqual(result.mimeType, "image/jpeg")
         XCTAssertNotNil(UIImage(data: result.data))
+    }
+
+    /// **#6922 — une image réduite partait TROIS fois plus grande.** Le rendu
+    /// de `downsample(cgImage:)` prenait l'échelle de l'écran : une photo de
+    /// 4 000 px « réduite » à 2 048 points sortait à 6 144 px sur un écran ×3,
+    /// soit un bitmap transitoire de 113 Mo par image et un JPEG plus lourd que
+    /// l'original. Le plafond se compte en PIXELS.
+    func test_compressImage_largeImage_encodesAtTheCapInPixels() async throws {
+        let image = makeTestImage(width: 4000, height: 1000)
+
+        let result = await makeSUT().compressImage(image, maxDimension: 2048)
+
+        XCTAssertEqual(try pixelSize(of: result.data), CGSize(width: 2048, height: 512))
+    }
+
+    /// Le composer tient ses photos à la taille que la publication envoie
+    /// (`SceneImageDownsampling.workingMaxPixelSize`) : si l'un bouge sans
+    /// l'autre, la scène montrerait plus — ou moins — que ce qui part.
+    func test_compressImage_defaultCap_isTheComposerWorkingSize() async throws {
+        let image = makeTestImage(width: 5000, height: 1000)
+
+        let result = await makeSUT().compressImage(image)
+
+        let taille = try pixelSize(of: result.data)
+        XCTAssertEqual(max(taille.width, taille.height), SceneImageDownsampling.workingMaxPixelSize)
+    }
+
+    private func pixelSize(of data: Data) throws -> CGSize {
+        let source = try XCTUnwrap(CGImageSourceCreateWithData(data as CFData, nil))
+        let proprietes = try XCTUnwrap(CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any])
+        let largeur = try XCTUnwrap(proprietes[kCGImagePropertyPixelWidth] as? NSNumber)
+        let hauteur = try XCTUnwrap(proprietes[kCGImagePropertyPixelHeight] as? NSNumber)
+        return CGSize(width: largeur.doubleValue, height: hauteur.doubleValue)
     }
 
     // MARK: - compressImageData — MIME Detection
@@ -264,6 +298,60 @@ final class MediaCompressorTests: XCTestCase {
         let result = await sut.compressImageData(shortData)
 
         XCTAssertEqual(result.mimeType, "image/jpeg")
+    }
+
+    // MARK: - compressImage — l'orientation visible survit à la réduction (#9403)
+
+    func test_compressImage_portraitRightOrientedLargeImage_keepsPortraitPixels() async {
+        let sut = makeSUT()
+        let image = makeOrientedImage(pixelWidth: 4000, pixelHeight: 3000, orientation: .right)
+
+        let result = await sut.compressImage(image, maxDimension: 2048)
+
+        let decoded = decodedPixels(result.data)
+        XCTAssertEqual(decoded?.width, 1536)
+        XCTAssertEqual(decoded?.height, 2048)
+        XCTAssertEqual(decoded?.orientation, 1)
+    }
+
+    func test_compressImage_portraitRightOrientedLargeImage_isSeenUpright() async {
+        let sut = makeSUT()
+        let image = makeOrientedImage(pixelWidth: 4000, pixelHeight: 3000, orientation: .right)
+
+        let result = await sut.compressImage(image, maxDimension: 2048)
+
+        let seen = UIImage(data: result.data)
+        XCTAssertEqual(seen?.size.width, 1536)
+        XCTAssertEqual(seen?.size.height, 2048)
+    }
+
+    func test_compressImage_upOrientedLargeImage_keepsLandscapePixels() async {
+        let sut = makeSUT()
+        let image = makeOrientedImage(pixelWidth: 4000, pixelHeight: 3000, orientation: .up)
+
+        let result = await sut.compressImage(image, maxDimension: 2048)
+
+        let decoded = decodedPixels(result.data)
+        XCTAssertEqual(decoded?.width, 2048)
+        XCTAssertEqual(decoded?.height, 1536)
+        XCTAssertEqual(decoded?.orientation, 1)
+    }
+
+    private func makeOrientedImage(pixelWidth: CGFloat, pixelHeight: CGFloat,
+                                   orientation: UIImage.Orientation) -> UIImage {
+        let raw = makeTestImage(width: pixelWidth, height: pixelHeight)
+        return UIImage(cgImage: raw.cgImage!, scale: 1, orientation: orientation)
+    }
+
+    private func decodedPixels(_ data: Data) -> (width: Int, height: Int, orientation: Int)? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+              let width = properties[kCGImagePropertyPixelWidth] as? Int,
+              let height = properties[kCGImagePropertyPixelHeight] as? Int else {
+            return nil
+        }
+        let orientation = properties[kCGImagePropertyOrientation] as? Int ?? 1
+        return (width, height, orientation)
     }
 
     // MARK: - Factory Helpers

@@ -1,3 +1,4 @@
+import AVFoundation
 import CoreGraphics
 import Foundation
 
@@ -79,13 +80,6 @@ nonisolated enum ComposerCaptureZoom {
     /// capteur grand-angle se plafonne là même si l'appareil annonce plus.
     static let ceiling: CGFloat = 10
 
-    /// Ce que l'objectif sert, plafonné. Un appareil sans zoom (simulateur,
-    /// objectif fixe) rend `min...min` : le geste n'y a aucun effet.
-    static func range(deviceMin: CGFloat, deviceMax: CGFloat) -> ClosedRange<CGFloat> {
-        let bas = max(1, deviceMin)
-        return bas...max(bas, min(deviceMax, ceiling))
-    }
-
     /// - Parameter translationY: la course depuis le début du glissé — NÉGATIVE
     ///   vers le haut (repère UIKit), donc un zoom.
     static func factor(from start: CGFloat,
@@ -104,9 +98,9 @@ nonisolated enum ComposerCaptureZoom {
         return min(range.upperBound, max(range.lowerBound, brut))
     }
 
-    /// Le badge ne dit rien tant que le cadrage est celui d'origine.
+    /// Le badge ne dit rien tant que le cadrage est celui d'origine (×1).
     static func showsBadge(_ factor: CGFloat) -> Bool {
-        factor > 1.01
+        abs(factor - 1) > 0.01
     }
 
     /// **Le pincement** (#9295, directive porteur 2026-10-04) : l'écart des
@@ -136,4 +130,46 @@ nonisolated enum ComposerCaptureZoom {
 nonisolated struct ComposerCaptureZoomAnchor: Equatable, Sendable {
     let factor: CGFloat
     let translationY: CGFloat
+}
+
+/// **Le facteur qu'on LIT n'est pas celui de l'appareil** (#9350, spec § 4.5).
+///
+/// Une caméra virtuelle à ultra grand-angle (triple, double grand-angle) compte
+/// son facteur 1 sur l'ultra grand-angle : le ×1 de l'appareil photo du système
+/// est son premier basculement. On raisonne en facteur AFFICHÉ partout (geste,
+/// pastille, badge) ; seul `CameraModel` convertit, à l'écriture.
+nonisolated struct ComposerCaptureZoomScale: Equatable, Sendable {
+    /// Le facteur de l'appareil qui s'affiche « ×1 ».
+    let base: CGFloat
+
+    /// Le premier trouvé gagne : les caméras virtuelles d'abord, l'objectif seul en dernier.
+    static let preferredDeviceTypes: [AVCaptureDevice.DeviceType] = [
+        .builtInTripleCamera, .builtInDualWideCamera, .builtInDualCamera, .builtInWideAngleCamera,
+    ]
+
+    static func base(switchOvers: [CGFloat], hasUltraWide: Bool) -> CGFloat {
+        guard hasUltraWide, let premier = switchOvers.first, premier > 0 else { return 1 }
+        return premier
+    }
+
+    func displayed(_ deviceFactor: CGFloat) -> CGFloat { deviceFactor / base }
+
+    func device(_ displayedFactor: CGFloat) -> CGFloat { displayedFactor * base }
+
+    /// Ce que l'objectif sert, en facteur affiché, plafonné à `ComposerCaptureZoom.ceiling`.
+    /// Un appareil sans zoom (simulateur, objectif fixe) rend `min...min`.
+    func displayedRange(deviceMin: CGFloat, deviceMax: CGFloat) -> ClosedRange<CGFloat> {
+        let bas = deviceMin / base
+        let haut = min(deviceMax / base, ComposerCaptureZoom.ceiling)
+        return bas...max(bas, haut)
+    }
+
+    /// Le viseur s'ouvre à ×1 affiché.
+    var opening: CGFloat { base }
+
+    /// Les crans que la pastille offre — ceux que l'objectif sert vraiment.
+    static func presets(in range: ClosedRange<CGFloat>) -> [CGFloat] {
+        guard range.upperBound > range.lowerBound else { return [] }
+        return [0.5, 1, 2].filter { range.contains($0) }
+    }
 }

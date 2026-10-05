@@ -29,8 +29,8 @@ final class ComposerReferencesLiftTests: XCTestCase {
         // Les étages du bas sont regroupés dans `lowerFloors` depuis le mode
         // Animé (#8415), que la frise remplace tant qu'elle est ouverte : le
         // pied reste leur PREMIER étage, juste sous la scène libre.
-        XCTAssertTrue(code.contains("freeZoneiflettimelinePanel{timelinePanel}else{lowerFloors.background{"),
-                      "Sous la scène libre : la frise, ou les étages du bas.")
+        XCTAssertTrue(code.contains("freeZoneiflettimelinePanel{timelinePanel}elseifComposerToolFocus.lowerFloorsAreShown(writesText:writesText){lowerFloors.background{"),
+                      "Sous la scène libre : la frise, ou les étages du bas — sauf pendant l'écriture (#6132).")
         XCTAssertTrue(code.contains("privatevarlowerFloors:someView{VStack(alignment:.leading,spacing:0){ifComposerCanonicalZone.isServed(.references,toolIsOpen:toolIsOpen),band==nil{ComposerSceneReferenceFooter("),
                       "Le pied des références doit être l'étage qui suit la scène libre.")
         XCTAssertFalse(code.contains("referencesLift"), "Aucune remontée : il n'y a plus de letterbox à combler.")

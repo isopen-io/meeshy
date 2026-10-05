@@ -82,9 +82,16 @@ const CANDIDATES = [
   { id: 'm-2', fileUrl: '/p/2.jpg', thumbnailUrl: null },
 ];
 
-async function monter(options: { readonly actuel?: Partial<AdminUserDetail>; readonly candidates?: readonly unknown[]; readonly refus?: boolean } = {}) {
+async function monter(
+  options: { readonly actuel?: Partial<AdminUserDetail>; readonly candidates?: readonly unknown[]; readonly refus?: boolean; readonly lecturesEnPanne?: number; readonly enLigne?: () => boolean; readonly panne?: { now: boolean } } = {},
+) {
+  let pannes = options.lecturesEnPanne ?? 0;
   const t = routedTransport((req: HttpRequest) => {
     if (req.method === 'GET' && pathOf(req) === '/api/v1/admin/users/u-alice/profile-image-candidates') {
+      if (pannes > 0 || options.panne?.now === true) {
+        pannes = Math.max(0, pannes - 1);
+        return { ok: false, status: 500, error: 'Internal server error' };
+      }
       const lignes = options.candidates ?? CANDIDATES;
       return { ok: true, data: lignes, pagination: { total: lignes.length, offset: 0, limit: 30, hasMore: false } };
     }
@@ -106,7 +113,7 @@ async function monter(options: { readonly actuel?: Partial<AdminUserDetail>; rea
         kind="avatar"
         language="fr"
         deps={{ source: 'gateway', transport: t.transport }}
-        isOnline={() => true}
+        isOnline={options.enLigne ?? (() => true)}
         onAnnounce={(texte) => annonces.push(texte)}
         onSaved={(aJour) => poses.push(aJour)}
         onClose={() => {
@@ -150,6 +157,46 @@ describe('choisir parmi les images publiques du membre', () => {
     expect(host.querySelector('[data-admin-image-upload]')).not.toBeNull();
   });
 
+  test('des candidates illisibles se disent avec un « Réessayer » qui les relit (#9463)', async () => {
+    const { host, calls } = await monter({ lecturesEnPanne: 1 });
+    const lectures = () => calls().filter((req) => req.method === 'GET').length;
+
+    expect(host.querySelector('[data-admin-error]')?.textContent).toContain('Ses images publiques n’ont pas pu être chargées.');
+    expect(host.querySelector('[data-admin-image-candidate]')).toBeNull();
+    await mounter.click(host.querySelector<HTMLButtonElement>('[data-admin-retry]'));
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+
+    expect(lectures()).toBe(2);
+    expect(host.querySelectorAll('[data-admin-image-candidate]')).toHaveLength(2);
+  });
+
+  test('une relecture en échec garde les candidates DÉJÀ servies — le cache d’abord (#9463)', async () => {
+    const panne = { now: false };
+    const { host } = await monter({ panne });
+    expect(host.querySelectorAll('[data-admin-image-candidate]')).toHaveLength(2);
+
+    panne.now = true;
+    await act(async () => {
+      await appQueryClient.refetchQueries();
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+
+    expect(host.querySelectorAll('[data-admin-image-candidate]')).toHaveLength(2);
+    expect(host.querySelector('[data-admin-error]')).toBeNull();
+  });
+
+  test('hors ligne, choisir une candidate n’écrit rien et dit pourquoi (#9463)', async () => {
+    const { host, calls, poses } = await monter({ enLigne: () => false });
+
+    await mounter.click(host.querySelector<HTMLButtonElement>('[data-admin-image-candidate="m-1"]'));
+
+    expect(calls().filter((req) => req.method === 'PUT')).toEqual([]);
+    expect(host.querySelector('[data-admin-image-refused]')?.getAttribute('data-admin-image-refused')).toBe('offline');
+    expect(poses).toEqual([]);
+  });
+
   test('un refus de la passerelle se dit, et la feuille reste ouverte', async () => {
     const { host, fermetures, poses } = await monter({ refus: true });
 
@@ -172,6 +219,15 @@ describe('retirer l’image', () => {
 
     expect(avec.calls().find((req) => req.method === 'PUT')?.body).toEqual({ source: 'none' });
     expect(avec.annonces).toContain('Image retirée');
+  });
+
+  test('hors ligne, retirer n’écrit rien et dit pourquoi (#9463)', async () => {
+    const { host, calls } = await monter({ actuel: { avatar: '/actuel.jpg' }, enLigne: () => false });
+
+    await mounter.click(host.querySelector<HTMLButtonElement>('[data-admin-image-remove]'));
+
+    expect(calls().filter((req) => req.method === 'PUT')).toEqual([]);
+    expect(host.querySelector('[data-admin-image-refused]')?.getAttribute('data-admin-image-refused')).toBe('offline');
   });
 });
 

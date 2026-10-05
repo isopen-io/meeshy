@@ -32,7 +32,9 @@ import MeeshyUI
 struct ComposerObjectEditorKeyboardExclusion: ViewModifier {
 
     @Binding var keyboardTransition: KeyboardTransition?
-    @Binding var optionsAreCollapsed: Bool
+    /// Le panneau ENTIER — rangé ou non, et par qui : sans le souvenir du
+    /// clavier, la descente ne saurait pas quoi rendre (réciproque, #6132).
+    @Binding var panel: ComposerObjectEditorPanelState
 
     /// La section OUVERTE — c'est elle qui décide, parce que c'est elle qui
     /// possède (ou non) le champ que le clavier sert.
@@ -42,7 +44,7 @@ struct ComposerObjectEditorKeyboardExclusion: ViewModifier {
         content
             .observingKeyboardTransition($keyboardTransition)
             .adaptiveOnChange(of: keyboardTransition) { _, transition in
-                rangerSiLeClavierMonte(transition)
+                suivreLeClavier(transition)
             }
     }
 
@@ -50,12 +52,18 @@ struct ComposerObjectEditorKeyboardExclusion: ViewModifier {
     /// ici** : `KeyboardTransition` ne STOCKE pas `isPresenting` — son init le
     /// consomme pour décider quelle hauteur retenir, et pose 0 à la descente.
     /// Lire la hauteur, c'est donc lire l'intention, pas la deviner.
-    private func rangerSiLeClavierMonte(_ transition: KeyboardTransition?) {
-        guard let transition, transition.height > 0 else { return }
-        guard ComposerObjectEditorRail.collapsesWhenKeyboardRises(section) else { return }
-        guard !optionsAreCollapsed else { return }
+    ///
+    /// **La descente rend ce que la montée avait rangé** (réciproque de la loi
+    /// #6132) : le clavier part, le panneau qu'IL avait rangé revient — jamais
+    /// celui que l'auteur a rangé lui-même. La règle décide, ce site applique.
+    private func suivreLeClavier(_ transition: KeyboardTransition?) {
+        guard let transition else { return }
+        let suivant = ComposerObjectEditorRail.panelState(keyboardRises: transition.height > 0,
+                                                          section: section,
+                                                          from: panel)
+        guard suivant != panel else { return }
         withAnimation(.spring(response: 0.3, dampingFraction: 0.9)) {
-            optionsAreCollapsed = true
+            panel = suivant
         }
     }
 }
@@ -65,11 +73,11 @@ extension View {
     /// Tient l'exclusion : le clavier qui sert le CANVAS range le panneau, celui
     /// qui sert un champ DU panneau le laisse ouvert.
     func excludingOptionsWhileTyping(keyboardTransition: Binding<KeyboardTransition?>,
-                                     optionsAreCollapsed: Binding<Bool>,
+                                     panel: Binding<ComposerObjectEditorPanelState>,
                                      section: ComposerObjectEditorSection) -> some View {
         modifier(ComposerObjectEditorKeyboardExclusion(
             keyboardTransition: keyboardTransition,
-            optionsAreCollapsed: optionsAreCollapsed,
+            panel: panel,
             section: section))
     }
 }

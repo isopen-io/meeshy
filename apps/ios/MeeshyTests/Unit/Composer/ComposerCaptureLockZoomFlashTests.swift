@@ -80,8 +80,9 @@ final class ComposerCaptureLockZoomFlashTests: XCTestCase {
     }
 
     func test_zoomRange_plafonneLeCapteur_etTolereUnObjectifFixe() {
-        XCTAssertEqual(ComposerCaptureZoom.range(deviceMin: 1, deviceMax: 123), 1...ComposerCaptureZoom.ceiling)
-        XCTAssertEqual(ComposerCaptureZoom.range(deviceMin: 1, deviceMax: 1), 1...1,
+        let echelle = ComposerCaptureZoomScale(base: 1)
+        XCTAssertEqual(echelle.displayedRange(deviceMin: 1, deviceMax: 123), 1...ComposerCaptureZoom.ceiling)
+        XCTAssertEqual(echelle.displayedRange(deviceMin: 1, deviceMax: 1), 1...1,
                        "sans zoom (simulateur), le geste n'a aucun effet")
     }
 
@@ -328,9 +329,9 @@ final class ComposerCaptureFocusAndPinchTests: XCTestCase {
     }
 
     func test_focusesOnDoubleTap_seulementQuandLImageEstLa() {
-        XCTAssertFalse(ComposerCaptureFocus.focusesOnDoubleTap(stage: .off))
-        XCTAssertTrue(ComposerCaptureFocus.focusesOnDoubleTap(stage: .armed))
-        XCTAssertTrue(ComposerCaptureFocus.focusesOnDoubleTap(stage: .recording))
+        XCTAssertFalse(ComposerCaptureFocus.focusesOnTap(stage: .off))
+        XCTAssertTrue(ComposerCaptureFocus.focusesOnTap(stage: .armed))
+        XCTAssertTrue(ComposerCaptureFocus.focusesOnTap(stage: .recording))
     }
 
     // MARK: - Le pincement
@@ -451,7 +452,7 @@ final class ComposerCaptureFocusAndPinchTests: XCTestCase {
 
     func test_leChromePartage_porteLeDoubleToucherEtLePincement() throws {
         let chrome = try source("Meeshy/Features/Main/Composer/ComposerCaptureViews.swift")
-        XCTAssertTrue(chrome.contains("SpatialTapGesture(count: 2, coordinateSpace: .global)"), "deux touchers visent")
+        XCTAssertTrue(chrome.contains("SpatialTapGesture(count: 1, coordinateSpace: .global)"), "un toucher vise (#9464)")
         XCTAssertTrue(chrome.contains("session.focus(atGlobalPoint:"))
         XCTAssertTrue(chrome.contains("MagnificationGesture()"), "pincer zoome")
         XCTAssertTrue(chrome.contains("session.pinchZoom(scale:"))

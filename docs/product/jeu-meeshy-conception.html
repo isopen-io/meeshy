@@ -167,6 +167,7 @@ ul.tight li,ol.tight li{margin:3px 0}
   <a class="part" href="#garde-fous">IX. Garde-fous</a>
   <a class="part" href="#livraison">X. Livraison</a>
   <a class="part" href="#decisions">XI. Décisions</a>
+  <a class="part" href="#finitions">XII. Héro et badges, v2</a>
 </nav>
 
 <main>
@@ -605,6 +606,42 @@ ul.tight li,ol.tight li{margin:3px 0}
     </tbody>
   </table></div>
 </section>
+
+<div class="part-head" id="finitions"><div class="n">Partie XII · ajoutée le 5 octobre au soir</div><h2>Héro et badges, version 2</h2><p class="muted">Demande porteur : de meilleurs badges, un meilleur héro, et le lien de parrainage sur le partage photo. Issues #5841 (héro pleine largeur qui dit comment gagner puis comment frapper), #7742 (carte 9:16 avec série et lien de parrainage) et une issue badges.</p></div>
+<section>
+  <div class="eyebrow">XII.1</div>
+  <h2>Le héro de Progression</h2>
+  <p>Pleine largeur, en deuxième position sous l'en-tête. Il répond à trois questions dans l'ordre : où j'en suis, comment je gagne, comment je frappe. L'énumération « comment gagner » se <b>dérive</b> du barème <code>ENGAGEMENT_AXIS_WEIGHTS</code>, et le prix de la frappe vient du serveur : régler un poids change le héro sans toucher une chaîne.</p>
+  <div id="heroV2"></div>
+  <ul class="tight">
+    <li>Fond teinté par la couleur du palier (12 %) et grande Signature en filigrane à droite ; reflet Metal ou WebGL sur le blason au chargement, une fois.</li>
+    <li>Anneau de niveau à 88 pt, chiffre qui roule ; repère fantôme du niveau record sur la barre.</li>
+    <li>« Comment gagner » : une puce par famille, triée par poids décroissant, avec son pictogramme et ses points. Un toucher ouvre le carnet des règles à la bonne ligne.</li>
+    <li>« Comment frapper » : prix, niveaux perdus, Gloire gagnée, puis le bouton. Sans assez de points, le bouton devient « Encore N points » et reste lisible, jamais grisé à l'illisible.</li>
+    <li>Mee se pose sur le coin du héro et dit la ligne courte du guide du moment ; un toucher ouvre la version complète.</li>
+    <li>Cache-first : le héro s'affiche depuis le cache, jamais de squelette sur cache non vide.</li>
+  </ul>
+</section>
+<section>
+  <div class="eyebrow">XII.2</div>
+  <h2>Les badges deviennent des médailles</h2>
+  <p>Un badge d'accumulation se lit comme une vraie médaille : une lunette de métal biseautée, un champ émaillé à la couleur de la famille, un pictogramme d'axe au centre, des perles de palier en haut, le poinçon Signature en bas, un ruban à partir de l'Or, et l'arc de progression vers le palier suivant.</p>
+  <div class="icon-row" id="medailles"></div>
+  <div class="icon-row" id="medaillesFamilles"></div>
+  <ul class="tight">
+    <li>Couleur d'émail par famille : contenu indigo, lien social rose, conversation violet, commentaire sarcelle, outil ambre.</li>
+    <li>Pictogrammes d'axe dessinés au trait, jamais une bulle : texte « Aa », vocal micro, story cercle pointillé, post carré, réel lecture, commentaire guillemets, conversation deux points reliés, outil étoile, social maillons.</li>
+    <li>L'arc extérieur montre la progression vers le palier suivant ; à 100 %, la médaille change de métal avec la chorégraphie « badge » (0,7 s, reflet à l'allumage).</li>
+    <li>L'empreinte d'un badge éteint est la même médaille en creux, sans métal, avec ce qu'il manque.</li>
+    <li>Prisme (5 000) : émail irisé qui suit l'inclinaison du téléphone.</li>
+  </ul>
+</section>
+<section>
+  <div class="eyebrow">XII.3</div>
+  <h2>La carte partagée porte le lien de parrainage</h2>
+  <p>Toute image partagée depuis un moment photo ou une révélation de succès porte, en bas de la carte 9:16, le lien de parrainage court de l'utilisateur et sa Flamme. Le partage transmet aussi le lien en texte. Chaque partage crédite l'axe <code>social.share</code>, comme tout partage. Le lien vient du service existant (<code>loadShareableReferralLink</code> sur le web, son miroir sur iOS) ; sans lien disponible, la carte part sans lui.</p>
+  <div id="carteV2"></div>
+</section>
 </main>
 </div>
 
@@ -771,6 +808,72 @@ const MEE={"meeGuide":"<defs><radialGradient id=\"a1mee1b\" cx=\".38\" cy=\".3\"
       ${sig(138,506,30,'#1c1941',110)}
     </svg>
   </div>`;
+
+
+  // ---------- XII : héro v2, médailles, carte partagée
+  const FAM={content:{c:'#4f46e5',n:'Contenu',w:9},social:{c:'#e11d48',n:'Lien',w:7},conversation:{c:'#7c3aed',n:'Conversation',w:5},comment:{c:'#0d9488',n:'Commentaire',w:3},tool:{c:'#d97706',n:'Outil',w:1}};
+  const GLY={
+    text:'<text x="0" y="5" text-anchor="middle" font-family="Bricolage Grotesque,system-ui" font-weight="800" font-size="15" fill="#fff">Aa</text>',
+    voice:'<rect x="-4" y="-10" width="8" height="13" rx="4" fill="#fff"/><path d="M-8 0a8 8 0 0 0 16 0M0 8v5" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/>',
+    story:'<circle r="9" fill="none" stroke="#fff" stroke-width="2.4" stroke-dasharray="4 3"/><circle r="3.5" fill="#fff"/>',
+    reel:'<path d="M-5 -8 L9 0 L-5 8 Z" fill="#fff"/>',
+    comment:'<path d="M-9 -6h6v6l-3 6h-3l2-6h-2zM2 -6h6v6l-3 6h-3l2-6h-2z" fill="#fff"/>',
+    conversation:'<circle cx="-6" cy="0" r="4" fill="#fff"/><circle cx="7" cy="0" r="4" fill="#fff"/><path d="M-2 0h5" stroke="#fff" stroke-width="2.6"/>',
+    tool:'<path d="'+STAR(0,0,10)+'" fill="#fff"/>',
+    social:'<rect x="-11" y="-4" width="12" height="8" rx="4" fill="none" stroke="#fff" stroke-width="2.4"/><rect x="-1" y="-4" width="12" height="8" rx="4" fill="none" stroke="#fff" stroke-width="2.4"/>'};
+  const medal=(o)=>{
+    const {mat='gOr',ink='#6b4610',fam='content',gly='text',tier=4,prog=.62,label='100',ghost=false,size=96}=o;
+    const R=34,arc=2*Math.PI*(R+7);
+    const pips=Array.from({length:7},(_,k)=>{const a=(-90+(k-3)*13)*Math.PI/180;return `<circle cx="${(50+(R+1.5)*Math.cos(a)).toFixed(1)}" cy="${(52+(R+1.5)*Math.sin(a)).toFixed(1)}" r="2.1" fill="${k<tier?'#fff':'none'}" stroke="#fff" stroke-opacity=".8" stroke-width="1"/>`}).join('');
+    if(ghost)return `<svg viewBox="0 0 100 112" width="${size}" height="${size*1.12}" aria-hidden="true"><circle cx="50" cy="52" r="${R+2}" fill="var(--surface)" stroke="var(--muted)" stroke-width="2" stroke-dasharray="4 4"/><circle cx="50" cy="52" r="${R-8}" fill="none" stroke="var(--line)" stroke-width="2"/><g transform="translate(50 52)" opacity=".35">${GLY[gly].replace(/#fff/g,'currentColor')}</g><text x="50" y="104" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="10" fill="var(--muted)">−37</text></svg>`;
+    const ribbon=tier>=4?`<path d="M38 74 l-8 30 9-6 5 9 6-30z" fill="${FAM[fam].c}"/><path d="M62 74 l8 30 -9-6 -5 9 -6-30z" fill="${FAM[fam].c}" opacity=".85"/>`:'';
+    return `<svg viewBox="0 0 100 112" width="${size}" height="${size*1.12}" aria-hidden="true">${ribbon}
+      <circle cx="50" cy="52" r="${R+7}" fill="none" stroke="var(--line)" stroke-width="3"/>
+      <circle cx="50" cy="52" r="${R+7}" fill="none" stroke="${FAM[fam].c}" stroke-width="3" stroke-linecap="round" stroke-dasharray="${(arc*prog).toFixed(1)} ${arc.toFixed(1)}" transform="rotate(-90 50 52)"/>
+      <circle cx="50" cy="52" r="${R+2}" fill="url(#${mat})" stroke="#1c1941" stroke-opacity=".3"/>
+      <circle cx="50" cy="52" r="${R-3}" fill="none" stroke="#fff" stroke-opacity=".55" stroke-width="1.4"/>
+      <circle cx="50" cy="52" r="${R-7}" fill="${FAM[fam].c}"/>
+      <circle cx="50" cy="52" r="${R-7}" fill="url(#gSheen)" opacity=".18"/>
+      <g transform="translate(50 50)">${GLY[gly]}</g>
+      ${pips}${sig(50,80.5,13,ink,130,'engraved')}
+      ${tier>=4?`<rect x="36" y="${tier>=4?99:0}" width="28" height="11" rx="3" fill="#1c1941"/><text x="50" y="107" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="7.5" fill="#fff">${label}</text>`:''}</svg>`;
+  };
+  $('medailles').innerHTML=[
+    ['gCopper','#5a2a12','Cuivre','1 message',1,.3,'1'],['gBronze','#4a3010','Bronze','10',2,.5,'10'],['gArgent','#3f4858','Argent','50',3,.8,'50'],['gOr','#6b4610','Or','100',4,.62,'100'],['gPlatine','#2c4459','Platine','500',5,.4,'500'],['gObs','#d7d4f2','Obsidienne','1 000',6,.2,'1 000'],['gPrism','#1c1941','Prisme','5 000',7,1,'5 000']
+  ].map(m=>cell(medal({mat:m[0],ink:m[1],tier:m[4],prog:m[5],label:m[6]}),m[2],m[3]+' messages')).join('')+cell(medal({ghost:true}),'Empreinte','badge éteint');
+  $('medaillesFamilles').innerHTML=[['voice','content','Vocaux'],['story','content','Stories'],['reel','content','Réels'],['comment','comment','Commentaires'],['conversation','conversation','Conversations'],['tool','tool','Réactions'],['social','social','Amitiés']].map(f=>cell(medal({fam:f[1],gly:f[0],mat:'gArgent',ink:'#3f4858',tier:3,prog:.45,size:84}),f[2],FAM[f[1]].n)).join('');
+
+  const chips=Object.values(FAM).map(f=>`<span style="display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:99px;background:color-mix(in srgb,${f.c} 14%,transparent);color:var(--ink);font-size:12.5px;white-space:nowrap"><i style="width:8px;height:8px;border-radius:9px;background:${f.c};display:inline-block"></i>${f.n}<b class="num">+${f.w}</b></span>`).join('');
+  $('heroV2').innerHTML=`<div style="position:relative;overflow:hidden;border-radius:22px;border:1px solid var(--line);background:linear-gradient(135deg,color-mix(in srgb,#a3e635 16%,var(--surface)),var(--surface) 60%);padding:20px;max-width:720px">
+    <svg viewBox="0 0 1024 1024" width="260" height="260" style="position:absolute;right:-40px;top:-30px;opacity:.07" aria-hidden="true">${DASH.map(d=>`<line x1="${d[0]}" y1="${d[2]}" x2="${d[1]}" y2="${d[2]}" stroke="var(--ink)" stroke-width="92" stroke-linecap="round"/>`).join('')}</svg>
+    <div style="position:absolute;right:10px;top:-6px">${`<svg viewBox="0 0 150 150" width="64" height="64" aria-hidden="true">${bird('meeGuide',145,5,1,1)}</svg>`}</div>
+    <div style="display:flex;gap:18px;align-items:center;flex-wrap:wrap">
+      ${ring(39,.18,'#a3e635',92)}
+      <div style="flex:1;min-width:160px"><div class="eyebrow" style="margin:0">Éclat · record 39</div><div style="font:800 26px var(--f-display)">Niveau 39</div><div class="muted" style="font-size:13.5px">648 points avant le niveau 40</div>
+        <div class="bar" style="margin-top:8px"><i style="width:18%"></i><u style="left:99%"></u></div></div>
+      <div style="text-align:center">${blason(0,82,3)}<div style="font-size:12px" class="muted">Murmure III · 166 Gloire pour II</div></div>
+    </div>
+    <div style="margin-top:14px"><div class="eyebrow" style="margin:0 0 6px">Comment gagner</div><div style="display:flex;flex-wrap:wrap;gap:6px">${chips}</div></div>
+    <div style="margin-top:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:10px 12px">
+      ${coinAvers(40)}<div style="flex:1;min-width:180px"><div class="eyebrow" style="margin:0">Comment frapper</div><div style="font-size:13.5px"><b class="num">1 221 points</b> → une Meesh · coûte 2 niveaux · <b style="color:var(--ok)">+100 Gloire</b></div></div>
+      <span class="btn" style="margin:0;padding:9px 16px">Frapper avec Mee et Meo</span></div>
+    <div style="margin-top:12px;display:flex;gap:16px;flex-wrap:wrap;font-size:13px">
+      <span style="display:flex;gap:6px;align-items:center">${coinAvers(20)}<b class="num">1</b> Meesh · Bourse</span>
+      <span style="color:var(--flame);font-weight:600">Flamme 0 j · bonus 0 %</span>
+      <span>Missions <b class="num">0/3</b> · coffre fermé</span></div>
+  </div>`;
+
+  $('carteV2').innerHTML=`<div class="phones"><div class="phone cam"><svg viewBox="0 0 276 560" width="276" height="560" aria-hidden="true">
+      <rect width="276" height="560" fill="url(#face)"/><ellipse cx="138" cy="290" rx="70" ry="88" fill="#3d3560" opacity=".75"/><ellipse cx="138" cy="470" rx="120" ry="70" fill="#3d3560" opacity=".75"/>
+      <g transform="translate(63 18) scale(.75)">${strip(blason(3,200,3))}</g>
+      <text x="138" y="172" text-anchor="middle" font-family="Bricolage Grotesque,system-ui" font-weight="800" font-size="20" fill="#fff">Conteur III</text>
+      ${bird('meeWink',-2,372,.56)}${bird('meoHeart',278,372,.56,1)}
+      <rect x="14" y="478" width="248" height="66" rx="16" fill="#1c1941" fill-opacity=".86"/>
+      ${sig(40,511,30,'#fff',110)}
+      <text x="62" y="505" font-family="Bricolage Grotesque,system-ui" font-weight="800" font-size="13" fill="#fff">Rejoins-moi sur Meeshy</text>
+      <text x="62" y="522" font-family="JetBrains Mono,monospace" font-size="10.5" fill="#c7d2fe">meeshy.me/r/AMANI7</text>
+      <path d="M236 497 c 6 8 11 13 9 21 a9 9 0 0 1 -18 0 c -1 -6 4 -9 5 -14 c 2 3 3 5 4 6 c 1 -4 1 -8 0 -13z" fill="url(#gFlame)"/><text x="236" y="537" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="9" fill="#fff">23 j</text>
+    </svg></div></div>`;
 
   const lvl=s=>Math.min(100,Math.floor(Math.sqrt(s/10)));
   const cost=n=>Math.min(Math.round(1221*Math.pow(1.06,Math.floor((n-1)/10))),4884);

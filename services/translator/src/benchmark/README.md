@@ -5,6 +5,12 @@ de langue, latence p50 / p95 sur messages courts (≤ 160 caractères) et sur pa
 (≥ 400 caractères), échecs du moteur. Le job `translation-benchmark.yml` le lance chaque
 nuit sur NLLB-200 600M, et refuse une régression face à `baselines/<modèle>.json`.
 
+NLLB y génère avec les bornes de la production (`utils/generation_guard.py`, #9309) :
+budget de jetons proportionnel à la source, arrêt quand la sortie boucle. Pour que
+l'emballement se voie, chaque direction rapporte aussi la sortie la plus longue (en
+caractères), le plus grand ratio sortie/source, et le nombre de segments arrêtés au
+budget ou sur une boucle (`—` pour un moteur qui ne le dit pas).
+
 ## Jeux dorés
 
 - **FLORES-200 devtest** : téléchargé par le job, jamais committé (CC-BY-SA 4.0). Chaque

@@ -55,7 +55,7 @@ struct GamePhotoFlowView: View {
             session.close()
         } label: {
             Image(systemName: "xmark")
-                .font(.system(size: 16, weight: .semibold))
+                .font(MeeshyFont.relative(16, weight: .semibold))
                 .foregroundColor(.white)
                 .frame(width: 44, height: 44)
                 .background(Circle().fill(Color.white.opacity(0.18)))
@@ -92,7 +92,7 @@ struct GamePhotoFlowView: View {
                 .frame(width: 120, height: 120)
                 .accessibilityHidden(true)
             Text(String(localized: "game.photo.offer.title", defaultValue: "On immortalise ?", bundle: .main))
-                .font(.system(size: 26, weight: .bold, design: .rounded))
+                .font(MeeshyFont.relative(26, weight: .bold, design: .rounded))
                 .foregroundColor(.white)
             Text(session.moment.title)
                 .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .medium))
@@ -153,7 +153,7 @@ struct GamePhotoFlowView: View {
             HStack(spacing: MeeshySpacing.xl) {
                 PhotosPicker(selection: $pickerItem, matching: .images) {
                     Image(systemName: "photo.on.rectangle")
-                        .font(.system(size: 20, weight: .semibold))
+                        .font(MeeshyFont.relative(20, weight: .semibold))
                         .foregroundColor(.white)
                         .frame(width: 52, height: 52)
                         .background(Circle().fill(Color.white.opacity(0.16)))
@@ -167,7 +167,7 @@ struct GamePhotoFlowView: View {
                 } label: {
                     Circle()
                         .strokeBorder(Color.white, lineWidth: 4)
-                        .background(Circle().fill(Color.white.opacity(phase == .live ? 0.9 : 0.25)).padding(6))
+                        .background(Circle().fill(Color.white.opacity(phase == .live ? 0.9 : 0.25)).padding(MeeshySpacing.xsPlus))
                         .frame(width: 72, height: 72)
                 }
                 .buttonStyle(.plain)
@@ -180,7 +180,7 @@ struct GamePhotoFlowView: View {
                     Task { await session.chooseCard() }
                 } label: {
                     Image(systemName: "rectangle.portrait")
-                        .font(.system(size: 20, weight: .semibold))
+                        .font(MeeshyFont.relative(20, weight: .semibold))
                         .foregroundColor(.white)
                         .frame(width: 52, height: 52)
                         .background(Circle().fill(Color.white.opacity(0.16)))
@@ -220,7 +220,7 @@ struct GamePhotoFlowView: View {
                     overlay(size: size, background: strikeBackground, strike: session.strike)
                         .animation(.spring(response: 0.45, dampingFraction: 0.55), value: session.strike)
                     Text(String(localized: "game.mint.tchak", defaultValue: "Tchak !", bundle: .main))
-                        .font(.system(size: 34, weight: .heavy, design: .rounded))
+                        .font(MeeshyFont.relative(34, weight: .heavy, design: .rounded))
                         .foregroundColor(MeeshyColors.warning)
                         .opacity(session.strike)
                         .offset(y: size.height * 0.12)
@@ -296,7 +296,7 @@ struct GamePhotoFlowView: View {
             action()
         } label: {
             VStack(spacing: 4) {
-                Image(systemName: symbol).font(.system(size: 18, weight: .semibold))
+                Image(systemName: symbol).font(MeeshyFont.relative(18, weight: .semibold))
                 Text(title).font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
             }
             .foregroundColor(.white)

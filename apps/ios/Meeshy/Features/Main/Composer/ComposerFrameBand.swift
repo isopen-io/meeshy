@@ -77,11 +77,11 @@ struct ComposerFrameBand: View {
     }
 
     private func swatch(_ fond: StoryBackdrop) -> AnyShapeStyle {
-        guard let hex = fond.solidHex else {
+        guard let couleur = fond.solidColor else {
             return AnyShapeStyle(LinearGradient(colors: [Color(hex: "FB923C"), MeeshyColors.indigo600],
                                                 startPoint: .topLeading, endPoint: .bottomTrailing))
         }
-        return AnyShapeStyle(Color(hex: hex))
+        return AnyShapeStyle(couleur)
     }
 }
 

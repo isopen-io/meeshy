@@ -1,11 +1,14 @@
 import { ONBOARDING_STEPS } from '@meeshy/shared/utils/game/guide';
 
+import { suspendForGameCatalog } from '@/lib/i18n-game-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { Glyph } from '@/components/glyph';
 import { GameBird } from '@/components/game';
 import { GlassBack } from '@/components/glass-surface';
 import { GAME_BRAND, GAME_CARD, GAME_INK, GAME_INK_2 } from '@/components/game-surface';
 import { guideBirds } from '@/lib/game-guide/card';
-import { GAME_RULES, stepCopy } from '@/lib/view/game-guide-copy';
+import { formatCount, gameText } from '@/lib/view/game-copy';
+import { gameRules, stepCopy } from '@/lib/view/game-guide-copy';
 import { Link } from '@/routes/route-table';
 
 /**
@@ -30,7 +33,7 @@ function StepCard({ step }: { readonly step: (typeof ONBOARDING_STEPS)[number] }
       </div>
       <div className="flex min-w-0 flex-col gap-1">
         <p className="text-check font-semibold uppercase tracking-wide" style={{ color: GAME_INK_2 }}>
-          Étape {step.index} sur {ONBOARDING_STEPS.length}
+          {gameText('game.guide.step_of', { index: formatCount(step.index), total: formatCount(ONBOARDING_STEPS.length) })}
         </p>
         <p className="text-body font-bold" style={{ color: GAME_INK }}>
           {copy.what}
@@ -52,17 +55,17 @@ export function RulesBody() {
       <section className="flex items-end gap-2 px-1">
         <GameBird bird="meeGuide" size={88} />
         <p className="flex-1 pb-2 text-body" style={{ color: GAME_INK }}>
-          Huit règles, et tout le jeu tient dedans. Meo les explique, Mee te montre le geste.
+          {gameText('game.rules.intro')}
         </p>
         <GameBird bird="meoGuide" size={88} flip />
       </section>
 
       <section aria-labelledby="regles-titre" className="flex flex-col gap-2">
         <h2 id="regles-titre" className="text-title font-bold" style={{ color: GAME_INK }}>
-          Les règles en une page
+          {gameText('game.rules.section_rules')}
         </h2>
         <ol className="flex flex-col gap-2">
-          {GAME_RULES.map((rule) => (
+          {gameRules().map((rule) => (
             <li key={rule.index} className="flex items-start gap-3 rounded-card px-3 py-3" style={{ backgroundColor: GAME_CARD }}>
               <span
                 aria-hidden="true"
@@ -86,7 +89,7 @@ export function RulesBody() {
 
       <section aria-labelledby="etapes-titre" className="flex flex-col gap-2">
         <h2 id="etapes-titre" className="text-title font-bold" style={{ color: GAME_INK }}>
-          Les sept étapes
+          {gameText('game.rules.section_steps')}
         </h2>
         <ol className="flex flex-col gap-2">
           {ONBOARDING_STEPS.map((step) => (
@@ -99,17 +102,18 @@ export function RulesBody() {
 }
 
 export default function ProgressionRulesScreen() {
+  suspendForGameCatalog(currentInterfaceLanguage());
   return (
     <div className="flex h-dvh flex-col overflow-hidden pt-safe">
       <header className="glass z-10 shrink-0">
         <div className="flex items-center gap-2 px-4 py-2">
-          <Link to="progression" className="grid size-11 shrink-0 place-items-center" style={{ color: GAME_BRAND }} aria-label="Retour à la progression">
-            <GlassBack label="Retour à la progression">
+          <Link to="progression" className="grid size-11 shrink-0 place-items-center" style={{ color: GAME_BRAND }} aria-label={gameText('game.page.back')}>
+            <GlassBack label={gameText('game.page.back')}>
               <Glyph name="caretLeft" size={22} className="rtl:-scale-x-100" />
             </GlassBack>
           </Link>
           <h1 className="flex-1 truncate text-title font-bold" style={{ color: GAME_INK }}>
-            Comment ça marche
+            {gameText('game.rules.page_title')}
           </h1>
         </div>
       </header>

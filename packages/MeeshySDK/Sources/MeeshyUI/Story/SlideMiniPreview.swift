@@ -73,11 +73,30 @@ public struct SlideMiniPreview: View {
     let drawingData: Data?
     let loadedImages: [String: UIImage]
     let index: Int
+    /// **Les vignettes, quand l'hôte en fournit un cache** (#6922). Sans lui,
+    /// chaque tuile peignait le bitmap ENTIER de sa scène dans quelques points.
+    /// Optionnel : un hôte qui ne monte qu'une tuile n'a rien à y gagner.
+    let thumbnails: SceneThumbnailCache?
+    @Environment(\.displayScale) private var displayScale
 
     public init(effects: StoryEffects, bgImage: UIImage?, drawingData: Data?,
-                loadedImages: [String: UIImage], index: Int) {
+                loadedImages: [String: UIImage], index: Int,
+                thumbnails: SceneThumbnailCache? = nil) {
         self.effects = effects; self.bgImage = bgImage; self.drawingData = drawingData
         self.loadedImages = loadedImages; self.index = index
+        self.thumbnails = thumbnails
+    }
+
+    /// L'image à peindre dans `tile` points : sa vignette si l'hôte fournit un
+    /// cache, l'image elle-même sinon.
+    private func shown(_ image: UIImage, filling tile: CGSize) -> UIImage {
+        guard let thumbnails else { return image }
+        let pixels = CGSize(width: image.size.width * image.scale,
+                            height: image.size.height * image.scale)
+        let plafond = SceneImageDownsampling.fillMaxPixelSize(source: pixels, tile: tile,
+                                                              scale: displayScale)
+        guard plafond > 0 else { return image }
+        return thumbnails.thumbnail(for: image, maxPixelSize: plafond)
     }
 
     public var body: some View {
@@ -130,7 +149,7 @@ public struct SlideMiniPreview: View {
 
         // Layer 1: User-picked background image
         if let image = bgImage {
-            Image(uiImage: image)
+            Image(uiImage: shown(image, filling: size))
                 .resizable()
                 .scaledToFill()
                 .frame(width: size.width, height: size.height)
@@ -152,7 +171,8 @@ public struct SlideMiniPreview: View {
         // de fond + overlays — désync avec le canvas qui joue la vidéo.
         if let bgMedia = effects.resolvedBackgroundMedia,
            let img = loadedImages[bgMedia.id] {
-            Image(uiImage: img)
+            let zoom = max(1, CGFloat(bgMedia.scale))
+            Image(uiImage: shown(img, filling: CGSize(width: size.width * zoom, height: size.height * zoom)))
                 .resizable()
                 .scaledToFill()
                 .frame(width: size.width, height: size.height)
@@ -202,11 +222,12 @@ public struct SlideMiniPreview: View {
             // média ~moitié trop petit et au mauvais ratio vs reader/preview.
             let base = StoryMediaLayer.baseMediaDesignSize(aspectRatio: media.aspectRatio)
             let factor = size.width / CanvasGeometry.designWidth
-            Image(uiImage: img)
+            let cadre = CGSize(width: base.width * factor * CGFloat(media.scale),
+                               height: base.height * factor * CGFloat(media.scale))
+            Image(uiImage: shown(img, filling: cadre))
                 .resizable()
                 .scaledToFill()
-                .frame(width: base.width * factor * CGFloat(media.scale),
-                       height: base.height * factor * CGFloat(media.scale))
+                .frame(width: cadre.width, height: cadre.height)
                 .clipped()
                 .rotationEffect(.degrees(Double(media.rotation)))
                 .position(x: CGFloat(media.x) * size.width,

@@ -53,11 +53,28 @@ public extension StoryComposerViewModel {
 
     /// Le bitmap montré d'une IMAGE suit sa borne — recoupé depuis le fichier
     /// d'origine, jamais depuis le bitmap déjà recadré.
+    ///
+    /// **Décodé à la taille PUBLIÉE du cadre, jamais pleine taille** (#6922) :
+    /// la source se lit juste assez grande pour que le cadre sorte à
+    /// `workingMaxPixelSize` — ni un pixel de plus en mémoire, ni un de moins
+    /// à l'envoi.
     func refreshMediaCropPreview(id: String) {
         guard let media = currentEffects.mediaObjects?.first(where: { $0.id == id }),
               media.kind == .image,
               let adresse = media.mediaURL.flatMap(URL.init(string:)), adresse.isFileURL,
-              let source = UIImage(contentsOfFile: adresse.path) else { return }
-        registerLoadedImage(media.crop.map { MediaCropBitmap.cropped(source, to: $0) } ?? source, for: id)
+              let source = SceneImageDownsampling.image(
+                fileAt: adresse, maxPixelSize: Self.cropDecodeMaxPixelSize(media.crop, fileAt: adresse))
+        else { return }
+        let montre = media.crop.map { MediaCropBitmap.cropped(source, to: $0) } ?? source
+        registerLoadedImage(SceneImageDownsampling.downsampled(
+            montre, maxPixelSize: SceneImageDownsampling.workingMaxPixelSize), for: id)
+    }
+
+    private static func cropDecodeMaxPixelSize(_ crop: MediaCropRect?, fileAt adresse: URL) -> CGFloat {
+        let plafond = SceneImageDownsampling.workingMaxPixelSize
+        guard let crop, let taille = SceneImageDownsampling.pixelSize(fileAt: adresse) else { return plafond }
+        let borne = MediaCropRule.clamped(crop)
+        return SceneImageDownsampling.decodeMaxPixelSize(
+            forCrop: CGSize(width: borne.width, height: borne.height), sourcePixelSize: taille, cap: plafond)
     }
 }

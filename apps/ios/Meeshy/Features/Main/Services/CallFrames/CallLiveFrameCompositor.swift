@@ -212,16 +212,12 @@ nonisolated final class CallLiveFrameCompositor: CallLiveFrameCompositing, @unch
             .cropped(to: slot.mask.extent)
     }
 
-    /// Les seuls pixels ENTIERS d'une image : un bord fractionnaire (une prise déjà
-    /// recadrée) est en partie transparent, et l'étendre ferait un liseré translucide.
+    /// La vidéo est opaque par nature : un bord en partie couvert (une prise déjà
+    /// recadrée au demi-pixel) reprend sa couleur pleine avant d'être prolongé — sinon
+    /// le prolongement recopierait sa transparence, un liseré translucide au bord de la case.
     static func opaqueCore(_ image: CIImage) -> CIImage {
-        let etendue = image.extent
-        guard !etendue.isInfinite, !etendue.isNull else { return image }
-        let minX = etendue.minX.rounded(.up), minY = etendue.minY.rounded(.up)
-        let coeur = CGRect(x: minX, y: minY, width: etendue.maxX.rounded(.down) - minX,
-                           height: etendue.maxY.rounded(.down) - minY)
-        guard coeur.width >= 1, coeur.height >= 1 else { return image }
-        return image.cropped(to: coeur)
+        guard !image.extent.isInfinite, !image.extent.isNull else { return image }
+        return image.unpremultiplyingAlpha().settingAlphaOne(in: image.extent)
     }
 
     /// Le ton d'une case (§ 4.2 de la spec des cadres) par les filtres intégrés de Core Image —

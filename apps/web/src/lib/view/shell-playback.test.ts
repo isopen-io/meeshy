@@ -412,3 +412,39 @@ describe('la coque gare la lecture et rend « Lecture » à la page (#9394)', ()
     expect(hote.appels).toEqual([{ plugin: 'MeeshyPlayback', methode: 'releasePlayback' }]);
   });
 });
+
+describe('le son d’un appel ne tient pas la lecture, comme dans Chrome Android (#9455)', () => {
+  const fluxEnDirect = (): HTMLMediaElement => {
+    const pair = media('audio');
+    Object.defineProperty(pair, 'srcObject', { value: {}, configurable: true });
+    return pair;
+  };
+
+  test('le son d’un pair qui joue ne pose ni service ni notification de lecture', () => {
+    const prise = priseComptee();
+    const arreter = holdWhileAudioPlays(document, prise);
+    const pair = fluxEnDirect();
+    signal(pair, 'playing');
+    signal(pair, 'volumechange');
+    signal(pair, 'pause');
+    expect(prise.journal).toEqual([]);
+    arreter();
+    pair.remove();
+  });
+
+  test('un vocal écouté pendant l’appel tient la lecture, le son du pair n’y change rien', () => {
+    const prise = priseComptee();
+    const arreter = holdWhileAudioPlays(document, prise);
+    const pair = fluxEnDirect();
+    const vocal = media('audio');
+    signal(pair, 'playing');
+    signal(vocal, 'playing');
+    signal(pair, 'pause');
+    expect(prise.journal).toEqual(['hold']);
+    signal(vocal, 'pause');
+    expect(prise.journal).toEqual(['hold', 'release']);
+    arreter();
+    pair.remove();
+    vocal.remove();
+  });
+});

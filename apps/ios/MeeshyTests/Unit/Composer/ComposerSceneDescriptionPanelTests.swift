@@ -1,4 +1,5 @@
 import XCTest
+import MeeshyUI
 @testable import Meeshy
 
 /// #4742 — **la description se lit sous la scène et se replie.**
@@ -102,5 +103,96 @@ final class ComposerSceneDescriptionPanelTests: XCTestCase {
         XCTAssertTrue(
             compact.contains("funcopenSceneDescriptionEditing(){sceneDescriptionCollapsed=falsesceneDescriptionEditingRequest&+=1}"),
             "L'ordre compte : déplier AVANT de demander le focus, et les deux au même endroit.")
+    }
+
+    // MARK: - #5008 · Une flèche DISCRÈTE, à l'échelle de la scène
+
+    /// **La flèche se dimensionne depuis la taille RENDUE de la scène**, jamais
+    /// d'un littéral (directive porteur 2026-09-03 : « proportionnelle à sa
+    /// taille affichée »). Éprouvé à DEUX tailles de scène : une carte plus
+    /// étroite — clavier levé, iPad, scène 1:1 — porte une flèche plus petite,
+    /// dans la même proportion.
+    func test_laFleche_seDimensionneAvecLaScene() {
+        let large = ComposerSceneDescriptionPanel.chevronGlyphSize(sceneWidth: 402)
+        let etroite = ComposerSceneDescriptionPanel.chevronGlyphSize(sceneWidth: 320)
+        XCTAssertGreaterThan(large, etroite, "une scène plus grande porte une flèche plus grande")
+        XCTAssertEqual(large / etroite, 402.0 / 320.0, accuracy: 0.001,
+                       "proportionnelle, pas seulement croissante")
+    }
+
+    /// **Discrète ne veut pas dire illisible ni envahissante** : la proportion
+    /// est bornée des deux côtés, pour une vignette comme pour un iPad.
+    func test_laFleche_resteBorneeAuxExtremes() {
+        let minuscule = ComposerSceneDescriptionPanel.chevronGlyphSize(sceneWidth: 40)
+        let immense = ComposerSceneDescriptionPanel.chevronGlyphSize(sceneWidth: 4_000)
+        XCTAssertGreaterThan(minuscule, 0)
+        XCTAssertEqual(minuscule, ComposerSceneDescriptionPanel.chevronGlyphSize(sceneWidth: 80),
+                       "sous le plancher, la taille ne descend plus")
+        XCTAssertEqual(immense, ComposerSceneDescriptionPanel.chevronGlyphSize(sceneWidth: 3_000),
+                       "au-dessus du plafond, la taille ne monte plus")
+        XCTAssertLessThan(immense, MeeshyControlSize.tapTarget / 2,
+                          "le DESSIN reste discret : moins de la moitié de la cible")
+    }
+
+    /// **La cible tactile reste ≥ 44 pt même si le dessin rétrécit** (dimension
+    /// 5 : discret ne veut pas dire petit à toucher).
+    func test_laCibleTactile_resteDe44ptQuelleQueSoitLaScene() {
+        XCTAssertGreaterThanOrEqual(ComposerSceneDescriptionPanel.chevronTapTarget, MeeshyControlSize.tapTarget)
+    }
+
+    /// **Aucune bulle** — ni sous la flèche, ni sous la légende ; déplié, le
+    /// texte SEUL sur un léger flou de la scène. `.ultraThinMaterial` existe
+    /// depuis iOS 15 : le flou ne demande aucune branche de version.
+    func test_aucuneBulle_leTexteSeLitSurUnFlouDeLaScene() throws {
+        let code = AppSourceGuard.stripComments(try AppSourceGuard.unit(
+            "Meeshy/Features/Main/Composer/ComposerSceneDescriptionPanel.swift"))
+        let compact = code.components(separatedBy: .whitespacesAndNewlines).joined()
+        XCTAssertTrue(compact.contains("structComposerSceneDescriptionPanel"), "le fichier lu n'est pas le volet")
+        XCTAssertFalse(compact.contains(".adaptiveGlass("),
+                       "aucune capsule de verre : ni la flèche ni la légende ne portent de bulle (#5008)")
+        XCTAssertFalse(compact.contains("Capsule()"), "la pastille de la flèche est partie (#5008)")
+        XCTAssertTrue(compact.contains(".ultraThinMaterial"),
+                      "le texte se lit sur un flou LÉGER de la scène, jamais sur un voile opaque")
+        XCTAssertTrue(compact.contains("chevronGlyphSize(sceneWidth:"),
+                      "la flèche se dessine depuis la règle, jamais d'un littéral")
+    }
+
+    // MARK: - #9450 · La légende tient 4,5:1 sur toute la palette
+
+    /// **Le voile et l'encre viennent de la loi, mesurée par le SDK**
+    /// (`SceneTextLegibilityTests` balaye la palette). Ces gardes vérifient que
+    /// le volet et le calque PEIGNENT ce que le témoin mesure : un voile de la
+    /// polarité opposée à l'encre, à l'opacité de la loi, et l'encre de scène
+    /// pour l'invite comme pour le texte — plus jamais l'encre secondaire, qui
+    /// mesurait 2,71:1 sur le rose `FF2E63`.
+    func test_laLegende_peintLeVoileEtLEncreQueLeTemoinMesure() throws {
+        let volet = AppSourceGuard.stripComments(try AppSourceGuard.unit(
+            "Meeshy/Features/Main/Composer/ComposerSceneDescriptionPanel.swift"))
+            .components(separatedBy: .whitespacesAndNewlines).joined()
+        let calque = AppSourceGuard.stripComments(try AppSourceGuard.unit(
+            "Meeshy/Features/Main/Composer/ComposerDescriptionLayer.swift"))
+            .components(separatedBy: .whitespacesAndNewlines).joined()
+        XCTAssertTrue(volet.contains("structComposerSceneDescriptionPanel"), "le fichier lu n'est pas le volet")
+        XCTAssertTrue(calque.contains("structComposerDescriptionLayer"), "le fichier lu n'est pas le calque")
+        XCTAssertTrue(volet.contains("CanvasChromeScheme.legibilityHalo(for:chromeScheme)"),
+                      "le voile prend la polarité opposée à l'encre, depuis la loi")
+        XCTAssertTrue(volet.contains(".opacity(CanvasChromeScheme.sceneTextVeilOpacity)"),
+                      "l'opacité du voile est celle que le témoin de palette mesure")
+        XCTAssertTrue(calque.contains("CanvasChromeScheme.sceneTextInk(for:colorScheme)"),
+                      "le calque écrit de l'encre de scène")
+        XCTAssertFalse(calque.contains("textSecondary("),
+                       "l'invite en encre secondaire mesurait 2,71:1 sur le rose de la palette (#9450)")
+        XCTAssertFalse(calque.contains("mentionColor(isDark:"),
+                       "les teintes indigo des mentions tombent à 2,1:1 sur la scène — l'encre de scène les porte")
+    }
+
+    /// **Le voile atteint sa pleine opacité à la fin de la marge du texte**, pas
+    /// à une fraction du volet : à 18 % d'une scène de 402 pt, le fondu mordait
+    /// 72 pt sur des lignes qui commencent à 20 pt.
+    func test_leVoile_estPleinDesLaFinDeLaMarge() {
+        XCTAssertEqual(ComposerSceneDescriptionPanel.debutOpaque(fondu: 20, longueur: 400), 0.05, accuracy: 0.0001)
+        XCTAssertEqual(ComposerSceneDescriptionPanel.debutOpaque(fondu: 20, longueur: 30), 0.5,
+                       "les deux fondus ne se croisent jamais")
+        XCTAssertEqual(ComposerSceneDescriptionPanel.debutOpaque(fondu: 20, longueur: 0), 0.5)
     }
 }

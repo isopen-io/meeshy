@@ -2,6 +2,13 @@ import SwiftUI
 import Combine
 import MeeshySDK
 
+/// Ce qu'il faut pour défaire UN geste optimiste : la charge d'avant, et la génération de
+/// lecture servie à laquelle il a commencé (#9383).
+struct GestureUndo {
+    let before: APIEngagementProgress
+    let generation: Int
+}
+
 /// L'écran « Progression » (#5698) — badges, série et niveau de l'utilisateur,
 /// lus depuis `GET /me/engagement` et DÉRIVÉS par la loi partagée
 /// (`EngagementProgressResolver`, miroir de `packages/shared/utils/engagement-progress.ts`).
@@ -70,7 +77,14 @@ final class ProgressionViewModel: ObservableObject {
     /// Les gestes du jeu en vol : tant qu'il y en a un, la lecture montrée est
     /// l'optimiste — le guide et les propositions de photo attendent qu'il soit
     /// réglé pour célébrer (un geste refusé ne se célèbre pas).
-    var gesturesInFlight = 0
+    @Published private(set) var gesturesInFlight = 0
+    /// Une écriture du cache demandée PENDANT un geste attend qu'il soit réglé : ce qui est
+    /// affiché alors est l'optimiste, et le cache ne garde jamais une valeur que le geste,
+    /// s'il échoue, rendra fausse (#9383).
+    private var persistDeferred = false
+    /// Incrémenté à chaque lecture SERVIE qui remplace la charge : un retour arrière ne
+    /// défait que ce que son geste a changé, jamais une lecture arrivée entre-temps.
+    private var snapshotGeneration = 0
     var celebrations = 0
     /// Une clé d'idempotence par INTENTION (frappe, coffre, gel, rallumage, changement de mission) ;
     /// elle ne se renouvelle qu'après un SUCCÈS.
@@ -143,10 +157,7 @@ final class ProgressionViewModel: ObservableObject {
         }
         let apply: @MainActor @Sendable ([APIEngagementProgress]) -> Void = { [weak self] snapshots in
             guard let self, let snapshot = snapshots.first else { return }
-            let resolu = EngagementProgressResolver.resolve(snapshot)
-            self.snapshot = snapshot
-            self.progress = resolu
-            self.game = snapshot.game
+            let resolu = self.adopt(snapshot)
             self.observeGame()
             // Les rappels de série se REPLANIFIENT à chaque lecture de la
             // progression (#5902) : c'est le seul moment où l'on connaît à la
@@ -192,6 +203,7 @@ final class ProgressionViewModel: ObservableObject {
             await load(forceNetwork: true)
         } catch {
             restore(before)
+            if GameService.refusal(of: error) == .requestIdConflict { mintRequestId = UUID().uuidString }
             mintError = String(
                 localized: "progression.meesh.mint_error",
                 defaultValue: "La frappe n'a pas abouti — réessayez",
@@ -214,16 +226,30 @@ final class ProgressionViewModel: ObservableObject {
 
     /// Capture l'instantané, applique la mise à jour optimiste, annonce le geste en vol.
     /// Rend l'instantané À RESTAURER — `nil` quand il n'y a pas de bloc `game` (ancien serveur).
-    func beginGesture(_ apply: (GameState) -> GameState) -> APIEngagementProgress? {
+    func beginGesture(_ apply: (GameState) -> GameState) -> GestureUndo? {
         gesturesInFlight += 1
         guard let snapshot, let game = snapshot.game else { return nil }
         commit(apply(GameState(game: game, meesh: snapshot.meesh)), over: snapshot)
-        return snapshot
+        return GestureUndo(before: snapshot, generation: snapshotGeneration)
     }
 
     func endGesture() {
         gesturesInFlight = max(0, gesturesInFlight - 1)
         observeGame()
+        guard isSettled, persistDeferred else { return }
+        persistDeferred = false
+        persistSnapshot()
+    }
+
+    /// Pose une lecture SERVIE (réseau ou cache) comme la charge affichée.
+    @discardableResult
+    func adopt(_ served: APIEngagementProgress) -> EngagementProgress {
+        let resolved = EngagementProgressResolver.resolve(served)
+        snapshotGeneration += 1
+        snapshot = served
+        progress = resolved
+        game = served.game
+        return resolved
     }
 
     /// Pose un état du jeu dans la charge servie et republie ce qui en est dérivé.
@@ -235,11 +261,15 @@ final class ProgressionViewModel: ObservableObject {
         game = next.game
     }
 
-    func restore(_ previous: APIEngagementProgress?) {
-        guard let previous else { return }
-        snapshot = previous
-        progress = EngagementProgressResolver.resolve(previous)
-        game = previous.game
+    /// Défait CE QUE LE GESTE a changé, et rien d'autre : une lecture servie arrivée entre-temps
+    /// est la vérité du serveur, elle reste ; les clés du guide vues pendant le vol restent vues
+    /// (elles ne dépendent pas du geste).
+    func restore(_ undo: GestureUndo?) {
+        guard let undo, undo.generation == snapshotGeneration else { return }
+        let seenSince = snapshot?.game?.guideSeen ?? []
+        guard let game = undo.before.game else { return }
+        let state = GameOptimistic.withGuideSeen(GameState(game: game, meesh: undo.before.meesh), keys: seenSince)
+        commit(state, over: undo.before)
     }
 
     /// Ce que la prochaine frappe éteindrait, calculé sur les compteurs servis avec le prix de CETTE
@@ -278,6 +308,10 @@ final class ProgressionViewModel: ObservableObject {
     }
 
     func persistSnapshot() {
+        guard isSettled else {
+            persistDeferred = true
+            return
+        }
         guard let snapshot else { return }
         let key = cacheKey
         Task {

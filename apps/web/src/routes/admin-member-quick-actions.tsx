@@ -1,3 +1,5 @@
+import { AdminButton } from '@/components/admin/button';
+import { AdminFormStatus } from '@/components/admin/form';
 import type { AdminDeps } from '@/lib/api/admin';
 import type { AdminUserDetail } from '@/lib/api/admin-user-detail';
 import {
@@ -11,7 +13,7 @@ import { apiDeps } from '@/lib/api/deps';
 import { translateAdmin, type AdminPlainCatalogKey, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 import { withContactProof } from './admin-member-contact';
-import { GLASS_CARD_CLASS, GLASS_CARD_EDGE, INK2, SectionButton, useMemberWrite } from './admin-member-parts';
+import { GLASS_CARD_CLASS, GLASS_CARD_EDGE, useMemberWrite } from './admin-member-parts';
 
 /**
  * **LES ACTIONS EN UN CLIC** (#8289, demande porteur) — ce qu'un
@@ -84,7 +86,7 @@ export function AdminMemberQuickActions({
       {visibles.length === 0 ? null : (
         <div className="flex flex-wrap gap-2">
           {visibles.map((action) => (
-            <SectionButton
+            <AdminButton
               key={action.id}
               tone={action.id === 'activate' ? 'primary' : 'secondary'}
               disabled={etat.phase === 'saving'}
@@ -92,19 +94,15 @@ export function AdminMemberQuickActions({
               onClick={() => lancer(action)}
             >
               {translateAdmin(language, action.label)}
-            </SectionButton>
+            </AdminButton>
           ))}
         </div>
       )}
-      <p
-        role="status"
-        aria-live="polite"
-        data-admin-quick-state={etat.phase}
-        className="text-caption"
-        style={{ color: etat.phase === 'error' ? 'var(--color-danger)' : etat.phase === 'saved' ? 'var(--color-success)' : INK2 }}
-      >
-        {etat.phase === 'saved' || etat.phase === 'error' ? etat.message : ''}
-      </p>
+      <AdminFormStatus
+        phase={etat.phase}
+        text={etat.phase === 'saved' || etat.phase === 'error' ? etat.message : ''}
+        data={{ 'data-admin-quick-state': etat.phase }}
+      />
     </section>
   );
 }

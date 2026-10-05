@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from .engines import Translator
+from utils.generation_guard import GenerationOutcome
 from .golden import GoldenPair
 from .latency import LatencySummary, summarize_latencies
 from .scoring import chrf
@@ -34,6 +35,10 @@ class DirectionResult:
     short: LatencySummary
     long: LatencySummary
     failures: int
+    output_chars_max: int | None = None
+    output_ratio_max: float | None = None
+    budget_hits: int | None = None
+    loop_stops: int | None = None
 
     @property
     def label(self) -> str:
@@ -52,6 +57,7 @@ class _Outcome:
     hypothesis: str
     duration_ms: float
     failed: bool
+    generation: GenerationOutcome | None
 
 
 def _translate(translator: Translator, pair: GoldenPair, clock: Callable[[], float]) -> _Outcome:
@@ -65,7 +71,9 @@ def _translate(translator: Translator, pair: GoldenPair, clock: Callable[[], flo
         )
         hypothesis = ""
         failed = True
-    return _Outcome(pair, hypothesis, (clock() - started) * 1000, failed)
+    duration_ms = (clock() - started) * 1000
+    generation = None if failed else getattr(translator, "last_generation", None)
+    return _Outcome(pair, hypothesis, duration_ms, failed, generation)
 
 
 def _warm_up(translator: Translator, pair: GoldenPair) -> None:
@@ -81,7 +89,25 @@ def _latency(outcomes: Sequence[_Outcome], keep: Callable[[int], bool]) -> Laten
     )
 
 
+def _longest_output(outcomes: Sequence[_Outcome]) -> tuple[int | None, float | None]:
+    produced = [o for o in outcomes if not o.failed]
+    if not produced:
+        return None, None
+    chars = max(len(o.hypothesis) for o in produced)
+    ratio = max(len(o.hypothesis) / max(1, len(o.pair.source)) for o in produced)
+    return chars, ratio
+
+
+def _cut_generations(outcomes: Sequence[_Outcome]) -> tuple[int | None, int | None]:
+    reported = [o.generation for o in outcomes if o.generation is not None]
+    if not reported:
+        return None, None
+    return sum(g.hit_budget for g in reported), sum(g.looped for g in reported)
+
+
 def _direction(outcomes: Sequence[_Outcome], comet: Scorer | None) -> DirectionResult:
+    output_chars_max, output_ratio_max = _longest_output(outcomes)
+    budget_hits, loop_stops = _cut_generations(outcomes)
     sources = [o.pair.source for o in outcomes]
     hypotheses = [o.hypothesis for o in outcomes]
     references = [o.pair.reference for o in outcomes]
@@ -94,6 +120,10 @@ def _direction(outcomes: Sequence[_Outcome], comet: Scorer | None) -> DirectionR
         short=_latency(outcomes, lambda size: size <= SHORT_MAX_CHARS),
         long=_latency(outcomes, lambda size: size >= LONG_MIN_CHARS),
         failures=sum(o.failed for o in outcomes),
+        output_chars_max=output_chars_max,
+        output_ratio_max=output_ratio_max,
+        budget_hits=budget_hits,
+        loop_stops=loop_stops,
     )
 
 

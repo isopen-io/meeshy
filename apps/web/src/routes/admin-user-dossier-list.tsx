@@ -1,15 +1,14 @@
 import type { ReactNode } from 'react';
 
 import { AdminResponsiveRows, type AdminColumn } from '@/components/admin/responsive-rows';
-import { AdminDeniedInline, AdminEmptyState, AdminErrorState } from '@/components/admin/states';
+import { AdminDeniedInline, AdminEmptyState, AdminErrorState, AdminSkeleton } from '@/components/admin/states';
 import type { AdminTarget } from '@/lib/admin/admin-routes';
 import { ADMIN_DOSSIER_PAGE_SIZE, type AdminDossierPage } from '@/lib/api/admin-user-dossier';
 import type { ApiResult } from '@/lib/api/http';
 import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { useOnline } from '@/lib/net/online';
 
-import { AdminSkeleton } from './admin-parts';
-import { AdminPager } from './admin-table';
+import { AdminPager } from '@/components/admin/pager';
 
 /**
  * **LES ÉTATS ET LA LISTE D'UN ONGLET DE DOSSIER** (#7845, #8876) — le même dessin que les listes

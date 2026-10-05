@@ -1,5 +1,6 @@
 import Foundation
 import UIKit
+import MeeshyUI
 import os
 
 /// Le magasin des brouillons du meuble (#8848).
@@ -179,7 +180,7 @@ nonisolated final class ComposerAutosaveStore: ComposerAutosaveProviding, @unche
         let fileNames = ((try? fileManager.contentsOfDirectory(atPath: media.path)) ?? [])
             .filter { $0.hasPrefix(ComposerAutosaveFileName.sourcePrefix) }
 
-        let urls: [String: URL] = fileNames.reduce(into: [:]) { carte, nom in
+        let copiees: [String: URL] = fileNames.reduce(into: [:]) { carte, nom in
             let source = media.appendingPathComponent(nom)
             guard fileManager.fileExists(atPath: source.path) else { return }
             let copie = session.appendingPathComponent(nom)
@@ -187,8 +188,22 @@ nonisolated final class ComposerAutosaveStore: ComposerAutosaveProviding, @unche
                 carte[nom] = copie
             }
         }
+        // Une adresse de scène écrite comme ALIAS (#9420) retrouve sa propre
+        // copie de session : la scène et la pièce jointe gardent deux adresses,
+        // comme avant la sauvegarde, pour un seul fichier dans le brouillon.
+        let urls: [String: URL] = (snapshot.fileAliases ?? [:]).reduce(into: copiees) { carte, alias in
+            guard carte[alias.key] == nil, let canon = carte[alias.value] else { return }
+            let copie = session.appendingPathComponent(alias.key)
+            if (try? fileManager.copyItem(at: canon, to: copie)) != nil {
+                carte[alias.key] = copie
+            }
+        }
+        // À la taille PUBLIÉE (#6922) : un brouillon écrit avant le plafond
+        // tient encore ses photos pleine taille, et les relire entières
+        // rendrait à la reprise la mémoire que la pose ne prend plus.
         let bitmaps: [String: UIImage] = bitmapFiles.reduce(into: [:]) { carte, nom in
-            carte[nom] = UIImage(contentsOfFile: media.appendingPathComponent(nom).path)
+            carte[nom] = SceneImageDownsampling.image(fileAt: media.appendingPathComponent(nom),
+                                                      maxPixelSize: SceneImageDownsampling.workingMaxPixelSize)
         }
         let blobs: [String: Data] = blobFiles.reduce(into: [:]) { carte, nom in
             carte[nom] = try? Data(contentsOf: media.appendingPathComponent(nom))

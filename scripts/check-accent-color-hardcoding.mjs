@@ -245,8 +245,26 @@
 // fond clair (mesuré : 1,6:1). Rien à voir avec `accentColor`/`colorPalette` ;
 // « Semantic colors (error, success) remain static via MeeshyColors »
 // (CLAUDE.md racine, § Conversation Accent Color).
-const REFERENCE_LITERAL_COLOR_COUNT = 112;
-const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 445;
+//
+// 2026-10-05 (#9383 #9381 #9382, via dev) — littéraux 112 → 110 : le lot
+// « le jeu respecte les gardes du dépôt » retire les deux littéraux
+// `GameSurface.swift` ajoutés par #9406 ci-dessus, en passant `warmText` et
+// `goodText` par des jetons au lieu de `Color(hex:)`. Valeur MESURÉE le
+// 2026-10-05.
+//
+// 2026-10-05 (#9380) — littéraux 110 → 109 : `GameMaterial.swift` centralise
+// les matières et couleurs de palier du jeu (cadre déclaré, ruban de l'écu,
+// marges) ; `LevelRingView.swift`, `RankBlasonView.swift` et
+// `SignatureMark.swift` lisent désormais ce jeton unique au lieu de
+// `Color(hex:)` répété. Valeur MESURÉE le 2026-10-05.
+//
+// 2026-10-05 (#9471, via #9349) — variables inconnues 445 → 444 :
+// `ComposerFrameBand.swift` lit `StoryBackdrop.solidColor` directement au
+// lieu de recomposer `Color(hex: hex)` depuis `solidHex` — un appel
+// variable de moins. Le littéral `Color(hex: "FB923C")` de la même fonction
+// (dégradé de repli) est inchangé, d'où le cliquet littéral stable à 109.
+const REFERENCE_LITERAL_COLOR_COUNT = 109;
+const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 444;
 
 import { readFileSync, readdirSync, statSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';

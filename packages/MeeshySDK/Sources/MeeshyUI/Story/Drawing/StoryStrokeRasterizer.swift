@@ -38,6 +38,22 @@ public enum StoryStrokeRasterizer {
         }
     }
 
+    /// Peint les traits DIRECTEMENT dans `rect` d'un contexte existant, à sa
+    /// résolution — sans passer par un bitmap 1080×1920 (8 Mo) qu'on réduirait
+    /// ensuite. C'est le chemin du composite (couverture, ThumbHash, vignette de
+    /// scène — #5037) : il ne décode jamais une scène à pleine taille.
+    public static func draw(strokes: [StoryDrawingStroke], in cg: CGContext, rect: CGRect,
+                            designSize: CGSize = CanvasGeometry.designSize) {
+        let paintable = strokes.filter { $0.tool != .eraser && !$0.points.isEmpty }
+        guard !paintable.isEmpty, designSize.width > 0, designSize.height > 0 else { return }
+        let builder = VariableWidthStrokeBuilder()
+        cg.saveGState()
+        cg.translateBy(x: rect.minX, y: rect.minY)
+        cg.scaleBy(x: rect.width / designSize.width, y: rect.height / designSize.height)
+        paintable.forEach { draw($0, in: cg, builder: builder) }
+        cg.restoreGState()
+    }
+
     private static func draw(_ stroke: StoryDrawingStroke, in cg: CGContext, builder: VariableWidthStrokeBuilder) {
         let base = UIColor(Color(hex: stroke.colorHex))
         // Le marqueur est translucide (mirroir du legacy `PKInkingTool(.marker)` à 45%) ;

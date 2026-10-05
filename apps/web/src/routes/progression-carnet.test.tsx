@@ -82,7 +82,7 @@ describe('un carnet vide', () => {
     const { env } = bench([]);
     const host = await mount(<CarnetBody env={env} />);
     await settle();
-    expect(host.textContent).toContain('Aucune photo pour l’instant');
+    expect(host.textContent).toContain('Ton carnet est vide');
     expect(host.textContent).toContain('Mee et Meo');
   });
 
@@ -91,7 +91,7 @@ describe('un carnet vide', () => {
     const host = await mount(<CarnetBody env={env} />);
     await settle();
     expect(host.querySelector('[role="alert"]')).toBeNull();
-    expect(host.textContent).toContain('Aucune photo pour l’instant');
+    expect(host.textContent).toContain('Ton carnet est vide');
   });
 
   test('pendant la lecture : occupé, pas un faux vide', async () => {
@@ -99,7 +99,7 @@ describe('un carnet vide', () => {
     const env = { ...base, notebook: { ...base.notebook, list: () => new Promise<readonly NotebookEntry[]>(() => undefined) } } as PhotoEnv;
     const host = await mount(<CarnetBody env={env} />);
     expect(host.querySelector('[aria-busy="true"]')).not.toBeNull();
-    expect(host.textContent).not.toContain('Aucune photo pour l’instant');
+    expect(host.textContent).not.toContain('Ton carnet est vide');
   });
 });
 

@@ -8,7 +8,7 @@ import { createRouter, navigate } from '@/lib/router';
 import { AdminFilterChips, AdminListToolbar } from './list-toolbar';
 import { AdminSortControl } from './sort-control';
 import { AdminTabPanel, AdminTabs, adminTabId, adminTabPanelId, useAdminTab } from './tabs';
-import { AdminPager } from '@/routes/admin-table';
+import { AdminPager } from './pager';
 
 const { mount, mounter } = setupAdminKitTests();
 
@@ -41,6 +41,13 @@ describe('AdminListToolbar — ne dessine que ce que la passerelle sert', () => 
     expect(champ?.style.minHeight).toBe('44px');
     mounter.type(host, '[data-admin-search]', 'awa');
     expect(tapes).toEqual(['awa']);
+  });
+
+  test('un filtre peut porter en plus l’ancre que son écran a déjà publiée à ses témoins', async () => {
+    const host = await mount(<AdminListToolbar language="fr" filters={[{ ...status, id: 'admin-user-conv-order', anchor: 'data-admin-user-conv-order' }]} />);
+    const choix = host.querySelector('[data-admin-user-conv-order]');
+    expect(choix?.getAttribute('data-admin-filter')).toBe('admin-user-conv-order');
+    expect(choix?.tagName).toBe('SELECT');
   });
 
   test('un filtre remonte sa valeur', async () => {
@@ -184,6 +191,18 @@ describe('AdminFilterChips', () => {
     const host = await mount(<AdminFilterChips label="Statut" options={options} value="" onChange={(v) => choix.push(v)} />);
     await act(async () => host.querySelector<HTMLButtonElement>('[data-admin-chip="pending"]')?.click());
     expect(choix).toEqual(['pending']);
+  });
+
+  test('l’écran nomme l’ancre de ses puces, et les désactive tant que leurs valeurs manquent', async () => {
+    const choix: string[] = [];
+    const host = await mount(
+      <AdminFilterChips label="Niveau" options={options} value="" anchor="data-admin-password-level" disabled onChange={(v) => choix.push(v)} />,
+    );
+    const puce = host.querySelector<HTMLButtonElement>('[data-admin-password-level="pending"]');
+    expect(host.querySelector('[data-admin-chip]')).toBeNull();
+    expect(puce?.disabled).toBe(true);
+    await act(async () => puce?.click());
+    expect(choix).toEqual([]);
   });
 });
 

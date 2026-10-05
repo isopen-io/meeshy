@@ -24,7 +24,7 @@ import type { AdminDeps } from '@/lib/api/admin';
 import { adminInvitationsListKey, loadAdminInvitations, type AdminInvitationRow } from '@/lib/api/admin-invitations';
 import { apiDeps } from '@/lib/api/deps';
 import { currentAdminLanguage, suspendForAdminInterfaceCatalog, translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
-import type { AdminOption } from '@/routes/admin-table';
+import type { AdminOption } from '@/components/admin/list-toolbar';
 
 import { InvitationStatusBadge } from './admin-invitation-parts';
 import { InvitationsOverview } from './admin-invitations-overview';

@@ -1,8 +1,13 @@
 import { describe, expect, test } from 'bun:test';
 
+import { loadAdminInterfaceCatalog, translateAdminMaybe } from '@/lib/i18n-admin-catalog';
+
 import {
   AGENT_CONFIG_FIELDS,
+  AGENT_CONFIG_NOT_EDITED,
+  AGENT_CONFIG_SECTIONS,
   AGENT_GLOBAL_FIELDS,
+  AGENT_GLOBAL_SECTIONS,
   changesOf,
   draftOf,
   pickServed,
@@ -85,9 +90,16 @@ describe('seul ce qui CHANGE part', () => {
       defaultModel: ' ',
       defaultProvider: 'mistral',
     };
-    expect(changesOf(SPECS, SERVED, draft)).toEqual({
+    expect(changesOf(SPECS, SERVED, draft)).toMatchObject({
       ok: false,
       invalid: ['scanIntervalMinutes', 'generationTemperature', 'agentInstructions', 'defaultModel', 'defaultProvider'],
+      problems: {
+        scanIntervalMinutes: { code: 'integer' },
+        generationTemperature: { code: 'range' },
+        agentInstructions: { code: 'length' },
+        defaultModel: { code: 'required' },
+        defaultProvider: { code: 'choice' },
+      },
     });
   });
 
@@ -100,7 +112,14 @@ describe('les tables suivent les bornes de la passerelle', () => {
   test('la configuration d’une conversation garde min ≤ max des réponses et des mots', () => {
     const served = { minResponsesPerCycle: 2, maxResponsesPerCycle: 4, minWordsPerMessage: 5, maxWordsPerMessage: 80 };
     const draft = { ...draftOf(AGENT_CONFIG_FIELDS, served), minResponsesPerCycle: '9' };
-    expect(changesOf(AGENT_CONFIG_FIELDS, served, draft)).toEqual({ ok: false, invalid: ['minResponsesPerCycle', 'maxResponsesPerCycle'] });
+    expect(changesOf(AGENT_CONFIG_FIELDS, served, draft)).toMatchObject({
+      ok: false,
+      invalid: ['minResponsesPerCycle', 'maxResponsesPerCycle'],
+      problems: {
+        minResponsesPerCycle: { code: 'order', other: 'maxResponsesPerCycle', side: 'low' },
+        maxResponsesPerCycle: { code: 'order', other: 'minResponsesPerCycle', side: 'high' },
+      },
+    });
   });
 
   test('chaque clé n’apparaît qu’une fois par table', () => {
@@ -109,4 +128,138 @@ describe('les tables suivent les bornes de la passerelle', () => {
       expect(new Set(keys).size).toBe(keys.length);
     }
   });
+});
+
+/**
+ * LE MIROIR DES SCHÉMAS DE LA PASSERELLE — les clés de `agentConfigSchema`
+ * (`agent-configs.ts`) et de `globalConfigSchema` (`agent-llm.ts`), recopiées.
+ * Une clé ajoutée là-bas sans être tranchée ici (éditée, ou exclue avec sa
+ * raison) rougit ce témoin.
+ */
+const GATEWAY_CONFIG_KEYS = [
+  'enabled', 'autoPickupEnabled', 'inactivityThresholdHours', 'minHistoricalMessages', 'maxControlledUsers', 'manualUserIds',
+  'excludedRoles', 'excludedUserIds', 'triggerOnTimeout', 'timeoutSeconds', 'triggerOnUserMessage', 'triggerFromUserIds',
+  'triggerOnReplyTo', 'agentType', 'contextWindowSize', 'useFullHistory', 'scanIntervalMinutes', 'minResponsesPerCycle',
+  'maxResponsesPerCycle', 'reactionsEnabled', 'maxReactionsPerCycle', 'agentInstructions', 'webSearchEnabled', 'minWordsPerMessage',
+  'maxWordsPerMessage', 'generationTemperature', 'qualityGateEnabled', 'qualityGateMinScore', 'weekdayMaxMessages', 'weekendMaxMessages',
+  'weekdayMaxUsers', 'weekendMaxUsers', 'burstEnabled', 'burstSize', 'burstIntervalMinutes', 'quietIntervalMinutes',
+  'inactivityDaysThreshold', 'prioritizeTaggedUsers', 'prioritizeRepliedUsers', 'reactionBoostFactor', 'eligibleConversationTypes',
+  'messageFreshnessHours', 'maxConversationsPerCycle', 'globalScanEnabled', 'globalScanMinInterval', 'globalScanMaxInterval',
+  'minDelayMinutes', 'maxDelayMinutes', 'spreadOverDayEnabled', 'maxMessagesPerUserPer10Min', 'freshTopicProbability',
+  'freshTopicCategoryHints',
+];
+const GATEWAY_GLOBAL_KEYS = [
+  'systemPrompt', 'enabled', 'defaultProvider', 'defaultModel', 'fallbackProvider', 'fallbackModel', 'globalDailyBudgetUsd',
+  'maxConcurrentCalls', 'eligibleConversationTypes', 'messageFreshnessHours', 'maxConversationsPerCycle', 'weekdayMaxConversations',
+  'weekendMaxConversations', 'globalScanEnabled', 'globalScanMinInterval', 'globalScanMaxInterval',
+];
+
+const specOf = (table: readonly AgentFieldSpec[], key: string): AgentFieldSpec => {
+  const spec = table.find((entry) => entry.key === key);
+  if (spec === undefined) throw new Error(`absent : ${key}`);
+  return spec;
+};
+
+describe('TOUS les réglages éditables sont couverts', () => {
+  test('conversation : table + exclusions nommées = le schéma de la passerelle, clé pour clé', () => {
+    const covered = [...AGENT_CONFIG_FIELDS.map((spec) => spec.key), ...Object.keys(AGENT_CONFIG_NOT_EDITED)].sort();
+    expect(covered).toEqual([...GATEWAY_CONFIG_KEYS].sort());
+    expect(AGENT_CONFIG_FIELDS).toHaveLength(45);
+  });
+
+  test('global : les seize clés du schéma', () => {
+    expect(AGENT_GLOBAL_FIELDS.map((spec) => spec.key).sort()).toEqual([...GATEWAY_GLOBAL_KEYS].sort());
+  });
+
+  test('chaque champ vit dans UNE section, et l’ordre des tables est celui des sections', () => {
+    for (const [sections, table] of [
+      [AGENT_CONFIG_SECTIONS, AGENT_CONFIG_FIELDS],
+      [AGENT_GLOBAL_SECTIONS, AGENT_GLOBAL_FIELDS],
+    ] as const) {
+      expect(sections.flatMap((section) => section.keys)).toEqual(table.map((spec) => spec.key));
+    }
+  });
+
+  test('chaque type a le bon contrôle : bascule, entier, nombre, liste nommée, ensemble coché, mots-clés', () => {
+    expect(specOf(AGENT_CONFIG_FIELDS, 'burstEnabled')).toEqual({ key: 'burstEnabled', kind: 'bool' });
+    expect(specOf(AGENT_CONFIG_FIELDS, 'timeoutSeconds')).toEqual({ key: 'timeoutSeconds', kind: 'int', min: 30, max: 3600 });
+    expect(specOf(AGENT_CONFIG_FIELDS, 'reactionBoostFactor')).toEqual({ key: 'reactionBoostFactor', kind: 'number', min: 0.5, max: 5 });
+    expect(specOf(AGENT_CONFIG_FIELDS, 'agentType')).toMatchObject({ kind: 'choice', options: ['personal', 'animator', 'support', 'faq'] });
+    expect(specOf(AGENT_CONFIG_FIELDS, 'excludedRoles')).toMatchObject({ kind: 'set' });
+    expect(specOf(AGENT_CONFIG_FIELDS, 'freshTopicCategoryHints')).toEqual({ key: 'freshTopicCategoryHints', kind: 'list', itemMax: 40, maxItems: 20 });
+    expect(specOf(AGENT_CONFIG_FIELDS, 'manualUserIds')).toMatchObject({ kind: 'list', item: 'objectId' });
+    expect(specOf(AGENT_GLOBAL_FIELDS, 'eligibleConversationTypes')).toMatchObject({ kind: 'set' });
+    expect(specOf(AGENT_GLOBAL_FIELDS, 'fallbackProvider')).toMatchObject({ kind: 'choice', nullable: true });
+  });
+});
+
+describe('les nouveaux genres de champ', () => {
+  const T: readonly AgentFieldSpec[] = [
+    specOf(AGENT_CONFIG_FIELDS, 'minDelayMinutes'),
+    specOf(AGENT_CONFIG_FIELDS, 'maxDelayMinutes'),
+    specOf(AGENT_CONFIG_FIELDS, 'excludedRoles'),
+    specOf(AGENT_CONFIG_FIELDS, 'freshTopicCategoryHints'),
+    specOf(AGENT_CONFIG_FIELDS, 'manualUserIds'),
+    specOf(AGENT_GLOBAL_FIELDS, 'fallbackProvider'),
+  ];
+  const ID = 'a'.repeat(24);
+  const SERVI = { minDelayMinutes: null, maxDelayMinutes: 30, excludedRoles: ['ADMIN', 'AGENT'], freshTopicCategoryHints: ['ia'], manualUserIds: [ID], fallbackProvider: null };
+
+  test('le brouillon : vide pour null, ensemble tel quel, liste une par ligne', () => {
+    expect(draftOf(T, SERVI)).toEqual({
+      minDelayMinutes: '',
+      maxDelayMinutes: '30',
+      excludedRoles: ['ADMIN', 'AGENT'],
+      freshTopicCategoryHints: 'ia',
+      manualUserIds: ID,
+      fallbackProvider: '',
+    });
+  });
+
+  test('intact, rien ne part ; un ensemble recoché dans un autre ordre non plus', () => {
+    expect(changesOf(T, SERVI, draftOf(T, SERVI))).toEqual({ ok: true, changes: {} });
+    expect(changesOf(T, SERVI, { ...draftOf(T, SERVI), excludedRoles: ['AGENT', 'ADMIN'] })).toEqual({ ok: true, changes: {} });
+  });
+
+  test('seul le champ modifié part, typé : tableau, null, nombre', () => {
+    const draft = { ...draftOf(T, SERVI), freshTopicCategoryHints: 'ia\nsport, musique\nia', maxDelayMinutes: '' };
+    expect(changesOf(T, SERVI, draft)).toEqual({ ok: true, changes: { freshTopicCategoryHints: ['ia', 'sport', 'musique'], maxDelayMinutes: null } });
+    expect(changesOf(T, SERVI, { ...draftOf(T, SERVI), excludedRoles: ['ADMIN'] })).toEqual({ ok: true, changes: { excludedRoles: ['ADMIN'] } });
+    expect(changesOf(T, SERVI, { ...draftOf(T, SERVI), fallbackProvider: 'anthropic' })).toEqual({ ok: true, changes: { fallbackProvider: 'anthropic' } });
+  });
+
+  test('bornes : délai hors bornes, plancher au-dessus du plafond, identifiant mal formé, mot-clé trop long, trop de mots-clés', () => {
+    expect(changesOf(T, SERVI, { ...draftOf(T, SERVI), minDelayMinutes: '2000' })).toMatchObject({ ok: false, problems: { minDelayMinutes: { code: 'range' } } });
+    expect(changesOf(T, SERVI, { ...draftOf(T, SERVI), minDelayMinutes: '45' })).toMatchObject({
+      ok: false,
+      invalid: ['minDelayMinutes', 'maxDelayMinutes'],
+      problems: { minDelayMinutes: { code: 'order', other: 'maxDelayMinutes' } },
+    });
+    expect(changesOf(T, SERVI, { ...draftOf(T, SERVI), manualUserIds: `${ID}\nlea` })).toMatchObject({ ok: false, problems: { manualUserIds: { code: 'item', value: 'lea' } } });
+    expect(changesOf(T, SERVI, { ...draftOf(T, SERVI), freshTopicCategoryHints: 'x'.repeat(41) })).toMatchObject({ ok: false, problems: { freshTopicCategoryHints: { code: 'item' } } });
+    const vingtEtUn = Array.from({ length: 21 }, (_, i) => `t${i}`).join('\n');
+    expect(changesOf(T, SERVI, { ...draftOf(T, SERVI), freshTopicCategoryHints: vingtEtUn })).toMatchObject({ ok: false, problems: { freshTopicCategoryHints: { code: 'count' } } });
+  });
+
+  test('global : intervalle minimal du balayage ≤ maximal', () => {
+    const served = { globalScanMinInterval: 60, globalScanMaxInterval: 300 };
+    const draft = { ...draftOf(AGENT_GLOBAL_FIELDS, served), globalScanMinInterval: '600' };
+    expect(changesOf(AGENT_GLOBAL_FIELDS, served, draft)).toMatchObject({ ok: false, invalid: ['globalScanMinInterval', 'globalScanMaxInterval'] });
+  });
+});
+
+describe('chaque champ a son libellé humain, dans les quatre langues', () => {
+  for (const language of ['fr', 'en', 'es', 'pt'] as const) {
+    test(`${language} : libellés, titres de section, options nommées`, async () => {
+      await loadAdminInterfaceCatalog(language);
+      const missing = [
+        ...AGENT_CONFIG_FIELDS.map((spec) => `admin.agentPanel.cfg.${spec.key}`),
+        ...AGENT_CONFIG_SECTIONS.map((section) => `admin.agentPanel.cfg.section.${section.id}`),
+        ...['personal', 'animator', 'support', 'faq'].map((type) => `admin.agentPanel.cfg.agentType.${type}`),
+        ...AGENT_GLOBAL_FIELDS.map((spec) => `admin.agentPanel.global.${spec.key}`),
+        ...AGENT_GLOBAL_SECTIONS.map((section) => `admin.agentPanel.global.section.${section.id}`),
+      ].filter((key) => translateAdminMaybe(language, key) === null);
+      expect(missing).toEqual([]);
+    });
+  }
 });

@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
+import { suspendForGameCatalog } from '@/lib/i18n-game-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { useQuery } from '@tanstack/react-query';
 
 import { Glyph, GlyphSvg } from '@/components/glyph';
@@ -512,7 +514,7 @@ export function MeeshDetail({
                   aria-busy={isMinting}
                   data-meesh-mint
                   className="mt-1 flex items-center justify-center gap-2 rounded-chip px-4 text-body font-bold disabled:opacity-80"
-                  style={{ minHeight: 44, backgroundColor: MEESH_TINT, color: 'var(--color-ios-surface)' }}
+                  style={{ minHeight: 44, backgroundColor: MEESH_TINT, color: 'var(--color-on-state)' }}
                 >
                   {/* L'ACTIVITÉ SE VOIT, pas seulement se lit (#6470) : le
                       jumeau iOS pose un `ProgressView` à gauche du libellé, et
@@ -527,7 +529,7 @@ export function MeeshDetail({
                     non en haut de l'écran, sous le détail qui le cache. Masqué
                     pendant la frappe : il décrirait alors un état révolu. */}
                 {mintError !== undefined && !isMinting ? (
-                  <p role="alert" data-meesh-mint-error className="text-caption" style={{ color: 'var(--ios-error)' }}>
+                  <p role="alert" data-meesh-mint-error className="text-caption" style={{ color: 'var(--color-error)' }}>
                     {mintError}
                   </p>
                 ) : null}
@@ -618,6 +620,7 @@ export function ProgressionBody({
 }
 
 export default function ProgressionScreen() {
+  suspendForGameCatalog(currentInterfaceLanguage());
   const online = useOnline();
 
   /**

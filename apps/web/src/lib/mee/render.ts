@@ -1,4 +1,4 @@
-import { escapeSvg } from './art';
+import { INK, PAPER, escapeSvg } from './art';
 import { meeSlotsFor } from './catalog';
 import { motionCss } from './motion';
 import type { MeeSlots, MeeSticker } from './types';
@@ -32,5 +32,5 @@ export function renderMeeSticker(sticker: MeeSticker, o: { readonly uid?: string
 export const MEE_VIEWBOX = '-8 -8 216 216';
 
 function dieCut(id: string): string {
-  return `<defs><filter id="${id}" filterUnits="userSpaceOnUse" x="-8" y="-8" width="216" height="216" color-interpolation-filters="sRGB"><feMorphology in="SourceAlpha" operator="dilate" radius="3.2" result="grown"/><feGaussianBlur in="grown" stdDeviation="1.6" result="soft"/><feComponentTransfer in="soft" result="cut"><feFuncA type="linear" slope="5" intercept="-0.9"/></feComponentTransfer><feFlood flood-color="#ffffff"/><feComposite in2="cut" operator="in" result="paper"/><feGaussianBlur in="cut" stdDeviation="2.4" result="haze"/><feOffset in="haze" dy="2.2" result="drop"/><feFlood flood-color="#1c1941" flood-opacity=".26"/><feComposite in2="drop" operator="in" result="shadow"/><feMerge><feMergeNode in="shadow"/><feMergeNode in="paper"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>`;
+  return `<defs><filter id="${id}" filterUnits="userSpaceOnUse" x="-8" y="-8" width="216" height="216" color-interpolation-filters="sRGB"><feMorphology in="SourceAlpha" operator="dilate" radius="3.2" result="grown"/><feGaussianBlur in="grown" stdDeviation="1.6" result="soft"/><feComponentTransfer in="soft" result="cut"><feFuncA type="linear" slope="5" intercept="-0.9"/></feComponentTransfer><feFlood flood-color="${PAPER}"/><feComposite in2="cut" operator="in" result="paper"/><feGaussianBlur in="cut" stdDeviation="2.4" result="haze"/><feOffset in="haze" dy="2.2" result="drop"/><feFlood flood-color="${INK}" flood-opacity=".26"/><feComposite in2="drop" operator="in" result="shadow"/><feMerge><feMergeNode in="shadow"/><feMergeNode in="paper"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>`;
 }

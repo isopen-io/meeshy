@@ -94,6 +94,7 @@ function makePrisma(options: { verified?: boolean; streak?: { current: number; l
         lastStreakDate: options.streak?.lastDay ?? null,
       })),
       update: jest.fn().mockResolvedValue({}),
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
     },
     $runCommandRaw: runCommandRaw,
   } as unknown as PrismaClient;

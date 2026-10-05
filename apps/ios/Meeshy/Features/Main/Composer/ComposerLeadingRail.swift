@@ -182,9 +182,9 @@ struct ComposerLeadingRail: View {
     private func verticalToolColumn(_ controls: [ComposerToolControl]) -> some View {
         VStack(spacing: entrySpacing) {
             ViewThatFits(in: .vertical) {
-                VStack(spacing: entrySpacing) { ForEach(controls) { toolButton($0) } }
+                VStack(spacing: entrySpacing) { toolEntries(controls) }
                 ScrollView(.vertical, showsIndicators: false) {
-                    VStack(spacing: entrySpacing) { ForEach(controls) { toolButton($0) } }
+                    VStack(spacing: entrySpacing) { toolEntries(controls) }
                 }
             }
             exitButton
@@ -233,34 +233,27 @@ struct ComposerLeadingRail: View {
                     if axis == .horizontal {
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: entrySpacing) {
-                                ForEach(controls) { toolButton($0) }
+                                toolEntries(controls)
                             }
                         }
                     } else {
-                        ForEach(controls) { control in
-                            toolButton(control)
-                        }
+                        toolEntries(controls)
                     }
             exitButton
         }
     }
 
+    /// Construites ICI, sur le fil principal : le `ForEach` ne fait que les
+    /// relire (#9135, `AsyncRenderRow`).
+    private func toolEntries(_ controls: [ComposerToolControl]) -> some View {
+        ForEach(controls.map { AsyncRenderRow(id: $0.id, content: toolButton($0)) },
+                content: asyncRenderRowContent)
+    }
+
     @ViewBuilder
     private func doorEntries(_ doors: [ComposerRailDoor]) -> some View {
-        ForEach(doors, id: \.rawValue) { door in
-            doorButton(door)
-            // Le bouton système se glisse à SA place dans l'ordre,
-            // jamais en bout de rail : la maquette range le collage
-            // entre le sticker et la mention, et une entrée qu'on
-            // relègue à la fin cesse d'être trouvable là où le doigt
-            // l'attend.
-            if let systemEntry, systemEntryAfter == door {
-                systemEntry
-                    .frame(width: ComposerRailGeometry.railWidth,
-                           height: ComposerRailGeometry.railWidth)
-            }
-            if sceneTogglesAfter == door { sceneToggleEntries }
-        }
+        ForEach(doors.map { AsyncRenderRow(id: $0.rawValue, content: doorSlot($0)) },
+                content: asyncRenderRowContent)
         if let systemEntry, systemEntryAfter == nil {
             systemEntry
                 .frame(width: ComposerRailGeometry.railWidth,
@@ -271,18 +264,37 @@ struct ComposerLeadingRail: View {
         }
     }
 
-    /// L'éclair puis le Cadre — teintés quand ce qu'ils règlent est actif.
+    /// Une porte, et ce qui se glisse à sa suite.
     @ViewBuilder
-    private var sceneToggleEntries: some View {
-        ForEach(sceneToggles) { bouton in
-            entry(id: "scene.\(bouton.id)",
-                  symbolName: bouton.toggle.symbol,
-                  label: bouton.label,
-                  tint: MeeshyColors.textPrimary(isDark: true),
-                  glassTint: bouton.isOn ? MeeshyColors.brandPrimary : nil,
-                  isOn: bouton.isOn,
-                  action: bouton.action)
+    private func doorSlot(_ door: ComposerRailDoor) -> some View {
+        doorButton(door)
+        // Le bouton système se glisse à SA place dans l'ordre,
+        // jamais en bout de rail : la maquette range le collage
+        // entre le sticker et la mention, et une entrée qu'on
+        // relègue à la fin cesse d'être trouvable là où le doigt
+        // l'attend.
+        if let systemEntry, systemEntryAfter == door {
+            systemEntry
+                .frame(width: ComposerRailGeometry.railWidth,
+                       height: ComposerRailGeometry.railWidth)
         }
+        if sceneTogglesAfter == door { sceneToggleEntries }
+    }
+
+    /// L'éclair puis le Cadre — teintés quand ce qu'ils règlent est actif.
+    private var sceneToggleEntries: some View {
+        ForEach(sceneToggles.map { AsyncRenderRow(id: $0.id, content: sceneToggleButton($0)) },
+                content: asyncRenderRowContent)
+    }
+
+    private func sceneToggleButton(_ bouton: ComposerSceneToggleEntry) -> some View {
+        entry(id: "scene.\(bouton.id)",
+              symbolName: bouton.toggle.symbol,
+              label: bouton.label,
+              tint: MeeshyColors.textPrimary(isDark: true),
+              glassTint: bouton.isOn ? MeeshyColors.brandPrimary : nil,
+              isOn: bouton.isOn,
+              action: bouton.action)
     }
 
     var body: some View {

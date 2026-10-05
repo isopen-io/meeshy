@@ -5,7 +5,9 @@ import type { SpeechSource } from './call-captions-controller';
  * (`SpeechRecognition`, préfixée `webkitSpeechRecognition` dans Chrome, Edge et
  * Safari) derrière la forme `SpeechSource` du contrôleur. DÉTECTÉE, jamais
  * supposée : Firefox et la WebView de la coque Android ne l'ont pas — on y
- * reçoit les sous-titres des autres, on n'y émet pas les siens.
+ * reçoit les sous-titres des autres. La coque qui déclare `MeeshySpeech` prête
+ * le `SpeechRecognizer` d'Android au même contrat (`call-shell-speech.ts`,
+ * #9446) ; Firefox et une coque plus ancienne n'émettent toujours pas.
  *
  * La reconnaissance continue s'arrête d'elle-même après un silence : elle est
  * relancée tant que la capture est voulue, et abandonnée après cinq relances

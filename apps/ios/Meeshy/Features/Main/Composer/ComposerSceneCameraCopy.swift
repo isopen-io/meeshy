@@ -107,8 +107,8 @@ enum ComposerSceneCameraCopy {
     }
 
     /// **Les gestes d'une scène vide, une ligne chacun** (#8653, #8671,
-    /// #8711) : le viseur au premier toucher, la photo au second, la vidéo au
-    /// maintien — le format décide lesquels paraissent
+    /// #8711, #9464) : le viseur au premier toucher, la photo au double toucher,
+    /// la vidéo au maintien — le format décide lesquels paraissent
     /// (`ComposerSceneQuickCapture.gestureLines`).
     static func gestureLine(_ line: ComposerSceneQuickCapture.GestureLine) -> String {
         switch line {
@@ -117,7 +117,7 @@ enum ComposerSceneCameraCopy {
                           defaultValue: "Toucher : ouvrir le viseur", bundle: .main)
         case .tapAgainPhoto:
             return String(localized: "composer.camera.gesture.tapAgainPhoto",
-                          defaultValue: "Toucher encore : photo", bundle: .main)
+                          defaultValue: "Toucher deux fois : photo", bundle: .main)
         case .holdFilm:
             return String(localized: "composer.camera.gesture.holdFilm",
                           defaultValue: "Maintenir : filmer", bundle: .main)
@@ -166,6 +166,11 @@ enum ComposerSceneCameraCopy {
     /// Le facteur tel qu'on le lit sur un appareil photo : « 2,5× ».
     static func zoomValue(_ factor: CGFloat) -> String {
         Double(factor).formatted(.number.precision(.fractionLength(1))) + "×"
+    }
+
+    /// Un cran de la pastille, lu comme l'appareil photo : « 0,5× », « 1× », « 2× ».
+    static func zoomPresetValue(_ factor: CGFloat) -> String {
+        Double(factor).formatted(.number.precision(.fractionLength(0...1))) + "×"
     }
 
     static var flashIntensityLabel: String {

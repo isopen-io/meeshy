@@ -58,11 +58,15 @@ public enum GameMint {
     public static let priceCap = basePrice * 4
 
     /// Le prix de la n-ième Meesh frappée (n commence à 1 ; une valeur < 1 vaut 1).
+    ///
+    /// Le plafond se pose AVANT la conversion en entier : au-delà de quelques milliers
+    /// de numéros, `1,06^k` dépasse `Int.max` puis l'infini, et `Int(_:)` planterait
+    /// sur un `mint.number` démesuré reçu du réseau. Le TS rend alors le plafond.
     public static func price(forNumber n: Int) -> Int {
         let rank = max(1, n)
         let steps = Double((rank - 1) / priceStepEvery)
-        let raw = Int((Double(basePrice) * pow(priceGrowth, steps)).rounded(.toNearestOrAwayFromZero))
-        return min(raw, priceCap)
+        let raw = (Double(basePrice) * pow(priceGrowth, steps)).rounded(.toNearestOrAwayFromZero)
+        return Int(min(raw, Double(priceCap)))
     }
 
     public static func edition(forNumber n: Int) -> MeeshEdition {
@@ -77,7 +81,7 @@ public enum GameMint {
     public static func preview(score: Int, mintedLifetime: Int, debitablePoints: Int) -> GameMintPreview {
         let held = max(0, score)
         let debitable = max(0, debitablePoints)
-        let number = max(0, mintedLifetime) + 1
+        let number = min(max(0, mintedLifetime), Int.max - 1) + 1
         let cost = price(forNumber: number)
         let canMint = debitable >= cost
         let levelBefore = GameLevels.level(forScore: held)
