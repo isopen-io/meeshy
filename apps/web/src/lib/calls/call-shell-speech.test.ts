@@ -67,7 +67,8 @@ describe('la reconnaissance vocale prêtée par la coque Android (#9446)', () =>
       }),
     ).toBeNull();
     expect(shellRecognition(coque({ methodes: ['startListening'] }).hote)).toBeNull();
-    expect(shellRecognition({ ...coque().hote, addListener: undefined })).toBeNull();
+    const { addListener: _sansEcoute, ...sansEcoute } = coque().hote;
+    expect(shellRecognition(sansEcoute)).toBeNull();
     expect(browserSpeech(shellRecognition(undefined))).toBeNull();
   });
 
