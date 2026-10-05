@@ -374,6 +374,7 @@ const fr = {
   'game.fmt.minus': '−{value}',
   'game.fmt.fraction': '{done} / {total}',
   'game.fmt.from_to': '{from} → {to}',
+  'game.error.request_id_conflict': 'Cet identifiant de requête a déjà servi à une autre action : réessaie, un nouvel identifiant sera envoyé.',
 } as const;
 
 export default fr;

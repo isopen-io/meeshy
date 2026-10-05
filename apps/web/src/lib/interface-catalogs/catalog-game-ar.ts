@@ -372,6 +372,7 @@ const ar = {
   'game.levels.few': '{count} مستويات',
   'game.mint.badges.two': 'ينخفض وسامان',
   'game.mint.badges.few': 'تنخفض {count} أوسمة',
+  'game.error.request_id_conflict': 'سبق استخدام معرّف هذا الطلب في إجراء آخر: أعد المحاولة وسيُرسَل معرّف جديد.',
 } as const satisfies GameCatalog;
 
 export default ar;

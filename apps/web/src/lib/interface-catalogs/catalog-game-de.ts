@@ -360,6 +360,7 @@ const de = {
   'game.fmt.minus': '−{value}',
   'game.fmt.fraction': '{done} / {total}',
   'game.fmt.from_to': '{from} → {to}',
+  'game.error.request_id_conflict': 'Diese Anfragekennung wurde schon für eine andere Aktion verwendet: Versuche es erneut, es wird eine neue gesendet.',
 } as const satisfies GameCatalog;
 
 export default de;

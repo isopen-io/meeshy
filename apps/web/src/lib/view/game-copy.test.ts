@@ -151,6 +151,15 @@ describe('les refus du serveur se disent', () => {
   });
 });
 
+describe('un identifiant de requête déjà pris', () => {
+  test('REQUEST_ID_CONFLICT a sa phrase dans chaque langue, distincte de la phrase neutre', () => {
+    for (const language of SUPPORTED_INTERFACE_LANGUAGES) {
+      expect(NAMED(gameErrorMessage('REQUEST_ID_CONFLICT', language))).toBe(true);
+      expect(gameErrorMessage('REQUEST_ID_CONFLICT', language)).not.toBe(gameErrorMessage('???', language));
+    }
+  });
+});
+
 describe('un pourcentage servi se borne à l’affichage', () => {
   test('un bonus au-delà de l’ancien plafond (50) s’affiche tel quel', () => {
     expect(boundedPercent(80)).toBe(80);

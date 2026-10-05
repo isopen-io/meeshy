@@ -176,6 +176,41 @@ describe('la frappe', () => {
   });
 });
 
+describe('un identifiant déjà pris par une autre écriture (REQUEST_ID_CONFLICT)', () => {
+  test('le refus se dit en toutes lettres, et le geste suivant part avec un NOUVEL identifiant', async () => {
+    let attempt = 0;
+    const { actions, calls } = await bench(seed(), (req) => {
+      if (pathOf(req) !== '/api/v1/me/meesh/mint') return undefined;
+      attempt += 1;
+      return attempt === 1 ? refused('REQUEST_ID_CONFLICT') : ok({ status: 'minted', balance: 5, mintedLifetime: 4 });
+    });
+    await act(async () => actions().mint());
+    await settle();
+    expect(actions().errors.mint).toContain('identifiant');
+    expect(actions().errors.mint).not.toContain('connexion');
+    await act(async () => actions().mint());
+    await settle();
+    const ids = calls().map((c) => (c.body as { requestId: string }).requestId);
+    expect(ids).toHaveLength(2);
+    expect(ids[1]).not.toBe(ids[0]);
+  });
+
+  test('un refus d’un autre ordre garde l’identifiant : le retry reste le même geste', async () => {
+    let attempt = 0;
+    const { actions, calls } = await bench(seed(), (req) => {
+      if (pathOf(req) !== '/api/v1/me/game/flame/freezes') return undefined;
+      attempt += 1;
+      return attempt === 1 ? refused('FREEZE_AT_MAXIMUM') : ok({ status: 'bought', freezes: 1, balance: 0 });
+    });
+    await act(async () => actions().buyFreeze());
+    await settle();
+    await act(async () => actions().buyFreeze());
+    await settle();
+    const ids = calls().map((c) => (c.body as { requestId: string }).requestId);
+    expect(ids[1]).toBe(ids[0]);
+  });
+});
+
 describe('changer une mission', () => {
   const replacement = { ...gameBlockFixture().missions.items[1]!, id: 'm-new', templateKey: 'comment-text', progress: 0 };
 

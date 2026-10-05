@@ -360,6 +360,7 @@ const en = {
   'game.fmt.minus': '−{value}',
   'game.fmt.fraction': '{done} / {total}',
   'game.fmt.from_to': '{from} → {to}',
+  'game.error.request_id_conflict': 'That request identifier was already used by another action: try again, a new one will be sent.',
 } as const satisfies GameCatalog;
 
 export default en;

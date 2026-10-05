@@ -141,7 +141,8 @@ type ErrorKey =
   | 'game.error.mission_reroll_exhausted'
   | 'game.error.mission_reroll_unavailable'
   | 'game.error.missions_locked'
-  | 'game.error.chest_not_ready';
+  | 'game.error.chest_not_ready'
+  | 'game.error.request_id_conflict';
 
 const ERRORS: Readonly<Record<string, ErrorKey>> = {
   [GAME_ERROR_CODES.insufficientPoints]: 'game.error.insufficient_points',
@@ -153,6 +154,7 @@ const ERRORS: Readonly<Record<string, ErrorKey>> = {
   [GAME_ERROR_CODES.missionRerollUnavailable]: 'game.error.mission_reroll_unavailable',
   [GAME_ERROR_CODES.missionsLocked]: 'game.error.missions_locked',
   [GAME_ERROR_CODES.chestNotReady]: 'game.error.chest_not_ready',
+  [GAME_ERROR_CODES.requestIdConflict]: 'game.error.request_id_conflict',
 };
 
 export function gameErrorMessage(code: string | undefined, language: Language = currentInterfaceLanguage()): string {
