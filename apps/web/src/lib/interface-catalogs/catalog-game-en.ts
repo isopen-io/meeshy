@@ -587,6 +587,14 @@ const en = {
   'game.prestige.go': 'Go Prestige',
   'game.prestige.stay': 'Stay at the top',
   'game.prestige.done': 'Prestige {number}! One more star on your ring.',
+  'game.rarity.common': 'Common',
+  'game.rarity.rare': 'Rare',
+  'game.rarity.epic': 'Epic',
+  'game.rarity.legendary': 'Legendary',
+  'game.rarity.mythic': 'Mythic',
+  'game.rarity.share': '{percent} of accounts',
+  'game.rarity.aria': 'Rarity: {name}, {share}',
+  'game.rarity.measuring': 'Rarity being measured',
 } as const satisfies GameCatalog;
 
 export default en;

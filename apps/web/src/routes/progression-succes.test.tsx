@@ -67,3 +67,41 @@ describe('les succès proposent la carte', () => {
     expect(host.querySelector('[role="dialog"]')).toBeNull();
   });
 });
+
+/**
+ * LA RARETÉ D'UN SUCCÈS (#9390) — un liseré par rareté, une règle de vie privée :
+ * sous 20 titulaires ou 1 000 comptes, aucun liseré, « rareté en cours de mesure ».
+ */
+describe('la rareté sur les succès', () => {
+  const key = progress.achievements[0]?.key ?? 'x';
+
+  test('une rareté mesurée assez large : le liseré, le nom, la part des comptes', async () => {
+    const host = await mount(<SuccesBody progress={progress} env={env} rarities={{ [key]: { rarity: 'epic', holders: 60, population: 1500 } }} />);
+    await settle();
+    const row = host.querySelector('[data-game-rim="epic"]');
+    expect(row).not.toBeNull();
+    expect(row?.textContent).toContain('Épique');
+    expect(row?.textContent).toContain('4 % des comptes');
+  });
+
+  test('sous le seuil de titulaires : AUCUN liseré, la rareté se dit en cours de mesure', async () => {
+    const host = await mount(<SuccesBody progress={progress} env={env} rarities={{ [key]: { rarity: 'mythic', holders: 2, population: 5000 } }} />);
+    await settle();
+    expect(host.querySelector('[data-game-rim]')).toBeNull();
+    expect(host.textContent).toContain('Rareté en cours de mesure');
+    expect(host.textContent).not.toContain('Mythique');
+  });
+
+  test('un serveur qui ne sert pas la rareté : l’écran d’avant, intact', async () => {
+    const host = await mount(<SuccesBody progress={progress} env={env} />);
+    await settle();
+    expect(host.querySelector('[data-game-rim]')).toBeNull();
+    expect(host.querySelector('[data-game-rarity]')).toBeNull();
+  });
+
+  test('le nom de la rareté est lu en toutes lettres, la couleur n’est jamais la seule information', async () => {
+    const host = await mount(<SuccesBody progress={progress} env={env} rarities={{ [key]: { rarity: 'legendary', holders: 25, population: 5000 } }} />);
+    await settle();
+    expect(host.querySelector('[data-game-rarity="legendary"]')?.getAttribute('aria-label')).toContain('Légendaire');
+  });
+});

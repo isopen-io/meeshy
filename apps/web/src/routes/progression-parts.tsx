@@ -13,12 +13,14 @@
 
 
 import { GameMedal } from '@/components/game/medal';
+import { GameRarityLine } from '@/components/game-rarity';
 import { Glyph, GlyphSvg, type GlyphShape } from '@/components/glyph';
 import { GLYPHS } from '@/components/glyphs';
 import { PROGRESSION_GLYPHS } from '@/components/glyphs-progression';
 import { milestoneGlyph } from '@/components/milestone-glyph';
 import { ProgressBar } from '@/components/progress-bar';
 import { medalOfAxis } from '@/lib/game/medal';
+import { rarityRim, visibleRarity, type AchievementRarityMap } from '@/lib/game/rarity';
 import { gameText } from '@/lib/view/game-copy';
 import { meeshMissing } from '@/lib/view/meesh-copy';
 import {
@@ -185,8 +187,11 @@ export function AxisRow({ axis, medalLabel }: { axis: EngagementAxisProgress; me
 export function AchievementsSection({
   progress,
   onPhoto,
+  rarities,
 }: {
   progress: EngagementProgress;
+  /** La rareté mesurée de chaque succès (#9390) ; absente (ancien serveur) : l'écran d'avant. */
+  rarities?: AchievementRarityMap | undefined;
   /** La révélation d'un succès se photographie (#7742) ; absent : aucun bouton. */
   onPhoto?: (key: EngagementAchievementKey) => void;
 }) {
@@ -205,8 +210,15 @@ export function AchievementsSection({
           {progress.achievements.map((achievement) => {
             const copy = ACHIEVEMENT_COPY[achievement.key];
             const dated = reachedAtLabel(achievement.reachedAt);
+            const entry = rarities?.[achievement.key];
+            const shown = visibleRarity(entry);
             return (
-              <li key={achievement.key} className="flex items-center gap-3 py-2.5">
+              <li
+                key={achievement.key}
+                {...(shown === null ? {} : { 'data-game-rim': shown })}
+                className="flex items-center gap-3 py-2.5"
+                style={shown === null ? undefined : { ...rarityRim(shown), paddingInlineStart: 10 }}
+              >
                 <span
                   className="grid size-9 shrink-0 place-items-center rounded-field"
                   style={{
@@ -225,6 +237,7 @@ export function AchievementsSection({
                   <span className="text-check" style={{ color: INK_2 }}>
                     {achievement.unlocked ? (dated ?? 'Débloqué') : copy.condition}
                   </span>
+                  <GameRarityLine entry={entry} />
                 </div>
                 {achievement.unlocked && onPhoto !== undefined ? (
                   <button

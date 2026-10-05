@@ -599,6 +599,14 @@ const ar = {
   'game.prestige.go': 'الانتقال إلى التميّز',
   'game.prestige.stay': 'البقاء في القمة',
   'game.prestige.done': 'التميّز ⁦{number}⁩! نجمة أخرى على حلقتك.',
+  'game.rarity.common': 'شائع',
+  'game.rarity.rare': 'نادر',
+  'game.rarity.epic': 'ملحمي',
+  'game.rarity.legendary': 'أسطوري',
+  'game.rarity.mythic': 'خرافي',
+  'game.rarity.share': '{percent} من الحسابات',
+  'game.rarity.aria': 'الندرة: {name}، {share}',
+  'game.rarity.measuring': 'جارٍ قياس الندرة',
 } as const satisfies GameCatalog;
 
 export default ar;

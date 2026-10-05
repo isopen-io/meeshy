@@ -3,7 +3,9 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, test } from 'bun:test';
 
 import { ENGAGEMENT_AXES, ENGAGEMENT_AXIS_FAMILIES, engagementAxisFamily } from '@meeshy/shared/types/engagement';
-import type { EngagementAxisProgress } from '@meeshy/shared/utils/engagement-progress';
+import { resolveEngagementProgress, type EngagementAxisProgress } from '@meeshy/shared/utils/engagement-progress';
+
+import { ENGAGEMENT_PROGRESS_FIXTURE } from '@/lib/api/engagement-fixture';
 
 import { GAME_BADGE_MATERIALS } from './materials';
 import {
@@ -125,5 +127,41 @@ describe('medalOfAxis — ce que la progression d’un axe donne à la médaille
   test('l’échelle complète : plus de palier suivant, l’arc est plein', () => {
     const top = medalOfAxis(axis({ reachedCount: 5, value: 900, previousThreshold: 500, nextThreshold: null, progress: 1, tiers: [1, 10, 50, 100, 500].map((threshold) => ({ threshold, reached: true, reachedAt: null })) }));
     expect(top).toMatchObject({ tier: 5, material: 'platinum', nextMaterial: null, progress: 1, threshold: 500 });
+  });
+});
+
+/**
+ * LES PALIERS 1 000 ET 5 000 (#9392) — les badges d'accumulation passent de
+ * cinq à sept paliers : l'obsidienne à 1 000, le prisme (irisé) à 5 000. La
+ * médaille les lit de la progression RÉSOLUE par la loi partagée, jamais d'une
+ * liste écrite ici : un compte à 5 000 messages a sa médaille prisme, et plus
+ * rien au-dessus.
+ */
+describe('les sept paliers de la progression résolue', () => {
+  const messages = (count: number) => {
+    const resolved = resolveEngagementProgress({ ...ENGAGEMENT_PROGRESS_FIXTURE, counters: [{ axisKey: 'content.text_message', count }] });
+    const found = resolved.axes.find((candidate) => candidate.axisKey === 'content.text_message');
+    if (found === undefined) throw new Error('axe absent');
+    return medalOfAxis(found);
+  };
+
+  test('1 000 messages : la médaille d’obsidienne, 4 000 de plus vers le prisme', () => {
+    const medal = messages(1000);
+    expect(medal.tier).toBe(6);
+    expect(medal.material).toBe('obsidian');
+    expect(medal.nextMaterial).toBe('prism');
+    expect(medal.nextThreshold).toBe(5000);
+  });
+
+  test('5 000 messages : la médaille prisme, plus aucun palier au-dessus', () => {
+    const medal = messages(5000);
+    expect(medal.tier).toBe(7);
+    expect(medal.material).toBe('prism');
+    expect(medal.nextMaterial).toBeNull();
+    expect(medal.nextThreshold).toBeNull();
+  });
+
+  test('499 messages : toujours l’or du palier 100, jamais l’obsidienne', () => {
+    expect(messages(499).material).toBe('gold');
   });
 });

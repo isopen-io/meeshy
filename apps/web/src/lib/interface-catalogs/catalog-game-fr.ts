@@ -601,6 +601,14 @@ const fr = {
   'game.prestige.go': 'Passer en Prestige',
   'game.prestige.stay': 'Rester au sommet',
   'game.prestige.done': 'Prestige {number} ! Une étoile de plus sur ton anneau.',
+  'game.rarity.common': 'Commun',
+  'game.rarity.rare': 'Rare',
+  'game.rarity.epic': 'Épique',
+  'game.rarity.legendary': 'Légendaire',
+  'game.rarity.mythic': 'Mythique',
+  'game.rarity.share': '{percent} des comptes',
+  'game.rarity.aria': 'Rareté : {name}, {share}',
+  'game.rarity.measuring': 'Rareté en cours de mesure',
 } as const;
 
 export default fr;

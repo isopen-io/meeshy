@@ -7,6 +7,7 @@ import type { EngagementWithGame } from '@/lib/api/engagement';
 import { appPhotoEnv } from '@/lib/game-photo/app-env';
 import type { PhotoEnv } from '@/lib/game-photo/env';
 import { achievementMoment, type PhotoMoment } from '@/lib/game-photo/moments';
+import type { AchievementRarityMap } from '@/lib/game/rarity';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { suspendForGameCatalog } from '@/lib/i18n-game-catalog';
 import { ProgressionPage } from '@/routes/progression-page';
@@ -30,15 +31,18 @@ export function SuccesBody({
   progress,
   env,
   flameDays = null,
+  rarities,
 }: {
   readonly progress: EngagementProgress;
   readonly env: PhotoEnv;
   readonly flameDays?: number | null;
+  /** La rareté mesurée de chaque succès (#9390) ; absente : l'écran d'avant. */
+  readonly rarities?: AchievementRarityMap | undefined;
 }) {
   const [taking, setTaking] = useState<PhotoMoment | null>(null);
   return (
     <>
-      <AchievementsSection progress={progress} onPhoto={(key) => setTaking(achievementMoment(key))} />
+      <AchievementsSection progress={progress} rarities={rarities} onPhoto={(key) => setTaking(achievementMoment(key))} />
       {taking === null ? null : <GamePhotoFlow moment={taking} env={env} flameDays={flameDays} onClose={() => setTaking(null)} />}
     </>
   );
@@ -47,14 +51,15 @@ export function SuccesBody({
 export default function ProgressionSuccesScreen() {
   suspendForGameCatalog(currentInterfaceLanguage());
   /* Les jours de la Flamme du bandeau : lus dans le cache de Progression, jamais redemandés. */
-  const flameDays = useQueryClient().getQueryData<EngagementWithGame>(ENGAGEMENT_PROGRESS_QUERY_KEY)?.game?.flame.days ?? null;
+  const cached = useQueryClient().getQueryData<EngagementWithGame>(ENGAGEMENT_PROGRESS_QUERY_KEY);
+  const flameDays = cached?.game?.flame.days ?? null;
   return (
     <ProgressionPage
       titre="Succès"
       teinte={UNLOCKED_TINT}
       compte={(p) => `${p.achievements.filter((a) => a.unlocked).length} / ${p.achievements.length}`}
     >
-      {(progress) => <SuccesBody progress={progress} env={appPhotoEnv()} flameDays={flameDays} />}
+      {(progress) => <SuccesBody progress={progress} env={appPhotoEnv()} flameDays={flameDays} rarities={(progress as EngagementWithGame).game?.achievementRarities} />}
     </ProgressionPage>
   );
 }

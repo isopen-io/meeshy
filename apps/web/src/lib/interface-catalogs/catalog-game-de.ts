@@ -587,6 +587,14 @@ const de = {
   'game.prestige.go': 'Zu Prestige wechseln',
   'game.prestige.stay': 'Oben bleiben',
   'game.prestige.done': 'Prestige {number}! Ein Stern mehr auf deinem Ring.',
+  'game.rarity.common': 'Gewöhnlich',
+  'game.rarity.rare': 'Selten',
+  'game.rarity.epic': 'Episch',
+  'game.rarity.legendary': 'Legendär',
+  'game.rarity.mythic': 'Mythisch',
+  'game.rarity.share': '{percent} der Konten',
+  'game.rarity.aria': 'Seltenheit: {name}, {share}',
+  'game.rarity.measuring': 'Seltenheit wird gemessen',
 } as const satisfies GameCatalog;
 
 export default de;

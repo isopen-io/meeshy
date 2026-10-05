@@ -91,6 +91,13 @@
   --game-stamp-4: #8b5cf6;
   --game-stamp-5: #0d9488;
 
+  /* LES LISERÉS DE RARETÉ (#9390) : ardoise, bleu, violet, or ; le mythique est
+     le dégradé du prisme (`--game-prism-*`). Illustration : pas de variante de thème. */
+  --game-rarity-slate: #64748b;
+  --game-rarity-blue: #3b82f6;
+  --game-rarity-violet: #8b5cf6;
+  --game-rarity-gold: #d4a017;
+
   --game-tier-etincelle: var(--ios-error);
   --game-tier-lueur: #fb923c;
   --game-tier-lumiere: var(--ios-warning);

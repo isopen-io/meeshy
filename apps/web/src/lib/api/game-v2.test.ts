@@ -78,6 +78,12 @@ describe('les extensions du bloc game', () => {
     expect(readGameExtensions({ season: bad })).toEqual({});
   });
 
+  test('la rareté des succès (hors contrat) se lit tolérante, entrée par entrée', () => {
+    const read = readGameExtensions({ achievementRarities: { a: { rarity: 'rare', holders: 30, population: 2000 }, b: { rarity: 'nope', holders: 1, population: 1 } } });
+    expect(Object.keys(read.achievementRarities ?? {})).toEqual(['a']);
+    expect(readGameExtensions({ achievementRarities: 'x' })).toEqual({});
+  });
+
   test('une visibilité inconnue refuse le bloc de visibilité', () => {
     expect(readGameExtensions({ visibility: { showcase: 'friends', rank: 'friends', treasury: 'friends', atlas: 'public' } })).toEqual({});
   });

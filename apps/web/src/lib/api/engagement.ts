@@ -2,7 +2,7 @@ import { isEngagementProgressPayload, type EngagementProgressPayload } from '@me
 import { resolveEngagementProgress, type EngagementProgress } from '@meeshy/shared/utils/engagement-progress';
 import * as meEndpoints from '@meeshy/shared/api/endpoints/me';
 
-import type { GameBlock } from '@meeshy/shared/types/game';
+import type { GameBlockV2 } from './game-v2';
 
 import { mintBadgeImpact, type MintBadgeImpact } from '@/lib/view/game-mint';
 
@@ -69,13 +69,13 @@ export async function fetchEngagementProgress(
  * l'écran actuel reste alors intact, il ne reçoit rien à moitié.
  */
 export type EngagementWithGame = EngagementProgress & {
-  readonly game?: GameBlock;
+  readonly game?: GameBlockV2;
   readonly mintBadgeLoss?: number;
   /** Actions à refaire pour rallumer le badge le plus proche de ceux qu'une frappe éteindrait. */
   readonly mintBadgeRegain?: number;
 };
 
-const withGame = (progress: EngagementProgress, game: GameBlock | null, impact: MintBadgeImpact | null): EngagementWithGame =>
+const withGame = (progress: EngagementProgress, game: GameBlockV2 | null, impact: MintBadgeImpact | null): EngagementWithGame =>
   game === null
     ? progress
     : { ...progress, game, ...(impact === null ? {} : { mintBadgeLoss: impact.lost, mintBadgeRegain: impact.regain }) };

@@ -1,4 +1,5 @@
 import type { GameVisibility } from '@meeshy/shared/types/game';
+import type { AchievementRarity } from '@meeshy/shared/utils/game/glory';
 import type { LeagueKey, LeagueZone } from '@meeshy/shared/utils/game/league';
 import { parseTrophyKey } from '@meeshy/shared/utils/game/trophies';
 
@@ -156,3 +157,6 @@ export function dayLabel(dayKey: string, language: Language = currentInterfaceLa
   const [year, month, day] = dayKey.split('-').map(Number);
   return new Intl.DateTimeFormat(language, { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(Date.UTC(year ?? 1970, (month ?? 1) - 1, day ?? 1)));
 }
+
+export const rarityName = (rarity: AchievementRarity, language: Language = currentInterfaceLanguage()): string =>
+  translateGame(language, `game.rarity.${rarity}`);

@@ -15,7 +15,7 @@ import { MISSION_DIFFICULTIES } from '@meeshy/shared/utils/game/missions';
 import { TREASURY_TIERS } from '@meeshy/shared/utils/game/treasury';
 
 import { isBool, isFraction, isInt, isOneOf, isText, orNull, shape } from './game-guards';
-import { readGameExtensions, withoutExtensions } from './game-v2';
+import { readGameExtensions, withoutExtensions, type GameBlockV2 } from './game-v2';
 import type { ApiResult, HttpTransport } from './http';
 
 /**
@@ -174,7 +174,7 @@ const isGameBlock = (value: unknown): value is GameBlock =>
   });
 
 /** Le bloc `game`, ou `null` s'il est absent ou partiel — jamais à moitié lu. */
-export const readGameBlock = (value: unknown): GameBlock | null =>
+export const readGameBlock = (value: unknown): GameBlockV2 | null =>
   isGameBlock(value) ? { ...withoutExtensions(value), ...readGameExtensions(value) } : null;
 
 const API_PREFIX = '/api/v1';
