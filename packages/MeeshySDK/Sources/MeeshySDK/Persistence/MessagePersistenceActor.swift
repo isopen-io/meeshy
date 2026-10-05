@@ -1442,7 +1442,7 @@ public actor MessagePersistenceActor {
                             ?? api.forwardedFromConversation?.identifier,
                         attachmentType: firstAtt?.mimeType,
                         attachmentThumbnailUrl: firstAtt?.thumbnailUrl,
-                        conversationType: api.forwardedFromConversation?.type
+                        conversationType: api.forwardedFromConversation?.type, senderUserId: fwd.sender?.resolvedUserId
                     )
                     return encoder.encodeOrLog(ref, field: "forwardedFromJson", id: api.id)
                 }
