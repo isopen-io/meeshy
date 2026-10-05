@@ -54,6 +54,10 @@ const log = enhancedLogger.child({ module: 'DuoService' });
 /** Le délai de grâce après le dimanche 20 h du dernier fuseau (UTC−12) avant d'expirer un duo. */
 const EXPIRY_GRACE_HOURS = 12;
 
+/** Invitations qu'un compte peut ENVOYER dans une semaine, et invitations en attente qu'un compte peut RECEVOIR. */
+export const DUO_INVITES_PER_WEEK = 5;
+export const DUO_PENDING_PER_INVITEE = 5;
+
 function isP2002(err: unknown): boolean {
   return typeof err === 'object' && err !== null && (err as { code?: string }).code === 'P2002';
 }
@@ -133,6 +137,19 @@ export class DuoService {
     })) as { id: string } | null;
     if (existing) return { status: 'already-invited', duoId: existing.id, weekKey };
 
+    // Le sens inverse (B→A pendant que A→B existe) est UN duo, pas deux ; et les invitations
+    // d'une semaine sont plafonnées, de part et d'autre, pour qu'on ne puisse pas harceler.
+    const reverse = await this.prisma.gameDuo.findFirst({
+      where: { weekKey, inviterId: friendId, inviteeId: inviterId, status: { in: ['invited', 'active'] } },
+      select: { id: true },
+    });
+    if (reverse !== null) throw new GameRefusal('DUO_ALREADY_ACTIVE', { reason: 'reverse-invitation' });
+    const [sent, pending] = await Promise.all([
+      this.prisma.gameDuo.count({ where: { weekKey, inviterId } }),
+      this.prisma.gameDuo.count({ where: { weekKey, inviteeId: friendId, status: 'invited' } }),
+    ]);
+    if (sent >= DUO_INVITES_PER_WEEK || pending >= DUO_PENDING_PER_INVITEE) throw new GameRefusal('DUO_TRANSITION_REFUSED', { reason: 'invitation-cap' });
+
     const verdict = canInviteToDuo({
       inviterLevelRecord: recordOf(inviter),
       inviteeLevelRecord: invitee ? recordOf(invitee) : 0,
@@ -174,15 +191,12 @@ export class DuoService {
       },
       select: { id: true },
     });
-    // UN duo par compte et par semaine, QUELLE QUE SOIT la direction : les deux
-    // emplacements se réservent ICI, l'unicité `(userId, weekKey)` tranche — deux
-    // invitations croisées simultanées ne peuvent pas toutes deux réussir.
+    // L'invitation ne réserve QUE l'emplacement de l'INVITANT (le sien, qu'il a choisi
+    // d'engager) : celui de l'invité ne se prend qu'à son acceptation. Une invitation
+    // en attente ne peut donc ni bloquer l'invité ni le priver de son duo de la semaine.
     try {
-      for (const userId of [inviterId, friendId]) {
-        await this.prisma.gameDuoSlot.create({ data: { userId, weekKey, duoId: duo.id }, select: { id: true } });
-      }
+      await this.prisma.gameDuoSlot.create({ data: { userId: inviterId, weekKey, duoId: duo.id }, select: { id: true } });
     } catch (err) {
-      await this.prisma.gameDuoSlot.deleteMany({ where: { duoId: duo.id } });
       await this.prisma.gameDuo.delete({ where: { id: duo.id } });
       if (isP2002(err)) throw new GameRefusal('DUO_ALREADY_ACTIVE');
       throw err;
@@ -227,8 +241,15 @@ export class DuoService {
       await this.end(duo, 'abandoned', now);
       throw new GameRefusal('DUO_NOT_FRIENDS');
     }
+    try {
+      await this.prisma.gameDuoSlot.create({ data: { userId, weekKey: duo.weekKey, duoId }, select: { id: true } });
+    } catch (err) {
+      if (isP2002(err)) throw new GameRefusal('DUO_ALREADY_ACTIVE');
+      throw err;
+    }
     const activated = await this.prisma.gameDuo.updateMany({ where: { id: duoId, status: 'invited' }, data: { status: 'active', acceptedAt: now } });
     if (activated.count === 0) {
+      await this.prisma.gameDuoSlot.deleteMany({ where: { userId, duoId } });
       const fresh = await this.load(duoId);
       if (fresh?.status === 'active') return { status: 'already-active', duoId };
       throw new GameRefusal('DUO_TRANSITION_REFUSED', { status: fresh?.status ?? null });

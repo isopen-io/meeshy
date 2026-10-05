@@ -10,7 +10,7 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import { duoReward } from '@meeshy/shared/utils/game/duo';
 import { levelFromScore } from '@meeshy/shared/utils/game/levels';
-import { DuoService, roundedPartnerProgress } from '../DuoService';
+import { DUO_INVITES_PER_WEEK, DuoService, roundedPartnerProgress } from '../DuoService';
 import { fakeGameDb, seedUser, USER, OTHER, type FakeGameDb } from './fakeGameDb';
 
 const privacy = new Map<string, Record<string, unknown>>();
@@ -60,7 +60,7 @@ describe('DuoService.invite', () => {
     expect(result).toMatchObject({ status: 'invited', weekKey: WEEK });
     expect(db.gameDuo.rows[0]).toMatchObject({ inviterId: USER, inviteeId: OTHER, status: 'invited', weekKey: WEEK });
     expect(db.gameDuo.rows[0]!.partTarget).toBeGreaterThan(0);
-    expect(db.gameDuoSlot.rows.map((s) => s.userId).sort()).toEqual([USER, OTHER]);
+    expect(db.gameDuoSlot.rows.map((s) => s.userId)).toEqual([USER]);
   });
 
   it('la même invitation rejouée rend already-invited sans créer de second duo', async () => {
@@ -335,15 +335,18 @@ describe('DuoService — pas de farming de récompenses', () => {
     await expect(service.invite({ inviterId: OTHER, friendId: USER, now: NOW })).rejects.toMatchObject({ code: 'DUO_ALREADY_ACTIVE' });
   });
 
-  it('invitations croisées SIMULTANÉES : un seul duo survit', async () => {
+  it('invitations croisées SIMULTANÉES : jamais deux duos actifs, aucun paiement double possible', async () => {
     const { db, service } = setup();
     const results = await Promise.allSettled([
       service.invite({ inviterId: USER, friendId: OTHER, now: NOW }),
       service.invite({ inviterId: OTHER, friendId: USER, now: NOW }),
     ]);
-    expect(results.filter((r) => r.status === 'fulfilled').length).toBeLessThanOrEqual(1);
-    expect(db.gameDuo.rows.length).toBe(db.gameDuoSlot.rows.length / 2);
-    expect(db.gameDuo.rows.length).toBeLessThanOrEqual(1);
+    const created = results.flatMap((r) => (r.status === 'fulfilled' ? [r.value.duoId] : []));
+    const accepted = await Promise.allSettled(
+      created.map((duoId) => service.accept({ userId: db.gameDuo.rows.find((d) => d.id === duoId)!.inviteeId as string, duoId, now: NOW })),
+    );
+    expect(accepted.filter((r) => r.status === 'fulfilled').length).toBeLessThanOrEqual(1);
+    expect(db.gameDuo.rows.filter((d) => d.status === 'active').length).toBeLessThanOrEqual(1);
   });
 
   it('un duo ACCOMPLI ne se rejoue pas la même semaine : ni même partenaire, ni autre, ni sens inverse', async () => {
@@ -410,6 +413,86 @@ describe('DuoService — pas de farming de récompenses', () => {
   it('inviter soi-même est refusé', async () => {
     const { service, db } = setup();
     await expect(service.invite({ inviterId: USER, friendId: USER, now: NOW })).rejects.toBeDefined();
+    expect(db.gameDuo.rows).toHaveLength(0);
+  });
+});
+
+describe('DuoService — autorisation et nuisance', () => {
+  it('l’invitant ne peut pas accepter sa propre invitation, seul l’invité le peut', async () => {
+    const { service } = setup();
+    const { duoId } = await service.invite({ inviterId: USER, friendId: OTHER, now: NOW });
+    await expect(service.accept({ userId: USER, duoId, now: NOW })).rejects.toMatchObject({ code: 'DUO_TRANSITION_REFUSED' });
+  });
+
+  it('un tiers reçoit EXACTEMENT la même réponse qu’un identifiant inexistant : DUO_NOT_FOUND, sans rien révéler', async () => {
+    const { db, service } = setup();
+    seedUser(db, { engagementScore: SCORE, levelRecord: 20 }, C);
+    const { duoId } = await service.invite({ inviterId: USER, friendId: OTHER, now: NOW });
+    const missing = '68b0000000000000000000ff';
+
+    for (const act of [(id: string) => service.accept({ userId: C, duoId: id, now: NOW }), (id: string) => service.abandon({ userId: C, duoId: id, now: NOW })]) {
+      const real = await act(duoId).catch((e) => e);
+      const none = await act(missing).catch((e) => e);
+      expect(real).toMatchObject({ code: 'DUO_NOT_FOUND' });
+      expect({ code: real.code, details: real.details }).toEqual({ code: none.code, details: none.details });
+    }
+    expect(db.gameDuo.rows[0]!.status).toBe('invited');
+  });
+
+  it('l’invité ou l’invitant peut décliner / quitter, le tiers non', async () => {
+    const { db, service } = setup();
+    const { duoId } = await service.invite({ inviterId: USER, friendId: OTHER, now: NOW });
+    expect((await service.abandon({ userId: OTHER, duoId, now: NOW })).status).toBe('abandoned');
+    expect(db.gameDuoSlot.rows).toHaveLength(0);
+  });
+
+  it('une invitation en attente n’occupe PAS l’emplacement de l’invité : il garde son duo de la semaine', async () => {
+    const { db, service } = setup();
+    seedUser(db, { engagementScore: SCORE, levelRecord: 20 }, C);
+    db.friendRequest.rows.push({ id: 'g', status: 'accepted', senderId: C, receiverId: OTHER });
+    await service.invite({ inviterId: USER, friendId: OTHER, now: NOW });
+
+    expect(db.gameDuoSlot.rows.some((s) => s.userId === OTHER)).toBe(false);
+    const other = await service.invite({ inviterId: C, friendId: OTHER, now: NOW });
+    expect((await service.accept({ userId: OTHER, duoId: other.duoId, now: NOW })).status).toBe('active');
+  });
+
+  it('l’invité peut lui-même inviter quelqu’un d’autre pendant qu’une invitation l’attend', async () => {
+    const { db, service } = setup();
+    seedUser(db, { engagementScore: SCORE, levelRecord: 20 }, C);
+    db.friendRequest.rows.push({ id: 'g', status: 'accepted', senderId: OTHER, receiverId: C });
+    await service.invite({ inviterId: USER, friendId: OTHER, now: NOW });
+    await expect(service.invite({ inviterId: OTHER, friendId: C, now: NOW })).resolves.toMatchObject({ status: 'invited' });
+  });
+
+  it('les invitations envoyées dans une semaine sont plafonnées', async () => {
+    const { db, service } = setup();
+    for (let i = 0; i < DUO_INVITES_PER_WEEK; i += 1) {
+      const friend = `68c0000000000000000000${String(i).padStart(2, '0')}`;
+      seedUser(db, { engagementScore: SCORE, levelRecord: 20 }, friend);
+      db.friendRequest.rows.push({ id: `fr${i}`, status: 'accepted', senderId: USER, receiverId: friend });
+      const { duoId } = await service.invite({ inviterId: USER, friendId: friend, now: NOW });
+      await service.abandon({ userId: USER, duoId, now: NOW });
+    }
+    await expect(service.invite({ inviterId: USER, friendId: OTHER, now: NOW })).rejects.toMatchObject({ code: 'DUO_TRANSITION_REFUSED', details: { reason: 'invitation-cap' } });
+  });
+
+  it('les invitations EN ATTENTE reçues par un même compte sont plafonnées', async () => {
+    const { db, service } = setup();
+    for (let i = 0; i < 5; i += 1) {
+      const friend = `68d0000000000000000000${String(i).padStart(2, '0')}`;
+      seedUser(db, { engagementScore: SCORE, levelRecord: 20 }, friend);
+      db.friendRequest.rows.push({ id: `fq${i}`, status: 'accepted', senderId: friend, receiverId: OTHER });
+      await service.invite({ inviterId: friend, friendId: OTHER, now: NOW });
+    }
+    await expect(service.invite({ inviterId: USER, friendId: OTHER, now: NOW })).rejects.toMatchObject({ code: 'DUO_TRANSITION_REFUSED', details: { reason: 'invitation-cap' } });
+  });
+
+  it('un compte bloqué (dans un sens ou l’autre) ne peut pas inviter', async () => {
+    const { db, service } = setup();
+    db.user.rows.find((u) => u.id === USER)!.blockedUserIds = [OTHER];
+    await expect(service.invite({ inviterId: OTHER, friendId: USER, now: NOW })).rejects.toMatchObject({ code: 'DUO_NOT_FRIENDS' });
+    await expect(service.invite({ inviterId: USER, friendId: OTHER, now: NOW })).rejects.toMatchObject({ code: 'DUO_NOT_FRIENDS' });
     expect(db.gameDuo.rows).toHaveLength(0);
   });
 });
