@@ -326,6 +326,30 @@ describe('la file de livraison', () => {
     expect(resultat.ok && resultat.data[0]?.scheduledAt).toBe('2026-10-05T12:00:00.000Z');
   });
 
+  test('nomme la conversation et le membre joué quand la passerelle les sert ; facultatifs pour un ancien serveur', async () => {
+    const { transport } = transportQui(() =>
+      ok([
+        {
+          id: 'q1',
+          conversationId: C,
+          conversation: { id: C, title: 'Les amis du jeudi' },
+          persona: { id: U, username: 'lea', displayName: 'Léa Martin' },
+          action: { type: 'message', asUserId: U, content: 'Bonjour' },
+        },
+        { id: 'q2', conversationId: C, conversation: { id: C, title: null }, persona: { id: U, username: 'lea', displayName: null }, action: { type: 'reaction', asUserId: U, emoji: '👍' } },
+        { id: 'q3', conversationId: C, conversation: 'abîmé', persona: { username: 'sans-id' }, action: { type: 'message', asUserId: U, content: 'Ancien' } },
+        { id: 'q4', conversationId: C, action: { type: 'message', asUserId: U, content: 'Ancien serveur' } },
+      ]),
+    );
+    const resultat = await loadAgentQueue(deps(transport));
+    expect(resultat.ok && resultat.data.map((item) => [item.conversation, item.persona])).toEqual([
+      [{ id: C, title: 'Les amis du jeudi' }, { id: U, username: 'lea', displayName: 'Léa Martin' }],
+      [{ id: C, title: null }, { id: U, username: 'lea', displayName: null }],
+      [null, null],
+      [null, null],
+    ]);
+  });
+
   test('PATCH réécrit le texte (`{ content }`), DELETE annule sans corps', async () => {
     const { transport, vues } = transportQui(() => ok({ deleted: true }));
     await editAgentQueueItem({ ...deps(transport), id: 'q1', content: 'Bonsoir' });

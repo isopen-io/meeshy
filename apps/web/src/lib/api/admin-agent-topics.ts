@@ -159,7 +159,30 @@ export type AgentQueueItem = {
   readonly content: string;
   readonly scheduledAt: string | null;
   readonly mergeCount: number;
+  /** La conversation nommée — `null` quand la passerelle ne la sert pas (serveur d'avant, ou conversation disparue). */
+  readonly conversation: AgentQueueConversation | null;
+  /** Le membre au nom duquel l'agent publie — `null` dans les mêmes cas. */
+  readonly persona: AgentQueuePersona | null;
 };
+
+export type AgentQueueConversation = { readonly id: string; readonly title: string | null };
+export type AgentQueuePersona = { readonly id: string; readonly username: string; readonly displayName: string | null };
+
+const nonEmptyOrNull = (value: unknown): string | null => (typeof value === 'string' && value.trim() !== '' ? value : null);
+
+/** Facultatif : un serveur d'avant ne sert ni `conversation` ni `persona` — l'écran retombe alors sur l'identifiant seul. */
+function decodeQueueConversation(raw: unknown): AgentQueueConversation | null {
+  const charge = asRecord(raw);
+  const id = nonEmptyOrNull(charge?.id);
+  return charge === null || id === null ? null : { id, title: nonEmptyOrNull(charge.title) };
+}
+
+function decodeQueuePersona(raw: unknown): AgentQueuePersona | null {
+  const charge = asRecord(raw);
+  const id = nonEmptyOrNull(charge?.id);
+  const username = nonEmptyOrNull(charge?.username);
+  return charge === null || id === null || username === null ? null : { id, username, displayName: nonEmptyOrNull(charge.displayName) };
+}
 
 function decodeQueueItem(raw: unknown): AgentQueueItem | null {
   const ligne = asRecord(raw);
@@ -176,6 +199,8 @@ function decodeQueueItem(raw: unknown): AgentQueueItem | null {
     scheduledAt:
       typeof ligne.scheduledAt === 'number' && Number.isFinite(ligne.scheduledAt) ? new Date(ligne.scheduledAt).toISOString() : null,
     mergeCount: asCount(ligne.mergeCount),
+    conversation: decodeQueueConversation(ligne.conversation),
+    persona: decodeQueuePersona(ligne.persona),
   };
 }
 

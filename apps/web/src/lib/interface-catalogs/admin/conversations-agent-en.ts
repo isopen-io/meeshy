@@ -376,6 +376,8 @@ const f = {
   'admin.agentPanel.queue.reaction': 'Reaction {emoji}',
   'admin.agentPanel.queue.at': 'Publication planned {when}',
   'admin.agentPanel.queue.conversation': 'Open the conversation',
+  'admin.agentPanel.queue.in': 'Conversation',
+  'admin.agentPanel.queue.as': 'Posted as',
   'admin.agentPanel.queue.edit': 'Correct the text',
   'admin.agentPanel.queue.editLabel': 'Message text',
   'admin.agentPanel.queue.save': 'Save the text',

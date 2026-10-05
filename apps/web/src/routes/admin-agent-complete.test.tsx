@@ -286,6 +286,41 @@ describe('la file de livraison', () => {
   });
 });
 
+describe('la file de livraison nomme où et au nom de qui', () => {
+  const NOMMEE: RoutedReply = (req) =>
+    req.method === 'GET' && pathOf(req) === '/api/v1/admin/agent/delivery-queue'
+      ? ok([
+          {
+            id: 'q1',
+            conversationId: C,
+            conversation: { id: C, title: 'Atelier cuisine' },
+            persona: { id: U, username: 'awa', displayName: 'Awa Diallo' },
+            scheduledAt: Date.UTC(2026, 9, 5, 12),
+            action: { type: 'message', asUserId: U, content: 'Salut' },
+          },
+        ])
+      : undefined;
+
+  test('la conversation nommée (lien vers sa fiche) et le membre joué (nom et @pseudo), jamais le libellé générique', async () => {
+    await monter(ADMIN, NOMMEE);
+    await ouvrir('queue');
+    const conversation = $('[data-agent-queue-item="q1"] [data-agent-queue-conversation]');
+    expect(conversation?.textContent).toContain('Atelier cuisine');
+    expect(conversation?.querySelector('a')?.getAttribute('href')).toContain(C);
+    const persona = $(`[data-agent-queue-item="q1"] [data-agent-queue-persona="${U}"]`);
+    expect(persona?.textContent).toContain('Awa Diallo');
+    expect(persona?.textContent).toContain('@awa');
+    expect($('[data-agent-queue-item="q1"]')?.textContent).not.toContain(translateAdmin('fr', 'admin.agentPanel.queue.conversation'));
+  });
+
+  test('un serveur d’avant (ni conversation ni persona) : le lien générique reste, aucun membre inventé', async () => {
+    await monter();
+    await ouvrir('queue');
+    expect($('[data-agent-queue-item="q1"] [data-agent-queue-conversation]')?.textContent).toContain(translateAdmin('fr', 'admin.agentPanel.queue.conversation'));
+    expect($('[data-agent-queue-item="q1"] [data-agent-queue-persona]')).toBeNull();
+  });
+});
+
 describe('les sujets', () => {
   test('un motif dangereux est refusé en le NOMMANT : le message de la passerelle s’affiche', async () => {
     const { calls } = await monter();
