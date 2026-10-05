@@ -28,19 +28,40 @@ import Foundation
 ///
 /// ## La règle
 ///
-/// **Dès qu'un hôte tient le texte, il EN EST la source — après l'envoi comme
-/// avant.** Il a vidé ⇒ le champ se vide ; il n'a pas bougé (donc il a refusé)
-/// ⇒ le champ garde ce qu'on venait d'y pousser. Rien à deviner, rien à
-/// chronométrer : on LIT ce que l'hôte dit, exactement comme `ComposerReturnKey`
-/// lit ce que le champ observe plutôt que d'interroger le clavier.
+/// **Le champ vaut ce que dit CELUI QUI A ENVOYÉ — et qui a envoyé se DIT, il
+/// ne se devine pas** (#9311).
+///
+/// - `.host` — l'hôte a fourni `onCustomSend:` (la conversation) : il prend le
+///   texte de SA source et la vide lui-même. Il a vidé ⇒ le champ se vide ; il
+///   n'a pas bougé (donc il a refusé) ⇒ le champ garde ce qu'on venait d'y
+///   pousser.
+/// - `.composer` — la barre a envoyé elle-même (`onSendMessage:` / `onSend:`) :
+///   `handleSend` a déjà vidé son état, ou l'a laissé intact s'il a refusé. La
+///   source de l'hôte ne dit alors RIEN de l'envoi : les hôtes de commentaires,
+///   de canvas de story et de réponse média ne la vident jamais. Y lire un
+///   refus ressuscitait le texte qu'on venait d'envoyer (#9311).
 nonisolated enum ComposerFieldAfterSend {
 
+    /// Qui a pris l'envoi — et donc le vidage — en charge.
+    enum Sender: Equatable {
+        case host
+        case composer
+
+        /// `onCustomSend` fourni ⇒ l'hôte ; absent ⇒ la barre.
+        init(hasCustomSend: Bool) {
+            self = hasCustomSend ? .host : .composer
+        }
+    }
+
     /// - Parameters:
-    ///   - local: le texte que la barre porte dans son `@State`.
+    ///   - local: le texte que la barre porte dans son `@State`, après `handleSend`.
     ///   - host: la valeur du `textBinding` APRÈS l'envoi — `nil` quand aucun
-    ///     hôte n'en tient (la barre est alors seule maître, et `handleSend`
-    ///     a déjà remis son état à zéro).
-    static func resolve(local: String, host: String?) -> String {
-        host ?? local
+    ///     hôte n'en tient.
+    ///   - sender: qui a envoyé (`Sender(hasCustomSend:)`).
+    static func resolve(local: String, host: String?, sender: Sender) -> String {
+        switch sender {
+        case .host: host ?? local
+        case .composer: local
+        }
     }
 }
