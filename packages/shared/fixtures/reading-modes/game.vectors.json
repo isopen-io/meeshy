@@ -12429,6 +12429,315 @@
         "emblem": null,
         "id": null
       }
+    },
+    {
+      "_label": "clé visiteur de « trophy.league-cup.2026-10-12.jade.gold » au mois 2026-10",
+      "input": {
+        "law": "trophy-visitor-key",
+        "key": "trophy.league-cup.2026-10-12.jade.gold",
+        "awardedMonth": "2026-10"
+      },
+      "expected": {
+        "key": "trophy.league-cup.2026-10.jade.gold"
+      }
+    },
+    {
+      "_label": "clé visiteur de « trophy.league-cup.2026-09-28.quartz.bronze » au mois 2026-10",
+      "input": {
+        "law": "trophy-visitor-key",
+        "key": "trophy.league-cup.2026-09-28.quartz.bronze",
+        "awardedMonth": "2026-10"
+      },
+      "expected": {
+        "key": "trophy.league-cup.2026-10.quartz.bronze"
+      }
+    },
+    {
+      "_label": "clé visiteur de « trophy.league-cup.2026-10.jade.gold » au mois 2026-11",
+      "input": {
+        "law": "trophy-visitor-key",
+        "key": "trophy.league-cup.2026-10.jade.gold",
+        "awardedMonth": "2026-11"
+      },
+      "expected": {
+        "key": "trophy.league-cup.2026-11.jade.gold"
+      }
+    },
+    {
+      "_label": "clé visiteur de « trophy.season-cup.3 » au mois 2026-10",
+      "input": {
+        "law": "trophy-visitor-key",
+        "key": "trophy.season-cup.3",
+        "awardedMonth": "2026-10"
+      },
+      "expected": {
+        "key": "trophy.season-cup.3"
+      }
+    },
+    {
+      "_label": "clé visiteur de « trophy.prestige.2 » au mois 2026-10",
+      "input": {
+        "law": "trophy-visitor-key",
+        "key": "trophy.prestige.2",
+        "awardedMonth": "2026-10"
+      },
+      "expected": {
+        "key": "trophy.prestige.2"
+      }
+    },
+    {
+      "_label": "clé visiteur de « trophy.flame.365 » au mois 2026-10",
+      "input": {
+        "law": "trophy-visitor-key",
+        "key": "trophy.flame.365",
+        "awardedMonth": "2026-10"
+      },
+      "expected": {
+        "key": "trophy.flame.365"
+      }
+    },
+    {
+      "_label": "clé visiteur de « trophy.cometa.2026-10-12 » au mois 2026-10",
+      "input": {
+        "law": "trophy-visitor-key",
+        "key": "trophy.cometa.2026-10-12",
+        "awardedMonth": "2026-10"
+      },
+      "expected": {
+        "key": null
+      }
+    },
+    {
+      "_label": "clé visiteur de « trophy.league-cup.2026-10-12.jade.gold » au mois octobre",
+      "input": {
+        "law": "trophy-visitor-key",
+        "key": "trophy.league-cup.2026-10-12.jade.gold",
+        "awardedMonth": "octobre"
+      },
+      "expected": {
+        "key": null
+      }
+    },
+    {
+      "_label": "lecture de la clé « trophy.league-cup.2026-10.jade.gold »",
+      "input": {
+        "law": "trophy-parse",
+        "key": "trophy.league-cup.2026-10.jade.gold"
+      },
+      "expected": {
+        "spec": {
+          "kind": "league-cup",
+          "monthKey": "2026-10",
+          "league": "jade",
+          "cup": "gold"
+        }
+      }
+    },
+    {
+      "_label": "lecture de la clé « trophy.league-cup.2026-13.jade.gold »",
+      "input": {
+        "law": "trophy-parse",
+        "key": "trophy.league-cup.2026-13.jade.gold"
+      },
+      "expected": {
+        "spec": null
+      }
+    },
+    {
+      "_label": "lecture de la clé « trophy.league-cup.2026-1.jade.gold »",
+      "input": {
+        "law": "trophy-parse",
+        "key": "trophy.league-cup.2026-1.jade.gold"
+      },
+      "expected": {
+        "spec": null
+      }
+    },
+    {
+      "_label": "vitrine d'un visiteur, cas 1",
+      "input": {
+        "law": "showcase-visitor",
+        "owned": [
+          {
+            "key": "trophy.league-cup.2026-10-05.jade.gold",
+            "awardedAt": "2026-10-12T00:05:00.000Z"
+          },
+          {
+            "key": "trophy.league-cup.2026-10-19.jade.gold",
+            "awardedAt": "2026-10-26T00:05:00.000Z"
+          },
+          {
+            "key": "trophy.league-cup.2026-10-12.jade.silver",
+            "awardedAt": "2026-10-19T00:05:00.000Z"
+          },
+          {
+            "key": "trophy.league-cup.2026-09-28.ambre.bronze",
+            "awardedAt": "2026-10-05T00:05:00.000Z"
+          },
+          {
+            "key": "trophy.flame.100",
+            "awardedAt": "2026-09-12T08:00:00.000Z"
+          },
+          {
+            "key": "trophy.cometa.2026-10-12",
+            "awardedAt": "2026-10-12T08:00:00.000Z"
+          }
+        ],
+        "order": []
+      },
+      "expected": {
+        "items": [
+          {
+            "key": "trophy.flame.100",
+            "awardedMonth": "2026-09"
+          },
+          {
+            "key": "trophy.league-cup.2026-10.jade.gold",
+            "awardedMonth": "2026-10",
+            "count": 2
+          },
+          {
+            "key": "trophy.league-cup.2026-10.jade.silver",
+            "awardedMonth": "2026-10"
+          },
+          {
+            "key": "trophy.league-cup.2026-10.ambre.bronze",
+            "awardedMonth": "2026-10"
+          }
+        ],
+        "order": [
+          "trophy.flame.100",
+          "trophy.league-cup.2026-10.jade.gold",
+          "trophy.league-cup.2026-10.jade.silver",
+          "trophy.league-cup.2026-10.ambre.bronze"
+        ]
+      }
+    },
+    {
+      "_label": "vitrine d'un visiteur, cas 2",
+      "input": {
+        "law": "showcase-visitor",
+        "owned": [
+          {
+            "key": "trophy.league-cup.2026-10-05.jade.gold",
+            "awardedAt": "2026-10-12T00:05:00.000Z"
+          },
+          {
+            "key": "trophy.league-cup.2026-10-19.jade.gold",
+            "awardedAt": "2026-10-26T00:05:00.000Z"
+          },
+          {
+            "key": "trophy.league-cup.2026-10-12.jade.silver",
+            "awardedAt": "2026-10-19T00:05:00.000Z"
+          },
+          {
+            "key": "trophy.league-cup.2026-09-28.ambre.bronze",
+            "awardedAt": "2026-10-05T00:05:00.000Z"
+          },
+          {
+            "key": "trophy.flame.100",
+            "awardedAt": "2026-09-12T08:00:00.000Z"
+          },
+          {
+            "key": "trophy.cometa.2026-10-12",
+            "awardedAt": "2026-10-12T08:00:00.000Z"
+          }
+        ],
+        "order": [
+          "trophy.league-cup.2026-10-12.jade.silver",
+          "trophy.flame.100"
+        ]
+      },
+      "expected": {
+        "items": [
+          {
+            "key": "trophy.league-cup.2026-10.jade.silver",
+            "awardedMonth": "2026-10"
+          },
+          {
+            "key": "trophy.flame.100",
+            "awardedMonth": "2026-09"
+          },
+          {
+            "key": "trophy.league-cup.2026-10.jade.gold",
+            "awardedMonth": "2026-10",
+            "count": 2
+          },
+          {
+            "key": "trophy.league-cup.2026-10.ambre.bronze",
+            "awardedMonth": "2026-10"
+          }
+        ],
+        "order": [
+          "trophy.league-cup.2026-10.jade.silver",
+          "trophy.flame.100",
+          "trophy.league-cup.2026-10.jade.gold",
+          "trophy.league-cup.2026-10.ambre.bronze"
+        ]
+      }
+    },
+    {
+      "_label": "vitrine d'un visiteur, cas 3",
+      "input": {
+        "law": "showcase-visitor",
+        "owned": [
+          {
+            "key": "trophy.league-cup.2026-10-05.jade.gold",
+            "awardedAt": "2026-10-12T00:05:00.000Z"
+          },
+          {
+            "key": "trophy.league-cup.2026-10-19.jade.gold",
+            "awardedAt": "2026-10-26T00:05:00.000Z"
+          },
+          {
+            "key": "trophy.league-cup.2026-10-12.jade.silver",
+            "awardedAt": "2026-10-19T00:05:00.000Z"
+          },
+          {
+            "key": "trophy.league-cup.2026-09-28.ambre.bronze",
+            "awardedAt": "2026-10-05T00:05:00.000Z"
+          },
+          {
+            "key": "trophy.flame.100",
+            "awardedAt": "2026-09-12T08:00:00.000Z"
+          },
+          {
+            "key": "trophy.cometa.2026-10-12",
+            "awardedAt": "2026-10-12T08:00:00.000Z"
+          }
+        ],
+        "order": [
+          "trophy.league-cup.2026-10-19.jade.gold",
+          "trophy.prestige.4"
+        ]
+      },
+      "expected": {
+        "items": [
+          {
+            "key": "trophy.league-cup.2026-10.jade.gold",
+            "awardedMonth": "2026-10",
+            "count": 2
+          },
+          {
+            "key": "trophy.flame.100",
+            "awardedMonth": "2026-09"
+          },
+          {
+            "key": "trophy.league-cup.2026-10.jade.silver",
+            "awardedMonth": "2026-10"
+          },
+          {
+            "key": "trophy.league-cup.2026-10.ambre.bronze",
+            "awardedMonth": "2026-10"
+          }
+        ],
+        "order": [
+          "trophy.league-cup.2026-10.jade.gold",
+          "trophy.flame.100",
+          "trophy.league-cup.2026-10.jade.silver",
+          "trophy.league-cup.2026-10.ambre.bronze"
+        ]
+      }
     }
   ]
 }

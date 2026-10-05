@@ -364,6 +364,12 @@ describe('les réponses de la vague 2', () => {
     expect(userShowcaseResponseSchema.safeParse({ visible: true, items: [{ key: 'trophy.prestige.1', awardedMonth: '2026-11-01T08:42' }], order: [] }).success).toBe(false);
   });
 
+  it('compte deux coupes identiques du même mois sur UNE ligne — `count` est additif et optionnel', () => {
+    const twice = { visible: true, items: [{ key: 'trophy.league-cup.2026-10.jade.gold', awardedMonth: '2026-10', count: 2 }], order: ['trophy.league-cup.2026-10.jade.gold'] };
+    expect(userShowcaseResponseSchema.parse(twice).items[0]).toEqual({ key: 'trophy.league-cup.2026-10.jade.gold', awardedMonth: '2026-10', count: 2 });
+    expect(userShowcaseResponseSchema.safeParse({ ...twice, items: [{ ...twice.items[0], count: 1 }] }).success).toBe(false);
+  });
+
   it('rend la réclamation d\'une étape et le passage en Prestige', () => {
     expect(
       seasonClaimResponseSchema.safeParse({
