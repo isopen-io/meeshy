@@ -66,6 +66,13 @@ describe('inAppStateOf', () => {
     expect(inAppStateOf(facts({ inAppSentAt: '2026-09-29T13:00:00.000Z' }))).toBe('running');
     expect(inAppStateOf(facts({ inAppSentAt: '2026-09-29T13:00:00.000Z', inAppCompletedAt: '2026-09-29T13:05:00.000Z' }))).toBe('done');
   });
+
+  test('terminée sans AUCUNE livraison et en échec : « échouée », jamais « publiée » (01402058e7)', () => {
+    const ended = { inAppSentAt: '2026-09-29T13:00:00.000Z', inAppCompletedAt: '2026-09-29T13:05:00.000Z' };
+    expect(inAppStateOf({ ...ended, status: 'FAILED', inAppSentCount: 0, inAppFailedCount: 1204 })).toBe('failed');
+    expect(inAppStateOf({ ...ended, status: 'FAILED', inAppSentCount: 0, inAppFailedCount: 0 })).toBe('failed');
+    expect(inAppStateOf({ ...ended, status: 'SENT', inAppSentCount: 1190, inAppFailedCount: 2 })).toBe('done');
+  });
 });
 
 describe('broadcastPollInterval', () => {
@@ -95,7 +102,18 @@ describe('broadcastPollInterval', () => {
 
 describe('recipientsToReach', () => {
   test('le nombre rapporté par la préparation prime quand on le connaît', () => {
-    expect(recipientsToReach({ totalRecipients: 1204 }, { recipientCount: 1300 })).toBe(1300);
+    expect(recipientsToReach({ totalRecipients: 1204 }, { recipientCount: 1300, emailRecipients: 1300, inAppRecipients: null })).toBe(1300);
+  });
+
+  test('chaque canal a son compte : l’e-mail exige une adresse vérifiée, l’application non (01402058e7)', () => {
+    const preview = { recipientCount: 0, emailRecipients: 0, inAppRecipients: 1500 };
+    expect(recipientsToReach({ totalRecipients: 0 }, preview, 'email')).toBe(0);
+    expect(recipientsToReach({ totalRecipients: 0 }, preview, 'inApp')).toBe(1500);
+  });
+
+  test('un ancien serveur sans compte in-app : repli sur le compte servi', () => {
+    expect(recipientsToReach({ totalRecipients: 1204 }, { recipientCount: 1300, emailRecipients: 1300, inAppRecipients: null }, 'inApp')).toBe(1300);
+    expect(recipientsToReach({ totalRecipients: 1204 }, undefined, 'inApp')).toBe(1204);
   });
 
   test('sinon le total que la ligne porte', () => {

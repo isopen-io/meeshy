@@ -51,6 +51,8 @@ type Options = {
   readonly fail?: Partial<Record<string, ApiResult<unknown>>>;
   readonly hold?: Partial<Record<string, Promise<void>>>;
   readonly onRead?: (read: number, state: { broadcast: Record<string, unknown> }) => void;
+  /** Ce que la préparation rapporte ; par défaut l'aperçu de la fixture. */
+  readonly preview?: Record<string, unknown>;
 };
 
 const ok = (data: unknown = undefined): ApiResult<unknown> => resultatServi(data);
@@ -90,7 +92,7 @@ function fakeServer(options: Options = {}): Fake {
           translatedSubjects: ready.translatedSubjects,
           translatedBodies: ready.translatedBodies,
         };
-        return ok(servedPreview());
+        return ok(options.preview ?? servedPreview());
       }
       if (request.path === adminEndpoints.broadcastsByIdSend(ID)) {
         state.broadcast = { ...state.broadcast, status: 'SENDING', sentAt: at, sentById: SENDER.id, sentBy: SENDER };
@@ -120,8 +122,12 @@ function Screen({ deps, pollMs }: { readonly deps: AdminDeps; readonly pollMs?: 
   );
 }
 
-async function open(fake: Fake, options: { readonly pollMs?: number; readonly url?: string; readonly identity?: ReturnType<typeof adminIdentityFixture> } = {}) {
-  const url = options.url ?? `/admin/broadcasts/${ID}`;
+/** `section` : la fiche s'ouvre par un lien `?open=<section>` — le bloc monte dans sa modale (spec 2026-10-04 § 3). */
+async function open(
+  fake: Fake,
+  options: { readonly pollMs?: number; readonly url?: string; readonly identity?: ReturnType<typeof adminIdentityFixture>; readonly section?: string } = {},
+) {
+  const url = options.url ?? `/admin/broadcasts/${ID}${options.section === undefined ? '' : `?open=${options.section}`}`;
   const adm = url.startsWith('/adm/');
   const { Router } = createRouter(
     {
@@ -153,7 +159,11 @@ const announcement = (host: ParentNode) => host.querySelector('[data-admin-annou
 const writes = (fake: Fake) => fake.calls.filter((call) => call.method !== 'GET');
 const reads = (fake: Fake) => fake.calls.filter((call) => call.method === 'GET');
 const meta = (host: ParentNode, anchor: string) => host.querySelector(`[data-admin-meta="${anchor}"]`)?.textContent ?? '';
-const section = (host: ParentNode, id: string) => host.querySelector(`[data-admin-fiche-section="${id}"]`);
+const section = (_host: ParentNode, id: string) => document.querySelector(`[data-admin-fiche-section="${id}"]`);
+const card = (host: ParentNode, id: string) => host.querySelector(`[data-admin-summary="${id}"]`)?.textContent ?? '';
+const openCard = async (host: ParentNode, id: string) => {
+  await mounter.click(host.querySelector<HTMLElement>(`[data-admin-summary="${id}"] [data-admin-summary-open]`));
+};
 const badge = (host: ParentNode) => host.querySelector('[data-admin-identity] [data-admin-raw]')?.textContent ?? '';
 const sleep = (ms: number) =>
   act(async () => {
@@ -181,7 +191,7 @@ describe('la fiche — qui, quoi, pour qui, où en est l’envoi', () => {
   });
 
   test('le contenu, dans la langue d’écriture NOMMÉE, garde ses retours à la ligne', async () => {
-    const host = await open(fakeServer());
+    const host = await open(fakeServer(), { section: 'content' });
 
     const content = section(host, 'content');
     expect(content?.textContent).toContain('Écrit en français');
@@ -191,7 +201,7 @@ describe('la fiche — qui, quoi, pour qui, où en est l’envoi', () => {
   });
 
   test('l’audience se dit en UNE phrase, langues et pays nommés', async () => {
-    const host = await open(fakeServer());
+    const host = await open(fakeServer(), { section: 'audience' });
 
     expect(section(host, 'audience')?.querySelector('[data-admin-audience]')?.textContent).toBe(
       'Comptes actifs, en français et espagnol, pays d’inscription : Sénégal et France',
@@ -199,19 +209,26 @@ describe('la fiche — qui, quoi, pour qui, où en est l’envoi', () => {
   });
 
   test('aucun ciblage : « Tous les comptes »', async () => {
-    const host = await open(fakeServer({ broadcast: servedBroadcast({ targeting: {} }) }));
+    const host = await open(fakeServer({ broadcast: servedBroadcast({ targeting: {} }) }), { section: 'audience' });
 
+    expect(card(host, 'audience')).toContain('Tous les comptes');
     expect(section(host, 'audience')?.querySelector('[data-admin-audience]')?.textContent).toBe('Tous les comptes');
   });
 
   test('un brouillon n’a pas encore de destinataires calculés, ni d’envoi, ni de publication : il le dit', async () => {
     const host = await open(fakeServer());
 
-    expect(meta(host, 'recipients')).toContain('Calculé à la préparation de l’envoi');
-    expect(section(host, 'translations')?.textContent).toContain('Pas encore traduite');
+    expect(card(host, 'translations')).toContain('Pas encore traduite');
+    expect(card(host, 'email')).toContain('Pas encore envoyée par e-mail');
+    expect(card(host, 'inApp')).toContain('Pas encore publiée dans l’application');
+    expect(card(host, 'audience')).toContain('—');
+    await openCard(host, 'audience');
+    expect(meta(document, 'recipients')).toContain('Calculé à la préparation de l’envoi');
+    await openCard(host, 'email');
     expect(section(host, 'email')?.textContent).toContain('Pas encore envoyée par e-mail');
-    expect(meta(host, 'inAppState')).toContain('Pas encore publiée dans l’application');
-    expect(host.querySelector('[role="progressbar"]')).toBeNull();
+    expect(document.querySelector('[role="progressbar"]')).toBeNull();
+    await openCard(host, 'inApp');
+    expect(meta(document, 'inAppState')).toContain('Pas encore publiée dans l’application');
   });
 
   test('la ligne « Identifiant technique » est le SEUL endroit où l’identifiant s’écrit', async () => {
@@ -222,7 +239,9 @@ describe('la fiche — qui, quoi, pour qui, où en est l’envoi', () => {
   });
 
   test('les personnes sont des puces nommées qui ouvrent la fiche du compte', async () => {
-    const host = await open(fakeServer({ broadcast: servedBroadcast({ status: 'SENT', sentAt: '2026-09-29T12:00:00.000Z', sentBy: SENDER, sentById: SENDER.id }) }));
+    const host = await open(fakeServer({ broadcast: servedBroadcast({ status: 'SENT', sentAt: '2026-09-29T12:00:00.000Z', sentBy: SENDER, sentById: SENDER.id }) }), {
+      section: 'people',
+    });
 
     const people = section(host, 'people');
     expect(meta(people ?? host, 'createdBy')).toContain('Membre 3');
@@ -234,8 +253,9 @@ describe('la fiche — qui, quoi, pour qui, où en est l’envoi', () => {
   });
 
   test('un compte supprimé se dit, il n’est pas inventé', async () => {
-    const host = await open(fakeServer({ broadcast: servedBroadcast({ createdBy: null }) }));
+    const host = await open(fakeServer({ broadcast: servedBroadcast({ createdBy: null }) }), { section: 'people' });
 
+    expect(card(host, 'people')).toContain('Compte introuvable');
     expect(meta(section(host, 'people') ?? host, 'createdBy')).toContain('Compte introuvable');
   });
 
@@ -296,13 +316,19 @@ describe('aucun identifiant ni valeur brute, dans aucun statut', () => {
 
       expect(host.querySelector('[data-admin-broadcast-fiche]')).not.toBeNull();
       expectNoRawIdentifiers(host);
+      /* Chaque modale aussi : le détail ne se lit qu'ouvert. */
+      for (const id of ['content', 'translations', 'audience', 'email', 'inApp', 'people']) {
+        await openCard(host, id);
+        expect(document.querySelector(`[data-admin-broadcast-panel="${id}"]`)).not.toBeNull();
+        expectNoRawIdentifiers(host);
+      }
     });
   }
 });
 
 describe('les traductions — en onglets NOMMÉS, dès qu’elles existent', () => {
   test('un onglet par langue de traduction, nommé ; le premier est ouvert', async () => {
-    const host = await open(fakeServer({ broadcast: servedReadyBroadcast() }));
+    const host = await open(fakeServer({ broadcast: servedReadyBroadcast() }), { section: 'translations' });
 
     const tabs = [...host.querySelectorAll('[data-admin-tab]')].map((tab) => tab.textContent?.trim());
     expect(tabs).toEqual(['Espagnol', 'Anglais']);
@@ -314,25 +340,54 @@ describe('les traductions — en onglets NOMMÉS, dès qu’elles existent', () 
   });
 
   test('changer d’onglet affiche l’autre langue', async () => {
-    const host = await open(fakeServer({ broadcast: servedReadyBroadcast() }));
+    const host = await open(fakeServer({ broadcast: servedReadyBroadcast() }), { section: 'translations' });
 
     await mounter.click(host.querySelector<HTMLElement>('[data-admin-tab="en"]'));
 
     const panel = section(host, 'translations')?.querySelector('[data-admin-translation]');
     expect(panel?.getAttribute('data-admin-translation')).toBe('en');
     expect(panel?.textContent).toContain('September news');
-    expect(window.location.search).toBe('?tab=en');
+    expect(new URLSearchParams(window.location.search).get('tab')).toBe('en');
+    expect(new URLSearchParams(window.location.search).get('open')).toBe('translations');
   });
 
   test('l’adresse pose l’onglet ouvert', async () => {
-    const host = await open(fakeServer({ broadcast: servedReadyBroadcast() }), { url: `/admin/broadcasts/${ID}?tab=en` });
+    const host = await open(fakeServer({ broadcast: servedReadyBroadcast() }), { url: `/admin/broadcasts/${ID}?open=translations&tab=en` });
 
     expect(section(host, 'translations')?.querySelector('[data-admin-translation]')?.getAttribute('data-admin-translation')).toBe('en');
   });
 
-  test('préparée sans aucune traduction nécessaire : elle le dit autrement que « pas encore »', async () => {
-    const host = await open(fakeServer({ broadcast: servedReadyBroadcast({ targetLanguages: [], translatedSubjects: {}, translatedBodies: {} }) }));
+  test('une langue cible restée sans traduction est SIGNALÉE, nommée ; la langue source n’est jamais un onglet', async () => {
+    const host = await open(
+      fakeServer({
+        broadcast: servedReadyBroadcast({
+          targetLanguages: ['es', 'en', 'wo'],
+          translatedSubjects: { fr: 'Paraphrase', es: 'Novedades', en: 'News' },
+          translatedBodies: { fr: 'Paraphrase', es: 'Hola', en: 'Hello' },
+        }),
+      }),
+      { section: 'translations' },
+    );
 
+    expect(card(host, 'translations')).toContain('Sans traduction : Wolof');
+    expect(section(host, 'translations')?.querySelector('[data-admin-translations-missing]')?.textContent).toContain('Wolof');
+    expect([...host.querySelectorAll('[data-admin-tab]')].map((tab) => tab.textContent?.trim())).toEqual(['Espagnol', 'Anglais']);
+  });
+
+  test('un texte servi échappé se lit à sa lettre : « 3 < 5 », jamais « 3 &lt; 5 »', async () => {
+    const host = await open(fakeServer({ broadcast: servedBroadcast({ subject: '3 &lt; 5 &amp; plus', body: '&lt;b&gt;Bonjour&lt;/b&gt;' }) }), { section: 'content' });
+
+    expect(section(host, 'content')?.querySelector('[data-admin-subject]')?.textContent).toBe('3 < 5 & plus');
+    expect(section(host, 'content')?.querySelector('[data-admin-body]')?.textContent).toBe('<b>Bonjour</b>');
+    expect(section(host, 'content')?.querySelector('b')).toBeNull();
+  });
+
+  test('préparée sans aucune traduction nécessaire : elle le dit autrement que « pas encore »', async () => {
+    const host = await open(fakeServer({ broadcast: servedReadyBroadcast({ targetLanguages: [], translatedSubjects: {}, translatedBodies: {} }) }), {
+      section: 'translations',
+    });
+
+    expect(card(host, 'translations')).toContain('Aucune traduction n’a été nécessaire');
     expect(section(host, 'translations')?.textContent).toContain('Aucune traduction n’a été nécessaire');
     expect(host.querySelector('[data-admin-tab]')).toBeNull();
   });
@@ -369,12 +424,35 @@ describe('quels gestes, dans quel état', () => {
     expect(offered(host)).toEqual(['send', 'delete']);
   });
 
-  test('prête qui ne vise PERSONNE : ni envoi ni publication, et le dit', async () => {
+  test('prête sans AUCUNE adresse e-mail vérifiée : l’envoi par e-mail est bloqué, la publication dans l’application NON (audit 2026-10-04)', async () => {
     const host = await open(fakeServer({ broadcast: servedReadyBroadcast({ totalRecipients: 0 }) }));
 
     expect(gesture(host, 'send')?.disabled).toBe(true);
+    expect(gesture(host, 'publishInApp')?.disabled).toBe(false);
+    expect(host.textContent).toContain('Aucun compte de cette audience n’a d’adresse e-mail vérifiée');
+    expect(host.textContent).not.toContain('Aucun compte ne correspond à cette audience');
+  });
+
+  test('préparée et ne visant PERSONNE sur aucun canal : ni envoi ni publication, et le dit', async () => {
+    const fake = fakeServer({ preview: servedPreview({ recipientCount: 0, emailRecipients: 0, inAppRecipients: 0, recipientsByLanguage: [], recipientsByCountry: [] }) });
+    const host = await open(fake);
+    await mounter.click(gesture(host, 'prepare'));
+    await mounter.click(confirm(host));
+
+    expect(gesture(host, 'send')?.disabled).toBe(true);
     expect(gesture(host, 'publishInApp')?.disabled).toBe(true);
-    expect(host.textContent).toContain('Aucun compte ne correspond à cette audience');
+  });
+
+  test('préparée : la publication compte les comptes joignables DANS L’APPLICATION, l’e-mail les adresses vérifiées', async () => {
+    const fake = fakeServer({ preview: servedPreview({ recipientCount: 2, emailRecipients: 2, inAppRecipients: 1500 }) });
+    const host = await open(fake);
+    await mounter.click(gesture(host, 'prepare'));
+    await mounter.click(confirm(host));
+
+    expect(gesture(host, 'send')?.textContent).toBe('Envoyer par e-mail à 2 comptes');
+    await mounter.click(gesture(host, 'publishInApp'));
+    expect(confirmBody(host)).toMatch(/Comptes visés : 1\s500/);
+    expect(card(host, 'audience')).toMatch(/1\s500/);
   });
 
   test('envoyée, pas encore publiée dans l’application : « Publier dans l’application » seulement', async () => {
@@ -403,6 +481,29 @@ describe('quels gestes, dans quel état', () => {
     expect(host.querySelector('[data-admin-inline-notice], [role="status"], [role="alert"]')).not.toBeNull();
     expect(host.textContent).toContain('L’envoi a échoué : Serveur SMTP injoignable');
     expect(badge(host)).toBe('Échec');
+  });
+
+  test('publication dans l’application ÉCHOUÉE (statut FAILED, aucune livraison) : l’avis dit le canal et l’erreur, jamais « Publiée »', async () => {
+    const host = await open(
+      fakeServer({
+        broadcast: servedReadyBroadcast({
+          status: 'FAILED',
+          errorMessage: 'All 1204 in-app deliveries failed',
+          inAppSentAt: '2026-09-29T13:00:00.000Z',
+          inAppCompletedAt: '2026-09-29T13:05:00.000Z',
+          inAppSentCount: 0,
+          inAppFailedCount: 1204,
+        }),
+      }),
+      { section: 'inApp' },
+    );
+
+    expect(badge(host)).toBe('Échec');
+    expect(host.textContent).toContain('La publication dans l’application a échoué : All 1204 in-app deliveries failed');
+    expect(card(host, 'inApp')).toContain('Publication échouée');
+    expect(meta(document, 'inAppState')).toContain('Publication échouée');
+    expect(meta(document, 'inAppState')).not.toContain('Publiée dans l’application');
+    expect(meta(document, 'inAppError')).toContain('All 1204 in-app deliveries failed');
   });
 
   test('échec sans message : le dit aussi', async () => {
@@ -437,6 +538,7 @@ describe('la livraison', () => {
           completedAt: '2026-09-29T12:20:00.000Z',
         }),
       }),
+      { section: 'email' },
     );
 
     const email = section(host, 'email');
@@ -451,6 +553,7 @@ describe('la livraison', () => {
   test('en cours : la progression est partielle et la fin est « En cours »', async () => {
     const host = await open(
       fakeServer({ broadcast: servedBroadcast({ status: 'SENDING', totalRecipients: 200, sentCount: 40, failedCount: 10, sentAt: '2026-09-30T11:30:00.000Z' }) }),
+      { section: 'email' },
     );
 
     const email = section(host, 'email');
@@ -459,7 +562,7 @@ describe('la livraison', () => {
   });
 
   test('dans l’application : publication en cours', async () => {
-    const running = await open(fakeServer({ broadcast: servedReadyBroadcast({ inAppSentAt: '2026-09-30T11:55:00.000Z', inAppSentCount: 300 }) }));
+    const running = await open(fakeServer({ broadcast: servedReadyBroadcast({ inAppSentAt: '2026-09-30T11:55:00.000Z', inAppSentCount: 300 }) }), { section: 'inApp' });
     const inApp = section(running, 'in-app');
     expect(meta(inApp ?? running, 'inAppState')).toContain('Publication en cours');
     expect(meta(inApp ?? running, 'inAppSent')).toContain('300');
@@ -478,12 +581,14 @@ describe('la livraison', () => {
           inAppSentBy: SENDER,
         }),
       }),
+      { section: 'inApp' },
     );
     const finished = section(done, 'in-app');
     expect(meta(finished ?? done, 'inAppState')).toContain('Publiée dans l’application');
     expect(meta(finished ?? done, 'inAppSent')).toMatch(/1\s190/);
     expect(meta(finished ?? done, 'inAppFailed')).toContain('2');
     expect(meta(finished ?? done, 'inAppCompletedAt')).toMatch(/2026.*·/);
+    await openCard(done, 'people');
     expect(meta(section(done, 'people') ?? done, 'inAppBy')).toContain('Léa Moreau');
   });
 });
@@ -529,7 +634,7 @@ describe('la relecture automatique — tant qu’un envoi tourne', () => {
     await sleep(200);
     await mounter.settle();
 
-    expect(meta(section(host, 'in-app') ?? host, 'inAppState')).toContain('Publiée dans l’application');
+    expect(card(host, 'inApp')).toContain('Publiée dans l’application');
   });
 });
 
@@ -572,7 +677,10 @@ describe('préparer — traduire, passer à « Prête », dire la répartition',
     await mounter.click(gesture(host, 'prepare'));
     await mounter.click(confirm(host));
 
+    expect(card(host, 'translations')).toContain('2');
+    await openCard(host, 'translations');
     expect([...host.querySelectorAll('[data-admin-tab]')].map((tab) => tab.textContent?.trim())).toEqual(['Espagnol', 'Anglais']);
+    await openCard(host, 'audience');
     const preview = section(host, 'audience')?.querySelector('[data-admin-preview]');
     expect(preview).not.toBeNull();
     const byLanguage = [...(preview?.querySelectorAll('[data-admin-chart="broadcast-recipients-languages"] [data-admin-bar]') ?? [])].map((bar) => bar.textContent);
@@ -650,8 +758,9 @@ describe('envoyer par e-mail', () => {
     expect(call?.method).toBe('POST');
     expect(call?.path).toBe(adminEndpoints.broadcastsByIdSend(ID));
     expect(badge(host)).toBe('Envoi en cours');
-    expect(meta(section(host, 'people') ?? host, 'sentBy')).toContain('Léa Moreau');
     expect(announcement(host)).toBe('Envoi par e-mail lancé');
+    await openCard(host, 'people');
+    expect(meta(section(host, 'people') ?? host, 'sentBy')).toContain('Léa Moreau');
   });
 
   test('refus : retour arrière — la diffusion redevient Prête — et le refus est dit en mots', async () => {
@@ -694,7 +803,7 @@ describe('publier dans l’application', () => {
     expect(call?.method).toBe('POST');
     expect(call?.path).toBe(adminEndpoints.broadcastsByIdSendInapp(ID));
     expect(offered(host)).toEqual(['send', 'delete']);
-    expect(meta(section(host, 'in-app') ?? host, 'inAppState')).toContain('Publication en cours');
+    expect(card(host, 'inApp')).toContain('Publication en cours');
     expect(announcement(host)).toBe('Publication dans l’application lancée');
   });
 
@@ -709,7 +818,7 @@ describe('publier dans l’application', () => {
     await mounter.click(confirm(host));
 
     expect(host.querySelector('[data-admin-confirm-error]')?.textContent).toBe('Vous n’avez pas le droit d’effectuer ce geste.');
-    expect(meta(section(host, 'in-app') ?? host, 'inAppState')).toContain('Pas encore publiée');
+    expect(card(host, 'inApp')).toContain('Pas encore publiée');
     expect(offered(host)).toEqual(['send', 'publishInApp', 'delete']);
   });
 });
@@ -807,6 +916,8 @@ describe('modifier un brouillon', () => {
       targeting: { activityStatus: 'active', languages: ['fr', 'es'], countries: ['SN', 'FR'] },
     });
     expect(host.querySelector('[data-admin-compose]')).toBeNull();
+    expect(card(host, 'content')).toContain('Nouvel objet');
+    await openCard(host, 'content');
     expect(section(host, 'content')?.querySelector('[data-admin-subject]')?.textContent).toBe('Nouvel objet');
     expect(announcement(host)).toBe('Modifications enregistrées');
   });

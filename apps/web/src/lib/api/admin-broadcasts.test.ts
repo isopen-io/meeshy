@@ -161,6 +161,7 @@ describe('decodeAdminBroadcast — la fiche, forme figée, personnes nommées', 
         { language: 'es', subject: 'Novedades de septiembre', body: 'Hola,\nesto es lo que cambia este mes.' },
         { language: 'en', subject: 'September news', body: 'Hello,\nhere is what changes this month.' },
       ],
+      untranslated: [],
       targetLanguages: ['es', 'en'],
       status: 'SENT',
       totalRecipients: 1204,
@@ -231,6 +232,49 @@ describe('decodeAdminBroadcast — la fiche, forme figée, personnes nommées', 
     ]);
   });
 
+  test('la langue SOURCE n’est pas une traduction : écartée, même servie (audit 2026-10-04)', () => {
+    const decoded = decodeAdminBroadcast(
+      servedReadyBroadcast({
+        sourceLanguage: 'fr',
+        targetLanguages: ['es', 'en'],
+        translatedSubjects: { fr: 'Paraphrase', 'fr-FR': 'Paraphrase', es: 'S es', en: 'S en' },
+        translatedBodies: { fr: 'Paraphrase', es: 'B es', en: 'B en' },
+      }),
+    );
+
+    expect(decoded?.translations.map((translation) => translation.language)).toEqual(['es', 'en']);
+  });
+
+  test('une langue cible sans traduction est SIGNALÉE, jamais la source', () => {
+    const decoded = decodeAdminBroadcast(
+      servedReadyBroadcast({
+        sourceLanguage: 'fr',
+        targetLanguages: ['es', 'en', 'wo', 'fr'],
+        translatedSubjects: { es: 'S es', en: 'S en' },
+        translatedBodies: { es: 'B es', en: 'B en' },
+      }),
+    );
+
+    expect(decoded?.untranslated).toEqual(['wo']);
+  });
+
+  test('le texte servi échappé (&lt;, &amp;) se lit à sa lettre — du texte, jamais du HTML', () => {
+    const decoded = decodeAdminBroadcast(
+      servedReadyBroadcast({
+        name: 'Promo &amp; nouveautés',
+        subject: '3 &lt; 5',
+        body: '&lt;b&gt;Bonjour&lt;/b&gt;',
+        translatedSubjects: { es: 'Hola &amp; adiós', en: 'S en' },
+      }),
+    );
+
+    expect(decoded?.name).toBe('Promo & nouveautés');
+    expect(decoded?.subject).toBe('3 < 5');
+    expect(decoded?.body).toBe('<b>Bonjour</b>');
+    expect(decoded?.translations[0]?.subject).toBe('Hola & adiós');
+    expect(decodeAdminBroadcastRow(servedBroadcastRow({ name: 'A &amp; B', subject: '1 &gt; 0' }))).toMatchObject({ name: 'A & B', subject: '1 > 0' });
+  });
+
   test('l’erreur d’envoi est gardée ; un message vide devient null', () => {
     expect(decodeAdminBroadcast(servedBroadcast({ status: 'FAILED', errorMessage: 'SMTP refusé' }))?.errorMessage).toBe('SMTP refusé');
     expect(decodeAdminBroadcast(servedBroadcast({ errorMessage: '  ' }))?.errorMessage).toBeNull();
@@ -250,6 +294,8 @@ describe('decodeBroadcastPreview — ce que la préparation rapporte', () => {
 
     expect(decoded).toEqual({
       recipientCount: 1204,
+      emailRecipients: 1204,
+      inAppRecipients: null,
       byLanguage: [
         { language: 'fr', count: 9 },
         { language: 'en', count: 4 },
@@ -277,7 +323,14 @@ describe('decodeBroadcastPreview — ce que la préparation rapporte', () => {
     const decoded = decodeBroadcastPreview(servedPreview({ recipientsByLanguage: [{ language: 'fr', count: 'x' }, { count: 2 }, { language: 'es', count: 2 }] }));
 
     expect(decoded?.byLanguage).toEqual([{ language: 'es', count: 2 }]);
-    expect(Object.keys(decoded ?? {}).sort()).toEqual(['byCountry', 'byLanguage', 'recipientCount']);
+    expect(Object.keys(decoded ?? {}).sort()).toEqual(['byCountry', 'byLanguage', 'emailRecipients', 'inAppRecipients', 'recipientCount']);
+  });
+
+  test('les deux canaux comptés à part (01402058e7) : e-mail vérifié, et in-app sans contrainte de canal', () => {
+    const decoded = decodeBroadcastPreview(servedPreview({ recipientCount: 0, emailRecipients: 0, inAppRecipients: 1500 }));
+
+    expect(decoded?.emailRecipients).toBe(0);
+    expect(decoded?.inAppRecipients).toBe(1500);
   });
 
   test('une charge sans nombre de destinataires est illisible', () => {

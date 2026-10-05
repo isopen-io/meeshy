@@ -16,13 +16,26 @@
 export type BroadcastGesture = 'edit' | 'prepare' | 'send' | 'publishInApp' | 'delete';
 
 type GestureFacts = { readonly status: string; readonly inAppSentAt: string | null };
-type InAppFacts = { readonly inAppSentAt: string | null; readonly inAppCompletedAt: string | null };
+type InAppFacts = {
+  readonly inAppSentAt: string | null;
+  readonly inAppCompletedAt: string | null;
+  readonly status?: string;
+  readonly inAppSentCount?: number;
+  readonly inAppFailedCount?: number;
+};
 
-export type InAppState = 'never' | 'running' | 'done';
+export type InAppState = 'never' | 'running' | 'done' | 'failed';
 
+/**
+ * Où en est la publication dans l'application. **Terminée ne veut pas dire
+ * publiée** (01402058e7) : un envoi sans AUCUNE livraison, échecs comptés ou
+ * job tombé (statut `FAILED`), est une publication ÉCHOUÉE.
+ */
 export function inAppStateOf(facts: InAppFacts): InAppState {
   if (facts.inAppSentAt === null) return 'never';
-  return facts.inAppCompletedAt === null ? 'running' : 'done';
+  if (facts.inAppCompletedAt === null) return 'running';
+  const delivered = facts.inAppSentCount ?? 0;
+  return delivered === 0 && ((facts.inAppFailedCount ?? 0) > 0 || facts.status === 'FAILED') ? 'failed' : 'done';
 }
 
 export function broadcastGestures(facts: GestureFacts): readonly BroadcastGesture[] {
@@ -57,9 +70,21 @@ export function broadcastPollInterval(
   return broadcast.status === 'SENDING' || inAppStateOf(broadcast) === 'running' ? pollMs : false;
 }
 
-/** Le nombre de comptes que l'envoi atteindra : celui de la préparation quand on le connaît, sinon le total de la ligne. */
-export function recipientsToReach(broadcast: { readonly totalRecipients: number }, preview: { readonly recipientCount: number } | undefined): number {
-  return preview?.recipientCount ?? broadcast.totalRecipients;
+type PreviewCounts = { readonly recipientCount: number; readonly emailRecipients: number; readonly inAppRecipients: number | null };
+
+/**
+ * Le nombre de comptes qu'un CANAL atteindra (01402058e7) : l'e-mail exige une
+ * adresse vérifiée, l'application non. Celui de la préparation quand on le
+ * connaît (un ancien serveur ne sert pas le compte in-app : repli sur le compte
+ * servi), sinon le total de la ligne.
+ */
+export function recipientsToReach(
+  broadcast: { readonly totalRecipients: number },
+  preview: PreviewCounts | undefined,
+  channel: 'email' | 'inApp' = 'email',
+): number {
+  if (preview === undefined) return broadcast.totalRecipients;
+  return channel === 'inApp' ? (preview.inAppRecipients ?? preview.recipientCount) : preview.emailRecipients;
 }
 
 /**
