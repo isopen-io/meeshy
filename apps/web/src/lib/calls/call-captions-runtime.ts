@@ -2,10 +2,12 @@ import { currentDeviceLocale } from '@/lib/api/client';
 import { apiDeps } from '@/lib/api/deps';
 import { sessionStore } from '@/lib/api/session';
 import { resolveViewer } from '@/lib/api/viewer';
+import { coqueCourante } from '@/lib/native-shell';
 import { resolveReaderLanguages } from '@/lib/reader';
 
 import { createCaptions, type CaptionsContext, type CaptionsPort } from './call-captions-controller';
-import { browserSpeech, recognitionOf } from './call-speech';
+import { recognitionFor } from './call-shell-speech';
+import { browserSpeech } from './call-speech';
 
 /**
  * **LES SOUS-TITRES DANS LE NAVIGATEUR** (#8048) — l'entrée du chunk
@@ -38,7 +40,7 @@ function utteranceId(): string {
 
 export function createBrowserCaptions(ctx: CaptionsContext): CaptionsPort {
   return createCaptions(ctx, {
-    speech: browserSpeech(typeof window === 'undefined' ? null : recognitionOf(window)),
+    speech: browserSpeech(recognitionFor(typeof window === 'undefined' ? null : window, __SHELL__ ? coqueCourante() : undefined)),
     language: spokenLanguage,
     viewerName,
     newId: utteranceId,

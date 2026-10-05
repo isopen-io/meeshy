@@ -4,7 +4,7 @@ import type { CoqueNative } from '@/lib/native-shell';
 
 import type { SpeechResult } from './call-captions-controller';
 import { browserSpeech } from './call-speech';
-import { shellRecognition } from './call-shell-speech';
+import { recognitionFor, shellRecognition } from './call-shell-speech';
 
 /**
  * **DANS LA COQUE ANDROID, MA VOIX EST SOUS-TITRÉE COMME DEPUIS CHROME** (#9446) —
@@ -173,5 +173,16 @@ describe('la reconnaissance vocale prêtée par la coque Android (#9446)', () =>
     const recognition = new Recognition();
     recognition.start();
     expect(() => recognition.start()).toThrow();
+  });
+
+  test('la page prend la reconnaissance du navigateur quand il en a une, celle de la coque sinon', () => {
+    const { hote } = coque();
+    class Navigateur {}
+    expect(recognitionFor({ webkitSpeechRecognition: Navigateur }, hote)).toBe(Navigateur as never);
+    const pretee = recognitionFor({}, hote);
+    expect(pretee).not.toBeNull();
+    expect(pretee).not.toBe(Navigateur as never);
+    expect(recognitionFor({}, undefined)).toBeNull();
+    expect(recognitionFor(null, undefined)).toBeNull();
   });
 });
