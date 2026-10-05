@@ -3,6 +3,7 @@ import { afterEach, describe, expect, test } from 'bun:test';
 import { ARCHIVE_CONVERSATION_ID, ARCHIVE_STARRED_ID } from './fixtures-archive';
 import { FIXTURE_HOLD_GLOBAL } from './fixture-hold';
 import { createHttpTransport } from './http';
+import { loadMessages } from './messages';
 import { loadMessagesWindow } from './messages-window';
 
 /**
@@ -58,5 +59,47 @@ describe('fixture-hold (#9302)', () => {
     host[FIXTURE_HOLD_GLOBAL] = () => undefined;
     const result = await load();
     expect(result.ok).toBe(true);
+  });
+});
+
+describe('fixture-hold — la page d’historique (#9216, #9219)', () => {
+  const loadOlder = (before: string | undefined) =>
+    loadMessages({
+      source: 'fixtures',
+      transport: createHttpTransport({ base: '', fetchImpl: () => Promise.reject(new Error('aucun réseau sous fixtures')) }),
+      conversationId: ARCHIVE_CONVERSATION_ID,
+      ...(before !== undefined ? { before } : {}),
+    });
+
+  test('une page `before` retenue attend sa relâche, et la retenue reçoit le curseur', async () => {
+    const asked: string[] = [];
+    let release: () => void = () => {};
+    host[FIXTURE_HOLD_GLOBAL] = (channel: string, detail: string) => {
+      asked.push(`${channel}:${detail}`);
+      return new Promise<void>((resolve) => {
+        release = resolve;
+      });
+    };
+    let served = false;
+    const pending = loadOlder(ARCHIVE_STARRED_ID).then((result) => {
+      served = result.ok;
+    });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(served).toBe(false);
+    expect(asked).toEqual([`messages-before:${ARCHIVE_STARRED_ID}`]);
+    release();
+    await pending;
+    expect(served).toBe(true);
+  });
+
+  test('la PREMIÈRE page (sans curseur) n’est jamais retenue — l’ouverture du fil n’attend personne', async () => {
+    const asked: string[] = [];
+    host[FIXTURE_HOLD_GLOBAL] = (channel: string) => {
+      asked.push(channel);
+      return new Promise<void>(() => {});
+    };
+    const result = await loadOlder(undefined);
+    expect(result.ok).toBe(true);
+    expect(asked).toEqual([]);
   });
 });

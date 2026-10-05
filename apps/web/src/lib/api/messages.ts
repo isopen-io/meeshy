@@ -3,6 +3,7 @@ import type { QueryClient } from '@tanstack/react-query';
 import { unwrap } from './client';
 import type { ConversationsDeps } from './conversations';
 import { hasOlderMessagesOf, messagesOf, recordSentMessage } from './fixtures';
+import { fixtureHold } from './fixture-hold';
 import type { ApiResult, HttpTransport } from './http';
 import type { SharedPlace } from '@/lib/send/shared-place';
 import type { MessageSticker } from '@meeshy/shared/types/message-sticker';
@@ -49,6 +50,12 @@ export async function loadMessages(
   },
 ): Promise<ApiResult<MessagesPage>> {
   if (__FIXTURES__ && params.source === 'fixtures') {
+    /* Une page d'HISTORIQUE peut être retenue par un gate (#9216, #9219) :
+       servie sur-le-champ, elle tombait toujours dans la fenêtre où le
+       virtualiseur défile encore, jamais dans celle d'une page qui arrive par
+       le réseau — `check-thread-virtualization.mjs` joue les deux. */
+    const held = params.before === undefined ? null : fixtureHold('messages-before', params.before);
+    if (held !== null) await held;
     const page = pageOfMessages(messagesOf(params.conversationId), {
       ...(params.before !== undefined ? { before: params.before } : {}),
       limit: MESSAGES_LIMIT,
