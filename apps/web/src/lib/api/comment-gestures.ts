@@ -1,4 +1,5 @@
 import type { QueryClient } from '@tanstack/react-query';
+import * as postsEndpoints from '@meeshy/shared/api/endpoints/posts';
 
 import { editedLanguage } from '@/lib/send/compose-language';
 
@@ -6,10 +7,12 @@ import { newClientMessageId } from './client-message-id';
 import type { DataSource } from './config';
 import type { ApiResult, HttpTransport } from './http';
 import { outcomeOf } from './outcome';
+import { commentRepliesQueryKey } from './comment-replies';
 import {
   COMMENT_MAX_LENGTH,
   commentsQueryKey,
   shiftCommentCount,
+  shiftReplyCount,
   type CommentInfiniteData,
   type PostComment,
 } from './publication-comments';
@@ -28,7 +31,7 @@ import {
  *
  * ROUTES RÉELLES, lues avant d'être appelées :
  *
- *  - `POST|DELETE /api/v1/posts/:postId/comments/:commentId/like`
+ *  - `POST|DELETE posts.byPostIdCommentsByCommentIdLike`
  *    (`services/gateway/src/routes/posts/comments.ts:679,774`, `requiredAuth`
  *    + `registeredUser`). Corps facultatif : `LikeSchema.emoji` a le DÉFAUT
  *    `'❤️'` (`routes/posts/types.ts:560`) et `UnlikeSchema` n'en a AUCUN
@@ -41,13 +44,13 @@ import {
  *    **Cette route ne passe PAS par `withMutationLog`** : aucun
  *    `X-Client-Mutation-Id` n'est posé, poser l'en-tête annoncerait une
  *    idempotence que la passerelle n'offre pas ici.
- *  - `PATCH /api/v1/posts/:postId/comments/:commentId` (`:524`) — corps
+ *  - `PATCH posts.byPostIdCommentsByCommentId` (`:524`) — corps
  *    `UpdateCommentSchema` (`types.ts:466`) : `content` ≤ 2000, `effectFlags`,
  *    `originalLanguage`, avec un `.refine` « Nothing to update ». Rend le
  *    commentaire SERVI (auteur + média + `postId`). 403 `FORBIDDEN` hors
  *    auteur, 400 `EMPTY_CONTENT` sur un texte blanc. Idempotent par
  *    `X-Client-Mutation-Id` (`replayCost: 'converges'`).
- *  - `DELETE /api/v1/posts/:postId/comments/:commentId` (`:853`) — rend
+ *  - `DELETE posts.byPostIdCommentsByCommentId` (`:853`) — rend
  *    `{ deleted: true }`, idempotent par `X-Client-Mutation-Id`. Ni le PATCH
  *    ni le DELETE ne gardent l'audience du POST, DÉLIBÉRÉMENT (le
  *    doc-comment de la route l'écrit : « le droit de retirer ce qu'on a
@@ -249,19 +252,30 @@ export function insertCommentAt(data: CommentInfiniteData | undefined, site: Com
 type GestureParams = {
   readonly postId: string;
   readonly commentId: string;
+  /** LA RACINE d'une RÉPONSE (#8583) — le geste vise alors la caisse des
+   * réponses de cette racine (`comment-replies.ts`), pas le fil. */
+  readonly parentId?: string | undefined;
   readonly deps: CommentGestureDeps;
 };
 
+/** LA CAISSE QUI PORTE LA RANGÉE — le fil, ou les réponses de sa racine. */
+type CommentCache = { readonly postId: string; readonly parentId?: string | undefined };
+
+const cacheKeyOf = (cache: CommentCache) =>
+  cache.parentId === undefined || cache.parentId === ''
+    ? commentsQueryKey(cache.postId)
+    : commentRepliesQueryKey(cache.postId, cache.parentId);
+
 const writeComments = (
   deps: CommentGestureDeps,
-  postId: string,
+  cache: CommentCache,
   update: (data: CommentInfiniteData | undefined) => CommentInfiniteData | undefined,
 ): void => {
-  deps.queryClient.setQueryData<CommentInfiniteData>(commentsQueryKey(postId), update);
+  deps.queryClient.setQueryData<CommentInfiniteData>(cacheKeyOf(cache), update);
 };
 
-const readSite = (deps: CommentGestureDeps, postId: string, commentId: string): CommentSite | undefined =>
-  siteOf(deps.queryClient.getQueryData<CommentInfiniteData>(commentsQueryKey(postId)), commentId);
+const readSite = (deps: CommentGestureDeps, cache: CommentCache, commentId: string): CommentSite | undefined =>
+  siteOf(deps.queryClient.getQueryData<CommentInfiniteData>(cacheKeyOf(cache)), commentId);
 
 /** Le `likeCount` ABSOLU servi par la passerelle — jamais un delta. */
 const servedLikeCount = (data: unknown): number | undefined => {
@@ -271,8 +285,8 @@ const servedLikeCount = (data: unknown): number | undefined => {
 
 /** REMET la rangée LUE AU DÉPART à SA place courante — jamais à l'indice de
  * départ : entre l'écriture et le refus, un envoi optimiste a pu s'insérer. */
-const restore = (deps: CommentGestureDeps, postId: string, commentId: string, comment: PostComment): void => {
-  writeComments(deps, postId, (data) => {
+const restore = (deps: CommentGestureDeps, cache: CommentCache, commentId: string, comment: PostComment): void => {
+  writeComments(deps, cache, (data) => {
     const current = siteOf(data, commentId);
     return current === undefined ? data : replaceCommentAt(data, current, comment);
   });
@@ -331,17 +345,17 @@ export async function performCommentLike(params: GestureParams & { readonly on: 
   const flightKey = `like:${commentId}`;
   if (inFlight.has(flightKey)) return { ok: true };
 
-  const site = readSite(deps, postId, commentId);
+  const site = readSite(deps, params, commentId);
   if (site === undefined) return refused(COMMENT_LIKE_FAILED_MESSAGE);
 
   const target = likeTarget(site.comment, on);
-  writeComments(deps, postId, (data) => replaceCommentAt(data, site, target));
+  writeComments(deps, params, (data) => replaceCommentAt(data, site, target));
 
   inFlight.add(flightKey);
   try {
     const result = await sendCommentRequest(deps, {
       method: on ? 'POST' : 'DELETE',
-      path: `/api/v1/posts/${encodeURIComponent(postId)}/comments/${encodeURIComponent(commentId)}/like`,
+      path: postsEndpoints.byPostIdCommentsByCommentIdLike(postId, commentId),
       idempotent: false,
       fixture: { liked: on, likeCount: countOf(target.likeCount) },
     }).catch(() => null);
@@ -353,7 +367,7 @@ export async function performCommentLike(params: GestureParams & { readonly on: 
     if (result.ok) {
       const served = servedLikeCount(result.data);
       if (served !== undefined) {
-        writeComments(deps, postId, (data) => {
+        writeComments(deps, params, (data) => {
           const current = siteOf(data, commentId);
           return current === undefined ? data : replaceCommentAt(data, current, { ...current.comment, likeCount: served });
         });
@@ -372,12 +386,12 @@ export async function performCommentLike(params: GestureParams & { readonly on: 
        INVALIDÉ en plus, le cache étant par construction périmé. Et c'est le
        SEUL refus dont la raison soit propre au cœur : le lecteur ne peut pas
        deviner qu'il vient d'atteindre un plafond, donc on le NOMME. */
-    writeComments(deps, postId, (data) => {
+    writeComments(deps, params, (data) => {
       const current = siteOf(data, commentId);
       return current === undefined ? data : replaceCommentAt(data, current, site.comment);
     });
     if (result.status === 409) {
-      void deps.queryClient.invalidateQueries({ queryKey: commentsQueryKey(postId) });
+      void deps.queryClient.invalidateQueries({ queryKey: cacheKeyOf(params) });
       return refused(COMMENT_LIKE_FAILED_MESSAGE, 'comment.like.limit');
     }
     return refusalOf(result.status, COMMENT_LIKE_FAILED_MESSAGE);
@@ -396,7 +410,7 @@ export async function performCommentEdit(
   const flightKey = `edit:${commentId}`;
   if (inFlight.has(flightKey)) return { ok: true };
 
-  const site = readSite(deps, postId, commentId);
+  const site = readSite(deps, params, commentId);
   if (site === undefined) return refused(COMMENT_EDIT_FAILED_MESSAGE);
   /* LA LANGUE SE LIT SUR LE COMMENTAIRE, PAS SUR L'APPELANT — c'est ICI que
      la loi s'applique, parce que c'est le seul site qui tient ENSEMBLE le
@@ -409,13 +423,13 @@ export async function performCommentEdit(
      aucune raison de partir. */
   if (content === site.comment.content) return { ok: true };
 
-  writeComments(deps, postId, (data) => replaceCommentAt(data, site, { ...site.comment, content }));
+  writeComments(deps, params, (data) => replaceCommentAt(data, site, { ...site.comment, content }));
 
   inFlight.add(flightKey);
   try {
     const result = await sendCommentRequest(deps, {
       method: 'PATCH',
-      path: `/api/v1/posts/${encodeURIComponent(postId)}/comments/${encodeURIComponent(commentId)}`,
+      path: postsEndpoints.byPostIdCommentsByCommentId(postId, commentId),
       idempotent: true,
       body: { content, ...(declared === undefined ? {} : { originalLanguage: declared }) },
       fixture: { ...site.comment, content },
@@ -427,7 +441,7 @@ export async function performCommentEdit(
        prochain chargement sans qu'un mot l'ait annoncé. Le rejeu est offert :
        c'est LUI qui porte la reprise, pas un optimiste laissé en l'air. */
     if (result === null) {
-      restore(deps, postId, commentId, site.comment);
+      restore(deps, params, commentId, site.comment);
       return notConfirmed(result);
     }
 
@@ -436,7 +450,7 @@ export async function performCommentEdit(
          effacer ce qu'on vient d'écrire — même garde que `performComment`. */
       const served = result.data as PostComment | null;
       if (served !== null && typeof served === 'object' && typeof served.id === 'string') {
-        writeComments(deps, postId, (data) => {
+        writeComments(deps, params, (data) => {
           const current = siteOf(data, commentId);
           return current === undefined ? data : replaceCommentAt(data, current, served);
         });
@@ -444,7 +458,7 @@ export async function performCommentEdit(
       return { ok: true };
     }
 
-    restore(deps, postId, commentId, site.comment);
+    restore(deps, params, commentId, site.comment);
     if (outcomeOf(result) !== 'permanent') return notConfirmed(result);
     return refusalOf(result.status, COMMENT_EDIT_FAILED_MESSAGE);
   } finally {
@@ -457,17 +471,18 @@ export async function performCommentDelete(params: GestureParams): Promise<Comme
   const flightKey = `delete:${commentId}`;
   if (inFlight.has(flightKey)) return { ok: true };
 
-  const site = readSite(deps, postId, commentId);
+  const site = readSite(deps, params, commentId);
   if (site === undefined) return refused(COMMENT_DELETE_FAILED_MESSAGE);
 
-  writeComments(deps, postId, (data) => removeCommentAt(data, site));
+  writeComments(deps, params, (data) => removeCommentAt(data, site));
   shiftCommentCount(deps.queryClient, postId, -1);
+  if (params.parentId !== undefined) shiftReplyCount(deps.queryClient, postId, params.parentId, -1);
 
   inFlight.add(flightKey);
   try {
     const result = await sendCommentRequest(deps, {
       method: 'DELETE',
-      path: `/api/v1/posts/${encodeURIComponent(postId)}/comments/${encodeURIComponent(commentId)}`,
+      path: postsEndpoints.byPostIdCommentsByCommentId(postId, commentId),
       idempotent: true,
       fixture: { deleted: true },
     }).catch(() => null);
@@ -481,8 +496,9 @@ export async function performCommentDelete(params: GestureParams): Promise<Comme
        suppression faite : elle revenait au prochain chargement, et aucune file
        ne rejouait le geste. L'écran affirmait un fait que la passerelle venait
        de refuser — la pire des trois formes du cycle 122. */
-    writeComments(deps, postId, (data) => insertCommentAt(data, site));
+    writeComments(deps, params, (data) => insertCommentAt(data, site));
     shiftCommentCount(deps.queryClient, postId, 1);
+    if (params.parentId !== undefined) shiftReplyCount(deps.queryClient, postId, params.parentId, 1);
 
     if (result === null || outcomeOf(result) !== 'permanent') return notConfirmed(result);
     return refusalOf(result.status, COMMENT_DELETE_FAILED_MESSAGE);
@@ -498,7 +514,7 @@ export async function performCommentDelete(params: GestureParams): Promise<Comme
  * « quel geste a échoué sur quelle rangée », et deux d'entre elles auraient
  * fini par diverger.
  */
-export type CommentGestureRequest =
+export type CommentGestureRequest = (
   | {
       readonly kind: 'like';
       readonly postId: string;
@@ -515,18 +531,25 @@ export type CommentGestureRequest =
       readonly commentId: string;
       readonly content: string;
       readonly originalLanguage?: string | undefined;
-    };
+    }
+) & {
+  /** La racine d'une RÉPONSE (#8583) — voyage avec la requête, donc avec son rejeu. */
+  readonly parentId?: string | undefined;
+};
 
 export function performCommentGesture(
   request: CommentGestureRequest,
   deps: CommentGestureDeps,
 ): Promise<CommentGestureResult> {
+  const parent = request.parentId === undefined ? {} : { parentId: request.parentId };
   if (request.kind === 'like')
-    return performCommentLike({ postId: request.postId, commentId: request.commentId, on: request.on, deps });
-  if (request.kind === 'delete') return performCommentDelete({ postId: request.postId, commentId: request.commentId, deps });
+    return performCommentLike({ postId: request.postId, commentId: request.commentId, on: request.on, ...parent, deps });
+  if (request.kind === 'delete')
+    return performCommentDelete({ postId: request.postId, commentId: request.commentId, ...parent, deps });
   return performCommentEdit({
     postId: request.postId,
     commentId: request.commentId,
+    ...parent,
     content: request.content,
     ...(request.originalLanguage === undefined ? {} : { originalLanguage: request.originalLanguage }),
     deps,

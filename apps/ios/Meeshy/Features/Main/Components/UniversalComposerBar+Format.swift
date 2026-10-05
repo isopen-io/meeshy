@@ -1,4 +1,5 @@
 import SwiftUI
+import MeeshySDK
 import MeeshyUI
 
 // MARK: - La mise en forme de la sélection (#7849)
@@ -25,10 +26,46 @@ extension UniversalComposerBar {
     @ViewBuilder
     var composerTextFieldBase: some View {
         if #available(iOS 18.0, *) {
-            TextField("", text: $text, selection: formatSelection, axis: .vertical)
+            TextField("", text: typedText, selection: formatSelection, axis: .vertical)
         } else {
             TextField("", text: $text, axis: .vertical)
         }
+    }
+
+    /// **Ce qu'on colle part toujours** (#9037) : l'objet collé devient pièce
+    /// jointe, un texte trop long un `.txt`. Seulement chez un hôte qui reçoit
+    /// les pièces (`onIngest`) — sinon le collage reste celui du système.
+    @ViewBuilder
+    var composerPasteInterceptor: some View {
+        if let onIngest {
+            ComposerPasteInterceptor(limit: pasteLimit, onIngest: onIngest)
+        }
+    }
+
+    /// La limite du mode, sinon celle d'un message (`MessageLimits`, 2000 comme `@meeshy/shared`).
+    var pasteLimit: Int { resolvedMaxLength ?? MessageLimits.maxMessageLength }
+
+    /// Ce que le champ écrit arrive avec la sélection qu'il vient de poser.
+    var typedText: Binding<String> {
+        Binding(
+            get: { text },
+            set: { typed in
+                selectionText = typed
+                text = typed
+            }
+        )
+    }
+
+    /// **Un texte écrit par programme pose le curseur à SA fin** (#8791).
+    ///
+    /// La sélection désigne des positions du texte pour lequel elle a été
+    /// posée. Une mention validée, un emoji ajouté, un brouillon rechargé
+    /// écrivent un AUTRE texte : la garder replaçait le curseur à l'ancienne
+    /// position — après `@al`, au milieu de `@alice`.
+    func caretFollowsWrite(_ written: String) {
+        guard #available(iOS 18.0, *), written != selectionText else { return }
+        selectionText = written
+        formatSelectionStorage = TextSelection(insertionPoint: written.endIndex)
     }
 
     /// La sélection NON VIDE, en positions de `Character` dans `text` — `nil`
@@ -57,6 +94,7 @@ extension UniversalComposerBar {
         guard #available(iOS 18.0, *), let range = selectedCharacterRange else { return }
         let result = ComposerTextFormat.toggle(text: text, start: range.start, end: range.end, style: style)
         text = result.text
+        selectionText = result.text
         let lower = text.index(text.startIndex, offsetBy: result.start)
         let upper = text.index(text.startIndex, offsetBy: result.end)
         formatSelectionStorage = TextSelection(range: lower..<upper)

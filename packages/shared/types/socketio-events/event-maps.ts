@@ -9,6 +9,7 @@
  * @see ../socketio-events.ts — la façade qui garde l'adresse historique.
  */
 
+import type { ConversationEngagementSnapshot } from '../engagement-scale.js';
 // Import pour les événements sociaux (posts, stories, statuts, commentaires)
 import type {
   CommentAddedEventData,
@@ -91,6 +92,27 @@ import type {
   CallTranslationRequestedEvent,
   CallTranslationResponseEvent,
 } from '../video-call.js';
+import type {
+  CallRecordingAck,
+  CallRecordingConsentEvent,
+  CallRecordingRequestEvent,
+  CallRecordingRequestedEvent,
+  CallRecordingStartedEvent,
+  CallRecordingStopEvent,
+  CallRecordingStoppedEvent,
+} from '../call-recording.js';
+import type {
+  CallControlAck,
+  CallInviteParticipantEvent,
+  CallMuteParticipantEvent,
+  CallMutedByModeratorEvent,
+  CallParticipantInvitedEvent,
+  CallInviteSettledEvent,
+  CallReactionEvent,
+  CallReactionReceivedEvent,
+} from '../call-controls.js';
+import type { CallPreviewRequestEvent, CallPreviewRequestedEvent } from '../call-preview.js';
+import type { CallLiveFrameSelectEvent, CallLiveFrameSelectedEvent } from '../call-live-frame.js';
 
 import type { AgentAdminEventData } from './agent.js';
 import type { AttachmentStatusUpdatedEventData, AttachmentUpdatedEventData } from './attachment.js';
@@ -154,6 +176,7 @@ import type {
   MessageDeletedEventData,
   MessageEditData,
   MessageExpiredEventData,
+  MessageCitedPostWithdrawnEventData,
   MessageHiddenForMeEventData,
   MessagePinnedEventData,
   MessageRestoredForMeEventData,
@@ -191,6 +214,10 @@ import type {
   TypingActionData,
   TypingEvent,
   UserStatusEvent,
+  ViewingActionData,
+  ViewingActivityData,
+  ViewingEvent,
+  ViewingSnapshotEvent,
 } from './presence.js';
 import type {
   AttachmentReactionUpdateEventData,
@@ -219,12 +246,18 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.MESSAGE_EDITED]: (message: SocketIOMessage) => void;
   [SERVER_EVENTS.MESSAGE_DELETED]: (data: MessageDeletedEventData) => void;
   [SERVER_EVENTS.MESSAGE_EXPIRED]: (data: MessageExpiredEventData) => void;
+  [SERVER_EVENTS.MESSAGE_CITED_POST_WITHDRAWN]: (data: MessageCitedPostWithdrawnEventData) => void;
   [SERVER_EVENTS.MESSAGE_COUNTDOWN_STARTED]: (data: MessageCountdownStartedEventData) => void;
   [SERVER_EVENTS.MESSAGE_HIDDEN_FOR_ME]: (data: MessageHiddenForMeEventData) => void;
   [SERVER_EVENTS.MESSAGE_RESTORED_FOR_ME]: (data: MessageRestoredForMeEventData) => void;
   [SERVER_EVENTS.MESSAGE_TRANSLATION]: (data: TranslationEvent) => void;
   [SERVER_EVENTS.TYPING_START]: (data: TypingEvent) => void;
   [SERVER_EVENTS.TYPING_STOP]: (data: TypingEvent) => void;
+  [SERVER_EVENTS.VIEWING_START]: (data: ViewingEvent) => void;
+  [SERVER_EVENTS.VIEWING_STOP]: (data: ViewingEvent) => void;
+  [SERVER_EVENTS.VIEWING_SNAPSHOT]: (data: ViewingSnapshotEvent) => void;
+  [SERVER_EVENTS.VIEWING_ACTIVITY]: (data: ViewingEvent) => void;
+  [SERVER_EVENTS.ENGAGEMENT_CONVERSATION_UPDATED]: (data: ConversationEngagementSnapshot) => void;
   [SERVER_EVENTS.USER_STATUS]: (data: UserStatusEvent) => void;
   [SERVER_EVENTS.PRESENCE_SNAPSHOT]: (data: PresenceSnapshotEventData) => void;
   [SERVER_EVENTS.CONVERSATION_JOINED]: (data: ConversationParticipationEventData) => void;
@@ -258,6 +291,17 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.CALL_SCREEN_CAPTURE_ALERT]: (data: CallScreenCaptureEvent) => void;
   [SERVER_EVENTS.CALL_FORCE_LEAVE]: (data: CallForceLeaveServerEvent) => void;
   [SERVER_EVENTS.CALL_ICE_SERVERS_REFRESHED]: (data: CallIceServersRefreshedEvent) => void;
+  [SERVER_EVENTS.CALL_RECORDING_REQUESTED]: (data: CallRecordingRequestedEvent) => void;
+  [SERVER_EVENTS.CALL_RECORDING_STARTED]: (data: CallRecordingStartedEvent) => void;
+  [SERVER_EVENTS.CALL_RECORDING_STOPPED]: (data: CallRecordingStoppedEvent) => void;
+  [SERVER_EVENTS.CALL_PARTICIPANT_INVITED]: (data: CallParticipantInvitedEvent) => void;
+  [SERVER_EVENTS.CALL_INVITE_DECLINED]: (data: CallInviteSettledEvent) => void;
+  [SERVER_EVENTS.CALL_INVITE_EXPIRED]: (data: CallInviteSettledEvent) => void;
+  [SERVER_EVENTS.CALL_MUTED_BY_MODERATOR]: (data: CallMutedByModeratorEvent) => void;
+  [SERVER_EVENTS.CALL_REACTION_RECEIVED]: (data: CallReactionReceivedEvent) => void;
+  [SERVER_EVENTS.CALL_FRAME_SELECTED]: (data: CallLiveFrameSelectedEvent) => void;
+  [SERVER_EVENTS.CALL_PREVIEW_REQUESTED]: (data: CallPreviewRequestedEvent) => void;
+  [SERVER_EVENTS.CALL_PREVIEW_SIGNAL]: (data: CallSignalEvent) => void;
   [SERVER_EVENTS.CONVERSATION_NEW]: (data: ConversationNewEventData) => void;
   [SERVER_EVENTS.FRIEND_REQUEST_CANCELLED]: (data: FriendRequestCancelledEventData) => void;
   [SERVER_EVENTS.FRIEND_REQUEST_NEW]: (data: FriendRequestNewEventData) => void;
@@ -419,6 +463,9 @@ export interface ClientToServerEvents {
   [CLIENT_EVENTS.CONVERSATION_LEAVE]: (data: ConversationActionData) => void;
   [CLIENT_EVENTS.TYPING_START]: (data: TypingActionData) => void;
   [CLIENT_EVENTS.TYPING_STOP]: (data: TypingActionData) => void;
+  [CLIENT_EVENTS.VIEWING_START]: (data: ViewingActionData) => void;
+  [CLIENT_EVENTS.VIEWING_STOP]: (data: ViewingActionData) => void;
+  [CLIENT_EVENTS.VIEWING_ACTIVITY]: (data: ViewingActivityData) => void;
   [CLIENT_EVENTS.AUTHENTICATE]: (data: AuthenticateData) => void;
   [CLIENT_EVENTS.REQUEST_TRANSLATION]: (data: RequestTranslationData) => void;
   /**
@@ -503,6 +550,7 @@ export interface ClientToServerEvents {
   [CLIENT_EVENTS.CALL_SIGNAL]: (data: CallSignalEvent, ack?: (response: { success: boolean }) => void) => void;
   [CLIENT_EVENTS.CALL_TOGGLE_AUDIO]: (data: CallMediaToggleClientEvent) => void;
   [CLIENT_EVENTS.CALL_TOGGLE_VIDEO]: (data: CallMediaToggleClientEvent) => void;
+  [CLIENT_EVENTS.CALL_TOGGLE_SCREEN]: (data: CallMediaToggleClientEvent) => void;
   /**
    * L'ack est OPTIONNEL, et il l'est dans l'autre sens que celui de
    * `CallMediaToggleClientEvent` (cycle 107 bis) — même symptôme, résolution
@@ -540,6 +588,15 @@ export interface ClientToServerEvents {
   [CLIENT_EVENTS.CALL_CHECK_ACTIVE]: () => void;
   [CLIENT_EVENTS.CALL_REQUEST_ICE_SERVERS]: (data: CallRequestIceServersEvent) => void;
   [CLIENT_EVENTS.CALL_ANALYTICS]: (data: CallAnalyticsEvent) => void;
+  [CLIENT_EVENTS.CALL_RECORDING_REQUEST]: (data: CallRecordingRequestEvent, ack?: (response: CallRecordingAck) => void) => void;
+  [CLIENT_EVENTS.CALL_RECORDING_CONSENT]: (data: CallRecordingConsentEvent, ack?: (response: CallRecordingAck) => void) => void;
+  [CLIENT_EVENTS.CALL_RECORDING_STOP]: (data: CallRecordingStopEvent, ack?: (response: CallRecordingAck) => void) => void;
+  [CLIENT_EVENTS.CALL_INVITE_PARTICIPANT]: (data: CallInviteParticipantEvent, ack?: (response: CallControlAck) => void) => void;
+  [CLIENT_EVENTS.CALL_MUTE_PARTICIPANT]: (data: CallMuteParticipantEvent, ack?: (response: CallControlAck) => void) => void;
+  [CLIENT_EVENTS.CALL_REACTION]: (data: CallReactionEvent, ack?: (response: CallControlAck) => void) => void;
+  [CLIENT_EVENTS.CALL_FRAME_SELECT]: (data: CallLiveFrameSelectEvent, ack?: (response: CallControlAck) => void) => void;
+  [CLIENT_EVENTS.CALL_PREVIEW_REQUEST]: (data: CallPreviewRequestEvent, ack?: (response: CallControlAck) => void) => void;
+  [CLIENT_EVENTS.CALL_PREVIEW_SIGNAL]: (data: CallSignalEvent, ack?: (response: CallControlAck) => void) => void;
   [CLIENT_EVENTS.PRESENCE_APP_STATE]: (data: { foreground?: boolean }) => void;
 
   // Location sharing

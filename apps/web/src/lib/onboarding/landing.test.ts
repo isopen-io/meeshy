@@ -6,6 +6,7 @@ import type { OnboardingState } from '@meeshy/shared/types/onboarding';
 import { ONBOARDING_QUERY_KEY } from '@/lib/api/onboarding';
 
 import { createOnboardingLanding, shouldOfferOnboarding } from './landing';
+import { takeOnboardingWaiver, waiveNextOnboardingOffer } from './landing-waiver';
 
 const state = (overrides: Partial<OnboardingState> = {}): OnboardingState => ({
   eligible: true,
@@ -49,6 +50,7 @@ describe('shouldOfferOnboarding — la loi, pure', () => {
 
 describe('createOnboardingLanding — cache d’abord, une fois par lancement', () => {
   const fixture = () => {
+    takeOnboardingWaiver();
     const queryClient = new QueryClient();
     const visits: string[] = [];
     let loads = 0;
@@ -116,5 +118,23 @@ describe('createOnboardingLanding — cache d’abord, une fois par lancement', 
     });
     await landing.offer({ source: 'gateway', sessionStatus: 'authenticated', routeKey: 'list', viewerId: 'me' });
     expect(visits).toEqual([]);
+  });
+
+  test('une arrivée CÉLÉBRÉE par le lien (#8088) mène aux conversations : le parcours ne s’y substitue pas, ni ensuite dans ce lancement', async () => {
+    const { visits, loads, landing } = fixture();
+    const at = { source: 'gateway', sessionStatus: 'authenticated', routeKey: 'list', viewerId: 'me' } as const;
+    waiveNextOnboardingOffer();
+    await landing.offer(at);
+    await landing.offer(at);
+    expect(visits).toEqual([]);
+    expect(loads()).toBe(0);
+  });
+
+  test('la renonciation ne vaut qu’UNE arrivée : un autre compte, plus tard, se voit proposer le parcours', async () => {
+    const { visits, landing } = fixture();
+    waiveNextOnboardingOffer();
+    await landing.offer({ source: 'gateway', sessionStatus: 'authenticated', routeKey: 'list', viewerId: 'me' });
+    await landing.offer({ source: 'gateway', sessionStatus: 'authenticated', routeKey: 'list', viewerId: 'autre' });
+    expect(visits).toEqual(['/onboarding']);
   });
 });

@@ -1,3 +1,4 @@
+import { hasPerReaderEphemeralDeadline } from '@meeshy/shared/utils/ephemeral-countdown';
 import type {
   LastMessageAttachmentSummary,
   LastMessageCallSummary,
@@ -81,7 +82,7 @@ const WITHHELD_PRISM: LastMessagePreviewPrism = {
 };
 
 function isEphemeral(message: PreviewGroupMessage | null | undefined): boolean {
-  return typeof message?.ephemeralDuration === 'number' && message.ephemeralDuration > 0;
+  return message != null && hasPerReaderEphemeralDeadline(message);
 }
 
 /**

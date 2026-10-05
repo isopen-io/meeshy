@@ -1,13 +1,14 @@
 import * as z from 'zod/mini';
 
 import type { MentionSuggestion } from '@meeshy/shared/types/mention';
+import * as mentionsEndpoints from '@meeshy/shared/api/endpoints/mentions';
 
 import type { ConversationsDeps } from './conversations';
 import type { ApiResult } from './http';
 
 /**
  * LE PORT DES SUGGESTIONS DE MENTION (#7826) — `GET
- * /api/v1/mentions/suggestions?contextId=<conversation>&contextType=conversation&query=<q>`
+ * mentions.suggestions?contextId=<conversation>&contextType=conversation&query=<q>`
  * (`services/gateway/src/routes/mentions.ts:47`, `requireAuth`), miroir de
  * `MentionService.suggestions(contextId:contextType:query:)` qu'appelle
  * `MentionComposerController.swift`.
@@ -87,7 +88,7 @@ export async function fetchMentionSuggestions(
   const query = encodeURIComponent(params.query);
   const result = await deps.transport.request<unknown>({
     method: 'GET',
-    path: `/api/v1/mentions/suggestions?contextId=${contextId}&contextType=${params.context.type}&query=${query}`,
+    path: `${mentionsEndpoints.suggestions}?contextId=${contextId}&contextType=${params.context.type}&query=${query}`,
     ...(params.signal === undefined ? {} : { signal: params.signal }),
   });
   if (!result.ok) return result;

@@ -40,9 +40,11 @@ import {
   AGENT_STATS,
   CONVERSATIONS_DU_MEMBRE,
   CONVERSATION_ID,
+  DASHBOARD_SERVI,
   MEDIAS_DU_MEMBRE,
   MEMBRE,
   MEMBRE_ID,
+  MEMBRES_RECENTS,
   MESSAGES_SERVIS,
   SECRETS_DES_PIECES,
   SESSION,
@@ -121,15 +123,13 @@ function repondre(pathname, search, avecAgent) {
   if (pathname === `/api/v1/admin/agent/configs/${CONVERSATION_ID}/live`) {
     return enveloppe({ conversationId: CONVERSATION_ID, isScanning: false, currentNode: null });
   }
-  if (pathname === '/api/v1/admin/dashboard') {
-    // La forme que `decodeAdminDashboard` lit : `statistics` et
-    // `recentActivity`, jamais une charge à plat — six compteurs à zéro sur un
-    // hub par ailleurs juste est la signature d'un corpus mal formé.
-    return enveloppe({
-      statistics: { totalUsers: 128, activeUsers: 64, totalMessages: 9421, totalCommunities: 7, totalReports: 2 },
-      recentActivity: { newUsers: 3, newMessages: 51 },
-    });
-  }
+  // Le tableau de bord du hub (#8876) : la recette lit avec `canAccessAdmin` et
+  // `canManageUsers` (+ `canManageAgent` selon le cas) — donc les compteurs de
+  // la plateforme, les derniers inscrits et, avec l'agent, ses statistiques
+  // (servies plus haut). Les blocs d'analyse exigent `canViewAnalytics`, que
+  // cette identité n'a pas : ils ne sont ni rendus ni demandés.
+  if (pathname === '/api/v1/admin/dashboard') return enveloppe(DASHBOARD_SERVI);
+  if (pathname === '/api/v1/admin/users') return enveloppe(MEMBRES_RECENTS);
 
   return null;
 }

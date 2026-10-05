@@ -184,4 +184,39 @@ class NotificationRevocationTest {
         assertThat(revocation?.types).isEqualTo(emptyList<String>())
         assertThat(revocation?.notificationManagerIds()).containsExactly(n1.hashCode())
     }
+
+    /**
+     * App en arrière-plan ou tuée, FCM rend LUI-MÊME la bannière d'un push
+     * `notification` : sous le TAG `android.notification.tag`
+     * (`threadId || notificationId`, gateway `android-push-config.ts`) et l'id
+     * 0 — jamais sous l'entier de [MessageNotificationId]. Révoquer par entier
+     * seulement laissait la bannière d'une réaction changée (❤️ → 😂 sur un
+     * post) affichée à côté de la nouvelle (#9028).
+     *
+     * Les tags suivent la même règle que les entiers : chaque notification, et
+     * la conversation seulement pour un arrivage de message — jumeau de
+     * `NotificationRevocation.tagsToCancel` de la coque Capacitor.
+     */
+    @Test
+    fun `cancels the system-rendered banners by tag, a conversation only for a message arrival`() {
+        val revocation = NotificationRevocationParser.parse(
+            mapOf(
+                "type" to "notification_revoked",
+                "notificationIds" to "$n1,$n2",
+                "conversationIds" to "$convA,$convA",
+                "types" to "message_reaction,new_message",
+            ),
+        )
+
+        assertThat(revocation?.systemRenderedTags()).containsExactly(n1, n2, convA).inOrder()
+    }
+
+    @Test
+    fun `a post reaction is cancelled under its own notification tag`() {
+        val revocation = NotificationRevocationParser.parse(
+            mapOf("type" to "notification_revoked", "notificationIds" to n1, "types" to "post_like"),
+        )
+
+        assertThat(revocation?.systemRenderedTags()).containsExactly(n1)
+    }
 }

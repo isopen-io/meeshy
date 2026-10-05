@@ -146,3 +146,70 @@ describe('useCommentsSheetHost — ouverture, fermeture, focus, clé', () => {
     expect(stateOf(container)).toBe('fermé');
   });
 });
+
+/**
+ * #8643 — **LA FEUILLE DIT À L'HÔTE OÙ EST SA BARRE QUAND ON ÉCRIT** : c'est la
+ * mesure dont l'hôte fait réduire la scène au-dessus d'elle. Fermée, la
+ * feuille n'écrit plus rien : l'hôte oublie la mesure, la scène reprend sa
+ * taille — même si la feuille n'a pas eu le temps de dire « fini ».
+ */
+describe('useCommentsSheetHost — la barre d’écriture', () => {
+  function WritingHarness({ closeKey }: { readonly closeKey: string }) {
+    const host = useCommentsSheetHost(closeKey);
+    return (
+      <div>
+        <button type="button" data-opener onClick={() => host.open('p1')} />
+        <button type="button" data-write onClick={() => host.reportWriting({ barTop: 480, frameHeight: 844 })} />
+        <button type="button" data-close onClick={host.close} />
+        <span data-writing>{host.writing === null ? 'lecture' : `${host.writing.barTop}/${host.writing.frameHeight}`}</span>
+      </div>
+    );
+  }
+
+  const writingOf = (el: HTMLElement) => el.querySelector('[data-writing]')?.textContent;
+  const tap = (el: HTMLElement, sel: string) =>
+    act(() => {
+      el.querySelector<HTMLButtonElement>(sel)?.click();
+    });
+  const mountWriting = (closeKey: string): HTMLDivElement => {
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    act(() => {
+      root.render(<WritingHarness closeKey={closeKey} />);
+    });
+    return container;
+  };
+
+  test('la feuille rapporte sa barre : l’hôte la tient', () => {
+    const el = mountWriting('s1');
+    tap(el, '[data-opener]');
+    expect(writingOf(el)).toBe('lecture');
+    tap(el, '[data-write]');
+    expect(writingOf(el)).toBe('480/844');
+  });
+
+  test('fermer la feuille oublie la barre — la scène reprend sa taille', () => {
+    const el = mountWriting('s1');
+    tap(el, '[data-opener]');
+    tap(el, '[data-write]');
+    tap(el, '[data-close]');
+    expect(writingOf(el)).toBe('lecture');
+  });
+
+  test('une barre rapportée feuille FERMÉE (démontage en vol) est ignorée', () => {
+    const el = mountWriting('s1');
+    tap(el, '[data-write]');
+    expect(writingOf(el)).toBe('lecture');
+  });
+
+  test('changer de story oublie la barre aussi', () => {
+    const el = mountWriting('s1');
+    tap(el, '[data-opener]');
+    tap(el, '[data-write]');
+    act(() => {
+      root.render(<WritingHarness closeKey="s2" />);
+    });
+    expect(writingOf(el)).toBe('lecture');
+  });
+});

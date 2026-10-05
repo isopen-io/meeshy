@@ -161,6 +161,9 @@ public struct ConversationUpdatedEvent: Decodable, Sendable {
     public let lastReaction: PreviewFieldUpdate<ConversationLastReaction>
     /// Appel en cours (#7545) — clé absente : `.unchanged` ; `null` : terminé.
     public let activeCall: PreviewFieldUpdate<ConversationActiveCall>
+    /// Le rang SERVI de la ligne (#9026) — posé chez CHAQUE participant quand
+    /// une activité survient (réaction, appel, épingle). `nil` : ne pas réordonner.
+    public let listRankAt: Date?
 
     private enum CodingKeys: String, CodingKey {
         case conversationId, title, description, avatar, banner
@@ -175,7 +178,7 @@ public struct ConversationUpdatedEvent: Decodable, Sendable {
         case lastMessageType, lastMessageEffectFlags, lastMessageEphemeralDuration
         case lastMessageIsEncrypted, lastMessageIsForwarded
         case lastMessageSystemEvent, lastMessageCallSummary, lastMessageAttachmentSummary
-        case lastReaction, activeCall
+        case lastReaction, activeCall, listRankAt
     }
 
     public init(from decoder: Decoder) throws {
@@ -250,6 +253,7 @@ public struct ConversationUpdatedEvent: Decodable, Sendable {
         activeCall = container.contains(.activeCall)
             ? .replaced(try? container.decodeIfPresent(ConversationActiveCall.self, forKey: .activeCall))
             : .unchanged
+        listRankAt = (try? container.decodeIfPresent(Date.self, forKey: .listRankAt)) ?? nil
     }
 
     public init(
@@ -281,7 +285,8 @@ public struct ConversationUpdatedEvent: Decodable, Sendable {
         lastMessageExpiresAt: Date? = nil,
         lastMessageNature: LastMessageNature? = nil,
         lastReaction: PreviewFieldUpdate<ConversationLastReaction> = .unchanged,
-        activeCall: PreviewFieldUpdate<ConversationActiveCall> = .unchanged
+        activeCall: PreviewFieldUpdate<ConversationActiveCall> = .unchanged,
+        listRankAt: Date? = nil
     ) {
         self.conversationId = conversationId
         self.title = title
@@ -312,6 +317,7 @@ public struct ConversationUpdatedEvent: Decodable, Sendable {
         self.lastMessageNature = lastMessageNature
         self.lastReaction = lastReaction
         self.activeCall = activeCall
+        self.listRankAt = listRankAt
     }
 
     /// L'id porté, `nil` quand la clé était absente OU nulle.

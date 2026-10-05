@@ -1,3 +1,5 @@
+import * as conversationsEndpoints from '@meeshy/shared/api/endpoints/conversations';
+
 import { unwrap } from './client';
 import type { DataSource } from './config';
 import { decodeConversation } from './decode';
@@ -11,7 +13,7 @@ import type { Conversation } from './types';
  * Services/ConversationService.swift:459`), que `UserProfileSheet` appelle
  * pour son onglet Conversations (`UserProfileSheet.swift:325`).
  *
- * `GET /api/v1/conversations?withUserId=<id>&limit=50` rend les conversations
+ * `GET conversations.root?withUserId=<id>&limit=50` rend les conversations
  * dont le LECTEUR **et** le sujet sont tous deux membres actifs
  * (`services/gateway/src/routes/conversations/core-list.ts:193-210`). **Aucune
  * route à écrire** : le filtre existe depuis le premier jour d'iOS, et ce port
@@ -52,7 +54,7 @@ export async function loadSharedConversations(
   const query = new URLSearchParams({ withUserId: params.userId, limit: String(SHARED_CONVERSATIONS_LIMIT) });
   const result = await params.transport.request<readonly Conversation[]>({
     method: 'GET',
-    path: `/api/v1/conversations?${query.toString()}`,
+    path: `${conversationsEndpoints.root}?${query.toString()}`,
     ...(params.signal !== undefined ? { signal: params.signal } : {}),
   });
   if (!result.ok) return result;

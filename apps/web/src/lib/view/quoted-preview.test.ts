@@ -3,6 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
 
 import { attachmentDefaults } from '@/lib/api/fixtures-base';
+import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import type { Attachment, Message } from '@/lib/api/types';
 
 import { quotedPreviewOf } from './quoted-preview';
@@ -388,5 +389,92 @@ describe('quotedPreviewOf — un message cité SUPPRIMÉ', () => {
     expect(shown.text).toBe('Message supprimé');
     expect(shown.media).toBeNull();
     expect(shown.inventory).toEqual([]);
+  });
+});
+
+/**
+ * #8631 — UNE CITATION SCELLÉE PARCE QUE L'ÉPHÉMÈRE A EXPIRÉ POUR SON LECTEUR
+ * n'a pas été SUPPRIMÉE. La passerelle la sert sous la forme d'une suppression
+ * datée de l'échéance du lecteur, et y joint `expiresAt` = cette même date
+ * (`sealedQuotedMessage`) ; le scellement local (`tombstoneQuotesOf`, à
+ * l'expiration ou à la consommation d'une flamme-œil) en fait autant.
+ */
+describe('quotedPreviewOf — un éphémère cité ÉCHU pour son lecteur', () => {
+  const sealedAt = '2026-09-25T10:00:00.000Z' as unknown as Date;
+  const lapsed = quoted({ content: '', translations: [], attachments: [], deletedAt: sealedAt, expiresAt: sealedAt });
+
+  test('dit « Message éphémère expiré », pas « Message supprimé »', () => {
+    expect(preview(lapsed).text).toBe('Message éphémère expiré');
+  });
+
+  test('dans la langue du lecteur', async () => {
+    await loadInterfaceCatalog('en');
+    expect(quotedPreviewOf({ quoted: lapsed, readerLanguages: ['en'], interfaceLanguage: 'en' }).text).toBe('Ephemeral message expired');
+  });
+
+  test('rien ne voyage, comme une suppression', () => {
+    const shown = preview(lapsed);
+    expect(shown.media).toBeNull();
+    expect(shown.inventory).toEqual([]);
+    expect(shown.isProtected).toBe(true);
+  });
+
+  test('une suppression AVANT l’échéance reste « Message supprimé »', () => {
+    const deletedEarly = quoted({ deletedAt: sealedAt, expiresAt: '2026-09-25T11:00:00.000Z' as unknown as Date });
+    expect(preview(deletedEarly).text).toBe('Message supprimé');
+  });
+});
+
+/**
+ * #8233 (jumelle web de #8230) — UNE CITATION D'AUDIO OU DE VIDÉO MONTRE SON
+ * APERÇU ET S'OUVRE. Deux faits de plus sortent du site unique : le FICHIER
+ * (`fileSrc`, pour la première image d'une vidéo sans vignette et la lecture
+ * d'un vocal) et la PIÈCE qu'on ouvre (`openable`). Tous deux retenus par la
+ * MÊME protection que la vignette : une pièce protégée ne livre ni l'un ni
+ * l'autre, au niveau du message comme de la pièce.
+ */
+describe('quotedPreviewOf — le fichier et la pièce ouvrable d’une citation (#8233)', () => {
+  const sansVignette = attachment({ ...VIDEO, thumbnailUrl: '' });
+
+  test('une vidéo SANS vignette serveur livre son fichier, pour en tirer la première image', () => {
+    const media = preview(quoted({ attachments: [sansVignette] })).media;
+    expect(media?.thumbnailSrc).toBeNull();
+    expect(media?.fileSrc).toContain('sortie.mp4');
+  });
+
+  test('un vocal livre son fichier, pour se jouer depuis la citation', () => {
+    expect(preview(quoted({ attachments: [VOCAL] })).media?.fileSrc).toContain('note.m4a');
+  });
+
+  test('une image et un document ne livrent aucun fichier : la vignette suffit, un PDF ne se lit pas', () => {
+    expect(preview(quoted({ attachments: [PHOTO] })).media?.fileSrc).toBeNull();
+    expect(preview(quoted({ attachments: [DOCUMENT] })).media?.fileSrc).toBeNull();
+  });
+
+  test('image, vidéo et vocal s’ouvrent — la pièce citée elle-même', () => {
+    for (const piece of [PHOTO, VIDEO, VOCAL]) {
+      expect(preview(quoted({ attachments: [piece] })).media?.openable?.id).toBe(piece.id);
+    }
+  });
+
+  test('un document ne s’ouvre pas depuis la citation : il n’a pas d’aperçu', () => {
+    expect(preview(quoted({ attachments: [DOCUMENT] })).media?.openable).toBeNull();
+  });
+
+  test('une pièce sans fichier ne promet aucune ouverture', () => {
+    expect(preview(quoted({ attachments: [attachment({ ...VIDEO, fileUrl: '' })] })).media?.openable).toBeNull();
+  });
+
+  test('un message cité PROTÉGÉ ne livre ni fichier ni pièce ouvrable', () => {
+    const media = preview(quoted({ content: '👁️ 🎬', isViewOnce: true, attachments: [sansVignette] })).media;
+    expect(media?.fileSrc).toBeNull();
+    expect(media?.openable).toBeNull();
+  });
+
+  test('une PIÈCE protégée dans un message ordinaire ne livre ni fichier ni pièce ouvrable', () => {
+    const floute = attachment({ ...VOCAL, isBlurred: true } as Partial<Attachment>);
+    const media = preview(quoted({ content: 'Écoute', attachments: [floute] })).media;
+    expect(media?.fileSrc).toBeNull();
+    expect(media?.openable).toBeNull();
   });
 });

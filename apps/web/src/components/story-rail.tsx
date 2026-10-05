@@ -13,6 +13,7 @@ import {
   railStroke,
 } from '@/components/rail-tile';
 import { StoryRailSelfTile } from '@/components/story-rail-self-tile';
+import { GLYPH_SIZE } from '@/components/ui-chrome';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { initialsOf, participantAvatarOf } from '@/lib/view/conversation';
@@ -323,7 +324,7 @@ function RailActions() {
           style={{ color: 'var(--color-ios-brand)', outlineColor: 'var(--color-ios-brand)' }}
         >
           <ChromeActionDisc>
-            <Glyph name="plus" size={14} />
+            <Glyph name="plus" size={GLYPH_SIZE.sm} />
           </ChromeActionDisc>
         </Link>
         <Link
@@ -333,7 +334,7 @@ function RailActions() {
           style={{ color: 'var(--color-ios-ink-2)', outlineColor: 'var(--color-ios-brand)' }}
         >
           <ChromeActionDisc>
-            <Glyph name="dotsThreeVertical" size={14} />
+            <Glyph name="dotsThreeVertical" size={GLYPH_SIZE.sm} />
           </ChromeActionDisc>
         </Link>
       </span>

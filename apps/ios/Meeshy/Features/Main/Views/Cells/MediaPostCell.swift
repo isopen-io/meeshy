@@ -7,7 +7,6 @@ final class MediaPostCell: UICollectionViewCell {
     // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
     // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
     nonisolated deinit {}
-    private let authorStack = UIStackView()
     private let avatarView = UIImageView()
     private let nameLabel = UILabel()
     private let contentLabel = UILabel()

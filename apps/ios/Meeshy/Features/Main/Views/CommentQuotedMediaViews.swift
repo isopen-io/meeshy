@@ -27,7 +27,7 @@ struct CommentQuotedMediaBanner: View {
     private var theme: ThemeManager { ThemeManager.shared }
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: MeeshySpacing.sm) {
             // La BARRE de citation — le même signe que partout ailleurs dans le
             // produit pour « ceci est repris d'ailleurs ».
             RoundedRectangle(cornerRadius: 1.5)
@@ -43,11 +43,11 @@ struct CommentQuotedMediaBanner: View {
 
             Spacer(minLength: 0)
         }
-        .padding(.vertical, 4)
-        .padding(.horizontal, 6)
+        .padding(.vertical, MeeshySpacing.xs)
+        .padding(.horizontal, MeeshySpacing.xsPlus)
         .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(Color(hex: accentColor).opacity(0.06))
+            RoundedRectangle(cornerRadius: MeeshyRadius.xs)
+                .fill(Color(hex: accentColor).opacity(MeeshyOpacity.subtle))
         )
         .frame(height: 42)
         .accessibilityElement(children: .combine)
@@ -75,7 +75,7 @@ struct CommentQuotationChip: View {
 
     var body: some View {
         if let citation = store.quotation(for: postId) {
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 CommentQuotedMediaThumbnail(citation: citation, side: 30, accentColor: accentColor)
 
                 VStack(alignment: .leading, spacing: 1) {
@@ -105,14 +105,14 @@ struct CommentQuotationChip: View {
                         .font(.caption2.weight(.bold))
                         .foregroundColor(theme.textMuted)
                         .frame(width: 22, height: 22)
-                        .background(Circle().fill(theme.textMuted.opacity(0.15)))
+                        .background(Circle().fill(theme.textMuted.opacity(MeeshyOpacity.light)))
                 }
                 .accessibilityLabel(Text(String(localized: "comment.quote.remove",
                                                 defaultValue: "Retirer la citation",
                                                 bundle: .main)))
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
+            .padding(.horizontal, MeeshySpacing.md)
+            .padding(.vertical, MeeshySpacing.xsPlus)
             .transition(.opacity.combined(with: .move(edge: .bottom)))
         }
     }
@@ -139,11 +139,11 @@ private struct CommentQuotedMediaThumbnail: View {
                     fullUrl: nil,
                     autoLoad: true
                 ) {
-                    Color(hex: accentColor).opacity(0.15)
+                    Color(hex: accentColor).opacity(MeeshyOpacity.light)
                 }
                 .aspectRatio(contentMode: .fill)
             } else {
-                Color(hex: accentColor).opacity(0.12)
+                Color(hex: accentColor).opacity(MeeshyOpacity.light)
                     .overlay(
                         // Le glyphe de repli est dimensionné par le CADRE de
                         // la vignette (`side`), jamais par une police : une
@@ -159,7 +159,7 @@ private struct CommentQuotedMediaThumbnail: View {
             }
         }
         .frame(width: side, height: side)
-        .clipShape(RoundedRectangle(cornerRadius: 6))
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.xxs))
         .accessibilityHidden(true)
     }
 }

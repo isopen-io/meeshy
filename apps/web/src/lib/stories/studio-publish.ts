@@ -4,7 +4,7 @@ import type { ApiResult } from '@/lib/api/http';
 import type { PostMediaUploadResult } from '@/lib/api/post-media-upload';
 import type { MosaicLayoutMode } from '@/lib/feed/mosaic-layout';
 
-import { storyMediaCaptionPayload } from './media-caption';
+import { storyMediaTextPayload } from './media-caption';
 import { PUBLICATION_CHANNEL } from './publication-kind';
 import type { PublishChoice } from './publication-layout';
 import { buildStoryCanvasEffectsPages, studioMediaIds, type StudioReadyAsset } from './story-document';
@@ -131,12 +131,23 @@ function pageCompositionInput({ page, background, overlay, sound }: ResolvedPage
   return {
     id: page.id,
     texts: page.texts,
+    ...(page.duration !== undefined ? { duration: page.duration } : {}),
+    ...(page.opening !== undefined ? { opening: page.opening } : {}),
+    ...(page.closing !== undefined ? { closing: page.closing } : {}),
     ...(background !== undefined && page.background !== null
       ? {
           background: {
             source: background,
             mediaType: page.background.mediaType,
             ...(page.background.aspectRatio !== undefined ? { aspectRatio: page.background.aspectRatio } : {}),
+            ...(page.background.frame !== undefined ? { frame: page.background.frame } : {}),
+            ...(page.background.filter !== undefined ? { filter: page.background.filter } : {}),
+            // LES ÉDITIONS DE BASE (#9136) partent comme l'aperçu les montre
+            // (`studio-preview.ts`) — sans elles, rouvrir une publication pour
+            // la modifier (#9317) défaisait sa coupe et son recadrage.
+            ...(page.background.trim !== undefined ? { trim: page.background.trim } : {}),
+            ...(page.background.muted !== undefined ? { muted: page.background.muted } : {}),
+            ...(page.background.crop !== undefined ? { crop: page.background.crop } : {}),
           },
         }
       : {}),
@@ -147,6 +158,8 @@ function pageCompositionInput({ page, background, overlay, sound }: ResolvedPage
             mediaType: page.overlay.mediaType,
             ...(page.overlay.aspectRatio !== undefined ? { aspectRatio: page.overlay.aspectRatio } : {}),
             pose: page.overlay.pose,
+            ...(page.overlay.timing !== undefined ? { timing: page.overlay.timing } : {}),
+            ...(page.overlay.filter !== undefined ? { filter: page.overlay.filter } : {}),
           },
         }
       : {}),
@@ -171,6 +184,8 @@ export type StudioPublication = {
   readonly storyEffects: CanvasV3;
   readonly mediaIds: readonly string[];
   readonly mediaCaption?: Record<string, string>;
+  /** Le TEXTE ALTERNATIF de chaque média (#8518) — `PostMedia.alt`. */
+  readonly mediaAlt?: Record<string, string>;
 };
 
 /** `unresolved` ⇒ un média posé n'a pas d'identité serveur : rien ne part,
@@ -189,12 +204,14 @@ export type StudioPublishPlan =
 function publicationOf(group: readonly ResolvedPage[], layout: MosaicLayoutMode | null): readonly StudioPublication[] {
   const storyEffects = buildStoryCanvasEffectsPages(group.map(pageCompositionInput), layout);
   if (storyEffects === null) return [];
-  const mediaCaption = storyMediaCaptionPayload(
-    group.flatMap(({ page, background, overlay }) => [
-      { postMediaId: background?.postMediaId, caption: page.background?.caption },
-      { postMediaId: overlay?.postMediaId, caption: page.overlay?.caption },
-    ]),
-  );
+  const media = group.flatMap(({ page, background, overlay }) => [
+    { postMediaId: background?.postMediaId, asset: page.background },
+    { postMediaId: overlay?.postMediaId, asset: page.overlay },
+  ]);
+  // La légende et le texte alternatif (#8518) : deux cartes de MÊME contrat.
+  const textsOf = (field: 'caption' | 'alt') => storyMediaTextPayload(media.map(({ postMediaId, asset }) => ({ postMediaId, text: asset?.[field] })));
+  const mediaCaption = textsOf('caption');
+  const mediaAlt = textsOf('alt');
   return [
     {
       pageIds: group.map(({ page }) => page.id),
@@ -202,6 +219,7 @@ function publicationOf(group: readonly ResolvedPage[], layout: MosaicLayoutMode 
       storyEffects,
       mediaIds: studioMediaIds(group),
       ...(mediaCaption !== undefined ? { mediaCaption } : {}),
+      ...(mediaAlt !== undefined ? { mediaAlt } : {}),
     },
   ];
 }

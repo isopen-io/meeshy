@@ -24,7 +24,7 @@
  * littéral erroné, est celui que cette phrase promet : un retour matériel
  * ULTÉRIEUR ne consomme plus qu'UNE seule couche (jamais deux, jamais zéro).
  */
-import { waitForRowSettled } from './check-media.mjs';
+import { requireRowSettled, waitForRowSettled } from './check-media.mjs';
 import { confinementDe } from './chrome-confinement.mjs';
 
 const QUAD_ID = 'media-13';
@@ -181,13 +181,13 @@ export async function checkThreadMediaGrid({ browser, BASE, expect, setScheme, s
 
   const scroller = page.locator('main#contenu');
   await scrollUntilMounted(page, scroller, QUAD_ID);
-  await waitForRowSettled(page, QUAD_ID);
+  await requireRowSettled(page, QUAD_ID, expect);
 
   if (skin === 'bulles') {
     await page.getByRole('button', { name: /Mode de lecture/ }).click();
     await page.getByRole('menuitemradio', { name: /Bulles/ }).click();
     await page.waitForTimeout(300);
-    await waitForRowSettled(page, QUAD_ID);
+    await requireRowSettled(page, QUAD_ID, expect);
   }
 
   const rowOf = (id) => page.locator(`[data-message="${id}"]`);
@@ -280,7 +280,7 @@ export async function checkThreadMediaGrid({ browser, BASE, expect, setScheme, s
   await expectNoTileClipped(QUAD_ID);
 
   await scrollUntilMounted(page, scroller, OVERFLOW_ID);
-  await waitForRowSettled(page, OVERFLOW_ID);
+  await requireRowSettled(page, OVERFLOW_ID, expect);
   const overflowRow = rowOf(OVERFLOW_ID);
   const overflowBadge = overflowRow.locator('[data-overflow]');
   expect((await overflowBadge.count()) === 1, `[${skin}/${scheme}] media-14 (6 images) porte un badge [data-overflow]`);
@@ -316,7 +316,7 @@ export async function checkThreadMediaGrid({ browser, BASE, expect, setScheme, s
   // « aucune image perdue » se lit au PIXEL peint, pas à une métrique que la
   // responsivité peut fausser sans qu'aucun octet ne soit perdu.
   await rowOf(QUAD_ID).evaluate((el) => el.scrollIntoView({ block: 'center' }));
-  await waitForRowSettled(page, QUAD_ID);
+  await requireRowSettled(page, QUAD_ID, expect);
   const quadImages = rowOf(QUAD_ID).locator('img[data-attachment-image]');
   const quadImageCount = await quadImages.count();
   const paintedColours = [];
@@ -426,7 +426,7 @@ export async function checkThreadMediaGrid({ browser, BASE, expect, setScheme, s
 
   // ===== G4 — la vidéo en grille est un <video> avec poster =====
   await scrollUntilMounted(page, scroller, TRIPLE_VIDEO_ID);
-  await waitForRowSettled(page, TRIPLE_VIDEO_ID);
+  await requireRowSettled(page, TRIPLE_VIDEO_ID, expect);
   const tripleRow = rowOf(TRIPLE_VIDEO_ID);
   expect(
     (await tripleRow.locator('[data-media-tile]').count()) === 3,
@@ -442,7 +442,7 @@ export async function checkThreadMediaGrid({ browser, BASE, expect, setScheme, s
      troisième agencement, et le seul dont les deux cases se partagent la
      largeur à parts égales sous `flex-shrink`. */
   await scrollUntilMounted(page, scroller, PAIR_ID);
-  await waitForRowSettled(page, PAIR_ID);
+  await requireRowSettled(page, PAIR_ID, expect);
   expect(
     (await rowOf(PAIR_ID).locator('[data-media-tile]').count()) === 2,
     `[${skin}/${scheme}] media-11 (2 images) rend 2 [data-media-tile]`,
@@ -545,7 +545,7 @@ export async function checkThreadMediaGrid({ browser, BASE, expect, setScheme, s
      main tout de suite quand la rangée est déjà là). */
   const checkGridShape = async (id, minimum) => {
     await scrollUntilMounted(page, scroller, id);
-    await waitForRowSettled(page, id);
+    await requireRowSettled(page, id, expect);
     await checkBoxAspectRatio(id);
     await checkSlotRatios(id, minimum);
   };
@@ -579,7 +579,7 @@ export async function checkThreadMediaGrid({ browser, BASE, expect, setScheme, s
    * c'est la FORME que `soloVideoSlot` élit — et une hauteur non nulle.
    */
   await scrollUntilMounted(page, scroller, SOLO_VIDEO_ID);
-  await waitForRowSettled(page, SOLO_VIDEO_ID);
+  await requireRowSettled(page, SOLO_VIDEO_ID, expect);
   const soloRow = rowOf(SOLO_VIDEO_ID);
   const soloTileBox = await soloRow.locator('[data-media-tile]').first().boundingBox();
   const soloVideoBox = await soloRow.locator('video').first().boundingBox();
@@ -621,7 +621,7 @@ export async function checkThreadMediaGrid({ browser, BASE, expect, setScheme, s
    * était juste ; il lui manquait la donnée. `media-16` est cette donnée.
    */
   await scrollDownUntilMounted(page, scroller, MINE_GRID_ID);
-  await waitForRowSettled(page, MINE_GRID_ID);
+  await requireRowSettled(page, MINE_GRID_ID, expect);
   const mineRow = rowOf(MINE_GRID_ID);
   if (skin === 'bulles') {
     const mineJustify = await mineRow.evaluate((el) => getComputedStyle(el).justifyContent);
@@ -654,9 +654,17 @@ export async function checkThreadMediaGrid({ browser, BASE, expect, setScheme, s
   // G7 a défilé VERS LE BAS : le virtualiseur a démonté `media-13`, il faut le remonter avant de le viser.
   await scrollUntilMounted(page, scroller, QUAD_ID);
   await rowOf(QUAD_ID).evaluate((el) => el.scrollIntoView({ block: 'center' }));
-  await waitForRowSettled(page, QUAD_ID);
+  await requireRowSettled(page, QUAD_ID, expect);
   const historyLengthBefore = await page.evaluate(() => window.history.length);
   const secondTile = rowOf(QUAD_ID).locator('[data-media-tile]').nth(1);
+  /* D-134 (#6303) — la pièce se nomme par son IDENTITÉ : depuis le fil, la
+     pellicule porte TOUTE la conversation, et la position de la 2ᵉ tuile n'y
+     est plus « 1 ». */
+  const quadIds = await rowOf(QUAD_ID)
+    .locator('[data-media-tile]')
+    .evaluateAll((tiles) => tiles.map((tile) => tile.closest('[data-attachment]')?.getAttribute('data-attachment') ?? ''));
+  const secondId = quadIds[1] ?? '';
+  expect(quadIds.length === 4 && quadIds.every((id) => id !== ''), `[${skin}/${scheme}] media-13 nomme ses 4 pièces (${JSON.stringify(quadIds)})`);
   await secondTile.click();
   await page.waitForSelector('[data-media-viewer]');
 
@@ -664,8 +672,8 @@ export async function checkThreadMediaGrid({ browser, BASE, expect, setScheme, s
   expect((await dialog.getAttribute('role')) === 'dialog', `[${skin}/${scheme}] la visionneuse porte role="dialog"`);
   expect((await dialog.getAttribute('aria-modal')) === 'true', `[${skin}/${scheme}] la visionneuse porte aria-modal="true"`);
   expect(
-    (await dialog.getAttribute('data-viewer-index')) === '1',
-    `[${skin}/${scheme}] la visionneuse s'ouvre sur l'index 1 (2ᵉ tuile) (obtenu ${await dialog.getAttribute('data-viewer-index')})`,
+    (await dialog.getAttribute('data-viewer-attachment')) === secondId,
+    `[${skin}/${scheme}] la visionneuse s'ouvre sur la 2ᵉ tuile (obtenu ${await dialog.getAttribute('data-viewer-attachment')}, attendu ${secondId})`,
   );
   const rootInert = await page.evaluate(() => document.getElementById('root')?.hasAttribute('inert') ?? false);
   expect(rootInert, `[${skin}/${scheme}] #root porte inert le temps de l'ouverture`);
@@ -680,14 +688,31 @@ export async function checkThreadMediaGrid({ browser, BASE, expect, setScheme, s
    * largeur du carrousel. La grille QUAD ouverte ici est exactement ce cas —
    * quatre pages, le carrousel le plus large du fil de conversation.
    */
-  const porte = await confinementDe(page, '[data-media-viewer] .media-viewer-close', { nom: 'la croix de la visionneuse' });
+  const porte = await confinementDe(page, '[data-media-viewer] [data-viewer-exit="close"]', { nom: 'la croix de la visionneuse' });
   expect(porte.ok, `[${skin}/${scheme}] #7040 : ${porte.message}`);
 
+  /* D-134 (#6303) — LA PELLICULE DU FIL PORTE LA CONVERSATION. Elle s'ouvre sur
+     les pièces de la bulle (aucune attente), puis GRANDIT quand l'index arrive :
+     on attend la croissance, puis on mesure ce qui est promis — plus que les
+     quatre pièces du message, les quatre à la suite dans l'ordre du fil, la
+     vignette courante étant celle de la tuile touchée. */
   const filmstripItems = dialog.locator('[data-filmstrip-item]');
-  expect((await filmstripItems.count()) === 4, `[${skin}/${scheme}] la pellicule compte 4 vignettes (media-13)`);
+  await page.waitForFunction(() => document.querySelectorAll('[data-media-viewer] [data-filmstrip-item]').length > 4);
+  const stripIds = await filmstripItems.evaluateAll((items) => items.map((item) => item.getAttribute('data-attachment') ?? ''));
+  const quadAt = stripIds.indexOf(quadIds[0] ?? '');
+  expect(stripIds.length > 4, `[${skin}/${scheme}] la pellicule compte TOUTE la conversation (${stripIds.length} vignettes, plus que les 4 de media-13)`);
   expect(
-    (await filmstripItems.nth(1).getAttribute('aria-current')) === 'true',
-    `[${skin}/${scheme}] la 2ᵉ vignette porte aria-current="true"`,
+    quadAt >= 0 && quadIds.every((id, offset) => stripIds[quadAt + offset] === id),
+    `[${skin}/${scheme}] les 4 pièces de media-13 s'y suivent dans l'ordre du fil (${JSON.stringify(stripIds)})`,
+  );
+  const openedAt = stripIds.indexOf(secondId);
+  expect(
+    (await filmstripItems.nth(openedAt).getAttribute('aria-current')) === 'true',
+    `[${skin}/${scheme}] la vignette de la 2ᵉ tuile porte aria-current="true" (position ${openedAt})`,
+  );
+  expect(
+    (await dialog.getAttribute('data-viewer-attachment')) === secondId,
+    `[${skin}/${scheme}] la croissance de la pellicule n'a pas déplacé la page regardée`,
   );
 
   /**
@@ -725,22 +750,39 @@ export async function checkThreadMediaGrid({ browser, BASE, expect, setScheme, s
    * (`filmstripIndexAtPlayhead` calculée, jamais lue). Miroir
    * `ConversationMediaFilmstrip` iOS 17+ (`scrollPosition(id:anchor:)`).
    */
-  await dialog.locator('[data-filmstrip]').evaluate((el) => {
-    el.scrollLeft = 179; // filmstripIndexAtPlayhead(179, 4) === 3 (media-stage.test.ts)
+  /* Deux pas de bande (le pas se MESURE entre deux vignettes, jamais codé en
+     dur) vers l'intérieur de la pellicule : la tête de lecture y sélectionne la
+     vignette visée. */
+  const scrollTarget = openedAt >= 2 ? openedAt - 2 : openedAt + 2;
+  await dialog.locator('[data-filmstrip]').evaluate((el, target) => {
+    const items = el.querySelectorAll('[data-filmstrip-item]');
+    const step = items[1].getBoundingClientRect().left - items[0].getBoundingClientRect().left;
+    el.scrollLeft = Math.round(target * step);
     el.dispatchEvent(new Event('scroll', { bubbles: false }));
-  });
-  await page.waitForFunction(() => document.querySelector('[data-media-viewer]')?.getAttribute('data-viewer-index') === '3');
-  expect(
-    (await filmstripItems.nth(3).getAttribute('aria-current')) === 'true',
-    `[${skin}/${scheme}] défiler la pellicule à la main jusqu'à l'index 3 pose aria-current sur la 4ᵉ vignette`,
+  }, scrollTarget);
+  await page.waitForFunction(
+    (target) => document.querySelector('[data-media-viewer]')?.getAttribute('data-viewer-index') === String(target),
+    scrollTarget,
   );
-  // Restauré à l'index 1 (clic, chemin déjà éprouvé par G3) — le reste du témoin G3 suppose cet état,
+  expect(
+    (await filmstripItems.nth(scrollTarget).getAttribute('aria-current')) === 'true',
+    `[${skin}/${scheme}] défiler la pellicule à la main de deux pas pose aria-current sur la vignette visée (${scrollTarget})`,
+  );
+  // Restauré sur la 2ᵉ tuile (clic, chemin déjà éprouvé par G3) — le reste du témoin G3 suppose cet état,
   // focus REMIS sur « Fermer » : le clic de restauration l'a déplacé sur la vignette.
-  await filmstripItems.nth(1).click();
-  await page.waitForFunction(() => document.querySelector('[data-media-viewer]')?.getAttribute('data-viewer-index') === '1');
-  await dialog.getByRole('button', { name: 'Fermer' }).focus();
+  await filmstripItems.nth(openedAt).click();
+  await page.waitForFunction((id) => document.querySelector('[data-media-viewer]')?.getAttribute('data-viewer-attachment') === id, secondId);
+  // La croix est EN FIN de la barre haute (#8879) : le premier focalisable est
+  // l'identité ou « … ». On part donc du PREMIER, quel qu'il soit.
+  await page.evaluate(() => {
+    const dlg = document.querySelector('[data-media-viewer]');
+    const focusables = Array.from(dlg.querySelectorAll('button, [href], [tabindex]:not([tabindex="-1"])')).filter(
+      (el) => !el.hasAttribute('disabled') && el.closest('[inert]') === null,
+    );
+    focusables[0]?.focus();
+  });
 
-  // Shift+Tab depuis « Fermer » (le premier focalisable) revient au DERNIER
+  // Shift+Tab depuis le PREMIER focalisable revient au DERNIER
   // (motif QUE le composant lui-même applique — `nextFocusIndex`, prouvé ici
   // dans un vrai navigateur, jamais seulement en unitaire).
   await page.keyboard.press('Shift+Tab');
@@ -751,7 +793,7 @@ export async function checkThreadMediaGrid({ browser, BASE, expect, setScheme, s
     );
     return focusables.length > 0 && document.activeElement === focusables[focusables.length - 1];
   });
-  expect(wrappedToLast, `[${skin}/${scheme}] Shift+Tab depuis « Fermer » boucle sur le DERNIER focalisable (le piège)`);
+  expect(wrappedToLast, `[${skin}/${scheme}] Shift+Tab depuis le PREMIER focalisable boucle sur le DERNIER (le piège)`);
 
   await page.keyboard.press('Escape');
   await page.waitForSelector('[data-media-viewer]', { state: 'detached' });
@@ -795,15 +837,15 @@ export async function checkThreadMediaGrid({ browser, BASE, expect, setScheme, s
   await backPage.waitForSelector('[data-message]');
   const backScroller = backPage.locator('main#contenu');
   await scrollUntilMounted(backPage, backScroller, QUAD_ID);
-  await waitForRowSettled(backPage, QUAD_ID);
+  await requireRowSettled(backPage, QUAD_ID, expect);
   if (skin === 'bulles') {
     await backPage.getByRole('button', { name: /Mode de lecture/ }).click();
     await backPage.getByRole('menuitemradio', { name: /Bulles/ }).click();
     await backPage.waitForFunction(() => typeof window.history.state?.backDismiss !== 'string');
-    await waitForRowSettled(backPage, QUAD_ID);
+    await requireRowSettled(backPage, QUAD_ID, expect);
   }
   await backPage.locator(`[data-message="${QUAD_ID}"]`).evaluate((el) => el.scrollIntoView({ block: 'center' }));
-  await waitForRowSettled(backPage, QUAD_ID);
+  await requireRowSettled(backPage, QUAD_ID, expect);
   /**
    * #6319 — l'entrée que le retour consomme est relevée À L'INSERTION de la
    * visionneuse (l'observateur de mutations s'exécute juste après le commit),

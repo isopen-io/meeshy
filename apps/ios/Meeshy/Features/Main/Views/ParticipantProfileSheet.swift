@@ -97,7 +97,7 @@ struct ParticipantProfileSheet: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-            .padding(20)
+            .padding(MeeshySpacing.xl)
             .background(theme.backgroundPrimary.ignoresSafeArea())
             .navigationTitle(String(
                 localized: "participantProfile.title",
@@ -152,10 +152,10 @@ struct ParticipantProfileSheet: View {
 
     @ViewBuilder
     private func content(_ profile: ConversationParticipantProfile) -> some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.lg) {
             header(profile)
 
-            VStack(spacing: 10) {
+            VStack(spacing: MeeshySpacing.smPlus) {
                 if let language = profile.language {
                     row(icon: "globe", label: languageLabel, value: language.uppercased())
                 }
@@ -180,9 +180,9 @@ struct ParticipantProfileSheet: View {
                     )
                 }
             }
-            .padding(14)
+            .padding(MeeshySpacing.mdPlus)
             .background(theme.backgroundSecondary)
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous))
 
             if let capabilities = profile.entryCapabilities {
                 capabilitiesSection(capabilities)
@@ -214,7 +214,7 @@ struct ParticipantProfileSheet: View {
     /// seule information utile.
     @ViewBuilder
     private func capabilitiesSection(_ capabilities: ParticipantEntryCapabilities) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             sectionTitle(capabilitiesLabel)
 
             if canEditRights {
@@ -238,9 +238,9 @@ struct ParticipantProfileSheet: View {
                     .accessibilityIdentifier("participant-profile-toggle-\(capability.rawValue)")
                 }
             } else if capabilities.denied.isEmpty {
-                HStack(spacing: 8) {
+                HStack(spacing: MeeshySpacing.sm) {
                     Image(systemName: "checkmark.shield.fill")
-                        .font(.system(size: 13))
+                        .font(.system(size: MeeshyIconSize.xs))
                         .foregroundColor(MeeshyColors.success)
                         .frame(width: 18)
                     Text(noRestrictionLabel)
@@ -251,9 +251,9 @@ struct ParticipantProfileSheet: View {
                 .accessibilityIdentifier("participant-profile-no-restriction")
             } else {
                 ForEach(capabilities.denied, id: \.rawValue) { capability in
-                    HStack(spacing: 8) {
+                    HStack(spacing: MeeshySpacing.sm) {
                         Image(systemName: "nosign")
-                            .font(.system(size: 13))
+                            .font(.system(size: MeeshyIconSize.xs))
                             .foregroundColor(MeeshyColors.warning)
                             .frame(width: 18)
                         Text(deniedLabel(capability))
@@ -277,13 +277,13 @@ struct ParticipantProfileSheet: View {
     /// l'octroi mais ne peut pas l'écrire).
     @ViewBuilder
     private func historyGrantSection(_ profile: ConversationParticipantProfile) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             sectionTitle(historyGrantTitleLabel)
 
             if canGrantHistory {
-                HStack(spacing: 8) {
+                HStack(spacing: MeeshySpacing.sm) {
                     Image(systemName: "clock.arrow.circlepath")
-                        .font(.system(size: 13))
+                        .font(.system(size: MeeshyIconSize.xs))
                         .foregroundColor(theme.textMuted)
                         .frame(width: 18)
                     Text(seesHistorySinceLabel)
@@ -320,7 +320,7 @@ struct ParticipantProfileSheet: View {
                                 // de points, et une cible de cette taille se
                                 // rate. 44 pt, la zone sensible étendue à tout
                                 // le cadre (#4393).
-                                .frame(minWidth: 44, minHeight: 44)
+                                .frame(minWidth: MeeshyControlSize.tapTarget, minHeight: MeeshyControlSize.tapTarget)
                                 .contentShape(Rectangle())
                         }
                         .disabled(historyGrantWriteInFlight)
@@ -349,7 +349,7 @@ struct ParticipantProfileSheet: View {
     /// client ne refait jamais cet arbitrage.
     @ViewBuilder
     private func entryLinkSection(_ link: ParticipantEntryLink) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
             sectionTitle(entryLinkLabel)
 
             if !link.isActive {
@@ -387,10 +387,10 @@ struct ParticipantProfileSheet: View {
                 row(icon: "character.bubble", label: linkLanguagesLabel, value: link.allowedLanguages.joined(separator: ", ").uppercased())
             }
         }
-        .padding(14)
+        .padding(MeeshySpacing.mdPlus)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous)
                 .strokeBorder(theme.textMuted.opacity(0.3), style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
         )
         .accessibilityIdentifier("participant-profile-entry-link")
@@ -403,16 +403,16 @@ struct ParticipantProfileSheet: View {
     }
 
     private func header(_ profile: ConversationParticipantProfile) -> some View {
-        HStack(spacing: 10) {
+        HStack(spacing: MeeshySpacing.smPlus) {
             // Le masque QUALIFIE l'identité — il la précède, il ne la décore pas.
             if profile.isAnonymous {
                 Image(systemName: "theatermasks.fill")
-                    .font(.system(size: 22, weight: .semibold))
+                    .font(.system(size: MeeshyIconSize.xxl, weight: .semibold))
                     .foregroundColor(.purple)
                     .accessibilityHidden(true)
             }
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(profile.resolvedFullName)
                     .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .semibold, design: .rounded))
                     .foregroundColor(theme.textPrimary)
@@ -435,8 +435,8 @@ struct ParticipantProfileSheet: View {
                 ))
                 .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
                 .foregroundColor(.purple)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 3)
+                .padding(.horizontal, MeeshySpacing.sm)
+                .padding(.vertical, MeeshySpacing.xxs)
                 .background(Capsule().fill(Color.purple.opacity(theme.mode.isDark ? 0.22 : 0.12)))
                 .accessibilityIdentifier("participant-profile-no-account")
             }
@@ -444,9 +444,9 @@ struct ParticipantProfileSheet: View {
     }
 
     private func row(icon: String, label: String, value: String?, withheld: Bool = false) -> some View {
-        HStack(spacing: 8) {
+        HStack(spacing: MeeshySpacing.sm) {
             Image(systemName: icon)
-                .font(.system(size: 13))
+                .font(.system(size: MeeshyIconSize.xs))
                 .foregroundColor(theme.textMuted)
                 .frame(width: 18)
             Text(label)

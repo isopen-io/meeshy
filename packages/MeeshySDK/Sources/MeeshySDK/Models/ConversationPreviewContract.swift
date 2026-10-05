@@ -140,6 +140,16 @@ public struct LastMessageNature: Codable, Sendable, Hashable {
         self.attachmentSummary = attachmentSummary
     }
 
+    /// La même nature, son événement système remplacé — un avis complété sur
+    /// place par le serveur reste le même message (#8565).
+    public func replacingSystemEvent(_ event: LastMessageSystemEvent) -> LastMessageNature {
+        LastMessageNature(
+            messageType: messageType, effectFlags: effectFlags, ephemeralDuration: ephemeralDuration,
+            isEncrypted: isEncrypted, isForwarded: isForwarded, systemEvent: event,
+            callSummary: callSummary, attachmentSummary: attachmentSummary
+        )
+    }
+
     /// `nil` quand le fil ne dit RIEN de la nature — un serveur antérieur à
     /// #7545. Une nature vide n'est pas une information : la garder distincte
     /// de « texte simple » évite de peindre en texte ce qu'on ne connaît pas.
@@ -296,12 +306,15 @@ public extension ConversationLastReaction {
 }
 
 public extension MeeshyConversation {
-    /// Le RANG de la ligne dans la liste (règle client du contrat #7545,
-    /// décision porteur #7546) : max(`lastMessageAt`, `lastReaction.createdAt`
-    /// quand la réaction vise un message du lecteur). Une réaction entre tiers
-    /// s'affiche sans réordonner ; `lastMessageAt` reste la date AFFICHÉE.
+    /// Le RANG de la ligne dans la liste : max(`lastMessageAt`, `listRankAt`
+    /// servi, `lastReaction.createdAt` quand la réaction vise un message du
+    /// lecteur). `listRankAt` (#9026) est le rang SERVEUR, le même pour tous les
+    /// participants — réaction, appel, épingle remontent la ligne pour chacun ;
+    /// la règle réaction (#7548) reste le repli d'un serveur antérieur.
+    /// `lastMessageAt` reste la date AFFICHÉE.
     var listActivityAt: Date {
-        guard lastReactionTargetsReader, let reaction = lastReaction else { return lastMessageAt }
-        return max(lastMessageAt, reaction.createdAt)
+        let served = listRankAt.map { max(lastMessageAt, $0) } ?? lastMessageAt
+        guard lastReactionTargetsReader, let reaction = lastReaction else { return served }
+        return max(served, reaction.createdAt)
     }
 }

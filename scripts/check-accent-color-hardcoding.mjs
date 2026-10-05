@@ -136,8 +136,93 @@
 // `colorHex` parce qu'elle porte l'un OU l'autre ; la nommer `accentColor`
 // mentirait sur la moitié des cas. Même raisonnement que #6793 ci-dessus :
 // relever plutôt que déplacer l'appel. Aucun littéral ne bouge (118).
-const REFERENCE_LITERAL_COLOR_COUNT = 118;
-const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 434;
+//
+// 2026-09-26 (#7945, lot 6) — variables inconnues 431 → 432. UN seul appel
+// neuf, et ce n'est qu'un DÉPLACEMENT : `FeedPostEmbedRow`, la ligne d'embed
+// vidéo extraite de `FeedPostCard` pour que ses deux balayages NSDataDetector
+// ne rejouent plus à chaque re-render de la carte (`.equatable()`), reçoit
+// l'accent du post sous le nom ÉTABLI `accentHex: String` — la carte, qui
+// écrivait `Color(hex: accentColor)` en place (variable admise), lui passe sa
+// propre `accentColor`. Même vocabulaire que #6793 ci-dessus (la CHAÎNE, par
+// opposition à la COULEUR) : relever plutôt que renommer. Aucun littéral ne
+// bouge (118).
+//
+// 2026-09-26 (#8099, #8101) — variables inconnues 432 → 437. CINQ appels neufs,
+// tous sous le nom ÉTABLI `accentHex` (la CHAÎNE, par opposition à la COULEUR,
+// même vocabulaire que #6793 et #7945 ci-dessus) : la carte de conversation
+// dans la bulle (`ConversationLinkCard`, `ConversationLinkCardBody` — dont
+// l'accent est CALCULÉ depuis la carte par `accentHex(for:)` —,
+// `ConversationLinkCardActionsRow`) et la carte de visite
+// (`ContactCardView`, deux appels, `ContactCardDetailSheet`). Chacun peint
+// l'accent de la carte reçu de son hôte, jamais une couleur en dur. Aucun
+// littéral ne bouge (118). Valeur MESURÉE sur `dev` le 2026-09-26.
+//
+// 2026-09-26 (#8103) — variables inconnues 437 → 439. DEUX appels neufs dans
+// `MediaHub/ConversationMediaHubCells.swift`, l'écran « Médias, liens et
+// documents » : l'icône d'une ligne de document et la capsule du segment
+// choisi, toutes deux à l'accent de la conversation reçu sous le nom ÉTABLI
+// `accentHex` (même vocabulaire que #6793, #7945, #8099). La vignette
+// `attachment.thumbnailColor` n'est qu'un DÉPLACEMENT depuis
+// `ConversationInfoSheet` (compte inchangé). Aucun littéral ne bouge (118).
+//
+// 2026-09-27 (#8067) — variables inconnues 439 → 440. UN appel neuf :
+// `UserProfileSheet+DetailsTab.callButton`, les boutons « Appel vocal » /
+// « Appel vidéo » de la fiche profil, peints à l'accent du PROFIL
+// (`resolvedAccent`) comme l'en-tête de la même fiche
+// (`UserProfileSheet+Header`, déjà compté). Ce n'est pas une conversation :
+// `accentColor` n'y aurait aucun sens. Aucun littéral ne bouge (118).
+//
+// 2026-09-27 (#8231) — variables inconnues 440 → 438. Plus aucune vidéo ne
+// se lit dans le fil : `BubbleGridVideoThumbnailView` et son badge play
+// (`contactColor`) disparaissent, remplacés par UN poster partagé
+// (`ConversationVideoPoster`, un seul appel à `accentHex`) pour la grille,
+// le carrousel et Focal. Aucun littéral ne bouge (118).
+//
+// 2026-09-27 (#8395, #8396) — variables inconnues 438 → 440. La vue d'appel
+// « C adapté » donne à chaque PERSONNE d'un appel une couleur stable
+// (`CallSpeakerColor.hex(for:)`), la même au liseré de sa vignette de groupe
+// (`GroupCallStageView`, `tile.accentHex`) et à son nom dans les sous-titres
+// (`CallCaptionsViews`, `line.speakerColorHex`). C'est l'identité d'un
+// participant, pas le contexte d'une conversation : `accentColor` n'y aurait
+// aucun sens. Aucun littéral ne bouge (118).
+//
+// 2026-09-27 (#8414) — littéraux 118 → 120, variables inconnues 440 → 443.
+// Le panneau Cadre du composer peint les bandes d'un média ajusté du FOND
+// choisi (`StoryBackdrop` : flou, noir, blanc, indigo, sable — contrat commun
+// au web) et prévisualise le fond « indigo » par son dégradé de marque
+// (`FB923C` → `4F46E5`, deux littéraux). Les trois variables sont la teinte du
+// fond choisi, relue au canvas, au lecteur et au composite. C'est le fond
+// d'une SCÈNE, pas le contexte d'une conversation : `accentColor` n'y aurait
+// aucun sens.
+//
+// 2026-09-30 (#8877) — littéraux 120 → 67. Le codemod de la charte visuelle
+// échange 53 `Color(hex: "…")` par le jeton `MeeshyColors` de MÊME valeur
+// (indigo, succès/erreur, teintes franches, tuiles, plans nommés) : aucun
+// pixel ne bouge, le codage en dur devient une référence au jeton. Les
+// variables inconnues ne bougent pas (441).
+//
+// 2026-09-30 (#8877, harmonisation vue par vue) — littéraux 67 → 65, variables
+// inconnues 441 → 438 : les plans de saisie de `ReportMessageSheet` deviennent
+// `surfaceDarkInput` / `surfaceLightInput` ; deux `Color(hex: MeeshyColors.…Hex)`
+// deviennent le jeton `Color` lui-même, et le contour « j'ai réagi » à la couleur
+// de l'auteur quitte le rail de la story avec le chrome plein écran (#8878).
+//
+// 2026-10-02 (#9069) — variables inconnues 438 → 443 : les cinq
+// `Color(hex: band.fill | band.stroke | band.ink | text.fill)` de
+// `MeeInstantView` (MeeshyUI/Story). Ce ne sont PAS des couleurs d'accent : ce
+// sont les couleurs du DESSIN d'un Instant de Mee et Meo, mesurées dans le SVG
+// du web par `apps/web/scripts/mee-ios-instants.ts` et écrites dans l'index
+// généré, pour que le bandeau et le texte redessinés en natif soient
+// identiques au web (une seule source de dessin). Les rapporter à
+// `accentColor` changerait le sticker selon la conversation.
+//
+// 2026-10-03 (#9171) — variables inconnues 442 → 443 : le fond d'attente de
+// `VisitorContentView` (`Color(hex: media.thumbnailColor)`). C'est la couleur
+// DOMINANTE du média, servie avec lui — le même fond que la bulle, la galerie
+// et l'aperçu peignent déjà sous chaque média qui charge. La rapporter à
+// `accentColor` peindrait la vignette d'un autre média que le sien.
+const REFERENCE_LITERAL_COLOR_COUNT = 65;
+const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 443;
 
 import { readFileSync, readdirSync, statSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';

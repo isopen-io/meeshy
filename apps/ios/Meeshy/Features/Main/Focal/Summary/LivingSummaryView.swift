@@ -65,16 +65,16 @@ struct LivingSummaryView: View {
     private var stateHeader: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
             Text(String(localized: "focal.summary.header.title", defaultValue: "Résumé Vivant", bundle: .main))
-                .font(MeeshyFont.relative(20, weight: .heavy))
+                .font(MeeshyFont.relative(MeeshyFont.title3Size, weight: .heavy))
                 .foregroundColor(isDark ? .white : .black)
 
             Text(countsLine)
-                .font(MeeshyFont.relative(14, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
                 .foregroundColor(isDark ? .white.opacity(0.7) : .black.opacity(0.6))
 
             if !viewModel.digest.isComplete {
                 Text(partialLine)
-                    .font(MeeshyFont.relative(12, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
                     .foregroundColor(MeeshyColors.indigo500)
             }
         }
@@ -111,16 +111,16 @@ struct LivingSummaryView: View {
 
     private func agentPanel(_ summary: ConversationSummaryAnalysis) -> some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
-            HStack(spacing: 4) {
+            HStack(spacing: MeeshySpacing.xs) {
                 Text("✦")
-                    .font(MeeshyFont.relative(12, weight: .heavy))
+                    .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .heavy))
                     .foregroundColor(MeeshyColors.indigo500)
                 Text(String(localized: "focal.summary.agent.title", defaultValue: "Vue d'ensemble de l'agent", bundle: .main))
-                    .font(MeeshyFont.relative(12, weight: .heavy))
+                    .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .heavy))
                     .foregroundColor(MeeshyColors.indigo500)
             }
             Text(summary.text)
-                .font(MeeshyFont.relative(13, weight: .regular))
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .regular))
                 .foregroundColor(isDark ? .white.opacity(0.85) : .black.opacity(0.78))
         }
         .padding(MeeshySpacing.md)
@@ -136,7 +136,7 @@ struct LivingSummaryView: View {
     private var resumeButton: some View {
         Button(action: onResumeThread) {
             Text(String(localized: "focal.summary.resume_thread", defaultValue: "Reprendre le fil", bundle: .main))
-                .font(MeeshyFont.relative(15, weight: .bold))
+                .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, MeeshySpacing.md)

@@ -27,18 +27,17 @@ final class ConversationStickerSendGuardTests: XCTestCase {
 
     // MARK: - La tuile
 
-    func test_composerBar_declaresStickerCallback_andGatesTheTileOnIt() throws {
+    func test_composerBar_declaresStickerCallback_andGatesTheGlassDoorOnIt() throws {
         let bar = try appSource("Meeshy/Features/Main/Components/UniversalComposerBar.swift")
         XCTAssertTrue(bar.contains("var onRequestStickerPicker: (() -> Void)? = nil"),
                       "la barre déclare la porte, avec `nil` pour défaut : un hôte qui ne la câble pas n'a pas de tuile")
 
-        let tiles = try appSource("Meeshy/Features/Main/Components/UniversalComposerBar+Attachments.swift")
-        XCTAssertTrue(tiles.contains("if onRequestStickerPicker != nil {"),
-                      "la tuile est GATÉE sur le rappel — loi 4, une porte sans effet n'est pas rendue")
-        XCTAssertTrue(tiles.contains("id: \"sticker\""))
-        XCTAssertTrue(tiles.contains("icon: \"rectangle.portrait.on.rectangle.portrait.angled\""),
+        let door = try appSource("Meeshy/Features/Main/Components/UniversalComposerBar+Toolbar.swift")
+        XCTAssertTrue(door.contains("if let openStickers = onRequestStickerPicker {"),
+                      "la porte est GATÉE sur le rappel — loi 4, une porte sans effet n'est pas rendue")
+        XCTAssertTrue(door.contains("symbol: \"rectangle.portrait.on.rectangle.portrait.angled\""),
                       "même glyphe que `ComposerRailDoor.sticker` et que l'en-tête de la palette — pas un smiley")
-        XCTAssertTrue(tiles.contains("\"composer.attach.sticker\""))
+        XCTAssertTrue(door.contains("\"composer.attach.sticker\""))
     }
 
     // MARK: - L'hôte
@@ -52,10 +51,14 @@ final class ConversationStickerSendGuardTests: XCTestCase {
         XCTAssertFalse(tail.hasPrefix("nil"), "câblé à `nil`, la tuile serait absente")
         XCTAssertTrue(tail.hasPrefix("{"), "la porte doit ouvrir quelque chose : une fermeture, pas une valeur")
 
-        XCTAssertTrue(composer.contains("StickerPickerView("),
+        // **La palette est la feuille unique du produit** (#9189) : ses
+        // injecteurs vivent dans `MeeshyStickerSheet`, une fois, et
+        // `StickerSheetHasOneMountSiteTests` les compte.
+        XCTAssertTrue(composer.contains("MeeshyStickerSheet("),
                       "la porte n'a d'effet que si la palette est PRÉSENTÉE")
+        let feuille = try appSource("Meeshy/Features/Main/Components/MeeshyStickerSheet.swift")
         for injecteur in [".storyPasteProvided()", ".storyStickerLibraryProvided()", ".stickerNearbyPlacesProvided()"] {
-            XCTAssertTrue(composer.contains(injecteur),
+            XCTAssertTrue(feuille.contains(injecteur),
                           "sans `\(injecteur)`, un onglet de la palette n'est pas rendu (loi 4)")
         }
     }
@@ -68,6 +71,9 @@ final class ConversationStickerSendGuardTests: XCTestCase {
                          "func sendLocationTemplateSticker(", "func sendLibrarySticker("] {
             XCTAssertTrue(sticker.contains(callback), "les quatre rappels de la palette ont chacun leur chemin")
         }
+        let choix = try appSource("Meeshy/Features/Main/Views/ConversationView+StickerSheet.swift")
+        XCTAssertTrue(choix.contains("case .packItem(let pack, let item): sendPackSticker(pack, item: item)"),
+                      "un sticker de pack part comme un Mee : image de repli + descripteur (#9190)")
     }
 
     // MARK: - Le rejeu hors-ligne

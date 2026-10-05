@@ -19,7 +19,7 @@
 
 [project]
 name = "meeshy-translator"
-version = "1.65.0"
+version = "1.78.0"
 description = "Meeshy Translator - FastAPI ML Service for translation, STT, and TTS"
 readme = "README.md"
 license = { text = "Proprietary" }
@@ -119,6 +119,9 @@ dev = [
     "ruff>=0.4.0",
     "mypy>=1.10.0",
     "ipython>=8.0.0",
+    # Banc de mesure de la traduction (#3662) : chrF. COMET s'installe à part
+    # dans le job nocturne, il tire un modèle de 2 Go.
+    "sacrebleu>=2.4.0",
 ]
 
 # Production optimizations

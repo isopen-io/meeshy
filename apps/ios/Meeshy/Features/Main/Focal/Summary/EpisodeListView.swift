@@ -42,11 +42,11 @@ private struct EpisodeRow: View {
             HStack(spacing: MeeshySpacing.sm) {
                 if episode.isAgentTitled {
                     Text("✦")
-                        .font(MeeshyFont.relative(12, weight: .heavy))
+                        .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .heavy))
                         .foregroundColor(MeeshyColors.indigo500)
                 }
                 Text(episode.displayTitle)
-                    .font(MeeshyFont.relative(13, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                     .foregroundColor(isDark ? .white.opacity(0.9) : .black.opacity(0.85))
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)

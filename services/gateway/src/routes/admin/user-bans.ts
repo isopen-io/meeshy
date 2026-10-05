@@ -11,6 +11,7 @@ import { UnifiedAuthContext, UnifiedAuthRequest, authUserCacheKey } from '../../
 import { getCacheStore } from '../../services/CacheStore';
 import { sendSuccess, sendNotFound, sendBadRequest, sendInternalError } from '../../utils/response';
 import { logError } from '../../utils/logger.js';
+import { loadAdminPeople } from './oversight-people';
 
 type Deps = {
   banService: BanService;
@@ -171,7 +172,20 @@ export function registerUserBanRoutes(fastify: FastifyInstance, deps: Deps): voi
         }
 
         const bans = await banService.listBans(userId);
-        sendSuccess(reply, bans.map((b) => ({ ...b, active: estEnVigueur(b) })));
+        // #8876 — QUI a banni et QUI a levé, par leur nom : une seule lecture de
+        // comptes pour toute la page. Une levée sans administrateur est celle du
+        // SYSTÈME (aucun geste humain ne l'a posée).
+        const people = await loadAdminPeople(fastify.prisma, bans.flatMap((b) => [b.bannedById, b.liftedById]));
+        sendSuccess(
+          reply,
+          bans.map((b) => ({
+            ...b,
+            active: estEnVigueur(b),
+            bannedBy: people.get(b.bannedById) ?? null,
+            liftedBy: b.liftedById ? (people.get(b.liftedById) ?? null) : null,
+            liftedBySystem: b.liftedAt !== null && !b.liftedById
+          }))
+        );
       } catch (error) {
         rendreErreur(fastify, reply, error, 'Failed to list bans');
       }

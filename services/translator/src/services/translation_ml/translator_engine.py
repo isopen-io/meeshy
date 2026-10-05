@@ -12,11 +12,16 @@ import logging
 import asyncio
 import os
 import threading
-import re
 from typing import List, Optional, Tuple
 from concurrent.futures import ThreadPoolExecutor
 
 from config.settings import LANGUAGE_MAPPINGS
+from utils.text_segmentation import (
+    has_translatable_text,
+    protect_entities,
+    restore_entities,
+    strip_entities,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -32,39 +37,6 @@ try:
     DETECT_MIN_CONFIDENCE = float(os.getenv("TRANSLATOR_DETECT_MIN_CONFIDENCE", "0.80"))
 except ValueError:
     DETECT_MIN_CONFIDENCE = 0.80
-
-
-# ═══════════════════════════════════════════════════════════════════════════
-# PRÉSERVATION DES LIENS HTTP(S)
-# NLLB corromprait les URLs (domaines/segments traduits comme des mots). On les
-# masque par un marqueur emoji-délimité (copié verbatim par NLLB, comme les
-# emojis) avant traduction, puis on les restaure intactes après.
-# ═══════════════════════════════════════════════════════════════════════════
-_URL_PATTERN = re.compile(r'https?://\S+')
-
-
-def mask_urls(text: str) -> Tuple[str, List[str]]:
-    """Remplace chaque URL HTTP(S) par un marqueur 🔗{i}🔗.
-
-    Retourne `(texte_masqué, urls)` où `urls[i]` est l'URL d'origine du marqueur i.
-    """
-    urls: List[str] = []
-
-    def _replace(match: "re.Match[str]") -> str:
-        urls.append(match.group(0))
-        return f'🔗{len(urls) - 1}🔗'
-
-    return _URL_PATTERN.sub(_replace, text), urls
-
-
-def restore_urls(text: str, urls: List[str]) -> str:
-    """Restaure les URLs masquées par `mask_urls`.
-
-    Tolère un espacement éventuellement inséré par NLLB autour du marqueur.
-    """
-    for index, url in enumerate(urls):
-        text = re.sub(r'🔗\s*' + str(index) + r'\s*🔗', lambda _m: url, text)
-    return text
 
 
 def smart_split_text(text: str, max_chars: int = 200) -> List[str]:
@@ -248,7 +220,7 @@ class TranslatorEngine:
         """Détecte la langue source. langdetect seuillé ; jamais de défaut 'en'
         arbitraire — repli sur `fallback` puis `DEFAULT_DETECT_LANGUAGE`."""
         default = fallback if fallback is not None else DEFAULT_DETECT_LANGUAGE
-        cleaned = _URL_PATTERN.sub(" ", text or "").strip()
+        cleaned = strip_entities(text or "").strip()
         if not _LANGDETECT_OK or sum(c.isalpha() for c in cleaned) < 4:
             return default
         try:
@@ -372,52 +344,43 @@ class TranslatorEngine:
         if not self.model_loader.is_model_loaded(model_type):
             raise Exception(f"Modèle {model_type} non chargé")
 
-        # ═══════════════════════════════════════════════════════════════════
-        # PRÉSERVATION DES LIENS: masquer les URLs HTTP(S) AVANT découpage et
-        # traduction (NLLB les corromprait). Restaurées verbatim à la fin.
-        # ═══════════════════════════════════════════════════════════════════
-        masked_text, urls = mask_urls(text)
+        # Adresses, mentions, hashtags et émojis ne passent jamais par NLLB (#9086).
+        masked_text, entities = protect_entities(text)
+        if not has_translatable_text(masked_text):
+            return text
+        translated = await self._translate_masked_text(
+            masked_text, source_lang, target_lang, model_type
+        )
+        return restore_entities(translated, entities)
 
-        # ═══════════════════════════════════════════════════════════════════
-        # DÉCOUPAGE INTELLIGENT: Textes longs découpés aux ponctuations
-        # ═══════════════════════════════════════════════════════════════════
+    async def _translate_masked_text(
+        self,
+        masked_text: str,
+        source_lang: str,
+        target_lang: str,
+        model_type: str
+    ) -> str:
+        """Traduit un texte dont les entités protégées sont déjà masquées."""
         if len(masked_text) > 200:
             logger.info(
                 f"[TRANSLATE] Texte long détecté ({len(masked_text)} chars) → "
                 f"découpage intelligent aux ponctuations"
             )
-
-            # Découper en morceaux de max 200 caractères
             chunks = smart_split_text(masked_text, max_chars=200)
-
             logger.info(
                 f"[TRANSLATE] Texte découpé en {len(chunks)} morceaux "
                 f"(tailles: {[len(c) for c in chunks]})"
             )
-
-            # Traduire chaque morceau
             translated_chunks = []
-            for i, chunk in enumerate(chunks):
-                logger.debug(f"[TRANSLATE] Chunk {i+1}/{len(chunks)}: '{chunk[:50]}...'")
-                translated_chunk = await self._translate_single_chunk(
+            for chunk in chunks:
+                translated_chunks.append(await self._translate_single_chunk(
                     chunk, source_lang, target_lang, model_type
-                )
-                translated_chunks.append(translated_chunk)
+                ))
+            return ' '.join(translated_chunks)
 
-            # Recoller les morceaux traduits
-            final_translation = ' '.join(translated_chunks)
-
-            logger.info(
-                f"[TRANSLATE] ✅ Traduction complète: {len(text)} → {len(final_translation)} chars"
-            )
-
-            return restore_urls(final_translation, urls)
-
-        # Texte court: traduction directe
-        translated = await self._translate_single_chunk(
+        return await self._translate_single_chunk(
             masked_text, source_lang, target_lang, model_type
         )
-        return restore_urls(translated, urls)
 
     async def _translate_single_chunk(
         self,
@@ -530,12 +493,18 @@ class TranslatorEngine:
         if not self.model_loader.is_model_loaded(model_type):
             raise Exception(f"Modèle {model_type} non chargé")
 
+        protected = [protect_entities(text) for text in texts]
+        pending = [i for i, (masked, _) in enumerate(protected) if has_translatable_text(masked)]
+        masked_inputs = [protected[i][0] for i in pending]
+        if not masked_inputs:
+            return list(texts)
+
         batch_size = self.perf_config.batch_size
 
         def translate_batch_sync():
             """Traduction batch synchrone - OPTIMISÉ POUR VITESSE"""
             try:
-                logger.info(f"[BATCH-SYNC] 🚀 FAST translate_batch_sync: {len(texts)} textes, {source_lang}→{target_lang}")
+                logger.info(f"[BATCH-SYNC] 🚀 FAST translate_batch_sync: {len(masked_inputs)} textes, {source_lang}→{target_lang}")
 
                 # Codes NLLB — jamais de repli silencieux (#3659)
                 nllb_source = self._resolve_nllb_code(source_lang, 'source')
@@ -566,7 +535,7 @@ class TranslatorEngine:
                 # `reusable_pipeline(chunk)` reste atomique et sérialisé par le lock,
                 # donc la thread-safety PyTorch est préservée.
                 # ═══════════════════════════════════════════════════════════════
-                n_chunks = (len(texts) + batch_size - 1) // batch_size
+                n_chunks = (len(masked_inputs) + batch_size - 1) // batch_size
                 logger.info(
                     f"🔒 [MODEL_LOCK] Inférence batch '{model_type}' en {n_chunks} chunk(s) "
                     f"(lock acquis/libéré par chunk)"
@@ -574,8 +543,8 @@ class TranslatorEngine:
 
                 # OPTIMISATION: Traitement direct SANS timeout wrapper (overhead supprimé)
                 with create_inference_context():
-                    for i in range(0, len(texts), batch_size):
-                        chunk = texts[i:i + batch_size]
+                    for i in range(0, len(masked_inputs), batch_size):
+                        chunk = masked_inputs[i:i + batch_size]
 
                         # ═══════════════════════════════════════════════════════════════
                         # OPTIMISATIONS NLLB AVANCÉES:
@@ -609,7 +578,7 @@ class TranslatorEngine:
                 logger.info(f"[BATCH-SYNC] ✅ Sortie inference_context, {len(all_results)} résultats")
 
                 # Nettoyage mémoire périodique
-                if self.perf_config.enable_memory_cleanup and len(texts) > 20:
+                if self.perf_config.enable_memory_cleanup and len(masked_inputs) > 20:
                     from utils.performance import get_performance_optimizer
                     perf_optimizer = get_performance_optimizer()
                     perf_optimizer.cleanup_memory()
@@ -633,7 +602,11 @@ class TranslatorEngine:
         logger.info(f"[BATCH] ✅ run_in_executor terminé, {len(results)} résultats")
 
         logger.info(f"⚡ [BATCH] {len(texts)} textes traduits en batch ({source_lang}→{target_lang})")
-        return results
+        translated = dict(zip(pending, results))
+        return [
+            restore_entities(translated[i], entities) if i in translated else texts[i]
+            for i, (_, entities) in enumerate(protected)
+        ]
 
     def cleanup(self):
         """Libère les ressources du moteur"""

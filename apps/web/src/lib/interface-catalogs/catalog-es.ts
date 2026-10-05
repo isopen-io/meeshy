@@ -1,9 +1,42 @@
 import type { InterfaceCatalog } from '@/lib/i18n-catalog';
 import esComposerAttach from './catalog-es-composer-attach';
 import esIdentity from './catalog-es-identity';
+import esMediaHub from './catalog-es-media-hub';
+import esMediaViewer from './catalog-es-media-viewer';
+import esActivation from './catalog-es-activation';
+import esVerifyEmail from './catalog-es-verify-email';
+import esDevicePush from './catalog-es-device-push';
+import esPassword from './catalog-es-password';
+import esAccounts from './catalog-es-accounts';
+import esCall from './catalog-es-call';
+import esRowActions from './catalog-es-row-actions';
+import esEngagement from './catalog-es-engagement';
+import esCallShell from './catalog-es-call-shell';
+import esCallJoin from './catalog-es-call-join';
+import esCallDecline from './catalog-es-call-decline';
+import esCallFeedback from './catalog-es-call-feedback';
+import esCallsErase from './catalog-es-calls-erase';
+import esCallDevices from './catalog-es-call-devices';
+import esCallScreen from './catalog-es-call-screen';
+import esCallQuality from './catalog-es-call-quality';
+import esCallCaptions from './catalog-es-call-captions';
+import esCallRecording from './catalog-es-call-recording';
+import esSignup from './catalog-es-signup';
 
+import esGallery from './catalog-es-gallery';
+import esMessageCard from './catalog-es-message-card';
 import esMentions from './catalog-es-mentions';
+import esStudioChrome from './catalog-es-studio-chrome';
+import esEphemeral from './catalog-es-ephemeral';
+import esConversationCard from './catalog-es-conversation-card';
 import esStoriesMine from './catalog-es-stories-mine';
+import esContactCard from './catalog-es-contact-card';
+import esQuote from './catalog-es-quote';
+import esCommentRow from './catalog-es-comment-row';
+import esContactDiscovery from './catalog-es-contact-discovery';
+import esDownload from './catalog-es-download';
+import esPhonePrompt from './catalog-es-phone-prompt';
+import esUserProfile from './catalog-es-user-profile';
 
 const es = {
   'announce.messageSent': 'Mensaje enviado',
@@ -95,6 +128,7 @@ const es = {
   'feed.post.media.next': 'Media siguiente',
   'feed.post.media.mosaic': 'Mosaico de {count} medios',
   'media.unavailable': 'Medio no disponible',
+  'media.retry': 'Reintentar',
   'feed.post.see_more': 'ver más',
   'feed.post.see_less': 'ver menos',
   'feed.post.more_options': 'Más opciones',
@@ -186,7 +220,27 @@ const es = {
   'feed.newPosts.one': '{count} publicación nueva',
   'feed.newPosts.other': '{count} publicaciones nuevas',
   ...esIdentity,
-  'userProfile.self.edit': 'Editar mi perfil',
+  ...esMediaHub,
+  ...esMediaViewer,
+  ...esVerifyEmail,
+  ...esActivation,
+  ...esPassword,
+  ...esDevicePush,
+  ...esAccounts,
+  ...esCall,
+  ...esRowActions,
+  ...esEngagement,
+  ...esCallShell,
+  ...esCallJoin,
+  ...esCallDecline,
+  ...esCallFeedback,
+  ...esCallsErase,
+  ...esCallDevices,
+  ...esCallScreen,
+  ...esCallQuality,
+  ...esCallCaptions,
+  ...esCallRecording,
+  ...esSignup,
   'report.title': 'Denunciar esta cuenta',
   'report.body': 'Elija el motivo de su denuncia. Nuestro equipo de moderación la recibirá.',
   'report.action': 'Denunciar',
@@ -231,6 +285,7 @@ const es = {
   'notifications.category.reactions': 'Reacciones',
   'notifications.category.mentions': 'Menciones',
   'notifications.category.social': 'Social',
+  'notifications.category.engagement': 'Participación',
   'notifications.category.contacts': 'Contactos',
   'notifications.category.groups': 'Grupos',
   'notifications.category.calls': 'Llamadas',
@@ -449,6 +504,7 @@ const es = {
   'settings.save.error': 'El ajuste no se guardó.',
   'settings.theme.sync_error': 'Tema aplicado en este dispositivo, sin sincronizar.',
   'common.cancel': 'Cancelar',
+  'common.close': 'Cerrar',
 
   'media.video.play': 'Reproducir vídeo',
   'media.video.pause': 'Pausa',
@@ -456,6 +512,7 @@ const es = {
   'media.audio.position': 'Posición de reproducción',
   'media.audio.speed': 'Velocidad de reproducción',
   'media.video.position.value': '{elapsed} de {total}',
+  'media.buffering': 'Cargando…',
   'media.video.mute': 'Silenciar',
   'media.video.unmute': 'Activar sonido',
   'media.video.more_options': 'Más opciones',
@@ -601,57 +658,12 @@ const es = {
   'discover.announce.unblockFailed': 'No se pudo desbloquear',
   'discover.announce.offline': 'Sin conexión: no se envió nada.',
 
-  'userProfile.title': 'Perfil',
-  'userProfile.loading': 'Cargando el perfil',
-  'userProfile.section.publications': 'PUBLICACIONES',
-  'userProfile.section.relation': 'CONEXIÓN',
-  'userProfile.section.conversations': 'CONVERSACIONES',
-  'userProfile.conversations.empty': 'Ninguna conversación en común',
-  'userProfile.conversations.emptyBody': 'Todavía nada os une: «Escribir» abre la primera.',
-  'userProfile.conversations.error': 'No se pudieron cargar las conversaciones',
-  'userProfile.conversations.loading': 'Cargando las conversaciones',
-  'userProfile.refused.title': 'Este perfil no está disponible',
-  'userProfile.refused.body': 'No existe, o no tienes acceso.',
-  'userProfile.throttled.title': 'Demasiadas solicitudes',
-  'userProfile.throttled.body': 'Inténtalo de nuevo en un momento.',
-  'userProfile.error.title': 'No se pudo cargar este perfil',
-  'userProfile.error.body': 'Inténtalo de nuevo en un momento.',
-  'userProfile.offline.body': 'El perfil aparecerá al volver a conectarte.',
-  'userProfile.posts.empty': 'Sin publicaciones',
-  'userProfile.posts.emptyBody': 'Todavía no hay nada público que leer.',
-  'userProfile.posts.emptyPosts': 'Ninguna publicación aquí',
-  'userProfile.posts.emptyReels': 'Ningún reel aquí',
-  'userProfile.posts.emptyFilter': 'Toca de nuevo la casilla para volver a verlo todo.',
-  'userProfile.posts.error': 'No se pudieron cargar las publicaciones',
-  'userProfile.posts.loadMore': 'Cargar más',
-  'userProfile.posts.loaded': 'Publicaciones añadidas: {count}',
-  'userProfile.posts.loadedNone': 'No hay más publicaciones que mostrar',
-  'userProfile.posts.loading': 'Cargando…',
-  'userProfile.stat.posts': 'Publicaciones',
-  'userProfile.stat.reels': 'Reels',
-  'userProfile.stat.stories': 'Historias',
-  'userProfile.stat.filterLabel': 'Filtrar por {name}',
-  'userProfile.stat.filterClear': 'Mostrar todo',
-  'userProfile.context.received': '{name} quiere conectar contigo. Acepta para intercambiar mensajes.',
-  'userProfile.context.sent': 'Enviaste una solicitud de conexión a {name}. A la espera de su respuesta.',
-  'userProfile.action.write': 'Escribir',
-  'userProfile.action.writeLabel': 'Escribir a {name}',
-  'userProfile.action.block': 'Bloquear',
-  'userProfile.action.blockLabel': 'Bloquear a {name}',
-  'userProfile.blocked.title': 'Has bloqueado a esta persona',
-  'userProfile.blocked.body': 'Sus publicaciones y estadísticas quedan ocultas mientras dure el bloqueo.',
-  'userProfile.signin.title': 'Inicia sesión para conectar',
-  'userProfile.signin.body': 'Las solicitudes de conexión y los mensajes requieren una cuenta.',
-  'userProfile.signin.cta': 'Iniciar sesión',
-  'userProfile.announce.blocked': 'Persona bloqueada',
-  'userProfile.announce.blockFailed': 'No se pudo bloquear',
-  'userProfile.announce.writeFailed': 'No se pudo abrir la conversación',
 
   'a11y.floating.rung.discover.requests.one': 'Descubrir, {count} solicitud recibida',
   'a11y.floating.rung.discover.requests.other': 'Descubrir, {count} solicitudes recibidas',
 
   'links.hub.banner.title': 'Gestiona tus enlaces',
-  'links.hub.banner.subtitle': 'Invita a quien quieras a tus conversaciones',
+  'links.hub.banner.subtitle': 'Comparte, sigue y haz crecer tu audiencia',
   'links.hub.share.title': 'Enlaces para compartir',
   'links.hub.share.description': 'Invita a tus contactos a unirse a tus conversaciones',
   'links.hub.share.create': 'Crear un enlace para compartir',
@@ -811,6 +823,7 @@ const es = {
   'story.studio.refusal.door.visual': 'Elige una imagen o un vídeo.',
   'story.studio.refusal.door.sound': 'Elige un archivo de audio.',
   'story.studio.refusal.media-max': 'Esta publicación ya lleva diez medios: el límite de la pasarela.',
+  'story.studio.refusal.import-max': '{count} medio(s) no importado(s): una publicación lleva diez como máximo.',
   'story.studio.failure.network': 'Red no disponible.',
   'story.studio.failure.timeout': 'El servidor no respondió.',
   'story.studio.failure.session': 'Sesión caducada — vuelve a iniciar sesión.',
@@ -822,7 +835,6 @@ const es = {
   'story.studio.failure.refused': 'Publicación rechazada.',
   'story.studio.failure.unavailable': 'El servidor no está disponible.',
   'story.studio.text.add': 'Añadir texto',
-  'story.studio.text.remove': 'Quitar este texto',
   'story.studio.object.text': 'Texto {index}',
   'story.studio.object.overlay': 'Capa',
   'story.studio.object.select': 'Seleccionar {name}',
@@ -981,14 +993,6 @@ const es = {
   'comment.send.error': 'No se pudo publicar el comentario.',
   'comment.send.pending': 'Comentario sin confirmar: sin conexión',
   'comment.send.empty': 'Escribe algo antes de enviar.',
-  'comments.action.like': 'Me gusta',
-  'comments.action.unlike': 'Ya no me gusta',
-  'comments.action.edit': 'Editar',
-  'comments.action.delete': 'Eliminar',
-  'comments.action.delete.confirm': 'Confirmar',
-  'comments.edit.label': 'Editar comentario',
-  'comments.edit.save': 'Guardar',
-  'comments.edit.cancel': 'Cancelar',
   'comment.like.error': 'No se ha guardado tu «me gusta».',
   'comment.edit.error': 'No se ha guardado la modificación.',
   'comment.delete.error': 'No se ha podido eliminar el comentario.',
@@ -1003,6 +1007,8 @@ const es = {
 
   'thread.unread-separator.one': '{count} mensaje no leído',
   'thread.unread-separator.other': '{count} mensajes no leídos',
+  'thread.long-message.read-more': 'Leer más',
+  'thread.long-message.collapse': 'Mostrar menos',
   'message-detail.info.title': 'Información del mensaje',
   'message-detail.received-by': 'Recibido por',
   'message-detail.read-by': 'Leído por',
@@ -1026,11 +1032,8 @@ const es = {
   'message-detail.load-error': 'No se pudo cargar esta información',
   'message-detail.retry': 'Reintentar',
 
-  'download.title': 'Descarga Meeshy',
-  'download.body': 'Escribe en tu idioma y lee en el tuyo: Meeshy traduce cada mensaje por el camino.',
-  'download.appStore': 'Descargar en el App Store',
-  'download.web': 'Abrir Meeshy en el navegador',
-  'download.otherPlatforms': 'En Android y en el ordenador, Meeshy funciona directamente en el navegador.',
+  ...esDownload,
+  ...esPhonePrompt,
 
   /* LES SOURCES DU COMPOSEUR (#7280) — miroir de `composer.attach.*` d'iOS. */
   ...esComposerAttach,
@@ -1071,7 +1074,7 @@ const es = {
   'message.withheld': 'Contenido retenido',
   'message.withheld.a11y': 'Contenido retenido: este mensaje existe y no se muestra',
   'message.veiled': 'Contenido oculto',
-  'message.veiled.hint': 'Toca para revelar el contenido',
+  'message.veiled.hint': 'Toca para ver',
   'message.veiled.error': 'No se puede revelar por ahora',
   'message.ephemeral.a11y': 'Mensaje efímero, desaparece en {remaining}',
   'message.ephemeral.awaiting': 'Esperando la recepción',
@@ -1085,6 +1088,7 @@ const es = {
   'attachment.protected.video': 'Vídeo protegido',
   'attachment.protected.audio': 'Audio protegido',
   'attachment.protected.file': 'Archivo protegido',
+  'attachment.protected.open.hint': 'toca para verlo a pantalla completa',
   'media.reactions.badge.a11y': 'Reacciones',
   'media.reactions.badge.mine.a11y': 'incluida la suya',
   'attachment.kind.image': 'Foto',
@@ -1110,7 +1114,17 @@ const es = {
   'message.detail.language.original': '{language} (original)',
 
   ...esMentions,
+  ...esStudioChrome,
+  ...esEphemeral,
+  ...esGallery,
+  ...esMessageCard,
+  ...esConversationCard,
   ...esStoriesMine,
+  ...esContactCard,
+  ...esQuote,
+  ...esCommentRow,
+  ...esContactDiscovery,
+  ...esUserProfile,
 } satisfies InterfaceCatalog;
 
 export default es;

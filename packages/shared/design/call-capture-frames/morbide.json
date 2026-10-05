@@ -1,0 +1,592 @@
+{
+  "mood": "morbide",
+  "motifs": [
+    {
+      "id": "morbide.faire-part",
+      "mood": "morbide",
+      "name": "Faire-part",
+      "base": {
+        "layout": {
+          "arrangement": "grid",
+          "margin": 0.1,
+          "gap": 0.035,
+          "top": 0.2,
+          "bottom": 0.14
+        },
+        "slot": {
+          "shape": "rect",
+          "stroke": {
+            "color": "#1A1A1A",
+            "width": 0.004
+          },
+          "shadow": true,
+          "tilt": "none",
+          "tone": "mono"
+        },
+        "background": {
+          "kind": "solid",
+          "color": "#F4F0E8"
+        },
+        "pattern": {
+          "kind": "grain",
+          "color": "#5A4A3A",
+          "opacity": 0.08
+        },
+        "border": {
+          "kind": "mourning",
+          "color": "#0A0A0A",
+          "width": 0.045,
+          "inset": 0
+        },
+        "ornaments": [
+          {
+            "kind": "roses",
+            "color": "#2A2A2A",
+            "density": "low",
+            "layer": "front"
+          }
+        ],
+        "brand": {
+          "mark": "wordmark",
+          "place": "bottom",
+          "color": "#4A4A4A",
+          "size": "s",
+          "font": "classic"
+        },
+        "names": {
+          "show": "name",
+          "style": "caption",
+          "font": "elegant",
+          "color": "#1A1A1A"
+        },
+        "title": {
+          "source": "group",
+          "font": "elegant",
+          "color": "#1A1A1A",
+          "place": "top",
+          "size": "l",
+          "effect": "none",
+          "case": "as-is"
+        },
+        "subtitle": {
+          "source": "date",
+          "font": "classic",
+          "color": "#4A4A4A",
+          "place": "top",
+          "size": "s",
+          "effect": "none",
+          "case": "upper"
+        }
+      },
+      "variants": {
+        "duo": {
+          "layout": {
+            "arrangement": "column",
+            "margin": 0.1,
+            "gap": 0.04,
+            "top": 0.22,
+            "bottom": 0.14
+          },
+          "title": {
+            "source": "names",
+            "font": "elegant",
+            "color": "#1A1A1A",
+            "place": "top",
+            "size": "l",
+            "effect": "none",
+            "case": "as-is"
+          }
+        },
+        "comite": {
+          "layout": {
+            "arrangement": "arch",
+            "margin": 0.1,
+            "gap": 0.035,
+            "top": 0.2,
+            "bottom": 0.14
+          }
+        },
+        "groupe": {
+          "layout": {
+            "arrangement": "grid",
+            "margin": 0.09,
+            "gap": 0.03,
+            "top": 0.18,
+            "bottom": 0.16
+          },
+          "slot": {
+            "shape": "rect",
+            "stroke": {
+              "color": "#1A1A1A",
+              "width": 0.003
+            },
+            "tilt": "none",
+            "tone": "mono"
+          },
+          "names": {
+            "show": "name",
+            "style": "list",
+            "font": "elegant",
+            "color": "#1A1A1A"
+          }
+        }
+      }
+    },
+    {
+      "id": "morbide.memento",
+      "mood": "morbide",
+      "name": "Memento",
+      "base": {
+        "layout": {
+          "arrangement": "grid",
+          "margin": 0.07,
+          "gap": 0.03,
+          "top": 0.17,
+          "bottom": 0.12
+        },
+        "slot": {
+          "shape": "rect",
+          "stroke": {
+            "color": "#B08D57",
+            "width": 0.008
+          },
+          "card": {
+            "color": "#1A0A0B",
+            "pad": 0.04,
+            "foot": 0.04
+          },
+          "shadow": true,
+          "tilt": "none",
+          "tone": "duotone",
+          "duotone": [
+            "#1A0205",
+            "#E8C9A0"
+          ]
+        },
+        "background": {
+          "kind": "radial",
+          "colors": [
+            "#2B1E14",
+            "#140D08",
+            "#060403"
+          ]
+        },
+        "pattern": {
+          "kind": "grain",
+          "color": "#E8C9A0",
+          "opacity": 0.06
+        },
+        "ornaments": [
+          {
+            "kind": "vignette",
+            "color": "#000000AA",
+            "density": "mid",
+            "layer": "back"
+          },
+          {
+            "kind": "roses",
+            "color": "#8E1B24",
+            "density": "mid",
+            "layer": "back"
+          },
+          {
+            "kind": "skulls",
+            "color": "#E8C9A0",
+            "density": "low",
+            "layer": "front"
+          },
+          {
+            "kind": "candles",
+            "color": "#F2C46D",
+            "density": "low",
+            "layer": "front"
+          }
+        ],
+        "brand": {
+          "mark": "both",
+          "place": "bottom",
+          "color": "#E8C9A0",
+          "size": "m",
+          "font": "classic"
+        },
+        "names": {
+          "show": "handle",
+          "style": "plate",
+          "font": "classic",
+          "color": "#E8C9A0",
+          "fill": "#1A0205D9"
+        },
+        "title": {
+          "source": "group",
+          "font": "fantasy",
+          "color": "#E8C9A0",
+          "place": "top",
+          "size": "l",
+          "effect": "shadow",
+          "case": "as-is"
+        },
+        "subtitle": {
+          "source": "date",
+          "font": "classic",
+          "color": "#B08D57",
+          "place": "top",
+          "size": "s",
+          "effect": "none",
+          "case": "upper"
+        }
+      },
+      "variants": {
+        "duo": {
+          "layout": {
+            "arrangement": "diagonal",
+            "margin": 0.07,
+            "gap": 0.03,
+            "top": 0.17,
+            "bottom": 0.12
+          },
+          "names": {
+            "show": "handle",
+            "style": "ribbon",
+            "font": "classic",
+            "color": "#1A0205",
+            "fill": "#E8C9A0"
+          },
+          "title": {
+            "source": "names",
+            "font": "fantasy",
+            "color": "#E8C9A0",
+            "place": "top",
+            "size": "l",
+            "effect": "shadow",
+            "case": "as-is"
+          }
+        },
+        "comite": {
+          "layout": {
+            "arrangement": "hero",
+            "margin": 0.07,
+            "gap": 0.03,
+            "top": 0.17,
+            "bottom": 0.12
+          }
+        },
+        "groupe": {
+          "layout": {
+            "arrangement": "mosaic",
+            "margin": 0.06,
+            "gap": 0.025,
+            "top": 0.16,
+            "bottom": 0.11
+          },
+          "ornaments": [
+            {
+              "kind": "vignette",
+              "color": "#000000AA",
+              "density": "mid",
+              "layer": "back"
+            },
+            {
+              "kind": "roses",
+              "color": "#8E1B24",
+              "density": "low",
+              "layer": "back"
+            },
+            {
+              "kind": "skulls",
+              "color": "#E8C9A0",
+              "density": "low",
+              "layer": "front"
+            }
+          ]
+        },
+        "tablee": {
+          "layout": {
+            "arrangement": "grid",
+            "margin": 0.05,
+            "gap": 0.018,
+            "top": 0.15,
+            "bottom": 0.1
+          },
+          "slot": {
+            "shape": "rect",
+            "stroke": {
+              "color": "#B08D57",
+              "width": 0.006
+            },
+            "tilt": "none",
+            "tone": "duotone",
+            "duotone": [
+              "#1A0205",
+              "#E8C9A0"
+            ]
+          },
+          "names": {
+            "show": "none",
+            "style": "plate",
+            "font": "classic",
+            "color": "#E8C9A0",
+            "fill": "#1A0205D9"
+          }
+        }
+      }
+    },
+    {
+      "id": "morbide.crypte",
+      "mood": "morbide",
+      "name": "Crypte",
+      "base": {
+        "layout": {
+          "arrangement": "grid",
+          "margin": 0.07,
+          "gap": 0.03,
+          "top": 0.17,
+          "bottom": 0.12
+        },
+        "slot": {
+          "shape": "arch",
+          "stroke": {
+            "color": "#5C6474",
+            "width": 0.01
+          },
+          "glow": "#9FB4D855",
+          "tilt": "none",
+          "tone": "mono"
+        },
+        "background": {
+          "kind": "linear",
+          "colors": [
+            "#1A2233",
+            "#0B0F18",
+            "#05070C"
+          ],
+          "angle": 0
+        },
+        "pattern": {
+          "kind": "grain",
+          "color": "#FFFFFF",
+          "opacity": 0.06
+        },
+        "border": {
+          "kind": "hairline",
+          "color": "#5C6474",
+          "width": 0.004,
+          "inset": 0.035
+        },
+        "ornaments": [
+          {
+            "kind": "cobwebs",
+            "color": "#C9D1DC59",
+            "density": "mid",
+            "layer": "back"
+          },
+          {
+            "kind": "bats",
+            "color": "#3E4860",
+            "density": "low",
+            "layer": "back"
+          },
+          {
+            "kind": "moon",
+            "color": "#E6EDF5",
+            "density": "low",
+            "layer": "front"
+          },
+          {
+            "kind": "candles",
+            "color": "#F2C46D",
+            "density": "low",
+            "layer": "front"
+          }
+        ],
+        "brand": {
+          "mark": "logo",
+          "place": "top-left",
+          "color": "#AEB8C8",
+          "size": "s"
+        },
+        "names": {
+          "show": "both",
+          "style": "caption",
+          "font": "classic",
+          "color": "#AEB8C8"
+        },
+        "title": {
+          "source": "group",
+          "font": "fantasy",
+          "color": "#D8DEE9",
+          "place": "top",
+          "size": "l",
+          "effect": "glow",
+          "case": "as-is"
+        }
+      },
+      "variants": {
+        "duo": {
+          "layout": {
+            "arrangement": "split",
+            "margin": 0.08,
+            "gap": 0.04,
+            "top": 0.16,
+            "bottom": 0.1
+          },
+          "names": {
+            "show": "both",
+            "style": "plate",
+            "font": "classic",
+            "color": "#D8DEE9",
+            "fill": "#05070CCC"
+          },
+          "title": {
+            "source": "names",
+            "font": "fantasy",
+            "color": "#D8DEE9",
+            "place": "top",
+            "size": "l",
+            "effect": "glow",
+            "case": "as-is"
+          }
+        },
+        "comite": {},
+        "groupe": {
+          "layout": {
+            "arrangement": "tiers",
+            "margin": 0.06,
+            "gap": 0.025,
+            "top": 0.16,
+            "bottom": 0.12
+          },
+          "slot": {
+            "shape": "arch",
+            "stroke": {
+              "color": "#5C6474",
+              "width": 0.008
+            },
+            "glow": "#9FB4D855",
+            "tilt": "none",
+            "tone": "mono"
+          },
+          "names": {
+            "show": "handle",
+            "style": "badge",
+            "font": "classic",
+            "color": "#D8DEE9",
+            "fill": "#05070CCC"
+          }
+        },
+        "tablee": {
+          "layout": {
+            "arrangement": "tiers",
+            "margin": 0.05,
+            "gap": 0.018,
+            "top": 0.15,
+            "bottom": 0.1
+          },
+          "slot": {
+            "shape": "arch",
+            "stroke": {
+              "color": "#5C6474",
+              "width": 0.006
+            },
+            "glow": "#9FB4D855",
+            "tilt": "none",
+            "tone": "mono"
+          },
+          "names": {
+            "show": "none",
+            "style": "badge",
+            "font": "classic",
+            "color": "#D8DEE9"
+          }
+        }
+      }
+    },
+    {
+      "id": "morbide.veillee",
+      "mood": "morbide",
+      "name": "Veillée",
+      "base": {
+        "layout": {
+          "arrangement": "diagonal",
+          "margin": 0.08,
+          "gap": 0.03,
+          "top": 0.16,
+          "bottom": 0.12
+        },
+        "slot": {
+          "shape": "oval",
+          "glow": "#F5A52466",
+          "shadow": true,
+          "tilt": "none",
+          "tone": "noir"
+        },
+        "background": {
+          "kind": "radial",
+          "colors": [
+            "#2A1608",
+            "#120904",
+            "#050302"
+          ]
+        },
+        "pattern": {
+          "kind": "grain",
+          "color": "#F3E3C3",
+          "opacity": 0.05
+        },
+        "ornaments": [
+          {
+            "kind": "candles",
+            "color": "#F5A524",
+            "density": "high",
+            "layer": "back"
+          },
+          {
+            "kind": "vignette",
+            "color": "#000000B3",
+            "density": "mid",
+            "layer": "back"
+          },
+          {
+            "kind": "drips",
+            "color": "#EDE3CF",
+            "density": "low",
+            "layer": "front"
+          }
+        ],
+        "brand": {
+          "mark": "wordmark",
+          "place": "bottom-right",
+          "color": "#C9A56B",
+          "size": "s",
+          "font": "elegant"
+        },
+        "names": {
+          "show": "both",
+          "style": "caption",
+          "font": "elegant",
+          "color": "#EAD9B8"
+        },
+        "title": {
+          "source": "names",
+          "font": "elegant",
+          "color": "#F3E3C3",
+          "place": "top",
+          "size": "l",
+          "effect": "glow",
+          "case": "as-is"
+        },
+        "subtitle": {
+          "source": "date",
+          "font": "classic",
+          "color": "#C9A56B",
+          "place": "top",
+          "size": "s",
+          "effect": "none",
+          "case": "upper"
+        }
+      },
+      "variants": {
+        "duo": {}
+      }
+    }
+  ]
+}

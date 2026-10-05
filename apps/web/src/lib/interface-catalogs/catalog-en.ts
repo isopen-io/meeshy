@@ -1,9 +1,42 @@
 import type { InterfaceCatalog } from '@/lib/i18n-catalog';
 import enComposerAttach from './catalog-en-composer-attach';
 import enIdentity from './catalog-en-identity';
+import enMediaHub from './catalog-en-media-hub';
+import enMediaViewer from './catalog-en-media-viewer';
+import enActivation from './catalog-en-activation';
+import enVerifyEmail from './catalog-en-verify-email';
+import enDevicePush from './catalog-en-device-push';
+import enPassword from './catalog-en-password';
+import enAccounts from './catalog-en-accounts';
+import enCall from './catalog-en-call';
+import enRowActions from './catalog-en-row-actions';
+import enEngagement from './catalog-en-engagement';
+import enCallShell from './catalog-en-call-shell';
+import enCallJoin from './catalog-en-call-join';
+import enCallDecline from './catalog-en-call-decline';
+import enCallFeedback from './catalog-en-call-feedback';
+import enCallsErase from './catalog-en-calls-erase';
+import enCallDevices from './catalog-en-call-devices';
+import enCallScreen from './catalog-en-call-screen';
+import enCallQuality from './catalog-en-call-quality';
+import enCallCaptions from './catalog-en-call-captions';
+import enCallRecording from './catalog-en-call-recording';
+import enSignup from './catalog-en-signup';
 
+import enGallery from './catalog-en-gallery';
+import enMessageCard from './catalog-en-message-card';
 import enMentions from './catalog-en-mentions';
+import enStudioChrome from './catalog-en-studio-chrome';
+import enEphemeral from './catalog-en-ephemeral';
+import enConversationCard from './catalog-en-conversation-card';
 import enStoriesMine from './catalog-en-stories-mine';
+import enContactCard from './catalog-en-contact-card';
+import enQuote from './catalog-en-quote';
+import enCommentRow from './catalog-en-comment-row';
+import enContactDiscovery from './catalog-en-contact-discovery';
+import enDownload from './catalog-en-download';
+import enPhonePrompt from './catalog-en-phone-prompt';
+import enUserProfile from './catalog-en-user-profile';
 
 const en = {
   'announce.messageSent': 'Message sent',
@@ -95,6 +128,7 @@ const en = {
   'feed.post.media.next': 'Next media',
   'feed.post.media.mosaic': 'Mosaic of {count} media',
   'media.unavailable': 'Media unavailable',
+  'media.retry': 'Try again',
   'feed.post.see_more': 'see more',
   'feed.post.see_less': 'show less',
   'feed.post.more_options': 'More options',
@@ -186,7 +220,27 @@ const en = {
   'feed.newPosts.one': '{count} new post',
   'feed.newPosts.other': '{count} new posts',
   ...enIdentity,
-  'userProfile.self.edit': 'Edit my profile',
+  ...enMediaHub,
+  ...enMediaViewer,
+  ...enVerifyEmail,
+  ...enActivation,
+  ...enPassword,
+  ...enDevicePush,
+  ...enAccounts,
+  ...enCall,
+  ...enRowActions,
+  ...enEngagement,
+  ...enCallShell,
+  ...enCallJoin,
+  ...enCallDecline,
+  ...enCallFeedback,
+  ...enCallsErase,
+  ...enCallDevices,
+  ...enCallScreen,
+  ...enCallQuality,
+  ...enCallCaptions,
+  ...enCallRecording,
+  ...enSignup,
   'report.title': 'Report this account',
   'report.body': 'Choose what prompts your report. Our moderation team will receive it.',
   'report.action': 'Report',
@@ -231,6 +285,7 @@ const en = {
   'notifications.category.reactions': 'Reactions',
   'notifications.category.mentions': 'Mentions',
   'notifications.category.social': 'Social',
+  'notifications.category.engagement': 'Engagement',
   'notifications.category.contacts': 'Contacts',
   'notifications.category.groups': 'Groups',
   'notifications.category.calls': 'Calls',
@@ -449,6 +504,7 @@ const en = {
   'settings.save.error': 'The setting was not saved.',
   'settings.theme.sync_error': 'Theme applied on this device, not synced.',
   'common.cancel': 'Cancel',
+  'common.close': 'Close',
 
   'media.video.play': 'Play video',
   'media.video.pause': 'Pause',
@@ -456,6 +512,7 @@ const en = {
   'media.audio.position': 'Playback position',
   'media.audio.speed': 'Playback speed',
   'media.video.position.value': '{elapsed} of {total}',
+  'media.buffering': 'Loading…',
   'media.video.mute': 'Mute',
   'media.video.unmute': 'Unmute',
   'media.video.more_options': 'More options',
@@ -601,57 +658,12 @@ const en = {
   'discover.announce.unblockFailed': 'Could not unblock',
   'discover.announce.offline': 'Offline: nothing was sent.',
 
-  'userProfile.title': 'Profile',
-  'userProfile.loading': 'Loading profile',
-  'userProfile.section.publications': 'POSTS',
-  'userProfile.section.relation': 'CONNECTION',
-  'userProfile.section.conversations': 'CONVERSATIONS',
-  'userProfile.conversations.empty': 'No conversation in common',
-  'userProfile.conversations.emptyBody': 'Nothing connects you yet — “Write” opens the first one.',
-  'userProfile.conversations.error': 'Could not load the conversations',
-  'userProfile.conversations.loading': 'Loading conversations',
-  'userProfile.refused.title': 'This profile is not available',
-  'userProfile.refused.body': 'It does not exist, or you do not have access to it.',
-  'userProfile.throttled.title': 'Too many requests',
-  'userProfile.throttled.body': 'Try again in a moment.',
-  'userProfile.error.title': 'Could not load this profile',
-  'userProfile.error.body': 'Try again in a moment.',
-  'userProfile.offline.body': 'The profile will appear once you are back online.',
-  'userProfile.posts.empty': 'No posts',
-  'userProfile.posts.emptyBody': 'Nothing public to read yet.',
-  'userProfile.posts.emptyPosts': 'No posts here',
-  'userProfile.posts.emptyReels': 'No reels here',
-  'userProfile.posts.emptyFilter': 'Tap the tile again to see everything.',
-  'userProfile.posts.error': 'Could not load the posts',
-  'userProfile.posts.loadMore': 'Load more',
-  'userProfile.posts.loaded': 'Posts added: {count}',
-  'userProfile.posts.loadedNone': 'No further posts to show',
-  'userProfile.posts.loading': 'Loading…',
-  'userProfile.stat.posts': 'Posts',
-  'userProfile.stat.reels': 'Reels',
-  'userProfile.stat.stories': 'Stories',
-  'userProfile.stat.filterLabel': 'Filter on {name}',
-  'userProfile.stat.filterClear': 'Show all',
-  'userProfile.context.received': '{name} would like to connect with you. Accept to exchange messages.',
-  'userProfile.context.sent': 'You sent a connection request to {name}. Waiting for their answer.',
-  'userProfile.action.write': 'Message',
-  'userProfile.action.writeLabel': 'Message {name}',
-  'userProfile.action.block': 'Block',
-  'userProfile.action.blockLabel': 'Block {name}',
-  'userProfile.blocked.title': 'You blocked this person',
-  'userProfile.blocked.body': 'Their posts and statistics stay hidden while the block lasts.',
-  'userProfile.signin.title': 'Sign in to connect',
-  'userProfile.signin.body': 'Connection requests and messages need an account.',
-  'userProfile.signin.cta': 'Sign in',
-  'userProfile.announce.blocked': 'Person blocked',
-  'userProfile.announce.blockFailed': 'Could not block',
-  'userProfile.announce.writeFailed': 'Could not open the conversation',
 
   'a11y.floating.rung.discover.requests.one': 'Discover, {count} request received',
   'a11y.floating.rung.discover.requests.other': 'Discover, {count} requests received',
 
   'links.hub.banner.title': 'Manage your links',
-  'links.hub.banner.subtitle': 'Invite anyone you like into your conversations',
+  'links.hub.banner.subtitle': 'Share, track and grow your audience',
   'links.hub.share.title': 'Share links',
   'links.hub.share.description': 'Invite contacts to join your conversations',
   'links.hub.share.create': 'Create a share link',
@@ -811,6 +823,7 @@ const en = {
   'story.studio.refusal.door.visual': 'Choose an image or a video.',
   'story.studio.refusal.door.sound': 'Choose an audio file.',
   'story.studio.refusal.media-max': 'This publication already carries ten media — the gateway’s ceiling.',
+  'story.studio.refusal.import-max': '{count} media not imported: a publication carries ten at most.',
   'story.studio.failure.network': 'Network unavailable.',
   'story.studio.failure.timeout': 'The server did not respond.',
   'story.studio.failure.session': 'Session expired — please log in again.',
@@ -822,7 +835,6 @@ const en = {
   'story.studio.failure.refused': 'Publication rejected.',
   'story.studio.failure.unavailable': 'The server is unavailable.',
   'story.studio.text.add': 'Add text',
-  'story.studio.text.remove': 'Remove this text',
   'story.studio.object.text': 'Text {index}',
   'story.studio.object.overlay': 'Layer',
   'story.studio.object.select': 'Select {name}',
@@ -981,14 +993,6 @@ const en = {
   'comment.send.error': 'Your comment couldn’t be posted.',
   'comment.send.pending': 'Comment not confirmed — offline',
   'comment.send.empty': 'Write something before sending.',
-  'comments.action.like': 'Like',
-  'comments.action.unlike': 'Unlike',
-  'comments.action.edit': 'Edit',
-  'comments.action.delete': 'Delete',
-  'comments.action.delete.confirm': 'Confirm',
-  'comments.edit.label': 'Edit comment',
-  'comments.edit.save': 'Save',
-  'comments.edit.cancel': 'Cancel',
   'comment.like.error': 'Your like wasn’t saved.',
   'comment.edit.error': 'Your edit wasn’t saved.',
   'comment.delete.error': 'The comment couldn’t be deleted.',
@@ -1003,6 +1007,8 @@ const en = {
 
   'thread.unread-separator.one': '{count} unread message',
   'thread.unread-separator.other': '{count} unread messages',
+  'thread.long-message.read-more': 'Read more',
+  'thread.long-message.collapse': 'Show less',
   'message-detail.info.title': 'Message info',
   'message-detail.received-by': 'Received by',
   'message-detail.read-by': 'Read by',
@@ -1026,11 +1032,8 @@ const en = {
   'message-detail.load-error': 'Couldn’t load this information',
   'message-detail.retry': 'Retry',
 
-  'download.title': 'Get Meeshy',
-  'download.body': 'Write in your language, read in yours: Meeshy translates every message on the way.',
-  'download.appStore': 'Download on the App Store',
-  'download.web': 'Open Meeshy in your browser',
-  'download.otherPlatforms': 'On Android and on a computer, Meeshy runs right in your browser.',
+  ...enDownload,
+  ...enPhonePrompt,
 
   /* LES SOURCES DU COMPOSEUR (#7280) — miroir de `composer.attach.*` d'iOS. */
   ...enComposerAttach,
@@ -1071,7 +1074,7 @@ const en = {
   'message.withheld': 'Content withheld',
   'message.withheld.a11y': 'Content withheld: this message exists and is not shown',
   'message.veiled': 'Hidden content',
-  'message.veiled.hint': 'Tap to reveal the content',
+  'message.veiled.hint': 'Tap to view',
   'message.veiled.error': 'Can’t reveal this right now',
   'message.ephemeral.a11y': 'Ephemeral message, disappears in {remaining}',
   'message.ephemeral.awaiting': 'Waiting to be received',
@@ -1085,6 +1088,7 @@ const en = {
   'attachment.protected.video': 'Protected video',
   'attachment.protected.audio': 'Protected voice message',
   'attachment.protected.file': 'Protected attachment',
+  'attachment.protected.open.hint': 'tap to view it full screen',
   'media.reactions.badge.a11y': 'Reactions',
   'media.reactions.badge.mine.a11y': 'including yours',
   'attachment.kind.image': 'Photo',
@@ -1110,7 +1114,17 @@ const en = {
   'message.detail.language.original': '{language} (original)',
 
   ...enMentions,
+  ...enStudioChrome,
+  ...enEphemeral,
+  ...enGallery,
+  ...enMessageCard,
+  ...enConversationCard,
   ...enStoriesMine,
+  ...enContactCard,
+  ...enQuote,
+  ...enCommentRow,
+  ...enContactDiscovery,
+  ...enUserProfile,
 } satisfies InterfaceCatalog;
 
 export default en;

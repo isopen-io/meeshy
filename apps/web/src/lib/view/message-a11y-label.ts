@@ -1,3 +1,4 @@
+import { isAfterReadMessage } from './after-read';
 import { kindOf } from './message';
 import type { Delivery } from './message';
 import { forwardAttributionOf, forwardLabelOf, systemRowOf, systemRowText } from './message-badges';
@@ -7,7 +8,9 @@ import { rendersContent, type ProtectionKind, type RevealPhase } from '@/lib/rea
 import type { Attachment, Message } from '@/lib/api/types';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
+import { messageProtection } from '@meeshy/shared/utils/message-protection';
 import { plainTextOf } from '@meeshy/shared/utils/text-plain';
+import { isContactCardAttachment } from '@meeshy/shared/utils/vcard';
 
 /**
  * LE LIBELLÉ D'ACCESSIBILITÉ D'UN MESSAGE — SITE UNIQUE, partagé par la
@@ -91,14 +94,16 @@ const lowerFirst = (text: string, language: InterfaceLanguage): string =>
  */
 export function attachmentSegments(attachments: readonly Attachment[] | undefined): readonly string[] {
   if (attachments === undefined || attachments.length === 0) return [];
-  const counts = { image: 0, video: 0, audio: 0, file: 0 };
-  for (const attachment of attachments) counts[kindOf(attachment)] += 1;
+  const counts = { image: 0, video: 0, audio: 0, file: 0, contact: 0 };
+  /* Une carte de visite est un CONTACT à l'oreille, jamais un fichier (#8122). */
+  for (const attachment of attachments) counts[isContactCardAttachment(attachment) ? 'contact' : kindOf(attachment)] += 1;
 
   const segments: string[] = [];
   if (counts.image > 0) segments.push(pluralize(counts.image, 'image', 'images'));
   if (counts.video > 0) segments.push(pluralize(counts.video, 'vidéo', 'vidéos'));
   if (counts.audio > 0) segments.push(pluralize(counts.audio, 'audio', 'audios'));
   if (counts.file > 0) segments.push(pluralize(counts.file, 'fichier', 'fichiers'));
+  if (counts.contact > 0) segments.push(pluralize(counts.contact, 'contact', 'contacts'));
   return segments;
 }
 
@@ -178,6 +183,29 @@ export type MessageLabelInput = {
    */
   readonly language: InterfaceLanguage;
 };
+
+/**
+ * LA PROTECTION SE DIT (#8635) — miroir `MessageProtectionChrome
+ * .accessibilityLabels` (iOS). La flamme-œil n'a ni capsule ni décompte, son
+ * filigrane est muet : sans ce segment, rien ne disait qu'elle disparaît après
+ * lecture. L'éphémère à durée se dit même sans échéance servie. Le flou et la
+ * vue unique ne se disent ici que sur un contenu MONTÉ : au repos, leur
+ * substitut (« Contenu masqué », la puce) les nomme déjà.
+ */
+type ProtectionLabelKey = 'message.afterRead.a11y' | 'message.ephemeral.label.a11y' | 'message.viewOnce.a11y' | 'message.blurred.a11y';
+
+function protectionSegments(message: Message, contentShown: boolean, language: InterfaceLanguage): readonly string[] {
+  const flags = messageProtection(message);
+  const lifetime: readonly ProtectionLabelKey[] = isAfterReadMessage(message)
+    ? ['message.afterRead.a11y']
+    : flags.ephemeral
+      ? ['message.ephemeral.label.a11y']
+      : [];
+  const shown: readonly ProtectionLabelKey[] = contentShown
+    ? [...(flags.viewOnce ? (['message.viewOnce.a11y'] as const) : []), ...(flags.blurred ? (['message.blurred.a11y'] as const) : [])]
+    : [];
+  return [...lifetime, ...shown].map((key) => translate(language, key));
+}
 
 /**
  * Compose le libellé complet d'une rangée de message — appelé UNE fois par
@@ -322,7 +350,7 @@ export function composeMessageLabel({
    */
   const attribution = forwardAttributionOf(message);
   if (attribution !== null) segments.push(lowerFirst(forwardLabelOf(attribution, language), language));
-  if (message.expiresAt !== undefined) segments.push('éphémère');
+  segments.push(...protectionSegments(message, rendersContent(protection, phase) && !contentWithheld, language));
 
   /* LES EFFETS DÉCORATIFS ne se prononcent plus (#7596) : ils s'EXÉCUTENT à
      l'écran, et les énumérer au lecteur d'écran ferait d'une décoration une

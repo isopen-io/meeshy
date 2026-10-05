@@ -58,6 +58,30 @@ final class CaptionsModeTests: XCTestCase {
 /// son propre panneau, ou un pair qui a ouvert le sien.
 final class TranscriptionCapturePolicyTests: XCTestCase {
 
+    // #8475 — micro coupé, ma voix n'est plus transcrite ni envoyée : la
+    // transcription écoute le micro par son PROPRE moteur, que la coupure de
+    // la piste WebRTC n'atteint pas.
+    func test_action_microphoneMuted_whileCapturing_stopsCapture() {
+        XCTAssertEqual(
+            TranscriptionCapturePolicy.action(localPanelOpen: true, peerCaptionsActive: true, isCapturing: true, isMicrophoneMuted: true),
+            .stop
+        )
+    }
+
+    func test_action_microphoneMuted_neverStartsCapture_evenIfSomeoneListens() {
+        XCTAssertEqual(
+            TranscriptionCapturePolicy.action(localPanelOpen: true, peerCaptionsActive: true, isCapturing: false, isMicrophoneMuted: true),
+            .none
+        )
+    }
+
+    func test_action_microphoneBackOn_resumesCapture_forSomeoneListening() {
+        XCTAssertEqual(
+            TranscriptionCapturePolicy.action(localPanelOpen: false, peerCaptionsActive: true, isCapturing: false, isMicrophoneMuted: false),
+            .start
+        )
+    }
+
     func test_action_nobodyListening_andNotCapturing_isNone() {
         XCTAssertEqual(
             TranscriptionCapturePolicy.action(localPanelOpen: false, peerCaptionsActive: false, isCapturing: false),

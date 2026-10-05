@@ -1,4 +1,5 @@
 import type { ConversationReadingMode, ReadingModePreference } from '@meeshy/shared/types/reading-modes';
+import * as userPreferencesEndpoints from '@meeshy/shared/api/endpoints/user-preferences';
 
 import type { Transport } from '../net/transport';
 
@@ -9,9 +10,9 @@ import type { Transport } from '../net/transport';
  * `user:preferences-updated`) appartient au travail `staging` du tour. Aucun
  * endpoint n'est inventé — les deux routes copiées existent déjà :
  *
- *   - lecture  : `GET /api/v1/user-preferences/conversations/:conversationId`
+ *   - lecture  : `GET userPreferences.conversationsByConversationId`
  *     (`services/gateway/src/routes/conversation-preferences.ts:191`)
- *   - écriture : `PUT /api/v1/user-preferences/conversations/:conversationId`
+ *   - écriture : `PUT userPreferences.conversationsByConversationId`
  *     (`conversation-preferences.ts:349`), corps `{ readingMode }` seul —
  *     les autres champs restent inchangés (l.393-404).
  *
@@ -35,7 +36,7 @@ export function pushPreference(
 ): Promise<unknown> {
   return transport({
     method: 'PUT',
-    path: `/api/v1/user-preferences/conversations/${conversationId}`,
+    path: userPreferencesEndpoints.conversationsByConversationId(conversationId),
     body: { readingMode: preference },
   });
 }

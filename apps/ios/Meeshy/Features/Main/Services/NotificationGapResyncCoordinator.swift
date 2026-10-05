@@ -25,7 +25,7 @@ final class NotificationGapResyncCoordinator {
     static let shared = NotificationGapResyncCoordinator()
 
     private let debounce: TimeInterval
-    private let resync: @Sendable () async -> Void
+    private let resync: @Sendable @concurrent () async -> Void
     private let gapPublisher: AnyPublisher<Int64, Never>
     private let reconnectPublisher: AnyPublisher<Void, Never>
     private let isAuthenticated: @MainActor () -> Bool
@@ -112,7 +112,7 @@ final class NotificationGapResyncCoordinator {
     /// reconnect réessaiera ; l'échec est journalisé pour rester diagnosticable.
     /// Le compteur est demandé même quand l'écriture cache échoue : les deux
     /// lectures sont indépendantes, et une pastille juste vaut mieux qu'aucune.
-    static let defaultResync: @Sendable () async -> Void = {
+    static let defaultResync: @Sendable @concurrent () async -> Void = {
         let response: NotificationListResponse
         do {
             response = try await NotificationService.shared.list(limit: 30)

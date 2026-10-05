@@ -69,6 +69,22 @@ describe('UserManagementService.getUsers', () => {
     ]));
   });
 
+  // #8876 — le nom AFFICHÉ est ce que la console montre d'un compte : la recherche
+  // doit le couvrir, sinon « Awa Diop » ne trouve pas Awa.
+  it('searches the display name too, case-insensitively', async () => {
+    const findMany = jest.fn().mockResolvedValue([]);
+    const count = jest.fn().mockResolvedValue(0);
+    const svc = makeService(makePrisma({ findMany, count }));
+
+    await svc.getUsers({ search: 'Awa Diop' }, { offset: 0, limit: 10 });
+
+    const callWhere = (findMany.mock.calls[0] as any[])[0].where;
+    expect(callWhere.OR).toEqual(expect.arrayContaining([
+      { displayName: { contains: 'Awa Diop', mode: 'insensitive' } },
+    ]));
+    expect((count.mock.calls[0] as any[])[0].where).toEqual(callWhere);
+  });
+
   it('filters by role when provided', async () => {
     const findMany = jest.fn().mockResolvedValue([]);
     const count = jest.fn().mockResolvedValue(0);
@@ -78,6 +94,18 @@ describe('UserManagementService.getUsers', () => {
 
     const callWhere = (findMany.mock.calls[0] as any[])[0].where;
     expect(callWhere.role).toBe('ADMIN');
+  });
+
+  it('filters by a LIST of roles with an `in` clause — the administration rank is BIGBOSS and ADMIN', async () => {
+    const findMany = jest.fn().mockResolvedValue([]);
+    const count = jest.fn().mockResolvedValue(0);
+    const svc = makeService(makePrisma({ findMany, count }));
+
+    await svc.getUsers({ role: ['BIGBOSS', 'ADMIN'] }, { offset: 0, limit: 10 });
+
+    const callWhere = (findMany.mock.calls[0] as any[])[0].where;
+    expect(callWhere.role).toEqual({ in: ['BIGBOSS', 'ADMIN'] });
+    expect(((count.mock.calls[0] as any[])[0]).where.role).toEqual({ in: ['BIGBOSS', 'ADMIN'] });
   });
 
   it('filters isActive: true', async () => {
@@ -502,41 +530,6 @@ describe('UserManagementService.updateUser', () => {
     expect(findUnique).not.toHaveBeenCalled();
     const writtenData = update.mock.calls[0][0].data;
     expect(writtenData).not.toHaveProperty('searchTokens');
-  });
-});
-
-// ─── updateEmail ──────────────────────────────────────────────────────────────
-
-describe('UserManagementService.updateEmail', () => {
-  it('throws when user not found', async () => {
-    const findUnique = jest.fn().mockResolvedValue(null);
-    const svc = makeService(makePrisma({ findUnique }));
-
-    await expect(svc.updateEmail('user-id', { password: 'pw', newEmail: 'new@ex.com' }))
-      .rejects.toThrow('User not found');
-  });
-
-  it('throws when password is invalid', async () => {
-    mockCompare.mockResolvedValueOnce(false);
-    const findUnique = jest.fn().mockResolvedValue(makeUser());
-    const svc = makeService(makePrisma({ findUnique }));
-
-    await expect(svc.updateEmail('user-id', { password: 'wrong', newEmail: 'new@ex.com' }))
-      .rejects.toThrow('Invalid password');
-  });
-
-  it('updates email when password is valid', async () => {
-    mockCompare.mockResolvedValueOnce(true);
-    const findUnique = jest.fn().mockResolvedValue(makeUser({ password: 'hashed' }));
-    const update = jest.fn().mockResolvedValue(makeUser({ email: 'new@ex.com' }));
-    const svc = makeService(makePrisma({ findUnique, update }));
-
-    const result = await svc.updateEmail('user-id', { password: 'correct', newEmail: 'new@ex.com' });
-
-    expect(update).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({ email: 'new@ex.com' }),
-    }));
-    expect((result as any).email).toBe('new@ex.com');
   });
 });
 

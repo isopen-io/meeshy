@@ -31,6 +31,21 @@ public struct MarkStoryViewedPayload: Codable, Sendable, Equatable {
     }
 }
 
+/// #8303 — les messages flamme-œil qu'un lecteur a vus puis quittés. Les
+/// identifiants sont SERVEUR : la passerelle ne consomme que les lignes flamme-œil
+/// reçues par l'appelant, un identifiant étranger est ignoré.
+public struct ConsumeAfterReadPayload: Codable, Sendable, Equatable {
+    public let clientMutationId: String
+    public let conversationId: String
+    public let messageIds: [String]
+
+    public init(clientMutationId: String = ClientMutationId.generate(), conversationId: String, messageIds: [String]) {
+        self.clientMutationId = clientMutationId
+        self.conversationId = conversationId
+        self.messageIds = messageIds
+    }
+}
+
 public struct MarkAsReadPayload: Codable, Sendable, Equatable {
     public let clientMutationId: String
     public let conversationId: String

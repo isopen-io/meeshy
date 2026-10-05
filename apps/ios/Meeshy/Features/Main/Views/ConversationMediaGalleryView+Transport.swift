@@ -42,7 +42,7 @@ extension ConversationMediaGalleryView {
     @ViewBuilder
     var transportCorridor: some View {
         if stageCorridors.transport > 0 {
-            HStack(spacing: 10) {
+            HStack(spacing: MeeshySpacing.smPlus) {
                 if currentAttachmentIsActiveTrack {
                     // **La barre du SDK, en gabarit de couloir.** `.duration`
                     // n'entre PAS dans le jeu : ce serait la durée du PLAYER,
@@ -63,6 +63,13 @@ extension ConversationMediaGalleryView {
                         controls: [.scrubber, .mute, .speed, .pip],
                         placement: .corridor
                     )
+                } else if let scene = currentScene, scene.timeline != nil {
+                    // **Une scène qui a une timeline se parcourt au doigt**
+                    // (#8598) — la piste du lecteur de stories, au même couloir
+                    // que la barre d'une vidéo, donc sous la même règle de
+                    // chrome : elle part avec le plateau en plein cadre et sous
+                    // le voile d'une ouverture.
+                    GallerySceneScrubBar(clock: sceneClock, sceneId: scene.id, accentColor: accentColor)
                 } else {
                     Spacer(minLength: 0)
                 }
@@ -93,8 +100,8 @@ extension ConversationMediaGalleryView {
     /// qu'elle ignore la personne qui a monté son Dynamic Type.
     private func transportDurationLabel(_ texte: String) -> some View {
         Text(texte)
-            .font(MeeshyFont.relative(11, weight: .semibold, design: .monospaced))
-            .foregroundColor(.white.opacity(0.55))
+            .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold, design: .monospaced))
+            .foregroundColor(MeeshyColors.mediaChromeTertiary)
             .lineLimit(1)
             .fixedSize()
             .padding(.trailing, MediaGalleryStage.gutter)

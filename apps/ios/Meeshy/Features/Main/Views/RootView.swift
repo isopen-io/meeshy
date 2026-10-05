@@ -63,7 +63,6 @@ final class ConversationListVMOwner: ObservableObject {
 
 struct RootView: View {
     @StateObject private var theme = ThemeManager.shared
-    @StateObject private var toastManager = FeedbackToastManager.shared
     @StateObject private var storyViewModel = StoryViewModel()
     @StateObject private var statusViewModel = StatusViewModel()
     // Possédé sans être observé (cf. ConversationListVMOwner) : évite que le churn
@@ -77,10 +76,8 @@ struct RootView: View {
     // portée par `.modifier(CallPresentationLayer())`, qui isole le churn d'appel
     // (callDuration 1 Hz + stats qualité) hors de `RootView.body`. Cf. watchdog
     // 0x8BADF00D. RootView ne se ré-évalue donc plus à chaque tick d'appel.
-    @StateObject private var connectionStatus = ConnectionStatusViewModel()
     @StateObject private var notifications = RootNotificationSource()  // #7010 — le compteur SEUL est observé ; cf. RootNotificationSource.
     @EnvironmentObject private var deepLinkRouter: DeepLinkRouter
-    @Environment(\.colorScheme) private var systemColorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotionEnabled
     @State private var showFeed = false
     @State private var feedWasVisibleBeforeNav = false
@@ -335,7 +332,6 @@ struct RootView: View {
             onContinueWithAccount: joinViaShareLink(identifier:),
             onJoinAnonymously: { deepLinkRouter.requestedGuestJoin = $0 }
         ))
-        .inAppLinks(router: router)
         .modifier(RootEnvironmentLayer(
             router: router,
             storyViewModel: storyViewModel,
@@ -367,9 +363,9 @@ struct RootView: View {
             activeConversationId: { router.currentConversationId ?? notificationPreviewConversation?.id },
             onSyncPillTap: handleSyncPillTap,
             onMiniPlayerTap: {
-                guard let convId = ConversationAudioCoordinator.shared
-                    .activeContext?.conversationId else { return }
-                navigateToConversationById(convId)
+                guard let target = MiniPlayerTapPolicy.target(
+                    context: ConversationAudioCoordinator.shared.activeContext) else { return }
+                navigateToConversationById(target.conversationId, highlightMessageId: target.highlightMessageId)
             },
             showFeed: showFeed,
             showMenu: showMenu
@@ -398,6 +394,7 @@ struct RootView: View {
             upgradeGate: upgradeGate,
             onDeepLink: handleDeepLink
         ))
+        .inAppLinks(router: router)
     }
 
     // MARK: - Démarrage de la racine
@@ -419,10 +416,7 @@ struct RootView: View {
         // commentaires et des réactions. Armé par `FeedView` et désarmé à
         // sa disparition, il ratait tout ce qui arrivait ailleurs dans
         // l'app. `arm()` est idempotent — jamais désarmé.
-        DependencyContainer.shared.feedSocketHandler.arm()
-
-        // Start SyncEngine socket relay
-        await ConversationSyncEngine.shared.startSocketRelay()
+        await RealtimeRelays.arm()
 
         // Deferred cleanup
         Task.detached(priority: .background) {
@@ -675,7 +669,7 @@ struct RootView: View {
                        bundle: .main)
             )
 
-        case .magicLink:
+        case .magicLink, .emailVerificationLink:
             break
         }
     }
@@ -1065,7 +1059,7 @@ struct RootView: View {
 
         case .friendRequest, .contactRequest, .legacyFriendRequest,
              .friendAccepted, .contactAccepted, .legacyFriendAccepted,
-             .legacyStatusUpdate:
+             .contactJoined, .contactRecentlyActive, .legacyStatusUpdate:
             if let senderId = ctx.senderId {
                 router.deepLinkProfileUser = ProfileSheetUser(
                     userId: senderId,
@@ -1460,7 +1454,7 @@ struct RootView: View {
                             .frame(width: MeeshySpacing.xxl + MeeshySpacing.xs, height: MeeshySpacing.xxl + MeeshySpacing.xs)
                     } else {
                         Image(systemName: "square.stack.fill")
-                            .font(MeeshyFont.relative(20, weight: .semibold))
+                            .font(MeeshyFont.relative(MeeshyIconSize.xl, weight: .semibold))
                             .foregroundColor(.white)
                     }
                 }
@@ -1772,7 +1766,7 @@ private struct PendingSettingsBannerInline: View {
                     // cf. PendingStoryBannerInline : la version FR est plus longue —
                     // shrink-avant-troncature pour rester lisible.
                     Text(String(localized: "root.sync_on_reconnect", defaultValue: "Synchronisation au retour en ligne", bundle: .main))
-                        .font(MeeshyFont.relative(10, weight: .regular))
+                        .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .regular))
                         .foregroundColor(MeeshyColors.indigo950.opacity(0.72))
                         .lineLimit(1)
                         .minimumScaleFactor(0.75)
@@ -1786,14 +1780,14 @@ private struct PendingSettingsBannerInline: View {
                     LinearGradient(
                         colors: [
                             MeeshyColors.warning,
-                            Color(hex: "F59E0B")
+                            MeeshyColors.amber500
                         ],
                         startPoint: .leading,
                         endPoint: .trailing
                     )
                 )
                 .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
-                .shadow(color: MeeshyColors.warning.opacity(0.35), radius: MeeshyShadow.medium.radius, y: 2)
+                .shadow(color: MeeshyColors.warning.opacity(MeeshyOpacity.medium), radius: MeeshyShadow.medium.radius, y: 2)
                 .padding(.horizontal, MeeshySpacing.lg)
                 .transition(.move(edge: .top).combined(with: .opacity))
             }
@@ -1852,7 +1846,7 @@ private struct PendingStoryBannerInline: View {
                     // la réduit avant de tronquer, pour qu'elle reste lisible en
                     // portrait étroit / Dynamic Type agrandi.
                     Text(String(localized: "root.publish_on_reconnect", defaultValue: "Publication au retour en ligne", bundle: .main))
-                        .font(MeeshyFont.relative(10, weight: .regular))
+                        .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .regular))
                         .foregroundColor(MeeshyColors.indigo950.opacity(0.72))
                         .lineLimit(1)
                         .minimumScaleFactor(0.75)
@@ -1868,14 +1862,14 @@ private struct PendingStoryBannerInline: View {
                     LinearGradient(
                         colors: [
                             MeeshyColors.warning,
-                            Color(hex: "F59E0B")
+                            MeeshyColors.amber500
                         ],
                         startPoint: .leading,
                         endPoint: .trailing
                     )
                 )
                 .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
-                .shadow(color: MeeshyColors.warning.opacity(0.35), radius: MeeshyShadow.medium.radius, y: 2)
+                .shadow(color: MeeshyColors.warning.opacity(MeeshyOpacity.medium), radius: MeeshyShadow.medium.radius, y: 2)
                 .padding(.horizontal, MeeshySpacing.lg)
                 .transition(.move(edge: .top).combined(with: .opacity))
                 .gesture(

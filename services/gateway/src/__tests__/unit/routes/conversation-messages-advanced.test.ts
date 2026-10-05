@@ -86,9 +86,9 @@ jest.mock('../../../middleware/rate-limiter', () => ({
   messageValidationHook: (...args: any[]) => mockMessageValidationHook(...args),
 }));
 
-jest.mock('../../../routes/conversations/utils/access-control', () => ({
-  canAccessConversation: (...args: any[]) => mockCanAccessConversation(...args),
-}));
+jest.mock('../../../routes/conversations/utils/access-control', () => (jest.requireActual('../../helpers/acces-conversation-double') as any)
+  .doubleAccesConversation(jest.requireActual('../../../routes/conversations/utils/access-control') as Record<string, unknown>,
+    (...args: any[]) => mockCanAccessConversation(...args)));
 
 jest.mock('../../../utils/conversation-id-cache', () => ({
   resolveConversationId: (...args: any[]) => mockResolveConversationId(...args),
@@ -631,7 +631,7 @@ describe('registerMessagesAdvancedRoutes', () => {
       // donc un texte réellement réécrit ; le cas de l'URL brute seule est
       // couvert par le test suivant.
       await getEditHandler(fastify)(
-        makeRequest({ params: { id: CONV_ID, messageId: MSG_ID }, body: { content: 'voir [[https://b.com]]' } }),
+        makeRequest({ params: { id: CONV_ID, messageId: MSG_ID }, body: { content: 'voir <https://b.com>' } }),
         makeReply()
       );
 
@@ -722,12 +722,12 @@ describe('registerMessagesAdvancedRoutes', () => {
         metadata: { trackingLinks: [{ url: 'https://a.com', token: 'tokA' }] },
       }));
       mockProcessExplicitLinksInContent.mockRejectedValue(new Error('link error'));
-      prisma.message.update.mockResolvedValue({ id: MSG_ID, content: 'voir [[https://a.com]]', validatedMentions: [], translations: null });
+      prisma.message.update.mockResolvedValue({ id: MSG_ID, content: 'voir <https://a.com>', validatedMentions: [], translations: null });
 
       // Syntaxe explicite : c'est elle qui fait appeler le service, donc la
       // seule façon d'atteindre la panne qu'on veut éprouver.
       await getEditHandler(fastify)(
-        makeRequest({ params: { id: CONV_ID, messageId: MSG_ID }, body: { content: 'voir [[https://a.com]]' } }),
+        makeRequest({ params: { id: CONV_ID, messageId: MSG_ID }, body: { content: 'voir <https://a.com>' } }),
         makeReply()
       );
 
@@ -735,7 +735,7 @@ describe('registerMessagesAdvancedRoutes', () => {
       expect(updateArg.data).not.toHaveProperty('metadata');
       // Le texte de l'utilisateur, lui, est persisté : son édition n'est pas
       // annulée par une panne de tracking.
-      expect(updateArg.data.content).toBe('voir [[https://a.com]]');
+      expect(updateArg.data.content).toBe('voir <https://a.com>');
     });
 
     it('processes mentions when mentionService is available', async () => {
@@ -2480,24 +2480,24 @@ describe('registerMessagesAdvancedRoutes', () => {
   describe('GET /conversations/:id/reactions', () => {
     const getReactionsHandler = (f: any) => getHandler(f, 'GET', '/conversations/:id/reactions');
 
-    it('returns 403 when conversation not found', async () => {
+    it('returns 404 when conversation not found', async () => {
       mockResolveConversationId.mockResolvedValue(null);
       const req = makeRequest({ params: { id: CONV_ID } });
       const reply = makeReply();
 
       await getReactionsHandler(fastify)(req, reply);
 
-      expect(mockSendForbidden).toHaveBeenCalled();
+      expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found');
     });
 
-    it('returns 403 when access denied', async () => {
+    it('returns the same 404 when access denied — a non-member learns nothing (#8116)', async () => {
       mockCanAccessConversation.mockResolvedValue(false);
       const req = makeRequest({ params: { id: CONV_ID } });
       const reply = makeReply();
 
       await getReactionsHandler(fastify)(req, reply);
 
-      expect(mockSendForbidden).toHaveBeenCalled();
+      expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found');
     });
 
     it('returns empty reactions array when no reactions', async () => {
@@ -2678,24 +2678,24 @@ describe('registerMessagesAdvancedRoutes', () => {
   describe('GET /conversations/:id/status', () => {
     const getStatusHandler = (f: any) => getHandler(f, 'GET', '/conversations/:id/status');
 
-    it('returns 403 when conversation not found', async () => {
+    it('returns 404 when conversation not found', async () => {
       mockResolveConversationId.mockResolvedValue(null);
       const req = makeRequest({ params: { id: CONV_ID } });
       const reply = makeReply();
 
       await getStatusHandler(fastify)(req, reply);
 
-      expect(mockSendForbidden).toHaveBeenCalled();
+      expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found');
     });
 
-    it('returns 403 when access denied', async () => {
+    it('returns the same 404 when access denied — a non-member learns nothing (#8116)', async () => {
       mockCanAccessConversation.mockResolvedValue(false);
       const req = makeRequest({ params: { id: CONV_ID } });
       const reply = makeReply();
 
       await getStatusHandler(fastify)(req, reply);
 
-      expect(mockSendForbidden).toHaveBeenCalled();
+      expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found');
     });
 
     it('returns empty statuses when no messages', async () => {

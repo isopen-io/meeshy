@@ -129,6 +129,9 @@ struct ThemedMessageBubble: View {
     var preferredAudioLangCode: String? = nil
     var showAvatar: Bool = true
     var presenceState: PresenceState? = nil
+    /// L'auteur a l'écran de CETTE conversation ouvert (#8892) — résolu par
+    /// l'hôte, jamais lu ici sur `PresenceManager`.
+    var senderIsHere: ConversationHere = .absent
     var senderMoodEmoji: String? = nil
     var senderStoryRingState: StoryRingState = .none
     var onViewStory: (() -> Void)? = nil
@@ -162,6 +165,8 @@ struct ThemedMessageBubble: View {
     /// Nil-default keeps preview / overlay call sites unchanged.
     var onPlayAudio: ((String) -> Void)? = nil
     var allAudioItems: [ConversationViewModel.AudioItem] = []
+    /// Tranche de `allAudioItems` pour CE message (`ConversationViewModel.audioItemsByMessageId`) : `==` la balaie en O(k) au lieu d'un O(N) sur toute la conversation.
+    var messageAudioItems: [ConversationViewModel.AudioItem] = []
     /// Cold-open (F1) : nom de conversation / file "à suivre" — forwardés
     /// jusqu'à `AudioMediaView` (`BubbleStandardLayout` -> `AudioMediaView`/
     /// `AudioCarouselView`) pour que le plein écran audio ouvert SANS
@@ -306,6 +311,8 @@ struct ThemedMessageBubble: View {
             } else {
                 BubbleSystemNoticeView(text: content.text?.raw ?? message.content, isDark: isDark, timeString: content.meta.timeString)
             }
+        case .deleted where content.protection.isExpired:
+            EmptyView()
         case .deleted:
             BubbleDeletedView(isMe: message.isMe, isDark: isDark)
         case .viewOnceSealed, .viewOnceOpened:
@@ -318,6 +325,7 @@ struct ThemedMessageBubble: View {
                     isDark: isDark,
                     protection: content.protection,
                     timeString: content.meta.timeString,
+                    hint: content.protectedTap().accessibilityHint,
                     onOpen: { [messageId = content.messageId, onConsumeViewOnce] in
                         HapticFeedback.medium()
                         onConsumeViewOnce?(messageId) { _ in }
@@ -383,7 +391,10 @@ struct ThemedMessageBubble: View {
                 // sur la bulle comme sur le sticker : un éphémère détruit sous
                 // les yeux du lecteur se consume, puis l'hôte retire la ligne.
                 .ephemeralBurn(isBurning: content.isBurning)
-                .viewOnceRetouch(isActive: content.isViewOnceRevealed) { [messageId = content.messageId, onConsumeViewOnce] in
+                // #8303 — la flamme-œil en filigrane, à cheval sur le bord d'attaque de la bulle.
+                .afterReadWatermark(content.protection.isAfterRead, gutter: 24, tint: ComposerProtection.ephemeral.tint,
+                                    edge: content.isMe ? .trailing : .leading, overhang: 10)
+                .viewOnceRetouch(isActive: content.viewOnceRetouchIsActive) { [messageId = content.messageId, onConsumeViewOnce] in
                     onConsumeViewOnce?(messageId) { _ in }
                 }
                 .onAppear {
@@ -478,6 +489,7 @@ struct ThemedMessageBubble: View {
             preferredTranslation: preferredTranslation,
             showAvatar: showAvatar,
             presenceState: presenceState,
+            senderIsHere: senderIsHere,
             senderMoodEmoji: senderMoodEmoji,
             senderStoryRingState: senderStoryRingState,
             allAudioItems: allAudioItems,
@@ -604,7 +616,7 @@ extension ThemedMessageBubble: @MainActor Equatable {
     private static func audioEnrichmentSignature(_ bubble: ThemedMessageBubble) -> [AudioEnrichmentKey] {
         let ownedIds = Set(bubble.message.attachments.filter { $0.type == .audio }.map(\.id))
         guard !ownedIds.isEmpty else { return [] }
-        return bubble.allAudioItems
+        return bubble.messageAudioItems
             .filter { ownedIds.contains($0.id) }
             .sorted { $0.id < $1.id }
             .map { AudioEnrichmentKey(id: $0.id, transcription: $0.transcription, translatedAudios: $0.translatedAudios) }
@@ -628,6 +640,10 @@ extension ThemedMessageBubble: @MainActor Equatable {
         lhs.message.attachments.count == rhs.message.attachments.count &&
         lhs.message.reactions.count == rhs.message.reactions.count &&
         lhs.message.viewOnceCount == rhs.message.viewOnceCount &&
+        // #8009 — ouvrir une vue unique ne bouge ni `updatedAt` ni un compteur :
+        // sans ces deux champs, la puce touchée ne se changeait pas en texte.
+        lhs.message.isViewOnceRevealed == rhs.message.isViewOnceRevealed &&
+        lhs.message.viewOnceOpenedAt == rhs.message.viewOnceOpenedAt &&
         // Effects (flags can flip without updatedAt for some appearance changes)
         lhs.message.effects.flags.rawValue == rhs.message.effects.flags.rawValue &&
         // Reaction identity, not just count (emoji swap with same count)
@@ -650,6 +666,7 @@ extension ThemedMessageBubble: @MainActor Equatable {
         lhs.highlightSearchTerm == rhs.highlightSearchTerm &&
         // Sender state — pushed by the server without bumping message.updatedAt
         lhs.presenceState == rhs.presenceState &&
+        lhs.senderIsHere == rhs.senderIsHere &&
         lhs.senderMoodEmoji == rhs.senderMoodEmoji &&
         lhs.senderStoryRingState == rhs.senderStoryRingState &&
         // Group state — recomputed by parent on neighbor changes

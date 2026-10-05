@@ -24,7 +24,6 @@ const PRIVATE_ROUTES: readonly RouteKey[] = [
   'stories',
   'storiesMine',
   'storyCompose',
-  'story',
   'feed',
   /* LES PORTES DE COMPOSITION (#7449, #7462) — leurs raisons sont écrites
      UNE fois, sur `RouteKey` dans `session-guard.ts` ; la famille `/…/new`
@@ -81,6 +80,56 @@ const PRIVATE_ROUTES: readonly RouteKey[] = [
   'admAnonymous',
   'adminAnonymousOne',
   'admAnonymousOne',
+  /**
+   * LA VUE DE DIEU (#8876) — QUARANTE adresses d'administration de plus, dans
+   * les deux espaces : treize listes et sept fiches, plus celles du barème de
+   * points (#8906), posé juste après. Chacune est PRIVÉE, et ce
+   * témoin l'affirme trois fois (fixtures, visiteur anonyme, invité de lien).
+   * `ADMIN_ROUTE_KEYS` en dérive la garde ; cette liste est écrite À LA MAIN,
+   * pour qu'elle reste un témoin INDÉPENDANT de ce qu'il garde.
+   */
+  'adminInvitations',
+  'admInvitations',
+  'adminInvitation',
+  'admInvitation',
+  'adminCommunities',
+  'admCommunities',
+  'adminCommunity',
+  'admCommunity',
+  'adminShareLinks',
+  'admShareLinks',
+  'adminShareLink',
+  'admShareLink',
+  'adminPosts',
+  'admPosts',
+  'adminPost',
+  'admPost',
+  'adminReports',
+  'admReports',
+  'adminReport',
+  'admReport',
+  'adminAudit',
+  'admAudit',
+  'adminAnalytics',
+  'admAnalytics',
+  'adminRanking',
+  'admRanking',
+  'adminTrackingLinks',
+  'admTrackingLinks',
+  'adminTrackingLink',
+  'admTrackingLink',
+  'adminBroadcasts',
+  'admBroadcasts',
+  'adminBroadcast',
+  'admBroadcast',
+  'adminMonitoring',
+  'admMonitoring',
+  'adminLanguages',
+  'admLanguages',
+  'adminSettings',
+  'admSettings',
+  'adminEngagementScale',
+  'admEngagementScale',
 ];
 const PUBLIC_AUTH_ROUTES: readonly RouteKey[] = ['login', 'signup'];
 
@@ -104,7 +153,12 @@ describe('resolveRouteAccess — source gateway, visiteur anonyme sur une route 
   // requiredAuth : un visiteur sans compte n'y a rien à voir.
   test('stories', () => expect(resolveRouteAccess({ sessionStatus: 'anonymous', source: 'gateway', routeKey: 'stories' })).toBe('redirect-login'));
   test('storyCompose', () => expect(resolveRouteAccess({ sessionStatus: 'anonymous', source: 'gateway', routeKey: 'storyCompose' })).toBe('redirect-login'));
-  test('story', () => expect(resolveRouteAccess({ sessionStatus: 'anonymous', source: 'gateway', routeKey: 'story' })).toBe('redirect-login'));
+  // #9149 — UNE story NOMMÉE (`/story/:id`) est l'adresse d'un lien partagé :
+  // un visiteur sans compte y entre, voit la story si elle est publique, et
+  // l'invitation à se connecter se pose PAR-DESSUS. Le plateau (`stories`)
+  // reste privé.
+  test('story (#9149) — publique : le lecteur sert le visiteur et l’invite', () =>
+    expect(resolveRouteAccess({ sessionStatus: 'anonymous', source: 'gateway', routeKey: 'story' })).toBe('allow'));
   // #5893 — GET /social/posts?scope=home exige une session malgré
   // optionalAuth à la porte : un visiteur sans compte y recevait jusqu'ici
   // l'écran d'attente (route publique par défaut).
@@ -334,6 +388,22 @@ describe('la famille des compositions — dérivée de ROUTES (#7462)', () => {
  * Ce que ces témoins mesurent est donc exactement ce que cette loi PROMET, ni
  * plus ni moins : un visiteur sans compte n'entre pas.
  */
+describe("toute route d'administration déclarée dans ROUTES est PRIVÉE (#8876)", () => {
+  test('aucune adresse /adm… ni /admin… ne reste publique — qu’un lot en ajoute une, ce témoin la voit', () => {
+    const publiques = Object.entries(ROUTES)
+      .filter(([, route]) => route.pattern === '/adm' || route.pattern.startsWith('/adm/') || route.pattern === '/admin' || route.pattern.startsWith('/admin/'))
+      .map(([key]) => key)
+      .filter((key) => resolveRouteAccess({ sessionStatus: 'anonymous', source: 'gateway', routeKey: key }) !== 'redirect-login');
+
+    expect(publiques).toEqual([]);
+  });
+
+  test('et la déclaration les connaît toutes : quarante adresses neuves + les seize d’avant + les deux du barème de points (#8906)', () => {
+    const adresses = Object.values(ROUTES).filter((route) => route.pattern.startsWith('/adm')).length;
+    expect(adresses).toBe(58);
+  });
+});
+
 describe("les routes d'administration sont PRIVÉES", () => {
   for (const routeKey of ['admin', 'adminUsers'] as const) {
     test(`${routeKey} : une session AUTHENTIFIÉE passe`, () => {

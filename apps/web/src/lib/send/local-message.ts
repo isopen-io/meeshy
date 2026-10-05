@@ -4,6 +4,7 @@ import type { Message, Participant } from '@/lib/api/types';
 import type { SentMessageAck } from '@/lib/api/messages';
 import { attachmentPreviewOf, type PendingAttachment } from './attachments';
 import { protectionFieldsOf, type ComposeProtection } from './compose-protection';
+import { contaminatedProtectionFieldsOf } from './reply-contagion';
 import type { SharedPlace } from './shared-place';
 import type { MessageSticker } from '@meeshy/shared/types/message-sticker';
 
@@ -105,7 +106,9 @@ export function localMessageOf(input: {
   readonly sticker?: MessageSticker;
   readonly now: Date;
 }): LocalMessage {
-  const protection = protectionFieldsOf(input.protection ?? {}, input.now.getTime());
+  /* LA CONTAGION DE LA CITATION (#8557) — la bulle optimiste porte déjà ce
+     que la passerelle imposera : flou et/ou mode éphémère du message cité. */
+  const protection = contaminatedProtectionFieldsOf(protectionFieldsOf(input.protection ?? {}), input.replyTo);
   return {
     id: input.clientMessageId,
     clientMessageId: input.clientMessageId,
@@ -123,7 +126,7 @@ export function localMessageOf(input: {
     viewOnceCount: 0,
     isBlurred: protection.isBlurred,
     ...(protection.effectFlags === 0 ? {} : { effectFlags: protection.effectFlags }),
-    ...(protection.expiresAt === undefined ? {} : { expiresAt: protection.expiresAt }),
+    ...(protection.ephemeralDuration === undefined ? {} : { ephemeralDuration: protection.ephemeralDuration }),
     // Rien n'est encore parti : `deliveredCount` à 0 est ce que `deliveryOf`
     // (`lib/view/message.ts`) lit comme « en attente », sans champ inventé.
     deliveredCount: 0,

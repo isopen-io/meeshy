@@ -1087,8 +1087,10 @@ describe('systemRankingsRoutes — GET /ranking', () => {
       expect(res.statusCode).toBe(200);
       const rankings = JSON.parse(res.body).data.rankings;
       expect(rankings[0].count).toBe(20);
-      expect(rankings[0].content).toBe('Hello world this is a test message body');
-      expect(rankings[0].contentPreview).toBe('Hello world this is a test message body');
+      // #8876 — le texte d'un message ne se lit que par la lecture souveraine.
+      expect(rankings[0]).not.toHaveProperty('content');
+      expect(rankings[0]).not.toHaveProperty('contentPreview');
+      expect(res.body).not.toContain('Hello world this is a test message body');
       expect(rankings[0].sender.username).toBe('alice');
       expect(rankings[0].conversation.identifier).toBe('conv-1');
     });
@@ -1126,7 +1128,7 @@ describe('systemRankingsRoutes — GET /ranking', () => {
       expect(JSON.parse(res.body).data.rankings[0].count).toBe(5);
     });
 
-    it('message not in map produces empty contentPreview and undefined sender', async () => {
+    it('message not in map produces undefined sender', async () => {
       mockPrisma.reaction.groupBy.mockResolvedValue([
         { messageId: 'unknown-msg', _count: { id: 1 } },
       ]);
@@ -1135,9 +1137,8 @@ describe('systemRankingsRoutes — GET /ranking', () => {
       const res = await inject(app, { entityType: 'messages', criterion: 'most_reactions' });
       expect(res.statusCode).toBe(200);
       const rankings = JSON.parse(res.body).data.rankings;
-      expect(rankings[0].contentPreview).toBe('');
       expect(rankings[0].sender).toBeUndefined();
-      expect(rankings[0].content).toBeUndefined();
+      expect(rankings[0]).not.toHaveProperty('content');
     });
 
     it('sender.user is null → sender.username is undefined', async () => {
@@ -1154,20 +1155,17 @@ describe('systemRankingsRoutes — GET /ranking', () => {
       expect(rankings[0].sender.username).toBeUndefined();
     });
 
-    it('content truncates to 100 chars in contentPreview', async () => {
-      const longContent = 'A'.repeat(150);
+    it('never ASKS the database for the message text — the column is not even selected (#8876)', async () => {
       mockPrisma.reaction.groupBy.mockResolvedValue([
         { messageId: MSG_ID, _count: { id: 1 } },
       ]);
-      mockPrisma.message.findMany.mockResolvedValue([{
-        ...fullMockMessage,
-        content: longContent,
-      }]);
+      mockPrisma.message.findMany.mockResolvedValue([{ ...fullMockMessage, content: 'A'.repeat(150) }]);
 
       const res = await inject(app, { entityType: 'messages', criterion: 'most_reactions' });
-      const rankings = JSON.parse(res.body).data.rankings;
-      expect(rankings[0].contentPreview).toHaveLength(100);
-      expect(rankings[0].content).toBe(longContent);
+
+      const select = (mockPrisma.message.findMany.mock.calls[0][0] as { select: Record<string, unknown> }).select;
+      expect(select).not.toHaveProperty('content');
+      expect(res.body).not.toContain('AAAAAAAAAA');
     });
 
     it('unknown criterion returns empty rankings', async () => {
@@ -1255,25 +1253,23 @@ describe('systemRankingsRoutes — GET /ranking', () => {
       expect(res.statusCode).toBe(200);
     });
 
-    it('share_links_most_used — falls back to identifier when name is null', async () => {
-      mockPrisma.conversationShareLink.findMany.mockResolvedValue([{
-        id: 'sl2', linkId: 'lxyz', identifier: 'share-slug', name: null,
-        currentUses: 5, maxUses: null, createdAt: null, creator: null, conversation: null,
-      }]);
+    it.each(['uses', 'share_links_most_unique_sessions'])(
+      'share links (%s) — never read nor serve a join key, and a nameless link has name null, not its secret (#8876)',
+      async (criterion) => {
+        mockPrisma.conversationShareLink.findMany.mockResolvedValue([{
+          id: 'sl2', linkId: 'mshy_SECRETLINKID', identifier: 'mshy_SECRETIDENT', name: null,
+          currentUses: 5, currentUniqueSessions: 4, maxUses: null, createdAt: null, creator: null, conversation: null,
+        }]);
 
-      const res = await inject(app, { entityType: 'links', criterion: 'uses' });
-      expect(JSON.parse(res.body).data.rankings[0].name).toBe('share-slug');
-    });
+        const res = await inject(app, { entityType: 'links', criterion });
 
-    it('share_links_most_used — falls back to linkId when name and identifier are null', async () => {
-      mockPrisma.conversationShareLink.findMany.mockResolvedValue([{
-        id: 'sl3', linkId: 'link-fallback', identifier: null, name: null,
-        currentUses: 3, maxUses: null, createdAt: null, creator: null, conversation: null,
-      }]);
-
-      const res = await inject(app, { entityType: 'links', criterion: 'uses' });
-      expect(JSON.parse(res.body).data.rankings[0].name).toBe('link-fallback');
-    });
+        const select = (mockPrisma.conversationShareLink.findMany.mock.calls[0][0] as { select: Record<string, unknown> }).select;
+        expect(select).not.toHaveProperty('linkId');
+        expect(select).not.toHaveProperty('identifier');
+        expect(JSON.parse(res.body).data.rankings[0].name).toBeNull();
+        expect(res.body).not.toMatch(/SECRETLINKID|SECRETIDENT/);
+      }
+    );
 
     it('share_links_most_unique_sessions — ordered by currentUniqueSessions', async () => {
       const mockShareLink = {
@@ -1296,30 +1292,6 @@ describe('systemRankingsRoutes — GET /ranking', () => {
       const res = await inject(app, { entityType: 'links', criterion: 'unknown_xyz' });
       expect(res.statusCode).toBe(200);
       expect(JSON.parse(res.body).data.rankings).toHaveLength(0);
-    });
-
-    it('share_links_most_unique_sessions — falls back to identifier when name is null', async () => {
-      mockPrisma.conversationShareLink.findMany.mockResolvedValue([{
-        id: 'su2', linkId: 'lu2', identifier: 'slug-u2', name: null,
-        currentUses: 8, currentUniqueSessions: 6, maxUses: null,
-        createdAt: null, creator: null, conversation: null,
-      }]);
-
-      const res = await inject(app, { entityType: 'links', criterion: 'share_links_most_unique_sessions' });
-      expect(res.statusCode).toBe(200);
-      expect(JSON.parse(res.body).data.rankings[0].name).toBe('slug-u2');
-    });
-
-    it('share_links_most_unique_sessions — falls back to linkId when name and identifier are null', async () => {
-      mockPrisma.conversationShareLink.findMany.mockResolvedValue([{
-        id: 'su3', linkId: 'lu3-fallback', identifier: null, name: null,
-        currentUses: 5, currentUniqueSessions: 4, maxUses: null,
-        createdAt: null, creator: null, conversation: null,
-      }]);
-
-      const res = await inject(app, { entityType: 'links', criterion: 'share_links_most_unique_sessions' });
-      expect(res.statusCode).toBe(200);
-      expect(JSON.parse(res.body).data.rankings[0].name).toBe('lu3-fallback');
     });
   });
 

@@ -103,6 +103,22 @@ export function isStickerAnimatedGif(data: Uint8Array): boolean {
   return false;
 }
 
+const VP8X = [0x56, 0x50, 0x38, 0x58] as const;
+const ANIMATION_FLAG = 0x02;
+
+/**
+ * Un WebP est animé si son en-tête étendu (`VP8X`) lève le drapeau
+ * d'animation — l'octet 20 du fichier, bit 1. Un WebP simple (`VP8 `/`VP8L`)
+ * n'a qu'une image.
+ */
+export function isStickerAnimatedWebp(data: Uint8Array): boolean {
+  if (stickerMimeFromSignature(data) !== 'image/webp' || !startsWith(data, VP8X, 12)) return false;
+  return ((data[20] ?? 0) & ANIMATION_FLAG) !== 0;
+}
+
+/** Les images qui BOUGENT — le genre « cinématique » d'un pack (#9141) se vérifie ici côté client, puis par le décodeur côté passerelle. */
+export const isStickerAnimated = (data: Uint8Array): boolean => isStickerAnimatedGif(data) || isStickerAnimatedWebp(data);
+
 /** Le format sous lequel un sticker est GARDÉ : le JPEG devient WebP, le reste ne change pas. */
 export function stickerStoredMime(source: StickerSourceMimeType): StickerMimeType {
   return source === 'image/jpeg' ? 'image/webp' : source;

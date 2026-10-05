@@ -9,8 +9,12 @@ import SwiftUI
 /// suite, identique au lancement système.
 enum InAppLinks {
     static func opensInApp(_ url: URL) -> Bool {
-        if case .external = DeepLinkParser.parse(url) { return false }
-        return true
+        switch DeepLinkParser.parse(url) {
+        // Une invitation touchée dans l'app l'est par un compte connecté : elle
+        // n'a rien à y ouvrir et part dans le navigateur, comme avant (#8075).
+        case .external, .referral: return false
+        default: return true
+        }
     }
 }
 

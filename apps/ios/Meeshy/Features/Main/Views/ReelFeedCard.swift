@@ -124,6 +124,7 @@ struct ReelFeedCard: View, Equatable {
             && lhs.displayShareCount == rhs.displayShareCount
             && lhs.post.commentCount == rhs.post.commentCount
             && lhs.post.content == rhs.post.content
+            && lhs.post.trackedLinkMap == rhs.post.trackedLinkMap
             && lhs.post.translatedContent == rhs.post.translatedContent
     }
 
@@ -173,8 +174,12 @@ struct ReelFeedCard: View, Equatable {
     private var displayAuthor: String { repostedReel?.author ?? post.author }
     private var displayAuthorColor: String { repostedReel?.authorColor ?? accentHex }
     private var displayAvatarURL: String? { repostedReel?.authorAvatarURL ?? post.authorAvatarURL }
+    /// Un réel publié sans texte montre la légende de sa scène (#9179), comme
+    /// le lecteur de réels — une seule règle, `ReelPublishedContent`.
     private var displayCaption: String {
-        post.content.isEmpty ? (repostedReel?.content ?? "") : post.displayContent
+        if post.content.isEmpty, let repostedReel { return repostedReel.content }
+        return ReelPublishedContent.content(type: .reel, text: post.displayContent,
+                                            captions: post.media.map(\.caption)) ?? ""
     }
 
     private var kind: ReelMediaKind {
@@ -201,8 +206,8 @@ struct ReelFeedCard: View, Equatable {
                 soundButtonOverlay
             }
             .frame(width: width, height: height)
-            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lgPlus, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: MeeshyRadius.lgPlus, style: .continuous))
             .onTapGesture { onTapMedia() }
         }
         .frame(height: reelCardHeight(mediaWidth: media?.width, mediaHeight: media?.height, cardWidth: cardWidthEstimate))
@@ -241,7 +246,7 @@ struct ReelFeedCard: View, Equatable {
                     .frame(width: width, height: height)
                     .clipped()
             } else {
-                Color(hex: accentHex).opacity(0.5)
+                Color(hex: accentHex).opacity(MeeshyOpacity.strong)
             }
         case .audio:
             // Un réel audio avec image de couverture montre sa couverture ; le
@@ -283,7 +288,7 @@ struct ReelFeedCard: View, Equatable {
                 .frame(width: width, height: height)
                 .clipped()
             } else {
-                Color(hex: accentHex).opacity(0.5)
+                Color(hex: accentHex).opacity(MeeshyOpacity.strong)
             }
         }
     }
@@ -306,16 +311,16 @@ struct ReelFeedCard: View, Equatable {
                     // mire cyan. Le schéma se pose sur le LIBELLÉ — posé sur le `Menu`, il
                     // habillerait aussi sa feuille.
                     Image(systemName: "ellipsis")
-                        .font(MeeshyFont.relative(15, weight: .bold))
+                        .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .bold))
                         .glassControlForeground()
-                        .padding(8)
+                        .padding(MeeshySpacing.sm)
                         .background(Circle().fill(.ultraThinMaterial))
-                        .overlay(Circle().stroke(Color.white.opacity(0.25), lineWidth: 1))
-                        .shadow(color: .black.opacity(0.25), radius: 3, y: 1)
+                        .overlay(Circle().stroke(Color.white.opacity(MeeshyOpacity.medium), lineWidth: 1))
+                        .shadow(color: .black.opacity(MeeshyOpacity.medium), radius: 3, y: 1)
                         .contentShape(Circle())
                         .mediaChromeTinted()
                 }
-                .padding(10)
+                .padding(MeeshySpacing.smPlus)
                 .accessibilityLabel(String(localized: "feed.post.more_options", defaultValue: "Plus d'options", bundle: .main))
                 .accessibilityHint(String(localized: "feed.post.more_options.hint", defaultValue: "Ouvre le menu des actions", bundle: .main))
             }
@@ -339,7 +344,7 @@ struct ReelFeedCard: View, Equatable {
                         ReelFeedSoundIntent.shared.toggleSound()
                         HapticFeedback.light()
                     }
-                    .padding(10)
+                    .padding(MeeshySpacing.smPlus)
                     Spacer()
                 }
                 Spacer()
@@ -350,13 +355,13 @@ struct ReelFeedCard: View, Equatable {
     // MARK: - Overlay bas (scrim + auteur + texte + boutons)
 
     private var bottomOverlay: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
             Spacer()
             if repostedReel != nil {
                 Label(String(localized: "feed.reel.republished.by", defaultValue: "Republié par \(post.author)", bundle: .main),
                       systemImage: "arrow.2.squarepath")
                     .font(.caption.weight(.semibold))
-                    .foregroundColor(.white.opacity(0.85))
+                    .foregroundColor(.white.opacity(MeeshyOpacity.intense))
                     .shadow(color: .black.opacity(0.4), radius: 2, y: 1)
             }
             authorRow
@@ -371,6 +376,7 @@ struct ReelFeedCard: View, Equatable {
                     hashtagColor: MeeshyColors.hashtagColor(isDark: true),
                     accentColor: .white,
                     usesRelativeFont: true,
+                    trackedLinks: post.trackedLinkMap,
                     validUsernames: post.validMentionUsernames
                 )
                     .tint(.white)
@@ -387,11 +393,11 @@ struct ReelFeedCard: View, Equatable {
             }
             actionsRow
         }
-        .padding(14)
+        .padding(MeeshySpacing.mdPlus)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             LinearGradient(
-                colors: [.clear, .black.opacity(0.55)],
+                colors: [.clear, .black.opacity(MeeshyOpacity.strong)],
                 startPoint: .top, endPoint: .bottom
             )
         )
@@ -408,7 +414,7 @@ struct ReelFeedCard: View, Equatable {
 
     private var authorRow: some View {
         Button { onTapAuthor(repostedReel?.authorId ?? post.authorId) } label: {
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 MeeshyAvatar(
                     name: displayAuthor,
                     context: .custom(34),
@@ -432,9 +438,9 @@ struct ReelFeedCard: View, Equatable {
     /// separated by middle dots: "@pseudo · 📊 1.2k · 👁 3.4k".
     @ViewBuilder
     private var authorMetaLine: some View {
-        HStack(spacing: 5) {
+        HStack(spacing: MeeshySpacing.xs) {
             if let u = displayUsername, !u.isEmpty {
-                Text("@\(u)").font(.caption).foregroundColor(.white.opacity(0.75))
+                Text("@\(u)").font(.caption).foregroundColor(.white.opacity(MeeshyOpacity.heavy))
             }
             if isAuthor {
                 if displayUsername?.isEmpty == false { metaDot }
@@ -448,7 +454,7 @@ struct ReelFeedCard: View, Equatable {
     }
 
     private var metaDot: some View {
-        MetaSeparator().font(.caption).foregroundColor(.white.opacity(0.55))
+        MetaSeparator().font(.caption).foregroundColor(.white.opacity(MeeshyOpacity.strong))
     }
 
     private func metricInline(icon: String, count: Int, a11yLabel: String) -> some View {
@@ -456,8 +462,8 @@ struct ReelFeedCard: View, Equatable {
             icon: icon,
             count: count,
             label: a11yLabel,
-            tint: .white.opacity(0.85),
-            iconFont: MeeshyFont.relative(10, weight: .semibold)
+            tint: .white.opacity(MeeshyOpacity.intense),
+            iconFont: MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold)
         )
     }
 
@@ -567,7 +573,7 @@ struct ReelFeedCard: View, Equatable {
         case .document: attachmentKind = .document
         case .image: attachmentKind = .image
         }
-        mediaSaveCoordinator.requestSave(MediaSaveRequest(
+        mediaSaveCoordinator.save(MediaSaveRequest(
             kind: attachmentKind,
             origin: .composed,
             remoteURLString: url,
@@ -605,7 +611,7 @@ struct ReelFeedCard: View, Equatable {
             onLike(post.id)
             HapticFeedback.light()
         } label: {
-            HStack(spacing: 5) {
+            HStack(spacing: MeeshySpacing.xs) {
                 actionGlyph(outline: "heart", filled: "heart.fill", tint: MeeshyColors.error, participated: isLiked)
                 if displayLikeCount > 0 {
                     Text("\(displayLikeCount)")
@@ -633,7 +639,7 @@ struct ReelFeedCard: View, Equatable {
             action()
             HapticFeedback.light()
         } label: {
-            HStack(spacing: 5) {
+            HStack(spacing: MeeshySpacing.xs) {
                 actionGlyph(outline: outline, filled: filled, tint: tint, participated: participated)
                 if count > 0 {
                     Text("\(count)").font(.footnote.weight(.medium))

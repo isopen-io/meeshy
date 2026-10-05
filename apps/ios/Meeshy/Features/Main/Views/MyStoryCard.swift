@@ -85,12 +85,12 @@ struct MyStoryCard: View {
             dateLabel
         }
         .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
+            RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous)
                 .fill(isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.04))
         )
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
+            RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous)
                 .strokeBorder(accentColor, lineWidth: 2.5)
                 .opacity(selectionIndicator == .selected ? 1 : 0)
         )
@@ -130,11 +130,11 @@ struct MyStoryCard: View {
             EmptyView()
         case .unselected:
             Circle()
-                .strokeBorder(Color.white, lineWidth: 2)
+                .strokeBorder(Color.white, lineWidth: MeeshyBorder.strong)
                 .background(Circle().fill(Color.black.opacity(0.25)))
                 .frame(width: 22, height: 22)
                 .shadow(color: .black.opacity(0.35), radius: 2)
-                .padding(6)
+                .padding(MeeshySpacing.xsPlus)
         case .selected:
             ZStack {
                 Circle().fill(accentColor)
@@ -144,7 +144,7 @@ struct MyStoryCard: View {
             }
             .frame(width: 22, height: 22)
             .shadow(color: .black.opacity(0.35), radius: 2)
-            .padding(6)
+            .padding(MeeshySpacing.xsPlus)
         }
     }
 
@@ -163,7 +163,7 @@ struct MyStoryCard: View {
             } label: {
                 StorySaveProgressRing(progress: progress, tint: accentColor, diameter: 32,
                                       isCancellable: model.saveIsCancellable)
-                    .padding(8)
+                    .padding(MeeshySpacing.sm)
                     .background(Circle().fill(Color.black.opacity(0.35)))
             }
             .buttonStyle(.plain)
@@ -226,10 +226,10 @@ struct MyStoryCard: View {
 
             if let title = model.title, !title.isEmpty {
                 Text(title)
-                    .font(MeeshyFont.relative(13, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                     .foregroundColor(.white)
                     .lineLimit(2)
-                    .padding(8)
+                    .padding(MeeshySpacing.sm)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
                     .shadow(color: .black.opacity(0.5), radius: 2)
             }
@@ -276,11 +276,11 @@ struct MyStoryCard: View {
 
     private var dateLabel: some View {
         Text(MyStoryCardPresentation.dateLabel(for: model.date, now: now, locale: locale))
-            .font(MeeshyFont.relative(11, weight: .medium))
+            .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
             .foregroundColor(.secondary)
             .lineLimit(1)
-            .padding(.horizontal, 8)
-            .padding(.bottom, 8)
+            .padding(.horizontal, MeeshySpacing.sm)
+            .padding(.bottom, MeeshySpacing.sm)
     }
 
     private var thumbnailAccessibilityLabel: String {

@@ -89,6 +89,24 @@ describe('le catalogue d’administration est chargé par CHAQUE route qui en a 
     expect(sansCatalogue.map((route) => `${route.clef} (${route.motif})`)).toEqual([]);
   });
 
+  /**
+   * **ET IL LE CHARGE DANS LA LANGUE DE L'ADMINISTRATION** (D-162). Un chargeur
+   * qui lirait `currentInterfaceLanguage()` chargerait — pour une interface
+   * allemande — un catalogue qu'`adminLanguageOf` remplace par l'anglais : il
+   * marcherait, par la défense en profondeur du chargeur, mais dirait le
+   * contraire de ce que l'écran lit (`currentAdminLanguage()`), et le jour où
+   * cette défense sauterait, l'écran planterait chez les seuls lecteurs de, it
+   * et ar. Lecture textuelle, pour la raison donnée plus haut.
+   */
+  test('chaque chargeur charge la langue d’ADMINISTRATION, jamais la langue d’interface brute', () => {
+    const corps = [...SOURCE.matchAll(/const\s+(\w+)\s*=\s*\(\)\s*=>\s*([\s\S]*?);\n/g)]
+      .filter(([, , body]) => body?.includes('loadAdminInterfaceCatalog') === true)
+      .map(([, nom, body]) => ({ nom: String(nom), body: String(body) }));
+
+    expect(corps.length).toBeGreaterThanOrEqual(4);
+    expect(corps.filter(({ body }) => !body.includes('loadAdminInterfaceCatalog(currentAdminLanguage())')).map(({ nom }) => nom)).toEqual([]);
+  });
+
   test('toute route d’administration déclarée dans ROUTES est vue par l’extraction', () => {
     // Sans ce témoin, une route écrite dans une forme que l'expression ne
     // reconnaît pas serait simplement ABSENTE du contrôle ci-dessus — gardée

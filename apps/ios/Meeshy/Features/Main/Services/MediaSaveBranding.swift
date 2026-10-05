@@ -112,7 +112,7 @@ struct MeeshyMediaSaveBranding: MediaSaveBranding {
 
     /// Pseudo gravé dans la marque. Injectable pour les tests ; en production
     /// c'est l'utilisateur connecté.
-    private let username: @Sendable () async -> String?
+    private let username: @Sendable @concurrent () async -> String?
 
     init(username: @escaping @Sendable () async -> String? = {
         await MainActor.run { AuthManager.shared.currentUser?.username }

@@ -95,7 +95,7 @@ struct AudioFullscreenWaveform: View {
                     : max(2, (geo.size.width - Self.spacing * CGFloat(barCount - 1)) / CGFloat(barCount))
 
                 RoundedRectangle(cornerRadius: 1.5)
-                    .fill(isPlayed ? accent : Color.white.opacity(0.15))
+                    .fill(isPlayed ? accent : Color.white.opacity(MeeshyOpacity.light))
                     .frame(width: computedWidth, height: barHeight)
                     .overlay(
                         needsScroll && i == playheadBarIndex

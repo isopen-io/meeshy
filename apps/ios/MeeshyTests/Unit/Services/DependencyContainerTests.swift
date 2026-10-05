@@ -1,5 +1,6 @@
 import XCTest
 import GRDB
+import MeeshySDK
 @testable import Meeshy
 
 @MainActor
@@ -117,7 +118,7 @@ final class DependencyContainerTests: XCTestCase {
         XCTAssertEqual(value, "ok")
 
         XCTAssertTrue(diagnostics.recoveryAttempted)
-        XCTAssertTrue(diagnostics.recoveredFromCorruption)
+        XCTAssertFalse(diagnostics.fellBackToSecondaryPath)
         XCTAssertFalse(diagnostics.fellBackToEphemeralStorage)
         XCTAssertNotNil(diagnostics.firstAttemptError)
         XCTAssertNotNil(diagnostics.quarantinedFilePath)
@@ -271,27 +272,20 @@ final class DependencyContainerTests: XCTestCase {
         XCTAssertTrue(diagnostics.fellBackToEphemeralStorage)
     }
 
-    // MARK: - databasePath (TestFlight crash 2026-06-12 — nil app-group container)
+    // MARK: - databaseDirectory (TestFlight crash 2026-06-12 — nil app-group container)
 
     /// Nominal path: the shared app-group container hosts `Database/`.
     @MainActor
-    func test_databasePath_withGroupContainer_usesSharedDatabaseDirectory() throws {
+    func test_databaseDirectory_withGroupContainer_usesSharedDatabaseDirectory() throws {
         let dir = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent("meeshy-tests-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: dir) }
 
-        let path = DependencyContainer.databasePath(groupContainer: dir)
+        let resolved = DependencyContainer.databaseDirectory(groupContainer: dir)
 
-        XCTAssertEqual(
-            path,
-            dir.appendingPathComponent("Database")
-                .appendingPathComponent("meeshy_messages.sqlite").path
-        )
+        XCTAssertEqual(resolved.path, dir.appendingPathComponent("Database").path)
         var isDir: ObjCBool = false
-        XCTAssertTrue(FileManager.default.fileExists(
-            atPath: dir.appendingPathComponent("Database").path,
-            isDirectory: &isDir
-        ))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: resolved.path, isDirectory: &isDir))
         XCTAssertTrue(isDir.boolValue)
     }
 
@@ -301,18 +295,12 @@ final class DependencyContainerTests: XCTestCase {
     /// must fall back to Application Support instead of trapping — a trap
     /// here is a launch crash-loop (TestFlight build 1125, 2026-06-12).
     @MainActor
-    func test_databasePath_withoutGroupContainer_fallsBackToApplicationSupport() {
-        let path = DependencyContainer.databasePath(groupContainer: nil)
+    func test_databaseDirectory_withoutGroupContainer_fallsBackToApplicationSupport() {
+        let resolved = DependencyContainer.databaseDirectory(groupContainer: nil)
 
         let appSupport = URL.applicationSupportDirectory
-        XCTAssertEqual(
-            path,
-            appSupport.appendingPathComponent("Database")
-                .appendingPathComponent("meeshy_messages.sqlite").path
-        )
-        XCTAssertTrue(FileManager.default.fileExists(
-            atPath: appSupport.appendingPathComponent("Database").path
-        ))
+        XCTAssertEqual(resolved.path, appSupport.appendingPathComponent("Database").path)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: resolved.path))
     }
 
     // MARK: - N1 — busy_timeout on the shared message store
@@ -378,28 +366,26 @@ final class DependencyContainerTests: XCTestCase {
     /// resolver must therefore pin `.completeUntilFirstUserAuthentication` on
     /// the Database directory AND on the sqlite file + WAL/SHM sidecars,
     /// mirroring `AppDatabase.resolveDatabaseURL`.
-    func test_databasePath_appliesCompleteUntilFirstUserAuthenticationProtection() throws {
+    func test_accountStore_appliesCompleteUntilFirstUserAuthenticationProtection() throws {
         let dir = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent("meeshy-tests-\(UUID().uuidString)")
         try FileManager.default.createDirectory(
             at: dir, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: dir) }
 
-        // Pre-create the database files as a previous app run would have,
-        // with no explicit protection class.
-        let dbDir = dir.appendingPathComponent("Database")
-        try FileManager.default.createDirectory(
-            at: dbDir, withIntermediateDirectories: true)
-        let sqlitePath = dbDir.appendingPathComponent("meeshy_messages.sqlite").path
-        for suffix in ["", "-wal", "-shm"] {
-            FileManager.default.createFile(atPath: sqlitePath + suffix, contents: Data())
-        }
-
-        let resolved = DependencyContainer.databasePath(groupContainer: dir)
-        XCTAssertEqual(resolved, sqlitePath)
+        // #8656 — une base PAR COMPTE : chacune reçoit la protection au moment
+        // où elle s'ouvre, la NSE devant pouvoir y écrire appareil verrouillé.
+        let dbDir = DependencyContainer.databaseDirectory(groupContainer: dir)
+        let key = try XCTUnwrap(MessageStoreAccountKey(userId: "alice", serverOrigin: "https://gate.meeshy.me"))
+        let session = MessageStoreSession.open(key: key, directory: dbDir)
+        try session.dbPool.write { db in try db.execute(sql: "CREATE TABLE IF NOT EXISTS t (id INTEGER)") }
+        DependencyContainer.applyMessageStoreFileProtection(directoryPath: dbDir.path, databasePath: session.path)
 
         var checkedPaths = [dbDir.path]
-        checkedPaths += ["", "-wal", "-shm"].map { sqlitePath + $0 }
+        checkedPaths += ["", "-wal", "-shm"]
+            .map { session.path + $0 }
+            .filter { FileManager.default.fileExists(atPath: $0) }
+        XCTAssertEqual(session.path, dbDir.appendingPathComponent(key.databaseFileName).path)
         for path in checkedPaths {
             let attributes = try FileManager.default.attributesOfItem(atPath: path)
             guard let protection = attributes[.protectionKey] as? FileProtectionType else {
@@ -494,5 +480,121 @@ extension DependencyContainerTests {
             between.contains("} catch"),
             "le do/catch de la purge messages doit se FERMER avant feed.clearAllForLogout() — les deux purges doivent être indépendantes"
         )
+    }
+    // MARK: - Relais temps réel → table canonique (#7960, #7969)
+
+    private func realtimeRecord(id: String, conversationId: String = "c-closed",
+                                storyReplyToId: String? = nil, replyToJson: Data? = nil) -> MessageRecord {
+        MessageRecord(
+            localId: id, serverId: id,
+            conversationId: conversationId, senderId: "participant-bob",
+            content: "le code est 4271", originalLanguage: "fr",
+            messageType: "text", messageSource: "user", contentType: "text",
+            state: .sent, retryCount: 0, lastError: nil,
+            isEncrypted: false, encryptionMode: nil, encryptedPayload: nil,
+            replyToId: nil, storyReplyToId: storyReplyToId,
+            forwardedFromId: nil, forwardedFromConversationId: nil,
+            replyToJson: replyToJson, forwardedFromJson: nil,
+            expiresAt: nil, effectFlags: 0,
+            maxViewOnceCount: nil, viewOnceCount: 0,
+            isEdited: false, editedAt: nil, deletedAt: nil,
+            pinnedAt: nil, pinnedBy: nil,
+            senderName: "Bob", senderUsername: "bob",
+            senderColor: nil, senderAvatarURL: nil,
+            deliveredCount: 0, readCount: 0,
+            deliveredToAllAt: nil, readByAllAt: nil,
+            createdAt: Date(timeIntervalSince1970: 1_000), sentAt: nil,
+            deliveredAt: nil, readAt: nil, updatedAt: Date(),
+            attachmentsJson: nil,
+            reactionsJson: nil,
+            reactionCount: 0, currentUserReactionsJson: nil,
+            mentionedUsersJson: nil,
+            cachedBubbleWidth: nil, cachedBubbleHeight: nil,
+            cachedLastLineWidth: nil, cachedLineCount: nil,
+            cachedTimestampInline: nil,
+            layoutVersion: 0, layoutMaxWidth: nil, changeVersion: 0
+        )
+    }
+
+    private func realtimeStore() throws -> (MessagePersistenceActor, DatabaseQueue) {
+        let queue = try DatabaseQueue()
+        try MessageDatabaseMigrations.runAll(on: queue)
+        return (MessagePersistenceActor(dbWriter: queue), queue)
+    }
+
+    /// #7960 — `message:expired` reçu conversation FERMÉE : le contenu échu
+    /// ne reste pas lisible hors ligne dans GRDB.
+    func test_persist_expired_emptiesTheMessageInTheCanonicalTable() async throws {
+        let (persistence, queue) = try realtimeStore()
+        try await persistence.insertOptimistic(realtimeRecord(id: "m-exp"))
+
+        await DependencyContainer.persist(.expired(messageId: "m-exp", expiredAt: Date()), into: persistence)
+
+        let row = try await queue.read { db in try MessageRecord.filter(Column("localId") == "m-exp").fetchOne(db) }
+        XCTAssertNil(row?.content)
+        XCTAssertNotNil(row?.deletedAt)
+    }
+
+    /// #8633 — la ligne d'arrivées complétée par le serveur (`isEdited: false`)
+    /// change de contenu sans se graver « modifiée ».
+    func test_persist_editedNotMarkingEdited_updatesContentWithoutTheFlag() async throws {
+        let (persistence, queue) = try realtimeStore()
+        try await persistence.insertOptimistic(realtimeRecord(id: "m-arrivals"))
+
+        await DependencyContainer.persist(
+            .edited(messageId: "m-arrivals", content: "Tom et Aïcha", editedAt: Date(), marksEdited: false),
+            into: persistence)
+
+        let row = try await queue.read { db in try MessageRecord.filter(Column("localId") == "m-arrivals").fetchOne(db) }
+        XCTAssertEqual(row?.content, "Tom et Aïcha")
+        XCTAssertEqual(row?.isEdited, false)
+    }
+
+    func test_persist_editedMarkingEdited_setsTheFlag() async throws {
+        let (persistence, queue) = try realtimeStore()
+        try await persistence.insertOptimistic(realtimeRecord(id: "m-edit"))
+
+        await DependencyContainer.persist(
+            .edited(messageId: "m-edit", content: "corrigé", editedAt: Date(), marksEdited: true),
+            into: persistence)
+
+        let row = try await queue.read { db in try MessageRecord.filter(Column("localId") == "m-edit").fetchOne(db) }
+        XCTAssertEqual(row?.content, "corrigé")
+        XCTAssertEqual(row?.isEdited, true)
+    }
+
+    /// #7969 — la story citée retirée : la citation gravée devient « Story
+    /// indisponible », conversation ouverte (le fil observe GRDB) ou fermée.
+    func test_persist_citedPostWithdrawn_rendersTheStoryCitationUnavailable() async throws {
+        let (persistence, queue) = try realtimeStore()
+        let quote = ReplyReference(messageId: "post-1", authorName: "", previewText: "Plage",
+                                   isStoryReply: true, storyThumbnailUrl: "https://cdn/t.jpg")
+        try await persistence.insertOptimistic(realtimeRecord(
+            id: "m-reply", storyReplyToId: "post-1", replyToJson: try JSONEncoder().encode(quote)))
+
+        await DependencyContainer.persist(
+            .citedPostWithdrawn(postId: "post-1", conversationId: "c-closed", deletedAt: Date()), into: persistence)
+
+        let blob = try await queue.read { db in
+            try MessageRecord.filter(Column("localId") == "m-reply").fetchOne(db)?.replyToJson
+        }
+        let sealed = try XCTUnwrap(blob.map { try JSONDecoder().decode(ReplyReference.self, from: $0) })
+        XCTAssertTrue(sealed.isUnavailableStory)
+    }
+
+    /// #9307 — un pair renommé : ses bulles, fil OUVERT (le fil observe GRDB)
+    /// comme fil fermé, servent le nouveau nom à la réouverture, sans réseau.
+    func test_persist_senderRepainted_renamesThePeerBubblesInTheCanonicalTable() async throws {
+        let (persistence, queue) = try realtimeStore()
+        try await persistence.insertOptimistic(realtimeRecord(id: "m-bob"))
+        let json = #"{"userId":"participant-bob","changes":{"displayName":"Bobby","firstName":null,"lastName":null,"username":"bobby","avatar":"https://cdn/new.png"}}"#
+        let event = try JSONDecoder().decode(UserUpdatedEvent.self, from: Data(json.utf8))
+
+        await DependencyContainer.persist(.senderRepainted(event), into: persistence)
+
+        let row = try await queue.read { db in try MessageRecord.filter(Column("localId") == "m-bob").fetchOne(db) }
+        XCTAssertEqual(row?.senderName, "Bobby")
+        XCTAssertEqual(row?.senderUsername, "bobby")
+        XCTAssertEqual(row?.senderAvatarURL, "https://cdn/new.png")
     }
 }

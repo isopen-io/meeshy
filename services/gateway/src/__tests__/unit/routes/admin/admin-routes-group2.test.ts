@@ -705,7 +705,7 @@ describe('Admin report routes', () => {
       await app.ready();
 
       const updatedReport = { id: '507f1f77bcf86cd799439020', moderatorId: '507f1f77bcf86cd799439011' };
-      mockReportService.assignModerator.mockResolvedValueOnce(updatedReport);
+      mockReportService.getReportById.mockResolvedValueOnce({ id: '507f1f77bcf86cd799439020' }); mockReportService.assignModerator.mockResolvedValueOnce(updatedReport); // #8876 : l'affectation lit l'état d'avant
 
       const res = await app.inject({ method: 'POST', url: '/507f1f77bcf86cd799439020/assign' });
       expect(res.statusCode).toBe(200);
@@ -719,7 +719,7 @@ describe('Admin report routes', () => {
       app = buildReportApp();
       await app.ready();
 
-      mockReportService.assignModerator.mockRejectedValueOnce(new Error('DB error'));
+      mockReportService.getReportById.mockResolvedValueOnce({ id: '507f1f77bcf86cd799439020' }); mockReportService.assignModerator.mockRejectedValueOnce(new Error('DB error'));
 
       const res = await app.inject({ method: 'POST', url: '/507f1f77bcf86cd799439020/assign' });
       expect(res.statusCode).toBe(500);

@@ -16,6 +16,8 @@ import {
 import {
   errorResponseSchema,
   validationErrorResponseSchema,
+  usernameMaxLength,
+  usernameMinLength,
   usernamePatternSource
 } from '@meeshy/shared/types/api-schemas';
 import type { AuthenticatedRequest } from './types';
@@ -26,6 +28,7 @@ import { disconnectSession } from '../../socketio/disconnectSession';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { sendSuccess, sendError, sendInternalError, sendNotFound, sendUnauthorized, sendBadRequest } from '../../utils/response';
 import { searchTokensFor } from '../../utils/search-tokens';
+import { refreshParticipantNameSnapshots } from '../../services/participantNameSnapshots';
 
 const logger = enhancedLogger.child({ module: 'UserProfileRoutes' });
 
@@ -199,8 +202,8 @@ export const updateUsernameBodySchema = {
   properties: {
     newUsername: {
       type: 'string',
-      minLength: 2,
-      maxLength: 16,
+      minLength: usernameMinLength,
+      maxLength: usernameMaxLength,
       pattern: usernamePatternSource,
       description: 'New username (2-16 chars: letters, digits, - and _ only — no spaces)'
     },
@@ -369,6 +372,9 @@ export async function updateUsername(fastify: FastifyInstance) {
       });
 
       try { await getCacheStore().del(authUserCacheKey(userId!)); } catch { /* best-effort */ }
+
+      await refreshParticipantNameSnapshots(fastify.prisma, userId!, updatedUser)
+        .catch((err: unknown) => logError(fastify.log, '[USERNAME_CHANGE] participant name refresh failed', err));
 
       fastify.notificationService?.emitUserUpdated({
         userId: userId!,

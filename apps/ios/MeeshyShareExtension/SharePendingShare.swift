@@ -155,18 +155,4 @@ nonisolated struct SharePendingShare: Codable, Equatable, Sendable {
         try Self.encoder().encode(self).write(to: file, options: .atomic)
     }
 
-    @discardableResult
-    func commitLive() -> Bool {
-        guard let directory = Self.directoryURL() else {
-            ShareLog.logger.error("Conteneur App Group indisponible — fiche de reprise impossible")
-            return false
-        }
-        do {
-            try commit(in: directory)
-            return true
-        } catch {
-            ShareLog.logger.error("Écriture de la fiche échouée : \(error.localizedDescription, privacy: .public)")
-            return false
-        }
-    }
 }

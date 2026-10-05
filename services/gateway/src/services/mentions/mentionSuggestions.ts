@@ -19,6 +19,7 @@ import { enhancedLogger } from '../../utils/logger-enhanced';
 import { unsetOrNull } from '../../utils/prisma-unset';
 import { jetonRecherche } from '../../utils/search-tokens';
 import { mentionableScope, scopeRequiresMembership, type MentionableScope } from './mentionableScope';
+import { keepDiscoverable } from '../profile-discoverability';
 
 const logger = enhancedLogger.child({ module: 'MentionSuggestions' });
 
@@ -265,10 +266,12 @@ export class MentionSuggestionFinder {
     query: string,
     currentUserId: string
   ): Promise<MentionSuggestion[]> {
-    const others = await this.searchDirectory(
-      query,
-      [...current.map(s => s.id), currentUserId],
-      MAX_SUGGESTIONS - current.length
+    // L'annuaire est une RECHERCHE : un compte caché (#8104) n'y est pas
+    // proposé. Membres et amis, listés plus haut, ne passent pas par ici.
+    const others = await keepDiscoverable(
+      this.prisma,
+      currentUserId,
+      await this.searchDirectory(query, [...current.map(s => s.id), currentUserId], MAX_SUGGESTIONS - current.length)
     );
     return appendUnique(
       current,

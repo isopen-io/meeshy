@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 import MeeshySDK
 
 /// ViewModel du sélecteur de transfert (`ForwardPickerSheet`) : pagination
@@ -47,13 +48,13 @@ final class ForwardPickerViewModel: ObservableObject {
     /// web (`use-friend-requests-v2.ts`).
     private static let friendsFetchCap = 500
     private static let searchMinimumLength = 2
-    private static let searchDebounceNanoseconds: UInt64 = 300_000_000
 
     /// Conversations paginées, EN MÉMOIRE UNIQUEMENT — source de `targets`
     /// hors recherche. Dédupliquée par id à chaque page, comme
     /// `ConversationListViewModel.appendConversations`.
     private var conversationTargets: [ForwardTarget] = []
     private var nextCursor: String?
+    private var profileRepaintSubscription: AnyCancellable?
 
     /// Jeton monotone de recherche — jumeau de `searchTokenRef` côté web
     /// (`apps/web/components/conversations/forward-message-modal.tsx`).
@@ -80,7 +81,7 @@ final class ForwardPickerViewModel: ObservableObject {
     /// Le défaut porte la discrimination `CacheResult` là où elle se lit : une
     /// page `.expired` ou `.empty` ne rend RIEN, elle ne rend pas « du vide
     /// frais ».
-    private let cachedConversations: @Sendable () async -> [Conversation]
+    private let cachedConversations: @Sendable @concurrent () async -> [Conversation]
 
     init(
         conversationService: ConversationServiceProviding = ConversationService.shared,
@@ -92,13 +93,25 @@ final class ForwardPickerViewModel: ObservableObject {
             case .fresh(let data, _), .stale(let data, _): return data
             case .expired, .empty: return []
             }
-        }
+        },
+        profileUpdates: AnyPublisher<UserUpdatedEvent, Never> = MessageSocketManager.shared.userUpdated.eraseToAnyPublisher()
     ) {
         self.conversationService = conversationService
         self.friendService = friendService
         self.contactDirectoryService = contactDirectoryService
         self.authManager = authManager
         self.cachedConversations = cachedConversations
+        profileRepaintSubscription = profileUpdates
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in self?.repaint(with: event) }
+    }
+
+    /// #9307 — un pair renommé ou repeint l'est dans la feuille ouverte, sans
+    /// relecture ; une liste intacte n'est pas republiée.
+    private func repaint(with event: UserUpdatedEvent) {
+        let rule: (ForwardTarget) -> ForwardTarget? = { $0.repainted(by: event) }
+        if let browsing = conversationTargets.repaintedElements(by: rule) { conversationTargets = browsing }
+        if let shown = targets.repaintedElements(by: rule) { targets = shown }
     }
 
     // MARK: - Pagination
@@ -357,7 +370,8 @@ final class ForwardPickerViewModel: ObservableObject {
             userId: user.id,
             title: contact.resolvedName,
             subtitle: contact.subtitle,
-            avatarURL: user.avatar
+            avatarURL: user.avatar,
+            followsProfileName: false
         )
     }
 }

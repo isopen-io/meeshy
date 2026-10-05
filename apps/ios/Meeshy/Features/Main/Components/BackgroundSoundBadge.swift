@@ -69,13 +69,13 @@ struct BackgroundSoundBadge: View, Equatable {
         case .none:
             EmptyView()
         case .original:
-            HStack(spacing: 4) {
+            HStack(spacing: MeeshySpacing.xs) {
                 Image(systemName: "music.note")
-                    .font(MeeshyFont.relative(10, weight: .semibold))
-                    .foregroundColor(Color(hex: accentHex).opacity(0.85))
+                    .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .semibold))
+                    .foregroundColor(Color(hex: accentHex).opacity(MeeshyOpacity.intense))
                     .accessibilityLabel(String(localized: "story.viewer.a11y.backgroundAudio", defaultValue: "Audio de fond", bundle: .main))
                 StoryHeaderAudioWaveform()
-                    .opacity(0.85)
+                    .opacity(MeeshyOpacity.intense)
             }
         case .credit(let title, let username, let duration):
             AudioChipMarquee(
@@ -85,7 +85,7 @@ struct BackgroundSoundBadge: View, Equatable {
                 tint: Color(hex: Self.servedTintHex(for: announcement, accentHex: accentHex) ?? accentHex)
             )
             .frame(width: 124)
-            .opacity(0.85)
+            .opacity(MeeshyOpacity.intense)
         }
     }
 

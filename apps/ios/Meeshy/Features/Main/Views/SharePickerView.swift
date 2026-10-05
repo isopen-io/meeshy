@@ -62,21 +62,22 @@ struct SharePickerView: View {
     // MARK: - Body
 
     var body: some View {
+        let visible = filteredConversations   // filtre actif + recherche, UNE fois par rendu
         NavigationStack {
             VStack(spacing: 0) {
                 contentPreviewBanner
 
                 Divider()
-                    .overlay(theme.textMuted.opacity(0.2))
+                    .overlay(theme.textMuted.opacity(MeeshyOpacity.light))
 
                 searchField
 
                 if isLoading {
                     loadingState
-                } else if filteredConversations.isEmpty {
+                } else if visible.isEmpty {
                     emptyState
                 } else {
-                    conversationList
+                    conversationList(visible)
                 }
             }
             .background(theme.backgroundPrimary)
@@ -106,7 +107,7 @@ struct SharePickerView: View {
     // MARK: - Content Preview Banner
 
     private var contentPreviewBanner: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: MeeshySpacing.smPlus) {
             RoundedRectangle(cornerRadius: 1.5)
                 .fill(MeeshyColors.indigo400)
                 .frame(width: 3, height: 32)
@@ -114,23 +115,23 @@ struct SharePickerView: View {
             contentIcon
                 .accessibilityHidden(true)
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(contentLabel)
-                    .font(MeeshyFont.relative(11, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
                     .foregroundColor(MeeshyColors.indigo400)
                     .lineLimit(1)
 
                 Text(contentPreview)
-                    .font(MeeshyFont.relative(12))
+                    .font(MeeshyFont.relative(MeeshyFont.smallSize))
                     .foregroundColor(theme.textMuted)
                     .lineLimit(2)
             }
 
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background(isDark ? Color.white.opacity(0.03) : Color.black.opacity(0.02))
+        .padding(.horizontal, MeeshySpacing.mdPlus)
+        .padding(.vertical, MeeshySpacing.smPlus)
+        .background(isDark ? Color.white.opacity(MeeshyOpacity.faint) : Color.black.opacity(0.02))
         .accessibilityElement(children: .combine)
     }
 
@@ -139,25 +140,25 @@ struct SharePickerView: View {
         switch sharedContent {
         case .text:
             Image(systemName: "text.bubble.fill")
-                .font(MeeshyFont.relative(16))
+                .font(MeeshyFont.relative(MeeshyIconSize.md))
                 .foregroundColor(MeeshyColors.indigo400)
         case .url:
             Image(systemName: "link.circle.fill")
-                .font(MeeshyFont.relative(16))
+                .font(MeeshyFont.relative(MeeshyIconSize.md))
                 .foregroundColor(MeeshyColors.indigo600)
         case .image(let image):
             Image(uiImage: image)
                 .resizable()
                 .scaledToFill()
-                .frame(width: 32, height: 32)
-                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .frame(width: MeeshyControlSize.compact, height: MeeshyControlSize.compact)
+                .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.xxs))
         case .message:
             Image(systemName: "arrowshape.turn.up.forward.fill")
-                .font(MeeshyFont.relative(16))
+                .font(MeeshyFont.relative(MeeshyIconSize.md))
                 .foregroundColor(MeeshyColors.warning)
         case .story:
             Image(systemName: "play.rectangle.fill")
-                .font(MeeshyFont.relative(16))
+                .font(MeeshyFont.relative(MeeshyIconSize.md))
                 .foregroundColor(MeeshyColors.indigo500)
         }
     }
@@ -193,14 +194,14 @@ struct SharePickerView: View {
     // MARK: - Search Field
 
     private var searchField: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: MeeshySpacing.sm) {
             Image(systemName: "magnifyingglass")
-                .font(MeeshyFont.relative(14, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .medium))
                 .foregroundColor(theme.textMuted)
                 .accessibilityHidden(true)
 
             TextField(String(localized: "share.search.placeholder", defaultValue: "Rechercher une conversation...", bundle: .main), text: $searchText)
-                .font(MeeshyFont.relative(15))
+                .font(MeeshyFont.relative(MeeshyFont.bodySize))
                 .foregroundColor(theme.textPrimary)
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
@@ -211,20 +212,20 @@ struct SharePickerView: View {
                     searchText = ""
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(MeeshyFont.relative(16))
+                        .font(MeeshyFont.relative(MeeshyIconSize.md))
                         .foregroundColor(theme.textMuted)
                 }
                 .accessibilityLabel(String(localized: "common.clearSearch", defaultValue: "Effacer la recherche", bundle: .main))
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
+        .padding(.horizontal, MeeshySpacing.md)
+        .padding(.vertical, MeeshySpacing.smPlus)
         .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.04))
+            RoundedRectangle(cornerRadius: MeeshyRadius.sm)
+                .fill(isDark ? Color.white.opacity(MeeshyOpacity.subtle) : Color.black.opacity(MeeshyOpacity.faint))
         )
-        .padding(.horizontal, 14)
-        .padding(.vertical, 8)
+        .padding(.horizontal, MeeshySpacing.mdPlus)
+        .padding(.vertical, MeeshySpacing.sm)
     }
 
     // MARK: - States
@@ -249,10 +250,10 @@ struct SharePickerView: View {
 
     // MARK: - Conversation List
 
-    private var conversationList: some View {
+    private func conversationList(_ visible: [Conversation]) -> some View {
         ScrollView(showsIndicators: false) {
             LazyVStack(spacing: 0) {
-                ForEach(filteredConversations) { conv in
+                ForEach(visible) { conv in
                     shareRow(for: conv)
                 }
             }
@@ -260,7 +261,7 @@ struct SharePickerView: View {
     }
 
     private func shareRow(for conv: Conversation) -> some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             MeeshyAvatar(
                 name: conv.displayName,
                 context: .conversationList,
@@ -270,17 +271,17 @@ struct SharePickerView: View {
                 onMoodTap: conv.participantUserId.flatMap { statusViewModel.moodTapHandler(for: $0) }
             )
 
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 ConversationTitleLabel(
                     name: conv.displayName,
                     favoriteEmoji: conv.userState.reaction,
-                    font: MeeshyFont.relative(15, weight: .medium),
+                    font: MeeshyFont.relative(MeeshyFont.bodySize, weight: .medium),
                     color: theme.textPrimary
                 )
 
-                HStack(spacing: 4) {
-                    Text(conversationTypeLabel(conv.type))
-                        .font(MeeshyFont.relative(12))
+                HStack(spacing: MeeshySpacing.xs) {
+                    Text(conv.type.displayName)
+                        .font(MeeshyFont.relative(MeeshyFont.smallSize))
                         .foregroundColor(theme.textMuted)
 
                     // B1 (Prisme Linguistique) — même résolution que la ligne
@@ -291,11 +292,11 @@ struct SharePickerView: View {
                         preferredLanguages: preferredContentLanguages
                     ), !preview.isEmpty {
                         Text("\u{2022}")
-                            .font(MeeshyFont.relative(10))
+                            .font(MeeshyFont.relative(MeeshyFont.captionSize))
                             .foregroundColor(theme.textMuted)
                             .accessibilityHidden(true)
                         Text(preview)
-                            .font(MeeshyFont.relative(12))
+                            .font(MeeshyFont.relative(MeeshyFont.smallSize))
                             .foregroundColor(theme.textMuted)
                             .lineLimit(1)
                     }
@@ -307,8 +308,8 @@ struct SharePickerView: View {
 
             shareButton(for: conv)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.vertical, MeeshySpacing.smPlus)
         .contentShape(Rectangle())
     }
 
@@ -323,7 +324,7 @@ struct SharePickerView: View {
             // Fixed control-sized status glyph (26pt): fills the row's trailing action
             // slot at a deliberate control size, not reading text (74i/86i doctrine).
             Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 26))
+                .font(.system(size: MeeshyIconSize.xxxl))
                 .foregroundColor(MeeshyColors.success)
                 .transition(.scale.combined(with: .opacity))
                 .accessibilityLabel(String(localized: "share.sent", defaultValue: "Envoyé", bundle: .main))
@@ -338,26 +339,11 @@ struct SharePickerView: View {
             } label: {
                 // Fixed control-sized action glyph (26pt): control size, not reading text.
                 Image(systemName: "paperplane.circle.fill")
-                    .font(.system(size: 26))
+                    .font(.system(size: MeeshyIconSize.xxxl))
                     .foregroundColor(MeeshyColors.indigo400)
             }
             .disabled(sendingToId != nil)
             .accessibilityLabel("\(String(localized: "share.sendTo", defaultValue: "Envoyer à", bundle: .main)) \(conv.displayName)")
-        }
-    }
-
-    // MARK: - Helpers
-
-    private func conversationTypeLabel(_ type: MeeshyConversation.ConversationType) -> String {
-        switch type {
-        case .direct: return String(localized: "conversation.type.direct", defaultValue: "Direct", bundle: .main)
-        case .group: return String(localized: "conversation.type.group", defaultValue: "Groupe", bundle: .main)
-        case .public: return String(localized: "conversation.type.public", defaultValue: "Public", bundle: .main)
-        case .global: return String(localized: "conversation.type.global", defaultValue: "Global", bundle: .main)
-        case .community: return String(localized: "conversation.type.community", defaultValue: "Communaute", bundle: .main)
-        case .channel: return String(localized: "conversation.type.channel", defaultValue: "Channel", bundle: .main)
-        case .bot: return String(localized: "conversation.type.bot", defaultValue: "Bot", bundle: .main)
-        case .broadcast: return String(localized: "conversation.type.broadcast", defaultValue: "Communication", bundle: .main)
         }
     }
 
@@ -373,6 +359,7 @@ struct SharePickerView: View {
         if let handler = onShareToConversation {
             handler(conv, sharedContent)
             viewModel.markSent(conv.id)
+            noteSharedStory()
             HapticFeedback.success()
             return
         }
@@ -389,6 +376,7 @@ struct SharePickerView: View {
                 forwardedMessageId: forwardedMessageId
             )
             if success {
+                noteSharedStory()
                 HapticFeedback.success()
             } else {
                 HapticFeedback.error()
@@ -409,6 +397,13 @@ struct SharePickerView: View {
             let link = resolvedStoryLink ?? "https://meeshy.me/story/\(item.id)"
             return String(format: String(localized: "share.story.shareText", defaultValue: "🔗 Story de %1$@ : %2$@", bundle: .main), authorName, link)
         }
+    }
+
+    /// Une story ENVOYÉE allume l'anneau du cœur sur « Envoyer » dans son lecteur
+    /// (directive porteur 2026-10-01) — la passerelle ne sert pas ce geste.
+    private func noteSharedStory() {
+        guard case .story(let item, _) = sharedContent else { return }
+        StoryViewerParticipationStore.shared.note(.sent, storyId: item.id)
     }
 
     private var forwardedMessageId: String? {

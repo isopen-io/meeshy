@@ -64,6 +64,18 @@ public struct ReplyReference: Codable, Equatable, Sendable {
     /// rendu.
     public let attachmentId: String?
     public let attachmentThumbnailUrl: String?
+    /// L'adresse du FICHIER cité (#8230) — ce qui donne un poster à une vidéo
+    /// dont la vignette serveur a raté (extraction de la première frame) et
+    /// ce qui ouvre en plein écran une pièce absente de la fenêtre chargée.
+    ///
+    /// JAMAIS posée pour un média protégé : chaque constructeur la retient dès
+    /// que `attachmentIsProtected` vaudrait vrai. Une vignette retenue ne
+    /// suffirait pas — le fichier EST le secret.
+    ///
+    /// **Optionnel, et il doit le rester** : un blob `replyToJson` gravé avant
+    /// ce champ doit se relire sans emporter le message entier. Même
+    /// discipline que `authorAvatarUrl`.
+    public let attachmentFileUrl: String?
     /// La piece jointe citee est PROTEGEE — vue unique ou floutee — donc son
     /// contenu ne doit ni s'afficher ni s'annoncer dans la citation.
     ///
@@ -134,6 +146,16 @@ public struct ReplyReference: Codable, Equatable, Sendable {
     /// Optionnel pour la même raison que `authorAvatarUrl` : un blob gravé
     /// avant lui doit se relire.
     public var quotedMessageDeletedAt: Date?
+    /// #8320 — l'échéance du message cité ÉPHÉMÈRE : passée, la zone lecture
+    /// d'un audio cité se ferme (`offersQuotedAudioPlayback(now:)`). Posée
+    /// après l'init, comme `quotedMessageDeletedAt` : optionnelle, un blob
+    /// gravé avant elle se relit sans emporter le message.
+    public var quotedExpiresAt: Date?
+    /// #8320 — les pistes TRADUITES d'un audio cité et la langue d'origine
+    /// qui les départage, pour que la citation joue, hors de la fenêtre
+    /// chargée, la MÊME piste que le vocal d'origine (Prisme audio). Jamais
+    /// posée pour un média protégé : le fichier EST le secret.
+    public var quotedAudioTracks: QuotedAudioTracks?
 
     /// Le PREDICAT unique des deux peaux (`BubbleQuotedReply`,
     /// `FocalQuotedReplyView`) : un media cite protege ne montre ni vignette ni
@@ -201,7 +223,7 @@ public struct ReplyReference: Codable, Equatable, Sendable {
             && (attachmentType != nil || attachmentThumbnailUrl?.isEmpty == false)
     }
 
-    public init(messageId: String = "", authorName: String, previewText: String, isMe: Bool = false, authorColor: String? = nil, authorAvatarUrl: String? = nil, attachmentType: String? = nil, attachmentId: String? = nil, attachmentThumbnailUrl: String? = nil, attachmentIsProtected: Bool? = nil, isStoryReply: Bool = false,
+    public init(messageId: String = "", authorName: String, previewText: String, isMe: Bool = false, authorColor: String? = nil, authorAvatarUrl: String? = nil, attachmentType: String? = nil, attachmentId: String? = nil, attachmentThumbnailUrl: String? = nil, attachmentFileUrl: String? = nil, attachmentIsProtected: Bool? = nil, isStoryReply: Bool = false,
                 storyPublishedAt: Date? = nil, storyReactionCount: Int? = nil, storyCommentCount: Int? = nil, storyShareCount: Int? = nil, storyThumbnailUrl: String? = nil, moodEmoji: String? = nil, storyAuthorId: String? = nil,
                 attachmentFacts: QuotedAttachmentFacts? = nil, storyUnavailable: Bool? = nil) {
         self.messageId = messageId
@@ -213,6 +235,7 @@ public struct ReplyReference: Codable, Equatable, Sendable {
         self.attachmentType = attachmentType
         self.attachmentId = attachmentId
         self.attachmentThumbnailUrl = attachmentThumbnailUrl
+        self.attachmentFileUrl = attachmentIsProtected == true ? nil : attachmentFileUrl
         self.attachmentIsProtected = attachmentIsProtected
         self.attachmentThumbHash = attachmentFacts?.thumbHash
         self.attachmentWidth = attachmentFacts?.width

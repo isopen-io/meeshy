@@ -14,6 +14,8 @@
  */
 import type { CSSProperties } from 'react';
 
+import { FOCAL_METRICS } from '@meeshy/shared/utils/focal-metrics';
+
 /** `FocalMetrics.Row.paddingVertical` / `.paddingHorizontal` — `3/16`. */
 export const ROW_PADDING_VERTICAL = 3;
 export const ROW_PADDING_HORIZONTAL = 16;
@@ -35,25 +37,21 @@ export const AVATAR_FRAME = 34;
 export const TEXT_INDENT = 41;
 
 /**
- * LE CONTENU SOUS L'AVATAR (#7929, règle porteur du 2026-09-25, jumelle iOS
- * #7928) — en Script et en Focal, le contenu PROPRE d'un message (texte,
- * drapeaux, médias, lieu, sticker, tuile protégée, réactions, heure, marques)
- * part du bord GAUCHE de la pastille, pas de la colonne du nom. La pastille
- * est centrée dans sa colonne de `TEXT_INDENT` : son bord gauche y est à
- * `(TEXT_INDENT − AVATAR_SIZE) / 2`, et le contenu remonte de la colonne du
- * nom jusque-là. DÉRIVÉES, jamais saisies : elles suivent les deux cotes que
+ * LE BORD GAUCHE DE LA PASTILLE dans sa colonne de `TEXT_INDENT` (elle y est
+ * centrée) : c'est là que part la bande de tête (épinglé, transféré, chrome de
+ * protection), au-dessus de l'avatar. DÉRIVÉE des deux cotes que
  * `check-curve.mjs` garde.
+ *
+ * L'ORIGINE DU CONTENU (#7995, directive porteur du 2026-09-26) — en Script et
+ * en Focal, l'avatar occupe SEUL sa marge gauche ; « auteur · heure », le
+ * contenu propre (texte, médias, réactions, méta, pastilles) ET toutes les
+ * citations partent de la MÊME origine : la colonne du nom (`TEXT_INDENT`).
+ * Aucune cote ne les en déplace : une citation se distingue par sa barre et
+ * son fond teinté, jamais par un retrait. Cette règle supplante celle du
+ * 2026-09-25 (#7929 : « contenu sous l'avatar, seules les citations
+ * décalées »), dont `CONTENT_PULL` et `QUOTE_INDENT` ont quitté ce fichier.
  */
 export const AVATAR_INSET = (TEXT_INDENT - AVATAR_SIZE) / 2;
-export const CONTENT_PULL = TEXT_INDENT - AVATAR_INSET;
-
-/**
- * LE RETRAIT DE CITATION (#7929) — SEULES les citations (message, pièce,
- * humeur, story) sont décalées, toutes du MÊME retrait, compté depuis
- * l'origine du contenu : elles retrouvent la colonne du nom, avec le filet de
- * la citation texte pour tous les types.
- */
-export const QUOTE_INDENT = CONTENT_PULL;
 
 /**
  * LA LARGEUR D'UNE CITATION VISUELLE (#7929, complément porteur du
@@ -126,20 +124,49 @@ export const FOCUS_CARD_HORIZONTAL_INSET = 6;
 /**
  * `FocalMetrics.FocusCard.marginVertical` / `Focus.loupeGain` (#6586/#6588) —
  * la LOUPE du message élu : lui seul grandit de ce gain, ses voisins restent
- * à plat (directive 2026-08-24). `marginVertical` borne l'écrêtage vertical
- * (`reading-mode/election.ts::focalLoupeScale`) ; `ROW_PADDING_HORIZONTAL`
- * ci-dessus borne déjà l'horizontal — même cote que `Row.paddingHorizontal`,
- * pas de constante séparée.
+ * à plat (directive 2026-08-24). Littéraux gardés par `check-curve.mjs`
+ * contre `FocalMetrics.swift`, et égaux à la loi partagée
+ * (`FOCAL_METRICS.loupeGain`, `metrics.test.ts`).
+ *
+ * #8506 (directive porteur 2026-09-28, « agrandis tout le contenu intérieur
+ * par ×1,2 encore ») : 0,05 → 0,26 (1,05 × 1,2 ≈ 1,26). La marge verticale
+ * n'écrête plus que le message DÉPLIÉ (`unfold-stage.tsx`, verre fixe) : le
+ * cadre de l'élu grandit avec son contenu (`focus-frame.ts`).
  */
 export const FOCUS_CARD_MARGIN_VERTICAL = 8;
-export const FOCUS_LOUPE_GAIN = 0.05;
+export const FOCUS_LOUPE_GAIN = 0.26;
 
 /**
- * `FocalScrollPerspective.focusCardFillOpacityDark` / `.Light` — la teinte de
- * la carte (accent de la conversation mélangé à cette opacité).
+ * LE CADRE DE L'ÉLU (#8506) — « place les contrôleurs et détails à
+ * l'intérieur du cadre, en laissant de l'espace sur les bords ». Identité,
+ * bande basse et tampon vivent DANS le verre, à `FOCUS_CARD_INNER_MARGIN` de
+ * ses quatre bords — une marge NON grossie depuis #8536 : seul le contenu
+ * grandit, le cadre et ce qu'il porte gardent leurs cotes.
+ * `FOCUS_IDENTITY_GAP` sépare la pastille d'identité d'une SUITE de groupe
+ * (qui n'a pas de ligne d'identité réservée) de sa première ligne ;
+ * `FOCUS_NEIGHBOUR_CLEARANCE` est l'air laissé entre le cadre grossi et les
+ * voisines qui s'écartent. Cotes du web : iOS pose les siennes dans le même
+ * lot (#8506), aucune garde ne les compare encore.
  */
-export const FOCUS_CARD_FILL_DARK = 0.16;
-export const FOCUS_CARD_FILL_LIGHT = 0.10;
+export const FOCUS_CARD_INNER_MARGIN = 10;
+export const FOCUS_IDENTITY_GAP = 4;
+export const FOCUS_NEIGHBOUR_CLEARANCE = 4;
+
+/**
+ * L'AIR DU CONTENU GROSSI (#8536, directive porteur 2026-09-28 : « le bloc
+ * de verre doit avoir de la marge haut et bas pour que le contenu soit
+ * aéré ! ») — posé AU-DESSUS et AU-DESSOUS du seul contenu que la loupe
+ * grossit : il le décolle de l'identité et de la bande basse, qui restent à
+ * l'échelle 1. Cote du web ; la jumelle iOS suit dans son propre lot.
+ */
+export const FOCUS_CONTENT_AIR = 8;
+
+/*
+ * `FOCUS_CARD_FILL_DARK` / `_LIGHT` (la teinte d'accent de la carte) ont
+ * quitté ce fichier avec #8147 : la carte de l'élue est désormais un BLOC DE
+ * VERRE (`glass glass-card`, `thread-scene.css`), qui ne lit plus aucune
+ * opacité de teinte.
+ */
 
 /**
  * `FocalScrollPerspective.focusChipFillOpacity(isDark:isActive:)` — les
@@ -178,15 +205,11 @@ export const IDENTITY_NAME_SIZE = 13.5;
 export const FLAG_LIMIT_PLAIN = 3;
 export const FLAG_LIMIT_MAGNIFIED = 5;
 
-/**
- * `FocalMetrics.FocusStrip.overhang` / `.identityOverhang` — FORMULES, pas
- * des littéraux Swift (`chipHeight / 2 + focusCardInnerMargin`,
- * `identityChipHeight / 2 + focusCardInnerMargin`) : reprises ici comme
- * calcul plutôt que recopiées en dur, pour que `check-curve.mjs` puisse
- * revérifier la formule (comme il le fait déjà pour `TEXT_INDENT`).
+/*
+ * `FocalMetrics.FocusStrip.overhang` / `.identityOverhang` ont quitté ce
+ * fichier avec #8506 : la bande basse et l'identité ne chevauchent plus les
+ * lignes du cadre, elles vivent à l'intérieur (`FOCUS_CARD_INNER_MARGIN`).
  */
-export const FOCUS_STRIP_OVERHANG = FOCUS_CHIP_HEIGHT / 2 + ROW_PADDING_VERTICAL;
-export const IDENTITY_OVERHANG = IDENTITY_CHIP_HEIGHT / 2 + ROW_PADDING_VERTICAL;
 
 /**
  * `FocalMetrics.Scene.restDelay` / `.flattenDuration` / `.enterDuration` —
@@ -214,6 +237,14 @@ export const REVEAL_FADE_DURATION_MS = 280;
 export const STICKER_SIDE = 112;
 export const BUBBLE_STICKER_SIDE = 160;
 export const STICKER_EMOJI_BOX = 60;
+
+/**
+ * LE WEB REND LE STICKER DEUX FOIS PLUS GRAND (#9319, porteur 2026-10-04) —
+ * dans les fils comme dans les commentaires. Les cotes ci-dessus restent
+ * celles d'iOS (que `check-curve.mjs` compare) ; ce facteur s'applique au
+ * RENDU, et le carré se borne à la largeur de sa colonne.
+ */
+export const STICKER_RENDER_SCALE = 2;
 
 /** `FocalScrollPerspective.FocalMagnificationLaw.sustainedScrollMs` / `.highVelocityThreshold`. */
 export const SUSTAINED_SCROLL_MS = 4000;
@@ -276,13 +307,11 @@ export const DAY_PILL_FADE_MS = 180;
  */
 export function sceneStyleVars(): CSSProperties {
   return {
-    '--focus-fill-dark': String(FOCUS_CARD_FILL_DARK),
-    '--focus-fill-light': String(FOCUS_CARD_FILL_LIGHT),
     '--focus-chip-fill-dark': String(FOCUS_CHIP_FILL_DARK),
     '--focus-chip-fill-light': String(FOCUS_CHIP_FILL_LIGHT),
     '--focus-card-radius': `${FOCUS_CARD_RADIUS}px`,
     '--focus-card-inset-x': `${ROW_PADDING_HORIZONTAL - FOCUS_CARD_HORIZONTAL_INSET}px`,
-    '--focus-card-inset-y': `${ROW_PADDING_VERTICAL}px`,
+    '--focus-card-margin': `${FOCUS_CARD_INNER_MARGIN}px`,
     '--scene-flatten-ms': `${SCENE_FLATTEN_DURATION_MS}ms`,
     '--reveal-fade-ms': `${REVEAL_FADE_DURATION_MS}ms`,
     '--focus-chip-h': `${FOCUS_CHIP_HEIGHT}px`,
@@ -297,8 +326,12 @@ export function sceneStyleVars(): CSSProperties {
        9 px de recouvrement) au lieu de la gouttière, et le chip d'identité
        se posait 41 px à droite de la pastille qu'il remplace. */
     '--focus-text-indent': `${TEXT_INDENT}px`,
-    '--focus-identity-overhang': `${IDENTITY_OVERHANG}px`,
-    '--focus-strip-overhang': `${FOCUS_STRIP_OVERHANG}px`,
+    '--focus-identity-h': `${IDENTITY_CHIP_HEIGHT}px`,
+    '--focus-identity-gap': `${FOCUS_IDENTITY_GAP}px`,
+    /* Le dépliage d'un message long (#8147) — cotes PARTAGÉES avec iOS
+       (`@meeshy/shared/utils/focal-metrics`), lues par `thread-scene.css`. */
+    '--unfold-dim': String(FOCAL_METRICS.neighborOpacity),
+    '--unfold-enter-ms': `${FOCAL_METRICS.enterDurationMs}ms`,
   } as CSSProperties;
 }
 

@@ -190,7 +190,7 @@ try {
       nue: prose.filter((p) => !p.masque).map((p) => p.texte),
     };
   });
-  check(arbre.mode === 'focal', `le fil s'ouvre en mode FOCAL — c'est le seul mode où la prose est masquée (lu « ${arbre.mode} »)`);
+  check(arbre.mode === 'script' || arbre.mode === 'focal', `le fil s'ouvre en RANGÉE PLATE (Script par défaut depuis #8147, ou Focal) — la peau où la prose est masquée (lu « ${arbre.mode} »)`);
   check(
     arbre.focusables > 0 && arbre.prose > 0,
     `la rangée mesurée porte À LA FOIS un élément focusable et de la prose — sans les deux, les témoins suivants ne pourraient pas tomber (${arbre.focusables} focusable(s), ${arbre.prose} nœud(s) de prose)`,

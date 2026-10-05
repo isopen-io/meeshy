@@ -377,6 +377,40 @@ describe('GET /admin/users/:userId/reported-messages', () => {
     expect(body.data[0].message).toMatchObject({ id: 'm1', content: 'bad message' });
     await app.close();
   });
+
+  // #8876 — la conversation du message signalé est NOMMÉE, en un seul lot.
+  it('nomme la conversation du message signalé ({ id, title }), et rend title null quand elle est introuvable', async () => {
+    const prisma = createMockPrisma({
+      participants: [{ id: 'p1' }],
+      conversations: [{ id: 'c1', title: '  Famille  ' }],
+      messages: [
+        { id: 'm1', content: 'a', conversationId: 'c1', messageType: 'text', createdAt: new Date('2026-05-01').toISOString(), deletedAt: null },
+        { id: 'm2', content: 'b', conversationId: 'c2', messageType: 'text', createdAt: new Date('2026-05-02').toISOString(), deletedAt: null },
+      ],
+      reports: [
+        { id: 'r1', reportedEntityId: 'm1', reportType: 'spam', reason: null, status: 'pending', reporterId: null, reporterName: null, createdAt: new Date('2026-06-01').toISOString(), resolvedAt: null },
+        { id: 'r2', reportedEntityId: 'm2', reportType: 'spam', reason: null, status: 'pending', reporterId: null, reporterName: null, createdAt: new Date('2026-06-02').toISOString(), resolvedAt: null },
+        { id: 'r3', reportedEntityId: 'm-gone', reportType: 'spam', reason: null, status: 'pending', reporterId: null, reporterName: null, createdAt: new Date('2026-06-03').toISOString(), resolvedAt: null },
+      ],
+      reportsCount: 3,
+    });
+    const app = await buildApp(prisma, 'ADMIN');
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/admin/users/${TARGET_ID}/reported-messages`,
+      headers: { authorization: 'Bearer x' },
+    });
+
+    const data = res.json().data as Array<{ id: string; conversation: { id: string; title: string | null } | null }>;
+    expect(data.map((row) => row.conversation)).toEqual([
+      { id: 'c1', title: 'Famille' },
+      { id: 'c2', title: null },
+      null,
+    ]);
+    const conversationReads = (prisma as unknown as { conversation: { findMany: jest.Mock } }).conversation.findMany;
+    expect(conversationReads).toHaveBeenCalledTimes(1);
+    await app.close();
+  });
 });
 
 /**

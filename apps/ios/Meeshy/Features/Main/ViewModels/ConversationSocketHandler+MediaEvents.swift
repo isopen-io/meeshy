@@ -94,12 +94,13 @@ extension ConversationSocketHandler {
                 // (`MessageMediaConsumptionService.updateAttachmentComputedStatus`).
                 guard event.userId != userId,
                       let delegate = self.delegate,
-                      let message = delegate.messages.first(where: { $0.id == event.messageId }),
-                      message.senderId != event.userId,
-                      message.recipientCount == 1,
-                      let attachment = message.attachments.first(where: { $0.id == event.attachmentId }),
+                      let messageIndex = delegate.messageIndex(for: event.messageId),
+                      delegate.messages[messageIndex].senderId != event.userId,
+                      delegate.messages[messageIndex].recipientCount == 1,
+                      let attachment = delegate.messages[messageIndex].attachments.first(where: { $0.id == event.attachmentId }),
                       let confirmedAt = event.updatedAt
                 else { return }
+                let message = delegate.messages[messageIndex]
 
                 let primaryAction = AttachmentConsumptionResolver.primaryAction(forMimeType: attachment.mimeType)
                 // The reported action must be the PRIMARY one for this
@@ -215,15 +216,16 @@ extension ConversationSocketHandler {
                 }
                 // Single assignment so SwiftUI publishes once per burst
                 // regardless of how many messages/languages came in.
-                for (msgId, merged) in buckets {
-                    delegate.messageTranslations[msgId] = merged
+                if !buckets.isEmpty {
+                    var next = delegate.messageTranslations
+                    for (msgId, merged) in buckets { next[msgId] = merged }
+                    delegate.messageTranslations = next
                 }
 
                 // Persist translations via actor
                 if let persistence = self?.persistence {
-                    let capturedEvents = events
                     Task {
-                        for event in capturedEvents {
+                        for event in events {
                             for t in event.translations {
                                 let record = TranslationRecord(
                                     id: t.id,
@@ -254,14 +256,7 @@ extension ConversationSocketHandler {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
                 guard let delegate = self?.delegate else { return }
-                let segments = (event.transcription.segments ?? []).map { s in
-                    MessageTranscriptionSegment(
-                        text: s.text,
-                        startTime: s.startTime,
-                        endTime: s.endTime,
-                        speakerId: s.speakerId
-                    )
-                }
+                let segments = (event.transcription.segments ?? []).map(MessageTranscriptionSegment.init)
                 let transcription = MessageTranscription(
                     attachmentId: event.attachmentId,
                     text: event.transcription.text,
@@ -284,14 +279,7 @@ extension ConversationSocketHandler {
             guard let delegate = self?.delegate else { return }
             guard event.conversationId == convId else { return }
             let msgId = event.messageId
-            let segments = (event.translatedAudio.segments ?? []).map { s in
-                MessageTranscriptionSegment(
-                    text: s.text,
-                    startTime: s.startTime,
-                    endTime: s.endTime,
-                    speakerId: s.speakerId
-                )
-            }
+            let segments = (event.translatedAudio.segments ?? []).map(MessageTranscriptionSegment.init)
             let audio = MessageTranslatedAudio(
                 id: event.translatedAudio.id,
                 attachmentId: event.attachmentId,

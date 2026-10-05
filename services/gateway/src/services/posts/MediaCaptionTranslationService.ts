@@ -26,26 +26,11 @@ import type { TranslationCompletedEvent } from '../zmq-translation/types';
 import type { SocialEventsHandler } from '../../socketio/handlers/SocialEventsHandler';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { translationTargetId, translationTargetNamespace } from '../zmq-translation/utils/zmq-helpers';
+import { detectContentLanguage } from '../../utils/content-language';
 
 const log = enhancedLogger.child({ module: 'MediaCaptionTranslationService' });
 
 const TOP_LANGUAGES = ['fr', 'en', 'es', 'ar', 'pt'];
-
-function detectLanguage(text: string): string {
-  if (!text) return 'en';
-  const lower = text.toLowerCase();
-  const langPatterns: Record<string, RegExp> = {
-    fr: /\b(le|la|les|un|une|des|je|tu|il|nous|vous|est|sont|avec|pour|dans|que|qui|pas|mais)\b/,
-    es: /\b(el|la|los|las|un|una|es|son|con|para|en|que|por|del|como|pero|más)\b/,
-    de: /\b(der|die|das|ein|eine|ist|sind|mit|für|und|ich|nicht|auf|dem|den)\b/,
-    pt: /\b(o|a|os|as|um|uma|é|são|com|para|em|que|por|do|da|não|mas)\b/,
-    ar: /[؀-ۿ]/,
-  };
-  for (const [lang, pattern] of Object.entries(langPatterns)) {
-    if (pattern.test(lower)) return lang;
-  }
-  return 'en';
-}
 
 export class MediaCaptionTranslationService {
   private static _shared: MediaCaptionTranslationService | null = null;
@@ -97,7 +82,7 @@ export class MediaCaptionTranslationService {
         return;
       }
 
-      const sourceLanguage = detectLanguage(caption);
+      const sourceLanguage = detectContentLanguage(caption);
 
       // Invalidation + pose de la nouvelle langue source EN UNE écriture : pas
       // d'état intermédiaire où `captionTranslations` porterait encore la
@@ -149,7 +134,7 @@ export class MediaCaptionTranslationService {
       return;
     }
 
-    const sourceLang = media.captionLanguage ?? detectLanguage(media.caption);
+    const sourceLang = media.captionLanguage ?? detectContentLanguage(media.caption);
     if (sourceLang === targetLanguage) {
       log.info('MediaCaptionTranslation: target same as source, skipping', { mediaId, targetLanguage });
       return;

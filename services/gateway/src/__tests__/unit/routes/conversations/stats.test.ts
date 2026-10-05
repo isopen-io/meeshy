@@ -24,6 +24,7 @@ jest.mock('../../../../utils/conversation-id-cache', () => ({
 }));
 
 jest.mock('../../../../routes/conversations/utils/access-control', () => ({
+  ...(jest.requireActual('../../../../routes/conversations/utils/access-control') as Record<string, unknown>),
   canAccessConversation: (...args: any[]) => mockCanAccessConversation(...args),
 }));
 
@@ -98,11 +99,11 @@ describe('GET /conversations/:id/stats — conversation not found', () => {
 });
 
 describe('GET /conversations/:id/stats — access denied', () => {
-  it('returns 403 when user has no access to the conversation', async () => {
+  it('returns the same 404 as a missing conversation when user is not a member (#8099)', async () => {
     mockCanAccessConversation.mockResolvedValueOnce(false);
     const app = await buildApp();
     const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/stats` });
-    expect(res.statusCode).toBe(403);
+    expect(res.statusCode).toBe(404);
     await app.close();
   });
 });

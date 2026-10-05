@@ -3,9 +3,9 @@ import { FORMATS } from '../lib/formats.mjs'
 import { KIT_LANGS, directionOf, appStoreLocale } from '../lib/locales.mjs'
 
 describe('formats de sortie', () => {
-  test('App Store : iPhone 6,9" 1320×2868 portrait, iPad 13" 2752×2064 paysage', () => {
+  test('App Store : iPhone 6,9" 1320×2868 et iPad 13" 2064×2752, tous deux en portrait', () => {
     expect(FORMATS['iphone-6.9']).toMatchObject({ width: 1320, height: 2868 })
-    expect(FORMATS['ipad-13']).toMatchObject({ width: 2752, height: 2064 })
+    expect(FORMATS['ipad-13']).toMatchObject({ width: 2064, height: 2752 })
   })
 
   test('réseaux sociaux : 9:16, 4:5, 1:1, 16:9', () => {

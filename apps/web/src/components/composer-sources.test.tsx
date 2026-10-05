@@ -5,6 +5,9 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
+import { DEFAULT_USER_PERMISSIONS, type ParticipantPermissions } from '@meeshy/shared/types/participant';
+
+import type { ComposerContactSource } from './composer-attachment-panel';
 import ComposerTray from './composer-tray';
 
 /**
@@ -53,7 +56,7 @@ afterEach(() => {
 
 type Gestures = {
   photos?: (files: FileList | null) => void;
-  camera?: (files: FileList | null) => void;
+  camera?: (files: readonly File[]) => void;
   file?: (files: FileList | null) => void;
   location?: () => void;
   emoji?: () => void;
@@ -61,7 +64,13 @@ type Gestures = {
   voice?: () => void;
 };
 
-function mountPanel(gestures: Gestures = {}, options: { canLocate?: boolean } = {}): HTMLDivElement {
+type PanelOptions = {
+  readonly canLocate?: boolean;
+  readonly contact?: ComposerContactSource;
+  readonly rights?: ParticipantPermissions;
+};
+
+function mountPanel(gestures: Gestures = {}, options: PanelOptions = {}): HTMLDivElement {
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -78,6 +87,8 @@ function mountPanel(gestures: Gestures = {}, options: { canLocate?: boolean } = 
         onStartVoice={gestures.voice ?? (() => {})}
         canRecord
         canLocate={options.canLocate ?? true}
+        {...(options.contact === undefined ? {} : { contact: options.contact })}
+        {...(options.rights === undefined ? {} : { rights: options.rights })}
       />,
     );
   });
@@ -101,11 +112,41 @@ function pickFileOn(tile: HTMLElement): void {
 }
 
 describe('Caméra (#7280) — la source la plus utilisée après Photos', () => {
-  test('la tuile PRODUIT un effet : revenir de l’appareil photo remet les fichiers au composeur', () => {
-    let calls = 0;
-    const el = mountPanel({ camera: () => (calls += 1) });
+  test('la tuile PRODUIT un effet : revenir de l’appareil photo remet les fichiers au composeur', async () => {
+    const received: Array<readonly File[]> = [];
+    const el = mountPanel({ camera: (files) => void received.push(files) });
     pickFileOn(sourceOf(el, 'camera'));
-    expect(calls).toBe(1);
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    expect(received).toHaveLength(1);
+  });
+
+  test('la photo prise passe par le développement unique avant d’être remise (#8695)', async () => {
+    const received: Array<readonly File[]> = [];
+    const el = mountPanel({ camera: (files) => void received.push(files) });
+    const input = sourceOf(el, 'camera').querySelector<HTMLInputElement>('input[type="file"]');
+    if (input === null) throw new Error('champ absent');
+    const shot = new File(['x'], 'IMG_0001.jpg', { type: 'image/jpeg' });
+    Object.defineProperty(input, 'files', { configurable: true, get: () => [shot] });
+    const decoded: File[] = [];
+    const original = globalThis.createImageBitmap;
+    globalThis.createImageBitmap = (async (file: File) => {
+      decoded.push(file);
+      throw new Error('pas de canevas ici');
+    }) as unknown as typeof createImageBitmap;
+    try {
+      act(() => {
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      });
+    } finally {
+      globalThis.createImageBitmap = original;
+    }
+    expect(decoded).toEqual([shot]);
+    expect(received).toEqual([[shot]]);
   });
 
   /**
@@ -204,5 +245,49 @@ describe('Sticker (#7938)', () => {
   test('un hôte qui ne monte pas la bibliothèque ne montre pas la tuile', () => {
     const el = mountPanel();
     expect(el.querySelector('[data-composer-source="sticker"]')).toBeNull();
+  });
+});
+
+describe('Contact (#8242) — la tuile d’iOS, à la même place', () => {
+  const gesture = (onRequest: () => void = () => {}): ComposerContactSource => ({
+    source: 'picker',
+    onRequest,
+    onPickFile: () => {},
+  });
+
+  test('elle vient après « Fichier », comme sur iOS', () => {
+    const el = mountPanel({}, { contact: gesture() });
+    const ids = [...el.querySelectorAll('[data-composer-source]')].map((tile) => tile.getAttribute('data-composer-source'));
+    expect(ids).toEqual(['photo', 'camera', 'file', 'contact', 'location', 'voice', 'emoji']);
+  });
+
+  test('son libellé et son geste viennent du catalogue', () => {
+    document.documentElement.lang = 'de';
+    const el = mountPanel({}, { contact: gesture() });
+    expect(sourceOf(el, 'contact').querySelector('[data-composer-source-label]')?.textContent).toBe('Kontakt');
+    expect(sourceOf(el, 'contact').getAttribute('aria-label')).toBe('Kontakt teilen');
+  });
+
+  test('avec un sélecteur (coque ou navigateur), la tuile OUVRE ce sélecteur', () => {
+    let calls = 0;
+    const el = mountPanel({}, { contact: gesture(() => (calls += 1)) });
+    act(() => {
+      sourceOf(el, 'contact').click();
+    });
+    expect(calls).toBe(1);
+  });
+
+  test('sans sélecteur, elle ouvre le choix d’une fiche .vcf — jamais inerte', () => {
+    let picked = 0;
+    const el = mountPanel({}, { contact: { source: 'file', onRequest: () => {}, onPickFile: () => (picked += 1) } });
+    const input = sourceOf(el, 'contact').querySelector('input[type="file"]');
+    expect(input?.getAttribute('accept')).toContain('.vcf');
+    pickFileOn(sourceOf(el, 'contact'));
+    expect(picked).toBe(1);
+  });
+
+  test('un participant qui n’a pas le droit d’envoyer de fichier ne voit pas la tuile', () => {
+    const el = mountPanel({}, { contact: gesture(), rights: { ...DEFAULT_USER_PERMISSIONS, canSendFiles: false } });
+    expect(el.querySelector('[data-composer-source="contact"]')).toBeNull();
   });
 });

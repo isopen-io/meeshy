@@ -59,7 +59,7 @@ export type ProfileRelation =
   | { readonly kind: 'pendingReceived'; readonly request: FriendRequestRecord | null }
   | { readonly kind: 'none' };
 
-/* `report` est entré au 2026-09-21 (#7187) — le port `POST /api/v1/reports`
+/* `report` est entré au 2026-09-21 (#7187) — le port `POST reports.root`
    existait côté passerelle et n'avait AUCUN appelant. Il se range ici plutôt
    qu'à côté : la fiche a UNE loi qui décide de ses actions, et un bouton posé
    hors d'elle serait le doublon qu'elle existe pour empêcher. */

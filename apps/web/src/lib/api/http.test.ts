@@ -509,3 +509,63 @@ describe('createHttpTransport — le délai de garde PAR APPEL', () => {
     expect(await abortedAfterATick(calls[0]!.init)).toBe(false);
   });
 });
+
+describe('createHttpTransport — le détenteur masqué d’un EMAIL_TAKEN (#8214 × #8216)', () => {
+  test('`emailOwner` à la racine d’un 409 voyage jusqu’à l’écran', async () => {
+    const emailOwner = { maskedDisplayName: 'A** L***', maskedUsername: 'a**l', avatar: null };
+    const { impl } = fakeFetch({
+      status: 409,
+      body: { success: false, error: 'Email déjà utilisé', code: 'EMAIL_TAKEN', field: 'email', emailOwner },
+    });
+    const result = await createHttpTransport({ base: '', fetchImpl: impl }).request({ method: 'POST', path: '/api/v1/auth/register' });
+    expect(result.ok).toBe(false);
+    expect(result.ok ? null : result.emailOwner).toEqual(emailOwner);
+  });
+
+  test('sans `emailOwner` (ancienne passerelle) : aucune clé fabriquée', async () => {
+    const { impl } = fakeFetch({ status: 409, body: { success: false, error: 'x', code: 'EMAIL_TAKEN' } });
+    const result = await createHttpTransport({ base: '', fetchImpl: impl }).request({ method: 'POST', path: '/api/v1/auth/register' });
+    expect(result.ok ? true : 'emailOwner' in result).toBe(false);
+  });
+});
+
+describe('createHttpTransport — le crédential FORCÉ par l’appel (#8816)', () => {
+  test('`credential: null` part NU : ni Bearer ni jeton d’invité, même sous un compte', async () => {
+    const { impl, calls } = fakeFetch({ status: 200, body: { success: true, data: {} } });
+    const transport = createHttpTransport({ base: '', fetchImpl: impl, credential: () => ({ kind: 'registered', token: 'jwt-1' }) });
+    await transport.request({ method: 'POST', path: '/api/v1/links/mshy_x/members', body: { language: 'fr' }, credential: null });
+    expect(headerOf(calls[0]!.init, 'Authorization')).toBeNull();
+    expect(headerOf(calls[0]!.init, 'X-Session-Token')).toBeNull();
+  });
+
+  test('un 401 sur un crédential forcé ne ferme PAS la session courante', async () => {
+    const { impl } = fakeFetch({ status: 401, body: { success: false, error: 'x' } });
+    let closed = 0;
+    const transport = createHttpTransport({
+      base: '',
+      fetchImpl: impl,
+      credential: () => ({ kind: 'registered', token: 'jwt-1' }),
+      onUnauthorized: () => {
+        closed += 1;
+      },
+    });
+    await transport.request({ method: 'POST', path: '/api/v1/links/mshy_x/members', credential: null });
+    expect(closed).toBe(0);
+  });
+
+  test('la réponse d’un appel forcé se résout même si l’identité de session change entre-temps', async () => {
+    let identity = 'u:ada';
+    const impl = (async () => {
+      identity = 'g:anon_1';
+      return new Response(JSON.stringify({ success: true, data: { ok: true } }), { status: 200 });
+    }) as unknown as typeof fetch;
+    const transport = createHttpTransport({
+      base: '',
+      fetchImpl: impl,
+      credential: () => ({ kind: 'registered', token: 'jwt-1' }),
+      identity: () => identity,
+    });
+    const result = await transport.request({ method: 'POST', path: '/api/v1/links/mshy_x/members', credential: null });
+    expect(result.ok).toBe(true);
+  });
+});

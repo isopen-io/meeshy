@@ -1,27 +1,39 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 
-import { Avatar } from '@/components/avatar';
-import { adminIdentityQueryOptions } from '@/lib/api/admin';
-import { adminUserDetailQueryKey, adminUserDetailQueryOptions, type AdminUserDetail } from '@/lib/api/admin-user-detail';
+import { AuthAmbient } from '@/components/auth-chrome';
+import { AdminBadge, AdminInterpretedBadge, AdminRoleBadge } from '@/components/admin/badges';
+import { AdminFiche, AdminIdentityHeader } from '@/components/admin/fiche';
+import { AdminPageHeader } from '@/components/admin/page-header';
+import { AdminLink } from '@/components/admin/entity-chip';
+import { AdminSectionScreen } from '@/components/admin/section-screen';
+import { AdminDeniedInline, AdminErrorState, AdminOfflineNotice } from '@/components/admin/states';
+import { AdminTabPanel } from '@/components/admin/tabs';
+import { accountStateOf } from '@/lib/admin/interpret/enums';
+import { personInitials } from '@/lib/admin/interpret/labels';
+import type { AdminReach } from '@/lib/admin/use-admin-reach';
+import { userEntityOf } from '@/lib/admin/user-entity';
+import { adminUserTabOf, withAdminUserTab } from '@/lib/admin/user-tabs';
+import type { AdminDeps } from '@/lib/api/admin';
+import { adminUserBansQueryOptions } from '@/lib/api/admin-user-bans';
+import { adminUserDetailQueryOptions, type AdminUserDetail } from '@/lib/api/admin-user-detail';
+import { adminUserStatsQueryOptions } from '@/lib/api/admin-user-member';
+import { ApiError } from '@/lib/api/client';
 import { apiDeps } from '@/lib/api/deps';
-import { adminMoment } from '@/lib/admin/format';
-import { visibleAdminSections } from '@/lib/admin/sections';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
-import { useParams, useRoute, useSearch } from '@/lib/router';
-import { ADMIN_USER_TABS, adminUserTabOf, withAdminUserTab, type AdminUserTab } from '@/lib/admin/user-tabs';
-import { initialsOf, participantAvatarOf } from '@/lib/view/conversation';
+import { currentAdminLanguage, suspendForAdminInterfaceCatalog, translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
+import { useParams, useSearch } from '@/lib/router';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
-import { ActionButton } from '@/routes/link-page-parts';
 
-import { AdminAnnouncement, AdminDenied, AdminLine as Ligne, AdminScreenFrame, AdminSection as Section, AdminSkeleton } from './admin-parts';
-import { AdminUserEditSheet } from './admin-user-edit-sheet';
+import { AdminMemberContactSection } from './admin-member-contact';
+import { AdminMemberIdentitySection } from './admin-member-identity';
+import { AdminMemberImagesSection } from './admin-member-images';
+import { AdminMemberMeta } from './admin-member-meta';
+import { AdminMemberQuickActions } from './admin-member-quick-actions';
+import { AdminMemberRoleSection } from './admin-member-role';
+import { AdminMemberSecuritySection } from './admin-member-security';
+import { AdminMemberStats } from './admin-member-stats';
+import { AdminAnnouncement, AdminSkeleton } from './admin-parts';
 import { AdminUserBanSheet } from './admin-user-ban-sheet';
-import { AdminUserGallery } from './admin-user-gallery';
-import { AdminUserPreferencesTab, AdminUserStatsSection } from './admin-user-member';
-import { AdminUserConversationsSection, AdminUserMediaSection } from './admin-user-lists';
-import { AdminUserPasswordSheet } from './admin-user-password-sheet';
 import {
   AdminUserCommunitiesTab,
   AdminUserContactsTab,
@@ -29,351 +41,221 @@ import {
   AdminUserSecurityTab,
   AdminUserVoiceTab,
 } from './admin-user-dossier';
+import { AdminUserGallery } from './admin-user-gallery';
+import { AdminUserConversationsSection, AdminUserMediaSection } from './admin-user-lists';
+import { AdminUserPasswordSheet } from './admin-user-password-sheet';
+import { AdminUserPreferencesTab } from './admin-user-preferences';
+import { ADMIN_USER_TABS_BASE, AdminUserTabs } from './admin-user-tabs';
 
 /**
- * **LE DÉTAIL D'UN MEMBRE** (#6819) — `/admin/users/$user` et `/adm/users/$user`,
- * premier écran de l'administration RÉÉCRITE sur le design system v2 (D-77).
+ * **LA FICHE D'UN MEMBRE** (#6819, #8005) — `/admin/users/$user` et `/adm/users/$user`,
+ * la « vue de dieu » sur UNE personne, sur le kit d'administration : en-tête
+ * d'identité (vrai nom, `@pseudo`, avatar et présence calculée, rôle, état, preuves
+ * et double authentification dits en mots), quinze chiffres, colonne de métadonnées
+ * INTERPRÉTÉES, puis les onglets du dossier.
  *
- * **En LECTURE seule pour l'instant.** Les six gestes que la passerelle sert
- * réellement — éditer, réinitialiser le mot de passe, désactiver, bannir,
- * lever un bannissement — arrivent par incréments séparés, chacun AVEC sa
- * confirmation : le port le dit depuis #6432, « une écriture d'administration
- * sans sa confirmation serait pire que son absence ».
+ * **Éditée EN PLACE, section par section** (#8289) — plus de bouton « Modifier » :
+ * l'onglet Profil montre les images, l'identité (pseudo compris), le contact et ses
+ * preuves, la sécurité, le rôle et le statut, et chaque section porte son
+ * « Enregistrer ». Les gestes lourds — changer le rôle, suspendre, réinitialiser un
+ * mot de passe, bannir, déverrouiller, retirer la double authentification, poser un
+ * consentement — gardent chacun leur confirmation : « une écriture d'administration
+ * sans sa confirmation serait pire que son absence » (#6432).
  *
- * **Le retour reste dans l'ESPACE d'où l'on vient.** `useRoute().key` distingue
- * `admUser` de `adminUser` : renvoyer les deux vers la même liste ferait sauter
- * l'administrateur d'une administration à l'autre au premier retour, alors que
- * D-76 les tient séparées à dessein.
+ * **Le retour reste dans l'ESPACE d'où l'on vient** (`AdminSectionScreen` le lit dans
+ * la route : `/adm` ne renvoie jamais vers `/admin`, D-76) et **la garde est celle de la
+ * liste**, lue au SERVEUR (`GET /me/permissions`) et jamais déduite d'un rôle côté client.
  *
- * **La garde est celle de la liste**, lue au SERVEUR (`GET /me/permissions`) et
- * jamais déduite d'un rôle côté client. Tant que #6825 n'est pas tranchée, la
- * v2 exige `canManageUsers` (ADMIN+) là où la passerelle sert la lecture à
- * `canViewUsers` (jusqu'à AUDIT) : cet écran hérite donc du seuil de sa
- * section, sciemment, plutôt que d'en inventer un troisième.
+ * Les ancres `data-admin-user`, `data-admin-user-panel` et `data-admin-user-tab` sont un
+ * CONTRAT de la recette `check-admin-souverain` : elles ne se renomment pas.
  */
 
-const INK = 'var(--color-ios-ink)';
-const INK2 = 'var(--color-ios-ink-2)';
+/** Un refus se dit comme un refus (403), un membre introuvable comme tel (404) : jamais les deux comme « une panne ». */
+function FicheState({ language, onRetry, denied, notFound }: { readonly language: AdminLanguage; readonly onRetry: () => void; readonly denied: boolean; readonly notFound: boolean }) {
+  if (denied) return <AdminDeniedInline language={language} />;
+  return <AdminErrorState language={language} message={translateAdmin(language, notFound ? 'admin.people.notFound' : 'admin.user.unavailable')} onRetry={onRetry} />;
+}
 
-export default function AdminUserScreen() {
-  const language = currentInterfaceLanguage();
-  const { user: userId } = useParams<'/admin/users/$user'>();
-  const { key } = useRoute();
-  const retour = key === 'admUser' ? 'admUsers' : 'adminUsers';
-  const cibleMembre = key === 'admUser' ? ('admUser' as const) : ('adminUser' as const);
+export function AdminUserFiche({
+  userId,
+  language,
+  reach,
+  deps = apiDeps,
+  now = () => new Date(),
+}: {
+  readonly userId: string;
+  readonly language: AdminLanguage;
+  readonly reach: AdminReach;
+  readonly deps?: AdminDeps;
+  readonly now?: () => Date;
+}) {
   const [search, setSearch] = useSearch();
   const onglet = adminUserTabOf(search);
-
-  const identite = useQuery(adminIdentityQueryOptions(apiDeps));
-  const sections = visibleAdminSections(identite.data?.permissions ?? null, identite.data?.role);
-  const autorise = sections.some((section) => section.id === 'users');
-  const gererConversation = sections.some((section) => section.id === 'conversations') ? (key === 'admUser' ? 'admConversation' : 'adminConversation') : null;
-
-  const fiche = useQuery({ ...adminUserDetailQueryOptions(apiDeps, userId), enabled: autorise });
-
-  const [edition, setEdition] = useState(false);
+  const annonceur = useLiveAnnouncer();
   const [motDePasse, setMotDePasse] = useState(false);
   const [bannissement, setBannissement] = useState(false);
-  const annonceur = useLiveAnnouncer();
-  const client = useQueryClient();
 
-  const titre = translateAdmin(language, 'admin.user.title');
+  const fiche = useQuery(adminUserDetailQueryOptions(deps, userId));
+  const chiffres = useQuery(adminUserStatsQueryOptions(deps, userId));
+  const bans = useQuery(adminUserBansQueryOptions(deps, userId));
 
-  if (identite.isPending) {
-    return (
-      <AdminScreenFrame language={language} title={titre} back={retour}>
-        <AdminSkeleton rows={5} />
-      </AdminScreenFrame>
-    );
-  }
-
-  if (!autorise) {
-    return (
-      <AdminScreenFrame language={language} title={titre} back={retour}>
-        <AdminDenied language={language} />
-      </AdminScreenFrame>
-    );
-  }
-
-  if (fiche.isPending) {
-    return (
-      <AdminScreenFrame language={language} title={titre} back={retour}>
-        <AdminSkeleton rows={6} />
-      </AdminScreenFrame>
-    );
-  }
+  if (fiche.isPending) return <AdminSkeleton rows={6} />;
 
   const membre = fiche.data;
   if (membre === undefined) {
-    return (
-      <AdminScreenFrame language={language} title={titre} back={retour}>
-        <p className="text-body" style={{ color: INK2 }}>
-          {translateAdmin(language, 'admin.user.unavailable')}
-        </p>
-      </AdminScreenFrame>
-    );
+    const status = fiche.error instanceof ApiError ? fiche.error.status : 0;
+    return <FicheState language={language} denied={status === 403} notFound={status === 404} onRetry={() => void fiche.refetch()} />;
   }
 
-  return (
-    <AdminScreenFrame language={language} title={titre} back={retour}>
-      <div className="grid gap-5" data-admin-user={membre.id}>
-        <Entete membre={membre} language={language} />
-        <Onglets language={language} actif={onglet} onChange={(suivant) => setSearch(withAdminUserTab(search, suivant), true)} />
-        <div role="tabpanel" id={`admin-user-panel-${onglet}`} aria-labelledby={`admin-user-tab-${onglet}`} data-admin-user-panel={onglet}>
-          {onglet === 'profile' ? (
-            <div className="grid gap-5 lg:grid-cols-2">
-              <div className="lg:col-span-2">
-                <AdminUserGallery membre={membre} language={language} />
-              </div>
-              <div className="lg:col-span-2">
-                <AdminUserStatsSection userId={membre.id} language={language} />
-              </div>
-              <Section titre={translateAdmin(language, 'admin.user.identity')}>
-                <Ligne label="@" valeur={membre.username} />
-                <Ligne label="✉" valeur={membre.email} />
-                {membre.phoneNumber === '' ? null : <Ligne label="☎" valeur={membre.phoneNumber} />}
-              </Section>
-              <Section titre={translateAdmin(language, 'admin.user.account')}>
-                <Ligne label={translateAdmin(language, 'admin.user.role')} valeur={membre.role} />
-                {/* UNE DATE SE LIT, ELLE NE SE RECOPIE PAS (#6819, recette au
-                    navigateur) : ces deux lignes peignaient
-                    « 2026-01-12T08:30:00.000Z ». Le champ, son décodage et le
-                    libellé étaient justes — seul le RENDU ne l'était pas, et aucun
-                    témoin ne pouvait tomber puisque la valeur affichée était
-                    exactement la valeur servie. `adminMoment` est le site que cet
-                    écran partage avec le pilotage de l'agent. */}
-                <Ligne label={translateAdmin(language, 'admin.user.created')} valeur={adminMoment(membre.createdAt, language)} />
-                <Ligne label={translateAdmin(language, 'admin.user.lastActive')} valeur={adminMoment(membre.lastActiveAt, language)} />
-                <Ligne
-                  label={translateAdmin(language, 'admin.user.twoFactor')}
-                  valeur={translateAdmin(language, membre.twoFactorEnabled ? 'admin.user.enabled' : 'admin.users.inactive')}
-                />
-              </Section>
-              <Metadonnees membre={membre} language={language} />
+  const moment = now();
+  const entity = userEntityOf(membre, language, moment);
+  const state = accountStateOf({ ...membre, activeBan: (bans.data ?? []).some((ban) => ban.active) }, moment, language);
+  const adm = reach.space === 'adm';
+  const gererConversation = reach.opens('conversations') ? (adm ? ('admConversation' as const) : ('adminConversation' as const)) : null;
 
-              <div className="grid gap-2">
-                <ActionButton onClick={() => setEdition(true)}>{translateAdmin(language, 'admin.edit.open')}</ActionButton>
-                {/* Ton `danger` : le geste révoque les sessions ouvertes de la cible,
-                    qui se retrouve déconnectée partout. La couleur le dit avant que
-                    la feuille ne l'écrive. */}
-                <ActionButton tone="danger" onClick={() => setMotDePasse(true)}>
-                  {translateAdmin(language, 'admin.password.title')}
-                </ActionButton>
-                <ActionButton tone="danger" onClick={() => setBannissement(true)}>
-                  {translateAdmin(language, 'admin.ban.open')}
-                </ActionButton>
-              </div>
+  return (
+    /* LE HALO DE L'INSCRIPTION (#8288), réutilisé : les cartes de verre de la fiche ne se
+       lisent comme du verre que posées sur une lumière. */
+    <div className="relative grid gap-6" data-admin-user={membre.id}>
+      <AuthAmbient />
+      <AdminPageHeader
+        language={language}
+        title={translateAdmin(language, 'admin.user.title')}
+        crumbs={[
+          { label: translateAdmin(language, 'admin.group.people') },
+          { label: translateAdmin(language, 'admin.nav.users'), target: { kind: 'section', section: 'users' } },
+          { label: entity.label },
+        ]}
+        actions={
+          reach.opens('audit') ? (
+            <AdminLink
+              target={{ kind: 'section', section: 'audit', search: { subject: membre.id } }}
+              anchor="member-journal"
+              className="inline-flex items-center rounded-chip px-4 text-body font-medium"
+              style={{ minHeight: 44, border: '1px solid var(--color-edge)', color: 'var(--color-ios-brand)' }}
+            >
+              {translateAdmin(language, 'admin.people.journal')}
+            </AdminLink>
+          ) : undefined
+        }
+      />
+      <AdminOfflineNotice language={language} />
+      <AdminFiche
+        kind="user"
+        header={
+          <AdminIdentityHeader
+            language={language}
+            title={entity.label}
+            {...(entity.secondary === undefined || entity.secondary === null ? {} : { secondary: entity.secondary })}
+            avatar={{
+              initials: personInitials(entity.label),
+              color: 'var(--color-ios-brand)',
+              src: entity.avatarUrl ?? null,
+              ...(entity.presence === undefined ? {} : { presence: entity.presence }),
+            }}
+            badges={<Badges membre={membre} language={language} state={state} />}
+          />
+        }
+        stats={<AdminMemberStats userId={membre.id} language={language} deps={deps} />}
+        aside={<AdminMemberMeta membre={membre} language={language} now={now} onAnnounce={annonceur.announce} />}
+      >
+        <AdminMemberQuickActions membre={membre} language={language} onAnnounce={annonceur.announce} deps={deps} />
+        <AdminUserTabs language={language} actif={onglet} onChange={(suivant) => setSearch(withAdminUserTab(search, suivant), true)} />
+        <AdminTabPanel idBase={ADMIN_USER_TABS_BASE} tab={onglet} attributes={{ 'data-admin-user-panel': onglet }}>
+          {onglet === 'profile' ? (
+            <div className="grid gap-6">
+              <AdminMemberImagesSection key={`images-${membre.id}`} membre={membre} language={language} onAnnounce={annonceur.announce} deps={deps} />
+              <AdminMemberIdentitySection key={`identity-${membre.id}`} membre={membre} language={language} onAnnounce={annonceur.announce} deps={deps} />
+              <AdminMemberContactSection key={`contact-${membre.id}`} membre={membre} language={language} onAnnounce={annonceur.announce} deps={deps} />
+              <AdminMemberSecuritySection
+                membre={membre}
+                language={language}
+                sessions={chiffres.data?.activeSessions ?? null}
+                onAnnounce={annonceur.announce}
+                onOpenPassword={() => setMotDePasse(true)}
+                onOpenSessions={() => setSearch(withAdminUserTab(search, 'security'), true)}
+                deps={deps}
+                now={now}
+              />
+              <AdminMemberRoleSection
+                key={`role-${membre.id}`}
+                membre={membre}
+                language={language}
+                onAnnounce={annonceur.announce}
+                onOpenBan={() => setBannissement(true)}
+                deps={deps}
+              />
+              <AdminUserGallery membre={membre} language={language} deps={deps} />
             </div>
           ) : null}
-          {/* Ce que ce membre a créé, et où il parle — en LECTURE. Les routes
-              sont servies jusqu'à AUDIT, plus largement que les gestes
-              d'écriture du profil qui exigent ADMIN+. La modale de lecture
+          {/* Ce que ce membre a créé, et où il parle — en LECTURE. Les routes sont servies jusqu'à AUDIT,
+              plus largement que les gestes d'écriture du profil qui exigent ADMIN+. La modale de lecture
               rend le fil dans le Prisme DU MEMBRE (#6862). */}
-          {onglet === 'conversations' ? <AdminUserConversationsSection membre={membre} language={language} gerer={gererConversation} /> : null}
-          {onglet === 'media' ? <AdminUserMediaSection userId={membre.id} language={language} /> : null}
-          {onglet === 'contacts' ? <AdminUserContactsTab userId={membre.id} language={language} cible={cibleMembre} /> : null}
-          {onglet === 'communities' ? <AdminUserCommunitiesTab userId={membre.id} language={language} /> : null}
-          {onglet === 'voice' ? <AdminUserVoiceTab userId={membre.id} language={language} /> : null}
-          {onglet === 'preferences' ? <AdminUserPreferencesTab userId={membre.id} language={language} onAnnounce={annonceur.announce} /> : null}
-          {onglet === 'security' ? <AdminUserSecurityTab userId={membre.id} language={language} /> : null}
-          {onglet === 'reports' ? <AdminUserReportsTab userId={membre.id} language={language} /> : null}
-        </div>
-      </div>
-
-      {edition ? (
-        <AdminUserEditSheet
-          membre={membre}
-          language={language}
-          onClose={() => setEdition(false)}
-          onAnnounce={annonceur.announce}
-          /**
-           * La route de PATCH rend le membre À JOUR, sanitisé : on l'écrit
-           * dans le cache plutôt que d'invalider. Invalider coûterait un
-           * aller-retour pour obtenir ce qu'on tient déjà, et laisserait
-           * l'écran afficher l'état d'AVANT pendant qu'il revient.
-           */
-          onSaved={(aJour) => client.setQueryData(adminUserDetailQueryKey(userId), aJour)}
-        />
-      ) : null}
+          {onglet === 'conversations' ? (
+            <AdminUserConversationsSection membre={membre} language={language} gerer={gererConversation} onAnnounce={annonceur.announce} deps={deps} />
+          ) : null}
+          {onglet === 'media' ? <AdminUserMediaSection userId={membre.id} language={language} deps={deps} /> : null}
+          {onglet === 'contacts' ? <AdminUserContactsTab userId={membre.id} language={language} deps={deps} now={now} /> : null}
+          {onglet === 'communities' ? <AdminUserCommunitiesTab userId={membre.id} language={language} deps={deps} /> : null}
+          {onglet === 'voice' ? <AdminUserVoiceTab userId={membre.id} language={language} deps={deps} /> : null}
+          {onglet === 'preferences' ? <AdminUserPreferencesTab userId={membre.id} language={language} onAnnounce={annonceur.announce} deps={deps} /> : null}
+          {onglet === 'security' ? <AdminUserSecurityTab userId={membre.id} language={language} deps={deps} now={now} onAnnounce={annonceur.announce} /> : null}
+          {onglet === 'reports' ? <AdminUserReportsTab userId={membre.id} language={language} deps={deps} now={now} /> : null}
+        </AdminTabPanel>
+      </AdminFiche>
 
       {motDePasse ? (
-        <AdminUserPasswordSheet
-          userId={membre.id}
-          language={language}
-          onClose={() => setMotDePasse(false)}
-          onAnnounce={annonceur.announce}
-        />
+        <AdminUserPasswordSheet userId={membre.id} language={language} onClose={() => setMotDePasse(false)} onAnnounce={annonceur.announce} />
       ) : null}
 
       {bannissement ? (
-        <AdminUserBanSheet
-          userId={membre.id}
-          language={language}
-          onClose={() => setBannissement(false)}
-          onAnnounce={annonceur.announce}
-        />
+        <AdminUserBanSheet userId={membre.id} language={language} onClose={() => setBannissement(false)} onAnnounce={annonceur.announce} deps={deps} />
       ) : null}
 
       <AdminAnnouncement text={annonceur.text} />
-    </AdminScreenFrame>
-  );
-}
-
-const LIBELLES_ONGLETS = {
-  profile: 'admin.tab.profile',
-  conversations: 'admin.tab.conversations',
-  media: 'admin.tab.media',
-  contacts: 'admin.tab.contacts',
-  communities: 'admin.tab.communities',
-  voice: 'admin.tab.voice',
-  preferences: 'admin.tab.preferences',
-  security: 'admin.tab.security',
-  reports: 'admin.tab.reports',
-} as const satisfies Readonly<Record<AdminUserTab, string>>;
-
-/**
- * LES ONGLETS DE LA FICHE (#7845, #7873) — un `tablist` ARIA : flèches
- * gauche/droite pour passer d'un onglet à l'autre, un seul arrêt de
- * tabulation (l'onglet actif), et l'onglet dans l'adresse.
- */
-function Onglets({
-  language,
-  actif,
-  onChange,
-}: {
-  readonly language: InterfaceLanguage;
-  readonly actif: AdminUserTab;
-  readonly onChange: (onglet: AdminUserTab) => void;
-}) {
-  const aller = (pas: number) => {
-    const index = ADMIN_USER_TABS.indexOf(actif);
-    const suivant = ADMIN_USER_TABS[(index + pas + ADMIN_USER_TABS.length) % ADMIN_USER_TABS.length] ?? 'profile';
-    onChange(suivant);
-    requestAnimationFrame(() => document.getElementById(`admin-user-tab-${suivant}`)?.focus());
-  };
-  return (
-    <div
-      role="tablist"
-      aria-label={translateAdmin(language, 'admin.tab.label')}
-      className="flex gap-1 overflow-x-auto"
-      style={{ borderBottom: '1px solid var(--color-edge)' }}
-      onKeyDown={(event) => {
-        if (event.key === 'ArrowRight') aller(document.dir === 'rtl' ? -1 : 1);
-        if (event.key === 'ArrowLeft') aller(document.dir === 'rtl' ? 1 : -1);
-      }}
-    >
-      {ADMIN_USER_TABS.map((onglet) => {
-        const selectionne = onglet === actif;
-        return (
-          <button
-            key={onglet}
-            type="button"
-            role="tab"
-            id={`admin-user-tab-${onglet}`}
-            aria-selected={selectionne}
-            aria-controls={`admin-user-panel-${onglet}`}
-            tabIndex={selectionne ? 0 : -1}
-            data-admin-user-tab={onglet}
-            onClick={() => onChange(onglet)}
-            className="shrink-0 px-3 text-body focus-visible:outline-2 focus-visible:outline-offset-2"
-            style={{
-              minHeight: 44,
-              color: selectionne ? 'var(--color-ios-brand)' : INK2,
-              fontWeight: selectionne ? 600 : 500,
-              borderBottom: `2px solid ${selectionne ? 'var(--color-ios-brand)' : 'transparent'}`,
-              outlineColor: 'var(--color-ios-brand)',
-            }}
-          >
-            {translateAdmin(language, LIBELLES_ONGLETS[onglet])}
-          </button>
-        );
-      })}
     </div>
   );
 }
 
 /**
- * L'ÉTAT se lit en TROIS champs, jamais en un statut calculé (#6822) :
- * `DELETE /admin/users/:userId` n'écrit que `isActive:false` — ni `deletedAt`,
- * ni `deletedBy`. Un compte supprimé arrive donc avec `deletedAt: null`, et
- * afficher « supprimé » sur la seule foi de `isActive` mentirait. On dit donc
- * « supprimé » QUAND la passerelle l'affirme, « désactivé » sinon.
+ * LES BADGES DE L'EN-TÊTE — rôle, ÉTAT (le plus grave d'abord : supprimé > banni > verrouillé >
+ * désactivé > actif), e-mail vérifié ou non, téléphone vérifié, double authentification.
+ * Chacun porte son MOT : la couleur ne dit jamais seule.
  */
-function Entete({ membre, language }: { readonly membre: AdminUserDetail; readonly language: InterfaceLanguage }) {
-  const etat = membre.deletedAt !== null ? 'admin.user.deleted' : membre.isActive ? null : 'admin.users.inactive';
-  /**
-   * LA PHOTO DU MEMBRE (#6975) — `AdminUserDetail.avatar` est SERVI
-   * (`api/admin-user-detail.ts:56`) et cette fiche ne montait aucun avatar du
-   * tout : un nom, une bio, une pastille d'activité. C'est le seul écran de
-   * l'application où identifier une personne A une conséquence (désactiver,
-   * bannir, réinitialiser un mot de passe), et c'était le seul à ne pas
-   * montrer son visage.
-   */
-  const photo = participantAvatarOf(membre);
-
+function Badges({ membre, language, state }: { readonly membre: AdminUserDetail; readonly language: AdminLanguage; readonly state: ReturnType<typeof accountStateOf> }) {
   return (
-    <div className="flex items-center gap-3">
-      <span
-        aria-hidden="true"
-        className="grid size-2 shrink-0 place-items-center rounded-full"
-        style={{ backgroundColor: membre.isOnline ? 'var(--color-success, #34D399)' : 'transparent' }}
-      />
-      <Avatar
-        initials={initialsOf(membre.displayName)}
-        color="var(--color-ios-brand)"
-        size={44}
-        name={membre.displayName}
-        {...(photo === undefined ? {} : { src: photo })}
-      />
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-title font-semibold" style={{ color: INK }}>
-          {membre.displayName}
-        </p>
-        {membre.bio === '' ? null : (
-          <p className="truncate text-caption" style={{ color: INK2 }}>
-            {membre.bio}
-          </p>
-        )}
-      </div>
-      {etat === null ? null : (
-        <span className="shrink-0 text-caption" style={{ color: 'var(--color-danger)' }}>
-          {translateAdmin(language, etat)}
-        </span>
+    <>
+      <AdminRoleBadge language={language} role={membre.role} />
+      <AdminInterpretedBadge value={state} />
+      {membre.email === '' ? null : membre.emailVerifiedAt === null ? (
+        <AdminBadge tone="neutral">{translateAdmin(language, 'admin.people.security.emailUnverified')}</AdminBadge>
+      ) : (
+        <AdminBadge tone="success" glyph="checkCircle">
+          {translateAdmin(language, 'admin.people.security.emailVerified')}
+        </AdminBadge>
       )}
-    </div>
+      {membre.phoneVerifiedAt === null ? null : (
+        <AdminBadge tone="success" glyph="checkCircle">
+          {translateAdmin(language, 'admin.people.security.phoneVerified')}
+        </AdminBadge>
+      )}
+      {membre.twoFactorEnabled ? (
+        <AdminBadge tone="info" glyph="shieldCheck">
+          {translateAdmin(language, 'admin.people.security.twoFactor')}
+        </AdminBadge>
+      ) : null}
+    </>
   );
 }
 
-/**
- * TOUTES LES MÉTADONNÉES SERVIES (#7845) — langues du Prisme, fuseau,
- * vérifications, verrouillage, complétion. Une ligne sans valeur ne
- * s'affiche pas : « — » répété dix fois ne dit rien de plus qu'une absence.
- */
-function Metadonnees({ membre, language }: { readonly membre: AdminUserDetail; readonly language: InterfaceLanguage }) {
-  const date = (valeur: string | null) => (valeur === null ? '' : adminMoment(valeur, language));
-  const lignes: readonly (readonly [string, string])[] = [
-    [translateAdmin(language, 'admin.meta.name'), [membre.firstName, membre.lastName].filter((part) => part !== '').join(' ')],
-    [translateAdmin(language, 'admin.meta.systemLanguage'), membre.systemLanguage],
-    [translateAdmin(language, 'admin.meta.regionalLanguage'), membre.regionalLanguage],
-    [translateAdmin(language, 'admin.meta.customLanguage'), membre.customDestinationLanguage],
-    [translateAdmin(language, 'admin.meta.timezone'), membre.timezone],
-    [translateAdmin(language, 'admin.meta.emailVerified'), date(membre.emailVerifiedAt)],
-    [translateAdmin(language, 'admin.meta.phoneVerified'), date(membre.phoneVerifiedAt)],
-    [translateAdmin(language, 'admin.meta.completion'), membre.profileCompletionRate === null ? '' : `${Math.round(membre.profileCompletionRate)} %`],
-    [translateAdmin(language, 'admin.meta.passwordChanged'), date(membre.lastPasswordChange)],
-    [translateAdmin(language, 'admin.meta.failedLogins'), membre.failedLoginAttempts === 0 ? '' : String(membre.failedLoginAttempts)],
-    [translateAdmin(language, 'admin.meta.lockedUntil'), date(membre.lockedUntil)],
-    [translateAdmin(language, 'admin.meta.lockedReason'), membre.lockedReason ?? ''],
-    [translateAdmin(language, 'admin.meta.deactivated'), date(membre.deactivatedAt)],
-    [translateAdmin(language, 'admin.meta.updated'), date(membre.updatedAt)],
-  ];
+export default function AdminUserScreen() {
+  const language = currentAdminLanguage();
+  suspendForAdminInterfaceCatalog(language);
+  const { user: userId } = useParams<'/admin/users/$user'>();
+
   return (
-    <Section titre={translateAdmin(language, 'admin.meta.title')}>
-      {lignes
-        .filter(([, valeur]) => valeur !== '')
-        .map(([label, valeur]) => (
-          <Ligne key={label} label={label} valeur={valeur} />
-        ))}
-    </Section>
+    <AdminSectionScreen section="users" language={language} title={translateAdmin(language, 'admin.user.title')}>
+      {(reach) => <AdminUserFiche userId={userId} language={language} reach={reach} />}
+    </AdminSectionScreen>
   );
 }

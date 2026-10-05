@@ -1,4 +1,5 @@
 import type { QueryClient } from '@tanstack/react-query';
+import * as postsEndpoints from '@meeshy/shared/api/endpoints/posts';
 
 import { bookmarkSlotOf, withBookmark, withoutBookmark, type BookmarkSlot } from '@/lib/feed/bookmark-membership';
 import { togglePost, withServedCount, type PostToggleKind } from '@/lib/feed/interactions';
@@ -16,12 +17,12 @@ import { outcomeOf } from './outcome';
  * SITE UNIQUE que la carte du fil appelle : plan → optimiste → appel → issue,
  * même forme que `performReaction` (`reactions.ts`).
  *
- * - AIMER : `POST|DELETE /api/v1/posts/:postId/like`
+ * - AIMER : `POST|DELETE posts.byPostIdLike`
  *   (`services/gateway/src/routes/posts/interactions.ts:86,265`), sans corps —
  *   la passerelle pose « ❤️ » par défaut. Idempotent par
  *   `X-Client-Mutation-Id` (`middleware/clientMutationId.ts`, `cmid_<uuid>`) :
  *   un rejeu ne diffuse ni ne notifie deux fois (#6293).
- * - ENREGISTRER : `POST|DELETE /api/v1/posts/:postId/bookmark`
+ * - ENREGISTRER : `POST|DELETE posts.byPostIdBookmark`
  *   (`bookmarks.ts:32,90`), qui rend le `bookmarkCount` ABSOLU.
  *
  * **LES CAISSES QU'IL ÉCRIT NE SONT PAS NOMMÉES ICI** (#7341) : le registre
@@ -85,6 +86,11 @@ const inFlight = new Set<string>();
 
 const newClientMutationId = (): string => newClientMessageId().replace(/^cid_/, 'cmid_');
 
+const GESTURE_PATH: Readonly<Record<PostToggleKind, (postId: string) => string>> = {
+  like: postsEndpoints.byPostIdLike,
+  bookmark: postsEndpoints.byPostIdBookmark,
+};
+
 const isOn = (post: FeedPost | undefined, kind: PostToggleKind): boolean =>
   kind === 'like' ? post?.isLikedByMe === true : post?.isBookmarkedByMe === true;
 
@@ -97,7 +103,7 @@ function sendGesture(
   }
   return deps.transport.request<unknown>({
     method: gesture.on ? 'POST' : 'DELETE',
-    path: `/api/v1/posts/${encodeURIComponent(gesture.postId)}/${gesture.kind}`,
+    path: GESTURE_PATH[gesture.kind](gesture.postId),
     headers: { 'X-Client-Mutation-Id': newClientMutationId() },
   });
 }

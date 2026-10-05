@@ -119,6 +119,8 @@ struct CanvasV3ExhaustivityTests {
         // l'étape 2 serait aveugle : un cadre plein est OMIS du fil par
         // doctrine, donc il ne pourrait pas manquer à l'arrivée.
         media.crop = MediaCropRect(x: 0.1, y: 0.2, width: 0.5, height: 0.6)
+        // #8502 — le filtre PROPRE d'un objet.
+        media.filter = "vintage"
         return media
     }
 
@@ -296,5 +298,15 @@ struct CanvasV3ExhaustivityTests {
     /// dessinait une bande vide), et `textEffect` qu'un lot voisin venait
     /// d'ajouter. Les quatre sont branchées plutôt qu'exemptées. Une exemption
     /// écrite ici serait une perte qu'on choisit ; il n'y en a aucune.
-    private static let untransportedKeys: [String: [String: String]] = [:]
+    ///
+    /// **Une seule depuis #8502, et c'est une décision de CONTRAT, pas une
+    /// perte.** Le média de cette fixture est un FOND (`isBackground`, qu'il
+    /// faut peupler à `true`). Or le filtre d'un fond EST le filtre de slide
+    /// (`StoryEffects.filter`) : c'est sous ce nom que le pont le transporte,
+    /// et la clé v3 `payload.filter` partagée ne peut pas dire les deux. Le
+    /// filtre PROPRE d'un média POSÉ, lui, fait l'aller-retour —
+    /// `CanvasV3ObjectFilterTests.allerRetour_rendChaqueFiltreASaPlace`.
+    private static let untransportedKeys: [String: [String: String]] = [
+        "media": ["filter": "le filtre d'un FOND est le filtre de slide (#8502)"],
+    ]
 }

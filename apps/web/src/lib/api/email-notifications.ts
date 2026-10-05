@@ -1,4 +1,5 @@
 import * as z from 'zod/mini';
+import * as meEndpoints from '@meeshy/shared/api/endpoints/me';
 
 import type { DataSource } from './config';
 import type { ApiFailure, ApiResult, HttpTransport } from './http';
@@ -6,7 +7,7 @@ import { reachFailureOf, unreadableFailure, type ReachFailure } from './link-fai
 
 /**
  * **LE PORT DU DÉSABONNEMENT DES E-MAILS** (#6715) — `notification.emailEnabled`,
- * lu et écrit par les routes unifiées `GET`/`PATCH /api/v1/me/preferences`
+ * lu et écrit par les routes unifiées `GET`/`PATCH me.preferences`
  * (`routes/me/preferences/unified-routes.ts`, sous session).
  *
  * **Pourquoi ce réglage et aucun autre** : c'est le SEUL que lisent la
@@ -36,7 +37,7 @@ export async function loadEmailNotifications(deps: EmailNotificationsDeps): Prom
     const { fixtureEmailNotifications } = await import('./fixtures-email-links');
     return fixtureEmailNotifications();
   }
-  const result = await deps.transport.request<unknown>({ method: 'GET', path: '/api/v1/me/preferences?fields=notification.emailEnabled' });
+  const result = await deps.transport.request<unknown>({ method: 'GET', path: `${meEndpoints.preferences}?fields=notification.emailEnabled` });
   return result.ok ? servedValue(result.data) : result;
 }
 
@@ -47,7 +48,7 @@ export async function saveEmailNotifications(deps: EmailNotificationsDeps, enabl
   }
   const result = await deps.transport.request<unknown>({
     method: 'PATCH',
-    path: '/api/v1/me/preferences',
+    path: meEndpoints.preferences,
     body: { notification: { emailEnabled: enabled } },
   });
   return result.ok ? servedValue(result.data) : result;

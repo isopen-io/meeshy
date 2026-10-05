@@ -1,6 +1,7 @@
 import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
 import {
   EPHEMERAL_UNRECEIVED_RETENTION_MS,
+  isAfterReadEphemeral,
   normalizeEphemeralDuration,
 } from '@meeshy/shared/utils/ephemeral-countdown';
 
@@ -44,15 +45,25 @@ export function ephemeralSendFields(input: {
   readonly ephemeralDuration?: number | null;
   readonly expiresAt?: Date | null;
   readonly isViewOnce?: boolean | null;
+  /** Le bitfield RECOMPOSÉ — porte la flamme-œil (#8302). */
+  readonly effectFlags?: number | null;
   readonly now: Date;
 }): EphemeralSendFields {
+  const retentionCap = new Date(input.now.getTime() + EPHEMERAL_UNRECEIVED_RETENTION_MS);
+  const viewOnce = input.isViewOnce === true ? { viewOnceBurnAt: retentionCap } : {};
+
+  // Flamme-œil (#8302) : aucune durée — rien ne décompte à la réception, la
+  // consommation pose l'échéance de chaque lecteur. La colonne porte le
+  // plafond de rétention, le filet d'un message que personne ne lit jamais.
+  if (isAfterReadEphemeral(input.effectFlags)) {
+    return { ephemeralDuration: null, expiresAt: retentionCap, ...viewOnce };
+  }
+
   const duration = normalizeEphemeralDuration({
     ephemeralDuration: input.ephemeralDuration,
     expiresAt: input.expiresAt,
     now: input.now,
   });
-  const retentionCap = new Date(input.now.getTime() + EPHEMERAL_UNRECEIVED_RETENTION_MS);
-  const viewOnce = input.isViewOnce === true ? { viewOnceBurnAt: retentionCap } : {};
 
   if (duration === null) {
     return { ephemeralDuration: null, expiresAt: input.expiresAt ?? null, ...viewOnce };
@@ -82,5 +93,8 @@ export function composeMessageEffectFlags(declared: {
   if (declared.isBlurred) flags |= MESSAGE_EFFECT_FLAGS.BLURRED;
   if (declared.expiresAt || declared.ephemeralDuration) flags |= MESSAGE_EFFECT_FLAGS.EPHEMERAL;
   if (declared.isViewOnce) flags |= MESSAGE_EFFECT_FLAGS.VIEW_ONCE;
+  // Flamme-œil (#8302) : le bit ne voyage jamais seul — un client qui l'oublie
+  // produirait un message que les lois de protection ne verraient pas éphémère.
+  if (flags & MESSAGE_EFFECT_FLAGS.EPHEMERAL_AFTER_READ) flags |= MESSAGE_EFFECT_FLAGS.EPHEMERAL;
   return flags;
 }

@@ -93,19 +93,18 @@ describe('/signup?next= — « Déjà un compte ? Se connecter » garde l’invi
 
 describe('landingAfterRegistration — où mène un compte qui vient d’être créé', () => {
   test('depuis une invitation : retour à l’invitation', () => {
-    expect(landingAfterRegistration({ next: '/chat/mshy_equipe_7f3a', email: 'ada@meeshy.example' })).toBe('/chat/mshy_equipe_7f3a');
+    expect(landingAfterRegistration({ next: '/chat/mshy_equipe_7f3a' })).toBe('/chat/mshy_equipe_7f3a');
   });
 
-  test('sans `next` : la vérification de l’e-mail, comme avant', () => {
-    expect(landingAfterRegistration({ next: null, email: 'ada@meeshy.example' })).toBe('/auth/verify-email?email=ada%40meeshy.example');
+  /** #8288 — le code se saisit DANS la carte, et un compte sans code s'utilise
+   * pendant son délai de grâce (#8238) : l'onboarding, plus l'écran du code. */
+  test('sans `next` : l’onboarding', () => {
+    expect(landingAfterRegistration({ next: null })).toBe('/onboarding');
   });
 
-  test('`next` hostile : la vérification de l’e-mail', () => {
+  test('`next` hostile : l’onboarding', () => {
     for (const hostile of ['//evil.com', 'https://evil.com']) {
-      expect({ hostile, landing: landingAfterRegistration({ next: hostile, email: 'ada@meeshy.example' }) }).toEqual({
-        hostile,
-        landing: '/auth/verify-email?email=ada%40meeshy.example',
-      });
+      expect({ hostile, landing: landingAfterRegistration({ next: hostile }) }).toEqual({ hostile, landing: '/onboarding' });
     }
   });
 });

@@ -83,14 +83,14 @@ extension UniversalComposerBar {
     // MARK: - Minimized Floating Button
 
     private var minimizedFloatingButton: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             // Mic button
             if resolvedShowVoice {
                 Button {
                     HapticFeedback.medium()
                     expandAndStartRecording()
                 } label: {
-                    VStack(spacing: 3) {
+                    VStack(spacing: MeeshySpacing.xxs) {
                         ZStack {
                             Circle()
                                 .fill(.ultraThinMaterial)
@@ -126,7 +126,7 @@ extension UniversalComposerBar {
                 HapticFeedback.medium()
                 expandComposer()
             } label: {
-                VStack(spacing: 3) {
+                VStack(spacing: MeeshySpacing.xxs) {
                     ZStack {
                         Circle()
                             .fill(
@@ -148,8 +148,8 @@ extension UniversalComposerBar {
                 }
             }
         }
-        .padding(.trailing, 16)
-        .padding(.bottom, 12)
+        .padding(.trailing, MeeshySpacing.lg)
+        .padding(.bottom, MeeshySpacing.md)
         .frame(maxWidth: .infinity, alignment: .trailing)
     }
 
@@ -157,139 +157,120 @@ extension UniversalComposerBar {
 
     private var expandedComposer: some View {
         VStack(spacing: 0) {
-            // Edit banner
-            if let banner = editBanner { banner }
-            // Reply banner
-            if let banner = replyBanner { banner }
-
-            // Custom attachments (real thumbnails from parent) or default chips
-            if let custom = customAttachmentsPreview {
-                custom
-                    .transition(.scale.combined(with: .opacity))
-            } else if !allAttachments.isEmpty {
-                attachmentsPreview
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            // Swipe handle indicator
+            if startMinimized {
+                swipeHandle
             }
 
-            // Clipboard content preview (for pasted text > 2000 chars)
-            if let clip = clipboardContent {
-                clipboardContentPreview(clip)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
+            // Ce qui accompagne le message — réponse, édition, pièces
+            // jointes, presse-papiers — vit DANS le verre (#8417).
+            panelHeader
 
-            // Main composer
-            VStack(spacing: 0) {
-                // Swipe handle indicator
-                if startMinimized {
-                    swipeHandle
-                }
-
-                // Les rails qui s'ouvrent au-dessus de la barre d'outils gardent
-                // une marge avec le bord du verre (#7966) : leur propre
-                // `.padding(.horizontal, 8)` sur les côtés, celle-ci en haut.
-                if showEphemeralPicker {
-                    ephemeralDurationPicker
-                        .padding(.top, Self.railTopInset)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                }
-
-                // Les effets du message s'ouvrent comme la durée éphémère : un
-                // petit panneau dans le verre, jamais une feuille (#7967).
-                if showEffectsPanel {
-                    EffectsPickerView(
-                        flags: pendingEffects.flags,
-                        accent: servedAccent,
-                        muted: mutedColor,
-                        surface: railSurface
-                    )
-                    .padding(.horizontal, 8)
+            // Les rails qui s'ouvrent au-dessus de la barre d'outils gardent
+            // une marge avec le bord du verre (#7966) : leur propre
+            // `.padding(.horizontal, 8)` sur les côtés, celle-ci en haut.
+            if showEphemeralPicker {
+                ephemeralDurationPicker
                     .padding(.top, Self.railTopInset)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
-                }
+            }
 
-                // Permanent effects inline picker (for comments)
-                if showPermanentEffectsPicker {
-                    permanentEffectsInlinePicker
-                        .padding(.top, Self.railTopInset)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                }
+            // Les effets du message s'ouvrent comme la durée éphémère : un
+            // petit panneau dans le verre, jamais une feuille (#7967).
+            if showEffectsPanel {
+                EffectsPickerView(
+                    flags: pendingEffects.flags,
+                    accent: servedAccent,
+                    muted: mutedColor,
+                    surface: railSurface
+                )
+                .padding(.horizontal, MeeshySpacing.sm)
+                .padding(.top, Self.railTopInset)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
 
-                // Top toolbar (ephemeral, sentiment, language, char counter)
-                // Hidden during recording for a clean, iMessage-like full-width bar
-                if !effectiveIsRecording {
-                    topToolbar
-                        .padding(.horizontal, 8)
-                        .padding(.top, 6)
-                        .padding(.bottom, 2)
-                        .transition(.opacity.combined(with: .move(edge: .top)))
-                }
+            // Permanent effects inline picker (for comments)
+            if showPermanentEffectsPicker {
+                permanentEffectsInlinePicker
+                    .padding(.top, Self.railTopInset)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
 
-                // Composer row — either the recording bar (full-width pill, iMessage-style)
-                // or the regular layout: [ (+) attach ]  [ text field ]  [ mic / send ]
-                if effectiveIsRecording {
-                    recordingBar
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 10)
-                        .transition(
-                            reduceMotion
-                                ? .opacity
-                                : .asymmetric(
-                                    insertion: .opacity.combined(with: .scale(scale: 0.96)),
-                                    removal: .opacity
-                                )
-                        )
-                } else {
-                    // Gras, italique, souligné, barré — dès qu'un mot est
-                    // sélectionné (#7849, iOS 18+).
-                    if showsFormatBar {
-                        ComposerFormatBar(accent: servedAccent, onFormat: applyEmphasis)
-                            .padding(.horizontal, 12)
-                            .padding(.top, 6)
-                            .transition(.opacity.combined(with: .move(edge: .bottom)))
+            // Top toolbar (ephemeral, sentiment, language, char counter)
+            // Hidden during recording for a clean, iMessage-like full-width bar
+            if !effectiveIsRecording {
+                topToolbar
+                    .padding(.horizontal, MeeshySpacing.sm)
+                    .padding(.top, MeeshySpacing.xsPlus)
+                    .padding(.bottom, MeeshySpacing.xxs)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+
+            // Composer row — either the recording bar (full-width pill, iMessage-style)
+            // or the regular layout: [ (+) attach ]  [ text field ]  [ mic / send ]
+            if effectiveIsRecording {
+                recordingBar
+                    .padding(.horizontal, MeeshySpacing.md)
+                    .padding(.vertical, MeeshySpacing.smPlus)
+                    .transition(
+                        reduceMotion
+                            ? .opacity
+                            : .asymmetric(
+                                insertion: .opacity.combined(with: .scale(scale: 0.96)),
+                                removal: .opacity
+                            )
+                    )
+            } else {
+                // Gras, italique, souligné, barré — dès qu'un mot est
+                // sélectionné (#7849, iOS 18+).
+                if showsFormatBar {
+                    ComposerFormatBar(accent: servedAccent, onFormat: applyEmphasis)
+                        .padding(.horizontal, MeeshySpacing.md)
+                        .padding(.top, MeeshySpacing.xsPlus)
+                        .transition(.opacity.combined(with: .move(edge: .bottom)))
+                }
+                HStack(alignment: .bottom, spacing: MeeshySpacing.md) {
+                    // Left: (+) attach / keyboard toggle button
+                    if resolvedShowAttachment {
+                        attachButton
                     }
-                    HStack(alignment: .bottom, spacing: 12) {
-                        // Left: (+) attach / keyboard toggle button
-                        if resolvedShowAttachment {
-                            attachButton
+
+                    // Center: text field. While the carousel is up, an
+                    // overlay intercepts taps to bring the keyboard back
+                    // (the field isn't focused then). When the keyboard is
+                    // already up there is no overlay, so the TextField keeps
+                    // its native tap-to-place-cursor behaviour.
+                    textInputField
+                        .overlay {
+                            if showAttachOptions {
+                                Color.clear
+                                    .contentShape(Rectangle())
+                                    .onTapGesture { focusTextField() }
+                            }
                         }
 
-                        // Center: text field. While the carousel is up, an
-                        // overlay intercepts taps to bring the keyboard back
-                        // (the field isn't focused then). When the keyboard is
-                        // already up there is no overlay, so the TextField keeps
-                        // its native tap-to-place-cursor behaviour.
-                        textInputField
-                            .overlay {
-                                if showAttachOptions {
-                                    Color.clear
-                                        .contentShape(Rectangle())
-                                        .onTapGesture { focusTextField() }
-                                }
-                            }
-
-                        // Right: send (when content) or hidden (idle)
-                        actionButton
-                    }
-                    .animation(.spring(response: 0.3, dampingFraction: 0.7), value: hasContent)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 10)
-                    .transition(.opacity)
+                    // Right: send (when content) or hidden (idle)
+                    actionButton
                 }
-
-                // Attachment carousel — slides up in the keyboard's place when
-                // the (+) toggle is active. Sized to the last known keyboard
-                // height so swapping keyboard <-> carousel keeps the input row
-                // perfectly still.
-                if showAttachOptions && !effectiveIsRecording {
-                    attachmentCarouselPanel
-                        .frame(height: attachmentPanelHeight)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                }
+                .animation(.spring(response: 0.3, dampingFraction: 0.7), value: hasContent)
+                .padding(.horizontal, MeeshySpacing.md)
+                .padding(.vertical, MeeshySpacing.smPlus)
+                .transition(.opacity)
             }
-            .adaptiveLiquidGlass(in: Self.panelShape, tint: panelGlassTint)
-            .padding(.horizontal, 8)
-            .padding(.bottom, 4)
+
+            // Attachment carousel — slides up in the keyboard's place when
+            // the (+) toggle is active. Sized to the last known keyboard
+            // height so swapping keyboard <-> carousel keeps the input row
+            // perfectly still.
+            if showAttachOptions && !effectiveIsRecording {
+                attachmentCarouselPanel
+                    .frame(height: attachmentPanelHeight)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
         }
+        .adaptiveLiquidGlass(in: Self.panelShape, tint: panelGlassTint)
+        .padding(.horizontal, MeeshySpacing.sm)
+        .padding(.bottom, MeeshySpacing.xs)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showEphemeralPicker)
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: dominantProtection)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showPermanentEffectsPicker)
@@ -374,7 +355,8 @@ extension UniversalComposerBar {
         .adaptiveOnChange(of: textAnalyzer.languageOverride?.code) { _, _ in
             applyDetectedLanguage(force: true)
         }
-        .adaptiveOnChange(of: text) { _, newValue in
+        .adaptiveOnChange(of: text) { oldValue, newValue in
+            caretFollowsWrite(newValue)
             onAnyInteraction?()
             notifyContentChange()
             textAnalyzer.analyze(text: newValue)
@@ -409,8 +391,8 @@ extension UniversalComposerBar {
                     showAttachOptions = false
                 }
             }
-            // Clipboard content: auto-create when pasting 2000+ chars
-            handleClipboardCheck(newValue)
+            // Collage : fichier `file://` → pièce jointe ; au-delà de la limite → `.txt` (#9037)
+            handleClipboardCheck(newValue, previous: oldValue)
         }
         .adaptiveOnChange(of: textBinding?.wrappedValue) { _, newValue in
             guard let newValue, newValue != text else { return }
@@ -454,6 +436,47 @@ extension UniversalComposerBar {
     }
 
     // ========================================================================
+    // MARK: - En-tête du verre
+    // ========================================================================
+
+    /// **Ce qui accompagne le message vit dans le verre** (#8417, directive
+    /// porteur 2026-09-27). Les bandeaux de l'hôte — cartes arrondies du fil
+    /// comme bandes plates de la story — prennent la forme d'une carte posée
+    /// sur la plaque, avec la marge des rails (#7966).
+    @ViewBuilder
+    var panelHeader: some View {
+        if editBanner != nil || replyBanner != nil {
+            VStack(spacing: MeeshySpacing.xsPlus) {
+                if let banner = editBanner { banner.clipShape(Self.bannerShape) }
+                if let banner = replyBanner { banner.clipShape(Self.bannerShape) }
+            }
+            .padding(.horizontal, MeeshySpacing.sm)
+            .padding(.top, Self.railTopInset)
+            .transition(.move(edge: .bottom).combined(with: .opacity))
+        }
+
+        // Custom attachments (real thumbnails from parent) or default chips
+        if let custom = customAttachmentsPreview {
+            custom
+                .padding(.horizontal, MeeshySpacing.sm)
+                .padding(.top, MeeshySpacing.xs)
+                .transition(.scale.combined(with: .opacity))
+        } else if !allAttachments.isEmpty {
+            attachmentsPreview
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+        }
+
+        // Clipboard content preview (for pasted text > 2000 chars)
+        if let clip = clipboardContent {
+            clipboardContentPreview(clip)
+                .padding(.top, MeeshySpacing.sm)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+        }
+    }
+
+    static let bannerShape = RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous)
+
+    // ========================================================================
     // MARK: - Panneau de verre
     // ========================================================================
 
@@ -461,12 +484,12 @@ extension UniversalComposerBar {
     /// porteur 2026-09-25) — réel sur iOS 26, fait maison avant. Il remplace le
     /// fond transparent de #3920 ; les éléments posés dessus (champ, (+),
     /// enregistrement, pastille de langue) sont du verre aussi.
-    static let panelShape = RoundedRectangle(cornerRadius: 26, style: .continuous)
-    static let fieldShape = RoundedRectangle(cornerRadius: 22, style: .continuous)
+    static let panelShape = RoundedRectangle(cornerRadius: MeeshyRadius.xxl, style: .continuous)
+    static let fieldShape = RoundedRectangle(cornerRadius: MeeshyRadius.xlPlus, style: .continuous)
 
     /// Une protection armée voile le panneau ENTIER de sa teinte (#7667) :
     /// toute la barre dit l'état, pas seulement la pastille qui l'a allumé.
     var panelGlassTint: Color? {
-        dominantProtection.map { $0.tint.opacity(isDark ? 0.30 : 0.22) }
+        dominantProtection.map { $0.panelWash(isDark: isDark) }
     }
 }

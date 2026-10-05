@@ -32,25 +32,8 @@ final class BlockedViewModel: ObservableObject {
         revalidationTask?.cancel()
         let fetch: @Sendable () async throws -> [BlockedUser] = { try await blockService.listBlockedUsers() }
         let setLoadState: @MainActor @Sendable (LoadState) -> Void = { [weak self] state in
-                guard let self else { return }
-                // Map the loader's transient states into the reduced surface the
-                // Blocked screen renders ("loading" vs "loaded" vs "error"). The
-                // bible's no-spinner-when-cached rule is honoured: cachedFresh /
-                // cachedStale come through as `.loaded`, only a cold start hits
-                // `.loading`.
-                switch state {
-                case .cachedFresh, .cachedStale, .loaded:
-                    self.loadState = .loaded
-                case .loading:
-                    self.loadState = .loading
-                case .offline:
-                    self.loadState = .offline
-                case .error:
-                    self.loadState = .error("Erreur lors du chargement")
-                case .idle:
-                    self.loadState = .idle
-                }
-            }
+            self?.loadState = state.collapsedForList(errorMessage: "Erreur lors du chargement")
+        }
         let apply: @MainActor @Sendable ([BlockedUser]) -> Void = { [weak self] users in
             self?.blockedUsers = users
         }

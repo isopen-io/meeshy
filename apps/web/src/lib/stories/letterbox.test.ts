@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { letterboxBands, letterboxHashes, letterboxIsServed } from './letterbox';
+import { letterboxBands, letterboxFill, letterboxHashes, letterboxIsServed } from './letterbox';
 import type { CanvasObject, CanvasScene } from '@/lib/canvas/document';
 
 /**
@@ -118,5 +118,35 @@ describe('letterboxHashes — la cascade des sources, dans l’ordre où on les 
       objects: [object({ id: 'fg', plane: 'content', z: 5, payload: { thumbHash: 'PLAN' } })],
     };
     expect(letterboxHashes(scene)).toEqual(['PLAN']);
+  });
+});
+
+/** LE FOND CHOISI AU CADRE (#8414) — ce que les bandes d'un fond AJUSTÉ
+ * peignent : le média lui-même flouté (le défaut), ou une teinte pleine. */
+describe('letterboxFill — les bandes se peignent du fond choisi', () => {
+  const HASH = '3nQFFAT4WIiod4WYZ6joeo+u9w==';
+  const base = { fitMode: 'fit' as const, backdrop: 'blur' as const, mediaSrc: 'https://cdn/x.jpg', mediaIsImage: true, hashes: [HASH] };
+
+  test('un fond qui REMPLIT n’a aucune bande à peindre', () => {
+    expect(letterboxFill({ ...base, fitMode: 'fill' })).toBeUndefined();
+  });
+
+  test('FLOU sur une image ⇒ l’image elle-même, floutée', () => {
+    expect(letterboxFill(base)).toEqual({ kind: 'blur', src: 'https://cdn/x.jpg' });
+  });
+
+  test('FLOU sur une vidéo ⇒ son thumbhash étiré (l’image complète, pas un aplat)', () => {
+    const fill = letterboxFill({ ...base, mediaIsImage: false });
+    expect(fill?.kind).toBe('blur');
+    expect(fill?.kind === 'blur' && fill.src.startsWith('data:image/bmp;base64,')).toBe(true);
+  });
+
+  test('FLOU sur une vidéo sans aucun hash ⇒ aucune bande (la surface reste)', () => {
+    expect(letterboxFill({ ...base, mediaIsImage: false, hashes: [] })).toBeUndefined();
+  });
+
+  test('une TEINTE ⇒ sa couleur du contrat, même sans hash ni média', () => {
+    expect(letterboxFill({ ...base, backdrop: 'indigo', hashes: [], mediaSrc: undefined })).toEqual({ kind: 'tint', backdrop: 'indigo', color: '#312E81' });
+    expect(letterboxFill({ ...base, backdrop: 'sand' })).toEqual({ kind: 'tint', backdrop: 'sand', color: '#FDE68A' });
   });
 });

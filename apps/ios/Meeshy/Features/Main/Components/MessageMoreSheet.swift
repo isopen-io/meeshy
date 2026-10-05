@@ -35,6 +35,8 @@ struct MessageMoreSheet: View {
     var onEdit: (() -> Void)? = nil
     var onCopy: (() -> Void)? = nil
     var onShare: (() -> Void)? = nil
+    /// « Imager » (#8692) — ouvre l'atelier « Imagine » une fois la feuille fermée.
+    var onImagine: (() -> Void)? = nil
     /// Ajout d'une réaction depuis la vue « Réactions » de « Plus… » (voir + ajouter).
     var onReact: ((String) -> Void)? = nil
     var onSelectTranslation: ((MessageTranslation?) -> Void)? = nil
@@ -69,29 +71,29 @@ struct MessageMoreSheet: View {
                 Spacer()
                 closeButton
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 12)
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.top, MeeshySpacing.md)
 
             ScrollView(showsIndicators: false) {
-                VStack(spacing: 16) {
+                VStack(spacing: MeeshySpacing.lg) {
                     if let selectedItem, isExploration(selectedItem) {
                         // Morph (req 2026-07-24) : au tap d'un item explorable, la
                         // grille complète se replie en une BANDE D'ICÔNES horizontale
                         // scrollable (Liquid Glass) — le contenu de l'item sélectionné
                         // s'affiche dessous, laissant la place au détail.
                         explorableTabStrip(selected: selectedItem)
-                            .padding(.horizontal, 14)
-                            .padding(.top, 8)
+                            .padding(.horizontal, MeeshySpacing.mdPlus)
+                            .padding(.top, MeeshySpacing.sm)
                         inlineContent(for: selectedItem)
                             .id(selectedItem)
                             .transition(.opacity.combined(with: .move(edge: .top)))
                     } else {
                         glassGridCard
-                            .padding(.horizontal, 14)
-                            .padding(.top, 8)
+                            .padding(.horizontal, MeeshySpacing.mdPlus)
+                            .padding(.top, MeeshySpacing.sm)
                     }
                 }
-                .padding(.bottom, 24)
+                .padding(.bottom, MeeshySpacing.xxl)
             }
             .animation(.easeInOut(duration: 0.2), value: selectedItem)
         }
@@ -156,15 +158,15 @@ struct MessageMoreSheet: View {
     // MARK: - Glass Grid Card
 
     private var glassGridCard: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.mdPlus) {
             ForEach(Array(sections.enumerated()), id: \.offset) { _, section in
                 sectionGrid(for: section)
             }
         }
-        .padding(.vertical, 16)
-        .padding(.horizontal, 12)
+        .padding(.vertical, MeeshySpacing.lg)
+        .padding(.horizontal, MeeshySpacing.md)
         .frame(maxWidth: .infinity)
-        .adaptiveGlass(in: RoundedRectangle(cornerRadius: 20, style: .continuous), tint: accent.opacity(0.14))
+        .adaptiveGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.xl, style: .continuous), tint: accent.opacity(0.14))
         .shadow(color: accent.opacity(0.12), radius: 12, x: 0, y: 4)
         .shadow(color: .black.opacity(0.14), radius: 18, x: 0, y: 8)
     }
@@ -185,7 +187,7 @@ struct MessageMoreSheet: View {
     /// fait via le bouton de fermeture de `inlineContent`.
     private func explorableTabStrip(selected: MoreItem) -> some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 10) {
+            HStack(spacing: MeeshySpacing.smPlus) {
                 ForEach(allMoreItems, id: \.self) { item in
                     let color = colorFor(item)
                     let isActive = item == selected
@@ -201,15 +203,15 @@ struct MessageMoreSheet: View {
                                     ? color.opacity(isDark ? 0.35 : 0.18)
                                     : (isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.05)))
                             )
-                            .overlay(Circle().stroke(isActive ? color.opacity(0.5) : .clear, lineWidth: 1.5))
+                            .overlay(Circle().stroke(isActive ? color.opacity(0.5) : .clear, lineWidth: MeeshyBorder.emphasis))
                     }
                     .buttonStyle(MorePelletButtonStyle())
                     .accessibilityLabel(labelText(item))
                     .accessibilityAddTraits(isActive ? [.isSelected] : [])
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
+            .padding(.horizontal, MeeshySpacing.md)
+            .padding(.vertical, MeeshySpacing.sm)
         }
         .adaptiveGlass(in: Capsule(), tint: accent.opacity(0.10))
         .shadow(color: accent.opacity(0.10), radius: 8, x: 0, y: 3)
@@ -230,15 +232,15 @@ struct MessageMoreSheet: View {
     @ViewBuilder
     private func pelletSubGrid(title: String, items: [MoreItem]) -> some View {
         if !items.isEmpty {
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
                 Text(title)
                     .font(.caption2.weight(.semibold))
                     .textCase(.uppercase)
                     .foregroundColor(theme.textMuted)
-                    .padding(.horizontal, 4)
+                    .padding(.horizontal, MeeshySpacing.xs)
 
-                let columns = Array(repeating: GridItem(.flexible(), spacing: 6), count: 5)
-                LazyVGrid(columns: columns, spacing: 8) {
+                let columns = Array(repeating: GridItem(.flexible(), spacing: MeeshySpacing.xsPlus), count: 5)
+                LazyVGrid(columns: columns, spacing: MeeshySpacing.sm) {
                     ForEach(Array(items.enumerated()), id: \.element) { index, item in
                         pellet(item, index: index)
                     }
@@ -258,6 +260,14 @@ struct MessageMoreSheet: View {
             withAnimation(.easeInOut(duration: 0.2)) {
                 selectedItem = (selectedItem == item) ? nil : item
             }
+        } else if item == .imager {
+            // L'atelier se présente APRÈS la fermeture de cette feuille : présenté
+            // pendant, il serait emporté avec elle (`MessageCardExportPresenter`
+            // attend la fin d'une fermeture en cours).
+            HapticFeedback.medium()
+            let open = onImagine
+            dismiss()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { open?() }
         } else if item == .media {
             // Ouvre le sous-menu média (enregistrer / transférer / supprimer) —
             // jamais de suppression directe (feedback device 2026-07-14).
@@ -295,7 +305,7 @@ struct MessageMoreSheet: View {
         return Button {
             handleMoreItemTap(item)
         } label: {
-            VStack(spacing: 5) {
+            VStack(spacing: MeeshySpacing.xs) {
                 ZStack {
                     Circle()
                         .fill(
@@ -350,7 +360,7 @@ struct MessageMoreSheet: View {
         // `pinSticker`/`unpinSticker` FONT et ferment, comme leurs voisins :
         // épingler une décoration n'ouvre rien à explorer.
         case .reply, .forward, .thread, .media, .pin, .unpin, .star, .unstar,
-             .pinSticker, .unpinSticker, .delete, .edit, .copy, .share: return false
+             .pinSticker, .unpinSticker, .delete, .edit, .copy, .share, .imager: return false
         case .views, .reactions, .language, .transcription, .sentiment, .history, .report: return true
         }
     }
@@ -371,6 +381,7 @@ struct MessageMoreSheet: View {
         case .edit: return MeeshyColors.indigo500
         case .copy: return MeeshyColors.indigo400
         case .share: return MeeshyColors.info
+        case .imager: return MeeshyColors.indigo500
         case .language: return MeeshyColors.info
         case .views: return MeeshyColors.success
         case .reactions: return MeeshyColors.warning
@@ -387,8 +398,8 @@ struct MessageMoreSheet: View {
     /// sous la grille. Le header remplace la barre de navigation absente.
     private func inlineContent(for item: MoreItem) -> some View {
         let color = colorFor(item)
-        return VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 8) {
+        return VStack(alignment: .leading, spacing: MeeshySpacing.md) {
+            HStack(spacing: MeeshySpacing.sm) {
                 Image(systemName: symbol(item))
                     .font(.footnote.weight(.semibold))
                     .foregroundColor(color)
@@ -415,11 +426,11 @@ struct MessageMoreSheet: View {
                 // réutilisée (0 clé neuve).
                 .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
             }
-            .padding(.horizontal, 4)
+            .padding(.horizontal, MeeshySpacing.xs)
 
             destination(for: item)
         }
-        .padding(.horizontal, 18)
+        .padding(.horizontal, MeeshySpacing.lg)
     }
 
     /// Contenu détaillé rendu INLINE sous la grille. La feuille est présentée
@@ -430,7 +441,7 @@ struct MessageMoreSheet: View {
     private func destination(for item: MoreItem) -> some View {
         switch item {
         case .language:
-            MessageLanguageDetailView(message: message, contactColor: contactColor, conversationId: conversationId,
+            MessageLanguageDetailView(message: message,
                 textTranslations: textTranslations, transcription: transcription, translatedAudios: translatedAudios,
                 onSelectTranslation: onSelectTranslation, onSelectAudioLanguage: onSelectAudioLanguage,
                 translatingTextLanguages: translatingTextLanguages, translatingAudioLanguages: translatingAudioLanguages,
@@ -439,18 +450,18 @@ struct MessageMoreSheet: View {
         case .views:
             MessageViewsDetailView(message: message, contactColor: contactColor, conversationId: conversationId)
         case .reactions:
-            MessageReactionsDetailView(message: message, contactColor: contactColor, conversationId: conversationId, onReact: onReact)
+            MessageReactionsDetailView(message: message, contactColor: contactColor, onReact: onReact)
         case .transcription:
-            MessageTranscriptionDetailView(message: message, contactColor: contactColor, conversationId: conversationId,
-                transcription: transcription, translatedAudios: translatedAudios, onSelectAudioLanguage: onSelectAudioLanguage)
+            MessageTranscriptionDetailView(message: message, contactColor: contactColor,
+                transcription: transcription, translatedAudios: translatedAudios)
         case .sentiment:
             MessageDetailSentimentTab(content: message.content, isDark: colorScheme == .dark).equatable()
         case .history:
             MessageEditsDetailView(message: message, editRevisions: editRevisions)
         case .report:
-            MessageReportDetailView(message: message, onReport: { onReport?($0, $1); dismiss() }, onDismiss: { dismiss() })
+            MessageReportDetailView(onReport: { onReport?($0, $1); dismiss() }, onDismiss: { dismiss() })
         case .reply, .forward, .thread, .media, .pin, .unpin, .star, .unstar,
-             .pinSticker, .unpinSticker, .delete, .edit, .copy, .share:
+             .pinSticker, .unpinSticker, .delete, .edit, .copy, .share, .imager:
             EmptyView()
         }
     }
@@ -471,6 +482,7 @@ struct MessageMoreSheet: View {
         case .edit: return "pencil"
         case .copy: return "doc.on.doc"
         case .share: return "square.and.arrow.up"
+        case .imager: return MessageCardExportMenu.imageSymbol
         case .language: return "globe"
         case .views: return "eye"
         case .reactions: return "face.smiling"
@@ -502,6 +514,7 @@ struct MessageMoreSheet: View {
         case .edit: return String(localized: "action.edit", defaultValue: "Modifier", bundle: .main)
         case .copy: return String(localized: "action.copy", defaultValue: "Copier", bundle: .main)
         case .share: return String(localized: "action.share", defaultValue: "Partager", bundle: .main)
+        case .imager: return MessageCardExportMenu.imageLabel
         case .language: return String(localized: "message-detail.tab.language", defaultValue: "Traduire", bundle: .main)
         case .views: return String(localized: "message-detail.tab.views", defaultValue: "Qui a vu", bundle: .main)
         case .reactions: return String(localized: "message-detail.tab.reactions", defaultValue: "Réactions", bundle: .main)

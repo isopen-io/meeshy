@@ -1,4 +1,5 @@
 import type { Message } from '@/lib/api/types';
+import { isAfterReadMessage } from '@/lib/view/after-read';
 
 /**
  * LA LOI DE PROTECTION D'UN MESSAGE — miroir de `BubbleContentBuilder.Kind`
@@ -79,14 +80,15 @@ export function viewOnceSpent(message: ViewOnceConsumptionFields): boolean {
   return message.isFullyConsumed === true || viewOnceOpenedByMe(message);
 }
 
-type ProtectionFields = Pick<Message, 'deletedAt' | 'isViewOnce' | 'viewOnceCount' | 'isBlurred' | 'expiresAt'> & {
+type ProtectionFields = Pick<Message, 'deletedAt' | 'isViewOnce' | 'viewOnceCount' | 'isBlurred' | 'expiresAt' | 'effectFlags'> & {
   readonly consumedByMe?: boolean;
   readonly isFullyConsumed?: boolean;
   readonly ephemeralDuration?: number;
 };
 
-/** Un message dont la DURÉE d'éphémère est posée — le seul qui a le droit de partir à l'échéance. */
-function isEphemeral(message: Pick<ProtectionFields, 'ephemeralDuration'>): boolean {
+/** Un message dont la DURÉE d'éphémère est posée, ou une flamme-œil (#8304) — les seuls qui ont le droit de partir à l'échéance. */
+function isEphemeral(message: Pick<ProtectionFields, 'ephemeralDuration' | 'effectFlags'>): boolean {
+  if (isAfterReadMessage(message)) return true;
   const duration = message.ephemeralDuration;
   return typeof duration === 'number' && Number.isFinite(duration) && duration > 0;
 }
@@ -115,6 +117,24 @@ export function protectionOf(message: ProtectionFields, now: number): Protection
   if (pastDeadline) return 'expired';
   if (message.isBlurred) return 'veiled';
   return 'standard';
+}
+
+/**
+ * CE QUE L'OUVERTURE D'UNE VUE UNIQUE LÈVE (#8567, décision porteur du
+ * 2026-09-29) : « l'ouverture de la vue unique n'enlève pas le flou, sauf si
+ * c'est un attachement directement, alors c'est ouvert en plein écran en
+ * clair ».
+ * - `fullscreen` — une pièce jointe : le plein écran, en clair, flou compris ;
+ * - `veiled-text` — un texte flouté : il s'ouvre à sa place ET reste voilé,
+ *   révélable par le geste du flou ;
+ * - `text` — un texte non flouté : il s'ouvre à sa place, en clair.
+ * Miroir iOS : `BubbleContent.veilConsumesViewOnce` / `protectedTap`.
+ */
+export type ViewOnceOpening = 'fullscreen' | 'veiled-text' | 'text';
+
+export function viewOnceOpeningOf(input: { readonly isBlurred: boolean; readonly attachmentCount: number }): ViewOnceOpening {
+  if (input.attachmentCount > 0) return 'fullscreen';
+  return input.isBlurred ? 'veiled-text' : 'text';
 }
 
 /** Les deux états de la vue unique — ceux que la PUCE porte. */
@@ -214,6 +234,27 @@ export function closeViewOnce(
   if (phase.phase !== 'revealed') return phase;
   if (input.immediate === true) return { phase: 'consumed' };
   return { phase: 'fogging', until: input.now + FOG_DURATION_MS, next: 'consumed' };
+}
+
+/**
+ * LE PLEIN ÉCRAN D'UN FLOU RÉVÉLÉ TIENT LA FENÊTRE (#8389) — un média révélé
+ * sur place s'ouvre en plein écran au toucher suivant ; la fenêtre de cinq
+ * secondes ne doit pas le refermer sous les yeux du lecteur. `until` infini :
+ * `settle` la laisse, comme une vue unique ouverte. Un toucher pendant le
+ * brouillard d'un flou rend le contenu ; une vue unique qui se referme, un
+ * voile au repos ou une vue consommée restent tels quels.
+ */
+export function holdReveal(phase: RevealPhase): RevealPhase {
+  if (phase.phase === 'revealed' || (phase.phase === 'fogging' && phase.next === 'hidden')) {
+    return { phase: 'revealed', until: Number.POSITIVE_INFINITY };
+  }
+  return phase;
+}
+
+/** LE PLEIN ÉCRAN REFERMÉ — une fenêtre NEUVE repart de maintenant, puis le flou revient par le chemin ordinaire. */
+export function rearmReveal(phase: RevealPhase, input: { readonly now: number }): RevealPhase {
+  if (phase.phase !== 'revealed') return phase;
+  return { phase: 'revealed', until: input.now + REVEAL_DURATION_SECONDS * 1000 };
 }
 
 /**

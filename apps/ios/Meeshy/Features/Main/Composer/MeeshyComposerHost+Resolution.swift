@@ -197,7 +197,8 @@ extension MeeshyComposerHost {
             // **Écrire n'est pas publier** (#6132). Les deux zones d'écriture
             // passent par le même terme : ce qui compte n'est pas LAQUELLE on
             // remplit, c'est qu'on est en train de remplir quelque chose.
-            writesText: writesText
+            writesText: writesText,
+            panelIsOpen: sceneBottomPanelIsOpen && horizontalSizeClass != .regular
         )
     }
 

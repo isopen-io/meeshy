@@ -1,7 +1,11 @@
 import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
 
 import { protectionOf } from '@/lib/reading-mode/protection';
-import type { Message } from '@/lib/api/types';
+import { quotedIsProtected } from '@/lib/view/quoted-protection';
+import type { Attachment, Message } from '@/lib/api/types';
+import type { ForwardSource } from '@/lib/api/forward';
+import type { SendPreview, SoleMedia } from '@/lib/send/send-sheet-plan';
+import type { SendSheetRequest } from '@/lib/send/send-sheet-store';
 
 /**
  * LA LOI DU TRANSFERT, CÔTÉ CLIENT (#5866) — miroir de `admitMessageForward`
@@ -70,4 +74,92 @@ export function admitForward(messages: readonly ForwardCandidate[], now: number)
   const refusal = messages.map((m) => forwardRefusalOf(m, now)).find((r) => r !== null);
   if (refusal !== undefined && refusal !== null) return { admitted: false, reason: refusal };
   return { admitted: true, ids: messages.map((m) => m.id) };
+}
+
+const MASKING_EFFECTS = MESSAGE_EFFECT_FLAGS.VIEW_ONCE | MESSAGE_EFFECT_FLAGS.BLURRED;
+
+type ForwardPiece = Pick<Attachment, 'id' | 'mimeType' | 'fileUrl'> &
+  Partial<Pick<Attachment, 'thumbnailUrl' | 'isViewOnce' | 'isBlurred' | 'isEncrypted'>> & {
+    readonly effectFlags?: number | null;
+  };
+
+/** Le message lui-même ne laisse PAS lire son contenu : voilé (colonne OU bit
+ * d'effet), chiffré, éphémère, vue unique — `protectionOf` ne lit ni le bit ni
+ * le chiffrement, `quotedIsProtected` les deux. */
+const messageMasks = (message: Message, now: number): boolean =>
+  protectionOf(message, now) !== 'standard' || message.expiresAt != null || quotedIsProtected(message);
+
+/**
+ * UNE PIÈCE NE SE PUBLIE PAS quand l'un des deux niveaux la masque — celui du
+ * MESSAGE (voilé, éphémère) et celui de la PIÈCE (vue unique, floutée,
+ * chiffrée, bits d'effet) : la passerelle refuse en `PROTECTED_MEDIA`, autant
+ * ne pas proposer le geste (leçon 275, la protection se lit aux deux niveaux).
+ */
+const pieceMasked = (piece: ForwardPiece): boolean =>
+  piece.isViewOnce === true ||
+  piece.isBlurred === true ||
+  piece.isEncrypted === true ||
+  ((piece.effectFlags ?? 0) & MASKING_EFFECTS) !== 0;
+
+const kindOfMime = (mime: string): 'image' | 'video' | 'audio' | 'file' => {
+  if (mime.startsWith('image/')) return 'image';
+  if (mime.startsWith('video/')) return 'video';
+  return mime.startsWith('audio/') ? 'audio' : 'file';
+};
+
+const soleMediaOf = (messages: readonly Message[], now: number): SoleMedia | undefined => {
+  const [only] = messages;
+  const pieces = only?.attachments ?? [];
+  const [piece] = pieces;
+  if (only === undefined || messages.length !== 1 || pieces.length !== 1 || piece === undefined) return undefined;
+  return { attachmentId: piece.id, mime: piece.mimeType, protected: messageMasks(only, now) || pieceMasked(piece) };
+};
+
+/**
+ * L'APERÇU — JAMAIS un contenu voilé. Un message flouté, éphémère ou à vue
+ * unique n'affiche ni son texte ni sa vignette dans la feuille : l'aperçu se
+ * réduit à « 1 message ». Sinon : le texte, à défaut la vignette de la pièce.
+ */
+const previewOfMessages = (messages: readonly Message[], now: number): SendPreview => {
+  const [only] = messages;
+  if (only === undefined || messages.length !== 1 || messageMasks(only, now)) return { kind: 'messages', count: messages.length };
+  if (only.content.trim() !== '') return { kind: 'text', text: only.content };
+  const piece = only.attachments?.length === 1 ? only.attachments[0] : undefined;
+  if (piece === undefined || pieceMasked(piece)) return { kind: 'messages', count: 1 };
+  const kind = kindOfMime(piece.mimeType);
+  const thumbUrl = piece.thumbnailUrl ?? (kind === 'image' ? piece.fileUrl : undefined);
+  return { kind, ...(thumbUrl === undefined ? {} : { thumbUrl }) };
+};
+
+const forwardSourceOf = (message: Message): ForwardSource => ({
+  id: message.id,
+  content: message.content,
+  originalLanguage: message.originalLanguage,
+});
+
+/**
+ * CE QUE LA SÉLECTION ADMISE REMET À LA FEUILLE D'ENVOI (#8884) — la demande
+ * que `openSendSheet` reçoit : les messages, dans l'ordre du fil, que le
+ * transport désigne par leur identifiant (la passerelle copie les pièces,
+ * aucun ré-upload), l'aperçu, et — pour UN message portant UN média — de quoi
+ * le proposer à la publication (story, post, réel). Pur : l'appelant a déjà
+ * fait passer la sélection par `admitForward`.
+ */
+export function forwardRequestOf(params: {
+  readonly conversationId: string;
+  readonly messages: readonly Message[];
+  readonly now: number;
+}): SendSheetRequest {
+  const { conversationId, messages, now } = params;
+  const soleMedia = soleMediaOf(messages, now);
+  return {
+    intent: 'forward',
+    payload: {
+      kind: 'messages',
+      conversationId,
+      messages: messages.map(forwardSourceOf),
+      preview: previewOfMessages(messages, now),
+      ...(soleMedia === undefined ? {} : { soleMedia }),
+    },
+  };
 }

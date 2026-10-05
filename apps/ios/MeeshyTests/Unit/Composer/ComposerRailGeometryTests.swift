@@ -30,12 +30,20 @@ final class ComposerRailGeometryTests: XCTestCase {
     /// scène plus ÉTROITE que cette aire — donc encore plus loin des rails.
     /// L'invariant est un plancher de sécurité, jamais une promesse de
     /// remplissage (cf. le témoin iPad plus bas).
-    func test_lAireDeLaSceneEtLesDeuxCouloirs_remplissentExactementLaLargeurUtile() {
+    /// PLEIN ÉCRAN (maquette 2026-09-27, #8370) : les rails FLOTTENT sur la
+    /// scène — elle ne cède plus aucune largeur aux couloirs.
+    ///
+    /// Elle garde pourtant une RESPIRATION au bord (retour porteur
+    /// 2026-09-28) : la marge des rails, jamais un couloir.
+    func test_pleinEcran_laSceneOccupeLaLargeurUtile_moinsSaRespiration() {
         for utile in [320.0, 375.0, 402.0, 430.0, 744.0, 1024.0] as [CGFloat] {
-            let scene = ComposerRailGeometry.sceneWidth(usableWidth: utile, railsShown: true)
-            XCTAssertEqual(scene + 2 * ComposerRailGeometry.lane, utile, accuracy: 0.01,
-                           "largeur utile \(utile) : la scène et les deux couloirs ne se referment pas")
+            XCTAssertEqual(ComposerRailGeometry.sceneWidth(usableWidth: utile, railsShown: true),
+                           utile - 2 * ComposerRailGeometry.outerMargin,
+                           accuracy: 0.01, "largeur utile \(utile) : un couloir retire encore de la place à la scène")
         }
+        XCTAssertEqual(ComposerRailGeometry.floatingInset, ComposerRailGeometry.outerMargin)
+        XCTAssertLessThan(ComposerRailGeometry.floatingInset, ComposerRailGeometry.lane,
+                          "La respiration n'est pas un couloir.")
     }
 
     /// La cible tactile est un PLANCHER d'accessibilité, pas un réglage : ce
@@ -66,19 +74,21 @@ final class ComposerRailGeometryTests: XCTestCase {
 
     // MARK: - Les chiffres annoncés par la planche
 
-    /// La planche (rév. 27) annonce 278 pt de scène et ≈ 494 pt de haut sur un
-    /// iPhone 16 Pro. **Un chiffre publié est une affirmation** : celui-ci se
-    /// mesure ici, il ne se recopie pas.
-    func test_surIPhone16Pro_lesChiffresDeLaPlancheSontCeuxDuCode() {
+    /// Plein écran (#8370) : sur un iPhone 16 Pro, l'aire de la scène est la
+    /// largeur entière — 402 pt, donc ≈ 715 pt de haut en 9:16 (contre 278 ×
+    /// 494 à l'époque des couloirs). **Un chiffre publié est une affirmation** :
+    /// celui-ci se mesure ici, il ne se recopie pas.
+    func test_surIPhone16Pro_laSceneGagneLaLargeurDesCouloirs() {
+        // Aucun couloir, la seule RESPIRATION de bord (2026-09-28) : 402 − 2 × 10.
         let scene = ComposerRailGeometry.sceneWidth(usableWidth: 402, railsShown: true)
-        XCTAssertEqual(scene, 278, accuracy: 0.01)
+        XCTAssertEqual(scene, 382, accuracy: 0.01)
 
         let taille = CanvasGeometry.aspectFitSize(
             in: CGSize(width: scene, height: 10_000),
             ratio: CanvasGeometry.portraitRatio)
-        XCTAssertEqual(taille.width, 278, accuracy: 0.01)
-        XCTAssertEqual(taille.height, 494, accuracy: 1,
-                       "9:16 sur 278 pt de large ⇒ ≈ 494 pt de haut.")
+        XCTAssertEqual(taille.width, 382, accuracy: 0.01)
+        XCTAssertEqual(taille.height, 679, accuracy: 1,
+                       "9:16 sur 382 pt de large ⇒ ≈ 679 pt de haut.")
     }
 
     /// **Le 9:16 ne bouge pas** (loi 3) : l'encastrement rétrécit, il ne
@@ -103,7 +113,7 @@ final class ComposerRailGeometryTests: XCTestCase {
     /// ici, et le rester est SAIN.
     func test_surIPad_laHauteurContraint_etLaSceneSEloigneDesRails() {
         let aire = ComposerRailGeometry.sceneWidth(usableWidth: 744, railsShown: true)
-        XCTAssertEqual(aire, 620, accuracy: 0.01)
+        XCTAssertEqual(aire, 724, accuracy: 0.01)
 
         // Une hauteur d'iPad réaliste une fois barre haute et socle retirées.
         let rendue = CanvasGeometry.aspectFitSize(
@@ -187,6 +197,79 @@ final class ComposerRailGeometryTests: XCTestCase {
         XCTAssertFalse(
             compact(try surfaceSource()).contains(".padding(.horizontal,14)"),
             "L'encastrement de la scène est revenu à un littéral : la raison qui le produit a disparu avec.")
+    }
+
+    // MARK: - Le volet de description DÉGAGE les rails flottants (#8388)
+
+    /// **Il tirait sa marge des COULOIRS** (`sceneInset(railsShown: true) + 10`).
+    /// Depuis la scène plein écran (#8370), `sceneInset` vaut zéro : la marge est
+    /// tombée à 10 pt et le volet — « Touchez pour écrire » — s'est étalé
+    /// par-dessus les dernières entrées des deux rails, qui flottent désormais à
+    /// cette hauteur. La marge qui dégage un rail est ce qu'un rail RÉSERVE :
+    /// `lane`.
+    func test_leVoletDeLaScene_degageLesRails() throws {
+        let surface = compact(AppSourceGuard.stripComments(try AppSourceGuard.unit(
+            "Meeshy/Features/Main/Composer/ComposerSceneSurface.swift")))
+        XCTAssertTrue(surface.contains("EmbeddedSceneCanvas"), "Ce n'est pas la surface de scène.")
+        // Les deux rails sont désormais de petits boutons SÉPARÉS, de même
+        // largeur (directive porteur 2026-09-27) : la tuile libellée de droite
+        // et son couloir `tileLane` sont partis, le volet se retire de `lane`
+        // des deux côtés.
+        XCTAssertTrue(surface.contains("descriptionPanel.padding(.horizontal,ComposerRailGeometry.descriptionInset(roomy:isRoomy,cardLeading:sceneCardLeading))"),
+                      "Le volet de la scène lit sa marge de la règle : un rail sur téléphone, la carte sur grand écran.")
+        XCTAssertEqual(ComposerRailGeometry.descriptionInset(roomy: false, cardLeading: 300),
+                       ComposerRailGeometry.lane, "Sur téléphone, la marge reste celle d'un rail.")
+        XCTAssertEqual(ComposerRailGeometry.descriptionInset(roomy: true, cardLeading: 300), 300,
+                       "Sur grand écran, le volet ne dépasse pas la carte.")
+        XCTAssertEqual(ComposerRailGeometry.descriptionInset(roomy: true, cardLeading: 10),
+                       ComposerRailGeometry.lane, "…et ne recouvre jamais un rail.")
+        XCTAssertFalse(surface.contains("sceneInset(railsShown:true)+10"),
+                       "La marge du volet ne peut plus se lire des couloirs, qui valent zéro.")
+    }
+
+    /// Le MÊME volet est monté sous le canvas de l'ATELIER (#4742), où les rails
+    /// flottent aussi : même marge, lue de la même règle.
+    func test_leVoletDeLAtelier_degageLesRails() throws {
+        let hote = compact(AppSourceGuard.stripComments(try AppSourceGuard.composerHostSource()))
+        XCTAssertTrue(hote.contains("volet.padding(.horizontal,ComposerRailGeometry.lane)"),
+                      "Le volet de l'atelier doit se retirer de la largeur d'un rail de chaque côté.")
+    }
+
+    // MARK: - La scène prend le viewport (#8370)
+
+    /// **La carte se cadre sur l'écran ENTIER**, et le chrome flotte dessus.
+    /// Elle vivait dans une `VStack` entre la barre haute et les rangées du bas,
+    /// qui lui prenaient chacune sa hauteur : elle ne pouvait jamais occuper le
+    /// viewport (retour porteur 2026-09-27). Deux calques frères désormais.
+    func test_laScene_estUnCalquePleinEcran_sousLeChrome() throws {
+        let surface = compact(AppSourceGuard.stripComments(try AppSourceGuard.unit(
+            "Meeshy/Features/Main/Composer/ComposerSceneSurface.swift")))
+        XCTAssertTrue(surface.contains("varbody:someView{ZStack{sceneLetterboxsceneLayerchromeLayer}"),
+                      "Le letterbox, la scène et le chrome sont trois calques empilés, dans cet ordre.")
+        XCTAssertTrue(surface.contains("SceneBackdropView(backdrop:.thumbHash,thumbHash:floorHash)"),
+                      "Ce que la carte laisse est le SOL de la scène : le thumbhash de son résultat, comme le lecteur.")
+        XCTAssertTrue(surface.contains("StorySlideRenderer.computeThumbHash(slide:slide,"),
+                      "Le sol se peint du composite de la slide — ce que la publication emporte.")
+        guard let debut = surface.range(of: "privatevarsceneLayer:someView{"),
+              let fin = surface.range(of: "privatevarchromeLayer:someView{") else {
+            return XCTFail("Les deux calques ont changé de nom — la garde doit être re-pointée.")
+        }
+        let scene = surface[debut.upperBound..<fin.lowerBound]
+        // `- chromeLift` : la barre haute MONTE dans la rangée de la Dynamic
+        // Island (« remonte encore le bouton X et … », 2026-09-27) — la scène
+        // la suit, elle reste dessous, jamais sous la croix.
+        XCTAssertTrue(scene.contains(".padding(.top,ComposerTopBar.height+4-chromeLift)"),
+                      "La scène se pose sous la barre haute, jamais sous la croix (directive 2026-09-27).")
+        XCTAssertTrue(scene.contains(".ignoresSafeArea(.keyboard)"),
+                      "Le clavier ne pousse pas la scène.")
+        XCTAssertTrue(surface.contains(".statusBarHidden(true)"),
+                      "La barre de statut s'efface : la croix monte dans la rangée de la Dynamic Island.")
+        XCTAssertFalse(scene.contains("ComposerTopBar("),
+                       "Aucun chrome ne se loge dans le calque de la scène.")
+        XCTAssertFalse(surface.contains("pushesToThumb:true"),
+                       "Aucun rail de la scène ne s'étire sur sa hauteur.")
+        XCTAssertTrue(surface.contains("onRedo:onRedo,pushesToThumb:false,separateButtons:true,"),
+                      "Le rail droit flotte sans ressort, en petits boutons séparés sans légende (directive 2026-09-27).")
     }
 
     // MARK: - Ce qu'une rangée requiert, et ce qui déborde (#4582)

@@ -176,7 +176,6 @@ struct StoryViewerView: View {
     @State var storyDrafts: [String: StoryDraft] = [:]
 
     @Environment(\.colorScheme) private var colorScheme
-    private var theme: ThemeManager { ThemeManager.shared }
 
     /// Durée dynamique du slide courant — max(6, durée max des médias vidéo/audio).
     /// Static text/image slides default to 6s (parité Instagram/Snapchat) — la
@@ -263,7 +262,7 @@ struct StoryViewerView: View {
     // must capture them here and re-inject onto SharePickerView (see line
     // ~257) to avoid the `EnvironmentObject error` crash that previously
     // happened the moment a user tapped the share button on a story.
-    @EnvironmentObject private var conversationListViewModel: ConversationListViewModel
+    @Environment(\.meeshyConversationList) private var conversationListViewModel
     @EnvironmentObject private var router: Router
     @EnvironmentObject private var statusViewModel: StatusViewModel
 
@@ -343,6 +342,9 @@ struct StoryViewerView: View {
     /// selon `StoryReactionStripGesture`, lu par `unifiedDragGesture`, purgé par
     /// `resetGestureTracking()` et à la fermeture de la barre.
     @State var reactionStripOwnsDrag: Bool = false // internal for cross-file extension access
+    /// Cadre `.global` de la barre ouverte (`StoryReactionStripFrameKey`, #9062).
+    @State var reactionStripFrame: CGRect? // internal for cross-file extension access
+    @State var composerOwnsDrag: Bool = false // #8431 — le glissé né sur le composeur
     /// Bord SUPÉRIEUR (coordonnées `.global`) de la surface scrollable ouverte,
     /// remonté par `StoryReaderScrollableSurfaceTopKey`. `nil` = aucune surface
     /// ouverte, ou surface dont le cadre n'est pas mesurable ici (cf.
@@ -751,8 +753,12 @@ struct StoryViewerView: View {
         // Filet du drapeau de revendication : la barre refermée, plus personne
         // ne peut le retirer. Le `UIScrollView` de la rangée peut priver la
         // barre de son `onEnded` — un drapeau collé gèlerait la navigation.
+        .onPreferenceChange(StoryReactionStripFrameKey.self) { reactionStripFrame = $0 }
         .adaptiveOnChange(of: showEmojiStrip) { _, isOpen in
-            if !isOpen { reactionStripOwnsDrag = false }
+            if !isOpen {
+                reactionStripOwnsDrag = false
+                reactionStripFrame = nil
+            }
         }
         .adaptiveOnChange(of: currentGroupIndex) { oldValue, _ in
             // **La légende se replie à CHAQUE changement de story.** Laissée
@@ -870,7 +876,7 @@ struct StoryViewerView: View {
                 onShareToConversation: nil
             )
             .environmentObject(router)
-            .environmentObject(conversationListViewModel)
+            .conversationListObject(conversationListViewModel)
             .environmentObject(statusViewModel)
             .presentationDetents([.medium, .large] as Set<PresentationDetent>)
         }
@@ -916,7 +922,7 @@ struct StoryViewerView: View {
                 opening: .post
             )
             .environmentObject(router)
-            .environmentObject(conversationListViewModel)
+            .conversationListObject(conversationListViewModel)
             .environmentObject(statusViewModel)
         }
         // **Republication en STORY — par le MEUBLE** (#5053).
@@ -943,7 +949,7 @@ struct StoryViewerView: View {
             // porte les redéclare en `@EnvironmentObject` ; c'est ici qu'ils
             // lui sont remis.
             .environmentObject(router)
-            .environmentObject(conversationListViewModel)
+            .conversationListObject(conversationListViewModel)
             .environmentObject(statusViewModel)
         }
     }
@@ -1538,6 +1544,7 @@ struct StoryViewerView: View {
             gestureResetToken: gestureResetToken,
             readerFeatureConsumedByTouch: $readerFeatureConsumedByTouch,
             reactionStripOwnsDrag: $reactionStripOwnsDrag,
+            composerOwnsDrag: $composerOwnsDrag,
             keyboard: keyboard,
             triggerStoryReaction: { emoji, frame in
                 triggerStoryReaction(emoji, from: frame)

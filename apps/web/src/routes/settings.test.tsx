@@ -51,6 +51,10 @@ const preferencesOf = (overrides: Partial<AppPreferences> = {}): AppPreferences 
   showLastSeen: true,
   showReadReceipts: true,
   showTypingIndicator: true,
+  hideProfileFromSearch: false,
+  acceptCallsFromNonContacts: true,
+  notifyContactsOnReturn: true,
+  contactActivityEnabled: true,
   ...overrides,
 });
 
@@ -127,7 +131,7 @@ describe('le compte — seule la suppression reste offerte', () => {
   });
 });
 
-describe('la confidentialité — quatre bascules que la passerelle obéit', () => {
+describe('la confidentialité — les bascules que la passerelle obéit', () => {
   const NAMES = ['Statut en ligne', 'Dernière connexion', 'Accusés de lecture', 'Indicateur de frappe'];
 
   test('chaque bascule annonce son état réel', () => {
@@ -143,9 +147,96 @@ describe('la confidentialité — quatre bascules que la passerelle obéit', () 
     expect(NAMES.map((name) => switchNamed(host, name)?.getAttribute('aria-checked'))).toEqual(['false', 'true', 'true', 'false']);
   });
 
+  /* #8284 — le carnet synchronisé s'efface à la suppression du compte, jamais
+     par un geste à part : la confidentialité n'offre aucune rangée pour cela. */
+  test('aucune rangée n’efface le carnet d’adresses à la main', () => {
+    const host = dom(<PrivacySection language="fr" view={ready()} disabled={false} onToggle={noop} onRetry={noop} />);
+    expect(host.textContent).not.toMatch(/carnet d’adresses/i);
+    expect(host.querySelector('[data-settings-address-book]')).toBeNull();
+  });
+
   test('ce qu’une bascule COÛTE se lit sous elle — la réciprocité des accusés de lecture', () => {
     const host = dom(<PrivacySection language="fr" view={ready()} disabled={false} onToggle={noop} onRetry={noop} />);
     expect(host.textContent).toContain('vous ne verrez pas non plus si vos messages ont été lus');
+  });
+
+  /* #8105 — la passerelle applique `hideProfileFromSearch` à toutes les
+     recherches par identifiant et à l'annonce « X a rejoint Meeshy » (#8104,
+     #8112) : la bascule a un effet, elle se montre. */
+  const DISCRETION = 'Ne pas me proposer à ceux qui ont mon numéro ou mon e-mail';
+
+  test('la discrétion de la recherche par identifiant se bascule, et écrit SA clé', () => {
+    const edits: Array<readonly [string, boolean]> = [];
+    const host = dom(
+      <PrivacySection
+        language="fr"
+        view={ready({ hideProfileFromSearch: true })}
+        disabled={false}
+        onToggle={(key, value) => edits.push([key, value])}
+        onRetry={noop}
+      />,
+    );
+    const toggle = switchNamed(host, DISCRETION);
+    expect(toggle?.getAttribute('aria-checked')).toBe('true');
+    expect(toggle?.getAttribute('data-setting')).toBe('hideProfileFromSearch');
+    expect(host.textContent).toContain('ne seront pas prévenus de votre arrivée');
+  });
+
+  test('la discrétion se dit dans chaque langue du catalogue, jamais par sa clé', async () => {
+    for (const language of ['en', 'es', 'de', 'it', 'pt', 'ar'] as const) {
+      await loadInterfaceCatalog(language);
+      const host = dom(<PrivacySection language={language} view={ready()} disabled={false} onToggle={noop} onRetry={noop} />);
+      const label = host.querySelector('[data-setting="hideProfileFromSearch"]')?.getAttribute('aria-label') ?? '';
+      expect(label).not.toContain('settings.');
+      expect(label).not.toBe(DISCRETION);
+    }
+  });
+
+  /* #8073 — la passerelle refuse de faire sonner un non-contact quand le
+     réglage est coupé : la bascule a un effet, elle se montre. */
+  test('les appels hors contacts se basculent, écrivent LEUR clé et disent ce qu’ils coûtent', () => {
+    const edits: Array<readonly [string, boolean]> = [];
+    const host = dom(
+      <PrivacySection
+        language="fr"
+        view={ready({ acceptCallsFromNonContacts: false })}
+        disabled={false}
+        onToggle={(key, value) => edits.push([key, value])}
+        onRetry={noop}
+      />,
+    );
+    const toggle = switchNamed(host, 'Appels hors contacts');
+    expect(toggle?.getAttribute('aria-checked')).toBe('false');
+    expect(toggle?.getAttribute('data-setting')).toBe('acceptCallsFromNonContacts');
+    expect(host.textContent).toContain('seuls vos amis peuvent vous faire sonner');
+  });
+
+  /* #8285 — la passerelle ne prévient les contacts du retour de X que si ce
+     réglage est ouvert (défaut : ouvert), et jamais si sa présence est masquée. */
+  const RETURN = 'Prévenir mes contacts quand je reviens sur Meeshy';
+
+  test('« prévenir mes contacts quand je reviens » se bascule, écrit SA clé et dit ce qu’elle montre', () => {
+    const host = dom(
+      <PrivacySection language="fr" view={ready({ notifyContactsOnReturn: false })} disabled={false} onToggle={noop} onRetry={noop} />,
+    );
+    const toggle = switchNamed(host, RETURN);
+    expect(toggle?.getAttribute('aria-checked')).toBe('false');
+    expect(toggle?.getAttribute('data-setting')).toBe('notifyContactsOnReturn');
+    expect(host.textContent).toContain('au plus une fois toutes les 3 heures');
+    expect(host.textContent).toContain('Jamais si votre statut en ligne est masqué.');
+  });
+
+  test('« prévenir mes contacts » se dit dans chaque langue du catalogue, jamais par sa clé', async () => {
+    for (const language of ['en', 'es', 'de', 'it', 'pt', 'ar'] as const) {
+      await loadInterfaceCatalog(language);
+      const host = dom(<PrivacySection language={language} view={ready()} disabled={false} onToggle={noop} onRetry={noop} />);
+      const toggle = host.querySelector('[data-setting="notifyContactsOnReturn"]');
+      const label = toggle?.getAttribute('aria-label') ?? '';
+      expect(label).not.toContain('settings.');
+      expect(label).not.toBe(RETURN);
+      expect(label).not.toBe('');
+      expect(host.textContent).not.toContain('settings.privacy.notify_contacts_on_return');
+    }
   });
 
   test('hors ligne, aucune bascule n’est actionnable', () => {
@@ -194,6 +285,23 @@ describe('les données — seul l’export reste offert', () => {
     expect(host.textContent).not.toContain('Médias');
     expect(host.textContent).not.toContain('Messages');
     expect(host.querySelectorAll('a')).toHaveLength(1);
+  });
+});
+
+describe('la galerie de la coque Android (#8308)', () => {
+  test('hors coque Android, aucune bascule de galerie n’est offerte', () => {
+    const host = dom(<DataSection language="fr" />);
+    expect(host.querySelector('[data-setting="galleryAutoSave"]')).toBeNull();
+  });
+
+  test('sur la coque, la bascule s’annonce avec son état et sa légende', () => {
+    const on = dom(<DataSection language="fr" gallery={{ enabled: true, onToggle: noop }} />);
+    const toggle = switchNamed(on, 'Enregistrer dans la galerie');
+    expect(toggle?.getAttribute('aria-checked')).toBe('true');
+    expect(toggle?.getAttribute('data-setting')).toBe('galleryAutoSave');
+    expect(on.textContent).toContain('album Meeshy');
+    const off = dom(<DataSection language="fr" gallery={{ enabled: false, onToggle: noop }} />);
+    expect(switchNamed(off, 'Enregistrer dans la galerie')?.getAttribute('aria-checked')).toBe('false');
   });
 });
 
@@ -262,6 +370,30 @@ describe('les notifications', () => {
     const host = dom(<NotificationsSection language="fr" view={ready({ soundEnabled: false })} disabled={false} onToggle={noop} onRetry={noop} />);
     expect(switchNamed(host, 'Notifications')?.getAttribute('aria-checked')).toBe('true');
     expect(switchNamed(host, 'Sons')?.getAttribute('aria-checked')).toBe('false');
+  });
+
+  /* #8285 — la passerelle ne pousse « X était sur Meeshy récemment » qu'à
+     qui garde cette préférence ouverte (défaut : ouverte). */
+  const CONTACT_BACK = 'Quand un contact revient sur Meeshy';
+
+  test('« quand un contact revient » se bascule et écrit SA clé', () => {
+    const host = dom(
+      <NotificationsSection language="fr" view={ready({ contactActivityEnabled: false })} disabled={false} onToggle={noop} onRetry={noop} />,
+    );
+    const toggle = switchNamed(host, CONTACT_BACK);
+    expect(toggle?.getAttribute('aria-checked')).toBe('false');
+    expect(toggle?.getAttribute('data-setting')).toBe('contactActivityEnabled');
+  });
+
+  test('« quand un contact revient » se dit dans chaque langue du catalogue, jamais par sa clé', async () => {
+    for (const language of ['en', 'es', 'de', 'it', 'pt', 'ar'] as const) {
+      await loadInterfaceCatalog(language);
+      const host = dom(<NotificationsSection language={language} view={ready()} disabled={false} onToggle={noop} onRetry={noop} />);
+      const label = host.querySelector('[data-setting="contactActivityEnabled"]')?.getAttribute('aria-label') ?? '';
+      expect(label).not.toContain('settings.');
+      expect(label).not.toBe(CONTACT_BACK);
+      expect(label).not.toBe('');
+    }
   });
 
   /* Le legacy est décommissionné (#6702) : les options fines de notification

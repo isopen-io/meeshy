@@ -74,7 +74,7 @@ final class BubbleDeliveryStatusWiringSourceGuardTests: XCTestCase {
     // MARK: - VoiceOver (libellé de `MessageAccessibilityLabelComposer`, source unique)
 
     func test_accessibilityLabel_noLongerSwitchesOnRawDeliveryStatus() throws {
-        let source = try strippedSource("Bubble/BubbleStandardLayout.swift")
+        let source = try strippedSource("Bubble/BubbleStandardLayout+Accessibility.swift")
 
         XCTAssertFalse(
             source.contains("switch \(Self.rawRead) {"),
@@ -84,7 +84,7 @@ final class BubbleDeliveryStatusWiringSourceGuardTests: XCTestCase {
     }
 
     func test_accessibilityLabel_usesTheComposerOnResolvedDeliveryStatus() throws {
-        let source = try strippedSource("Bubble/BubbleStandardLayout.swift")
+        let source = try strippedSource("Bubble/BubbleStandardLayout+Accessibility.swift")
 
         XCTAssertTrue(
             source.contains("MessageAccessibilityLabelComposer.deliveryStatusAccessibilityLabel(\(Self.resolvedRead))"),

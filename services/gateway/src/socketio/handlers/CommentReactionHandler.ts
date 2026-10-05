@@ -29,6 +29,7 @@ import {
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { SocketRateLimiter } from '../../utils/socket-rate-limiter.js';
 import { loadCommentPostAcl, canUserInteractWithPost, canUserConsumePost } from '../../services/posts/postVisibility.js';
+import { sliceCodePoints } from '@meeshy/shared/utils/text-truncate';
 
 const logger = enhancedLogger.child({ module: 'CommentReactionHandler' });
 
@@ -458,7 +459,7 @@ export class CommentReactionHandler {
         commentId,
         postId,
         reactionEmoji: emoji,
-        commentPreview: comment.content?.slice(0, 80) ?? '',
+        commentPreview: comment.content ? sliceCodePoints(comment.content, 80) : '',
         postAuthorName,
         // Forward the real post type (mirror PostReactionHandler) so a reaction on a
         // comment under a REEL/STATUS keeps its entity typing instead of collapsing to POST.

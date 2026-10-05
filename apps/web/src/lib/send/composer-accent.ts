@@ -41,3 +41,21 @@ export function composerChromeAccentStyle(state: ComposerAccentState): CSSProper
   if (state === null) return undefined;
   return { '--accent': `var(${SUBSTITUTED_ACCENT_VAR[state]})` } as CSSProperties;
 }
+
+/**
+ * **UNE LOI DE TEINTE D'ICÔNE** (#9121, miroir `ComposerIconTint`, iOS) — un
+ * effet armé donne SA couleur à toutes les icônes de la barre (la protection
+ * dominante sa couleur d'état ; un effet de message, qui n'a pas de couleur
+ * propre, la couleur de MARQUE) ; sinon, la couleur COMMUNE des icônes. Les
+ * deux schémas lisent les mêmes jetons, chacun redéfini par schéma.
+ */
+export const COMMON_ICON_VAR = '--color-ios-ink-2';
+
+export function composerIconTintOf(state: ComposerAccentState): string {
+  return `var(${state === null ? COMMON_ICON_VAR : SUBSTITUTED_ACCENT_VAR[state]})`;
+}
+
+/** Le style à poser sur la racine : les icônes lisent `var(--composer-icon)`. */
+export function composerIconTintStyle(state: ComposerAccentState): CSSProperties {
+  return { '--composer-icon': composerIconTintOf(state) } as CSSProperties;
+}

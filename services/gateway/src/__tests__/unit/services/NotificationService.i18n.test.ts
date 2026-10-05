@@ -132,7 +132,7 @@ describe('contenu localisé par destinataire', () => {
       commentAuthorId: 'r', reactorUserId: 'a', commentId: 'c', postId: 'p',
       reactionEmoji: '❤️', postAuthorName: 'Bob', postType: 'REEL',
     });
-    expect(created[0].content).toBe('User a reacted ❤️ to your comment on Bob’s reel');
+    expect(created[0].content).toBe('On Bob’s reel');
     expect(created[0].metadata.postType).toBe('REEL');
   });
   it('comment_reaction STATUS ne s’effondre pas vers POST dans metadata.postType (F58)', async () => {
@@ -141,8 +141,17 @@ describe('contenu localisé par destinataire', () => {
       commentAuthorId: 'r', reactorUserId: 'a', commentId: 'c', postId: 'p',
       reactionEmoji: '🔥', postAuthorName: 'Bob', postType: 'STATUS',
     });
-    expect(created[0].content).toBe('User a a réagi 🔥 à votre commentaire sur le statut de Bob');
+    expect(created[0].content).toBe('Sur le statut de Bob');
     expect(created[0].metadata.postType).toBe('STATUS');
+  });
+  it('comment_reaction : le corps est l’extrait du commentaire, jamais la phrase d’action répétée (#9049)', async () => {
+    const { svc, created } = makeContentHarness({ r: { systemLanguage: 'fr' } });
+    await svc.createCommentReactionNotification({
+      commentAuthorId: 'r', reactorUserId: 'a', commentId: 'c', postId: 'p',
+      reactionEmoji: '❤️', postAuthorName: 'Bob', postType: 'POST', commentPreview: 'Superbe features',
+    });
+    expect(created[0].content).toBe('« Superbe features »');
+    expect(created[0].content).not.toContain('a réagi');
   });
   it('comment_reaction sans postType retombe sur POST (rétro-compat)', async () => {
     const { svc, created } = makeContentHarness({ r: { systemLanguage: 'en' } });
@@ -150,7 +159,7 @@ describe('contenu localisé par destinataire', () => {
       commentAuthorId: 'r', reactorUserId: 'a', commentId: 'c', postId: 'p',
       reactionEmoji: '❤️', postAuthorName: 'Bob',
     });
-    expect(created[0].content).toBe('User a reacted ❤️ to your comment on Bob’s post');
+    expect(created[0].content).toBe('On Bob’s post');
     expect(created[0].metadata.postType).toBe('POST');
   });
 });

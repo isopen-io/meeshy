@@ -113,14 +113,10 @@ struct SendMessageIntent: AppIntent {
 
 // MARK: - Call Contact Intent
 
-/// Raccourci « Appeler un contact sur Meeshy ».
-///
-/// STATUT : NON ROUTÉ (délibéré). Le deep link émis (`meeshy://call?contactId=…&type=…`)
-/// n'a pas de case dans `DeepLinkParser` → `.external` : l'app s'ouvre sans
-/// effet. Amorcer un appel depuis un lien demande une surface produit qui
-/// n'existe pas encore. Le brancher = ajouter le case au parseur ET retirer
-/// `call` de `deliberatelyUnroutedHosts` (`DeepLinkSurfaceRoutingGuardTests`),
-/// qui rougit sinon.
+/// Raccourci « Appeler un contact sur Meeshy ». `contactId` est l'identifiant
+/// de la conversation directe épinglée (`favorite_contacts`) :
+/// `DeepLinkParser` le lit en `.call`, et `CallBackDialer` résout le
+/// correspondant puis compose par `CallStarter` (#8067).
 @available(iOS 18.0, *)
 struct CallContactIntent: AppIntent {
     static let title: LocalizedStringResource = "Call Contact"
@@ -250,7 +246,6 @@ struct OpenRecentConversationIntent: AppIntent {
 }
 
 // MARK: - Check Notifications Intent
-@available(iOS 16.0, *)
 struct CheckNotificationsIntent: AppIntent {
     static let title: LocalizedStringResource = "Check Notifications"
     static let description = IntentDescription("Check for unread messages")
@@ -294,7 +289,6 @@ struct CheckNotificationsIntent: AppIntent {
     }
 }
 
-@available(iOS 16.0, *)
 struct NotificationCheckView: View {
     let unreadCount: Int
     let recentMessages: [String]
@@ -329,13 +323,11 @@ struct NotificationCheckView: View {
 }
 
 // MARK: - Contact Entity
-@available(iOS 16.0, *)
 struct ContactEntity: AppEntity {
     static let typeDisplayRepresentation = TypeDisplayRepresentation(name: "Contact")
     static let defaultQuery = ContactQuery()
 
     var id: String
-    var displayString: String
     var name: String
     var avatar: String?
 
@@ -348,7 +340,6 @@ struct ContactEntity: AppEntity {
     }
 }
 
-@available(iOS 16.0, *)
 struct ContactQuery: EntityQuery {
     /// Ré-hydratation d'un contact déjà choisi (raccourci Siri enregistré,
     /// relance Siri).
@@ -377,7 +368,7 @@ struct ContactQuery: EntityQuery {
 
         return contacts
             .filter { identifiers.contains($0.id) }
-            .map { ContactEntity(id: $0.id, displayString: $0.name, name: $0.name, avatar: $0.avatar) }
+            .map { ContactEntity(id: $0.id, name: $0.name, avatar: $0.avatar) }
     }
 
     func suggestedEntities() async throws -> [ContactEntity] {
@@ -389,7 +380,7 @@ struct ContactQuery: EntityQuery {
         }
 
         return contacts.map {
-            ContactEntity(id: $0.id, displayString: $0.name, name: $0.name, avatar: $0.avatar)
+            ContactEntity(id: $0.id, name: $0.name, avatar: $0.avatar)
         }
     }
 }

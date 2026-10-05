@@ -78,7 +78,7 @@ struct RiverStreamHost: View {
     var bottomInset: CGFloat = 0
     /// L2b/2b-7 — le roster de frappe, DIT par l'appelant
     /// (`ConversationView` → `RiverConversationHost`, qui lit
-    /// `ConversationViewModel.typingUsernames`).
+    /// `ConversationViewModel.typingParticipants.displayNames`).
     ///
     /// **Décoration de PEAU, jamais une entrée de la LOI.** Il n'entre ni
     /// dans `RiverLaneResolver` ni dans `lanesInput` : une voix qui n'a encore
@@ -96,6 +96,13 @@ struct RiverStreamHost: View {
     var onReply: ((String) -> Void)? = nil
     /// #7452 — la consommation d'une vue unique, reçue de `ConversationView`.
     var onConsumeViewOnce: ((String, @escaping (Bool) -> Void) -> Void)? = nil
+    /// #8283 — la zone média d'une citation : joue un vocal sur place (#8320)
+    /// ou ouvre une image ou une vidéo en plein écran ; rend `false` quand il
+    /// n'y a rien d'honnête à jouer ni à ouvrir (média protégé, document, pièce
+    /// introuvable), et la citation retombe alors sur son saut (`openReply`).
+    var onOpenQuotedMedia: ((ReplyReference) -> Bool)? = nil
+    /// #8310 — le plein écran d'un média flouté, ouvert par `ConversationView`.
+    var onMediaTap: ((MessageAttachment) -> Void)? = nil
 
     @ObservedObject var navigation: RiverNavigationController
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -129,6 +136,11 @@ struct RiverStreamHost: View {
     /// au repos (`RiverTimeHandleMetrics.restDelay`).
     @State private var isTimeHandleVisible = false
     @State private var timeHandleRest: Task<Void, Never>?
+    /// #8147 — le message long DÉPLIÉ en place (un seul à la fois), et s'il
+    /// est dans la fenêtre de la pile : ses voisins ne s'atténuent que tant
+    /// qu'on le lit.
+    @State private var expandedMessageId: String?
+    @State private var isExpandedMessageOnScreen = false
 
 
     private var laneCount: Int { max(1, geometry.laneCount) }
@@ -260,6 +272,16 @@ struct RiverStreamHost: View {
     /// `focusRank` lit (`readingLineRatio`), pour que la bande de couloirs
     /// nomme aussitôt la voix rejointe. Le couloir et le rang viennent du
     /// mapping, jamais recalculés ici.
+    /// Le plein écran d'abord, le saut ensuite : une zone média touchée
+    /// n'est jamais une cible morte.
+    private var quotedMediaTap: ((ReplyReference) -> Void)? {
+        guard let onOpenQuotedMedia else { return nil }
+        return { reference in
+            guard !onOpenQuotedMedia(reference) else { return }
+            openReply(reference.messageId)
+        }
+    }
+
     private func openReply(_ messageId: String) {
         guard let cursor = RiverConversationMapping.cursor(forMessageId: messageId, geometry: geometry) else { return }
         navigation.moveTo(cursor)
@@ -463,8 +485,8 @@ struct RiverStreamHost: View {
                     isDark: colorScheme == .dark,
                     isFlat: true
                 )
-                .padding(.horizontal, 10)
-                .padding(.vertical, 4)
+                .padding(.horizontal, MeeshySpacing.smPlus)
+                .padding(.vertical, MeeshySpacing.xs)
                 .background(.ultraThinMaterial, in: Capsule())
                 .padding(.bottom, bottomInset)
                 // Décoration : elle ne prend jamais un doigt destiné à la
@@ -554,18 +576,33 @@ struct RiverStreamHost: View {
                 content: content,
                 contentWidth: columns.bubbleContentWidth,
                 onOpenReply: openReply,
+                onQuotedMediaTap: quotedMediaTap,
                 onOpenProfile: onOpenProfile,
                 onViewStory: onViewStory,
                 onOpenInThread: onOpenInThread,
                 onReply: onReply,
-                onConsumeViewOnce: onConsumeViewOnce
+                onConsumeViewOnce: onConsumeViewOnce,
+                onMediaTap: onMediaTap
             )
                 .equatable()
+                .longMessageFocus(expansion(for: bubble.messageId))
+                .longMessageLoupe(isActive: expandedMessageId == bubble.messageId && !reduceMotion)
+                .opacity(LongMessageExpansionLaw.alpha(
+                    isExpandedCell: expandedMessageId == bubble.messageId,
+                    expansionVisible: isExpandedMessageOnScreen
+                ))
+                .zIndex(expandedMessageId == bubble.messageId ? 1 : 0)
                 .padding(.horizontal, RiverMetrics.Lane.gutter)
                 .onTapGesture {
                     navigation.moveTo(RiverLaneResolver.RiverCursor(laneIndex: laneIndex, rank: rank))
                 }
-                .onAppear { completeLanding(rank: rank, laneIndex: laneIndex) }
+                .onAppear {
+                    completeLanding(rank: rank, laneIndex: laneIndex)
+                    if expandedMessageId == bubble.messageId { isExpandedMessageOnScreen = true }
+                }
+                .onDisappear {
+                    if expandedMessageId == bubble.messageId { isExpandedMessageOnScreen = false }
+                }
         } else {
             // Cellule VIDE — préserve l'alignement de colonne pour que
             // `LazyVGrid` garde la grille synchronisée avec `RiverColumnLayout`.
@@ -574,6 +611,21 @@ struct RiverStreamHost: View {
             Color.clear
                 .frame(width: laneWidth, height: 1)
                 .accessibilityHidden(true)
+        }
+    }
+
+    /// #8147 — « Lire la suite » / « Réduire » : la même loi que le fil
+    /// (`LongMessageExpansionLaw`), la hauteur animée par la pile elle-même,
+    /// au tempo et sur la courbe du web (#8232).
+    private func expansion(for messageId: String) -> LongMessageExpansion {
+        LongMessageExpansion(messageId: messageId, isExpanded: expandedMessageId == messageId) {
+            let next = LongMessageExpansionLaw.nextExpanded(current: expandedMessageId, toggled: messageId)
+            let apply = {
+                expandedMessageId = next
+                isExpandedMessageOnScreen = next != nil
+            }
+            guard let timing = LongMessageExpansionLaw.heightTiming(reduceMotion: reduceMotion) else { return apply() }
+            withAnimation(timing.animation, apply)
         }
     }
 

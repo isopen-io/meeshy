@@ -38,7 +38,6 @@ final class NotificationBannerPresentationTests: XCTestCase {
         XCTAssertEqual(banner.headline, "Bob Commentateur a commenté votre réel")
         XCTAssertEqual(banner.body, "Superbe montage !")
         XCTAssertEqual(banner.thumbnailURL, "https://cdn/reel.jpg")
-        XCTAssertNil(banner.reactionBadge)
     }
 
     func test_contentComment_withoutThumbnail_stillCarriesATypedSymbol() throws {
@@ -160,7 +159,7 @@ final class NotificationBannerPresentationTests: XCTestCase {
                        "le nom SERVEUR ne doit pas survivre au nom local")
     }
 
-    func test_groupMessage_withAttachment_bodyPrefixesTheMediaLabel() throws {
+    func test_groupMessage_withoutServedPreview_fallsBackToTheMediaLabel() throws {
         let event = try makeEvent("""
         {
             "id": "n8", "userId": "u1", "type": "new_message",
@@ -172,6 +171,45 @@ final class NotificationBannerPresentationTests: XCTestCase {
         """)
 
         XCTAssertEqual(event.bannerPresentation().body, "\u{1F4F7} Photo")
+    }
+
+    /// #8723 — capture porteur : « 🎵 Audio • 🎵 Audio · 0:32 · 193 Ko ». La
+    /// passerelle a DÉJÀ composé le libellé du média dans l'aperçu
+    /// (`buildMessageNotificationBodyI18n`) ; le client le préfixait une
+    /// seconde fois. L'aperçu servi est le SEUL site de composition.
+    func test_bannerBody_voiceMessageWithServerComposedLabel_namesTheMediaOnce() throws {
+        let event = try makeEvent("""
+        {
+            "id": "n8b", "userId": "u1", "type": "new_message",
+            "title": "Abed Dollar", "content": "🎵 Audio · 0:32 · 193 Ko",
+            "actor": { "id": "a1", "displayName": "Abed Dollar" },
+            "context": { "conversationType": "direct" },
+            "metadata": {
+                "commentPreview": "🎵 Audio · 0:32 · 193 Ko",
+                "attachments": { "count": 1, "firstType": "audio" }
+            }
+        }
+        """)
+
+        let banner = event.bannerPresentation()
+        XCTAssertEqual(banner.body, "🎵 Audio · 0:32 · 193 Ko")
+        XCTAssertFalse(banner.showsContentTile, "le « 🎵 » du corps nomme déjà le média (#8897)")
+    }
+
+    func test_bannerBody_photoWithCaption_withoutThumbnail_showsTheCaptionAlone() throws {
+        let event = try makeEvent("""
+        {
+            "id": "n8c", "userId": "u1", "type": "new_message",
+            "title": "Alice", "content": "regarde ça",
+            "actor": { "id": "a1", "displayName": "Alice" },
+            "context": { "conversationType": "direct" },
+            "metadata": { "attachments": { "count": 1, "firstType": "image" } }
+        }
+        """)
+
+        let banner = event.bannerPresentation()
+        XCTAssertEqual(banner.body, "regarde ça")
+        XCTAssertNil(banner.contentSymbol, "sans vignette, aucune case-symbole (#8897)")
     }
 
     /// Un message protégé (éphémère / vue unique / flouté / chiffré) arrive avec
@@ -274,12 +312,14 @@ final class NotificationBannerPresentationTests: XCTestCase {
         XCTAssertEqual(banner.headline, "Sam a réagi 🔥 à votre story")
         XCTAssertEqual(banner.body, "Votre story · 📷 Photo")
         XCTAssertEqual(banner.thumbnailURL, "https://cdn/s.jpg")
-        XCTAssertNil(banner.reactionBadge, "l'émoji est DÉJÀ dans la phrase — le répéter est du bruit")
+        XCTAssertEqual(Self.occurrences(of: "🔥", in: banner), 1, "#9049 — l'émoji est dit par la phrase servie, une fois")
     }
 
-    /// Une ligne ancienne, ou un éventail dont la phrase ne porte pas l'émoji :
-    /// la réaction doit alors être rendue COMME une réaction, pas perdue.
-    func test_contentReaction_whenTheActionOmitsTheEmoji_thePastilleCarriesIt() throws {
+    /// #9049 — la passerelle est le SEUL site qui compose la phrase de
+    /// réaction, émoji compris. La bannière la rend telle quelle et n'ajoute
+    /// AUCUN émoji de son cru : c'est ce second émoji, posé devant le corps,
+    /// qui faisait lire « ❤️  a réagi ❤️ à votre message ».
+    func test_reaction_theBannerNeverAddsAnEmojiOfItsOwn() throws {
         let event = try makeEvent("""
         {
             "id": "n15", "userId": "u1", "type": "comment_like",
@@ -290,15 +330,18 @@ final class NotificationBannerPresentationTests: XCTestCase {
         }
         """)
 
-        XCTAssertEqual(event.bannerPresentation().reactionBadge, "👍")
+        let banner = event.bannerPresentation()
+        XCTAssertEqual(banner.headline, "Sam a aimé votre commentaire")
+        XCTAssertEqual(banner.body, "« Bien vu ! »")
+        XCTAssertEqual(Self.occurrences(of: "👍", in: banner), 0)
     }
 
-    func test_messageReaction_readsTheOtherWireNameOfTheEmoji() throws {
+    func test_groupMessageReaction_saysTheEmojiOnce_andTheGroupInTheHeadline() throws {
         let event = try makeEvent("""
         {
             "id": "n16", "userId": "u1", "type": "message_reaction",
             "title": "Grace", "subtitle": "Équipe Tech",
-            "content": "a réagi à votre message",
+            "content": "a réagi 🔥 à votre message : « On part à 9 h »",
             "actor": { "id": "a1", "displayName": "Grace" },
             "context": { "conversationTitle": "Équipe Tech", "conversationType": "group" },
             "metadata": { "reactionEmoji": "🔥" }
@@ -307,7 +350,33 @@ final class NotificationBannerPresentationTests: XCTestCase {
 
         let banner = event.bannerPresentation()
         XCTAssertTrue(banner.headline.contains("Équipe Tech"), "cadrage de conversation")
-        XCTAssertEqual(banner.reactionBadge, "🔥")
+        XCTAssertEqual(banner.body, "a réagi 🔥 à votre message : « On part à 9 h »")
+        XCTAssertEqual(Self.occurrences(of: "🔥", in: banner), 1)
+    }
+
+    func test_messageReaction_whenTheServedSentenceCarriesTheEmoji_noSecondEmoji() throws {
+        let event = try makeEvent("""
+        {
+            "id": "n17", "userId": "u1", "type": "message_reaction",
+            "title": "meeshy sama",
+            "content": "a réagi ❤️ à votre message : « J'attends! »",
+            "actor": { "id": "a1", "displayName": "meeshy sama" },
+            "context": { "conversationType": "direct" },
+            "metadata": { "reactionEmoji": "❤️" }
+        }
+        """)
+
+        let banner = event.bannerPresentation()
+        XCTAssertEqual(banner.headline, "meeshy sama")
+        XCTAssertEqual(banner.body, "a réagi ❤️ à votre message : « J'attends! »")
+        XCTAssertEqual(Self.occurrences(of: "❤️", in: banner), 1, "#9049 — pas de second ❤️ devant la phrase")
+        XCTAssertEqual(Self.occurrences(of: "meeshy sama", in: banner), 1, "#9049 — l'acteur est dit par la headline seule")
+    }
+
+    /// Ce que la bannière AFFICHE en texte : sa headline puis son corps.
+    private static func occurrences(of needle: String, in banner: NotificationBannerPresentation) -> Int {
+        let text = [banner.headline, banner.body].compactMap { $0 }.joined(separator: "\n")
+        return text.components(separatedBy: needle).count - 1
     }
 
     // MARK: - Replis

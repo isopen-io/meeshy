@@ -28,13 +28,7 @@ class ConversationListViewModel: ObservableObject {
         }
     }
     @Published var userCategories: [ConversationSection] = []
-    @Published var isLoading = false
-    /// Convenience accessor mirroring `paginationState == .loadingMore`.
-    /// Kept for compatibility with views that still bind to the boolean
-    /// (e.g. the spinner footer in ConversationListView). Updates flow
-    /// through `paginationState`'s @Published wrapper, so SwiftUI
-    /// re-evaluates dependents when this transitions.
-    var isLoadingMore: Bool { paginationState == .loadingMore }
+    var isLoading = false
     /// `true` when the last cold-start sync failed and the cache is still
     /// empty. The view reads this to swap the empty-state placeholder for
     /// a retryable error panel. We don't reuse `isLoading` because the
@@ -98,6 +92,9 @@ class ConversationListViewModel: ObservableObject {
     }
     private(set) var filteredConversations: [Conversation] = []
     @Published var groupedConversations: [(section: ConversationSection, conversations: [Conversation])] = []
+    /// Taille du corpus que `groupedConversations` a groupé en dernier — voir
+    /// `groupingAwaitsCorpus(...)` (#8759).
+    private(set) var groupedCorpusCount = 0
     /// Brouillons actifs indexés par conversationId. Alimente le badge
     /// « Brouillon » de la ligne et la priorité de tri. Concept client-local
     /// — jamais stocké dans le modèle SDK `Conversation`.
@@ -130,13 +127,12 @@ class ConversationListViewModel: ObservableObject {
         conversations.reduce(0) { $0 + $1.userState.unreadCount }
     }
 
-    private let api: APIClientProviding
     private let conversationService: ConversationServiceProviding
     private let preferenceService: PreferenceServiceProviding
     private let messageSocket: MessageSocketProviding
     private let messageService: MessageServiceProviding
     private let authManager: AuthManaging
-    private let storyService: StoryServiceProviding
+    let storyService: StoryServiceProviding
     private let syncEngine: ConversationSyncEngineProviding
     /// Mutation source of truth for per-user conversation state (pin, mute,
     /// archive, read, section, reaction, tags). The VM hydrates it from the
@@ -383,7 +379,7 @@ class ConversationListViewModel: ObservableObject {
             }
             await store.saveCursor(nextCursor: cursor, hasMore: more, for: "list")
             #if DEBUG
-            await MainActor.run { self?.persistCallCount += 1 }
+            self?.persistCallCount += 1
             #endif
         }
     }
@@ -440,9 +436,6 @@ class ConversationListViewModel: ObservableObject {
         case socketNotification     // notification:new legacy fallback (~3-month deprecation window)
         case socketUpdated          // CONVERSATION_UPDATED (first activity on unknown id)
         case pushNotification       // APNs message notification for an unknown conversation
-        case syncDelta              // syncSinceLastCheckpoint (foreground / reconnect)
-        case pullRefresh            // user pulled to refresh
-        case coldCache              // initial cache load on app start
     }
 
     /// Fetch a conversation that the gateway just told us about via
@@ -463,25 +456,22 @@ class ConversationListViewModel: ObservableObject {
         Task { [weak self] in
             defer { Task { @MainActor [weak self] in self?.pendingMissingFetches.remove(id) } }
             do {
-                let apiConv = try await service.getById(id)
-                let domain = apiConv.toConversation(currentUserId: userId)
-                await MainActor.run { [weak self] in
-                    guard let self else { return }
-                    // Defensive dedup: a concurrent fullSync / socket event
-                    // may have surfaced the conversation between the fetch
-                    // start and this point.
-                    if let existing = self.convIndex(for: domain.id) {
-                        self.conversations.remove(at: existing)
-                    }
-                    self.conversations.insert(domain, at: 0)
-                    // Mark this id as recently-created so the next destructive
-                    // snapshot (foreground delta sync, cache reload after
-                    // fullSync, etc.) doesn't clobber it during the gateway
-                    // aggregate's eventual-consistency window.
-                    self.recentlyCreatedAt[domain.id] = self.dateProvider()
-                    self.schedulePersist()
-                    Logger.messages.info("[Discovery] source=\(source.rawValue, privacy: .public) id=\(id, privacy: .public) action=insert")
+                let domain = try await ConversationDiscoveryRowFetcher(service: service).row(id: id, currentUserId: userId)
+                guard let self else { return }
+                // Defensive dedup: a concurrent fullSync / socket event
+                // may have surfaced the conversation between the fetch
+                // start and this point.
+                if let existing = self.convIndex(for: domain.id) {
+                    self.conversations.remove(at: existing)
                 }
+                self.conversations.insert(domain, at: 0)
+                // Mark this id as recently-created so the next destructive
+                // snapshot (foreground delta sync, cache reload after
+                // fullSync, etc.) doesn't clobber it during the gateway
+                // aggregate's eventual-consistency window.
+                self.recentlyCreatedAt[domain.id] = self.dateProvider()
+                self.schedulePersist()
+                Logger.messages.info("[Discovery] source=\(source.rawValue, privacy: .public) id=\(id, privacy: .public) action=insert")
             } catch {
                 Logger.messages.error("[Discovery] source=\(source.rawValue, privacy: .public) id=\(id, privacy: .public) action=fetch-error error=\(error.localizedDescription, privacy: .public)")
             }
@@ -496,13 +486,7 @@ class ConversationListViewModel: ObservableObject {
         return Date().timeIntervalSince(ts) < cacheTTL
     }
 
-    func invalidateCache() {
-        lastFetchedAt = nil
-        Task.detached { await CacheCoordinator.shared.conversations.invalidateAll() }
-    }
-
     init(
-        api: APIClientProviding = APIClient.shared,
         conversationService: ConversationServiceProviding = ConversationService.shared,
         preferenceService: PreferenceServiceProviding = PreferenceService.shared,
         messageSocket: MessageSocketProviding = MessageSocketManager.shared,
@@ -515,7 +499,6 @@ class ConversationListViewModel: ObservableObject {
         store: ConversationStore = .shared,
         categoryStore: UserCategoryStore = .shared
     ) {
-        self.api = api
         self.conversationService = conversationService
         self.preferenceService = preferenceService
         self.messageSocket = messageSocket
@@ -572,6 +555,7 @@ class ConversationListViewModel: ObservableObject {
             .sink { [weak self] (convs, text, filters, categories) in
                 guard let self else { return }
                 let (filter, tag) = filters
+                let corpusCount = convs.count
                 let filtered = Self.filterConversations(convs, searchText: text, filters: filter, tag: tag)
                 self.filteredConversations = filtered
                 let drafts = self.draftSummaries
@@ -581,6 +565,7 @@ class ConversationListViewModel: ObservableObject {
                     let grouped = Self.groupConversations(filtered, categories: categories, draftSummaries: drafts)
                     guard !Task.isCancelled else { return }
                     await MainActor.run { [weak self] in
+                        self?.groupedCorpusCount = corpusCount
                         self?.groupedConversations = grouped
                     }
                 }
@@ -1707,9 +1692,7 @@ class ConversationListViewModel: ObservableObject {
             lastFetchedAt = Date()
             Task { [weak self] in
                 await self?.syncEngine.syncSinceLastCheckpoint()
-                await MainActor.run { [weak self] in
-                    self?.loadState = .loaded
-                }
+                self?.loadState = .loaded
             }
         case .expired:
             // `load()` intentionally returns a data-less `.expired` once an
@@ -1917,7 +1900,7 @@ class ConversationListViewModel: ObservableObject {
             let cursorAdvanced = page.nextCursor != nil && page.nextCursor != previousCursor
             let madeProgress = !newIds.isEmpty && cursorAdvanced
             if !madeProgress, !page.items.isEmpty {
-                Logger.messages.error("[ConversationListVM] loadMore zero-progress (cursor=\(self.nextCursor ?? "nil") → \(page.nextCursor ?? "nil"), newIds=\(newIds.count)) — forcing exhausted to break loop")
+                Logger.messages.error("[ConversationListVM] loadMore zero-progress (cursor=\(previousCursor ?? "<aucun>") → \(page.nextCursor ?? "nil"), newIds=\(newIds.count)) — forcing exhausted to break loop")
                 nextCursor = page.nextCursor
                 hasMore = false
                 paginationState = .exhausted
@@ -2299,140 +2282,22 @@ class ConversationListViewModel: ObservableObject {
         }
     }
 
-    /// Précharge les messages des top 20 conversations qui n'ont pas encore de cache.
+    /// Précharge les messages des premières conversations — voir
+    /// `ConversationListMessagePrefetcher` (#8651 : jamais pour un autre
+    /// compte que celui qui l'a lancé, jamais pour un identifiant vide).
     private func prefetchTopConversationMessages() {
-        let topConversations = Array(conversations.prefix(20))
-        let messageService = self.messageService
-        let userId = AuthManager.shared.currentUser?.id ?? ""
-        let username = AuthManager.shared.currentUser?.username; let prism = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
-
-        Task.detached(priority: .utility) {
-            await withTaskGroup(of: Void.self) { group in
-                for conversation in topConversations {
-                    let conversationId = conversation.id
-                    // SWR: prefetch only when the cache cannot already serve a
-                    // preview. `.fresh` / `.stale` both surface usable data
-                    // (the row's preview path reads them directly), so we
-                    // skip the network round-trip. `.expired` / `.empty`
-                    // mean the row would render an empty preview — fetch.
-                    let result = await CacheCoordinator.shared.messages.load(for: conversationId)
-                    switch result {
-                    case .fresh(let cached, _) where !cached.isEmpty,
-                         .stale(let cached, _) where !cached.isEmpty:
-                        continue
-                    case .fresh, .stale, .expired, .empty:
-                        break
-                    }
-
-                    group.addTask {
-                        do {
-                            let response = try await messageService.list(
-                                conversationId: conversationId,
-                                offset: 0,
-                                limit: 20,
-                                includeReplies: true,
-                                includeTranslations: true
-                            )
-                            if response.success {
-                                let messages = response.data.reversed().map {
-                                    $0.toMessage(currentUserId: userId, currentUsername: username, preferredLanguages: prism)
-                                }
-                                try? await CacheCoordinator.shared.messages.save(Array(messages), for: conversationId)
-                            }
-                        } catch {
-                            Logger.messages.warning("[ConversationList] prefetch failed for \(conversationId, privacy: .public): \(error.localizedDescription, privacy: .public)")
-                        }
-                    }
-                }
+        let userId = currentUserId
+        ConversationListMessagePrefetcher.start(
+            conversationIds: ConversationListMessagePrefetcher.targets(conversations),
+            messageService: messageService,
+            userId: userId,
+            username: authManager.currentUser?.username,
+            prism: authManager.currentUser?.preferredContentLanguages ?? [],
+            stillOwner: { [weak self] in
+                guard let self, !userId.isEmpty else { return false }
+                return self.currentUserId == userId
             }
-        }
-    }
-
-    // MARK: - Story Prefetch
-
-    /// Précharge les stories : 2 premières de chaque groupe + 3 premiers groupes complets.
-    /// Utilise les DiskCacheStore existants (images/video) avec cache-hit check.
-    func prefetchRecentStories() {
-        storyPrefetchTask?.cancel()
-
-        storyPrefetchTask = Task.detached(priority: .utility) { [storyService = self.storyService] in
-            // Cache-first : `StoryViewModel.loadStories()` récupère déjà le feed
-            // (limit=50) et préfetch ses médias au lancement, en écrivant le
-            // MÊME `storiesCacheKey`. On saute notre fetch réseau redondant
-            // (limit=30) quand ce cache est déjà peuplé — sinon les deux partent
-            // au cold start, tapant /posts/feed/stories deux fois et churnant la
-            // même clé de cache.
-            switch await CacheCoordinator.shared.stories.load(for: StoryViewModel.storiesCacheKey) {
-            case .fresh, .stale:
-                return
-            case .expired, .empty:
-                break
-            }
-            do {
-                let response = try await storyService.list(cursor: nil, limit: 30)
-                guard response.success, !Task.isCancelled else { return }
-
-                let storyGroups = response.data.toStoryGroups()
-                guard !storyGroups.isEmpty else { return }
-
-                // Collecter les URLs à précharger (2 par groupe + reste des 3 premiers)
-                var imageURLs: [String] = []
-                var videoURLs: [String] = []
-                for (i, group) in storyGroups.enumerated() {
-                    let limit = i < 3 ? group.stories.count : min(2, group.stories.count)
-                    for story in group.stories.prefix(limit) {
-                        for media in story.media {
-                            guard let url = media.url, !url.isEmpty else { continue }
-                            switch media.type {
-                            case .video:
-                                videoURLs.append(url)
-                            default:
-                                imageURLs.append(url)
-                            }
-                        }
-                    }
-                }
-
-                // Précharger images par lots de 8
-                let imageStore = await CacheCoordinator.shared.images
-                let uniqueImageURLs = Array(Set(imageURLs))
-                for chunk in stride(from: 0, to: uniqueImageURLs.count, by: 8) {
-                    guard !Task.isCancelled else { return }
-                    let end = min(chunk + 8, uniqueImageURLs.count)
-                    await withTaskGroup(of: Void.self) { taskGroup in
-                        for urlString in uniqueImageURLs[chunk..<end] {
-                            taskGroup.addTask {
-                                _ = await imageStore.image(for: urlString)
-                            }
-                        }
-                    }
-                }
-
-                // Précharger vidéos par lots de 4 (plus lourds)
-                let videoStore = await CacheCoordinator.shared.video
-                let uniqueVideoURLs = Array(Set(videoURLs))
-                for chunk in stride(from: 0, to: uniqueVideoURLs.count, by: 4) {
-                    guard !Task.isCancelled else { return }
-                    let end = min(chunk + 4, uniqueVideoURLs.count)
-                    await withTaskGroup(of: Void.self) { taskGroup in
-                        for urlString in uniqueVideoURLs[chunk..<end] {
-                            taskGroup.addTask {
-                                _ = try? await videoStore.data(for: urlString)
-                            }
-                        }
-                    }
-                }
-
-                try? await CacheCoordinator.shared.stories.save(storyGroups, for: StoryViewModel.storiesCacheKey)
-                Logger.messages.info("[ConversationListVM] Stories prefetched: \(storyGroups.count) groups, \(uniqueImageURLs.count) images, \(uniqueVideoURLs.count) videos")
-            } catch {
-                Logger.messages.error("[ConversationListVM] Story prefetch failed: \(error.localizedDescription)")
-            }
-        }
-    }
-
-    func refreshStoriesPrefetch() {
-        prefetchRecentStories()
+        )
     }
 
     /// Called when app returns to foreground — refresh stories if stale.
@@ -2542,15 +2407,6 @@ class ConversationListViewModel: ObservableObject {
     /// (`focal.row.you`) : la liste vouvoie, comme ses autres libellés.
     /// Posé dans le SDK au démarrage (`MeeshyApp`), qui le relaie partout.
     static let youAuthorLabel = String(localized: "message.author.self", defaultValue: "Vous", bundle: .main)
-
-    /// `currentUserId` retombe sur `""` tant que l'auth n'est pas résolue.
-    /// Comparer par `==` sans écarter ce cas ferait d'un payload au `userId`
-    /// vide une fin d'appartenance, donc le retrait d'une ligne au hasard —
-    /// piège que la comparaison par `!=` (`participantJoined`) n'a pas.
-    private func isMe(_ userId: String) -> Bool {
-        let me = currentUserId
-        return !me.isEmpty && userId == me
-    }
 }
 
 extension Notification.Name {

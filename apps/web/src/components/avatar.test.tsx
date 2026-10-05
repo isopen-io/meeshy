@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 
-import { PRESENCE_HEX } from '@meeshy/shared/utils/user-presence';
+import { PRESENCE_HERE_HEX, PRESENCE_HEX } from '@meeshy/shared/utils/user-presence';
 
 import { Avatar } from './avatar';
 
@@ -184,5 +184,25 @@ describe('Avatar — ce que l’`<img>` demande au réseau (#6973)', () => {
   test('un aperçu local (`blob:`) ne demande rien non plus — il n’a pas d’origine à négocier', () => {
     const html = renderToStaticMarkup(<Avatar initials="LD" color="#4F46E5" size={44} src="blob:https://staging.meeshy.me/abcd" />);
     expect(html).not.toContain('crossorigin');
+  });
+});
+
+describe('Avatar — le pair est DANS la conversation (#8892)', () => {
+  test('here ⇒ une pastille à la couleur primaire Meeshy, jamais verte', () => {
+    const html = renderToStaticMarkup(<Avatar initials="KM" color="#4F46E5" size={44} presence="online" here />);
+    expect(html).toContain(PRESENCE_HERE_HEX);
+    expect(html).not.toContain(PRESENCE_HEX.success);
+    expect(html).toMatch(/data-presence="here"/);
+  });
+
+  test('here ⇒ la pastille se rend même quand la présence globale est masquée', () => {
+    const html = renderToStaticMarkup(<Avatar initials="KM" color="#4F46E5" size={44} here />);
+    expect(html).toContain(PRESENCE_HERE_HEX);
+  });
+
+  test('sans here ⇒ la pastille garde le ton de présence', () => {
+    const html = renderToStaticMarkup(<Avatar initials="KM" color="#4F46E5" size={44} presence="online" here={false} />);
+    expect(html).toContain(PRESENCE_HEX.success);
+    expect(html).not.toContain(PRESENCE_HERE_HEX);
   });
 });

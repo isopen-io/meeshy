@@ -111,7 +111,7 @@ describe('Composer — l’accent substitué de la rangée haute est CÂBLÉ (#6
     expect(root.style.getPropertyValue('--accent')).toBe('var(--color-error)');
   });
 
-  test('après un envoi, la substitution retombe — la protection est remise à zéro', () => {
+  test('après un envoi, la substitution TIENT — la protection reste armée (#8306)', () => {
     const el = mount(() => {});
     const field = el.querySelector<HTMLTextAreaElement>('[aria-label="Écrire un message"]')!;
     type(field, 'texte');
@@ -123,7 +123,7 @@ describe('Composer — l’accent substitué de la rangée haute est CÂBLÉ (#6
     act(() => {
       el.querySelector<HTMLButtonElement>('[aria-label="Envoyer"]')!.click();
     });
-    expect(root.style.getPropertyValue('--accent')).toBe('');
+    expect(root.style.getPropertyValue('--accent')).toBe('var(--ios-state-concealed)');
   });
 
   /**
@@ -167,5 +167,28 @@ describe('Composer — l’accent substitué de la rangée haute est CÂBLÉ (#6
     const el = mount(() => {});
     const field = el.querySelector<HTMLTextAreaElement>('[aria-label="Écrire un message"]')!;
     expect(field.hasAttribute('aria-description')).toBe(false);
+  });
+
+  test('#9121 — toutes les icônes de la barre lisent `--composer-icon` : commune au repos, la couleur de l’effet armé sinon', () => {
+    const el = mount(() => {});
+    const root = el.querySelector<HTMLElement>('[data-composer]')!;
+    expect(root.style.getPropertyValue('--composer-icon')).toBe('var(--color-ios-ink-2)');
+    for (const selector of ['[data-composer-ephemeral]', '[data-composer-blur]', '[data-composer-view-once]', '[data-composer-effects]', '[data-composer-sticker]', '[data-composer-library]', '[data-composer-camera]']) {
+      expect(el.querySelector<HTMLElement>(selector)?.style.color).toBe('var(--composer-icon)');
+    }
+    act(() => {
+      el.querySelector<HTMLButtonElement>('[data-composer-ephemeral]')!.click();
+    });
+    act(() => {
+      [...el.querySelectorAll<HTMLButtonElement>('[data-composer-ephemeral-picker] button')][1]!.click();
+    });
+    expect(root.style.getPropertyValue('--composer-icon')).toBe('var(--color-error)');
+    expect(el.querySelector<HTMLElement>('[data-composer-blur]')?.style.color).toBe('var(--composer-icon)');
+  });
+
+  test('#9121 — la pastille de langue lit `--composer-icon`, comme sur iOS (`languageSelectorPill` → `iconTint`)', () => {
+    const el = mount(() => {});
+    const capsule = el.querySelector<HTMLElement>('[data-composer-language] > span')!;
+    expect(capsule.className).toContain('text-[var(--composer-icon,var(--color-ios-ink))]');
   });
 });

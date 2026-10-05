@@ -32,19 +32,19 @@ extension ReelsPlayerView {
     }
 
     private var noReelsState: some View {
-        VStack(spacing: 14) {
+        VStack(spacing: MeeshySpacing.mdPlus) {
             // Glyphe héros décoratif, masqué à VoiceOver (le texte porte le
             // sens). La taille SCALE : rien ne l'entoure qui déborderait, et un
             // fichier neuf n'a pas droit à une taille figée — la garde
             // `FixedFontSizeGuardTests` ne connaît d'exception que pour la
             // dette gelée du 264i, jamais pour un arrivant.
             Image(systemName: "play.rectangle.on.rectangle")
-                .font(MeeshyFont.relative(44))
-                .foregroundColor(.white.opacity(0.7))
+                .font(MeeshyFont.relative(MeeshyIconSize.hero))
+                .foregroundColor(MeeshyColors.mediaChromeTertiary)
                 .accessibilityHidden(true)
             Text(String(localized: "reels.empty", defaultValue: "Aucun réel pour le moment", bundle: .main))
-                .font(.headline)
-                .foregroundColor(.white)
+                .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .semibold))
+                .foregroundColor(MeeshyColors.mediaChromeForeground)
         }
         .accessibilityElement(children: .combine)
     }
@@ -53,30 +53,30 @@ extension ReelsPlayerView {
     /// pager est noir plein écran : la palette est donc celle du viewer (blanc
     /// sur noir), pas celle du thème clair/sombre de l'app.
     private func loadFailureState(message: String) -> some View {
-        VStack(spacing: 14) {
+        VStack(spacing: MeeshySpacing.mdPlus) {
             Image(systemName: "exclamationmark.arrow.triangle.2.circlepath")
-                .font(MeeshyFont.relative(44))
-                .foregroundColor(.white.opacity(0.7))
+                .font(MeeshyFont.relative(MeeshyIconSize.hero))
+                .foregroundColor(MeeshyColors.mediaChromeTertiary)
                 .accessibilityHidden(true)
             Text(message)
-                .font(.headline)
-                .foregroundColor(.white)
+                .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .semibold))
+                .foregroundColor(MeeshyColors.mediaChromeForeground)
                 .multilineTextAlignment(.center)
-                .padding(.horizontal, 32)
+                .padding(.horizontal, MeeshySpacing.xxxl)
             Button {
                 HapticFeedback.light()
                 Task { await viewModel.retryLoad() }
             } label: {
                 Text(String(localized: "common.retry"))
-                    .font(.subheadline.weight(.semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
                     .foregroundColor(.black)
-                    .padding(.horizontal, 24)
-                    .padding(.vertical, 10)
+                    .padding(.horizontal, MeeshySpacing.xxl)
+                    .padding(.vertical, MeeshySpacing.smPlus)
                     .background(Capsule().fill(Color.white))
             }
             // Cible 44 pt (HIG) : le libellé seul ne les atteint pas en
             // Dynamic Type minimal.
-            .frame(minHeight: 44)
+            .frame(minHeight: MeeshyControlSize.tapTarget)
         }
         .accessibilityElement(children: .contain)
     }

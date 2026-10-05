@@ -65,6 +65,10 @@ public enum OutboxKind: String, Codable, CaseIterable, Sendable {
     /// enregistrement). Volontairement NON coalescé : chaque rapport porte
     /// une trace différente, voir `ReportAttachmentStatusPayload`.
     case reportAttachmentStatus
+    /// #8303 — la consommation des messages flamme-œil lus, envoyée à la
+    /// SORTIE de la conversation (`POST …/messages/after-read/consume`).
+    /// Idempotente côté passerelle : un rejeu ne consomme rien de plus.
+    case consumeAfterRead
 }
 
 extension OutboxKind {
@@ -89,7 +93,7 @@ extension OutboxKind {
     /// geste pour l'écarter.
     public var countsTowardSyncIndicator: Bool {
         switch self {
-        case .markAsRead, .reportAttachmentStatus, .markStoryViewed:
+        case .markAsRead, .reportAttachmentStatus, .markStoryViewed, .consumeAfterRead:
             return false
         default:
             return true
@@ -126,6 +130,7 @@ extension OutboxKind {
              .markAsRead,
              .markStoryViewed,
              .reportAttachmentStatus,
+             .consumeAfterRead,
              .sendFriendRequest,
              .respondFriendRequest,
              .blockUser,

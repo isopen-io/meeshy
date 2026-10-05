@@ -18,19 +18,19 @@ struct StoryElementLanguageBar: View {
             VStack(spacing: 0) {
                 Spacer()
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 6) {
+                    HStack(spacing: MeeshySpacing.xsPlus) {
                         Image(systemName: "globe")
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(.system(size: MeeshyIconSize.xs, weight: .semibold))
                             .foregroundStyle(.secondary)
                         ForEach(TextEditToolOptions.languageChoices(current: current), id: \.self) { code in
                             chip(code, current: current, elementId: elementId)
                         }
                     }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
+                    .padding(.horizontal, MeeshySpacing.mdPlus)
+                    .padding(.vertical, MeeshySpacing.sm)
                 }
                 .background(.ultraThinMaterial, in: Capsule())
-                .padding(.horizontal, 16)
+                .padding(.horizontal, MeeshySpacing.lg)
                 .padding(.bottom, 96)
                 .accessibilityElement(children: .contain)
                 .accessibilityLabel(Text(String(
@@ -48,12 +48,12 @@ struct StoryElementLanguageBar: View {
             HapticFeedback.light()
         } label: {
             Text(code.uppercased())
-                .font(.system(size: 12, weight: .semibold))
+                .font(.system(size: MeeshyFont.smallSize, weight: .semibold))
                 .foregroundStyle(isSel ? Color.white : Color.primary)
                 .frame(minWidth: 38, minHeight: 30)
-                .padding(.horizontal, 4)
+                .padding(.horizontal, MeeshySpacing.xs)
                 .background(
-                    RoundedRectangle(cornerRadius: 10)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.sm)
                         .fill(isSel ? AnyShapeStyle(MeeshyColors.brandGradient)
                                     : AnyShapeStyle(Color.gray.opacity(0.18)))
                 )

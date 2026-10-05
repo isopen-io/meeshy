@@ -47,6 +47,26 @@ extension ConversationSyncEngine {
             }
             .store(in: &socketSubscriptions)
 
+        // `message:expired` (#7960) reçu conversation FERMÉE : sans ce relais,
+        // seul `ConversationSocketHandler` (conversation ouverte) vidait le
+        // message — son contenu restait lisible hors ligne, et dans l'aperçu.
+        messageSocket.messageExpired
+            .sink { [weak self] event in
+                guard let self else { return }
+                Task { await self.handleExpiredMessage(event) }
+            }
+            .store(in: &socketSubscriptions)
+
+        // `message:cited-post-withdrawn` (#7969) : la story citée a été
+        // retirée. Un seul site, conversation ouverte ou fermée — le fil
+        // ouvert observe la table que le relais écrit.
+        messageSocket.messageCitedPostWithdrawn
+            .sink { [weak self] event in
+                guard let self else { return }
+                Task { await self.handleCitedPostWithdrawn(event) }
+            }
+            .store(in: &socketSubscriptions)
+
         messageSocket.reactionAdded
             .sink { [weak self] event in
                 guard let self else { return }
@@ -299,7 +319,10 @@ extension ConversationSyncEngine {
         // buffering the same payload stays idempotent — and an own-echo
         // arriving after the user navigated away still flips its optimistic
         // `.sending` row to `.sent` instead of leaving the clock forever.
-        await apiMessagePersistor?([apiMessage])
+        // #8656 — reçu pour `userId`, il ne s'écrit que dans SA base.
+        await Self.$syncOwner.withValue(userId) {
+            await apiMessagePersistor?([apiMessage])
+        }
         _messagesDidChange.send(msg.conversationId)
 
         // Facette COMPLÈTE du nouveau dernier message. Les onze champs
@@ -421,7 +444,8 @@ extension ConversationSyncEngine {
         // If the edited message is the conversation's last message, the list-row
         // preview still shows the pre-edit text — refresh it in place.
         await refreshLastMessagePreviewIfEdited(
-            conversationId: msg.conversationId, messageId: msg.id, newContent: msg.content)
+            conversationId: msg.conversationId, messageId: msg.id, newContent: msg.content,
+            systemEvent: apiMessage.systemEvent)
     }
 
     /// `message:edited` ne sert que le texte : les réactions et les pièces
@@ -442,6 +466,7 @@ extension ConversationSyncEngine {
             msg.deletedAt = deletedAt
             msg.content = ""
         }
+        await dropFromMediaIndex(conversationId: event.conversationId, messageId: event.messageId)
         await realtimeMessagePersistor?(.deleted(messageId: event.messageId, deletedAt: deletedAt))
         if let callId {
             await CallTranscriptStore.shared.invalidate(for: callId)
@@ -454,6 +479,69 @@ extension ConversationSyncEngine {
             conversationId: event.conversationId, deletedMessageId: event.messageId)
     }
 
+    /// #8095 — un message supprimé ou échu quitte l'INDEX des médias : la
+    /// galerie feuillette aussi les messages hors de la fenêtre chargée, et y
+    /// retrouver une photo retirée serait une fuite, pas un cache. #8103 — de
+    /// TOUS les genres de l'index (documents, liens, audios…).
+    private func dropFromMediaIndex(conversationId: String, messageId: String) async {
+        await cache.dropFromConversationMedia(conversationId: conversationId, messageId: messageId)
+    }
+
+    /// **La flamme-œil lue, retirée à la sortie** (#8303) — le MÊME effet local
+    /// qu'un `message:expired` servi : contenu vidé, ligne GRDB marquée, index
+    /// média purgé, mort gravée au registre, aperçu recalculé. Le serveur
+    /// n'émet `message:expired` qu'aux AUTRES appareils du lecteur ; celui qui
+    /// consomme applique donc lui-même ce que les autres recevront.
+    public func expireLocally(conversationId: String, messageIds: [String]) async {
+        for messageId in messageIds {
+            await handleExpiredMessage(MessageExpiredEvent(messageId: messageId, conversationId: conversationId))
+        }
+    }
+
+    /// `message:expired` — même effet local que la suppression : contenu vidé,
+    /// aperçu recalculé. La table canonique reçoit `.expired`, que l'hôte
+    /// applique comme la conversation ouverte (citations scellées, favori
+    /// retiré). La mort se GRAVE au registre de réception (#7552).
+    private func handleExpiredMessage(_ event: MessageExpiredEvent) async {
+        let expiredAt = Date()
+        await cache.messages.upsertPatch(for: event.conversationId, itemId: event.messageId) { msg in
+            msg.deletedAt = expiredAt
+            msg.content = ""
+        }
+        await dropFromMediaIndex(conversationId: event.conversationId, messageId: event.messageId)
+        await realtimeMessagePersistor?(.expired(messageId: event.messageId, expiredAt: expiredAt))
+        EphemeralReceiptLedger.shared.noteDestruction(of: event.messageId)
+        _messagesDidChange.send(event.conversationId)
+        await recomputeLastMessagePreviewAfterDeletion(
+            conversationId: event.conversationId, deletedMessageId: event.messageId)
+    }
+
+    private func handleCitedPostWithdrawn(_ event: MessageCitedPostWithdrawnEvent) async {
+        await cache.messages.update(for: event.conversationId) { messages in
+            Self.withdrawingCitedPost(event.postId, in: messages) ?? messages
+        }
+        await realtimeMessagePersistor?(.citedPostWithdrawn(
+            postId: event.postId, conversationId: event.conversationId, deletedAt: event.deletedAt))
+        _messagesDidChange.send(event.conversationId)
+    }
+
+    /// Les messages dont la citation désigne le post retiré, rendus « Story
+    /// indisponible » ; `nil` quand aucun ne change (aucune écriture cache).
+    nonisolated static func withdrawingCitedPost(_ postId: String, in messages: [MeeshyMessage]) -> [MeeshyMessage]? {
+        let unavailable = ReplyReference.unavailableStory(storyId: postId)
+        var changed = false
+        let next = messages.map { message -> MeeshyMessage in
+            let cites = message.storyReplyToId == postId
+                || (message.replyTo?.isStoryReply == true && message.replyTo?.messageId == postId)
+            guard cites, message.replyTo != unavailable else { return message }
+            var copy = message
+            copy.replyTo = unavailable
+            changed = true
+            return copy
+        }
+        return changed ? next : nil
+    }
+
     /// Updates a conversation row's `lastMessagePreview` when the edited message
     /// is that row's `lastMessageId`. No-op otherwise (editing an older message
     /// leaves the preview untouched). Fires `_conversationsDidChange` only when a
@@ -463,8 +551,13 @@ extension ConversationSyncEngine {
     /// drapeaux éphémères restent vrais, et ce chemin n'y touche pas. Seule la
     /// carte du Prisme devient fausse — elle traduit le texte remplacé — et
     /// c'est celle que le résolveur préfère.
+    ///
+    /// #8565 — un avis que le SERVEUR complète sur place (la ligne d'arrivées
+    /// de Meeshy Global) n'a pas d'autre diffusion que celle-ci : son
+    /// `systemEvent` servi remplace celui de la nature, que le composeur
+    /// préfère au texte stocké (un repli français).
     private func refreshLastMessagePreviewIfEdited(
-        conversationId: String, messageId: String, newContent: String
+        conversationId: String, messageId: String, newContent: String, systemEvent: LastMessageSystemEvent?
     ) async {
         let list = await cache.conversations.load(for: "list").snapshot() ?? []
         guard list.first(where: { $0.id == conversationId })?.lastMessageId == messageId else { return }
@@ -485,6 +578,10 @@ extension ConversationSyncEngine {
                 // changé d'identité, et sans carte le résolveur ne le consulte
                 // plus. Le prochain `conversation:updated` reposera les deux.
                 updated[idx].lastMessageTranslations = nil
+                if let systemEvent {
+                    updated[idx].lastMessageNature = (updated[idx].lastMessageNature
+                        ?? LastMessageNature(messageType: "system")).replacingSystemEvent(systemEvent)
+                }
             }
             return updated
         }
@@ -695,58 +792,53 @@ extension ConversationSyncEngine {
             await recomputeTotalUnread()
         }
 
-        // Update delivery status of own messages in the message cache.
-        // WhatsApp-style all-or-nothing: the double-gray "delivered" / indigo
-        // "read" indicator must represent EVERY recipient, never a single member
-        // of a group. `summary.totalMembers` is the active recipient count
-        // (sender excluded); a 0 denominator falls back to legacy "any > 0" so
-        // 1:1 keeps working.
+        // #7433 — le résumé ne touche que le message qu'il décrit, s'il est
+        // le mien (`ReadStatusReceipt`), même règle que la base GRDB.
         let summary = event.summary
-        let newStatus = DeliveryStatusResolver.fromCounts(
-            deliveredCount: summary.deliveredCount,
-            readCount: summary.readCount,
-            recipientCount: summary.totalMembers
-        )
-
         await cache.messages.update(for: event.conversationId) { messages in
-            Self.applyReadReceipt(
-                to: messages,
-                newStatus: newStatus,
-                deliveredCount: summary.deliveredCount,
-                readCount: summary.readCount,
-                frontier: event.updatedAt
-            )
+            Self.applyReadReceipt(to: messages, summary: summary)
         }
         _messagesDidChange.send(event.conversationId)
     }
 
-    /// Applies a read/deliver-status update to the sender's own messages, gated
-    /// by the read frontier `frontier` (the event's `updatedAt`). A message
-    /// created AFTER the recipient's read/deliver moment cannot have been
-    /// read/delivered yet, so it must NOT advance to `.read`/`.delivered` —
-    /// otherwise a message sent right after the peer read would falsely render
-    /// the double-check / "Lu". Iterates newest-first: messages beyond the
-    /// frontier are skipped, the monotonic guard only advances a status that is
-    /// genuinely better, and once an already-`.read` message is reached every
-    /// older one is read too. Pure + testable.
+    /// Pose un résumé d'accusé sur le SEUL message qu'il décrit — celui qu'il
+    /// nomme, sinon le dernier message acquitté du fil (passerelle d'avant
+    /// #7433) — et seulement si ce message est le mien. Compteurs fusionnés
+    /// sans recul, coche dérivée des compteurs (tout-ou-rien en groupe) et
+    /// jamais rétrogradée. Pure + testable.
     nonisolated static func applyReadReceipt(
         to messages: [MeeshyMessage],
-        newStatus: MeeshyMessage.DeliveryStatus,
-        deliveredCount: Int,
-        readCount: Int,
-        frontier: Date
+        summary: ReadStatusSummary
     ) -> [MeeshyMessage] {
+        let inFlight: Set<MeeshyMessage.DeliveryStatus> = [.sending, .invisible, .clock, .slow, .failed]
+        let latestAcked = messages
+            .filter { !inFlight.contains($0.deliveryStatus) }
+            .max { $0.createdAt < $1.createdAt }
+        guard let targetId = ReadStatusReceipt.describedMessageId(of: summary, latestMessageId: latestAcked?.id),
+              let index = messages.firstIndex(where: { $0.id == targetId }),
+              messages[index].isMe
+        else { return messages }
+        let target = messages[index]
+        let current = ReadStatusReceipt.Counters(
+            deliveredCount: target.deliveredCount,
+            readCount: target.readCount,
+            recipientCount: target.recipientCount,
+            readByAllAt: target.readByAllAt
+        )
+        let next = ReadStatusReceipt.merged(current, with: summary)
+        guard next != current else { return messages }
         var updated = messages
-        for i in updated.indices.reversed() {
-            guard updated[i].isMe else { continue }
-            if updated[i].createdAt > frontier { continue }
-            let current = updated[i].deliveryStatus
-            if current == .read { break }
-            if newStatus.isBetterThan(current) {
-                updated[i].deliveryStatus = newStatus
-                updated[i].deliveredCount = deliveredCount
-                updated[i].readCount = readCount
-            }
+        updated[index].deliveredCount = next.deliveredCount
+        updated[index].readCount = next.readCount
+        updated[index].recipientCount = next.recipientCount
+        updated[index].readByAllAt = next.readByAllAt
+        let derived = DeliveryStatusResolver.fromCounts(
+            deliveredCount: next.deliveredCount,
+            readCount: next.readCount,
+            recipientCount: next.recipientCount
+        )
+        if derived.isBetterThan(target.deliveryStatus) {
+            updated[index].deliveryStatus = derived
         }
         return updated
     }
@@ -774,7 +866,8 @@ extension ConversationSyncEngine {
             return .edited(
                 messageId: apiMessage.id,
                 content: content,
-                editedAt: apiMessage.editedAt ?? Date()
+                editedAt: apiMessage.editedAt ?? Date(),
+                marksEdited: apiMessage.isEdited ?? true
             )
         }
         return .callNoticeUpdated(

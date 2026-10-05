@@ -250,6 +250,43 @@ final class WebRTCServiceTests: XCTestCase {
         XCTAssertEqual(client.addIceCandidateCallCount, 0)
     }
 
+    /// 2026-09-30 — l'appelé RENVOIE sa réponse quand l'accusé tarde (socket
+    /// de l'appelant coupée un instant) : l'appelant la reçoit deux fois. La
+    /// seconde application échouait (négociation déjà stable) et
+    /// `handleRemoteAnswer` raccrochait un appel qui fonctionnait.
+    func test_setRemoteDescription_sameAnswerTwice_appliesOnceAndSucceedsTwice() async {
+        let (sut, client) = makeSUT()
+        let desc = SessionDescription(type: .answer, sdp: "v=0\r\no=answer 1\r\n")
+        let first = await sut.setRemoteDescription(desc)
+        client.setRemoteAnswerResult = .failure(WebRTCError.failedToCreateSDP)
+        let second = await sut.setRemoteDescription(desc)
+        XCTAssertTrue(first)
+        XCTAssertTrue(second, "un doublon exact de la réponse déjà appliquée ne fait jamais échouer l'appel")
+        XCTAssertEqual(client.setRemoteAnswerCallCount, 1)
+    }
+
+    func test_setRemoteDescription_afterICERestart_appliesTheSameSDPAgain() async {
+        let (sut, client) = makeSUT()
+        client.createOfferResult = .success(SessionDescription(type: .offer, sdp: "restart-offer"))
+        let desc = SessionDescription(type: .answer, sdp: "v=0\r\no=answer 1\r\n")
+        await sut.setRemoteDescription(desc)
+        _ = await sut.performICERestart()
+        await sut.setRemoteDescription(desc)
+        XCTAssertEqual(client.setRemoteAnswerCallCount, 2)
+    }
+
+    func test_setRemoteDescription_afterFailure_retriesTheSameSDP() async {
+        let (sut, client) = makeSUT()
+        client.setRemoteAnswerResult = .failure(WebRTCError.failedToCreateSDP)
+        let desc = SessionDescription(type: .answer, sdp: "v=0\r\no=answer 1\r\n")
+        let failed = await sut.setRemoteDescription(desc)
+        client.setRemoteAnswerResult = .success(())
+        let retried = await sut.setRemoteDescription(desc)
+        XCTAssertFalse(failed)
+        XCTAssertTrue(retried)
+        XCTAssertEqual(client.setRemoteAnswerCallCount, 2)
+    }
+
     // MARK: - ICE Restart
 
     func test_performICERestart_returnsNewOffer() async {
@@ -738,9 +775,13 @@ final class AdjustBitrateJitterGateSourceGuardTests: XCTestCase {
     func test_adjustBitrate_jitterGate_capsToMinBitrate() throws {
         let src = try webRTCServiceSource()
         XCTAssertTrue(
-            src.contains("let effectiveBitrate = jitterCapped ? QualityThresholds.minBitrate : newBitrate"),
-            "When the jitter tracker confirms the cap, the effective bitrate must be minBitrate — " +
+            src.contains("let ladderBitrate = jitterCapped ? QualityThresholds.minBitrate : newBitrate"),
+            "When the jitter tracker confirms the cap, the ladder bitrate must be minBitrate — " +
             "any other fallback value leaves the Opus encoder at a bitrate too high for the jitter buffer to compensate."
+        )
+        XCTAssertTrue(
+            src.contains("let effectiveBitrate = dataProfile.budget.audio.capping(ladderBitrate)"),
+            "#8697 — the data profile caps the ladder, it never lifts it: the jitter floor must reach the encoder through the cap."
         )
     }
 
@@ -941,7 +982,6 @@ final class WebRTCInputValidationSourceGuardTests: XCTestCase {
 
 private nonisolated final class TestableWebRTCClient: WebRTCClientProviding {
     weak var delegate: (any WebRTCClientDelegate)?
-    var isConnected: Bool = false
     var localVideoTrack: Any? = nil
     var remoteVideoTrack: Any? = nil
 
@@ -972,7 +1012,11 @@ private nonisolated final class TestableWebRTCClient: WebRTCClientProviding {
     func createOffer() async throws -> SessionDescription { try createOfferResult.get() }
     func createAnswer(for offer: SessionDescription) async throws -> SessionDescription { try createAnswerResult.get() }
     var setRemoteAnswerResult: Result<Void, Error> = .success(())
-    func setRemoteAnswer(_ answer: SessionDescription) async throws { try setRemoteAnswerResult.get() }
+    private(set) var setRemoteAnswerCallCount = 0
+    func setRemoteAnswer(_ answer: SessionDescription) async throws {
+        setRemoteAnswerCallCount += 1
+        try setRemoteAnswerResult.get()
+    }
     func addIceCandidate(_ candidate: IceCandidate) async throws {
         addIceCandidateCallCount += 1
         addedCandidates.append(candidate)
@@ -1028,7 +1072,7 @@ private nonisolated final class TestableWebRTCClient: WebRTCClientProviding {
         return createDataChannelResult
     }
     func sendDataChannelMessage(_ data: Data) { lastSentData = data }
-    func disconnect() { disconnectCallCount += 1; isConnected = false }
+    func disconnect() { disconnectCallCount += 1 }
     private(set) var disconnectAfterFlushingPendingSendCallCount = 0
     func disconnectAfterFlushingPendingSend() {
         disconnectAfterFlushingPendingSendCallCount += 1

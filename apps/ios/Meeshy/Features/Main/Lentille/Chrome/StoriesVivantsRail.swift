@@ -264,10 +264,18 @@ private struct LentilleRailSelfEntryView: View {
             // emoji), jamais un second « plus » ambigu.
             .overlay(alignment: .topLeading) {
                 if let onCreateStory {
-                    Button(action: onCreateStory) { createStoryBadge }
-                        .buttonStyle(.plain)
-                        .contentShape(Circle())
-                        .accessibilityLabel(StoryTrayCopy.addStory)
+                    // La cible déborde VERS L'EXTÉRIEUR, dans les marges du
+                    // rail (#9363) : vers l'intérieur elle avalerait le centre
+                    // de la pastille, qui ouvre mes stories. Dessin inchangé.
+                    Button(action: onCreateStory) {
+                        createStoryBadge
+                            .padding(.leading, MeeshySpacing.lg)
+                            .padding(.top, LentilleMetrics.Rail.paddingVertical)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .offset(x: -MeeshySpacing.lg, y: -LentilleMetrics.Rail.paddingVertical)
+                    .accessibilityLabel(StoryTrayCopy.addStory)
                 }
             }
 
@@ -323,7 +331,7 @@ private struct LentilleRailSelfEntryView: View {
             .background(
                 Circle()
                     .fill(MeeshyColors.brandGradient)
-                    .overlay(Circle().stroke(MeeshyColors.backgroundSecondary(isDark: isDark), lineWidth: 1.5))
+                    .overlay(Circle().stroke(MeeshyColors.backgroundSecondary(isDark: isDark), lineWidth: MeeshyBorder.emphasis))
             )
     }
 

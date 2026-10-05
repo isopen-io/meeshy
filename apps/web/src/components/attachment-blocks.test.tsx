@@ -645,6 +645,43 @@ describe('Attachments — ouvrir un document REÇU rapporte, jamais le sien (#73
     expect(link?.style.minHeight).toBe('44px');
   });
 
+  test('dans la coque, un document EN COURS D’ENVOI (blob:) n’est pas un lien — la WebView naviguerait dessus (#8402)', () => {
+    const globalHost = globalThis as { Capacitor?: unknown };
+    globalHost.Capacitor = { getPlatform: () => 'android' };
+    try {
+      container = document.createElement('div');
+      document.body.appendChild(container);
+      root = createRoot(container);
+      act(() => {
+        root.render(
+          <Attachments attachments={[{ ...document_, fileUrl: 'blob:https://localhost/9f1c' }]} languages={['fr']} fallbackLanguage="fr" mediaFrame="box" />,
+        );
+      });
+
+      const row = container.querySelector('[data-attachment-file="att-doc-1"]');
+      expect(row).not.toBeNull();
+      expect(row?.hasAttribute('href')).toBe(false);
+      expect(row?.hasAttribute('target')).toBe(false);
+    } finally {
+      delete globalHost.Capacitor;
+    }
+  });
+
+  test('dans un navigateur, un document en cours d’envoi s’ouvre dans un nouvel onglet', () => {
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    act(() => {
+      root.render(
+        <Attachments attachments={[{ ...document_, fileUrl: 'blob:https://meeshy.me/9f1c' }]} languages={['fr']} fallbackLanguage="fr" mediaFrame="box" />,
+      );
+    });
+
+    const link = container.querySelector('[data-attachment-file="att-doc-1"]');
+    expect(link?.getAttribute('href')).toBe('blob:https://meeshy.me/9f1c');
+    expect(link?.getAttribute('target')).toBe('_blank');
+  });
+
   test('cliquer un document REÇU (isMine=false) rapporte "viewed" sur le port serveur', () => {
     const { calls, deps } = scriptedGateway({ 'POST /api/v1/attachments/att-doc-1/status': { ok: true, data: {} } });
     container = document.createElement('div');

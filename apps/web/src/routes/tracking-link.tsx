@@ -7,7 +7,9 @@ import { recordTrackingClick, resolveTrackingLink } from '@/lib/api/tracking-lin
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { browserClickEnvironment, collectClickContext, type ClickContext } from '@/lib/links/click-context';
-import { decideTrackingRedirect, isTrackingToken, type TrackingClick, type TrackingResolution } from '@/lib/links/tracking-redirect';
+import { shellLeave } from '@/lib/links/shell-leave';
+import { decideTrackingRedirect, isTrackingToken, sharedContentPath, type TrackingClick, type TrackingResolution } from '@/lib/links/tracking-redirect';
+import { currentHistory } from '@/lib/reels/exit';
 import { useParams } from '@/lib/router';
 import { href, navigate } from '@/routes/route-table';
 
@@ -22,6 +24,9 @@ import { LinkPage, ReachFailurePage } from './link-page-parts';
  * clic est COMPTÉ et la cible RÉSOLUE en parallèle, puis
  * `decideTrackingRedirect` tranche :
  *
+ * - un CONTENU de Meeshy (réel, publication, story, humeur) → sa page
+ *   canonique par le routeur, `?via=<jeton>` compris (#9149) : la page relit
+ *   le jeton pour dire qui l'a partagé ;
  * - une adresse web → `location.replace` : le lien ne reste pas dans
  *   l'historique, et « retour » ne recompte pas le clic ;
  * - une invitation de conversation → la jonction de la v2 (`/chat/:link`) ;
@@ -47,11 +52,24 @@ export type TrackingLinkDeps = {
   readonly go: (url: string, replace?: boolean) => void;
 };
 
+/* La coque ne quitte pas le document (#8322) : elle remet la cible au
+   navigateur, puis recule au retour au premier plan (`shell-leave.ts`). */
+const leave = (target: string): void =>
+  __SHELL__
+    ? shellLeave({
+        open: (url) => window.location.replace(url),
+        document,
+        history: currentHistory,
+        back: () => window.history.back(),
+        home: () => navigate(href('list'), true),
+      })(target)
+    : window.location.replace(target);
+
 const BROWSER_DEPS: TrackingLinkDeps = {
   record: (token, context) => recordTrackingClick(apiDeps, token, context),
   resolve: (token) => resolveTrackingLink(apiDeps, token),
   context: () => collectClickContext(browserClickEnvironment()),
-  leave: (target) => window.location.replace(target),
+  leave,
   go: navigate,
 };
 
@@ -84,6 +102,10 @@ export function TrackingLinkRedirect({
       }
       const [click, resolution] = await Promise.all([deps.record(token, deps.context()), deps.resolve(token)]);
       const outcome = decideTrackingRedirect({ token, click, resolution });
+      if (outcome.kind === 'open') {
+        deps.go(sharedContentPath(outcome.content, outcome.via), true);
+        return;
+      }
       if (outcome.kind === 'leave') {
         deps.leave(outcome.target);
         return;

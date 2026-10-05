@@ -36,6 +36,7 @@ export function resolveViewer(input: { readonly source: DataSource; readonly ses
       handle: VIEWER_HANDLE,
       displayName: 'Vous',
       isAnonymous: false,
+      // harmony-exempt: portrait de fixture, teintes de l'illustration factice
       avatar: portraitStandIn('#fb7185', '#7f1d1d'),
     };
   }

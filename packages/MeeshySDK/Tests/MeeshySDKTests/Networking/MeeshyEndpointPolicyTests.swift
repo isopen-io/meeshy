@@ -92,6 +92,16 @@ final class MeeshyEndpointPolicyTests: XCTestCase {
         XCTAssertEqual(ConversationsEndpoint.root.authKind,
                        MeeshyEndpointPolicy.authKind(forLegacyPath: "/conversations"))
     }
+
+    /// #8081 — la preuve d'adresse DOCUMENTE ses refus (`INVALID_VERIFICATION`,
+    /// `VERIFICATION_EXPIRED`, `WEAK_PASSWORD`) : un écran qui ne recevrait que
+    /// la phrase du serveur la rendrait en français dans une app en anglais.
+    func test_laPreuveDAdresse_rendDesRefusTypes() {
+        XCTAssertEqual(AuthEndpoint.verifyEmail.rejectionPolicy, .structured)
+        XCTAssertEqual(MeeshyEndpointPolicy.rejectionPolicy(forLegacyPath: "/auth/verify-email"), .structured)
+        XCTAssertEqual(AuthEndpoint.login.rejectionPolicy, .opaque)
+        XCTAssertEqual(MeeshyEndpointPolicy.rejectionPolicy(forLegacyPath: "/auth/login"), .opaque)
+    }
 }
 
 

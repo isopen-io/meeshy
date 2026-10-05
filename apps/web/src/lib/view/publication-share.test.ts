@@ -1,82 +1,82 @@
-import { beforeAll, describe, expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 
-import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
-import type { PortailPartage } from '@/lib/view/invitation';
+import type { FeedPost } from '@/lib/api/feed-pages';
+import type { SendSheetRequest } from '@/lib/send/send-sheet-store';
 
-import { sharePublicationLink } from './publication-share';
+import { openPublicationShare } from './publication-share';
 
 /**
- * `sharePublicationLink` (#7116, revue) — le SITE UNIQUE du partage d'une
- * publication. Le premier jet de #7116 en avait écrit une JUMELLE
- * (`lib/stories/share-story.ts`) à côté de `usePostGesture().onShare`, que la
- * spécification désignait comme « le site à PARTAGER, pas à recopier » : deux
- * copies du même geste, dont la suivante corrigerait une seule.
+ * `openPublicationShare` (#8884) — « Partager » une publication ouvre la
+ * feuille d'envoi UNIQUE (à une ou plusieurs personnes, à un groupe, ou en
+ * publication), avec le lien public en « Plus d'options… ». La feuille ne se
+ * monte jamais ici : l'entrée ne fait que DEMANDER.
  */
-beforeAll(async () => {
-  await loadInterfaceCatalog('fr');
+const postOf = (overrides: Partial<FeedPost> = {}): FeedPost => ({ id: 'p1', type: 'POST', createdAt: '2026-09-30T10:00:00Z', ...overrides });
+
+const previewOfFirst = (requests: SendSheetRequest[]): unknown => {
+  const payload = requests[0]?.payload;
+  return payload?.kind === 'publication' ? payload.preview : undefined;
+};
+
+function opened(post: FeedPost | undefined, postId = 'p1'): SendSheetRequest[] {
+  const requests: SendSheetRequest[] = [];
+  openPublicationShare({ postId, lookup: () => post, open: (request) => void requests.push(request) });
+  return requests;
+}
+
+describe('openPublicationShare — la feuille d’envoi, avec le lien public en options (#8884)', () => {
+  test('ouvre UNE feuille de partage dont « Plus d’options » porte l’adresse canonique', () => {
+    const [request, ...rest] = opened(postOf({ content: 'Bonjour' }));
+    expect(rest).toEqual([]);
+    expect(request?.intent).toBe('share');
+    expect(request?.moreOptions).toEqual({ url: 'https://meeshy.me/feeds/post/p1' });
+    expect(request?.payload).toEqual({
+      kind: 'publication',
+      postId: 'p1',
+      postType: 'POST',
+      url: 'https://meeshy.me/feeds/post/p1',
+      preview: { kind: 'publication', text: 'Bonjour' },
+    });
+  });
+
+  test('un réel part en REEL, une story en STORY — le format d’origine de la publication', () => {
+    expect(opened(postOf({ type: 'REEL' }))[0]?.payload).toMatchObject({ postType: 'REEL' });
+    expect(opened(postOf({ type: 'STORY' }))[0]?.payload).toMatchObject({ postType: 'STORY' });
+    expect(opened(postOf({ type: 'STATUS' }))[0]?.payload).toMatchObject({ postType: 'POST' });
+  });
+
+  test('l’aperçu montre la vignette du premier média, sinon une image, sinon rien', () => {
+    const withThumb = opened(postOf({ media: [{ id: 'm', fileUrl: 'https://cdn/v.mp4', mimeType: 'video/mp4', thumbnailUrl: 'https://cdn/v.jpg' }] }));
+    expect(withThumb[0]?.payload).toMatchObject({ preview: { thumbUrl: 'https://cdn/v.jpg' } });
+    const image = opened(postOf({ media: [{ id: 'm', fileUrl: 'https://cdn/i.jpg', mimeType: 'image/jpeg' }] }));
+    expect(image[0]?.payload).toMatchObject({ preview: { thumbUrl: 'https://cdn/i.jpg' } });
+    const audio = opened(postOf({ media: [{ id: 'm', fileUrl: 'https://cdn/a.m4a', mimeType: 'audio/mp4' }] }));
+    expect(previewOfFirst(audio)).toEqual({ kind: 'publication' });
+  });
+
+  test('une publication hors cache (lien direct) s’ouvre quand même, en POST, sans aperçu', () => {
+    const [request] = opened(undefined, 'inconnue');
+    expect(request?.payload).toEqual({
+      kind: 'publication',
+      postId: 'inconnue',
+      postType: 'POST',
+      url: 'https://meeshy.me/feeds/post/inconnue',
+      preview: { kind: 'publication' },
+    });
+  });
+
+  test('un texte de blancs n’est pas un aperçu', () => {
+    expect(previewOfFirst(opened(postOf({ content: '   \n ' })))).toEqual({ kind: 'publication' });
+  });
 });
 
-function settle(): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, 0));
-}
-
-function recorder() {
-  const recorded: string[] = [];
-  return { recorded, record: (postId: string) => void recorded.push(postId) };
-}
-
-describe('sharePublicationLink — l’adresse canonique, DANS le geste (D-48)', () => {
-  test('la feuille du système est appelée SYNCHRONEMENT — avant tout `await`, sinon Safari la refuse hors activation', () => {
-    const calls: string[] = [];
-    const portal: PortailPartage = {
-      share: async (data) => {
-        calls.push(data.url);
-      },
-    };
-    sharePublicationLink({ postId: 'st-mienne', language: 'fr', announce: () => undefined, record: () => undefined, portal });
-    expect(calls).toEqual(['https://meeshy.me/feeds/post/st-mienne']);
-  });
-
-  test('un partage RÉUSSI est COMPTÉ et n’annonce rien — la feuille du système a déjà parlé', async () => {
-    const messages: string[] = [];
-    const { recorded, record } = recorder();
-    sharePublicationLink({ postId: 'p1', language: 'fr', announce: (m) => messages.push(m), record, portal: { share: async () => undefined } });
-    await settle();
-    expect(recorded).toEqual(['p1']);
-    expect(messages).toEqual([]);
-  });
-
-  test('l’annulation n’est ni comptée ni annoncée', async () => {
-    const messages: string[] = [];
-    const { recorded, record } = recorder();
-    const portal: PortailPartage = {
-      share: async () => {
-        const error = new Error('cancelled');
-        error.name = 'AbortError';
-        throw error;
-      },
-    };
-    sharePublicationLink({ postId: 'p2', language: 'fr', announce: (m) => messages.push(m), record, portal });
-    await settle();
+describe('openPublicationShare — le partage est compté une fois parti', () => {
+  test('`onShared` compte le partage de CETTE publication, et rien n’est compté à l’ouverture', () => {
+    const recorded: string[] = [];
+    const requests: SendSheetRequest[] = [];
+    openPublicationShare({ postId: 'p9', lookup: () => undefined, open: (request) => void requests.push(request), record: (id) => void recorded.push(id) });
     expect(recorded).toEqual([]);
-    expect(messages).toEqual([]);
-  });
-
-  test('le repli presse-papier est COMPTÉ et ANNONCE la copie', async () => {
-    const messages: string[] = [];
-    const { recorded, record } = recorder();
-    sharePublicationLink({ postId: 'p3', language: 'fr', announce: (m) => messages.push(m), record, portal: { copier: async () => undefined } });
-    await settle();
-    expect(recorded).toEqual(['p3']);
-    expect(messages).toEqual(['Lien copié — il ne reste qu’à le coller.']);
-  });
-
-  test('sans aucune porte : rien de compté, l’impossibilité ANNONCÉE', async () => {
-    const messages: string[] = [];
-    const { recorded, record } = recorder();
-    sharePublicationLink({ postId: 'p4', language: 'fr', announce: (m) => messages.push(m), record, portal: {} });
-    await settle();
-    expect(recorded).toEqual([]);
-    expect(messages).toEqual(['Impossible de partager la publication']);
+    requests[0]?.onShared?.();
+    expect(recorded).toEqual(['p9']);
   });
 });

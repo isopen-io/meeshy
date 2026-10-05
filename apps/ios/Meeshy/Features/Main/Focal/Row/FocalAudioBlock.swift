@@ -105,7 +105,7 @@ nonisolated enum FocalAudioRouting {
 
 // MARK: - FocalAudioBlock (WS-3)
 
-/// Bloc audio NU de la rangée plate — sous l'avatar (`Row.contentIndent`)
+/// Bloc audio NU de la rangée plate — à la colonne du nom (`Row.contentIndent`)
 /// — routage par `FocalAudioRouting.mode(for:)`.
 ///
 /// **Réutilise** `AudioMediaView`/`AudioCarouselView` (contrat §WS-3) —

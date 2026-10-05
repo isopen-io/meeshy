@@ -8,17 +8,17 @@
  *   devices doivent cesser de sonner même si leur WebSocket n'est jamais
  *   monté (réveil VoIP push sans socket).
  *
- * Cross-platform mobile par construction (audit appels 2026-07-11 #2) :
- * apns+fcm / ios+android — le hardcode `['ios']` historique laissait un
- * Android backgrounded sonner dans le vide. Web exclu : un tab web sans
- * socket n'a pas de sonnerie background à éteindre, et un data-push FCM web
- * n'a pas de handler `call_*` côté service worker.
+ * Cross-platform par construction (audit appels 2026-07-11 #2) :
+ * apns+fcm / ios+android+web — le hardcode `['ios']` historique laissait un
+ * Android backgrounded sonner dans le vide. Le web y est depuis #8043 : un
+ * onglet fermé montre la notification d'appel du service worker
+ * (`apps/web/public/sw-push.js`), que ces deux pushes retirent.
  */
 
 export type CallSilentPushType = 'call_cancel' | 'call_answered_elsewhere';
 
 export const CALL_SILENT_PUSH_TYPES: ReadonlyArray<'apns' | 'fcm'> = ['apns', 'fcm'];
-export const CALL_SILENT_PUSH_PLATFORMS: ReadonlyArray<'ios' | 'android'> = ['ios', 'android'];
+export const CALL_SILENT_PUSH_PLATFORMS: ReadonlyArray<'ios' | 'android' | 'web'> = ['ios', 'android', 'web'];
 
 export type CallSilentPush = {
   userId: string;
@@ -29,7 +29,7 @@ export type CallSilentPush = {
     data: { type: CallSilentPushType; callId: string };
   };
   types: Array<'apns' | 'fcm'>;
-  platforms: Array<'ios' | 'android'>;
+  platforms: Array<'ios' | 'android' | 'web'>;
   bypassDnd: true;
 };
 

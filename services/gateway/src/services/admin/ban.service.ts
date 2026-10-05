@@ -1,5 +1,6 @@
 import { PrismaClient, Ban } from '@meeshy/shared/prisma/client';
 import type { UserManagementService } from './user-management.service';
+import { unsetOrNull } from '../../utils/prisma-unset';
 
 export interface CreateBanParams {
   userId: string;
@@ -105,7 +106,7 @@ export class BanService {
 
   async listActiveBans(userId: string, options: { excludeBanId?: string } = {}): Promise<Ban[]> {
     const tous = await this.prisma.ban.findMany({
-      where: { userId, liftedAt: null, id: options.excludeBanId ? { not: options.excludeBanId } : undefined },
+      where: { userId, ...unsetOrNull('liftedAt'), id: options.excludeBanId ? { not: options.excludeBanId } : undefined },
     });
     return tous.filter((b) => estEnVigueur(b));
   }
@@ -122,7 +123,7 @@ export class BanService {
    */
   async sweepExpiredBans(now: Date = new Date()): Promise<Ban[]> {
     const expires = await this.prisma.ban.findMany({
-      where: { liftedAt: null, expiresAt: { not: null, lte: now } },
+      where: { ...unsetOrNull('liftedAt'), expiresAt: { not: null, lte: now } },
     });
 
     const lifted: Ban[] = [];

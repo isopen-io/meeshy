@@ -3,7 +3,7 @@ import MeeshySDK
 
 /// Action affichée dans la liste verticale de l'overlay appui-long.
 enum PrimaryAction: String, Equatable {
-    case edit, translate, copy, saveMedia, pin, unpin, star, unstar, more, delete
+    case edit, translate, copy, saveMedia, more
     /// **Composer** (lot 5, O13) — ouvre l'atelier sur le média reçu, déjà
     /// posé. Elle vit dans la liste VERTICALE et non dans « Plus… » parce que
     /// O13 fixe le budget à DEUX gestes : la feuille en coûterait trois.
@@ -23,6 +23,14 @@ enum PrimaryAction: String, Equatable {
     /// « parmi les premiers éléments ». Vivait dans `MoreItem` (« Plus… »),
     /// enterrée derrière un geste supplémentaire — retour porteur explicite.
     case select
+    /// **Imager** (#8692, ex « Exporter en image ») — l'atelier « Imagine »
+    /// (miroir du menu web, `apps/web/src/lib/view/message-actions.ts`). Même
+    /// garde que « Copier » : une image est une copie qu'on partage, ce qui ne
+    /// se copie pas ne se peint pas. Offert sur un texte ET sur un média seul.
+    case exportImage
+    /// **Export rapide** — la carte part dans le format par défaut enregistré
+    /// sur l'appareil, sans passer par les options. N'existe qu'avec ce défaut.
+    case exportQuick
 }
 
 /// Item d'une section de la feuille « Plus… ».
@@ -47,6 +55,9 @@ enum MoreItem: String, Equatable {
     /// Actions « faire » ajoutées au menu « Plus… » (exécutent + ferment) :
     /// éditer, copier, partager. `language`/`transcription` = explorables.
     case edit, copy, share
+    /// **Imager** dans « Plus… » (#8692) — la même porte que l'action
+    /// primaire, pour qui la cherche dans le grand menu.
+    case imager
     case language, views, reactions, transcription, sentiment, history
     case report
 }
@@ -118,6 +129,21 @@ struct MessageMenuContext: Equatable {
     /// à ce qui a un sens — Supprimer et Infos. Verdict posé au point d'usage
     /// par `MeeshyMessage.holdsViewOnce`.
     var isViewOnce: Bool = false
+    /// **Le message est flouté** (#8009) — verdict `Message.holdsBlur`. Le flou
+    /// retient le contenu dans le fil ; le menu ne doit pas le rendre par une
+    /// autre porte : ni copie, ni traduction, ni transfert, ni partage, ni
+    /// enregistrement, ni historique d'édition.
+    var isBlurred: Bool = false
+    /// Un format d'export par défaut est enregistré sur l'appareil : « Export
+    /// rapide » l'applique sans options (`MessageCardFormat.readDefault`).
+    var hasDefaultExportFormat: Bool = false
+    /// Le message porte un média qu'une carte peut peindre — photo, vidéo,
+    /// son (`MessageCardSubject.paintableMedia`). « Imager » s'offre alors
+    /// même sans texte (#8692).
+    var hasPaintableMedia: Bool = false
+
+    /// « Imager » a-t-il quelque chose à peindre ? Un texte ou un média peignable.
+    var canImagine: Bool { hasText || hasPaintableMedia }
 }
 
 /// **Ce qu'une graine de composer sait poser sur un canvas.**
@@ -263,15 +289,20 @@ enum MessageActionResolver {
         // « Sélectionner » — retour porteur 2026-08-27 : juste À CÔTÉ
         // d'Éditer, parmi les premiers éléments (jamais dans « Plus… »).
         out.append(.select)
-        if ctx.hasText { out.append(.translate) }
-        if ctx.hasText { out.append(.copy) }
-        if ctx.saveableAttachmentCount == 1 { out.append(.saveMedia) }
+        let showsContent = !ctx.isBlurred
+        if ctx.hasText && showsContent { out.append(.translate) }
+        if ctx.hasText && showsContent { out.append(.copy) }
+        if ctx.canImagine && showsContent {
+            out.append(.exportImage)
+            if ctx.hasDefaultExportFormat { out.append(.exportQuick) }
+        }
+        if ctx.saveableAttachmentCount == 1 && showsContent { out.append(.saveMedia) }
         // « Composer » suit immédiatement « Enregistrer » : ce sont les deux
         // gestes qui EMPORTENT le média hors de la conversation, et le second se
         // cherche à côté du premier. La CONDITION, elle, n'est pas ici : elle
         // vit dans `ComposableAttachment.offers`, que les trois lecteurs de ce
         // geste partagent. Le résolveur n'en tient qu'un fait.
-        if ctx.canComposeMedia { out.append(.compose) }
+        if ctx.canComposeMedia && showsContent { out.append(.compose) }
         // Le repli « jamais de menu réduit à Plus… seul » (média-seul non
         // enregistrable, localisation…) est devenu SANS OBJET : `.select`,
         // toujours ajouté ci-dessus, garantit déjà `out` non vide.
@@ -289,12 +320,14 @@ enum MessageActionResolver {
         // « Faire » (exécutent + ferment) : répondre, transférer, discussion,
         // éditer (si éditable), copier (si texte), partager, épingler/favori,
         // supprimer.
+        let showsContent = !ctx.isBlurred
         var actions: [MoreItem] = [.reply]
-        if ctx.isForwardable { actions.append(.forward) }
+        if ctx.isForwardable && showsContent { actions.append(.forward) }
         actions.append(.thread)
         if ctx.isMine && ctx.canEdit && ctx.hasText { actions.append(.edit) }
-        if ctx.hasText { actions.append(.copy) }
-        actions.append(.share)
+        if ctx.hasText && showsContent { actions.append(.copy) }
+        if showsContent { actions.append(.share) }
+        if ctx.canImagine && showsContent { actions.append(.imager) }
         actions.append(ctx.isPinned ? .unpin : .pin)
         actions.append(ctx.isStarred ? .unstar : .star)
         // **La décoration, juste après le favori du MESSAGE** — c'est le
@@ -311,12 +344,12 @@ enum MessageActionResolver {
         // (langue), transcription (audio/vidéo), réactions (voir + ajouter),
         // vues, sentiment (texte), historique (édité).
         var info: [MoreItem] = []
-        if ctx.hasText || ctx.hasTimebasedMedia { info.append(.language) }
-        if ctx.hasTimebasedMedia { info.append(.transcription) }
+        if (ctx.hasText || ctx.hasTimebasedMedia) && showsContent { info.append(.language) }
+        if ctx.hasTimebasedMedia && showsContent { info.append(.transcription) }
         info.append(.reactions)
         if ctx.showReadReceipts { info.append(.views) }
-        if ctx.hasText { info.append(.sentiment) }
-        if ctx.isEdited && ctx.hasEditRevisions { info.append(.history) }
+        if ctx.hasText && showsContent { info.append(.sentiment) }
+        if ctx.isEdited && ctx.hasEditRevisions && showsContent { info.append(.history) }
         sections.append(.info(info))
 
         sections.append(.moderation([.report]))

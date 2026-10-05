@@ -27,6 +27,7 @@ import { MetadataManager } from './MetadataManager';
 import { planVideoTranscode, buildVideoTranscodeArgs } from './video-transcode-plan.js';
 import { isExifStrippable, stripExifFromImageBuffer } from './ExifStrip.js';
 import { verifyDeclaredMimeType } from './ContentSignature.js';
+import { NORMALIZED_AUDIO, normalizedAudioPath } from './audio-normalization.js';
 import { UnsupportedMediaTypeError, PayloadTooLargeError } from '../../errors/custom-errors.js';
 
 export interface FileToUpload {
@@ -228,93 +229,40 @@ export class UploadProcessor {
   }
 
   /**
-   * Amplifie le volume d'un fichier audio avec ffmpeg
-   * Applique +9dB pour améliorer la transcription et la diarization
+   * Normalise un audio en AAC/M4A (+9 dB pour la transcription et la
+   * diarization). Le conteneur de SORTIE est toujours M4A, quelle que soit la
+   * source (#8039) : l'AAC ne tient ni dans un WebM, ni dans un Ogg, ni dans
+   * un MP3 — ffmpeg refusait ces combinaisons, et le WebM/Opus de Chrome
+   * partait tel quel vers iOS, qui ne le lit pas. `null` = échec : l'appelant
+   * garde l'original, une normalisation ratée ne fait pas échouer l'upload.
    */
-  private async amplifyAudio(buffer: Buffer, mimeType: string): Promise<Buffer> {
-    // Best-effort : chaque branche d'erreur RÉSOUT avec le buffer d'origine
-    // plutôt que de rejeter — une amplification ratée ne doit pas faire
-    // échouer l'upload. `reject` n'est donc jamais appelé, par construction.
-    return new Promise((resolve, _reject) => {
-      // Déterminer le format de sortie basé sur le mimeType
-      let outputFormat = 'mp4';
-      if (mimeType.includes('webm')) outputFormat = 'webm';
-      else if (mimeType.includes('wav')) outputFormat = 'wav';
-      else if (mimeType.includes('mp3')) outputFormat = 'mp3';
-      else if (mimeType.includes('ogg')) outputFormat = 'ogg';
-      else if (mimeType.includes('m4a')) outputFormat = 'm4a';
-
-      // Extension correcte pour les fichiers temp
-      const ext = outputFormat === 'mp4' ? 'mp4' : outputFormat;
-      const tempInputPath = path.join(os.tmpdir(), `audio_input_${uuidv4()}.${ext}`);
-      const tempOutputPath = path.join(os.tmpdir(), `audio_output_${uuidv4()}.${ext}`);
-
-      // Mapping format ffmpeg (m4a -> ipod pour le conteneur M4A)
-      let ffmpegFormat = outputFormat;
-      if (outputFormat === 'm4a') ffmpegFormat = 'ipod';
-
-      // Écrire le buffer temporairement
-      fs.writeFile(tempInputPath, buffer)
-        .then(() => {
-          // Amplifier avec ffmpeg (+9dB). Bitrate aligné sur la source iOS
-          // (64 kbps mono AAC) — ré-encoder à 128 kbps doublait la taille
-          // sans bénéfice perceptif puisque l'audio est déjà mono parlé.
-          const ffmpeg = spawn('ffmpeg', [
-            '-i', tempInputPath,
-            '-af', 'volume=9dB',  // Amplification de +9dB
-            '-c:a', 'aac',        // Codec audio AAC (universel)
-            '-b:a', '64k',        // Bitrate aligné sur la source mobile
-            '-ac', '1',           // Mono (voix)
-            '-f', ffmpegFormat,   // Format de sortie explicite
-            '-y',                 // Overwrite output
-            tempOutputPath
-          ]);
-
-          let stderr = '';
-          ffmpeg.stderr.on('data', (data) => {
-            stderr += data.toString();
-          });
-
-          ffmpeg.on('close', async (code) => {
-            try {
-              // Nettoyer le fichier d'entrée
-              await fs.unlink(tempInputPath).catch(() => {});
-
-              if (code !== 0) {
-                logger.error('Amplification ffmpeg échouée', { stderr });
-                // En cas d'erreur, retourner le buffer original
-                await fs.unlink(tempOutputPath).catch(() => {});
-                resolve(buffer);
-                return;
-              }
-
-              // Lire le fichier amplifié
-              const amplifiedBuffer = await fs.readFile(tempOutputPath);
-
-              // Nettoyer le fichier de sortie
-              await fs.unlink(tempOutputPath).catch(() => {});
-
-              logger.debug('Audio amplifié de +9dB', { inputBytes: buffer.length, outputBytes: amplifiedBuffer.length });
-              resolve(amplifiedBuffer);
-            } catch (error) {
-              logger.error('Erreur lecture audio amplifié', error as Error);
-              await fs.unlink(tempOutputPath).catch(() => {});
-              resolve(buffer);
-            }
-          });
-
-          ffmpeg.on('error', async (error) => {
-            logger.error('Erreur spawn ffmpeg', error as Error);
-            await fs.unlink(tempInputPath).catch(() => {});
-            await fs.unlink(tempOutputPath).catch(() => {});
-            resolve(buffer);
-          });
-        })
-        .catch((error) => {
-          logger.error('Erreur écriture fichier temp', error as Error);
-          resolve(buffer);
-        });
-    });
+  private async normalizeAudio(buffer: Buffer, sourceFilename: string): Promise<Buffer | null> {
+    const tempInputPath = path.join(os.tmpdir(), `audio_input_${uuidv4()}${path.extname(sourceFilename) || '.bin'}`);
+    const tempOutputPath = path.join(os.tmpdir(), `audio_output_${uuidv4()}${NORMALIZED_AUDIO.extension}`);
+    try {
+      await fs.writeFile(tempInputPath, buffer);
+      // Bitrate aligné sur la source iOS (64 kbps mono AAC) — ré-encoder à
+      // 128 kbps doublait la taille sans bénéfice perceptif sur de la voix.
+      await this.runFfmpeg([
+        '-i', tempInputPath,
+        '-af', 'volume=9dB',
+        '-c:a', 'aac',
+        '-b:a', '64k',
+        '-ac', '1',
+        '-f', NORMALIZED_AUDIO.ffmpegFormat,
+        '-y',
+        tempOutputPath,
+      ]);
+      const normalized = await fs.readFile(tempOutputPath);
+      logger.debug('Audio normalisé en M4A (+9dB)', { inputBytes: buffer.length, outputBytes: normalized.length });
+      return normalized;
+    } catch (error) {
+      logger.error('Normalisation audio échouée, original conservé', error as Error);
+      return null;
+    } finally {
+      await fs.unlink(tempInputPath).catch(() => {});
+      await fs.unlink(tempOutputPath).catch(() => {});
+    }
   }
 
   /** Run ffmpeg with the given argv; resolves on exit 0, rejects otherwise. */
@@ -385,25 +333,31 @@ export class UploadProcessor {
   }
 
   /**
-   * Sauvegarde physiquement un fichier avec permissions sécurisées
-   * Pour les fichiers audio, applique automatiquement une amplification de +9dB
+   * Sauvegarde physiquement un fichier avec permissions sécurisées.
+   * Un audio est normalisé en M4A : le fichier écrit peut alors changer
+   * d'extension et de type — ce que rend `relativePath`/`mimeType`, et ce que
+   * l'appelant persiste.
    */
-  async saveFile(buffer: Buffer, relativePath: string, mimeType?: string): Promise<{ size: number }> {
-    const fullPath = path.join(this.uploadBasePath, relativePath);
-    const directory = path.dirname(fullPath);
-
-    await fs.mkdir(directory, { recursive: true });
-
-    // Amplifier automatiquement les fichiers audio
+  async saveFile(
+    buffer: Buffer,
+    relativePath: string,
+    mimeType?: string
+  ): Promise<{ size: number; relativePath: string; mimeType?: string }> {
     let finalBuffer = buffer;
+    let finalPath = relativePath;
+    let finalMimeType = mimeType;
     if (mimeType && mimeType.startsWith('audio/')) {
-      logger.debug('Amplification audio avant sauvegarde');
-      finalBuffer = await this.amplifyAudio(buffer, mimeType);
+      const normalized = await this.normalizeAudio(buffer, relativePath);
+      if (normalized) {
+        finalBuffer = normalized;
+        finalPath = normalizedAudioPath(relativePath);
+        finalMimeType = NORMALIZED_AUDIO.mimeType;
+      }
     } else if (mimeType && isExifStrippable(mimeType)) {
       // #3627 — EXIF/GPS retiré AVANT persistance : c'est ce fichier que
       // `GET /attachments/:id` sert tel quel. `mimeType` absent (chemin
-      // chiffré, ligne 591 plus bas) saute cette branche sans y penser —
-      // le serveur ne peut pas lire un buffer E2EE en clair de toute façon.
+      // chiffré) saute cette branche sans y penser — le serveur ne peut pas
+      // lire un buffer E2EE en clair de toute façon.
       try {
         finalBuffer = await stripExifFromImageBuffer(buffer, mimeType);
       } catch (error) {
@@ -411,6 +365,8 @@ export class UploadProcessor {
       }
     }
 
+    const fullPath = path.join(this.uploadBasePath, finalPath);
+    await fs.mkdir(path.dirname(fullPath), { recursive: true });
     await fs.writeFile(fullPath, finalBuffer);
 
     try {
@@ -419,7 +375,7 @@ export class UploadProcessor {
       logger.error('Impossible de modifier les permissions du fichier', error as Error);
     }
 
-    return { size: finalBuffer.length };
+    return { size: finalBuffer.length, relativePath: finalPath, mimeType: finalMimeType };
   }
 
   /**
@@ -488,14 +444,15 @@ export class UploadProcessor {
       throwUploadValidationError(validation.code, validation.error);
     }
 
-    const filePath = this.generateFilePath(userId, file.filename);
-    const saved = await this.saveFile(file.buffer, filePath, file.mimeType);
+    const saved = await this.saveFile(file.buffer, this.generateFilePath(userId, file.filename), file.mimeType);
+    const filePath = saved.relativePath;
+    const savedMimeType = saved.mimeType ?? file.mimeType;
 
     const attachmentType = getAttachmentType(file.mimeType, file.filename);
     let metadata = await this.metadataManager.extractMetadata(
       filePath,
       attachmentType,
-      file.mimeType,
+      savedMimeType,
       providedMetadata,
       saved.size  // Passer la taille du fichier RÉELLEMENT écrit (EXIF/audio peuvent la changer)
     );
@@ -505,7 +462,7 @@ export class UploadProcessor {
     // (URL, size, mime, dimensions) reads these, not the raw upload.
     let storedFilePath = filePath;
     let storedFileSize = saved.size;
-    let storedMimeType = file.mimeType;
+    let storedMimeType = savedMimeType;
 
     let thumbnailPath: string | null = null;
     let imageVariants: Array<{ width: number; height: number; url: string; size: number; format: 'webp' }> | undefined;
@@ -649,9 +606,13 @@ export class UploadProcessor {
 
     // Amplifier l'audio AVANT chiffrement pour améliorer la transcription/diarization
     let fileBuffer = file.buffer;
+    let storedMimeType = file.mimeType;
     if (attachmentType === 'audio') {
-      logger.debug('Amplification audio avant chiffrement');
-      fileBuffer = await this.amplifyAudio(file.buffer, file.mimeType);
+      const normalized = await this.normalizeAudio(file.buffer, file.filename);
+      if (normalized) {
+        fileBuffer = normalized;
+        storedMimeType = NORMALIZED_AUDIO.mimeType;
+      }
     }
 
     let thumbnailBuffer: Buffer | undefined;
@@ -664,7 +625,7 @@ export class UploadProcessor {
     const encryptionResult = await this.encryptionService.encryptAttachment({
       fileBuffer: fileBuffer,
       filename: file.filename,
-      mimeType: file.mimeType,
+      mimeType: storedMimeType,
       mode: encryptionMode,
       thumbnailBuffer,
     });
@@ -716,7 +677,7 @@ export class UploadProcessor {
         messageId: messageId || null,
         fileName: path.basename(filePath),
         originalName: file.filename,
-        mimeType: file.mimeType,
+        mimeType: storedMimeType,
         fileSize: encryptionResult.metadata.encryptedSize,
         filePath: filePath,
         fileUrl: fileUrl,

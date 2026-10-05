@@ -18,15 +18,22 @@ private nonisolated let phonebookPagingLogger = Logger(subsystem: "me.meeshy.app
 /// on ne lit pas son carnet d'adresses derrière son dos.
 @MainActor
 final class PhonebookViewModel: ObservableObject {
-    @Published private(set) var contacts: [DirectoryContact] = []
+    @Published private(set) var contacts: [DirectoryContact] = [] { didSet { recomputeDerived() } }
     @Published private(set) var loadState: LoadState = .idle
     @Published private(set) var isSyncing = false
     /// Utilisateurs de la plateforme trouvés par le RELAIS de recherche —
     /// alimenté seulement quand le répertoire ne répond pas à la requête.
     @Published private(set) var platformResults: [UserSearchResult] = []
     @Published private(set) var isSearchingPlatform = false
-    @Published var activeFilter: DirectoryFilter = .all
-    @Published var searchQuery: String = ""
+    @Published var activeFilter: DirectoryFilter = .all { didSet { recomputeDerived() } }
+    @Published var searchQuery: String = "" { didSet { recomputeDerived() } }
+    /// Dérivés de `contacts` / `activeFilter` / `searchQuery`, recalculés une
+    /// fois par changement (`recomputeDerived()`, ci-dessous) plutôt qu'à
+    /// chaque lecture — `PhonebookListView.content` lisait `visibleContacts`
+    /// jusqu'à quatre fois par passe de rendu, chacune reparcourant tout
+    /// l'annuaire.
+    @Published private(set) var visibleContacts: [DirectoryContact] = []
+    @Published private(set) var meeshyCount = 0
 
     private let directoryService: ContactDirectoryServiceProviding
     private let contactSync: ContactSyncProviding
@@ -64,10 +71,13 @@ final class PhonebookViewModel: ObservableObject {
 
     /// Filtrage et recherche appliqués localement : le répertoire est déjà en
     /// mémoire, faire un aller-retour réseau à chaque frappe ferait clignoter
-    /// une liste que l'utilisateur voit déjà.
-    var visibleContacts: [DirectoryContact] {
-        var result = contacts
+    /// une liste que l'utilisateur voit déjà. Alimente `visibleContacts` /
+    /// `meeshyCount` (stockés, ci-dessus) au lieu de les recalculer à chaque
+    /// lecture.
+    private func recomputeDerived() {
+        meeshyCount = contacts.filter(\.isOnMeeshy).count
 
+        var result = contacts
         switch activeFilter {
         case .all: break
         case .meeshy: result = result.filter(\.isOnMeeshy)
@@ -75,17 +85,18 @@ final class PhonebookViewModel: ObservableObject {
         }
 
         let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !query.isEmpty else { return result }
+        guard !query.isEmpty else {
+            visibleContacts = result
+            return
+        }
 
-        return result.filter { contact in
+        visibleContacts = result.filter { contact in
             contact.resolvedName.lowercased().contains(query)
                 || contact.matchedUser?.username.lowercased().contains(query) == true
                 || contact.emails.contains { $0.contains(query) }
                 || contact.phoneNumbers.contains { $0.contains(query) }
         }
     }
-
-    var meeshyCount: Int { contacts.filter(\.isOnMeeshy).count }
 
     var isEmpty: Bool { contacts.isEmpty }
 
@@ -253,23 +264,6 @@ final class PhonebookViewModel: ObservableObject {
         return await startConversation(withUserId: user.id)
     }
 
-    /// Efface le répertoire conservé côté serveur (droit au retrait).
-    func eraseDirectory() async {
-        do {
-            _ = try await directoryService.clear()
-            contacts = []
-            loadState = .loaded
-            try? await CacheCoordinator.shared.phonebook.save([], for: cacheKey)
-            FeedbackToastManager.shared.showSuccess(
-                String(localized: "contacts.phonebook.erased", defaultValue: "Répertoire effacé", bundle: .main)
-            )
-        } catch {
-            FeedbackToastManager.shared.showError(
-                String(localized: "contacts.phonebook.erase-error", defaultValue: "Impossible d'effacer le répertoire", bundle: .main)
-            )
-        }
-    }
-
     func setFilter(_ filter: DirectoryFilter) {
         activeFilter = filter
         HapticFeedback.light()
@@ -277,7 +271,11 @@ final class PhonebookViewModel: ObservableObject {
 
     /// Message d'invitation pour un contact hors plateforme.
     func invitationMessage(for contact: DirectoryContact) -> String {
-        let name = contact.resolvedName
+        Self.invitationMessage(name: contact.resolvedName)
+    }
+
+    /// Le texte d'invitation UNIQUE — répertoire et carte de visite (#8101).
+    nonisolated static func invitationMessage(name: String) -> String {
         let greeting = name.isEmpty ? "Salut" : "Salut \(name)"
         return "\(greeting) ! Rejoins-moi sur Meeshy : https://meeshy.me/download"
     }

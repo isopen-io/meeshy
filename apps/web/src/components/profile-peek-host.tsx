@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useLayoutEffect } from 'react';
+import { lazy, Suspense, useLayoutEffect } from 'react';
 
 import { routeKey, useRoute } from '@/lib/router';
 import { closeProfilePeek, registerProfilePeekHost, useProfilePeek } from '@/lib/view/profile-peek';
@@ -14,7 +14,11 @@ import { closeProfilePeek, registerProfilePeekHost, useProfilePeek } from '@/lib
  *
  * **Elle se referme quand l'adresse change** — « Écrire » ouvre le fil,
  * « Ouvrir le profil complet » ouvre la page : la feuille laissée ouverte
- * recouvrirait l'écran qu'on vient de demander.
+ * recouvrirait l'écran qu'on vient de demander. La porte vers la page la
+ * referme DANS son clic ; pour les autres navigations (« Écrire », retour
+ * arrière), la fermeture est un effet de MISE EN PAGE : sous Preact, un
+ * `useEffect` attend l'image suivante, et la feuille survivait une image
+ * au-dessus de la page qu'on venait d'ouvrir (CI rouge, `check-rich-text`).
  */
 const LazyProfilePeekSheet = lazy(() => import('@/components/profile-peek-sheet').then((m) => ({ default: m.ProfilePeekSheet })));
 
@@ -23,7 +27,7 @@ export function ProfilePeekHost() {
   const address = routeKey(useRoute());
 
   useLayoutEffect(() => registerProfilePeekHost(), []);
-  useEffect(() => closeProfilePeek, [address]);
+  useLayoutEffect(() => closeProfilePeek, [address]);
 
   return username === null ? null : (
     <Suspense fallback={null}>

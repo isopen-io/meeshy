@@ -501,6 +501,7 @@ final class MessageModelsTests: XCTestCase {
     // MARK: - EphemeralDuration
 
     func testEphemeralDurationRawValues() {
+        XCTAssertEqual(EphemeralDuration.fifteenSeconds.rawValue, 15)
         XCTAssertEqual(EphemeralDuration.thirtySeconds.rawValue, 30)
         XCTAssertEqual(EphemeralDuration.oneMinute.rawValue, 60)
         XCTAssertEqual(EphemeralDuration.fiveMinutes.rawValue, 300)
@@ -509,10 +510,12 @@ final class MessageModelsTests: XCTestCase {
     }
 
     func testEphemeralDurationAllCasesCount() {
-        XCTAssertEqual(EphemeralDuration.allCases.count, 5)
+        XCTAssertEqual(EphemeralDuration.allCases.count, 6)
+        XCTAssertEqual(EphemeralDuration.allCases.first, .fifteenSeconds, "15 s ouvre la liste des durées (#8303)")
     }
 
     func testEphemeralDurationLabels() {
+        XCTAssertEqual(EphemeralDuration.fifteenSeconds.label, "15s")
         XCTAssertEqual(EphemeralDuration.thirtySeconds.label, "30s")
         XCTAssertEqual(EphemeralDuration.oneMinute.label, "1min")
         XCTAssertEqual(EphemeralDuration.fiveMinutes.label, "5min")
@@ -521,6 +524,7 @@ final class MessageModelsTests: XCTestCase {
     }
 
     func testEphemeralDurationDisplayLabels() {
+        XCTAssertEqual(EphemeralDuration.fifteenSeconds.displayLabel, "15 secondes")
         XCTAssertEqual(EphemeralDuration.thirtySeconds.displayLabel, "30 secondes")
         XCTAssertEqual(EphemeralDuration.oneMinute.displayLabel, "1 minute")
         XCTAssertEqual(EphemeralDuration.fiveMinutes.displayLabel, "5 minutes")

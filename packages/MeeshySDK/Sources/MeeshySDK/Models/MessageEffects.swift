@@ -11,6 +11,9 @@ public struct MessageEffectFlags: OptionSet, Codable, Sendable, Hashable {
     public static let ephemeral  = MessageEffectFlags(rawValue: 1 << 0)
     public static let blurred    = MessageEffectFlags(rawValue: 1 << 1)
     public static let viewOnce   = MessageEffectFlags(rawValue: 1 << 2)
+    /// Flamme-œil (#8302) : toujours avec `.ephemeral`, sans durée — le message
+    /// disparaît chez chaque lecteur quand il l'a vu puis a quitté la conversation.
+    public static let ephemeralAfterRead = MessageEffectFlags(rawValue: 1 << 3)
 
     // Axe 2: Effets visuels d'apparition — one-shot (bits 8-15)
     public static let shake      = MessageEffectFlags(rawValue: 1 << 8)
@@ -27,7 +30,7 @@ public struct MessageEffectFlags: OptionSet, Codable, Sendable, Hashable {
     public static let sparkle    = MessageEffectFlags(rawValue: 1 << 19)
 
     // Convenience masks
-    public static let lifecycleMask: MessageEffectFlags   = [.ephemeral, .blurred, .viewOnce]
+    public static let lifecycleMask: MessageEffectFlags   = [.ephemeral, .ephemeralAfterRead, .blurred, .viewOnce]
     public static let appearanceMask: MessageEffectFlags   = [.shake, .zoom, .explode, .confetti, .fireworks, .waoo]
     public static let persistentMask: MessageEffectFlags   = [.glow, .pulse, .rainbow, .sparkle]
 

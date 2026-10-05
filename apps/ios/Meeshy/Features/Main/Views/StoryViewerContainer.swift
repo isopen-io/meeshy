@@ -1,6 +1,7 @@
 import SwiftUI
 import os
 import MeeshySDK
+import MeeshyUI
 
 /// Reactive wrapper that shows a loading state until storyGroups are available,
 /// then seamlessly transitions to StoryViewerView. Solves the race condition
@@ -216,12 +217,12 @@ struct StoryViewerContainer: View {
 
     private var loadingOverlay: some View {
         ZStack {
-            VStack(spacing: 16) {
+            VStack(spacing: MeeshySpacing.lg) {
                 ProgressView()
-                    .tint(.white)
+                    .tint(MeeshyColors.mediaChromeForeground)
                     .scaleEffect(1.3)
                 Text(String(localized: "story.viewer.loading", defaultValue: "Chargement…", bundle: .main))
-                    .foregroundColor(.white.opacity(0.6))
+                    .foregroundColor(MeeshyColors.mediaChromeTertiary)
                     .font(.subheadline)
             }
 
@@ -231,34 +232,34 @@ struct StoryViewerContainer: View {
 
     private var notFoundOverlay: some View {
         ZStack {
-            VStack(spacing: 16) {
+            VStack(spacing: MeeshySpacing.lg) {
                 Image(systemName: "exclamationmark.circle")
                     // Doctrine 84i/86i : glyphe hero d'etat d'erreur (~38pt, decoratif) → fige ;
                     // le titre ci-dessous porte le sens. Masque de VoiceOver.
                     .font(.system(size: 38, weight: .regular))
-                    .foregroundColor(.white.opacity(0.8))
+                    .foregroundColor(MeeshyColors.mediaChromeSecondary)
                     .accessibilityHidden(true)
 
                 Text(String(localized: "story.viewer.notFound.title", defaultValue: "Story introuvable", bundle: .main))
-                    .foregroundColor(.white)
+                    .foregroundColor(MeeshyColors.mediaChromeForeground)
                     .font(.headline)
 
                 Text(String(localized: "story.viewer.notFound.description", defaultValue: "Impossible de charger cette story. Réessayez ou fermez.", bundle: .main))
                     .multilineTextAlignment(.center)
-                    .foregroundColor(.white.opacity(0.6))
+                    .foregroundColor(MeeshyColors.mediaChromeTertiary)
                     .font(.footnote)
-                    .padding(.horizontal, 32)
+                    .padding(.horizontal, MeeshySpacing.xxxl)
 
-                HStack(spacing: 12) {
+                HStack(spacing: MeeshySpacing.md) {
                     Button {
                         Task { await retryFetch(uid: uid) }
                     } label: {
                         Text(String(localized: "story.viewer.retry", defaultValue: "Réessayer", bundle: .main))
                             .font(.subheadline.weight(.semibold))
-                            .foregroundColor(.black)
-                            .padding(.horizontal, 20)
-                            .padding(.vertical, 10)
-                            .background(Capsule().fill(Color.white))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, MeeshySpacing.xl)
+                            .padding(.vertical, MeeshySpacing.smPlus)
+                            .background(Capsule().fill(MeeshyColors.brandGradient))
                     }
 
                     Button {
@@ -266,15 +267,15 @@ struct StoryViewerContainer: View {
                     } label: {
                         Text(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
                             .font(.subheadline.weight(.semibold))
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 20)
-                            .padding(.vertical, 10)
-                            .background(Capsule().stroke(Color.white.opacity(0.4), lineWidth: 1))
+                            .foregroundColor(MeeshyColors.mediaChromeForeground)
+                            .padding(.horizontal, MeeshySpacing.xl)
+                            .padding(.vertical, MeeshySpacing.smPlus)
+                            .background(Capsule().stroke(Color.white.opacity(MeeshyOpacity.medium), lineWidth: MeeshyBorder.regular))
                     }
                 }
-                .padding(.top, 8)
+                .padding(.top, MeeshySpacing.sm)
             }
-            .padding(24)
+            .padding(MeeshySpacing.xxl)
 
             closeButton
         }
@@ -282,21 +283,7 @@ struct StoryViewerContainer: View {
 
     private var closeButton: some View {
         VStack {
-            HStack {
-                Spacer()
-                Button { isPresented = false } label: {
-                    Image(systemName: "xmark")
-                        // Doctrine 82i : glyphe dans un cadre de tap fixe 32×32 → fige
-                        // (le scaler deborderait du cercle). Bouton labellise ci-dessous.
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundColor(.white)
-                        .frame(width: 32, height: 32)
-                        .background(Circle().fill(Color.white.opacity(0.2)))
-                }
-                .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
-                .padding(.trailing, 16)
-                .padding(.top, 8)
-            }
+            FullscreenTopBar(onClose: { isPresented = false })
             Spacer()
         }
     }

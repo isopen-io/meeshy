@@ -1,0 +1,63 @@
+import { primeTones } from './call-tones';
+import type { CallFeedbackIssue, CallFeedbackRating } from './call-feedback';
+import type { CallReactionEmoji } from '@meeshy/shared/types/call-control-law';
+
+import type { DecodedPerson } from './call-decode';
+import type { CallEngine, JoinCallRequest, StartCallRequest } from './engine';
+
+/**
+ * **CE QUE LES ÉCRANS APPELLENT** (#6382) — le fil, le journal et la bulle
+ * d'appel importent CE module, jamais le moteur : `engine.ts` (WebRTC,
+ * signalisation, sons) n'est chargé qu'au premier geste d'appel ou au premier
+ * appel reçu.
+ */
+
+let pending: Promise<CallEngine> | null = null;
+
+export function loadCallEngine(): Promise<CallEngine> {
+  pending ??= import('./engine').then((module) => module.defaultCallEngine());
+  return pending;
+}
+
+/* `primeTones` DANS le geste : un contexte audio ne démarre qu'à l'intérieur
+   d'un clic, et le moteur n'arrive qu'après un `import()`. */
+const run = (fn: (engine: CallEngine) => unknown): void => {
+  primeTones();
+  void loadCallEngine().then(fn);
+};
+
+export const callActions = {
+  start: (request: StartCallRequest): void => run((engine) => engine.start(request)),
+  join: (request: JoinCallRequest): void => run((engine) => engine.join(request)),
+  accept: (options?: { readonly audioOnly?: boolean }): void => run((engine) => engine.accept(options)),
+  decline: (): void => run((engine) => engine.decline()),
+  /** Entendre l'appelant avant de décrocher fait taire la sonnerie (#8627). */
+  hearPreview: (): void => run((engine) => engine.hearPreview()),
+  hangup: (): void => run((engine) => engine.hangup()),
+  toggleMic: (): void => run((engine) => engine.toggleMic()),
+  toggleCamera: (): void => run((engine) => engine.toggleCamera()),
+  switchCamera: (): void => run((engine) => engine.switchCamera()),
+  selectCamera: (deviceId: string): void => run((engine) => engine.selectCamera(deviceId)),
+  /** Partager l'écran ou arrêter (#8063) — le sélecteur du navigateur s'ouvre dans le geste. */
+  toggleScreen: (): void => run((engine) => engine.toggleScreen()),
+  minimize: (): void => run((engine) => engine.setDisplay('pill')),
+  expand: (): void => run((engine) => engine.setDisplay('full')),
+  /** La pastille repliée en bulle déplaçable (#8046, `CallBubbleView.swift`). */
+  collapse: (): void => run((engine) => engine.setDisplay('bubble')),
+  toggleCaptions: (): void => run((engine) => engine.toggleCaptions()),
+  /** Un effet de ma vidéo a changé (#8442) : la piste envoyée le suit. */
+  refreshEffects: (): void => run((engine) => engine.refreshEffects()),
+  answerWaiting: (): void => run((engine) => engine.answerWaiting()),
+  declineWaiting: (): void => run((engine) => engine.declineWaiting()),
+  retry: (): void => run((engine) => engine.retry()),
+  dismiss: (): void => run((engine) => engine.dismiss()),
+  /** La note d'après-appel (#8072). */
+  rate: (rating: CallFeedbackRating, issues: readonly CallFeedbackIssue[]): void => run((engine) => engine.rate(rating, issues)),
+  skipRating: (): void => run((engine) => engine.skipRating()),
+  /** Faire sonner un ami dans l'appel en cours (#8433). */
+  invite: (person: DecodedPerson): void => run((engine) => engine.invite(person)),
+  /** Couper le micro d'un participant (#8438). */
+  muteParticipant: (userId: string): void => run((engine) => engine.muteParticipant(userId)),
+  /** Réagir (#8439). */
+  react: (emoji: CallReactionEmoji): void => run((engine) => engine.react(emoji)),
+};

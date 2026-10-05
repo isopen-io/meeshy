@@ -1,4 +1,6 @@
 import * as z from 'zod/mini';
+import * as authEndpoints from '@meeshy/shared/api/endpoints/auth';
+import * as usersEndpoints from '@meeshy/shared/api/endpoints/users';
 
 import type { DataSource } from './config';
 import type { ApiFailure, ApiResult, HttpTransport } from './http';
@@ -218,7 +220,7 @@ export async function loadActiveSessions(
   if (__FIXTURES__ && params.source === 'fixtures') return NOT_SERVED;
   const result = await params.transport.request<unknown>({
     method: 'GET',
-    path: '/api/v1/auth/sessions',
+    path: authEndpoints.sessions,
     ...withSignal(params.signal),
   });
   if (!result.ok) return result;
@@ -231,7 +233,7 @@ export async function revokeSession(deps: AccountSecurityDeps, sessionId: string
   if (__FIXTURES__ && deps.source === 'fixtures') return NOT_SERVED;
   return deps.transport.request<unknown>({
     method: 'DELETE',
-    path: `/api/v1/auth/sessions/${encodeURIComponent(sessionId)}`,
+    path: authEndpoints.sessionsBySessionId(sessionId),
   });
 }
 
@@ -242,7 +244,7 @@ export async function revokeSession(deps: AccountSecurityDeps, sessionId: string
  */
 export async function revokeOtherSessions(deps: AccountSecurityDeps): Promise<ApiResult<number>> {
   if (__FIXTURES__ && deps.source === 'fixtures') return NOT_SERVED;
-  const result = await deps.transport.request<unknown>({ method: 'DELETE', path: '/api/v1/auth/sessions' });
+  const result = await deps.transport.request<unknown>({ method: 'DELETE', path: authEndpoints.sessions });
   if (!result.ok) return result;
   const charge = result.data;
   const count = charge !== null && typeof charge === 'object' ? (charge as { revokedCount?: unknown }).revokedCount : undefined;
@@ -255,7 +257,7 @@ export async function loadPushDevices(
   if (__FIXTURES__ && params.source === 'fixtures') return NOT_SERVED;
   const result = await params.transport.request<unknown>({
     method: 'GET',
-    path: '/api/v1/users/me/devices',
+    path: usersEndpoints.meDevices,
     ...withSignal(params.signal),
   });
   if (!result.ok) return result;
@@ -266,7 +268,7 @@ export async function forgetDevice(deps: AccountSecurityDeps, deviceId: string):
   if (__FIXTURES__ && deps.source === 'fixtures') return NOT_SERVED;
   return deps.transport.request<unknown>({
     method: 'DELETE',
-    path: `/api/v1/users/me/devices/${encodeURIComponent(deviceId)}`,
+    path: usersEndpoints.meDevicesByDeviceId(deviceId),
   });
 }
 
@@ -276,7 +278,7 @@ export async function loadTwoFactorStatus(
   if (__FIXTURES__ && params.source === 'fixtures') return NOT_SERVED;
   const result = await params.transport.request<unknown>({
     method: 'GET',
-    path: '/api/v1/auth/2fa/status',
+    path: authEndpoints.n2FaStatus,
     ...withSignal(params.signal),
   });
   if (!result.ok) return result;

@@ -23,6 +23,12 @@ import MeeshySDK
 @MainActor
 extension MeeshyComposerHost {
 
+    /// La caméra de la machine — lue par les observateurs de prise du meuble.
+    var sceneCamera: CameraModel { sceneCapture.camera }
+
+    /// L'étape du viseur, lue par la surface et le meuble.
+    var sceneCameraStage: ComposerSceneCameraStage { sceneCapture.stage }
+
     /// **L'appui long sur une scène VIDE ouvre la caméra** (#4036, #4851 —
     /// porteur 2026-09-03 ; planche `2b`).
     ///
@@ -34,8 +40,9 @@ extension MeeshyComposerHost {
     /// - **quel** viseur — la même règle, où le FORMAT prime la porte ;
     /// - **comment** il s'ouvre — `presentCamera(mode:)`, le site unique.
     ///
-    /// L'hôte ne fait que les composer. Un `if` écrit ici aurait remis la
-    /// décision dans un corps de vue, où une garde de source ne la lit pas.
+    /// **L'appui long OUVRE ET FILME** (#8653, directive porteur 2026-09-29 :
+    /// « longpress ouvre et lance la vidéo ») : la tenue de la machine part dès
+    /// que la session peut écrire, et dure tant que le doigt reste.
     func handleSceneCaptureLongPress() {
         guard ComposerSceneCaptureGesture.offersCapture(
             backgroundIsEmpty: !viewModel.currentSlide.effects.hasVisualBackgroundMedia,
@@ -43,83 +50,58 @@ extension MeeshyComposerHost {
         ) else { return }
         HapticFeedback.medium()
         armSceneCamera()
-        // **Le geste ne s'arrête pas à l'armement** (directive porteur
-        // 2026-09-04) :
-        //
-        // > « il faut que le simple longpress déclenche la photo et non pas
-        // > juste l'objectif, si on a un vrai longpress ça déclenche la capture
-        // > vidéo avec le chrono et indicateur »
-        //
-        // L'appui long ARME et VISE ; c'est sa LEVÉE qui décide. Un doigt
-        // relâché tôt rend une photo, un doigt qui tient bascule en vidéo. La
-        // loi est celle de l'obturateur de la barre — `ComposerShutterGesture`,
-        // le site unique (#5074) — et non un second seuil écrit ici : deux
-        // seuils pour un même verbe divergent au premier réglage.
-        sceneHoldStartedAt = Date()
-        sceneHoldTask?.cancel()
-        // Un `UILongPressGestureRecognizer` n'émet `.changed` que sur un
-        // MOUVEMENT. Un doigt parfaitement immobile — le cas nominal quand on
-        // cadre — ne réveillerait personne, et la vidéo ne partirait jamais.
-        // C'est l'horloge qui la déclenche, pas le geste.
-        sceneHoldTask = Task { @MainActor in
-            try? await Task.sleep(nanoseconds:
-                UInt64(ComposerShutterGesture.holdToFilm * 1_000_000_000))
-            guard !Task.isCancelled, sceneHoldStartedAt != nil else { return }
-            HapticFeedback.medium()
-            startSceneFilming()
-        }
+        sceneCapture.beginHold()
     }
 
-    /// **Le doigt glisse pendant la prise : à DROITE, il la verrouille.**
-    ///
-    /// Directive porteur 2026-09-04 : « il faut s'assurer de pouvoir déplacer à
-    /// droite pour verrouiller l'enregistrement afin d'accéder à d'autres gestes
-    /// comme le changement de la caméra en continuant à enregistrer ».
-    ///
-    /// Le sens et le seuil viennent de `ComposerShutterGesture`, la même loi que
-    /// la barre applique à son obturateur. Le verrou est IDEMPOTENT : le
-    /// reconnaisseur émet `.changed` à chaque image tant que le doigt bouge, et
-    /// `lockSceneTake` se garde déjà d'un stage qui n'enregistre pas.
-    func handleSceneCaptureLongPressChanged(_ translation: CGPoint) {
-        guard sceneHoldStartedAt != nil,
-              ComposerShutterGesture.locks(translationX: translation.x) else { return }
-        guard sceneCameraMode != ComposerShutterGesture.mode(locked: true) else { return }
+    /// **Un toucher sur une scène VIDE ARME le viseur — il ne prend rien**
+    /// (#8711, qui supplante le « ouvre et prend » de #8653). Le viseur paraît
+    /// avec ses contrôleurs habituels ; c'est le SECOND toucher qui prend la
+    /// photo (`handleArmedSceneTap`). Rend `true` quand il a pris le geste —
+    /// le tap de sélection du fond n'a alors rien à faire.
+    func handleSceneQuickTap() -> Bool {
+        guard ComposerSceneQuickCapture.offers(
+            sceneIsBlank: ComposerSceneQuickCapture.sceneIsBlank(viewModel.currentSlide),
+            format: selectedFormat,
+            stage: sceneCameraStage,
+            toolIsOpen: sceneToolOwnsScreen),
+              ComposerSceneQuickCapture.tap(format: selectedFormat) != nil else { return false }
         HapticFeedback.light()
-        lockSceneTake()
+        armSceneCamera()
+        return true
     }
 
-    /// **La levée décide** — et c'est la même loi que la barre, à un fait près :
-    /// ici le « verrouillé » se LIT sur le mode courant plutôt que sur un
-    /// booléen de vue. `ComposerShutterGesture.mode(locked:)` est l'unique
-    /// producteur de ce mode, donc le lire est équivalent à le tenir — et évite
-    /// un second état à garder d'accord avec le premier.
+    /// **Le second toucher, n'importe où sur la scène, prend la photo** (#8711).
+    /// La nappe du viseur le reçoit hors de ses contrôleurs ; la loi décide.
+    func handleArmedSceneTap() {
+        guard ComposerSceneQuickCapture.armedTap(
+            stage: sceneCameraStage,
+            format: selectedFormat,
+            pendingSegments: sceneCapture.segments.count) == .takePhoto else { return }
+        sceneCapture.photographWhenReady()
+    }
+
+    /// **Viseur ARMÉ : l'appui long, n'importe où sur la scène, FILME** (#8846,
+    /// directive porteur 2026-09-30) — la même tenue, le même cadenas et le
+    /// même zoom que l'appui long d'une scène vide.
+    func handleArmedSceneHold() {
+        guard ComposerSceneQuickCapture.armedHold(stage: sceneCameraStage,
+                                                  format: selectedFormat) == .startFilming else { return }
+        sceneCapture.beginHold()
+    }
+
+    /// **Le doigt glisse pendant la prise** : à droite le cadenas, à la
+    /// verticale le zoom — la loi est celle de la machine.
+    func handleSceneCaptureLongPressChanged(_ translation: CGPoint) {
+        sceneCapture.holdChanged(translation)
+    }
+
+    /// **La levée décide** — tenu, verrouillé ou annulé, selon la loi du
+    /// cadenas. Une levée sans début (l'hôte a refusé l'armement) ne fait rien.
     func handleSceneCaptureLongPressEnded() {
-        sceneHoldTask?.cancel()
-        sceneHoldTask = nil
-        // La fin arrive AUSSI quand l'hôte a refusé l'armement : le canvas
-        // n'applique que ses trois gardes, la clause « scène vide » vit ici.
-        // Sans ce témoin de début, cette fin poserait une photo que personne
-        // n'a armée — et sur une scène qui a déjà un fond.
-        guard let debut = sceneHoldStartedAt else { return }
-        sceneHoldStartedAt = nil
-        switch ComposerShutterGesture.outcome(
-            heldFor: Date().timeIntervalSince(debut),
-            locked: sceneCameraMode == ComposerShutterGesture.mode(locked: true)) {
-        case .photo:
-            takeScenePhoto()
-        case .closeTake:
-            closeSceneTake()
-        case .keepFilming:
-            break
-        }
+        sceneCapture.endHold()
     }
 
     /// **Le viseur s'ARME dans la scène — il ne se PRÉSENTE plus** (#4080).
-    ///
-    /// Le geste et sa règle n'ont pas bougé d'une ligne ; c'est sa DESTINATION
-    /// qui change. `presentCamera(mode:)` posait `presentedPortal = .camera`,
-    /// donc une feuille modale par-dessus le composer — la scène disparaissait
-    /// au moment précis où l'auteur cadrait ce qu'il allait y poser.
     ///
     /// > « La caméra est une entrée, pas un mode. » — planche `2b`
     ///
@@ -128,168 +110,51 @@ extension MeeshyComposerHost {
     /// rangée ne montrerait pas.
     func armSceneCamera() {
         guard let mode = ComposerSceneCamera.initialMode(for: selectedFormat) else { return }
-        sceneCameraMode = mode
-        sceneCameraStage = .armed
         sceneCameraSize = .card
         // **Ce que le viseur prend appartient à la SCÈNE** (#4080, planche
-        // `2b` : « ce qu'elle rend est posé dans la scène courante »).
-        //
-        // Sans cette ligne, la prise partait dans `documentLocalMedia` sans
-        // marque de rail, donc `syncPostMediaIntoSlides` la classait « rangée
-        // du document » — une slide à elle. Symptômes signalés par le porteur :
-        // la scène reste NOIRE après la prise, et la pastille du rail ne
-        // compte pas. Deux manifestations d'un seul fait — le média n'était
-        // jamais arrivé sur la slide courante.
-        //
-        // Le marquage se fait à l'ARMEMENT et non à la pose : `ingestIntoDocument`
-        // consomme le drapeau AVANT d'écrire (#4879), et l'observateur qui lit
-        // `railPosedMediaURLs` tourne sur l'écriture. Le poser plus tard le
-        // ferait arriver après lui.
+        // `2b`). Le marquage se fait à l'ARMEMENT et non à la pose :
+        // `ingestIntoDocument` consomme le drapeau AVANT d'écrire (#4879), et
+        // l'observateur qui lit `railPosedMediaURLs` tourne sur l'écriture.
         railPosesNextMedia = true
-        // `configure()` demande la permission PUIS ouvre la session — c'est le
-        // même point d'entrée que la feuille, et il rend un panneau explicatif
-        // plutôt qu'un aperçu noir si l'accès est refusé.
-        sceneCamera.configure()
-    }
-
-    /// **Un appui bref PREND une photo** (#4080, directive porteur 2026-09-04 :
-    /// le mode se lit du geste, pas d'un bouton).
-    func takeScenePhoto() {
-        guard sceneCameraStage == .armed else { return }
-        sceneCameraMode = .photo
-        HapticFeedback.medium()
-        sceneCamera.takePhoto(flash: sceneCameraFlash)
-    }
-
-    /// **Le doigt a TENU : la prise commence.** Le seuil vit dans
-    /// `ComposerShutterGesture`, et la vue le compte — elle seule voit le doigt.
-    func startSceneFilming() {
-        guard sceneCameraStage == .armed else { return }
-        sceneCameraMode = ComposerShutterGesture.mode(locked: false)
-        sceneCameraStage = .recording
-        Task {
-            await sceneCamera.enableAudioCaptureIfNeeded()
-            sceneCamera.startRecording()
-        }
-    }
-
-    /// **Le doigt a remonté sans relâcher : la prise continue sans lui.** Rien
-    /// ne change à ce qui s'écrit — seul le mode change, et avec lui ce que le
-    /// relâchement fera.
-    func lockSceneTake() {
-        guard sceneCameraStage == .recording else { return }
-        sceneCameraMode = ComposerShutterGesture.mode(locked: true)
-    }
-
-    /// **La prise se clôt** — relâchement d'une prise tenue, ou appui sur une
-    /// prise verrouillée. La durée est saisie AVANT l'arrêt : le modèle remet
-    /// son horloge à zéro au démarrage suivant, et le fichier n'arrive
-    /// qu'après.
-    func closeSceneTake() {
-        guard sceneCameraStage == .recording else { return }
-        sceneCameraStage = .armed
-        pendingSegmentDuration = sceneCamera.recordingDuration
-        sceneCamera.stopRecording()
-        HapticFeedback.medium()
+        sceneCapture.arm(mode: mode)
     }
 
     /// **Une vidéo prise au viseur en scène s'ACCUMULE, elle ne se pose pas**
-    /// (#4099, vue `4b`).
-    ///
-    /// > « relâcher pour clore le segment · ✓ pour poser dans la scène »
-    ///
-    /// C'est la seule différence de fond avec la feuille, et elle est délibérée :
-    /// la feuille pose à chaque prise, le viseur en scène laisse l'auteur en
-    /// enchaîner plusieurs avant de valider. Une PHOTO, elle, se pose tout de
-    /// suite — il n'y a rien à concaténer, et l'y faire attendre un `✓`
-    /// ajouterait un geste à l'usage le plus courant.
+    /// (#4099, vue `4b`) — « relâcher pour clore le segment · ✓ pour poser
+    /// dans la scène ». Une PHOTO, elle, se pose tout de suite.
     func collectSceneSegment(_ url: URL) {
-        sceneSegments.append(ComposerCaptureSegment(
-            url: url, duration: pendingSegmentDuration))
-        pendingSegmentDuration = 0
+        sceneCapture.collectSegment(url)
     }
 
-    /// **Retirer le dernier segment supprime son FICHIER.** La règle dit lequel ;
-    /// l'effacement se fait ici, seul endroit qui a le droit de toucher au
-    /// disque. Sans lui, chaque essai abandonné laisserait un fichier dans le
-    /// dossier temporaire jusqu'au prochain vidage du système.
-    func dropLastSceneSegment() {
-        let (gardés, orphelin) = ComposerCaptureSegments.droppingLast(sceneSegments)
-        sceneSegments = gardés
-        if let orphelin {
-            FileManager.default.removeItemLogging(
-                at: orphelin, context: "segment de prise retiré par l'auteur", logger: .media)
-        }
-        HapticFeedback.light()
-    }
-
-    /// **`✓` concatène et pose.** Un segment unique EST le fichier final : le
-    /// passer au concaténateur le ré-écrirait pour rien, quand la planche
-    /// promet « quasi instantané quelle que soit la durée ».
+    /// **`✓` concatène et pose.**
     func validateSceneSegments() {
-        let segments = sceneSegments
-        guard ComposerCaptureSegments.canValidate(segments) else { return }
-        sceneSegments = []
-        Task {
-            let finale: URL?
-            if ComposerCaptureSegments.needsMerge(segments) {
-                finale = await CameraModel.mergeSegments(segments.map(\.url))
-            } else {
-                finale = segments.first?.url
-            }
-            // Repli DOUX sur le dernier segment : une concaténation qui échoue
-            // ne doit pas perdre la prise entière — même règle que la feuille,
-            // et pour la même raison.
-            guard let url = finale ?? segments.last?.url else { return }
-            poseSceneCapture(.video(url))
-        }
+        sceneCapture.validateSegments { poseSceneCapture(.video($0)) }
     }
 
     /// **La prise POSE, puis le viseur se RETIRE** (#4080, planche `2b` : « une
     /// entrée, pas un mode »).
-    ///
-    /// Rester armé après une pose ferait de la caméra un état du composer, et
-    /// l'auteur n'aurait plus de scène à regarder pour juger ce qu'il vient d'y
-    /// mettre. L'étape d'arrivée vient de la loi
-    /// (`ComposerSceneCamera.stageAfterCapture`), jamais d'un `.off` écrit ici.
     func poseSceneCapture(_ result: CameraResult) {
-        sceneCameraStage = ComposerSceneCamera.stageAfterCapture
-        sceneCameraMode = nil
-        sceneCamera.stop()
+        // **« Reprendre une photo » : l'ancien fond part À LA POSE** (#8716),
+        // avant l'ingestion — retirée ici et non à l'armement, elle ne se perd
+        // pas si l'auteur referme le viseur.
+        if let ancien = sceneCaptureReplacesBackgroundId {
+            sceneCaptureReplacesBackgroundId = nil
+            retractMedia(objectIds: [ancien])
+        }
+        sceneCapture.finishCapture()
         HapticFeedback.success()
         Task { await ingestCameraCapture(result) }
     }
 
-    /// **Désarmer REND la scène**, et ferme la session dans le même geste : une
-    /// caméra qu'on laisse tourner derrière une scène rendue est un voyant
-    /// allumé que rien à l'écran n'explique.
+    /// **Désarmer REND la scène**, et la machine ferme la session et emporte
+    /// les segments abandonnés avec leurs fichiers.
     func disarmSceneCamera() {
-        sceneCameraStage = .off
+        sceneCaptureReplacesBackgroundId = nil
         sceneCameraSize = .card
-        sceneCameraMode = nil
         // Quitter sans prendre RETIRE la marque : laissée posée, elle
-        // classerait sur la scène le prochain média venu d'une AUTRE porte —
-        // un lot suivant qui n'a rien demandé.
+        // classerait sur la scène le prochain média venu d'une AUTRE porte.
         railPosesNextMedia = false
-        // **Les segments abandonnés emportent leurs FICHIERS** (#4099). Sans
-        // cette purge, quitter le viseur après trois essais laisserait trois
-        // .mov dans le dossier temporaire jusqu'au prochain vidage du système
-        // — et la prise suivante repartirait AVEC eux, ce qui poserait dans la
-        // scène des segments que l'auteur croyait avoir jetés.
-        discardSceneSegments()
-        sceneCamera.stop()
-    }
-
-    /// Efface les segments en attente ET leurs fichiers. Appelé au
-    /// désarmement ; la validation, elle, vide la liste sans effacer — les
-    /// fichiers y sont consommés par la concaténation.
-    func discardSceneSegments() {
-        for segment in sceneSegments {
-            FileManager.default.removeItemLogging(
-                at: segment.url, context: "segment de prise abandonné", logger: .media)
-        }
-        sceneSegments = []
-        pendingSegmentDuration = 0
+        sceneCapture.disarm()
     }
 
     // MARK: - Le montage unique
@@ -299,24 +164,29 @@ extension MeeshyComposerHost {
     /// La couche BASSE porte l'image et ignore les marges système : en plein
     /// écran, « entièrement » veut dire jusqu'au bord, encoche comprise.
     /// La couche HAUTE porte le chrome — flash, `[ ]`, bascule d'objectif,
-    /// obturateur — et les RESPECTE : c'est le troisième reproche du porteur,
-    /// « les icônes accessibles et non au niveau de la barre système ».
+    /// obturateur — et les RESPECTE : « les icônes accessibles et non au niveau
+    /// de la barre système ».
     ///
     /// Deux `overlayPreferenceValue` sur la même clé, et non un seul avec un
     /// `safeAreaPadding` : ce dernier n'existe qu'à partir d'iOS 17 et le
-    /// plancher de l'app est iOS 16. Deux lectures d'une même ancre coûtent
-    /// une résolution de plus et rendent le contrat lisible — chaque couche
-    /// déclare le repère qu'elle veut.
+    /// plancher de l'app est iOS 16.
     func withSceneCameraViewfinder<Contenu: View>(_ contenu: Contenu) -> some View {
         contenu
             .overlayPreferenceValue(ComposerSceneCameraFrameKey.self) { ancre in
                 GeometryReader { proxy in
                     if let ancre, sceneCameraStage != .off {
+                        // **Le sol en BLANC brillant** (#8653) : objectif
+                        // avant, flash actif — son intensité suit le curseur
+                        // de verre (#8671).
+                        if sceneCapture.floorIsLit { Color(white: sceneCapture.floorWhite) }
                         sceneCameraPreview(
-                            rect: ComposerSceneCameraFrame.rect(
-                                card: proxy[ancre],
-                                full: CGRect(origin: .zero, size: proxy.size),
-                                size: sceneCameraSize))
+                            rect: ComposerFrontFlash.previewRect(
+                                ComposerSceneCameraFrame.rect(
+                                    card: proxy[ancre],
+                                    full: CGRect(origin: .zero, size: proxy.size),
+                                    size: sceneCameraSize),
+                                size: sceneCameraSize,
+                                floorLit: sceneCapture.floorIsLit))
                     }
                 }
                 .ignoresSafeArea()
@@ -343,83 +213,26 @@ extension MeeshyComposerHost {
         .interpolatingSpring(stiffness: 260, damping: 28)
     }
 
-    @ViewBuilder
+    /// **Une seule `CameraPreviewLayer` pour toute la session** — celle de
+    /// l'aperçu partagé, posé à la taille du moment.
     private func sceneCameraPreview(rect: CGRect) -> some View {
-        ZStack {
-            Color.black
-            switch ComposerSceneCameraSurface.shown(stage: sceneCameraStage,
-                                                    permission: sceneCamera.permission) {
-            case .scene:
-                EmptyView()
-            case .viewfinder:
-                // **Une seule `CameraPreviewLayer` pour toute la session.** Le
-                // plein écran en construisait une seconde, qui devait attendre
-                // sa première image pendant que le fondu jouait sur du noir.
-                CameraPreviewLayer(session: sceneCamera.session)
-            case .permissionRefused:
-                CameraPermissionPanel()
-            }
-        }
-        .frame(width: rect.width, height: rect.height)
-        .clipShape(RoundedRectangle(
-            cornerRadius: ComposerSceneCameraFrame.radius(for: sceneCameraSize),
-            style: .continuous))
-        // **L'aperçu ne prend AUCUN doigt.** L'appui long qui l'a armé est
-        // toujours en cours sous lui : le geste continue jusqu'à la levée, et
-        // c'est cette levée qui décide photo ou vidéo.
-        .allowsHitTesting(false)
-        .offset(y: ComposerSceneCameraFrame.dismissOffset(translationY: sceneCameraDismissDrag))
-        .opacity(ComposerSceneCameraFrame.dismissOpacity(translationY: sceneCameraDismissDrag))
-        .position(x: rect.midX, y: rect.midY)
+        ComposerCapturePreview(session: sceneCapture, size: sceneCameraSize)
+            .frame(width: rect.width, height: rect.height)
+            .position(x: rect.midX, y: rect.midY)
     }
 
-    @ViewBuilder
+    /// Le chrome partagé ; le toucher et l'appui long de la nappe passent par
+    /// les lois du FORMAT (`handleArmedSceneTap`, `handleArmedSceneHold`).
     private func sceneCameraChrome(rect: CGRect) -> some View {
-        ZStack {
-            // **Le glissement vers le BAS coupe la caméra** (directive porteur
-            // 2026-09-04). Il est PROGRESSIF et ANNULABLE (directive
-            // 2026-08-30) : `onChanged` déplace ce qu'on voit, `onEnded` ne
-            // fait que CONCLURE une course déjà rendue.
-            //
-            // Cette nappe est sous la barre dans le ZStack, donc les boutons
-            // gagnent sur leurs propres surfaces ; elle ne prend que le vide.
-            Color.clear
-                .contentShape(Rectangle())
-                .gesture(
-                    DragGesture(minimumDistance: 12)
-                        .onChanged { valeur in sceneCameraDismissDrag = valeur.translation.height }
-                        .onEnded { valeur in
-                            let course = valeur.translation.height
-                            sceneCameraDismissDrag = 0
-                            guard ComposerSceneCameraFrame.dismisses(translationY: course) else { return }
-                            HapticFeedback.light()
-                            disarmSceneCamera()
-                        })
-            ComposerSceneCameraBar(
-                stage: sceneCameraStage,
-                mode: sceneCameraMode ?? .photo,
-                onPhoto: { takeScenePhoto() },
-                onStartFilming: { startSceneFilming() },
-                onLock: { lockSceneTake() },
-                onCloseTake: { closeSceneTake() },
-                flashMode: sceneCameraFlash,
-                onCycleFlash: { sceneCameraFlash = ComposerCameraFlash.next(after: sceneCameraFlash) },
-                onFlipCamera: { sceneCamera.switchCamera() },
-                onDisarm: { disarmSceneCamera() },
-                size: sceneCameraSize,
-                onToggleSize: { sceneCameraSize = sceneCameraSize.toggled },
-                segments: sceneSegments,
-                onDropLastSegment: { dropLastSceneSegment() },
-                onValidateSegments: { validateSceneSegments() },
-                // L'horloge de la prise en cours. Sans elle, le chrono ne
-                // comptait que les segments CLOS — donc restait figé pendant
-                // toute la prise et ne repartait qu'au relâchement, au moment
-                // exact où il cesse de servir.
-                liveDuration: sceneCamera.recordingDuration)
-        }
+        ComposerCaptureChrome(
+            session: sceneCapture,
+            size: sceneCameraSize,
+            onToggleSize: { sceneCameraSize = sceneCameraSize.toggled },
+            onTap: { handleArmedSceneTap() },
+            onHold: { handleArmedSceneHold() },
+            onDisarm: { disarmSceneCamera() },
+            onValidateSegments: { validateSceneSegments() })
         .frame(width: rect.width, height: rect.height)
-        .offset(y: ComposerSceneCameraFrame.dismissOffset(translationY: sceneCameraDismissDrag))
-        .opacity(ComposerSceneCameraFrame.dismissOpacity(translationY: sceneCameraDismissDrag))
         .position(x: rect.midX, y: rect.midY)
     }
 }

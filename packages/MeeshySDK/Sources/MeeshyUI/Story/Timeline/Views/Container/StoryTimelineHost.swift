@@ -204,7 +204,7 @@ public struct StoryTimelineHost: View {
         if tracks.isEmpty {
             TimelineEmptyState(isDark: colorScheme == .dark)
                 .padding(.vertical, 28)
-                .padding(.horizontal, 16)
+                .padding(.horizontal, MeeshySpacing.lg)
         } else {
             GeometryReader { proxy in
                 let laneWidth = max(0, proxy.size.width - Plan2DView.labelColumnWidth)

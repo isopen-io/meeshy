@@ -52,25 +52,57 @@ export function remainingPlacesOf(limits: InvitationLimits): number | null {
 }
 
 export type JoinChoices = {
+  /** L'action primaire « Rejoindre avec mon compte ». */
   readonly account: boolean;
+  /** Le formulaire d'invité et son « Continuer en anonyme ». */
   readonly guest: boolean;
+  /** Un compte connecté se voit OFFRIR l'entrée anonyme, en second (#8816). */
+  readonly anonymousOffer: boolean;
+  /** Un compte connecté qui a choisi l'anonyme garde le chemin de son compte (#8816). */
+  readonly accountOffer: boolean;
   readonly signIn: boolean;
   readonly signUp: boolean;
   readonly accountRequired: boolean;
 };
 
 /**
- * LA MATRICE DES CHOIX — session × compte requis.
+ * LA MATRICE DES CHOIX — session × compte requis × anonyme demandé.
  *
- * **Un compte connecté ne se voit pas offrir « Rejoindre en anonyme ».** Le web
- * ne tient qu'UNE identité à la fois (`session.ts § establishGuest` remplace la
- * session) : entrer en invité fermerait le compte sans le dire. La porte
- * anonyme reste celle du visiteur sans session.
+ * **Un compte connecté peut entrer en anonyme (#8816, jumelle de #8726)** : la
+ * session du compte n'est ni remplacée ni fermée — l'identité anonyme est
+ * TENUE à côté d'elle (`session.ts § adoptAnonymous`). Son compte reste
+ * l'action primaire ; « Continuer en anonyme » ouvre le formulaire d'invité
+ * (`?mode=anonymous`, que la carte d'une bulle vise directement), d'où son
+ * compte reste offert pour revenir. Un lien réservé aux comptes n'offre rien
+ * d'anonyme, même demandé.
  */
-export function joinChoicesOf({ signedIn, guestAllowed }: { readonly signedIn: boolean; readonly guestAllowed: boolean }): JoinChoices {
-  if (signedIn) return { account: true, guest: false, signIn: false, signUp: false, accountRequired: false };
-  return { account: false, guest: guestAllowed, signIn: true, signUp: true, accountRequired: !guestAllowed };
+export function joinChoicesOf({
+  signedIn,
+  guestAllowed,
+  anonymousRequested,
+}: {
+  readonly signedIn: boolean;
+  readonly guestAllowed: boolean;
+  readonly anonymousRequested: boolean;
+}): JoinChoices {
+  const closed = { signIn: false, signUp: false, accountRequired: false } as const;
+  if (signedIn && guestAllowed && anonymousRequested) {
+    return { account: false, guest: true, anonymousOffer: false, accountOffer: true, ...closed };
+  }
+  if (signedIn) return { account: true, guest: false, anonymousOffer: guestAllowed, accountOffer: false, ...closed };
+  return {
+    account: false,
+    guest: guestAllowed,
+    anonymousOffer: false,
+    accountOffer: false,
+    signIn: true,
+    signUp: true,
+    accountRequired: !guestAllowed,
+  };
 }
+
+/** Le paramètre d'adresse qui ouvre directement l'entrée anonyme (#8816). */
+export const ANONYMOUS_MODE = 'anonymous';
 
 export type LanguageShare = { readonly code: string; readonly weight: number; readonly percent: number | null };
 

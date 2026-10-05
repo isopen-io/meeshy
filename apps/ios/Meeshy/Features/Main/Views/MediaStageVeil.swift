@@ -87,6 +87,18 @@ nonisolated enum MediaStageVeil {
         presentation.showsPlateau && !overlays.isOpen
     }
 
+    /// **La pastille « en pause » se tait sous le voile, elle aussi** (#8601).
+    ///
+    /// Elle vit dans sa propre couche, au-dessus du plateau, et c'est ce qui
+    /// l'avait laissée hors de la règle : ouvrir la barre de réponse ou la
+    /// traînée d'émojis en plein cadre effaçait tout le reste, et laissait
+    /// « En pause » au centre de ce qu'on commente. Le verdict de la pastille
+    /// (`MediaStagePause.showsBadge`) reste le sien ; le voile ne fait que
+    /// passer par-dessus.
+    static func showsPausedBadge(_ verdict: Bool, overlays: Overlays) -> Bool {
+        verdict && !overlays.isOpen
+    }
+
     /// **L'état que le SOLVEUR reçoit — celui qu'aucune ouverture ne change.**
     ///
     /// `overlays` est pris et n'est pas lu, délibérément. Un voile qui libérerait

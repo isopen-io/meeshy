@@ -375,6 +375,26 @@ describe('NotificationService - Structure Groupée', () => {
     });
   });
 
+  describe('missed_call sans lieu lisible (#9115)', () => {
+    it('ne nomme aucune conversation et n’en lit rien quand l’appelant n’en donne aucune', async () => {
+      mockPrisma.user.findUnique.mockResolvedValue({ id: 'user_caller', username: 'eve' });
+      mockPrisma.conversation.findUnique.mockClear();
+      mockPrisma.notification.create.mockImplementation((data) => ({ id: 'notif_call', ...data.data }));
+
+      await service.createMissedCallNotification({
+        recipientUserId: 'user_recipient',
+        callerId: 'user_caller',
+        conversationId: null,
+        callSessionId: 'call_999',
+        callType: 'audio',
+      });
+
+      const createCall = mockPrisma.notification.create.mock.calls.at(-1)[0];
+      expect(createCall.data.context).toEqual({ callSessionId: 'call_999' });
+      expect(mockPrisma.conversation.findUnique).not.toHaveBeenCalled();
+    });
+  });
+
   describe('Structure Groupée - friend_request', () => {
     it('devrait créer une notification de demande d\'ami', async () => {
       mockPrisma.user.findUnique.mockResolvedValue({

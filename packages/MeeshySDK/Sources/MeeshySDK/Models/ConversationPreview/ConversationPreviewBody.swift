@@ -13,6 +13,9 @@ enum ConversationPreviewProtection: Equatable {
     case viewOnce
     case hidden
     case encrypted
+    /// La flamme-œil (#8634) : son lecteur la consomme en la VOYANT dans le
+    /// fil ; la liste la lui donnait à lire sans jamais la consommer.
+    case afterRead
     /// `expiresAt` : l'échéance connue (servie ou réception + durée) ;
     /// `durationSeconds` : l'expéditeur dont personne n'a encore reçu le
     /// message voit sa DURÉE, sans décompte (#7451).
@@ -83,6 +86,9 @@ enum ConversationPreviewProtection: Equatable {
         if flags.viewOnce || attachment.viewOnce { return .viewOnce }
         if flags.blurred || attachment.blurred { return .hidden }
         if flags.encrypted { return .encrypted }
+        if MessageEffectFlags(rawValue: UInt32(truncatingIfNeeded: message.effectFlags ?? 0)).contains(.ephemeralAfterRead) {
+            return .afterRead
+        }
         guard flags.ephemeral else { return .none }
         switch due {
         case .scheduled(let expiresAt): return .ephemeral(expiresAt: expiresAt, durationSeconds: nil)
@@ -225,6 +231,12 @@ struct ConversationPreviewBody {
             return ConversationPreviewBody(icon: icon, segments: [head] + size, labelled: [head] + size)
         }
 
+        if let attachment, ContactCardFile.isContactCard(
+            mimeType: attachment.mimeType ?? "", fileName: attachment.originalName ?? ""
+        ) {
+            return contactCard(attachment, text: text, strings)
+        }
+
         let kind = kindOf(attachment, messageType: message.messageType)
         if let text { return ConversationPreviewBody(icon: kind.icon, segments: [text], labelled: [text]) }
         let name = ConversationPreviewComposer.trimmed(attachment?.originalName ?? "")
@@ -233,6 +245,19 @@ struct ConversationPreviewBody {
         let details = detailsOf(kind, attachment, strings)
         let labelledHead = named ? [ConversationPreviewSegment.label(strings(kind.one)), head] : [head]
         return ConversationPreviewBody(icon: kind.icon, segments: [head] + details, labelled: labelledHead + details)
+    }
+
+    /// Une carte de visite se dit par son CONTACT, jamais par son fichier
+    /// (#8122, #8148) : « Contact partagé · Zoé » — ni UUID, ni extension, ni
+    /// poids. Miroir de `contactCardBody` (`packages/shared/utils/conversation-preview.ts`).
+    private static func contactCard(
+        _ attachment: ConversationPreviewAttachment, text: ConversationPreviewSegment?, _ strings: ConversationPreviewStrings
+    ) -> ConversationPreviewBody {
+        if let text { return ConversationPreviewBody(icon: .contact, segments: [text], labelled: [text]) }
+        let name = ContactCardFile.displayName(fromFileName: attachment.originalName ?? "")
+        let segments = [ConversationPreviewSegment.label(strings(.attachmentContact))]
+            + (name.map { [ConversationPreviewSegment.label($0)] } ?? [])
+        return ConversationPreviewBody(icon: .contact, segments: segments, labelled: segments)
     }
 
     /// Chaque détail n'apparaît QUE si l'information existe — durée, dimensions,

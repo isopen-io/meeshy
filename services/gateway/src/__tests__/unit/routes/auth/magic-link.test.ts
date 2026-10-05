@@ -94,6 +94,11 @@ jest.mock('../../../../routes/auth/types', () => ({
 
 // ─── Import after mocks ───────────────────────────────────────────────────────
 
+const mockScheduleArrival = jest.fn();
+jest.mock('../../../../services/notifications/contact-joined', () => ({
+  scheduleContactJoinedAnnouncement: (...args: unknown[]) => mockScheduleArrival(...args),
+}));
+
 import { registerMagicLinkRoutes } from '../../../../routes/auth/magic-link';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -412,6 +417,31 @@ describe('POST /refresh — user not found', () => {
   });
 });
 
+describe('POST /refresh — délai de grâce de l’adresse passé (#8238)', () => {
+  it('refuse le renouvellement : 401 `ACCOUNT_ACTIVATION_REQUIRED`, aucun jeton', async () => {
+    const bloque = { ...mockUser, activation: { phase: 'blocked', deadline: '2026-10-26T00:00:00.000Z', missing: ['email', 'phone'] } };
+    const authService = makeAuthService({ getUserById: jest.fn<any>().mockResolvedValue(bloque) });
+    const app = await buildApp({ authService });
+    const res = await app.inject({ method: 'POST', url: '/refresh', payload: { token: 'valid-jwt-token' } });
+
+    expect(res.statusCode).toBe(401);
+    expect(res.json()).toMatchObject({ success: false, code: 'ACCOUNT_ACTIVATION_REQUIRED' });
+    expect(authService.generateToken).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('pendant le délai (`invite`) le renouvellement a lieu', async () => {
+    const invite = { ...mockUser, activation: { phase: 'invite', deadline: '2026-10-26T00:00:00.000Z', missing: ['email'] } };
+    const authService = makeAuthService({ getUserById: jest.fn<any>().mockResolvedValue(invite) });
+    const app = await buildApp({ authService });
+    const res = await app.inject({ method: 'POST', url: '/refresh', payload: { token: 'valid-jwt-token' } });
+
+    expect(res.statusCode).toBe(200);
+    expect(authService.generateToken).toHaveBeenCalled();
+    await app.close();
+  });
+});
+
 describe('POST /refresh — invalid token no userId', () => {
   it('returns 401 when decoded token has no userId', async () => {
     const jwt = await import('jsonwebtoken');
@@ -660,73 +690,8 @@ describe('POST /refresh — deux sessions, une révoquée (#4264, critère 5)', 
 // y compris le critère de fin littéral de #3621 : extrait dans
 // magic-link-refresh-legacy-token.test.ts (#4531 — budget de taille).
 
-// ─── POST /verify-email ───────────────────────────────────────────────────────
-
-describe('POST /verify-email — success with token', () => {
-  it('returns 200 on successful email verification', async () => {
-    const app = await buildApp();
-    const res = await app.inject({
-      method: 'POST',
-      url: '/verify-email',
-      payload: { token: 'verify-token-abc', email: 'alice@test.com' },
-    });
-    expect(res.statusCode).toBe(200);
-    const body = res.json();
-    expect(body.success).toBe(true);
-    await app.close();
-  });
-});
-
-describe('POST /verify-email — already verified', () => {
-  it('returns 200 with alreadyVerified: true', async () => {
-    const authService = makeAuthService({
-      verifyEmail: jest.fn<any>().mockResolvedValue({
-        success: true,
-        alreadyVerified: true,
-        verifiedAt: new Date(),
-      }),
-    });
-    const app = await buildApp({ authService });
-    const res = await app.inject({
-      method: 'POST',
-      url: '/verify-email',
-      payload: { token: 'verify-token-abc', email: 'alice@test.com' },
-    });
-    expect(res.statusCode).toBe(200);
-    const body = res.json();
-    expect(body.success).toBe(true);
-    await app.close();
-  });
-});
-
-describe('POST /verify-email — failure', () => {
-  it('returns 400 when verification fails', async () => {
-    const authService = makeAuthService({
-      verifyEmail: jest.fn<any>().mockResolvedValue({ success: false, error: 'Token invalide' }),
-    });
-    const app = await buildApp({ authService });
-    const res = await app.inject({
-      method: 'POST',
-      url: '/verify-email',
-      payload: { token: 'bad-token', email: 'alice@test.com' },
-    });
-    expect(res.statusCode).toBe(400);
-    await app.close();
-  });
-});
-
-describe('POST /verify-email — via code', () => {
-  it('returns 200 when using verification code instead of token', async () => {
-    const app = await buildApp();
-    const res = await app.inject({
-      method: 'POST',
-      url: '/verify-email',
-      payload: { code: '123456', email: 'alice@test.com' },
-    });
-    expect(res.statusCode).toBe(200);
-    await app.close();
-  });
-});
+// POST /verify-email — depuis #8033 la vérification OUVRE la session : ses
+// témoins vivent dans `verify-email-opens-session.test.ts`, sur les schémas RÉELS.
 
 // ─── POST /resend-verification ────────────────────────────────────────────────
 
@@ -808,6 +773,28 @@ describe('POST /verify-phone — success', () => {
     expect(res.statusCode).toBe(200);
     const body = res.json();
     expect(body.success).toBe(true);
+    await app.close();
+  });
+});
+
+describe('POST /verify-phone — « X a rejoint Meeshy » (#8105)', () => {
+  it('une vérification NEUVE programme l’annonce aux carnets', async () => {
+    mockScheduleArrival.mockClear();
+    const authService = makeAuthService({
+      verifyPhone: jest.fn<any>().mockResolvedValue({ success: true, verifiedUserId: '507f1f77bcf86cd799439011' }),
+    });
+    const app = await buildApp({ authService });
+    await app.inject({ method: 'POST', url: '/verify-phone', payload: { phoneNumber: '+33612345678', code: '123456' } });
+    expect(mockScheduleArrival).toHaveBeenCalledWith(expect.anything(), '507f1f77bcf86cd799439011');
+    await app.close();
+  });
+
+  it('un numéro DÉJÀ vérifié n’annonce rien', async () => {
+    mockScheduleArrival.mockClear();
+    const authService = makeAuthService({ verifyPhone: jest.fn<any>().mockResolvedValue({ success: true }) });
+    const app = await buildApp({ authService });
+    await app.inject({ method: 'POST', url: '/verify-phone', payload: { phoneNumber: '+33612345678', code: '123456' } });
+    expect(mockScheduleArrival).not.toHaveBeenCalled();
     await app.close();
   });
 });

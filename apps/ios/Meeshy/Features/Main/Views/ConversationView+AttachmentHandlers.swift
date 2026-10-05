@@ -204,7 +204,7 @@ extension ConversationView {
         // (garde d'éligibilité, popup de consentement vocal) : désarmer avant
         // eux perdrait la protection sans qu'aucun message ne parte, et le
         // popup relance ce même tap sur un état qu'il doit retrouver intact.
-        let protection = viewModel.consumeArmedProtection()
+        let protection = viewModel.captureArmedProtection(replyingTo: replyId)
 
         if attachments.isEmpty {
             // Text-only send: clear UI immediately
@@ -410,8 +410,7 @@ extension ConversationView {
             var progressCancellable: AnyCancellable?
             progressCancellable = uploader.progressPublisher
                 .receive(on: DispatchQueue.main)
-                .sink { [progressCancellable] progress in
-                    _ = progressCancellable
+                .sink { progress in
                     composerState.uploadProgress = progress
                 }
 
@@ -440,7 +439,8 @@ extension ConversationView {
                             content: nil,
                             clientMessageId: send.tempId,
                             originalLanguage: lang,
-                            replyToId: send.group.carriesReply ? replyId : nil
+                            replyToId: send.group.carriesReply ? replyId : nil,
+                            protection: protection
                         )
                         anySuccess = true
                         Logger.messages.info("Audio group queued offline for \(send.tempId)")
@@ -476,7 +476,8 @@ extension ConversationView {
                             content: nil,
                             clientMessageId: send.tempId,
                             originalLanguage: lang,
-                            replyToId: send.group.carriesReply ? replyId : nil
+                            replyToId: send.group.carriesReply ? replyId : nil,
+                            protection: protection
                         )
                         anySuccess = true
                         Logger.messages.info("Visual group queued offline for \(send.tempId)")
@@ -668,7 +669,8 @@ extension ConversationView {
                                 content: nil,
                                 clientMessageId: send.tempId,
                                 originalLanguage: lang,
-                                replyToId: send.group.carriesReply ? replyId : nil
+                                replyToId: send.group.carriesReply ? replyId : nil,
+                                protection: protection
                             )) != nil
                         }
                     } else {
@@ -685,7 +687,8 @@ extension ConversationView {
                                 content: nil,
                                 clientMessageId: send.tempId,
                                 originalLanguage: lang,
-                                replyToId: send.group.carriesReply ? replyId : nil
+                                replyToId: send.group.carriesReply ? replyId : nil,
+                                protection: protection
                             )) != nil
                         }
                     }
@@ -1027,27 +1030,8 @@ extension ConversationView {
     ///    result into the legacy pending dicts the send pipeline already
     ///    knows how to consume. `.failed` simply drops the tile + toasts.
     func trackPreparation(_ prep: PreparingAttachment) {
-        composerState.preparingAttachments.append(prep)
-        observePreparation(prep)
-    }
-
-    private func observePreparation(_ prep: PreparingAttachment) {
-        Task { @MainActor [prep] in
-            let result = await prep.awaitCompletion()
-            switch result {
-            case .success(let prepared):
-                composerState.pendingMediaFiles[prepared.attachment.id] = prepared.fileURL
-                if let thumb = prep.thumbnail {
-                    composerState.pendingThumbnails[prepared.attachment.id] = thumb
-                }
-                composerState.pendingAttachments.append(prepared.attachment)
-                HapticFeedback.success()
-            case .failure(.preparationFailed(let message)):
-                HapticFeedback.error()
-                FeedbackToastManager.shared.showError(message)
-            }
-            composerState.preparingAttachments.removeAll { $0.id == prep.id }
-        }
+        PreparationTracking.track(prep, preparing: $composerState.preparingAttachments, attachments: $composerState.pendingAttachments,
+                                  mediaFiles: $composerState.pendingMediaFiles, thumbnails: $composerState.pendingThumbnails)
     }
 
     func sendMessage() {

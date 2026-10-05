@@ -18,8 +18,6 @@ public protocol ContactDirectoryServiceProviding: Sendable {
     /// Une page du répertoire, par CURSEUR, avec delta optionnel.
     func page(cursor: String?, limit: Int, filter: DirectoryFilter, query: String?, updatedSince: Date?) async throws
         -> PaginatedAPIResponse<[DirectoryContact]>
-    /// Efface l'intégralité du répertoire conservé.
-    func clear() async throws -> DirectoryClearResult
 }
 
 public extension ContactDirectoryServiceProviding {
@@ -86,15 +84,5 @@ public final class ContactDirectoryService: ContactDirectoryServiceProviding, @u
             body: nil,
             queryItems: items
         )
-    }
-
-    public func clear() async throws -> DirectoryClearResult {
-        let response: APIResponse<DirectoryClearResult> = try await api.request(
-            DirectoryEndpoint.contacts,
-            method: "DELETE",
-            body: nil,
-            queryItems: nil
-        )
-        return response.data
     }
 }

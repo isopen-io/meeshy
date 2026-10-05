@@ -76,11 +76,11 @@ struct AboutView: View {
             .accessibilityHidden(true)
 
             Text(String(localized: "about.app_name", defaultValue: "Meeshy", bundle: .main))
-                .font(MeeshyFont.relative(28, weight: .bold, design: .rounded))
+                .font(MeeshyFont.relative(MeeshyFont.displaySize, weight: .bold, design: .rounded))
                 .foregroundColor(theme.textPrimary)
 
             Text(versionString)
-                .font(MeeshyFont.relative(13, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
                 .foregroundColor(theme.textMuted)
                 .contextMenu {
                     Button {
@@ -119,7 +119,7 @@ struct AboutView: View {
 
             VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
                 Text(String(localized: "about.description.body", defaultValue: "Meeshy est une plateforme de messagerie en temps réel haute performance avec traduction multilingue, clonage vocal et chiffrement de bout en bout.", bundle: .main))
-                    .font(MeeshyFont.relative(14, weight: .regular))
+                    .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .regular))
                     .foregroundColor(theme.textPrimary)
                     .lineSpacing(4)
                     .padding(.horizontal, MeeshySpacing.md + 2)
@@ -133,7 +133,7 @@ struct AboutView: View {
 
     private var fonctionnalitesSection: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
-            sectionHeader(title: String(localized: "about.section.features", defaultValue: "Fonctionnalités", bundle: .main), icon: "star.fill", color: "F8B500")
+            sectionHeader(title: String(localized: "about.section.features", defaultValue: "Fonctionnalités", bundle: .main), icon: "star.fill", color: MeeshyColors.tileSaffronHex)
 
             VStack(spacing: 0) {
                 featureRow(title: String(localized: "about.feature.encryption", defaultValue: "Chiffrement bout en bout", bundle: .main), icon: "lock.shield.fill")
@@ -142,7 +142,7 @@ struct AboutView: View {
                 featureRow(title: String(localized: "about.feature.themes", defaultValue: "Thèmes personnalisables", bundle: .main), icon: "paintbrush.fill")
                 featureRow(title: String(localized: "about.feature.cloudSync", defaultValue: "Synchronisation cloud", bundle: .main), icon: "cloud.fill")
             }
-            .background(sectionBackground(tint: "F8B500"))
+            .background(sectionBackground(tint: MeeshyColors.tileSaffronHex))
         }
     }
 
@@ -178,7 +178,7 @@ struct AboutView: View {
 
     private var copyrightSection: some View {
         Text(String(localized: "about.copyright", defaultValue: "2024-2026 Meeshy. Tous droits réservés.", bundle: .main))
-            .font(MeeshyFont.relative(12, weight: .medium))
+            .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
             .foregroundColor(theme.textMuted)
             .frame(maxWidth: .infinity)
             .padding(.top, MeeshySpacing.sm)
@@ -189,10 +189,10 @@ struct AboutView: View {
     private func sectionHeader(title: String, icon: String, color: String) -> some View {
         HStack(spacing: MeeshySpacing.xs + 2) {
             Image(systemName: icon)
-                .font(MeeshyFont.relative(12, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
                 .foregroundColor(Color(hex: color))
             Text(title.uppercased())
-                .font(MeeshyFont.relative(11, weight: .bold, design: .rounded))
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold, design: .rounded))
                 .foregroundColor(Color(hex: color))
                 .tracking(1.2)
         }
@@ -213,7 +213,7 @@ struct AboutView: View {
 
     private func fieldIcon(_ name: String, color: String) -> some View {
         Image(systemName: name)
-            .font(MeeshyFont.relative(14, weight: .medium))
+            .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .medium))
             .foregroundColor(Color(hex: color))
             .frame(width: 28, height: 28)
             .background(
@@ -227,13 +227,13 @@ struct AboutView: View {
             fieldIcon(icon, color: color)
 
             Text(title)
-                .font(MeeshyFont.relative(14, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
                 .foregroundColor(theme.textPrimary)
 
             Spacer()
 
             Text(value)
-                .font(MeeshyFont.relative(13, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
                 .foregroundColor(theme.textMuted)
                 .lineLimit(1)
         }
@@ -252,16 +252,16 @@ struct AboutView: View {
 
     private func featureRow(title: String, icon: String) -> some View {
         HStack(spacing: MeeshySpacing.md) {
-            fieldIcon(icon, color: "F8B500")
+            fieldIcon(icon, color: MeeshyColors.tileSaffronHex)
 
             Text(title)
-                .font(MeeshyFont.relative(14, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
                 .foregroundColor(theme.textPrimary)
 
             Spacer()
 
             Image(systemName: "checkmark.circle.fill")
-                .font(MeeshyFont.relative(16))
+                .font(MeeshyFont.relative(MeeshyIconSize.md))
                 .foregroundColor(MeeshyColors.success)
         }
         .padding(.horizontal, MeeshySpacing.md + 2)
@@ -277,13 +277,13 @@ struct AboutView: View {
                     fieldIcon(icon, color: color)
 
                     Text(title)
-                        .font(MeeshyFont.relative(14, weight: .medium))
+                        .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
                         .foregroundColor(theme.textPrimary)
 
                     Spacer()
 
                     Image(systemName: "arrow.up.right")
-                        .font(MeeshyFont.relative(12, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
                         .foregroundColor(Color(hex: color))
                 }
                 .padding(.horizontal, MeeshySpacing.md + 2)

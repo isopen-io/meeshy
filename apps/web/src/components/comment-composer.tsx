@@ -1,19 +1,29 @@
-import { useCallback, useId, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useId, useRef, useState } from 'react';
 
-import { Glyph } from '@/components/glyph';
+import { CommentComposerTools } from '@/components/comment-composer-tools';
+import type { PickedSticker } from '@/components/composer-sticker-sheet';
+import { Glyph, GlyphSvg } from '@/components/glyph';
+import { FEED_GLYPHS } from '@/components/glyphs-feed';
 import { MentionFieldPanel } from '@/components/mention-suggestions';
 import { COMMENT_MAX_LENGTH } from '@/lib/api/publication-comments';
+import { COMMENT_MEDIA_ACCEPT, acceptCommentFiles, withCommentPiece } from '@/lib/comments/comment-media';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
+import { removePendingAttachment, replacePendingAttachment, type PendingAttachment } from '@/lib/send/attachments';
+import { withReplyMention, type CommentReplyTarget } from '@/lib/view/comment-reply-target';
 import type { MentionSource } from '@/lib/view/mention-source';
 import { useMentionField } from '@/lib/view/use-mention-field';
+import { recordingSupported, useRecorder, type RecorderEngine, type RecorderStatus } from '@/lib/view/use-recorder';
 
 /**
  * **LE COMPOSEUR DE COMMENTAIRE** — miroir réduit de
  * `PostDetailView+CommentComposer.swift` et de `StoryComposerBarView`
  * (`StoryViewerView+CanvasComposerBar.swift`) : **UNE seule zone de saisie**
- * (spécification porteur du 2026-05-28 citée par le fichier Swift), pièces
- * jointes, voix et lieu hors tranche — donc aucun de leurs boutons ici.
+ * (spécification porteur du 2026-05-28 citée par le fichier Swift). Il joint
+ * photos, GIF, vidéos et sons de l'appareil (#9167, #9318), enregistre un
+ * vocal, insère un emoji et envoie un sticker (#9318, ses outils :
+ * `comment-composer-tools.tsx`) ; le lieu reste hors tranche — donc aucun
+ * bouton de lieu ici.
  *
  * **LE CHAMP SE VIDE AVANT LE RÉSEAU.** L'optimiste vit dans la liste
  * (`performComment` l'y pose) : garder le texte dans le champ le montrerait
@@ -28,15 +38,67 @@ import { useMentionField } from '@/lib/view/use-mention-field';
  * `X-Client-Mutation-Id` garde un REJEU, pas deux intentions distinctes).
  */
 
+/** LE PLATEAU DES PIÈCES (#9167) — celui du composeur de message, chargé à la
+ * première pièce jointe : ses vignettes portent « Éditer » et ouvrent la MÊME
+ * retouche en série (`composer-retouch.tsx`). */
+const ComposerTray = lazy(() => import('@/components/composer-tray'));
+
+/** La cible du ⌄ : 44 px, la taille minimale d'un contrôle au doigt. */
+const FOLD_TARGET_PX = 44;
+
+/**
+ * LE FOCUS EST-IL DANS LE COMPOSEUR ? — écouté sur `focusin`/`focusout` de la
+ * forme (ils bouillonnent, `focus`/`blur` non), et annoncé à l'hôte à chaque
+ * changement. Une sortie vers un élément ENCORE dans la forme (champ → ⌄ →
+ * envoi, à la tabulation) n'est pas une sortie.
+ */
+function useComposerWriting(
+  formRef: { readonly current: HTMLFormElement | null },
+  onWritingChange: ((writing: boolean) => void) | undefined,
+  mounted: boolean,
+): boolean {
+  const [writing, setWriting] = useState(false);
+  const report = useRef(onWritingChange);
+  report.current = onWritingChange;
+  useEffect(() => {
+    const form = formRef.current;
+    if (form === null) return;
+    const onIn = () => setWriting(true);
+    const onOut = (e: FocusEvent) => {
+      if (e.relatedTarget instanceof Node && form.contains(e.relatedTarget)) return;
+      setWriting(false);
+    };
+    form.addEventListener('focusin', onIn);
+    form.addEventListener('focusout', onOut);
+    return () => {
+      form.removeEventListener('focusin', onIn);
+      form.removeEventListener('focusout', onOut);
+    };
+  }, [formRef, mounted]);
+  useEffect(() => {
+    report.current?.(writing);
+  }, [writing]);
+  useEffect(() => () => report.current?.(false), []);
+  return writing;
+}
+
 export type CommentComposerResult = { readonly ok: boolean; readonly message?: InterfaceCatalogKey | undefined };
 
 /** CE QUE LE COMPOSEUR A À DIRE, et de quelle encre — `refused` a perdu le
  * texte (il est rendu au champ) ; `unconfirmed` l'a posé sans confirmation. */
 type ComposerNotice = { readonly text: string; readonly issue: 'refused' | 'unconfirmed' };
 
+/** LE MICRO QUI NE S'OUVRE PAS SE DIT (#9318) — les libellés du composeur du fil. */
+const MIC_NOTICE: Readonly<Partial<Record<RecorderStatus, InterfaceCatalogKey>>> = {
+  refused: 'composer.mic.refused',
+  unsupported: 'composer.mic.unavailable',
+};
+
 export type CommentComposerProps = {
   readonly language: InterfaceLanguage;
-  readonly onSend: (content: string) => Promise<CommentComposerResult>;
+  /** Le texte, et les photos, GIF, vidéos et sons joints — vocal compris (#9167, #9318) — l'hôte les téléverse
+   * (`uploadContext: comment`) avant de les envoyer dans `attachmentIds`. */
+  readonly onSend: (content: string, pending: readonly PendingAttachment[]) => Promise<CommentComposerResult>;
   /** Absent ⇒ le composeur laisse place à une invitation à se connecter :
    * `POST /posts/:postId/comments` exige un `registeredUser` (`comments.ts:184`),
    * donc un champ offert à un visiteur anonyme serait un contrôle qui ment. */
@@ -44,24 +106,124 @@ export type CommentComposerProps = {
   /** LE CONTEXTE DES MENTIONS (#7846) — la publication commentée
    * (`useMentionSource`) ; `null` : aucune liste ne s'ouvre. */
   readonly mentionSource?: MentionSource | null;
+  /**
+   * **LA CIBLE D'UNE RÉPONSE** (#8583) — posée par le glissé d'une rangée ou
+   * son bouton « Répondre ». Le composeur l'ANNONCE (bandeau « Répondre à X »
+   * et son ×), prend le FOCUS, et préremplit la @mention d'une réponse à une
+   * réponse — miroir de `commentReplyBanner` et `beginReply(to:)`
+   * (`FeedCommentsSheet.swift`). C'est l'hôte qui tient la cible et l'envoie
+   * avec le texte : le composeur ne connaît ni la racine ni le réseau.
+   */
+  readonly replyTo?: CommentReplyTarget | null;
+  readonly onCancelReply?: () => void;
+  /**
+   * **ON ÉCRIT** (#8643) — vrai tant que le focus est DANS le composeur (champ,
+   * ⌄, envoi). L'hôte d'un lecteur plein écran en fait réduire la scène
+   * au-dessus de la barre (`lib/view/scene-yields.ts`).
+   */
+  readonly onWritingChange?: (writing: boolean) => void;
+  /** Un envoi RÉUSSI replie la saisie (lecteur de story ou de réel : on
+   * revient à la lecture, la scène reprend sa taille). Absent : on enchaîne. */
+  readonly foldOnSend?: boolean;
+  /**
+   * **LE STICKER, UN COMMENTAIRE À LUI SEUL** (#9318) — comme dans le fil :
+   * le texte en cours et les pièces restent au composeur. Absent ⇒ aucun
+   * bouton sticker (un contrôle sans effet mentirait).
+   */
+  readonly onSendSticker?: (picked: PickedSticker) => Promise<CommentComposerResult>;
+  /** Le micro et son horloge — injectés par les témoins ; absent, le micro
+   * du navigateur (`useRecorder`), rendu seulement s'il existe. */
+  readonly recording?: { readonly engine: RecorderEngine; readonly now?: () => number };
 };
 
-export function CommentComposer({ language, onSend, canWrite, mentionSource = null }: CommentComposerProps) {
+export function CommentComposer({
+  language,
+  onSend,
+  canWrite,
+  mentionSource = null,
+  replyTo = null,
+  onCancelReply,
+  onWritingChange,
+  foldOnSend = false,
+  onSendSticker,
+  recording,
+}: CommentComposerProps) {
   const [text, setText] = useState('');
+  const [pending, setPending] = useState<readonly PendingAttachment[]>([]);
+  const pickerRef = useRef<HTMLInputElement | null>(null);
   const [sending, setSending] = useState(false);
   const [notice, setNotice] = useState<ComposerNotice | null>(null);
   const fieldRef = useRef<HTMLTextAreaElement | null>(null);
   const fieldId = useId();
   const mention = useMentionField({ text, fieldRef, onText: setText, source: mentionSource });
+  const formRef = useRef<HTMLFormElement | null>(null);
+  const [userFolded, setUserFolded] = useState(false);
+  const folded = userFolded && replyTo === null;
+  const writing = useComposerWriting(formRef, onWritingChange, canWrite);
+  /* LE MICRO DU COMPOSEUR DU FIL (#9318) — le même hook, la même barre
+     d'enregistrement (`ComposerTray`, variante `recording-bar`). */
+  const recorder = useRecorder(recording);
+  const canRecord = recording !== undefined || recordingSupported();
+  const isRecording = recorder.state.status === 'recording';
+  const micNotice = MIC_NOTICE[recorder.state.status];
 
-  const submit = useCallback(async () => {
+  /* RENDRE LA LECTURE (un envoi réussi chez un hôte `foldOnSend`, ou le ⌄) :
+     le focus quitte le composeur pour le FIL qui le porte (sa racine
+     `tabIndex=-1`), jamais pour `<body>` — au clavier, on repartirait du haut
+     du document. */
+  const release = useCallback(() => {
+    const thread = formRef.current?.parentElement?.closest<HTMLElement>('[tabindex="-1"]') ?? null;
+    if (thread !== null) thread.focus();
+    else if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+  }, []);
+
+  /* LE REPLI (#9122, miroir `StoryComposerFold`) — le ⌄, visible d'emblée,
+     réduit la barre à UNE icône de commentaire ; le brouillon reste dans
+     `text`. Une réponse en cours la rouvre : sa bannière vit dedans. */
+  const fold = useCallback(() => {
+    release();
+    setUserFolded(true);
+  }, [release]);
+  const unfold = useCallback(() => {
+    setUserFolded(false);
+    requestAnimationFrame(() => fieldRef.current?.focus());
+  }, []);
+  useEffect(() => {
+    if (replyTo !== null) setUserFolded(false);
+  }, [replyTo]);
+
+  /* LA MENTION PRÉREMPLIE SUIT LA CIBLE — posée pour une réponse à une
+     réponse, retirée quand la cible change ou disparaît, jamais cumulée
+     (`withReplyMention`). Et le focus va au champ : glisser un commentaire,
+     c'est demander à écrire. */
+  const appliedMention = useRef<string | null>(null);
+  useEffect(() => {
+    const next = replyTo?.mention ?? null;
+    const previous = appliedMention.current;
+    appliedMention.current = next;
+    if (previous !== next) setText((current) => withReplyMention(current, previous, next));
+    if (replyTo !== null) fieldRef.current?.focus();
+  }, [replyTo]);
+
+  /* `recorded` — le vocal que « Envoyer » de la barre d'enregistrement
+     ajoute À LA VOLÉE (#9318, miroir `sendRecordingNow` du fil) : il part avec
+     le texte et le plateau, d'un seul geste. */
+  const submit = useCallback(async (recorded: PendingAttachment | null = null) => {
     const content = text.trim();
-    if (content === '' || sending) return;
+    const base = pending;
+    const pieces = recorded === null ? base : withCommentPiece(base, recorded);
+    if ((content === '' && pieces.length === 0) || sending) return;
     setSending(true);
     setNotice(null);
-    /* Vidé AVANT l'appel — l'optimiste est déjà dans la liste. */
-    setText('');
-    const result = await onSend(content);
+    /* Vidé AVANT l'appel — l'optimiste est déjà dans la liste. Des pièces
+       jointes montent d'abord (#9167) : l'optimiste n'existe qu'après elles,
+       donc le brouillon RESTE, en vol, jusqu'à l'issue. */
+    if (pieces.length === 0) setText('');
+    const result = await onSend(content, pieces);
+    if (result.ok) {
+      setText((current) => (pieces.length > 0 && current === text ? '' : current));
+      setPending((current) => (current === base ? [] : current));
+    }
     setSending(false);
     if (result.message !== undefined) {
       setNotice({
@@ -72,9 +234,47 @@ export function CommentComposer({ language, onSend, canWrite, mentionSource = nu
     /* RENDU au lecteur sur un refus : son texte lui appartient. */
     if (!result.ok) {
       setText(content);
+      /* Le vocal enregistré à la volée rejoint le plateau : il est au lecteur. */
+      if (recorded !== null) setPending((current) => (current === base ? pieces : current));
       fieldRef.current?.focus();
+      return;
     }
-  }, [text, sending, onSend, language]);
+    if (foldOnSend) release();
+  }, [text, pending, sending, onSend, language, foldOnSend, release]);
+
+  /** L'EMOJI ENTRE AU CURSEUR (#9318) — la sélection éventuelle est remplacée,
+   * le curseur se pose après lui, exactement comme dans le fil. */
+  const insertEmoji = useCallback(
+    (emoji: string) => {
+      const el = fieldRef.current;
+      const start = el?.selectionStart ?? text.length;
+      const end = el?.selectionEnd ?? text.length;
+      mention.write(`${text.slice(0, start)}${emoji}${text.slice(end)}`, start + emoji.length);
+    },
+    [text, mention],
+  );
+
+  const sendSticker = useCallback(
+    async (picked: PickedSticker) => {
+      if (onSendSticker === undefined) return;
+      setNotice(null);
+      const result = await onSendSticker(picked);
+      if (result.message === undefined) return;
+      setNotice({ text: translate(language, result.message), issue: result.ok ? 'unconfirmed' : 'refused' });
+    },
+    [onSendSticker, language],
+  );
+
+  /** ARRÊTER → JOINDRE (miroir `stopRecordingToTray` du fil) : le vocal entre au plateau. */
+  const stopRecordingToTray = useCallback(() => {
+    void recorder.stop().then((piece) => {
+      if (piece !== null) setPending((current) => withCommentPiece(current, piece));
+    });
+  }, [recorder]);
+
+  const sendRecordingNow = useCallback(() => {
+    void recorder.stop().then((piece) => submit(piece));
+  }, [recorder, submit]);
 
   if (!canWrite) {
     return (
@@ -84,26 +284,139 @@ export function CommentComposer({ language, onSend, canWrite, mentionSource = nu
     );
   }
 
-  const vide = text.trim() === '';
+  const vide = text.trim() === '' && pending.length === 0;
+  const shownNotice: ComposerNotice | null =
+    notice ?? (micNotice === undefined ? null : { text: translate(language, micNotice), issue: 'refused' });
 
   return (
     <form
+      ref={formRef}
       data-comment-composer
+      data-comment-writing={writing ? '' : undefined}
       className="flex flex-col gap-1 px-3 py-2"
       onSubmit={(e) => {
         e.preventDefault();
         void submit();
       }}
     >
-      <div className="relative flex items-end gap-2">
+      {/* REPLIÉE (#9122), la barre n'est plus qu'une icône de commentaire ; le
+          champ reste MONTÉ, caché — miroir de la plaque iOS gardée à hauteur
+          nulle : le brouillon ne dépend d'aucun démontage. */}
+      {folded ? (
+        <button
+          type="button"
+          data-comment-unfold=""
+          aria-label={translate(language, 'comments.composer.unfold')}
+          onClick={unfold}
+          className="grid place-items-center self-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2"
+          style={{ width: FOLD_TARGET_PX, height: FOLD_TARGET_PX, background: 'var(--color-ios-card)', color: 'var(--color-ios-ink)', outlineColor: 'var(--color-ios-brand)' }}
+        >
+          <span data-glyph="chatCircle" className="inline-flex">
+            <GlyphSvg glyph={FEED_GLYPHS.chatCircle} size={20} />
+          </span>
+        </button>
+      ) : null}
+      <div data-comment-composer-body="" className={folded ? 'hidden' : 'contents'}>
+      {replyTo === null ? null : (
+        <div data-comment-reply-banner={replyTo.commentId} className="flex items-center gap-2 pb-1">
+          <span aria-hidden className="shrink-0 rounded-full" style={{ width: 3, height: 32, background: 'var(--color-ios-brand)' }} />
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-check font-semibold" style={{ color: 'var(--color-ios-brand)' }}>
+              {translate(language, 'comments.reply.to', { name: replyTo.authorName })}
+            </p>
+            {replyTo.excerpt === null ? null : (
+              /* LA CIBLE RESTE LISIBLE (#8644) : pendant qu'on écrit dans une
+                 feuille de lecteur, la liste s'efface — l'extrait est alors ce
+                 qui garde en vue le commentaire auquel on répond. Trois lignes,
+                 jamais une (140 caractères au plus, `comment-reply-target`). */
+              <p
+                data-comment-reply-excerpt=""
+                className="line-clamp-3 text-caption"
+                style={{ color: 'var(--color-ios-ink-2)' }}
+              >
+                {replyTo.excerpt}
+              </p>
+            )}
+          </div>
+          {onCancelReply === undefined ? null : (
+            <button
+              type="button"
+              data-comment-reply-cancel
+              aria-label={translate(language, 'comments.reply.cancel')}
+              onClick={() => {
+                onCancelReply();
+                fieldRef.current?.focus();
+              }}
+              className="grid shrink-0 place-items-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2"
+              style={{ width: 44, height: 44, color: 'var(--color-ios-ink-2)', outlineColor: 'var(--color-ios-brand)' }}
+            >
+              <Glyph name="x" size={16} />
+            </button>
+          )}
+        </div>
+      )}
+      {pending.length === 0 ? null : (
+        <div
+          data-comment-tray=""
+          aria-busy={sending}
+          className={sending ? 'pointer-events-none opacity-60' : undefined}
+          style={{ ['--accent' as string]: 'var(--color-ios-brand)' }}
+        >
+          <Suspense fallback={null}>
+            <ComposerTray
+              variant="above"
+              pending={pending}
+              onRemove={(localId) => setPending((current) => removePendingAttachment(current, localId))}
+              onReplace={(localId, file) => setPending((current) => replacePendingAttachment(current, localId, file))}
+              notice={null}
+              place={null}
+              onRemovePlace={() => undefined}
+            />
+          </Suspense>
+        </div>
+      )}
+      {isRecording ? (
+        <div style={{ ['--accent' as string]: 'var(--color-ios-brand)' }}>
+          <Suspense fallback={<div style={{ minHeight: 56 }} aria-hidden />}>
+            <ComposerTray
+              variant="recording-bar"
+              recorderState={recorder.state}
+              onCancelRecording={recorder.cancel}
+              onStopToTray={stopRecordingToTray}
+              onSendRecording={sendRecordingNow}
+            />
+          </Suspense>
+        </div>
+      ) : null}
+      {/* PENDANT L'ENREGISTREMENT, la barre prend la place de la rangée ; le
+          champ reste MONTÉ, caché — le brouillon ne dépend d'aucun démontage. */}
+      <div className={isRecording ? 'hidden' : 'relative flex items-end gap-2'}>
       <MentionFieldPanel field={mention} language={language} />
+      <input
+        ref={pickerRef}
+        type="file"
+        data-comment-attach-input=""
+        accept={COMMENT_MEDIA_ACCEPT}
+        multiple
+        hidden
+        onChange={(e) => {
+          const files = Array.from(e.currentTarget.files ?? []);
+          e.currentTarget.value = '';
+          if (files.length > 0) setPending((current) => acceptCommentFiles(current, files));
+        }}
+      />
       <label className="sr-only" htmlFor={fieldId}>
         {translate(language, 'comments.placeholder')}
       </label>
+      {/* LA PLAQUE DU CHAMP (#8643) — le ⌄ vit DEDANS, à l'angle haut-droit
+          (haut-gauche en RTL : `insetInlineEnd`), visible d'emblée (#9122,
+          `StoryComposerFold.offersFoldButton` côté iOS). */}
+      <div data-comment-plate="" className="relative flex min-w-0 flex-1">
       <textarea
         id={fieldId}
         ref={fieldRef}
         data-comment-field
+        enterKeyHint="send"
         value={text}
         rows={1}
         maxLength={COMMENT_MAX_LENGTH}
@@ -136,8 +449,27 @@ export function CommentComposer({ language, onSend, canWrite, mentionSource = nu
           background: 'var(--color-ios-card)',
           color: 'var(--color-ios-ink)',
           outlineColor: 'var(--color-ios-brand)',
+          paddingInlineEnd: FOLD_TARGET_PX,
         }}
       />
+      {folded ? null : (
+      <button
+        type="button"
+        data-comment-fold=""
+        aria-label={translate(language, 'comments.composer.fold')}
+        /* Le doigt ne VOLE pas le focus au champ avant le clic : sans cela,
+           le champ perdrait la rédaction au `pointerdown` et le ⌄ se
+           démonterait avant de recevoir son propre clic. */
+        onPointerDown={(e) => e.preventDefault()}
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={fold}
+        className="absolute grid place-items-center rounded-chip focus-visible:outline-2 focus-visible:outline-offset-[-2px]"
+        style={{ top: 0, insetInlineEnd: '0px', width: FOLD_TARGET_PX, height: FOLD_TARGET_PX, color: 'var(--color-ios-ink-2)', outlineColor: 'var(--color-ios-brand)' }}
+      >
+        <Glyph name="caretDown" size={14} />
+      </button>
+      )}
+      </div>
       <button
         type="submit"
         data-comment-send
@@ -148,13 +480,23 @@ export function CommentComposer({ language, onSend, canWrite, mentionSource = nu
           width: 44,
           height: 44,
           background: vide || sending ? 'var(--color-ios-card)' : 'var(--color-ios-brand)',
-          color: vide || sending ? 'var(--color-ios-ink-3)' : '#fff',
+          color: vide || sending ? 'var(--color-ios-ink-3)' : 'var(--color-ios-on-brand)',
           outlineColor: 'var(--color-ios-brand)',
         }}
       >
         <Glyph name="arrowUp" size={18} />
       </button>
       </div>
+      {isRecording ? null : (
+        <CommentComposerTools
+          language={language}
+          onAttach={() => pickerRef.current?.click()}
+          onRecord={canRecord ? recorder.start : undefined}
+          recordBusy={recorder.state.status === 'requesting'}
+          onEmoji={insertEmoji}
+          onSticker={onSendSticker === undefined ? undefined : (picked) => void sendSticker(picked)}
+        />
+      )}
       {/**
        * L'ANNONCE — `performComment` distingue « parti » de « posé mais non
        * confirmé » ; sans ce texte, le second serait indiscernable du
@@ -178,18 +520,19 @@ export function CommentComposer({ language, onSend, canWrite, mentionSource = nu
        * commentaire, pas une reprise du premier. La reprise de cette
        * famille-là est la file #5868.
        */}
-      {notice === null ? null : (
+      {shownNotice === null ? null : (
         <p
           role="status"
           aria-live="polite"
           data-comment-notice
-          data-comment-notice-issue={notice.issue}
+          data-comment-notice-issue={shownNotice.issue}
           className="text-caption"
-          style={{ color: notice.issue === 'refused' ? 'var(--color-error)' : 'var(--color-ios-ink-2)' }}
+          style={{ color: shownNotice.issue === 'refused' ? 'var(--color-error)' : 'var(--color-ios-ink-2)' }}
         >
-          {notice.text}
+          {shownNotice.text}
         </p>
       )}
+      </div>
     </form>
   );
 }

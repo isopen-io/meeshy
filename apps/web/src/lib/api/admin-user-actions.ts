@@ -1,9 +1,11 @@
+import * as adminEndpoints from '@meeshy/shared/api/endpoints/admin';
+
 import { type AdminDeps } from './admin';
 import { decodeAdminUserDetail, type AdminUserDetail } from './admin-user-detail';
 import type { ApiResult } from './http';
 
 /**
- * **ÉDITER UN MEMBRE** (#6819) — `PATCH /api/v1/admin/users/:userId`, sous
+ * **ÉDITER UN MEMBRE** (#6819) — `PATCH admin.usersByUserId`, sous
  * `canUpdateUsers` ET `requireHierarchy` : l'acteur doit SURCLASSER sa cible,
  * fail-closed en 403 même lorsque la cible est introuvable.
  *
@@ -53,17 +55,17 @@ export type AdminUserEdit = {
   readonly username?: string | undefined;
   readonly firstName?: string | undefined;
   readonly lastName?: string | undefined;
-  readonly displayName?: string | undefined;
+  readonly displayName?: string | null | undefined;
   readonly bio?: string | undefined;
   readonly avatar?: string | undefined;
   readonly banner?: string | undefined;
   readonly email?: string | undefined;
-  readonly phoneNumber?: string | undefined;
-  readonly phoneCountryCode?: string | undefined;
+  readonly phoneNumber?: string | null | undefined;
+  readonly phoneCountryCode?: string | null | undefined;
   readonly timezone?: string | undefined;
   readonly systemLanguage?: string | undefined;
-  readonly regionalLanguage?: string | undefined;
-  readonly customDestinationLanguage?: string | undefined;
+  readonly regionalLanguage?: string | null | undefined;
+  readonly customDestinationLanguage?: string | null | undefined;
   readonly birthDate?: string | undefined;
   readonly role?: string | undefined;
   readonly isActive?: boolean | undefined;
@@ -101,7 +103,7 @@ export async function updateAdminUser(
 
   const result = await params.transport.request<unknown>({
     method: 'PATCH',
-    path: `/api/v1/admin/users/${encodeURIComponent(params.userId)}`,
+    path: adminEndpoints.usersByUserId(params.userId),
     body: corps,
     ...(params.signal === undefined ? {} : { signal: params.signal }),
   });

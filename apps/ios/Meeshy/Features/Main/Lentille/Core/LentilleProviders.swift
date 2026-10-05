@@ -122,8 +122,8 @@ nonisolated struct LocalBridgeProvider: ConversationBridgeProviding, Sendable {
         }
     }
 
-    typealias CachedMessagesProvider = @Sendable (_ conversationId: String) async -> [LentilleBridgeFormatter.BridgeMessage]
-    typealias UnreadWindowProvider = @Sendable (_ conversationId: String) async -> UnreadWindow?
+    typealias CachedMessagesProvider = @Sendable @concurrent (_ conversationId: String) async -> [LentilleBridgeFormatter.BridgeMessage]
+    typealias UnreadWindowProvider = @Sendable @concurrent (_ conversationId: String) async -> UnreadWindow?
 
     private let getCachedMessages: CachedMessagesProvider
     private let getUnreadWindow: UnreadWindowProvider

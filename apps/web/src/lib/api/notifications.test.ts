@@ -97,6 +97,14 @@ describe('loadNotificationsPage — la passerelle', () => {
     expect(url.searchParams.has('cursor')).toBe(false);
   });
 
+  test('« Toutes » demande de retirer les lignes lues des familles consommées (#8960)', async () => {
+    const { requests, transport } = scripted(async () => ({ ok: true, data: [] }));
+    await loadNotificationsPage({ source: 'gateway', transport, category: 'all' });
+    const url = new URL(`https://x${requests[0]?.path ?? ''}`);
+    expect(url.searchParams.has('types')).toBe(false);
+    expect(url.searchParams.get('hideReadTypes')?.split(',')).toContain('new_message');
+  });
+
   test('une pagination absente vaut « fin de liste », jamais une boucle', async () => {
     const { transport } = scripted(async () => ({ ok: true, data: [ligne('n1')] }));
     const result = await loadNotificationsPage({ source: 'gateway', transport, category: 'all' });

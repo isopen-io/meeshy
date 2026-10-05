@@ -74,7 +74,9 @@ final class ComposerSceneCameraMountingTests: XCTestCase {
             montages.append(contentsOf: Array(repeating: fichier.lastPathComponent,
                                               count: occurrences))
         }
-        XCTAssertEqual(montages, ["MeeshyComposerHost+Viewfinder.swift"],
+        // #9134 — le viseur en scène et le viseur servi SEUL en plein écran
+        // (#9125) posent le MÊME aperçu partagé : un seul montage.
+        XCTAssertEqual(montages.sorted(), ["ComposerCaptureViews.swift"],
                        "un aperçu qui se remplace ne peut pas grandir fluidement")
     }
 
@@ -82,9 +84,9 @@ final class ComposerSceneCameraMountingTests: XCTestCase {
     /// toujours en cours SOUS lui — c'est sa levée qui décidera photo ou
     /// vidéo. Un aperçu qui capte le toucher couperait le geste en deux.
     func test_lAperçu_neCapteAucunGeste() throws {
-        let code = compact(try source("MeeshyComposerHost+Viewfinder.swift"))
-        guard let début = code.range(of: "funcsceneCameraPreview(rect:CGRect)"),
-              let fin = code.range(of: "funcsceneCameraChrome(", range: début.upperBound..<code.endIndex)
+        let code = compact(try source("ComposerCaptureViews.swift"))
+        guard let début = code.range(of: "structComposerCapturePreview:View{"),
+              let fin = code.range(of: "structComposerCaptureChrome:View{", range: début.upperBound..<code.endIndex)
         else { return XCTFail("l'aperçu ou le chrome a changé de nom") }
         XCTAssertTrue(String(code[début.upperBound..<fin.lowerBound])
             .contains("allowsHitTesting(false)"))
@@ -115,9 +117,17 @@ final class ComposerSceneCameraMountingTests: XCTestCase {
         // qui ne change rien à ce qu'elle protège.
         guard let enveloppe = code.range(of: "withSceneCameraViewfinder(")
         else { return XCTFail("l'enveloppe du viseur a changé de nom") }
-        XCTAssertTrue(code[enveloppe.upperBound...].hasPrefix("backgroundMenuPresented(composerStack)")
-                      || code[enveloppe.upperBound...].hasPrefix("composerStack)"),
+        // La pile est un NŒUD depuis #8387 (`composerStackNode` monte
+        // `ComposerHostStack`, dont le `body` est `composerStack`) : la
+        // découpe de type ne change rien à ce que le viseur enveloppe.
+        XCTAssertTrue(code[enveloppe.upperBound...].hasPrefix("backgroundMenuPresented(composerStackNode)")
+                      || code[enveloppe.upperBound...].hasPrefix("composerStackNode)"),
                       "posé APRÈS le socle, le viseur ne l'aurait jamais couvert")
+        let couches = compact(try source("MeeshyComposerHost+Layers.swift"))
+        XCTAssertTrue(couches.contains("varcomposerStackNode:someView{ComposerHostStack(host:self"),
+                      "le nœud de la pile doit monter `ComposerHostStack`")
+        XCTAssertTrue(couches.contains("varbody:someView{host.composerStack}"),
+                      "`ComposerHostStack` doit rendre la pile ENTIÈRE, socle compris")
         guard let début = surfaces.range(of: "varcomposerStack:someView{") else {
             return XCTFail("la pile a changé de nom ou de fichier")
         }
@@ -236,7 +246,14 @@ final class ComposerSceneCameraMountingTests: XCTestCase {
     /// dans le meuble.
     func test_aprèsLaPose_leViseurSeRetire_etLaSessionSeFerme() throws {
         let code = compact(try source("MeeshyComposerHost+Viewfinder.swift"))
-        XCTAssertTrue(code.contains("sceneCameraStage=ComposerSceneCamera.stageAfterCapture"))
+        XCTAssertTrue(code.contains("sceneCapture.finishCapture()"))
+        let machine = compact(try source("ComposerCaptureSession.swift"))
+        guard let début = machine.range(of: "funcfinishCapture(){"),
+              let fin = machine.range(of: "funcdisarm(){", range: début.upperBound..<machine.endIndex)
+        else { return XCTFail("la sortie de la machine a changé de nom") }
+        let corps = String(machine[début.upperBound..<fin.lowerBound])
+        XCTAssertTrue(corps.contains("stage=ComposerSceneCamera.stageAfterCapture"))
+        XCTAssertTrue(corps.contains("camera.stop()"))
         XCTAssertEqual(ComposerSceneCamera.stageAfterCapture, .off)
     }
 
@@ -255,7 +272,7 @@ final class ComposerSceneCameraMountingTests: XCTestCase {
             try String(contentsOf: url, encoding: .utf8)))
         XCTAssertTrue(code.contains("collectSceneSegment(url)"),
                       "une vidéo doit rejoindre les segments, pas la scène")
-        XCTAssertTrue(code.contains("poseSceneCapture(.photo(image,data:sceneCamera.capturedPhotoData))"),
+        XCTAssertTrue(code.contains("sceneCapture.lookedPhoto(image,data:sceneCamera.capturedPhotoData){poseSceneCapture($0)}"),
                       "une photo se pose tout de suite — AVEC ses octets d'origine, qui portent l'EXIF")
     }
 
@@ -266,18 +283,17 @@ final class ComposerSceneCameraMountingTests: XCTestCase {
     /// zéro pour tous les segments sauf le dernier — un écart qui ne casse rien
     /// et fait mentir toute la bande, donc que rien ne signalerait.
     func test_laDuréeDuSegment_estSaisieAuRelâchement() throws {
-        let code = compact(try source("MeeshyComposerHost+Viewfinder.swift"))
-        // Le geste unique (#5074) a renommé `releaseSceneShutter` en
-        // `closeSceneTake` : la CLÔTURE n'est plus toujours un relâchement —
-        // sur une prise verrouillée, c'est un second appui. Ce que le témoin
-        // garde n'a pas bougé d'un mot : la durée se lit AVANT l'arrêt.
-        guard let début = code.range(of: "funccloseSceneTake(){"),
-              let fin = code.range(of: "funccollectSceneSegment(", range: début.upperBound..<code.endIndex)
+        // #9134 — la clôture vit dans la machine PARTAGÉE par les deux
+        // montages ; ce que le témoin garde n'a pas bougé d'un mot : la durée
+        // se lit AVANT l'arrêt.
+        let code = compact(try source("ComposerCaptureSession.swift"))
+        guard let début = code.range(of: "funccloseTake(){"),
+              let fin = code.range(of: "funccollectSegment(", range: début.upperBound..<code.endIndex)
         else { return XCTFail("la clôture ou la collecte a changé de nom") }
         let corps = String(code[début.upperBound..<fin.lowerBound])
-        XCTAssertTrue(corps.contains("pendingSegmentDuration=sceneCamera.recordingDuration"))
-        XCTAssertTrue(corps.range(of: "pendingSegmentDuration=sceneCamera.recordingDuration")!.lowerBound
-                      < corps.range(of: "sceneCamera.stopRecording()")!.lowerBound,
+        XCTAssertTrue(corps.contains("pendingSegmentDuration=camera.recordingDuration"))
+        XCTAssertTrue(corps.range(of: "pendingSegmentDuration=camera.recordingDuration")!.lowerBound
+                      < corps.range(of: "camera.stopRecording()")!.lowerBound,
                       "la durée se lit AVANT l'arrêt, sinon l'horloge est déjà repartie")
     }
 
@@ -289,14 +305,15 @@ final class ComposerSceneCameraMountingTests: XCTestCase {
     /// l'auteur croyait avoir jetés. C'est la fuite qui se voit, pas celle qui
     /// coûte de l'espace.
     func test_désarmer_effaceLesSegmentsEtLeursFichiers() throws {
-        let code = compact(try source("MeeshyComposerHost+Viewfinder.swift"))
-        guard let début = code.range(of: "funcdisarmSceneCamera(){"),
-              let fin = code.range(of: "funcdiscardSceneSegments()", range: début.upperBound..<code.endIndex)
+        let hote = compact(try source("MeeshyComposerHost+Viewfinder.swift"))
+        XCTAssertTrue(hote.contains("sceneCapture.disarm()"))
+        let code = compact(try source("ComposerCaptureSession.swift"))
+        guard let début = code.range(of: "funcdisarm(){"),
+              let fin = code.range(of: "funcdiscardSegments(){", range: début.upperBound..<code.endIndex)
         else { return XCTFail("le désarmement ou la purge a changé de nom") }
         XCTAssertTrue(String(code[début.upperBound..<fin.lowerBound])
-            .contains("discardSceneSegments()"))
-        XCTAssertTrue(code.contains("funcdiscardSceneSegments(){"))
-        XCTAssertTrue(code.contains("removeItemLogging("),
+            .contains("discardSegments()"))
+        XCTAssertTrue(code[fin.upperBound...].contains("removeItemLogging("),
                       "la purge doit toucher au DISQUE, pas seulement vider une liste")
     }
 
@@ -306,7 +323,11 @@ final class ComposerSceneCameraMountingTests: XCTestCase {
     func test_désarmer_fermeLaSession() throws {
         let code = compact(try source("MeeshyComposerHost+Viewfinder.swift"))
         XCTAssertTrue(code.contains("funcdisarmSceneCamera(){"))
-        XCTAssertTrue(code.contains("sceneCamera.stop()"))
+        let machine = compact(try source("ComposerCaptureSession.swift"))
+        guard let début = machine.range(of: "funcdisarm(){"),
+              let fin = machine.range(of: "funcdiscardSegments(){", range: début.upperBound..<machine.endIndex)
+        else { return XCTFail("le désarmement a changé de nom") }
+        XCTAssertTrue(String(machine[début.upperBound..<fin.lowerBound]).contains("camera.stop()"))
     }
 }
 
@@ -356,8 +377,8 @@ final class ComposerSceneCameraPosingTests: XCTestCase {
     func test_désarmer_retireLaMarque() throws {
         let code = compact(try source("MeeshyComposerHost+Viewfinder.swift"))
         guard let début = code.range(of: "funcdisarmSceneCamera(){"),
-              let fin = code.range(of: "funcdiscardSceneSegments()", range: début.upperBound..<code.endIndex)
-        else { return XCTFail("le désarmement ou la purge a changé de nom") }
+              let fin = code.range(of: "funcwithSceneCameraViewfinder", range: début.upperBound..<code.endIndex)
+        else { return XCTFail("le désarmement ou le montage a changé de nom") }
         XCTAssertTrue(String(code[début.upperBound..<fin.lowerBound])
             .contains("railPosesNextMedia=false"))
     }

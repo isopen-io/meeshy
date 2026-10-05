@@ -92,15 +92,41 @@ public struct MeeshyVideoThumbnail: View {
                 .resizable()
                 .aspectRatio(contentMode: .fill)
         }
-        // Priority 3 : color placeholder while loading or as final fallback
+        // Priority 3 : thumbHash (ou dégradé) pendant l'extraction, repli final
         else {
-            placeholder
+            pendingPoster
                 .overlay {
                     if isLoading {
                         ProgressView()
                             .tint(.white.opacity(0.6))
                     }
                 }
+        }
+    }
+
+    /// Ce qui tient la place d'une première image encore en extraction.
+    nonisolated enum PendingLayer: Equatable, Sendable {
+        case thumbHash
+        case gradient
+    }
+
+    /// Le thumbHash décode en moins d'une milliseconde et donne déjà la
+    /// silhouette de l'image : tant qu'il existe, c'est lui qui patiente — le
+    /// dégradé n'est que le repli d'une pièce qui n'en porte pas (#8231).
+    nonisolated static func pendingLayer(thumbHash: String?) -> PendingLayer {
+        guard let thumbHash, !thumbHash.isEmpty else { return .gradient }
+        return .thumbHash
+    }
+
+    @ViewBuilder
+    private var pendingPoster: some View {
+        if let hash = attachment?.thumbHash, Self.pendingLayer(thumbHash: hash) == .thumbHash {
+            ProgressiveCachedImage(thumbHash: hash, thumbnailUrl: nil, fullUrl: nil) {
+                placeholder
+            }
+            .aspectRatio(contentMode: .fill)
+        } else {
+            placeholder
         }
     }
 
@@ -127,10 +153,10 @@ public struct MeeshyVideoThumbnail: View {
 
     private var playBadge: some View {
         ZStack {
-            Circle().fill(.ultraThinMaterial).frame(width: 44, height: 44)
-            Circle().fill(Color(hex: accentColor).opacity(0.85)).frame(width: 38, height: 38)
+            Circle().fill(.ultraThinMaterial).frame(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)
+            Circle().fill(Color(hex: accentColor).opacity(0.85)).frame(width: MeeshyControlSize.regular, height: MeeshyControlSize.regular)
             Image(systemName: "play.fill")
-                .font(.system(size: 16, weight: .bold))
+                .font(.system(size: MeeshyIconSize.md, weight: .bold))
                 .foregroundColor(.white)
                 .offset(x: 1.5)
         }
@@ -145,15 +171,15 @@ public struct MeeshyVideoThumbnail: View {
             Spacer()
             HStack {
                 Text(formatted)
-                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                    .font(.system(size: MeeshyFont.captionSize, weight: .semibold, design: .monospaced))
                     .foregroundColor(.white)
-                    .padding(.horizontal, 5)
-                    .padding(.vertical, 2)
+                    .padding(.horizontal, MeeshySpacing.xs)
+                    .padding(.vertical, MeeshySpacing.xxs)
                     .background(Capsule().fill(Color.black.opacity(0.6)))
                 Spacer()
             }
-            .padding(.leading, 4)
-            .padding(.bottom, 4)
+            .padding(.leading, MeeshySpacing.xs)
+            .padding(.bottom, MeeshySpacing.xs)
         }
     }
 

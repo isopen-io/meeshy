@@ -4,6 +4,7 @@ import { CanvasV3Schema } from '@meeshy/shared/types/canvas-v3';
 
 import { backgroundMedia, isBackground } from '@/lib/feed/scene-framing';
 import { electBackgroundTrack } from '@/lib/canvas/background-sound';
+import { backgroundBackdrop, backgroundFraming } from '@/lib/canvas/background';
 import { parseCanvasDocument } from '@/lib/canvas/document';
 import { resolveSceneText } from '@/lib/canvas/text';
 
@@ -70,6 +71,39 @@ describe('buildStoryCanvasEffects — le fond (§0 de la spécification, correct
     const scene = document.scenes[0]!;
     expect(isBackground(scene.objects[0]!)).toBe(true);
     expect(backgroundMedia(scene)?.id).toBe('background');
+  });
+
+  // Maquette plein écran (#8370) : chaque média garde SON format — le fond
+  // part AJUSTÉ (`videoFitMode: "fit"`, la forme que le composer iOS pose déjà
+  // à l'ingestion, `StoryBackgroundFraming.posedFitMode`), et le lecteur, sur
+  // les deux plateformes, le relit sur le fond lui-même.
+  test('le fond part AJUSTÉ : `transform.videoFitMode: "fit"`, relu `fit` par le moteur', () => {
+    const effects = buildStoryCanvasEffects({ texts: [], background: { source: BACKGROUND, mediaType: 'image', aspectRatio: 4 / 3 } });
+    expect(effects!.scenes![0]!.objects[0]!.payload.transform).toEqual({ videoFitMode: 'fit' });
+    expect(CanvasV3Schema.safeParse(effects).success).toBe(true);
+    expect(backgroundFraming(parseCanvasDocument(effects)!.scenes[0]!)).toBe('fit');
+  });
+
+  // Le panneau Cadre (#8414) : REMPLIR et un fond choisi voyagent dans le
+  // MÊME `transform`, et le lecteur les relit à l'identique.
+  test('le Cadre choisi (Remplir, fond indigo) part dans `transform` et se relit', () => {
+    const effects = buildStoryCanvasEffects({
+      texts: [],
+      background: { source: BACKGROUND, mediaType: 'image', aspectRatio: 4 / 3, frame: { fitMode: 'fill', backdrop: 'indigo' } },
+    });
+    expect(effects!.scenes![0]!.objects[0]!.payload.transform).toEqual({ videoFitMode: 'fill', backdrop: 'indigo' });
+    expect(CanvasV3Schema.safeParse(effects).success).toBe(true);
+    const scene = parseCanvasDocument(effects)!.scenes[0]!;
+    expect(backgroundFraming(scene)).toBe('fill');
+    expect(backgroundBackdrop(scene)).toBe('indigo');
+  });
+
+  test('le fond FLOU (défaut) n’écrit aucun `backdrop` : l’absence se relit « flou »', () => {
+    const effects = buildStoryCanvasEffects({
+      texts: [],
+      background: { source: BACKGROUND, mediaType: 'image', frame: { fitMode: 'fit', backdrop: 'blur' } },
+    });
+    expect(effects!.scenes![0]!.objects[0]!.payload.transform).toEqual({ videoFitMode: 'fit' });
   });
 });
 

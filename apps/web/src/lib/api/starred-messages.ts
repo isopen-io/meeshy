@@ -1,4 +1,5 @@
 import type { QueryClient } from '@tanstack/react-query';
+import * as meEndpoints from '@meeshy/shared/api/endpoints/me';
 
 import { writeCardCache } from './card-caches';
 import { unwrap } from './client';
@@ -76,7 +77,7 @@ export const STARRED_MEMBERSHIP_STALE_TIME = 5 * 60_000;
 export const starredMessagesPath = (params: { readonly limit: number; readonly cursor?: string | undefined }): string => {
   const query = new URLSearchParams({ limit: String(params.limit) });
   if (params.cursor !== undefined) query.set('cursor', params.cursor);
-  return `/api/v1/me/starred-messages?${query.toString()}`;
+  return `${meEndpoints.starredMessages}?${query.toString()}`;
 };
 
 /** La pagination keyset du contrat — `{ limit, hasMore, nextCursor, form: 'keyset' }`. */
@@ -171,7 +172,7 @@ function sendStar(deps: StarGestureDeps, message: StarTarget, on: boolean): Prom
   }
   return deps.transport.request<unknown>({
     method: on ? 'PUT' : 'DELETE',
-    path: `/api/v1/me/starred-messages/${encodeURIComponent(message.id)}`,
+    path: meEndpoints.starredMessagesByMessageId(message.id),
   });
 }
 

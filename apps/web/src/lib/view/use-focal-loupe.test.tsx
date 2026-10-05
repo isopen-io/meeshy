@@ -11,8 +11,9 @@ import { useFocalLoupe } from './use-focal-loupe';
  * `useFocalLoupe` (#6586/#6588) — patron `use-pull-to-refresh.test.tsx`
  * (happy-dom + `createRoot` + `act`, `matchMedia` bouché pour piloter reduce
  * motion). `offsetWidth`/`offsetHeight` sont posés PAR INSTANCE (happy-dom ne
- * calcule aucun layout réel) : `390 × 60`, le même gabarit que les témoins
- * iOS (`FocalScrollPerspectiveTests`) et `law.test.ts`.
+ * calcule aucun layout réel) : `100 × 60`, un message court qui tient
+ * dans sa gouttière — ni la place horizontale ni la marge verticale du verre
+ * fixe n'écrêtent le gain plein (#8506).
  */
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
 
@@ -59,7 +60,7 @@ afterEach(() => {
   container.remove();
 });
 
-function Host({ isFocused }: { readonly isFocused: boolean }) {
+function Host({ isFocused, height = 60 }: { readonly isFocused: boolean; readonly height?: number }) {
   const ref = useRef<HTMLDivElement | null>(null);
   useFocalLoupe(ref, isFocused);
   return (
@@ -68,21 +69,21 @@ function Host({ isFocused }: { readonly isFocused: boolean }) {
       ref={(node) => {
         ref.current = node;
         if (node !== null) {
-          Object.defineProperty(node, 'offsetWidth', { configurable: true, value: 390 });
-          Object.defineProperty(node, 'offsetHeight', { configurable: true, value: 60 });
+          Object.defineProperty(node, 'offsetWidth', { configurable: true, value: 100 });
+          Object.defineProperty(node, 'offsetHeight', { configurable: true, value: height });
         }
       }}
     />
   );
 }
 
-function mount(isFocused: boolean): HTMLDivElement {
+function mount(isFocused: boolean, height?: number): HTMLDivElement {
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
   mounted = true;
   act(() => {
-    root.render(<Host isFocused={isFocused} />);
+    root.render(<Host isFocused={isFocused} {...(height === undefined ? {} : { height })} />);
   });
   return container.querySelector('[data-testid="row"]') as HTMLDivElement;
 }
@@ -99,7 +100,7 @@ describe('useFocalLoupe', () => {
     expect(row.style.transform).toBe('');
   });
 
-  test('élue -> grandit du gain plein (390×60, jamais écrêté)', () => {
+  test('dépliée -> grandit du gain plein (100×60, jamais écrêté)', () => {
     const row = mount(true);
     expect(row.style.transform).toBe(`scale(${1 + FOCUS_LOUPE_GAIN})`);
   });
@@ -127,5 +128,12 @@ describe('useFocalLoupe', () => {
     matchMediaReduced = true;
     const row = mount(true);
     expect(row.style.transform).toBe('');
+  });
+});
+
+describe('useFocalLoupe — le verre du message déplié reste à sa taille', () => {
+  test("un message déplié HAUT s'écrête à la marge verticale de son verre", () => {
+    const row = mount(true, 800);
+    expect(row.style.transform).toBe(`scale(${1 + 16 / 800})`);
   });
 });

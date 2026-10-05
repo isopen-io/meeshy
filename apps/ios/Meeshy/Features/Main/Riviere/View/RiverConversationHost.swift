@@ -22,7 +22,7 @@ struct RiverConversationHost: View {
     /// pour le fil (`MessageListView.bottomInset`), il la dit ici aussi.
     var bottomInset: CGFloat = 0
     /// L2b/2b-7 — les voix qui ÉCRIVENT, DITES par l'appelant
-    /// (`ConversationViewModel.typingUsernames`). Relayé tel quel au lecteur :
+    /// (`ConversationViewModel.typingParticipants.displayNames`). Relayé tel quel au lecteur :
     /// cet hôte ne le regarde pas, et il n'entre JAMAIS dans
     /// `RiverConversationMapping` — la frappe décore la peau, elle ne compose
     /// aucun couloir.
@@ -39,6 +39,11 @@ struct RiverConversationHost: View {
     var onReply: ((String) -> Void)? = nil
     /// #7452 — la consommation d'une vue unique, relayée jusqu'à la bulle.
     var onConsumeViewOnce: ((String, @escaping (Bool) -> Void) -> Void)? = nil
+    var onMediaTap: ((MessageAttachment) -> Void)? = nil
+    /// #8283 après #8320 — la lecture SUR PLACE d'un vocal cité, DITE par
+    /// l'appelant (`ConversationViewModel.toggleQuotedAudio`, le lecteur
+    /// PARTAGÉ du Fil). `false` ⇒ rien à jouer, la citation retombe sur son saut.
+    var onPlayQuotedAudio: ((ReplyReference) -> Bool)? = nil
     /// #3901 — appelé quand le curseur ATTEINT le présent (rang de la bulle
     /// la plus récente, `RiverConversationMapping.isAtPresent`) : c'est ici,
     /// et seulement ici, que l'appelant sait qu'il peut faire avancer le
@@ -82,6 +87,8 @@ struct RiverConversationHost: View {
         onOpenInThread: ((String) -> Void)? = nil,
         onReply: ((String) -> Void)? = nil,
         onConsumeViewOnce: ((String, @escaping (Bool) -> Void) -> Void)? = nil,
+        onMediaTap: ((MessageAttachment) -> Void)? = nil,
+        onPlayQuotedAudio: ((ReplyReference) -> Bool)? = nil,
         onReachPresent: (() -> Void)? = nil,
         text: @escaping (MeeshyMessage) -> String
     ) {
@@ -97,6 +104,8 @@ struct RiverConversationHost: View {
         self.onOpenInThread = onOpenInThread
         self.onReply = onReply
         self.onConsumeViewOnce = onConsumeViewOnce
+        self.onMediaTap = onMediaTap
+        self.onPlayQuotedAudio = onPlayQuotedAudio
         self.onReachPresent = onReachPresent
         self.text = text
         let geometry = RiverConversationMapping.resolveGeometry(messages: messages, viewerId: viewerId)
@@ -125,6 +134,32 @@ struct RiverConversationHost: View {
     }
 
     @State private var memo = ContentsMemo()
+
+    /// #8283 — la zone média d'une citation fait ce qu'elle fait en Script :
+    /// le geste, la pièce et son verrou sont ceux du Fil
+    /// (`QuotedMediaOpening.gesture`). Un vocal se JOUE sur place (#8320), une
+    /// image ou une vidéo s'ouvre par le toucher d'un média (`onMediaTap`).
+    /// `false` ⇒ rien d'honnête à jouer ni à ouvrir (média protégé, document,
+    /// pièce introuvable), et la citation retombe sur son saut.
+    private var openQuotedMedia: ((ReplyReference) -> Bool)? {
+        let onMediaTap = onMediaTap
+        let onPlayQuotedAudio = onPlayQuotedAudio
+        guard onMediaTap != nil || onPlayQuotedAudio != nil else { return nil }
+        let messages = messages
+        return { reference in
+            let quoted = messages.first { $0.id == reference.messageId }
+            switch QuotedMediaOpening.gesture(for: reference, quoted: quoted) {
+            case .playInPlace:
+                return onPlayQuotedAudio?(reference) ?? false
+            case .open(let attachment):
+                guard let onMediaTap else { return false }
+                onMediaTap(attachment)
+                return true
+            case .followQuote:
+                return false
+            }
+        }
+    }
 
     /// `RiverConversationMapping.contents` construit un dictionnaire de TOUS
     /// les messages puis, par bulle, résout nom d'affichage, heure, texte,
@@ -202,6 +237,8 @@ struct RiverConversationHost: View {
                 onOpenInThread: onOpenInThread,
                 onReply: onReply,
                 onConsumeViewOnce: onConsumeViewOnce,
+                onOpenQuotedMedia: openQuotedMedia,
+                onMediaTap: onMediaTap,
                 navigation: navigation
             )
             .frame(width: proxy.size.width, height: proxy.size.height)

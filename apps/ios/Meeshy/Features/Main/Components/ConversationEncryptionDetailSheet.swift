@@ -1,6 +1,7 @@
 import SwiftUI
 import os
 import MeeshySDK
+import MeeshyUI
 
 struct ConversationEncryptionDetailSheet: View {
     let conversationId: String
@@ -63,7 +64,7 @@ struct ConversationEncryptionDetailSheet: View {
     @ViewBuilder
     private func activeStateSections(mode: E2EAPI.ConversationEncryptionMode, status: E2EAPI.ConversationEncryptionStatus) -> some View {
         Section {
-            HStack(spacing: 12) {
+            HStack(spacing: MeeshySpacing.md) {
                 Image(systemName: "lock.shield.fill")
                     .font(.title2)
                     .foregroundColor(MeeshyColors.success)
@@ -71,7 +72,7 @@ struct ConversationEncryptionDetailSheet: View {
                     // title + mode subtitle carry the state, so hide the symbol
                     // from VoiceOver rather than reading its SF Symbol name.
                     .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                     Text(String(localized: "conversation.encryption.detail.activeLabel",
                                 defaultValue: "Chiffrement actif",
                                 bundle: .main))
@@ -81,7 +82,7 @@ struct ConversationEncryptionDetailSheet: View {
                         .foregroundColor(.secondary)
                 }
             }
-            .padding(.vertical, 4)
+            .padding(.vertical, MeeshySpacing.xs)
         }
 
         Section {
@@ -140,14 +141,14 @@ struct ConversationEncryptionDetailSheet: View {
     @ViewBuilder
     private var enableStateSections: some View {
         Section {
-            HStack(spacing: 12) {
+            HStack(spacing: MeeshySpacing.md) {
                 Image(systemName: "lock.open")
                     .font(.title2)
                     .foregroundColor(MeeshyColors.warning)
                     // Decorative status glyph — "Unencrypted conversation" title +
                     // subtitle carry the state, so hide the symbol from VoiceOver.
                     .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                     Text(String(localized: "conversation.encryption.detail.inactiveLabel",
                                 defaultValue: "Conversation non chiffrée",
                                 bundle: .main))
@@ -159,7 +160,7 @@ struct ConversationEncryptionDetailSheet: View {
                         .foregroundColor(.secondary)
                 }
             }
-            .padding(.vertical, 4)
+            .padding(.vertical, MeeshySpacing.xs)
         }
 
         Section {

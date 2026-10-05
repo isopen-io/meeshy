@@ -70,10 +70,11 @@ public struct ScrubTileFramesKey: PreferenceKey {
 /// La capsule `QuickReactionStripChrome` était une propriété du composant : tout
 /// appelant recevait la pilule, sans moyen de la refuser. Elle est juste partout
 /// où la barre flotte AU-DESSUS d'un contenu qu'elle doit trancher (liste de
-/// messages, scrim d'appui long) — elle y sépare la rangée de ce qu'elle
-/// survole. Elle a tort sur une story plein écran, où la scène EST le fond et où
-/// la pilule ajoute un cadre que la directive porteur refuse (#6083,
-/// 2026-09-11 : « pas de contour »).
+/// messages) — elle y sépare la rangée de ce qu'elle survole. Elle a tort sur
+/// une story plein écran, où la scène EST le fond et où la pilule ajoute un
+/// cadre que la directive porteur refuse (#6083, 2026-09-11 : « pas de
+/// contour ») — et, depuis le 2026-10-01 (#9043), sur le voile de l'appui long
+/// d'un message, « sans cadre comme pour les story ».
 ///
 /// `nonisolated` : un habillage est une VALEUR. Le paquet est sous
 /// `defaultIsolation(MainActor)` ; sans ce mot-clé, décider de l'habillage hors
@@ -212,11 +213,11 @@ public struct EmojiReactionPicker: View {
             } label: {
                 ZStack {
                     Circle()
-                        .fill(style == .dark ? Color.white.opacity(0.15) : Color.gray.opacity(0.15))
+                        .fill(style == .dark ? Color.white.opacity(MeeshyOpacity.light) : Color.gray.opacity(MeeshyOpacity.light))
                         .frame(width: 32 * scale, height: 32 * scale)
                     Image(systemName: "plus")
                         .font(.system(size: 14 * scale, weight: .bold))
-                        .foregroundColor(style == .dark ? .white.opacity(0.8) : .gray)
+                        .foregroundColor(style == .dark ? .white.opacity(MeeshyOpacity.intense) : .gray)
                 }
                 .scaleEffect(highlightedIndex == quickEmojis.count ? 1.35 : 1.0)
                 .animation(.spring(response: 0.25, dampingFraction: 0.5), value: highlightedIndex)
@@ -344,12 +345,12 @@ private struct QuickReactionStripChrome: ViewModifier {
         if style == .dark {
             Capsule().fill(.ultraThinMaterial)
                 .overlay(Capsule().fill(Color.black.opacity(0.2)))
-                .overlay(Capsule().stroke(Color.white.opacity(0.15), lineWidth: 0.5))
-                .shadow(color: .black.opacity(0.3), radius: 12, y: 4)
+                .overlay(Capsule().stroke(Color.white.opacity(MeeshyOpacity.light), lineWidth: MeeshyBorder.hairline))
+                .shadow(color: .black.opacity(MeeshyOpacity.medium), radius: 12, y: 4)
         } else {
             Capsule().fill(.regularMaterial)
-                .overlay(Capsule().stroke(Color.gray.opacity(0.15), lineWidth: 0.5))
-                .shadow(color: .black.opacity(0.08), radius: 8, y: 2)
+                .overlay(Capsule().stroke(Color.gray.opacity(MeeshyOpacity.light), lineWidth: MeeshyBorder.hairline))
+                .shadow(color: .black.opacity(MeeshyOpacity.subtle), radius: 8, y: 2)
         }
     }
 }
@@ -466,7 +467,7 @@ public struct EmojiFullPickerSheet: View {
                 .frame(height: currentHeight(for: geo.size.height))
                 .frame(maxWidth: min(geo.size.width, 560))
                 .background(sheetBackground)
-                .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.xxl, style: .continuous))
                 .gesture(sheetDragGesture)
                 .transition(.move(edge: .bottom))
             }
@@ -480,70 +481,70 @@ public struct EmojiFullPickerSheet: View {
     }
 
     private var dragHandle: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: MeeshySpacing.sm) {
             Capsule()
-                .fill(style == .dark ? Color.white.opacity(0.3) : Color.gray.opacity(0.3))
-                .frame(width: 36, height: 4).padding(.top, 10)
+                .fill(style == .dark ? Color.white.opacity(MeeshyOpacity.medium) : Color.gray.opacity(MeeshyOpacity.medium))
+                .frame(width: 36, height: 4).padding(.top, MeeshySpacing.smPlus)
             Text(String(localized: "emoji.picker.title", defaultValue: "Reactions", bundle: .module))
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundColor(style == .dark ? .white.opacity(0.8) : .primary)
-                .padding(.bottom, 4)
+                .font(.system(size: MeeshyFont.bodySize, weight: .semibold))
+                .foregroundColor(style == .dark ? .white.opacity(MeeshyOpacity.intense) : .primary)
+                .padding(.bottom, MeeshySpacing.xs)
         }
     }
 
     private var categoryTabs: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 2) {
+            HStack(spacing: MeeshySpacing.xxs) {
                 ForEach(Array(EmojiCategory.all.enumerated()), id: \.element.id) { index, category in
                     Button {
                         withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) { selectedCategory = index }
                     } label: {
-                        VStack(spacing: 2) {
-                            Text(category.icon).font(.system(size: 20))
+                        VStack(spacing: MeeshySpacing.xxs) {
+                            Text(category.icon).font(.system(size: MeeshyFont.title3Size))
                             Text(category.name)
-                                .font(.system(size: 9, weight: .medium))
+                                .font(.system(size: MeeshyFont.microSize, weight: .medium))
                                 .foregroundColor(selectedCategory == index
                                     ? (style == .dark ? .white : MeeshyColors.brandPrimary)
-                                    : (style == .dark ? .white.opacity(0.5) : .gray))
+                                    : (style == .dark ? .white.opacity(MeeshyOpacity.strong) : .gray))
                         }
-                        .padding(.horizontal, 10).padding(.vertical, 6)
+                        .padding(.horizontal, MeeshySpacing.smPlus).padding(.vertical, MeeshySpacing.xsPlus)
                         .background(
-                            RoundedRectangle(cornerRadius: 10)
+                            RoundedRectangle(cornerRadius: MeeshyRadius.sm)
                                 .fill(selectedCategory == index
-                                    ? (style == .dark ? Color.white.opacity(0.15) : MeeshyColors.brandPrimary.opacity(0.12))
+                                    ? (style == .dark ? Color.white.opacity(MeeshyOpacity.light) : MeeshyColors.brandPrimary.opacity(MeeshyOpacity.light))
                                     : Color.clear)
                         )
                     }
                 }
-            }.padding(.horizontal, 12)
-        }.padding(.bottom, 6)
+            }.padding(.horizontal, MeeshySpacing.md)
+        }.padding(.bottom, MeeshySpacing.xsPlus)
     }
 
     private var emojiGrid: some View {
         let category = EmojiCategory.all[selectedCategory]
         return ScrollView {
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 2), count: 8), spacing: 10) {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: MeeshySpacing.xxs), count: 8), spacing: MeeshySpacing.smPlus) {
                 ForEach(category.emojis, id: \.self) { emoji in
                     Button { selectEmoji(emoji) } label: {
-                        Text(emoji).font(.system(size: 30)).frame(maxWidth: .infinity)
+                        Text(emoji).font(.system(size: MeeshyFont.displaySize)).frame(maxWidth: .infinity)
                             .scaleEffect(reactedEmoji == emoji ? 1.35 : 1.0)
                             .animation(.spring(response: 0.2, dampingFraction: 0.5), value: reactedEmoji)
                     }
                 }
-            }.padding(.horizontal, 10).padding(.vertical, 8)
+            }.padding(.horizontal, MeeshySpacing.smPlus).padding(.vertical, MeeshySpacing.sm)
         }
     }
 
     private var sheetBackground: some View {
         Group {
             if style == .dark {
-                RoundedRectangle(cornerRadius: 24, style: .continuous).fill(.ultraThinMaterial)
-                    .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).fill(Color.black.opacity(0.45)))
-                    .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).stroke(Color.white.opacity(0.1), lineWidth: 0.5))
+                RoundedRectangle(cornerRadius: MeeshyRadius.xxl, style: .continuous).fill(.ultraThinMaterial)
+                    .overlay(RoundedRectangle(cornerRadius: MeeshyRadius.xxl, style: .continuous).fill(Color.black.opacity(MeeshyOpacity.strong)))
+                    .overlay(RoundedRectangle(cornerRadius: MeeshyRadius.xxl, style: .continuous).stroke(Color.white.opacity(MeeshyOpacity.subtle), lineWidth: MeeshyBorder.hairline))
             } else {
-                RoundedRectangle(cornerRadius: 24, style: .continuous).fill(.regularMaterial)
-                    .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).stroke(Color.gray.opacity(0.1), lineWidth: 0.5))
-                    .shadow(color: .black.opacity(0.15), radius: 20, y: -5)
+                RoundedRectangle(cornerRadius: MeeshyRadius.xxl, style: .continuous).fill(.regularMaterial)
+                    .overlay(RoundedRectangle(cornerRadius: MeeshyRadius.xxl, style: .continuous).stroke(Color.gray.opacity(MeeshyOpacity.subtle), lineWidth: MeeshyBorder.hairline))
+                    .shadow(color: .black.opacity(MeeshyOpacity.light), radius: 20, y: -5)
             }
         }
     }
@@ -597,13 +598,13 @@ public struct CategorizedEmojiPickerSheet: View {
     }
 
     public var body: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: MeeshySpacing.smPlus) {
             // Titre seul — pas de bouton Close (dismiss via drag/detent) ni recherche.
             Text(String(localized: "emoji.picker.title", defaultValue: "Reactions", bundle: .module))
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundColor(style == .dark ? .white.opacity(0.85) : .primary)
-                .padding(.top, 16)
-                .padding(.bottom, 2)
+                .font(.system(size: MeeshyFont.bodySize, weight: .semibold))
+                .foregroundColor(style == .dark ? .white.opacity(MeeshyOpacity.intense) : .primary)
+                .padding(.top, MeeshySpacing.lg)
+                .padding(.bottom, MeeshySpacing.xxs)
             categoryTabs
             emojiGrid
         }
@@ -616,44 +617,44 @@ public struct CategorizedEmojiPickerSheet: View {
 
     private var categoryTabs: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 2) {
+            HStack(spacing: MeeshySpacing.xxs) {
                 ForEach(Array(EmojiCategory.all.enumerated()), id: \.element.id) { index, category in
                     Button {
                         withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) { selectedCategory = index }
                     } label: {
-                        VStack(spacing: 2) {
-                            Text(category.icon).font(.system(size: 20))
+                        VStack(spacing: MeeshySpacing.xxs) {
+                            Text(category.icon).font(.system(size: MeeshyFont.title3Size))
                             Text(category.name)
-                                .font(.system(size: 9, weight: .medium))
+                                .font(.system(size: MeeshyFont.microSize, weight: .medium))
                                 .foregroundColor(selectedCategory == index
                                     ? (style == .dark ? .white : MeeshyColors.brandPrimary)
-                                    : (style == .dark ? .white.opacity(0.5) : .gray))
+                                    : (style == .dark ? .white.opacity(MeeshyOpacity.strong) : .gray))
                         }
-                        .padding(.horizontal, 10).padding(.vertical, 6)
+                        .padding(.horizontal, MeeshySpacing.smPlus).padding(.vertical, MeeshySpacing.xsPlus)
                         .background(
-                            RoundedRectangle(cornerRadius: 10)
+                            RoundedRectangle(cornerRadius: MeeshyRadius.sm)
                                 .fill(selectedCategory == index
-                                    ? (style == .dark ? Color.white.opacity(0.15) : MeeshyColors.brandPrimary.opacity(0.12))
+                                    ? (style == .dark ? Color.white.opacity(MeeshyOpacity.light) : MeeshyColors.brandPrimary.opacity(MeeshyOpacity.light))
                                     : Color.clear)
                         )
                     }
                 }
-            }.padding(.horizontal, 12)
-        }.padding(.bottom, 4)
+            }.padding(.horizontal, MeeshySpacing.md)
+        }.padding(.bottom, MeeshySpacing.xs)
     }
 
     private var emojiGrid: some View {
         let category = EmojiCategory.all[selectedCategory]
         return ScrollView {
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 2), count: 8), spacing: 10) {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: MeeshySpacing.xxs), count: 8), spacing: MeeshySpacing.smPlus) {
                 ForEach(category.emojis, id: \.self) { emoji in
                     Button { selectEmoji(emoji) } label: {
-                        Text(emoji).font(.system(size: 30)).frame(maxWidth: .infinity)
+                        Text(emoji).font(.system(size: MeeshyFont.displaySize)).frame(maxWidth: .infinity)
                             .scaleEffect(reactedEmoji == emoji ? 1.35 : 1.0)
                             .animation(.spring(response: 0.2, dampingFraction: 0.5), value: reactedEmoji)
                     }
                 }
-            }.padding(.horizontal, 10).padding(.vertical, 8)
+            }.padding(.horizontal, MeeshySpacing.smPlus).padding(.vertical, MeeshySpacing.sm)
         }
     }
 
@@ -679,34 +680,34 @@ public struct EmojiKeyboardPanel: View {
 
     public var body: some View {
         VStack(spacing: 0) {
-            Rectangle().fill(style == .dark ? Color.white.opacity(0.1) : Color.gray.opacity(0.15)).frame(height: 0.5)
+            Rectangle().fill(style == .dark ? Color.white.opacity(MeeshyOpacity.subtle) : Color.gray.opacity(MeeshyOpacity.light)).frame(height: 0.5)
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 2) {
+                HStack(spacing: MeeshySpacing.xxs) {
                     ForEach(Array(EmojiCategory.all.enumerated()), id: \.element.id) { index, category in
                         Button {
                             withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) { selectedCategory = index }
                         } label: {
-                            VStack(spacing: 2) {
-                                Text(category.icon).font(.system(size: 20))
+                            VStack(spacing: MeeshySpacing.xxs) {
+                                Text(category.icon).font(.system(size: MeeshyFont.title3Size))
                                 Text(category.name)
-                                    .font(.system(size: 9, weight: .medium))
+                                    .font(.system(size: MeeshyFont.microSize, weight: .medium))
                                     .foregroundColor(selectedCategory == index
                                         ? (style == .dark ? .white : MeeshyColors.brandPrimary)
                                         : (style == .dark ? .white.opacity(0.4) : .gray))
                             }
-                            .padding(.horizontal, 10).padding(.vertical, 6)
+                            .padding(.horizontal, MeeshySpacing.smPlus).padding(.vertical, MeeshySpacing.xsPlus)
                             .background(
-                                RoundedRectangle(cornerRadius: 10)
+                                RoundedRectangle(cornerRadius: MeeshyRadius.sm)
                                     .fill(selectedCategory == index
-                                        ? (style == .dark ? Color.white.opacity(0.15) : MeeshyColors.brandPrimary.opacity(0.12))
+                                        ? (style == .dark ? Color.white.opacity(MeeshyOpacity.light) : MeeshyColors.brandPrimary.opacity(MeeshyOpacity.light))
                                         : Color.clear)
                             )
                         }
                     }
-                }.padding(.horizontal, 12)
-            }.padding(.vertical, 6)
+                }.padding(.horizontal, MeeshySpacing.md)
+            }.padding(.vertical, MeeshySpacing.xsPlus)
             ScrollView {
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 2), count: 8), spacing: 8) {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: MeeshySpacing.xxs), count: 8), spacing: MeeshySpacing.sm) {
                     ForEach(EmojiCategory.all[selectedCategory].emojis, id: \.self) { emoji in
                         Button {
                             HapticFeedback.light()
@@ -714,17 +715,17 @@ public struct EmojiKeyboardPanel: View {
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { withAnimation { tappedEmoji = nil } }
                             onSelect?(emoji)
                         } label: {
-                            Text(emoji).font(.system(size: 28)).frame(maxWidth: .infinity)
+                            Text(emoji).font(.system(size: MeeshyFont.displaySize)).frame(maxWidth: .infinity)
                                 .scaleEffect(tappedEmoji == emoji ? 1.3 : 1.0)
                                 .animation(.spring(response: 0.2, dampingFraction: 0.5), value: tappedEmoji)
                         }
                     }
-                }.padding(.horizontal, 10).padding(.vertical, 4)
+                }.padding(.horizontal, MeeshySpacing.smPlus).padding(.vertical, MeeshySpacing.xs)
             }
         }
         .background(Group {
             if style == .dark {
-                Rectangle().fill(.ultraThinMaterial).overlay(Rectangle().fill(Color.black.opacity(0.5)))
+                Rectangle().fill(.ultraThinMaterial).overlay(Rectangle().fill(Color.black.opacity(MeeshyOpacity.strong)))
             } else {
                 Rectangle().fill(.regularMaterial)
             }

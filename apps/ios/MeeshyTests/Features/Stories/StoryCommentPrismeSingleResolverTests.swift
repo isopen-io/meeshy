@@ -136,7 +136,11 @@ final class StoryCommentPrismeSingleResolverTests: XCTestCase {
 
     private static let mapperAnchor = "static func storyComment(from"
     private static let networkPathAnchor = "private func fetchStoryCommentsFromNetwork("
-    private static let canonicalCall = "PostDetailViewModel.resolveCommentTranslation("
+    /// Depuis #9075, les chemins ne nomment plus le résolveur eux-mêmes : ils
+    /// délèguent à `FeedComment(api:)`, le site UNIQUE de la projection, qui
+    /// l'appelle (et porte la carte des liens suivis qu'aucune copie ne
+    /// recopiait). Les témoins de RANG ci-dessus éprouvent ce chemin-là.
+    private static let canonicalCall = "FeedComment(api:"
 
     /// Le versant INTERDICTION : la ligne de la première charge réseau ne
     /// résout plus sa langue elle-même. Rougit si la fermeture revient dans le

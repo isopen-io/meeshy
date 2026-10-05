@@ -1,0 +1,64 @@
+{
+  "v": 3,
+  "attachments": {},
+  "boards": {
+    "Main.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "radius": 36,
+      "title": "Web mobile et coque Android · prototype jouable",
+      "w": 390,
+      "x": 0,
+      "y": 0
+    },
+    "Web.dc.html": {
+      "h": 800,
+      "title": "Web bureau · menu « Publier comme » ouvert",
+      "w": 1280,
+      "x": 943,
+      "y": 0
+    },
+    "iOS.dc.html": {
+      "h": 852,
+      "radius": 44,
+      "title": "iOS · menu « Publier comme » ouvert",
+      "w": 393,
+      "x": 470,
+      "y": 0
+    },
+    "iPad.dc.html": {
+      "x": 2303,
+      "y": 0,
+      "w": 1180,
+      "h": 820,
+      "title": "iPad · la même app lancée sur Mac",
+      "radius": 18
+    }
+  },
+  "createdOnFiles": {
+    "at": "2026-09-27T06:45:00Z",
+    "v": 1
+  },
+  "designSystems": [],
+  "launch": {
+    "view": "canvas"
+  },
+  "notes": {
+    "title": {
+      "kind": "title1",
+      "maxW": 3483,
+      "text": "Composer plein écran : une seule scène, chaque média à son format, le type choisi à l'envoi",
+      "w": 240,
+      "x": 0,
+      "y": -280
+    }
+  },
+  "order": [
+    "Main.dc.html",
+    "iOS.dc.html",
+    "Web.dc.html",
+    "iPad.dc.html"
+  ],
+  "pages": [],
+  "title": "Composer plein écran"
+}

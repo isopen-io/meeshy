@@ -1,0 +1,163 @@
+import { describe, expect, test } from 'bun:test';
+
+import { callControlSet, cameraSwitchOf, chromeAfter, isVideoScene } from './call-controls';
+import type { ActiveCall, CallMember } from './call-store';
+
+/**
+ * LES COMMANDES DE L'APPEL EN « C ADAPTÉ » (#8391) — ce que `(…)` sort, où
+ * ça sort, et ce qui range les commandes d'une vidéo.
+ */
+
+const member = (overrides: Partial<CallMember> = {}): CallMember => ({ userId: 'u-a', name: 'Amina', avatar: null, micMuted: false, cameraOn: false, screenSharing: false, weakNetwork: false, capturing: false, link: 'connected', ...overrides });
+
+const liveVideo = { getVideoTracks: () => [{ readyState: 'live' }] } as unknown as MediaStream;
+
+const context = (overrides: Partial<Parameters<typeof callControlSet>[0]> = {}) => ({
+  phase: { kind: 'connected' } as ActiveCall['phase'],
+  callId: 'call-1',
+  cameraOn: false,
+  screenSharing: false,
+  canShare: true,
+  canEffect: true,
+  cameraSwitch: 'flip' as const,
+  canPip: false,
+  videoScene: false,
+  ...overrides,
+});
+
+describe('ce que (…) sort', () => {
+  test('mon image : Caméra, Écran ; l’appel : Sous-titres, Journal, Enregistrer, Ajouter, Réagir — la conversation vit dans l’en-tête (#8436, #8579)', () => {
+    expect(callControlSet(context())).toEqual({ mine: ['camera', 'screen'], call: ['captions', 'journal', 'record', 'invite', 'react'] });
+  });
+
+  test('caméra allumée : Caméra, Retourner, Effets, Écran — l’ordre de la planche', () => {
+    expect(callControlSet(context({ cameraOn: true })).mine).toEqual(['camera', 'flip', 'effects', 'screen']);
+  });
+
+  test('Retourner n’existe que là où il y a une AUTRE caméra — sinon le bouton n’aurait aucun effet (#8432)', () => {
+    expect(callControlSet(context({ cameraOn: true, cameraSwitch: 'none' })).mine).toEqual(['camera', 'effects', 'screen']);
+  });
+
+  test('Effets n’existe que caméra allumée, là où le navigateur sait les faire, et jamais sur un écran partagé (#8442)', () => {
+    expect(callControlSet(context({ cameraOn: false })).mine).not.toContain('effects');
+    expect(callControlSet(context({ cameraOn: true, canEffect: false })).mine).toEqual(['camera', 'flip', 'screen']);
+    expect(callControlSet(context({ cameraOn: true, screenSharing: true })).mine).not.toContain('effects');
+  });
+
+  test('sans getDisplayMedia, Écran n’est jamais promis — sauf pour arrêter un partage en cours', () => {
+    expect(callControlSet(context({ canShare: false })).mine).toEqual(['camera']);
+    expect(callControlSet(context({ canShare: false, screenSharing: true })).mine).toEqual(['camera', 'screen']);
+  });
+
+  test('pendant la sonnerie : ni Écran, ni Sous-titres, ni Enregistrer — Caméra reste', () => {
+    expect(callControlSet(context({ phase: { kind: 'outgoing' } }))).toEqual({ mine: ['camera'], call: [] });
+  });
+
+  test('Enregistrer demande un appel identifié ET connecté (pas en reconnexion)', () => {
+    expect(callControlSet(context({ callId: null })).call).toEqual(['captions', 'journal']);
+    expect(callControlSet(context({ phase: { kind: 'reconnecting' } })).call).toEqual(['captions', 'journal', 'invite', 'react']);
+  });
+
+  test('Ajouter et Réagir existent en duo comme en groupe, dès qu’un appel identifié est rejoint (#8433, #8439)', () => {
+    expect(callControlSet(context({ phase: { kind: 'connected' } })).call).toContain('invite');
+    expect(callControlSet(context({ phase: { kind: 'connected' } })).call).toContain('react');
+    expect(callControlSet(context({ phase: { kind: 'connecting' } })).call).toEqual([]);
+  });
+
+});
+
+describe('se retourner, ou choisir sa caméra (#8432, #9094)', () => {
+  type Device = Parameters<typeof cameraSwitchOf>[0][number];
+  const camera = (label: string, facing?: string): Device => ({ kind: 'videoinput', label, ...(facing === undefined ? {} : { getCapabilities: () => ({ facingMode: [facing] }) }) });
+  const microphone: Device = { kind: 'audioinput', label: 'Micro' };
+
+  test('une seule caméra : ni Retourner ni choix, rien n’aurait d’effet', () => {
+    expect(cameraSwitchOf([camera('FaceTime HD'), microphone])).toBe('none');
+  });
+
+  test('une liste encore vide ne retire rien : Retourner reste offert', () => {
+    expect(cameraSwitchOf([])).toBe('flip');
+  });
+
+  test('un téléphone (une caméra arrière, dite par ses capacités ou son nom) : Retourner', () => {
+    expect(cameraSwitchOf([camera('camera2 1', 'user'), camera('camera2 0', 'environment')])).toBe('flip');
+    expect(cameraSwitchOf([camera('Caméra avant'), camera('Caméra arrière')])).toBe('flip');
+    expect(cameraSwitchOf([camera('Front Camera'), camera('Back Dual Wide Camera')])).toBe('flip');
+  });
+
+  test('un ordinateur à deux webcams, sans avant ni arrière : le choix de la caméra, comme iOS sur Mac (`.cameraPicker`)', () => {
+    expect(cameraSwitchOf([camera('FaceTime HD'), camera('Logitech C920')])).toBe('picker');
+    expect(cameraSwitchOf([camera('FaceTime HD', 'user'), camera('Caméra de l’iPhone')])).toBe('picker');
+  });
+
+  test('le choix remplace Retourner dans mon image, caméra allumée seulement', () => {
+    expect(callControlSet(context({ cameraOn: true, cameraSwitch: 'picker' })).mine).toEqual(['camera', 'camera-picker', 'effects', 'screen']);
+    expect(callControlSet(context({ cameraOn: false, cameraSwitch: 'picker' })).mine).not.toContain('camera-picker');
+  });
+});
+
+describe('l’image dans l’image rejoint la rangée « l’appel » (#9095, `CallView+Pill.swift`)', () => {
+  test('offerte, elle ferme la rangée, après Ajouter et Réagir — comme iOS', () => {
+    expect(callControlSet(context({ canPip: true })).call).toEqual(['captions', 'journal', 'record', 'invite', 'react', 'pip']);
+  });
+
+  test('non offerte, elle n’y est pas', () => {
+    expect(callControlSet(context({ canPip: false })).call).not.toContain('pip');
+  });
+});
+
+describe('« Capturer » (#8552)', () => {
+  test('une vidéo connectée l’offre dans l’appel, après Enregistrer', () => {
+    expect(callControlSet(context({ videoScene: true })).call).toEqual(['captions', 'journal', 'record', 'capture', 'invite', 'react']);
+  });
+
+  test('jamais en audio, ni pendant une reconnexion ou la sonnerie', () => {
+    expect(callControlSet(context({ videoScene: false })).call).not.toContain('capture');
+    expect(callControlSet(context({ videoScene: true, phase: { kind: 'reconnecting' } })).call).not.toContain('capture');
+    expect(callControlSet(context({ videoScene: true, phase: { kind: 'outgoing' } })).call).toEqual([]);
+  });
+
+  test('un appel pas encore identifié peut capturer ce qu’il voit', () => {
+    expect(callControlSet(context({ videoScene: true, callId: null })).call).toEqual(['captions', 'journal', 'capture']);
+  });
+});
+
+describe('la scène vidéo', () => {
+  const call = (overrides: Partial<Parameters<typeof isVideoScene>[0]> = {}) => ({ members: {}, cameraOn: false, remoteStreams: {}, isGroup: false, phase: { kind: 'connected' } as ActiveCall['phase'], ...overrides });
+
+  test('un appel vocal n’est jamais une scène vidéo', () => {
+    expect(isVideoScene(call({ members: { a: member() } }))).toBe(false);
+  });
+
+  test('ma caméra, celle du pair ou un écran partagé en font une', () => {
+    expect(isVideoScene(call({ cameraOn: true }))).toBe(true);
+    expect(isVideoScene(call({ members: { a: member({ cameraOn: true }) }, remoteStreams: { 'u-a': liveVideo } }))).toBe(true);
+    expect(isVideoScene(call({ members: { a: member({ screenSharing: true }) }, remoteStreams: { 'u-a': liveVideo } }))).toBe(true);
+  });
+
+  test('une grille de groupe sans aucune caméra reste un appel vocal', () => {
+    const members = { a: member(), b: member({ userId: 'u-b' }) };
+    expect(isVideoScene(call({ isGroup: true, members }))).toBe(false);
+    expect(isVideoScene(call({ isGroup: true, members: { ...members, b: member({ userId: 'u-b', cameraOn: true }) } }))).toBe(true);
+  });
+
+  test('pendant la sonnerie, rien ne s’efface', () => {
+    expect(isVideoScene(call({ cameraOn: true, phase: { kind: 'outgoing' } }))).toBe(false);
+  });
+});
+
+/* UN TOUCHER RANGE, LE SUIVANT REND (#8550, #8988) — et seul le clavier rend
+   aussi : aucune attente, aucun mouvement ne range les commandes (directive
+   porteur du 2026-10-01). La minuterie vit dans le DOM : son absence se prouve
+   en avançant l'horloge (`use-call-chrome.test.tsx`, `call-screen.test.tsx`). */
+describe('toucher la scène range ou rend TOUTES les commandes (#8550, #8988)', () => {
+  test('un toucher range des commandes visibles, le suivant les rend', () => {
+    expect(chromeAfter('shown', 'tap')).toBe('dismissed');
+    expect(chromeAfter('dismissed', 'tap')).toBe('shown');
+  });
+
+  test('le clavier rend toujours les commandes, et n’en range jamais', () => {
+    expect(chromeAfter('dismissed', 'key')).toBe('shown');
+    expect(chromeAfter('shown', 'key')).toBe('shown');
+  });
+});

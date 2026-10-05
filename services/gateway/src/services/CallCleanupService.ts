@@ -18,6 +18,7 @@
 import { PrismaClient, CallStatus, CallEndReason } from '@meeshy/shared/prisma/client';
 import type { ServerEmitIOWithRooms } from '../socketio/serverEmit';
 import { CALL_EVENTS } from '@meeshy/shared/types/video-call';
+import { CALL_HEARTBEAT_TIMEOUT_MS, CALL_RING_GC_MS } from '@meeshy/shared/types/call-rules';
 import { ROOMS } from '@meeshy/shared/types/socketio-events';
 import { resolveCallEndedRooms } from '../utils/callEndedFanout';
 import { logger } from '../utils/logger';
@@ -32,19 +33,10 @@ export class CallCleanupService {
   private cleanupInterval: NodeJS.Timeout | null = null;
   private readonly CLEANUP_INTERVAL_MS = 60 * 1000;
 
-  // CALL-FIX 2026-06-25 — 60s→120s: VoIP push on iOS can take up to 30s to
-  // wake the device + show the incoming call UI, then the user needs time to
-  // swipe/tap answer. 60s was routinely too short on slow networks, causing
-  // valid incoming calls to be force-MISSed before the user could answer.
-  // Étage 3 (dernier filet) de la cascade 45s client / 60s serveur / 120s GC —
-  // voir CallService.RINGING_TIMEOUT_MS (audit 2026-07-11 #7).
-  private readonly MAX_INITIATED_RINGING_MS = 120 * 1000;
-  // CALL-FIX 2026-06-25 — 60s→120s: heartbeat interval is 10s on the iOS
-  // client; a device with moderate network latency may miss 5-6 beats before
-  // the connection recovers, and the 60s window was too tight for cellular
-  // reconnections that legitimately take 30-90s (switching between Wi-Fi and
-  // LTE, dormant radio wakeup, tunnelled corporate VPN).
-  private readonly HEARTBEAT_TIMEOUT_MS = 120 * 1000;
+  // Dernier filet derrière le minuteur de sonnerie, et silence toléré d'un
+  // participant : `@meeshy/shared/types/call-rules` (#8074).
+  private readonly MAX_INITIATED_RINGING_MS = CALL_RING_GC_MS;
+  private readonly HEARTBEAT_TIMEOUT_MS = CALL_HEARTBEAT_TIMEOUT_MS;
 
   // Optional Socket.IO server — set via `attachSocketServer()` once the
   // socket layer is ready. Without it the cleanup still runs but the

@@ -174,12 +174,12 @@ final class ModePreferenceRoundTripTests: XCTestCase {
         await withIsolatedStore { store in
             let conversation = makeConversation(unreadCount: ReadingModeOrchestrator.unreadCap + 5, lastReadAt: nil)
 
-            await store.set(conversationId: conversation.id, value: .script, optimistic: true)
+            await store.set(conversationId: conversation.id, value: .focal, optimistic: true)
             let forced = await store.get(conversationId: conversation.id)
             let forcedDecision = LentilleReadingModeContext.decision(
                 for: conversation, preference: forced, isAnonymous: false, isLentilleFlagEnabled: true, now: Self.now
             )
-            XCTAssertEqual(forcedDecision.mode, .script)
+            XCTAssertEqual(forcedDecision.mode, .focal)
             XCTAssertEqual(forcedDecision.reason, .sticky)
 
             await store.set(conversationId: conversation.id, value: .auto, optimistic: true)
@@ -251,7 +251,7 @@ final class ModePreferenceRoundTripTests: XCTestCase {
         }
     }
 
-    /// I-073 — branche `.default` (§ branche 5, repli `.focal` numérique) :
+    /// I-073 — branche `.default` (§ branche 5, repli `.script` numérique depuis #8147) :
     /// aucun forçage, aucun non-lu massif, aucune absence — l'orchestrateur
     /// rend son repli de base. Complète la matrice des quatre branches
     /// atteignables drapeau ON avec le test précédent et celui du haut de ce
@@ -266,12 +266,12 @@ final class ModePreferenceRoundTripTests: XCTestCase {
             // seulement de l'absence d'un forçage.
             let conversation = makeConversation(unreadCount: 0, lastReadAt: Self.now)
 
-            await store.set(conversationId: conversation.id, value: .script, optimistic: true)
+            await store.set(conversationId: conversation.id, value: .focal, optimistic: true)
             let forced = await store.get(conversationId: conversation.id)
             let forcedDecision = LentilleReadingModeContext.decision(
                 for: conversation, preference: forced, isAnonymous: false, isLentilleFlagEnabled: true, now: Self.now
             )
-            XCTAssertEqual(forcedDecision.mode, .script)
+            XCTAssertEqual(forcedDecision.mode, .focal)
             XCTAssertEqual(forcedDecision.reason, .sticky)
 
             await store.set(conversationId: conversation.id, value: .auto, optimistic: true)
@@ -280,16 +280,16 @@ final class ModePreferenceRoundTripTests: XCTestCase {
                 for: conversation, preference: backToAuto, isAnonymous: false, isLentilleFlagEnabled: true, now: Self.now
             )
             XCTAssertEqual(
-                autoDecision.mode, .focal,
+                autoDecision.mode, .script,
                 "Revenu sur Auto sans aucun signal numérique, l'orchestrateur retombe sur " +
-                "son repli de base — `.focal`, le plancher de la loi (§ commentaire " +
+                "son repli de base — `.script` depuis #8147 (§ commentaire " +
                 "`clampFallbackMode`)."
             )
             XCTAssertEqual(autoDecision.reason, .default)
             XCTAssertNotEqual(
                 forcedDecision.mode, autoDecision.mode,
-                "Discrimination : `.script` forcé vs `.focal` par défaut — un round-trip qui " +
-                "rendrait `.focal` dans les DEUX états ne prouverait rien (leçon 266)."
+                "Discrimination : `.focal` forcé (choix explicite CONSERVÉ) vs `.script` par défaut — " +
+                "un round-trip qui rendrait le même mode dans les DEUX états ne prouverait rien (leçon 266)."
             )
         }
     }

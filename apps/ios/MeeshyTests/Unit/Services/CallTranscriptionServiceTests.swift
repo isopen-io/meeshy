@@ -99,15 +99,28 @@ final class CallTranscriptionServiceTests: XCTestCase {
         XCTAssertNil(loaded, "A nil callId must never produce a persisted transcript, empty-keyed or otherwise.")
     }
 
-    func test_persistedSegments_retainsBeyondLiveDisplayCap() {
+    /// #8579 — le journal garde TOUT l'appel : l'ancien plafond de 50 phrases
+    /// faisait disparaître le début de la conversation.
+    func test_displayedSegments_longCall_keepsEverySentence() {
         let (sut, _) = makeSUT()
-        for i in 0..<60 {
+        for i in 0..<300 {
             sut.receiveTranslatedSegment(
                 makeSegment(text: "segment \(i)", isFinal: true, capturedAt: Date(timeIntervalSince1970: TimeInterval(i)))
             )
         }
-        XCTAssertEqual(sut.displayedSegments.count, 50, "Live display stays capped at 50, unchanged.")
-        XCTAssertEqual(sut.persistedSegmentsForTesting.count, 60, "The persistence accumulator must retain all 60, not just the last 50.")
+        XCTAssertEqual(sut.displayedSegments.count, 300)
+        XCTAssertEqual(sut.displayedSegments.first?.text, "segment 0")
+        XCTAssertEqual(sut.persistedSegmentsForTesting.count, 300)
+    }
+
+    func test_displayedSegments_arrivingOutOfOrder_staysInCaptureOrder() {
+        let (sut, _) = makeSUT()
+        [3, 1, 2].forEach { i in
+            sut.receiveTranslatedSegment(
+                makeSegment(text: "segment \(i)", isFinal: true, capturedAt: Date(timeIntervalSince1970: TimeInterval(i)))
+            )
+        }
+        XCTAssertEqual(sut.displayedSegments.map(\.text), ["segment 1", "segment 2", "segment 3"])
     }
 
     func test_displayedSegments_doesNotTruncateBeyondFive() {

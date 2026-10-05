@@ -64,6 +64,29 @@ describe('conversation:updated — un vue unique ne transporte rien de son conte
     expect(JSON.stringify(payload)).not.toContain('secret');
   });
 
+  it('une flamme-œil (disparaît après lecture) ne transporte rien de son contenu non plus (#8634)', async () => {
+    const afterRead = {
+      ...viewOnce,
+      id: 'msg-fo',
+      messageType: 'image',
+      isViewOnce: false,
+      effectFlags: 1 | 8,
+      expiresAt: new Date('2026-09-30T10:00:00Z'),
+    };
+    const emitted: Emitted[] = [];
+    await emitConversationPreviewUpdate(makePrisma(afterRead), makeIo(emitted) as never, 'conv-1', 'user-B');
+
+    const [{ payload }] = emitted;
+    expect(payload.lastMessageId).toBe('msg-fo');
+    expect(payload.lastMessageEffectFlags).toBe(9);
+    expect(payload.lastMessagePreview).toBe('');
+    expect(payload.lastMessageTranslations).toBeNull();
+    expect(payload.lastMessageAttachments).toEqual([]);
+    expect(payload.lastMessageExpiresAt).toBeNull();
+    expect(JSON.stringify(payload)).not.toContain('4521');
+    expect(JSON.stringify(payload)).not.toContain('secret');
+  });
+
   it('emitConversationPreviewUpdate : sélectionne ce que la protection et la nature lisent', async () => {
     const prisma = makePrisma(viewOnce) as unknown as { message: { findFirst: jest.Mock } };
     await emitConversationPreviewUpdate(prisma as never, makeIo([]) as never, 'conv-1', 'user-B');

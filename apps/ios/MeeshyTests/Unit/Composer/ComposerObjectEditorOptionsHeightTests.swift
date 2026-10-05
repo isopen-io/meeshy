@@ -60,7 +60,7 @@ final class ComposerObjectEditorOptionsHeightTests: XCTestCase {
             .appendingPathComponent("Meeshy/Features/Main/Composer/ComposerObjectEditorView.swift")
         let code = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
             .components(separatedBy: .whitespacesAndNewlines).joined()
-        XCTAssertTrue(code.contains("safeAreaInset(edge:.bottom,spacing:0){options}"),
+        XCTAssertTrue(code.contains("safeAreaInset(edge:.bottom,spacing:0){options"),
                       "le panneau doit être POSÉ sur le bord, pas empilé dans la pile")
         XCTAssertTrue(code.contains("ComposerObjectEditorOptions.height("),
                       "…et faire la hauteur de son contenu, un ScrollView étant glouton")

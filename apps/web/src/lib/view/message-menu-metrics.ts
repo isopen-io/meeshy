@@ -13,14 +13,22 @@ export const MENU_GAP = 6;
 export const SIDE_PADDING = 16;
 /** `MessageActionsMenu.swift:36` (`menuWidth`). */
 export const MENU_WIDTH = 240;
-/** `MessageActionsMenu.swift:18` (`@ScaledMetric` rangée). */
+/** `MessageActionsMenu.rowHeight` — la hauteur d'une entrée, celle du menu
+ * système. PRÉSERVÉE par #9043 : seule la bande d'emojis s'allonge. */
 export const MENU_ROW_HEIGHT = 44;
-/** Le CHROME de la liste (rembourrage vertical + bordures) — nombre littéral
- * de `MessageActionsMenu.estimatedSize` (`:93` : `count * scaledRow + 20`),
- * la MÊME estimation dont `MessageOverlayMenu` se sert pour placer le cluster
- * (`:266`, `nlMenuHeight`). La première écriture posait `+ 8` en dur dans le
+/** Le CHROME de la liste (rembourrage vertical) — nombre littéral de
+ * `MessageActionsMenu.estimatedSize` (`count * scaledRow + 20`), la MÊME
+ * estimation dont `MessageOverlayMenu` se sert pour placer le cluster
+ * (`nlMenuHeight`). La première écriture posait `+ 8` en dur dans le
  * composant — un nombre qui ne venait de nulle part (revue #5814). */
 export const MENU_CHROME = 20;
+/** Le rembourrage vertical rendu de la liste — la moitié du chrome. */
+export const MENU_PADDING_Y = MENU_CHROME / 2;
+/** La hauteur de la zone du menu pour `rows` entrées — miroir de
+ * `MessageActionsMenu.estimatedSize(actionCount:)`. */
+export function menuListHeight(rows: number): number {
+  return Math.max(1, rows) * MENU_ROW_HEIGHT + MENU_CHROME;
+}
 /** `MessageOverlayMenu.swift:274` — plancher de réduction de l'aperçu, jamais agrandi. */
 export const PREVIEW_SCALE_FLOOR = 0.4;
 /** Tuile du rail dessinée à 34 (débord tactile ±5 = cible réelle 44,
@@ -40,3 +48,13 @@ export const RAIL_PADDING_X = 8;
  * tuiles se faisaient rétrécir par `flex-shrink` (≈ 31,7 px chacune) et la
  * cible tactile promise (34 dessinés + 5 de débord = 44) n'était plus tenue. */
 export const RAIL_WIDTH = 7 * RAIL_TILE + 6 * RAIL_TILE_GAP + 2 * RAIL_PADDING_X;
+
+/** `MessageOverlayMenu.emojiBandLengthFactor` — **la bande d'emojis s'allonge
+ * de ×1,4** (directive porteur 2026-10-01, #9043) : la BANDE, pas les tuiles,
+ * dont la taille ne change pas ; l'espace gagné se répartit entre elles. */
+export const RAIL_LENGTH_FACTOR = 1.4;
+/** La largeur rendue du rail — miroir de `MessageOverlayMenu.emojiBandWidth`,
+ * bornée à la largeur disponible. */
+export function railBandWidth(available: number): number {
+  return Math.min(RAIL_WIDTH * RAIL_LENGTH_FACTOR, Math.max(0, available));
+}

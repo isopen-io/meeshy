@@ -1,4 +1,5 @@
 import type { QueryClient } from '@tanstack/react-query';
+import * as postsEndpoints from '@meeshy/shared/api/endpoints/posts';
 
 import {
   STORY_DEFAULT_REACTION,
@@ -18,7 +19,7 @@ import { STORY_FEED_QUERY_KEY, storyPostQueryKey, type StoryFeedPost } from './s
 /**
  * **RÉAGIR À UNE STORY** — le PORT, au-dessus de la loi pure
  * (`lib/stories/reaction.ts`). MÊME route que « Aimer » au Flux :
- * `POST|DELETE /api/v1/posts/:postId/like`
+ * `POST|DELETE posts.byPostIdLike`
  * (`services/gateway/src/routes/posts/interactions.ts:86,265`, `requiredAuth`
  * + `registeredUser` obligatoire), corps `{ emoji }`, idempotence par
  * `X-Client-Mutation-Id` (`middleware/clientMutationId.ts`, `cmid_<uuid>`) —
@@ -109,7 +110,7 @@ function sendStoryReaction(
   }
   return deps.transport.request<unknown>({
     method: params.plan === 'add' ? 'POST' : 'DELETE',
-    path: `/api/v1/posts/${encodeURIComponent(params.storyId)}/like`,
+    path: postsEndpoints.byPostIdLike(params.storyId),
     body: { emoji: params.emoji },
     headers: { 'X-Client-Mutation-Id': newClientMutationId() },
   });

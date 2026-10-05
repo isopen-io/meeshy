@@ -1,6 +1,7 @@
 import SwiftUI
 import Combine
 import MeeshySDK
+import MeeshyUI
 
 struct CreateTrackingLinkView: View {
     let onCreate: (TrackingLink) -> Void
@@ -26,17 +27,17 @@ struct CreateTrackingLinkView: View {
             ZStack {
                 theme.backgroundGradient.ignoresSafeArea()
                 ScrollView {
-                    VStack(spacing: 20) {
+                    VStack(spacing: MeeshySpacing.xl) {
                         formSection
                         utmSection
                         tokenSection
                         if let error = errorMessage {
                             Text(error).font(.footnote).foregroundColor(MeeshyColors.error)
-                                .padding(.horizontal, 20)
+                                .padding(.horizontal, MeeshySpacing.xl)
                         }
                         createButton
                     }
-                    .padding(.top, 20).padding(.bottom, 40)
+                    .padding(.top, MeeshySpacing.xl).padding(.bottom, 40)
                 }
             }
             .navigationTitle(String(localized: "tracking.link.create.title", defaultValue: "Nouveau lien de tracking", bundle: .main))
@@ -50,7 +51,7 @@ struct CreateTrackingLinkView: View {
     }
 
     private var formSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             formField(
                 String(localized: "tracking.link.create.field.url", defaultValue: "URL de destination *", bundle: .main),
                 placeholder: "https://meeshy.me",
@@ -61,11 +62,11 @@ struct CreateTrackingLinkView: View {
                 .keyboardType(.URL).textInputAutocapitalization(.never)
             formField(String(localized: "tracking.link.create.field.name", defaultValue: "Nom interne", bundle: .main), placeholder: String(localized: "tracking.link.create.field.name.placeholder", defaultValue: "ex. : Campagne Instagram", bundle: .main), text: $name)
         }
-        .padding(.horizontal, 20)
+        .padding(.horizontal, MeeshySpacing.xl)
     }
 
     private var utmSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             Button {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                     showUtmFields.toggle()
@@ -80,31 +81,31 @@ struct CreateTrackingLinkView: View {
                         .accessibilityHidden(true)
                 }
             }
-            .padding(.horizontal, 20)
+            .padding(.horizontal, MeeshySpacing.xl)
             .accessibilityHint(String(localized: "a11y.tracking.utm.hint", defaultValue: "Affiche ou masque les paramètres UTM", bundle: .main))
             .accessibilityValue(showUtmFields
                 ? String(localized: "accessibility.section_expanded", defaultValue: "Développée", bundle: .main)
                 : String(localized: "accessibility.section_collapsed", defaultValue: "Réduite", bundle: .main))
 
             if showUtmFields {
-                VStack(spacing: 10) {
+                VStack(spacing: MeeshySpacing.smPlus) {
                     formField(String(localized: "tracking.link.create.utm.campaign", defaultValue: "Campagne", bundle: .main), placeholder: String(localized: "tracking.link.create.utm.campaign.placeholder", defaultValue: "ex. : summer_sale", bundle: .main), text: $campaign)
                     formField(String(localized: "tracking.link.create.utm.source", defaultValue: "Source", bundle: .main), placeholder: String(localized: "tracking.link.create.utm.source.placeholder", defaultValue: "ex. : instagram, email", bundle: .main), text: $source)
                     formField(String(localized: "tracking.link.create.utm.medium", defaultValue: "Moyen", bundle: .main), placeholder: String(localized: "tracking.link.create.utm.medium.placeholder", defaultValue: "ex. : social, cpc, email", bundle: .main), text: $medium)
                 }
-                .padding(.horizontal, 20)
+                .padding(.horizontal, MeeshySpacing.xl)
                 .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
     }
 
     private var tokenSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             Text(String(localized: "tracking.link.create.token.title", defaultValue: "Token personnalisé (optionnel)", bundle: .main))
                 .font(.footnote.weight(.medium)).foregroundColor(theme.textSecondary)
             TextField(String(localized: "tracking.link.create.token.placeholder", defaultValue: "ex. : summer24 (6 caractères min.)", bundle: .main), text: $customToken)
-                .padding(12)
-                .background(RoundedRectangle(cornerRadius: 10)
+                .padding(MeeshySpacing.md)
+                .background(RoundedRectangle(cornerRadius: MeeshyRadius.sm)
                     .fill(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.04)))
                 .foregroundColor(theme.textPrimary)
                 .textInputAutocapitalization(.never)
@@ -112,7 +113,7 @@ struct CreateTrackingLinkView: View {
             Text(String(localized: "tracking.link.create.token.help", defaultValue: "Laissez vide pour un token aléatoire", bundle: .main))
                 .font(.caption2).foregroundColor(theme.textMuted)
         }
-        .padding(.horizontal, 20)
+        .padding(.horizontal, MeeshySpacing.xl)
     }
 
     private var createButton: some View {
@@ -123,7 +124,7 @@ struct CreateTrackingLinkView: View {
                 Text(String(localized: "tracking.link.create.button", defaultValue: "Créer le lien", bundle: .main)).font(.callout.weight(.bold)).foregroundColor(.white)
             }
         }
-        .frame(maxWidth: .infinity).padding(.vertical, 14)
+        .frame(maxWidth: .infinity).padding(.vertical, MeeshySpacing.mdPlus)
         .background(
             Capsule().fill(LinearGradient(
                 colors: [MeeshyColors.trackingAccent, MeeshyColors.brandPrimary],
@@ -131,7 +132,7 @@ struct CreateTrackingLinkView: View {
             ))
         )
         .disabled(!isValid || isCreating).opacity(!isValid || isCreating ? 0.5 : 1)
-        .padding(.horizontal, 20)
+        .padding(.horizontal, MeeshySpacing.xl)
         .accessibilityLabel(String(localized: "tracking.link.create.button", defaultValue: "Créer le lien", bundle: .main))
         .accessibilityValue(isCreating
             ? String(localized: "a11y.tracking.create.in-progress", defaultValue: "Création en cours", bundle: .main)
@@ -143,13 +144,13 @@ struct CreateTrackingLinkView: View {
 
     @ViewBuilder
     private func formField(_ label: String, placeholder: String, text: Binding<String>, accessibilityLabel: String? = nil, hint: String? = nil) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
             Text(label).font(.caption.weight(.medium))
                 .foregroundColor(theme.textSecondary)
                 .accessibilityHidden(true)
             TextField(placeholder, text: text)
-                .padding(12)
-                .background(RoundedRectangle(cornerRadius: 10)
+                .padding(MeeshySpacing.md)
+                .background(RoundedRectangle(cornerRadius: MeeshyRadius.sm)
                     .fill(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.04)))
                 .foregroundColor(theme.textPrimary)
                 .accessibilityLabel(accessibilityLabel ?? label)

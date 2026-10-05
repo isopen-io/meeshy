@@ -4,6 +4,7 @@ import {
   initialScenePlayback,
   scenePlaybackEnded,
   scenePlaybackPaused,
+  scenePlaybackScrubbed,
   scenePlaybackShowsPlay,
   scenePlaybackToggled,
   scenePlays,
@@ -60,5 +61,14 @@ describe('scenePlaybackToggled — une scène TERMINÉE se REJOUE, elle ne se «
     const state = initialScenePlayback(false);
     scenePlaybackToggled(scenePlaybackEnded(state));
     expect(state).toEqual({ paused: false, ended: false, run: 0 });
+  });
+
+  test('#8598 — parcourir une scène TERMINÉE la rend jouable depuis le temps pointé, sans la remonter ni défaire une pause', () => {
+    const ended = scenePlaybackEnded(initialScenePlayback(false));
+    const scrubbed = scenePlaybackScrubbed(ended);
+    expect(scrubbed).toEqual({ paused: false, ended: false, run: 0 });
+    expect(scenePlays({ state: scrubbed, isActive: true, moves: true })).toBe(true);
+    const pausedAndEnded = scenePlaybackEnded(scenePlaybackPaused(initialScenePlayback(false)));
+    expect(scenePlaybackScrubbed(pausedAndEnded)).toEqual({ paused: true, ended: false, run: 0 });
   });
 });

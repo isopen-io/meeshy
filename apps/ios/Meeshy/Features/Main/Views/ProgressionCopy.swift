@@ -36,6 +36,8 @@ enum ProgressionCopy {
             return String(localized: "progression.axis.conversation.public", defaultValue: "Conversations publiques", bundle: .main)
         case .communityConversation:
             return String(localized: "progression.axis.conversation.community", defaultValue: "Conversations de communauté", bundle: .main)
+        case .groupCreated:
+            return String(localized: "progression.axis.conversation.group_created", defaultValue: "Groupes créés", bundle: .main)
         case .sticker:
             return String(localized: "progression.axis.tool.sticker", defaultValue: "Stickers posés", bundle: .main)
         case .inAppEdit:
@@ -50,31 +52,17 @@ enum ProgressionCopy {
             return String(localized: "progression.axis.social.friendship", defaultValue: "Amitiés nouées", bundle: .main)
         case .directPublish:
             return String(localized: "progression.axis.tool.direct_publish", defaultValue: "Publications directes", bundle: .main)
+        case .reaction:
+            return String(localized: "progression.axis.tool.reaction", defaultValue: "Réactions", bundle: .main)
+        case .attachment:
+            return String(localized: "progression.axis.tool.attachment", defaultValue: "Pièces jointes", bundle: .main)
         }
     }
 
     /// SF Symbol — le même vocabulaire iconographique que le reste de l'app
     /// (`NotificationModels.systemIcon`, `UserStatsView`).
     static func symbol(for axis: EngagementAxisKey) -> String {
-        switch axis {
-        case .audioMessage: return "mic.fill"
-        case .textMessage: return "text.bubble.fill"
-        case .post: return "doc.text.fill"
-        case .story: return "camera.fill"
-        case .reel: return "film.fill"
-        case .audioComment: return "waveform"
-        case .textComment: return "text.quote"
-        case .privateConversation: return "person.fill"
-        case .publicConversation: return "globe"
-        case .communityConversation: return "person.3.fill"
-        case .sticker: return "face.smiling.fill"
-        case .inAppEdit: return "wand.and.stars"
-        case .trackedLink: return "link.badge.plus"
-        case .share: return "square.and.arrow.up.fill"
-        case .inviteJoined: return "person.badge.plus.fill"
-        case .friendship: return "person.2.fill"
-        case .directPublish: return "paperplane.fill"
-        }
+        axis.symbolName
     }
 
     static func title(for family: EngagementAxisFamily) -> String {

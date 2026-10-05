@@ -197,15 +197,18 @@ final class FocalRealtimeMatrixTests: XCTestCase {
         )
     }
 
-    /// Arbitrage user 2026-08-18 : le chip 🌐 et la bande de drapeaux sont
-    /// RETIRÉS de la rangée — le signal multi-langue est le drapeau de la
-    /// langue D'ORIGINE (`LanguageData.info(for:)`), affiché seulement quand
-    /// plusieurs versions existent ; le menu d'appui long porte l'exploration.
+    /// Arbitrage user 2026-08-18 : le chip 🌐 est RETIRÉ de la rangée. Le
+    /// signal multi-langue est la bande `plainLanguageFlags` (directive
+    /// 2026-08-24), bâtie depuis la langue D'ORIGINE (`originalLangCode`) et
+    /// montée seulement quand plusieurs versions existent ; le menu d'appui
+    /// long porte l'exploration. L'ancien toggle unique `originalLanguageFlag`,
+    /// jamais monté depuis la bande, a quitté `FocalRow` le 2026-09-25.
     func test_F06_originalLanguageFlagSignalsMultilingual_inFocalRow() throws {
         let code = try source(rowRoot().appendingPathComponent("FocalRow.swift"))
         XCTAssertTrue(
-            code.contains("LanguageData.info(for: translation.originalLangCode"),
-            "F06 : le drapeau de la langue d'origine doit signaler le message multilingue — sans lui, aucune trace visuelle du Prisme sur le Fil"
+            code.contains("plainLanguageFlags(translation)")
+                && code.contains("originalLangCode: translation.originalLangCode"),
+            "F06 : la bande de drapeaux doit être bâtie depuis la langue d'origine et montée sur la rangée — sans elle, aucune trace visuelle du Prisme sur le Fil"
         )
         XCTAssertFalse(
             code.lowercased().contains("systemname: \"globe\""),

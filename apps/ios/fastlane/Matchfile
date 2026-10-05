@@ -8,11 +8,16 @@ type("appstore")
 
 # me.meeshy.app.share-extension ajouté 2026-07-28 en même temps que le
 # ré-embarquement du target MeeshyShareExtension dans l'app (project.yml).
+# me.meeshy.app.broadcast (#8063, App ID 67U4MGRB8C) et
+# me.meeshy.app.notification-content (#8859, App ID T75359QHNV) ajoutés
+# 2026-10-01 (#8953) : deux extensions embarquées, APP_GROUPS au portail.
 app_identifier([
   "me.meeshy.app",
   "me.meeshy.app.notification-service",
+  "me.meeshy.app.notification-content",
   "me.meeshy.app.widgets",
-  "me.meeshy.app.share-extension"
+  "me.meeshy.app.share-extension",
+  "me.meeshy.app.broadcast"
 ])
 
 # Team ID pinned to D72UK7R5RE since 2026-07-28 — see the header block in

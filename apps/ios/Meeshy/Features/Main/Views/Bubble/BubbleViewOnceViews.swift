@@ -18,10 +18,12 @@ struct BubbleViewOnceSealedView: View, Equatable {
     let isDark: Bool
     let protection: MessageProtectionDescriptor
     let timeString: String
+    /// Ce que fait le toucher, dit à VoiceOver (#8009).
+    var hint: String? = nil
     let onOpen: () -> Void
 
     static func == (lhs: BubbleViewOnceSealedView, rhs: BubbleViewOnceSealedView) -> Bool {
-        lhs.state == rhs.state
+        lhs.state == rhs.state && lhs.hint == rhs.hint
             && lhs.isMe == rhs.isMe
             && lhs.isDark == rhs.isDark
             && lhs.protection == rhs.protection
@@ -29,17 +31,17 @@ struct BubbleViewOnceSealedView: View, Equatable {
     }
 
     var body: some View {
-        HStack(alignment: .bottom, spacing: 8) {
+        HStack(alignment: .bottom, spacing: MeeshySpacing.sm) {
             if isMe { Spacer(minLength: 50) }
 
-            VStack(alignment: isMe ? .trailing : .leading, spacing: 4) {
+            VStack(alignment: isMe ? .trailing : .leading, spacing: MeeshySpacing.xs) {
                 MessageProtectionChrome(descriptor: protection.withoutViewOnce, isDark: isDark)
                     .equatable()
-                HStack(alignment: .center, spacing: 6) {
-                    ViewOnceChip(state: state, isDark: isDark, onOpen: onOpen)
+                HStack(alignment: .center, spacing: MeeshySpacing.xsPlus) {
+                    ViewOnceChip(state: state, isDark: isDark, hint: hint, onOpen: onOpen)
                         .equatable()
                     Text(timeString)
-                        .font(MeeshyFont.relative(11, weight: .regular))
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .regular))
                         .foregroundColor(ThemeManager.shared.textMuted)
                         .accessibilityHidden(true)
                 }
@@ -48,6 +50,6 @@ struct BubbleViewOnceSealedView: View, Equatable {
             if !isMe { Spacer(minLength: 50) }
         }
         .padding(.horizontal, MeeshySpacing.lg)
-        .padding(.vertical, 2)
+        .padding(.vertical, MeeshySpacing.xxs)
     }
 }

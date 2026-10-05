@@ -3,6 +3,7 @@ import type { PostVisibility } from '@meeshy/shared/types/post';
 import type { StorageLike } from '@/lib/send/draft-store';
 
 import { isRememberableAudience, STUDIO_AUDIENCES, type ChoosableAudience } from './publication-audience';
+import { PUBLICATION_KINDS, type PublicationKind } from './publication-kind';
 import type { StudioMediaKind } from './story-document';
 
 /**
@@ -37,19 +38,30 @@ export type StudioDraftAssetRef = {
   readonly durationMs?: number;
 };
 
-/** Une LÉGENDE de média conservée avec sa référence (#6944). */
-type StudioDraftCaption = { readonly caption?: string };
+/** Une LÉGENDE de média conservée avec sa référence (#6944), et son FILTRE
+ * (lot 7) — LÂCHE, normalisé à la relecture (`studio.ts`). */
+type StudioDraftCaption = { readonly caption?: string; readonly filter?: unknown };
 
 /** Ce qu'UNE page porte — voir `StudioPage` (`studio-page.ts`) côté vivant. */
 export type StudioPageSnapshot = {
   readonly id: string;
   readonly texts: readonly StudioTextLayerSnapshot[];
   readonly background?: StudioDraftAssetRef &
-    StudioDraftCaption & { readonly mediaType: StudioMediaKind; readonly aspectRatio?: number };
+    StudioDraftCaption & {
+      readonly mediaType: StudioMediaKind;
+      readonly aspectRatio?: number;
+      /** LE CADRE (#8414) — LÂCHE, normalisé à la relecture (`studio.ts`). */
+      readonly frame?: unknown;
+    };
   /** LE CALQUE d'avant-plan et SA pose (#6943). */
   readonly overlay?: StudioDraftAssetRef &
-    StudioDraftCaption & { readonly mediaType: StudioMediaKind; readonly aspectRatio?: number; readonly pose?: unknown };
+    StudioDraftCaption & { readonly mediaType: StudioMediaKind; readonly aspectRatio?: number; readonly pose?: unknown; readonly timing?: unknown };
   readonly sound?: StudioDraftAssetRef & { readonly plane?: unknown };
+  /** LA DURÉE d'une scène animée (#8415) — LÂCHE, normalisée à la relecture. */
+  readonly duration?: unknown;
+  /** L'OUVERTURE et la FERMETURE (#8792) — LÂCHES, normalisées à la relecture. */
+  readonly opening?: unknown;
+  readonly closing?: unknown;
 };
 
 export type StudioDraftSnapshot = {
@@ -69,6 +81,14 @@ export type StudioDraftSnapshot = {
    * `undefined` tant que l'auteur n'a rien choisi pour CE brouillon.
    */
   readonly visibility?: PostVisibility;
+  /** LE TEXTE DU POST (#8413) — `Post.content`, absent tant que vide.
+   * Champ AJOUTÉ, optionnel : un client plus ancien l'ignore sans rien
+   * perdre d'autre, d'où l'absence de bump de `schema`. */
+  readonly postText?: string;
+  /** LE FORMAT de la création (#8849, jumelle de #8848 : l'instantané iOS
+   * porte le format) — rouverte, elle reprend story, post ou réel, quelle que
+   * soit l'entrée qui la rouvre. Champ AJOUTÉ, optionnel : pas de bump. */
+  readonly kind?: PublicationKind;
 };
 
 /** LA FORME PRÉCÉDENTE (#6900-#7683, sans `schema`) — UNE page implicite,
@@ -96,6 +116,7 @@ export type StudioTextLayerSnapshot = {
   readonly align?: unknown;
   readonly background?: unknown;
   readonly pose?: unknown;
+  readonly timing?: unknown;
 };
 
 const keyOf = (viewerId: string): string => `meeshy.draft.story.${viewerId}`;
@@ -146,7 +167,7 @@ function isPagesSnapshot(value: unknown): value is StudioDraftSnapshot {
   if (value.currentPage !== undefined && typeof value.currentPage !== 'string') return false;
   if (value.language !== undefined && typeof value.language !== 'string') return false;
   if (value.visibility !== undefined && !(STUDIO_AUDIENCES as readonly unknown[]).includes(value.visibility)) return false;
-  return true;
+  return value.postText === undefined || typeof value.postText === 'string';
 }
 
 function isLegacySnapshot(value: unknown): value is LegacyStudioDraftSnapshot {
@@ -177,11 +198,18 @@ function migrateLegacySnapshot(legacy: LegacyStudioDraftSnapshot): StudioDraftSn
   };
 }
 
+/** Un format INCONNU (écrit par un client plus récent, donnée altérée) ne
+ * coûte pas la création : elle est relue sans format, l'entrée décide. */
+function withKnownKind(snapshot: StudioDraftSnapshot): StudioDraftSnapshot {
+  const { kind, ...rest } = snapshot;
+  return kind === undefined || PUBLICATION_KINDS.includes(kind) ? snapshot : rest;
+}
+
 /** LE SEUL SITE qui accepte du JSON quelconque — les deux formes en entrée,
  * UNE seule en sortie (`schema: 2`). Un `schema` futur (≥ 3) ⇒ `null` : un
  * client ancien ne relit pas ce qu'il ne comprend pas. */
 function parseSnapshot(value: unknown): StudioDraftSnapshot | null {
-  if (isPagesSnapshot(value)) return value;
+  if (isPagesSnapshot(value)) return withKnownKind(value);
   if (isLegacySnapshot(value)) return migrateLegacySnapshot(value);
   return null;
 }

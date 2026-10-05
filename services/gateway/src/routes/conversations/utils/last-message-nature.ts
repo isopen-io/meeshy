@@ -1,4 +1,5 @@
 import { resolveLastMessageSummaryKind } from '@meeshy/shared/utils/last-message-protection';
+import { hasPerReaderEphemeralDeadline } from '@meeshy/shared/utils/ephemeral-countdown';
 import { parseJoinNotice, type JoinNoticeMetadata } from '@meeshy/shared/utils/join-notice';
 import { arrivalsNoticeLine, parseArrivalsNotice } from '@meeshy/shared/utils/arrivals-notice';
 import { parseConversationNotice, type ConversationNotice } from '@meeshy/shared/utils/conversation-notice';
@@ -25,6 +26,8 @@ export interface PreviewProtectionFlags {
   readonly isEncrypted?: boolean | null;
   readonly expiresAt?: Date | string | null;
   readonly ephemeralDuration?: number | null;
+  /** #8634 — porte la flamme-œil (`EPHEMERAL_AFTER_READ`), qu'aucune colonne ne dit. */
+  readonly effectFlags?: number | null;
   /**
    * #7451 — l'échéance SERVIE à ce lecteur pour un éphémère (`D(lecteur)`, ou la
    * plus tardive pour l'expéditeur — `servedEphemeralExpiresAt`). Seule une
@@ -32,6 +35,11 @@ export interface PreviewProtectionFlags {
    * room l'ignore et laisse le client décompter depuis sa réception.
    */
   readonly servedExpiresAt?: Date | null;
+  /**
+   * #8630 — la mort, pour ce lecteur, de ce que le message CITE : une réponse
+   * meurt avec ce qu'elle cite, éphémère ou non.
+   */
+  readonly quotedDeathAt?: Date | null;
 }
 
 /**
@@ -42,11 +50,15 @@ export interface PreviewProtectionFlags {
  */
 export const PREVIEW_ATTACHMENT_SUMMARY_LIMIT = 50;
 
-const WITHHOLDING: ReadonlySet<PreviewProtection> = new Set(['expired', 'view-once', 'blurred', 'encrypted']);
+const WITHHOLDING: ReadonlySet<PreviewProtection> = new Set(['expired', 'view-once', 'blurred', 'encrypted', 'after-read']);
 
 /**
  * La protection qui qualifie l'aperçu, dans l'ordre du cumul d'effets validé
- * (#7546) : expiré > vue unique > flou > chiffré > éphémère.
+ * (#7546) : expiré > vue unique > flou > chiffré > flamme-œil > éphémère.
+ *
+ * La flamme-œil (#8634) RETIENT comme une vue unique : son lecteur la consomme
+ * en la VOYANT dans le fil, et la liste la lui donnait à lire sans jamais la
+ * consommer.
  *
  * La péremption se juge par `resolveLastMessageSummaryKind`, la loi partagée
  * avec iOS, `ephemeralDuration` COMPRIS : pour un éphémère, `expiresAt` est
@@ -64,6 +76,7 @@ export function resolvePreviewProtection(
       isViewOnce: flags.isViewOnce,
       expiresAt: flags.expiresAt,
       ephemeralDuration: flags.ephemeralDuration,
+      effectFlags: flags.effectFlags,
     },
     now,
   );
@@ -71,13 +84,14 @@ export function resolvePreviewProtection(
   if (flags.isViewOnce === true) return 'view-once';
   if (flags.isBlurred === true) return 'blurred';
   if (flags.isEncrypted === true) return 'encrypted';
+  if (kind === 'afterRead') return 'after-read';
   if (kind === 'ephemeralActive') return 'ephemeral';
   return null;
 }
 
 function readerEphemeralExpired(flags: PreviewProtectionFlags, now: Date): boolean {
-  const isEphemeral = typeof flags.ephemeralDuration === 'number' && flags.ephemeralDuration > 0;
-  return isEphemeral && flags.servedExpiresAt != null && flags.servedExpiresAt.getTime() <= now.getTime();
+  if (flags.quotedDeathAt != null && flags.quotedDeathAt.getTime() <= now.getTime()) return true;
+  return hasPerReaderEphemeralDeadline(flags) && flags.servedExpiresAt != null && flags.servedExpiresAt.getTime() <= now.getTime();
 }
 
 /** `true` quand ni le texte, ni les traductions, ni les pièces jointes ne doivent partir. */

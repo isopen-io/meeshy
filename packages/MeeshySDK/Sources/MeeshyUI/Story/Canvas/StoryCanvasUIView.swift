@@ -123,6 +123,8 @@ public final class StoryCanvasUIView: UIView {
     /// Transport timeline en lecture pendant la preview : bascule la
     /// stratégie vidéo entre seek-en-pause (scrub) et lecture muette calée.
     var timelinePreviewPlaying: Bool = false
+    /// La répétition des transitions en composition (#8792) — `nil` au repos.
+    var transitionRehearsal: StoryCanvasTransitionRehearsalRun?
 
     /// Corner radius (in this view's own coordinate space) applied to the
     /// backing layer so the rounded « card » clips the actual CALayer story
@@ -301,6 +303,21 @@ public final class StoryCanvasUIView: UIView {
     /// (en Post : une slide du carrousel). Non câblée, l'action n'est pas
     /// offerte : le SDK ne fabrique pas un geste sans destinataire.
     public var onItemLeftScene: ((String, CanvasItemKind) -> Void)?
+    /// **« Rogner » dans l'appui long** (#8370, lot 6) — la vidéo ou le son
+    /// choisi s'ouvre sur ses bornes chez l'hôte. Le rail des contrôleurs qui
+    /// portait ce geste est parti (directive porteur 2026-09-27 : « faire
+    /// apparaître les actions possibles au long press ») ; non câblée,
+    /// l'action n'est pas offerte.
+    public var onItemTrimRequested: ((String, CanvasItemKind) -> Void)?
+    /// **L'hôte PEINT lui-même le menu d'appui long** (#8717). Câblée, elle
+    /// reçoit l'objet, sa famille et le point du doigt — NORMALISÉ (0…1) sur
+    /// la carte, car le canvas peut être projeté à une autre échelle que
+    /// l'écran — et le menu système n'est pas présenté. Non câblée, le canvas
+    /// garde son `UIMenu` : les autres hôtes ne changent pas.
+    public var onItemMenuRequested: ((String, CanvasItemKind, CGPoint) -> Void)?
+    /// **Un média de premier plan devient le fond** (#8716) — l'hôte décide ce
+    /// que devient l'ancien. Non câblée, l'action n'est pas offerte.
+    public var onItemMadeBackground: ((String, CanvasItemKind) -> Void)?
 
     /// Called after the context-menu "Dupliquer" action creates a copy of an
     /// element. Parent uses this to mirror viewModel-owned ephemeral state
@@ -742,6 +759,10 @@ public final class StoryCanvasUIView: UIView {
     var inlineEditor: StoryInlineTextEditor?
     /// Id du texte en cours d'édition en place (nil hors édition).
     public internal(set) var inlineEditingTextId: String?
+    /// Voir `StoryCanvasUIView+InlineEditYield.swift`.
+    public var inlineEditYieldsToManipulation = false
+    public internal(set) var suspendedInlineEditId: String?
+    var parkedInlineEditor: StoryInlineTextEditor?
     /// Notifié à chaque frappe : (textId, nouvelle chaîne).
     public var onInlineTextChanged: ((String, String) -> Void)?
     /// Notifié quand l'édition se termine (textId).
@@ -1021,6 +1042,13 @@ public final class StoryCanvasUIView: UIView {
     /// stops as a unit (the « long-press = stop comme une vidéo »
     /// requirement).
     var isPlaybackPaused: Bool = false
+    /// Les deux causes dont `isPlaybackPaused` est la somme : la pause du
+    /// viewer (`setPaused`) et l'interruption de l'hôte (`PlaybackInterruption`,
+    /// #8725). Séparées pour que la fin d'un appel ne relance jamais une story
+    /// que l'utilisateur avait mise en pause.
+    var isPlaybackRequestedPaused: Bool = false
+    var isPlaybackInterrupted: Bool = false
+    nonisolated(unsafe) var playbackInterruptionCancellable: AnyCancellable?
 
     // MARK: - Playback health (unified timeline)
 

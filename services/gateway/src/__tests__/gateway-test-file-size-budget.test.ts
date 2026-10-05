@@ -184,7 +184,6 @@ const DETTE_HERITEE: Readonly<Record<string, number>> = {
   '__tests__/unit/routes/conversation-sharing.test.ts': 1171,
   '__tests__/unit/routes/admin/admin-routes-group1.test.ts': 1255,
   '__tests__/unit/routes/users/profile.test.ts': 1255,
-  '__tests__/unit/routes/links-messages.test.ts': 1253,
   '__tests__/unit/routes/reactions-routes.test.ts': 1250,
   '__tests__/unit/services/messageNotificationFanOut.test.ts': 1234,
   '__tests__/unit/services/UploadProcessor.test.ts': 1231,

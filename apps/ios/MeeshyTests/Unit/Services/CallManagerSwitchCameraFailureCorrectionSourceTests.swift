@@ -48,7 +48,7 @@ final class CallManagerSwitchCameraFailureCorrectionSourceTests: XCTestCase {
 
     func test_callManager_switchCamera_revertsMirroringFlagOnFailure() {
         guard let fn = body(
-            source(for: "CallManager.swift"),
+            ((try? AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")) ?? ""),
             from: "func switchCamera() {",
             to: "func refreshAvailableCameras()"
         ) else { return }

@@ -1,7 +1,7 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
+import { threadCollectionCalls } from './thread-collection-calls';
 
 // ─── Module mocks (must come before all imports — jest hoisting) ──────────────
-
 // Mocked fn refs declared at module scope (hoisted correctly)
 const mockGenerateDefaultConversationTitle = jest.fn<any>();
 const mockGetUnreadCountsForUser = jest.fn<any>();
@@ -27,9 +27,8 @@ const mockResolveConversationId = jest.fn<any>();
 jest.mock('@meeshy/shared/utils/conversation-helpers', () => ({
   ...(jest.requireActual('@meeshy/shared/utils/conversation-helpers') as object),
   generateDefaultConversationTitle: (...args: any[]) => mockGenerateDefaultConversationTitle(...args),
-  // Résolu dès que l'appelant porte un `registeredUser` : sans le double, tout
-  // test qui donne un rôle plateforme au lecteur tombe dans le `catch` de la
-  // route et se lit comme un échec de la règle testée, pas du harnais.
+  // Sans ce double, un lecteur à rôle plateforme (`registeredUser`) tombe dans
+  // le `catch` de la route : un échec du harnais, pas de la règle testée.
   resolveUserLanguagesOrdered: () => ['fr'],
 }));
 
@@ -61,9 +60,9 @@ jest.mock('../../../utils/logger-enhanced', () => ({
   },
 }));
 
-jest.mock('../../../routes/conversations/utils/access-control', () => ({
-  canAccessConversation: (...args: any[]) => mockCanAccessConversation(...args),
-}));
+jest.mock('../../../routes/conversations/utils/access-control', () => (jest.requireActual('../../helpers/acces-conversation-double') as any)
+  .doubleAccesConversation(jest.requireActual('../../../routes/conversations/utils/access-control') as Record<string, unknown>,
+    (...args: any[]) => mockCanAccessConversation(...args)));
 
 jest.mock('../../../utils/conversation-id-cache', () => ({
   resolveConversationId: (...args: any[]) => mockResolveConversationId(...args),
@@ -1127,15 +1126,15 @@ describe('registerThreadsRoutes — GET /conversations/:id/threads/:messageId', 
     expect(mockCanAccessConversation).not.toHaveBeenCalled();
   });
 
-  // ── canAccessConversation returns false → 403 ────────────────────────────
+  // ── non-membre → le MÊME 404 qu'une conversation inexistante (#8116) ─────
 
-  it('returns 403 when user does not have access', async () => {
+  it('returns the same 404 as an unknown conversation when user does not have access', async () => {
     const { prisma, route, reply } = setup();
     mockCanAccessConversation.mockResolvedValue(false);
 
     await route.handler(makeThreadRequest(VALID_CONV_ID, VALID_MSG_ID), reply);
 
-    expect(mockSendForbidden).toHaveBeenCalledWith(reply, 'You do not have access to this conversation');
+    expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found');
     expect(prisma.message.findFirst).not.toHaveBeenCalled();
   });
 
@@ -1226,7 +1225,7 @@ describe('registerThreadsRoutes — GET /conversations/:id/threads/:messageId', 
     await route.handler(makeThreadRequest(VALID_CONV_ID, VALID_MSG_ID), reply);
 
     // findMany called twice: depth 0 + depth 1 (empty)
-    expect(prisma.message.findMany).toHaveBeenCalledTimes(2);
+    expect(threadCollectionCalls(prisma)).toBe(2);
     const result = (mockSendSuccess.mock.calls[0] as any[])[1];
     expect(result.replies).toHaveLength(1);
   });
@@ -1270,7 +1269,7 @@ describe('registerThreadsRoutes — GET /conversations/:id/threads/:messageId', 
     await route.handler(makeThreadRequest(VALID_CONV_ID, VALID_MSG_ID), reply);
 
     // Only one findMany call (first batch saturates limit)
-    expect(prisma.message.findMany).toHaveBeenCalledTimes(1);
+    expect(threadCollectionCalls(prisma)).toBe(1);
     const result = (mockSendSuccess.mock.calls[0] as any[])[1];
     expect(result.replies).toHaveLength(200);
     expect(result.totalCount).toBe(200);
@@ -1323,7 +1322,7 @@ describe('registerThreadsRoutes — GET /conversations/:id/threads/:messageId', 
     await route.handler(makeThreadRequest(VALID_CONV_ID, VALID_MSG_ID), reply);
 
     // MAX_DEPTH = 10, so findMany is called exactly 10 times
-    expect(prisma.message.findMany).toHaveBeenCalledTimes(10);
+    expect(threadCollectionCalls(prisma)).toBe(10);
     const result = (mockSendSuccess.mock.calls[0] as any[])[1];
     expect(result.replies).toHaveLength(10);
   });
@@ -1489,7 +1488,7 @@ describe('registerThreadsRoutes — GET /conversations/:id/threads/:messageId', 
 
     await route.handler(makeThreadRequest(VALID_CONV_ID, VALID_MSG_ID), reply);
 
-    expect(prisma.message.findMany).toHaveBeenCalledTimes(2);
+    expect(threadCollectionCalls(prisma)).toBe(2);
     const result = (mockSendSuccess.mock.calls[0] as any[])[1];
     expect(result.replies).toHaveLength(1);
   });

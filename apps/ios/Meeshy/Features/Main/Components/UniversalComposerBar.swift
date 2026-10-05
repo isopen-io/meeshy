@@ -42,6 +42,10 @@ struct UniversalComposerBar: View {
     /// Called when the composer collapses back to minimized state
     var onCollapse: (() -> Void)? = nil
 
+    /// **Le repli que l'hôte offre, posé DANS la plaque** (#8642) — au bout de
+    /// la rangée d'outils, angle intérieur haut-droit. `nil` = aucun repli.
+    var foldControl: ComposerFoldControl? = nil
+
     /// Called when clipboard content exceeds 2000 chars (creates a clipboard_content attachment)
     var onClipboardContent: ((ClipboardContent) -> Void)? = nil
 
@@ -177,6 +181,10 @@ struct UniversalComposerBar: View {
     var onPhotoLibrary: (() -> Void)? = nil
     var onCamera: (() -> Void)? = nil
     var onFilePicker: (() -> Void)? = nil
+    /// Tuile « Contact » (#8101) : l'hôte ouvre le sélecteur du carnet, et le
+    /// contact choisi part en pièce jointe vCard. Absente si l'hôte ne câble
+    /// rien — une tuile sans effet n'est jamais rendue (loi 4).
+    var onContactPicker: (() -> Void)? = nil
 
     /// Fired when the attachment carousel becomes visible. The keyboard, the
     /// attachment carousel and any host-owned emoji panel are mutually
@@ -227,8 +235,9 @@ struct UniversalComposerBar: View {
 
     // MARK: - Ephemeral mode
 
-    /// Binding to the ephemeral duration (nil = off). Parent owns the state.
-    var ephemeralDuration: Binding<EphemeralDuration?> = .constant(nil)
+    /// L'éphémère armé : la flamme-œil ou une durée (nil = désactivé, #8303).
+    /// Le parent possède l'état.
+    var ephemeralChoice: Binding<EphemeralChoice?> = .constant(nil)
 
     /// When true, the ephemeral toggle is hidden (e.g. in edit mode)
     var hideEphemeral: Bool = false
@@ -262,6 +271,10 @@ struct UniversalComposerBar: View {
     /// protections de MASQUAGE se gardent désormais pareil : masquées en
     /// édition, offertes partout ailleurs.
     var hideViewOnce: Bool = false
+
+    /// Ce que le message CITÉ impose à la réponse (#8557) : ces protections
+    /// s'affichent armées et VERROUILLÉES — la réponse peut ajouter le reste.
+    var imposedProtection: ReplyProtectionContagion.Imposed = .none
 
     // MARK: - Effects picker
 
@@ -305,12 +318,18 @@ struct UniversalComposerBar: View {
     /// La sélection du champ (`TextSelection`, iOS 18+), rangée en `Any?`
     /// parce qu'une propriété stockée ne peut pas être `@available` (#7849).
     @State var formatSelectionStorage: Any? = nil
+    /// Le texte pour lequel cette sélection a été posée — par la frappe, ou
+    /// par la mise en forme qui la replace elle-même (#8791).
+    @State var selectionText = ""
     /// La feuille des dix cadres à mots, ouverte par un appui long sur le
     /// bouton d'envoi (#5326, directive porteur 2026-09-25).
     @State var showTextStickerSheet = false
     /// La feuille des emojis, ouverte par un appui long sur un emoji rapide
     /// (#7931).
     @State var showQuickEmojiPicker = false
+    /// L'instant où la rangée des emojis rapides est revenue — la garde
+    /// d'arrivée (`QuickEmojiArrivalGuard`) s'y mesure (#7985).
+    @State var quickEmojiArrivedAt: Date?
 
     @FocusState var isFocused: Bool
     @State var sendBounce = false
@@ -324,7 +343,6 @@ struct UniversalComposerBar: View {
     /// complète — cf. `ComposerLibraryHandoff`. Non-`private` : muté depuis
     /// `UniversalComposerBar+Attachments.swift`.
     @State var isExpandingToLibrary = false
-    @State private var attachButtonPressed = false
     @State var currentLanguage: String = "fr"
 
     // Attachments
@@ -352,23 +370,33 @@ struct UniversalComposerBar: View {
     var theme: ThemeManager { ThemeManager.shared }
 
     @Environment(\.accessibilityReduceMotion) var reduceMotion
+    /// Le repli confié par l'ENVIRONNEMENT (#9122) — `foldableComment` le pose
+    /// sur un espace commentaire sans toucher à l'appel de la barre.
+    @Environment(\.composerFoldControl) var environmentFoldControl
+
+    var resolvedFoldControl: ComposerFoldControl? { foldControl ?? environmentFoldControl }
 
     /// Tracks the system keyboard so the attachment carousel can be sized to the
     /// exact space the keyboard last occupied (seamless keyboard <-> carousel swap).
     @StateObject private var keyboardObserver = KeyboardObserver()
 
     /// Height for the attachment carousel — matches the last known keyboard
-    /// height so swapping keyboard <-> carousel keeps the input row still, but
-    /// never shorter than the panel's own content (taller when the two-row
-    /// recent-media grid is shown, so it can't clip).
+    /// height so swapping keyboard <-> carousel keeps the input row still,
+    /// never shorter than the panel's own content, and never so tall that the
+    /// composer leaves the screen (`ComposerPanelHeightLaw`, #8869).
     var attachmentPanelHeight: CGFloat {
         let keyboard = max(keyboardObserver.lastKnownHeight, 260)
         // iPad / macOS gets a taller floor so the roomy recent-media grid has
-        // breathing room; iPhone (incl. landscape, also .regular width) keeps the
-        // compact two-row floor since its screen is short.
+        // breathing room; iPhone keeps a floor that shows two rows of the grid.
         let recentFloor: CGFloat = DeviceLayout.isPad ? 460 : 324
         let contentFloor: CGFloat = onRecentMediaSelected != nil ? recentFloor : 150
-        let resting = max(keyboard, contentFloor)
+        let resting = ComposerPanelHeightLaw.restingHeight(
+            lastKeyboardHeight: keyboard,
+            contentFloor: contentFloor,
+            windowHeight: DeviceLayout.windowSize.height,
+            safeAreaTop: DeviceLayout.safeAreaTop,
+            safeAreaBottom: DeviceLayout.safeAreaBottom
+        )
         guard isExpandingToLibrary else { return resting }
         return ComposerLibraryHandoff.expandedHeight(
             resting: resting,
@@ -391,10 +419,18 @@ struct UniversalComposerBar: View {
         if forceHideAttachment { return false }
         return forceShowAttachment || (mode?.showAttachment ?? showAttachment)
     }
-    private var resolvedShowLanguage: Bool { mode?.showLanguageSelector ?? showLanguageSelector }
     var resolvedHideEphemeral: Bool {
         if let mode { return !mode.showEphemeral }
         return hideEphemeral
+    }
+    /// Masquée en édition (`hideViewOnce`) ET partout où le mode ne l'offre
+    /// pas : en commentaire, le bouton écrivait dans une constante (#8431).
+    var resolvedHideViewOnce: Bool {
+        Self.hidesViewOnce(mode: mode, hideViewOnce: hideViewOnce)
+    }
+
+    static func hidesViewOnce(mode: ComposerMode?, hideViewOnce: Bool) -> Bool {
+        hideViewOnce || !(mode?.showViewOnce ?? true)
     }
     var resolvedHideEffects: Bool {
         if let mode { return !mode.showEffectsSheet }

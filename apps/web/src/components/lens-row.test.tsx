@@ -445,3 +445,41 @@ describe('LensRow après applyConversationUpdated (#6171, T6) — l’aperçu SE
     expect(sameRowProps(beforeProps, afterProps)).toBe(false);
   });
 });
+
+describe('LensRow — le pair a cette conversation OUVERTE (#8892)', () => {
+  const direct = () =>
+    conversation({
+      participants: [
+        { id: 'p1', userId: 'u-viewer' },
+        { id: 'p2', userId: 'u-amina', user: { id: 'u-amina', isOnline: true } },
+      ] as never,
+    });
+
+  test('la pastille du pair passe à la couleur primaire, même quand il écrit', () => {
+    const html = renderToStaticMarkup(<LensRow {...baseProps({ conversation: direct(), peerHere: true, typists: ['Amina Diallo'] })} />);
+    expect(html).toMatch(/data-presence="here"/);
+  });
+
+  test('sameRowProps distingue deux rangées qui ne diffèrent que par la présence du pair', () => {
+    const stable: Partial<LensRowProps> = { conversation: direct(), onRowAction: () => {} };
+    expect(sameRowProps(baseProps(stable), baseProps({ ...stable, peerHere: true }))).toBe(false);
+    expect(sameRowProps(baseProps({ ...stable, peerHere: false }), baseProps(stable))).toBe(true);
+  });
+});
+
+describe('la rangée d’un direct porte le mood du pair (#9065)', () => {
+  test('le mood du pair se peint sur l’avatar, cerné de vert quand il est en ligne', () => {
+    const html = renderToStaticMarkup(<LensRow {...baseProps({ peerMood: '😎' })} />);
+    expect(html).toContain('data-mood="😎"');
+  });
+
+  test('sans mood, aucun badge', () => {
+    expect(renderToStaticMarkup(<LensRow {...baseProps()} />)).not.toContain('data-mood');
+  });
+
+  test('un mood qui change re-rend la rangée', () => {
+    const props = baseProps();
+    expect(sameRowProps(props, { ...props, peerMood: '😎' })).toBe(false);
+    expect(sameRowProps({ ...props, peerMood: '😎' }, { ...props, peerMood: '😎' })).toBe(true);
+  });
+});

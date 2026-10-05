@@ -7,6 +7,7 @@ import type { ConversationsDeps } from '@/lib/api/conversations';
 import { offerLastMessage } from '@/lib/api/list-preview';
 import type { ApiFailure } from '@/lib/api/http';
 import { messagesQueryKey, sendMessage, upsertThreadMessage, type SendMessageBody } from '@/lib/api/messages';
+import { attachmentReplyOf } from './attachment-reply';
 import type { Message, Participant } from '@/lib/api/types';
 
 import { messageTypeOfPending, type PendingAttachment } from './attachments';
@@ -51,7 +52,7 @@ export type Draft = {
    * décoratifs, composée en champs `Message` par `localMessageOf`
    * (`protectionFieldsOf`, `compose-protection.ts`) UNE seule fois, à la
    * création : `retrySend` relit le MÊME `LocalMessage`, jamais recalculée
-   * (`expiresAt` ne doit JAMAIS reculer d'un renvoi à l'autre). `undefined`
+   * (la durée ne change JAMAIS d’un renvoi à l’autre). `undefined`
    * ⇒ aucune protection (comportement INCHANGÉ, tous les témoins historiques
    * de ce module continuent de passer sans cette clé).
    */
@@ -78,64 +79,6 @@ export type Draft = {
 };
 
 /**
- * LE DÉDOUBLONNAGE DU DOUBLE-TAP — miroir
- * `ConversationViewModel.swift:81` (`duplicateSendDebounce`, 0,6 s) : deux
- * envois du MÊME `(conversationId, content, replyToId)` sous 600 ms sont UN
- * seul envoi, jamais deux messages identiques partis en double. Une carte de
- * MODULE (comme `consumedViewOnceIds`, `api/fixtures.ts`) — la clé compose
- * la conversation pour qu'un même texte tapé dans DEUX fils distincts ne se
- * dédoublonne jamais entre eux.
- *
- * ELLE NE RETIENT RIEN AU-DELÀ DE SA FENÊTRE (revue-correction) : sa clé
- * porte le TEXTE ENTIER du message et sa valeur ne vaut que 600 ms — la
- * laisser croître garderait en mémoire, pour toute la session, chaque
- * message jamais écrit (dimension 3, « aucun cache non borné »). La purge se
- * fait à l'entrée de `performSend`, sur une carte qui reste par construction
- * minuscule : jamais un minuteur, jamais un second cycle de vie à tenir.
- */
-const DEBOUNCE_MS = 600;
-const lastAccepted = new Map<string, number>();
-
-/**
- * Le séparateur est U+0000, ÉCRIT EN ÉCHAPPEMENT et jamais en octet brut : un
- * seul NUL dans le fichier suffit à faire classer la source BINAIRE par git
- * (`git diff` rend « Bin 0 -> 9232 bytes », plus aucune revue possible) —
- * mesuré sur ce fichier même. La valeur produite est identique.
- *
- * LA SIGNATURE DES PIÈCES JOINTES (#5668) — `content` seul dédoublonnait déjà
- * deux ENVOIS DE TEXTE identiques ; un envoi de pièces PURES (`content`
- * toujours `''`) aurait sinon confondu deux photos DISTINCTES tapées à moins
- * de 600 ms d'écart. `name:size` suffit (jamais le `File` lui-même, non
- * sérialisable en clé) — deux fichiers homonymes de même poids restent une
- * collision acceptée, exactement la même tolérance que le texte (`content`
- * identique = même clé).
- */
-function attachmentsSignatureOf(attachments: readonly PendingAttachment[] | undefined): string {
-  return (attachments ?? []).map((a) => `${a.name}:${a.size}`).join('\u0000');
-}
-
-function debounceKeyOf(
-  conversationId: string,
-  content: string,
-  replyToId: string | undefined,
-  attachments: readonly PendingAttachment[] | undefined,
-): string {
-  return `${conversationId}\u0000${content}\u0000${replyToId ?? ''}\u0000${attachmentsSignatureOf(attachments)}`;
-}
-
-function pruneDebounce(nowMs: number): void {
-  for (const [key, at] of lastAccepted) {
-    if (nowMs - at >= DEBOUNCE_MS) lastAccepted.delete(key);
-  }
-}
-
-/** TÉMOIN SEUL — combien de clés la carte du débounce RETIENT (même
- * discipline que `resetSentMessagesForTests`, `api/fixtures.ts`). */
-export function debounceEntryCountForTests(): number {
-  return lastAccepted.size;
-}
-
-/**
  * `attachmentIds` REÇUS séparément du `message` (#5668) : ils viennent de la
  * PHASE D'UPLOAD de `attempt()` (ou d'une reprise qui les a déjà obtenus),
  * jamais de `message.attachments` — qui porte des `Attachment` LOCAUX
@@ -147,17 +90,17 @@ export function debounceEntryCountForTests(): number {
 /**
  * LA PROTECTION, RELUE depuis le message local plutôt que RECOMPOSÉE
  * (#6175) — `localMessageOf` a déjà posé `isBlurred`/`isViewOnce`/
- * `effectFlags`/`expiresAt` par `protectionFieldsOf` : ce corps relit ces
+ * `effectFlags`/`ephemeralDuration` par `protectionFieldsOf` : ce corps relit ces
  * MÊMES champs, jamais une seconde composition depuis `ComposeProtection` (un
  * seul site de vérité entre ce qui s'affiche et ce qui part). Chaque clé est
  * OMISE à sa valeur par défaut (`false`/`0`/absente) — même discipline que
  * `content`/`replyToId` ci-dessous, miroir `ConversationViewModel+Send.swift:428-437`
  * (« aucune clé à sa valeur par défaut »).
  */
-function protectionBodyOf(message: LocalMessage): Pick<SendMessageBody, 'isBlurred' | 'expiresAt' | 'effectFlags' | 'isViewOnce'> {
+function protectionBodyOf(message: LocalMessage): Pick<SendMessageBody, 'isBlurred' | 'ephemeralDuration' | 'effectFlags' | 'isViewOnce'> {
   return {
     ...(message.isBlurred ? { isBlurred: true } : {}),
-    ...(message.expiresAt === undefined ? {} : { expiresAt: message.expiresAt.toISOString() }),
+    ...(message.ephemeralDuration === undefined ? {} : { ephemeralDuration: message.ephemeralDuration }),
     ...(message.effectFlags ? { effectFlags: message.effectFlags } : {}),
     ...(message.isViewOnce ? { isViewOnce: true } : {}),
   };
@@ -165,6 +108,7 @@ function protectionBodyOf(message: LocalMessage): Pick<SendMessageBody, 'isBlurr
 
 function bodyOf(message: LocalMessage, attachmentIds: readonly string[]): SendMessageBody {
   const declared = declaredAttachmentType(message.messageType);
+  const namedPiece = attachmentReplyOf(message.replyTo);
   return {
     ...(message.content.trim().length > 0 ? { content: message.content } : {}),
     originalLanguage: message.originalLanguage,
@@ -172,6 +116,10 @@ function bodyOf(message: LocalMessage, attachmentIds: readonly string[]): SendMe
     ...(declared === undefined ? {} : { messageType: declared }),
     ...(attachmentIds.length > 0 ? { attachmentIds } : {}),
     ...(message.replyToId === undefined ? {} : { replyToId: message.replyToId }),
+    /* LA PIÈCE NOMMÉE (#6303) — relue sur le message CITÉ, comme la bande et la
+       bulle optimiste : la passerelle la range dans `metadata.attachmentReplyTo`
+       et la ressert sur `replyTo.attachmentReplyTo`. */
+    ...(namedPiece === undefined ? {} : { attachmentReplyTo: namedPiece }),
     /* LE LIEU SE RELIT SUR LE MESSAGE (#7328), comme la protection deux lignes
        plus bas — un seul site de vérité entre ce qui s'affiche et ce qui part.
        `retrySend` reprend `entry.message` tel quel : le lieu survit au renvoi
@@ -347,6 +295,17 @@ async function attempt(params: {
   deps.outbox.getState().remove(conversationId, message.clientMessageId);
 }
 
+/**
+ * AUCUN DÉDOUBLONNAGE PAR CONTENU (#7985, directive porteur 2026-09-25) — le
+ * débounce de 600 ms sur `(conversation, texte, réponse, pièces)` bloquait
+ * 😂 😂 😂 tapés en série ; il est retiré, comme son miroir iOS
+ * (`duplicateSendDebounce`). Chaque envoi est un MESSAGE, avec son propre
+ * `clientMessageId` : c'est la SEULE déduplication qui reste — un même
+ * message rejoué (`retrySend`, écho socket) garde son identifiant et ne fait
+ * qu'une ligne, ici comme à la passerelle (`messages-send.ts`). Le double
+ * clic sur « Envoyer » est tenu par le composeur, qui vide son brouillon à
+ * l'instant de l'envoi (`composer.tsx`, `draftNow`).
+ */
 export async function performSend(params: {
   readonly conversationId: string;
   readonly draft: Draft;
@@ -357,12 +316,6 @@ export async function performSend(params: {
   const { conversationId, draft, viewerId, sender, deps } = params;
   const now = deps.now ?? Date.now;
   const nowMs = now();
-
-  const key = debounceKeyOf(conversationId, draft.content, draft.replyToId, draft.attachments);
-  const previous = lastAccepted.get(key);
-  pruneDebounce(nowMs);
-  if (previous !== undefined && nowMs - previous < DEBOUNCE_MS) return;
-  lastAccepted.set(key, nowMs);
 
   const clientMessageId = newClientMessageId();
   const messageType = messageTypeOfPending(draft.attachments ?? []);

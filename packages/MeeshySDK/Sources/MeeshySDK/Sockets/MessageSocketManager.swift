@@ -464,15 +464,6 @@ public struct UserUpdatedEvent: Decodable, Sendable {
         case replaced(String?)
     }
 
-    /// Nom à afficher, recomposé avec la règle du chemin REST
-    /// (`APIConversationUser.name` : `displayName` puis `username`) pour que la
-    /// ligne de liste dise la même chose quel que soit le transport qui l'a
-    /// hydratée. `nil` quand le payload ne porte pas le groupe du nom.
-    public var resolvedDisplayName: String? {
-        guard hasNameGroup else { return nil }
-        return [displayName, username].compactMap { $0 }.first { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
-    }
-
     private enum CodingKeys: String, CodingKey {
         case userId, changes
     }
@@ -1023,42 +1014,6 @@ public struct CallIceServersRefreshedData: Decodable, Sendable {
     public let ttl: Int
 }
 
-public struct CallOfferData: Decodable, Sendable {
-    public let callId: String
-    public let conversationId: String
-    /// Architecture mode (`"p2p"` or `"sfu"`). NOT the media type — see `type`.
-    public let mode: String?
-    /// Media type (`"audio"` or `"video"`). Drives CallKit `hasVideo`.
-    /// Optional for backwards compatibility with older gateway builds that
-    /// did not include this field; absence is treated as audio call.
-    public let type: String?
-    public let initiator: CallInitiatorInfo
-    public let iceServers: [SocketIceServer]?
-    /// Audit P1-26 — initial participant list emitted by the gateway in
-    /// `call:initiated`. Optional for backwards compat with older builds.
-    /// Lets the iOS UI show all participants during the ringing phase
-    /// rather than waiting for `call:participant-joined` events.
-    public let participants: [CallParticipantInfo]?
-
-    public struct CallInitiatorInfo: Decodable, Sendable {
-        public let userId: String
-        public let username: String
-        public let displayName: String?
-        public let avatar: String?
-    }
-
-    public struct CallParticipantInfo: Decodable, Sendable {
-        public let id: String
-        public let userId: String?
-        public let role: String?
-        public let isAudioEnabled: Bool?
-        public let isVideoEnabled: Bool?
-        public let username: String?
-        public let displayName: String?
-        public let avatar: String?
-    }
-}
-
 public struct CallAnswerData: Decodable, Sendable {
     public let callId: String
     public let signal: CallSignalPayload
@@ -1113,21 +1068,6 @@ public struct CallMissedData: Decodable, Sendable {
 /// answers a call, so the rest can dismiss CallKit + ringing UI.
 public struct CallAlreadyAnsweredData: Decodable, Sendable {
     public let callId: String
-}
-
-public struct CallParticipantData: Decodable, Sendable {
-    public let callId: String
-    public let participantId: String?
-    public let userId: String?
-    public let mode: String?
-    public let iceServers: [SocketIceServer]?
-}
-
-public struct CallMediaToggleData: Decodable, Sendable {
-    public let callId: String
-    public let participantId: String?
-    public let mediaType: String
-    public let enabled: Bool
 }
 
 public struct CallErrorData: Decodable, Sendable {
@@ -1371,6 +1311,8 @@ public protocol MessageSocketProviding: Sendable {
     /// `messageHiddenForMe` : le consommateur (`ConversationSocketHandler`) ne
     /// détient qu'un `MessageSocketProviding`.
     var messageExpired: PassthroughSubject<MessageExpiredEvent, Never> { get }
+    /// `message:cited-post-withdrawn` (#7969) — voir `MessageSocketManager+CitedPost.swift`.
+    var messageCitedPostWithdrawn: PassthroughSubject<MessageCitedPostWithdrawnEvent, Never> { get }
     /// `message:countdown-started` — l'échéance SERVIE d'un éphémère, résolue
     /// pour CE lecteur. Dans le protocole pour la même raison que ses voisins :
     /// le consommateur (`ConversationSocketHandler`) ne détient qu'un
@@ -1698,6 +1640,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     public let messageEdited = PassthroughSubject<APIMessage, Never>()
     public let messageDeleted = PassthroughSubject<MessageDeletedEvent, Never>()
     public let messageExpired = PassthroughSubject<MessageExpiredEvent, Never>()
+    public let messageCitedPostWithdrawn = PassthroughSubject<MessageCitedPostWithdrawnEvent, Never>()
     public let messageCountdownStarted = PassthroughSubject<MessageCountdownStartedEvent, Never>()
     public let messageHiddenForMe = PassthroughSubject<MessageHiddenForMeEvent, Never>()
     public let messageRestoredForMe = PassthroughSubject<MessageRestoredForMeEvent, Never>()
@@ -1715,6 +1658,8 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     // Combine publishers — typing
     public let typingStarted = PassthroughSubject<TypingEvent, Never>()
     public let typingStopped = PassthroughSubject<TypingEvent, Never>()
+    public let conversationViewing = PassthroughSubject<ConversationViewingEvent, Never>()
+    public let conversationEngagementUpdated = PassthroughSubject<ConversationEngagementSnapshot, Never>()
 
     // Combine publishers — presence
     public let unreadUpdated = PassthroughSubject<UnreadUpdateEvent, Never>()
@@ -3054,21 +2999,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             }
         }
 
-        // --- Typing events ---
-
-        socket.on("typing:start") { [weak self] data, _ in
-            guard let self else { return }
-            self.decode(TypingEvent.self, from: data) { [weak self] event in
-                self?.typingStarted.send(event)
-            }
-        }
-
-        socket.on("typing:stop") { [weak self] data, _ in
-            guard let self else { return }
-            self.decode(TypingEvent.self, from: data) { [weak self] event in
-                self?.typingStopped.send(event)
-            }
-        }
+        registerActivitySignalHandlers(on: socket)
 
         // --- Unread events ---
 
@@ -3216,6 +3147,11 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         }
 
         registerViewOnceHandlers(on: socket)
+        registerCitedPostHandlers(on: socket)
+        registerConversationEngagementHandlers(on: socket)
+        registerCallRecordingHandlers(on: socket)
+        registerCallControlHandlers(on: socket)
+        registerCallPreviewHandlers(on: socket)
 
         // --- Conversation participation events ---
 

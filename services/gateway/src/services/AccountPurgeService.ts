@@ -3,6 +3,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { hashPassword } from '../utils/password-hash';
 import { clearPendingTwoFactor } from './auth/pending-two-factor';
+import { eraseAddressBookOf } from './ContactDirectoryService';
 
 const logger = enhancedLogger.child({ module: 'AccountPurgeService' });
 
@@ -10,14 +11,23 @@ export type AccountPurgeSummary = {
   readonly sessionsDeleted: number;
   readonly voiceProfileDeleted: number;
   readonly shareLinksDeleted: number;
+  readonly notificationsDeleted: number;
+  readonly addressBookContactsDeleted: number;
+  readonly contactJoinNoticesDeleted: number;
+  readonly arrivalAnnouncementsDeleted: number;
 };
 
 /**
  * Purge, à l'expiration de la période de grâce (#3632), la portion des
  * données d'un compte supprimé qui ne touche AUCUN autre utilisateur :
- * sessions, profil vocal, liens de partage créés par ce compte. Trois tables
- * isolées, aucune ligne partagée avec un tiers — supprimables sans arbitrage
- * sur ce qu'un AUTRE participant continue de voir.
+ * sessions, profil vocal, liens de partage créés par ce compte, notifications
+ * qui lui étaient destinées, et son carnet d'adresses synchronisé (#8284 —
+ * `eraseAddressBookOf`, qui retire aussi les annonces « X a rejoint Meeshy »
+ * faites à d'autres à son sujet : elles désignent un compte qui n'existe plus).
+ * Aucune ligne partagée avec un tiers — supprimables sans arbitrage sur ce
+ * qu'un AUTRE participant continue de voir. Les notifications d'AUTRES comptes
+ * nées de son activité (un message, une réaction) ne sont PAS visées ici :
+ * elles suivent l'anonymisation des messages (#5689).
  *
  * Idempotent par construction (`deleteMany` sur une ligne déjà absente ne
  * lève pas) : rejouable sans effet de bord si l'appelant retente après un
@@ -41,22 +51,36 @@ export type AccountPurgeSummary = {
  * décision produit sur `Participant.displayName` (#5691, partagée avec #5689).
  */
 export async function purgeAccountIsolatedData(
-  prisma: Pick<PrismaClient, 'userSession' | 'userVoiceModel' | 'conversationShareLink'>,
+  prisma: Pick<
+    PrismaClient,
+    'userSession' | 'userVoiceModel' | 'conversationShareLink' | 'notification' | 'userContact' | 'contactJoinNotice'
+  >,
   userId: string,
 ): Promise<AccountPurgeSummary> {
-  const [sessions, voiceProfile, shareLinks] = await Promise.all([
+  const [sessions, voiceProfile, shareLinks, notifications, addressBook] = await Promise.all([
     prisma.userSession.deleteMany({ where: { userId } }),
     prisma.userVoiceModel.deleteMany({ where: { userId } }),
     prisma.conversationShareLink.deleteMany({ where: { createdBy: userId } }),
+    prisma.notification.deleteMany({ where: { userId } }),
+    eraseAddressBookOf(prisma, userId),
   ]);
 
   const summary: AccountPurgeSummary = {
     sessionsDeleted: sessions.count,
     voiceProfileDeleted: voiceProfile.count,
     shareLinksDeleted: shareLinks.count,
+    notificationsDeleted: notifications.count,
+    addressBookContactsDeleted: addressBook.contactsDeleted,
+    contactJoinNoticesDeleted: addressBook.joinNoticesDeleted,
+    arrivalAnnouncementsDeleted: addressBook.arrivalAnnouncementsDeleted,
   };
 
-  logger.info(`[AccountPurge] user=${userId} sessions=${summary.sessionsDeleted} voiceProfile=${summary.voiceProfileDeleted} shareLinks=${summary.shareLinksDeleted}`);
+  logger.info(
+    `[AccountPurge] user=${userId} sessions=${summary.sessionsDeleted} voiceProfile=${summary.voiceProfileDeleted} ` +
+      `shareLinks=${summary.shareLinksDeleted} notifications=${summary.notificationsDeleted} ` +
+      `addressBook=${summary.addressBookContactsDeleted} joinNotices=${summary.contactJoinNoticesDeleted} ` +
+      `arrivalAnnouncements=${summary.arrivalAnnouncementsDeleted}`
+  );
 
   return summary;
 }

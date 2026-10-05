@@ -120,7 +120,7 @@ export function GroupComposer({
             onInput={(event) => onEdit('description', event.currentTarget.value)}
             onFocus={() => onFocus('description')}
             onBlur={() => onFocus(null)}
-            className="min-w-0 flex-1 resize-none bg-transparent py-2.5 text-body outline-none"
+            className="w-0 min-w-0 flex-1 resize-none bg-transparent py-2.5 text-body outline-none"
             style={{ color: 'var(--color-ios-ink)' }}
           />
         )}
@@ -133,7 +133,7 @@ export function GroupComposer({
         data-group-submit
         disabled={disabled}
         aria-busy={busy}
-        className="grid w-full place-items-center rounded-[14px] font-bold text-white transition-opacity"
+        className="grid w-full place-items-center rounded-[14px] font-bold text-ios-on-brand transition-opacity"
         style={{
           minHeight: 52,
           backgroundColor: 'var(--color-ios-brand)',

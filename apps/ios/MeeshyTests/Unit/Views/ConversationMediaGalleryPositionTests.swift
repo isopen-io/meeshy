@@ -56,8 +56,21 @@ final class ConversationMediaGalleryPositionTests: XCTestCase {
             XCTFail("`FilmstripThumbnail` introuvable")
             return
         }
+        // Depuis #8141 (d6f8a29097), la vignette n'applique plus le champ TEL
+        // QUEL : elle le passe à `FilmstripThumbnailPresentation`, qui y ajoute
+        // « Ce média n'est plus disponible » quand le fichier est introuvable.
+        // Chercher la seule écriture littérale `.accessibilityLabel(accessibilityLabel)`
+        // rendait ce témoin rouge sur un code juste. La propriété gardée reste
+        // la même : le libellé REÇU atteint le modificateur appliqué, soit
+        // directement, soit comme `position:` de la composition (dont le
+        // contenu est gardé par `FilmstripThumbnailUnavailableTests`).
+        let applied = thumbnailStruct.filter { !$0.isWhitespace }
+        let appliesTheReceivedLabel = applied.contains(".accessibilityLabel(accessibilityLabel)")
+            || applied.contains(
+                ".accessibilityLabel(FilmstripThumbnailPresentation.accessibilityLabel(position:accessibilityLabel,"
+            )
         XCTAssertTrue(
-            thumbnailStruct.contains(".accessibilityLabel(accessibilityLabel)"),
+            appliesTheReceivedLabel,
             "la vignette doit rendre effectivement le libellé de position reçu — "
                 + "un champ qui ne s'applique pas n'informe personne"
         )

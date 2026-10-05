@@ -171,16 +171,16 @@ const DUPLICATED = {
 
 // ─── Harness ──────────────────────────────────────────────────────────────────
 
-function makePreValidationAuth(emailVerified: boolean = true) {
+function makePreValidationAuth(emailVerified: boolean = true, activation?: unknown) {
   return async (req: FastifyRequest) => {
     (req as any).authContext = {
       isAuthenticated: true,
-      registeredUser: { emailVerifiedAt: emailVerified ? new Date() : null, id: USER_ID, role: 'USER' },
+      registeredUser: { emailVerifiedAt: emailVerified ? new Date() : null, id: USER_ID, role: 'USER', activation },
     };
   };
 }
 
-async function buildApp(prismaOverrides: Record<string, unknown> = {}, opts: { emailVerified?: boolean } = {}): Promise<{
+async function buildApp(prismaOverrides: Record<string, unknown> = {}, opts: { emailVerified?: boolean; activation?: unknown } = {}): Promise<{
   app: FastifyInstance;
   social: Record<string, any>;
 }> {
@@ -204,7 +204,7 @@ async function buildApp(prismaOverrides: Record<string, unknown> = {}, opts: { e
   };
   app.decorate('socialEvents', social as any);
 
-  registerCoreRoutes(app, prisma, makePreValidationAuth(opts.emailVerified ?? true));
+  registerCoreRoutes(app, prisma, makePreValidationAuth(opts.emailVerified ?? true, opts.activation));
   await app.ready();
   return { app, social };
 }
@@ -220,15 +220,23 @@ beforeEach(() => {
   mockCreatePostMentions.mockReset().mockResolvedValue(undefined);
 });
 
-// #6437 — même porte de publication que POST /posts.
+// #8476 — même porte de publication que POST /posts : le délai de grâce (#8238).
 describe('POST /posts/from-attachment — email not verified', () => {
-  it('returns 403 EMAIL_NOT_VERIFIED when the author has not confirmed their e-mail', async () => {
-    const { app } = await buildApp({}, { emailVerified: false });
+  it('reaches the creation while the activation phase is not blocked', async () => {
+    mockCreatePost.mockResolvedValue({ id: 'post-pub', type: 'POST', visibility: 'PUBLIC', createdAt: new Date() });
+    const { app } = await buildApp({}, { emailVerified: false, activation: { phase: 'invite', deadline: '2026-10-26T00:00:00.000Z', missing: ['email'] } });
 
-    const res = await app.inject({
-      method: 'POST', url: '/posts/from-attachment',
-      payload: { attachmentId: ATTACHMENT_ID },
-    });
+    const res = await app.inject({ method: 'POST', url: '/posts/from-attachment', payload: { attachmentId: ATTACHMENT_ID } });
+
+    expect(res.json().code).not.toBe('EMAIL_NOT_VERIFIED');
+    expect(mockCreatePost).toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('returns 403 EMAIL_NOT_VERIFIED once the phase is blocked', async () => {
+    const { app } = await buildApp({}, { emailVerified: false, activation: { phase: 'blocked', deadline: '2026-09-01T00:00:00.000Z', missing: ['email'] } });
+
+    const res = await app.inject({ method: 'POST', url: '/posts/from-attachment', payload: { attachmentId: ATTACHMENT_ID } });
 
     expect(res.statusCode).toBe(403);
     expect(res.json().code).toBe('EMAIL_NOT_VERIFIED');

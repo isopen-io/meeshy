@@ -1,10 +1,15 @@
 import type { CanvasV3, ObjectV3 } from '@meeshy/shared/types/canvas-v3';
+import type { MediaCropRect } from '@meeshy/shared/utils/media-crop';
 
+import type { StoryFilterId } from '@/lib/canvas/media-filter';
+import { sceneTransitionWire, type SceneTransition } from '@/lib/canvas/scene-transition';
+import { DEFAULT_SCENE_BACKDROP, DEFAULT_SCENE_FIT_MODE, type SceneBackdrop, type SceneFitMode } from '@/lib/canvas/backdrop';
 import { parseCanvasDocument, type CanvasDocument } from '@/lib/canvas/document';
 import type { MosaicLayoutMode } from '@/lib/feed/mosaic-layout';
 
+import type { StudioMediaTrim } from './studio-page';
 import type { StudioPose } from './studio-pose';
-import { textLayerPayload, type StudioTextLayer } from './studio-text';
+import { textLayerPayload, type StudioTextLayer, type StudioTiming } from './studio-text';
 
 /**
  * LE DOCUMENT D'UNE STORY COMPOSÉE (#6900, élargi au PLATEAU par #6943) — le
@@ -70,7 +75,21 @@ export type StoryVisual = {
    * fond paysage n'est plus cadré sur sa bande côté lecteur
    * (`declaredAspect`, `scene-framing.ts:57-61`). */
   readonly aspectRatio?: number;
+  /** LE CADRE d'un FOND (#8414, `lib/canvas/backdrop.ts`) — Ajuster ou
+   * Remplir, et ce qui se peint autour. Absent ⇒ ajusté, flou. */
+  readonly frame?: StoryFrame;
+  /** LE FILTRE de CE média (lot 7, #8474) — `payload.filter` de SON objet,
+   * aux valeurs de `StoryFilter` ; il ne peint que lui. */
+  readonly filter?: StoryFilterId;
+  /** LES ÉDITIONS DE BASE d'une pièce retouchée (#9136) — la coupe et le son
+   * coupé d'une vidéo, le recadrage d'une image : `sourceStart`/`sourceEnd`,
+   * `muted`, `cropX…cropH` de SON objet. */
+  readonly trim?: StudioMediaTrim;
+  readonly muted?: true;
+  readonly crop?: MediaCropRect;
 };
+
+export type StoryFrame = { readonly fitMode: SceneFitMode; readonly backdrop: SceneBackdrop };
 
 export type StoryComposition = {
   /** Les objets TEXTE, dans leur ordre de pose — leur `z` en découle, comme
@@ -81,7 +100,12 @@ export type StoryComposition = {
   /** LE CALQUE D'AVANT-PLAN — un second visuel, posé SUR le fond, avec sa
    * propre pose. C'est lui qui répond à « ajouter des images en fond **ou
    * front** » (directive porteur 2026-09-17). */
-  readonly overlay?: StoryVisual & { readonly pose: StudioPose };
+  readonly overlay?: StoryVisual & { readonly pose: StudioPose; readonly timing?: StudioTiming };
+  /** LA DURÉE d'une scène animée (#8415) — `SceneV3.timelineDuration`. */
+  readonly duration?: number;
+  /** L'ENTRÉE et la SORTIE de la scène (#8792) — `SceneV3.opening` / `.closing`. */
+  readonly opening?: SceneTransition;
+  readonly closing?: SceneTransition;
   /** LE SON — `background` : la bande-son de la scène, élue par
    * `electBackgroundTrack` (`payload.isBackground === true`) ; `foreground` :
    * un son POSÉ, que cette élection ignore. Deux rôles, un seul fichier. */
@@ -105,6 +129,25 @@ export function studioMediaKindOf(mimeType: string): StudioMediaKind {
 export const STORY_PLAIN_BACKGROUND = '0F0C29';
 const CENTER = { t: 'free', x: 0.5, y: 0.5 } as const;
 const IDENTITY = { scale: 1, rotation: 0, opacity: 1 } as const;
+
+/** `timelineDuration` d'une scène ANIMÉE — absente d'une scène statique. */
+const durationOf = (input: { readonly duration?: number }): { readonly timelineDuration?: number } =>
+  input.duration !== undefined && input.duration > 0 ? { timelineDuration: input.duration } : {};
+
+/** `opening` / `closing` d'une scène — `{ type }`, la forme d'iOS (#8792). */
+const transitionsOf = (input: {
+  readonly opening?: SceneTransition;
+  readonly closing?: SceneTransition;
+}): { readonly opening?: { readonly type: SceneTransition }; readonly closing?: { readonly type: SceneTransition } } => ({
+  ...(input.opening !== undefined ? { opening: sceneTransitionWire(input.opening) } : {}),
+  ...(input.closing !== undefined ? { closing: sceneTransitionWire(input.closing) } : {}),
+});
+
+function frameTransform(frame: StoryFrame | undefined): Record<string, string> {
+  const fitMode = frame?.fitMode ?? DEFAULT_SCENE_FIT_MODE;
+  const backdrop = frame?.backdrop ?? DEFAULT_SCENE_BACKDROP;
+  return { videoFitMode: fitMode, ...(backdrop !== DEFAULT_SCENE_BACKDROP ? { backdrop } : {}) };
+}
 
 function addressPayload(address: StoryMediaAddress): Record<string, string> {
   return {
@@ -137,6 +180,7 @@ function storyTextObject(layer: StudioTextLayer, z: number): ObjectV3 {
     id: layer.id,
     kind: 'text',
     ...posed(layer.pose),
+    ...(layer.timing !== undefined ? { timing: { start: layer.timing.start, end: layer.timing.end } } : {}),
     plane: 'fg',
     z,
     locale: layer.language,
@@ -162,8 +206,18 @@ function composeObjects(input: StoryComposition): ObjectV3[] {
               ...addressPayload(background.address),
               mediaType: background.mediaType,
               isBackground: true,
+              // Chaque média garde SON format (maquette plein écran, #8370) :
+              // le fond part AJUSTÉ, comme le composer iOS le pose déjà ; le
+              // panneau Cadre (#8414) choisit Remplir et le fond d'autour. Le
+              // FLOU est l'absence de `backdrop` — le contrat commun à iOS.
+              transform: frameTransform(background.frame),
               ...(background.aspectRatio !== undefined ? { aspectRatio: background.aspectRatio } : {}),
-              ...(mutesVideo ? { muted: true, volume: 0 } : {}),
+              ...(background.filter !== undefined ? { filter: background.filter } : {}),
+              ...(mutesVideo || background.muted === true ? { muted: true, volume: 0 } : {}),
+              ...(background.trim !== undefined ? { sourceStart: background.trim.start, sourceEnd: background.trim.end } : {}),
+              ...(background.crop !== undefined
+                ? { cropX: background.crop.x, cropY: background.crop.y, cropW: background.crop.width, cropH: background.crop.height }
+                : {}),
             },
           } satisfies ObjectV3,
         ]
@@ -201,6 +255,7 @@ function composeObjects(input: StoryComposition): ObjectV3[] {
             id: 'overlay',
             kind: 'media',
             ...posed(overlay.pose),
+            ...(overlay.timing !== undefined ? { timing: { start: overlay.timing.start, end: overlay.timing.end } } : {}),
             // `fg` SANS `isBackground` : `isBackground()`
             // (`lib/feed/scene-framing.ts:51-52`) rend alors faux, donc ce
             // visuel ne vole ni le cadrage ni la bande du fond.
@@ -210,6 +265,7 @@ function composeObjects(input: StoryComposition): ObjectV3[] {
               ...addressPayload(overlay.address),
               mediaType: overlay.mediaType,
               ...(overlay.aspectRatio !== undefined ? { aspectRatio: overlay.aspectRatio } : {}),
+              ...(overlay.filter !== undefined ? { filter: overlay.filter } : {}),
             },
           } satisfies ObjectV3,
         ]
@@ -234,7 +290,7 @@ function composeObjects(input: StoryComposition): ObjectV3[] {
  * jamais sans texte NI média, `core.ts:327-365`). */
 export function composeStoryCanvas(input: StoryComposition): CanvasV3 | null {
   const objects = composeObjects(input);
-  return objects.length === 0 ? null : { v: 3, scenes: [{ id: 'scene-0', objects }] };
+  return objects.length === 0 ? null : { v: 3, scenes: [{ id: 'scene-0', objects, ...durationOf(input), ...transitionsOf(input) }] };
 }
 
 /**
@@ -247,8 +303,17 @@ export function composeStoryCanvas(input: StoryComposition): CanvasV3 | null {
  * paramètre. C'est la loi 6 relue « le PLAYER est l'aperçu » : une seconde
  * description aurait divergé, et ce que l'auteur voit ne serait plus ce qui
  * part (le texte d'aperçu y avait déjà perdu `textStyle` et `fontFamily`). */
-type VisualSlot<A> = { readonly source: A; readonly mediaType: StudioMediaKind; readonly aspectRatio?: number };
-type OverlaySlot<A> = VisualSlot<A> & { readonly pose: StudioPose };
+type VisualSlot<A> = {
+  readonly source: A;
+  readonly mediaType: StudioMediaKind;
+  readonly aspectRatio?: number;
+  readonly frame?: StoryFrame;
+  readonly filter?: StoryFilterId;
+  readonly trim?: StudioMediaTrim;
+  readonly muted?: true;
+  readonly crop?: MediaCropRect;
+};
+type OverlaySlot<A> = VisualSlot<A> & { readonly pose: StudioPose; readonly timing?: StudioTiming };
 type SoundSlot<A> = { readonly source: A; readonly plane: StudioPlane };
 
 /** Un emplacement du studio CONVERTI en `StoryComposition` — l'ADRESSE
@@ -262,6 +327,9 @@ function storyCompositionOf<A>(
     readonly background?: VisualSlot<A>;
     readonly overlay?: OverlaySlot<A>;
     readonly sound?: SoundSlot<A>;
+    readonly duration?: number;
+    readonly opening?: SceneTransition;
+    readonly closing?: SceneTransition;
   },
   addressOf: (source: A) => StoryMediaAddress,
 ): StoryComposition {
@@ -269,11 +337,21 @@ function storyCompositionOf<A>(
     address: addressOf(slot.source),
     mediaType: slot.mediaType,
     ...(slot.aspectRatio !== undefined ? { aspectRatio: slot.aspectRatio } : {}),
+    ...(slot.frame !== undefined ? { frame: slot.frame } : {}),
+    ...(slot.filter !== undefined ? { filter: slot.filter } : {}),
+    ...(slot.trim !== undefined ? { trim: slot.trim } : {}),
+    ...(slot.muted !== undefined ? { muted: slot.muted } : {}),
+    ...(slot.crop !== undefined ? { crop: slot.crop } : {}),
   });
   return {
     texts: params.texts,
     ...(params.background !== undefined ? { background: visual(params.background) } : {}),
-    ...(params.overlay !== undefined ? { overlay: { ...visual(params.overlay), pose: params.overlay.pose } } : {}),
+    ...(params.overlay !== undefined
+      ? { overlay: { ...visual(params.overlay), pose: params.overlay.pose, ...(params.overlay.timing !== undefined ? { timing: params.overlay.timing } : {}) } }
+      : {}),
+    ...(params.duration !== undefined ? { duration: params.duration } : {}),
+    ...(params.opening !== undefined ? { opening: params.opening } : {}),
+    ...(params.closing !== undefined ? { closing: params.closing } : {}),
     ...(params.sound !== undefined ? { sound: { address: addressOf(params.sound.source), plane: params.sound.plane } } : {}),
   };
 }
@@ -284,6 +362,9 @@ function compose<A>(
     readonly background?: VisualSlot<A>;
     readonly overlay?: OverlaySlot<A>;
     readonly sound?: SoundSlot<A>;
+    readonly duration?: number;
+    readonly opening?: SceneTransition;
+    readonly closing?: SceneTransition;
   },
   addressOf: (source: A) => StoryMediaAddress,
 ): CanvasV3 | null {
@@ -295,6 +376,9 @@ export function buildStoryCanvasEffects(params: {
   readonly background?: VisualSlot<StudioReadyAsset>;
   readonly overlay?: OverlaySlot<StudioReadyAsset>;
   readonly sound?: SoundSlot<StudioReadyAsset>;
+  readonly duration?: number;
+  readonly opening?: SceneTransition;
+  readonly closing?: SceneTransition;
 }): CanvasV3 | null {
   return compose(params, (ready) => ({
     postMediaId: ready.postMediaId,
@@ -313,6 +397,9 @@ export function buildPreviewCanvasDocument(params: {
   readonly background?: VisualSlot<string>;
   readonly overlay?: OverlaySlot<string>;
   readonly sound?: SoundSlot<string>;
+  readonly duration?: number;
+  readonly opening?: SceneTransition;
+  readonly closing?: SceneTransition;
 }): CanvasDocument | null {
   const composed = compose(params, (previewUrl) => ({ mediaURL: previewUrl }));
   return composed === null ? null : parseCanvasDocument(composed);
@@ -377,7 +464,9 @@ export function studioMediaIds(
 export type StoryPageComposition = StoryComposition & { readonly id: string };
 
 export function composeStoryCanvasPages(pages: readonly StoryPageComposition[], layout: MosaicLayoutMode | null): CanvasV3 | null {
-  const scenes = pages.map((page) => ({ id: page.id, objects: composeObjects(page) })).filter((scene) => scene.objects.length > 0);
+  const scenes = pages
+    .map((page) => ({ id: page.id, objects: composeObjects(page), ...durationOf(page), ...transitionsOf(page) }))
+    .filter((scene) => scene.objects.length > 0);
   if (scenes.length === 0) return null;
   return { v: 3, scenes, ...(scenes.length >= 2 && layout !== null ? { layout } : {}) };
 }
@@ -391,6 +480,9 @@ export function buildStoryCanvasEffectsPages(
     readonly background?: VisualSlot<StudioReadyAsset>;
     readonly overlay?: OverlaySlot<StudioReadyAsset>;
     readonly sound?: SoundSlot<StudioReadyAsset>;
+    readonly duration?: number;
+    readonly opening?: SceneTransition;
+    readonly closing?: SceneTransition;
   }[],
   layout: MosaicLayoutMode | null,
 ): CanvasV3 | null {

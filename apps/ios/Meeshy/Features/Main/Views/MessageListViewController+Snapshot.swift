@@ -2,6 +2,7 @@
 
 import UIKit
 import Combine
+import MeeshySDK
 
 //
 // Le cluster SNAPSHOT de la liste : la portée d'un reconfigure, l'empreinte du
@@ -273,5 +274,20 @@ extension MessageListViewController {
                 self.queueReconfigure(for: changed)
             }
             .store(in: &cancellables)
+    }
+
+    /// **L'état de la VISITE qu'aucune ligne GRDB ne porte** : la vue unique
+    /// texte ouverte (#7618) et l'éphémère en combustion (#8382). Le fil rend
+    /// `MessageStore` ; ces deux états vivent au modèle de vue et se reposent
+    /// ici, sur chaque cellule, dans les trois modes que la liste sert.
+    func applyVisitState(to message: inout MeeshyMessage) {
+        let vm = conversationViewModel
+        message.isViewOnceRevealed = vm?.revealedViewOnceIds[message.id] == true
+        message.isBurning = vm?.burningEphemeralIds[message.id] == true
+    }
+
+    func observeVisitState(_ vm: ConversationViewModel) {
+        observePerMessageDictionary(vm.$revealedViewOnceIds, initial: vm.revealedViewOnceIds)
+        observePerMessageDictionary(vm.$burningEphemeralIds, initial: vm.burningEphemeralIds)
     }
 }

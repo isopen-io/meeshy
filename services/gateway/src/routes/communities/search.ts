@@ -111,6 +111,8 @@ export async function registerSearchRoutes(fastify: FastifyInstance) {
       // Build where clause for public communities
       const whereClause = {
         isPrivate: false,
+        // #8876 — une communauté désactivée par l'administration ne se trouve plus.
+        isActive: true,
         OR: [
           { name: { contains: q, mode: 'insensitive' as const } },
           { identifier: { contains: q, mode: 'insensitive' as const } },

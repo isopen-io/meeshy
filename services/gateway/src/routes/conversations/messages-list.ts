@@ -23,7 +23,6 @@ import {
 } from '../../services/historyFloor';
 import { shareLinkHasExpired } from '../../services/shareLinkReadGate';
 import { resolveUserLanguage } from '@meeshy/shared/utils/conversation-helpers';
-import { resolveConversationId } from '../../utils/conversation-id-cache';
 import {
   loadPersonalHistoryHiding,
   applyPersonalHistoryHiding,
@@ -35,11 +34,8 @@ import {
   messageSchema,
   errorResponseSchema
 } from '@meeshy/shared/types/api-schemas';
-import {
-  refuserAccesConversation,
-  verdictAccesConversation,
-  type MessagesDeRefusDAcces
-} from './utils/access-control';
+import type { MessagesDeRefusDAcces } from './utils/access-control';
+import { ouvrirConversationLisible } from './utils/conversation-read-gate';
 import { resolveMentionedUsers } from '../../services/MentionService';
 import type {
   ConversationParams,
@@ -76,23 +72,25 @@ import { loadReaderReactionsByMessage } from './messages-reader-reactions';
 import {
   isEphemeralServableToReader,
   loadEphemeralReaderDeadlines,
+  withQuotedMessages,
 } from './ephemeralReaderDeadlines';
 import { loadViewOnceReaderStates, projectViewOnceForReader } from '../../services/messaging/viewOnceAudience';
+import {
+  isServableThroughQuotes,
+  loadInheritedEphemeralDeadlines,
+  withInheritedExpiry,
+} from '../../services/messaging/quoteCascade';
 
 /**
  * LES DEUX REFUS DE CETTE ROUTE NE SONT PAS LE MÊME REFUS (#4792).
  *
- * `nonMembre` garde MOT POUR MOT la phrase que la route servait déjà — un
- * refus d'AUTORISATION, correct en 403. Ce qui change est qu'une session
- * ABSENTE ou MORTE ne le reçoit plus : elle n'a jamais été un refus de droit,
- * et cette route est montée en `optionalAuth` (`{ requireAuth: false,
- * allowAnonymous: true }`, `routes/conversations/index.ts`), une garde qui ne
- * refuse RIEN — c'est donc bien ici que ça se tranche, et le cas nominal d'un
- * retour après quelques jours arrivait jusque là.
+ * Une session ABSENTE ou MORTE reçoit 401 : cette route est montée en
+ * `optionalAuth`, une garde qui ne refuse RIEN, c'est donc ici que ça se
+ * tranche. Un non-membre reçoit le même 404 qu'un identifiant inexistant
+ * (#8099) — voir `ouvrirConversationLisible`.
  */
 const REFUS_DE_LECTURE: MessagesDeRefusDAcces = {
-  sansSession: 'Authentication required to read this conversation',
-  nonMembre: 'Unauthorized access to this conversation'
+  sansSession: 'Authentication required to read this conversation'
 };
 
 /**
@@ -175,6 +173,7 @@ export function registerMessagesListRoute(
         400: errorResponseSchema,
         401: errorResponseSchema,
         403: errorResponseSchema,
+        404: errorResponseSchema,
         500: errorResponseSchema
       }
     },
@@ -194,6 +193,7 @@ export function registerMessagesListRoute(
         view,
         parentId,
         q,
+        kinds,
         include_translations: includeTranslationsStr = 'true',
         include_replies: includeRepliesStr = 'true',
         languages: languagesStr
@@ -224,19 +224,16 @@ export function registerMessagesListRoute(
 
       // Résoudre l'ID de conversation réel
       let t0 = performance.now();
-      const conversationId = await resolveConversationId(prisma, id);
-      timings.resolveConversationId = performance.now() - t0;
-      if (!conversationId) {
-        return sendForbidden(reply, 'Unauthorized access to this conversation');
-      }
-
-      // Vérifier les permissions d'accès
-      t0 = performance.now();
-      const acces = await verdictAccesConversation(prisma, authRequest.authContext, conversationId, id);
+      const conversationId = await ouvrirConversationLisible({
+        prisma,
+        reply,
+        authContext: authRequest.authContext,
+        identifiant: id,
+        messages: REFUS_DE_LECTURE
+      });
       timings.canAccessConversation = performance.now() - t0;
-
-      if (acces.genre !== 'ok') {
-        return refuserAccesConversation(reply, acces, REFUS_DE_LECTURE);
+      if (!conversationId) {
+        return;
       }
 
       // Resolve the current user's participantId in this conversation
@@ -324,7 +321,7 @@ export function registerMessagesListRoute(
 
       // #4340 — la SOUS-COLLECTION lue. Résolue APRÈS toutes les portes
       // (appartenance, lien de partage échu) : un refus de VALIDATION ne se
-      // sert jamais avant un refus de DROIT, sans quoi les quatre vues
+      // sert jamais avant un refus de DROIT, sans quoi les cinq vues
       // n'auraient plus le même ordre de gardes — ce que ce lot promet
       // précisément.
       //
@@ -333,7 +330,7 @@ export function registerMessagesListRoute(
       // `resolveCollectionView` en fait un `predicate` identique.
       // `ThreadRepliesLoader.swift` l'envoie en production ; il n'y a rien à
       // migrer côté client.
-      const vue = resolveCollectionView({ view, parentId, replyToId, q });
+      const vue = resolveCollectionView({ view, parentId, replyToId, q, kinds });
       if (vue.genre === 'refus') {
         return sendBadRequest(reply, vue.message, { code: 'INVALID_VIEW' });
       }
@@ -643,9 +640,11 @@ export function registerMessagesListRoute(
       // Le retrait a lieu ICI, sur `messages`, et pas sur la projection : les
       // deux tableaux avancent ensemble jusqu'à la pagination (`splice`), et
       // ne filtrer que le second les aurait désynchronisés.
+      // #8562 — les messages CITÉS aussi : la citation d'un éphémère échu
+      // pour ce lecteur sort scellée, même s'il n'est pas sur la page.
       const ephemeralDeadlines = await loadEphemeralReaderDeadlines(
         prisma,
-        messages,
+        withQuotedMessages(messages),
         currentParticipantId
       );
       if (ephemeralDeadlines.size > 0) {
@@ -660,6 +659,20 @@ export function registerMessagesListRoute(
         if (served.length !== messages.length) {
           messages.length = 0;
           messages.push(...served);
+        }
+      }
+
+      // #8630 — une réponse meurt, pour CE lecteur, avec ce qu'elle cite
+      // (transitivement) : même grâce d'une heure, même retrait en place.
+      const inheritedDeadlines = await loadInheritedEphemeralDeadlines(prisma, messages, currentParticipantId);
+      if (inheritedDeadlines.size > 0) {
+        const inheritedAt = new Date();
+        const alive = messages.filter((message: { id: string }) =>
+          isServableThroughQuotes(inheritedDeadlines, message.id, inheritedAt)
+        );
+        if (alive.length !== messages.length) {
+          messages.length = 0;
+          messages.push(...alive);
         }
       }
 
@@ -754,6 +767,14 @@ export function registerMessagesListRoute(
       if (viewOnceStates.size > 0) {
         mappedMessages.forEach((m, index) => {
           mappedMessages[index] = projectViewOnceForReader(m, viewOnceStates.get(m.id));
+        });
+      }
+
+      // #8630 — l'échéance servie d'une réponse est la plus proche de la
+      // sienne et de celle de ce qu'elle cite : les clients la retirent alors.
+      if (inheritedDeadlines.size > 0) {
+        mappedMessages.forEach((m, index) => {
+          mappedMessages[index] = withInheritedExpiry(m, inheritedDeadlines);
         });
       }
 
@@ -911,7 +932,7 @@ export function registerMessagesListRoute(
       logger[level](`⏱️ GET /conversations/${conversationId}/messages`, {
         durationMs: Math.round(timings.total),
         messageCount: messages.length,
-        // #4340 — la vue servie : sans elle, quatre sous-collections aux profils
+        // #4340 — la vue servie : sans elle, cinq sous-collections aux profils
         // de coût très différents se confondent dans la même ligne de journal.
         view: vue.view,
         limit,

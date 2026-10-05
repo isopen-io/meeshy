@@ -2,7 +2,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import { resolveUserLanguagesOrdered } from '@meeshy/shared/utils/conversation-helpers';
 import type { ConversationActiveCall } from '@meeshy/shared/types/conversation-preview';
-import { listRankFromColumns, reactionTargetKey } from '@meeshy/shared/utils/conversation-list-rank';
+import { listRankFromColumns } from '@meeshy/shared/utils/conversation-list-rank';
 import { participantUserRoomTargets } from './emitToConversationParticipants';
 import { PREVIEW_PARTICIPANT_SELECT } from './emitConversationPreviewUpdate';
 import { loadHistoryFloorsForOrFail } from '../services/historyFloor';
@@ -20,16 +20,19 @@ export interface ConversationActivityUpdate {
   readonly conversationId: string;
   /** `User.id` de qui a déclenché la mise à jour (réagi, appelé). */
   readonly updatedByUserId: string;
-  /** Rediffuser la dernière réaction, relue depuis `Conversation.lastReactionId`. */
-  readonly reaction?: boolean;
   /**
-   * Le message réagi (ajout OU retrait) : son auteur reçoit le rang de sa ligne
-   * (#7592), y compris quand le retrait a effacé la dernière réaction et, avec
-   * elle, la clé qui le désignait.
+   * Rediffuser la dernière réaction, relue depuis `Conversation.lastReactionId`.
+   * Porte aussi le rang (`listRankAt`) à chaque participant (#9026).
    */
-  readonly reactedMessageId?: string;
+  readonly reaction?: boolean;
   /** Rediffuser l'appel en cours, relu depuis `Conversation.activeCallId`. */
   readonly call?: boolean;
+  /**
+   * Rediffuser le rang de la ligne (`listRankAt`), relu depuis
+   * `Conversation.lastMessageAt` / `lastActivityAt`, à chaque participant —
+   * une activité hors message vient d'être enregistrée (#9026 : appel, épingle).
+   */
+  readonly rank?: boolean;
   readonly onError?: (error: unknown) => void;
 }
 
@@ -39,13 +42,14 @@ export interface ConversationActivityUpdate {
  * `activeCall`, et de RIEN du groupe d'aperçu — ni `lastMessageId` ni
  * `lastMessageAt`.
  *
- * **La remontée d'une conversation par une réaction est une règle SERVEUR**
- * (#7592, directive du 2026-09-23, qui inverse #7545) : rang = max(
- * `lastMessageAt`, dernière réaction quand elle vise un message du lecteur),
+ * **La remontée d'une conversation par une activité est une règle SERVEUR**
+ * (#9026, directive porteur du 2026-10-01, qui remplace la règle PAR LECTEUR de
+ * #7592) : rang = max(`lastMessageAt`, `lastActivityAt`), le MÊME pour tous,
  * écrit une fois (`utils/conversation-list-rank.ts`). `GET /conversations` trie
- * dessus et le sert ; ici, SEUL l'auteur du message réagi reçoit `listRankAt`
- * — sa ligne remonte, ou redescend au retrait. Les tiers reçoivent la réaction
- * sans rang : ils ne réordonnent rien.
+ * dessus et le sert ; ici, CHAQUE participant reçoit `listRankAt` quand
+ * l'événement parle d'une réaction (`reaction`) ou d'une activité (`rank`) —
+ * sa ligne remonte en tête. Une mise à jour d'appel seule (`call`) ne porte
+ * aucun rang : l'activité de l'appel arrive avec son message (début, fin).
  *
  * **Relu, jamais reçu** : l'état vient de la base (`lastReactionId`,
  * `activeCallId`) et non de l'appelant. Un retrait de réaction, un ajout
@@ -64,15 +68,16 @@ export async function emitConversationActivityUpdate(
   update: ConversationActivityUpdate,
 ): Promise<void> {
   const { conversationId, updatedByUserId, onError } = update;
-  if (!io || (!update.reaction && !update.call)) return;
+  const sendsRank = update.reaction === true || update.rank === true;
+  if (!io || (!sendsRank && !update.call)) return;
   try {
     const conversation = await prisma.conversation.findUnique({
       where: { id: conversationId },
-      select: { lastReactionId: true, activeCallId: true, lastMessageAt: true, lastReactionAt: true, lastReactionTargetKey: true },
+      select: { lastReactionId: true, activeCallId: true, lastMessageAt: true, lastActivityAt: true },
     });
     if (!conversation) return;
 
-    const [reactionRow, callRow, participants, reactedMessage] = await Promise.all([
+    const [reactionRow, callRow, participants] = await Promise.all([
       update.reaction && conversation.lastReactionId
         ? prisma.reaction.findUnique({ where: { id: conversation.lastReactionId }, select: LAST_REACTION_SELECT })
         : null,
@@ -80,23 +85,10 @@ export async function emitConversationActivityUpdate(
         ? prisma.callSession.findUnique({ where: { id: conversation.activeCallId }, select: ACTIVE_CALL_SELECT })
         : null,
       prisma.participant.findMany({ where: { conversationId, isActive: true }, select: PREVIEW_PARTICIPANT_SELECT }),
-      update.reaction && update.reactedMessageId
-        ? prisma.message
-            .findUnique({
-              where: { id: update.reactedMessageId },
-              select: { senderId: true, sender: { select: { userId: true } } },
-            })
-            .catch(() => null)
-        : null,
     ]);
-    const rankedKeys = new Set(
-      [
-        conversation.lastReactionTargetKey,
-        reactedMessage
-          ? reactionTargetKey({ targetSenderUserId: reactedMessage.sender?.userId ?? null, targetSenderId: reactedMessage.senderId })
-          : null,
-      ].filter((key): key is string => !!key),
-    );
+    // Le rang ne dépend pas du lecteur : un plancher d'historique illisible
+    // retient l'extrait de la réaction, jamais la remontée de la ligne.
+    const listRankAt = sendsRank ? listRankFromColumns(conversation)?.toISOString() ?? null : undefined;
 
     const { floors, unreadable } = update.reaction
       ? await loadHistoryFloorsForOrFail(prisma, participants)
@@ -108,7 +100,7 @@ export async function emitConversationActivityUpdate(
     for (const { room, participant } of participantUserRoomTargets(participants)) {
       const index = readerIndex.get(participant.id) ?? -1;
       const mayReadReaction = update.reaction === true && !unreadable.has(index);
-      if (!mayReadReaction && !update.call) continue;
+      if (!mayReadReaction && !update.call && listRankAt === undefined) continue;
       const prefs = participant.user;
       const lastReaction = mayReadReaction
         ? resolveConversationLastReaction(reactionRow as LastReactionRow | null, {
@@ -117,10 +109,6 @@ export async function emitConversationActivityUpdate(
               : [],
             historyFloor: floors[index] ?? null,
           })
-        : undefined;
-      const readerKey = participant.userId ?? participant.id;
-      const listRankAt = mayReadReaction && rankedKeys.has(readerKey)
-        ? listRankFromColumns(conversation, readerKey)?.toISOString() ?? null
         : undefined;
       io.to(room).emit(SERVER_EVENTS.CONVERSATION_UPDATED, {
         conversationId,

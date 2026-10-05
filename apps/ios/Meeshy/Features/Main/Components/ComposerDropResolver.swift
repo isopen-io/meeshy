@@ -349,7 +349,7 @@ nonisolated enum ComposerDropResolver {
         }
     }
 
-    private static func loadString(from provider: NSItemProvider) async -> String? {
+    static func loadString(from provider: NSItemProvider) async -> String? {
         await withCheckedContinuation { continuation in
             _ = provider.loadObject(ofClass: NSString.self) { object, error in
                 if let error {

@@ -1,13 +1,16 @@
+import { useMemo } from 'react';
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { conversationStore } from '@/lib/conversation-store';
 import { performSend, retrySend, type Draft } from '@/lib/send/perform-send';
 import { outboxStore } from '@/lib/send/outbox-store';
+import { notePublicationParticipation } from '@/lib/view/publication-participation';
 import type { RowActionId } from '@/lib/view/row-actions';
 
 import { cachedCardSeed } from './card-caches';
 import { ApiError } from './client';
 import { performCommentGesture, type CommentGestureRequest, type CommentGestureResult } from './comment-gestures';
+import { repliesInfiniteOptions } from './comment-replies';
 import { performRowAction } from './conversation-actions';
 import { conversationQuery, conversationsQuery, refreshConversations } from './conversations';
 import { apiDeps } from './deps';
@@ -16,17 +19,20 @@ import { forwardMessages, type ForwardResult, type ForwardSource } from './forwa
 import { performPostGesture, type PostGestureResult } from './feed-gestures';
 import type { FeedAuthor } from './feed-pages';
 import { recordPostShare } from './feed-share';
-import { commentsInfiniteOptions, performComment, type CommentResult } from './publication-comments';
+import { commentsInfiniteOptions, flattenCommentPages, performComment, type CommentInfiniteData, type CommentResult, type CommentStickerSend, type PostComment } from './publication-comments';
+import type { PostMediaUploadResult } from './post-media-upload';
 import { postQueryOptions } from './publication-detail';
 import { performRepost, type RepostIntent, type RepostResult } from './publication-repost';
 import type { PostToggleKind } from '@/lib/feed/interactions';
 import { paginationStateOf } from '@/lib/lens/pagination';
 import type { Conversation, Message, Participant } from './types';
 import { messagesQuery } from './messages';
+import { joinThreadWindows } from './messages-window';
+import { useAnchoredThread } from './use-anchored-thread';
 import { appQueryClient } from './query-client';
 import { performReaction, type PerformReactionResult } from './reactions';
 import { deletePost, editPost, pinPost, type EditPostOutcome, type PostActionOutcome } from './publication-actions';
-import { reportPost, type ReportOutcome, type ReportReason } from './reports';
+import { reportComment, reportPost, type ReportOutcome, type ReportReason } from './reports';
 import {
   STORIES_QUERY_PREFIX,
   STORY_TRAY_QUERY_KEY,
@@ -101,8 +107,8 @@ export function useStoryTray(options: { readonly enabled?: boolean } = {}) {
  * fenêtre courte (une heure — `PostType.STATUS`, `schema.prisma`) et n'a
  * aucune raison d'être refetchée à chaque retour sur la liste.
  */
-export function useStatusMoods() {
-  return useQuery({ ...statusMoodsQueryOptions(apiDeps), staleTime: 60_000 });
+export function useStatusMoods(options: { readonly enabled?: boolean } = {}) {
+  return useQuery({ ...statusMoodsQueryOptions(apiDeps), staleTime: 60_000, enabled: options.enabled ?? true });
 }
 
 /**
@@ -113,8 +119,8 @@ export function useStatusMoods() {
  * cache existant sans jamais poser de spinner dessus), mais sans figer une
  * minute de fraîcheur sur un corpus qui change à chaque `markStoryViewed`.
  */
-export function useStoryFeed() {
-  return useQuery({ ...storyFeedQueryOptions(apiDeps), staleTime: 0 });
+export function useStoryFeed(options: { readonly enabled?: boolean } = {}) {
+  return useQuery({ ...storyFeedQueryOptions(apiDeps), staleTime: 0, enabled: options.enabled ?? true });
 }
 
 /**
@@ -194,7 +200,10 @@ export function postGestureAction(postId: string, kind: PostToggleKind): Promise
  * `appQueryClient`, donc un réel repartagé depuis le lecteur des Réels
  * l'est aussi dans le Flux, sans relecture. */
 export function repostAction(postId: string, intent?: RepostIntent): Promise<RepostResult> {
-  return performRepost({ postId, deps: { ...apiDeps, queryClient: appQueryClient }, ...(intent === undefined ? {} : { intent }) });
+  return performRepost({ postId, deps: { ...apiDeps, queryClient: appQueryClient }, ...(intent === undefined ? {} : { intent }) }).then((result) => {
+    if (result.ok) notePublicationParticipation(postId, 'reposted');
+    return result;
+  });
 }
 
 /** LES GESTES DU MENU « ⋯ » (#7533) — mêmes références de module stables,
@@ -219,9 +228,17 @@ export function reportPostAction(postId: string, reason: ReportReason): Promise<
   return reportPost({ postId, reason, deps: apiDeps });
 }
 
+/** Le « Signaler » du menu « … » d'un commentaire (#8734). */
+export function reportCommentAction(commentId: string, reason: ReportReason): Promise<ReportOutcome> {
+  return reportComment({ commentId, reason, deps: apiDeps });
+}
+
 /** `recordShareAction` (#6278) — RÉFÉRENCE DE MODULE STABLE : compter un
  * partage DÉJÀ parti, sur l'instance partagée du cache du fil. */
 export function recordShareAction(postId: string): Promise<boolean> {
+  /* Le partage EST parti (c'est la condition de cet appel) : le rail le montre
+     tout de suite par l'anneau de « Envoyer », sans attendre le compteur. */
+  notePublicationParticipation(postId, 'sent');
   return recordPostShare({ postId, deps: { ...apiDeps, queryClient: appQueryClient } });
 }
 
@@ -313,6 +330,21 @@ export function useThreadData(id: string) {
   const conversation = useConversation(id);
   const conversationId = conversation.data?.id ?? id;
   const messages = useMessages(conversationId);
+  /**
+   * LA FENÊTRE ANCRÉE (#7420) — un message hors des pages chargées s'atteint
+   * par `?around=` (`useAnchoredThread`) ; `joinThreadWindows` dit ce que le
+   * fil MONTRE : la fenêtre seule tant qu'elle est DÉTACHÉE du présent, puis
+   * un fil continu dès qu'elle le rejoint. Tant qu'elle est engagée, la
+   * pagination des deux bords lui appartient.
+   */
+  const anchored = useAnchoredThread(conversationId);
+  const present = messages.data?.messages ?? NO_MESSAGES;
+  const shown = useMemo(() => joinThreadWindows(present, anchored.window), [present, anchored.window]);
+  const presentOlderState = paginationStateOf({
+    hasNextPage: messages.hasNextPage,
+    isFetchingNextPage: messages.isFetchingNextPage,
+    isFetchNextPageError: messages.isFetchNextPageError,
+  });
 
   const error = conversation.error ?? messages.error ?? null;
   const refused = isRefusal(conversation.error) || isRefusal(messages.error);
@@ -324,7 +356,7 @@ export function useThreadData(id: string) {
   return {
     conversationId,
     conversation: conversation.data,
-    messages: messages.data?.messages ?? NO_MESSAGES,
+    messages: shown.messages,
     /**
      * `hasOlder` — « le serveur DÉCLARE-T-IL du plus ancien ? », lu sur la
      * page qui borde la fenêtre (`threadWindowOf`, `messages-pages.ts`).
@@ -334,19 +366,25 @@ export function useThreadData(id: string) {
      * toujours. Son lecteur est `windowCoversUnread` (« Sur les N derniers
      * messages » du Résumé Vivant, `routes/thread.tsx`).
      */
-    hasOlder: messages.data?.hasOlder ?? false,
+    hasOlder: anchored.window?.hasOlder ?? messages.data?.hasOlder ?? false,
     /** L'état de pagination du HAUT du fil, quatre cas, la MÊME loi que la
      * Lentille (`paginationStateOf`, `lib/lens/pagination.ts`) — dérivé des
      * drapeaux de TanStack, jamais tenu à part. */
-    olderState: paginationStateOf({
-      hasNextPage: messages.hasNextPage,
-      isFetchingNextPage: messages.isFetchingNextPage,
-      isFetchNextPageError: messages.isFetchNextPageError,
-    }),
+    olderState: anchored.engaged ? anchored.olderState : presentOlderState,
     /** `fetchNextPage` de TanStack — référence STABLE entre deux rendus
      * (`useInfiniteQuery` la mémoïse), ce que l'ancrage de `routes/thread.tsx`
      * exige pour ne pas recréer sa sentinelle à chaque image. */
-    fetchOlder: messages.fetchNextPage,
+    fetchOlder: anchored.engaged ? anchored.fetchOlder : messages.fetchNextPage,
+    /** Le bas du fil, vers le PRÉSENT — seulement tant que la fenêtre ancrée en est DÉTACHÉE (#7420). */
+    newerState: shown.detached ? anchored.newerState : ('exhausted' as const),
+    fetchNewer: anchored.fetchNewer,
+    /** La fenêtre montrée ne touche pas le présent : ni accusé de lecture, ni ancrage en bas (#7420, `windowIsAtTip` iOS). */
+    detached: shown.detached,
+    /** `target` non nul : le fil est ancré autour d'un message, son bas n'est plus « le présent qui arrive ». */
+    around: { target: anchored.target, settled: anchored.settled, seek: anchored.seek },
+    /** La fenêtre `?around=` est en vol, rien n'en est encore servi (#9302) — jamais sur un cache. */
+    windowLoading: anchored.loading,
+    returnToPresent: anchored.clear,
     status,
     error,
     refetch: (): void => {
@@ -460,6 +498,29 @@ export function useComments(postId: string, options?: { readonly enabled?: boole
 }
 
 /**
+ * `useCommentReplies` (#8583) — les réponses d'UNE racine, chargées quand son
+ * fil est DÉPLIÉ seulement : un fil replié ne coûte aucune requête.
+ */
+export function useCommentReplies(postId: string, parentId: string, options: { readonly enabled: boolean }) {
+  return useInfiniteQuery({ ...repliesInfiniteOptions({ ...apiDeps, postId, parentId }), enabled: options.enabled });
+}
+
+/**
+ * LES RÉPONSES D'UNE RACINE, POUR LES JOINDRE À SA CARTE (#8734) — la caisse
+ * du fil déplié si elle existe (`ensureInfiniteQueryData`), sinon la première
+ * page lue et gardée pour le dépliage suivant. Une lecture ratée rend `[]` :
+ * la carte part sans elles, elle n'attend pas.
+ */
+export async function loadCommentRepliesAction(postId: string, parentId: string): Promise<readonly PostComment[]> {
+  try {
+    const data = await appQueryClient.ensureInfiniteQueryData(repliesInfiniteOptions({ ...apiDeps, postId, parentId }));
+    return flattenCommentPages(data as CommentInfiniteData);
+  } catch {
+    return [];
+  }
+}
+
+/**
  * `commentAction` — RÉFÉRENCE DE MODULE STABLE (motif `reactAction`) : le
  * SITE UNIQUE d'envoi d'un commentaire, lié à l'instance PARTAGÉE
  * `appQueryClient`. La liste de `/post/$post` et le panneau du lecteur de
@@ -471,13 +532,27 @@ export function commentAction(params: {
   readonly content: string;
   readonly author: FeedAuthor;
   readonly originalLanguage?: string | undefined;
+  /** La RACINE de la réponse (#8583) — absent ⇒ premier niveau. */
+  readonly parentId?: string | undefined;
+  /** Les photos et vidéos déjà téléversées (#9167). */
+  readonly media?: readonly PostMediaUploadResult[] | undefined;
+  /** Le sticker et son image déjà téléversée (#9080, #9318). */
+  readonly sticker?: CommentStickerSend | undefined;
 }): Promise<CommentResult> {
   return performComment({
     postId: params.postId,
     content: params.content,
     author: params.author,
     ...(params.originalLanguage === undefined ? {} : { originalLanguage: params.originalLanguage }),
+    ...(params.parentId === undefined ? {} : { parentId: params.parentId }),
+    ...(params.media === undefined || params.media.length === 0 ? {} : { media: params.media }),
+    ...(params.sticker === undefined ? {} : { sticker: params.sticker }),
     deps: { ...apiDeps, queryClient: appQueryClient },
+  }).then((result) => {
+    /* Un commentaire RETENU (servi, ou gardé en attente) allume l'anneau de
+       « Commentaires » ; un refus permanent, défait, ne l'allume pas. */
+    if (result.ok) notePublicationParticipation(params.postId, 'commented');
+    return result;
   });
 }
 

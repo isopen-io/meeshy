@@ -1,6 +1,8 @@
 import { useEffect, useId, useRef, type ReactNode } from 'react';
 
 import { Glyph } from './glyph';
+import { translate } from '@/lib/i18n-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 
 /**
@@ -41,10 +43,20 @@ export function Sheet({
   search,
   onSearchChange,
   bodyAs = 'ul',
+  presentation = 'fullscreen',
+  accessory,
+  closeLabel,
   onClose,
   children,
 }: {
   title: string;
+  /**
+   * Le NOM ACCESSIBLE du bouton de fermeture. Par défaut, « Fermer » dans la langue
+   * d'interface ; un hôte qui lit une AUTRE langue que celle-là — l'administration, servie
+   * en anglais aux interfaces allemande, italienne et arabe — passe la sienne : sans cela
+   * le lecteur d'écran annonçait « Fermer » en français sur une feuille anglaise.
+   */
+  closeLabel?: string;
   searchLabel?: string;
   searchPlaceholder?: string;
   search?: string;
@@ -64,6 +76,19 @@ export function Sheet({
    * de désigner son propre conteneur de défilement.
    */
   bodyAs?: 'ul' | 'div';
+  /**
+   * PLEIN ÉCRAN ou MODALE CENTRÉE (#8289).
+   *
+   * `'fullscreen'` (défaut) — les choix longs, qu'on parcourt et qu'on filtre.
+   * `'centered'` — un FORMULAIRE court (photo, mot de passe, bannissement) :
+   * largeur bornée à 36 rem avec une gouttière d'1 rem de chaque côté, hauteur
+   * bornée à 90 % de l'écran, centré par les marges automatiques du
+   * `<dialog>` modal — le même geste sur un téléphone, une tablette et un
+   * bureau, et l'écran d'où l'on vient reste visible derrière le voile.
+   */
+  presentation?: 'fullscreen' | 'centered';
+  /** Les gestes propres à la feuille, au bout de l'en-tête (le composer d'export : « Au hasard », « Format par défaut »). */
+  accessory?: ReactNode;
   onClose: () => void;
   children: ReactNode;
 }) {
@@ -99,37 +124,51 @@ export function Sheet({
     };
   }, []);
 
+  const centree = presentation === 'centered';
+
   return (
     <dialog
       ref={ref}
       onClose={onClose}
       aria-labelledby={titleId}
-      style={{
-        margin: 0,
-        padding: 0,
-        border: 0,
-        width: '100%',
-        maxWidth: '100%',
-        height: '100%',
-        maxHeight: '100%',
-        backgroundColor: 'var(--color-ios-surface)',
-        color: 'var(--color-ios-ink)',
-      }}
+      data-sheet-presentation={presentation}
+      className={centree ? 'm-auto w-[min(36rem,calc(100%-2rem))] max-h-[min(90dvh,calc(100%-2rem))] overflow-hidden rounded-card p-0 backdrop:bg-veil' : undefined}
+      style={
+        centree
+          ? {
+              border: 0,
+              backgroundColor: 'var(--color-ios-surface)',
+              color: 'var(--color-ios-ink)',
+              boxShadow: '0 24px 64px color-mix(in srgb, var(--color-media-backdrop) 28%, transparent)',
+            }
+          : {
+              margin: 0,
+              padding: 0,
+              border: 0,
+              width: '100%',
+              maxWidth: '100%',
+              height: '100%',
+              maxHeight: '100%',
+              backgroundColor: 'var(--color-ios-surface)',
+              color: 'var(--color-ios-ink)',
+            }
+      }
     >
-      <div className="flex h-full flex-col">
-        <div className="flex shrink-0 items-center gap-3 px-4 pt-safe pb-2">
+      <div className={centree ? 'flex max-h-[min(90dvh,calc(100dvh-2rem))] flex-col' : 'flex h-full flex-col'}>
+        <div className={`flex shrink-0 items-center gap-3 px-4 pb-2 ${centree ? 'pt-2' : 'pt-safe'}`}>
           <button
             type="button"
             onClick={() => ref.current?.close()}
             className="grid place-items-center rounded-chip"
             style={{ minHeight: 44, minWidth: 44, color: 'var(--color-ios-ink-2)' }}
-            aria-label="Fermer"
+            aria-label={closeLabel ?? translate(currentInterfaceLanguage(), 'common.close')}
           >
             <Glyph name="x" size={20} />
           </button>
           <h2 id={titleId} className="flex-1 text-title font-bold" style={{ color: 'var(--color-ios-ink)' }}>
             {title}
           </h2>
+          {accessory}
         </div>
 
         {onSearchChange === undefined ? null : (
@@ -142,7 +181,11 @@ export function Sheet({
               <input
                 type="search"
                 value={search ?? ''}
-                onChange={(e) => onSearchChange(e.currentTarget.value)}
+                /* `onInput`, la convention des champs texte du dépôt
+                   (`composer.tsx`, `test-support/react-events-probe.test.tsx`) :
+                   un `onChange` n'y est jamais rappelé sous happy-dom, et la
+                   recherche d'une feuille restait sans témoin (#8103). */
+                onInput={(e) => onSearchChange(e.currentTarget.value)}
                 placeholder={searchPlaceholder}
                 className="w-full bg-transparent py-2 text-body outline-none"
                 style={{ color: 'var(--color-ios-ink)' }}
@@ -152,10 +195,13 @@ export function Sheet({
           </div>
         )}
 
+        {/* Centrée, la feuille est BORNÉE : son corps défile lui-même, quel
+            qu'il soit — sans `min-h-0`, un enfant de flex refuse de rétrécir
+            sous son contenu et le bas du formulaire serait rogné. */}
         {bodyAs === 'ul' ? (
-          <ul className="flex-1 overflow-y-auto pb-safe">{children}</ul>
+          <ul className={`min-h-0 flex-1 overflow-y-auto ${centree ? 'pb-2' : 'pb-safe'}`}>{children}</ul>
         ) : (
-          <div className="flex min-h-0 flex-1 flex-col pb-safe">{children}</div>
+          <div className={`flex min-h-0 flex-1 flex-col ${centree ? 'overflow-y-auto pb-2' : 'pb-safe'}`}>{children}</div>
         )}
       </div>
     </dialog>

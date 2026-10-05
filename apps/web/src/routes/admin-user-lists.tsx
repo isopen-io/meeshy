@@ -1,7 +1,12 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 
 import { CONVERSATION_TYPES } from '@/lib/admin/conversation-list';
+import { interpretConversationType } from '@/lib/admin/interpret/enums';
+import { conversationLabel, personLabel } from '@/lib/admin/interpret/labels';
+import { formatBytes } from '@/lib/admin/interpret/numbers';
+import { adminDate, formatDuration } from '@/lib/admin/interpret/time';
+import { usePrismeDuMembreComplet } from '@/lib/admin/prisme-membre-hook';
 
 import { CollapsibleSection } from '@/components/collapsible-section';
 import { Sheet } from '@/components/sheet';
@@ -9,6 +14,7 @@ import {
   ADMIN_CONVERSATIONS_PAGE_SIZE,
   ADMIN_USER_CONVERSATION_SORTS,
   adminUserConversationsQueryKey,
+  adminUserConversationsRootKey,
   type AdminUserConversationSort,
   loadAdminUserConversations,
   type AdminConversation,
@@ -23,15 +29,14 @@ import type { AdminDeps } from '@/lib/api/admin';
 import type { AdminUserDetail } from '@/lib/api/admin-user-detail';
 import { apiDeps } from '@/lib/api/deps';
 import type { Viewer } from '@/lib/api/viewer';
-import { usePrismeDuMembre } from '@/lib/view/use-prisme-membre';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { useOnline } from '@/lib/net/online';
 
 import { AdminSkeleton } from './admin-parts';
 import { AdminFilterBar, AdminSelect } from './admin-table';
 import { Link } from './route-table';
 import { AdminConversationReading } from './admin-conversation-reading';
+import { AdminConversationSettingsSheet } from './admin-conversation-settings-sheet';
 
 /**
  * **CE QU'UN MEMBRE A CRÉÉ, ET OÙ IL PARLE** (#6819, étendu par #6862) — les
@@ -65,6 +70,18 @@ import { AdminConversationReading } from './admin-conversation-reading';
  * MÊME composant que `/adm/conversations/$id`, donc la même vue que le
  * produit, avec **le Prisme DU MEMBRE** : on lit ce que ce membre-là a lu, pas
  * la traduction que l'administrateur aurait vue.
+ *
+ * ## « CONFIGURER » OUVRE LES ÉCRITURES SOUVERAINES (#7845, #7999)
+ *
+ * Titre, description, images, droits d'écriture, archive, fermeture, et le
+ * rang ou le retrait du membre — sans que l'administrateur soit membre de la
+ * conversation (`AdminConversationSettingsSheet`). Le geste n'existe que pour
+ * qui a la section Conversations (`gerer`, résolu par la fiche depuis
+ * `GET /me/permissions`) : la passerelle garde ces écritures par
+ * `canManageConversations` au rang ADMIN, et un bouton qui rend un 403 à qui le
+ * touche est pire que son absence. Après une écriture, TOUTES les pages de la
+ * liste sont invalidées (`adminUserConversationsRootKey`) : un archivage change
+ * ce que chaque tri et chaque filtre rendent.
  */
 
 const INK = 'var(--color-ios-ink)';
@@ -82,7 +99,7 @@ function Pagination({
   taille,
   onOffset,
 }: {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly offset: number;
   readonly hasMore: boolean;
   readonly taille: number;
@@ -113,7 +130,7 @@ function Pagination({
  * n'a pas répondu. Les confondre ferait chercher une panne là où il n'y a qu'un
  * tunnel. Mêmes clés que la section Agent, qui portait déjà cette distinction.
  */
-function Absence({ language, online }: { readonly language: InterfaceLanguage; readonly online: boolean }) {
+function Absence({ language, online }: { readonly language: AdminLanguage; readonly online: boolean }) {
   return (
     <p className="text-caption" style={{ color: INK2 }} data-admin-absence>
       {translateAdmin(language, online ? 'admin.convList.unavailable' : 'admin.offline')}
@@ -127,7 +144,7 @@ export function AdminUserMediaSection({
   deps = apiDeps,
 }: {
   readonly userId: string;
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   /** Le port, injectable — MÊME porte que la section des conversations : une
    * asymétrie entre deux sections jumelles rend l'une mesurable et l'autre
    * non, ce qui décide en silence de ce qui sera gardé. */
@@ -175,16 +192,31 @@ export function AdminUserMediaSection({
   );
 }
 
-function MediaRow({ media, language }: { readonly media: AdminMedia; readonly language: InterfaceLanguage }) {
+/** Le GENRE d'un média, dit en mots — « Image », « Vidéo », « Audio », « Document » — jamais son type MIME brut. */
+function mediaKind(mimeType: string, language: AdminLanguage): string {
+  if (mimeType.startsWith('image/')) return translateAdmin(language, 'admin.people.media.kind.image');
+  if (mimeType.startsWith('video/')) return translateAdmin(language, 'admin.people.media.kind.video');
+  if (mimeType.startsWith('audio/')) return translateAdmin(language, 'admin.people.media.kind.audio');
+  return translateAdmin(language, 'admin.people.media.kind.document');
+}
+
+function MediaRow({ media, language }: { readonly media: AdminMedia; readonly language: AdminLanguage }) {
   return (
     <li data-admin-media={media.id} className="flex items-center gap-3 rounded-card px-4 py-3" style={CARTE}>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-body" style={{ color: INK }}>
-          {media.originalName === '' ? media.id : media.originalName}
+        <p className="break-words text-body" style={{ color: INK }}>
+          {media.originalName === '' ? translateAdmin(language, 'admin.people.media.unnamed') : media.originalName}
         </p>
-        <p className="truncate text-caption" style={{ color: INK2 }}>
-          {translateAdmin(language, media.source === 'message' ? 'admin.media.fromMessage' : 'admin.media.fromPost')}
-          {media.mimeType === '' ? '' : ` · ${media.mimeType}`}
+        <p className="break-words text-caption" style={{ color: INK2 }}>
+          {[
+            mediaKind(media.mimeType, language),
+            formatBytes(media.fileSize, language),
+            media.duration === null ? null : formatDuration(media.duration, 's', language),
+            media.createdAt === null ? null : adminDate(media.createdAt, language),
+            translateAdmin(language, media.source === 'message' ? 'admin.media.fromMessage' : 'admin.media.fromPost'),
+          ]
+            .filter((part): part is string => part !== null && part !== '')
+            .join(' · ')}
         </p>
       </div>
       {media.isProtected ? (
@@ -197,6 +229,16 @@ function MediaRow({ media, language }: { readonly media: AdminMedia; readonly la
 }
 
 /**
+ * LE NOM D'UNE CONVERSATION — son titre, ou à défaut les noms de ses membres (« Awa et Jean »,
+ * « Awa, Jean et 3 autres »), jamais son identifiant : un identifiant n'est pas un nom.
+ */
+const nameOf = (conversation: AdminConversation, language: AdminLanguage): string =>
+  conversationLabel(
+    { title: conversation.title, type: conversation.type, participants: conversation.participants, total: conversation.memberCount },
+    language,
+  );
+
+/**
  * LE VIEWER DE LA MODALE EST LE MEMBRE, pas l'administrateur.
  *
  * `isMineOf` compare `message.senderId` à l'identifiant du lecteur : servir
@@ -204,11 +246,11 @@ function MediaRow({ media, language }: { readonly media: AdminMedia; readonly la
  * y compris celles du membre — une conversation qu'il n'a jamais vue ainsi.
  * `isAnonymous: false` : on regarde un COMPTE, par définition.
  */
-function viewerDuMembre(membre: AdminUserDetail): Viewer {
+function viewerDuMembre(membre: AdminUserDetail, language: AdminLanguage): Viewer {
   return {
     id: membre.id,
     handle: membre.username,
-    displayName: membre.displayName,
+    displayName: personLabel(membre, language),
     isAnonymous: false,
     ...(membre.avatar === '' ? {} : { avatar: membre.avatar }),
   };
@@ -217,11 +259,14 @@ function viewerDuMembre(membre: AdminUserDetail): Viewer {
 export function AdminUserConversationsSection({
   membre,
   language,
+  onAnnounce = () => undefined,
   gerer = null,
   deps = apiDeps,
 }: {
   readonly membre: AdminUserDetail;
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
+  /** Le verdict d'une configuration, dit au lecteur d'écran par la fiche. */
+  readonly onAnnounce?: (texte: string) => void;
   /** La fiche d'administration d'une conversation, dans l'espace courant — `null` pour qui n'a pas la section des conversations. */
   readonly gerer?: 'adminConversation' | 'admConversation' | null;
   /** Le port, injectable — voir `AdminConversationReading`, même raison. */
@@ -233,6 +278,9 @@ export function AdminUserConversationsSection({
    * doit savoir LAQUELLE elle lit, et la remonter à chaque ouverture remet le
    * motif à zéro, ce qui est voulu (un motif par lecture). */
   const [ouverte, setOuverte] = useState<AdminConversation | null>(null);
+  /** La conversation dont la feuille « Configurer » est ouverte — même raison. */
+  const [configuree, setConfiguree] = useState<AdminConversation | null>(null);
+  const client = useQueryClient();
 
   const [tri, setTri] = useState<AdminUserConversationSort>('lastMessageAt');
   const [ordre, setOrdre] = useState<'asc' | 'desc'>('desc');
@@ -248,7 +296,12 @@ export function AdminUserConversationsSection({
     retry: false,
   });
 
-  const prisme = usePrismeDuMembre(membre);
+  const prisme = usePrismeDuMembreComplet({
+    systemLanguage: membre.systemLanguage,
+    regionalLanguage: membre.regionalLanguage,
+    customDestinationLanguage: membre.customDestinationLanguage,
+    deviceLocale: membre.adminMetadata?.deviceLocale ?? null,
+  });
 
   return (
     <>
@@ -283,7 +336,7 @@ export function AdminUserConversationsSection({
           <AdminSelect
             label={translateAdmin(language, 'admin.col.type')}
             value={type}
-            options={[{ value: '', label: translateAdmin(language, 'admin.list.all') }, ...CONVERSATION_TYPES.map((valeur) => ({ value: valeur, label: valeur }))]}
+            options={[{ value: '', label: translateAdmin(language, 'admin.list.all') }, ...CONVERSATION_TYPES.map((valeur) => ({ value: valeur, label: interpretConversationType(valeur, language).label }))]}
             onChange={(valeur) => {
               setType(valeur);
               setOffset(0);
@@ -308,6 +361,7 @@ export function AdminUserConversationsSection({
                   conversation={conversation}
                   language={language}
                   onOpen={() => setOuverte(conversation)}
+                  onConfigure={gerer === null ? null : () => setConfiguree(conversation)}
                   gerer={gerer}
                 />
               ))}
@@ -325,7 +379,8 @@ export function AdminUserConversationsSection({
 
       {ouverte === null ? null : (
         <Sheet
-          title={ouverte.title ?? ouverte.identifier ?? ouverte.id}
+          title={nameOf(ouverte, language)}
+          closeLabel={translateAdmin(language, 'admin.kit.close')}
           bodyAs="div"
           onClose={() => setOuverte(null)}
         >
@@ -336,11 +391,25 @@ export function AdminUserConversationsSection({
               prisme="membre"
               readerLanguages={prisme.languages}
               readerLocale={prisme.locale}
-              viewer={viewerDuMembre(membre)}
+              viewer={viewerDuMembre(membre, language)}
               deps={deps}
             />
           </div>
         </Sheet>
+      )}
+
+      {configuree === null ? null : (
+        <AdminConversationSettingsSheet
+          conversation={configuree}
+          userId={membre.id}
+          language={language}
+          deps={deps}
+          onAnnounce={onAnnounce}
+          onClose={() => setConfiguree(null)}
+          onChanged={() => {
+            void client.invalidateQueries({ queryKey: adminUserConversationsRootKey(membre.id) });
+          }}
+        />
       )}
     </>
   );
@@ -356,11 +425,13 @@ function ConversationRow({
   conversation,
   language,
   onOpen,
+  onConfigure,
   gerer,
 }: {
   readonly conversation: AdminConversation;
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly onOpen: () => void;
+  readonly onConfigure: (() => void) | null;
   readonly gerer: 'adminConversation' | 'admConversation' | null;
 }) {
   return (
@@ -374,18 +445,30 @@ function ConversationRow({
       >
         <div className="min-w-0 flex-1">
           <p className="truncate text-body" style={{ color: INK }}>
-            {/* Un DIRECT n'a pas de titre propre (D-75) : il porte le nom de
-                l'autre, que cette route ne sert pas. On montre alors son
-                identifiant plutôt qu'une ligne vide. */}
-            {conversation.title ?? conversation.identifier ?? conversation.id}
+            {/* Un DIRECT n'a pas de titre propre (D-75) : il porte le nom de l'autre, que cette route
+                ne sert pas — « Conversation sans titre », jamais son identifiant (un identifiant n'est
+                pas un nom). */}
+            {nameOf(conversation, language)}
           </p>
           <p className="truncate text-caption" style={{ color: INK2 }}>
-            {conversation.type}
+            {interpretConversationType(conversation.type, language).label}
             {' · '}
             {translateAdmin(language, 'admin.conv.members', { count: String(conversation.memberCount) })}
           </p>
         </div>
       </button>
+      {onConfigure === null ? null : (
+        <button
+          type="button"
+          data-admin-conversation-configure={conversation.id}
+          aria-label={`${translateAdmin(language, 'admin.conv.configure')} — ${nameOf(conversation, language)}`}
+          onClick={onConfigure}
+          className="grid shrink-0 place-items-center rounded-card px-3 text-caption font-semibold"
+          style={{ ...CARTE, color: 'var(--color-ios-brand)', minHeight: 44 }}
+        >
+          {translateAdmin(language, 'admin.conv.configure')}
+        </button>
+      )}
       {gerer === null ? null : (
         <Link
           to={gerer}

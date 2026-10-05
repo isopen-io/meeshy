@@ -128,32 +128,12 @@ struct ComposerObjectEditorView: View {
     /// plutôt que de prendre tout ce qu'on l'autorise à prendre.
     @State var optionsContentHeight: CGFloat = 0
 
-    /// La durée du fichier source d'un média, mesurée à l'ouverture (#4082).
-    /// Le modèle ne la porte pas de façon fiable ; sans elle, chaque
-    /// réouverture de la bande montrerait une source rétrécie à la fenêtre
-    /// précédente — un rognage qui se referme sur lui-même à chaque visite.
-    @State var mediaSourceDuration: Double = 0
-
-    @State private var planZoom: Plan2DZoom = .fit
-    @State private var moveOrigin: Double?
 
     /// **Le plan TIENT le geste, donc le scroller doit lâcher.** Sans ce
     /// verrou, le contenu panne sous le doigt pendant que la barre se rogne —
     /// les deux se disputent le même doigt, et `Plan2DView` documente
     /// explicitement le signal qu'il émet pour l'éviter.
     @State private var planHoldsGesture = false
-
-    /// La fenêtre de l'objet, LUE du modèle à chaque rendu — jamais recopiée
-    /// dans un `@State`, qui divergerait de ce que le plan 2D dessine.
-    private var timing: ComposerObjectTiming {
-        // **Générique depuis #4937** : `MeeshySceneObject` expose `startTime` et
-        // `duration` pour les cinq familles, en uniformisant le `Float?` de
-        // l'audio. Lire `textObject` ici aurait rendu la fenêtre d'un sticker
-        // « permanente » quelle que soit sa vraie valeur — un réglage qui ment
-        // plutôt qu'un réglage absent.
-        ComposerObjectTiming.timing(start: sceneObject?.startTime,
-                                    duration: sceneObject?.duration)
-    }
 
     /// **L'objet courant, TOUTES familles** (#4937) — lu du modèle à chaque
     /// rendu, jamais recopié : le plan 2D permet d'en désigner un autre sans
@@ -168,14 +148,6 @@ struct ComposerObjectEditorView: View {
     /// l'écran se referme alors de lui-même.
     private var family: MeeshySceneObject.Kind {
         sceneObject?.kind ?? .text
-    }
-
-    private var textObject: StoryTextObject? {
-        viewModel.currentEffects.textObjects.first { $0.id == objectId }
-    }
-
-    private var slideDuration: Double {
-        max(1, viewModel.currentSlide.duration)
     }
 
     /// **L'anatomie du PLATEAU, ici aussi** (#4936) — et les outils dans le
@@ -244,7 +216,21 @@ struct ComposerObjectEditorView: View {
         // C'est aussi ce que fait tout le reste du produit : le socle est ancré
         // en bas, les options de l'outil DESSIN aussi. L'éditeur plein écran
         // était l'exception.
-        .safeAreaInset(edge: .bottom, spacing: 0) { options }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            options
+                // **Le glissement BAS rend l'écran à la scène** (#5027) — posé
+                // sur le PANNEAU seulement depuis le 2026-09-28 : sur tout
+                // l'écran, déplacer un texte vers le bas au doigt repliait
+                // aussi le panneau.
+                .simultaneousGesture(
+                    DragGesture(minimumDistance: 24)
+                        .onEnded { valeur in
+                            guard ComposerObjectEditorDismissGesture.completes(
+                                translation: valeur.translation) else { return }
+                            yieldScreenToScene()
+                        }
+                )
+        }
         .background(plateauTint.ignoresSafeArea())
         .preferredColorScheme(.dark)
         // **Le glissement du bord de tête RAMÈNE à la scène** (#4997).
@@ -255,21 +241,6 @@ struct ComposerObjectEditorView: View {
         // posé sur toute la vue — le canvas y déplace des objets, et un
         // glissement horizontal capté partout lui volerait chaque translation.
         .overlay(alignment: .leading) { edgeBackStrip }
-        // **Le glissement BAS rend l'écran à la scène** (#5027) : le clavier
-        // part, puis le panneau de l'outil se replie.
-        //
-        // Posé en `simultaneousGesture` et non en `gesture` : la zone
-        // d'options défile et le plan 2D panne. Un `gesture` exclusif leur
-        // volerait le doigt ; la règle, elle, refuse tout ce qui n'est pas
-        // franchement vertical, donc les deux cohabitent.
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 24)
-                .onEnded { valeur in
-                    guard ComposerObjectEditorDismissGesture.completes(
-                        translation: valeur.translation) else { return }
-                    yieldScreenToScene()
-                }
-        )
         // **Changer d'objet peut changer de FAMILLE** (#4937), et l'outil
         // courant peut ne plus exister pour elle : passer d'un texte réglé sur
         // POLICE à un sticker laisserait le bas vide.
@@ -281,7 +252,9 @@ struct ComposerObjectEditorView: View {
             let demandee = initialSectionPending ? (initialSection ?? selectedTool) : selectedTool
             initialSectionPending = false
             selectedTool = ComposerObjectEditorRail.selection(forFamily: nouvelle,
-                                                              keeping: demandee)
+                                                              keeping: demandee,
+                                                              hasTrimmableSource: objectHasTrimmableSource,
+                                                              offersFilter: objectOffersFilter)
         }
     }
 
@@ -305,7 +278,7 @@ struct ComposerObjectEditorView: View {
             // (`spokenLabel`) — une chaîne pour l'œil, une pour l'oreille, parce
             // qu'un « 4 » annoncé seul ne dit pas ce qu'il compte.
             Button(action: onClose) {
-                HStack(spacing: 3) {
+                HStack(spacing: MeeshySpacing.xxs) {
                     // `chevron.backward`, jamais `chevron.left` : le second nomme
                     // un côté PHYSIQUE et ne se retourne pas en arabe, où le
                     // retour est à droite. `RightToLeftLayoutGuardTests` l'a
@@ -314,10 +287,10 @@ struct ComposerObjectEditorView: View {
                     Image(systemName: "chevron.backward")
                         .font(MeeshyFont.relative(15, weight: .semibold))
                     Text(LocalizedNumber.exact(objectCount))
-                        .font(MeeshyFont.relative(16, weight: .semibold).monospacedDigit())
+                        .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .semibold).monospacedDigit())
                 }
                 .foregroundStyle(.white)
-                .padding(.horizontal, 12)
+                .padding(.horizontal, MeeshySpacing.md)
                 .frame(minWidth: 44, minHeight: 40)
                 // **Verre ADAPTATIF, jamais `glassEffect` en direct** (#4997) :
                 // l'enrobage du SDK rend le vrai Liquid Glass sur iOS 26 et un
@@ -333,18 +306,18 @@ struct ComposerObjectEditorView: View {
             Spacer()
             Button(action: onClose) {
                 Text(ComposerObjectEditorCopy.done)
-                    .font(MeeshyFont.relative(15, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
                     // Blanc sur la capsule PROÉMINENTE, comme « Publier » : les
                     // deux sont l'action terminale de leur écran, et le même
                     // geste doit avoir partout le même relief.
                     .foregroundStyle(.white)
-                    .padding(.horizontal, 16)
+                    .padding(.horizontal, MeeshySpacing.lg)
                     .frame(minHeight: 40)
                     .adaptiveGlassProminent(in: Capsule(), tint: MeeshyColors.brandPrimary)
             }
             .buttonStyle(.plain)
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, MeeshySpacing.lg)
         .padding(.vertical, 8)
     }
 
@@ -380,7 +353,7 @@ struct ComposerObjectEditorView: View {
                 set: { viewModel.currentSlide = $0 }
             ),
             aspectRatio: aspectRatio,
-            cornerRadius: 20,
+            cornerRadius: MeeshyRadius.xl,
             // **Taper un autre texte l'OUVRE** — le même geste que sur une barre
             // du plan 2D, et la même raison : sur un écran dont le sujet EST
             // l'objet sélectionné, un tap qui ne sélectionne rien est un
@@ -437,7 +410,12 @@ struct ComposerObjectEditorView: View {
             // geste : « Terminé », qui appelle `closeObjectEditor`.
             onInlineTextEditEnded: { _ in },
             // `nil` — voir le doc-comment : pas de cadre en plein écran (#4850).
-            selectedItemId: nil
+            selectedItemId: nil,
+            // **Le texte se manipule AU DOIGT pendant qu'on l'édite** (#8540,
+            // retour porteur 2026-09-28) : un glisser, un pincer ou une
+            // rotation suspend la saisie et rend le texte à sa place ; le
+            // toucher la reprend. Sans quitter cet écran.
+            inlineEditYieldsToManipulation: true
         )
         // **Le sujet RÉCLAME la hauteur libre** (#4997) : la carte est figée à
         // son ratio et se centre dans ce qu'on lui donne, donc sans
@@ -450,8 +428,8 @@ struct ComposerObjectEditorView: View {
         // Les DEUX couloirs sont de nouveau occupés (#5026) — les outils à
         // gauche, l'historique à droite — et la carte s'encastre entre eux,
         // comme sur la surface de scène.
-        .padding(.horizontal, 16)
-        .padding(.bottom, 10)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.bottom, MeeshySpacing.smPlus)
     }
 
     // MARK: - Les deux rails, dans les couloirs
@@ -500,8 +478,11 @@ struct ComposerObjectEditorView: View {
     /// > geste.
     private var toolRail: some View {
         ScrollView(.vertical, showsIndicators: false) {
-            VStack(spacing: 6) {
-                ForEach(ComposerObjectEditorRail.entries(for: family), id: \.self) { entree in
+            VStack(spacing: MeeshySpacing.sm) {
+                ForEach(ComposerObjectEditorRail.entries(
+                    for: family,
+                    hasTrimmableSource: objectHasTrimmableSource,
+                    offersFilter: objectOffersFilter), id: \.self) { entree in
                     Button {
                         // **La bascule vit dans la RÈGLE** (#5098) : retaper
                         // l'entrée OUVERTE range son panneau, taper une autre
@@ -527,17 +508,23 @@ struct ComposerObjectEditorView: View {
                         }
                     } label: {
                         Image(systemName: ComposerObjectEditorRail.symbolName(entree))
-                            .font(.title3)
+                            .font(.body.weight(.semibold))
                             .symbolRenderingMode(.hierarchical)
-                            .foregroundStyle(ComposerObjectEditorRail.isSelected(entree, selected: selectedTool)
-                                             ? MeeshyColors.brandPrimary
-                                             : Color.white.opacity(0.55))
+                            .foregroundStyle(MeeshyColors.textPrimary(isDark: true))
                             // 44 pt de CIBLE quel que soit le glyphe
                             // (dimension 5) : dessiné à sa taille naturelle, un
                             // `clock` donnerait 17 pt que personne n'atteint du
                             // pouce.
-                            .frame(width: ComposerObjectEditorRail.railWidth, height: 44)
-                            .contentShape(Rectangle())
+                            .frame(width: 44, height: 44)
+                            .contentShape(Circle())
+                            // **Un petit bouton SÉPARÉ, dans son disque de verre**
+                            // (directive porteur 2026-09-27 : « pas de long
+                            // bandeau de contrôleur à gauche ou à droite, juste
+                            // des petits boutons »). L'outil ouvert passe à
+                            // l'indigo.
+                            .adaptiveLiquidGlass(in: Circle(),
+                                           tint: ComposerObjectEditorRail.isSelected(entree, selected: selectedTool)
+                                               ? MeeshyColors.brandPrimary : plateauTint.opacity(0.55), interactive: true)
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(ComposerObjectEditorCopy.entry(entree))
@@ -545,34 +532,15 @@ struct ComposerObjectEditorView: View {
                                             ? [.isButton, .isSelected] : .isButton)
                 }
             }
-            .padding(.vertical, 4)
+            .padding(.vertical, MeeshySpacing.xs)
         }
         .frame(width: ComposerObjectEditorRail.railWidth)
-        // **La CARTE, et c'est tout le correctif du #5097.**
-        //
-        // Le rail était déjà à gauche (#5026) et déjà défilable ; ce qui lui
-        // manquait n'était ni la place ni la course, c'était une FRONTIÈRE.
-        // Posé nu, il se terminait au contact de la zone d'options — deux jeux
-        // de glyphes contigus sur le même fond, et rien ne disait où l'un
-        // finissait. Clavier levé, ce qui reste au `HStack` se réduit d'autant
-        // et les deux se touchent.
-        //
-        // > Directive porteur 2026-09-04 : « la liste des tools à gauche […]
-        // > toujours être au dessus des options qui apparaissent en base et non
-        // > pas se confondre avec les option lorsqu'on a le clavier qui
-        // > s'affiche. »
-        //
-        // Le dessin n'est pas inventé : c'est EXACTEMENT celui du couloir droit
-        // (`ComposerTrailingRail`) — même rayon, même teinte, même respiration.
-        // C'est la dimension 6 prise au mot : les deux couloirs du même écran
-        // portent la même pièce, et l'auteur n'a rien à réapprendre en passant
-        // de l'un à l'autre.
+        // **Plus de CARTE depuis le 2026-09-27** : le #5097 l'avait posée pour
+        // que le rail ne se confonde pas avec les options, clavier levé. Chaque
+        // bouton porte désormais son propre disque de verre — la frontière est
+        // tenue bouton par bouton, et la bande que le porteur a retirée ne
+        // revient pas.
         .padding(.vertical, 8)
-        .background(
-            RoundedRectangle(cornerRadius: ComposerObjectEditorRail.railWidth / 2,
-                             style: .continuous)
-                .fill(plateauTint.opacity(0.55))
-        )
         .accessibilityElement(children: .contain)
         .accessibilityLabel(ComposerObjectEditorCopy.toolRow)
     }
@@ -621,9 +589,16 @@ struct ComposerObjectEditorView: View {
             actions: [],
             plateauTint: plateauTint,
             onUndo: viewModel.canUndoGlobal ? { viewModel.undoGlobal() } : nil,
-            onRedo: viewModel.canRedoGlobal ? { viewModel.redoGlobal() } : nil
+            onRedo: viewModel.canRedoGlobal ? { viewModel.redoGlobal() } : nil,
+            // **Plus de colonne vide** (directive porteur 2026-09-27 : « pas de
+            // barre d'action qui se prolonge sans action »). Le ressort étirait
+            // le verre sur toute la hauteur au-dessus d'un seul bouton ; des
+            // boutons SÉPARÉS, posés au bas, n'occupent que ce qu'ils portent.
+            pushesToThumb: false,
+            separateButtons: true
         )
-        .frame(width: 52)
+        .frame(width: ComposerRailGeometry.railWidth)
+        .frame(maxHeight: .infinity, alignment: .bottom)
     }
 
     // MARK: - Toutes les options, empilées
@@ -747,6 +722,14 @@ struct ComposerObjectEditorView: View {
             optionsContentHeight = $0
         }
         .scrollDisabled(scrollDisabled)
+        // **La plaque de VERRE du bas** (directive porteur 2026-09-27 : « en bas
+        // une plaque de verre dans laquelle apparaissent les options des
+        // différents outils d'édition, le tout en adaptive glass »).
+        .padding(.vertical, MeeshySpacing.smPlus)
+        .adaptiveGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.xlPlus, style: .continuous),
+                       tint: plateauTint.opacity(0.55))
+        .padding(.horizontal, MeeshySpacing.sm)
+        .padding(.bottom, MeeshySpacing.xs)
     }
 
     /// Les options d'un objet TEXTE, dans l'ordre que la rangée du SDK a fixé —
@@ -754,7 +737,7 @@ struct ComposerObjectEditorView: View {
     /// demande pas de réapprendre.
     @ViewBuilder
     private func textOptions(_ binding: Binding<StoryTextObject>) -> some View {
-        VStack(alignment: .leading, spacing: 18) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.lg) {
             // **POLICE n'est plus un cas particulier** (directive porteur
             // 2026-09-05 : « aligne correctement les éléments Effets et
             // Polices », « assure-toi que tout entre bien dans les viewport »).
@@ -792,7 +775,7 @@ struct ComposerObjectEditorView: View {
             timingSection
             planSection
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, MeeshySpacing.lg)
         .padding(.bottom, 28)
     }
 
@@ -802,133 +785,24 @@ struct ComposerObjectEditorView: View {
     // reste disponible dans le SDK ; il n'a simplement plus d'hôte ici.
 
 
-    // MARK: - D'où à où
+    // MARK: - D'où à où, et le plan 2D
 
-    /// La fenêtre se règle en DÉBUT et FIN — ce que l'auteur voit — et se range
-    /// en début + durée, ce que le modèle stocke. `ComposerObjectTiming` tient
-    /// la conversion, et surtout le `nil` de « permanent », qu'une paire de
-    /// glissières nues perdrait au premier réglage.
+    /// **Les MÊMES contrôles que l'édition en place** (#9138) : extraits dans
+    /// `ComposerObjectTimingControls.swift`, ils servent cet écran et le
+    /// panneau qui s'ouvre à droite de la scène — deux copies divergeraient au
+    /// premier réglage.
     private var timingSection: some View {
         section(ComposerObjectEditorCopy.timing, .timing) {
-            VStack(alignment: .leading, spacing: 10) {
-                Text(ComposerObjectEditorCopy.window(timing, slideDuration: slideDuration))
-                    .font(MeeshyFont.relative(12, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.75))
-                    .accessibilityLabel(ComposerObjectEditorCopy.window(timing, slideDuration: slideDuration))
-
-                slider(titre: ComposerObjectEditorCopy.start,
-                       valeur: Binding(get: { timing.start }, set: { nouvelle in
-                           apply(timing.moved(to: nouvelle, slideDuration: slideDuration))
-                       }),
-                       borne: slideDuration)
-
-                if let fin = timing.end {
-                    slider(titre: ComposerObjectEditorCopy.end,
-                           valeur: Binding(get: { fin }, set: { nouvelle in
-                               apply(timing.trimmingEnd(to: nouvelle, slideDuration: slideDuration))
-                           }),
-                           borne: slideDuration)
-                }
-
-                // **Le retour vers « permanent » est un CHEMIN, pas un défaut.**
-                // Sans lui, régler une fin serait irréversible : l'interface
-                // offrirait un aller sans retour, et l'auteur devrait supprimer
-                // l'objet pour le refaire.
-                Toggle(isOn: Binding(
-                    get: { timing.isPermanent },
-                    set: { permanent in
-                        apply(permanent
-                              ? timing.madePermanent
-                              : timing.trimmingEnd(to: slideDuration, slideDuration: slideDuration))
-                    }
-                )) {
-                    Text(ComposerObjectEditorCopy.permanent)
-                        .font(MeeshyFont.relative(13, weight: .regular))
-                        .foregroundStyle(.white.opacity(0.85))
-                }
-                .tint(MeeshyColors.brandPrimary)
-            }
+            ComposerObjectTimingControls(viewModel: viewModel, objectId: objectId)
         }
     }
 
-    private func slider(titre: String, valeur: Binding<Double>, borne: Double) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack {
-                Text(titre)
-                    .font(MeeshyFont.relative(11, weight: .regular))
-                    .foregroundStyle(.white.opacity(0.55))
-                Spacer()
-                Text(ComposerObjectEditorCopy.seconds(valeur.wrappedValue))
-                    .font(MeeshyFont.relative(11, weight: .medium).monospacedDigit())
-                    .foregroundStyle(.white.opacity(0.75))
-            }
-            Slider(value: valeur, in: 0...borne)
-                .tint(MeeshyColors.brandPrimary)
-                .accessibilityLabel(titre)
-                .accessibilityValue(ComposerObjectEditorCopy.seconds(valeur.wrappedValue))
-        }
-    }
-
-    // MARK: - Le plan 2D
-
-    /// **La vision dans le plan** — l'objet parmi les autres, sur l'axe du
-    /// temps. C'est `Plan2DView` du SDK, monté tel quel : en écrire une version
-    /// simplifiée ici perdrait les poignées de bord, le verrou des fonds et le
-    /// signal de blocage du scroll, que l'atelier a déjà.
     private var planSection: some View {
         section(ComposerObjectEditorCopy.plan, .plan) {
-            GeometryReader { geo in
-                Plan2DView(
-                    tracks: Plan2DLayout.tracks(from: viewModel.currentEffects,
-                                                slideDuration: slideDuration),
-                    zoom: planZoom,
-                    laneWidth: max(120, geo.size.width),
-                    slideDuration: slideDuration,
-                    isDark: true,
-                    selectedTrackId: objectId,
-                    // **Taper une autre piste ouvre CET objet-là** : le plan
-                    // montre toute la slide, et le seul geste qu'on attend d'une
-                    // barre voisine est « celle-ci maintenant ». Sans ce
-                    // branchement, le tap serait un contrôle inerte de plus.
-                    onSelectTrack: { id in
-                        guard id != objectId,
-                              viewModel.currentEffects.textObjects.contains(where: { $0.id == id })
-                        else { return }
-                        openEditor(id)
-                    },
-                    // Les keyframes s'éditent à l'Inspecteur de l'atelier, que ce
-                    // meuble ne monte pas (#4082) : DÉSIGNER un keyframe ici
-                    // n'ouvrirait rien. Le rappel reste vide et le dit — un
-                    // geste armé sans destination est un contrôle qui ment.
-                    onSelectKeyframe: { _ in },
-                    // Même raison : l'index rendu est absolu dans `tracks`, tous
-                    // plans confondus, et le traduire en mutation de plan/z est
-                    // exactement ce que `Plan2DView` laisse à l'appelant. Tant
-                    // que l'écran ne sait pas le faire, il ne le promet pas.
-                    onReorder: { _, _ in },
-                    onTrimStart: { id, delta in
-                        guard id == objectId else { return }
-                        apply(timing.trimmingStart(to: timing.start + delta))
-                    },
-                    onTrimEnd: { id, delta in
-                        guard id == objectId else { return }
-                        apply(timing.trimmingEnd(to: (timing.end ?? slideDuration) + delta,
-                                                 slideDuration: slideDuration))
-                    },
-                    onMove: { id, cumule in
-                        guard id == objectId else { return }
-                        // Le déplacement est CUMULÉ depuis le début du geste :
-                        // l'origine se capture au premier appel, sans quoi les
-                        // deltas s'additionneraient en boule de neige.
-                        let origine = moveOrigin ?? timing.start
-                        if moveOrigin == nil { moveOrigin = origine }
-                        apply(timing.moved(to: origine + cumule, slideDuration: slideDuration))
-                    },
-                    onMoveEnded: { _ in moveOrigin = nil },
-                    onScrollLockChanged: { tenu in planHoldsGesture = tenu }
-                )
-            }
-            .frame(height: 120)
+            ComposerObjectPlanControls(viewModel: viewModel,
+                                       objectId: objectId,
+                                       onSelectText: { openEditor($0) },
+                                       holdsGesture: $planHoldsGesture)
         }
     }
 
@@ -950,15 +824,17 @@ struct ComposerObjectEditorView: View {
                                         _ id: ComposerObjectEditorSection,
                                         @ViewBuilder content: () -> Content) -> some View {
         if ComposerObjectEditorRail.isSelected(id, selected: selectedTool) {
-            VStack(alignment: .leading, spacing: 10) {
-                Text(titre)
-                    .font(MeeshyFont.relative(11, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.55))
-                    .tracking(0.8)
+            // **Aucune légende visible** (directive porteur 2026-09-27 :
+            // « enlève les captions partout ») : le bouton allumé du rail dit
+            // déjà quel outil est ouvert. Le titre reste celui que VoiceOver
+            // annonce pour le groupe (dimension 5).
+            VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
                 content()
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel(titre)
         }
     }
 
@@ -966,21 +842,6 @@ struct ComposerObjectEditorView: View {
         viewModel.exitTextEditingMode()
         viewModel.enterTextEditingMode(textId: id)
         onSelectObject(id)
-    }
-
-    /// Ranger la fenêtre dans le MODÈLE — jamais dans un état de vue. C'est ce
-    /// qui garde le plan 2D, le canvas et la publication d'accord.
-    ///
-    /// **Elle passe par le BINDING du viewModel**, seul site qui sait écrire
-    /// dans `currentEffects` — son setter est privé au SDK, et c'est une bonne
-    /// clôture : une vue qui reconstruirait le tableau d'effets pour changer un
-    /// champ écraserait tout ce qu'un autre chemin y aurait posé entre-temps.
-    private func apply(_ nouveau: ComposerObjectTiming) {
-        guard let binding = viewModel.textObjectBinding(for: objectId) else { return }
-        var objet = binding.wrappedValue
-        objet.startTime = nouveau.storedStartTime
-        objet.duration = nouveau.storedDuration
-        binding.wrappedValue = objet
     }
 }
 

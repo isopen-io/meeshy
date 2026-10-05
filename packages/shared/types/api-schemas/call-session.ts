@@ -64,6 +64,13 @@ export const callSessionSchema = {
     isTranscribed: { type: 'boolean', description: 'Whether call was transcribed' },
     transcriptionId: { type: 'string', nullable: true, description: 'Transcription ID' },
 
+    // Réactions envoyées pendant l'appel (#8439), comptées par emoji
+    reactionCounts: {
+      type: 'object',
+      additionalProperties: { type: 'integer' },
+      description: 'Reactions sent during the call, counted per emoji (CALL_REACTION_EMOJIS only)'
+    },
+
     // Quality metrics
     averageQuality: { type: 'number', nullable: true, description: 'Average quality score (0-100)' },
 

@@ -40,6 +40,7 @@ import { PAGE_PARTNERS } from '../src/institutional/partners';
 import { PAGE_PRIVACY } from '../src/institutional/privacy';
 import { PAGE_TERMS } from '../src/institutional/terms';
 import type { ContentPage } from '../src/institutional/type';
+import { meeViewFiles } from '../src/institutional/mee-views';
 import { INLINE_SCHEME_BOOTSTRAP } from '../src/lib/inline-scheme-bootstrap.js';
 import { resolveDistDir } from './lib/resolve-dist-dir.mjs';
 
@@ -242,6 +243,14 @@ function check(route: string, html: string, page: ContentPage): void {
     for (const e of failures) console.error(`    · ${e}`);
     process.exit(1);
   }
+}
+
+/* LES VUES DE MEE (#9034) — écrites AVANT les pages, pour que le contrôle
+   « chaque sous-ressource existe dans le dist » les trouve. */
+for (const { path, svg } of meeViewFiles(PAGES.map(({ page }) => page))) {
+  const file = join(DIST, path);
+  mkdirSync(dirname(file), { recursive: true });
+  writeFileSync(file, svg);
 }
 
 const sheet = producedSheet();

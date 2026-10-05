@@ -477,14 +477,7 @@ extension ConversationViewModel {
         for msg in apiMessages {
             for att in msg.attachments ?? [] {
                 if let t = att.transcription {
-                    let segments = (t.segments ?? []).map {
-                        MessageTranscriptionSegment(
-                            text: $0.text,
-                            startTime: $0.startTime,
-                            endTime: $0.endTime,
-                            speakerId: $0.speakerId
-                        )
-                    }
+                    let segments = (t.segments ?? []).map(MessageTranscriptionSegment.init)
                     let transcription = MessageTranscription(
                         attachmentId: att.id,
                         text: t.resolvedText,
@@ -501,26 +494,18 @@ extension ConversationViewModel {
                     var audios: [MessageTranslatedAudio] = []
                     for (lang, trans) in translations {
                         guard let url = trans.url, !url.isEmpty else { continue }
-                        let segments = (trans.segments ?? []).map {
-                            MessageTranscriptionSegment(
-                                text: $0.text,
-                                startTime: $0.startTime,
-                                endTime: $0.endTime,
-                                speakerId: $0.speakerId
-                            )
-                        }
+                        let segments = (trans.segments ?? []).map(MessageTranscriptionSegment.init)
                         audios.append(MessageTranslatedAudio(
-                            id: "\(att.id)_\(lang)",
                             attachmentId: att.id,
-                            targetLanguage: lang,
+                            language: lang,
                             url: url,
-                            transcription: trans.transcription ?? "",
-                            durationMs: trans.durationMs ?? 0,
-                            format: trans.format ?? "mp3",
-                            cloned: trans.cloned ?? false,
-                            quality: trans.quality ?? 0,
+                            transcription: trans.transcription,
+                            durationMs: trans.durationMs,
+                            format: trans.format,
+                            cloned: trans.cloned,
+                            quality: trans.quality,
                             voiceModelId: trans.voiceModelId,
-                            ttsModel: trans.ttsModel ?? "xtts",
+                            ttsModel: trans.ttsModel,
                             segments: segments
                         ))
                     }

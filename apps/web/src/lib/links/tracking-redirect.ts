@@ -37,13 +37,21 @@ import { isUnreachable } from '@/lib/api/link-failure';
 
 export type TrackingClick = { readonly originalUrl: string | null };
 
+/** Les quatre types de contenu qu'un partage nomme (`PostService.shareWithTrackingLink`). */
+export type SharedContentType = 'POST' | 'REEL' | 'STORY' | 'STATUS';
+
+export type SharedContent = { readonly type: SharedContentType; readonly id: string };
+
 export type TrackingResolution = {
   readonly kind: 'tracking' | 'conversation';
   readonly originalUrl: string | null;
   readonly isActive: boolean;
+  /** La cible TYPÉE d'un partage de contenu (#9149) — absente pour tout le reste. */
+  readonly content?: SharedContent | null;
 };
 
 export type TrackingOutcome =
+  | { readonly kind: 'open'; readonly content: SharedContent; readonly via: string }
   | { readonly kind: 'leave'; readonly target: string }
   | { readonly kind: 'join'; readonly linkId: string }
   | { readonly kind: 'dead' }
@@ -75,6 +83,23 @@ const DEAD_STATUSES: ReadonlySet<number> = new Set([400, 404, 410]);
 const targetOf = (result: ApiResult<{ readonly originalUrl: string | null }>): string | null =>
   result.ok ? safeExternalTarget(result.data.originalUrl) : null;
 
+/** Un ObjectId Mongo : l'identifiant d'un contenu ne s'insère dans un chemin
+ * qu'après avoir prouvé qu'il n'en contient pas d'autre. */
+const OBJECT_ID = /^[a-f0-9]{24}$/i;
+
+const CONTENT_ROUTE: Readonly<Record<SharedContentType, string>> = { POST: 'post', REEL: 'reel', STORY: 'story', STATUS: 'mood' };
+
+/**
+ * **L'ADRESSE CANONIQUE D'UN CONTENU PARTAGÉ** (#9149) — `/reel/<id>?via=<jeton>`.
+ * `via` est le jeton du lien suivi : la page le relit pour dire QUI a partagé
+ * (`GET /tracking-links/:token/resolve` → `sharer`), sans qu'aucune identité
+ * ne voyage dans l'adresse. Les quatre chemins sont ceux que la passerelle
+ * grave (`PostService.shareWithTrackingLink`) et que la table des routes sert.
+ */
+export function sharedContentPath(content: SharedContent, via: string): string {
+  return `/${CONTENT_ROUTE[content.type]}/${encodeURIComponent(content.id)}?via=${encodeURIComponent(via)}`;
+}
+
 export function decideTrackingRedirect(input: {
   readonly token: string;
   readonly click: ApiResult<TrackingClick>;
@@ -83,6 +108,14 @@ export function decideTrackingRedirect(input: {
   const { token, click, resolution } = input;
   if (!isTrackingToken(token)) return DEAD;
   if (resolution.ok && !resolution.data.isActive) return DEAD;
+
+  /* UN CONTENU DE MEESHY S'OUVRE DANS MEESHY (#9149) — sa page canonique,
+     par le routeur : pas de rechargement, la coque reste dans l'application,
+     et `?via=` porte la trace du partageur jusqu'à l'invitation. */
+  const content = resolution.ok ? resolution.data.content : undefined;
+  if (content != null && resolution.ok && resolution.data.kind === 'tracking' && OBJECT_ID.test(content.id)) {
+    return { kind: 'open', content, via: token };
+  }
 
   const target = targetOf(click) ?? targetOf(resolution);
   if (target !== null) return { kind: 'leave', target };

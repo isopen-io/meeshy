@@ -42,6 +42,21 @@ export const SERVER_EVENTS = {
    */
   MESSAGE_EXPIRED: 'message:expired',
   /**
+   * LE POST CITÉ PAR DES MESSAGES DE CETTE CONVERSATION A ÉTÉ RETIRÉ par son
+   * auteur ou par la modération (#7969). Émis vers la room
+   * `conversation:<id>` de chaque conversation dont un message porte
+   * `storyReplyToId = postId`, une émission par conversation.
+   *
+   * Un événement DÉDIÉ plutôt que `message:edited` : l'édition transporte un
+   * `SocketIOMessage` ENTIER par message — il aurait fallu relire et
+   * resérialiser chaque réponse, et les clients y posent `isEdited`, alors que
+   * personne n'a modifié ces messages. Ici la charge ne dit que QUOI a disparu
+   * (`postId`) et QUAND (`deletedAt`) : rien du contenu retiré ne voyage. Le
+   * client rend chaque citation de ce post « Story indisponible », exactement
+   * comme le fait déjà la lecture REST (`servedPostReply.ts`, #7950).
+   */
+  MESSAGE_CITED_POST_WITHDRAWN: 'message:cited-post-withdrawn',
+  /**
    * LE DÉCOMPTE D'UN ÉPHÉMÈRE A COMMENCÉ pour un lecteur (contrat du fil
    * #7451, point 5) — émis à la PREMIÈRE réception d'un destinataire, vers
    * `user:<destinataire>` (pour ses autres appareils) et vers
@@ -99,6 +114,20 @@ export const SERVER_EVENTS = {
   MESSAGE_RESTORED_FOR_ME: 'message:restored-for-me',
   TYPING_START: 'typing:start',
   TYPING_STOP: 'typing:stop',
+  /** Un pair a ouvert la conversation (#8892) — `ViewingEvent`. */
+  VIEWING_START: 'viewing:start',
+  /** Un pair a quitté la conversation, ou l'a mise en arrière-plan (#8892). */
+  VIEWING_STOP: 'viewing:stop',
+  /** Réponse au seul émetteur d'un `viewing:start` : les pairs déjà présents. */
+  VIEWING_SNAPSHOT: 'viewing:snapshot',
+  /** Un pair ICI regarde, écoute ou agit dans la conversation (#9061) — `ViewingEvent`. */
+  VIEWING_ACTIVITY: 'viewing:activity',
+  /**
+   * Les points et la série qu'une conversation a rapportés à son LECTEUR ont
+   * changé (#8906) — `ConversationEngagementSnapshot`, émis dans la room
+   * `user:<id>` du seul crédité, jamais dans la room de la conversation.
+   */
+  ENGAGEMENT_CONVERSATION_UPDATED: 'engagement:conversation-updated',
   USER_STATUS: 'user:status',
   /**
    * Snapshot émis à l'authentification socket : liste des userIds actuellement
@@ -214,6 +243,26 @@ export const SERVER_EVENTS = {
   CALL_FORCE_LEAVE: 'call:force-leave',
   /** Gateway pushes fresh TURN credentials to the client after a `call:request-ice-servers` event. */
   CALL_ICE_SERVERS_REFRESHED: 'call:ice-servers-refreshed',
+  /** #8064 — consentement à l'enregistrement : demande diffusée, démarrage après l'accord de TOUS, arrêt. */
+  CALL_RECORDING_REQUESTED: 'call:recording-requested',
+  CALL_RECORDING_STARTED: 'call:recording-started',
+  CALL_RECORDING_STOPPED: 'call:recording-stopped',
+  /** #8433 — une personne vient d'être invitée dans l'appel : diffusé aux participants. */
+  CALL_PARTICIPANT_INVITED: 'call:participant-invited',
+  /** #8470 — la personne invitée a refusé : diffusé aux participants, sa puce « Sonne… » se résout. */
+  CALL_INVITE_DECLINED: 'call:invite-declined',
+  /** #8470 — la personne invitée n'a pas répondu dans la durée de la sonnerie d'un appel. */
+  CALL_INVITE_EXPIRED: 'call:invite-expired',
+  /** #8438 — à la personne visée seulement : son micro a été coupé, elle le coupe elle-même. */
+  CALL_MUTED_BY_MODERATOR: 'call:muted-by-moderator',
+  /** #8439 — une réaction d'un participant, relayée aux autres participants connectés. */
+  CALL_REACTION_RECEIVED: 'call:reaction-received',
+  /** #9214 — le cadre en direct d'un appel à deux, relayé à l'AUTRE participant seulement. */
+  CALL_FRAME_SELECTED: 'call:frame-selected',
+  /** #8480 — à l'initiateur d'un appel qui sonne : l'appelé demande l'aperçu avant de décrocher. */
+  CALL_PREVIEW_REQUESTED: 'call:preview-requested',
+  /** #8480 — signal WebRTC de l'aperçu, relayé entre l'initiateur et l'appelé ; ne décroche rien. */
+  CALL_PREVIEW_SIGNAL: 'call:preview-signal',
   /**
    * L'accusé de remise et de lecture — le SEUL nom sous lequel il voyage.
    *
@@ -571,6 +620,11 @@ export const CLIENT_EVENTS = {
   CONVERSATION_LEAVE: 'conversation:leave',
   TYPING_START: 'typing:start',
   TYPING_STOP: 'typing:stop',
+  /** L'écran de la conversation est ouvert et au premier plan (#8892). */
+  VIEWING_START: 'viewing:start',
+  VIEWING_STOP: 'viewing:stop',
+  /** L'utilisateur ICI fait défiler, lit un média, écrit ou réagit (#9061). */
+  VIEWING_ACTIVITY: 'viewing:activity',
   // `USER_STATUS: 'user:status'` a été retiré d'ici (cycle 60) : c'est un
   // événement SERVEUR→client (`SERVER_EVENTS.USER_STATUS`, écouté par
   // `presence.service.ts`, `websocket.service.ts`, iOS `PresenceManager`), et
@@ -601,6 +655,7 @@ export const CLIENT_EVENTS = {
   CALL_SIGNAL: 'call:signal',
   CALL_TOGGLE_AUDIO: 'call:toggle-audio',
   CALL_TOGGLE_VIDEO: 'call:toggle-video',
+  CALL_TOGGLE_SCREEN: 'call:toggle-screen',
   CALL_END: 'call:end',
   CALL_HEARTBEAT: 'call:heartbeat',
   CALL_QUALITY_REPORT: 'call:quality-report',
@@ -643,6 +698,22 @@ export const CLIENT_EVENTS = {
    * passerelle depuis toujours — déclaré ici seulement au cycle 107.
    */
   CALL_ANALYTICS: 'call:analytics',
+  /** #8064 — demander, accepter ou refuser, arrêter l'enregistrement d'un appel. */
+  CALL_RECORDING_REQUEST: 'call:recording-request',
+  CALL_RECORDING_CONSENT: 'call:recording-consent',
+  CALL_RECORDING_STOP: 'call:recording-stop',
+  /** #8433 — inviter un ami accepté dans l'appel en cours (accusé `CallControlAck`). */
+  CALL_INVITE_PARTICIPANT: 'call:invite-participant',
+  /** #8438 — couper le micro d'un participant (initiateur, ou modérateur+ qui dépasse la cible). */
+  CALL_MUTE_PARTICIPANT: 'call:mute-participant',
+  /** #8439 — réagir pendant l'appel, emoji de la liste blanche `CALL_REACTION_EMOJIS`. */
+  CALL_REACTION: 'call:reaction',
+  /** #9214 — poser ou retirer le cadre en direct d'un appel à deux (accusé `CallControlAck`). */
+  CALL_FRAME_SELECT: 'call:frame-select',
+  /** #8480 — l'appelé demande à voir l'appelant pendant la sonnerie (accusé `CallControlAck`). */
+  CALL_PREVIEW_REQUEST: 'call:preview-request',
+  /** #8480 — signal WebRTC de l'aperçu (forme de `CallSignalEvent`, accusé `CallControlAck`). */
+  CALL_PREVIEW_SIGNAL: 'call:preview-signal',
 
   // --- Location sharing ---
   LOCATION_LIVE_START: 'location:live-start',

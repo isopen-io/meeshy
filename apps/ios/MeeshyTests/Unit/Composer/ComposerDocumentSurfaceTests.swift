@@ -1471,8 +1471,8 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
     func test_rangCanonique_suitLOrdreDeLaMaquette() {
         XCTAssertEqual(
             ComposerDocumentTool.canonicalRow,
-            [.photo, .camera, .emoji, .document, .place, .microphone, .mention],
-            "photo · caméra · emoji · doc · lieu · micro — les six de la maquette d'abord, "
+            [.photo, .camera, .emoji, .textScene, .document, .place, .microphone, .mention],
+            "photo · caméra · emoji · texte · doc · lieu · micro — le texte rejoint la palette (#9137), "
                 + "puis ce que l'app ajoute en propre (loi 1 : ce qui dépasse RESTE, mais ne "
                 + "passe pas devant)."
         )
@@ -1511,7 +1511,7 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
 
         XCTAssertFalse(visibles.contains(.camera), "Une capture refusée retire l'outil, elle ne le grise pas.")
         XCTAssertEqual(
-            visibles, [.photo, .emoji, .document, .place, .microphone, .mention],
+            visibles, [.photo, .emoji, .textScene, .document, .place, .microphone, .mention],
             "Les autres gardent leur ordre : le retrait ne réorganise pas la rangée."
         )
     }
@@ -1947,7 +1947,7 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
     /// effet.
     func test_laSurface_neFabriquePasUnSecondPipelineDIngestion() throws {
         let bloc = try surfaceBlock()
-        for interdit in ["photosPicker(", "fileImporter(", "PhotosPickerItem", "UIImagePickerController", "CameraView("] {
+        for interdit in ["photosPicker(", "fileImporter(", "PhotosPickerItem", "UIImagePickerController", "ComposerViewfinder("] {
             XCTAssertFalse(
                 bloc.contains(interdit),
                 "La surface monte « \(interdit) » : le pipeline d'ingestion du dépôt est ailleurs, et unique."

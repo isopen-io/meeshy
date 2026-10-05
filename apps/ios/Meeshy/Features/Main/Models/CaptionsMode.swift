@@ -70,9 +70,11 @@ nonisolated enum TranscriptionCapturePolicy {
     static func action(
         localPanelOpen: Bool,
         peerCaptionsActive: Bool,
-        isCapturing: Bool
+        isCapturing: Bool,
+        isMicrophoneMuted: Bool = false
     ) -> TranscriptionCaptureAction {
-        let someoneIsListening = localPanelOpen || peerCaptionsActive
+        // #8475 — micro coupé : rien ne se capte, rien ne part.
+        let someoneIsListening = (localPanelOpen || peerCaptionsActive) && !isMicrophoneMuted
         if someoneIsListening && !isCapturing { return .start }
         if !someoneIsListening && isCapturing { return .stop }
         return .none

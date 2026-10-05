@@ -2,6 +2,10 @@ import SwiftUI
 import Combine
 import MeeshySDK
 
+enum AuthTextFieldFocus: Hashable {
+    case input
+}
+
 public struct AuthTextField: View {
     let title: String
     let icon: String
@@ -16,9 +20,9 @@ public struct AuthTextField: View {
     /// laissait l'ancien mot de passe enregistré dans le gestionnaire.
     var textContentType: UITextContentType? = nil
 
-    @State private var isShowingPassword = false
     @State private var validationError: String?
-    @FocusState private var isFocused: Bool
+    @FocusState private var focus: AuthTextFieldFocus?
+    private var isFocused: Bool { focus == .input }
     // Leaf field — do not observe the ThemeManager singleton. `colorScheme`
     // keeps theme-flip reactivity; `theme` is accessed non-observingly for its
     // derived input colors.
@@ -41,37 +45,32 @@ public struct AuthTextField: View {
     }
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 12) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
+            HStack(spacing: MeeshySpacing.md) {
                 Image(systemName: icon)
                     .foregroundStyle(isFocused ? MeeshyColors.brandPrimary : theme.textMuted)
                     .frame(width: 20)
 
-                if isSecure && !isShowingPassword {
-                    SecureField(title, text: $text)
-                        .focused($isFocused)
-                        .textContentType(textContentType)
-                        .textInputAutocapitalization(autocapitalization)
+                if isSecure {
+                    MeeshyPasswordField(
+                        title,
+                        text: $text,
+                        role: textContentType == .newPassword ? .new : .current,
+                        focus: $focus,
+                        equals: .input,
+                        eyeColor: theme.textMuted
+                    )
                 } else {
                     TextField(title, text: $text)
-                        .focused($isFocused)
+                        .focused($focus, equals: .input)
                         .keyboardType(keyboardType)
                         .textContentType(textContentType)
                         .textInputAutocapitalization(autocapitalization)
                         .autocorrectionDisabled()
                 }
-
-                if isSecure {
-                    Button {
-                        isShowingPassword.toggle()
-                    } label: {
-                        Image(systemName: isShowingPassword ? "eye.slash" : "eye")
-                            .foregroundStyle(theme.textMuted)
-                    }
-                }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 14)
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.vertical, MeeshySpacing.mdPlus)
             .background(
                 RoundedRectangle(cornerRadius: MeeshyRadius.md)
                     .fill(theme.inputBackground)
@@ -80,8 +79,8 @@ public struct AuthTextField: View {
                 RoundedRectangle(cornerRadius: MeeshyRadius.md)
                     .strokeBorder(
                         isFocused ? MeeshyColors.brandPrimary.opacity(0.6) :
-                            validationError != nil ? Color.red.opacity(0.5) :
-                            theme.inputBorder.opacity(0.3),
+                            validationError != nil ? Color.red.opacity(MeeshyOpacity.strong) :
+                            theme.inputBorder.opacity(MeeshyOpacity.medium),
                         lineWidth: 1
                     )
             )
@@ -89,8 +88,8 @@ public struct AuthTextField: View {
             if let error = validationError {
                 Text(error)
                     .font(.caption)
-                    .foregroundStyle(.red.opacity(0.8))
-                    .padding(.leading, 4)
+                    .foregroundStyle(.red.opacity(MeeshyOpacity.intense))
+                    .padding(.leading, MeeshySpacing.xs)
             }
         }
         .adaptiveOnChange(of: text) { _, newValue in

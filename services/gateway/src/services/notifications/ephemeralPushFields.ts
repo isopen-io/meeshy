@@ -1,3 +1,5 @@
+import { isAfterReadEphemeral } from '@meeshy/shared/utils/ephemeral-countdown';
+
 /**
  * Ce qu'un push dit d'un message éphémère (#7451, point 10 du contrat du fil).
  *
@@ -32,6 +34,10 @@ export interface EphemeralPushContext {
 export function ephemeralPushFields(
   context: EphemeralPushContext,
 ): { ephemeralDuration?: string; effectFlags?: string } {
+  // Flamme-œil (#8302) : aucune durée à porter, mais le bitfield dit à la NSE
+  // que la bulle est éphémère.
+  if (isAfterReadEphemeral(context.effectFlags)) return { effectFlags: String(context.effectFlags) };
+
   const duration = context.ephemeralDuration;
   if (typeof duration !== 'number' || !Number.isFinite(duration) || duration <= 0) return {};
 

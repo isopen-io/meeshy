@@ -8,6 +8,8 @@ import { loadInterfaceCatalog, translate } from '@/lib/i18n-catalog';
 import {
   EXTENDED_REACTIONS,
   QUICK_REACTIONS,
+  forwardMenuItems,
+  messageDetailExposureOf,
   messageMenuContextOf,
   messageMenuItems,
   messageStarAction,
@@ -26,8 +28,8 @@ const ctx = (overrides: Partial<MessageMenuContext> = {}): MessageMenuContext =>
 });
 
 describe('messageMenuItems — miroir MessageActionResolver.primaryActions, réduit (#5814 §1.2)', () => {
-  test('message standard, deux langues ⇒ select, translate, copy, forward, reply, more', () => {
-    expect(messageMenuItems(ctx()).map((i) => i.id)).toEqual(['select', 'translate', 'copy', 'forward', 'reply', 'more']);
+  test('message standard, deux langues ⇒ select, translate, copy, forward, reply, export, more', () => {
+    expect(messageMenuItems(ctx()).map((i) => i.id)).toEqual(['select', 'translate', 'copy', 'forward', 'reply', 'export', 'more']);
   });
 
   test('message SANS texte (m3) ⇒ select, forward, reply, more — ni copy ni translate', () => {
@@ -39,7 +41,7 @@ describe('messageMenuItems — miroir MessageActionResolver.primaryActions, réd
   });
 
   test('une seule langue ⇒ pas de translate, copy reste', () => {
-    expect(messageMenuItems(ctx({ languageCount: 1 })).map((i) => i.id)).toEqual(['select', 'copy', 'forward', 'reply', 'more']);
+    expect(messageMenuItems(ctx({ languageCount: 1 })).map((i) => i.id)).toEqual(['select', 'copy', 'forward', 'reply', 'export', 'more']);
   });
 
   /**
@@ -57,6 +59,7 @@ describe('messageMenuItems — miroir MessageActionResolver.primaryActions, réd
       copy: 'message.menu.copy',
       forward: 'message.menu.forward',
       reply: 'message.menu.reply',
+      export: 'message.menu.export',
       more: 'message.menu.more',
     });
   });
@@ -77,6 +80,7 @@ describe('messageMenuItems — miroir MessageActionResolver.primaryActions, réd
       'Copy',
       'Forward',
       'Reply',
+      'Make an image',
       'More…',
     ]);
     expect(messageMenuItems(ctx()).map((i) => translate('ar', i.labelKey))).toEqual([
@@ -85,6 +89,7 @@ describe('messageMenuItems — miroir MessageActionResolver.primaryActions, réd
       'نسخ',
       'إعادة توجيه',
       'رد',
+      'تحويل إلى صورة',
       'المزيد…',
     ]);
   });
@@ -119,6 +124,25 @@ describe('messageMenuContextOf — dérivé du message, jamais une seconde loi d
       { now: 1000 },
     );
     expect(result.hasText).toBe(false);
+    expect(result.hasImageableMedia).toBe(false);
+  });
+
+  test('une photo, une vidéo ou un vocal non masqués s’imagent ; une pièce floutée ou un document, non (#8693)', () => {
+    const base = { content: '', isBlurred: false, isViewOnce: false, viewOnceCount: 0, translations: [] };
+    const piece = (mimeType: string, masked = false) => ({ mimeType, isBlurred: masked, isViewOnce: false });
+    expect(messageMenuContextOf({ ...base, attachments: [piece('image/png')] }, { now: 1000 }).hasImageableMedia).toBe(true);
+    expect(messageMenuContextOf({ ...base, attachments: [piece('audio/mp4')] }, { now: 1000 }).hasImageableMedia).toBe(true);
+    expect(messageMenuContextOf({ ...base, attachments: [piece('image/png', true)] }, { now: 1000 }).hasImageableMedia).toBe(false);
+    expect(messageMenuContextOf({ ...base, attachments: [piece('application/pdf')] }, { now: 1000 }).hasImageableMedia).toBe(false);
+  });
+
+  test('« Composer » n’offre que ce que le studio sait poser : une photo ou une vidéo (#8693)', () => {
+    const base = { content: '', isBlurred: false, isViewOnce: false, viewOnceCount: 0, translations: [] };
+    const piece = (mimeType: string) => ({ mimeType, isBlurred: false, isViewOnce: false });
+    expect(messageMenuContextOf({ ...base, attachments: [piece('video/mp4')] }, { now: 1000 }).composableIndex).toBe(0);
+    expect(messageMenuContextOf({ ...base, attachments: [piece('audio/mp4'), piece('image/jpeg')] }, { now: 1000 }).composableIndex).toBe(1);
+    expect(messageMenuContextOf({ ...base, attachments: [piece('audio/mp4')] }, { now: 1000 }).composableIndex).toBeNull();
+    expect(messageMenuContextOf({ ...base, isBlurred: true, attachments: [piece('image/jpeg')] }, { now: 1000 }).composableIndex).toBeNull();
   });
 
   /** LE CACHE ALLÉGÉ NE PORTE PAS LE CHAMP (#7527) — le témoin le passe donc
@@ -174,6 +198,43 @@ describe('translationChoices — original puis les rangs du PRISME, jamais l’o
       servedLanguage: 'fr',
     });
     expect(choices).toEqual([{ code: 'fr', isOriginal: true, isServed: true }]);
+  });
+});
+
+describe('« Exporter en image » suit la garde de « Copier »', () => {
+  test('un message texte ordinaire s’exporte, juste avant « Plus… »', () => {
+    const ids = messageMenuItems(ctx()).map((i) => i.id);
+    expect(ids.indexOf('export')).toBe(ids.indexOf('more') - 1);
+  });
+
+  test('un message PROTÉGÉ ne s’exporte pas : ce qui ne se copie pas ne se peint pas', () => {
+    expect(messageMenuItems(ctx({ isProtected: true })).map((i) => i.id)).not.toContain('export');
+  });
+
+  test('un message sans texte ni média n’a rien à peindre', () => {
+    expect(messageMenuItems(ctx({ hasText: false })).map((i) => i.id)).not.toContain('export');
+  });
+
+  test('« Imager » un message fait d’une seule photo, d’une vidéo ou d’un vocal (#8693)', () => {
+    expect(messageMenuItems(ctx({ hasText: false, hasImageableMedia: true })).map((i) => i.id)).toContain('export');
+    expect(messageMenuItems(ctx({ hasText: false, hasImageableMedia: true, isProtected: true })).map((i) => i.id)).not.toContain('export');
+  });
+
+  test('le menu rapide dit « Imager », jamais « Composer » (#8693)', () => {
+    const items = messageMenuItems(ctx({ hasImageableMedia: true }));
+    expect(items.find((i) => i.id === 'export')?.labelKey).toBe('message.menu.export');
+    expect(items.map((i) => i.id)).not.toContain('compose');
+  });
+
+  test('« Export rapide » n’apparaît qu’avec un format par défaut enregistré, juste après « Exporter en image »', () => {
+    expect(messageMenuItems(ctx()).map((i) => i.id)).not.toContain('exportQuick');
+    const ids = messageMenuItems(ctx({ hasDefaultExportFormat: true })).map((i) => i.id);
+    expect(ids.indexOf('exportQuick')).toBe(ids.indexOf('export') + 1);
+    expect(messageMenuItems(ctx({ hasDefaultExportFormat: true, isProtected: true })).map((i) => i.id)).not.toContain('exportQuick');
+  });
+
+  test('une vue unique ne propose que « Plus… »', () => {
+    expect(messageMenuItems(ctx({ isViewOnce: true })).map((i) => i.id)).toEqual(['more']);
   });
 });
 
@@ -255,5 +316,53 @@ describe('starrableOf — ce que le serveur accepterait (règle 2 de #7377)', ()
 
   test('un message encore OPTIMISTE (`cid_…`) n’existe pas côté serveur', () => {
     expect(starrableOf({ ...base, id: 'cid_0f0e0d0c-0b0a-4908-8706-050403020100' }, { now: NOW })).toBe(false);
+  });
+});
+
+describe('messageDetailExposureOf — la feuille « Plus… » ne fait pas fuir un contenu non ouvert (#8008)', () => {
+  const base = { content: 'bonjour', isBlurred: false, isViewOnce: false, viewOnceCount: 0 };
+
+  test('un message ordinaire expose ses langues et ses pièces', () => {
+    expect(messageDetailExposureOf(base, { now: 1000 })).toBe(true);
+  });
+
+  test('flouté : ni langues à explorer, ni pièces nommées', () => {
+    expect(messageDetailExposureOf({ ...base, isBlurred: true }, { now: 1000 })).toBe(false);
+  });
+
+  test('à vue unique, scellée ou déjà ouverte : rien non plus', () => {
+    expect(messageDetailExposureOf({ ...base, isViewOnce: true }, { now: 1000 })).toBe(false);
+    expect(messageDetailExposureOf({ ...base, isViewOnce: true, viewOnceCount: 1 }, { now: 1000 })).toBe(false);
+  });
+});
+
+/**
+ * #9039 — « TRANSFÉRER » PROPOSE D'IMAGER LA DISCUSSION. Le sous-menu de
+ * Transférer garde le transfert (armer la sélection) et ajoute « Imager la
+ * discussion », sous la garde d'« Imager » : ce qui ne se copie pas ne se
+ * peint pas.
+ */
+describe('forwardMenuItems — le sous-menu de « Transférer » (#9039)', () => {
+  test('un message imageable ⇒ transférer, puis imager la discussion', () => {
+    expect(forwardMenuItems(ctx()).map((i) => [i.id, i.labelKey, i.glyph])).toEqual([
+      ['forward', 'message.menu.forward', 'arrowBendUpRight'],
+      ['exportDiscussion', 'message.menu.exportDiscussion', 'imageSquare'],
+    ]);
+  });
+
+  test('un message fait d’un seul média s’image aussi en discussion', () => {
+    expect(forwardMenuItems(ctx({ hasText: false, hasImageableMedia: true })).map((i) => i.id)).toEqual(['forward', 'exportDiscussion']);
+  });
+
+  test('un message protégé (flouté, éphémère) se transfère mais ne s’image pas', () => {
+    expect(forwardMenuItems(ctx({ isProtected: true })).map((i) => i.id)).toEqual(['forward']);
+  });
+
+  test('« Imager la discussion » se dit dans les sept langues, jamais par sa clé', async () => {
+    for (const language of ['fr', 'en', 'es', 'pt', 'it', 'de', 'ar'] as const) {
+      await loadInterfaceCatalog(language);
+      expect(translate(language, 'message.menu.exportDiscussion')).not.toBe('message.menu.exportDiscussion');
+    }
+    expect(translate('fr', 'message.menu.exportDiscussion')).toBe('Imager la discussion');
   });
 });

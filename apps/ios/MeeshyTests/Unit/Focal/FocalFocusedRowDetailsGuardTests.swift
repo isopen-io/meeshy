@@ -46,10 +46,11 @@ final class FocalFocusedRowDetailsGuardTests: XCTestCase {
         // Le haut ne porte plus que l'identité — plus de Spacer ni de chip de date.
         XCTAssertTrue(row.contains("if input.isFocused { focusIdentityChip"), "haut : l'identité seule")
         XCTAssertFalse(row.contains("focusIdentityChip Spacer(minLength: 4) focusStampChip"), "la chip de date a quitté la ligne du haut")
-        XCTAssertTrue(row.contains(".offset(y: -FocalMetrics.FocusStrip.identityOverhang)"))
+        // #8506 : en haut du bloc, dans le cadre — la descente d'une suite annulée pour elle seule.
+        XCTAssertTrue(row.contains("if input.isFocused { focusIdentityChip.offset(y: -focusLift) }"))
         // Le bas porte la bande ET la chip de date, sur la même ligne.
         XCTAssertTrue(
-            row.contains("if input.isFocused { HStack(alignment: .center, spacing: 4) { focusStrip Spacer(minLength: 4) focusStampChip }"),
+            row.contains("if input.isFocused { electedStrip(elected) }") && row.contains("HStack(alignment: .center, spacing: 4) { focusStrip Spacer(minLength: 4) focusStampChip }"),
             "bas : bande à gauche, date+coche à droite"
         )
         // 3 → 2 le 2026-08-24 : la méta a REJOINT la ligne drapeaux+réactions,
@@ -107,9 +108,18 @@ final class FocalFocusedRowDetailsGuardTests: XCTestCase {
         // vue UIKit bornée à la cellule qui dérivait avant la pose.
         // #7953 : la carte s'allonge, en RENDU, sous le contenu d'une suite
         // descendu et sous la bande basse — jamais une hauteur de rangée.
-        XCTAssertTrue(row.contains(".background { if input.isFocused { focusCardBackground.padding(.bottom, -focusDrop) } }"), "carte = fond SwiftUI du contenu")
+        // #8147 : le message long DÉPLIÉ reçoit un bloc de verre, à ses marges.
+        // #8506 : le cadre de l'élu est le fond de la COLONNE du message et
+        // englobe identité et bande, à `electedCardMargin`.
+        // #8537 : il se pose sur la mesure du contenu GROSSI, lue par préférence.
+        XCTAssertTrue(row.contains(".backgroundPreferenceValue(FocalElectedContentKey.self) { elected in if input.isFocused { electedCardBackground(elected) } }"), "cadre de l'élu = fond SwiftUI de la colonne")
+        XCTAssertTrue(row.contains(".background { if input.isExpanded && !input.isFocused { focusCardBackground } }"), "le déplié garde son verre")
         XCTAssertTrue(row.contains(".offset(y: focusLift)"), "une suite magnifiée descend par offset, pas par hauteur")
         XCTAssertTrue(row.contains(".padding(.vertical, -FocalScrollPerspective.focusCardInnerMargin)"), "mêmes cotes que focusCardInsets")
+        XCTAssertTrue(row.contains(".padding(.bottom, -(span.stripTop + FocalMetrics.FocusStrip.chipHeight + margin - proxy.size.height))"), "le cadre descend sous la bande, à sa marge")
+        // #8506 : plus aucune réserve de hauteur sous le texte d'un élu (#5718) —
+        // la bande se pose sous le contenu, la rangée ne change pas de taille.
+        XCTAssertFalse(row.contains("focusOverlayReserveHeight"), "aucune hauteur réservée à l'élection")
         // La colonne est MONTÉE en focus comme hors focus — elle s'efface par
         // opacité (voir le compte ci-dessus), jamais par démontage : c'est ce
         // qui garantit qu'aucune largeur ne change à l'élection.
@@ -138,8 +148,8 @@ final class FocalFocusedRowDetailsGuardTests: XCTestCase {
     /// réactions ; ses coches (haut-droite) ouvrent les détails de lecture.
     func test_focusedRow_hasTheBottomStrip_andTappableChecks() throws {
         let row = try normalized("Meeshy/Features/Main/Focal/Row/FocalRow.swift")
-        XCTAssertTrue(row.contains("focusStrip Spacer(minLength: 4) focusStampChip"), "la bande est une superposition SUR la ligne basse, la date à sa droite")
-        XCTAssertTrue(row.contains(".offset(y: FocalMetrics.FocusStrip.overhang + focusDrop)"))
+        XCTAssertTrue(row.contains("focusStrip Spacer(minLength: 4) focusStampChip"), "la bande est une superposition sous le contenu, la date à sa droite")
+        XCTAssertTrue(row.contains(".offset(y: span.stripTop)"), "#8506/#8537 : la bande entière sous le contenu GROSSI, dans le cadre")
         XCTAssertTrue(row.contains("actions.onSetActiveDisplayLanguage?(content.messageId, code)"), "un drapeau = afficher cette langue")
         XCTAssertTrue(row.contains("actions.onShowTranslationDetail?(content.messageId)"), "l'icône de traduction du mode bulle")
         XCTAssertTrue(row.contains("actions.onOpenReactPicker?(content.messageId)"), "le (+) emoji, toujours")
@@ -223,10 +233,20 @@ final class FocalFocusedRowDetailsGuardTests: XCTestCase {
     func test_theFocusCard_andItsChips_carryNoBorderAnymore() throws {
         let row = try normalized("Meeshy/Features/Main/Focal/Row/FocalRow.swift")
         XCTAssertFalse(row.contains("strokeBorder"), "ni la carte ni les chips ne tracent de bord")
-        XCTAssertTrue(
-            row.contains(".fill(focusAccent.opacity(input.isDark ? FocalScrollPerspective.focusCardFillOpacityDark : FocalScrollPerspective.focusCardFillOpacityLight))"),
-            "le fond reste la couleur de la conversation"
-        )
+        // #8147 : le fond est un BLOC DE VERRE teinté de la couleur de la
+        // conversation — plus un aplat opaque.
+        XCTAssertTrue(row.contains("FocalGlassBlock()"), "le fond est le bloc de verre")
+        // #8506 (directive porteur 2026-09-28) : la MÊME matière que le panneau
+        // de la barre de composition — le vrai verre d'iOS 26, sans teinte ni
+        // filet d'accent (le filet à `glassRimOpacity` en faisait une carte bordée).
+        let glass = try normalized("Meeshy/Features/Main/Focal/Row/FocalGlassBlock.swift")
+        let composer = try normalized("Meeshy/Features/Main/Components/UniversalComposerBar+Layout.swift")
+        XCTAssertTrue(composer.contains(".adaptiveLiquidGlass(in: Self.panelShape"), "référence : le panneau du composer")
+        XCTAssertTrue(glass.contains(".adaptiveLiquidGlass(in: Self.shape)"), "même atome, même verre non teinté")
+        XCTAssertFalse(glass.contains("strokeBorder"), "aucun filet superposé au verre")
+        XCTAssertFalse(glass.contains("glassRimOpacity"), "le filet d'accent a disparu")
+        XCTAssertFalse(glass.contains("Color.clear .adaptiveLiquidGlass"), "le verre se pose sur une forme remplie, pas sur un Color.clear nu")
+        XCTAssertFalse(row.contains("focusCardFillOpacity"), "plus aucun aplat opaque sous le message élu")
         let perspective = try normalized("Meeshy/Features/Main/Focal/Core/FocalScrollPerspective.swift")
         XCTAssertFalse(perspective.contains("focusCardBorderOpacity"), "la teinte du cadre n'a plus de porteur")
         XCTAssertFalse(perspective.contains("focusChipRingOpacity"), "ni l'anneau des chips")
@@ -280,22 +300,24 @@ final class FocalFocusedRowDetailsGuardTests: XCTestCase {
         XCTAssertTrue(body.contains("onOpenProfile: actions.onOpenProfile"), "le routage de l'hôte, pas un second")
     }
 
-    /// **L'identité revient EN BORDURE** (directive 2026-08-24, seconde
-    /// passe) : sa chip est de nouveau posée à cheval sur la ligne haute de la
-    /// carte, comme celles de la ligne basse. Elle avait été sortie de la
-    /// carte le matin même ; c'est le placement d'avant qui est retenu.
+    /// **L'identité vit DANS le cadre** (#8506, directive porteur 2026-09-28,
+    /// qui supplante l'« en bordure » du 2026-08-24) : sa chip se pose entière
+    /// en haut du bloc, et une suite de groupe descend son contenu de la
+    /// pastille entière — plus rien ne chevauche la ligne haute du cadre.
     @MainActor
-    func test_theMagnifiedIdentity_sitsOnTheCardsEdge_inItsChip() throws {
+    func test_theMagnifiedIdentity_sitsInsideTheCard_inItsChip() throws {
         let row = try normalized("Meeshy/Features/Main/Focal/Row/FocalRow.swift")
         let chip = try XCTUnwrap(row.range(of: "private var focusIdentityChip: some View {"))
         let body = String(row[chip.lowerBound...].prefix(1500))
         XCTAssertTrue(body.contains("focusChip(height: FocalMetrics.FocusStrip.identityChipHeight)"), "sa chip, à son gabarit")
         XCTAssertTrue(body.contains("FocalIdentityHeader("), "et l'en-tête complet dedans")
         XCTAssertEqual(
-            FocalMetrics.FocusStrip.identityOverhang,
-            FocalMetrics.FocusStrip.identityChipHeight / 2 + FocalScrollPerspective.focusCardInnerMargin,
-            "son centre tombe SUR la ligne de la carte"
+            FocalMetrics.FocusStrip.contentLift(isFirstInGroup: false),
+            FocalMetrics.FocusStrip.identityChipHeight + FocalMetrics.Row.paddingVertical,
+            "une suite descend sous la pastille ENTIÈRE"
         )
+        XCTAssertEqual(FocalMetrics.FocusStrip.contentLift(isFirstInGroup: true), 0, "une tête la loge sur son en-tête réservé")
+        XCTAssertEqual(FocalMetrics.FocusStrip.identityChipHeight, FocalMetrics.Focus.avatarSize, "la pastille a la hauteur de l'en-tête réservé")
     }
 
     /// « Juste la taille qui est maintenue » : l'auteur du message magnifié
@@ -541,7 +563,7 @@ final class FocalFocusedRowDetailsGuardTests: XCTestCase {
         let row = try normalized("Meeshy/Features/Main/Focal/Row/FocalRow.swift")
         XCTAssertTrue(
             Self.rowHeightIsFocusIndependent(row),
-            "le plafond de texte doit valoir la constante HISTORIQUE (`BubbleExpandableText.truncateLimit`) "
+            "le plafond de texte doit être celui de la loi partagée (`LongMessageExcerpt`, via `expansion`) "
             + "que la rangée soit élue ou non : le ternaire re-mesurait la cellule au tick d'élection, en "
             + "plein geste, et l'autre constante (`FocalMetrics.Focus.maxCharacters`, 360) tronquerait "
             + "TOUTES les rangées plates, y compris au repos — un changement visible hors directive."
@@ -563,8 +585,8 @@ final class FocalFocusedRowDetailsGuardTests: XCTestCase {
             "le plafond du focus appliqué à TOUTES les rangées aussi — il tronque au repos"
         )
         XCTAssertTrue(
-            Self.rowHeightIsFocusIndependent("truncateLimit: BubbleExpandableText.truncateLimit,"),
-            "…et la constante historique, elle, doit passer"
+            Self.rowHeightIsFocusIndependent("expansion: expansion"),
+            "…et la loi partagée, elle, doit passer"
         )
     }
 
@@ -587,17 +609,12 @@ final class FocalFocusedRowDetailsGuardTests: XCTestCase {
             "les géométries doivent se construire APRÈS la garde d'armement, et plus aucun balayage "
             + "de sous-vues ne doit fermer la passe. Corps lu : \(pass)"
         )
-        // Le nettoyage vit toujours aux deux SEULS points qui en produisent
-        // l'occasion : une cellule (re)configurée, et l'aplatissement.
-        XCTAssertTrue(
-            host.contains("FocalScrollPerspective.reset(cell.contentView.layer) FocalScrollPerspective.hideFocusCard(in: cell.contentView)"),
-            "registration : une cellule recyclée arrive à plat ET sans carte"
-        )
-        let flatten = try Self.body(of: "func flattenFocalScene(animated: Bool) {", in: host)
-        XCTAssertTrue(
-            flatten.contains("FocalScrollPerspective.hideFocusCard(in: cell.contentView)"),
-            "aplatissement de la scène : la carte héritée d'un recyclage est démontée là"
-        )
+        // #8147 : la carte UIKit OPAQUE n'existe plus — le bloc de verre est
+        // le fond SwiftUI de la rangée. Une cellule recyclée arrive à plat.
+        XCTAssertTrue(host.contains("FocalScrollPerspective.reset(cell.contentView.layer)"), "registration : une cellule recyclée arrive à plat")
+        let perspective = try normalized("Meeshy/Features/Main/Focal/Core/FocalScrollPerspective.swift")
+        XCTAssertFalse(perspective.contains("FocusCardView"), "aucune carte UIKit opaque ne revient sous le message élu")
+        XCTAssertFalse(host.contains("hideFocusCard"), "rien à démonter : il n'y a plus de carte UIKit")
     }
 
     /// **Contre-épreuve** — la garde ci-dessus rougit si la boucle par frame
@@ -625,8 +642,8 @@ final class FocalFocusedRowDetailsGuardTests: XCTestCase {
     // MARK: - Prédicats partagés par les gardes et leurs contre-épreuves
 
     private static func rowHeightIsFocusIndependent(_ row: String) -> Bool {
-        !row.contains("truncateLimit: input.isFocused ?")
-            && row.contains("truncateLimit: BubbleExpandableText.truncateLimit")
+        !row.contains("truncateLimit")
+            && row.contains("expansion: expansion")
             && !row.contains("FocalMetrics.Focus.maxCharacters")
     }
 

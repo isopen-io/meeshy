@@ -77,7 +77,7 @@ const mockPrisma: Record<string, Record<string, jest.Mock>> = {
   trackingLink: { findMany: jest.fn().mockResolvedValue([]) },
   affiliateToken: { findMany: jest.fn().mockResolvedValue([]) },
   friendRequest: { findMany: jest.fn().mockResolvedValue([]) },
-  user: { findUnique: jest.fn() },
+  user: { findUnique: jest.fn(), findMany: jest.fn() },
 };
 
 const makeAuthContext = (role = 'ADMIN') => ({
@@ -103,6 +103,8 @@ function resetMocks() {
 
   // `requireHierarchy` lit le rang de la cible en base.
   mockPrisma.user.findUnique.mockResolvedValue({ role: 'USER' });
+  // #8876 — `GET …/bans` nomme ses deux acteurs en UNE lecture de comptes.
+  mockPrisma.user.findMany.mockResolvedValue([]);
 
   mockUMS.getUserById.mockResolvedValue(mockUser);
   mockUMS.updateStatus.mockResolvedValue({ ...mockUser, isActive: false });
@@ -290,6 +292,68 @@ describe('GET /admin/users/:userId/bans', () => {
     const body = JSON.parse(res.body);
     const parActif = Object.fromEntries(body.data.map((b: { id: string; active: boolean }) => [b.id, b.active]));
     expect(parActif).toEqual({ 'ban-perm': true, 'ban-expire': false, 'ban-leve': false });
+  });
+
+  // #8876 — le bannissement dit QUI a banni et QUI a levé, par leur nom.
+  describe('les acteurs sont nommés', () => {
+    const AWA = '507f1f77bcf86cd799439021';
+    const JEAN = '507f1f77bcf86cd799439022';
+    const awa = { id: AWA, username: 'awa', displayName: 'Awa Diop', avatar: null };
+    const jean = { id: JEAN, username: 'jean', displayName: null, avatar: 'https://cdn/j.png' };
+
+    beforeEach(() => {
+      mockPrisma.user.findMany.mockImplementation(async (args: { where: { id: { in: string[] } } }) =>
+        [awa, jean].filter((p) => args.where.id.in.includes(p.id))
+      );
+    });
+
+    it('sert bannedBy et liftedBy comme des personnes, en une seule lecture de comptes', async () => {
+      mockBan.listBans.mockResolvedValue([
+        { ...BAN, id: 'b1', bannedById: AWA, liftedAt: new Date('2026-09-05'), liftedById: JEAN },
+        { ...BAN, id: 'b2', bannedById: JEAN, liftedAt: null, liftedById: null },
+      ]);
+
+      const res = await app.inject({ method: 'GET', url: '/admin/users/user123/bans' });
+      const [lifted, running] = JSON.parse(res.body).data;
+
+      expect(lifted.bannedBy).toEqual(awa);
+      expect(lifted.liftedBy).toEqual(jean);
+      expect(lifted.liftedBySystem).toBe(false);
+      expect(running.bannedBy).toEqual(jean);
+      expect(running.liftedBy).toBeNull();
+      expect(running.liftedBySystem).toBe(false);
+      expect(mockPrisma.user.findMany).toHaveBeenCalledTimes(1);
+    });
+
+    it('une levée sans administrateur est une levée du SYSTÈME', async () => {
+      mockBan.listBans.mockResolvedValue([
+        { ...BAN, id: 'b3', bannedById: AWA, liftedAt: new Date('2026-09-05'), liftedById: null },
+      ]);
+
+      const res = await app.inject({ method: 'GET', url: '/admin/users/user123/bans' });
+      const [ban] = JSON.parse(res.body).data;
+
+      expect(ban.liftedBySystem).toBe(true);
+      expect(ban.liftedBy).toBeNull();
+    });
+
+    it('un administrateur dont le compte a disparu est servi null, sans erreur', async () => {
+      mockBan.listBans.mockResolvedValue([{ ...BAN, id: 'b4', bannedById: '507f1f77bcf86cd7994390ee' }]);
+
+      const res = await app.inject({ method: 'GET', url: '/admin/users/user123/bans' });
+
+      expect(res.statusCode).toBe(200);
+      expect(JSON.parse(res.body).data[0].bannedBy).toBeNull();
+    });
+
+    it('ne lit que l’identité publique des acteurs', async () => {
+      mockBan.listBans.mockResolvedValue([{ ...BAN, bannedById: AWA }]);
+
+      await app.inject({ method: 'GET', url: '/admin/users/user123/bans' });
+
+      const select = mockPrisma.user.findMany.mock.calls[0][0].select;
+      expect(Object.keys(select).sort()).toEqual(['avatar', 'displayName', 'id', 'username']);
+    });
   });
 
   it('404 sur une cible inexistante', async () => {

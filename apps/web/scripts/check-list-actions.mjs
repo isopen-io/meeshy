@@ -47,7 +47,7 @@
  *     son menu plutôt que de tomber sur le conteneur muet qui l'enveloppe.
  *  9. LE MENU NE DÉBORDE JAMAIS DU BAS DE L'ÉCRAN — #5559 revue-correction,
  *     défaut 7 : sur un viewport de 390×640, le menu de la DERNIÈRE rangée
- *     se RETOURNE au-dessus de son ancre et ses QUATRE lignes restent
+ *     se RETOURNE au-dessus de son ancre et ses SIX lignes restent
  *     atteignables.
  * 10. « 0 CONTRÔLE SANS GESTIONNAIRE » (#5652) — les trois boutons ronds de
  *     l'en-tête ont chacun leur effet MESURÉ (feuille ouverte + retour
@@ -147,7 +147,7 @@ const rowIds = (page) => page.$$eval('[data-row]', (els) => els.map((el) => el.d
 const menuItem = (label) => `[role="menu"] [role="menuitem"]:text-is("${label}")`;
 
 const browser = await launchChromium();
-const context = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme: 'dark' });
+const context = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme: 'dark', locale: 'fr-FR' });
 const page = await context.newPage();
 await page.goto(`${BASE}/`, { waitUntil: 'load' });
 await page.waitForSelector('[data-row]');
@@ -275,11 +275,11 @@ await page.keyboard.press('Enter');
 await page.waitForSelector('[role="menu"]');
 await page.waitForTimeout(120);
 const firstItem = await page.evaluate(() => document.activeElement?.textContent?.trim());
-check(firstItem === 'Épingler' || firstItem === 'Désépingler', `à l'ouverture, le focus entre DANS le menu (« ${firstItem} »)`);
+check(firstItem === 'Appel vocal', `à l'ouverture, le focus entre DANS le menu, sur « Appel vocal » (#8109) (« ${firstItem} »)`);
 await page.keyboard.press('ArrowDown');
 const secondItem = await page.evaluate(() => document.activeElement?.textContent?.trim());
 check(
-  secondItem !== firstItem && (secondItem === 'Silence' || secondItem === 'Son'),
+  secondItem !== firstItem && secondItem === 'Appel vidéo',
   `ArrowDown déplace RÉELLEMENT le focus vers la ligne suivante (« ${secondItem} »)`,
 );
 await page.keyboard.press('Escape');
@@ -469,7 +469,7 @@ check(
 // ------------------------------------------------------- 7. le second schéma
 await page.close();
 await context.close();
-const light = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme: 'light' });
+const light = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme: 'light', locale: 'fr-FR' });
 const pageLight = await light.newPage();
 await pageLight.goto(`${BASE}/`, { waitUntil: 'load' });
 await pageLight.waitForSelector('[data-row]');
@@ -511,6 +511,7 @@ const touchContext = await browser.newContext({
   hasTouch: true,
   isMobile: true,
   colorScheme: 'dark',
+  locale: 'fr-FR',
 });
 const touchPage = await touchContext.newPage();
 await touchPage.goto(`${BASE}/`, { waitUntil: 'load' });
@@ -580,7 +581,7 @@ await touchContext.close();
  * tombaient hors écran et rien — pas même un défilement, qui REFERME le
  * menu — ne les ramenait.
  */
-const shortContext = await browser.newContext({ viewport: { width: 390, height: 640 }, colorScheme: 'dark' });
+const shortContext = await browser.newContext({ viewport: { width: 390, height: 640 }, colorScheme: 'dark', locale: 'fr-FR' });
 const shortPage = await shortContext.newPage();
 await shortPage.goto(`${BASE}/`, { waitUntil: 'load' });
 await shortPage.waitForSelector('[data-row]');
@@ -609,8 +610,8 @@ const menuFit = await shortPage.evaluate(() => {
   };
 });
 check(
-  menuFit.count === 4 && menuFit.allInView,
-  `à 390×640, les QUATRE lignes du menu de la dernière rangée ont leur centre dans l'écran (${JSON.stringify(menuFit)})`,
+  menuFit.count === 6 && menuFit.allInView,
+  `à 390×640, les SIX lignes du menu de la dernière rangée (deux appels, quatre actions) ont leur centre dans l'écran (${JSON.stringify(menuFit)})`,
 );
 
 await shortContext.close();
@@ -634,7 +635,7 @@ await shortContext.close();
  * cellule « soi » (#6150), qui a imposé de reformuler le compte — voir
  * l'invariant lui-même plus bas.
  */
-const enTeteContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
+const enTeteContext = await browser.newContext({ viewport: { width: 390, height: 844 }, locale: 'fr-FR' });
 const enTetePage = await enTeteContext.newPage();
 await enTetePage.goto(`${BASE}/`, { waitUntil: 'load' });
 await enTetePage.waitForSelector('[data-row]');
@@ -849,7 +850,7 @@ await enTeteContext.close();
  * raison : seul un défilement REÇU COMME UNE INTENTION vaut le geste d'un
  * doigt.
  */
-const bottomContext = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme: 'dark' });
+const bottomContext = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme: 'dark', locale: 'fr-FR' });
 const bottomPage = await bottomContext.newPage();
 await bottomPage.goto(`${BASE}/`, { waitUntil: 'load' });
 await bottomPage.waitForSelector('[data-row]');
@@ -921,6 +922,58 @@ check(
 );
 
 await bottomContext.close();
+
+// ------------- 12. appeler depuis le menu de la ligne, clic droit compris (#8109)
+/**
+ * Deux gestes lancent un appel depuis la liste, dans les DEUX schémas : le
+ * clic droit sur la rangée ouvre le MÊME menu que son bouton (jamais celui du
+ * navigateur), et « Appel vocal » / « Appel vidéo » ouvrent l'écran d'appel
+ * vers la conversation de la rangée, au-dessus de la liste.
+ */
+for (const scheme of ['light', 'dark']) {
+  for (const [label, media] of [
+    ['Appel vocal', 'audio'],
+    ['Appel vidéo', 'video'],
+  ]) {
+    const callContext = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme: scheme, locale: 'fr-FR' });
+    const callPage = await callContext.newPage();
+    await callPage.goto(`${BASE}/`, { waitUntil: 'load' });
+    await callPage.waitForSelector(`[data-row="${SUBJECT}"] [data-name]`);
+    const name = await callPage.$eval(`[data-row="${SUBJECT}"] [data-name]`, (el) => (el.textContent ?? '').trim());
+    await callPage.click(`[data-row="${SUBJECT}"] [data-name]`, { button: 'right' });
+    const menuOpened = await callPage.waitForSelector('[role="menu"]', { timeout: 2000 }).then(() => true, () => false);
+    const items = menuOpened ? await callPage.$$eval('[role="menu"] [role="menuitem"]', (els) => els.map((el) => (el.textContent ?? '').trim())) : [];
+    check(
+      menuOpened && items[0] === 'Appel vocal' && items[1] === 'Appel vidéo',
+      `${scheme} : le clic droit sur une rangée ouvre son menu, « Appel vocal » et « Appel vidéo » en tête (${JSON.stringify(items)})`,
+    );
+    if (menuOpened) await callPage.click(menuItem(label));
+    const screen = await callPage
+      .waitForSelector('[data-call-screen]', { timeout: 5000 })
+      .then(() => callPage.$eval('[data-call-screen]', (el) => el.getAttribute('aria-label')), () => null);
+    check(
+      screen === `Appel avec ${name}` && new URL(callPage.url()).pathname === '/',
+      `${scheme} : « ${label} » depuis le menu ouvre l'écran d'appel (${media}) vers « ${name} », au-dessus de la liste (${screen})`,
+    );
+    await callContext.close();
+  }
+}
+
+// ------------- 13. le menu parle la langue d'interface du lecteur (#8150)
+{
+  const enContext = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme: 'dark', locale: 'en-US' });
+  const enPage = await enContext.newPage();
+  await enPage.goto(`${BASE}/`, { waitUntil: 'load' });
+  await enPage.waitForSelector(`[data-row="${SUBJECT}"] [data-name]`);
+  await enPage.click(`[data-row="${SUBJECT}"] [data-name]`, { button: 'right' });
+  const opened = await enPage.waitForSelector('[role="menu"][aria-label="Conversation actions"]', { timeout: 2000 }).then(() => true, () => false);
+  const labels = opened ? await enPage.$$eval('[role="menu"] [role="menuitem"]', (els) => els.map((el) => (el.textContent ?? '').trim())) : [];
+  check(
+    JSON.stringify(labels) === JSON.stringify(['Voice call', 'Video call', 'Pin', 'Mute', 'Read', 'Archive']),
+    `en anglais, le menu d'une ligne est entièrement anglais — « Conversation actions » (${JSON.stringify(labels)})`,
+  );
+  await enContext.close();
+}
 
 await browser.close();
 served.close();

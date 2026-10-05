@@ -25,23 +25,23 @@ public struct StoryNotificationOfflineContent: View {
 
     public var body: some View {
         ZStack {
-            Color.black.opacity(0.85).ignoresSafeArea()
+            Color.black.opacity(MeeshyOpacity.intense).ignoresSafeArea()
 
-            VStack(spacing: 20) {
+            VStack(spacing: MeeshySpacing.xl) {
                 Image(systemName: cause.symbolName)
                     .font(.system(size: 40))
-                    .foregroundStyle(.white.opacity(0.85))
+                    .foregroundStyle(.white.opacity(MeeshyOpacity.intense))
                     .accessibilityHidden(true)
-                VStack(spacing: 8) {
+                VStack(spacing: MeeshySpacing.sm) {
                     Text(cause.title)
                         .font(.title3.bold())
                         .foregroundStyle(.white)
                     Text(cause.message)
                         .font(.subheadline)
-                        .foregroundStyle(.white.opacity(0.75))
+                        .foregroundStyle(.white.opacity(MeeshyOpacity.heavy))
                 }
                 .multilineTextAlignment(.center)
-                .padding(.horizontal, 32)
+                .padding(.horizontal, MeeshySpacing.xxxl)
 
                 Button {
                     HapticFeedback.light()
@@ -50,7 +50,7 @@ public struct StoryNotificationOfflineContent: View {
                     Text(String(localized: "story.viewer.retry", defaultValue: "Réessayer", bundle: .main))
                         .font(.headline)
                         .padding(.horizontal, 28)
-                        .padding(.vertical, 12)
+                        .padding(.vertical, MeeshySpacing.md)
                         .background(Capsule().fill(.white))
                         .foregroundStyle(.black)
                 }
@@ -62,7 +62,7 @@ public struct StoryNotificationOfflineContent: View {
                     Text("notifications.story.expired.back")
                         .font(.subheadline)
                         .underline()
-                        .foregroundStyle(.white.opacity(0.7))
+                        .foregroundStyle(.white.opacity(MeeshyOpacity.heavy))
                 }
                 .buttonStyle(.plain)
             }

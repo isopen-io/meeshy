@@ -1,10 +1,12 @@
+import * as postsEndpoints from '@meeshy/shared/api/endpoints/posts';
+
 import { unwrap } from './client';
 import type { DataSource } from './config';
 import { CANVAS_CAPS_HEADERS, type FeedPost } from './feed-pages';
 import type { ApiResult, HttpTransport } from './http';
 
 /**
- * LE PORT DU DÉTAIL D'UNE PUBLICATION (#6278) — `GET /api/v1/posts/:postId`
+ * LE PORT DU DÉTAIL D'UNE PUBLICATION (#6278) — `GET posts.byPostId`
  * (`services/gateway/src/routes/posts/core.ts:476`, requiredAuth). La
  * passerelle applique l'ACL de `getPostById` : « n'existe pas » et « hors
  * audience » rendent le MÊME 404 `POST_NOT_FOUND` (D-6), et le port le
@@ -36,7 +38,7 @@ export async function loadPost(
   }
   return params.transport.request<FeedPost>({
     method: 'GET',
-    path: `/api/v1/posts/${encodeURIComponent(params.postId)}`,
+    path: postsEndpoints.byPostId(params.postId),
     headers: CANVAS_CAPS_HEADERS,
     ...(params.signal !== undefined ? { signal: params.signal } : {}),
   });

@@ -9,7 +9,9 @@
  *
  * Trois lecteurs partagent ce module, plutôt que trois copies du littéral :
  *  - `vite.config.ts` (§ VitePWA `runtimeCaching`), qui CRÉE ces seaux ;
- *  - `lib/api/query-client.ts`, qui les purge au changement d'identité (D-6) ;
+ *  - `lib/api/account-caches.ts`, qui les purge à la FIN d'un compte sur
+ *    l'appareil — déconnexion, révocation (#8674 ; le seau `api` range chaque
+ *    réponse sous son identité, changer de compte ne le purge donc plus) ;
  *  - `lib/app-update/service-worker.ts`, qui les purge à la mise à jour.
  */
 

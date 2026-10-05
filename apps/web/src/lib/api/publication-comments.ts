@@ -1,4 +1,4 @@
-import type { InfiniteData, QueryClient } from '@tanstack/react-query';
+import type { InfiniteData, QueryClient, QueryKey } from '@tanstack/react-query';
 
 import type {
   CommentAddedEventData,
@@ -8,14 +8,18 @@ import type {
   CommentUpdatedEventData,
   PostComment as SharedPostComment,
 } from '@meeshy/shared/types/post';
+import * as postsEndpoints from '@meeshy/shared/api/endpoints/posts';
+import type { MessageSticker } from '@meeshy/shared/types/message-sticker';
 
 import { shiftedCount, withCommentCount } from '@/lib/feed/interactions';
 
 import { updateCardPost, writeCardCache } from './card-caches';
+import { appendReply, commentRepliesQueryKey, dropReply, settleReply } from './comment-replies';
 import { newClientMessageId } from './client-message-id';
 import type { DataSource } from './config';
 import type { FeedAuthor, FeedMedia } from './feed-pages';
 import type { ApiResult, HttpTransport } from './http';
+import type { PostMediaUploadResult } from './post-media-upload';
 import { outcomeOf } from './outcome';
 import { postQueryKey } from './publication-detail';
 import { STORY_FEED_QUERY_KEY, storyPostQueryKey, type StoryFeedPost } from './stories';
@@ -29,7 +33,7 @@ import { mergedTranslations, nonEmpty, translationDeliveryOf } from './translati
  *
  * Routes RÉELLES, lues avant d'être appelées :
  *
- *  - `GET /api/v1/posts/:postId/comments?limit=&cursor=`
+ *  - `GET posts.byPostIdComments?limit=&cursor=`
  *    (`services/gateway/src/routes/posts/comments.ts:66`, `requiredAuth`).
  *    Sert les commentaires de PREMIER NIVEAU seuls (`parentId: null`,
  *    `PostCommentService.ts:402-447`), `createdAt desc, id desc`, curseur
@@ -39,12 +43,13 @@ import { mergedTranslations, nonEmpty, translationDeliveryOf } from './translati
  *    Hors audience ⇒ 404 `POST_NOT_FOUND`, indistinct de « n'existe pas »
  *    (D-6, et le commentaire de la route le dit : « distinguer révélerait
  *    l'existence du post »).
- *  - `POST /api/v1/posts/:postId/comments`
+ *  - `POST posts.byPostIdComments`
  *    (`:179`, `requiredAuth` + `registeredUser` obligatoire ⇒ 401 anonyme).
  *    Corps `CreateCommentSchema` (`routes/posts/types.ts:428`) :
- *    `content` (≤ 2000, peut être vide SI un média est joint — ce port
- *    n'envoie pas de média, donc il exige du texte), `parentId?`,
- *    `effectFlags?`, `originalLanguage?`, `attachmentIds?`.
+ *    `content` (≤ 2000, peut être vide SI un média ou un sticker est joint
+ *    — ce port n'envoie de média que l'image d'un sticker, donc il exige du
+ *    texte OU un sticker), `parentId?`, `effectFlags?`, `originalLanguage?`,
+ *    `attachmentIds?`, `sticker?` (#9080).
  *    Refus propres à cette route : 403 `COMMENTS_DISABLED` (réglage auteur,
  *    `:214-216`), 404 `POST_NOT_FOUND` (hors audience d'INTERACTION — amis
  *    stricts, plus étroite que la lecture : « un contact DM non-ami peut lire
@@ -81,6 +86,15 @@ export type PostComment = {
   readonly effectFlags?: number | null;
   readonly currentUserReactions?: readonly string[] | null;
   readonly media?: readonly FeedMedia[] | null;
+  /** La carte `{ url, token }` des adresses suivies (#9074) — `metadata.trackingLinks`
+   * en REST, hissée en `trackingLinks` par le socket ; décodée par `trackingLinksOf`,
+   * jamais lue telle quelle. Elle couvre le contenu ET la légende du média. */
+  readonly metadata?: unknown;
+  readonly trackingLinks?: unknown;
+  /** Le sticker (#9080) — la forme `MessageSticker` d'un message, HISSÉE de
+   * `metadata.sticker` par la passerelle (REST et socket) ; son image est le
+   * premier `media`. Décodé par `commentStickerOf`, jamais lu tel quel. */
+  readonly sticker?: unknown;
   /**
    * **LOCAL SEULEMENT** — vrai tant que la passerelle n'a pas confirmé. Aucun
    * champ de ce nom ne voyage sur le fil : c'est la marque qui permet au rendu
@@ -122,7 +136,7 @@ export async function loadCommentsPage(
   });
   const result = await params.transport.request<readonly PostComment[]>({
     method: 'GET',
-    path: `/api/v1/posts/${encodeURIComponent(params.postId)}/comments?${query.toString()}`,
+    path: `${postsEndpoints.byPostIdComments(params.postId)}?${query.toString()}`,
     ...(params.signal !== undefined ? { signal: params.signal } : {}),
   });
   if (!result.ok) return result;
@@ -324,6 +338,44 @@ export const COMMENT_MAX_LENGTH = 2000;
 const mutationIdOf = (tempId: string): string => tempId.replace(/^cid_/, 'cmid_');
 
 /**
+ * **LE STICKER QU'UN COMMENTAIRE EMPORTE** (#9080) — la MÊME forme que celui
+ * d'un message (`composer.tsx`, `sendSticker`) : le descripteur
+ * `MessageSticker`, et l'image rendue DÉJÀ téléversée en `PostMedia`
+ * (`uploadPostMedia`, contexte `comment`). Sans `picture`, seul le
+ * descripteur part (un sticker emoji ou à gabarit) — la passerelle l'admet
+ * comme pour un message.
+ */
+export type CommentStickerSend = {
+  readonly sticker: MessageSticker;
+  readonly picture?: PostMediaUploadResult;
+};
+
+/** LES MÉDIAS JOINTS (#9167) — l'image du sticker d'abord (`commentStickerOf`
+ * la lit au premier rang), puis les photos et vidéos de la photothèque. */
+const joinedMedia = (send: CommentStickerSend | undefined, media: readonly PostMediaUploadResult[] | undefined): readonly PostMediaUploadResult[] => [
+  ...(send?.picture === undefined ? [] : [send.picture]),
+  ...(media ?? []),
+];
+
+/** Ce que le sticker et les médias ajoutent au CORPS envoyé — `sticker` et `attachmentIds`. */
+const stickerBodyOf = (send: CommentStickerSend | undefined, media?: readonly PostMediaUploadResult[]): Readonly<Record<string, unknown>> => {
+  const joined = joinedMedia(send, media);
+  return {
+    ...(send === undefined ? {} : { sticker: send.sticker }),
+    ...(joined.length === 0 ? {} : { attachmentIds: joined.map((piece) => piece.postMediaId) }),
+  };
+};
+
+/** Ce que le sticker et les médias ajoutent à la rangée PROVISOIRE — la forme que la passerelle servira. */
+const stickerRowOf = (send: CommentStickerSend | undefined, media?: readonly PostMediaUploadResult[]): Pick<PostComment, 'sticker' | 'media'> => {
+  const joined = joinedMedia(send, media);
+  return {
+    ...(send === undefined ? {} : { sticker: send.sticker }),
+    ...(joined.length === 0 ? {} : { media: joined.map((piece) => ({ id: piece.postMediaId, fileUrl: piece.fileUrl, mimeType: piece.mimeType })) }),
+  };
+};
+
+/**
  * L'ENVOI — optimiste, puis l'issue, exactement la forme de
  * `performPostGesture` :
  *
@@ -341,11 +393,23 @@ export async function performComment(params: {
   readonly content: string;
   readonly author: FeedAuthor;
   readonly originalLanguage?: string | undefined;
+  /** LA RACINE à laquelle cette réponse se rattache (#8583) — absent ⇒ un
+   * commentaire de premier niveau. */
+  readonly parentId?: string | undefined;
+  /** Un sticker (#9080) — il suffit à rendre le commentaire non vide. */
+  readonly sticker?: CommentStickerSend | undefined;
+  /** Les photos et vidéos DÉJÀ téléversées (#9167) — elles suffisent aussi. */
+  readonly media?: readonly PostMediaUploadResult[] | undefined;
   readonly deps: CommentDeps & { readonly queryClient: QueryClient };
 }): Promise<CommentResult> {
   const { postId, author, deps } = params;
   const content = params.content.trim();
-  if (content === '' || content.length > COMMENT_MAX_LENGTH) return { ok: false, message: COMMENT_EMPTY_MESSAGE };
+  const bare = params.sticker === undefined && (params.media?.length ?? 0) === 0;
+  if ((content === '' && bare) || content.length > COMMENT_MAX_LENGTH) {
+    return { ok: false, message: COMMENT_EMPTY_MESSAGE };
+  }
+  const parentId = typeof params.parentId === 'string' && params.parentId !== '' ? params.parentId : undefined;
+  if (parentId !== undefined) return performReply({ ...params, content, parentId });
 
   const tempId = newClientMessageId();
   const optimistic: PostComment = {
@@ -355,6 +419,7 @@ export async function performComment(params: {
     author,
     pending: true,
     ...(params.originalLanguage === undefined ? {} : { originalLanguage: params.originalLanguage }),
+    ...stickerRowOf(params.sticker, params.media),
   };
 
   const key = commentsQueryKey(postId);
@@ -364,6 +429,7 @@ export async function performComment(params: {
   const body = {
     content,
     ...(params.originalLanguage === undefined ? {} : { originalLanguage: params.originalLanguage }),
+    ...stickerBodyOf(params.sticker, params.media),
   };
 
   const result = await sendComment(deps, { postId, body, clientMutationId: mutationIdOf(tempId) }).catch(() => null);
@@ -391,6 +457,98 @@ export async function performComment(params: {
   return { ok: false, message: COMMENT_FAILED_MESSAGE };
 }
 
+/**
+ * **LE COMPTE DE RÉPONSES DE LA RACINE** (#8583) — il bouge AVEC la réponse
+ * et revient avec elle, comme le compte de la publication : « Voir les
+ * réponses (2) » au-dessus d'un fil qui en montre trois serait le compteur
+ * menteur que `shiftCommentCount` existe pour empêcher. Une racine qu'aucune
+ * page chargée ne porte est laissée telle quelle.
+ */
+export function shiftReplyCount(queryClient: QueryClient, postId: string, parentId: string, delta: number): void {
+  const key = commentsQueryKey(postId);
+  if (queryClient.getQueryData<CommentInfiniteData>(key) === undefined) return;
+  queryClient.setQueryData<CommentInfiniteData>(key, (data) =>
+    mapAllPages(data, (comments) =>
+      comments.some((c) => c.id === parentId)
+        ? comments.map((c) =>
+            c.id === parentId ? { ...c, replyCount: Math.max(0, (typeof c.replyCount === 'number' ? c.replyCount : 0) + delta) } : c,
+          )
+        : comments,
+    ),
+  );
+}
+
+/**
+ * **RÉPONDRE** (#8583) — la même forme que l'envoi d'un commentaire, dans la
+ * caisse des réponses de la RACINE (`comment-replies.ts`), en QUEUE parce que
+ * les réponses se lisent `createdAt ASC`. Trois compteurs bougent ensemble :
+ * la caisse des réponses, le `replyCount` de la racine, et le compte de la
+ * publication — la passerelle incrémente les deux derniers
+ * (`PostCommentService.addComment`), une réponse EST un commentaire.
+ *
+ * Une caisse de réponses jamais lue est AMORCÉE de la seule réponse posée :
+ * elle se voit tout de suite. Elle est déclarée périmée APRÈS la confirmation
+ * seulement — avant, une relecture rendrait un fil qui ne la porte pas encore
+ * et la ferait clignoter.
+ */
+async function performReply(params: {
+  readonly postId: string;
+  readonly content: string;
+  readonly parentId: string;
+  readonly author: FeedAuthor;
+  readonly originalLanguage?: string | undefined;
+  readonly sticker?: CommentStickerSend | undefined;
+  readonly media?: readonly PostMediaUploadResult[] | undefined;
+  readonly deps: CommentDeps & { readonly queryClient: QueryClient };
+}): Promise<CommentResult> {
+  const { postId, content, parentId, author, deps } = params;
+  const tempId = newClientMessageId();
+  const optimistic: PostComment = {
+    id: tempId,
+    content,
+    createdAt: new Date().toISOString(),
+    author,
+    parentId,
+    pending: true,
+    ...(params.originalLanguage === undefined ? {} : { originalLanguage: params.originalLanguage }),
+    ...stickerRowOf(params.sticker, params.media),
+  };
+
+  const key = commentRepliesQueryKey(postId, parentId);
+  const seeded = deps.queryClient.getQueryData<CommentInfiniteData>(key) === undefined;
+  deps.queryClient.setQueryData<CommentInfiniteData>(key, (data) => appendReply(data, optimistic));
+  shiftReplyCount(deps.queryClient, postId, parentId, 1);
+  shiftCommentCount(deps.queryClient, postId, 1);
+
+  const body = {
+    content,
+    parentId,
+    ...(params.originalLanguage === undefined ? {} : { originalLanguage: params.originalLanguage }),
+    ...stickerBodyOf(params.sticker, params.media),
+  };
+  const result = await sendComment(deps, { postId, body, clientMutationId: mutationIdOf(tempId) }).catch(() => null);
+
+  if (result === null) {
+    return { ok: true, notice: readerIsOffline() ? COMMENT_PENDING_MESSAGE : COMMENT_UNCONFIRMED_MESSAGE };
+  }
+
+  if (result.ok) {
+    const served = result.data;
+    if (served !== null && typeof served === 'object' && typeof (served as PostComment).id === 'string') {
+      deps.queryClient.setQueryData<CommentInfiniteData>(key, (data) => settleReply(data, tempId, served as PostComment));
+    }
+    if (seeded) void deps.queryClient.invalidateQueries({ queryKey: key, exact: true });
+    return { ok: true };
+  }
+
+  if (outcomeOf(result) !== 'permanent') return { ok: true, notice: COMMENT_UNCONFIRMED_MESSAGE };
+
+  deps.queryClient.setQueryData<CommentInfiniteData>(key, (data) => dropReply(data, tempId));
+  shiftReplyCount(deps.queryClient, postId, parentId, -1);
+  shiftCommentCount(deps.queryClient, postId, -1);
+  return { ok: false, message: COMMENT_FAILED_MESSAGE };
+}
+
 function sendComment(
   deps: CommentDeps,
   params: {
@@ -405,7 +563,7 @@ function sendComment(
   }
   return deps.transport.request<PostComment>({
     method: 'POST',
-    path: `/api/v1/posts/${encodeURIComponent(params.postId)}/comments`,
+    path: postsEndpoints.byPostIdComments(params.postId),
     body: params.body,
     headers: { 'X-Client-Mutation-Id': params.clientMutationId },
   });
@@ -517,6 +675,11 @@ export function applyCommentAdded(queryClient: QueryClient, payload: unknown): v
      voisine ne casse pas l'écran. */
   if (!isCommentAdded(payload)) return;
   const data = payload;
+  const parentId = typeof data.comment.parentId === 'string' && data.comment.parentId !== '' ? data.comment.parentId : undefined;
+  if (parentId !== undefined) {
+    applyReplyAdded(queryClient, data.postId, parentId, commentFromSocket(data.comment), data.clientMutationId);
+    return;
+  }
   const key = commentsQueryKey(data.postId);
   const cached = queryClient.getQueryData<CommentInfiniteData>(key);
   if (cached === undefined) return;
@@ -534,6 +697,54 @@ export function applyCommentAdded(queryClient: QueryClient, payload: unknown): v
   queryClient.setQueryData<CommentInfiniteData>(key, (d) => insertComment(d, servi));
   shiftCommentCount(queryClient, data.postId, 1);
 }
+
+/**
+ * **UNE RÉPONSE REJOINT SA RACINE, JAMAIS LE PREMIER NIVEAU** (#8583) — avant
+ * ce lot, l'écho d'une réponse s'insérait EN TÊTE du fil, à plat, comme un
+ * commentaire neuf. Les trois chemins d'`applyCommentAdded`, dans la caisse
+ * des réponses (en QUEUE, ordre ASC) ; et, pour une réponse NEUVE, le compte
+ * de la racine et celui de la publication. Rien n'est fabriqué si ni le fil
+ * ni les réponses ne sont ouverts — même règle que le premier niveau.
+ */
+function applyReplyAdded(
+  queryClient: QueryClient,
+  postId: string,
+  parentId: string,
+  servi: PostComment,
+  clientMutationId: string | undefined,
+): void {
+  const key = commentRepliesQueryKey(postId, parentId);
+  const held = queryClient.getQueryData<CommentInfiniteData>(key);
+  if (held === undefined && queryClient.getQueryData<CommentInfiniteData>(commentsQueryKey(postId)) === undefined) return;
+  const present = flattenCommentPages(held);
+  if (present.some((c) => c.id === servi.id)) return;
+  const tempId = optimisticIdOf(clientMutationId);
+  if (tempId !== undefined && present.some((c) => c.id === tempId)) {
+    queryClient.setQueryData<CommentInfiniteData>(key, (d) => settleReply(d, tempId, servi));
+    return;
+  }
+  if (held !== undefined) queryClient.setQueryData<CommentInfiniteData>(key, (d) => appendReply(d, servi));
+  shiftReplyCount(queryClient, postId, parentId, 1);
+  shiftCommentCount(queryClient, postId, 1);
+}
+
+/**
+ * **TOUTES LES CAISSES D'UNE PUBLICATION, PAR UN PRÉFIXE** (#8583) — le fil
+ * ET chaque caisse de réponses (`comment-replies.ts`, même forme, clé
+ * préfixée par `commentsQueryKey`). Une édition, un cœur, une traduction ou
+ * une suppression qui vise une RÉPONSE la trouve donc sans second inventaire.
+ */
+const commentCacheKeys = (queryClient: QueryClient, postId: string): readonly QueryKey[] =>
+  queryClient
+    .getQueriesData<CommentInfiniteData>({ queryKey: commentsQueryKey(postId) })
+    .filter(([, data]) => data !== undefined)
+    .map(([key]) => key);
+
+/** La racine d'une caisse de réponses, lue sur sa clé — `undefined` pour le fil. */
+const parentOfCacheKey = (key: QueryKey): string | undefined => {
+  const parent = key[4];
+  return key[3] === 'replies' && typeof parent === 'string' ? parent : undefined;
+};
 
 /* ------------------------------------------------------------------ #7227 --
  * **W8 — `comment:updated` / `comment:deleted` / `comment:liked` /
@@ -588,14 +799,14 @@ const mergedComment = (incoming: PostComment, held: PostComment): PostComment =>
  * ouverte n'est pas fabriquée. */
 export function applyCommentUpdated(queryClient: QueryClient, payload: unknown): void {
   if (!isCommentUpdated(payload)) return;
-  const key = commentsQueryKey(payload.postId);
-  if (queryClient.getQueryData<CommentInfiniteData>(key) === undefined) return;
   const updated = commentFromSocket(payload.comment);
-  queryClient.setQueryData<CommentInfiniteData>(key, (d) =>
-    mapAllPages(d, (comments) =>
-      comments.some((c) => c.id === updated.id)
-        ? comments.map((c) => (c.id === updated.id ? mergedComment(updated, c) : c))
-        : comments,
+  commentCacheKeys(queryClient, payload.postId).forEach((key) =>
+    queryClient.setQueryData<CommentInfiniteData>(key, (d) =>
+      mapAllPages(d, (comments) =>
+        comments.some((c) => c.id === updated.id)
+          ? comments.map((c) => (c.id === updated.id ? mergedComment(updated, c) : c))
+          : comments,
+      ),
     ),
   );
 }
@@ -649,18 +860,22 @@ export function setCommentCountServed(queryClient: QueryClient, postId: string, 
  * (`setCommentCountServed`) — même si la liste de commentaires n'est pas
  * ouverte, la carte de chaque écran et la pastille du rail doivent rester
  * justes. `deletedCommentIds` porte le
- * sous-arbre entier (soft-delete côté serveur) ; web n'a pas de réponses
- * imbriquées (pas de route `replies`), donc un id de réponse n'y trouve
- * simplement rien à retirer — sans effet, jamais une erreur.
+ * sous-arbre entier (soft-delete côté serveur) : chaque caisse de la
+ * publication — le fil et les réponses de chaque racine (#8583) — en retire
+ * ce qu'elle porte, et une caisse de réponses rend le compte de SA racine.
  */
 export function applyCommentDeleted(queryClient: QueryClient, payload: unknown): void {
   if (!isCommentDeleted(payload)) return;
   const ids = new Set<string>([payload.commentId, ...(payload.deletedCommentIds ?? [])]);
-  const key = commentsQueryKey(payload.postId);
-  if (queryClient.getQueryData<CommentInfiniteData>(key) !== undefined) {
+  const { postId } = payload;
+  commentCacheKeys(queryClient, postId).forEach((key) => {
+    const removed = flattenCommentPages(queryClient.getQueryData<CommentInfiniteData>(key)).filter((c) => ids.has(c.id)).length;
+    if (removed === 0) return;
     queryClient.setQueryData<CommentInfiniteData>(key, (d) => mapAllPages(d, (comments) => comments.filter((c) => !ids.has(c.id))));
-  }
-  setCommentCountServed(queryClient, payload.postId, payload.commentCount);
+    const parent = parentOfCacheKey(key);
+    if (parent !== undefined) shiftReplyCount(queryClient, postId, parent, -removed);
+  });
+  setCommentCountServed(queryClient, postId, payload.commentCount);
 }
 
 /** LA GARDE PARTAGÉE de `comment:liked` / `comment:unliked` — même forme
@@ -687,13 +902,15 @@ export function isCommentLikeEvent(payload: unknown): payload is CommentLikedEve
  */
 export function applyCommentLikeEvent(queryClient: QueryClient, payload: unknown, viewerId: string, liked: boolean): void {
   if (!isCommentLikeEvent(payload)) return;
-  const key = commentsQueryKey(payload.postId);
-  if (queryClient.getQueryData<CommentInfiniteData>(key) === undefined) return;
   const byViewer = payload.userId === viewerId;
   const { commentId, likeCount } = payload;
-  queryClient.setQueryData<CommentInfiniteData>(key, (d) =>
-    mapAllPages(d, (comments) =>
-      comments.map((c) => (c.id === commentId ? { ...c, likeCount, ...(byViewer ? { isLikedByMe: liked } : {}) } : c)),
+  commentCacheKeys(queryClient, payload.postId).forEach((key) =>
+    queryClient.setQueryData<CommentInfiniteData>(key, (d) =>
+      mapAllPages(d, (comments) =>
+        comments.some((c) => c.id === commentId)
+          ? comments.map((c) => (c.id === commentId ? { ...c, likeCount, ...(byViewer ? { isLikedByMe: liked } : {}) } : c))
+          : comments,
+      ),
     ),
   );
 }
@@ -734,10 +951,10 @@ export function applyCommentLikeEvent(queryClient: QueryClient, payload: unknown
  * le lecteur de stories et le lecteur des Réels
  * (`components/publication-comments-sheet.tsx`, D-89) montent la même surface
  * (`CommentThread`) sur le même cache. Aucune carte ne peint de commentaire
- * (`FeedPost` ne déclare pas `comments`), et web-v2 n'a pas de caisse de
- * réponses imbriquées (#7118) : une réponse n'y entre que par `comment:added`,
- * à plat, où cette loi la trouve par son id comme n'importe quelle rangée. Le
- * jour où une caisse de réponses naîtra, elle devra être parcourue ICI.
+ * (`FeedPost` ne déclare pas `comments`). Les caisses de RÉPONSES (#8583,
+ * `comment-replies.ts`) partagent le préfixe du fil : `commentCacheKeys` les
+ * parcourt toutes ici, comme le demandait ce doc-comment avant qu'elles
+ * naissent.
  *
  * **UNE RÉÉCRITURE QUI NE CHANGE RIEN N'EST PAS ÉCRITE** (`writeCardCache`) :
  * un commentaire absent du fil, un fil jamais ouvert, une rediffusion du même
@@ -750,11 +967,14 @@ export function applyCommentTranslation(queryClient: QueryClient, payload: unkno
   const { postId, commentId } = p;
   if (delivery === null || !nonEmpty(postId) || !nonEmpty(commentId)) return;
 
-  writeCardCache<CommentInfiniteData>(queryClient, commentsQueryKey(postId), (data) =>
-    mapAllPages(data, (comments) => {
-      const held = comments.find((c) => c.id === commentId);
-      const translations = held === undefined ? null : mergedTranslations(held.translations, delivery);
-      return translations === null ? comments : comments.map((c) => (c === held ? { ...c, translations } : c));
-    }),
+  const keys = commentCacheKeys(queryClient, postId);
+  (keys.length === 0 ? [commentsQueryKey(postId)] : keys).forEach((key) =>
+    writeCardCache<CommentInfiniteData>(queryClient, key, (data) =>
+      mapAllPages(data, (comments) => {
+        const held = comments.find((c) => c.id === commentId);
+        const translations = held === undefined ? null : mergedTranslations(held.translations, delivery);
+        return translations === null ? comments : comments.map((c) => (c === held ? { ...c, translations } : c));
+      }),
+    ),
   );
 }

@@ -292,6 +292,17 @@ export const linkMessageSchema = {
       items: { type: 'string' },
       description: 'Usernames whose mention passed validation'
     },
+    // La carte des liens suivis (#9093, #9105) : non nommée ici, elle serait
+    // tronquée du 201 et l'auteur verrait l'adresse brute au lieu de m+token.
+    trackingLinks: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: { url: { type: 'string' }, token: { type: 'string' } },
+        required: ['url', 'token']
+      },
+      description: 'Raw and markdown URLs of the content, with their /l/ tracking token'
+    },
     location: { ...sharedPlaceResponseSchema }
   }
 } as const;
@@ -353,6 +364,10 @@ const replyToMessageSchema = {
     isBlurred: { type: 'boolean', description: 'Quoted message content is blurred until tap to reveal' },
     isEncrypted: { type: 'boolean', description: 'Quoted message is end-to-end encrypted' },
     effectFlags: { type: 'number', description: 'Bitfield for the quoted message effects (blurred / ephemeral / view-once)' },
+    // #7927 / #8562 — la citation SCELLÉE (message cité supprimé, ou éphémère
+    // échu pour ce lecteur) le DIT : sans la déclaration, le sérialiseur retire
+    // le marqueur et le client rend une citation vide au lieu du scellé.
+    deletedAt: { type: 'string', format: 'date-time', nullable: true, description: 'Quoted message is sealed for this reader (deleted, or ephemeral lapsed for them)' },
     // #6164 — la PIÈCE NOMMÉE que la réponse vise. DEUX champs, et deux
     // seulement : l'ancre du saut et la NATURE du média. Tout ce qui DÉCRIT la
     // pièce se relit à chaque service et n'a donc pas le droit d'être figé

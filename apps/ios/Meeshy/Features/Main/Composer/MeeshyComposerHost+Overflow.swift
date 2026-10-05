@@ -96,7 +96,8 @@ extension MeeshyComposerHost {
                 .foregroundColor(MeeshyColors.textPrimary(isDark: true))
                 .frame(width: ComposerControlMetrics.visualDiameter,
                        height: ComposerControlMetrics.visualDiameter)
-                .adaptiveGlass(in: Circle())
+                // Teinté du plateau, comme la croix qu'il encadre (#8370).
+                .adaptiveLiquidGlass(in: Circle(), tint: tint.color.opacity(0.55), interactive: true)
         }
         .accessibilityLabel(Text(ComposerOverflowCopy.menu))
     }
@@ -106,6 +107,8 @@ extension MeeshyComposerHost {
     /// lisent sans monter une vue.
     func perform(_ entry: ComposerOverflowEntry) {
         switch entry {
+        case .preview:
+            performSoclePreview()
         case .pickBackground:
             // Bascule : le même geste ouvre et referme la bande. « Ouvrir »
             // sans « refermer » rendrait les ≈ 170 pt à sens unique.
@@ -128,9 +131,9 @@ extension MeeshyComposerHost {
         // exportable : timeline committée, URLs de vidéo résolues, fond image
         // du composer injecté. La recopier ici perdrait les trois.
         case .saveToPhotos:
-            sceneExport.export(.photoLibrary, slide: viewModel.exportableCurrentSlide())
+            exportScene(to: .photoLibrary)
         case .share:
-            sceneExport.export(.share, slide: viewModel.exportableCurrentSlide())
+            exportScene(to: .share)
 
         case .clearAll:
             // **Les HUIT porteurs du média partent d'un bloc, et les
@@ -179,5 +182,13 @@ extension MeeshyComposerHost {
             // mesure appartient désormais à l'éditeur plein écran — qui la
             // refait à chaque ouverture, donc n'a rien à effacer.
         }
+    }
+
+    /// Bake la scène courante vers `destination` : la slide ET ce que la scène
+    /// tient en mémoire (#8599), construits UNE fois depuis le même instantané
+    /// — `exportInputs(for:)` lit la slide qu'il reçoit, jamais une autre.
+    func exportScene(to destination: ComposerSceneExportController.Destination) {
+        let slide = viewModel.exportableCurrentSlide()
+        sceneExport.export(destination, slide: slide, inputs: viewModel.exportInputs(for: slide))
     }
 }

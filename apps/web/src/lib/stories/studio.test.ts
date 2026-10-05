@@ -13,7 +13,14 @@ import {
   studioSnapshotOf,
   withAddedPage,
   withAddedText,
+  withAnimated,
+  withTextDuplicated,
+  withTextMoved,
+  withPlacedWhileAnimated,
   withAudience,
+  withTrackTiming,
+  withBackgroundFrame,
+  withPostText,
   withCurrentPage,
   withPage,
   withSound,
@@ -383,5 +390,105 @@ describe('l’audience du brouillon (#7683) — voyage, jamais un défaut recopi
 
   test('une audience seule ne tient pas un brouillon en vie (la mémoire s’en charge)', () => {
     expect(isStudioDraftEmpty(withAudience(emptyStudioDraft('fr'), 'FRIENDS'))).toBe(true);
+  });
+});
+
+describe('le Cadre du fond (#8414) — posé sur la page COURANTE, persisté, jamais sans fond', () => {
+  test('Remplir + sable se lit sur le fond de la page courante', () => {
+    const draft = withBackgroundFrame(withVisual(empty(), 'visual', visualAsset()), { fitMode: 'fill', backdrop: 'sand' });
+    expect(currentStudioPage(draft).background?.frame).toEqual({ fitMode: 'fill', backdrop: 'sand' });
+  });
+
+  test('sans fond, le Cadre ne change rien', () => {
+    const draft = empty();
+    expect(withBackgroundFrame(draft, { fitMode: 'fill', backdrop: 'sand' })).toBe(draft);
+  });
+
+  test('le Cadre fait l’aller-retour du brouillon persisté ; une valeur inconnue se relit ajusté/flou', () => {
+    const ready = withVisualUpload(withVisual(empty(), 'visual', visualAsset()), 'visual', { phase: 'ready', postMediaId: 'pm-bg', fileUrl: 'bg.jpg' });
+    const framed = withBackgroundFrame(ready, { fitMode: 'fill', backdrop: 'indigo' });
+    const snapshot = studioSnapshotOf(framed, 'fr');
+    expect(snapshot.pages[0]!.background?.frame).toEqual({ fitMode: 'fill', backdrop: 'indigo' });
+    expect(currentStudioPage(studioDraftFromSnapshot(snapshot, (u) => u, 'fr')).background?.frame).toEqual({ fitMode: 'fill', backdrop: 'indigo' });
+
+    const corrupted = { ...snapshot, pages: [{ ...snapshot.pages[0]!, background: { ...snapshot.pages[0]!.background!, frame: { fitMode: 'x', backdrop: 'y' } } }] };
+    expect(currentStudioPage(studioDraftFromSnapshot(corrupted, (u) => u, 'fr')).background?.frame).toEqual({ fitMode: 'fit', backdrop: 'blur' });
+  });
+});
+
+describe('le texte du POST (#8413) — le corps de la publication, un concept de brouillon', () => {
+  test('vide par défaut, écrit par `withPostText`', () => {
+    expect(empty().postText).toBe('');
+    expect(withPostText(empty(), 'Bonjour à tous').postText).toBe('Bonjour à tous');
+  });
+
+  test('il fait l’aller-retour du brouillon persisté', () => {
+    const snapshot = studioSnapshotOf(withPostText(typed('Une'), 'Le corps'), 'fr');
+    expect(snapshot.postText).toBe('Le corps');
+    expect(studioDraftFromSnapshot(snapshot, (u) => u, 'fr').postText).toBe('Le corps');
+  });
+
+  test('vide, il ne s’écrit pas', () => {
+    expect(studioSnapshotOf(typed('Une'), 'fr').postText).toBeUndefined();
+  });
+});
+
+describe('le mode Animé (#8415) — posé sur la page courante et persisté', () => {
+  test('ouvrir Animé puis régler une piste ; le tout fait l’aller-retour du brouillon', () => {
+    const animated = withTrackTiming(withAnimated(typed('Une')), seedId(typed('Une')), { start: 1, end: 3 });
+    const page = currentStudioPage(animated);
+    expect(page.duration).toBe(6);
+    expect(page.texts[0]!.timing).toEqual({ start: 1, end: 3 });
+    const restored = currentStudioPage(studioDraftFromSnapshot(studioSnapshotOf(animated, 'fr'), (u) => u, 'fr'));
+    expect(restored.duration).toBe(6);
+    expect(restored.texts[0]!.timing).toEqual({ start: 1, end: 3 });
+  });
+
+  test('une fenêtre corrompue dans le brouillon se relit SANS fenêtre (l’objet couvre la scène)', () => {
+    const snapshot = studioSnapshotOf(withAnimated(typed('Une')), 'fr');
+    const corrupted = { ...snapshot, pages: [{ ...snapshot.pages[0]!, duration: -2, texts: [{ ...snapshot.pages[0]!.texts[0]!, timing: { start: 'x' } }] }] };
+    const restored = currentStudioPage(studioDraftFromSnapshot(corrupted, (u) => u, 'fr'));
+    expect(restored.duration).toBeUndefined();
+    expect(restored.texts[0]!.timing).toBeUndefined();
+  });
+});
+
+describe('un objet posé sur une scène animée entre à la tête (lot 6)', () => {
+  test('scène animée : fenêtre [tête, fin] ; scène statique : inchangé', () => {
+    const animated = withAddedText(withAnimated(typed('Une')), 'fr');
+    const id = currentStudioPage(animated).selected!;
+    expect(currentStudioPage(withPlacedWhileAnimated(animated, id, 2)).texts.find((l) => l.id === id)?.timing).toEqual({ start: 2, end: 6 });
+    const still = withAddedText(typed('Une'), 'fr');
+    expect(withPlacedWhileAnimated(still, currentStudioPage(still).selected!, 2)).toBe(still);
+  });
+});
+
+/** LE MENU D'UN OBJET (lot 6, appui long) — monter, reculer, dupliquer. */
+describe('withTextMoved / withTextDuplicated', () => {
+  const two = () => {
+    const first = typed('Un');
+    return withText(withAddedText(first, 'fr'), 'text-2', 'Deux');
+  };
+
+  test('monter place le texte AU-DESSUS du suivant ; au sommet, rien ne change', () => {
+    const moved = withTextMoved(two(), 'text-1', 1);
+    expect(currentStudioPage(moved).texts.map((l) => l.id)).toEqual(['text-2', 'text-1']);
+    const top = two();
+    expect(withTextMoved(top, 'text-2', 1)).toBe(top);
+  });
+
+  test('reculer le fait passer dessous ; au fond, rien ne change', () => {
+    expect(currentStudioPage(withTextMoved(two(), 'text-2', -1)).texts.map((l) => l.id)).toEqual(['text-2', 'text-1']);
+    const bottom = two();
+    expect(withTextMoved(bottom, 'text-1', -1)).toBe(bottom);
+  });
+
+  test('dupliquer pose une copie décalée, AU-DESSUS, sélectionnée, avec un identifiant neuf', () => {
+    const page = currentStudioPage(withTextDuplicated(two(), 'text-1'));
+    expect(page.texts.map((l) => l.id)).toEqual(['text-1', 'text-3', 'text-2']);
+    expect(page.selected).toBe('text-3');
+    const copy = page.texts[1]!;
+    expect(copy.text).toBe('Un');
+    expect(copy.pose.y).toBeCloseTo(page.texts[0]!.pose.y + 0.06, 5);
   });
 });

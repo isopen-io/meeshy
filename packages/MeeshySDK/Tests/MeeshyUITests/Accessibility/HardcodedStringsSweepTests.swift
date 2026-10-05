@@ -88,24 +88,6 @@ final class HardcodedStringsSweepTests: XCTestCase {
         "tag.placeholder",
         "tag.remove",
         "userIdentity.read",
-        "videoEditor.audio.sound",
-        "videoEditor.captions.analyzing",
-        "videoEditor.captions.clear",
-        "videoEditor.captions.count",
-        "videoEditor.captions.recommended",
-        "videoEditor.captions.spoken_language",
-        "videoEditor.export.failed",
-        "videoEditor.finish",
-        "videoEditor.reset",
-        "videoEditor.resume.message",
-        "videoEditor.resume.restart",
-        "videoEditor.resume.restore",
-        "videoEditor.rotation",
-        "videoEditor.split.at_playhead",
-        "videoEditor.split.instructions",
-        "videoEditor.split.segment",
-        "videoEditor.timeline.a11y",
-        "videoEditor.trim.handles_hint",
         "voiceProfile.recording.min_duration",
         "voiceProfile.recording.sample",
         "audio.recorder.micDeniedSettings",
@@ -190,9 +172,7 @@ final class HardcodedStringsSweepTests: XCTestCase {
         let sharedAcrossLocales: Set<String> = [
             "media.video.airplay",           // brand name
             "media.video.pip.enter",         // Apple ships this untranslated in fr
-            "videoEditor.timeline.a11y",     // "Timeline" is used verbatim in fr
             "story.audio.volume",            // "Volume" identical fr/en
-            "videoEditor.rotation",          // "Rotation" identical fr/en
             "media.video.pause",             // "Pause" identical fr/en
             "story.audio.pause",             // idem
             "story.timeline.container",      // "Timeline" verbatim en fr
@@ -201,7 +181,6 @@ final class HardcodedStringsSweepTests: XCTestCase {
             "conversation.settings.slowmode.5min",
             "conversation.unread_messages",  // "%lld messages" identical fr/en
             "media.document.pages",          // "%lld pages" identical fr/en
-            "videoEditor.split.segment",     // "Segment %lld" identical fr/en
             "voiceProfile.recording.min_duration",
         ]
         for key in Self.sweptKeys where !sharedAcrossLocales.contains(key) {

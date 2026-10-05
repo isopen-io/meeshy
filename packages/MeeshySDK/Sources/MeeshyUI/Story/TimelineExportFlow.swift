@@ -48,7 +48,7 @@ protocol TimelineStoryExporting {
         to outputURL: URL,
         watermark: StoryExportWatermark?,
         intro: StoryExportIntroContent?,
-        audioResolver: (@Sendable (StoryAudioPlayerObject) -> URL?)?,
+        inputs: StoryExportInputs,
         progress: ((Double) -> Void)?
     ) async throws -> URL
 }
@@ -67,7 +67,7 @@ struct SystemTimelineStoryExporter: TimelineStoryExporting {
         to outputURL: URL,
         watermark: StoryExportWatermark?,
         intro: StoryExportIntroContent?,
-        audioResolver: (@Sendable (StoryAudioPlayerObject) -> URL?)?,
+        inputs: StoryExportInputs,
         progress: ((Double) -> Void)?
     ) async throws -> URL {
         // Trampoline @MainActor → @Sendable : `StoryExporter.export` exige un
@@ -116,7 +116,7 @@ struct SystemTimelineStoryExporter: TimelineStoryExporting {
             // fonctionnellement équivalent mais mesuré 5 à 20× plus lent —
             // voir `tasks/todo-story-export-single-pass.md`.
             branding: nil,
-            audioResolver: audioResolver,
+            inputs: inputs,
             progress: progressTrampoline
         )
 
@@ -226,7 +226,9 @@ final class TimelineExportController: ObservableObject {
         }
         pausedTimelineViewModel = timelineViewModel
         let slide = composer.exportableCurrentSlide()
-        let mediaURLs = composer.collectMediaURLs(for: slide)
+        // Même construction que le `⋯` du composer (#8599) : bitmaps en
+        // mémoire, stickers adoptés et sons de session — pas seulement l'audio.
+        let inputs = composer.exportInputs(for: slide)
         // Filigrane Meeshy animé (logo + « meeshy » + pseudo de l'auteur) —
         // MÊME appel que les 3 autres chemins d'export (Task 9 : avant ce
         // fix, ce chemin appelait `.make()` SANS `username:`, filigrane
@@ -265,7 +267,7 @@ final class TimelineExportController: ObservableObject {
                     to: outputURL,
                     watermark: watermark,
                     intro: introContent,
-                    audioResolver: { audio in mediaURLs[audio.id] },
+                    inputs: inputs,
                     progress: { [weak self] fraction in
                         guard let self, self.isExporting else { return }
                         self.phase = .exporting(fraction)
@@ -321,6 +323,22 @@ final class TimelineExportController: ObservableObject {
 
 /// Contenu de la sheet timeline du composer : switcher Quick/Pro + flux
 /// d'export (overlay de progression, aperçu partageable, alerte d'échec).
+/// **La frise, montable hors de l'atelier** (#8415) : la scène plein écran du
+/// meuble l'ouvre par sa bascule « Animé ». Même contenu que le panneau de
+/// l'atelier — export compris —, le cycle de vie restant chez l'hôte
+/// (`openTimelinePanel` / `closeTimelinePanel`).
+public struct SceneTimelinePanel: View {
+    private let composer: StoryComposerViewModel
+
+    public init(composer: StoryComposerViewModel) {
+        self.composer = composer
+    }
+
+    public var body: some View {
+        TimelineSheetContent(composer: composer)
+    }
+}
+
 struct TimelineSheetContent: View {
 
     let composer: StoryComposerViewModel
@@ -384,7 +402,7 @@ struct TimelineSheetContent: View {
         if case .exporting(let fraction) = exportController.phase {
             ZStack {
                 Color.black.opacity(0.45).ignoresSafeArea()
-                VStack(spacing: 16) {
+                VStack(spacing: MeeshySpacing.lg) {
                     ProgressView(value: max(0, min(1, fraction)))
                         .progressViewStyle(.linear)
                         .tint(MeeshyColors.indigo400)
@@ -402,7 +420,7 @@ struct TimelineSheetContent: View {
                 }
                 .padding(26)
                 .background(
-                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.xlPlus, style: .continuous)
                         .fill(.ultraThinMaterial)
                 )
             }
@@ -482,10 +500,10 @@ struct TimelineExportPreviewSheet: View {
 
     private var controlsOverlay: some View {
         VStack {
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 Button { dismiss() } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 28))
+                        .font(.system(size: MeeshyIconSize.xxxl))
                         .foregroundColor(.white.opacity(0.85))
                         .padding()
                 }
@@ -498,14 +516,14 @@ struct TimelineExportPreviewSheet: View {
 
                 ShareLink(item: url) {
                     Image(systemName: "square.and.arrow.up")
-                        .font(.system(size: 18, weight: .semibold))
+                        .font(.system(size: MeeshyIconSize.lg, weight: .semibold))
                         .foregroundColor(.white.opacity(0.9))
                         .frame(width: 40, height: 40)
                         .background(Circle().fill(Color.white.opacity(0.2)))
                 }
                 .accessibilityLabel(String(localized: "story.timeline.export.preview.share",
                                            defaultValue: "Partager la vidéo", bundle: .module))
-                .padding(.trailing, 16)
+                .padding(.trailing, MeeshySpacing.lg)
             }
             Spacer()
         }

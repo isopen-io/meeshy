@@ -6,6 +6,9 @@ export const MESSAGE_EFFECT_FLAGS = {
     EPHEMERAL: 1 << 0,   // 1
     BLURRED:   1 << 1,   // 2
     VIEW_ONCE: 1 << 2,   // 4
+    // Flamme-œil (#8302) : toujours avec EPHEMERAL, sans durée — le message
+    // disparaît chez chaque lecteur quand il l'a vu puis a quitté la conversation.
+    EPHEMERAL_AFTER_READ: 1 << 3, // 8
     // Appearance one-shot (bits 8-15)
     SHAKE:     1 << 8,   // 256
     ZOOM:      1 << 9,   // 512

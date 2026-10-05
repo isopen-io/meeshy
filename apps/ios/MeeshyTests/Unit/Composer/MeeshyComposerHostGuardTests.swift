@@ -439,8 +439,10 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
         // n'interdit pas. Une garde négative doit être bornée à l'endroit où sa
         // règle s'applique.
         let code = try hostCode()
-        guard let bodyBlock = declarationBody(startingAt: "var composerStack: some View", in: code) else {
-            return XCTFail("`composerStack` est introuvable — le meuble a changé de forme, la garde doit être re-pointée")
+        // **`socleSlot`** depuis #8387 : l'encart du bas est un nœud nominal
+        // monté par `composerStack`, et la condition du socle vit en lui.
+        guard let bodyBlock = declarationBody(startingAt: "var socleSlot: some View", in: code) else {
+            return XCTFail("`socleSlot` est introuvable — le meuble a changé de forme, la garde doit être re-pointée")
         }
         let compacte = compact(bodyBlock)
 
@@ -1011,9 +1013,18 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
             return XCTFail("`publishBlockedHint` est introuvable — la garde ne mesurerait RIEN")
         }
         let compacte = compact(bloc)
+        // **La légende « ajoutez au moins un élément… » est partie**
+        // (directive porteur 2026-09-27 : « c'est un fait connu de tous », et
+        // le bouton Publier disparaît quand rien n'est à publier). L'indice ne
+        // parle plus que de l'AUDIENCE, la seule cause que rien d'autre à
+        // l'écran ne signale.
         XCTAssertTrue(
-            compacte.contains(compact("ComposerSocleCopy.publishBlockedHint(")),
+            compacte.contains(compact("ComposerSocleCopy.publishBlockedAudienceHint")),
             "Le bloc lu n'est pas celui de l'indice."
+        )
+        XCTAssertFalse(
+            compacte.contains(compact("ComposerSocleCopy.publishBlockedHint(")),
+            "La légende « ajoutez au moins un élément » est revenue."
         )
         XCTAssertTrue(
             compacte.contains(compact("ComposerDocumentPublishGate.audienceIsComplete(")),
@@ -1165,8 +1176,15 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
                 + "ce qu'elle mesure."
         )
         XCTAssertTrue(
-            compacte.contains("performSoclePublish("),
+            compacte.contains("requestSoclePublish("),
             "… et un bouton qui ne déclenche rien est l'affordance sans effet que ce chantier retire partout."
+        )
+        guard let demande = declarationBody(startingAt: "func requestSoclePublish(", in: try hostCode()) else {
+            return XCTFail("La demande de publication (#8603) est introuvable — la garde ne mesurerait RIEN")
+        }
+        XCTAssertTrue(
+            compact(demande).contains("performSoclePublish("),
+            "La question « Publier en réel ? » (#8603) retombe sur l'aiguillage : sans lui, la flèche ne publierait plus rien."
         )
         // **Le GATE a déménagé dans l'habillage partagé le 2026-09-03**
         // (#4995) : les deux flèches — socle et en-tête du mood — passent par
@@ -1313,8 +1331,9 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
 
         XCTAssertTrue(compacte.contains("onPublishDocument("), "Le bloc lu n'est pas celui de l'envoi du socle.")
         XCTAssertTrue(
-            compacte.contains(compact("if accepted { onDismiss() }")),
-            "La sortie doit être CONDITIONNÉE par l'acceptation du site de montage. Un `onDismiss()` "
+            compacte.contains(compact("if accepted { discardAutosavedDraft(); onDismiss() }")),
+            "La sortie doit être CONDITIONNÉE par l'acceptation du site de montage — et c'est elle, et elle seule, "
+                + "qui efface le brouillon autosauvegardé (#8848). Un `onDismiss()` "
                 + "inconditionnel jetterait ce que l'auteur vient d'écrire sur un envoi que le publieur a "
                 + "refusé — et l'écran se refermerait comme si tout allait bien."
         )
@@ -1483,9 +1502,15 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
             // > dit « une porte a cessé de passer par le meuble et recopie son
             // > envoi ». Les deux se lisent dans un diff, et c'est pour ça que la
             // > liste est écrite en toutes lettres plutôt que comptée.
+            //
+            // **Une porte de plus, 2026-09-28** (#8416) : la RETOUCHE d'une image
+            // du fil (`ConversationImageSceneDoor`) monte le meuble au lieu de
+            // l'éditeur d'image à part. Elle passe les trois canaux — et n'en
+            // publie aucun : son socle rend l'image au message.
             ["StoryTrayActions.swift", "ComposerMoodSurface.swift", "DocumentComposerDoor.swift",
              "MediaComposerDoor.swift", "ShareComposeDoor.swift",
-             "StoryEditComposer.swift", "StoryRepublishComposer.swift"],
+             "StoryEditComposer.swift", "StoryRepublishComposer.swift",
+             "ConversationImageSceneDoor.swift"],
             "Les sites qui montent le MEUBLE lui-même sont écrits en toutes lettres, et ce sont des PORTES : "
                 + "un montage de plus, posé directement dans une feuille de présentation, recopierait l'envoi "
                 + "et la reprise hors-ligne que `MoodComposerDoor` et `DocumentComposerDoor` tiennent une "
@@ -1522,8 +1547,13 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
             // deux choses (quel contenu reprendre, quelle audience il autorise)
             // parce que les séparer aurait permis d'en passer une sans l'autre,
             // c'est-à-dire de republier SANS PLAFOND, silencieusement.
+            // `onReturnMedia` ferme la liste (#8416, #9123) : la retouche d'une pièce du
+            // fil rend l'image composée au lieu de la publier. `retouchSeries` et
+            // `onReturnSeries` la suivent (#9126) : toutes les pièces du message
+            // en scènes, rendues chacune à sa place.
             ["intent", "initialVisibility", "draftId", "hydration", "onPublishAllInBackground",
-             "onPublishDocument", "moodSeed", "mediaSeed", "onPreview", "onDismiss"],
+             "onPublishDocument", "moodSeed", "mediaSeed", "onPreview", "onDismiss", "onReturnMedia",
+             "retouchSeries", "onReturnSeries"],
             "La liste des paramètres du meuble a changé. Ce n'est pas un échec en soi — elle est écrite en "
                 + "toutes lettres ici pour qu'un changement d'ordre se lise dans un diff au lieu de se "
                 + "découvrir à la compilation, et pour que la sous-suite ci-dessous ait une référence stable."
@@ -2477,8 +2507,9 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
             "La story part sous l'audience choisie AU SOCLE, avec ses personnes nommées."
         )
         XCTAssertTrue(
-            corps.contains("ifaccepted{onDismiss()}"),
-            "La sortie n'est acquise que sur une ACCEPTATION — comme `publishDocument`."
+            corps.contains("ifaccepted{discardAutosavedDraft();onDismiss()}"),
+            "La sortie — et l'effacement du brouillon autosauvegardé (#8848) — n'est acquise que sur une "
+                + "ACCEPTATION, comme `publishDocument`."
         )
     }
 

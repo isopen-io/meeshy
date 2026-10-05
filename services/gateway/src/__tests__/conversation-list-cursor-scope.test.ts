@@ -46,6 +46,7 @@ type LigneCurseur = {
   lastMessageAt: Date | null;
   lastReactionAt?: Date | null;
   lastReactionTargetKey?: string | null;
+  lastActivityAt?: Date | null;
 };
 
 const prismaQuiRespecteLeScope = (ligne: LigneCurseur | null) => {
@@ -73,19 +74,19 @@ describe('le curseur de GET /conversations', () => {
     });
   });
 
-  it("#7592 — borne sur le RANG du lecteur : une réaction à SON message a remonté la ligne curseur", async () => {
-    const reaction = new Date('2026-09-18T09:05:00.000Z');
-    const prisma = prismaQuiRespecteLeScope({ lastMessageAt: QUAND, lastReactionAt: reaction, lastReactionTargetKey: LECTEUR });
+  it("#9026 — borne sur le RANG de la ligne : une activité (réaction, appel, épingle) a remonté la ligne curseur", async () => {
+    const activite = new Date('2026-09-18T09:05:00.000Z');
+    const prisma = prismaQuiRespecteLeScope({ lastMessageAt: QUAND, lastActivityAt: activite });
 
     expect(await resolveListCursor({ prisma, beforeCursor: UNE_CONVERSATION, userId: LECTEUR })).toEqual({
       genre: 'borne',
-      rang: reaction,
+      rang: activite,
     });
   });
 
-  it("#7592 — une réaction entre tiers ne déplace pas la borne", async () => {
+  it("#9026 — une réaction écrite avant #9026 (colonnes #7592 seules) ne déplace plus la borne", async () => {
     const reaction = new Date('2026-09-18T09:05:00.000Z');
-    const prisma = prismaQuiRespecteLeScope({ lastMessageAt: QUAND, lastReactionAt: reaction, lastReactionTargetKey: 'u-tiers' });
+    const prisma = prismaQuiRespecteLeScope({ lastMessageAt: QUAND, lastReactionAt: reaction, lastReactionTargetKey: LECTEUR });
 
     expect(await resolveListCursor({ prisma, beforeCursor: UNE_CONVERSATION, userId: LECTEUR })).toEqual({
       genre: 'borne',

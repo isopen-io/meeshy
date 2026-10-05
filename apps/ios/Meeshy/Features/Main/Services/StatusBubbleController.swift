@@ -201,56 +201,56 @@ private struct MoodReplyConfirmationOverlay: View {
                 .contentShape(Rectangle())
                 .onTapGesture { onCancel() }
 
-            VStack(spacing: 14) {
+            VStack(spacing: MeeshySpacing.mdPlus) {
                 Text(String(localized: "mood.reply.confirm.title", defaultValue: "Répondre à cette humeur ?", bundle: .main))
-                    .font(MeeshyFont.relative(16, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .semibold))
                     .foregroundColor(theme.textPrimary)
                     .multilineTextAlignment(.center)
 
                 Text(moodSummary)
-                    .font(MeeshyFont.relative(14))
+                    .font(MeeshyFont.relative(MeeshyFont.labelSize))
                     .foregroundColor(theme.textSecondary)
                     .multilineTextAlignment(.center)
                     .lineLimit(3)
 
-                HStack(spacing: 10) {
+                HStack(spacing: MeeshySpacing.smPlus) {
                     Button(action: onCancel) {
                         Text(String(localized: "mood.reply.confirm.cancel", defaultValue: "Quitter", bundle: .main))
-                            .font(MeeshyFont.relative(15, weight: .medium))
+                            .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .medium))
                             .foregroundColor(theme.textSecondary)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 11)
                             .background(
-                                RoundedRectangle(cornerRadius: 12)
+                                RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                                     .fill(colorScheme == .dark ? Color.white.opacity(0.08) : Color.black.opacity(0.05))
                             )
                     }
 
                     Button(action: onReply) {
                         Text(String(localized: "mood.reply.confirm.reply", defaultValue: "Répondre", bundle: .main))
-                            .font(MeeshyFont.relative(15, weight: .semibold))
+                            .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 11)
                             .background(
-                                RoundedRectangle(cornerRadius: 12)
+                                RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                                     .fill(MeeshyColors.brandGradient)
                             )
                     }
                 }
             }
-            .padding(20)
+            .padding(MeeshySpacing.xl)
             .frame(maxWidth: 320)
             .background(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                RoundedRectangle(cornerRadius: MeeshyRadius.xl, style: .continuous)
                     .fill(.ultraThinMaterial)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 20, style: .continuous)
-                            .stroke(theme.border(tint: "6366F1", intensity: 0.3), lineWidth: 1)
+                        RoundedRectangle(cornerRadius: MeeshyRadius.xl, style: .continuous)
+                            .stroke(theme.border(tint: MeeshyColors.brandPrimaryHex, intensity: 0.3), lineWidth: 1)
                     )
                     .shadow(color: Color.black.opacity(0.18), radius: 24, y: 8)
             )
-            .padding(.horizontal, 32)
+            .padding(.horizontal, MeeshySpacing.xxxl)
             .scaleEffect(appear ? 1 : 0.9)
             .opacity(appear ? 1 : 0)
         }

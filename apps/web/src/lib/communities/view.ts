@@ -2,20 +2,14 @@ import { colorForName } from '@meeshy/shared/utils/conversation-colors';
 import type { InfiniteData } from '@tanstack/react-query';
 
 import { searchTermOf, type CommunityConversation, type CommunityPage, type CommunitySummary } from '@/lib/api/communities';
+import { letterWordsOf } from '@/lib/view/conversation';
 
 /**
  * **LES RÈGLES PURES DES ÉCRANS DE COMMUNAUTÉ** (#6364) — ce que la liste, la
  * carte, le détail et la création affichent, sans DOM ni requête.
  */
 
-/**
- * L'abrégé d'un compteur — miroir `CompactCountLabel` (iOS), qui l'a sorti de
- * sept copies pour la raison qui vaut ici : `1.3K` n'est pas un nombre en
- * français, qui écrit `1,3 k`. CLDR décide du séparateur ET de l'abréviation.
- */
-export function compactCount(count: number, language: string): string {
-  return new Intl.NumberFormat(language, { notation: 'compact', maximumFractionDigits: 1 }).format(count);
-}
+export { compactCount } from '@/lib/view/compact-count';
 
 /**
  * La teinte d'une communauté — miroir `APICommunity.toCommunity()`, qui la
@@ -27,10 +21,10 @@ export function communityAccent(name: string): string {
   return colorForName(name);
 }
 
+/** Une initiale par mot, deux au plus — des LETTRES seulement (#8131) : les
+ * mots viennent de `letterWordsOf`, la même découpe que les avatars. */
 export function initialsOf(name: string): string {
-  return name
-    .trim()
-    .split(/\s+/u)
+  return letterWordsOf(name)
     .slice(0, 2)
     .map((word) => [...word][0]?.toUpperCase() ?? '')
     .join('');

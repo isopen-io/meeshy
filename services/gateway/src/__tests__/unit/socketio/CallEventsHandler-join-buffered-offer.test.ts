@@ -321,6 +321,45 @@ describe('CallEventsHandler — buffered offer sender validation (C2)', () => {
 // a buffered answer just like it already delivers a buffered offer.
 // ---------------------------------------------------------------------------
 
+describe('CallEventsHandler — call:join d’un revenant ne rejoue pas l’offre gardée (#9111)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    (validateSocketEvent as jest.MockedFunction<any>).mockReturnValue({ success: true });
+  });
+
+  async function joinWith(callSession: ReturnType<typeof makeCallSession> & { answeredAt: Date }) {
+    mockJoinCall.mockResolvedValue({ callSession, iceServers: [] });
+    const { socket, handlers, directEmit } = makeSocket();
+    const { io } = makeIo();
+    const handler = new CallEventsHandler(makePrisma());
+    injectBufferedOffer(handler, CALLER_ID, CALLEE_ID);
+    handler.setupCallEvents(socket as any, io, () => CALLEE_ID);
+    await handlers[CALL_EVENTS.JOIN](JOIN_DATA, jest.fn());
+    return { handler, directEmit };
+  }
+
+  it('un participant qui avait quitté sa ligne revient : aucune offre rejouée, l’offre gardée est vidée', async () => {
+    const answeredAt = new Date(Date.now() - 60_000);
+    const departed = { ...makeCalleeParticipant(new Date(Date.now() - 10_000)), id: 'participant-callee-old-row' };
+    const session = { ...makeCallSession(), answeredAt, participants: [makeCallerParticipant(), departed, makeCalleeParticipant()] };
+
+    const { handler, directEmit } = await joinWith(session);
+
+    expect(directEmit.mock.calls.filter(([ev]) => ev === CALL_EVENTS.SIGNAL)).toHaveLength(0);
+    expect((handler as any).bufferedOffers.get(`${CALL_ID}:${CALLEE_ID}`)).toBeUndefined();
+  });
+
+  it('un participant revenu dans sa grâce (ligne d’avant ce join) : aucune offre rejouée', async () => {
+    const answeredAt = new Date(Date.now() - 60_000);
+    const alive = { ...makeCalleeParticipant(), joinedAt: answeredAt };
+    const session = { ...makeCallSession(), answeredAt, participants: [makeCallerParticipant(), alive] };
+
+    const { directEmit } = await joinWith(session);
+
+    expect(directEmit.mock.calls.filter(([ev]) => ev === CALL_EVENTS.SIGNAL)).toHaveLength(0);
+  });
+});
+
 describe('CallEventsHandler — buffered ANSWER replay on (re)join', () => {
   beforeEach(() => {
     jest.clearAllMocks();

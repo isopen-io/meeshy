@@ -1,8 +1,14 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { sendError, sendSuccess } from '../../utils/response';
 import { requirePermission } from '../../middleware/authorize';
-import { getCacheStore } from '../../services/CacheStore';
-import { circuitBreakerManager } from '../../utils/circuitBreaker';
+import {
+  baseState,
+  countConnections,
+  pingBase,
+  pingCache,
+  servedCircuitBreakers,
+  type DependencyState,
+} from '../../services/admin/platform-probes';
 
 /**
  * Les trois sondes de santé du gateway (#4219).
@@ -80,77 +86,13 @@ type Verdict = { readonly pris: number; readonly pret: boolean };
 /** Le corps servi par `/health/ready` — sa forme entière, rien d'implicite. */
 type CorpsDisponibilite = { readonly status: 'ready' | 'not-ready' };
 
-type EtatDependance = {
-  readonly status: 'up' | 'down';
-  readonly latencyMs: number | null;
-};
-
 type CorpsMetriques = {
   readonly uptimeSeconds: number;
   readonly memory: { readonly heapUsed: number; readonly heapTotal: number; readonly rss: number };
-  readonly database: EtatDependance;
-  readonly redis: EtatDependance;
+  readonly database: DependencyState;
+  readonly redis: DependencyState;
   readonly socketConnections: number;
 };
-
-type DisjoncteurServi = {
-  readonly name: string;
-  readonly state: string;
-  readonly failures: number;
-  readonly successes: number;
-  readonly totalRequests: number;
-  readonly lastFailure: string | null;
-};
-
-/**
- * Le ping de disponibilité. `$runCommandRaw({ ping: 1 })` plutôt qu'un
- * `count` : c'est la commande d'administration de MongoDB, elle ne lit aucune
- * collection et son coût ne croît pas avec la base — contrairement au
- * `user.count()` de `/health`, dont le prix augmente à mesure que le service
- * réussit.
- */
-async function pingBase(prisma: { $runCommandRaw: (cmd: Record<string, unknown>) => Promise<unknown> }): Promise<number | null> {
-  const debut = Date.now();
-  try {
-    await prisma.$runCommandRaw({ ping: 1 });
-    return Date.now() - debut;
-  } catch {
-    // Le message d'erreur du pilote porte l'hôte, le port et le nom de la
-    // base. Il ne remonte NULLE PART : ni dans la charge S0, ni dans la
-    // charge S5 — il n'y a aucune raison de le transporter jusqu'à un
-    // navigateur alors que les journaux du service le tiennent déjà.
-    return null;
-  }
-}
-
-async function pingCache(): Promise<EtatDependance> {
-  const store = getCacheStore();
-  if (!store.isAvailable()) return { status: 'down', latencyMs: null };
-  const debut = Date.now();
-  try {
-    await store.get('health:probe');
-    return { status: 'up', latencyMs: Date.now() - debut };
-  } catch {
-    return { status: 'down', latencyMs: null };
-  }
-}
-
-/**
- * Le nombre de connexions Socket.IO, s'il est lisible. Le décorateur
- * `socketIOHandler` n'existe qu'une fois `setupSocketIO()` passé, et le
- * harnais de la garde de routes le décore avec un objet NU : sonder la
- * méthode plutôt que l'objet évite de faire dépendre une route REST de
- * l'ordre d'amorçage du serveur.
- */
-function compterConnexions(fastify: FastifyInstance): number {
-  const handler = (fastify as unknown as { socketIOHandler?: { getConnectedUsers?: () => string[] } }).socketIOHandler;
-  if (typeof handler?.getConnectedUsers !== 'function') return 0;
-  try {
-    return handler.getConnectedUsers().length;
-  } catch {
-    return 0;
-  }
-}
 
 export async function healthProbeRoutes(fastify: FastifyInstance): Promise<void> {
   let memo: Verdict | null = null;
@@ -167,7 +109,7 @@ export async function healthProbeRoutes(fastify: FastifyInstance): Promise<void>
   fastify.get('/ready', async (_request: FastifyRequest, reply: FastifyReply) => {
     const maintenant = Date.now();
     if (!memo || maintenant - memo.pris > TTL_VERDICT_MS) {
-      const latence = await pingBase(fastify.prisma as unknown as { $runCommandRaw: (c: Record<string, unknown>) => Promise<unknown> });
+      const latence = await pingBase(fastify.prisma);
       memo = { pris: maintenant, pret: latence !== null };
     }
 
@@ -193,16 +135,16 @@ export async function healthProbeRoutes(fastify: FastifyInstance): Promise<void>
   }, async (_request: FastifyRequest, reply: FastifyReply) => {
     const memoire = process.memoryUsage();
     const [latenceBase, redis] = await Promise.all([
-      pingBase(fastify.prisma as unknown as { $runCommandRaw: (c: Record<string, unknown>) => Promise<unknown> }),
+      pingBase(fastify.prisma),
       pingCache(),
     ]);
 
     const corps: CorpsMetriques = {
       uptimeSeconds: Math.round(process.uptime()),
       memory: { heapUsed: memoire.heapUsed, heapTotal: memoire.heapTotal, rss: memoire.rss },
-      database: { status: latenceBase === null ? 'down' : 'up', latencyMs: latenceBase },
+      database: baseState(latenceBase),
       redis,
-      socketConnections: compterConnexions(fastify),
+      socketConnections: countConnections(fastify),
     };
 
     return sendSuccess(reply, corps);
@@ -218,17 +160,7 @@ export async function healthProbeRoutes(fastify: FastifyInstance): Promise<void>
   fastify.get('/circuit-breakers', {
     onRequest: [fastify.authenticate, requirePermission('canAccessAdmin'), requirePermission('canViewAnalytics')],
   }, async (_request: FastifyRequest, reply: FastifyReply) => {
-    const stats = circuitBreakerManager.getAllStats();
-    const corps: DisjoncteurServi[] = Object.entries(stats).map(([name, s]) => ({
-      name,
-      state: s.state,
-      failures: s.failures,
-      successes: s.successes,
-      totalRequests: s.totalRequests,
-      // L'écran lit une date, le registre tient un epoch : la conversion vit
-      // ici, du côté qui CONNAÎT l'unité, jamais chez le lecteur.
-      lastFailure: s.lastFailureTime ? new Date(s.lastFailureTime).toISOString() : null,
-    }));
+    const corps = servedCircuitBreakers();
 
     return sendSuccess(reply, corps);
   });

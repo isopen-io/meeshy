@@ -67,7 +67,7 @@ public struct LoopRepeatOverlay: View {
                     .foregroundStyle(tint.opacity(0.55))
                 if tileWidth >= 20 {
                     Image(systemName: "arrow.triangle.2.circlepath")
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(.system(size: MeeshyIconSize.xxs, weight: .semibold))
                         .foregroundStyle(tint.opacity(0.65))
                 }
             }

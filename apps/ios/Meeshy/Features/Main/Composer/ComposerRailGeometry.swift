@@ -24,6 +24,15 @@ import MeeshyUI
 /// des rails : la scène ne laissait que 14 pt de chaque côté, très en dessous
 /// des 44 pt d'une cible.
 ///
+/// ## ⚠️ PLEIN ÉCRAN (maquette 2026-09-27, #8370) — les rails FLOTTENT
+///
+/// La maquette plein écran supersède l'encastrement ci-dessus : la scène prend
+/// toute la largeur et les deux rails se posent PAR-DESSUS, à `outerMargin` du
+/// bord (`floatingInset`). `lane` reste ce qu'un rail recouvre ; il ne se
+/// retire plus de la scène. Les deux sections précédentes racontent la règle
+/// d'avant, conservée pour ce qu'elle expliquait de la loi 6 — c'est la
+/// directive du 2026-09-27 qui gagne.
+///
 /// ## Ce que ça rend, et ce que ça ne touche pas
 ///
 /// Sur un iPhone 16 Pro (402 pt de large) : la scène passe de 374 à **278 pt**,
@@ -50,6 +59,32 @@ nonisolated enum ComposerRailGeometry {
     /// scène — l'ambiguïté même que l'encastrement existe pour lever.
     static let gutter: CGFloat = 8
 
+    /// **Le disque de verre d'un bouton FLOTTANT** (directive porteur
+    /// 2026-09-28 : « réduis la taille des boutons flottants liquidglass »).
+    /// Le DESSIN rétrécit, jamais la cible : le cadre du bouton garde
+    /// `railWidth`, et c'est l'écart entre deux cadres qui se resserre
+    /// (`floatingEntrySpacing`) pour que les disques gardent leur respiration.
+    static let floatingButtonSize: CGFloat = 36
+
+    /// L'écart entre deux CADRES de 44 pt dont le disque n'en dessine que 36 :
+    /// `2 + 2 × 4 = 10 pt` entre deux disques, la respiration d'avant.
+    static let floatingEntrySpacing: CGFloat = 2
+
+    /// **La remontée des deux rails flottants** (même directive : « remonte-les
+    /// d'au moins la taille d'un des boutons ») — la gouttière d'avant, plus un
+    /// cadre entier.
+    static var floatingBottomInset: CGFloat { gutter + railWidth }
+
+    /// **La place de l'historique, gardée quand il se tait** (#8713) : la frise
+    /// masque annuler et rétablir, et « Temps », posé au-dessus d'eux, ne doit
+    /// pas descendre d'autant sous le doigt.
+    static func historyReserve(undo: Bool, redo: Bool) -> CGFloat {
+        CGFloat([undo, redo].filter { $0 }.count) * (railWidth + floatingEntrySpacing)
+    }
+
+    /// La marge verticale d'une colonne flottante (`ComposerLeadingRail`).
+    static let floatingColumnPadding: CGFloat = 8
+
     /// L'encastrement d'AVANT les rails, conservé tel quel là où aucun rail
     /// n'est monté : ce lot ne déplace pas une scène qui n'a pas de rails.
     static let legacyInset: CGFloat = 14
@@ -57,9 +92,44 @@ nonisolated enum ComposerRailGeometry {
     /// Ce qu'UN rail réserve au total, bord compris.
     static var lane: CGFloat { outerMargin + railWidth + gutter }
 
+    /// PLEIN ÉCRAN (#8370) : les rails flottent sur la scène, qui ne cède plus
+    /// aucune largeur aux couloirs — mais elle ne colle pas au bord du verre
+    /// (retour porteur 2026-09-28 : « toute la scène est trop collée au
+    /// viewport à gauche et à droite »). La respiration est celle des rails,
+    /// `outerMargin` : la carte et les boutons partent du même bord.
+    static let floatingInset: CGFloat = outerMargin
+
+    // MARK: - L'écran LARGE (iPad, Mac) — maquette `iPad.dc.html`
+
+    /// **La marge de bord d'un grand écran** : 24 pt, celle de la maquette
+    /// iPad/Mac (« top: 24px; left: 24px »). Le téléphone garde `outerMargin`.
+    static let roomyMargin: CGFloat = 24
+
+    /// La marge de bord selon l'écran — une seule lecture pour la carte, les
+    /// rails, la barre haute et les rangées du bas.
+    static func edgeMargin(roomy: Bool) -> CGFloat { roomy ? roomyMargin : outerMargin }
+
+    /// La largeur d'un panneau flottant sur grand écran — la carte « Cadre »
+    /// de la maquette (250 pt), portée à ce que la rangée d'ajustement et les
+    /// cinq pastilles de fond demandent sans défiler.
+    static let roomyPanelWidth: CGFloat = 320
+
+    /// Le panneau se pose à côté du rail droit : la marge de bord, le rail, et
+    /// l'écart d'un rail à la scène.
+    static var roomyPanelTrailing: CGFloat { roomyMargin + railWidth + gutter }
+
+    /// **La marge du volet de texte** : sur téléphone, la place d'un rail de
+    /// chaque côté (`lane`, #8388) ; sur grand écran, jamais plus large que la
+    /// CARTE — il traversait tout l'écran, sous une scène trois fois plus
+    /// étroite (retour porteur 2026-09-28, iPad/Mac).
+    static func descriptionInset(roomy: Bool, cardLeading: CGFloat) -> CGFloat {
+        guard roomy, cardLeading.isFinite else { return lane }
+        return max(lane, cardLeading)
+    }
+
     /// L'encastrement horizontal de la scène, par côté.
     static func sceneInset(railsShown: Bool) -> CGFloat {
-        railsShown ? lane : legacyInset
+        railsShown ? floatingInset : legacyInset
     }
 
     /// La largeur qui reste à la scène.
@@ -72,84 +142,14 @@ nonisolated enum ComposerRailGeometry {
         max(0, usableWidth - 2 * sceneInset(railsShown: railsShown))
     }
 
-    /// **Ce qui sépare le bas de la FRAME du bas du DESSIN** (#4119).
-    ///
-    /// La carte est figée à son ratio et se CENTRE dans la hauteur qu'on lui
-    /// donne (`EmbeddedSceneCanvas` : `frame(maxHeight: .infinity)` puis
-    /// `aspectFitSize`). Les deux rails, posés en `.overlay(alignment:
-    /// .bottom…)`, s'ancraient donc au bas de la frame — soit **sous** la
-    /// composition, d'un écart qui vaut la moitié de la hauteur perdue et qui
-    /// GRANDIT avec le ratio : nul en 9:16 plein, maximal en paysage.
-    ///
-    /// > Un rail qui suit la frame et non la composition n'est pas « un peu
-    /// > plus bas » : il cesse de dire à quoi il s'applique. En paysage, les
-    /// > portes se retrouvent en face de rien.
-    ///
-    /// **Le ratio est DÉJÀ connu de la vue** — la correction ne passe donc par
-    /// aucune hauteur codée en dur, ce que le critère de fin de #4119 interdit
-    /// explicitement.
-    ///
-    /// - Parameter overlay: la taille de la vue sur laquelle l'overlay se pose.
-    ///   C'est celle de la vue PADDÉE : elle inclut les deux couloirs, que la
-    ///   carte n'a pas. D'où le second paramètre — sans lui, le `fit` serait
-    ///   calculé sur une largeur que la carte n'occupe jamais, et l'inset
-    ///   rendrait une valeur juste par accident en portrait seulement.
-    /// - Parameter horizontalInset: l'encastrement par côté (`sceneInset`).
-    static func sceneBottomInset(overlay: CGSize,
-                                 ratio: CGFloat,
-                                 horizontalInset: CGFloat) -> CGFloat {
-        let carte = CGSize(width: max(0, overlay.width - 2 * horizontalInset),
-                           height: overlay.height)
-        let dessin = CanvasGeometry.aspectFitSize(in: carte, ratio: ratio)
-        return max(0, (overlay.height - dessin.height) / 2)
-    }
-
-    /// **De combien le pied des références doit REMONTER** (#5036).
-    ///
-    /// > Directive porteur 2026-09-03 : « les hashtag et mention doivent être
-    /// > **directement en bas de la scene**, aligné comme le son de fond ».
-    ///
-    /// Le pied flottait à 77 pt sous le bord bas du dessin (mesuré au
-    /// simulateur, iPhone 16 Pro, 9:16). **Ce n'était ni une marge ni un
-    /// espacement de pile** : le canvas est `maxHeight: .infinity` et la carte,
-    /// ajustée à son ratio, s'y CENTRE — les 77 points sont la moitié basse du
-    /// letterbox, et rien ne les occupe. Un pied posé au bas de la FRAME cesse
-    /// donc de dire à quoi il se rapporte, exactement comme le rail de #4119 et
-    /// la trace du son de #5017.
-    ///
-    /// **La gouttière est SOUSTRAITE, jamais ajoutée après coup** : le pied doit
-    /// respirer sous la carte comme la trace du son respire au-dessus (6 pt), et
-    /// remonter de la totalité du letterbox le collerait au dessin.
-    ///
-    /// **Le plancher à zéro n'est pas une précaution, c'est le cas iPad.** Dès
-    /// que la carte est contrainte par la HAUTEUR — écran large, format non
-    /// 9:16 — le letterbox vaut zéro : il n'y a rien à remonter, et une remontée
-    /// négative ferait chevaucher le pied avec la rangée qui le suit. La même
-    /// borne rend l'appel sûr quand la gouttière dépasse le letterbox disponible.
-    static func referencesLift(cardBottomInset: CGFloat, gutter: CGFloat) -> CGFloat {
-        max(0, cardBottomInset - gutter)
-    }
-
-    /// Ce que la REMONTÉE laisse entre le dessin et le pied — six points, le
-    /// même nombre que celui dont la trace du son se sépare du bord haut
-    /// (`ComposerSceneSoundHeader`, `.padding(.bottom, 6)`) : le porteur
-    /// demande explicitement l'alignement sur elle.
-    ///
-    /// **Ce n'est PAS l'écart final, et le confondre le doublerait.** Le pied
-    /// est un frère de la pile, dont l'espacement vaut 8 pt ; la trace du son
-    /// est un OVERLAY, qui n'en paie aucun. L'écart mesuré au simulateur
-    /// (iPhone 16 Pro, 9:16, un hashtag posé) est donc :
-    ///
-    ///     bas du dessin 690  →  pied 704  =  14 pt   (6 ici + 8 de pile)
-    ///
-    /// contre **77 pt** avant ce lot. Qui voudrait porter l'écart final à une
-    /// autre valeur doit retirer les 8 points de la pile du nombre visé, pas
-    /// les ajouter ici.
-    static let referencesGutter: CGFloat = 6
+    // **Le bas du dessin et la remontée des références ont quitté cette règle
+    // au #8370.** `sceneBottomInset` (#4119) et `referencesLift` (#5036)
+    // retranchaient le letterbox d'une carte centrée dans une frame plus haute
+    // qu'elle. La scène se cadre désormais sur le viewport et le chrome flotte
+    // dessus : il n'y a plus de letterbox à retrancher.
 
     /// **Ce qui sépare le bord GAUCHE de la frame du bord gauche du DESSIN**
-    /// (#5011) — le jumeau horizontal de `sceneBottomInset`, et pour la même
-    /// raison.
+    /// (#5011).
     ///
     /// > Directive porteur 2026-09-03 : « avec les **bordures gauches alignées
     /// > à celle de la scene** ».
@@ -167,7 +167,7 @@ nonisolated enum ComposerRailGeometry {
     /// > l'autre axe.
     ///
     /// - Parameter overlay: la taille de la vue PADDÉE — celle qui inclut les
-    ///   deux couloirs, comme pour `sceneBottomInset`.
+    ///   deux couloirs.
     static func sceneLeadingInset(overlay: CGSize,
                                   ratio: CGFloat,
                                   horizontalInset: CGFloat) -> CGFloat {

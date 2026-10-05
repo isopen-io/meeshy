@@ -2,6 +2,7 @@ import SwiftUI
 import Combine
 import os
 import MeeshySDK
+import MeeshyUI
 
 struct AffiliateView: View {
     @Environment(\.dismiss) private var dismiss
@@ -55,7 +56,7 @@ struct AffiliateView: View {
             showCreateSheet = true
         } label: {
             Image(systemName: "plus")
-                .font(.system(size: 18, weight: .bold))
+                .font(.system(size: MeeshyIconSize.lg, weight: .bold))
                 .foregroundColor(Color(hex: accentColor))
                 .frame(width: 40, height: 40)
                 .adaptiveGlass(in: Circle(), interactive: true)
@@ -67,19 +68,19 @@ struct AffiliateView: View {
     // MARK: - Content
 
     private var affiliateContent: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: MeeshySpacing.xl) {
             statsOverview
             tokensSection
             Spacer().frame(height: 40)
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 8)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.top, MeeshySpacing.sm)
     }
 
     // MARK: - Stats Overview
 
     private var statsOverview: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             affiliateStatCard(
                 value: "\(viewModel.tokens.count)",
                 label: String(localized: "affiliate.stat.links", defaultValue: "Liens", bundle: .main),
@@ -102,28 +103,28 @@ struct AffiliateView: View {
     }
 
     private func affiliateStatCard(value: String, label: String, color: String, icon: String) -> some View {
-        VStack(spacing: 6) {
+        VStack(spacing: MeeshySpacing.xsPlus) {
             Image(systemName: icon)
-                .font(MeeshyFont.relative(18, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyIconSize.lg, weight: .semibold))
                 .foregroundColor(Color(hex: color))
                 .accessibilityHidden(true)
 
             Text(value)
-                .font(MeeshyFont.relative(20, weight: .bold, design: .rounded))
+                .font(MeeshyFont.relative(MeeshyFont.title3Size, weight: .bold, design: .rounded))
                 .foregroundColor(Color(hex: color))
 
             Text(label)
-                .font(MeeshyFont.relative(10, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
                 .foregroundColor(theme.textMuted)
         }
         .frame(maxWidth: .infinity)
         .accessibilityElement(children: .combine)
-        .padding(.vertical, 14)
+        .padding(.vertical, MeeshySpacing.mdPlus)
         .background(
-            RoundedRectangle(cornerRadius: 14)
+            RoundedRectangle(cornerRadius: MeeshyRadius.md)
                 .fill(theme.surfaceGradient(tint: color))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 14)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.md)
                         .stroke(theme.border(tint: color), lineWidth: 1)
                 )
         )
@@ -133,19 +134,19 @@ struct AffiliateView: View {
     // MARK: - Tokens Section
 
     private var tokensSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 6) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.md) {
+            HStack(spacing: MeeshySpacing.xsPlus) {
                 Image(systemName: "link.badge.plus")
-                    .font(MeeshyFont.relative(12, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
                     .foregroundColor(Color(hex: accentColor))
                     .accessibilityHidden(true)
                 Text(String(localized: "affiliate.section.myLinks", defaultValue: "MES LIENS", bundle: .main))
-                    .font(MeeshyFont.relative(11, weight: .bold, design: .rounded))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold, design: .rounded))
                     .foregroundColor(Color(hex: accentColor))
                     .tracking(1.2)
                     .accessibilityAddTraits(.isHeader)
             }
-            .padding(.leading, 4)
+            .padding(.leading, MeeshySpacing.xs)
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isHeader)
 
@@ -161,10 +162,10 @@ struct AffiliateView: View {
                     }
                 }
                 .background(
-                    RoundedRectangle(cornerRadius: 16)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                         .fill(theme.surfaceGradient(tint: accentColor))
                         .overlay(
-                            RoundedRectangle(cornerRadius: 16)
+                            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                                 .stroke(theme.border(tint: accentColor), lineWidth: 1)
                         )
                 )
@@ -173,7 +174,7 @@ struct AffiliateView: View {
     }
 
     private var emptyTokensState: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: MeeshySpacing.md) {
             // Héros décoratif ≥36pt : gardé figé (doctrine 74i/86i/89i) ; le libellé adjacent
             // porte le sens → laissé fixe et masqué de VoiceOver plutôt que de scaler et
             // déséquilibrer l'état vide.
@@ -183,41 +184,41 @@ struct AffiliateView: View {
                 .accessibilityHidden(true)
 
             Text(String(localized: "affiliate.empty.title", defaultValue: "Aucun lien de parrainage", bundle: .main))
-                .font(MeeshyFont.relative(14, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
                 .foregroundColor(theme.textPrimary)
 
             Text(String(localized: "affiliate.empty.subtitle", defaultValue: "Créez un lien pour inviter vos amis", bundle: .main))
-                .font(MeeshyFont.relative(12))
+                .font(MeeshyFont.relative(MeeshyFont.smallSize))
                 .foregroundColor(theme.textMuted)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 30)
+        .padding(.vertical, MeeshySpacing.xxxl)
         .background(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                 .fill(theme.surfaceGradient(tint: accentColor))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 16)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                         .stroke(theme.border(tint: accentColor), lineWidth: 1)
                 )
         )
     }
 
     private func tokenRow(_ token: AffiliateToken) -> some View {
-        HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 3) {
+        HStack(spacing: MeeshySpacing.md) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(token.name)
-                    .font(MeeshyFont.relative(14, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
                     .foregroundColor(theme.textPrimary)
                     .lineLimit(1)
 
-                HStack(spacing: 8) {
+                HStack(spacing: MeeshySpacing.sm) {
                     Label(String(localized: "affiliate.token.clicks", defaultValue: "\(token.clickCount) clics", bundle: .main), systemImage: "cursorarrow.click")
-                        .font(MeeshyFont.relative(12))
+                        .font(MeeshyFont.relative(MeeshyFont.smallSize))
                         .foregroundColor(theme.textMuted)
                     MetaSeparator()
                         .foregroundColor(theme.textMuted)
                     Label(String(localized: "affiliate.token.signups", defaultValue: "\(token.referralCount) inscrit(s)", bundle: .main), systemImage: "person.fill.checkmark")
-                        .font(MeeshyFont.relative(12))
+                        .font(MeeshyFont.relative(MeeshyFont.smallSize))
                         .foregroundColor(MeeshyColors.success)
                 }
             }
@@ -232,7 +233,7 @@ struct AffiliateView: View {
                 }
             } label: {
                 Image(systemName: "doc.on.doc")
-                    .font(MeeshyFont.relative(14, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .medium))
                     .foregroundColor(Color(hex: accentColor))
             }
             .accessibilityLabel(String(localized: "affiliate.action.copy", defaultValue: "Copier le lien de parrainage", bundle: .main))
@@ -243,13 +244,13 @@ struct AffiliateView: View {
                 Task { await viewModel.deleteToken(token) }
             } label: {
                 Image(systemName: "trash")
-                    .font(MeeshyFont.relative(14, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .medium))
                     .foregroundColor(MeeshyColors.error)
             }
             .accessibilityLabel(String(localized: "affiliate.action.delete", defaultValue: "Supprimer le lien de parrainage", bundle: .main))
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .padding(.horizontal, MeeshySpacing.mdPlus)
+        .padding(.vertical, MeeshySpacing.smPlus)
     }
 
     /// Native share: `ShareLink` gives the activity sheet, the iPad popover
@@ -280,7 +281,7 @@ struct AffiliateView: View {
 
     private var shareTokenGlyph: some View {
         Image(systemName: "square.and.arrow.up")
-            .font(MeeshyFont.relative(16))
+            .font(MeeshyFont.relative(MeeshyIconSize.md))
             .foregroundColor(Color(hex: accentColor))
     }
 }

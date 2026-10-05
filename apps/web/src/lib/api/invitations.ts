@@ -1,11 +1,12 @@
 import * as z from 'zod/mini';
+import * as invitationsEndpoints from '@meeshy/shared/api/endpoints/invitations';
 
 import type { FriendRequestsDeps } from './friend-requests';
 import type { ApiResult } from './http';
 
 /**
  * **INVITER PAR E-MAIL** (#6363) — miroir `FriendService.sendEmailInvitation`
- * (iOS) : `POST /api/v1/invitations/email {email}`
+ * (iOS) : `POST invitations.email {email}`
  * (`services/gateway/src/routes/invitations.ts`). La passerelle refuse une
  * adresse déjà inscrite (409 `USER_ALREADY_EXISTS`) et borne le débit.
  *
@@ -26,7 +27,7 @@ async function postEmailInvitation(deps: FriendRequestsDeps, email: string): Pro
     const { fixtureSendEmailInvitation } = await import('./fixtures-friends');
     return fixtureSendEmailInvitation(email);
   }
-  return deps.transport.request<unknown>({ method: 'POST', path: '/api/v1/invitations/email', body: { email } });
+  return deps.transport.request<unknown>({ method: 'POST', path: invitationsEndpoints.email, body: { email } });
 }
 
 export async function performEmailInvitation({

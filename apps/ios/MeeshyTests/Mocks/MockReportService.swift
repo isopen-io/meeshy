@@ -73,6 +73,14 @@ final class MockReportService: ReportServiceProviding, @unchecked Sendable {
         try reportStoryResult.get()
     }
 
+    var reportCommentCallCount = 0
+
+    nonisolated func reportComment(commentId: String, reportType: String, reason: String?) async throws {
+        await MainActor.run {
+            reportCommentCallCount += 1
+        }
+    }
+
     nonisolated func reportConversation(conversationId: String, reportType: String, reason: String?) async throws {
         await MainActor.run {
             reportConversationCallCount += 1

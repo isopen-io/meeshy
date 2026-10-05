@@ -14,9 +14,9 @@
  * Cette route n'a jamais lu `body.attachments`. Le champ est validé,
  * puis abandonné : ni `prisma.message.create`, ni la diffusion, ni la
  * notification ne le mentionnent. La branche que le `refine` ouvre ne mène donc
- * à aucune fonctionnalité — elle mène à `trackingLinkService.processMessageLinks`,
- * dont le paramètre est typé `content: string` et qui appelle `content.match()`
- * sans garde (`TrackingLinkService.ts`). Le gateway compilant en
+ * à aucune fonctionnalité — elle mène à la collecte des liens suivis
+ * (`collectContentTrackingLinks`, puis `processMessageLinks`), dont le
+ * paramètre est typé `content: string` et qui appelle `content.match()`. Le gateway compilant en
  * `strict: false`, rien n'a signalé qu'un `string | undefined` y entrait.
  *
  * Ces suites tiennent la seule invariante qui vaille ici : **un corps que le
@@ -42,22 +42,28 @@ jest.mock('../../../../utils/session-token', () => ({
 }));
 
 /**
- * Double FIDÈLE de `TrackingLinkService.processMessageLinks`.
+ * Doubles FIDÈLES de `TrackingLinkService`.
  *
- * Il reproduit la seule chose qui compte ici : la méthode réelle déclare
- * `content: string` et fait `content.match(urlRegex)` dès sa quatrième ligne,
- * sans garde de nullité. Un double permissif (`mockResolvedValue(...)`)
- * accepterait `undefined` sans broncher et cacherait exactement le défaut que
- * cette suite existe pour voir.
+ * `processExplicitLinksInContent` fait `content.match(...)` sans garde ;
+ * `collectContentTrackingLinks` rend `[]` sur un contenu vide, comme la
+ * méthode réelle. Un double permissif (`mockResolvedValue(...)`) accepterait
+ * `undefined` sans broncher et cacherait exactement le défaut que cette suite
+ * existe pour voir.
  */
-const mockProcessMessageLinks = jest.fn(async ({ content }: any) => {
-  const matches = content.match(/(https?:\/\/[^\s]+)/gi);
-  return { processedContent: content, trackingLinks: matches ? [] : [] };
+const mockProcessExplicitLinksInContent = jest.fn(async ({ content }: any) => {
+  content.match(/<(https?:\/\/[^>\s]+)>/gi);
+  return { processedContent: content, trackingLinks: [] };
+});
+const mockCollectContentTrackingLinks = jest.fn(async ({ content }: any) => {
+  if (!content) return [];
+  content.match(/(https?:\/\/[^\s]+)/gi);
+  return [];
 });
 const mockUpdateTrackingLinks = jest.fn<any>().mockResolvedValue(undefined);
 jest.mock('../../../../services/TrackingLinkService', () => ({
   TrackingLinkService: jest.fn().mockImplementation(() => ({
-    processMessageLinks: (...args: any[]) => (mockProcessMessageLinks as any)(...args),
+    processExplicitLinksInContent: (...args: any[]) => (mockProcessExplicitLinksInContent as any)(...args),
+    collectContentTrackingLinks: (...args: any[]) => (mockCollectContentTrackingLinks as any)(...args),
     updateTrackingLinksMessageId: (...args: any[]) => mockUpdateTrackingLinks(...args),
   })),
 }));

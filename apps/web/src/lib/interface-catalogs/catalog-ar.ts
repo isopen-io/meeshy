@@ -1,9 +1,42 @@
 import type { InterfaceCatalog } from '@/lib/i18n-catalog';
 import arComposerAttach from './catalog-ar-composer-attach';
 import arIdentity from './catalog-ar-identity';
+import arMediaHub from './catalog-ar-media-hub';
+import arMediaViewer from './catalog-ar-media-viewer';
+import arActivation from './catalog-ar-activation';
+import arVerifyEmail from './catalog-ar-verify-email';
+import arDevicePush from './catalog-ar-device-push';
+import arPassword from './catalog-ar-password';
+import arAccounts from './catalog-ar-accounts';
+import arCall from './catalog-ar-call';
+import arRowActions from './catalog-ar-row-actions';
+import arEngagement from './catalog-ar-engagement';
+import arCallShell from './catalog-ar-call-shell';
+import arCallJoin from './catalog-ar-call-join';
+import arCallDecline from './catalog-ar-call-decline';
+import arCallFeedback from './catalog-ar-call-feedback';
+import arCallsErase from './catalog-ar-calls-erase';
+import arCallDevices from './catalog-ar-call-devices';
+import arCallScreen from './catalog-ar-call-screen';
+import arCallQuality from './catalog-ar-call-quality';
+import arCallCaptions from './catalog-ar-call-captions';
+import arCallRecording from './catalog-ar-call-recording';
+import arSignup from './catalog-ar-signup';
 
+import arGallery from './catalog-ar-gallery';
+import arMessageCard from './catalog-ar-message-card';
 import arMentions from './catalog-ar-mentions';
+import arStudioChrome from './catalog-ar-studio-chrome';
+import arEphemeral from './catalog-ar-ephemeral';
+import arConversationCard from './catalog-ar-conversation-card';
 import arStoriesMine from './catalog-ar-stories-mine';
+import arContactCard from './catalog-ar-contact-card';
+import arQuote from './catalog-ar-quote';
+import arCommentRow from './catalog-ar-comment-row';
+import arContactDiscovery from './catalog-ar-contact-discovery';
+import arDownload from './catalog-ar-download';
+import arPhonePrompt from './catalog-ar-phone-prompt';
+import arUserProfile from './catalog-ar-user-profile';
 
 const ar = {
   'announce.messageSent': 'تم إرسال الرسالة',
@@ -95,6 +128,7 @@ const ar = {
   'feed.post.media.next': 'الوسائط التالية',
   'feed.post.media.mosaic': 'فسيفساء من {count} وسائط',
   'media.unavailable': 'الوسائط غير متوفرة',
+  'media.retry': 'إعادة المحاولة',
   'feed.post.see_more': 'عرض المزيد',
   'feed.post.see_less': 'عرض أقل',
   'feed.post.more_options': 'خيارات إضافية',
@@ -186,7 +220,27 @@ const ar = {
   'feed.newPosts.one': 'منشور جديد {count}',
   'feed.newPosts.other': 'منشورات جديدة {count}',
   ...arIdentity,
-  'userProfile.self.edit': 'تعديل ملفي الشخصي',
+  ...arMediaHub,
+  ...arMediaViewer,
+  ...arVerifyEmail,
+  ...arActivation,
+  ...arPassword,
+  ...arDevicePush,
+  ...arAccounts,
+  ...arCall,
+  ...arRowActions,
+  ...arEngagement,
+  ...arCallShell,
+  ...arCallJoin,
+  ...arCallDecline,
+  ...arCallFeedback,
+  ...arCallsErase,
+  ...arCallDevices,
+  ...arCallScreen,
+  ...arCallQuality,
+  ...arCallCaptions,
+  ...arCallRecording,
+  ...arSignup,
   'report.title': 'الإبلاغ عن هذا الحساب',
   'report.body': 'اختر سبب البلاغ. سيصل إلى فريق الإشراف لدينا.',
   'report.action': 'إبلاغ',
@@ -231,6 +285,7 @@ const ar = {
   'notifications.category.reactions': 'التفاعلات',
   'notifications.category.mentions': 'الإشارات',
   'notifications.category.social': 'اجتماعي',
+  'notifications.category.engagement': 'التفاعل',
   'notifications.category.contacts': 'جهات الاتصال',
   'notifications.category.groups': 'المجموعات',
   'notifications.category.calls': 'المكالمات',
@@ -447,6 +502,7 @@ const ar = {
   'settings.save.error': 'لم يُحفظ الإعداد.',
   'settings.theme.sync_error': 'طُبّق المظهر على هذا الجهاز دون مزامنة.',
   'common.cancel': 'إلغاء',
+  'common.close': 'إغلاق',
 
   'media.video.play': 'تشغيل الفيديو',
   'media.video.pause': 'إيقاف مؤقت',
@@ -454,6 +510,7 @@ const ar = {
   'media.audio.position': 'موضع التشغيل',
   'media.audio.speed': 'سرعة التشغيل',
   'media.video.position.value': '{elapsed} من {total}',
+  'media.buffering': 'جارٍ التحميل…',
   'media.video.mute': 'كتم الصوت',
   'media.video.unmute': 'إلغاء كتم الصوت',
   'media.video.more_options': 'مزيد من الخيارات',
@@ -599,57 +656,12 @@ const ar = {
   'discover.announce.unblockFailed': 'تعذّر إلغاء الحظر',
   'discover.announce.offline': 'غير متصل: لم يُرسَل شيء.',
 
-  'userProfile.title': 'الملف الشخصي',
-  'userProfile.loading': 'جارٍ تحميل الملف الشخصي',
-  'userProfile.section.publications': 'المنشورات',
-  'userProfile.section.relation': 'الاتصال',
-  'userProfile.section.conversations': 'المحادثات',
-  'userProfile.conversations.empty': 'لا توجد محادثة مشتركة',
-  'userProfile.conversations.emptyBody': 'لا شيء يجمعكما بعد — «اكتب» يفتح المحادثة الأولى.',
-  'userProfile.conversations.error': 'تعذّر تحميل المحادثات',
-  'userProfile.conversations.loading': 'جارٍ تحميل المحادثات',
-  'userProfile.refused.title': 'هذا الملف الشخصي غير متاح',
-  'userProfile.refused.body': 'إما أنه غير موجود، أو لا تملك صلاحية الوصول إليه.',
-  'userProfile.throttled.title': 'طلبات كثيرة جدًا',
-  'userProfile.throttled.body': 'أعد المحاولة بعد لحظة.',
-  'userProfile.error.title': 'تعذّر تحميل هذا الملف الشخصي',
-  'userProfile.error.body': 'أعد المحاولة بعد لحظة.',
-  'userProfile.offline.body': 'سيظهر الملف الشخصي عند عودة الاتصال.',
-  'userProfile.posts.empty': 'لا توجد منشورات',
-  'userProfile.posts.emptyBody': 'لا يوجد بعد محتوى عام للقراءة.',
-  'userProfile.posts.emptyPosts': 'لا توجد منشورات هنا',
-  'userProfile.posts.emptyReels': 'لا توجد ريلز هنا',
-  'userProfile.posts.emptyFilter': 'انقر على البطاقة مرة أخرى لعرض كل شيء.',
-  'userProfile.posts.error': 'تعذّر تحميل المنشورات',
-  'userProfile.posts.loadMore': 'تحميل المزيد',
-  'userProfile.posts.loaded': 'المنشورات المضافة: {count}',
-  'userProfile.posts.loadedNone': 'لا مزيد من المنشورات للعرض',
-  'userProfile.posts.loading': 'جارٍ التحميل…',
-  'userProfile.stat.posts': 'منشورات',
-  'userProfile.stat.reels': 'ريلز',
-  'userProfile.stat.stories': 'قصص',
-  'userProfile.stat.filterLabel': 'التصفية على {name}',
-  'userProfile.stat.filterClear': 'عرض الكل',
-  'userProfile.context.received': 'يريد {name} التواصل معك. اقبل لتبادل الرسائل.',
-  'userProfile.context.sent': 'أرسلت طلب اتصال إلى {name}. في انتظار الرد.',
-  'userProfile.action.write': 'مراسلة',
-  'userProfile.action.writeLabel': 'مراسلة {name}',
-  'userProfile.action.block': 'حظر',
-  'userProfile.action.blockLabel': 'حظر {name}',
-  'userProfile.blocked.title': 'لقد حظرت هذا الشخص',
-  'userProfile.blocked.body': 'تبقى منشوراته وإحصاءاته مخفية ما دام الحظر قائمًا.',
-  'userProfile.signin.title': 'سجّل الدخول للتواصل',
-  'userProfile.signin.body': 'طلبات الاتصال والرسائل تتطلب حسابًا.',
-  'userProfile.signin.cta': 'تسجيل الدخول',
-  'userProfile.announce.blocked': 'تم حظر الشخص',
-  'userProfile.announce.blockFailed': 'تعذّر الحظر',
-  'userProfile.announce.writeFailed': 'تعذّر فتح المحادثة',
 
   'a11y.floating.rung.discover.requests.one': 'اكتشاف، {count} طلب وارد',
   'a11y.floating.rung.discover.requests.other': 'اكتشاف، {count} طلبات واردة',
 
   'links.hub.banner.title': 'إدارة روابطك',
-  'links.hub.banner.subtitle': 'ادعُ من تشاء إلى محادثاتك',
+  'links.hub.banner.subtitle': 'شارك وتابع ووسّع جمهورك',
   'links.hub.share.title': 'روابط المشاركة',
   'links.hub.share.description': 'ادعُ جهات اتصالك للانضمام إلى محادثاتك',
   'links.hub.share.create': 'إنشاء رابط مشاركة',
@@ -808,6 +820,7 @@ const ar = {
   'story.studio.refusal.door.visual': 'اختر صورة أو فيديو.',
   'story.studio.refusal.door.sound': 'اختر ملفًا صوتيًا.',
   'story.studio.refusal.media-max': 'هذا المنشور يحمل بالفعل عشرة عناصر وسائط — وهو الحد الأقصى للبوابة.',
+  'story.studio.refusal.import-max': 'لم يتم استيراد {count} من الوسائط: يحمل المنشور عشرة على الأكثر.',
   'story.studio.failure.network': 'الشبكة غير متاحة.',
   'story.studio.failure.timeout': 'لم يستجب الخادم.',
   'story.studio.failure.session': 'انتهت الجلسة — سجّل الدخول مجددًا.',
@@ -819,7 +832,6 @@ const ar = {
   'story.studio.failure.refused': 'تم رفض النشر.',
   'story.studio.failure.unavailable': 'الخادم غير متاح.',
   'story.studio.text.add': 'إضافة نص',
-  'story.studio.text.remove': 'إزالة هذا النص',
   'story.studio.object.text': 'نص {index}',
   'story.studio.object.overlay': 'طبقة',
   'story.studio.object.select': 'تحديد {name}',
@@ -978,14 +990,6 @@ const ar = {
   'comment.send.error': 'تعذّر نشر التعليق.',
   'comment.send.pending': 'لم يُؤكَّد التعليق — غير متصل',
   'comment.send.empty': 'اكتب شيئًا قبل الإرسال.',
-  'comments.action.like': 'أعجبني',
-  'comments.action.unlike': 'لم يعد يعجبني',
-  'comments.action.edit': 'تعديل',
-  'comments.action.delete': 'حذف',
-  'comments.action.delete.confirm': 'تأكيد',
-  'comments.edit.label': 'تعديل التعليق',
-  'comments.edit.save': 'حفظ',
-  'comments.edit.cancel': 'إلغاء',
   'comment.like.error': 'لم يُحفظ إعجابك.',
   'comment.edit.error': 'لم يُحفظ التعديل.',
   'comment.delete.error': 'تعذّر حذف التعليق.',
@@ -1000,6 +1004,8 @@ const ar = {
 
   'thread.unread-separator.one': '{count} رسالة غير مقروءة',
   'thread.unread-separator.other': '{count} رسائل غير مقروءة',
+  'thread.long-message.read-more': 'اقرأ المزيد',
+  'thread.long-message.collapse': 'عرض أقل',
   'message-detail.info.title': 'معلومات الرسالة',
   'message-detail.received-by': 'استلمها',
   'message-detail.read-by': 'قرأها',
@@ -1023,11 +1029,8 @@ const ar = {
   'message-detail.load-error': 'تعذر تحميل هذه المعلومات',
   'message-detail.retry': 'إعادة المحاولة',
 
-  'download.title': 'نزّل Meeshy',
-  'download.body': 'اكتب بلغتك واقرأ بلغتك: يترجم Meeshy كل رسالة في الطريق.',
-  'download.appStore': 'التنزيل من App Store',
-  'download.web': 'افتح Meeshy في المتصفح',
-  'download.otherPlatforms': 'على أندرويد وعلى الحاسوب، يعمل Meeshy مباشرة في المتصفح.',
+  ...arDownload,
+  ...arPhonePrompt,
 
   /* LES SOURCES DU COMPOSEUR (#7280) — miroir de `composer.attach.*` d'iOS. */
   ...arComposerAttach,
@@ -1068,7 +1071,7 @@ const ar = {
   'message.withheld': 'محتوى محجوب',
   'message.withheld.a11y': 'محتوى محجوب: هذه الرسالة موجودة ولا تُعرض',
   'message.veiled': 'محتوى مخفي',
-  'message.veiled.hint': 'اضغط لإظهار المحتوى',
+  'message.veiled.hint': 'المس للعرض',
   'message.veiled.error': 'يتعذّر الإظهار في الوقت الحالي',
   'message.ephemeral.a11y': 'رسالة مؤقتة، تختفي خلال {remaining}',
   'message.ephemeral.awaiting': 'في انتظار الاستلام',
@@ -1082,6 +1085,7 @@ const ar = {
   'attachment.protected.video': 'فيديو محمي',
   'attachment.protected.audio': 'رسالة صوتية محمية',
   'attachment.protected.file': 'مرفق محمي',
+  'attachment.protected.open.hint': 'المس للعرض بملء الشاشة',
   'media.reactions.badge.a11y': 'التفاعلات',
   'media.reactions.badge.mine.a11y': 'بما في ذلك تفاعلك',
   'attachment.kind.image': 'صورة',
@@ -1107,7 +1111,17 @@ const ar = {
   'message.detail.language.original': '{language} (الأصل)',
 
   ...arMentions,
+  ...arStudioChrome,
+  ...arEphemeral,
+  ...arGallery,
+  ...arMessageCard,
+  ...arConversationCard,
   ...arStoriesMine,
+  ...arContactCard,
+  ...arQuote,
+  ...arCommentRow,
+  ...arContactDiscovery,
+  ...arUserProfile,
 } satisfies InterfaceCatalog;
 
 export default ar;

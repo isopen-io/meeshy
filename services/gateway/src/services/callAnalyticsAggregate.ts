@@ -239,3 +239,50 @@ export function summarizeCallReliability(
     byEndReason: byCount((r) => normalizeEndReason(r.endReason)),
   };
 }
+
+/**
+ * La note d'après-appel (#8072), lue sur `CallParticipant.feedback` — écrite
+ * par `call:quality-feedback`, une par participant qui a noté. Les motifs
+ * suivent `CALL_FEEDBACK_ISSUES` (`validation/call-schemas.ts`) ; un motif
+ * inconnu d'une ligne ancienne est ignoré, la note reste comptée.
+ */
+const FEEDBACK_ISSUES: ReadonlySet<string> = new Set(['audio_quality', 'video_quality', 'dropped', 'echo', 'sync', 'other']);
+
+export type CallFeedbackRecord = {
+  readonly rating: 1 | 2 | 3 | 4 | 5;
+  readonly issues: readonly string[];
+};
+
+export type CallFeedbackSummary = {
+  readonly ratedCalls: number;
+  readonly avgRating: number | null;
+  readonly ratingDistribution: Readonly<Record<1 | 2 | 3 | 4 | 5, number>>;
+  readonly byIssue: Record<string, number>;
+};
+
+const isRating = (value: unknown): value is CallFeedbackRecord['rating'] =>
+  value === 1 || value === 2 || value === 3 || value === 4 || value === 5;
+
+export function coerceCallFeedback(value: unknown): CallFeedbackRecord | null {
+  if (!isRecord(value) || !isRating(value.rating)) return null;
+  const issues = Array.isArray(value.issues)
+    ? value.issues.filter((issue): issue is string => typeof issue === 'string' && FEEDBACK_ISSUES.has(issue))
+    : [];
+  return { rating: value.rating, issues };
+}
+
+export function summarizeCallFeedback(records: readonly CallFeedbackRecord[]): CallFeedbackSummary {
+  const ratingDistribution = records.reduce<Record<1 | 2 | 3 | 4 | 5, number>>(
+    (acc, r) => ({ ...acc, [r.rating]: acc[r.rating] + 1 }),
+    { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }
+  );
+  const byIssue = records
+    .flatMap((r) => r.issues)
+    .reduce<Record<string, number>>((acc, issue) => ({ ...acc, [issue]: (acc[issue] ?? 0) + 1 }), {});
+  return {
+    ratedCalls: records.length,
+    avgRating: records.length > 0 ? records.reduce((acc, r) => acc + r.rating, 0) / records.length : null,
+    ratingDistribution,
+    byIssue,
+  };
+}

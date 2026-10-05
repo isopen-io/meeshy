@@ -83,8 +83,9 @@ export async function registerSettingsRoutes(fastify: FastifyInstance) {
       const userId = authContext.userId;
 
       // Verifier que l'utilisateur est le createur de la communaute
-      const community = await fastify.prisma.community.findFirst({
-        where: { id },
+      // #8876 — communauté désactivée par l'administration : 404, comme pour les lecteurs publics.
+const community = await fastify.prisma.community.findFirst({
+        where: { id, isActive: true },
         select: { createdBy: true, identifier: true }
       });
 

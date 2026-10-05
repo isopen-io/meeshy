@@ -17,26 +17,23 @@ extension MeeshyComposerHost {
     /// **Le menu, monté sur la PILE et non sur la racine.**
     ///
     /// SwiftUI n'honore qu'UNE présentation par vue, et la racine porte déjà la
-    /// feuille de partage (#4996). Une seconde posée au même niveau serait
-    /// silencieusement avalée — le mode de panne qui ne rougit nulle part, et
-    /// dont le doc-comment de l'éditeur d'objet porte déjà la trace.
+    /// feuille de partage (#4996). Le menu n'est plus une présentation depuis
+    /// #8717 : c'est un calque de VERRE (`ComposerSceneContextMenu`) posé sur la
+    /// pile, qui sert le fond ET les objets de la scène — le `confirmationDialog`
+    /// et le `UIMenu` du canvas étaient des menus système, que le verre du
+    /// composer ne peut pas habiller.
+    ///
+    /// Il lit la place de la carte à la même source que le viseur
+    /// (`ComposerSceneCameraFrameKey`) : le point du doigt, normalisé sur la
+    /// carte par le canvas, y redevient un point de l'écran.
     func backgroundMenuPresented<Contenu: View>(_ contenu: Contenu) -> some View {
-        contenu.confirmationDialog(
-            ComposerBackgroundMenuCopy.title(),
-            isPresented: Binding(
-                get: { backgroundMenuObjectId != nil },
-                set: { if !$0 { backgroundMenuObjectId = nil } }),
-            titleVisibility: .visible
-        ) {
-            // L'ordre vient de la RÈGLE (`served`), jamais de trois `Button`
-            // écrits à la suite : une garde de source sur des littéraux passe au
-            // vert dès qu'on réécrit la liste autrement.
-            ForEach(ComposerBackgroundMenuAction.served, id: \.self) { action in
-                Button(ComposerBackgroundMenuCopy.label(for: action),
-                       role: action.isDestructive ? .destructive : nil) {
-                    applyBackgroundMenu(action)
+        contenu.overlayPreferenceValue(ComposerSceneCameraFrameKey.self) { ancre in
+            GeometryReader { proxy in
+                if let demande = presentedSceneMenu, let ancre {
+                    sceneMenuLayer(demande, card: proxy[ancre], container: proxy.size)
                 }
             }
+            .animation(.spring(response: 0.28, dampingFraction: 0.86), value: presentedSceneMenu)
         }
     }
 
@@ -70,6 +67,12 @@ extension MeeshyComposerHost {
             // arrivée après l'inventaire des deux autres : elle a hérité du
             // défaut sans figurer nulle part.
             retractMedia(objectIds: [id])
+        case .retakePhoto:
+            // **Le viseur s'ouvre ARMÉ, et la prise REMPLACE ce fond** (#8716).
+            // L'ancien ne part qu'à la pose (`poseSceneCapture`) : refermer le
+            // viseur le laisse intact.
+            sceneCaptureReplacesBackgroundId = id
+            armSceneCamera()
         }
         HapticFeedback.medium()
     }

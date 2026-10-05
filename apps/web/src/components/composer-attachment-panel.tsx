@@ -1,12 +1,15 @@
 import type { ReactNode } from 'react';
 
+import { CONTACT_CARD_MIME_TYPE } from '@meeshy/shared/types/contact-card';
 import type { ParticipantPermissions } from '@meeshy/shared/types/participant';
 
 import { Glyph, GlyphSvg } from './glyph';
 import { COMPOSER_GLYPHS } from './glyphs-composer';
+import { developShots } from '@/lib/media/develop-shots';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { mayAttach } from '@/lib/send/attachments';
+import type { ContactSource } from '@/lib/send/contact-card';
 
 /**
  * LE PANNEAU DES SOURCES (#7280) — extrait de `composer-tray.tsx`, qui
@@ -23,6 +26,9 @@ import { mayAttach } from '@/lib/send/attachments';
  * (`composer-sticker-sheet.tsx`), la bibliothèque SERVEUR que l'on remplit
  * depuis une image ou un collage, et dont un choix compose un message à lui
  * seul. Elle est gardée par le droit « Photos » : un sticker part en image.
+ * #8242 a ajouté « Contact » (#8101 sur iOS), après « Fichier » : une carte
+ * de visite `text/vcard`, gardée par le droit « Fichiers » comme la passerelle
+ * la jugera.
  *
  * ## LOI 4 — UNE TUILE N'EXISTE QUE SI SON GESTE A UN EFFET
  *
@@ -152,15 +158,35 @@ function GestureSource({
   );
 }
 
+/**
+ * LA TUILE « CONTACT » (#8242) — sa SOURCE décide de sa forme : un sélecteur
+ * (coque Android ou API Contact Picker) s'ouvre par un geste ; sans lui, la
+ * tuile est un champ qui ne propose que des fiches `.vcf`. Jamais grisée :
+ * chaque hôte a une source (`contactSourceOf`, `lib/send/contact-card.ts`).
+ */
+export type ComposerContactSource = {
+  readonly source: ContactSource;
+  readonly onRequest: () => void;
+  readonly onPickFile: (files: FileList | null) => void;
+};
+
+const CONTACT_FILE_TYPES = '.vcf,.vcard,text/vcard,text/x-vcard';
+
 export type ComposerAttachmentPanelProps = {
   readonly onPickPhotos: (files: FileList | null) => void;
-  readonly onPickCamera: (files: FileList | null) => void;
+  /** Les photos prises, déjà développées (`developPhotoFile`, #8695). */
+  readonly onPickCamera: (files: readonly File[]) => void;
+  /** LA CAMÉRA DE LA BARRE (#9123) : présente ⇒ la tuile ouvre le studio,
+   * viseur armé ; absente ⇒ l'appareil photo de l'OS (`onPickCamera`). */
+  readonly onOpenCamera?: () => void;
   readonly onPickFile: (files: FileList | null) => void;
   readonly onRequestLocation: () => void;
   readonly onRequestEmoji: () => void;
   /** ABSENT ⇒ PAS DE TUILE (loi 4) : un hôte qui ne monte pas « Mes stickers »
    * ne montre pas une porte qui ne mène nulle part. */
   readonly onRequestSticker?: () => void;
+  /** ABSENT ⇒ PAS DE TUILE (loi 4), même discipline que le sticker. */
+  readonly contact?: ComposerContactSource;
   readonly onStartVoice: () => void;
   readonly canRecord: boolean;
   /** `navigator.geolocation` existe DANS CE NAVIGATEUR — reçu, jamais lu ici :
@@ -173,10 +199,12 @@ export type ComposerAttachmentPanelProps = {
 export function ComposerAttachmentPanel({
   onPickPhotos,
   onPickCamera,
+  onOpenCamera,
   onPickFile,
   onRequestLocation,
   onRequestEmoji,
   onRequestSticker,
+  contact,
   onStartVoice,
   canRecord,
   canLocate,
@@ -197,6 +225,7 @@ export function ComposerAttachmentPanel({
   const canImages = mayAttach(rights, 'image/*');
   const canFiles = mayAttach(rights, 'application/octet-stream');
   const canAudios = canRecord && mayAttach(rights, 'audio/*');
+  const canContacts = mayAttach(rights, CONTACT_CARD_MIME_TYPE);
 
   return (
     /* `data-composer-panel` — L'ANCRE STRUCTURELLE DU PANNEAU (#7280), même
@@ -230,7 +259,7 @@ export function ComposerAttachmentPanel({
             label={translate(language, 'composer.attach.photo')}
             action={translate(language, 'composer.attach.photo.action')}
             color="var(--ios-tile-photo)"
-            accept="image/*"
+            accept="image/*,video/*"
             multiple
             onPick={onPickPhotos}
           >
@@ -238,7 +267,17 @@ export function ComposerAttachmentPanel({
           </FileSource>
         ) : null}
 
-        {canImages ? (
+        {canImages && onOpenCamera !== undefined ? (
+          <GestureSource
+            id="camera"
+            label={translate(language, 'composer.attach.camera')}
+            action={translate(language, 'composer.attach.camera.action')}
+            color="var(--ios-tile-camera)"
+            onTrigger={onOpenCamera}
+          >
+            <GlyphSvg glyph={COMPOSER_GLYPHS.camera} size={26} />
+          </GestureSource>
+        ) : canImages ? (
           <FileSource
             id="camera"
             label={translate(language, 'composer.attach.camera')}
@@ -246,7 +285,7 @@ export function ComposerAttachmentPanel({
             color="var(--ios-tile-camera)"
             accept="image/*"
             capture="environment"
-            onPick={onPickCamera}
+            onPick={(files) => void developShots([...(files ?? [])]).then(onPickCamera)}
           >
             <GlyphSvg glyph={COMPOSER_GLYPHS.camera} size={26} />
           </FileSource>
@@ -263,6 +302,31 @@ export function ComposerAttachmentPanel({
           >
             <Glyph name="file" size={26} />
           </FileSource>
+        ) : null}
+
+        {contact !== undefined && canContacts ? (
+          contact.source === 'file' ? (
+            <FileSource
+              id="contact"
+              label={translate(language, 'composer.attach.contact')}
+              action={translate(language, 'composer.attach.contact.action')}
+              color="var(--ios-tile-contact)"
+              accept={CONTACT_FILE_TYPES}
+              onPick={contact.onPickFile}
+            >
+              <GlyphSvg glyph={COMPOSER_GLYPHS.userCircle} size={26} />
+            </FileSource>
+          ) : (
+            <GestureSource
+              id="contact"
+              label={translate(language, 'composer.attach.contact')}
+              action={translate(language, 'composer.attach.contact.action')}
+              color="var(--ios-tile-contact)"
+              onTrigger={contact.onRequest}
+            >
+              <GlyphSvg glyph={COMPOSER_GLYPHS.userCircle} size={26} />
+            </GestureSource>
+          )
         ) : null}
 
         {canLocate ? (

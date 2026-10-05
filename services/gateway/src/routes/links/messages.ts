@@ -4,6 +4,8 @@ import { logError } from '../../utils/logger';
 import { sendSuccess, sendUnauthorized, sendForbidden, sendNotFound, sendBadRequest, sendInternalError, sendError } from '../../utils/response.js';
 import { AUTH_ERROR_CODES } from '../../utils/auth-error-codes.js';
 import { TrackingLinkService } from '../../services/TrackingLinkService';
+import type { ContentTrackingLink } from '../../services/TrackingLinkService';
+import { processExplicitLinks } from '../../services/messaging/messageLinks.js';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 import { parseSharedPlace, sharedPlaceFromMetadata } from '../../services/location/sharedPlace';
@@ -101,8 +103,10 @@ function buildLinkMessagePayload(params: {
    * reconnu par le serveur reste du texte brut chez tous ses lecteurs.
    */
   validatedMentions: readonly string[];
+  /** La carte `url → token`, hissée comme sur le chemin nominal. */
+  trackingLinks: readonly ContentTrackingLink[];
 }) {
-  const { message, conversationId, senderId, place, validatedMentions } = params;
+  const { message, conversationId, senderId, place, validatedMentions, trackingLinks } = params;
   return {
     id: message.id,
     ...(message.clientMessageId ? { clientMessageId: message.clientMessageId } : {}),
@@ -123,8 +127,25 @@ function buildLinkMessagePayload(params: {
     updatedAt: message.updatedAt,
     sender: message.sender,
     validatedMentions: [...validatedMentions],
+    ...(trackingLinks.length > 0 ? { trackingLinks: trackingLinks.map((link) => ({ ...link })) } : {}),
     ...(place ? { location: place } : {})
   };
+}
+
+/**
+ * Ce que ce chemin range dans `Message.metadata` : le lieu partagé et la
+ * carte des liens suivis — les deux blocs que `MessageProcessor` y écrit pour
+ * un message authentifié. Rien ⇒ aucune clé `metadata`.
+ */
+function linkMessageMetadata(
+  place: SharedPlace | null,
+  trackingLinks: readonly ContentTrackingLink[]
+): { metadata?: Prisma.InputJsonValue } {
+  const metadata = {
+    ...(place ? { location: place } : {}),
+    ...(trackingLinks.length > 0 ? { trackingLinks: trackingLinks.map((link) => ({ ...link })) } : {}),
+  };
+  return Object.keys(metadata).length > 0 ? { metadata: metadata as unknown as Prisma.InputJsonValue } : {};
 }
 
 export async function registerMessageRoutes(fastify: FastifyInstance) {
@@ -303,11 +324,19 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
       }
 
 
-      // Traiter les liens dans le message AVANT la sauvegarde
-      const { processedContent, trackingLinks } = await trackingLinkService.processMessageLinks({
+      // Même contrat que le chemin nominal (#9093, #9105) : seule `<url>` est
+      // réécrite en `m+<token>` ; une URL brute ou markdown reste telle
+      // qu'écrite, et sa carte `url → token` part dans `metadata.trackingLinks`.
+      // L'affichage (m+token, libellé, `[[url]]`) se décide au rendu.
+      const processedContent = await processExplicitLinks({
+        trackingLinkService,
         content: body.content,
         conversationId: participantShareLink.conversationId,
-        createdBy: undefined
+        onError: (err) => logError(fastify.log, 'Link message explicit links failed:', err)
+      });
+      const trackingLinks = await trackingLinkService.collectContentTrackingLinks({
+        content: processedContent,
+        conversationId: participantShareLink.conversationId
       });
 
       // Lieu partagé — ce chemin (participant anonyme via lien de partage)
@@ -332,7 +361,7 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
           messageType: body.messageType,
           clientMessageId: body.clientMessageId,
           ...LIVE_MESSAGE_MARK,
-          ...(sharedPlace ? { metadata: { location: sharedPlace } as unknown as Prisma.InputJsonValue } : {})
+          ...linkMessageMetadata(sharedPlace, trackingLinks)
         },
         include: {
           sender: {
@@ -393,7 +422,8 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
         conversationId: participantShareLink.conversationId,
         senderId: anonymousParticipant.id,
         place,
-        validatedMentions: mentions.validatedUsernames
+        validatedMentions: mentions.validatedUsernames,
+        trackingLinks
       });
 
       // Ce que ce message doit à sa conversation — bump de `lastMessageAt`,

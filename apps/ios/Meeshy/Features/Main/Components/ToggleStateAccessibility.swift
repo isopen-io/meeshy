@@ -44,9 +44,7 @@ extension View {
     @ViewBuilder
     func toggleStateAccessibility(isToggle: Bool, isActive: Bool) -> some View {
         if isToggle {
-            let stateLabel = isActive
-                ? String(localized: "a11y.toggle.on", defaultValue: "Activé", bundle: .main)
-                : String(localized: "a11y.toggle.off", defaultValue: "Désactivé", bundle: .main)
+            let stateLabel = ToggleStateLabel.text(isActive: isActive)
             if #available(iOS 17, *) {
                 self
                     .accessibilityAddTraits(.isToggle)
@@ -57,5 +55,15 @@ extension View {
         } else {
             self
         }
+    }
+}
+
+/// Le mot « Activé / Désactivé » seul, pour une valeur COMPOSÉE qui le suit
+/// d'un complément (la sortie « Sortie » : « Activé, AirPods »).
+enum ToggleStateLabel {
+    static func text(isActive: Bool) -> String {
+        isActive
+            ? String(localized: "a11y.toggle.on", defaultValue: "Activé", bundle: .main)
+            : String(localized: "a11y.toggle.off", defaultValue: "Désactivé", bundle: .main)
     }
 }

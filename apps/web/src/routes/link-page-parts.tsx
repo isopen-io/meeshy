@@ -79,7 +79,7 @@ export function LinkAlert({ children }: { readonly children: ReactNode }) {
 }
 
 const ACTION_CLASS =
-  'grid w-full place-items-center rounded-[14px] px-6 text-center font-bold focus-visible:outline-2 focus-visible:outline-offset-2';
+  'grid w-full place-items-center rounded-field px-6 text-center font-bold focus-visible:outline-2 focus-visible:outline-offset-2';
 
 const ACTION_HEIGHT = 52;
 
@@ -87,7 +87,7 @@ export type ActionTone = 'primary' | 'danger' | 'secondary';
 
 const ACTION_FILL: Readonly<Record<ActionTone, CSSProperties>> = {
   primary: {
-    color: 'white',
+    color: 'var(--color-ios-on-brand)',
     background: 'linear-gradient(90deg, var(--ios-indigo-600), var(--ios-indigo-400))',
     outlineColor: 'var(--color-ios-brand)',
   },
@@ -109,16 +109,20 @@ export function ActionButton({
   type = 'button',
   disabled = false,
   onClick,
+  data,
   children,
 }: {
   readonly tone?: ActionTone;
   readonly type?: 'button' | 'submit';
   readonly disabled?: boolean;
   readonly onClick?: () => void;
+  /** Les attributs `data-*` par lesquels un témoin ou une recette nomme ce geste. */
+  readonly data?: Readonly<Record<`data-${string}`, string>>;
   readonly children: string;
 }) {
   return (
     <button
+      {...data}
       type={type}
       disabled={disabled}
       onClick={onClick}

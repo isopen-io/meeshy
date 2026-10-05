@@ -35,23 +35,23 @@ private struct ProfilePostsFallback: View {
     var body: some View {
         Group {
             if posts.isEmpty && isLoading {
-                VStack(spacing: 12) {
+                VStack(spacing: MeeshySpacing.md) {
                     ForEach(0..<3, id: \.self) { _ in
-                        RoundedRectangle(cornerRadius: 14)
+                        RoundedRectangle(cornerRadius: MeeshyRadius.md)
                             .fill(theme.surface(tint: accentColor, intensity: 0.1))
                             .frame(height: 72)
                             .shimmer()
                     }
                 }
-                .padding(.horizontal, 20)
+                .padding(.horizontal, MeeshySpacing.xl)
             } else if posts.isEmpty {
                 ProfilePostsEmpty(accentColor: accentColor)
             } else {
-                VStack(spacing: 12) {
+                VStack(spacing: MeeshySpacing.md) {
                     ForEach(posts, id: \.id) { post in
                         ProfilePostRow(post: post, accentColor: accentColor)
                             .equatable()
-                            .padding(.horizontal, 20)
+                            .padding(.horizontal, MeeshySpacing.xl)
                     }
                 }
             }
@@ -80,21 +80,21 @@ private struct ProfilePostRow: View, Equatable {
     @ObservedObject private var theme = ThemeManager.shared
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
             if let content = post.content, !content.isEmpty {
                 Text(content)
-                    .font(.system(size: 14))
+                    .font(.system(size: MeeshyFont.labelSize))
                     .foregroundColor(theme.textPrimary)
                     .lineLimit(4)
                     .multilineTextAlignment(.leading)
             } else {
                 Text(String(localized: "profile.posts.noText", defaultValue: "Publication sans texte", bundle: .module))
-                    .font(.system(size: 13))
+                    .font(.system(size: MeeshyFont.subheadSize))
                     .foregroundColor(theme.textMuted)
                     .italic()
             }
 
-            HStack(spacing: 12) {
+            HStack(spacing: MeeshySpacing.md) {
                 Label("\(post.likeCount ?? 0)", systemImage: "heart")
                 Label("\(post.commentCount ?? 0)", systemImage: "bubble.right")
             }
@@ -102,9 +102,9 @@ private struct ProfilePostRow: View, Equatable {
             .foregroundColor(theme.textMuted)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(14)
+        .padding(MeeshySpacing.mdPlus)
         .background(theme.surfaceGradient(tint: accentColor))
-        .glassCard(cornerRadius: 14)
+        .glassCard(cornerRadius: MeeshyRadius.md)
     }
 }
 
@@ -113,16 +113,16 @@ private struct ProfilePostsEmpty: View {
     @ObservedObject private var theme = ThemeManager.shared
 
     var body: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: MeeshySpacing.smPlus) {
             Image(systemName: "square.text.square")
-                .font(.system(size: 28))
-                .foregroundColor(theme.textMuted.opacity(0.5))
+                .font(.system(size: MeeshyIconSize.xxxl))
+                .foregroundColor(theme.textMuted.opacity(MeeshyOpacity.strong))
                 .accessibilityHidden(true)
             Text(String(localized: "profile.posts.empty", defaultValue: "Aucune publication", bundle: .module))
-                .font(.system(size: 12, weight: .medium))
-                .foregroundColor(theme.textMuted.opacity(0.7))
+                .font(.system(size: MeeshyFont.smallSize, weight: .medium))
+                .foregroundColor(theme.textMuted.opacity(MeeshyOpacity.heavy))
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 24)
+        .padding(.vertical, MeeshySpacing.xxl)
     }
 }

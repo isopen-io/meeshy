@@ -69,7 +69,8 @@ extension MeeshyComposerHost {
         // des slides à des médias arrivés autrement sur une story — un
         // changement de comportement que rien ici ne mesure.
         let posePourLaScene = documentContentMedia.contains {
-            mediaRoleByURL[$0.sourceURL] == nil && railPosedMediaURLs.contains($0.sourceURL)
+            mediaRoleByURL[$0.sourceURL] == nil
+                && (railPosedMediaURLs.contains($0.sourceURL) || sceneSeriesMediaURLs.contains($0.sourceURL))
         }
         guard selectedFormat == .post || posePourLaScene else { return }
 
@@ -103,10 +104,12 @@ extension MeeshyComposerHost {
         // `ComposerMediaPlacement` tranche, et sa moitié la moins évidente est
         // celle qui garde la rangée haute d'accord avec le modèle : le rail ne
         // pose en premier plan que s'il a un fond SUR QUOI poser.
+        var poseeParLeRail: String?
         for media in documentContentMedia where media.kind != .audio
             && mediaRoleByURL[media.sourceURL] == nil {
             let porte: ComposerMediaDoor =
-                railPosedMediaURLs.contains(media.sourceURL) ? .sceneRail : .documentRow
+                sceneSeriesMediaURLs.contains(media.sourceURL) ? .sceneSeries
+                : railPosedMediaURLs.contains(media.sourceURL) ? .sceneRail : .documentRow
             // **Le MÊME prédicat que `addMediaObject`**, mot pour mot : un fond
             // de slide est un `mediaObject` résolu OU une image de fond posée
             // au niveau de la slide. En omettre la seconde moitié ferait
@@ -131,9 +134,12 @@ extension MeeshyComposerHost {
                 // Il rejoint la scène COURANTE et n'y fonde rien : pas de
                 // `addSlide`, pas d'entrée dans l'index des fondations, donc
                 // pas de tuile. C'est tout le lot.
-                documentMediaObjectIdBySource.merge(
-                    viewModel.applyContentMedia([media], intoSlideId: viewModel.currentSlide.id)
-                ) { _, neuf in neuf }
+                let poses = viewModel.applyContentMedia([media], intoSlideId: viewModel.currentSlide.id)
+                documentMediaObjectIdBySource.merge(poses) { _, neuf in neuf }
+                // **Poser par le rail SÉLECTIONNE** (#9138) : l'image posée
+                // montre ses sous-outils à droite, comme le texte et le
+                // sticker. Le dernier de la sélection l'emporte.
+                if porte == .sceneRail, let id = poses[media.sourceURL] { poseeParLeRail = id }
 
             case .background:
                 let target: String
@@ -144,7 +150,12 @@ extension MeeshyComposerHost {
                 // `1g` — en Post, une slide est UN média.
                 if porte == .sceneRail {
                     target = viewModel.currentSlide.id
-                } else if slideIdByMediaURL.isEmpty,
+                } else if porte == .sceneSeries, !dejaUnFond,
+                          (viewModel.currentSlide.effects.mediaObjects ?? []).isEmpty {
+                    // La série remplit d'abord la scène courante si elle n'a
+                    // pas de fond ; chaque média suivant fonde la sienne.
+                    target = viewModel.currentSlide.id
+                } else if porte != .sceneSeries, slideIdByMediaURL.isEmpty,
                    (viewModel.currentSlide.effects.mediaObjects ?? []).isEmpty {
                     target = viewModel.currentSlide.id
                 } else if viewModel.canAddSlide {
@@ -162,6 +173,9 @@ extension MeeshyComposerHost {
                     viewModel.applyContentMedia([media], intoSlideId: target)
                 ) { _, neuf in neuf }
                 slideIdByMediaURL[media.sourceURL] = target
+                // En retouche, l'image posée EST l'état de départ (#8524) : ce
+                // qui reste annulable ensuite est ce que l'auteur a fait.
+                if returnsToConversation { viewModel.seedHistory() }
             }
         }
 
@@ -188,6 +202,7 @@ extension MeeshyComposerHost {
         // énumérer — cinq, dont une née d'un GESTE et absente de tout
         // inventaire (#4879, #5069). Ici, une sixième porte hérite de la
         // pré-montée sans que personne n'ait à y penser.
+        if let poseeParLeRail { beginInlineEdit(poseeParLeRail) }
         startPendingPreUploads()
     }
 
@@ -333,8 +348,10 @@ extension MeeshyComposerHost {
             // qu'ouvrir les rendrait à sens unique. C'est le geste exact de
             // `ComposerOverflowEntry.pickBackground`, déplacé du menu au rail —
             // le même effet par un chemin qu'on trouve sans le chercher.
+            // Avec un média de fond, la même porte ouvre le CADRE (#8414).
             HapticFeedback.light()
-            requestedSceneBand = requestedSceneBand == .palette ? nil : .palette
+            let bande = ComposerSceneBand.forBackgroundDoor(hasBackgroundMedia: sceneHasBackgroundMedia)
+            requestedSceneBand = requestedSceneBand == bande ? nil : bande
         case .description:
             // La SEULE façon d'ouvrir la description sur la scène incrustée
             // depuis le 2026-08-30 : le champ permanent qui l'affichait dès
@@ -392,15 +409,21 @@ extension MeeshyComposerHost {
                 viewModel.setExpandedDrawingTool(.tool)
             }
         case .text:
-            // **Poser PUIS ouvrir l'éditeur, dans le même geste.** `addText()`
-            // crée une coquille vide : la laisser sans éditeur donnerait un
-            // objet invisible que rien ne remplit — un contrôle sans effet.
+            // **Poser PUIS saisir SUR LA SCÈNE, dans le même geste** (directive
+            // porteur 2026-09-28 : « plutôt que d'ouvrir l'édition de texte,
+            // affiche la liste des options directement à droite du bouton »).
+            // Le clavier monte sur le texte posé, et ses options s'accrochent à
+            // ce rail, à la place des portes (#8652). Le double-toucher et
+            // « Modifier » ouvrent la MÊME saisie (#8680).
             //
-            // La coquille vide est supprimée si l'auteur referme sans écrire
-            // (`exitTextEditingMode`), donc « poser » n'engage à rien.
+            // La porte BASCULE, comme le dessin : retouchée pendant la saisie,
+            // elle la termine. La coquille restée vide est supprimée par
+            // `exitTextEditingMode`, donc « poser » n'engage à rien.
             HapticFeedback.light()
-            if let objet = viewModel.addText() {
-                openObjectEditor(objet.id)
+            if viewModel.textEditingMode.activeTextId != nil {
+                viewModel.exitTextEditingMode()
+            } else if let objet = viewModel.addText() {
+                beginSceneTextEditing(objet.id)
             }
         case .sticker:
             // **Le portail vit sur le MEUBLE** (#4120), comme les six autres :
@@ -450,6 +473,7 @@ extension MeeshyComposerHost {
             selectedSceneItemId = nil
             selectedSceneItemKind = nil
         case .bringForward: viewModel.bringForward(id: id)
+        case .setAsBackground, .replaceBackground: makeSceneBackground(id)
         case .sendBackward: viewModel.sendBackward(id: id)
         case .trim:
             // **« Rogner » ouvre l'ÉDITEUR sur ses bornes** (2026-09-05). Il
@@ -502,6 +526,8 @@ extension MeeshyComposerHost {
         case .attachesLocation:
             HapticFeedback.light()
             presentedPortal = .location
+        case .composesTextScene:
+            openTextScene()
         case .attachesTranscribedAudio:
             HapticFeedback.light()
             // **La MÊME feuille que « Ajouter un son » (#4657).** Ce qui
@@ -568,16 +594,11 @@ extension MeeshyComposerHost {
 
     /// Rend VRAI si un sélecteur est effectivement à l'écran — c'est ce que la
     /// porte du rail lit pour savoir si son intention a une sortie (#6008).
+    /// La porte va droit à la photothèque (#8680) : aucune feuille de choix.
     @discardableResult
     func presentMediaSources() -> Bool {
         HapticFeedback.light()
-        let sources = ComposerMediaSourcePolicy.offered(allowsCapture: profile.allowsCapture)
-        guard sources.count > 1 else {
-            guard let seule = sources.first else { return false }
-            presentMediaIntake(seule)
-            return true
-        }
-        showsMediaSourceChooser = true
+        presentMediaIntake(ComposerMediaSourcePolicy.railDoorIntake)
         return true
     }
 
@@ -660,70 +681,6 @@ extension MeeshyComposerHost {
     /// d'ouvrir le sélecteur de personnes, sous peine de reproduire à
     /// l'identique le défaut du bouton « Fichiers ». Une seule reprise, un seul
     /// `onDismiss`, aucune chance qu'une troisième s'en dispense en silence.
-    /// **LA façon d'éditer un texte — une seule, quelle que soit la porte**
-    /// (#4634, directive porteur : « il faut préserver la même façon d'éditer un
-    /// texte que celle de le créer »).
-    ///
-    /// Créer un texte et modifier un texte existant passaient tous deux par
-    /// `enterTextEditingMode`, mais aboutissaient à des écrans différents : la
-    /// création ouvrait l'édition en ligne avec une zone basse VIDE (aucun outil
-    /// déplié), la modification la même chose. Les dix-huit styles, eux,
-    /// n'étaient atteignables qu'APRÈS avoir refermé l'éditeur.
-    ///
-    /// Ce site unique ouvre l'éditeur plein écran dans les deux cas — et ferme
-    /// le portail d'abord : `fullScreenCover` et `.sheet` se disputent le même
-    /// présentateur, et fermer l'état invalide chez l'ÉCRIVAIN vaut mieux que le
-    /// garder chez le lecteur.
-    /// **Ouvre l'éditeur sur N'IMPORTE QUELLE famille** (#4937).
-    ///
-    /// Il posait `.text` en dur et entrait toujours en mode saisie — l'écran ne
-    /// savait éditer qu'un texte. Taper un sticker ou un média ne faisait alors
-    /// RIEN, ce qui se lit comme une scène morte plutôt que comme une limite.
-    ///
-    /// Le mode SAISIE reste réservé au texte, et c'est une distinction, pas une
-    /// précaution : `enterTextEditingMode` ouvre le curseur en ligne sur le
-    /// canvas. L'appeler sur un sticker mettrait l'écran dans un état qu'aucune
-    /// vue ne rend.
-    /// - Parameter section: la section sur laquelle OUVRIR — `nil` ⇒ celle que
-    ///   la famille sert en premier. Elle vient des jetons de l'inspecteur
-    ///   (2026-09-05), qui nomment chacun un réglage : l'auteur a désigné
-    ///   « ALIGN ▭ » du doigt, l'écran ne doit pas lui demander de le
-    ///   retrouver. Les autres portes — appui long, création, plan 2D — ne
-    ///   désignent rien et passent `nil`.
-    func openObjectEditor(_ id: String, section: ComposerObjectEditorSection? = nil) {
-        presentedPortal = nil
-        selectedSceneItemId = id
-        let famille = viewModel.currentSlide.sceneObject(id: id)?.kind
-        selectedSceneItemKind = famille.map(Self.canvasKind) ?? .text
-        if famille == .text || famille == nil {
-            viewModel.enterTextEditingMode(textId: id)
-        }
-        editedObject = ComposerEditedObject(id: id, section: section)
-    }
-
-    /// La traduction entre la famille du MODÈLE et le kind du CANVAS — deux
-    /// énumérés qui portent les mêmes cinq familles depuis #4960, mais que Swift
-    /// ne confond pas. Le `switch` est exhaustif : une sixième famille ne
-    /// compilera pas tant qu'elle n'aura pas dit ce qu'elle est sur la toile.
-    static func canvasKind(_ famille: MeeshySceneObject.Kind) -> StoryCanvasUIView.CanvasItemKind {
-        switch famille {
-        case .text:    return .text
-        case .media:   return .media
-        case .sticker: return .sticker
-        case .place:   return .place
-        case .audio:   return .audio
-        }
-    }
-
-    /// Fermer rend la scène au doigt ET sort du mode d'édition — les deux, sans
-    /// quoi le rail continuerait d'afficher les contrôleurs d'un texte qu'on
-    /// n'édite plus. C'est le modèle qui décide du sort d'une coquille vide : il
-    /// la supprime.
-    func closeObjectEditor() {
-        viewModel.exitTextEditingMode()
-        editedObject = nil
-    }
-
     func resumePendingPresentation() {
         if pendingFileImport {
             pendingFileImport = false
@@ -740,6 +697,7 @@ extension MeeshyComposerHost {
     func presentMediaIntake(_ intake: ComposerMediaIntake) {
         switch intake {
         case .photoLibrary:
+            openingPickFoundsScenes = false
             showsPhotoPicker = true
         case .camera:
             presentCamera(mode: .photo)
@@ -856,6 +814,20 @@ extension MeeshyComposerHost {
               let plan = ComposerSeedIngestion.plan(for: mediaSeed) else { return }
         seedIngestedIntoDocument = true
 
+        // **En retouche d'une image du fil, l'image devient un VRAI fond**
+        // (#8416). Le modèle la range en fond hérité (`slideImages`), que la
+        // scène du meuble ne lit pas — elle restait noire. Hors publication, on
+        // la retire de là et la boucle de placement la pose en média de fond,
+        // par le chemin de la porte Photos (le Cadre s'y applique donc aussi).
+        if returnsToConversation, case .image? = mediaSeed?.payload {
+            viewModel.detachSeededBackgroundImage()
+            // Posée « par le rail » : hors Post, la boucle de placement ne pose
+            // sur la scène que ce que le rail a demandé (`posePourLaScene`).
+            railPosesNextMedia = true
+            ecrireDansLaListeDuDocument([plan.media], rail: .consomme)
+            return
+        }
+
         mediaRoleByURL[plan.media.url] = plan.foundsScene ? .background : .foreground
         if plan.foundsScene {
             slideIdByMediaURL[plan.media.url] = viewModel.currentSlide.id
@@ -904,190 +876,6 @@ extension MeeshyComposerHost {
 
     func ingestIntoDocument(_ medias: [ComposerDocumentMedia]) {
         ecrireDansLaListeDuDocument(medias, rail: .consomme)
-    }
-
-    func ingestPhotoLibraryItems(_ items: [PhotosPickerItem]) async {
-        // Les médias sont ACCUMULÉS puis remis en une fois à
-        // `ingestIntoDocument` : écrire dans la boucle rejouait la dérivation à
-        // chaque item, sur un état différent (#4879).
-        var medias: [ComposerDocumentMedia] = []
-        for item in items {
-            guard let data = try? await item.loadTransferable(type: Data.self) else { continue }
-            let declaredType = item.supportedContentTypes.first
-            let url = FileManager.default.temporaryDirectory.appendingPathComponent(
-                "composer_photo_\(UUID().uuidString).\(declaredType?.preferredFilenameExtension ?? "dat")"
-            )
-            guard (try? data.write(to: url)) != nil else { continue }
-            let mime = ComposerMediaProbe.mime(forURL: url, declaredType: declaredType)
-            let duration = await ComposerMediaProbe.durationMs(forURL: url, mime: mime)
-            // **Ce qu'on vient d'ingérer se DIT** (#4879). Le mime décide de
-            // TOUT en aval — `ComposerIngestRouter` en tire la famille, et une
-            // famille `.document` fait qu'un média n'atteint jamais la scène,
-            // sans qu'aucune ligne ne le signale.
-            os.Logger(subsystem: "me.meeshy.app", category: "media").info(
-                "ingest photothèque: \(url.lastPathComponent, privacy: .public) type=\(declaredType?.identifier ?? "nil", privacy: .public) mime=\(mime, privacy: .public) durée=\(duration ?? -1, privacy: .public)"
-            )
-            medias.append(ComposerDocumentMediaFactory.media(
-                url: url,
-                declaredMimeType: mime,
-                durationMs: duration
-            ))
-        }
-        ingestIntoDocument(medias)
-        HapticFeedback.light()
-    }
-
-    /// La caméra (T2.3) — le mime est celui que CE SITE choisit en écrivant
-    /// le fichier, jamais dérivé après coup : JPEG pour une photo, QuickTime
-    /// pour une vidéo (le conteneur qu'`AVCaptureMovieFileOutput` écrit déjà,
-    /// `CameraModel.startSegment()`).
-    ///
-    /// **Revue Opus, correctif 1.** La branche vidéo sonde sa durée RÉELLE
-    /// (`ComposerMediaProbe.durationMs`) — sans elle, une vidéo de 10 s
-    /// captée ici partait `durationMs: nil` et `ReelComposition` la classait
-    /// `.post` au lieu de `.reel`. La branche photo n'a rien à sonder : une
-    /// image n'a pas de durée, et `ComposerMediaProbe.durationMs` la
-    /// classerait `nil` de toute façon — l'appeler ici serait un aller-retour
-    /// pour rien.
-    /// **Ce qu'un COLLAGE pose** (#4092) — et il ne pose pas comme l'atelier.
-    ///
-    /// L'atelier a `posePastedItems`, qui route vers `addCapturedMedia` et
-    /// `addRecordingToBackground` : deux helpers qui portent son état de
-    /// CHARGEMENT (`isLoadingMedia`, `mediaLoadProgress`), une orchestration de
-    /// vue que le meuble n'a pas et n'a pas à recopier.
-    ///
-    /// Le meuble a le sien, et il est déjà écrit : `ingestCameraCapture` pose
-    /// une image ou une vidéo dans `documentLocalMedia`, en sondant le mime et
-    /// la durée. Un collage d'image EST une capture, du point de vue de ce qui
-    /// arrive dans le document — la seule différence est d'où viennent les
-    /// octets.
-    ///
-    /// **Ce n'est donc pas une réécriture de `posePastedItems`, c'est le même
-    /// geste branché sur l'ingestion de CE meuble.** Recopier les helpers de
-    /// l'atelier aurait apporté avec eux un état de chargement dont rien ici ne
-    /// se sert (leçon 336 : emprunter ce qui décide, pas ce qui orchestre).
-    ///
-    /// Le TEXTE, lui, garde sa règle partagée : `StoryPastePolicy` décide s'il
-    /// devient la description ou un objet de scène, et cette question ne dépend
-    /// pas de la surface qui colle.
-    func handlePastedItems(_ items: [StoryPastedItem]) {
-        for item in items {
-            switch item {
-            case .image(let image):
-                // Une image venue du presse-papier n'a pas d'octets d'origine
-                // à nous remettre : le repli redresse et ré-encode.
-                Task { await ingestCameraCapture(.photo(image, data: nil)) }
-            case .video(let url):
-                Task { await ingestCameraCapture(.video(url)) }
-            case .audio(let url):
-                // Un son collé rejoint la scène comme un son EMPRUNTÉ le ferait
-                // — c'est le même objet, et `addAudioObject` en est le site
-                // unique. Le fichier voyage par `loadedAudioURLs`.
-                viewModel.attachPastedAudio(url: url)
-            case .text(let contenu):
-                switch StoryPastePolicy.placement(forText: contenu) {
-                case .description(let texte):
-                    documentText = texte
-                case .textObject(let texte):
-                    if let objet = viewModel.addText() {
-                        viewModel.updateTextContent(id: objet.id, text: texte)
-                        viewModel.exitTextEditingMode()
-                    }
-                case nil:
-                    break   // coller le vide n'est pas une erreur, c'est un geste sans matière
-                }
-            }
-        }
-        HapticFeedback.light()
-    }
-
-    func ingestCameraCapture(_ result: CameraResult) async {
-        switch result {
-        case .photo(let image, let originaux):
-            // **Les octets D'ORIGINE quand on les a** (directive porteur
-            // 2026-09-04 : « la prise de la photo doit avoir les exif et
-            // metadata »).
-            //
-            // `AVCapturePhoto.fileDataRepresentation()` rend un fichier
-            // COMPLET — EXIF, TIFF, appareil, date, temps de pose, focale,
-            // orientation. Les ré-encoder depuis l'`UIImage` jetait tout cela :
-            // `jpegData` n'écrit ni EXIF ni orientation, et c'est ce qui
-            // faisait aussi arriver la photo COUCHÉE. Une seule correction
-            // ferme les deux défauts, et elle est la bonne pour une raison de
-            // fond : on ne reconstruit pas ce qu'on a reçu.
-            let (octets, suffixe) = ComposerCapturePayload.bytes(
-                original: originaux, fallback: image)
-            guard let octets else { return }
-            let url = FileManager.default.temporaryDirectory
-                .appendingPathComponent("composer_camera_\(UUID().uuidString).\(suffixe)")
-            guard (try? octets.write(to: url)) != nil else { return }
-            ingestIntoDocument([ComposerDocumentMediaFactory.media(
-                url: url,
-                declaredMimeType: ComposerCapturePayload.mime(for: suffixe))])
-        case .video(let url):
-            let duration = await ComposerMediaProbe.durationMs(forURL: url, mime: "video/quicktime")
-            ingestIntoDocument([ComposerDocumentMediaFactory.media(
-                url: url,
-                declaredMimeType: "video/quicktime",
-                durationMs: duration
-            )])
-        }
-        HapticFeedback.light()
-    }
-
-    /// L'importateur de documents (T2.3) — le mime passe par
-    /// `ComposerMediaProbe.mime`, jamais recalculé ici.
-    ///
-    /// **Revue Opus, correctif 3.** `UTType.preferredMIMEType` rend `nil`
-    /// pour des types pourtant bien identifiés (`.caf`, `.opus`) : retomber
-    /// directement sur `application/octet-stream` ici ferait perdre
-    /// EXACTEMENT le défaut que ce lot prétend fermer. `ComposerMediaProbe.mime`
-    /// retombe d'abord sur la table par EXTENSION (`MimeTypeResolver`).
-    ///
-    /// **Revue Opus, correctif 4.** `startAccessingSecurityScopedResource()`
-    /// rend `false` pour un fichier qui N'EST PAS security-scoped (conteneur
-    /// app, certains fournisseurs) — ce n'EST PAS un échec. La copie est
-    /// tentée QUEL QUE SOIT ce retour ; `stopAccessingSecurityScopedResource()`
-    /// n'est appelé QUE si `start` a rendu `true`.
-    ///
-    /// **Revue Opus, correctif 1.** La durée RÉELLE est sondée
-    /// (`ComposerMediaProbe.durationMs`) — un `.mp4`/`.caf` importé ici
-    /// portait sinon `durationMs: nil`, et `ReelComposition` le classait
-    /// `.post` au lieu de `.reel`/l'excluait à tort d'un réel à deux médias.
-    ///
-    /// `async` depuis ce lot : le `.fileImporter` du corps l'enveloppe d'un
-    /// `Task`, comme les deux autres ingestions.
-    func ingestFileImporterResult(_ result: Result<[URL], Error>) async {
-        guard case .success(let urls) = result else { return }
-        // **L'intention retombe dès la lecture** : elle vaut pour UNE ouverture.
-        // Laissée à `.sound`, elle ferait poser sur la scène le fichier suivant,
-        // même arrivé par la rangée du document.
-        let intention = fileImportIntent
-        fileImportIntent = .media
-        if intention == .sound {
-            await ingestSoundFiles(urls)
-            return
-        }
-        // Même accumulation que la photothèque (#4879) : marquer le rail avant
-        // d'écrire, et n'écrire qu'une fois.
-        var medias: [ComposerDocumentMedia] = []
-        for sourceURL in urls {
-            let scoped = sourceURL.startAccessingSecurityScopedResource()
-            defer { if scoped { sourceURL.stopAccessingSecurityScopedResource() } }
-            let declaredType = try? sourceURL.resourceValues(forKeys: [.contentTypeKey]).contentType
-            let destination = FileManager.default.temporaryDirectory
-                .appendingPathComponent("composer_file_\(UUID().uuidString)_\(sourceURL.lastPathComponent)")
-            guard (try? FileManager.default.copyItem(at: sourceURL, to: destination)) != nil else { continue }
-            let mime = ComposerMediaProbe.mime(forURL: destination, declaredType: declaredType)
-            let duration = await ComposerMediaProbe.durationMs(forURL: destination, mime: mime)
-            medias.append(ComposerDocumentMediaFactory.media(
-                url: destination,
-                declaredMimeType: mime,
-                durationMs: duration
-            ))
-        }
-        ingestIntoDocument(medias)
-        HapticFeedback.light()
     }
 
     // MARK: - Ce qui entre par un GESTE du meuble

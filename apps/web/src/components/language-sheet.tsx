@@ -75,7 +75,7 @@ export function LanguageSheet({
               type="button"
               onClick={() => onSelect(lang.code)}
               aria-current={isSelected ? 'true' : undefined}
-              className="flex w-full items-center gap-3 px-4 text-left"
+              className="flex w-full items-center gap-3 px-4 text-start"
               style={{ minHeight: 44 }}
             >
               <span aria-hidden="true">{lang.flag}</span>

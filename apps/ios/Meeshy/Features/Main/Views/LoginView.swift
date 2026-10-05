@@ -3,6 +3,18 @@ import Combine
 import MeeshySDK
 import MeeshyUI
 
+/// #8287 — le choix du serveur n'existe qu'au simulateur. La décision se prend
+/// à la COMPILATION : un binaire d'appareil ne contient pas la branche.
+enum LoginServerPicker {
+    static var isAvailable: Bool {
+        #if targetEnvironment(simulator)
+        return true
+        #else
+        return false
+        #endif
+    }
+}
+
 struct LoginView: View {
     @EnvironmentObject var authManager: AuthManager
     @StateObject private var theme = ThemeManager.shared
@@ -15,6 +27,9 @@ struct LoginView: View {
     @State private var selectedAccount: SavedAccount? = nil
     @State private var accountPassword = ""
     @State private var showNormalLogin = false
+    /// #8286 — « Rester connecté sur cet appareil », proposée au compte
+    /// SUPPLÉMENTAIRE seulement (`AuthManager.offersKeepSignedIn`).
+    @State private var keepSignedIn = true
 
     // UI state
     @State private var glowPulse = false
@@ -24,6 +39,26 @@ struct LoginView: View {
     @State private var showForgotPassword = false
     @State private var showMagicLink = false
     @State private var twoFactorCode = ""
+    /// Adresse inconnue à la connexion (#8035) : l'écran du code, avec le mot
+    /// de passe tapé tenu en mémoire jusqu'à sa fermeture — jamais persisté.
+    @State private var codeEntry: CodeEntryContext?
+    /// Le point UNIQUE où une session prouvée s'ouvre (#8059, #8076) : jamais
+    /// pendant qu'une présentation d'accès est là — ouvrir la session démonte
+    /// cet écran, et sa feuille resterait orpheline, figée, « Fermer » inerte.
+    /// Code, lien reçu par e-mail, inscription : la session attend le
+    /// `onDismiss` de la présentation.
+    private let sessionGate = SessionOpeningGate.shared
+
+    /// Une porte d'accès est-elle présentée par cet écran ?
+    private var hasAccessPresentation: Bool {
+        codeEntry != nil || showMagicLink || showRegister || showForgotPassword
+    }
+
+    private struct CodeEntryContext: Identifiable {
+        let pending: PendingEmailVerification
+        let password: String
+        var id: String { pending.email }
+    }
 
     // Environment selector
     @State private var selectedEnv: MeeshyConfig.ServerEnvironment = MeeshyConfig.shared.selectedEnvironment
@@ -147,8 +182,9 @@ struct LoginView: View {
                 .opacity(showFields ? 1 : 0)
 
                 // Sélecteur d'environnement (Production/Staging/Localhost/Custom +
-                // « Connecté à … ») réservé à l'environnement de simulation.
-                if Self.isSimulator {
+                // « Connecté à … ») : au SIMULATEUR seulement, décidé à la
+                // compilation (#8287) — jamais dans un binaire d'appareil.
+                if LoginServerPicker.isAvailable {
                     environmentSelector
                         .padding(.bottom, MeeshySpacing.md)
                         .opacity(showFields ? 1 : 0)
@@ -170,22 +206,57 @@ struct LoginView: View {
             // seule façon de mesurer son étape 2FA — s'étirait sur l'iPad.
             .iPadFormWidth()
         }
-        .sheet(isPresented: $showForgotPassword) {
-            MeeshyForgotPasswordView()
+        .sheet(isPresented: $showForgotPassword, onDismiss: accessPresentationDismissed) {
+            MeeshyForgotPasswordView(prefilledEmail: prefillableEmail)
         }
-        .sheet(isPresented: $showMagicLink) {
-            MagicLinkView()
+        .sheet(item: $codeEntry, onDismiss: accessPresentationDismissed) { entry in
+            EmailVerificationView(
+                email: entry.pending.email,
+                password: entry.password,
+                accountCreated: entry.pending.accountCreated,
+                pendingSessionToken: entry.pending.pendingSessionToken,
+                onVerified: { sessionGate.openWhenDismissed($0) }
+            )
+        }
+        .sheet(isPresented: $showMagicLink, onDismiss: accessPresentationDismissed) {
+            MagicLinkView(onVerified: { sessionGate.openWhenDismissed($0) }, prefilledEmail: prefillableEmail)
                 .environmentObject(authManager)
         }
-        .fullScreenCover(isPresented: $showRegister) {
+        .fullScreenCover(isPresented: $showRegister, onDismiss: accessPresentationDismissed) {
             // #5218 — UN écran remplace l'assistant en huit étapes. `onComplete`
             // se contente de refermer : la session est déjà appliquée par
             // `AuthManager.registerThrowing`, et `MeeshyApp` bascule sur
             // `AdaptiveRootView` à l'instant où `isAuthenticated` passe.
             SignupView(
                 onComplete: { showRegister = false },
-                onSwitchToLogin: { showRegister = false }
+                onSwitchToLogin: { email in
+                    adoptSignupEmail(email)
+                    showRegister = false
+                },
+                onVerified: { opener in
+                    sessionGate.openWhenDismissed(opener)
+                    showRegister = false
+                }
             )
+        }
+        .adaptiveOnChange(of: hasAccessPresentation) { _, presenting in
+            if presenting { sessionGate.presentationBegan() }
+        }
+        // Un lien reçu par e-mail a prouvé une session pendant qu'une porte
+        // d'accès est affichée (#8076) : la refermer, la session s'ouvrira
+        // dans son `onDismiss`.
+        .onReceive(sessionGate.$dismissalRequested.filter { $0 }) { _ in
+            codeEntry = nil
+            showMagicLink = false
+            showRegister = false
+            showForgotPassword = false
+        }
+        .onAppear {
+            if !hasAccessPresentation { sessionGate.presentationEnded() }
+            // L'accueil referme l'inscription AVANT que cet écran n'existe
+            // (#8216) : l'adresse qu'on y avait tapée l'attend ici.
+            adoptSignupEmail(LoginEmailHandoff.shared.take())
+            adoptAccountIntent(LoginAccountHandoff.shared.take())
         }
         // « Créer un compte » depuis une invitation (#7795) ouvre l'inscription ;
         // « Se connecter » n'a rien à ouvrir de plus que cet écran même.
@@ -221,6 +292,35 @@ struct LoginView: View {
             }
         }
         .onTapGesture { focusedField = nil }
+    }
+
+    // MARK: - Adresse venue de l'inscription (#8216)
+
+    /// L'identifiant tapé, quand c'est une ADRESSE : la connexion par e-mail
+    /// et le mot de passe oublié la reçoivent au lieu d'un champ vide.
+    private var prefillableEmail: String {
+        SignupForm.isEmailValid(username) ? username.trimmingCharacters(in: .whitespacesAndNewlines) : ""
+    }
+
+    /// L'inscription bascule vers la connexion avec l'adresse qu'on venait de
+    /// taper : elle devient l'identifiant, sur le formulaire qui la montre.
+    private func adoptSignupEmail(_ email: String?) {
+        guard let email, !email.isEmpty else { return }
+        username = email
+        showNormalLogin = true
+    }
+
+    /// « Changer de compte » a quitté le compte actuel pour en ouvrir un
+    /// autre (#8286) : son formulaire attend ici, sans passer par le sélecteur.
+    private func adoptAccountIntent(_ intent: LoginAccountHandoff.Intent?) {
+        switch intent {
+        case .addAccount:
+            showNormalLogin = true
+        case .account(let id):
+            if let account = authManager.savedAccounts.first(where: { $0.id == id }) { select(account) }
+        case nil:
+            break
+        }
     }
 
     // MARK: - Account Picker Section
@@ -272,48 +372,58 @@ struct LoginView: View {
     }
 
     private func savedAccountRow(_ account: SavedAccount) -> some View {
-        Button {
+        let status = SavedAccountStatus.of(
+            account,
+            activeId: nil,
+            isPreserved: authManager.hasPreservedSession(for: account.id)
+        )
+        return Button {
             HapticFeedback.light()
-            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                selectedAccount = account
-                username = account.username
-                accountPassword = Self.isSimulator ? (Self.debugAutofillPassword ?? "") : ""
+            // #8286 — un compte GARDÉ s'ouvre sans mot de passe.
+            if status.opensWithoutPassword {
+                Task { await authManager.switchAccount(to: account.id) }
+                return
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                focusedField = .accountPassword
-            }
+            select(account)
         } label: {
-            HStack(spacing: MeeshySpacing.md) {
-                accountAvatar(account, size: 44)
-
-                VStack(alignment: .leading, spacing: MeeshySpacing.xs / 2) {
-                    Text(account.shortName)
-                        .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-                        .foregroundColor(theme.textPrimary)
-                    Text("@\(account.username)")
-                        .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .regular))
-                        .foregroundColor(theme.textMuted)
-                }
-
-                Spacer()
-
-                Image(systemName: "chevron.forward")
-                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                    .foregroundColor(theme.textMuted.opacity(0.5))
-            }
-            .padding(.horizontal, MeeshySpacing.lg)
-            .padding(.vertical, MeeshySpacing.md)
-            .background(
-                RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                    .fill(theme.inputBackground)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                            .stroke(theme.inputBorder.opacity(0.3), lineWidth: 1)
-                    )
+            SavedAccountRow(
+                account: account,
+                status: status,
+                textPrimary: theme.textPrimary,
+                textMuted: theme.textMuted,
+                fill: theme.inputBackground,
+                stroke: theme.inputBorder.opacity(0.3)
             )
         }
         .buttonStyle(.plain)
         .bounceOnTap()
+        .accessibilityIdentifier("auth.login.account.\(account.username)")
+    }
+
+    private func select(_ account: SavedAccount) {
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+            selectedAccount = account
+            username = account.username
+            accountPassword = Self.isSimulator ? (Self.debugAutofillPassword ?? "") : ""
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            focusedField = .accountPassword
+        }
+    }
+
+    /// #8286 — proposée dès qu'un AUTRE compte garde sa session ; le premier
+    /// compte de l'appareil est gardé sans question.
+    @ViewBuilder
+    private var keepSignedInToggle: some View {
+        if authManager.offersKeepSignedIn {
+            Toggle(isOn: $keepSignedIn) {
+                Text(String(localized: "accounts.keep_signed_in", defaultValue: "Rester connecté sur cet appareil", bundle: .main))
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
+                    .foregroundColor(theme.textPrimary)
+            }
+            .tint(MeeshyColors.indigo500)
+            .accessibilityIdentifier("auth.login.keep_signed_in")
+        }
     }
 
     private func selectedAccountView(_ account: SavedAccount) -> some View {
@@ -360,16 +470,20 @@ struct LoginView: View {
                     .foregroundColor(MeeshyColors.purple600.opacity(0.7))
                     .frame(width: MeeshySpacing.xl)
                     .accessibilityHidden(true)
-                SecureField(String(localized: "auth.password.placeholder", bundle: .main), text: $accountPassword)
-                    .textContentType(.password)
-                    .focused($focusedField, equals: .accountPassword)
-                    .foregroundColor(theme.textPrimary)
-                    .submitLabel(.go)
-                    .onSubmit { attemptAccountLogin() }
-                    .accessibilityLabel(String(localized: "auth.password.placeholder", bundle: .main))
+                MeeshyPasswordField(
+                    String(localized: "auth.password.placeholder", bundle: .main),
+                    text: $accountPassword,
+                    role: .current,
+                    focus: $focusedField,
+                    equals: .accountPassword,
+                    eyeColor: theme.textMuted
+                )
+                .foregroundColor(theme.textPrimary)
+                .submitLabel(.go)
+                .onSubmit { attemptAccountLogin() }
             }
             .padding(.horizontal, MeeshySpacing.lg)
-            .padding(.vertical, MeeshySpacing.md + MeeshySpacing.xs / 2)
+            .padding(.vertical, MeeshySpacing.mdPlus)
             .background(
                 RoundedRectangle(cornerRadius: MeeshyRadius.md)
                     .fill(theme.inputBackground)
@@ -384,6 +498,8 @@ struct LoginView: View {
                     )
             )
             .bounceOnFocus(focusedField == .accountPassword)
+
+            keepSignedInToggle
 
             errorRow
 
@@ -435,7 +551,7 @@ struct LoginView: View {
                     .accessibilityLabel(String(localized: "auth.username.placeholder", bundle: .main))
             }
             .padding(.horizontal, MeeshySpacing.lg)
-            .padding(.vertical, MeeshySpacing.md + MeeshySpacing.xs / 2)
+            .padding(.vertical, MeeshySpacing.mdPlus)
             .background(
                 RoundedRectangle(cornerRadius: MeeshyRadius.md)
                     .fill(theme.inputBackground)
@@ -457,16 +573,20 @@ struct LoginView: View {
                     .foregroundColor(MeeshyColors.purple600.opacity(0.7))
                     .frame(width: MeeshySpacing.xl)
                     .accessibilityHidden(true)
-                SecureField(String(localized: "auth.password.placeholder", bundle: .main), text: $password)
-                    .textContentType(.password)
-                    .focused($focusedField, equals: .password)
-                    .foregroundColor(theme.textPrimary)
-                    .submitLabel(.go)
-                    .onSubmit { attemptLogin() }
-                    .accessibilityLabel(String(localized: "auth.password.placeholder", bundle: .main))
+                MeeshyPasswordField(
+                    String(localized: "auth.password.placeholder", bundle: .main),
+                    text: $password,
+                    role: .current,
+                    focus: $focusedField,
+                    equals: .password,
+                    eyeColor: theme.textMuted
+                )
+                .foregroundColor(theme.textPrimary)
+                .submitLabel(.go)
+                .onSubmit { attemptLogin() }
             }
             .padding(.horizontal, MeeshySpacing.lg)
-            .padding(.vertical, MeeshySpacing.md + MeeshySpacing.xs / 2)
+            .padding(.vertical, MeeshySpacing.mdPlus)
             .background(
                 RoundedRectangle(cornerRadius: MeeshyRadius.md)
                     .fill(theme.inputBackground)
@@ -481,6 +601,8 @@ struct LoginView: View {
                     )
             )
             .bounceOnFocus(focusedField == .password)
+
+            keepSignedInToggle
 
             errorRow
 
@@ -598,7 +720,7 @@ struct LoginView: View {
                         Text(env.label)
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: selectedEnv == env ? .bold : .medium))
                             .foregroundColor(selectedEnv == env ? .white : theme.textMuted)
-                        .padding(.horizontal, MeeshySpacing.sm + 2)
+                        .padding(.horizontal, MeeshySpacing.smPlus)
                         .padding(.vertical, MeeshySpacing.xs + 1)
                             .background(
                                 Capsule().fill(
@@ -664,12 +786,31 @@ struct LoginView: View {
 
     // MARK: - Actions
 
+    /// Le premier compte est gardé ; les suivants, selon la case.
+    private var keepsNewSession: Bool {
+        authManager.offersKeepSignedIn ? keepSignedIn : true
+    }
+
     private func attemptLogin() {
         focusedField = nil
         showError = false
         Task {
-            await authManager.login(username: username, password: password)
+            let outcome = await authManager.login(username: username, password: password, keepSignedIn: keepsNewSession)
+            presentCodeEntryIfNeeded(outcome, password: password)
         }
+    }
+
+
+    /// La présentation d'accès est partie : la session prouvée peut s'ouvrir
+    /// (#8059, #8076) — sauf si une autre porte a pris sa place.
+    private func accessPresentationDismissed() {
+        guard !hasAccessPresentation else { return }
+        sessionGate.presentationEnded()
+    }
+
+    private func presentCodeEntryIfNeeded(_ outcome: LoginOutcome, password: String) {
+        guard case .verificationRequired(let pending) = outcome else { return }
+        codeEntry = CodeEntryContext(pending: pending, password: password)
     }
 
     private func attemptAccountLogin() {
@@ -677,7 +818,8 @@ struct LoginView: View {
         showError = false
         guard let account = selectedAccount else { return }
         Task {
-            await authManager.login(username: account.username, password: accountPassword)
+            let outcome = await authManager.login(username: account.username, password: accountPassword, keepSignedIn: keepsNewSession)
+            presentCodeEntryIfNeeded(outcome, password: accountPassword)
         }
     }
 
@@ -710,7 +852,7 @@ struct LoginView: View {
                     .accessibilityLabel(String(localized: "auth.login.two_factor.label", bundle: .main))
             }
             .padding(.horizontal, MeeshySpacing.lg)
-            .padding(.vertical, MeeshySpacing.md + MeeshySpacing.xs / 2)
+            .padding(.vertical, MeeshySpacing.mdPlus)
             .background(
                 RoundedRectangle(cornerRadius: MeeshyRadius.md)
                     .fill(theme.inputBackground)

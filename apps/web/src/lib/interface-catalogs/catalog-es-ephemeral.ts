@@ -1,0 +1,24 @@
+import type { EphemeralCatalogSlice } from './catalog-fr-ephemeral';
+
+/** Composer ephemeral picker (#8304) — see `catalog-fr-ephemeral.ts`. */
+const esEphemeral = {
+  'composer.ephemeral.afterRead': 'Desaparece tras la lectura',
+  'composer.ephemeral.duration.15': '15 segundos',
+  'composer.ephemeral.duration.30': '30 segundos',
+  'composer.ephemeral.duration.60': '1 minuto',
+  'composer.ephemeral.duration.300': '5 minutos',
+  'composer.ephemeral.duration.3600': '1 hora',
+  'composer.ephemeral.duration.86400': '24 horas',
+  'composer.ephemeral.activate': 'Activar el modo efímero',
+  'composer.ephemeral.active': 'Modo efímero activo: {duration}',
+  'composer.ephemeral.off': 'Desactivado',
+  'composer.ephemeral.rail': 'Tiempo antes de que desaparezca el mensaje',
+  'composer.protection.imposed.blur': 'Desenfoque impuesto por el mensaje citado',
+  'composer.protection.imposed.ephemeral': 'Modo efímero impuesto por el mensaje citado: {duration}',
+  'message.afterRead.a11y': 'Mensaje efímero, desaparece tras leerlo',
+  'message.ephemeral.label.a11y': 'Mensaje efímero',
+  'message.blurred.a11y': 'Difuminado',
+  'message.viewOnce.a11y': 'Ver una vez',
+} satisfies EphemeralCatalogSlice;
+
+export default esEphemeral;

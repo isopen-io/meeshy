@@ -185,7 +185,6 @@ public final class NotificationToastManager: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     private var toastDismissTask: Task<Void, Never>?
     private static let toastDuration: UInt64 = 7_000_000_000
-    private static let refreshDelay: UInt64 = 500_000_000
 
     // Dedup set: évite d'afficher 2x la même notification (APN foreground + socket simultanés)
     private var recentNotificationIds = Set<String>()
@@ -847,6 +846,14 @@ public final class NotificationToastManager: ObservableObject {
     }
 
     // MARK: - Toast
+
+    #if DEBUG
+    /// Recette DEBUG (#8723) : pose une bannière depuis une fixture, sans
+    /// socket ni envoi. Absent d'un build Release.
+    public func presentPreviewToast(_ event: SocketNotificationEvent) {
+        showToast(event)
+    }
+    #endif
 
     private func showToast(_ event: SocketNotificationEvent) {
         if UserPreferencesManager.shared.notification.vibrationEnabled {

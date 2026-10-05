@@ -1,13 +1,23 @@
 import { lazy, Suspense, useEffect, type ReactNode } from 'react';
+import { useStore } from 'zustand/react';
 
+import { useEmailGatePresenter } from '@/lib/activation/email-gate-presenter';
+import { useActivationInviteArmed } from '@/lib/activation/invite-gate';
 import { useAppUpdateAnnounced } from '@/lib/app-update/pending-store';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
+import { loadNotificationRowCatalog } from '@/lib/i18n-notification-row-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { conversationPreviewStore } from '@/lib/notifications/conversation-preview';
+import { inAppBannerStore } from '@/lib/notifications/in-app-banner';
+import { audioCarryStore } from '@/lib/view/audio-carry';
 import { showsFloatingMenus } from '@/lib/view/floating-gate';
 import { useSyncPillArmed } from '@/lib/view/sync-pill-gate';
 import { useRoute } from '@/lib/router';
 
+import { CallLayer, CallResumeSlot } from './call-layer';
+import { loadConversationPreviewHost } from './conversation-preview-chunks';
 import { ProfilePeekHost } from './profile-peek-host';
+import { SendSheetHost } from './send-sheet-host';
 
 /**
  * LA COQUILLE — deliberement mince.
@@ -115,9 +125,76 @@ const AppUpdateBanner = lazy(chargerBanniereMaj);
 const chargerBadge = () => import('./app-badge').then((m) => ({ default: m.AppBadge }));
 const AppBadge = lazy(chargerBadge);
 
+/**
+ * ...ET L'INVITATION À VALIDER SON COMPTE (#8239), cinquième exception : de J7
+ * à J28, la modal « Validez votre compte » s'ouvre à l'OUVERTURE de l'app,
+ * quelle que soit la route — donc ici. À la demande, SANS préchargement, sur
+ * le modèle de la bannière : `useActivationInviteArmed` seul est statique, et
+ * son OUI (session ouverte, pas encore montrée aujourd'hui) va chercher l'hôte,
+ * qui relit l'état servi et n'ouvre la modal qu'en phase `invite`.
+ */
+const chargerInvitation = () =>
+  Promise.all([import('./activation-invite-host'), loadInterfaceCatalog(currentInterfaceLanguage())]).then(([m]) => ({
+    default: m.ActivationInviteHost,
+  }));
+const ActivationInviteHost = lazy(chargerInvitation);
+
+/**
+ * ...ET LA GARDE DE L'E-MAIL (#8365), sixième exception : publier, inviter par
+ * e-mail ou créer un lien sans adresse prouvée ouvre la validation, quelle que
+ * soit la route — donc ici. `useEmailGatePresenter` seul est statique ; la
+ * demande en cours va chercher l'hôte, qui relit l'adresse et envoie le code.
+ */
+const chargerGardeEmail = () =>
+  Promise.all([import('./email-gate-host'), loadInterfaceCatalog(currentInterfaceLanguage())]).then(([m]) => ({
+    default: m.EmailGateHost,
+  }));
+const EmailGateHost = lazy(chargerGardeEmail);
+
+/**
+ * ...ET LA BANNIÈRE IN-APP (#8727), septième exception : une notification
+ * réseau descend sur toutes les routes. `inAppBannerStore` seul est statique
+ * (la connexion l'alimente) ; sa première bannière va chercher la peinture et
+ * les libellés.
+ */
+const chargerBanniereNotification = () =>
+  Promise.all([
+    import('./notification-toast'),
+    loadInterfaceCatalog(currentInterfaceLanguage()),
+    loadNotificationRowCatalog(currentInterfaceLanguage()),
+  ]).then(([m]) => ({
+    default: m.NotificationToastHost,
+  }));
+const NotificationToastHost = lazy(chargerBanniereNotification);
+
+/**
+ * ...ET L'APERÇU DE CONVERSATION TIRÉ DE LA BANNIÈRE (#8821) : il survit à la
+ * bannière qui l'a ouvert, d'où son propre magasin et son propre hôte.
+ */
+const ConversationPreviewHost = lazy(() =>
+  Promise.all([loadConversationPreviewHost(), loadNotificationRowCatalog(currentInterfaceLanguage())]).then(([m]) => ({
+    default: m.ConversationPreviewHost,
+  })),
+);
+
+/**
+ * ...ET LE MINI-LECTEUR (#9256) : le vocal que le lecteur plein écran jouait
+ * quand on l'a fermé continue ici, sur toutes les routes, comme
+ * `MiniAudioPlayerBar` au-dessus de la racine iOS. Rien n'est chargé tant
+ * qu'aucune lecture n'a été confiée.
+ */
+const MiniAudioPlayerHost = lazy(() =>
+  Promise.all([import('./mini-audio-player'), loadInterfaceCatalog(currentInterfaceLanguage())]).then(([m]) => m),
+);
+
 export default function Shell({ children }: { children: ReactNode }) {
+  const lectureConfiee = useStore(audioCarryStore, (state) => state.carried !== null);
+  const banniereNotification = useStore(inAppBannerStore, (state) => state.current !== null);
+  const apercuOuvert = useStore(conversationPreviewStore, (state) => state.conversationId !== null);
   const pastilleArmee = useSyncPillArmed();
   const majAnnoncee = useAppUpdateAnnounced();
+  const invitationArmee = useActivationInviteArmed();
+  const gardeEmail = useEmailGatePresenter();
   const routeKey = useRoute().key;
   const menusArmes = showsFloatingMenus(routeKey);
 
@@ -162,6 +239,37 @@ export default function Shell({ children }: { children: ReactNode }) {
           routes (`profile-peek-host.tsx`) — la feuille, elle, est chargée au
           premier toucher. */}
       <ProfilePeekHost />
+      {/* L'APPEL AU-DESSUS DE TOUT (#6382) — un appel survit à la navigation
+          et un appel entrant s'affiche sur toutes les routes, comme
+          `CallPresentationLayer.swift`. Sans appel, rien n'est chargé. */}
+      {banniereNotification ? (
+        <Suspense fallback={null}>
+          <NotificationToastHost />
+        </Suspense>
+      ) : null}
+      <CallLayer />
+      {/* LA PILE DU HAUT (#9279) — « Reprendre l'appel » puis le mini-lecteur,
+          dans UNE colonne fixe : l'appel prime et le vocal se range dessous,
+          comme le `VStack` de `CallPresentationLayer` iOS. Chacun posé en
+          `fixed` au même sommet, ils se chevauchaient. */}
+      <div data-top-bars className="pointer-events-none fixed inset-x-0 z-40 flex flex-col gap-2 px-4" style={{ top: 'calc(env(safe-area-inset-top, 0px) + 8px)' }}>
+        <CallResumeSlot />
+        {lectureConfiee ? (
+          <Suspense fallback={null}>
+            <MiniAudioPlayerHost />
+          </Suspense>
+        ) : null}
+      </div>
+      {invitationArmee ? (
+        <Suspense fallback={null}>
+          <ActivationInviteHost />
+        </Suspense>
+      ) : null}
+      {gardeEmail !== null ? (
+        <Suspense fallback={null}>
+          <EmailGateHost reason={gardeEmail} />
+        </Suspense>
+      ) : null}
       {/* APRÈS `children` : à z-index égal, c'est l'ordre du document qui
           tranche, et un menu recouvert par l'écran qu'il commande serait le
           défaut le plus bête du lot. */}
@@ -170,6 +278,15 @@ export default function Shell({ children }: { children: ReactNode }) {
           <FloatingMenus routeKey={routeKey} />
         </Suspense>
       ) : null}
+      {apercuOuvert ? (
+        <Suspense fallback={null}>
+          <ConversationPreviewHost />
+        </Suspense>
+      ) : null}
+      {/* LA FEUILLE D'ENVOI (#8884) : transfert, partage, publication — toute
+          entrée l'ouvre par `openSendSheet`. L'hôte ne porte que l'abonnement ;
+          la feuille est chargée au premier appel. */}
+      <SendSheetHost />
     </div>
   );
 }

@@ -14,6 +14,9 @@ import {
   NotificationsSkeleton,
 } from './notifications';
 import { FLOATING_CORRIDOR_BOTTOM } from '@/lib/view/floating-corridor';
+import { loadNotificationRowCatalog } from '@/lib/i18n-notification-row-catalog';
+
+await loadNotificationRowCatalog('fr');
 
 /**
  * LA CLOCHE DESSINÉE (#6288) — chaque état est un composant PUR, rendu sans
@@ -201,5 +204,151 @@ describe('une rangée', () => {
     expect(html).toContain('data-read="true"');
     expect(html).not.toContain('Non lue');
     expect(html).toContain('aria-label="Actions de la notification"');
+  });
+
+  test('un appel manqué porte « Rappeler <nom> », du même type, HORS du lien de la rangée (A6, C12)', () => {
+    const html = row(
+      record({ type: 'missed_call', title: null, content: '📹 Appel vidéo manqué', context: { conversationId: 'c-kwame', conversationType: 'direct' }, metadata: { callType: 'video' } }),
+    );
+    const button = html.match(/<button[^>]*data-notification-call-back="([a-z]+)"[^>]*>/);
+    expect(button?.[1]).toBe('video');
+    expect(button?.[0]).toContain('aria-label="Rappeler Kwame Mensah"');
+    const at = html.indexOf(button?.[0] ?? '<none>');
+    expect(html.lastIndexOf('</a>', at)).toBeGreaterThan(html.lastIndexOf('<a ', at));
+  });
+
+  test('une notification qui n’est pas un appel manqué ne propose pas de rappeler', () => {
+    expect(row(record({}))).not.toContain('data-notification-call-back');
+  });
+});
+
+/**
+ * « X EST SUR MEESHY » (#8143, recette 2026-09-26) — le titre persisté est une
+ * PHRASE (« Marie est sur Meeshy ! ») : des initiales tirées du titre y lisaient
+ * « ME » (Marie, est). Elles viennent du NOM de l'acteur, en lettres seules, et
+ * la rangée s'annonce en entier au lecteur d'écran : qui, ce qui arrive, et
+ * l'invitation à lui écrire.
+ */
+describe('la rangée « a rejoint Meeshy »', () => {
+  const joined = (displayName: string) =>
+    record({
+      type: 'contact_joined',
+      title: `${displayName} est sur Meeshy !`,
+      content: 'Dites-lui bonjour 👋',
+      actor: { id: 'u-marie', username: 'marie', displayName, avatar: null },
+      context: {},
+    });
+
+  test('les initiales viennent du nom de l’acteur, jamais de la phrase du titre', () => {
+    expect(row(joined('Marie'))).toContain('>MA</span>');
+    expect(row(joined('Théo (foot)'))).toContain('>TF</span>');
+  });
+
+  test('le libellé lu dit qui, ce qui arrive et l’invitation', () => {
+    const html = row(joined('Marie'));
+    expect(html).toContain('Marie est sur Meeshy !');
+    expect(html).toContain('Dites-lui bonjour 👋');
+  });
+});
+
+/**
+ * « X ÉTAIT SUR MEESHY RÉCEMMENT » (#8285) — la passerelle compose titre et
+ * corps dans la langue du destinataire : la rangée les AFFICHE, tire ses
+ * initiales du nom de X, et MÈNE à son profil.
+ */
+describe('la rangée « était sur Meeshy récemment »', () => {
+  const back = record({
+    type: 'contact_recently_active',
+    title: 'Marie était sur Meeshy récemment',
+    content: 'C’est le moment de lui écrire 👋',
+    actor: { id: 'u-marie', username: 'marie', displayName: 'Marie', avatar: null },
+    context: {},
+    metadata: {},
+  });
+
+  test('elle affiche ce que le serveur a composé, sous les initiales de X', () => {
+    const html = row(back);
+    expect(html).toContain('Marie était sur Meeshy récemment');
+    expect(html).toContain('C’est le moment de lui écrire 👋');
+    expect(html).toContain('>MA</span>');
+  });
+
+  test('elle mène au profil de X', () => {
+    expect(row(back)).toContain('href="/u/marie"');
+  });
+});
+
+/**
+ * UNE LIGNE QUI NE SE RÉPÈTE PAS ET DIT SON CONTEXTE (#8727, jumelle de #8724) —
+ * la capture porteur : « Belva a réagi ❤️ à votre commentaire » montrait le
+ * commentaire DEUX fois, sans dire le post. Un badge ne disait pas lequel.
+ */
+describe('la rangée dit son contexte, une fois', () => {
+  const occurrences = (html: string, text: string) => html.split(text).length - 1;
+
+  test('réaction à un commentaire : le commentaire UNE fois, le post en pied avec son icône', () => {
+    const html = row(
+      record({
+        type: 'comment_reaction',
+        title: 'Belva Tano a réagi ❤️ à votre commentaire',
+        content: 'Superbe features',
+        actor: { id: 'u-belva', username: 'belva', displayName: 'Belva Tano', avatar: null },
+        context: { postId: 'p1' },
+        metadata: { commentPreview: 'Superbe features', postPreview: 'Le lac au matin', postType: 'POST' },
+      }),
+    );
+    expect(occurrences(html, 'Superbe features')).toBe(1);
+    expect(html).toContain('data-notification-footer="content"');
+    expect(html).toContain('Le lac au matin');
+  });
+
+  test('un badge débloqué se nomme, avec son médaillon et son palier', () => {
+    const html = row(
+      record({
+        type: 'badge_earned',
+        title: 'Badge débloqué',
+        content: 'Badge débloqué : Stories · palier 10',
+        actor: null,
+        context: {},
+        metadata: { axisKey: 'content.story', threshold: 10 },
+      }),
+    );
+    expect(html).toContain('data-notification-milestone');
+    expect(html).toContain('>Stories<');
+    expect(html).toContain('Badge débloqué · palier 10');
+  });
+
+  test('l’ami parrainé : « Écrire » et « Se connecter », HORS du lien — « Écrire » seul entre amis', () => {
+    const invite = record({
+      type: 'badge_earned',
+      title: 'Badge débloqué',
+      content: '',
+      actor: { id: 'u-awa', username: 'awa', displayName: 'Awa', avatar: null },
+      context: {},
+      metadata: { axisKey: 'social.invite_joined', threshold: 1 },
+    });
+    const withActions = (isFriend: boolean, connectRequested = false) =>
+      renderToStaticMarkup(
+        <ul>
+          <NotificationRow
+            notification={invite}
+            language="fr"
+            now={NOW}
+            onOpen={noop}
+            onMarkRead={noop}
+            onDelete={noop}
+            onQuickAction={noop}
+            isFriend={isFriend}
+            connectRequested={connectRequested}
+          />
+        </ul>,
+      );
+    const stranger = withActions(false);
+    expect(stranger).toContain('Awa a rejoint Meeshy grâce à vous');
+    expect(stranger).toContain('data-quick-action="write"');
+    expect(stranger).toContain('data-quick-action="connect"');
+    expect(stranger.indexOf('data-notification-quick-actions')).toBeGreaterThan(stranger.lastIndexOf('</a>'));
+    expect(withActions(true)).not.toContain('data-quick-action="connect"');
+    expect(withActions(false, true)).toContain('Demande envoyée');
   });
 });

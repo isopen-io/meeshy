@@ -1,9 +1,11 @@
+import * as conversationsEndpoints from '@meeshy/shared/api/endpoints/conversations';
+
 import type { DataSource } from './config';
 import type { ApiResult, HttpTransport } from './http';
 
 /**
  * LE PORT DE L'ANALYSE DE CONVERSATION (#5695, étape 12) — sur le motif
- * exact de `engagement.ts:31-66`. `GET /api/v1/conversations/:id/analysis`
+ * exact de `engagement.ts:31-66`. `GET conversations.byIdAnalysis`
  * (`services/gateway/src/routes/conversations/core-detail.ts:531-676`) :
  * `requiredAuth` (l.550), 404 `Conversation not found` (l.557-559), 403
  * `Access denied` (l.562-564), 500 (l.672-675), `sendSuccess(reply, {
@@ -31,8 +33,7 @@ export type ConversationAnalysis = {
   readonly summary: ConversationAnalysisSummary | null;
 };
 
-export const CONVERSATION_ANALYSIS_PATH = (conversationId: string): string =>
-  `/api/v1/conversations/${conversationId}/analysis`;
+export const CONVERSATION_ANALYSIS_PATH: (conversationId: string) => string = conversationsEndpoints.byIdAnalysis;
 
 /**
  * Rend la charge PROJETÉE (`conversationId`, `summary.text`) quand la forme

@@ -12,6 +12,7 @@ import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { loadMoreRootMargin, paginationStateOf, showsAllLoadedHint } from '@/lib/lens/pagination';
 import { useOnline } from '@/lib/net/online';
 import { starredRowModel, type StarredExcerpt, type StarredRowModel } from '@/lib/view/starred-row';
+import { THREAD_ANCHOR_PARAM } from '@/lib/view/thread-anchor';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
 import { starMessageAction } from '@/lib/view/use-message-star';
 import { useLoadMoreSentinel } from '@/lib/view/use-load-more-sentinel';
@@ -62,7 +63,7 @@ export function StarredMessagesHeader() {
         className="grid size-11 shrink-0 place-items-center rounded-chip focus-visible:outline-2 focus-visible:outline-offset-2"
         style={{ color: 'var(--color-ios-brand)', outlineColor: 'var(--color-ios-brand)' }}
       >
-        <Glyph name="caretLeft" size={20} />
+        <Glyph name="caretLeft" size={20} className="rtl:-scale-x-100" />
       </Link>
       <h1 className="min-w-0 flex-1 truncate text-screen font-bold" style={{ color: 'var(--color-ios-ink)' }}>
         {translate(language, 'starred.messages.title')}
@@ -91,7 +92,7 @@ export function StarredMessagesEmpty() {
       </p>
       <Link
         to="list"
-        className="grid place-items-center rounded-chip px-5 text-body font-semibold text-white"
+        className="grid place-items-center rounded-chip px-5 text-body font-semibold text-ios-on-brand"
         style={{ backgroundColor: 'var(--color-ios-brand)', minHeight: 44 }}
       >
         {translate(language, 'starred.messages.empty.cta')}
@@ -117,7 +118,7 @@ export function StarredMessagesError({ online, onRetry }: { readonly online: boo
       <button
         type="button"
         onClick={onRetry}
-        className="grid place-items-center rounded-chip px-5 text-body font-semibold text-white"
+        className="grid place-items-center rounded-chip px-5 text-body font-semibold text-ios-on-brand"
         style={{ backgroundColor: 'var(--color-ios-brand)', minHeight: 44 }}
       >
         {translate(language, 'feed.retry')}
@@ -187,7 +188,9 @@ function Excerpt({ excerpt }: { readonly excerpt: StarredExcerpt }) {
 /**
  * **LA LIGNE** — un LIEN (ouvrir la conversation) et un BOUTON (retirer), frères,
  * jamais imbriqués : un bouton dans un lien n'est ni du HTML valide ni un
- * contrôle qu'un lecteur d'écran sait annoncer.
+ * contrôle qu'un lecteur d'écran sait annoncer. Le lien NOMME le message
+ * (`?message=`, #7420) : le fil s'ouvre sur lui et le met en évidence, comme
+ * `StarredMessagesView.navigate(to:)` iOS — même plus ancien que ses pages.
  */
 export function StarredMessageRow({ model, onRemove }: { readonly model: StarredRowModel; readonly onRemove: (model: StarredRowModel) => void }) {
   const language = currentInterfaceLanguage();
@@ -205,6 +208,7 @@ export function StarredMessageRow({ model, onRemove }: { readonly model: Starred
       <Link
         to="thread"
         params={{ conversation: model.conversationId }}
+        search={{ [THREAD_ANCHOR_PARAM]: model.messageId }}
         data-starred-open
         aria-describedby={hintId}
         className="flex min-w-0 flex-1 gap-3 p-3 text-start focus-visible:outline-2 focus-visible:outline-offset-2"

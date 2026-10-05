@@ -144,10 +144,20 @@ final class ComposerSoundFileIntakeTests: XCTestCase {
         // rougir la garde sur un ajout parfaitement légitime, sans rien dire de
         // la reprise qu'elle protège. Ce qui compte est que la reprise soit là,
         // et qu'elle CONCLUE la fermeture — le présentateur n'est libre qu'après.
-        XCTAssertTrue(code.contains("resumePendingPresentation()}){portailin"),
+        //
+        // **#9125 — le portail a DEUX présentations** : la feuille, et le plein
+        // écran de la caméra (`ComposerPortal.presentation`). Leur contenu est
+        // devenu `portalView($0)` ; chacune doit conclure sa fermeture par la
+        // reprise, sans quoi un import demandé depuis la caméra resterait
+        // en attente.
+        let anchor = "resumePendingPresentation()}){portalView($0)}"
+        XCTAssertTrue(code.contains("onDismiss:{forgetEditedSound();" + anchor),
                       "La feuille des portails doit reprendre l'import en attente à sa "
                       + "fermeture EFFECTIVE, en DERNIER — c'est le seul instant où le "
                       + "présentateur est libre.")
+        XCTAssertEqual(code.components(separatedBy: anchor).count - 1, 2,
+                       "Les DEUX présentations du portail (feuille et plein écran) doivent "
+                       + "reprendre l'import en attente à leur fermeture.")
     }
 
     /// **La moitié « destination », celle que le premier défaut cachait.** Un

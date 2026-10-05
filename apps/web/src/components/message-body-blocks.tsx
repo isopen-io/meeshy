@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { Suspense, lazy, useState } from 'react';
 
 import type { MessageSticker } from '@meeshy/shared/types/message-sticker';
 
@@ -7,8 +7,10 @@ import { attachmentSrc } from '@/lib/api/media-url';
 import { isMediaAbsent, noteMediaAbsent } from '@/lib/api/media-absent';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
+import { isMeeTemplate } from '@/lib/mee/template';
+import { coqueCourante } from '@/lib/native-shell';
 import {
-  EMOJI_ONLY_FONT_SIZES,
+  STICKER_EMOJI_GLYPH_SIZE,
   mapsUrlOf,
   type MoodCitation,
   type SharedPlace,
@@ -42,13 +44,16 @@ import { QuoteRail } from './message-blocks';
  * jamais l'`<img>` — l'inverse (mesuré en revue) rendait le PNG même quand
  * l'emoji natif était disponible.
  */
+/** Le catalogue de Mee et Meo n'est chargé qu'au premier sticker qui le demande (#9034). */
+const MeeBubbleSticker = lazy(() => import('./mee-sticker-bubble'));
+
 export function StickerArtwork({
   sticker,
   picture,
   side,
 }: {
   readonly sticker: MessageSticker;
-  readonly picture: Attachment | undefined;
+  readonly picture: Pick<Attachment, 'fileUrl'> | undefined;
   readonly side: number;
 }) {
   const alt = sticker.emoji !== undefined ? `Sticker ${sticker.emoji}` : 'Sticker';
@@ -57,13 +62,38 @@ export function StickerArtwork({
   if (!hasTemplate && sticker.emoji !== undefined && sticker.emoji !== '') {
     return <StickerEmojiGlyph text={sticker.emoji} alt={alt} />;
   }
+  /* MEE ET MEO (#9034) — un gabarit de ce catalogue est REDESSINÉ, animé ;
+     l'image jointe le remplace le temps du chargement et pour un gabarit que
+     ce binaire ne connaît pas encore. */
+  if (isMeeTemplate(sticker.templateId)) {
+    const fallback = <StickerPicture sticker={sticker} picture={picture} side={side} alt={alt} />;
+    return (
+      <Suspense fallback={fallback}>
+        <MeeBubbleSticker sticker={sticker} side={side} fallback={fallback} />
+      </Suspense>
+    );
+  }
+  return <StickerPicture sticker={sticker} picture={picture} side={side} alt={alt} />;
+}
+
+function StickerPicture({
+  sticker,
+  picture,
+  side,
+  alt,
+}: {
+  readonly sticker: MessageSticker;
+  readonly picture: Pick<Attachment, 'fileUrl'> | undefined;
+  readonly side: number;
+  readonly alt: string;
+}) {
   if (picture !== undefined && picture.fileUrl !== '') {
     return (
       <img
         alt={alt}
         width={side}
         height={side}
-        style={{ objectFit: 'contain' }}
+        style={{ objectFit: 'contain', maxWidth: '100%', height: 'auto' }}
         src={attachmentSrc(picture.fileUrl)}
       />
     );
@@ -79,9 +109,9 @@ export function StickerArtwork({
 const EMOJI_GLYPH_LINE_HEIGHT = 1.1;
 
 /**
- * LE GLYPHE — la POLICE est `EMOJI_ONLY_FONT_SIZES.single` (90,
- * `EmojiOnlyResult.single.fontSize`), CONSTANTE quel que soit `side` (112 en
- * rangée plate, 160 en bulle — la cote du cas PNG, pas de celui-ci ;
+ * LE GLYPHE — la POLICE est `STICKER_EMOJI_GLYPH_SIZE` (180, le 90 de
+ * `BubbleSticker.emojiGlyphSize` doublé par #9319), CONSTANTE quel que soit
+ * `side` (224 en rangée plate, 320 en bulle — la cote du cas PNG, pas de celui-ci ;
  * revue-correction #5936, défaut majeur 6b).
  *
  * AUCUNE BOÎTE FIXE (#7881). `STICKER_EMOJI_BOX` (60, `BubbleSticker.
@@ -101,7 +131,7 @@ function StickerEmojiGlyph({ text, alt }: { readonly text: string; readonly alt:
       role="img"
       aria-label={alt}
       className="inline-block"
-      style={{ fontSize: EMOJI_ONLY_FONT_SIZES.single, lineHeight: EMOJI_GLYPH_LINE_HEIGHT }}
+      style={{ fontSize: STICKER_EMOJI_GLYPH_SIZE, lineHeight: EMOJI_GLYPH_LINE_HEIGHT }}
     >
       {text}
     </span>
@@ -157,11 +187,11 @@ export function LocationCard({
   const label = place.name ?? translate(language, 'message.location.shared');
   return (
     <a
-      href={mapsUrlOf(place)}
+      href={mapsUrlOf(place, { platform: coqueCourante()?.getPlatform?.() })}
       target="_blank"
       rel="noopener noreferrer"
       aria-label={translate(language, 'message.location.a11y', { place: label })}
-      className="mb-1.5 flex w-full max-w-[260px] items-center gap-2 text-left"
+      className="mb-1.5 flex w-full max-w-[260px] items-center gap-2 text-start"
       style={{
         borderRadius: 'var(--ios-radius-md)',
         border: '1px solid var(--color-edge)',
@@ -349,7 +379,7 @@ export function StoryCitationCard({
         data-story-citation
         onClick={() => onOpen(citation.id)}
         aria-label={label}
-        className="mb-1.5 flex flex-col text-left"
+        className="mb-1.5 flex flex-col text-start"
       >
         {card}
       </button>
@@ -389,13 +419,13 @@ export function MoodQuote({
       data-mood-citation
       role="group"
       aria-label={`${title}, ${body}`}
-      className="mb-1.5 flex w-full rounded-quote text-left"
+      className="mb-1.5 flex w-full rounded-quote text-start"
       style={{ backgroundColor: isMine ? 'var(--color-quote-mine)' : 'var(--color-quote)' }}
     >
       <QuoteRail isMine={isMine} />
-      <span className="min-w-0 py-2 pr-2.5 pl-2 text-title" aria-hidden>
+      <span className="min-w-0 py-2 pe-2.5 ps-2 text-title" aria-hidden>
         <span className="flex items-baseline gap-1.5">
-          <span className="truncate font-semibold" style={{ color: isMine ? 'white' : 'var(--accent)' }}>
+          <span className="truncate font-semibold" style={{ color: isMine ? 'var(--color-ios-on-brand)' : 'var(--accent)' }}>
             {title}
           </span>
           {relativeDate !== '' ? (

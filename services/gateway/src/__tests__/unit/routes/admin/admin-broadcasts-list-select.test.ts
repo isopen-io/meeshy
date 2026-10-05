@@ -94,7 +94,7 @@ describe('GET /admin/broadcasts — select explicite (#4166 critère 1)', () => 
     await app.close();
   });
 
-  it('le select porte exactement les huit champs que la liste web sert — ni body, ni targeting, ni les traductions', async () => {
+  it('le select porte exactement les quatorze champs que la liste sert — ni body, ni targeting, ni les traductions', async () => {
     const prisma = makeMockPrisma();
     const app = buildApp(prisma);
     await app.ready();
@@ -111,6 +111,13 @@ describe('GET /admin/broadcasts — select explicite (#4166 critère 1)', () => 
       sentCount: true,
       failedCount: true,
       createdAt: true,
+      // #8876 — le suivi d'une diffusion sans ouvrir sa fiche.
+      sentAt: true,
+      completedAt: true,
+      sourceLanguage: true,
+      targetLanguages: true,
+      inAppSentCount: true,
+      inAppSentAt: true,
     });
     // Les champs lourds nommés par l'issue — jamais chargés par la LISTE.
     expect(call.select).not.toHaveProperty('body');

@@ -240,3 +240,21 @@ describe('createStudioDraftStore — l’audience voyage dans le brouillon ET se
     expect(store.get(VIEWER)).toBeNull();
   });
 });
+
+/** LE FORMAT VOYAGE AVEC LA CRÉATION (#8849, jumelle de #8848 — l'instantané
+ * iOS porte le FORMAT) : une création rouverte reprend story, post ou réel. */
+describe('createStudioDraftStore — le format de la création fait l’aller-retour', () => {
+  test('un snapshot avec `kind` le rend à un NOUVEAU magasin branché au même stockage', () => {
+    const storage = fakeStorage();
+    createStudioDraftStore(storage).set(VIEWER, { ...onePage(), kind: 'REEL' });
+    expect(createStudioDraftStore(storage).get(VIEWER)?.kind).toBe('REEL');
+  });
+
+  test('un `kind` inconnu en stockage ⇒ le brouillon est relu SANS format, jamais perdu', () => {
+    const storage = fakeStorage();
+    storage.setItem(`meeshy.draft.story.${VIEWER}`, JSON.stringify({ ...onePage(), kind: 'STATUS' }));
+    const read = createStudioDraftStore(storage).get(VIEWER);
+    expect(read?.pages[0]?.texts[0]?.text).toBe('x');
+    expect(read?.kind).toBeUndefined();
+  });
+});

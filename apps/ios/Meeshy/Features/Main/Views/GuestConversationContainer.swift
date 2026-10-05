@@ -19,11 +19,8 @@ struct GuestSession {
 struct GuestConversationContainer: View {
     let session: GuestSession
     let onSessionCreated: (AnonymousSessionContext) -> Void
-    let onDismiss: () -> Void
     /// « Se connecter » / « Créer un compte » depuis la page d'invitation.
     let onAccountRequest: (InviteLandingChoice) -> Void
-
-    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         if let context = session.context {
@@ -36,6 +33,7 @@ struct GuestConversationContainer: View {
                 anonymousSession: context,
                 showsOwnConnectionBanner: true
             )
+            .reportsConversationViewing(context.conversationId)
         } else {
             // Une entrée DÉLIBÉRÉE a déjà vu la page d'invitation (#7795) et y a
             // choisi l'anonymat : le formulaire s'ouvre directement.

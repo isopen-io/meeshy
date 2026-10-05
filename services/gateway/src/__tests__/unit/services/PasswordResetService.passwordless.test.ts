@@ -178,17 +178,18 @@ describe('« Mot de passe oublié » — un compte SANS mot de passe reçoit son
     );
   });
 
-  it("garde la porte fermée à un compte AVEC mot de passe dont l'adresse n'est pas vérifiée", async () => {
+  it("envoie la réinitialisation NORMALE à un compte AVEC mot de passe dont l'adresse n'est pas vérifiée (#8238)", async () => {
+    // Précision porteur 2026-09-27 : l'USAGE du lien prouve l'adresse — il
+    // n'y a plus de raison de fermer la porte, ni de lui substituer l'e-mail
+    // d'activation.
     const harness = makeHarness(makeAccount({ password: HASH_EN_BASE }));
 
     await demander(harness);
 
-    expect(harness.email.sendPasswordResetEmail).not.toHaveBeenCalled();
-    expect(harness.prisma.passwordResetToken.create).not.toHaveBeenCalled();
-    expect(harness.prisma.securityEvent.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({ eventType: 'PASSWORD_RESET_UNVERIFIED_EMAIL' })
-      })
+    expect(harness.email.sendPasswordResetEmail).toHaveBeenCalledWith(expect.objectContaining({ to: ADRESSE, intent: 'reset' }));
+    expect(harness.prisma.passwordResetToken.create).toHaveBeenCalledTimes(1);
+    expect(harness.prisma.securityEvent.create).not.toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ eventType: 'PASSWORD_RESET_UNVERIFIED_EMAIL' }) })
     );
   });
 

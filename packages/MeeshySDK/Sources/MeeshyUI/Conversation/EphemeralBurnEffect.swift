@@ -71,7 +71,7 @@ public struct EphemeralBurnEffect: ViewModifier {
     @ViewBuilder
     private var emberGlow: some View {
         if isBurning && !reduceMotion {
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
+            RoundedRectangle(cornerRadius: MeeshyRadius.lgPlus, style: .continuous)
                 .fill(
                     LinearGradient(
                         colors: [MeeshyColors.warning.opacity(0.55), MeeshyColors.error.opacity(0.35)],

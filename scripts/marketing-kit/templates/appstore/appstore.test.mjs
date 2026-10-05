@@ -3,25 +3,26 @@ import { KIT_LANGS } from '../../lib/locales.mjs'
 import { LEGENDES } from '../../textes/legendes.mjs'
 import { APPAREILS, POSTER, cheminFastlane, cheminPoster, graphemes } from './plan.mjs'
 import { pageCapture, pagePoster } from './composition.mjs'
+import { imageReelle } from './ecran-reel.mjs'
 
 const theme = (sequence) => sequence.map((c) => (c.theme === 'dark' ? 'S' : 'C')).join('-')
 
-describe('séquences App Store (captures-app-store.md § 2-3)', () => {
-  test('iPhone : dix captures, légendes L1→L10, alternance S-C-S-C-S-S-C-S-S-C', () => {
+describe('séquences App Store (captures-app-store.md § 2-3, #8825)', () => {
+  test('iPhone : dix captures, les conversations d’abord, alternance S-C-S-C-S-C-S-S-C-C', () => {
     const { captures } = APPAREILS.iphone
-    expect(captures.map((c) => c.legende)).toEqual(['L1', 'L2', 'L3', 'L4', 'L5', 'L6', 'L7', 'L8', 'L9', 'L10'])
-    expect(theme(captures)).toBe('S-C-S-C-S-S-C-S-S-C')
+    expect(captures.map((c) => c.legende)).toEqual(['L1', 'L11', 'L2', 'L12', 'L9', 'L3', 'L4', 'L6', 'L7', 'L10'])
+    expect(theme(captures)).toBe('S-C-S-C-S-C-S-S-C-C')
   })
 
-  test('iPad : sept captures P1→P7 avec les légendes du § 3', () => {
+  test('iPad : neuf captures, le même récit que l’iPhone', () => {
     const { captures } = APPAREILS.ipad
-    expect(captures.map((c) => c.legende)).toEqual(['L1', 'L3', 'L4', 'L2', 'L7', 'L9', 'L6'])
-    expect(theme(captures)).toBe('S-C-S-C-C-S-S')
+    expect(captures.map((c) => c.legende)).toEqual(['L1', 'L11', 'L2', 'L12', 'L9', 'L3', 'L4', 'L6', 'L7'])
+    expect(theme(captures)).toBe('S-C-S-C-S-C-S-S-C')
   })
 
-  test('tailles exigées par App Store Connect', () => {
+  test('tailles par défaut d’App Store Connect : iPhone 6,9" et iPad 13", en portrait', () => {
     expect([APPAREILS.iphone.width, APPAREILS.iphone.height]).toEqual([1320, 2868])
-    expect([APPAREILS.ipad.width, APPAREILS.ipad.height]).toEqual([2752, 2064])
+    expect([APPAREILS.ipad.width, APPAREILS.ipad.height]).toEqual([2064, 2752])
     expect([POSTER.width, POSTER.height]).toEqual([886, 1920])
   })
 })
@@ -30,7 +31,7 @@ describe('fichiers fastlane', () => {
   test('les locales fastlane et le nommage iphone69_NN / ipad13_NN', () => {
     expect(cheminFastlane({ appareil: 'iphone', lang: 'fr', rang: 1 })).toMatch(/apps\/ios\/fastlane\/screenshots\/fr-FR\/iphone69_01\.png$/)
     expect(cheminFastlane({ appareil: 'iphone', lang: 'pt', rang: 10 })).toMatch(/screenshots\/pt-BR\/iphone69_10\.png$/)
-    expect(cheminFastlane({ appareil: 'ipad', lang: 'it', rang: 7 })).toMatch(/screenshots\/it\/ipad13_07\.png$/)
+    expect(cheminFastlane({ appareil: 'ipad', lang: 'it', rang: 9 })).toMatch(/screenshots\/it\/ipad13_09\.png$/)
     expect(cheminFastlane({ appareil: 'ipad', lang: 'ar', rang: 2 })).toMatch(/screenshots\/ar-SA\/ipad13_02\.png$/)
   })
 
@@ -91,29 +92,50 @@ describe('pages composées', () => {
   })
 })
 
-describe('capture 8 — badges et Meesh frappées', () => {
+describe('légende des badges (hors vitrine depuis #8825)', () => {
   test('la légende dit « badges », comme l’écran (« Badge gagné »)', () => {
     expect(LEGENDES.L8.fr).toStartWith('Débloque des badges.')
     expect(LEGENDES.L8.en).toStartWith('Unlock badges.')
   })
-
-  test('la frappe est MONTRÉE : la carte Meesh de Progression flotte sous le badge, sans loupe redondante sur le solde', () => {
-    for (const lang of KIT_LANGS) {
-      const html = pageCapture({ appareil: 'iphone', lang, rang: 8 })
-      expect(html).not.toContain('data-loupe=')
-      expect(html).toMatch(/class="as-carte-flottante[^"]*"[\s\S]*class="p-card meesh"/)
-    }
-  })
 })
 
-describe('appel vidéo — le correspondant', () => {
-  test('la vidéo du correspondant porte ses initiales (portrait flouté, sans visage dessiné)', () => {
-    for (const lang of ['fr', 'ar']) {
-      const html = pageCapture({ appareil: 'iphone', lang, rang: 9 })
-      expect(html).toContain('call-illu')
-      expect(html).toMatch(/class="call-avatar[\s\S]*?>MP</)
+describe('écran réel de l’invitation (lien.mov, 1.1.3)', () => {
+  const invitation = APPAREILS.iphone.captures[9]
+  const PNG = Buffer.from('89504e470d0a1a0a', 'hex')
+
+  test('la capture 10 de l’iPhone prend en français l’image de lien.mov, une fois la page posée', () => {
+    expect(invitation.ecran).toBe('invitation')
+    expect(invitation.ecranReel).toEqual({ fr: { video: 'Marketing/02-captures/iphone/fr/lien.mov', instant: 3.5 } })
+  })
+
+  test('l’image se tire de la vidéo déclarée, à son instant ; une langue sans vidéo garde la maquette', () => {
+    const appels = []
+    const extraire = (video, instant) => (appels.push([video, instant]), PNG)
+    expect(imageReelle({ capture: invitation, lang: 'fr', extraire, existe: () => true })).toBe(PNG)
+    expect(appels).toHaveLength(1)
+    expect(appels[0][0]).toMatch(/\/Marketing\/02-captures\/iphone\/fr\/lien\.mov$/)
+    expect(appels[0][1]).toBe(3.5)
+    expect(imageReelle({ capture: invitation, lang: 'en', extraire, existe: () => true })).toBeNull()
+    expect(appels).toHaveLength(1)
+  })
+
+  test('une vidéo déclarée mais absente arrête le rendu au lieu de retomber sur la maquette', () => {
+    expect(() => imageReelle({ capture: invitation, lang: 'fr', extraire: () => PNG, existe: () => false })).toThrow(/lien\.mov/)
+  })
+
+  test('posée dans le cadre, l’image réelle remplace la maquette, sous la même légende', () => {
+    const html = pageCapture({ appareil: 'iphone', lang: 'fr', rang: 10, ecranReel: PNG })
+    expect(html).toMatch(/class="device-screen"[\s\S]*class="ecran-reel"/)
+    expect(html).not.toContain('class="inv-card"')
+    expect(html).toContain('class="as-caption')
+  })
+
+  test('la maquette de l’invitation montre un lien /chat/, et aucune capture un lien /l/', () => {
+    for (const appareil of Object.keys(APPAREILS)) {
+      for (const lang of KIT_LANGS) {
+        APPAREILS[appareil].captures.forEach((_, i) => expect(pageCapture({ appareil, lang, rang: i + 1 })).not.toMatch(/meeshy\.me\/l\//))
+      }
     }
-    const ipad = pageCapture({ appareil: 'ipad', lang: 'fr', rang: 6 })
-    expect(ipad).toMatch(/class="call-avatar[\s\S]*?>MP</)
+    expect(pageCapture({ appareil: 'iphone', lang: 'en', rang: 10 })).toContain('meeshy.me/chat/')
   })
 })

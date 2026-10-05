@@ -1,15 +1,18 @@
+import { readFileSync } from 'node:fs';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 import { useState } from 'react';
 
-import { messageMenuItems, translationChoices } from '@/lib/view/message-actions';
+import { forwardMenuItems, messageMenuItems, translationChoices, type MessageMenuItem } from '@/lib/view/message-actions';
 import { loadInterfaceCatalog, translate } from '@/lib/i18n-catalog';
 import { useLongPress } from '@/lib/view/long-press';
 import { pinToBottom } from '@/lib/view/pin-to-bottom';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import { MessageMenu, type MessageMenuTarget } from './message-menu';
+import { ReactionSheet } from './reaction-sheet';
+import { EMOJI_USAGE_KEY, readEmojiUsage } from '@/lib/emoji-usage';
 
 /**
  * TÉMOIN DE COMPOSANT (#5814, T8-T11) — patron `composer.test.tsx:60-110`
@@ -44,6 +47,7 @@ afterEach(() => {
     root.unmount();
   });
   container.remove();
+  localStorage.clear();
   /* La langue d'interface est un état GLOBAL du document : un témoin qui la
      déplace la rend, sinon le suivant mesure la langue du précédent. */
   document.documentElement.lang = 'fr';
@@ -62,7 +66,10 @@ function Harness({
   protectedMessage = false,
   flatRow = false,
   events = {},
+  forwardItems,
 }: {
+  /** Le sous-menu de « Transférer » (#9039) — absent : Transférer agit aussitôt. */
+  readonly forwardItems?: readonly MessageMenuItem[];
   readonly text?: string;
   readonly isMine?: boolean;
   readonly protectedMessage?: boolean;
@@ -105,6 +112,7 @@ function Harness({
           target={target}
           items={items}
           choices={choices}
+          {...(forwardItems === undefined ? {} : { forwardItems })}
           subjectLabel={`Actions du message de Amina Diallo : ${text}`}
           onClose={() => setTarget(null)}
           onReact={(emoji) => events.onReact?.(emoji)}
@@ -176,14 +184,14 @@ describe('MessageMenu — ouvrir (T8)', () => {
     expect(document.querySelector('[aria-label="Ajouter une réaction"]')).not.toBeNull();
   });
 
-  test('les entrées, dans l’ordre : Sélectionner · Traduire · Copier · Transférer · Répondre · Plus…', () => {
+  test('les entrées, dans l’ordre : Sélectionner · Traduire · Copier · Transférer · Répondre · Imager · Plus…', () => {
     const el = mount();
     act(() => {
       row(el).dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
     });
     const list = document.querySelector('.message-menu-list')!;
     const labels = Array.from(list.querySelectorAll('[role="menuitem"]')).map((b) => b.textContent);
-    expect(labels).toEqual(['Sélectionner', 'Traduire', 'Copier', 'Transférer', 'Répondre', 'Plus…']);
+    expect(labels).toEqual(['Sélectionner', 'Traduire', 'Copier', 'Transférer', 'Répondre', 'Imager', 'Plus…']);
   });
 
   test('l’aperçu contient le texte de la rangée et AUCUN data-message/data-row dupliqué', () => {
@@ -371,7 +379,7 @@ describe('MessageMenu — les libellés viennent du catalogue (#7555)', () => {
     act(() => {
       row(el).dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
     });
-    expect(labelsOf()).toEqual(['Select', 'Translate', 'Copy', 'Forward', 'Reply', 'More…']);
+    expect(labelsOf()).toEqual(['Select', 'Translate', 'Copy', 'Forward', 'Reply', 'Make an image', 'More…']);
   });
 
   test('interface AR ⇒ le menu rendu est arabe, et son rail s’annonce en arabe', () => {
@@ -380,7 +388,7 @@ describe('MessageMenu — les libellés viennent du catalogue (#7555)', () => {
     act(() => {
       row(el).dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
     });
-    expect(labelsOf()).toEqual(['تحديد', 'ترجمة', 'نسخ', 'إعادة توجيه', 'رد', 'المزيد…']);
+    expect(labelsOf()).toEqual(['تحديد', 'ترجمة', 'نسخ', 'إعادة توجيه', 'رد', 'تحويل إلى صورة', 'المزيد…']);
     expect(document.querySelector('[data-message-menu-rail]')?.getAttribute('aria-label')).toBe(
       translate('ar', 'message.menu.react'),
     );
@@ -699,5 +707,229 @@ describe('MessageMenu — un défilement de l’APPLICATION ne ferme pas le menu
     });
     expect(document.querySelectorAll('[role="menu"]').length).toBe(1);
     scroller.remove();
+  });
+});
+
+/**
+ * #9039 — « TRANSFÉRER » PROPOSE D'IMAGER LA DISCUSSION. Le tap sur
+ * Transférer ouvre son sous-menu (comme Traduire ouvre ses langues) :
+ * Transférer garde son effet, « Imager la discussion » rend l'action qui
+ * ouvre l'atelier d'Imager sur la discussion.
+ */
+describe('MessageMenu — le sous-menu de « Transférer » (#9039)', () => {
+  const open = (el: HTMLDivElement) => {
+    act(() => {
+      row(el).dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+    });
+  };
+  const entry = (label: string) =>
+    Array.from(document.querySelectorAll<HTMLButtonElement>('.message-menu-list [role="menuitem"]')).find((b) => b.textContent === label);
+  const forwardItems = forwardMenuItems({ hasText: true, isProtected: false, languageCount: 2, canForward: true });
+
+  test('Transférer ouvre son sous-menu : Transférer · Imager la discussion — et rien ne part encore', () => {
+    const actions: string[] = [];
+    const el = mount({ forwardItems, events: { onAction: (id) => actions.push(id) } });
+    open(el);
+    act(() => {
+      entry('Transférer')!.click();
+    });
+    const labels = Array.from(document.querySelectorAll('.message-menu-list [role="menuitem"]')).map((b) => b.textContent);
+    expect(labels).toEqual(['Transférer', 'Imager la discussion']);
+    expect(actions).toEqual([]);
+  });
+
+  test('« Imager la discussion » rend son action et ferme le menu', () => {
+    const actions: string[] = [];
+    const el = mount({ forwardItems, events: { onAction: (id) => actions.push(id) } });
+    open(el);
+    act(() => {
+      entry('Transférer')!.click();
+    });
+    act(() => {
+      entry('Imager la discussion')!.click();
+    });
+    expect(actions).toEqual(['exportDiscussion']);
+    expect(document.querySelectorAll('[role="menu"]').length).toBe(0);
+  });
+
+  test('Transférer, dans le sous-menu, garde son effet (armer la sélection)', () => {
+    const actions: string[] = [];
+    const el = mount({ forwardItems, events: { onAction: (id) => actions.push(id) } });
+    open(el);
+    act(() => {
+      entry('Transférer')!.click();
+    });
+    act(() => {
+      entry('Transférer')!.click();
+    });
+    expect(actions).toEqual(['forward']);
+  });
+
+  test('Échap dans le sous-menu revient à la liste des actions', () => {
+    const el = mount({ forwardItems });
+    open(el);
+    act(() => {
+      entry('Transférer')!.click();
+    });
+    act(() => {
+      document.querySelector('[role="menu"]')!.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Escape' }));
+    });
+    expect(entry('Imager')).toBeDefined();
+    expect(entry('Imager la discussion')).toBeUndefined();
+  });
+
+  test('sans sous-menu (une seule entrée), Transférer agit aussitôt', () => {
+    const actions: string[] = [];
+    const single = forwardMenuItems({ hasText: true, isProtected: true, languageCount: 2, canForward: true });
+    const el = mount({ forwardItems: single, events: { onAction: (id) => actions.push(id) } });
+    open(el);
+    act(() => {
+      entry('Transférer')!.click();
+    });
+    expect(actions).toEqual(['forward']);
+  });
+});
+
+/**
+ * #9043 — SANS CADRE, COMME LA STORY, ET GLISSER VERS LE HAUT RÉDUIT L'APERÇU.
+ * Un message LONG (1 500 px) pousse la liste sous le bas de l'écran : on
+ * impose cette géométrie à l'ancre, `happy-dom` ne mesurant rien.
+ */
+describe('MessageMenu — le rail sans cadre, la liste dans sa carte, et l’aperçu se réduit au glissement (#9043)', () => {
+  const surface = (): HTMLElement => document.querySelector('[data-message-menu-drag-surface]')!;
+  const list = (): HTMLElement => document.querySelector('.message-menu-list')!;
+  const previewScale = (): number =>
+    Number(/scale\(([0-9.]+)\)/.exec(document.querySelector<HTMLElement>('[data-message-menu-preview-host]')!.style.transform)![1]);
+  const listTop = (): number => Number.parseFloat(list().style.top);
+  const pointer = (type: string, clientY: number) =>
+    act(() => {
+      surface().dispatchEvent(new PointerEvent(type, { bubbles: true, pointerId: 7, clientY }));
+    });
+
+  const openLong = (): void => {
+    const el = mount();
+    const rect = { top: 120, bottom: 1620, left: 20, right: 370, width: 350, height: 1500, x: 20, y: 120 };
+    row(el).getBoundingClientRect = () => ({ ...rect, toJSON: () => rect }) as DOMRect;
+    act(() => {
+      row(el).dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+    });
+  };
+
+  const cssRule = (selector: string): string => {
+    const css = readFileSync(new URL('../styles/thread-menu.css', import.meta.url), 'utf8');
+    return new RegExp(`\\n${selector.replace('.', '\\.')} \\{([^}]*)\\}`).exec(css)![1]!;
+  };
+
+  test('le rail se pose NU sur le voile : ni fond, ni bordure, ni ombre', () => {
+    expect(cssRule('.message-menu-rail')).not.toMatch(/background|border|box-shadow/);
+  });
+
+  test('la liste d’actions GARDE sa carte : fond, bordure et ombre (directive porteur 2026-10-01)', () => {
+    const list = cssRule('.message-menu-list');
+    expect(list).toMatch(/background-color/);
+    expect(list).toMatch(/border:/);
+    expect(list).toMatch(/box-shadow/);
+  });
+
+  test('glisser vers le haut réduit l’aperçu ET remonte la liste d’autant, image par image', () => {
+    openLong();
+    const scale0 = previewScale();
+    const top0 = listTop();
+    pointer('pointerdown', 600);
+    pointer('pointermove', 540);
+    expect(previewScale()).toBeLessThan(scale0);
+    expect(listTop()).toBeCloseTo(top0 - 60, 3);
+  });
+
+  test('relâcher GARDE l’état atteint ; redescendre rend la taille', () => {
+    openLong();
+    const scale0 = previewScale();
+    const top0 = listTop();
+    pointer('pointerdown', 600);
+    pointer('pointermove', 540);
+    pointer('pointerup', 540);
+    expect(document.querySelectorAll('[role="menu"]').length).toBe(1);
+    expect(listTop()).toBeCloseTo(top0 - 60, 3);
+    pointer('pointerdown', 540);
+    pointer('pointermove', 900);
+    pointer('pointerup', 900);
+    expect(previewScale()).toBeCloseTo(scale0, 6);
+    expect(listTop()).toBeCloseTo(top0, 3);
+  });
+
+  test('un toucher sur le voile, sans glisser, ferme toujours le menu', () => {
+    openLong();
+    pointer('pointerdown', 300);
+    pointer('pointerup', 302);
+    expect(document.querySelectorAll('[role="menu"]').length).toBe(0);
+  });
+
+  test('sans le geste : un focus qui entre dans la liste la dégage d’office', () => {
+    openLong();
+    const top0 = listTop();
+    act(() => {
+      list().querySelector<HTMLButtonElement>('[role="menuitem"]')!.focus();
+    });
+    expect(listTop()).toBeLessThan(top0);
+  });
+});
+
+/**
+ * LE RAIL SUIT L'USAGE (#7983) — la même table que le cadre des emojis rapides
+ * du composeur (`lib/emoji-usage.ts`, jumelle d'`EmojiUsageTracker`) : une
+ * réaction posée ici reclasse le composeur, et inversement.
+ */
+describe('MessageMenu — le rail suit l’usage des emojis', () => {
+  const railEmojis = () =>
+    [...document.querySelectorAll<HTMLButtonElement>('[data-message-menu-rail] [role="menuitem"]')]
+      .filter((tile) => !tile.hasAttribute('data-add-reaction'))
+      .map((tile) => tile.getAttribute('aria-label'));
+  const open = (el: HTMLDivElement) =>
+    act(() => {
+      row(el).dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+    });
+
+  test('sans historique : les six réactions d’iOS, dans leur ordre', () => {
+    open(mount());
+    expect(railEmojis()).toEqual(['😂', '❤️', '👍', '😮', '😢', '🔥']);
+  });
+
+  test('les emojis que ce lecteur emploie passent en tête, les défauts complètent', () => {
+    localStorage.setItem(EMOJI_USAGE_KEY, JSON.stringify([['🔥', 3], ['🎉', 4]]));
+    open(mount());
+    expect(railEmojis()).toEqual(['🎉', '🔥', '😂', '❤️', '👍', '😮']);
+  });
+
+  test('réagir depuis le rail compte un emploi', () => {
+    open(mount());
+    act(() => document.querySelector<HTMLButtonElement>('[data-message-menu-rail] [aria-label="😮"]')!.click());
+    expect(readEmojiUsage().get('😮')).toBe(1);
+  });
+
+  test('réagir depuis « Ajouter une réaction » compte un emploi', () => {
+    const picked: string[] = [];
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    act(() => {
+      root.render(<ReactionSheet onPick={(emoji) => picked.push(emoji)} onClose={() => {}} />);
+    });
+    act(() => container.querySelector<HTMLButtonElement>('button[aria-label="🎉"]')!.click());
+    expect(picked).toEqual(['🎉']);
+    expect(readEmojiUsage().get('🎉')).toBe(1);
+  });
+
+  test('« Ajouter une réaction » se titre dans la langue d’interface (#9253)', () => {
+    document.documentElement.lang = 'en';
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    act(() => {
+      root.render(<ReactionSheet onPick={() => {}} onClose={() => {}} />);
+    });
+    const dialog = document.querySelector<HTMLElement>('dialog');
+    const title = document.getElementById(dialog?.getAttribute('aria-labelledby') ?? '');
+    expect(title?.textContent).toBe('Add a reaction');
+    expect(document.body.textContent).not.toContain('Ajouter une réaction');
   });
 });

@@ -620,23 +620,26 @@ final class ReadingModeProtectionChromeGuardTests: XCTestCase {
         XCTAssertEqual(MessageProtectionSymbols.blurred, "eye.slash")
     }
 
-    /// Les DEUX surfaces de CHOIX lisent la table, plutôt que de la recopier.
-    /// Un littéral y reviendrait sans rien faire rougir — c'est exactement
-    /// ainsi que la barre et la feuille ont divergé.
+    /// La surface de CHOIX lit la table, plutôt que de la recopier. Un
+    /// littéral y reviendrait sans rien faire rougir — c'est exactement ainsi
+    /// que la barre et la feuille ont divergé. Depuis #7967, le comportement
+    /// (éphémère, flou, vue unique) ne se choisit PLUS que dans la barre :
+    /// le panneau des effets ne l'offre plus, mais il reste interdit d'y
+    /// peindre un pictogramme de protection à la main.
     func test_lesSurfacesDeChoix_lisentLaTableEtNePeignentAucunLittéral() throws {
-        let surfaces = [
-            "Features/Main/Components/EffectsPickerView.swift",
-            "Features/Main/Components/UniversalComposerBar+Protections.swift",
-        ]
+        let choiceSurfaces = ["Features/Main/Components/UniversalComposerBar+Protections.swift"]
+        let surfaces = choiceSurfaces + ["Features/Main/Components/EffectsPickerView.swift"]
         let bannedLiterals = ["\"flame\"", "\"flame.fill\"", "\"1.circle\"", "\"1.circle.fill\"",
                               "\"eye.slash\"", "\"eye.slash.fill\"", "\"hourglass\"", "\"timer.circle\""]
         for path in surfaces {
             let code = try source(at: path)
-            XCTAssertTrue(
-                code.contains("MessageProtectionSymbols."),
-                "`\(path)` doit lire `MessageProtectionSymbols` : c'est là que l'utilisateur "
-                    + "APPREND le vocabulaire, et l'affichage doit dire la même chose."
-            )
+            if choiceSurfaces.contains(path) {
+                XCTAssertTrue(
+                    code.contains("MessageProtectionSymbols."),
+                    "`\(path)` doit lire `MessageProtectionSymbols` : c'est là que l'utilisateur "
+                        + "APPREND le vocabulaire, et l'affichage doit dire la même chose."
+                )
+            }
             for literal in bannedLiterals {
                 XCTAssertFalse(
                     code.contains(literal),
@@ -726,7 +729,9 @@ final class ComposerViewOnceReachabilityGuardTests: XCTestCase {
             "Aucune autre bascule ne doit s'insérer entre le flou et la vue unique : "
                 + "« à côté » est la moitié de la demande."
         )
-        XCTAssertTrue(toolbar.contains("if !hideViewOnce"),
+        // #8431 — l'opt-OUT passe par sa résolution : `hideViewOnce` OU un
+        // mode qui ne l'offre pas (un commentaire n'a personne à qui la brûler).
+        XCTAssertTrue(toolbar.contains("if !resolvedHideViewOnce"),
                       "La vue unique se cache par opt-OUT, comme le flou (`if !hideBlur`).")
     }
 
@@ -735,8 +740,13 @@ final class ComposerViewOnceReachabilityGuardTests: XCTestCase {
     /// s'il a un effet.
     func test_lÉtatArmé_atteintLEnvoi() throws {
         let mount = try source(at: "Features/Main/Views/ConversationView+Composer.swift")
-        XCTAssertTrue(mount.contains("isViewOnceEnabled: $viewModel.isViewOnceEnabled"),
+        XCTAssertTrue(mount.contains("isViewOnceEnabled: $viewModel.composerViewOnceEnabled"),
                       "La bascule doit écrire dans l'état du ViewModel, pas dans un `@State` local.")
+        // #8557 — la bascule passe par la projection qui respecte la contagion
+        // d'une réponse ; la projection, elle, écrit l'état armé du ViewModel.
+        let projection = try source(at: "Features/Main/ViewModels/ConversationViewModel+ReplyContagion.swift")
+        XCTAssertTrue(projection.contains("isViewOnceEnabled = newValue"),
+                      "La projection du composeur doit écrire l'état armé du ViewModel.")
         let send = try source(at: "Features/Main/ViewModels/ConversationViewModel+Send.swift")
         XCTAssertTrue(send.contains("isViewOnceEnabled"),
                       "L'envoi doit LIRE l'état armé — sinon la bascule est une cible morte.")
@@ -771,8 +781,8 @@ final class ComposerProtectionTravelsGuardTests: XCTestCase {
     /// l'acquittement, on est au bout d'UN message, et il en reste à partir.
     func test_leDésarmement_seFaitAuTapEtPasÀLAcquittement() throws {
         let send = try source(at: "Features/Main/ViewModels/ConversationViewModel+Send.swift")
-        XCTAssertTrue(send.contains("func consumeArmedProtection()"),
-                      "La saisie-et-désarmement doit être UNE fonction nommée, appelée par le tap.")
+        XCTAssertTrue(send.contains("func captureArmedProtection(replyingTo replyToId: String?)"),
+                      "La saisie doit être UNE fonction nommée, appelée par le tap — elle ne désarme plus (#8305).")
 
         guard let finalize = send.range(of: "func finalizeSuccessfulSend") else {
             return XCTFail("Impossible de localiser la finalisation d'un envoi acquitté.")
@@ -815,10 +825,25 @@ final class ComposerProtectionTravelsGuardTests: XCTestCase {
         let corps = String(send[insert.lowerBound...])
         XCTAssertFalse(corps.contains("expiresAt: nil, effectFlags: 0"),
                        "La ligne optimiste d'un média ne doit plus naître sans protection.")
-        XCTAssertTrue(corps.contains("expiresAt: protection.expiresAt(from: now)"),
-                      "Elle doit dater son échéance depuis l'intention saisie au tap.")
+        XCTAssertTrue(corps.contains("ephemeralDuration: protection.ephemeralDurationSeconds"),
+                      "Elle doit porter la DURÉE saisie au tap — jamais une échéance (#8905).")
         XCTAssertTrue(corps.contains("effectFlags: protection.lifecycleFlags.rawValue"),
                       "Et porter les bits de cycle de vie correspondants.")
+    }
+
+    /// **L'envoi n'est pas une réception** (#8905). Aucune ligne optimiste —
+    /// texte en ligne, hors ligne ou média — ne grave `envoi + durée` :
+    /// l'expéditeur lit « en attente de réception » jusqu'à ce que la
+    /// passerelle serve `max D(u)`. Une échéance client décomptait dès l'envoi
+    /// et survivait à l'accusé (l'upsert coalesce `api ?? existant`).
+    func test_aucuneLigneOptimiste_neGraveDÉchéanceClient() throws {
+        let send = try source(at: "Features/Main/ViewModels/ConversationViewModel+Send.swift")
+        XCTAssertFalse(send.contains("intent.expiresAt("), "Une échéance calculée à l'envoi fait décompter l'expéditeur.")
+        XCTAssertFalse(send.contains("protection.expiresAt("), "Idem pour la ligne d'un média.")
+        XCTAssertEqual(send.components(separatedBy: "ephemeralDuration: intent.ephemeralDurationSeconds").count - 1, 1,
+                       "La ligne HORS LIGNE porte la durée.")
+        XCTAssertEqual(send.components(separatedBy: "ephemeralDuration: resolvedEphemeralDuration\n").count - 1, 1,
+                       "La ligne EN LIGNE porte la durée.")
     }
 
     /// La ligne optimiste d'un TEXTE porte les DEUX axes, unis.
@@ -867,7 +892,7 @@ final class ComposerProtectionTravelsGuardTests: XCTestCase {
     func test_leTap_saisitUneFoisEtSertTousLesGroupes() throws {
         let src = try source(at: "Features/Main/Views/ConversationView+AttachmentHandlers.swift")
         XCTAssertEqual(
-            src.components(separatedBy: "viewModel.consumeArmedProtection()").count - 1, 1,
+            src.components(separatedBy: "viewModel.captureArmedProtection(replyingTo: replyId)").count - 1, 1,
             "Une seule saisie par tap : deux saisies rendraient la seconde vide."
         )
         let envois = src.components(separatedBy: "viewModel.sendMessage(").count - 1
@@ -911,7 +936,11 @@ final class ViewOnceOpensBeforeConsumingGuardTests: XCTestCase {
         let corps = String(grille[reveal.upperBound...].prefix(1200))
         XCTAssertFalse(corps.contains("onConsumeViewOnce?("),
                        "Toucher un média à vue unique doit l'OUVRIR, pas le consommer.")
-        XCTAssertTrue(corps.contains("openFullscreen()"),
+        // #8009 — le plein écran s'ouvre sur CETTE pièce, jamais par le
+        // carrousel en ligne qui dévoilerait les autres dans la bulle.
+        // #8310 — par l'ouvreur DIRECT de l'hôte, jamais par la liaison
+        // `fullscreenAttachment`, détour que #8009 avait mesuré mort.
+        XCTAssertTrue(corps.contains("onOpenProtected(media)"),
                       "La révélation doit ouvrir le plein écran dans le même geste.")
     }
 
@@ -927,8 +956,8 @@ final class ViewOnceOpensBeforeConsumingGuardTests: XCTestCase {
         XCTAssertTrue(galerie.contains("viewModel.consumeViewOnce(messageId:"),
                       "La consommation reste l'appel serveur existant, déplacé — pas réécrit.")
 
-        let hôte = try source(at: "Features/Main/Views/ConversationView.swift")
-        XCTAssertTrue(hôte.contains("pendingViewOnceConsumption.arm(attachment.messageId)"),
+        // #8310 — l'ouvreur du fil vit à côté de la galerie (`openMediaFullscreen`).
+        XCTAssertTrue(galerie.contains("pendingViewOnceConsumption.arm(attachment.messageId)"),
                       "L'ouverture arme la consommation, sur le chemin qui ouvre la galerie.")
     }
 

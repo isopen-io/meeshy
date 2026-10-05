@@ -378,6 +378,17 @@ final class MessageListLayout: UICollectionViewCompositionalLayout {
         fireOrDeferRecoveryInvalidation()
     }
 
+    /// **Une correction VOULUE n'est pas une tempête** (#8232). Le dépliage
+    /// d'un message long redimensionne UNE ou deux rangées, sur un geste :
+    /// si le plafond ci-dessus était déjà consommé dans la transaction —
+    /// un toucher qui suit un défilement dans le même tour —, la correction
+    /// était avalée et la passe différée ne la ré-émettait pas (mesuré en
+    /// test : 242 pt au lieu de 707, deux secondes plus tard). Le geste
+    /// rouvre donc le budget pour sa transaction, borné comme toujours.
+    func admitDeliberateResize() {
+        partialInvalidationsThisTransaction = 0
+    }
+
     override func invalidateLayout(with context: UICollectionViewLayoutInvalidationContext) {
         let isPartial = !context.invalidateEverything && !context.invalidateDataSourceCounts
         if isPartial {

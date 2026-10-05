@@ -55,7 +55,7 @@ async function buildApp(): Promise<FastifyInstance> {
       registeredUser: { id: MOI, role: 'USER' },
     };
   });
-  app.decorate('prisma', { user: { findMany, count } } as any);
+  app.decorate('prisma', { user: { findMany, count }, userPreferences: { findMany: jest.fn<any>(async () => []) }, userPreference: { findMany: jest.fn<any>(async () => []) } } as any);
   await app.register(searchUsers);
   await app.ready();
   return app;

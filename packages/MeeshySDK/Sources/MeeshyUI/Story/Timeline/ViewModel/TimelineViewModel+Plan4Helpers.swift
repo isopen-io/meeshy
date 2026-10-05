@@ -58,7 +58,7 @@ extension TimelineViewModel {
         project.mediaObjects.first { $0.id == id }?.intrinsicDuration.map(Float.init)
     }
 
-    private func applyWindow(id: String, edit: ClipWindowResolver.Edit) {
+    func applyWindow(id: String, edit: ClipWindowResolver.Edit) {
         guard let kind = clipKind(forId: id),
               let current = currentWindow(id: id) else { return }
         var resolved = ClipWindowResolver.resolve(edit, from: current)

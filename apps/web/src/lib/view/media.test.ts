@@ -363,3 +363,16 @@ describe('mediaCarrierOf — VOYAGE ce que l’hôte a déjà résolu, ne résou
     expect(carrier.caption).toEqual({ text: 'Aufnahme vom Yachthafen', language: 'de', translated: true });
   });
 });
+
+describe('mediaCarrierOf — la carte des adresses suivies du message voyage (#9074)', () => {
+  const caption = { text: 'voir https://exemple.org/a', language: 'fr', translated: false };
+  test('portée quand le message en sert une', () => {
+    const trackingLinks = [{ url: 'https://exemple.org/a', token: 'A1' }];
+    const carrier = mediaCarrierOf({ message: { createdAt: new Date('2026-10-02T10:00:00Z'), trackingLinks }, caption });
+    expect(carrier.trackingLinks).toEqual(trackingLinks);
+  });
+  test('absente sinon', () => {
+    const carrier = mediaCarrierOf({ message: { createdAt: new Date('2026-10-02T10:00:00Z') }, caption });
+    expect(carrier.trackingLinks).toBeUndefined();
+  });
+});

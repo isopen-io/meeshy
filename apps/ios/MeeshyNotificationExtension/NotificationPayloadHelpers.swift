@@ -1,4 +1,5 @@
 import Foundation
+import MeeshySDK
 
 /// Pure, side-effect-free helpers used by `NotificationService` (the rich-push
 /// `UNNotificationServiceExtension`) to repair fields that iOS Communication
@@ -179,6 +180,7 @@ nonisolated enum NotificationPayloadHelpers {
 
         return NSLocalizedString(
             "notification.audio_voice_message.body",
+            bundle: InterfaceLanguageResolver.bundle(),
             value: "🎵 Message vocal",
             comment: "Push body fallback for an audio-only message when the gateway body is empty (E2EE caption)."
         )
@@ -420,6 +422,7 @@ nonisolated enum NotificationPayloadHelpers {
         let time = formatter.string(from: deadline)
         let template = NSLocalizedString(
             "notification.ephemeral_message.deadline",
+            bundle: InterfaceLanguageResolver.bundle(),
             value: "🔥 Message éphémère · disparaît à %@",
             comment: "Push body for an ephemeral message, carrying the local deadline time."
         )

@@ -1,0 +1,509 @@
+{
+  "mood": "futuriste",
+  "motifs": [
+    {
+      "id": "futuriste.hud",
+      "mood": "futuriste",
+      "name": "HUD",
+      "base": {
+        "layout": {
+          "arrangement": "grid",
+          "margin": 0.07,
+          "gap": 0.025,
+          "top": 0.14,
+          "bottom": 0.08
+        },
+        "slot": {
+          "shape": "rect",
+          "stroke": {
+            "color": "#22D3EE",
+            "width": 0.004
+          },
+          "tilt": "none",
+          "tone": "cool"
+        },
+        "background": {
+          "kind": "solid",
+          "color": "#05060F"
+        },
+        "pattern": {
+          "kind": "grid",
+          "color": "#22D3EE",
+          "opacity": 0.08
+        },
+        "border": {
+          "kind": "brackets",
+          "color": "#22D3EE",
+          "width": 0.006,
+          "inset": 0.03
+        },
+        "ornaments": [
+          {
+            "kind": "scanlines",
+            "color": "#22D3EE1A",
+            "density": "mid",
+            "layer": "back"
+          },
+          {
+            "kind": "crosshair",
+            "color": "#22D3EE",
+            "density": "low",
+            "layer": "front"
+          }
+        ],
+        "brand": {
+          "mark": "logo",
+          "place": "top-left",
+          "color": "#22D3EE",
+          "size": "s"
+        },
+        "names": {
+          "show": "handle",
+          "style": "plate",
+          "font": "futuristic",
+          "color": "#05060F",
+          "fill": "#22D3EECC"
+        },
+        "title": {
+          "source": "group",
+          "font": "futuristic",
+          "color": "#22D3EE",
+          "place": "top",
+          "size": "m",
+          "effect": "glow",
+          "case": "upper"
+        },
+        "subtitle": {
+          "source": "date",
+          "font": "futuristic",
+          "color": "#E879F9",
+          "place": "top",
+          "size": "s",
+          "effect": "none",
+          "case": "upper"
+        }
+      },
+      "variants": {
+        "duo": {
+          "layout": {
+            "arrangement": "split",
+            "margin": 0.07,
+            "gap": 0.03,
+            "top": 0.14,
+            "bottom": 0.08
+          },
+          "title": {
+            "source": "names",
+            "font": "futuristic",
+            "color": "#22D3EE",
+            "place": "top",
+            "size": "m",
+            "effect": "glow",
+            "case": "upper"
+          }
+        },
+        "comite": {
+          "layout": {
+            "arrangement": "hero",
+            "margin": 0.07,
+            "gap": 0.025,
+            "top": 0.14,
+            "bottom": 0.08
+          }
+        },
+        "groupe": {
+          "layout": {
+            "arrangement": "mosaic",
+            "margin": 0.06,
+            "gap": 0.02,
+            "top": 0.14,
+            "bottom": 0.08
+          },
+          "names": {
+            "show": "handle",
+            "style": "badge",
+            "font": "futuristic",
+            "color": "#05060F",
+            "fill": "#22D3EECC"
+          }
+        },
+        "tablee": {
+          "layout": {
+            "arrangement": "grid",
+            "margin": 0.05,
+            "gap": 0.012,
+            "top": 0.12,
+            "bottom": 0.06
+          },
+          "slot": {
+            "shape": "rect",
+            "stroke": {
+              "color": "#22D3EE",
+              "width": 0.003
+            },
+            "tilt": "none",
+            "tone": "cool"
+          },
+          "names": {
+            "show": "handle",
+            "style": "badge",
+            "font": "futuristic",
+            "color": "#05060F",
+            "fill": "#22D3EECC"
+          }
+        }
+      }
+    },
+    {
+      "id": "futuriste.hologramme",
+      "mood": "futuriste",
+      "name": "Hologramme",
+      "base": {
+        "layout": {
+          "arrangement": "arch",
+          "margin": 0.07,
+          "gap": 0.03,
+          "top": 0.18,
+          "bottom": 0.12
+        },
+        "slot": {
+          "shape": "round",
+          "radius": 0.06,
+          "glow": "#E879F9",
+          "tilt": "none",
+          "tone": "duotone",
+          "duotone": [
+            "#1A0B3A",
+            "#7FF3FF"
+          ]
+        },
+        "background": {
+          "kind": "radial",
+          "colors": [
+            "#1A1040",
+            "#05060F"
+          ]
+        },
+        "pattern": {
+          "kind": "scanlines",
+          "color": "#22D3EE",
+          "opacity": 0.1
+        },
+        "ornaments": [
+          {
+            "kind": "bokeh",
+            "color": "#22D3EE33",
+            "density": "mid",
+            "layer": "back"
+          },
+          {
+            "kind": "glitch",
+            "color": "#E879F980",
+            "density": "low",
+            "layer": "back"
+          },
+          {
+            "kind": "sparkles",
+            "color": "#E6FBFF",
+            "density": "low",
+            "layer": "front"
+          }
+        ],
+        "brand": {
+          "mark": "wordmark",
+          "place": "bottom",
+          "color": "#E879F9",
+          "size": "m",
+          "font": "futuristic"
+        },
+        "names": {
+          "show": "name",
+          "style": "caption",
+          "font": "neon",
+          "color": "#E879F9"
+        },
+        "title": {
+          "source": "group",
+          "font": "neon",
+          "color": "#22D3EE",
+          "place": "top",
+          "size": "l",
+          "effect": "glow"
+        }
+      },
+      "variants": {
+        "duo": {
+          "layout": {
+            "arrangement": "diagonal",
+            "margin": 0.07,
+            "gap": 0.03,
+            "top": 0.18,
+            "bottom": 0.12
+          },
+          "title": {
+            "source": "names",
+            "font": "neon",
+            "color": "#22D3EE",
+            "place": "top",
+            "size": "l",
+            "effect": "glow"
+          }
+        },
+        "comite": {},
+        "groupe": {
+          "layout": {
+            "arrangement": "scatter",
+            "margin": 0.06,
+            "gap": 0.03,
+            "top": 0.16,
+            "bottom": 0.12
+          },
+          "slot": {
+            "shape": "round",
+            "radius": 0.06,
+            "glow": "#E879F9",
+            "tilt": "gentle",
+            "tone": "duotone",
+            "duotone": [
+              "#1A0B3A",
+              "#7FF3FF"
+            ]
+          },
+          "names": {
+            "show": "name",
+            "style": "badge",
+            "font": "neon",
+            "color": "#E6FBFF",
+            "fill": "#05060FCC"
+          }
+        }
+      }
+    },
+    {
+      "id": "futuriste.orbite",
+      "mood": "futuriste",
+      "name": "Orbite",
+      "base": {
+        "layout": {
+          "arrangement": "orbit",
+          "margin": 0.07,
+          "gap": 0.03,
+          "top": 0.16,
+          "bottom": 0.12
+        },
+        "slot": {
+          "shape": "circle",
+          "stroke": {
+            "color": "#E879F9",
+            "width": 0.006
+          },
+          "glow": "#22D3EE",
+          "tilt": "none",
+          "tone": "cool"
+        },
+        "background": {
+          "kind": "linear",
+          "colors": [
+            "#05060F",
+            "#0B1026",
+            "#1B0B2E"
+          ],
+          "angle": 0
+        },
+        "pattern": {
+          "kind": "stars",
+          "color": "#E6FBFF",
+          "opacity": 0.25
+        },
+        "ornaments": [
+          {
+            "kind": "orbits",
+            "color": "#22D3EE66",
+            "density": "mid",
+            "layer": "back"
+          },
+          {
+            "kind": "stars",
+            "color": "#E6FBFF99",
+            "density": "low",
+            "layer": "back"
+          }
+        ],
+        "brand": {
+          "mark": "both",
+          "place": "bottom",
+          "color": "#E6FBFF",
+          "size": "m"
+        },
+        "names": {
+          "show": "handle",
+          "style": "badge",
+          "font": "futuristic",
+          "color": "#E6FBFF",
+          "fill": "#05060FCC"
+        },
+        "title": {
+          "source": "group",
+          "font": "futuristic",
+          "color": "#E6FBFF",
+          "place": "top",
+          "size": "m",
+          "effect": "glow",
+          "case": "upper"
+        },
+        "subtitle": {
+          "source": "date",
+          "font": "futuristic",
+          "color": "#22D3EE",
+          "place": "top",
+          "size": "s",
+          "effect": "none",
+          "case": "upper"
+        }
+      },
+      "variants": {
+        "duo": {
+          "layout": {
+            "arrangement": "hero",
+            "margin": 0.07,
+            "gap": 0.03,
+            "top": 0.16,
+            "bottom": 0.12
+          },
+          "names": {
+            "show": "handle",
+            "style": "caption",
+            "font": "futuristic",
+            "color": "#E6FBFF"
+          },
+          "title": {
+            "source": "names",
+            "font": "futuristic",
+            "color": "#E6FBFF",
+            "place": "top",
+            "size": "m",
+            "effect": "glow",
+            "case": "upper"
+          }
+        },
+        "comite": {},
+        "groupe": {
+          "layout": {
+            "arrangement": "arch",
+            "margin": 0.06,
+            "gap": 0.025,
+            "top": 0.16,
+            "bottom": 0.12
+          }
+        }
+      }
+    },
+    {
+      "id": "futuriste.essaim",
+      "mood": "futuriste",
+      "name": "Essaim",
+      "base": {
+        "layout": {
+          "arrangement": "honeycomb",
+          "margin": 0.06,
+          "gap": 0.015,
+          "top": 0.14,
+          "bottom": 0.14
+        },
+        "slot": {
+          "shape": "hex",
+          "stroke": {
+            "color": "#22D3EE",
+            "width": 0.005
+          },
+          "glow": "#E879F999",
+          "tilt": "none",
+          "tone": "duotone",
+          "duotone": [
+            "#05060F",
+            "#F5C2FF"
+          ]
+        },
+        "background": {
+          "kind": "linear",
+          "colors": [
+            "#0B1026",
+            "#05060F"
+          ],
+          "angle": 160
+        },
+        "pattern": {
+          "kind": "circuit",
+          "color": "#22D3EE",
+          "opacity": 0.12
+        },
+        "border": {
+          "kind": "neon",
+          "color": "#E879F9",
+          "width": 0.005,
+          "inset": 0.025
+        },
+        "ornaments": [
+          {
+            "kind": "scanlines",
+            "color": "#E879F914",
+            "density": "low",
+            "layer": "back"
+          }
+        ],
+        "brand": {
+          "mark": "logo",
+          "place": "bottom-right",
+          "color": "#E879F9",
+          "size": "m"
+        },
+        "names": {
+          "show": "handle",
+          "style": "list",
+          "font": "futuristic",
+          "color": "#E6FBFF"
+        },
+        "title": {
+          "source": "group",
+          "font": "futuristic",
+          "color": "#E879F9",
+          "place": "top",
+          "size": "l",
+          "effect": "glow",
+          "case": "upper"
+        }
+      },
+      "variants": {
+        "groupe": {},
+        "tablee": {
+          "layout": {
+            "arrangement": "honeycomb",
+            "margin": 0.05,
+            "gap": 0.01,
+            "top": 0.12,
+            "bottom": 0.08
+          },
+          "slot": {
+            "shape": "hex",
+            "stroke": {
+              "color": "#22D3EE",
+              "width": 0.003
+            },
+            "tilt": "none",
+            "tone": "duotone",
+            "duotone": [
+              "#05060F",
+              "#F5C2FF"
+            ]
+          },
+          "names": {
+            "show": "none",
+            "style": "list",
+            "font": "futuristic",
+            "color": "#E6FBFF"
+          }
+        }
+      }
+    }
+  ]
+}

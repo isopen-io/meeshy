@@ -200,8 +200,12 @@ final class StoryCanvasLockedItemGuardTests: XCTestCase {
             StoryCanvasContextAction.offered(
                 isLocked: false, isBackground: false,
                 sharesPlaneWithAnother: true, hasEditor: true,
-                canLeaveScene: true, hasTrimmableSource: true),
-            StoryCanvasContextAction.allCases
+                canLeaveScene: true, hasTrimmableSource: true,
+                canBecomeBackground: true, sceneHasBackground: false),
+            // **Devenir le fond** (#8716) a DEUX mots exclusifs : « mettre » sur
+            // une scène sans fond, « remplacer » sur une scène qui en a un. Un
+            // objet capable de tout en obtient donc UN — le témoin le dit.
+            StoryCanvasContextAction.allCases.filter { $0 != .replaceBackground }
         )
     }
 
@@ -297,7 +301,10 @@ final class StoryCanvasLockedItemGuardTests: XCTestCase {
 
         XCTAssertEqual(
             titles,
-            StoryCanvasContextAction.allCases.filter { $0 != .trim }.map(\.title))
+            // Un TEXTE ne devient pas un fond (#8716) : seul un média le peut.
+            StoryCanvasContextAction.allCases
+                .filter { ![.trim, .setAsBackground, .replaceBackground].contains($0) }
+                .map(\.title))
     }
 
     /// **Le fusible du témoin ci-dessus.** Retirer `.trim` d'une attente est un

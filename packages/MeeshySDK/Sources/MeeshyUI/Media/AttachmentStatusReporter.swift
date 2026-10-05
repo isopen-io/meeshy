@@ -34,7 +34,7 @@ public nonisolated enum AttachmentStatusReporter {
     /// `nonisolated(unsafe)` : écrit une fois au montage d'un test, lu ensuite ;
     /// aucun accès concurrent réel, et le typer en `actor` imposerait un `await`
     /// à des appelants `@MainActor` synchrones.
-    public nonisolated(unsafe) static var sink: @Sendable (String, AttachmentStatusBody) async -> Void = {
+    public nonisolated(unsafe) static var sink: @Sendable @concurrent (String, AttachmentStatusBody) async -> Void = {
         attachmentId, body in
         await persist(attachmentId: attachmentId, body: body)
     }

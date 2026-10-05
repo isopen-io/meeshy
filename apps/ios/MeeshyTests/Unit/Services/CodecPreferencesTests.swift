@@ -90,10 +90,24 @@ final class SDPMungingTests: XCTestCase {
         XCTAssertTrue(result.contains("useinbandfec=1"), "In-band FEC must be enabled")
     }
 
-    func test_mungeOpusSDP_setsBitrateAndStereo() {
+    func test_mungeOpusSDP_setsVoiceBitrateAndMono() {
         let result = P2PWebRTCClient.mungeOpusSDP(Self.minimalAudioSDP)
-        XCTAssertTrue(result.contains("maxaveragebitrate=64000"))
-        XCTAssertTrue(result.contains("stereo=1"))
+        XCTAssertTrue(result.contains("maxaveragebitrate=32000"))
+        XCTAssertTrue(result.contains("stereo=0"))
+        XCTAssertFalse(result.contains("stereo=1"), "A voice call never negotiates stereo (#8697)")
+    }
+
+    func test_mungeOpusSDP_withCellularProfile_capsTheAverageBitrate() {
+        let result = P2PWebRTCClient.mungeOpusSDP(Self.minimalAudioSDP, audio: CallDataProfile.cellular.budget.audio)
+        XCTAssertTrue(result.contains("maxaveragebitrate=24000"))
+        XCTAssertFalse(result.contains("maxaveragebitrate=32000"))
+    }
+
+    func test_mungeOpusSDP_overridesARemoteStereoHint() {
+        let stereo = Self.sdpWithFmtp.replacingOccurrences(of: "minptime=10;useinbandfec=1", with: "minptime=10;stereo=1;useinbandfec=1")
+        let result = P2PWebRTCClient.mungeOpusSDP(stereo)
+        XCTAssertFalse(result.contains("stereo=1"))
+        XCTAssertTrue(result.contains("stereo=0"))
     }
 
     func test_mungeOpusSDP_doesNotDuplicateExistingParams() {
@@ -320,8 +334,12 @@ final class CodecPreferencesTests: XCTestCase {
             source.contains("encoding.minBitrateBps = NSNumber(value: QualityThresholds.audioCodecFloorBitrateBps)"),
             "audio bitrate floor must be set via RTCRtpEncodingParameters.minBitrateBps (QualityThresholds.audioCodecFloorBitrateBps = 16 kbps)"
         )
+        let fmtpSource = try String(
+            contentsOf: url.deletingLastPathComponent().appendingPathComponent("CallDataProfile.swift"),
+            encoding: .utf8
+        )
         XCTAssertTrue(
-            source.contains("\"usedtx=1\""),
+            fmtpSource.contains("\"usedtx=1\""),
             "DTX must remain enabled via Opus fmtp `usedtx=1` (no native ObjC API in libwebrtc 141)"
         )
     }

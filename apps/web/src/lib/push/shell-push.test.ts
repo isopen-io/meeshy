@@ -3,7 +3,7 @@ import { createStore } from 'zustand/vanilla';
 
 import type { HttpRequest } from '@/lib/api/http';
 import type { SessionState } from '@/lib/api/session';
-import type { PushTapTarget } from '@/lib/notifications/target';
+import { pushTapTarget, type PushTapTarget } from '@/lib/notifications/target';
 
 import {
   SHELL_PUSH_CHANNEL_ID,
@@ -103,6 +103,7 @@ describe('startShellPush — le jeton FCM de la coque part sous le compte couran
         method: 'POST',
         path: '/api/v1/users/register-device-token',
         body: { token: 'fcm-token-1-xxxxxxxx', platform: 'android', type: 'fcm', appVersion: '2.0.12' },
+        credential: { kind: 'registered', token: 'jwt-u1' },
       },
     ]);
   });
@@ -161,6 +162,42 @@ describe('startShellPush — le jeton FCM de la coque part sous le compte couran
   });
 });
 
+describe('une identité anonyme tenue par le compte (#8816)', () => {
+  const heldBy = (account: SessionState): SessionState =>
+    account.status === 'authenticated'
+      ? {
+          status: 'guest',
+          sessionToken: 'anon_1',
+          guest: { participantId: 'p1', nickname: 'Masque', conversationId: 'c-anon', link: 'mshy_x', mayWrite: true },
+          expiresAt: Date.now() + 3_600_000,
+          account,
+        }
+      : account;
+
+  test('lire une conversation en anonyme ne détruit pas le jeton du compte', async () => {
+    const h = harness(authenticated('u1'));
+    await h.start();
+    await flush();
+    h.store.setState({ session: heldBy(authenticated('u1')) });
+    await flush();
+    expect(h.calls).toEqual(['register']);
+  });
+
+  test('le jeton et les accusés partent sous le COMPTE, jamais sous l’identité anonyme', async () => {
+    const h = harness(authenticated('u1'));
+    await h.start();
+    await flush();
+    h.store.setState({ session: heldBy(authenticated('u1')) });
+    h.requests.length = 0;
+    h.fire('registration', { value: 'fcm-token-refreshed' });
+    h.fire('pushNotificationReceived', { id: 'n', data: { type: 'new_message', conversationId: 'c42', messageId: 'm7' } });
+    expect(h.requests.map((request) => request.credential)).toEqual([
+      { kind: 'registered', token: 'jwt-u1' },
+      { kind: 'registered', token: 'jwt-u1' },
+    ]);
+  });
+});
+
 describe('le tap d’une bannière de la coque aboutit (#7307)', () => {
   test('il mène à la conversation que la charge nomme', async () => {
     const h = harness(authenticated('u1'));
@@ -188,7 +225,12 @@ describe('la coque accuse la remise d’un message reçu (#7307, report de #7368
     h.requests.length = 0;
     h.fire('pushNotificationReceived', { id: 'n', data: { type: 'new_message', conversationId: 'c42', messageId: 'm7' } });
     expect(h.requests).toEqual([
-      { method: 'POST', path: '/api/v1/conversations/c42/receipts', body: { type: 'delivered', messageIds: ['m7'] } },
+      {
+        method: 'POST',
+        path: '/api/v1/conversations/c42/receipts',
+        body: { type: 'delivered', messageIds: ['m7'] },
+        credential: { kind: 'registered', token: 'jwt-u1' },
+      },
     ]);
   });
 
@@ -214,6 +256,20 @@ describe('ce que la coque lit de la charge', () => {
     expect(Object.values(input)).not.toContain('Bonjour');
     expect(Object.values(input)).not.toContain('Hello');
     expect(input.conversationId).toBe('c1');
+  });
+
+  test('« X a rejoint Meeshy » mène la coque au profil de l’arrivant (#8105)', () => {
+    expect(pushTapTarget(shellPushTargetInput({ type: 'contact_joined', senderUsername: 'awa' }))).toEqual({
+      route: 'userProfile',
+      params: { username: 'awa' },
+    });
+  });
+
+  test('« X était sur Meeshy récemment » mène la coque au profil du contact revenu (#8285)', () => {
+    expect(pushTapTarget(shellPushTargetInput({ type: 'contact_recently_active', senderUsername: 'marie' }))).toEqual({
+      route: 'userProfile',
+      params: { username: 'marie' },
+    });
   });
 
   test('une remise sans message ni conversation n’est pas une remise', () => {

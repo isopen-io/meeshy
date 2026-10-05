@@ -10,7 +10,7 @@ export function getAppStoreUrl(platform?: string): string {
   if (typeof platform === 'string' && platform.trim().toLowerCase() === 'android') {
     return process.env.PLAY_STORE_URL ?? 'https://play.google.com/store/apps/details?id=me.meeshy.app';
   }
-  return process.env.APP_STORE_URL ?? 'https://apps.apple.com/app/meeshy';
+  return process.env.APP_STORE_URL ?? 'https://apps.apple.com/app/id6760208591';
 }
 
 export function compareAppVersions(a: string, b: string): number {

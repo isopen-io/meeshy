@@ -394,9 +394,15 @@ nonisolated enum ComposerChromeOwnership {
         /// aux tests, et c'est ainsi qu'une règle produit se met à exister en
         /// deux exemplaires. Défaut `false` — un appelant qui l'ignore obtient
         /// le comportement d'avant, exactement.
-        writesText: Bool = false
+        writesText: Bool = false,
+        /// **Un panneau ouvert en bas efface le socle** (directive porteur
+        /// 2026-09-27 : « sur mobile, quand un panneau comme Cadre s'ouvre en
+        /// bas, la barre du bas disparaît le temps du panneau »). Le panneau a la
+        /// largeur et la place ; le socle revient à sa fermeture. Défaut
+        /// `false` : un appelant qui l'ignore garde le comportement d'avant.
+        panelIsOpen: Bool = false
     ) -> [ComposerTopBarControl] {
-        guard !writesText else { return [] }
+        guard !writesText, !panelIsOpen else { return [] }
         switch surface {
         case .scene:
             // **RETOURNÉ au #4135** : le socle y peignait RIEN, l'atelier
@@ -404,12 +410,18 @@ nonisolated enum ComposerChromeOwnership {
             // partout, l'atelier n'en assemble plus aucune — les peindre ici
             // n'en double donc aucune, et ne pas les peindre les ferait
             // disparaître.
-            return atelierOffersPreview
-                ? [.audience, .preview, .publish]
-                : [.audience, .publish]
-        case .document: return documentHasScene
-            ? [.audience, .preview, .publish]
-            : [.audience, .publish]
+            //
+            // **L'œil a quitté le socle au #8370** (directive porteur
+            // 2026-09-27 : « preview à supprimer, remplacer le bouton par le
+            // bouton de texte de post »). L'aperçu reste servi par le `⋯`
+            // (`ComposerOverflowEntry.preview`) : ce qui existe s'agrège, ne se
+            // supprime pas. `atelierOffersPreview` et `documentHasScene`
+            // restent au contrat, et ne décident plus de la rangée.
+            _ = atelierOffersPreview
+            return [.audience, .publish]
+        case .document:
+            _ = documentHasScene
+            return [.audience, .publish]
         case .mood: return []
         }
     }
@@ -577,6 +589,10 @@ nonisolated enum ComposerSoundCredit {
 ///   Il porte plus loin que le rail : le rail retire les MÉDIAS un à un, celui-ci
 ///   emporte aussi le texte, le fond, le lieu et la transcription.
 nonisolated enum ComposerOverflowEntry: Equatable, CaseIterable {
+    /// **Voir la scène COMME ELLE SERA LUE** — l'œil du socle, déplacé ici au
+    /// #8370 : le socle ne porte plus que ce qui décide de l'envoi et le texte
+    /// du post.
+    case preview
     case pickBackground
     case removeBackground
     /// **Bake la scène et l'écrit dans Photos** (#4996). Ne touche JAMAIS le
@@ -629,6 +645,7 @@ nonisolated enum ComposerOverflowPolicy {
         if !backgroundPickerIsReachable { served.append(.pickBackground) }
         if hasBackground { served.append(.removeBackground) }
         if hasScene {
+            served.insert(.preview, at: 0)
             served.append(.saveToPhotos)
             served.append(.share)
         }
@@ -649,6 +666,9 @@ nonisolated enum ComposerOverflowPolicy {
 nonisolated enum ComposerOverflowCopy {
     static func label(_ entry: ComposerOverflowEntry) -> String {
         switch entry {
+        case .preview:
+            return String(localized: "composer.a11y.preview",
+                          defaultValue: "Aperçu", bundle: .main)
         case .pickBackground:
             return String(localized: "composer.overflow.pickBackground",
                           defaultValue: "Couleur de fond", bundle: .main)
@@ -669,6 +689,7 @@ nonisolated enum ComposerOverflowCopy {
 
     static func icon(_ entry: ComposerOverflowEntry) -> String {
         switch entry {
+        case .preview: return "eye"
         case .pickBackground: return "paintpalette.fill"
         case .removeBackground: return "paintpalette"
         // `arrow.down.to.line` et non `square.and.arrow.down` : le second est

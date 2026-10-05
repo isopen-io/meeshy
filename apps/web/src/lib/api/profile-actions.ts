@@ -1,9 +1,10 @@
 import type { QueryClient } from '@tanstack/react-query';
 
-import { recompressImage } from '@/lib/profile/image-recompress';
+import { uploadProfileImage } from '@/lib/profile/image-upload';
 
-import { uploadAttachments } from './attachments';
+import type { AccountVault } from './accounts';
 import { CONVERSATIONS_QUERY_KEY } from './conversations';
+import { repaintMyPortrait, repaintProfile } from './my-portrait';
 import {
   LANGUAGE_PATCH_KEYS,
   MY_PROFILE_QUERY_KEY,
@@ -15,6 +16,7 @@ import {
   type ProfileImageKind,
   type ProfilePatch,
 } from './profile';
+import { publicProfileQueryKey, type PublicProfileView } from './public-profile';
 import type { SessionProfileFields, SessionStoreApi, SessionUser } from './session';
 
 /**
@@ -45,6 +47,8 @@ import type { SessionProfileFields, SessionStoreApi, SessionUser } from './sessi
 export type ProfileActionDeps = ProfileDeps & {
   readonly queryClient: QueryClient;
   readonly session: SessionStoreApi;
+  /** La liste des comptes de l'appareil (#8886). */
+  readonly accounts: Pick<AccountVault, 'refreshUser'>;
   readonly isOnline: () => boolean;
 };
 
@@ -104,12 +108,60 @@ function sessionFieldsOfUser(user: SessionUser): SessionProfileFields {
   };
 }
 
+/**
+ * **MA FICHE PUBLIQUE SUIT MON PROFIL** (#8881) — `/u/<moi>` lit une AUTRE
+ * clé (`publicProfileQueryKey`), persistée et servie par la passerelle sous
+ * `Cache-Control: max-age=60` : sans cette projection, la photo et la bannière
+ * qu'on vient de poser y restaient les anciennes jusqu'à la revalidation. Seul
+ * ce que le porteur écrit est recopié — la relation et les compteurs restent
+ * ceux que le serveur a servis.
+ */
+function confirmOntoPublicProfile(queryClient: QueryClient, profile: MyProfile): void {
+  queryClient.setQueryData<PublicProfileView>(publicProfileQueryKey(profile.username), (view) =>
+    view === undefined
+      ? view
+      : {
+          ...view,
+          profile: {
+            ...view.profile,
+            displayName: profile.displayName,
+            avatar: profile.avatar,
+            banner: profile.banner,
+            bio: profile.bio === '' ? null : profile.bio,
+          },
+        },
+  );
+}
+
+/**
+ * La valeur SERVIE s'écrit partout où le porteur se voit : le cache du profil,
+ * la session (en-tête, réglages, rail des stories), ma fiche publique et la
+ * ligne de mon compte dans la liste de l'appareil (#8886) — celle que la
+ * connexion et « Changer de compte » affichent.
+ */
+function confirm(deps: ProfileActionDeps, profile: MyProfile): void {
+  deps.queryClient.setQueryData(MY_PROFILE_QUERY_KEY, profile);
+  deps.session.getState().updateUser(sessionFieldsOfProfile(profile));
+  confirmOntoPublicProfile(deps.queryClient, profile);
+  const user = heldUser(deps.session);
+  if (user !== undefined) deps.accounts.refreshUser(user);
+}
+
 const heldUser = (session: SessionStoreApi): SessionUser | undefined => {
   const state = session.getState().session;
   return state.status === 'authenticated' ? state.user : undefined;
 };
 
 const touchesPrism = (patch: ProfilePatch): boolean => LANGUAGE_PATCH_KEYS.some((key) => patch[key] !== undefined);
+
+const NAME_PATCH_KEYS = ['displayName', 'firstName', 'lastName'] as const;
+
+/** #8890 — mon nom, recopié dans chaque charge qui me montre, suit la valeur SERVIE (même loi que la photo, `my-portrait.ts`). */
+function repaintMyName(queryClient: QueryClient, patch: ProfilePatch, profile: MyProfile): void {
+  if (!NAME_PATCH_KEYS.some((key) => patch[key] !== undefined)) return;
+  const { displayName, firstName, lastName, username } = profile;
+  repaintProfile(queryClient, { userId: profile.id, name: { displayName, firstName, lastName, username } });
+}
 
 export async function performProfileEdit(params: {
   readonly patch: ProfilePatch;
@@ -138,8 +190,8 @@ export async function performProfileEdit(params: {
     return { status: 'refused', error: result.error, ...(result.field === undefined ? {} : { field: result.field }) };
   }
 
-  deps.queryClient.setQueryData(MY_PROFILE_QUERY_KEY, result.data);
-  deps.session.getState().updateUser(sessionFieldsOfProfile(result.data));
+  confirm(deps, result.data);
+  repaintMyName(deps.queryClient, patch, result.data);
   if (touchesPrism(patch)) void deps.queryClient.invalidateQueries({ queryKey: CONVERSATIONS_QUERY_KEY });
   return { status: 'saved' };
 }
@@ -155,28 +207,11 @@ export type ImageUpdateDeps = ProfileActionDeps & {
   readonly recompress?: (file: Blob, kind: ProfileImageKind) => Promise<Blob>;
 };
 
-const EXTENSIONS: Readonly<Record<string, string>> = { 'image/webp': 'webp', 'image/jpeg': 'jpg', 'image/png': 'png' };
-
-const cancelled = (signal: AbortSignal | undefined, code: string | undefined): boolean =>
-  signal?.aborted === true || code === 'ABORTED';
-
-async function readableImage(
-  file: Blob,
-  kind: ProfileImageKind,
-  recompress: (file: Blob, kind: ProfileImageKind) => Promise<Blob>,
-): Promise<Blob | null> {
-  try {
-    return await recompress(file, kind);
-  } catch {
-    return null;
-  }
-}
-
 /**
  * **CHANGER SA PHOTO OU SA BANNIÈRE** — le chemin d'iOS
  * (`ProfileView.uploadAvatar`, `:925-943`) : recompresser, téléverser par
- * `POST /api/v1/attachments/upload` (le port déjà employé par le composeur,
- * `attachments.ts`), puis poser l'URL servie par `PATCH /users/me/avatar` ou
+ * `POST attachments.upload` (`uploadProfileImage`, partagé avec
+ * l'administration — #8217), puis poser l'URL servie par `PATCH /users/me/avatar` ou
  * `/banner`. L'APERÇU local est tenu par l'écran, jamais par ce cache : une URL
  * `blob:` persistée survivrait au rechargement sans rien désigner.
  *
@@ -190,28 +225,14 @@ export async function performImageUpdate(params: {
   readonly deps: ImageUpdateDeps;
 }): Promise<ImageUpdateOutcome> {
   const { kind, file, signal, deps } = params;
-  if (!deps.isOnline()) return { status: 'offline' };
-
-  const image = await readableImage(file, kind, deps.recompress ?? recompressImage);
-  if (image === null) return { status: 'unreadable' };
-  if (signal?.aborted === true) return { status: 'cancelled' };
-
-  const upload = await uploadAttachments({
-    source: deps.source,
-    transport: deps.transport,
-    pending: [{ file: new File([image], `${kind}.${EXTENSIONS[image.type] ?? 'jpg'}`, { type: image.type }) }],
-    ...(signal === undefined ? {} : { signal }),
-  });
-  if (!upload.ok) return cancelled(signal, upload.code) ? { status: 'cancelled' } : { status: 'refused', error: upload.error };
-
-  const url = upload.data.attachments[0]?.fileUrl;
-  if (url === undefined || url === '') return { status: 'refused', error: 'Téléversement sans adresse' };
-  if (cancelled(signal, undefined)) return { status: 'cancelled' };
+  const upload = await uploadProfileImage({ kind, file, deps, ...(signal === undefined ? {} : { signal }) });
+  if (upload.status !== 'uploaded') return upload;
+  const { url, bytesSent } = upload;
 
   const result = await patchMyImage(deps, kind, url);
   if (!result.ok) return { status: 'refused', error: result.error };
 
-  deps.queryClient.setQueryData(MY_PROFILE_QUERY_KEY, result.data);
-  deps.session.getState().updateUser(sessionFieldsOfProfile(result.data));
-  return { status: 'saved', url, bytesSent: image.size };
+  confirm(deps, result.data);
+  repaintMyPortrait(deps.queryClient, { userId: result.data.id, avatar: result.data.avatar, banner: result.data.banner });
+  return { status: 'saved', url, bytesSent };
 }

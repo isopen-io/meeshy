@@ -25,9 +25,9 @@ enum ReelNotificationDestination {
 /// réseau reclasse.
 struct ReelNotificationOpener {
     let postService: PostServiceProviding
-    let cachedPost: (String) async -> FeedPost?
+    let cachedPost: @MainActor (String) async -> FeedPost?
     let preferredLanguages: () -> [String]
-    let drainPrefetchedPosts: () async -> Void
+    let drainPrefetchedPosts: @MainActor () async -> Void
 
     static var live: ReelNotificationOpener {
         ReelNotificationOpener(

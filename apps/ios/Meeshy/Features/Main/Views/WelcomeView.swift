@@ -73,9 +73,17 @@ struct WelcomeView: View {
                 // carrousel au prochain lancement d'un utilisateur connecté
                 // serait un écran mort posé devant sa messagerie.
                 onComplete: { completeWelcome() },
-                onSwitchToLogin: {
+                onSwitchToLogin: { email in
+                    LoginEmailHandoff.shared.hold(email)
                     isShowingSignup = false
                     completeWelcome()
+                },
+                // Code vérifié après une inscription sans numéro (#8059) : l'accueil
+                // est présenté par la racine de l'app, qui survit à l'ouverture
+                // de session — il se referme avec elle.
+                onVerified: { open in
+                    completeWelcome()
+                    open()
                 }
             )
         }

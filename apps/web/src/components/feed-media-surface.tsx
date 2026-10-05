@@ -69,7 +69,7 @@ export function FeedMediaSurface({ media, playable = false }: { readonly media: 
           className="absolute inset-0 size-full object-cover"
         />
         <div className="pointer-events-none absolute inset-0 grid place-items-center">
-          <Glyph name="fillPlay" size={44} style={{ color: 'rgba(255,255,255,0.85)' }} title={translate(language, 'feed.post.media.video')} />
+          <Glyph name="fillPlay" size={44} style={{ color: 'var(--color-on-media-2)' }} title={translate(language, 'feed.post.media.video')} />
         </div>
       </div>
     );
@@ -85,7 +85,7 @@ export function FeedMediaSurface({ media, playable = false }: { readonly media: 
         <GlyphSvg
           glyph={FEED_GLYPHS.waveform}
           size={72}
-          style={{ color: 'rgba(255,255,255,0.55)' }}
+          style={{ color: 'var(--color-on-media-3)' }}
           title={translate(language, 'feed.post.media.audio')}
         />
       </div>
@@ -117,12 +117,12 @@ export function FeedMediaSurface({ media, playable = false }: { readonly media: 
         }}
       >
         {media.kind === 'video' ? (
-          <Glyph name="fillPlay" size={44} style={{ color: 'rgba(255,255,255,0.85)' }} title={translate(language, 'feed.post.media.video')} />
+          <Glyph name="fillPlay" size={44} style={{ color: 'var(--color-on-media-2)' }} title={translate(language, 'feed.post.media.video')} />
         ) : (
           <GlyphSvg
             glyph={FEED_GLYPHS.waveform}
             size={72}
-            style={{ color: 'rgba(255,255,255,0.55)' }}
+            style={{ color: 'var(--color-on-media-3)' }}
             title={translate(language, 'feed.post.media.audio')}
           />
         )}

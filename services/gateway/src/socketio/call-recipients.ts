@@ -14,13 +14,14 @@
  * ne reçoit pas ne se rattrape pas.
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import { resolveUserLanguage } from '@meeshy/shared/utils/conversation-helpers';
 import { logger } from '../utils/logger';
+import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../utils/recipient-language';
 
 /**
- * Langue de notification résolue (Prisme-first) pour chaque callee d'un
- * push d'appel. Un seul findMany ; toute erreur retourne une Map vide —
- * notificationString(undefined) retombe sur 'fr', le push part toujours.
+ * Langue de CADRAGE de chaque callee d'un push d'appel (« X vous appelle »,
+ * Répondre / Refuser) — la descente du site unique `recipient-language.ts`,
+ * sa projection comprise. Un seul findMany ; toute erreur retourne une Map
+ * vide — notificationString(undefined) retombe sur 'fr', le push part toujours.
  */
 export async function resolveNotificationLangs(prisma: PrismaClient, userIds: string[]): Promise<Map<string, string>> {
   const out = new Map<string, string>();
@@ -28,16 +29,10 @@ export async function resolveNotificationLangs(prisma: PrismaClient, userIds: st
   try {
     const users = await prisma.user.findMany({
       where: { id: { in: userIds } },
-      select: {
-        id: true,
-        systemLanguage: true,
-        regionalLanguage: true,
-        customDestinationLanguage: true,
-        deviceLocale: true,
-      },
+      select: { id: true, ...RECIPIENT_LANG_SELECT },
     });
     for (const u of users) {
-      out.set(u.id, resolveUserLanguage(u, { deviceLocale: u.deviceLocale ?? undefined }));
+      out.set(u.id, recipientLanguage(u, 'fr'));
     }
   } catch (error) {
     logger.error('Notification language resolution failed — falling back to fr', { error });

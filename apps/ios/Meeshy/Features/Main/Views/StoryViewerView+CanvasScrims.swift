@@ -1,4 +1,5 @@
 import SwiftUI
+import MeeshyUI
 
 /// **Les voiles de lisibilité du lecteur de story** (#6701).
 ///
@@ -13,50 +14,17 @@ import SwiftUI
 /// reviennent dans le même mouvement.
 ///
 /// Sorti de `StoryViewerView+Canvas.swift`, hors budget : on n'y ajoute pas, on
-/// extrait d'abord.
+/// extrait d'abord. Le dessin vit dans le SDK (`FullscreenScrims`, #8878) : la galerie
+/// et la scène d'un réel montent le même, ce nom reste celui que les gardes épinglent.
 struct StoryReaderScrims: View {
     let topInset: CGFloat
     let chromeVisible: Bool
 
-    /// L'opacité des voiles : pleine sous le chrome, nulle sans lui.
     static func opacity(chromeVisible: Bool) -> Double {
-        chromeVisible ? 1 : 0
+        FullscreenScrims.opacity(chromeVisible: chromeVisible)
     }
 
     var body: some View {
-        VStack {
-            LinearGradient(
-                stops: [
-                    .init(color: .black.opacity(0.7), location: 0),
-                    .init(color: .black.opacity(0.4), location: 0.5),
-                    .init(color: .black.opacity(0.0), location: 1)
-                ],
-                startPoint: .top, endPoint: .bottom
-            )
-            .frame(height: topInset + 110)
-            Spacer()
-            // Scrim bottom plus opaque + plus haut — assure que le caption
-            // texte d'une slide (rendu par le canvas à y≈0.95 en design
-            // coords) ne déborde plus visuellement sur la zone composer
-            // « Commenter... ». Le canvas du reader est positionné au
-            // centre du geometry (9:16 fit-to-width), donc un text
-            // positioné bas du slide tombe juste au-dessus du composer.
-            // Sans ce scrim fort, les deux se superposent — symptôme
-            // user-reporté 2026-05-27.
-            LinearGradient(
-                stops: [
-                    .init(color: .black.opacity(0.0), location: 0),
-                    .init(color: .black.opacity(0.55), location: 0.45),
-                    .init(color: .black.opacity(0.92), location: 1)
-                ],
-                startPoint: .top, endPoint: .bottom
-            )
-            .frame(height: 240)
-        }
-        .opacity(Self.opacity(chromeVisible: chromeVisible))
-        .animation(.spring(response: 0.32, dampingFraction: 0.78), value: chromeVisible)
-        .ignoresSafeArea()
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
+        FullscreenScrims(topInset: topInset, chromeVisible: chromeVisible)
     }
 }

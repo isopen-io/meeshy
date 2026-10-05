@@ -26,7 +26,7 @@ import { exigerNodeRecent } from '../../../scripts/node-guard/require-node-runti
 // et un Node trop ancien y echoue sur une pile qui ne nomme pas la cause.
 exigerNodeRecent('packages/shared/scripts/generate-api-endpoints.ts');
 
-import { readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -37,6 +37,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(HERE, '../../..');
 const MANIFEST_PATH = resolve(REPO_ROOT, 'services/gateway/route-manifest.json');
 const OUTPUT_PATH = resolve(HERE, '../api/endpoints.ts');
+const GROUPS_DIR = resolve(HERE, '../api/endpoints');
 const REGENERATE_MANIFEST_COMMAND = 'cd services/gateway && npm run route-manifest:generate';
 
 interface RawManifestFile {
@@ -76,14 +77,26 @@ function main(): void {
   // #5424 — les routes d'EXPLOITATION (jamais destinées à un client) ne
   // rejoignent pas le catalogue, sans quitter le manifeste (`ops-only-routes.ts`).
   const routes = filterOutOpsOnlyRoutes(readManifest());
-  const { source, pathTemplates } = buildApiEndpointsCatalog(routes);
+  const { source, groups, pathTemplates } = buildApiEndpointsCatalog(routes);
 
   writeFileSync(OUTPUT_PATH, source, 'utf8');
+
+  // #7716 — un module par groupe. Un groupe DISPARU du manifeste emporte son
+  // fichier : un module orphelin resterait importable, et le cliquet de
+  // régénération le signalerait comme périmé.
+  mkdirSync(GROUPS_DIR, { recursive: true });
+  const expected = new Set(groups.map((group) => `${group.fileName}.ts`));
+  for (const name of readdirSync(GROUPS_DIR)) {
+    if (name.endsWith('.ts') && !expected.has(name)) rmSync(resolve(GROUPS_DIR, name));
+  }
+  for (const group of groups) {
+    writeFileSync(resolve(GROUPS_DIR, `${group.fileName}.ts`), group.source, 'utf8');
+  }
 
   // eslint-disable-next-line no-console
   console.log(
     `api/endpoints.ts régénéré depuis ${routes.length} route(s) du manifeste ` +
-      `(${pathTemplates.length} chemin(s) unique(s)) → ${OUTPUT_PATH}`
+      `(${pathTemplates.length} chemin(s) unique(s), ${groups.length} groupe(s)) → ${OUTPUT_PATH}`
   );
 }
 

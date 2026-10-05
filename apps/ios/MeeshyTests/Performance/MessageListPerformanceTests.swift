@@ -44,7 +44,7 @@ final class MessageListPerformanceTests: XCTestCase {
         let pool = try makeDatabase(messageCount: 1000)
         let persistence = MessagePersistenceActor(dbWriter: pool)
         let store = MessageStore(conversationId: "c1", persistence: persistence)
-        await store.loadInitial()
+        await store.refreshFromDB()
 
         XCTAssertEqual(store.messages.count, MessageStore.initialWindowSize,
             "loadInitial loads only the most-recent window (initialWindowSize); older messages page in on scroll")
@@ -69,7 +69,7 @@ final class MessageListPerformanceTests: XCTestCase {
         let pool = try makeDatabase(messageCount: 1000)
         let persistence = MessagePersistenceActor(dbWriter: pool)
         let store = MessageStore(conversationId: "c1", persistence: persistence)
-        await store.loadInitial()
+        await store.refreshFromDB()
 
         let opts = XCTMeasureOptions()
         opts.iterationCount = 10
@@ -90,7 +90,7 @@ final class MessageListPerformanceTests: XCTestCase {
         let pool = try makeRealisticDatabase(messageCount: 5000)
         let persistence = MessagePersistenceActor(dbWriter: pool)
         let store = MessageStore(conversationId: "c1", persistence: persistence)
-        await store.loadInitial()
+        await store.refreshFromDB()
         var rounds = 0
         while store.messages.count < 1000, rounds < 30 {
             guard let oldest = store.messages.first?.createdAt else { break }
@@ -141,7 +141,7 @@ final class MessageListPerformanceTests: XCTestCase {
         let pool = try makeDatabase(messageCount: 1000)
         let persistence = MessagePersistenceActor(dbWriter: pool)
         let store = MessageStore(conversationId: "c1", persistence: persistence)
-        await store.loadInitial()
+        await store.refreshFromDB()
 
         let options = XCTMeasureOptions()
         options.iterationCount = 10
@@ -161,7 +161,7 @@ final class MessageListPerformanceTests: XCTestCase {
         let pool = try makeDatabase(messageCount: 1000)
         let persistence = MessagePersistenceActor(dbWriter: pool)
         let store = MessageStore(conversationId: "c1", persistence: persistence)
-        await store.loadInitial()
+        await store.refreshFromDB()
 
         // Index borné par la fenêtre initiale (initialWindowSize = 200), pas
         // le total inséré — `loadInitial` ne charge que la fenêtre récente.
@@ -238,7 +238,7 @@ final class MessageListPerformanceTests: XCTestCase {
         let pool = try makeRealisticDatabase(messageCount: 2000)
         let persistence = MessagePersistenceActor(dbWriter: pool)
         let store = MessageStore(conversationId: "c1", persistence: persistence)
-        await store.loadInitial()
+        await store.refreshFromDB()
         // Faire grandir la fenêtre chargée vers un état "scroll profond"
         // (~1000) pour qu'`applySnapshot` traite un grand item-set réaliste,
         // pas seulement la fenêtre initiale de 200.
@@ -293,7 +293,7 @@ final class MessageListPerformanceTests: XCTestCase {
         let pool = try makeRealisticDatabase(messageCount: 5000)
         let persistence = MessagePersistenceActor(dbWriter: pool)
         let store = MessageStore(conversationId: "c1", persistence: persistence)
-        await store.loadInitial()
+        await store.refreshFromDB()
         var rounds = 0
         while store.messages.count < 2000, rounds < 60 {
             guard let oldest = store.messages.first?.createdAt else { break }
@@ -402,7 +402,7 @@ final class MessageListPerformanceTests: XCTestCase {
         let pool = try makeRealisticDatabase(messageCount: 5000)
         let persistence = MessagePersistenceActor(dbWriter: pool)
         let store = MessageStore(conversationId: "c1", persistence: persistence)
-        await store.loadInitial()
+        await store.refreshFromDB()
         var rounds = 0
         while store.messages.count < 2000, rounds < 60 {
             guard let oldest = store.messages.first?.createdAt else { break }
@@ -457,7 +457,7 @@ final class MessageListPerformanceTests: XCTestCase {
         let pool = try makeRealisticDatabase(messageCount: 5000)
         let persistence = MessagePersistenceActor(dbWriter: pool)
         let store = MessageStore(conversationId: "c1", persistence: persistence)
-        await store.loadInitial()
+        await store.refreshFromDB()
         var rounds = 0
         while store.messages.count < 2000, rounds < 60 {
             guard let oldest = store.messages.first?.createdAt else { break }

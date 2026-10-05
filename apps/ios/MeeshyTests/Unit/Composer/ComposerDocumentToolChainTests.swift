@@ -157,7 +157,7 @@ final class ComposerDocumentToolChainTests: XCTestCase {
         )
         XCTAssertEqual(
             ComposerDocumentTool.servedRow,
-            [.photo, .camera, .emoji, .document, .place, .microphone, .mention],
+            [.photo, .camera, .emoji, .textScene, .document, .place, .microphone, .mention],
             "La rangée servie doit couvrir la rangée canonique dans l'ordre de la maquette `1a` "
                 + "(#4071). `.mention` est passé en queue parce qu'au 4e rang il poussait trois "
                 + "outils hors champ, et qu'il est le seul à avoir une seconde porte — taper `@` : "

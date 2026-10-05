@@ -29,7 +29,9 @@
 @source not '../../**/*.md';
 @import '@meeshy/design-tokens/tokens.css';
 @import './ios.css';
+@import './admin.css';
 @import './glass.css';
+@import './ui.css';
 
 /* Le schema SOMBRE est le defaut de la table (`:root, :root.dark`) ; le clair
    s'obtient par la classe `.light`. La variante ci-dessous sert les rares cas
@@ -113,7 +115,11 @@
 
   /* ---- RAYONS : cinq roles, pas cinq tailles (charte regle 9) ---- */
   --radius-menu: var(--radius-xs);
-  --radius-field: var(--radius-sm);
+  /* 14 et non plus 8 (#8879) : le champ d'iOS (`MeeshyRadius.md`), celui
+     que `field.tsx` et la recherche de `sheet.tsx` posaient déjà en dur. */
+  --radius-field: var(--ios-radius-md);
+  /* La tuile (`MeeshyRadius.sm`, 10) — vignettes et icônes carrées. */
+  --radius-tile: var(--ios-radius-sm);
   --radius-card: var(--radius-lg);
   --radius-hero: var(--radius-xl);
   --radius-sheet: var(--radius-2xl);
@@ -541,6 +547,126 @@
   }
 }
 
+/* LE RETOUR APRES ENVOI, ADOUCI (#7985) — l'emplacement d'envoi du composeur
+   (bouton d'envoi OU cadre des emojis rapides) entre par un tourbillon DOUX.
+   iOS (`tourbillonTransition`, `UniversalComposerBar+Send.swift`) passait de
+   ±250 deg / echelle 0,05 / ressort amorti 0,62 ; la directive porteur du
+   2026-09-25 le veut nettement moins accentue : ±40 deg, echelle 0,6, ressort
+   amorti 0,85 — presque sans rebond, donc une simple deceleration ici.
+   Seule l'ENTREE est animee (l'element sortant est demonte), et jamais au
+   premier rendu : ouvrir une conversation ne fait rien tourner.
+   `prefers-reduced-motion` la coupe. */
+@keyframes composerSlotIn {
+  from {
+    opacity: 0;
+    transform: scale(0.6) rotate(-40deg);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.composer-slot-in {
+  animation: composerSlotIn 320ms cubic-bezier(0.25, 1, 0.5, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .composer-slot-in {
+    animation: none;
+  }
+}
+
+[data-composer-toolbar-leading][data-scrolls-further] {
+  mask-image: linear-gradient(to right, #000 calc(100% - 44px), transparent);
+}
+
+[data-composer-toolbar-leading][data-scrolls-further]:dir(rtl) {
+  mask-image: linear-gradient(to left, #000 calc(100% - 44px), transparent);
+}
+
+/* LA MONTEE D'UNE PLAQUE DU STUDIO (#8517) — l'edition d'un objet et le
+   Cadre entrent comme le texte du post : un cadre de verre qui glisse de
+   16 px vers le haut en s'eclairant. `prefers-reduced-motion` la coupe. */
+@keyframes studioPlaqueRise {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.studio-plaque-rise {
+  animation: studioPlaqueRise 240ms cubic-bezier(0.25, 1, 0.5, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .studio-plaque-rise {
+    animation: none;
+  }
+}
+
+/* UN OUTIL OUVERT PREND TOUTE LA PLACE (#8654) — l'en-tete, les rails et
+   leurs (+) cedent en fondu, sans quitter leur place (la scene ne saute
+   pas). */
+[data-studio-chrome] {
+  transition: opacity 200ms ease;
+}
+
+[data-studio-chrome='hidden'] {
+  opacity: 0;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-studio-chrome] {
+    transition: none;
+  }
+}
+
+/* LE SOL QUI CHANGE DE SOURCE (#8534) — l'image arrivee, deja decodee, se
+   leve en fondu sur celle qui part (gardee dessous par `useDecodedSwap`) :
+   aucune image perdue, aucun eclair de vide. */
+@keyframes studioFloorIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.studio-floor-in {
+  animation: studioFloorIn 320ms ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .studio-floor-in {
+    animation: none;
+  }
+}
+
+/* LES RAILS AUTOUR DE LA CARTE, AU BUREAU (#8517) — la zone de la scene
+   s'etirait sur tout l'ecran : les rails, poses a 10 px de ses bords, restaient
+   colles au bord de la fenetre, a plusieurs centaines de pixels de la carte.
+   Au-dela d'un telephone, la zone se borne a la largeur d'une carte 9:16 de la
+   hauteur de l'ecran, plus un couloir de rail de chaque cote, et se centre :
+   les rails flottent a cote de la carte, jamais dessus. La carte, qui se cadre
+   dans la zone, ne change pas de hauteur. */
+@media (min-width: 768px) {
+  .studio-shell {
+    container-type: size;
+  }
+
+  .studio-shell > [data-story-studio-plateau] {
+    width: min(100%, calc(100cqh * 9 / 16 + 8rem));
+    margin-inline: auto;
+  }
+}
+
 /* LA RESPIRATION DE MA PASTILLE D'HUMEUR (#6150) — trame de `MeeshyMoodBadge`
    (`packages/MeeshySDK/Sources/MeeshyUI/Primitives/MoodBadge.swift`) : repos
    1.0, crete 1.18, puis la pastille SE POSE. Deux bornes portees depuis iOS,
@@ -576,8 +702,51 @@
   animation-fill-mode: both;
 }
 
+/* LE PLEIN ÉCRAN DU PAIR (#9065) : le mood quitte sa respiration pour un
+   pulse à peine perceptible, tant que le pair regarde. Miroir de
+   `MeeshyMoodBadge.hushedScale` (iOS). */
+@keyframes moodHush {
+  0% {
+    transform: scale(1);
+  }
+  100% {
+    transform: scale(1.05);
+  }
+}
+
+.mood-hush {
+  animation-name: moodHush;
+  animation-duration: 1.6s;
+  animation-direction: alternate;
+  animation-iteration-count: infinite;
+  animation-timing-function: ease-in-out;
+}
+
+/* LE PAIR ACTIF (#9065) : une respiration à peine plus élevée, qui dure tant
+   qu'il défile, écoute ou agit — le même cran que l'onde active du point « ici »,
+   jamais un pulse qui crie.
+   Miroir de `MeeshyMoodBadge` (iOS). */
+@keyframes moodStir {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.2);
+  }
+}
+
+.mood-stir {
+  animation-name: moodStir;
+  animation-duration: 2s;
+  animation-iteration-count: infinite;
+  animation-timing-function: ease-in-out;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .mood-breathe {
+  .mood-breathe,
+  .mood-stir,
+  .mood-hush {
     animation: none;
   }
 }
@@ -597,4 +766,69 @@
 
 :root.light {
   --color-karaoke-ink: var(--ios-indigo-600);
+}
+
+/*
+ * L'ENCRE DE LA SÉRIE 🔥 (#9221) — la flamme sous l'avatar de l'en-tête et la
+ * marque « 🔥4 · 120 » de la liste. Le rouge iOS (`--ios-error`, #f87171) se
+ * lit sur nuit, mais pas sur blanc (2,8:1, en 11–12 px) : sur téléphone, la
+ * série disparaissait. En clair, un rouge plus profond, mêlé des deux rouges
+ * du design system, mesuré à 5:1.
+ */
+:root,
+:root.dark {
+  --streak-ink: var(--ios-error);
+}
+
+:root.light {
+  --streak-ink: color-mix(in srgb, var(--ios-error-strong) 60%, var(--ios-error-dark));
+}
+
+/*
+ * UNE INTERFACE ARABE, UN CONTENU LATIN (#8803). `<html dir="rtl">` retourne la
+ * mise en page ; il retournerait aussi chaque phrase française ou anglaise d'un
+ * message, d'un aperçu ou d'un nom — « .On se voit demain au bureau », le point
+ * en tête. Chaque bloc prend donc le sens de SON contenu (premier caractère
+ * fort), comme `NSWritingDirection.natural` sur iOS ; la géométrie reste celle
+ * du document. L'ALIGNEMENT, lui, suit l'interface (`NSTextAlignment.natural`) :
+ * `start` se résoudrait sur le contenu, donc le corps hérite de `right` et un
+ * `text-start` posé par un écran se lit « côté début de l'INTERFACE » ; un
+ * `text-center` garde la main.
+ */
+:root[dir='rtl'] body {
+  text-align: right;
+}
+
+:root[dir='rtl'] body :where(*),
+:root[dir='rtl'] body ::placeholder {
+  unicode-bidi: plaintext;
+}
+
+:root[dir='rtl'] body .text-start {
+  text-align: right;
+}
+
+/*
+ * L'ADMINISTRATION EST TOUJOURS À L'ENDROIT (D-162, directive porteur
+ * 2026-09-30). Son cadre porte `dir="ltr"` quelle que soit la langue
+ * d'interface — une interface arabe lit l'administration en anglais — mais les
+ * règles ci-dessus décrivent le corps par un sélecteur DESCENDANT : elles
+ * atteignent le cadre malgré son `dir`, et l'`unicode-bidi: plaintext` hérité
+ * + l'alignement `right` remettraient à droite chaque texte d'une mise en page
+ * qui lit de gauche à droite. On les rend ici, sous le cadre seulement ; le
+ * reste du document garde son sens. (`revert` rend la valeur de la feuille de
+ * style du navigateur : `isolate` pour un élément qui porte `dir`.)
+ */
+:root[dir='rtl'] [data-admin-shell] {
+  text-align: left;
+}
+
+:root[dir='rtl'] [data-admin-shell],
+:root[dir='rtl'] [data-admin-shell] :where(*),
+:root[dir='rtl'] [data-admin-shell] ::placeholder {
+  unicode-bidi: revert;
+}
+
+:root[dir='rtl'] [data-admin-shell] .text-start {
+  text-align: left;
 }

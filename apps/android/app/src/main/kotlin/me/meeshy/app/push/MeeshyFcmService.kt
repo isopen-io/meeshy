@@ -98,6 +98,7 @@ class MeeshyFcmService : FirebaseMessagingService() {
         Timber.d("Revocation push: ${revocation.notificationIds.size} notification(s)")
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         revocation.notificationManagerIds().forEach { manager.cancel(it) }
+        revocation.systemRenderedTags().forEach { manager.cancel(it, 0) }
     }
 
     private fun cancelIncomingCallNotification(push: CallStopPush) {

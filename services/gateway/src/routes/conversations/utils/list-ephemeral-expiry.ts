@@ -1,5 +1,10 @@
-import { servedEphemeralExpiresAt } from '@meeshy/shared/utils/ephemeral-countdown';
+import { hasPerReaderEphemeralDeadline, servedEphemeralExpiresAt } from '@meeshy/shared/utils/ephemeral-countdown';
 import { loadEphemeralReaderDeadlines, type EphemeralDeadlinesPrisma } from '../ephemeralReaderDeadlines';
+import {
+  loadInheritedEphemeralDeadlines,
+  type QuoteCascadePrisma,
+  type QuotingRow,
+} from '../../../services/messaging/quoteCascade';
 
 /**
  * L'échéance SERVIE au lecteur pour le dernier message de chaque ligne de liste
@@ -20,6 +25,7 @@ export interface ListLastMessage {
   readonly id: string;
   readonly senderId?: string | null;
   readonly ephemeralDuration?: number | null;
+  readonly effectFlags?: number | null;
   readonly expiresAt?: Date | null;
 }
 
@@ -30,7 +36,7 @@ export async function loadListEphemeralExpiries(
 ): Promise<ReadonlyMap<string, Date | null>> {
   const ephemeral = rows.filter(
     (row): row is { conversationId: string; message: ListLastMessage } =>
-      typeof row.message?.ephemeralDuration === 'number' && row.message.ephemeralDuration > 0,
+      row.message !== undefined && hasPerReaderEphemeralDeadline(row.message),
   );
   const served = await Promise.all(
     ephemeral.map(async ({ conversationId, message }) => {
@@ -40,6 +46,7 @@ export async function loadListEphemeralExpiries(
         message.id,
         servedEphemeralExpiresAt({
           ephemeralDuration: message.ephemeralDuration,
+          effectFlags: message.effectFlags,
           rawExpiresAt: message.expiresAt ?? null,
           isSender: resolution?.isSender ?? false,
           readerDeadline: resolution?.readerDeadline ?? null,
@@ -49,4 +56,26 @@ export async function loadListEphemeralExpiries(
     }),
   );
   return new Map(served);
+}
+
+/**
+ * #8630 — la mort, pour CE lecteur, de ce que le dernier message de chaque ligne
+ * CITE (transitivement) : une réponse meurt avec ce qu'elle cite, et sa ligne
+ * de liste passe à « expiré » comme celle d'un éphémère échu. Une lecture par
+ * conversation dont le dernier message est une réponse ; aucune pour les autres.
+ */
+export async function loadListInheritedExpiries(
+  prisma: QuoteCascadePrisma,
+  rows: ReadonlyArray<{ readonly conversationId: string; readonly message: (QuotingRow & ListLastMessage) | undefined }>,
+  readerParticipantFor: (conversationId: string) => string | undefined,
+): Promise<ReadonlyMap<string, Date>> {
+  const replies = rows.filter(
+    (row): row is { conversationId: string; message: QuotingRow & ListLastMessage } => Boolean(row.message?.replyToId),
+  );
+  const inherited = await Promise.all(
+    replies.map(({ conversationId, message }) =>
+      loadInheritedEphemeralDeadlines(prisma, [message], readerParticipantFor(conversationId)),
+    ),
+  );
+  return new Map(inherited.flatMap((map) => [...map.entries()]));
 }

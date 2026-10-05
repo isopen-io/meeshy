@@ -12,3 +12,6 @@ export const ANONYMOUS_LIST_SPEC = defineListSpec({
   filters: { status: ['active', 'inactive'] },
   pageSizes: [20, 50, 100],
 });
+
+export type AnonymousSortKey = (typeof ANONYMOUS_LIST_SPEC.sortKeys)[number];
+export type AnonymousFilterKey = keyof typeof ANONYMOUS_LIST_SPEC.filters;

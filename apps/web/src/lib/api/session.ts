@@ -58,6 +58,12 @@ export type SessionUser = Pick<User, 'id' | 'username' | 'displayName' | 'avatar
      * seul), un écart déjà présent ailleurs dans le dépôt que ce fichier
      * n'a pas vocation à corriger — il se contente de ne pas y échouer. */
     readonly customDestinationLanguage?: string | null;
+    /** L'adresse du compte n'est PAS prouvée (#8365) — posé depuis ce que la
+     * connexion sert (`emailVerifiedAt: null`, ou `activation.missing` qui
+     * contient `email`, #8238), jamais deviné : absent = inconnu. Lu par le
+     * transport pour ouvrir la validation de l'e-mail AVANT d'envoyer une
+     * publication (`lib/activation/email-gated-transport.ts`). */
+    readonly emailUnproven?: true;
   };
 
 /** La branche « second facteur attendu » ne porte AUCUN jeton d'accès —
@@ -87,6 +93,18 @@ export type GuestIdentity = {
   readonly mayWrite: boolean;
 };
 
+export type AuthenticatedSession = {
+  readonly status: 'authenticated';
+  readonly user: SessionUser;
+  readonly token: string;
+  readonly sessionToken: string;
+  /** Horodatage epoch ms — `Date.now() + expiresIn × 1000` au moment où
+   * la passerelle a servi le jeton. Lu par la restauration, et par le
+   * rafraîchissement proactif quand il viendra (miroir
+   * `AuthManager.swift:741`). */
+  readonly expiresAt: number;
+};
+
 export type SessionState =
   | { readonly status: 'anonymous' }
   | { readonly status: 'pending2fa'; readonly twoFactorToken: string; readonly user: PendingUser }
@@ -94,24 +112,21 @@ export type SessionState =
    * L'INVITÉ D'UN LIEN — le régime `X-Session-Token`, jamais `Authorization`
    * (`http.ts § Credential` : présenter un jeton d'invité en Bearer fait
    * répondre « Invalid JWT token »). Il ne porte AUCUN `token`.
+   *
+   * `account` (#8816) — le COMPTE TENU À CÔTÉ quand c'est un compte connecté
+   * qui a choisi « Anonyme » : l'invité est la session EFFECTIVE le temps de
+   * lire SA conversation (`scopeAnonymous`), le compte n'est ni remplacé ni
+   * fermé, et rien de lui ne voyage avec l'invité (le crédential dérivé ne
+   * lit que `sessionToken`).
    */
   | {
       readonly status: 'guest';
       readonly sessionToken: string;
       readonly guest: GuestIdentity;
       readonly expiresAt: number;
+      readonly account?: AuthenticatedSession;
     }
-  | {
-      readonly status: 'authenticated';
-      readonly user: SessionUser;
-      readonly token: string;
-      readonly sessionToken: string;
-      /** Horodatage epoch ms — `Date.now() + expiresIn × 1000` au moment où
-       * la passerelle a servi le jeton. Lu par la restauration, et par le
-       * rafraîchissement proactif quand il viendra (miroir
-       * `AuthManager.swift:741`). */
-      readonly expiresAt: number;
-    };
+  | AuthenticatedSession;
 
 /**
  * LES CHAMPS DE SOI QU'UNE ÉDITION DE PROFIL FAIT VOYAGER JUSQU'À LA SESSION
@@ -161,11 +176,58 @@ export type SessionStoreState = {
    * projetée comme à l'`establish`. Sans effet hors d'une session
    * authentifiée : il n'y a pas de soi à modifier. */
   updateUser(fields: SessionProfileFields): void;
+  /** L'adresse vient d'être prouvée (#8365) : le drapeau `emailUnproven`
+   * quitte la session tenue ET persistée. Sans effet hors d'un compte. */
+  noteEmailProven(): void;
   restoreSession(): void;
   clearSession(): void;
+  /**
+   * REJOINDRE EN ANONYME (#8816). Sous un compte, l'identité anonyme est
+   * TENUE à côté de lui — une par conversation, persistée sous le compte qui
+   * l'a ouverte — et devient la session effective ; sans compte, c'est
+   * `establishGuest`.
+   */
+  adoptAnonymous(payload: { readonly sessionToken: string; readonly guest: GuestIdentity }): void;
+  /** La conversation dont l'identité anonyme TENUE doit servir, ou `null` :
+   * aucun compte tenu, aucune identité pour elle, ou une identité échue. */
+  anonymousScopeFor(conversationId: string | null): string | null;
+  /** Pose la session effective pour la conversation lue : son identité
+   * anonyme tenue si elle existe, le COMPTE sinon. Idempotent. */
+  scopeAnonymous(conversationId: string | null): void;
+  /** Oublie l'identité anonyme d'une conversation (refusée par la passerelle,
+   * ou remplacée par une jonction du compte) — le compte reste. */
+  dropAnonymous(conversationId: string): void;
 };
 
 export type SessionStoreApi = StoreApi<SessionStoreState>;
+
+/**
+ * QUI PARLE — la clé d'identité d'une session (#8674) : le COMPTE, jamais son
+ * jeton (un jeton renouvelé reste la même personne), l'invité par sa session
+ * de lien, personne sinon. Le transport (`client.ts`), le cache de requêtes
+ * (`query-client.ts`) et les magasins en mémoire la comparent pour savoir
+ * qu'une donnée appartient à une identité QUITTÉE.
+ */
+/** Le COMPTE que la session tient — effectif, ou tenu à côté d'une identité
+ * anonyme (#8816). Ce qui appartient au compte et non à l'identité qui parle
+ * (la notification poussée, la fin d'un compte) le lit ici. */
+export function heldAccountOf(session: SessionState): AuthenticatedSession | null {
+  if (session.status === 'authenticated') return session;
+  if (session.status === 'guest') return session.account ?? null;
+  return null;
+}
+
+/** La conversation dont l'identité anonyme TENUE par un compte est la session
+ * effective (#8816), ou `null` — un invité SANS compte n'est pas « tenu ». */
+export function scopedConversationOf(session: SessionState): string | null {
+  return session.status === 'guest' && session.account !== undefined ? session.guest.conversationId : null;
+}
+
+export function sessionIdentityKey(session: SessionState): string | null {
+  if (session.status === 'authenticated') return `u:${session.user.id}`;
+  if (session.status === 'guest') return `g:${session.sessionToken}`;
+  return null;
+}
 
 const STORAGE_KEY = 'meeshy.session';
 
@@ -195,6 +257,19 @@ type PersistedGuest = {
 
 type PersistedSession = PersistedAccount | PersistedGuest;
 
+/** Ce que la connexion SERT de la preuve d'adresse (#8365) — lu sur la charge
+ * brute, que le type ne déclare pas : `emailVerifiedAt` explicitement `null`,
+ * ou `activation.missing` qui nomme `email`. Une session restaurée porte déjà
+ * le drapeau projeté. */
+function servesUnprovenEmail(user: SessionUser): boolean {
+  if (user.emailUnproven === true) return true;
+  if (Reflect.get(user, 'emailVerifiedAt') === null) return true;
+  const activation: unknown = Reflect.get(user, 'activation');
+  if (typeof activation !== 'object' || activation === null) return false;
+  const missing: unknown = Reflect.get(activation, 'missing');
+  return Array.isArray(missing) && missing.includes('email');
+}
+
 /** La PROJECTION — un objet NEUF, jamais celui reçu du réseau : les champs
  * absents ne deviennent pas des clés `undefined`, et rien d'autre ne suit. */
 function pickSessionUser(user: SessionUser): SessionUser {
@@ -208,6 +283,7 @@ function pickSessionUser(user: SessionUser): SessionUser {
     ...(user.customDestinationLanguage !== undefined
       ? { customDestinationLanguage: user.customDestinationLanguage }
       : {}),
+    ...(servesUnprovenEmail(user) ? { emailUnproven: true as const } : {}),
   };
 }
 
@@ -303,6 +379,58 @@ function purge(storage: SessionStorage): void {
 }
 
 /**
+ * LES IDENTITÉS ANONYMES QU'UN COMPTE TIENT (#8816) — une par conversation,
+ * sous une clé qui porte le COMPTE (`u_<id>`) : un autre compte du même
+ * appareil ne les lit jamais, et la déconnexion les efface avec le reste de
+ * ce que le compte laisse (`accounts.ts § purgeAccountLocalData`).
+ *
+ * BORNÉ (au plus {@link MAX_ANONYMOUS_SESSIONS}, la plus ancienne part) et
+ * ÉCHU à l'horizon d'un invité ({@link GUEST_SESSION_HOURS}) ; chaque entrée
+ * est PROJETÉE (`pickGuest`) et ne contient rien du compte — ni jeton, ni nom,
+ * ni identifiant autre que celui qui nomme la clé.
+ */
+export const MAX_ANONYMOUS_SESSIONS = 20;
+
+export const anonymousSessionsKey = (userId: string): string => `meeshy.anonymous-sessions.u_${userId}`;
+
+type HeldAnonymous = {
+  readonly sessionToken: string;
+  readonly guest: GuestIdentity;
+  readonly expiresAt: number;
+};
+
+function isHeldAnonymous(value: unknown): value is HeldAnonymous {
+  if (typeof value !== 'object' || value === null) return false;
+  const v = value as Record<string, unknown>;
+  if (typeof v.sessionToken !== 'string' || v.sessionToken === '') return false;
+  if (typeof v.expiresAt !== 'number' || !Number.isFinite(v.expiresAt)) return false;
+  return isGuestIdentity(v.guest);
+}
+
+function readHeldAnonymous(storage: SessionStorage, userId: string, now: number): readonly HeldAnonymous[] {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(storage.getItem(anonymousSessionsKey(userId)) ?? '[]');
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(parsed)) return [];
+  return parsed.filter(isHeldAnonymous).filter((entry) => entry.expiresAt > now);
+}
+
+function writeHeldAnonymous(storage: SessionStorage, userId: string, entries: readonly HeldAnonymous[]): void {
+  try {
+    if (entries.length === 0) storage.removeItem(anonymousSessionsKey(userId));
+    else storage.setItem(anonymousSessionsKey(userId), JSON.stringify(entries));
+  } catch {
+    /* Stockage refusé : l'identité tient pour l'onglet, sans se souvenir. */
+  }
+}
+
+const withoutConversation = (entries: readonly HeldAnonymous[], conversationId: string): readonly HeldAnonymous[] =>
+  entries.filter((entry) => entry.guest.conversationId !== conversationId);
+
+/**
  * LA BASCULE DE meeshy.me NE DÉCONNECTE PERSONNE (#6702). Quand
  * `meeshy.session` est ABSENTE, la session laissée par le legacy
  * (`legacy-session.ts`) devient une entrée `meeshy.session`, projetée comme à
@@ -339,6 +467,7 @@ function withProfileFields(user: SessionUser, fields: SessionProfileFields): Ses
     ...(systemLanguage === undefined ? {} : { systemLanguage }),
     ...(regionalLanguage === undefined ? {} : { regionalLanguage }),
     ...(customDestinationLanguage === undefined ? {} : { customDestinationLanguage }),
+    ...(user.emailUnproven === true ? { emailUnproven: true as const } : {}),
   };
 }
 
@@ -367,6 +496,13 @@ export function createSessionStore(options: SessionStoreOptions = {}): SessionSt
       const current = get().session;
       if (current.status !== 'authenticated') return;
       const user = pickSessionUser(withProfileFields(current.user, fields));
+      persist(storage, { user, token: current.token, sessionToken: current.sessionToken, expiresAt: current.expiresAt });
+      set({ session: { ...current, user } });
+    },
+    noteEmailProven: () => {
+      const current = get().session;
+      if (current.status !== 'authenticated' || current.user.emailUnproven !== true) return;
+      const { emailUnproven: _proven, ...user } = current.user;
       persist(storage, { user, token: current.token, sessionToken: current.sessionToken, expiresAt: current.expiresAt });
       set({ session: { ...current, user } });
     },
@@ -402,6 +538,45 @@ export function createSessionStore(options: SessionStoreOptions = {}): SessionSt
     clearSession: () => {
       purge(storage);
       set({ session: { status: 'anonymous' } });
+    },
+    adoptAnonymous: ({ sessionToken, guest }) => {
+      const account = heldAccountOf(get().session);
+      if (account === null) {
+        get().establishGuest({ sessionToken, guest });
+        return;
+      }
+      const projected = pickGuest(guest);
+      const held: HeldAnonymous = { sessionToken, guest: projected, expiresAt: now() + GUEST_SESSION_HOURS * 60 * 60 * 1000 };
+      const kept = withoutConversation(readHeldAnonymous(storage, account.user.id, now()), projected.conversationId);
+      writeHeldAnonymous(storage, account.user.id, [...kept, held].slice(-MAX_ANONYMOUS_SESSIONS));
+      set({ session: { status: 'guest', ...held, account } });
+    },
+    anonymousScopeFor: (conversationId) => {
+      const account = heldAccountOf(get().session);
+      if (account === null || conversationId === null) return null;
+      const held = readHeldAnonymous(storage, account.user.id, now());
+      return held.some((entry) => entry.guest.conversationId === conversationId) ? conversationId : null;
+    },
+    scopeAnonymous: (conversationId) => {
+      const current = get().session;
+      const account = heldAccountOf(current);
+      if (account === null) return;
+      const live = readHeldAnonymous(storage, account.user.id, now());
+      writeHeldAnonymous(storage, account.user.id, live);
+      const held = conversationId === null ? undefined : live.find((entry) => entry.guest.conversationId === conversationId);
+      if (held === undefined) {
+        if (current !== account) set({ session: account });
+        return;
+      }
+      if (current.status === 'guest' && current.sessionToken === held.sessionToken) return;
+      set({ session: { status: 'guest', sessionToken: held.sessionToken, guest: pickGuest(held.guest), expiresAt: held.expiresAt, account } });
+    },
+    dropAnonymous: (conversationId) => {
+      const current = get().session;
+      const account = heldAccountOf(current);
+      if (account === null) return;
+      writeHeldAnonymous(storage, account.user.id, withoutConversation(readHeldAnonymous(storage, account.user.id, now()), conversationId));
+      if (current.status === 'guest' && current.guest.conversationId === conversationId) set({ session: account });
     },
   }));
 }

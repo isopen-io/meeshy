@@ -114,18 +114,22 @@ describe('UserSanitizationService.sanitizeUser — sensitive viewer', () => {
     });
   });
 
-  it('preserves twoFactorBackupCodes (defaults empty array for null)', () => {
+  // #8876 — les empreintes des codes de secours ne sont servies sur AUCUNE ligne :
+  // on en sert le NOMBRE. Le détail des cas vit dans
+  // `user-sanitization-admin-metadata.test.ts`.
+  it('serves the REMAINING COUNT of backup codes, never the hashes', () => {
     const svc = makeService();
-    const user = makeFullUser({ twoFactorBackupCodes: [] });
+    const user = makeFullUser({ twoFactorBackupCodes: ['h1', 'h2'] });
     const result = svc.sanitizeUser(user, UserRoleEnum.ADMIN) as any;
-    expect(result.twoFactorBackupCodes).toEqual([]);
+    expect(result.twoFactorBackupCodesRemaining).toBe(2);
+    expect(result).not.toHaveProperty('twoFactorBackupCodes');
   });
 
-  it('uses empty array when twoFactorBackupCodes is falsy', () => {
+  it('counts zero remaining codes when the column is falsy', () => {
     const svc = makeService();
     const user = makeFullUser({ twoFactorBackupCodes: undefined as unknown as string[] });
     const result = svc.sanitizeUser(user, UserRoleEnum.ADMIN) as any;
-    expect(result.twoFactorBackupCodes).toEqual([]);
+    expect(result.twoFactorBackupCodesRemaining).toBe(0);
   });
 
   it('includes deletedAt and deletedBy in AdminUser', () => {

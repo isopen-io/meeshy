@@ -149,7 +149,7 @@ extension StoryViewerView {
             if let filter = currentStory?.storyEffects?.filter {
                 switch filter {
                 case "vintage":
-                    Color(hex: "F8B500").opacity(0.15)
+                    MeeshyColors.tileSaffron.opacity(0.15)
                         .blendMode(.multiply)
                 case "bw":
                     Color.gray.opacity(0.4)
@@ -188,6 +188,7 @@ extension StoryViewerView {
                 // insubordonnable par priorité — la barre ne peut gagner que
                 // s'il CÈDE, et il ne le sait qu'en lisant cet état.
                 guard !reactionStripOwnsDrag else { return }
+                guard !composerOwnsDrag else { return }
                 // CESSION AU GLISSÉ DE LA BARRE (#7878) et du rail : pendant un
                 // parcours au doigt, ni cube ni fermeture.
                 guard !isScrubbingRail else { return }
@@ -235,6 +236,9 @@ extension StoryViewerView {
                 // reprise redevient automatique dès que l'axe retombe à 0.
                 if gestureAxis == 0 {
                     if abs(dx) > abs(dy) + 8 {
+                        guard !StoryReactionStripGesture.yieldsHorizontalAxis(
+                            stripFrame: reactionStripFrame, dragStart: value.startLocation
+                        ) else { return }
                         gestureAxis = 1 // horizontal
                     } else if abs(dy) > abs(dx) + 8 {
                         gestureAxis = 2 // vertical
@@ -434,6 +438,7 @@ extension StoryViewerView {
         // Même raison que les deux lignes précédentes : la revendication de la
         // barre de réactions ne vaut que pour LE geste qui vient de finir.
         reactionStripOwnsDrag = false
+        composerOwnsDrag = false
         gestureResetToken &+= 1
     }
 
@@ -1407,7 +1412,7 @@ struct StoryViewersSheet: View {
                     Button(String(localized: "common.close", defaultValue: "Fermer", bundle: .main)) {
                         dismiss()
                     }
-                    .font(MeeshyFont.relative(16, weight: .bold))
+                    .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .bold))
                     .foregroundColor(accentColor)
                 }
             }
@@ -1429,7 +1434,7 @@ struct StoryViewersSheet: View {
     }
 
     private func viewerRow(_ viewer: StoryViewerItem) -> some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             // Local-first mood (StatusViewModel) + presence (PresenceManager
             // live store). `onViewProfile` + row tap open the viewer's profile.
             MeeshyAvatar(
@@ -1442,46 +1447,46 @@ struct StoryViewersSheet: View {
                 onMoodTap: statusViewModel.moodTapHandler(for: viewer.id)
             )
 
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                 HStack {
                     Text(viewer.displayName)
-                        .font(MeeshyFont.relative(16, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .semibold))
                         .foregroundColor(.primary)
 
                     if viewer.hasReshared {
                         Image(systemName: "arrow.2.squarepath")
-                            .font(MeeshyFont.relative(12, weight: .bold))
+                            .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .bold))
                             .foregroundColor(accentColor)
                     }
 
                     Spacer()
 
                     Text(viewer.viewedAt, style: .time)
-                        .font(MeeshyFont.relative(12))
+                        .font(MeeshyFont.relative(MeeshyFont.smallSize))
                         .foregroundColor(.secondary)
                 }
 
                 if let reply = viewer.replyContent {
-                    HStack(spacing: 6) {
+                    HStack(spacing: MeeshySpacing.xsPlus) {
                         Image(systemName: "arrowshape.turn.up.left.fill")
-                            .font(MeeshyFont.relative(10))
+                            .font(MeeshyFont.relative(MeeshyIconSize.xxs))
                         Text(reply)
-                            .font(MeeshyFont.relative(14))
+                            .font(MeeshyFont.relative(MeeshyFont.labelSize))
                             .lineLimit(1)
                     }
                     .foregroundColor(.secondary)
                 } else if let reaction = viewer.reactionEmoji {
-                    HStack(spacing: 6) {
+                    HStack(spacing: MeeshySpacing.xsPlus) {
                         Image(systemName: "heart.fill")
-                            .font(MeeshyFont.relative(10))
+                            .font(MeeshyFont.relative(MeeshyIconSize.xxs))
                             .foregroundColor(MeeshyColors.error)
                         Text(reaction)
-                            .font(MeeshyFont.relative(14))
+                            .font(MeeshyFont.relative(MeeshyFont.labelSize))
                     }
                 }
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, MeeshySpacing.xs)
         .contentShape(Rectangle())
         .onTapGesture { onOpenProfile(viewer) }
         .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
@@ -1558,7 +1563,7 @@ struct StoryCommentThread: View {
     /// chargées (endpoint replies paginé à 20) — affiche « Voir plus de
     /// réponses » en bas du fil déplié.
     var hasMoreReplies: Bool = false
-    var onLoadMoreReplies: (() async -> Void)? = nil
+    var onLoadMoreReplies: (@MainActor () async -> Void)? = nil
 
     var body: some View {
         makeRow(comment, userLang)
@@ -1568,7 +1573,7 @@ struct StoryCommentThread: View {
         if !autoPreview.isEmpty && !isExpanded {
             ForEach(autoPreview) { reply in
                 makeRow(reply, userLang)
-                    .padding(.leading, 32)
+                    .padding(.leading, MeeshySpacing.xxxl)
                     .id(reply.id)
             }
         }
@@ -1578,18 +1583,18 @@ struct StoryCommentThread: View {
                 HapticFeedback.light()
                 onToggleThread()
             } label: {
-                HStack(spacing: 4) {
+                HStack(spacing: MeeshySpacing.xs) {
                     Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
                         .font(MeeshyFont.relative(9, weight: .bold))
                     let remaining = max(0, comment.replies - 2)
                     Text(isExpanded
                          ? "Masquer"
                          : "Voir \(remaining) autre\(remaining > 1 ? "s" : "") r\u{00E9}ponse\(remaining > 1 ? "s" : "")")
-                        .font(MeeshyFont.relative(11, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
                 }
                 .foregroundColor(StoryCommentRowView.legibleAuthorColor(hex: comment.authorColor))
                 .padding(.leading, 40)
-                .padding(.vertical, 4)
+                .padding(.vertical, MeeshySpacing.xs)
                 .storyOverlayLegible()
             }
         }
@@ -1601,13 +1606,13 @@ struct StoryCommentThread: View {
                     ProgressView().tint(.white.opacity(0.5)).scaleEffect(0.7)
                     Spacer()
                 }
-                .padding(.leading, 32)
-                .padding(.vertical, 4)
+                .padding(.leading, MeeshySpacing.xxxl)
+                .padding(.vertical, MeeshySpacing.xs)
             }
 
             ForEach(replies) { reply in
                 makeRow(reply, userLang)
-                    .padding(.leading, 32)
+                    .padding(.leading, MeeshySpacing.xxxl)
                     .id(reply.id)
             }
 
@@ -1616,15 +1621,15 @@ struct StoryCommentThread: View {
                     HapticFeedback.light()
                     Task { await onLoadMoreReplies() }
                 } label: {
-                    HStack(spacing: 4) {
+                    HStack(spacing: MeeshySpacing.xs) {
                         Image(systemName: "chevron.down")
                             .font(MeeshyFont.relative(9, weight: .bold))
                         Text(String(localized: "story.viewer.comments.loadMoreReplies", defaultValue: "Voir plus de réponses", bundle: .main))
-                            .font(MeeshyFont.relative(11, weight: .semibold))
+                            .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
                     }
                     .foregroundColor(StoryCommentRowView.legibleAuthorColor(hex: comment.authorColor))
                     .padding(.leading, 40)
-                    .padding(.vertical, 4)
+                    .padding(.vertical, MeeshySpacing.xs)
                     .storyOverlayLegible()
                 }
                 .accessibilityLabel(String(localized: "a11y.story.comments.loadMoreReplies", defaultValue: "Charger plus de réponses", bundle: .main))
@@ -1656,14 +1661,14 @@ struct StoryCommentsOverlayView: View {
     /// Chasse paginée fournie par le parent quand la cible n'est pas dans les
     /// pages chargées (les pages qui arrivent re-déclenchent le scroll via
     /// l'onChange sur le count).
-    var huntTargetComment: (() async -> Void)? = nil
+    var huntTargetComment: (@MainActor () async -> Void)? = nil
     /// Page suivante des réponses d'un fil (commentId) — câblé sur
     /// `loadMoreStoryCommentReplies` côté StoryViewerView.
-    var loadMoreStoryCommentReplies: ((String) async -> Void)? = nil
+    var loadMoreStoryCommentReplies: (@MainActor (String) async -> Void)? = nil
     /// Ciblage d'une RÉPONSE : déplie le fil du parent (parentId) puis chasse
     /// les pages de réponses jusqu'à la cible (replyId). Retourne `true` si la
     /// réponse est chargée à l'issue de la chasse.
-    var revealTargetReply: ((_ parentId: String, _ replyId: String) async -> Bool)? = nil
+    var revealTargetReply: (@MainActor (_ parentId: String, _ replyId: String) async -> Bool)? = nil
     /// Latch — un seul ciblage par montage de l'overlay, ensuite la liste
     /// reprend le comportement historique (suivre le dernier commentaire).
     @State private var hasScrolledToTargetStoryComment = false
@@ -1693,7 +1698,7 @@ struct StoryCommentsOverlayView: View {
     let safeBottom: CGFloat
 
     let makeStoryCommentRow: (FeedComment, String) -> StoryCommentRowView
-    let toggleStoryCommentThread: (String) async -> Void
+    let toggleStoryCommentThread: @MainActor (String) async -> Void
 
     private var topLevelComments: [FeedComment] {
         storyComments.filter { $0.parentId == nil }
@@ -1743,17 +1748,17 @@ struct StoryCommentsOverlayView: View {
     private var expiredStoryBanner: some View {
         Label {
             Text(String(localized: "story.viewer.expiredBanner", defaultValue: "Story expirée — les commentaires restent visibles", bundle: .main))
-                .font(MeeshyFont.relative(11, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
                 .lineLimit(1)
         } icon: {
             Image(systemName: "clock.badge.xmark")
-                .font(MeeshyFont.relative(11, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .semibold))
         }
-        .foregroundColor(.white.opacity(0.85))
-        .padding(.horizontal, 12)
-        .padding(.vertical, 7)
+        .foregroundColor(MeeshyColors.mediaChromeSecondary)
+        .padding(.horizontal, MeeshySpacing.md)
+        .padding(.vertical, MeeshySpacing.xsPlus)
         .background(Capsule().fill(MeeshyColors.error.opacity(0.32)))
-        .padding(.bottom, 6)
+        .padding(.bottom, MeeshySpacing.xsPlus)
         .transition(.opacity)
     }
 
@@ -1763,12 +1768,11 @@ struct StoryCommentsOverlayView: View {
             if isStoryExpired {
                 expiredStoryBanner
             }
-            commentsList
+            let topLevel = topLevelComments   // filtré UNE fois par rendu (3 lectures avant)
+            commentsList(topLevel)
                 // Les médias de TOUS les commentaires de la story (racines +
                 // réponses dépliées) se feuillettent ensemble en plein écran.
-                .commentMediaGallery(
-                    topLevel: topLevelComments, replies: storyCommentRepliesMap
-                )
+                .commentMediaGallery(topLevel: topLevel, replies: storyCommentRepliesMap)
                 .frame(maxHeight: listMaxHeight)
                 // Bord supérieur RÉEL de la zone défilante, remonté au viewer :
                 // c'est lui qui sépare « geste né dans la liste » (au scroll) de
@@ -1844,11 +1848,11 @@ struct StoryCommentsOverlayView: View {
 
     // MARK: - Comments List
 
-    private var commentsList: some View {
+    private func commentsList(_ topLevel: [FeedComment]) -> some View {
         ScrollViewReader { proxy in
             ScrollView(.vertical, showsIndicators: false) {
-                LazyVStack(alignment: .leading, spacing: 8) {
-                    ForEach(Array(topLevelComments.enumerated()), id: \.element.id) { idx, comment in
+                LazyVStack(alignment: .leading, spacing: MeeshySpacing.sm) {
+                    ForEach(Array(topLevel.enumerated()), id: \.element.id) { idx, comment in
                         // Separator between top-level comments — `Divider()`
                         // SwiftUI natif (1pt, white opacity ~15%) au lieu de la
                         // RoundedRectangle box autour de chaque row (user spec
@@ -1857,7 +1861,7 @@ struct StoryCommentsOverlayView: View {
                             Divider()
                                 .overlay(Color.white.opacity(0.28))
                                 .shadow(color: .black.opacity(0.3), radius: 1)
-                                .padding(.vertical, 4)
+                                .padding(.vertical, MeeshySpacing.xs)
                         }
 
                         StoryCommentThread(
@@ -1870,7 +1874,7 @@ struct StoryCommentsOverlayView: View {
                             onToggleThread: { Task { await toggleStoryCommentThread(comment.id) } },
                             hasMoreReplies: storyCommentExpandedThreads.contains(comment.id)
                                 && (storyCommentRepliesHasMore[comment.id] ?? false),
-                            onLoadMoreReplies: loadMoreStoryCommentReplies.map { load -> (() async -> Void) in
+                            onLoadMoreReplies: loadMoreStoryCommentReplies.map { load -> (@MainActor () async -> Void) in
                                 { await load(comment.id) }
                             }
                         )
@@ -1882,10 +1886,10 @@ struct StoryCommentsOverlayView: View {
                             ProgressView().tint(.white.opacity(0.6))
                             Spacer()
                         }
-                        .padding(.vertical, 8)
+                        .padding(.vertical, MeeshySpacing.sm)
                     }
 
-                    if topLevelComments.isEmpty && !isLoadingComments {
+                    if topLevel.isEmpty && !isLoadingComments {
                         emptyPlaceholder
                     }
                 }
@@ -1898,8 +1902,8 @@ struct StoryCommentsOverlayView: View {
                 // sidebar (Layer 8 ~56+6=62pt depuis le bord droit).
                 .padding(.leading, 28)
                 .padding(.trailing, 80)
-                .padding(.top, 24)
-                .padding(.bottom, 12)
+                .padding(.top, MeeshySpacing.xxl)
+                .padding(.bottom, MeeshySpacing.md)
             }
             .adaptiveOnChange(of: storyComments.count) { _, _ in
                 // Notification → RÉPONSE précise : le parent est chargé
@@ -1966,23 +1970,23 @@ struct StoryCommentsOverlayView: View {
     // MARK: - Empty State
 
     private var emptyPlaceholder: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: MeeshySpacing.sm) {
             Image(systemName: "bubble.left.and.bubble.right")
                 // Doctrine 84i/86i : glyphe héros décoratif de l'état vide → taille
                 // figée + masqué de VoiceOver (les deux libellés ci-dessous portent
                 // le sens). Le texte, lui, scale avec le Dynamic Type.
-                .font(.system(size: 28))
-                .foregroundColor(.white.opacity(0.7))
+                .font(.system(size: MeeshyIconSize.xxxl))
+                .foregroundColor(MeeshyColors.mediaChromeTertiary)
                 .accessibilityHidden(true)
             Text(String(localized: "story.viewer.comments.empty", defaultValue: "Pas encore de commentaires", bundle: .main))
-                .font(MeeshyFont.relative(13, weight: .semibold))
-                .foregroundColor(.white.opacity(0.85))
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
+                .foregroundColor(MeeshyColors.mediaChromeSecondary)
             Text(String(localized: "story.viewer.comments.beFirst", defaultValue: "Soyez le premier à commenter !", bundle: .main))
-                .font(MeeshyFont.relative(11))
-                .foregroundColor(.white.opacity(0.65))
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
+                .foregroundColor(MeeshyColors.mediaChromeTertiary)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 32)
+        .padding(.vertical, MeeshySpacing.xxxl)
         .storyOverlayLegible()
     }
 
@@ -2077,64 +2081,7 @@ extension StoryViewerView {
 
     private func mapStoryReplies(_ data: [APIPostComment], parentId: String) -> [FeedComment] {
         let langs = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
-        return data.map { c -> FeedComment in
-            let translated = PostDetailViewModel.resolveCommentTranslation(
-                translations: c.translations, originalLanguage: c.originalLanguage,
-                preferredLanguages: langs
-            )
-            return FeedComment(
-                id: c.id, author: c.author.name, authorId: c.author.id,
-                authorUsername: c.author.username,
-                authorAvatarURL: c.author.avatar,
-                content: c.content, timestamp: c.createdAt,
-                likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
-                parentId: parentId,
-                effectFlags: c.effectFlags ?? 0,
-                originalLanguage: c.originalLanguage, translatedContent: translated,
-                currentUserReactions: c.currentUserReactions,
-                media: (c.media ?? []).map { $0.toFeedMedia() },
-                location: c.location
-            )
-        }
-    }
-
-    func makeStoryCommentRow(_ comment: FeedComment, userLang: String) -> StoryCommentRowView {
-        StoryCommentRowView(
-            comment: comment,
-            userLang: userLang,
-            isLiked: storyCommentLikedIds.contains(comment.id),
-            likeCount: max(0, comment.likes + (storyCommentLikeDelta[comment.id] ?? 0)),
-            isInFlight: heartInFlightIds.contains(comment.id),
-            onReply: {
-                withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                    replyingToStoryComment = comment
-                }
-                // Répondre à une réponse (niveau 2) : la réponse reste plate au niveau 2
-                // (parent racine, cf. submitStoryComment) — on injecte une @mention de
-                // l'auteur ciblé dans le composer pour qu'il soit notifié (`user_mentioned`).
-                if comment.parentId != nil, let username = comment.authorUsername, !username.isEmpty {
-                    emojiToInject = "@\(username) "
-                }
-                // Faire APPARAÎTRE l'universal composer bar : on déclenche le focus
-                // pour ouvrir le clavier immédiatement (spec 2026-06-23) — l'auteur
-                // (et tout viewer) peut répondre sans tap supplémentaire.
-                //
-                // Pour l'auteur de sa propre story, le composer n'existe PAS avant
-                // ce tap (cf. condition de rendu `!isOwnStory || replyingToStoryComment`
-                // dans +Canvas) : il est monté dans la même passe que `replyingToStoryComment`.
-                // Or `focusTrigger` est consommé via `onChange`, qui ne fire pas au
-                // montage initial — poser `true` synchroniquement serait ignoré et le
-                // drapeau resterait coincé. On force donc un front false→true sur le
-                // runloop suivant, une fois le composer monté et son `onChange` actif.
-                composerFocusTrigger = false
-                DispatchQueue.main.async { composerFocusTrigger = true }
-                HapticFeedback.light()
-            },
-            onToggleLike: {
-                HapticFeedback.light()
-                Task { await toggleStoryCommentLike(comment) }
-            }
-        )
+        return data.map { FeedComment(api: $0, preferredLanguages: langs, parentId: parentId) }
     }
 
     // MARK: - Story Comment Reactions
@@ -2171,29 +2118,7 @@ extension StoryViewerView {
     func applyStoryCommentAdded(_ data: SocketCommentAddedData) {
         guard data.postId == currentStory?.id else { return }
 
-        let translatedContent = PostDetailViewModel.resolveCommentTranslation(
-            translations: data.comment.translations,
-            originalLanguage: data.comment.originalLanguage,
-            preferredLanguages: resolvedViewerLanguageChain
-        )
-        let comment = FeedComment(
-            id: data.comment.id,
-            author: data.comment.author.name,
-            authorId: data.comment.author.id,
-            authorUsername: data.comment.author.username,
-            authorAvatarURL: data.comment.author.avatar,
-            content: data.comment.content,
-            timestamp: data.comment.createdAt,
-            likes: data.comment.likeCount ?? 0,
-            replies: data.comment.replyCount ?? 0,
-            parentId: data.comment.parentId,
-            effectFlags: data.comment.effectFlags ?? 0,
-            originalLanguage: data.comment.originalLanguage,
-            translatedContent: translatedContent,
-            currentUserReactions: data.comment.currentUserReactions,
-            media: (data.comment.media ?? []).map { $0.toFeedMedia() },
-            location: data.comment.location
-        )
+        let comment = FeedComment(api: data.comment, preferredLanguages: resolvedViewerLanguageChain)
 
         let result = Self.applyingStoryCommentAdded(
             comment: comment,
@@ -2212,39 +2137,10 @@ extension StoryViewerView {
     /// à toucher. Miroir de `PostDetailViewModel.applyCommentUpdated`.
     func applyStoryCommentUpdated(_ data: SocketCommentUpdatedData) {
         guard data.postId == currentStory?.id else { return }
-        let translated = PostDetailViewModel.resolveCommentTranslation(
-            translations: data.comment.translations,
-            originalLanguage: data.comment.originalLanguage,
-            preferredLanguages: resolvedViewerLanguageChain
-        )
-        let updated = FeedComment(
-            id: data.comment.id,
-            author: data.comment.author.name,
-            authorId: data.comment.author.id,
-            authorUsername: data.comment.author.username,
-            authorAvatarURL: data.comment.author.avatar,
-            content: data.comment.content,
-            timestamp: data.comment.createdAt,
-            likes: data.comment.likeCount ?? 0,
-            replies: data.comment.replyCount ?? 0,
-            parentId: data.comment.parentId,
-            effectFlags: data.comment.effectFlags ?? 0,
-            originalLanguage: data.comment.originalLanguage,
-            translatedContent: translated,
-            currentUserReactions: data.comment.currentUserReactions,
-            media: (data.comment.media ?? []).map { $0.toFeedMedia() },
-            location: data.comment.location
-        )
-        if let parentId = updated.parentId,
-           var replies = storyCommentRepliesMap[parentId],
-           let idx = replies.firstIndex(where: { $0.id == updated.id }) {
-            replies[idx] = updated
-            storyCommentRepliesMap[parentId] = replies
-            return
-        }
-        if let idx = storyComments.firstIndex(where: { $0.id == updated.id }) {
-            storyComments[idx] = updated
-        }
+        let updated = FeedComment(api: data.comment, preferredLanguages: resolvedViewerLanguageChain)
+        let applied = StoryCommentEditing.replacing(updated, comments: storyComments, replies: storyCommentRepliesMap)
+        storyComments = applied.comments
+        storyCommentRepliesMap = applied.replies
     }
 
     /// Traduction de commentaire arrivée pendant la lecture : pose
@@ -2484,24 +2380,7 @@ extension StoryViewerView {
     /// Extrait en `static` pour que le témoin de RANG lise ce chemin-ci, pas
     /// seulement le résolveur.
     static func storyComment(from c: APIPostComment, preferredLanguages langs: [String]) -> FeedComment {
-        FeedComment(
-            id: c.id, author: c.author.name, authorId: c.author.id,
-            authorUsername: c.author.username,
-            authorAvatarURL: c.author.avatar,
-            content: c.content, timestamp: c.createdAt,
-            likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
-            parentId: c.parentId,
-            effectFlags: c.effectFlags ?? 0,
-            originalLanguage: c.originalLanguage,
-            translatedContent: PostDetailViewModel.resolveCommentTranslation(
-                translations: c.translations,
-                originalLanguage: c.originalLanguage,
-                preferredLanguages: langs
-            ),
-            currentUserReactions: c.currentUserReactions,
-            media: (c.media ?? []).map { $0.toFeedMedia() },
-            location: c.location
-        )
+        FeedComment(api: c, preferredLanguages: langs)
     }
 
     private func fetchStoryCommentsFromNetwork(story: StoryItem, cacheKey: String) async {
@@ -2546,23 +2425,7 @@ extension StoryViewerView {
                 postId: story.id, cursor: storyCommentsNextCursor, limit: 50
             )
             if let now = currentStory?.id, now != story.id { return }
-            let fetched = response.data.map { c -> FeedComment in
-                FeedComment(
-                    id: c.id, author: c.author.name, authorId: c.author.id,
-                    authorUsername: c.author.username,
-                    authorAvatarURL: c.author.avatar,
-                    content: c.content, timestamp: c.createdAt,
-                    likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
-                    parentId: c.parentId,
-                    originalLanguage: c.originalLanguage,
-                    translatedContent: PostDetailViewModel.resolveCommentTranslation(
-                        translations: c.translations, originalLanguage: c.originalLanguage, preferredLanguages: langs
-                    ),
-                    currentUserReactions: c.currentUserReactions,
-                    media: (c.media ?? []).map { $0.toFeedMedia() },
-                    location: c.location
-                )
-            }
+            let fetched = response.data.map { FeedComment(api: $0, preferredLanguages: langs) }
             let existing = Set(storyComments.map(\.id))
             storyComments.append(contentsOf: fetched.filter { !existing.contains($0.id) })
             storyCommentsNextCursor = response.pagination?.nextCursor
@@ -2665,292 +2528,6 @@ extension StoryViewerView {
     }
 }
 
-// MARK: - Story Comment Row View
-//
-// Modern bubble-style row used by the story viewer comments overlay.
-// - Background tinted with the author's accent color (mirrors post comment cards).
-// - Header pair of language flags lets the viewer toggle between original and
-//   prisme-translated content without leaving the overlay.
-// - Heart reaction + Reply CTAs sit below the text in their own action row.
-struct StoryCommentRowView: View, Equatable {
-    let comment: FeedComment
-    let userLang: String
-    let isLiked: Bool
-    let likeCount: Int
-    var isInFlight: Bool = false
-    let onReply: () -> Void
-    let onToggleLike: () -> Void
-    /// Lieu du commentaire ouvert plein écran (tap sur le sticker).
-    @State private var rowFullscreenPlace: BubbleFullscreenPlace?
-
-    static func == (lhs: Self, rhs: Self) -> Bool {
-        lhs.comment.id == rhs.comment.id &&
-        lhs.isLiked == rhs.isLiked &&
-        lhs.likeCount == rhs.likeCount &&
-        lhs.isInFlight == rhs.isInFlight &&
-        lhs.comment.content == rhs.comment.content &&
-        lhs.comment.translatedContent == rhs.comment.translatedContent &&
-        lhs.comment.media.first?.id == rhs.comment.media.first?.id &&
-        lhs.comment.media.first?.transcription?.text == rhs.comment.media.first?.transcription?.text &&
-        lhs.comment.media.first?.translatedAudios.count == rhs.comment.media.first?.translatedAudios.count
-    }
-
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    /// Posé par le viewer sur l'overlay (`readerChromeScheme`, cf.
-    /// `StoryViewerView+Canvas.swift`) — suit la luminance du FOND de la story,
-    /// pas le thème de l'app. Pilote `legibleOverlayColor` ci-dessous.
-    @Environment(\.colorScheme) private var colorScheme
-    @State private var showOriginal: Bool = false
-
-    private var hasTranslation: Bool {
-        comment.translatedContent != nil && comment.originalLanguage != nil
-    }
-
-    private var displayContent: String {
-        if showOriginal { return comment.content }
-        return comment.translatedContent ?? comment.content
-    }
-
-    private var bubbleColor: Color { Color(hex: comment.authorColor) }
-
-    /// Flat row sans box : sliver vertical coloré à gauche (identité auteur)
-    /// + avatar + VStack {header, contenu, actions}. Pas de RoundedRectangle
-    /// background, pas de strokeBorder — les rows sont séparées par un
-    /// `Divider()` côté `StoryCommentsOverlayView.commentsList`
-    /// (user spec 2026-05-28 : « les commentaires ne doivent pas être dans
-    /// des box mais alignés et séparés par des ---- uniquement »).
-    var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            // Sliver vertical d'accent : identité couleur de l'auteur,
-            /// extrait du background pour ne pas avoir à wrapper la row.
-            Capsule(style: .continuous)
-                .fill(bubbleColor)
-                .frame(width: 3)
-                .shadow(color: .black.opacity(0.35), radius: 3)
-                .padding(.vertical, 6)
-
-            avatar
-
-            VStack(alignment: .leading, spacing: 4) {
-                headerRow
-                contentText
-                // Média unique du commentaire (image/vidéo/audio) — inline + plein
-                // écran, identique aux autres surfaces de commentaires.
-                if let media = comment.media.first {
-                    CommentMediaView(
-                        media: media,
-                        accentColor: comment.authorColor,
-                        commentId: comment.id,
-                        carrierText: comment.displayContent,
-                        carrierOriginalLanguage: comment.originalLanguage,
-                        authorName: comment.author,
-                        authorAvatarURL: comment.authorAvatarURL,
-                        authorColor: comment.authorColor,
-                        sentAt: comment.timestamp
-                    )
-                    .padding(.top, 2)
-                }
-                // Lieu attaché au commentaire — sticker cliquable, même surface
-                // plein écran que les autres rows de commentaires.
-                if let place = comment.location {
-                    FeedPostLocationSticker(place: place) {
-                        rowFullscreenPlace = BubbleFullscreenPlace(place: place)
-                    }
-                    .padding(.top, 2)
-                }
-                actionRow
-            }
-
-            Spacer(minLength: 0)
-        }
-        .padding(.vertical, 8)
-        .padding(.trailing, 12)
-        .fullScreenCover(item: $rowFullscreenPlace) { item in
-            LocationFullscreenView(
-                latitude: item.place.latitude,
-                longitude: item.place.longitude,
-                placeName: item.place.name,
-                address: item.place.address,
-                accentColor: comment.authorColor,
-                senderName: comment.author
-            )
-        }
-    }
-
-    @ViewBuilder
-    private var avatar: some View {
-        Group {
-            if let avatarURL = comment.authorAvatarURL,
-               let url = MeeshyConfig.resolveMediaURL(avatarURL) {
-                CachedAsyncImage(url: url.absoluteString, targetSize: CGSize(width: 32, height: 32)) {
-                    Circle().fill(bubbleColor)
-                }
-            } else {
-                Circle()
-                    .fill(bubbleColor)
-                    .overlay(
-                        Text(String(comment.author.prefix(1)).uppercased())
-                            // Doctrine 82i : monogramme dans un cercle d'avatar de
-                            // dimension fixe 32×32 → taille figée (scaler ferait
-                            // déborder l'initiale du cercle). Nom d'auteur lisible
-                            // par ailleurs dans `headerRow`.
-                            .font(.system(size: 13, weight: .bold))
-                            .foregroundColor(.white)
-                    )
-            }
-        }
-        .frame(width: 32, height: 32)
-        .clipShape(Circle())
-        .overlay(Circle().strokeBorder(bubbleColor.opacity(0.55), lineWidth: 1))
-        // Halo de séparation : l'avatar reste détaché même sur une story claire.
-        .shadow(color: .black.opacity(0.4), radius: 4, y: 1)
-    }
-
-    private var headerRow: some View {
-        let overlayColor = Self.legibleOverlayColor(for: colorScheme)
-        return HStack(spacing: 6) {
-            Text(comment.author)
-                .font(MeeshyFont.relative(12.5, weight: .semibold))
-                .foregroundColor(Self.legibleAuthorColor(hex: comment.authorColor))
-
-            if hasTranslation {
-                MetaSeparator().font(MeeshyFont.relative(10)).foregroundColor(overlayColor.opacity(0.55))
-                languageSwitcher
-            }
-
-            MetaSeparator().font(MeeshyFont.relative(10)).foregroundColor(overlayColor.opacity(0.55))
-
-            Text(comment.timestamp, style: .relative)
-                .font(MeeshyFont.relative(10))
-                .foregroundColor(overlayColor.opacity(0.75))
-        }
-        // Halo lisibilité (cf. StoryActionButton sidebar) — le header reste net
-        // sur n'importe quel fond de story, clair comme foncé. Pas de box.
-        .storyOverlayLegible(isLightText: colorScheme == .dark)
-    }
-
-    private var languageSwitcher: some View {
-        HStack(spacing: 4) {
-            LanguageFlagChip(code: comment.originalLanguage ?? "",
-                             isActive: showOriginal,
-                             metrics: .overlay) {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    showOriginal = true
-                }
-            }
-
-            LanguageFlagChip(code: userLang, isActive: !showOriginal, metrics: .overlay) {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    showOriginal = false
-                }
-            }
-
-            TranslationsBadge(metrics: .overlay)
-        }
-    }
-
-    private var contentText: some View {
-        // La couleur suit `readerChromeScheme` (posé par le viewer sur
-        // l'overlay) : blanc sur fond sombre, quasi-noir sur fond clair — un
-        // blanc fixe restait illisible sur une story à dominante claire/blanche
-        // (bug user 2026-08-11), le halo seul ne suffisant pas à cette extrémité.
-        let textColor = Self.legibleOverlayColor(for: colorScheme)
-        return MessageTextRenderer.render(
-            displayContent,
-            fontSize: 13.5,
-            color: textColor,
-            mentionColor: MeeshyColors.mentionColor(isDark: colorScheme == .dark),
-            hashtagColor: MeeshyColors.hashtagColor(isDark: colorScheme == .dark),
-            accentColor: textColor,
-            usesRelativeFont: true
-        )
-            .tint(textColor)
-            .lineLimit(6)
-            .multilineTextAlignment(.leading)
-            .animation(.easeInOut(duration: 0.2), value: showOriginal)
-            .messageEffects(comment.effects)
-            // Halo renforcé sur le corps du commentaire — c'est le texte le plus
-            // long, donc le plus exposé à un fond clair/chargé. Le sens du halo
-            // suit `colorScheme` : noir pour détacher un texte clair d'un fond
-            // clair, blanc pour détacher un texte sombre d'un fond sombre/chargé.
-            .storyOverlayLegible(strong: true, isLightText: colorScheme == .dark)
-    }
-
-    private var actionRow: some View {
-        let overlayColor = Self.legibleOverlayColor(for: colorScheme)
-        return HStack(spacing: 16) {
-            Button {
-                withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.6)) {
-                    onToggleLike()
-                }
-            } label: {
-                HStack(spacing: 3) {
-                    // Le contour à l'accent de l'auteur — « c'est MOI qui ai
-                    // aimé ce commentaire ». Sans lui, un commentaire de story
-                    // que j'avais aimé ne se distinguait que par sa teinte, la
-                    // même qu'un commentaire aimé par d'autres. Le `scaleEffect`
-                    // d'origine est conservé.
-                    EngagementGlyph(
-                        outline: "heart",
-                        filled: "heart.fill",
-                        participated: isLiked,
-                        accentHex: comment.authorColor,
-                        activeTint: MeeshyColors.error,
-                        inactiveTint: overlayColor.opacity(0.92),
-                        size: 13,
-                        // Posé sur un média : l'ombre porte la lisibilité.
-                        shadowed: true
-                    )
-                    .scaleEffect(isLiked ? 1.15 : 1.0)
-                    if likeCount > 0 {
-                        Text("\(likeCount)")
-                            .font(MeeshyFont.relative(11, weight: .semibold))
-                            .foregroundColor(isLiked ? MeeshyColors.error : overlayColor.opacity(0.85))
-                    }
-                }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .disabled(isInFlight)
-            .frame(minHeight: 44)
-            // Ce « j'aime » n'avait AUCUNE étiquette : VoiceOver n'en tirait
-            // que le cœur et le compteur. Sa JUMELLE de `FeedCommentsSheet` —
-            // le même contrôle, sur la même entité — porte le vocabulaire
-            // complet depuis toujours ; il est repris ici à l'identique plutôt
-            // que réinventé (253i, #4266).
-            //
-            // Un « j'aime » n'est PAS un `.isToggle` : son nom dit l'ACTION
-            // (« J'aime » / « Je n'aime plus ») et sa valeur porte le COMPTE,
-            // pas un « Activé ». C'est le patron que la jumelle a établi.
-            .accessibilityElement(children: .ignore)
-            .accessibilityAddTraits(.isButton)
-            .accessibilityLabel(isLiked
-                ? String(localized: "a11y.comment.unlike", defaultValue: "Je n'aime plus", bundle: .main)
-                : String(localized: "a11y.comment.like", defaultValue: "J'aime", bundle: .main))
-            .accessibilityValue(LocalizedNumber.exact(likeCount))
-            .accessibilityHint(String(localized: "a11y.comment.like.hint", defaultValue: "Aimer ce commentaire", bundle: .main))
-
-            Button(action: onReply) {
-                HStack(spacing: 3) {
-                    Image(systemName: "arrowshape.turn.up.left")
-                        .font(MeeshyFont.relative(11, weight: .semibold))
-                    Text(String(localized: "story.viewer.reply", defaultValue: "Répondre", bundle: .main))
-                        .font(MeeshyFont.relative(10.5, weight: .semibold))
-                }
-                .foregroundColor(overlayColor.opacity(0.88))
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .frame(minHeight: 44)
-
-            Spacer()
-        }
-        .padding(.top, 2)
-        // Halo lisibilité sur la rangée d'actions (cœur + Répondre).
-        .storyOverlayLegible(isLightText: colorScheme == .dark)
-    }
-}
-
 // MARK: - Story Overlay Legibility
 
 extension View {
@@ -2971,35 +2548,5 @@ extension View {
         return self
             .shadow(color: haloColor.opacity(strong ? 0.7 : 0.55), radius: strong ? 3 : 2, y: 1)
             .shadow(color: haloColor.opacity(strong ? 0.45 : 0.3), radius: strong ? 8 : 6)
-    }
-}
-
-extension StoryCommentRowView {
-    /// Couleur du nom d'auteur garantie lisible sur une story arbitraire.
-    /// Les couleurs d'auteur très sombres (`luminance < 0.4` WCAG) sont mélangées
-    /// vers le blanc pour ne jamais disparaître sur un fond foncé ; le halo gère
-    /// les fonds clairs. Pure + testable (cf. StoryViewerCommentReactionTests).
-    static func legibleAuthorColor(hex: String) -> Color {
-        let base = Color(hex: hex)
-        guard base.luminance < 0.4 else { return base }
-        let ui = UIColor(base)
-        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
-        ui.getRed(&r, green: &g, blue: &b, alpha: &a)
-        let f: CGFloat = 0.55
-        return Color(
-            red: Double(r + (1 - r) * f),
-            green: Double(g + (1 - g) * f),
-            blue: Double(b + (1 - b) * f)
-        )
-    }
-
-    /// Couleur du texte/icônes du corps du commentaire (contenu, séparateurs,
-    /// actions) — dérivée du SCHÉMA DE COULEUR du canvas de la story
-    /// (`readerChromeScheme`, posé sur l'overlay par le viewer), jamais d'un
-    /// blanc fixe. Bug user 2026-08-11 : un fond de story clair/blanc rendait
-    /// le texte blanc totalement illisible, le halo seul ne suffisant pas à
-    /// cette extrémité. Pure + testable.
-    static func legibleOverlayColor(for scheme: ColorScheme) -> Color {
-        scheme == .dark ? .white : MeeshyColors.indigo950
     }
 }

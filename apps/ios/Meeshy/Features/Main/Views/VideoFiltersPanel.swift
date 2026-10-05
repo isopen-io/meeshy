@@ -85,12 +85,7 @@ struct VideoFiltersPanel: View {
     private func presetChip(_ preset: VideoFilterPreset) -> some View {
         let isActive = activePreset == preset
         return Button {
-            var config = preset.config
-            config.backgroundBlurEnabled = filterConfig.backgroundBlurEnabled
-            config.backgroundBlurRadius = filterConfig.backgroundBlurRadius
-            config.skinSmoothingEnabled = filterConfig.skinSmoothingEnabled
-            config.skinSmoothingIntensity = filterConfig.skinSmoothingIntensity
-            filterConfig = config
+            filterConfig = filterConfig.applyingPreset(preset)
         } label: {
             Text(presetLabel(preset))
                 .font(MeeshyFont.relative(12, weight: .medium))
@@ -107,7 +102,7 @@ struct VideoFiltersPanel: View {
                 )
         }
         .meeshyTapTarget()
-        .pressable()
+        .buttonStyle(CallPressButtonStyle())
         .accessibilityAddTraits(isActive ? [.isSelected] : [])
     }
 
@@ -158,6 +153,26 @@ struct VideoFiltersPanel: View {
                 }
                 .padding(.leading, 28)
                 .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+
+            HStack {
+                Image(systemName: "sparkles")
+                    .font(MeeshyFont.relative(12, weight: .medium))
+                    .foregroundColor(MeeshyColors.indigo400)
+                    .frame(width: 18)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(String(localized: "video.filter.naturalComplexion", defaultValue: "Teint naturel", bundle: .main))
+                        .font(MeeshyFont.relative(13, weight: .medium))
+                    Text(String(localized: "video.filter.naturalComplexion.hint", defaultValue: "Unifie et illumine le teint, sans retouche visible", bundle: .main))
+                        .font(MeeshyFont.relative(11))
+                        .foregroundColor(.secondary)
+                }
+                Spacer()
+                Toggle("", isOn: $filterConfig.naturalComplexionEnabled)
+                    .tint(MeeshyColors.indigo500)
+                    .labelsHidden()
+                    .accessibilityLabel(String(localized: "video.filter.naturalComplexion", defaultValue: "Teint naturel", bundle: .main))
+                    .accessibilityHint(String(localized: "video.filter.naturalComplexion.hint", defaultValue: "Unifie et illumine le teint, sans retouche visible", bundle: .main))
             }
 
             HStack {

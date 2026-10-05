@@ -153,6 +153,8 @@ describe('le corps SÉRIALISÉ d’un refus de schéma porte `success` (#4688 cr
       message: expect.stringContaining('password'),
       code: 'VALIDATION_ERROR',
       details: [{ field: 'password', message: expect.any(String) }],
+      // #8082 — la forme que le client iOS décode, déclarée par le schéma.
+      violations: [{ path: 'password', message: expect.any(String) }],
     });
   });
 });

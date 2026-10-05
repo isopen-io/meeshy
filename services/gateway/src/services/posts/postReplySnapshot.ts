@@ -1,3 +1,5 @@
+import { sliceCodePoints } from '@meeshy/shared/utils/text-truncate';
+
 export type PostReplySnapshotablePost = {
   id: string;
   type: string;
@@ -39,7 +41,7 @@ export const POST_REPLY_SNAPSHOT_SELECT = Object.freeze({
 export function buildPostReplyTo(post: PostReplySnapshotablePost): PostReplyTo {
   const rawText = post.content ?? '';
   const trimmed = rawText.trim();
-  const previewText = trimmed.length > 80 ? trimmed.slice(0, 80) : trimmed;
+  const previewText = sliceCodePoints(trimmed, 80);
 
   const thumbnailUrl = post.media[0]?.thumbnailUrl ?? null;
 

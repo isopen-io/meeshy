@@ -12,17 +12,20 @@ import type { PlacedMessage } from '@/lib/grouping';
 import { time } from '@/lib/grouping';
 import { languageBand, mountsBottomLine } from '@/lib/reading-mode/meta';
 import { protectionOf } from '@/lib/reading-mode/protection';
-import { BUBBLE_STICKER_SIDE } from '@/lib/reading-mode/metrics';
+import { BUBBLE_STICKER_SIDE, STICKER_RENDER_SCALE } from '@/lib/reading-mode/metrics';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 
+import { hereKeyOf } from '@/lib/view/use-conversation-viewing';
 import { AuthorAvatar } from './author-avatar';
 import { PersonName } from './person-name';
 import { Attachments } from './attachment-blocks';
 import { EmojiOnly, LocationCard, MoodQuote, StickerArtwork, StoryCitationCard } from './message-body-blocks';
 import { ProtectedContent, ProtectionNotice } from './protected-content';
 import { ProtectionChrome } from './protection-chrome';
-import { RichText } from './rich-text';
+import { LongMessageText } from './long-message-text';
+import { ConversationLinkCards } from './conversation-link-cards';
 import { SystemNotice } from './system-notice';
+import { callNoticeTarget } from '@/lib/calls/call-notice';
 import {
   Badges,
   Check,
@@ -195,7 +198,7 @@ export function Bubble({
   if (systemRow !== null) {
     return (
       <div data-message={message.id} style={{ marginBottom: tail ? 6 : 2 }}>
-        <SystemNotice row={systemRow} timeString={time(message.createdAt)} surface="bubble" />
+        <SystemNotice row={systemRow} timeString={time(message.createdAt)} surface="bubble" callTarget={callNoticeTarget(message)} languages={languages} />
       </div>
     );
   }
@@ -325,6 +328,8 @@ export function Bubble({
           isMine={isMine}
           languages={languages}
           onJump={() => onJumpToMessage(message.replyTo!.id)}
+          citingId={message.id}
+          now={new Date(nowMs)}
         />
       ) : null}
       {/* « MODIFIÉ » — INLINE dans le corps, entre la citation et le texte
@@ -340,6 +345,7 @@ export function Bubble({
           carrier={mediaCarrierOf({ message, caption: rendered, senderAvatarUrl: senderPhoto })}
           mediaFrame="box"
           isMine={isMine}
+          message={message}
           {...(displayLanguage !== undefined ? { displayLanguage } : {})}
         />
       ) : null}
@@ -347,7 +353,7 @@ export function Bubble({
       {sharedPlace !== null ? <LocationCard place={sharedPlace} accent="var(--accent)" language={currentInterfaceLanguage()} /> : null}
 
       {body.kind === 'sticker' ? (
-        <StickerArtwork sticker={body.sticker} picture={body.picture} side={BUBBLE_STICKER_SIDE} />
+        <StickerArtwork sticker={body.sticker} picture={body.picture} side={BUBBLE_STICKER_SIDE * STICKER_RENDER_SCALE} />
       ) : body.kind === 'emoji-only' ? (
         <EmojiOnly text={body.text} fontSize={body.fontSize} />
       ) : rendered.text ? (
@@ -393,16 +399,21 @@ export function Bubble({
             le paragraphe entier rendrait chaque mention focusable ET invisible
             (violation `aria-hidden-focus`, pire qu'un texte nu). Les liens
             restent atteignables, nommés et au clavier. */
-        <RichText
+        <LongMessageText
+          messageId={message.id}
           text={rendered.text}
           lang={rendered.language}
           className="text-bubble leading-[1.35] whitespace-pre-wrap"
           mentions={message.validatedMentions}
           trackingLinks={message.trackingLinks}
-          linkColor={isMine ? 'white' : 'var(--color-ios-brand)'}
+          linkColor={isMine ? 'var(--color-ios-on-brand)' : 'var(--color-ios-brand)'}
+          toggleColor={isMine ? 'var(--color-ios-on-brand)' : 'var(--color-ios-ink)'}
           plainTextHidden
         />
       ) : null}
+      {/* La carte d'un lien de conversation (#8099), SOUS le texte comme iOS
+          (`BubbleLinkEmbed.swift`). */}
+      {bareBody ? null : <ConversationLinkCards text={message.content} trackingLinks={message.trackingLinks} />}
     </>
   );
 
@@ -411,12 +422,21 @@ export function Bubble({
       messageId={message.id}
       kind={kind}
       isViewOnce={message.isViewOnce}
+      isBlurred={message.isBlurred === true}
       contentLength={message.content.length}
       attachments={message.attachments}
       surface="bubble"
       isMine={isMine}
       revealable={revealable}
       onConsumeViewOnce={onConsumeViewOnce}
+      media={{
+        frame: 'box',
+        languages,
+        fallbackLanguage: message.originalLanguage,
+        carrier: mediaCarrierOf({ message, caption: rendered, senderAvatarUrl: senderPhoto }),
+        isMine,
+        ...(displayLanguage !== undefined ? { displayLanguage } : {}),
+      }}
       now={now}
     >
       {contentBlock}
@@ -470,7 +490,7 @@ export function Bubble({
                 height: 20,
                 border: `1.5px solid ${selected ? 'var(--accent)' : 'var(--color-ios-ink-3)'}`,
                 backgroundColor: selected ? 'var(--accent)' : 'transparent',
-                color: 'white',
+                color: 'var(--color-ios-on-brand)',
                 fontSize: 11,
               }}
             >
@@ -565,7 +585,7 @@ export function Bubble({
             className="rounded-bubble px-3.5 py-2.5 transition-shadow duration-500"
             style={{
               ...(isMine
-                ? { backgroundColor: 'var(--color-bubble-mine)', color: 'white', '--color-karaoke-ink': 'white' }
+                ? { backgroundColor: 'var(--color-bubble-mine)', color: 'var(--color-ios-on-brand)', '--color-karaoke-ink': 'var(--color-ios-on-brand)' }
                 : { backgroundColor: receivedBg, border: `1px solid ${receivedHairline}`, color: 'var(--color-ios-ink)' }),
               /* Mise en évidence temporaire après un saut de citation — un
                  anneau plutôt qu'un fond, pour ne jamais menacer le contraste
@@ -583,7 +603,7 @@ export function Bubble({
               <FailedSendBand
                 {...(sendFailureReason === undefined ? {} : { reason: sendFailureReason })}
                 {...(onRetry === undefined ? {} : { onRetry })}
-                textColor={isMine ? 'white' : 'var(--color-error)'}
+                textColor={isMine ? 'var(--color-ios-on-brand)' : 'var(--color-error)'}
               />
             ) : null}
 
@@ -595,15 +615,16 @@ export function Bubble({
             >
               {showsIdentity ? (
                 <AuthorAvatar
+                  authorId={hereKeyOf(message.sender)}
                   initials={initialsOf(message.sender?.displayName ?? '')}
                   color="var(--accent)"
                   size={32}
                   name={message.sender?.displayName ?? ''}
                   /* L'IDENTITÉ MÈNE AU PROFIL (#7241). Le pseudo vit sous
                      `sender.user.username`, JAMAIS à la racine du participant
-                     (`packages/shared/types/participant.ts:113`) — et il est
-                     bien SERVI : `MessagingService.ts:175` pose
-                     `username: true`. Absent (participant anonyme), l'avatar
+                     (`packages/shared/types/participant.ts:113`) — le socket le
+                     sert imbriqué, la liste REST à la racine, repliée par
+                     `withSenderAccount` (#7991). Absent (participant anonyme), l'avatar
                      reste muet plutôt que d'ouvrir `/u/`. */
                   {...(typeof message.sender?.user?.username === 'string' && message.sender.user.username !== ''
                     ? { profileUsername: message.sender.user.username }

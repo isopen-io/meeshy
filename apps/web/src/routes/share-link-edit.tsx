@@ -43,7 +43,7 @@ const EXPIRATION_KEY = {
 const expirationOf = (value: string): ShareLinkExpirationChoice =>
   value === 'keep' ? 'keep' : (SHARE_LINK_EXPIRATIONS.find((option) => option === value) ?? 'keep');
 
-const TEXT_INPUT = 'w-full min-w-0 rounded-[14px] px-3.5 text-body outline-none focus-visible:outline-2';
+const TEXT_INPUT = 'w-full min-w-0 rounded-field px-3.5 text-body outline-none focus-visible:outline-2';
 const TEXT_INPUT_STYLE = {
   minHeight: 48,
   color: INK,
@@ -136,7 +136,7 @@ function LanguageChoices({
                 disabled={draft.allLanguages}
                 onClick={() => onToggle(code)}
                 lang={code}
-                className={`rounded-chip px-3.5 text-caption font-bold focus-visible:outline-2 focus-visible:outline-offset-2 ${selected ? 'text-white' : SECTION_BRAND_INK}`}
+                className={`rounded-chip px-3.5 text-caption font-bold focus-visible:outline-2 focus-visible:outline-offset-2 ${selected ? 'text-ios-on-brand' : SECTION_BRAND_INK}`}
                 style={{
                   minHeight: 44,
                   outlineColor: BRAND,
@@ -203,7 +203,7 @@ export function EditLinkForm({ language, link, policy, now, onSave, onToggleActi
   const numberError = translateInvite(language, 'linkDetail.edit.number.invalid', { max: format.format(MAX_USES_CEILING) });
 
   return (
-    <section id="link-edit" aria-labelledby="link-edit-title" data-share-link-edit className="grid scroll-mt-4 gap-4 rounded-[24px] p-4 md:p-6" style={SECTION_CARD_STYLE}>
+    <section id="link-edit" aria-labelledby="link-edit-title" data-share-link-edit className="grid scroll-mt-4 gap-4 rounded-sheet p-4 md:p-6" style={SECTION_CARD_STYLE}>
       <h2 id="link-edit-title" className="text-thread font-extrabold" style={{ color: INK }}>
         {translateInvite(language, 'linkDetail.edit.title')}
       </h2>
@@ -363,7 +363,7 @@ export function EditLinkForm({ language, link, policy, now, onSave, onToggleActi
           data-share-link-save
           disabled={saving}
           aria-busy={saving}
-          className="flex w-full items-center justify-center gap-2 rounded-[18px] text-body font-extrabold focus-visible:outline-2 focus-visible:outline-offset-2"
+          className="flex w-full items-center justify-center gap-2 rounded-bubble text-body font-extrabold focus-visible:outline-2 focus-visible:outline-offset-2"
           style={{ ...BRAND_BUTTON_STYLE, minHeight: 52, opacity: saving ? 0.7 : 1 }}
         >
           {translateInvite(language, saving ? 'linkDetail.edit.saving' : 'linkDetail.edit.save')}
@@ -376,7 +376,7 @@ export function EditLinkForm({ language, link, policy, now, onSave, onToggleActi
             type="button"
             data-share-link-action={link.isActive ? 'disable' : 'activate'}
             onClick={onToggleActive}
-            className="flex items-center justify-center gap-2 rounded-[16px] px-3 text-body font-bold focus-visible:outline-2 focus-visible:outline-offset-2"
+            className="flex items-center justify-center gap-2 rounded-card px-3 text-body font-bold focus-visible:outline-2 focus-visible:outline-offset-2"
             style={{ minHeight: 48, color: INK, border: '1.5px solid color-mix(in srgb, var(--color-ios-ink-3) 45%, transparent)', outlineColor: BRAND }}
           >
             <span aria-hidden="true">{link.isActive ? <LinksGlyph name="pauseCircle" size={18} /> : <LinksGlyph name="playCircle" size={18} />}</span>
@@ -390,7 +390,7 @@ export function EditLinkForm({ language, link, policy, now, onSave, onToggleActi
           data-share-link-action="delete"
           aria-haspopup="dialog"
           onClick={onDelete}
-          className="flex items-center justify-center gap-2 rounded-[16px] px-3 text-body font-bold focus-visible:outline-2 focus-visible:outline-offset-2"
+          className="flex items-center justify-center gap-2 rounded-card px-3 text-body font-bold focus-visible:outline-2 focus-visible:outline-offset-2"
           style={{ minHeight: 48, color: 'var(--color-error)', border: '1.5px solid color-mix(in srgb, var(--color-error) 45%, transparent)', outlineColor: 'var(--color-error)' }}
         >
           {translateInvite(language, 'linkDetail.edit.delete')}
@@ -404,7 +404,7 @@ export function EditLinkForm({ language, link, policy, now, onSave, onToggleActi
  * **LA CONFIRMATION DE « SUPPRIMER » VIT DÉSORMAIS DANS `ConfirmDialog`**
  * (revue-correction #6149, défaut majeur 2, issue #7858) — c'était la
  * TROISIÈME copie divergente du dépôt, et la seule avec un rayon écrit à la
- * main (`rounded-[24px]`, jamais dérivé d'un jeton). Le composant partagé
+ * main (`rounded-sheet`, jamais dérivé d'un jeton). Le composant partagé
  * (`components/confirm-dialog.tsx`) est monté directement par
  * `routes/share-link.tsx`, avec son `busy` — cet écran attend encore la
  * réponse réseau avant de fermer (#6411, pas encore optimiste).

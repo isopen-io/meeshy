@@ -233,6 +233,16 @@ public extension StoryComposerViewModel {
     /// `loadedImagesVersion` : sa vignette, son ratio et sa durée peuvent
     /// arriver après, ce qui évite de décoder une piste vidéo sur le main actor
     /// pendant qu'une `View` se construit.
+    /// **Retire le fond HÉRITÉ qu'une graine d'image a posé** (#8416), pour
+    /// qu'un hôte le repose en vrai média de fond. Réservé à un hôte qui ne
+    /// PUBLIE pas la scène — la retouche d'une image du fil : `runStoryUpload`
+    /// n'envoie un fond que depuis `slideImages`, et une story publiée perdrait
+    /// le sien.
+    public func detachSeededBackgroundImage() {
+        setImage(nil, for: currentSlide.id)
+        hasBackgroundImage = false
+    }
+
     convenience init(seeding seed: StoryComposerSeed) {
         self.init()
 

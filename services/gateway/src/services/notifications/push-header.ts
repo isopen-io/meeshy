@@ -5,6 +5,12 @@
  */
 
 import type { NotificationActor, NotificationType } from '@meeshy/shared/types/notification';
+import type { NotificationContentCategory } from '@meeshy/shared/types/notification-content-detail';
+
+/** Les bannières qui annoncent le CONTENU d'un message — les seules qu'une catégorie de contenu concerne. */
+const CONTENT_BEARING_TYPES: ReadonlySet<NotificationType> = new Set<NotificationType>([
+  'new_message', 'message_reply', 'reply', 'user_mentioned', 'mention',
+] as NotificationType[]);
 
 /**
  * Resolve the best available name for a notification actor:
@@ -21,8 +27,18 @@ function resolveActorName(actor: NotificationActor | undefined): string {
  * `MEESHY_CALL_INCOMING` (answer/decline) vs `MEESHY_CALL_MISSED`
  * (callback/view) so a finished call never shows an "Answer" action.
  * Unknown types return undefined — no category means no misleading actions.
+ *
+ * #8857 — `contentCategory` (élue par `contentDetailCategory`) remplace la
+ * catégorie d'une bannière de MESSAGE par celle de son contenu (position,
+ * contact, invitation), dont les actions le servent. L'appelant la retient
+ * sous `showPreview: false` et sur un message protégé : les actions diraient à
+ * elles seules ce que le corps masque.
  */
-export function pushCategoryForNotificationType(type: NotificationType): string | undefined {
+export function pushCategoryForNotificationType(
+  type: NotificationType,
+  contentCategory?: NotificationContentCategory,
+): string | undefined {
+  if (contentCategory && CONTENT_BEARING_TYPES.has(type)) return contentCategory;
   switch (type) {
     case 'new_message':
     case 'message_reply':

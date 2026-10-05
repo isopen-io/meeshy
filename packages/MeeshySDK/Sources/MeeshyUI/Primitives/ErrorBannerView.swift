@@ -49,7 +49,7 @@ public struct ErrorBannerView: View {
             } label: {
                 Image(systemName: "xmark")
                     .font(.system(size: MeeshyFont.footnoteSize, weight: .bold))
-                    .foregroundColor(.white.opacity(0.8))
+                    .foregroundColor(.white.opacity(MeeshyOpacity.intense))
                     .meeshyTapTarget()
             }
         }

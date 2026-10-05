@@ -27,7 +27,7 @@ public enum MeeshyEndpointPolicy {
     /// tout en 400 (`sendBadRequest`, vérifié côté gateway), donc les y ranger
     /// affirmerait ce que le serveur ne soutient pas.
     public static func authKind(forLegacyPath path: String) -> MeeshyEndpointAuthKind {
-        if path.hasPrefix("/auth/login") { return .credentials }
+        if path.hasPrefix("/auth/login") || path == "/auth/verification/status" { return .credentials }
         if path == "/auth/refresh"
             || path.hasPrefix("/auth/register")
             || path.hasPrefix("/auth/magic-link") { return .none }
@@ -40,9 +40,10 @@ public enum MeeshyEndpointPolicy {
     }
 
     /// Ce qu'un refus 4xx rend. Voir `MeeshyEndpointRejectionPolicy` —
-    /// l'inscription est la seule route dont le contrat DOCUMENTE ses codes.
+    /// l'inscription et la preuve d'adresse sont les routes dont le contrat
+    /// DOCUMENTE ses codes.
     public static func rejectionPolicy(forLegacyPath path: String) -> MeeshyEndpointRejectionPolicy {
-        path.hasPrefix("/auth/register") ? .structured : .opaque
+        path.hasPrefix("/auth/register") || path == "/auth/verify-email" ? .structured : .opaque
     }
 }
 
@@ -55,13 +56,16 @@ public enum MeeshyEndpointPolicy {
 public extension AuthEndpoint {
     var authKind: MeeshyEndpointAuthKind {
         switch self {
-        case .login, .loginN2Fa: return .credentials
+        // #8083 — l'état d'une attente de preuve : aucune session n'y est en
+        // jeu, un 401 y dit « jeton d'attente invalide », jamais « session
+        // expirée » (qui rafraîchirait celle d'un AUTRE compte).
+        case .login, .loginN2Fa, .verificationStatus: return .credentials
         case .refresh, .register, .magicLinkRequest, .magicLinkValidate: return .none
         default: return .bearer
         }
     }
 
-    /// **L'inscription est la SEULE route dont les refus sont typés** (#5218).
+    /// **Les routes dont les refus sont typés** — l'inscription d'abord (#5218).
     ///
     /// Son contrat documente quatre codes et le champ que chacun vise —
     /// `VALIDATION_ERROR` (+ `violations`), `PHONE_INVALID`, `USERNAME_TAKEN`
@@ -70,9 +74,14 @@ public extension AuthEndpoint {
     /// promet cela : les y basculer ferait de `MeeshyError.rejected` la forme
     /// courante d'un 400, et les sites qui filtrent `.server(400, _)`
     /// cesseraient de matcher sans qu'aucun d'eux ne rougisse.
+    ///
+    /// **La preuve d'adresse les rejoint (#8081)** : `POST /auth/verify-email`
+    /// pose `INVALID_VERIFICATION`, `VERIFICATION_EXPIRED` et `WEAK_PASSWORD`,
+    /// et sa phrase est écrite en français — l'écran de saisie du code doit
+    /// lire le CODE pour parler la langue de l'interface.
     var rejectionPolicy: MeeshyEndpointRejectionPolicy {
         switch self {
-        case .register: return .structured
+        case .register, .verifyEmail: return .structured
         default: return .opaque
         }
     }

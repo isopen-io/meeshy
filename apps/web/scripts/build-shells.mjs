@@ -33,6 +33,10 @@
  *     VITE_DATA_SOURCE=gateway node scripts/build-shells.mjs \
  *     --target android|ios|both [--no-native]
  *
+ * Release du Play Store (#8669, Android seulement — `lib/android-release.mjs`) :
+ *   VITE_API_BASE=https://gate.meeshy.me VITE_DATA_SOURCE=gateway \
+ *     node scripts/build-shells.mjs --target android --release
+ *
  * Les trois fonctions ci-dessous sont PURES et exportées pour un témoin sans
  * build (`build-shells.test.ts`) — même discipline que `check-shell-dist.mjs`
  * (`auditShellDist`) : le pilote ne s'exécute que lorsque ce fichier est le
@@ -43,6 +47,11 @@ import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
+import {
+  androidReleaseArtifacts,
+  androidReleaseGradleArgs,
+  auditAndroidReleaseInputs,
+} from './lib/android-release.mjs';
 import { allFiles } from './lib/files.mjs';
 import { FIXTURE_MARKERS } from './lib/fixture-markers.mjs';
 
@@ -438,6 +447,32 @@ export function auditAndroidVersionCodeForm(gradleText) {
 }
 
 /**
+ * La release de la coque Android est signée par la clé de release (#8085),
+ * dont l'empreinte SHA-256 est publiée dans `public/.well-known/assetlinks.json`
+ * — sans elle, Android ne vérifie pas les App Links et un lien d'e-mail ouvre
+ * le navigateur au lieu de l'app. La clé et ses mots de passe vivent HORS du
+ * dépôt (fichier `keystore.properties` ignoré, ou variables d'environnement de
+ * la CI) : `build.gradle` ne fait que les LIRE, jamais les porter.
+ */
+const ANDROID_SIGNING_SECRET_LITERAL_RE = /^\s*(storePassword|keyPassword)\s*=?\s*['"]/m;
+
+export function auditAndroidReleaseSigning(gradleText) {
+  const text = stripGradleComments(gradleText);
+  const violations = [];
+  if (!/signingConfigs\s*\{[\s\S]*?\brelease\s*\{/.test(text)) {
+    violations.push('build.gradle ne déclare aucun signingConfigs.release — la release de la coque ne peut pas être signée par la clé de release (#8085).');
+  }
+  if (!/signingConfig\s*=?\s*signingConfigs\.release/.test(text)) {
+    violations.push('le buildType release ne pointe pas « signingConfig signingConfigs.release » — la release partirait non signée ou signée en debug (#8085).');
+  }
+  const literal = ANDROID_SIGNING_SECRET_LITERAL_RE.exec(text);
+  if (literal !== null) {
+    violations.push(`${literal[1]} est écrit en LITTÉRALE dans build.gradle — un secret de signature se lit hors du dépôt (keystore.properties ignoré ou variable d'environnement), jamais dans un fichier suivi (#8085).`);
+  }
+  return violations;
+}
+
+/**
  * Ce que les deux fichiers SUIVIS annoncent quand la construction ne passe PAS
  * par le site unique (Android Studio, Xcode, `./gradlew` à la main) : `1`, et
  * `1` seulement (D-45). C'est la moitié de la doctrine qu'aucune garde ne
@@ -606,12 +641,33 @@ function parseArgv(argv) {
   const targetIndex = argv.indexOf('--target');
   const target = targetIndex !== -1 ? argv[targetIndex + 1] : undefined;
   const noNative = argv.includes('--no-native');
-  return { target, noNative };
+  const release = argv.includes('--release');
+  return { target, noNative, release };
 }
 
 async function main() {
-  const { target: cliTarget, noNative } = parseArgv(process.argv.slice(2));
+  const { target: cliTarget, noNative, release } = parseArgv(process.argv.slice(2));
   const { apiBase, target } = resolveShellBuildEnv({ ...process.env, target: cliTarget });
+
+  if (release) {
+    const googleServicesPath = join(APP, 'android/app/google-services.json');
+    const releaseViolations =
+      target === 'android'
+        ? auditAndroidReleaseInputs({
+            apiBase,
+            env: process.env,
+            localKeystoreProperties: existsSync(join(APP, 'android/keystore.properties')),
+            googleServicesJson: existsSync(googleServicesPath) ? readFileSync(googleServicesPath, 'utf8') : null,
+          })
+        : ['--release ne construit que la coque Android : poser --target android.'];
+    if (releaseViolations.length > 0) {
+      console.error('\n  la release ne peut pas partir :\n');
+      for (const v of releaseViolations) console.error(`    · ${v}`);
+      console.error('');
+      process.exit(1);
+    }
+    console.log('  release du Play Store : clé, google-services.json et passerelle de production — ok');
+  }
 
   console.log(`  cible : ${target}${noNative ? ' (--no-native : pas de gradle/xcodebuild)' : ''}`);
   console.log(`  base d'API : ${apiBase}`);
@@ -709,7 +765,9 @@ async function main() {
   if (target !== 'ios') {
     run(
       './gradlew',
-      nativeBuildArgs({ target: 'android', buildNumber, version: shellVersion }),
+      release
+        ? androidReleaseGradleArgs(buildNumber)
+        : nativeBuildArgs({ target: 'android', buildNumber, version: shellVersion }),
       {
         cwd: join(APP, 'android'),
         env: {
@@ -718,12 +776,12 @@ async function main() {
           ANDROID_HOME: process.env.ANDROID_HOME ?? join(process.env.HOME ?? '', 'android-sdk'),
         },
       },
-      'construction Android (assembleDebug)',
+      release ? 'construction Android (bundleRelease + assembleRelease)' : 'construction Android (assembleDebug)',
     );
 
     const outputMetadataPath = join(
       APP,
-      'android/app/build/outputs/apk/debug/output-metadata.json',
+      release ? androidReleaseArtifacts.apkMetadata : 'android/app/build/outputs/apk/debug/output-metadata.json',
     );
     if (!existsSync(outputMetadataPath)) {
       console.error(
@@ -744,6 +802,11 @@ async function main() {
       process.exit(1);
     }
     console.log(`  audit de l'APK construit : versionName ${shellVersion}, versionCode ${buildNumber} — ok`);
+    if (release) {
+      console.log(`\n  bundle du Play Store : ${androidReleaseArtifacts.bundle}`);
+      console.log(`  APK signé (installation directe) : ${androidReleaseArtifacts.apk}\n`);
+      return;
+    }
     console.log(`\n  APK : android/app/build/outputs/apk/debug/app-debug.apk`);
     console.log(
       '  installation AVD : adb install -r android/app/build/outputs/apk/debug/app-debug.apk && ' +

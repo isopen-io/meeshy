@@ -85,13 +85,39 @@ final class StoryReactionStripGestureTests: XCTestCase {
         )
     }
 
+    // MARK: - 1 bis · La loi du point de départ (#9062)
+
+    /// **Un glissé NÉ sur la barre n'est jamais une pagination**, quelle que
+    /// soit sa vitesse. La loi de direction ci-dessus dépend de l'ORDRE dans
+    /// lequel SwiftUI livre deux `onChanged` simultanés : sur un swipe rapide,
+    /// le lecteur pouvait arrêter son axe avant que la barre n'ait revendiqué.
+    /// Le point de départ, lui, est connu du lecteur dès son premier tick.
+    func test_unGlisseNeSurLaBarre_neDevientJamaisHorizontalPourLeLecteur() {
+        let barre = CGRect(x: 40, y: 400, width: 280, height: 56)
+        XCTAssertTrue(StoryReactionStripGesture.yieldsHorizontalAxis(
+            stripFrame: barre, dragStart: CGPoint(x: 200, y: 420)))
+        XCTAssertTrue(StoryReactionStripGesture.yieldsHorizontalAxis(
+            stripFrame: barre, dragStart: CGPoint(x: 41, y: 455)),
+                      "Le bord de la barre lui appartient encore.")
+    }
+
+    func test_unGlisseNeHorsDeLaBarre_resteAuLecteur() {
+        let barre = CGRect(x: 40, y: 400, width: 280, height: 56)
+        XCTAssertFalse(StoryReactionStripGesture.yieldsHorizontalAxis(
+            stripFrame: barre, dragStart: CGPoint(x: 200, y: 200)),
+                       "Né sur la story, au-dessus de la barre ouverte, le glissé pagine toujours.")
+        XCTAssertFalse(StoryReactionStripGesture.yieldsHorizontalAxis(
+            stripFrame: nil, dragStart: CGPoint(x: 200, y: 420)),
+                       "Barre fermée (aucun cadre publié) : rien n'est cédé.")
+    }
+
     // MARK: - 2 · Le site — la barre de la story
 
     /// Non-vacuité : le site existe là où les gardes regardent.
     func test_leSite_estBienLaOuLesGardesRegardent() throws {
         let code = try sidebarSource()
         XCTAssertNotNil(pickerCallSite(in: code),
-                        "Le montage `EmojiReactionPicker(` sous le cœur est introuvable — "
+                        "Le montage `FullscreenReactionStrip(` sous le cœur est introuvable — "
                             + "les gardes suivantes ne mesureraient plus rien.")
     }
 
@@ -109,19 +135,31 @@ final class StoryReactionStripGestureTests: XCTestCase {
         guard let site = pickerCallSite(in: code) else { return XCTFail("site introuvable") }
         let plat = compact(site)
 
-        XCTAssertTrue(plat.contains("scale:1.5"),
-                      "Échelle 1,5 — « ×0,75 » sur le 2 de la directive du 2026-09-11 après-midi.")
-        XCTAssertFalse(plat.contains("scale:2,"),
-                       "L'échelle 2 a été explicitement RETIRÉE : la barre était trop grosse à l'écran.")
-        XCTAssertTrue(plat.contains("chrome:.none"),
-                      "Sans capsule ni fond — « pas de contour ».")
-        XCTAssertTrue(plat.contains("scrollable:true"),
-                      "Même à 1,5 la rangée dépasse la largeur du viewer : elle DÉFILE, elle ne déborde pas.")
+        XCTAssertTrue(plat.contains("FullscreenReactionStrip("),
+                      "La barre de la story est celle de l'atome plein écran (#8878), pas un picker réécrit.")
+        XCTAssertFalse(plat.contains("EmojiReactionPicker("),
+                       "Aucun picker monté au site : le défaut du composant EST l'échelle 1,5 "
+                           + "(`ReactionBarScaleParityTests`), et l'atome ne la surcharge jamais.")
         XCTAssertTrue(plat.contains("onExpandFullPicker:"),
                       "Le « + » reste — il ouvre le sélecteur complet.")
         XCTAssertFalse(plat.contains(".fixedSize()"),
                        "`.fixedSize()` force la rangée à sa largeur NATURELLE : le ScrollView ne défilerait "
                            + "jamais et la barre sortirait de l'écran. Sa largeur doit être bornée.")
+
+        let atom = try compact(Self.stripComments(String(
+            contentsOf: iosRoot()
+                .deletingLastPathComponent()
+                .deletingLastPathComponent()
+                .appendingPathComponent("packages/MeeshySDK/Sources/MeeshyUI/Fullscreen/FullscreenReactionStrip.swift"),
+            encoding: .utf8)))
+        XCTAssertTrue(atom.contains("EmojiReactionPicker("),
+                      "L'atome monte le picker partagé.")
+        XCTAssertTrue(atom.contains("chrome:.none"),
+                      "Sans capsule ni fond — « pas de contour ».")
+        XCTAssertTrue(atom.contains("scrollable:true"),
+                      "Même à l'échelle par défaut la rangée dépasse la largeur du viewer : elle DÉFILE, elle ne déborde pas.")
+        XCTAssertFalse(atom.contains("scale:"),
+                       "L'atome ne surcharge jamais l'échelle : le défaut du composant fait foi.")
     }
 
     func test_laBarreDeLaStory_porteBienUnGesteSimultane() throws {
@@ -169,6 +207,42 @@ final class StoryReactionStripGestureTests: XCTestCase {
         )
     }
 
+    /// La cession au point de départ est lue À LA DÉCISION D'AXE : c'est le
+    /// seul instant où le lecteur choisit l'horizontal, donc le seul où la
+    /// course entre les deux `onChanged` peut être perdue.
+    func test_leLecteur_consulteLeCadreDeLaBarreAvantDArreterLHorizontal() throws {
+        let code = try contentSource()
+        guard let corps = corps("var unifiedDragGesture: some Gesture {", dans: code) else {
+            return XCTFail("`unifiedDragGesture` introuvable — la garde ne mesurerait rien.")
+        }
+        let plat = compact(corps)
+        guard let consultation = plat.range(of: "StoryReactionStripGesture.yieldsHorizontalAxis("),
+              let axe = plat.range(of: "gestureAxis=1") else {
+            return XCTFail("Le lecteur doit consulter `yieldsHorizontalAxis(` avant de poser `gestureAxis = 1`.")
+        }
+        XCTAssertLessThan(consultation.lowerBound, axe.lowerBound,
+                          "La consultation doit PRÉCÉDER l'arrêt de l'axe horizontal.")
+        XCTAssertTrue(plat.contains("stripFrame:reactionStripFrame"),
+                      "Le cadre consulté est celui que publie la barre.")
+        XCTAssertTrue(plat.contains("dragStart:value.startLocation"),
+                      "Le critère est le POINT DE DÉPART, en `.global` comme le drag parent.")
+    }
+
+    func test_laBarre_publieSonCadreGlobal() throws {
+        let code = try sidebarSource()
+        guard let site = pickerCallSite(in: code) else { return XCTFail("site introuvable") }
+        let plat = compact(site)
+        guard let publication = plat.range(of: "key:StoryReactionStripFrameKey.self"),
+              let decalage = plat.range(of: ".offset(x:FullscreenChromeMetrics.reactionStripLeadingOffset)") else {
+            return XCTFail("La barre doit publier `StoryReactionStripFrameKey`.")
+        }
+        XCTAssertTrue(plat.contains("proxy.frame(in:.global)"),
+                      "Même espace que `value.startLocation` du drag parent.")
+        XCTAssertLessThan(publication.lowerBound, decalage.lowerBound,
+                          "Mesuré AVANT `.offset` : posé après, le cadre serait celui de la place "
+                              + "d'origine, pas celle où le doigt voit la barre.")
+    }
+
     /// **Le drapeau doit pouvoir se DÉCOLLER.** SwiftUI ne délivre pas
     /// `onEnded` quand un recognizer concurrent emporte la séquence — et un
     /// `UIScrollView` le fait. Un drapeau posé sans filet gèlerait la
@@ -211,14 +285,14 @@ final class StoryReactionStripGestureTests: XCTestCase {
         return Self.stripComments(try String(contentsOf: url, encoding: .utf8))
     }
 
-    /// Le montage de la barre sous le cœur : du `icon: "heart.fill"` jusqu'à la
-    /// fin de son `.overlay(alignment: .trailing)`. Ancré sur le cœur pour ne
-    /// jamais confondre avec un autre `EmojiReactionPicker` du dépôt.
+    /// Le montage de la barre sous le bouton Réagir : du `FullscreenActionButton.react(`
+    /// jusqu'à la fin de son `.overlay(alignment: .trailing)`. Ancré sur ce bouton pour
+    /// ne jamais confondre avec une autre `FullscreenReactionStrip` du dépôt.
     private func pickerCallSite(in code: String) -> String? {
-        guard let coeur = code.range(of: "icon: \"heart.fill\""),
+        guard let coeur = code.range(of: "FullscreenActionButton.react("),
               let overlay = code.range(of: ".overlay(alignment: .trailing) {",
                                        range: coeur.upperBound..<code.endIndex),
-              code.range(of: "EmojiReactionPicker(", range: overlay.upperBound..<code.endIndex) != nil,
+              code.range(of: "FullscreenReactionStrip(", range: overlay.upperBound..<code.endIndex) != nil,
               let corps = corps(".overlay(alignment: .trailing) {",
                                 dans: String(code[coeur.upperBound...])) else { return nil }
         return corps

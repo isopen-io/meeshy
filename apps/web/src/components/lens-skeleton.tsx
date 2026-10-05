@@ -29,7 +29,7 @@ function SkeletonRow({ delayMs }: { readonly delayMs: number }) {
   return (
     <li data-skeleton-row style={{ height: ROW_HEIGHT, flexShrink: 0, position: 'relative' }}>
       <div
-        className="absolute inset-0 flex items-center gap-3 pl-3 pr-12"
+        className="absolute inset-0 flex items-center gap-3 ps-3 pe-12"
         style={{ opacity: visible ? 1 : 0, transitionProperty: 'opacity', transitionDuration: '300ms', transitionDelay: `${delayMs}ms` }}
       >
         <div className="shrink-0 rounded-full" style={{ width: 44, height: 44, backgroundColor: 'var(--color-ios-card)' }} />

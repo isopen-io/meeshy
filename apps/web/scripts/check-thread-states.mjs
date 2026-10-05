@@ -17,10 +17,11 @@ import { launchChromium } from './lib/browser.mjs';
 import { startDistServer } from './lib/gate-server.mjs';
 import { awaitCondition, awaitFact } from './lib/await-fact.mjs';
 import { checkOfflineStates } from './lib/check-offline-states.mjs';
-import { checkThreadMedia, waitForRowSettled } from './lib/check-media.mjs';
+import { checkThreadMedia, requireRowSettled } from './lib/check-media.mjs';
 import { waitForValueSettled } from './lib/settle-value.mjs';
 import { checkThreadMediaGrid } from './lib/check-media-grid.mjs';
 import { checkViewerVideoTransport } from './lib/check-media-transport.mjs';
+import { checkAudioFullscreen, checkMiniPlayerParity } from './lib/check-audio-fullscreen.mjs';
 import { checkMessageStates } from './lib/check-message-states.mjs';
 import { checkMoreSheet } from './lib/check-more-sheet.mjs';
 import { checkRealtimeEvents } from './lib/check-realtime-events.mjs';
@@ -149,7 +150,7 @@ await checkProtectionStates({ browser, BASE, expect });
    * aussitôt, sans rapport avec le clic. `waitForRowSettled`
    * (`lib/check-media.mjs`) attend le FAIT — réutilisé, jamais dupliqué.
    */
-  await waitForRowSettled(menuPage, await rows.nth(2).locator('[data-message]').getAttribute('data-message'));
+  await requireRowSettled(menuPage, await rows.nth(2).locator('[data-message]').getAttribute('data-message'), expect);
 
   /**
    * Le fil est ANCRÉ EN BAS et VIRTUALISÉ : une rangée peut être montée sans
@@ -541,7 +542,18 @@ await checkProtectionStates({ browser, BASE, expect });
      manque au menu » et accusait le produit. Les quatre autres appels de ce
      fichier passent déjà `copy`, `translate`, `reply`, `select` ; celui-ci
      était le seul resté sur l'ancien contrat. */
+  /* « Transférer » ouvre désormais un SOUS-MENU (#9039) : Transférer /
+     Imager la discussion. Le témoin mesure les deux : le sous-menu porte
+     bien « Imager la discussion », et son « Transférer » garde l'effet tranché
+     par #5989. */
   if (await clickMenuItem('forward')) {
+    const forwardPanel = menuPage.locator('.message-menu-list[data-message-menu-forward]');
+    await awaitFact(forwardPanel);
+    expect(
+      (await forwardPanel.locator('[role="menuitem"]').count()) >= 2,
+      '« Transférer » ouvre son sous-menu, avec « Imager la discussion » (#9039)',
+    );
+    await forwardPanel.locator('[role="menuitem"][data-action="forward"]').first().click();
     await awaitFact(menuPage.getByRole('toolbar', { name: 'Sélection de messages' }));
     expect(
       (await menuPage.getByRole('toolbar', { name: 'Sélection de messages' }).count()) === 1,
@@ -559,9 +571,9 @@ await checkProtectionStates({ browser, BASE, expect });
     /* Le FAIT est la feuille de destinataires — pas un état qui se stabilise :
        `useConversations` sert le cache tout de suite quand il en a, et
        n'attend le réseau que sur un cache vide (cache-first, D-113). */
-    await awaitFact(menuPage.locator('[data-forward-target]').first());
+    await awaitFact(menuPage.locator('[data-send-target]').first());
     expect(
-      (await menuPage.locator('[data-forward-target]').count()) > 0,
+      (await menuPage.locator('[data-send-target]').count()) > 0,
       'valider ouvre la feuille de destinataires, avec au moins une conversation',
     );
   }
@@ -599,7 +611,7 @@ await checkProtectionStates({ browser, BASE, expect });
     // L'ancrage d'ouverture peut encore être en vol (§ doc-comment du premier
     // `waitForRowSettled` de ce fichier) — le clic droit qui suit ouvrirait
     // un menu que le premier `scroll` de convergence referme aussitôt.
-    await waitForRowSettled(leakPage, BLURRED_WITNESS_ID);
+    await requireRowSettled(leakPage, BLURRED_WITNESS_ID, expect);
 
     // (a) le menu d'un message PROTÉGÉ n'offre pas « Copier ». Visé par
     // `data-action` et non par le libellé (#7141/#7555) : ce gate tourne en
@@ -703,7 +715,7 @@ await checkProtectionStates({ browser, BASE, expect });
    */
   // L'ancrage d'ouverture peut encore être en vol (§ doc-comment du premier
   // `waitForRowSettled` de ce fichier).
-  await waitForRowSettled(touchPage, await touchPage.locator('[data-row] [data-message]').first().getAttribute('data-message'));
+  await requireRowSettled(touchPage, await touchPage.locator('[data-row] [data-message]').first().getAttribute('data-message'), expect);
   await touchPage.dispatchEvent('[data-row]', 'contextmenu');
   await touchPage.waitForSelector('.message-menu-list');
   const clusterTouchGuard = await touchPage.evaluate(() => {
@@ -855,6 +867,16 @@ await checkThreadMediaGrid({ browser, BASE, expect, setScheme, skin: 'bulles', s
  * jamais la visionneuse. Un seul schéma : la barre n'a pas de variante claire.
  */
 await checkViewerVideoTransport({ browser, BASE, expect, setScheme, scheme: 'dark' });
+
+/**
+ * 8quater — LE LECTEUR AUDIO PLEIN ÉCRAN (#8333) — `lib/check-audio-fullscreen.mjs` :
+ * la bulle d'un vocal ouvre la page audio, servie au Prisme du lecteur ; lecture,
+ * pause, vocal suivant et Échap, sur les vraies pistes décodées par Chromium.
+ */
+await checkAudioFullscreen({ browser, BASE, expect, setScheme, scheme: 'dark' });
+/* #9294 — le mini-lecteur dans les DEUX schémas : son aplat et sa place se jugent sur chaque fond. */
+await checkMiniPlayerParity({ browser, BASE, expect, setScheme, scheme: 'light' });
+await checkMiniPlayerParity({ browser, BASE, expect, setScheme, scheme: 'dark' });
 
 /**
  * 9 — LES ÉTATS DU MESSAGE (#5936) — `lib/check-message-states.mjs`, QUATRE

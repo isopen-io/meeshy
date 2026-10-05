@@ -1,6 +1,7 @@
 import XCTest
 import SwiftUI
 @testable import MeeshyUI
+import MeeshySDK
 
 /// **Light markdown and links in a message** (#7849) — the same cases as
 /// `packages/shared/__tests__/text-segments-markdown.test.ts`, so web and iOS
@@ -16,8 +17,10 @@ final class MessageTextRendererMarkdownTests: XCTestCase {
             case .code(let s, _): return "code(\(s))"
             case .mentionLink(let d, _, _): return "mention(\(d))"
             case .hashtagLink(let d, _, _): return "hashtag(\(d))"
-            case .meeshyTokenLink(let d, _, _): return "token(\(d))"
-            case .urlLink(let d, let url): return "url(\(d)->\(url.absoluteString))"
+            case .link(.shortCode(let token)): return "token(m+\(token))"
+            case .link(let written):
+                let shown = LinkDisplayLaw.resolve(written, trackedLinks: nil)
+                return "url(\(shown?.text ?? "")->\(shown?.url.absoluteString ?? ""))"
             }
         }
     }

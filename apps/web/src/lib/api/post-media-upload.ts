@@ -1,10 +1,13 @@
+import * as uploadsEndpoints from '@meeshy/shared/api/endpoints/uploads';
+
+import { anySignal, timeoutSignal } from './abort';
 import type { DataSource } from './config';
 import { credentialHeaders, type ApiFailure, type ApiResult, type Credential } from './http';
 
 /**
  * LE CLIENT TUS D'UN `PostMedia` (#6900, § 1.5 de la spécification) — le
  * MÊME protocole que `TusUploadManager.swift` (`:180-196`, `:288-520`,
- * `:520-582`) : `POST /api/v1/uploads` (201 + `Location`), `PATCH` par
+ * `:520-582`) : `POST uploads.root` (201 + `Location`), `PATCH` par
  * tranches (`Upload-Offset`), `HEAD` pour se réaligner sur un 409, une
  * nouvelle création sur un 404/410. Sans checkpoint disque (question 9.5 : la
  * reprise ne survit pas à un rechargement de page) ni rafraîchissement de
@@ -64,7 +67,7 @@ export type PostMediaUploadParams = PostMediaUploadDeps & {
 export const WEB_TUS_CHUNK_BYTES = 2 * 1024 * 1024;
 export const TUS_REQUEST_TIMEOUT_MS = 120_000;
 
-const UPLOADS_PATH = '/api/v1/uploads';
+const UPLOADS_PATH = uploadsEndpoints.root;
 const TUS_RESUMABLE = '1.0.0';
 /** Réalignements sur 409 avant d'abandonner — une boucle BORNÉE : un serveur
  * dont l'offset ne progresse jamais rend la main plutôt que de tourner. */
@@ -97,14 +100,14 @@ async function exchange(
   init: RequestInit,
   params: Pick<PostMediaUploadParams, 'signal' | 'fetchImpl'>,
 ): Promise<Exchange> {
-  const timeoutSignal = AbortSignal.timeout(TUS_REQUEST_TIMEOUT_MS);
-  const signal = params.signal === undefined ? timeoutSignal : AbortSignal.any([params.signal, timeoutSignal]);
+  const deadline = timeoutSignal(TUS_REQUEST_TIMEOUT_MS);
+  const signal = params.signal === undefined ? deadline : anySignal([params.signal, deadline]);
   try {
     const response = await (params.fetchImpl ?? fetch)(url, { ...init, signal });
     return { kind: 'response', response };
   } catch (error) {
     if (params.signal?.aborted === true) return { kind: 'failure', failure: failure(0, 'Téléversement annulé', 'ABORTED') };
-    if (timeoutSignal.aborted) return { kind: 'failure', failure: failure(0, 'La passerelle n’a pas répondu', 'TIMEOUT') };
+    if (deadline.aborted) return { kind: 'failure', failure: failure(0, 'La passerelle n’a pas répondu', 'TIMEOUT') };
     const message = error instanceof Error ? error.message : 'Réseau indisponible';
     return { kind: 'failure', failure: failure(0, message, 'NETWORK') };
   }
@@ -128,7 +131,7 @@ function offsetOf(response: Response): number | null {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
 }
 
-/** `Location` — absolue ou relative (`/api/v1/uploads/<id>`) selon que
+/** `Location` — absolue ou relative (`uploads.byWildcard(<id>)`) selon que
  * `@tus/server` a reçu un hôte de confiance (`respectForwardedHeaders`). */
 function resolvedLocation(location: string, base: string): string {
   if (/^https?:\/\//i.test(location)) return location;

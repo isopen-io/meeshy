@@ -43,6 +43,21 @@ export const userPermissionsSchema = {
 } as const;
 
 /**
+ * L'état d'activation de l'utilisateur courant (#8238) — forme :
+ * `AccountActivation` (`types/account-activation.ts`).
+ */
+export const accountActivationSchema = {
+  type: 'object',
+  description: 'Email grace period of the current account: quiet (< 7 days), invite (7-28 days), blocked (28 days without email proof), done (email proven)',
+  properties: {
+    phase: { type: 'string', enum: ['quiet', 'invite', 'blocked', 'done'] },
+    deadline: { type: 'string', format: 'date-time', nullable: true, description: 'Instant the account gets blocked without email proof; null when no block is scheduled' },
+    missing: { type: 'array', items: { type: 'string', enum: ['email', 'phone'] } }
+  },
+  required: ['phase', 'deadline', 'missing']
+} as const;
+
+/**
  * User object schema for API responses
  * Contains all user fields returned by login, register, and profile endpoints
  */
@@ -86,6 +101,10 @@ export const userSchema = {
     emailVerifiedAt: { type: 'string', format: 'date-time', nullable: true, description: 'Email verification timestamp' },
     phoneVerifiedAt: { type: 'string', format: 'date-time', nullable: true, description: 'Phone verification timestamp' },
     twoFactorEnabledAt: { type: 'string', format: 'date-time', nullable: true, description: '2FA enabled timestamp' },
+    // #8238 — le délai de grâce de l'adresse. Calculé par la passerelle
+    // (`services/auth/account-activation.ts`), servi tel quel ; un client ne
+    // le recalcule jamais.
+    activation: accountActivationSchema,
     lastPasswordChange: { type: 'string', format: 'date-time', nullable: true, description: 'Last password change timestamp' },
 
     // Security - Login Tracking

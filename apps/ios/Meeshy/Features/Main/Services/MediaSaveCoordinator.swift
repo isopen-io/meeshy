@@ -138,6 +138,21 @@ final class MediaSaveCoordinator: ObservableObject {
         pendingRequest = request
     }
 
+    /// **« Enregistrer » d'une image ou d'une vidéo : directement dans l'album
+    /// Meeshy, sans demander où** (#8307, directive porteur 2026-09-27). Les
+    /// documents et l'audio gardent le choix de destination (Fichiers, partage).
+    func save(_ request: MediaSaveRequest) {
+        guard Self.savesStraightToAlbum(request.kind) else { return requestSave(request) }
+        lastOutcome = nil
+        activeRequest = nil
+        pendingRequest = nil
+        Task { await pick(.photoLibrary, request: request) }
+    }
+
+    nonisolated static func savesStraightToAlbum(_ kind: AttachmentKind) -> Bool {
+        kind == .image || kind == .video
+    }
+
     func cancel() {
         pendingRequest = nil
     }

@@ -33,16 +33,19 @@ import { logger } from '../utils/logger';
 import { CALL_EVENTS, CALL_ERROR_CODES, CALL_TERMINAL_STATUSES } from '@meeshy/shared/types/video-call';
 import { ROOMS, CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import { resolveCallEndedRooms } from '../utils/callEndedFanout';
-import { handleMediaToggle as handleMediaToggleBody } from './call-media-toggle';
-import {
-  resolveNotificationLangs,
-  resolveDeviceCountries,
-  resolveVoipCapableUsers,
-} from './call-recipients';
+import { handleMediaToggle as handleMediaToggleBody, mapMediaToggleError, registerMediaToggleListeners } from './call-media-toggle';
+import { announceRecordingArrival, registerCallRecordingEvents } from './call-recording-events';
+import { evictStaleSameUserSockets } from './call-room-eviction';
+import { DISCONNECT_GRACE_MS, GRACE_EXTENSION_MS, MAX_GRACE_EXTENSIONS, alreadyActiveCallDetails, isCallRevenant } from './call-rejoin';
+import { forceLeaveSparesLiveCall } from './call-force-leave-scope';
+import { registerCallControlEvents } from './call-controls';
+import { CallRecordingService } from '../services/calls/callRecording';
+import { callRosterFrom, prismaCallRecordingRepository } from '../services/calls/callRecordingRepository';
+import { buildCallInitiatedEvent, pushIncomingCall, ringCalleeSockets } from './call-ring';
 import {
   type CallParticipantResolverDeps,
   resolveParticipantId,
-  resolveParticipantIdFromCall,
+  resolveJoinParticipantId,
   resolveActiveCallParticipant,
   resolveActiveCallParticipantDetailed,
   resolveActiveCallParticipantId,
@@ -62,7 +65,9 @@ import {
 import { callErrorMessageOf, parseCallHandlerError } from './utils/call-error-parsing';
 import { buildTranslatedSegment } from './utils/call-translated-segment';
 import { buildCallSilentPush, shouldMirrorAnsweredElsewhere } from '../services/call-push-mirroring';
-import { notificationString } from '@meeshy/shared/utils/notification-strings';
+import { ringableCallees } from '../services/calls/callRingPolicy';
+import { sendMissedCallNotifications, sendNeverJoinedCancellationPushes } from './call-missed-notifications';
+import { createCallInvitationLifecycle, type CallInvitationLifecycle } from './call-invite-lifecycle';
 import { resolveParticipantAvatar } from '@meeshy/shared/utils/participant-helpers';
 import { validateSocketEvent, isValidationFailure } from '../middleware/validation';
 import {
@@ -91,6 +96,7 @@ import type {
   CallSignalEvent,
   CallEndedEvent,
   CallMediaToggleClientEvent,
+  CallMediaType,
   CallError,
   CallHeartbeatEvent,
   CallQualityReportEvent,
@@ -122,7 +128,9 @@ export type DisconnectParticipation = {
 export class CallEventsHandler {
   private callService: CallService;
   private notificationService: NotificationService | null = null;
+  private readonly callRecording: CallRecordingService;
   private pushService: PushNotificationService | null = null;
+  private readonly callInvitations: CallInvitationLifecycle;
   private zmqClient: ZmqTranslationClient | null = null;
   /** Periodic sweep handle for `bufferedOffers` TTL eviction. */
   private bufferCleanupInterval: ReturnType<typeof setInterval> | null = null;
@@ -232,15 +240,6 @@ export class CallEventsHandler {
    */
   private isShuttingDown = false;
   private disconnectGraceTimers = new Map<string, ReturnType<typeof setTimeout>>();
-  private static readonly DISCONNECT_GRACE_MS = 30_000;
-  // CALL-RESILIENCE (chaos-test prod 2026-07-02, callId 6a46713b…) — the
-  // socket.io reconnect backoff can legitimately exceed the 30s grace (the
-  // re-join landed 18s late on a call whose BOTH apps were alive and whose
-  // P2P media was healthy). When the user still has ANY connected socket at
-  // expiry, the re-join is coming: extend rather than kill, capped so the
-  // total stays under the heartbeat GC tier (30s + 4×15s = 90s < 120s).
-  private static readonly GRACE_EXTENSION_MS = 15_000;
-  private static readonly MAX_GRACE_EXTENSIONS = 4;
   // Pre-answer disconnects: long enough to absorb a socket churn / transport
   // blip of the caller mid-ring, short enough that a real crash still resolves
   // the ring quickly (the 60s ringing timeout remains the hard cap).
@@ -296,6 +295,8 @@ export class CallEventsHandler {
 
   constructor(private prisma: PrismaClient, callService?: CallService) {
     this.callService = callService ?? new CallService(prisma);
+    this.callInvitations = createCallInvitationLifecycle({ prisma, pushService: () => this.pushService, notificationService: () => this.notificationService });
+    this.callRecording = new CallRecordingService({ repository: prismaCallRecordingRepository(prisma), roster: callRosterFrom(this.callService), now: () => new Date() });
     // Defensive TTL sweep: runs every 60s to evict stale offer entries whose
     // call ended via a path that skipped clearBufferedOffer (error branches,
     // GC teardown). Complements the inline sweep in bufferOffer which only
@@ -323,41 +324,6 @@ export class CallEventsHandler {
         }
       }
     }, 60_000).unref();
-  }
-
-  // ==============================================
-  // CE QU'IL FAUT SAVOIR D'UN DESTINATAIRE (`call-recipients.ts`)
-  // ==============================================
-
-  private resolveNotificationLangs(userIds: string[]): Promise<Map<string, string>> {
-    return resolveNotificationLangs(this.prisma, userIds);
-  }
-
-  private resolveDeviceCountries(userIds: string[]): Promise<Map<string, string | null>> {
-    return resolveDeviceCountries(this.prisma, userIds);
-  }
-
-  private resolveVoipCapableUsers(userIds: string[]): Promise<Set<string>> {
-    return resolveVoipCapableUsers(this.prisma, userIds);
-  }
-
-  /**
-   * GW6(c) — a socket's `appForeground=true` is only trusted while the socket
-   * is FRESH (last inbound packet within this window). A zombie socket (app
-   * crashed / network died without presence:app-state=false) stays flagged
-   * foreground until the Socket.IO ping timeout (~45s) — during that window a
-   * ring would be lost. Window > pingInterval (25s) + jitter so a healthy
-   * idle-foreground client (which only pongs every 25s) is never
-   * misclassified — a false-stale would force a CallKit banner over the
-   * in-app UI (client dedups by callId, but avoid it by construction).
-   */
-  private static readonly FOREGROUND_SOCKET_STALENESS_MS = 32_000;
-
-  private isFreshForegroundSocket(socketData: { appForeground?: boolean; lastSeenAt?: number } | undefined): boolean {
-    if (socketData?.appForeground !== true) return false;
-    const lastSeenAt = socketData.lastSeenAt;
-    if (typeof lastSeenAt !== 'number') return true;
-    return Date.now() - lastSeenAt <= CallEventsHandler.FOREGROUND_SOCKET_STALENESS_MS;
   }
 
   /** Release the periodic cleanup interval. Call when shutting down the handler. */
@@ -457,20 +423,10 @@ export class CallEventsHandler {
     const rooms = await resolveCallEndedRooms(this.prisma, callId, conversationId);
     io.to(rooms).emit(CALL_EVENTS.ENDED, endedEvent);
     await this.sendCallCancellationPushes(callId, conversationId, endedEvent);
+    await this.callInvitations.callEnded(io, callId);
   }
 
-  /**
-   * Sonnerie fantôme (app suspendue) — le fanout socket ci-dessus n'atteint
-   * pas un appelé dont le socket n'est JAMAIS monté (réseau pauvre : la push
-   * VoIP passe par APNs mais le WebSocket ne s'établit pas ; le freshness
-   * check REST a déjà validé l'appel au moment du push). Quand l'appel se
-   * termine SANS avoir été décroché (missed/rejected), on envoie aux membres
-   * n'ayant jamais rejoint la call room une push APNs **background**
-   * `call_cancel` qui coupe CallKit. JAMAIS en type voip : chaque push VoIP
-   * exige un reportNewIncomingCall (sinon kill) — c'est précisément pourquoi
-   * la cancellation passe par une push standard silencieuse. Best-effort :
-   * aucun échec ne doit casser le chemin terminal.
-   */
+  /** Sonnerie fantôme — la doctrine vit avec le fan-out (`call-missed-notifications.ts`) ; ici, la seule déduplication par appel. */
   private async sendCallCancellationPushes(
     callId: string,
     conversationId: string | undefined,
@@ -485,47 +441,7 @@ export class CallEventsHandler {
       return;
     }
     this.callCancellationPushSentAt.set(callId, Date.now());
-
-    try {
-      const [members, joined] = await Promise.all([
-        this.prisma.participant.findMany({
-          where: { conversationId, isActive: true, userId: { not: null } },
-          select: { userId: true }
-        }),
-        this.prisma.callParticipant.findMany({
-          where: { callSessionId: callId },
-          select: { participant: { select: { userId: true } } }
-        })
-      ]);
-
-      const excluded = new Set<string>(
-        joined.map((p) => p.participant?.userId).filter((uid): uid is string => !!uid)
-      );
-      if (endedEvent.endedBy) excluded.add(endedEvent.endedBy);
-
-      const targets = members
-        .map((m) => m.userId)
-        .filter((uid): uid is string => !!uid && !excluded.has(uid));
-      if (targets.length === 0) return;
-
-      // Cross-platform mobile (audit 2026-07-11 #2) — le hardcode
-      // apns/ios laissait un Android backgrounded (socket mort) sonner
-      // dans le vide après un missed/rejected.
-      await Promise.all(targets.map((uid) =>
-        this.pushService!.sendToUser(
-          buildCallSilentPush({ userId: uid, type: 'call_cancel', callId })
-        ).catch((error) => {
-          logger.error('call_cancel push failed', { callId, userId: uid, error });
-        })
-      ));
-
-      logger.info('📲 call_cancel background push sent to never-joined members', {
-        callId,
-        targets
-      });
-    } catch (error) {
-      logger.error('call_cancel push fanout failed — terminal path unaffected', { callId, error });
-    }
+    await sendNeverJoinedCancellationPushes({ prisma: this.prisma, pushService: this.pushService }, { callId, conversationId, endedBy: endedEvent.endedBy });
   }
 
   private buildRingingTimeoutHandler(io: SocketIOServer, callId: string): () => Promise<void> {
@@ -659,7 +575,7 @@ export class CallEventsHandler {
     getUserId: (socketId: string) => string | undefined;
     participation: DisconnectParticipation;
     userId: string;
-  }, graceMs: number = CallEventsHandler.DISCONNECT_GRACE_MS): void {
+  }, graceMs: number = DISCONNECT_GRACE_MS): void {
     const { participation, userId } = opts;
     const callId = participation.callSessionId;
     const key = this.graceKey(callId, userId);
@@ -729,12 +645,12 @@ export class CallEventsHandler {
       // didReconnect re-join is on its way. Extend rather than end healthy
       // P2P media; a re-join cancels the extension via the same grace key.
       const extensions = opts.extensionCount ?? 0;
-      if (extensions < CallEventsHandler.MAX_GRACE_EXTENSIONS) {
+      if (extensions < MAX_GRACE_EXTENSIONS) {
         const userSockets = await io.in(ROOMS.user(userId)).fetchSockets();
         if (userSockets.length > 0) {
           logger.info('📞 Grace expired but user still has a live socket — extending grace', {
             callId, userId, extension: extensions + 1,
-            maxExtensions: CallEventsHandler.MAX_GRACE_EXTENSIONS
+            maxExtensions: MAX_GRACE_EXTENSIONS
           });
           const key = this.graceKey(callId, userId);
           const timer = setTimeout(() => {
@@ -746,7 +662,7 @@ export class CallEventsHandler {
               (error: unknown) =>
                 logger.error('📞 Extended disconnect grace expiry rejected', { callId, userId, error })
             );
-          }, CallEventsHandler.GRACE_EXTENSION_MS);
+          }, GRACE_EXTENSION_MS);
           timer.unref?.();
           this.disconnectGraceTimers.set(key, timer);
           return;
@@ -1442,10 +1358,6 @@ export class CallEventsHandler {
     return resolveParticipantId(this.participantResolverDependencies(), userId, conversationId);
   }
 
-  private resolveParticipantIdFromCall(userId: string, callId: string): Promise<string | null> {
-    return resolveParticipantIdFromCall(this.participantResolverDependencies(), userId, callId);
-  }
-
   private resolveActiveCallParticipant(
     userId: string,
     callId: string
@@ -1480,30 +1392,7 @@ export class CallEventsHandler {
   }
 
   /**
-   * CallService throws plain `Error`s formatted as `"<CODE>: <description>"`
-   * (e.g. getCallSession's `CALL_NOT_FOUND: Call session not found`, thrown
-   * when the peer ends the call in the same instant a toggle is in flight).
-   * Relay the real code/message when it matches a known CALL_ERROR_CODES
-   * value so the client can react appropriately (e.g. silently clean up on
-   * CALL_NOT_FOUND instead of surfacing a generic toggle-failed toast);
-   * fall back to the generic code for anything unrecognized (DB errors,
-   * etc.) so raw internals are never leaked to the client.
-   */
-  private mapMediaToggleError(error: unknown, fallbackMessage: string): CallError {
-    const message = error instanceof Error ? error.message : undefined;
-    if (!message) {
-      return { code: 'MEDIA_TOGGLE_FAILED', message: fallbackMessage } as CallError;
-    }
-    const match = message.match(/^([A-Z_]+):\s*(.+)$/);
-    const knownCodes = new Set<string>(Object.values(CALL_ERROR_CODES));
-    if (match && knownCodes.has(match[1])) {
-      return { code: match[1], message: match[2] } as CallError;
-    }
-    return { code: 'MEDIA_TOGGLE_FAILED', message: fallbackMessage } as CallError;
-  }
-
-  /**
-   * Le corps partagé de `call:toggle-audio` / `call:toggle-video` vit dans
+   * Le corps partagé de `call:toggle-audio` / `-video` / `-screen` vit dans
    * `call-media-toggle.ts` — la plus grande unité de ce fichier qui ne
    * dépende que de QUATRE membres, donc la seule dont la liste de
    * dépendances reste lisible une fois explicitée.
@@ -1512,13 +1401,13 @@ export class CallEventsHandler {
     socket: Socket,
     getUserId: (socketId: string) => string | undefined,
     data: CallMediaToggleClientEvent,
-    mediaType: 'audio' | 'video'
+    mediaType: CallMediaType
   ): Promise<void> {
     return handleMediaToggleBody(
       {
         callService: this.callService,
         rateLimiter: this.rateLimiter,
-        mapMediaToggleError: (error, fallback) => this.mapMediaToggleError(error, fallback),
+        mapMediaToggleError,
         resolveActiveCallParticipant: (userId, callId) => this.resolveActiveCallParticipant(userId, callId),
       },
       socket, getUserId, data, mediaType
@@ -2056,47 +1945,7 @@ export class CallEventsHandler {
           room: ROOMS.call(callSession.id)
         });
 
-        // Prepare event data
-        // CRITIQUE — `mode` est l'architecture WebRTC (`'p2p' | 'sfu'`), PAS
-        // le type média. Le type média (`'audio' | 'video'`) est stocké dans
-        // `callSession.metadata.type` (cf. CallService.initiateCall:339). Sans
-        // ce champ explicite, l'iOS recevait `mode: 'p2p'` et décidait
-        // toujours `isVideo = false` → CallKit affichait l'incoming call en
-        // audio même quand l'appelant voulait un appel vidéo.
-        const callType: 'audio' | 'video' = (callSession.metadata as { type?: string } | null)?.type === 'video' ? 'video' : 'audio';
-        const initiatedEvent: CallInitiatedEvent = {
-          callId: callSession.id,
-          conversationId: data.conversationId,
-          mode: callSession.mode,
-          type: callType,
-          initiator: {
-            userId: callSession.initiator.id,
-            username: callSession.initiator.username,
-            displayName: callSession.initiator.displayName || undefined,
-            avatar: callSession.initiator.avatar
-          },
-          // Group-calls gap analysis W6 — lets a ringing callee's UI tell
-          // "Alice is calling you" (direct) apart from "Alice is calling the
-          // Design Team" (group) without a separate conversation lookup.
-          // `conversation` is already selected by `callSessionInclude`
-          // (CallService.ts); the fallback only matters for a test double
-          // that omits it, never for a real Prisma-backed session.
-          conversationType: callSession.conversation?.type ?? 'direct',
-          conversationTitle: callSession.conversation?.title ?? null,
-          participants: callSession.participants.map(p => ({
-            id: p.id,
-            callSessionId: p.callSessionId,
-            userId: p.participant?.userId || p.participantId,
-            role: p.role,
-            joinedAt: p.joinedAt,
-            leftAt: p.leftAt,
-            isAudioEnabled: p.isAudioEnabled,
-            isVideoEnabled: p.isVideoEnabled,
-            username: p.participant?.user?.username || p.participant?.displayName,
-            displayName: p.participant?.displayName || p.participant?.user?.displayName,
-            avatar: resolveParticipantAvatar(p.participant)
-          }))
-        };
+        const initiatedEvent = buildCallInitiatedEvent(callSession, data.conversationId);
 
         // ACK to initiator with callId, mode AND iceServers — the iceServers
         // MUST be returned synchronously so the initiator's RTCPeerConnection
@@ -2133,46 +1982,19 @@ export class CallEventsHandler {
           }
         });
 
-        const memberUserIds = conversationParticipants.map(p => p.userId!).filter(Boolean);
+        const memberUserIds = await ringableCallees(this.prisma, {
+          callerUserId: userId,
+          calleeUserIds: conversationParticipants.flatMap(p => (p.userId ? [p.userId] : [])),
+        });
         logger.info('📋 Conversation members to notify', {
           conversationId: data.conversationId,
           memberUserIds
         });
 
-        // Audit P2-GW-1 — was `io.fetchSockets()` which scans EVERY connected
-        // socket on the server (O(N), prohibitive at 10k+ connections). Each
-        // callee user auto-joins `ROOMS.user(userId)` at auth (AuthHandler
-        // L121/L181), so a per-user `io.in(ROOMS.user(memberId)).fetchSockets()`
-        // is O(M) where M = the callee's online device count (typically 1–3).
-        let notifiedSocketsCount = 0;
-        const notifiedUserIds = new Set<string>();
-        const foregroundUserIds = new Set<string>();
-        for (const memberId of memberUserIds) {
-          if (memberId === userId) continue; // skip initiator
-          const memberSockets = await io.in(ROOMS.user(memberId)).fetchSockets();
-          if (memberSockets.length === 0) continue;
-          notifiedUserIds.add(memberId);
-          // CALL-FIX 2026-06-06 — a member is reachable via the in-app socket UI
-          // ONLY if at least one of its sockets is FOREGROUND. A backgrounded
-          // socket still receives this emit but iOS has suspended the app so it
-          // can't act on it → that member also needs a VoIP push (below).
-          // GW6(c) — appForeground is only trusted on a FRESH socket (see
-          // isFreshForegroundSocket): a zombie foreground socket must not
-          // suppress the VoIP push (iOS dedups by callId anyway).
-          if (memberSockets.some((s) => this.isFreshForegroundSocket(s.data))) {
-            foregroundUserIds.add(memberId);
-          }
-          const memberIceServers = this.callService.generateIceServers(memberId);
-          for (const memberSocket of memberSockets) {
-            memberSocket.emit(CALL_EVENTS.INITIATED, { ...initiatedEvent, iceServers: memberIceServers });
-            notifiedSocketsCount++;
-            logger.debug('📤 Sent call:initiated to member socket', {
-              socketId: memberSocket.id,
-              userId: memberId,
-              callId: callSession.id
-            });
-          }
-        }
+        const { notifiedSocketsCount, foregroundUserIds } = await ringCalleeSockets(
+          { io, prisma: this.prisma, callService: this.callService },
+          { callerUserId: userId, calleeUserIds: memberUserIds, event: initiatedEvent }
+        );
 
         logger.info('✅ Socket: Call initiated and sent to members', {
           callId: callSession.id,
@@ -2205,92 +2027,22 @@ export class CallEventsHandler {
 
         // Send VoIP push to offline members for incoming call wake-up
         if (this.pushService) {
-          const callerName = callSession.initiator.displayName || callSession.initiator.username || 'Unknown';
-          const callerAvatar = callSession.initiator.avatar || undefined;
-
-          // CALL-FIX 2026-06-06 — VoIP-push every callee that is NOT confirmed
-          // FOREGROUND (the `foregroundUserIds` set built during the fanout). That
-          // covers BOTH truly offline members (no socket) AND backgrounded members
-          // (socket still TCP-connected for ~45s but the app is suspended and can't
-          // ring from the socket event). Only a foreground member relies on the
-          // in-app socket UI and must NOT get a VoIP push (which would force a
-          // CallKit banner over the in-app UI). Previously this used
-          // `!notifiedUserIds` (socket-less only), so a backgrounded iPhone never
-          // rang — the core "I don't receive calls when the app is closed" bug.
-          const offlineUserIds = memberUserIds.filter(
-            uid => uid !== userId && !foregroundUserIds.has(uid)
-          );
-
-          // Prisme linguistique (audit 2026-07-11 #11) : titre/corps du push
-          // VoIP à la langue résolue de CHAQUE callee, plus de français codé
-          // en dur. La résolution ne bloque jamais le push (fallback 'fr').
-          const offlineLangs = await this.resolveNotificationLangs(offlineUserIds);
-
-          // Guideline 5 (MIIT) — Apple requires CallKit to be inactive in
-          // China, and PushKit contractually forces reportNewIncomingCall on
-          // every 'voip' push. iOS skips VoIP-push registration entirely for
-          // China-region devices (VoIPPushManager.shouldRegisterVoIPPush), so
-          // route those callees' incoming-call push through the standard
-          // 'apns' alert type instead — same title/body/data payload, no
-          // CallKit involved. Unknown/null deviceCountry conservatively keeps
-          // the existing 'voip' behavior.
-          const offlineCountries = await this.resolveDeviceCountries(offlineUserIds);
-
-          // GW6(b) — callees without an active voip token get a standard
-          // apns alert instead (same payload, `.incomingCallAlert` routing).
-          const voipCapableUsers = await this.resolveVoipCapableUsers(offlineUserIds);
-
-          for (const offlineUserId of offlineUserIds) {
-            // Per-user TURN credentials so the answerer's RTCPeerConnection has
-            // TURN at construction time (VoIPPushManager.didReceiveIncomingPush
-            // configures WebRTC immediately, before any socket reconnect).
-            // Serialized as JSON string because APNs `data` is Record<string,string>.
-            const memberIceServers = this.callService.generateIceServers(offlineUserId);
-            const isChinaDevice = offlineCountries.get(offlineUserId) === 'CN';
-            this.pushService.sendToUser({
-              userId: offlineUserId,
-              payload: {
-                title: notificationString(offlineLangs.get(offlineUserId), 'call.incoming.title', { actor: callerName }),
-                body: notificationString(offlineLangs.get(offlineUserId), 'call.incoming.body', {
-                  callType: data.type === 'video' ? 'video' : 'audio',
-                }),
-                callId: callSession.id,
-                callerName,
-                callerAvatar,
-                data: {
-                  type: 'call',
-                  callId: callSession.id,
-                  conversationId: data.conversationId,
-                  callerName,
-                  callerUserId: userId,
-                  callerAvatar: callerAvatar || '',
-                  // String "true"/"false" — iOS VoIPPushManager parses both bool and string forms.
-                  isVideo: String(data.type === 'video'),
-                  // JSON-encoded; iOS deserializes into [SocketIceServer] before
-                  // calling WebRTCService.configure(iceServers:).
-                  iceServers: JSON.stringify(memberIceServers),
-                },
-              },
-              types: isChinaDevice || !voipCapableUsers.has(offlineUserId) ? ['apns'] : ['voip'],
-              bypassDnd: true,
-            }).catch(err => {
-              logger.error('Failed to send VoIP push', { userId: offlineUserId, error: err });
-            });
-          }
-
-          if (offlineUserIds.length > 0) {
-            logger.info('📲 VoIP push sent to offline members', {
-              callId: callSession.id,
-              offlineUserIds,
-            });
-          }
+          await pushIncomingCall({ prisma: this.prisma, callService: this.callService, pushService: this.pushService }, {
+            callId: callSession.id,
+            conversationId: data.conversationId,
+            callerUserId: userId,
+            callerName: callSession.initiator.displayName || callSession.initiator.username || 'Unknown',
+            callerAvatar: callSession.initiator.avatar || undefined,
+            isVideo: data.type === 'video',
+            calleeUserIds: memberUserIds,
+            foregroundUserIds,
+          });
         }
       } catch (error) {
         logger.error('Error initiating call', error);
 
         const { code: errorCode, message } = parseCallHandlerError(error, 'Failed to initiate call');
-
-        ack?.({ success: false, error: { code: errorCode, message } });
+        ack?.({ success: false, error: { code: errorCode, message, ...(await alreadyActiveCallDetails(this.prisma, errorCode, data?.conversationId)) } });
         socket.emit(CALL_EVENTS.ERROR, { code: errorCode, message } as CallError);
       }
     });
@@ -2352,7 +2104,7 @@ export class CallEventsHandler {
         });
 
         // Resolve participantId from userId + callId
-        const joinParticipantId = await this.resolveParticipantIdFromCall(userId, data.callId);
+        const joinParticipantId = await resolveJoinParticipantId(this.participantResolverDependencies(), userId, data.callId);
         if (!joinParticipantId) {
           ack?.({ success: false, error: { code: CALL_ERROR_CODES.NOT_A_PARTICIPANT, message: 'You are not a participant in this conversation' } });
           socket.emit(CALL_EVENTS.ERROR, {
@@ -2378,6 +2130,7 @@ export class CallEventsHandler {
         // window expires. Item F follow-up below explains why join no
         // longer clears the ringing timer at all — see that note past the
         // catch block for the current (and final) ownership of the clear.
+        const joinStartedAt = new Date();
         const joinResult = await this.callService.joinCall({
           callId: data.callId,
           userId,
@@ -2401,29 +2154,8 @@ export class CallEventsHandler {
         // Join call room
         await socket.join(ROOMS.call(data.callId));
 
-        // C8 (prod audit, callIds 6a4607a9…/6a4607bb…) — a user re-joining
-        // from a NEW socket (churn, second tab, post-restart reconnect)
-        // leaves stale sockets of the SAME user in the room: every targeted
-        // signal then fans out to N sockets (targetSockets:2 observed —
-        // glare risk, double offer handling, double analytics). A P2P call
-        // has exactly one signaling endpoint per user: last join wins, our
-        // own older sockets are evicted from the room. Best-effort — an
-        // eviction failure must never fail the join.
-        try {
-          const roomSockets = await io.in(ROOMS.call(data.callId)).fetchSockets();
-          for (const s of roomSockets) {
-            if (s.id !== socket.id && getUserId(s.id) === userId) {
-              s.leave(ROOMS.call(data.callId));
-              logger.info('📞 C8 — evicted stale same-user socket from call room', {
-                callId: data.callId, userId, staleSocketId: s.id, newSocketId: socket.id
-              });
-            }
-          }
-        } catch (evictError) {
-          logger.warn('📞 C8 — same-user socket eviction failed (join unaffected)', {
-            callId: data.callId, evictError
-          });
-        }
+        // C8 — evict our own stale sockets; the remaining room feeds the broadcast below (#9087).
+        const roomAfterEviction = await evictStaleSameUserSockets({ io, callId: data.callId, userId, socketId: socket.id, getUserId });
 
         // Get the participant that just joined
         const participant = callSession.participants.find(
@@ -2465,7 +2197,7 @@ export class CallEventsHandler {
         // connectionMap, `remoteUserId` serait toujours undefined, entraînant le
         // fallback STUN-only à chaque broadcast — ICE échouait sur tout call entre
         // devices derrière des NATs distincts (simulator ↔ device cellulaire, par ex.).
-        const socketsInRoom = await io.in(ROOMS.call(data.callId)).fetchSockets();
+        const socketsInRoom = roomAfterEviction ?? await io.in(ROOMS.call(data.callId)).fetchSockets();
         for (const remoteSocket of socketsInRoom) {
           if (remoteSocket.id === socket.id) continue;
           const remoteUserId = getUserId(remoteSocket.id);
@@ -2482,6 +2214,7 @@ export class CallEventsHandler {
             iceServers: remoteIceServers
           });
         }
+        announceRecordingArrival({ io, authority: this.callRecording }, callSession.id, userId).catch((error: unknown) => logger.error('call-recording arrival failed', { error }));
 
         // §4.6 — replay a buffered offer to the joining participant. If the
         // caller's offer arrived before this socket was in the room (PushKit
@@ -2491,7 +2224,9 @@ export class CallEventsHandler {
         // Match the same identity the relay uses to resolve `signal.to`:
         // the participant's real userId (registered) or participantId (anon).
         const joinerParticipantId = participant.participant?.userId || participant.participantId;
-        const replayOffer = this.bufferedOfferFor(data.callId, userId, joinerParticipantId);
+        const revenant = isCallRevenant({ answeredAt: callSession.answeredAt, rows: callSession.participants, userId, joinStartedAt });
+        if (revenant) this.clearBufferedOfferFor(data.callId, userId, joinerParticipantId);
+        const replayOffer = revenant ? null : this.bufferedOfferFor(data.callId, userId, joinerParticipantId);
         if (replayOffer) {
           // C2 — verify the offer sender is still an active participant before
           // replaying. If the sender left between buffering and this join, the
@@ -2654,7 +2389,7 @@ export class CallEventsHandler {
         }
 
         // Resolve participantId from userId + callId
-        const leaveParticipantId = await this.resolveParticipantIdFromCall(userId, data.callId);
+        const leaveParticipantId = participant.participantId;
 
         // Leave call via service
         const callSession = await this.callService.leaveCall({
@@ -2897,7 +2632,7 @@ export class CallEventsHandler {
             (p) => p.participant?.userId === userId && !p.leftAt
           );
 
-          if (participant) {
+          if (participant && !forceLeaveSparesLiveCall(call, userId)) {
             logger.info('🔄 Force leaving call', {
               callId: call.id,
               userId,
@@ -2906,7 +2641,7 @@ export class CallEventsHandler {
 
             try {
               // Resolve participantId for cleanup
-              const cleanupParticipantId = await this.resolveParticipantIdFromCall(userId, call.id);
+              const cleanupParticipantId = participant.participantId;
 
               // Leave the call
               const callSession = await this.callService.leaveCall({
@@ -3372,23 +3107,7 @@ export class CallEventsHandler {
       }
     });
 
-    /**
-     * call:toggle-audio - Toggle audio on/off
-     * CVE-002: Added rate limiting (50 req/min)
-     * CVE-006: Added input validation
-     */
-    socket.on(CALL_EVENTS.TOGGLE_AUDIO, async (data: CallMediaToggleClientEvent) => {
-      await this.handleMediaToggle(socket, getUserId, data, 'audio');
-    });
-
-    /**
-     * call:toggle-video - Toggle video on/off
-     * CVE-002: Added rate limiting (50 req/min)
-     * CVE-006: Added input validation
-     */
-    socket.on(CALL_EVENTS.TOGGLE_VIDEO, async (data: CallMediaToggleClientEvent) => {
-      await this.handleMediaToggle(socket, getUserId, data, 'video');
-    });
+    registerMediaToggleListeners(socket, (data, mediaType) => this.handleMediaToggle(socket, getUserId, data, mediaType));
 
     /**
      * call:end - End a call (ANY active participant can end in P2P)
@@ -3483,6 +3202,11 @@ export class CallEventsHandler {
           && !!endParticipantDetail
           && !endParticipantDetail.isDirectCall
           && endParticipantDetail.hasOtherActiveParticipants;
+        // #8470 — une personne INVITÉE qui refuse n'a pas de participation : son refus se dit à l'appel, qui continue.
+        if (!endParticipantId && data.reason === 'rejected' && await this.callInvitations.decline(io, { callId: data.callId, userId })) {
+          ack?.({ success: true });
+          return;
+        }
         if (!endParticipantId) {
           // Failing here means `userId` has no active CallParticipant row
           // for THIS call — either no conversation membership at all, or a
@@ -3555,7 +3279,7 @@ export class CallEventsHandler {
 
         const callSession = await this.callService.endCall(
           data.callId, userId, endParticipantId, isAnonymous, data.reason,
-          { preJoinDecline: Boolean(preJoinDecline) }
+          { preJoinDecline: Boolean(preJoinDecline), session: endParticipantDetail?.session }
         );
 
         // Group pre-join decline (2026-08-15): CallService.endCall() no-ops
@@ -3567,6 +3291,7 @@ export class CallEventsHandler {
         // the other invitees. The decliner still gets a clean ack so their
         // own UI dismisses the incoming-call sheet.
         if (preJoinDecline && !(CALL_TERMINAL_STATUSES as readonly string[]).includes(callSession.status)) {
+          await this.callInvitations.decline(io, { callId: data.callId, userId });
           ack?.({ success: true });
           logger.info('Pre-join decline acknowledged — group call continues for other invitees', {
             callId: data.callId, declinedBy: userId
@@ -4164,6 +3889,8 @@ export class CallEventsHandler {
     // `call-client-reports.ts` (#7632) ; leur doctrine commune — le
     // `participantId` du client n'est jamais cru sur parole — y est écrite.
     registerCallClientReportEvents(this.clientReportDependencies(), socket, { getUserId, rememberAuth });
+    registerCallRecordingEvents({ io, authority: this.callRecording, rateLimiter: this.rateLimiter }, socket, getUserId);
+    registerCallControlEvents({ io, prisma: this.prisma, callService: this.callService, rateLimiter: this.rateLimiter, pushService: () => this.pushService, invitations: this.callInvitations }, socket, getUserId);
 
     /**
      * Handle disconnect - auto-leave any active calls
@@ -4286,7 +4013,7 @@ export class CallEventsHandler {
               userId
             },
             isAnswered
-              ? CallEventsHandler.DISCONNECT_GRACE_MS
+              ? DISCONNECT_GRACE_MS
               : CallEventsHandler.PRE_ANSWER_GRACE_MS
           );
         }
@@ -4314,60 +4041,10 @@ export class CallEventsHandler {
     this.missedCallNotifiedAt.set(callId, Date.now());
 
     try {
-      // Récupérer les informations de l'appel
-      const callSession = await this.prisma.callSession.findUnique({
-        where: { id: callId },
-        include: {
-          initiator: {
-            select: {
-              id: true,
-              username: true,
-              displayName: true,
-              avatar: true
-            }
-          },
-          conversation: {
-            select: {
-              id: true,
-              identifier: true
-            }
-          }
-        }
-      });
-
-      if (!callSession) {
-        logger.warn('⚠️ Call session not found for missed call notifications', { callId });
-        return;
-      }
-
-      // Récupérer les participants qui n'ont pas rejoint l'appel
-      const unrespondedParticipants = await this.callService.getUnrespondedParticipants(callId);
-
-      if (unrespondedParticipants.length === 0) {
-        logger.info('📢 No unresponded participants for missed call notifications', { callId });
-        return;
-      }
-
-      // Créer une notification pour chaque participant qui n'a pas répondu
-      // Audit P2-GW-2 — derive callType from metadata.type (set by
-      // initiateCall) instead of hardcoding 'video'. Misclassified
-      // notifications confuse users about what they actually missed.
-      const inferredCallType: 'audio' | 'video' =
-        ((callSession.metadata as { type?: string } | null)?.type === 'video' ? 'video' : 'audio');
-      for (const participantId of unrespondedParticipants) {
-        await this.notificationService.createMissedCallNotification({
-          recipientUserId: participantId,
-          callerId: callSession.initiatorId,
-          conversationId: callSession.conversationId,
-          callSessionId: callSession.id,
-          callType: inferredCallType,
-        });
-      }
-
-      logger.info('📢 Missed call notifications created', {
-        callId,
-        recipientCount: unrespondedParticipants.length
-      });
+      await sendMissedCallNotifications(
+        { prisma: this.prisma, callService: this.callService, notificationService: this.notificationService },
+        callId
+      );
     } catch (error) {
       logger.error('❌ Error creating missed call notifications:', error);
     }

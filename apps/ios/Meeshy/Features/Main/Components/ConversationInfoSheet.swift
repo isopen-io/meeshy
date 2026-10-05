@@ -17,11 +17,29 @@ struct ConversationInfoSheet: View {
     /// sur la valeur figée capturée à la navigation : le titre et l'avatar
     /// d'AVANT l'édition, alors que le serveur a confirmé les nouveaux.
     var onConversationUpdated: ((Conversation) -> Void)? = nil
+    /// #8103 — ce que l'hôte fait d'un élément de l'onglet Médias (galerie,
+    /// « aller au message »). L'onglet lit l'INDEX de la conversation, jamais
+    /// `messages` : depuis la liste des conversations, ce tableau est vide.
+    let mediaHubActions: ConversationMediaHubActions
+    /// Dérivés UNE fois de `messages` (un `let`) — relus jusqu'à quatre fois par rendu avant.
+    let pinnedMessages: [Message]
+
+    init(conversation: Conversation, accentColor: String, messages: [Message],
+         mediaHubActions: ConversationMediaHubActions = .none,
+         onConversationUpdated: ((Conversation) -> Void)? = nil) {
+        self.conversation = conversation
+        self.accentColor = accentColor
+        self.messages = messages
+        self.mediaHubActions = mediaHubActions
+        self.onConversationUpdated = onConversationUpdated
+        pinnedMessages = messages.filter { $0.pinnedAt != nil }
+            .sorted { ($0.pinnedAt ?? .distantPast) > ($1.pinnedAt ?? .distantPast) }
+    }
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
-    private var isDark: Bool { colorScheme == .dark }
-    private var theme: ThemeManager { ThemeManager.shared }
+    var isDark: Bool { colorScheme == .dark }
+    var theme: ThemeManager { ThemeManager.shared }
     // Lecture directe sans @ObservedObject — évite que chaque event presence force
     // un re-render complet de la fiche conversation.
     private var presenceManager: PresenceManager { PresenceManager.shared }
@@ -34,8 +52,7 @@ struct ConversationInfoSheet: View {
     @State private var isLoadingParticipants = false
     @State private var isLoadingMoreParticipants = false
     @State private var hasMoreParticipants = true
-    @State private var totalParticipants: Int = 0
-    @State private var appearAnimation = false
+    @State var appearAnimation = false
     @State private var selectedTab: InfoTab = .members
     @State private var showBlockConfirm = false
     @State private var isBlocking = false
@@ -55,40 +72,19 @@ struct ConversationInfoSheet: View {
 
     private static let logger = Logger(subsystem: "me.meeshy.app", category: "conversation-info")
 
-    @State private var showAllPinnedMessages = false
+    @State var showAllPinnedMessages = false
 
-    enum InfoTab: String, CaseIterable {
-        case members = "Membres"
-        case media = "Medias"
-        case plus = "Stats"
-        case preferences = "Options"
+    enum InfoTab: CaseIterable {
+        case members, media, plus, preferences
     }
 
-    private var accent: Color { Color(hex: accentColor) }
+    var accent: Color { Color(hex: accentColor) }
     private var isDirect: Bool { conversation.type == .direct }
     private var otherUserId: String? { conversation.participantUserId }
 
     private var canManageMembers: Bool {
         guard let role = conversation.currentUserRole?.lowercased() else { return false }
         return ["creator", "admin", "moderator"].contains(role)
-    }
-
-    private var pinnedMessages: [Message] {
-        messages.filter { $0.pinnedAt != nil }
-            .sorted { ($0.pinnedAt ?? .distantPast) > ($1.pinnedAt ?? .distantPast) }
-    }
-
-    private var mediaMessages: [Message] {
-        messages.filter { msg in
-            msg.attachments.contains { [.image, .video].contains($0.type) }
-        }
-        .sorted { $0.createdAt > $1.createdAt }
-    }
-
-    private var mediaAttachments: [MessageAttachment] {
-        mediaMessages.flatMap { msg in
-            msg.attachments.filter { [.image, .video].contains($0.type) }
-        }
     }
 
     // MARK: - Body
@@ -129,9 +125,9 @@ struct ConversationInfoSheet: View {
         }
         .presentationDragIndicator(.visible)
         .task {
-            totalParticipants = conversation.memberCount
             await loadParticipants()
         }
+        .repaintingPeers($participants)
         .alert(String(localized: "conversation.info.block.title", defaultValue: "Bloquer cet utilisateur", bundle: .main), isPresented: $showBlockConfirm) {
             Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) { }
             Button(String(localized: "conversation.info.block.confirm", defaultValue: "Bloquer", bundle: .main), role: .destructive) {
@@ -196,7 +192,7 @@ struct ConversationInfoSheet: View {
     private var headerBar: some View {
         HStack {
             Text(String(localized: "conversation.info.header", defaultValue: "Conversation", bundle: .main))
-                .font(MeeshyFont.relative(17, weight: .semibold, design: .rounded))
+                .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .semibold, design: .rounded))
                 .foregroundColor(theme.textPrimary)
 
             Spacer()
@@ -207,7 +203,7 @@ struct ConversationInfoSheet: View {
                         .font(MeeshyFont.relative(13, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                         .frame(width: 28, height: 28)
-                        .background(Circle().fill(theme.textMuted.opacity(0.12)))
+                        .background(Circle().fill(theme.textMuted.opacity(MeeshyOpacity.light)))
                 }
                 .accessibilityLabel(String(localized: "conversation.info.settings-a11y", defaultValue: "Réglages de la conversation", bundle: .main))
             }
@@ -217,16 +213,16 @@ struct ConversationInfoSheet: View {
                 dismiss()
             } label: {
                 Image(systemName: "xmark")
-                    .font(MeeshyFont.relative(10, weight: .bold))
+                    .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .bold))
                     .foregroundColor(theme.textMuted)
                     .frame(width: 28, height: 28)
-                    .background(Circle().fill(theme.textMuted.opacity(0.12)))
+                    .background(Circle().fill(theme.textMuted.opacity(MeeshyOpacity.light)))
             }
             .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
         }
-        .padding(.horizontal, 20)
-        .padding(.top, 16)
-        .padding(.bottom, 8)
+        .padding(.horizontal, MeeshySpacing.xl)
+        .padding(.top, MeeshySpacing.lg)
+        .padding(.bottom, MeeshySpacing.sm)
     }
 
     // MARK: - Conversation Header
@@ -246,7 +242,7 @@ struct ConversationInfoSheet: View {
     // MARK: - Direct Conversation Header (unchanged)
 
     private var directConversationHeader: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: MeeshySpacing.md) {
             MeeshyAvatar(
                 name: conversation.name,
                 context: .profileSheet,
@@ -257,7 +253,7 @@ struct ConversationInfoSheet: View {
             )
 
             Text(conversation.name)
-                .font(MeeshyFont.relative(20, weight: .bold, design: .rounded))
+                .font(MeeshyFont.relative(MeeshyFont.title3Size, weight: .bold, design: .rounded))
                 .foregroundColor(theme.textPrimary)
                 .lineLimit(2)
                 .multilineTextAlignment(.center)
@@ -267,11 +263,11 @@ struct ConversationInfoSheet: View {
             muteIndicator
 
             Text(String(format: String(localized: "conversation.info.created-on", defaultValue: "Créé le %@", bundle: .main), conversation.createdAt.formatted(.dateTime.day().month().year())))
-                .font(MeeshyFont.relative(11, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                 .foregroundColor(theme.textMuted)
         }
-        .padding(.horizontal, 20)
-        .padding(.bottom, 16)
+        .padding(.horizontal, MeeshySpacing.xl)
+        .padding(.bottom, MeeshySpacing.lg)
     }
 
     // MARK: - Hero Conversation Header (group/public/global)
@@ -281,8 +277,8 @@ struct ConversationInfoSheet: View {
             // Banner
             heroBannerImage
                 .frame(height: 140)
-                .clipShape(RoundedRectangle(cornerRadius: 20))
-                .padding(.horizontal, 16)
+                .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.xl))
+                .padding(.horizontal, MeeshySpacing.lg)
 
             // Avatar overlapping banner
             MeeshyAvatar(
@@ -300,26 +296,26 @@ struct ConversationInfoSheet: View {
 
             // Name
             Text(conversation.name)
-                .font(MeeshyFont.relative(22, weight: .bold))
+                .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold))
                 .foregroundColor(theme.textPrimary)
                 .lineLimit(2)
                 .multilineTextAlignment(.center)
-                .padding(.top, 10)
+                .padding(.top, MeeshySpacing.smPlus)
 
             // Info row
             conversationInfoRow
-                .padding(.top, 8)
+                .padding(.top, MeeshySpacing.sm)
 
             muteIndicator
-                .padding(.top, 6)
+                .padding(.top, MeeshySpacing.xsPlus)
 
             Text(String(format: String(localized: "conversation.info.created-on", defaultValue: "Créé le %@", bundle: .main), conversation.createdAt.formatted(.dateTime.day().month().year())))
-                .font(MeeshyFont.relative(11, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                 .foregroundColor(theme.textMuted)
-                .padding(.top, 6)
+                .padding(.top, MeeshySpacing.xsPlus)
         }
-        .padding(.horizontal, 4)
-        .padding(.bottom, 16)
+        .padding(.horizontal, MeeshySpacing.xs)
+        .padding(.bottom, MeeshySpacing.lg)
     }
 
     @ViewBuilder
@@ -347,8 +343,8 @@ struct ConversationInfoSheet: View {
         LinearGradient(
             colors: [
                 accent.opacity(0.4),
-                accent.opacity(0.15),
-                accent.opacity(0.3)
+                accent.opacity(MeeshyOpacity.light),
+                accent.opacity(MeeshyOpacity.medium)
             ],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
@@ -358,23 +354,23 @@ struct ConversationInfoSheet: View {
     // MARK: - Shared Info Sub-views
 
     private var conversationInfoRow: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: MeeshySpacing.xsPlus) {
             Image(systemName: conversationTypeIcon)
                 .font(MeeshyFont.relative(11, weight: .semibold))
                 .foregroundColor(accent)
 
-            Text(conversationTypeLabel)
-                .font(MeeshyFont.relative(12, weight: .medium))
+            Text(conversation.type.displayName)
+                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
                 .foregroundColor(theme.textSecondary)
 
             if conversation.memberCount > 0 {
                 MetaSeparator()
                     .foregroundColor(theme.textMuted)
                 Image(systemName: "person.2.fill")
-                    .font(MeeshyFont.relative(10))
+                    .font(MeeshyFont.relative(MeeshyIconSize.xxs))
                     .foregroundColor(theme.textMuted)
                 Text(conversation.memberCountDisplay)
-                    .font(MeeshyFont.relative(12, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
                     .foregroundColor(theme.textSecondary)
             }
         }
@@ -383,16 +379,16 @@ struct ConversationInfoSheet: View {
     @ViewBuilder
     private var muteIndicator: some View {
         if conversation.userState.isMuted {
-            HStack(spacing: 4) {
+            HStack(spacing: MeeshySpacing.xs) {
                 Image(systemName: "bell.slash.fill")
-                    .font(MeeshyFont.relative(10))
+                    .font(MeeshyFont.relative(MeeshyIconSize.xxs))
                 Text(String(localized: "conversation.info.muted", defaultValue: "Notifications désactivées", bundle: .main))
-                    .font(MeeshyFont.relative(11, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
             }
             .foregroundColor(theme.textMuted)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 4)
-            .background(Capsule().fill(theme.textMuted.opacity(0.1)))
+            .padding(.horizontal, MeeshySpacing.smPlus)
+            .padding(.vertical, MeeshySpacing.xs)
+            .background(Capsule().fill(theme.textMuted.opacity(MeeshyOpacity.subtle)))
         }
     }
 
@@ -410,10 +406,10 @@ struct ConversationInfoSheet: View {
                     }
                     HapticFeedback.light()
                 } label: {
-                    VStack(spacing: 6) {
-                        HStack(spacing: 4) {
+                    VStack(spacing: MeeshySpacing.xsPlus) {
+                        HStack(spacing: MeeshySpacing.xs) {
                             Text(tabLabel(for: tab))
-                                .font(MeeshyFont.relative(13, weight: isSelected ? .bold : .medium))
+                                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: isSelected ? .bold : .medium))
 
                             if let label {
                                 Text(label)
@@ -421,10 +417,10 @@ struct ConversationInfoSheet: View {
                                     // hors Dynamic Type pour que la pill reste « tight » (cf. 53i).
                                     .font(.system(size: 10, weight: .bold))
                                     .foregroundColor(isSelected ? .white : theme.textMuted)
-                                    .padding(.horizontal, 5)
+                                    .padding(.horizontal, MeeshySpacing.xs)
                                     .padding(.vertical, 1)
                                     .background(
-                                        Capsule().fill(isSelected ? accent : theme.textMuted.opacity(0.15))
+                                        Capsule().fill(isSelected ? accent : theme.textMuted.opacity(MeeshyOpacity.light))
                                     )
                             }
                         }
@@ -444,7 +440,7 @@ struct ConversationInfoSheet: View {
                 .accessibilityAddTraits(isSelected ? [.isSelected] : [])
             }
         }
-        .padding(.horizontal, 20)
+        .padding(.horizontal, MeeshySpacing.xl)
         .opacity(appearAnimation ? 1 : 0)
         .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.05), value: appearAnimation)
     }
@@ -458,16 +454,15 @@ struct ConversationInfoSheet: View {
             case .members:
                 membersSection
             case .media:
-                mediaSection
+                ConversationMediaHubView(conversationId: conversation.id, accentColor: accentColor, actions: mediaHubActions)
             case .plus:
                 ConversationDashboardView(
                     conversationId: conversation.id,
                     messages: messages,
-                    accentColor: accentColor,
-                    participants: participants
+                    accentColor: accentColor
                 )
             case .preferences:
-                ConversationPreferencesTab(conversation: conversation, participants: participants, accentColor: accentColor)
+                ConversationPreferencesTab(conversation: conversation, accentColor: accentColor)
             }
         }
         .animation(.easeInOut(duration: 0.2), value: selectedTab)
@@ -495,21 +490,21 @@ struct ConversationInfoSheet: View {
             // Member count
             HStack {
                 Text(MembersCountLabel.text(participants.count))
-                    .font(MeeshyFont.relative(13, weight: .semibold, design: .rounded))
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold, design: .rounded))
                     .foregroundColor(theme.textMuted)
                 Spacer()
             }
-            .padding(.horizontal, 20)
-            .padding(.top, 12)
-            .padding(.bottom, 4)
+            .padding(.horizontal, MeeshySpacing.xl)
+            .padding(.top, MeeshySpacing.md)
+            .padding(.bottom, MeeshySpacing.xs)
 
             // Search field
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 Image(systemName: "magnifyingglass")
                     .font(MeeshyFont.relative(13, weight: .medium))
                     .foregroundColor(theme.textMuted)
                 TextField(String(localized: "conversation.info.member-search", defaultValue: "Rechercher un membre…", bundle: .main), text: $memberSearchQuery)
-                    .font(MeeshyFont.relative(14))
+                    .font(MeeshyFont.relative(MeeshyFont.labelSize))
                     .foregroundColor(theme.textPrimary)
                     .autocorrectionDisabled()
                     .textInputAutocapitalization(.never)
@@ -518,33 +513,33 @@ struct ConversationInfoSheet: View {
                         memberSearchQuery = ""
                     } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .font(MeeshyFont.relative(14))
+                            .font(MeeshyFont.relative(MeeshyIconSize.sm))
                             .foregroundColor(theme.textMuted)
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(String(localized: "common.clear-search", defaultValue: "Effacer la recherche", bundle: .main))
                 }
             }
-            .padding(10)
+            .padding(MeeshySpacing.smPlus)
             .background(
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(isDark ? Color.white.opacity(0.04) : Color.black.opacity(0.03))
+                RoundedRectangle(cornerRadius: MeeshyRadius.sm)
+                    .fill(MeeshyColors.surfaceFill(isDark: isDark))
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 10)
-                    .strokeBorder(theme.textMuted.opacity(0.12), lineWidth: 1)
+                RoundedRectangle(cornerRadius: MeeshyRadius.sm)
+                    .strokeBorder(theme.textMuted.opacity(MeeshyOpacity.light), lineWidth: 1)
             )
-            .padding(.horizontal, 20)
-            .padding(.bottom, 8)
+            .padding(.horizontal, MeeshySpacing.xl)
+            .padding(.bottom, MeeshySpacing.sm)
 
             if isLoadingParticipants {
-                VStack(spacing: 12) {
+                VStack(spacing: MeeshySpacing.md) {
                     ForEach(0..<3, id: \.self) { _ in
                         memberSkeletonRow
                     }
                 }
-                .padding(.horizontal, 20)
-                .padding(.top, 16)
+                .padding(.horizontal, MeeshySpacing.xl)
+                .padding(.top, MeeshySpacing.lg)
             } else if filteredMembers.isEmpty {
                 emptyState(icon: "person.2.slash", text: memberSearchQuery.isEmpty ? String(localized: "conversation.info.no-members", defaultValue: "Aucun membre", bundle: .main) : String(localized: "common.no-results", defaultValue: "Aucun résultat", bundle: .main))
             } else {
@@ -560,37 +555,37 @@ struct ConversationInfoSheet: View {
                     if isLoadingMoreParticipants {
                         ProgressView()
                             .frame(maxWidth: .infinity)
-                            .padding(.vertical, 12)
+                            .padding(.vertical, MeeshySpacing.md)
                     }
                 }
-                .padding(.top, 8)
+                .padding(.top, MeeshySpacing.sm)
             }
         }
-        .padding(.bottom, 32)
+        .padding(.bottom, MeeshySpacing.xxxl)
     }
 
     private var manageMembersButton: some View {
         NavigationLink(value: "settings") {
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 Image(systemName: "person.2.badge.gearshape")
                     .font(MeeshyFont.relative(13, weight: .semibold))
                 Text(String(localized: "conversation.info.manage_members", defaultValue: "Gérer les membres", bundle: .main))
-                    .font(MeeshyFont.relative(13, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                 Spacer()
                 Image(systemName: "chevron.forward")
                     .font(MeeshyFont.relative(11, weight: .semibold))
                     .foregroundColor(theme.textMuted)
             }
             .foregroundColor(accent)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.vertical, MeeshySpacing.md)
             .background(
-                RoundedRectangle(cornerRadius: 10)
+                RoundedRectangle(cornerRadius: MeeshyRadius.sm)
                     .fill(accent.opacity(isDark ? 0.12 : 0.08))
             )
         }
-        .padding(.horizontal, 20)
-        .padding(.top, 12)
+        .padding(.horizontal, MeeshySpacing.xl)
+        .padding(.top, MeeshySpacing.md)
         .accessibilityLabel(String(localized: "conversation.info.manage_members.a11y", defaultValue: "Gérer les membres du groupe", bundle: .main))
     }
 
@@ -598,7 +593,7 @@ struct ConversationInfoSheet: View {
         let color = DynamicColorGenerator.colorForName(participant.name)
         let presence = presenceManager.presenceState(for: participant.id)
 
-        return HStack(spacing: 12) {
+        return HStack(spacing: MeeshySpacing.md) {
             MeeshyAvatar(
                 name: participant.name,
                 context: .userListItem,
@@ -609,19 +604,19 @@ struct ConversationInfoSheet: View {
                 onMoodTap: participant.userId.flatMap { moodTapResolver?($0) }
             )
 
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
+                HStack(spacing: MeeshySpacing.xsPlus) {
                     Text(participant.name)
-                        .font(MeeshyFont.relative(14, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
                         .foregroundColor(theme.textPrimary)
                         .lineLimit(1)
 
                     if let role = participant.conversationRole,
                        role.lowercased() != "member" {
                         Text(roleBadgeLabel(role))
-                            .font(MeeshyFont.relative(9, weight: .bold))
+                            .font(MeeshyFont.relative(MeeshyFont.microSize, weight: .bold))
                             .foregroundColor(.white)
-                            .padding(.horizontal, 5)
+                            .padding(.horizontal, MeeshySpacing.xs)
                             .padding(.vertical, 1)
                             .background(
                                 Capsule().fill(roleBadgeColor(role))
@@ -631,7 +626,7 @@ struct ConversationInfoSheet: View {
 
                 if let username = participant.username {
                     Text("@\(username)")
-                        .font(MeeshyFont.relative(11, weight: .medium))
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                         .foregroundColor(theme.textMuted)
                         .lineLimit(1)
                 }
@@ -642,30 +637,30 @@ struct ConversationInfoSheet: View {
             if let joinedAt = participant.joinedAt {
                 VStack(alignment: .trailing, spacing: 1) {
                     Text(String(localized: "conversation.info.member.since", defaultValue: "Depuis", bundle: .main))
-                        .font(MeeshyFont.relative(9, weight: .medium))
+                        .font(MeeshyFont.relative(MeeshyFont.microSize, weight: .medium))
                         .foregroundColor(theme.textMuted)
                     Text(shortDate(joinedAt))
-                        .font(MeeshyFont.relative(10, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                 }
             }
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 10)
+        .padding(.horizontal, MeeshySpacing.xl)
+        .padding(.vertical, MeeshySpacing.smPlus)
     }
 
     private var memberSkeletonRow: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             Circle()
-                .fill(theme.textMuted.opacity(0.12))
+                .fill(theme.textMuted.opacity(MeeshyOpacity.light))
                 .frame(width: 36, height: 36)
 
-            VStack(alignment: .leading, spacing: 4) {
-                RoundedRectangle(cornerRadius: 4)
-                    .fill(theme.textMuted.opacity(0.12))
+            VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
+                RoundedRectangle(cornerRadius: MeeshyRadius.xxs)
+                    .fill(theme.textMuted.opacity(MeeshyOpacity.light))
                     .frame(width: 120, height: 12)
                 RoundedRectangle(cornerRadius: 3)
-                    .fill(theme.textMuted.opacity(0.08))
+                    .fill(theme.textMuted.opacity(MeeshyOpacity.subtle))
                     .frame(width: 80, height: 10)
             }
 
@@ -674,234 +669,16 @@ struct ConversationInfoSheet: View {
         .shimmer()
     }
 
-    // MARK: - Media Section
-
-    private var mediaSection: some View {
-        VStack(spacing: 0) {
-            if mediaAttachments.isEmpty {
-                emptyState(icon: "photo.on.rectangle.angled", text: String(localized: "conversation.info.no-media", defaultValue: "Aucun média partagé", bundle: .main))
-            } else {
-                let columns = [
-                    GridItem(.flexible(), spacing: 2),
-                    GridItem(.flexible(), spacing: 2),
-                    GridItem(.flexible(), spacing: 2)
-                ]
-
-                LazyVGrid(columns: columns, spacing: 2) {
-                    ForEach(mediaAttachments) { attachment in
-                        mediaGridCell(attachment)
-                    }
-                }
-                .padding(.horizontal, 2)
-                .padding(.top, 8)
-            }
-        }
-        .padding(.bottom, 32)
-    }
-
-    @ViewBuilder
-    private func mediaGridCell(_ attachment: MessageAttachment) -> some View {
-        let thumbUrl = attachment.thumbnailUrl?.isEmpty == false ? attachment.thumbnailUrl : nil
-        let fullUrl = attachment.fileUrl.isEmpty ? nil : attachment.fileUrl
-        let color = Color(hex: attachment.thumbnailColor)
-
-        ZStack {
-            if thumbUrl != nil || fullUrl != nil || attachment.thumbHash != nil {
-                ProgressiveCachedImage(
-                    thumbHash: attachment.thumbHash,
-                    thumbnailUrl: thumbUrl,
-                    fullUrl: fullUrl ?? thumbUrl
-                ) {
-                    color.shimmer()
-                }
-                .aspectRatio(contentMode: .fill)
-            } else {
-                color
-            }
-
-            if attachment.type == .video {
-                Image(systemName: "play.circle.fill")
-                    .font(MeeshyFont.relative(24))
-                    .foregroundStyle(.white, .black.opacity(0.3))
-            }
-        }
-        .frame(minHeight: 110)
-        .clipped()
-        .contentShape(Rectangle())
-    }
-
-    // MARK: - Pinned Preview (before tabs)
-
-    @ViewBuilder
-    private var pinnedPreview: some View {
-        let pinned = pinnedMessages
-        if !pinned.isEmpty {
-            Button {
-                HapticFeedback.light()
-                showAllPinnedMessages = true
-            } label: {
-                VStack(spacing: 0) {
-                    ForEach(pinned.prefix(2)) { msg in
-                        pinnedPreviewRow(msg)
-                    }
-                    if pinned.count > 2 {
-                        HStack(spacing: 4) {
-                            Text(String(format: String(localized: "conversation.info.pinned.see-all", defaultValue: "Voir les %d messages épinglés", bundle: .main), pinned.count))
-                                .font(MeeshyFont.relative(11, weight: .semibold))
-                                .foregroundColor(accent)
-                            Image(systemName: "chevron.forward")
-                                .font(MeeshyFont.relative(9, weight: .bold))
-                                .foregroundColor(accent)
-                        }
-                        .padding(.vertical, 6)
-                    }
-                }
-                .padding(.vertical, 4)
-                .padding(.horizontal, 14)
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(accent.opacity(isDark ? 0.08 : 0.05))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .strokeBorder(accent.opacity(0.12), lineWidth: 1)
-                )
-            }
-            .padding(.horizontal, 20)
-            .padding(.bottom, 12)
-            .opacity(appearAnimation ? 1 : 0)
-            .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.04), value: appearAnimation)
-        }
-    }
-
-    private func pinnedPreviewRow(_ msg: Message) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: "pin.fill")
-                .font(MeeshyFont.relative(10, weight: .semibold))
-                .foregroundColor(accent)
-                .rotationEffect(.degrees(45))
-
-            Text(msg.senderName ?? "?")
-                .font(MeeshyFont.relative(12, weight: .semibold))
-                .foregroundColor(theme.textPrimary)
-                .lineLimit(1)
-
-            if !msg.content.isEmpty {
-                Text(msg.content)
-                    .font(MeeshyFont.relative(12))
-                    .foregroundColor(theme.textSecondary)
-                    .lineLimit(1)
-            } else if let att = msg.attachments.first {
-                HStack(spacing: 3) {
-                    Image(systemName: attachmentIcon(att.type))
-                        .font(MeeshyFont.relative(9))
-                    Text(attachmentLabel(att.type))
-                        .font(MeeshyFont.relative(11, weight: .medium))
-                }
-                .foregroundColor(theme.textMuted)
-            }
-
-            Spacer(minLength: 0)
-        }
-        .padding(.vertical, 7)
-    }
-
-    // MARK: - All Pinned Messages Sheet
-
-    private var allPinnedMessagesSheet: some View {
-        NavigationStack {
-            ScrollView {
-                LazyVStack(spacing: 0) {
-                    ForEach(pinnedMessages) { msg in
-                        fullPinnedRow(msg)
-                        if msg.id != pinnedMessages.last?.id {
-                            Divider()
-                                .padding(.horizontal, 20)
-                        }
-                    }
-                }
-                .padding(.top, 8)
-            }
-            .background(theme.backgroundPrimary)
-            .navigationTitle(String(localized: "conversation.info.pinned.title", defaultValue: "Messages épinglés", bundle: .main))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        showAllPinnedMessages = false
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(MeeshyFont.relative(10, weight: .bold))
-                            .foregroundColor(theme.textMuted)
-                            .frame(width: 28, height: 28)
-                            .background(Circle().fill(theme.textMuted.opacity(0.12)))
-                    }
-                    .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
-                }
-            }
-        }
-        .presentationDragIndicator(.visible)
-    }
-
-    private func fullPinnedRow(_ msg: Message) -> some View {
-        HStack(spacing: 12) {
-            ZStack {
-                Circle()
-                    .fill(accent.opacity(isDark ? 0.2 : 0.12))
-                    .frame(width: 36, height: 36)
-
-                Image(systemName: "pin.fill")
-                    .font(MeeshyFont.relative(14, weight: .semibold))
-                    .foregroundColor(accent)
-                    .rotationEffect(.degrees(45))
-            }
-
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 4) {
-                    Text(msg.senderName ?? "?")
-                        .font(MeeshyFont.relative(13, weight: .semibold))
-                        .foregroundColor(theme.textPrimary)
-
-                    MetaSeparator()
-                        .foregroundColor(theme.textMuted)
-
-                    Text(relativeTime(from: msg.createdAt))
-                        .font(MeeshyFont.relative(11, weight: .medium))
-                        .foregroundColor(theme.textMuted)
-                }
-
-                if !msg.content.isEmpty {
-                    Text(msg.content)
-                        .font(MeeshyFont.relative(13))
-                        .foregroundColor(theme.textSecondary)
-                        .lineLimit(4)
-                } else if let att = msg.attachments.first {
-                    HStack(spacing: 4) {
-                        Image(systemName: attachmentIcon(att.type))
-                            .font(MeeshyFont.relative(10))
-                        Text(attachmentLabel(att.type))
-                            .font(MeeshyFont.relative(12, weight: .medium))
-                    }
-                    .foregroundColor(accent)
-                }
-            }
-
-            Spacer()
-        }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 12)
-    }
-
     // MARK: - Empty State
 
     private func emptyState(icon: String, text: String) -> some View {
-        VStack(spacing: 12) {
+        VStack(spacing: MeeshySpacing.md) {
             Image(systemName: icon)
                 .font(MeeshyFont.relative(32, weight: .light))
                 .foregroundColor(theme.textMuted.opacity(0.4))
 
             Text(text)
-                .font(MeeshyFont.relative(14, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
                 .foregroundColor(theme.textMuted)
         }
         .frame(maxWidth: .infinity)
@@ -911,7 +688,7 @@ struct ConversationInfoSheet: View {
     // MARK: - Action Buttons
 
     private var actionButtons: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             actionButton(
                 icon: "link.badge.plus",
                 label: String(localized: "common.share", defaultValue: "Partager", bundle: .main),
@@ -929,8 +706,8 @@ struct ConversationInfoSheet: View {
                 showLeaveConfirmation = true
             }
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 12)
+        .padding(.horizontal, MeeshySpacing.xl)
+        .padding(.vertical, MeeshySpacing.md)
         .opacity(appearAnimation ? 1 : 0)
         .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.03), value: appearAnimation)
     }
@@ -945,13 +722,13 @@ struct ConversationInfoSheet: View {
                 HapticFeedback.light()
                 showEncryptionDetail = true
             } label: {
-                HStack(spacing: 12) {
+                HStack(spacing: MeeshySpacing.md) {
                     Image(systemName: conversation.encryptionMode != nil ? "lock.shield.fill" : "lock.shield")
-                        .font(MeeshyFont.relative(16))
+                        .font(MeeshyFont.relative(MeeshyIconSize.md))
                         .foregroundColor(conversation.encryptionMode != nil ? MeeshyColors.success : Color(hex: accentColor))
                         .frame(width: 24)
 
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                         Text(String(localized: "conversation.encryption.menu.title",
                                     defaultValue: "Chiffrement de bout en bout",
                                     bundle: .main))
@@ -973,18 +750,18 @@ struct ConversationInfoSheet: View {
                     Spacer()
 
                     Image(systemName: "chevron.forward")
-                        .font(MeeshyFont.relative(12, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 14)
+                .padding(.horizontal, MeeshySpacing.lg)
+                .padding(.vertical, MeeshySpacing.mdPlus)
                 .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(isDark ? theme.textPrimary.opacity(0.05) : theme.textPrimary.opacity(0.03))
+                    RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
+                        .fill(isDark ? theme.textPrimary.opacity(MeeshyOpacity.faint) : theme.textPrimary.opacity(MeeshyOpacity.faint))
                 )
             }
-            .padding(.horizontal, 20)
-            .padding(.bottom, 12)
+            .padding(.horizontal, MeeshySpacing.xl)
+            .padding(.bottom, MeeshySpacing.md)
             .opacity(appearAnimation ? 1 : 0)
             .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.04), value: appearAnimation)
             .sheet(isPresented: $showEncryptionDetail) {
@@ -999,13 +776,13 @@ struct ConversationInfoSheet: View {
                 HapticFeedback.light()
                 showSecurityVerification = true
             } label: {
-                HStack(spacing: 12) {
+                HStack(spacing: MeeshySpacing.md) {
                     Image(systemName: "lock.fill")
-                        .font(MeeshyFont.relative(16))
+                        .font(MeeshyFont.relative(MeeshyIconSize.md))
                         .foregroundColor(MeeshyColors.indigo400)
                         .frame(width: 24)
 
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                         Text(String(localized: "conversation.encryption.legacy.title",
                                     defaultValue: "Chiffrement de bout en bout",
                                     bundle: .main))
@@ -1023,18 +800,18 @@ struct ConversationInfoSheet: View {
                     Spacer()
 
                     Image(systemName: "chevron.forward")
-                        .font(MeeshyFont.relative(12, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 14)
+                .padding(.horizontal, MeeshySpacing.lg)
+                .padding(.vertical, MeeshySpacing.mdPlus)
                 .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(isDark ? theme.textPrimary.opacity(0.05) : theme.textPrimary.opacity(0.03))
+                    RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
+                        .fill(isDark ? theme.textPrimary.opacity(MeeshyOpacity.faint) : theme.textPrimary.opacity(MeeshyOpacity.faint))
                 )
             }
-            .padding(.horizontal, 20)
-            .padding(.bottom, 12)
+            .padding(.horizontal, MeeshySpacing.xl)
+            .padding(.bottom, MeeshySpacing.md)
             .opacity(appearAnimation ? 1 : 0)
             .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.04), value: appearAnimation)
         }
@@ -1048,7 +825,7 @@ struct ConversationInfoSheet: View {
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 if isLoading {
                     ProgressView()
                         .scaleEffect(0.8)
@@ -1058,18 +835,18 @@ struct ConversationInfoSheet: View {
                         .font(MeeshyFont.relative(13, weight: .semibold))
                 }
                 Text(label)
-                    .font(MeeshyFont.relative(13, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
             }
             .foregroundColor(Color(hex: color))
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 10)
+            .padding(.vertical, MeeshySpacing.smPlus)
             .background(
-                RoundedRectangle(cornerRadius: 12)
+                RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                     .fill(Color(hex: color).opacity(isDark ? 0.12 : 0.08))
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .strokeBorder(Color(hex: color).opacity(0.2), lineWidth: 1)
+                RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
+                    .strokeBorder(Color(hex: color).opacity(MeeshyOpacity.light), lineWidth: 1)
             )
         }
         .disabled(isLoading)
@@ -1091,7 +868,7 @@ struct ConversationInfoSheet: View {
             guard let shareURL = URL(string: result.joinUrl) else {
                 throw URLError(.badURL)
             }
-            await MainActor.run { shareableLink = ShareableLink(url: shareURL) }
+            shareableLink = ShareableLink(url: shareURL)
         } catch {
             FeedbackToastManager.shared.showError(String(localized: "conversation.info.share.error", defaultValue: "Erreur lors de la création du lien", bundle: .main))
         }
@@ -1119,19 +896,6 @@ struct ConversationInfoSheet: View {
         }
     }
 
-    private var conversationTypeLabel: String {
-        switch conversation.type {
-        case .direct: return String(localized: "conversation.type.direct", defaultValue: "Direct", bundle: .main)
-        case .group: return String(localized: "conversation.type.group", defaultValue: "Groupe", bundle: .main)
-        case .public: return String(localized: "conversation.type.public", defaultValue: "Public", bundle: .main)
-        case .global: return String(localized: "conversation.type.global", defaultValue: "Global", bundle: .main)
-        case .community: return String(localized: "conversation.type.community", defaultValue: "Communaute", bundle: .main)
-        case .channel: return String(localized: "conversation.type.channel", defaultValue: "Channel", bundle: .main)
-        case .bot: return String(localized: "conversation.type.bot", defaultValue: "Bot", bundle: .main)
-        case .broadcast: return String(localized: "conversation.type.broadcast", defaultValue: "Communication", bundle: .main)
-        }
-    }
-
     private func tabLabel(for tab: InfoTab) -> String {
         switch tab {
         case .members: return String(localized: "conversation.info.tab.members", defaultValue: "Membres", bundle: .main)
@@ -1146,7 +910,7 @@ struct ConversationInfoSheet: View {
         case .members:
             return nil
         case .media:
-            return mediaAttachments.count > 0 ? "\(mediaAttachments.count)" : nil
+            return nil
         case .plus:
             return nil
         case .preferences:
@@ -1170,7 +934,7 @@ struct ConversationInfoSheet: View {
         }
     }
 
-    private func attachmentIcon(_ type: MessageAttachment.AttachmentType) -> String {
+    func attachmentIcon(_ type: MessageAttachment.AttachmentType) -> String {
         switch type {
         case .image: return "photo.fill"
         case .video: return "video.fill"
@@ -1180,11 +944,11 @@ struct ConversationInfoSheet: View {
         }
     }
 
-    private func attachmentLabel(_ type: MessageAttachment.AttachmentType) -> String {
+    func attachmentLabel(_ type: MessageAttachment.AttachmentType) -> String {
         MediaKindLabel.name(MediaKindLabel.kind(for: type))
     }
 
-    private func relativeTime(from date: Date) -> String {
+    func relativeTime(from date: Date) -> String {
         RelativeTimeFormatter.longString(for: date)
     }
 
@@ -1204,7 +968,7 @@ struct ConversationInfoSheet: View {
             HapticFeedback.medium()
             showBlockConfirm = true
         } label: {
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 if isBlocking {
                     ProgressView()
                         .tint(MeeshyColors.error)
@@ -1214,23 +978,23 @@ struct ConversationInfoSheet: View {
                         .font(MeeshyFont.relative(13, weight: .semibold))
                 }
                 Text(String(localized: "conversation.info.block.title", defaultValue: "Bloquer cet utilisateur", bundle: .main))
-                    .font(MeeshyFont.relative(13, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
             }
             .foregroundColor(MeeshyColors.error)
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 10)
+            .padding(.vertical, MeeshySpacing.smPlus)
             .background(
-                RoundedRectangle(cornerRadius: 10)
+                RoundedRectangle(cornerRadius: MeeshyRadius.sm)
                     .fill(MeeshyColors.error.opacity(isDark ? 0.12 : 0.08))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 10)
-                            .stroke(MeeshyColors.error.opacity(0.2), lineWidth: 1)
+                        RoundedRectangle(cornerRadius: MeeshyRadius.sm)
+                            .stroke(MeeshyColors.error.opacity(MeeshyOpacity.light), lineWidth: 1)
                     )
             )
         }
         .disabled(isBlocking)
-        .padding(.horizontal, 20)
-        .padding(.bottom, 12)
+        .padding(.horizontal, MeeshySpacing.xl)
+        .padding(.bottom, MeeshySpacing.md)
         .accessibilityLabel(String(format: String(localized: "conversation.info.block.a11y", defaultValue: "Bloquer %@", bundle: .main), conversation.name))
     }
 
@@ -1266,9 +1030,6 @@ struct ConversationInfoSheet: View {
             )
             participants = fetched
             hasMoreParticipants = await ParticipantService.shared.hasMore(for: conversation.id)
-            if let serverTotal = await ParticipantService.shared.totalCount(for: conversation.id) {
-                totalParticipants = serverTotal
-            }
         } catch {
             Self.logger.error("Failed to load participants: \(error.localizedDescription)")
         }
@@ -1283,9 +1044,6 @@ struct ConversationInfoSheet: View {
             let allFetched = try await ParticipantService.shared.loadNextPage(for: conversation.id)
             participants = allFetched
             hasMoreParticipants = await ParticipantService.shared.hasMore(for: conversation.id)
-            if let serverTotal = await ParticipantService.shared.totalCount(for: conversation.id) {
-                totalParticipants = serverTotal
-            }
         } catch {
             Self.logger.error("Failed to load more participants: \(error.localizedDescription)")
         }

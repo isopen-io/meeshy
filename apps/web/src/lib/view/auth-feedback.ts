@@ -1,4 +1,9 @@
+import { usernameMaxLength, usernameMinLength } from '@meeshy/shared/types/api-schemas/auth';
+import type { UsernameRefusal } from '@meeshy/shared/utils/username-rule';
+
+import { decodeEmailOwner, type EmailOwner } from '../api/email-owner';
 import type { ApiFailure, ApiResult } from '../api/http';
+import { verificationOpensSession, type VerifyEmailData } from '../api/verify-email';
 
 /**
  * LE PLACEMENT D'UN REFUS DE CONNEXION / D'INSCRIPTION (#5555, E5) — pur,
@@ -18,8 +23,9 @@ export type SignupField = 'username' | 'displayName' | 'email' | 'phoneNumber' |
 export type SignupFeedback = {
   readonly fieldErrors: Partial<Record<SignupField, string>>;
   readonly bannerError: string | null;
-  /** Vrai quand le serveur a répondu `EMAIL_TAKEN` : l'écran offre alors
-   * « Se connecter » sous le champ (miroir `emailAlreadyRegistered`). */
+  /** Vrai quand le serveur a répondu `EMAIL_TAKEN` : l'écran offre alors,
+   * sous le champ, « Recevoir un lien de connexion » à cette adresse et
+   * « Mot de passe oublié ? » (#8216, miroir `emailAlreadyRegistered`). */
   readonly showSignIn: boolean;
   /**
    * Les pseudos LIBRES à proposer quand celui qu'on envoyait est pris (#6479).
@@ -30,6 +36,10 @@ export type SignupFeedback = {
    * un mur.
    */
   readonly usernameSuggestions: readonly string[];
+  /** Le détenteur MASQUÉ de l'adresse d'un `EMAIL_TAKEN` (#8214) — l'écran
+   * demande alors « Est-ce vous ? ». `null` partout ailleurs, et sur une
+   * passerelle qui ne le sert pas encore. */
+  readonly emailOwner: EmailOwner | null;
 };
 
 /** Le conflit de numéro (`register.ts:301-331`) — AUCUN champ HTTP ne le
@@ -38,10 +48,31 @@ export type SignupFeedback = {
 export type PhoneConflict = { readonly kind: 'phone-conflict' };
 
 const EMAIL_TAKEN_CODE = 'EMAIL_TAKEN';
+const VALIDATION_ERROR_CODE = 'VALIDATION_ERROR';
+
+/**
+ * LA RÈGLE DU PSEUDO, dite au lecteur (#8082) — sous le champ pendant la
+ * saisie, et à la place du texte d'Ajv quand la passerelle refuse le pseudo.
+ * Les bornes sont LUES sur le schéma partagé, jamais recopiées.
+ */
+export function usernameRefusalMessage(refusal: UsernameRefusal): string {
+  switch (refusal) {
+    case 'too-long':
+      return `${usernameMaxLength} caractères au plus.`;
+    case 'too-short':
+      return `${usernameMinLength} caractères au moins.`;
+    case 'invalid-characters':
+      return 'Lettres sans accent, chiffres, - et _ uniquement — pas d’espace.';
+  }
+}
+
+/** Le refus de SCHÉMA d'un pseudo : Ajv ne dit pas lequel des trois motifs
+ * dans une forme stable ; la règle entière l'englobe. */
+const USERNAME_RULE_MESSAGE = `De ${usernameMinLength} à ${usernameMaxLength} caractères : lettres sans accent, chiffres, - et _.`;
 const USERNAME_TAKEN_CODE = 'USERNAME_TAKEN';
 const PHONE_INVALID_CODE = 'PHONE_INVALID';
 
-const PHONE_OWNERSHIP_CONFLICT_MESSAGE = 'Ce numéro est déjà rattaché à un compte. Laissez-le vide pour continuer.';
+const PHONE_OWNERSHIP_CONFLICT_MESSAGE = 'Ce numéro est déjà rattaché à un compte. Saisissez-en un autre, ou connectez-vous.';
 const NETWORK_UNAVAILABLE_MESSAGE = 'Pas de connexion. Vérifiez votre réseau et réessayez.';
 const REJECTION_GENERIC_MESSAGE = "L'inscription a été refusée — réessayez dans un instant.";
 /** Le repli générique des trois flux neufs (#5816) — `MagicLinkView.swift`'s
@@ -142,13 +173,15 @@ export function placeSignupFailure(failure: ApiFailure | PhoneConflict): SignupF
       bannerError: null,
       showSignIn: false,
       usernameSuggestions: [],
+      emailOwner: null,
     };
   }
 
   const showSignIn = failure.code === EMAIL_TAKEN_CODE;
+  const emailOwner = showSignIn ? decodeEmailOwner(failure.emailOwner) : null;
 
   if (failure.status === 0) {
-    return { fieldErrors: {}, bannerError: NETWORK_UNAVAILABLE_MESSAGE, showSignIn, usernameSuggestions: [] };
+    return { fieldErrors: {}, bannerError: NETWORK_UNAVAILABLE_MESSAGE, showSignIn, usernameSuggestions: [], emailOwner };
   }
 
   // Avant le calcul de `field` : un 429 ne vise aucune saisie à corriger, et
@@ -161,6 +194,7 @@ export function placeSignupFailure(failure: ApiFailure | PhoneConflict): SignupF
       bannerError: signupRateLimitedMessage(failure.retryAfter),
       showSignIn: false,
       usernameSuggestions: [],
+      emailOwner: null,
     };
   }
 
@@ -168,16 +202,27 @@ export function placeSignupFailure(failure: ApiFailure | PhoneConflict): SignupF
 
   if (field !== null) {
     return {
-      fieldErrors: { [field]: failure.error },
+      fieldErrors: { [field]: fieldMessage(field, failure) },
       bannerError: null,
       showSignIn,
       usernameSuggestions: failure.suggestions ?? [],
+      emailOwner,
     };
   }
 
   // Un refus qu'aucun champ ne porte doit rester VISIBLE : sans ce repli, un
   // code inconnu effacerait le formulaire de toute trace de l'échec.
-  return { fieldErrors: {}, bannerError: rejectionBannerMessage(failure), showSignIn, usernameSuggestions: [] };
+  return { fieldErrors: {}, bannerError: rejectionBannerMessage(failure), showSignIn, usernameSuggestions: [], emailOwner };
+}
+
+/**
+ * Le texte posé sous un champ. Un refus de SCHÉMA sur le pseudo porte la
+ * phrase d'Ajv (« body/username must NOT have more than 16 characters ») —
+ * anglaise, technique : la règle du pseudo la remplace (#8082).
+ */
+function fieldMessage(field: SignupField, failure: ApiFailure): string {
+  if (field === 'username' && failure.code === VALIDATION_ERROR_CODE) return USERNAME_RULE_MESSAGE;
+  return failure.error;
 }
 
 // --- Connexion ---------------------------------------------------------
@@ -255,10 +300,11 @@ export function placeMagicLinkValidationFailure(failure: ApiFailure): MagicLinkV
 
 // --- Vérification d'e-mail (T-verify, miroir EmailVerificationView.swift) --
 
-type VerifyEmailData = { readonly message: string; readonly alreadyVerified?: boolean; readonly verifiedAt?: string };
 
 export type VerifyEmailOutcome =
+  | { readonly kind: 'signed-in' }
   | { readonly kind: 'verified' }
+  | { readonly kind: 'rate-limited' }
   | { readonly kind: 'invalid-code' }
   | { readonly kind: 'offline' }
   | { readonly kind: 'failed'; readonly message: string };
@@ -268,12 +314,15 @@ export type VerifyEmailOutcome =
  * (`AuthService.verifyEmail`, aucun champ ne les distingue) — un seul texte,
  * même doctrine que `placeMagicLinkValidationFailure`. La branche
  * `alreadyVerified` (magic-link.ts:349-354) est un SUCCÈS, jamais un refus :
- * l'écran affiche le même overlay de confirmation.
+ * l'écran affiche le même overlay de confirmation. Une réponse qui porte une
+ * SESSION (#8034, contrat #8033) est `signed-in` : l'écran quitte la
+ * vérification pour l'accueil, comme après une connexion.
  */
 export function resolveVerifyEmailOutcome(result: ApiResult<VerifyEmailData>): VerifyEmailOutcome {
-  if (result.ok) return { kind: 'verified' };
+  if (result.ok) return verificationOpensSession(result.data) ? { kind: 'signed-in' } : { kind: 'verified' };
   if (result.status === 0) return { kind: 'offline' };
   if (result.status === 400) return { kind: 'invalid-code' };
+  if (result.status === 429) return { kind: 'rate-limited' };
   return { kind: 'failed', message: `${AUTH_GENERIC_FAILURE_MESSAGE} (${result.code ?? result.status})` };
 }
 

@@ -1,11 +1,17 @@
 import { isRememberableAudience, type ChoosableAudience } from './publication-audience';
-import type { StudioPlane } from './story-document';
+import { sceneBackdropOf, sceneFitModeOf } from '@/lib/canvas/backdrop';
+import { isStoryFilter, type StoryFilterId } from '@/lib/canvas/media-filter';
+import { isSceneTransition } from '@/lib/canvas/scene-transition';
+
+import type { PublicationKind } from './publication-kind';
+import type { StoryFrame, StudioPlane } from './story-document';
 import {
   emptyStudioPage,
   isStudioPageEmpty,
   isStudioPagePublishable,
   pageMediaCount,
   pageWithAddedText,
+  pageWithBackgroundFrame,
   pageWithMediaDuration,
   pageWithSelected,
   pageWithSound,
@@ -16,6 +22,7 @@ import {
   pageWithVisual,
   pageWithVisualAspectRatio,
   pageWithVisualCaption,
+  pageWithVisualFilter,
   pageWithVisualPose,
   pageWithVisualUpload,
   pageWithoutSound,
@@ -42,7 +49,9 @@ import {
   STUDIO_TEXT_STYLES,
   nextTextLayerId,
   type StudioTextLayer,
+  type StudioTiming,
 } from './studio-text';
+import { pageAnimated, pagePlacedWhileAnimated, pageStatic, pageWithTrackTiming } from './studio-timeline';
 
 /**
  * **L'ÉTAT DU PLATEAU DE STORY** (#6900, élargi par #6943, #6944 puis #7684) —
@@ -95,6 +104,13 @@ export type StudioDraft = {
    * tenir `ONLY`/`EXCEPT` sans leur liste de personnes.
    */
   readonly visibility: ChoosableAudience | null;
+  /**
+   * **LE TEXTE DU POST** (#8413) — `Post.content`, le CORPS de la publication
+   * quand elle part en POST (le bouton document du socle l'ouvre). Distinct
+   * du texte POSÉ sur la scène (`storyEffects`) et de la légende d'un média
+   * (`PostMedia.caption`) : trois contenus. `''` tant que rien n'est écrit.
+   */
+  readonly postText: string;
 };
 
 /** La page COURANTE — le SITE UNIQUE de lecture, pour que « quelle page ? »
@@ -116,7 +132,7 @@ function nextPageId(pages: readonly StudioPage[]): string {
 
 export function emptyStudioDraft(language: string): StudioDraft {
   const page = emptyStudioPage('page-1', 'text-1', language);
-  return { pages: [page], currentPage: page.id, visibility: null };
+  return { pages: [page], currentPage: page.id, visibility: null, postText: '' };
 }
 
 export function isStudioDraftEmpty(draft: StudioDraft): boolean {
@@ -223,6 +239,32 @@ export function withAddedText(draft: StudioDraft, language: string): StudioDraft
   return withCurrentPageChange(draft, (page) => pageWithAddedText(page, textId, language));
 }
 
+/** MONTER (+1) ou RECULER (−1) un texte dans l'ordre de pose — l'ordre EST
+ * le `z` (`composeObjects`). Au sommet ou au fond, le brouillon reste le même. */
+export function withTextMoved(draft: StudioDraft, id: string, step: 1 | -1): StudioDraft {
+  const page = currentStudioPage(draft);
+  const index = page.texts.findIndex((layer) => layer.id === id);
+  const target = index + step;
+  if (index < 0 || target < 0 || target >= page.texts.length) return draft;
+  const texts = [...page.texts];
+  const [moved] = texts.splice(index, 1);
+  if (moved === undefined) return draft;
+  texts.splice(target, 0, moved);
+  return withCurrentPageChange(draft, (p) => ({ ...p, texts }));
+}
+
+/** DUPLIQUER un texte — une copie décalée vers le bas, juste AU-DESSUS de
+ * l'original, sélectionnée, sous un identifiant neuf du brouillon. */
+export function withTextDuplicated(draft: StudioDraft, id: string): StudioDraft {
+  const page = currentStudioPage(draft);
+  const index = page.texts.findIndex((layer) => layer.id === id);
+  const original = page.texts[index];
+  if (original === undefined) return draft;
+  const copy: StudioTextLayer = { ...original, id: nextTextLayerId(allTexts(draft)), pose: clampPose({ ...original.pose, y: original.pose.y + 0.06 }) };
+  const texts = [...page.texts.slice(0, index + 1), copy, ...page.texts.slice(index + 1)];
+  return withCurrentPageChange(draft, (p) => ({ ...p, texts, selected: copy.id }));
+}
+
 export function withSelected(draft: StudioDraft, id: string | null): StudioDraft {
   return withCurrentPageChange(draft, (page) => pageWithSelected(page, id));
 }
@@ -271,6 +313,48 @@ export function withMediaDuration(draft: StudioDraft, door: StudioDoor, previewU
   return withCurrentPageChange(draft, (page) => pageWithMediaDuration(page, door, previewUrl, durationMs));
 }
 
+/** LE CADRE du fond de la page COURANTE (#8414) — sans fond, le brouillon
+ * reste le MÊME objet (aucun rendu, aucune écriture). */
+export function withBackgroundFrame(draft: StudioDraft, frame: StoryFrame): StudioDraft {
+  return currentStudioPage(draft).background === null ? draft : withCurrentPageChange(draft, (page) => pageWithBackgroundFrame(page, frame));
+}
+
+/** OUVRIR « Animé » sur la page courante (#8415, `pageAnimated`). */
+export function withAnimated(draft: StudioDraft): StudioDraft {
+  const page = currentStudioPage(draft);
+  return pageAnimated(page) === page ? draft : withCurrentPageChange(draft, pageAnimated);
+}
+
+/** ÉTEINDRE « Animé » sur la page courante (#8516, `pageStatic`) — un pas
+ * d'historique ; une page déjà statique laisse le brouillon identique. */
+export function withStatic(draft: StudioDraft): StudioDraft {
+  const page = currentStudioPage(draft);
+  return pageStatic(page) === page ? draft : withCurrentPageChange(draft, pageStatic);
+}
+
+export function withTrackTiming(draft: StudioDraft, id: string, timing: StudioTiming): StudioDraft {
+  return withCurrentPageChange(draft, (page) => pageWithTrackTiming(page, id, timing));
+}
+
+/** UN OBJET POSÉ sur une scène ANIMÉE (lot 6) — il entre à la tête. Sur une
+ * scène statique (sans durée), rien ne change. */
+export function withPlacedWhileAnimated(draft: StudioDraft, id: string, head: number): StudioDraft {
+  const page = currentStudioPage(draft);
+  return page.duration === undefined ? draft : withCurrentPageChange(draft, (p) => pagePlacedWhileAnimated(p, id, head));
+}
+
+export function withPostText(draft: StudioDraft, postText: string): StudioDraft {
+  return { ...draft, postText };
+}
+
+/** LE FILTRE d'UN média de la page courante (lot 7) — le MÊME brouillon quand
+ * rien ne change, pour qu'aucun pas d'historique ne s'écrive à vide. */
+export function withVisualFilter(draft: StudioDraft, door: 'visual' | 'overlay', filter: StoryFilterId | null): StudioDraft {
+  const page = currentStudioPage(draft);
+  const next = pageWithVisualFilter(page, door, filter);
+  return next === page ? draft : withCurrentPageChange(draft, () => next);
+}
+
 export function withVisualCaption(draft: StudioDraft, door: 'visual' | 'overlay', caption: string): StudioDraft {
   return withCurrentPageChange(draft, (page) => pageWithVisualCaption(page, door, caption));
 }
@@ -317,6 +401,25 @@ const poseOf = (value: unknown): StudioPose => {
   return clampPose({ x: n('x', 0.5), y: n('y', 0.5), scale: n('scale', 1), rotation: n('rotation', 0) });
 };
 
+/** LE CADRE relu — chaque champ NORMALISÉ contre le contrat (#8414). */
+/** UNE FENÊTRE relue (#8415) — deux nombres finis, fin après début ; tout le
+ * reste se relit SANS fenêtre (l'objet couvre la scène). */
+const timingOf = (value: unknown): StudioTiming | undefined => {
+  if (typeof value !== 'object' || value === null) return undefined;
+  const { start, end } = value as Record<string, unknown>;
+  return typeof start === 'number' && typeof end === 'number' && Number.isFinite(start) && Number.isFinite(end) && start >= 0 && end > start
+    ? { start, end }
+    : undefined;
+};
+
+const durationOf = (value: unknown): number | undefined =>
+  typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined;
+
+const frameOf = (value: unknown): StoryFrame => {
+  const record = typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {};
+  return { fitMode: sceneFitModeOf(record.fitMode), backdrop: sceneBackdropOf(record.backdrop) };
+};
+
 /** UN objet texte relu — chaque champ NORMALISÉ contre la table du studio. */
 function textLayerFromSnapshot(snapshot: StudioTextLayerSnapshot, language: string): StudioTextLayer {
   return {
@@ -332,6 +435,7 @@ function textLayerFromSnapshot(snapshot: StudioTextLayerSnapshot, language: stri
         ? snapshot.background
         : null,
     pose: poseOf(snapshot.pose),
+    ...(timingOf(snapshot.timing) !== undefined ? { timing: timingOf(snapshot.timing)! } : {}),
   };
 }
 
@@ -350,6 +454,9 @@ function pageFromSnapshot(snapshot: StudioPageSnapshot, resolveUrl: (fileUrl: st
           ...(ref.durationMs !== undefined ? { durationMs: ref.durationMs } : {}),
           caption: ref.caption ?? '',
           pose: poseOf('pose' in ref ? ref.pose : undefined),
+          ...('frame' in ref && ref.frame !== undefined ? { frame: frameOf(ref.frame) } : {}),
+          ...('timing' in ref && timingOf(ref.timing) !== undefined ? { timing: timingOf(ref.timing)! } : {}),
+          ...(isStoryFilter(ref.filter) ? { filter: ref.filter } : {}),
           upload: {
             phase: 'ready',
             postMediaId: ref.postMediaId,
@@ -365,6 +472,9 @@ function pageFromSnapshot(snapshot: StudioPageSnapshot, resolveUrl: (fileUrl: st
     id: snapshot.id,
     texts,
     selected: texts[0]?.id ?? null,
+    ...(durationOf(snapshot.duration) !== undefined ? { duration: durationOf(snapshot.duration)! } : {}),
+    ...(isSceneTransition(snapshot.opening) ? { opening: snapshot.opening } : {}),
+    ...(isSceneTransition(snapshot.closing) ? { closing: snapshot.closing } : {}),
     background: visual(snapshot.background),
     overlay: visual(snapshot.overlay),
     sound:
@@ -397,6 +507,9 @@ function pageSnapshotOf(page: StudioPage): StudioPageSnapshot {
       ...(asset.durationMs !== undefined ? { durationMs: asset.durationMs } : {}),
       ...(asset.caption !== '' ? { caption: asset.caption } : {}),
       pose: asset.pose,
+      ...(asset.frame !== undefined ? { frame: asset.frame } : {}),
+      ...(asset.timing !== undefined ? { timing: asset.timing } : {}),
+      ...(asset.filter !== undefined ? { filter: asset.filter } : {}),
     };
   };
   const background = visual(page.background);
@@ -405,6 +518,9 @@ function pageSnapshotOf(page: StudioPage): StudioPageSnapshot {
   return {
     id: page.id,
     texts: page.texts.map((layer) => ({ ...layer })),
+    ...(page.duration !== undefined ? { duration: page.duration } : {}),
+    ...(page.opening !== undefined ? { opening: page.opening } : {}),
+    ...(page.closing !== undefined ? { closing: page.closing } : {}),
     ...(background !== undefined ? { background } : {}),
     ...(overlay !== undefined ? { overlay } : {}),
     ...(sound !== null && page.sound !== null
@@ -413,16 +529,19 @@ function pageSnapshotOf(page: StudioPage): StudioPageSnapshot {
   };
 }
 
-/** Ce qui se PERSISTE — les PAGES, la page courante, et l'audience choisie.
+/** Ce qui se PERSISTE — les PAGES, la page courante, l'audience choisie et le
+ * FORMAT de la création (#8849), qui vit dans l'écran, pas dans le brouillon.
  * `language` part SI au moins une page porte du texte : c'est la graine de
  * `useComposeLanguage`, un concept de SESSION plutôt que par page. */
-export function studioSnapshotOf(draft: StudioDraft, language: string): StudioDraftSnapshot {
+export function studioSnapshotOf(draft: StudioDraft, language: string, kind?: PublicationKind): StudioDraftSnapshot {
   return {
     schema: 2,
     pages: draft.pages.map(pageSnapshotOf),
     currentPage: draft.currentPage,
     ...(allTexts(draft).some((layer) => layer.text.trim() !== '') ? { language } : {}),
     ...(draft.visibility !== null ? { visibility: draft.visibility } : {}),
+    ...(draft.postText !== '' ? { postText: draft.postText } : {}),
+    ...(kind !== undefined ? { kind } : {}),
   };
 }
 
@@ -444,5 +563,6 @@ export function studioDraftFromSnapshot(
     currentPage,
     ...(snapshot.language !== undefined ? { language: snapshot.language } : {}),
     visibility: isRememberableAudience(snapshot.visibility) ? snapshot.visibility : null,
+    postText: snapshot.postText ?? '',
   };
 }

@@ -29,6 +29,10 @@
  * Les `suggestions` n'accompagnent qu'`USERNAME_TAKEN` : c'est le seul refus
  * dont le remède se propose. On ne suggère pas d'e-mail de rechange.
  *
+ * `emailOwner` n'accompagne qu'`EMAIL_TAKEN` (#8214) : l'identité MASQUÉE du
+ * compte qui détient l'adresse, pour que le client demande « Est-ce vous ? ».
+ * Même masquage que `phoneOwnerInfo` ; ni l'adresse ni l'identifiant du compte.
+ *
  * ## Ce qui n'est PAS un refus
  *
  * Une panne (Mongo, e-mail, socket) n'en est pas un : elle reste une erreur
@@ -59,6 +63,13 @@ const CHAMP_PAR_CODE: Readonly<Record<RegistrationRefusalCode, RegistrationRefus
   PHONE_INVALID: 'phoneNumber',
 };
 
+/** L'identité masquée du détenteur d'une adresse (#8214) — jamais l'adresse. */
+export type EmailOwner = {
+  readonly maskedDisplayName: string;
+  readonly maskedUsername: string;
+  readonly avatar?: string;
+};
+
 /**
  * Un refus d'inscription — LEVÉ par le service, traduit en réponse par la route.
  *
@@ -71,11 +82,12 @@ export class RegistrationRefusal extends Error {
   readonly field: RegistrationRefusalField;
   readonly status: 400 | 409;
   readonly suggestions?: readonly string[];
+  readonly emailOwner?: EmailOwner;
 
   constructor(
     code: RegistrationRefusalCode,
     message: string,
-    options?: { readonly suggestions?: readonly string[] },
+    options?: { readonly suggestions?: readonly string[]; readonly emailOwner?: EmailOwner },
   ) {
     super(message);
     this.name = 'RegistrationRefusal';
@@ -83,6 +95,7 @@ export class RegistrationRefusal extends Error {
     this.field = CHAMP_PAR_CODE[code];
     this.status = STATUT_PAR_CODE[code];
     if (options?.suggestions) this.suggestions = options.suggestions;
+    if (options?.emailOwner) this.emailOwner = options.emailOwner;
   }
 }
 

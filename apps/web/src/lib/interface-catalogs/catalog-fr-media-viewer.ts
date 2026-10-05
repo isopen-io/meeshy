@@ -1,0 +1,38 @@
+/**
+ * LES ACTIONS DE LA VISIONNEUSE (#6303) — tranche du catalogue `catalog-fr.ts`, extraite pour tenir
+ * le budget de taille (motif `catalog-fr-media-hub.ts`) : le catalogue la RÉPAND. Miroir des libellés
+ * iOS `media.save.title`, `media.react.title`, `media.reply.title`, `media.compose.title`.
+ */
+const frMediaViewer = {
+  'media.viewer.save': 'Enregistrer',
+  'media.viewer.react': 'Réagir',
+  'media.viewer.react_with': 'Réagir avec {emoji}',
+  'media.viewer.reply': 'Répondre',
+  'media.viewer.compose': 'Créer avec ce média',
+  'media.viewer.saved': 'Enregistré',
+  'media.viewer.save_failed': 'Enregistrement impossible',
+  'media.viewer.offline': 'Hors ligne — réessayez une fois connecté',
+  'media.viewer.retry': 'Touchez de nouveau pour enregistrer',
+  'media.viewer.react_failed': 'Réaction impossible',
+  'media.viewer.react_limit': 'Nombre maximal de réactions atteint',
+  'media.viewer.compose_failed': 'Impossible d’ouvrir ce média dans le studio',
+  'media.viewer.open_fullscreen': 'Ouvrir en plein écran',
+  'media.audio.play': 'Lire l’audio',
+  'media.audio.pause': 'Mettre en pause',
+  'media.audio.skip_back': 'Reculer de 10 secondes',
+  'media.audio.skip_forward': 'Avancer de 10 secondes',
+  'media.audio.transcript_empty': 'Aucune transcription',
+  'media.audio.languages': 'Écouter dans une autre langue',
+  'media.audio.transcribe': 'Transcrire',
+  'media.audio.transcribing': 'Transcription en cours…',
+  'media.audio.transcribe_failed': 'Transcription impossible',
+  'media.audio.translate': 'Traduire',
+  'media.audio.translate_to': 'Traduire en {language}',
+  'media.audio.translating': 'Traduction en cours…',
+  'media.audio.translate_failed': 'Traduction impossible',
+  'media.audio.mini.label': 'Lecteur audio',
+  'media.audio.mini.title': 'Message vocal',
+  'media.audio.mini.close': 'Fermer le lecteur',
+} as const;
+
+export default frMediaViewer;

@@ -18,10 +18,12 @@ import {
 import type { AppPreferences } from '@/lib/api/app-preferences';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import { SUPPORTED_INTERFACE_LANGUAGES } from '@/lib/inline-interface-language-bootstrap.js';
+import { appInstitutionalHref } from '@/lib/institutional-href';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import type { ThemePreference } from '@/lib/scheme';
 import { initialsOf } from '@/lib/view/conversation';
 import { FLOATING_CORRIDOR_BOTTOM } from '@/lib/view/floating-corridor';
+import type { DevicePushRow } from '@/lib/push/use-device-push';
 import { Link } from '@/routes/route-table';
 
 /**
@@ -93,7 +95,7 @@ function RowText({ label, caption, captionId }: { readonly label: string; readon
 function Chevron() {
   return (
     <span aria-hidden="true" className="shrink-0" style={{ color: SECTION_INK_2 }}>
-      <GlyphSvg glyph={SETTINGS_GLYPHS.caretRight} size={12} />
+      <GlyphSvg glyph={SETTINGS_GLYPHS.caretRight} size={12} className="rtl:-scale-x-100" />
     </span>
   );
 }
@@ -108,7 +110,7 @@ export function SettingsHeaderBar({ language }: { readonly language: InterfaceLa
         style={{ color: 'var(--color-ios-brand)', outlineColor: 'var(--color-ios-brand)' }}
       >
         <ChromeActionDisc>
-          <Glyph name="caretLeft" size={16} />
+          <Glyph name="caretLeft" size={16} className="rtl:-scale-x-100" />
         </ChromeActionDisc>
       </Link>
       <h1 className="min-w-0 flex-1 truncate text-body font-semibold" style={{ color: SECTION_INK }}>
@@ -171,9 +173,12 @@ export function AccountSection({ language }: { readonly language: InterfaceLangu
    que le jour où sa destination existe (loi 4). L'EXPORT est la première à
    revenir (#6725), à une adresse propre à la v2 — `/settings/data-export`,
    jamais l'ancienne `meeshy.me/settings#privacy`. */
-export function DataSection({ language }: { readonly language: InterfaceLanguage }) {
+export type GalleryToggle = { readonly enabled: boolean; readonly onToggle: (enabled: boolean) => void };
+
+export function DataSection({ language, gallery }: { readonly language: InterfaceLanguage; readonly gallery?: GalleryToggle }) {
   return (
     <GroupedSection id="settings-data" title={upper(language, 'settings.section.data')} icon={SECTION_ICON({ set: 'ecran', name: 'export' })}>
+      {gallery === undefined ? null : <GalleryToggleRow language={language} gallery={gallery} />}
       <Link to="dataExport" data-settings-export className={ROW_CLASS} style={ROW_STYLE}>
         <RowIcon tint="var(--color-warning)">
           <IconOf icon={{ set: 'ecran', name: 'export' }} size={15} />
@@ -182,6 +187,35 @@ export function DataSection({ language }: { readonly language: InterfaceLanguage
         <Chevron />
       </Link>
     </GroupedSection>
+  );
+}
+
+/* LA GALERIE DE LA COQUE ANDROID (#8308) — réglage LOCAL à l'appareil (la
+   galerie est la sienne), offert sur la seule coque qui sait y écrire (loi 4) :
+   l'écran l'omet partout ailleurs. Actif par défaut. */
+function GalleryToggleRow({ language, gallery }: { readonly language: InterfaceLanguage; readonly gallery: GalleryToggle }) {
+  const captionId = useId();
+  const label = translate(language, 'settings.gallery.auto_save');
+  return (
+    <div className="flex items-center gap-3 px-3.5 py-2.5" style={{ minHeight: 52 }}>
+      <RowIcon tint="var(--color-success)">
+        <IconOf icon={{ set: 'socle', name: 'image' }} size={15} />
+      </RowIcon>
+      <RowText label={label} caption={translate(language, 'settings.gallery.auto_save.info')} captionId={captionId} />
+      <button
+        type="button"
+        role="switch"
+        aria-checked={gallery.enabled}
+        aria-label={label}
+        aria-describedby={captionId}
+        data-setting="galleryAutoSave"
+        onClick={() => gallery.onToggle(!gallery.enabled)}
+        className="grid shrink-0 place-items-center rounded-chip focus-visible:outline-2"
+        style={{ minWidth: 56, minHeight: 44, outlineColor: 'var(--color-ios-brand)' }}
+      >
+        <Switch checked={gallery.enabled} />
+      </button>
+    </div>
   );
 }
 
@@ -219,8 +253,8 @@ function Switch({ checked }: { readonly checked: boolean }) {
           insetInlineStart: checked ? 22 : 2,
           width: 27,
           height: 27,
-          backgroundColor: 'white',
-          boxShadow: '0 1px 3px rgb(0 0 0 / 0.3)',
+          backgroundColor: 'var(--color-ios-on-brand)',
+          boxShadow: 'var(--shadow-sm)',
           transition: 'inset-inline-start 160ms ease',
         }}
       />
@@ -339,11 +373,33 @@ const PRIVACY_TOGGLES = [
     tint: 'var(--color-ios-brand)',
   },
   { key: 'showTypingIndicator', label: 'settings.privacy.typing_indicator', icon: { set: 'ecran', name: 'keyboard' }, tint: 'var(--ios-indigo-300)' },
+  {
+    key: 'hideProfileFromSearch',
+    label: 'settings.privacy.hide_from_search',
+    caption: 'settings.privacy.hide_from_search.info',
+    icon: { set: 'ecran', name: 'shieldCheck' },
+    tint: 'var(--ios-indigo-500)',
+  },
+  {
+    key: 'acceptCallsFromNonContacts',
+    label: 'settings.privacy.calls_non_contacts',
+    caption: 'settings.privacy.calls_non_contacts.info',
+    icon: { set: 'socle', name: 'phone' },
+    tint: 'var(--color-error)',
+  },
+  {
+    key: 'notifyContactsOnReturn',
+    label: 'settings.privacy.notify_contacts_on_return',
+    caption: 'settings.privacy.notify_contacts_on_return.info',
+    icon: { set: 'socle', name: 'users' },
+    tint: 'var(--color-success)',
+  },
 ] as const satisfies readonly ToggleSpec[];
 
 const NOTIFICATION_TOGGLES = [
   { key: 'pushEnabled', label: 'settings.notifications.title', icon: { set: 'ecran', name: 'bellRinging' }, tint: 'var(--color-error)' },
   { key: 'soundEnabled', label: 'settings.notif.sounds', icon: { set: 'ecran', name: 'speakerHigh' }, tint: 'var(--ios-indigo-300)' },
+  { key: 'contactActivityEnabled', label: 'settings.notif.contact_activity', icon: { set: 'ecran', name: 'handPalm' }, tint: 'var(--color-ios-brand)' },
 ] as const satisfies readonly ToggleSpec[];
 
 type PreferenceSectionProps = {
@@ -366,9 +422,44 @@ export function PrivacySection({ language, view, disabled, onToggle, onRetry }: 
   );
 }
 
-export function NotificationsSection({ language, view, disabled, onToggle, onRetry }: PreferenceSectionProps) {
+/**
+ * LA PERMISSION DE L'APPAREIL (#7307) — la coque seule la porte. Refusée,
+ * la bascule `pushEnabled` ne gouverne plus rien sur CET appareil : la rangée
+ * le dit, et donne le seul chemin de retour qu'Android laisse.
+ */
+function DevicePushRowView({ language, device }: { readonly language: InterfaceLanguage; readonly device: DevicePushRow }) {
+  const denied = device.permission === 'denied';
+  const label = translate(language, denied ? 'settings.notif.device.blocked' : 'settings.notif.device.prompt');
+  return (
+    <div data-device-push={device.permission} className="flex items-center gap-3 px-3.5 py-2.5" style={{ minHeight: 52 }}>
+      <RowIcon tint={denied ? 'var(--color-error)' : 'var(--color-ios-brand)'}>
+        <IconOf icon={{ set: 'ecran', name: 'bellRinging' }} size={15} />
+      </RowIcon>
+      <RowText label={label} />
+      <button
+        type="button"
+        data-device-push-action
+        onClick={denied ? device.openSettings : device.enable}
+        className={`grid shrink-0 place-items-center rounded-chip px-3 text-caption font-semibold focus-visible:outline-2 ${SECTION_BRAND_INK}`}
+        style={{ minHeight: 44, outlineColor: 'var(--color-ios-brand)' }}
+      >
+        {translate(language, denied ? 'settings.notif.device.open_settings' : 'settings.notif.device.enable')}
+      </button>
+    </div>
+  );
+}
+
+export function NotificationsSection({
+  language,
+  view,
+  disabled,
+  onToggle,
+  onRetry,
+  device = null,
+}: PreferenceSectionProps & { readonly device?: DevicePushRow | null }) {
   return (
     <GroupedSection id="settings-notifications" title={upper(language, 'settings.section.notifications')} icon={SECTION_ICON({ set: 'socle', name: 'bell' })}>
+      {device !== null && device.permission !== 'granted' ? <DevicePushRowView language={language} device={device} /> : null}
       <Toggles language={language} view={view} specs={NOTIFICATION_TOGGLES} disabled={disabled} onToggle={onToggle} onRetry={onRetry} />
     </GroupedSection>
   );
@@ -428,7 +519,7 @@ export function AppearanceSection({
                 style={{
                   minHeight: 44,
                   outlineColor: 'var(--color-ios-brand)',
-                  color: pressed ? 'white' : SECTION_INK,
+                  color: pressed ? 'var(--color-ios-on-brand)' : SECTION_INK,
                   backgroundColor: pressed ? 'var(--ios-indigo-600)' : 'color-mix(in srgb, var(--color-ios-ink-3) 14%, transparent)',
                 }}
               >
@@ -451,7 +542,7 @@ export function AppearanceSection({
           data-interface-language
           value={interfaceChoice ?? ''}
           onChange={(event) => onInterfaceLanguage(interfaceChoiceOf(event.currentTarget.value))}
-          className={`ms-auto rounded-chip px-3 text-caption font-semibold focus-visible:outline-2 ${SECTION_BRAND_INK}`}
+          className={`ms-auto rounded-chip px-3 text-input font-semibold focus-visible:outline-2 ${SECTION_BRAND_INK}`}
           style={{
             minHeight: 44,
             outlineColor: 'var(--color-ios-brand)',
@@ -558,8 +649,8 @@ function DocumentRow({ href, label, glyph }: { readonly href: string; readonly l
 export function AboutSection({ language, version }: { readonly language: InterfaceLanguage; readonly version: string }) {
   return (
     <GroupedSection id="settings-about" title={upper(language, 'settings.section.about')} icon={SECTION_ICON({ set: 'ecran', name: 'info' })}>
-      <DocumentRow href="/terms" label={translate(language, 'settings.terms')} glyph="fileText" />
-      <DocumentRow href="/privacy" label={translate(language, 'settings.privacy_policy')} glyph="handPalm" />
+      <DocumentRow href={appInstitutionalHref('terms')} label={translate(language, 'settings.terms')} glyph="fileText" />
+      <DocumentRow href={appInstitutionalHref('privacy')} label={translate(language, 'settings.privacy_policy')} glyph="handPalm" />
       <div className="flex items-center gap-3 px-3.5 py-2.5" style={{ minHeight: 52 }}>
         <RowIcon tint="var(--color-warning)">
           <GlyphSvg glyph={SETTINGS_GLYPHS.sparkle} size={15} />

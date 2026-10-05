@@ -9,12 +9,45 @@
  * Un paramètre s'écrit `{nom}` et se place là où la LANGUE le veut, jamais là
  * où un site d'appel le concatène.
  */
+import frGallery from './catalog-fr-gallery';
+import frMessageCard from './catalog-fr-message-card';
 import frMentions from './catalog-fr-mentions';
+import frStudioChrome from './catalog-fr-studio-chrome';
+import frEphemeral from './catalog-fr-ephemeral';
+import frConversationCard from './catalog-fr-conversation-card';
 import frComposerAttach from './catalog-fr-composer-attach';
 import frThreadStates from './catalog-fr-thread-states';
 import frIdentity from './catalog-fr-identity';
+import frMediaHub from './catalog-fr-media-hub';
+import frMediaViewer from './catalog-fr-media-viewer';
+import frActivation from './catalog-fr-activation';
+import frVerifyEmail from './catalog-fr-verify-email';
+import frDevicePush from './catalog-fr-device-push';
+import frPassword from './catalog-fr-password';
+import frAccounts from './catalog-fr-accounts';
+import frCall from './catalog-fr-call';
+import frRowActions from './catalog-fr-row-actions';
+import frEngagement from './catalog-fr-engagement';
+import frCallShell from './catalog-fr-call-shell';
+import frCallJoin from './catalog-fr-call-join';
+import frCallDecline from './catalog-fr-call-decline';
+import frCallFeedback from './catalog-fr-call-feedback';
+import frCallsErase from './catalog-fr-calls-erase';
+import frCallDevices from './catalog-fr-call-devices';
+import frCallScreen from './catalog-fr-call-screen';
+import frCallQuality from './catalog-fr-call-quality';
+import frCallCaptions from './catalog-fr-call-captions';
+import frCallRecording from './catalog-fr-call-recording';
+import frSignup from './catalog-fr-signup';
 import frStoriesMine from './catalog-fr-stories-mine';
 import frFeedPost from './catalog-fr-feed-post';
+import frContactCard from './catalog-fr-contact-card';
+import frQuote from './catalog-fr-quote';
+import frCommentRow from './catalog-fr-comment-row';
+import frContactDiscovery from './catalog-fr-contact-discovery';
+import frDownload from './catalog-fr-download';
+import frPhonePrompt from './catalog-fr-phone-prompt';
+import frUserProfile from './catalog-fr-user-profile';
 
 const fr = {
   'announce.messageSent': 'Message envoyé',
@@ -23,7 +56,6 @@ const fr = {
   'announce.messageProtected': 'Message protégé',
   'announce.selectionCap': 'Maximum {count} messages',
   'announce.nothingToCopy': 'Rien à copier',
-
   'message.author.self': 'Vous',
   'message.excerpt.protected': 'contenu protégé',
   'a11y.message.menu.subject': 'Actions du message de {author} : {excerpt}',
@@ -119,6 +151,7 @@ const fr = {
      taille) ; ces deux-ci restent ICI parce qu'elles ne portent pas ce
      préfixe. */
   'media.unavailable': 'Média indisponible',
+  'media.retry': 'Réessayer',
   'report.post.title': 'Signaler cette publication',
   /* LES PUBLICATIONS ENREGISTRÉES (#7286) — l'écran `/me/bookmarks` et sa rangée de Réglages › Outils. */
   'bookmarks.title': 'Publications enregistrées',
@@ -176,7 +209,27 @@ const fr = {
   'feed.newPosts.one': '{count} nouvelle publication',
   'feed.newPosts.other': '{count} nouvelles publications',
   ...frIdentity,
-  'userProfile.self.edit': 'Modifier mon profil',
+  ...frMediaHub,
+  ...frMediaViewer,
+  ...frVerifyEmail,
+  ...frActivation,
+  ...frPassword,
+  ...frDevicePush,
+  ...frAccounts,
+  ...frCall,
+  ...frRowActions,
+  ...frEngagement,
+  ...frCallShell,
+  ...frCallJoin,
+  ...frCallDecline,
+  ...frCallFeedback,
+  ...frCallsErase,
+  ...frCallDevices,
+  ...frCallScreen,
+  ...frCallQuality,
+  ...frCallCaptions,
+  ...frCallRecording,
+  ...frSignup,
   'report.title': 'Signaler ce compte',
   'report.body': 'Choisissez ce qui motive votre signalement. Notre équipe de modération le recevra.',
   'report.action': 'Signaler',
@@ -221,6 +274,7 @@ const fr = {
   'notifications.category.reactions': 'Réactions',
   'notifications.category.mentions': 'Mentions',
   'notifications.category.social': 'Social',
+  'notifications.category.engagement': 'Engagements',
   'notifications.category.contacts': 'Contacts',
   'notifications.category.groups': 'Groupes',
   'notifications.category.calls': 'Appels',
@@ -447,6 +501,7 @@ const fr = {
   'settings.save.error': "Le réglage n'a pas été enregistré.",
   'settings.theme.sync_error': 'Thème appliqué sur cet appareil, sans synchronisation.',
   'common.cancel': 'Annuler',
+  'common.close': 'Fermer',
 
   'media.video.play': 'Lire la vidéo',
   'media.video.pause': 'Pause',
@@ -454,6 +509,7 @@ const fr = {
   'media.audio.position': 'Position de lecture',
   'media.audio.speed': 'Vitesse de lecture',
   'media.video.position.value': '{elapsed} sur {total}',
+  'media.buffering': 'Chargement…',
   'media.video.mute': 'Couper le son',
   'media.video.unmute': 'Réactiver le son',
   'media.video.more_options': "Plus d'options",
@@ -599,71 +655,20 @@ const fr = {
   'discover.announce.unblockFailed': 'Impossible de débloquer',
   'discover.announce.offline': 'Hors ligne : rien n’a été envoyé.',
 
-  /* LE PROFIL PUBLIC DE QUELQU'UN (#7083) — préfixe `userProfile.*` : le
-     préfixe `profile.*` appartient à /me, et deux écrans qui partageraient un
-     préfixe partageraient ses retouches. Ce qui EXISTE déjà est réutilisé, pas
-     redit : `discover.connection.*` et `discover.announce.*` (les mêmes
-     gestes), `profile.stats.*`, `profile.section.stats`,
-     `profile.section.member_since`, `profile.retry`, `profile.offline.title`. */
-  'userProfile.title': 'Profil',
-  'userProfile.loading': 'Chargement du profil',
-  'userProfile.section.publications': 'PUBLICATIONS',
-  'userProfile.section.relation': 'CONNEXION',
-  'userProfile.section.conversations': 'CONVERSATIONS',
-  'userProfile.conversations.empty': 'Aucune conversation en commun',
-  'userProfile.conversations.emptyBody': 'Rien ne vous relie encore — « Écrire » ouvre la première.',
-  'userProfile.conversations.error': 'Impossible de charger les conversations',
-  'userProfile.conversations.loading': 'Chargement des conversations',
-  'userProfile.refused.title': 'Ce profil n’est pas accessible',
-  'userProfile.refused.body': 'Il n’existe pas, ou vous n’y avez pas accès.',
-  'userProfile.throttled.title': 'Trop de demandes',
-  'userProfile.throttled.body': 'Réessayez dans un instant.',
-  'userProfile.error.title': 'Impossible de charger ce profil',
-  'userProfile.error.body': 'Réessayez dans un instant.',
-  'userProfile.offline.body': 'Le profil s’affichera à la reconnexion.',
-  'userProfile.posts.empty': 'Aucune publication',
-  'userProfile.posts.emptyBody': 'Rien de public à lire pour l’instant.',
   /* LE VIDE D'UN FILTRE N'EST PAS LE VIDE D'UN COMPTE (miroir de
      `filteredEmptyState`, `ProfileUserPostsList.swift:498-510`) : dire
      « Aucune publication » à qui vient de toucher « Réels » est FAUX — le
      compte publie, c'est le filtre qui ne trouve rien ICI. */
-  'userProfile.posts.emptyPosts': 'Aucun poste',
-  'userProfile.posts.emptyReels': 'Aucun réel',
-  'userProfile.posts.emptyFilter': 'Touchez à nouveau la tuile pour tout revoir.',
-  'userProfile.posts.error': 'Impossible de charger les publications',
-  'userProfile.posts.loadMore': 'Charger plus',
   /* CE QUI EST ARRIVÉ SE DIT (revue #7083) : « Charger plus » était le seul
      geste de l'écran à changer la LONGUEUR de la liste, et le seul à ne rien
      annoncer. La forme « Publications ajoutées : {count} » évite l'accord de
      pluriel dans les sept langues — un seul libellé pour 1 comme pour 12. */
-  'userProfile.posts.loaded': 'Publications ajoutées : {count}',
-  'userProfile.posts.loadedNone': 'Aucune publication de plus à afficher',
-  'userProfile.posts.loading': 'Chargement…',
-  'userProfile.stat.posts': 'Postes',
-  'userProfile.stat.reels': 'Réels',
-  'userProfile.stat.stories': 'Stories',
-  'userProfile.stat.filterLabel': 'Filtrer sur {name}',
-  'userProfile.stat.filterClear': 'Tout afficher',
-  'userProfile.context.received': '{name} souhaite entrer en contact avec vous. Acceptez pour échanger des messages.',
-  'userProfile.context.sent': 'Vous avez envoyé une demande de connexion à {name}. En attente de sa réponse.',
-  'userProfile.action.write': 'Écrire',
-  'userProfile.action.writeLabel': 'Écrire à {name}',
-  'userProfile.action.block': 'Bloquer',
-  'userProfile.action.blockLabel': 'Bloquer {name}',
-  'userProfile.blocked.title': 'Vous avez bloqué cette personne',
-  'userProfile.blocked.body': 'Ses publications et ses statistiques restent masquées tant que le blocage dure.',
-  'userProfile.signin.title': 'Connectez-vous pour entrer en contact',
-  'userProfile.signin.body': 'Les demandes de connexion et les messages demandent un compte.',
-  'userProfile.signin.cta': 'Se connecter',
-  'userProfile.announce.blocked': 'Personne bloquée',
-  'userProfile.announce.blockFailed': 'Impossible de bloquer',
-  'userProfile.announce.writeFailed': 'Impossible d’ouvrir la conversation',
 
   'a11y.floating.rung.discover.requests.one': 'Découvrir, {count} demande reçue',
   'a11y.floating.rung.discover.requests.other': 'Découvrir, {count} demandes reçues',
 
   'links.hub.banner.title': 'Gérez vos liens',
-  'links.hub.banner.subtitle': 'Invitez qui vous voulez dans vos conversations',
+  'links.hub.banner.subtitle': 'Partagez, suivez et développez votre audience',
   'links.hub.share.title': 'Liens de partage',
   'links.hub.share.description': 'Invitez des contacts à rejoindre vos conversations',
   'links.hub.share.create': 'Créer un lien de partage',
@@ -829,6 +834,7 @@ const fr = {
   'story.studio.refusal.door.visual': 'Choisissez une image ou une vidéo.',
   'story.studio.refusal.door.sound': 'Choisissez un fichier audio.',
   'story.studio.refusal.media-max': 'Cette publication porte déjà dix médias — le plafond de la passerelle.',
+  'story.studio.refusal.import-max': '{count} média(s) non importé(s) : une publication en porte dix au plus.',
   'story.studio.failure.network': 'Réseau indisponible.',
   'story.studio.failure.timeout': 'La passerelle n’a pas répondu.',
   'story.studio.failure.session': 'Session expirée — reconnectez-vous.',
@@ -840,7 +846,6 @@ const fr = {
   'story.studio.failure.refused': 'Publication refusée.',
   'story.studio.failure.unavailable': 'La passerelle est indisponible.',
   'story.studio.text.add': 'Ajouter un texte',
-  'story.studio.text.remove': 'Retirer ce texte',
   'story.studio.object.text': 'Texte {index}',
   'story.studio.object.overlay': 'Calque',
   'story.studio.object.select': 'Sélectionner {name}',
@@ -1023,14 +1028,6 @@ const fr = {
   'comment.send.error': 'Le commentaire n’a pas pu être publié.',
   'comment.send.pending': 'Commentaire non confirmé — hors ligne',
   'comment.send.empty': 'Écrivez quelque chose avant d’envoyer.',
-  'comments.action.like': 'J’aime',
-  'comments.action.unlike': 'Je n’aime plus',
-  'comments.action.edit': 'Modifier',
-  'comments.action.delete': 'Supprimer',
-  'comments.action.delete.confirm': 'Confirmer',
-  'comments.edit.label': 'Modifier le commentaire',
-  'comments.edit.save': 'Enregistrer',
-  'comments.edit.cancel': 'Annuler',
   'comment.like.error': 'Le « j’aime » n’a pas été enregistré.',
   'comment.edit.error': 'La modification n’a pas été enregistrée.',
   'comment.delete.error': 'Le commentaire n’a pas pu être supprimé.',
@@ -1045,6 +1042,8 @@ const fr = {
 
   'thread.unread-separator.one': '{count} message non lu',
   'thread.unread-separator.other': '{count} messages non lus',
+  'thread.long-message.read-more': 'Lire la suite',
+  'thread.long-message.collapse': 'Réduire',
   'message-detail.info.title': 'Infos du message',
   'message-detail.received-by': 'Reçu par',
   'message-detail.read-by': 'Vu par',
@@ -1072,11 +1071,8 @@ const fr = {
      est ce que le produit tient : la fiche App Store, qui existe, et le web,
      que meeshy.me sert aujourd'hui. Aucune mention du Play Store tant que la
      coque Android n'est pas publiée. */
-  'download.title': 'Téléchargez Meeshy',
-  'download.body': 'Écrivez dans votre langue, lisez dans la vôtre : Meeshy traduit chaque message au passage.',
-  'download.appStore': 'Télécharger dans l’App Store',
-  'download.web': 'Ouvrir Meeshy dans le navigateur',
-  'download.otherPlatforms': 'Sur Android et sur ordinateur, Meeshy s’utilise directement dans le navigateur.',
+  ...frDownload,
+  ...frPhonePrompt,
 
   /* LES SOURCES DU COMPOSEUR (#7280) — le panneau de pièces jointes du fil.
      Les libellés et les gestes annoncés reprennent le catalogue d'iOS
@@ -1108,6 +1104,11 @@ const fr = {
 
   ...frThreadStates,
   ...frMentions,
+  ...frStudioChrome,
+  ...frEphemeral,
+  ...frGallery,
+  ...frMessageCard,
+  ...frConversationCard,
 
   /* LE MENU DU MESSAGE, SA BARRE DE SÉLECTION ET SA FEUILLE « PLUS… » (#7555).
      Ces libellés étaient EN DUR, en français, sur trois surfaces servies en
@@ -1140,6 +1141,11 @@ const fr = {
 
   ...frStoriesMine,
   ...frFeedPost,
+  ...frContactCard,
+  ...frQuote,
+  ...frCommentRow,
+  ...frContactDiscovery,
+  ...frUserProfile,
 } as const;
 
 export default fr;

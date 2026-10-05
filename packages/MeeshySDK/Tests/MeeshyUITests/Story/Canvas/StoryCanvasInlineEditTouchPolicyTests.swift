@@ -78,4 +78,18 @@ final class StoryCanvasInlineEditTouchPolicyTests: XCTestCase {
         XCTAssertTrue(
             StoryCanvasInlineEditTouchPolicy.canvasReceives(touched: nil, inlineEditor: UIView()))
     }
+
+    /// **La saisie cède au doigt** (retour porteur 2026-09-28) : un geste qui
+    /// transforme reçoit les touches du champ quand l'hôte l'opte ; un tap, non.
+    func test_unGesteDeManipulation_recoitLeChamp_quandLHoteLOpte() {
+        let champ = UITextView()
+        XCTAssertTrue(StoryCanvasInlineEditTouchPolicy.canvasReceives(
+            touched: champ, inlineEditor: champ, yieldsManipulation: true, isManipulation: true))
+        XCTAssertFalse(StoryCanvasInlineEditTouchPolicy.canvasReceives(
+            touched: champ, inlineEditor: champ, yieldsManipulation: true, isManipulation: false),
+                       "Un tap reste au champ : c'est lui qui lève le clavier (#5099).")
+        XCTAssertFalse(StoryCanvasInlineEditTouchPolicy.canvasReceives(
+            touched: champ, inlineEditor: champ, yieldsManipulation: false, isManipulation: true),
+                       "Sans l'opt-in de l'hôte, rien ne change.")
+    }
 }

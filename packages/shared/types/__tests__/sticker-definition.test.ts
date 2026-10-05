@@ -4,6 +4,8 @@ import {
   stickerFitWithin,
   stickerMimeFromSignature,
   isStickerAnimatedGif,
+  isStickerAnimated,
+  isStickerAnimatedWebp,
   stickerStoredMime,
 } from '../sticker-definition';
 
@@ -60,5 +62,21 @@ describe('isStickerAnimatedGif', () => {
   it('treats a single-frame GIF and any other format as still', () => {
     expect(isStickerAnimatedGif(bytes(...gif(), ...frame))).toBe(false);
     expect(isStickerAnimatedGif(png())).toBe(false);
+  });
+});
+
+describe('isStickerAnimatedWebp', () => {
+  const vp8x = (flags: number) =>
+    bytes(0x52, 0x49, 0x46, 0x46, 30, 0, 0, 0, 0x57, 0x45, 0x42, 0x50, 0x56, 0x50, 0x38, 0x58, 10, 0, 0, 0, flags, 0, 0, 0);
+
+  it('reads the animation flag of an extended WebP', () => {
+    expect(isStickerAnimatedWebp(vp8x(0x02))).toBe(true);
+    expect(isStickerAnimatedWebp(vp8x(0x10))).toBe(false);
+    expect(isStickerAnimated(vp8x(0x12))).toBe(true);
+  });
+
+  it('a simple WebP or another format never moves', () => {
+    expect(isStickerAnimatedWebp(webp())).toBe(false);
+    expect(isStickerAnimated(png())).toBe(false);
   });
 });

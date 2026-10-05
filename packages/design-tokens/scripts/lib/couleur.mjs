@@ -25,14 +25,25 @@
 // Ce module ne connaît ni la v3 ni les jetons : il prend des chaînes et rend
 // des nombres. La LOI — quelles paires, quel seuil — vit dans check-jetons.mjs.
 
-const CANAL = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
+const CANAL = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/;
 
+// Les trois premiers octets : l'alpha d'un hexadécimal à huit chiffres est lu
+// à part (`alpha`), jamais comme un quatrième canal de luminance.
 const octets = (hex) => {
   const corps = hex.slice(1);
   const paires =
     corps.length === 3 ? [...corps].map((c) => `${c}${c}`) : corps.match(/.{2}/g);
-  return paires.map((paire) => Number.parseInt(paire, 16));
+  return paires.slice(0, 3).map((paire) => Number.parseInt(paire, 16));
 };
+
+const alpha = (hex) => {
+  const corps = hex.trim().slice(1);
+  return corps.length === 8 ? Number.parseInt(corps.slice(6), 16) / 255 : 1;
+};
+
+const MOTS = { white: '#ffffff', black: '#000000' };
+
+const canal = (a, b, part) => Math.round(a * part + b * (1 - part));
 
 // WCAG 2.x — https://www.w3.org/TR/WCAG21/#dfn-relative-luminance
 const lineaire = (octet) => {
@@ -47,8 +58,24 @@ export const luminance = (hex) => {
   return 0.2126 * r + 0.7152 * v + 0.0722 * b;
 };
 
+const enHex = (octets) =>
+  `#${octets.map((octet) => octet.toString(16).padStart(2, '0')).join('')}`;
+
+// UNE ENCRE TRANSLUCIDE SE MESURE COMPOSÉE SUR SON FOND (#8879) — les rôles du
+// SDK en portent (`textMuted` à 80 % en clair, `--ios-edge`, les voiles). Le
+// fond doit être opaque : deux translucides n'ont pas de rapport défini, et un
+// rapport nul échoue sous tout seuil plutôt que d'inventer un plan dessous.
+const composee = (encre, fond) => {
+  const part = alpha(encre);
+  const [dessus, dessous] = [octets(encre.trim()), octets(fond.trim())];
+  return enHex(dessus.map((valeur, rang) => canal(valeur, dessous[rang], part)));
+};
+
 export const contraste = (a, b) => {
-  const [haut, bas] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+  const [alphaA, alphaB] = [alpha(a), alpha(b)];
+  if (alphaA < 1 && alphaB < 1) return 0;
+  const [encre, fond] = alphaA < 1 ? [composee(a, b), b] : alphaB < 1 ? [composee(b, a), a] : [a, b];
+  const [haut, bas] = [luminance(encre), luminance(fond)].sort((x, y) => y - x);
   return (haut + 0.05) / (bas + 0.05);
 };
 
@@ -65,10 +92,6 @@ const ALIAS = /^var\(\s*(--[\w-]+)\s*\)$/;
 // approché.
 const MELANGE = /^color-mix\(\s*in\s+srgb\s*,\s*(.+?)\s+([\d.]+)%\s*,\s*(.+?)\s*\)$/;
 
-const canal = (a, b, part) => Math.round(a * part + b * (1 - part));
-
-const enHex = (octets) =>
-  `#${octets.map((octet) => octet.toString(16).padStart(2, '0')).join('')}`;
 
 // Bornée par le nombre de jetons de la table : au-delà, la chaîne d'alias se
 // mord la queue et il vaut mieux rendre `null` que boucler.
@@ -80,7 +103,7 @@ export const resout = (table, nom) => {
     const melange = MELANGE.exec(texte);
     if (melange !== null) return melangeResolu(table, melange);
     const alias = ALIAS.exec(texte);
-    if (alias === null) return estHex(texte) ? texte.toLowerCase() : null;
+    if (alias === null) return couleurLitterale(texte);
     valeur = table[alias[1]];
   }
   return null;
@@ -89,16 +112,30 @@ export const resout = (table, nom) => {
 // Les deux termes d'un voile sont eux-mêmes des jetons : ils se résolvent par le
 // même chemin, ce qui rend un voile POSÉ SUR un voile calculable sans cas
 // particulier.
-const terme = (table, texte) => {
-  const alias = ALIAS.exec(texte.trim());
-  if (alias !== null) return resout(table, alias[1]);
+const couleurLitterale = (texte) => {
+  const mot = MOTS[texte.trim().toLowerCase()];
+  if (mot !== undefined) return mot;
   return estHex(texte) ? texte.trim().toLowerCase() : null;
 };
 
+const terme = (table, texte) => {
+  if (texte.trim() === 'transparent') return 'transparent';
+  const alias = ALIAS.exec(texte.trim());
+  if (alias !== null) return resout(table, alias[1]);
+  return couleurLitterale(texte);
+};
+
+// `color-mix(in srgb, A p%, transparent)` n'est pas un mélange de deux
+// couleurs mais A à l'alpha p : il rend un hexadécimal à huit chiffres, que
+// `contraste` compose ensuite sur le fond de la paire mesurée.
 const melangeResolu = (table, [, premier, pourcentage, second]) => {
   const [a, b] = [terme(table, premier), terme(table, second)];
   if (a === null || b === null) return null;
   const part = Number(pourcentage) / 100;
+  if (b === 'transparent' && a !== 'transparent' && alpha(a) === 1) {
+    return `${enHex(octets(a))}${Math.round(part * 255).toString(16).padStart(2, '0')}`;
+  }
+  if (a === 'transparent' || b === 'transparent' || alpha(a) < 1 || alpha(b) < 1) return null;
   const [octetsA, octetsB] = [octets(a), octets(b)];
   return enHex(octetsA.map((valeur, rang) => canal(valeur, octetsB[rang], part)));
 };

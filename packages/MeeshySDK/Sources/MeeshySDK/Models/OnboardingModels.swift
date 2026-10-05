@@ -96,7 +96,7 @@ public struct APIOnboardingState: Codable, Sendable, Equatable {
     /// qui ne le dit pas — la carte « valide ton adresse » ne s'invente pas.
     public let emailVerified: Bool?
     /// La carte Story peut-elle publier ? `false` quand l'adresse n'est pas
-    /// vérifiée ET que l'exception « première story » est déjà consommée.
+    /// vérifiée ET que son délai de grâce est échu (#8476).
     /// `nil` : non servi — la carte publie comme avant.
     public let canPublishStory: Bool?
     /// `nil` : passerelle antérieure à #7908.

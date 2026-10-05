@@ -100,6 +100,14 @@ describe('les destructions programmées à tort par l’ancien chemin', () => {
     expect(isLegacyViewOnceBurn({ ...base, isViewOnce: false })).toBe(false);
   });
 
+  it('laisse une flamme-œil à vue unique à SA destruction, même privée du bit EPHEMERAL (#8345)', () => {
+    const flame = MESSAGE_EFFECT_FLAGS.EPHEMERAL_AFTER_READ | MESSAGE_EFFECT_FLAGS.VIEW_ONCE;
+    expect(isLegacyViewOnceBurn({ ...base, isViewOnce: true, ephemeralDuration: null, effectFlags: flame })).toBe(false);
+    expect(
+      isLegacyViewOnceBurn({ ...base, isViewOnce: true, ephemeralDuration: null, effectFlags: flame | MESSAGE_EFFECT_FLAGS.EPHEMERAL }),
+    ).toBe(false);
+  });
+
   it("personne n'a ouvert (l'auteur seul) ⇒ la destruction redevient le plafond de rétention", async () => {
     const prisma = buildPrisma([]);
     prisma.messageStatusEntry.findMany.mockResolvedValue([{ messageId: 'msg-1', participantId: 'author' }]);

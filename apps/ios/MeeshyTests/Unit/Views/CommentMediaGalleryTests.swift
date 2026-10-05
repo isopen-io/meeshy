@@ -310,8 +310,16 @@ final class CommentMediaGalleryWiringGuardTests: XCTestCase {
             "Meeshy/Features/Main/Views/FeedCommentsSheet.swift",
             ["Meeshy/Features/Main/Views/CommentRowView.swift"]
         ),
-        ("Meeshy/Features/Main/Views/FeedPostCard.swift", []),
-        ("Meeshy/Features/Main/Views/StoryViewerView+Content.swift", []),
+        // #8582 — l'aperçu de la carte et la ligne de story ont quitté leurs
+        // hôtes hors budget : la LÉGENDE DE REPLI suit la ligne, la galerie reste.
+        (
+            "Meeshy/Features/Main/Views/FeedPostCard.swift",
+            ["Meeshy/Features/Main/Views/FeedPostCard+CommentsPreview.swift"]
+        ),
+        (
+            "Meeshy/Features/Main/Views/StoryViewerView+Content.swift",
+            ["Meeshy/Features/Main/Views/StoryCommentRowView.swift"]
+        ),
     ]
 
     func test_everyCommentHost_declaresTheSharedGallery() throws {

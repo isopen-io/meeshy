@@ -23,4 +23,9 @@ extension Message {
     /// swipe-to-forward, rangée quick-reaction, dialogue média. Elle se nomme
     /// ici, une fois ; tout site d'UI la LIT, aucun ne la redit.
     nonisolated var isForwardable: Bool { !isViewOnce }
+
+    /// Le message est-il FLOUTÉ, au niveau du message ou d'une de ses pièces
+    /// (#8009) ? Son appui long ne laisse sortir aucun contenu : ni copie, ni
+    /// traduction, ni transfert, ni enregistrement, et son aperçu reste flou.
+    nonisolated var holdsBlur: Bool { isBlurred || attachments.contains { $0.isBlurred } }
 }

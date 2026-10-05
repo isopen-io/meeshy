@@ -86,13 +86,13 @@ public struct CachedAsyncImage<Placeholder: View>: View {
                             hasFailed = false
                             retryCount += 1
                         } label: {
-                            VStack(spacing: 4) {
+                            VStack(spacing: MeeshySpacing.xs) {
                                 Image(systemName: "arrow.clockwise.circle.fill")
-                                    .font(.system(size: 22, weight: .medium))
-                                    .foregroundStyle(.white.opacity(0.7))
+                                    .font(.system(size: MeeshyIconSize.xxl, weight: .medium))
+                                    .foregroundStyle(.white.opacity(MeeshyOpacity.heavy))
                                 Text(String(localized: "common.retry", defaultValue: "Réessayer", bundle: .module))
-                                    .font(.system(size: 10, weight: .semibold))
-                                    .foregroundStyle(.white.opacity(0.5))
+                                    .font(.system(size: MeeshyFont.captionSize, weight: .semibold))
+                                    .foregroundStyle(.white.opacity(MeeshyOpacity.strong))
                             }
                         }
                     }
@@ -300,7 +300,7 @@ public struct CachedAvatarImage: View {
         let initials = name.components(separatedBy: " ").prefix(2).compactMap(\.first).map(String.init).joined().uppercased()
         let color = Color(hex: accentColor)
         return ZStack {
-            LinearGradient(colors: [color, color.opacity(0.7)], startPoint: .topLeading, endPoint: .bottomTrailing)
+            LinearGradient(colors: [color, color.opacity(MeeshyOpacity.heavy)], startPoint: .topLeading, endPoint: .bottomTrailing)
             Text(initials.isEmpty ? "?" : initials)
                 .font(.system(size: size * 0.38, weight: .semibold, design: .rounded))
                 .foregroundColor(.white)
@@ -360,7 +360,7 @@ public struct CachedBannerImage: View {
                 Image(uiImage: thumbHashImage).resizable().aspectRatio(contentMode: .fill)
             } else {
                 let color = Color(hex: fallbackColor)
-                LinearGradient(colors: [color.opacity(0.8), color.opacity(0.4)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                LinearGradient(colors: [color.opacity(MeeshyOpacity.intense), color.opacity(0.4)], startPoint: .topLeading, endPoint: .bottomTrailing)
             }
         }
         .frame(height: height).clipped()
@@ -429,6 +429,12 @@ public struct ProgressiveCachedImage<Placeholder: View>: View {
     /// Le vrai gain octets+pixels vient toujours de la sélection de variante
     /// en amont (URL plus petite passée en `fullUrl`).
     public let targetSize: CGSize?
+    /// Appelé quand le plein format a été DEMANDÉ au réseau et n'est pas
+    /// arrivé (404, 410, refus, panne) — jamais quand la politique de
+    /// téléchargement a retenu la requête. Sans lui, un hôte n'a aucun moyen
+    /// de distinguer « encore en chargement » de « n'arrivera pas » : le
+    /// placeholder tournait pour toujours (#8141).
+    public let onFullImageFailure: (@MainActor () -> Void)?
     public let placeholder: () -> Placeholder
 
     @State private var thumbHashImage: UIImage?
@@ -445,6 +451,7 @@ public struct ProgressiveCachedImage<Placeholder: View>: View {
         fullUrl: String?,
         autoLoad: Bool = false,
         targetSize: CGSize? = nil,
+        onFullImageFailure: (@MainActor () -> Void)? = nil,
         @ViewBuilder placeholder: @escaping () -> Placeholder
     ) {
         self.thumbHash = thumbHash
@@ -452,6 +459,7 @@ public struct ProgressiveCachedImage<Placeholder: View>: View {
         self.fullUrl = fullUrl
         self.autoLoad = autoLoad
         self.targetSize = targetSize
+        self.onFullImageFailure = onFullImageFailure
         self.placeholder = placeholder
 
         // Tier 2: warm le full image depuis le disque vers la NSCache puis
@@ -607,10 +615,11 @@ public struct ProgressiveCachedImage<Placeholder: View>: View {
         } else {
             loaded = await CacheCoordinator.shared.images.image(for: resolved)
         }
-        if let loaded {
-            if !Task.isCancelled {
-                withAnimation(.easeIn(duration: 0.25)) { fullImage = loaded }
-            }
+        guard !Task.isCancelled else { return }
+        guard let loaded else {
+            onFullImageFailure?()
+            return
         }
+        withAnimation(.easeIn(duration: 0.25)) { fullImage = loaded }
     }
 }

@@ -6,7 +6,7 @@ As a Staff+ Apple Platform Engineer, Human Interface Guidelines (HIG) expert, Ac
 
 Following a series of proactive architectural modernization sweeps, Meeshy iOS demonstrates outstanding platform readiness, visual polish, and exceptional technical execution. In this latest verification, we have systematically addressed outstanding legacy patterns across the app, extension, and widget targets:
 1. **Modernized Push Notification ISO8601 Date Parsing:** Replaced legacy per-call `ISO8601DateFormatter()` allocations in `NotificationPayloadHelpers.swift` with high-performance native `Date.ParseStrategy` implementations (`Date(value, strategy: .iso8601...)`).
-2. **Standardized Swift Concurrency Sleep States:** Converted nanoseconds-based `Task.sleep(nanoseconds:)` calls in core UI ViewModels, Share Extension, Widgets, and Views (`SyncPillViewModel.swift`, `ForwardPickerViewModel.swift`, `FloatingCallPillView.swift`, `KeypadViewModel.swift`, `ShareViewController.swift`, and `LiveActivities.swift`) to readable, type-safe, and future-proof duration-based `Task.sleep(for: .seconds(...) / .milliseconds(...))` calls.
+2. **Standardized Swift Concurrency Sleep States:** Converted nanoseconds-based `Task.sleep(nanoseconds:)` calls in core UI ViewModels, Share Extension, Widgets, and Views (`SyncPillViewModel.swift`, `ForwardPickerViewModel.swift`, `FloatingCallPillView.swift`, `KeypadViewModel.swift`, `ShareViewController.swift`, `LiveActivities.swift`, and `InviteGroupCard.swift`) to readable, type-safe, and future-proof duration-based `Task.sleep(for: .seconds(...) / .milliseconds(...))` calls.
 3. **Eliminated Design System Drift & Typography Inconsistencies:** Verified dynamic typography tokens (`MeeshyFont.relative(...)`), `MeeshySpacing`, and `MeeshyRadius` tokens across all sheets and overlays, ensuring complete Dynamic Type scaling and HIG compliance.
 4. **Verified 100% Localization Consistency:** Validated String Catalogs (`Localizable.xcstrings`) across 1,849 Swift files, confirming bidirectional consistency across all 3,921 app catalog keys and 1,736 SDK catalog keys with `check_localization.py`.
 
@@ -95,7 +95,7 @@ With these enhancements, the visual architecture, localized layouts, accessibili
 ### 2. Severity: Medium (Resolved) | Category: Architecture & Swift Concurrency
 *   **Description:** Legacy nanoseconds-based `Task.sleep(nanoseconds:)` calls were present in UI ViewModels, Share Extension, Widgets, and Views (`SyncPillViewModel`, `ForwardPickerViewModel`, `FloatingCallPillView`, `KeypadViewModel`, `ShareViewController`, `LiveActivities`).
 *   **Impact:** Decreased code readability and potential deprecation issues in future Swift versions.
-*   **Evidence:** `Task.sleep(nanoseconds:)` in `SyncPillViewModel.swift`, `ForwardPickerViewModel.swift`, `FloatingCallPillView.swift`, `KeypadViewModel.swift`, `ShareViewController.swift`, and `LiveActivities.swift`.
+*   **Evidence:** `Task.sleep(nanoseconds:)` in `SyncPillViewModel.swift`, `ForwardPickerViewModel.swift`, `FloatingCallPillView.swift`, `KeypadViewModel.swift`, `ShareViewController.swift`, `LiveActivities.swift`, and `InviteGroupCard.swift`.
 *   **Recommendation:** Migrate to standard duration-based `Task.sleep(for: .seconds(...) / .milliseconds(...))` APIs.
 *   **Resolution:** Standardized debouncing, timing watchdogs, and status dismissals in these views and extensions to use duration-based `Task.sleep(for:)` calls.
 

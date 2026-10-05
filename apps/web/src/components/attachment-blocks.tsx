@@ -1,16 +1,22 @@
-import { Fragment, Suspense, lazy, useCallback, useMemo, useState } from 'react';
+import { Fragment, Suspense, lazy, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+
+import { maskedAttachment as servedMasked } from '@meeshy/shared/utils/attachment-protection';
+import { isContactCardAttachment } from '@meeshy/shared/utils/vcard';
 
 
-import type { Attachment } from '@/lib/api/types';
+import type { Attachment, Message } from '@/lib/api/types';
 import { attachmentSrc } from '@/lib/api/media-url';
 import { reportAttachmentStatus } from '@/lib/api/attachments';
 import type { ConversationsDeps } from '@/lib/api/conversations';
 import { apiDeps } from '@/lib/api/deps';
+import { coqueCourante } from '@/lib/native-shell';
 import { attachmentOpenReport } from '@/lib/view/attachment-open-report';
 import { electAudio, type MediaCarrier } from '@/lib/view/media';
 import { partitionAttachments, type MediaGridFrame } from '@/lib/view/media-grid-layout';
 import { waveformOf } from '@/lib/view/message';
 import { useMediaPlayback } from '@/lib/view/use-media-playback';
+import { handOffVideoPosition } from '@/lib/view/video-handoff';
+import { useCarriedPlayback } from '@/lib/view/audio-carry';
 import { PLAYBACK_SPEEDS, seekFraction, speedLabel } from '@/lib/view/media-transport';
 import {
   karaokeSegments,
@@ -18,6 +24,7 @@ import {
   segmentSeekTarget,
   type KaraokeTone,
 } from '@/lib/view/transcript-karaoke';
+import { ThreadMediaContext } from '@/lib/view/thread-media-context';
 import { useKaraokeIndex } from '@/lib/view/use-karaoke';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
@@ -27,7 +34,7 @@ import { Glyph, GlyphSvg } from './glyph';
 import { MEDIA_GLYPHS } from './glyphs-media';
 import { MaskedAttachment } from './masked-attachment';
 import { MediaGrid } from './media-grid';
-import { useAttachmentMasked } from './view-once-opened';
+import { VeilRevealContext, revealedAttachment, useAttachmentMasked } from './view-once-opened';
 
 /**
  * LES WIDGETS DE MÉDIA DU FIL (#5805, redécoupé #6221 « la grille de
@@ -59,6 +66,11 @@ import { useAttachmentMasked } from './view-once-opened';
  * multi-pistes, l'anneau de téléchargement.
  */
 const MediaViewer = lazy(() => import('./media-viewer'));
+/** DEPUIS LE FIL (#6303) : la visionneuse conversation-entière, chunk à la demande (D-54 amendé). */
+const ThreadMediaViewer = lazy(() => import('./thread-media-viewer'));
+
+/** La carte de visite (#8101) — son lecteur vCard et sa fiche en chunk à la demande. */
+const ContactCard = lazy(() => import('./contact-card'));
 
 /** [0..1] → pourcentage arrondi au DIXIÈME — `MediaConsumptionProgressBar.swift:23-41`. */
 const consumptionPercentOf = (fraction: number): number => Math.round(fraction * 1000) / 10;
@@ -93,11 +105,14 @@ function VoiceAttachment({
   languages,
   displayLanguage,
   fallbackLanguage,
+  onExpand,
 }: {
   readonly attachment: Attachment;
   readonly languages: readonly string[];
   readonly displayLanguage?: string;
   readonly fallbackLanguage: string;
+  /** Le lecteur plein écran (#8333, miroir de la pastille de pourcentage iOS) — la lecture en cours y reprend à la même seconde. */
+  readonly onExpand: () => void;
 }) {
   const { described: transcript, track } = electAudio({
     attachment,
@@ -114,8 +129,7 @@ function VoiceAttachment({
   // la fin et au démontage — le hook porte la reprise, le throttle 5 s et le
   // tracker de segments, ce widget ne fait que lui donner ce qu'il connaît.
   const consumption = attachment.currentUserConsumption;
-  const { status, progress, toggle, bind, position, duration, seek, rate, setRate, reportedFraction } =
-    useMediaPlayback({
+  const own = useMediaPlayback({
       attachmentId: attachment.id,
       tracksTime: true,
       report: {
@@ -132,6 +146,12 @@ function VoiceAttachment({
           : {}),
       },
     });
+  /* LA BULLE REPREND LA MAIN (#9279) — quand le mini-lecteur joue CE vocal, il
+     en est le seul moteur : la bulle reflète sa lecture et la commande, comme
+     la bulle iOS reflète `ConversationAudioCoordinator`. Jamais un second son. */
+  const carried = useCarriedPlayback(attachment.id);
+  const { bind, reportedFraction } = own;
+  const { status, progress, toggle, position, duration, seek, rate, setRate } = carried ?? own;
   const uiLanguage = currentInterfaceLanguage();
 
   /*
@@ -174,7 +194,8 @@ function VoiceAttachment({
     },
     [bind],
   );
-  const activeSegment = useKaraokeIndex(audioElement, segments, status === 'playing');
+  const playingElement = carried?.element ?? audioElement;
+  const activeSegment = useKaraokeIndex(playingElement, segments, status === 'playing');
 
   const waves = waveformOf(attachment);
   // `duration` voyage en MILLISECONDES sur la charge du dépôt.
@@ -269,9 +290,9 @@ function VoiceAttachment({
           aria-label={isPlaying ? 'Mettre en pause' : "Lire l'audio"}
         >
           {isPlaying ? (
-            <GlyphSvg glyph={MEDIA_GLYPHS.pause} size={13} className="text-white" />
+            <GlyphSvg glyph={MEDIA_GLYPHS.pause} size={13} className="text-ios-on-brand" />
           ) : (
-            <Glyph name="fillPlay" size={13} className="text-white" />
+            <Glyph name="fillPlay" size={13} className="text-ios-on-brand" />
           )}
         </button>
         {/* L'ONDE SE PARCOURT AU DOIGT (#6306) — elle était `aria-hidden` et
@@ -334,6 +355,21 @@ function VoiceAttachment({
           aria-label={translate(uiLanguage, 'media.audio.speed')}
         >
           {speedLabel(rate, uiLanguage)}
+        </button>
+        <button
+          type="button"
+          data-voice-expand
+          onClick={() => {
+            if (playingElement !== null && (status === 'playing' || status === 'paused') && playingElement.currentTime > 0) {
+              handOffVideoPosition({ attachmentId: attachment.id, positionMs: Math.round(playingElement.currentTime * 1000) });
+            }
+            if (isPlaying) toggle();
+            onExpand();
+          }}
+          className="tap-target-22 grid shrink-0 place-items-center rounded-chip"
+          aria-label={translate(uiLanguage, 'media.viewer.open_fullscreen')}
+        >
+          <GlyphSvg glyph={MEDIA_GLYPHS.arrowsOutSimple} size={13} />
         </button>
       </div>
 
@@ -408,6 +444,17 @@ function VoiceAttachment({
  * }`) — `isMine` ferme le rapport pour sa propre pièce, jamais l'ouverture
  * elle-même.
  */
+/**
+ * LA COQUE N'A QU'UNE FENÊTRE (#8402) — `target="_blank"` y est ignoré, et
+ * `Bridge.launchIntent` laisse passer `blob:` sans le confier au système : la
+ * WebView naviguerait SUR le fichier en cours d'envoi, à la place de l'app.
+ * La rangée redevient un lien dès que l'envoi rend l'URL de la passerelle.
+ */
+const inShell = (): boolean => {
+  const platform = coqueCourante()?.getPlatform?.();
+  return platform !== undefined && platform !== 'web';
+};
+
 function FileAttachmentRow({
   attachment,
   isMine,
@@ -419,12 +466,11 @@ function FileAttachmentRow({
 }) {
   const lang = currentInterfaceLanguage();
   const name = attachment.originalName;
+  const opensInPlace = inShell() && attachment.fileUrl.startsWith('blob:');
 
   return (
     <a
-      href={attachmentSrc(attachment.fileUrl)}
-      target="_blank"
-      rel="noopener noreferrer"
+      {...(opensInPlace ? {} : { href: attachmentSrc(attachment.fileUrl), target: '_blank', rel: 'noopener noreferrer' })}
       aria-label={translate(lang, 'message-detail.attachment.open', { name })}
       data-attachment-file={attachment.id}
       className="flex items-center gap-2 py-1"
@@ -451,6 +497,7 @@ export function Attachments({
   mediaFrame,
   isMine = false,
   deps,
+  message,
 }: {
   readonly attachments: readonly Attachment[];
   /** Le prisme du lecteur — descendu pour l'`alt`/la transcription ET la piste audio. */
@@ -471,10 +518,38 @@ export function Attachments({
   readonly isMine?: boolean;
   /** INJECTABLE pour les témoins — `apiDeps` (singleton réel) par défaut. */
   readonly deps?: ConversationsDeps;
+  /**
+   * LE MESSAGE QUI PORTE CES PIÈCES (#6303) — posé par les rangées du fil.
+   * Avec le `ThreadMediaContext` du fil, une tuile touchée ouvre la
+   * visionneuse de TOUTE la conversation et ses actions ; sans lui (écran des
+   * médias, flux), la pellicule reste celle du message.
+   */
+  readonly message?: Message;
 }) {
   const { visual, audio, nonMedia } = partitionAttachments(attachments);
+  const thread = useContext(ThreadMediaContext);
   const [openIndex, setOpenIndex] = useState<number | null>(null);
+  const [openAudioIndex, setOpenAudioIndex] = useState<number | null>(null);
   const maskedAttachment = useAttachmentMasked();
+  /* LA VISIONNEUSE MONTRE EN CLAIR CE QUE LA RANGÉE MONTRE EN CLAIR — la pièce
+     qu'on vient de toucher (#8008) et celles qu'une révélation a levées
+     (#8389, le flou révélé sur place). Les autres pièces masquées gardent leur
+     substitut dans la visionneuse (`ViewerMaskedPage`), faute d'avoir été
+     touchées ; la visionneuse juge sur la pièce SERVIE. */
+  const liftedIds = new Set(visual.filter((attachment) => servedMasked(attachment) && !maskedAttachment(attachment)).map((a) => a.id));
+  const viewerItems =
+    openIndex === null
+      ? visual
+      : visual.map((attachment, index) =>
+          servedMasked(attachment) && (index === openIndex || liftedIds.has(attachment.id)) ? revealedAttachment(attachment) : attachment,
+        );
+  const veil = useContext(VeilRevealContext);
+  const viewing = openIndex !== null || openAudioIndex !== null;
+  useEffect(() => {
+    if (veil === null || !viewing) return;
+    veil.onViewer(true);
+    return () => veil.onViewer(false);
+  }, [veil, viewing]);
 
   return (
     <>
@@ -498,6 +573,7 @@ export function Attachments({
             attachment={attachment}
             languages={languages}
             fallbackLanguage={fallbackLanguage}
+            onExpand={() => setOpenAudioIndex(i)}
             {...(displayLanguage !== undefined ? { displayLanguage } : {})}
           />
         ),
@@ -506,15 +582,72 @@ export function Attachments({
       {nonMedia.map((attachment, i) =>
         maskedAttachment(attachment) ? (
           <MaskedAttachment key={`file-${i}`} attachment={attachment} />
+        ) : isContactCardAttachment(attachment) ? (
+          <Suspense
+            key={`file-${i}`}
+            fallback={<FileAttachmentRow attachment={attachment} isMine={isMine} {...(deps !== undefined ? { deps } : {})} />}
+          >
+            <ContactCard attachment={attachment} />
+          </Suspense>
         ) : (
           <FileAttachmentRow key={`file-${i}`} attachment={attachment} isMine={isMine} {...(deps !== undefined ? { deps } : {})} />
         ),
       )}
 
-      {openIndex !== null ? (
+      {openAudioIndex !== null && thread !== null && message !== undefined ? (
+        <Suspense fallback={null}>
+          <ThreadMediaViewer
+            kind="audio"
+            opened={message}
+            openedVisual={audio}
+            startIndex={openAudioIndex}
+            viewerId={thread.viewerId}
+            onReplyToMedia={thread.onReplyToMedia}
+            onClose={() => setOpenAudioIndex(null)}
+            languages={languages}
+            fallbackLanguage={fallbackLanguage}
+            {...(displayLanguage !== undefined ? { displayLanguage } : {})}
+            {...(carrier !== undefined ? { carrier } : {})}
+            {...(deps !== undefined ? { deps } : {})}
+          />
+        </Suspense>
+      ) : openAudioIndex !== null ? (
         <Suspense fallback={null}>
           <MediaViewer
-            items={visual}
+            items={audio}
+            startIndex={openAudioIndex}
+            onClose={() => setOpenAudioIndex(null)}
+            languages={languages}
+            fallbackLanguage={fallbackLanguage}
+            isMine={isMine}
+            {...(displayLanguage !== undefined ? { displayLanguage } : {})}
+            {...(carrier !== undefined ? { carrier } : {})}
+            {...(deps !== undefined ? { deps } : {})}
+          />
+        </Suspense>
+      ) : null}
+
+      {openIndex !== null && thread !== null && message !== undefined ? (
+        <Suspense fallback={null}>
+          <ThreadMediaViewer
+            opened={message}
+            openedVisual={visual}
+            liftedIds={liftedIds}
+            startIndex={openIndex}
+            viewerId={thread.viewerId}
+            onReplyToMedia={thread.onReplyToMedia}
+            onClose={() => setOpenIndex(null)}
+            languages={languages}
+            fallbackLanguage={fallbackLanguage}
+            {...(displayLanguage !== undefined ? { displayLanguage } : {})}
+            {...(carrier !== undefined ? { carrier } : {})}
+            {...(deps !== undefined ? { deps } : {})}
+          />
+        </Suspense>
+      ) : openIndex !== null ? (
+        <Suspense fallback={null}>
+          <MediaViewer
+            items={viewerItems}
             startIndex={openIndex}
             onClose={() => setOpenIndex(null)}
             languages={languages}

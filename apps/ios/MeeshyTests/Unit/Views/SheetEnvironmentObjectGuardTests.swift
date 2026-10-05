@@ -40,7 +40,11 @@ final class SheetEnvironmentObjectGuardTests: XCTestCase {
     /// hôte qui ne réinjecte pas le chrome social.
     private static let sheetOnlyViews: [(file: String, types: [String])] = [
         ("Meeshy/Features/Main/Views/FeedCommentsSheet.swift",
-         ["CommentsSheetView", "ThreadedCommentSection"]),
+         ["CommentsSheetView"]),
+        // #8582 — `ThreadedCommentSection` a quitté la feuille à son tour (hors
+        // budget) : la garde suit le TYPE, comme pour `CommentRowView` ci-dessous.
+        ("Meeshy/Features/Main/Views/ThreadedCommentSection.swift",
+         ["ThreadedCommentSection"]),
         // #6578 — `CommentRowView` a QUITTÉ `FeedCommentsSheet.swift` pour son
         // propre fichier (la feuille frôlait 2 519 lignes). La garde suit le
         // TYPE, pas le fichier où il est né : le risque qu'elle mesure — une vue

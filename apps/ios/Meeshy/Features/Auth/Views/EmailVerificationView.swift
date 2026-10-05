@@ -3,20 +3,37 @@ import Combine
 import MeeshySDK
 import MeeshyUI
 
+/// Ouvre la session prouvée par le code. L'HÔTE la reçoit et l'appelle dans le
+/// `onDismiss` de sa présentation (#8059) : ouvrir la session pendant que la
+/// feuille est encore là démonte l'écran de connexion qui la présente, et la
+/// feuille reste orpheline, figée sur « Email vérifié ! ».
+typealias ProvenSessionOpener = @MainActor () -> Void
+
 struct EmailVerificationView: View {
     @StateObject private var viewModel: EmailVerificationViewModel
+    private let onVerified: (@escaping ProvenSessionOpener) -> Void
+    /// Le temps de lire « Email vérifié ! » avant que la feuille se referme.
+    private static let successPause: Duration = .milliseconds(800)
     private var theme: ThemeManager { ThemeManager.shared }
     @Environment(\.dismiss) private var dismiss
-    @State private var code = ""
 
-    init(email: String, authService: AuthServiceProviding = AuthService.shared) {
+    init(
+        email: String,
+        password: String? = nil,
+        accountCreated: Bool = false,
+        pendingSessionToken: String? = nil,
+        authService: AuthServiceProviding = AuthService.shared,
+        onVerified: @escaping (@escaping ProvenSessionOpener) -> Void
+    ) {
+        self.onVerified = onVerified
         _viewModel = StateObject(wrappedValue: EmailVerificationViewModel(
             email: email,
+            password: password,
+            accountCreated: accountCreated,
+            pendingSessionToken: pendingSessionToken,
             authService: authService
         ))
     }
-
-    private var isCodeComplete: Bool { code.count == 6 }
 
     var body: some View {
         NavigationStack {
@@ -28,17 +45,23 @@ struct EmailVerificationView: View {
                     headerIcon
                     titleSection
                     subtitleSection
-                    codeField
-                    errorView
-                    verifyButton
+                    EmailCodeEntry(viewModel: viewModel)
                     resendSection
                     Spacer()
                     Spacer()
                 }
-                .padding(.horizontal, 24)
+                .padding(.horizontal, MeeshySpacing.xxl)
                 .iPadFormWidth()
 
                 successOverlay
+            }
+            // #8059 — la vérification réussie REFERME la feuille : l'hôte reçoit
+            // de quoi ouvrir la session, la pose une fois la feuille partie.
+            .task(id: viewModel.verificationSuccess) {
+                guard viewModel.verificationSuccess else { return }
+                onVerified(viewModel.openProvenSession)
+                try? await Task.sleep(for: Self.successPause)
+                dismiss()
             }
             .navigationTitle(String(localized: "emailVerification.nav.title", defaultValue: "Vérification de l'email"))
             .navigationBarTitleDisplayMode(.inline)
@@ -58,7 +81,7 @@ struct EmailVerificationView: View {
     private var headerIcon: some View {
         ZStack {
             Circle()
-                .fill(MeeshyColors.indigo500.opacity(0.12))
+                .fill(MeeshyColors.indigo500.opacity(MeeshyOpacity.light))
                 .frame(width: 96, height: 96)
 
             Image(systemName: "envelope.open.fill")
@@ -81,120 +104,30 @@ struct EmailVerificationView: View {
 
     // MARK: - Subtitle
 
+    /// Un compte NÉ de cette connexion le dit (#8035) ; un compte EXISTANT qui
+    /// attend son activation dit pourquoi et où chercher le code (#8186).
     private var subtitleSection: some View {
-        Text(String(localized: "emailVerification.subtitle", defaultValue: "Entrez le code a 6 chiffres envoye a **\(viewModel.email)**"))
-            .font(.subheadline)
-            .multilineTextAlignment(.center)
-            .foregroundStyle(theme.textSecondary)
-            .padding(.horizontal, 16)
-    }
-
-    // MARK: - Code Field
-
-    private var codeField: some View {
-        TextField(
-            String(localized: "emailVerification.codePlaceholder", defaultValue: "000000"),
-            text: $code
-        )
-        .keyboardType(.numberPad)
-        .textContentType(.oneTimeCode)
-        .font(.system(.title, design: .monospaced).weight(.semibold))
+        VStack(spacing: MeeshySpacing.smPlus) {
+            Text(Self.markdown(viewModel.lead.subtitle(email: viewModel.email)))
+                .font(.subheadline)
+            if let inboxHint = viewModel.lead.inboxHint {
+                Text(inboxHint)
+                    .font(.footnote)
+            }
+        }
         .multilineTextAlignment(.center)
-        .padding(.vertical, 14)
-        .padding(.horizontal, 24)
-        .background(
-            RoundedRectangle(cornerRadius: 14)
-                .fill(theme.inputBackground)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 14)
-                .stroke(isCodeComplete ? MeeshyColors.indigo500 : theme.inputBorder, lineWidth: 1.5)
-        )
-        .padding(.horizontal, 32)
-        .adaptiveOnChange(of: code) { _, newValue in
-            let filtered = newValue.filter(\.isNumber)
-            let limited = String(filtered.prefix(6))
-            if limited != newValue {
-                code = limited
-            }
-        }
-        .disabled(viewModel.isVerifying || viewModel.verificationSuccess)
-        // Sans label, VoiceOver lit le placeholder « 000000 » comme intitulé du
-        // champ — inintelligible. On pose un label + un indice explicites.
-        .accessibilityLabel(String(localized: "emailVerification.code.a11yLabel", defaultValue: "Code de vérification"))
-        .accessibilityHint(String(localized: "emailVerification.code.a11yHint", defaultValue: "Entrez le code à 6 chiffres reçu par email"))
+        .foregroundStyle(theme.textSecondary)
+        .padding(.horizontal, MeeshySpacing.lg)
     }
 
-    // MARK: - Error View
-
-    @ViewBuilder
-    private var errorView: some View {
-        if let errorMessage = viewModel.error {
-            HStack(spacing: 8) {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .font(.subheadline)
-                Text(errorMessage)
-                    .font(.subheadline.weight(.medium))
-            }
-            .foregroundStyle(MeeshyColors.error)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-            .background(
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(MeeshyColors.error.opacity(0.1))
-            )
-            .transition(.opacity.combined(with: .move(edge: .top)))
-            // Glyphe d'alerte décoratif + message fusionnés en un seul élément :
-            // VoiceOver annonce le message d'erreur, pas le triangle isolé.
-            .accessibilityElement(children: .combine)
-        }
-    }
-
-    // MARK: - Verify Button
-
-    private var verifyButton: some View {
-        Button {
-            Task { await viewModel.verifyCode(code) }
-        } label: {
-            HStack(spacing: 8) {
-                if viewModel.isVerifying {
-                    ProgressView()
-                        .controlSize(.small)
-                        .tint(.white)
-                } else {
-                    Text(String(localized: "emailVerification.verifyButton", defaultValue: "Vérifier"))
-                }
-            }
-            .font(.headline)
-            .foregroundStyle(.white)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 16)
-            .background(
-                RoundedRectangle(cornerRadius: 14)
-                    .fill(isCodeComplete && !viewModel.isVerifying
-                          ? AnyShapeStyle(MeeshyColors.brandGradient)
-                          : AnyShapeStyle(MeeshyColors.indigo500.opacity(0.3)))
-            )
-        }
-        .disabled(!isCodeComplete || viewModel.isVerifying || viewModel.verificationSuccess)
-        .accessibilityIdentifier("emailVerification.submit")
-        .padding(.horizontal, 8)
-        // Pendant la vérification le label se réduit à un spinner (aucun texte) →
-        // VoiceOver lirait un bouton anonyme. Label stable et explicite dans les
-        // deux états.
-        .accessibilityLabel(verifyButtonAccessibilityLabel)
-    }
-
-    private var verifyButtonAccessibilityLabel: String {
-        viewModel.isVerifying
-            ? String(localized: "emailVerification.verifying.a11y", defaultValue: "Vérification en cours")
-            : String(localized: "emailVerification.verifyButton", defaultValue: "Vérifier")
+    private static func markdown(_ text: String) -> AttributedString {
+        (try? AttributedString(markdown: text)) ?? AttributedString(text)
     }
 
     // MARK: - Resend Section
 
     private var resendSection: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: MeeshySpacing.sm) {
             Text(String(localized: "emailVerification.noCode", defaultValue: "Vous n'avez pas reçu le code ?"))
                 .font(.footnote)
                 .foregroundStyle(theme.textSecondary)
@@ -202,7 +135,7 @@ struct EmailVerificationView: View {
             Button {
                 Task { await viewModel.resendCode() }
             } label: {
-                HStack(spacing: 6) {
+                HStack(spacing: MeeshySpacing.xsPlus) {
                     if viewModel.isResending {
                         ProgressView()
                             .controlSize(.small)
@@ -244,10 +177,10 @@ struct EmailVerificationView: View {
     private var successOverlay: some View {
         if viewModel.verificationSuccess {
             ZStack {
-                theme.backgroundPrimary.opacity(0.9)
+                theme.backgroundPrimary.opacity(MeeshyOpacity.intense)
                     .ignoresSafeArea()
 
-                VStack(spacing: 20) {
+                VStack(spacing: MeeshySpacing.xl) {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(.largeTitle))
                         .foregroundStyle(MeeshyColors.success)

@@ -2,6 +2,7 @@ import {
   FullUser,
   PublicUser,
   AdminUser,
+  AdminUserMetadata,
   MaskedUser,
   UserResponse,
   UserAuditLog,
@@ -9,6 +10,40 @@ import {
 } from '@meeshy/shared/types';
 import { permissionsService } from './permissions.service';
 import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
+
+export type SanitizeUserOptions = {
+  /** La FICHE demande le bloc `adminMetadata` ; une ligne de liste ne le porte pas. */
+  readonly withAdminMetadata?: boolean;
+};
+
+/**
+ * Le bloc de métadonnées, énuméré CHAMP PAR CHAMP — jamais un spread de la ligne
+ * (#8876). Ce que la ligne porte de plus (`pendingEmail`, `pendingPhoneNumber`,
+ * `blockedUserIds`…) ne sort donc jamais : on en tire un booléen ou un compte.
+ */
+export function adminMetadataOf(user: FullUser): AdminUserMetadata {
+  return {
+    deviceLocale: user.deviceLocale ?? null,
+    deviceCountry: user.deviceCountry ?? null,
+    birthDate: user.birthDate ?? null,
+    ageVerifiedAt: user.ageVerifiedAt ?? null,
+    voiceProfileConsentAt: user.voiceProfileConsentAt ?? null,
+    voiceDataConsentAt: user.voiceDataConsentAt ?? null,
+    dataProcessingConsentAt: user.dataProcessingConsentAt ?? null,
+    analyticsConsentAt: user.analyticsConsentAt ?? null,
+    voiceCloningEnabledAt: user.voiceCloningEnabledAt ?? null,
+    termsAcceptedAt: user.termsAcceptedAt ?? null,
+    termsVersion: user.termsVersion ?? null,
+    onboardingCompletedAt: user.onboardingCompletedAt ?? null,
+    currentStreakDays: user.currentStreakDays ?? 0,
+    longestStreakDays: user.longestStreakDays ?? 0,
+    engagementScore: user.engagementScore ?? 0,
+    meeshBalance: user.meeshBalance ?? 0,
+    blockedCount: user.blockedUserIds?.length ?? 0,
+    hasPendingEmail: Boolean(user.pendingEmail),
+    hasPendingPhone: Boolean(user.pendingPhoneNumber)
+  };
+}
 
 export class UserSanitizationService {
   /**
@@ -43,7 +78,7 @@ export class UserSanitizationService {
   /**
    * Sanitize un utilisateur selon le rôle du viewer
    */
-  sanitizeUser(user: FullUser, viewerRole: UserRoleEnum): UserResponse {
+  sanitizeUser(user: FullUser, viewerRole: UserRoleEnum, options: SanitizeUserOptions = {}): UserResponse {
     const canViewSensitive = permissionsService.canViewSensitiveData(viewerRole);
     // Directive produit 2026-08-25 : « les utilisateurs avec le rôle ADMIN et
     // supérieur peuvent constamment avoir l'état de présence » — un seuil
@@ -105,7 +140,9 @@ export class UserSanitizationService {
         lockedUntil: user.lockedUntil,
         lockedReason: user.lockedReason,
         twoFactorEnabledAt: user.twoFactorEnabledAt,
-        twoFactorBackupCodes: user.twoFactorBackupCodes ?? [],
+        // Le NOMBRE de codes restants, jamais leurs empreintes (#8876) : une
+        // empreinte de code à usage unique n'a aucune raison d'atteindre un navigateur.
+        twoFactorBackupCodesRemaining: user.twoFactorBackupCodes?.length ?? 0,
         lastLoginIp: user.lastLoginIp,
         lastLoginLocation: user.lastLoginLocation,
         lastLoginDevice: user.lastLoginDevice,
@@ -116,7 +153,8 @@ export class UserSanitizationService {
         deletedAt: user.deletedAt,
         deletedBy: user.deletedBy,
         userFeature: user.userFeature,
-        _count: user._count
+        _count: user._count,
+        ...(options.withAdminMetadata ? { adminMetadata: adminMetadataOf(user) } : {})
       };
       return adminData;
     }

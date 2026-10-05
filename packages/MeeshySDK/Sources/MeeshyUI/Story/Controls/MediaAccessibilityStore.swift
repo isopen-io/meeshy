@@ -91,11 +91,13 @@ public final class MediaAccessibilityStore: ObservableObject {
 
     public func setCaption(_ value: String, for mediaId: String) { setText(value, .caption, for: mediaId) }
 
-    /// Défaut CONSERVATEUR : `false` tant que l'auteur n'a pas explicitement
-    /// activé l'extraction — c'est un choix sur SON contenu, jamais un
-    /// opt-out.
+    /// Défaut `true` (directive porteur 2026-09-26, #8012) : un contenu PUBLIC
+    /// verse la bande-son de ses vidéos à la bibliothèque, et la passerelle lit
+    /// l'ABSENCE de choix comme un accord (`videoSoundExtractionAllowed`).
+    /// L'interrupteur affiche donc ce qui se passera ; seul un refus explicite
+    /// de l'auteur (`false`) retient la bande-son.
     public func allowsSoundExtraction() -> Bool {
-        allowSoundExtractionOverride ?? false
+        allowSoundExtractionOverride ?? true
     }
 
     public func setAllowsSoundExtraction(_ allowed: Bool) {

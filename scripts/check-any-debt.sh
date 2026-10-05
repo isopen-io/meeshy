@@ -342,7 +342,15 @@ readonly SHARED_BASELINE=0
 # ne persiste plus de message (il contournait `MessagingService.handleMessage`,
 # donc le mode lent des nouveaux comptes, la clôture et l'appartenance) — le
 # `const messageData: any` de la branche « nouveau message » part avec elle.
-readonly GATEWAY_BASELINE=505
+#
+# 505 → 504 (#7999, configuration souveraine d'une conversation) :
+# `GET /admin/users/:userId/conversations` compose son `where` en objet typé
+# (appartenance active + type facultatif) au lieu d'un `const where: any`.
+#
+# 504 → 502 (#8039, un vocal web se lit sur iOS) : les tests de couverture
+# d'`UploadProcessor` visent `normalizeAudio` — un seul cas paramétré couvre le
+# conteneur M4A pour toutes les sources, au lieu de trois `amplifyAudio` par format.
+readonly GATEWAY_BASELINE=501
 
 # `apps/web` — le legacy Next.js (451 usages) a quitté le dépôt le
 # 2026-09-24 (#7668) et l'application qui a pris son chemin naît à ZÉRO

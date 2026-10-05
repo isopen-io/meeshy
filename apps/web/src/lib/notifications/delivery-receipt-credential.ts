@@ -1,7 +1,7 @@
 import { apiConfig } from '@/lib/api/config';
 import { type Credential } from '@/lib/api/http';
 import { credentialFromSession } from '@/lib/api/client';
-import { sessionStore, type SessionState } from '@/lib/api/session';
+import { heldAccountOf, sessionStore, type SessionState } from '@/lib/api/session';
 
 /**
  * **LE CRÉDENTIAL QUE LE SERVICE WORKER PARTAGE AVEC LA PAGE** (#7368, W4).
@@ -40,8 +40,11 @@ export type DeliveryReceiptCredential = {
   readonly credential: Credential | null;
 };
 
+/** Le COMPTE tenu d'abord (#8816) : une notification poussée appartient au
+ * compte de l'appareil, et l'accuser sous une identité anonyme relierait les
+ * deux côté passerelle. */
 export function deliveryReceiptCredentialOf(session: SessionState): DeliveryReceiptCredential {
-  return { apiBase: apiConfig.base, credential: credentialFromSession(session) };
+  return { apiBase: apiConfig.base, credential: credentialFromSession(heldAccountOf(session) ?? session) };
 }
 
 export type CredentialWriter = (value: DeliveryReceiptCredential) => Promise<void>;

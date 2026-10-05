@@ -1,5 +1,8 @@
-import type { HttpTransport } from '@/lib/api/http';
-import type { SessionState } from '@/lib/api/session';
+import * as conversationsEndpoints from '@meeshy/shared/api/endpoints/conversations';
+import * as usersEndpoints from '@meeshy/shared/api/endpoints/users';
+
+import type { Credential, HttpTransport } from '@/lib/api/http';
+import { heldAccountOf, type SessionState } from '@/lib/api/session';
 import { DELIVERY_RECEIPT_TYPES } from '@/lib/notifications/delivery-receipt-types';
 import { pushTapTarget, type NotificationTargetInput, type PushTapTarget } from '@/lib/notifications/target';
 
@@ -11,7 +14,7 @@ import { pushTapTarget, type NotificationTargetInput, type PushTapTarget } from 
  * par `@capacitor/push-notifications`. Un seul chemin d'ENVOI pour autant — la
  * passerelle sert déjà `platform: 'android'` (`PushNotificationService`,
  * bloc `android.notification`), et le jeton s'enregistre par le MÊME port
- * qu'iOS et que le navigateur (`POST /api/v1/users/register-device-token`).
+ * qu'iOS et que le navigateur (`POST users.registerDeviceToken`).
  *
  * Ce module ne REND rien : application en arrière-plan ou tuée, le bloc
  * `notification` de FCM est affiché par le SYSTÈME, dans le canal que la
@@ -88,6 +91,7 @@ export function shellPushTargetInput(raw: unknown): NotificationTargetInput {
     postType: data.postType,
     contentType: data.contentType,
     friendRequestId: data.friendRequestId,
+    senderUsername: data.senderUsername,
     route: data.route,
   };
 }
@@ -102,7 +106,18 @@ export function deliveredMessageOf(raw: unknown): { readonly conversationId: str
   return { conversationId, messageId };
 }
 
-const userIdOf = (session: SessionState): string | null => (session.status === 'authenticated' ? session.user.id : null);
+/**
+ * LE COMPTE, jamais l'identité qui parle (#8816) : lire une conversation sous
+ * une identité anonyme TENUE par le compte ne ferme pas ses notifications, et
+ * rien de ce qui appartient à l'appareil — son jeton FCM, ses accusés — ne
+ * part sous l'invité, ce qui relierait les deux identités côté passerelle.
+ */
+const accountCredentialOf = (session: SessionState): Credential | null => {
+  const account = heldAccountOf(session);
+  return account === null ? null : { kind: 'registered', token: account.token };
+};
+
+const userIdOf = (session: SessionState): string | null => heldAccountOf(session)?.user.id ?? null;
 
 /**
  * Monte la coque sur FCM. Idempotent par construction : appelé UNE fois au
@@ -119,14 +134,17 @@ export async function startShellPush(env: ShellPushEnvironment): Promise<void> {
   const { plugin, sessionStore, transport } = env;
   let token: string | null = null;
   let activeUser: string | null = null;
+  const account = (): Credential | null => accountCredentialOf(sessionStore.getState().session);
 
   const registerToken = (): void => {
-    if (token === null || activeUser === null) return;
+    const credential = account();
+    if (token === null || activeUser === null || credential === null) return;
     void transport
       .request({
         method: 'POST',
-        path: '/api/v1/users/register-device-token',
+        path: usersEndpoints.registerDeviceToken,
         body: { token, platform: 'android', type: 'fcm', appVersion: env.appVersion },
+        credential,
       })
       .catch(() => undefined);
   };
@@ -143,12 +161,14 @@ export async function startShellPush(env: ShellPushEnvironment): Promise<void> {
 
   await plugin.addListener('pushNotificationReceived', ({ data }) => {
     const delivered = deliveredMessageOf(data);
-    if (delivered === null || activeUser === null) return;
+    const credential = account();
+    if (delivered === null || activeUser === null || credential === null) return;
     void transport
       .request({
         method: 'POST',
-        path: `/api/v1/conversations/${encodeURIComponent(delivered.conversationId)}/receipts`,
+        path: conversationsEndpoints.byConversationIdReceipts(delivered.conversationId),
         body: { type: 'delivered', messageIds: [delivered.messageId] },
+        credential,
       })
       .catch(() => undefined);
   });

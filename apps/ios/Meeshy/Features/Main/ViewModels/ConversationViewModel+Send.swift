@@ -63,29 +63,27 @@ extension ConversationViewModel {
     /// d'envoi n'en applique que deux sur trois.
     var armedProtection: MessageProtectionIntent {
         MessageProtectionIntent(
-            ephemeralDurationSeconds: ephemeralDuration?.rawValue,
+            ephemeral: ephemeralChoice,
             isBlurred: isBlurEnabled,
             isViewOnce: isViewOnceEnabled
         )
     }
 
-    /// Saisit la protection armée et DÉSARME la rangée dans le même tour.
+    /// Saisit la protection armée, une fois par tap, AVANT que quoi que ce soit
+    /// parte : la valeur rendue voyage ensuite jusqu'à chaque message de cet
+    /// envoi (#7498 — un envoi multi-pièces ne peut pas perdre sa protection
+    /// en route).
     ///
-    /// Appelée une fois par tap, avant que quoi que ce soit parte : la valeur
-    /// rendue voyage ensuite jusqu'à chaque message de cet envoi. Le
-    /// désarmement était jusqu'ici fait à l'ACQUITTEMENT de chaque message
-    /// (`finalizeSuccessfulSend`), ce qui donnait à un envoi multi-pièces une
-    /// fenêtre où la protection avait déjà disparu pour les groupes suivants.
+    /// **Elle ne DÉSARME plus rien** (#8305, directive porteur 2026-09-27) : une
+    /// protection armée reste armée pour les messages suivants de la
+    /// conversation jusqu'à ce qu'on la change. Seuls les effets décoratifs
+    /// restent à usage unique (`finalizeSuccessfulSend`).
     ///
-    /// Désarmer au TAP est aussi ce que l'utilisateur attend : il vient
-    /// d'envoyer, la rangée s'éteint — elle ne reste pas allumée le temps d'un
-    /// upload, à lui faire croire que le prochain envoi sera protégé aussi.
-    func consumeArmedProtection() -> MessageProtectionIntent {
-        let intent = armedProtection
-        if ephemeralDuration != nil { ephemeralDuration = nil }
-        if isBlurEnabled { isBlurEnabled = false }
-        if isViewOnceEnabled { isViewOnceEnabled = false }
-        return intent
+    /// La contagion de la citation (#8557) s'y applique : tout ce qui part de
+    /// ce tap — ligne optimiste, corps REST, file hors ligne — porte les bits
+    /// que le message cité impose.
+    func captureArmedProtection(replyingTo replyToId: String?) -> MessageProtectionIntent {
+        contaminated(armedProtection, replyingTo: replyToId)
     }
 
     /// Les bits que la ligne OPTIMISTE doit porter : l'axe apparition/persistant
@@ -102,6 +100,15 @@ extension ConversationViewModel {
     func optimisticEffectFlags(_ intent: MessageProtectionIntent) -> MessageEffectFlags {
         let apparence: MessageEffectFlags = pendingEffects.hasAnyEffect ? pendingEffects.flags : MessageEffectFlags(rawValue: 0)
         return apparence.union(intent.lifecycleFlags)
+    }
+
+    /// Le `effectFlags` du corps REST : l'axe apparition/persistant choisi au
+    /// composeur, uni aux bits de protection qu'aucune colonne ne porte — la
+    /// flamme-œil (#8303). `nil` quand il n'y a rien, comme avant.
+    func wireEffectFlags(_ intent: MessageProtectionIntent) -> UInt32? {
+        let apparence: MessageEffectFlags = pendingEffects.hasAnyEffect ? pendingEffects.flags : []
+        let bits = apparence.union(intent.wireEffectFlags)
+        return bits.isEmpty ? nil : bits.rawValue
     }
 
     // MARK: - Délai de garde de l'envoi REST
@@ -175,12 +182,10 @@ extension ConversationViewModel {
             )
         }
 
-        // Le désarmement des TROIS protections a quitté cet endroit (#7498) :
-        // il se fait au TAP, par `consumeArmedProtection()`. Ici, on est à
-        // l'ACQUITTEMENT d'UN message — et un tap en produit souvent plusieurs
-        // (un par groupe de pièces jointes, plus le texte). Désarmer ici
-        // laissait partir sans protection tout ce qui suivait le premier
-        // acquittement, la rangée allumée au moment du tap.
+        // Les TROIS protections ne se désarment NI ici NI au tap (#8305) :
+        // elles restent armées jusqu'à ce qu'on les change. Seuls les effets
+        // décoratifs sont à usage unique — et c'est à l'ACQUITTEMENT qu'ils
+        // tombent, jamais avant (#7498 : un tap produit plusieurs messages).
         if pendingEffects.hasAnyEffect { pendingEffects = .none }
         mentionController.clearDraft()
 
@@ -242,6 +247,7 @@ extension ConversationViewModel {
         // quatre sorties de cette fonction, et un envoi mis en file hors ligne
         // compte tout autant : il partira.
         StreakActivityMark.marquer()
+        HeaderFlameReplay.messageSent(in: conversationId)
 
         // Debounce: a fast double-tap on the send button used to trigger two
         // concurrent `sendMessage` runs, both inserting their own optimistic
@@ -276,6 +282,10 @@ extension ConversationViewModel {
         // Stop typing emission on send
         socketHandler?.stopTypingEmission()
 
+        // La protection de CET envoi, saisie avant toute branche (#8303) : la
+        // file hors ligne la rejoue désormais, elle doit donc la connaître.
+        let intent = contaminated(protection ?? armedProtection, replyingTo: replyToId)
+
         // Offline: enqueue for later delivery + show optimistic message.
         // NOTE: we only gate on network availability here — NOT on socket
         // connection state. The send path is a plain REST POST which works
@@ -300,7 +310,8 @@ extension ConversationViewModel {
                 attachmentKinds: offlineKinds,
                 location: location,
                 sticker: sticker,
-                attachmentReplyTo: attachmentReplyTo?.attachmentId
+                attachmentReplyTo: attachmentReplyTo?.attachmentId,
+                protection: intent
             )
             // Lieu partagé encodé pour la colonne `locationJson` du record
             // optimiste : une écriture GRDB concurrente déclenche
@@ -341,8 +352,8 @@ extension ConversationViewModel {
                 forwardedFromId: forwardedFromId,
                 forwardedFromConversationId: forwardedFromConversationId,
                 replyToJson: nil, forwardedFromJson: nil,
-                expiresAt: nil, effectFlags: 0,
-                maxViewOnceCount: nil, viewOnceCount: 0,
+                expiresAt: nil, effectFlags: optimisticEffectFlags(intent).rawValue,
+                maxViewOnceCount: intent.maxViewOnceCount, viewOnceCount: 0,
                 isEdited: false, editedAt: nil, deletedAt: nil,
                 pinnedAt: nil, pinnedBy: nil,
                 senderName: authManager.currentUser?.displayName,
@@ -361,7 +372,8 @@ extension ConversationViewModel {
                 layoutVersion: 0, layoutMaxWidth: nil,
                 changeVersion: 0,
                 locationJson: offlineLocationJson,
-                stickerJson: Self.stickerJson(sticker, id: offlineClientMessageId)
+                stickerJson: Self.stickerJson(sticker, id: offlineClientMessageId),
+                ephemeralDuration: intent.ephemeralDurationSeconds
             )
 
             // `insertOptimistic` is a synchronous actor-isolated throw (no
@@ -428,8 +440,9 @@ extension ConversationViewModel {
         // eux (rejeu d'outbox, envoi programmatique) : ils lisent ce qui est
         // armé, comme avant. Un chemin ne peut donc pas partir SANS protection
         // par oubli ; il faudrait passer `.none` délibérément.
-        let intent = protection ?? armedProtection
-        let resolvedExpiresAt = intent.expiresAt()
+        // #8905 — la DURÉE, jamais une échéance : l'envoi n'est pas une
+        // réception. La bulle lit « en attente de réception » jusqu'à ce que la
+        // passerelle serve `max D(u)` (`message:countdown-started`).
         let resolvedEphemeralDuration = intent.ephemeralDurationSeconds
         let resolvedIsViewOnce = intent.isViewOnce
         let resolvedMaxViewOnceCount = intent.maxViewOnceCount
@@ -495,7 +508,7 @@ extension ConversationViewModel {
                 forwardedFromId: forwardedFromId,
                 forwardedFromConversationId: forwardedFromConversationId,
                 replyToJson: replyRef.flatMap { try? JSONEncoder().encode($0) }, forwardedFromJson: nil,
-                expiresAt: resolvedExpiresAt, effectFlags: optimisticEffectFlags(intent).rawValue,
+                expiresAt: nil, effectFlags: optimisticEffectFlags(intent).rawValue,
                 maxViewOnceCount: resolvedMaxViewOnceCount, viewOnceCount: 0,
                 isEdited: false, editedAt: nil, deletedAt: nil,
                 pinnedAt: nil, pinnedBy: nil,
@@ -515,7 +528,8 @@ extension ConversationViewModel {
                 layoutVersion: 0, layoutMaxWidth: nil,
                 changeVersion: 0,
                 locationJson: optimisticLocationJson,
-                stickerJson: Self.stickerJson(sticker, id: tempId)
+                stickerJson: Self.stickerJson(sticker, id: tempId),
+                ephemeralDuration: resolvedEphemeralDuration
             )
             Logger.messages.info("SendFlow insertOptimistic START tempId=\(tempId, privacy: .public) convId=\(self.conversationId, privacy: .public)")
             do {
@@ -536,7 +550,7 @@ extension ConversationViewModel {
                         attachments: resolvedAttachments,
                         isBlurred: resolvedBlur ?? false,
                         isViewOnce: resolvedIsViewOnce,
-                        expiresAt: resolvedExpiresAt,
+                        ephemeralDuration: resolvedEphemeralDuration,
                         originalLanguage: optimisticRecord.originalLanguage,
                         location: location
                     ),
@@ -561,22 +575,24 @@ extension ConversationViewModel {
             var encryptionMode: String? = nil
 
             // E2EE logic for Direct Messages
+            //
+            // #8221 — une session E2EE indisponible (pair sans bundle Signal,
+            // cache négatif de `SessionManager`) n'est PAS un envoi raté : le
+            // message part en clair, dans tous les builds. Le build Release
+            // posait la bulle en `.failed` puis relançait l'erreur — mais le
+            // `catch` repartait par le repli socket avec ce même contenu en
+            // clair, et l'ACK la guérissait (`(.failed, .serverAck) → .sent`).
+            // La garde ne retenait aucun texte ; elle ne produisait que le
+            // retry rouge affiché quelques millisecondes à chaque envoi.
             if isDirect, let targetUserId = participantUserId, let textContent = finalContent {
                 do {
                     let payloadData = Data(textContent.utf8)
-                    let encryptedData = try await SessionManager.shared.encryptMessage(payloadData, for: targetUserId, conversationId: conversationId)
+                    let encryptedData = try await messageEncryptor.encryptMessage(payloadData, for: targetUserId, conversationId: conversationId)
                     finalContent = encryptedData.base64EncodedString()
                     isEncrypted = true
                     encryptionMode = "E2EE"
                 } catch {
-                    Logger.messages.error("Failed to encrypt message: \(error.localizedDescription)")
-                    #if DEBUG
-                    // Debug-only fallback: log and continue with plaintext so dev builds don't block on E2EE setup issues.
-                    #else
-                    // Production: never silently downgrade an E2EE session to plaintext.
-                    try? await messagePersistence.markOptimisticFailed(localId: tempId, reason: "encryption_failed")
-                    throw error
-                    #endif
+                    Logger.messages.warning("E2EE session unavailable, sending in plaintext: \(error.localizedDescription, privacy: .public)")
                 }
             }
 
@@ -588,12 +604,11 @@ extension ConversationViewModel {
                 forwardedFromId: forwardedFromId,
                 forwardedFromConversationId: forwardedFromConversationId,
                 attachmentIds: attachmentIds,
-                expiresAt: resolvedExpiresAt,
                 ephemeralDuration: resolvedEphemeralDuration,
                 isViewOnce: resolvedIsViewOnce ? true : nil,
                 maxViewOnceCount: resolvedMaxViewOnceCount,
                 isBlurred: resolvedBlur,
-                effectFlags: pendingEffects.hasAnyEffect ? pendingEffects.flags.rawValue : nil,
+                effectFlags: wireEffectFlags(intent),
                 isEncrypted: isEncrypted ? true : nil,
                 encryptionMode: encryptionMode,
                 clientMessageId: tempId,
@@ -615,7 +630,8 @@ extension ConversationViewModel {
             let socketFirstEligible = messageSocket.isConnected
                 && !isEncrypted
                 && (attachmentIds?.isEmpty ?? true)
-                && resolvedExpiresAt == nil
+                && resolvedEphemeralDuration == nil
+                && !intent.ephemeralAfterRead
                 && !resolvedIsViewOnce
                 && resolvedBlur != true
                 && !pendingEffects.hasAnyEffect
@@ -717,7 +733,8 @@ extension ConversationViewModel {
             // propriétés sensibles (éphémère, vue unique, flou, effets) que le
             // canal socket ne transporte pas intégralement : ceux-là restent sur
             // le retry REST de l'outbox qui, lui, les préserve.
-            let hasSpecialProps = resolvedExpiresAt != nil
+            let hasSpecialProps = resolvedEphemeralDuration != nil
+                || intent.ephemeralAfterRead
                 || resolvedIsViewOnce
                 || resolvedBlur == true
                 || pendingEffects.hasAnyEffect
@@ -784,7 +801,8 @@ extension ConversationViewModel {
                 attachmentKinds: retryKinds,
                 location: location,
                 sticker: sticker,
-                attachmentReplyTo: attachmentReplyTo?.attachmentId
+                attachmentReplyTo: attachmentReplyTo?.attachmentId,
+                protection: intent
             )
 
             // AWAITED enqueue (Bug 1 fix — online retry path, B2 2026-05-27).
@@ -980,7 +998,9 @@ extension ConversationViewModel {
             // décompte, ni voile — jusqu'à la réconciliation serveur. Le
             // défaut se lisait comme « la protection n'a pas été appliquée »,
             // ce qui était vrai à l'écran et faux sur le fil.
-            expiresAt: protection.expiresAt(from: now),
+            // #8905 — la DURÉE, jamais une échéance : l'envoi n'est pas une
+            // réception, la flamme lit « en attente de réception ».
+            expiresAt: nil,
             effectFlags: protection.lifecycleFlags.rawValue,
             maxViewOnceCount: protection.maxViewOnceCount, viewOnceCount: 0,
             isEdited: false, editedAt: nil, deletedAt: nil,
@@ -1000,7 +1020,8 @@ extension ConversationViewModel {
             cachedTimestampInline: nil,
             layoutVersion: 0, layoutMaxWidth: nil,
             changeVersion: 0,
-            stickerJson: Self.stickerJson(sticker, id: tempId)
+            stickerJson: Self.stickerJson(sticker, id: tempId),
+            ephemeralDuration: protection.ephemeralDurationSeconds
         )
         let persistence = messagePersistence
         let recordConversationId = record.conversationId
@@ -1012,6 +1033,7 @@ extension ConversationViewModel {
             text: content,
             at: now,
             attachments: attachments,
+            ephemeralDuration: protection.ephemeralDurationSeconds,
             originalLanguage: resolvedOriginalLanguage
         )
         Task.detached(priority: .userInitiated) {

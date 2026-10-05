@@ -17,7 +17,7 @@ struct HashtagResultsView: View {
 
     var body: some View {
         ScrollView {
-            LazyVStack(spacing: 12) {
+            LazyVStack(spacing: MeeshySpacing.md) {
                 ForEach(viewModel.posts) { post in
                     FeedPostCard(
                         post: post,
@@ -40,7 +40,7 @@ struct HashtagResultsView: View {
                         .padding(.top, 60)
                 }
             }
-            .padding(.horizontal, 12)
+            .padding(.horizontal, MeeshySpacing.md)
         }
         .navigationTitle("#\(viewModel.tag)")
         .task { await viewModel.load() }

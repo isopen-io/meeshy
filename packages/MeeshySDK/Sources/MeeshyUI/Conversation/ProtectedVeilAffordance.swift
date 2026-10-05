@@ -25,16 +25,21 @@ public struct ProtectedVeilAffordance: View, Equatable {
 
     public let isViewOnce: Bool
     public let isDark: Bool
+    /// Ce que fait le toucher, dit à VoiceOver (#8009) — l'hôte le sait, le
+    /// voile non : « ouvrir en plein écran » pour un média caché, « afficher en
+    /// clair » pour un texte. `nil` ⇒ l'indice générique du voile.
+    public let hint: String?
     private let onReveal: () -> Void
 
-    public init(isViewOnce: Bool, isDark: Bool, onReveal: @escaping () -> Void) {
+    public init(isViewOnce: Bool, isDark: Bool, hint: String? = nil, onReveal: @escaping () -> Void) {
         self.isViewOnce = isViewOnce
         self.isDark = isDark
+        self.hint = hint
         self.onReveal = onReveal
     }
 
     public static func == (lhs: ProtectedVeilAffordance, rhs: ProtectedVeilAffordance) -> Bool {
-        lhs.isViewOnce == rhs.isViewOnce && lhs.isDark == rhs.isDark
+        lhs.isViewOnce == rhs.isViewOnce && lhs.isDark == rhs.isDark && lhs.hint == rhs.hint
     }
 
     public var body: some View {
@@ -52,8 +57,8 @@ public struct ProtectedVeilAffordance: View, Equatable {
                         .lineLimit(2)
                         .multilineTextAlignment(.center)
                         .foregroundColor(isDark ? .white.opacity(0.92) : .black.opacity(0.85))
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
+                        .padding(.horizontal, MeeshySpacing.smPlus)
+                        .padding(.vertical, MeeshySpacing.xsPlus)
                         .background(
                             Capsule().fill(.ultraThinMaterial)
                         )
@@ -64,7 +69,7 @@ public struct ProtectedVeilAffordance: View, Equatable {
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(isViewOnce ? Self.viewOnceVeilLabel : Self.hiddenLabel)
-        .accessibilityHint(isViewOnce ? Self.viewOnceVeilHint : Self.hiddenHint)
+        .accessibilityHint(hint ?? (isViewOnce ? Self.viewOnceVeilHint : Self.hiddenHint))
     }
 
     // MARK: - Libellés (catalogue MeeshyUI, 7 langues)

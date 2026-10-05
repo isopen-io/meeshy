@@ -73,6 +73,7 @@ import { OrphanMediaCleanupService } from './services/storage/OrphanMediaCleanup
 import { MediaService } from './services/MediaService';
 import { ZmqAgentClient } from './services/zmq-agent/ZmqAgentClient';
 import { typedErrorResponse } from './errors/custom-errors';
+import { prismaRecipientAddressLookup, registerEmailRecipientLookup } from './services/email/recipient-policy';
 
 // ============================================================================
 // CONFIGURATION & ENVIRONMENT
@@ -221,8 +222,8 @@ class MeeshyServer {
       },
     }) as unknown as PrismaClient;
 
-    // NOUVEAU: Initialiser le StatusService en premier (requis par AuthMiddleware)
-    this.statusService = new StatusService(this.prisma);
+    registerEmailRecipientLookup(prismaRecipientAddressLookup(this.prisma)); // #8238 — garde centrale des e-mails
+    this.statusService = new StatusService(this.prisma); // requis par AuthMiddleware
 
     // Initialiser le cache multi-niveau partagé pour les mappings de jobs (avant MessageTranslationService)
     this.jobMappingCache = new MultiLevelJobMappingCache(getCacheStore());
@@ -399,6 +400,34 @@ class MeeshyServer {
         });
       }
 
+      // Refus de SCHÉMA (Ajv, avant le handler) : Fastify le marque par
+      // `err.validation`. Sans cette branche il tombait dans le repli
+      // générique et ressortait en « Internal Server Error / An unexpected
+      // error occurred » sous un code 400 — le client apprenait qu'il avait
+      // tort, jamais sur quoi. C'est ce qui rendait illisible le refus de
+      // `POST /auth/register` le 2026-08-18.
+      //
+      // Elle passe AVANT la branche typée : un refus d'Ajv n'est pas une
+      // `BaseAppError`, mais il porte `statusCode: 400` et serait donc happé
+      // par tout repli qui lit ce champ.
+      //
+      // Et elle passe AVANT `logger.error` (#8082) : un refus de schéma est
+      // une saisie du client, pas une panne. Journalisé en ERROR « Uncaught
+      // error in request handler », un pseudo de 17 caractères accusait le
+      // serveur — le bruit que #6591 a retiré pour les refus CORS.
+      const schemaRefusal = schemaValidationErrorResponse(error);
+      if (schemaRefusal) {
+        logger.warn('Schema validation refused request', {
+          module: 'ErrorHandler',
+          func: 'setErrorHandler',
+          path: request.url,
+          method: request.method,
+          fields: schemaRefusal.details.map(({ field }) => field)
+        });
+        const { statusCode: refusStatus, ...corpsRefus } = schemaRefusal;
+        return reply.code(refusStatus).send(corpsRefus);
+      }
+
       logger.error('Uncaught error in request handler', {
         module: 'ErrorHandler',
         func: 'setErrorHandler',
@@ -427,21 +456,6 @@ class MeeshyServer {
       // ne décode pas le corps. Le lien « ce qui PART ⊆ ce qui est DÉCLARÉ »
       // est gardé : `__tests__/security/global-error-handler-field-closure-guard.test.ts`.
 
-      // Refus de SCHÉMA (Ajv, avant le handler) : Fastify le marque par
-      // `err.validation`. Sans cette branche il tombait dans le repli
-      // générique et ressortait en « Internal Server Error / An unexpected
-      // error occurred » sous un code 400 — le client apprenait qu'il avait
-      // tort, jamais sur quoi. C'est ce qui rendait illisible le refus de
-      // `POST /auth/register` le 2026-08-18.
-      //
-      // Elle passe AVANT la branche typée : un refus d'Ajv n'est pas une
-      // `BaseAppError`, mais il porte `statusCode: 400` et serait donc happé
-      // par tout repli qui lit ce champ.
-      const schemaRefusal = schemaValidationErrorResponse(error);
-      if (schemaRefusal) {
-        const { statusCode: refusStatus, ...corpsRefus } = schemaRefusal;
-        return reply.code(refusStatus).send(corpsRefus);
-      }
 
       // TOUTE la hiérarchie typée, en UNE branche (#4212).
       //
@@ -743,6 +757,8 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
     this.server.decorate('mentionService', this.mentionService);
     this.server.decorate('socketIOHandler', this.socketIOHandler);
     this.server.decorate('jobMappingCache', this.jobMappingCache);
+    // Lu par la supervision d'administration (routes/admin/monitoring.ts) : sans elle, la carte « Présence » restait vide.
+    this.server.decorate('statusService', this.statusService);
     this.server.decorate('authenticate', this.createAuthMiddleware());
 
     logger.info('✓ Middleware configured successfully');
@@ -1146,25 +1162,9 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
     logger.info('🛑 Shutting down server...');
 
     try {
-      // CALL-RESILIENCE — tell the call handler we're shutting down BEFORE the
-      // HTTP/Socket.IO server closes and mass-drops every socket, so it does not
-      // interpret the restart's disconnect storm as everyone hanging up and end
-      // active peer-to-peer calls. Clients re-join the restarted instance; the
-      // media (direct P2P) never dropped.
-      try {
-        const socketManager = this.socketIOHandler?.getManager?.();
-        socketManager?.getCallEventsHandler?.().prepareForShutdown();
-        // Release the handler's own periodic buffered-offer cleanup interval
-        // and any leftover disconnect-grace timers — `prepareForShutdown()`
-        // only flips shutdown mode and clears the grace timers; it does not
-        // stop the interval, which would otherwise keep querying a handler
-        // that's about to be torn down.
-        socketManager?.getCallEventsHandler?.().destroy();
-        socketManager?.getCallService?.()?.destroy();
-        logger.info('✓ Call handler set to shutdown mode (active calls preserved for reconnect)');
-      } catch (callShutdownError) {
-        logger.warn('⚠️ Could not set call handler shutdown mode', callShutdownError);
-      }
+      // Appels en mode arrêt, puis sockets fermées : les clients rejoignent
+      // aussitôt la nouvelle instance (#8297).
+      await this.socketIOHandler.close();
 
       // Stop call cleanup service
       if (this.callCleanupService) {

@@ -30,6 +30,8 @@
  * @module utils/registration-identity
  */
 
+import { usernameMaxLength, usernameMinLength } from '../types/api-schemas/auth.js';
+
 /**
  * Capitalise un nom en respectant les composés — la MÊME fonction que
  * `services/gateway/src/utils/normalize.ts`, qui la réexporte désormais depuis
@@ -45,10 +47,10 @@ export function capitalizeName(name: string): string {
     .replace(/(^|[\s'.-])(\p{L})/gu, (_match, separator, letter) => separator + letter.toUpperCase());
 }
 
-/** Longueur maximale d'un `username` — bornée par `registerRequestSchema`. */
-export const PSEUDO_MAX = 16;
+/** Longueur maximale d'un `username` — LA borne de `registerRequestSchema` (#8082). */
+export const PSEUDO_MAX = usernameMaxLength;
 /** En deçà, un pseudo n'est pas recevable (borne basse du même schéma). */
-export const PSEUDO_MIN = 2;
+export const PSEUDO_MIN = usernameMinLength;
 /** Le dernier recours quand le nom affiché ET l'adresse ne donnent rien de slugifiable. */
 export const PSEUDO_DE_SECOURS = 'user';
 

@@ -150,20 +150,6 @@ final class AttachmentPreparationService {
         return prep
     }
 
-    // MARK: Image data (PhotosPicker / share extension)
-
-    func prepareImageData(_ data: Data,
-                                 image: UIImage,
-                                 context: MediaContext = .message,
-                                 accentColor: String = MeeshyColors.brandPrimaryHex) -> PreparingAttachment {
-        let prep = PreparingAttachment(kind: .image, initialThumbnail: image, accentColor: accentColor)
-        prep.stage = .compressing
-        Task { [weak self] in
-            await self?.runImageDataPreparation(prep: prep, data: data, image: image, context: context)
-        }
-        return prep
-    }
-
     // MARK: Video (URL on disk — camera or already-extracted picker payload)
 
     func prepareVideo(sourceURL: URL,

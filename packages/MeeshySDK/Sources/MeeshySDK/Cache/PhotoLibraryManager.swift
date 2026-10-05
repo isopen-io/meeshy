@@ -54,6 +54,36 @@ public final class PhotoLibraryManager: @unchecked Sendable {
         }
     }
 
+    /// Save encoded image bytes AS-IS to the Meeshy album — no `UIImage`
+    /// round-trip, so a PNG keeps its metadata chunks (the export card's
+    /// « created with Meeshy » stamp) and its exact pixels.
+    @discardableResult
+    public func saveImageFile(_ data: Data, fileName: String) async -> Bool {
+        guard await requestAuthorization() else {
+            photoLog.error("saveImageFile denied: photo library authorization refused")
+            return false
+        }
+        let album = self.fetchOrCreateAlbum()
+        return await withCheckedContinuation { continuation in
+            PHPhotoLibrary.shared().performChanges {
+                let options = PHAssetResourceCreationOptions()
+                options.originalFilename = fileName
+                let request = PHAssetCreationRequest.forAsset()
+                request.addResource(with: .photo, data: data, options: options)
+                if let album,
+                   let placeholder = request.placeholderForCreatedAsset {
+                    let albumChangeRequest = PHAssetCollectionChangeRequest(for: album)
+                    albumChangeRequest?.addAssets([placeholder] as NSFastEnumeration)
+                }
+            } completionHandler: { success, error in
+                if !success {
+                    photoLog.error("saveImageFile performChanges failed: \(error?.localizedDescription ?? "unknown", privacy: .public)")
+                }
+                continuation.resume(returning: success)
+            }
+        }
+    }
+
     /// Save a video from a local file URL to the Meeshy album.
     @discardableResult
     public func saveVideo(at fileURL: URL) async -> Bool {

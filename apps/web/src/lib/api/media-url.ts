@@ -1,3 +1,6 @@
+import * as apiLegacyAttachmentsEndpoints from '@meeshy/shared/api/endpoints/api-legacy-attachments';
+import * as attachmentsEndpoints from '@meeshy/shared/api/endpoints/attachments';
+
 import { apiConfig } from './config';
 import type { ImageVariant } from './types';
 
@@ -10,9 +13,9 @@ import type { ImageVariant } from './types';
  * soir § 7).
  *
  * LE DÉFAUT QU'IL FERME : la passerelle sert `Attachment.fileUrl` en chemin
- * RELATIF — `/api/v1/attachments/file/…` (mesuré en direct sur
+ * RELATIF — `attachments.fileByWildcard` (mesuré en direct sur
  * `gate.staging.meeshy.me`, compte `cible-web-trois`,
- * `fileUrl: "/api/v1/attachments/file/2026%2F09%2F…"`). Posé tel quel comme
+ * `fileUrl` = la route de flux suivie de `2026%2F09%2F…`). Posé tel quel comme
  * `src` d'une `<img>`, le navigateur le résout contre l'origine du DOCUMENT
  * — jamais contre `apiConfig.base`. En DEV, le proxy de `vite.config.ts`
  * (§ `server.proxy`) relaie `/api/v1` et masque le défaut ; en PWA déployée
@@ -53,8 +56,12 @@ import type { ImageVariant } from './types';
 const LOCAL_OBJECT_URL_PATTERN = /^(blob:|data:)/i;
 const ABSOLUTE_URL_PATTERN = /^https?:/i;
 
-/** Le chemin de la route de flux, écrit UNE fois — `download.ts:273`. */
-const ATTACHMENT_STREAM_PATH = '/api/v1/attachments/file';
+/**
+ * Le chemin de la route de flux, lu dans le catalogue — `download.ts:273`. Le joker
+ * reçoit la clé ENTIÈRE encodée d'un bloc (`2026%2F09%2F…`), la forme que la base
+ * porte : l'entrée du catalogue n'en donne donc que le PRÉFIXE.
+ */
+const ATTACHMENT_STREAM_PREFIX = attachmentsEndpoints.fileByWildcard('');
 
 /**
  * LA FORME D'UNE CLÉ DE STOCKAGE, telle que l'écrivent les DEUX producteurs de
@@ -76,7 +83,7 @@ const STORAGE_KEY_PATTERN = /^\d{4}\/\d{2}\//;
  * `routes/attachments/index.ts`) et les deux sont en base : 1600 lignes en v1,
  * 574 sous le montage legacy non versionné (mesuré le 2026-09-18).
  */
-const STREAM_ROUTE_PREFIXES = ['/api/v1/attachments/file/', '/api/attachments/file/'] as const;
+const STREAM_ROUTE_PREFIXES = [ATTACHMENT_STREAM_PREFIX, apiLegacyAttachmentsEndpoints.fileByWildcard('')] as const;
 
 /** Décode UNE fois, sans jamais lever : une clé mal encodée reste servie telle quelle. */
 function decodeOnce(encoded: string): string {
@@ -90,7 +97,7 @@ function decodeOnce(encoded: string): string {
 /**
  * LA SEPTIÈME FORME (#7022) — LA ROUTE DE FLUX QUI PORTE SA CLÉ, avec ou sans
  * hôte. C'est la forme MAJORITAIRE de la base : 1600 références sur 2912
- * (55 %) sont des `https://gate.meeshy.me/api/v1/attachments/file/<clé>`.
+ * (55 %) sont `https://gate.meeshy.me` suivi de `attachments.fileByWildcard(<clé>)`.
  *
  * Elle traversait INCHANGÉE — un test de FORME (« ça commence par https, c'est
  * donc déjà résolu ») là où il fallait un test de PROVENANCE (« cet hôte est-il
@@ -105,7 +112,7 @@ function decodeOnce(encoded: string): string {
  *
  * Rend `null` quand ce que porte la route n'a pas la forme d'une clé de
  * stockage — au premier chef les pistes TRADUITES
- * (`/api/v1/attachments/file/translated/<nom>`, `MessageTranslationService`),
+ * (`attachments.fileByWildcard('translated/<nom>')`, `MessageTranslationService`),
  * qui vivent hors de l'arborescence datée et qu'une re-base abîmerait.
  */
 function storageKeyOfStreamRoute(pathname: string): string | null {
@@ -150,7 +157,7 @@ function storageKeyOfLegacyUrl(fileUrl: string): string | null {
  *
  * UN CHEMIN QUI PORTE DÉJÀ LA ROUTE DE FLUX rend sa CLÉ, pas `null` (#7022) —
  * c'est `storageKeyOfStreamRoute` qui la lui prend. Le risque que l'ancienne
- * rédaction voulait écarter (`…/attachments/file/api/v1/attachments/file/…`,
+ * rédaction voulait écarter (la route de flux EMPILÉE deux fois,
  * `media-ref.ts`) ne vient PAS de reconnaître la route : il vient de la
  * CONCATÉNER. En rendant la clé NUE — la route retirée — on la repose une
  * seule fois par `streamSrc`, donc empiler devient impossible plutôt que
@@ -190,7 +197,7 @@ export function resolveAttachmentSrc(fileUrl: string, base: string): string {
 
 /** L'UNIQUE composition de la route de flux — clé encodée UNE fois. */
 function streamSrc(key: string, base: string): string {
-  return `${base}${ATTACHMENT_STREAM_PATH}/${encodeURIComponent(key)}`;
+  return `${base}${ATTACHMENT_STREAM_PREFIX}${encodeURIComponent(key)}`;
 }
 
 /** L'UNIQUE évaluation contre `apiConfig.base` — tout consommateur importe

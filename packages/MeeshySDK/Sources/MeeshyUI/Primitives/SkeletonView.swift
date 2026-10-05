@@ -21,7 +21,7 @@ public struct ShimmerModifier: ViewModifier {
                 LinearGradient(
                     colors: [
                         Color.clear,
-                        theme.textMuted.opacity(0.3),
+                        theme.textMuted.opacity(MeeshyOpacity.medium),
                         Color.clear
                     ],
                     startPoint: .leading,
@@ -84,7 +84,7 @@ public struct SkeletonShape: View {
 
     public var body: some View {
         RoundedRectangle(cornerRadius: cornerRadius)
-            .fill(theme.textMuted.opacity(0.12))
+            .fill(theme.textMuted.opacity(MeeshyOpacity.light))
             .frame(width: width, height: height)
             .skeletonShimmer()
             .accessibilityHidden(true)
@@ -100,15 +100,15 @@ public struct SkeletonConversationRow: View {
     public init() {}
 
     public var body: some View {
-        HStack(spacing: 14) {
+        HStack(spacing: MeeshySpacing.mdPlus) {
             // Avatar placeholder
             Circle()
-                .fill(theme.textMuted.opacity(0.12))
+                .fill(theme.textMuted.opacity(MeeshyOpacity.light))
                 .frame(width: 48, height: 48)
                 .skeletonShimmer()
 
             // Text lines
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
                 HStack {
                     SkeletonShape(height: 14, cornerRadius: MeeshyRadius.sm)
                         .frame(maxWidth: .infinity)
@@ -125,13 +125,13 @@ public struct SkeletonConversationRow: View {
                     .frame(width: min(WindowMetrics.windowSize.width * 0.5, 280))
             }
         }
-        .padding(14)
+        .padding(MeeshySpacing.mdPlus)
         .background(
-            RoundedRectangle(cornerRadius: 18)
-                .fill(theme.textMuted.opacity(0.04))
+            RoundedRectangle(cornerRadius: MeeshyRadius.lgPlus)
+                .fill(theme.textMuted.opacity(MeeshyOpacity.faint))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 18)
-                        .stroke(theme.textMuted.opacity(0.06), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.lgPlus)
+                        .stroke(theme.textMuted.opacity(MeeshyOpacity.faint), lineWidth: 1)
                 )
         )
         .accessibilityHidden(true)
@@ -170,7 +170,7 @@ public struct SkeletonMessageBubble: View {
             if !isLeft { Spacer(minLength: 50) }
 
             RoundedRectangle(cornerRadius: MeeshyRadius.lg)
-                .fill(theme.textMuted.opacity(0.12))
+                .fill(theme.textMuted.opacity(MeeshyOpacity.light))
                 .frame(width: bubbleWidth, height: bubbleHeight)
                 .skeletonShimmer()
 

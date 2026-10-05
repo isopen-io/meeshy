@@ -114,7 +114,7 @@ struct ComposerSceneReferenceFooter: View {
 
     var body: some View {
         if ComposerSceneReferences.isServed(hashtags: hashtags, references: references) {
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
                 if !hashtags.isEmpty { hashtagRow }
                 // La rangée du LECTEUR, montée telle quelle : elle porte la
                 // règle d'exclusion, le mot « Avec » et la ponctuation.
@@ -140,7 +140,7 @@ struct ComposerSceneReferenceFooter: View {
     /// hauteur variable à chaque frappe.
     private var hashtagRow: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
+            HStack(spacing: MeeshySpacing.xsPlus) {
                 ForEach(hashtags, id: \.self) { balise in
                     chip(balise)
                 }
@@ -162,10 +162,10 @@ struct ComposerSceneReferenceFooter: View {
         // est pas un, et figée sous une rangée « Avec … » qui scale, elle
         // inverserait la hiérarchie du pied aux grandes tailles.
         let etiquette = Text("#\(balise)")
-            .font(MeeshyFont.relative(13, weight: .semibold))
+            .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
             .foregroundStyle(tint)
             .lineLimit(1)
-            .padding(.horizontal, 10)
+            .padding(.horizontal, MeeshySpacing.smPlus)
             .frame(minHeight: 28)
             .background(Capsule().fill(tint.opacity(0.14)))
         if let onOpenHashtags {

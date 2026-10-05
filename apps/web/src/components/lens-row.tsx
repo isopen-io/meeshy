@@ -1,10 +1,17 @@
 import { memo } from 'react';
+import { useStore } from 'zustand/react';
 
+import { apiConfig } from '@/lib/api/config';
+import type { ListConversation } from '@/lib/api/list-preview';
+import { sessionStore } from '@/lib/api/session';
 import type { Conversation } from '@/lib/api/types';
+import type { ConversationEngagementSnapshot } from '@meeshy/shared/types/engagement-scale';
+import { callActions } from '@/lib/calls/call-actions';
+import { translate } from '@/lib/i18n-catalog';
 import type { ConversationFlags } from '@/lib/api/preferences';
 import { accentOf, withAccent } from '@/lib/accent';
 import { MUTED_OPACITY } from '@/lib/lens/law';
-import type { RowActionId } from '@/lib/view/row-actions';
+import { isRowCallAction, type RowActionId } from '@/lib/view/row-actions';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { avatarOf, initialsOf, isGroup, peerOf, presenceOf, titleOf } from '@/lib/view/conversation';
 import { useConversationPreview } from '@/lib/view/use-conversation-preview';
@@ -12,9 +19,10 @@ import { Link } from '@/routes/route-table';
 
 import { Avatar } from './avatar';
 import { Glyph } from './glyph';
-import { LensPreviewLine } from './lens-preview-line';
+import { LensJoinCallButton, LensPreviewLine } from './lens-preview-line';
 import { LensTime } from './lens-time';
 import { UnreadBadge } from './unread-badge';
+import { ConversationStreakMark } from './conversation-streak-mark';
 import { RowActions } from './row-actions';
 
 /**
@@ -103,6 +111,26 @@ export type LensRowProps = {
    *    écrit est TOUJOURS verte »).
    */
   typists?: readonly string[] | undefined;
+  /**
+   * LE PAIR A CETTE CONVERSATION OUVERTE (#8892) — distribué par l'écran
+   * (`useHerePeers`) comme `typists`. Prime sur la frappe : sa pastille passe
+   * à la couleur primaire Meeshy.
+   */
+  peerHere?: boolean | undefined;
+  /** … et il y regarde, écoute ou agit en ce moment : le point pulse (#9061). */
+  peerActive?: boolean | undefined;
+  /** … ou il regarde en plein écran un élément de la conversation : le point
+   * pulse, son mood se fige (#9065). */
+  peerFocused?: boolean | undefined;
+  /** Le mood courant du pair d'un direct (#9065, `use-author-moods.ts`) — il
+   * masque le point et se cerne de la présence. */
+  peerMood?: string | undefined;
+  /**
+   * « N (M) 🔥 » (#8906) — l'état d'engagement EFFECTIF de la conversation pour
+   * le lecteur (servi + direct, `effectiveEngagementOf`), distribué par
+   * l'écran. Rendu dans le supplément de la rangée ÉLUE seulement.
+   */
+  engagement?: ConversationEngagementSnapshot | undefined;
   /** Langue de CADRAGE des libellés — l'interface par défaut ; injectable pour les témoins. */
   interfaceLanguage?: string | undefined;
   /** Horloge injectable — jamais `Date.now()` lu dans un témoin. */
@@ -118,6 +146,11 @@ function LensRowImpl({
   unreadCount,
   onRowAction,
   typists,
+  peerHere = false,
+  peerActive = false,
+  peerFocused = false,
+  peerMood,
+  engagement,
   interfaceLanguage,
   now,
 }: LensRowProps) {
@@ -161,6 +194,14 @@ function LensRowImpl({
   })();
   const accent = accentOf(conversation);
   const at = conversation.lastMessageAt ?? conversation.lastMessage?.createdAt;
+  const liveCall = (conversation as ListConversation).activeCall ?? null;
+  /* Appeler depuis le menu de la ligne (#8109) : la passerelle refuse l'appel
+     à un invité anonyme (`CallEventsHandler.ts`), comme `ThreadCallButton`. */
+  const canCall = useStore(sessionStore, (state) => state.session.status === 'authenticated') || apiConfig.source === 'fixtures';
+  const onAction = (id: RowActionId) => {
+    if (!isRowCallAction(id)) return onRowAction(conversation.id, id);
+    callActions.start({ conversationId: conversation.id, media: id === 'callVideo' ? 'video' : 'audio', title, avatar: photo ?? null, isGroup: group });
+  };
 
   /**
    * LA CLASSE DE TRONCATURE DE L'APERÇU — `truncate` au repos (une ligne,
@@ -179,6 +220,15 @@ function LensRowImpl({
     now,
   });
   const typing = typists !== undefined && typists.length > 0;
+  const peerSignals = group
+    ? {}
+    : {
+        presence: typing ? ('online' as const) : presenceOf(peerOf(conversation, viewerId)),
+        here: peerHere,
+        hereActive: peerActive,
+        hereFocused: peerFocused,
+        ...(peerMood === undefined ? {} : { mood: peerMood }),
+      };
 
   return (
     <li
@@ -223,7 +273,7 @@ function LensRowImpl({
       */}
       <div
         /*
-         * `pr-12` (48px) et non `px-3` des deux côtés : `RowActions`
+         * `pe-12` (48px) et non `px-3` des deux côtés : `RowActions`
          * (frère ci-dessous, `position: absolute`, ancré `right-2` sur le
          * `<li>`) couvrait sinon l'heure/le badge de non-lus — mesuré à la
          * capture (#5559 revue). La cote se DÉDUIT du bouton : 8 (droite)
@@ -235,7 +285,7 @@ function LensRowImpl({
          * réserve qui apparaîtrait/disparaîtrait décalerait le texte sous le
          * pointeur — un mouvement que rien ne justifie ici.
          */
-        className="lens-row absolute inset-x-0 flex items-center gap-3 pl-3 pr-12"
+        className="lens-row absolute inset-x-0 flex items-center gap-3 ps-3 pe-12"
         style={withAccent(accent, {
           top: -OVERHANG,
           height: VISUAL_HEIGHT,
@@ -286,7 +336,7 @@ function LensRowImpl({
               name={title}
               opacity={chromeFade}
               {...(photo === undefined ? {} : { src: photo })}
-              {...(group ? {} : { presence: typing ? 'online' : presenceOf(peerOf(conversation, viewerId)) })}
+              {...peerSignals}
             />
           </Link>
         ) : (
@@ -298,7 +348,7 @@ function LensRowImpl({
             opacity={chromeFade}
             profileUsername={peerHandle}
             {...(photo === undefined ? {} : { src: photo })}
-            {...(group ? {} : { presence: typing ? 'online' : presenceOf(peerOf(conversation, viewerId)) })}
+            {...peerSignals}
           />
         )}
 
@@ -490,6 +540,7 @@ function LensRowImpl({
               (`shortRelativeTime`), vivante à la minute (`minuteClock`), et
               fondue avec le reste du CHROME sous sourdine (`chromeFade`).
             */}
+            {status.magnified ? null : <ConversationStreakMark snapshot={engagement} now={now} />}
             {at === undefined ? null : (
               <span style={{ opacity: chromeFade }}>
                 <LensTime at={at} />
@@ -497,13 +548,24 @@ function LensRowImpl({
             )}
           </span>
         </Link>
+        {/* « REJOINDRE » (H4) — frère du lien, jamais dedans : voir `LensJoinCallButton`. */}
+        {liveCall === null ? null : (
+          <LensJoinCallButton
+            request={{ conversationId: conversation.id, callId: liveCall.id, media: liveCall.kind === 'video' ? 'video' : 'audio', title, avatar: photo ?? null, isGroup: group }}
+            label={translate(currentInterfaceLanguage(), 'callJoin.named', { name: title })}
+            text={translate(currentInterfaceLanguage(), 'callJoin.action')}
+            onJoin={callActions.join}
+          />
+        )}
       </div>
 
       <RowActions
         flags={flags}
         unread={unread}
         magnified={status.magnified}
-        onAction={(id) => onRowAction(conversation.id, id)}
+        language={currentInterfaceLanguage()}
+        canCall={canCall}
+        onAction={onAction}
       />
     </li>
   );
@@ -540,6 +602,13 @@ export function sameRowProps(prev: LensRowProps, next: LensRowProps): boolean {
      toutes les autres se seraient re-rendues pour rien. C'est ce que le
      doc-comment de `useTypistNames` promet de borner. */
   if ((prev.typists ?? []).join('\u0001') !== (next.typists ?? []).join('\u0001')) return false;
+  if ((prev.peerHere ?? false) !== (next.peerHere ?? false)) return false;
+  if ((prev.peerActive ?? false) !== (next.peerActive ?? false)) return false;
+  if ((prev.peerFocused ?? false) !== (next.peerFocused ?? false)) return false;
+  if (prev.peerMood !== next.peerMood) return false;
+  /* L'instantané d'engagement (#8906) — comparé par RÉFÉRENCE : il vient du
+     magasin ou de la charge, stables tant qu'aucun geste n'est crédité. */
+  if (prev.engagement !== next.engagement) return false;
   if (prev.interfaceLanguage !== next.interfaceLanguage || prev.now !== next.now) return false;
 
   const s1 = prev.status ?? AT_REST;

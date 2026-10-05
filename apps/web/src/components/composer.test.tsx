@@ -557,7 +557,7 @@ describe('Composer — le tiroir des pièces jointes (#5668)', () => {
    * `NotReadableError` (micro pris par une autre application) et
    * `NotSupportedError` (constaté, mesuré, en Chromium HEADLESS) ne sont PAS
    * un refus : aucun réglage à changer ne les résout, donc AUCUN
-   * « Réessayer » — seulement « Micro indisponible sur ce navigateur » et
+   * « Réessayer » — seulement « Micro indisponible sur cet appareil » et
    * une sortie. La version livrée les envoyait tous vers la bande de refus,
    * avec un « Réessayer » qui ne pouvait jamais aboutir (loi 4).
    */
@@ -570,7 +570,7 @@ describe('Composer — le tiroir des pièces jointes (#5668)', () => {
   ] as const;
 
   for (const domExceptionName of unsupportedRecorderNames) {
-    test(`${domExceptionName} ⇒ « Micro indisponible sur ce navigateur », SANS « Réessayer »`, async () => {
+    test(`${domExceptionName} ⇒ « Micro indisponible sur cet appareil », SANS « Réessayer »`, async () => {
       Object.defineProperty(globalThis, 'MediaRecorder', { value: class {}, configurable: true });
       Object.defineProperty(navigator, 'mediaDevices', {
         value: { getUserMedia: () => Promise.reject(new DOMException('indisponible', domExceptionName)) },
@@ -583,7 +583,7 @@ describe('Composer — le tiroir des pièces jointes (#5668)', () => {
         });
         await flush();
 
-        expect(el.textContent).toContain('Micro indisponible sur ce navigateur');
+        expect(el.textContent).toContain('Micro indisponible sur cet appareil');
         expect(el.textContent).not.toContain('Réessayer');
         expect(el.textContent).not.toContain('Micro refusé');
       } finally {
@@ -903,5 +903,18 @@ describe('Composer — `memo` (revue-correction #6175, défaut majeur 3)', () =>
   test('l’export est enveloppé dans React.memo', () => {
     const composerType = Composer as unknown as { readonly $$typeof?: symbol };
     expect(composerType.$$typeof).toBe(Symbol.for('react.memo'));
+  });
+});
+
+/**
+ * LA TOUCHE D'ACTION DU CLAVIER LOGICIEL DIT « ENVOYER » (#8031) — Entrée
+ * envoie (`onKeyDown` ci-dessus) ; sans `enterkeyhint`, le clavier Android
+ * dessine un saut de ligne sur une touche qui part. Miroir de
+ * `.submitLabel(.send)` iOS (`UniversalComposerBar+Recording.swift`).
+ */
+describe('Composer — la touche Entrée du clavier logiciel annonce l’envoi (#8031)', () => {
+  test('le champ porte enterkeyhint="send"', () => {
+    const html = renderToStaticMarkup(<Composer onSend={() => {}} />);
+    expect(html).toMatch(/<textarea[^>]*enterkeyhint="send"/i);
   });
 });

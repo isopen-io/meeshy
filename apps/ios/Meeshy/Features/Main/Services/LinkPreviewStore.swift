@@ -68,34 +68,6 @@ final class LinkPreviewStore: ObservableObject {
         cache[urlString]
     }
 
-    /// Kick off a fetch for this URL if we don't already have fresh data and
-    /// we haven't recently failed. No-op on repeat calls — `LinkPreviewFetcher`
-    /// dedupes in-flight requests, and our `pendingKeys` set prevents
-    /// duplicate VM-level refreshes during the same scroll frame.
-    func requestMetadata(for urlString: String) {
-        if cache[urlString] != nil { return }
-        if let failedAt = negativeCache[urlString],
-           Date().timeIntervalSince(failedAt) < negativeCacheDuration {
-            return
-        }
-        if pendingKeys.contains(urlString) { return }
-        pendingKeys.insert(urlString)
-
-        Task { [weak self] in
-            let metadata = await LinkPreviewFetcher.shared.metadata(for: urlString)
-            await MainActor.run { [weak self] in
-                guard let self else { return }
-                self.pendingKeys.remove(urlString)
-                if let metadata {
-                    self.cache[urlString] = metadata
-                    self.persist()
-                } else {
-                    self.negativeCache[urlString] = Date()
-                }
-            }
-        }
-    }
-
     /// Awaitable resolution driving `LinkPreviewCard`'s LOCAL `@State` so the
     /// card does NOT observe the global `@Published cache` — otherwise EVERY
     /// link card in the conversation re-evaluates its body each time ANY URL's

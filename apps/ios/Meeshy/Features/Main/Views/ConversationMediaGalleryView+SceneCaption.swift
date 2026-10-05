@@ -102,11 +102,12 @@ struct GallerySceneCaptionBlock: View {
             accessory: translationRow,
             onToggle: onToggle
         ) { texte, taille in
-            Text(texte)
-                .font(MeeshyFont.relative(taille))
-                .foregroundColor(.white)
+            // #9075 — la légende d'une scène est un texte DU POST : ses adresses
+            // s'ouvrent par la carte des liens suivis du post.
+            MediaCaptionRichText(texte, size: taille, trackedLinks: post.trackedLinkMap,
+                                 validUsernames: post.validMentionUsernames)
         }
-        .padding(.vertical, 8)
+        .padding(.vertical, MeeshySpacing.sm)
         // Une traduction arrivée sort sa langue de l'attente (#6504, #6280).
         .adaptiveOnChange(of: source?.translations.count ?? 0) { _, _ in
             requestedLanguages.subtract((source?.translations ?? [:]).keys.map { $0.lowercased() })
@@ -156,8 +157,6 @@ struct GallerySceneCaptionBlock: View {
                         senderAvatarURL: post.authorAvatarURL,
                         senderUserId: post.authorId
                     ),
-                    contactColor: post.authorColor,
-                    conversationId: "",
                     textTranslations: displayedTranslations,
                     onSelectTranslation: { traduction in
                         withAnimation(.easeInOut(duration: 0.2)) {
@@ -168,7 +167,7 @@ struct GallerySceneCaptionBlock: View {
                     onRequestTextTranslation: { cible, _ in requestTranslation(to: cible) },
                     fetchesMessageTranslations: false
                 )
-                .padding(16)
+                .padding(MeeshySpacing.lg)
             }
             .navigationTitle(String(localized: "feed.post.translation.title", defaultValue: "Langues", bundle: .main))
             .navigationBarTitleDisplayMode(.inline)

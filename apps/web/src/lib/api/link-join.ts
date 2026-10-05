@@ -1,5 +1,7 @@
 import * as z from 'zod/mini';
 import type { ConversationType } from '@meeshy/shared/types/conversation';
+import * as anonymousEndpoints from '@meeshy/shared/api/endpoints/anonymous';
+import * as linksEndpoints from '@meeshy/shared/api/endpoints/links';
 
 import type { DataSource } from './config';
 import type { ApiFailure, ApiResult, HttpTransport } from './http';
@@ -12,15 +14,15 @@ import type { ApiFailure, ApiResult, HttpTransport } from './http';
  *
  * DEUX appels, et le choix de chacun est une question de CONFIDENTIALITÉ :
  *
- * - **Lire** : `GET /api/v1/anonymous/link/:identifier` (`anonymous.ts:441-749`),
+ * - **Lire** : `GET anonymous.linkByIdentifier` (`anonymous.ts:441-749`),
  *   l'aperçu public qu'iOS lit déjà (`AnonymousEndpoint.linkByIdentifier`). Il
  *   ne sert ni message ni participant : le lien, sa conversation (titre, type)
- *   et son créateur. `GET /api/v1/links/:identifier` (`links/retrieval.ts`)
+ *   et son créateur. `GET links.byIdentifier` (`links/retrieval.ts`)
  *   n'est JAMAIS appelé ici : sans session, il sert jusqu'à cinquante messages,
  *   les membres et les invités dès que le lien autorise l'historique, et refuse
  *   en 403 le lien qui ne l'autorise pas — il en dit trop à qui peut le lire,
  *   et rien à qui ne le peut pas.
- * - **Rejoindre** : `POST /api/v1/links/:key/members` (`link-admission.ts:723`),
+ * - **Rejoindre** : `POST links.byKeyMembers` (`link-admission.ts:723`),
  *   la porte canonique. Le compte vient de la CRÉANCE (le Bearer), jamais du
  *   corps ; le corps ne porte que la langue du compte, que la loi
  *   `allowedLanguages` juge (`link-admission.ts:445-450`).
@@ -316,7 +318,7 @@ export async function loadLinkInvitation(
   }
   const result = await params.transport.request<unknown>({
     method: 'GET',
-    path: `/api/v1/anonymous/link/${encodeURIComponent(params.link)}`,
+    path: anonymousEndpoints.linkByIdentifier(params.link),
     ...withSignal(params.signal),
   });
   if (!result.ok) return result;
@@ -351,7 +353,7 @@ export async function joinLinkAsMember(
   const language = textOrNull(params.language);
   const result = await deps.transport.request<unknown>({
     method: 'POST',
-    path: `/api/v1/links/${encodeURIComponent(params.link)}/members`,
+    path: linksEndpoints.byKeyMembers(params.link),
     body: language === null ? {} : { language },
   });
   if (!result.ok) return result;
@@ -486,6 +488,10 @@ const MEMBER_NOT_GUEST = 'MEMBER_NOT_GUEST';
  * optionnelle, donc un Bearer encore valide dans le transport ferait entrer le
  * COMPTE sous son nom pendant que l'écran croit créer un invité. Le port refuse
  * de s'en accommoder plutôt que de rendre une session d'invité qui n'existe pas.
+ *
+ * **Elle part NUE** (`credential: null`, #8816) : un compte connecté qui choisit
+ * « Anonyme » ne présente ni son Bearer ni le jeton d'une autre identité
+ * anonyme — la passerelle ne reçoit rien qui relie l'invité au compte.
  */
 export async function joinLinkAsGuest(
   deps: LinkJoinDeps,
@@ -497,8 +503,9 @@ export async function joinLinkAsGuest(
   }
   const result = await deps.transport.request<unknown>({
     method: 'POST',
-    path: `/api/v1/links/${encodeURIComponent(params.link)}/members`,
+    path: linksEndpoints.byKeyMembers(params.link),
     body: params.body,
+    credential: null,
   });
   if (!result.ok) return result;
   const parsed = WireGuestJoined.safeParse(result.data);

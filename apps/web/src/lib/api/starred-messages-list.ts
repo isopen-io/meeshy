@@ -9,7 +9,7 @@ import { starredMessagesPath, starredPaginationOf, type StarredMessagesDeps } fr
 
 /**
  * **LE PORT DE L'ÉCRAN DES MESSAGES FAVORIS** (#7286) — `GET
- * /api/v1/me/starred-messages?limit=&cursor=` (#7377,
+ * me.starredMessages?limit=&cursor=` (#7377,
  * `services/gateway/src/routes/me/starred-messages.ts`).
  *
  * **LE CURSEUR EST OPAQUE** — keyset `(createdAt, id)` de l'ÉTOILE, transmis

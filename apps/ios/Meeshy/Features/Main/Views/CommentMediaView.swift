@@ -15,24 +15,21 @@ struct CommentAttachmentsTray: View {
     var place: SharedPlace? = nil
     var onRemovePlace: (() -> Void)? = nil
 
+    /// « Éditer » une pièce dans la scène (#9127) — posé par l'hôte via
+    /// `.commentSceneRetouch` ; absent, le bandeau ne promet aucune édition.
+    @Environment(\.commentRetouch) private var retouch
+
     private var theme: ThemeManager { ThemeManager.shared }
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 if let place {
                     placeChip(place)
                 }
                 ForEach(attachments) { attachment in
-                    HStack(spacing: 6) {
-                        Image(systemName: icon(for: attachment.type))
-                            .font(.caption)
-                            .foregroundColor(Color(hex: attachment.thumbnailColor))
-                            .accessibilityHidden(true)
-                        Text(attachment.name)
-                            .font(.caption.weight(.medium))
-                            .lineLimit(1)
-                            .frame(maxWidth: 120)
+                    HStack(spacing: MeeshySpacing.xsPlus) {
+                        attachmentLabel(attachment)
                         Button {
                             remove(attachment)
                         } label: {
@@ -40,37 +37,69 @@ struct CommentAttachmentsTray: View {
                                 .font(.caption2.weight(.bold))
                                 .foregroundColor(theme.textMuted)
                                 .frame(width: 18, height: 18)
-                                .background(Circle().fill(theme.textMuted.opacity(0.15)))
+                                .background(Circle().fill(theme.textMuted.opacity(MeeshyOpacity.light)))
                         }
                         .accessibilityHidden(true)
                     }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
+                    .padding(.horizontal, MeeshySpacing.smPlus)
+                    .padding(.vertical, MeeshySpacing.xsPlus)
                     .background(
                         Capsule()
                             .fill(theme.inputBackground)
-                            .overlay(Capsule().stroke(theme.textMuted.opacity(0.2), lineWidth: 0.5))
+                            .overlay(Capsule().stroke(theme.textMuted.opacity(MeeshyOpacity.light), lineWidth: MeeshyBorder.hairline))
                     )
                     .foregroundColor(theme.textPrimary)
                     .accessibilityElement(children: .combine)
                     .accessibilityAction(named: Text(String(localized: "composer.a11y.removeAttachment", defaultValue: "Retirer la pièce jointe", bundle: .main))) {
                         remove(attachment)
                     }
+                    .modifier(EditableChipAccessibility(label: editLabel(attachment), open: editAction(attachment)))
                 }
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
+            .padding(.horizontal, MeeshySpacing.mdPlus)
+            .padding(.vertical, MeeshySpacing.sm)
         }
     }
 
-    private func icon(for type: ComposerAttachmentType) -> String {
-        switch type {
-        case .voice: return "mic.fill"
-        case .location: return "location.fill"
-        case .image: return "photo.fill"
-        case .file: return "doc.fill"
-        case .video: return "video.fill"
+    /// Une pièce que la scène ouvre se touche pour s'éditer : le glyphe
+    /// « Éditer » le dit, comme au centre d'une tuile de conversation (#9119).
+    @ViewBuilder
+    private func attachmentLabel(_ attachment: ComposerAttachment) -> some View {
+        let label = HStack(spacing: MeeshySpacing.xsPlus) {
+            Image(systemName: attachment.type.glyph)
+                .font(.caption)
+                .foregroundColor(Color(hex: attachment.thumbnailColor))
+                .accessibilityHidden(true)
+            Text(attachment.name)
+                .font(.caption.weight(.medium))
+                .lineLimit(1)
+                .frame(maxWidth: 120)
         }
+        if let open = editAction(attachment), let glyph = CommentSceneRetouch.editGlyph(for: attachment) {
+            Button(action: open) {
+                HStack(spacing: MeeshySpacing.xsPlus) {
+                    label
+                    Image(systemName: glyph)
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(MeeshyColors.mediaChromeForeground)
+                        .frame(width: 18, height: 18)
+                        .background(Circle().fill(MeeshyColors.mediaChromeFill))
+                        .accessibilityHidden(true)
+                }
+            }
+            .buttonStyle(.plain)
+        } else {
+            label
+        }
+    }
+
+    private func editAction(_ attachment: ComposerAttachment) -> (() -> Void)? {
+        guard let retouch, CommentSceneRetouch.editGlyph(for: attachment) != nil else { return nil }
+        return { retouch.open(attachment.id) }
+    }
+
+    private func editLabel(_ attachment: ComposerAttachment) -> String {
+        String(localized: "conversation.composer.attachment.edit", defaultValue: "Éditer \(attachment.name)", bundle: .main)
     }
 
     private func remove(_ attachment: ComposerAttachment) {
@@ -83,7 +112,7 @@ struct CommentAttachmentsTray: View {
 
     /// Même gabarit de chip que les pièces jointes ci-dessus, pour un lieu.
     private func placeChip(_ place: SharedPlace) -> some View {
-        HStack(spacing: 6) {
+        HStack(spacing: MeeshySpacing.xsPlus) {
             Image(systemName: "location.fill")
                 .font(.caption)
                 .foregroundColor(MeeshyColors.success)
@@ -102,21 +131,39 @@ struct CommentAttachmentsTray: View {
                     .font(.caption2.weight(.bold))
                     .foregroundColor(theme.textMuted)
                     .frame(width: 18, height: 18)
-                    .background(Circle().fill(theme.textMuted.opacity(0.15)))
+                    .background(Circle().fill(theme.textMuted.opacity(MeeshyOpacity.light)))
             }
             .accessibilityHidden(true)
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
+        .padding(.horizontal, MeeshySpacing.smPlus)
+        .padding(.vertical, MeeshySpacing.xsPlus)
         .background(
             Capsule()
                 .fill(theme.inputBackground)
-                .overlay(Capsule().stroke(theme.textMuted.opacity(0.2), lineWidth: 0.5))
+                .overlay(Capsule().stroke(theme.textMuted.opacity(MeeshyOpacity.light), lineWidth: MeeshyBorder.hairline))
         )
         .foregroundColor(theme.textPrimary)
         .accessibilityElement(children: .combine)
         .accessibilityAction(named: Text(String(localized: "composer.a11y.removeAttachment", defaultValue: "Retirer la pièce jointe", bundle: .main))) {
             onRemovePlace?()
+        }
+    }
+}
+
+/// Une pièce éditable se lit « Éditer … » et s'ouvre par l'action par défaut
+/// de VoiceOver ; les autres gardent leur lecture.
+private struct EditableChipAccessibility: ViewModifier {
+    let label: String
+    let open: (() -> Void)?
+
+    func body(content: Content) -> some View {
+        if let open {
+            content
+                .accessibilityLabel(label)
+                .accessibilityAddTraits(.isButton)
+                .accessibilityAction { open() }
+        } else {
+            content
         }
     }
 }
@@ -166,6 +213,9 @@ struct CommentMediaView: View {
     let authorAvatarURL: String?
     let authorColor: String
     let sentAt: Date
+    /// La carte des liens suivis du commentaire porteur — la légende du média en
+    /// plein écran ouvre ses adresses par `/l/` (#9075).
+    var trackedLinks: [String: String] = [:]
 
     @State private var showFullscreen = false
     @State private var audioFullscreen: AudioFullscreenSource?
@@ -360,6 +410,7 @@ struct CommentMediaView: View {
         return CommentMediaGallerySnapshot(
             attachments: [attachment],
             captions: caption.map { [attachment.id: $0] } ?? [:],
+            links: trackedLinks.isEmpty ? [:] : [attachment.id: trackedLinks],
             senders: [attachment.id: ConversationViewModel.MediaSenderInfo(
                 senderName: authorName,
                 senderAvatarURL: authorAvatarURL,
@@ -385,6 +436,7 @@ struct CommentMediaView: View {
             startAttachmentId: media.id,
             accentColor: accentColor,
             captionMap: snapshot.captions,
+            captionLinks: snapshot.links,
             senderInfoMap: snapshot.senders,
             // #7362 — pièce de COMMENTAIRE, pas de `MessageAttachment` :
             // aucune consommation à reporter.

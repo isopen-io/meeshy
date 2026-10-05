@@ -215,3 +215,18 @@ describe('startEphemeralCountdowns', () => {
     expect(emitted).toEqual([]);
   });
 });
+
+describe('startEphemeralCountdowns — flamme-œil (#8302)', () => {
+  it("ne pose AUCUNE échéance à la réception : rien ne décompte avant la consommation", async () => {
+    // La base la rend malgré le prédicat (pire cas du connecteur MongoDB) :
+    // c'est le filet en processus qui doit refuser d'écrire.
+    messageFindMany.mockResolvedValue([
+      ephemeralMessage({ ephemeralDuration: null, effectFlags: 1 | 8 }),
+    ]);
+
+    expect(await start()).toEqual([]);
+    expect(entryUpdateMany).not.toHaveBeenCalled();
+    expect(messageUpdateMany).not.toHaveBeenCalled();
+    expect(emitted).toEqual([]);
+  });
+});

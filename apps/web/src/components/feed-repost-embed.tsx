@@ -76,7 +76,7 @@ export function FeedRepostEmbed({ repost }: { readonly repost: FeedCardRepostEmb
         {chipLabel !== undefined ? (
           <span
             data-feed-repost-embed-chip
-            className="ml-auto shrink-0 rounded-chip px-1.5 py-0.5 text-check font-semibold"
+            className="ms-auto shrink-0 rounded-chip px-1.5 py-0.5 text-check font-semibold"
             style={{ backgroundColor: 'var(--color-ios-surface)', color: 'var(--color-ios-ink-2)' }}
           >
             {chipLabel}
@@ -117,8 +117,8 @@ export function FeedRepostEmbed({ repost }: { readonly repost: FeedCardRepostEmb
           {repost.moreCount !== undefined ? (
             <span
               data-feed-repost-embed-more
-              className="absolute bottom-2 right-2 rounded-full px-2 py-0.5 text-check font-bold text-white"
-              style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}
+              className="absolute bottom-2 right-2 rounded-full px-2 py-0.5 text-check font-bold text-on-media"
+              style={{ backgroundColor: 'var(--color-scrim-strong)' }}
             >
               +{repost.moreCount}
             </span>

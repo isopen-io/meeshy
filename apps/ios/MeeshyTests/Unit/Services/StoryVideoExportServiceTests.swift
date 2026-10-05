@@ -172,7 +172,7 @@ final class StoryVideoExportServiceTests: XCTestCase {
         let url = await sut.prepareExport(
             slide: makeStaticSlide(),
             languages: [],
-            stickerImageSources: sources,
+            inputs: StoryExportInputs(stickerImageSources: sources),
             onProgress: nil,
             onPhaseChange: nil
         )
@@ -409,7 +409,7 @@ final class RealMP4StubExporter: StoryExporting, @unchecked Sendable {
         languages: [String],
         watermark: StoryExportWatermark?,
         branding: StoryExportBranding.Plan?,
-        stickerImageSources: [String: String],
+        inputs: StoryExportInputs,
         progress: (@Sendable (Double) -> Void)?
     ) async throws {
         let image = UIGraphicsImageRenderer(size: size, format: {
@@ -504,7 +504,7 @@ final class MockStoryExporter: StoryExporting, @unchecked Sendable {
         languages: [String],
         watermark: StoryExportWatermark?,
         branding: StoryExportBranding.Plan?,
-        stickerImageSources: [String: String],
+        inputs: StoryExportInputs,
         progress: (@Sendable (Double) -> Void)?
     ) async throws {
         lock.withLock {
@@ -512,7 +512,7 @@ final class MockStoryExporter: StoryExporting, @unchecked Sendable {
             _lastOutputURL = outputURL
             _lastLanguages = languages
             _lastBranding = branding
-            _lastStickerImageSources = stickerImageSources
+            _lastStickerImageSources = inputs.stickerImageSources
         }
 
         switch behavior {

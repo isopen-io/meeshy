@@ -41,21 +41,21 @@ struct SupportView: View {
     // MARK: - Content
 
     private var pageContent: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: MeeshySpacing.xl) {
             helpSection
             contactSection
             reportSection
             infoSection
             Spacer().frame(height: 40)
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 16)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.top, MeeshySpacing.lg)
     }
 
     // MARK: - Help Section
 
     private var helpSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             sectionHeader(title: String(localized: "support.help.title", defaultValue: "Obtenir de l'aide", bundle: .main), icon: "lifepreserver.fill", color: accentColor)
 
             VStack(spacing: 0) {
@@ -72,7 +72,7 @@ struct SupportView: View {
     // MARK: - Contact Section
 
     private var contactSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             sectionHeader(title: String(localized: "support.contact.title", defaultValue: "Nous contacter", bundle: .main), icon: "envelope.fill", color: MeeshyColors.infoHex)
 
             VStack(spacing: 0) {
@@ -86,7 +86,7 @@ struct SupportView: View {
     // MARK: - Report Section
 
     private var reportSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             sectionHeader(title: String(localized: "support.report.title", defaultValue: "Signaler un problème", bundle: .main), icon: "exclamationmark.bubble.fill", color: MeeshyColors.warningHex)
 
             VStack(spacing: 0) {
@@ -100,7 +100,7 @@ struct SupportView: View {
     // MARK: - Info Section
 
     private var infoSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             sectionHeader(title: String(localized: "support.info.title", defaultValue: "Informations", bundle: .main), icon: "info.circle", color: MeeshyColors.neutral500Hex)
 
             VStack(spacing: 0) {
@@ -115,25 +115,25 @@ struct SupportView: View {
     // MARK: - Helpers
 
     private func sectionHeader(title: String, icon: String, color: String) -> some View {
-        HStack(spacing: 6) {
+        HStack(spacing: MeeshySpacing.xsPlus) {
             Image(systemName: icon)
-                .font(MeeshyFont.relative(12, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
                 .foregroundColor(Color(hex: color))
             Text(title.uppercased())
-                .font(MeeshyFont.relative(11, weight: .bold, design: .rounded))
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold, design: .rounded))
                 .foregroundColor(Color(hex: color))
                 .tracking(1.2)
         }
-        .padding(.leading, 4)
+        .padding(.leading, MeeshySpacing.xs)
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isHeader)
     }
 
     private func sectionBackground(tint: String) -> some View {
-        RoundedRectangle(cornerRadius: 16)
+        RoundedRectangle(cornerRadius: MeeshyRadius.lg)
             .fill(theme.surfaceGradient(tint: tint))
             .overlay(
-                RoundedRectangle(cornerRadius: 16)
+                RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                     .stroke(theme.border(tint: tint), lineWidth: 1)
             )
     }
@@ -143,12 +143,12 @@ struct SupportView: View {
         // Dynamic Type would burst the fixed frame (doctrine 74i/86i/91i). The
         // adjacent row label carries the meaning, so the glyph is decorative to VoiceOver.
         Image(systemName: name)
-            .font(.system(size: 14, weight: .medium))
+            .font(.system(size: MeeshyIconSize.sm, weight: .medium))
             .foregroundColor(Color(hex: color))
-            .frame(width: 28, height: 28)
+            .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
             .background(
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(Color(hex: color).opacity(0.12))
+                RoundedRectangle(cornerRadius: MeeshyRadius.xs)
+                    .fill(Color(hex: color).opacity(MeeshyOpacity.light))
             )
             .accessibilityHidden(true)
     }
@@ -157,22 +157,22 @@ struct SupportView: View {
     private func supportLink(icon: String, title: String, url: String, color: String) -> some View {
         if let destination = URL(string: url) {
         Link(destination: destination) {
-            HStack(spacing: 12) {
+            HStack(spacing: MeeshySpacing.md) {
                 fieldIcon(icon, color: color)
 
                 Text(title)
-                    .font(MeeshyFont.relative(14, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
                     .foregroundColor(theme.textPrimary)
 
                 Spacer()
 
                 Image(systemName: "arrow.up.right")
-                    .font(MeeshyFont.relative(12, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
                     .foregroundColor(Color(hex: color))
                     .accessibilityHidden(true)
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
+            .padding(.horizontal, MeeshySpacing.mdPlus)
+            .padding(.vertical, MeeshySpacing.smPlus)
         }
         .accessibilityLabel(title)
         .accessibilityHint(String(localized: "support.a11y.opens", defaultValue: "Ouvre \(title)", bundle: .main))
@@ -184,43 +184,43 @@ struct SupportView: View {
             HapticFeedback.light()
             action()
         } label: {
-            HStack(spacing: 12) {
+            HStack(spacing: MeeshySpacing.md) {
                 fieldIcon(icon, color: color)
 
                 Text(title)
-                    .font(MeeshyFont.relative(14, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
                     .foregroundColor(theme.textPrimary)
 
                 Spacer()
 
                 Image(systemName: "chevron.forward")
-                    .font(MeeshyFont.relative(12, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
                     .foregroundColor(Color(hex: color))
                     .accessibilityHidden(true)
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
+            .padding(.horizontal, MeeshySpacing.mdPlus)
+            .padding(.vertical, MeeshySpacing.smPlus)
         }
         .accessibilityLabel(title)
     }
 
     private func infoRow(icon: String, title: String, value: String, color: String) -> some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             fieldIcon(icon, color: color)
 
             Text(title)
-                .font(MeeshyFont.relative(14, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
                 .foregroundColor(theme.textPrimary)
 
             Spacer()
 
             Text(value)
-                .font(MeeshyFont.relative(13, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
                 .foregroundColor(theme.textMuted)
                 .textSelection(.enabled)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .padding(.horizontal, MeeshySpacing.mdPlus)
+        .padding(.vertical, MeeshySpacing.smPlus)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(title), \(value)")
     }

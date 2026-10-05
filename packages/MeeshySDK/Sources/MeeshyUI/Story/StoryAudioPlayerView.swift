@@ -202,7 +202,7 @@ public struct StoryAudioPlayerView: View {
     // MARK: - UI
 
     private var playerContent: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: MeeshySpacing.sm) {
             Button(action: togglePlayback) {
                 ZStack {
                     if !isEditing {
@@ -211,7 +211,7 @@ public struct StoryAudioPlayerView: View {
                             .frame(width: 36, height: 36)
                     }
                     Image(systemName: buttonIcon)
-                        .font(.system(size: 16, weight: .bold))
+                        .font(.system(size: MeeshyIconSize.md, weight: .bold))
                         .foregroundColor(.white.opacity(isEditing ? 1.0 : (isMuted ? 0.6 : 1.0)))
                 }
                 .frame(width: 44, height: 44)
@@ -224,8 +224,8 @@ public struct StoryAudioPlayerView: View {
             waveformView
                 .frame(width: 120, height: 32)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.horizontal, MeeshySpacing.md)
+        .padding(.vertical, MeeshySpacing.sm)
         .background(.ultraThinMaterial, in: Capsule())
     }
 

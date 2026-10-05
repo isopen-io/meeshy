@@ -41,14 +41,14 @@ final class MessageListViewController: UIViewController {
     var collectionView: UICollectionView!
     var dataSource: UICollectionViewDiffableDataSource<MessageListSection, MessageListItem>!
     let store: MessageStore
-    private let currentUserId: String
+    let currentUserId: String
     private var accentColor: String
     private let isDirect: Bool
     // `internal` (pas `private`) depuis `+UnreadSeparator.swift` (#7222) :
     // `private` est de portée FICHIER en Swift, même raison que
     // `cancellables`/`lastTypingRosterFingerprint` (#4944).
     var isDark: Bool
-    private let router: Router
+    let router: Router
     private let storyViewModel: StoryViewModel
     private let statusViewModel: StatusViewModel
     private let conversationListViewModel: ConversationListViewModel?  // #7006 — remis aux cellules, jamais lu ici ; nil hors liste montée.
@@ -141,7 +141,7 @@ final class MessageListViewController: UIViewController {
     /// (see `ConversationViewModel.loadOlderMessages`). Going through the
     /// store directly would bypass the network fallback and silently
     /// stall pagination once the local GRDB window is exhausted.
-    var onLoadOlder: (() async -> Void)?
+    var onLoadOlder: (@MainActor () async -> Void)?
     /// Invoked when the scroll position crosses the near-bottom threshold.
     /// Drives the floating "scroll to latest" button in the parent SwiftUI view.
     var onNearBottomChanged: ((Bool) -> Void)?
@@ -196,10 +196,6 @@ final class MessageListViewController: UIViewController {
     /// menu longpress ferme le clavier et remonte le message vers le centre
     /// s'il est trop bas, ce qui exige le VRAI frame de la cellule.
     var onLongPress: ((String, CGRect?) -> Void)?
-    /// iOS 26+ : builder du contenu `.contextMenu` NATIF (Liquid Glass) d'une
-    /// bulle, fourni par `ConversationView`. Quand présent (donc iOS 26+), la
-    /// cellule attache le menu natif et DÉSACTIVE le long-press custom.
-    var nativeMessageMenu: ((Message) -> AnyView)?
     /// id de la bulle présentée dans l'overlay d'appui long. La cellule live
     /// correspondante passe à `opacity 0` (masquée) le temps de l'overlay —
     /// seule la copie élevée reste visible (anti double-bulle fantôme). Ne
@@ -268,12 +264,11 @@ final class MessageListViewController: UIViewController {
     /// mutation (plafond `ConversationOverlayState.selectionCap` compris),
     /// ce contrôleur ne fait que relayer l'id tapé.
     var onToggleSelection: ((String) -> Void)?
-    /// **Les trois opérations servies EN PREMIER par le menu système**
-    /// (#6117 — « les options qu'il faut en premier c'est editer, selectionner
-    /// et composer »), plus la porte du GRAND menu.
+    /// **Les opérations servies EN PREMIER par le menu système** (#6117 ; « Imager » y remplace « Composer », #8692), plus la porte du GRAND menu.
     var onEditMessage: ((String) -> Void)?
     var onSelectMessage: ((String) -> Void)?
     var onComposeFromMessage: ((String) -> Void)?
+    var onImagineFromMessage: ((String) -> Void)?
     /// « Plus… » ouvre `MessageMoreSheet` — la feuille COMPLÈTE — et non
     /// l'overlay d'appui long. Les deux sont des menus distincts.
     var onOpenMoreSheet: ((String) -> Void)?
@@ -302,9 +297,8 @@ final class MessageListViewController: UIViewController {
     var onShowReactions: ((String) -> Void)?
     /// Open the detail sheet on the language / translation tab.
     var onShowTranslationDetail: ((String) -> Void)?
-    var onReadMore: ((FocalReadMorePayload) -> Void)?
-    /// Lot 3.2 — carte lieu de la rangée plate : plein écran présenté par
-    /// ConversationView (même chaîne que `onReadMore`).
+    var longMessageExpansionState = LongMessageExpansionState() // #8147 / #8157
+    /// Lot 3.2 — carte lieu de la rangée plate : plein écran (ConversationView).
     var onFocalTapLocation: ((SharedPlace) -> Void)?
     /// Lot 3.2 — partage d'un fichier téléchargé depuis la rangée plate.
     var onFocalShareFile: ((URL) -> Void)?
@@ -591,18 +585,24 @@ final class MessageListViewController: UIViewController {
         applyTopInsetToViews()
     }
 
+    /// Hauteur MESURÉE de la bande d'en-tête (grandit avec Dynamic Type) :
+    /// les pilules et la réserve de la rangée plate la suivent (#7998).
+    var headerBandHeight: CGFloat = 0 {
+        didSet { if oldValue != headerBandHeight { applyTopInsetToViews() } }
+    }
+
     private func applyTopInsetToViews() {
         guard collectionView != nil else { return }
         // Rangée plate : le repos réserve la rangée de l'en-tête (#6013).
-        let restTop = topInset + ThreadHeadClearance.value(usesFlatRow: readingMode.usesFlatRow)
+        let restTop = topInset + ThreadHeadClearance.value(usesFlatRow: readingMode.usesFlatRow, headerBandHeight: headerBandHeight)
         if collectionView.contentInset.bottom != restTop {
             collectionView.contentInset.bottom = restTop
             collectionView.verticalScrollIndicatorInsets.bottom = restTop
         }
-        // INCHANGÉ — garde source ConversationTopChromeFadeTests:119
-        stickyDayTopConstraint?.constant = topInset + MessageDayStickyPlacement.topOffset
+        // Garde source ConversationTopChromeFadeTests (#7998 : hauteur mesurée).
+        stickyDayTopConstraint?.constant = topInset + MessageDayStickyPlacement.topOffset(headerBandHeight: headerBandHeight)
         // F-086bis (WS-2) : ancre de la pilule jour·heure, si montée.
-        scrollTimePillTopConstraint?.constant = topInset + FocalMetrics.Pill.top
+        scrollTimePillTopConstraint?.constant = topInset + MessageDayStickyPlacement.scrollTimePillTop(headerBandHeight: headerBandHeight)
     }
 
     /// État réactif de la pill flottante « Aujourd'hui / Hier / … » posée au
@@ -612,7 +612,7 @@ final class MessageListViewController: UIViewController {
     private var stickyDayHost: UIHostingController<MessageDayStickyOverlay>?
     /// Ancre verticale de la pill, recalculée par `applyTopInset` : la vue
     /// s'étendant sous la safe area haute, l'offset produit est
-    /// `topInset + MessageDayStickyPlacement.topOffset`.
+    /// `topInset + MessageDayStickyPlacement.topOffset(headerBandHeight:)`.
     private var stickyDayTopConstraint: NSLayoutConstraint?
     /// Défilement actif (drag OU décélération) — `store.isUserScrolling`,
     /// la garde des REPORTS de reconfigure (§4.7ter) : re-mesurer des
@@ -635,6 +635,8 @@ final class MessageListViewController: UIViewController {
     /// La pill de jour suit la même règle en rangée plate ; Bulles :
     /// comportement historique, la pilule suit le défilement.
     private var isChromeHiddenForScroll = false
+    /// Le clavier part D'ABORD (#8000) — `KeyboardFirstScroll.swift`.
+    private let keyboardFirst = KeyboardFirstScrollGate()
     /// Offset d'arrivée de la décélération en cours (`nil` hors décélération).
     var decelerationTargetOffsetY: CGFloat?
 
@@ -762,6 +764,8 @@ final class MessageListViewController: UIViewController {
         let host = UIHostingController(
             rootView: MessageDayStickyOverlay(state: stickyDayState)
         )
+        // #7998 : sans hauteur, la pill était CENTRÉE sur son ancre.
+        host.sizingOptions = .intrinsicContentSize
         host.view.backgroundColor = .clear
         host.view.isUserInteractionEnabled = false
         addChild(host)
@@ -774,7 +778,7 @@ final class MessageListViewController: UIViewController {
         // SwiftUI propage comme safe area au contrôleur hébergé.
         let stickyTop = host.view.topAnchor.constraint(
             equalTo: view.topAnchor,
-            constant: topInset + MessageDayStickyPlacement.topOffset
+            constant: topInset + MessageDayStickyPlacement.topOffset(headerBandHeight: headerBandHeight)
         )
         NSLayoutConstraint.activate([
             stickyTop,
@@ -843,7 +847,7 @@ final class MessageListViewController: UIViewController {
         host.view.translatesAutoresizingMaskIntoConstraints = false
         let pillTop = host.view.topAnchor.constraint(
             equalTo: view.topAnchor,
-            constant: topInset + FocalMetrics.Pill.top
+            constant: topInset + MessageDayStickyPlacement.scrollTimePillTop(headerBandHeight: headerBandHeight)
         )
         NSLayoutConstraint.activate([
             pillTop,
@@ -914,16 +918,6 @@ final class MessageListViewController: UIViewController {
             focalMagnificationArmed = armed
             applyFocalPerspectiveToVisibleCells()
         }
-    }
-
-    private func topVisibleMessageDate() -> Date? {
-        guard let dataSource,
-              let topIndexPath = collectionView.indexPathsForVisibleItems.max(),
-              let topItem = dataSource.itemIdentifier(for: topIndexPath),
-              case .message(let localId) = topItem,
-              let record = store.message(for: localId)
-        else { return nil }
-        return record.createdAt
     }
 
     /// Recalcule le label de la pill sticky à partir de la cellule la plus
@@ -1066,7 +1060,7 @@ final class MessageListViewController: UIViewController {
         // comportement historique (auto-scroll RC2.1 compris).
         layout.nearBottomThreshold = Self.nearBottomFollowThreshold
 
-        collectionView = UICollectionView(frame: view.bounds, collectionViewLayout: layout)
+        collectionView = MessageListCollectionView(frame: view.bounds, collectionViewLayout: layout)
         collectionView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         collectionView.backgroundColor = .clear
         // La liste est inversée (transform ci-dessous) : l'ajustement
@@ -1169,12 +1163,14 @@ final class MessageListViewController: UIViewController {
             // pastille 22 de l'auteur + points pulsants accent SANS capsule ;
             // la capsule reste le rendu du mode bulles.
             let typingFlat = self.readingMode != .bubbles
+            let typingHere = self.conversationHere
             cell.contentConfiguration = UIHostingConfiguration {
                 TypingIndicatorBubble(
                     participants: typingRoster,
                     accentHex: typingAccent,
                     isDark: typingDark,
-                    isFlat: typingFlat
+                    isFlat: typingFlat,
+                    here: typingHere
                 )
                 .scaleEffect(x: 1, y: -1)
             }
@@ -1268,7 +1264,7 @@ final class MessageListViewController: UIViewController {
                 cell.contentConfiguration = nil
                 return
             }
-            message.isViewOnceRevealed = self.conversationViewModel?.revealedViewOnceIds[message.id] == true
+            self.applyVisitState(to: &message)
             let accent = self.accentColor
             let dark = self.isDark
             let direct = self.isDirect
@@ -1311,7 +1307,7 @@ final class MessageListViewController: UIViewController {
             // sur l'icône / chip plein écran d'une bulle audio ouvre un
             // ZStack contenant uniquement le `Color.black` de fond — d'où
             // l'écran noir observé en prod.
-            let allAudioItems = vm?.allAudioItems ?? []
+            let allAudioItems = vm?.allAudioItems ?? [], audioIndex = vm?.audioItemsByMessageId ?? [:]
             // Cold-open plein écran audio (F1) : sans lecture déjà active, la
             // carte Now Playing / l'avance auto doivent porter le même
             // contexte conversation que `ConversationViewModel.playAudio`
@@ -1410,6 +1406,7 @@ final class MessageListViewController: UIViewController {
             let editHandler = self.onEditMessage
             let selectHandler = self.onSelectMessage
             let composeHandler = self.onComposeFromMessage
+            let imagineHandler = self.onImagineFromMessage
             let moreSheetHandler = self.onOpenMoreSheet
             let canEdit = self.canEditMessage
             let openReactPickerHandler = self.onOpenReactPicker
@@ -1418,7 +1415,6 @@ final class MessageListViewController: UIViewController {
             let retryHandler = self.onRetry
             let showReactionsHandler = self.onShowReactions
             let showTranslationHandler = self.onShowTranslationDetail
-            let readMoreHandler = self.onReadMore
             let tapLocationHandler = self.onFocalTapLocation
             let shareFileHandler = self.onFocalShareFile
             let callBackHandler = self.onCallBack
@@ -1435,6 +1431,7 @@ final class MessageListViewController: UIViewController {
             let senderRingState: StoryRingState = isMine
                 ? .none
                 : stories.storyRingState(forUserId: senderId)
+            let senderIsHere: ConversationHere = isMine ? .absent : self.conversationHere[message.viewingKey]
             let viewSenderStoryHandler = self.onViewSenderStory
 
             // Menu d'appui long — DEUX chemins par version d'OS (miroir des
@@ -1536,6 +1533,7 @@ final class MessageListViewController: UIViewController {
                         // évaluation de son body (audit fluidité 2026-08-21).
                         preferredAudioLangCode: preferredAudioLang,
                         showAvatar: !direct,
+                        senderIsHere: senderIsHere,
                         senderStoryRingState: senderRingState,
                         onViewStory: (senderRingState != .none)
                             ? { viewSenderStoryHandler?(senderId) }
@@ -1567,7 +1565,7 @@ final class MessageListViewController: UIViewController {
                         onPlayAudio: { [weak self] attachmentId in
                             self?.conversationViewModel?.playAudio(attachmentId: attachmentId)
                         },
-                        allAudioItems: allAudioItems,
+                        allAudioItems: allAudioItems, messageAudioItems: audioIndex[message.id] ?? [],
                         conversationName: conversationName,
                         audioQueueTailProvider: audioQueueTailProvider,
                         onScrollToMessage: scrollHandler,
@@ -1678,6 +1676,7 @@ final class MessageListViewController: UIViewController {
                     senderThumbHash: nil,
                     senderColorHex: message.senderColor ?? accent,
                     senderPresence: PresenceManager.shared.presenceState(for: senderId),
+                    senderIsHere: senderIsHere,
                     senderStoryRing: senderRingState,
                     senderMoodEmoji: statuses.statusForUser(userId: senderId)?.moodEmoji,
                     senderIsAnonymous: message.senderIsAnonymous,
@@ -1716,6 +1715,7 @@ final class MessageListViewController: UIViewController {
                     // Focal : le message en focus (posé à la POSE par
                     // `syncFocalFocusDetails`) porte ses détails complets.
                     isFocused: self.focalDetailedLocalId == localId,
+                    isExpanded: self.expandedLongMessageLocalId == localId,
                     sentAt: message.createdAt,
                     // Pré-calculée ici, jamais dans un body (directive 2026-08-22).
                     focusTimestamp: self.focalDetailedLocalId == localId ? self.focalFocusTimestamp(for: message.createdAt) : nil,
@@ -1728,6 +1728,7 @@ final class MessageListViewController: UIViewController {
                 focalActions.onOpenParticipantProfile = openParticipantProfileHandler
                 focalActions.onShowReactions = showReactionsHandler
                 focalActions.onShowReadStatus = showReadStatusHandler
+                focalActions.onShowMessageInfo = showInfoHandler
                 focalActions.onRetry = retryHandler
                 focalActions.onReplyTap = scrollHandler
                 focalActions.onStoryReplyTap = storyReplyHandler
@@ -1736,7 +1737,7 @@ final class MessageListViewController: UIViewController {
                 focalActions.onReactToAttachment = { attId, emoji in attachmentReactionHandler?(attId, messageId, emoji) }
                 focalActions.onRequestTranslation = requestTranslationHandler
                 focalActions.onShowTranslationDetail = showTranslationHandler
-                focalActions.onReadMore = readMoreHandler
+                focalActions.onToggleExpanded = { [weak self] in self?.toggleLongMessageExpansion(localId) }
                 focalActions.onTapLocation = tapLocationHandler
                 focalActions.onShareFile = shareFileHandler
                 focalActions.onSetActiveDisplayLanguage = { [weak self] msgId, code in
@@ -1789,10 +1790,9 @@ final class MessageListViewController: UIViewController {
                 focalRow = nil
             }
 
-            // Chips du message en focus SUR la ligne de la carte : elles
-            // débordent du bas de la cellule — jamais rognées, et la cellule
-            // passe au-dessus de ses voisines le temps du focus.
-            let isFocusedCell = self.readingMode.usesFlatRow && self.focalDetailedLocalId == localId
+            // Le cadre de l'élu déborde de la cellule : jamais rogné, dessiné au-dessus
+            // des voisines, et touchable (`touchOverflow`, posé par la passe Focal).
+            let isFocusedCell = (self.readingMode.usesFlatRow && self.focalDetailedLocalId == localId) || self.expandedLongMessageLocalId == localId
             cell.clipsToBounds = false
             cell.contentView.clipsToBounds = false
             cell.layer.zPosition = isFocusedCell ? 1 : 0
@@ -1800,7 +1800,6 @@ final class MessageListViewController: UIViewController {
             cell.contentConfiguration = UIHostingConfiguration {
                 BubbleSwipeContainer(
                     isMine: isMine,
-                    messageId: messageId,
                     messageCreatedAt: message.createdAt,
                     // Masquée pendant que l'overlay d'appui long présente CETTE
                     // bulle : seule la copie élevée reste visible (anti ghost).
@@ -1826,25 +1825,24 @@ final class MessageListViewController: UIViewController {
                     isSelectionModeActive: selectionModeActive,
                     isSelected: selectedIds.contains(messageId),
                     onToggleSelection: { toggleSelectionHandler?(messageId) },
-                    // Les opérations primaires du menu SYSTÈME, ouvert au
-                    // double tap. Elles sont composées ici parce que c'est le
-                    // seul étage qui tient à la fois le `messageId` et les
-                    // rappels déjà résolus par `ConversationView`.
+                    // Les opérations primaires du menu SYSTÈME (double tap), composées ici : seul étage qui
+                    // tient à la fois le `messageId` et les rappels déjà résolus par `ConversationView`.
                     editMenuActions: MessageEditMenuAction.primaires(
                         messageId: messageId,
                         peutEditer: canEdit?(messageId) ?? false,
                         editer: editHandler,
                         selectionner: selectHandler,
-                        composer: composeHandler,
+                        composer: message.holdsBlur ? nil : composeHandler,
+                        imager: message.holdsBlur || !MessageCardSubject.isExportable(message, now: Date()) ? nil : imagineHandler,
                         repondre: swipeReplyHandler,
-                        transferer: swipeForwardHandler,
+                        transferer: message.holdsBlur ? nil : swipeForwardHandler,
                         plus: moreSheetHandler
                     )
                 ) {
                     if let focalRow {
                         focalRow.equatable()
                     } else {
-                        messageBubble
+                        messageBubble.longMessageFocus(self.longMessageExpansion(for: localId))
                     }
                 }
                 .environmentObject(host)
@@ -1889,11 +1887,10 @@ final class MessageListViewController: UIViewController {
             }
             .margins(.all, 0)
             cell.backgroundColor = .clear
-            // Cellule (re)configurée : à plat, sans carte. Focal la reposera à
-            // l'affichage (`willDisplay`) puis à chaque tick — jamais une pose
-            // héritée d'un recyclage.
+            // Cellule (re)configurée : à plat. Focal (et le dépliage, #8147) la
+            // reposent à l'affichage (`willDisplay`) — jamais une pose héritée
+            // d'un recyclage.
             FocalScrollPerspective.reset(cell.contentView.layer)
-            FocalScrollPerspective.hideFocusCard(in: cell.contentView)
         }
 
         // Séparateur de premier non-lu (#7222) — cluster dédié, voir
@@ -2417,7 +2414,7 @@ final class MessageListViewController: UIViewController {
         // re-renders with the fresh snapped inputs (the Equatable gate sees
         // them change and lets the body re-run).
         observePerMessageDictionary(vm.$bubbleLanguageSelections, initial: vm.bubbleLanguageSelections)
-        observePerMessageDictionary(vm.$revealedViewOnceIds, initial: vm.revealedViewOnceIds)
+        observeVisitState(vm)
 
         // Séparateur de premier non-lu (D-L1..3, #7222) — voir
         // `MessageListViewController+UnreadSeparator.swift`.
@@ -2664,80 +2661,12 @@ final class MessageListViewController: UIViewController {
     /// snapshot items are keyed on `localId`; reply chips pass the server
     /// id; this method bridges the two without forcing every call site
     /// to remember which kind it has.
-    private func resolveLocalId(_ id: String) -> String {
+    func resolveLocalId(_ id: String) -> String {
         // Most call sites pass a localId already (e.g. the typing → message
         // glue, the scroll-to-bottom action). Look it up via the
         // server-side map only when we don't already match an item key —
         // saves a dict probe on the hot scroll-to-bottom path.
         serverIdToLocalId[id] ?? id
-    }
-
-    /// ZONE 1 de la LOI DES ZONES (2026-08-24) — tap sur l'AVATAR de l'auteur
-    /// cité (le NOM ne l'ouvre plus). Résout le message cité dans le store
-    /// local pour ouvrir le profil RÉEL (username/avatar) ; repli sur une
-    /// fiche nom-seul (la sheet profil résout par username) quand le cité
-    /// n'est plus dans la fenêtre locale.
-    ///
-    /// L'avatar de la RÉFÉRENCE est le dernier recours des deux branches : il
-    /// voyage avec la citation depuis le 2026-08-24, là où la relecture du
-    /// store dépend, elle, de la position de défilement. Sans lui, la fiche
-    /// ouverte depuis un message sorti de la fenêtre chargée s'affichait sans
-    /// visage — le geste ouvrait bien la porte, mais la pièce était vide.
-    private func openQuotedAuthorProfile(_ reference: ReplyReference) {
-        let localId = resolveLocalId(reference.messageId)
-        if let quoted = store.domainMessage(for: localId, currentUserId: currentUserId) {
-            router.deepLinkProfileUser = ProfileSheetUser(
-                userId: quoted.senderId,
-                username: quoted.senderUsername ?? quoted.senderName ?? reference.authorName,
-                displayName: quoted.senderName ?? reference.authorName,
-                avatarURL: quoted.senderAvatarURL ?? reference.authorAvatarUrl,
-                accentColor: reference.authorColor
-            )
-            return
-        }
-        router.deepLinkProfileUser = ProfileSheetUser(
-            userId: nil,
-            username: reference.authorName,
-            displayName: reference.authorName,
-            avatarURL: reference.authorAvatarUrl,
-            accentColor: reference.authorColor
-        )
-    }
-
-    /// Tap sur la zone MÉDIA d'une citation — la pièce est élue par
-    /// `ReplyReference.citedAttachment(among:)`, site UNIQUE partagé avec son
-    /// ICÔNE (#6164) : image/vidéo → plein écran (`onMediaTap`), audio →
-    /// lecture (`playAudio`, même file) ; document et cité hors fenêtre locale
-    /// → saut à l'original (la carte document y offre téléchargement/partage).
-    private func openQuotedMedia(_ reference: ReplyReference) {
-        let localId = resolveLocalId(reference.messageId)
-        guard let quoted = store.domainMessage(for: localId, currentUserId: currentUserId),
-              let attachment = reference.citedAttachment(among: quoted.attachments)
-        else {
-            scrollToMessage(localId: localId)
-            return
-        }
-        // Miroir explicite de `BubbleGridCell.handleTap`
-        // (`BubbleStandardLayout+Media.swift`), qui refuse d'ouvrir un
-        // attachement protégé tant qu'il n'a pas été révélé. Ce verrou
-        // manquait ici, et la LOI DES ZONES vient d'ÉLARGIR la porte : une
-        // icône de lecture explicite invite là où un `waveform` inerte ne le
-        // faisait pas, et la peau BULLE — celle de tout le monde — vient
-        // d'acquérir la zone. Élargir une porte sans son verrou serait une
-        // régression d'exposition. Le repli est le saut à l'original, où le
-        // média garde son propre geste de révélation.
-        guard !(attachment.isViewOnce || attachment.isBlurred) else {
-            scrollToMessage(localId: localId)
-            return
-        }
-        switch attachment.type {
-        case .image, .video:
-            onMediaTap?(attachment)
-        case .audio:
-            conversationViewModel?.playAudio(attachmentId: attachment.id)
-        case .file, .location:
-            scrollToMessage(localId: localId)
-        }
     }
 
     func scrollToMessage(localId: String) {
@@ -2941,7 +2870,8 @@ extension MessageListViewController: UICollectionViewDelegate {
         willDisplay cell: UICollectionViewCell,
         forItemAt indexPath: IndexPath
     ) {
-        applyFocalPerspective(to: cell)
+        applyFocalPerspectiveOnCellDisplay()
+        applyLongMessageExpansionPresentation(animated: false)
         guard rendersThread, let serverId = serverMessageId(at: indexPath) else { return }
         let now = Self.nowMs()
         lastSeenActivityMs = now
@@ -2953,6 +2883,7 @@ extension MessageListViewController: UICollectionViewDelegate {
         didEndDisplaying cell: UICollectionViewCell,
         forItemAt indexPath: IndexPath
     ) {
+        applyLongMessageExpansionPresentation(animated: true, excluding: cell)
         guard rendersThread, let serverId = serverMessageId(at: indexPath) else { return }
         let now = Self.nowMs()
         lastSeenActivityMs = now
@@ -2967,6 +2898,7 @@ extension MessageListViewController: UICollectionViewDelegate {
         let frameHeight = scrollView.frame.height
 
         setScrollingActive(scrollView.isDragging || scrollView.isDecelerating)
+        keyboardFirst.noteScroll(offsetY: offset, isTracking: scrollView.isTracking)
         // Chrome (boutons, composeur, bulle « retour en bas », pilule) :
         // caché tant que le doigt est posé, puis tant que la décélération est
         // LOIN de son offset d'arrivée ; il revient « quand on s'approche de
@@ -2976,7 +2908,7 @@ extension MessageListViewController: UICollectionViewDelegate {
             isTracking: scrollView.isTracking,
             isDecelerating: scrollView.isDecelerating,
             remainingDistance: decelerationTargetOffsetY.map { $0 - scrollView.contentOffset.y }
-        ))
+        ) && keyboardFirst.chromeMayCollapse)
 
         // Verrou de scène (rouleau) : le doigt/momentum RE-CAPTURE l'ancre à
         // chaque frame ; sans pilote et loin du bas, tout écart est annulé.
@@ -3106,6 +3038,7 @@ extension MessageListViewController: UICollectionViewDelegate {
     /// jamais par-dessus un geste.
     func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
         scrollSettleTarget = nil
+        keyboardFirst.gestureBegan(offsetY: scrollView.contentOffset.y)
     }
 
     /// **Adopter ce que le fil MESURE** (#4041) — à la POSE uniquement.
@@ -3167,128 +3100,4 @@ extension MessageListViewController: UICollectionViewDelegate {
         flushDeferredReconfigureAtSettle()
     }
 
-}
-
-// MARK: - Typing Indicator Cell
-
-/// Bulle « X écrit… » rendue comme dernière cellule du flux de messages
-/// (bas visuel de la liste inversée). Alignée côté expéditeur ; les points
-/// s'animent en autonomie via `@State` (pas de timer externe).
-///
-/// **`internal`, pas `private` (2026-08-25, constat L2b/2b-7).** La Rivière
-/// monte la MÊME vue en tenue plate (la peau de `Riviere/View/`) : `private` étant à
-/// portée de FICHIER, elle était invisible depuis `Riviere/View/` et la seule
-/// façon d'y rendre la frappe aurait été d'en déclarer une SECONDE — deux
-/// vues qui divergeraient sur les timings, le libellé et l'accessibilité, et
-/// la frappe n'aurait pas le même visage selon le mode de lecture.
-struct TypingIndicatorBubble: View {
-    let participants: [TypingParticipant]
-    let accentHex: String
-    let isDark: Bool
-    /// Rangée PLATE (Focal/Script, matrice §5) : pastille 22 de l'auteur +
-    /// trois points pulsants accent, SANS capsule ni libellé visible (mêmes
-    /// timings 0.5 s / 0.18 s). `false` = capsule historique du mode bulles.
-    var isFlat: Bool = false
-
-    @State private var animating = false
-
-    private var names: [String] { participants.displayNames }
-
-    private var label: String {
-        switch names.count {
-        case 0: return ""
-        case 1: return String(format: String(localized: "typing.named", bundle: .main), names[0])
-        case 2: return String(format: String(localized: "typing.double", bundle: .main), names[0], names[1])
-        default: return String(localized: "typing.several", bundle: .main)
-        }
-    }
-
-    /// Le frappeur dont on montre le visage : le premier du roster, dans
-    /// l'ordre de première apparition tenu par `ConversationSocketHandler`.
-    private var lead: TypingParticipant? { participants.first }
-
-    /// Pastille de l'auteur — sa VRAIE photo dès qu'elle est connue localement,
-    /// ses initiales déterministes sinon. `MeeshyAvatar` porte déjà la cascade
-    /// (cache disque → réseau → initiales) : lui passer `avatarURL` suffit.
-    @ViewBuilder
-    private func leadAvatar(size: CGFloat) -> some View {
-        if let lead {
-            MeeshyAvatar(
-                name: lead.displayName,
-                context: .custom(size),
-                accentColor: accentHex,
-                avatarURL: lead.avatarURL,
-                isDark: isDark
-            )
-        }
-    }
-
-    /// Les trois points pulsants — mêmes timings dans les deux tenues.
-    private func pulsingDots(accent: Color) -> some View {
-        HStack(spacing: 3) {
-            ForEach(0..<3, id: \.self) { i in
-                Circle()
-                    .fill(accent)
-                    .frame(width: 5, height: 5)
-                    .scaleEffect(animating ? 1.0 : 0.5)
-                    .opacity(animating ? 1.0 : 0.4)
-                    // Ici le repos EST la cible (`animating == true` : pleine
-                    // taille, pleine opacité) — l'inverse du point d'appel juste
-                    // à côté. En tenue plate il n'y a aucun libellé : ce qui dit
-                    // « quelqu'un écrit » est la PRÉSENCE des trois points, pas
-                    // leur mouvement. Les rendre à demi-taille et à 40 %
-                    // d'opacité les ferait passer pour une décoration éteinte.
-                    .meeshyAnimation(
-                        .easeInOut(duration: 0.5)
-                            .repeatForever(autoreverses: true)
-                            .delay(Double(i) * 0.18),
-                        value: animating
-                    )
-            }
-        }
-    }
-
-    var body: some View {
-        let accent = Color(hex: accentHex)
-        HStack(spacing: 0) {
-            if isFlat {
-                HStack(spacing: 7) {
-                    leadAvatar(size: 22)
-                    pulsingDots(accent: accent)
-                }
-                // Aligné sur la colonne d'identité de FocalRow (retrait
-                // horizontal de rangée) — aucune capsule, aucun bord.
-                .padding(.horizontal, FocalMetrics.Row.paddingHorizontal)
-            } else {
-                HStack(spacing: 6) {
-                    // Le visage AVANT le libellé : « qui écrit » se lit d'un
-                    // coup d'œil, sans lire le nom. La capsule du mode bulles
-                    // ne le portait pas — seule la rangée plate en avait un, et
-                    // sans photo (initiales seules).
-                    leadAvatar(size: 18)
-                    if !label.isEmpty {
-                        Text(label)
-                            // Dynamic Type (153i) : libellé « X écrit… » réel et localisé —
-                            // scale via MeeshyFont.relative. La bulle est dimensionnée par
-                            // padding (pas de frame figée), donc elle grandit proprement ;
-                            // les 3 points restent des `Circle` décoratifs de 5pt.
-                            .font(MeeshyFont.relative(12, weight: .medium))
-                            .foregroundColor(isDark ? accent.opacity(0.85) : accent.opacity(0.7))
-                            .lineLimit(1)
-                    }
-                    pulsingDots(accent: accent)
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(Capsule().fill(isDark ? Color.white.opacity(0.07) : Color.black.opacity(0.05)))
-                .overlay(Capsule().strokeBorder(accent.opacity(isDark ? 0.25 : 0.18), lineWidth: 1))
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .onAppear { animating = true }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(label)
-    }
 }

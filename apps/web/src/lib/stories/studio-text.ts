@@ -34,7 +34,14 @@ export type StudioTextLayer = {
   /** La pastille derrière le texte, hex SANS dièse ; `null` = aucune. */
   readonly background: string | null;
   readonly pose: StudioPose;
+  /** LA FENÊTRE D'APPARITION (#8415, mode Animé) — en secondes, dans la
+   * durée de la scène. Absente : l'objet est là toute la scène. */
+  readonly timing?: StudioTiming;
 };
+
+/** Une fenêtre `[start, end[` en secondes — la forme que `CanvasV3` porte
+ * sur `ObjectV3.timing` et que le lecteur relit (`visibilityWindow`). */
+export type StudioTiming = { readonly start: number; readonly end: number };
 
 /** Les langues que l'auteur peut déclarer — les MÊMES sept que le sélecteur
  * iOS (`TextEditToolOptions.swift:454-460`), donc les sept de l'app. */

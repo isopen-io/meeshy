@@ -74,19 +74,19 @@ public struct TransitionInspector: View {
     }
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             header
             kindPicker
             durationSlider
             easingPicker
             deleteButton
         }
-        .padding(14)
+        .padding(MeeshySpacing.mdPlus)
         // Même composition que ClipInspector/KeyframeInspector : matériau
         // sous le contenu (jamais glassEffect, le verre ne peut pas
         // échantillonner du verre — artefacts iOS 26).
         .background(
-            RoundedRectangle(cornerRadius: 14).fill(.ultraThinMaterial)
+            RoundedRectangle(cornerRadius: MeeshyRadius.md).fill(.ultraThinMaterial)
         )
         .frame(maxWidth: 360, alignment: .leading)
         .accessibilityElement(children: .contain)
@@ -96,7 +96,7 @@ public struct TransitionInspector: View {
     /// Titre lisible — l'ancien header affichait les UUID bruts des deux
     /// clips (« 5D212F9D-6530-… »), inutilisables (retour user 2026-07-11).
     private var header: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: MeeshySpacing.sm) {
             Image(systemName: "diamond.fill")
                 .foregroundStyle(MeeshyColors.warning)
                 .accessibilityHidden(true)
@@ -122,7 +122,7 @@ public struct TransitionInspector: View {
     /// is opened (`onAppear` below), matching what it already looks like
     /// everywhere it plays.
     private var kindPicker: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: MeeshySpacing.xsPlus) {
             Text(String(localized: "story.timeline.transition.crossfade", bundle: .module))
                 .font(.subheadline.weight(.semibold))
             Spacer(minLength: 0)
@@ -136,7 +136,7 @@ public struct TransitionInspector: View {
     }
 
     private var durationSlider: some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
             HStack {
                 // Clé dédiée : l'ancien label réutilisait la clé de TOOLTIP
                 // « DURATION %@ » et affichait le format brut (retour user).
@@ -146,7 +146,7 @@ public struct TransitionInspector: View {
                     .foregroundStyle(.secondary)
                 Spacer(minLength: 0)
                 Text(String(format: "%.2f s", duration))
-                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                    .font(.system(size: MeeshyFont.microSize, weight: .semibold, design: .monospaced))
                     .foregroundStyle(MeeshyColors.indigo400)
             }
             Slider(value: $duration, in: Self.durationRange, step: 0.05) { editing in
@@ -175,12 +175,12 @@ public struct TransitionInspector: View {
     }
 
     private var easingPicker: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
             Text(String(localized: "story.timeline.inspector.easing.section",
                         defaultValue: "Courbe", bundle: .module).uppercased())
                 .font(.system(size: 9, weight: .semibold))
                 .foregroundStyle(.secondary)
-            HStack(spacing: 6) {
+            HStack(spacing: MeeshySpacing.xsPlus) {
                 ForEach([StoryEasing.linear, .easeIn, .easeOut, .easeInOut], id: \.self) { candidate in
                     let isOn = easing == candidate
                     Button {
@@ -189,8 +189,8 @@ public struct TransitionInspector: View {
                     } label: {
                         Text(Self.easingDisplayName(candidate))
                             .font(.caption2.weight(.semibold))
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
+                            .padding(.horizontal, MeeshySpacing.smPlus)
+                            .padding(.vertical, MeeshySpacing.xsPlus)
                             .background(Capsule().fill(
                                 isOn ? MeeshyColors.indigo500 : MeeshyColors.indigo500.opacity(0.14)))
                             .foregroundStyle(isOn ? .white : MeeshyColors.indigo400)

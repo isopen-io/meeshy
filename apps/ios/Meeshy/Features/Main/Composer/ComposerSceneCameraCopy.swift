@@ -106,6 +106,78 @@ enum ComposerSceneCameraCopy {
                defaultValue: "Revenir à la scène", bundle: .main)
     }
 
+    /// **Les gestes d'une scène vide, une ligne chacun** (#8653, #8671,
+    /// #8711) : le viseur au premier toucher, la photo au second, la vidéo au
+    /// maintien — le format décide lesquels paraissent
+    /// (`ComposerSceneQuickCapture.gestureLines`).
+    static func gestureLine(_ line: ComposerSceneQuickCapture.GestureLine) -> String {
+        switch line {
+        case .tapArm:
+            return String(localized: "composer.camera.gesture.tapArm",
+                          defaultValue: "Toucher : ouvrir le viseur", bundle: .main)
+        case .tapAgainPhoto:
+            return String(localized: "composer.camera.gesture.tapAgainPhoto",
+                          defaultValue: "Toucher encore : photo", bundle: .main)
+        case .holdFilm:
+            return String(localized: "composer.camera.gesture.holdFilm",
+                          defaultValue: "Maintenir : filmer", bundle: .main)
+        }
+    }
+
+    /// **La scène vide se VEND avant de s'expliquer** (#8671, directive porteur
+    /// 2026-09-29 : « être plus commercial : ceci est votre scène, ajouter
+    /// texte, dessin, image, vidéo. Puis le petit détail en plus grand »).
+    static var emptySceneTitle: String {
+        String(localized: "composer.scene.empty.title",
+               defaultValue: "Ceci est votre scène", bundle: .main)
+    }
+
+    static var emptySceneInvite: String {
+        String(localized: "composer.scene.empty.invite",
+               defaultValue: "Ajoutez-y un texte, un dessin, une image ou une vidéo — et faites-la vôtre.",
+               bundle: .main)
+    }
+
+    /// Ce que VoiceOver lit de la scène vide : les trois lignes, dans l'ordre
+    /// où l'œil les parcourt.
+    static func emptySceneSpoken(_ hint: ComposerSceneQuickCapture.Hint) -> String {
+        ([emptySceneTitle, emptySceneInvite]
+            + ComposerSceneQuickCapture.gestureLines(hint).map(gestureLine))
+            .joined(separator: ". ")
+    }
+
+    /// **Le cadenas** (#8671) — dit ce que le glissé FAIT.
+    static var lockHint: String {
+        String(localized: "composer.camera.lock.hint",
+               defaultValue: "Glisser vers le cadenas pour verrouiller", bundle: .main)
+    }
+
+    /// Annoncé quand le verrou prend : le doigt peut partir.
+    static var lockedAnnouncement: String {
+        String(localized: "composer.camera.lock.done",
+               defaultValue: "Enregistrement verrouillé", bundle: .main)
+    }
+
+    static var zoomLabel: String {
+        String(localized: "composer.camera.zoom",
+               defaultValue: "Zoom", bundle: .main)
+    }
+
+    /// Le facteur tel qu'on le lit sur un appareil photo : « 2,5× ».
+    static func zoomValue(_ factor: CGFloat) -> String {
+        Double(factor).formatted(.number.precision(.fractionLength(1))) + "×"
+    }
+
+    static var flashIntensityLabel: String {
+        String(localized: "composer.camera.flashIntensity",
+               defaultValue: "Intensité du flash", bundle: .main)
+    }
+
+    static func flashIntensityValue(_ level: Double) -> String {
+        (Double(ComposerFlashIntensity.percent(level)) / 100)
+            .formatted(.percent.precision(.fractionLength(0)))
+    }
+
     /// **Le libellé parlé dit l'ACTION, jamais la forme.** « Bouton rond
     /// corail » n'apprend rien ; « Prendre une photo » et « Arrêter
     /// l'enregistrement » disent ce qu'un appui fera — et ils diffèrent selon

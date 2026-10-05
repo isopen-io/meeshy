@@ -112,7 +112,7 @@ public struct MeeshyAudioEditorView: View {
     // MARK: - Preparing State
 
     private var preparingState: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: MeeshySpacing.lg) {
             ProgressView()
                 .tint(accent)
                 .scaleEffect(1.2)
@@ -135,21 +135,21 @@ public struct MeeshyAudioEditorView: View {
             ScrollView {
                 VStack(spacing: 0) {
                     header
-                        .padding(.horizontal, 16)
-                        .padding(.top, 10)
+                        .padding(.horizontal, MeeshySpacing.lg)
+                        .padding(.top, MeeshySpacing.smPlus)
 
                     Spacer(minLength: 6)
 
                     waveformSection
-                        .padding(.horizontal, 18)
+                        .padding(.horizontal, MeeshySpacing.lg)
 
                     transportControls
-                        .padding(.top, 18)
+                        .padding(.top, MeeshySpacing.lg)
 
                     Spacer(minLength: 6)
 
                     bottomDock
-                        .padding(.horizontal, 16)
+                        .padding(.horizontal, MeeshySpacing.lg)
                         .padding(.bottom, 28)
                 }
                 // Plancher égal au conteneur : tant que le contenu tient, les
@@ -163,7 +163,7 @@ public struct MeeshyAudioEditorView: View {
     }
 
     private var bottomDock: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: MeeshySpacing.smPlus) {
             if let error = controller.lastError {
                 errorBanner(error)
             }
@@ -182,7 +182,7 @@ public struct MeeshyAudioEditorView: View {
     // MARK: - Header
 
     private var header: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: MeeshySpacing.smPlus) {
             circleButton(icon: "xmark") { cancelEditing() }
                 .accessibilityLabel(String(localized: "audio.editor.close",
                                            defaultValue: "Fermer", bundle: .module))
@@ -213,9 +213,9 @@ public struct MeeshyAudioEditorView: View {
             ZStack {
                 Circle()
                     .fill(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.05))
-                    .frame(width: 38, height: 38)
+                    .frame(width: MeeshyControlSize.regular, height: MeeshyControlSize.regular)
                 Image(systemName: icon)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.system(size: MeeshyIconSize.sm, weight: .semibold))
                     .foregroundColor(theme.textPrimary.opacity(enabled ? 0.85 : 0.25))
             }
         }
@@ -226,7 +226,7 @@ public struct MeeshyAudioEditorView: View {
     // MARK: - Mode Switcher (Simple / Pro — timeline switch style)
 
     private var modeSwitcher: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: MeeshySpacing.xs) {
             modeSegment(.simple, label: String(localized: "audio.editor.mode.simple",
                                                defaultValue: "Simple", bundle: .module),
                         icon: "square.split.2x1")
@@ -234,13 +234,13 @@ public struct MeeshyAudioEditorView: View {
                                             defaultValue: "Pro", bundle: .module),
                         icon: "slider.horizontal.below.rectangle")
         }
-        .padding(4)
+        .padding(MeeshySpacing.xs)
         .background(
             Capsule().fill(isDark ? MeeshyColors.indigo900.opacity(0.55)
                                   : MeeshyColors.indigo100.opacity(0.85))
         )
         .overlay(
-            Capsule().strokeBorder(MeeshyColors.indigo400.opacity(0.25), lineWidth: 0.5)
+            Capsule().strokeBorder(MeeshyColors.indigo400.opacity(0.25), lineWidth: MeeshyBorder.hairline)
         )
     }
 
@@ -251,12 +251,12 @@ public struct MeeshyAudioEditorView: View {
             HapticFeedback.light()
             controller.mode = target
         } label: {
-            HStack(spacing: 5) {
-                Image(systemName: icon).font(.system(size: 11, weight: .semibold))
-                Text(label).font(.system(size: 12, weight: .semibold))
+            HStack(spacing: MeeshySpacing.xs) {
+                Image(systemName: icon).font(.system(size: MeeshyIconSize.xxs, weight: .semibold))
+                Text(label).font(.system(size: MeeshyFont.smallSize, weight: .semibold))
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
+            .padding(.horizontal, MeeshySpacing.md)
+            .padding(.vertical, MeeshySpacing.xsPlus)
             .frame(minWidth: 72)
             .foregroundStyle(isActive ? Color.white
                              : (isDark ? MeeshyColors.indigo100 : MeeshyColors.indigo700))
@@ -273,7 +273,7 @@ public struct MeeshyAudioEditorView: View {
     // MARK: - Waveform Section
 
     private var waveformSection: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: MeeshySpacing.sm) {
             AudioEditorWaveform(
                 samples: waveform.samples,
                 progress: playbackProgress,
@@ -292,11 +292,11 @@ public struct MeeshyAudioEditorView: View {
 
             HStack {
                 Text(formatTime(displayTime))
-                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                    .font(.system(size: MeeshyFont.footnoteSize, weight: .semibold, design: .monospaced))
                     .foregroundColor(accent)
                 Spacer()
                 Text(formatTime(controller.activeDuration))
-                    .font(.system(size: 11, design: .monospaced))
+                    .font(.system(size: MeeshyFont.footnoteSize, design: .monospaced))
                     .foregroundColor(theme.textMuted)
             }
         }
@@ -337,7 +337,7 @@ public struct MeeshyAudioEditorView: View {
                         .frame(width: 60, height: 60)
                         .shadow(color: accent.opacity(0.4), radius: 12)
                     Image(systemName: isPlaying ? "pause.fill" : "play.fill")
-                        .font(.system(size: 23, weight: .semibold))
+                        .font(.system(size: MeeshyIconSize.xxl, weight: .semibold))
                         .foregroundColor(.white)
                         .offset(x: isPlaying ? 0 : 2)
                 }
@@ -365,7 +365,7 @@ public struct MeeshyAudioEditorView: View {
     // MARK: - Tool Strip (FAB-style)
 
     private var toolStrip: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: MeeshySpacing.smPlus) {
             ForEach(controller.availableTools) { tool in
                 toolFAB(tool)
             }
@@ -379,7 +379,7 @@ public struct MeeshyAudioEditorView: View {
             HapticFeedback.light()
             controller.selectTool(isActive ? nil : tool)
         } label: {
-            VStack(spacing: 5) {
+            VStack(spacing: MeeshySpacing.xs) {
                 ZStack {
                     Circle()
                         .fill(isActive ? AnyShapeStyle(MeeshyColors.brandGradient)
@@ -393,11 +393,11 @@ public struct MeeshyAudioEditorView: View {
                             )
                         )
                     Image(systemName: tool.icon)
-                        .font(.system(size: 18, weight: .semibold))
+                        .font(.system(size: MeeshyIconSize.lg, weight: .semibold))
                         .foregroundColor(isActive ? .white : accent)
                 }
                 Text(tool.title)
-                    .font(.system(size: 10, weight: .medium))
+                    .font(.system(size: MeeshyFont.captionSize, weight: .medium))
                     .foregroundColor(isActive ? theme.textPrimary : theme.textMuted)
                     .lineLimit(1)
             }
@@ -411,7 +411,7 @@ public struct MeeshyAudioEditorView: View {
 
     @ViewBuilder
     private func toolPanel(for tool: AudioEditorTool) -> some View {
-        VStack(spacing: 12) {
+        VStack(spacing: MeeshySpacing.md) {
             switch tool {
             case .trim:
                 selectionHint(
@@ -448,15 +448,15 @@ public struct MeeshyAudioEditorView: View {
                 transcribePanel
             }
         }
-        .padding(14)
+        .padding(MeeshySpacing.mdPlus)
         .background(panelBackground)
     }
 
     private var panelBackground: some View {
-        RoundedRectangle(cornerRadius: 18, style: .continuous)
+        RoundedRectangle(cornerRadius: MeeshyRadius.lgPlus, style: .continuous)
             .fill(isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.035))
             .overlay(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                RoundedRectangle(cornerRadius: MeeshyRadius.lgPlus, style: .continuous)
                     .strokeBorder(isDark ? Color.white.opacity(0.08)
                                   : Color.black.opacity(0.06), lineWidth: 1)
             )
@@ -464,9 +464,9 @@ public struct MeeshyAudioEditorView: View {
 
     private func selectionHint(text: String, resetTitle: String,
                                reset: @escaping () -> Void) -> some View {
-        HStack(spacing: 10) {
+        HStack(spacing: MeeshySpacing.smPlus) {
             Text(text)
-                .font(.system(size: 12))
+                .font(.system(size: MeeshyFont.smallSize))
                 .foregroundColor(theme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 8)
@@ -475,7 +475,7 @@ public struct MeeshyAudioEditorView: View {
                 reset()
             } label: {
                 Text(resetTitle)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(size: MeeshyFont.smallSize, weight: .semibold))
                     .foregroundColor(accent)
             }
             .buttonStyle(.plain)
@@ -483,7 +483,7 @@ public struct MeeshyAudioEditorView: View {
     }
 
     private var fadePanel: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: MeeshySpacing.smPlus) {
             Toggle(isOn: $controller.fadeIn) {
                 Label(String(localized: "audio.editor.fade.in",
                              defaultValue: "Fondu d'entr\u{00E9}e", bundle: .module),
@@ -505,7 +505,7 @@ public struct MeeshyAudioEditorView: View {
 
     private var speedPanel: some View {
         let speeds: [Double] = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0]
-        return HStack(spacing: 8) {
+        return HStack(spacing: MeeshySpacing.sm) {
             ForEach(speeds, id: \.self) { value in
                 let isActive = abs(controller.speed - value) < 0.001
                 Button {
@@ -514,12 +514,12 @@ public struct MeeshyAudioEditorView: View {
                     applyPreviewRate()
                 } label: {
                     Text(speedLabel(value))
-                        .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                        .font(.system(size: MeeshyFont.smallSize, weight: .semibold, design: .monospaced))
                         .foregroundColor(isActive ? .white : theme.textSecondary)
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 9)
+                        .padding(.vertical, MeeshySpacing.sm)
                         .background(
-                            RoundedRectangle(cornerRadius: 10)
+                            RoundedRectangle(cornerRadius: MeeshyRadius.sm)
                                 .fill(isActive ? AnyShapeStyle(MeeshyColors.brandGradient)
                                       : AnyShapeStyle(isDark ? Color.white.opacity(0.06)
                                                       : Color.black.opacity(0.04)))
@@ -531,19 +531,19 @@ public struct MeeshyAudioEditorView: View {
     }
 
     private var volumePanel: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: MeeshySpacing.sm) {
             HStack {
                 Image(systemName: "speaker.fill")
-                    .font(.system(size: 12))
+                    .font(.system(size: MeeshyIconSize.xs))
                     .foregroundColor(theme.textMuted)
                 Slider(value: $controller.gain, in: 0...2, step: 0.05)
                     .tint(accent)
                 Image(systemName: "speaker.wave.3.fill")
-                    .font(.system(size: 12))
+                    .font(.system(size: MeeshyIconSize.xs))
                     .foregroundColor(theme.textMuted)
             }
             Text(volumeLabel(controller.gain))
-                .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                .font(.system(size: MeeshyFont.smallSize, weight: .semibold, design: .monospaced))
                 .foregroundColor(accent)
         }
     }
@@ -551,7 +551,7 @@ public struct MeeshyAudioEditorView: View {
     // MARK: - Transcribe Panel
 
     private var transcribePanel: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: MeeshySpacing.md) {
             transcribeLanguageStrip
             transcribeAction
             transcribeResult
@@ -560,22 +560,22 @@ public struct MeeshyAudioEditorView: View {
 
     private var transcribeLanguageStrip: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 ForEach(transcribableLanguages, id: \.code) { language in
                     let isActive = controller.transcriptionLanguage == language.code
                     Button {
                         HapticFeedback.light()
                         controller.transcriptionLanguage = language.code
                     } label: {
-                        HStack(spacing: 5) {
+                        HStack(spacing: MeeshySpacing.xs) {
                             Text(language.flag)
                             Text(language.nativeName)
-                                .font(.system(size: 12, weight: .medium))
+                                .font(.system(size: MeeshyFont.smallSize, weight: .medium))
                                 .lineLimit(1)
                         }
                         .foregroundColor(isActive ? .white : theme.textSecondary)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
+                        .padding(.horizontal, MeeshySpacing.smPlus)
+                        .padding(.vertical, MeeshySpacing.xsPlus)
                         .background(
                             Capsule().fill(isActive ? AnyShapeStyle(MeeshyColors.brandGradient)
                                            : AnyShapeStyle(isDark ? Color.white.opacity(0.06)
@@ -585,14 +585,14 @@ public struct MeeshyAudioEditorView: View {
                     .buttonStyle(.plain)
                 }
             }
-            .padding(.horizontal, 2)
+            .padding(.horizontal, MeeshySpacing.xxs)
         }
     }
 
     @ViewBuilder
     private var transcribeAction: some View {
         if controller.transcription == .running {
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 ProgressView().tint(accent)
                 Text(String(localized: "audio.editor.transcription.running",
                             defaultValue: "Transcription en cours\u{2026}", bundle: .module))
@@ -604,16 +604,16 @@ public struct MeeshyAudioEditorView: View {
                 HapticFeedback.medium()
                 controller.transcribe()
             } label: {
-                HStack(spacing: 6) {
+                HStack(spacing: MeeshySpacing.xsPlus) {
                     Image(systemName: "waveform")
                     Text(transcribeButtonTitle)
                 }
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundColor(accent)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 10)
+                .padding(.vertical, MeeshySpacing.smPlus)
                 .background(
-                    RoundedRectangle(cornerRadius: 12)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                         .strokeBorder(accent.opacity(0.35), lineWidth: 1)
                 )
             }
@@ -627,7 +627,7 @@ public struct MeeshyAudioEditorView: View {
         case .done(let text, _):
             ScrollView {
                 Text(text)
-                    .font(.system(size: 13))
+                    .font(.system(size: MeeshyFont.subheadSize))
                     .foregroundColor(theme.textPrimary.opacity(0.85))
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -649,12 +649,12 @@ public struct MeeshyAudioEditorView: View {
     }
 
     private func transcribeMessage(icon: String, text: String, tint: Color) -> some View {
-        HStack(spacing: 8) {
+        HStack(spacing: MeeshySpacing.sm) {
             Image(systemName: icon)
-                .font(.system(size: 12))
+                .font(.system(size: MeeshyIconSize.xs))
                 .foregroundColor(tint)
             Text(text)
-                .font(.system(size: 12))
+                .font(.system(size: MeeshyFont.smallSize))
                 .foregroundColor(theme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
@@ -665,12 +665,12 @@ public struct MeeshyAudioEditorView: View {
 
     private var historyStrip: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 ForEach(Array(controller.document.versions.enumerated()), id: \.element.id) { index, version in
                     historyChip(index: index, version: version)
                 }
             }
-            .padding(.horizontal, 2)
+            .padding(.horizontal, MeeshySpacing.xxs)
         }
     }
 
@@ -680,16 +680,16 @@ public struct MeeshyAudioEditorView: View {
             HapticFeedback.light()
             controller.selectVersion(version.id)
         } label: {
-            HStack(spacing: 5) {
+            HStack(spacing: MeeshySpacing.xs) {
                 Image(systemName: version.operation.displayIcon)
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(.system(size: MeeshyIconSize.xxs, weight: .semibold))
                 Text(version.operation.displayLabel)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.system(size: MeeshyFont.footnoteSize, weight: .medium))
                     .lineLimit(1)
             }
             .foregroundColor(isActive ? .white : theme.textSecondary)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
+            .padding(.horizontal, MeeshySpacing.smPlus)
+            .padding(.vertical, MeeshySpacing.xsPlus)
             .background(
                 Capsule().fill(isActive ? AnyShapeStyle(accent)
                                : AnyShapeStyle(isDark ? Color.white.opacity(0.06)
@@ -720,7 +720,7 @@ public struct MeeshyAudioEditorView: View {
                 .frame(maxWidth: .infinity)
                 .frame(height: 52)
                 .background(MeeshyColors.brandGradient)
-                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous))
                 .shadow(color: accent.opacity(0.3), radius: 12, y: 4)
         }
         .buttonStyle(.plain)
@@ -728,27 +728,27 @@ public struct MeeshyAudioEditorView: View {
     }
 
     private func errorBanner(_ message: String) -> some View {
-        HStack(spacing: 8) {
+        HStack(spacing: MeeshySpacing.sm) {
             Image(systemName: "exclamationmark.triangle.fill")
-                .font(.system(size: 12))
+                .font(.system(size: MeeshyIconSize.xs))
                 .foregroundColor(MeeshyColors.error)
             Text(message)
-                .font(.system(size: 12))
+                .font(.system(size: MeeshyFont.smallSize))
                 .foregroundColor(theme.textSecondary)
             Spacer(minLength: 0)
             Button {
                 controller.lastError = nil
             } label: {
                 Image(systemName: "xmark")
-                    .font(.system(size: 10, weight: .bold))
+                    .font(.system(size: MeeshyIconSize.xxs, weight: .bold))
                     .foregroundColor(theme.textMuted)
             }
             .buttonStyle(.plain)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 9)
+        .padding(.horizontal, MeeshySpacing.md)
+        .padding(.vertical, MeeshySpacing.sm)
         .background(
-            RoundedRectangle(cornerRadius: 12)
+            RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                 .fill(MeeshyColors.error.opacity(0.1))
         )
     }
@@ -758,16 +758,16 @@ public struct MeeshyAudioEditorView: View {
     private var processingOverlay: some View {
         ZStack {
             Color.black.opacity(0.35).ignoresSafeArea()
-            VStack(spacing: 12) {
+            VStack(spacing: MeeshySpacing.md) {
                 ProgressView().tint(.white).scaleEffect(1.2)
                 Text(String(localized: "audio.editor.processing",
                             defaultValue: "Traitement\u{2026}", bundle: .module))
                     .font(.system(size: 13, weight: .medium))
                     .foregroundColor(.white)
             }
-            .padding(24)
+            .padding(MeeshySpacing.xxl)
             .background(
-                RoundedRectangle(cornerRadius: 18)
+                RoundedRectangle(cornerRadius: MeeshyRadius.lgPlus)
                     .fill(.ultraThinMaterial)
             )
         }

@@ -1,5 +1,7 @@
 import { readFileSync } from 'node:fs';
 
+import { readSwiftDesignTokens, SWIFT_VALUE } from './swift-design-tokens.mjs';
+
 /**
  * PARTIE 11 — LA GRILLE DE MÉDIAS DU FIL (#6169, § 5 étape d de la
  * spécification « grille de médias »). CINQ sources Swift, jamais importées
@@ -54,9 +56,10 @@ export function mediaGridCurveFailures({ root, count }) {
   const mediaStageDerived = readFileSync(`${root}apps/web/src/lib/view/media-stage.ts`, 'utf8');
 
   /** `nom: CGFloat = valeur` ou `nom = valeur` — motif PARTIE 9 (`bubbleStickerNumber`), généralisé aux cinq sources d'ici. */
+  const tokens = readSwiftDesignTokens(root);
   const swiftNumber = (text, name) => {
-    const m = new RegExp(`\\b${name}\\s*(?::\\s*\\w+\\s*)?=\\s*(-?[0-9.]+)`).exec(text);
-    return m === null ? null : Number(m[1]);
+    const m = new RegExp(`\\b${name}\\s*(?::\\s*\\w+\\s*)?=\\s*${SWIFT_VALUE}`).exec(text);
+    return m === null ? null : tokens.value(m[1]);
   };
 
   const check = (what, swiftValue, derivedValue) => {
@@ -118,12 +121,14 @@ export function mediaGridCurveFailures({ root, count }) {
     return m === null ? '' : m[0];
   })();
   const overflowOpacitySwift = (() => {
-    const m = /Color\.black\.opacity\((-?[0-9.]+)\)/.exec(overflowOverlaySwift);
-    return m === null ? null : Number(m[1]);
+    const literal = new RegExp(`Color\\.black\\.opacity\\(${SWIFT_VALUE}\\)`).exec(overflowOverlaySwift);
+    if (literal !== null) return tokens.value(literal[1]);
+    const veil = /^\s*(MeeshyColors\.\w+)\s*$/m.exec(overflowOverlaySwift);
+    return veil === null ? null : tokens.veilOpacity(veil[1]);
   })();
   const overflowLabelSizeSwift = (() => {
-    const m = /relative\((-?[0-9.]+),\s*weight:\s*\.bold\)/.exec(overflowOverlaySwift);
-    return m === null ? null : Number(m[1]);
+    const m = new RegExp(`relative\\(${SWIFT_VALUE},\\s*weight:\\s*\\.bold\\)`).exec(overflowOverlaySwift);
+    return m === null ? null : tokens.value(m[1]);
   })();
   check(
     'grille de médias : opacité du voile « +N » (overflowOverlay)',

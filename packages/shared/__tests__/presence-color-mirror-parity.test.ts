@@ -57,7 +57,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync } from 'fs';
 import { join } from 'path';
-import { PRESENCE_HEX } from '../utils/user-presence.js';
+import { PRESENCE_HEX, PRESENCE_HERE_HEX } from '../utils/user-presence.js';
 
 const SWIFT_COLORS_SOURCE = join(
   __dirname,
@@ -229,6 +229,16 @@ describe('palette de présence 1/3/5 — TS, Swift et Kotlin ne peuvent pas dive
       expect(androidTone).toBe(tone);
     }
   );
+
+  it('iOS : le point « ici » (#8892) est la couleur primaire, égale à PRESENCE_HERE_HEX', () => {
+    expect(swiftStyle).toMatch(
+      /public static let hereDotColor\s*=\s*MeeshyColors\.brandPrimary\b/
+    );
+    const brandPrimaryHex = swiftColors.match(/public static let brandPrimaryHex\s*=\s*"([0-9A-Fa-f]{6})"/);
+    expect(brandPrimaryHex?.[1] && canon(brandPrimaryHex[1])).toBe(canon(PRESENCE_HERE_HEX));
+    expect(swiftColors).toMatch(/public static let brandPrimary\s*=\s*indigo500\b/);
+    expect(swiftColorHex(swiftColors, 'indigo500')).toBe(canon(PRESENCE_HERE_HEX));
+  });
 
   it('le web importe la palette de la source de vérité, sans la recopier', () => {
     const avatar = readFileSync(WEB_AVATAR_SOURCE, 'utf8');

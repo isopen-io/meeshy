@@ -43,6 +43,10 @@ extension ConversationView {
             secondaryColor: secondaryColor,
             headerMoodEmoji: headerMoodEmoji,
             headerPresenceState: headerPresenceState,
+            showsIdentity: headerLayout.avatarShowsIdentity,
+            isPreview: previewMode,
+            onSetExpanded: { setHeaderExpanded($0) },
+            onDismissFlame: { dismissHeaderFlame() },
             onNavigateToDM: { userId, name in
                 Task { await self.navigateToDM(with: userId, name: name) }
             },
@@ -57,6 +61,64 @@ extension ConversationView {
         ))
     }
 
+    // MARK: - L'aperçu tiré de la bannière (#8822)
+
+    /// Ce que la bande d'en-tête montre : l'aperçu porte l'en-tête COMPLET dans
+    /// son bloc de verre, sans chevron retour (`ConversationHeaderLayout`).
+    var headerLayout: ConversationHeaderLayout {
+        ConversationHeaderLayout.resolve(previewMode: previewMode, showOptions: composerState.showOptions)
+    }
+
+    /// LA PORTE VERS LA CONVERSATION COMPLÈTE, dans l'aperçu. Elle remplace le
+    /// calque transparent posé sur tout le fil, qui l'ouvrait au toucher — et
+    /// volait ainsi le DÉFILEMENT à la liste.
+    var openFullConversationButton: AnyView {
+        AnyView(Button {
+            HapticFeedback.light()
+            onOpenFullConversation?()
+        } label: {
+            HeaderOpenFullGlyph(accentColor: accentColor)
+        }
+        .accessibilityLabel(String(localized: "conversation.preview.openFull", defaultValue: "Ouvrir la conversation", bundle: .main))
+        .accessibilityIdentifier("conversation.preview.openFull"))
+    }
+
+    // MARK: - La mémoire de l'en-tête (#9031)
+
+    /// Déplie ou replie l'en-tête par le GESTE du lecteur, et le retient pour
+    /// cette conversation. Déplier ramène aussi la flamme du jour qu'il avait
+    /// touchée (`HeaderFlameVisibility`). Les replis automatiques (frappe, menu
+    /// d'appui long) ne passent pas ici : ils ne disent rien de sa préférence.
+    func setHeaderExpanded(_ expanded: Bool) {
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+            composerState.showOptions = expanded
+        }
+        guard !previewMode, let conversationId = conversation?.id else { return }
+        headerMemory.setExpanded(expanded, for: conversationId)
+        let dismissed = HeaderFlameVisibility.dismissed(afterHeaderExpanded: expanded, wasDismissed: headerState.flameDismissed)
+        guard dismissed != headerState.flameDismissed else { return }
+        headerState.flameDismissed = dismissed
+        headerMemory.setFlameDismissed(dismissed, for: conversationId)
+    }
+
+    /// Relit ce que l'en-tête de cette conversation avait retenu. L'aperçu tiré
+    /// d'une bannière a sa propre disposition et ne lit rien.
+    func restoreHeaderMemory() {
+        guard !previewMode, let conversationId = conversation?.id else { return }
+        composerState.showOptions = headerMemory.isExpanded(conversationId)
+        headerState.flameDismissed = headerMemory.isFlameDismissed(conversationId)
+    }
+
+    func dismissHeaderFlame() {
+        HapticFeedback.light()
+        headerState.flameDismissed = true
+        guard let conversationId = conversation?.id else { return }
+        headerMemory.setFlameDismissed(true, for: conversationId)
+    }
+
+    var headerMemory: ConversationHeaderMemoryProviding { ConversationHeaderMemory.shared }
+
+
     // MARK: - Header Call Buttons (audio + video)
 
     // AnyView : dernier maillon nu de la chaîne du header (voir les
@@ -64,6 +126,38 @@ extension ConversationView {
     // `readingModeAffordanceCluster` dans ConversationView.swift, même
     // débordement de pile au décodage de mangled name, 2026-08-17).
     var headerCallButtons: AnyView {
+        AnyView(headerCallButtonsOnly
+        .task(id: liveConversation?.id) {
+            await ConversationEngagementStore.shared.revalidate(liveConversation?.id ?? "")
+        })
+    }
+
+    // MARK: - « 🔥 série · total » (#8906, #9044)
+
+    /// Ce que le lecteur a gagné dans CETTE conversation. Elle ne se lit que
+    /// sous le titre de l'en-tête DÉPLIÉ : replié ou en aperçu, c'est la flamme
+    /// du jour sous l'avatar qui parle.
+    var headerEngagementBadge: some View {
+        ConversationEngagementBadge(
+            conversationId: liveConversation?.id ?? "",
+            seed: liveConversation?.viewerEngagement,
+            accentColor: accentColor
+        )
+    }
+
+    private var headerCallButtonsOnly: AnyView {
+        // #3585 — un groupe s'appelle depuis le MÊME bouton qu'un contact : la
+        // poignée de l'appel est la conversation, son nom le titre du groupe.
+        if conversation?.type == .group, let groupId = conversation?.id, !groupId.isEmpty {
+            return AnyView(HeaderCallButtonsView(
+                conversationId: groupId,
+                userId: groupId,
+                calleeName: conversation?.displayName ?? "",
+                accentColor: accentColor,
+                secondaryColor: secondaryColor,
+                isGroup: true
+            ))
+        }
         guard isDirect, let userId = conversation?.participantUserId else { return AnyView(EmptyView()) }
         // §7.6 — the start-call buttons are owned by a dedicated subview that
         // observes CallManager, so during an active call they swap to a
@@ -111,35 +205,40 @@ extension ConversationView {
         // au-dessus dans le même en-tête.
         let isEncrypted = liveConversation?.encryptionMode != nil
         let hasTags = conversationSection != nil || !(liveConversation?.tags.isEmpty ?? true) || isEncrypted
+        let showsEngagement = !headerLayout.showsActions
         if hasTags {
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 4) {
+                HStack(spacing: MeeshySpacing.xs) {
+                    if showsEngagement {
+                        headerEngagementBadge
+                    }
+
                     // Lock icon (encryption only, no text)
                     if isEncrypted {
                         Image(systemName: "lock.fill")
-                            .font(MeeshyFont.relative(9, weight: .semibold))
+                            .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .semibold))
                             .foregroundColor(theme.success)
                             .accessibilityLabel(String(localized: "conversation.encrypted", defaultValue: "Conversation chiffrée", bundle: .main))
                     }
 
                     // Category tag
                     if let section = conversationSection {
-                        HStack(spacing: 2) {
+                        HStack(spacing: MeeshySpacing.xxs) {
                             Image(systemName: section.icon)
                                 .font(MeeshyFont.relative(7, weight: .bold))
                                 .accessibilityHidden(true)
                             Text(section.name)
-                                .font(MeeshyFont.relative(8, weight: .bold))
+                                .font(MeeshyFont.relative(MeeshyFont.microSize, weight: .bold))
                         }
                         .foregroundColor(Color(hex: section.color))
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 2)
+                        .padding(.horizontal, MeeshySpacing.xs)
+                        .padding(.vertical, MeeshySpacing.xxs)
                         .background(
                             Capsule()
-                                .fill(Color(hex: section.color).opacity(0.2))
+                                .fill(Color(hex: section.color).opacity(MeeshyOpacity.light))
                                 .overlay(
                                     Capsule()
-                                        .stroke(Color(hex: section.color).opacity(0.3), lineWidth: 0.5)
+                                        .stroke(Color(hex: section.color).opacity(MeeshyOpacity.medium), lineWidth: MeeshyBorder.hairline)
                                 )
                         )
                     }
@@ -147,22 +246,24 @@ extension ConversationView {
                     if let conv = liveConversation {
                         ForEach(conv.tags) { tag in
                             Text(tag.name)
-                                .font(MeeshyFont.relative(8, weight: .semibold))
+                                .font(MeeshyFont.relative(MeeshyFont.microSize, weight: .semibold))
                                 .foregroundColor(Color(hex: tag.color))
-                                .padding(.horizontal, 5)
-                                .padding(.vertical, 2)
+                                .padding(.horizontal, MeeshySpacing.xs)
+                                .padding(.vertical, MeeshySpacing.xxs)
                                 .background(
                                     Capsule()
-                                        .fill(Color(hex: tag.color).opacity(0.12))
+                                        .fill(Color(hex: tag.color).opacity(MeeshyOpacity.light))
                                         .overlay(
                                             Capsule()
-                                                .stroke(Color(hex: tag.color).opacity(0.25), lineWidth: 0.5)
+                                                .stroke(Color(hex: tag.color).opacity(MeeshyOpacity.medium), lineWidth: MeeshyBorder.hairline)
                                         )
                                 )
                         }
                     }
                 }
             }
+        } else if showsEngagement {
+            headerEngagementBadge
         }
     }
 
@@ -209,6 +310,9 @@ private struct HeaderCallButtonsView: View {
     let calleeName: String
     let accentColor: String
     let secondaryColor: String
+    /// #3585 — `userId` porte alors la conversation (poignée CallKit du groupe)
+    /// et `calleeName` son titre.
+    var isGroup = false
 
     @ObservedObject private var callManager = CallManager.shared
     /// Set when the SERVER (not this device's own `CallManager`) reports an
@@ -239,10 +343,10 @@ private struct HeaderCallButtonsView: View {
                 startCallButtons
             }
         }
-        // Re-reconciles whenever the conversation changes (task id) — not on
-        // every body re-eval, which would otherwise fire on every callState
-        // tick (e.g. once a rejoin succeeds and callDuration starts ticking).
-        .task(id: conversationId) {
+        // Re-reconciles when the conversation changes OR when the local call
+        // starts/stops (#9111 — after leaving a group call that goes on, the
+        // pill must come back as « Rejoindre ») — never on every callState tick.
+        .task(id: HeaderCallReconcileKey(conversationId: conversationId, isLocalCallActive: callManager.callState.isActive)) {
             await reconcileActiveCall()
         }
         // Invalidation temps réel : le gateway fanout `call:ended` jusqu'aux
@@ -282,22 +386,24 @@ private struct HeaderCallButtonsView: View {
             }
             HapticFeedback.medium()
         } label: {
-            HStack(spacing: 5) {
+            HStack(spacing: MeeshySpacing.xs) {
                 Circle()
                     .fill(MeeshyColors.success)
                     .frame(width: 7, height: 7)
                 Image(systemName: "phone.fill")
-                    .font(MeeshyFont.relative(10, weight: .semibold))
-                Text(callManager.formattedDuration)
-                    .font(MeeshyFont.relative(11, weight: .semibold, design: .monospaced))
+                    .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .semibold))
+                CallDurationClock {
+                    Text(callManager.formattedDuration)
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold, design: .monospaced))
+                }
             }
             .foregroundColor(MeeshyColors.success)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
+            .padding(.horizontal, MeeshySpacing.smPlus)
+            .padding(.vertical, MeeshySpacing.xs)
             .background(
                 Capsule()
-                    .fill(MeeshyColors.success.opacity(0.15))
-                    .overlay(Capsule().stroke(MeeshyColors.success.opacity(0.3), lineWidth: 0.5))
+                    .fill(MeeshyColors.success.opacity(MeeshyOpacity.light))
+                    .overlay(Capsule().stroke(MeeshyColors.success.opacity(MeeshyOpacity.medium), lineWidth: MeeshyBorder.hairline))
             )
         }
         .accessibilityLabel(String(localized: "call.header.return", defaultValue: "Appel en cours, toucher pour revenir", bundle: .main))
@@ -311,6 +417,9 @@ private struct HeaderCallButtonsView: View {
     /// flips true and this view naturally swaps to `returnToCallIndicator`.
     private func rejoinCallIndicator(_ activeCall: ActiveCallSession) -> some View {
         Button {
+            // Rejoindre un groupe en cours : les membres présents offrent à
+            // l'arrivant, et le premier qui offre devient le pair principal.
+            if isGroup { GroupCallMeshCoordinator.shared.markGroupConversation(conversationId, title: calleeName) }
             callManager.rejoinActiveCall(
                 callId: activeCall.id,
                 conversationId: conversationId,
@@ -320,22 +429,22 @@ private struct HeaderCallButtonsView: View {
             )
             HapticFeedback.medium()
         } label: {
-            HStack(spacing: 5) {
+            HStack(spacing: MeeshySpacing.xs) {
                 Circle()
                     .fill(MeeshyColors.success)
                     .frame(width: 7, height: 7)
                 Image(systemName: "phone.fill")
-                    .font(MeeshyFont.relative(10, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .semibold))
                 Text(String(localized: "call.header.rejoin", defaultValue: "Rejoindre", bundle: .main))
-                    .font(MeeshyFont.relative(11, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
             }
             .foregroundColor(MeeshyColors.success)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
+            .padding(.horizontal, MeeshySpacing.smPlus)
+            .padding(.vertical, MeeshySpacing.xs)
             .background(
                 Capsule()
-                    .fill(MeeshyColors.success.opacity(0.15))
-                    .overlay(Capsule().stroke(MeeshyColors.success.opacity(0.3), lineWidth: 0.5))
+                    .fill(MeeshyColors.success.opacity(MeeshyOpacity.light))
+                    .overlay(Capsule().stroke(MeeshyColors.success.opacity(MeeshyOpacity.medium), lineWidth: MeeshyBorder.hairline))
             )
         }
         .accessibilityLabel(String(localized: "call.header.rejoin.a11y", defaultValue: "Appel en cours, toucher pour rejoindre", bundle: .main))
@@ -353,9 +462,8 @@ private struct HeaderCallButtonsView: View {
         // network error and "no active call" both collapse to nil here,
         // which is the right behavior: reconciliation is best-effort and
         // silent, never surfaced as an error to the user.
-        guard let session = try? await ActiveCallService.shared.activeCall(conversationId: conversationId),
-              session.conversationId == conversationId else { return }
-        reconciledActiveCall = session
+        let session = try? await ActiveCallService.shared.activeCall(conversationId: conversationId)
+        reconciledActiveCall = session?.conversationId == conversationId ? session : nil
     }
 
     /// Bouton d'appel unique : un `Menu` qui laisse choisir vocal ou vidéo via un
@@ -365,12 +473,12 @@ private struct HeaderCallButtonsView: View {
     private var startCallButtons: some View {
         Menu {
             Button {
-                Task { await CallManager.shared.requestPermissionsThenStartCall(conversationId: conversationId, userId: userId, displayName: calleeName, isVideo: false) }
+                startCall(isVideo: false)
             } label: {
                 Label(String(localized: "call.start.audio", defaultValue: "Appel vocal", bundle: .main), systemImage: "phone.fill")
             }
             Button {
-                Task { await CallManager.shared.requestPermissionsThenStartCall(conversationId: conversationId, userId: userId, displayName: calleeName, isVideo: true) }
+                startCall(isVideo: true)
             } label: {
                 Label(String(localized: "call.start.video", defaultValue: "Appel video", bundle: .main), systemImage: "video.fill")
             }
@@ -378,13 +486,28 @@ private struct HeaderCallButtonsView: View {
             callGlyph("phone.fill")
                 .meeshyTapTarget()
         }
-        .accessibilityLabel(String(localized: "call.start.menu", defaultValue: "Appeler", bundle: .main))
-        .accessibilityHint(String(localized: "call.start.menu.hint", defaultValue: "Choisir un appel vocal ou vidéo", bundle: .main))
+        .accessibilityLabel(isGroup
+            ? String(localized: "call.group.start.menu", defaultValue: "Appeler le groupe", bundle: .main)
+            : String(localized: "call.start.menu", defaultValue: "Appeler", bundle: .main))
+        .accessibilityHint(isGroup
+            ? String(localized: "call.group.start.menu.hint", defaultValue: "Appel vocal ou vidéo avec les membres du groupe, jusqu'à 6 personnes", bundle: .main)
+            : String(localized: "call.start.menu.hint", defaultValue: "Choisir un appel vocal ou vidéo", bundle: .main))
+    }
+
+    private func startCall(isVideo: Bool) {
+        let conversationId = conversationId
+        let userId = userId
+        let calleeName = calleeName
+        guard isGroup else {
+            Task { await CallManager.shared.requestPermissionsThenStartCall(conversationId: conversationId, userId: userId, displayName: calleeName, isVideo: isVideo) }
+            return
+        }
+        Task { await CallManager.shared.startGroupCall(conversationId: conversationId, title: calleeName, isVideo: isVideo) }
     }
 
     private func callGlyph(_ systemName: String) -> some View {
         Image(systemName: systemName)
-            .font(MeeshyFont.relative(13, weight: .semibold))
+            .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
             .foregroundStyle(
                 LinearGradient(
                     colors: [Color(hex: accentColor), Color(hex: secondaryColor)],
@@ -400,7 +523,7 @@ private struct HeaderCallButtonsView: View {
             // 44, minHeight: 44)` drew the visible circle at 44pt instead of
             // 28pt, even though both buttons declared identical numbers.
             // expandedHeaderSearchButton already has the correct order.
-            .frame(width: 28, height: 28)
+            .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
             .adaptiveGlass(in: Circle(), tint: Color(hex: accentColor).opacity(0.4), interactive: true)
             .meeshyTapTarget()
     }
@@ -421,14 +544,31 @@ private struct ConversationHeaderAvatarView: View {
     let secondaryColor: String
     let headerMoodEmoji: String?
     let headerPresenceState: PresenceState
+    /// L'IDENTITÉ — pile des plus actifs puis interlocuteur ou groupe — plutôt
+    /// que l'avatar replié (`ConversationHeaderLayout.avatarShowsIdentity`).
+    let showsIdentity: Bool
+    /// Dans l'aperçu, l'avatar ouvre les détails : il n'y a rien à replier.
+    let isPreview: Bool
+    var onSetExpanded: (Bool) -> Void
+    var onDismissFlame: () -> Void
     var onNavigateToDM: (String, String) -> Void
     var onViewProfile: (() -> Void)?
     var onViewMemberProfile: (ProfileSheetUser) -> Void
 
     @EnvironmentObject private var storyViewModel: StoryViewModel
     @EnvironmentObject private var statusViewModel: StatusViewModel
+    /// Signal débouncé de `PresenceManager` (jamais le manager lui-même) :
+    /// l'arrivée ou le départ d'un pair (#8892) repeint les points de l'en-tête.
+    @ObservedObject private var presencePulse: PresenceRefreshSignal = PresenceManager.shared.refreshSignal
 
     private var isDirect: Bool { conversation?.type == .direct }
+
+    /// Le pair a l'écran de CETTE conversation ouvert (#8892), et y est
+    /// peut-être actif (#9061).
+    private func isHere(_ userId: String?) -> ConversationHere {
+        guard let userId, let conversationId = conversation?.id else { return .absent }
+        return PresenceManager.shared.here(userId: userId, conversationId: conversationId)
+    }
 
     private func memberStoryState(for userId: String) -> StoryRingState {
         storyViewModel.storyRingState(forUserId: userId)
@@ -521,9 +661,21 @@ private struct ConversationHeaderAvatarView: View {
         return avatarContextMenu(for: userId, name: conversation?.name ?? "Contact")
     }
 
+    /// Le toucher de l'identité : dans le fil il replie l'en-tête, dans
+    /// l'aperçu il ouvre les détails de la conversation (comme le web).
+    private func identityTap() {
+        HapticFeedback.light()
+        if isPreview {
+            composerState.showConversationInfo = true
+        } else {
+            onSetExpanded(false)
+        }
+    }
+
     var body: some View {
-        if composerState.showOptions {
-            // Expanded: participant avatar(s) — tap collapses band
+        if showsIdentity {
+            // Identity: participant avatar(s) — tap collapses band (fil) or
+            // opens details (aperçu, #9031)
             if isDirect, let userId = conversation?.participantUserId {
                 MeeshyAvatar(
                     name: conversation?.name ?? "?",
@@ -534,12 +686,8 @@ private struct ConversationHeaderAvatarView: View {
                     storyState: memberStoryState(for: userId),
                     moodEmoji: statusViewModel.statusForUser(userId: userId)?.moodEmoji,
                     presenceState: PresenceManager.shared.presenceState(for: userId),
-                    onTap: {
-                        HapticFeedback.light()
-                        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                            composerState.showOptions = false
-                        }
-                    },
+                    isHere: isHere(userId),
+                    onTap: identityTap,
                     onViewStory: {
                         headerState.storyUserIdForHeader = userId
                         headerState.showStoryViewerFromHeader = true
@@ -548,7 +696,7 @@ private struct ConversationHeaderAvatarView: View {
                     contextMenuItems: directContextMenu
                 )
             } else {
-                HStack(spacing: 4) {
+                HStack(spacing: MeeshySpacing.xs) {
                     // Stacked active member avatars
                     if !topActiveMembers.isEmpty {
                         HStack(spacing: -6) {
@@ -562,6 +710,7 @@ private struct ConversationHeaderAvatarView: View {
                                     storyState: storyState,
                                     moodEmoji: statusViewModel.statusForUser(userId: member.id)?.moodEmoji,
                                     presenceState: PresenceManager.shared.presenceState(for: member.id),
+                                    isHere: isHere(member.viewingKey),
                                     onTap: { openMember(member, storyState: storyState) },
                                     onMoodTap: statusViewModel.moodTapHandler(for: member.id),
                                     contextMenuItems: memberContextMenu(for: member, storyState: storyState)
@@ -577,12 +726,7 @@ private struct ConversationHeaderAvatarView: View {
                         accentColor: accentColor,
                         secondaryColor: secondaryColor,
                         avatarURL: conversation?.avatar,
-                        onTap: {
-                            HapticFeedback.light()
-                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                                composerState.showOptions = false
-                            }
-                        }
+                        onTap: identityTap
                     )
                 }
             }
@@ -597,11 +741,10 @@ private struct ConversationHeaderAvatarView: View {
                 storyState: collapsedStoryState,
                 moodEmoji: headerMoodEmoji,
                 presenceState: headerPresenceState,
+                isHere: isDirect ? isHere(conversation?.participantUserId) : .absent,
                 onTap: {
                     HapticFeedback.light()
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                        composerState.showOptions = true
-                    }
+                    onSetExpanded(true)
                 },
                 onViewStory: isDirect ? {
                     if let userId = conversation?.participantUserId {
@@ -612,6 +755,30 @@ private struct ConversationHeaderAvatarView: View {
                 onMoodTap: isDirect ? statusViewModel.moodTapHandler(for: conversation?.participantUserId ?? "", repliesInline: true) : nil,
                 contextMenuItems: directContextMenu
             )
+            // La flamme du jour, sous l'avatar replié (#9031).
+            .modifier(HeaderFlameDecoration(
+                conversationId: conversation?.id ?? "",
+                seed: conversation?.viewerEngagement,
+                headerExpanded: showsIdentity,
+                dismissed: headerState.flameDismissed,
+                avatarDiameter: 44,
+                onDismiss: onDismissFlame
+            ))
         }
+    }
+}
+
+/// Le disque de verre de la porte de l'aperçu — la forme de la loupe
+/// (`HeaderSearchGlyph`), type NOMINAL pour borner la chaîne de types de l'en-tête.
+private struct HeaderOpenFullGlyph: View {
+    let accentColor: String
+
+    var body: some View {
+        Image(systemName: "arrow.up.left.and.arrow.down.right")
+            .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
+            .foregroundStyle(Color(hex: accentColor))
+            .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
+            .adaptiveGlass(in: Circle(), tint: Color(hex: accentColor).opacity(MeeshyOpacity.medium))
+            .meeshyTapTarget()
     }
 }

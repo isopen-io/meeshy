@@ -167,16 +167,19 @@ final class ComposerObjectEditorTests: XCTestCase {
 
     /// **LE témoin de la directive.** Créer et modifier passent par le même
     /// site : recopier ses lignes chez l'un des deux est exactement ce qui les
-    /// faisait diverger.
+    /// faisait diverger. Pour un TEXTE, ce site est la saisie sur scène depuis
+    /// #8680 (`ComposerSceneTextEditingTests`) ; les autres familles gardent
+    /// l'éditeur d'objet.
     func test_creerEtModifier_empruntentLeMemeSite() throws {
-        let intake = compact(try hostUnit())
-        let surfaces = compact(try hostUnit())
-        XCTAssertTrue(intake.contains("funcopenObjectEditor("),
+        let code = compact(try hostUnit())
+        XCTAssertTrue(code.contains("funcopenObjectEditor("),
                       "Le site unique est introuvable — re-pointer la garde.")
-        XCTAssertTrue(intake.contains("openObjectEditor(objet.id)"),
-                      "La porte TEXTE doit ouvrir l'éditeur, pas seulement entrer en mode.")
-        XCTAssertTrue(surfaces.contains("openObjectEditor(id)"),
-                      "L'appui long « Modifier » doit ouvrir le MÊME écran que la création.")
+        XCTAssertTrue(code.contains("openObjectEditor(id)"),
+                      "« Modifier » sur un média, un sticker ou un lieu ouvre l'éditeur d'objet.")
+        XCTAssertTrue(code.contains("ifletobjet=viewModel.addText(){beginSceneTextEditing(objet.id)}"),
+                      "Créer un texte ouvre la saisie sur scène.")
+        XCTAssertTrue(code.contains("case.text:beginSceneTextEditing(id)"),
+                      "Modifier un texte ouvre la MÊME saisie que sa création (#8680).")
     }
 
     /// Le site unique ferme le portail AVANT d'ouvrir : `fullScreenCover` et
@@ -375,7 +378,8 @@ final class ComposerObjectEditorTests: XCTestCase {
     /// simplifiée perdrait les poignées de bord, le verrou des fonds et le
     /// signal de blocage du scroll — la leçon 336 rejouée.
     func test_lePlan2D_estCeluiDuSDK() throws {
-        let code = compact(try source("ComposerObjectEditorView.swift"))
+        // Extrait de l'éditeur pour #9138 : l'édition en place le monte aussi.
+        let code = compact(try source("ComposerObjectTimingControls.swift"))
         XCTAssertTrue(code.contains("Plan2DView("))
         XCTAssertTrue(code.contains("Plan2DLayout.tracks(from:viewModel.currentEffects"),
                       "Les pistes se dérivent de la slide par la règle du SDK, jamais "
@@ -385,12 +389,15 @@ final class ComposerObjectEditorTests: XCTestCase {
     /// **La fenêtre se LIT du modèle à chaque rendu.** Recopiée dans un `@State`,
     /// elle divergerait de ce que le plan 2D dessine juste en dessous.
     func test_laFenetre_neVitPasDansUnEtatDeVue() throws {
-        let code = compact(try source("ComposerObjectEditorView.swift"))
+        // Extraite de l'éditeur pour #9138 : l'édition en place la monte aussi.
+        let code = compact(try source("ComposerObjectTimingControls.swift"))
         XCTAssertFalse(code.contains("@Stateprivatevartiming"),
                        "La fenêtre doit se lire du modèle — deux sources pour un même "
                        + "fait divergeraient au premier geste sur le plan.")
-        XCTAssertTrue(code.contains("varttiming:ComposerObjectTiming{")
-                      || code.contains("vartiming:ComposerObjectTiming{"))
+        XCTAssertTrue(code.contains("staticfunctiming(viewModel:StoryComposerViewModel,objectId:String)->ComposerObjectTiming{"))
+        XCTAssertTrue(compact(try source("ComposerObjectEditorView.swift"))
+                        .contains("ComposerObjectTimingControls(viewModel:viewModel,objectId:objectId)"),
+                      "l'éditeur monte LES contrôles partagés, jamais une copie")
     }
 
     // MARK: - La frontière entre le rail et les options (#5097)
@@ -417,24 +424,55 @@ final class ComposerObjectEditorTests: XCTestCase {
             "Meeshy/Features/Main/Composer/ComposerObjectEditorView.swift")
         let trailing = try AppSourceGuard.unit(
             "Meeshy/Features/Main/Composer/ComposerTrailingRail.swift")
+        let leading = try AppSourceGuard.unit(
+            "Meeshy/Features/Main/Composer/ComposerLeadingRail.swift")
 
-        for (nom, source, largeur) in [
-            ("le couloir d'OUTILS", editeur, "ComposerObjectEditorRail.railWidth"),
-            ("le couloir d'HISTORIQUE", trailing, "ComposerRailGeometry.railWidth")
+        // **Les rails FLOTTENT sur la scène depuis #8370** : leur carte est un
+        // verre (Liquid Glass sur iOS 26, matériau translucide avant), TEINTÉ du
+        // plateau. La teinte reste celle que mesurent les témoins de contraste,
+        // et elle évite la barre pâle qu'un verre nu peint sur le plateau sombre
+        // (directive porteur 2026-09-05, `ComposerMentionStripContrastTests`).
+        // Le rail des PORTES se couche aussi à l'horizontale (la rangée basse) :
+        // son air suit l'axe, et vaut `.vertical, 8` debout comme ses jumeaux.
+        // **Depuis le 2026-09-27, les couloirs de la scène et de l'éditeur sont
+        // de petits boutons SÉPARÉS** (« pas de long bandeau de contrôleur à
+        // gauche ou à droite, juste des petits boutons ») : chaque bouton
+        // porte son disque de verre, TEINTÉ du même plateau. La carte ne
+        // survit qu'au mode colonne des rails, qu'un seul modificateur dessine
+        // (`ComposerRailCard`) — la cohérence se tient donc en un site.
+        let verre = AppSourceGuard.stripComments(try AppSourceGuard.unit(
+            "Meeshy/Features/Main/Composer/ComposerRailGlass.swift"))
+            .replacingOccurrences(of: " ", with: "")
+            .replacingOccurrences(of: "\n", with: "")
+        XCTAssertTrue(verre.contains(".adaptiveLiquidGlass(in:RoundedRectangle(cornerRadius:ComposerRailGeometry.railWidth/2,style:.continuous),tint:plateauTint.opacity(0.55))"),
+                      "La carte d'un rail en colonne est le verre teinté du plateau.")
+        XCTAssertTrue(verre.contains(".adaptiveLiquidGlass(in:Circle(),tint:tint??plateauTint.opacity(0.55),interactive:true)"),
+                      "Un bouton séparé porte le MÊME verre teinté, en disque.")
+        for (nom, source, attendu, air) in [
+            ("le couloir d'OUTILS", editeur,
+             ".adaptiveLiquidGlass(in:Circle(),tint:ComposerObjectEditorRail.isSelected(entree,selected:selectedTool)?MeeshyColors.brandPrimary:plateauTint.opacity(0.55),interactive:true)",
+             ".padding(.vertical,8)"),
+            ("le couloir d'HISTORIQUE", trailing,
+             ".adaptiveLiquidGlass(in:RoundedRectangle(cornerRadius:ComposerRailGeometry.railWidth/2,style:.continuous),tint:plateauTint.opacity(0.55))",
+             ".padding(.vertical,8)"),
+            ("le couloir des PORTES", leading,
+             ".modifier(ComposerRailButtonGlass(active:separateButtons,plateauTint:plateauTint,tint:glassTint))",
+             ".padding(axis==.vertical?.vertical:.horizontal,ComposerRailGeometry.floatingColumnPadding)")
         ] {
             let nu = AppSourceGuard.stripComments(source)
                 .replacingOccurrences(of: " ", with: "")
                 .replacingOccurrences(of: "\n", with: "")
-            XCTAssertTrue(
-                nu.contains("RoundedRectangle(cornerRadius:\(largeur)/2,style:.continuous)"),
-                "\(nom) doit porter la carte arrondie du plateau")
-            XCTAssertTrue(
+            XCTAssertTrue(nu.contains(attendu),
+                          "\(nom) doit porter le verre teinté du plateau — le même que ses jumeaux")
+            XCTAssertFalse(
                 nu.contains(".fill(plateauTint.opacity(0.55))"),
-                "\(nom) doit porter la teinte du plateau — la même que son jumeau")
+                "\(nom) ne doit plus peindre un aplat opaque sous son verre")
             XCTAssertTrue(
-                nu.contains(".padding(.vertical,8)"),
+                nu.contains(air),
                 "\(nom) doit respirer comme son jumeau")
         }
+        XCTAssertEqual(ComposerRailGeometry.floatingColumnPadding, 8,
+                       "l'air du couloir des PORTES vaut celui de ses jumeaux")
     }
 
     /// **Non-vacuité** — sans elle, le témoin ci-dessus passerait sur un fichier
@@ -472,8 +510,10 @@ final class ComposerObjectEditorTests: XCTestCase {
     /// divergentes — ici il n'y en a qu'un, `viewModel.applyFilter`, et aucune
     /// des deux surfaces n'écrit `currentEffects.filter` de sa main.
     func test_leFiltre_estLaMemeGrilleDepuisLesDeuxSurfaces() throws {
+        // **La grille vit dans `ComposerMediaFilterGrid`** (#9138) : l'éditeur
+        // d'objet ET l'édition en place la montent — une seule expression.
         let editeur = try AppSourceGuard.unit(
-            "Meeshy/Features/Main/Composer/ComposerObjectEditorView.swift")
+            "Meeshy/Features/Main/Composer/ComposerMediaControls.swift")
         let nu = AppSourceGuard.stripComments(editeur)
             .replacingOccurrences(of: " ", with: "")
             .replacingOccurrences(of: "\n", with: "")
@@ -483,12 +523,19 @@ final class ComposerObjectEditorTests: XCTestCase {
         // vert le jour exact où un argument de plus s'ajoute, donc elle ne
         // tomberait que sur un RENOMMAGE, jamais sur un AJOUT. Or un argument
         // ajouté est précisément la façon dont un appel dérive de son jumeau.
+        //
+        // **Réécrite le 2026-09-28** (retour porteur : « les modifications
+        // impactent cet objet-là et non toute la scène »). La grille reste LA
+        // grille du SDK ; ce qui change est la CIBLE : le fond garde le filtre
+        // de slide et son aperçu, un média POSÉ règle son propre filtre sur sa
+        // propre image. Le montage entier est écrit, fermante comprise.
         XCTAssertTrue(
-            nu.contains("StoryFilterGridView(viewModel:viewModel,previewImage:viewModel.currentSlideBackgroundImage)"),
-            "l'éditeur monte LA grille du SDK avec le MÊME aperçu que l'inspecteur du "
-            + "document — le montage entier, fermante comprise, pas son préfixe")
+            nu.contains("StoryFilterGridView(viewModel:viewModel,previewImage:isBackground?viewModel.currentSlideBackgroundImage:viewModel.loadedImages[media.id],objectId:isBackground?nil:media.id)"),
+            "l'éditeur monte LA grille du SDK : filtre de slide pour le fond, filtre de l'objet "
+            + "pour un média posé — le montage entier, fermante comprise, pas son préfixe")
         XCTAssertFalse(nu.contains("currentEffects.filter="),
-                       "aucune surface n'écrit le champ de sa main : `applyFilter` est l'unique écrivain")
+                       "aucune surface n'écrit le champ de sa main : `applyFilter` / "
+                       + "`applyMediaObjectFilter` sont les seuls écrivains")
     }
 
     /// **Non-vacuité du témoin ci-dessus** : sans elle, un fichier renommé ferait
@@ -499,7 +546,13 @@ final class ComposerObjectEditorTests: XCTestCase {
             "Meeshy/Features/Main/Composer/ComposerObjectEditorView.swift")
         XCTAssertTrue(editeur.contains("struct ComposerObjectEditorView"))
         XCTAssertTrue(editeur.contains("var mediaOptions"),
-                      "les options média — l'unité inclut l'extension `+Media` où vit la grille")
+                      "les options média — l'unité inclut l'extension `+Media`")
+        XCTAssertTrue(AppSourceGuard.stripComments(editeur)
+                        .contains("ComposerMediaFilterGrid(viewModel: viewModel, media: media,"),
+                      "l'éditeur monte LA grille partagée")
+        let panneau = try AppSourceGuard.unit("Meeshy/Features/Main/Composer/ComposerInlineToolPanel.swift")
+        XCTAssertTrue(panneau.contains("ComposerMediaFilterGrid(viewModel: viewModel, media: media,"),
+                      "l'édition en place monte LA MÊME grille")
     }
 
 }

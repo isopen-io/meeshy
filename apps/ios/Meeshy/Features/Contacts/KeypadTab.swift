@@ -11,11 +11,10 @@ struct KeypadTab: View {
     var isActive: Bool = true
     var onScrollOffsetChange: (CGFloat) -> Void = { _ in }
 
-    @Environment(\.colorScheme) private var colorScheme
     private var theme: ThemeManager { ThemeManager.shared }
     @EnvironmentObject private var router: Router
 
-    private let keys: [[KeypadKey]] = [
+    private static let keys: [[KeypadKey]] = [
         [.init("1", ""), .init("2", "ABC"), .init("3", "DEF")],
         [.init("4", "GHI"), .init("5", "JKL"), .init("6", "MNO")],
         [.init("7", "PQRS"), .init("8", "TUV"), .init("9", "WXYZ")],
@@ -36,7 +35,7 @@ struct KeypadTab: View {
     // MARK: - Input Bar
 
     private var inputBar: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: MeeshySpacing.smPlus) {
             TextField(
                 String(localized: "keypad.input.placeholder", defaultValue: "Numéro ou nom", bundle: .main),
                 text: $viewModel.input
@@ -71,9 +70,9 @@ struct KeypadTab: View {
                 )
             }
         }
-        .padding(.horizontal, 24)
+        .padding(.horizontal, MeeshySpacing.xxl)
         .frame(height: 64)
-        .overlay(alignment: .bottom) { Divider().opacity(0.2) }
+        .overlay(alignment: .bottom) { Divider().opacity(MeeshyOpacity.light) }
     }
 
     // MARK: - Results
@@ -90,7 +89,7 @@ struct KeypadTab: View {
                         resultRow(user)
                     }
                 }
-                .padding(.top, 6)
+                .padding(.top, MeeshySpacing.xsPlus)
             }
         }
         .reportsContactsScroll(active: isActive, onChange: onScrollOffsetChange)
@@ -120,7 +119,7 @@ struct KeypadTab: View {
     }
 
     private func hintMessage(title: String, subtitle: String) -> some View {
-        VStack(spacing: 6) {
+        VStack(spacing: MeeshySpacing.xsPlus) {
             Text(title)
                 .font(.callout.weight(.semibold))
                 .foregroundColor(theme.textPrimary)
@@ -130,7 +129,7 @@ struct KeypadTab: View {
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 40)
         }
-        .padding(.top, 24)
+        .padding(.top, MeeshySpacing.xxl)
     }
 
     private func resultRow(_ user: UserSearchResult) -> some View {
@@ -138,11 +137,11 @@ struct KeypadTab: View {
         let color = DynamicColorGenerator.colorForName(name)
         let presence = PresenceManager.shared.resolvedState(userId: user.id, isOnline: user.isOnline)
 
-        return HStack(spacing: 14) {
+        return HStack(spacing: MeeshySpacing.mdPlus) {
             Button {
                 openProfile(user)
             } label: {
-                HStack(spacing: 14) {
+                HStack(spacing: MeeshySpacing.mdPlus) {
                     MeeshyAvatar(
                         name: name,
                         context: .userListItem,
@@ -150,7 +149,7 @@ struct KeypadTab: View {
                         avatarURL: user.avatar,
                         presenceState: presence
                     )
-                    VStack(alignment: .leading, spacing: 3) {
+                    VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                         Text(name)
                             .font(.subheadline.weight(.semibold))
                             .foregroundColor(theme.textPrimary)
@@ -167,10 +166,10 @@ struct KeypadTab: View {
             .accessibilityLabel(resultRowAccessibilityLabel(for: user, name: name, presence: presence))
             .accessibilityHint(String(localized: "keypad.result.open-profile.a11y", defaultValue: "Ouvrir le profil", bundle: .main))
 
-            dialMenu(for: user, displayName: name)
+            CallRowDialButton(userId: user.id, displayName: name, onUnavailable: { openProfile(user) }, accessibilityLabel: String(localized: "calls.call", defaultValue: "Appeler", bundle: .main))
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 12)
+        .padding(.horizontal, MeeshySpacing.xl)
+        .padding(.vertical, MeeshySpacing.md)
     }
 
     // `.accessibilityElement(children: .combine)` above would let VoiceOver read
@@ -189,38 +188,6 @@ struct KeypadTab: View {
         return parts.joined(separator: ", ")
     }
 
-    private func dialMenu(for user: UserSearchResult, displayName: String) -> some View {
-        Menu {
-            Button {
-                startCall(user, displayName: displayName, isVideo: false)
-            } label: {
-                Label(String(localized: "call.start.audio", defaultValue: "Appel vocal", bundle: .main), systemImage: "phone.fill")
-            }
-            Button {
-                startCall(user, displayName: displayName, isVideo: true)
-            } label: {
-                Label(String(localized: "call.start.video", defaultValue: "Appel video", bundle: .main), systemImage: "video.fill")
-            }
-        } label: {
-            Image(systemName: "phone.fill")
-                .font(.subheadline.weight(.semibold))
-                .foregroundColor(MeeshyColors.indigo500)
-                .frame(width: 40, height: 40)
-                .background(Circle().fill(MeeshyColors.indigo500.opacity(0.12)))
-        }
-        .accessibilityLabel(String(localized: "calls.call", defaultValue: "Appeler", bundle: .main))
-    }
-
-    private func startCall(_ user: UserSearchResult, displayName: String, isVideo: Bool) {
-        HapticFeedback.medium()
-        CallStarter.start(
-            userId: user.id,
-            displayName: displayName,
-            isVideo: isVideo,
-            onUnavailable: { openProfile(user) }
-        )
-    }
-
     private func openProfile(_ user: UserSearchResult) {
         router.deepLinkProfileUser = ProfileSheetUser(username: user.username)
         HapticFeedback.light()
@@ -229,17 +196,17 @@ struct KeypadTab: View {
     // MARK: - Keypad
 
     private var keypad: some View {
-        VStack(spacing: 14) {
-            ForEach(keys.indices, id: \.self) { row in
+        VStack(spacing: MeeshySpacing.mdPlus) {
+            ForEach(Self.keys.indices, id: \.self) { row in
                 HStack(spacing: 28) {
-                    ForEach(keys[row]) { key in
+                    ForEach(Self.keys[row]) { key in
                         keyButton(key)
                     }
                 }
             }
         }
-        .padding(.vertical, 18)
-        .overlay(alignment: .top) { Divider().opacity(0.2) }
+        .padding(.vertical, MeeshySpacing.lg)
+        .overlay(alignment: .top) { Divider().opacity(MeeshyOpacity.light) }
     }
 
     private func keyButton(_ key: KeypadKey) -> some View {

@@ -27,6 +27,9 @@ const DEFAULT_MESSAGES: Record<AuthSessionRevokedEventData['reason'], string> = 
   // — qui compose son propre message plutôt que d'appeler cette fonction.
   // Présent uniquement pour l'exhaustivité que `Record` exige sur l'union.
   session_expired: 'Your session expired — please sign in again.',
+  // #8238 — même régime que `session_expired` : refusé à la CONNEXION par
+  // `AuthHandler._authenticateJWTUser`, présent pour l'exhaustivité.
+  activation_required: 'Confirm your email address to continue — please sign in again.',
 };
 
 export interface DisconnectRevokedSessionsParams {

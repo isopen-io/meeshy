@@ -142,7 +142,6 @@ struct ConversationListView: View {
     // change only on explicit user action (rare), and the gate keeps unaffected
     // rows static, so observing them is free on the hot scroll path.
     private var lockManager: ConversationLockManager { ConversationLockManager.shared }
-    private var blockService: BlockService { BlockService.shared }
     // Lecture directe sans @ObservedObject sur PresenceManager lui-même —
     // observer l'objet entier re-déclencherait ce body à CHAQUE mutation de
     // `presenceMap` (un event `user:status` par contact), pas seulement
@@ -172,11 +171,7 @@ struct ConversationListView: View {
     // Search and Filters
     @FocusState var isSearching: Bool
     @State var showSearchOverlay: Bool = false
-    @State private var animateGradient = false
     @State private var expandedSections: Set<String> = ["pinned", "other"]
-
-    // Scroll tracking
-    @State private var hideSearchBar = false
 
     // Performance optimized scroll variables
     @State private var selectedProfileUser: ProfileSheetUser? = nil
@@ -371,25 +366,8 @@ struct ConversationListView: View {
     // The filtered and grouped conversations are now calculated on a background queue
     // inside `ConversationListViewModel` to prevent main thread freezes and overheating.
 
-    // MARK: - Empty Branch Resolution
-
-    nonisolated static func emptyBranch(
-        loadState: LoadState,
-        loadFailed: Bool,
-        searchTextIsEmpty: Bool
-    ) -> ConversationListEmptyBranch {
-        switch loadState {
-        case .idle, .loading:
-            // Cold, cache-less first fetch still in flight: a still-loading
-            // state is never a definitive result, so this wins over an
-            // active search — never show "no results" while we don't yet
-            // know whether the cache is genuinely empty (fix 2026-07-21).
-            return .skeleton
-        default:
-            guard searchTextIsEmpty else { return .searchNoResults }
-            return loadFailed ? .syncError : .createFirstConversation
-        }
-    }
+    // Empty Branch Resolution: `emptyBranch` / `currentEmptyBranch` live in
+    // `ConversationListView+SectionRules.swift` (#8759).
 
     // MARK: - Preview Auto-Load Eligibility
     //
@@ -475,48 +453,24 @@ struct ConversationListView: View {
         && conversationViewModel.groupedConversations[0].section.id == "other"
     }
 
-    // MARK: - Sections : pliage et cible de drop (règles PURES)
-
-    /// Une section repliable est une section dont le pliage a un SENS
-    /// PERSISTANT : `pinned` et les catégories utilisateur, dont
-    /// `toggleSection` persiste l'état (`persistCategoryExpansion`, E4). Les
-    /// sections calculées par la loi Lentille (`EN DIRECT`, `AUJOURD'HUI`…) ne
-    /// sont persistées nulle part : repliées, elles se rouvriraient au
-    /// prochain chargement. Elles restent donc dépliées et leur sticker n'est
-    /// pas un bouton. Drapeau OFF : aucun id `lentille.` n'existe ⇒ toujours
-    /// `true`, exactement comme aujourd'hui.
-    nonisolated static func isSectionCollapsible(sectionId: String) -> Bool {
-        !LentilleSectionIdentity.isLentilleOnly(sectionId: sectionId)
-    }
-
-    /// Cible de drop légitime. Même partition que `isSectionCollapsible` — une
-    /// section calculée n'est ni pliable ni assignable — mais les deux règles
-    /// restent distinctes : elles répondent à deux questions (« puis-je la
-    /// replier ? », « puis-je y déposer ? ») qui pourraient diverger demain.
-    nonisolated static func acceptsSectionDrop(sectionId: String) -> Bool {
-        !LentilleSectionIdentity.isLentilleOnly(sectionId: sectionId)
-    }
-
-    /// Rangs visibles ? Réécriture PURE et testable de la condition
-    /// d'aujourd'hui (`isSingleUngroupedSection || expandedSections.contains`),
-    /// étendue du seul cas neuf : une section non repliable est toujours
-    /// dépliée. Sous drapeau OFF la troisième clause est inatteignable — la
-    /// condition dégénère au bit près en celle d'avant LWS-6.
-    nonisolated static func isSectionContentVisible(
-        sectionId: String,
-        expandedSections: Set<String>,
-        isSingleUngroupedSection: Bool
-    ) -> Bool {
-        if isSingleUngroupedSection { return true }
-        if !isSectionCollapsible(sectionId: sectionId) { return true }
-        return expandedSections.contains(sectionId)
-    }
+    // MARK: - Sections : pliage et cible de drop — règles PURES dans
+    // `ConversationListView+SectionRules.swift`.
 
     private func isSectionContentVisible(_ sectionId: String) -> Bool {
         Self.isSectionContentVisible(
             sectionId: sectionId,
             expandedSections: expandedSections,
             isSingleUngroupedSection: isSingleUngroupedSection
+        )
+    }
+
+    /// #8694 — repliée, une section porte le compte de non-lus que ses rangs
+    /// cachent ; dépliée, zéro (les rangs le portent). Même source que les
+    /// pastilles des rangs, donc à jour en temps réel sans déplier.
+    private func foldedUnread(of group: (section: ConversationSection, conversations: [Conversation])) -> Int {
+        SectionFoldedUnread.count(
+            unreadCounts: group.conversations.map(\.userState.unreadCount),
+            isExpanded: isSectionContentVisible(group.section.id)
         )
     }
 
@@ -623,6 +577,7 @@ struct ConversationListView: View {
             LentilleSticker(
                 title: group.section.name,
                 isExpanded: isSectionContentVisible(group.section.id),
+                foldedUnread: foldedUnread(of: group),
                 onToggle: sectionToggle(for: group.section.id)
             )
             // D7 — DIAGNOSTIQUÉ, NON CORRIGÉ ICI : le correctif demande un
@@ -663,12 +618,13 @@ struct ConversationListView: View {
                 // épingler) — la surbrillance suit dropTargetSection, que le
                 // chemin chip ne renseigne pour Épingles que si l'action est
                 // réelle (conversation pas déjà épinglée).
-                isDropTarget: dropTargetSection == group.section.id
+                isDropTarget: dropTargetSection == group.section.id,
+                foldedUnread: foldedUnread(of: group)
             ) {
                 toggleSection(group.section.id)
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 8)
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.top, MeeshySpacing.sm)
         }
     }
 
@@ -747,7 +703,7 @@ struct ConversationListView: View {
         // puisque c'est ici que le rang se construit. Sous OFF, `false` fait rendre le
         // rang NU : aucun modificateur de Lentille monté (contrat LWS-8/I-069).
         let perspectiveEnabled = LentilleFeatureFlag.isLentilleListEnabled
-        LazyVStack(spacing: 6) {
+        LazyVStack(spacing: MeeshySpacing.xsPlus) {
             ForEach(conversations, id: \.id) { conversation in
                 conversationRow(for: conversation, rowWidth: rowWidth, passContext: passContext)
                     // Passe de compositor (§4.1) : opacité et échelle SEULES, sur la
@@ -777,16 +733,6 @@ struct ConversationListView: View {
         }
     }
 
-    func storyRingState(for conversation: Conversation) -> StoryRingState {
-        guard conversation.type == .direct, let userId = conversation.participantUserId else { return .none }
-        return storyViewModel.storyRingState(forUserId: userId)
-    }
-
-    func conversationMoodStatus(for conversation: Conversation) -> StatusEntry? {
-        guard conversation.type == .direct, let userId = conversation.participantUserId else { return nil }
-        return statusViewModel.statusForUser(userId: userId)
-    }
-
     // Builds one conversation row. The heavy subtree (swipe actions +
     // context menu + preview) lives in the nominal `ConversationRowItem`
     // struct (ConversationListView+Rows.swift) so it no longer bloats the
@@ -807,6 +753,7 @@ struct ConversationListView: View {
             rowWidth: rowWidth,
             isDragging: draggingConversationId == conversation.id,
             presenceState: presenceManager.presenceState(for: conversation.participantUserId ?? ""),
+            isPeerHere: peerIsHere(in: conversation),
             isDark: theme.mode.isDark,
             storyRingState: storyRingState(for: conversation),
             moodStatus: conversationMoodStatus(for: conversation),
@@ -1089,9 +1036,8 @@ struct ConversationListView: View {
             .sheet(item: $sheetTargets.info) { conversation in
                 ConversationInfoSheet(
                     conversation: conversation,
-                    accentColor: conversation.accentColor,
-                    messages: []
-                )
+                    accentColor: conversation.accentColor, messages: [],
+                    mediaHubActions: ConversationMediaHubActions(goToMessage: { sheetTargets.info = nil; router.navigateToConversation(conversation, highlightMessageId: $0) }))
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
             }
@@ -1300,8 +1246,8 @@ struct ConversationListView: View {
                     }
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 6)
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.vertical, MeeshySpacing.xsPlus)
         }
         .accessibilityLabel(String(localized: "conversation.filter.row",
                                    defaultValue: "Filtres de conversations", bundle: .main))
@@ -1585,7 +1531,9 @@ struct ConversationListView: View {
 
     @ViewBuilder
     private var listTail: some View {
-        if LentilleFeatureFlag.isLentilleListEnabled {
+        // Sous un squelette, la queue attend la liste (#8759) : posée sous
+        // lui, elle était repoussée par les rangées réelles.
+        if LentilleFeatureFlag.isLentilleListEnabled, Self.showsQuickActionsTail(emptyBranch: currentEmptyBranch) {
             // UNIQUE montage des accès rapides (2026-09-09). `listTail` vit
             // HORS du `if groupedConversations.isEmpty` : il se rend dans
             // toutes les branches. Le titre suit donc le VIDE plutôt que le
@@ -1683,12 +1631,8 @@ struct ConversationListView: View {
                     // even flips `loadState` to `.loading`) from an ACTIVE
                     // search with zero matches (dedicated "no results" state,
                     // never the misleading "you have no conversations" CTA).
-                    if conversationViewModel.groupedConversations.isEmpty {
-                        switch Self.emptyBranch(
-                            loadState: conversationViewModel.loadState,
-                            loadFailed: conversationViewModel.loadFailed,
-                            searchTextIsEmpty: conversationViewModel.searchText.isEmpty
-                        ) {
+                    if let emptyBranch = currentEmptyBranch {
+                        switch emptyBranch {
                         case .skeleton:
                             // Mux de squelette sous drapeau (contrat LWS-7,
                             // workshop I-067bis — exception de périmètre
@@ -1868,7 +1812,7 @@ struct ConversationListView: View {
                             }
                         }
                 }
-                .padding(.top, 8)
+                .padding(.top, MeeshySpacing.sm)
                 .padding(.bottom, 80)
             }
             // LIGNE D'ÉPINGLAGE (LWS-6/I-063bis). Un `LazyVStack(pinnedViews:)`
@@ -1915,7 +1859,7 @@ struct ConversationListView: View {
                 showGlobalSearch: $showGlobalSearch,
                 userCommunities: userCommunities
             )
-            .padding(.bottom, 8)
+            .padding(.bottom, MeeshySpacing.sm)
             // Hide on scroll down
             .offset(y: isScrollingDown ? 150 : 0)
             .opacity(isScrollingDown ? 0 : 1)
@@ -2116,12 +2060,12 @@ struct ShareLinkPickerSheet: View {
         NavigationStack {
             Group {
                 if conversations.isEmpty {
-                    VStack(spacing: 16) {
+                    VStack(spacing: MeeshySpacing.lg) {
                         Image(systemName: "link.badge.plus")
-                            .font(MeeshyFont.relative(48))
+                            .font(MeeshyFont.relative(MeeshyIconSize.hero))
                             .foregroundStyle(MeeshyColors.indigo300)
                         Text(String(localized: "conversation.list.no_eligible_conversation", bundle: .main))
-                            .font(MeeshyFont.relative(16, weight: .medium))
+                            .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .medium))
                             .foregroundColor(theme.textSecondary)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -2130,32 +2074,32 @@ struct ShareLinkPickerSheet: View {
                         Button {
                             onSelect(conversation)
                         } label: {
-                            HStack(spacing: 12) {
+                            HStack(spacing: MeeshySpacing.md) {
                                 Image(systemName: conversation.type == .group ? "person.3.fill" : "globe")
-                                    .font(MeeshyFont.relative(16))
+                                    .font(MeeshyFont.relative(MeeshyIconSize.md))
                                     .foregroundColor(MeeshyColors.indigo500)
-                                    .frame(width: 32, height: 32)
+                                    .frame(width: MeeshyControlSize.compact, height: MeeshyControlSize.compact)
                                     .accessibilityHidden(true)
 
-                                VStack(alignment: .leading, spacing: 2) {
+                                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                                     Text(conversation.name)
-                                        .font(MeeshyFont.relative(16, weight: .medium))
+                                        .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .medium))
                                         .foregroundColor(theme.textPrimary)
                                         .lineLimit(1)
 
                                     Text(conversation.type.rawValue.capitalized)
-                                        .font(MeeshyFont.relative(13))
+                                        .font(MeeshyFont.relative(MeeshyFont.subheadSize))
                                         .foregroundColor(theme.textSecondary)
                                 }
 
                                 Spacer()
 
                                 Image(systemName: "link")
-                                    .font(MeeshyFont.relative(14))
+                                    .font(MeeshyFont.relative(MeeshyIconSize.sm))
                                     .foregroundColor(MeeshyColors.indigo400)
                                     .accessibilityHidden(true)
                             }
-                            .padding(.vertical, 4)
+                            .padding(.vertical, MeeshySpacing.xs)
                         }
                     }
                     .listStyle(.plain)

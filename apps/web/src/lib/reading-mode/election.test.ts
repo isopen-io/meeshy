@@ -143,10 +143,10 @@ describe('armingLaw.isArmed', () => {
  * et `.test_loupeScale_aTallMessageNeverOverflowsItsCardMargin`, mêmes vecteurs.
  */
 describe('focalLoupeScale', () => {
-  const size = { width: 390, height: 60 };
+  const size = { width: 100, height: 60 };
 
-  test('les cotes sont celles de FocalMetrics.swift', () => {
-    expect(FOCUS_LOUPE_GAIN).toBe(0.05);
+  test('les cotes sont celles de FocalMetrics.swift (gain ×1,2 encore, #8506)', () => {
+    expect(FOCUS_LOUPE_GAIN).toBe(0.26);
     expect(FOCUS_CARD_MARGIN_VERTICAL).toBe(8);
   });
 
@@ -162,9 +162,14 @@ describe('focalLoupeScale', () => {
     expect(focalLoupeScale({ isFocused: true, reducedMotion: true, ...size })).toBe(1);
   });
 
-  test('un long message ne déborde jamais de la marge verticale de sa carte', () => {
-    const tall = { width: 390, height: 900 };
-    const scale = focalLoupeScale({ isFocused: true, reducedMotion: false, ...tall });
+  test("un long message élu grossit du gain plein : son cadre grandit avec lui (#8506)", () => {
+    const tall = { width: 100, height: 900 };
+    expect(focalLoupeScale({ isFocused: true, reducedMotion: false, ...tall })).toBeCloseTo(1 + FOCUS_LOUPE_GAIN, 10);
+  });
+
+  test('un long message déplié (verre fixe) ne déborde jamais de la marge verticale de sa carte', () => {
+    const tall = { width: 100, height: 900 };
+    const scale = focalLoupeScale({ isFocused: true, reducedMotion: false, fixedGlass: true, ...tall });
     expect(scale).toBeGreaterThan(1);
     expect((scale - 1) * tall.height / 2).toBeLessThanOrEqual(FOCUS_CARD_MARGIN_VERTICAL + 0.0001);
   });

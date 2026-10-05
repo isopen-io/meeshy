@@ -89,6 +89,7 @@ public enum ConversationPreviewComposer {
         case "expired": return .protectionExpired
         case "view-once": return .protectionViewOnce
         case "encrypted": return .protectionEncrypted
+        case "after-read": return .protectionAfterRead
         // `blurred` — et toute protection qu'un client ancien ne connaît pas
         // encore : retenue, jamais rendue en clair.
         default: return .protectionHidden
@@ -119,9 +120,14 @@ public enum ConversationPreviewComposer {
         let isReader = reaction.reactorUserId != nil && reaction.reactorUserId == input.viewerId
         let actor = hasText(reaction.reactorName) ? reaction.reactorName : strings(.authorUnknown)
         let excerpt = reactionExcerpt(reaction, input, strings)
-        let key: ConversationPreviewStringKey = isReader
-            ? (excerpt != nil ? .reactionSelf : .reactionSelfBare)
-            : (excerpt != nil ? .reactionMember : .reactionMemberBare)
+        let key: ConversationPreviewStringKey
+        if isReader {
+            key = excerpt != nil ? .reactionSelf : .reactionSelfBare
+        } else if input.isDirect == true {
+            key = excerpt != nil ? .reactionPeer : .reactionPeerBare
+        } else {
+            key = excerpt != nil ? .reactionMember : .reactionMemberBare
+        }
         let text = strings(key, ["actor": actor, "emoji": reaction.emoji, "excerpt": excerpt ?? ""])
         return ConversationPreview(kind: .reaction, segments: [.label(text)])
     }
@@ -162,6 +168,8 @@ public enum ConversationPreviewComposer {
             return line(.hidden, [.label(strings(.protectionHidden)), .label(strings(.protectionHiddenHint))])
         case .encrypted:
             return line(.encrypted, [.label(strings(.protectionEncrypted))])
+        case .afterRead:
+            return line(.ephemeral, [.label(strings(.protectionAfterRead))])
         case .ephemeral(let expiresAt, let durationSeconds):
             let body = ConversationPreviewBody.of(message, input, strings)
             let countdown: [ConversationPreviewSegment]
@@ -238,6 +246,7 @@ public enum ConversationPreviewComposer {
     private static func systemKey(_ event: LastMessageSystemEvent) -> ConversationPreviewStringKey {
         switch event.key {
         case "system.member-joined": return .systemMemberJoined
+        case "system.members-arrived": return arrivalsKey(count: event.params["count"]?.rendered)
         case "system.encryption-enabled":
             return event.params["mode"]?.rendered == "e2ee" ? .systemEncryptionE2EE : .systemEncryptionEnabled
         case "system.member-added": return .systemMemberAdded
@@ -249,10 +258,23 @@ public enum ConversationPreviewComposer {
         }
     }
 
+    /// Miroir de `arrivalsLineKey` : trois arrivées au plus se nomment toutes.
+    private static func arrivalsKey(count rendered: String?) -> ConversationPreviewStringKey {
+        let count = rendered.map { Double($0) ?? .nan } ?? 1
+        if count <= 1 { return .systemMembersArrivedOne }
+        if count == 2 { return .systemMembersArrivedTwo }
+        if count == 3 { return .systemMembersArrivedThree }
+        return .systemMembersArrivedMany
+    }
+
+    /// `system.generic` : le serveur n'a pas su typer l'avis. Son texte est la
+    /// seule chose qu'il dise — celle que le fil affiche (#8561).
+    private static let untypedSystemKey = "system.generic"
+
     private static func systemLine(
         _ message: ConversationPreviewMessage, _ input: ConversationPreviewInput, _ strings: ConversationPreviewStrings
     ) -> ConversationPreview {
-        guard let event = message.systemEvent else {
+        guard let event = message.systemEvent, event.key != untypedSystemKey else {
             let text = ConversationPreviewBody.servedText(message, input) ?? .label(strings(.systemGeneric))
             return ConversationPreview(kind: .system, tone: .system, segments: [text])
         }

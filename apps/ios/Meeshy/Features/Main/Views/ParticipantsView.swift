@@ -87,7 +87,7 @@ struct ParticipantsView: View {
                         dismiss()
                     } label: {
                         Image(systemName: "chevron.backward")
-                            .font(MeeshyFont.relative(14, weight: .semibold))
+                            .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .semibold))
                             .foregroundColor(theme.textPrimary)
                     }
                     .accessibilityLabel(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
@@ -99,11 +99,11 @@ struct ParticipantsView: View {
                             HapticFeedback.light()
                             showAddSheet = true
                         } label: {
-                            HStack(spacing: 4) {
+                            HStack(spacing: MeeshySpacing.xs) {
                                 Image(systemName: "plus")
-                                    .font(MeeshyFont.relative(12, weight: .bold))
+                                    .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .bold))
                                 Text(String(localized: "participants.add", defaultValue: "Ajouter", bundle: .main))
-                                    .font(MeeshyFont.relative(13, weight: .semibold))
+                                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                             }
                             .foregroundColor(accent)
                         }
@@ -112,6 +112,7 @@ struct ParticipantsView: View {
                 }
             }
             .task { await loadParticipants() }
+            .repaintingPeers($participants)
             .onReceive(
                 MessageSocketManager.shared.participantRoleUpdated
                     .filter { $0.conversationId == conversationId }
@@ -232,7 +233,7 @@ struct ParticipantsView: View {
                 .accessibilityHidden(true)
 
             Text("\(participants.count) \(participants.count > 1 ? String(localized: "participants.members_plural", defaultValue: "membres", bundle: .main) : String(localized: "participants.members_singular", defaultValue: "membre", bundle: .main))")
-                .font(MeeshyFont.relative(14, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
                 .foregroundColor(theme.textPrimary)
 
             Spacer()
@@ -280,7 +281,7 @@ struct ParticipantsView: View {
                     HStack {
                         Spacer()
                         ProgressView()
-                            .padding(.vertical, 16)
+                            .padding(.vertical, MeeshySpacing.lg)
                         Spacer()
                     }
                 }
@@ -306,15 +307,15 @@ struct ParticipantsView: View {
                 onMoodTap: statusViewModel.moodTapHandler(for: participant.id)
             )
 
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
+                HStack(spacing: MeeshySpacing.xsPlus) {
                     // Le masque QUALIFIE l'identité : sans lui, un visiteur
                     // entré par lien public est indiscernable d'un membre
                     // inscrit dans la liste des membres. Tranché par
                     // `Participant.type`, jamais par le pseudo.
                     if participant.isAnonymous {
                         Image(systemName: "theatermasks.fill")
-                            .font(MeeshyFont.relative(12, weight: .semibold))
+                            .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
                             .foregroundColor(.purple)
                             .accessibilityLabel(String(
                                 localized: "participants.anonymous",
@@ -325,7 +326,7 @@ struct ParticipantsView: View {
                     }
 
                     Text(isCurrentUser ? "\(participant.name) (\(String(localized: "participants.you", defaultValue: "vous", bundle: .main)))" : participant.name)
-                        .font(MeeshyFont.relative(14, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
                         .foregroundColor(theme.textPrimary)
                         .lineLimit(1)
 
@@ -338,7 +339,7 @@ struct ParticipantsView: View {
 
                 if let username = participant.username {
                     Text("@\(username)")
-                        .font(MeeshyFont.relative(11, weight: .medium))
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                         .foregroundColor(theme.textMuted)
                         .lineLimit(1)
                 }
@@ -349,16 +350,16 @@ struct ParticipantsView: View {
             if let joinedAt = participant.joinedAt {
                 VStack(alignment: .trailing, spacing: 1) {
                     Text(String(localized: "participants.since", defaultValue: "Depuis", bundle: .main))
-                        .font(MeeshyFont.relative(9, weight: .medium))
+                        .font(MeeshyFont.relative(MeeshyFont.microSize, weight: .medium))
                         .foregroundColor(theme.textMuted)
                     Text(shortDate(joinedAt))
-                        .font(MeeshyFont.relative(10, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                 }
             }
         }
         .padding(.horizontal, MeeshySpacing.xl)
-        .padding(.vertical, MeeshySpacing.sm + 2)
+        .padding(.vertical, MeeshySpacing.smPlus)
         .contentShape(Rectangle())
         // Ouvrir la fiche : c'est la SEULE surface de profil d'un visiteur sans
         // compte. Réservée à eux — un inscrit a déjà sa page `/u/{pseudo}`, et
@@ -375,10 +376,10 @@ struct ParticipantsView: View {
 
     private func roleBadge(_ role: String) -> some View {
         Text(roleDisplayLabel(role))
-            .font(MeeshyFont.relative(9, weight: .bold))
+            .font(MeeshyFont.relative(MeeshyFont.microSize, weight: .bold))
             .foregroundColor(.white)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
+            .padding(.horizontal, MeeshySpacing.xsPlus)
+            .padding(.vertical, MeeshySpacing.xxs)
             .background(Capsule().fill(roleBadgeColor(role)))
     }
 
@@ -464,13 +465,13 @@ struct ParticipantsView: View {
         } label: {
             HStack(spacing: MeeshySpacing.sm) {
                 Image(systemName: "rectangle.portrait.and.arrow.right")
-                    .font(MeeshyFont.relative(14, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .semibold))
                 Text(String(localized: "participants.leave_group", defaultValue: "Quitter le groupe", bundle: .main))
-                    .font(MeeshyFont.relative(14, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
             }
             .foregroundColor(MeeshyColors.error)
             .frame(maxWidth: .infinity)
-            .padding(.vertical, MeeshySpacing.md + 2)
+            .padding(.vertical, MeeshySpacing.mdPlus)
             .background(
                 RoundedRectangle(cornerRadius: MeeshyRadius.md)
                     .fill(MeeshyColors.error.opacity(isDark ? 0.12 : 0.08))
@@ -495,12 +496,12 @@ struct ParticipantsView: View {
     // MARK: - Skeleton Row
 
     private var skeletonRow: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             Circle()
                 .fill(theme.textMuted.opacity(0.12))
                 .frame(width: 36, height: 36)
-            VStack(alignment: .leading, spacing: 4) {
-                RoundedRectangle(cornerRadius: 4)
+            VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
+                RoundedRectangle(cornerRadius: MeeshyRadius.xxs)
                     .fill(theme.textMuted.opacity(0.12))
                     .frame(width: 120, height: 12)
                 RoundedRectangle(cornerRadius: 3)
@@ -700,6 +701,24 @@ struct ParticipantsView: View {
         } catch {
             Logger.participants.error("Failed to leave group: \(error.localizedDescription)")
             HapticFeedback.error()
+        }
+    }
+}
+
+// MARK: - Repeinture des pairs (#9307)
+
+extension View {
+    /// Un membre renommé ou repeint (`user:updated`) l'est dans la liste
+    /// ouverte, par la loi du SDK (`UserUpdatedEvent.repainted(_:)`) et sans
+    /// relecture. Une liste où rien ne change n'est pas republiée ; le cache
+    /// persistant suit par `ConversationSyncEngine`.
+    func repaintingPeers(
+        _ participants: Binding<[PaginatedParticipant]>,
+        updates: AnyPublisher<UserUpdatedEvent, Never> = MessageSocketManager.shared.userUpdated.eraseToAnyPublisher()
+    ) -> some View {
+        onReceive(updates.receive(on: DispatchQueue.main)) { event in
+            guard let repainted = participants.wrappedValue.repaintedElements(by: event.repainted) else { return }
+            participants.wrappedValue = repainted
         }
     }
 }

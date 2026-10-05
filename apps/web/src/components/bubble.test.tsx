@@ -908,7 +908,7 @@ describe('Bubble — remet le carrier (auteur, date) à la visionneuse ouverte (
         // `MediaViewer` rend par `createPortal(…, document.body)` (§ media-
         // viewer.tsx) — HORS de `container`, il faut donc interroger le
         // DOCUMENT, pas la racine montée.
-        const found = document.querySelector('[data-viewer-footer]');
+        const found = document.querySelector('[data-viewer-top-bar]');
         if (found) return found;
       }
       return null;

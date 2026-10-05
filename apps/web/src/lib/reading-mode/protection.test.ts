@@ -3,7 +3,9 @@ import { describe, expect, test } from 'bun:test';
 import {
   closeViewOnce,
   formatRemaining,
+  holdReveal,
   openViewOnce,
+  rearmReveal,
   protectionOf,
   requiresConsume,
   rendersContent,
@@ -12,6 +14,7 @@ import {
   settleFog,
   showsAffordance,
   surrogateOf,
+  viewOnceOpeningOf,
 } from './protection';
 import type { ProtectionKind, RevealPhase } from './protection';
 
@@ -225,6 +228,36 @@ describe('openViewOnce / closeViewOnce — la vue unique n\'a pas d\'horloge (#7
   });
 });
 
+describe('holdReveal / rearmReveal — un flou révélé ouvert en plein écran ne se referme pas sous le lecteur (#8389)', () => {
+  test('tenu, la fenêtre ne se referme plus seule : settle la laisse, quel que soit le temps écoulé', () => {
+    const held = holdReveal(reveal({ phase: 'hidden' }, { now: 0 }));
+    expect(held.phase).toBe('revealed');
+    expect(settle(held, { now: Number.MAX_SAFE_INTEGER, isViewOnce: false })).toBe(held);
+  });
+
+  test('tenu pendant le brouillard d’un flou, le contenu revient en clair', () => {
+    const fogging = settle(reveal({ phase: 'hidden' }, { now: 0 }), { now: 5000, isViewOnce: false });
+    expect(holdReveal(fogging)).toEqual({ phase: 'revealed', until: Number.POSITIVE_INFINITY });
+  });
+
+  test('jamais une vue unique qui se referme, jamais un voile au repos', () => {
+    const closing = closeViewOnce(openViewOnce({ phase: 'hidden' }), { now: 1000 });
+    expect(holdReveal(closing)).toBe(closing);
+    expect(holdReveal({ phase: 'hidden' })).toEqual({ phase: 'hidden' });
+    expect(holdReveal({ phase: 'consumed' })).toEqual({ phase: 'consumed' });
+  });
+
+  test('relâché, une fenêtre neuve de cinq secondes repart de maintenant', () => {
+    const held = holdReveal(reveal({ phase: 'hidden' }, { now: 0 }));
+    expect(rearmReveal(held, { now: 60_000 })).toEqual({ phase: 'revealed', until: 65_000 });
+  });
+
+  test('relâcher ne touche à rien d’autre qu’une fenêtre ouverte', () => {
+    expect(rearmReveal({ phase: 'hidden' }, { now: 60_000 })).toEqual({ phase: 'hidden' });
+    expect(rearmReveal({ phase: 'consumed' }, { now: 60_000 })).toEqual({ phase: 'consumed' });
+  });
+});
+
 describe('rendersContent / showsAffordance — la matrice kind × phase', () => {
   const hidden = { phase: 'hidden' as const };
   const revealed = { phase: 'revealed' as const, until: 6000 };
@@ -319,5 +352,26 @@ describe('surrogateOf — le substitut ne transporte rien du contenu', () => {
       expect(blocks).toBeLessThanOrEqual(Math.round(length / 2) + 8);
       expect(blocks).toBeGreaterThan(0);
     }
+  });
+});
+
+/**
+ * CE QUE L'OUVERTURE D'UNE VUE UNIQUE LÈVE (#8567, décision porteur du
+ * 2026-09-29) : « l'ouverture de la vue unique n'enlève pas le flou, sauf si
+ * c'est un attachement directement, alors c'est ouvert en plein écran en
+ * clair ».
+ */
+describe('viewOnceOpeningOf — ce que l’ouverture d’une vue unique lève (#8567)', () => {
+  test('un TEXTE flouté s’ouvre à sa place ET reste flouté', () => {
+    expect(viewOnceOpeningOf({ isBlurred: true, attachmentCount: 0 })).toBe('veiled-text');
+  });
+
+  test('un TEXTE non flouté s’ouvre à sa place, en clair', () => {
+    expect(viewOnceOpeningOf({ isBlurred: false, attachmentCount: 0 })).toBe('text');
+  });
+
+  test('une PIÈCE JOINTE s’ouvre en plein écran, en clair, flou ou non', () => {
+    expect(viewOnceOpeningOf({ isBlurred: true, attachmentCount: 1 })).toBe('fullscreen');
+    expect(viewOnceOpeningOf({ isBlurred: false, attachmentCount: 2 })).toBe('fullscreen');
   });
 });

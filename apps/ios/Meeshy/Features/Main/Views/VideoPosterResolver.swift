@@ -256,3 +256,55 @@ enum VideoPosterResolver {
         await CacheCoordinator.shared.thumbnails.store(data, for: key)
     }
 }
+
+// MARK: - Poster de CITATION (#8230)
+
+extension VideoPosterResolver {
+
+    /// Plus grand côté (px) d'un poster de citation : la miniature citée fait
+    /// `QuotedReplyPresentation.citedSceneWidth` points, soit moins de 400 px
+    /// à 3x — le grade BULLE que `VideoPosterGrade` sait reconnaître sous la
+    /// clé partagée, et remplacer quand le plein écran s'ouvre.
+    nonisolated static let quoteGradeMaxDimension: CGFloat = VideoPosterGrade.bubbleGradeMaxDimension
+
+    /// Lecture SYNCHRONE : tout poster résident sous `thumb:<url>` sert, quel
+    /// que soit son grade — un poster plein écran est net dans une citation.
+    nonisolated static func persistedQuotePoster(for attachment: MessageAttachment) -> UIImage? {
+        posterKey(for: attachment).flatMap { CacheCoordinator.warmedThumbnail(for: $0) }
+    }
+
+    /// La cascade d'une CITATION : résident → disque → fichier local décodé →
+    /// extraction par `Range` du premier Mo. Même politique que le poster de
+    /// la bulle vidéo (`MeeshyVideoThumbnail`), qui l'extrait dès qu'elle est
+    /// visible — mais jamais hors ligne, et jamais le fichier complet : une
+    /// citation ne télécharge pas une vidéo que personne n'a ouverte.
+    static func resolveQuotePoster(for attachment: MessageAttachment) async -> UIImage? {
+        if let warmed = persistedQuotePoster(for: attachment) { return warmed }
+        guard let key = posterKey(for: attachment) else { return nil }
+        let store = await CacheCoordinator.shared.thumbnails
+        if store.cachedFileURL(for: key) != nil,
+           let persisted = await store.image(for: key, maxPixelSize: quoteGradeMaxDimension) {
+            return persisted
+        }
+        guard let frame = await quoteFrame(for: attachment) else { return nil }
+        await persist(frame, key: key)
+        return frame
+    }
+
+    private static func quoteFrame(for attachment: MessageAttachment) async -> UIImage? {
+        if let local = localVideoFileURL(for: attachment) {
+            return try? await StoryMediaDecoder.firstFrame(of: local, maxDimension: quoteGradeMaxDimension)
+        }
+        guard NetworkConditionMonitor.shared.condition != .offline,
+              let remote = remoteVideoURL(for: attachment), !remote.isFileURL
+        else { return nil }
+        do {
+            return try await MeeshyVideoThumbnail.extractRemoteFirstFrame(
+                from: remote, maxDimension: quoteGradeMaxDimension, timeout: 8
+            )
+        } catch {
+            Logger.media.debug("Quoted video poster extraction failed: \(error.localizedDescription, privacy: .public)")
+            return nil
+        }
+    }
+}

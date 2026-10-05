@@ -96,7 +96,7 @@ public struct KeyframeInspector: View {
     }
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             header
             timeStepper
             positionSliders
@@ -105,12 +105,12 @@ public struct KeyframeInspector: View {
             easingPicker
             deleteButton
         }
-        .padding(14)
+        .padding(MeeshySpacing.mdPlus)
         // Même composition que ClipInspector/TransitionInspector : matériau
         // sous le contenu (jamais glassEffect, le verre ne peut pas
         // échantillonner du verre — artefacts iOS 26).
         .background(
-            RoundedRectangle(cornerRadius: 14).fill(.ultraThinMaterial)
+            RoundedRectangle(cornerRadius: MeeshyRadius.md).fill(.ultraThinMaterial)
         )
         .frame(maxWidth: 360, alignment: .leading)
         .accessibilityElement(children: .contain)
@@ -119,7 +119,7 @@ public struct KeyframeInspector: View {
     }
 
     private var header: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: MeeshySpacing.sm) {
             Image(systemName: "diamond.fill")
                 .foregroundStyle(MeeshyColors.warning)
                 .accessibilityHidden(true)
@@ -143,12 +143,12 @@ public struct KeyframeInspector: View {
     /// Même pas et même présentation que les steppers de `ClipInspector` —
     /// une seule grammaire de réglage fin dans toute la timeline.
     private var timeStepper: some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
             Text(String(localized: "story.timeline.keyframe.time",
                         defaultValue: "Instant", bundle: .module).uppercased())
                 .font(.system(size: 9, weight: .semibold))
                 .foregroundStyle(.secondary)
-            HStack(spacing: 6) {
+            HStack(spacing: MeeshySpacing.xsPlus) {
                 timeStepButton(systemName: "minus.circle.fill") { onTimeAdjusted(-Self.timeStep) }
                 Text(String(format: "%.2fs", keyframe.absoluteTime))
                     .font(.system(.callout, design: .monospaced))
@@ -173,11 +173,11 @@ public struct KeyframeInspector: View {
     }
 
     private var positionSliders: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
             Text(String(localized: "story.timeline.keyframe.position", bundle: .module).uppercased())
-                .font(.system(size: 9, weight: .semibold))
+                .font(.system(size: MeeshyFont.microSize, weight: .semibold))
                 .foregroundStyle(.secondary)
-            HStack(spacing: 12) {
+            HStack(spacing: MeeshySpacing.md) {
                 axisSlider(label: "X", value: $posX, range: 0...1) {
                     onPositionChanged(posX, posY)
                 }
@@ -189,7 +189,7 @@ public struct KeyframeInspector: View {
     }
 
     private func axisSlider(label: String, value: Binding<CGFloat>, range: ClosedRange<CGFloat>, onCommit: @escaping () -> Void) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
             Text(label).font(.caption.weight(.semibold))
             Slider(value: value, in: range) { editing in
                 if !editing { onCommit() }
@@ -200,9 +200,9 @@ public struct KeyframeInspector: View {
     }
 
     private var scaleSlider: some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
             Text(String(localized: "story.timeline.keyframe.scale", bundle: .module).uppercased())
-                .font(.system(size: 9, weight: .semibold))
+                .font(.system(size: MeeshyFont.microSize, weight: .semibold))
                 .foregroundStyle(.secondary)
             Slider(value: $scale, in: 0.1...4.0, step: 0.05) { editing in
                 if !editing { onScaleChanged(scale) }
@@ -213,9 +213,9 @@ public struct KeyframeInspector: View {
     }
 
     private var opacitySlider: some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
             Text(String(localized: "story.timeline.keyframe.opacity", bundle: .module).uppercased())
-                .font(.system(size: 9, weight: .semibold))
+                .font(.system(size: MeeshyFont.microSize, weight: .semibold))
                 .foregroundStyle(.secondary)
             Slider(value: $opacity, in: 0...1, step: 0.01) { editing in
                 if !editing { onOpacityChanged(opacity) }

@@ -55,7 +55,11 @@ import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { NotificationService } from '../../../services/notifications/NotificationService';
 import { retractReactionNotifications } from '../../../services/notifications/retractReactionNotifications';
 import { retractMessageNotifications } from '../../../services/messaging/retractMessageNotifications';
-import { REPRODUCED_PUSH_FIELD, REPRODUCED_PUSH_VALUE } from '@meeshy/shared/types/reproduced-notification-push';
+import {
+  REPLACES_NOTIFICATION_FIELD,
+  REPRODUCED_PUSH_FIELD,
+  REPRODUCED_PUSH_VALUE,
+} from '@meeshy/shared/types/reproduced-notification-push';
 
 const AUTHOR_ID = '64a000000000000000000001';
 const MENTIONED_ID = '64a000000000000000000002';
@@ -245,27 +249,21 @@ describe('NotificationService — push de révocation des bannières déjà livr
    * Éditer un message, un post ou un commentaire « annule la notification
    * envoyée et envoie la nouvelle version » : les trois passent par ce hub
    * (`reproduceEditedMessageNotifications`, `reproduceEditedSubjectNotifications`).
-   * Le socket ne suffit pas — un destinataire dont l'app est tuée perdrait la
-   * bannière sans rien recevoir à la place.
+   *
+   * L'ANNULATION VOYAGE AVEC LE REMPLACEMENT. Deux pushes séparés — une
+   * révocation silencieuse puis le nominal — n'ont aucun ordre garanti par
+   * APNs : iOS bride le silencieux, peut le livrer APRÈS le remplacement (il
+   * efface alors la version d'après) et ne le livre jamais à une app tuée (la
+   * bannière d'avant reste à côté de la nouvelle). Le remplacement porte donc
+   * lui-même `replacesNotificationId`, que l'extension de notification honore
+   * AVANT d'afficher : l'annulation ne peut ni arriver après lui, ni se perdre
+   * sans lui.
    */
   describe('announceNotificationsReproduced — contenu réécrit', () => {
-    it('révoque la bannière PÉRIMÉE de chaque ligne reproduite', async () => {
-      prisma.notification.findUnique.mockResolvedValue(makeRawNotification());
+    const delivered = [{ success: true, tokenId: 'token-1' }];
 
-      await service.announceNotificationsReproduced([{ id: NOTIF_ID, userId: AUTHOR_ID }]);
-      await service.flushPendingRevocations();
-
-      expect(mockIO.emit).toHaveBeenCalledWith('notification:deleted', { notificationId: NOTIF_ID });
-      expect(mockIO.emit).toHaveBeenCalledWith('notification:new', expect.objectContaining({ id: NOTIF_ID }));
-      expect(revocationTo(AUTHOR_ID)?.payload.data).toEqual({
-        type: 'notification_revoked',
-        notificationIds: NOTIF_ID,
-        conversationIds: CONVERSATION_ID,
-        types: 'new_message',
-      });
-    });
-
-    it('pousse ENSUITE la nouvelle version, en push NOMINAL visible', async () => {
+    it('une ligne qui existe encore : UN SEUL push, le remplacement, qui annonce la bannière qu’il annule', async () => {
+      sendToUser.mockResolvedValue(delivered);
       prisma.notification.findUnique.mockResolvedValue(
         makeRawNotification({ content: 'Rendez-vous à 18h finalement' })
       );
@@ -273,18 +271,19 @@ describe('NotificationService — push de révocation des bannières déjà livr
       await service.announceNotificationsReproduced([{ id: NOTIF_ID, userId: AUTHOR_ID }]);
       await service.flushPendingRevocations();
 
-      const calls = pushCalls();
-      expect(calls).toHaveLength(2);
-      // L'ORDRE est la règle : les deux charges nomment la MÊME notification,
-      // et les clients indexent leur bannière par cette identité. Une
-      // révocation qui arriverait après le remplacement l'effacerait.
-      expect(calls[0].payload.data.type).toBe('notification_revoked');
+      expect(mockIO.emit).toHaveBeenCalledWith('notification:deleted', { notificationId: NOTIF_ID });
+      expect(mockIO.emit).toHaveBeenCalledWith('notification:new', expect.objectContaining({ id: NOTIF_ID }));
 
-      const replacement = calls[1];
+      const calls = pushCalls();
+      expect(calls).toHaveLength(1);
+      expect(revocationTo(AUTHOR_ID)).toBeUndefined();
+
+      const [replacement] = calls;
       expect(replacement.userId).toBe(AUTHOR_ID);
       expect(replacement.types).toEqual(['apns', 'fcm']);
       expect(replacement.payload.body).toBe('Rendez-vous à 18h finalement');
       expect(replacement.payload.data.notificationId).toBe(NOTIF_ID);
+      expect(replacement.payload.data[REPLACES_NOTIFICATION_FIELD]).toBe(NOTIF_ID);
       expect(replacement.payload.data.conversationId).toBe(CONVERSATION_ID);
       // Du CONTENU, pas un signal de contrôle : ni silencieux, ni au-dessus des
       // préférences — `PushNotificationService` applique DND et `pushEnabled`.
@@ -294,33 +293,52 @@ describe('NotificationService — push de révocation des bannières déjà livr
 
     /* Le web ne reçoit pas la révocation (#7308) : son worker prenait la
        version d'après pour un doublon de la bannière d'avant, et l'écartait
-       (#7342). Le remplacement DÉCLARE qu'il corrige — la révocation, elle,
-       n'a rien à déclarer. */
-    it('le remplacement se DÉCLARE correction, pour le web qui ne reçoit pas la révocation', async () => {
-      prisma.notification.findUnique.mockResolvedValue(
-        makeRawNotification({ content: 'Rendez-vous à 18h finalement' })
-      );
+       (#7342). Le remplacement DÉCLARE qu'il corrige. */
+    it('le remplacement se DÉCLARE correction, pour le service worker web', async () => {
+      sendToUser.mockResolvedValue(delivered);
+      prisma.notification.findUnique.mockResolvedValue(makeRawNotification());
 
       await service.announceNotificationsReproduced([{ id: NOTIF_ID, userId: AUTHOR_ID }]);
       await service.flushPendingRevocations();
 
-      const [revocation, replacement] = pushCalls();
-      expect({
-        revocation: revocation?.payload.data[REPRODUCED_PUSH_FIELD],
-        replacement: replacement?.payload.data[REPRODUCED_PUSH_FIELD],
-      }).toEqual({ revocation: undefined, replacement: REPRODUCED_PUSH_VALUE });
+      expect(pushCalls()[0]?.payload.data[REPRODUCED_PUSH_FIELD]).toBe(REPRODUCED_PUSH_VALUE);
     });
 
-    it('ne pousse aucun remplacement pour une ligne disparue entre la réécriture et l’annonce', async () => {
+    it('une ligne disparue entre la réécriture et l’annonce : la révocation part, aucun remplacement', async () => {
       prisma.notification.findUnique.mockResolvedValue(null);
 
       await service.announceNotificationsReproduced([{ id: NOTIF_ID, userId: AUTHOR_ID }]);
       await service.flushPendingRevocations();
 
       expect(pushCalls().filter((call) => call.payload.data.type !== 'notification_revoked')).toEqual([]);
+      expect(revocationTo(AUTHOR_ID)?.payload.data).toEqual({
+        type: 'notification_revoked',
+        notificationIds: NOTIF_ID,
+      });
     });
 
-    it('un remplacement qui échoue n’annule pas la révocation déjà partie', async () => {
+    /* Le remplacement se soumet à DND et à `pushEnabled` ; s'il n'atteint
+       aucun appareil, la bannière d'avant resterait avec le texte périmé. La
+       révocation de repli part alors APRÈS lui — elle ne peut rien effacer
+       qu'il aurait posé, puisqu'il n'a rien posé. */
+    it('un remplacement qui n’atteint aucun appareil se replie sur la révocation, APRÈS lui', async () => {
+      prisma.notification.findUnique.mockResolvedValue(makeRawNotification());
+      sendToUser.mockResolvedValue([]);
+
+      await service.announceNotificationsReproduced([{ id: NOTIF_ID, userId: AUTHOR_ID }]);
+      await service.flushPendingRevocations();
+
+      const calls = pushCalls();
+      expect(calls.map((call) => call.payload.data.type)).toEqual(['new_message', 'notification_revoked']);
+      expect(calls[1].payload.data).toEqual({
+        type: 'notification_revoked',
+        notificationIds: NOTIF_ID,
+        conversationIds: CONVERSATION_ID,
+        types: 'new_message',
+      });
+    });
+
+    it('un remplacement qui lève se replie aussi sur la révocation, sans rejeter', async () => {
       prisma.notification.findUnique.mockResolvedValue(makeRawNotification());
       sendToUser.mockImplementation(async (options: any) =>
         options.payload.data.type === 'notification_revoked'
@@ -333,7 +351,7 @@ describe('NotificationService — push de révocation des bannières déjà livr
       ).resolves.toBeUndefined();
       await expect(service.flushPendingRevocations()).resolves.toBeUndefined();
 
-      expect(revocationTo(AUTHOR_ID)).toBeDefined();
+      expect(revocationTo(AUTHOR_ID)?.payload.data.notificationIds).toBe(NOTIF_ID);
     });
   });
 

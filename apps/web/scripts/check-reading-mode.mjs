@@ -5,15 +5,15 @@
  *
  * CE QU'IL MESURE
  *
- * 1. Le fil s'ouvre en mode FOCAL par défaut (D-7) : des rangées PLATES
- *    (`data-reading-mode="focal"`), AUCUNE bulle.
+ * 1. Le fil s’ouvre en mode SCRIPT par défaut (#8147, Focal jusqu’au 2026-09-26) : des rangées PLATES
+ *    (`data-reading-mode="script"`), AUCUNE bulle.
  * 2. Le menu du chip liste les CINQ modes + « Automatique » ; `Résumé` est
  *    DISPONIBLE pour un inscrit depuis #5695 (D-21) ; `Rivière` reste
  *    désactivée et MOTIVÉE (D-8) — ses deux raisons, sous le seuil et déjà
  *    éligible, sont mesurées par `lib/check-river-menu.mjs` (#5696).
  * 3. Sélectionner « Bulles » change RÉELLEMENT le rendu (l'effet), la
  *    sélection SURVIT à un rechargement (persistance), et « Automatique »
- *    revient au focal.
+ *    revient au Script.
  * 4. Les DEUX schémas sont capturés et LUS (outil Read, en dehors de ce
  *    script — il produit les fichiers, ne les regarde pas).
  * 5. `prefers-reduced-motion: reduce` : aucune transformation de perspective
@@ -88,6 +88,7 @@ import { checkRowIdentityAndLabel } from './lib/check-identity.mjs';
 import { pageÀInstantFigé } from './lib/instant.mjs';
 import { checkLivingSummary } from './lib/check-summary.mjs';
 import { assertRiverBelowThreshold, checkEligibleRiverRow } from './lib/check-river-menu.mjs';
+import { checkFocalElectedControls } from './lib/check-focal-elected.mjs';
 import { contrastOf } from './lib/contrast.mjs';
 import { scrollRowIntoView } from './lib/scroll-row.mjs';
 import { waitForFlattenFade, waitForRevealedOpacity } from './lib/scene-polling.mjs';
@@ -131,7 +132,31 @@ const setScheme = (context, scheme) =>
     }
   }, scheme);
 
-const QUOTE_TEXT = 'main li [data-reading-mode] button[aria-label^="Aller au message"] .line-clamp-2';
+/**
+ * FOCAL EST DÉSORMAIS UN CHOIX, PLUS LE DÉFAUT (#8147, directive porteur
+ * 2026-09-26 : « par défaut Script »). Les sous-tests qui mesurent la SCÈNE
+ * Focal (élection, révélé, second schéma, écran étroit, mouvement réduit) le
+ * choisissent donc comme le ferait le lecteur : une préférence mémorisée,
+ * posée AVANT le rendu et seulement si aucune n'existe — un choix fait
+ * pendant le sous-test (Script, Bulles) survit ainsi au rechargement, et
+ * `localStorage.clear()` rend bien le fil à Focal.
+ */
+const FOCAL_CONVERSATIONS = ['c-salon-riviere', 'c-deploiement'];
+const preferFocal = (context) =>
+  context.addInitScript((ids) => {
+    try {
+      for (const id of ids) {
+        const key = `meeshy.reading-mode.u_u-viewer.${id}`;
+        if (localStorage.getItem(key) === null) localStorage.setItem(key, 'focal');
+      }
+    } catch {
+      /* navigation privée : le sous-test verra le défaut, et le dira. */
+    }
+  }, FOCAL_CONVERSATIONS);
+
+/* VISÉE PAR SON MARQUEUR (#8320) : depuis que le libellé de la citation lit le
+   catalogue d'interface, il suit la langue du LECTEUR — même piège que #7141. */
+const QUOTE_TEXT = 'main li [data-reading-mode] button[data-quote-jump] .line-clamp-2';
 
 /**
  * LA BARRE AA (#5625, remplace l'ancien plancher d'invisibilité à 2,5). Le
@@ -286,7 +311,7 @@ const noRowCarriesContinuousPerspective = (page) =>
     return offenders;
   });
 
-// --- 1 : le défaut est FOCAL, mesuré au DOM.
+// --- 1 : le défaut est SCRIPT (#8147, directive porteur 2026-09-26), mesuré au DOM.
 {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
   await setScheme(context, 'dark');
@@ -296,8 +321,12 @@ const noRowCarriesContinuousPerspective = (page) =>
   await page.waitForTimeout(400);
 
   expect(
-    (await page.locator('main li [data-reading-mode="focal"]').count()) > 0,
-    'la rangée plate FOCALE est rendue par défaut (D-7)',
+    (await page.locator('main li [data-reading-mode="script"]').count()) > 0,
+    'la rangée plate SCRIPT est rendue par défaut (#8147)',
+  );
+  expect(
+    (await page.locator('main li [data-reading-mode="focal"]').count()) === 0,
+    'Focal n’est plus le défaut (#8147) — il reste un choix',
   );
   expect(
     (await page.locator('main li .rounded-bubble').count()) === 0,
@@ -402,7 +431,7 @@ const noRowCarriesContinuousPerspective = (page) =>
    * rien : ni `onClick`, ni prop de rappel).
    */
   const quoteButton = page
-    .locator('main li [data-reading-mode] button[aria-label^="Aller au message"]')
+    .locator('main li [data-reading-mode] button[data-quote-jump]')
     .first();
   expect((await quoteButton.count()) > 0, 'un message avec citation est rendu');
   await quoteButton.click();
@@ -415,7 +444,7 @@ const noRowCarriesContinuousPerspective = (page) =>
   );
   expect(highlighted, 'cliquer une citation met en évidence le message cité (le contrôle a un effet)');
 
-  await page.screenshot({ path: join(CAPTURES, 'thread-focal-dark.png') });
+  await page.screenshot({ path: join(CAPTURES, 'thread-script-dark.png') });
 
   // --- 2 : le menu du chip.
   await page.getByRole('button', { name: /Mode de lecture/ }).click();
@@ -530,8 +559,8 @@ const noRowCarriesContinuousPerspective = (page) =>
   await page.getByRole('menuitem', { name: 'Automatique' }).click();
   await page.waitForTimeout(300);
   expect(
-    (await page.locator('main li [data-reading-mode="focal"]').count()) > 0,
-    '« Automatique » revient au focal',
+    (await page.locator('main li [data-reading-mode="script"]').count()) > 0,
+    '« Automatique » revient au Script (#8147)',
   );
 
   /**
@@ -567,14 +596,14 @@ const noRowCarriesContinuousPerspective = (page) =>
   await page.keyboard.press('ArrowDown');
   const afterArrow = await page.evaluate(() => document.activeElement?.textContent ?? '');
   expect(
-    afterArrow.startsWith('Script'),
+    afterArrow.startsWith('Bulles'),
     `ArrowDown déplace RÉELLEMENT le focus vers la ligne suivante (« ${afterArrow} »)`,
   );
   await page.keyboard.press('Enter');
   await page.waitForTimeout(300);
   expect(
-    (await page.locator('main li [data-reading-mode="script"]').count()) > 0,
-    'au clavier, Entrée sur la ligne atteinte par les flèches change RÉELLEMENT le mode (Script)',
+    (await page.locator('main li .rounded-bubble').count()) > 0,
+    'au clavier, Entrée sur la ligne atteinte par les flèches change RÉELLEMENT le mode (Bulles)',
   );
   expect(
     await page.evaluate(() => document.activeElement?.getAttribute('aria-haspopup') === 'menu'),
@@ -585,8 +614,8 @@ const noRowCarriesContinuousPerspective = (page) =>
   await page.waitForTimeout(200);
   const focusedAfterReopen = await page.evaluate(() => document.activeElement?.textContent ?? '');
   expect(
-    focusedAfterReopen.startsWith('Script'),
-    're-ouvert, le focus se pose de nouveau sur la ligne COURANTE (Script)',
+    focusedAfterReopen.startsWith('Bulles'),
+    're-ouvert, le focus se pose de nouveau sur la ligne COURANTE (Bulles)',
   );
   await page.keyboard.press('Escape');
   await page.waitForTimeout(150);
@@ -611,6 +640,7 @@ const noRowCarriesContinuousPerspective = (page) =>
 {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
   await setScheme(context, 'dark');
+  await preferFocal(context);
   const page = await pageÀInstantFigé(context);
   await page.goto(`${BASE}/c/c-salon-riviere`, { waitUntil: 'load' });
   await page.waitForSelector('main li');
@@ -657,6 +687,17 @@ const noRowCarriesContinuousPerspective = (page) =>
     cardBg !== 'rgba(0, 0, 0, 0)' && cardBg !== 'transparent',
     `la carte de la rangée élue porte un fond calculé ≠ transparent (${cardBg})`,
   );
+  /* #8147 — la carte de l'élue est un BLOC DE VERRE : la matière de
+     `glass.css` (flou d'arrière-plan), posée SOUS le texte de la rangée. */
+  const cardGlass = await elected.locator('.focus-card').evaluate((el) => ({
+    backdrop: getComputedStyle(el).backdropFilter || getComputedStyle(el).webkitBackdropFilter,
+    zIndex: getComputedStyle(el).zIndex,
+  }));
+  expect(
+    /blur\(/.test(cardGlass.backdrop) && cardGlass.zIndex === '-1',
+    `la carte de l'élue est un bloc de VERRE flouté, passé sous le texte (${JSON.stringify(cardGlass)})`,
+  );
+  await page.screenshot({ path: join(CAPTURES, 'thread-focal-elected-glass-dark.png') });
 
   const identity = await elected.locator('.focus-identity').evaluate((el) => {
     const avatar = el.querySelector('.avatar-root');
@@ -666,17 +707,85 @@ const noRowCarriesContinuousPerspective = (page) =>
   });
   expect(identity.height >= 34, `le chip d'identité de l'élue mesure au moins 34 px de haut (${identity.height})`);
   /**
-   * `IDENTITY_AVATAR_SIZE` (26) est la cote NOMINALE, NON transformée — la
-   * rangée élue GRANDIT désormais de `FOCUS_LOUPE_GAIN` (0,05, #6586/#6588),
-   * chip d'identité compris : la loupe grandit la CELLULE entière, comme
-   * `FocalScrollPerspective.magnify` côté iOS (`cell.contentView.layer`,
-   * pas seulement son texte). L'avatar rendu mesure donc entre 26 px (aucun
-   * gain) et 26 × 1,05 px (gain plein) — jamais davantage, la loupe ne fait
-   * QUE grandir.
+   * `IDENTITY_AVATAR_SIZE` (26) — la cote NOMINALE, et désormais la cote
+   * RENDUE : depuis #8536 (« seul le contenu grandit : […] l'auteur et son
+   * avatar doivent rester à la taille originale »), la loupe ne grossit plus
+   * la rangée entière mais son seul contenu (`[data-loupe]`).
    */
   expect(
-    identity.avatarWidth !== null && identity.avatarWidth >= 26 && identity.avatarWidth <= 26 * 1.05 + 0.01,
-    `l'avatar du chip d'identité mesure entre 26 et 27,3 px — nominal, ou grandi par la loupe de l'élue (#6588) (${identity.avatarWidth})`,
+    identity.avatarWidth !== null && Math.abs(identity.avatarWidth - 26) < 0.5,
+    `l'avatar du chip d'identité garde sa taille d'origine, 26 px — la loupe ne le grossit pas (#8536) (${identity.avatarWidth})`,
+  );
+
+  /**
+   * LE CADRE ENGLOBE TOUT (#8506, directive porteur 2026-09-28) — identité,
+   * bande basse et tampon vivent ENTIÈREMENT dans le verre, avec une marge sur
+   * les bords qu'ils bordent ; le cadre tient dans sa rangée en largeur ; et
+   * aucune voisine, écartée par `translate`, ne passe sous lui.
+   */
+  const frame = await elected.evaluate((row) => {
+    const card = row.querySelector('.focus-card').getBoundingClientRect();
+    const li = row.closest('li');
+    const liBox = li.getBoundingClientRect();
+    const part = (sel) => {
+      const el = row.querySelector(sel);
+      if (el === null) return null;
+      const r = el.getBoundingClientRect();
+      return { top: r.top - card.top, bottom: card.bottom - r.bottom, left: r.left - card.left, right: card.right - r.right };
+    };
+    const inked = (el) => [...el.querySelectorAll('p, time, span')].filter((e) => (e.textContent ?? '').trim() !== '');
+    const covered = (n) =>
+      n === null
+        ? 0
+        : inked(n).filter((e) => {
+            const r = e.getBoundingClientRect();
+            if (getComputedStyle(e).visibility === 'hidden' || r.width === 0) return false;
+            return r.top < card.bottom - 1 && card.top + 1 < r.bottom && r.left < card.right && card.left < r.right;
+          }).length;
+    const loupe = row.querySelector('[data-loupe]');
+    const m = loupe === null ? null : /matrix\(([0-9.]+)/.exec(getComputedStyle(loupe).transform);
+    return {
+      scale: m === null ? 1 : Number(m[1]),
+      identity: part('.focus-identity'),
+      strip: part('.focus-strip'),
+      stamp: part('.focus-stamp'),
+      cardInsideRow: card.left >= liBox.left - 0.5 && card.right <= liBox.right + 0.5,
+      coveredAbove: covered(li.previousElementSibling),
+      coveredBelow: covered(li.nextElementSibling),
+    };
+  });
+  const MARGIN = 8;
+  expect(
+    frame.identity !== null &&
+      frame.identity.top >= MARGIN &&
+      frame.identity.left >= MARGIN &&
+      frame.identity.right >= 0 &&
+      frame.identity.bottom >= 0,
+    `l'identité de l'élue vit DANS le cadre, à au moins ${MARGIN} px de ses bords haut et gauche — ${JSON.stringify(frame)}`,
+  );
+  expect(
+    frame.stamp !== null &&
+      frame.stamp.bottom >= MARGIN &&
+      frame.stamp.right >= MARGIN &&
+      frame.stamp.top >= 0 &&
+      frame.stamp.left >= 0,
+    `le tampon de l'élue vit DANS le cadre, à au moins ${MARGIN} px de ses bords bas et droit — ${JSON.stringify(frame)}`,
+  );
+  expect(
+    frame.strip === null || (frame.strip.bottom >= MARGIN && frame.strip.left >= MARGIN && frame.strip.top >= 0 && frame.strip.right >= 0),
+    `la bande basse de l'élue vit DANS le cadre, à au moins ${MARGIN} px de ses bords bas et gauche — ${JSON.stringify(frame)}`,
+  );
+  expect(frame.cardInsideRow, `le cadre grossi ne dépasse jamais la largeur de sa rangée — ${JSON.stringify(frame)}`);
+  expect(frame.scale >= 1 && frame.scale <= 1.26 + 1e-9, `la loupe de l'élue reste entre ×1 et ×1,26 — ${JSON.stringify(frame)}`);
+  /* L'élue de ce corpus ne remplit pas la largeur de son cadre : son CONTENU
+     doit grossir NETTEMENT. Depuis #8536 seule l'encre du contenu borne la
+     loupe : ni le tampon ni la bande basse, restés à l'échelle 1, n'y
+     comptent plus (ils la bornaient à ×1,02, puis à ×1,107 en CI où la police
+     du runner élargit la bande). */
+  expect(frame.scale > 1.15, `un message qui ne remplit pas son cadre grossit nettement (×${frame.scale})`);
+  expect(
+    frame.coveredAbove === 0 && frame.coveredBelow === 0,
+    `les voisines de l'élue s'écartent : aucun de leurs textes ne passe sous le cadre — ${JSON.stringify(frame)}`,
   );
 
   const stampText = await elected.locator('.focus-stamp').first().innerText();
@@ -987,6 +1096,7 @@ const noRowCarriesContinuousPerspective = (page) =>
 {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
   await setScheme(context, 'dark');
+  await preferFocal(context);
   const page = await pageÀInstantFigé(context);
   await page.goto(`${BASE}/c/c-salon-riviere`, { waitUntil: 'load' });
   await page.waitForSelector('main li');
@@ -995,7 +1105,7 @@ const noRowCarriesContinuousPerspective = (page) =>
   const metaOpacities = () =>
     page.evaluate(() =>
       [...document.querySelectorAll('main li [data-reading-mode] time')]
-        .filter((t) => !t.classList.contains('focus-stamp'))
+        .filter((t) => t.closest('.focus-stamp') === null)
         .map((t) => Number(getComputedStyle(t.closest('.focal-meta') ?? t).opacity)),
     );
 
@@ -1059,6 +1169,7 @@ const noRowCarriesContinuousPerspective = (page) =>
 {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
   await setScheme(context, 'light');
+  await preferFocal(context);
   const page = await pageÀInstantFigé(context);
   await page.goto(`${BASE}/c/c-deploiement`, { waitUntil: 'load' });
   await page.waitForSelector('main li');
@@ -1091,6 +1202,7 @@ const noRowCarriesContinuousPerspective = (page) =>
 {
   const context = await browser.newContext({ viewport: { width: 320, height: 780 } });
   await setScheme(context, 'dark');
+  await preferFocal(context);
   const page = await pageÀInstantFigé(context);
   await page.goto(`${BASE}/c/c-deploiement`, { waitUntil: 'load' });
   await page.waitForSelector('main li');
@@ -1121,6 +1233,7 @@ const noRowCarriesContinuousPerspective = (page) =>
 {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 }, reducedMotion: 'reduce' });
   await setScheme(context, 'dark');
+  await preferFocal(context);
   const page = await pageÀInstantFigé(context);
   await page.goto(`${BASE}/c/c-deploiement`, { waitUntil: 'load' });
   await page.waitForSelector('main li');
@@ -1299,6 +1412,10 @@ const noRowCarriesContinuousPerspective = (page) =>
 // --- 11 : LA RIVIÈRE ÉLIGIBLE, grisée et motivée SANS MENTIR (#5696) — `lib/check-river-menu.mjs`.
 await checkEligibleRiverRow({ browser, BASE, setScheme, expect });
 
+// --- L'ÉLU AU TOUCHER (#8536) : seul le contenu grossit, le verre respire,
+// chaque contrôle agit au premier clic ET au premier toucher.
+await checkFocalElectedControls({ browser, BASE, setScheme, preferFocal, expect });
+
 // --- 14 : LE RÉSUMÉ VIVANT (#5695) — `lib/check-summary.mjs` (l'hôte est hors
 // budget de taille) ; il reçoit LE compteur de défauts et LA pose de schéma.
 await checkLivingSummary({ browser, BASE, CAPTURES, setScheme, expect, AA_THRESHOLD });
@@ -1315,5 +1432,5 @@ if (failures.length > 0) {
   process.exit(1);
 }
 console.log(
-  `\n  Le mode de lecture tient : focal par défaut, menu à cinq lignes motivées, sélection avec effet et persistance, deux schémas capturés dans ${CAPTURES}.\n`,
+  `\n  Le mode de lecture tient : Script par défaut (#8147), Focal au choix, menu à cinq lignes motivées, sélection avec effet et persistance, deux schémas capturés dans ${CAPTURES}.\n`,
 );

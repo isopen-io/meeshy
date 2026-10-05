@@ -1,4 +1,5 @@
 import XCTest
+import Contacts
 import MeeshySDK
 @testable import Meeshy
 
@@ -49,6 +50,8 @@ final class OnboardingViewModelTests: XCTestCase {
         let permission: MockOnboardingNotificationPermission
         let appliedUsers: AppliedUsers
         let settled: MockOnboardingSettledStore
+        let contacts: MockContactSyncService
+        let directory: MockContactDirectoryService
     }
 
     final class AppliedUsers {
@@ -58,7 +61,8 @@ final class OnboardingViewModelTests: XCTestCase {
     private func makeSUT(
         state: APIOnboardingState? = nil,
         permission: OnboardingNotificationStatus = .notDetermined,
-        settled: MockOnboardingSettledStore = MockOnboardingSettledStore()
+        settled: MockOnboardingSettledStore = MockOnboardingSettledStore(),
+        contactsStatus: CNAuthorizationStatus = .restricted
     ) -> SUT {
         let service = MockOnboardingService()
         service.fetchStateResult = .success(state ?? makeState())
@@ -70,6 +74,9 @@ final class OnboardingViewModelTests: XCTestCase {
         let notif = MockOnboardingNotificationPermission()
         notif.status = permission
         let applied = AppliedUsers()
+        let contacts = MockContactSyncService()
+        contacts.authorizationStatusResult = contactsStatus
+        let directory = MockContactDirectoryService()
         let model = OnboardingViewModel(
             service: service,
             messages: messages,
@@ -80,11 +87,13 @@ final class OnboardingViewModelTests: XCTestCase {
             pickTemplate: { _ in 0 },
             applyUser: { applied.users.append($0) },
             settled: settled,
-            pause: { _ in }
+            pause: { _ in },
+            contacts: contacts,
+            directory: directory
         )
         return SUT(model: model, service: service, messages: messages, friends: friends,
                    users: users, progress: progress, permission: notif, appliedUsers: applied,
-                   settled: settled)
+                   settled: settled, contacts: contacts, directory: directory)
     }
 
     // MARK: - Présentation
@@ -220,6 +229,41 @@ final class OnboardingViewModelTests: XCTestCase {
 
         sut.model.routingChanged(isElsewhere: true)
 
+        XCTAssertTrue(sut.model.isPresented)
+    }
+
+    // MARK: - #8089 — la célébration de l'arrivée passe d'abord
+
+    func test_start_whileTheArrivalIsCelebrated_defersThePresentation() async {
+        let sut = makeSUT()
+        sut.model.celebrationChanged(isShowing: true)
+
+        await sut.model.start(user: makeUser())
+
+        XCTAssertFalse(sut.model.isPresented)
+    }
+
+    func test_celebrationEnded_presentsTheFirstCard() async {
+        let sut = makeSUT()
+        sut.model.celebrationChanged(isShowing: true)
+        await sut.model.start(user: makeUser())
+
+        sut.model.celebrationChanged(isShowing: false)
+
+        XCTAssertTrue(sut.model.isPresented)
+        XCTAssertEqual(sut.model.card, .step(.languages), "la célébration ne remplace pas la première étape")
+    }
+
+    func test_celebrationEnded_whileRoutingElsewhere_stillWaitsForTheRoute() async {
+        let sut = makeSUT()
+        sut.model.celebrationChanged(isShowing: true)
+        sut.model.routingChanged(isElsewhere: true)
+        await sut.model.start(user: makeUser())
+
+        sut.model.celebrationChanged(isShowing: false)
+        XCTAssertFalse(sut.model.isPresented)
+
+        sut.model.routingChanged(isElsewhere: false)
         XCTAssertTrue(sut.model.isPresented)
     }
 

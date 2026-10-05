@@ -170,7 +170,7 @@ struct ComposerBottomBand: View {
                 removal: .move(edge: .bottom).combined(with: .opacity)
             ))
         }
-        .padding(.bottom, 16) // Breathing room above home indicator
+        .padding(.bottom, MeeshySpacing.lg) // Breathing room above home indicator
         .frame(maxWidth: .infinity)
         .background(bandBackground)
         // `.compositingGroup()` aplatit le band en UNE silhouette avant
@@ -211,14 +211,14 @@ struct ComposerBottomBand: View {
                         : Color.white.opacity(0.55)),
                     in: Self.bandShape
                 )
-                .overlay(Self.bandShape.stroke(bandStroke, lineWidth: 0.5))
+                .overlay(Self.bandShape.stroke(bandStroke, lineWidth: MeeshyBorder.hairline))
                 .ignoresSafeArea(edges: .bottom)
         } else {
             Self.bandShape
                 .fill(colorScheme == .dark
                     ? MeeshyColors.indigo950.opacity(0.92)
                     : Color.white.opacity(0.92))
-                .overlay(Self.bandShape.stroke(bandStroke, lineWidth: 0.5))
+                .overlay(Self.bandShape.stroke(bandStroke, lineWidth: MeeshyBorder.hairline))
                 .ignoresSafeArea(edges: .bottom)
         }
     }
@@ -232,8 +232,8 @@ struct ComposerBottomBand: View {
         let handle = RoundedRectangle(cornerRadius: 2.5)
             .fill(dragHandleColor)
             .frame(width: 42, height: 5)
-            .padding(.top, 10)
-            .padding(.bottom, 6)
+            .padding(.top, MeeshySpacing.smPlus)
+            .padding(.bottom, MeeshySpacing.xsPlus)
             .frame(maxWidth: .infinity)        // hit-area sur toute la largeur
             // 5 + 10 + 6 = 21 pt de haut, sous le minimum HIG (même technique que
             // `fabRestoreHandle`/`canvasZoomResetButton`/`CanvasLayerIndicator` :

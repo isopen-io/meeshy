@@ -1,4 +1,7 @@
+import { SCENE_BACKDROP_TINT, type SceneBackdrop, type SceneBackdropTint } from '@/lib/canvas/backdrop';
+import type { BackgroundFraming } from '@/lib/canvas/background';
 import type { CanvasScene } from '@/lib/canvas/document';
+import { thumbHashImage } from '@/lib/media/thumbhash-image';
 import { backgroundMedia, isBackground } from '@/lib/feed/scene-framing';
 
 /**
@@ -91,4 +94,34 @@ export function letterboxHashes(scene: CanvasScene): readonly string[] {
     result.push(hash);
   }
   return result;
+}
+
+/** Ce qui se peint dans les bandes d'un fond AJUSTÉ (#8414). */
+export type LetterboxFill =
+  /** Le média lui-même (une image) ou son thumbhash étiré (une vidéo),
+   * floutés à la peinture. */
+  | { readonly kind: 'blur'; readonly src: string }
+  /** Une teinte pleine du contrat du Cadre (`lib/canvas/backdrop.ts`). */
+  | { readonly kind: 'tint'; readonly backdrop: SceneBackdropTint; readonly color: string };
+
+/**
+ * **LE FOND CHOISI AU CADRE, PEINT DANS LES BANDES** (#8414) — la loi que le
+ * lecteur ET le composer relisent : un fond qui remplit n'a pas de bande ; une
+ * teinte se peint telle quelle ; le flou (le défaut) peint l'IMAGE de fond
+ * elle-même, ou — pour une vidéo, dont on ne floute pas une seconde lecture —
+ * le thumbhash complet de la cascade (`letterboxHashes`). Sans rien de tout
+ * cela, aucune bande : la surface reste, comme `StoryLetterboxFill.Source.none`.
+ */
+export function letterboxFill(params: {
+  readonly fitMode: BackgroundFraming;
+  readonly backdrop: SceneBackdrop;
+  readonly mediaSrc: string | undefined;
+  readonly mediaIsImage: boolean;
+  readonly hashes: readonly string[];
+}): LetterboxFill | undefined {
+  if (params.fitMode !== 'fit') return undefined;
+  if (params.backdrop !== 'blur') return { kind: 'tint', backdrop: params.backdrop, color: SCENE_BACKDROP_TINT[params.backdrop] };
+  if (params.mediaIsImage && params.mediaSrc !== undefined) return { kind: 'blur', src: params.mediaSrc };
+  const hashed = params.hashes.map((hash) => thumbHashImage(hash)).find((src): src is string => src !== undefined);
+  return hashed === undefined ? undefined : { kind: 'blur', src: hashed };
 }

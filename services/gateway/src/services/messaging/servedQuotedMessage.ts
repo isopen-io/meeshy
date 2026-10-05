@@ -1,6 +1,10 @@
 import { maskedAttachment, protectedPreview } from '../notifications/notification-preview';
 import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
 import {
+  hasPerReaderEphemeralDeadline,
+  servedEphemeralExpiresAt,
+} from '@meeshy/shared/utils/ephemeral-countdown';
+import {
   transformTranslationsToArray,
   type MessageTranslationJSON,
 } from '../../utils/translation-transformer';
@@ -31,6 +35,14 @@ import type { AttachmentReplyTo } from './attachmentReplySnapshot';
  * Même lecture exactement que `APIMessageReplyTo.isProtected` côté iOS : sans
  * cette symétrie, la passerelle masquerait un texte que le client affiche, ou
  * l'inverse.
+ *
+ * Mais son ÉCHÉANCE est une affaire de LECTEUR (#8562) : `D(u)`, jamais la
+ * colonne `expiresAt`, qui porte l'heure INTERNE de destruction. Passé `D(u)`,
+ * la citation est SCELLÉE pour ce lecteur — même forme qu'une suppression
+ * (`sealedQuotedMessage`), que les clients rendent déjà sans rien en garder.
+ * Le scellement vivait seulement dans le cache du web et se perdait au
+ * rechargement : une flamme-œil consommée restait lisible dans la citation
+ * d'une réponse jusqu'à la destruction globale.
  */
 export type QuotedMessageRow = {
   readonly content?: string | null;
@@ -40,10 +52,10 @@ export type QuotedMessageRow = {
   readonly isEncrypted?: boolean | null;
   readonly effectFlags?: number | null;
   readonly createdAt?: Date | string | null;
-  /// Lu par PERSONNE ici — déclaré pour que le site d'appel puisse répandre
-  /// une ligne entière sans conversion : l'éphémère n'est pas une protection
-  /// au sens de la citation (voir l'en-tête).
+  /// #8562 — la colonne BRUTE : jamais resservie pour un éphémère, dont
+  /// l'échéance est celle du lecteur (voir l'en-tête).
   readonly expiresAt?: Date | string | null;
+  readonly ephemeralDuration?: number | null;
   /// #7927 — la suppression GARDE `content` en base : seul ce champ dit que
   /// le texte ne doit plus sortir.
   readonly deletedAt?: Date | string | null;
@@ -51,6 +63,49 @@ export type QuotedMessageRow = {
   readonly translations?: unknown;
   readonly attachments?: unknown;
 };
+
+/**
+ * #8562 — ce que la passerelle sait de CE lecteur face au message cité : la
+ * même résolution que la racine (`EphemeralReaderResolution`), et l'instant du
+ * service. Absente ⇒ lecteur inconnu (diffusion de room) : aucune échéance
+ * servie, et le scellement revient à la variante par lecteur de la diffusion.
+ */
+export type QuotedEphemeralReader = {
+  readonly resolution:
+    | {
+        readonly isSender: boolean;
+        readonly readerDeadline: Date | null;
+        readonly latestRecipientDeadline: Date | null;
+      }
+    | undefined;
+  readonly now: Date;
+};
+
+type QuotedEphemeralVerdict = { readonly expiresAt: Date | null; readonly sealedAt: Date | null };
+
+/**
+ * `undefined` pour un message sans échéance par lecteur : sa colonne garde son
+ * autre écrivain (la grâce de vue unique) et n'est pas réécrite. L'expéditeur
+ * n'est jamais scellé : sur son écran, son message vit tant qu'il vit pour
+ * quelqu'un, et la règle de sa bulle reste la sienne.
+ */
+export function quotedEphemeralVerdict(
+  quoted: QuotedMessageRow,
+  reader: QuotedEphemeralReader | undefined
+): QuotedEphemeralVerdict | undefined {
+  if (!hasPerReaderEphemeralDeadline(quoted)) return undefined;
+  const resolution = reader?.resolution;
+  if (!reader || !resolution) return { expiresAt: null, sealedAt: null };
+  const expiresAt = servedEphemeralExpiresAt({
+    ephemeralDuration: quoted.ephemeralDuration,
+    effectFlags: quoted.effectFlags,
+    isSender: resolution.isSender,
+    readerDeadline: resolution.readerDeadline,
+    latestRecipientDeadline: resolution.latestRecipientDeadline,
+  });
+  const lapsed = !resolution.isSender && expiresAt !== null && expiresAt.getTime() <= reader.now.getTime();
+  return { expiresAt, sealedAt: lapsed ? expiresAt : null };
+}
 
 const MASKING_FLAGS = MESSAGE_EFFECT_FLAGS.VIEW_ONCE | MESSAGE_EFFECT_FLAGS.BLURRED;
 
@@ -114,12 +169,18 @@ export function servedQuotedMessage(
     readonly includeTranslations?: boolean;
     readonly languages?: readonly string[];
     readonly attachmentReplyTo?: AttachmentReplyTo | null;
+    readonly ephemeralReader?: QuotedEphemeralReader;
   }
 ): Record<string, unknown> {
   if (!quoted) return {};
   if (quoted.deletedAt) return servedDeletedQuote(quoted.deletedAt);
+  const ephemeral = quotedEphemeralVerdict(quoted, options?.ephemeralReader);
+  if (ephemeral?.sealedAt) return sealedQuotedMessage(ephemeral.sealedAt);
   const isProtected = quotedMessageIsProtected(quoted);
   const served: Record<string, unknown> = {};
+  // Toujours POSÉE pour un éphémère, même absente : elle écrase la colonne
+  // brute que le site d'appel vient de répandre.
+  if (ephemeral) served['expiresAt'] = ephemeral.expiresAt ?? undefined;
 
   // L'ancre et la NATURE, les DEUX seuls faits figés (#6164). Servies même
   // quand le message cité est protégé et même quand la pièce a disparu : elles
@@ -197,6 +258,49 @@ function servedDeletedQuote(deletedAt: Date | string): Record<string, unknown> {
     sticker: undefined,
     validatedMentions: [],
     attachmentReplyTo: undefined,
+  };
+}
+
+/**
+ * #8562 — la citation d'un éphémère ÉCHU pour son lecteur : la forme d'une
+ * suppression (rien ne reste), datée de l'échéance du lecteur, qui voyage aussi
+ * en `expiresAt` pour qu'un client sache que c'est une EXPIRATION.
+ */
+export function sealedQuotedMessage(sealedAt: Date): Record<string, unknown> {
+  return { ...servedDeletedQuote(sealedAt), expiresAt: sealedAt };
+}
+
+/**
+ * La variante SCELLÉE d'une charge déjà composée (`message:new`,
+ * `message:edited`), pour les lecteurs qu'une diffusion de room ne peut pas
+ * distinguer : l'identité et l'auteur de la citation restent, rien d'autre.
+ *
+ * #8630 — et la RÉPONSE meurt avec ce qu'elle cite (décision porteur
+ * 2026-09-29) : elle part vidée, datée de la mort du cité, que les clients
+ * retirent comme un éphémère échu. Aucun `deletedAt` : ce n'est pas une
+ * suppression, que les clients peindraient en « Message supprimé ».
+ */
+export function withSealedQuote<T extends object>(payload: T, sealedAt: Date): T {
+  const quote = (payload as { replyTo?: unknown }).replyTo;
+  if (!quote || typeof quote !== 'object') return payload;
+  const ownExpiry = (payload as { expiresAt?: unknown }).expiresAt;
+  const expiresAt = ownExpiry instanceof Date && ownExpiry.getTime() < sealedAt.getTime() ? ownExpiry : sealedAt;
+  return {
+    ...payload,
+    content: '',
+    originalContent: undefined,
+    translations: [],
+    attachments: [],
+    metadata: undefined,
+    location: undefined,
+    sticker: undefined,
+    validatedMentions: [],
+    encryptedContent: undefined,
+    encryptedPayload: undefined,
+    encryptionMetadata: undefined,
+    postReplyTo: undefined,
+    expiresAt,
+    replyTo: { ...(quote as Record<string, unknown>), ...sealedQuotedMessage(sealedAt) },
   };
 }
 

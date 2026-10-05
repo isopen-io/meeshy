@@ -18,15 +18,14 @@ import { buildLastMessagePreviewTranslations } from './utils/last-message-previe
 import { loadConversationListActivity } from './utils/list-activity';
 import { loadRankedConversationPage } from './utils/list-rank';
 import { listRankFromColumns } from '@meeshy/shared/utils/conversation-list-rank';
-import { loadListEphemeralExpiries } from './utils/list-ephemeral-expiry';
+import { loadListEphemeralExpiries, loadListInheritedExpiries } from './utils/list-ephemeral-expiry';
+import { inheritedEphemeralExpiresAt } from '@meeshy/shared/utils/ephemeral-countdown';
 import { isPreviewWithheld, resolvePreviewProtection } from './utils/last-message-nature';
 import { projectListLastMessageBody } from './utils/list-last-message-body';
 import { loadViewOnceConsumptions, viewOnceConsumptionKey } from '../../services/messaging/readViewOnceConsumption';
 import { UnifiedAuthRequest } from '../../middleware/auth';
-import {
-  conversationListResponseSchema,
-  errorResponseSchema
-} from '@meeshy/shared/types/api-schemas';
+import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
+import { conversationListWithEngagementResponseSchema, loadViewerEngagementsOrEmpty } from './engagement';
 import { loadConversationTombstones } from './utils/delta-tombstones';
 import { sendUnauthorized, sendInternalError, sendBadRequest } from '../../utils/response';
 import { resolveListCursor } from './list-cursor';
@@ -85,7 +84,7 @@ export function registerConversationListRoute(
       // `!options.allowAnonymous`. Le déclarer encore décrirait un corps que
       // rien n'émet.
       response: {
-        200: conversationListResponseSchema,
+        200: conversationListWithEngagementResponseSchema,
         // #6857 — la route ÉMET désormais un 400 : le `pattern` du curseur
         // `before` est appliqué par Fastify avant le handler. Le déclarer suit
         // la règle que le commentaire du 403 ci-dessus énonce à l'envers — on
@@ -254,7 +253,7 @@ export function registerConversationListRoute(
       if (curseur.genre === 'refus') {
         return sendBadRequest(reply, 'Unknown pagination cursor', { code: 'INVALID_CURSOR' });
       }
-      // La borne du curseur porte sur le RANG du lecteur (#7592) : elle est posée
+      // La borne du curseur porte sur le RANG de la ligne (#9026) : elle est posée
       // par `loadRankedConversationPage`, pas sur `whereClause`.
 
       // Filtre delta-sync. DEUX consommateurs, qui doivent rester d'accord sur
@@ -307,15 +306,14 @@ export function registerConversationListRoute(
       // de la couleur d'accent). Le `select` est extrait dans `core-selects.ts`
       // pour porter un type Prisma nommé (#3679).
       //
-      // L'ORDRE est le RANG du lecteur (#7592) — une réaction à SON message
-      // remonte sa ligne ; une page delta garde `updatedAt asc`. Les raisons des
+      // L'ORDRE est le RANG de la ligne (#9026) — toute activité (réaction,
+      // appel, épingle) la remonte pour tous ; une page delta garde `updatedAt asc`. Les raisons des
       // deux ordres et la fusion des deux flux vivent dans `utils/list-rank.ts`.
       const conversations: ConversationListRow[] = await loadRankedConversationPage({
         prisma,
         readRows: ({ where, orderBy, skip, take }) =>
           prisma.conversation.findMany({ where, orderBy, skip, take, select: conversationListQuerySelect(userId) }),
         where: whereClause,
-        viewerKey: userId,
         curseur,
         deltaOrder: isDeltaPage,
         limit,
@@ -455,7 +453,7 @@ export function registerConversationListRoute(
       const { MessageReadStatusService } = await import('../../services/MessageReadStatusService.js');
       const readStatusService = new MessageReadStatusService(prisma);
 
-      const [totalCount, unreadCountMap, readCursorBoundaries] = await Promise.all([
+      const [totalCount, unreadCountMap, readCursorBoundaries, viewerEngagementByConversation] = await Promise.all([
         // Count (if requested) - skip when using cursor pagination
         (!beforeCursor && (includeCount || offset === 0))
           ? prisma.conversation.count({ where: whereClause })
@@ -474,6 +472,10 @@ export function registerConversationListRoute(
         currentUserParticipantIdMap.size > 0
           ? loadReadCursorBoundaries(prisma, [...currentUserParticipantIdMap.values()])
           : Promise.resolve(new Map<string, ReadCursorBoundary>()),
+
+        // « N (M) 🔥 » du lecteur (#8906) — UNE lecture groupée pour la page.
+        // Un invité anonyme n'a pas de compte, donc pas d'état d'engagement.
+        loadViewerEngagementsOrEmpty(prisma, isAnonymousViewer ? undefined : userId, conversationIds),
       ]);
 
       // Par CONVERSATION plutôt que par participant — c'est la clé que la
@@ -556,7 +558,7 @@ export function registerConversationListRoute(
       });
       // #7451 — l'échéance d'un éphémère servie à CE lecteur, comme le fil.
       const readerParticipantByConversation = new Map(readerJoins.map((j) => [j.conversationId, j.id] as const));
-      const [servedEphemeralExpiry, consumedViewOnce] = await Promise.all([
+      const [servedEphemeralExpiry, consumedViewOnce, quotedDeaths] = await Promise.all([
         loadListEphemeralExpiries(
           prisma,
           conversations.map((c) => ({ conversationId: c.id, message: c.messages?.[0] })),
@@ -571,6 +573,12 @@ export function registerConversationListRoute(
             return message?.isViewOnce && participantId ? [{ messageId: message.id, participantId }] : [];
           }),
           (error) => logger.warn('view-once consumption read failed', { error })
+        ),
+        // #8630 — une réponse meurt, pour ce lecteur, avec ce qu'elle cite.
+        loadListInheritedExpiries(
+          prisma,
+          conversations.map((c) => ({ conversationId: c.id, message: c.messages?.[0] })),
+          (conversationId) => readerParticipantByConversation.get(conversationId)
         )
       ]);
       perfTimings.listActivity = performance.now() - t0;
@@ -776,6 +784,8 @@ export function registerConversationListRoute(
               expiresAt?: Date | string | null;
               ephemeralDuration?: number | null;
               isEncrypted?: boolean | null;
+              /* #8634 — porte la flamme-œil, que `resolvePreviewProtection` retient. */
+              effectFlags?: number | null;
             }
           | undefined;
         // #6111 — un dernier message à vue unique, flouté ou éphémère périmé
@@ -788,9 +798,11 @@ export function registerConversationListRoute(
         // destruction d'un éphémère (#7451) se lisait comme son échéance. Le
         // chiffrement retient aussi le contenu (« 🔒 Message chiffré »).
         const firstId = conversation.messages[0]?.id;
-        const servedExpiresAt = firstId && servedEphemeralExpiry.has(firstId) ? servedEphemeralExpiry.get(firstId) ?? null : undefined;
+        const ownExpiresAt = firstId && servedEphemeralExpiry.has(firstId) ? servedEphemeralExpiry.get(firstId) ?? null : undefined;
+        const quotedDeathAt = firstId ? quotedDeaths.get(firstId) ?? null : null;
+        const servedExpiresAt = quotedDeathAt ? inheritedEphemeralExpiresAt([ownExpiresAt, quotedDeathAt]) : ownExpiresAt;
         const lastMessageProtected = latestMessage
-          ? isPreviewWithheld(resolvePreviewProtection({ ...latestMessage, servedExpiresAt }))
+          ? isPreviewWithheld(resolvePreviewProtection({ ...latestMessage, servedExpiresAt, quotedDeathAt }))
           : false;
 
         // `_count` est retiré du spread : c'est une forme d'agrégat Prisma que
@@ -863,9 +875,9 @@ export function registerConversationListRoute(
             };
           })(),
           unreadCount,
-          // #7592 — le rang de CE lecteur, la clé du tri ci-dessus : les
+          // #9026 — le rang de la ligne, la clé du tri ci-dessus : les
           // clients trient dessus au lieu de le recalculer.
-          listRankAt: listRankFromColumns(conversation, userId)?.toISOString() ?? null,
+          listRankAt: listRankFromColumns(conversation)?.toISOString() ?? null,
           lastReaction: activityByConversation.get(conversation.id)?.lastReaction ?? null,
           activeCall: activityByConversation.get(conversation.id)?.activeCall ?? null,
           // Le pont ✦ (G-123). ABSENT — jamais `null`, jamais un objet vide —
@@ -880,7 +892,11 @@ export function registerConversationListRoute(
           // séparateur (D-L3). ABSENTE sans curseur, jamais fabriquée (REV-4).
           ...projectReadCursorBoundary(readCursorByConversation.get(conversation.id)),
           currentUserRole: currentUserRoleMap.get(conversation.id) || null,
-          currentUserJoinedAt: currentUserJoinedAtMap.get(conversation.id) || null
+          currentUserJoinedAt: currentUserJoinedAtMap.get(conversation.id) || null,
+          // ABSENT tant que le lecteur n'a rien crédité ici (#8906).
+          ...(viewerEngagementByConversation.has(conversation.id)
+            ? { viewerEngagement: viewerEngagementByConversation.get(conversation.id) }
+            : {})
         };
       });
 

@@ -174,6 +174,9 @@ export type StoryPlaybackStory = {
    * C4 — miroir `StoryViewersSheet:1381`). */
   readonly viewCount?: number | null;
   readonly currentUserReactions?: readonly string[] | null;
+  /** La carte des adresses suivies (#9074), lue par `trackingLinksOf` — jamais un champ direct. */
+  readonly metadata?: unknown;
+  readonly trackingLinks?: unknown;
 };
 
 export type StoryPlaybackGroup = {
@@ -407,6 +410,28 @@ export function scopeToSingleGroup(
 ): readonly StoryPlaybackGroup[] {
   const position = resolvePosition(groups, postId);
   return position === null ? groups : [groups[position.groupIndex]!];
+}
+
+/**
+ * `StoryViewerScope.liveOnly` (`StoryViewerScope.swift`, #7887) — **MES
+ * STORIES NE TRACENT QUE LES BARRES DES STORIES EN COURS** (#7889, directive
+ * porteur 2026-09-25). Le corpus sert à l'auteur ses propres stories expirées
+ * depuis moins de 7 jours (`PostFeedService.getStories`,
+ * `AUTHOR_ARCHIVE_WINDOW_MS`) : sans cette portée, le lecteur traçait une
+ * barre par archive et les jouait, {@link resolvePlayablePosition} ne sautant
+ * jamais le groupe `isMine`. Seule l'archive ouverte explicitement
+ * (`keeping`) reste ; sans story en cours, le groupe reste entier — le
+ * lecteur ne s'ouvre jamais vide. Les autres auteurs ne sont pas touchés.
+ */
+export function scopeToLiveStories(
+  groups: readonly StoryPlaybackGroup[],
+  options: { readonly keeping: readonly string[]; readonly now: number },
+): readonly StoryPlaybackGroup[] {
+  return groups.map((group) => {
+    if (!group.isMine) return group;
+    const live = group.stories.filter((s) => !isStoryExpired(s, options.now) || options.keeping.includes(s.id));
+    return live.length === 0 || live.length === group.stories.length ? group : { ...group, stories: live };
+  });
 }
 
 function isPlayable(story: StoryPlaybackStory, now: number): boolean {

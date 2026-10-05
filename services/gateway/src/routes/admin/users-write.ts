@@ -11,10 +11,14 @@ import { requireHierarchy } from '../../middleware/authorize';
 import { requireUserModifyAccess } from '../../middleware/admin-user-auth.middleware';
 import { UnifiedAuthContext, UnifiedAuthRequest, authUserCacheKey } from '../../middleware/auth';
 import { getCacheStore } from '../../services/CacheStore';
-import { sendSuccess, sendNotFound, sendForbidden, sendBadRequest, sendInternalError } from '../../utils/response';
+import { sendSuccess, sendNotFound, sendForbidden, sendBadRequest, sendInternalError, sendError } from '../../utils/response';
 import { dateDeRetrait, depreciee } from '../../utils/deprecation';
 import { evaluerLoiDesChamps, champsDeLaFamille } from './user-field-law';
 import { logError } from '../../utils/logger.js';
+import { replyIdentifierTaken } from '../../services/admin/admin-identifier-taken';
+import { refreshParticipantNameSnapshots, type AccountNameFields } from '../../services/participantNameSnapshots';
+
+const NAME_FIELDS = ['displayName', 'firstName', 'lastName', 'username'] as const;
 
 /**
  * Les écritures d'un compte administré, gouvernées par la loi de leur CHAMP (#4154).
@@ -188,7 +192,7 @@ function servir(
   rendu: Rendu | undefined,
   messageParDefaut: string
 ): void {
-  const sanitise = sanitizationService.sanitizeUser(servi as never, role);
+  const sanitise = sanitizationService.sanitizeUser(servi as never, role, { withAdminMetadata: true });
   if (!rendu) {
     sendSuccess(reply, sanitise, { message: messageParDefaut });
     return;
@@ -215,6 +219,7 @@ function rendreErreur(
     sendBadRequest(reply, 'Invalid input data');
     return;
   }
+  if (replyIdentifierTaken(reply, error)) return;
   logError(fastify.log, message, error);
   sendInternalError(reply, 'Internal server error', { message });
 }
@@ -278,6 +283,25 @@ export function registerUserWriteRoutes(fastify: FastifyInstance, deps: Deps): v
    * l'autre moitié est refusée. Un lot à moitié appliqué est plus difficile à
    * défaire qu'un lot refusé.
    */
+  /**
+   * Un renommage par l'administration se propage comme celui du porteur
+   * (#8890) : la copie du nom dans chaque conversation, puis le groupe des
+   * quatre composants vers les co-participants (`UserUpdatedEventData`).
+   * Best-effort — le nom est déjà écrit et tracé.
+   */
+  async function propagerLeNom(userId: string, servi: AccountNameFields): Promise<void> {
+    const changes = {
+      displayName: servi.displayName,
+      firstName: servi.firstName,
+      lastName: servi.lastName,
+      username: servi.username,
+    };
+    await refreshParticipantNameSnapshots(fastify.prisma, userId, changes)
+      .catch((err: unknown) => logError(fastify.log, '[ADMIN_USER_RENAME] participant name refresh failed', err));
+    fastify.notificationService?.emitUserUpdated({ userId, changes })
+      .catch((err: unknown) => logError(fastify.log, '[ADMIN_USER_RENAME] emitUserUpdated failed', err));
+  }
+
   async function ecrireCompte(request: FastifyRequest, reply: FastifyReply, corps: Corps, rendu?: Rendu): Promise<void> {
     try {
       const admis = await admettre(request, reply, corps);
@@ -313,6 +337,7 @@ export function registerUserWriteRoutes(fastify: FastifyInstance, deps: Deps): v
         }
         servi = await userManagementService.updateUser(userId, profil);
         await tracer(request, { cible: userId, action: UserAuditAction.UPDATE_PROFILE, changes, motif });
+        if (NAME_FIELDS.some((champ) => champ in profil)) await propagerLeNom(userId, servi);
       }
 
       if (nouveauRole) {
@@ -360,6 +385,17 @@ export function registerUserWriteRoutes(fastify: FastifyInstance, deps: Deps): v
       const { moi, motif, cible } = admis;
       const userId = (request.params as { userId: string }).userId;
       const valide = securitySchema.parse(corps);
+
+      // ARMER un second facteur jamais appairé enfermerait le membre dehors
+      // (#8289) : la connexion exige alors un code TOTP que `TwoFactorService`
+      // ne peut vérifier sans secret. Refusé AVANT toute écriture du lot.
+      // `getUserById` lit la LIGNE entière (sans `select`) : le secret y est,
+      // même si `FullUser` — la forme servie — ne le déclare pas, à dessein.
+      const secret = (cible as unknown as { twoFactorSecret?: string | null }).twoFactorSecret;
+      if (valide.twoFactorEnabled === true && !cible!.twoFactorEnabledAt && !secret) {
+        sendError(reply, 409, 'The member has not paired an authenticator app', { code: 'TWO_FACTOR_NOT_ENROLLED' });
+        return;
+      }
 
       let servi = cible!;
 

@@ -7,8 +7,8 @@
  * depuis « Tous », ce qu'une ligne annonce et où elle mène. Aucun ne traverse le
  * CÂBLAGE ni la FEUILLE DE STYLE — une ligne qu'un disque flottant recouvre, un
  * nom manqué rouge illisible en clair, un filtre qui attend le réseau alors que
- * le cache répond, ou un « Rappeler » qui réapparaîtrait sans effet les laissent
- * tous verts. Ce gate les mesure dans un navigateur réel, sur le `dist`
+ * le cache répond, ou un « Rappeler » qui disparaîtrait ou n'ouvrirait aucun appel
+ * les laissent tous verts. Ce gate les mesure dans un navigateur réel, sur le `dist`
  * construit (source fixtures : cinq appels), dans les DEUX schémas et aux deux
  * gabarits de la charte (390 × 844, 320 × 568) :
  *
@@ -19,16 +19,23 @@
  *     chaque contrôle fait au moins 44 de haut ; chaque ligne s'atteint une fois
  *     amenée au milieu de l'écran ;
  *  3. les trois directions se distinguent par un glyphe PROPRE et un libellé
- *     VISIBLE, et aucune ligne ne porte de bouton (« Rappeler » n'a pas d'effet
- *     sur le web) ;
+ *     VISIBLE, et chaque ligne porte UN bouton, « Rappeler », du type de l'appel
+ *     d'origine, hors du bouton de la ligne (#6382, #8056) ;
  *  4. chaque texte tient AA dans les deux schémas — le nom ROUGE d'un manqué
  *     compris ;
  *  5. « Manqués » se peint en moins d'une seconde (depuis le cache de « Tous »),
  *     l'adresse porte `?filtre=missed`, et « Tous » rend les cinq ;
- *  6. une ligne ouvre le fil de SA conversation, et le retour ramène au journal ;
+ *  6. une ligne ouvre la fiche de SON appel (#6383) — nom, type, durée, deux
+ *     rappels —, la fiche le fil de sa conversation, et le retour ramène au journal ;
+ *  6 bis. « Rappeler » a un EFFET (loi : un contrôle n'existe que s'il agit) —
+ *     il ouvre l'écran d'appel vers la personne de la ligne, au-dessus du
+ *     journal, et « Raccrocher » l'en retire ;
  *  7. hors ligne, le journal reste lisible et le dit ; la pastille de
  *     synchronisation ne recouvre aucun filtre du rail (#6401, #6387) ;
- *  8. aucune erreur de page.
+ *  8. aucune erreur de page ;
+ *  9. un onglet NEUF ouvert par « Rappeler » d'une notification attend sa
+ *     connexion puis demande « Appeler » quand le son est bloqué, et le
+ *     toucher compose (#8199).
  *
  * `CAPTURE_DIR=<dossier>` écrit les captures de recette.
  */
@@ -94,7 +101,7 @@ const reachRows = async (page) => {
   for (const id of ids) {
     out.push(
       await page.evaluate(async (callId) => {
-        const el = document.querySelector(`[data-call="${callId}"] a`);
+        const el = document.querySelector(`[data-call="${callId}"] [data-call-row]`);
         el.scrollIntoView({ block: 'center' });
         await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
         const r = el.getBoundingClientRect();
@@ -151,14 +158,19 @@ try {
       const rows = await reachRows(page);
       check(rows.length === 5 && rows.every((r) => r.ok && r.hauteur >= TAP_FLOOR), `${label} : chaque ligne s'atteint — ${JSON.stringify(rows)}`);
 
-      // ------------------------------------------------ 3. trois directions, sans la couleur, sans « Rappeler »
+      // ------------------------------------------------ 3. trois directions, sans la couleur, avec « Rappeler »
       const directions = await page.$$eval('[data-call]', (els) =>
         els.map((el) => ({
           ligne: el.getAttribute('data-call'),
           direction: el.querySelector('[data-call-direction]')?.getAttribute('data-call-direction') ?? null,
           libelle: (el.querySelector('[data-call-direction]')?.textContent ?? '').trim(),
           glyphe: el.querySelector('[data-call-meta] svg')?.innerHTML ?? '',
-          boutons: el.querySelectorAll('button').length,
+          boutons: el.querySelectorAll('button[data-call-back]').length,
+          rappel: el.querySelector('button[data-call-back]')?.getAttribute('data-call-back') ?? null,
+          rappelNomme: el.querySelector('button[data-call-back]')?.getAttribute('aria-label') ?? '',
+          nom: (el.querySelector('[data-call-name]')?.textContent ?? '').trim(),
+          horsDuLien: el.querySelector('[data-call-row] [data-call-back], [data-call-back] [data-call-row]') === null,
+          video: el.querySelector('[data-call-video]') !== null,
         })),
       );
       const byDirection = (d) => directions.filter((row) => row.direction === d);
@@ -168,11 +180,14 @@ try {
       );
       const glyphs = new Set(['missed', 'incoming', 'outgoing'].map((d) => byDirection(d)[0]?.glyphe ?? ''));
       check(glyphs.size === 3 && !glyphs.has(''), `${label} : les trois directions ont trois glyphes distincts`);
-      check(directions.every((r) => r.boutons === 0), `${label} : aucune ligne ne porte de bouton — « Rappeler » n'a pas d'effet sur le web`);
+      check(
+        directions.every((r) => r.boutons === 1 && r.horsDuLien && r.rappel === (r.video ? 'video' : 'audio') && r.rappelNomme === `Rappeler ${r.nom}`),
+        `${label} : chaque ligne porte UN bouton « Rappeler <nom> », du type de l'appel d'origine, hors du lien — ${JSON.stringify(directions.map(({ ligne, boutons, rappel, rappelNomme, horsDuLien }) => ({ ligne, boutons, rappel, rappelNomme, horsDuLien })))}`,
+      );
       const videos = await page.$$eval('[data-call-video]', (els) => els.map((el) => el.closest('[data-call]')?.getAttribute('data-call')));
       check(JSON.stringify(videos) === JSON.stringify(['call-kwame-video', 'call-fatou-manque']), `${label} : les appels vidéo portent leur glyphe (${JSON.stringify(videos)})`);
       check(
-        (await page.getAttribute('[data-call="call-kwame-video"] a', 'aria-label')) === 'Kwame Mensah, appel émis, appel vidéo, 3h, durée 12:34',
+        (await page.getAttribute('[data-call="call-kwame-video"] [data-call-row]', 'aria-label')) === 'Kwame Mensah, appel émis, appel vidéo, 3h, durée 12:34',
         `${label} : une ligne annonce nom, direction, type, heure et durée`,
       );
       check((await textOf(page, '[data-call="call-annonces-groupe"] [data-call-name]')) === 'Annonces produit', `${label} : un appel de groupe se nomme par sa conversation`);
@@ -212,14 +227,69 @@ try {
       await page.waitForFunction(() => document.querySelectorAll('[data-call]').length === 5);
       check(new URL(page.url()).search === '', `${label} : « Tous » retire le paramètre et rend les cinq`);
 
-      // ------------------------------------------------ 6. une ligne ouvre SON fil
+      // ------------------------------------------------ 6. une ligne ouvre SA fiche (#6383), la fiche SON fil
       await page.click('[data-call="call-kwame-video"] a');
+      await page.waitForURL('**/call/call-kwame-video');
+      const detail = await page
+        .waitForSelector('[data-call-detail="call-kwame-video"] [data-call-detail-name]', { timeout: 5000 })
+        .then(() =>
+          page.$eval('[data-call-detail]', (el) => ({
+            nom: (el.querySelector('[data-call-detail-name]')?.textContent ?? '').trim(),
+            type: (el.querySelector('[data-call-detail-row="type"] dd')?.textContent ?? '').trim(),
+            duree: (el.querySelector('[data-call-detail-row="duration"] dd')?.textContent ?? '').trim(),
+            rappels: [...el.querySelectorAll('[data-call-detail-redial]')].map((b) => b.getAttribute('data-call-detail-redial')),
+          })),
+          () => null,
+        );
+      check(
+        detail !== null && detail.nom === 'Kwame Mensah' && detail.type.toLowerCase() === 'appel vidéo' && detail.duree === '12:34' && JSON.stringify(detail.rappels) === '["audio","video"]',
+        `${label} : une ligne ouvre la fiche de son appel — nom, type, durée, deux rappels (${JSON.stringify(detail)})`,
+      );
+      await page.click('[data-call-detail-open]');
       await page.waitForURL('**/c/c-kwame');
-      check(true, `${label} : une ligne ouvre le fil de sa conversation`);
+      check(true, `${label} : la fiche ouvre le fil de sa conversation`);
+      await page.goBack();
+      await page.waitForURL('**/call/call-kwame-video');
       await page.goBack();
       await page.waitForURL('**/calls');
       await page.waitForSelector('[data-call]');
       check((await shownCalls(page)).length === 5, `${label} : le retour ramène au journal`);
+
+      // ------------------------------------------------ 6 bis. « Rappeler » a un EFFET
+      for (const [ligne, nom] of [
+        ['call-amina-manque', 'Amina Diallo'],
+        ['call-kwame-video', 'Kwame Mensah'],
+      ]) {
+        await page.click(`[data-call="${ligne}"] [data-call-back]`);
+        const opened = await page.waitForSelector('[data-call-screen]', { timeout: 5000 }).then(() => true, () => false);
+        const screen = opened
+          ? await page.$eval('[data-call-screen]', (el) => ({
+              role: el.getAttribute('role'),
+              nom: el.getAttribute('aria-label'),
+              titre: (el.querySelector('h2')?.textContent ?? '').trim(),
+            }))
+          : null;
+        check(
+          screen !== null && screen.role === 'dialog' && screen.nom === `Appel avec ${nom}` && screen.titre === nom,
+          `${label} : « Rappeler » sur ${ligne} ouvre l'écran d'appel vers ${nom} (${JSON.stringify(screen)})`,
+        );
+        check(new URL(page.url()).pathname === '/calls', `${label} : l'appel se pose AU-DESSUS du journal, sans quitter /calls (${new URL(page.url()).pathname})`);
+        await capture(page, `appels-rappel-${ligne}-${slug}`);
+        /* L'écran change de phase sous le doigt (sortant, échec d'accès aux
+           médias sur un runner sans caméra, fin) : on vise par LOCATEUR, qui
+           se re-résout, jamais par une poignée d'élément qui peut se détacher. */
+        const tap = (name) =>
+          page
+            .locator(`[data-call-screen] button[aria-label="${name}"]`)
+            .first()
+            .click({ timeout: 2000 })
+            .then(() => true, () => false);
+        await tap('Raccrocher');
+        if ((await page.$('[data-call-screen]')) !== null) await tap('Fermer');
+        const gone = await page.waitForSelector('[data-call-screen]', { state: 'detached', timeout: 8000 }).then(() => true, () => false);
+        check(opened && gone, `${label} : raccrocher retire l'écran d'appel de ${ligne} et rend le journal`);
+      }
+      check((await shownCalls(page)).length === 5, `${label} : après le rappel, le journal est intact`);
 
       // ------------------------------------------------ 7. hors ligne
       await context.setOffline(true);
@@ -280,6 +350,62 @@ try {
       check(resumed && (await coldPage.$('[data-calls-offline]')) === null, `${label} : au retour du réseau, le journal se charge seul`);
       check(coldErrors.length === 0, `${label} : aucune erreur de page à cache froid — ${JSON.stringify(coldErrors)}`);
       await cold.close();
+
+      // ------------------------------------------------ 9. rappel depuis un onglet NEUF (#8199)
+      /* Le worker ouvre `/c/<id>?rappeler=<type>` dans un onglet que personne
+         n'a touché : le navigateur y bloque le son. L'appel attend la connexion
+         authentifiée, puis demande « Appeler » au lieu de partir muet ; le
+         toucher compose, et l'adresse a oublié l'intention. */
+      /* Chromium de Playwright lève la politique d'autoplay (page tenue pour
+         touchée, contexte audio « running ») : le blocage d'un vrai onglet
+         neuf s'émule comme la coupure réseau du § 8, par ce que la page LIT. */
+      const fresh = await browser.newContext({ viewport: { width, height }, colorScheme: scheme, locale: 'fr-FR' });
+      await fresh.addInitScript(() => {
+        Object.defineProperty(Navigator.prototype, 'userActivation', { configurable: true, get: () => ({ hasBeenActive: false, isActive: false }) });
+      });
+      const freshPage = await fresh.newPage();
+      freshPage.setDefaultTimeout(10_000);
+      const freshErrors = [];
+      freshPage.on('pageerror', (error) => freshErrors.push(error.message));
+      await freshPage.goto(`${BASE}/c/c-kwame?rappeler=video&appelant=${encodeURIComponent('Kwame Mensah')}`, { waitUntil: 'load' });
+      const prompted = await freshPage.waitForSelector('[data-call-back-prompt]', { timeout: 8000 }).then(() => true, () => false);
+      const prompt = prompted
+        ? await freshPage.$eval('[data-call-back-prompt]', (el) => ({
+            type: el.getAttribute('data-call-back-prompt'),
+            nom: el.getAttribute('aria-label'),
+            appeler: (el.querySelector('[data-call-back-prompt-action="call"]')?.textContent ?? '').trim(),
+          }))
+        : null;
+      check(
+        prompt !== null && prompt.type === 'video' && prompt.nom === 'Rappeler Kwame Mensah en vidéo ?' && prompt.appeler === 'Appeler',
+        `${label} : un onglet neuf sans geste demande « Appeler » avant de rappeler (${JSON.stringify(prompt)})`,
+      );
+      check((await freshPage.$('[data-call-screen]')) === null, `${label} : rien ne compose avant le geste`);
+      check(!new URL(freshPage.url()).search.includes('rappeler'), `${label} : l'adresse a oublié l'intention (${new URL(freshPage.url()).search})`);
+      await freshPage.click('[data-call-back-prompt-action="call"]').catch(() => undefined);
+      const calling = await freshPage.waitForSelector('[data-call-screen]', { timeout: 5000 }).then(() => true, () => false);
+      const freshScreen = calling ? await freshPage.$eval('[data-call-screen]', (el) => el.getAttribute('aria-label')) : null;
+      check(
+        calling && freshScreen === 'Appel avec Kwame Mensah' && (await freshPage.$('[data-call-back-prompt]')) === null,
+        `${label} : « Appeler » compose l'appel vers Kwame Mensah et retire la question (${freshScreen})`,
+      );
+      await capture(freshPage, `appels-rappel-onglet-neuf-${slug}`);
+      check(freshErrors.length === 0, `${label} : aucune erreur de page au rappel depuis un onglet neuf — ${JSON.stringify(freshErrors)}`);
+      await fresh.close();
+
+      /* Et quand le navigateur laisse partir le son, l'onglet neuf compose seul
+         dès sa connexion prête, sans question. */
+      const allowed = await browser.newContext({ viewport: { width, height }, colorScheme: scheme, locale: 'fr-FR' });
+      const allowedPage = await allowed.newPage();
+      allowedPage.setDefaultTimeout(10_000);
+      await allowedPage.goto(`${BASE}/c/c-kwame?rappeler=audio&appelant=${encodeURIComponent('Kwame Mensah')}`, { waitUntil: 'load' });
+      const direct = await allowedPage.waitForSelector('[data-call-screen]', { timeout: 8000 }).then(() => true, () => false);
+      const directScreen = direct ? await allowedPage.$eval('[data-call-screen]', (el) => el.getAttribute('aria-label')) : null;
+      check(
+        direct && directScreen === 'Appel avec Kwame Mensah' && (await allowedPage.$('[data-call-back-prompt]')) === null,
+        `${label} : son autorisé, l'onglet neuf rappelle Kwame Mensah sans question (${directScreen})`,
+      );
+      await allowed.close();
     }
   }
 } finally {

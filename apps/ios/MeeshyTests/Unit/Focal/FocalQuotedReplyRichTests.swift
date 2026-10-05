@@ -118,6 +118,12 @@ final class FocalQuotedReplyRichTests: XCTestCase {
         try source("Meeshy/Features/Main/Views/MessageListViewController.swift")
     }
 
+    /// Les deux résolutions de la citation ont quitté le contrôleur (hors
+    /// budget) pour leur extension (#8230) ; le MONTAGE des rappels y reste.
+    private func quotedMediaHostSource() throws -> String {
+        try source("Meeshy/Features/Main/Views/MessageListViewController+QuotedMedia.swift")
+    }
+
     // MARK: - La loi : le NOM n'est plus une zone
 
     /// LA nouveauté du 2026-08-24, et la seule assertion qui la dise. Le NOM
@@ -387,7 +393,7 @@ final class FocalQuotedReplyRichTests: XCTestCase {
     // MARK: - Zone 3 : la résolution hôte, inchangée
 
     func test_host_resolvesQuotedAuthor_fromLocalStore_withNameOnlyFallback() throws {
-        let code = try hostSource()
+        let code = try quotedMediaHostSource()
         XCTAssertTrue(
             code.contains("func openQuotedAuthorProfile(_ reference: ReplyReference)"),
             "L'hôte doit résoudre l'auteur cité — la vue ne porte que la référence, jamais l'identité complète."
@@ -402,8 +408,17 @@ final class FocalQuotedReplyRichTests: XCTestCase {
         )
     }
 
-    func test_host_routesQuotedMedia_byAttachmentType_withJumpFallback() throws {
-        let code = try hostSource()
+    /// **#8230 a envoyé l'audio cité en plein écran ; #8320 (directive porteur
+    /// du 2026-09-27, plus tardive) le fait JOUER SUR PLACE** : « jouer les
+    /// miniatures audio dans les reply lorsqu'on touche la zone play
+    /// uniquement ». Image et vidéo gardent le plein écran (`onMediaTap`) ; un
+    /// vocal passe par le lecteur PARTAGÉ (`toggleQuotedAudio`), jamais par
+    /// `playAudio`, qui mettrait en file les vocaux suivant l'original.
+    ///
+    /// Et le cité HORS fenêtre ne retombe plus sur le saut quand la citation
+    /// porte de quoi reconstruire la pièce.
+    func test_host_routesQuotedMedia_imageVideoToFullscreen_audioInPlace() throws {
+        let code = try quotedMediaHostSource()
         guard let start = code.range(of: "func openQuotedMedia(_ reference: ReplyReference)"),
               let end = code.range(of: "\n    }", range: start.upperBound..<code.endIndex)
         else {
@@ -411,17 +426,33 @@ final class FocalQuotedReplyRichTests: XCTestCase {
             return
         }
         let body = code[start.lowerBound..<end.upperBound]
+        // #8283 — l'élection de la pièce a quitté l'hôte pour le site partagé
+        // avec la Rivière (`QuotedMediaOpening`) : l'hôte l'APPELLE, la règle
+        // se lit chez elle et s'exécute dans `QuotedMediaOpeningTests`.
         XCTAssertTrue(
-            body.contains("onMediaTap?(attachment)"),
-            "Image/vidéo citée → la MÊME galerie plein écran que la rangée (onMediaTap), jamais une surface parallèle."
+            body.contains("QuotedMediaOpening.gesture(for: reference") && body.contains("onMediaTap?(attachment)"),
+            "Image et vidéo citées → le plein écran de la conversation (onMediaTap), jamais une surface parallèle."
         )
         XCTAssertTrue(
-            body.contains("playAudio(attachmentId: attachment.id)"),
-            "Audio cité → la MÊME file de lecture que la rangée (playAudio)."
+            body.contains("toggleQuotedAudio(reference)"),
+            "un vocal cité se joue SUR PLACE par le lecteur partagé (#8320)."
+        )
+        XCTAssertFalse(
+            body.contains("playAudio("),
+            "une citation ne met pas en file les vocaux qui suivent l'original — `playAudio` n'a rien à faire ici."
+        )
+        let rule = try source("Meeshy/Features/Main/Views/Bubble/QuotedMediaOpening.swift")
+        XCTAssertTrue(
+            rule.contains("case .image, .video, .audio:"),
+            "les trois genres qui ont un plein écran sont élus par la règle partagée."
+        )
+        XCTAssertTrue(
+            rule.contains("reference.quotedAttachment"),
+            "un message cité hors fenêtre s'ouvre depuis la pièce RECONSTRUITE par la citation, pas par un saut."
         )
         XCTAssertTrue(
             body.contains("scrollToMessage(localId: localId)"),
-            "Document ou cité hors fenêtre → repli sur le saut à l'original — jamais un no-op silencieux."
+            "Document ou pièce introuvable → repli sur le saut à l'original — jamais un no-op silencieux."
         )
     }
 
@@ -515,17 +546,26 @@ final class FocalQuotedReplyRichTests: XCTestCase {
             to: "\n    private "
         )
         XCTAssertTrue(
-            block.contains("bubble.reply.author_hint") && block.contains("bubble.reply.open_media"),
-            "les deux actions réemploient les clés que la citation porte déjà — zéro clé neuve, zéro clé morte, " +
-            "cliquet français inchangé."
+            block.contains("QuotedZoneAccessibility.actions("),
+            "les actions nommées de la citation vivent en UN site partagé par les deux rangées (#8320) — " +
+            "une jumelle qu'on modifie deux fois finit par diverger."
+        )
+        let shared = try source("Meeshy/Features/Main/Views/Bubble/QuotedZoneAccessibility.swift")
+        XCTAssertTrue(
+            shared.contains("bubble.reply.author_hint") && shared.contains("bubble.reply.open_media")
+                && shared.contains("bubble.reply.listen_quoted") && shared.contains("bubble.reply.go_to_quoted"),
+            "les actions nomment les trois zones : l'auteur, le média (« Écouter le message cité » pour un " +
+            "audio, #8320), et le saut « Aller au message cité »."
         )
         XCTAssertTrue(
-            block.contains("onQuotedAuthorTap(reference)") && block.contains("onQuotedMediaTap(reference)"),
+            shared.contains("onQuotedAuthorTap(reference)") && shared.contains("onQuotedMediaTap(reference)")
+                && shared.contains("onReplyTap(reference.messageId)"),
             "chaque action doit DÉCLENCHER sa zone : une action nommée sans effet est un contrôle qui ment, et " +
             "le rotor la récite."
         )
         XCTAssertTrue(
-            block.contains("reference.offersAuthorGate") && block.contains("reference.offersMediaGate"),
+            shared.contains("reference.offersAuthorGate") && shared.contains("reference.offersMediaGate")
+                && shared.contains("reference.opensQuotedTarget"),
             "les actions suivent l'ARMEMENT (gestionnaire câblé ET zone offerte par la donnée), jamais la seule " +
             "présence d'une citation — sinon VoiceOver se voit proposer d'ouvrir la fiche d'une story."
         )

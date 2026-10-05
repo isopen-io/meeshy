@@ -78,7 +78,7 @@ final class NotificationActionHandlerTests: XCTestCase {
         var insertError: Error?
         /// Suspension point for the mid-flight expiration test — lets the test
         /// freeze `handle()` between `beginTask` and the outbox/REST work.
-        var onInsert: (() async -> Void)?
+        var onInsert: (@concurrent () async -> Void)?
 
         func insertOptimistic(_ record: MessageRecord) async throws {
             if let insertError { throw insertError }

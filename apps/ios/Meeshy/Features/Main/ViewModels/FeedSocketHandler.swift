@@ -15,17 +15,33 @@ final class FeedSocketHandler {
     // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
     // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
     nonisolated deinit {}
-    private let persistence: FeedPersistenceActor
+    /// #8656 — la base du fil est celle du compte ACTIF, relue à chaque
+    /// événement : armé une fois pour la vie de l'app, ce pont écrirait sinon
+    /// les événements du compte suivant dans la base du compte quitté.
+    private let persistenceProvider: @MainActor () -> FeedPersistenceActor
+    private var persistence: FeedPersistenceActor { persistenceProvider() }
     private let socialSocket: SocialSocketProviding
     private let currentUserIdProvider: @MainActor () -> String?
     private var cancellables = Set<AnyCancellable>()
 
-    init(
+    convenience init(
         persistence: FeedPersistenceActor,
         socialSocket: SocialSocketProviding = SocialSocketManager.shared,
         currentUserIdProvider: @MainActor @escaping () -> String? = { AuthManager.shared.currentUser?.id }
     ) {
-        self.persistence = persistence
+        self.init(
+            persistenceProvider: { persistence },
+            socialSocket: socialSocket,
+            currentUserIdProvider: currentUserIdProvider
+        )
+    }
+
+    init(
+        persistenceProvider: @MainActor @escaping () -> FeedPersistenceActor,
+        socialSocket: SocialSocketProviding = SocialSocketManager.shared,
+        currentUserIdProvider: @MainActor @escaping () -> String? = { AuthManager.shared.currentUser?.id }
+    ) {
+        self.persistenceProvider = persistenceProvider
         self.socialSocket = socialSocket
         self.currentUserIdProvider = currentUserIdProvider
     }

@@ -12,6 +12,17 @@ import { usesFlatRow } from '@/lib/reading-mode/decision';
  * (jamais au chronomètre, #6115). */
 export const HIGHLIGHT_MS = 1600;
 
+/**
+ * Le port de la fenêtre ancrée du fil — `useThreadData().around` (#7420) :
+ * `seek` la demande autour d'un message, `target`/`settled` disent sur quel
+ * message elle est posée et si sa demande a abouti.
+ */
+export type AroundWindow = {
+  readonly target: string | null;
+  readonly settled: boolean;
+  readonly seek: (messageId: string) => void;
+};
+
 export type ThreadJump = {
   readonly highlightedId: string | null;
   readonly jumpToMessage: (messageId: string) => void;
@@ -29,9 +40,14 @@ export type ThreadJump = {
  * la fenêtre virtualisée ; la mise en évidence s'efface d'elle-même, jamais
  * un état qui s'accumule sans fin.
  *
- * UN IDENTIFIANT ABSENT de `placed` est aujourd'hui SANS EFFET (la fenêtre
- * chargée ne le contient pas). #7420 y ajoutera le chargement de la fenêtre
- * `?around=` (`messages-list.ts`, `allowsAround`) — ICI, jamais dans l'hôte.
+ * UN IDENTIFIANT ABSENT de `placed` (#8320, #7420) : avec `around`, le saut
+ * demande la fenêtre autour du message (`?around=`, UNE requête quelle que
+ * soit sa distance au présent) et saute dès que la rangée arrive ; une
+ * fenêtre servie sans elle (supprimée, sous le plancher d'historique) clôt la
+ * recherche. Sans `around`, il reste sans effet. #8320 chargeait les pages
+ * plus anciennes UNE à UNE : N allers-retours pour un message N pages plus
+ * haut, plafonnés à vingt — un favori plus ancien que mille messages restait
+ * hors d'atteinte.
  *
  * `virtualizer` n'est demandé que pour `scrollToIndex` (`Pick`) : c'est la
  * SEULE capacité du virtualiseur qu'un saut emploie, et un bouchon de test
@@ -42,8 +58,14 @@ export function useThreadJump(params: {
   readonly virtualizer: Pick<Virtualizer<HTMLElement, Element>, 'scrollToIndex'>;
   readonly noteProgrammaticScroll: () => void;
   readonly mode: ConversationReadingMode;
+  readonly around?: AroundWindow;
 }): ThreadJump {
   const { placed, virtualizer, noteProgrammaticScroll, mode } = params;
+  /* En REF, pas en dépendance : `jumpToMessage` est une prop du `memo` de
+     chaque rangée, et l'état de la fenêtre change à chaque demande. */
+  const aroundRef = useRef(params.around);
+  aroundRef.current = params.around;
+  const [seek, setSeek] = useState<string | null>(null);
 
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
   const highlightTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -55,10 +77,8 @@ export function useThreadJump(params: {
    * `virtualizer` aussi (instance TanStack), `placed` depuis le `useMemo` de
    * l'hôte — la chaîne tient de bout en bout.
    */
-  const jumpToMessage = useCallback(
-    (messageId: string) => {
-      const index = placed.findIndex((p) => p.message.id === messageId);
-      if (index === -1) return;
+  const land = useCallback(
+    (index: number, messageId: string) => {
       // ANNONCE le défilement PROGRAMMÉ avant de le déclencher — ni le
       // révélé ni l'armement de la scène ne doivent réagir à un saut de
       // citation (§1.5 de la spécification #5648, même famille de
@@ -69,8 +89,37 @@ export function useThreadJump(params: {
       if (highlightTimer.current !== null) clearTimeout(highlightTimer.current);
       highlightTimer.current = setTimeout(() => setHighlightedId(null), HIGHLIGHT_MS);
     },
-    [placed, virtualizer, noteProgrammaticScroll],
+    [virtualizer, noteProgrammaticScroll],
   );
+
+  const jumpToMessage = useCallback(
+    (messageId: string) => {
+      const index = placed.findIndex((p) => p.message.id === messageId);
+      if (index !== -1) {
+        setSeek(null);
+        land(index, messageId);
+        return;
+      }
+      const around = aroundRef.current;
+      if (around === undefined) return;
+      setSeek(messageId);
+      around.seek(messageId);
+    },
+    [placed, land],
+  );
+
+  const aroundTarget = params.around?.target ?? null;
+  const aroundSettled = params.around?.settled ?? false;
+  useEffect(() => {
+    if (seek === null) return;
+    const index = placed.findIndex((p) => p.message.id === seek);
+    if (index !== -1) {
+      setSeek(null);
+      land(index, seek);
+      return;
+    }
+    if (aroundTarget === seek && aroundSettled) setSeek(null);
+  }, [seek, placed, aroundTarget, aroundSettled, land]);
   useEffect(
     () => () => {
       if (highlightTimer.current !== null) clearTimeout(highlightTimer.current);

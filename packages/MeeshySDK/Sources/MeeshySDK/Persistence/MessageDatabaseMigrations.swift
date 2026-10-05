@@ -367,5 +367,14 @@ public enum MessageDatabaseMigrations {
                 t.add(column: "viewOnceOpenedAt", .datetime)
             }
         }
+
+        // **La carte des liens suivis** (#9104). Le fil ne lit que GRDB : sans
+        // elle, une URL brute suivie s'affichait en entier au lieu de
+        // `m+<token>`. Même convention nullable : NULL ⇒ carte vide.
+        migrator.registerMigration("messages_tracked_links") { db in
+            try db.alter(table: "messages") { t in
+                t.add(column: "trackedLinksJson", .text)
+            }
+        }
     }
 }

@@ -88,10 +88,11 @@ describe('CallEventsHandler.sendMissedCallCancellationPushForTerminatedCall', ()
           silent: true,
           data: { type: 'call_cancel', callId: CALL_ID },
         }),
-        // Cross-platform mobile depuis l'audit 2026-07-11 #2 : le hardcode
-        // apns/ios laissait un Android backgrounded sonner dans le vide.
+        // Cross-platform depuis l'audit 2026-07-11 #2 (le hardcode apns/ios
+        // laissait un Android backgrounded sonner dans le vide), web compris
+        // depuis #8043 : la notification d'appel du service worker se retire.
         types: ['apns', 'fcm'],
-        platforms: ['ios', 'android'],
+        platforms: ['ios', 'android', 'web'],
       })
     );
   });

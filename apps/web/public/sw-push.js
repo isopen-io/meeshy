@@ -16,7 +16,10 @@
  * servirait, pour un même message, un texte différent de celui qu'iOS montre
  * — le défaut qui a coûté trois cycles à la passerelle (cycles 121→123).
  *
- * **Il ne rend AUCUNE URL venue de la charge** — ni pièce jointe, ni avatar.
+ * **Il ne rend AUCUNE URL venue de la charge** — ni pièce jointe, ni avatar —,
+ * à UNE exception près, la vignette d'une vidéo (#8860, `offreContenu`) : une
+ * clé que la passerelle ne pose qu'hors protection, et que ce worker retient
+ * lui-même sous `notificationLocKey`.
  * La présence de `notificationLocKey` est une DÉCLARATION de contenu protégé
  * (éphémère, vue unique, flouté, chiffré) ; la passerelle vide déjà les champs
  * de média dans ce cas, mais une protection de contenu se mesure sur tout ce
@@ -61,6 +64,7 @@ const PUSH_ROUTE_PATTERNS = {
   story: '/story/$post',
   post: '/post/$post',
   discover: '/discover',
+  userProfile: '/u/$username',
   progression: '/me/progression',
   settings: '/settings',
   notifications: '/notifications',
@@ -82,6 +86,7 @@ const EPHEMERAL_ONLY_TYPES = [
   'friend_new_mood',
 ];
 const REQUEST_TYPES = ['friend_request', 'contact_request'];
+const PROFILE_TYPES = ['contact_joined', 'contact_recently_active'];
 const PROGRESSION_TYPES = [
   'achievement_unlocked',
   'ACHIEVEMENT_UNLOCKED',
@@ -104,7 +109,17 @@ const HINTED_ROUTES = ['discover', 'progression', 'settings', 'notifications'];
  * `delete` des champs sensibles : une liste noire oublie le champ ajouté
  * demain, une liste blanche le refuse par défaut.
  */
-const TAP_FIELDS = ['notificationId', 'type', 'conversationId', 'postId', 'postType', 'contentType', 'friendRequestId', 'route'];
+const TAP_FIELDS = [
+  'notificationId',
+  'type',
+  'conversationId',
+  'postId',
+  'postType',
+  'contentType',
+  'friendRequestId',
+  'senderUsername',
+  'route',
+];
 
 /**
  * LE NOM DU MESSAGE remis à un client déjà ouvert — JUMEAU de
@@ -123,6 +138,16 @@ const NOTIFICATION_CLICKED_MESSAGE = 'NOTIFICATION_CLICKED';
  */
 const REPRODUCED_PUSH_FIELD = 'reproduced';
 const REPRODUCED_PUSH_VALUE = 'true';
+
+/**
+ * LE CHAMP PAR LEQUEL UNE RÉACTION REMPLACE LA PRÉCÉDENTE (#9028) — JUMEAU de
+ * `REPLACES_ACTOR_SUBJECT_FIELD` / `REPLACES_ACTOR_SUBJECT_VALUE`, même
+ * fichier partagé, même garde par les constantes des témoins.
+ * `ACTOR_SUBJECT_KEY` est la clé, posée sur la bannière, qui la retrouve.
+ */
+const REPLACES_ACTOR_SUBJECT_FIELD = 'replacesActorSubject';
+const REPLACES_ACTOR_SUBJECT_VALUE = 'true';
+const ACTOR_SUBJECT_KEY = 'acteurSujet';
 
 /**
  * L'ACCUSÉ DE REMISE (#7368, W4) — JUMEAU web de
@@ -283,6 +308,9 @@ function resolvePushTarget(data) {
   const type = texte(data.type);
   if (texte(data.friendRequestId) !== '' || REQUEST_TYPES.indexOf(type) >= 0) return demandes();
 
+  const pseudo = texte(data.senderUsername);
+  if (PROFILE_TYPES.indexOf(type) >= 0 && pseudo !== '') return { route: 'userProfile', params: { username: pseudo }, search: {} };
+
   const indice = texte(data.route);
   if (HINTED_ROUTES.indexOf(indice) >= 0) {
     return indice === 'discover' ? demandes() : { route: indice, params: {}, search: {} };
@@ -397,14 +425,173 @@ function donneesDuTap(data) {
   return retenu;
 }
 
+const CALL_BACK_TYPES = ['missed_call', 'CALL_MISSED', 'call_declined'];
+const CALL_BACK_ACTION = 'call-back';
+const CALL_BACK_PARAM = 'rappeler';
+const CALL_BACK_NAME_PARAM = 'appelant';
+const CALL_BACK_GROUP_PARAM = 'groupe';
+
+function rappel(data) {
+  const conversationId = texte(data.conversationId);
+  const libelle = texte(data.callBackLabel);
+  if (CALL_BACK_TYPES.indexOf(texte(data.type)) < 0 || conversationId === '' || libelle === '') return null;
+  const typeDeConversation = texte(data.conversationType);
+  const groupe = typeDeConversation !== '' && typeDeConversation !== 'direct';
+  const titre = groupe
+    ? texte(data.conversationTitle)
+    : texte(data.senderDisplayName) || texte(data.senderUsername);
+  return {
+    action: { action: CALL_BACK_ACTION, title: libelle },
+    callBack: { conversationId: conversationId, media: texte(data.callType) === 'video' ? 'video' : 'audio', title: titre, isGroup: groupe },
+  };
+}
+
+/**
+ * LE DÉTAIL DU CONTENU (#8860, jumeau web de #8856) — le CORPS est composé par
+ * la passerelle (`detailedBannerBody` : « 📍 Tour Eiffel », « 👤 Mamadou »,
+ * « ✉️ Invitation · Équipe », « 🔗 domaine », « Réponse à votre story · … ») ;
+ * le worker n'en réécrit aucun mot. Il ajoute ce qu'un texte ne porte pas :
+ *
+ * - les ACTIONS, dans l'ordre d'iOS (`NotificationDetailCategories`) —
+ *   « Ouvrir la carte » (position) ou « Rejoindre » (invitation Meeshy), puis
+ *   « Répondre ». Leurs libellés sont LOCALISÉS par la passerelle
+ *   (`contentActionPushFields`) : ce worker ne charge aucun catalogue, et sans
+ *   libellé servi il n'offre rien ;
+ * - la VIGNETTE d'une vidéo (`thumbnailUrl`, adresse publique https).
+ *
+ * SECOND VERROU : sous `notificationLocKey` (contenu protégé), ni image, ni
+ * carte, ni invitation — la passerelle les retient déjà ; une garde de
+ * confidentialité ne dépend pas de la fidélité de l'autre.
+ *
+ * Aucune requête vers un tiers : la carte est un LIEN vers Plans, ouvert au
+ * toucher — JUMEAU de `mapsUrlOf` (`src/lib/view/message-body.ts`, branche
+ * navigateur). Une invitation ne mène qu'à l'écran d'invitation de CETTE
+ * application — JUMEAU de `inviteAppPath` (`src/lib/notifications/content-detail.ts`).
+ */
+const OPEN_MAP_ACTION = 'open-map';
+const JOIN_ACTION = 'join';
+const REPLY_ACTION = 'reply';
+/** JUMEAU de `COMPOSE_PARAM` (`src/lib/notifications/content-detail.ts`). */
+const COMPOSE_PARAM = 'ecrire';
+const MAPS_ORIGIN = 'https://maps.apple.com/';
+/** JUMEAU de `REPLYABLE_TYPES` (`src/lib/notifications/content-detail.ts`, `contentActionPushFields.ts`). */
+const REPLYABLE_TYPES = ['new_message', 'message_reply', 'reply', 'user_mentioned', 'message_forwarded'];
+const INVITE_FORMS = ['chat', 'join'];
+const SHARE_LINK_KEY = /^[A-Za-z0-9_-]{1,100}$/;
+
+function coordonnee(valeur, borne) {
+  const nombre = Number(texte(valeur));
+  return texte(valeur) !== '' && Number.isFinite(nombre) && Math.abs(nombre) <= borne ? nombre : null;
+}
+
+function adresseCarte(data) {
+  const lat = coordonnee(data.locationLat, 90);
+  const lon = coordonnee(data.locationLon, 180);
+  if (lat === null || lon === null) return null;
+  const nom = texte(data.locationName);
+  return MAPS_ORIGIN + '?ll=' + lat.toFixed(5) + ',' + lon.toFixed(5) + (nom === '' ? '' : '&q=' + encodeURIComponent(nom));
+}
+
+function hoteMeeshy(hote) {
+  return hote === 'meeshy.me' || hote.endsWith('.meeshy.me');
+}
+
+function cheminInvitation(brute) {
+  let url;
+  try {
+    url = new URL(texte(brute));
+  } catch {
+    return null;
+  }
+  const segments = url.pathname.split('/').filter(Boolean);
+  const schemaMeeshy = url.protocol === 'meeshy:';
+  const forme = schemaMeeshy ? url.host : segments[0];
+  const cle = schemaMeeshy ? segments[0] : segments[1];
+  const deMeeshy = schemaMeeshy || (url.protocol === 'https:' && hoteMeeshy(url.hostname.toLowerCase()));
+  if (!deMeeshy || !forme || INVITE_FORMS.indexOf(forme.toLowerCase()) < 0 || !cle || !SHARE_LINK_KEY.test(cle)) return null;
+  return '/chat/' + cle;
+}
+
+function vignette(data) {
+  const url = texte(data.thumbnailUrl);
+  return url.indexOf('https://') === 0 ? url : '';
+}
+
+function offreContenu(data) {
+  const protege = texte(data.notificationLocKey) !== '';
+  const libelle = texte(data.contentActionLabel);
+  const carte = protege || libelle === '' ? null : adresseCarte(data);
+  const invitation = protege || libelle === '' || carte !== null ? null : cheminInvitation(data.inviteUrl);
+  const repondre = texte(data.replyActionLabel);
+  const peutRepondre = repondre !== '' && texte(data.conversationId) !== '' && REPLYABLE_TYPES.indexOf(texte(data.type)) >= 0;
+  const actions = [
+    ...(carte === null ? [] : [{ action: OPEN_MAP_ACTION, title: libelle }]),
+    ...(invitation === null ? [] : [{ action: JOIN_ACTION, title: libelle }]),
+    ...(peutRepondre ? [{ action: REPLY_ACTION, title: repondre }] : []),
+  ];
+  const image = protege ? '' : vignette(data);
+  return {
+    actions: actions,
+    image: image,
+    data: {
+      ...(carte === null ? {} : { mapUrl: carte }),
+      ...(invitation === null ? {} : { invitePath: invitation }),
+    },
+  };
+}
+
 function montrer(banniere, notification, data) {
+  const offre = rappel(data);
+  const contenu = offreContenu(data);
+  const actions = offre === null ? contenu.actions : [offre.action];
+  const cle = acteurSujet(data);
+  const tap = { ...donneesDuTap(data), ...(cle === '' ? {} : { [ACTOR_SUBJECT_KEY]: cle }) };
   return self.registration.showNotification(banniere.titre, {
     body: banniere.corps,
     ...livraison(notification, texte(data.notificationId)),
     icon: BANNER_ICON,
     badge: BANNER_BADGE,
-    data: donneesDuTap(data),
+    ...(contenu.image === '' ? {} : { image: contenu.image }),
+    ...(actions.length === 0 ? {} : { actions: actions }),
+    data: offre === null ? { ...tap, ...contenu.data } : { ...tap, callBack: offre.callBack },
   });
+}
+
+/**
+ * UNE RÉACTION CHANGÉE NE LAISSE QU'UNE BANNIÈRE (#9028).
+ *
+ * ❤️ → 😂 retire une notification et en crée une AUTRE : rien que le tag ni
+ * l'identifiant ne relient. La passerelle déclare le remplacement
+ * (`REPLACES_ACTOR_SUBJECT_FIELD`) ; la bannière remplacée est celle du même
+ * type, du même acteur et du même sujet — le commentaire d'abord, le post qui
+ * le porte seulement à défaut. Le web ne reçoit pas la révocation : sans
+ * cette fermeture, la réaction d'avant restait affichée à côté.
+ */
+function acteurSujet(data) {
+  if (texte(data[REPLACES_ACTOR_SUBJECT_FIELD]) !== REPLACES_ACTOR_SUBJECT_VALUE) return '';
+  const type = texte(data.type);
+  const acteur = texte(data.senderId);
+  const sujet = texte(data.commentId) || texte(data.messageId) || texte(data.postId);
+  return type === '' || acteur === '' || sujet === '' ? '' : [type, acteur, sujet].join('|');
+}
+
+/**
+ * Ferme les bannières que ce push remplace — jamais la sienne : la même
+ * réaction livrée deux fois relève du dédoublonnage (D-11 point 4).
+ */
+async function fermerRemplacees(data) {
+  const cle = acteurSujet(data);
+  if (cle === '') return;
+  const notificationId = texte(data.notificationId);
+  try {
+    const affichees = await self.registration.getNotifications();
+    affichees
+      .filter((affichee) => affichee && texte(objet(affichee.data)[ACTOR_SUBJECT_KEY]) === cle)
+      .filter((affichee) => notificationId === '' || texte(objet(affichee.data).notificationId) !== notificationId)
+      .forEach((affichee) => affichee.close());
+  } catch {
+    /* Barre illisible sous cette portée : la bannière d'avant reste, rien ne casse. */
+  }
 }
 
 /**
@@ -412,9 +599,10 @@ function montrer(banniere, notification, data) {
  *
  * Éditer un message, un post ou un commentaire réécrit sa notification sous
  * la MÊME identité, et la passerelle repousse la version d'après en la
- * déclarant (`REPRODUCED_PUSH_FIELD`). Sur iOS et Android, un push de
- * révocation retire d'abord la bannière d'avant ; le web ne le reçoit pas
- * (#7308), et le dédoublonnage de D-11 point 4 écartait donc la correction.
+ * déclarant (`REPRODUCED_PUSH_FIELD`). Sur iOS, ce même push nomme la
+ * bannière d'avant (`replacesNotificationId`) et l'extension la retire ; sur
+ * Android, le tag la remplace. Le web, lui, la dédoublonnait (D-11 point 4) et
+ * écartait donc la correction.
  *
  * - La bannière de CETTE notification est encore affichée : elle est
  *   remplacée EN PLACE, sous SON tag — pas sous celui de la charge. Si le
@@ -431,7 +619,7 @@ function montrer(banniere, notification, data) {
  *   visible n'est plus la sienne.
  *
  * Le remplacement s'annonce (`renotify`), muet si le son est coupé : iOS fait
- * sonner le push nominal qui suit la révocation, comme tout contenu neuf.
+ * sonner le push de remplacement, comme tout contenu neuf.
  */
 async function corriger(banniere, notification, data) {
   const affichee = await banniereAffichee(texte(data.notificationId));
@@ -444,6 +632,10 @@ async function afficher(payload) {
   if (payload === null) return;
   const data = objet(payload.data);
   const notification = objet(payload.notification);
+  if (estPushDAppel(data)) {
+    await traiterAppel(data);
+    return;
+  }
 
   /* Démarré EN PARALLÈLE de la logique de bannière, jamais attendu avant —
      un accusé de remise ne doit pas retarder ce que le lecteur VOIT. Le
@@ -461,6 +653,10 @@ async function afficher(payload) {
        catalogue ne porte. */
     if (titre === '' && corps === '') return;
     const banniere = titre === '' ? { titre: corps, corps: '' } : { titre: titre, corps: corps };
+
+    /* Avant D-11 : la bannière d'avant dit une réaction qui n'existe plus,
+       que quelqu'un regarde l'application ou non. */
+    await fermerRemplacees(data);
 
     /* D-11 point 1 — quelqu'un REGARDE l'application : le socket porte la
        bannière in-app, une bannière système la doublerait. */
@@ -481,8 +677,194 @@ async function afficher(payload) {
   }
 }
 
-async function ouvrir(data) {
-  const url = pushTargetUrl(data);
+/**
+ * L'APPEL ENTRANT, ONGLET FERMÉ (#8043) — la sonnerie iOS (CallKit) et
+ * Android (plein écran) a son équivalent web : une notification qui RESTE
+ * (`requireInteraction`), avec Répondre et Refuser.
+ *
+ * La passerelle pousse l'appel DATA-ONLY (`call-incoming-push.ts`), titre,
+ * corps et libellés des deux actions déjà localisés à la langue du lecteur :
+ * ce worker ne charge aucun catalogue. D-11 vaut ici aussi — un onglet
+ * visible sonne déjà par le socket, une notification le doublerait.
+ *
+ * Elle porte le tag `call:<id>` : `call_cancel` (l'appelant a raccroché,
+ * personne n'a répondu) et `call_answered_elsewhere` (un autre appareil a
+ * décroché) la RETIRENT. Une sonnerie qui survit à l'appel est un contrôle
+ * qui ment (loi 4).
+ */
+const CALL_PUSH_TYPE = 'call';
+const CALL_CLOSING_TYPES = ['call_cancel', 'call_answered_elsewhere'];
+const CALL_TAG_PREFIX = 'call:';
+const CALL_ANSWER_ACTION = 'answer';
+const CALL_DECLINE_ACTION = 'decline';
+/** JUMEAU de `CALL_ANSWER_PARAM` (`src/lib/calls/call-answer-intent.ts`). */
+const CALL_ANSWER_PARAM = 'repondre';
+
+function estPushDAppel(data) {
+  const type = texte(data.type);
+  return type === CALL_PUSH_TYPE || CALL_CLOSING_TYPES.indexOf(type) >= 0;
+}
+
+async function fermerSonnerie(callId) {
+  if (callId === '') return;
+  try {
+    const affichees = await self.registration.getNotifications({ tag: CALL_TAG_PREFIX + callId });
+    affichees
+      .filter((affichee) => affichee && affichee.tag === CALL_TAG_PREFIX + callId)
+      .forEach((affichee) => affichee.close());
+  } catch {
+    /* Rien à fermer, ou l'API refuse sous cette portée : l'expiration du push
+       (TTL de sonnerie) borne de toute façon ce qui pourrait rester. */
+  }
+}
+
+async function sonner(data) {
+  const callId = texte(data.callId);
+  const conversationId = texte(data.conversationId);
+  const titre = texte(data.title) || texte(data.callerName);
+  if (callId === '' || conversationId === '' || titre === '') return;
+
+  const ouvertes = await fenetres();
+  if (ouvertes.some((client) => client.visibilityState === 'visible')) return;
+
+  const actions = [
+    { action: CALL_ANSWER_ACTION, title: texte(data.answerLabel) },
+    { action: CALL_DECLINE_ACTION, title: texte(data.declineLabel) },
+  ].filter((action) => action.title !== '');
+
+  await self.registration.showNotification(titre, {
+    body: texte(data.body),
+    tag: CALL_TAG_PREFIX + callId,
+    renotify: true,
+    requireInteraction: true,
+    icon: BANNER_ICON,
+    badge: BANNER_BADGE,
+    actions: actions,
+    data: { type: CALL_PUSH_TYPE, callId: callId, conversationId: conversationId },
+  });
+}
+
+async function traiterAppel(data) {
+  if (texte(data.type) === CALL_PUSH_TYPE) {
+    await sonner(data);
+    return;
+  }
+  await fermerSonnerie(texte(data.callId));
+}
+
+/** Refuse sans socket — `DELETE /api/v1/calls/:callId?reason=rejected`, le refus AVANT d'avoir rejoint. */
+async function refuserAppel(callId) {
+  const stocke = await lireCredential();
+  if (stocke === null) return;
+  const entetes = entetesCredential(stocke.credential);
+  if (entetes === null) return;
+  try {
+    await self.fetch(texte(stocke.apiBase) + '/api/v1/calls/' + encodeURIComponent(callId) + '?reason=rejected', {
+      method: 'DELETE',
+      headers: entetes,
+      keepalive: true,
+    });
+  } catch {
+    /* Le refus manqué laisse l'appelant sonner jusqu'à la fin de sa sonnerie :
+       c'est ce que faisait un onglet fermé avant ce lot, jamais pire. */
+  }
+}
+
+/**
+ * Répondre ouvre le fil de l'appel et le fait DÉCROCHER : l'onglet ouvert
+ * reçoit l'identifiant de l'appel, un onglet neuf le lit dans son adresse
+ * (`?repondre=<id>`). Le toucher du corps ouvre seulement le fil, où
+ * `call:check-active` rejoue la sonnerie à la connexion.
+ */
+async function ouvrirAppel(data, action) {
+  const callId = texte(data.callId);
+  if (action === CALL_DECLINE_ACTION) {
+    await refuserAppel(callId);
+    return;
+  }
+  const fil = pushTargetUrl({ conversationId: data.conversationId });
+  const repondre = action === CALL_ANSWER_ACTION;
+  const ouvertes = await fenetres();
+  const client = ouvertes[0];
+  if (client === undefined) {
+    await self.clients.openWindow(repondre ? fil + '?' + CALL_ANSWER_PARAM + '=' + encodeURIComponent(callId) : fil);
+    return;
+  }
+  try {
+    await client.focus();
+  } catch {
+    /* Voir `ouvrir()`. */
+  }
+  client.postMessage({ type: NOTIFICATION_CLICKED_MESSAGE, url: fil, data: data, ...(repondre ? { answerCallId: callId } : {}) });
+}
+
+async function rappeler(data) {
+  const cible = objet(data.callBack);
+  const conversationId = texte(cible.conversationId);
+  if (conversationId === '') {
+    await ouvrir(data);
+    return;
+  }
+  const callBack = {
+    conversationId: conversationId,
+    media: texte(cible.media) === 'video' ? 'video' : 'audio',
+    title: texte(cible.title),
+    isGroup: cible.isGroup === true,
+  };
+  const fil = pushTargetUrl({ conversationId: conversationId });
+  const ouvertes = await fenetres();
+  const client = ouvertes[0];
+  if (client === undefined) {
+    const query = new URLSearchParams();
+    query.set(CALL_BACK_PARAM, callBack.media);
+    if (callBack.title !== '') query.set(CALL_BACK_NAME_PARAM, callBack.title);
+    if (callBack.isGroup) query.set(CALL_BACK_GROUP_PARAM, '1');
+    await self.clients.openWindow(fil + '?' + query.toString());
+    return;
+  }
+  await Promise.resolve()
+    .then(() => client.focus())
+    .catch(() => undefined);
+  client.postMessage({ type: NOTIFICATION_CLICKED_MESSAGE, url: fil, data: data, callBack: callBack });
+}
+
+/**
+ * LES ACTIONS DU CONTENU (#8860). « Ouvrir la carte » n'ouvre QUE Plans (une
+ * `data` altérée ne fait pas de ce worker une redirection ouverte) ;
+ * « Rejoindre » et « Répondre » restent dans l'application — un onglet NEUF
+ * lit l'intention d'écrire dans son adresse (`?ecrire=1`), un onglet OUVERT la
+ * reçoit à côté du fil (`compose`, `composer-focus-intent.ts`).
+ */
+async function agirSurContenu(data, action) {
+  if (action === OPEN_MAP_ACTION) {
+    const carte = texte(data.mapUrl);
+    if (carte.indexOf(MAPS_ORIGIN) === 0) {
+      await self.clients.openWindow(carte);
+      return;
+    }
+    await ouvrir(data);
+    return;
+  }
+  if (action === JOIN_ACTION) {
+    const chemin = texte(data.invitePath);
+    await ouvrir(data, /^\/chat\/[A-Za-z0-9_-]{1,100}$/.test(chemin) ? chemin : undefined);
+    return;
+  }
+  const fil = pushTargetUrl({ conversationId: data.conversationId });
+  const ouvertes = await fenetres();
+  const client = ouvertes[0];
+  if (client === undefined) {
+    await self.clients.openWindow(fil + '?' + COMPOSE_PARAM + '=1');
+    return;
+  }
+  await Promise.resolve()
+    .then(() => client.focus())
+    .catch(() => undefined);
+  client.postMessage({ type: NOTIFICATION_CLICKED_MESSAGE, url: fil, data: data, compose: true });
+}
+
+async function ouvrir(data, adresse) {
+  const url = adresse === undefined ? pushTargetUrl(data) : adresse;
   const ouvertes = await fenetres();
   const client = ouvertes[0];
   if (client === undefined) {
@@ -504,7 +886,17 @@ self.addEventListener('push', (evenement) => {
 
 self.addEventListener('notificationclick', (evenement) => {
   evenement.notification.close();
-  evenement.waitUntil(ouvrir(objet(evenement.notification.data)));
+  const data = objet(evenement.notification.data);
+  const action = texte(evenement.action);
+  evenement.waitUntil(
+    texte(data.type) === CALL_PUSH_TYPE
+      ? ouvrirAppel(data, action)
+      : action === CALL_BACK_ACTION
+        ? rappeler(data)
+        : action === OPEN_MAP_ACTION || action === JOIN_ACTION || (action === REPLY_ACTION && texte(data.conversationId) !== '')
+          ? agirSurContenu(data, action)
+          : ouvrir(data),
+  );
 });
 
 /**
@@ -521,6 +913,7 @@ self.meeshyPushTarget = {
   EPHEMERAL_ENTITIES: EPHEMERAL_ENTITIES,
   EPHEMERAL_ONLY_TYPES: EPHEMERAL_ONLY_TYPES,
   REQUEST_TYPES: REQUEST_TYPES,
+  PROFILE_TYPES: PROFILE_TYPES,
   PROGRESSION_TYPES: PROGRESSION_TYPES,
   SECURITY_TYPES: SECURITY_TYPES,
   HINTED_ROUTES: HINTED_ROUTES,

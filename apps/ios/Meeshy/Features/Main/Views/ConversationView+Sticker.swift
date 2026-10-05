@@ -33,6 +33,29 @@ extension ConversationView {
         sendTemplateSticker(template, slots: ConversationStickerRendering.locationSlots(for: place))
     }
 
+    /// Mee ou Meo (#9053) : la première image du film en PNG — le repli des
+    /// clients qui ne le redessinent pas — et `templateId: "mee.<id>"`, que le
+    /// web et iOS rejouent animé. Le contrat est celui du web.
+    func sendMeeSticker(_ mee: MeeSticker) {
+        guard let image = MeeStickerCatalog.stillImage(mee) else {
+            sendEmojiSticker(mee.emoji)
+            return
+        }
+        sendStickerImage(image, sticker: mee.messageSticker)
+    }
+
+    /// Un Instant (#9069) : la première image du film avec le texte saisi
+    /// posé dessus — le repli des clients qui ne le redessinent pas — et
+    /// `templateId: "mee.<id>"` avec ses emplacements, que le web et iOS
+    /// rejouent animés. Le contrat est celui du web.
+    func sendMeeInstant(_ instant: MeeInstant, slots: [MeeSlot: String]) {
+        guard let image = instant.stillImage(slots: slots) else {
+            sendEmojiSticker(instant.emoji)
+            return
+        }
+        sendStickerImage(image, sticker: instant.messageSticker(slots: slots))
+    }
+
     /// « Mes stickers » : le PNG collé EST le sticker — aucun gabarit à
     /// redessiner, donc `sticker: nil` et une image ordinaire.
     func sendLibrarySticker(_ item: StoryStickerLibraryItem) {
@@ -116,7 +139,7 @@ extension ConversationView {
         let tempId = ClientMessageId.generate()
         // Un sticker est un ENVOI comme un autre : la protection armée le suit
         // (#7498), et la rangée se désarme au tap, ici comme ailleurs.
-        let protection = viewModel.consumeArmedProtection()
+        let protection = viewModel.captureArmedProtection(replyingTo: replyId)
 
         viewModel.insertOptimisticMediaMessage(
             tempId: tempId, content: "", attachments: [local], messageType: .image,

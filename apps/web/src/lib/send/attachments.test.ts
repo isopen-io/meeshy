@@ -14,6 +14,7 @@ import {
   messageTypeOfPending,
   pendingAttachmentOf,
   removePendingAttachment,
+  replacePendingAttachment,
   resetPendingAttachmentIdsForTests,
   type PendingAttachment,
 } from './attachments';
@@ -318,5 +319,27 @@ describe('la même image ne part pas deux fois (#6956)', () => {
 
     expect(list).toHaveLength(2);
     expect(list.map((p) => p.name)).toEqual(['chat.jpg', 'chien.jpg']);
+  });
+});
+
+/** LA RETOUCHE (#8416) — le composite REMPLACE la pièce à sa place, sous une
+ * identité NEUVE (l'URL d'aperçu est mémoïsée par `localId`). */
+describe('replacePendingAttachment', () => {
+  test('même rang, nouveau fichier, nouvelle identité ; les autres pièces intactes', () => {
+    const a = pendingAttachmentOf(new File(['a'], 'a.png', { type: 'image/png' }));
+    const b = pendingAttachmentOf(new File(['b'], 'b.png', { type: 'image/png' }));
+    const retouched = new File(['r'], 'a-retouche.jpg', { type: 'image/jpeg' });
+    const next = replacePendingAttachment([a, b], a.localId, retouched);
+    expect(next).toHaveLength(2);
+    expect(next[0]?.file).toBe(retouched);
+    expect(next[0]?.kind).toBe('image');
+    expect(next[0]?.localId).not.toBe(a.localId);
+    expect(next[1]).toBe(b);
+  });
+
+  test('une pièce inconnue ne change rien', () => {
+    const a = pendingAttachmentOf(new File(['a'], 'a.png', { type: 'image/png' }));
+    const list = [a];
+    expect(replacePendingAttachment(list, 'inconnue', new File(['r'], 'r.jpg', { type: 'image/jpeg' }))).toBe(list);
   });
 });

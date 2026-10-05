@@ -1,6 +1,7 @@
-import { html } from '../lib/html.mjs'
+import { html, raw } from '../lib/html.mjs'
 import { icon } from '../lib/icons.mjs'
 import { langue } from '../lib/langues.mjs'
+import { avatar } from '../lib/composants.mjs'
 
 // AudioPlayerView.waveformHeight — la forme de repli de l'app quand les échantillons ne sont
 // pas encore analysés : 5 + sin(s)·6 + cos(s/2)·4, bornée à [2, 22], s = 7i + 3.
@@ -13,12 +14,16 @@ export const waveformHeights = (count) =>
 const pastille = ({ drapeau, libelle, active }) =>
   html`<span class="audio-lang${active ? ' active' : ''}"><span class="f">${drapeau}</span>${libelle}</span>`
 
-export const audioBubble = ({ ctx, duree, ecoule, progression, pistes, active, transcription, time, heure }) => {
+// `mine` : le vocal du lecteur (bulle indigo). Sinon le vocal REÇU : AudioPlayerView le teinte de
+// l'accent de la conversation (bouton, barres jouées, piste active) sur un fond neutre, et en
+// groupe son pied nomme l'expéditeur (`expediteur`).
+export const audioBubble = ({ ctx, duree, ecoule, progression, pistes, active, transcription, time, heure, mine = true, accent, expediteur }) => {
   const barres = waveformHeights(38)
   const jouees = Math.round(barres.length * progression)
   const piste = langue(active)
-  return html`<div class="msg-row mine">
-    <div class="bubble mine audio">
+  const cote = mine ? 'mine' : 'theirs'
+  return html`<div class="msg-row ${cote}">
+    <div class="bubble ${cote} audio"${accent ? raw(` style="--accent:${accent}"`) : ''}>
       <div class="audio-player">
         <div class="audio-play">${icon('pause', { size: 16 })}</div>
         <div class="audio-wave-col">
@@ -34,7 +39,7 @@ export const audioBubble = ({ ctx, duree, ecoule, progression, pistes, active, t
         ${pastille({ drapeau: '🔊', libelle: ctx.ui('media.audio.original'), active: false })}
         ${pistes.map((code) => pastille({ drapeau: langue(code).drapeau, libelle: langue(code).nom, active: code === active }))}
       </div>
-      <div class="audio-footer"><span class="pill">${heure(ctx.lang, time)} ${icon('checks', { size: 13 })}</span></div>
+      <div class="audio-footer">${expediteur ? html`<span class="audio-sender">${avatar(expediteur, 22)}<b>${expediteur.prenom}</b></span>` : ''}<span class="pill">${heure(ctx.lang, time)}${mine ? html` ${icon('checks', { size: 13 })}` : ''}</span></div>
     </div>
   </div>`
 }

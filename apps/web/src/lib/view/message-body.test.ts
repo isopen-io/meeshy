@@ -26,21 +26,25 @@ const message = (partial: Partial<Message> = {}): Message =>
     ...partial,
   }) as Message;
 
-describe('emojiOnlyOf — 90 / 60 / 45, jamais au-delà de trois', () => {
-  test('un seul emoji ⇒ {count:1, fontSize:90}', () => {
-    expect(emojiOnlyOf({ content: '👍', attachmentCount: 0, hasPlace: false })).toEqual({ count: 1, fontSize: 90 });
+describe('emojiOnlyOf — ×4 jusqu’à deux, ×3 à trois, ×2 à quatre, la taille d’un emoji dans le texte (17) pour base (#9054)', () => {
+  test('un seul emoji ⇒ ×4 : {count:1, fontSize:68}', () => {
+    expect(emojiOnlyOf({ content: '👍', attachmentCount: 0, hasPlace: false })).toEqual({ count: 1, fontSize: 68 });
   });
 
-  test('un graphème à modificateur compte UN : "👍🏽❤️" ⇒ 2/60', () => {
-    expect(emojiOnlyOf({ content: '👍🏽❤️', attachmentCount: 0, hasPlace: false })).toEqual({ count: 2, fontSize: 60 });
+  test('un graphème à modificateur compte UN : "👍🏽❤️" ⇒ deux, encore ×4', () => {
+    expect(emojiOnlyOf({ content: '👍🏽❤️', attachmentCount: 0, hasPlace: false })).toEqual({ count: 2, fontSize: 68 });
   });
 
-  test('trois emoji ⇒ 3/45', () => {
-    expect(emojiOnlyOf({ content: '🎉🎉🎉', attachmentCount: 0, hasPlace: false })).toEqual({ count: 3, fontSize: 45 });
+  test('trois emoji ⇒ ×3 : 51', () => {
+    expect(emojiOnlyOf({ content: '🎉🎉🎉', attachmentCount: 0, hasPlace: false })).toEqual({ count: 3, fontSize: 51 });
   });
 
-  test('quatre emoji ⇒ null', () => {
-    expect(emojiOnlyOf({ content: '🎉🎉🎉🎉', attachmentCount: 0, hasPlace: false })).toBeNull();
+  test('quatre emoji ⇒ ×2 : 34', () => {
+    expect(emojiOnlyOf({ content: '🎉🎉🎉🎉', attachmentCount: 0, hasPlace: false })).toEqual({ count: 4, fontSize: 34 });
+  });
+
+  test('cinq emoji ⇒ null : la bulle normale', () => {
+    expect(emojiOnlyOf({ content: '🎉🎉🎉🎉🎉', attachmentCount: 0, hasPlace: false })).toBeNull();
   });
 
   test('« ok 👍 » (du texte mêlé) ⇒ null', () => {
@@ -48,7 +52,7 @@ describe('emojiOnlyOf — 90 / 60 / 45, jamais au-delà de trois', () => {
   });
 
   test('les espaces autour sont retirés : " 👍 " ⇒ 1', () => {
-    expect(emojiOnlyOf({ content: ' 👍 ', attachmentCount: 0, hasPlace: false })).toEqual({ count: 1, fontSize: 90 });
+    expect(emojiOnlyOf({ content: ' 👍 ', attachmentCount: 0, hasPlace: false })).toEqual({ count: 1, fontSize: 68 });
   });
 
   test('une chaîne vide ⇒ null', () => {
@@ -136,6 +140,27 @@ describe('placeOf — coordonnées valides, textes bornés', () => {
   test('mapsUrlOf compose le lien Plans', () => {
     expect(mapsUrlOf({ latitude: 48.8584, longitude: 2.2945, name: 'Tour Eiffel', address: null })).toBe(
       'https://maps.apple.com/?ll=48.85840,2.29450&q=Tour%20Eiffel',
+    );
+  });
+
+  test('mapsUrlOf rend une URI geo: sous la coque Android — launchIntent la remet à l’app de cartes (#8262)', () => {
+    expect(mapsUrlOf({ latitude: 48.8584, longitude: 2.2945, name: 'Tour Eiffel', address: null }, { platform: 'android' })).toBe(
+      'geo:48.85840,2.29450?q=48.85840,2.29450(Tour%20Eiffel)',
+    );
+  });
+
+  test('mapsUrlOf sous Android : sans nom, la seule position ; les parenthèses du nom sont encodées', () => {
+    expect(mapsUrlOf({ latitude: 48.8584, longitude: 2.2945, name: null, address: null }, { platform: 'android' })).toBe(
+      'geo:48.85840,2.29450?q=48.85840,2.29450',
+    );
+    expect(mapsUrlOf({ latitude: 1, longitude: 2, name: 'Café (terrasse)', address: null }, { platform: 'android' })).toBe(
+      'geo:1.00000,2.00000?q=1.00000,2.00000(Caf%C3%A9%20%28terrasse%29)',
+    );
+  });
+
+  test('mapsUrlOf garde Plans sous la coque iOS', () => {
+    expect(mapsUrlOf({ latitude: 48.8584, longitude: 2.2945, name: null, address: null }, { platform: 'ios' })).toBe(
+      'https://maps.apple.com/?ll=48.85840,2.29450',
     );
   });
 });

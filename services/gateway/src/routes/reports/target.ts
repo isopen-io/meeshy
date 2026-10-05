@@ -33,6 +33,7 @@ export type TypeSignale =
   | 'community'
   | 'post'
   | 'story'
+  | 'comment'
   | 'sound';
 
 export type VerdictCible = { atteignable: true } | { atteignable: false; raison: 'introuvable' | 'inaccessible' };
@@ -114,6 +115,28 @@ async function postAtteignable(
   }
 }
 
+async function publicationAtteignable(
+  prisma: PrismaClient,
+  postId: string,
+  viewerId: string
+): Promise<VerdictCible> {
+  const post = await prisma.post.findUnique({
+    where: { id: postId },
+    select: { authorId: true, visibility: true, visibilityUserIds: true, deletedAt: true },
+  });
+  if (!post || post.deletedAt) return INTROUVABLE;
+  const vu = await postAtteignable(
+    prisma,
+    {
+      authorId: post.authorId,
+      visibility: String(post.visibility),
+      visibilityUserIds: post.visibilityUserIds ?? [],
+    },
+    viewerId
+  );
+  return vu ? ATTEIGNABLE : INACCESSIBLE;
+}
+
 export async function verifierCible(options: {
   prisma: PrismaClient;
   signalant: Signalant;
@@ -154,22 +177,20 @@ export async function verifierCible(options: {
     }
 
     case 'post':
-    case 'story': {
-      const post = await prisma.post.findUnique({
+    case 'story':
+      return publicationAtteignable(prisma, entityId, viewerId);
+
+    case 'comment': {
+      // Un commentaire (de post, de réel ou de story — #8709) est atteignable
+      // quand sa PUBLICATION l'est : on ne lit un commentaire que sous elle.
+      // Signaler le sien n'a pas de sens, comme pour un compte.
+      const commentaire = await prisma.postComment.findUnique({
         where: { id: entityId },
-        select: { authorId: true, visibility: true, visibilityUserIds: true, deletedAt: true },
+        select: { postId: true, authorId: true, deletedAt: true },
       });
-      if (!post || post.deletedAt) return INTROUVABLE;
-      const vu = await postAtteignable(
-        prisma,
-        {
-          authorId: post.authorId,
-          visibility: String(post.visibility),
-          visibilityUserIds: post.visibilityUserIds ?? [],
-        },
-        viewerId
-      );
-      return vu ? ATTEIGNABLE : INACCESSIBLE;
+      if (!commentaire || commentaire.deletedAt) return INTROUVABLE;
+      if (viewerId !== '' && commentaire.authorId === viewerId) return INACCESSIBLE;
+      return publicationAtteignable(prisma, commentaire.postId, viewerId);
     }
 
     case 'community': {

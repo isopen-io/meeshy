@@ -5,6 +5,7 @@ import type { RetractedNotificationAnnouncer } from '../notifications/retractedN
 import { deactivatePostTrackingLinks } from './deactivatePostTrackingLinks';
 import { retractPostNotifications } from './retractPostNotifications';
 import { SoundCaptureService } from './SoundCaptureService';
+import { reclaimRemovedContent, type PostEngagementRecorder } from './postEngagementCredits';
 
 const log = enhancedLogger.child({ module: 'postRemovalEffects' });
 
@@ -62,7 +63,8 @@ export async function applyPostRemovalEffects(
   // résolution que le jumeau `applyMessageRemovalEffects` : les deux routes qui
   // retirent un post n'ont ainsi rien à câbler, et un appelant hors serveur
   // (worker, script, test) retire quand même les lignes, sans annonce.
-  announcer: RetractedNotificationAnnouncer | undefined = getSharedNotificationService()
+  announcer: RetractedNotificationAnnouncer | undefined = getSharedNotificationService(),
+  engagement?: PostEngagementRecorder
 ): Promise<void> {
   // Retrait par un tiers habilité : trace d'audit. Un auteur qui retire son
   // propre contenu n'est pas un acte de modération — c'est ce qui distingue
@@ -86,6 +88,12 @@ export async function applyPostRemovalEffects(
       log.warn('post removal: audit log write failed', { postId: post.id, actorId: actor.id, err });
     }
   }
+
+  // Les points d'un contenu lourd retiré dans la fenêtre du barème reviennent
+  // sur le compte de son AUTEUR (#8959) — que le retrait vienne de lui ou d'un
+  // modérateur : c'est ici, et non dans chaque route, pour que les deux
+  // chemins de retrait l'appliquent. Hors du chemin, ne rejette jamais.
+  reclaimRemovedContent(prisma, post, engagement);
 
   // Les notifications que le post a produites. Placées juste après l'audit —
   // qui doit rester le premier effet écrit, c'est la trace de modération — et

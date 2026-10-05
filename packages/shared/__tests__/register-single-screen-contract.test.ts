@@ -194,3 +194,16 @@ describe('le téléphone reste facultatif, et sa forme reste gardée', () => {
     expect(zodOk({ ...TROIS_CHAMPS, phoneCountryCode: 'FRA' })).toBe(false);
   });
 });
+
+describe('le code de parrainage voyage avec l’inscription (#8058)', () => {
+  it('Zod GARDE affiliateToken et affiliateSessionKey — un champ non déclaré serait retiré', () => {
+    const parsed = AuthSchemas.register.safeParse({ ...TROIS_CHAMPS, affiliateToken: 'aff-123', affiliateSessionKey: 'visite-9' });
+
+    expect(parsed.success).toBe(true);
+    expect(parsed.success && parsed.data).toMatchObject({ affiliateToken: 'aff-123', affiliateSessionKey: 'visite-9' });
+  });
+
+  it('Ajv déclare les deux champs', () => {
+    expect(Object.keys(registerRequestSchema.properties)).toEqual(expect.arrayContaining(['affiliateToken', 'affiliateSessionKey']));
+  });
+});

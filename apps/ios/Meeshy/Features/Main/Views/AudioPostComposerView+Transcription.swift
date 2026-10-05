@@ -23,7 +23,7 @@ extension AudioPostComposerView {
     // MARK: - Language Selector
 
     var languageSelector: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
             // **« Langue du son », et seulement AVANT l'enregistrement**
             // (directive porteur 2026-09-01). Ce n'est pas la langue de la
             // transcription : c'est celle qui est PARLÉE — la transcription
@@ -32,7 +32,7 @@ extension AudioPostComposerView {
             // les pastilles ne montrent, et la place qu'il prend manque au
             // rognage.
             if phase == .idle || phase == .recording {
-                HStack(spacing: 6) {
+                HStack(spacing: MeeshySpacing.xsPlus) {
                     Image(systemName: "globe")
                         .font(.caption.weight(.semibold))
                         .accessibilityHidden(true)
@@ -45,13 +45,13 @@ extension AudioPostComposerView {
             }
 
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
+                HStack(spacing: MeeshySpacing.sm) {
                     ForEach(suggestedLocales, id: \.identifier) { loc in
                         languageChip(for: loc)
                     }
                     moreLanguagesButton
                 }
-                .padding(.horizontal, 2)
+                .padding(.horizontal, MeeshySpacing.xxs)
             }
         }
         // Seul l'ENREGISTREMENT ferme le choix : pendant qu'on parle, changer
@@ -83,8 +83,8 @@ extension AudioPostComposerView {
             Text(Self.shortDisplayName(for: loc))
                 .font(.footnote.weight(.semibold))
                 .foregroundColor(isSelected ? .white : theme.textPrimary)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
+                .padding(.horizontal, MeeshySpacing.mdPlus)
+                .padding(.vertical, MeeshySpacing.sm)
                 .background(
                     Capsule().fill(
                         isSelected
@@ -109,7 +109,7 @@ extension AudioPostComposerView {
             showLanguagePicker = true
             HapticFeedback.light()
         } label: {
-            HStack(spacing: 4) {
+            HStack(spacing: MeeshySpacing.xs) {
                 Image(systemName: "line.3.horizontal.decrease.circle.fill")
                     .font(.footnote)
                     .accessibilityHidden(true)
@@ -117,8 +117,8 @@ extension AudioPostComposerView {
                     .font(.footnote.weight(.semibold))
             }
             .foregroundColor(MeeshyColors.indigo500)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
+            .padding(.horizontal, MeeshySpacing.mdPlus)
+            .padding(.vertical, MeeshySpacing.sm)
             .background(
                 Capsule().stroke(MeeshyColors.indigo400.opacity(0.4), lineWidth: 1)
             )
@@ -260,7 +260,7 @@ extension AudioPostComposerView {
     /// C'est l'état d'un son rouvert, et le silence s'y lisait comme « ce son
     /// n'a pas de texte » alors qu'il en avait peut-être un.
     func transcriptionPreview(_ t: OnDeviceTranscription?) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
             HStack {
                 Image(systemName: "text.bubble.fill")
                     .font(.footnote)
@@ -273,9 +273,9 @@ extension AudioPostComposerView {
                 Text((t?.language ?? Self.shortDisplayName(for: selectedLocale)).uppercased())
                     .font(.caption2.weight(.semibold))
                     .foregroundColor(theme.textMuted)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .background(Capsule().fill(theme.surface(tint: "A5B4FC")))
+                    .padding(.horizontal, MeeshySpacing.sm)
+                    .padding(.vertical, MeeshySpacing.xxs)
+                    .background(Capsule().fill(theme.surface(tint: MeeshyColors.indigo300Hex)))
             }
 
             let texte = t?.text ?? ""
@@ -304,13 +304,13 @@ extension AudioPostComposerView {
             }
             .frame(minHeight: 44)
         }
-        .padding(16)
+        .padding(MeeshySpacing.lg)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                 .fill(.ultraThinMaterial)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 16)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                         .stroke(MeeshyColors.indigo300.opacity(isDark ? 0.25 : 0.35), lineWidth: 1)
                 )
         )
@@ -336,21 +336,21 @@ extension AudioPostComposerView {
         // Empiler règle les deux d'un coup : le message garde sa phrase
         // entière, les actions gardent leur largeur, et plus rien ne dépend de
         // la langue ni du Dynamic Type.
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
             ligneMessage
             ligneActions
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 9)
+        .padding(.horizontal, MeeshySpacing.md)
+        .padding(.vertical, MeeshySpacing.sm)
         .frame(maxWidth: .infinity, alignment: .leading)
         // Un rectangle arrondi plutôt qu'une capsule : la forme doit tenir les
         // DEUX dispositions, et une capsule sur deux lignes dessine un stade.
         .background(
-            RoundedRectangle(cornerRadius: 18)
+            RoundedRectangle(cornerRadius: MeeshyRadius.lgPlus)
                 .fill(MeeshyColors.error.opacity(isDark ? 0.12 : 0.08))
-                .overlay(RoundedRectangle(cornerRadius: 18)
-                    .stroke(MeeshyColors.error.opacity(0.3), lineWidth: 1))
+                .overlay(RoundedRectangle(cornerRadius: MeeshyRadius.lgPlus)
+                    .stroke(MeeshyColors.error.opacity(MeeshyOpacity.medium), lineWidth: 1))
         )
         // Le détail technique n'est pas montré, mais il n'est pas PERDU : il
         // part dans l'annonce, seul endroit où un diagnostic peut vivre sans
@@ -363,7 +363,7 @@ extension AudioPostComposerView {
 
     /// Ce qui s'est passé.
     private var ligneMessage: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: MeeshySpacing.xsPlus) {
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(.caption)
                 .foregroundColor(MeeshyColors.error)
@@ -379,7 +379,7 @@ extension AudioPostComposerView {
     /// Ce qu'on peut faire.
     @ViewBuilder
     private var ligneActions: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: MeeshySpacing.sm) {
             if recordedURL != nil {
                 actionErreur(String(localized: "common.retry", defaultValue: "Réessayer"),
                              pleine: true, action: retryTranscription)
@@ -418,14 +418,14 @@ extension AudioPostComposerView {
                 .foregroundColor(pleine ? .white : MeeshyColors.indigo400)
                 .lineLimit(1)
                 .fixedSize(horizontal: true, vertical: false)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 6)
+                .padding(.horizontal, MeeshySpacing.sm)
+                .padding(.vertical, MeeshySpacing.xsPlus)
                 .background(
                     Capsule()
                         .fill(pleine ? AnyShapeStyle(MeeshyColors.brandGradient)
                                      : AnyShapeStyle(Color.clear))
                         .overlay(Capsule().stroke(
-                            pleine ? Color.clear : MeeshyColors.indigo400.opacity(0.45),
+                            pleine ? Color.clear : MeeshyColors.indigo400.opacity(MeeshyOpacity.strong),
                             lineWidth: 1))
                 )
         }
@@ -481,7 +481,7 @@ struct ManualTranscriptionEditor: View {
 
     var body: some View {
         NavigationStack {
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.md) {
                 Text(String(localized: "composer.audio.transcription.write.hint",
                             defaultValue: "Écrivez ce qui est dit dans l'enregistrement.",
                             bundle: .main))
@@ -492,16 +492,16 @@ struct ManualTranscriptionEditor: View {
                     .focused($focused)
                     .font(.body)
                     .scrollContentBackground(.hidden)
-                    .padding(10)
+                    .padding(MeeshySpacing.smPlus)
                     .background(
-                        RoundedRectangle(cornerRadius: 14)
-                            .fill(Color.primary.opacity(0.06))
+                        RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                            .fill(Color.primary.opacity(MeeshyOpacity.subtle))
                     )
                     .frame(minHeight: 180)
 
                 Spacer(minLength: 0)
             }
-            .padding(16)
+            .padding(MeeshySpacing.lg)
             .navigationTitle(String(localized: "composer.audio.transcription.title",
                                     defaultValue: "Transcription", bundle: .main))
             .navigationBarTitleDisplayMode(.inline)
@@ -513,9 +513,9 @@ struct ManualTranscriptionEditor: View {
                 ToolbarItem(placement: .principal) {
                     Text(language)
                         .font(.caption2.weight(.semibold))
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .background(Capsule().fill(Color.primary.opacity(0.08)))
+                        .padding(.horizontal, MeeshySpacing.sm)
+                        .padding(.vertical, MeeshySpacing.xxs)
+                        .background(Capsule().fill(Color.primary.opacity(MeeshyOpacity.subtle)))
                         .accessibilityHidden(true)
                 }
                 ToolbarItem(placement: .confirmationAction) {

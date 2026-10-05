@@ -3,7 +3,7 @@ import type { PostVisibility } from '@meeshy/shared/types/post';
 
 /**
  * LE VOCABULAIRE DU FIL DES PUBLICATIONS (#5893) — la forme EXACTE que
- * `GET /api/v1/social/posts?scope=home` sert (`postInclude`,
+ * `GET social.posts?scope=home` sert (`postInclude`,
  * `services/gateway/src/services/posts/postIncludes.ts:367-374`), réduite à
  * ce que `FeedPostCard` (v3.1) LIT — voir § 3.1 de la spécification pour la
  * liste complète des champs retenus et de ceux laissés de côté (menu,

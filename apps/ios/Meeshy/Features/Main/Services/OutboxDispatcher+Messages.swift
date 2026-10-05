@@ -210,28 +210,7 @@ extension OutboxDispatcher {
                     )
                 }
 
-                let ack = await MessageSocketManager.shared.sendWithAttachmentsAsync(
-                    conversationId: item.conversationId,
-                    content: item.content.isEmpty ? nil : item.content,
-                    attachmentIds: uploadedIds,
-                    replyToId: item.replyToId,
-                    storyReplyToId: nil,
-                    originalLanguage: item.originalLanguage,
-                    clientMessageId: item.clientMessageId,
-                    // Lieu partagé rejoué au renvoi — le canal socket porte la
-                    // même clé `location` que le corps REST.
-                    location: item.location,
-                    // Sticker (#4823) : le PNG remonté repart avec ce qu'il
-                    // représente, sinon le destinataire reçoit une image muette.
-                    sticker: item.sticker
-                )
-                guard let ack else {
-                    throw NSError(
-                        domain: "OutboxDispatcher",
-                        code: 502,
-                        userInfo: [NSLocalizedDescriptionKey: "Socket ACK missing for offline audio dispatch"]
-                    )
-                }
+                let serverId = try await replayUploadedAttachments(item, uploadedIds: uploadedIds, kind: "audio")
 
                 // Best-effort cleanup of uploaded tracks. Failure here is
                 // benign — skipped (failed-but-present) track files are
@@ -246,7 +225,7 @@ extension OutboxDispatcher {
 
                 await reconcileSuccessfulMessageSend(
                     clientMessageId: item.clientMessageId,
-                    serverId: ack.messageId,
+                    serverId: serverId,
                     conversationId: item.conversationId
                 )
                 return
@@ -305,26 +284,7 @@ extension OutboxDispatcher {
                     )
                 }
 
-                let ack = await MessageSocketManager.shared.sendWithAttachmentsAsync(
-                    conversationId: item.conversationId,
-                    content: item.content.isEmpty ? nil : item.content,
-                    attachmentIds: uploadedIds,
-                    replyToId: item.replyToId,
-                    storyReplyToId: nil,
-                    originalLanguage: item.originalLanguage,
-                    clientMessageId: item.clientMessageId,
-                    // Lieu partagé rejoué au renvoi — même clé `location` que
-                    // le corps REST.
-                    location: item.location,
-                    sticker: item.sticker
-                )
-                guard let ack else {
-                    throw NSError(
-                        domain: "OutboxDispatcher",
-                        code: 502,
-                        userInfo: [NSLocalizedDescriptionKey: "Socket ACK missing for offline media dispatch"]
-                    )
-                }
+                let serverId = try await replayUploadedAttachments(item, uploadedIds: uploadedIds, kind: "media")
 
                 for path in uploadedPaths {
                     do { try FileManager.default.removeItem(atPath: path) } catch {
@@ -334,7 +294,7 @@ extension OutboxDispatcher {
 
                 await reconcileSuccessfulMessageSend(
                     clientMessageId: item.clientMessageId,
-                    serverId: ack.messageId,
+                    serverId: serverId,
                     conversationId: item.conversationId
                 )
                 return
@@ -346,12 +306,20 @@ extension OutboxDispatcher {
             // source> » au destinataire (décision user, invariant produit).
             let copyAttachmentsFromMessageId = try await resolveCopyAttachmentsFromMessageId(for: item)
 
+            // La protection armée à l'envoi (#8303) — flou, vue unique, durée
+            // et flamme-œil. Le rejeu la perdait : un envoi protégé mis en file
+            // repartait en clair.
+            let protection = item.replayProtection
             let request = SendMessageRequest(
                 content: item.content,
                 replyToId: item.replyToId,
                 forwardedFromId: item.forwardedFromId,
                 forwardedFromConversationId: item.forwardedFromConversationId,
                 attachmentIds: item.attachmentIds,
+                ephemeralDuration: protection.ephemeralDurationSeconds,
+                isViewOnce: protection.wireIsViewOnce,
+                isBlurred: protection.wireIsBlurred,
+                effectFlags: protection.wireEffectFlags.isEmpty ? nil : protection.wireEffectFlags.rawValue,
                 clientMessageId: item.clientMessageId,
                 // Lieu partagé rejoué au renvoi, comme pour un post et un
                 // commentaire : clé top-level `location`, omise quand nil.
@@ -426,6 +394,61 @@ extension OutboxDispatcher {
             )
         }
         // Unknown namespace prefix — stale row, accept so the flusher removes it.
+    }
+
+    // MARK: - Rejeu des pièces téléversées (#8350)
+
+    /// Le corps REST d'un média PROTÉGÉ rejoué depuis la file — `nil` pour un
+    /// média non protégé, qui garde le canal socket.
+    ///
+    /// Les branches média repartaient toutes par `sendWithAttachmentsAsync`,
+    /// qui ne transporte aucune protection : une photo floutée, à vue unique,
+    /// éphémère ou flamme-œil capturée hors ligne repartait EN CLAIR. La
+    /// flamme-œil ne part jamais par socket (#8303) ; le POST porte tout.
+    static func protectedMediaReplayRequest(for item: OfflineQueueItem, uploadedIds: [String]) -> SendMessageRequest? {
+        let protection = item.replayProtection
+        guard !protection.isEmpty else { return nil }
+        return SendMessageRequest(
+            content: item.content,
+            originalLanguage: item.originalLanguage,
+            replyToId: item.replyToId,
+            attachmentIds: uploadedIds,
+            ephemeralDuration: protection.ephemeralDurationSeconds,
+            isViewOnce: protection.wireIsViewOnce,
+            isBlurred: protection.wireIsBlurred,
+            effectFlags: protection.wireEffectFlags.isEmpty ? nil : protection.wireEffectFlags.rawValue,
+            clientMessageId: item.clientMessageId,
+            location: item.location,
+            sticker: item.sticker
+        )
+    }
+
+    /// Envoie le message qui porte les pièces que la file vient de téléverser,
+    /// et rend l'identifiant serveur : par le POST quand il est protégé, par le
+    /// socket sinon (lieu et sticker rejoués sous les mêmes clés que le REST).
+    func replayUploadedAttachments(_ item: OfflineQueueItem, uploadedIds: [String], kind: String) async throws -> String {
+        if let request = Self.protectedMediaReplayRequest(for: item, uploadedIds: uploadedIds) {
+            return try await MessageService.shared.send(conversationId: item.conversationId, request: request).id
+        }
+        let ack = await MessageSocketManager.shared.sendWithAttachmentsAsync(
+            conversationId: item.conversationId,
+            content: item.content.isEmpty ? nil : item.content,
+            attachmentIds: uploadedIds,
+            replyToId: item.replyToId,
+            storyReplyToId: nil,
+            originalLanguage: item.originalLanguage,
+            clientMessageId: item.clientMessageId,
+            location: item.location,
+            sticker: item.sticker
+        )
+        guard let ack else {
+            throw NSError(
+                domain: "OutboxDispatcher",
+                code: 502,
+                userInfo: [NSLocalizedDescriptionKey: "Socket ACK missing for offline \(kind) dispatch"]
+            )
+        }
+        return ack.messageId
     }
 
     // MARK: - Edit Message

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- #7307 — la teinte de la petite icône de notification : brandPrimary
+         (MeeshyColors.swift ; ios-indigo-500 dans packages/design-tokens/ios.css). -->
+    <color name="meeshy_notification_accent">#6366F1</color>
+</resources>

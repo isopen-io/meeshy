@@ -1,13 +1,7 @@
 import { electFocus } from '@/lib/lens/law';
 import type { Candidate } from '@/lib/lens/law';
 
-import {
-  FOCUS_CARD_MARGIN_VERTICAL,
-  FOCUS_LOUPE_GAIN,
-  HIGH_VELOCITY_THRESHOLD,
-  ROW_PADDING_HORIZONTAL,
-  SUSTAINED_SCROLL_MS,
-} from './metrics';
+import { HIGH_VELOCITY_THRESHOLD, SUSTAINED_SCROLL_MS } from './metrics';
 
 /**
  * LES LOIS DE L'ÉLECTION DU FIL (#5648) — miroir de
@@ -109,33 +103,13 @@ export const armingLaw = {
 
 /**
  * `FocalScrollPerspective.loupeScale` (#6586/#6588) — le message ÉLU grandit
- * de `FOCUS_LOUPE_GAIN`, autour de son centre ; ses voisins restent à plat
- * (directive 2026-08-24 : « aucune animation entre les messages »). Le gain
- * est écrêté pour qu'un long message ne déborde jamais de la marge verticale
- * de sa carte (`FOCUS_CARD_MARGIN_VERTICAL`), ni de la gouttière horizontale
- * de la rangée (`ROW_PADDING_HORIZONTAL`) — `width`/`height` sont la boîte
- * NON transformée de la rangée (mesurée hors de tout `scale` déjà posé, sans
- * quoi une mesure prise APRÈS l'application grandirait le gain à l'infini).
+ * de la loupe, autour de son centre, écrêtée à la marge verticale de sa carte
+ * et à la gouttière de la rangée. DEPUIS #8147 la loi vit dans
+ * `@meeshy/shared/utils/focal-metrics` — partagée avec iOS, et avec le
+ * dépliage d'un message long ; `metrics.test.ts` tient les cotes dérivées de
+ * Swift (`check-curve.mjs`) égales à celles de la loi partagée.
  */
-export function focalLoupeScale({
-  isFocused,
-  reducedMotion,
-  width,
-  height,
-}: {
-  readonly isFocused: boolean;
-  readonly reducedMotion: boolean;
-  readonly width: number;
-  readonly height: number;
-}): number {
-  if (!isFocused || reducedMotion || width <= 0 || height <= 0) return 1;
-  const gain = Math.min(
-    FOCUS_LOUPE_GAIN,
-    (2 * FOCUS_CARD_MARGIN_VERTICAL) / height,
-    (2 * ROW_PADDING_HORIZONTAL) / width,
-  );
-  return 1 + gain;
-}
+export { focalLoupeScale } from '@meeshy/shared/utils/focal-metrics';
 
 /**
  * La vitesse verticale du geste, en px/s, SIGNÉE — l'équivalent honnête de

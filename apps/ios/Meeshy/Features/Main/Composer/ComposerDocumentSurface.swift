@@ -300,6 +300,7 @@ struct ComposerDocumentSurface: View {
                 ComposerMentionStrip(
                     controller: mentionBox.controller,
                     currentText: text,
+                    backdrop: .plateau,
                     onSelect: { updated in text = updated }
                 )
                 .transition(.move(edge: .top).combined(with: .opacity))
@@ -311,8 +312,8 @@ struct ComposerDocumentSurface: View {
             if let contentLanguageAccessory {
                 contentLanguageAccessory
                     .frame(maxWidth: .infinity, alignment: .trailing)
-                    .padding(.horizontal, 16)
-                    .padding(.top, 6)
+                    .padding(.horizontal, MeeshySpacing.lg)
+                    .padding(.top, MeeshySpacing.xsPlus)
             }
             Spacer(minLength: 0)
             backgroundStrip
@@ -378,6 +379,7 @@ struct ComposerDocumentSurface: View {
             slideRailSlot: slideRailSlot,
             overflowMenu: overflowMenu,
             onClose: onClose,
+            plateauTint: plateauTint
         )
     }
 
@@ -393,11 +395,11 @@ struct ComposerDocumentSurface: View {
             // fond est choisi, la scène 9:16 (peinte de ce fond) occupe le haut
             // de l'écran document, arrondie ; le texte devient la DESCRIPTION,
             // sous la scène. Plus de switch vers l'atelier plein écran.
-            VStack(spacing: 8) {
+            VStack(spacing: MeeshySpacing.sm) {
                 EmbeddedSceneCanvas(
                     slide: sceneSlide,
                     aspectRatio: sceneAspectRatio,
-                    cornerRadius: 22,
+                    cornerRadius: MeeshyRadius.xlPlus,
                     onItemTapped: onSceneItemTapped,
                     onBackgroundTapped: onSceneBackgroundTapped,
                     onBackgroundLongPressed: onSceneBackgroundLongPressed,
@@ -414,7 +416,7 @@ struct ComposerDocumentSurface: View {
                 // de scène, exactement ce que la tâche 4.3 de la planche a
                 // fermé en faisant du mood une SURFACE plutôt qu'un cas.
                 .padding(.horizontal, ComposerRailGeometry.sceneInset(railsShown: false))
-                .padding(.top, 8)
+                .padding(.top, MeeshySpacing.sm)
                 sceneDescriptionField
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -440,8 +442,8 @@ struct ComposerDocumentSurface: View {
         // d'être recouvert.
         Group {
             if let backgroundSound {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(alignment: .center, spacing: 12) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
+                    HStack(alignment: .center, spacing: MeeshySpacing.md) {
                         avatarView
                         ComposerAvatarSoundBadge(sound: backgroundSound,
                                                  onTap: onEditBackgroundSound)
@@ -453,17 +455,17 @@ struct ComposerDocumentSurface: View {
                     foregroundSoundCard
                 }
             } else {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
+                    HStack(alignment: .top, spacing: MeeshySpacing.md) {
                         // **La colonne d'outils suit l'AVATAR, pas le champ**
                         // (#5082). Posée en frère de `content`, elle se rangeait
                         // sous `textOnlyField` — qui s'étend — et retombait à
                         // `y = 428` au lieu de `155`. Dans la colonne gauche de
                         // l'en-tête, elle reste sous l'avatar quelle que soit la
                         // hauteur prise par le texte.
-                        VStack(alignment: .leading, spacing: 12) {
+                        VStack(alignment: .leading, spacing: MeeshySpacing.md) {
                             avatarView
-                                .padding(.top, 10)
+                                .padding(.top, MeeshySpacing.smPlus)
                             toolRail
                         }
                         textOnlyField
@@ -505,8 +507,8 @@ struct ComposerDocumentSurface: View {
                 isDark: true,
                 onEdit: onEditForegroundSound.map { rappel in { rappel(son) } }
             )
-            .padding(.horizontal, 16)
-            .padding(.top, 4)
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.top, MeeshySpacing.xs)
             .modifier(ComposerSoundActionsMenu(
                 supprimer: onDeleteForegroundSound.map { rappel in { rappel(son) } }))
         }
@@ -525,7 +527,7 @@ struct ComposerDocumentSurface: View {
             // déjà les couleurs du vrai avatar.
             thumbHash: AuthManager.shared.currentUser?.avatarThumbHash
         )
-        .padding(.leading, 16)
+        .padding(.leading, MeeshySpacing.lg)
         .accessibilityHidden(true)
     }
 
@@ -535,8 +537,8 @@ struct ComposerDocumentSurface: View {
                 Text(ComposerDocumentCopy.placeholder)
                     .font(.body)
                     .foregroundColor(MeeshyColors.textSecondary(isDark: true))
-                    .padding(.horizontal, 16)
-                    .padding(.top, 12)
+                    .padding(.horizontal, MeeshySpacing.lg)
+                    .padding(.top, MeeshySpacing.md)
                     .allowsHitTesting(false)
             }
             TextEditor(text: $text)
@@ -545,8 +547,8 @@ struct ComposerDocumentSurface: View {
                 .foregroundColor(MeeshyColors.textPrimary(isDark: true))
                 .font(.body)
                 .frame(minHeight: 120)
-                .padding(.horizontal, 12)
-                .padding(.top, 4)
+                .padding(.horizontal, MeeshySpacing.md)
+                .padding(.top, MeeshySpacing.xs)
                 .accessibilityLabel(Text(ComposerDocumentCopy.placeholder))
         }
     }
@@ -559,8 +561,8 @@ struct ComposerDocumentSurface: View {
                 Text(ComposerDocumentCopy.placeholder)
                     .font(.callout)
                     .foregroundColor(MeeshyColors.textSecondary(isDark: true))
-                    .padding(.horizontal, 16)
-                    .padding(.top, 8)
+                    .padding(.horizontal, MeeshySpacing.lg)
+                    .padding(.top, MeeshySpacing.sm)
                     .allowsHitTesting(false)
             }
             TextEditor(text: $text)
@@ -569,7 +571,7 @@ struct ComposerDocumentSurface: View {
                 .foregroundColor(MeeshyColors.textPrimary(isDark: true))
                 .font(.callout)
                 .frame(height: 56)
-                .padding(.horizontal, 12)
+                .padding(.horizontal, MeeshySpacing.md)
                 .accessibilityLabel(Text(ComposerDocumentCopy.placeholder))
         }
     }
@@ -618,7 +620,7 @@ struct ComposerDocumentSurface: View {
                     // Le padding vertical vit ICI, dans le contenu défilant :
                     // posé sur le `ScrollView`, il rognerait la zone tactile des
                     // icônes au lieu de les aérer.
-                    .padding(.vertical, 2)
+                    .padding(.vertical, MeeshySpacing.xxs)
                 }
                 if let toolRowTrailingAccessory {
                     // **L'occultation, en dégradé de la teinte du plateau.** Un
@@ -639,7 +641,7 @@ struct ComposerDocumentSurface: View {
                         )
                 }
             }
-            .padding(16)
+            .padding(MeeshySpacing.lg)
             .accessibilityElement(children: .contain)
             .accessibilityLabel(Text(ComposerDocumentCopy.publicationAccessories))
         }
@@ -724,7 +726,10 @@ struct ComposerDocumentSurface: View {
                         // La porte du FOND garde sa place derrière l'emoji — sa
                         // position fut mesurée (elle fait NAÎTRE la scène, vue
                         // `1b`), et passer en colonne ne change pas cette raison.
-                        if tool == .emoji, onPickBackground != nil {
+                        // Le Texte, l'autre naissance de la scène, s'y intercale
+                        // (#9137).
+                        if tool == ComposerDocumentTool.paletteAnchor(in: tools),
+                           onPickBackground != nil {
                             backgroundColorToggle
                         }
                     }
@@ -737,10 +742,10 @@ struct ComposerDocumentSurface: View {
                     // site qui connaît l'axe, sans toucher la tuile que la
                     // rangée d'accessoires partage encore.
                 }
-                .padding(.vertical, 2)
+                .padding(.vertical, MeeshySpacing.xxs)
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 12)
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.top, MeeshySpacing.md)
             .accessibilityElement(children: .contain)
             .accessibilityLabel(Text(ComposerDocumentCopy.toolRow))
         }
@@ -751,29 +756,19 @@ struct ComposerDocumentSurface: View {
             lastTappedTool = tool
             onTool?(tool)
         } label: {
-            VStack(spacing: 6) {
-                Image(systemName: tool.symbolName)
-                    .font(.title3)
-                    .symbolRenderingMode(.hierarchical)
-                    .composerToolBounce(active: lastTappedTool == tool)
-                Text(ComposerDocumentCopy.label(tool))
-                    .font(.caption2)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
-            }
-            .foregroundColor(MeeshyColors.textSecondary(isDark: true))
-            // **Fixe, plus minimale** (#5082). `minWidth` servait la RANGÉE :
-            // une tuile large y passait inaperçue, les voisines défilant. La
-            // colonne est le seul consommateur restant, et elle dessine un bord
-            // droit — « Mentionner » y dépassait ses voisines de douze points.
-            .frame(width: ComposerDocumentToolRowFit.minimumTileWidth)
-            .padding(.vertical, 8)
-            .padding(.horizontal, 6)
-            .overlay(
-                RoundedRectangle(cornerRadius: 14)
-                    .strokeBorder(MeeshyColors.textSecondary(isDark: true).opacity(0.22),
-                                  lineWidth: 1)
-            )
+            // **Un petit bouton de verre, SANS légende** (directive porteur
+            // 2026-09-27 : « enlève les captions partout »), le même dessin que
+            // les rails de la scène. Le nom de l'outil reste celui que
+            // VoiceOver annonce.
+            Image(systemName: tool.symbolName)
+                .font(.title3)
+                .symbolRenderingMode(.hierarchical)
+                .composerToolBounce(active: lastTappedTool == tool)
+                .foregroundColor(MeeshyColors.textSecondary(isDark: true))
+                .frame(width: ComposerDocumentToolRowFit.minimumTileWidth,
+                       height: ComposerDocumentToolRowFit.minimumTileWidth)
+                .adaptiveLiquidGlass(in: Circle(), tint: plateauTint.opacity(0.55), interactive: true)
+                .contentShape(Circle())
         }
         .accessibilityLabel(Text(ComposerDocumentCopy.label(tool)))
     }
@@ -791,32 +786,16 @@ struct ComposerDocumentSurface: View {
             // Même TUILE que ses voisines (#4071) : la rangée se lit comme une
             // famille, et un bouton qui porterait seul un glyphe nu au milieu de
             // six tuiles nommées se lirait comme un accident, pas comme un choix.
-            VStack(spacing: 6) {
-                Image(systemName: "paintpalette")
-                    .font(.title3)
-                    .symbolRenderingMode(.hierarchical)
-                Text(ComposerDocumentCopy.backgroundShort)
-                    .font(.caption2)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
-            }
-            .foregroundColor(showColorPalette
-                ? Color(hex: MeeshyColors.brandPrimaryHex)
-                : MeeshyColors.textSecondary(isDark: true))
-            // **Fixe, plus minimale** (#5082). `minWidth` servait la RANGÉE :
-            // une tuile large y passait inaperçue, les voisines défilant. La
-            // colonne est le seul consommateur restant, et elle dessine un bord
-            // droit — « Mentionner » y dépassait ses voisines de douze points.
-            .frame(width: ComposerDocumentToolRowFit.minimumTileWidth)
-            .padding(.vertical, 8)
-            .padding(.horizontal, 6)
-            .overlay(
-                RoundedRectangle(cornerRadius: 14)
-                    .strokeBorder(showColorPalette
-                        ? Color(hex: MeeshyColors.brandPrimaryHex).opacity(0.55)
-                        : MeeshyColors.textSecondary(isDark: true).opacity(0.22),
-                                  lineWidth: 1)
-            )
+            Image(systemName: "paintpalette")
+                .font(.title3)
+                .symbolRenderingMode(.hierarchical)
+                .foregroundColor(showColorPalette
+                    ? Color(hex: MeeshyColors.brandPrimaryHex)
+                    : MeeshyColors.textSecondary(isDark: true))
+                .frame(width: ComposerDocumentToolRowFit.minimumTileWidth,
+                       height: ComposerDocumentToolRowFit.minimumTileWidth)
+                .adaptiveLiquidGlass(in: Circle(), tint: plateauTint.opacity(0.55), interactive: true)
+                .contentShape(Circle())
         }
         .accessibilityLabel(Text(ComposerDocumentCopy.background))
         // Le doc-comment ci-dessus écrivait la règle à l'envers — « Active

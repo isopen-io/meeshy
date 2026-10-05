@@ -31,6 +31,18 @@ public struct LoginResponseData: Decodable, Sendable {
     /// une panne, donc irrattrapable par l'écran.
     public let phoneOwnershipConflict: Bool?
 
+    /// #8035 — `POST /auth/login` sur une adresse inconnue sert un 200 SANS
+    /// session : `status == "verification-required"`, l'adresse, et si le
+    /// compte vient d'être créé. Lu par `pendingEmailVerification(typedIdentifier:)`.
+    /// #8055 — `POST /auth/register` sans numéro de téléphone sert la même
+    /// branche (`accountCreated: true`) : le compte n'est pas encore actif.
+    public let status: String?
+    public let accountCreated: Bool?
+    public let email: String?
+    /// #8083 — servi avec `verification-required` : le jeton d'attente de cet
+    /// appareil, pour `POST /auth/verification/status`.
+    public let pendingSessionToken: String?
+
     public init(
         user: MeeshyUser?,
         token: String?,
@@ -38,7 +50,11 @@ public struct LoginResponseData: Decodable, Sendable {
         expiresIn: Int?,
         requires2FA: Bool?,
         twoFactorToken: String?,
-        phoneOwnershipConflict: Bool? = nil
+        phoneOwnershipConflict: Bool? = nil,
+        status: String? = nil,
+        accountCreated: Bool? = nil,
+        email: String? = nil,
+        pendingSessionToken: String? = nil
     ) {
         self.user = user
         self.token = token
@@ -47,6 +63,10 @@ public struct LoginResponseData: Decodable, Sendable {
         self.requires2FA = requires2FA
         self.twoFactorToken = twoFactorToken
         self.phoneOwnershipConflict = phoneOwnershipConflict
+        self.status = status
+        self.accountCreated = accountCreated
+        self.email = email
+        self.pendingSessionToken = pendingSessionToken
     }
 }
 
@@ -118,6 +138,18 @@ public struct RegisterRequest: Encodable, Sendable {
     public let username: String?
     public let firstName: String?
     public let lastName: String?
+    /// Le code du lien d'invitation (#8058, #8075). La passerelle rattache le
+    /// compte créé à son parrain, activé ou non, et un code invalide ne bloque
+    /// jamais l'inscription. `nil` ⇒ absent de la charge.
+    public let affiliateToken: String?
+    /// La clé de visite de `/affiliate/track-visit`, quand le client en tient
+    /// une. Ne voyage qu'avec `affiliateToken`.
+    public let affiliateSessionKey: String?
+    /// « Ce n'est pas moi » (#8214 × #8216) : l'adresse est détenue par un
+    /// autre compte, celui-ci la REVENDIQUE. La passerelle crée le compte sans
+    /// session et envoie un code à l'adresse ; seule sa preuve la lui donne.
+    /// `nil` ⇒ absent de la charge, jamais `false`.
+    public let claimEmail: Bool?
 
     public init(
         displayName: String? = nil,
@@ -129,8 +161,14 @@ public struct RegisterRequest: Encodable, Sendable {
         regionalLanguage: String? = nil,
         username: String? = nil,
         firstName: String? = nil,
-        lastName: String? = nil
+        lastName: String? = nil,
+        affiliateToken: String? = nil,
+        affiliateSessionKey: String? = nil,
+        claimEmail: Bool? = nil
     ) {
+        self.claimEmail = claimEmail == true ? true : nil
+        self.affiliateToken = affiliateToken
+        self.affiliateSessionKey = affiliateToken == nil ? nil : affiliateSessionKey
         self.displayName = displayName
         self.email = email
         self.password = password
@@ -141,6 +179,35 @@ public struct RegisterRequest: Encodable, Sendable {
         self.username = username
         self.firstName = firstName
         self.lastName = lastName
+    }
+
+    /// La même charge, portant le code d'invitation s'il a la forme d'un code
+    /// (`ReferralCode.normalized`). Sans code, la charge part sans aucune des
+    /// deux clés : une clé de session seule n'a rien à rattacher.
+    public func referred(byCode code: String?, sessionKey: String? = nil) -> RegisterRequest {
+        let token = code.flatMap(ReferralCode.normalized)
+        let key = sessionKey?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return RegisterRequest(
+            displayName: displayName, email: email, password: password,
+            phoneNumber: phoneNumber, phoneCountryCode: phoneCountryCode,
+            systemLanguage: systemLanguage, regionalLanguage: regionalLanguage,
+            username: username, firstName: firstName, lastName: lastName,
+            affiliateToken: token,
+            affiliateSessionKey: (key?.isEmpty ?? true) ? nil : key,
+            claimEmail: claimEmail
+        )
+    }
+
+    /// La même charge, qui REVENDIQUE l'adresse (#8214 × #8216).
+    public func claimingEmail() -> RegisterRequest {
+        RegisterRequest(
+            displayName: displayName, email: email, password: password,
+            phoneNumber: phoneNumber, phoneCountryCode: phoneCountryCode,
+            systemLanguage: systemLanguage, regionalLanguage: regionalLanguage,
+            username: username, firstName: firstName, lastName: lastName,
+            affiliateToken: affiliateToken, affiliateSessionKey: affiliateSessionKey,
+            claimEmail: true
+        )
     }
 }
 
@@ -413,6 +480,10 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
     public let voiceSampleDurationMs: Int?
     public let voiceQuality: Double?
 
+    /// L'état d'activation du compte (#8239, loi #8238) — servi pour SOI
+    /// seulement (connexion, `/auth/me`) ; `nil` sur une passerelle antérieure.
+    public let activation: UserActivation?
+
     public init(
         id: String, username: String, email: String? = nil,
         firstName: String? = nil, lastName: String? = nil,
@@ -436,7 +507,8 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
         voicePublic: Bool? = nil,
         voiceSampleUrl: String? = nil,
         voiceSampleDurationMs: Int? = nil,
-        voiceQuality: Double? = nil
+        voiceQuality: Double? = nil,
+        activation: UserActivation? = nil
     ) {
         self.id = id
         self.username = username
@@ -475,6 +547,7 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
         self.voiceSampleUrl = voiceSampleUrl
         self.voiceSampleDurationMs = voiceSampleDurationMs
         self.voiceQuality = voiceQuality
+        self.activation = activation
     }
 
     /// Returns a new MeeshyUser with the specified profile fields replaced.
@@ -518,7 +591,8 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
             voicePublic: voicePublic ?? self.voicePublic,
             voiceSampleUrl: voiceSampleUrl,
             voiceSampleDurationMs: voiceSampleDurationMs,
-            voiceQuality: voiceQuality
+            voiceQuality: voiceQuality,
+            activation: activation
         )
     }
 
@@ -691,15 +765,40 @@ public struct SavedAccount: Codable, Identifiable, Sendable {
     public let displayName: String?
     public let avatarURL: String?
     public let lastActiveAt: Date
+    /// #8286 — la session de ce compte survit-elle quand on le QUITTE ?
+    /// `true` pour le premier compte de l'appareil ; au-delà, la case
+    /// « Rester connecté sur cet appareil » de la connexion.
+    public let keepsSession: Bool
 
-    public var shortName: String { displayName ?? username }
+    /// Un nom d'affichage vide ou blanc n'en est pas un : le pseudo le remplace.
+    public var shortName: String {
+        guard let name = displayName?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty else { return username }
+        return name
+    }
 
-    public init(id: String, username: String, displayName: String?, avatarURL: String?, lastActiveAt: Date) {
+    public init(id: String, username: String, displayName: String?, avatarURL: String?, lastActiveAt: Date, keepsSession: Bool = true) {
         self.id = id
         self.username = username
         self.displayName = displayName
         self.avatarURL = avatarURL
         self.lastActiveAt = lastActiveAt
+        self.keepsSession = keepsSession
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, username, displayName, avatarURL, lastActiveAt, keepsSession
+    }
+
+    /// Une entrée écrite avant #8286 n'a pas `keepsSession` : tout compte
+    /// gardait alors sa session, l'absence vaut donc `true`.
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        username = try container.decode(String.self, forKey: .username)
+        displayName = try container.decodeIfPresent(String.self, forKey: .displayName)
+        avatarURL = try container.decodeIfPresent(String.self, forKey: .avatarURL)
+        lastActiveAt = try container.decode(Date.self, forKey: .lastActiveAt)
+        keepsSession = try container.decodeIfPresent(Bool.self, forKey: .keepsSession) ?? true
     }
 }
 

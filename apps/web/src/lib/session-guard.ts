@@ -1,3 +1,4 @@
+import { ADMIN_ROUTE_KEYS, type AdminFicheRouteKey, type AdminListRouteKey } from './admin/admin-routes';
 import type { SessionState } from './api/session';
 import { safeReturnPath } from './view/magic-link';
 
@@ -70,7 +71,7 @@ export type RouteKey =
   | 'feed'
   /**
    * MON HUMEUR (#7462) — PRIVÉE, comme `storyCompose` et `postCompose` :
-   * `POST /api/v1/posts` (type `STATUS`) porte `requiredAuth`
+   * `POST posts.root` (type `STATUS`) porte `requiredAuth`
    * (`routes/posts/core.ts:370-384`), et le corpus qui pré-sélectionne
    * l'emoji courant (`GET /social/posts?scope=statuses`) rend 401 sans compte.
    * Non déclarée ici, la route était PUBLIQUE par défaut (voir `routeKey`
@@ -82,18 +83,20 @@ export type RouteKey =
   | 'statusCompose'
   /**
    * PUBLIER DANS LE FIL (#7449) — PRIVÉE, comme `feed` et `storyCompose` :
-   * `POST /api/v1/posts` exige une session (`fastify.authenticate`), et
-   * `POST /api/v1/uploads` aussi. Non déclarée ici, elle serait PUBLIQUE par
+   * `POST posts.root` exige une session (`fastify.authenticate`), et
+   * `POST uploads.root` aussi. Non déclarée ici, elle serait PUBLIQUE par
    * défaut (voir `routeKey` plus bas) : un visiteur sans compte composerait
    * une publication entière — texte, médias montés — avant de se faire
    * refuser à l'envoi. Le travail perdu est le coût exact de l'oubli.
    */
   | 'postCompose'
+  /** MODIFIER UNE PUBLICATION (#9317) — seul son auteur la modifie. */
+  | 'postEdit'
   /**
    * CRÉER UN LIEN, CRÉER UNE COMMUNAUTÉ (#7462, revue) — PRIVÉES, les deux
-   * dernières portes `/…/new` : `POST /api/v1/links` exige un compte
+   * dernières portes `/…/new` : `POST links.root` exige un compte
    * (`routes/links/creation.ts:24-33`, `requireAuth: true`,
-   * `allowAnonymous: false`) et `POST /api/v1/communities` aussi
+   * `allowAnonymous: false`) et `POST communities.root` aussi
    * (`routes/communities/core.ts:387-388`, `fastify.authenticate`). Non
    * déclarées, elles étaient PUBLIQUES par défaut : un visiteur sans compte
    * remplissait nom, description et options avant le refus. Le témoin de la
@@ -101,6 +104,21 @@ export type RouteKey =
    */
   | 'shareLinkNew'
   | 'communityNew'
+  /**
+   * LES TROIS AUTRES FAMILLES DE « MES LIENS » (#6408, #6409, #6410) —
+   * PRIVÉES : chacune ne lit que des ports authentifiés
+   * (`GET /tracking-links/user/me`, `GET /affiliate/tokens`,
+   * `GET /communities/mine`) et n'a rien à montrer à un visiteur sans compte.
+   * Non déclarées, elles seraient PUBLIQUES par défaut : l'écran se peindrait
+   * en squelette sans fin, ou une création se remplirait avant le refus.
+   */
+  | 'myTrackingLinks'
+  | 'myTrackingLinkNew'
+  | 'myTrackingLink'
+  | 'affiliateLinks'
+  | 'affiliateLinkNew'
+  | 'communityLinks'
+  | 'communityLink'
   /**
    * LE PROFIL PUBLIC ET LE MOT-CLÉ (#7032) — PRIVÉES, comme `feed`. Les deux
    * ports qu'elles lisent exigent une session : `GET /directory/people/:handle`
@@ -184,6 +202,15 @@ export type RouteKey =
   | 'admAnonymous'
   | 'adminAnonymousOne'
   | 'admAnonymousOne'
+  /**
+   * LA VUE DE DIEU (#8876) — TOUTES les clés d'administration, dans les deux
+   * espaces, DÉRIVÉES de `admin-routes.ts` : une section ou une fiche ajoutée à
+   * la table est PRIVÉE sans qu'on ait à y penser. Écrites à la main, vingt
+   * clés de plus auraient laissé l'oubli d'une seule ouvrir une adresse
+   * d'administration à un visiteur sans session.
+   */
+  | AdminListRouteKey
+  | AdminFicheRouteKey
   | 'login'
   | 'signup'
   | 'welcome'
@@ -279,16 +306,30 @@ const PRIVATE_ROUTES: ReadonlySet<string> = new Set<RouteKey>([
   /* « MES STORIES » (#6149) — voir la raison écrite sur `RouteKey` plus haut. */
   'storiesMine',
   'storyCompose',
-  'story',
+  /* `story` N'EST PLUS PRIVÉE (#9149) — `/story/:id` est l'adresse d'un lien
+     PARTAGÉ : le lecteur sert la story publique à un visiteur sans compte
+     (`GET /posts/:id`, `optionalAuth` + `anonymousPostGate`) et pose
+     l'invitation par-dessus (`components/visitor-invitation.tsx`). */
   'feed',
   /* MON HUMEUR (#7462) — voir la raison écrite sur `RouteKey` plus haut. */
   'statusCompose',
   /* PUBLIER DANS LE FIL (#7449) — voir la raison écrite sur `RouteKey` plus haut. */
   'postCompose',
+  /* MODIFIER UNE PUBLICATION (#9317) — voir la raison écrite sur `RouteKey`. */
+  'postEdit',
   /* CRÉER UN LIEN, CRÉER UNE COMMUNAUTÉ (#7462, revue) — voir la raison
      écrite sur `RouteKey` plus haut. */
   'shareLinkNew',
   'communityNew',
+  /* LES TROIS AUTRES FAMILLES DE « MES LIENS » (#6408, #6409, #6410) — voir la
+     raison écrite sur `RouteKey` plus haut. */
+  'myTrackingLinks',
+  'myTrackingLinkNew',
+  'myTrackingLink',
+  'affiliateLinks',
+  'affiliateLinkNew',
+  'communityLinks',
+  'communityLink',
   /* LES DEUX ADRESSES DU TEXTE ENRICHI (#7032) — privées, leurs ports étant
      authentifiés ; voir la raison écrite sur `RouteKey` plus haut. */
   'userProfile',
@@ -316,6 +357,9 @@ const PRIVATE_ROUTES: ReadonlySet<string> = new Set<RouteKey>([
   'admAnonymous',
   'adminAnonymousOne',
   'admAnonymousOne',
+  /* LA VUE DE DIEU (#8876) — le reste, dérivé de la table des sections : voir
+     la raison écrite sur `RouteKey` plus haut. */
+  ...ADMIN_ROUTE_KEYS,
 ]);
 const AUTH_ROUTES: ReadonlySet<string> = new Set<RouteKey>(['login', 'signup', 'welcome', 'magicLink', 'forgotPassword']);
 

@@ -75,8 +75,14 @@ final class ComposerSceneBandTests: XCTestCase {
     /// > qui les en sort est une seconde question, que le critère ne posait
     /// > pas : **sur QUOI ce contrôle agit-il ?** Un critère de FORME ne peut
     /// > pas répondre à une question de PORTÉE.
+    ///
+    /// **Le CADRE y entre au #8414** (maquette plein écran, `iPad.dc.html`), et
+    /// il passe la question de PORTÉE : il agit sur la SCÈNE — son cadrage et
+    /// le fond de ses bandes —, jamais sur un objet posé. Il partage d'ailleurs
+    /// la porte de la palette : « Fond » ouvre l'une ou l'autre selon qu'un
+    /// média occupe le fond.
     func test_lesContextes_sontCeuxDeLaPlanche() {
-        XCTAssertEqual(Set(ComposerSceneBand.allCases.map(\.rawValue)), ["palette"])
+        XCTAssertEqual(Set(ComposerSceneBand.allCases.map(\.rawValue)), ["palette", "frame"])
     }
 
     // MARK: - Le `⋯` rouvre la palette là où la rangée d'outils a disparu
@@ -188,8 +194,10 @@ final class ComposerSceneBandTests: XCTestCase {
     /// > ce dépôt (budget de 1200 lignes), et le nom change à chaque fois.
     func test_leSocle_neCedeJamaisAUneBande() throws {
         let code = try source("MeeshyComposerHost.swift")
-        guard let corps = declarationBody(startingAt: "var composerStack: some View", in: code) else {
-            return XCTFail("`composerStack` est introuvable — la garde doit être re-pointée, "
+        // **`socleSlot`** depuis #8387 : l'encart du bas est un nœud nominal,
+        // et sa condition a quitté `composerStack` avec lui.
+        guard let corps = declarationBody(startingAt: "var socleSlot: some View", in: code) else {
+            return XCTFail("`socleSlot` est introuvable — la garde doit être re-pointée, "
                              + "comme elle l'a été le 2026-09-05 quand la pile a quitté le `body`")
         }
         let compacte = compact(corps)
@@ -203,8 +211,8 @@ final class ComposerSceneBandTests: XCTestCase {
         // `HStack` vide en dessous. Toujours PAS une bande — la garde négative
         // ci-dessous continue de le vérifier.
         XCTAssertTrue(
-            compacte.contains(compact("if !chromeOwner.assembles(.publish) && !paintedSocleZones.isEmpty { socle }")),
-            "Le socle est monté par la seule PROPRIÉTÉ DU CHROME (et ses zones), sur une seule ligne lisible."
+            compacte.contains(compact("if !chromeOwner.assembles(.publish) && !paintedSocleZones.isEmpty { let servi = ComposerToolFocus.isShown(.socle, toolIsOpen: sceneToolOwnsScreen) socle")),
+            "Le socle est monté par la seule PROPRIÉTÉ DU CHROME (et ses zones) ; il ne s'efface que devant un OUTIL ouvert (#8652), jamais devant une bande."
         )
         // Et la bande n'apparaît PAS dans cette pile : elle est passée à la
         // surface de scène, dans une propriété à part. Un identifiant de bande
@@ -236,12 +244,18 @@ final class ComposerSceneBandTests: XCTestCase {
     /// zone d'inspecteur du document documente déjà.
     func test_laBande_neSInsereParAucuneAnimation() throws {
         let code = try source("ComposerSceneSurface.swift")
-        guard let corps = declarationBody(startingAt: "var body: some View", in: code) else {
-            return XCTFail("Le `body` de la surface de scène est introuvable")
+        // Le chrome de la scène vit dans `chromeLayer` depuis #8370 : le `body`
+        // n'empile plus que les calques, et c'est là que la bande s'insère.
+        guard let corps = declarationBody(startingAt: "private var lowerFloors: some View", in: code) else {
+            return XCTFail("Les étages du bas de la surface de scène sont introuvables")
         }
         let compacte = compact(corps)
-        XCTAssertTrue(compacte.contains("ComposerSceneBandView("),
+        // La bande passe par `bandView(_:)` depuis que le grand écran la pose
+        // aussi en carte flottante (#8532) : un seul montage, deux places.
+        XCTAssertTrue(compacte.contains("bandView(ouverte)"),
                       "Le bloc lu n'est pas celui du body — la garde ne mesurerait RIEN")
+        XCTAssertTrue(compact(code).contains("privatefuncbandView(_ouverte:ComposerSceneBand)->someView{ComposerSceneBandView("),
+                      "Le montage unique de la bande est introuvable.")
         for interdit in [".transition(", "withAnimation", ".animation("] {
             XCTAssertFalse(compacte.contains(compact(interdit)),
                            "`\(interdit)` dans le body de la scène ferait varier la frame du canvas.")
@@ -308,11 +322,13 @@ final class ComposerSceneBandOpeningRowGuardTests: XCTestCase {
     }
 
     /// Le meuble lit ET écrit le réglage — un choix qui n'atteint pas le modèle
-    /// est un contrôle inerte.
+    /// est un contrôle inerte. Depuis #8792 il le lit sur la SLIDE et l'écrit
+    /// par le chemin du carrousel d'effets, qui rejoue aussi l'entrée choisie.
     func test_leMeuble_litEtEcritLeReglage() throws {
         let source = compact(try hostSource())
-        XCTAssertTrue(source.contains("bandOpeningEffect:viewModel.openingEffect"))
-        XCTAssertTrue(source.contains("viewModel.openingEffect=effect"))
+        XCTAssertTrue(source.contains("bandOpeningEffect:sceneTransitions.opening"))
+        XCTAssertTrue(source.contains("chooseSceneEffect(.opening(effect))"))
+        XCTAssertTrue(source.contains("viewModel.setSlideTransitions(opening:apres.opening,closing:apres.closing)"))
     }
 
     /// **La bande NE se referme PAS sur un effet d'ouverture**, à la différence
@@ -321,9 +337,9 @@ final class ComposerSceneBandOpeningRowGuardTests: XCTestCase {
     /// aucun retour sur ce qu'il vient de choisir.
     func test_choisirUnEffet_neRefermePasLaBande() throws {
         let source = compact(try hostSource())
-        XCTAssertTrue(source.contains("onPickBandOpening:{effectinviewModel.openingEffect=effect"),
+        XCTAssertTrue(source.contains("onPickBandOpening:{effectinchooseSceneEffect(.opening(effect))"),
                       "Le rappel d'ouverture doit poser le réglage…")
-        XCTAssertFalse(source.contains("viewModel.openingEffect=effectrequestedSceneBand=nil"),
+        XCTAssertFalse(source.contains("chooseSceneEffect(.opening(effect))requestedSceneBand=nil"),
                        "…et NE PAS refermer la bande, contrairement à la couleur.")
     }
 }

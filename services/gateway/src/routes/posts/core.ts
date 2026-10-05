@@ -1,8 +1,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { Post } from '@meeshy/shared/types/post';
-import { UnifiedAuthRequest, requireEmailVerification } from '../../middleware/auth';
-import { requireEmailVerificationUnlessFirstStory } from '../../middleware/email-verification-first-story';
+import { UnifiedAuthRequest, requirePublishingGrace, createUnifiedAuthMiddleware } from '../../middleware/auth';
 import { PostService } from '../../services/PostService';
 import { storyContentEditRequested } from '../../services/posts/storyEditPolicy';
 import { PostTranslationService } from '../../services/posts/PostTranslationService';
@@ -11,6 +10,7 @@ import {
   servePublishedPost,
   finalReferences,
   hoistLocation,
+  hoistTrackingLinks,
   type PublishedPostRow,
   type PublishedPostType,
 } from './publication';
@@ -29,6 +29,7 @@ import {
 // masque.
 import { protectedPreview, maskedAttachment } from '../../services/notifications/notification-preview';
 import { canAccessConversation } from '../conversations/utils/access-control';
+import { mayServePostToAnonymous } from './anonymousPostGate';
 import { sendSuccess, sendUnauthorized, sendBadRequest, sendNotFound, sendForbidden, sendInternalError, sendError, sendUpgradeRequired, sendGone } from '../../utils/response';
 import { getAppVersionFloor, getAppStoreUrl, isBelowFloor } from '../../utils/appVersion';
 import { CanvasV3Schema } from '@meeshy/shared/types/canvas-v3';
@@ -51,6 +52,7 @@ import { SecuritySanitizer } from '../../utils/sanitize.js';
 import { parseSharedPlace, type SharedPlace } from '../../services/location/sharedPlace';
 import { WIRE_BROADCAST, isCanvasV3, unclaimedCanvasMediaIds } from '../../services/posts/storyEffectsV3';
 import { broadcastPostRemoval } from '../../socketio/broadcastPostRemoval';
+import { announceCitedPostWithdrawal } from '../../socketio/announceCitedPostWithdrawal';
 import { logError, logWarn } from '../../utils/logger.js';
 
 /**
@@ -165,7 +167,11 @@ function rejectUnclaimedCanvasMedia(
 export function registerCoreRoutes(
   fastify: FastifyInstance,
   prisma: PrismaClient,
-  requiredAuth: any
+  requiredAuth: any,
+  // #9149 — la porte d'un LIEN PARTAGÉ : `GET /posts/:postId` laisse entrer un
+  // visiteur sans compte, que `anonymousPostGate` juge. Absente, la route reste
+  // fermée comme avant (fail-closed) : seul `postRoutes` la câble.
+  optionalAuth: ReturnType<typeof createUnifiedAuthMiddleware> = requiredAuth
 ) {
   const postService = new PostService(prisma);
   // #4147 critère 2 — seau PARTAGÉ avec POST /posts/:postId/repost
@@ -217,8 +223,8 @@ export function registerCoreRoutes(
   // PARTAGÉ que POST /posts et POST /posts/:postId/repost
   // (`sharedWriteRateLimit`, cf. définition ci-dessus).
   fastify.post('/posts/from-attachment', {
-    // #6437 — même porte de publication que POST /posts ci-dessus.
-    preValidation: [requiredAuth, requireEmailVerification],
+    // #8476 — même porte de publication que POST /posts ci-dessous.
+    preValidation: [requiredAuth, requirePublishingGrace],
     preHandler: [sharedWriteRateLimit],
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
@@ -263,7 +269,6 @@ export function registerCoreRoutes(
           isEncrypted: attachment?.message?.isEncrypted,
           effectFlags: attachment?.message?.effectFlags,
           expiresAt: attachment?.message?.expiresAt,
-          createdAt: attachment?.message?.createdAt,
         }) !== null
         || maskedAttachment({
           isViewOnce: attachment?.isViewOnce,
@@ -369,10 +374,9 @@ export function registerCoreRoutes(
   // éviter le plafond de création » vit dans ce partage, pas dans un
   // plafond individuel supplémentaire.
   fastify.post('/posts', {
-    // #6437 — publier (post ou story) sort du compte vers d'autres personnes ;
-    // avant le budget d'écriture partagé pour ne pas le consommer en pure perte.
-    // #7907 — sauf la PREMIÈRE story d'un compte au courriel non vérifié.
-    preValidation: [requiredAuth, requireEmailVerificationUnlessFirstStory(prisma)],
+    // #8476 — publier suit le délai de grâce de l'adresse (#8238) ; avant le
+    // budget d'écriture partagé pour ne pas le consommer en pure perte.
+    preValidation: [requiredAuth, requirePublishingGrace],
     preHandler: [sharedWriteRateLimit],
     bodyLimit: 1 * 1024 * 1024,
   }, async (request: FastifyRequest, reply: FastifyReply) => {
@@ -480,12 +484,20 @@ export function registerCoreRoutes(
   // GET /posts/:postId — Get post by ID
   fastify.get('/posts/:postId', {
     schema: { params: postIdParamsSchema },
-    preValidation: [requiredAuth],
+    preValidation: [optionalAuth],
   }, async (request: FastifyRequest<{ Params: PostParams }>, reply: FastifyReply) => {
     try {
       const authContext = (request as UnifiedAuthRequest).authContext;
       const viewerUserId = authContext?.registeredUser?.id;
       const { postId } = request.params;
+
+      // #9149 — un visiteur SANS COMPTE (aucune session, ou l'invité d'un lien
+      // de conversation) ne lit que ce que `anonymousPostGate` autorise :
+      // public, vivant, d'un auteur actif, original compris. Refusé, il reçoit
+      // le même 404 qu'une publication inexistante.
+      if (viewerUserId === undefined && !(await mayServePostToAnonymous(prisma, postId))) {
+        return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
+      }
 
       const post = await postService.getPostById(postId, viewerUserId);
       if (!post) {
@@ -636,7 +648,7 @@ export function registerCoreRoutes(
         // — doit rester visible sur CE broadcast aussi, sinon un post modifié
         // après coup (visibilité, contenu…) republierait sans sa position.
         const broadcastPost = withMentions(
-          graftReferences(hoistLocation(post as unknown as Record<string, unknown>), broadcastReferences),
+          graftReferences(hoistLocation(hoistTrackingLinks(post as unknown as Record<string, unknown>)), broadcastReferences),
           WIRE_BROADCAST
         ) as unknown as Post;
         if (updatedPostType === 'STORY') {
@@ -701,6 +713,13 @@ export function registerCoreRoutes(
         result,
         (err) => logWarn(fastify.log, '[DELETE /posts/:postId]: broadcast deletion failed', err)
       );
+      // #7969 — les conversations qui CITENT ce post passent leur carte en
+      // « Story indisponible » sans relire ; best-effort, jamais attendu.
+      announceCitedPostWithdrawal({
+        prisma,
+        io: fastify.socketIOHandler?.getManager?.()?.getIO(),
+        post: result,
+      }).catch((err) => logWarn(fastify.log, '[DELETE /posts/:postId]: cited-post announce failed', err));
 
       return sendSuccess(reply, { deleted: true });
     } catch (error) {

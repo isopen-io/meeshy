@@ -51,9 +51,17 @@ nonisolated enum StoryCanvasInlineEditTouchPolicy {
     /// - `touched` : `UITouch.view`, la vue que UIKit a élue par hit-test.
     /// - `inlineEditor` : le champ monté, ou `nil` quand aucune édition n'est en
     ///   cours — auquel cas rien n'est disputé et tout revient au canvas.
+    /// `yieldsManipulation` / `isManipulation` (retour porteur 2026-09-28) :
+    /// quand l'hôte laisse la saisie céder au doigt, un geste qui TRANSFORME
+    /// (glisser, pincer, tourner) reçoit aussi les touches posées sur le champ
+    /// — c'est ainsi qu'on déplace le texte qu'on écrit. Un TAP, lui, reste au
+    /// champ : c'est lui qui lève le clavier (#5099).
     @MainActor
-    static func canvasReceives(touched: UIView?, inlineEditor: UIView?) -> Bool {
+    static func canvasReceives(touched: UIView?, inlineEditor: UIView?,
+                               yieldsManipulation: Bool = false,
+                               isManipulation: Bool = false) -> Bool {
         guard let inlineEditor, let touched else { return true }
+        if yieldsManipulation && isManipulation { return true }
         return !(touched === inlineEditor || touched.isDescendant(of: inlineEditor))
     }
 }

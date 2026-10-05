@@ -23,23 +23,26 @@ import { MediaService } from './MediaService';
 import type { MediaStorage, MediaDuplicateResult } from './storage/MediaStorage';
 import type { OrphanMediaCleanupService } from './storage/OrphanMediaCleanupService';
 import { enhancedLogger } from '../utils/logger-enhanced';
-import { EngagementService } from './engagement/EngagementService';
 import { ZMQSingleton } from './ZmqSingleton';
 import { authorSelect, mediaInclude, postInclude } from './posts/postIncludes';
 import { projectReferencesForViewer, toPostReferences } from './posts/postReferences';
 import { attachReferenceAccess, consumeReferenceView, resolveReferenceAccess } from './posts/referenceAccess';
 import { remapStoryEffectsMediaIds } from './posts/storyEffectsMediaRemap';
-import { composeStoryContent, isContentDerivedFromTextObjects, storyTextObjectText } from './posts/storyContentComposition';
+import { isContentDerivedFromTextObjects, storyTextObjectText } from './posts/storyContentComposition';
 import { storyTranslatableTexts } from './posts/storyEffectsV3';
+import { syncPostTrackingLinks } from './posts/publicationTrackingLinks';
 import { storyContentEditRequested } from './posts/storyEditPolicy';
 import { SoundCaptureService } from './posts/SoundCaptureService';
 import { applyPostRemovalEffects } from './posts/postRemovalEffects';
+import { creditPostEngagement, creditStoryViewed } from './posts/postEngagementCredits';
 import { retractReactionNotifications } from './notifications/retractReactionNotifications';
 import { reproduceEditedSubjectNotifications } from './posts/reproduceEditedSubjectNotifications';
 import { getSharedNotificationService } from './notifications/notification-service-registry';
 import { reclaimMediaRowBytes } from './posts/reclaimPostMediaBytes';
 import { extractCaptureTracks } from './posts/captureTracks';
-import { mediaCaptureTracks } from './posts/mediaCaptureTracks';
+import { collectCaptureTracks } from './posts/collectCaptureTracks';
+import { withCanvasMedia } from './posts/canvasMediaClaims';
+import { videoSoundExtractionAllowed } from './posts/soundEligibility';
 import { orchestrateSoundCapture, type SoundCaptureVerdict } from './posts/soundCaptureVerdict';
 import { normalizeLanguageCode, normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
 import { parseSharedPlace, type SharedPlace } from './location/sharedPlace';
@@ -48,6 +51,7 @@ import { isAdult } from '@meeshy/shared/utils/age';
 import { translationTargetId } from './zmq-translation/utils/zmq-helpers';
 import { attachmentTranscriptionFromMobile } from './posts/mobile-transcription';
 import { parseAttachmentTranscription } from '@meeshy/shared/utils/attachment-validators';
+import { detectContentLanguage } from '../utils/content-language';
 
 const log = enhancedLogger.child({ module: 'PostService' });
 
@@ -71,26 +75,6 @@ interface StoryTextObjectRaw {
  */
 function computeExpiresAt(type: PostType): Date | undefined {
   return ephemeralExpiresAt(type, new Date());
-}
-
-// Minimal language detection (first word heuristics + fallback)
-function detectLanguage(text: string): string {
-  if (!text) return 'en';
-  const lower = text.toLowerCase();
-  // Simple heuristic based on common words
-  const langPatterns: Record<string, RegExp> = {
-    fr: /\b(le|la|les|un|une|des|je|tu|il|nous|vous|est|sont|avec|pour|dans|que|qui|pas|mais)\b/,
-    es: /\b(el|la|los|las|un|una|es|son|con|para|en|que|por|del|como|pero|más)\b/,
-    de: /\b(der|die|das|ein|eine|ist|sind|mit|für|und|ich|nicht|auf|dem|den)\b/,
-    pt: /\b(o|a|os|as|um|uma|é|são|com|para|em|que|por|do|da|não|mas)\b/,
-    ar: /[\u0600-\u06FF]/,
-    zh: /[\u4e00-\u9fff]/,
-    ja: /[\u3040-\u309F\u30A0-\u30FF]/,
-  };
-  for (const [lang, pattern] of Object.entries(langPatterns)) {
-    if (pattern.test(lower)) return lang;
-  }
-  return 'en';
 }
 
 // postInclude is shared — see ./posts/postIncludes for the single source of truth.
@@ -186,12 +170,12 @@ export class PostService {
     const expiresAt = ephemeralExpiresAt(data.type, now);
 
     // Canonicalize the client claim at the write boundary — clients send the raw
-    // platform locale (iOS `fr_FR`, web `fr-FR`). `detectLanguage` already returns
+    // platform locale (iOS `fr_FR`, web `fr-FR`). `detectContentLanguage` already returns
     // canonical codes, so only the claim path needs normalization. Irreducible
     // codes (`bas`) fall back verbatim. Mirrors the message funnel (218/219).
     const originalLanguage = data.originalLanguage
       ? (normalizeLanguageCode(data.originalLanguage) ?? data.originalLanguage)
-      : (data.content ? detectLanguage(data.content) : undefined);
+      : (data.content ? detectContentLanguage(data.content) : undefined);
 
     // `detectedLanguage` (#5349/#5422) est déjà de l'ISO 639-1 mesuré
     // (`detectMeasuredLanguage`, tinyld) — normalisée par sûreté, comme la
@@ -309,6 +293,9 @@ export class PostService {
     // UnifiedPostComposer) retombe aussi sur POST. Les PostMedia sont lus AVANT
     // `post.create`, avec la MÊME garde de propriété que le rattachement plus
     // bas, pour classifier exactement ce qui sera réellement attaché.
+    // Médias que seul le canvas référence (#8012) — posts/canvasMediaClaims.ts.
+    // Jamais sur une republication : son canvas désigne les médias de la SOURCE.
+    if (!repostOfId) data = { ...data, mediaIds: withCanvasMedia(data.mediaIds, data.storyEffects) };
     let effectiveType = data.type;
     if (data.type === PostType.REEL) {
       const claimableMedia = data.mediaIds?.length
@@ -344,7 +331,7 @@ export class PostService {
         detectedLanguage,
         communityId: data.communityId,
         storyEffects: (data.storyEffects as any) ?? undefined,
-        allowSoundExtraction: data.allowSoundExtraction ?? false,
+        allowSoundExtraction: videoSoundExtractionAllowed(data.allowSoundExtraction),
         commentsDisabled: data.commentsDisabled ?? false,
         moodEmoji: data.moodEmoji,
         audioUrl: data.audioUrl,
@@ -431,8 +418,8 @@ export class PostService {
     // avec opt-in d'extraction — `collectCaptureTracks`, résiliente).
     // HORS de la garde médias — une story peut réutiliser un média déjà attaché
     // — et fire-and-forget : publier ne dépend jamais de la bibliothèque.
-    const captureTracks = await this.collectCaptureTracks(
-      post.id, data.storyEffects, data.allowSoundExtraction ?? false,
+    const captureTracks = await collectCaptureTracks(this.prisma,
+      post.id, data.storyEffects, videoSoundExtractionAllowed(data.allowSoundExtraction),
       Boolean(data.mediaIds?.length));
     // Éligibilité + capture fire-and-forget + verdict synchrone (#6603) — voir posts/soundCaptureVerdict.ts.
     const soundLibrary = orchestrateSoundCapture({
@@ -486,49 +473,27 @@ export class PostService {
       });
     }
 
-    // Tracking des URLs brutes du post/story : mapping `url → token` rangé dans
-    // `metadata.trackingLinks`. Même mécanisme que les messages — le client rend
-    // le lien (texte + façade vidéo) vers `/l/<token>` SANS réécrire le contenu
-    // (aperçu vidéo + URL lisible préservés). Le texte effectif est le corps du
-    // post, le texte de la story (`content`) ou l'index de recherche des
-    // textObjects. JAMAIS bloquant : le helper avale ses erreurs (→ []) et
-    // l'écriture metadata est gardée.
-    const trackingContent =
-      data.content
-      ?? (textObjects?.length ? composeStoryContent(textObjects) : undefined);
-    if (trackingContent) {
-      try {
-        const trackingLinks = await this.trackingLinkService.collectContentTrackingLinks({
-          content: trackingContent,
-          createdBy: userId,
-          postId: post.id,
-        });
-        if (trackingLinks.length > 0) {
-          const existingMetadata = (post.metadata as Record<string, unknown> | null) ?? {};
-          await this.prisma.post.update({
-            where: { id: post.id },
-            data: { metadata: { ...existingMetadata, trackingLinks } as Prisma.InputJsonValue },
-          });
-        }
-      } catch (err) {
-        log.warn('createPost: tracking link persistence failed', { postId: post.id, err });
-      }
-    }
-
     // Refetch pour inclure transcription et translations après toutes les opérations media
     const refreshed = await this.prisma.post.findUnique({
       where: { id: post.id },
       select: postInclude,
     });
+    // Carte `metadata.trackingLinks` (#9073) : TOUS les textes affichés —
+    // corps, scène, légendes de média — relus sur la ligne enregistrée.
+    const persisted = refreshed ?? post;
+    const trackingMetadata = await syncPostTrackingLinks({
+      prisma: this.prisma, linkService: this.trackingLinkService, post: persisted, createdBy: userId,
+    });
+    const served = trackingMetadata === undefined ? persisted : { ...persisted, metadata: trackingMetadata };
     // `soundLibrary` : champ de service (#6603), pas une colonne.
-    return { ...(refreshed ?? post), soundLibrary };
+    return { ...served, soundLibrary };
   }
 
   private async triggerStoryTextTranslation(postId: string, content: string, authorId: string, sourceLanguageOverride?: string): Promise<void> {
     try {
       // An explicit source (e.g. the language chosen when editing a post) wins
       // over the heuristic detector, which only guesses from word patterns.
-      const sourceLanguage = sourceLanguageOverride ?? detectLanguage(content);
+      const sourceLanguage = sourceLanguageOverride ?? detectContentLanguage(content);
 
       // 1. Résoudre les langues cibles depuis les contacts de l'auteur, hors
       // la langue source elle-même — même garde que le sibling
@@ -672,7 +637,7 @@ export class PostService {
         return;
       }
 
-      const sourceLanguage = obj.sourceLanguage ?? detectLanguage(text);
+      const sourceLanguage = obj.sourceLanguage ?? detectContentLanguage(text);
       const targetLanguages = allTargetLanguages.filter(l => l !== sourceLanguage);
 
       if (targetLanguages.length === 0) {
@@ -1014,40 +979,6 @@ export class PostService {
   }
 
   /**
-   * Pistes de capture COMPLÈTES d'un post : celles du blob `storyEffects`
-   * (composer riche) + celles synthétisées depuis ses médias attachés (posts
-   * vocaux sans blob, vidéos sous opt-in d'extraction). Les médias déjà
-   * référencés par une piste du blob restent à cette piste-là
-   * (`mediaCaptureTracks` les exclut).
-   */
-  private async collectCaptureTracks(
-    postId: string,
-    storyEffects: Record<string, unknown> | undefined,
-    allowVideoExtraction: boolean,
-    /** Épargne la lecture Prisma quand l'appelant SAIT qu'aucun média n'est attaché. */
-    hasAttachedMedia: boolean,
-  ) {
-    const effectTracks = extractCaptureTracks(storyEffects);
-    if (!hasAttachedMedia) return effectTracks;
-    try {
-      const media = await this.prisma.postMedia.findMany({
-        where: { postId },
-        select: { id: true, mimeType: true, duration: true },
-      });
-      return [
-        ...effectTracks,
-        ...mediaCaptureTracks({ media, storyEffectsTracks: effectTracks, allowVideoExtraction }),
-      ];
-    } catch (error) {
-      // RÉSILIENTE : publier/éditer ne dépend jamais de la bibliothèque. Sans
-      // la lecture des médias, les pistes du blob restent capturables.
-      log.error('collectCaptureTracks: lecture des médias impossible',
-        error instanceof Error ? error : new Error(String(error)), { postId });
-      return effectTracks;
-    }
-  }
-
-  /**
    * Entrées « audio » synthétiques pour `qualifiesAsReel` : les sons EMPRUNTÉS
    * du blob (pistes `soundId`), avec la même garde d'autorisation que
    * `recordBorrowed` — un son privé d'autrui ou coupé ne qualifie pas plus un
@@ -1152,7 +1083,7 @@ export class PostService {
     // another post's media is silently ignored (never cross-deletes).
     const ownMediaIds = new Set(post.media.map((m) => m.id));
     const mediaIdsToRemove = (removeMediaIds ?? []).filter((id) => ownMediaIds.has(id));
-    const mediaIdsToAttach = mediaIds ?? [];
+    const mediaIdsToAttach = withCanvasMedia(mediaIds, data.storyEffects, ownMediaIds) ?? [];
     const finalType = requestedType ?? post.type;
 
     // Liste FINALE des médias après édition : (médias du post − retraits) +
@@ -1413,7 +1344,7 @@ export class PostService {
     if (data.storyEffects !== undefined || editTouchesComposition || data.allowSoundExtraction !== undefined) {
       const effectiveEffects = data.storyEffects
         ?? (updated.storyEffects as Record<string, unknown> | null) ?? undefined;
-      const editedTracks = await this.collectCaptureTracks(
+      const editedTracks = await collectCaptureTracks(this.prisma,
         updated.id, effectiveEffects, updated.allowSoundExtraction === true,
         finalMedia.length > 0);
       soundLibrary = orchestrateSoundCapture({
@@ -1423,7 +1354,18 @@ export class PostService {
       });
     }
 
-    return soundLibrary ? { ...updated, soundLibrary } : updated;
+    // Édition : la carte de liens suivis se recalcule sur la ligne ÉCRITE
+    // (#9073) — une URL retirée sort, une ajoutée entre, et le document rendu
+    // porte la nouvelle carte que la diffusion socket hisse.
+    const editTouchesTexts = data.content !== undefined || data.storyEffects !== undefined
+      || data.mediaCaption !== undefined || editTouchesComposition;
+    const trackingMetadata = editTouchesTexts
+      ? await syncPostTrackingLinks({
+          prisma: this.prisma, linkService: this.trackingLinkService, post: updated, createdBy: userId,
+        })
+      : undefined;
+    const served = trackingMetadata === undefined ? updated : { ...updated, metadata: trackingMetadata };
+    return soundLibrary ? { ...served, soundLibrary } : served;
   }
 
   /**
@@ -1645,6 +1587,7 @@ export class PostService {
       data: { bookmarkCount: { increment: 1 } },
       select: { bookmarkCount: true },
     });
+    creditPostEngagement(this.prisma, userId, 'tool.post_bookmark', { targetId: postId, targetOwnerId: post.authorId });
 
     return { success: true, bookmarkCount: updated.bookmarkCount };
   }
@@ -1694,7 +1637,7 @@ export class PostService {
   ): Promise<{ shared: boolean; shareCount: number; shortUrl: string; token: string; reused: boolean } | null> {
     const post = await this.prisma.post.findFirst({
       where: { id: postId, deletedAt: NOT_DELETED },
-      select: { id: true, shareCount: true, type: true },
+      select: { id: true, shareCount: true, type: true, authorId: true },
     });
     if (!post) return null;
 
@@ -1749,9 +1692,7 @@ export class PostService {
       // `reused: true` : elles réutilisent un lien déjà émis, et les créditer
       // ferait gagner des points en pressant « Partager » en boucle. Un axe
       // d'engagement qui se farme ne mesure plus rien.
-      new EngagementService(this.prisma)
-        .recordActivity(userId, 'social.share')
-        .catch((err: unknown) => log.warn('engagement social.share failed', { err }));
+      creditPostEngagement(this.prisma, userId, 'social.share', { targetId: postId, targetOwnerId: post.authorId });
       return { shared: true, shareCount: created.shareCount, token: created.link.token, shortUrl: `${baseUrl}${created.link.shortUrl}`, reused: false };
     } catch (err) {
       if (err && typeof err === 'object' && 'code' in err && (err as { code?: string }).code === 'P2002') {
@@ -1945,6 +1886,7 @@ export class PostService {
       const isNewView = target.authorId === userId
         ? false
         : await this.creditPostView(postId, userId, safeDuration);
+      creditStoryViewed(this.prisma, { viewerId: userId, story: target, isNewView, durationMs: safeDuration });
 
       const rootId = target.originalRepostOfId ?? target.repostOfId;
       if (rootId && rootId !== postId) {
@@ -2326,7 +2268,7 @@ export class PostService {
     const content = opts.content;
     const isQuote = opts.isQuote ?? false;
 
-    const originalLanguage = content ? detectLanguage(content) : undefined;
+    const originalLanguage = content ? detectContentLanguage(content) : undefined;
 
     const originalRepostOfId = original.originalRepostOfId
       ?? original.repostOfId
@@ -2580,6 +2522,7 @@ export class PostService {
           await this.orphanCleanup.untrackBatch(orphanRowIds);
         }
 
+        creditPostEngagement(this.prisma, userId, 'social.repost', { targetId: postId, targetOwnerId: original.authorId });
         return finalRepost;
       } catch (err) {
         // Inline (best-effort) compensation. Same as before — fast-path
@@ -2622,6 +2565,7 @@ export class PostService {
       where: { id: postId },
       data: { repostCount: { increment: 1 } },
     });
+    creditPostEngagement(this.prisma, userId, 'social.repost', { targetId: postId, targetOwnerId: original.authorId });
 
     return repost;
   }

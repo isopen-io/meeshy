@@ -5,7 +5,7 @@ import type { Conversation } from './types';
 
 /**
  * LA FORME D'UNE PAGE DE LA LENTILLE (#6195) — miroir EXACT de ce que sert
- * `GET /api/v1/conversations?limit=30[&before=<id>]`
+ * `GET conversations.root?limit=30[&before=<id>]`
  * (`services/gateway/src/routes/conversations/core-list.ts:916-937`) : DEUX
  * blocs de pagination SIBLINGS de `data`, jamais imbriqués dedans.
  * `pageOfConversations` (`fixtures-pagination.ts`) mime la MÊME forme.

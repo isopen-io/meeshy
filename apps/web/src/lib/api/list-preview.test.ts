@@ -152,6 +152,7 @@ describe('message:new — aucun texte protégé dans le cache de liste (#7547)',
     ['vue unique', { isViewOnce: true }],
     ['flouté', { isBlurred: true }],
     ['chiffré', { isEncrypted: true }],
+    ['flamme-œil (#8634)', { effectFlags: 9 }],
   ] as const) {
     test(`${label} : la ligne garde l’identité et le drapeau, jamais le texte, la carte ni les pièces`, () => {
       const client = new QueryClient();

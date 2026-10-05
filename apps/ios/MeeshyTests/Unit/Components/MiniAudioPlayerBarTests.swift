@@ -212,6 +212,20 @@ final class MiniAudioPlayerBarTests: XCTestCase {
         try source("Meeshy/Features/Main/Components/MiniAudioPlayerBar.swift")
     }
 
+    /// La croix se touche sur TOUT son cadre de 44 pt (#8983) : sans `contentShape`, un toucher
+    /// sur la partie transparente du cadre tombe sur le corps de la barre, qui ouvre la
+    /// conversation au lieu de fermer le lecteur.
+    func test_closeButton_isTappableOverItsWholeFrame() throws {
+        let code = try barSource()
+        let croix = try XCTUnwrap(code.range(of: "Image(systemName: \"xmark\")"), "La croix du lecteur a disparu.")
+        let bouton = code[croix.upperBound...]
+        let suite = bouton[..<(bouton.range(of: ".buttonStyle(.plain)")?.lowerBound ?? bouton.endIndex)]
+        XCTAssertTrue(
+            suite.contains(".contentShape(Rectangle())"),
+            "Le libellé de la croix doit porter `.contentShape(Rectangle())` après son cadre de 44 pt."
+        )
+    }
+
     /// Apple HIG (and this repo's own iOS rule) put the floor for a tappable
     /// control at 44×44 pt. These three carry `.buttonStyle(.plain)`, which adds
     /// no padding of its own: the hit region is *exactly* the label's frame, so

@@ -6,6 +6,7 @@ import { appQueryClient } from '@/lib/api/query-client';
 import { attachmentDefaults, message, translation } from '@/lib/api/fixtures-base';
 import type { Attachment, Message } from '@/lib/api/types';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
+import { loadExportCardCatalog } from '@/lib/i18n-export-card-catalog';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
@@ -80,13 +81,12 @@ const menuOf = (overrides: Partial<ThreadSheetsMenu> = {}): ThreadSheetsMenu => 
   onMenuReact: () => {},
   onMenuAction: () => {},
   onPickLanguage: () => {},
-  forwardIds: null,
-  onForwardTo: () => {},
-  onCloseForward: () => {},
   reactionSheetFor: null,
   setReactionSheetFor: () => {},
   detailFor: null,
   setDetailFor: () => {},
+  exportFor: null,
+  setExportFor: () => {},
   servedOf: () => undefined,
   starOf: () => null,
   ...overrides,
@@ -102,6 +102,10 @@ const mountSheets = async (menu: ThreadSheetsMenu, messages: readonly Message[])
         readerLocale="fr-FR"
         conversationId="c-deploiement"
         viewerId={VIEWER_ID}
+        viewerName="Jacques"
+        viewerHandle="jacques"
+        conversationTitle="Déploiement"
+        announce={() => {}}
       />
     </QueryClientProvider>,
   );
@@ -128,6 +132,10 @@ describe('ThreadMessageSheets — les feuilles du message (#7429, extrait de rou
         readerLocale="fr-FR"
         conversationId="c-1"
         viewerId={VIEWER_ID}
+        viewerName="Jacques"
+        viewerHandle="jacques"
+        conversationTitle="Déploiement"
+        announce={() => {}}
       />,
     );
     expect(html).toBe('');
@@ -142,6 +150,10 @@ describe('ThreadMessageSheets — les feuilles du message (#7429, extrait de rou
         readerLocale="fr-FR"
         conversationId="c-1"
         viewerId={VIEWER_ID}
+        viewerName="Jacques"
+        viewerHandle="jacques"
+        conversationTitle="Déploiement"
+        announce={() => {}}
       />,
     );
     expect(html).toBe('');
@@ -178,6 +190,72 @@ describe('ThreadMessageSheets — les feuilles du message (#7429, extrait de rou
     );
     await mounter.click(languageButton(host, 'Français (original)'));
     expect(journal).toEqual([`pick:${SERVER_MESSAGE_ID}:fr`, 'detail:null']);
+  });
+
+  test('« Plus… » déplie Composer (une photo à composer) ET Imager, qui ouvre l’atelier (#8693)', async () => {
+    const journal: string[] = [];
+    const host = await mountSheets(
+      menuOf({
+        detailFor: SERVER_MESSAGE_ID,
+        setExportFor: (request) => journal.push(typeof request === 'function' || request === null ? 'export:?' : `export:${request.messageId}:${String(request.quick)}`),
+        setDetailFor: (id) => journal.push(`detail:${String(id)}`),
+      }),
+      [ownMessage()],
+    );
+    expect([...host.querySelectorAll('[data-message-create]')].map((el) => el.getAttribute('data-message-create'))).toEqual(['compose', 'image']);
+    await mounter.click(host.querySelector<HTMLElement>('[data-message-create="image"]'));
+    expect(journal).toEqual([`export:${SERVER_MESSAGE_ID}:false`, 'detail:null']);
+  });
+
+  test('« Plus… » d’un message protégé n’offre ni Composer ni Imager', async () => {
+    const host = await mountSheets(menuOf({ detailFor: SERVER_MESSAGE_ID }), [ownMessage({ isBlurred: true })]);
+    expect(has(host, '[data-message-create]')).toBe(false);
+  });
+
+  test('« Imager » monte la carte d’un message ordinaire, avec ses templates', async () => {
+    const host = await mountSheets(menuOf({ exportFor: { messageId: SERVER_MESSAGE_ID, quick: false } }), [ownMessage({ attachments: [] })]);
+    await loadExportCardCatalog('fr');
+    await mounter.settle();
+    expect(host.querySelectorAll('[data-export-tab]').length > 1).toBe(true);
+  });
+
+  test('« Imager la discussion » (#9039) monte l’atelier sur la discussion — un choisi protégé n’en monte aucun', async () => {
+    const earlier = ownMessage({ id: 'm-avant', content: 'Bonjour', attachments: [], createdAt: new Date('2026-09-24T09:59:00.000Z') });
+    const request = { exportFor: { messageId: SERVER_MESSAGE_ID, quick: false, scope: 'discussion' as const } };
+    const host = await mountSheets(menuOf(request), [earlier, ownMessage({ attachments: [] })]);
+    await loadExportCardCatalog('fr');
+    await mounter.settle();
+    expect(host.querySelectorAll('[data-export-tab]').length > 1).toBe(true);
+    mounter.unmountAll();
+
+    const veiled = await mountSheets(menuOf(request), [earlier, ownMessage({ attachments: [], isBlurred: true })]);
+    expect(has(veiled, '[data-export-tab]')).toBe(false);
+  });
+
+  test('le menu reçoit le sous-menu de « Transférer » (#9039)', async () => {
+    const element = document.createElement('div');
+    document.body.appendChild(element);
+    const item = (id: 'forward' | 'exportDiscussion', labelKey: 'message.menu.forward' | 'message.menu.exportDiscussion') => ({ id, labelKey, glyph: 'imageSquare' as const });
+    await mountSheets(
+      menuOf({
+        menuTarget: { messageId: SERVER_MESSAGE_ID, element, isMine: true },
+        menuData: {
+          items: [item('forward', 'message.menu.forward')],
+          forwardItems: [item('forward', 'message.menu.forward'), item('exportDiscussion', 'message.menu.exportDiscussion')],
+          choices: [],
+          subjectLabel: 'Actions',
+        },
+      }),
+      [ownMessage()],
+    );
+    await mounter.click(document.querySelector<HTMLElement>('.message-menu-list [data-action="forward"]'));
+    expect(document.querySelector('.message-menu-list [data-action="exportDiscussion"]') !== null).toBe(true);
+    element.remove();
+  });
+
+  test('un message protégé ne monte aucune carte, même ciblé', async () => {
+    const host = await mountSheets(menuOf({ exportFor: { messageId: SERVER_MESSAGE_ID, quick: false } }), [ownMessage({ isBlurred: true })]);
+    expect(has(host, '[data-export-tab]')).toBe(false);
   });
 
   test('réagir depuis la feuille de réactions pose la réaction PUIS referme la feuille', async () => {

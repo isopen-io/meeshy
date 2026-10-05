@@ -18,8 +18,10 @@
  *  - la PROTECTION : un message expiré, à vue unique, flouté ou chiffré ne
  *    transporte ni son texte, ni sa traduction, ni le moindre détail de ses
  *    pièces jointes — la valeur rendue est ce qui finit dans le cache disque de
- *    la liste. Préséance : expiré > vue unique > flou > chiffré > éphémère, et
- *    un effet comportemental ne s'affiche que sur un message non protégé.
+ *    la liste. La flamme-œil (disparaît après lecture) non plus (#8634) : la
+ *    lire dans la liste ne la consomme pas. Préséance : expiré > vue unique >
+ *    flou > chiffré > flamme-œil > éphémère, et un effet comportemental ne
+ *    s'affiche que sur un message non protégé.
  */
 
 import { arrivalsLineKey } from './arrivals-notice.js';
@@ -35,6 +37,8 @@ import type { AttachmentProtectionFlags } from './attachment-protection.js';
 import { resolvePrismTranslation } from './conversation-helpers.js';
 import { formatClock } from './duration-format.js';
 import { ephemeralDeadline } from './ephemeral-deadline.js';
+import { isAfterReadEphemeral } from './ephemeral-countdown.js';
+import { contactCardNameFromFileName, isContactCardAttachment } from './vcard.js';
 import { behavioralEffects, messageProtection, type BehavioralEffect } from './message-protection.js';
 import {
   conversationPreviewString,
@@ -53,6 +57,7 @@ export type PreviewIcon =
   | 'video'
   | 'photo'
   | 'file'
+  | 'contact'
   | 'location'
   | 'sticker'
   | 'attachments'
@@ -177,6 +182,11 @@ export type ConversationPreviewInput = {
   readonly draft?: string | null;
   readonly lastReaction?: ConversationLastReaction | null;
   readonly lastMessage?: ConversationPreviewMessage | null;
+  /**
+   * Discussion DIRECTE (#9049) : le titre de la ligne nomme déjà le pair — sa
+   * réaction se dit « a réagi ❤️ à « … » », sans répéter son nom.
+   */
+  readonly isDirect?: boolean;
 };
 
 type Str = (key: ConversationPreviewStringKey, params?: Readonly<Record<string, string | number>>) => string;
@@ -252,6 +262,7 @@ const PROTECTION_PLACEHOLDER: Readonly<Record<Exclude<PreviewProtection, 'epheme
   'view-once': 'protection.viewOnce',
   blurred: 'protection.hidden',
   encrypted: 'protection.encrypted',
+  'after-read': 'protection.afterRead',
 };
 
 /**
@@ -277,7 +288,9 @@ function reactionLine(reaction: ConversationLastReaction, input: ConversationPre
   const excerpt = reactionExcerpt(reaction, input, str);
   const key: ConversationPreviewStringKey = isSelf
     ? excerpt ? 'reaction.self' : 'reaction.self.bare'
-    : excerpt ? 'reaction.member' : 'reaction.member.bare';
+    : input.isDirect === true
+      ? excerpt ? 'reaction.peer' : 'reaction.peer.bare'
+      : excerpt ? 'reaction.member' : 'reaction.member.bare';
   return preview({
     kind: 'reaction',
     segments: [label(str(key, { actor, emoji: reaction.emoji, excerpt: excerpt ?? '' }))],
@@ -327,6 +340,8 @@ function messageLine(message: ConversationPreviewMessage, input: ConversationPre
       });
     case 'encrypted':
       return preview({ kind: 'message', author, icon: 'encrypted', segments: [label(str('protection.encrypted'))] });
+    case 'after-read':
+      return preview({ kind: 'message', author, icon: 'ephemeral', segments: [label(str('protection.afterRead'))] });
     case 'ephemeral': {
       const body = bodyOf(message, input, str);
       const countdown: readonly PreviewSegment[] = guard.expiresAt !== null
@@ -352,7 +367,7 @@ function messageLine(message: ConversationPreviewMessage, input: ConversationPre
 }
 
 type Guard =
-  | { readonly kind: 'none' | 'expired' | 'view-once' | 'hidden' | 'encrypted' }
+  | { readonly kind: 'none' | 'expired' | 'view-once' | 'hidden' | 'encrypted' | 'after-read' }
   | { readonly kind: 'ephemeral'; readonly expiresAt: number | null; readonly durationSeconds: number | null };
 
 function protectionOf(message: ConversationPreviewMessage, input: ConversationPreviewInput, now: number): Guard {
@@ -375,6 +390,7 @@ function protectionOf(message: ConversationPreviewMessage, input: ConversationPr
   if (flags.viewOnce || attachment.viewOnce) return { kind: 'view-once' };
   if (flags.blurred || attachment.blurred) return { kind: 'hidden' };
   if (flags.encrypted) return { kind: 'encrypted' };
+  if (isAfterReadEphemeral(message.effectFlags)) return { kind: 'after-read' };
   if (!flags.ephemeral) return { kind: 'none' };
   return {
     kind: 'ephemeral',
@@ -485,6 +501,10 @@ function bodyOf(message: ConversationPreviewMessage, input: ConversationPreviewI
     return { icon, segments: [head, ...size], labelled: [head, ...size] };
   }
 
+  if (attachment && isContactCardAttachment({ mimeType: attachment.mimeType, fileName: attachment.originalName })) {
+    return contactCardBody(attachment, text, str);
+  }
+
   const kind = attachmentKindOf(attachment, message.messageType);
   if (text) return { icon: kind, segments: [text], labelled: [text] };
   const name = attachment?.originalName?.trim() ?? '';
@@ -493,6 +513,17 @@ function bodyOf(message: ConversationPreviewMessage, input: ConversationPreviewI
   const details = detailsOf(kind, attachment, input.language, str);
   const labelledHead = named ? [label(str(ONE_KEY[kind])), head] : [head];
   return { icon: kind, segments: [head, ...details], labelled: [...labelledHead, ...details] };
+}
+
+/**
+ * Une carte de visite se dit par son CONTACT, jamais par son fichier (#8122,
+ * #8148) : « Contact partagé · Zoé » — ni UUID, ni extension, ni poids.
+ */
+function contactCardBody(attachment: ConversationPreviewAttachment, text: PreviewSegment | null, str: Str): Body {
+  if (text) return { icon: 'contact', segments: [text], labelled: [text] };
+  const name = contactCardNameFromFileName(attachment.originalName);
+  const segments = [label(str('attachment.contact')), ...(name ? [label(name)] : [])];
+  return { icon: 'contact', segments, labelled: segments };
 }
 
 function detailsOf(kind: AttachmentKind, attachment: ConversationPreviewAttachment | null, language: string, str: Str): readonly PreviewSegment[] {
@@ -576,9 +607,16 @@ const SYSTEM_KEYS: Readonly<Record<string, (params: Readonly<Record<string, stri
   'system.conversation-image': () => 'system.conversation.image',
 };
 
+/**
+ * `system.generic` est la clé d'un message que le SERVEUR ne sait pas typer
+ * (avis antérieur aux métadonnées) : son texte est alors la seule chose qu'il
+ * dise — celle que le fil affiche. Le libellé neutre ne vaut que sans texte (#8561).
+ */
+const UNTYPED_SYSTEM_KEY = 'system.generic';
+
 function systemLine(message: ConversationPreviewMessage, input: ConversationPreviewInput, str: Str): ConversationPreview {
   const event = message.systemEvent ?? null;
-  if (event) {
+  if (event && event.key !== UNTYPED_SYSTEM_KEY) {
     const raw = event.params ?? {};
     const key = SYSTEM_KEYS[event.key]?.(raw) ?? 'system.generic';
     const someone = str('message.author.unknown');
@@ -602,6 +640,7 @@ export const PREVIEW_ICON_GLYPH: Readonly<Record<PreviewIcon, string>> = {
   video: '🎬',
   photo: '📷',
   file: '📄',
+  contact: '👤',
   location: '📍',
   sticker: '🏷',
   attachments: '📎',

@@ -59,23 +59,34 @@ const HOOK_NAMES = [
   'useSyncExternalStore',
   'useQueryClient',
   'useStore',
-  'useParams',
+  'useOptionalRoute',
   'useOnline',
   'useConversationsSnapshot',
   'useReaderLanguages',
   'useLiveAnnouncer',
   'useSend',
+  'useHeaderMemory',
   'useThreadData',
   'useVirtualizer',
   'useThreadScene',
   'useThreadInsets',
   'useThreadChromeSignals',
   'useThreadTyping',
+  'useConversationViewing',
+  'useHereIn',
+  'useActiveIn',
+  'useFocusedIn',
+  'useConversationActivity',
   'useMessageMenu',
   'useAuthorStoryRings',
+  'useAuthorMoods',
   'useEphemeralDestruction',
+  'useLivingMessages',
   'useOlderMessages',
+  'useNewerMessages',
   'useReadTracking',
+  'useAfterReadConsumption',
+  'useEngagementRevalidation',
   'useThreadOpenScroll',
   'useUnreadBoundary',
   // #7429 — les trois hooks nés du découpage de cet écran ; ceux qu'ils ont
@@ -87,9 +98,9 @@ const HOOK_NAMES = [
 ] as const;
 
 const EARLY_RETURN_MARKERS = [
-  "return <ThreadRefused />",
-  "return <ThreadError onRetry={threadData.refetch} />",
-  "return <ThreadSkeleton />",
+  "return <ThreadRefused preview={inPreview} />",
+  "return <ThreadError onRetry={threadData.refetch} preview={inPreview} />",
+  "return <ThreadSkeleton preview={inPreview} />",
 ] as const;
 
 describe('ThreadScreen — Rules of Hooks : aucun hook après un retour anticipé (#6175, défaut bloquant 1)', () => {

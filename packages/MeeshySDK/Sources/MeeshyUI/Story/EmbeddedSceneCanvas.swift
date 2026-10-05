@@ -122,6 +122,12 @@ public struct EmbeddedSceneCanvas: View {
     /// donc c'est LUI qui dit au canvas qu'un bitmap a changé. Le transmettre
     /// sans le cookie laisserait le canvas sur sa version périmée.
     public var loadedImagesVersion: UInt64
+    /// Les médias adoptés rendus à leur fichier local (retour porteur
+    /// 2026-09-28 — l'adoption doit être imperceptible).
+    public var localMediaAliases: [String: URL]
+    /// L'éditeur d'objet l'opte : le texte en saisie se déplace, se zoome et
+    /// se tourne au doigt (retour porteur 2026-09-28).
+    public var inlineEditYieldsToManipulation: Bool
 
     /// **Le canvas doit RETIRER son calque de dessin persisté pendant qu'une
     /// surface de dessin est active** (#4092).
@@ -168,6 +174,10 @@ public struct EmbeddedSceneCanvas: View {
     /// incrustée sert `[.text]` tant qu'aucun éditeur média n'y est monté, pour
     /// que « Modifier » ne soit jamais offert sur un objet qu'elle ignore.
     public var onItemDoubleTapped: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)?
+    /// « Rogner » dans l'appui long (#8370, lot 6).
+    public var onItemTrimRequested: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)?
+    /// Le menu d'appui long peint par l'hôte (#8717).
+    public var onItemMenuRequested: ((String, StoryCanvasUIView.CanvasItemKind, CGPoint) -> Void)?
     public var editableKinds: Set<StoryCanvasUIView.CanvasItemKind>
 
     public init(
@@ -193,8 +203,18 @@ public struct EmbeddedSceneCanvas: View {
         onInlineTextEditEnded: ((String) -> Void)? = nil,
         selectedItemId: String? = nil,
         selectionBadge: String? = nil,
-        referenceViewport: CGSize = CGSize(width: 402, height: 874)
+        referenceViewport: CGSize = CGSize(width: 402, height: 874),
+        timelineBridge: StoryCanvasTimelineBridge? = nil,
+        onItemTrimRequested: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)? = nil,
+        onItemMenuRequested: ((String, StoryCanvasUIView.CanvasItemKind, CGPoint) -> Void)? = nil,
+        localMediaAliases: [String: URL] = [:],
+        inlineEditYieldsToManipulation: Bool = false
     ) {
+        self.localMediaAliases = localMediaAliases
+        self.inlineEditYieldsToManipulation = inlineEditYieldsToManipulation
+        self.timelineBridge = timelineBridge
+        self.onItemTrimRequested = onItemTrimRequested
+        self.onItemMenuRequested = onItemMenuRequested
         self._slide = slide
         self.aspectRatio = aspectRatio
         self.cornerRadius = cornerRadius
@@ -235,18 +255,28 @@ public struct EmbeddedSceneCanvas: View {
     /// propre canvas (mesuré 392×696 sur iPhone 16 Pro).
     public var referenceViewport: CGSize
 
+    /// **Le pont de la frise** (#8415, mode Animé) : la lecture et le
+    /// déplacement de la tête pilotent ce canvas-ci, comme dans l'atelier.
+    /// `nil` pour tout hôte qui n'anime pas sa scène.
+    public var timelineBridge: StoryCanvasTimelineBridge?
+
     public var body: some View {
         GeometryReader { proxy in
             // Bounds intrinsèques FIXES au ratio, centrés (« fit ») dans la
             // zone bornée que le parent nous donne — jamais l'écran entier.
-            let fit = CanvasGeometry.aspectFitSize(in: proxy.size, ratio: aspectRatio)
-            let reference = CanvasGeometry.aspectFitSize(in: referenceViewport, ratio: aspectRatio)
-            let scale = reference.width > 0 ? fit.width / reference.width : 1
+            let projection = SceneCardProjection(container: proxy.size,
+                                                 ratio: aspectRatio,
+                                                 referenceViewport: referenceViewport)
+            let fit = projection.fit
+            let reference = projection.reference
+            let scale = projection.scale
             StoryComposerCanvasView(
                 slide: $slide,
                 onItemTapped: onItemTapped,
                 onItemDoubleTapped: onItemDoubleTapped,
                 editableKinds: editableKinds,
+                onItemTrimRequested: onItemTrimRequested,
+                onItemMenuRequested: onItemMenuRequested,
                 editingTextId: editingTextId,
                 onInlineTextChanged: onInlineTextChanged,
                 onInlineTextEditEnded: onInlineTextEditEnded,
@@ -265,7 +295,10 @@ public struct EmbeddedSceneCanvas: View {
                 // de référence PUIS réduite, donc un rayon UIKit de
                 // `cornerRadius / scale` atterrit bien à `cornerRadius` à l'écran
                 // (même compensation que `canvasComposerLayer`).
-                canvasCornerRadius: scale > 0 ? cornerRadius / scale : 0
+                canvasCornerRadius: scale > 0 ? cornerRadius / scale : 0,
+                timelineBridge: timelineBridge,
+                localMediaAliases: localMediaAliases,
+                inlineEditYieldsToManipulation: inlineEditYieldsToManipulation
             )
             // **Le canvas cesse de recevoir les touches pendant qu'un calque
             // les capture** — sinon le doigt qui trace déplacerait aussi

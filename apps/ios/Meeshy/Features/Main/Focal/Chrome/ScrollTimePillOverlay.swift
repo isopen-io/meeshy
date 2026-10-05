@@ -54,7 +54,7 @@ struct ScrollTimePillOverlay: View {
                     .fill(.ultraThinMaterial)
                     .overlay(
                         Capsule()
-                            .strokeBorder(borderColor, lineWidth: 0.5)
+                            .strokeBorder(borderColor, lineWidth: MeeshyBorder.hairline)
                     )
             )
     }

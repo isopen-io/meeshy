@@ -3,9 +3,12 @@ import type { MessageDeletedEventData, SocketIOMessage } from '@meeshy/shared/ty
 
 import { quotedIsProtected } from '@/lib/view/quoted-protection';
 
+import { decodeAttachment } from './decode';
+
 import { deleteLastMessage, editLastMessage } from './list-preview';
 import { findCachedThreadMessage, patchThreadMessages } from './messages';
-import type { Message } from './types';
+import { belongsTo, quotes, tombstone } from './quote-tombstone';
+import type { Attachment, Message } from './types';
 import { purgeViewOnceIn } from './view-once-seal';
 
 /**
@@ -54,32 +57,55 @@ const isStaleEdit = (known: Message, incomingEditedAt: unknown): boolean => {
   return incomingMs < knownMs - EDIT_ORDERING_TOLERANCE_MS;
 };
 
-const belongsTo = (message: Message, conversationId: string): boolean => message.conversationId === conversationId;
 
 /** Les traductions de l'ANCIEN texte sont périmées ; seule une carte servie AVEC l'édition peut la suivre. */
 const servedTranslations = (data: SocketIOMessage): Message['translations'] =>
   Array.isArray(data.translations) && data.translations.length > 0 ? (data.translations as Message['translations']) : [];
 
+/** Une rediffusion qui porte ses pièces jointes les pose (l'enregistrement rattaché à la bulle d'un appel, #8064) ; une charge qui n'en dit rien garde celles en place. */
+const isServedAttachment = (value: unknown): value is Attachment =>
+  typeof value === 'object' && value !== null && typeof (value as { readonly id?: unknown }).id === 'string';
+
+const servedAttachments = (data: SocketIOMessage): Pick<Message, 'attachments'> | Record<string, never> =>
+  Array.isArray(data.attachments) ? { attachments: data.attachments.filter(isServedAttachment).map(decodeAttachment) } : {};
+
+/**
+ * Un avis que le SERVEUR complète sur place (la ligne d'arrivées de Meeshy
+ * Global, #8565) arrive avec `isEdited: false` et son `metadata` à jour :
+ * personne ne l'a modifié, et la rangée le relit depuis `metadata`. Une
+ * charge qui tait `isEdited` reste une édition d'utilisateur.
+ */
+const wasEdited = (data: SocketIOMessage): boolean => data.isEdited !== false;
+
+const servedMetadata = (data: SocketIOMessage): Pick<Message, 'metadata'> | Record<string, never> =>
+  typeof data.metadata === 'object' && data.metadata !== null
+    ? { metadata: data.metadata as NonNullable<Message['metadata']> }
+    : {};
+
 const editedRow = (known: Message, data: SocketIOMessage): Message => ({
   ...known,
+  ...servedAttachments(data),
+  ...servedMetadata(data),
   content: data.content,
-  isEdited: true,
+  isEdited: wasEdited(data),
   translations: servedTranslations(data),
   ...(data.editedAt === undefined ? {} : { editedAt: data.editedAt }),
   ...(data.validatedMentions === undefined ? {} : { validatedMentions: data.validatedMentions }),
 });
 
-/** Une citation PROTÉGÉE porte un placeholder servi : le texte en clair n'y entre jamais. */
+/**
+ * Une citation PROTÉGÉE porte un placeholder servi : le texte en clair n'y entre jamais.
+ * Une citation SCELLÉE (supprimée, ou éphémère échu pour ce lecteur — #8562) non plus :
+ * une édition du message cité ne la ressuscite pas. Miroir de `followsParentEdits` (iOS).
+ */
+const isSealedQuote = (quote: Message): boolean => quote.deletedAt !== undefined && quote.deletedAt !== null;
+
 const editedQuote = (quote: Message, data: SocketIOMessage): Message =>
-  quotedIsProtected(quote) || isStaleEdit(quote, data.editedAt) ? quote : editedRow(quote, data);
+  quotedIsProtected(quote) || isSealedQuote(quote) || isStaleEdit(quote, data.editedAt) ? quote : editedRow(quote, data);
 
-const tombstone = (message: Message, deletedAt: string): Message => {
-  const { attachments: _attachments, ...rest } = message;
-  return { ...rest, content: '', translations: [], deletedAt: deletedAt as unknown as Date };
-};
 
-const quotes = (message: Message, quotedId: string): boolean =>
-  message.replyTo !== undefined && message.replyTo !== null && message.replyTo.id === quotedId;
+
+export { tombstoneQuotesOf } from './quote-tombstone';
 
 export function applyMessageEdited(queryClient: QueryClient, data: SocketIOMessage): void {
   const known = findCachedThreadMessage(queryClient, data.conversationId, data.id);
@@ -100,7 +126,9 @@ export function applyMessageEdited(queryClient: QueryClient, data: SocketIOMessa
   editLastMessage(queryClient, data.conversationId, {
     messageId: data.id,
     content: data.content,
+    isEdited: wasEdited(data),
     ...(data.editedAt === undefined ? {} : { editedAt: data.editedAt }),
+    ...(data.systemEvent === undefined ? {} : { systemEvent: data.systemEvent }),
   });
 }
 

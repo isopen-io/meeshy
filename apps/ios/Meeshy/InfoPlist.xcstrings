@@ -151,43 +151,43 @@
         "ar" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "يحتاج Meeshy إلى الوصول إلى جهات اتصالك لمساعدتك في العثور على أصدقائك على المنصّة."
+            "value" : "يستخدم Meeshy جهات اتصالك للعثور على أصدقائك الموجودين على Meeshy وإخطارك عند انضمام أحدهم. لن يتواصل أحد مع أي شخص نيابةً عنك."
           }
         },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Meeshy benötigt Zugriff auf Ihre Kontakte, um Ihnen zu helfen, Freunde auf der Plattform zu finden."
+            "value" : "Meeshy nutzt Ihre Kontakte, um Freunde zu finden, die schon auf Meeshy sind, und Sie zu benachrichtigen, wenn einer von ihnen dazukommt. Niemand wird in Ihrem Namen kontaktiert."
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Meeshy needs access to your contacts to help you connect with friends on the platform."
+            "value" : "Meeshy uses your contacts to find friends who are already on Meeshy and let you know when one of them joins. No one is contacted on your behalf."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Meeshy necesita acceso a tus contactos para ayudarte a conectar con amigos en la plataforma."
+            "value" : "Meeshy usa tus contactos para encontrar a los amigos que ya están en Meeshy y avisarte cuando uno de ellos llegue. Nadie recibe mensajes en tu nombre."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Meeshy a besoin d'accéder à vos contacts pour vous aider à retrouver vos amis sur la plateforme."
+            "value" : "Meeshy utilise vos contacts pour retrouver vos amis déjà sur Meeshy et vous prévenir quand l'un d'eux arrive. Personne n'est contacté à votre place."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Meeshy ha bisogno di accedere ai tuoi contatti per aiutarti a ritrovare i tuoi amici sulla piattaforma."
+            "value" : "Meeshy usa i tuoi contatti per ritrovare gli amici già su Meeshy e avvisarti quando uno di loro arriva. Nessuno viene contattato al posto tuo."
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "O Meeshy precisa de acesso aos seus contatos para ajudá-lo a se conectar com amigos na plataforma."
+            "value" : "O Meeshy usa seus contatos para encontrar amigos que já estão no Meeshy e avisar você quando um deles chegar. Ninguém é contatado em seu nome."
           }
         }
       }

@@ -295,7 +295,78 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // (synchroniser `StickerLibraryStore`, aujourd'hui local, avec ces routes).
 // Leur appelant actuel est TS (`apps/web/src/lib/api/stickers.ts`). Valeur
 // MESURÉE sur la branche du 2026-09-25 fusionnée avec `dev`.
-const BASELINE_DEAD_ENTRIES = 272;
+// 272 → 275 (#7999) : `AdminEndpoint.conversationsByConversationId`,
+// `.conversationsByConversationIdParticipantsByUserId` et
+// `.conversationsByConversationIdParticipantsByUserIdRemove` — GÉNÉRÉES depuis
+// `route-manifest.json` ; leur seul appelant est la fiche d'administration WEB.
+// Valeur MESURÉE le 2026-09-26.
+// 275 → 276 → 275 (#8083) : `AuthEndpoint.verificationStatus`, générée par la
+// phase passerelle avant son appelant, consommée par la phase iOS
+// (`AuthService.emailVerificationStatus`).
+// 275 → 277 (#8099) : `ConversationsEndpoint.byIdCard` et
+// `LinksEndpoint.byIdentifierCard` — GÉNÉRÉES depuis `route-manifest.json` ;
+// `ConversationCardService` (iOS) passe encore par l'enum écrit à la main
+// `ConversationCardEndpoint`, dont l'en-tête annonce le retrait au profit de
+// ces cas générés. Valeur MESURÉE le 2026-09-26.
+// 277 → 278 (#8066) : `CallsEndpoint.historyByCallId` — `DELETE
+// /api/v1/calls/history/:callId`, effacer une ligne du journal d'appels,
+// GÉNÉRÉE depuis `route-manifest.json`. Le lot ne livre que le web ; l'app
+// iOS n'efface pas encore une ligne de son journal. Valeur MESURÉE le 2026-09-26.
+// 278 → 279 (#8051) : `AdminEndpoint.usersByUserIdPasswordProposals` — `POST
+// /api/v1/admin/users/:userId/password-proposals`, les mots de passe proposés
+// à un administrateur, GÉNÉRÉE depuis `route-manifest.json` ; seul le web
+// d'administration l'appelle, comme ses voisines `AdminEndpoint`. Valeur
+// MESURÉE le 2026-09-27.
+// 278 → 280 (#8217) : `AdminEndpoint.usersByUserIdProfileImageCandidates` et
+// `AdminEndpoint.usersByUserIdProfileImagesByKind` — `GET
+// /api/v1/admin/users/:userId/profile-image-candidates` et `PUT
+// /api/v1/admin/users/:userId/profile-images/:kind`, la photo et la bannière
+// d'un membre posées par l'administration, GÉNÉRÉES depuis
+// `route-manifest.json` ; seul le web d'administration les appelle, comme
+// leurs voisines `AdminEndpoint`. Valeur MESURÉE le 2026-09-27.
+// 280 → 281 (#8289) : `AdminEndpoint.usersByUserIdVerificationRequests` —
+// `POST /api/v1/admin/users/:userId/verification-requests`, le renvoi par
+// l'administration de la vérification d'un e-mail ou d'un téléphone, GÉNÉRÉE
+// depuis `route-manifest.json` ; seul le web d'administration l'appelle, comme
+// ses voisines `AdminEndpoint`. Valeur MESURÉE le 2026-09-27.
+// 281 → 282 (#8302) : `ConversationsEndpoint.byIdMessagesAfterReadConsume` —
+// `POST /api/v1/conversations/:id/messages/after-read/consume`, la flamme-œil
+// consommée par le lecteur qui quitte la conversation, GÉNÉRÉE depuis
+// `route-manifest.json`. Le web l'appelle déjà ; le lot iOS de la même
+// milestone la consomme en parallèle et doit ramener cette valeur à 281.
+// Valeur MESURÉE le 2026-09-27.
+// 282 → 281 (#8303) : le lot iOS consomme `byIdMessagesAfterReadConsume`
+// (`MessageService.consumeAfterRead`, rejoué par l'outbox). Valeur MESURÉE le
+// 2026-09-27.
+// 281 → 280 (#8365) : la garde de l'e-mail (`EmailVerificationGate`) lit ses
+// routes dans le catalogue, dont `ConversationsEndpoint.byIdNewLink`, jamais
+// appelée jusque-là. Valeur MESURÉE le 2026-09-27.
+// 280 → 279 (#8438) : le retrait d'un participant d'appel appelle enfin
+// `DELETE /calls/:callId/participants/:participantId` depuis le catalogue.
+// Valeur MESURÉE le 2026-09-28.
+// 279 -> 285 (#8876, 2026-09-30) : six entrées `AdminEndpoint` GÉNÉRÉES depuis
+// `route-manifest.json` pour la vue de Dieu de l'administration —
+// `.auditLogs`, `.trackingLinks`, `.trackingLinksByLinkId`, `.monitoring`,
+// `.communitiesByCommunityId` et `.communitiesByCommunityIdMembers`. Leur seul
+// appelant est la console d'administration WEB, comme leurs voisines
+// `AdminEndpoint` ; iOS n'a pas d'écran d'administration. Valeur MESURÉE le
+// 2026-09-30.
+// 285 -> 286 (#8906, fusion de `dev` dans la vue de Dieu, 2026-09-30) :
+// `AdminEndpoint.engagementScale` — le barème de points se règle depuis
+// l'administration WEB (`/admin/engagement-scale`) ; iOS n'a pas d'écran
+// d'administration du barème. Sa jumelle lecteur,
+// `ConversationsEndpoint.byIdEngagement`, est appelée par
+// `ConversationService.engagement(conversationId:)`. Les deux cliquets se
+// lisent ici sur le résultat de la fusion (chacun 279 de son côté : 285 et
+// 280), jamais sur l'un des deux parents. Valeur MESURÉE le 2026-09-30.
+// 285 -> 292 (#9141, 2026-10-02) : les sept entrées `StickerPacksEndpoint`
+// GÉNÉRÉES depuis `route-manifest.json` pour les packs de stickers tiers —
+// `.root`, `.installed`, `.pending`, `.submissions`, `.bySlug`,
+// `.bySlugInstall` et `.bySlugReview`. Mortes à la naissance PAR
+// CONSTRUCTION : #9141 livre les routes gateway et la Boutique WEB ; les
+// onglets par pack côté iOS sont un suivi à part, qui n'existe pas encore.
+// Valeur MESURÉE le 2026-10-02.
+const BASELINE_DEAD_ENTRIES = 289;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;
 // Une déclaration de cas n'a jamais de point après `case` ; une branche de

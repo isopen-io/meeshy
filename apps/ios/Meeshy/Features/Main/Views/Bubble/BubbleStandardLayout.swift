@@ -58,6 +58,7 @@ struct BubbleStandardLayout: View {
     let preferredTranslation: MessageTranslation?
     let showAvatar: Bool
     let presenceState: PresenceState?
+    let senderIsHere: ConversationHere
     let senderMoodEmoji: String?
     let senderStoryRingState: StoryRingState
     let allAudioItems: [ConversationViewModel.AudioItem]
@@ -141,31 +142,12 @@ struct BubbleStandardLayout: View {
     /// bulle. Défaut `false` — la cellule live garde ses spacers d'alignement.
     var standalone: Bool = false
 
-    // MARK: - Playback tracking
-    //
-    // `inlineVideoActiveURL` réplique localement la `SharedAVPlayerManager.activeURL`
-    // pour qu'on puisse cacher le footer (heure d'envoi + delivery state)
-    // pendant qu'une des vidéos de cette bulle est en lecture. On évite
-    // `@ObservedObject SharedAVPlayerManager.shared` : ça re-renderait la
-    // bulle 10×/sec via le periodic time observer. Ici on s'abonne juste à
-    // `$activeURL` qui ne ticke pas (change uniquement sur load/stop).
-    @State private var inlineVideoActiveURL: String = ""
-
     /// Lieu affiché en plein écran quand il vient de `message.location` (voie
     /// serveur actuelle). Les anciennes pièces jointes `.location` du cache
     /// local passent, elles, par `fullscreenLocationAttachment` (binding du
     /// wrapper) — deux états distincts car les véhicules diffèrent
     /// (`SharedPlace` vs `MessageAttachment`).
     @State private var fullscreenPlace: BubbleFullscreenPlace?
-
-    /// Whether an inline AVPlayer is currently mounted on this bubble.
-    /// Read by the extension in `ThemedMessageBubble+Media.swift` to hide
-    /// the footer and the media-time overlay during playback — defaults
-    /// to internal so cross-file extensions on this struct can observe it.
-    var hasPlayingInlineVideo: Bool {
-        guard !inlineVideoActiveURL.isEmpty else { return false }
-        return visualAttachments.contains { $0.type == .video && $0.fileUrl == inlineVideoActiveURL }
-    }
 
     // MARK: - Adaptive sizing (iPad regular size class needs a tighter cap)
 
@@ -193,7 +175,7 @@ struct BubbleStandardLayout: View {
         }
     }
 
-    private var audioAttachments: [MessageAttachment] {
+    var audioAttachments: [MessageAttachment] {
         switch content.attachments {
         case .audio(let atts): return atts
         case .mixed(_, let audio, _): return audio
@@ -201,7 +183,7 @@ struct BubbleStandardLayout: View {
         }
     }
 
-    private var nonMediaAttachments: [MessageAttachment] {
+    var nonMediaAttachments: [MessageAttachment] {
         switch content.attachments {
         case .nonMedia(let items): return items
         case .mixed(_, _, let items): return items
@@ -255,12 +237,12 @@ struct BubbleStandardLayout: View {
     private var isEmojiOnly: Bool { content.isEmojiOnly }
 
     /// Cache key for `BubbleBodyFooterLayout`. nil (no caching) for expandable
-    /// bubbles: their measured height depends on the per-cell `isExpanded`
-    /// @State of `BubbleExpandableText`, which the content-keyed cache cannot
+    /// bubbles: their measured height depends on the host's expansion state
+    /// (`longMessageExpansion`, #8147), which the content-keyed cache cannot
     /// observe — so a long message always measures live and never risks a stale
     /// collapsed/expanded height. Every other bubble keys on (id, content).
     private var heightCacheContext: BubbleHeightCacheContext? {
-        if let raw = content.text?.raw, raw.count > BubbleExpandableText.truncateLimit {
+        if let raw = content.text?.raw, LongMessageExcerpt.isLong(raw) {
             return nil
         }
         // Link-preview bubbles host a self-loading OG card whose height changes
@@ -359,7 +341,7 @@ struct BubbleStandardLayout: View {
     /// expediteur -> [reponse a...] -> contenu. Returns nil when the bubble is
     /// not a reply. The combined bubble element flattens the visual quote card's
     /// own sub-views, so this is the only way the reply reaches VoiceOver.
-    private var replyAccessibilityLabel: String? {
+    var replyAccessibilityLabel: String? {
         guard let reply = content.reply?.reference else { return nil }
         let author: String = reply.isMe
             ? String(localized: "a11y.bubble.replyTo.you", bundle: .main)
@@ -373,37 +355,16 @@ struct BubbleStandardLayout: View {
         return String(format: String(localized: "a11y.bubble.replyTo.excerpt", bundle: .main), author, excerpt)
     }
 
-    /// **LOI DES ZONES — la moitié VoiceOver.** Les zones 1 (avatar → profil) et
-    /// 2 (miniature / icône de lecture → plein écran) sont des gestes posés
-    /// DANS `BubbleQuotedReply`. Deux lignes plus haut, cette rangée pose
-    /// `.accessibilityElement(children: .combine)` — elle devient UN seul
-    /// élément — puis `.accessibilityLabel(messageAccessibilityLabel)`, qui
-    /// REMPLACE le libellé composé des enfants. Le trait de bouton, l'indice et
-    /// le libellé que la citation pose sur son avatar et sur sa miniature ne
-    /// sont donc jamais prononcés, et VoiceOver n'a ni tap localisé ni appui
-    /// long pour les atteindre : sans action nommée, les deux capacités sont
-    /// indisponibles au lecteur d'écran.
-    ///
-    /// Même parade que `BubbleSystemViews.joinNotice` (« VoiceOver n'a pas
-    /// d'appui long : l'action lui est offerte explicitement »). Les actions
-    /// suivent l'ARMEMENT, jamais la présence à l'écran : une action nommée qui
-    /// ne déclenche rien serait un contrôle qui ment (loi 4 du dépôt), pire ici
-    /// qu'ailleurs puisque le rotor la RÉCITE. Les deux clés sont celles que la
-    /// citation emploie déjà — zéro clé neuve, zéro clé morte.
-    @ViewBuilder
+    /// **LOI DES ZONES — la moitié VoiceOver.** Site unique des deux rangées :
+    /// `QuotedZoneAccessibility` (#8320), qui y ajoute l'écoute d'un audio cité
+    /// et le saut au message cité.
     private var quotedZoneAccessibilityActions: some View {
-        if let reference = content.reply?.reference {
-            if let onQuotedAuthorTap, reference.offersAuthorGate {
-                Button(String(localized: "bubble.reply.author_hint", defaultValue: "Affiche le profil de l'auteur cité", bundle: .main)) {
-                    onQuotedAuthorTap(reference)
-                }
-            }
-            if let onQuotedMediaTap, reference.offersMediaGate {
-                Button(String(localized: "bubble.reply.open_media", defaultValue: "Ouvrir le média cité", bundle: .main)) {
-                    onQuotedMediaTap(reference)
-                }
-            }
-        }
+        QuotedZoneAccessibility.actions(
+            reference: content.reply?.reference,
+            onQuotedAuthorTap: onQuotedAuthorTap,
+            onQuotedMediaTap: onQuotedMediaTap,
+            onReplyTap: onReplyTap
+        )
     }
 
     /// Mentions d'accessibilité des contenus non média : lieu + fichiers.
@@ -416,67 +377,7 @@ struct BubbleStandardLayout: View {
         hasSharedPlace: Bool,
         nonMedia: [MessageAttachment]
     ) -> [String] {
-        var parts: [String] = []
-        if hasSharedPlace {
-            parts.append(String(localized: "a11y.message.location", bundle: .main))
-        }
-        for att in nonMedia {
-            if att.type == .location {
-                parts.append(String(localized: "a11y.message.location", bundle: .main))
-            } else {
-                parts.append(String(format: String(localized: "a11y.message.file", bundle: .main), att.originalName))
-            }
-        }
-        return parts
-    }
-
-    private var messageAccessibilityLabel: String {
-        var parts: [String] = []
-        if !content.isMe, let senderName = content.senderName {
-            parts.append(senderName)
-        } else if !content.isMe {
-            parts.append(String(localized: "a11y.message.unknown_sender", bundle: .main))
-        }
-        if let replyLabel = replyAccessibilityLabel {
-            parts.append(replyLabel)
-        }
-        if let raw = content.text?.raw, !raw.isEmpty {
-            parts.append(raw)
-        }
-        if !visualAttachments.isEmpty {
-            let imageCount = visualAttachments.filter { $0.type == .image }.count
-            let videoCount = visualAttachments.filter { $0.type == .video }.count
-            if imageCount > 0 {
-                parts.append(String(format: String(localized: "a11y.message.images", bundle: .main), imageCount))
-            }
-            if videoCount > 0 {
-                parts.append(String(format: String(localized: "a11y.message.videos", bundle: .main), videoCount))
-            }
-        }
-        if !audioAttachments.isEmpty {
-            parts.append(String(format: String(localized: "a11y.message.audios", bundle: .main), audioAttachments.count))
-        }
-        parts.append(contentsOf: Self.nonMediaAccessibilityParts(
-            hasSharedPlace: content.location != nil,
-            nonMedia: nonMediaAttachments
-        ))
-        parts.append(content.meta.timeString)
-        if content.isMe {
-            parts.append(MessageAccessibilityLabelComposer.deliveryStatusAccessibilityLabel(content.meta.deliveryStatus))
-        }
-        if content.editedAt != nil {
-            parts.append(String(localized: "a11y.message.edited", bundle: .main))
-        }
-        if content.isPinned {
-            parts.append(String(localized: "a11y.message.pinned", bundle: .main))
-        }
-        parts.append(contentsOf: MessageProtectionChrome.accessibilityLabels(for: content.protection))
-        let summaries = content.reactions
-        if !summaries.isEmpty {
-            let reactionText = summaries.map { "\($0.emoji) \($0.count)" }.joined(separator: ", ")
-            parts.append(String(format: String(localized: "a11y.message.reactions", bundle: .main), reactionText))
-        }
-        return parts.joined(separator: ", ")
+        MessageAccessibilityLabelComposer.nonMediaAccessibilityParts(hasSharedPlace: hasSharedPlace, nonMedia: nonMedia)
     }
 
     // MARK: - Body
@@ -486,7 +387,7 @@ struct BubbleStandardLayout: View {
         HStack(alignment: .bottom, spacing: 0) {
             if isMe && !standalone { Spacer(minLength: 50) }
 
-            VStack(alignment: isMe ? .trailing : .leading, spacing: 4) {
+            VStack(alignment: isMe ? .trailing : .leading, spacing: MeeshySpacing.xs) {
                 // Pin indicator
                 if content.isPinned {
                     BubblePinnedIndicator()
@@ -541,7 +442,6 @@ struct BubbleStandardLayout: View {
                 ZStack {
                     contentStack(shouldBlur: shouldBlur)
 
-                    // Fog condensation effect (appears when blur returns)
                     if blurController.fogOpacity > 0 {
                         fogOverlay
                     }
@@ -549,8 +449,9 @@ struct BubbleStandardLayout: View {
                     // Blur peek: tap to reveal for N seconds, then auto re-blur
                     if content.requiresVeil && !blurController.isRevealed {
                         ProtectedVeilAffordance(
-                            isViewOnce: content.isViewOnce,
+                            isViewOnce: content.veilConsumesViewOnce,
                             isDark: isDark,
+                            hint: content.protectedTap().accessibilityHint,
                             onReveal: revealBlurredContent
                         )
                     }
@@ -620,19 +521,6 @@ struct BubbleStandardLayout: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel(messageAccessibilityLabel)
         .accessibilityActions { quotedZoneAccessibilityActions }
-        .onReceive(SharedAVPlayerManager.shared.$activeURL) { newURL in
-            // Local mirror — toggles `hasPlayingInlineVideo` to drive the
-            // footer overlay visibility. Doesn't re-render on time ticks.
-            //
-            // Every visible bubble (text bubbles included) is subscribed, but
-            // only a bubble that actually owns a video has any reason to mirror
-            // this. Gating the @State write on video presence (and deduping the
-            // value) means a text bubble's body is never invalidated when the
-            // active inline video changes elsewhere in the list.
-            guard visualAttachments.contains(where: { $0.type == .video }),
-                  newURL != inlineVideoActiveURL else { return }
-            inlineVideoActiveURL = newURL
-        }
         .sheet(isPresented: $showShareSheet) {
             if let url = shareURL {
                 ShareSheet(activityItems: [url])
@@ -761,7 +649,7 @@ struct BubbleStandardLayout: View {
     @ViewBuilder
     private func contentStackBody(shouldBlur: Bool) -> some View {
         let isMe = content.isMe
-        VStack(alignment: isMe ? .trailing : .leading, spacing: 4) {
+        VStack(alignment: isMe ? .trailing : .leading, spacing: MeeshySpacing.xs) {
             // Grille visuelle (images + videos) ou carrousel inline
             if !visualAttachments.isEmpty {
                 if showCarousel {
@@ -786,12 +674,7 @@ struct BubbleStandardLayout: View {
                         .compositingGroup()
                         .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
                         .overlay(alignment: .bottomTrailing) {
-                            // Footer caché pendant la lecture d'une vidéo
-                            // inline : on libère le coin droit pour les
-                            // contrôles overlay (time current/total) et on
-                            // évite que l'heure d'envoi se superpose à la
-                            // vidéo en plein flow.
-                            if !content.hasTextOrNonMediaContent && !hasPlayingInlineVideo {
+                            if !content.hasTextOrNonMediaContent {
                                 let (model, fullActions) = resolvedFooter(includesTranslationControls: false)
                                 BubbleFooter(
                                     model: model,
@@ -803,7 +686,7 @@ struct BubbleStandardLayout: View {
                                     isDark: isDark
                                 )
                                 .equatable()
-                                .padding(8)
+                                .padding(MeeshySpacing.sm)
                                 .transition(.opacity)
                             }
                         }
@@ -839,10 +722,10 @@ struct BubbleStandardLayout: View {
                 // can't be used to key the carousel.
                 let footer = resolvedFooter(includesTranslationControls: true)
                 let trackIDs = Set(auds.map(\.id))
+                // UNE passe sur la liste conversation-entière (deux filtres avant).
+                let pageItems = allAudioItems.filter { trackIDs.contains($0.id) }
                 let perPageTranscriptions = Dictionary(
-                    allAudioItems
-                        .filter { trackIDs.contains($0.id) }
-                        .compactMap { item in item.transcription.map { (item.id, $0) } },
+                    pageItems.compactMap { item in item.transcription.map { (item.id, $0) } },
                     uniquingKeysWith: { first, _ in first }
                 )
                 // Per-page translated audios are keyed by attachmentId from
@@ -853,9 +736,7 @@ struct BubbleStandardLayout: View {
                 // so it can't be used to key the carousel. Falls back to the
                 // grouped per-message array for safety (single-audio path).
                 let perAttachmentAudios = Dictionary(
-                    allAudioItems
-                        .filter { trackIDs.contains($0.id) }
-                        .map { ($0.id, $0.translatedAudios) },
+                    pageItems.map { ($0.id, $0.translatedAudios) },
                     uniquingKeysWith: { first, _ in first }
                 )
                 let perPageTranslatedAudios = perAttachmentAudios.allSatisfy({ $0.value.isEmpty })
@@ -931,25 +812,6 @@ struct BubbleStandardLayout: View {
         .modifier(BlurRevealModifier(isBlurrable: content.requiresVeil, shouldBlur: shouldBlur))
     }
 
-    /// Gate le blur+mask sur le fait que la bulle soit floutable. Voir l'appel
-    /// dans `contentStack` pour le rationale (perf GPU au scroll).
-    private struct BlurRevealModifier: ViewModifier {
-        let isBlurrable: Bool
-        let shouldBlur: Bool
-        func body(content: Content) -> some View {
-            if isBlurrable {
-                content
-                    .blur(radius: shouldBlur ? 20 : 0)
-                    .mask(
-                        RoundedRectangle(cornerRadius: 18, style: .continuous)
-                            .blur(radius: shouldBlur ? 5 : 0)
-                    )
-            } else {
-                content
-            }
-        }
-    }
-
     // MARK: - Emoji-only path
 
     @ViewBuilder
@@ -962,12 +824,12 @@ struct BubbleStandardLayout: View {
         // la date a un endroit excentre). Le VStack exterieur conserve
         // l'alignement isMe pour le secondary content (langue alternative
         // active) qui descend dessous.
-        VStack(alignment: content.isMe ? .trailing : .leading, spacing: 2) {
+        VStack(alignment: content.isMe ? .trailing : .leading, spacing: MeeshySpacing.xxs) {
             HStack(alignment: .lastTextBaseline, spacing: 6) {
                 // Emoji-only intentionally renders the ORIGINAL `message.content`,
                 // not the translated text — emoji bubbles are not translated.
                 Text(message.content)
-                        .font(MeeshyFont.relative(emojiFontSize))
+                        .font(MeeshyFont.emoji(emojiFontSize))
                     .fixedSize(horizontal: false, vertical: true)
 
                 compactInlineFooter
@@ -1007,7 +869,7 @@ struct BubbleStandardLayout: View {
         // les deux rendus divergent au premier cas de bord.
         if let reply = content.reply, detachedStoryCitation == nil {
             quotedReplyView(reply.reference)
-                .padding(.bottom, 4)
+                .padding(.bottom, MeeshySpacing.xs)
                 .onTapGesture {
                     guard reply.reference.opensQuotedTarget else { return }
                     HapticFeedback.light()
@@ -1022,7 +884,7 @@ struct BubbleStandardLayout: View {
         // « modifié » se dit dans le PIED, à côté de l'heure (#7620) — posé
         // ici, le crayon tombait dans le coin arrondi que le clip rogne.
         if hasBubbleBodyContent {
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
                 // Lieu porté par `message.location` (voie serveur actuelle).
                 // Rendu UNE seule fois : le builder exclut la pièce jointe
                 // `.location` de `content.attachments` quand le message porte
@@ -1054,31 +916,20 @@ struct BubbleStandardLayout: View {
                         // card), pas s'etirer sur 70% de la largeur d'ecran. Le
                         // VStack parent gere deja l'alignement naturel a gauche.
                         Text(message.content)
-                            .font(MeeshyFont.relative(emojiFontSize))
+                            .font(MeeshyFont.emoji(emojiFontSize))
                             .fixedSize(horizontal: false, vertical: true)
                     } else {
                         expandableTextView
                     }
                 }
 
-                // Inline OpenGraph preview for the first URL in the
-                // effective (possibly translated) content. Self-loading.
-                // URL précalculée dans BubbleContent (plus de NSDataDetector ici).
-                if let video = content.text?.embeddedVideo {
-                    VideoEmbedContainer(video: video, accent: Color(hex: contactColor), trackedURL: content.text?.embedTrackedURL)
-                        .padding(.top, 4)
-                } else if let url = content.text?.firstLinkURL {
-                    LinkPreviewCard(
-                        urlString: url,
-                        accentColor: contactColor,
-                        isDark: isDark
-                    )
-                    .padding(.top, 4)
+                if let text = content.text {
+                    BubbleLinkEmbed(text: text, accentColor: contactColor, isDark: isDark)
                 }
 
                 secondaryContentView
             }
-            .padding(.horizontal, 14)
+            .padding(.horizontal, MeeshySpacing.mdPlus)
             .padding(.vertical, content.hasTextOrNonMediaContent ? 10 : 4)
         }
     }
@@ -1102,7 +953,7 @@ struct BubbleStandardLayout: View {
             // Wrapped in a VStack so the Layout sees the body as ONE opaque
             // subview — a bare @ViewBuilder property would be flattened into
             // its individual conditional branches.
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                 bubbleInnerContent
             }
             // `textBubbleContent` n'est plus rendu pour `audioHostsReply` /
@@ -1157,7 +1008,8 @@ struct BubbleStandardLayout: View {
             accentColor: message.senderColor ?? contactColor,
             moodEmoji: senderMoodEmoji,
             presence: presenceState,
-            storyRing: senderStoryRingState
+            storyRing: senderStoryRingState,
+            isHere: senderIsHere
         ) : nil
 
         // #7365 — statut RÉSOLU (tout-ou-rien en groupe), jamais le brut.
@@ -1204,7 +1056,7 @@ struct BubbleStandardLayout: View {
             .equatable()
             .padding(.horizontal, showIdentityBar ? 10 : 14)
             .padding(.top, showIdentityBar ? 8 : 0)
-            .padding(.bottom, 8)
+            .padding(.bottom, MeeshySpacing.sm)
     }
 
     /// Live read of the global network monitor. Kept as a computed property
@@ -1231,7 +1083,7 @@ struct BubbleStandardLayout: View {
     // MARK: - Expandable text
 
     private var linkTint: Color {
-        content.isMe ? .white.opacity(0.9) : Color(hex: contactColor)
+        content.isMe ? .white.opacity(MeeshyOpacity.intense) : Color(hex: contactColor)
     }
 
     /// Distinct des liens URL — et THÉMATISÉ : l'`indigo400` figé d'avant ne
@@ -1467,7 +1319,7 @@ struct BubbleStandardLayout: View {
             RadialGradient(
                 gradient: Gradient(colors: [
                     Color.white.opacity(0.35),
-                    Color.white.opacity(0.12),
+                    Color.white.opacity(MeeshyOpacity.light),
                     Color.clear
                 ]),
                 center: .center,
@@ -1478,13 +1330,13 @@ struct BubbleStandardLayout: View {
             .scaleEffect(1.3)
 
             Circle()
-                .fill(Color.white.opacity(0.18))
+                .fill(Color.white.opacity(MeeshyOpacity.light))
                 .blur(radius: 25)
                 .frame(width: 70, height: 70)
                 .offset(x: -25, y: -18)
 
             Circle()
-                .fill(Color.white.opacity(0.12))
+                .fill(Color.white.opacity(MeeshyOpacity.light))
                 .blur(radius: 30)
                 .frame(width: 55, height: 55)
                 .offset(x: 20, y: 12)
@@ -1536,12 +1388,14 @@ struct BubbleStandardLayout: View {
 
     // MARK: - Blur reveal action (delegated to controller)
 
+    /// #8389 — le voile se lève SUR PLACE, médias compris : chaque case
+    /// révélée ouvre ensuite son plein écran par son propre toucher.
     private func revealBlurredContent() {
         HapticFeedback.medium()
         blurController.requestReveal(
             request: BubbleBlurRevealLifecycle.RevealRequest(
                 messageId: content.messageId,
-                isViewOnce: content.isViewOnce
+                isViewOnce: content.veilConsumesViewOnce
             ),
             consumeViewOnce: onConsumeViewOnce
         )

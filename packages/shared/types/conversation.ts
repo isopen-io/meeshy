@@ -437,10 +437,10 @@ export interface Conversation {
   readonly lastMessage?: Message;
   readonly lastMessageAt?: Date;
   /**
-   * Rang de la ligne POUR CE LECTEUR (#7592), chaîne ISO : max(`lastMessageAt`,
-   * dernière réaction quand elle vise un message du lecteur). `GET
-   * /conversations` trie dessus ; les clients trient sur cette valeur servie
-   * (`conversationListRank`, `utils/conversation-list-rank.ts`).
+   * Rang de la ligne (#9026), chaîne ISO : max(`lastMessageAt`,
+   * `lastActivityAt` — réaction, appel, épingle), le même pour tous les
+   * participants. `GET /conversations` trie dessus ; les clients trient sur
+   * cette valeur servie (`conversationListRank`, `utils/conversation-list-rank.ts`).
    */
   readonly listRankAt?: string | null;
   readonly messageCount?: number;

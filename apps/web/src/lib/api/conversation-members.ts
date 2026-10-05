@@ -1,5 +1,6 @@
 import type { InfiniteData } from '@tanstack/react-query';
 import * as z from 'zod/mini';
+import * as conversationsEndpoints from '@meeshy/shared/api/endpoints/conversations';
 
 import { unwrap } from './client';
 import type { ConversationsDeps } from './conversations';
@@ -11,7 +12,7 @@ import { participantAvatarOf } from '@/lib/view/conversation';
  * **LES MEMBRES D'UNE CONVERSATION** (#7829) — le port de l'onglet « Membres »
  * de la feuille de détails, miroir de ce que lit `ConversationInfoSheet.swift`.
  *
- * `GET /api/v1/conversations/:id/participants?limit=&cursor=`
+ * `GET conversations.byIdParticipants?limit=&cursor=`
  * (`services/gateway/src/routes/conversations/participants-reads.ts:89`) —
  * paginé par CURSEUR (id du participant), `pagination` posée à la RACINE de
  * l'enveloppe (`{ nextCursor, hasMore, totalCount }`, la route ne passe pas
@@ -113,7 +114,7 @@ export function memberFromParticipant(participant: Participant): ConversationMem
 const membersPath = (conversationId: string, cursor: string | null): string => {
   const query = new URLSearchParams({ limit: String(MEMBERS_PAGE_SIZE) });
   if (cursor !== null) query.set('cursor', cursor);
-  return `/api/v1/conversations/${encodeURIComponent(conversationId)}/participants?${query.toString()}`;
+  return `${conversationsEndpoints.byIdParticipants(conversationId)}?${query.toString()}`;
 };
 
 export async function loadConversationMembers(

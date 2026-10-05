@@ -1,247 +1,422 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react';
+import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
 
-import { translate } from '@/lib/i18n-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
-import { gripPose, keyboardPose, pointerFraction, type GripOrigin } from '@/lib/stories/studio-grip';
+import { pinchPose, pointerFraction } from '@/lib/stories/studio-grip';
 import type { StudioPose } from '@/lib/stories/studio-pose';
+import { snapPose, type SnapEngaged } from '@/lib/stories/studio-snap';
+import { StudioManipulationLimits } from '@/routes/story-compose-limits';
 
 /**
- * **LES POIGNÉES DU PLATEAU** (#6943) — ce par quoi un objet se DÉPLACE,
- * s'AGRANDIT et TOURNE. Deux cibles de 44 px posées aux coins de l'objet
- * sélectionné : la poignée de DÉPLACEMENT en tête, la poignée d'ÉCHELLE ET DE
- * ROTATION au coin opposé (la grammaire d'un éditeur à un seul doigt, là où
- * iOS a le pincement à deux doigts).
+ * **LES GESTES SUR LA SCÈNE — UNE SÉLECTION SILENCIEUSE** (lot 6, directive
+ * porteur 2026-09-27 soir, miroir iOS) :
+ *  - TOUCHER un objet le sélectionne, sans l'entourer (ni contour, ni poignée) ;
+ *  - le GLISSER le déplace, aimanté aux cibles d'iOS, avec le contour de la
+ *    scène et les lignes magnétiques pendant le geste (#8413) ;
+ *  - l'APPUI LONG (ou le clic droit au bureau) ouvre son menu d'actions ;
+ *  - le DOUBLE-TAP ouvre son édition ;
+ *  - DEUX DOIGTS le pincent et le tournent (#8515, miroir `handlePinch` /
+ *    `handleRotation` d'iOS) — l'objet sous le premier doigt, sinon sous le
+ *    milieu des deux ;
+ *  - toucher le VIDE désélectionne (`onBackgroundTapped` d'iOS).
  *
- * **Deux lois que ce fichier tient :**
+ * **L'INVITE s'écrit au doigt** (#8515) : un texte VIDE n'est pas peint, le
+ * moteur n'a donc rien à toucher — mais la saisie qui l'invite (« Écrivez… »)
+ * est sous ce calque. Toucher sa boîte ouvre l'écriture (`onWrite`) : le
+ * texte vide qu'elle cible, ou un texte neuf quand elle n'en cible aucun.
  *
- *  - **60 fps pendant le geste** — la pose se PEINT directement en `style`
- *    sur l'élément que le moteur a rendu, exactement les propriétés que
- *    `SceneObjectFrame.applyPose` écrit (`left`, `top`, `transform`) ; l'état
- *    React n'est touché qu'au RELÂCHEMENT. Une vue re-rendue à chaque image
- *    de pointeur ne peut pas être fluide.
- *  - **tout ce que le pointeur fait, le clavier le fait** — les poignées sont
- *    des `<button>` focusables, et `keyboardPose` y traduit flèches, `+`/`−`
- *    et `[`/`]`. Un plateau qui ne s'exploite qu'à la souris n'est pas livré
- *    (dimension 5).
+ * **60 fps pendant le glissé** : la pose se PEINT sur l'élément que le moteur
+ * a rendu (`left`/`top`/`transform`, les propriétés de `SceneObjectFrame`) ;
+ * l'état React ne change qu'au relâchement, et à l'entrée ou la sortie d'un
+ * aimant.
  *
- * Ces poignées sont posées SUR la scène, et c'est la seule exception assumée
- * à « aucun contrôle ne se pose sur le canvas » (`apps/ios/CLAUDE.md` § 1) :
- * une poignée de manipulation directe n'est pas un RAIL — elle ne porte aucun
- * réglage, elle EST l'objet qu'on saisit. Tous les réglages, eux, vivent dans
- * le couloir droit (`story-compose-editor.tsx`).
+ * Le calque couvre la scène ; en ÉDITION d'un texte, la saisie passe
+ * au-dessus de lui (l'hôte l'élève), pour que le curseur se pose au doigt et
+ * que le clavier écrive.
  */
 
-const TARGET = 44;
+const DRAG_THRESHOLD = 6;
+const LONG_PRESS_MS = 500;
+const DOUBLE_TAP_MS = 300;
+/** L'appui long qui FILME sur une scène vide — plus court que celui du menu :
+ * le doigt qui veut filmer n'attend pas (miroir du déclencheur de la caméra). */
+const CAPTURE_HOLD_MS = 350;
+
+export type StudioStageObject = { readonly id: string; readonly pose: StudioPose };
+
+export type StudioStageCapture = {
+  readonly onTap: () => void;
+  readonly onHoldStart: () => void;
+  readonly onHoldEnd: () => void;
+  /** Le doigt qui filme glisse (écart depuis l'appui, en px). */
+  readonly onHoldMove: (dx: number, dy: number) => void;
+};
 
 /** Les propriétés que `SceneObjectFrame.applyPose` écrit — mêmes noms, même
- * ordre de composition : deux formules de pose divergeraient au premier
- * ajustement, et le geste peindrait ailleurs que le rendu. */
+ * ordre de composition : deux formules divergeraient au premier ajustement. */
 function paintPose(element: HTMLElement, pose: StudioPose): void {
   element.style.left = `${pose.x * 100}%`;
   element.style.top = `${pose.y * 100}%`;
   element.style.transform = `translate(-50%, -50%) rotate(${pose.rotation}deg) scale(${pose.scale})`;
 }
 
-export type StudioHandlesProps = {
-  readonly lang: InterfaceLanguage;
-  /** Le NOM de l'objet, tel qu'un lecteur d'écran l'entendra (« Texte 2 »). */
-  readonly name: string;
-  readonly pose: StudioPose;
-  /** Le plateau, ancêtre positionné commun à la scène et aux poignées. */
-  readonly stageRef: { readonly current: HTMLElement | null };
-  /**
-   * L'IDENTIFIANT de l'objet, pas une `ref` vers son élément — et c'est un
-   * piège d'ORDRE qui l'impose : les effets de mise en page d'un ENFANT
-   * tournent AVANT ceux de son parent, donc une `ref` que l'hôte remplit dans
-   * son propre `useLayoutEffect` est encore `null` quand la poignée mesure.
-   * Elle ne se serait jamais affichée tant qu'un second rendu n'était pas
-   * provoqué par ailleurs. La poignée retrouve donc elle-même son élément.
-   */
-  readonly objectId: string;
-  readonly onCommit: (pose: StudioPose) => void;
+const clamp01 = (value: number): number => (Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 0.5);
+
+type Point = { readonly x: number; readonly y: number };
+
+/** Ce que le doigt touche : un objet PEINT, ou l'INVITE d'écriture (la boîte
+ * de la saisie) — `id` nul quand l'invite ne cible aucun texte. */
+type Hit = { readonly kind: 'object'; readonly id: string } | { readonly kind: 'invite'; readonly id: string | null };
+
+type Press = {
+  readonly hit: Hit | null;
+  readonly x: number;
+  readonly y: number;
+  readonly origin: StudioPose | null;
+  readonly start: Point;
+  moved: boolean;
+  menu: boolean;
+  /** L'appui long sur une scène vide a ouvert la caméra et filme (#8654) :
+   * le relâcher clôt la prise. Tenu depuis l'appui — la caméra ouverte, la
+   * scène ne l'offre plus, mais ce doigt-là doit encore pouvoir la clore. */
+  filming?: () => void;
+  /** Le même doigt qui GLISSE pendant qu'il filme (#8672) : vers le cadenas
+   * (verrou), vers le haut ou le bas (zoom) — relayé à la caméra. */
+  filmingMove?: (dx: number, dy: number) => void;
+  pose: StudioPose | null;
+  timer: ReturnType<typeof setTimeout> | null;
+  /** Né dans la SAISIE d'un texte en édition (#8535) : un toucher sans
+   * glissé y pose le curseur, rien d'autre. */
+  readonly inField?: boolean;
 };
 
-/**
- * Le cadre de SÉLECTION et ses deux poignées. Le cadre lui-même est inerte
- * (`pointer-events: none`) : il MONTRE la sélection, il ne la capture pas —
- * sinon il mangerait la frappe dans la saisie de texte posée au même endroit.
- */
-export function StudioObjectHandles({ lang, name, pose, stageRef, objectId, onCommit }: StudioHandlesProps) {
-  const frameRef = useRef<HTMLDivElement | null>(null);
-  const [box, setBox] = useState<{ readonly width: number; readonly height: number } | null>(null);
-  // La pose EN COURS de geste — une ref, jamais un état : la lire ne doit
-  // provoquer aucun rendu.
-  const live = useRef(pose);
-  live.current = pose;
+/** Un doigt, qu'il vienne du calque (React) ou de la saisie (natif). */
+type Finger = { readonly pointerId: number; readonly clientX: number; readonly clientY: number; readonly button: number; readonly capture: () => void };
 
-  /** L'élément que le MOTEUR a peint pour CET objet — retrouvé à chaque
-   * mesure, jamais mémorisé : la scène se re-rend à chaque frappe, et un
-   * élément gardé serait détaché du document. */
-  const painted = useCallback(
-    (): HTMLElement | null => stageRef.current?.querySelector<HTMLElement>(`[data-scene-object-id="${CSS.escape(objectId)}"]`) ?? null,
-    [objectId, stageRef],
+/** `holder` garde le doigt : le calque pour ses propres pointeurs, la SAISIE
+ * pour les siens — capturer sur un ancêtre les retirerait de la saisie. */
+const fingerOf = (
+  event: { readonly pointerId: number; readonly clientX: number; readonly clientY: number; readonly button: number },
+  holder: EventTarget | null,
+): Finger => ({
+  pointerId: event.pointerId,
+  clientX: event.clientX,
+  clientY: event.clientY,
+  button: event.button,
+  capture: () => (holder as Element | null)?.setPointerCapture?.(event.pointerId),
+});
+
+/** Un pincement en cours — l'objet, sa pose et les deux doigts au départ. */
+type Pinch = { readonly id: string; readonly origin: StudioPose; readonly from: readonly [Point, Point]; pose: StudioPose | null };
+
+const inside = (box: DOMRect, x: number, y: number): boolean => x >= box.left && x <= box.right && y >= box.top && y <= box.bottom;
+
+export function StudioStageGestures({
+  stageRef,
+  objects,
+  locked,
+  onSelect,
+  onEdit,
+  onCommit,
+  onMenu,
+  onWrite,
+  editing = null,
+  capture = null,
+  onBackgroundMenu,
+}: {
+  readonly stageRef: { readonly current: HTMLElement | null };
+  /** Les objets SAISISSABLES (textes écrits, calque), avec leur pose. */
+  readonly objects: readonly StudioStageObject[];
+  readonly locked: boolean;
+  readonly onSelect: (id: string | null) => void;
+  readonly onEdit: (id: string) => void;
+  readonly onCommit: (id: string, pose: StudioPose) => void;
+  readonly onMenu: (id: string, point: { readonly x: number; readonly y: number }) => void;
+  /** L'INVITE touchée — écrire le texte vide `id`, ou un texte neuf (`null`). */
+  readonly onWrite: (id: string | null) => void;
+  /** Le texte EN ÉDITION (#8535) — sa saisie passe au-dessus du calque, et le
+   * doigt qui la touche le déplace, le pince et le tourne quand même. */
+  readonly editing?: string | null;
+  /** LA CAPTURE RAPIDE d'une scène vide (#8654) — toucher le vide ouvre la
+   * caméra et prend la photo, l'appui long ouvre et filme tant qu'il dure.
+   * `null` dès que la scène porte quelque chose. */
+  readonly capture?: StudioStageCapture | null;
+  /** L'APPUI LONG SUR LE FOND (#8716) — sur une scène qui porte un fond, le
+   * vide sous le doigt ouvre le menu du fond ; absent sans fond. */
+  readonly onBackgroundMenu?: (point: { readonly x: number; readonly y: number }) => void;
+}) {
+  const press = useRef<Press | null>(null);
+  const pinch = useRef<Pinch | null>(null);
+  /** Les doigts posés — un pincement commence au SECOND. */
+  const pointers = useRef(new Map<number, Point>());
+  const lastTap = useRef<{ readonly id: string; readonly at: number } | null>(null);
+  const [engaged, setEngaged] = useState<SnapEngaged | null>(null);
+
+  useEffect(
+    () => () => {
+      if (press.current?.timer) clearTimeout(press.current.timer);
+    },
+    [],
   );
 
-  /** La taille NON transformée de l'objet peint (`offsetWidth/Height`, avant
-   * `scale`/`rotate`) : le cadre l'adopte puis subit la MÊME transformation,
-   * donc il colle quelle que soit l'échelle. */
-  const measure = useCallback(() => {
-    const element = painted();
-    if (element === null) {
-      setBox((current) => (current === null ? current : null));
+  /** Ce qui est SOUS le doigt — l'objet le plus haut peint (le dernier du
+   * DOM), sinon l'invite. Une invite qui cible un texte ÉCRIT est ce texte. */
+  const hit = (x: number, y: number): Hit | null => {
+    const stage = stageRef.current;
+    if (stage === null) return null;
+    const ids = new Set(objects.map((object) => object.id));
+    const painted = [...stage.querySelectorAll<HTMLElement>('[data-scene-object-id]')].filter((element) => ids.has(element.dataset.sceneObjectId ?? ''));
+    const found = painted.reverse().find((element) => inside(element.getBoundingClientRect(), x, y))?.dataset.sceneObjectId;
+    if (found !== undefined) return { kind: 'object', id: found };
+    const invite = stage.querySelector<HTMLElement>('[data-story-text-input]');
+    if (invite === null || !inside(invite.getBoundingClientRect(), x, y)) return null;
+    const target = invite.dataset.storyTextTarget ?? null;
+    return target !== null && ids.has(target) ? { kind: 'object', id: target } : { kind: 'invite', id: target };
+  };
+
+  const objectAt = (x: number, y: number): string | null => {
+    const found = hit(x, y);
+    return found?.kind === 'object' ? found.id : null;
+  };
+
+  const poseOf = (id: string): StudioPose | null => objects.find((object) => object.id === id)?.pose ?? null;
+
+  const paintedOf = (id: string): HTMLElement | null =>
+    stageRef.current?.querySelector<HTMLElement>(`[data-scene-object-id="${CSS.escape(id)}"]`) ?? null;
+
+  const stageBox = () => stageRef.current?.getBoundingClientRect() ?? { left: 0, top: 0, width: 0, height: 0 };
+
+  const clearPress = () => {
+    if (press.current?.timer) clearTimeout(press.current.timer);
+    press.current = null;
+  };
+
+  /** Le SECOND doigt — le pincement prend l'objet du premier, sinon celui du
+   * milieu des deux ; sans objet, le geste n'a pas d'effet. */
+  const startPinch = (): void => {
+    const [a, b] = [...pointers.current.values()];
+    if (a === undefined || b === undefined) return;
+    const held = press.current?.hit?.kind === 'object' ? press.current.hit.id : null;
+    // En édition, deux doigts manipulent l'objet qu'on édite, où qu'ils se posent.
+    const id = (editing !== null && poseOf(editing) !== null ? editing : null) ?? held ?? objectAt((a.x + b.x) / 2, (a.y + b.y) / 2);
+    clearPress();
+    const origin = id === null ? null : poseOf(id);
+    if (id === null || origin === null) return;
+    pinch.current = { id, origin, from: [a, b], pose: null };
+    setEngaged({ x: null, y: null });
+  };
+
+  const onPointerDown = (event: Finger, inField = false) => {
+    if (locked || event.button !== 0) return;
+    event.capture();
+    pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    if (pointers.current.size === 2) {
+      startPinch();
       return;
     }
-    const width = element.offsetWidth;
-    const height = element.offsetHeight;
-    setBox((current) => (current !== null && current.width === width && current.height === height ? current : { width, height }));
-  }, [painted]);
+    if (pointers.current.size > 2) return;
+    const found: Hit | null = inField && editing !== null ? { kind: 'object', id: editing } : hit(event.clientX, event.clientY);
+    const origin = found?.kind === 'object' ? poseOf(found.id) : null;
+    const current: Press = {
+      hit: found,
+      x: event.clientX,
+      y: event.clientY,
+      origin,
+      start: pointerFraction(stageBox(), event.clientX, event.clientY),
+      moved: false,
+      menu: false,
+      pose: null,
+      timer: null,
+      inField,
+    };
+    // Dans la saisie, l'appui long appartient au champ (sélection, loupe).
+    if (found?.kind === 'object' && !inField) {
+      current.timer = setTimeout(() => {
+        current.menu = true;
+        onMenu(found.id, { x: current.x, y: current.y });
+      }, LONG_PRESS_MS);
+    }
+    if (found === null && capture === null && onBackgroundMenu !== undefined && !inField) {
+      current.timer = setTimeout(() => {
+        current.menu = true;
+        onBackgroundMenu({ x: current.x, y: current.y });
+      }, LONG_PRESS_MS);
+    }
+    if (found === null && capture !== null && !inField) {
+      current.timer = setTimeout(() => {
+        current.filming = capture.onHoldEnd;
+        current.filmingMove = capture.onHoldMove;
+        capture.onHoldStart();
+      }, CAPTURE_HOLD_MS);
+    }
+    press.current = current;
+  };
 
-  useLayoutEffect(measure);
+  const movePinch = (active: Pinch) => {
+    const [a, b] = [...pointers.current.values()];
+    if (a === undefined || b === undefined) return;
+    active.pose = pinchPose(active.origin, active.from, [a, b]);
+    const element = paintedOf(active.id);
+    if (element !== null) paintPose(element, active.pose);
+  };
 
+  const onPointerMove = (event: Finger) => {
+    if (pointers.current.has(event.pointerId)) pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    if (pinch.current !== null) {
+      movePinch(pinch.current);
+      return;
+    }
+    const current = press.current;
+    if (current?.filmingMove !== undefined) {
+      current.filmingMove(event.clientX - current.x, event.clientY - current.y);
+      return;
+    }
+    // Un doigt qui GLISSE sur le fond ne demande pas son menu.
+    if (current !== null && current.hit === null && capture === null && current.timer !== null && Math.hypot(event.clientX - current.x, event.clientY - current.y) >= DRAG_THRESHOLD) {
+      clearTimeout(current.timer);
+      current.timer = null;
+    }
+    if (current === null || current.menu || current.hit?.kind !== 'object' || current.origin === null) return;
+    if (!current.moved && Math.hypot(event.clientX - current.x, event.clientY - current.y) < DRAG_THRESHOLD) return;
+    if (!current.moved) {
+      current.moved = true;
+      if (current.timer !== null) clearTimeout(current.timer);
+      setEngaged({ x: null, y: null });
+      if (current.inField) caretHidden(true);
+    }
+    const at = pointerFraction(stageBox(), event.clientX, event.clientY);
+    const snapped = snapPose({
+      ...current.origin,
+      x: clamp01(current.origin.x + (at.x - current.start.x)),
+      y: clamp01(current.origin.y + (at.y - current.start.y)),
+    });
+    current.pose = snapped.pose;
+    const element = paintedOf(current.hit.id);
+    if (element !== null) paintPose(element, snapped.pose);
+    setEngaged((previous) => (previous !== null && previous.x === snapped.engaged.x && previous.y === snapped.engaged.y ? previous : snapped.engaged));
+  };
+
+  /** Le pincement se COMMET quand un doigt se lève — un seul pas d'historique. */
+  const endPinch = (active: Pinch) => {
+    pinch.current = null;
+    setEngaged(null);
+    lastTap.current = null;
+    onSelect(active.id);
+    if (active.pose !== null) onCommit(active.id, active.pose);
+  };
+
+  const onPointerUp = (event: Pick<Finger, 'pointerId'>) => {
+    pointers.current.delete(event.pointerId);
+    caretHidden(false);
+    if (pinch.current !== null) {
+      endPinch(pinch.current);
+      return;
+    }
+    const current = press.current;
+    press.current = null;
+    if (current === null) return;
+    if (current.timer !== null) clearTimeout(current.timer);
+    setEngaged(null);
+    if (current.menu) return;
+    if (current.filming !== undefined) {
+      current.filming();
+      return;
+    }
+    const found = current.hit;
+    if (current.inField && !current.moved) return;
+    if (found?.kind === 'invite') {
+      lastTap.current = null;
+      onWrite(found.id);
+      return;
+    }
+    if (found === null) {
+      lastTap.current = null;
+      if (capture !== null) capture.onTap();
+      else onSelect(null);
+      return;
+    }
+    if (current.moved && current.pose !== null) {
+      onSelect(found.id);
+      onCommit(found.id, current.pose);
+      return;
+    }
+    const now = Date.now();
+    const previous = lastTap.current;
+    if (previous !== null && previous.id === found.id && now - previous.at < DOUBLE_TAP_MS) {
+      lastTap.current = null;
+      onEdit(found.id);
+      return;
+    }
+    lastTap.current = { id: found.id, at: now };
+    onSelect(found.id);
+  };
+
+  /** Pendant un geste né dans la saisie, le curseur ne reste pas à l'ancienne
+   * place : il se cache, et revient là où le texte est posé. */
+  const caretHidden = (hidden: boolean) => {
+    const field = stageRef.current?.querySelector<HTMLElement>('[data-story-text-input]');
+    if (field !== null && field !== undefined) field.style.caretColor = hidden ? 'transparent' : '';
+  };
+
+  /** LA SAISIE D'UN TEXTE EN ÉDITION se manipule au doigt (#8535) : ses
+   * pointeurs (tactiles et stylet — la souris y sélectionne, comme dans tout
+   * champ) nourrissent les MÊMES gestes que le calque, dont ils partagent les
+   * doigts : un pincement peut commencer sur le texte et finir sur la scène. */
+  const handlers = useRef({ onPointerDown, onPointerMove, onPointerUp });
+  handlers.current = { onPointerDown, onPointerMove, onPointerUp };
   useEffect(() => {
-    const element = painted();
-    if (element === null || typeof ResizeObserver === 'undefined') return;
-    const observer = new ResizeObserver(measure);
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, [measure, painted]);
+    const stage = stageRef.current;
+    if (editing === null || stage === null) return;
+    const fromField = (event: PointerEvent): boolean =>
+      event.pointerType !== 'mouse' && event.target instanceof Element && event.target.closest('[data-story-text-input]') !== null;
+    const down = (event: PointerEvent) => {
+      if (fromField(event)) handlers.current.onPointerDown(fingerOf(event, event.target), true);
+    };
+    const move = (event: PointerEvent) => {
+      if (fromField(event)) handlers.current.onPointerMove(fingerOf(event, event.target));
+    };
+    const up = (event: PointerEvent) => {
+      if (fromField(event)) handlers.current.onPointerUp(event);
+    };
+    stage.addEventListener('pointerdown', down);
+    stage.addEventListener('pointermove', move);
+    stage.addEventListener('pointerup', up);
+    stage.addEventListener('pointercancel', up);
+    return () => {
+      stage.removeEventListener('pointerdown', down);
+      stage.removeEventListener('pointermove', move);
+      stage.removeEventListener('pointerup', up);
+      stage.removeEventListener('pointercancel', up);
+    };
+  }, [editing, stageRef]);
 
-  const applyLive = useCallback(
-    (next: StudioPose) => {
-      live.current = next;
-      const element = painted();
-      const frame = frameRef.current;
-      if (element !== null) paintPose(element, next);
-      if (frame !== null) paintPose(frame, next);
-    },
-    [painted],
-  );
-
-  const stageBox = () => {
-    const rect = stageRef.current?.getBoundingClientRect();
-    return rect === undefined ? { left: 0, top: 0, width: 0, height: 0 } : rect;
-  };
-
-  const onMoveDown = (event: ReactPointerEvent<HTMLButtonElement>) => {
+  /** Le CLIC DROIT au bureau — le même menu que l'appui long. */
+  const onContextMenu = (event: ReactMouseEvent<HTMLDivElement>) => {
+    const id = objectAt(event.clientX, event.clientY);
+    if (locked) return;
+    if (id === null) {
+      if (onBackgroundMenu === undefined || hit(event.clientX, event.clientY) !== null) return;
+      event.preventDefault();
+      onBackgroundMenu({ x: event.clientX, y: event.clientY });
+      return;
+    }
     event.preventDefault();
-    const target = event.currentTarget;
-    target.setPointerCapture(event.pointerId);
-    const stage = stageBox();
-    const start = pointerFraction(stage, event.clientX, event.clientY);
-    const origin = live.current;
-    const move = (e: PointerEvent) => {
-      const at = pointerFraction(stageBox(), e.clientX, e.clientY);
-      applyLive({ ...live.current, x: clamp01(origin.x + (at.x - start.x)), y: clamp01(origin.y + (at.y - start.y)) });
-    };
-    const end = () => {
-      target.removeEventListener('pointermove', move);
-      target.removeEventListener('pointerup', end);
-      target.removeEventListener('pointercancel', end);
-      onCommit(live.current);
-    };
-    target.addEventListener('pointermove', move);
-    target.addEventListener('pointerup', end);
-    target.addEventListener('pointercancel', end);
+    onSelect(id);
+    onMenu(id, { x: event.clientX, y: event.clientY });
   };
-
-  const onGripDown = (event: ReactPointerEvent<HTMLButtonElement>) => {
-    event.preventDefault();
-    const target = event.currentTarget;
-    target.setPointerCapture(event.pointerId);
-    const stage = stageBox();
-    const origin: GripOrigin = {
-      centerX: stage.left + live.current.x * stage.width,
-      centerY: stage.top + live.current.y * stage.height,
-      grabX: event.clientX,
-      grabY: event.clientY,
-      scale: live.current.scale,
-      rotation: live.current.rotation,
-    };
-    const move = (e: PointerEvent) => applyLive(gripPose(live.current, origin, e.clientX, e.clientY));
-    const end = () => {
-      target.removeEventListener('pointermove', move);
-      target.removeEventListener('pointerup', end);
-      target.removeEventListener('pointercancel', end);
-      onCommit(live.current);
-    };
-    target.addEventListener('pointermove', move);
-    target.addEventListener('pointerup', end);
-    target.addEventListener('pointercancel', end);
-  };
-
-  /** Le clavier COMMET directement : il n'y a pas de geste continu à
-   * absorber, et chaque frappe doit être annulable comme une action. */
-  const onKey = (event: ReactKeyboardEvent<HTMLButtonElement>) => {
-    const next = keyboardPose(live.current, event.key, event.shiftKey);
-    if (next === null) return;
-    event.preventDefault();
-    onCommit(next);
-  };
-
-  if (box === null) return null;
 
   return (
-    <div
-      ref={frameRef}
-      data-story-object-frame
-      className="absolute"
-      style={{
-        width: box.width,
-        height: box.height,
-        left: `${pose.x * 100}%`,
-        top: `${pose.y * 100}%`,
-        transform: `translate(-50%, -50%) rotate(${pose.rotation}deg) scale(${pose.scale})`,
-        outline: '1px dashed rgba(255,255,255,0.85)',
-        outlineOffset: 4,
-        pointerEvents: 'none',
-      }}
-    >
-      <button
-        type="button"
-        data-story-object-move
-        aria-label={translate(lang, 'story.studio.pose.handle', { name })}
-        title={translate(lang, 'story.studio.pose.handle', { name })}
-        onPointerDown={onMoveDown}
-        onKeyDown={onKey}
-        className="absolute grid place-items-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2"
-        style={{
-          width: TARGET,
-          height: TARGET,
-          insetInlineStart: -TARGET / 2,
-          top: -TARGET / 2,
-          pointerEvents: 'auto',
-          touchAction: 'none',
-          color: '#fff',
-          backgroundColor: 'rgba(0,0,0,0.55)',
-          outlineColor: 'var(--color-ios-brand)',
-        }}
-      >
-        <span aria-hidden="true">✥</span>
-      </button>
-      <button
-        type="button"
-        data-story-object-grip
-        aria-label={translate(lang, 'story.studio.pose.grip', { name })}
-        title={translate(lang, 'story.studio.pose.grip', { name })}
-        onPointerDown={onGripDown}
-        onKeyDown={onKey}
-        className="absolute grid place-items-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2"
-        style={{
-          width: TARGET,
-          height: TARGET,
-          insetInlineEnd: -TARGET / 2,
-          bottom: -TARGET / 2,
-          pointerEvents: 'auto',
-          touchAction: 'none',
-          color: '#fff',
-          backgroundColor: 'rgba(0,0,0,0.55)',
-          outlineColor: 'var(--color-ios-brand)',
-        }}
-      >
-        <span aria-hidden="true">⤡</span>
-      </button>
-    </div>
+    <>
+      {engaged !== null ? <StudioManipulationLimits engaged={engaged} /> : null}
+      <div
+        aria-hidden="true"
+        data-story-stage-gestures
+        className="absolute inset-0"
+        style={{ zIndex: 3, touchAction: 'none' }}
+        onPointerDown={(event) => onPointerDown(fingerOf(event, event.currentTarget))}
+        onPointerMove={(event) => onPointerMove(fingerOf(event, event.currentTarget))}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
+        onContextMenu={onContextMenu}
+      />
+    </>
   );
 }
-
-const clamp01 = (value: number): number => (Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 0.5);

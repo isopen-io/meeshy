@@ -45,6 +45,7 @@ SDK_CATALOG = REPO / "packages/MeeshySDK/Sources/MeeshyUI/Resources/Localizable.
 SOURCE_ROOTS = [
     "apps/ios/Meeshy",
     "apps/ios/MeeshyNotificationExtension",
+    "apps/ios/MeeshyNotificationContentExtension",
     "apps/ios/MeeshyWidgets",
     "apps/ios/MeeshyShareExtension",
     "apps/ios/MeeshyIntents",
@@ -59,6 +60,7 @@ SOURCE_ROOTS = [
 CATALOG_BY_TARGET_FRAGMENT = {
     "/MeeshyShareExtension/": "apps/ios/MeeshyShareExtension/Localizable.xcstrings",
     "/MeeshyNotificationExtension/": "apps/ios/MeeshyNotificationExtension/Localizable.xcstrings",
+    "/MeeshyNotificationContentExtension/": "apps/ios/MeeshyNotificationContentExtension/Localizable.xcstrings",
     "/MeeshyWidgets/": "apps/ios/MeeshyWidgets/Localizable.xcstrings",
 }
 

@@ -51,25 +51,12 @@ final class FeedInlineComposerGuardTests: XCTestCase {
         )
     }
 
-    // 2 — INVENTAIRE, pas compte : FeedView arme le composer inline depuis CINQ
-    //     sites, chacun identifié par ce qu'il PRÉ-OUVRE, jamais par un numéro.
-    func test_feedView_armeLeComposerInline_depuisCinqSitesNommes() throws {
+    // 2 — INVENTAIRE : FeedView ouvre le composer (le meuble) depuis CINQ
+    //     sites — le placeholder et les quatre entrées du menu « + » ;
+    //     l'audio ouvre `showAudioComposer`, pas le composer. Les
+    //     pré-ouvertures de picker sont parties avec l'overlay (2026-09-06).
+    func test_feedView_ouvreLeComposer_depuisCinqSitesNommes() throws {
         let feedView = compact(try source("Meeshy/Features/Main/Views/FeedView.swift"))
-        let armements: Set<String> = [
-            "isComposerFocused=true",   // le champ nu (clavier)
-            "showPhotoPicker=true",     // photo/vidéo
-            "showCamera=true",          // appareil photo
-            "showFilePicker=true",      // fichier
-            "showLocationPicker=true"   // position
-        ]
-        let présents = armements.filter { feedView.contains($0) }
-        XCTAssertEqual(
-            présents, armements,
-            "Les CINQ armements du composer inline (chacun nommé par ce qu'il pré-ouvre) doivent tous "
-                + "exister. Un compte nu passerait au vert en ajoutant puis retirant un site dans le même "
-                + "lot ; ce SET, lui, change dès qu'un site apparaît ou disparaît. L'audio, lui, n'ouvre "
-                + "PAS le composer inline (`showAudioComposer`), et ce n'est pas un oubli."
-        )
         XCTAssertEqual(
             feedView.components(separatedBy: "showComposer=true").count - 1, 5,
             "Et exactement CINQ `showComposer = true` — la contre-épreuve du SET ci-dessus."
@@ -134,8 +121,8 @@ final class FeedInlineComposerGuardTests: XCTestCase {
     ///
     /// Ce qui reste de l'ancien composer n'est PAS du code mort :
     /// `FeedComposerSheet` porte encore les deux citations (le meuble refuse un
-    /// repost — levée 7.5) et cinq capacités que le meuble n'a pas — progression,
-    /// références, dépôt, éditeur d'image, son emprunté. Les retirer les
+    /// repost — levée 7.5) et quatre capacités que le meuble n'a pas — progression,
+    /// dépôt, éditeur d'image, son emprunté. Les retirer les
     /// retirerait à l'utilisateur : voir `FeedComposerSheetRetirementInventoryTests`.
     func test_lOverlayInlineIPad_estRetireDeFeedView() throws {
         let feedView = try source("Meeshy/Features/Main/Views/FeedView.swift")

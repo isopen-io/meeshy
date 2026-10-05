@@ -32,11 +32,17 @@ import {
   EPHEMERAL_UNAVAILABILITY_GRACE_MS,
   EPHEMERAL_UNRECEIVED_RETENTION_MS,
   ephemeralDestructionAt,
+  hasPerReaderEphemeralDeadline,
+  isAfterReadEphemeral,
   isEphemeralServable,
+  isInheritedEphemeralServable,
+  inheritedEphemeralExpiresAt,
   normalizeEphemeralDuration,
   recipientEphemeralDeadline,
   servedEphemeralExpiresAt,
 } from './ephemeral-countdown';
+import { MESSAGE_EFFECT_FLAGS } from '../types/message-effect-flags';
+import { messageProtection } from './message-protection';
 
 const SENT_AT = new Date('2026-09-22T10:00:00.000Z');
 const at = (msAfterSend: number): Date => new Date(SENT_AT.getTime() + msAfterSend);
@@ -238,5 +244,102 @@ describe('isEphemeralServable — la coupure à D(u) + 1 h', () => {
     expect(
       isEphemeralServable({ ephemeralDuration: null, servedExpiresAt: at(-1), now: SENT_AT }),
     ).toBe(true);
+  });
+});
+
+/**
+ * Flamme-œil (#8302) : aucune DURÉE, mais une échéance PAR LECTEUR quand même —
+ * celle que la consommation pose (« vu puis quitté »). Les témoins écartent
+ * donc la raw column (le plafond de rétention) de ce qui est servi : une
+ * lecture qui la servirait afficherait « disparaît dans 7 jours ».
+ */
+describe('flamme-œil — une échéance par lecteur sans durée (#8302)', () => {
+  const AFTER_READ = MESSAGE_EFFECT_FLAGS.EPHEMERAL | MESSAGE_EFFECT_FLAGS.EPHEMERAL_AFTER_READ;
+  const RETENTION = at(EPHEMERAL_UNRECEIVED_RETENTION_MS);
+  const CONSUMED = at(120_000);
+
+  it('reconnaît le bit, et lui seul', () => {
+    expect(isAfterReadEphemeral(AFTER_READ)).toBe(true);
+    expect(isAfterReadEphemeral(MESSAGE_EFFECT_FLAGS.EPHEMERAL)).toBe(false);
+    expect(isAfterReadEphemeral(null)).toBe(false);
+  });
+
+  it('a une échéance par lecteur, comme un éphémère à durée', () => {
+    expect(hasPerReaderEphemeralDeadline({ effectFlags: AFTER_READ })).toBe(true);
+    expect(hasPerReaderEphemeralDeadline({ ephemeralDuration: 30 })).toBe(true);
+    expect(hasPerReaderEphemeralDeadline({ effectFlags: MESSAGE_EFFECT_FLAGS.EPHEMERAL })).toBe(false);
+  });
+
+  it('ne sert JAMAIS le plafond de rétention à un lecteur qui n\'a pas consommé', () => {
+    expect(
+      servedEphemeralExpiresAt({ effectFlags: AFTER_READ, rawExpiresAt: RETENTION, isSender: false, readerDeadline: null }),
+    ).toBeNull();
+  });
+
+  it('sert au lecteur l\'instant de SA consommation', () => {
+    expect(
+      servedEphemeralExpiresAt({ effectFlags: AFTER_READ, rawExpiresAt: RETENTION, isSender: false, readerDeadline: CONSUMED }),
+    ).toEqual(CONSUMED);
+  });
+
+  it('ne sert rien à l\'expéditeur, même quand un lecteur a consommé : il le garde', () => {
+    expect(
+      servedEphemeralExpiresAt({
+        effectFlags: AFTER_READ,
+        rawExpiresAt: RETENTION,
+        isSender: true,
+        readerDeadline: null,
+        latestRecipientDeadline: CONSUMED,
+      }),
+    ).toBeNull();
+  });
+
+  it('cesse d\'être servi au lecteur une heure après sa consommation', () => {
+    expect(
+      isEphemeralServable({
+        effectFlags: AFTER_READ,
+        servedExpiresAt: CONSUMED,
+        now: new Date(CONSUMED.getTime() + EPHEMERAL_UNAVAILABILITY_GRACE_MS),
+      }),
+    ).toBe(false);
+    expect(
+      isEphemeralServable({ effectFlags: AFTER_READ, servedExpiresAt: null, now: at(EPHEMERAL_UNRECEIVED_RETENTION_MS - 1) }),
+    ).toBe(true);
+  });
+
+  it('est un éphémère pour la protection, même si le bit EPHEMERAL manque', () => {
+    expect(messageProtection({ effectFlags: MESSAGE_EFFECT_FLAGS.EPHEMERAL_AFTER_READ }).ephemeral).toBe(true);
+  });
+});
+
+/**
+ * #8630 — décision porteur 2026-09-29 : « quand elle se détruit, elle entraîne
+ * la destruction du message qui l'a cité ». La réponse meurt, POUR UN LECTEUR,
+ * à la plus proche des échéances servies de sa chaîne de citations — la sienne
+ * comprise. Le témoin est posé sur une réponse qui vivrait PLUS LONGTEMPS que
+ * ce qu'elle cite : c'est le seul cas où la règle change le verdict.
+ */
+describe('la destruction d\'un message cité entraîne ses réponses (#8630)', () => {
+  const QUOTED_DEATH = new Date('2026-09-29T10:00:00.000Z');
+  const OWN_DEATH = new Date('2026-09-29T12:00:00.000Z');
+
+  it('retient la plus proche des échéances de la chaîne, jamais la plus lointaine', () => {
+    expect(inheritedEphemeralExpiresAt([OWN_DEATH, null, QUOTED_DEATH, undefined])).toEqual(QUOTED_DEATH);
+  });
+
+  it('ne fabrique aucune échéance quand rien de la chaîne n\'a d\'échéance servie', () => {
+    expect(inheritedEphemeralExpiresAt([null, undefined])).toBeNull();
+    expect(inheritedEphemeralExpiresAt([])).toBeNull();
+  });
+
+  it('cesse de servir la réponse une heure après la mort du message cité, comme le cité lui-même', () => {
+    const justBefore = new Date(QUOTED_DEATH.getTime() + EPHEMERAL_UNAVAILABILITY_GRACE_MS - 1);
+    const atGraceEnd = new Date(QUOTED_DEATH.getTime() + EPHEMERAL_UNAVAILABILITY_GRACE_MS);
+    expect(isInheritedEphemeralServable({ inheritedExpiresAt: QUOTED_DEATH, now: justBefore })).toBe(true);
+    expect(isInheritedEphemeralServable({ inheritedExpiresAt: QUOTED_DEATH, now: atGraceEnd })).toBe(false);
+  });
+
+  it('sert toujours une réponse dont aucun ancêtre n\'est mort pour ce lecteur', () => {
+    expect(isInheritedEphemeralServable({ inheritedExpiresAt: null, now: OWN_DEATH })).toBe(true);
   });
 });

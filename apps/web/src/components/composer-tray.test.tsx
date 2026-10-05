@@ -3,6 +3,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
+import { pendingAttachmentOf } from '@/lib/send/attachments';
 import { MIN_SENDABLE_DURATION_MS, type RecorderState } from '@/lib/view/use-recorder';
 
 import ComposerTray from './composer-tray';
@@ -147,5 +148,61 @@ describe('ComposerTray — la bande d’avertissement (#5668, revue-correction)'
     const el = mountNotice({ message: 'Micro refusé', onRetry: () => {}, onDismiss: () => {} });
     expect(el.querySelector('[role="status"]')).not.toBeNull();
     expect(el.textContent).toContain('Réessayer');
+  });
+});
+
+describe('ComposerTray — chaque pièce porte « Éditer » en son centre (#9119)', () => {
+  const fileOf = (name: string, type: string) => new File([new Uint8Array([1])], name, { type });
+
+  function mountAbove(files: readonly File[]) {
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    act(() => {
+      root.render(
+        <ComposerTray
+          variant="above"
+          pending={files.map((file) => pendingAttachmentOf(file))}
+          onRemove={() => {}}
+          onReplace={() => {}}
+          notice={null}
+          place={null}
+          onRemovePlace={() => {}}
+        />,
+      );
+    });
+    return container;
+  }
+
+  test('image, vidéo, audio : le geste est « Éditer », le glyphe est au CENTRE ; un fichier : rien', () => {
+    const el = mountAbove([fileOf('plage.png', 'image/png'), fileOf('clip.mp4', 'video/mp4'), fileOf('note.webm', 'audio/webm'), fileOf('notes.pdf', 'application/pdf')]);
+    const edits = [...el.querySelectorAll('[data-composer-edit]')];
+    expect(edits.map((button) => button.getAttribute('aria-label'))).toEqual(['Éditer plage.png', 'Éditer clip.mp4', 'Éditer note.webm']);
+    for (const button of edits) {
+      expect(button.querySelector('[data-pending-glyph="edit"]')).not.toBeNull();
+    }
+  });
+
+  test('#9124, #9136 — toucher une VIDÉO ouvre la scène en retouche ; un audio ouvre sa COUPE, Fermer la referme', async () => {
+    await import('./composer-retouch');
+    const el = mountAbove([fileOf('clip.mp4', 'video/mp4'), fileOf('note.webm', 'audio/webm')]);
+    const [video, audio] = [...el.querySelectorAll<HTMLButtonElement>('[data-composer-edit]')];
+    act(() => video!.click());
+    for (let tour = 0; tour < 50 && document.querySelector('[data-composer-retouch]') === null; tour += 1) {
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      });
+    }
+    expect(document.querySelector('[data-composer-retouch]')).not.toBeNull();
+    expect(document.querySelector('[data-composer-media-preview] video')).toBeNull();
+    act(() => audio!.click());
+    for (let tour = 0; tour < 50 && document.querySelector('[data-composer-audio-trim]') === null; tour += 1) {
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      });
+    }
+    expect(document.querySelector('[data-composer-audio-trim] audio')).not.toBeNull();
+    act(() => document.querySelector<HTMLButtonElement>('[data-audio-trim-cancel]')!.click());
+    expect(document.querySelector('[data-composer-audio-trim]')).toBeNull();
   });
 });

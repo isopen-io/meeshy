@@ -102,6 +102,9 @@ function buildPrisma() {
       findMany: jest.fn(async () => [REPORT_FIXTURE]),
       count: jest.fn(async () => 1),
     },
+    conversation: {
+      findMany: jest.fn(async () => [{ id: 'conv1', title: 'Famille' }]),
+    },
   };
 }
 

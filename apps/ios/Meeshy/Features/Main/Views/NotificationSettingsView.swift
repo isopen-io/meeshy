@@ -28,7 +28,7 @@ struct NotificationSettingsView: View {
     // MARK: - Content
 
     private var pageContent: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: MeeshySpacing.xl) {
             generalSection
             messagesSection
             conversationsSection
@@ -39,8 +39,8 @@ struct NotificationSettingsView: View {
 
             Spacer().frame(height: 40)
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 8)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.top, MeeshySpacing.sm)
     }
 
     // MARK: - General
@@ -109,6 +109,9 @@ struct NotificationSettingsView: View {
         settingsSection(title: String(localized: "settings.notifications.contacts_groups", defaultValue: "Contacts et groupes", bundle: .main), icon: "person.2.fill", color: MeeshyColors.brandPrimaryHex) {
             notifToggle(icon: "person.badge.plus", title: String(localized: "settings.notifications.contact_requests", defaultValue: "Demandes de contact", bundle: .main), color: MeeshyColors.brandPrimaryHex,
                         keyPath: \.contactRequestEnabled)
+
+            notifToggle(icon: "person.crop.circle.badge.clock", title: String(localized: "settings.notifications.contact_activity", defaultValue: "Quand un contact revient sur Meeshy", bundle: .main), color: MeeshyColors.successHex,
+                        keyPath: \.contactActivityEnabled)
 
             notifToggle(icon: "person.3.fill", title: String(localized: "settings.notifications.group_invites", defaultValue: "Invitations de groupe", bundle: .main), color: MeeshyColors.infoHex,
                         keyPath: \.groupInviteEnabled)
@@ -196,7 +199,7 @@ struct NotificationSettingsView: View {
     // MARK: - DnD Days Selector
 
     private var dndDaysSelector: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: MeeshySpacing.xs) {
             ForEach(DndDay.allCases, id: \.self) { day in
                 let isSelected = prefs.notification.dndDays.contains(day)
                 Button {
@@ -212,7 +215,7 @@ struct NotificationSettingsView: View {
                     Text(dayLabel(day))
                         // Fixed size: single-letter label constrained inside a fixed
                         // 28×28 capsule — a scalable font would overflow the pill (doctrine 86i/93i).
-                        .font(MeeshyFont.relative(11, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
                         .foregroundColor(isSelected ? .white : theme.textMuted)
                         .frame(width: 28, height: 28)
                         .background(
@@ -317,18 +320,18 @@ struct NotificationSettingsView: View {
         color: String,
         @ViewBuilder content: () -> Content
     ) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 6) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
+            HStack(spacing: MeeshySpacing.xsPlus) {
                 Image(systemName: icon)
-                    .font(MeeshyFont.relative(12, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
                     .foregroundColor(Color(hex: color))
                     .accessibilityHidden(true)
                 Text(title.uppercased())
-                    .font(MeeshyFont.relative(11, weight: .bold, design: .rounded))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold, design: .rounded))
                     .foregroundColor(Color(hex: color))
                     .tracking(1.2)
             }
-            .padding(.leading, 4)
+            .padding(.leading, MeeshySpacing.xs)
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isHeader)
 
@@ -352,28 +355,28 @@ struct NotificationSettingsView: View {
         color: String,
         @ViewBuilder trailing: () -> Trailing
     ) -> some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             Image(systemName: icon)
                 // Fixed size: decorative glyph constrained inside a fixed 28×28 badge —
                 // a scalable font would overflow the tinted square (doctrine 74i/86i).
-                .font(MeeshyFont.relative(14, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
                 .foregroundColor(Color(hex: color))
                 .frame(width: 28, height: 28)
                 .background(
-                    RoundedRectangle(cornerRadius: 8)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.xs)
                         .fill(Color(hex: color).opacity(0.12))
                 )
                 .accessibilityHidden(true)
 
             Text(title)
-                .font(MeeshyFont.relative(14, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
                 .foregroundColor(theme.textPrimary)
 
             Spacer()
 
             trailing()
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .padding(.horizontal, MeeshySpacing.mdPlus)
+        .padding(.vertical, MeeshySpacing.smPlus)
     }
 }

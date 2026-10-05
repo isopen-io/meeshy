@@ -229,7 +229,7 @@ export function StoryRailSelfTile({ entry, size, language }: SelfTileProps) {
             className="grid place-items-center rounded-full"
             style={{
               ...disque,
-              color: 'var(--color-ios-on-brand, #fff)',
+              color: 'var(--color-ios-on-brand)',
               background: 'var(--color-ios-brand)',
               boxShadow: '0 0 0 1.5px var(--color-ios-surface)',
             }}

@@ -19,6 +19,7 @@ import { permissionsService } from '../../services/admin/permissions.service';
 import type { UnifiedAuthRequest } from '../../middleware/auth';
 import type { UserRoleEnum } from '@meeshy/shared/types';
 import { computeUserStats, servedUserStats } from '../user-stats';
+import { keepDiscoverable } from '../../services/profile-discoverability';
 
 
 /**
@@ -632,11 +633,14 @@ export async function searchUsers(fastify: FastifyInstance) {
       // lastActiveAt/isOnline que pour soi, un ami accepté ou ADMIN/BIGBOSS.
       // Puis la page se classe sur ce qu'elle SERT : un ami en ligne remonte
       // pour qui a le droit de le voir, un inconnu masqué garde sa place de nom.
+      // « Ne pas être trouvé » (#8104) : la page se lit, PUIS se prive des
+      // comptes cachés — l'offset reste celui de la base.
+      const trouvables = await keepDiscoverable(fastify.prisma, authContext.userId, users);
       const visibilityMap = await getPresenceVisibilityService(fastify.prisma).resolveForTargets(
         presenceViewer,
-        users.map(u => u.id),
+        trouvables.map(u => u.id),
       );
-      const gatedUsers = users
+      const gatedUsers = trouvables
         .map(u => applyPresenceVisibilityAsOffline(u, visibilityMap.get(u.id)))
         .sort(servedOnlineFirst);
 

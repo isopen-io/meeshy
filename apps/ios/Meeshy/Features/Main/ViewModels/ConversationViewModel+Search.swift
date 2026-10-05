@@ -31,22 +31,11 @@ extension ConversationViewModel {
     /// First-page search. Delegates to `searchHandler`, then mirrors the
     /// store-side state back onto the legacy `@Published` so the views
     /// keep observing the ViewModel directly during the incremental
-    /// split. The local `searchNextCursor` legacy field becomes dead
-    /// weight (cursor lives in the handler) but is left assigned to
-    /// `nil` for any reader that still peeks at it.
+    /// split.
     func searchMessages(query: String) async {
         await searchHandler.searchMessages(query: query)
         searchResults = stateStore.searchResults
         currentSearchQuery = stateStore.currentSearchQuery
-        searchHasMore = stateStore.searchHasMore
-        isSearching = stateStore.isSearching
-        searchNextCursor = nil
-        await applySearchFilterWindow()
-    }
-
-    func loadMoreSearchResults(query: String) async {
-        await searchHandler.loadMoreSearchResults(query: query)
-        searchResults = stateStore.searchResults
         searchHasMore = stateStore.searchHasMore
         isSearching = stateStore.isSearching
         await applySearchFilterWindow()

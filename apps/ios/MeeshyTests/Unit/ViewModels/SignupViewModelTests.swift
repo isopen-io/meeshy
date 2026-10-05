@@ -19,16 +19,18 @@ final class SignupViewModelTests: XCTestCase {
     // MARK: - Fabrique
 
     private func makeSUT(
-        locale: Locale = Locale(identifier: "fr_FR")
+        locale: Locale = Locale(identifier: "fr_FR"),
+        referrals: MockPendingReferralStore = MockPendingReferralStore()
     ) -> (sut: SignupViewModel, registrar: MockSignupRegistrar) {
         let registrar = MockSignupRegistrar()
-        let sut = SignupViewModel(registrar: registrar, locale: locale)
+        let sut = SignupViewModel(registrar: registrar, locale: locale, referrals: referrals)
         return (sut, registrar)
     }
 
     private func fillValidForm(_ sut: SignupViewModel) {
         sut.form.displayName = "Awa N’Diaye"
         sut.form.email = "awa@example.com"
+        sut.form.phoneDigits = "0612345678"
         sut.form.password = "motdepasse"
     }
 
@@ -53,19 +55,100 @@ final class SignupViewModelTests: XCTestCase {
         XCTAssertFalse(sut.canSubmit)
     }
 
-    func test_canSubmit_threeRequiredFieldsValid_isTrue() {
+    func test_canSubmit_requiredFieldsValid_isTrue() {
         let (sut, _) = makeSUT()
         fillValidForm(sut)
         XCTAssertTrue(sut.canSubmit)
     }
 
-    /// Le téléphone n'est pas requis, et il n'est pas non plus annoncé
-    /// facultatif : le bouton ne l'attend simplement pas.
-    func test_canSubmit_withoutPhone_isTrue() {
+    /// #9343 — le numéro est REQUIS par l'écran (la passerelle, elle, accepte
+    /// toujours une adresse seule) : sans lui, le bouton reste éteint.
+    func test_canSubmit_withoutPhone_isFalse() {
         let (sut, _) = makeSUT()
         fillValidForm(sut)
-        XCTAssertTrue(sut.form.phoneDigits.isEmpty)
-        XCTAssertTrue(sut.canSubmit)
+        sut.form.phoneDigits = ""
+        XCTAssertFalse(sut.canSubmit)
+    }
+
+    // MARK: - Parrainage (#8075)
+
+    func test_submit_rememberedReferral_travelsWithTheRegistration() async {
+        let referrals = MockPendingReferralStore(code: "aff_42")
+        let (sut, registrar) = makeSUT(referrals: referrals)
+        fillValidForm(sut)
+
+        await sut.submit()
+
+        XCTAssertEqual(registrar.lastRegisterRequest?.affiliateToken, "aff_42")
+        XCTAssertNil(registrar.lastRegisterRequest?.affiliateSessionKey, "iOS ne tient aucune clé de visite")
+    }
+
+    func test_submit_withPhone_referralStillTravels() async {
+        let referrals = MockPendingReferralStore(code: "aff_42")
+        let (sut, registrar) = makeSUT(referrals: referrals)
+        fillValidForm(sut)
+        sut.form.phoneDigits = "0612345678"
+
+        await sut.submit()
+
+        XCTAssertNotNil(registrar.lastRegisterRequest?.phoneNumber)
+        XCTAssertEqual(registrar.lastRegisterRequest?.affiliateToken, "aff_42")
+    }
+
+    func test_submit_withoutReferral_sendsNoAffiliateToken() async {
+        let (sut, registrar) = makeSUT()
+        fillValidForm(sut)
+
+        await sut.submit()
+
+        XCTAssertNil(registrar.lastRegisterRequest?.affiliateToken)
+    }
+
+    func test_submit_accountCreatedWithSession_forgetsTheReferral() async {
+        let referrals = MockPendingReferralStore(code: "aff_42")
+        let (sut, registrar) = makeSUT(referrals: referrals)
+        registrar.registerResult = .success(.authenticated)
+        fillValidForm(sut)
+
+        await sut.submit()
+
+        XCTAssertNil(referrals.code)
+        XCTAssertEqual(referrals.forgetCallCount, 1)
+    }
+
+    func test_submit_accountCreatedAwaitingVerification_forgetsTheReferral() async {
+        let referrals = MockPendingReferralStore(code: "aff_42")
+        let (sut, registrar) = makeSUT(referrals: referrals)
+        registrar.registerResult = .success(.verificationRequired(PendingEmailVerification(email: "awa@example.com", accountCreated: true)))
+        fillValidForm(sut)
+
+        await sut.submit()
+
+        XCTAssertNotNil(sut.pendingVerification)
+        XCTAssertNil(referrals.code, "le compte existe déjà, rattaché : le code a servi")
+    }
+
+    func test_submit_rejected_keepsTheReferral() async {
+        let referrals = MockPendingReferralStore(code: "aff_42")
+        let (sut, registrar) = makeSUT(referrals: referrals)
+        registrar.registerResult = .failure(rejection(status: 409, code: "EMAIL_TAKEN", field: "email"))
+        fillValidForm(sut)
+
+        await sut.submit()
+
+        XCTAssertEqual(referrals.code, "aff_42", "aucun compte créé : le code attend le prochain essai")
+        XCTAssertEqual(referrals.forgetCallCount, 0)
+    }
+
+    func test_submit_phoneConflict_keepsTheReferral() async {
+        let referrals = MockPendingReferralStore(code: "aff_42")
+        let (sut, registrar) = makeSUT(referrals: referrals)
+        registrar.registerResult = .failure(PhoneOwnershipConflict())
+        fillValidForm(sut)
+
+        await sut.submit()
+
+        XCTAssertEqual(referrals.code, "aff_42")
     }
 
     // MARK: - Envoi
@@ -129,9 +212,10 @@ final class SignupViewModelTests: XCTestCase {
         let created = await sut.submit()
 
         XCTAssertFalse(created)
-        XCTAssertEqual(sut.error(for: .email), "Cette adresse est déjà utilisée")
+        // #8216 — le champ dit qu'un COMPTE existe, jamais le texte serveur.
+        XCTAssertEqual(sut.error(for: .email), SignupViewModel.emailTakenMessage)
         XCTAssertTrue(sut.emailAlreadyRegistered,
-                      "l'écran doit pouvoir offrir « Se connecter » sous le champ")
+                      "l'écran doit pouvoir offrir le lien de connexion sous le champ")
         XCTAssertNil(sut.bannerError, "un refus qui vise un champ ne va PAS au bandeau")
     }
 
@@ -324,7 +408,7 @@ final class SignupViewModelTests: XCTestCase {
         XCTAssertNotNil(sut.error(for: .email))
         XCTAssertTrue(sut.emailAlreadyRegistered)
 
-        registrar.registerResult = .success(())
+        registrar.registerResult = .success(.authenticated)
         sut.form.email = "autre@example.com"
         let created = await sut.submit()
 
@@ -370,5 +454,404 @@ final class SignupViewModelTests: XCTestCase {
     func test_serverFieldNames_prismRanks_areNotFieldErrors() {
         XCTAssertNil(SignupViewModel.field(forServerName: "systemLanguage"))
         XCTAssertNil(SignupViewModel.field(forServerName: "regionalLanguage"))
+    }
+
+    /// Le repli par CODE suit la même règle que le repli par NOM DE CHAMP
+    /// (#6479) : `USERNAME_TAKEN` vise le pseudo, qui a sa propre saisie
+    /// depuis que l'écran l'envoie — jamais le nom affiché.
+    func test_fieldForCode_usernameTaken_targetsTheUsernameInput() {
+        XCTAssertEqual(SignupViewModel.field(forCode: "USERNAME_TAKEN"), .username)
+    }
+
+    // MARK: - Le numéro, requis par l'écran (#9343)
+
+    /// Plus d'alerte « Continuer quand même » : sans numéro, rien ne part et le
+    /// refus se dit sous le champ.
+    func test_requestSubmit_withoutPhone_sendsNothingAndSaysWhyUnderThePhone() async {
+        let (sut, registrar) = makeSUT()
+        fillValidForm(sut)
+        sut.form.phoneDigits = ""
+
+        let outcome = await sut.requestSubmit()
+
+        XCTAssertEqual(outcome, .rejected)
+        XCTAssertEqual(registrar.registerCallCount, 0)
+        XCTAssertEqual(sut.error(for: .phoneNumber), SignupViewModel.phoneRefusalMessage(.missing))
+    }
+
+    func test_submit_withoutPhone_sendsNothing() async {
+        let (sut, registrar) = makeSUT()
+        fillValidForm(sut)
+        sut.form.phoneDigits = "   "
+
+        let created = await sut.submit()
+
+        XCTAssertFalse(created)
+        XCTAssertEqual(registrar.registerCallCount, 0)
+    }
+
+    func test_requestSubmit_withPhone_sendsTheNumberAndItsCountry() async {
+        let (sut, registrar) = makeSUT()
+        fillValidForm(sut)
+        sut.form.phoneDigits = "612345678"
+
+        let outcome = await sut.requestSubmit()
+
+        XCTAssertEqual(outcome, .created)
+        XCTAssertEqual(registrar.registerCallCount, 1)
+        XCTAssertEqual(registrar.lastRegisterRequest?.phoneNumber, "612345678")
+        XCTAssertEqual(registrar.lastRegisterRequest?.phoneCountryCode, "FR")
+    }
+
+    func test_requestSubmit_invalidForm_sendsNothing() async {
+        let (sut, registrar) = makeSUT()
+
+        let outcome = await sut.requestSubmit()
+
+        XCTAssertEqual(outcome, .rejected)
+        XCTAssertEqual(registrar.registerCallCount, 0)
+    }
+
+    func test_requestSubmit_withPhone_serverRefusal_isRejected() async {
+        let (sut, registrar) = makeSUT()
+        fillValidForm(sut)
+        sut.form.phoneDigits = "612345678"
+        registrar.registerResult = .failure(rejection(status: 409, code: "EMAIL_TAKEN", field: "email"))
+
+        let outcome = await sut.requestSubmit()
+
+        XCTAssertEqual(outcome, .rejected)
+    }
+
+    /// Pendant la première frappe, rien ne s'affiche ; le champ QUITTÉ avec
+    /// une saisie implausible dit pourquoi.
+    func test_phoneRefusal_saysNothingWhileTyping_thenSpeaksOnceTheFieldIsLeft() {
+        let (sut, _) = makeSUT()
+        sut.form.phoneDigits = "061234"
+        XCTAssertNil(sut.error(for: .phoneNumber))
+
+        sut.notePhoneFieldLeft()
+
+        XCTAssertEqual(sut.error(for: .phoneNumber), SignupViewModel.phoneRefusalMessage(.implausible(.tooShort)))
+    }
+
+    /// Un champ quitté VIDE ne gronde pas : on peut aller choisir son pays.
+    func test_phoneFieldLeftEmpty_saysNothing() {
+        let (sut, _) = makeSUT()
+        sut.notePhoneFieldLeft()
+        XCTAssertNil(sut.error(for: .phoneNumber))
+    }
+
+    // MARK: - « S'inscrire » inactif EXPLIQUE (#9362)
+
+    /// Le bouton touché pendant la première frappe d'un numéro trop court : le
+    /// motif paraît sous le champ, et la main revient au champ.
+    func test_explainInactivePrimary_tooShortPhoneWhileTyping_saysWhyAndTargetsThePhone() {
+        let (sut, registrar) = makeSUT()
+        sut.form.phoneDigits = "061234"
+        XCTAssertEqual(sut.primaryAction, .signUp(enabled: false))
+        XCTAssertNil(sut.error(for: .phoneNumber))
+
+        let target = sut.explainInactivePrimary()
+
+        XCTAssertEqual(target, .phoneNumber)
+        XCTAssertEqual(sut.error(for: .phoneNumber), SignupViewModel.phoneRefusalMessage(.implausible(.tooShort)))
+        XCTAssertEqual(registrar.registerCallCount, 0)
+    }
+
+    func test_explainInactivePrimary_emptyPhone_saysTheNumberIsRequired() {
+        let (sut, _) = makeSUT()
+
+        XCTAssertEqual(sut.explainInactivePrimary(), .phoneNumber)
+        XCTAssertEqual(sut.error(for: .phoneNumber), SignupViewModel.phoneRefusalMessage(.missing))
+    }
+
+    /// Un numéro plausible n'a rien à se reprocher : le bouton inactif pour une
+    /// autre raison ne gronde pas le téléphone.
+    func test_explainInactivePrimary_plausiblePhone_saysNothingAboutThePhone() {
+        let (sut, _) = makeSUT()
+        sut.form.phoneDigits = "612345678"
+        sut.form.email = "awa@"
+
+        XCTAssertNil(sut.explainInactivePrimary())
+        XCTAssertNil(sut.error(for: .phoneNumber))
+    }
+
+    func test_explainInactivePrimary_activeButton_isNotItsBusiness() {
+        let (sut, _) = makeSUT()
+        fillValidForm(sut)
+        XCTAssertEqual(sut.primaryAction, .signUp(enabled: true))
+
+        XCTAssertNil(sut.explainInactivePrimary())
+    }
+
+    /// VoiceOver lit le motif SUR le bouton, avant même qu'on le touche.
+    func test_inactivePrimaryReason_isThePhoneRefusal_untilTheNumberIsPlausible() {
+        let (sut, _) = makeSUT()
+        sut.form.phoneDigits = "061234"
+        XCTAssertEqual(sut.inactivePrimaryReason, SignupViewModel.phoneRefusalMessage(.implausible(.tooShort)))
+
+        sut.form.phoneDigits = "0612345678"
+        XCTAssertNil(sut.inactivePrimaryReason)
+    }
+
+    func test_phoneRefusalMessages_areDistinctAndNeverEmpty() {
+        let missing = SignupViewModel.phoneRefusalMessage(.missing)
+        let tooShort = SignupViewModel.phoneRefusalMessage(.implausible(.tooShort))
+        let implausible = SignupViewModel.phoneRefusalMessage(.implausible(.identicalRun))
+        XCTAssertFalse(missing.isEmpty)
+        XCTAssertTrue(tooShort.contains("\(PhonePlausibility.minDigits)"), "la borne vient de PhonePlausibility, jamais d'un littéral")
+        XCTAssertEqual(Set([missing, tooShort, implausible]).count, 3)
+        XCTAssertEqual(SignupViewModel.phoneRefusalMessage(.implausible(.repeatedPattern)), implausible)
+    }
+
+    /// Avec un numéro, la session est ouverte : rien à vérifier avant d'entrer.
+    func test_requestSubmit_withPhone_authenticated_exposesNoPendingVerification() async {
+        let (sut, registrar) = makeSUT()
+        fillValidForm(sut)
+        sut.form.phoneDigits = "612345678"
+        registrar.registerResult = .success(.authenticated)
+
+        let outcome = await sut.requestSubmit()
+
+        XCTAssertEqual(outcome, .created)
+        XCTAssertNil(sut.pendingVerification)
+    }
+
+    /// Un nouvel envoi efface l'adresse en attente d'un envoi précédent.
+    func test_submit_clearsAPreviousPendingVerification() async {
+        let (sut, registrar) = makeSUT()
+        fillValidForm(sut)
+        registrar.registerResult = .success(.verificationRequired(PendingEmailVerification(email: "awa@example.com", accountCreated: true)))
+        await sut.submit()
+        registrar.registerResult = .failure(rejection(status: 409, code: "EMAIL_TAKEN", field: "email"))
+
+        await sut.submit()
+
+        XCTAssertNil(sut.pendingVerification)
+    }
+
+    // MARK: - La borne du pseudo (#8082)
+
+    /// Recette 2026-09-26 : `direction_recette` (17 caractères) passait l'écran,
+    /// la passerelle le refusait, et l'app disait « réessayez ». La borne se
+    /// dit désormais PENDANT la saisie, sous le pseudo, et rien ne part.
+    func test_tooLongUsername_showsTheBoundUnderTheFieldWhileTyping() {
+        let (sut, _) = makeSUT()
+        fillValidForm(sut)
+
+        sut.form.username = "direction_recette"
+
+        XCTAssertEqual(sut.error(for: .username), SignupViewModel.usernameRefusalMessage(.tooLong))
+        XCTAssertTrue(sut.error(for: .username)?.contains("16") ?? false)
+        XCTAssertFalse(sut.canSubmit)
+    }
+
+    func test_tooLongUsername_submitSendsNothing() async {
+        let (sut, registrar) = makeSUT()
+        fillValidForm(sut)
+        sut.form.username = "direction_recette"
+
+        let outcome = await sut.requestSubmit()
+
+        XCTAssertEqual(outcome, .rejected)
+        XCTAssertEqual(registrar.registerCallCount, 0)
+    }
+
+    func test_validUsername_hasNoFieldMessage() {
+        let (sut, _) = makeSUT()
+        fillValidForm(sut)
+
+        sut.form.username = "direction_recett"
+
+        XCTAssertNil(sut.error(for: .username))
+        XCTAssertTrue(sut.canSubmit)
+    }
+
+    /// La passerelle sert `violations: [{ path: "username", message: "must NOT
+    /// have more than 16 characters" }]` : le refus se pose SOUS le pseudo,
+    /// dans la langue du lecteur — jamais le texte d'Ajv, jamais « réessayez ».
+    func test_schemaRefusalOnUsername_landsUnderTheFieldInTheReadersLanguage() async {
+        let (sut, registrar) = makeSUT()
+        fillValidForm(sut)
+        registrar.registerResult = .failure(
+            rejection(code: "VALIDATION_ERROR", message: "body/username must NOT have more than 16 characters", violations: [
+                .init(path: "username", message: "must NOT have more than 16 characters"),
+            ])
+        )
+
+        _ = await sut.submit()
+
+        XCTAssertEqual(sut.error(for: .username), SignupViewModel.usernameRuleMessage)
+        XCTAssertNil(sut.bannerError)
+    }
+
+    // MARK: - Adresse déjà utilisée : le lien de connexion en un geste (#8216)
+
+    private func makeTakenSUT() async -> (sut: SignupViewModel, requester: MockSignInLinkRequester) {
+        let registrar = MockSignupRegistrar()
+        let requester = MockSignInLinkRequester()
+        let sut = SignupViewModel(
+            registrar: registrar,
+            locale: Locale(identifier: "fr_FR"),
+            referrals: MockPendingReferralStore(),
+            linkRequester: requester
+        )
+        fillValidForm(sut)
+        sut.form.email = "  Awa@Example.com "
+        registrar.registerResult = .failure(
+            rejection(status: 409, code: "EMAIL_TAKEN", field: "email", message: "Email already used")
+        )
+        _ = await sut.submit()
+        return (sut, requester)
+    }
+
+    func test_emailTaken_fieldSaysAnAccountAlreadyExists() async {
+        let (sut, _) = await makeTakenSUT()
+
+        XCTAssertTrue(sut.showsEmailTakenActions)
+        XCTAssertEqual(sut.error(for: .email), SignupViewModel.emailTakenMessage)
+    }
+
+    func test_requestSignInLink_afterEmailTaken_sendsTheLinkToTheTypedAddress() async {
+        let (sut, requester) = await makeTakenSUT()
+
+        let sent = await sut.requestSignInLink()
+
+        XCTAssertTrue(sent)
+        XCTAssertEqual(requester.requestCallCount, 1)
+        XCTAssertEqual(requester.lastRequestedEmail, "awa@example.com")
+        XCTAssertEqual(sut.signInLink?.email, "awa@example.com")
+        XCTAssertEqual(sut.signInLink?.dispatch.pendingSessionToken, "attente-8216")
+    }
+
+    func test_requestSignInLink_emailEditedSinceTheRefusal_sendsNothing() async {
+        let (sut, requester) = await makeTakenSUT()
+        sut.form.email = "autre@example.com"
+
+        let sent = await sut.requestSignInLink()
+
+        XCTAssertFalse(sent)
+        XCTAssertFalse(sut.showsEmailTakenActions)
+        XCTAssertNil(sut.error(for: .email), "le refus ne vaut que pour l'adresse refusée")
+        XCTAssertEqual(requester.requestCallCount, 0)
+        XCTAssertNil(sut.signInLink)
+    }
+
+    func test_requestSignInLink_withoutEmailTaken_sendsNothing() async {
+        let requester = MockSignInLinkRequester()
+        let sut = SignupViewModel(
+            registrar: MockSignupRegistrar(),
+            locale: Locale(identifier: "fr_FR"),
+            referrals: MockPendingReferralStore(),
+            linkRequester: requester
+        )
+        fillValidForm(sut)
+
+        let sent = await sut.requestSignInLink()
+
+        XCTAssertFalse(sent)
+        XCTAssertEqual(requester.requestCallCount, 0)
+    }
+
+    func test_requestSignInLink_offline_saysSoUnderTheActionsAndPresentsNothing() async {
+        let (sut, requester) = await makeTakenSUT()
+        requester.requestResult = .failure(URLError(.notConnectedToInternet))
+
+        let sent = await sut.requestSignInLink()
+
+        XCTAssertFalse(sent)
+        XCTAssertNil(sut.signInLink)
+        XCTAssertEqual(sut.signInLinkError, EmailProofErrorText.sendMessage(for: URLError(.notConnectedToInternet)))
+        XCTAssertFalse(sut.isRequestingSignInLink)
+    }
+
+    func test_loginEmail_validAddress_travelsTrimmed() {
+        let (sut, _) = makeSUT()
+        sut.form.email = " awa@example.com "
+        XCTAssertEqual(sut.loginEmail, "awa@example.com")
+    }
+
+    func test_loginEmail_incompleteAddress_doesNotTravel() {
+        let (sut, _) = makeSUT()
+        sut.form.email = "awa@"
+        XCTAssertNil(sut.loginEmail)
+    }
+
+    // MARK: - « Est-ce vous ? » (#8214 × #8216)
+
+    private func makeOwnedSUT() async -> (sut: SignupViewModel, registrar: MockSignupRegistrar) {
+        let registrar = MockSignupRegistrar()
+        let sut = SignupViewModel(
+            registrar: registrar,
+            locale: Locale(identifier: "fr_FR"),
+            referrals: MockPendingReferralStore(),
+            linkRequester: MockSignInLinkRequester()
+        )
+        fillValidForm(sut)
+        registrar.registerResult = .failure(MeeshyError.rejected(APIRejection(
+            statusCode: 409, code: "EMAIL_TAKEN", field: "email", message: "x",
+            emailOwner: .init(maskedDisplayName: "A** N*****", maskedUsername: "a**a", avatar: nil)
+        )))
+        _ = await sut.submit()
+        return (sut, registrar)
+    }
+
+    func test_emailTaken_withOwner_exposesTheMaskedOwner() async {
+        let (sut, _) = await makeOwnedSUT()
+        XCTAssertEqual(sut.emailOwner?.maskedDisplayName, "A** N*****")
+        XCTAssertEqual(sut.emailOwner?.maskedUsername, "a**a")
+        XCTAssertTrue(sut.showsEmailTakenActions)
+    }
+
+    func test_emailTaken_withoutOwner_fallsBackToRecoveryOnly() async {
+        let (sut, _) = await makeTakenSUT()
+        XCTAssertNil(sut.emailOwner)
+        XCTAssertTrue(sut.showsEmailTakenActions)
+    }
+
+    func test_claimEmail_resendsTheSameRegistrationWithClaimEmail_andAwaitsTheCode() async {
+        let (sut, registrar) = await makeOwnedSUT()
+        let first = registrar.lastRegisterRequest
+        let pending = PendingEmailVerification(email: "awa@example.com", accountCreated: true, pendingSessionToken: nil)
+        registrar.registerResult = .success(.verificationRequired(pending))
+
+        let claimed = await sut.claimEmail()
+
+        XCTAssertTrue(claimed)
+        XCTAssertEqual(registrar.registerCallCount, 2)
+        XCTAssertEqual(registrar.lastRegisterRequest?.claimEmail, true)
+        XCTAssertEqual(registrar.lastRegisterRequest?.email, first?.email)
+        XCTAssertEqual(registrar.lastRegisterRequest?.username, first?.username)
+        XCTAssertEqual(sut.pendingVerification, pending)
+    }
+
+    /// #9343 — « Ce n'est pas moi » ne consulte pas le bouton principal : il
+    /// hérite pourtant de la règle. Numéro effacé ⇒ rien ne part, et le refus
+    /// se dit sous le champ.
+    func test_claimEmail_withoutPhone_sendsNothingAndSaysWhy() async {
+        let (sut, registrar) = await makeOwnedSUT()
+        sut.form.phoneDigits = ""
+
+        let claimed = await sut.claimEmail()
+
+        XCTAssertFalse(claimed)
+        XCTAssertEqual(registrar.registerCallCount, 1)
+        XCTAssertEqual(sut.error(for: .phoneNumber), SignupViewModel.phoneRefusalMessage(.missing))
+    }
+
+    func test_claimEmail_withoutEmailTaken_sendsNothing() async {
+        let (sut, registrar) = makeSUT()
+        fillValidForm(sut)
+        let claimed = await sut.claimEmail()
+        XCTAssertFalse(claimed)
+        XCTAssertEqual(registrar.registerCallCount, 0)
+    }
+
+    func test_loginEmailHandoff_isTakenOnce() {
+        let handoff = LoginEmailHandoff()
+        handoff.hold("awa@example.com")
+        XCTAssertEqual(handoff.take(), "awa@example.com")
+        XCTAssertNil(handoff.take())
     }
 }

@@ -18,7 +18,7 @@ light.css     schéma clair  — porté par .light seulement
 Un franchissement de frontière de paquet se **déclare** : `@meeshy/design-tokens`
 est un workspace, `apps/web` le porte en dépendance, et `docker.yml` reconstruit son
 image quand ce paquet change (`packages/design-tokens/` figure dans la détection
-de `web_v31`). `apps/web/scripts/check-docker-context.mjs` vérifie que
+de `webapp`). `apps/web/scripts/check-docker-context.mjs` vérifie que
 `.dockerignore` laisse entrer les cinq fichiers.
 
 ## `ios.css` — la palette dérivée
@@ -32,6 +32,28 @@ cd packages/design-tokens && bun run generate:ios   # régénérer
 cd apps/web && bun run check:tokens              # le CSS généré n'a pas dérivé de Swift — en CI (« Gates web »)
 cd apps/web && bun run check:tokens-resolved     # le navigateur PEINT ces valeurs, dans les deux schémas — à la main
 ```
+
+## Les rôles du SDK gagnent (#8879, 2026-09-30)
+
+La directive d'harmonie tranche le reste de #5445 : quand la table héritée et le
+SDK donnent deux RÔLES différents à une couleur, **le rôle du SDK gagne**. Les
+rôles de `dark.css`, `light.css` et `tokens.css` qui avaient un jumeau iOS
+POINTENT désormais vers lui (`--color-bg: var(--ios-surface)`,
+`--color-danger: var(--ios-error)`, `--text-md: var(--ios-font-headline)`…).
+Restent des valeurs : les rôles qu'iOS n'a pas (voiles d'état, ombres,
+palette d'avatars, présence — dont la source est `packages/shared/utils/user-presence.ts`),
+et ceux dont la valeur iOS tombe sous AA dans l'usage de la table — la
+primaire (indigo500 comme encre : 4,43:1), les encres muettes claires
+(indigo700 à 80 % sur un voile d'état : 4,26:1), les états clairs.
+
+`check-jetons.mjs` lit donc `ios.css` SOUS la table (bloc `:root`, plus
+`:root.light` en clair), et `lib/couleur.mjs` compose une encre translucide
+(`color-mix(…, transparent)`) sur le fond de la paire qu'elle mesure.
+
+`ios.css` porte aussi l'échelle FERMÉE du chrome posé sur un média
+(`--ios-on-media*`, `--ios-media-*`, `--ios-scrim*`) et l'encre d'un aplat
+(`--ios-on-brand`), déclarées dans `MeeshyColors.swift`. La table motif →
+jeton que les écrans appliquent est `docs/product/charte-visuelle-web.md`.
 
 ## `tokens.css`, `dark.css`, `light.css` — la table héritée
 

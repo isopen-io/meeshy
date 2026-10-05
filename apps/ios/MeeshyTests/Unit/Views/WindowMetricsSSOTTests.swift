@@ -56,7 +56,6 @@ final class WindowMetricsSSOTTests: XCTestCase {
         "Meeshy/Features/Main/Views/RootView.swift",
         "Meeshy/Features/Main/Views/VideoLegacySupport.swift",
         "Meeshy/Features/Main/Components/ComposerModels.swift",
-        "Meeshy/Features/Main/Components/IslandEmergingBanner.swift",
         "Meeshy/Features/Main/Components/RecentMediaStrip.swift"
     ]
 
@@ -172,12 +171,12 @@ final class WindowMetricsSSOTTests: XCTestCase {
     func test_windowMetrics_areReadersOverTheSingleResolution() throws {
         let code = codeLines(try source(Self.deviceLayout))
 
-        for metric in ["activeWindow?.bounds.size",
-                       "activeWindow?.safeAreaInsets.bottom",
-                       "activeWindow?.safeAreaInsets.top"] {
+        for metric in ["measurementWindow?.bounds.size",
+                       "measurementWindow?.safeAreaInsets.bottom",
+                       "measurementWindow?.safeAreaInsets.top"] {
             XCTAssertTrue(
                 code.contains(metric),
-                "\(metric) must be derived from activeWindow, not from its own scene walk."
+                "\(metric) must be derived from measurementWindow, not from its own scene walk."
             )
         }
 
@@ -185,6 +184,21 @@ final class WindowMetricsSSOTTests: XCTestCase {
             code.components(separatedBy: "connectedScenes").count - 1, 1,
             "DeviceLayout must touch connectedScenes exactly once — in activeWindowScene."
         )
+    }
+
+    /// 2026-09-30 — the call screen lives in its own key `UIWindow` (#8725).
+    /// Measured off the KEY window, the call view read the insets of the very
+    /// window SwiftUI was laying out: an AttributeGraph cycle, after which the
+    /// call screen never updated again (stuck on « Appel entrant » /
+    /// « Appel en cours… » while the call was connected). Metrics are taken
+    /// on the app's normal-level window, never on an overlay above it.
+    func test_windowMetrics_measureTheAppWindow_neverAnOverlay() throws {
+        let code = codeLines(try source(Self.deviceLayout))
+        XCTAssertTrue(code.contains("static var measurementWindow: UIWindow?"))
+        XCTAssertTrue(code.contains("for window in scene.windows where window.windowLevel == .normal"),
+                      "the measured window is filtered on the NORMAL level — an overlay window (call, alerts) is never measured")
+        XCTAssertTrue(code.contains("guard let scene = activeWindowScene else { return nil }"),
+                      "measurementWindow reuses the single scene resolution")
     }
 
     // MARK: - No call site keeps its own walk
@@ -267,7 +281,7 @@ final class WindowMetricsSSOTTests: XCTestCase {
 
         let deliberate: Set<String> = [
             "DeviceLayout.swift",  // the single resolution
-            "CallManager.swift"    // screen-capture probe: genuinely about every scene
+            "CallManager+SystemMonitoring.swift"    // screen-capture probe: genuinely about every scene
         ]
 
         var found: Set<String> = []

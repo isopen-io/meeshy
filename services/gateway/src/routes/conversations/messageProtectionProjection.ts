@@ -59,6 +59,7 @@ export function mapMessageProtectionFields(
     ephemeralDuration: message.ephemeralDuration ?? null,
     expiresAt: servedEphemeralExpiresAt({
       ephemeralDuration: message.ephemeralDuration,
+      effectFlags: message.effectFlags,
       rawExpiresAt: message.expiresAt ?? null,
       isSender: reader?.isSender ?? false,
       readerDeadline: reader?.readerDeadline ?? null,

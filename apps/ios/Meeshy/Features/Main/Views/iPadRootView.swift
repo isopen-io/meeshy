@@ -74,7 +74,6 @@ struct iPadRootView: View {
     /// imposait ici (cf. watchdog 0x8BADF00D juste au-dessus).
     @ObservedObject var reelsPresenter = ReelsPresenter.shared
     @EnvironmentObject var deepLinkRouter: DeepLinkRouter
-    @Environment(\.colorScheme) var systemColorScheme
 
     @State var activeConversation: Conversation?
     @State var rightPanelRoute: Route?
@@ -95,7 +94,9 @@ struct iPadRootView: View {
 
     /// Conversation surfaced by a long-press / pull-down on a notification toast
     /// — presented as a reusable `ConversationView` preview over the columns.
-    @State var notificationPreviewConversation: Conversation?
+    /// Sur le tas (`iPadRootSheetTargets`, #8972) : en ligne, elle faisait
+    /// franchir à la vue son budget de taille.
+    @State var sheetTargets = iPadRootSheetTargets()
     /// Swallows the toast Button's release tap that can fire right after the
     /// long-press / drag opened the preview (prevents double action).
     @State var suppressToastTap = false
@@ -201,7 +202,7 @@ struct iPadRootView: View {
             storyViewerCoordinator: storyViewerCoordinator,
             showSharePicker: $showSharePicker,
             showNewConversation: $showNewConversation,
-            notificationPreviewConversation: $notificationPreviewConversation,
+            notificationPreviewConversation: $sheetTargets.notificationPreview,
             onOpenFullConversation: openConversation
         ))
         .modifier(iPadCoversAndChromeLayer(
@@ -217,11 +218,11 @@ struct iPadRootView: View {
             activeConversationId: activeConversation?.id,
             onStoryReply: handleStoryReply,
             onSyncPillTap: handleSyncPillTap,
-            activeConversationIdForBanner: { activeConversation?.id ?? notificationPreviewConversation?.id },
+            activeConversationIdForBanner: { activeConversation?.id ?? sheetTargets.notificationPreview?.id },
             onMiniPlayerTap: {
-                guard let convId = ConversationAudioCoordinator.shared
-                    .activeContext?.conversationId else { return }
-                navigateToConversationById(convId)
+                guard let target = MiniPlayerTapPolicy.target(
+                    context: ConversationAudioCoordinator.shared.activeContext) else { return }
+                navigateToConversationById(target.conversationId, highlightMessageId: target.highlightMessageId)
             }
         ))
         // C4b — la rupture, posée PAR-DESSUS les feuilles : elle les recouvre,
@@ -279,8 +280,7 @@ struct iPadRootView: View {
         // Même raison, pour le feed : `FeedSocketHandler` est le SEUL
         // écrivain disque des posts, commentaires et réactions.
         // `arm()` est idempotent — jamais désarmé (miroir de RootView).
-        DependencyContainer.shared.feedSocketHandler.arm()
-        await ConversationSyncEngine.shared.startSocketRelay()
+        await RealtimeRelays.arm()
 
         Task.detached(priority: .background) {
             try? await Task.sleep(for: .seconds(5))
@@ -362,8 +362,10 @@ struct iPadRootView: View {
                 // I-075 — override éphémère, jamais persistant : consommé ici
                 // comme `pendingReplyContext` ci-dessus, jamais écrit en
                 // préférence.
-                forcedReadingMode: router.pendingForcedReadingMode
+                forcedReadingMode: router.pendingForcedReadingMode,
+                landsOnMessage: router.landsOnMessage(in: conversation.id)
             )
+            .reportsConversationViewing(conversation.id)
             .id(conversation.id)
             .navigationBarHidden(true)
             .onAppear {

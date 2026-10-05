@@ -37,7 +37,6 @@ class ConversationViewModel: ObservableObject {
         _cachedLastSentIndex = .uncomputed
 
         if structureChanged {
-            _messagesByDate = nil
             _topActiveMembers = nil
             _mediaSenderInfoMap = nil
             _allVisualAttachments = nil
@@ -75,11 +74,6 @@ class ConversationViewModel: ObservableObject {
     /// spinner (cache-first + stale-while-revalidate discipline).
     @Published var isRevalidating = false
 
-    /// Message ids whose `messageService.edit` round-trip is in flight. The
-    /// bubble renders a "Enregistrement…" indicator next to the "Modifie"
-    /// badge while the set contains its id so the user never wonders if
-    /// their edit actually landed.
-    @Published var editInProgress: Set<String> = []
     @Published var hasOlderMessages = true
     @Published var hasNewerMessages = false
     @Published var isSending = false
@@ -100,9 +94,6 @@ class ConversationViewModel: ObservableObject {
         }
         return error.localizedDescription
     }
-
-    /// Set before prepend so the view can restore scroll position
-    @Published var scrollAnchorId: String?
 
     /// Real-time translation/transcription/audio data keyed by messageId
     ///
@@ -189,6 +180,10 @@ class ConversationViewModel: ObservableObject {
     /// (#7618) — lues par chaque mode via `MeeshyMessage.isViewOnceRevealed`.
     @Published var revealedViewOnceIds: [String: Bool] = [:]
 
+    /// Les éphémères EN COMBUSTION (#8382) — lus par les cellules du fil, qui
+    /// rendent `MessageStore` et non `messages`.
+    @Published var burningEphemeralIds: [String: Bool] = [:]
+
     struct BubbleLanguageSelection: Equatable {
         var activeDisplayLangCode: String?
         var secondaryLangCode: String?
@@ -259,6 +254,10 @@ class ConversationViewModel: ObservableObject {
     /// successful load so older messages are ready before the user reaches them.
     var isCurrentlyNearBottom: Bool = true
 
+    /// Stockée ici et non dans l'extension qui la pilote (`ConversationViewModel+JumpToMessage.swift`) :
+    /// une extension Swift ne peut pas déclarer de propriété stockée.
+    var newerPagesChain: Task<Void, Never>?
+
     /// Dernier message dont l'affichage a fait « rattraper » la conversation.
     /// Rendu obsolète tout seul dès qu'un message plus récent arrive — la
     /// comparaison se fait sur le message le plus récent du moment.
@@ -295,15 +294,18 @@ class ConversationViewModel: ObservableObject {
     /// viewing/sending into a conversation they no longer belong to.
     @Published var accessRevoked: Bool = false
 
-    /// Selected ephemeral duration for next message
-    @Published var ephemeralDuration: EphemeralDuration?
+    /// L'éphémère armé pour les prochains messages : la flamme-œil ou une durée (#8303).
+    @Published var ephemeralChoice: EphemeralChoice? { didSet { persistArmedProtection() } }
 
     /// When true, next message will be sent with blur (recipient must tap to reveal)
-    @Published var isBlurEnabled: Bool = false
+    @Published var isBlurEnabled: Bool = false { didSet { persistArmedProtection() } }
 
     /// When true, next message will be sent as view-once (revealed once, then
     /// burned). Surfaced by the notification preview composer.
-    @Published var isViewOnceEnabled: Bool = false
+    @Published var isViewOnceEnabled: Bool = false { didSet { persistArmedProtection() } }
+
+    /// La contagion de la citation en attente (#8557) — superposée à l'armement, jamais persistée.
+    @Published var armedReplyContagion: ArmedReplyContagion?
 
     /// Pending message effects selected via the effects picker
     @Published var pendingEffects: MessageEffects = .none
@@ -338,7 +340,7 @@ class ConversationViewModel: ObservableObject {
     /// Resolves to the test-injected coordinator under DEBUG when present,
     /// otherwise the shared singleton. Pure UX orchestration lives in the
     /// coordinator — the VM only feeds it.
-    private var audioCoordinator: ConversationAudioCoordinator {
+    var audioCoordinator: ConversationAudioCoordinator {
         #if DEBUG
         return _testAudioCoordinator ?? .shared
         #else
@@ -372,7 +374,6 @@ class ConversationViewModel: ObservableObject {
     @Published var isSearching = false
     @Published var searchHasMore = false
     @Published var currentSearchQuery: String?
-    var searchNextCursor: String?
 
     /// True when the user jumped to a search result and messages are loaded around that point
     @Published var isInJumpedState = false
@@ -382,10 +383,6 @@ class ConversationViewModel: ObservableObject {
     /// reference. Drives a pulsing indicator on the scroll-to-bottom button
     /// so the user knows the app is working to find the cited message.
     @Published var isSearchingQuotedMessage = false
-    /// The message id the user is trying to jump to. Set alongside
-    /// `isSearchingQuotedMessage` and cleared once the jump completes
-    /// (or fails). Read by the scroll button to display contextual text.
-    @Published var quotedMessageSearchTarget: String? = nil
 
     // Permanent mapping `optimistic id → server id` for the lifetime of the
     // ViewModel. The optimistic id (`temp_…` / `offline_…` / `retry_…`) is
@@ -403,16 +400,6 @@ class ConversationViewModel: ObservableObject {
     // MARK: - O(1) Message Index
 
     var _messageIdIndex: [String: Int]?
-
-    // MARK: - Date-Grouped Messages
-
-    struct DateGroup: Identifiable {
-        let id: String
-        let date: Date
-        let messages: [Message]
-    }
-
-    var _messagesByDate: [DateGroup]?
 
     // MARK: - Conversation-Wide Media
 
@@ -452,7 +439,10 @@ class ConversationViewModel: ObservableObject {
         let translatedAudios: [MessageTranslatedAudio]
     }
 
-    var _allAudioItems: [AudioItem]?
+    var _allAudioItems: [AudioItem]? { didSet { _audioItemsByMessageId = nil } }
+    /// Index par message de `_allAudioItems` — voir `audioItemsByMessageId`
+    /// (ConversationViewModel+Projections.swift). Invalidé avec son parent.
+    var _audioItemsByMessageId: [String: [AudioItem]]?
 
     /// Maps attachment.id -> caption text for the fullscreen gallery.
     /// Priority: 1) attachment.caption  2) message text (only if single visual attachment)
@@ -508,10 +498,7 @@ class ConversationViewModel: ObservableObject {
     /// Actor for optimistic inserts and state-machine transitions.
     private(set) var messagePersistence: MessagePersistenceActor
     var lastOlderPaginationTime: Date = .distantPast
-    var lastNewerPaginationTime: Date = .distantPast
     static let paginationDebounceInterval: TimeInterval = 0.3
-    static let paginationRetryCount: Int = 3
-    private static let paginationRetryDelay: UInt64 = 500_000_000
 
     let authManager: AuthManaging
     let messageService: MessageServiceProviding
@@ -523,10 +510,18 @@ class ConversationViewModel: ObservableObject {
     let messageSocket: MessageSocketProviding
     let networkMonitor: NetworkMonitorProviding
     let offlineQueue: OfflineMessageQueueing
+    /// #8303 — les flammes-œil vues pendant la visite, et ce que la sortie en fait.
+    var afterReadVisit = AfterReadVisit()
+    let afterReadConsumer: AfterReadConsumptionProviding
+    /// #8305 — ce que la conversation garde armé, entre deux envois et deux visites.
+    let protectionPreferences: ConversationProtectionPreferenceProviding
+    /// #8307 — les images et vidéos reçues rejoignent l'album Meeshy à l'accusé de réception.
+    let receivedMediaAutoSaver: ReceivedMediaAutoSaving
     private let activeCallService: ActiveCallServiceProviding
     private let liveCallJoin: LiveCallJoinContext
     let translationService: TranslationServiceProviding
     let attachmentTranslationService: AttachmentTranslationProviding
+    let messageEncryptor: DirectMessageEncrypting
     let decryptionActor = DecryptionActor(provider: LiveSessionProvider())
 
     /// Captured at init so the heavy side-effects (DB observation, initial
@@ -604,12 +599,20 @@ class ConversationViewModel: ObservableObject {
         activeCallService: ActiveCallServiceProviding = ActiveCallService.shared,
         liveCallJoin: LiveCallJoinContext = .live,
         translationService: TranslationServiceProviding = TranslationService.shared,
-        attachmentTranslationService: AttachmentTranslationProviding = AttachmentService.shared
+        attachmentTranslationService: AttachmentTranslationProviding = AttachmentService.shared,
+        messageEncryptor: DirectMessageEncrypting = SessionManager.shared,
+        afterReadConsumer: AfterReadConsumptionProviding = AfterReadConsumption.shared,
+        protectionPreferences: ConversationProtectionPreferenceProviding = ConversationProtectionPreferenceStore.shared,
+        receivedMediaAutoSaver: ReceivedMediaAutoSaving = ReceivedMediaAutoSaver.shared
     ) {
+        self.receivedMediaAutoSaver = receivedMediaAutoSaver
+        self.afterReadConsumer = afterReadConsumer
+        self.protectionPreferences = protectionPreferences
         self.activeCallService = activeCallService
         self.liveCallJoin = liveCallJoin
         self.translationService = translationService
         self.attachmentTranslationService = attachmentTranslationService
+        self.messageEncryptor = messageEncryptor
         self.conversationId = conversationId
         self.memberJoinedAt = memberJoinedAt
         self.lastReadMessageId = lastReadMessageId
@@ -680,6 +683,7 @@ class ConversationViewModel: ObservableObject {
         handler.delegate = self
         handler.persistence = dependencies.persistence
         self.socketHandler = handler
+        restoreArmedProtection()
     }
 
     // MARK: - MessageStore Observation (Task 1.3)
@@ -694,6 +698,7 @@ class ConversationViewModel: ObservableObject {
     deinit {
         // socketHandler deinit handles room leave & typing cleanup
         socketHandler = nil
+        newerPagesChain?.cancel()
         // Only undo the singleton mutations `start()` performed. A throwaway VM
         // (eagerly allocated by `ConversationView.init`, never activated because
         // `@StateObject` discarded it before its `.task` ran) MUST NOT clear the
@@ -770,11 +775,11 @@ class ConversationViewModel: ObservableObject {
         // guest can trigger the OS microphone permission prompt from a bubble
         // tap before the gateway's own isAnonymous check ever runs.
         guard anonymousSession == nil else { return }
-        guard isDirect, let peerUserId = participantUserId, !peerUserId.isEmpty else { return }
         if summary.isLive {
             Task { await joinOngoingCall(summary) }
             return
         }
+        guard isDirect, let peerUserId = participantUserId, !peerUserId.isEmpty else { return }
         let displayName = resolvedPeerDisplayName
             ?? String(localized: "call.peer.fallback", defaultValue: "Appel", bundle: .main)
         Task { @MainActor in
@@ -803,7 +808,8 @@ class ConversationViewModel: ObservableObject {
                 isVideo: summary.callType == .video,
                 currentUserId: currentUserId,
                 fallbackRemoteUserId: participantUserId,
-                fallbackDisplayName: resolvedPeerDisplayName
+                fallbackDisplayName: isDirect ? resolvedPeerDisplayName : currentConversationName,
+                isGroup: !isDirect
             )
         )
     }
@@ -895,15 +901,28 @@ class ConversationViewModel: ObservableObject {
     /// widget (`AudioTrackLanguageResolver` : bascule manuelle du drapeau
     /// puis Prisme). C'est CETTE url que le coordinateur doit jouer pour que
     /// l'audio entendu corresponde au texte et aux segments affichés.
-    private func effectiveAudioTrackUrl(for attachment: MessageAttachment, message: Message) -> String {
-        let tracks = translatedAudioTracks(for: attachment, messageId: message.id)
-        let lang = AudioTrackLanguageResolver.resolve(
+    func effectiveAudioTrackUrl(for attachment: MessageAttachment, message: Message) -> String {
+        servedAudioTrack(for: attachment, message: message).url
+    }
+
+    /// La piste SERVIE entière (URL, durée, texte) — la descente de
+    /// `effectiveAudioTrackUrl`, que l'aperçu d'appui long reçoit (#9010).
+    func servedAudioTrack(for attachment: MessageAttachment, message: Message) -> ServedAudioTrack {
+        let transcript = messageTranscriptionsByAttachment[attachment.id]
+            ?? messageTranscriptions[message.id].flatMap { $0.attachmentId == attachment.id ? $0 : nil }
+        return AudioTrackLanguageResolver.servedTrack(
+            of: attachment,
             manualOverride: bubbleLanguageSelections[message.id]?.activeDisplayLangCode,
             originalLanguage: message.originalLanguage,
             preferredLanguages: ConversationLanguagePreferences(user: authManager.currentUser).resolved,
-            translatedAudios: tracks
+            translatedAudios: translatedAudioTracks(for: attachment, messageId: message.id),
+            originalTranscript: transcript?.text ?? attachment.transcription?.text
         )
-        return AudioTrackLanguageResolver.url(for: lang, translatedAudios: tracks, originalUrl: attachment.fileUrl)
+    }
+
+    func servedAudioTracks(of message: Message) -> [String: ServedAudioTrack] {
+        Dictionary(message.attachments.filter { $0.type == .audio }.map { ($0.id, servedAudioTrack(for: $0, message: message)) },
+                   uniquingKeysWith: { first, _ in first })
     }
 
     /// Subscribes to `$messages` and forwards any newly-inserted audio messages
@@ -1009,6 +1028,10 @@ class ConversationViewModel: ObservableObject {
     /// - Parameter visibleIds: ce que la surface MONTRE, distinct de ce qu'elle
     ///   a vu assez longtemps (#3902). Vide ⇒ règle d'avant, à l'identique.
     func markAsRead(messageIds: [String]? = nil, visibleIds: [String] = []) {
+        #if DEBUG
+        VitrineRendu.shared.conversationAffichee(self, visibles: visibleIds)
+        #endif
+        afterReadVisit.note(displayed: (messageIds ?? []) + visibleIds, among: messages)
         let caughtUpId = caughtUpMessageId(seen: messageIds, visible: visibleIds)
         if caughtUpId == nil, let messageIds { notePartialRead(seen: messageIds) }
         sendReadReceipt(messageIds: messageIds, caughtUpId: caughtUpId)
@@ -1030,6 +1053,7 @@ class ConversationViewModel: ObservableObject {
     /// aucun `MessageStatusEntry.readAt` individuel n'est gelé pour un
     /// message que le lecteur n'a pas vu bulle par bulle.
     func markCaughtUpFromSummaryOrRiver() {
+        afterReadVisit.noteAll(among: messages)
         guard !hasNewerMessages, let newest = newestServerMessageId() else { return }
         lastCaughtUpMessageId = newest
         sendReadReceipt(messageIds: nil, caughtUpId: newest)
@@ -1130,6 +1154,7 @@ class ConversationViewModel: ObservableObject {
     /// equally permissive error path.
     func markAsReceived() {
         commandHandler.markAsReceived()
+        receivedMediaAutoSaver.consider(messages)
     }
 
     // MARK: - Préférences de langue (ardoise de cache)

@@ -15,7 +15,7 @@ import { MessageReadStatusService } from '../MessageReadStatusService';
 import { NotificationService } from '../notifications/NotificationService';
 import { MessageValidator } from './MessageValidator';
 import { MessageProcessor } from './MessageProcessor';
-import { queueMessageTranslation, runMessagePostSaveEffects } from './messagePostSaveEffects';
+import { postSaveToolFields, queueMessageTranslation, runMessagePostSaveEffects } from './messagePostSaveEffects';
 import { EngagementService } from '../engagement/EngagementService';
 import { stickerFromMetadata } from '../stickers/messageSticker';
 import {
@@ -563,6 +563,7 @@ export class MessagingService {
     const saved = message as typeof message & {
       sender?: { userId?: string | null } | null;
       attachments?: Array<{ mimeType?: string | null }> | null;
+      replyTo?: { sender?: { userId?: string | null } | null } | null;
     };
 
     runMessagePostSaveEffects({
@@ -576,6 +577,7 @@ export class MessagingService {
         senderUserId: saved.sender?.userId ?? null,
         attachmentMimeTypes: (saved.attachments ?? []).map((att) => att.mimeType ?? ''),
         hasSticker: Boolean(stickerFromMetadata(message.metadata)),
+        ...postSaveToolFields(saved),
         content: message.content,
         messageType: message.messageType,
         replyToId: message.replyToId

@@ -1881,18 +1881,15 @@ describe('registerCoreRoutes', () => {
       expect(mockSendNotFound).toHaveBeenCalled();
     });
 
-    it('returns sendForbidden with CONVERSATION_ACCESS_DENIED when canAccessConversation is false', async () => {
+    it('answers a non-member with the same 404 as a missing conversation (#8099)', async () => {
       mockCanAccessConversation.mockResolvedValue(false);
       const req = makeRequest({ params: { id: CONV_ID } });
       const reply = makeReply();
 
       await getDetailHandler(fastify)(req, reply);
 
-      expect(mockSendForbidden).toHaveBeenCalledWith(
-        reply,
-        expect.any(String),
-        expect.objectContaining({ code: 'CONVERSATION_ACCESS_DENIED' })
-      );
+      expect(mockSendForbidden).not.toHaveBeenCalled();
+      expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found');
     });
 
     it('returns sendNotFound when conversation not found after access check', async () => {
@@ -2930,14 +2927,15 @@ describe('registerCoreRoutes', () => {
       expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found');
     });
 
-    it('returns sendForbidden when canAccessConversation is false', async () => {
+    it('answers a non-member with the same 404 as a missing conversation (#8099)', async () => {
       mockCanAccessConversation.mockResolvedValue(false);
       const req = makeRequest({ params: { id: CONV_ID } });
       const reply = makeReply();
 
       await getAnalysisHandler(fastify)(req, reply);
 
-      expect(mockSendForbidden).toHaveBeenCalledWith(reply, 'Access denied');
+      expect(mockSendForbidden).not.toHaveBeenCalled();
+      expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found');
     });
 
     it('happy path: returns analysis with null summary', async () => {

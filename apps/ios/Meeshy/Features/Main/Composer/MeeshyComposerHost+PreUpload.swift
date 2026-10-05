@@ -23,6 +23,9 @@ extension MeeshyComposerHost {
     /// connaît déjà, et le balayage ne voit plus un objet dont l'adoption a
     /// remplacé l'URL locale par celle du serveur.
     func startPendingPreUploads() {
+        // Une pièce de MESSAGE retouchée ne monte pas comme média de post — et
+        // l'adoption de l'URL distante se lirait comme une retouche (#9131).
+        guard !returnsToConversation else { return }
         preUploads.configure(makePreUploader())
         preUploads.adopt = { [weak viewModel] local, postMediaId, remote in
             viewModel?.adoptPreUploadedMedia(

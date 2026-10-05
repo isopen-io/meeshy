@@ -70,9 +70,9 @@ export type OnboardingStepRewards = z.infer<typeof OnboardingStepRewardsSchema>;
  * Les quatre derniers champs sont OPTIONNELS pour le client (rétrocompatibles :
  * un serveur antérieur ne les sert pas) ; la passerelle les sert toujours.
  * - `emailVerified` (#7907) — l'adresse du compte est vérifiée ;
- * - `canPublishStory` (#7907) — `POST /posts { type: 'STORY' }` passera la
- *   garde du courriel : vérifié, OU aucune story encore jamais écrite
- *   (l'exception « première story ») ;
+ * - `canPublishStory` (#7907, #8476) — `POST /posts { type: 'STORY' }`
+ *   passera la garde de publication : vérifié, OU délai de grâce de l'adresse
+ *   non échu (phase d'activation autre que `blocked`) ;
  * - `pendingFriendRequests` (#7910) — demandes d'ami ENVOYÉES par le compte
  *   et toujours en attente (ni acceptées, ni refusées, ni annulées) ;
  * - `stepRewards` (#7908) — ce que chaque geste créditera à l'élan courant.

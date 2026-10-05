@@ -30,26 +30,6 @@ const check = (ok, what) => {
   if (!ok) failures.push(what);
 };
 
-/**
- * La couleur MOYENNE d'un ThumbHash (spécification d'Evan Wallace, fonction
- * `thumbHashToAverageRGBA`), recopiée ici — comme dans `check-story-scene.mjs`
- * — pour que l'attendu ne soit pas lu dans `lib/media/thumbhash.ts`, le code
- * mesuré. `THUMB_HASH_AMBER` (`fixtures-feed.ts`) est désormais posé sur
- * `POST_SCENE_DECORATED.bg1.payload.thumbHash` (revue-correction #6901).
- */
-function averageRgbOfThumbHash(base64) {
-  const bytes = Buffer.from(base64, 'base64');
-  const header = bytes[0] | (bytes[1] << 8) | (bytes[2] << 16);
-  const l = (header & 63) / 63;
-  const p = ((header >> 6) & 63) / 31.5 - 1;
-  const q = ((header >> 12) & 63) / 31.5 - 1;
-  const b = l - (2 / 3) * p;
-  const r = (3 * l - b + q) / 2;
-  const g = r - q;
-  const to255 = (v) => Math.round(Math.max(0, Math.min(1, v)) * 255);
-  return [to255(r), to255(g), to255(b)];
-}
-const LETTERBOX_AMBER_RGB = averageRgbOfThumbHash('LHkC');
 const distance = (a, b) => Math.max(...a.map((v, i) => Math.abs(v - b[i])));
 
 /** La couleur MOYENNE d'un petit clip, décodée par un `<canvas>` de la page —
@@ -540,14 +520,17 @@ async function runScheme(colorScheme) {
     }
 
     /* LE SOL D'UN FOND AJUSTÉ EST PEINT DANS LE MOTEUR, PAS DANS L'APLAT DE
-     * CARTE (revue-correction #6901, défaut 1). Le fond `fit` de cette scène
-     * (16:9) est plus LARGE que le canvas 9:16 : il laisse une bande
-     * horizontale en haut ET en bas. L'échantillon est pris au centre du bord
-     * HAUT — loin des deux coins arrondis (`data-feed-scene-box`,
-     * `borderRadius: 16`) et de tout occupant (texte à x∈[0,2;0,8] y=0,2 ;
-     * dessin dès (100,100) en design, ≈ 36 px rendus ; sticker/lieu en bas) —
-     * et exige la couleur MOYENNE du ThumbHash du fond (ambré), jamais celle
-     * de l'aplat de carte, qui CHANGE de schéma alors que le sol ne doit pas. */
+     * CARTE (revue-correction #6901, défaut 1), et depuis le panneau Cadre
+     * (#8414) il est le MÉDIA LUI-MÊME, flouté — le fond « flou » par défaut
+     * du contrat commun à iOS, plus la couleur MOYENNE du ThumbHash. Le fond
+     * `fit` de cette scène (16:9) est plus LARGE que le canvas 9:16 : il
+     * laisse une bande horizontale en haut ET en bas. L'échantillon est pris
+     * au centre du bord HAUT — loin des deux coins arrondis
+     * (`data-feed-scene-box`, `borderRadius: 16`) et de tout occupant (texte
+     * à x∈[0,2;0,8] y=0,2 ; dessin dès (100,100) en design, ≈ 36 px rendus ;
+     * sticker/lieu en bas). Il doit être LOIN de l'aplat de carte du schéma
+     * (qu'il remplace) — l'épreuve inter-schémas plus bas prouve qu'il n'en
+     * dépend pas. */
     if (colorSchemeCtx.reducedMotion !== 'reduce') {
       const sceneRect = await page3.evaluate(() => {
         const scene = document.querySelector('[data-feed-card-id="post-scene-decorated"] [data-scene-player]');
@@ -556,14 +539,29 @@ async function runScheme(colorScheme) {
         return { x: r.left, y: r.top, width: r.width, height: r.height };
       });
       check(sceneRect !== null, `[${colorScheme}] post-scene-decorated : [data-scene-player] introuvable pour l'échantillon de bande`);
+      check(
+        await page3.evaluate(
+          () => document.querySelector('[data-feed-card-id="post-scene-decorated"] [data-scene-letterbox]')?.getAttribute('data-scene-backdrop') === 'blur',
+        ),
+        `[${colorScheme}] post-scene-decorated : le fond \`fit\` sans \`backdrop\` doit peindre ses bandes du média flouté (\`data-scene-backdrop="blur"\`)`,
+      );
       if (sceneRect !== null) {
         const clip = { x: Math.round(sceneRect.x + sceneRect.width / 2 - 4), y: Math.round(sceneRect.y + 4), width: 8, height: 6 };
         const rgb = await averageRgbOfClip(page3, clip);
         bandeParScheme[colorScheme] = rgb;
-        const ecart = distance(rgb, LETTERBOX_AMBER_RGB);
+        const carte = await page3.evaluate(() => {
+          const probe = document.createElement('div');
+          probe.style.cssText = 'position:fixed;left:0;top:0;width:8px;height:8px;z-index:2147483647;background:var(--color-ios-card)';
+          probe.setAttribute('data-gate-probe', '');
+          document.body.appendChild(probe);
+          return { x: 0, y: 0, width: 8, height: 8 };
+        });
+        const aplat = await averageRgbOfClip(page3, carte);
+        await page3.evaluate(() => document.querySelector('[data-gate-probe]')?.remove());
+        const ecart = distance(rgb, aplat);
         check(
-          ecart <= 40,
-          `[${colorScheme}] post-scene-decorated : bande du fond \`fit\` = rgb(${rgb.join(',')}) — attendu proche de l'ambré du ThumbHash rgb(${LETTERBOX_AMBER_RGB.join(',')}) (écart ${ecart}, ≤ 40), pas l'aplat de carte`,
+          ecart > 40,
+          `[${colorScheme}] post-scene-decorated : bande du fond \`fit\` = rgb(${rgb.join(',')}) — trop proche de l'aplat de carte rgb(${aplat.join(',')}) (écart ${ecart}, attendu > 40) : le sol ne serait pas peint`,
         );
       }
     }
@@ -602,13 +600,10 @@ check(
 );
 if (bandeParScheme.light !== undefined && bandeParScheme.dark !== undefined) {
   // Le sol se peint à `LETTERBOX_FILL_OPACITY` (0,85, MÊME constante qu'iOS,
-  // `StoryLetterboxFill.fillOpacity`) : il laisse filtrer 15 % de ce qu'il y
-  // a DESSOUS, donc un écart RÉSIDUEL entre schémas est ATTENDU — mesuré ici
-  // à 34 (clair rgb(225,173,169), sombre rgb(191,139,135), calcul vérifié :
-  // 0,85 × ambré + 0,15 × `--color-ios-card` de chaque schéma). Le seuil
-  // borne ce résidu, PAS l'écart des deux aplats de carte eux-mêmes
-  // (`#f8f7ff` clair vs `#13111c` sombre : distance 229) — c'est CETTE
-  // distance-là que le sol doit éviter, pas atteindre zéro.
+  // `StoryLetterboxFill.fillOpacity`) sur un fond NOIR depuis #8414 — plus
+  // sur l'aplat de carte : ce qui transparaît ne dépend plus du schéma. Le
+  // seuil borne un résidu d'anticrénelage, PAS l'écart des deux aplats de
+  // carte eux-mêmes (`#f8f7ff` clair vs `#13111c` sombre : distance 229).
   const ecartEntreSchemas = distance(bandeParScheme.light, bandeParScheme.dark);
   check(
     ecartEntreSchemas <= 40,
@@ -654,7 +649,12 @@ async function fullscreenInvariants(viewport) {
   // ── 8. le tap ouvre EN PLACE, sur la scène TOUCHÉE (jamais la première) ──
   await page.click('[data-feed-card-id="post-scenes-mixed"] [data-feed-scene-index="1"] button');
   await page.waitForSelector('[data-scene-fullscreen] [data-scene-viewer-page]');
-  await page.waitForTimeout(120); // `ResizeObserver`/`fitScene` peint la boîte après le montage
+  // #8598 — la boîte GRANDIT depuis la carte (FLIP, 320 ms) : sa place se lit
+  // une fois l'ouverture JOUÉE, jamais sur une image intermédiaire — un FAIT
+  // attendu, qui remplace l'ancien délai fixe de 120 ms.
+  await page.waitForFunction(() =>
+    document.querySelector('[data-scene-fullscreen]').getAnimations({ subtree: true }).every((a) => a.playState !== 'running' || a.effect?.getTiming().iterations === Infinity),
+  );
 
   const fullscreen = await page.evaluate(() => {
     const dialog = document.querySelector('[data-scene-fullscreen]');
@@ -686,7 +686,7 @@ async function fullscreenInvariants(viewport) {
    * capsule de synchronisation) ne couvrait pas les plein écran. Il y est
    * porté, aux DEUX gabarits que cette fonction joue déjà.
    */
-  const porte = await confinementDe(page, '[data-scene-fullscreen] .media-viewer-close', { nom: 'la croix du plein écran de scène' });
+  const porte = await confinementDe(page, '[data-scene-fullscreen] [data-viewer-exit="close"]', { nom: 'la croix du plein écran de scène' });
   check(porte.ok, `[${viewport.width}×${viewport.height}] #7040 : ${porte.message}`);
 
   const ratioCard = sceneBoxBefore.width / sceneBoxBefore.height;
@@ -778,6 +778,87 @@ for (const [asked, expected] of [
   }
 
   check(pageErrors.length === 0, `#6902 (?scene=${asked}) : ${pageErrors.length} erreur(s) de page — ${pageErrors.slice(0, 3).join(' | ')}`);
+  await context.close();
+}
+
+/* ── 12. #8598 — UNE SCÈNE À TIMELINE S'OUVRE DEPUIS SA CARTE, AVEC SON
+ * CURSEUR. Quatre mesures, toutes à l'EFFET : (a) la PREMIÈRE image après le
+ * tap montre déjà la scène (jamais un `Suspense` vide), posée sur la carte et
+ * non à sa place finale, sur un fond encore transparent ; (b) le curseur est
+ * dans le couloir et AVANCE ; (c) glisser le curseur déplace la lecture sans
+ * basculer le plateau ; (d) le plein cadre efface le curseur avec le chrome,
+ * aux yeux ET au doigt. */
+{
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, locale: 'en-US' });
+  const page = await context.newPage();
+  const pageErrors = [];
+  page.on('pageerror', (e) => pageErrors.push(String(e)));
+  const CARD = '[data-feed-card-id="post-scene-decorated"] [data-feed-scene] button';
+
+  await page.goto(`${BASE}/feed`, { waitUntil: 'load' });
+  await page.waitForSelector(`${CARD} [data-scene-player]`);
+  await page.locator(CARD).scrollIntoViewIfNeeded();
+
+  const first = await page.evaluate(async (selector) => {
+    const button = document.querySelector(selector);
+    button.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    const card = button.querySelector('[data-feed-scene-frame]').getBoundingClientRect();
+    button.click();
+    await new Promise((resolve) => requestAnimationFrame(() => resolve()));
+    const dialog = document.querySelector('[data-scene-fullscreen]');
+    const active = dialog === null ? null : [...dialog.querySelectorAll('[data-viewer-page]')].find((p) => p.style.transform === 'translateX(0%)');
+    const box = active?.querySelector('[data-scene-viewer-box]');
+    const rect = box?.getBoundingClientRect();
+    return {
+      dialog: dialog !== null,
+      player: box?.querySelector('[data-scene-player]') !== null && box !== undefined,
+      card: { top: card.top, width: card.width },
+      box: rect === undefined ? null : { top: rect.top, width: rect.width },
+      background: dialog === null ? '' : getComputedStyle(dialog).backgroundColor,
+    };
+  }, CARD);
+  check(first.dialog && first.player, `#8598 : la première image après le tap doit montrer la scène (dialogue ${first.dialog}, player ${first.player})`);
+  check(
+    first.box !== null && Math.abs(first.box.top - first.card.top) < Math.abs(first.box.top - 76),
+    `#8598 : la première image doit partir de la CARTE (haut carte ${first.card.top.toFixed(0)}, haut boîte ${first.box?.top.toFixed(0)}) — pas de la place finale`,
+  );
+  check(first.background !== 'rgb(0, 0, 0)', `#8598 : le fond doit se LEVER avec la scène, pas tomber noir d'un bloc (reçu ${first.background})`);
+
+  await page.waitForFunction(() =>
+    document.querySelector('[data-scene-fullscreen]').getAnimations({ subtree: true }).every((a) => a.playState !== 'running' || a.effect?.getTiming().iterations === Infinity),
+  );
+  const SCRUB = '[data-scene-fullscreen] [data-viewer-transport-slot] [data-scene-scrub]';
+  const scrubVisible = await page.locator(SCRUB).isVisible();
+  check(scrubVisible, '#8598 : le curseur de la scène doit être visible dans le couloir de transport');
+  const t0 = Number(await page.getAttribute(SCRUB, 'aria-valuenow'));
+  const advanced = await page
+    .waitForFunction(({ s, from }) => Number(document.querySelector(s)?.getAttribute('aria-valuenow')) !== from, { s: SCRUB, from: t0 }, { timeout: 1500 })
+    .then(() => true)
+    .catch(() => false);
+  check(advanced, `#8598 : le curseur doit AVANCER pendant la lecture (resté à ${t0})`);
+
+  const bar = await page.locator(SCRUB).boundingBox();
+  await page.mouse.move(bar.x + bar.width * 0.2, bar.y + bar.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(bar.x + bar.width * 0.75, bar.y + bar.height / 2, { steps: 6 });
+  const during = Number(await page.getAttribute(SCRUB, 'aria-valuenow'));
+  await page.mouse.up();
+  check(Math.abs(during - 75) <= 3, `#8598 : glisser le curseur doit pointer 75 % (reçu ${during})`);
+  const corridorAfterScrub = await page.evaluate((s) => document.querySelector(s).closest('[data-viewer-bottom-bar]').getAttribute('data-chrome-yields'), SCRUB);
+  check(corridorAfterScrub === 'shown', `#8598 : glisser le curseur ne doit PAS basculer le plein cadre (couloir ${corridorAfterScrub})`);
+
+  await page.mouse.click(195, 400);
+  await page
+    .waitForFunction((s) => getComputedStyle(document.querySelector(s).closest('[data-viewer-bottom-bar]')).opacity === '0', SCRUB, { timeout: 1500 })
+    .catch(() => undefined);
+  const full = await page.evaluate((s) => {
+    const corridor = document.querySelector(s).closest('[data-viewer-bottom-bar]');
+    return { opacity: getComputedStyle(corridor).opacity, inert: corridor.inert };
+  }, SCRUB);
+  check(full.opacity === '0' && full.inert, `#8598 : en plein cadre, le curseur s'efface avec le chrome (opacité ${full.opacity}, inerte ${full.inert})`);
+
+  check(pageErrors.length === 0, `#8598 : ${pageErrors.length} erreur(s) de page — ${pageErrors.slice(0, 3).join(' | ')}`);
   await context.close();
 }
 

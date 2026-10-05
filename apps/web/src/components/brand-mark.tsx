@@ -1,3 +1,5 @@
+import { BRAND_DASH_BOX, BRAND_DASHES } from '@/lib/brand';
+
 /**
  * LA MARQUE MEESHY — les TROIS TRAITS, portés de `MeeshyDashesShape`
  * (`packages/MeeshySDK/Sources/MeeshyUI/Primitives/AnimatedLogoView.swift:12-34`).
@@ -28,16 +30,6 @@
  * moitié des lecteurs n'est pas une différence de structure, c'est un ornement.
  */
 
-/** Les trois segments, dans le repère 1024 de `MeeshyDashesShape.path(in:)`. */
-const DASHES = [
-  { y: 384, x2: 762, opacity: 0.7 },
-  { y: 512, x2: 662, opacity: 1 },
-  { y: 640, x2: 562, opacity: 0.75 },
-] as const;
-
-const ORIGIN_X = 262;
-const BOX = 1024;
-
 export function BrandMark({
   size,
   /** L'épaisseur du trait EN POINTS de la vue, comme `AnimatedLogoView(lineWidth:)` :
@@ -48,20 +40,20 @@ export function BrandMark({
   size: number;
   lineWidth: number;
 }) {
-  const strokeWidth = (lineWidth * BOX) / size;
+  const strokeWidth = (lineWidth * BRAND_DASH_BOX) / size;
   return (
     <svg
       width={size}
       height={size}
-      viewBox={`0 0 ${BOX} ${BOX}`}
+      viewBox={`0 0 ${BRAND_DASH_BOX} ${BRAND_DASH_BOX}`}
       fill="none"
       aria-hidden="true"
       focusable="false"
     >
-      {DASHES.map((dash) => (
+      {BRAND_DASHES.map((dash) => (
         <line
           key={dash.y}
-          x1={ORIGIN_X}
+          x1={dash.x1}
           y1={dash.y}
           x2={dash.x2}
           y2={dash.y}

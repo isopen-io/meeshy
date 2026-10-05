@@ -180,6 +180,12 @@ enum AppSourceGuard {
         // trois lignes plus haut, à la création plutôt qu'au déplacement.
         "Meeshy/Features/Main/Composer/ComposerMediaRetraction.swift",
         "Meeshy/Features/Main/Composer/ComposerMediaPorterStore.swift",
+        // **Les poses de la feuille de stickers, sorties du meuble au #9189** :
+        // la feuille est devenue UNE pour la conversation et la scène, et ce
+        // que la scène fait d'un choix vit dans cette règle. Sans son adresse,
+        // les gardes qui lisent « la feuille POSE par le viewmodel » liraient
+        // un meuble qui ne pose plus rien lui-même.
+        "Meeshy/Features/Main/Composer/SceneStickerPose.swift",
     ]
 
     static func composerHostURLs() -> [URL] {
@@ -274,5 +280,19 @@ enum AppSourceGuard {
 
     static func storyViewModelSource() throws -> String {
         try unit(storyViewModelPath, alsoIncluding: storyViewModelCompanions)
+    }
+
+    /// L'unité de l'écran d'APPEL (#8276) : `CallView.swift`, ses extensions
+    /// `CallView+*.swift` (en-tête, états, appel établi, vignette perso,
+    /// sous-titres, pilule…), et les vues feuilles de la pilule et des
+    /// sous-titres sorties au #8394/#8396, qui ne portent pas le préfixe.
+    static let callViewPath = "Meeshy/Features/Main/Views/CallView.swift"
+    static let callViewCompanions = [
+        "Meeshy/Features/Main/Views/CallDeviceControls.swift",
+        "Meeshy/Features/Main/Views/CallCaptionsViews.swift",
+    ]
+
+    static func callViewSource() throws -> String {
+        try unit(callViewPath, alsoIncluding: callViewCompanions)
     }
 }

@@ -142,7 +142,9 @@ final class ConversationSelectionGuardTests: XCTestCase {
     }
 
     func test_forwardPickerSheet_receivesAdditionalMessages_atItsExistingMountSite() throws {
-        let code = try source("Features/Main/Views/ConversationView.swift")
+        // Le montage vit dans `ConversationView+Forward.swift` depuis #9039
+        // (extrait de l'hôte, hors budget de taille).
+        let code = try source("Features/Main/Views/ConversationView+Forward.swift")
         // Ancre sur l'instanciation elle-même, pas sur `.sheet(...onDismiss: {`
         // — ce closure `onDismiss` referme sur SA PROPRE accolade avant que
         // `body(of:)` (brace-matché) atteigne le closure trailing suivant qui

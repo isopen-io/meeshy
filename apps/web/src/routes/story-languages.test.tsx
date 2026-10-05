@@ -104,7 +104,7 @@ describe('/story/st-amie-1 — le lecteur français d’une story anglaise', () 
     const button = host.querySelector('[data-story-action="translations"]');
     expect(button).not.toBeNull();
     expect(button?.getAttribute('aria-label')).toBe('Traductions');
-    expect(button?.querySelector('[data-story-action-badge]')?.textContent).toBe('FR');
+    expect(button?.querySelector('[data-viewer-badge]')?.textContent).toBe('FR');
   });
 
   test('la légende lit « Bonjour depuis le parc ! » avec lang="fr" ; la pastille est là, non pressée', async () => {
@@ -122,10 +122,11 @@ describe('/story/st-amie-1 — le lecteur français d’une story anglaise', () 
     const button = host.querySelector<HTMLButtonElement>('[data-story-action="translations"]')!;
     button.focus();
     await act(async () => button.click());
-    expect(host.querySelector('[data-story-language-bar]')).not.toBeNull();
+    /* La barre est un chunk À LA DEMANDE (D-54) : elle se monte après l'import. */
+    await waitFor(host, '[data-story-language-bar]');
     expect(host.querySelector('[data-story-scene]')?.getAttribute('data-story-paused')).toBe('true');
+    await waitUntil(() => document.activeElement?.hasAttribute('data-story-language') === true);
     expect(host.contains(document.activeElement)).toBe(true);
-    expect(document.activeElement?.hasAttribute('data-story-language')).toBe(true);
   });
 
   test('clic sur le chip "en" ⇒ légende "Hello from the park!" lang="en", barre fermée, reprise, badge "EN", focus rendu', async () => {
@@ -133,7 +134,7 @@ describe('/story/st-amie-1 — le lecteur français d’une story anglaise', () 
     const translationsButton = host.querySelector<HTMLButtonElement>('[data-story-action="translations"]')!;
     translationsButton.focus();
     await act(async () => translationsButton.click());
-    const chipEn = host.querySelector<HTMLButtonElement>('[data-story-language="en"]')!;
+    const chipEn = (await waitFor(host, '[data-story-language="en"]')) as HTMLButtonElement;
     await act(async () => chipEn.click());
 
     const legend = legendText(host);
@@ -141,7 +142,7 @@ describe('/story/st-amie-1 — le lecteur français d’une story anglaise', () 
     expect(legend?.lang).toBe('en');
     expect(host.querySelector('[data-story-language-bar]')).toBeNull();
     expect(host.querySelector('[data-story-scene]')?.hasAttribute('data-story-paused')).toBe(false);
-    expect(host.querySelector('[data-story-action="translations"] [data-story-action-badge]')?.textContent).toBe('EN');
+    expect(host.querySelector('[data-story-action="translations"] [data-viewer-badge]')?.textContent).toBe('EN');
     expect(document.activeElement === translationsButton).toBe(true);
   });
 
@@ -160,7 +161,7 @@ describe('/story/st-amie-1 — le lecteur français d’une story anglaise', () 
   test('barre ouverte, un pointerdown sur le plateau (hors barre) ⇒ elle se ferme et la story N’AVANCE PAS', async () => {
     const host = await mountAt('/story/st-amie-1');
     await act(async () => host.querySelector<HTMLButtonElement>('[data-story-action="translations"]')!.click());
-    expect(host.querySelector('[data-story-language-bar]')).not.toBeNull();
+    await waitFor(host, '[data-story-language-bar]');
 
     const scene = host.querySelector('[data-story-scene]')!;
     const sceneIdBefore = scene.getAttribute('data-story-scene');
@@ -175,7 +176,7 @@ describe('/story/st-amie-1 — le lecteur français d’une story anglaise', () 
   test('Échap, barre ouverte ⇒ la barre se ferme, le lecteur reste monté', async () => {
     const host = await mountAt('/story/st-amie-1');
     await act(async () => host.querySelector<HTMLButtonElement>('[data-story-action="translations"]')!.click());
-    const bar = host.querySelector('[data-story-language-bar]')!;
+    const bar = await waitFor(host, '[data-story-language-bar]');
     await act(async () => {
       bar.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     });
@@ -186,7 +187,8 @@ describe('/story/st-amie-1 — le lecteur français d’une story anglaise', () 
   test('ArrowRight (story suivante st-amie-2) après un choix "en" ⇒ le choix retombe, st-amie-2 est monolingue', async () => {
     const host = await mountAt('/story/st-amie-1');
     await act(async () => host.querySelector<HTMLButtonElement>('[data-story-action="translations"]')!.click());
-    await act(async () => host.querySelector<HTMLButtonElement>('[data-story-language="en"]')!.click());
+    const chipEn = (await waitFor(host, '[data-story-language="en"]')) as HTMLButtonElement;
+    await act(async () => chipEn.click());
     expect(legendText(host)?.lang).toBe('en');
 
     await act(async () => {
@@ -205,7 +207,8 @@ describe('/story/st-mienne?scope=mine — l’auteur explore sa propre story', (
     expect(actions).toContain('translations');
 
     await act(async () => host.querySelector<HTMLButtonElement>('[data-story-action="translations"]')!.click());
-    await act(async () => host.querySelector<HTMLButtonElement>('[data-story-language="en"]')!.click());
+    const chipEn = (await waitFor(host, '[data-story-language="en"]')) as HTMLButtonElement;
+    await act(async () => chipEn.click());
     const legend = legendText(host);
     expect(legend?.text).toBe('My very own story.');
     expect(legend?.lang).toBe('en');

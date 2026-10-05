@@ -51,8 +51,12 @@ const buildPostPrisma = (createdMetadata: Record<string, unknown> | null = null)
       updateCalls.push(arg);
       return {};
     }),
-    findUnique: jest.fn<(arg?: unknown) => Promise<unknown>>()
-      .mockResolvedValue({ id: POST_ID, authorId: USER_ID }),
+    // La carte se calcule sur la ligne RELUE (#9073) : le refetch rend ce que
+    // `create` a écrit.
+    findUnique: jest.fn<(arg?: unknown) => Promise<unknown>>().mockImplementation(async () => {
+      const written = (post.create.mock.calls.at(-1)?.[0] as { data?: Record<string, unknown> } | undefined)?.data ?? {};
+      return { id: POST_ID, authorId: USER_ID, content: written.content, storyEffects: written.storyEffects, metadata: createdMetadata, media: [] };
+    }),
     findFirst: jest.fn<(arg?: unknown) => Promise<unknown>>().mockResolvedValue(null),
   };
   const prisma = { post, __updateCalls: updateCalls };
@@ -163,7 +167,11 @@ describe('PostService.createPost — raw-URL tracking links', () => {
 const buildCommentPrisma = (commentMetadata: Record<string, unknown> | null = null) => {
   const postComment = {
     create: jest.fn<(arg?: unknown) => Promise<{ id: string; content: string; metadata: unknown }>>()
-      .mockResolvedValue({ id: COMMENT_ID, content: 'c', metadata: commentMetadata }),
+      .mockImplementation(async (arg?: unknown) => ({
+        id: COMMENT_ID,
+        content: ((arg as { data?: { content?: string } } | undefined)?.data?.content) ?? '',
+        metadata: commentMetadata,
+      })),
     update: jest.fn<(arg?: unknown) => Promise<unknown>>().mockResolvedValue({}),
     findFirst: jest.fn<(arg?: unknown) => Promise<unknown>>().mockResolvedValue(null),
   };

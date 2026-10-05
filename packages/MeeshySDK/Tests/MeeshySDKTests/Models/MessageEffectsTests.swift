@@ -9,6 +9,7 @@ final class MessageEffectsTests: XCTestCase {
         XCTAssertEqual(MessageEffectFlags.ephemeral.rawValue, 1 << 0)
         XCTAssertEqual(MessageEffectFlags.blurred.rawValue, 1 << 1)
         XCTAssertEqual(MessageEffectFlags.viewOnce.rawValue, 1 << 2)
+        XCTAssertEqual(MessageEffectFlags.ephemeralAfterRead.rawValue, 1 << 3)
     }
 
     func test_messageEffectFlags_appearanceBits() {

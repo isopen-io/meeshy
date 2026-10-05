@@ -64,11 +64,16 @@ public struct AnimatedCachedImage<Fallback: View>: View {
     public var body: some View {
         Group {
             if let decoded {
+                // Vue UIKit hébergée : elle avalerait l'appui long de la bulle
+                // qui la porte. Transparente aux touchers ; la case reste
+                // touchable par `contentShape`.
                 AnimatedImageView(decoded: decoded, contentMode: contentMode)
+                    .allowsHitTesting(false)
             } else {
                 fallback()
             }
         }
+        .contentShape(Rectangle())
         .task(id: taskKey) { await resolve() }
     }
 

@@ -31,7 +31,7 @@ struct ComposerObjectChipsRow: View {
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 ForEach(chips, id: \.id) { chip in
                     // **Un jeton n'est un BOUTON que s'il mène quelque part.**
                     //
@@ -73,10 +73,10 @@ struct ComposerObjectChipsRow: View {
     /// dessins divergeraient au premier ajustement.
     private func capsule(_ chip: ComposerObjectChips.Chip) -> some View {
         Text(chip.label)
-            .font(MeeshyFont.relative(12, weight: .semibold))
+            .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
             .lineLimit(1)
             .foregroundColor(MeeshyColors.textSecondary(isDark: true))
-            .padding(.horizontal, 14)
+            .padding(.horizontal, MeeshySpacing.mdPlus)
             // Le plancher de 44 pt est POSÉ, pas déduit du contenu :
             // « TAILLE 38 » et « 0:00 → 0:06 » n'ont pas la même largeur, et la
             // cible tactile ne doit pas dépendre de la valeur affichée.

@@ -31,6 +31,21 @@ enum ShareLinkDetailCopy {
     static var noArrivals: String { String(localized: "shareLink.detail.noArrivals", defaultValue: "Personne n'est encore arrivé par ce lien.", bundle: .main) }
     static var statsUnavailable: String { String(localized: "shareLink.detail.statsUnavailable", defaultValue: "Les statistiques de ce lien ne sont pas encore disponibles.", bundle: .main) }
 
+    // MARK: - All arrivals (#7813)
+
+    static func seeAllArrivals(_ count: Int) -> String {
+        String(localized: "shareLink.arrivals.seeAll", defaultValue: "Voir les \(count) arrivées", bundle: .main)
+    }
+
+    static func arrivalsTotal(_ count: Int) -> String {
+        String(localized: "shareLink.arrivals.total", defaultValue: "\(count) arrivées au total", bundle: .main)
+    }
+
+    static var arrivalsLoading: String { String(localized: "shareLink.arrivals.loading", defaultValue: "Chargement des arrivées", bundle: .main) }
+    static var arrivalsLoadFailed: String { String(localized: "shareLink.arrivals.loadFailed", defaultValue: "Les arrivées n'ont pas pu être chargées.", bundle: .main) }
+    static var arrivalsMoreFailed: String { String(localized: "shareLink.arrivals.moreFailed", defaultValue: "La suite n'a pas pu être chargée.", bundle: .main) }
+    static var retry: String { String(localized: "common.retry", defaultValue: "Réessayer", bundle: .main) }
+
     // MARK: - Configuration
 
     static var configuration: String { String(localized: "shareLink.detail.configuration", defaultValue: "Configuration", bundle: .main) }

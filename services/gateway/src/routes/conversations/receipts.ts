@@ -44,7 +44,7 @@ import { PrivacyPreferencesService } from '../../services/PrivacyPreferencesServ
 import { ConversationBridgeService } from '../../services/ConversationBridgeService';
 import { broadcastReadStatus } from '../../socketio/broadcastReadStatus';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
-import { resolveCallerParticipant } from './utils/access-control';
+import { CONVERSATION_INTROUVABLE, resolveCallerParticipant } from './utils/access-control';
 import { historyReaderFromAuthContext, loadReaderHistoryFloor } from '../../services/historyFloor';
 import { MarkReadBodySchema } from '../../validation/messages-schemas';
 import {
@@ -526,13 +526,17 @@ export type ReadReceiptsParams = Readonly<ReceiptsQuery> & {
  * (critère 3) : un accusé NOMINATIF publie une identité et un horodatage, donc
  * `showReadReceipts` de la personne NOMMÉE décide — question qui ne se réécrit à
  * aucun site, l'avoir relue ailleurs l'a déjà fait diverger.
+ *
+ * Une LECTURE refusée rend le 404 d'une conversation inexistante, que la
+ * conversation manque ou que l'appelant n'en soit pas membre (#8116) : la
+ * distinction 403/404 de la porte commune reste celle des ÉCRITURES.
  */
 export async function readReceipts(
   ctx: ReceiptContext,
   params: ReadReceiptsParams
 ): Promise<{ ok: true; payload: ReceiptsPayload } | ReceiptFailure> {
   const reader = await resolveReceiptReader(ctx, params.authContext, params.conversationRef);
-  if (reader.ok === false) return reader;
+  if (reader.ok === false) return failure(404, CONVERSATION_INTROUVABLE);
 
   const detail = params.detail ?? 'summary';
   const floor = await reader.historyFloor();

@@ -91,12 +91,12 @@ describe('VideoTile — la vignette et la lecture inline (#6221)', () => {
 
   test('le bouton porte le vocabulaire iOS, cible ≥ 44, diamètre 64 en solo / 44 en multi', () => {
     const solo = mount(video, true, () => {});
-    const soloButton = solo.querySelector('button')!;
+    const soloButton = solo.querySelector('[data-video-control="play-pause"]')!;
     expect(soloButton.getAttribute('aria-label')).toBe('Lire la vidéo');
     expect(soloButton.getAttribute('data-play-diameter')).toBe('64');
 
     const multi = mount(video, false, () => {});
-    expect(multi.querySelector('button')!.getAttribute('data-play-diameter')).toBe('44');
+    expect(multi.querySelector('[data-video-control="play-pause"]')!.getAttribute('data-play-diameter')).toBe('44');
   });
 
   test('le badge de durée affiche 0:07 pour 7000 ms', () => {
@@ -107,7 +107,7 @@ describe('VideoTile — la vignette et la lecture inline (#6221)', () => {
   test('clic sur le bouton : play() UNE fois, data-video-status="playing" ; second clic : pause(), "paused"', async () => {
     const el = mount(video, true, () => {});
     const calls = stubVideo(el.querySelector('video')!);
-    const button = el.querySelector('button')!;
+    const button = el.querySelector('[data-video-control="play-pause"]')!;
 
     await act(async () => {
       button.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -123,27 +123,27 @@ describe('VideoTile — la vignette et la lecture inline (#6221)', () => {
     expect(el.querySelector('[data-attachment]')!.getAttribute('data-video-status')).toBe('paused');
   });
 
-  test('clic sur le bouton n’ouvre PAS la visionneuse (stopPropagation)', async () => {
+  test('clic sur le bouton n’ouvre PAS la visionneuse — un geste, un effet (#8234)', async () => {
     let expanded = 0;
     const el = mount(video, true, () => {
       expanded += 1;
     });
     stubVideo(el.querySelector('video')!);
-    const button = el.querySelector('button')!;
+    const button = el.querySelector('[data-video-control="play-pause"]')!;
     await act(async () => {
       button.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     expect(expanded).toBe(0);
   });
 
-  test('tap HORS du bouton ⇒ onExpand()', () => {
+  test('tap sur la SURFACE, hors du bouton ⇒ onExpand() (#8234)', () => {
     let expanded = 0;
     const el = mount(video, true, () => {
       expanded += 1;
     });
     stubVideo(el.querySelector('video')!);
-    const tile = el.querySelector('[data-attachment]')!;
-    tile.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    const surface = el.querySelector('[data-video-surface]')!;
+    surface.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     expect(expanded).toBe(1);
   });
 

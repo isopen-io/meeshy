@@ -29,8 +29,10 @@ const entryUpdateMany = jest.fn<any>();
 const participantFindUnique = jest.fn<any>();
 const notificationFindMany = jest.fn<any>();
 const notificationDeleteMany = jest.fn<any>();
+const messageFindMany = jest.fn<any>();
 
 const prisma = {
+  message: { findMany: messageFindMany },
   messageStatusEntry: { findMany: entryFindMany, updateMany: entryUpdateMany },
   participant: { findUnique: participantFindUnique },
   notification: { findMany: notificationFindMany, deleteMany: notificationDeleteMany },
@@ -59,7 +61,7 @@ const dueEntry = (over: Record<string, unknown> = {}) => ({
 
 beforeEach(() => {
   emitted.length = 0;
-  for (const fn of [entryFindMany, entryUpdateMany, participantFindUnique, notificationFindMany, notificationDeleteMany]) {
+  for (const fn of [entryFindMany, entryUpdateMany, participantFindUnique, notificationFindMany, notificationDeleteMany, messageFindMany]) {
     fn.mockReset();
   }
   entryFindMany.mockResolvedValue([dueEntry()]);
@@ -67,6 +69,53 @@ beforeEach(() => {
   participantFindUnique.mockResolvedValue({ id: PARTICIPANT_ID, userId: USER_ID });
   notificationFindMany.mockResolvedValue([]);
   notificationDeleteMany.mockResolvedValue({ count: 0 });
+  messageFindMany.mockResolvedValue([]);
+});
+
+/**
+ * #8630 — la mort d'un éphémère pour `u` entraîne, POUR `u`, celle des
+ * réponses qui le citent, transitivement : chacune reçoit son
+ * `message:expired` sur la room de `u` seul, et ses bannières chez `u` partent.
+ */
+describe('EphemeralRecipientExpiryService — les réponses partent avec ce qu\'elles citent (#8630)', () => {
+  const REPONSE = '507f1f77bcf86cd799439021';
+  const PETITE_REPONSE = '507f1f77bcf86cd799439022';
+
+  beforeEach(() => {
+    messageFindMany.mockImplementation(async ({ where }: any) => {
+      const parents: string[] = where?.replyToId?.in ?? [];
+      if (parents.includes(MESSAGE_ID)) return [{ id: REPONSE, conversationId: CONVERSATION_ID }];
+      if (parents.includes(REPONSE)) return [{ id: PETITE_REPONSE, conversationId: CONVERSATION_ID }];
+      return [];
+    });
+  });
+
+  it('annonce la mort de chaque réponse, transitivement, au seul lecteur échu', async () => {
+    await service().sweep(undefined);
+
+    expect(emitted).toEqual([
+      { room: `user:${USER_ID}`, event: 'message:expired', data: { messageId: MESSAGE_ID, conversationId: CONVERSATION_ID } },
+      { room: `user:${USER_ID}`, event: 'message:expired', data: { messageId: REPONSE, conversationId: CONVERSATION_ID } },
+      { room: `user:${USER_ID}`, event: 'message:expired', data: { messageId: PETITE_REPONSE, conversationId: CONVERSATION_ID } },
+    ]);
+  });
+
+  it('retire chez ce lecteur les bannières déjà servies des réponses', async () => {
+    notificationFindMany.mockResolvedValue([{ id: 'n1', userId: USER_ID, type: 'message', context: {}, delivery: {} }]);
+
+    await service().sweep(undefined);
+
+    expect(notificationDeleteMany).toHaveBeenCalledWith({ where: { messageId: REPONSE, userId: USER_ID } });
+    expect(notificationDeleteMany).toHaveBeenCalledWith({ where: { messageId: PETITE_REPONSE, userId: USER_ID } });
+  });
+
+  it('ne cherche aucune réponse quand l\'annonce a déjà été réclamée', async () => {
+    entryUpdateMany.mockResolvedValue({ count: 0 });
+
+    await service().sweep(undefined);
+
+    expect(messageFindMany).not.toHaveBeenCalled();
+  });
 });
 
 describe('EphemeralRecipientExpiryService.sweep', () => {
@@ -154,7 +203,8 @@ describe('EphemeralRecipientExpiryService.sweep', () => {
 
     // Une seule écriture, et c'est le marqueur d'annonce.
     expect(entryUpdateMany).toHaveBeenCalledTimes(1);
-    expect((prisma as { message?: unknown }).message).toBeUndefined();
+    // #8630 — elle LIT les réponses à annoncer, et n'écrit jamais un message.
+    expect(Object.keys((prisma as { message: object }).message)).toEqual(['findMany']);
   });
 
   it("adresse un invité de lien partagé sans chercher à retirer des notifications qu'il n'a pas", async () => {
@@ -164,5 +214,35 @@ describe('EphemeralRecipientExpiryService.sweep', () => {
 
     expect(emitted[0].room).toBe(`user:${PARTICIPANT_ID}`);
     expect(notificationFindMany).not.toHaveBeenCalled();
+  });
+});
+
+describe('EphemeralRecipientExpiryService.expireNow — la flamme-œil consommée (#8302)', () => {
+  it("expire TOUT DE SUITE les entrées remises, sans attendre la passe à la minute", async () => {
+    const result = await service().expireNow([dueEntry({ ephemeralExpiresAt: NOW })], undefined);
+
+    expect(result).toEqual({ expired: 1 });
+    expect(entryFindMany).not.toHaveBeenCalled();
+    expect(emitted).toEqual([
+      {
+        room: `user:${USER_ID}`,
+        event: 'message:expired',
+        data: { messageId: MESSAGE_ID, conversationId: CONVERSATION_ID },
+      },
+    ]);
+  });
+
+  it("n'annonce pas deux fois une entrée déjà réclamée — la consommation est idempotente", async () => {
+    entryUpdateMany.mockResolvedValue({ count: 0 });
+
+    expect(await service().expireNow([dueEntry({ ephemeralExpiresAt: NOW })], undefined)).toEqual({ expired: 0 });
+    expect(emitted).toEqual([]);
+  });
+
+  it("refuse une entrée dont l'échéance n'est pas encore échue", async () => {
+    const later = new Date(NOW.getTime() + 60_000);
+
+    expect(await service().expireNow([dueEntry({ ephemeralExpiresAt: later })], undefined)).toEqual({ expired: 0 });
+    expect(entryUpdateMany).not.toHaveBeenCalled();
   });
 });

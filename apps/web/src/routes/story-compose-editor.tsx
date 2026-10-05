@@ -1,12 +1,14 @@
-import type { ReactNode } from 'react';
-
 import { hexColorCss } from '@/lib/canvas/background';
+import type { StoryFilterId } from '@/lib/canvas/media-filter';
 import { SERVED_TEXT_STYLES, sceneTextAppearance } from '@/lib/canvas/text-appearance';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
+import type { StudioPageEdit } from '@/lib/stories/studio-page-edit';
 import type { StudioPose } from '@/lib/stories/studio-pose';
 import { STUDIO_TEXT_LANGUAGES, type StudioTextLayer } from '@/lib/stories/studio-text';
+import type { StudioOverlaySection, StudioTextSection } from '@/lib/stories/studio-inline-edit';
 
+import { StudioAltField, StudioFilterSection, StudioSection as Section } from './story-compose-media-fields';
 import { StudioChip } from './story-compose-parts';
 
 /**
@@ -115,38 +117,22 @@ function AlignGlyph({ align, bars }: { readonly align: 'left' | 'center' | 'righ
  * barre d'édition iOS (`StoryTextEditTopBar.swift:84`). */
 const LANGUAGES = STUDIO_TEXT_LANGUAGES;
 
-function Section({ label, children }: { readonly label: string; readonly children: ReactNode }) {
-  return (
-    <div role="group" aria-label={label} className="flex flex-col gap-1">
-      <span className="text-check font-semibold" style={{ color: 'var(--color-ios-ink-2)' }}>
-        {label}
-      </span>
-      <div className="flex flex-wrap gap-1">{children}</div>
-    </div>
-  );
-}
-
-export type StudioObjectEditorProps = {
+/** Une section du TEXTE (#9140) : les pastilles d'UN sous-outil, que le
+ * panneau de droite porte quand le rail l'ouvre. */
+function TextSectionChips({
+  lang,
+  section,
+  layer,
+  onChange,
+}: {
   readonly lang: InterfaceLanguage;
-  /** L'objet texte SÉLECTIONNÉ, ou `null` — le rail dit alors quoi faire
-   * plutôt que de disparaître : une surface qui s'évapore ne se retrouve pas. */
-  readonly layer: StudioTextLayer | null;
+  readonly section: Exclude<StudioTextSection, 'pose'>;
+  readonly layer: StudioTextLayer;
   readonly onChange: (change: (layer: StudioTextLayer) => StudioTextLayer) => void;
-  readonly onPose: (pose: StudioPose) => void;
-  readonly onRemove: () => void;
-};
-
-export function StudioObjectEditor({ lang, layer, onChange, onPose, onRemove }: StudioObjectEditorProps) {
-  if (layer === null) {
-    return (
-      <p data-story-editor-empty className="px-1 text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
-        {translate(lang, 'story.studio.editor.empty')}
-      </p>
-    );
-  }
+}) {
   const none = translate(lang, 'story.studio.editor.none');
-  return (
-    <div data-story-object-editor={layer.id} className="flex flex-col gap-3" role="group" aria-label={translate(lang, 'story.studio.editor.label')}>
+  if (section === 'style') {
+    return (
       <Section label={translate(lang, 'story.studio.editor.style')}>
         {STYLES.map(({ id, key }) => {
           // La pastille se PEINT dans sa propre famille : le nom d'une police
@@ -168,7 +154,10 @@ export function StudioObjectEditor({ lang, layer, onChange, onPose, onRemove }: 
           );
         })}
       </Section>
-
+    );
+  }
+  if (section === 'effect') {
+    return (
       <Section label={translate(lang, 'story.studio.editor.effect')}>
         <StudioChip label={none} pressed={layer.effect === 'none'} onPress={() => onChange((current) => ({ ...current, effect: 'none' }))} probe="effect:none" />
         {EFFECTS.map(({ id, key }) => (
@@ -182,7 +171,10 @@ export function StudioObjectEditor({ lang, layer, onChange, onPose, onRemove }: 
           />
         ))}
       </Section>
-
+    );
+  }
+  if (section === 'color') {
+    return (
       <Section label={translate(lang, 'story.studio.editor.color')}>
         {COLORS.map(({ hex, key }) => (
           <StudioChip
@@ -197,7 +189,10 @@ export function StudioObjectEditor({ lang, layer, onChange, onPose, onRemove }: 
           </StudioChip>
         ))}
       </Section>
-
+    );
+  }
+  if (section === 'background') {
+    return (
       <Section label={translate(lang, 'story.studio.editor.background')}>
         <StudioChip
           label={none}
@@ -218,7 +213,10 @@ export function StudioObjectEditor({ lang, layer, onChange, onPose, onRemove }: 
           </StudioChip>
         ))}
       </Section>
-
+    );
+  }
+  if (section === 'align') {
+    return (
       <Section label={translate(lang, 'story.studio.editor.align')}>
         {ALIGNS.map(({ id, key, bars }) => (
           <StudioChip key={id} label={translate(lang, key)} pressed={layer.align === id} onPress={() => onChange((current) => ({ ...current, align: id }))} probe={`align:${id}`}>
@@ -226,78 +224,141 @@ export function StudioObjectEditor({ lang, layer, onChange, onPose, onRemove }: 
           </StudioChip>
         ))}
       </Section>
+    );
+  }
+  // LA LANGUE DE L'OBJET — celle que le serveur TRADUIRA
+  // (`triggerStoryTextObjectTranslation`), pas celle de l'interface. Un studio
+  // qui la devine fait traduire un texte arabe depuis le français.
+  return (
+    <Section label={translate(lang, 'story.studio.editor.language')}>
+      {LANGUAGES.map((code) => (
+        <StudioChip
+          key={code}
+          label={code.toUpperCase()}
+          pressed={layer.language === code}
+          onPress={() => onChange((current) => ({ ...current, language: code }))}
+          probe={`language:${code}`}
+        />
+      ))}
+    </Section>
+  );
+}
 
-      {/* LA LANGUE DE L'OBJET — celle que le serveur TRADUIRA
-          (`triggerStoryTextObjectTranslation`), pas celle de l'interface. Un
-          studio qui la devine fait traduire un texte arabe depuis le français. */}
-      <Section label={translate(lang, 'story.studio.editor.language')}>
-        {LANGUAGES.map((code) => (
-          <StudioChip
-            key={code}
-            label={code.toUpperCase()}
-            pressed={layer.language === code}
-            onPress={() => onChange((current) => ({ ...current, language: code }))}
-            probe={`language:${code}`}
-          />
-        ))}
-      </Section>
-
-      {/* LA POSE AU CLAVIER ET AU BOUTON — le geste au pointeur vit sur la
-          scène (`story-compose-stage.tsx`), mais « un objet déplaçable doit
-          aussi être déplaçable au clavier ». Ces quatre cibles sont la voie
-          de secours VISIBLE, en plus des raccourcis de la poignée. */}
-      <Section label={translate(lang, 'story.studio.pose.label')}>
-        <StudioChip
-          label={translate(lang, 'story.studio.pose.smaller')}
-          probe="pose:smaller"
-          pressed={false}
-          onPress={() => onPose({ ...layer.pose, scale: layer.pose.scale / 1.2 })}
-        >
-          <span aria-hidden="true">−</span>
-        </StudioChip>
-        <StudioChip
-          label={translate(lang, 'story.studio.pose.bigger')}
-          probe="pose:bigger"
-          pressed={false}
-          onPress={() => onPose({ ...layer.pose, scale: layer.pose.scale * 1.2 })}
-        >
-          <span aria-hidden="true">+</span>
-        </StudioChip>
-        <StudioChip
-          label={translate(lang, 'story.studio.pose.rotateLeft')}
-          probe="pose:rotateLeft"
-          pressed={false}
-          onPress={() => onPose({ ...layer.pose, rotation: layer.pose.rotation - 15 })}
-        >
-          <span aria-hidden="true">↺</span>
-        </StudioChip>
-        <StudioChip
-          label={translate(lang, 'story.studio.pose.rotateRight')}
-          probe="pose:rotateRight"
-          pressed={false}
-          onPress={() => onPose({ ...layer.pose, rotation: layer.pose.rotation + 15 })}
-        >
-          <span aria-hidden="true">↻</span>
-        </StudioChip>
-        <StudioChip
-          label={translate(lang, 'story.studio.pose.reset')}
-          probe="pose:reset"
-          pressed={false}
-          onPress={() => onPose({ x: 0.5, y: 0.5, scale: 1, rotation: 0 })}
-        >
-          <span aria-hidden="true">⊙</span>
-        </StudioChip>
-      </Section>
-
-      <button
-        type="button"
-        data-story-text-remove
-        onClick={onRemove}
-        className="self-start rounded-chip px-3 text-caption font-semibold"
-        style={{ minHeight: 44, color: 'var(--color-error)' }}
-      >
-        {translate(lang, 'story.studio.text.remove')}
-      </button>
+/** Les options d'UN sous-outil du texte — le panneau n'en porte jamais deux. */
+export function StudioTextSectionControls({
+  lang,
+  section,
+  layer,
+  onChange,
+  onPose,
+}: {
+  readonly lang: InterfaceLanguage;
+  readonly section: StudioTextSection;
+  /** L'objet texte en édition, ou `null` — le panneau dit alors quoi faire
+   * plutôt que de disparaître : une surface qui s'évapore ne se retrouve pas. */
+  readonly layer: StudioTextLayer | null;
+  readonly onChange: (change: (layer: StudioTextLayer) => StudioTextLayer) => void;
+  readonly onPose: (pose: StudioPose) => void;
+}) {
+  if (layer === null) {
+    return (
+      <p data-story-editor-empty className="px-1 text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
+        {translate(lang, 'story.studio.editor.empty')}
+      </p>
+    );
+  }
+  return (
+    <div data-story-object-editor={layer.id} className="flex flex-col gap-3" role="group" aria-label={translate(lang, 'story.studio.editor.label')}>
+      {section === 'pose' ? <StudioPoseSection lang={lang} pose={layer.pose} onPose={onPose} /> : <TextSectionChips lang={lang} section={section} layer={layer} onChange={onChange} />}
     </div>
   );
 }
+
+type PoseKey =
+  | 'story.studio.pose.left'
+  | 'story.studio.pose.right'
+  | 'story.studio.pose.up'
+  | 'story.studio.pose.down'
+  | 'story.studio.pose.smaller'
+  | 'story.studio.pose.bigger'
+  | 'story.studio.pose.rotateLeft'
+  | 'story.studio.pose.rotateRight'
+  | 'story.studio.pose.reset';
+
+/** LA POSE AU CLAVIER ET AU BOUTON (lot 6) — plus aucune poignée sur la
+ * scène : le glissé au doigt déplace, et ces petits boutons sont la voie du
+ * clavier (dimension 5) pour DÉPLACER, agrandir, tourner et recentrer un
+ * texte ou le calque. */
+export function StudioPoseSection({ lang, pose, onPose }: { readonly lang: InterfaceLanguage; readonly pose: StudioPose; readonly onPose: (pose: StudioPose) => void }) {
+  const STEP = 0.05;
+  const nudge = (dx: number, dy: number) => onPose({ ...pose, x: Math.min(1, Math.max(0, pose.x + dx)), y: Math.min(1, Math.max(0, pose.y + dy)) });
+  const chip = (probe: string, key: PoseKey, glyph: string, next: () => void) => (
+    <StudioChip label={translate(lang, key)} probe={`pose:${probe}`} pressed={false} onPress={next}>
+      <span aria-hidden="true">{glyph}</span>
+    </StudioChip>
+  );
+  return (
+    <Section label={translate(lang, 'story.studio.pose.label')}>
+      {chip('left', 'story.studio.pose.left', '←', () => nudge(-STEP, 0))}
+      {chip('right', 'story.studio.pose.right', '→', () => nudge(STEP, 0))}
+      {chip('up', 'story.studio.pose.up', '↑', () => nudge(0, -STEP))}
+      {chip('down', 'story.studio.pose.down', '↓', () => nudge(0, STEP))}
+      {chip('smaller', 'story.studio.pose.smaller', '−', () => onPose({ ...pose, scale: pose.scale / 1.2 }))}
+      {chip('bigger', 'story.studio.pose.bigger', '+', () => onPose({ ...pose, scale: pose.scale * 1.2 }))}
+      {chip('rotateLeft', 'story.studio.pose.rotateLeft', '↺', () => onPose({ ...pose, rotation: pose.rotation - 15 }))}
+      {chip('rotateRight', 'story.studio.pose.rotateRight', '↻', () => onPose({ ...pose, rotation: pose.rotation + 15 }))}
+      {chip('reset', 'story.studio.pose.reset', '⊙', () => onPose({ x: 0.5, y: 0.5, scale: 1, rotation: 0 }))}
+    </Section>
+  );
+}
+
+/** L'ÉDITION DU CALQUE (lot 6, rangée en sous-outils par #9140) — sa
+ * légende (`PostMedia.caption`) et son texte alternatif (`PostMedia.alt`,
+ * #8518) sous « Décrire », son filtre, sa pose au bouton. */
+export function StudioOverlaySectionControls({
+  lang,
+  section,
+  pose,
+  caption,
+  alt,
+  filter,
+  onFilter,
+  onPose,
+  onCaption,
+}: {
+  readonly lang: InterfaceLanguage;
+  readonly section: StudioOverlaySection;
+  readonly pose: StudioPose;
+  readonly caption: string;
+  /** LE TEXTE ALTERNATIF — absent d'une retouche, qui ne publie rien. */
+  readonly alt?: { readonly value: string; readonly onPage: StudioPageEdit };
+  /** LE FILTRE de CE média (lot 7) — `null` : aucun. */
+  readonly filter: StoryFilterId | null;
+  readonly onFilter: (filter: StoryFilterId | null) => void;
+  readonly onPose: (pose: StudioPose) => void;
+  readonly onCaption: (value: string) => void;
+}) {
+  return (
+    <div data-story-overlay-editor className="flex flex-col gap-3">
+      {section === 'describe' ? (
+        <>
+          <input
+            id="story-studio-caption-overlay"
+            type="text"
+            value={caption}
+            aria-label={translate(lang, 'story.studio.caption.placeholder')}
+            placeholder={translate(lang, 'story.studio.caption.placeholder')}
+            onInput={(event) => onCaption(event.currentTarget.value)}
+            className="h-11 rounded-xl px-3 text-body outline-none"
+            style={{ backgroundColor: 'color-mix(in srgb, var(--color-ios-ink) 10%, transparent)', color: 'var(--color-ios-ink)' }}
+          />
+          {alt !== undefined ? <StudioAltField lang={lang} door="overlay" value={alt.value} onPage={alt.onPage} /> : null}
+        </>
+      ) : null}
+      {section === 'filter' ? <StudioFilterSection lang={lang} filter={filter} onFilter={onFilter} /> : null}
+      {section === 'pose' ? <StudioPoseSection lang={lang} pose={pose} onPose={onPose} /> : null}
+    </div>
+  );
+}
+
+export { StudioInlinePanel } from './story-compose-inline-panel';

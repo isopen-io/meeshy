@@ -7,6 +7,7 @@
  */
 
 import { messageProtection } from '@meeshy/shared/utils/message-protection';
+import { isAfterReadEphemeral } from '@meeshy/shared/utils/ephemeral-countdown';
 import { formatClock } from '@meeshy/shared/utils/duration-format';
 import { notificationString, formatFileSizeI18n, type NotificationStringKey } from '@meeshy/shared/utils/notification-strings';
 
@@ -207,9 +208,12 @@ export function contentTypeIcon(messageType: string | null | undefined): string 
 }
 
 /**
- * Compact human-readable duration for an ephemeral message TTL. Returns
- * undefined when the duration is non-positive or unknown so the caller can
- * omit the suffix entirely.
+ * Compact human-readable duration for an ephemeral message TTL, from the
+ * DECLARED duration in seconds (`Message.ephemeralDuration`). Never from
+ * `expiresAt − createdAt` : since #7451 the column carries the RETENTION CAP
+ * (7 days) at send time, so a 30 s ephemeral announced « 7j » (#8344).
+ * Returns undefined when the duration is non-positive or unknown so the
+ * caller can omit the suffix entirely.
  *
  * Outputs (rounded, FR-style abbreviations to stay locale-neutral) :
  *   < 60s   → "Ns"      ("30s")
@@ -217,14 +221,11 @@ export function contentTypeIcon(messageType: string | null | undefined): string 
  *   < 24h   → "Nh"      ("2h")
  *   else    → "Nj"      ("3j" — for "jours/days")
  */
-export function formatEphemeralDuration(
-  expiresAt: Date | null | undefined,
-  createdAt: Date | null | undefined,
-): string | undefined {
-  if (!expiresAt || !createdAt) return undefined;
-  const ms = expiresAt.getTime() - createdAt.getTime();
-  if (!Number.isFinite(ms) || ms <= 0) return undefined;
-  const sec = Math.round(ms / 1000);
+export function formatEphemeralDuration(ephemeralDuration: number | null | undefined): string | undefined {
+  if (typeof ephemeralDuration !== 'number' || !Number.isFinite(ephemeralDuration) || ephemeralDuration <= 0) {
+    return undefined;
+  }
+  const sec = Math.round(ephemeralDuration);
   if (sec < 60)     return `${sec}s`;
   const min = Math.round(sec / 60);
   if (min < 60)     return `${min}min`;
@@ -282,7 +283,8 @@ export function protectedPreview(input: {
   isBlurred?: boolean | null;
   effectFlags?: number | null;
   expiresAt?: Date | null;
-  createdAt?: Date | null;
+  /** La durée DÉCLARÉE (secondes) — seule source du suffixe (#8344). */
+  ephemeralDuration?: number | null;
 }): { preview: string; locKey: string } | null {
   const { ephemeral: isEphemeral, viewOnce: isViewOnce, blurred: isBlurred, encrypted: isEncrypted } = messageProtection({
     ...input,
@@ -293,7 +295,10 @@ export function protectedPreview(input: {
   const icon = contentTypeIcon(input.messageType);
 
   if (isEphemeral) {
-    const duration = formatEphemeralDuration(input.expiresAt ?? null, input.createdAt ?? null);
+    // Flamme-œil (#8302) : aucune durée — rien ne décompte à la réception.
+    const duration = isAfterReadEphemeral(input.effectFlags)
+      ? undefined
+      : formatEphemeralDuration(input.ephemeralDuration);
     const preview = duration
       ? `${PROTECTION_ICON.ephemeral} ${icon} ${duration}`
       : `${PROTECTION_ICON.ephemeral} ${icon}`;
@@ -330,6 +335,8 @@ function extractExtension(filename: string | null | undefined): string | null {
   return filename.slice(dot + 1).toLowerCase();
 }
 
+const CONTACT_CARD_ICON = '👤';
+
 const DOC_LABELS: Record<string, string> = {
   pdf: '📄 PDF',
   doc: '📝 Word',
@@ -356,11 +363,18 @@ function formatDocumentLabel(ext: string): string {
   return DOC_LABELS[ext] ?? `📎 Fichier .${ext}`;
 }
 
-type NotificationAttachmentType = 'image' | 'video' | 'audio' | 'document';
+export type NotificationAttachmentType = 'image' | 'video' | 'audio' | 'document' | 'contact';
 
+/**
+ * `contactName` ne vaut que pour une carte de visite (#8122) : le nom tel que
+ * l'auteur l'a nommé, lu dans le nom d'ORIGINE du fichier
+ * (`contactCardNameFromFileName`) — la vCard elle-même n'est pas relue. `null`
+ * ⇒ la bannière dit « Carte de visite » dans la langue du destinataire.
+ */
 export type NotificationAttachmentSummary = {
   type: NotificationAttachmentType;
   filename?: string | null;
+  contactName?: string | null;
 };
 
 /**
@@ -370,6 +384,7 @@ export type NotificationAttachmentSummary = {
 export function formatSingleAttachmentLabelI18n(lang: string, params: {
   type: NotificationAttachmentType;
   filename?: string | null;
+  contactName?: string | null;
   fileSize?: number | null;
   /** Durée en MILLISECONDES (champ `duration` de MessageAttachment, cf. schema.prisma). */
   duration?: number | null;
@@ -377,6 +392,11 @@ export function formatSingleAttachmentLabelI18n(lang: string, params: {
   height?: number | null;
 }): string {
   const details: string[] = [];
+
+  if (params.type === 'contact') {
+    const name = params.contactName?.trim();
+    return name ? `${CONTACT_CARD_ICON} ${name}` : notificationString(lang, 'attachment.contact');
+  }
 
   if (params.type === 'audio') {
     if (params.duration) details.push(formatDuration(params.duration));
@@ -430,12 +450,14 @@ function buildAttachmentBadges(lang: string, rest: ReadonlyArray<NotificationAtt
   const audios = rest.filter(att => att.type === 'audio');
   const videos = rest.filter(att => att.type === 'video');
   const documents = rest.filter(att => att.type === 'document');
+  const contacts = rest.filter(att => att.type === 'contact');
 
   const segments: string[] = [];
   if (images.length > 0) segments.push(`+${images.length}📷`);
   if (audios.length > 0) segments.push(`+${audios.length}🎵`);
   if (videos.length > 0) segments.push(`+${videos.length}🎬`);
   if (documents.length > 0) segments.push(formatDocumentBadge(lang, documents));
+  if (contacts.length > 0) segments.push(`+${contacts.length}${CONTACT_CARD_ICON}`);
   return segments.join(' ');
 }
 
@@ -462,6 +484,7 @@ export function buildMessageNotificationBodyI18n(lang: string, params: {
   const base = text || formatSingleAttachmentLabelI18n(lang, {
     type: first.type,
     filename: first.filename,
+    contactName: first.contactName,
     fileSize: params.firstAttachmentFileSize,
     duration: params.firstAttachmentDuration,
     width: params.firstAttachmentWidth,

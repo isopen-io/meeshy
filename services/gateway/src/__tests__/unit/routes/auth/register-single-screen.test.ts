@@ -160,10 +160,10 @@ describe('POST /register — trois champs suffisent, le serveur DÉRIVE le reste
     mockLookupGeoIp.mockResolvedValue(null);
   });
 
-  it('crée le compte et sert son pseudo GÉNÉRÉ', async () => {
+  it('crée le compte et sert son pseudo GÉNÉRÉ — avec un numéro, le compte est actif et servi (#8055)', async () => {
     const { app, create } = await monter();
 
-    const res = await inscrire(app);
+    const res = await inscrire(app, { ...CORPS, phoneNumber: '0612345678', phoneCountryCode: 'FR' });
 
     expect(res.statusCode).toBe(200);
     expect(res.json().data.user.username).toBe('lena-vogel');

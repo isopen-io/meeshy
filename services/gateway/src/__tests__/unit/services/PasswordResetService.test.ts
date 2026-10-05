@@ -381,7 +381,7 @@ describe('PasswordResetService', () => {
         }
       });
 
-      it('should return generic response for unverified email', async () => {
+      it('sends the normal reset to an unverified email — its use proves the address (#8238)', async () => {
         mockPrisma.user.findFirst.mockResolvedValue({
           ...mockUser,
           emailVerifiedAt: null
@@ -390,7 +390,7 @@ describe('PasswordResetService', () => {
         const result = await service.requestPasswordReset(validResetRequest);
 
         expect(result.success).toBe(true);
-        expect(mockPrisma.securityEvent.create).toHaveBeenCalledWith(
+        expect(mockPrisma.securityEvent.create).not.toHaveBeenCalledWith(
           expect.objectContaining({
             data: expect.objectContaining({
               eventType: 'PASSWORD_RESET_UNVERIFIED_EMAIL'

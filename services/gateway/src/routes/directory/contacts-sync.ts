@@ -2,8 +2,14 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { logError, logWarn } from '../../utils/logger';
 import { sendSuccess, sendBadRequest, sendUnauthorized, sendInternalError } from '../../utils/response.js';
 import { normalizeContacts, MAX_CONTACTS_PER_SYNC } from '../../utils/contact-identifiers';
+import {
+  countContactIdentifiers,
+  refuseContactIdentifierBudget,
+  spendContactIdentifierBudget,
+} from '../../utils/contact-identifier-budget';
 import { ContactDirectoryService, type SyncMode } from '../../services/ContactDirectoryService';
 import type { AuthenticatedRequest } from '../users/types';
+import { EngagementService } from '../../services/engagement/EngagementService';
 
 /** Tolérance d'horloge cliente pour `syncStartedAt` — au-delà, 400. */
 const TOLERANCE_HORLOGE_MS = 5_000;
@@ -59,6 +65,9 @@ export async function synchroniser(
     const totalContacts = body.contacts.length;
     const contacts = normalizeContacts(body.contacts, body.defaultCountry as string | undefined);
 
+    const budget = await spendContactIdentifierBudget(fastify, moi, countContactIdentifiers(contacts));
+    if (!budget.allowed) return refuseContactIdentifierBudget(reply, budget.retryAfter);
+
     const tronque = totalContacts > MAX_CONTACTS_PER_SYNC;
     if (tronque) {
       logWarn(
@@ -83,6 +92,15 @@ export async function synchroniser(
       isFinalBatch: tronque ? false : isFinalBatch,
       receivedAt,
     });
+
+    // `social.contacts_synced` (#8959) — une fois par compte, et seulement si
+    // le carnet a réellement reçu au moins une fiche : un lot vide n'a rien
+    // synchronisé.
+    if (result.synced > 0) {
+      new EngagementService(fastify.prisma)
+        .recordActivity(moi, 'social.contacts_synced')
+        .catch((error: unknown) => logWarn(fastify.log, 'engagement social.contacts_synced failed', error));
+    }
 
     return sendSuccess(reply, {
       totalContacts,

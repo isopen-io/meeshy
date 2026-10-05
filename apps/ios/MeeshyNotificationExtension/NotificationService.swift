@@ -25,14 +25,14 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
 
     // Timestamp recorded at the very start of didReceive so that each download
     // can cap its URLRequest timeout to what's left in the OS budget.
-    private var extensionStartTime: Date = .distantPast
+    var extensionStartTime: Date = .distantPast
 
     // The OS grants the NSE ~30 s. We reserve 3 s at the end for INSendMessageIntent
     // construction + contentHandler invocation, giving downloads 27 s total.
-    private static let nseBudget: TimeInterval = 27
+    static let nseBudget: TimeInterval = 27
     // Never start a download with less than 2 s left — it would almost certainly
     // time out mid-transfer and leave the extension hung right up to the OS kill.
-    private static let minDownloadBudget: TimeInterval = 2
+    static let minDownloadBudget: TimeInterval = 2
 
     override func didReceive(
         _ request: UNNotificationRequest,
@@ -103,7 +103,7 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
             || (userInfo["encryptedContent"] as? String).map { !$0.isEmpty } == true
         if isEncryptedPush, !didDecrypt,
            let locKey = userInfo["notificationLocKey"] as? String, !locKey.isEmpty {
-            let localized = NSLocalizedString(locKey, comment: "")
+            let localized = NSLocalizedString(locKey, bundle: InterfaceLanguageResolver.bundle(), comment: "")
             if localized != locKey {
                 bestAttemptContent.body = localized
             }
@@ -121,6 +121,9 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
         ) {
             bestAttemptContent.body = fallback
         }
+        // #8858 — position, contact, invitation, lien : le corps DIT le détail
+        // quand la passerelle ne l'a pas composé (vide, ou URL brute).
+        applyDetailedBody(to: bestAttemptContent)
 
         // #7453 — L'ÉCHÉANCE, pas une durée figée.
         //
@@ -168,6 +171,14 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
         let group = DispatchGroup()
         var avatarData: Data?
         nonisolated(unsafe) var messageAttachment: UNNotificationAttachment?
+
+        // Un push de REMPLACEMENT (édition, réaction changée) annule la bannière d'avant AVANT de
+        // s'afficher : le `contentHandler` n'est appelé qu'au `notify` du
+        // groupe, donc après ce retrait confirmé.
+        group.enter()
+        Self.removeReplacedBanners(userInfo: userInfo, incomingIdentifier: request.identifier) {
+            group.leave()
+        }
 
         // Les URLs du payload sont RELATIVES quand le média est servi par le
         // gateway (`/api/v1/attachments/file/…`) : `URL(string:)` les accepte
@@ -236,13 +247,20 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
             }
         }
 
+        // #8858 — la carte d'une position ou la vignette d'une vidéo, quand le
+        // message n'a pas de média attachable (une vidéo ne l'est jamais).
+        let detailAttachment = DetailAttachmentBox()
+        enqueueDetailAttachment(userInfo: userInfo, apiBaseURL: apiBaseURL, group: group) {
+            detailAttachment.store($0)
+        }
+
         group.notify(queue: .global(qos: .userInitiated)) { [weak self] in
             guard let self else {
                 contentHandler(bestAttemptContent)
                 return
             }
-            if let messageAttachment {
-                bestAttemptContent.attachments = [messageAttachment]
+            if let attachment = messageAttachment ?? detailAttachment.value {
+                bestAttemptContent.attachments = [attachment]
             }
             if isCommunicationType {
                 let finalContent = self.applyCommunicationIntent(
@@ -342,7 +360,12 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
             return
         }
 
-        content.categoryIdentifier = category
+        // #8858 — une position, une carte de visite ou une invitation appellent
+        // leurs propres actions (Plans, Contacts, Rejoindre).
+        content.categoryIdentifier = NotificationDetailPolicy.refinedCategory(
+            category, type: rawType, userInfo: content.userInfo,
+            declared: content.categoryIdentifier
+        )
     }
 
     /// Respect the per-push badge override so the lock screen shows an accurate count.
@@ -429,21 +452,34 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
     ///
     /// This is a best-effort, fire-and-forget operation. Any failure is silently
     /// swallowed; the main app will fetch the message from the REST API on resume.
-    private static let sharedPool: DatabasePool? = {
-        guard let path = appGroupDatabasePath() else { return nil }
-        do {
-            // N1 — mirror of `DependencyContainer.dbConfig()`'s busy timeout:
-            // the main app holds its own pool on this same file, and GRDB's
-            // default `.immediateError` busy mode would turn a cross-process
-            // write collision into an SQLITE_BUSY swallowed by the catch
-            // below (pre-persisted bubble silently lost).
-            var config = Configuration()
-            config.busyMode = .timeout(5)
-            let pool = try DatabasePool(path: path, configuration: config)
-            try MessageDatabaseMigrations.runAll(on: pool)
-            return pool
-        } catch { return nil }
-    }()
+    ///
+    /// #8656 — la base visée est celle du compte DESTINATAIRE (le compte actif
+    /// publié dans l'App Group, dans son environnement), jamais une base
+    /// commune : l'extension survit d'un push à l'autre, et un changement de
+    /// compte entre deux pushes doit la faire écrire ailleurs. Personne de
+    /// connecté ⇒ aucune base, aucune écriture.
+    private static let poolLock = NSLock()
+    nonisolated(unsafe) private static var poolsByPath: [String: DatabasePool] = [:]
+
+    private static func recipientPool() -> DatabasePool? {
+        guard let path = recipientDatabasePath() else { return nil }
+        return poolLock.withLock {
+            if let pool = poolsByPath[path] { return pool }
+            do {
+                // N1 — mirror of `DependencyContainer.dbConfig()`'s busy timeout:
+                // the main app holds its own pool on this same file, and GRDB's
+                // default `.immediateError` busy mode would turn a cross-process
+                // write collision into an SQLITE_BUSY swallowed by the catch
+                // below (pre-persisted bubble silently lost).
+                var config = Configuration()
+                config.busyMode = .timeout(5)
+                let pool = try DatabasePool(path: path, configuration: config)
+                try MessageDatabaseMigrations.runAll(on: pool)
+                poolsByPath[path] = pool
+                return pool
+            } catch { return nil }
+        }
+    }
 
     /// Pré-enregistre la bulle d'un message qui ARRIVE, et rien d'autre.
     ///
@@ -505,7 +541,7 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
                   userInfo: userInfo,
                   now: Date()
               ),
-              let pool = Self.sharedPool
+              let pool = Self.recipientPool()
         else { return }
 
         do {
@@ -583,13 +619,19 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
     /// extension via EXC_BREAKPOINT on the very first push when the
     /// entitlement was absent — invisible to users, hard to diagnose
     /// without a sysdiagnose.
-    private static func appGroupDatabasePath() -> String? {
+    ///
+    /// #8656 — le fichier est celui du compte destinataire (utilisateur +
+    /// environnement, `MessageStoreAccountKey`), la même clé que l'app ouvre.
+    private static func recipientDatabasePath() -> String? {
         guard let container = FileManager.default.containerURL(
             forSecurityApplicationGroupIdentifier: "group.me.meeshy.apps"
+        ), let key = MessageStoreAccountKey.activeAccount(
+            appGroupDefaults: UserDefaults(suiteName: "group.me.meeshy.apps"),
+            serverOrigin: NSEDataSync.trustedApiBaseURL
         ) else { return nil }
         let dbDir = container.appendingPathComponent("Database")
         nseCreateDirectory(dbDir, context: "NSE database directory")
-        return dbDir.appendingPathComponent("meeshy_messages.sqlite").path
+        return dbDir.appendingPathComponent(key.databaseFileName).path
     }
 
     // MARK: - Éphémère (#7453)
@@ -641,6 +683,65 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
         }
     }
 
+    /// Délai accordé à la CONFIRMATION du retrait d'une bannière remplacée.
+    /// Prélevé sur le budget de la NSE, borné pour ne jamais retarder
+    /// l'affichage de la version d'après au-delà de ce qu'il vaut.
+    static let replacedBannerConfirmationBudget: TimeInterval = 2
+
+    /// Retire la bannière qu'un push de REMPLACEMENT annule
+    /// (`userInfo.replacesNotificationId`, édition d'un message / post /
+    /// commentaire), puis appelle `completion` — que l'hôte place AVANT le
+    /// `contentHandler`.
+    ///
+    /// L'annulation voyage dans le même push que la version d'après : c'est
+    /// ce qui garantit qu'elle ne peut ni la suivre (et l'effacer) ni se
+    /// perdre (app tuée), contrairement à la révocation silencieuse séparée.
+    /// `removeDeliveredNotifications` n'ayant aucun completion handler, le
+    /// retrait est CONFIRMÉ par relecture, dans un délai borné.
+    nonisolated static func removeReplacedBanners(
+        userInfo: [AnyHashable: Any],
+        incomingIdentifier: String,
+        completion: @escaping @Sendable () -> Void
+    ) {
+        guard let replacement = NotificationReplacement(userInfo: userInfo) else {
+            completion()
+            return
+        }
+        UNUserNotificationCenter.current().getDeliveredNotifications { delivered in
+            let identifiers = replacement.identifiersToRemove(
+                from: delivered.map { (id: $0.request.identifier, userInfo: $0.request.content.userInfo) },
+                excluding: incomingIdentifier
+            )
+            guard !identifiers.isEmpty else {
+                completion()
+                return
+            }
+            UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: identifiers)
+            Self.confirmReplacedBannersRemoved(
+                Set(identifiers),
+                deadline: Date().addingTimeInterval(Self.replacedBannerConfirmationBudget),
+                completion: completion
+            )
+        }
+    }
+
+    private nonisolated static func confirmReplacedBannersRemoved(
+        _ identifiers: Set<String>,
+        deadline: Date,
+        completion: @escaping @Sendable () -> Void
+    ) {
+        UNUserNotificationCenter.current().getDeliveredNotifications { delivered in
+            let stillDelivered = Set(delivered.map { $0.request.identifier })
+            guard !stillDelivered.isDisjoint(with: identifiers), Date() < deadline else {
+                completion()
+                return
+            }
+            DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 0.05) {
+                Self.confirmReplacedBannersRemoved(identifiers, deadline: deadline, completion: completion)
+            }
+        }
+    }
+
     // MARK: - Delivery Receipt
 
     /// Acknowledge delivery of a push-delivered message to the gateway.
@@ -688,7 +789,7 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
         "comment_like", "comment_reply", "comment_reaction",
         "story_new_comment", "story_thread_reply", "friend_story_comment",
         "friend_new_story", "friend_new_post", "friend_new_mood",
-        "friend_request", "contact_request"
+        "friend_request", "contact_request", "contact_joined", "contact_recently_active"
     ]
 
     /// Creates an `INSendMessageIntent` and returns updated notification content
@@ -858,7 +959,7 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
     /// bannière sans enrichissement qu'on ne distingue pas d'un réseau lent.
     /// Écrire sur DISQUE rend la taille du fichier inoffensive pour la mémoire
     /// et MESURABLE avant tout usage — cf. `NSEAttachmentPolicy`.
-    private func downloadFile(
+    func downloadFile(
         from url: URL,
         completion: @escaping (URL?) -> Void
     ) {
@@ -895,7 +996,7 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
     /// Taille d'un fichier local, `nil` s'il a disparu. C'est la mesure du
     /// SECOND étage de `NSEAttachmentPolicy` : un serveur n'est jamais tenu par
     /// la taille qu'il annonce sur le fil.
-    private nonisolated static func fileSize(at url: URL) -> Int? {
+    nonisolated static func fileSize(at url: URL) -> Int? {
         guard let attributes = try? FileManager.default.attributesOfItem(atPath: url.path) else {
             return nil
         }
@@ -913,7 +1014,7 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
     /// ensuite ce fichier dans son propre magasin ; s'il refuse, on efface —
     /// une extension qui laisse des temporaires derrière elle les paie au
     /// push suivant.
-    private func createMessageAttachment(
+    func createMessageAttachment(
         fromFile downloadedFile: URL,
         originalURL: URL,
         mimeType: String

@@ -5,7 +5,13 @@ import { parseJoinNotice } from '@meeshy/shared/utils/join-notice';
 
 import { resolveRiverGeometry, riverLanesInput } from '@/lib/river/geometry';
 import { VIEWER_ID } from './fixtures-base';
-import { RIVER_CONVERSATION_ID, RIVER_MESSAGES } from './fixtures-river';
+import {
+  RIVER_CONTINUATION_WITNESS_ID,
+  RIVER_CONVERSATION_ID,
+  RIVER_MESSAGES,
+  RIVER_NO_TRANSLATION_WITNESS_ID,
+  RIVER_REACTION_WITNESS_ID,
+} from './fixtures-river';
 import { RIVER_OPENING_MESSAGES } from './fixtures-river-opening';
 import { hasOlderMessagesOf, messagesOf } from './fixtures';
 
@@ -130,5 +136,22 @@ describe('invariants de corpus', () => {
 
   test('hasOlderMessagesOf(c-salon-riviere) reste false', () => {
     expect(hasOlderMessagesOf(RIVER_CONVERSATION_ID)).toBe(false);
+  });
+});
+
+/**
+ * LE TÉMOIN DES CAPSULES DE L'ÉLU (#8536) — une rangée du Salon Rivière
+ * porte des réactions, pour que `check-reading-mode.mjs` puisse ÉLIRE une
+ * rangée réagie et y toucher une capsule (« quand je touche […] le bouton de
+ * réaction […] sur le message en focal, rien ne se passe ! »). Elle reste
+ * traduite et dernière de son groupe : sa ligne basse monte, comme celle
+ * des rangées qu'elle côtoie.
+ */
+describe('RIVER_REACTION_WITNESS_ID — une rangée réagie, élisible', () => {
+  test('elle porte des réactions, une traduction, et n’est aucun des deux autres témoins', () => {
+    const witness = RIVER_MESSAGES.find((m) => m.id === RIVER_REACTION_WITNESS_ID);
+    expect(Object.keys(witness?.reactionSummary ?? {}).length).toBeGreaterThan(0);
+    expect(witness?.translations.length ?? 0).toBeGreaterThan(0);
+    expect([RIVER_CONTINUATION_WITNESS_ID, RIVER_NO_TRANSLATION_WITNESS_ID]).not.toContain(RIVER_REACTION_WITNESS_ID);
   });
 });

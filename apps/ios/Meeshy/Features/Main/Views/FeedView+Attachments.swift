@@ -8,28 +8,20 @@ import MeeshyUI
 // MARK: - Feed Attachment Handlers
 extension FeedView {
 
-    /// Append an in-flight preparation to the loading row and promote its
-    /// result into `pendingAttachments` / `pendingMediaFiles` /
-    /// `pendingThumbnails` once it reaches `.ready`. Mirrors
-    /// `ConversationView.trackPreparation` so the publish pipeline keeps
-    /// reading the same three dictionaries.
+    /// Promeut le résultat d'une préparation dans `pendingAttachments` une
+    /// fois `.ready` ; la rangée de tuiles qui affichait les préparations en
+    /// vol est partie avec l'overlay (2026-09-06).
     func trackFeedPreparation(_ prep: PreparingAttachment) {
-        preparingAttachments.append(prep)
         Task { @MainActor [prep] in
             let result = await prep.awaitCompletion()
             switch result {
             case .success(let prepared):
-                pendingMediaFiles[prepared.attachment.id] = prepared.fileURL
-                if let thumb = prep.thumbnail {
-                    pendingThumbnails[prepared.attachment.id] = thumb
-                }
                 pendingAttachments.append(prepared.attachment)
                 HapticFeedback.success()
             case .failure(.preparationFailed(let message)):
                 HapticFeedback.error()
                 FeedbackToastManager.shared.showError(message)
             }
-            preparingAttachments.removeAll { $0.id == prep.id }
         }
     }
 
@@ -43,7 +35,6 @@ extension FeedView {
     func recoverStuckPostDraftIfNeeded() async {
         guard composerText.isEmpty,
               pendingAttachments.isEmpty,
-              pendingAudioURL == nil,
               recoveredPostCmid == nil else { return }
         guard let draft = await viewModel.recoverUnsentPost() else { return }
 
@@ -67,7 +58,7 @@ extension FeedView {
 
     /// Rebuilds a composer attachment from a recovered local media file via the
     /// same preparation pipeline the pickers use (`trackFeedPreparation`, so
-    /// `pendingAttachments` / `pendingMediaFiles` / thumbnails stay consistent).
+    /// `pendingAttachments` stays consistent).
     /// `deleteSourceAfterCompression` is false so the queued row's pending-media
     /// file survives until the resend supersedes it.
     private func restoreRecoveredMedia(url: URL) {
@@ -95,13 +86,6 @@ extension FeedView {
                 image, context: .feedPost, accentColor: MeeshyColors.brandPrimaryHex)
             trackFeedPreparation(prep)
         }
-    }
-
-    /// Ce que la publication DÉCLARE : les non-INLINE, et `nil` quand il n'y
-    /// en a aucune — `[]` serait entendu par le serveur comme un effacement.
-    var feedDeclaredReferences: [PostMentionInput]? {
-        let declared = ComposerReferences.payload(composerReferences)
-        return declared.isEmpty ? nil : declared
     }
 
     // MARK: - Audio Post
@@ -136,8 +120,6 @@ extension FeedView {
     /// défaut : un contrôle sans effet cesse d'être un oubli et devient une
     /// décision apparente. Loi 4 — un contrôle existe s'il a un EFFET.
     func publishAudioPost(audioURL: URL, mimeType: String, durationMs: Int, transcription: MobileTranscriptionPayload?) async {
-        await MainActor.run { isUploading = true }
-
         await viewModel.publish(PublishIntent.audioRecording(
             fileURL: audioURL,
             mimeType: mimeType,
@@ -150,29 +132,24 @@ extension FeedView {
             // le gateway comme un effacement. Même expression qu'aux cinq
             // autres sites de publication de ce fichier.
             visibilityUserIds: postVisibilityUserIds.isEmpty ? nil : postVisibilityUserIds,
-            // Le composer reste ouvert pendant l'enregistrement : les personnes
-            // qu'on venait d'y nommer partent avec le post audio, au lieu
-            // d'être jetées au changement de surface.
-            mentions: feedDeclaredReferences,
+            // Aucune personne n'est nommable depuis ce chemin depuis le retrait de l'overlay (#6016).
+            mentions: nil,
             location: nil,
             discoverabilityPrecision: nil
         ))
 
-        await MainActor.run {
-            isUploading = false
-            if viewModel.publishError != nil {
-                HapticFeedback.error()
-                FeedbackToastManager.shared.showError(String(localized: "feed.post.toast.audioPublishError", defaultValue: "Échec de la publication du post audio", bundle: .main))
-            } else {
-                HapticFeedback.success()
-                // Le chemin est UN, le mot est deux : le post est enfilé dans
-                // les deux cas, mais dire « publié » sans réseau serait faux.
-                FeedbackToastManager.shared.showSuccess(
-                    NetworkMonitor.shared.isOffline
-                        ? String(localized: "feed.post.toast.pendingOffline", defaultValue: "Publication en attente d'envoi", bundle: .main)
-                        : String(localized: "feed.post.toast.audioPublished", defaultValue: "Post audio publié", bundle: .main)
-                )
-            }
+        if viewModel.publishError != nil {
+            HapticFeedback.error()
+            FeedbackToastManager.shared.showError(String(localized: "feed.post.toast.audioPublishError", defaultValue: "Échec de la publication du post audio", bundle: .main))
+        } else {
+            HapticFeedback.success()
+            // Le chemin est UN, le mot est deux : le post est enfilé dans
+            // les deux cas, mais dire « publié » sans réseau serait faux.
+            FeedbackToastManager.shared.showSuccess(
+                NetworkMonitor.shared.isOffline
+                    ? String(localized: "feed.post.toast.pendingOffline", defaultValue: "Publication en attente d'envoi", bundle: .main)
+                    : String(localized: "feed.post.toast.audioPublished", defaultValue: "Post audio publié", bundle: .main)
+            )
         }
     }
 
@@ -185,22 +162,18 @@ extension FeedView {
     /// capture serveur (usage, crédit) suivent le même chemin. Le type suit la
     /// règle de composition : un son ≥ 3 s qualifie un RÉEL (miroir gateway).
     func publishBorrowedSoundPost(_ sound: APISound) async {
-        await MainActor.run { isUploading = true }
         await viewModel.createBorrowedSoundPost(
             type: BorrowedSoundPost.type(for: sound, forcePlainPost: composerForcePlainPost),
             storyEffects: BorrowedSoundPost.effects(for: sound),
-            mentions: feedDeclaredReferences
+            mentions: nil
         )
 
-        await MainActor.run {
-            isUploading = false
-            if viewModel.publishError == nil {
-                HapticFeedback.success()
-                FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.toast.audioPublished", defaultValue: "Post audio publié", bundle: .main))
-            } else {
-                HapticFeedback.error()
-                FeedbackToastManager.shared.showError(String(localized: "feed.post.toast.audioPublishError", defaultValue: "Échec de la publication du post audio", bundle: .main))
-            }
+        if viewModel.publishError == nil {
+            HapticFeedback.success()
+            FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.toast.audioPublished", defaultValue: "Post audio publié", bundle: .main))
+        } else {
+            HapticFeedback.error()
+            FeedbackToastManager.shared.showError(String(localized: "feed.post.toast.audioPublishError", defaultValue: "Échec de la publication du post audio", bundle: .main))
         }
     }
 

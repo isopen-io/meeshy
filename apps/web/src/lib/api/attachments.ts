@@ -1,3 +1,5 @@
+import * as attachmentsEndpoints from '@meeshy/shared/api/endpoints/attachments';
+
 import type { ConversationsDeps } from './conversations';
 import { uploadedAttachmentsOf } from './fixtures';
 import type { ApiResult } from './http';
@@ -7,7 +9,7 @@ import type { Attachment } from './types';
  * LE PORT DE L'UPLOAD (#5668, § 0 de la spécification) — **PAS**
  * `POST /conversations/:id/messages` (qui ne consomme que des
  * `attachmentIds` déjà obtenus, `messages.ts`), mais
- * `POST /api/v1/attachments/upload`
+ * `POST attachments.upload`
  * (`services/gateway/src/routes/attachments/upload.ts:59-207`,
  * `consumes: ['multipart/form-data']`) : les octets partent AVANT, sur cette
  * route-ci.
@@ -66,7 +68,7 @@ const UPLOAD_TIMEOUT_MS = 1_200_000;
 
 /**
  * LE PORT DU RAPPORT DE CONSOMMATION (#7225, W6) — route RÉELLE :
- * `POST /api/v1/attachments/:attachmentId/status`
+ * `POST attachments.byAttachmentIdStatus`
  * (`services/gateway/src/routes/messages-writes.ts:588-608`), corps validé
  * par `AttachmentStatusBodySchema`
  * (`services/gateway/src/validation/messages-schemas.ts:212-251`).
@@ -107,7 +109,7 @@ export function reportAttachmentStatus(
   }
   return params.transport.request<unknown>({
     method: 'POST',
-    path: `/api/v1/attachments/${params.attachmentId}/status`,
+    path: attachmentsEndpoints.byAttachmentIdStatus(params.attachmentId),
     body: params.report,
   });
 }
@@ -123,7 +125,7 @@ export async function uploadAttachments(
 
   return params.transport.request<{ readonly attachments: readonly Attachment[] }>({
     method: 'POST',
-    path: '/api/v1/attachments/upload',
+    path: attachmentsEndpoints.upload,
     body: formDataOf(params.pending),
     timeoutMs: UPLOAD_TIMEOUT_MS,
     ...(params.signal !== undefined ? { signal: params.signal } : {}),
@@ -132,7 +134,7 @@ export async function uploadAttachments(
 
 /**
  * QUI A OUVERT / TÉLÉCHARGÉ / ÉCOUTÉ / REGARDÉ UNE PIÈCE (#7226, W7) —
- * `GET /api/v1/attachments/:id/status-details`
+ * `GET attachments.byAttachmentIdStatusDetails`
  * (`services/gateway/src/routes/messages-reads.ts:570-634`). L'enveloppe
  * pose `pagination` À LA RACINE (`sendPaginatedSuccess`), PAS dans `data` —
  * `data` EST le tableau (`statusDetails.statuses`), contrairement à
@@ -239,7 +241,7 @@ export async function fetchAttachmentStatusDetails(
   const search = query.toString();
   return params.transport.request<readonly AttachmentStatusRow[]>({
     method: 'GET',
-    path: `/api/v1/attachments/${params.attachmentId}/status-details${search.length > 0 ? `?${search}` : ''}`,
+    path: `${attachmentsEndpoints.byAttachmentIdStatusDetails(params.attachmentId)}${search.length > 0 ? `?${search}` : ''}`,
     ...(params.signal !== undefined ? { signal: params.signal } : {}),
   });
 }

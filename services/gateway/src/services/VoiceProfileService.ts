@@ -40,6 +40,7 @@ import type { FastifyInstance } from 'fastify';
 import { emitPreferenceCategoryUpdated } from './preferences/preferences-broadcast';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { calculateAge } from '@meeshy/shared/utils/age';
+import { EngagementService } from './engagement/EngagementService';
 // Logger dédié pour VoiceProfileService
 const logger = enhancedLogger.child({ module: 'VoiceProfileService' });
 
@@ -126,6 +127,7 @@ export class VoiceProfileService extends EventEmitter {
   private prisma: PrismaClient;
   private zmqClient: ZmqTranslationClient;
   private fastify?: FastifyInstance;
+  private engagement?: Pick<EngagementService, 'recordActivity'>;
   private uploadBasePath: string;
   private pendingRequests: Map<string, {
     resolve: (value: VoiceProfileEvent) => void;
@@ -138,12 +140,21 @@ export class VoiceProfileService extends EventEmitter {
    * `preferences:updated` après une écriture de réglages de clonage vocal
    * (#3735) — un appelant de test qui construit le service sans instance
    * Fastify garde un service pleinement fonctionnel, juste muet sur ce canal.
+   *
+   * `engagement` se double en test ; absent, le moteur de `prisma` est créé au
+   * premier crédit (`profile.voice_profile`, #8959).
    */
-  constructor(prisma: PrismaClient, zmqClient: ZmqTranslationClient, fastify?: FastifyInstance) {
+  constructor(
+    prisma: PrismaClient,
+    zmqClient: ZmqTranslationClient,
+    fastify?: FastifyInstance,
+    engagement?: Pick<EngagementService, 'recordActivity'>,
+  ) {
     super();
     this.prisma = prisma;
     this.zmqClient = zmqClient;
     this.fastify = fastify;
+    this.engagement = engagement;
     // UPLOAD_PATH doit être défini dans Docker, fallback sécurisé vers /app/uploads
     this.uploadBasePath = process.env.UPLOAD_PATH || '/app/uploads';
 
@@ -466,6 +477,22 @@ export class VoiceProfileService extends EventEmitter {
   // PROFILE REGISTRATION
   // ═══════════════════════════════════════════════════════════════════════════
 
+  /**
+   * `profile.voice_profile` (#8959) — le profil vocal ENREGISTRÉ, consentement
+   * donné (vérifié plus haut), une fois par compte. Hors du chemin de la
+   * réponse : une panne du moteur n'annule jamais l'inscription.
+   */
+  private creditVoiceProfile(userId: string): void {
+    try {
+      this.engagement ??= new EngagementService(this.prisma);
+      this.engagement
+        .recordActivity(userId, 'profile.voice_profile')
+        .catch((error: unknown) => logger.warn('[VoiceProfileService] engagement profile.voice_profile non crédité', { error }));
+    } catch (error) {
+      logger.warn('[VoiceProfileService] engagement profile.voice_profile non crédité', { error });
+    }
+  }
+
   async registerProfile(
     userId: string,
     request: RegisterProfileRequest
@@ -557,6 +584,8 @@ export class VoiceProfileService extends EventEmitter {
           nextRecalibrationAt: expiresAt
         }
       });
+
+      this.creditVoiceProfile(userId);
 
       // Save voice cloning settings to UserFeature if provided
       if (request.voiceCloningSettings) {

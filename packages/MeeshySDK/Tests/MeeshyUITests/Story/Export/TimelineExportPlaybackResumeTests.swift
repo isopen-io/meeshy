@@ -170,7 +170,7 @@ private final class SpyTimelineStoryExporter: TimelineStoryExporting {
         to outputURL: URL,
         watermark: StoryExportWatermark?,
         intro: StoryExportIntroContent?,
-        audioResolver: (@Sendable (StoryAudioPlayerObject) -> URL?)?,
+        inputs: StoryExportInputs,
         progress: ((Double) -> Void)?
     ) async throws -> URL {
         callCount += 1

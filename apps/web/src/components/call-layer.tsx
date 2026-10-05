@@ -1,0 +1,176 @@
+import { lazy, Suspense, useRef, type CSSProperties, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
+import { useStore } from 'zustand/react';
+
+import { callBackPromptStore } from '@/lib/calls/call-back-prompt';
+import { CALL_LAYER_Z } from '@/lib/calls/call-presentation';
+import { callRecordingStore } from '@/lib/calls/call-recording-live';
+import { useCallPresentation } from '@/lib/calls/use-call-presentation';
+import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
+import { loadCallRecordingCatalog } from '@/lib/i18n-call-recording-catalog';
+import { callStore } from '@/lib/calls/call-store';
+import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
+
+/**
+ * **LA COUCHE D'APPEL** (#6382) — montée par la coquille sur TOUTES les
+ * routes, comme `CallPresentationLayer.swift` au-dessus de la racine iOS : un
+ * appel survit à la navigation, et un appel entrant s'affiche où que l'on
+ * soit. Elle ne pèse qu'un abonnement au magasin ; l'écran d'appel est un
+ * chunk à part, chargé quand un appel existe.
+ */
+/* Avec lui, le catalogue de ses contrôles (#8433, #8438, #8439, #8437) — les
+   ajouter aux catalogues d'interface les porterait au-delà de leur plafond. */
+const loadOverlay = () =>
+  Promise.all([import('./call-overlay'), loadCallControlsCatalog(currentInterfaceLanguage())]).then(([module]) => ({ default: module.CallOverlay }));
+const CallOverlay = lazy(loadOverlay);
+/* #8046 — la bulle et l'image dans l'image sont des FRÈRES de l'écran, pas
+   ses enfants : un chunk chargé par un autre chunk à la demande ne peut
+   pas en partager les modules sans l'importer statiquement (budgets.json ›
+   dynamic_only). Chargés d'ici, leurs modules communs (éléments média,
+   glyphes) forment un chunk partagé. */
+const CallBubbleLayer = lazy(() => import('./call-bubble').then((module) => ({ default: module.CallBubbleLayer })));
+const CallPipLayer = lazy(() => import('./call-pip-window').then((module) => ({ default: module.CallPipLayer })));
+/* « Reprendre l'appel » (#3586) — son propre chunk, chargé APRÈS la première
+   peinture : la coquille n'en paie que l'`import()`. Monté sur toutes les
+   routes, il peut précéder l'écran qui charge le catalogue : il l'attend
+   avec son chunk, comme les menus flottants. */
+const CallResumeBanner = lazy(() =>
+  Promise.all([import('./call-resume-banner'), loadInterfaceCatalog(currentInterfaceLanguage())]).then(([module]) => module),
+);
+
+/* La note d'après-appel (#8072) : son chunk, chargé quand une note est
+   demandée, avec le catalogue comme la bannière « Reprendre ». */
+const CallFeedbackLayer = lazy(() =>
+  Promise.all([import('./call-feedback-layer'), loadInterfaceCatalog(currentInterfaceLanguage())]).then(([module]) => module),
+);
+
+/* L'enregistrement d'un appel (#8064) : la question de consentement,
+   l'indicateur « en cours » et le mot de fin, dans leur chunk, chargé quand
+   une demande existe — il survit à l'écran pour dire que le fichier est
+   déposé. */
+const CallRecordingLayer = lazy(() =>
+  Promise.all([import('./call-recording-layer'), loadCallRecordingCatalog(currentInterfaceLanguage())]).then(([module]) => module),
+);
+
+/* « Appeler » d'un rappel qui attend son geste (#8199) : son chunk, chargé
+   quand un onglet ouvert à froid n'a pas pu composer sans toucher. */
+const CallBackPromptLayer = lazy(() =>
+  Promise.all([import('./call-back-prompt-layer'), loadInterfaceCatalog(currentInterfaceLanguage())]).then(([module]) => module),
+);
+
+/**
+ * **L'ÉTAGE DE L'APPEL** (#8727, jumelle de `CallWindowPresenter` iOS, #8725) —
+ * un `<dialog>` NON modal, ouvert par son attribut (aucun focus volé), qui
+ * n'occupe aucune surface : ses enfants sont `fixed`. Il porte l'appel
+ * au-dessus de tout ce qui vit dans la page (`CALL_LAYER_Z`, au-dessus de la
+ * visionneuse de médias), et `useCallPresentation` le rouvre en modale quand
+ * une feuille modale couvrirait l'écran d'appel.
+ */
+const LAYER_STYLE: CSSProperties = {
+  position: 'fixed',
+  inset: 0,
+  width: 0,
+  height: 0,
+  maxWidth: 'none',
+  maxHeight: 'none',
+  margin: 0,
+  padding: 0,
+  border: 0,
+  overflow: 'visible',
+  background: 'transparent',
+  color: 'inherit',
+  zIndex: CALL_LAYER_Z,
+};
+
+/* HORS de `#root`, par un portail : la visionneuse de médias et le menu de
+   message rendent `#root` INERTE le temps de leur ouverture — un appel monté
+   dedans s'y peignait par-dessus, et aucun de ses boutons ne répondait. */
+function CallStage({ children }: { readonly children: ReactNode }) {
+  const layer = useRef<HTMLDialogElement | null>(null);
+  useCallPresentation(layer);
+  const stage = (
+    <dialog ref={layer} open data-call-stage="" className="backdrop:bg-transparent" style={LAYER_STYLE}>
+      {children}
+    </dialog>
+  );
+  return typeof document === 'undefined' ? stage : createPortal(stage, document.body);
+}
+
+/**
+ * « REPRENDRE L'APPEL » DANS LA PILE DU HAUT (#9279) — la coquille l'empile
+ * AU-DESSUS du mini-lecteur, comme `FloatingCallPillView` puis
+ * `MiniAudioPlayerBar` dans le `VStack` de `CallPresentationLayer` iOS : posés
+ * chacun en `fixed` au même sommet, ils se chevauchaient.
+ */
+export function CallResumeSlot() {
+  return (
+    <Suspense fallback={null}>
+      <CallResumeBanner />
+    </Suspense>
+  );
+}
+
+export function CallLayer() {
+  const active = useStore(callStore, (state) => state.call !== null || state.waiting !== null || state.notice !== null);
+  const hasCall = useStore(callStore, (state) => state.call !== null);
+  const bubble = useStore(callStore, (state) => state.call?.display === 'bubble');
+  const rating = useStore(callStore, (state) => state.feedback !== null && state.call === null);
+  const recording = useStore(callRecordingStore, (state) => state.view.kind !== 'idle' || state.notice !== null);
+  const callingBack = useStore(callBackPromptStore, (state) => state.request !== null);
+  const staged = active || recording || rating || hasCall;
+  return (
+    <>
+      {callingBack ? (
+        <Suspense fallback={null}>
+          <CallBackPromptLayer />
+        </Suspense>
+      ) : null}
+      {staged ? (
+        <CallStage>
+          <StagedLayers active={active} recording={recording} rating={rating} hasCall={hasCall} bubble={bubble} />
+        </CallStage>
+      ) : null}
+    </>
+  );
+}
+
+function StagedLayers({
+  active,
+  recording,
+  rating,
+  hasCall,
+  bubble,
+}: {
+  readonly active: boolean;
+  readonly recording: boolean;
+  readonly rating: boolean;
+  readonly hasCall: boolean;
+  readonly bubble: boolean;
+}) {
+  return (
+    <>
+      {active ? (
+        <Suspense fallback={null}>
+          <CallOverlay />
+        </Suspense>
+      ) : null}
+      {recording ? (
+        <Suspense fallback={null}>
+          <CallRecordingLayer />
+        </Suspense>
+      ) : null}
+      {rating ? (
+        <Suspense fallback={null}>
+          <CallFeedbackLayer />
+        </Suspense>
+      ) : null}
+      {hasCall ? (
+        <Suspense fallback={null}>
+          <CallPipLayer />
+          {bubble ? <CallBubbleLayer /> : null}
+        </Suspense>
+      ) : null}
+    </>
+  );
+}

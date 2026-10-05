@@ -33,6 +33,40 @@ nonisolated enum ComposerMediaDoor: Equatable, Sendable {
     /// créer une page est le geste de `[+]`, et lui seul (directive porteur
     /// 2026-08-30).
     case sceneRail
+    /// **Une SÉRIE choisie d'un coup** (directive porteur 2026-09-28 : « on
+    /// créera autant de scènes que d'images/vidéos chargées »). Chaque média
+    /// fonde SA scène — le premier remplit la scène courante si elle n'a pas
+    /// encore de fond —, sur tous les formats : post, story, réel.
+    case sceneSeries
+}
+
+/// **Quand un choix de la photothèque FONDE des scènes** (directive porteur
+/// 2026-09-28). Plusieurs médias choisis ensemble fondent chacun la leur ; un
+/// média seul choisi par le rail se POSE sur la scène (une image sur une
+/// vidéo, un son sur une image) — sauf au choix d'OUVERTURE, où il n'y a
+/// encore rien sur quoi poser.
+nonisolated enum ComposerScenePicking {
+
+    static func foundsScenes(count: Int, openingPick: Bool) -> Bool {
+        openingPick ? count >= 1 : count >= 2
+    }
+
+    /// **La photothèque s'ouvre TOUT DE SUITE** à la création d'un post, d'une
+    /// story ou d'un réel — la porte d'où l'on part pour composer, jamais
+    /// celle qui reprend un contenu (brouillon, édition, republication, partage,
+    /// média d'une conversation, retouche d'image) ni l'humeur, qui est un texte.
+    /// Et seulement sur une composition VIERGE : un brouillon restauré a déjà
+    /// sa matière.
+    static func opensOnPicker(origin: ComposerOrigin, compositionIsEmpty: Bool) -> Bool {
+        guard compositionIsEmpty else { return false }
+        switch origin {
+        case .storyTray, .feedComposer:
+            return true
+        case .moodChip, .repost, .edit, .draft, .share, .conversationMedia, .socialMedia,
+             .conversationDraftMedia, .conversationCapture:
+            return false
+        }
+    }
 }
 
 /// **Ce qu'une écriture dans la liste média du document fait de l'INTENTION du
@@ -100,6 +134,8 @@ nonisolated enum ComposerMediaPlacement {
             return .background
         case .sceneRail:
             return currentSlideHasBackground ? .foreground : .background
+        case .sceneSeries:
+            return .background
         }
     }
 }
@@ -223,5 +259,35 @@ nonisolated enum ComposerScenePresence {
                          foundedSlides: Int,
                          sceneObjectCount: Int) -> Bool {
         backgroundHex != nil || foundedSlides > 0 || sceneObjectCount > 0
+    }
+}
+
+/// **La scène que l'outil Texte du document fait naître** (#9137) — d'un
+/// toucher, et sans laisser de fantôme quand le texte reste vide.
+///
+/// Le fond que l'outil pose est IMPLICITE : l'auteur a demandé un texte, pas
+/// une couleur. Il ne survit donc qu'à ce que la scène porte réellement — un
+/// texte saisi, un autre objet, un média fondateur, une seconde scène, ou une
+/// couleur choisie ensuite à la palette.
+nonisolated enum ComposerTextSceneDoor {
+
+    /// Le fond déjà choisi, sinon la première couleur de la palette du document.
+    static func background(chosen: String?, palette: [String]) -> String? {
+        chosen ?? palette.first
+    }
+
+    /// Le fond que l'outil a posé DE LUI-MÊME — `nil` quand l'auteur en avait
+    /// déjà choisi un.
+    static func implicitBackground(chosen: String?, posed: String) -> String? {
+        chosen == nil ? posed : nil
+    }
+
+    static func returnsToDocument(implicitBackground: String?,
+                                  currentBackground: String?,
+                                  foundedSlides: Int,
+                                  sceneObjectCount: Int,
+                                  slideCount: Int) -> Bool {
+        guard let implicitBackground, implicitBackground == currentBackground else { return false }
+        return foundedSlides == 0 && sceneObjectCount == 0 && slideCount <= 1
     }
 }

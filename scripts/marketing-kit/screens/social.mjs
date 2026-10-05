@@ -1,6 +1,7 @@
 import { html } from '../lib/html.mjs'
 import { icon, logo } from '../lib/icons.mjs'
 import { illustration } from '../lib/illustrations.mjs'
+import { CREDITS, photo } from '../lib/photos.mjs'
 import { avatar, flagChip, homeIndicator, nomComplet, roundButton, statusBar, typo } from '../lib/composants.mjs'
 import { formatNumber } from '../lib/locales.mjs'
 import { langue } from '../lib/langues.mjs'
@@ -13,6 +14,11 @@ const pastilleTraduction = (ctx, servi) =>
   servi.translated
     ? html`<div class="tr-row">${icon('translate', { size: 14 })}<span>${ctx.ui('call.control.captions.state.translated')}</span>${flagChip(servi.originalLang)}<span class="tr-arrow flip-rtl">${icon('forward', { size: 11 })}</span>${flagChip(ctx.lang, { active: true })}</div>`
     : ''
+
+// Le média d'un post : une photo réelle quand le kit en a une (#8825), sinon l'illustration maison
+// que garde le post « ma ville » des visuels sociaux (une ville générique, d'une langue à l'autre).
+const mediaDuPost = (post) =>
+  CREDITS[post.photo] ? photo(post.photo, { className: 'post-photo' }) : illustration(post.photo, { className: `m-${post.id}` })
 
 // FeedPostCard : en-tête auteur, texte servi par le Prisme + pastille de traduction, média,
 // actions, aperçu de commentaires (eux aussi servis dans la langue du lecteur).
@@ -30,7 +36,7 @@ export const postCard = (ctx, post, { heures, ami = false }) => {
     </header>
     <p class="post-text">${typo(servi.text, ctx.lang)}</p>
     ${pastilleTraduction(ctx, servi)}
-    ${post.photo ? html`<div class="post-media">${illustration(post.photo, { className: `m-${post.id}` })}</div>` : ''}
+    ${post.photo ? html`<div class="post-media">${mediaDuPost(post)}</div>` : ''}
     <footer class="post-actions">
       <span class="liked">${icon('heartFill', { size: 20 })}${formatNumber(ctx.lang, post.likes)}</span>
       <span>${icon('comment', { size: 20 })}${post.commentaires}</span>
@@ -120,7 +126,7 @@ export const ecranStory = (ctx) => {
   const auteur = profilDe(story.auteur)
   const servi = serve(story, ctx.lang)
   return html`<div class="ecran iphone story dark" dir="${ctx.dir}" lang="${ctx.lang}">
-    <div class="story-media">${illustration(story.fond, { className: 'story-illu' })}</div>
+    <div class="story-media">${photo(story.photo, { className: 'story-photo' })}</div>
     <div class="story-shade"></div>
     ${statusBar({ onMedia: true })}
     <div class="story-bars"><i class="done"></i><i class="live"><b></b></i><i></i></div>

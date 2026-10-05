@@ -220,6 +220,44 @@ describe('TrackingLinkService.createTrackingLink', () => {
     );
   });
 
+  // #8187 — le garde-fou des dix essais se posait AVANT la verification :
+  // `do { token = …; attempts++; if (attempts >= maxAttempts) throw } while (exists)`
+  // jetait le dixieme jeton sans jamais appeler `tokenExists` dessus. Ces deux
+  // temoins tiennent le contrat par ses deux bouts — le dixieme jeton libre est
+  // RENDU, et l'erreur n'arrive qu'apres DIX consultations, pas neuf.
+  it('rend le dixieme jeton quand les neuf premiers sont pris (#8187)', async () => {
+    const link = makeLink({ token: 'AUTOTK' });
+    const prisma = makePrisma({ findUniqueResult: null, createLinkResult: link });
+    let calls = 0;
+    prisma.trackingLink.findUnique = jest.fn<any>(async () => {
+      calls += 1;
+      return calls <= 9 ? makeLink() : null;
+    });
+    const sut = new TrackingLinkService(prisma as any);
+
+    await expect(
+      sut.createTrackingLink({ originalUrl: 'https://auto.example.com' })
+    ).resolves.toMatchObject({ token: 'AUTOTK' });
+
+    expect(calls).toBe(10);
+  });
+
+  it('ne jette qu\'apres DIX consultations, pas neuf (#8187)', async () => {
+    const prisma = makePrisma({ findUniqueResult: null });
+    let calls = 0;
+    prisma.trackingLink.findUnique = jest.fn<any>(async () => {
+      calls += 1;
+      return makeLink();
+    });
+    const sut = new TrackingLinkService(prisma as any);
+
+    await expect(
+      sut.createTrackingLink({ originalUrl: 'https://auto.example.com' })
+    ).rejects.toThrow('Unable to generate unique token after maximum attempts');
+
+    expect(calls).toBe(10);
+  });
+
   it('auto-generates a unique token when no customToken is provided', async () => {
     const link = makeLink({ token: 'AUTOTK' });
     const prisma = makePrisma({ findUniqueResult: null, createLinkResult: link });
@@ -310,30 +348,37 @@ describe('TrackingLinkService.resolveTarget', () => {
 // ─── findExistingTrackingLink ─────────────────────────────────────────────────
 
 describe('TrackingLinkService.findExistingTrackingLink', () => {
-  it('queries with originalUrl and isActive:true', async () => {
+  it('scopes an owner lookup to the caller\'s own active links (#9184)', async () => {
     const prisma = makePrisma();
     const sut = new TrackingLinkService(prisma as any);
 
-    await sut.findExistingTrackingLink('https://example.com');
+    await sut.findExistingTrackingLink('https://example.com', { kind: 'owner', createdBy: 'user-1' });
 
-    expect(prisma.trackingLink.findFirst).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({ originalUrl: 'https://example.com', isActive: true }),
-      })
-    );
+    expect(prisma.trackingLink.findFirst).toHaveBeenCalledWith({
+      where: { originalUrl: 'https://example.com', isActive: true, createdBy: 'user-1' },
+    });
   });
 
-  it('includes conversationId filter when provided', async () => {
+  it('narrows an owner lookup to a conversation when one is given', async () => {
     const prisma = makePrisma();
     const sut = new TrackingLinkService(prisma as any);
 
-    await sut.findExistingTrackingLink('https://example.com', 'conv-42');
+    await sut.findExistingTrackingLink('https://example.com', { kind: 'owner', createdBy: 'user-1', conversationId: 'conv-42' });
 
-    expect(prisma.trackingLink.findFirst).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({ conversationId: 'conv-42' }),
-      })
-    );
+    expect(prisma.trackingLink.findFirst).toHaveBeenCalledWith({
+      where: { originalUrl: 'https://example.com', isActive: true, createdBy: 'user-1', conversationId: 'conv-42' },
+    });
+  });
+
+  it('shares a conversation\'s link for the same URL regardless of who minted it', async () => {
+    const prisma = makePrisma();
+    const sut = new TrackingLinkService(prisma as any);
+
+    await sut.findExistingTrackingLink('https://example.com', { kind: 'conversation', conversationId: 'conv-42' });
+
+    expect(prisma.trackingLink.findFirst).toHaveBeenCalledWith({
+      where: { originalUrl: 'https://example.com', isActive: true, conversationId: 'conv-42' },
+    });
   });
 });
 
@@ -661,6 +706,7 @@ describe('TrackingLinkService.collectContentTrackingLinks', () => {
 
     const result = await sut.collectContentTrackingLinks({
       content: 'https://example.com and again https://example.com',
+      createdBy: 'user-1',
     });
 
     expect(result).toHaveLength(1);

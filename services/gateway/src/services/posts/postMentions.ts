@@ -3,6 +3,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { collectMentionableText } from './mentionableText';
 import { retractMentionNotifications } from './retractMentionNotifications';
 import { NOT_DELETED } from './softDelete';
+import { sliceCodePointsOrUndefined } from '@meeshy/shared/utils/text-truncate';
 
 /**
  * Le contenu mentionnant, tel que la résolution le lit. Structural et minimal :
@@ -525,7 +526,7 @@ function notifyNewlyMentioned(
       postId: post.id,
       posterId: post.authorId,
       mentionedUserIds: [...newlyMentionedUserIds],
-      postExcerpt: content?.slice(0, EXCERPT_LENGTH),
+      postExcerpt: sliceCodePointsOrUndefined(content, EXCERPT_LENGTH),
       postType: post.type,
       visibility: post.visibility,
       visibilityUserIds: post.visibilityUserIds,

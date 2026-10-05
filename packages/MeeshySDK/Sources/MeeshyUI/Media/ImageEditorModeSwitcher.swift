@@ -30,11 +30,11 @@ public struct ImageEditorModeSwitcher: View, Equatable {
     }
 
     public var body: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: MeeshySpacing.xs) {
             segment(for: .simple, label: "Simple", systemImage: "wand.and.stars")
             segment(for: .pro, label: "Pro", systemImage: "slider.horizontal.3")
         }
-        .padding(4)
+        .padding(MeeshySpacing.xs)
         .fixedSize(horizontal: true, vertical: false)
         .background(
             Capsule()
@@ -44,7 +44,7 @@ public struct ImageEditorModeSwitcher: View, Equatable {
         )
         .overlay(
             Capsule()
-                .strokeBorder(MeeshyColors.indigo400.opacity(0.25), lineWidth: 0.5)
+                .strokeBorder(MeeshyColors.indigo400.opacity(0.25), lineWidth: MeeshyBorder.hairline)
         )
         .animation(.spring(response: 0.32, dampingFraction: 0.72), value: mode)
         .accessibilityElement(children: .contain)
@@ -57,14 +57,14 @@ public struct ImageEditorModeSwitcher: View, Equatable {
             HapticFeedback.light()
             onSelect(target)
         } label: {
-            HStack(spacing: 5) {
+            HStack(spacing: MeeshySpacing.xs) {
                 Image(systemName: systemImage)
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.system(size: MeeshyIconSize.xxs, weight: .semibold))
                 Text(label)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(size: MeeshyFont.smallSize, weight: .semibold))
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
+            .padding(.horizontal, MeeshySpacing.md)
+            .padding(.vertical, MeeshySpacing.xsPlus)
             .frame(minWidth: 72)
             .foregroundStyle(activeForeground(isActive: isActive))
             .background(

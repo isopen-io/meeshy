@@ -45,6 +45,32 @@ extension StoryComposerViewModel {
     /// mixer jamais stoppé et un preview en cours jamais coupé. L'instance
     /// est nil-ée : le prochain `onAppear` → `loadCurrentSlideIntoTimeline()`
     /// recrée un moteur frais.
+    // MARK: - La frise hors de l'atelier (#8415, mode Animé)
+
+    /// **La scène est-elle en cours d'animation** — la frise est ouverte et
+    /// pilote le canvas. Lu par un hôte qui n'est pas l'atelier.
+    public var timelineIsOpen: Bool { isTimelineVisible }
+
+    /// **Ouvre la frise sur la slide courante**, depuis un hôte autre que
+    /// l'atelier (la scène plein écran du meuble). Le même cycle que le panneau
+    /// de l'atelier (`ComposerToolPanelHost.timelinePanel`) : charger la slide,
+    /// puis caler la tête — et marquer la frise visible, sans quoi les rappels
+    /// de lecture ne pilotent pas le canvas.
+    public func openTimelinePanel() {
+        isTimelineVisible = true
+        loadCurrentSlideIntoTimeline()
+        canvasTimelineBridge.scrub(seconds: Double(timelineViewModel.currentTime))
+    }
+
+    /// **Referme la frise et REND ses pistes à la slide** — sans ce commit, un
+    /// réglage de timing fait dans la frise mourrait à la publication.
+    public func closeTimelinePanel() {
+        if timelineViewModel.isPlaying { timelineViewModel.togglePlayback() }
+        canvasTimelineBridge.end()
+        commitTimelineToCurrentSlide()
+        isTimelineVisible = false
+    }
+
     public func shutdownTimelineIfNeeded() {
         stashTimelineHistoryIfLoaded()
         _timelineViewModel?.shutdown()

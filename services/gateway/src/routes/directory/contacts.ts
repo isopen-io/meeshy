@@ -245,40 +245,4 @@ export async function directoryContactsRoutes(fastify: FastifyInstance) {
         synchroniser(fastify, request, reply, mode),
     });
   }
-
-  // ─── Effacer ───────────────────────────────────────────────────────────────
-
-  fastify.delete('/contacts', {
-    onRequest: [fastify.authenticate],
-    preHandler: [parEcriture.middleware()],
-    schema: {
-      description: 'Erase the persisted address book (right to withdrawal).',
-      tags: ['directory'],
-      summary: 'Erase the address book',
-      response: {
-        200: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: true },
-            data: { type: 'object', properties: { removedCount: { type: 'number' } } },
-          },
-        },
-        401: errorResponseSchema,
-        429: errorResponseSchema,
-        500: errorResponseSchema,
-      },
-      security: [{ bearerAuth: [] }],
-    },
-  }, async (request: FastifyRequest, reply: FastifyReply) => {
-    try {
-      const moi = acteur(request);
-      if (!moi) return sendUnauthorized(reply, 'Authentication required');
-
-      const removedCount = await new ContactDirectoryService(fastify.prisma).clear(moi);
-      return sendSuccess(reply, { removedCount });
-    } catch (error) {
-      logError(fastify.log, '[DIR-CONTACTS] Error clearing directory', error);
-      return sendInternalError(reply, 'Failed to clear contacts');
-    }
-  });
 }

@@ -1,6 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { chromium } from '@playwright/test'
-import { pageCapture } from '../templates/appstore/composition.mjs'
 import { pageSociale } from '../templates/social/page.mjs'
 import { typo } from '../lib/composants.mjs'
 import { coupeLegende, page } from '../lib/gabarits.mjs'
@@ -43,7 +42,7 @@ describe('pages rendues', () => {
   })
 
   test('l’arabe est rendu de droite à gauche', () => {
-    expect(page({ format: 'iphone-6.9', lang: 'ar', gabarit: '03-global' })).toMatch(/<html lang="ar" dir="rtl">/)
+    expect(page({ format: 'iphone-6.9', lang: 'ar', gabarit: '06-global' })).toMatch(/<html lang="ar" dir="rtl">/)
   })
 })
 
@@ -79,11 +78,9 @@ describe('révélation d’un badge (AchievementRevealView)', () => {
       )
     })
 
-  test('aucun rayon ne barre le surtitre ni le titre, dans la capture App Store 8 et les visuels sociaux, en sept langues', async () => {
+  test('aucun rayon ne barre le surtitre ni le titre, dans les visuels sociaux, en sept langues', async () => {
     const fautes = []
     for (const lang of KIT_LANGS) {
-      await navigateur.setContent(pageCapture({ appareil: 'iphone', lang, rang: 8 }))
-      ;(await croisements()).forEach((f) => fautes.push(`${lang}/iphone69_08 — ${f}`))
       for (const id of ['V3-3', 'V8-3', 'C2-4', 'C4-4']) {
         await navigateur.setContent(pageSociale({ id, lang }))
         ;(await croisements()).forEach((f) => fautes.push(`${lang}/${id} — ${f}`))

@@ -68,8 +68,8 @@ struct ComposerAudienceSheet: View {
                     hashtagsSection
                     scopeNote
                 }
-                .padding(.horizontal, 16)
-                .padding(.bottom, 24)
+                .padding(.horizontal, MeeshySpacing.lg)
+                .padding(.bottom, MeeshySpacing.xxl)
             }
             applyBar
         }
@@ -80,14 +80,14 @@ struct ComposerAudienceSheet: View {
     // MARK: - L'en-tête
 
     private var header: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             Text(ComposerAudienceCopy.title)
-                .font(MeeshyFont.relative(17, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .semibold))
                 .foregroundStyle(.white)
             Spacer()
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 14)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.vertical, MeeshySpacing.mdPlus)
         .overlay(alignment: .bottom) {
             Rectangle().fill(Color.white.opacity(0.08)).frame(height: 1)
         }
@@ -109,14 +109,14 @@ struct ComposerAudienceSheet: View {
             // `ComposerDocumentPublishGate` refuse, sans dire pourquoi.
             if candidate.requiresUserSelection { onChooseUsers(candidate) }
         } label: {
-            HStack(spacing: 12) {
+            HStack(spacing: MeeshySpacing.md) {
                 Image(systemName: candidate.icon)
                     .font(MeeshyFont.relative(15))
                     .frame(width: 22)
                     .foregroundStyle(.white.opacity(0.65))
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     Text(candidate.label)
-                        .font(MeeshyFont.relative(15, weight: .medium))
+                        .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .medium))
                         .foregroundStyle(.white)
                     Text(ComposerAudienceSubtitle.subtitle(for: candidate,
                                                            selectedCount: selectedUserIds.count))
@@ -130,10 +130,10 @@ struct ComposerAudienceSheet: View {
                         .foregroundStyle(tint)
                 } else if candidate.requiresUserSelection {
                     Image(systemName: "chevron.forward")
-                        .font(MeeshyFont.relative(12, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
                         .foregroundStyle(.white.opacity(0.35))
                 } else {
-                    Circle().strokeBorder(Color.white.opacity(0.22), lineWidth: 1.5)
+                    Circle().strokeBorder(Color.white.opacity(0.22), lineWidth: MeeshyBorder.emphasis)
                         .frame(width: 20, height: 20)
                 }
             }
@@ -161,7 +161,7 @@ struct ComposerAudienceSheet: View {
     private var mentionsSection: some View {
         if !references.isEmpty {
             sectionTitle(ComposerAudienceCopy.mentionsSection)
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
                 // `ComposerReference` n'est pas `Identifiable`, et son id peut
                 // manquer : le PSEUDO est la seule clé qui survive à un
                 // brouillon repris — c'est la raison même pour laquelle le type
@@ -178,27 +178,27 @@ struct ComposerAudienceSheet: View {
         let reach = ComposerAudienceReach.resolve(mentionUserId: reference.userId,
                                                   visibility: selection,
                                                   audienceUserIds: selectedUserIds)
-        VStack(alignment: .leading, spacing: 3) {
-            HStack(spacing: 8) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
+            HStack(spacing: MeeshySpacing.sm) {
                 Text("@\(reference.username)")
-                    .font(MeeshyFont.relative(13, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
                     .foregroundStyle(.white)
                 Text(ComposerAudienceCopy.mentionMode(reference.display))
                     .font(MeeshyFont.relative(10.5, weight: .regular))
                     .foregroundStyle(.white.opacity(0.55))
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
+                    .padding(.horizontal, MeeshySpacing.sm)
+                    .padding(.vertical, MeeshySpacing.xxs)
                     .background(Capsule().fill(Color.white.opacity(0.08)))
                 Spacer(minLength: 0)
                 if reach.warns {
                     Image(systemName: "exclamationmark.triangle.fill")
-                        .font(MeeshyFont.relative(12))
+                        .font(MeeshyFont.relative(MeeshyIconSize.xs))
                         .foregroundStyle(MeeshyColors.warning)
                 }
             }
             if reach.warns {
                 Text(ComposerAudienceCopy.mentionOutsideAudience)
-                    .font(MeeshyFont.relative(11, weight: .regular))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .regular))
                     .foregroundStyle(MeeshyColors.warning)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -225,15 +225,15 @@ struct ComposerAudienceSheet: View {
                     onRemoveHashtag(tag)
                     HapticFeedback.light()
                 } label: {
-                    HStack(spacing: 6) {
+                    HStack(spacing: MeeshySpacing.xsPlus) {
                         Text("#\(tag)")
-                            .font(MeeshyFont.relative(12, weight: .medium))
+                            .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
                             .foregroundStyle(MeeshyColors.hashtagColor(isDark: true))
                         Image(systemName: "xmark")
                             .font(MeeshyFont.relative(9, weight: .bold))
                             .foregroundStyle(.white.opacity(0.5))
                     }
-                    .padding(.horizontal, 11)
+                    .padding(.horizontal, MeeshySpacing.smPlus)
                     .frame(minHeight: 32)
                     .background(Capsule().fill(Color.white.opacity(0.07)))
                     .overlay(Capsule().strokeBorder(Color.white.opacity(0.12), lineWidth: 1))
@@ -252,26 +252,26 @@ struct ComposerAudienceSheet: View {
             .font(MeeshyFont.relative(9.5, weight: .semibold))
             .tracking(1.2)
             .foregroundStyle(.white.opacity(0.5))
-            .padding(.top, 20)
-            .padding(.bottom, 10)
+            .padding(.top, MeeshySpacing.xl)
+            .padding(.bottom, MeeshySpacing.smPlus)
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var scopeNote: some View {
         Text(ComposerAudienceCopy.scopeNote)
-            .font(MeeshyFont.relative(12, weight: .regular))
+            .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .regular))
             .foregroundStyle(.white.opacity(0.7))
             .fixedSize(horizontal: false, vertical: true)
-            .padding(12)
+            .padding(MeeshySpacing.md)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                RoundedRectangle(cornerRadius: MeeshyRadius.sm, style: .continuous)
                     .fill(Color.white.opacity(0.05))
             )
             .overlay(alignment: .leading) {
                 Rectangle().fill(tint).frame(width: 2)
             }
-            .padding(.top, 22)
+            .padding(.top, MeeshySpacing.xl)
     }
 
     /// **Le bouton NOMME ce qu'il applique** — la planche l'écrit
@@ -285,14 +285,14 @@ struct ComposerAudienceSheet: View {
             onClose()
         } label: {
             Text("\(ComposerAudienceCopy.apply) · \(selection.label.uppercased())")
-                .font(MeeshyFont.relative(13, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                 .foregroundStyle(Color.black.opacity(0.85))
                 .frame(maxWidth: .infinity, minHeight: 50)
-                .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(tint))
+                .background(RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous).fill(tint))
         }
         .buttonStyle(.plain)
-        .padding(.horizontal, 14)
-        .padding(.top, 12)
+        .padding(.horizontal, MeeshySpacing.mdPlus)
+        .padding(.top, MeeshySpacing.md)
         .padding(.bottom, 26)
         .background(Color.black.opacity(0.35))
     }

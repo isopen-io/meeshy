@@ -1,0 +1,88 @@
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+import { describe, expect, test } from 'bun:test';
+
+/**
+ * L'APPEL VIDÉO FLOTTE QUAND ON QUITTE LA COQUE ANDROID (#8144).
+ *
+ * Sur le web, masquer l'onglet pendant un appel vidéo ouvre Document PiP.
+ * Dans la coque, le service au premier plan gardait l'appel vivant mais
+ * l'image disparaissait : l'activité n'était pas déclarée capable d'image
+ * dans l'image et rien ne l'y faisait entrer. La règle qui décide vit dans
+ * `CallShellRules.entersPictureInPicture` (témoins JVM) ; ici, le câblage.
+ */
+
+const APP = join(dirname(fileURLToPath(import.meta.url)), '..');
+const SOURCES = join(APP, 'android', 'app', 'src', 'main');
+const lire = (...chemin: string[]): string => readFileSync(join(SOURCES, ...chemin), 'utf8');
+const JAVA = ['java', 'me', 'meeshy', 'app'];
+const LANGUES = ['values', 'values-fr', 'values-es', 'values-pt', 'values-de', 'values-it', 'values-ar'];
+
+function sansCommentaires(source: string): string {
+  return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '').replace(/<!--[\s\S]*?-->/g, '');
+}
+
+function corpsDe(code: string, signature: string): string {
+  const debut = code.indexOf(signature);
+  expect(debut).toBeGreaterThan(-1);
+  const ouverture = code.indexOf('{', debut);
+  let profondeur = 0;
+  for (let i = ouverture; i < code.length; i += 1) {
+    if (code[i] === '{') profondeur += 1;
+    if (code[i] === '}') profondeur -= 1;
+    if (profondeur === 0) return code.slice(ouverture, i + 1);
+  }
+  return code.slice(ouverture);
+}
+
+describe("l'image dans l'image d'un appel dans la coque Android (#8144)", () => {
+  test("l'activité principale se déclare capable d'image dans l'image", () => {
+    const manifeste = sansCommentaires(lire('AndroidManifest.xml'));
+    const activite = manifeste.slice(manifeste.indexOf('android:name=".MainActivity"') - 300, manifeste.indexOf('</activity>'));
+    expect(activite).toContain('android:supportsPictureInPicture="true"');
+  });
+
+  test("quitter l'app y entre quand le plugin d'appel le décide", () => {
+    const code = sansCommentaires(lire(...JAVA, 'MainActivity.java'));
+    const depart = corpsDe(code, 'void onUserLeaveHint(');
+    expect(depart).toContain('floatsInPictureInPicture()');
+    expect(depart).toContain('enterPictureInPictureMode(');
+  });
+
+  test('la page apprend chaque entrée et chaque sortie', () => {
+    const code = sansCommentaires(lire(...JAVA, 'MainActivity.java'));
+    expect(corpsDe(code, 'void onPictureInPictureModeChanged(')).toContain('pictureInPictureChanged(active)');
+    const plugin = sansCommentaires(lire(...JAVA, 'MeeshyCallPlugin.java'));
+    expect(corpsDe(plugin, 'void pictureInPictureChanged(')).toContain('notifyListeners("pictureInPictureModeChanged"');
+    expect(corpsDe(plugin, 'boolean floatsInPictureInPicture(')).toContain('CallShellRules.entersPictureInPicture(');
+  });
+
+  test('la fenêtre porte micro et raccrocher, dans les sept langues', () => {
+    const code = sansCommentaires(lire(...JAVA, 'MainActivity.java'));
+    expect(corpsDe(code, 'void onUserLeaveHint(')).toContain('pictureInPictureParams()');
+    const plugin = sansCommentaires(lire(...JAVA, 'MeeshyCallPlugin.java'));
+    const params = corpsDe(plugin, 'PictureInPictureParams pictureInPictureParams(');
+    expect(params).toContain('CallShellRules.pictureInPictureActions(');
+    expect(params).toContain('remoteAction(');
+    expect(corpsDe(plugin, 'RemoteAction remoteAction(')).toContain('new RemoteAction(');
+    expect(plugin).toContain('RECEIVER_NOT_EXPORTED');
+    expect(plugin).toContain('notifyListeners("pictureInPictureAction"');
+    for (const dossier of LANGUES) {
+      const chaines = lire('res', dossier, 'strings_call.xml');
+      for (const cle of ['call_pip_mute', 'call_pip_unmute', 'call_pip_hangup']) expect(chaines).toContain(`name="${cle}"`);
+    }
+    for (const icone of ['ic_pip_mic', 'ic_pip_mic_off', 'ic_pip_hangup']) expect(lire('res', 'drawable', `${icone}.xml`)).toContain('<vector');
+  });
+
+  test('la fenêtre prend le format que la page lui donne (#8144)', () => {
+    const plugin = sansCommentaires(lire(...JAVA, 'MeeshyCallPlugin.java'));
+    const params = corpsDe(plugin, 'PictureInPictureParams pictureInPictureParams(');
+    expect(params).toContain('CallShellRules.pictureInPictureAspect(');
+    expect(params).toContain('setAspectRatio(new Rational(');
+    const reglage = corpsDe(plugin, 'void setPictureInPictureControls(');
+    expect(reglage).toContain('"aspectWidth"');
+    expect(reglage).toContain('"aspectHeight"');
+  });
+});

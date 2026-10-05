@@ -1,12 +1,21 @@
-import { ForwardSheet } from '@/components/forward-sheet';
+
+import { discussionCardSubjectOf } from '@/lib/export/discussion-card-subject';
+import { messageCardLanguagesOf, messageCardSubjectOf } from '@/lib/export/message-card-subject';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { MessageDetailSheet } from '@/components/message-detail-sheet';
 import { MessageMenu } from '@/components/message-menu';
 import { reactionEntries } from '@/components/message-blocks';
 import { ReactionSheet } from '@/components/reaction-sheet';
-import type { Message } from '@/lib/api/types';
-import { translationChoices } from '@/lib/view/message-actions';
+import type { Attachment, Message } from '@/lib/api/types';
+import { translate } from '@/lib/i18n-catalog';
+import { offerStudioSeed } from '@/lib/stories/studio-seed';
+import { messageDetailExposureOf, messageMenuContextOf, translationChoices } from '@/lib/view/message-actions';
 import { deliveryOf as deliveryStatusOf, isMineOf } from '@/lib/view/message';
 import type { MessageMenuController } from '@/lib/view/use-message-menu';
+
+import { ExportCatalogGate } from './export-catalog-gate';
+import { href, navigate } from './route-table';
+import { MessageExportSheet } from './thread-export-sheet';
 
 /** LA PART du contrôleur de `useMessageMenu` que les feuilles LISENT — un
  * `Pick`, jamais le contrôleur entier : le contrat de ce composant se lit
@@ -19,13 +28,12 @@ export type ThreadSheetsMenu = Pick<
   | 'onMenuReact'
   | 'onMenuAction'
   | 'onPickLanguage'
-  | 'forwardIds'
-  | 'onForwardTo'
-  | 'onCloseForward'
   | 'reactionSheetFor'
   | 'setReactionSheetFor'
   | 'detailFor'
   | 'setDetailFor'
+  | 'exportFor'
+  | 'setExportFor'
   | 'servedOf'
   | 'starOf'
 >;
@@ -33,8 +41,10 @@ export type ThreadSheetsMenu = Pick<
 /**
  * LES FEUILLES DU MESSAGE (#5814, #5866 ; extrait de `routes/thread.tsx` au
  * lot #7429, découpage sans changer un pixel) — le menu du message (appui
- * long / clic droit / `ContextMenu`), la feuille de destinataires, le rail de
- * réactions et la fiche détail. Miroir `ConversationOverlayState` (iOS,
+ * long / clic droit / `ContextMenu`), le rail de réactions et la fiche détail.
+ * Le TRANSFERT n'a plus de feuille ici (#8884) : la barre de sélection ouvre la
+ * feuille d'envoi commune (`openSendSheet`, montée une fois par le shell).
+ * Miroir `ConversationOverlayState` (iOS,
  * `ConversationView.swift:24` — menu, sélection, feuilles) : la même
  * partition que `useThreadJump` (le saut) et `useThreadReadingMode`
  * (l'orchestration du mode) reprennent côté état, ici côté FEUILLES.
@@ -53,6 +63,10 @@ export function ThreadMessageSheets({
   readerLocale,
   conversationId,
   viewerId,
+  viewerName,
+  viewerHandle,
+  conversationTitle,
+  announce,
 }: {
   readonly messageMenu: ThreadSheetsMenu;
   readonly messages: readonly Message[];
@@ -60,6 +74,13 @@ export function ThreadMessageSheets({
   readonly readerLocale: string;
   readonly conversationId: string;
   readonly viewerId: string;
+  /** Le nom de qui exporte : il nomme ses propres messages sur la carte. */
+  readonly viewerName: string;
+  /** Le pseudo de qui exporte : il signe le filigrane, « Meeshy @pseudo ». */
+  readonly viewerHandle: string | null;
+  /** Le titre du fil, qu'une carte d'export peut afficher. */
+  readonly conversationTitle: string | null;
+  readonly announce: (message: string) => void;
 }) {
   return (
     <>
@@ -76,6 +97,7 @@ export function ThreadMessageSheets({
             target={target}
             items={data.items}
             choices={data.choices}
+            forwardItems={data.forwardItems}
             subjectLabel={data.subjectLabel}
             onClose={messageMenu.onCloseMenu}
             onReact={(emoji) => messageMenu.onMenuReact(target.messageId, emoji)}
@@ -88,13 +110,6 @@ export function ThreadMessageSheets({
       {/* « ＋ Ajouter une réaction » (rail) et « Plus… » (détails) — deux
           feuilles indépendantes, jamais montées en même temps que le menu
           (celui-ci se referme déjà avant de les ouvrir, `use-message-menu.ts`). */}
-      {/* LA FEUILLE DE DESTINATAIRES (#5866) — montée SEULEMENT quand une
-          sélection ADMISE attend sa cible : c'est ce montage conditionnel qui
-          fait que la requête de liste (`useConversations`, cache-first) n'est
-          jamais lancée par la simple ouverture d'un fil. */}
-      {messageMenu.forwardIds === null ? null : (
-        <ForwardSheet viewerId={viewerId} onPick={messageMenu.onForwardTo} onClose={messageMenu.onCloseForward} />
-      )}
       {((messageId) =>
         messageId === null ? null : (
           <ReactionSheet
@@ -110,13 +125,17 @@ export function ThreadMessageSheets({
         const detailMessage = messages.find((m) => m.id === detailFor);
         if (detailMessage === undefined) return null;
         const servedDetail = messageMenu.servedOf(detailFor);
+        /* Un message protégé (#7580, #8008) : ni langues ni pièces — rien de son contenu. */
+        const exposed = messageDetailExposureOf(detailMessage, { now: Date.now() });
+        const menuContext = messageMenuContextOf(detailMessage, { now: Date.now() });
+        const imageable = !menuContext.isProtected && (menuContext.hasText || menuContext.hasImageableMedia === true);
+        const composable = menuContext.composableIndex === null || menuContext.composableIndex === undefined ? null : (detailMessage.attachments ?? [])[menuContext.composableIndex];
         return (
           <MessageDetailSheet
-            /* Une vue unique (#7580) : ni langues ni pièces — rien de son contenu. */
             choices={
-              detailMessage.isViewOnce
-                ? []
-                : translationChoices({ message: detailMessage, preferredLanguages: readerLanguages, servedLanguage: servedDetail?.language ?? '' })
+              exposed
+                ? translationChoices({ message: detailMessage, preferredLanguages: readerLanguages, servedLanguage: servedDetail?.language ?? '' })
+                : []
             }
             reactions={reactionEntries(detailMessage.reactionSummary)}
             sentAt={new Date(detailMessage.createdAt)}
@@ -124,8 +143,12 @@ export function ThreadMessageSheets({
             locale={readerLocale}
             conversationId={conversationId}
             messageId={detailMessage.id}
-            attachments={detailMessage.isViewOnce ? [] : (detailMessage.attachments ?? [])}
+            attachments={exposed ? (detailMessage.attachments ?? []) : []}
             star={messageMenu.starOf(detailFor)}
+            create={{
+              onCompose: composable === undefined || composable === null ? null : () => void composeWithAttachment(composable, announce),
+              onImage: imageable ? () => messageMenu.setExportFor({ messageId: detailFor, quick: false }) : null,
+            }}
             onPickLanguage={(code) => {
               messageMenu.onPickLanguage(detailFor, code);
               messageMenu.setDetailFor(null);
@@ -134,6 +157,67 @@ export function ThreadMessageSheets({
           />
         );
       })(messageMenu.detailFor)}
+      {((request) => {
+        if (request === null) return null;
+        const exportFor = request.messageId;
+        const exportMessage = messages.find((m) => m.id === exportFor);
+        if (exportMessage === undefined) return null;
+        const subjectIn = (language: string | null) =>
+          messageCardSubjectOf({
+            message: exportMessage,
+            servedText: messageMenu.servedOf(exportFor)?.text,
+            viewer: { id: viewerId, displayName: viewerName, handle: viewerHandle },
+            readerLanguages,
+            interfaceLanguage: currentInterfaceLanguage(),
+            now: Date.now(),
+            language,
+          });
+        /* « IMAGER LA DISCUSSION » (#9039) — la même carte, étendue aux messages
+           qui mènent à celui-ci ; elle se lit dans les langues que le lecteur
+           lit, sans choix de langue d'export (chaque message a les siennes). */
+        const discussion = request.scope === 'discussion';
+        const subject = discussion
+          ? discussionCardSubjectOf({
+              messages,
+              anchorId: exportFor,
+              servedOf: (id) => messageMenu.servedOf(id)?.text,
+              viewer: { id: viewerId, displayName: viewerName, handle: viewerHandle },
+              now: Date.now(),
+            })
+          : subjectIn(null);
+        if (subject === null) return null;
+        return (
+          <ExportCatalogGate>
+            <MessageExportSheet
+              subject={subject}
+              {...(discussion ? {} : { exportLanguages: { codes: messageCardLanguagesOf(exportMessage), subjectIn } })}
+              handle={viewerHandle}
+              conversationTitle={conversationTitle}
+              quick={request.quick}
+              announce={announce}
+              onClose={() => messageMenu.setExportFor(null)}
+            />
+          </ExportCatalogGate>
+        );
+      })(messageMenu.exportFor)}
     </>
   );
 }
+
+/**
+ * « COMPOSER » DEPUIS « PLUS… » (#8693) — le geste de la visionneuse
+ * (`viewer-media-actions.tsx`, #6303) : la pièce en fichier, posée en graine
+ * du studio, puis le studio. Un échec se dit, jamais un bouton muet.
+ */
+async function composeWithAttachment(attachment: Attachment, announce: (message: string) => void): Promise<void> {
+  const language = currentInterfaceLanguage();
+  const { fetchCardMediaBlob } = await import('@/lib/export/message-card-fetch');
+  const blob = await fetchCardMediaBlob(attachment.fileUrl, attachment.id).catch(() => null);
+  if (blob === null) {
+    announce(translate(language, 'media.viewer.compose_failed'));
+    return;
+  }
+  offerStudioSeed(new File([blob], attachment.originalName !== '' ? attachment.originalName : attachment.fileName, { type: attachment.mimeType }));
+  navigate(href('storyCompose'));
+}
+

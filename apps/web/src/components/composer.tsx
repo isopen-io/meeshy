@@ -1,4 +1,5 @@
 import { Suspense, lazy, memo, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 import type { ParticipantPermissions } from '@meeshy/shared/types/participant';
 
@@ -6,6 +7,7 @@ import { ComposerEphemeralRail, ComposerTopRow } from './composer-top-row';
 import { QUICK_EMOJI_FRAME_WIDTH, QuickEmojiFrame } from './composer-quick-emoji';
 import { Glyph } from './glyph';
 import { MentionFieldPanel } from './mention-suggestions';
+import { ComposerEmojiSheet, ComposerStickerSheet } from './composer-sheets-lazy';
 import type { ComposerNotice } from './composer-tray';
 import {
   acceptPendingFiles,
@@ -13,9 +15,19 @@ import {
   mayAttach,
   pendingAttachmentOf,
   removePendingAttachment,
+  replacePendingAttachment,
   type PendingAttachment,
 } from '@/lib/send/attachments';
 import { releasePreviewUrl } from '@/lib/send/attachment-preview-url';
+import { pastedContentOf, routePastedContent } from '@/lib/send/paste-route';
+import {
+  contactCardFile,
+  contactFromVCardFile,
+  contactSourceOf,
+  defaultContactHost,
+  pickContact,
+} from '@/lib/send/contact-card';
+import type { ParsedVCard } from '@meeshy/shared/types/contact-card';
 import {
   composerAccentOf,
   decorativeEffectCountOf,
@@ -23,17 +35,20 @@ import {
   type ComposeProtection,
   type VeilState,
 } from '@/lib/send/compose-protection';
-import { composerChromeAccentStyle } from '@/lib/send/composer-accent';
+import { composerChromeAccentStyle, composerIconTintStyle } from '@/lib/send/composer-accent';
 import type { ComposerDraft } from '@/lib/send/draft-store';
+import type { StickyProtection } from '@/lib/send/protection-preference';
+import { NO_IMPOSED_PROTECTION, contaminatedComposeProtection, imposedLocksOf } from '@/lib/send/reply-contagion';
+import type { ImposedReplyProtection } from '@meeshy/shared/utils/reply-protection-contagion';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import type { ComposerDraftReport } from '@/lib/view/use-draft';
 import { useComposeLanguage } from '@/lib/view/use-compose-language';
-import { useSentiment } from '@/lib/view/use-sentiment';
 import type { SharedPlace } from '@/lib/send/shared-place';
 import type { MessageSticker } from '@meeshy/shared/types/message-sticker';
 import { locationSupported, useLocationRequest } from '@/lib/view/use-location-request';
 import { recordingSupported, useRecorder } from '@/lib/view/use-recorder';
+import { appSettingsOpener } from '@/lib/view/settings-recovery';
 import { toggleEmphasis } from '@meeshy/shared/utils/text-format';
 import type { EmphasisStyle } from '@meeshy/shared/utils/text-segments';
 import { ComposerFormatBar, emphasisShortcutOf } from './composer-format-bar';
@@ -77,19 +92,8 @@ const LanguageSheet = lazy(() => import('./language-sheet').then((m) => ({ defau
  */
 
 const ComposerTray = lazy(() => import('./composer-tray'));
-
-/**
- * LA PALETTE D'EMOJIS, CHARGÉE À LA DEMANDE (#7280) — même discipline que
- * `LanguageSheet` et `EffectsSheet` : la grille des vingt (`EmojiGrid`,
- * SEULE liste du dépôt) et la feuille qui la porte n'entrent dans aucun
- * chunk tant qu'on n'a pas touché la tuile « Emoji ».
- */
-const ComposerEmojiSheet = lazy(() =>
-  import('./composer-emoji-sheet').then((m) => ({ default: m.ComposerEmojiSheet })),
-);
-const ComposerStickerSheet = lazy(() =>
-  import('./composer-sticker-sheet').then((m) => ({ default: m.ComposerStickerSheet })),
-);
+/** La caméra de la barre (#9123) — le studio viseur armé, chargé à la demande. */
+const ComposerCapture = lazy(() => import('./composer-retouch').then((m) => ({ default: m.ComposerCapture })));
 
 /** IDENTITÉ STABLE pour l'appelant qui omet `preferred` (les témoins, surtout)
  * — un `[]` littéral en valeur par défaut serait reconstruit à CHAQUE rendu
@@ -98,9 +102,12 @@ const ComposerStickerSheet = lazy(() =>
  * le construit en ligne »). */
 const NO_PREFERRED_LANGUAGES: readonly string[] = [];
 
-/** Ce que la barre d'outils réserve au cadre des emojis rapides : sa marge de
- * fin (`px-3`), le cadre, et 4 px d'air (miroir `quickEmojiSlotWidth + 4`). */
-const QUICK_EMOJI_TOOLBAR_RESERVE = 12 + QUICK_EMOJI_FRAME_WIDTH + 4;
+type DraftNow = {
+  readonly text: string;
+  readonly pending: readonly PendingAttachment[];
+  readonly place: SharedPlace | null;
+};
+const EMPTY_DRAFT: DraftNow = { text: '', pending: [], place: null };
 
 /**
  * `memo` (revue-correction #6175, défaut majeur 3) — `thread.tsx` re-rend à
@@ -119,8 +126,10 @@ export const Composer = memo(function Composer({
   onTextChange,
   replyTo,
   onCancelReply,
+  imposedProtection = NO_IMPOSED_PROTECTION,
   rights,
   draft,
+  stickyProtection,
   onDraftChange,
   maxLength,
 }: {
@@ -166,6 +175,11 @@ export const Composer = memo(function Composer({
    */
   replyTo?: { author: string; excerpt: string; language?: string };
   onCancelReply?: () => void;
+  /** CE QUE LE MESSAGE CITÉ IMPOSE À LA RÉPONSE (#8557) — `imposedReplyProtection`
+   * de `@meeshy/shared`, calculé par l'hôte (`useThreadCompose`). Il RECOUVRE
+   * l'état des bascules sans jamais l'écrire : retirer la citation rend l'état
+   * d'avant, et la préférence collante (#8306) ne le voit pas. */
+  imposedProtection?: ImposedReplyProtection;
   /** #5668 — les droits d'envoi du LECTEUR (`Participant.permissions`) : une
    * tuile du tiroir ne se rend que si son geste a un effet (loi 4). Absent ⇒
    * tout est autorisé (aucun participant chargé encore). */
@@ -179,12 +193,21 @@ export const Composer = memo(function Composer({
    * aucun brouillon.
    */
   draft?: ComposerDraft | null;
+  /**
+   * LES PROTECTIONS ARMÉES DE LA CONVERSATION (#8306) — lues UNE fois au
+   * montage, comme `draft` ; elles priment sur celles du brouillon. L'hôte
+   * les réécrit depuis `onDraftChange` (`useComposerDraft`), ce composant
+   * ne fait que semer son état.
+   */
+  stickyProtection?: StickyProtection | null;
   /** Appelée à CHAQUE changement (texte, langue, protection) — la politique
    * de débounce vit chez l'hôte (`useComposerDraft`), jamais ici. */
   onDraftChange?: (report: ComposerDraftReport) => void;
   /** Absent en conversation standard (§1.2 point 2, #6175) — aucun appelant
    * ne le fournit cette itération, faute de source honnête de la limite
-   * serveur (issue gateway compagnon). Le compteur ne se rend QUE si fourni. */
+   * serveur (issue gateway compagnon). Le compteur ne se rend QUE si fourni.
+   * Le collage (#9037) suit la MÊME limite : ce `maxLength` s'il est fourni,
+   * sinon `MAX_MESSAGE_LENGTH` partagé (2000, `lib/send/paste-route.ts`). */
   maxLength?: number;
 }) {
   const [text, setText] = useState(() => draft?.text ?? '');
@@ -202,6 +225,7 @@ export const Composer = memo(function Composer({
   const locator = useLocationRequest();
   const [emojiSheetOpen, setEmojiSheetOpen] = useState(false);
   const [stickerSheetOpen, setStickerSheetOpen] = useState(false);
+  const [capturing, setCapturing] = useState(false);
   const field = useRef<HTMLTextAreaElement>(null);
   /** LA MENTION (#7826, #7846) — le mécanisme PARTAGÉ par tous les champs
    * qui mentionnent (`use-mention-field.ts`) : curseur, clavier de la liste,
@@ -236,9 +260,6 @@ export const Composer = memo(function Composer({
   const sendTarget = text.trim().length > 0 || pending.length > 0 || locator.place !== null;
   const hasReply = replyTo !== undefined;
   const isRecording = recorder.state.status === 'recording';
-  /** Le cadre des emojis rapides monte sur la barre d'outils : champ vide,
-   * NON focalisé, hors enregistrement (miroir `quickEmojiCoversToolbar`). */
-  const quickEmojiCoversToolbar = !sendTarget && !focused && !isRecording;
 
   /**
    * LA LANGUE D'ÉCRITURE (#5828) — décide ce qui PART, jamais le rang 1 du
@@ -262,12 +283,16 @@ export const Composer = memo(function Composer({
    * La gate « image en attente » de #7354 la rendait invisible dans l'état
    * par défaut du composeur : c'est le défaut que #7597 corrige.
    */
-  const [ephemeralSeconds, setEphemeralSeconds] = useState<number | undefined>(draft?.protection.ephemeralSeconds);
+  /* LA PRÉFÉRENCE DE LA CONVERSATION D'ABORD (#8306) — réécrite à chaque
+     changement, elle est toujours au moins aussi fraîche que le brouillon ;
+     celui-ci ne sert de graine qu'aux conversations sans préférence. */
+  const armed = stickyProtection ?? draft?.protection;
+  const [ephemeralSeconds, setEphemeralSeconds] = useState<number | undefined>(armed?.ephemeralSeconds);
   const [ephemeralPickerOpen, setEphemeralPickerOpen] = useState(false);
   // Un brouillon d'avant #7667 peut porter flou ET vue unique : la vue
   // unique, plus forte, l'emporte dès la restauration.
-  const [blurred, setBlurred] = useState(draft?.protection.blurred === true && draft?.protection.viewOnce !== true);
-  const [viewOnce, setViewOnce] = useState(draft?.protection.viewOnce === true);
+  const [blurred, setBlurred] = useState(armed?.blurred === true && armed?.viewOnce !== true);
+  const [viewOnce, setViewOnce] = useState(armed?.viewOnce === true);
   const [effectFlags, setEffectFlags] = useState(draft?.protection.effectFlags ?? 0);
   /** Flou et vue unique sont EXCLUSIFS (#7667) — la loi pure décide, la
    * rangée haute ne fait que poser ses deux valeurs. */
@@ -288,10 +313,12 @@ export const Composer = memo(function Composer({
     }),
     [ephemeralSeconds, blurred, viewOnce, effectFlags],
   );
+  /* LA PROTECTION QUI PART (#8557) — celle de l'utilisateur, recouverte par
+     ce que la citation impose : c'est elle que la rangée haute MONTRE et que
+     l'envoi PORTE ; `protection` seule est rapportée au brouillon. */
+  const locks = imposedLocksOf(imposedProtection);
+  const effective = useMemo(() => contaminatedComposeProtection(protection, imposedProtection), [protection, imposedProtection]);
 
-  /** LA TONALITÉ — INDICATEUR PASSIF, débounce 300 ms (`use-sentiment.ts`,
-   * miroir `TextAnalyzer`). */
-  const sentiment = useSentiment(text);
 
   /**
    * L'ACCENT SUBSTITUÉ (#6175, puis #7667) — éphémère > vue unique > flou >
@@ -301,8 +328,8 @@ export const Composer = memo(function Composer({
    * pastille de langue…) en hérite sans qu'aucune n'ait à le savoir — le même
    * mécanisme que `withAccent` au niveau de l'écran (`thread.tsx`).
    */
-  const accentState = composerAccentOf(protection);
-  const chromeAccentStyle = composerChromeAccentStyle(accentState);
+  const accentState = composerAccentOf(effective);
+  const chromeAccentStyle = { ...composerChromeAccentStyle(accentState), ...composerIconTintStyle(accentState) };
   /** La couleur ne se voit pas au lecteur d'écran : le champ DIT la
    * protection dominante (#7667, miroir `accessibilityHint` iOS). */
   const protectionAnnouncement =
@@ -359,11 +386,16 @@ export const Composer = memo(function Composer({
      entre deux taps, et promettre un rejeu impossible est la forme que
      `NoticeBanner` interdit explicitement (loi 4). `locating` n'a pas de
      sortie non plus — elle DIT l'attente, et elle se résout seule. */
+  /* UN REFUS DÉFINITIF MÈNE AUX RÉGLAGES DE L'APP (#8882) — dans la coque
+     Android, la permission refusée deux fois ne se redemande plus. */
+  const openAppSettings = appSettingsOpener();
+  const refusalExit = (retry: () => void): Pick<ComposerNotice, 'onRetry' | 'retryLabel'> =>
+    openAppSettings === null ? { onRetry: retry } : { onRetry: openAppSettings, retryLabel: translate(uiLanguage, 'composer.openSettings') };
   const locationNotice: ComposerNotice | null =
     locator.state.status === 'locating'
       ? { message: translate(uiLanguage, 'composer.location.locating'), onDismiss: locator.dismiss }
       : locator.state.status === 'denied'
-        ? { message: translate(uiLanguage, 'composer.location.denied'), onRetry: locator.request, onDismiss: locator.dismiss }
+        ? { message: translate(uiLanguage, 'composer.location.denied'), ...refusalExit(locator.request), onDismiss: locator.dismiss }
         : locator.state.status === 'failed'
           ? { message: translate(uiLanguage, 'composer.location.failed'), onRetry: locator.request, onDismiss: locator.dismiss }
           : locator.state.status === 'unsupported'
@@ -381,12 +413,12 @@ export const Composer = memo(function Composer({
                l'APPLICATION, pas du navigateur — la copie « réglages du
                navigateur » envoyait le lecteur au mauvais endroit sur deux
                des trois plateformes). */
-            message: 'Micro refusé — autorisez-le dans les réglages',
-            onRetry: () => recorder.start(),
+            message: translate(uiLanguage, 'composer.mic.refused'),
+            ...refusalExit(() => recorder.start()),
             onDismiss: recorder.reset,
           }
         : recorder.state.status === 'unsupported'
-          ? { message: 'Micro indisponible sur ce navigateur', onDismiss: recorder.reset }
+          ? { message: translate(uiLanguage, 'composer.mic.unavailable'), onDismiss: recorder.reset }
           : null);
 
   const showAbove = pending.length > 0 || notice !== null || locator.place !== null;
@@ -410,7 +442,32 @@ export const Composer = memo(function Composer({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- volontairement la TRANSITION, pas l'identité de `replyTo` (voir le doc-comment).
   }, [hasReply]);
 
+  /**
+   * LE BROUILLON À L'INSTANT DU GESTE (#7985) — le dédoublonnage par CONTENU
+   * est retiré (`perform-send.ts`) : deux emojis identiques tapés en série
+   * sont deux messages. Ce qui protège le DOUBLE CLIC sur « Envoyer » est
+   * donc le brouillon VIDÉ au moment même de l'envoi : l'état React ne l'est
+   * qu'au rendu suivant, et un second clic servi avant lui relirait le texte
+   * déjà parti. Ce registre est vidé SYNCHRONIQUEMENT par `resetAfterSend`,
+   * et ressemé à chaque rendu depuis l'état.
+   */
+  const draftNow = useRef<DraftNow>(EMPTY_DRAFT);
+  draftNow.current = { text, pending, place: locator.place };
+
+  /**
+   * L'EMPLACEMENT D'ENVOI N'ANIME QUE SES BASCULES (#7985) — le bouton
+   * d'envoi qui arrive, les emojis qui reviennent après un envoi ; jamais le
+   * premier rendu, qui montre simplement ce qui est là. Le registre passe à
+   * vrai après le premier montage : lu au rendu d'une bascule, il pose la
+   * classe sur l'élément qui NAÎT, dont l'animation joue une fois.
+   */
+  const slotSettled = useRef(false);
+  useEffect(() => {
+    slotSettled.current = true;
+  }, []);
+
   const resetAfterSend = (opts?: { readonly keepFocus: boolean }) => {
+    draftNow.current = EMPTY_DRAFT;
     setText('');
     onTextChange?.('');
     compose.setText(''); // Le vidage réinitialise la détection (miroir `TextAnalyzer` texte vidé).
@@ -437,15 +494,13 @@ export const Composer = memo(function Composer({
          ici. */
       if (opts?.keepFocus) field.current.focus();
     }
-    // LA PROTECTION EST REMISE À ZÉRO APRÈS L'ENVOI (#6175) — miroir
-    // `ConversationViewModel+Send.swift:156-159` : éphémère, flou et effets
-    // ne survivent PAS au message qui vient de partir, contrairement à la
-    // LANGUE (qui reste COLLANTE, `compose.noteSent()`).
-    setEphemeralSeconds(undefined);
+    // LES PROTECTIONS RESTENT ARMÉES (#8306, directive porteur 2026-09-27) —
+    // éphémère, flou et vue unique décrivent la CONVERSATION et survivent à
+    // l'envoi (leur préférence est tenue par l'hôte, `useComposerDraft`) ;
+    // les effets DÉCORATIFS décrivent CE message et repartent à zéro, comme
+    // #6175 le posait pour tout.
     setEphemeralPickerOpen(false);
     setEffectsPanelOpen(false);
-    setBlurred(false);
-    setViewOnce(false);
     setEffectFlags(0);
     /* LE LIEU NE SURVIT PAS AU MESSAGE QUI VIENT DE PARTIR (#7280) — même
        règle que la protection, et pour la même raison : il DÉCRIT ce
@@ -454,34 +509,67 @@ export const Composer = memo(function Composer({
     locator.clear();
   };
 
-  const send = (value: string, attachments: readonly PendingAttachment[] = pending) => {
+  const send = (value: string, attachments: readonly PendingAttachment[] = draftNow.current.pending) => {
     const own = value.trim();
-    if (!own && attachments.length === 0 && locator.place === null) return;
+    const { place } = draftNow.current;
+    if (!own && attachments.length === 0 && place === null) return;
     const keepFocus = document.activeElement === field.current;
     // LA VALEUR AFFICHÉE EST CELLE QUI PART (#5828, Q2) — capturée AVANT
     // `resetAfterSend`, qui vide le texte et donc changerait ce que
     // `compose.language` rendrait si on le relisait après.
     const language = compose.language;
-    onSend({ text: own, attachments, language, protection, place: locator.place });
+    onSend({ text: own, attachments, language, protection: effective, place });
     compose.noteSent(); // Le choix cesse d'être ÉPINGLÉ, mais reste COLLANT (Q3).
     resetAfterSend({ keepFocus });
   };
+
+  /** Le bouton d'envoi et la touche Entrée envoient le brouillon TEL QU'IL
+   * EST — jamais la valeur capturée par le rendu qui a posé le gestionnaire. */
+  const sendDraft = () => send(draftNow.current.text, draftNow.current.pending);
 
   /** LA TUILE « PHOTOS »/« FICHIER » (`<input type="file">`, `composer-tray.tsx`)
    * AJOUTE À LA SÉLECTION, ne la remplace jamais — un second tap ajoute une
    * seconde pièce, jamais un remplacement silencieux. Ce qui est ÉCARTÉ (droit,
    * taille, nombre) est DIT (`acceptPendingFiles`, `send/attachments.ts`) :
    * un fichier qui disparaît sans un mot est le pire des deux mondes. */
-  const addFiles = (files: FileList | null) => {
+  const addFiles = (files: FileList | readonly File[] | null) => {
     if (files === null || files.length === 0) return;
+    /* `draftNow` et non `pending` : une carte de contact arrive APRÈS un
+       sélecteur asynchrone, quand l'état capturé par ce rendu a pu vieillir. */
     const outcome = acceptPendingFiles({
-      current: pending,
+      current: draftNow.current.pending,
       files: Array.from(files),
       ...(rights === undefined ? {} : { rights }),
     });
     setFileRefusal(outcome.refusal ?? null);
     setPending(outcome.list);
     setPanelOpen(false);
+  };
+
+  /**
+   * LA TUILE « CONTACT » (#8242) — la fiche CHOISIE devient une carte
+   * `text/vcard` (`lib/send/contact-card.ts`) qui rejoint la sélection par
+   * `addFiles`, comme un fichier : mêmes droits, même aperçu, même envoi.
+   * Un sélecteur refermé n'ajoute rien ; une fiche illisible est DITE.
+   */
+  const contactSource = useMemo(() => contactSourceOf(defaultContactHost()), []);
+  const addContact = (card: ParsedVCard | null) => {
+    if (card !== null) addFiles([contactCardFile(card)]);
+  };
+  const refuseContact = () => setFileRefusal(translate(uiLanguage, 'composer.contact.failed'));
+  const contact = {
+    source: contactSource,
+    onRequest: () => {
+      setPanelOpen(false);
+      if (contactSource === 'file') return;
+      pickContact(contactSource, defaultContactHost()).then(addContact, refuseContact);
+    },
+    onPickFile: (files: FileList | null) => {
+      const file = files?.[0];
+      setPanelOpen(false);
+      if (file === undefined) return;
+      contactFromVCardFile(file).then((card) => (card === null ? refuseContact() : addContact(card)), refuseContact);
+    },
   };
 
   /**
@@ -532,17 +620,18 @@ export const Composer = memo(function Composer({
    * ENVOYER UN STICKER DE LA BIBLIOTHÈQUE (#7938) — un message À LUI SEUL,
    * comme sur iOS : le texte en cours, les pièces en attente et le lieu
    * restent dans le composeur. L'image relue par la feuille part en pièce
-   * jointe, le descripteur `{ stickerId }` dans le champ `sticker` du corps.
+   * jointe, le descripteur (`{ stickerId }`, ou `{ templateId: 'mee.…' }`
+   * pour Mee et Meo, #9034) dans le champ `sticker` du corps.
    */
-  const sendSticker = ({ stickerId, file }: { readonly stickerId: string; readonly file: File }) => {
+  const sendSticker = ({ file, sticker }: { readonly file: File; readonly sticker: MessageSticker }) => {
     setStickerSheetOpen(false);
     onSend({
       text: '',
       attachments: [pendingAttachmentOf(file)],
       language: compose.language,
-      protection,
+      protection: effective,
       place: null,
-      sticker: { stickerId },
+      sticker,
     });
   };
 
@@ -625,6 +714,10 @@ export const Composer = memo(function Composer({
             variant="above"
             pending={pending}
             onRemove={removeAttachment}
+            onReplace={(localId, file) => {
+              releasePreviewUrl(localId);
+              setPending((prev) => replacePendingAttachment(prev, localId, file));
+            }}
             notice={notice}
             place={locator.place}
             onRemovePlace={locator.clear}
@@ -633,10 +726,9 @@ export const Composer = memo(function Composer({
       ) : null}
 
       {/* LES RAILS AU-DESSUS DE LA BARRE D'OUTILS (#7980, miroir #7966/#7967)
-          — la durée éphémère OU les effets, jamais les deux, posés HORS du
-          pont que couvre le cadre des emojis rapides, à 8 px du bord haut du
-          verre et de ses côtés. */}
-      {!isRecording && ephemeralPickerOpen ? (
+          — la durée éphémère OU les effets, jamais les deux, à 8 px du bord
+          haut du verre et de ses côtés. */}
+      {!isRecording && ephemeralPickerOpen && !locks.ephemeral ? (
         <ComposerEphemeralRail
           {...(ephemeralSeconds === undefined ? {} : { ephemeralSeconds })}
           onSelectEphemeral={(seconds) => {
@@ -651,10 +743,6 @@ export const Composer = memo(function Composer({
         </Suspense>
       ) : null}
 
-      {/* LE PONT (#7980) — la barre d'outils et la ligne de saisie, sous un
-          même repère : le cadre des emojis rapides s'y pose en absolu sur
-          tout le côté droit. */}
-      <div data-composer-deck className="relative" style={{ containerType: 'inline-size' }}>
       {/* LA RANGÉE HAUTE (#5828, #6175) — miroir `topToolbar`
           (`UniversalComposerBar+Toolbar.swift:25-81`) : posée AU-DESSUS du
           champ, jamais DANS lui, et DÉMONTÉE pendant un enregistrement
@@ -667,9 +755,11 @@ export const Composer = memo(function Composer({
           `targets/thread.composer-top-row.{light,dark}.png`, 25 nœuds). */}
       {!isRecording ? (
         <ComposerTopRow
-          {...(ephemeralSeconds === undefined ? {} : { ephemeralSeconds })}
-          ephemeralPickerOpen={ephemeralPickerOpen}
+          {...(effective.ephemeralSeconds === undefined ? {} : { ephemeralSeconds: effective.ephemeralSeconds })}
+          ephemeralPickerOpen={ephemeralPickerOpen && !locks.ephemeral}
+          locks={locks}
           onToggleEphemeral={() => {
+            if (locks.ephemeral) return;
             if (ephemeralSeconds !== undefined) {
               // ARMÉ ⇒ tap DÉSARME (miroir `+Protections.swift:26-34`).
               setEphemeralSeconds(undefined);
@@ -679,8 +769,10 @@ export const Composer = memo(function Composer({
             setEffectsPanelOpen(false);
             setEphemeralPickerOpen((v) => !v);
           }}
-          blurred={blurred}
-          onToggleBlur={() => applyVeil(toggledVeil('blurred', { blurred, viewOnce }))}
+          blurred={effective.blurred === true}
+          onToggleBlur={() => {
+            if (!locks.blurred) applyVeil(toggledVeil('blurred', { blurred, viewOnce }));
+          }}
           viewOnce={viewOnce}
           onToggleViewOnce={() => applyVeil(toggledVeil('viewOnce', { blurred, viewOnce }))}
           effectCount={decorativeEffectCountOf(effectFlags)}
@@ -689,13 +781,21 @@ export const Composer = memo(function Composer({
             setEphemeralPickerOpen(false);
             setEffectsPanelOpen((v) => !v);
           }}
-          sentiment={sentiment}
+          {...(mayAttach(rights, 'image/*')
+            ? {
+                onOpenStickers: () => {
+                  setPanelOpen(false);
+                  setStickerSheetOpen(true);
+                },
+                onPickLibrary: addFiles,
+                onOpenCamera: () => setCapturing(true),
+              }
+            : {})}
           languageCode={compose.language}
           onOpenLanguage={() => setLanguageSheetOpen(true)}
           languagePillRef={languagePillRef}
           text={text}
           {...(maxLength === undefined ? {} : { maxLength })}
-          reserveEnd={quickEmojiCoversToolbar ? QUICK_EMOJI_TOOLBAR_RESERVE : 0}
         />
       ) : null}
 
@@ -728,6 +828,21 @@ export const Composer = memo(function Composer({
           <ComposerStickerSheet onPick={sendSticker} onClose={() => setStickerSheetOpen(false)} />
         </Suspense>
       ) : null}
+
+      {capturing
+        ? createPortal(
+            <Suspense fallback={null}>
+              <ComposerCapture
+                onCancel={() => setCapturing(false)}
+                onDone={(file) => {
+                  setCapturing(false);
+                  addFiles([file]);
+                }}
+              />
+            </Suspense>,
+            document.body,
+          )
+        : null}
 
       {isRecording ? (
         <Suspense fallback={<div style={{ minHeight: 56 }} aria-hidden />}>
@@ -762,7 +877,7 @@ export const Composer = memo(function Composer({
             style={{
               backgroundColor: 'color-mix(in srgb, var(--accent) 10%, transparent)',
               border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)',
-              color: 'var(--accent)',
+              color: 'var(--composer-icon)',
             }}
             aria-label={panelOpen ? 'Fermer le menu des pièces jointes' : 'Ouvrir le menu des pièces jointes'}
           >
@@ -787,7 +902,7 @@ export const Composer = memo(function Composer({
                 onClick={() => recorder.start()}
                 aria-busy={recorder.state.status === 'requesting'}
                 className="grid size-9 shrink-0 place-items-center self-end"
-                style={{ marginBottom: 4, marginLeft: 4, color: 'var(--color-ios-ink-2)' }}
+                style={{ marginBottom: 4, marginLeft: 4, color: 'var(--composer-icon)' }}
                 aria-label="Enregistrer un message vocal"
               >
                 <Glyph
@@ -800,6 +915,10 @@ export const Composer = memo(function Composer({
             <textarea
               ref={field}
               rows={1}
+              /* Entrée ENVOIE (`onKeyDown`) : le clavier logiciel doit le DIRE,
+                 comme `.submitLabel(.send)` iOS — sans quoi Android dessine un
+                 saut de ligne sur une touche qui part (#8031). */
+              enterKeyHint="send"
               value={text}
               onFocus={() => {
                 setFocused(true);
@@ -818,6 +937,22 @@ export const Composer = memo(function Composer({
                 // Croissance jusqu'a cinq lignes, comme iOS (`lineLimit(1...5)`).
                 el.style.height = 'auto';
                 el.style.height = `${Math.min(el.scrollHeight, 5 * 22)}px`;
+              }}
+              /* CE QU'ON COLLE PART TOUJOURS (#9037) — un fichier devient la
+                 pièce, un texte qui dépasserait la limite du serveur part en
+                 `.txt` ; le reste est laissé au navigateur (`paste-route.ts`). */
+              onPaste={(e) => {
+                const el = e.currentTarget;
+                const decision = routePastedContent({
+                  pasted: pastedContentOf(e.clipboardData),
+                  current: el.value,
+                  selection: { start: el.selectionStart, end: el.selectionEnd },
+                  now: new Date(),
+                  ...(maxLength === undefined ? {} : { maxLength }),
+                });
+                if (decision.kind === 'native') return;
+                e.preventDefault();
+                addFiles(decision.files);
               }}
               onClick={(e) => mention.syncCaret(e.currentTarget)}
               onKeyUp={(e) => {
@@ -842,7 +977,7 @@ export const Composer = memo(function Composer({
                 // insere une ligne.
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault();
-                  send(text);
+                  sendDraft();
                 }
               }}
               placeholder="Message…"
@@ -866,8 +1001,8 @@ export const Composer = memo(function Composer({
                    avant que `send()` ne le lui rende, et cette image suffit à
                    voir le micro remonter et le champ rétrécir. */
                 onPointerDown={(e) => e.preventDefault()}
-                onClick={() => send(text)}
-                className="grid size-11 place-items-center rounded-chip"
+                onClick={sendDraft}
+                className={`grid size-11 place-items-center rounded-chip${slotSettled.current ? ' composer-slot-in' : ''}`}
                 style={{
                   background: 'linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 65%, white))',
                 }}
@@ -876,13 +1011,12 @@ export const Composer = memo(function Composer({
                 <Glyph name="arrowUp" size={20} className="text-white" />
               </button>
             ) : (
-              <QuickEmojiFrame focused={focused} onSend={send} />
+              <QuickEmojiFrame onSend={send} animateIn={slotSettled.current} />
             )}
           </div>
         </div>
         </>
       )}
-      </div>
 
       {/* SOUS la rangée, à la place du clavier — `attachmentCarouselPanel`
           (`+Layout.swift:254-258`). */}
@@ -896,6 +1030,10 @@ export const Composer = memo(function Composer({
                même `addFiles` applique les mêmes droits, les mêmes bornes de
                taille et le même refus DIT (`acceptPendingFiles`). */
             onPickCamera={addFiles}
+            onOpenCamera={() => {
+              setPanelOpen(false);
+              setCapturing(true);
+            }}
             onPickFile={addFiles}
             onRequestLocation={() => {
               setPanelOpen(false);
@@ -909,6 +1047,7 @@ export const Composer = memo(function Composer({
               setPanelOpen(false);
               setStickerSheetOpen(true);
             }}
+            contact={contact}
             onStartVoice={() => {
               setPanelOpen(false);
               recorder.start();

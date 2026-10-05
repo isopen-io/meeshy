@@ -1,4 +1,5 @@
 import * as z from 'zod/mini';
+import * as linksEndpoints from '@meeshy/shared/api/endpoints/links';
 
 import { unwrap } from './client';
 import type { DataSource } from './config';
@@ -6,7 +7,7 @@ import type { ApiResult, HttpTransport } from './http';
 
 /**
  * **LES STATISTIQUES D'UN LIEN D'INVITATION** (#7797) — `GET
- * /api/v1/links/:linkId/stats`, réservée au créateur du lien et aux
+ * links.byLinkIdStats`, réservée au créateur du lien et aux
  * administrateurs du groupe. Visites, arrivées, arrivées sans compte, langues
  * et pays des arrivants, derniers arrivés.
  *
@@ -138,7 +139,7 @@ export async function loadShareLinkStats(
   }
   const result = await params.transport.request<unknown>({
     method: 'GET',
-    path: `/api/v1/links/${encodeURIComponent(params.linkId)}/stats`,
+    path: linksEndpoints.byLinkIdStats(params.linkId),
     ...withSignal(params.signal),
   });
   if (!result.ok) return result.status === 404 ? { ok: true, data: null } : result;

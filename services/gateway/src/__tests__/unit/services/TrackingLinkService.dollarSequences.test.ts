@@ -117,16 +117,17 @@ describe('TrackingLinkService — content integrity with $-sequences', () => {
   });
 
   describe('processExplicitLinksInContent — raw-URL error fallback (STEP 2/3 catch)', () => {
-    it('restores the bracketed URL verbatim when it contains $ and minting fails', async () => {
-      prisma.trackingLink.create.mockRejectedValueOnce(new Error('db down'));
+    it('leaves a [[url]] block verbatim, $-sequences included, without minting (#9093)', async () => {
+      // `[[url]]` n'est plus suivi ni réécrit : c'est l'écriture d'un lien
+      // affiché tel quel. Ce témoin remplace celui qui figeait sa réécriture.
       const content = '[[https://x.com/?q=$&a$$b]]';
       const { processedContent } = await service.processExplicitLinksInContent({
         content,
         conversationId: 'c1',
       });
 
-      // On error the [[...]] wrapper is stripped and the raw URL restored verbatim.
-      expect(processedContent).toBe('https://x.com/?q=$&a$$b');
+      expect(processedContent).toBe(content);
+      expect(prisma.trackingLink.create).not.toHaveBeenCalled();
     });
 
     it('restores an angle-bracketed URL verbatim when it contains $ and minting fails', async () => {

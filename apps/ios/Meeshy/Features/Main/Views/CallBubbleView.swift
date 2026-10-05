@@ -9,9 +9,10 @@ import MeeshyUI
 /// 2026-08-03-call-bubble-pip-resize-morph-design.md), tap → plein écran,
 /// appui long (palier cercle uniquement) → mini-menu rapide
 /// (mute/haut-parleur/raccrocher). Aux paliers rectangle, ces 3 actions sont
-/// à la place une barre persistante en haut du cadre. Montée sans condition
-/// à deux endroits (`RootView`, `iPadRootView+Sheets`), garde interne
-/// symétrique à celle de `FloatingCallPillView`.
+/// à la place une barre persistante en haut du cadre. Montée dans la fenêtre
+/// passe-plat du point de retour (`CallReturnPointWindowHost`, #8739), au-dessus
+/// de tout plein écran ; elle se montre selon `CallReturnPoint.showsBubble` —
+/// en mode bulle, et en mode pastille quand un plein écran recouvre la pastille.
 struct CallBubbleView: View {
     // Audit P1-16 parity (see CallView.swift / FloatingCallPillView.swift) —
     // injected by the caller instead of a `= CallManager.shared` default, so
@@ -20,6 +21,7 @@ struct CallBubbleView: View {
     // objectWillChange subscription. Both mount sites (RootView,
     // iPadRootView+Sheets) already hold their own @ObservedObject callManager.
     @ObservedObject var callManager: CallManager
+    let isMainScreenCovered: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @State private var isMenuRevealed = false
@@ -33,7 +35,12 @@ struct CallBubbleView: View {
     private let menuButtonGap: CGFloat = 8
 
     var body: some View {
-        if callManager.displayMode == .bubble && callManager.callState.isActive && !callManager.isSystemPiPActive {
+        if CallReturnPoint.showsBubble(
+            displayMode: callManager.displayMode,
+            callState: callManager.callState,
+            isSystemPiPActive: callManager.isSystemPiPActive,
+            isMainScreenCovered: isMainScreenCovered
+        ) {
             GeometryReader { geometry in
                 bubbleCluster(in: geometry)
                     .position(bubbleCenter(in: geometry, size: CallBubbleGestureResolver.interpolatedSize(progress: currentProgress)))
@@ -81,11 +88,11 @@ struct CallBubbleView: View {
             }
 
             CallParticipantVisual(width: size.width, height: size.height, cornerRadius: cornerRadius, callManager: callManager)
-                .shadow(color: Color.black.opacity(0.3), radius: 8, y: 4)
+                .shadow(color: Color.black.opacity(MeeshyOpacity.medium), radius: 8, y: 4)
                 .overlay(alignment: .topTrailing) {
                     TransientCallSignalGlyph(strength: signalStrength)
-                        .padding(6)
-                        .background(Circle().fill(Color.black.opacity(0.55)))
+                        .padding(MeeshySpacing.xsPlus)
+                        .background(Circle().fill(Color.black.opacity(MeeshyOpacity.strong)))
                         .offset(x: 16, y: -16)
                 }
                 .overlay(alignment: .top) {
@@ -93,6 +100,17 @@ struct CallBubbleView: View {
                         .opacity(controlOpacity)
                         .allowsHitTesting(controlOpacity > 0.5)
                 }
+        }
+        // Le cadre touchable de la fenêtre passe-plat, mesuré AVANT les
+        // décalages pour les suivre : élargi au glyphe de signal, et aux
+        // boutons du mini-menu quand il est ouvert.
+        .background {
+            GeometryReader { proxy in
+                Color.clear.preference(
+                    key: CallReturnPointFrameKey.self,
+                    value: proxy.frame(in: .global).insetBy(dx: -touchReach, dy: -touchReach)
+                )
+            }
         }
         .offset(x: menuOffset)
         .offset(dragTranslation)
@@ -145,13 +163,18 @@ struct CallBubbleView: View {
         }
     }
 
+    private var touchReach: CGFloat {
+        guard isCircleRegion && isMenuRevealed else { return 16 }
+        return menuButtonGap + menuButtonDiameter + MeeshySpacing.sm
+    }
+
     private var tierControlBar: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             muteButton
             speakerButton
             hangupButton
         }
-        .padding(.top, 10)
+        .padding(.top, MeeshySpacing.smPlus)
     }
 
     private func accessibilityTierLabel(for tier: CallBubbleSizeTier) -> String {
@@ -290,7 +313,7 @@ struct CallBubbleView: View {
                 .font(.subheadline.weight(.medium))
                 .foregroundColor(callManager.isMuted ? MeeshyColors.error : .white)
                 .frame(width: menuButtonDiameter, height: menuButtonDiameter)
-                .background(Circle().fill(callManager.isMuted ? MeeshyColors.error.opacity(0.2) : Color.black.opacity(0.55)))
+                .background(Circle().fill(callManager.isMuted ? MeeshyColors.error.opacity(MeeshyOpacity.light) : Color.black.opacity(MeeshyOpacity.strong)))
         }
         .pressable()
         .accessibilityLabel(callManager.isMuted
@@ -309,7 +332,7 @@ struct CallBubbleView: View {
                 .font(.subheadline.weight(.medium))
                 .foregroundColor(callManager.isSpeaker ? MeeshyColors.indigo400 : .white)
                 .frame(width: menuButtonDiameter, height: menuButtonDiameter)
-                .background(Circle().fill(callManager.isSpeaker ? MeeshyColors.indigo400.opacity(0.2) : Color.black.opacity(0.55)))
+                .background(Circle().fill(callManager.isSpeaker ? MeeshyColors.indigo400.opacity(MeeshyOpacity.light) : Color.black.opacity(MeeshyOpacity.strong)))
         }
         .pressable()
         .accessibilityLabel(callManager.isSpeaker
@@ -331,7 +354,7 @@ struct CallBubbleView: View {
                 .background(
                     Circle().fill(
                         LinearGradient(
-                            colors: [MeeshyColors.error, MeeshyColors.error.opacity(0.85)],
+                            colors: [MeeshyColors.error, MeeshyColors.error.opacity(MeeshyOpacity.intense)],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )

@@ -313,7 +313,9 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     /// persistance passe par la même chaîne `granularCanvasSync` — aucun
     /// callback de synchro à câbler par surface.
     @Published public var openingEffect: StoryTransitionEffect?
-    @Published var closingEffect: StoryTransitionEffect?
+    /// `public` en LECTURE (#8792) : le carrousel d'effets de la scène la
+    /// montre ; l'écriture passe par `setSlideTransitions`.
+    @Published public internal(set) var closingEffect: StoryTransitionEffect?
 
     // Per-slide background image transforms (persisted across slide changes)
     struct BackgroundTransform {
@@ -380,6 +382,9 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     /// pas Equatable et SwiftUI ne peut donc pas détecter une mutation
     /// de valeur intra-clé). Cf. `ComposerImageCacheReader.version`.
     @Published public internal(set) var loadedImagesVersion: UInt64 = 0
+    /// Les médias adoptés, rendus à leur fichier local pour le canvas du
+    /// composer (`StoryReaderContext.localMediaAliases`).
+    @Published public internal(set) var adoptedLocalMedia: [String: URL] = [:]
 
     /// Enregistre (ou retire, si `image == nil`) le bitmap importé/édité d'un
     /// média sous sa clé ET **bump `loadedImagesVersion`** dans la foulée.

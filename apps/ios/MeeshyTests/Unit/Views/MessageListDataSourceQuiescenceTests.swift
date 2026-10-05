@@ -269,7 +269,7 @@ final class MessageListDataSourceQuiescenceTests: XCTestCase {
         }
         let persistence = MessagePersistenceActor(dbWriter: pool)
         let store = MessageStore(conversationId: "c1", persistence: persistence)
-        await store.loadInitial()
+        await store.refreshFromDB()
         return store
     }
 }

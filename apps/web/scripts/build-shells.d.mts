@@ -59,6 +59,8 @@ export declare function stripGradleComments(gradleText: string): string;
 
 export declare function auditAndroidVersionCodeForm(gradleText: string): readonly string[];
 
+export declare function auditAndroidReleaseSigning(gradleText: string): readonly string[];
+
 export declare function auditCommittedBuildNumberFallback(
   files: Readonly<{ readonly gradleText: string; readonly pbxprojText: string }>,
 ): readonly string[];

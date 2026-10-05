@@ -6,9 +6,12 @@ import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-su
 import { createDraftStore, type StorageLike } from '@/lib/send/draft-store';
 import { VIEWER_ID, message } from '@/lib/api/fixtures-base';
 import type { Message } from '@/lib/api/types';
+import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
 
 import { mentionSourceStore } from './mention-source';
 import { useThreadCompose, type ThreadComposeState } from './use-thread-compose';
+
+const { BLURRED, EPHEMERAL, EPHEMERAL_AFTER_READ } = MESSAGE_EFFECT_FLAGS;
 
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
 
@@ -178,6 +181,35 @@ describe('useThreadCompose — brouillon, citation, envoi (#7429, extrait de rou
     rerender();
     const second = state().onSend;
     expect(Object.is(first, second)).toBe(true);
+  });
+});
+
+describe('useThreadCompose — ce que la citation impose à la réponse (#8557)', () => {
+  const noop = () => {};
+
+  test('citer un message flou + flamme-œil impose le flou et la flamme-œil ; annuler lève tout', () => {
+    const secret = messageOf({ id: 'm-secret', isBlurred: true, effectFlags: BLURRED | EPHEMERAL | EPHEMERAL_AFTER_READ });
+    const { state } = mount({ messages: [secret], send: noop });
+    expect(state().imposedProtection).toEqual({ blurred: false, ephemeral: null });
+
+    act(() => {
+      state().setReplyTarget('m-secret');
+    });
+    expect(state().imposedProtection).toEqual({ blurred: true, ephemeral: { kind: 'after-read' } });
+
+    act(() => {
+      state().onCancelReply();
+    });
+    expect(state().imposedProtection).toEqual({ blurred: false, ephemeral: null });
+  });
+
+  test('citer un message ordinaire n’impose rien', () => {
+    const plain = messageOf({ id: 'm-plain' });
+    const { state } = mount({ messages: [plain], send: noop });
+    act(() => {
+      state().setReplyTarget('m-plain');
+    });
+    expect(state().imposedProtection).toEqual({ blurred: false, ephemeral: null });
   });
 });
 

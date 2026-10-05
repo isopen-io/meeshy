@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import type { ApiFailure, ApiResult } from '@/lib/api/http';
 
-import { decideTrackingRedirect, isTrackingToken, safeExternalTarget, type TrackingClick, type TrackingResolution } from './tracking-redirect';
+import { decideTrackingRedirect, isTrackingToken, safeExternalTarget, sharedContentPath, type TrackingClick, type TrackingResolution } from './tracking-redirect';
 
 /**
  * OÙ MÈNE UN LIEN SUIVI (#6714) — la décision est PURE : deux réponses de la
@@ -135,5 +135,48 @@ describe('decideTrackingRedirect — une passerelle en échec n’est pas un lie
     expect(decideTrackingRedirect({ token: TOKEN, click: refused(0, 'TIMEOUT'), resolution: refused(0, 'TIMEOUT') })).toEqual({
       kind: 'unavailable',
     });
+  });
+});
+
+describe('un CONTENU partagé s’ouvre dans sa page, avec la trace du partageur (#9149)', () => {
+  const POST_ID = '6abfd6cb9fa9a97766e6bf7a';
+
+  test('un réel partagé ouvre sa page canonique, sans quitter l’application', () => {
+    const outcome = decideTrackingRedirect({
+      token: TOKEN,
+      click: clicked(`https://meeshy.me/reel/${POST_ID}`),
+      resolution: resolved({ content: { type: 'REEL', id: POST_ID } }),
+    });
+    expect(outcome).toEqual({ kind: 'open', content: { type: 'REEL', id: POST_ID }, via: TOKEN });
+  });
+
+  test('chaque type de contenu partagé s’ouvre', () => {
+    for (const type of ['POST', 'REEL', 'STORY', 'STATUS'] as const) {
+      const outcome = decideTrackingRedirect({ token: TOKEN, click: refused(500), resolution: resolved({ content: { type, id: POST_ID } }) });
+      expect(outcome).toEqual({ kind: 'open', content: { type, id: POST_ID }, via: TOKEN });
+    }
+  });
+
+  test('un lien éteint ne rouvre pas son contenu', () => {
+    const outcome = decideTrackingRedirect({ token: TOKEN, click: refused(410), resolution: resolved({ isActive: false, content: { type: 'REEL', id: POST_ID } }) });
+    expect(outcome).toEqual({ kind: 'dead' });
+  });
+
+  test('un identifiant de contenu hors forme retombe sur l’adresse servie', () => {
+    const outcome = decideTrackingRedirect({
+      token: TOKEN,
+      click: clicked('https://meeshy.me/post/p1'),
+      resolution: resolved({ content: { type: 'POST', id: '../admin' } }),
+    });
+    expect(outcome).toEqual({ kind: 'leave', target: 'https://meeshy.me/post/p1' });
+  });
+});
+
+describe('sharedContentPath — l’adresse canonique, `?via=` compris', () => {
+  test('un réel, une publication, une story, une humeur', () => {
+    expect(sharedContentPath({ type: 'REEL', id: 'r1' }, 'abc123')).toBe('/reel/r1?via=abc123');
+    expect(sharedContentPath({ type: 'POST', id: 'p1' }, 'abc123')).toBe('/post/p1?via=abc123');
+    expect(sharedContentPath({ type: 'STORY', id: 's1' }, 'abc123')).toBe('/story/s1?via=abc123');
+    expect(sharedContentPath({ type: 'STATUS', id: 'm1' }, 'abc123')).toBe('/mood/m1?via=abc123');
   });
 });

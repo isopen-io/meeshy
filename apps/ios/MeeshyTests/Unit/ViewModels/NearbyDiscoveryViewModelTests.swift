@@ -37,7 +37,7 @@ final class NearbyDiscoveryViewModelTests: XCTestCase {
         private(set) var lastCoordinate: CLLocationCoordinate2D?
         /// Exécuté À L'INTÉRIEUR de l'appel réseau : c'est le seul instant où
         /// l'on peut observer ce que l'écran affichait DÉJÀ.
-        var duringNearby: (@Sendable () async -> Void)?
+        var duringNearby: (@Sendable @concurrent () async -> Void)?
 
         func nearby(
             latitude: Double, longitude: Double, radiusKm: Double, cursor: Int, limit: Int

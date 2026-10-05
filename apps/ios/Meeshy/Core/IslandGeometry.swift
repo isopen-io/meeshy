@@ -34,8 +34,6 @@ enum IslandGeometry {
         safeAreaTop >= minimumSafeAreaTop
     }
 
-    static var size: CGSize { CGSize(width: width, height: height) }
-
     /// Ordonnée du haut de l'îlot. `max(0, …)` borne le cas dégénéré d'un
     /// inset plus petit que l'îlot (matériel sans îlot) : la géométrie reste
     /// définie, `isPresent` étant le seul juge de sa pertinence.

@@ -1,12 +1,15 @@
-import type { Ref } from 'react';
+import { useRef, type Ref } from 'react';
 
 import { THREAD_MENU_GLYPHS } from './glyphs-thread-menu';
 import { ComposerLanguagePill } from './composer-language-pill';
 import { Glyph, GlyphSvg } from './glyph';
-import { EPHEMERAL_DURATIONS, characterCounterOf } from '@/lib/send/compose-protection';
-import { SENTIMENT_EMOJI, type SentimentLevel } from '@/lib/send/sentiment';
+import { FlameEyeGlyph } from './flame-eye-glyph';
+import { EPHEMERAL_DURATIONS, characterCounterOf, ephemeralDurationLabelOf, isAfterReadChoice } from '@/lib/send/compose-protection';
+import { COMPOSER_GLYPHS } from './glyphs-composer';
+import type { ImposedLocks } from '@/lib/send/reply-contagion';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { useScrollsFurtherMark } from '@/lib/view/scrolls-further';
 
 /**
  * L'ÉTAT ARMÉ D'UNE BASCULE (revue-correction #6175, défaut majeur) — le
@@ -34,23 +37,7 @@ const armedStyle = (color: string, fill = 15, ring = 30) => ({
   color: 'var(--color-ios-ink)',
 });
 
-/**
- * LE LIBELLÉ FRANÇAIS DE CHAQUE NIVEAU — PROSE, jamais l'identifiant anglais
- * de `SentimentLevel` (D-13 : le CODE est en anglais, la PROSE reste en
- * français). iOS annonce « Tonalité du message » comme LABEL et l'EMOJI comme
- * VALEUR (`accessibilityLabel`/`accessibilityValue`,
- * `+Toolbar.swift:58-63`) — HTML n'a pas de second canal pour un `<span>`
- * inerte, donc ce libellé COMBINE les deux dans le nom accessible.
- */
-const SENTIMENT_LABEL_FR: Readonly<Record<SentimentLevel, string>> = {
-  veryNegative: 'très négative',
-  negative: 'négative',
-  slightlyNegative: 'légèrement négative',
-  neutral: 'neutre',
-  slightlyPositive: 'légèrement positive',
-  positive: 'positive',
-  veryPositive: 'très positive',
-};
+const NO_LOCKS: ImposedLocks = { blurred: false, ephemeral: false };
 
 /**
  * LA RANGÉE HAUTE DU COMPOSEUR (#6175) — miroir `topToolbar`
@@ -58,7 +45,10 @@ const SENTIMENT_LABEL_FR: Readonly<Record<SentimentLevel, string>> = {
  * pour tenir le budget de 1000–1200 lignes (CLAUDE.md racine).
  *
  * CINQ occupants à EFFET (éphémère, flou, vue unique, effets, langue) + UN
- * indicateur PASSIF (tonalité) + UN compteur CONDITIONNEL — pas six
+ * compteur CONDITIONNEL — et deux PORTES (#9082, directive porteur
+ * 2026-10-02) : le sticker à la place de l'ancien indicateur de tonalité, la
+ * caméra à l'angle droit du verre, chacune rendue seulement si l'hôte sait
+ * l'ouvrir (loi 4) — pas six
  * contrôles égaux : la capture de référence
  * (`targets/thread.composer-top-row.{light,dark}.png`) et le code source
  * (`maxLength == nil` en conversation) corrigent le libellé initial de
@@ -72,7 +62,7 @@ const SENTIMENT_LABEL_FR: Readonly<Record<SentimentLevel, string>> = {
  * (`1.circle` / `1.circle.fill`) dit l'état : contour au repos, plein armé.
  *
  * ORDRE FIXE, jamais réordonné : éphémère · flou · vue unique · effets ·
- * tonalité · langue · spacer · compteur — le groupe MENANT d'iOS
+ * sticker · langue · spacer · compteur · photothèque · caméra — le groupe MENANT d'iOS
  * (`targets/README.md` § 1.4, `+Protections.swift:161-238` pour le rang de
  * « vue unique » entre flou et effets).
  */
@@ -84,16 +74,18 @@ export function ComposerTopRow({
   onToggleBlur,
   viewOnce,
   onToggleViewOnce,
+  locks = NO_LOCKS,
   effectCount,
   effectsPanelOpen,
   onToggleEffects,
-  sentiment,
+  onOpenStickers,
+  onPickLibrary,
+  onOpenCamera,
   languageCode,
   onOpenLanguage,
   languagePillRef,
   text,
   maxLength,
-  reserveEnd = 0,
 }: {
   /** `undefined` = désactivé. */
   readonly ephemeralSeconds?: number;
@@ -105,6 +97,9 @@ export function ComposerTopRow({
   readonly onToggleBlur: () => void;
   readonly viewOnce: boolean;
   readonly onToggleViewOnce: () => void;
+  /** CE QUE LA CITATION IMPOSE (#8557) — une bascule verrouillée reste
+   * armée, ne répond plus au tap et DIT pourquoi. */
+  readonly locks?: ImposedLocks;
   /** Nombre d'effets décoratifs actifs — la capsule affiche ce compte,
    * jamais un booléen (miroir `effectsToggleButton`, `+Toolbar.swift`). */
   readonly effectCount: number;
@@ -112,7 +107,14 @@ export function ComposerTopRow({
   readonly effectsPanelOpen: boolean;
   /** Tap sur la baguette : ouvre/ferme le panneau d'effets (#7980). */
   readonly onToggleEffects: () => void;
-  readonly sentiment: SentimentLevel;
+  /** La porte de la feuille de stickers (#9082) — absente ⇒ rien. */
+  readonly onOpenStickers?: () => void;
+  /** La photothèque, juste avant la caméra (#9120) — images ET vidéos ;
+   * absente ⇒ rien. */
+  readonly onPickLibrary?: (files: FileList | null) => void;
+  /** La caméra de l'angle droit (#9082) — elle ouvre le studio plein écran,
+   * viseur armé (#9123) ; absente ⇒ rien. */
+  readonly onOpenCamera?: () => void;
   readonly languageCode: string;
   readonly onOpenLanguage: () => void;
   readonly languagePillRef?: Ref<HTMLButtonElement>;
@@ -122,38 +124,25 @@ export function ComposerTopRow({
    * appelant ne le fournit cette itération, faute de source honnête de la
    * limite serveur. */
   readonly maxLength?: number;
-  /** LA DROITE RÉSERVÉE AU CADRE DES EMOJIS RAPIDES (#7980, miroir
-   * `quickEmojiCoversToolbar`) — en px, `0` quand le cadre ne monte pas sur
-   * la barre (champ focalisé ou non vide) : rien ne glisse dessous. */
-  readonly reserveEnd?: number;
 }) {
   const counter = characterCounterOf({ text, ...(maxLength === undefined ? {} : { maxLength }) });
-  /** LIBELLÉS DE LA BASCULE « VUE UNIQUE » (#7354) — SEUL occupant de cette
-   * rangée à passer par le catalogue (Prisme Linguistique, CLAUDE.md
-   * racine) : les autres bascules restent en français en dur, dette
-   * antérieure (#6310) que ce lot n'étend pas mais ne répand pas non plus. */
+  /** LES LIBELLÉS DE L'ÉPHÉMÈRE (#8304) ET DE LA VUE UNIQUE (#7354) passent
+   * par le catalogue ; le flou et les effets restent en français en dur,
+   * dette antérieure (#6310) que ce lot ne répand pas. */
   const language = currentInterfaceLanguage();
-  /**
-   * LA BARRE PARTAGE SA LIGNE AVEC LE CADRE DES EMOJIS RAPIDES (#7980).
-   *
-   * Sous 400 px de pont, quatre cibles de 44 + la pastille + le cadre ne
-   * tiennent pas : les bascules y passent à 36 × 44 (au-dessus du plancher AA
-   * de 24 px, WCAG 2.5.8 ; iOS pose 30 pt), sans gouttière — et seulement
-   * tant que le cadre est là : au focus, la barre retrouve ses 44 × 44.
-   *
-   * La TONALITÉ s'efface dans ce même état : il n'existe que champ VIDE, où
-   * elle vaut toujours « neutre » — elle n'y dit rien, et sa place rend la
-   * pastille de langue entière.
-   */
-  const reserved = reserveEnd > 0;
-  const compact = reserved ? ' @max-[400px]:min-w-9' : '';
+  const armedEphemeral = ephemeralSeconds === undefined ? undefined : ephemeralDurationLabelOf(ephemeralSeconds);
+  const ephemeralDuration = armedEphemeral === undefined ? '' : translate(language, armedEphemeral.displayKey);
+  const leadingRef = useRef<HTMLDivElement | null>(null);
+  useScrollsFurtherMark(leadingRef, 'data-scrolls-further');
 
   return (
-    <div
-      data-composer-toolbar
-      className={`flex items-center justify-start gap-1 px-3 pt-1.5${reserved ? ' @max-[400px]:gap-0' : ''}`}
-      style={reserveEnd > 0 ? { paddingInlineEnd: reserveEnd } : undefined}
-    >
+    <div data-composer-toolbar className="flex items-center justify-start gap-1 px-3 pt-1.5">
+      {/* LA BANDE MENANTE DÉFILE, L'ANGLE DROIT JAMAIS (#9082) — miroir
+          `ComposerToolbarStrip` : à 320 px la rangée débordait et la caméra
+          sortait de l'écran ; seuls les outils de tête glissent, le compteur
+          et la caméra restent à l'angle du verre. La pastille de langue la
+          ferme SANS y défiler (#9251, D-164). */}
+      <div ref={leadingRef} data-composer-toolbar-leading className="flex min-w-0 items-center gap-1 overflow-x-auto">
         {/* CIBLES ≥ 44×44 (dimension 5, revue-correction #6175) — `min-w-11`
             AUTANT que `min-h-11`, motif `composer-language-pill.tsx:69`. La
             première forme ne posait que la HAUTEUR : mesurée 32×44 au
@@ -163,33 +152,51 @@ export function ComposerTopRow({
         <button
           type="button"
           onClick={onToggleEphemeral}
+          disabled={locks.ephemeral}
           aria-pressed={ephemeralSeconds !== undefined}
           aria-expanded={ephemeralPickerOpen}
           data-composer-ephemeral
-          className={`flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1 rounded-chip px-2${compact}`}
-          style={ephemeralSeconds !== undefined ? armedStyle('var(--color-error)') : { color: 'var(--color-ios-ink-2)' }}
+          {...(locks.ephemeral ? { 'data-imposed': '' } : {})}
+          className="flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1 rounded-chip px-2 disabled:cursor-not-allowed"
+          style={ephemeralSeconds !== undefined ? armedStyle('var(--color-error)') : { color: 'var(--composer-icon)' }}
           aria-label={
-            ephemeralSeconds === undefined
-              ? 'Activer le mode éphémère'
-              : `Mode éphémère actif : ${EPHEMERAL_DURATIONS.find((d) => d.seconds === ephemeralSeconds)?.displayLabel ?? ''}`
+            locks.ephemeral
+              ? translate(language, 'composer.protection.imposed.ephemeral', { duration: ephemeralDuration })
+              : ephemeralSeconds === undefined
+                ? translate(language, 'composer.ephemeral.activate')
+                : translate(language, 'composer.ephemeral.active', { duration: ephemeralDuration })
           }
         >
-          <Glyph name={ephemeralSeconds !== undefined ? 'flameFill' : 'timer'} size={16} />
-          {ephemeralSeconds !== undefined ? (
-            <span className="text-title font-bold">
-              {EPHEMERAL_DURATIONS.find((d) => d.seconds === ephemeralSeconds)?.label}
+          {/* LA FLAMME-ŒIL (#8304) n'a pas de libellé court : son
+              pictogramme DIT le choix, comme sur iOS. */}
+          {isAfterReadChoice(ephemeralSeconds) ? (
+            <span data-glyph="flameEye" className="inline-flex">
+              <FlameEyeGlyph size={16} />
             </span>
+          ) : (
+            <Glyph name={ephemeralSeconds !== undefined ? 'flameFill' : 'timer'} size={16} />
+          )}
+          {armedEphemeral !== undefined && armedEphemeral.label !== '' ? (
+            <span className="text-title font-bold">{armedEphemeral.label}</span>
           ) : null}
         </button>
 
         <button
           type="button"
           onClick={onToggleBlur}
+          disabled={locks.blurred}
           aria-pressed={blurred}
           data-composer-blur
-          className={`flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1 rounded-chip px-2${compact}`}
-          style={blurred ? armedStyle('var(--ios-state-concealed)') : { color: 'var(--color-ios-ink-2)' }}
-          aria-label={blurred ? 'Mode flou actif' : 'Activer le mode flou'}
+          {...(locks.blurred ? { 'data-imposed': '' } : {})}
+          className="flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1 rounded-chip px-2 disabled:cursor-not-allowed"
+          style={blurred ? armedStyle('var(--ios-state-concealed)') : { color: 'var(--composer-icon)' }}
+          aria-label={
+            locks.blurred
+              ? translate(language, 'composer.protection.imposed.blur')
+              : blurred
+                ? 'Mode flou actif'
+                : 'Activer le mode flou'
+          }
         >
           <Glyph name="eyeSlash" size={16} />
           {blurred ? <span className="text-title font-bold">Flou</span> : null}
@@ -206,8 +213,8 @@ export function ComposerTopRow({
           aria-pressed={viewOnce}
           data-composer-view-once
           data-glyph={viewOnce ? 'numberCircleOneFill' : 'numberCircleOne'}
-          className={`flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1 rounded-chip px-2${compact}`}
-          style={viewOnce ? armedStyle('var(--ios-state-view-once)') : { color: 'var(--color-ios-ink-2)' }}
+          className="flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1 rounded-chip px-2"
+          style={viewOnce ? armedStyle('var(--ios-state-view-once)') : { color: 'var(--composer-icon)' }}
           aria-label={translate(language, viewOnce ? 'composer.viewOnce.active' : 'composer.viewOnce.activate')}
         >
           <Glyph name={viewOnce ? 'numberCircleOneFill' : 'numberCircleOne'} size={16} />
@@ -219,48 +226,87 @@ export function ComposerTopRow({
           onClick={onToggleEffects}
           aria-expanded={effectsPanelOpen}
           data-composer-effects
-          className={`flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1 rounded-chip px-2${compact}`}
-          style={effectCount > 0 ? armedStyle('var(--accent)') : { color: 'var(--color-ios-ink-2)' }}
+          className="flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1 rounded-chip px-2"
+          style={effectCount > 0 ? armedStyle('var(--accent)') : { color: 'var(--composer-icon)' }}
           aria-label={effectCount > 0 ? `${effectCount} effet(s) actif(s)` : 'Ajouter des effets au message'}
         >
           <GlyphSvg glyph={THREAD_MENU_GLYPHS.magicWand} size={16} />
           {effectCount > 0 ? <span className="text-title font-bold">{effectCount}</span> : null}
         </button>
 
-        {/* TONALITÉ — LECTURE SEULE (§ 1.1 : « c'était un Button dont
-            l'action se limitait à un retour haptique… rendu passif »). */}
-        {reserved ? null : (
-          <span
-            role="img"
-            aria-label={`Tonalité du message : ${SENTIMENT_LABEL_FR[sentiment]}`}
-            className="grid size-11 shrink-0 place-items-center text-[17px]"
+        {onOpenStickers === undefined ? null : (
+          <button
+            type="button"
+            onClick={onOpenStickers}
+            data-composer-sticker
+            className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-chip px-2"
+            style={{ color: 'var(--composer-icon)' }}
+            aria-label={translate(language, 'composer.attach.sticker')}
           >
-            {SENTIMENT_EMOJI[sentiment]}
-          </span>
+            <GlyphSvg glyph={COMPOSER_GLYPHS.sticker} size={16} />
+          </button>
         )}
 
-        <ComposerLanguagePill code={languageCode} onOpen={onOpenLanguage} {...(languagePillRef ? { buttonRef: languagePillRef } : {})} />
+      </div>
 
-        <span className="flex-1" />
+      <div className="me-auto flex shrink-0">
+        <ComposerLanguagePill code={languageCode} onOpen={onOpenLanguage} {...(languagePillRef ? { buttonRef: languagePillRef } : {})} />
+      </div>
 
         {counter ? (
           <span
             data-composer-counter
-            className="shrink-0 pr-1 font-mono text-[11px] font-semibold"
+            className="shrink-0 pe-1 font-mono text-[11px] font-semibold"
             style={{ color: counter.overflow ? 'var(--color-error)' : 'var(--color-ios-ink-2)' }}
           >
             {counter.text}
           </span>
         ) : null}
+
+        {/* LA PHOTOTHÈQUE (#9120) — images ET vidéos, à côté de la caméra
+            (miroir `ComposerGlassDoors.trailing` → [library, camera, fold]) ;
+            sans `capture`, elle ouvre la galerie, jamais l'objectif. */}
+        {onPickLibrary === undefined ? null : (
+          <label
+            data-composer-library
+            className="flex min-h-11 min-w-11 shrink-0 cursor-pointer items-center justify-center rounded-chip px-2"
+            style={{ color: 'var(--composer-icon)' }}
+          >
+            <Glyph name="image" size={16} />
+            <input
+              type="file"
+              accept="image/*,video/*"
+              multiple
+              className="sr-only"
+              aria-label={translate(language, 'composer.attach.photo.action')}
+              onChange={(e) => {
+                onPickLibrary(e.currentTarget.files);
+                e.currentTarget.value = '';
+              }}
+            />
+          </label>
+        )}
+
+        {onOpenCamera === undefined ? null : (
+          <button
+            type="button"
+            data-composer-camera
+            onClick={onOpenCamera}
+            aria-label={translate(language, 'composer.attach.camera.action')}
+            className="flex min-h-11 min-w-11 shrink-0 cursor-pointer items-center justify-center rounded-chip px-2"
+            style={{ color: 'var(--composer-icon)' }}
+          >
+            <GlyphSvg glyph={COMPOSER_GLYPHS.camera} size={16} />
+          </button>
+        )}
     </div>
   );
 }
 
 /**
  * LE RAIL DE DURÉE ÉPHÉMÈRE (#6175) — sorti de la rangée haute (#7980) pour
- * que le COMPOSEUR le pose au-dessus de la barre d'outils ET du cadre des
- * emojis rapides, qui ne couvre que la barre et la ligne de saisie. Il
- * partage cette place avec le panneau d'effets, les deux s'excluant.
+ * que le COMPOSEUR le pose au-dessus de la barre d'outils. Il partage cette
+ * place avec le panneau d'effets, les deux s'excluant.
  *
  * 8 px avec le bord haut du verre et sur les côtés (`mt-2 mx-2`, miroir
  * `railTopInset` + `.padding(.horizontal, 8)`, #7966).
@@ -274,11 +320,12 @@ export function ComposerEphemeralRail({
   /** Choix d'une capsule du sélecteur — `undefined` = « Désactivé ». */
   readonly onSelectEphemeral: (seconds: number | undefined) => void;
 }) {
+  const language = currentInterfaceLanguage();
   return (
     <div
       data-composer-ephemeral-picker
       role="group"
-      aria-label="Durée avant disparition du message"
+      aria-label={translate(language, 'composer.ephemeral.rail')}
       className="mx-2 mt-2 flex gap-2 overflow-x-auto rounded-[16px] px-3 py-1"
       style={{ backgroundColor: 'color-mix(in srgb, var(--color-error) 8%, var(--color-ios-surface))' }}
     >
@@ -297,7 +344,7 @@ export function ComposerEphemeralRail({
             : { color: 'var(--color-ios-ink-2)' }
         }
       >
-        Désactivé
+        {translate(language, 'composer.ephemeral.off')}
       </button>
       {EPHEMERAL_DURATIONS.map((d) => {
         const active = ephemeralSeconds === d.seconds;
@@ -307,7 +354,8 @@ export function ComposerEphemeralRail({
             type="button"
             onClick={() => onSelectEphemeral(d.seconds)}
             aria-pressed={active}
-            aria-label={d.displayLabel}
+            aria-label={translate(language, d.displayKey)}
+            {...(d.afterRead ? { 'data-ephemeral-after-read': '' } : {})}
             className="flex min-h-11 shrink-0 items-center gap-1 rounded-full px-3.5 text-title font-semibold"
             style={
               active
@@ -318,8 +366,8 @@ export function ComposerEphemeralRail({
                   }
             }
           >
-            <Glyph name="flameFill" size={12} />
-            {d.label}
+            {d.afterRead ? <FlameEyeGlyph size={16} /> : <Glyph name="flameFill" size={12} />}
+            {d.label === '' ? null : d.label}
           </button>
         );
       })}

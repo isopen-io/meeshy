@@ -163,3 +163,126 @@ final class ComposerStoryCanvasTests: XCTestCase {
         XCTAssertFalse(ComposerDocumentTool.servedRow(for: .post).isEmpty)
     }
 }
+
+/// **Un post sans média crée sa scène d'un toucher sur l'outil Texte** (#9137).
+///
+/// La palette faisait naître la scène, puis il fallait encore trouver la porte
+/// Texte du rail de la scène : deux gestes et une découverte pour l'usage le
+/// plus simple qu'une scène ait. L'outil du document fait les deux d'un coup —
+/// un fond, un texte posé, la saisie ouverte — et un texte resté vide rend le
+/// document tel qu'il était.
+@MainActor
+final class ComposerTextSceneDoorTests: XCTestCase {
+
+    func test_servedRow_post_serviceLOutilTexte() {
+        XCTAssertTrue(ComposerDocumentTool.servedRow(for: .post).contains(.textScene))
+    }
+
+    func test_servedRow_reel_serviceLOutilTexte() {
+        XCTAssertTrue(ComposerDocumentTool.servedRow(for: .reel).contains(.textScene))
+    }
+
+    func test_servedRow_status_neServicePasLOutilTexte() {
+        XCTAssertFalse(ComposerDocumentTool.servedRow(for: .status).contains(.textScene),
+                       "Un mood n'a pas de scène : la porte qui en fait naître une n'y a rien à ouvrir.")
+    }
+
+    func test_servedRow_story_resteVide() {
+        XCTAssertTrue(ComposerDocumentTool.servedRow(for: .story).isEmpty)
+    }
+
+    func test_canonicalRow_texte_suitLEmojiEtPrecedeLaPalette() {
+        let rangee = ComposerDocumentTool.canonicalRow
+        guard let emoji = rangee.firstIndex(of: .emoji),
+              let texte = rangee.firstIndex(of: .textScene) else {
+            return XCTFail("La rangée doit porter l'emoji et le texte.")
+        }
+        XCTAssertEqual(texte, emoji + 1)
+        XCTAssertEqual(ComposerDocumentTool.paletteAnchor(in: rangee), .textScene)
+    }
+
+    func test_paletteAnchor_sansTexte_retombeSurLEmoji() {
+        XCTAssertEqual(ComposerDocumentTool.paletteAnchor(in: [.photo, .emoji, .document]), .emoji)
+    }
+
+    func test_effect_texte_composeUneSceneDeTexte() {
+        XCTAssertEqual(ComposerDocumentTool.textScene.effect, .composesTextScene)
+    }
+
+    func test_symbolName_texte_estCeluiDeLaPorteTexteDeLaScene() {
+        XCTAssertEqual(ComposerDocumentTool.textScene.symbolName, ComposerRailDoor.text.symbolName)
+    }
+
+    func test_label_texte_estCeluiDeLaPorteTexteDeLaScene() {
+        XCTAssertEqual(ComposerDocumentCopy.label(.textScene), ComposerRailCopy.label(.text))
+    }
+
+    func test_visibleTools_captureRefusee_garde_LOutilTexte() {
+        XCTAssertTrue(ComposerDocumentToolPolicy.visibleTools(
+            served: ComposerDocumentTool.canonicalRow, allowsCapture: false
+        ).contains(.textScene))
+    }
+
+    func test_background_aucunFondChoisi_prendLaPremiereCouleurDeLaPalette() {
+        XCTAssertEqual(
+            ComposerTextSceneDoor.background(chosen: nil, palette: StoryBackgroundPalette.colors),
+            StoryBackgroundPalette.colors.first
+        )
+    }
+
+    func test_background_fondDejaChoisi_leGarde() {
+        XCTAssertEqual(
+            ComposerTextSceneDoor.background(chosen: "FF2E63", palette: StoryBackgroundPalette.colors),
+            "FF2E63"
+        )
+    }
+
+    func test_background_paletteVideEtAucunFond_rendNil() {
+        XCTAssertNil(ComposerTextSceneDoor.background(chosen: nil, palette: []))
+    }
+
+    func test_implicitBackground_aucunFondChoisi_marqueLeFondPoseParLOutil() {
+        XCTAssertEqual(ComposerTextSceneDoor.implicitBackground(chosen: nil, posed: "0F0C29"), "0F0C29")
+    }
+
+    func test_implicitBackground_fondDejaChoisi_neMarqueRien() {
+        XCTAssertNil(ComposerTextSceneDoor.implicitBackground(chosen: "FF2E63", posed: "FF2E63"))
+    }
+
+    func test_returnsToDocument_texteVideEtSceneNue_rendLeDocument() {
+        XCTAssertTrue(ComposerTextSceneDoor.returnsToDocument(
+            implicitBackground: "0F0C29", currentBackground: "0F0C29",
+            foundedSlides: 0, sceneObjectCount: 0, slideCount: 1))
+    }
+
+    func test_returnsToDocument_texteSaisi_garde_LaScene() {
+        XCTAssertFalse(ComposerTextSceneDoor.returnsToDocument(
+            implicitBackground: "0F0C29", currentBackground: "0F0C29",
+            foundedSlides: 0, sceneObjectCount: 1, slideCount: 1))
+    }
+
+    func test_returnsToDocument_fondChoisiEnsuite_garde_LaScene() {
+        XCTAssertFalse(ComposerTextSceneDoor.returnsToDocument(
+            implicitBackground: "0F0C29", currentBackground: "FF2E63",
+            foundedSlides: 0, sceneObjectCount: 0, slideCount: 1),
+            "Une couleur choisie à la palette pendant la saisie est un choix de l'auteur.")
+    }
+
+    func test_returnsToDocument_fondChoisiAvantLOutil_garde_LaScene() {
+        XCTAssertFalse(ComposerTextSceneDoor.returnsToDocument(
+            implicitBackground: nil, currentBackground: "FF2E63",
+            foundedSlides: 0, sceneObjectCount: 0, slideCount: 1))
+    }
+
+    func test_returnsToDocument_mediaFondateur_garde_LaScene() {
+        XCTAssertFalse(ComposerTextSceneDoor.returnsToDocument(
+            implicitBackground: "0F0C29", currentBackground: "0F0C29",
+            foundedSlides: 1, sceneObjectCount: 0, slideCount: 1))
+    }
+
+    func test_returnsToDocument_secondeScene_garde_LaScene() {
+        XCTAssertFalse(ComposerTextSceneDoor.returnsToDocument(
+            implicitBackground: "0F0C29", currentBackground: "0F0C29",
+            foundedSlides: 0, sceneObjectCount: 0, slideCount: 2))
+    }
+}

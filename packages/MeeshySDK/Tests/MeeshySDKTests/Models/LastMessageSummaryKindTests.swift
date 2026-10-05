@@ -41,6 +41,28 @@ struct LastMessageSummaryKindTests {
         #expect(conv.lastMessageSummaryKind(now: now) == .expired)
     }
 
+    private func afterRead(expiresAt: Date? = nil, viewOnce: Bool = false) -> MeeshyConversation {
+        var conv = makeConversation(viewOnce: viewOnce, expiresAt: expiresAt)
+        conv.lastMessageNature = LastMessageNature(effectFlags: 1 | 8)
+        return conv
+    }
+
+    @Test("Flamme-œil (#8634) → afterRead, jamais le texte")
+    func afterReadIsProtected() {
+        #expect(afterRead().lastMessageSummaryKind() == .afterRead)
+    }
+
+    @Test("Flamme-œil consommée (échéance servie passée) → expired")
+    func afterReadConsumed() {
+        let now = Date()
+        #expect(afterRead(expiresAt: now.addingTimeInterval(-60)).lastMessageSummaryKind(now: now) == .expired)
+    }
+
+    @Test("La vue unique passe devant la flamme-œil")
+    func viewOnceBeatsAfterRead() {
+        #expect(afterRead(viewOnce: true).lastMessageSummaryKind() == .viewOnce)
+    }
+
     @Test("Expiration future → ephemeralActive")
     func ephemeralActive() {
         let now = Date()

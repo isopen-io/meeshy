@@ -22,10 +22,13 @@ public struct BackgroundTransform: Sendable, Equatable {
     /// `resolveVideoGravity` and `resolveImageGravity` share identical
     /// orientation logic and both consume this same field.
     public nonisolated var videoFitMode: String?
+    /// Le fond des bandes d'un média ajusté (`StoryBackdrop`, #8414).
+    public nonisolated var backdrop: String?
 
     public nonisolated init(scale: Double = 1.0, offsetX: Double = 0,
                             offsetY: Double = 0, rotation: Double = 0,
-                            videoFitMode: String? = nil) {
+                            videoFitMode: String? = nil, backdrop: String? = nil) {
+        self.backdrop = backdrop
         self.scale = scale
         self.offsetX = offsetX
         self.offsetY = offsetY

@@ -1,9 +1,12 @@
+import * as authEndpoints from '@meeshy/shared/api/endpoints/auth';
+import * as meEndpoints from '@meeshy/shared/api/endpoints/me';
+
 import type { HttpTransport } from '@/lib/api/http';
 
 /**
  * **RENVOYER LE LIEN DE VÉRIFICATION DEPUIS L'ONBOARDING** (#7907) — par les
  * deux routes EXISTANTES de la passerelle, sans contrat neuf :
- * `GET /api/v1/me` rend l'adresse du compte, `POST /api/v1/auth/resend-verification`
+ * `GET me.root` rend l'adresse du compte, `POST auth.resendVerification`
  * y renvoie le lien.
  *
  * La session ne garde pas l'adresse (`session.ts`, règle 1 : on ne persiste
@@ -19,10 +22,10 @@ const emailOf = (payload: unknown): string | null => {
 };
 
 export async function resendOwnVerification(transport: HttpTransport): Promise<boolean> {
-  const me = await transport.request<unknown>({ method: 'GET', path: '/api/v1/me' });
+  const me = await transport.request<unknown>({ method: 'GET', path: meEndpoints.root });
   if (!me.ok) return false;
   const email = emailOf(me.data);
   if (email === null) return false;
-  const sent = await transport.request<unknown>({ method: 'POST', path: '/api/v1/auth/resend-verification', body: { email } });
+  const sent = await transport.request<unknown>({ method: 'POST', path: authEndpoints.resendVerification, body: { email } });
   return sent.ok;
 }

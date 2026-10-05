@@ -90,6 +90,12 @@ describe('callHistory pure helpers', () => {
   });
 
   describe('buildCallHistoryItem', () => {
+    it('sert les réactions comptées de l’appel, emojis connus seulement (#8439)', () => {
+      expect(buildCallHistoryItem(baseRow({ reactionCounts: { '👏': 2, '💩': 3 } }), 'me', null, false).reactionCounts)
+        .toEqual({ '👏': 2 });
+      expect(buildCallHistoryItem(baseRow(), 'me', null, false).reactionCounts).toEqual({});
+    });
+
     it('maps an answered outgoing video direct call with a peer', () => {
       const peer: CallHistoryPeer = {
         userId: 'u2',

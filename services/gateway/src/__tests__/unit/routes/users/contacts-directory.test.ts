@@ -28,7 +28,6 @@ jest.mock('../../../../services/PresenceVisibilityService', () => ({
 import {
   syncContactsDirectory,
   getContactsDirectory,
-  clearContactsDirectory,
 } from '../../../../routes/users/contacts-directory';
 
 const FULL = { showOnline: true, showLastSeenTimestamp: true };
@@ -72,6 +71,10 @@ const STORED_ENTRY = {
 function makePrisma(options: { users?: any[]; entries?: any[]; total?: number } = {}) {
   const { users = [], entries = [], total = entries.length } = options;
   return {
+    // « Ne pas être trouvé » (#8104) : la loi de découvrabilité lit les
+    // préférences de confidentialité ; aucun document ⇒ personne ne se cache.
+    userPreferences: { findMany: jest.fn<any>(async () => []) },
+    userPreference: { findMany: jest.fn<any>(async () => []) },
     user: {
       findMany: jest.fn<any>().mockResolvedValue(users),
       findUnique: jest.fn<any>().mockResolvedValue({ blockedUserIds: [] }),
@@ -96,7 +99,6 @@ async function buildApp(opts: { auth?: 'authenticated' | 'unauthenticated'; pris
   });
   await syncContactsDirectory(app);
   await getContactsDirectory(app);
-  await clearContactsDirectory(app);
   await app.ready();
   return { app, prisma };
 }
@@ -440,27 +442,6 @@ describe('GET /users/me/contacts', () => {
     expect(entry.matchedUser).toBeNull();
     expect(entry.isOnMeeshy).toBe(false);
     expect(entry.displayName).toBe('Awa Diallo');
-    await app.close();
-  });
-});
-
-// ─── DELETE /users/me/contacts ────────────────────────────────────────────────
-
-describe('DELETE /users/me/contacts', () => {
-  it('rejects an unauthenticated caller', async () => {
-    const { app } = await buildApp({ auth: 'unauthenticated' });
-    const res = await app.inject({ method: 'DELETE', url: '/users/me/contacts' });
-    expect(res.statusCode).toBe(401);
-    await app.close();
-  });
-
-  it('erases every entry of the caller', async () => {
-    const prisma = makePrisma();
-    const { app } = await buildApp({ prisma });
-    const res = await app.inject({ method: 'DELETE', url: '/users/me/contacts' });
-    expect(res.statusCode).toBe(200);
-    expect(res.json().data.removedCount).toBe(2);
-    expect(prisma.userContact.deleteMany).toHaveBeenCalledWith({ where: { ownerId: CURRENT_USER_ID } });
     await app.close();
   });
 });

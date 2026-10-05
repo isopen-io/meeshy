@@ -402,7 +402,7 @@ describe('selectOnboardingSuggestions — la loi pure', () => {
   });
 });
 
-describe('OnboardingService.getState — le courriel et la story (#7907)', () => {
+describe('OnboardingService.getState — le courriel et la story (#7907, #8476)', () => {
   it('courriel non vérifié : `emailVerified` faux, étape `email` NON pré-cochée', async () => {
     const state = await new OnboardingService(makePrisma()).getState(VIEWER, NOW);
     expect(state?.emailVerified).toBe(false);
@@ -416,18 +416,21 @@ describe('OnboardingService.getState — le courriel et la story (#7907)', () =>
     expect(state?.prefilledSteps).toEqual(['email', 'story']);
   });
 
-  it('non vérifié, aucune story jamais écrite : la première story est publiable', async () => {
-    const state = await new OnboardingService(makePrisma()).getState(VIEWER, NOW);
-    expect(state?.canPublishStory).toBe(true);
+  it('non vérifié, dans le délai de grâce (#8476) : publiable, même après une story déjà écrite', async () => {
+    const first = await new OnboardingService(makePrisma()).getState(VIEWER, NOW);
+    const second = await new OnboardingService(makePrisma({ authoredStories: [{ deletedAt: null }] })).getState(VIEWER, NOW);
+    expect(first?.canPublishStory).toBe(true);
+    expect(second?.canPublishStory).toBe(true);
   });
 
-  it('non vérifié, une story déjà écrite — même supprimée : plus publiable', async () => {
-    const live = await new OnboardingService(makePrisma({ authoredStories: [{ deletedAt: null }] })).getState(VIEWER, NOW);
-    const deleted = await new OnboardingService(
-      makePrisma({ authoredStories: [{ deletedAt: new Date('2026-09-25T11:00:00.000Z') }] }),
-    ).getState(VIEWER, NOW);
-    expect(live?.canPublishStory).toBe(false);
-    expect(deleted?.canPublishStory).toBe(false);
+  it('non vérifié, délai de grâce échu (#8476) : plus publiable', async () => {
+    const afterDeadline = new Date('2026-10-27T00:00:00.000Z');
+    expect((await new OnboardingService(makePrisma()).getState(VIEWER, afterDeadline))?.canPublishStory).toBe(false);
+  });
+
+  it('non vérifié mais porteur d\'un numéro, délai échu : publiable — le numéro n\'est jamais bloquant (#8055)', async () => {
+    const prisma = makePrisma({ viewer: makeUser({ phoneNumber: '+33600000000' } as Partial<UserRow>) });
+    expect((await new OnboardingService(prisma).getState(VIEWER, new Date('2026-10-27T00:00:00.000Z')))?.canPublishStory).toBe(true);
   });
 
   it('vérifié : toujours publiable, quelles que soient ses stories', async () => {
@@ -454,9 +457,9 @@ describe('OnboardingService.getState — demandes en attente (#7910)', () => {
 });
 
 describe('OnboardingService.getState — les points à l’élan courant (#7908)', () => {
-  it('compte neuf, aucun élan : le barème nu (14 · 10 · 7)', async () => {
+  it('compte neuf, aucun élan : le barème nu (8 · 80 · 7), la story à sa visibilité publique par défaut', async () => {
     const state = await new OnboardingService(makePrisma()).getState(VIEWER, NOW);
-    expect(state?.stepRewards).toEqual({ global: 14, story: 10, friendship: 7 });
+    expect(state?.stepRewards).toEqual({ global: 8, story: 80, friendship: 7 });
   });
 
   it('actif dans deux familles cette semaine : chaque axe crédite à l’élan de SA famille ajoutée', async () => {
@@ -470,16 +473,16 @@ describe('OnboardingService.getState — les points à l’élan courant (#7908)
     });
     const state = await new OnboardingService(prisma).getState(VIEWER, NOW);
     // content + social actives (le commentaire est hors fenêtre) :
-    // global = texte 9 × 2 (content) + conversation 5 × 3 (+conversation) = 33
-    // story  = story 9 × 2 (content) + outil 1 × 3 (+tool) = 21
+    // global = texte 3 × 2 (content) + conversation 5 × 3 (+conversation) = 21
+    // story  = story publique 79 × 2 (content) + outil 1 × 3 (+tool) = 161
     // amitié = 7 × 2 (social déjà active) = 14
-    expect(state?.stepRewards).toEqual({ global: 33, story: 21, friendship: 14 });
+    expect(state?.stepRewards).toEqual({ global: 21, story: 161, friendship: 14 });
   });
 
   it('l’assise permanente (dix succès) ajoute un cran à chaque geste', async () => {
     const milestones = Array.from({ length: 10 }, (_, n) => ({ milestoneType: 'achievement', milestoneKey: `a:${n}` }));
     const state = await new OnboardingService(makePrisma({ milestones })).getState(VIEWER, NOW);
-    expect(state?.stepRewards).toEqual({ global: 28, story: 20, friendship: 14 });
+    expect(state?.stepRewards).toEqual({ global: 16, story: 160, friendship: 14 });
   });
 });
 

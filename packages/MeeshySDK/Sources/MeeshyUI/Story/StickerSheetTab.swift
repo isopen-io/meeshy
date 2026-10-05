@@ -45,6 +45,10 @@ public enum StickerSheetTab: String, CaseIterable, Identifiable, Sendable {
     case favorites
     /// Ce qu'il a posé récemment.
     case recents
+    /// Mee, Meo et leurs duos (#9053, #9058, #9068). Plus jamais une page
+    /// depuis #9190 — chaque pack intégré a la sienne — : le titre de la
+    /// section Mee de Favoris et Récents.
+    case meeAndMeo
     /// Ce que l'auteur fait sien (directive porteur 2026-09-25 : « une tab
     /// customisée plutôt que dynamique ») : ses propres stickers, puis les
     /// décorations qui se remplissent de SES données — ses mots, son lieu,
@@ -60,6 +64,7 @@ public enum StickerSheetTab: String, CaseIterable, Identifiable, Sendable {
         case .search:    return "magnifyingglass"
         case .favorites: return "star.fill"
         case .recents:   return "clock.arrow.circlepath"
+        case .meeAndMeo: return "bird.fill"
         case .custom:    return "paintbrush.pointed.fill"
         case .smileys:   return "face.smiling"
         }
@@ -73,6 +78,8 @@ public enum StickerSheetTab: String, CaseIterable, Identifiable, Sendable {
             return String(localized: "sticker.sheet.tab.favorites", defaultValue: "Favoris", bundle: .module)
         case .recents:
             return String(localized: "sticker.sheet.tab.recents", defaultValue: "Récents", bundle: .module)
+        case .meeAndMeo:
+            return String(localized: "sticker.sheet.tab.mee-and-meo", defaultValue: "Mee & Meo", bundle: .module)
         case .custom:
             return String(localized: "sticker.sheet.tab.custom", defaultValue: "Personnalisés", bundle: .module)
         case .smileys:
@@ -118,10 +125,13 @@ public enum StickerSheetTab: String, CaseIterable, Identifiable, Sendable {
             // qui n'appartiendrait à aucun onglet serait invisible, et rien ne
             // le dirait.
             return offered.filter { $0 != .emoji && $0 != .library && !dynamicTabs.contains($0) }
-        case .favorites, .recents:
+        case .favorites, .recents, .meeAndMeo:
             return []
         }
     }
+
+    // Les onglets RENDUS ne se lisent plus ici : `StickerSheetPage.offered`
+    // (#9190) range les onglets fixes autour d'un onglet par pack installé.
 
     /// **Toute famille servie appartient à AU MOINS un onglet.**
     ///

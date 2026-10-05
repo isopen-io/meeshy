@@ -1,7 +1,10 @@
 import { describe, expect, test } from 'bun:test';
 
 import {
+  auditCallComponents,
+  auditForbiddenPermissions,
   auditManifestPermissions,
+  auditShareIntentFilters,
   formatViolations,
   REQUIRED_PERMISSIONS,
 } from './check-android-manifest.mjs';
@@ -162,5 +165,205 @@ describe('formatViolations — le message du gate NOMME chaque permission en dé
     expect(lines).toHaveLength(3);
     expect(lines[1]).toContain(INTERNET);
     expect(lines[2]).toContain(ACCESS_NETWORK_STATE);
+  });
+});
+
+describe('les permissions de l appel natif de la coque (#8049)', () => {
+  const CALL_PERMISSIONS = [
+    'android.permission.FOREGROUND_SERVICE',
+    'android.permission.FOREGROUND_SERVICE_MICROPHONE',
+    'android.permission.FOREGROUND_SERVICE_CAMERA',
+    'android.permission.USE_FULL_SCREEN_INTENT',
+    'android.permission.BLUETOOTH_CONNECT',
+    'android.permission.WAKE_LOCK',
+    'android.permission.VIBRATE',
+  ];
+
+  for (const permission of CALL_PERMISSIONS) {
+    test(`${permission} est requise : son absence est une violation nommée`, () => {
+      expect(REQUIRED_PERMISSIONS).toContain(permission);
+      expect(auditManifestPermissions({ manifest: manifestWith(othersThan(permission)) })).toEqual([
+        { permission, count: 0 },
+      ]);
+    });
+  }
+});
+
+const CALL_COMPONENTS: readonly string[] = [
+  '    <application>',
+  '        <service android:name="com.capacitorjs.plugins.pushnotifications.MessagingService" tools:node="remove" />',
+  '        <service android:name=".MeeshyMessagingService" android:exported="false">',
+  '            <intent-filter><action android:name="com.google.firebase.MESSAGING_EVENT" /></intent-filter>',
+  '        </service>',
+  '        <service android:name=".CallForegroundService" android:exported="false" android:foregroundServiceType="microphone|camera" />',
+  '        <receiver android:name=".DeclineCallReceiver" android:exported="false" />',
+  '    </application>',
+];
+
+const callComponentsWhere = (edit: (line: string) => string | null): string =>
+  manifestWith(CALL_COMPONENTS.map(edit).filter((line): line is string => line !== null));
+
+describe('auditCallComponents — la coque déclare les composants de l appel natif (#8049)', () => {
+  test('les quatre déclarations présentes → aucune violation', () => {
+    expect(auditCallComponents({ manifest: callComponentsWhere((line) => line) })).toEqual([]);
+  });
+
+  test('le service du plugin NON retiré → deux services MESSAGING_EVENT se concurrencent', () => {
+    const manifest = callComponentsWhere((line) => line.replace(' tools:node="remove"', ''));
+    expect(auditCallComponents({ manifest })).toEqual([
+      'com.capacitorjs.plugins.pushnotifications.MessagingService — non retiré (tools:node="remove") : deux services MESSAGING_EVENT se concurrencent',
+    ]);
+  });
+
+  test('le service de messagerie de la coque absent → l appel app tuée ne sonne pas', () => {
+    const manifest = manifestWith(CALL_COMPONENTS.filter((line) => !line.includes('MeeshyMessagingService')));
+    expect(auditCallComponents({ manifest })).toEqual([
+      '.MeeshyMessagingService — absent ou sans com.google.firebase.MESSAGING_EVENT',
+    ]);
+  });
+
+  test('le service au premier plan sans le type caméra → violation nommée', () => {
+    const manifest = callComponentsWhere((line) => line.replace('microphone|camera', 'microphone'));
+    expect(auditCallComponents({ manifest })).toEqual([
+      '.CallForegroundService — foregroundServiceType doit porter microphone ET camera',
+    ]);
+  });
+
+  test('le récepteur de refus exporté → n importe quelle app pourrait refuser un appel', () => {
+    const manifest = callComponentsWhere((line) =>
+      line.includes('DeclineCallReceiver') ? line.replace('"false"', '"true"') : line,
+    );
+    expect(auditCallComponents({ manifest })).toEqual(['.DeclineCallReceiver — absent ou exporté']);
+  });
+
+  test('un composant en commentaire ne compte pas', () => {
+    const manifest = callComponentsWhere((line) =>
+      line.includes('DeclineCallReceiver') ? `<!-- ${line.trim()} -->` : line,
+    );
+    expect(auditCallComponents({ manifest })).toEqual(['.DeclineCallReceiver — absent ou exporté']);
+  });
+});
+
+describe('les permissions que la coque ne DEMANDE PAS (#8242)', () => {
+  const READ_CONTACTS = 'android.permission.READ_CONTACTS';
+
+  test('le sélecteur de contacts passe par ACTION_PICK : le carnet entier n est jamais lisible', () => {
+    expect(auditForbiddenPermissions({ manifest: manifestWith(REQUIRED_PERMISSIONS.map(declaration)) })).toEqual([]);
+  });
+
+  test('READ_CONTACTS déclarée → violation qui la nomme', () => {
+    const manifest = manifestWith([...REQUIRED_PERMISSIONS.map(declaration), declaration(READ_CONTACTS)]);
+    expect(auditForbiddenPermissions({ manifest })).toEqual([READ_CONTACTS]);
+  });
+
+  test('une déclaration en commentaire ne compte pas', () => {
+    const manifest = manifestWith([`<!-- ${declaration(READ_CONTACTS).trim()} -->`]);
+    expect(auditForbiddenPermissions({ manifest })).toEqual([]);
+  });
+});
+
+describe('la galerie (#8336) écrit sans lire : aucune permission de stockage', () => {
+  const GALLERY_READS = [
+    'android.permission.READ_MEDIA_IMAGES',
+    'android.permission.READ_MEDIA_VIDEO',
+    'android.permission.READ_EXTERNAL_STORAGE',
+    'android.permission.WRITE_EXTERNAL_STORAGE',
+  ];
+
+  test('le plugin Media hors androidGalleryMode écrit dans Android/media/<appId> : le manifeste de la coque ne demande rien', () => {
+    expect(auditForbiddenPermissions({ manifest: manifestWith(REQUIRED_PERMISSIONS.map(declaration)) })).toEqual([]);
+  });
+
+  for (const permission of GALLERY_READS) {
+    test(`${permission} déclarée → violation qui la nomme (elle ouvrirait la photothèque entière)`, () => {
+      const manifest = manifestWith([...REQUIRED_PERMISSIONS.map(declaration), declaration(permission)]);
+      expect(auditForbiddenPermissions({ manifest })).toEqual([permission]);
+    });
+  }
+});
+
+/**
+ * MEESHY FIGURE DANS LA FEUILLE DE PARTAGE D'ANDROID (#8884).
+ *
+ * Une image, une vidéo ou un lien partagé depuis une autre application arrive
+ * sur la feuille d'envoi : c'est l'`<intent-filter>` SEND / SEND_MULTIPLE de
+ * l'activité principale qui inscrit l'app. Sans la catégorie DEFAULT, le
+ * système ne la propose pas — et rien ne casse, elle est simplement absente.
+ */
+const activityWith = (filters: readonly string[]): string =>
+  manifestWith([
+    '<application>',
+    '<activity android:name=".MainActivity" android:exported="true">',
+    ...filters,
+    '</activity>',
+    '</application>',
+  ]);
+
+const filter = (action: string, mimeTypes: readonly string[], category = 'android.intent.category.DEFAULT'): string =>
+  [
+    '<intent-filter>',
+    `<action android:name="android.intent.action.${action}" />`,
+    `<category android:name="${category}" />`,
+    ...mimeTypes.map((mimeType) => `<data android:mimeType="${mimeType}" />`),
+    '</intent-filter>',
+  ].join('\n');
+
+const SEND = filter('SEND', ['image/*', 'video/*', 'text/plain']);
+const SEND_MULTIPLE = filter('SEND_MULTIPLE', ['image/*', 'video/*']);
+
+describe('auditShareIntentFilters — l\'app est proposée au partage', () => {
+  test('SEND et SEND_MULTIPLE complets → aucune violation', () => {
+    expect(auditShareIntentFilters({ manifest: activityWith([SEND, SEND_MULTIPLE]) })).toEqual([]);
+  });
+
+  test('un filtre absent est nommé', () => {
+    const violations = auditShareIntentFilters({ manifest: activityWith([SEND]) });
+    expect(violations).toHaveLength(1);
+    expect(violations[0]).toContain('SEND_MULTIPLE');
+  });
+
+  test('sans la catégorie DEFAULT, le système ne propose pas l\'app', () => {
+    const violations = auditShareIntentFilters({
+      manifest: activityWith([filter('SEND', ['image/*', 'video/*', 'text/plain'], 'android.intent.category.BROWSABLE'), SEND_MULTIPLE]),
+    });
+    expect(violations).toHaveLength(1);
+    expect(violations[0]).toContain('DEFAULT');
+  });
+
+  test('un type manquant est nommé', () => {
+    const violations = auditShareIntentFilters({ manifest: activityWith([filter('SEND', ['image/*', 'text/plain']), SEND_MULTIPLE]) });
+    expect(violations).toHaveLength(1);
+    expect(violations[0]).toContain('video/*');
+  });
+
+  test('un type que le pont ne copie pas est refusé : l\'app serait proposée pour un contenu qu\'elle rejetterait', () => {
+    const violations = auditShareIntentFilters({
+      manifest: activityWith([filter('SEND', ['image/*', 'video/*', 'text/plain', '*/*']), SEND_MULTIPLE]),
+    });
+    expect(violations).toHaveLength(1);
+    expect(violations[0]).toContain('*/*');
+  });
+
+  test('un filtre en commentaire ne compte pas', () => {
+    const violations = auditShareIntentFilters({ manifest: activityWith([`<!-- ${SEND} -->`, SEND_MULTIPLE]) });
+    expect(violations).toHaveLength(1);
+    expect(violations[0]).toContain('SEND —');
+  });
+
+  test('un filtre posé sur une AUTRE activité ne compte pas', () => {
+    const manifest = manifestWith([
+      '<application>',
+      '<activity android:name=".Autre">',
+      SEND,
+      SEND_MULTIPLE,
+      '</activity>',
+      '<activity android:name=".MainActivity"></activity>',
+      '</application>',
+    ]);
+    expect(auditShareIntentFilters({ manifest })).toHaveLength(2);
+  });
+
+  test('pas d\'activité principale : violation, pas d\'exception', () => {
+    expect(auditShareIntentFilters({ manifest: manifestWith([]) })).toEqual(['.MainActivity — absente du manifeste']);
   });
 });

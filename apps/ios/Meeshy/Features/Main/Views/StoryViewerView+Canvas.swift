@@ -846,6 +846,8 @@ struct StoryCardView: View {
     /// Relayé tel quel au rail : la barre de réactions y revendique le glissé
     /// horizontal (cf. `StoryReactionStripGesture`), le drag parent y cède.
     @Binding var reactionStripOwnsDrag: Bool
+    /// Le composeur revendique le glissé vertical né sur lui (#8431).
+    @Binding var composerOwnsDrag: Bool
 
     @ObservedObject var keyboard: KeyboardObserver
 
@@ -859,6 +861,9 @@ struct StoryCardView: View {
     /// suspend l'horloge de lecture et appartient donc au parent — remonter une
     /// fenêtre de défilement ne regarde personne d'autre que cette carte.
     @State var captionScrollToTopToken: Int = 0 // internal for cross-file extension access
+    /// Repli du composeur et hauteur mesurée de son bloc (#8431).
+    @State var isComposerFolded: Bool = false // internal for cross-file extension access
+    @State var composerBlockHeight: CGFloat? // internal for cross-file extension access
     @State private var slideContentProgress: Double = 0
     /// Le pont du parcours au doigt (#7878) : la barre le pilote, le canvas de
     /// la story COURANTE s'y attache au montage.
@@ -905,12 +910,12 @@ struct StoryCardView: View {
     let goToNext: () -> Void
     let sendComment: (_ text: String, _ effectFlags: Int?, _ parentId: String?, _ pendingMedia: PendingCommentMedia?, _ place: SharedPlace?) -> Void
     let makeStoryCommentRow: (FeedComment, String) -> StoryCommentRowView
-    let toggleStoryCommentThread: (String) async -> Void
+    let toggleStoryCommentThread: @MainActor (String) async -> Void
     let makeStoryExternalShareURL: (String) -> URL?
     let deleteCurrentStory: () -> Void
     let repostAsPostDirect: () -> Void
     let dismissViewer: () -> Void
-    let reportStory: (_ storyId: String, _ reportType: String, _ reason: String?) async throws -> Void
+    let reportStory: @MainActor (_ storyId: String, _ reportType: String, _ reason: String?) async throws -> Void
     let composerBottomPadding: (GeometryProxy) -> CGFloat
 
     /// Builds the Instagram-style floating comments overlay. Conditional on
@@ -1191,9 +1196,10 @@ struct StoryCardView: View {
     /// (truth-table SDK pure, testée). Le long-press qui cache les contrôleurs
     /// agrandit ainsi le canvas pour épouser le viewport (user 2026-06-03).
     private var canvasPresentation: StoryCanvasFraming.Presentation {
-        StoryCanvasFraming.readerPresentation(
-            isFullscreenSession: isFullscreenStorySession,
-            chromeVisible: chromeVisible)
+        StorySceneFocus.presentation(
+            resting: StoryCanvasFraming.readerPresentation(isFullscreenSession: isFullscreenStorySession,
+                                                           chromeVisible: chromeVisible),
+            isComposing: isComposerEngaged)
     }
 
     /// `true` quand le canvas est étendu plein bord (`.free`) — pilote le voile,
@@ -1205,7 +1211,7 @@ struct StoryCardView: View {
     var canvasIsExpanded: Bool { canvasPresentation != .carded } // internal : idem
 
     var readerCanvasFraming: StoryCanvasFraming.Result { // internal : idem
-        StoryCanvasFraming.resolve(.init(
+        StoryCanvasFraming.resolve(StorySceneFocus.framingInput(resting: .init(
             viewport: geometry.size,
             headerInset: topInset + 72,   // barres progress (~8) + ligne auteur (~48) + gap — clairance chrome, flush sans occlusion
             bottomInset: 64,              // marge basse ÷2 (it.48) — carte plus proche du bord bas
@@ -1224,7 +1230,8 @@ struct StoryCardView: View {
             // vivent chez `StageChromeAlignment.verticalAlignment` — pas ici,
             // pour qu'une seule surface ne puisse pas les faire diverger.
             verticalAlignment: StageChromeAlignment.verticalAlignment(canvasRatio: readerCanvasRatio),
-            canvasRatio: readerCanvasRatio))
+            canvasRatio: readerCanvasRatio),
+            topInset: topInset, composerReserve: composingSceneReserve))
     }
 
     var body: some View {
@@ -1293,6 +1300,7 @@ struct StoryCardView: View {
                     .readerCard(layout: readerSceneLayout,
                                 framing: readerCanvasFraming,
                                 thumbHash: readerBackdropHash(of: outgoing))
+                    .storyCommentsReadingBlur(showCommentsOverlay)
                     .allowsHitTesting(false)
                     .accessibilityHidden(true)
             }
@@ -1402,6 +1410,7 @@ struct StoryCardView: View {
                     // Le flou est posé APRÈS l'ombre et le cadrage : il porte
                     // sur la carte telle qu'elle est rendue, coins compris, et
                     // ne déborde donc pas de son clip.
+                    .storyCommentsReadingBlur(showCommentsOverlay)
                     .animation(.spring(response: 0.42, dampingFraction: 0.84), value: canvasIsExpanded)
 
                 // Overlay loader granulaire — ThumbHash bg flouté + (spinner+%).
@@ -1445,6 +1454,7 @@ struct StoryCardView: View {
                     .readerCard(layout: readerSceneLayout,
                                 framing: readerCanvasFraming,
                                 thumbHash: readerBackdropHash(of: story))
+                    .storyCommentsReadingBlur(showCommentsOverlay)
                     .animation(.spring(response: 0.42, dampingFraction: 0.84), value: canvasIsExpanded)
                     .allowsHitTesting(false)
                     .transition(.opacity)
@@ -1479,7 +1489,7 @@ struct StoryCardView: View {
             // point d'entrée des traductions. Plus de badge flottant ici.
 
             // === Layer 5: voiles de lisibilité — ils suivent le chrome (#6701) ===
-            StoryReaderScrims(topInset: topInset, chromeVisible: chromeVisible)
+            StoryReaderScrims(topInset: topInset, chromeVisible: readerChromeShown)
 
             // === Layer 6: Gesture overlay (tap left/right, long press) ===
             StoryGestureOverlayView(
@@ -1537,7 +1547,7 @@ struct StoryCardView: View {
                     slideDuration: currentSlideDuration,
                     fallbackElapsedTime: progress > 0 ? TimeInterval(progress) * currentSlideDuration : nil
                 )
-                .allowsHitTesting(!isComposerEngaged)
+                .storyFocusFade(readerDecorationsShown)
             }
 
             // === Layer 6.6: Location badge tap targets ===
@@ -1560,7 +1570,7 @@ struct StoryCardView: View {
                 .scaleEffect(readerCanvasFraming.scale)
                 .offset(y: readerCanvasFraming.offset.height)
                 .animation(.spring(response: 0.42, dampingFraction: 0.84), value: canvasIsExpanded)
-                .allowsHitTesting(!isComposerEngaged)
+                .storyFocusFade(readerDecorationsShown)
             }
 
             // === Layer 7: Top UI (progress bars + header) — ABOVE gesture overlay for hit testing ===
@@ -1574,7 +1584,7 @@ struct StoryCardView: View {
                     onScrubStateChanged: onScrubStateChanged,
                     onSeek: seekTimer
                 )
-                    .padding(.horizontal, 12)
+                    .padding(.horizontal, MeeshySpacing.md)
                     .padding(.top, topInset + 4)
 
                 StoryHeaderView(
@@ -1597,8 +1607,7 @@ struct StoryCardView: View {
                     isFullscreenStorySession: $isFullscreenStorySession,
                     chromeVisible: $chromeVisible
                 )
-                    .padding(.horizontal, 16)
-                    .padding(.top, 10)
+                    .padding(.top, MeeshySpacing.smPlus)
 
                 // Les personnes que la story NOMME en mode NOTE, sous l'auteur.
                 //
@@ -1625,8 +1634,8 @@ struct StoryCardView: View {
                     onTapReference: { selectedProfileUser = .from(reference: $0) }
                 )
                 .equatable()
-                .padding(.horizontal, 16)
-                .padding(.top, 6)
+                .padding(.horizontal, MeeshySpacing.lg)
+                .padding(.top, MeeshySpacing.xsPlus)
 
                 Spacer()
             }
@@ -1642,8 +1651,7 @@ struct StoryCardView: View {
             // invisible lorsqu'il est positionné juste en dehors du safe area
             // (sinon un sliver pixelé peut traîner sur certaines tailles).
             .offset(y: chromeVisible ? 0 : -(topInset + 120))
-            .opacity(chromeVisible ? 1 : 0)
-            .allowsHitTesting(chromeVisible)
+            .storyFocusFade(readerChromeShown)
             .animation(.spring(response: 0.32, dampingFraction: 0.78), value: chromeVisible)
             .environment(\.colorScheme, readerChromeScheme)
 
@@ -1735,7 +1743,7 @@ struct StoryCardView: View {
                     // visibly too tight — button labels « React », « Répondre »,
                     // « Envoyer », « Son » were clipped on the right
                     // (bug user 2026-05-28 « les elements sortent du viewport »).
-                    .padding(.trailing, 16)
+                    .padding(.trailing, MeeshySpacing.lg)
             }
             .padding(.top, topReserved)
             .padding(.bottom, bottomReserved)
@@ -1758,8 +1766,7 @@ struct StoryCardView: View {
             // bord arrondi. Hit-testing désactivé en plus de l'opacité 0 pour
             // éviter qu'un tap fantôme atterrisse sur un bouton invisible.
             .offset(x: chromeVisible ? 0 : 110)
-            .opacity(chromeVisible ? 1 : 0)
-            .allowsHitTesting(chromeVisible)
+            .storyFocusFade(readerChromeShown)
             .environment(\.colorScheme, readerChromeScheme)
             // **Le rail passe AU-DESSUS du corpus déplié** (#4831).
             //
@@ -1788,6 +1795,7 @@ struct StoryCardView: View {
                     onArrived: { heartBouncePulse += 1 },
                     onFinished: { reactionFlight = nil }
                 )
+                .storyFocusFade(readerDecorationsShown)
                 // Identité PAR VOL : sans elle, une deuxième réaction envoyée
                 // dans les 750ms de la première ne fait que muter la vue déjà
                 // montée (structural identity) — `@State progress` reste à 1,
@@ -1811,105 +1819,9 @@ struct StoryCardView: View {
             // `.offset(x: totalSlideX)`, scale and rotation3D, and shifted
             // left during drag / scale / 3D transitions (bug 2026-05-28).
 
-            // Bottom area: composer + emoji panel / keyboard space
-            VStack(spacing: 0) {
-                Spacer()
-
-                // **Toujours visible** quand l'utilisateur n'est pas l'auteur
-                // de la story (un seul composer pour la story-reply ET la
-                // comment-reply — spec user 2026-05-28). Quand l'overlay
-                // commentaires est ouvert et qu'on tape « Répondre » sur un
-                // commentaire, la reply banner apparaît au-dessus de CETTE
-                // rangée de saisie via le binding `replyingToStoryComment`.
-                //
-                // **Auteur de sa propre story** : pas de composer permanent (on
-                // ne répond pas à sa propre story), MAIS il doit pouvoir
-                // répondre aux commentaires reçus. Le composer apparaît donc
-                // dès que `replyingToStoryComment` est posé (tap « Répondre »
-                // dans l'overlay), avec la reply banner, puis se referme à
-                // l'envoi (`sendComment` remet le binding à nil) ou à la
-                // fermeture de la banner (spec user 2026-06-25).
-                if !isOwnStory || replyingToStoryComment != nil {
-                    StoryComposerBarView(
-                        accentColor: currentGroup?.avatarColor ?? "6366F1",
-                        storyId: currentStory?.id,
-                        composerLanguage: $composerLanguage,
-                        commentEffects: $commentEffects,
-                        commentBlurEnabled: $commentBlurEnabled,
-                        isComposerEngaged: $isComposerEngaged,
-                        showTextEmojiPicker: $showTextEmojiPicker,
-                        hasComposerContent: $hasComposerContent,
-                        emojiToInject: $emojiToInject,
-                        composerFocusTrigger: $composerFocusTrigger,
-                        storyDrafts: $storyDrafts,
-                        replyingToStoryComment: $replyingToStoryComment,
-                        sendComment: sendComment
-                    )
-                        // Marge latérale 16pt, alignée sur le `sideInset` (16) de
-                        // la carte reader (`readerCanvasFraming`) et le
-                        // `.padding(.trailing, 16)` du sidebar — même rythme 16pt
-                        // pour les trois colonnes de chrome.
-                        // (Historique 14 → 20 → 28 : tentatives de rattraper un
-                        // bouton d'envoi rogné à droite. La cause réelle n'était
-                        // pas la courbure des coins — le composer est ~54pt au-dessus
-                        // du bas, où l'arc des coins a déjà reculé — mais le
-                        // `maxWidth: .infinity` du bloc, corrigé par le pin de
-                        // largeur sur le viewport ci-dessous.)
-                        .padding(.horizontal, 16)
-                        .simultaneousGesture(
-                            DragGesture(minimumDistance: 20, coordinateSpace: .local)
-                                .onEnded { value in
-                                    // Swipe down on composer → dismiss keyboard & disengage
-                                    if value.translation.height > 40 && abs(value.translation.width) < value.translation.height {
-                                        dismissComposer()
-                                    }
-                                }
-                        )
-
-                    // Inline emoji keyboard panel (replaces system keyboard)
-                    if showTextEmojiPicker {
-                        EmojiKeyboardPanel(
-                            style: .dark,
-                            onSelect: { emoji in
-                                emojiToInject = emoji
-                            }
-                        )
-                        .frame(height: max(keyboard.lastKnownHeight - geometry.safeAreaInsets.bottom, 260))
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                    }
-                }
-            }
-            // **CRITIQUE (hauteur)** : `maxHeight: .infinity, alignment: .bottom`
-            // force la VStack à remplir la hauteur du canvas ZStack. Sans cela, le
-            // `Spacer()` au top collapse à minLength: 0 et la VStack prend sa
-            // hauteur intrinsèque (~150pt = composer + emoji panel). Le canvas
-            // ZStack parent utilisant `alignment: .center`, une VStack courte se
-            // faisait CENTRER verticalement dans le canvas 874pt → composer
-            // apparaissait à y≈360pt au lieu de y≈760pt en bas (bug user
-            // 2026-05-28 « le composeur est rogné au lieu d'être bien aligné »).
-            //
-            // **CRITIQUE (largeur)** : `maxWidth: geometry.size.width` (et NON
-            // `.infinity`) borne la proposition de largeur du bloc au viewport réel.
-            // Le canvas UIViewRepresentable gonfle la largeur intrinsèque du ZStack
-            // parent au-delà de l'écran (~480pt vs 402pt sur iPhone 16 Pro) ; avec
-            // `.infinity` le composer remplissait ces ~480pt et son bouton d'envoi
-            // sortait à droite de l'écran (bug user 2026-06-03). Borné au viewport,
-            // le bloc se cadre sur l'écran réel et reste centré — même principe que
-            // le pin `.frame(width: geometry.size.width)` du header (L1013) et du
-            // sidebar (L1099).
-            .frame(maxWidth: geometry.size.width, maxHeight: .infinity, alignment: .bottom)
-            .padding(.bottom, composerBottomPadding(geometry))
-            .animation(.easeInOut(duration: 0.25), value: keyboard.height)
-            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showTextEmojiPicker)
-            // Glissement vers le BAS à la disparition + fondu. L'offset 240pt
-            // couvre l'ensemble composer + picker emoji + safe area inférieure
-            // pour les iPhones les plus grands ; le composant étant ancré
-            // bottom via `Spacer()`, c'est suffisant pour le sortir totalement
-            // du viewport. Hit-testing OFF en plus pour ne pas intercepter
-            // les taps même invisible.
-            .offset(y: chromeVisible ? 0 : 240)
-            .opacity(chromeVisible ? 1 : 0)
-            .allowsHitTesting(chromeVisible)
+            // Bottom area — le composeur, son repli et la mesure qui sert
+            // de sol au texte de la story (`+CanvasComposerLayer`, #8431).
+            composerLayer(geometry: geometry)
 
             // Full emoji picker — REACTIONS ONLY (sends via API)
             if showFullEmojiPicker {
@@ -2140,122 +2052,6 @@ struct StoryCardView: View {
 
     // Le badge de langue courante vit désormais dans le rail (accolé à « Abc »),
     // plus dans le canvas — voir `StoryActionSidebarView.displayedLanguageCode`.
-}
-
-// MARK: - Story Viewer Content
-
-/// Root canvas of the story viewer: opaque black base, offscreen prefetcher
-/// host, and the geometry-wrapped story card with its transform stack and
-/// lifecycle modifiers. Extracted from `StoryViewerView.viewerContent`
-/// (formerly an `AnyView`) so the whole subtree is its own type-metadata
-/// unit instead of inflating `StoryViewerView.body`'s opaque type.
-struct StoryViewerContentView: View {
-    let prefetcher: StoryReaderPrefetcher
-
-    // Card transform inputs
-    let cardScale: CGFloat
-    let cardCornerRadius: CGFloat
-    let cardOpacity: Double
-    let cardOffsetY: CGFloat
-    let totalSlideX: CGFloat
-    let slideProgress: CGFloat
-    let dragProgress: CGFloat
-
-    // Cube inter-groupes (Lot 3) : aperçu statique léger du groupe voisin
-    // rendu comme seconde face pendant le drag horizontal / le commit.
-    let neighborGroup: StoryGroup?
-    let neighborEntryStory: StoryItem?
-    let neighborDirection: Int
-    // Interlude du voisin révélé AU DOIGT (directive user 2026-07-25) —
-    // valeurs OPAQUES résolues par `StoryViewerView` (cache d'intros
-    // pré-résolues + présence + amitié) et descendues jusqu'à la face du cube.
-    // `nil` = pas encore résolu → la face reste sur son backdrop seul.
-    let neighborIntro: StoryViewModel.StoryGroupIntro?
-    let neighborPresence: UserPresence?
-    let neighborIsFriend: Bool
-
-    @Binding var isPresented: Bool
-
-    /// Builds the story card for the supplied geometry. The closure is owned by
-    /// `StoryViewerView` so the card receives the view's `@State` bindings.
-    let makeStoryCard: (GeometryProxy) -> StoryCardView
-
-    var body: some View {
-        ZStack {
-            // Opaque black base — prevents any white frame bleed
-            Color.black.ignoresSafeArea()
-
-            // === P3 wire-up : offscreen prefetcher host ===
-            PrefetcherHostView(prefetcher: prefetcher)
-                .frame(width: 1, height: 1)
-                .allowsHitTesting(false)
-                .accessibilityHidden(true)
-                .zIndex(-1000)
-
-            GeometryReader { geometry in
-                ZStack {
-                    // The story card with all transforms layered.
-                    // Pin to geometry size BEFORE applying scale/clip — the
-                    // story canvas itself (`StoryCardView`) hard-frames its
-                    // body, and we double-down here so neither the
-                    // `scaleEffect` nor any unexpected intrinsic content
-                    // size can leak beyond the viewport's actual bounds.
-                    // Vrai cube inter-groupes (Lot 3) : angle proportionnel à
-                    // la position écran, anchor sur l'arête intérieure — les
-                    // deux faces (carte sortante + aperçu voisin) tournent
-                    // autour de l'arête commune. À 90° la face est de profil :
-                    // le swap de contenu au commit y est invisible.
-                    let cubeWidth = max(geometry.size.width, 1)
-                    makeStoryCard(geometry)
-                        .frame(width: geometry.size.width, height: geometry.size.height)
-                        .scaleEffect(cardScale * (1.0 - slideProgress * 0.08))
-                        .clipShape(RoundedRectangle(cornerRadius: cardCornerRadius + slideProgress * 16, style: .continuous))
-                        .opacity(cardOpacity)
-                        .offset(x: totalSlideX, y: cardOffsetY)
-                        .rotation3DEffect(
-                            .degrees(Double(totalSlideX / cubeWidth) * 90.0),
-                            axis: (x: 0, y: 1, z: 0),
-                            anchor: totalSlideX > 0 ? .leading : .trailing,
-                            perspective: 0.5
-                        )
-                        .shadow(
-                            color: .black.opacity(dragProgress > 0.05 || slideProgress > 0.02 ? 0.5 : 0),
-                            radius: 40, y: 15
-                        )
-
-                    if let neighborGroup, neighborDirection != 0 {
-                        let incomingX = totalSlideX + (neighborDirection == 1 ? cubeWidth : -cubeWidth)
-                        NeighborGroupCubeFace(
-                            entryStory: neighborEntryStory,
-                            intro: neighborIntro,
-                            avatarURL: neighborGroup.avatarURL,
-                            avatarColor: neighborGroup.avatarColor,
-                            presence: neighborPresence,
-                            isFriend: neighborIsFriend,
-                            revealProgress: slideProgress
-                        )
-                            .frame(width: geometry.size.width, height: geometry.size.height)
-                            .clipShape(RoundedRectangle(cornerRadius: cardCornerRadius + slideProgress * 16, style: .continuous))
-                            .offset(x: incomingX, y: cardOffsetY)
-                            .rotation3DEffect(
-                                .degrees(Double(incomingX / cubeWidth) * 90.0),
-                                axis: (x: 0, y: 1, z: 0),
-                                anchor: incomingX > 0 ? .leading : .trailing,
-                                perspective: 0.5
-                            )
-                            .allowsHitTesting(false)
-                            .accessibilityHidden(true)
-                    }
-
-                    // La croix de fermeture du preview est portée par le
-                    // `StoryHeaderView` (coin haut-droit, `dismissViewer()`).
-                    // Pas de bouton ✕ additionnel en haut-gauche — une seule
-                    // croix de fermeture (directive user 2026-07-23).
-
-                }
-            }
-        }
-    }
 }
 
 // MARK: - R3 : indicateur de buffering mid-slide

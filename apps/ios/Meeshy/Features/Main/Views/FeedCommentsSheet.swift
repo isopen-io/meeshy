@@ -5,201 +5,6 @@ import UniformTypeIdentifiers
 import MeeshySDK
 import MeeshyUI
 
-// MARK: - Threaded Comment Section
-
-struct ThreadedCommentSection: View {
-    let comment: FeedComment
-    let replies: [FeedComment]
-    let isExpanded: Bool
-    let isLoadingReplies: Bool
-    let accentColor: String
-    let likedIds: Set<String>
-    let likeDelta: [String: Int]
-    let heartInFlightIds: Set<String>
-    let onReply: (FeedComment) -> Void
-    let onToggleThread: () -> Void
-    let onLikeComment: (String) -> Void
-    /// Supprime un commentaire (racine ou réponse). Le parent gère le retrait
-    /// optimiste + l'appel API. Câblé sur chaque ligne uniquement quand
-    /// l'utilisateur courant est l'auteur (`canDelete`).
-    var onDeleteComment: ((FeedComment) -> Void)? = nil
-    /// Édite un commentaire (contenu + effets visuels). Même règle
-    /// d'éligibilité que la suppression : auteur uniquement.
-    var onEditComment: ((FeedComment) -> Void)? = nil
-    /// Demande la traduction d'un commentaire vers la langue préférée du
-    /// lecteur — câblé par l'hôte (sheet / détail) vers le endpoint on-demand.
-    var onRequestTranslation: ((FeedComment) -> Void)? = nil
-    var moodEmoji: String? = nil
-    var storyState: StoryRingState = .none
-    var presenceState: PresenceState? = nil
-    var replyMoodResolver: ((String) -> String?)? = nil
-    var replyStoryResolver: ((String) -> StoryRingState)? = nil
-    var replyPresenceResolver: ((String) -> PresenceState?)? = nil
-    /// Vrai quand le serveur a d'autres pages de réponses au-delà de celles
-    /// chargées (le endpoint replies est paginé à 20). Affiche le bouton
-    /// « Voir plus de réponses » en bas du fil déplié.
-    var hasMoreReplies: Bool = false
-    var onLoadMoreReplies: (() async -> Void)? = nil
-    /// Réponse surlignée (cible d'une notification). Le tint de section reste
-    /// porté par le parent ; ici on teinte la rangée de la RÉPONSE ciblée.
-    var highlightedCommentId: String? = nil
-
-    private var theme: ThemeManager { ThemeManager.shared }
-
-    /// Renvoie un handler de suppression pour `c` SEULEMENT si l'utilisateur
-    /// courant en est l'auteur — sinon `nil` (l'item « Supprimer » disparaît).
-    private func deleteHandler(for c: FeedComment) -> (() -> Void)? {
-        guard let onDeleteComment,
-              let me = AuthManager.shared.currentUser?.id, !me.isEmpty,
-              c.authorId == me else { return nil }
-        return { onDeleteComment(c) }
-    }
-
-    /// Même éligibilité que `deleteHandler` : l'item « Modifier » n'apparaît
-    /// que sur les commentaires de l'utilisateur courant.
-    private func editHandler(for c: FeedComment) -> (() -> Void)? {
-        guard let onEditComment,
-              let me = AuthManager.shared.currentUser?.id, !me.isEmpty,
-              c.authorId == me else { return nil }
-        return { onEditComment(c) }
-    }
-
-    /// Show first 2 replies by default without requiring toggle
-    private var autoPreviewReplies: [FeedComment] {
-        Array(replies.prefix(2))
-    }
-
-    private var remainingRepliesCount: Int {
-        let loaded = replies.count
-        // Use the greater of server count or local count for accuracy
-        let total = max(comment.replies, loaded)
-        return max(0, total - autoPreviewReplies.count)
-    }
-
-    /// « Voir » n'apparaît que tant qu'il reste des réponses non révélées (au-delà
-    /// de l'auto-preview de 2). Une fois le thread déplié, il disparaît → pas de repli.
-    private var showSeeReplies: Bool {
-        !isExpanded && remainingRepliesCount > 0
-    }
-
-    var body: some View {
-        VStack(spacing: 0) {
-            CommentRowView(
-                comment: comment,
-                accentColor: accentColor,
-                isLiked: likedIds.contains(comment.id),
-                likeCount: max(0, comment.likes + (likeDelta[comment.id] ?? 0)),
-                isInFlight: heartInFlightIds.contains(comment.id),
-                onReply: { onReply(comment) },
-                onLikeComment: { onLikeComment(comment.id) },
-                onDeleteComment: deleteHandler(for: comment),
-                onEditComment: editHandler(for: comment),
-                onRequestTranslation: onRequestTranslation.map { handler in { handler(comment) } },
-                showSeeReplies: showSeeReplies,
-                onSeeReplies: { onToggleThread() },
-                moodEmoji: moodEmoji,
-                storyState: storyState,
-                presenceState: presenceState
-            )
-                .equatable()
-
-            // Auto-show first 2 replies (no toggle needed)
-            if !autoPreviewReplies.isEmpty && !isExpanded {
-                ForEach(autoPreviewReplies) { reply in
-                    CommentRowView(
-                        comment: reply,
-                        accentColor: accentColor,
-                        isReply: true,
-                        isLiked: likedIds.contains(reply.id),
-                        likeCount: max(0, reply.likes + (likeDelta[reply.id] ?? 0)),
-                        isInFlight: heartInFlightIds.contains(reply.id),
-                        onReply: { onReply(reply) },
-                        onLikeComment: { onLikeComment(reply.id) },
-                        onDeleteComment: deleteHandler(for: reply),
-                        onEditComment: editHandler(for: reply),
-                        onRequestTranslation: onRequestTranslation.map { handler in { handler(reply) } },
-                        moodEmoji: replyMoodResolver?(reply.authorId),
-                        storyState: replyStoryResolver?(reply.authorId) ?? .none,
-                        presenceState: replyPresenceResolver?(reply.authorId) ?? nil
-                    )
-                        .equatable()
-                    .padding(.leading, 36)
-                    .transition(.opacity.combined(with: .move(edge: .top)))
-                }
-            }
-
-            // Le bouton « Voir » vit désormais dans la barre d'actions du commentaire
-            // racine (`CommentRowView`, gated par `showSeeReplies`), plus ici.
-
-            // Expanded — show ALL replies
-            if isExpanded {
-                if isLoadingReplies && replies.isEmpty {
-                    HStack {
-                        Spacer()
-                        ProgressView()
-                            .scaleEffect(0.8)
-                        Spacer()
-                    }
-                    .padding(.leading, 36)
-                    .padding(.vertical, 8)
-                }
-
-                ForEach(replies) { reply in
-                    CommentRowView(
-                        comment: reply,
-                        accentColor: accentColor,
-                        isReply: true,
-                        isLiked: likedIds.contains(reply.id),
-                        likeCount: max(0, reply.likes + (likeDelta[reply.id] ?? 0)),
-                        isInFlight: heartInFlightIds.contains(reply.id),
-                        onReply: { onReply(reply) },
-                        onLikeComment: { onLikeComment(reply.id) },
-                        onDeleteComment: deleteHandler(for: reply),
-                        onEditComment: editHandler(for: reply),
-                        onRequestTranslation: onRequestTranslation.map { handler in { handler(reply) } },
-                        moodEmoji: replyMoodResolver?(reply.authorId),
-                        storyState: replyStoryResolver?(reply.authorId) ?? .none,
-                        presenceState: replyPresenceResolver?(reply.authorId) ?? nil
-                    )
-                        .equatable()
-                    .padding(.leading, 36)
-                    // Même style que le tint de section (les deux appelants) —
-                    // au niveau de la rangée pour cibler UNE réponse précise.
-                    .background(
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(Color(hex: accentColor).opacity(highlightedCommentId == reply.id ? 0.12 : 0))
-                    )
-                    .animation(.easeInOut(duration: 0.4), value: highlightedCommentId)
-                    // Ancre de scroll par RÉPONSE (le ciblage notification peut
-                    // viser une réponse, pas seulement la section parente).
-                    .id("comment-\(reply.id)")
-                    .transition(.opacity.combined(with: .move(edge: .top)))
-                }
-
-                if hasMoreReplies, let onLoadMoreReplies {
-                    Button {
-                        HapticFeedback.light()
-                        Task { await onLoadMoreReplies() }
-                    } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: "chevron.down")
-                                .font(MeeshyFont.relative(10, weight: .bold))
-                            Text(String(localized: "feed.comments.load_more_replies", defaultValue: "Voir plus de réponses", bundle: .main))
-                                .font(MeeshyFont.relative(12, weight: .semibold))
-                        }
-                        .foregroundColor(Color(hex: accentColor))
-                    }
-                    .frame(minHeight: 44)
-                    .padding(.leading, 36)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .accessibilityLabel(String(localized: "a11y.comment.load_more_replies", defaultValue: "Charger plus de réponses", bundle: .main))
-                }
-            }
-        }
-        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isExpanded)
-    }
-}
-
 // MARK: - Comments Sheet View
 
 struct CommentsSheetView: View {
@@ -210,10 +15,12 @@ struct CommentsSheetView: View {
     var targetCommentId: String? = nil
     /// Parent comment when `targetCommentId` is a reply.
     var targetParentCommentId: String? = nil
-    var onSendComment: ((String, String, String?) -> Void)? = nil
     /// Fired with the post id AFTER a comment was successfully sent — lets a host
     /// (e.g. the reels viewer) bump its own comment counter. Optional; nil = no-op.
     var onCommentSent: ((_ postId: String) -> Void)? = nil
+    /// Commentaire auquel la feuille s'ouvre EN RÉPONSE (glissé de l'aperçu du fil,
+    /// #8582) — consommé UNE fois par `beginReply` : bannière, focus, @mention.
+    let initialReplyTarget: FeedComment?
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
@@ -256,6 +63,7 @@ struct CommentsSheetView: View {
     /// réels), la feuille ne revendique rien et ne relâche rien à sa
     /// fermeture — l'ordre onDismiss/onDisappear devient indifférent.
     @State private var claimedActivePost: Bool = false
+    @State private var didConsumeInitialReplyTarget = false
     @State var repliesMap: [String: [FeedComment]] = [:]
     @State private var expandedThreads: Set<String> = []
     @State private var loadingReplies: Set<String> = []
@@ -309,15 +117,15 @@ struct CommentsSheetView: View {
         accentColor: String,
         targetCommentId: String? = nil,
         targetParentCommentId: String? = nil,
-        onSendComment: ((String, String, String?) -> Void)? = nil,
-        onCommentSent: ((_ postId: String) -> Void)? = nil
+        onCommentSent: ((_ postId: String) -> Void)? = nil,
+        initialReplyTarget: FeedComment? = nil
     ) {
         self.post = post
         self.accentColor = accentColor
         self.targetCommentId = targetCommentId
         self.targetParentCommentId = targetParentCommentId
-        self.onSendComment = onSendComment
         self.onCommentSent = onCommentSent
+        self.initialReplyTarget = initialReplyTarget
         _mentionController = StateObject(wrappedValue: MentionComposerController(
             context: .post(id: post.id)
         ))
@@ -339,27 +147,13 @@ struct CommentsSheetView: View {
         comments.filter { $0.parentId == nil }
     }
 
-    /// Computes the set of comment ids that the current user has heart-reacted to.
-    /// Mirrors `StoryViewerView.computeLikedIds(from:)` so seeding logic is testable.
-    static func computeLikedIds(from comments: [APIPostComment]) -> Set<String> {
-        Set(
-            comments
-                .filter { $0.currentUserReactions?.contains(StoryViewerView.heartEmoji) == true }
-                .map { $0.id }
-        )
-    }
-
     /// Variante pour les commentaires domaine déjà mappés (`FeedComment`). C'est
     /// celle réellement branchée dans la sheet : elle sème `likedIds` à partir de
     /// `post.comments` (et des réponses chargées) qui portent désormais
     /// `currentUserReactions` (cf. `toFeedPost` / `loadReplies`). Sans ce seeding,
     /// tout commentaire déjà liké s'affichait cœur vide à l'ouverture.
     static func computeLikedIds(from comments: [FeedComment]) -> Set<String> {
-        Set(
-            comments
-                .filter { $0.currentUserReactions?.contains(StoryViewerView.heartEmoji) == true }
-                .map { $0.id }
-        )
+        StoryViewerView.computeLikedIds(fromCachedComments: comments)
     }
 
     /// Sème (additif) `likedIds` depuis l'état serveur des commentaires fournis,
@@ -493,25 +287,25 @@ struct CommentsSheetView: View {
     /// Bandeau au-dessus du composer pendant une édition — sortie possible
     /// par la croix (le composer revient en mode création, texte effacé).
     private var editingBanner: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: MeeshySpacing.sm) {
             Image(systemName: "pencil")
-                .font(MeeshyFont.relative(12))
+                .font(MeeshyFont.relative(MeeshyIconSize.xs))
                 .foregroundColor(Color(hex: accentColor))
             Text(String(localized: "feed.comments.editing", defaultValue: "Modification du commentaire", bundle: .main))
-                .font(MeeshyFont.relative(12, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
                 .foregroundColor(theme.textSecondary)
             Spacer()
             Button {
                 cancelEditComment()
             } label: {
                 Image(systemName: "xmark.circle.fill")
-                    .font(MeeshyFont.relative(14))
+                    .font(MeeshyFont.relative(MeeshyIconSize.sm))
                     .foregroundColor(theme.textMuted)
             }
             .accessibilityLabel(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main))
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 6)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.vertical, MeeshySpacing.xsPlus)
         .background(theme.inputBackground.opacity(0.6))
         .transition(.move(edge: .bottom).combined(with: .opacity))
     }
@@ -558,13 +352,13 @@ struct CommentsSheetView: View {
     }
 
     var body: some View {
-        sheetBody
-            // Les médias de TOUS les commentaires du post (racines + réponses
-            // chargées) se feuillettent ensemble en plein écran.
-            .commentMediaGallery(topLevel: topLevelComments, replies: repliesMap)
+        let topLevel = topLevelComments   // filtré UNE fois par rendu (3 lectures avant)
+        sheetBody(topLevel)
+            // Les médias de TOUS les commentaires du post (racines + réponses chargées) se feuillettent ensemble en plein écran.
+            .commentMediaGallery(topLevel: topLevel, replies: repliesMap)
     }
 
-    private var sheetBody: some View {
+    private func sheetBody(_ topLevel: [FeedComment]) -> some View {
         NavigationStack {
             ZStack {
                 // Translucent sheet: no opaque fill on 16.4+ (the translucent
@@ -584,7 +378,7 @@ struct CommentsSheetView: View {
                     ScrollViewReader { commentsProxy in
                     ScrollView(showsIndicators: false) {
                         LazyVStack(spacing: 0) {
-                            ForEach(topLevelComments) { comment in
+                            ForEach(topLevel) { comment in
                                 ThreadedCommentSection(
                                     comment: comment,
                                     replies: repliesMap[comment.id] ?? [],
@@ -627,14 +421,14 @@ struct CommentsSheetView: View {
                                     highlightedCommentId: highlightedCommentId
                                 )
                                 .background(
-                                    RoundedRectangle(cornerRadius: 12)
+                                    RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                                         .fill(Color(hex: accentColor).opacity(highlightedCommentId == comment.id ? 0.12 : 0))
                                 )
                                 .animation(.easeInOut(duration: 0.4), value: highlightedCommentId)
                                 .id("comment-\(comment.id)")
                             }
                         }
-                        .padding(.horizontal, 16)
+                        .padding(.horizontal, MeeshySpacing.lg)
                         .padding(.bottom, 100)
                     }
                     .onAppear {
@@ -642,9 +436,10 @@ struct CommentsSheetView: View {
                             attemptScrollToTargetComment(using: commentsProxy)
                         }
                     }
-                    .adaptiveOnChange(of: topLevelComments.count) { _, _ in
+                    .adaptiveOnChange(of: topLevel.count) { _, _ in
                         attemptScrollToTargetComment(using: commentsProxy)
                     }
+                    .keepsReplyTargetInView(replyingTo?.id, proxy: commentsProxy)
                     } // ScrollViewReader
 
                     VStack(spacing: 0) {
@@ -664,7 +459,7 @@ struct CommentsSheetView: View {
                             )
                             .transition(.move(edge: .bottom).combined(with: .opacity))
                         }
-                        commentComposer
+                        commentComposer.foldableComment(isReplying: replyingTo != nil)
                     }
                     .animation(.spring(response: 0.3, dampingFraction: 0.8), value: mentionController.activeQuery != nil)
                 }
@@ -673,7 +468,7 @@ struct CommentsSheetView: View {
             .toolbar {
                 ToolbarItem(placement: .principal) {
                     Text(String(localized: "feed.comments.count", defaultValue: "\(commentCount) commentaires", bundle: .main))
-                        .font(MeeshyFont.relative(16, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .semibold))
                         .foregroundColor(theme.textPrimary)
                         .accessibilityAddTraits(.isHeader)
                 }
@@ -684,7 +479,7 @@ struct CommentsSheetView: View {
                     } label: {
                         // Figé : chrome xmark dans un cadre tap fixe 32×32 (doctrine 82i).
                         Image(systemName: "xmark")
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(.system(size: MeeshyIconSize.sm, weight: .semibold))
                             .foregroundColor(theme.textSecondary)
                             .frame(width: 32, height: 32)
                             .background(Circle().fill(theme.inputBackground))
@@ -716,6 +511,11 @@ struct CommentsSheetView: View {
             if composerText.isEmpty, let draft = CommentDraftStore.shared.load(postId: post.id) {
                 composerText = draft
             }
+            // APRÈS le brouillon : la @mention d'une réponse se pose devant lui.
+            if !didConsumeInitialReplyTarget, let initialReplyTarget {
+                didConsumeInitialReplyTarget = true
+                beginReply(to: initialReplyTarget)
+            }
         }
         .onDisappear {
             SocialSocketManager.shared.leavePostRoom(postId: post.id)
@@ -737,25 +537,7 @@ struct CommentsSheetView: View {
             // sans effectFlags, un commentaire stylé (lueur/pulse) arrivant en
             // temps réel rendait SANS ses effets dans cette feuille.
             let langs = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
-            let translated = PostDetailViewModel.resolveCommentTranslation(
-                translations: data.comment.translations,
-                originalLanguage: data.comment.originalLanguage,
-                preferredLanguages: langs
-            )
-            let feedComment = FeedComment(
-                id: data.comment.id, author: data.comment.author.name,
-                authorId: data.comment.author.id,
-                authorUsername: data.comment.author.username,
-                authorAvatarURL: data.comment.author.avatar,
-                content: data.comment.content, timestamp: data.comment.createdAt,
-                likes: data.comment.likeCount ?? 0, replies: data.comment.replyCount ?? 0,
-                parentId: parentId,
-                effectFlags: data.comment.effectFlags ?? 0,
-                originalLanguage: data.comment.originalLanguage,
-                translatedContent: translated,
-                currentUserReactions: data.comment.currentUserReactions,
-                media: (data.comment.media ?? []).map { $0.toFeedMedia() }
-            )
+            let feedComment = FeedComment(api: data.comment, preferredLanguages: langs)
             // The echoed event for OUR own just-sent comment: replace the optimistic
             // placeholder in place instead of duplicating it. Primary key: the
             // cmid echoed by the gateway matches the optimistic row id exactly.
@@ -817,25 +599,7 @@ struct CommentsSheetView: View {
                 .filter { [postId = post.id] in $0.postId == postId }
         ) { data in
             let langs = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
-            let translated = PostDetailViewModel.resolveCommentTranslation(
-                translations: data.comment.translations,
-                originalLanguage: data.comment.originalLanguage,
-                preferredLanguages: langs
-            )
-            let updated = FeedComment(
-                id: data.comment.id, author: data.comment.author.name,
-                authorId: data.comment.author.id,
-                authorUsername: data.comment.author.username,
-                authorAvatarURL: data.comment.author.avatar,
-                content: data.comment.content, timestamp: data.comment.createdAt,
-                likes: data.comment.likeCount ?? 0, replies: data.comment.replyCount ?? 0,
-                parentId: data.comment.parentId,
-                effectFlags: data.comment.effectFlags ?? 0,
-                originalLanguage: data.comment.originalLanguage,
-                translatedContent: translated,
-                currentUserReactions: data.comment.currentUserReactions,
-                media: (data.comment.media ?? []).map { $0.toFeedMedia() }
-            )
+            let updated = FeedComment(api: data.comment, preferredLanguages: langs)
             let topLevelWasLoaded = liveComments != nil
             applyCommentEdit(updated)
             persistCommentCache(
@@ -1045,20 +809,7 @@ struct CommentsSheetView: View {
 
     private func mapFetchedComments(_ data: [APIPostComment]) -> [FeedComment] {
         let langs = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
-        return data.map { c -> FeedComment in
-            let translated = PostDetailViewModel.resolveCommentTranslation(
-                translations: c.translations, originalLanguage: c.originalLanguage, preferredLanguages: langs
-            )
-            return FeedComment(
-                id: c.id, author: c.author.name, authorId: c.author.id,
-                authorAvatarURL: c.author.avatar,
-                content: c.content, timestamp: c.createdAt,
-                likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
-                parentId: c.parentId, effectFlags: c.effectFlags ?? 0,
-                originalLanguage: c.originalLanguage, translatedContent: translated,
-                currentUserReactions: c.currentUserReactions
-            )
-        }
+        return data.map { FeedComment(api: $0, preferredLanguages: langs) }
     }
 
     /// Page suivante (plus ancienne) du fil — utilisée par la chasse paginée
@@ -1297,36 +1048,20 @@ struct CommentsSheetView: View {
 
     private func mapFetchedReplies(_ data: [APIPostComment], parentId: String) -> [FeedComment] {
         let langs = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
-        return data.map { c -> FeedComment in
-            let translated = PostDetailViewModel.resolveCommentTranslation(
-                translations: c.translations, originalLanguage: c.originalLanguage,
-                preferredLanguages: langs
-            )
-            return FeedComment(
-                id: c.id, author: c.author.name, authorId: c.author.id,
-                authorUsername: c.author.username,
-                authorAvatarURL: c.author.avatar,
-                content: c.content, timestamp: c.createdAt,
-                likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
-                parentId: parentId,
-                originalLanguage: c.originalLanguage, translatedContent: translated,
-                currentUserReactions: c.currentUserReactions,
-                media: (c.media ?? []).map { $0.toFeedMedia() }
-            )
-        }
+        return data.map { FeedComment(api: $0, preferredLanguages: langs, parentId: parentId) }
     }
 
     // MARK: - Comment Reply Banner
 
     private func commentReplyBanner(_ reply: FeedComment) -> some View {
-        HStack(spacing: 8) {
+        HStack(spacing: MeeshySpacing.sm) {
             RoundedRectangle(cornerRadius: 2)
                 .fill(Color(hex: reply.authorColor))
                 .frame(width: 3, height: 36)
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(reply.author)
-                    .font(MeeshyFont.relative(12, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
                     .foregroundColor(Color(hex: reply.authorColor))
 
                 MessageTextRenderer.render(
@@ -1336,7 +1071,7 @@ struct CommentsSheetView: View {
                     mentionColor: MeeshyColors.mentionColor(isDark: isDark),
                     hashtagColor: MeeshyColors.hashtagColor(isDark: isDark),
                     accentColor: Color(hex: reply.authorColor),
-                    usesRelativeFont: true
+                    usesRelativeFont: true, trackedLinks: reply.trackedLinkMap
                 )
                     .tint(Color(hex: reply.authorColor))
                     .lineLimit(1)
@@ -1357,19 +1092,18 @@ struct CommentsSheetView: View {
                     .background(Circle().fill(isDark ? Color.white.opacity(0.1) : Color.black.opacity(0.05)))
             }
             .accessibilityLabel(String(localized: "a11y.comment.cancel_reply", defaultValue: "Annuler la réponse", bundle: .main))
-            .meeshyTapTarget(44)
+            .meeshyTapTarget(MeeshyControlSize.tapTarget)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.horizontal, MeeshySpacing.md)
+        .padding(.vertical, MeeshySpacing.sm)
         .background(
-            RoundedRectangle(cornerRadius: 14)
+            RoundedRectangle(cornerRadius: MeeshyRadius.md)
                 .fill(theme.surfaceGradient(tint: accentColor))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 14)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.md)
                         .stroke(theme.border(tint: accentColor, intensity: 0.3), lineWidth: 1)
                 )
         )
-        .padding(.horizontal, 8)
     }
 
     // MARK: - Comment Composer (UniversalComposerBar)
@@ -1447,124 +1181,19 @@ struct CommentsSheetView: View {
         .adaptiveOnChange(of: commentPhotoItems) { _, items in
             handleCommentPhotoSelection(items)
         }
-        // "Éditer" from the recent-media strip → edit BEFORE staging: only the
-        // edited output lands in the comment attachments.
-        .fullScreenCover(isPresented: Binding(
-            get: { commentRecentImageToEdit != nil },
-            set: { if !$0 { commentRecentImageToEdit = nil } }
-        )) {
-            if let image = commentRecentImageToEdit {
-                MeeshyImageEditorView(image: image, context: .post, accentColor: accentColor, onAccept: { edited in
-                    commentRecentImageToEdit = nil
-                    ingestCommentRecentMedia(.image(edited))
-                }, onCancel: {
-                    commentRecentImageToEdit = nil
-                })
-            }
-        }
-        .fullScreenCover(isPresented: Binding(
-            get: { commentRecentVideoToEdit != nil },
-            set: { if !$0 { commentRecentVideoToEdit = nil } }
-        )) {
-            if let url = commentRecentVideoToEdit {
-                MeeshyVideoEditorView(
-                    url: url,
-                    context: .post,
-                    accentColor: accentColor,
-                    onComplete: { result in
-                        commentRecentVideoToEdit = nil
-                        ingestCommentRecentMedia(.video(result.url))
-                    },
-                    onCancel: { commentRecentVideoToEdit = nil }
-                )
-            }
-        }
+        // « Éditer » sur un média récent ou sur une pièce jointe : la SCÈNE du
+        // composeur, plus les anciens éditeurs (#9127).
+        .commentRecentMediaScene(image: $commentRecentImageToEdit, video: $commentRecentVideoToEdit,
+                                 onDone: { pick in ingestCommentRecentMedia(pick) })
+        .commentSceneRetouch(attachments: $commentAttachments)
     }
 
     // MARK: - Comment Attachments Preview (custom chips with remove)
 
     private var commentAttachmentsPreview: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                if let place = commentPendingPlace {
-                    HStack(spacing: 6) {
-                        Image(systemName: "location.fill")
-                            .font(.caption)
-                            .foregroundColor(MeeshyColors.success)
-                        Text(MediaKindLabel.placeLabel(place.name))
-                            .font(.caption.weight(.medium))
-                            .lineLimit(1)
-                            .frame(maxWidth: 120)
-                        Button {
-                            HapticFeedback.light()
-                            withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
-                                commentPendingPlace = nil
-                            }
-                        } label: {
-                            Image(systemName: "xmark")
-                                .font(.caption2.weight(.bold))
-                                .foregroundColor(theme.textMuted)
-                                .frame(width: 18, height: 18)
-                                .background(Circle().fill(theme.textMuted.opacity(0.15)))
-                        }
-                        .accessibilityLabel(String(localized: "composer.a11y.removeAttachment", defaultValue: "Retirer la pièce jointe", bundle: .main))
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(
-                        Capsule()
-                            .fill(theme.inputBackground)
-                            .overlay(Capsule().stroke(theme.textMuted.opacity(0.2), lineWidth: 0.5))
-                    )
-                    .foregroundColor(theme.textPrimary)
-                }
-                ForEach(commentAttachments) { attachment in
-                    HStack(spacing: 6) {
-                        Image(systemName: commentAttachmentIcon(attachment.type))
-                            .font(.caption)
-                            .foregroundColor(Color(hex: attachment.thumbnailColor))
-                        Text(attachment.name)
-                            .font(.caption.weight(.medium))
-                            .lineLimit(1)
-                            .frame(maxWidth: 120)
-                        Button {
-                            HapticFeedback.light()
-                            withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
-                                commentAttachments.removeAll { $0.id == attachment.id }
-                            }
-                            if let url = attachment.url { try? FileManager.default.removeItem(at: url) }
-                        } label: {
-                            Image(systemName: "xmark")
-                                .font(.caption2.weight(.bold))
-                                .foregroundColor(theme.textMuted)
-                                .frame(width: 18, height: 18)
-                                .background(Circle().fill(theme.textMuted.opacity(0.15)))
-                        }
-                        .accessibilityLabel(String(localized: "composer.a11y.removeAttachment", defaultValue: "Retirer la pièce jointe", bundle: .main))
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(
-                        Capsule()
-                            .fill(theme.inputBackground)
-                            .overlay(Capsule().stroke(theme.textMuted.opacity(0.2), lineWidth: 0.5))
-                    )
-                    .foregroundColor(theme.textPrimary)
-                }
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
-        }
-    }
-
-    private func commentAttachmentIcon(_ type: ComposerAttachmentType) -> String {
-        switch type {
-        case .voice: return "mic.fill"
-        case .location: return "location.fill"
-        case .image: return "photo.fill"
-        case .file: return "doc.fill"
-        case .video: return "video.fill"
-        }
+        CommentAttachmentsTray(attachments: commentAttachments, onRemove: { id in
+            commentAttachments.removeAll { $0.id == id }
+        }, place: commentPendingPlace, onRemovePlace: { commentPendingPlace = nil })
     }
 
     // MARK: - Comment Attachment Pickers
@@ -1612,7 +1241,7 @@ struct CommentsSheetView: View {
                     ? ComposerAttachment(
                         id: "video-\(UUID().uuidString)", type: .video,
                         name: MediaKindLabel.name(.video),
-                        url: url, size: data.count, thumbnailColor: "FF6B6B")
+                        url: url, size: data.count, thumbnailColor: MeeshyColors.tileCoralHex)
                     : ComposerAttachment.image(url: url)
                 await MainActor.run { commentAttachments.append(attachment) }
             }
@@ -2024,21 +1653,6 @@ struct CommentsSheetView: View {
             liveCommentCount = previousCount
             FeedbackToastManager.shared.showError(String(localized: "feed.comments.delete_error", defaultValue: "Impossible de supprimer le commentaire", bundle: .main))
         }
-    }
-}
-
-// MARK: - Comment Row View
-
-
-// MARK: - Legacy Support
-
-struct FeedCard: View {
-    let item: FeedItem
-
-    var body: some View {
-        FeedPostCard(
-            post: FeedPost(author: item.author, content: item.content, timestamp: item.timestamp, likes: item.likes)
-        )
     }
 }
 

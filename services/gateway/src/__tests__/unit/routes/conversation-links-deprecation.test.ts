@@ -71,12 +71,12 @@ describe("GET /conversations/:conversationId/links — dit qu'elle est en sursis
     await app.close();
   });
 
-  it("l'annonce part MÊME sur un refus (403, non membre) — c'est l'ADRESSE qui est en sursis", async () => {
-    const app = await buildApp(null); // pas de ligne Participant ⇒ 403
+  it("l'annonce part MÊME sur un refus (non membre ⇒ le 404 d'une conversation inexistante, #8116) — c'est l'ADRESSE qui est en sursis", async () => {
+    const app = await buildApp(null); // pas de ligne Participant ⇒ 404
 
     const res = await getLinks(app);
 
-    expect(res.statusCode).toBe(403);
+    expect(res.statusCode).toBe(404);
     expect(res.headers['deprecation']).toMatch(/^@\d+$/);
     expect(res.headers['link']).toBe(`</api/v1/links?conversationId=${CONV_ID}>; rel="successor-version"`);
 

@@ -15,12 +15,16 @@ struct MeeshyApp: App {
     @StateObject private var deepLinkRouter = DeepLinkRouter.shared
     @StateObject private var theme = ThemeManager.shared
     @StateObject private var a11yPrefs = MeeshyAccessibilityPreferences.shared
+    /// #8089 — la célébration de l'arrivée, au-dessus de la racine connectée.
+    @StateObject private var arrivalCelebration = ArrivalCelebrationController.shared
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     /// Le splash et sa loi de vie (#6744) : il tombe dès que la session et la
     /// liste en cache sont prêtes, et à son plafond quoi que fasse le démarrage.
     @StateObject private var launchSplash = LaunchSplashController()
     @State private var hasCheckedSession = false
     @State private var activeGuestSession: GuestSession?
+    /// #9171 — le contenu d'un lien ouvert sans session, au-dessus de la connexion.
+    @StateObject private var visitorPresenter = VisitorContentPresenter.shared
     @State private var crashReportsToShow: [CrashDiagnostic] = []
     @State private var showCrashSheet = false
     @State private var hasSurfacedCrashReports = false
@@ -51,6 +55,11 @@ struct MeeshyApp: App {
         // appareil), ne crashe jamais.
         UILanguageOverride.applyIfNeeded()
 
+        // #8951 — les extensions de notification tournent dans leur propre
+        // processus : elles lisent cette langue dans le groupe d'app, et les
+        // catégories que l'AppDelegate enregistre juste après aussi.
+        UILanguageOverride.publishInterfaceLanguage()
+
         // Le mot qui me désigne dans le préfixe d'auteur d'une ligne de liste
         // (#6921). Posé APRÈS `applyIfNeeded()`, jamais avant : c'est cette
         // ligne-là qui décide dans quelle langue le catalogue va répondre, et
@@ -63,6 +72,10 @@ struct MeeshyApp: App {
         // Sortie de bêta (2026-09-14, #6482) : la préférence « Activer les
         // bêta » ne gouverne plus rien — sa clé est retirée de l'appareil.
         LentilleFeatureFlag.removeRetiredBetaPreference()
+
+        // #8365 — publier, inviter par e-mail ou créer un lien sans adresse
+        // prouvée ouvre la validation, puis la requête repart (`APIClient`).
+        EmailVerificationGate.current = EmailVerificationGateController.shared
 
         #if DEBUG
         // Filet de diagnostic dev : capture la stack des SIGSEGV que
@@ -131,7 +144,7 @@ struct MeeshyApp: App {
                                 // mêmes contacts que celles de l'app, réchauffés
                                 // de la même façon.
                                 .environment(\.mentionContactsProvider, MentionContactsAudienceBridge())
-                        } else if hasCheckedSession && !Self.onboardingPreviewReplacesLogin {
+                        } else if hasCheckedSession && !Self.onboardingPreviewReplacesLogin && !authManager.isSwitchingAccount {
                             LoginView()
                                 .safeAreaInset(edge: .top, spacing: 0) {
                                     PendingLinkNotice(isVisible: deepLinkRouter.pendingDeepLink?.opensAfterSignIn == true)
@@ -140,6 +153,17 @@ struct MeeshyApp: App {
                         }
                     }
                     .opacity(launchSplash.phase == .covering ? 0 : 1)
+                    .accessibilityHidden(arrivalCelebration.isShowing)
+
+                    // #8089 — l'adresse prouvée vient d'ouvrir la session : la
+                    // fête passe AVANT l'onboarding, qui l'attend
+                    // (`OnboardingHost`), pendant que la racine, montée
+                    // dessous, et `ArrivalPrefetcher` remplissent les caches.
+                    if authManager.isAuthenticated && arrivalCelebration.isShowing {
+                        ArrivalCelebrationView(onSkip: { arrivalCelebration.dismiss() })
+                            .transition(.opacity)
+                            .zIndex(3)
+                    }
 
                     // #4363 / #6744 — il s'efface d'abord (`fullScreenGate`
                     // coupe touches et VoiceOver), puis quitte l'arbre SANS
@@ -158,8 +182,12 @@ struct MeeshyApp: App {
                     if OnboardingPreviewLaunch.isActive {
                         OnboardingPreviewScreen().zIndex(2)
                     }
+                    if ConversationLinkCardPreviewLaunch.isActive {
+                        ConversationLinkCardPreviewScreen().zIndex(2)
+                    }
                     #endif
                 }
+                .meeshyAnimation(.easeInOut(duration: 0.35), value: arrivalCelebration.isShowing)
                 // `!isAuthenticated` protège d'un ACCIDENT — un lien traité
                 // avant la fin de `checkExistingSession`, qui échouerait un
                 // utilisateur connecté dans un flux invité. `isDeliberate`
@@ -184,7 +212,6 @@ struct MeeshyApp: App {
                                     isDeliberate: guestSession.isDeliberate
                                 )
                             },
-                            onDismiss: { dismissGuestSession() },
                             onAccountRequest: { entry in
                                 deepLinkRouter.requestAccount(entry, forShareLink: guestSession.identifier)
                                 dismissGuestSession()
@@ -192,8 +219,12 @@ struct MeeshyApp: App {
                         )
                     }
                 }
+                .visitorContentCover(
+                    presenter: visitorPresenter,
+                    isEligible: !authManager.isAuthenticated && activeGuestSession == nil && launchSplash.phase != .covering
+                )
                 .fullScreenCover(isPresented: .init(
-                    get: { shouldShowOnboarding && launchSplash.phase != .covering && activeGuestSession == nil },
+                    get: { shouldShowOnboarding && launchSplash.phase != .covering && activeGuestSession == nil && visitorPresenter.request == nil },
                     set: { _ in }
                 )) {
                     WelcomeView(hasCompletedOnboarding: $hasCompletedOnboarding)
@@ -227,25 +258,33 @@ struct MeeshyApp: App {
                         Task { await ShareComposeHandoffConsumer.shared.consumeNext(id: identifiant) }
                         return
                     }
-                    let destination = DeepLinkParser.parse(url)
-                    if case .magicLink = destination {
-                        handleAppLevelDeepLink(url)
+                    if let link = SignInLink(DeepLinkParser.parse(url)) {
+                        Task { await SignInLinkOpener.open(link) }
                         return
                     }
                     let _ = deepLinkRouter.handle(url: url)
                 }
                 .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { userActivity in
                     guard let url = userActivity.webpageURL else { return }
-                    let destination = DeepLinkParser.parse(url)
-                    if case .magicLink = destination {
-                        handleAppLevelDeepLink(url)
+                    if let link = SignInLink(DeepLinkParser.parse(url)) {
+                        Task { await SignInLinkOpener.open(link) }
                         return
                     }
                     let _ = deepLinkRouter.handle(url: url)
                 }
+                .onContinueUserActivity(CallBackRequest.startCallActivityType) { userActivity in
+                    guard CallDialReadinessSnapshot.mayQueueDial(sessionResolved: authManager.hasResolvedStoredSession, authenticated: authManager.isAuthenticated),
+                          let request = CallBackRequest(userActivity: userActivity) else { return }
+                    CallBackDialer.shared.dial(request)
+                }
                 .task {
                     ImageDownsamplingConfig.applyGlobal()
                     KeychainManager.shared.migrateToAfterFirstUnlock()
+                    #if DEBUG
+                    // Vitrine App Store (#8855) : session fictive et lien fixé AVANT la
+                    // restauration de l'environnement et de la session — voir `VitrineStage`.
+                    VitrineStage.preparer()
+                    #endif
                     MeeshyConfig.shared.restoreEnvironment()
                     // Miroir de l'environnement pour les extensions (NSE +
                     // partage), qui n'ont pas accès à MeeshyConfig. À poser
@@ -283,7 +322,17 @@ struct MeeshyApp: App {
                     await NotificationActionHandler.sweepExpiredEphemeralBanners()
                     NotificationActionHandler.shared.observeForegroundSweep()
                     launchSplash.reach(.cache)
+                    // #8674 — le cache vivant est-il bien celui du compte qui
+                    // s'ouvre ? Sans effet dans le cas nominal ; après une
+                    // bascule interrompue, il est rendu ou effacé AVANT la
+                    // première lecture.
+                    await CacheAccountBinder.shared.bind(DependencyContainer.activeAccountStoreKey()).value
                     await CacheCoordinator.shared.start()
+                    #if DEBUG
+                    // Vitrine (#8855, #8922) : le fil et les médias sont rangés AVANT que la
+                    // restauration de la session ne monte les racines qui les lisent.
+                    await VitrineStage.remplirLesCaches()
+                    #endif
                     // Touch PresenceManager early so it has subscribed to
                     // `presence:snapshot` + `user:status` + `didReconnect`
                     // BEFORE the first socket auth lands. Without this, the
@@ -543,6 +592,7 @@ struct MeeshyApp: App {
                     // principale de l'utilisateur) dès que la session cold-start
                     // est résolue, pour l'appliquer au prochain lancement.
                     UILanguageOverride.cache(from: authManager.currentUser?.systemLanguage)
+                    UILanguageOverride.refreshNotificationLanguage()
                     if authManager.isAuthenticated {
                         // P1 — prime SessionManager's `lastKnownUserId` cache
                         // on EVERY cold start with an already-restored session,
@@ -552,6 +602,13 @@ struct MeeshyApp: App {
                         // (no DM sent/received) would leave `clearSessions()`
                         // with no userId to scope its Keychain wipe against.
                         Task { await SessionManager.shared.migrateKeychainIfNeeded() }
+                        #if DEBUG
+                        // Vitrine (#8855) : les vraies bases se remplissent avant le
+                        // préchargement de la liste ; l'écran de la scène s'ouvre une fois
+                        // le voile du lancement parti.
+                        await VitrineStage.remplir()
+                        VitrineStage.ouvrir(apres: launchSplash.$phase)
+                        #endif
                         // Précharge le cache liste — SQLite read instantané,
                         // retourne `.empty` au tout premier install. C'est ce que
                         // le splash attend pour tomber : la liste se montre
@@ -631,6 +688,7 @@ struct MeeshyApp: App {
                         // incoming calls use the in-app banner (socket) instead of a
                         // VoIP push / CallKit.
                         MessageSocketManager.shared.emitAppForeground(true)
+                        ConversationViewingReporter.shared.setForeground(true)
                         Task { await AuthManager.shared.refreshCurrentUserProfile() }
                         // Only rearm the socket + backfill if we ACTUALLY backgrounded.
                         // A transient .inactive→.active (Control Center, notification
@@ -653,6 +711,7 @@ struct MeeshyApp: App {
                         // coordinator may suspend it) so incoming calls fall back to
                         // a VoIP push (CallKit) — a suspended socket can't ring.
                         MessageSocketManager.shared.emitAppForeground(false)
+                        ConversationViewingReporter.shared.setForeground(false)
                         // Delegate the whole background entry to a single
                         // coordinator guarded by a beginBackgroundTask. The
                         // coordinator owns the order (stop players → flush
@@ -787,11 +846,14 @@ struct MeeshyApp: App {
                         // IdentityKey and upload it under their own
                         // account — a hard cross-account identity leak.
                         Task { await SessionManager.shared.clearSessions() }
-                        // `reset()` purges every disk-backed store (GRDB +
-                        // media) — required because the stores are not
-                        // namespaced by userId and would otherwise expose
-                        // user A's data to user B on the next login.
-                        Task { await CacheCoordinator.shared.reset() }
+                        // #8674 — le cache n'est plus vidé ici : la sortie de
+                        // session le lie à « personne », en mettant de côté
+                        // celui d'un compte gardé et en effaçant celui d'un
+                        // compte déconnecté. Sans effet quand c'est déjà fait ;
+                        // le coordinateur est seulement démonté pour que le
+                        // `start()` suivant réarme.
+                        CacheAccountBinder.shared.bind(nil)
+                        Task { await CacheCoordinator.shared.stop() }
                         // Purge the device's VoIP registration (PushKit +
                         // keychain-backed token record) — without this, a
                         // different user logging in on this device inherits
@@ -802,7 +864,7 @@ struct MeeshyApp: App {
                         // otherwise the call is orphaned locally: the peer
                         // keeps ringing/connecting to a device that vanished
                         // without sending a hangup signal.
-                        if CallManager.shared.callState.isActive {
+                        if CallManagerHost.shared.manager?.callState.isActive == true {
                             CallManager.shared.endCall()
                         }
                         MessageSocketManager.shared.disconnect()
@@ -841,6 +903,7 @@ struct MeeshyApp: App {
                 // lancement (cf. `UILanguageOverride`).
                 .adaptiveOnChange(of: authManager.currentUser?.systemLanguage) { _, newLanguage in
                     UILanguageOverride.cache(from: newLanguage)
+                    UILanguageOverride.refreshNotificationLanguage()
                 }
             }
         }
@@ -978,15 +1041,17 @@ struct MeeshyApp: App {
         case .joinLink(let id), .chatLink(let id):
             activeGuestSession = GuestSession(identifier: id, context: AnonymousSessionStore.load(linkId: id))
             deepLinkRouter.consumePendingDeepLink()
-        case .magicLink(let token):
-            // Cold-launch Universal Link magic link. `AppDelegate
+        case .magicLink, .emailVerificationLink:
+            // Cold-launch Universal Link sign-in link. `AppDelegate
             // .application(_:continue:)` set `pendingDeepLink = .magicLink`
             // before any view mounted, and `RootView` (the warm consumer)
             // never mounts while unauthenticated — so this is the ONLY place
             // a cold-launch magic link gets validated. Consume first so the
             // `.task` + `.onChange` callers don't double-fire the request.
             deepLinkRouter.consumePendingDeepLink()
-            validateMagicLinkToken(token)
+            if let signIn = SignInLink(link) {
+                Task { await SignInLinkOpener.open(signIn) }
+            }
         case .externalLink(let url):
             // `/l/<token>` de cible EXTERNAL reçu SANS compte : `RootView` n'est
             // pas monté, donc personne d'autre ne l'ouvrirait. Le lien vise le
@@ -994,153 +1059,10 @@ struct MeeshyApp: App {
             deepLinkRouter.consumePendingDeepLink()
             UIApplication.shared.open(url)
         default:
-            break
+            // #9171 — une publication ou un réel s'affiche au visiteur, SANS
+            // consommer le lien : il s'ouvrira encore après la connexion.
+            visitorPresenter.present(link)
         }
-    }
-
-    // MARK: - App-Level Deep Link (handles magic link when not authenticated)
-
-    private func handleAppLevelDeepLink(_ url: URL) {
-        let destination = DeepLinkParser.parse(url)
-        guard case .magicLink(let token) = destination else { return }
-        validateMagicLinkToken(token)
-    }
-
-    /// Validate a passwordless magic-link token and surface the outcome.
-    /// Shared by the warm path (`.onOpenURL` / `.onContinueUserActivity` via
-    /// `handleAppLevelDeepLink`) and the cold-launch path
-    /// (`handleGuestDeepLink`) so both report success/failure identically.
-    private func validateMagicLinkToken(_ token: String) {
-        Task {
-            // P0 — a magic link tapped while ALREADY authenticated (possibly
-            // as a DIFFERENT account) must never `applySession(B)` on top of
-            // account A without a full teardown first: A's caches, sockets
-            // (still carrying A's JWT), and E2EE session keys would all leak
-            // into B's session. `applySession`'s `isTokenRotation` only
-            // special-cases the SAME user re-authenticating — a magic link
-            // for a different account is a genuine account switch, so we log
-            // out completely before validating. The cold-launch path
-            // (`handleGuestDeepLink`) already only reaches here while
-            // unauthenticated, so this is a no-op there.
-            if authManager.isAuthenticated {
-                await authManager.logout()
-            }
-            await authManager.validateMagicLink(token: token)
-
-            if authManager.isAuthenticated {
-                toastManager.showSuccess(String(localized: "magicLink.success", defaultValue: "Connexion réussie !", bundle: .main))
-            } else {
-                toastManager.showError(authManager.errorMessage ?? String(localized: "magicLink.error.invalidLink", defaultValue: "Lien invalide ou expiré", bundle: .main))
-            }
-        }
-    }
-}
-
-// MARK: - UI Language Override (Prisme Linguistique)
-
-/// Force le chrome de l'app (menus, boutons, libellés système) dans la langue
-/// principale configurée de l'utilisateur (`MeeshyUser.systemLanguage`) plutôt
-/// que la locale de l'appareil — le Prisme Linguistique appliqué au chrome :
-/// l'utilisateur consomme TOUT dans sa langue préférée.
-///
-/// Mécanisme : on écrit `AppleLanguages` dans `UserDefaults`. iOS lit cette clé
-/// UNE seule fois au démarrage du process → l'override prend effet au prochain
-/// (re)lancement (acceptable : l'app est relancée aux tests).
-///
-/// Garde-fous : on ne force JAMAIS une langue absente du catalogue traduit —
-/// sinon `String(localized:)` afficherait la source française à côté de
-/// libellés traduits, et l'écran deviendrait un panachage de deux langues.
-/// Un cache nil/vide/non-supporté ⇒ no-op total (iOS garde la locale appareil).
-/// Aucune de ces opérations ne peut crasher.
-enum UILanguageOverride {
-    /// Langues réellement traduites dans les catalogues. Toute langue hors de
-    /// cet ensemble est refusée.
-    ///
-    /// La liste est explicite plutôt que dérivée de `Bundle.main.localizations` :
-    /// une langue peut être déclarée dans le bundle bien avant d'être traduite,
-    /// et c'est la traduction — pas la déclaration — qui décide si l'affichage
-    /// tient debout. `LocalizationCatalogGuardTests` vérifie que les deux
-    /// restent d'accord, pour que cette liste ne puisse pas se périmer en
-    /// silence comme elle l'a fait pour l'allemand et le portugais.
-    ///
-    /// `it` et `ar` rejoignent la liste le 2026-07-25 : les deux catalogues
-    /// (app + SDK), l'extension de notification et les descriptions
-    /// d'autorisation y sont complets à 100 %.
-    /// `nonisolated` : une simple liste de codes, lue aussi bien depuis
-    /// `MeeshyApp.init()` que depuis les tests, hors du main actor.
-    nonisolated static let supportedUICodes: [String] = ["fr", "en", "es", "de", "pt-BR", "it", "ar"]
-
-    private static let cacheKey = "meeshy.ui.language"
-    private static let appleLanguagesKey = "AppleLanguages"
-    private static let explicitKey = "meeshy.ui.language.explicit"
-
-    /// Sentinelle « suivre la langue principale » — un choix, pas une langue.
-    nonisolated static let automaticCode = "auto"
-
-    /// Langues proposées dans les Réglages, hors sentinelle. Dérivée de ce que
-    /// l'app sait réellement afficher : la liste des choix ne peut pas
-    /// s'écarter des catalogues.
-    nonisolated static var selectableCodes: [String] { supportedUICodes }
-
-    /// Langue d'affichage retenue : le choix explicite de l'auteur s'il est
-    /// posé ET livré, sinon la langue principale du compte.
-    ///
-    /// Le repli n'est pas un détail. `AppearancePreferences.interfaceLanguage`
-    /// vaut « en » par défaut pour tout le monde : faire primer cette
-    /// préférence telle quelle aurait basculé en anglais l'interface de chaque
-    /// utilisateur qui n'y a jamais touché. Le choix explicite vit donc à part,
-    /// et son absence rend la main à la langue principale.
-    nonisolated static func resolvedCode(explicit: String?, fallback: String?) -> String? {
-        if let explicit, explicit != automaticCode, let code = normalized(explicit) {
-            return code
-        }
-        return normalized(fallback)
-    }
-
-    /// Choix explicite de langue d'interface. `nil` = automatique.
-    static var explicitChoice: String? {
-        get { UserDefaults.standard.string(forKey: explicitKey) }
-        set {
-            if let newValue, newValue != automaticCode, normalized(newValue) != nil {
-                UserDefaults.standard.set(newValue, forKey: explicitKey)
-            } else {
-                UserDefaults.standard.removeObject(forKey: explicitKey)
-            }
-        }
-    }
-
-    /// Normalise un code de langue vers un code UI supporté, ou `nil`.
-    /// - Comparaison insensible à la casse contre `supportedUICodes`.
-    /// - `pt` (ou `pt_PT`, `pt-BR`…) → `pt-BR` (seule variante portugaise traduite).
-    /// - Sinon réduit à la base 2-lettres lowercase et re-teste l'appartenance.
-    nonisolated static func normalized(_ raw: String?) -> String? {
-        guard let trimmed = raw?.trimmingCharacters(in: .whitespacesAndNewlines),
-              !trimmed.isEmpty else { return nil }
-        let lower = trimmed.lowercased()
-        if let exact = supportedUICodes.first(where: { $0.lowercased() == lower }) {
-            return exact
-        }
-        let base = lower.split(whereSeparator: { $0 == "-" || $0 == "_" })
-            .first.map(String.init) ?? lower
-        if base == "pt" { return "pt-BR" }
-        return supportedUICodes.first(where: { $0.lowercased() == base })
-    }
-
-    /// Mémorise la langue UI depuis la préférence utilisateur. No-op si la
-    /// langue n'est pas supportée (la valeur précédente / la locale appareil
-    /// reste en place).
-    static func cache(from systemLanguage: String?) {
-        guard let code = normalized(systemLanguage) else { return }
-        UserDefaults.standard.set(code, forKey: cacheKey)
-    }
-
-    /// Applique l'override au tout début du lancement (à appeler depuis
-    /// `MeeshyApp.init()`). No-op si rien n'est choisi ni mis en cache.
-    static func applyIfNeeded() {
-        guard let code = resolvedCode(explicit: explicitChoice,
-                                      fallback: UserDefaults.standard.string(forKey: cacheKey))
-        else { return }
-        UserDefaults.standard.set([code], forKey: appleLanguagesKey)
     }
 }
 

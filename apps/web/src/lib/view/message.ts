@@ -155,7 +155,7 @@ export const translationsOf = (
  * l'autre, et ne prétend RIEN sur le contenu audio : c'est une décoration
  * honnête, à remplacer le jour où le serveur sert la vraie.
  */
-export const waveformOf = (attachment: Attachment, bars = 22): readonly number[] => {
+export const waveformOf = (attachment: Pick<Attachment, 'id'>, bars = 22): readonly number[] => {
   const seed = [...attachment.id].reduce((acc, c) => (acc * 31 + c.charCodeAt(0)) % 9973, 7);
   return Array.from({ length: bars }, (_, i) => 6 + ((seed * (i + 3)) % 17));
 };

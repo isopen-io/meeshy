@@ -287,8 +287,6 @@ struct NearbyDiscoverabilityControl: View {
     /// spec ne demande rien à mémoriser d'une ouverture à l'autre.
     @State private var isExpanded = false
 
-    private var theme: ThemeManager { ThemeManager.shared }
-
     /// Le `Toggle` reçoit un binding qui passe par le geste du modèle plutôt
     /// que d'écrire le champ : la règle reste au même endroit, et aucun
     /// `.onChange` n'est nécessaire pour la faire respecter.
@@ -399,14 +397,14 @@ struct NearbyDiscoverabilityControl: View {
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 1) {
                 Text(placeName)
-                    .font(MeeshyFont.relative(13, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                     .foregroundColor(MeeshyColors.textPrimary(isDark: true))
                     .lineLimit(1)
                 if offersDiscoverability {
                     Text(choice.isDiscoverable
                          ? NearbyDiscoverabilityLabels.summaryEnabled
                          : NearbyDiscoverabilityLabels.summaryDisabled)
-                        .font(MeeshyFont.relative(11))
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
                         .foregroundColor(MeeshyColors.textMuted(isDark: true))
                         .lineLimit(1)
                 }
@@ -455,7 +453,7 @@ struct NearbyDiscoverabilityControl: View {
     @ViewBuilder
     private var discoverabilityDetail: some View {
         Text(NearbyDiscoverabilityLabels.subtitle)
-            .font(MeeshyFont.relative(11))
+            .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
             .foregroundColor(MeeshyColors.textMuted(isDark: true))
             .fixedSize(horizontal: false, vertical: true)
     }
@@ -475,7 +473,7 @@ struct NearbyDiscoverabilityControl: View {
                             .id(tier)
                     }
                 }
-                .padding(.vertical, 2)
+                .padding(.vertical, MeeshySpacing.xxs)
             }
             // Quatre puces font environ 500 pt de large ; un iPhone en
             // portrait en montre trois. La pré-sélection sans mémoire est
@@ -498,7 +496,7 @@ struct NearbyDiscoverabilityControl: View {
                     .font(MeeshyFont.relative(11, weight: .semibold))
                     .accessibilityHidden(true)
                 Text(NearbyDiscoverabilityLabels.tierTitle(tier))
-                    .font(MeeshyFont.relative(12, weight: isSelected ? .semibold : .regular))
+                    .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: isSelected ? .semibold : .regular))
                     .lineLimit(1)
             }
             .foregroundColor(isSelected ? .white : MeeshyColors.textSecondary(isDark: true))
@@ -546,11 +544,11 @@ struct NearbyDiscoverabilityControl: View {
     private func noticeLine(icon: String, text: String) -> some View {
         HStack(alignment: .top, spacing: MeeshySpacing.xs) {
             Image(systemName: icon)
-                .font(MeeshyFont.relative(10))
+                .font(MeeshyFont.relative(MeeshyIconSize.xxs))
                 .foregroundColor(MeeshyColors.textMuted(isDark: true))
                 .accessibilityHidden(true)
             Text(text)
-                .font(MeeshyFont.relative(11))
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
                 .foregroundColor(MeeshyColors.textMuted(isDark: true))
                 .fixedSize(horizontal: false, vertical: true)
         }

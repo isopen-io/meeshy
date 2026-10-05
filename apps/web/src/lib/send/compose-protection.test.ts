@@ -3,7 +3,9 @@ import { describe, expect, test } from 'bun:test';
 import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
 
 import {
+  EPHEMERAL_AFTER_READ_SECONDS,
   EPHEMERAL_DURATIONS,
+  isAfterReadChoice,
   characterCounterOf,
   composerAccentOf,
   ephemeralDurationLabelOf,
@@ -12,29 +14,28 @@ import {
   type ComposeProtection,
 } from './compose-protection';
 
-const NOW = 1_757_600_000_000;
-
 describe('protectionFieldsOf — la composition des bits (miroir messages-send.ts:240-245)', () => {
   test('aucune protection ⇒ effectFlags à 0, aucune date, tout à false', () => {
-    expect(protectionFieldsOf({}, NOW)).toEqual({ isBlurred: false, isViewOnce: false, effectFlags: 0 });
+    expect(protectionFieldsOf({})).toEqual({ isBlurred: false, isViewOnce: false, effectFlags: 0 });
   });
 
-  test('éphémère 60s ⇒ expiresAt = now + 60s, bit EPHEMERAL posé', () => {
-    const fields = protectionFieldsOf({ ephemeralSeconds: 60 }, NOW);
-    expect(fields.expiresAt).toEqual(new Date(NOW + 60_000));
+  test('éphémère 60s ⇒ la DURÉE, jamais une échéance (#8905), bit EPHEMERAL posé', () => {
+    const fields = protectionFieldsOf({ ephemeralSeconds: 60 });
+    expect(fields.ephemeralDuration).toBe(60);
+    expect('expiresAt' in fields).toBe(false);
     expect(fields.effectFlags & MESSAGE_EFFECT_FLAGS.EPHEMERAL).toBe(MESSAGE_EFFECT_FLAGS.EPHEMERAL);
     expect(fields.isBlurred).toBe(false);
   });
 
   test('flou ⇒ isBlurred true, bit BLURRED posé, pas de date', () => {
-    const fields = protectionFieldsOf({ blurred: true }, NOW);
+    const fields = protectionFieldsOf({ blurred: true });
     expect(fields.isBlurred).toBe(true);
     expect(fields.effectFlags & MESSAGE_EFFECT_FLAGS.BLURRED).toBe(MESSAGE_EFFECT_FLAGS.BLURRED);
-    expect(fields.expiresAt).toBeUndefined();
+    expect(fields.ephemeralDuration).toBeUndefined();
   });
 
   test('vue unique (loi seule, aucun contrôle ne l’arme en conversation) ⇒ isViewOnce true, bit VIEW_ONCE posé', () => {
-    const fields = protectionFieldsOf({ viewOnce: true }, NOW);
+    const fields = protectionFieldsOf({ viewOnce: true });
     expect(fields.isViewOnce).toBe(true);
     expect(fields.effectFlags & MESSAGE_EFFECT_FLAGS.VIEW_ONCE).toBe(MESSAGE_EFFECT_FLAGS.VIEW_ONCE);
   });
@@ -44,7 +45,7 @@ describe('protectionFieldsOf — la composition des bits (miroir messages-send.t
       effectFlags: MESSAGE_EFFECT_FLAGS.SHAKE | MESSAGE_EFFECT_FLAGS.GLOW,
       blurred: true,
     };
-    const fields = protectionFieldsOf(protection, NOW);
+    const fields = protectionFieldsOf(protection);
     expect(fields.effectFlags).toBe(MESSAGE_EFFECT_FLAGS.SHAKE | MESSAGE_EFFECT_FLAGS.GLOW | MESSAGE_EFFECT_FLAGS.BLURRED);
   });
 });
@@ -129,7 +130,7 @@ describe('flou et vue unique sont exclusifs (#7667)', () => {
   });
 
   test('flou ET vue unique armés ensemble ⇒ seule la vue unique part', () => {
-    const fields = protectionFieldsOf({ blurred: true, viewOnce: true, ephemeralSeconds: 60 }, NOW);
+    const fields = protectionFieldsOf({ blurred: true, viewOnce: true, ephemeralSeconds: 60 });
     expect(fields.isBlurred).toBe(false);
     expect(fields.isViewOnce).toBe(true);
     expect(fields.effectFlags & MESSAGE_EFFECT_FLAGS.BLURRED).toBe(0);
@@ -138,18 +139,63 @@ describe('flou et vue unique sont exclusifs (#7667)', () => {
   });
 });
 
-describe('EPHEMERAL_DURATIONS — les cinq durées et leurs deux libellés (CoreModels.swift:947-977)', () => {
-  test('cinq durées, dans l’ordre croissant', () => {
-    expect(EPHEMERAL_DURATIONS.map((d) => d.seconds)).toEqual([30, 60, 300, 3600, 86400]);
+describe('EPHEMERAL_DURATIONS — la flamme-œil, 15 s, puis les durées (#8304, CoreModels.swift:947-977)', () => {
+  test('la flamme-œil EN TÊTE, puis 15 s, puis les durées existantes dans l’ordre croissant', () => {
+    expect(EPHEMERAL_DURATIONS.map((d) => d.seconds)).toEqual([EPHEMERAL_AFTER_READ_SECONDS, 15, 30, 60, 300, 3600, 86400]);
+    expect(EPHEMERAL_DURATIONS[0]?.afterRead).toBe(true);
+    expect(EPHEMERAL_DURATIONS.slice(1).every((d) => d.afterRead !== true)).toBe(true);
   });
 
-  test('libellés courts et longs', () => {
-    expect(ephemeralDurationLabelOf(60)).toEqual({ seconds: 60, label: '1min', displayLabel: '1 minute' });
-    expect(ephemeralDurationLabelOf(86400)).toEqual({ seconds: 86400, label: '24h', displayLabel: '24 heures' });
+  test('libellés courts et clés de catalogue des libellés longs', () => {
+    expect(ephemeralDurationLabelOf(15)).toEqual({ seconds: 15, label: '15s', displayKey: 'composer.ephemeral.duration.15' });
+    expect(ephemeralDurationLabelOf(60)).toEqual({ seconds: 60, label: '1min', displayKey: 'composer.ephemeral.duration.60' });
+    expect(ephemeralDurationLabelOf(86400)).toEqual({ seconds: 86400, label: '24h', displayKey: 'composer.ephemeral.duration.86400' });
+  });
+
+  test('la flamme-œil n’a pas de libellé court : son pictogramme le porte', () => {
+    expect(ephemeralDurationLabelOf(EPHEMERAL_AFTER_READ_SECONDS)).toEqual({
+      seconds: EPHEMERAL_AFTER_READ_SECONDS,
+      label: '',
+      displayKey: 'composer.ephemeral.afterRead',
+      afterRead: true,
+    });
   });
 
   test('durée inconnue ⇒ undefined', () => {
     expect(ephemeralDurationLabelOf(120)).toBeUndefined();
+  });
+});
+
+describe('protectionFieldsOf — la flamme-œil (#8304, contrat #8302)', () => {
+  test('bits EPHEMERAL | EPHEMERAL_AFTER_READ, SANS aucune échéance', () => {
+    const fields = protectionFieldsOf({ ephemeralSeconds: EPHEMERAL_AFTER_READ_SECONDS });
+    expect(fields.effectFlags).toBe(MESSAGE_EFFECT_FLAGS.EPHEMERAL | MESSAGE_EFFECT_FLAGS.EPHEMERAL_AFTER_READ);
+    expect('ephemeralDuration' in fields).toBe(false);
+    expect('expiresAt' in fields).toBe(false);
+  });
+
+  test('se combine au flou sans rien perdre', () => {
+    const fields = protectionFieldsOf({ ephemeralSeconds: EPHEMERAL_AFTER_READ_SECONDS, blurred: true });
+    expect(fields.effectFlags).toBe(
+      MESSAGE_EFFECT_FLAGS.EPHEMERAL | MESSAGE_EFFECT_FLAGS.EPHEMERAL_AFTER_READ | MESSAGE_EFFECT_FLAGS.BLURRED,
+    );
+    expect(fields.isBlurred).toBe(true);
+  });
+
+  test('une durée ordinaire ne pose JAMAIS le bit après lecture', () => {
+    const fields = protectionFieldsOf({ ephemeralSeconds: 15 });
+    expect(fields.effectFlags & MESSAGE_EFFECT_FLAGS.EPHEMERAL_AFTER_READ).toBe(0);
+    expect(fields.ephemeralDuration).toBe(15);
+  });
+
+  test('la flamme-œil colore la barre comme tout éphémère', () => {
+    expect(composerAccentOf({ ephemeralSeconds: EPHEMERAL_AFTER_READ_SECONDS })).toBe('ephemeral');
+  });
+
+  test('isAfterReadChoice ne reconnaît que la flamme-œil', () => {
+    expect(isAfterReadChoice(EPHEMERAL_AFTER_READ_SECONDS)).toBe(true);
+    expect(isAfterReadChoice(15)).toBe(false);
+    expect(isAfterReadChoice(undefined)).toBe(false);
   });
 });
 

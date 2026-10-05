@@ -81,7 +81,7 @@ final class ComposerPublishMenuRuleTests: XCTestCase {
         XCTAssertEqual(try XCTUnwrap(entrees.first { $0.format == .post }).layouts, [])
     }
 
-    func test_chaqueEntree_publieEnUnSeulGeste() throws {
+    func test_chaqueEntree_seChoisitEnUnSeulGeste() throws {
         let entrees = ComposerPublishMenuRule.entries(candidates: candidats, offered: candidats,
                                                       carriesMoreThanText: true, slideCount: 2,
                                                       layoutsTravel: true)
@@ -123,6 +123,59 @@ final class ComposerPublishMenuRuleTests: XCTestCase {
         XCTAssertEqual(menu.first?.layouts, ComposerMosaicChoice.ordered)
     }
 
+    // MARK: - Le chevron CHOISIT, seule la partie principale publie (maquette plein écran, 2026-09-27)
+
+    private func menuTroisFormats(slides: Int = 2) -> [ComposerPublishMenuRule.Entry] {
+        ComposerPublishMenuRule.entries(candidates: candidats, offered: candidats,
+                                        carriesMoreThanText: true, slideCount: slides,
+                                        layoutsTravel: true)
+    }
+
+    func test_armed_sansChoix_publieLeFormatDeLaPorte() {
+        XCTAssertEqual(ComposerPublishMenuRule.armed(chosen: nil, defaultFormat: .story,
+                                                     entries: menuTroisFormats()),
+                       ComposerPublishChoice(format: .story, layout: nil))
+    }
+
+    func test_armed_retientLeChoixDuChevron_avecSonAgencement() {
+        let choix = ComposerPublishChoice(format: .post, layout: ComposerMosaicChoice.ordered[0])
+        XCTAssertEqual(ComposerPublishMenuRule.armed(chosen: choix, defaultFormat: .story,
+                                                     entries: menuTroisFormats()), choix)
+    }
+
+    func test_armed_retombeSurLaPorte_quandLeChoixNestPlusOffert() {
+        let choix = ComposerPublishChoice(format: .post, layout: ComposerMosaicChoice.ordered[0])
+        XCTAssertEqual(ComposerPublishMenuRule.armed(chosen: choix, defaultFormat: .story,
+                                                     entries: menuTroisFormats(slides: 1)),
+                       ComposerPublishChoice(format: .story, layout: nil),
+                       "Une slide retirée efface l'agencement : on ne publie pas ce que le menu n'offre plus.")
+        let grise = ComposerPublishMenuRule.entries(candidates: candidats, offered: [.story, .post],
+                                                    carriesMoreThanText: true, slideCount: 1,
+                                                    layoutsTravel: true)
+        XCTAssertEqual(ComposerPublishMenuRule.armed(chosen: ComposerPublishChoice(format: .reel, layout: nil),
+                                                     defaultFormat: .story, entries: grise),
+                       ComposerPublishChoice(format: .story, layout: nil))
+    }
+
+    func test_leChevron_choisitSansPublier_laPartiePrincipalePublieLeChoixArme() throws {
+        let fleche = compact(try XCTUnwrap(bloc("var publishButton", dans: try hostCode())))
+        XCTAssertTrue(fleche.contains("onChoose:{chooseArmedPublish($0)}"),
+                      "Le chevron RETIENT le choix ; il ne publie pas.")
+        // #8793 : retenir le choix, c'est l'ARMER et verrouiller la bascule
+        // automatique vers le réel — jamais le publier.
+        let choix = compact(try XCTUnwrap(bloc("func chooseArmedPublish(", dans: try hostCode())))
+        XCTAssertTrue(choix.contains("armedPublishChoice=choice"))
+        XCTAssertFalse(choix.contains("Publish(choice)"), "Choisir ne publie pas.")
+        XCTAssertFalse(fleche.contains("onPublish:"), "Le chevron ne publie plus.")
+        XCTAssertTrue(fleche.contains("requestSoclePublish(armedChoice)"),
+                      "Seule la partie principale publie, et elle publie ce qui est armé.")
+        // #8603 : la partie principale passe par la question « Publier en
+        // réel ? », qui retombe sur l'aiguillage hors de son seul cas.
+        let demande = compact(try XCTUnwrap(bloc("func requestSoclePublish(", dans: try hostCode())))
+        XCTAssertTrue(demande.contains("performSoclePublish(choice)"),
+                      "Hors du post à une seule vidéo, la capsule publie comme avant.")
+    }
+
     // MARK: - OÙ part la publication choisie
 
     func test_leCanalSuitLeChoix() {
@@ -141,6 +194,45 @@ final class ComposerPublishMenuRuleTests: XCTestCase {
             XCTAssertEqual(ComposerPublishMenuRule.route(surface: surface, choice: choix), attendu,
                            "\(surface) · \(choix)")
         }
+    }
+
+    // MARK: - Le texte du post armé depuis une scène part avec elle (#8473)
+
+    /// Une scène ouverte en story et armée « Post » au chevron publie par
+    /// l'ATELIER, qui lit le contenu de la slide — jamais `documentText`, où la
+    /// plaque de verre du socle écrit le texte du post. Sans report, le texte
+    /// tapé ne partait nulle part.
+    func test_unPostArmeSousLAtelier_emporteLeTexteDuPost() {
+        let texte = ComposerPublishMenuRule.atelierCarriedPostText(
+            route: .atelier, choice: .init(format: .post, layout: nil), documentText: "Bonjour à tous")
+        XCTAssertEqual(texte, "Bonjour à tous")
+    }
+
+    func test_uneStorySousLAtelier_nEmporteAucunTexteDePost() {
+        XCTAssertNil(ComposerPublishMenuRule.atelierCarriedPostText(
+            route: .atelier, choice: .init(format: .story, layout: nil), documentText: "Bonjour"))
+    }
+
+    func test_unTexteBlanc_neRemplacePasLeContenuDeLaSlide() {
+        XCTAssertNil(ComposerPublishMenuRule.atelierCarriedPostText(
+            route: .atelier, choice: .init(format: .post, layout: nil), documentText: "  \n "))
+    }
+
+    func test_leCanalDocument_porteDejaLeTexte_rienAReporter() {
+        XCTAssertNil(ComposerPublishMenuRule.atelierCarriedPostText(
+            route: .document, choice: .init(format: .post, layout: .wave), documentText: "Bonjour"))
+    }
+
+    func test_laFlecheDuSocle_reporteLeTexteDuPost_avantDePresserLAtelier() throws {
+        let code = try hostCode()
+        let envoi = try XCTUnwrap(bloc("func performSoclePublish(", dans: code),
+                                  "L'envoi du socle est introuvable — la garde ne mesurerait RIEN.")
+        let compacte = compact(envoi)
+        let report = try XCTUnwrap(compacte.range(of: "ComposerPublishMenuRule.atelierCarriedPostText("),
+                                   "Le texte du post armé depuis une scène doit partir avec elle (#8473).")
+        let presse = try XCTUnwrap(compacte.range(of: "publishTrigger.requestPublish("))
+        XCTAssertLessThan(report.lowerBound, presse.lowerBound,
+                          "Le report précède la pression de l'atelier, sinon la slide part sans le texte.")
     }
 
     func test_leDocument_portetousLesFichiers_seulementQuandChaqueObjetEstPasseParLeMeuble() {

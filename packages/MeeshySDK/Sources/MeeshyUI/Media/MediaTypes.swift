@@ -86,6 +86,15 @@ public enum ComposerMode: Equatable {
         }
     }
 
+    /// La vue unique protège un MESSAGE adressé : un commentaire, une légende
+    /// ou un post public n'ont personne à qui la brûler (#8431).
+    public var showViewOnce: Bool {
+        switch self {
+        case .message: return true
+        default: return false
+        }
+    }
+
     public var showEffectsSheet: Bool {
         switch self {
         case .message: return true

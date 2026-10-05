@@ -566,7 +566,7 @@ final class ReelsViewModel: ObservableObject {
         location: PostLocationUpdate? = nil,
         visibility: String? = nil,
         visibilityUserIds: [String]? = nil,
-        known: Set<PostEditField> = EditPostDraft.documentFields
+        known: Set<PostEditField> = EditPostDraft.documentFields, storyEffects: StoryEffects? = nil
     ) async {
         guard let idx = reels.firstIndex(where: { $0.id == postId }) else { return }
         let snapshot = reels[idx]
@@ -593,7 +593,7 @@ final class ReelsViewModel: ObservableObject {
             // champ non déclaré est OMIS, et le serveur préserve le sien.
             let updated = try await service.update(postId: postId, known: known, draft: PostEditDraft(
                 content: content, visibility: visibility, visibilityUserIds: visibilityUserIds,
-                originalLanguage: language, type: type, removeMediaIds: removeMediaIds,
+                originalLanguage: language, type: type, removeMediaIds: removeMediaIds, storyEffects: storyEffects,
                 location: location
             ))
             if let newIdx = reels.firstIndex(where: { $0.id == postId }) {

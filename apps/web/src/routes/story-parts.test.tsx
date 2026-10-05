@@ -160,3 +160,21 @@ describe('ProgressBars — le segment actif est un slider (#7879)', () => {
     expect(html).toContain('aria-label="Story 2 sur 3"');
   });
 });
+
+describe('StoryMediaLayer — le texte d’une story de texte (#9074)', () => {
+  test('ses adresses passent par /l/ quand la carte les porte, et réclament le geste', () => {
+    const html = renderToStaticMarkup(
+      <StoryMediaLayer
+        {...props}
+        mediaSrc=""
+        showsMedia={false}
+        hasMedia={false}
+        caption={{ text: 'Rendez-vous https://exemple.org/rdv', language: 'fr' }}
+        trackingLinks={[{ url: 'https://exemple.org/rdv', token: 'Rdv7' }]}
+      />,
+    );
+    expect(html).toContain('href="/l/Rdv7"');
+    expect(html).toContain('>m+Rdv7</a>');
+    expect(html).toContain('data-claims-gesture');
+  });
+});

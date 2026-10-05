@@ -2,10 +2,10 @@ import Foundation
 
 // MARK: - Ce qu'une bannière in-app AFFICHE
 
-/// Les cinq pièces d'une bannière in-app — la notification qui descend du haut
+/// Les quatre pièces d'une bannière in-app — la notification qui descend du haut
 /// de l'écran puis s'efface.
 ///
-/// Elle en a besoin de cinq et pas de trois parce qu'une bannière doit dire
+/// Elle en a besoin de quatre et pas de deux parce qu'une bannière doit dire
 /// **CE QUI vient d'arriver**, pas seulement qui l'a fait et ce qu'il a écrit.
 /// Un commentaire sur un réel, une réaction à une story et la publication d'une
 /// humeur se ressemblaient toutes trois — « Alice » / « super ! » — et rien ne
@@ -17,11 +17,17 @@ import Foundation
 /// |---|---|---|
 /// | commentaire de contenu | X a commenté une story / un réel / un post | vignette + commentaire |
 /// | nouvelle publication | X a publié un réel / une humeur / un post / une story | vignette + contenu |
-/// | message privé | X | message |
+/// | message privé | X | message (aucune case sauf vraie vignette — #8897) |
 /// | message de groupe | X dans « nom local du groupe » | message / média / indicateur de protection |
 /// | relation acceptée | X a accepté votre demande | — |
 /// | demande de relation | X veut se connecter | — |
-/// | réaction à un contenu | X a réagi à votre story / humeur / post / réel / commentaire | vignette + réaction |
+/// | réaction à un contenu | X a réagi 🔥 à votre story / humeur / post / réel / commentaire | vignette + contenu visé |
+///
+/// **L'émoji d'une réaction n'est dit qu'une fois, par la phrase SERVIE** (#9049).
+/// La passerelle est le seul site qui compose « a réagi ❤️ à votre message : « … » » ;
+/// la bannière la rend telle quelle et n'y ajoute aucun émoji de son cru — la
+/// pastille qu'elle posait devant le corps faisait lire « ❤️  a réagi ❤️ … ».
+/// Même règle que le web, dont la bannière n'a jamais eu de pastille.
 public struct NotificationBannerPresentation: Equatable, Sendable {
     /// Ligne 1 : QUI, et QUOI. Jamais vide.
     public let headline: String
@@ -29,27 +35,28 @@ public struct NotificationBannerPresentation: Equatable, Sendable {
     /// visé. `nil` quand la headline se suffit (demande de relation, contenu
     /// sans texte dont le serveur retombe sur la phrase d'action).
     public let body: String?
-    /// La réaction, rendue COMME une réaction et non noyée dans une phrase.
-    /// `nil` quand la headline la porte déjà — le serveur l'y fusionne
-    /// (« a réagi 🔥 à votre story ») et la répéter serait du bruit.
-    public let reactionBadge: String?
-    /// Vignette du contenu visé (miniature du post / de la story / du réel, ou
-    /// la photo du message). `nil` ⇒ la bannière pose `contentSymbol`.
+    /// Vignette du contenu visé (miniature du post / de la story / du réel, la
+    /// photo du message, la vignette d'une vidéo, l'image d'aperçu d'un lien).
     public let thumbnailURL: String?
-    /// Icône typée du contenu visé (SF Symbol), toujours résolue : c'est ce qui
-    /// tient la place de la vignette quand il n'y en a pas.
-    public let contentSymbol: String
+    /// Icône du CONTENU SOCIAL visé (story, réel, humeur, statut, publication),
+    /// posée quand sa miniature manque. `nil` pour tout le reste (#8897) : la
+    /// pastille de l'avatar dit déjà le type, et le corps servi porte déjà son
+    /// emoji (« 🎵 Audio · 0:32 », « 📍 Tour Eiffel ») — une case-symbole de
+    /// plus disait la même chose une deuxième, voire une troisième fois.
+    public let contentSymbol: String?
+
+    /// La case devant le corps n'existe que pour une vraie vignette ou un
+    /// contenu social — la règle du web (`ContentTile`).
+    public var showsContentTile: Bool { thumbnailURL != nil || contentSymbol != nil }
 
     public init(
         headline: String,
         body: String?,
-        reactionBadge: String?,
         thumbnailURL: String?,
-        contentSymbol: String
+        contentSymbol: String?
     ) {
         self.headline = headline
         self.body = body
-        self.reactionBadge = reactionBadge
         self.thumbnailURL = thumbnailURL
         self.contentSymbol = contentSymbol
     }
@@ -83,7 +90,8 @@ public extension SocketNotificationEvent {
              .messageReaction, .reaction, .legacyMessageReaction:
             return .conversation
         case .friendRequest, .contactRequest, .legacyFriendRequest,
-             .friendAccepted, .contactAccepted, .legacyFriendAccepted:
+             .friendAccepted, .contactAccepted, .legacyFriendAccepted,
+             .contactJoined:
             return .relation
         default:
             return .action
@@ -100,7 +108,6 @@ public extension SocketNotificationEvent {
         NotificationBannerPresentation(
             headline: bannerHeadline(groupName: groupName),
             body: bannerBody,
-            reactionBadge: bannerReactionBadge,
             thumbnailURL: bannerThumbnailURL,
             contentSymbol: bannerContentSymbol
         )
@@ -130,7 +137,9 @@ public extension SocketNotificationEvent {
             // pas. `subtitle` est la phrase d'action localisée. Leur somme EST
             // le titre riche que le serveur persiste — on ne le réécrit pas ici.
             let head = nonBlank(title) ?? actor
-            guard let action = nonBlank(subtitle) else { return head }
+            // Un titre serveur qui PORTE déjà l'action (« Marie était sur
+            // Meeshy récemment ») ne la reçoit pas une seconde fois.
+            guard let action = nonBlank(subtitle), !head.hasSuffix(action) else { return head }
             return "\(head) \(action)"
         }
     }
@@ -145,13 +154,21 @@ public extension SocketNotificationEvent {
             return nil
 
         case .conversation:
-            if let label = attachmentLabel {
-                if let preview = nonBlank(messagePreview) ?? nonBlank(content) {
-                    return "\(label) \u{2022} \(preview)"
-                }
-                return label
+            // L'aperçu SERVI est le seul site de composition (#8723) : la
+            // passerelle y met déjà le libellé détaillé du média quand le
+            // message n'a pas de texte (`buildMessageNotificationBodyI18n` →
+            // « 🎵 Audio · 0:32 · 193 Ko »). Le préfixer ici du libellé client
+            // disait « 🎵 Audio • 🎵 Audio · 0:32 · 193 Ko ». Quand il y a un
+            // texte, la pastille de l'avatar dit déjà « message » et la
+            // vignette, quand il y en a une, montre le média (#8897). Le libellé client ne sert que si le serveur n'a rien servi.
+            let served = nonBlank(messagePreview) ?? nonBlank(content)
+            // #8858 — une position, une carte de visite, une invitation ou un
+            // lien n'ont pas de texte à dire : leur DÉTAIL le dit. Un corps que
+            // la passerelle a déjà composé est gardé tel quel.
+            if let detail = messageDetail {
+                return detail.resolvedBody(served: served, labels: Self.bannerDetailLabels)
             }
-            return nonBlank(messagePreview) ?? nonBlank(content)
+            return served ?? attachmentLabel
 
         case .action:
             // Le serveur garantit que la LIGNE DE LISTE n'est jamais vide : à
@@ -165,38 +182,11 @@ public extension SocketNotificationEvent {
         }
     }
 
-    // MARK: Réaction
-
-    var bannerReactionBadge: String? {
-        guard isReactionBanner, let emoji = nonBlank(reactionEmoji) else { return nil }
-        // Le serveur fusionne déjà l'émoji dans la phrase d'action
-        // (« a réagi 🔥 à votre story ») : le rendre une seconde fois en pastille
-        // ferait dire deux fois la même chose à deux endroits de la même carte.
-        if let action = nonBlank(subtitle), action.contains(emoji) { return nil }
-        return emoji
-    }
-
-    private var isReactionBanner: Bool {
-        switch notificationType {
-        case .messageReaction, .reaction, .legacyMessageReaction,
-             .postLike, .legacyPostLike, .storyReaction, .statusReaction,
-             .commentLike, .commentReaction:
-            return true
-        default:
-            return false
-        }
-    }
-
-    /// L'émoji de réaction, sous ses DEUX noms de fil : les éventails sur
-    /// contenu l'écrivent en `emoji`, ceux sur message en `reactionEmoji`.
-    var reactionEmoji: String? {
-        nonBlank(metadata?.emoji) ?? nonBlank(metadata?.reactionEmoji)
-    }
-
     // MARK: Vignette & icône
 
     var bannerThumbnailURL: String? {
         if let thumb = nonBlank(metadata?.postThumbnailUrl) { return thumb }
+        if let detailThumb = detailThumbnailURL { return detailThumb }
         // Message : la photo du 1er attachment. Elle est ABSENTE du fil quand le
         // message est protégé (éphémère / vue unique / flouté / chiffré) — la
         // passerelle la retient en bloc (cycle 125). Rien à re-garder ici, mais
@@ -216,22 +206,54 @@ public extension SocketNotificationEvent {
         }
     }
 
-    /// L'icône dit l'ENTITÉ visée quand on la connaît (story / réel / humeur /
-    /// publication), le MÉDIA sinon, et à défaut l'action.
-    var bannerContentSymbol: String {
-        switch metadata?.mediaType?.lowercased() {
-        case "image": return "photo.fill"
-        case "video": return "play.rectangle.fill"
-        case "audio": return "waveform"
-        default: break
-        }
+    /// L'icône du contenu SOCIAL visé, et rien d'autre (#8897). Ni le média
+    /// d'un message (le corps servi le nomme), ni son détail (position, contact,
+    /// invitation, lien : `summary` le nomme), ni le type de la notification
+    /// (la pastille de l'avatar le porte).
+    var bannerContentSymbol: String? {
+        guard bannerFraming == .action else { return nil }
         switch postType?.uppercased() {
         case "STORY": return "circle.dashed.inset.filled"
         case "REEL": return "play.rectangle.fill"
         case "MOOD", "STATUS": return "face.smiling.fill"
         case "POST": return "square.text.square.fill"
-        default: return notificationType.systemIcon
+        default: return nil
         }
+    }
+
+    // MARK: Détail du message (#8858)
+
+    /// Position, carte de visite, invitation ou lien. **Jamais pour un message
+    /// qui DÉCLARE une protection** : la passerelle retient déjà ces clés
+    /// derrière `mediaMayTravel`, et un `notificationLocKey` posé est le second
+    /// verrou — sa présence est une déclaration, jamais un indice.
+    var messageDetail: NotificationMessageDetail? {
+        guard !declaresProtection else { return nil }
+        return NotificationMessageDetail(lookup: { detailFields[$0] })
+    }
+
+    private var declaresProtection: Bool {
+        nonBlank(detailFields["notificationLocKey"]) != nil
+    }
+
+    /// La vignette d'une VIDÉO (`thumbnailUrl`, jamais le fichier) ou l'image
+    /// d'aperçu d'un LIEN, quand le serveur la connaît déjà.
+    private var detailThumbnailURL: String? {
+        guard !declaresProtection else { return nil }
+        let mime = context?.firstAttachmentMimeType?.lowercased() ?? ""
+        let isVideo = mime.hasPrefix("video/") || metadata?.attachments?.firstType == "video"
+        if isVideo, let thumb = nonBlank(detailFields["thumbnailUrl"]) { return thumb }
+        if case .link(let link) = messageDetail { return nonBlank(link.imageURL) }
+        return nil
+    }
+
+    static var bannerDetailLabels: NotificationMessageDetail.Labels {
+        NotificationMessageDetail.Labels(
+            sharedLocation: String(localized: "notification.detail.sharedLocation",
+                                   defaultValue: "Position partagée", bundle: .main),
+            invitation: String(localized: "notification.detail.invitation",
+                               defaultValue: "Invitation", bundle: .main)
+        )
     }
 
     // MARK: - Helper

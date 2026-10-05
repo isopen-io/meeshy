@@ -6,27 +6,34 @@ import { StoryRail } from '@/components/story-rail';
 import { Glyph } from '@/components/glyph';
 import { LensRow, ROW_HEIGHT } from '@/components/lens-row';
 import { LensPaginationFooter } from '@/components/lens-pagination-footer';
-import { LensSection } from '@/components/lens-sticker';
+import { LensSection, type LensSectionFold } from '@/components/lens-sticker';
 import { LensSkeletonRows } from '@/components/lens-skeleton';
 import { PullIndicator } from '@/components/pull-indicator';
 import { useScene } from '@/lib/lens/scene';
 import { PINNED_RAIL_RELEASE_RATIO, PINNED_RAIL_REVEAL_RATIO } from '@/lib/lens/pinned-rail';
 import { loadMoreRootMargin, paginationStateOf, showsAllLoadedHint } from '@/lib/lens/pagination';
+import { apiConfig } from '@/lib/api/config';
 import { apiDeps } from '@/lib/api/deps';
 import { PAGE_SIZE } from '@/lib/api/conversations';
 import { refreshListAction, rowAction, useConversations } from '@/lib/api/query';
 import type { Conversation } from '@/lib/api/types';
 import { sessionStore } from '@/lib/api/session';
 import { useTypistNames } from '@/lib/api/use-typists';
+import { useAuthorMoods } from '@/lib/view/use-author-moods';
+import { peerHereIn, peerKeyIn, useActiveHerePeers, useFocusedHerePeers, useHerePeers } from '@/lib/view/use-conversation-viewing';
+import { effectiveEngagementOf } from '@/lib/api/conversation-engagement';
+import { useLiveEngagements } from '@/lib/view/use-conversation-engagement';
 import { resolveViewer } from '@/lib/api/viewer';
 import { conversationStore, effectiveFlagsOf, effectiveUnreadOf } from '@/lib/conversation-store';
 import { applyFilter, emptinessOf, FILTER_LABELS, LIST_FILTERS, orderConversations, type ListFilter } from '@/lib/lens/filters';
 import { memoriserLienParLecteur, partagerInvitationParrainee, retourInvitationParrainee } from '@/lib/view/invitation';
 import { useStoryRailProps } from '@/lib/view/use-story-rail';
 import { QuickActions, type QuickAction } from '@/components/quick-actions';
-import { resolveLensSections } from '@/lib/lens/sections';
+import { foldedSectionUnread, isLensSectionFoldable } from '@/lib/lens/folded-unread';
+import { resolveLensSections, type LensSection as ResolvedLensSection, type LensSectionId } from '@/lib/lens/sections';
 import { useOnline } from '@/lib/net/online';
 import { navigate } from '@/lib/router';
+import { webOriginOf } from '@/lib/links/web-origin';
 import { useLoadMoreSentinel } from '@/lib/view/use-load-more-sentinel';
 import { useOutOfView } from '@/lib/view/use-out-of-view';
 import { useScrollportMemory } from '@/lib/view/use-scrollport-memory';
@@ -130,7 +137,7 @@ function ListError({ online, onRetry }: { readonly online: boolean; readonly onR
       <button
         type="button"
         onClick={onRetry}
-        className="grid place-items-center rounded-chip px-5 text-body font-semibold text-white"
+        className="grid place-items-center rounded-chip px-5 text-body font-semibold text-ios-on-brand"
         style={{ backgroundColor: 'var(--color-ios-brand)', minHeight: 44 }}
       >
         Réessayer
@@ -148,7 +155,7 @@ function ListError({ online, onRetry }: { readonly online: boolean; readonly onR
  */
 const lienDeParrainage = memoriserLienParLecteur(async () => {
   const { loadShareableReferralLink } = await import('@/lib/api/referral-link');
-  const result = await loadShareableReferralLink({ origin: window.location.origin, now: new Date(), deps: apiDeps });
+  const result = await loadShareableReferralLink({ origin: webOriginOf(apiConfig.base, window.location.origin), now: new Date(), deps: apiDeps });
   return result.ok ? result.data : null;
 });
 
@@ -344,6 +351,15 @@ export default function ConversationsScreen() {
    * change se re-rend.
    */
   const typists = useTypistNames(viewer.id ?? '');
+  /** Les pairs qui ont leur conversation OUVERTE (#8892) — même distribution que `typists`. */
+  const herePeers = useHerePeers(viewer.id ?? '');
+  /** … et ceux qui y regardent, écoutent ou agissent (#9061). */
+  const activePeers = useActiveHerePeers(viewer.id ?? '');
+  /** … et ceux qui y regardent en plein écran (#9065). */
+  const focusedPeers = useFocusedHerePeers(viewer.id ?? '');
+  /** … et le mood de chaque pair de direct, du corpus déjà chargé par le rail (#9065). */
+  const moodOf = useAuthorMoods(viewer);
+  const liveEngagements = useLiveEngagements();
   /**
    * LE CORPUS DU RAIL — une seule prop, partagée par les DEUX géographies
    * (grande et épinglée) pour qu'elles ne puissent PAS diverger.
@@ -396,6 +412,27 @@ export default function ConversationsScreen() {
     // volontaire — elle y est la clé qui fait ré-évaluer `new Date()`.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversations, filter, search, viewer.id, overrides, timeZone, minute]);
+
+  /**
+   * LE PLIAGE DES SECTIONS (#8694) — l'état de l'ÉCRAN, comme `expandedSections`
+   * iOS pour `pinned` (jamais persisté là-bas non plus). Repliée, une section
+   * porte le compte de non-lus de ses conversations, lu sur la même source que
+   * les pastilles des rangées (`effectiveUnreadOf`) : un message reçu ou lu le
+   * fait bouger sans déplier.
+   */
+  const [folded, setFolded] = useState<ReadonlySet<LensSectionId>>(() => new Set());
+  const toggleFold = useCallback((id: LensSectionId) => {
+    setFolded((current) => (current.has(id) ? new Set([...current].filter((other) => other !== id)) : new Set([...current, id])));
+  }, []);
+  const foldOf = (section: ResolvedLensSection): LensSectionFold | undefined => {
+    if (!isLensSectionFoldable(section.id)) return undefined;
+    const isFolded = folded.has(section.id);
+    return {
+      folded: isFolded,
+      unread: foldedSectionUnread({ unreadCounts: section.conversations.map((c) => effectiveUnreadOf(c, overrides)), folded: isFolded }),
+      onToggle: () => toggleFold(section.id),
+    };
+  };
 
   /**
    * LA SENTINELLE DE DÉFILEMENT INFINI (#6195) — déclarée APRÈS `visible`
@@ -516,7 +553,7 @@ export default function ConversationsScreen() {
                       className="rounded-chip px-3 py-1.5 text-title font-medium whitespace-nowrap transition-colors"
                       style={
                         active
-                          ? { backgroundColor: 'var(--color-ios-brand)', color: 'white' }
+                          ? { backgroundColor: 'var(--color-ios-brand)', color: 'var(--color-ios-on-brand)' }
                           : {
                               backgroundColor: 'var(--color-ios-card)',
                               color: 'var(--color-ios-ink-2)',
@@ -558,8 +595,10 @@ export default function ConversationsScreen() {
           en-tête par le suivant au lieu de les empiler tous en haut (revue
           #5694 ; voir le doc-comment de `LensSticker`).
         */}
-        {sections.map((section) => (
-          <LensSection key={section.id} id={section.id}>
+        {sections.map((section) => {
+          const fold = foldOf(section);
+          return (
+          <LensSection key={section.id} id={section.id} {...(fold === undefined ? {} : { fold })}>
             {section.conversations.map((c) => (
               <LensRow
                 key={c.id}
@@ -570,6 +609,11 @@ export default function ConversationsScreen() {
                 unreadCount={effectiveUnreadOf(c, overrides)}
                 onRowAction={rowAction}
                 typists={typists[c.id]}
+                peerHere={peerHereIn(herePeers, c, viewer.id ?? '')}
+                peerActive={peerHereIn(activePeers, c, viewer.id ?? '')}
+                peerFocused={peerHereIn(focusedPeers, c, viewer.id ?? '')}
+                peerMood={moodOf(peerKeyIn(c, viewer.id ?? ''))}
+                engagement={effectiveEngagementOf({ byConversation: liveEngagements }, c)}
                 status={{
                   /**
                    * L'APLATISSEMENT AU REPOS (#5694, écart 2) —
@@ -593,7 +637,8 @@ export default function ConversationsScreen() {
               />
             ))}
           </LensSection>
-        ))}
+          );
+        })}
         {/*
           LE PIED DE PAGINATION (#6195) — APRÈS les sections, AVANT les états
           vides (miroir iOS `ConversationListView.swift:1851` →
@@ -674,7 +719,7 @@ export default function ConversationsScreen() {
                 setSearch('');
                 setFilter('all');
               }}
-              className="rounded-chip px-5 text-body font-semibold text-white"
+              className="rounded-chip px-5 text-body font-semibold text-ios-on-brand"
               style={{ backgroundColor: 'var(--color-ios-brand)', minHeight: 44 }}
             >
               Tout afficher
@@ -771,7 +816,7 @@ export default function ConversationsScreen() {
             onChange={(e) => setSearch(e.currentTarget.value)}
             placeholder="Rechercher…"
             aria-label="Rechercher une conversation"
-            className="min-w-0 flex-1 bg-transparent text-bubble outline-none placeholder:text-ios-ink-3"
+            className="w-0 min-w-0 flex-1 bg-transparent text-input outline-none placeholder:text-ios-ink-3"
           />
           {search ? (
             <button type="button" onClick={() => setSearch('')} className="grid size-6 place-items-center">

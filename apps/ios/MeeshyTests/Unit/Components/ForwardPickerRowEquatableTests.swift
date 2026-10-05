@@ -18,7 +18,6 @@ final class ForwardPickerRowEquatableTests: XCTestCase {
     private func row(
         id: String = "6a0000000000000000000001",
         name: String = "Équipe produit",
-        memberCount: Int = 3,
         moodEmoji: String? = nil,
         accentHex: String = "#6366F1",
         isDark: Bool = false,
@@ -30,10 +29,8 @@ final class ForwardPickerRowEquatableTests: XCTestCase {
             id: id,
             name: name,
             typeLabel: "group",
-            memberCount: memberCount,
             avatarURL: nil,
             avatarAccentHex: "#4338CA",
-            favoriteEmoji: nil,
             moodEmoji: moodEmoji,
             accentHex: accentHex,
             isDark: isDark,
@@ -71,7 +68,6 @@ final class ForwardPickerRowEquatableTests: XCTestCase {
     func test_row_differs_whenDisplayedValuesChange() {
         XCTAssertNotEqual(row(id: "6a0000000000000000000001"), row(id: "6a0000000000000000000002"))
         XCTAssertNotEqual(row(name: "Alice"), row(name: "Bob"))
-        XCTAssertNotEqual(row(memberCount: 3), row(memberCount: 4))
         XCTAssertNotEqual(row(moodEmoji: nil), row(moodEmoji: "🎉"))
         XCTAssertNotEqual(row(accentHex: "#6366F1"), row(accentHex: "#4338CA"))
     }

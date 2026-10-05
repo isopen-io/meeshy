@@ -223,6 +223,9 @@ const PROGRESSION = [
   'share-network',
   'user-plus',
   'handshake',
+  // Les gestes COMPTÉS du barème (#8906) : une réaction, une pièce jointe.
+  'heart',
+  'paperclip',
 ];
 
 function extract(ids) {
@@ -310,6 +313,10 @@ emit({
  * glyphe que `AUTH`/`THREAD_STATES` (composeur, avatar), un jeu D'ÉCRAN
  * distinct parce que ce menu et le fil des messages ne se chargent jamais
  * ensemble.
+ *
+ * `image-square` — « Exporter en image » : le message (et sa citation) peint
+ * en carte PNG, enregistrée dans la galerie. `lightning` — « Export rapide »,
+ * la même carte dans le format par défaut, sans passer par les options.
  */
 const THREAD_MENU = [
   'check-circle',
@@ -321,6 +328,8 @@ const THREAD_MENU = [
   'star',
   'star-fill',
   'pencil-simple',
+  'image-square',
+  'lightning',
 ];
 
 emit({
@@ -382,13 +391,12 @@ emit({
  * socle ni dans le chunk du fil : la barre d'enregistrement n'entre qu'au
  * premier tap sur le micro ou le "+".
  */
-const COMPOSER = ['stop', 'camera', 'map-pin', 'sticker', 'clipboard-text', 'image-square', 'x'];
+const COMPOSER = ['stop', 'camera', 'map-pin', 'sticker', 'clipboard-text', 'image-square', 'x', 'user-circle', 'video-camera'];
 
-/* AVERTISSEMENT (#7280) — `glyphs-feed.ts` porte un `mapPin` AJOUTÉ À LA MAIN
-   (#6901), que ce script ne connaît pas : le relancer le SUPPRIME. Avant de
-   committer une regeneration, verifier `git diff src/components/glyphs-*.ts`
-   et ne garder que les jeux qu'on voulait toucher — ou ajouter `map-pin` a
-   FEED, ce qui ferait perdre son doc-comment. */
+/* HISTORIQUE (#7280, soldé par #8876) — `glyphs-feed.ts` portait un `mapPin`
+   AJOUTÉ À LA MAIN que ce script ne connaissait pas : le relancer le
+   supprimait. `map-pin` est désormais dans `FEED` : la régénération est
+   IDEMPOTENTE, `git diff src/components/glyphs-*.ts` reste vide. */
 
 emit({
   ids: COMPOSER,
@@ -403,9 +411,11 @@ emit({
  * vocal bascule `fillPlay` (socle) ⇄ `pause` selon `AudioPlaybackStatus`,
  * `fill/pause-fill.svg`, meme dispositif que `fill-play`). Charge avec
  * `attachment-blocks.tsx`, deja dans le chunk du fil (monte par bubble.tsx
- * et focal-row.tsx) — jamais dans le socle.
+ * et focal-row.tsx) — jamais dans le socle. `arrows-out-simple` (#8234) :
+ * le bouton plein ecran de la lecture dans le fil (`VideoTile`), miroir de
+ * `arrow.up.left.and.arrow.down.right` (`MeeshyVideoPlayer+Controls.swift`).
  */
-const MEDIA = ['pause'];
+const MEDIA = ['pause', 'arrows-out-simple'];
 
 emit({
   ids: MEDIA,
@@ -522,8 +532,14 @@ emit({
  * `speaker-slash` (#6898) : l'indicateur « son coupe » d'une scene elue du fil,
  * miroir de `BackgroundSoundBadge.muteIconName` (`FeedSceneAutoplay.swift:186-200`)
  * -- jusqu'ici un trace RECOPIE a la main dans `scene-player.tsx`.
+ *
+ * `map-pin` (#6901, #8876) : la pastille de LIEU d'une scene canvas
+ * (`scene-object-place.tsx`). Le glyphe avait ete AJOUTE A LA MAIN a
+ * `glyphs-feed.ts` : relancer ce script le supprimait en silence, et aucun
+ * autre jeu ne pouvait etre regenere sans defaire celui-ci. Il est desormais
+ * extrait comme les autres -- le script est idempotent, `git diff` reste vide.
  */
-const FEED = ['heart', 'heart-fill', 'chat-circle', 'arrows-clockwise', 'bookmark', 'bookmark-fill', 'share-network', 'waveform', 'caret-right', 'monitor-play', 'speaker-slash'];
+const FEED = ['heart', 'heart-fill', 'chat-circle', 'arrows-clockwise', 'bookmark', 'bookmark-fill', 'share-network', 'waveform', 'caret-right', 'monitor-play', 'speaker-slash', 'arrow-bend-up-left', 'map-pin'];
 
 emit({
   ids: FEED,
@@ -555,7 +571,7 @@ emit({
  * existent aussi dans d'autres jeux d'ecran : ceux-la ne se chargent jamais
  * avec la cloche, aucun octet n'est donc paye deux fois au meme demarrage.
  */
-const NOTIFICATIONS = ['circle', 'chat-circle', 'heart', 'at', 'thumbs-up', 'user-plus', 'users-three', 'globe', 'gear', 'trash'];
+const NOTIFICATIONS = ['circle', 'chat-circle', 'heart', 'at', 'thumbs-up', 'user-plus', 'users-three', 'globe', 'gear', 'trash', 'circle-dashed'];
 
 emit({
   ids: NOTIFICATIONS,
@@ -698,6 +714,20 @@ emit({
  * `caretLeft`, `lock` et `warningCircle` restent au SOCLE. Charge avec la route
  * `/me/starred-messages`, jamais dans le socle.
  */
+/**
+ * LE JEU DE LA NOTE D'APRÈS-APPEL (#8072) — les étoiles de la carte qui
+ * suit un appel ; chargé avec cette carte, jamais dans le socle.
+ */
+const CALL_FEEDBACK = ['star', 'star-fill', 'x'];
+
+emit({
+  ids: CALL_FEEDBACK,
+  output: join(HERE, '../src/components/glyphs-call-feedback.ts'),
+  constant: 'CALL_FEEDBACK_GLYPHS',
+  type: 'CallFeedbackGlyphName',
+  role: "LE JEU de la note d'apres-appel (#8072) : charge avec sa carte, jamais dans le socle.",
+});
+
 const STARRED = ['star', 'star-fill', 'chats-circle'];
 
 emit({
@@ -767,7 +797,7 @@ emit({
   role: "LE JEU D'ECRAN de la decouverte de personnes (#6363) : onglets, ajout, blocage, invitation et etats vides, charge avec la route /discover, jamais dans le socle.",
 });
 
-const CALLS = ['arrow-up-right', 'arrow-down-left', 'phone-x', 'video-camera', 'phone-outgoing'];
+const CALLS = ['arrow-up-right', 'arrow-down-left', 'phone-x', 'video-camera', 'phone-outgoing', 'dots-nine', 'backspace', 'arrows-down-up', 'calendar-blank', 'trash', 'x-circle'];
 
 emit({
   ids: CALLS,
@@ -775,6 +805,81 @@ emit({
   constant: 'CALLS_GLYPHS',
   type: 'CallsGlyphName',
   role: "LE JEU D'ECRAN du journal d'appels (#6362) : directions, type video et etat vide, charge avec la route /calls, jamais dans le socle.",
+});
+
+/**
+ * L'ECRAN D'APPEL (#6382) — miroir des symboles de `CallView.swift`,
+ * `IncomingCallView.swift` et `FloatingCallPillView.swift` :
+ *
+ * | iOS | phosphor |
+ * |---|---|
+ * | `phone.down.fill` (raccrocher, refuser) | `phone-disconnect` |
+ * | `mic.slash.fill` (micro coupe) | `microphone-slash` |
+ * | `video.fill` / `video.slash.fill` (camera) | `video-camera` / `video-camera-slash` |
+ * | `arrow.triangle.2.circlepath.camera` (changer de camera) | `camera-rotate` |
+ * | `arrow.down.right.and.arrow.up.left` (reduire) | `arrows-in-simple` |
+ * | `captions.bubble` (sous-titres) | `closed-captioning` |
+ * | `wifi.exclamationmark` (connexion instable) | `cell-signal-low` |
+ * | `rectangle.on.rectangle` (partager l'ecran, #8063) | `monitor-arrow-up` |
+ *
+ * `phone` et `microphone` restent au SOCLE. Charge avec l'ecran d'appel, jamais dans le socle.
+ */
+const CALL_SCREEN = ['phone-disconnect', 'microphone-slash', 'video-camera', 'video-camera-slash', 'camera-rotate', 'arrows-in-simple', 'closed-captioning', 'cell-signal-low', 'monitor-arrow-up', 'chat-circle-text'];
+
+emit({
+  ids: CALL_SCREEN,
+  output: join(HERE, '../src/components/glyphs-call-screen.ts'),
+  constant: 'CALL_SCREEN_GLYPHS',
+  type: 'CallScreenGlyphName',
+  role: "LE JEU D'ECRAN de l'appel audio et video (#6382) : raccrocher, micro, camera, reduire, sous-titres, qualite et partage d'ecran, charge avec l'ecran d'appel, jamais dans le socle.",
+});
+
+/**
+ * CONTINUER A DISCUTER PENDANT L'APPEL (#8046) — miroir de `CallBubbleView.swift`
+ * et `PiPCallController.swift` :
+ *
+ * | iOS | phosphor |
+ * |---|---|
+ * | `pip.enter` (image dans l'image) | `picture-in-picture` |
+ * | `slider.horizontal.3` (peripheriques) | `sliders-horizontal` |
+ * | `arrow.down.right` (replier la pastille en bulle) | `arrow-down-right` |
+ *
+ * Un jeu a part plutot qu'une ligne de plus au jeu d'ecran : charge avec la
+ * couche d'appel, comme lui, sans reecrire un fichier que d'autres lots touchent.
+ */
+emit({
+  ids: ['picture-in-picture', 'sliders-horizontal', 'arrow-down-right'],
+  output: join(HERE, '../src/components/glyphs-call-devices.ts'),
+  constant: 'CALL_DEVICES_GLYPHS',
+  type: 'CallDevicesGlyphName',
+  role: "LE JEU DE LA BULLE, DE L'IMAGE DANS L'IMAGE ET DES PERIPHERIQUES (#8046), charge avec la couche d'appel, jamais dans le socle.",
+});
+
+/**
+ * LA VUE D'APPEL « C ADAPTE » (#8391, #8392) — la pilule de verre et la une :
+ *
+ * | role | phosphor |
+ * |---|---|
+ * | `(…)`, les actions de l'appel | `dots-three` |
+ * | Sortie (audio et appareils) | `speaker-high` |
+ * | Grille (quitter la une) | `squares-four` |
+ * | Plein ecran / le quitter | `corners-out` / `corners-in` |
+ * | Effets de ma video (#8442) | `magic-wand` |
+ * | Zoom de ma camera -, + (#8441) ; fermer un panneau | `minus`, `plus`, `x` |
+ * | Ajouter des personnes (#8433) | `user-plus` |
+ * | Reagir (#8439) | `smiley` |
+ * | Retirer de l'appel (#8438) | `user-minus` |
+ * | Son de l'apercu avant decroche, coupe (#8480) | `speaker-slash` |
+ * | Capturer l'appel (#8552) | `aperture` |
+ *
+ * Un jeu a part : charge avec l'ecran d'appel, sans reecrire les jeux voisins.
+ */
+emit({
+  ids: ['dots-three', 'speaker-high', 'squares-four', 'corners-out', 'corners-in', 'magic-wand', 'minus', 'plus', 'x', 'user-plus', 'smiley', 'user-minus', 'speaker-slash', 'aperture'],
+  output: join(HERE, '../src/components/glyphs-call-view.ts'),
+  constant: 'CALL_VIEW_GLYPHS',
+  type: 'CallViewGlyphName',
+  role: "LA VUE D'APPEL « C ADAPTE » (#8391, #8392) : le (…) de la pilule, la sortie, la grille et le plein ecran, charge avec l'ecran d'appel, jamais dans le socle.",
 });
 
 /**
@@ -826,6 +931,18 @@ const LINKS = [
   'clock-counter-clockwise',
   'hourglass',
   'caret-right',
+  'chart-line',
+  'users-three',
+  'gift',
+  'trash',
+  'globe',
+  'device-mobile',
+  'desktop',
+  'device-tablet',
+  'cursor-click',
+  'browser',
+  'arrow-square-out',
+  'share-network',
 ];
 
 emit({
@@ -833,7 +950,7 @@ emit({
   output: join(HERE, '../src/components/glyphs-links.ts'),
   constant: 'LINKS_GLYPHS',
   type: 'LinksGlyphName',
-  role: "LE JEU D'ECRAN de Mes liens (#6361) : hub, liens de partage, detail et creation, charge avec les routes /links, jamais dans le socle.",
+  role: "LE JEU D'ECRAN de Mes liens (#6361, #6408, #6409, #6410) : hub, liens de partage, de suivi, de parrainage et de communaute, charge avec les routes /links, jamais dans le socle.",
 });
 
 /**
@@ -922,11 +1039,125 @@ emit({
  * chunk) : seul `trash` (Supprimer) est propre a cet ecran, comme il l'est
  * deja a la cloche (`glyphs-notifications.ts`) — deux jeux qui portent le
  * meme tracé plutot qu'un import croise qui lierait la cloche au listing.
+ * `pencil-simple` (Modifier, #9317) suit la meme regle : le menu de fil le
+ * porte deja, l'ecran ne paie pas ce chunk pour un seul tracé.
  */
 emit({
-  ids: ['trash'],
+  ids: ['trash', 'pencil-simple'],
   output: join(HERE, '../src/components/glyphs-stories-mine.ts'),
   constant: 'STORIES_MINE_GLYPHS',
   type: 'StoriesMineGlyphName',
-  role: 'LE JEU DE « MES STORIES » (#6149) : le bouton Supprimer du listing, charge avec /stories/mine.',
+  role: 'LE JEU DE « MES STORIES » (#6149) : les boutons Supprimer et Modifier (#9317) du listing, charges avec /stories/mine.',
+});
+
+/**
+ * LE JEU DU COMPOSER D'EXPORT EN IMAGE (#8667) — les onglets du plateau
+ * (Styles, Frame, Fond, Police, Liaison, Détails, Médias — #8693), « Au hasard », « Format par
+ * défaut » et « Partager ». Chargé avec la feuille d'export, elle-même montée
+ * à la demande depuis le menu du message : jamais dans le socle. `translate`
+ * (Langue), `download-simple` (Sauvegarder), `magnifying-glass` et `x`
+ * restent au socle, où ils vivent déjà.
+ */
+emit({
+  ids: ['squares-four', 'palette', 'text-aa', 'arrow-elbow-down-right', 'sliders-horizontal', 'shuffle', 'bookmark-simple', 'export', 'frame-corners', 'images'],
+  output: join(HERE, '../src/components/glyphs-export-card.ts'),
+  constant: 'EXPORT_CARD_GLYPHS',
+  type: 'ExportCardGlyphName',
+  role: "LE JEU DU COMPOSER D'EXPORT EN IMAGE (#8667) : les onglets du plateau et les gestes de l'en-tete, charge avec la feuille d'export.",
+});
+
+/**
+ * LE JEU D'ECRAN DE L'ADMINISTRATION (#8876) — le kit (`components/admin/*`)
+ * et le menu groupe. Charge avec les routes `/adm` et `/admin`, jamais dans
+ * le socle : un lecteur qui n'ouvre jamais l'administration ne paie pas un
+ * octet de ces tracés (`budgets.json`, `first_paint`).
+ *
+ * | usage | phosphor |
+ * |---|---|
+ * | sections du menu | `squares-four` (tableau de bord), `users`, `detective` (anonymes), `handshake` (demandes de contact), `chats`, `users-three` (communautés), `link-simple`, `newspaper`, `flag`, `scroll` (journal), `chart-line`, `trophy`, `target` (suivi), `megaphone`, `heartbeat`, `translate`, `robot`, `flame` (barème de points, #8906), `gear` |
+ * | entités liées | `user`, `detective`, `handshake`, `chats`, `users-three`, `link-simple`, `newspaper`, `flag`, `target`, `megaphone` |
+ * | états (ton) | `check-circle`, `warning`, `warning-circle`, `info`, `prohibit`, `lock`, `lock-open`, `shield-check`, `eye`, `eye-slash`, `hourglass` |
+ * | gestes | `pencil-simple`, `trash`, `paper-plane-tilt`, `plus`, `copy`, `arrow-clockwise`, `arrow-square-out`, `download-simple`, `user-minus`, `link-break` |
+ * | listes et graphiques | `magnifying-glass`, `funnel`, `x`, `check`, `caret-*`, `arrow-up`, `arrow-down`, `table`, `chart-bar`, `chart-pie-slice`, `trend-up`, `trend-down`, `minus`, `list`, `dots-three` |
+ * | métadonnées | `clock`, `calendar-blank`, `globe`, `phone-call`, `video-camera`, `image`, `file`, `microphone`, `database`, `cpu`, `lightning` |
+ */
+const ADMIN = [
+  'squares-four',
+  'users',
+  'detective',
+  'handshake',
+  'chats',
+  'users-three',
+  'link-simple',
+  'newspaper',
+  'flag',
+  'scroll',
+  'chart-line',
+  'trophy',
+  'target',
+  'megaphone',
+  'heartbeat',
+  'translate',
+  'robot',
+  'flame',
+  'gear',
+  'magnifying-glass',
+  'funnel',
+  'x',
+  'check',
+  'check-circle',
+  'caret-right',
+  'caret-left',
+  'caret-down',
+  'caret-up',
+  'arrow-up',
+  'arrow-down',
+  'arrow-clockwise',
+  'copy',
+  'warning',
+  'warning-circle',
+  'info',
+  'prohibit',
+  'trash',
+  'lock',
+  'lock-open',
+  'shield-check',
+  'eye',
+  'eye-slash',
+  'pencil-simple',
+  'paper-plane-tilt',
+  'plus',
+  'arrow-square-out',
+  'clock',
+  'calendar-blank',
+  'globe',
+  'phone-call',
+  'video-camera',
+  'image',
+  'file',
+  'microphone',
+  'user',
+  'user-minus',
+  'database',
+  'cpu',
+  'lightning',
+  'hourglass',
+  'list',
+  'dots-three',
+  'download-simple',
+  'table',
+  'chart-bar',
+  'chart-pie-slice',
+  'trend-up',
+  'trend-down',
+  'minus',
+  'link-break',
+];
+
+emit({
+  ids: ADMIN,
+  output: join(HERE, '../src/components/glyphs-admin.ts'),
+  constant: 'ADMIN_GLYPHS',
+  type: 'AdminGlyphName',
+  role: "LE JEU D'ECRAN de l'administration (#8876) : le menu groupe et le kit, charge avec les routes /adm et /admin, jamais dans le socle.",
 });

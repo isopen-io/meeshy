@@ -7,11 +7,9 @@ final class MockContactDirectoryService: ContactDirectoryServiceProviding, @unch
         DirectorySyncResult(totalContacts: 0, processedContacts: 0, syncedCount: 0, matchedCount: 0, removedCount: 0)
     )
     var listResult: Result<[DirectoryContact], Error> = .success([])
-    var clearResult: Result<DirectoryClearResult, Error> = .success(DirectoryClearResult(removedCount: 0))
 
     var syncCallCount = 0
     var listCallCount = 0
-    var clearCallCount = 0
     var lastSyncRequest: DirectorySyncRequest?
     var lastListFilter: DirectoryFilter?
     var lastListQuery: String?
@@ -50,20 +48,13 @@ final class MockContactDirectoryService: ContactDirectoryServiceProviding, @unch
         )
     }
 
-    func clear() async throws -> DirectoryClearResult {
-        clearCallCount += 1
-        return try clearResult.get()
-    }
-
     func reset() {
         syncResult = .success(
             DirectorySyncResult(totalContacts: 0, processedContacts: 0, syncedCount: 0, matchedCount: 0, removedCount: 0)
         )
         listResult = .success([])
-        clearResult = .success(DirectoryClearResult(removedCount: 0))
         syncCallCount = 0
         listCallCount = 0
-        clearCallCount = 0
         lastSyncRequest = nil
         lastListFilter = nil
         lastListCursor = nil

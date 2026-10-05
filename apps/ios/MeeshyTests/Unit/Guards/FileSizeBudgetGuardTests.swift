@@ -43,20 +43,15 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     /// **Dette héritée, mesurée au 261i.** Cette liste ne s'ALLONGE jamais : un
     /// fichier qui la quitte (découpé, ou redescendu sous le budget) en sort pour
     /// toujours. Chaque découpe est un lot à elle seule — `CallManager.swift`
-    /// (6462 lignes) n'est pas un lot d'UI/UX.
+    /// (6462 lignes) n'était pas un lot d'UI/UX ; il a eu le sien (2026-10-02).
     private static let legacyOverBudget: Set<String> = [
-        "AudioFullscreenView.swift",
         "BubbleStandardLayout.swift",
-        "CallManager.swift",
-        "CallView.swift",
         "ConversationDashboardView.swift",
-        "ConversationInfoSheet.swift",
         "ConversationListView+Overlays.swift",
         "ConversationListView.swift",
         "ConversationListViewModel.swift",
         "ConversationView.swift",
         "FeedCommentsSheet.swift",
-        "FeedPostCard.swift",
         // #6040 — `FeedView+Attachments.swift` a QUITTÉ la dette : 207 lignes,
         // contre 1 391 avant le découpage. La feuille qui en est sortie
         // (`FeedComposerSheet.swift`, 1 166) n'y ENTRE pas : elle est sous le
@@ -64,7 +59,6 @@ final class FileSizeBudgetGuardTests: XCTestCase {
         "FeedView.swift",
         "FeedViewModel.swift",
         "MessageListViewController.swift",
-        "MessageOverlayMenu.swift",
         "P2PWebRTCClient.swift",
         "PostDetailView.swift",
         "ProfileUserPostsList.swift",
@@ -473,7 +467,126 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     // d'un lien de partage : `ShareLinkEntryResolver.Resolution.landing(...)`
     // le rend, et le `switch` de cinq cas devient une garde (−10) — le plafond
     // reprend les 10 lignes dans le même lot.
-    private static let legacyLineCeiling = 52_062
+    //
+    // **51 972 depuis l'application du relevé d'audit G014.**
+    // `ConversationDashboardView.swift` (1300 → 1211, −89) perd son code mort
+    // (`participants` non lu, deux `@State` de chargement jamais lus, la
+    // branche `activityChartSection` inatteignable + son placeholder, une
+    // garde `contentTypesSection` redondante) et déplace le calcul des
+    // statistiques dérivées des messages (sentiment `NLTagger`, comptages de
+    // mots/médias, activité par participant) — pur de `messages`, jamais de
+    // `chartPeriod`/`serverStats` — dans un type `nonisolated` neuf,
+    // `ConversationDashboardClientStats.swift`, calculé UNE fois par
+    // `Task.detached` plutôt qu'à chaque rendu sur le MainActor.
+    // `ConversationInfoSheet.swift` (1268 → 1267, −1) perd l'argument
+    // `participants:` que `ConversationDashboardView` ne lisait plus. Les
+    // deux hôtes RESTENT en dette ; le plafond baisse d'exactement ce que le
+    // lot retire.
+    //
+    // **52 005 depuis #8009.** Le toucher d'un message protégé devait passer
+    // par `BubbleStandardLayout` et l'aperçu d'appui long par
+    // `MessageOverlayMenu`, tous deux hors budget : `BlurRevealModifier` a
+    // quitté le premier (−16), la grille d'images de l'aperçu a quitté le
+    // second pour `MessageOverlayPreviewMedia.swift` (−39). Le plafond reprend
+    // les 55 lignes, et les 2 que `ConversationView` rend (garde de l'appui
+    // long), dans le même lot.
+    //
+    // **50 721 à la réunion des deux lots** (52 062 à leur base commune) :
+    // G014 retire 90 lignes, #8009 en retire 57 ; et `MessageOverlayMenu.swift`,
+    // que #7990 allège de son code mort pendant que #8009 en extrait la grille
+    // d'aperçu, repasse SOUS le budget (1 194 lignes comptées) : il quitte la
+    // liste, plafond compris.
+    //
+    // #8074 — 50 721 → 50 683 (−38). Les délais d'appel de `WebRTCTypes.swift`
+    // lisent `CallRules` (SDK) au lieu de les redire (−23) ; `CallManager.swift`
+    // cède `CallEndReasonMapper` à son propre fichier avant de recevoir la
+    // relance ICE sur identifiants TURN frais (−15 net).
+    //
+    // #8063 — 50 683 → 48 703, REMESURÉ. Le partage d'écran a payé sa place
+    // avant de la prendre : `CallManager.swift` cède ses deux fabriques de
+    // segments de transcription (−51 net), `P2PWebRTCClient.swift` son calcul
+    // de directions SDP (−16), `CallView.swift` ses libellés de fin d'appel et
+    // d'échec des sous-titres (−20). Le reste de l'écart (1 892) était du mou
+    // laissé par des lots antérieurs : un plafond cumulatif se remesure.
+    //
+    // #8103 — 48 703 → 47 652 (−1 051). `ConversationInfoSheet.swift` est
+    // repassé SOUS le budget (1 051 lignes comptées) quand ses épinglés l'ont
+    // quitté pour `ConversationInfoSheet+Pinned.swift` : il sort de
+    // `legacyOverBudget` ENTIER, et le plafond baisse d'exactement ce qu'il
+    // pesait à la sortie.
+    //
+    // #8231 — 47 652 → 47 615 (−37). Plus aucune vidéo ne se lit dans une
+    // bulle : `BubbleStandardLayout.swift` perd le miroir de
+    // `SharedAVPlayerManager.activeURL` qui masquait son pied pendant la
+    // lecture inline.
+    //
+    // #8389 — 47 615 → 47 614 (−1). Le voile d'une bulle floutée se lève sur
+    // place : `BubbleStandardLayout.swift` perd la couche qui ouvrait chaque
+    // case en plein écran sous le voile.
+    //
+    // #8276 — 47 614 → 45 449 (−2 165). `CallView.swift` repasse SOUS le
+    // budget : ses surfaces partent dans les extensions `CallView+*.swift`
+    // (pilule, en-tête, scène connectée, vignette perso, sous-titres). Il sort
+    // de `legacyOverBudget` ENTIER, et le plafond baisse d'exactement ce qu'il
+    // pesait à la sortie.
+    //
+    // #8431 — 45 449 → 45 362 (−87). La bande basse du composeur quitte
+    // `StoryViewerView+Canvas.swift` pour `StoryViewerView+CanvasComposerLayer.swift`
+    // (−91 net) AVANT d'y recevoir son repli ; le lecteur y gagne la cession au
+    // composeur (`StoryViewerView` +2, `+Content` +2).
+    //
+    // #8435/#8434 — 45 362 → 45 292 (−70). Le PiP système quitte
+    // `CallManager.swift` pour `CallManager+SystemPiP.swift`, et la
+    // resynchronisation du micro naît dans `CallManager+MuteSync.swift` sans
+    // qu'une ligne nette n'entre dans le fichier hors budget.
+    //
+    // #8582 — 45 292 → 43 431 (−1 861), REMESURÉ. Le glissé « répondre » et
+    // les effets de commentaire devaient toucher trois hôtes hors budget ; ils
+    // ont payé leur place avant de la prendre. `ThreadedCommentSection` quitte
+    // `FeedCommentsSheet.swift` (−195), `StoryCommentRowView` quitte
+    // `StoryViewerView+Content.swift` (−316), et l'aperçu des commentaires
+    // quitte `FeedPostCard.swift`, qui repasse SOUS le budget et sort de
+    // `legacyOverBudget` ENTIER (−1 361). La feuille reçoit ensuite la cible de
+    // réponse amorcée depuis l'aperçu (+11) : le plafond baisse du NET du lot,
+    // pas de sa seule relocalisation — le mou antérieur reste à ses lots.
+    //
+    // #8642/#8644 — 43 431 → 43 322 (−109, NET du lot). La scène d'une story
+    // qui se floute et se réduit devait toucher `StoryViewerView+Canvas.swift` ;
+    // `StoryViewerContentView` en sort d'abord (−121), la loi rentre par ses
+    // appels (+10). La feuille de commentaires et le détail d'un post reçoivent
+    // une ligne chacun (+2) : la règle vit dans `CommentReplyFocus.swift`.
+    //
+    // #8709 — 43 322 → 43 276 (−46, NET du lot). Le menu « … » des commentaires
+    // de story devait toucher la fabrique de la ligne dans
+    // `StoryViewerView+Content.swift` : elle en sort d'abord pour
+    // `StoryViewerView+CommentMenu.swift` (−44), et l'écho `comment:updated`
+    // y délègue son remplacement en place à `StoryCommentEditing` (−2).
+    //
+    // #8878 — 43 276 → 42 092 (−1 184). La croix et l'enregistrement du plein écran audio
+    // montent les briques du chrome plein écran de MeeshyUI (`FullscreenCloseButton`,
+    // `FullscreenChromeDisc`) au lieu de peindre leurs disques : `AudioFullscreenView.swift`
+    // repasse SOUS le budget (1 184 lignes comptées), sort de `legacyOverBudget` ENTIER, et le
+    // plafond baisse d'exactement ce qu'il pesait à la sortie.
+    //
+    // #8878 — 42 092 → 42 091 (−1). Le lecteur de story monte son en-tête avec la marge
+    // latérale de `FullscreenTopBarLayout` : le `.padding(.horizontal, …)` que
+    // `StoryViewerView+Canvas.swift` posait autour de `StoryHeaderView` part (−1 ligne).
+    // L'hôte RESTE en dette ; le plafond baisse d'exactement ce que le lot retire.
+    //
+    // #9075 — 42 091 → 41 996 (−95). Les CINQ projections jumelles
+    // `APIPostComment → FeedComment` de `StoryViewerView+Content.swift` (premier
+    // chargement, page suivante, réponses, `comment:added`, `comment:updated`)
+    // délèguent au site UNIQUE `FeedComment(api:)` — qui porte la carte des liens
+    // suivis qu'aucune d'elles ne recopiait. L'hôte RESTE en dette.
+    //
+    // 2026-10-02 — 41 996 → 35 776 (−6 220). `CallManager.swift` repasse SOUS le
+    // budget : ses responsabilités partent dans les extensions `CallManager+*.swift`
+    // (délégués CallKit et WebRTC, reconnexion, signalisation, négociation, session
+    // et interruptions audio, réponse, raccroché, attente, commandes média,
+    // démontage…), toutes sous le budget, sans changer une ligne de comportement. Il
+    // sort de `legacyOverBudget` ENTIER, et le plafond baisse d'exactement ce qu'il
+    // pesait à la sortie.
+    private static let legacyLineCeiling = 35_776
 
     // MARK: - Règle 1 — pas de 43ᵉ
 

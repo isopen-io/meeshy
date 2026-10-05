@@ -1,4 +1,5 @@
 import * as z from 'zod/mini';
+import * as meEndpoints from '@meeshy/shared/api/endpoints/me';
 
 import type { DeliverFileOutcome } from '@/lib/media/deliver-file';
 import { browserFileDeliveryHost, type FileDeliveryHost } from '@/lib/media/file-delivery-host';
@@ -9,7 +10,7 @@ import { unreadableFailure } from './link-failure';
 
 /**
  * **LE PORT DE L'EXPORT DE DONNÉES** (#6725, section « Données ») —
- * `GET /api/v1/me/export`, la route RGPD déjà servie et testée côté gateway
+ * `GET me.export`, la route RGPD déjà servie et testée côté gateway
  * (`services/gateway/src/routes/me/export.ts`, #3633). La v2 ne demande que le
  * JSON complet (`format=json`, le défaut de la route) : c'est la forme la plus
  * fidèle, et un CSV par section n'a pas de consommateur ici — le proposer
@@ -42,7 +43,7 @@ export async function requestDataExport(deps: DataExportDeps): Promise<ApiResult
     const { fixtureDataExport } = await import('./fixtures-data-export');
     return { ok: true, data: fixtureDataExport() };
   }
-  const result = await deps.transport.request<unknown>({ method: 'GET', path: '/api/v1/me/export?format=json' });
+  const result = await deps.transport.request<unknown>({ method: 'GET', path: `${meEndpoints.export}?format=json` });
   if (!result.ok) return result;
   const parsed = Envelope.safeParse(result.data);
   if (!parsed.success || result.data === null || typeof result.data !== 'object' || Array.isArray(result.data)) {

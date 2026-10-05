@@ -121,6 +121,8 @@ extension PostDetailView {
                 await MainActor.run { commentPhotoItems = [] }
             }
         }
+        // « Éditer » une pièce jointe : la scène du composeur (#9127).
+        .commentSceneRetouch(attachments: $commentAttachments)
     }
 
     // MARK: - Reply targeting

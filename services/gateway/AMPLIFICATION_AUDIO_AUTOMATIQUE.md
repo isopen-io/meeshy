@@ -1,5 +1,7 @@
 # 🔊 Amplification Automatique Audio - Gateway
 
+> **Mis à jour le 2026-09-26 (#8039).** Le code ci-dessous date de la première version : il gardait le conteneur de la source, et ffmpeg refusait l'AAC dans un WebM, un Ogg ou un MP3 — l'échec avalé laissait le WebM/Opus de Chrome partir tel quel vers iOS, qui ne le lit pas. Tout audio en clair est désormais normalisé en **AAC / M4A** (`-f ipod`, `audio/mp4`, `.m4a`, 64 kbps mono) par `UploadProcessor.normalizeAudio`, et le chemin, le nom et le type persistés suivent le fichier écrit (`audio-normalization.ts`).
+
 ## 📝 Objectif
 
 Amplifier systématiquement tous les fichiers audio de **+9dB** dès leur réception dans la gateway, **AVANT** de les envoyer au translator.

@@ -219,24 +219,23 @@ final class ConversationViewModelOfflineQueueTests: XCTestCase {
         XCTAssertEqual(Set(contents), ["Tap A", "Tap B"])
     }
 
-    /// Double-tap protection survives the mutex removal: the SAME logical
-    /// message fired twice within the debounce window dedups to a single send
-    /// (no duplicate optimistic row, no duplicate outbox item). The check-and-set
-    /// runs before the first `await`, so the @MainActor serialization of the
-    /// synchronous prefix makes it atomic against the concurrent burst.
-    func test_duplicate_rapid_tap_is_deduped() async throws {
+    /// **Identical content fired twice is TWO messages** (#7985, directive
+    /// porteur 2026-09-25 : « la déduplication d'envoi des emojis doit être
+    /// enlevée pour permettre d'envoyer des emojis en séries »). The old
+    /// content debounce collapsed 😂😂 into one send; now both reach the outbox,
+    /// each under its own `clientMessageId` — the only dedup key left.
+    func test_identical_rapid_sends_both_enqueue() async throws {
         let fx = try await makeFixture(offlineQueueDelay: .milliseconds(150))
 
-        async let a = fx.sut.sendMessage(content: "Same text")
-        async let b = fx.sut.sendMessage(content: "Same text")
+        async let a = fx.sut.sendMessage(content: "😂")
+        async let b = fx.sut.sendMessage(content: "😂")
         let results = await [a, b]
 
-        let succeeded = results.filter { $0 }.count
-        let rejected = results.filter { !$0 }.count
-        XCTAssertEqual(succeeded, 1, "A rapid double-tap of identical content sends once")
-        XCTAssertEqual(rejected, 1, "The duplicate tap is deduped")
+        XCTAssertEqual(results.filter { $0 }.count, 2, "Two identical taps in a row send twice")
         let enqueueCount = await fx.offlineQueue.enqueueCount
-        XCTAssertEqual(enqueueCount, 1)
+        XCTAssertEqual(enqueueCount, 2, "Both identical messages must reach the outbox")
+        let ids = await fx.offlineQueue.enqueuedClientMessageIds
+        XCTAssertEqual(Set(ids).count, 2, "Each send carries its own clientMessageId")
     }
 
     /// Three DISTINCT sends — concurrent burst then a sequential one — all reach

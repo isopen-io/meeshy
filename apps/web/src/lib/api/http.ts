@@ -2,6 +2,8 @@ import type { CursorPaginationMeta, PaginationMeta } from '@meeshy/shared/types/
 
 import type { Transport } from '../net/transport';
 
+import { anySignal, timeoutSignal } from './abort';
+
 /**
  * LE CLIENT HTTP RÉEL (#5605, T2) — le transport que `apiConfig`/`session.ts`
  * cablent, `fetchImpl` INJECTABLE pour les témoins.
@@ -27,9 +29,10 @@ import type { Transport } from '../net/transport';
  * connexion puis se tait (redémarrage, réseau qui se dégrade sans se
  * couper) laissait sinon la requête pendue indéfiniment, ce que la
  * dimension 2 (« combien de temps avant que l'utilisateur VOIE quelque
- * chose ») interdit. `timeoutMs` compose un `AbortSignal.timeout()` AVEC le
- * `signal` de l'appelant (`AbortSignal.any`, jamais l'un À LA PLACE de
- * l'autre) et rend l'expiration comme `code: 'TIMEOUT'` — distinct de
+ * chose ») interdit. `timeoutMs` compose un délai (`timeoutSignal`) AVEC le
+ * `signal` de l'appelant (`anySignal`, jamais l'un À LA PLACE de l'autre —
+ * `./abort.ts`, avec repli pour une WebView antérieure à Chromium 116, #8481)
+ * et rend l'expiration comme `code: 'TIMEOUT'` — distinct de
  * `'ABORTED'`, pour qu'un écran propose « réessayer » sans le confondre
  * avec un départ volontaire. Distinguer les deux se fait en relisant l'état
  * des DEUX signaux sources après coup, jamais le nom de l'erreur : un
@@ -90,6 +93,12 @@ export type ApiFailure = {
    * Les confondre ferait proposer un pseudo libre ailleurs, et repris ici.
    */
   readonly suggestedNickname?: string;
+  /**
+   * LE DÉTENTEUR MASQUÉ d'une adresse déjà prise (#8214), posé à la racine
+   * d'un `409 EMAIL_TAKEN`. BRUT ici — le transport ne connaît aucun schéma
+   * métier ; `decodeEmailOwner` (`email-owner.ts`) le valide là où il sert.
+   */
+  readonly emailOwner?: unknown;
 };
 
 export type ApiSuccess<T> = {
@@ -118,6 +127,9 @@ export type ApiSuccess<T> = {
    * jumelle divergente que ce transport existe pour éviter.
    */
   readonly cursorPagination?: CursorPaginationMeta;
+  /** #7420 — la fenêtre `?around=` de `GET …/messages` dit, à côté de `data`,
+   * s'il existe plus RÉCENT qu'elle (`messages-list.ts`, `hasNewer`). */
+  readonly hasNewer?: boolean;
   /**
    * #6361 — les MÉTA-DONNÉES qu'une route pose à côté de `data`
    * (`GET /links?include=summary` : `meta.summary`, les agrégats réels de ses
@@ -141,6 +153,15 @@ export type HttpRequest = {
    * hors du crédential courant (`logout()` § `X-Session-Token`). */
   readonly headers?: Readonly<Record<string, string>>;
   /**
+   * REMPLACE le crédential de la session POUR CET APPEL (#8816) — `null` part
+   * nu. La jonction ANONYME d'un compte connecté ne doit porter ni son Bearer
+   * (la porte, en authentification optionnelle, ferait entrer le COMPTE) ni
+   * rien qui le nomme. L'appel n'appartient alors à AUCUNE identité de
+   * session : son 401 ne ferme rien, et sa réponse se résout même si la
+   * session change pendant le vol.
+   */
+  readonly credential?: Credential | null;
+  /**
    * REMPLACE le délai de garde du transport POUR CET APPEL (revue-correction
    * #5668). `DEFAULT_TIMEOUT_MS` est arbitré contre le p95 d'un appel JSON
    * (voir son doc-comment) : il ne dit RIEN d'un téléversement, dont la durée
@@ -157,6 +178,14 @@ export type HttpRequest = {
 export type HttpTransportOptions = {
   readonly base: string;
   readonly credential?: () => Credential | null;
+  /**
+   * QUI parle — une clé d'identité stable (le compte, pas son jeton), relue
+   * au départ ET à l'arrivée de chaque requête (#8674). Une réponse obtenue
+   * avec le crédential d'une identité qui n'est plus la courante ne se résout
+   * JAMAIS : ni son `queryFn` ni le rollback d'une mutation de l'identité
+   * précédente ne s'exécutent sous la suivante.
+   */
+  readonly identity?: () => string | null;
   readonly deviceLocale?: () => string | null;
   /** Notifié sur un 401 PORTANT un crédential, et seulement là. Un 403
    * (interdit) ou un 500 (panne) ne disent rien du jeton courant — et un 401
@@ -274,10 +303,10 @@ function composeSignal(
   callerSignal: AbortSignal | undefined,
   timeoutMs: number,
 ): { readonly signal: AbortSignal | undefined; readonly timeoutSignal: AbortSignal | undefined } {
-  const timeoutSignal = timeoutMs > 0 ? AbortSignal.timeout(timeoutMs) : undefined;
-  if (callerSignal === undefined) return { signal: timeoutSignal, timeoutSignal };
-  if (timeoutSignal === undefined) return { signal: callerSignal, timeoutSignal };
-  return { signal: AbortSignal.any([callerSignal, timeoutSignal]), timeoutSignal };
+  const deadline = timeoutMs > 0 ? timeoutSignal(timeoutMs) : undefined;
+  if (callerSignal === undefined) return { signal: deadline, timeoutSignal: deadline };
+  if (deadline === undefined) return { signal: callerSignal, timeoutSignal: deadline };
+  return { signal: anySignal([callerSignal, deadline]), timeoutSignal: deadline };
 }
 
 /**
@@ -302,6 +331,15 @@ function abortCode(
   return undefined;
 }
 
+/**
+ * LA RÉPONSE D'UNE IDENTITÉ QUITTÉE (#8674) — une promesse qui ne se résout
+ * jamais. Ni succès (son `queryFn` écrirait la donnée d'A dans le cache de
+ * B), ni échec (le rollback d'une mutation d'A y recopierait l'instantané
+ * d'A) : rien de ce qui attend cette réponse ne s'exécute sous B. Personne ne
+ * la retient une fois son appelant démonté ; elle part avec lui.
+ */
+const NEVER: Promise<never> = new Promise<never>(() => undefined);
+
 export function createHttpTransport(options: HttpTransportOptions): HttpTransport {
   const fetchImpl = options.fetchImpl ?? fetch;
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
@@ -309,8 +347,15 @@ export function createHttpTransport(options: HttpTransportOptions): HttpTranspor
   async function request<T>(req: HttpRequest): Promise<ApiResult<T>> {
     const url = `${options.base}${req.path}`;
     const locale = options.deviceLocale?.() ?? null;
-    const credential = options.credential?.() ?? null;
-    const presentsIdentity = credential !== null || namesAnIdentity(req.headers);
+    const forced = req.credential !== undefined;
+    const credential = forced ? (req.credential ?? null) : (options.credential?.() ?? null);
+    const presentsIdentity = !forced && (credential !== null || namesAnIdentity(req.headers));
+    const issuedUnder = options.identity?.() ?? null;
+    const identityChanged = (): boolean => !forced && options.identity !== undefined && options.identity() !== issuedUnder;
+    /** La charge d'une identité quittée — seulement quand CE transport a
+     * présenté le crédential de session : une requête publique ne porte
+     * rien de personnel. */
+    const staleForReader = (): boolean => credential !== null && identityChanged();
     /**
      * UN CORPS `FormData` (#5668, upload multipart) NE POSE JAMAIS SON PROPRE
      * `Content-Type` : c'est le NAVIGATEUR qui doit l'écrire, `boundary`
@@ -337,6 +382,7 @@ export function createHttpTransport(options: HttpTransportOptions): HttpTranspor
         ...(req.body !== undefined ? { body: formBody ?? JSON.stringify(req.body) } : {}),
       });
     } catch (error) {
+      if (staleForReader()) return NEVER;
       const code = abortCode(error, { callerSignal: req.signal, timeoutSignal });
       return {
         ok: false,
@@ -346,7 +392,11 @@ export function createHttpTransport(options: HttpTransportOptions): HttpTranspor
       };
     }
 
-    if (response.status === 401 && presentsIdentity) options.onUnauthorized?.();
+    if (staleForReader()) return NEVER;
+    /* Un 401 ne dit rien de l'identité COURANTE si elle n'est plus celle qui
+       a demandé : la déconnexion d'A, rejouée sur ses en-têtes explicites, ne
+       ferme jamais la session de B ouverte entre-temps. */
+    if (response.status === 401 && presentsIdentity && !identityChanged()) options.onUnauthorized?.();
 
     let payload: unknown;
     try {
@@ -354,6 +404,7 @@ export function createHttpTransport(options: HttpTransportOptions): HttpTranspor
     } catch {
       payload = undefined;
     }
+    if (staleForReader()) return NEVER;
     const envelope = envelopeOf(payload);
 
     if (envelope.success === true) {
@@ -365,6 +416,7 @@ export function createHttpTransport(options: HttpTransportOptions): HttpTranspor
         ...(envelope.cursorPagination !== undefined
           ? { cursorPagination: envelope.cursorPagination as CursorPaginationMeta }
           : {}),
+        ...(typeof envelope.hasNewer === 'boolean' ? { hasNewer: envelope.hasNewer } : {}),
         ...(envelope.meta !== null && typeof envelope.meta === 'object' && !Array.isArray(envelope.meta)
           ? { meta: envelope.meta as Readonly<Record<string, unknown>> }
           : {}),
@@ -383,6 +435,7 @@ export function createHttpTransport(options: HttpTransportOptions): HttpTranspor
       ...(typeof envelope.suggestedNickname === 'string' && envelope.suggestedNickname.trim() !== ''
         ? { suggestedNickname: envelope.suggestedNickname }
         : {}),
+      ...(envelope.emailOwner !== undefined && envelope.emailOwner !== null ? { emailOwner: envelope.emailOwner } : {}),
     };
   }
 

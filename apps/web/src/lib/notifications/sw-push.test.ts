@@ -1,16 +1,13 @@
 import { describe, expect, test } from 'bun:test';
-import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { REPRODUCED_PUSH_FIELD, REPRODUCED_PUSH_VALUE } from '@meeshy/shared/types/reproduced-notification-push';
-
-import { createFakeIndexedDB, type FakeIndexedDB } from '@/test-support/fake-indexed-db';
 import {
-  DELIVERY_RECEIPT_DB_NAME,
-  DELIVERY_RECEIPT_KEY,
-  DELIVERY_RECEIPT_STORE_NAME,
-  type DeliveryReceiptCredential,
-} from './delivery-receipt-credential';
+  REPLACES_ACTOR_SUBJECT_FIELD,
+  REPLACES_ACTOR_SUBJECT_VALUE,
+  REPRODUCED_PUSH_FIELD,
+  REPRODUCED_PUSH_VALUE,
+} from '@meeshy/shared/types/reproduced-notification-push';
+
+import type { DeliveryReceiptCredential } from './delivery-receipt-credential';
+import { banner, CODE, mount, push, windowClient, type WorkerHarness } from '@/test-support/sw-push-harness';
 
 /**
  * LE SERVICE WORKER QUI REÇOIT LE PUSH (#7305).
@@ -33,191 +30,6 @@ import {
  * aucun Prisme et ne rend aucune URL venue de la charge.
  */
 
-const HERE = dirname(fileURLToPath(import.meta.url));
-const SOURCE = readFileSync(join(HERE, '../../../public/sw-push.js'), 'utf8');
-
-/** Le CODE seul : un doc-comment qui NOMME un champ interdit le documente, il ne le lit pas. */
-const CODE = SOURCE.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
-
-type Listener = (event: ExtendableEventLike) => void;
-
-type ExtendableEventLike = {
-  readonly data?: { json(): unknown };
-  readonly notification?: NotificationLike;
-  waitUntil(promise: Promise<unknown>): void;
-};
-
-type NotificationLike = {
-  readonly data: Record<string, unknown>;
-  close(): void;
-};
-
-type ShownNotification = { readonly title: string; readonly options: Record<string, unknown> };
-
-/** Une bannière de la barre de notifications, telle que `getNotifications()` la rend. */
-type TrayBanner = {
-  readonly title: string;
-  readonly body: string;
-  readonly tag: string;
-  readonly data: Record<string, unknown>;
-  close(): void;
-};
-
-type ClientStub = {
-  readonly visibilityState: string;
-  readonly url: string;
-  focused: boolean;
-  readonly messages: unknown[];
-  focus(): Promise<void>;
-  postMessage(message: unknown): void;
-};
-
-/** Une requête `fetch` captée par le bouchon, telle que `accuserRemise` la compose. */
-type CapturedFetch = { readonly url: string; readonly init: Record<string, unknown> };
-
-type WorkerHarness = {
-  readonly listeners: Map<string, Listener>;
-  readonly shown: ShownNotification[];
-  readonly tray: TrayBanner[];
-  readonly opened: string[];
-  readonly badges: number[];
-  readonly clients: ClientStub[];
-  /** Les accusés de remise partis — vide tant qu'aucun push éligible n'a de crédential. */
-  readonly deliveries: CapturedFetch[];
-  readonly exports: {
-    readonly PUSH_ROUTE_PATTERNS: Readonly<Record<string, string>>;
-    readonly pushTargetUrl: (data: Record<string, unknown>) => string;
-  };
-  dispatch(type: string, event: Omit<ExtendableEventLike, 'waitUntil'>): Promise<void>;
-};
-
-const windowClient = (visibilityState: string, url = 'https://meeshy.me/'): ClientStub => {
-  const client: ClientStub = {
-    visibilityState,
-    url,
-    focused: false,
-    messages: [],
-    focus: async () => {
-      client.focused = true;
-    },
-    postMessage: (message) => void client.messages.push(message),
-  };
-  return client;
-};
-
-/**
- * `credential`, sème le double IndexedDB EXACTEMENT comme
- * `writeDeliveryReceiptCredential` (`delivery-receipt-credential.ts`, la
- * moitié « page » du jumeau) l'aurait écrit — même base, même magasin, même
- * clé — pour que ces témoins prouvent l'absence de dérive plutôt que de la
- * supposer. `fetchFails`, un accusé qui échoue au réseau ne doit ni lever ni
- * empêcher la bannière (best-effort, doc-comment de `accuserRemise`).
- */
-function mount({
-  clients = [] as ClientStub[],
-  already = [] as Record<string, unknown>[],
-  credential,
-  fetchFails = false,
-}: {
-  readonly clients?: ClientStub[];
-  readonly already?: Record<string, unknown>[];
-  readonly credential?: DeliveryReceiptCredential;
-  readonly fetchFails?: boolean;
-} = {}): WorkerHarness {
-  const listeners = new Map<string, Listener>();
-  const shown: ShownNotification[] = [];
-  const opened: string[] = [];
-  const badges: number[] = [];
-  const deliveries: CapturedFetch[] = [];
-  const idb: FakeIndexedDB = createFakeIndexedDB();
-  if (credential !== undefined) idb.seed(DELIVERY_RECEIPT_DB_NAME, DELIVERY_RECEIPT_STORE_NAME, DELIVERY_RECEIPT_KEY, credential);
-  /* La barre de notifications du navigateur : `getNotifications()` la lit, et
-     `showNotification` y REMPLACE, à sa place, la bannière de même tag
-     (« show steps » de la Notifications API). `already` y pose des bannières
-     réduites à leur `data`. */
-  const tray: TrayBanner[] = [];
-  const onTray = (title: string, body: string, tag: string, data: Record<string, unknown>): TrayBanner => {
-    const banner: TrayBanner = {
-      title,
-      body,
-      tag,
-      data,
-      close: () => {
-        const index = tray.indexOf(banner);
-        if (index >= 0) tray.splice(index, 1);
-      },
-    };
-    return banner;
-  };
-  already.forEach((data) => tray.push(onTray('', '', '', data)));
-
-  const self = {
-    addEventListener: (type: string, listener: Listener) => listeners.set(type, listener),
-    clients: {
-      matchAll: async () => clients,
-      openWindow: async (url: string) => {
-        opened.push(url);
-        return null;
-      },
-    },
-    registration: {
-      getNotifications: async () => [...tray],
-      showNotification: async (title: string, options: Record<string, unknown>) => {
-        /* Les deux TypeError de « create a notification » (Notifications API) :
-           le bouchon refuse ce que le navigateur refuserait, et la bannière
-           qu'il refuse n'est jamais montrée. */
-        if (options['silent'] === true && options['vibrate'] !== undefined) {
-          throw new TypeError('silent ne se combine pas avec vibrate');
-        }
-        if (options['renotify'] === true && (typeof options['tag'] !== 'string' || options['tag'] === '')) {
-          throw new TypeError('renotify exige un tag non vide');
-        }
-        shown.push({ title, options });
-        const tag = typeof options['tag'] === 'string' ? options['tag'] : '';
-        const data = typeof options['data'] === 'object' && options['data'] !== null ? (options['data'] as Record<string, unknown>) : {};
-        const banner = onTray(title, typeof options['body'] === 'string' ? options['body'] : '', tag, data);
-        const replaced = tag === '' ? -1 : tray.findIndex((existing) => existing.tag === tag);
-        if (replaced >= 0) tray.splice(replaced, 1, banner);
-        else tray.push(banner);
-      },
-    },
-    navigator: {
-      setAppBadge: async (count: number) => {
-        badges.push(count);
-      },
-    },
-    indexedDB: idb,
-    fetch: async (url: string, init: Record<string, unknown>) => {
-      deliveries.push({ url, init });
-      if (fetchFails) throw new TypeError('Failed to fetch');
-      return { ok: true, status: 200 };
-    },
-  } as Record<string, unknown>;
-
-  new Function('self', SOURCE)(self);
-
-  const pending: Promise<unknown>[] = [];
-  return {
-    listeners,
-    shown,
-    tray,
-    opened,
-    badges,
-    clients,
-    deliveries,
-    exports: self['meeshyPushTarget'] as WorkerHarness['exports'],
-    async dispatch(type, event) {
-      const listener = listeners.get(type);
-      if (listener === undefined) throw new Error(`aucun écouteur « ${type} »`);
-      listener({ ...event, waitUntil: (promise) => void pending.push(promise) });
-      await Promise.all(pending.splice(0));
-    },
-  };
-}
-
-const push = (payload: unknown): Omit<ExtendableEventLike, 'waitUntil'> => ({ data: { json: () => payload } });
-
-const banner = (data: Record<string, unknown>) => ({ notification: { title: 'Awa', body: 'Bonjour' }, data });
 
 describe('le worker n’affiche une bannière que si personne ne regarde (D-11)', () => {
   test('aucun client ouvert : la bannière système s’affiche', async () => {
@@ -434,6 +246,83 @@ describe('une notification éditée remplace la bannière déjà affichée (#734
   });
 });
 
+/**
+ * UNE RÉACTION CHANGÉE NE LAISSE QU'UNE BANNIÈRE (#9028).
+ *
+ * Changer sa réaction (❤️ → 😂) retire une notification et en crée une
+ * AUTRE : deux identités, et un post n'empile pas ses bannières sous un tag
+ * commun. La passerelle déclare que le push remplace la bannière du même type,
+ * du même acteur et du même sujet (`REPLACES_ACTOR_SUBJECT_FIELD`) ; le
+ * worker la ferme avant d'afficher la nouvelle.
+ */
+const reaction = (notificationId: string, body: string, data: Record<string, unknown> = {}) =>
+  composed(
+    { body },
+    {
+      notificationId,
+      type: 'post_like',
+      senderId: 'u-kwame',
+      postId: 'p1',
+      [REPLACES_ACTOR_SUBJECT_FIELD]: REPLACES_ACTOR_SUBJECT_VALUE,
+      ...data,
+    },
+  );
+
+describe('une réaction changée remplace la bannière de la réaction d’avant (#9028)', () => {
+  test('❤️ puis 😂 du même acteur sur le même post : une seule bannière, celle d’après', async () => {
+    const worker = mount();
+    await worker.dispatch('push', push(reaction('n1', 'Kwame a réagi ❤️')));
+    await worker.dispatch('push', push(reaction('n2', 'Kwame a réagi 😂')));
+    expect(visible(worker)).toEqual([['n2', 'Kwame a réagi 😂']]);
+  });
+
+  test('la réaction d’un AUTRE acteur reste affichée', async () => {
+    const worker = mount();
+    await worker.dispatch('push', push(reaction('n1', 'Awa a réagi ❤️', { senderId: 'u-awa' })));
+    await worker.dispatch('push', push(reaction('n2', 'Kwame a réagi 😂')));
+    expect(visible(worker)).toEqual([
+      ['n1', 'Awa a réagi ❤️'],
+      ['n2', 'Kwame a réagi 😂'],
+    ]);
+  });
+
+  test('la réaction du même acteur à un AUTRE commentaire du post reste affichée', async () => {
+    const worker = mount();
+    await worker.dispatch('push', push(reaction('n1', 'Kwame aime c1', { type: 'comment_like', commentId: 'c1' })));
+    await worker.dispatch('push', push(reaction('n2', 'Kwame aime c2', { type: 'comment_like', commentId: 'c2' })));
+    expect(visible(worker)).toEqual([
+      ['n1', 'Kwame aime c1'],
+      ['n2', 'Kwame aime c2'],
+    ]);
+  });
+
+  /* L'affirmation reste vraie quand quelqu'un regarde : la bannière d'avant
+     dit une réaction qui n'existe plus, même si la nouvelle passe par le
+     socket (D-11). */
+  test('un onglet VISIBLE ferme quand même la bannière périmée, sans en montrer une autre', async () => {
+    const clients: ReturnType<typeof windowClient>[] = [];
+    const worker = mount({ clients });
+    await worker.dispatch('push', push(reaction('n1', 'Kwame a réagi ❤️')));
+    clients.push(windowClient('visible'));
+    await worker.dispatch('push', push(reaction('n2', 'Kwame a réagi 😂')));
+    expect(worker.tray).toEqual([]);
+  });
+
+  test('un push sans la déclaration ne ferme rien — un commentaire ne remplace pas le précédent', async () => {
+    const worker = mount();
+    await worker.dispatch('push', push(reaction('n1', 'Kwame a commenté', { type: 'post_comment', [REPLACES_ACTOR_SUBJECT_FIELD]: undefined })));
+    await worker.dispatch('push', push(reaction('n2', 'Kwame a commenté encore', { type: 'post_comment', [REPLACES_ACTOR_SUBJECT_FIELD]: undefined })));
+    expect(visible(worker).length).toBe(2);
+  });
+
+  test('la même réaction livrée deux fois reste affichée une fois', async () => {
+    const worker = mount();
+    await worker.dispatch('push', push(reaction('n1', 'Kwame a réagi ❤️')));
+    await worker.dispatch('push', push(reaction('n1', 'Kwame a réagi ❤️')));
+    expect(visible(worker)).toEqual([['n1', 'Kwame a réagi ❤️']]);
+  });
+});
+
 describe('le worker AFFICHE ce que le serveur a composé — il ne re-résout rien', () => {
   test('une charge sans titre ni corps n’affiche rien plutôt qu’un libellé inventé', async () => {
     const worker = mount();
@@ -491,6 +380,18 @@ describe('le worker AFFICHE ce que le serveur a composé — il ne re-résout ri
       }),
     );
     expect(worker.shown[0]?.options['data']).toEqual({ notificationId: 'n1', conversationId: 'abc' });
+  });
+
+  test('« X a rejoint Meeshy » garde le pseudonyme qui route son tap, jamais son avatar (#8105)', async () => {
+    const worker = mount();
+    await worker.dispatch(
+      'push',
+      push({
+        notification: { title: 'Maman a rejoint Meeshy', body: 'Dites-lui bonjour' },
+        data: { notificationId: 'n2', type: 'contact_joined', senderUsername: 'awa', senderAvatar: 'https://gate.meeshy.me/a.png' },
+      }),
+    );
+    expect(worker.shown[0]?.options['data']).toEqual({ notificationId: 'n2', type: 'contact_joined', senderUsername: 'awa' });
   });
 
   test('`unreadCount` pose le badge de l’application', async () => {
@@ -650,6 +551,18 @@ describe('le tap atterrit à l’adresse de la v2, jamais à celle du legacy', (
     expect(worker.opened).toEqual(['/discover?onglet=requests&demandes=received']);
   });
 
+  test('« X a rejoint Meeshy » ouvre le profil de l’arrivant (#8105)', async () => {
+    const worker = mount();
+    await worker.dispatch('notificationclick', clic({ type: 'contact_joined', senderUsername: 'awa' }).event);
+    expect(worker.opened).toEqual(['/u/awa']);
+  });
+
+  test('« X était sur Meeshy récemment » ouvre le profil du contact revenu (#8285)', async () => {
+    const worker = mount();
+    await worker.dispatch('notificationclick', clic({ type: 'contact_recently_active', senderUsername: 'marie' }).event);
+    expect(worker.opened).toEqual(['/u/marie']);
+  });
+
   test('sans destination, le tap ouvre la liste des notifications — il atterrit toujours', async () => {
     const worker = mount();
     await worker.dispatch('notificationclick', clic({ type: 'un_type_sans_ecran' }).event);
@@ -662,6 +575,7 @@ describe('le tap atterrit à l’adresse de la v2, jamais à celle du legacy', (
       story: '/story/$post',
       post: '/post/$post',
       discover: '/discover',
+      userProfile: '/u/$username',
       progression: '/me/progression',
       settings: '/settings',
       notifications: '/notifications',

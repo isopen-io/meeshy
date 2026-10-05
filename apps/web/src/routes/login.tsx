@@ -7,20 +7,29 @@ import { Field } from '@/components/field';
 import { GlyphSvg } from '@/components/glyph';
 import { AUTH_GLYPHS } from '@/components/glyphs-auth';
 import { MagicLinkPanel, type MagicLinkPanelDeps } from '@/components/magic-link-panel';
-import { auth } from '@/lib/api/auth';
+import { auth, isVerificationRequired } from '@/lib/api/auth';
+import { apiConfig } from '@/lib/api/config';
 import { sessionStore } from '@/lib/api/session';
 import { useOnline } from '@/lib/net/online';
+import { holdPendingVerification } from '@/lib/pending-verification';
+import { isEmailValid } from '@/lib/signup-form';
 import { useSearch } from '@/lib/router';
 import { landingAfterSession, safeNextPath } from '@/lib/session-guard';
 import { placeLoginFailure } from '@/lib/view/auth-feedback';
 import { Link, href, navigate } from '@/routes/route-table';
+import { PasswordInput } from '@/components/password-input';
+import { DeviceAccountList } from '@/components/device-account-list';
+import type { AccountSwitcher, AccountVault, DeviceAccount } from '@/lib/api/accounts';
+import { accountSwitcher, accountVault } from '@/lib/api/device-accounts';
+import { translate } from '@/lib/i18n-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 
 /**
  * L'ÉCRAN DE CONNEXION (#5555) — anatomie de `LoginView.swift:93-166`.
  *
- * TROIS sections EXCLUSIVES : la connexion normale, le second facteur, et le
- * sélecteur de comptes sauvegardés — ce dernier NON REPRIS (§ 9 Q3 de la
- * spécification, aucun trousseau web). La section active se lit sur le
+ * DEUX sections EXCLUSIVES : la connexion normale et le second facteur. La
+ * liste des comptes de l'appareil (#8286) les précède — elle ouvre un compte
+ * GARDÉ sans mot de passe, et préremplit l'identifiant des autres. La section active se lit sur le
  * MAGASIN DE SESSION partagé (`session.status === 'pending2fa'`), jamais un
  * état local dupliqué : c'est la MÊME source que `SessionGate` (`main.tsx`)
  * consulte pour décider si cet écran doit même rester affiché.
@@ -69,7 +78,33 @@ const LEGACY_PASSWORD_METHOD = 'motdepasse';
  */
 const NEXT_PARAM = 'next';
 
+/**
+ * `email` — L'ADRESSE DÉJÀ TAPÉE (#8216). L'inscription y bascule avec
+ * l'adresse qu'on venait de saisir : la retaper est un geste de trop, et une
+ * occasion de se tromper d'adresse puis de créer un second compte. Elle
+ * préremplit la saisie, jamais n'envoie rien.
+ */
+const EMAIL_PARAM = 'email';
+
 type LoginMethod = 'lien' | 'password';
+
+/**
+ * LE SERVEUR MONTRÉ À LA CONNEXION (#8287) — miroir du sélecteur iOS réservé au
+ * simulateur : en DÉVELOPPEMENT local seulement, jamais dans un build de
+ * production. La base relative du dev part par le proxy : c'est sa cible qu'on nomme.
+ */
+export function loginServerLabel({
+  dev,
+  base,
+  proxyTarget,
+}: {
+  readonly dev: boolean | undefined;
+  readonly base: string;
+  readonly proxyTarget: string;
+}): string | null {
+  if (dev !== true) return null;
+  return base === '' ? proxyTarget : base.replace(/\/api\/v1\/?$/, '');
+}
 
 export function loginMethodFromSearch(raw: string | null): LoginMethod {
   return raw === PASSWORD_METHOD || raw === LEGACY_PASSWORD_METHOD ? 'password' : 'lien';
@@ -101,7 +136,9 @@ export default function LoginScreen({ magicLinkDeps }: { readonly magicLinkDeps?
     <LoginDoors
       method={loginMethodFromSearch(search.get(METHOD_PARAM))}
       next={search.get(NEXT_PARAM)}
+      email={search.get(EMAIL_PARAM)}
       {...(magicLinkDeps === undefined ? {} : { magicLinkDeps })}
+      serverLabel={import.meta.env.DEV ? loginServerLabel({ dev: true, base: apiConfig.base, proxyTarget: __API_PROXY_TARGET__ }) : null}
     />
   );
 }
@@ -109,22 +146,41 @@ export default function LoginScreen({ magicLinkDeps }: { readonly magicLinkDeps?
 export function LoginDoors({
   method,
   next = null,
+  email = null,
   magicLinkDeps,
+  passwordLogin = auth.login,
+  accounts = { vault: accountVault, switcher: accountSwitcher },
+  serverLabel = null,
 }: {
   readonly method: LoginMethod;
   /** La valeur BRUTE de `?next=` — clampée ici, là où elle sert. */
   readonly next?: string | null;
+  /** L'adresse à PRÉREMPLIR (#8216) — la valeur brute de `?email=`. */
+  readonly email?: string | null;
   readonly magicLinkDeps?: MagicLinkPanelDeps;
+  /** La connexion par mot de passe — injectable pour les témoins. */
+  readonly passwordLogin?: typeof auth.login;
+  /** Le coffre des comptes et la bascule (#8286) — injectables pour les témoins. */
+  readonly accounts?: { readonly vault: AccountVault; readonly switcher: AccountSwitcher };
+  /** Le serveur visé, montré en développement seulement (#8287) — `null` : rien. */
+  readonly serverLabel?: string | null;
 }) {
   const session = useStore(sessionStore, (s) => s.session);
   const online = useOnline();
 
-  const [username, setUsername] = useState('');
+  const [username, setUsername] = useState(email ?? '');
   const [password, setPassword] = useState('');
   const [twoFactorCode, setTwoFactorCode] = useState('');
   const [focused, setFocused] = useState<'username' | 'password' | 'code' | null>(null);
   const [isSubmitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const language = currentInterfaceLanguage();
+  const [deviceAccounts, setDeviceAccounts] = useState<readonly DeviceAccount[]>(() => accounts.vault.list());
+  /** Proposée au compte SUPPLÉMENTAIRE seulement : le premier est gardé sans
+   * question. Lue au montage — la liste ne change pas sous la saisie. */
+  const [offersKeepSignedIn] = useState(() => accounts.switcher.offersKeepSignedIn());
+  const [keepSignedIn, setKeepSignedIn] = useState(true);
 
   const requires2FA = session.status === 'pending2fa';
   /** Ce que les liens qui RÉÉCRIVENT l'adresse transmettent — changer de porte
@@ -141,17 +197,46 @@ export function LoginDoors({
    * restent `allow` partout, délibérément, pour ne pas casser le POC).
    */
   useEffect(() => {
-    if (session.status === 'authenticated') navigate(landingAfterSession(next, href('list')), true);
+    if (session.status !== 'authenticated') return;
+    accounts.vault.noteActive(session.user, offersKeepSignedIn ? keepSignedIn : undefined);
+    navigate(landingAfterSession(next, href('list')), true);
   }, [session.status, next]);
+
+  function chooseAccount(account: DeviceAccount) {
+    if (accounts.switcher.switchTo(account.user.id) === 'switched') return;
+    setUsername(account.user.username);
+    setPassword('');
+    setErrorMessage(null);
+    if (method !== 'password') navigate(href('login', undefined, { [METHOD_PARAM]: PASSWORD_METHOD, ...nextSearch }), true);
+  }
+
+  function forgetAccount(account: DeviceAccount) {
+    accounts.vault.forget(account.user.id);
+    setDeviceAccounts(accounts.vault.list());
+  }
 
   async function handleLoginSubmit(event: FormEvent) {
     event.preventDefault();
     if (username.trim() === '' || password === '' || isSubmitting) return;
     setSubmitting(true);
     setErrorMessage(null);
-    const result = await auth.login({ username, password });
+    const result = await passwordLogin({ username, password, ...(offersKeepSignedIn ? { rememberDevice: keepSignedIn } : {}) });
     setSubmitting(false);
-    if (!result.ok) setErrorMessage(placeLoginFailure(result).message);
+    if (!result.ok) {
+      setErrorMessage(placeLoginFailure(result).message);
+      return;
+    }
+    /* UN E-MAIL INCONNU DEVIENT UN COMPTE (#8034, contrat #8033) : la
+       passerelle l'a créé SANS mot de passe ni session, et envoyé un code et
+       un lien. On va AUSSITÔT à la saisie du code ; le mot de passe tapé est
+       retenu en mémoire vive (jamais l'adresse, jamais le stockage) pour
+       voyager avec ce code — seule preuve que celui qui l'a tapé possède
+       l'adresse. */
+    if (isVerificationRequired(result.data)) {
+      const { email, accountCreated, pendingSessionToken } = result.data;
+      holdPendingVerification({ email, password, accountCreated, ...(pendingSessionToken !== undefined ? { pendingSessionToken } : {}) });
+      navigate(href('verifyEmail', undefined, { email: result.data.email, ...nextSearch }));
+    }
     // Un succès (avec ou sans 2FA) écrit le magasin — `session.status` change
     // et `SessionGate` (`main.tsx`) prend la suite (redirection vers `/`).
   }
@@ -173,7 +258,14 @@ export function LoginDoors({
   }
 
   return (
-    <AuthColumn className="items-center justify-center gap-8 px-6 py-10">
+    /* LES ESPACES PLIENT, PAS L'ÉCRAN (#8418). `gap-8 py-10` fixes
+       faisaient 672 px de la porte par défaut et 830 de celle du mot de
+       passe : sur un téléphone, la connexion défilait. iOS range la même
+       colonne entre des `Spacer()` (`LoginView.swift:128-201`) qui cèdent la
+       place avant le contenu — ici `justify-evenly` partage le blanc
+       restant, et `gap-2` / `py-2` sont le plancher quand il n'en reste
+       plus. Témoin : `scripts/check-phone-frame.mjs`, 375×667. */
+    <AuthColumn className="items-center justify-evenly gap-2 px-6 py-2">
       {/* LE BLASON NE PARAÎT QUE LÀ OÙ IL NOMME QUELQUE CHOSE (#6583).
           Directive porteur 2026-09-14 : « à la connexion la page doit être
           sans titre sauf la baguette magique ». La porte par défaut a la
@@ -192,9 +284,20 @@ export function LoginDoors({
       {method === 'password' || requires2FA ? <AuthTitle gradient="login" /> : null}
 
       {!online ? (
-        <p className="w-full rounded-[14px] px-4 py-2 text-center text-caption" style={{ backgroundColor: 'var(--color-ios-card)', color: 'var(--color-ios-ink-2)' }}>
+        <p className="w-full rounded-field px-4 py-2 text-center text-caption" style={{ backgroundColor: 'var(--color-ios-card)', color: 'var(--color-ios-ink-2)' }}>
           Hors ligne — la connexion n’est pas possible pour l’instant.
         </p>
+      ) : null}
+
+      {!requires2FA && deviceAccounts.length > 0 ? (
+        <DeviceAccountList
+          language={language}
+          accounts={deviceAccounts}
+          activeId={null}
+          isPreserved={accounts.vault.hasPreservedSession}
+          onChoose={chooseAccount}
+          onForget={forgetAccount}
+        />
       ) : null}
 
       {requires2FA ? (
@@ -260,6 +363,7 @@ export function LoginDoors({
         <MagicLinkPanel
           {...(magicLinkDeps === undefined ? {} : { deps: magicLinkDeps })}
           next={next}
+          initialEmail={email ?? ''}
           footer={
             <div className="mt-1 grid justify-items-center gap-2">
               <Link
@@ -291,7 +395,7 @@ export function LoginDoors({
                 autoCapitalize="none"
                 autoCorrect="off"
                 value={username}
-                onChange={(e) => setUsername(e.currentTarget.value)}
+                onInput={(e) => setUsername(e.currentTarget.value)}
                 onFocus={() => setFocused('username')}
                 onBlur={() => setFocused(null)}
                 placeholder="Identifiant, e-mail ou téléphone"
@@ -303,17 +407,14 @@ export function LoginDoors({
 
           <Field id="login-password" label="Mot de passe" icon="lock" tint={FOCUS_TINT} focused={focused === 'password'}>
             {({ id }) => (
-              <input
+              <PasswordInput
                 id={id}
-                type="password"
                 autoComplete="current-password"
                 value={password}
-                onChange={(e) => setPassword(e.currentTarget.value)}
+                onValue={setPassword}
                 onFocus={() => setFocused('password')}
                 onBlur={() => setFocused(null)}
                 placeholder="Mot de passe"
-                className="w-full bg-transparent py-3 text-input outline-none"
-                style={{ color: 'var(--color-ios-ink)' }}
               />
             )}
           </Field>
@@ -322,6 +423,19 @@ export function LoginDoors({
             <p role="alert" className="text-center text-caption" style={{ color: 'var(--ios-error)' }}>
               {errorMessage}
             </p>
+          ) : null}
+
+          {offersKeepSignedIn ? (
+            <label data-keep-signed-in className="flex items-center gap-3 text-body" style={{ minHeight: 44, color: 'var(--color-ios-ink)' }}>
+              <input
+                type="checkbox"
+                checked={keepSignedIn}
+                onChange={(e) => setKeepSignedIn(e.currentTarget.checked)}
+                className="size-5 shrink-0"
+                style={{ accentColor: 'var(--color-ios-brand)' }}
+              />
+              {translate(language, 'accounts.keep_signed_in')}
+            </label>
           ) : null}
 
           <AuthSubmitButton
@@ -358,6 +472,7 @@ export function LoginDoors({
             </Link>
             <Link
               to="forgotPassword"
+              search={{ [EMAIL_PARAM]: isEmailValid(username) ? username.trim() : undefined }}
               className="inline-flex items-center font-medium text-title"
               style={{ minHeight: 44, color: 'var(--color-ios-ink-2)' }}
               aria-label="Mot de passe oublié"
@@ -374,6 +489,12 @@ export function LoginDoors({
           Créer un compte
         </Link>
       </p>
+
+      {serverLabel === null ? null : (
+        <p data-login-server className="font-mono text-caption" style={{ color: 'var(--color-ios-ink-3)' }}>
+          {translate(language, 'login.server_origin', { origin: serverLabel })}
+        </p>
+      )}
 
       <AuthBrandFooter />
     </AuthColumn>

@@ -41,7 +41,7 @@ final class ReelFeedAutoplayCoordinator: ObservableObject {
     private var callStateCancellable: AnyCancellable?
 
     /// `callStatePublisher` injecte le flux d'état d'appel (true = appel actif).
-    /// Défaut : `CallManager.shared.$callState` mappé sur `isActive`, qui émet
+    /// Défaut : `CallManagerHost.shared.callStatePublisher` mappé sur `isActive`, qui émet
     /// la transition inactif→actif même sans scroll. Les tests passent un
     /// publisher déterministe (ou `nil`) pour ne pas toucher le singleton.
     init(
@@ -64,7 +64,7 @@ final class ReelFeedAutoplayCoordinator: ObservableObject {
     /// vers un `Bool` "appel actif". Construite hors-init pour rester `nil` si la
     /// couche appel n'est pas disponible (preview/test sans singleton).
     static var defaultCallStatePublisher: AnyPublisher<Bool, Never> {
-        CallManager.shared.$callState
+        CallManagerHost.shared.callStatePublisher
             .map(\.isActive)
             .removeDuplicates()
             .eraseToAnyPublisher()

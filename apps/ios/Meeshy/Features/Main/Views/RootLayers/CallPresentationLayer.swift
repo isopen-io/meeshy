@@ -2,8 +2,8 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
-/// Découple la présentation d'appel (cover plein écran + pastille flottante +
-/// bulle + bannière call-waiting) du corps de `RootView` / `iPadRootView`.
+/// Découple la présentation d'appel (fenêtre plein écran #8725 + pastille flottante +
+/// fenêtre du point de retour #8739 + bannière call-waiting) du corps de `RootView` / `iPadRootView`.
 ///
 /// EXTRAIT de `RootView.swift` le 2026-09-14 (#6579). `RootView.swift` dépassait
 /// le plafond dur de 1200 lignes : y ajouter le montage de la bande du haut était
@@ -23,8 +23,32 @@ import MeeshyUI
 /// que `body(content:)` (les overlays d'appel, légers) et ne reconstruit JAMAIS
 /// le `content` sous-jacent (liste de conversations, NavigationStack, tabs) —
 /// celui-ci est un placeholder opaque que le framework diffe sans re-layout.
+///
+/// #7955 — ce conteneur observe `CallManagerHost`, jamais `CallManager.shared`
+/// : le lire construisait toute la pile d'appel (CallKit, WebRTC, PiP AVKit,
+/// Vision + Metal) sur le fil principal pendant la première image du démarrage
+/// à froid, hors de tout appel. L'hôte relaie les changements de la pile dès
+/// qu'elle existe ; avant, il n'y a pas d'appel à présenter. La STRUCTURE du
+/// corps ne dépend pas de sa présence (chaque montage d'appel est un `if let`
+/// à sa place) : réveiller la pile ne recrée jamais le `content`.
 struct CallPresentationLayer: ViewModifier {
-    @ObservedObject private var callManager = CallManager.shared
+    @ObservedObject private var calls: CallManagerHost
+
+    init(
+        miniPlayerOnTapBody: @escaping () -> Void,
+        miniPlayerCurrentConversationId: @escaping () -> String?,
+        miniPlayerCoordinator: ConversationAudioCoordinator? = nil,
+        calls: CallManagerHost = .shared,
+        incomingCallGate: IncomingCallWakeGate = .shared
+    ) {
+        self.miniPlayerOnTapBody = miniPlayerOnTapBody
+        self.miniPlayerCurrentConversationId = miniPlayerCurrentConversationId
+        self.miniPlayerCoordinator = miniPlayerCoordinator
+        self._calls = ObservedObject(wrappedValue: calls)
+        self.incomingCallGate = incomingCallGate
+    }
+
+    private let incomingCallGate: IncomingCallWakeGate
 
     // Mini-lecteur audio hoisté ICI (même point de montage que la bannière
     // d'appel — demande produit 2026-08-13 : « le mini lecteur doit être
@@ -45,7 +69,7 @@ struct CallPresentationLayer: ViewModifier {
     /// la bande. Sans cette couture, le seul moyen d'exercer le chemin complet
     /// (barre → `onDisplayedContextChange` → `audioBarContext` → bande) serait de
     /// muter le singleton du processus, ce qui fuit d'un témoin à l'autre.
-    var miniPlayerCoordinator: ConversationAudioCoordinator? = nil
+    var miniPlayerCoordinator: ConversationAudioCoordinator?
 
     /// Ce que le mini-lecteur AFFICHE — pas ce que le coordinateur joue (#6579).
     ///
@@ -61,6 +85,11 @@ struct CallPresentationLayer: ViewModifier {
     /// hors du corps de la racine. Le callback ne tire qu'aux changements de la
     /// valeur AFFICHÉE — quelques fois par lecture.
     @State private var audioBarContext: ActiveAudioContext?
+
+    /// L'encart haut que les barres franchissent en sortant par le haut (#9048).
+    @State private var topInset: CGFloat = 0
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func body(content: Content) -> some View {
         // Compression de frame, PAS augmentation de safe area : la bannière
@@ -78,20 +107,23 @@ struct CallPresentationLayer: ViewModifier {
         // bannière d'appel : quand un appel est actif, `FloatingCallPillView`
         // occupe le haut et le mini-lecteur (s'il joue quelque chose) se pose
         // juste en dessous — l'appel prime toujours visuellement sur la
-        // lecture audio, jamais l'inverse. Les deux ont un corps vide
-        // (`EmptyView`) quand ils n'ont rien à montrer, donc aucune empreinte
-        // fantôme dans le VStack (même garantie que `FloatingCallPillView`
-        // seule avant ce changement).
-        VStack(spacing: 0) {
-            FloatingCallPillView(callManager: callManager)
-            MiniAudioPlayerBar(
-                coordinatorForTesting: miniPlayerCoordinator,
-                onTapBody: miniPlayerOnTapBody,
-                currentConversationId: miniPlayerCurrentConversationId,
-                onDisplayedContextChange: { audioBarContext = $0 }
+        // lecture audio, jamais l'inverse. Quand ils n'ont rien à montrer, la
+        // pilule a un corps vide et le mini-lecteur une ancre de hauteur nulle :
+        // aucune empreinte fantôme dans le VStack.
+        //
+        // `callIsActive` vient du prédicat de la pilule elle-même, jamais de
+        // `callState.isActive` : la pilule se masque aussi en plein écran et
+        // pendant le PiP système, et une bande sans sa barre serait un ruban
+        // indigo posé sur rien.
+        let callManager = calls.manager
+        let pillShowing = callManager.map {
+            FloatingCallPillView.isShowingPill(
+                displayMode: $0.displayMode,
+                callState: $0.callState,
+                isSystemPiPActive: $0.isSystemPiPActive
             )
-            content
-        }
+        } ?? false
+        VStack(spacing: 0) {
             // La BANDE DU HAUT (#6579) — le site UNIQUE qui peint la zone
             // status-bar au-dessus de la barre active. Montée ICI parce que ce
             // conteneur est le seul endroit que les DEUX racines partagent
@@ -100,58 +132,84 @@ struct CallPresentationLayer: ViewModifier {
             // leur propre débord — une peinture portée par chaque barre est
             // présente chez l'une et absente chez l'autre, ce qui ÉTAIT le défaut.
             //
-            // `callIsActive` vient du prédicat de la pilule elle-même, jamais de
-            // `callState.isActive` : la pilule se masque aussi en plein écran et
-            // pendant le PiP système, et une bande sans sa barre serait un ruban
-            // indigo posé sur rien.
-            .modifier(TopChromeBand(
-                callIsActive: FloatingCallPillView.isShowingPill(
-                    displayMode: callManager.displayMode,
-                    callState: callManager.callState,
-                    isSystemPiPActive: callManager.isSystemPiPActive
-                ),
-                audio: audioBarContext
-            ))
-            // Le `set: false` est un "minimize" (→ PiP), PAS un "end call" :
-            // swiper le cover vers le bas ne raccroche pas. Le bouton hangup de
-            // chaque UI passe explicitement par `callManager.endCall()`.
-            .fullScreenCover(isPresented: Binding(
-                get: {
-                    CallState.shouldPresentFullScreenCover(
-                        callState: callManager.callState,
-                        displayMode: callManager.displayMode
-                    )
-                },
-                set: { if !$0 { callManager.displayMode = .pip } }
-            )) {
-                CallView(callManager: callManager)
+            // Sur une rangée de tête de hauteur nulle (#9048), et plus sur la pile
+            // entière : son RANG la place au-dessus du contenu mais sous la barre
+            // qui sort par le haut, dont elle masquerait sinon le contenu à la
+            // traversée de l'encart (`TopChromeBarMotion`).
+            Color.clear.frame(height: 0)
+                .modifier(TopChromeBand(callIsActive: pillShowing, audio: audioBarContext))
+                .zIndex(TopChromeBarMotion.bandLayer)
+            if let callManager {
+                FloatingCallPillView(callManager: callManager, isLastBar: audioBarContext == nil, topInset: topInset)
+            }
+            MiniAudioPlayerBar(
+                coordinatorForTesting: miniPlayerCoordinator,
+                onTapBody: miniPlayerOnTapBody,
+                currentConversationId: miniPlayerCurrentConversationId,
+                onDisplayedContextChange: { audioBarContext = $0 },
+                isLastBar: !pillShowing,
+                topInset: topInset
+            )
+            content
+        }
+            // L'encart haut, MESURÉ : le haut de la pile en coordonnées de la
+            // fenêtre. Le lire sur la fenêtre pendant le rendu (`DeviceLayout`)
+            // provoque un cycle AttributeGraph qui fige la barre (#8772, #9048).
+            .background {
+                GeometryReader { geo in
+                    Color.clear.preference(key: TopChromeInsetKey.self, value: geo.frame(in: .global).minY)
+                }
+            }
+            .onPreferenceChange(TopChromeInsetKey.self) { topInset = $0 }
+            // #9048 — la pilule entre et sort au gré de l'état de l'APPEL, qu'aucun
+            // `withAnimation` n'enveloppe : son ressort se pose donc ici, sur la pile
+            // ENTIÈRE — bande comprise — pour que la bande et le contenu de l'app la
+            // suivent au lieu de sauter. Une bascule faite sous `disablesAnimations` —
+            // l'aller-retour du plein écran, qui joue son propre morph — reste
+            // instantanée.
+            .animation(TopChromeBarMotion.animation(reduceMotion: reduceMotion), value: pillShowing)
+            .onAppear {
+                incomingCallGate.arm()
+                // #8725 — la vue d'appel plein écran vit dans sa propre
+                // fenêtre, au-dessus de toute présentation (story, réels,
+                // visionneuses, composer, feuilles).
+                CallWindowPresenter.shared.bind()
+                // #8739 — la bulle d'un appel réduit vit dans une fenêtre
+                // passe-plat au-dessus de toute présentation : un viewer de
+                // story ou une visionneuse ne la recouvre plus.
+                CallReturnPointPresenter.shared.bind()
+                CallPlaybackInterruptionBinding.shared.bind()
+                #if DEBUG
+                CallDebugIncomingTrigger.arm()
+                #endif
             }
             // C1 — ancre du PiP système pour les modes RÉDUITS. L'unique ancre
-            // vivait dans `CallView`, donc dans le `fullScreenCover` : réduire
-            // l'appel démonte le cover, `pipConfiguredSource` est `weak` et passe
+            // vivait dans `CallView`, donc dans la présentation plein écran : réduire
+            // l'appel la démonte, `pipConfiguredSource` est `weak` et passe
             // à nil, et plus rien ne reconfigure. Un appel réduit ne pouvait donc
             // PLUS ouvrir de PiP — alors que le réduire est exactement le geste
             // qui devrait le préparer.
             //
             // Deux gardes, chacune pour une raison distincte :
-            // • `displayMode != .fullScreen` — pendant que le cover est présenté
-            //   (`UIModalPresentationFullScreen`), UIKit détache la hiérarchie
-            //   présentante : une ancre montée ici y serait hors fenêtre, et le
-            //   bouton PiP manuel de `CallView` resterait visible mais inerte.
+            // • `displayMode != .fullScreen` — en plein écran, `CallView` (dans
+            //   sa fenêtre dédiée, #8725) porte sa propre ancre : deux ancres
+            //   vivantes se disputeraient la source AVKit à chaque rendu.
             // • PAS de garde sur `isSystemPiPActive` — contrairement à la pilule
             //   et à la bulle, qui se masquent pendant le PiP. L'ancre doit
             //   SURVIVRE à la fenêtre flottante : c'est la vue d'où AVKit fait
             //   émerger puis retourner l'animation.
             .overlay(alignment: .top) {
-                if callManager.callState.isActive && callManager.displayMode != .fullScreen {
+                if let callManager, callManager.callState.isActive, callManager.displayMode != .fullScreen {
+                    // #8435 — entrer en PiP ferme le plein écran : cette ancre
+                    // devient la source de la fenêtre. Remontée à chaque
+                    // fermeture (`pipAnchorGeneration`), elle reconfigure le
+                    // PiP suivant sur une vue vivante.
                     PiPSourceAnchor()
+                        .id(callManager.pipAnchorGeneration)
                         .frame(height: 64)
                         .padding(.top, MeeshySpacing.sm)
                         .allowsHitTesting(false)
                 }
-            }
-            .overlay {
-                CallBubbleView(callManager: callManager)
             }
             // §7.6 — call-waiting : un 2e appel entrant pendant un appel actif.
             // Reject termine le nouvel appel ; "end & answer" raccroche l'appel
@@ -160,11 +218,14 @@ struct CallPresentationLayer: ViewModifier {
             // un 3e appelant réutilise l'identité du 2e et se fait auto-rejeter
             // 5-10 s trop tôt (Audit Vague 27).
             .overlay(alignment: .top) {
-                if callManager.showCallWaitingBanner {
+                if let callManager, callManager.showCallWaitingBanner {
                     CallWaitingBannerView(
                         callerName: callManager.pendingIncomingCall?.fromUsername
                             ?? String(localized: "call.unknown", defaultValue: "Inconnu", bundle: .main),
-                        isVisible: $callManager.showCallWaitingBanner,
+                        isVisible: Binding(
+                            get: { callManager.showCallWaitingBanner },
+                            set: { callManager.showCallWaitingBanner = $0 }
+                        ),
                         onReject: { callManager.rejectPendingCall() },
                         onEndAndAnswer: { callManager.endCurrentAndAnswerPending() }
                     )
@@ -172,5 +233,6 @@ struct CallPresentationLayer: ViewModifier {
                     .padding(.top, MeeshySpacing.sm)
                 }
             }
+            .modifier(CallFeedbackLayer(callManager: callManager))
     }
 }

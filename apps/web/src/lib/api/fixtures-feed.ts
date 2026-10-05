@@ -346,7 +346,7 @@ export const POST_NO_DIMENSIONS: FeedPost = {
 /**
  * `POST_WIRE_NULLS` — LA CHARGE TELLE QUE LA PASSERELLE LA SERT, `null`
  * compris (défaut BLOQUANT, revue-correction #5893). Relevé le 2026-09-13 sur
- * `gate.staging.meeshy.me` (`GET /api/v1/social/posts?scope=home`) : un
+ * `gate.staging.meeshy.me` (`GET social.posts?scope=home`) : un
  * auteur sans photo sert `avatar: null`, un média sans vignette sert
  * `thumbnailUrl`/`thumbHash`/`caption`/`width`/`height`/`duration` à `null` —
  * Prisma sérialise une colonne optionnelle, jamais une clé absente.
@@ -875,7 +875,7 @@ export const POST_SCENE_DECORATED: FeedPost = {
             // n'en passe aucune) — est désormais RÉSOLUE dans le moteur
             // (`scene-player.tsx#SceneCanvas`, `bg1.payload.thumbHash`
             // ci-dessus) ; la pastille RESTE, en défense en profondeur —
-            // le sol se peint à `LETTERBOX_FILL_OPACITY` (0,85), jamais 1.
+            // le sol se peint à `LETTERBOX_FILL_OPACITY` (0,85) sur du noir.
             payload: { text: 'Ça bouge !', textColor: '#FFFFFF', textBg: '#4338CA' },
           },
           {

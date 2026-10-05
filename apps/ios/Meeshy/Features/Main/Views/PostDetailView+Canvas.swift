@@ -58,14 +58,14 @@ extension PostDetailView {
         if BackgroundSoundBadge.canvasHasContent(renderedItem) {
             storyCanvasContainer(reader(), renderedItem: renderedItem, onOpen: onOpen)
         } else {
-            HStack(spacing: 6) {
+            HStack(spacing: MeeshySpacing.xsPlus) {
                 Image(systemName: "sparkles.rectangle.stack")
                 Text(String(localized: "feed.post.detail.story_unavailable", defaultValue: "Story indisponible", bundle: .main))
             }
             .font(.footnote)
             .foregroundColor(theme.textMuted)
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 32)
+            .padding(.vertical, MeeshySpacing.xxxl)
         }
     }
 
@@ -86,8 +86,8 @@ extension PostDetailView {
             accentHex: accentColor,
             onTogglePlayback: { isCanvasPaused.toggle() }
         )
-        .padding(.horizontal, 16)
-        .padding(.top, 8)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.top, MeeshySpacing.sm)
     }
 
     /// Le chemin NATIF. Le lecteur est construit sur `renderedItem` plutôt que
@@ -137,8 +137,8 @@ extension PostDetailView {
                     onTapScene: { openDetailScene(at: $0) }
                 )
             )
-            .padding(.horizontal, 16)
-            .padding(.top, 8)
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.top, MeeshySpacing.sm)
         } else {
             storyCanvasOrPlaceholder(renderedItem: renderedItem,
                                      onOpen: { openDetailScene(at: 0) }) {
@@ -151,8 +151,8 @@ extension PostDetailView {
                                                                 viewerPaused: isCanvasPaused)
                 )
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 8)
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.top, MeeshySpacing.sm)
         }
     }
 
@@ -203,7 +203,7 @@ extension PostDetailView {
             reader
                 .aspectRatio(ratio, contentMode: .fit)
                 .frame(maxWidth: taille?.width ?? PostDetailSceneFraming.maxWidth)
-                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
         )
         .detailSceneOpening(onOpen)
         .frame(maxWidth: .infinity, alignment: .center)
@@ -252,7 +252,7 @@ private extension View {
     @ViewBuilder
     func detailSceneOpening(_ onOpen: (() -> Void)?) -> some View {
         if let onOpen {
-            contentShape(RoundedRectangle(cornerRadius: 12))
+            contentShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
                 .onTapGesture(perform: onOpen)
                 .accessibilityAction(named: Text(String(localized: "a11y.post.media.open.hint",
                                                         defaultValue: "Ouvrir en plein écran",

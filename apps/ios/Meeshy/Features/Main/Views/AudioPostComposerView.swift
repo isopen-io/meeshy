@@ -120,8 +120,8 @@ struct AudioPostComposerView: View {
     }
 
     // Washes sombres intentionnels — pas de token MeeshyColors equivalent
-    private let darkCanvasTop = Color(hex: "0F0D19")
-    private let darkCanvasBase = Color(hex: "13111C")
+    private let darkCanvasTop = MeeshyColors.surfaceDarkDeep
+    private let darkCanvasBase = MeeshyColors.surfaceDarkRaised
 
     var isDark: Bool { colorScheme == .dark }
 
@@ -133,7 +133,7 @@ struct AudioPostComposerView: View {
                 background
 
                 ScrollView(.vertical, showsIndicators: false) {
-                    VStack(spacing: 24) {
+                    VStack(spacing: MeeshySpacing.xxl) {
                         if phase == .idle || phase == .recording {
                             // **Les trois SOURCES au même rang** (#4657).
                             //
@@ -228,7 +228,7 @@ struct AudioPostComposerView: View {
                         .padding(.bottom, MeeshySpacing.lg)
                         .background(
                             LinearGradient(
-                                colors: [Color.clear, backgroundBaseColor.opacity(0.7), backgroundBaseColor],
+                                colors: [Color.clear, backgroundBaseColor.opacity(MeeshyOpacity.heavy), backgroundBaseColor],
                                 startPoint: .top, endPoint: .bottom
                             )
                             .ignoresSafeArea(edges: .bottom)
@@ -291,8 +291,8 @@ struct AudioPostComposerView: View {
     private var background: some View {
         LinearGradient(
             colors: isDark
-                ? [darkCanvasTop, darkCanvasBase, MeeshyColors.indigo950.opacity(0.85)]
-                : [MeeshyColors.indigo50, MeeshyColors.indigo100, MeeshyColors.indigo200.opacity(0.55)],
+                ? [darkCanvasTop, darkCanvasBase, MeeshyColors.indigo950.opacity(MeeshyOpacity.intense)]
+                : [MeeshyColors.indigo50, MeeshyColors.indigo100, MeeshyColors.indigo200.opacity(MeeshyOpacity.strong)],
             startPoint: .topLeading, endPoint: .bottomTrailing
         )
         .ignoresSafeArea()
@@ -303,15 +303,15 @@ struct AudioPostComposerView: View {
     /// Carte d'état hors capture : la phase idle/recording est entièrement
     /// portée par la feuille unifiée (`AudioRecorderSheet`).
     private var statusCard: some View {
-        VStack(spacing: 18) {
+        VStack(spacing: MeeshySpacing.lg) {
             ZStack {
                 Circle()
-                    .fill(haloColor.opacity(0.12))
+                    .fill(haloColor.opacity(MeeshyOpacity.light))
                     .frame(width: 168, height: 168)
                     .blur(radius: 4)
 
                 Circle()
-                    .fill(haloColor.opacity(0.08))
+                    .fill(haloColor.opacity(MeeshyOpacity.subtle))
                     .frame(width: 132, height: 132)
 
                 centerContent
@@ -353,7 +353,7 @@ struct AudioPostComposerView: View {
                 .font(MeeshyFont.relative(56))
                 .foregroundStyle(
                     LinearGradient(
-                        colors: [MeeshyColors.success, MeeshyColors.success.opacity(0.7)],
+                        colors: [MeeshyColors.success, MeeshyColors.success.opacity(MeeshyOpacity.heavy)],
                         startPoint: .top, endPoint: .bottom
                     )
                 )
@@ -368,7 +368,7 @@ struct AudioPostComposerView: View {
     @ViewBuilder
     private var durationLabel: some View {
         if phase == .preview, let borrowedSound {
-            VStack(spacing: 4) {
+            VStack(spacing: MeeshySpacing.xs) {
                 Text(borrowedSound.hasAuthoredTitle
                      ? borrowedSound.title
                      : String(localized: "media.sound.original", defaultValue: "Son original"))
@@ -392,7 +392,7 @@ struct AudioPostComposerView: View {
                 .accessibilityLabel(String(localized: "composer.audio.recorded-duration", defaultValue: "Durée enregistrée"))
                 .accessibilityValue(spokenDuration)
         } else if phase == .transcribing {
-            VStack(spacing: 4) {
+            VStack(spacing: MeeshySpacing.xs) {
                 Text(String(localized: "composer.audio.transcription.running", defaultValue: "Transcription en cours…"))
                     .font(.subheadline.weight(.medium))
                     .foregroundColor(theme.textSecondary)
@@ -420,7 +420,7 @@ struct AudioPostComposerView: View {
             EmptyView()
         case .loading:
             trimPlaceholder {
-                HStack(spacing: 8) {
+                HStack(spacing: MeeshySpacing.sm) {
                     ProgressView()
                         .progressViewStyle(CircularProgressViewStyle(tint: MeeshyColors.indigo500))
                     Text(String(localized: "composer.audio.trim.loading",
@@ -431,7 +431,7 @@ struct AudioPostComposerView: View {
             }
         case .failed:
             trimPlaceholder {
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
                     Text(String(localized: "composer.audio.trim.load-failed",
                                 defaultValue: "Le son n'a pas pu être chargé.", bundle: .main))
                         .font(.caption)
@@ -446,7 +446,7 @@ struct AudioPostComposerView: View {
                 }
             }
         case .trimmer:
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
                 trimHeader
                 if let url = recordedURL {
                     MeeshyAudioTrimmer(
@@ -461,7 +461,7 @@ struct AudioPostComposerView: View {
     }
 
     private var trimHeader: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: MeeshySpacing.xsPlus) {
             Image(systemName: "scissors")
                 .font(.caption.weight(.semibold))
                 .accessibilityHidden(true)
@@ -484,13 +484,13 @@ struct AudioPostComposerView: View {
     /// piste arrive.
     @ViewBuilder
     private func trimPlaceholder<Contenu: View>(@ViewBuilder _ contenu: () -> Contenu) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
             trimHeader
             contenu()
                 .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
-                .padding(.horizontal, 12)
+                .padding(.horizontal, MeeshySpacing.md)
                 .background(
-                    RoundedRectangle(cornerRadius: 14)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.md)
                         .fill(theme.surface(tint: "C7D2FE"))
                 )
         }
@@ -504,7 +504,7 @@ struct AudioPostComposerView: View {
     @ViewBuilder
     private var placementSection: some View {
         if let placement, recordedURL != nil || borrowedSound != nil {
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
                 // **Sans titre** (directive porteur 2026-09-01). « Place du
                 // son » nommait ce que les deux libellés disent déjà — « fond
                 // de publication », « contenu de publication » se lisent seuls.
@@ -515,12 +515,12 @@ struct AudioPostComposerView: View {
                     }
                 }
                 .background(
-                    RoundedRectangle(cornerRadius: 14)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.md)
                         .fill(theme.surface(tint: "C7D2FE"))
                 )
                 .overlay(
-                    RoundedRectangle(cornerRadius: 14)
-                        .stroke(MeeshyColors.indigo400.opacity(0.25), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                        .stroke(MeeshyColors.indigo400.opacity(MeeshyOpacity.medium), lineWidth: 1)
                 )
 
                 // La définition passe SOUS l'interrupteur, sur une ligne, pour
@@ -566,13 +566,13 @@ struct AudioPostComposerView: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 11)
-                .padding(.horizontal, 8)
+                .padding(.vertical, MeeshySpacing.smPlus)
+                .padding(.horizontal, MeeshySpacing.sm)
                 .background(
-                    RoundedRectangle(cornerRadius: 14)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.md)
                         .fill(choisi ? AnyShapeStyle(MeeshyColors.brandGradient) : AnyShapeStyle(Color.clear))
                 )
-                .contentShape(RoundedRectangle(cornerRadius: 14))
+                .contentShape(RoundedRectangle(cornerRadius: MeeshyRadius.md))
         }
         .buttonStyle(.plain)
         .disabled(refuse)
@@ -604,7 +604,7 @@ struct AudioPostComposerView: View {
     private var actionBar: some View {
         switch phase {
         case .preview:
-            HStack(spacing: 12) {
+            HStack(spacing: MeeshySpacing.md) {
                 Button(action: demanderRefaire) {
                     Label(
                         String(localized: "common.redo", defaultValue: "Refaire"),
@@ -612,8 +612,8 @@ struct AudioPostComposerView: View {
                     )
                     .font(.subheadline.weight(.semibold))
                     .foregroundColor(theme.textPrimary)
-                    .padding(.horizontal, 18)
-                    .padding(.vertical, 14)
+                    .padding(.horizontal, MeeshySpacing.lg)
+                    .padding(.vertical, MeeshySpacing.mdPlus)
                     .background(
                         Capsule()
                             .fill(.ultraThinMaterial)
@@ -643,7 +643,7 @@ struct AudioPostComposerView: View {
                         .font(.callout.weight(.bold))
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
+                        .padding(.vertical, MeeshySpacing.mdPlus)
                         .background(
                             Capsule()
                                 .fill(MeeshyColors.brandGradient)
@@ -662,7 +662,7 @@ struct AudioPostComposerView: View {
                 .font(.subheadline.weight(.semibold))
                 .foregroundColor(MeeshyColors.error)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 14)
+                .padding(.vertical, MeeshySpacing.mdPlus)
                 .background(
                     Capsule()
                         .fill(.ultraThinMaterial)
@@ -1057,7 +1057,7 @@ struct AudioLanguagePickerView: View {
                             dismiss()
                         } label: {
                             HStack {
-                                VStack(alignment: .leading, spacing: 2) {
+                                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                                     Text(item.name)
                                         .font(.callout.weight(
                                             selectedLocale.identifier == item.locale.identifier

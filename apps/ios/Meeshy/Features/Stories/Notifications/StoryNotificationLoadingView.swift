@@ -21,13 +21,13 @@ public struct StoryNotificationLoadingView: View {
         ZStack {
             Color.black.opacity(0.6)
                 .ignoresSafeArea()
-            VStack(spacing: 16) {
+            VStack(spacing: MeeshySpacing.lg) {
                 ProgressView()
                     .progressViewStyle(.circular)
                     .tint(.white)
                 Text(loadingMessage)
                     .font(.subheadline)
-                    .foregroundStyle(.white.opacity(0.85))
+                    .foregroundStyle(.white.opacity(MeeshyOpacity.intense))
             }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(loadingMessage)

@@ -147,9 +147,11 @@ extension ConversationMediaGalleryView {
     /// galerie pour une scène (#6709), le player partagé pour une vidéo.
     @ViewBuilder
     var pausedBadgeLayer: some View {
-        if MediaStagePause.showsBadge(presentation: stagePresentation,
-                                      isPlayable: currentMediaIsPlayable,
-                                      isPlaying: currentScene != nil ? scenePlaying : videoManagerIsPlaying) {
+        if MediaStageVeil.showsPausedBadge(
+            MediaStagePause.showsBadge(presentation: stagePresentation,
+                                       isPlayable: currentMediaIsPlayable,
+                                       isPlaying: currentScene != nil ? scenePlaying : videoManagerIsPlaying),
+            overlays: stageOverlays) {
             MediaStagePausedBadge()
                 .allowsHitTesting(false)
                 .transition(.opacity.combined(with: .scale(scale: 0.9)))
@@ -168,7 +170,7 @@ extension ConversationMediaGalleryView {
 /// exactement cette raison.
 struct MediaStagePausedBadge: View {
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: MeeshySpacing.sm) {
             // Le glyphe SUIT le texte, il ne se fige pas — et la doctrine 82i
             // ne le couvre pas : elle autorise une taille figée quand un CADRE
             // FIXE déborderait en scalant. Ici la capsule est dimensionnée par
@@ -178,16 +180,16 @@ struct MediaStagePausedBadge: View {
             // Type. Les deux montent ensemble. Il dit l'état, le texte le nomme,
             // et VoiceOver lit le second.
             Image(systemName: "pause.fill")
-                .font(MeeshyFont.relative(15, weight: .bold))
+                .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
                 .accessibilityHidden(true)
             Text(String(localized: "media.stage.paused",
                         defaultValue: "En pause",
                         bundle: .main))
-                .font(MeeshyFont.relative(14, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
         }
-        .foregroundColor(.white)
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
+        .foregroundColor(MeeshyColors.mediaChromeForeground)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.vertical, MeeshySpacing.smPlus)
         .adaptiveGlass(in: Capsule())
         .accessibilityElement(children: .combine)
     }

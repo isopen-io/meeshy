@@ -118,14 +118,23 @@ final class ComposerRailGeographyByFormatTests: XCTestCase {
 
     /// La partition tient sur CHAQUE format — c'est la propriété qui empêche
     /// qu'une porte se perde entre deux rangées ou s'y montre deux fois.
-    func test_lesDeuxRangeesFormentUnePartition_surChaqueFormat() {
+    ///
+    /// **TROIS places depuis #8370** : la porte du corps du post a quitté la
+    /// rangée basse pour le SOCLE (directive porteur 2026-09-27). La partition
+    /// se compte donc sur le côté, le bas ET le socle — sans quoi elle
+    /// s'y perdrait sans que rien ne le dise.
+    func test_lesTroisPlacesFormentUnePartition_surChaqueFormat() {
         for format in ComposerFormat.allComposable {
             let toutes = ComposerRailDoor.canonicalRail
             let gauche = ComposerSceneFloatingRail.sideRow(from: toutes, format: format)
             let bas = ComposerSceneFloatingRail.lowRow(from: toutes, format: format)
-            XCTAssertEqual(gauche.count + bas.count, toutes.count, "\(format)")
+            let socle = toutes.filter { $0 == ComposerSceneFloatingRail.socleDoor
+                                        && !gauche.contains($0) }
+            XCTAssertEqual(gauche.count + bas.count + socle.count, toutes.count, "\(format)")
             XCTAssertTrue(Set(gauche).isDisjoint(with: Set(bas)), "\(format)")
-            XCTAssertEqual(Set(gauche).union(bas), Set(toutes), "\(format)")
+            XCTAssertFalse(bas.contains(ComposerSceneFloatingRail.socleDoor),
+                           "\(format) : le corps du post ne se peint pas deux fois")
+            XCTAssertEqual(Set(gauche).union(bas).union(socle), Set(toutes), "\(format)")
         }
     }
 

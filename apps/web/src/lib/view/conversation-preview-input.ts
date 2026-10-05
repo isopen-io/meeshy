@@ -143,5 +143,6 @@ export function previewInputOf(conversation: Conversation, context: PreviewConte
     draft: context.draft ?? null,
     lastReaction: row.lastReaction ?? null,
     lastMessage: messageOf(conversation, context),
+    isDirect: conversation.type === 'direct',
   };
 }

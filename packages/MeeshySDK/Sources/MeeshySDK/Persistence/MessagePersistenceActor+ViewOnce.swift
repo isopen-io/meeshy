@@ -34,6 +34,7 @@ public extension MessageRecord {
         attachmentsJson = nil
         stickerJson = nil
         locationJson = nil
+        trackedLinksJson = nil
     }
 }
 

@@ -123,7 +123,7 @@ const SKINS = [
 const frameOf = (element: ReturnType<(typeof SKINS)[number][1]>) => {
   const host = document.createElement('div');
   host.innerHTML = renderToStaticMarkup(element);
-  const frame = host.querySelector<HTMLElement>('button[aria-label^="Aller au message"] [data-quote-frame]');
+  const frame = host.querySelector<HTMLElement>('[data-quote-card] [data-quote-frame]');
   return frame === null ? null : { width: frame.style.width, height: frame.style.height, host };
 };
 

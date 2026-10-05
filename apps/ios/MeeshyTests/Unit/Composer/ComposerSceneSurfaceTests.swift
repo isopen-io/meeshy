@@ -104,8 +104,15 @@ final class ComposerSceneSurfaceTests: XCTestCase {
     /// L'encastrement se lit de la RÈGLE, et `railsShown: true` DIT ce que
     /// cette surface est — une scène a ses rails.
     func test_laSurfaceDeScene_encastreParLaRegle() throws {
-        XCTAssertTrue(compact(try source("ComposerSceneSurface.swift"))
-            .contains("ComposerRailGeometry.sceneInset(railsShown:true)"))
+        // La respiration de la carte est la marge de bord de la RÈGLE
+        // (`edgeMargin(roomy:)`, qui vaut `floatingInset` sur téléphone) —
+        // jamais un littéral.
+        let code = compact(try source("ComposerSceneSurface.swift"))
+        XCTAssertTrue(code.contains("ComposerRailGeometry.edgeMargin(roomy:isRoomy)"))
+        XCTAssertTrue(code.contains(".padding(.horizontal,edge)"))
+        XCTAssertEqual(ComposerRailGeometry.edgeMargin(roomy: false),
+                       ComposerRailGeometry.sceneInset(railsShown: true),
+                       "Sur téléphone, la marge de bord EST l'encastrement de la scène.")
     }
 
     /// **La barre haute est PARTAGÉE, pas recopiée.** Deux copies auraient

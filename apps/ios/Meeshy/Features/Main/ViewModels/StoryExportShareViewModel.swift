@@ -153,7 +153,7 @@ final class StoryExportShareViewModel: ObservableObject {
                 languages: langs,
                 watermark: watermark,
                 intro: intro,
-                stickerImageSources: stickerImageSources,
+                inputs: StoryExportInputs(stickerImageSources: stickerImageSources),
                 // **La carte de fin est DUE** (#7052). L'exception que porte ce
                 // paramètre vise le seul export d'une SCÈNE DE POST, voulue sans
                 // habillage. Ici on partage une STORY publiée, qui peint déjà

@@ -33,6 +33,13 @@ public enum TextEditOptionsLayout: String, Sendable, CaseIterable {
     /// que la largeur permet, et le nom se pose SOUS la boîte.
     case grid
 
+    /// **La grille d'une COLONNE** (#9138) — le panneau qui s'ouvre à droite
+    /// de la scène, depuis le haut, à côté des sous-outils. Les mêmes outils
+    /// s'y enroulent que dans la grille, mais le compte de colonnes suit la
+    /// largeur SERVIE : cinq boîtes de 56 pt ne tiennent pas dans un panneau
+    /// borné par la colonne de droite sur le plus étroit des iPhone.
+    case column
+
     /// **Quels outils la grille gouverne — et pourquoi les autres non.**
     ///
     /// **POLICE a rejoint la grille le 2026-09-05** (directive porteur : « aligne
@@ -52,7 +59,7 @@ public enum TextEditOptionsLayout: String, Sendable, CaseIterable {
     /// Règle EXHAUSTIVE plutôt qu'un `default` : un neuvième outil ajouté à
     /// `TextEditTool` doit forcer une décision ici, pas hériter d'un silence.
     public nonisolated func wraps(_ tool: TextEditTool) -> Bool {
-        guard self == .grid else { return false }
+        guard self != .row else { return false }
         switch tool {
         case .background, .effect, .style:
             return true
@@ -130,9 +137,16 @@ extension TextEditToolOptions {
     /// 2026-09-05). `.flexible()` partage la largeur servie en parts égales :
     /// le compte est tenu, et chaque boîte reste centrée dans sa part.
     var gridColumns: [GridItem] {
-        Array(repeating: GridItem(.flexible(),
-                                  spacing: TextEditOptionsGridMetrics.columnSpacing),
-              count: TextEditOptionsGridMetrics.columns)
+        if layout == .column {
+            // La COLONNE (#9138) : autant de boîtes que la largeur en tient,
+            // jamais moins que leur côté — une boîte écrasée sous 56 pt
+            // rognerait l'exemple qu'elle est là pour montrer.
+            return [GridItem(.adaptive(minimum: TextEditOptionsGridMetrics.boxSide),
+                             spacing: TextEditOptionsGridMetrics.columnSpacing)]
+        }
+        return Array(repeating: GridItem(.flexible(),
+                                         spacing: TextEditOptionsGridMetrics.columnSpacing),
+                     count: TextEditOptionsGridMetrics.columns)
     }
 
     /// L'encre du spécimen est celle que l'auteur a CHOISIE, jamais une encre

@@ -226,7 +226,7 @@ extension PiPCallController: AVPictureInPictureControllerDelegate {
         _ controller: AVPictureInPictureController,
         failedToStartPictureInPictureWithError error: Error
     ) {
-        Logger.pipController.error("PiP failed to start: \(error.localizedDescription, privacy: .public)")
+        Logger.pip.error("PiP failed to start: \(error.localizedDescription, privacy: .public)")
         detachRenderer()
         onStop?()
     }
@@ -285,15 +285,8 @@ extension PiPCallController {
     }
 
     func flushSurface() {
-        if #available(iOS 17.0, *) {
-            surfaceView.displayLayer.sampleBufferRenderer.flush()
-        } else {
-            surfaceView.displayLayer.flush()
-        }
+        surfaceView.displayLayer.flushCompat()
     }
 }
 
-private extension Logger {
-    nonisolated static let pipController = Logger(subsystem: "me.meeshy.app", category: "pip")
-}
 #endif

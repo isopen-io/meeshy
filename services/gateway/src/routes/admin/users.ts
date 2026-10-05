@@ -36,9 +36,13 @@ import { registerUserReportsRoutes } from './user-reports';
 import { registerUserWriteRoutes } from './users-write';
 import { registerUserBanRoutes } from './user-bans';
 import { registerUserSessionRoutes } from './user-sessions';
+import { registerUserPasswordProposalRoutes } from './user-password-proposals';
 import { registerUserProfileReadRoutes } from './user-profile-reads';
 import { registerUserMemberStatsRoutes } from './user-member-stats';
 import { registerUserMemberPreferencesRoutes } from './user-member-preferences';
+import { registerUserProfileImageRoutes } from './user-profile-images';
+import { authVerificationSender, registerUserVerificationRequestRoutes } from './user-verification-requests';
+import { evaluerLoiDesChamps } from './user-field-law';
 import { userListFilters, type UserListQuery } from './user-list-filters';
 import { BanService } from '../../services/admin/ban.service';
 import { validatePagination, buildPaginationMeta } from '../../utils/pagination';
@@ -46,8 +50,10 @@ import { withAnonymousParticipantCounts } from '../../utils/share-link-participa
 import { sendSuccess, sendInternalError, sendNotFound, sendForbidden, sendBadRequest, sendPaginatedSuccess } from '../../utils/response';
 import { validatePasswordStrength } from '../../utils/password-strength';
 import { EmailService } from '../../services/EmailService';
-import { conversationActiveMemberCountSelect } from '../conversations/utils/active-member-count';
+import { CONVERSATION_METADATA_SELECT, serveConversationMetadata } from './conversation-metadata';
+import { registerConversationSettingsSovereignRoutes } from './conversation-settings-sovereign';
 import { logError, logWarn } from '../../utils/logger.js';
+import { replyIdentifierTaken } from '../../services/admin/admin-identifier-taken';
 
 const userConversationSortSchema = z.object({
   sortBy: z.enum(['lastMessageAt', 'createdAt']).default('lastMessageAt'),
@@ -130,6 +136,9 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
   // Historique de connexion (#6821) : `UserSession` / `SecurityEvent` étaient
   // écrits à chaque connexion et n'avaient aucun lecteur sous `routes/admin/`.
   registerUserSessionRoutes(fastify, { userAuditService });
+  // #8051 — les quatre niveaux de mot de passe proposés AVANT `reset-password`
+  // ci-dessous, sous les mêmes gardes : voir `user-password-proposals.ts`.
+  registerUserPasswordProposalRoutes(fastify);
 
   // Fiche utilisateur de l'espace d'administration web (#7873, #7845) :
   // communautés et profil vocal, deux lectures de plus sous `canViewUsers`.
@@ -139,6 +148,12 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
   // préférences lues / écrites sous les gardes des écritures de compte.
   registerUserMemberStatsRoutes(fastify);
   registerUserMemberPreferencesRoutes(fastify, { userAuditService });
+
+  // Photo et bannière posées par l'administration (#8217) : téléversées, ou
+  // choisies parmi les images DÉJÀ publiques du membre.
+  registerUserProfileImageRoutes(fastify, { userAuditService });
+  // Renvoi d'une vérification d'e-mail ou de téléphone par l'administration (#8289).
+  registerUserVerificationRequestRoutes(fastify, { userAuditService, sender: authVerificationSender(fastify) });
 
   /**
    * GET /admin/users - Liste tous les utilisateurs (avec sanitization)
@@ -221,8 +236,9 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
         return;
       }
 
-      // Sanitize selon le role
-      const sanitizedUser = sanitizationService.sanitizeUser(user, viewerRole);
+      // Sanitize selon le role — la FICHE demande en plus le bloc de métadonnées
+      // de compte (#8876), servi aux seuls rôles qui voient les données sensibles.
+      const sanitizedUser = sanitizationService.sanitizeUser(user, viewerRole, { withAdminMetadata: true });
 
       // Log d'audit
       await userAuditService.logViewUser(
@@ -285,16 +301,28 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
         return;
       }
 
+      // Attester l'adresse (#8217) est le geste de `PATCH …/verifications` posé
+      // à la naissance du compte : il passe par la loi du MÊME champ.
+      if (validatedData.emailVerified === true) {
+        const refus = evaluerLoiDesChamps({ role: adminRole, champs: ['emailVerified'] });
+        if (refus) {
+          sendForbidden(reply, refus.message, { message: refus.message });
+          return;
+        }
+      }
+
       // Creer l'utilisateur
       const newUser = await userManagementService.createUser(
         validatedData as CreateUserDTO
       );
 
-      // Log d'audit
+      // Log d'audit — jamais la VALEUR du mot de passe (#8217) : la trace
+      // recopiait le corps validé, secret en clair compris, dans
+      // `AdminAuditLog.changes`. Elle dit qu'il a été posé, rien de plus.
       await userAuditService.logCreateUser(
         authContext.registeredUser!.id,
         newUser.id,
-        validatedData as unknown as Record<string, unknown>,
+        { ...validatedData, password: '[set]' },
         request.ip,
         request.headers['user-agent']
       );
@@ -308,6 +336,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
         sendBadRequest(reply, 'Invalid input data');
         return;
       }
+      if (replyIdentifierTaken(reply, error)) return;
 
       logError(fastify.log, 'Error creating user', error);
       sendInternalError(reply, 'Internal server error', { message: 'Failed to create user' });
@@ -681,33 +710,20 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
         return sendNotFound(reply, 'Utilisateur non trouvé');
       }
 
-      const where: any = {
-        participants: {
-          some: { userId, isActive: true }
-        }
+      const where = {
+        participants: { some: { userId, isActive: true } },
+        ...(type ? { type } : {})
       };
-      if (type) {
-        where.type = type;
-      }
 
       const [conversations, total] = await Promise.all([
         fastify.prisma.conversation.findMany({
           where,
           select: {
-            id: true,
-            identifier: true,
-            title: true,
-            type: true,
-            avatar: true,
-            isActive: true,
-            // Même règle que `GET /conversations` : la colonne `memberCount`
-            // n'est écrite par personne, donc l'écran admin affichait
-            // « 0 membres » sur toute conversation créée depuis la migration
-            // héritée. Le compte vient de la base.
-            _count: { select: conversationActiveMemberCountSelect },
-            communityId: true,
-            createdAt: true,
-            lastMessageAt: true,
+            // Titre, description, images, réglages, effectif (recalculé depuis
+            // `_count` : la colonne `memberCount` n'est écrite par personne) et
+            // nombre de messages — la ligne que la feuille « Configurer » de la
+            // fiche pré-remplit (#7999). Jamais un contenu de message.
+            ...CONVERSATION_METADATA_SELECT,
             participants: {
               where: { isActive: true },
               take: 6,
@@ -733,15 +749,24 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
         fastify.prisma.conversation.count({ where })
       ]);
 
-      // Keep a small participant preview (direct → the other member, group → a
-      // first slice; the full group list is paged via the dedicated endpoint),
-      // and surface the target user's membership separately for convenience.
-      const data = conversations.map((conv) => {
-        const { _count, ...convData } = conv as typeof conv & { _count: { participants: number } };
-        const participants = (convData as { participants?: Array<{ userId?: string | null }> }).participants ?? [];
-        const membership = participants.find((p) => p.userId === userId) ?? null;
-        return { ...convData, memberCount: _count.participants, participants, membership };
-      });
+      // `membership` est lue À PART, en UNE requête pour la page : l'aperçu est
+      // borné à six participants, et y chercher la ligne du membre rendait
+      // `null` dès qu'il était entré septième — sur les groupes, précisément
+      // là où son rang compte (#7999).
+      const memberships = conversations.length === 0
+        ? []
+        : await fastify.prisma.participant.findMany({
+            where: { userId, isActive: true, conversationId: { in: conversations.map((c) => c.id) } },
+            select: { id: true, userId: true, conversationId: true, type: true, displayName: true, avatar: true, role: true, joinedAt: true, isActive: true, nickname: true },
+            take: conversations.length
+          });
+      const membershipOf = new Map(memberships.map((m) => [m.conversationId, m]));
+
+      const data = conversations.map(({ participants, ...conv }) => ({
+        ...serveConversationMetadata(conv),
+        participants,
+        membership: membershipOf.get(conv.id) ?? participants.find((p) => p.userId === userId) ?? null
+      }));
 
       return sendPaginatedSuccess(reply, data, {
         total,
@@ -962,4 +987,10 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
   // à qui, depuis quand et dans quels groupes est une lecture de la vie privée
   // de TOUS les membres — pas la fiche d'un seul, que `canViewUsers` ouvre.
   registerConversationsSovereignRoute(fastify);
+
+  // PATCH /admin/conversations/:id et ses deux gestes sur un membre (#7999) :
+  // configurer une conversation SANS en être membre — les routes de membre
+  // exigent d'y être (« une fois dans »). Rang d'administration, motif écrit,
+  // trace `AdminAuditLog`.
+  registerConversationSettingsSovereignRoutes(fastify);
 }

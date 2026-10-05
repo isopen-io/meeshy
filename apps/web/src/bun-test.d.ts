@@ -58,6 +58,8 @@ declare module 'bun:test' {
   type Expectations = {
     toBe(expected: unknown): void;
     toEqual(expected: unknown): void;
+    /** `toMatchObject` (#8044) — les témoins du moteur d'appel lisent une charge PARTIELLE (le code d'un accusé, la raison d'une fin) sans recopier ce qui ne les concerne pas. */
+    toMatchObject(expected: object): void;
     toBeNull(): void;
     toBeUndefined(): void;
     toBeDefined(): void;
@@ -76,6 +78,17 @@ declare module 'bun:test' {
   };
 
   export function expect(value: unknown): Expectations & { readonly not: Expectations };
+
+  /**
+   * L'horloge simulée — qu'aucune attente n'efface les commandes d'une vidéo
+   * (#8988), ou que la durée d'un appel avance, se prouve sans attendre :
+   * `setTimeout` ET `Date.now()` avancent ensemble.
+   */
+  export const jest: {
+    useFakeTimers(): void;
+    useRealTimers(): void;
+    advanceTimersByTime(ms: number): void;
+  };
 }
 
 /**
@@ -120,3 +133,6 @@ declare const __FIXTURES__: boolean;
  * un littéral recopié dans un écran.
  */
 declare const __APP_VERSION__: string;
+
+/** `__API_PROXY_TARGET__` — la passerelle du proxy de dev (#8287), `vite.config.ts`. */
+declare const __API_PROXY_TARGET__: string;

@@ -46,13 +46,13 @@ export function PageMark({ size = 20 }: { readonly size?: number }) {
   );
 }
 
-export function SlidersMark({ size = 20 }: { readonly size?: number }) {
+/** « Temps » (#8516) — des pistes et la tête de lecture, le `timeline.selection`
+ * d'iOS (`ComposerTrailingRail.tiles`). */
+export function TimeMark({ size = 20 }: { readonly size?: number }) {
   return (
     <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round">
-      <path d="M4 7h16M4 12h16M4 17h16" />
-      <circle cx="9" cy="7" r="2" fill="currentColor" stroke="none" />
-      <circle cx="15" cy="12" r="2" fill="currentColor" stroke="none" />
-      <circle cx="8" cy="17" r="2" fill="currentColor" stroke="none" />
+      <path d="M3 8h8M15 8h6M3 16h4M11 16h10" />
+      <path d="M13 3v18" />
     </svg>
   );
 }
@@ -68,6 +68,7 @@ export function StudioDoorButton({
   accept,
   door,
   onSelect,
+  onSelectMany,
   disabled = false,
 }: {
   readonly label: string;
@@ -75,6 +76,9 @@ export function StudioDoorButton({
   readonly accept: string;
   readonly door: StudioDoor;
   readonly onSelect: (file: File) => void;
+  /** PLUSIEURS fichiers d'un geste (#8533) — l'entrée devient `multiple` et
+   * remet tout ce qui est choisi, dans l'ordre du choix. */
+  readonly onSelectMany?: (files: readonly File[]) => void;
   /** VERROUILLÉE pendant l'envoi (#7707, revue-correction) — le plan est figé
    * au premier clic sur Publier ; poser un média après n'atteindrait jamais
    * la publication en cours, et laisserait croire à l'auteur qu'il compte. */
@@ -84,12 +88,11 @@ export function StudioDoorButton({
     <label
       title={label}
       aria-disabled={disabled}
-      className="grid place-items-center rounded-full focus-within:outline-2 focus-within:outline-offset-2"
+      className="glass grid place-items-center rounded-full focus-within:outline-2 focus-within:outline-offset-2"
       style={{
         width: TARGET,
         height: TARGET,
         color: 'var(--color-ios-ink)',
-        backgroundColor: 'var(--color-ios-card)',
         outlineColor: 'var(--color-ios-brand)',
         opacity: disabled ? 0.4 : 1,
         cursor: disabled ? 'not-allowed' : 'pointer',
@@ -99,16 +102,18 @@ export function StudioDoorButton({
         type="file"
         accept={accept}
         data-door={door}
+        multiple={onSelectMany !== undefined}
         disabled={disabled}
         className="sr-only"
         aria-label={label}
         onChange={(event) => {
-          const file = event.currentTarget.files?.[0];
+          const files = [...(event.currentTarget.files ?? [])];
           event.currentTarget.value = '';
-          if (file !== undefined) onSelect(file);
+          if (onSelectMany !== undefined) onSelectMany(files);
+          else if (files[0] !== undefined) onSelect(files[0]);
         }}
       />
-      {glyph === 'layer' ? <LayerMark size={22} /> : <Glyph name={glyph} size={22} />}
+      {glyph === 'layer' ? <LayerMark size={20} /> : <Glyph name={glyph} size={20} />}
     </label>
   );
 }
@@ -186,6 +191,7 @@ export function StudioAssetRow({
   onRemove,
   caption,
   children,
+  discreet,
   locked = false,
 }: {
   readonly lang: InterfaceLanguage;
@@ -200,13 +206,16 @@ export function StudioAssetRow({
    * rendre — l'annoncer serait un contrôle sans effet (loi 4). */
   readonly caption?: { readonly value: string; readonly inputId: string; readonly onChange: (value: string) => void };
   readonly children?: ReactNode;
+  /** Une ligne DISCRÈTE (lot 6) — un visuel prêt ne s'affiche plus en bas ;
+   * la ligne reste pour le lecteur d'écran et le clavier (elle paraît au focus). */
+  readonly discreet?: boolean;
   /** VERROUILLÉ pendant l'envoi (#7707, revue-correction) — retirer ou
    * réessayer un média que le plan a déjà réglé ne changerait rien à ce qui
    * part, et légender un média EN VOL de publication en tromperait l'auteur. */
   readonly locked?: boolean;
 }) {
   return (
-    <li className="flex flex-col gap-1" data-asset-phase={upload.phase}>
+    <li className={discreet === true ? 'sr-only focus-within:not-sr-only' : 'flex flex-col gap-1'} data-asset-phase={upload.phase}>
       <div className="flex items-center gap-2 text-caption">
         {glyph === 'layer' ? (
           <span style={{ color: 'var(--color-ios-ink-2)', display: 'grid' }}>
@@ -221,7 +230,7 @@ export function StudioAssetRow({
         <span
           role={upload.phase === 'failed' ? 'alert' : 'status'}
           className="min-w-0 flex-1 truncate"
-          style={{ color: upload.phase === 'failed' ? 'var(--color-error)' : 'var(--color-ios-ink-2)' }}
+          style={{ color: upload.phase === 'failed' ? 'var(--color-error)' : 'var(--color-ios-ink)' }}
         >
           {upload.phase === 'uploading'
             ? translate(lang, 'story.studio.upload.progress', { percent: String(Math.round(upload.progress * 100)) })
@@ -268,7 +277,7 @@ export function StudioAssetRow({
             value={caption.value}
             onInput={(event) => caption.onChange(event.currentTarget.value)}
             placeholder={translate(lang, 'story.studio.caption.placeholder')}
-            className="w-full rounded-chip px-3 text-caption focus-visible:outline-2 focus-visible:outline-offset-2"
+            className="w-full rounded-chip px-3 text-input focus-visible:outline-2 focus-visible:outline-offset-2"
             style={{
               minHeight: TARGET,
               color: 'var(--color-ios-ink)',

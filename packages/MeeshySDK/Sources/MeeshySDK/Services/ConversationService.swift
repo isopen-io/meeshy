@@ -180,6 +180,15 @@ public final class ConversationService: ConversationServiceProviding, @unchecked
         return response.data
     }
 
+    /// `GET /conversations/:id/engagement` — « N (M) 🔥 » du lecteur dans
+    /// cette conversation (#8906). Zéros tant qu'il n'y a rien gagné.
+    public func engagement(conversationId: String) async throws -> ConversationEngagementSnapshot {
+        let response: APIResponse<ConversationEngagementSnapshot> = try await api.request(
+            ConversationsEndpoint.byIdEngagement(id: conversationId)
+        )
+        return response.data
+    }
+
     public func create(type: String, title: String? = nil, participantIds: [String]) async throws -> CreateConversationResponse {
         let body = CreateConversationRequest(type: type, title: title, participantIds: participantIds)
         let response: APIResponse<CreateConversationResponse> = try await api.post(ConversationsEndpoint.root, body: body)

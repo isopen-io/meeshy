@@ -1,6 +1,12 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import { isEphemeralServable, servedEphemeralExpiresAt } from '@meeshy/shared/utils/ephemeral-countdown';
+import {
+  hasPerReaderEphemeralDeadline,
+  isEphemeralServable,
+  servedEphemeralExpiresAt,
+} from '@meeshy/shared/utils/ephemeral-countdown';
 import { enhancedLogger } from '../../utils/logger-enhanced';
+import { servedQuotedMessage, type QuotedMessageRow } from '../../services/messaging/servedQuotedMessage';
+import { attachmentReplyToFromMetadata } from '../../services/messaging/attachmentReplySnapshot';
 
 const logger = enhancedLogger.child({ module: 'ephemeralReaderDeadlines' });
 
@@ -52,6 +58,8 @@ interface EphemeralRow {
   readonly id: string;
   readonly senderId?: string | null;
   readonly ephemeralDuration?: number | null;
+  /** Porte la flamme-œil (#8302) : une échéance par lecteur, sans durée. */
+  readonly effectFlags?: number | null;
 }
 
 /** Ce que la carte rend pour un message qu'aucune échéance ne concerne. */
@@ -74,7 +82,7 @@ export async function loadEphemeralReaderDeadlines(
   const resolutions = new Map<string, EphemeralReaderResolution>();
 
   const ephemeralIds = messages
-    .filter((message) => typeof message.ephemeralDuration === 'number' && message.ephemeralDuration > 0)
+    .filter((message) => hasPerReaderEphemeralDeadline(message))
     .map((message) => message.id);
   if (ephemeralIds.length === 0) return resolutions;
 
@@ -131,6 +139,61 @@ export async function loadEphemeralReaderDeadlines(
 }
 
 /**
+ * #8562 — la page ET les messages qu'elle CITE : une citation d'éphémère se
+ * scelle à l'échéance de CE lecteur, que le message cité soit sur la page ou
+ * non. Même lecture, même plafond — une seule requête.
+ */
+export function withQuotedMessages(messages: ReadonlyArray<EphemeralRow & QuotingRow>): EphemeralRow[] {
+  return [...messages, ...quotedRowsOf(messages)];
+}
+
+type QuotingRow = { readonly replyTo?: (Omit<EphemeralRow, 'id'> & { readonly id?: string | null }) | null };
+
+const quotedRowsOf = (messages: ReadonlyArray<QuotingRow>): EphemeralRow[] =>
+  messages.flatMap(({ replyTo }) => (replyTo?.id ? [{ ...replyTo, id: replyTo.id }] : []));
+
+/**
+ * #8562 — les échéances des seuls messages CITÉS, pour une porte qui ne les
+ * charge pas déjà (fil de réponses, lien de partage). Le lecteur n'est résolu
+ * — une requête — que si une citation porte un éphémère.
+ */
+export async function loadQuotedEphemeralReaders(
+  prisma: EphemeralDeadlinesPrisma,
+  messages: ReadonlyArray<QuotingRow>,
+  readerParticipantId: () => Promise<string | undefined>,
+): Promise<Map<string, EphemeralReaderResolution>> {
+  const quoted = quotedRowsOf(messages).filter((row) => hasPerReaderEphemeralDeadline(row));
+  if (quoted.length === 0) return new Map();
+  return loadEphemeralReaderDeadlines(prisma, quoted, await readerParticipantId());
+}
+
+/**
+ * #8562 — un message rendu à UN lecteur nommé (la réponse HTTP d'un envoi) :
+ * sa citation passe par la garde unique, avec l'échéance de ce lecteur. La
+ * ligne relue par `saveMessage` porte le message cité ENTIER — texte,
+ * traductions, pièces, transcription — et partait telle quelle.
+ */
+export async function withQuoteServedToReader<T extends { readonly replyTo?: unknown; readonly metadata?: unknown }>(
+  prisma: EphemeralDeadlinesPrisma,
+  message: T,
+  readerParticipantId: string | undefined,
+): Promise<T> {
+  const quoted = message.replyTo as (QuotedMessageRow & Record<string, unknown>) | null | undefined;
+  if (!quoted || typeof quoted !== 'object') return message;
+  const deadlines = await loadQuotedEphemeralReaders(prisma, [{ replyTo: quoted as EphemeralRow }], async () => readerParticipantId);
+  return {
+    ...message,
+    replyTo: {
+      ...quoted,
+      ...servedQuotedMessage(quoted, {
+        attachmentReplyTo: attachmentReplyToFromMetadata(message.metadata),
+        ephemeralReader: { resolution: quoted.id ? deadlines.get(quoted.id) : undefined, now: new Date() },
+      }),
+    },
+  };
+}
+
+/**
  * Le message est-il encore SERVABLE à ce lecteur ?
  *
  * La directive du 2026-09-22 arrête le service à `D(u) + 1 h` — une heure APRÈS
@@ -150,8 +213,10 @@ export function isEphemeralServableToReader(
 ): boolean {
   return isEphemeralServable({
     ephemeralDuration: message.ephemeralDuration,
+    effectFlags: message.effectFlags,
     servedExpiresAt: servedEphemeralExpiresAt({
       ephemeralDuration: message.ephemeralDuration,
+      effectFlags: message.effectFlags,
       rawExpiresAt: message.expiresAt ?? null,
       isSender: resolution?.isSender ?? false,
       readerDeadline: resolution?.readerDeadline ?? null,

@@ -110,10 +110,18 @@ export interface LegacyViewOnceBurnRow {
   readonly effectFlags?: number | null;
 }
 
+/**
+ * Une flamme-œil (#8302) est éphémère par son bit 3, même si le bit
+ * EPHEMERAL lui manque : l'y reconnaître garde sa destruction (`expiresAt`)
+ * hors de la réévaluation « vue unique héritée », qui l'annulerait et
+ * purgerait le contenu sur-le-champ (#8345).
+ */
+const EPHEMERAL_BITS = MESSAGE_EFFECT_FLAGS.EPHEMERAL | MESSAGE_EFFECT_FLAGS.EPHEMERAL_AFTER_READ;
+
 export function isLegacyViewOnceBurn(row: LegacyViewOnceBurnRow): boolean {
   const ephemeral =
     (typeof row.ephemeralDuration === 'number' && row.ephemeralDuration > 0) ||
-    ((row.effectFlags ?? 0) & MESSAGE_EFFECT_FLAGS.EPHEMERAL) !== 0;
+    ((row.effectFlags ?? 0) & EPHEMERAL_BITS) !== 0;
   return row.isViewOnce === true && !ephemeral;
 }
 

@@ -278,7 +278,7 @@ final class MediaChromeRailTests: XCTestCase {
         XCTAssertTrue(page.contains(".mediaChromeRail(for: .reel(reel, visibleMediaId: visibleCarouselMediaId), stage: .reelPlayer)"))
 
         let railReels = try source("Meeshy/Features/Main/Views/ReelsPlayerView+ActionRail.swift")
-        XCTAssertEqual(railReels.components(separatedBy: ".mediaChromeGlyph()").count - 1, 2)
+        XCTAssertEqual(railReels.components(separatedBy: ".mediaChromeGlyph()").count - 1, 1)
 
         let railStory = try source("Meeshy/Features/Main/Views/StoryViewerView+Sidebar.swift")
         XCTAssertTrue(railStory.contains(".mediaChromeRail(for: .story(currentStory)"))

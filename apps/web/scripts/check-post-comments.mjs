@@ -46,7 +46,7 @@
  *     par rien. La rangée à soi est donc de RANG 2 (espagnol lu en français),
  *     parce qu'en français la règle juste et le relabel rendent le même
  *     verdict (leçon 261) ;
- *  7. **« SUPPRIMER » S'ARME PUIS CONFIRME**, retire la rangée et décrémente
+ *  7. **« SUPPRIMER » VIT DERRIÈRE LE « … »** (#8734), retire la rangée et décrémente
  *     le compteur de la PUBLICATION — le travail principal du lot (#7135 : le
  *     compte ne bougeait que dans deux caches sur quatre) n'avait aucun témoin
  *     de navigateur, alors que son symptôme se lit sur des PIXELS. Le gate
@@ -377,6 +377,25 @@ async function runScheme({ browser, base, scheme, check }) {
 
   await page.route(isPostDetail, (route) => json(route, envelope(POST)));
 
+  /* LE MENU « … » D'UNE RANGÉE (#8734) — Modifier, Supprimer, Copier, Imager
+     et Signaler vivent derrière lui, comme sur iOS : l'ouvrir, puis choisir.
+     Le panneau est en PORTAIL, lu dans le document. */
+  const plusDe = (id) => `[data-comment-row="${id}"] [data-comment-gesture="more"]`;
+  const entreeDuMenu = (geste) => `[data-comment-menu] [data-comment-gesture="${geste}"]`;
+  const menuDe = async (id) => {
+    if ((await page.$(plusDe(id))) === null) return [];
+    await page.click(plusDe(id));
+    await page.waitForSelector('[data-comment-menu]');
+    const entrees = await page.$$eval('[data-comment-menu] [role="menuitem"]', (items) => items.map((i) => i.getAttribute('data-comment-gesture')));
+    await page.keyboard.press('Escape');
+    await page.waitForSelector('[data-comment-menu]', { state: 'detached' });
+    return entrees;
+  };
+  const choisir = async (id, geste) => {
+    await page.click(plusDe(id));
+    await page.click(entreeDuMenu(geste));
+  };
+
   // ------------------------------------------- 0. l'ancre dépose sur le fil
   /* `settleFocus` plutôt qu'un délai : c'est un EFFET de React qui pose le
      focus, et il court après la peinture — `waitForSelector` rend la main
@@ -401,12 +420,14 @@ async function runScheme({ browser, base, scheme, check }) {
   await capture(page, `feed.post-comments.${scheme}`);
 
   // ------------------------------------------------ 1. qui a le droit de quoi
-  const offered = await page.evaluate(() =>
+  const rangees = await page.evaluate(() =>
     [...document.querySelectorAll('[data-comment-row]')].map((row) => ({
       id: row.getAttribute('data-comment-row'),
       gestes: [...row.querySelectorAll('[data-comment-gesture]')].map((b) => b.getAttribute('data-comment-gesture')),
     })),
   );
+  const offered = [];
+  for (const row of rangees) offered.push({ ...row, gestes: [...row.gestes, ...(await menuDe(row.id))] });
   check(offered.length === COMMENTS.length, say(`les ${COMMENTS.length} rangées du corpus sont peintes — ${offered.length}`));
   check(
     offered.every((row) => row.gestes.includes('like')),
@@ -421,6 +442,12 @@ async function runScheme({ browser, base, scheme, check }) {
   check(
     others.every((row) => !row.gestes.includes('edit') && !row.gestes.includes('delete')),
     say(`… et sur AUCUNE autre : la passerelle les garde sur l'AUTEUR — ${JSON.stringify(others)}`),
+  );
+  /* LE MENU D'AUTRUI (#8734) : copier, imager, SIGNALER — et le sien ne se
+     signale pas. */
+  check(
+    others.every((row) => ['copy', 'image', 'report'].every((g) => row.gestes.includes(g))) && mine !== undefined && !mine.gestes.includes('report'),
+    say(`« Signaler » est offert sur les rangées d'AUTRUI seules, avec Copier et Imager — ${JSON.stringify(offered)}`),
   );
 
   /* ---------------------------------- 1 bis. LE PRISME S'ANNONCE, ET S'OUVRE
@@ -517,24 +544,30 @@ async function runScheme({ browser, base, scheme, check }) {
     say(`chaque cible de geste fait au moins 44 px — ${JSON.stringify(hauteurs)}`),
   );
 
-  /* **ET ELLES SE MESURENT AUSSI EN ÉCARTEMENT** (revue-correction #7135,
-     défaut majeur 5). Ce bloc ne mesurait que la HAUTEUR : « Supprimer »
-     vivait à 4 px de « Modifier » — moitié moins que le minimum entre cibles
-     adjacentes, et la cible voisine est IRRÉVERSIBLE. Un pouce qui vise le
-     verbe réversible atteignait le destructeur. La géométrie se lit au
-     RECTANGLE, jamais au texte : `px-2` donne l'illusion d'un écart que le
-     doigt ne rencontre pas. */
-  const ecart = await page.evaluate((id) => {
-    const rect = (geste) =>
-      document.querySelector(`[data-comment-row="${id}"] [data-comment-gesture="${geste}"]`)?.getBoundingClientRect() ?? null;
-    const edit = rect('edit');
-    const supprimer = rect('delete');
-    if (edit === null || supprimer === null) return null;
-    return { editRight: Math.round(edit.right), deleteLeft: Math.round(supprimer.left), ecart: Math.round(supprimer.left - edit.right) };
-  }, MINE);
+  /* **LE VERBE IRRÉVERSIBLE VIT DERRIÈRE LE « … »** (#8734, et le défaut
+     majeur 5 de #7135 qu'il ferme pour de bon) : « Supprimer » vivait à
+     découvert à côté de « Modifier ». Dans le menu, il ouvre sa propre section
+     (le `Divider()` d'iOS), à l'encre destructrice, 44 px comme les autres —
+     mesuré au RECTANGLE, jamais au texte. */
+  await page.click(plusDe(MINE));
+  await page.waitForSelector('[data-comment-menu]');
+  const section = await page.evaluate(() => {
+    const cible = (geste) => document.querySelector(`[data-comment-menu] [data-comment-gesture="${geste}"]`);
+    const supprimer = cible('delete');
+    const modifier = cible('edit');
+    if (supprimer === null || modifier === null) return null;
+    return {
+      hauteurs: [...document.querySelectorAll('[data-comment-menu] [role="menuitem"]')].map((i) => Math.round(i.getBoundingClientRect().height)),
+      filet: parseFloat(getComputedStyle(supprimer).borderTopWidth),
+      rouge: getComputedStyle(supprimer).color !== getComputedStyle(modifier).color,
+    };
+  });
+  await capture(page, `feed.post-comment-menu.${scheme}`);
+  await page.keyboard.press('Escape');
+  await page.waitForSelector('[data-comment-menu]', { state: 'detached' });
   check(
-    ecart !== null && ecart.ecart >= 8,
-    say(`« Supprimer » est ÉCARTÉ de « Modifier » d'au moins 8 px — ${JSON.stringify(ecart)}`),
+    section !== null && section.filet > 0 && section.rouge && section.hauteurs.every((h) => h >= 44),
+    say(`« Supprimer » ouvre sa section du menu, à l'encre destructrice, 44 px par entrée — ${JSON.stringify(section)}`),
   );
 
   // ------------------------------------------------ 3. l'optimiste SE PEINT
@@ -667,7 +700,7 @@ async function runScheme({ browser, base, scheme, check }) {
     lang: p.getAttribute('lang'),
   }));
   const avantEdition = sent.length;
-  await page.click(`[data-comment-row="${MINE}"] [data-comment-gesture="edit"]`);
+  await choisir(MINE, 'edit');
   await page.waitForSelector(`[data-comment-edit-field="${MINE}"]`);
   const enEdition = await page.evaluate(
     (id) => {
@@ -724,14 +757,14 @@ async function runScheme({ browser, base, scheme, check }) {
      le focus à rien, et qui navigue au clavier repartait du haut du document.
      La moitié manquante du correctif `473a1289a5`, dont le doc-comment
      nommait pourtant le risque. */
-  await settleFocus(page, () => document.activeElement?.getAttribute?.('data-comment-gesture') === 'edit');
+  await settleFocus(page, () => document.activeElement?.getAttribute?.('data-comment-gesture') === 'more');
   const focusApresAnnuler = await page.evaluate(() => ({
     geste: document.activeElement?.getAttribute('data-comment-gesture') ?? null,
     rangee: document.activeElement?.closest('[data-comment-row]')?.getAttribute('data-comment-row') ?? null,
   }));
   check(
-    focusApresAnnuler.geste === 'edit' && focusApresAnnuler.rangee === MINE,
-    say(`« Annuler » REND le focus au bouton « Modifier » — ${JSON.stringify(focusApresAnnuler)}`),
+    focusApresAnnuler.geste === 'more' && focusApresAnnuler.rangee === MINE,
+    say(`« Annuler » REND le focus au « … » d'où « Modifier » est parti — ${JSON.stringify(focusApresAnnuler)}`),
   );
 
   // ------------------------------------------------ 7. ENREGISTRER, et la langue qui part avec
@@ -741,7 +774,7 @@ async function runScheme({ browser, base, scheme, check }) {
      à la passerelle — n'était donc mesuré par rien, ni ici ni en `bun test` :
      c'est là que le relabel de la langue est passé. */
   const CORRIGE = 'Lo probé esta mañana, aguanta perfectamente.';
-  await page.click(`[data-comment-row="${MINE}"] [data-comment-gesture="edit"]`);
+  await choisir(MINE, 'edit');
   await page.waitForSelector(`[data-comment-edit-field="${MINE}"]`);
   /**
    * **LE CHAMP PORTE SON TEXTE AVANT QU'ON LE REMPLACE** (#7176).
@@ -860,9 +893,9 @@ async function runScheme({ browser, base, scheme, check }) {
     apresEnregistrement === CORRIGE,
     say(`et la rangée peint le texte servi, traductions purgées — « ${apresEnregistrement} »`),
   );
-  await settleFocus(page, () => document.activeElement?.getAttribute?.('data-comment-gesture') === 'edit');
+  await settleFocus(page, () => document.activeElement?.getAttribute?.('data-comment-gesture') === 'more');
   const focusApresSauver = await page.evaluate(() => document.activeElement?.getAttribute('data-comment-gesture') ?? null);
-  check(focusApresSauver === 'edit', say(`« Enregistrer » aussi rend le focus au geste qui l'a ouvert — ${focusApresSauver}`));
+  check(focusApresSauver === 'more', say(`« Enregistrer » aussi rend le focus au geste qui l'a ouvert — ${focusApresSauver}`));
 
   // ------------------------------------------------ 8. SUPPRIMER, et les compteurs qui suivent
   /* LE TRAVAIL PRINCIPAL DU LOT N'AVAIT AUCUN TÉMOIN DE NAVIGATEUR : le
@@ -883,8 +916,7 @@ async function runScheme({ browser, base, scheme, check }) {
      était bonne. Le témoin se pose sur un 500 EN LIGNE, rang AUTRE que le
      hors-ligne. */
   deletePlan = { kind: 'refuse5xx' };
-  await page.click(`[data-comment-row="${MINE}"] [data-comment-gesture="delete"]`);
-  await page.click(`[data-comment-row="${MINE}"] [data-comment-gesture="delete"]`);
+  await choisir(MINE, 'delete');
   await page.waitForSelector(`[data-comment-row="${MINE}"] [data-comment-gesture-error]`);
   const refusSuppression = await page.evaluate(
     (id) => {
@@ -911,33 +943,31 @@ async function runScheme({ browser, base, scheme, check }) {
   );
   await capture(page, `feed.post-comment-delete-refused.${scheme}`);
 
-  /* **ET LE PREMIER TAP NE DÉTRUIT PAS** (défaut majeur 5) — il ARME. iOS
-     enferme le verbe dans un menu « … » : deux gestes. Le gate tapait UNE
-     fois et le commentaire partait. */
+  /* **ET LE PREMIER GESTE NE DÉTRUIT PAS** (défaut majeur 5) — il OUVRE le
+     menu « … », comme sur iOS : deux gestes. Le gate tapait UNE fois et le
+     commentaire partait. */
   deletePlan = { kind: 'ok' };
   const departsAvant = sent.filter((r) => r.method === 'DELETE' && r.path.endsWith(MINE)).length;
-  await page.click(`[data-comment-row="${MINE}"] [data-comment-gesture="delete"]`);
+  await page.click(plusDe(MINE));
+  await page.waitForSelector(entreeDuMenu('delete'));
   await page.waitForTimeout(150);
-  const arme = await page.$eval(`[data-comment-row="${MINE}"] [data-comment-gesture="delete"]`, (b) => ({
-    arme: b.hasAttribute('data-comment-delete-armed'),
-    libelle: (b.textContent ?? '').trim(),
-  }));
+  const libelle = await page.$eval(entreeDuMenu('delete'), (b) => (b.textContent ?? '').trim());
   check(
-    arme.arme && sent.filter((r) => r.method === 'DELETE' && r.path.endsWith(MINE)).length === departsAvant,
-    say(`le PREMIER tap sur « Supprimer » n'envoie RIEN — il arme, et se renomme « ${arme.libelle} »`),
+    sent.filter((r) => r.method === 'DELETE' && r.path.endsWith(MINE)).length === departsAvant,
+    say(`le PREMIER geste n'envoie RIEN — il ouvre le menu, où « ${libelle} » attend le second`),
   );
   check(
     (await page.$(`[data-comment-row="${MINE}"]`)) !== null,
-    say('… et la rangée est toujours là : rien d’irréversible au premier tap'),
+    say('… et la rangée est toujours là : rien d’irréversible au premier geste'),
   );
 
-  await page.click(`[data-comment-row="${MINE}"] [data-comment-gesture="delete"]`);
+  await page.click(entreeDuMenu('delete'));
   await page.waitForSelector(`[data-comment-row="${MINE}"]`, { state: 'detached' });
   await page.waitForTimeout(200);
   const apresSuppression = await compteurCartes();
   check(
     avantSuppression === String(COMMENTS.length) && apresSuppression === String(COMMENTS.length - 1),
-    say(`le SECOND tap retire la rangée ET décrémente le compteur — « ${avantSuppression} » puis « ${apresSuppression} »`),
+    say(`le SECOND geste retire la rangée ET décrémente le compteur — « ${avantSuppression} » puis « ${apresSuppression} »`),
   );
   check(
     sent.some((r) => r.method === 'DELETE' && r.path.endsWith(MINE)),

@@ -108,7 +108,7 @@ private struct ProfilePostsStatsBand: View {
     private let accentHex = "6366F1"
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: MeeshySpacing.sm) {
             chip(icon: "square.grid.2x2.fill", value: counts.posts,
                  label: String(localized: "profile.posts.stat.posts", defaultValue: "Postes", bundle: .main),
                  isSelected: selectedFilter == .posts,
@@ -130,12 +130,12 @@ private struct ProfilePostsStatsBand: View {
             action()
             HapticFeedback.light()
         } label: {
-            VStack(spacing: 4) {
+            VStack(spacing: MeeshySpacing.xs) {
                 Image(systemName: icon)
                     .font(MeeshyFont.relative(15, weight: .semibold))
                     .foregroundColor(MeeshyColors.indigo500)
                 Text(display)
-                    .font(MeeshyFont.relative(18, weight: .bold, design: .rounded))
+                    .font(MeeshyFont.relative(MeeshyFont.subtitleSize, weight: .bold, design: .rounded))
                     .foregroundColor(theme.textPrimary)
                     .monospacedDigit()
                     .lineLimit(1)
@@ -147,12 +147,12 @@ private struct ProfilePostsStatsBand: View {
                     .minimumScaleFactor(0.7)
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 12)
+            .padding(.vertical, MeeshySpacing.md)
             .background(theme.surfaceGradient(tint: accentHex))
-            .glassCard(cornerRadius: 14)
+            .glassCard(cornerRadius: MeeshyRadius.md)
             .overlay(
-                RoundedRectangle(cornerRadius: 14)
-                    .stroke(MeeshyColors.indigo500.opacity(isSelected ? 0.9 : 0), lineWidth: 1.5)
+                RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                    .stroke(MeeshyColors.indigo500.opacity(isSelected ? 0.9 : 0), lineWidth: MeeshyBorder.emphasis)
             )
         }
         .buttonStyle(.plain)
@@ -204,11 +204,11 @@ struct ProfileUserPostsList: View {
     // scroll container. Pull-to-refresh is intentionally dropped here (the outer
     // ScrollView owns scrolling); SWR + the visit revalidate covers freshness.
     var body: some View {
-        LazyVStack(spacing: 12) {
+        LazyVStack(spacing: MeeshySpacing.md) {
             if viewModel.posts.isEmpty {
                 if viewModel.isLoading {
                     // Cache VIDE ⇒ squelette (bible § I4), jamais un spinner.
-                    SkeletonFeedList(count: 3).padding(.top, 8)
+                    SkeletonFeedList(count: 3).padding(.top, MeeshySpacing.sm)
                 } else {
                     emptyState
                 }
@@ -225,8 +225,8 @@ struct ProfileUserPostsList: View {
                         openStories()
                     }
                 )
-                .padding(.horizontal, 12)
-                .padding(.bottom, 4)
+                .padding(.horizontal, MeeshySpacing.md)
+                .padding(.bottom, MeeshySpacing.xs)
 
                 if viewModel.visiblePosts.isEmpty {
                     filteredEmptyState
@@ -259,8 +259,8 @@ struct ProfileUserPostsList: View {
                 }
             }
         }
-        .padding(.top, 8)
-        .padding(.bottom, 24)
+        .padding(.top, MeeshySpacing.sm)
+        .padding(.bottom, MeeshySpacing.xxl)
         .task { await viewModel.loadInitial() }
         // Flush au niveau LISTE. Posé sur le `ForEach`, ce modificateur était
         // appliqué à CHAQUE carte générée : toute carte quittant l'écran
@@ -282,13 +282,13 @@ struct ProfileUserPostsList: View {
                 originalContent: post.content,
                 originalLanguage: post.originalLanguage,
                 originalType: post.type,
-                media: post.media.map { EditablePostMedia($0) },
+                media: post.media.map { EditablePostMedia($0) }, originalStoryEffects: post.storyEffects,
                 originalLocation: post.location,
                 originalVisibility: post.visibility,
                 originalVisibilityUserIds: post.visibilityUserIds ?? [],
                 isRepost: post.repost != nil,
                 onSave: { draft in
-                    await viewModel.updatePost(post.id, content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds, location: draft.location, visibility: draft.visibility, visibilityUserIds: draft.visibilityUserIds, known: draft.known)
+                    await viewModel.updatePost(post.id, content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds, location: draft.location, visibility: draft.visibility, visibilityUserIds: draft.visibilityUserIds, known: draft.known, storyEffects: draft.storyEffects)
                 },
                 onDismiss: { editingPost = nil }
             )
@@ -344,7 +344,7 @@ struct ProfileUserPostsList: View {
             onPin: isOwnPost ? { id in Task { await viewModel.pinPost(id) } } : nil
         )
         .equatable()
-        .padding(.horizontal, 12)
+        .padding(.horizontal, MeeshySpacing.md)
     }
 
     private func postCard(_ post: FeedPost) -> some View {
@@ -454,9 +454,9 @@ struct ProfileUserPostsList: View {
     /// comportement — la sentinelle disparaît sans signal — se lisait comme un
     /// blocage de chargement).
     private var endOfContentFooter: some View {
-        VStack(spacing: 6) {
+        VStack(spacing: MeeshySpacing.xsPlus) {
             Image(systemName: "checkmark.seal")
-                .font(MeeshyFont.relative(20))
+                .font(MeeshyFont.relative(MeeshyIconSize.xl))
                 .foregroundColor(theme.textSecondary)
             Text(String(localized: "profile.posts.endOfContent", defaultValue: "Vous avez tout vu", bundle: .main))
                 .font(.footnote.weight(.medium))
@@ -468,7 +468,7 @@ struct ProfileUserPostsList: View {
             }
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 20)
+        .padding(.vertical, MeeshySpacing.xl)
         .accessibilityElement(children: .combine)
     }
 
@@ -486,7 +486,7 @@ struct ProfileUserPostsList: View {
             compact: true
         )
         .padding(.top, 40)
-        .padding(.bottom, 24)
+        .padding(.bottom, MeeshySpacing.xxl)
     }
 
     /// Le profil a des publications, mais AUCUNE ne passe le filtre actif. Sans
@@ -505,7 +505,7 @@ struct ProfileUserPostsList: View {
                 subtitle: String(localized: "profile.posts.empty.filter.subtitle", defaultValue: "Touchez à nouveau la tuile pour tout revoir", bundle: .main),
                 compact: true
             )
-            .padding(.vertical, 24)
+            .padding(.vertical, MeeshySpacing.xxl)
         }
     }
 }
@@ -613,7 +613,6 @@ final class ProfileUserPostsViewModel: ObservableObject {
     /// zone « plus de contenu » (on a atteint le tout premier contenu publié).
     @Published private(set) var paginationState: PaginationState = .idle
 
-    private static let logger = Logger(subsystem: "me.meeshy.app", category: "profile")
     /// Number of posts actually rendered. Grows via the infinite-scroll sentinel
     /// so the nested LazyVStack never builds the whole cached list at once.
     @Published private(set) var renderWindow = ProfileUserPostsViewModel.initialRenderWindow {
@@ -1041,7 +1040,7 @@ final class ProfileUserPostsViewModel: ObservableObject {
         location: PostLocationUpdate? = nil,
         visibility: String? = nil,
         visibilityUserIds: [String]? = nil,
-        known: Set<PostEditField> = EditPostDraft.documentFields
+        known: Set<PostEditField> = EditPostDraft.documentFields, storyEffects: StoryEffects? = nil
     ) async {
         guard let idx = posts.firstIndex(where: { $0.id == postId }) else { return }
         let snapshot = posts[idx]
@@ -1065,7 +1064,7 @@ final class ProfileUserPostsViewModel: ObservableObject {
             // champ non déclaré est OMIS, et le serveur préserve le sien.
             let updated = try await postService.update(postId: postId, known: known, draft: PostEditDraft(
                 content: content, visibility: visibility, visibilityUserIds: visibilityUserIds,
-                originalLanguage: language, type: type, removeMediaIds: removeMediaIds,
+                originalLanguage: language, type: type, removeMediaIds: removeMediaIds, storyEffects: storyEffects,
                 location: location
             ))
             if let newIdx = posts.firstIndex(where: { $0.id == postId }) {

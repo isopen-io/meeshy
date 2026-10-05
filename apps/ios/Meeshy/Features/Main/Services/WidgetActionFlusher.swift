@@ -21,11 +21,10 @@ final class WidgetActionFlusher {
     nonisolated deinit {}
     static let shared = WidgetActionFlusher()
 
-    private let suiteName = "group.me.meeshy.apps"
+    private let suiteName = UserPreferencesManager.appGroupSuiteName
     /// Exposée pour le wipe de logout (appgroup-01) — une seule définition de
     /// la clé, pas de duplication de littéral.
     nonisolated static let pendingMarkReadKey = "pending_mark_read"
-    private var pendingMarkReadKey: String { Self.pendingMarkReadKey }
 
     private lazy var sharedDefaults: UserDefaults? = {
         UserDefaults(suiteName: suiteName)
@@ -39,7 +38,7 @@ final class WidgetActionFlusher {
     /// retries — idempotent on the server side.
     func flush() async {
         guard let defaults = sharedDefaults else { return }
-        let queued = defaults.stringArray(forKey: pendingMarkReadKey) ?? []
+        let queued = defaults.stringArray(forKey: Self.pendingMarkReadKey) ?? []
         guard !queued.isEmpty else { return }
 
         logger.info("Flushing \(queued.count) pending widget mark-as-read")
@@ -61,6 +60,6 @@ final class WidgetActionFlusher {
         }
 
         // Keep failures for a retry; drop the successes.
-        defaults.set(failed, forKey: pendingMarkReadKey)
+        defaults.set(failed, forKey: Self.pendingMarkReadKey)
     }
 }

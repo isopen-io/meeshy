@@ -1,6 +1,6 @@
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
-import type { PublicationRefusal } from '@/lib/stories/publication-kind';
+import type { PublicationKind, PublicationRefusal } from '@/lib/stories/publication-kind';
 import type { StudioPlane } from '@/lib/stories/story-document';
 import type { StudioDoor, StudioFailureKey, StudioPage } from '@/lib/stories/studio-page';
 import { StudioAssetRow, StudioSoundPlaneToggle } from '@/routes/story-compose-parts';
@@ -22,15 +22,24 @@ const REFUSAL_KEY: Readonly<Record<PublicationRefusal, 'story.studio.refusal.ree
  * par refus (#7684), jamais le libellé du réel pour tout. */
 export const publicationRefusalText = (lang: InterfaceLanguage, refusal: PublicationRefusal): string => translate(lang, REFUSAL_KEY[refusal]);
 
-export type StudioPlaceRefusalNotice = { readonly door: StudioDoor; readonly reason: 'door' | 'media-max' };
+/** `count` : les fichiers écartés d'un import multiple (#8533) — le pied dit
+ * combien, jamais un refus muet. */
+export type StudioPlaceRefusalNotice = { readonly door: StudioDoor; readonly reason: 'door' | 'media-max' | 'import-max'; readonly count?: number };
 
-/** Les médias de la page COURANTE — une ligne par porte occupée. */
+/** La carte des médias a-t-elle une ligne à montrer ? */
+export const studioAssetsShown = (page: StudioPage): boolean =>
+  page.sound !== null || [page.background, page.overlay].some((asset) => asset !== null && asset.upload.phase !== 'ready');
+
+/** Les médias de la page COURANTE — une ligne par porte occupée, SAUF un
+ * visuel PRÊT (lot 6, « plus de détails en bas ») : sa légende vit dans
+ * son panneau (Cadre pour le fond, édition pour le calque). Un visuel en
+ * montée ou en échec garde sa ligne — c'est là qu'on réessaie. Le son garde
+ * la sienne (il n'est pas un objet de la scène). */
 export function StudioPageAssets({
   lang,
   page,
   onRetry,
   onRemove,
-  onCaption,
   onSoundPlane,
   locked = false,
 }: {
@@ -38,7 +47,6 @@ export function StudioPageAssets({
   readonly page: StudioPage;
   readonly onRetry: (door: StudioDoor) => void;
   readonly onRemove: (door: StudioDoor) => void;
-  readonly onCaption: (door: 'visual' | 'overlay', value: string) => void;
   readonly onSoundPlane: (plane: StudioPlane) => void;
   /** VERROUILLÉ pendant l'envoi (#7707, revue-correction) — le plan que la
    * séquence publie est figé au premier clic sur Publier ; retirer, réessayer
@@ -59,9 +67,9 @@ export function StudioPageAssets({
             label={translate(lang, door === 'visual' ? 'story.studio.background.label' : 'story.studio.overlay.label')}
             removeLabel={translate(lang, door === 'visual' ? 'story.studio.background.remove' : 'story.studio.overlay.remove')}
             upload={asset.upload}
+            discreet={asset.upload.phase === 'ready'}
             onRetry={asset.file !== undefined ? () => onRetry(door) : undefined}
             onRemove={() => onRemove(door)}
-            caption={{ value: asset.caption, inputId: `story-studio-caption-${door}`, onChange: (value) => onCaption(door, value) }}
             locked={locked}
           />
         );
@@ -91,30 +99,48 @@ export function StudioPageAssets({
  * de taire ce qui a réussi. */
 export type StudioPublishFailureNotice = { readonly failure: StudioFailureKey; readonly published: number; readonly total: number };
 
+/** Le pied a-t-il quelque chose à DIRE ? — l'aide de durée n'est vraie que
+ * d'une STORY (« reste visible vingt heures ») : sous un post ou un réel, elle
+ * mentait (retour de revue #8425). Sans refus, sans échec et hors story, le
+ * pied se tait, et l'hôte ne monte pas de carte vide. */
+export function studioFooterSpeaks(params: {
+  readonly kind: PublicationKind;
+  readonly placeRefusal: StudioPlaceRefusalNotice | null;
+  readonly kindRefusal: PublicationRefusal | null;
+  readonly publishFailure: StudioPublishFailureNotice | null;
+}): boolean {
+  return params.kind === 'STORY' || params.placeRefusal !== null || params.kindRefusal !== null || params.publishFailure !== null;
+}
+
 /** LE MESSAGE du pied (aide, refus, échec) a sa PROPRE ligne, pleine largeur :
  * partagée avec la pastille et la capsule Publier, elle ne gardait que
  * quelques pixels à 320 px. */
 export function StudioFooterMessage({
   lang,
+  kind,
   placeRefusal,
   kindRefusal,
   publishFailure,
 }: {
   readonly lang: InterfaceLanguage;
+  readonly kind: PublicationKind;
   readonly placeRefusal: StudioPlaceRefusalNotice | null;
   readonly kindRefusal: PublicationRefusal | null;
   readonly publishFailure: StudioPublishFailureNotice | null;
 }) {
+  if (!studioFooterSpeaks({ kind, placeRefusal, kindRefusal, publishFailure })) return null;
   return (
     <div className="text-caption">
       {placeRefusal !== null ? (
         <p role="alert" data-place-refusal={placeRefusal.reason} style={{ color: 'var(--color-error)' }}>
-          {placeRefusal.reason === 'media-max'
+          {placeRefusal.reason === 'import-max'
+            ? translate(lang, 'story.studio.refusal.import-max', { count: String(placeRefusal.count ?? 0) })
+            : placeRefusal.reason === 'media-max'
             ? translate(lang, 'story.studio.refusal.media-max')
             : translate(lang, placeRefusal.door === 'sound' ? 'story.studio.refusal.door.sound' : 'story.studio.refusal.door.visual')}
         </p>
       ) : kindRefusal !== null ? (
-        <p data-publish-refusal={kindRefusal} style={{ color: 'var(--color-ios-ink-2)' }}>
+        <p data-publish-refusal={kindRefusal} style={{ color: 'var(--color-ios-ink)' }}>
           {publicationRefusalText(lang, kindRefusal)}
         </p>
       ) : publishFailure !== null && publishFailure.published > 0 ? (
@@ -133,7 +159,7 @@ export function StudioFooterMessage({
           {translate(lang, 'story.studio.error.publish')} {translate(lang, publishFailure.failure)}
         </p>
       ) : (
-        <p style={{ color: 'var(--color-ios-ink-2)' }}>{translate(lang, 'story.studio.hint.duration')}</p>
+        <p style={{ color: 'var(--color-ios-ink)' }}>{translate(lang, 'story.studio.hint.duration')}</p>
       )}
     </div>
   );

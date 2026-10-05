@@ -52,9 +52,6 @@ enum StoryCoverURLMemo {
         resolved.removeAll()
     }
 
-    /// Point d'accès de test — `internal`, lu par `@testable import Meeshy`.
-    static var memoizedCountForTesting: Int { resolved.count }
-
     static func reset() {
         resolved.removeAll()
         filledFor = nil

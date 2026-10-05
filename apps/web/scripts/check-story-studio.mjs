@@ -5,13 +5,20 @@
  * `story-document.test.ts`, `studio.test.ts`) prouvent les LOIS ; ce gate
  * prouve que `/stories/new` les PEINT :
  *
- *  1. Publier est INERTE sur un brouillon vide (loi 4).
+ *  1. Sur un brouillon vide, AUCUNE capsule Publier (lot 6 : ni grisée, ni
+ *     phrase) — loi 4 tenue par l'absence.
  *  2. Poser un fond (image) ET un son ⇒ `[data-scene-player]` PEINT
  *     réellement — les pixels de la carte ne sont PAS uniformes (deux
  *     `requestAnimationFrame` après la pose, jamais `img.complete` seul).
  *  3. La carte (`[data-scene-stage]`) est TOUJOURS 9:16 (±0,01) et CENTRÉE
  *     (±1 px) dans son plateau, aux DEUX gabarits (320 et 390 px de large) et
- *     dans les DEUX schémas.
+ *     dans les DEUX schémas. PLEIN ÉCRAN, PARITÉ iOS (#8413, retour porteur
+ *     du 2026-09-27 sur #8370) : ce plateau s'étend ENTRE la barre haute et le
+ *     socle — la carte ne passe ni sous ✕/⋯ ni sous la capsule Publier (±1 px),
+ *     il prend toute la largeur de l'écran, et seuls les deux rails FLOTTENT
+ *     dessus (`position: absolute`). Le sol (`[data-story-studio-floor]`) est
+ *     peint dès qu'un fond image est posé, puis du thumbhash du COMPOSITE de
+ *     la scène (#8425).
  *  4. Cinq cibles ≥ 44 px : les deux portes, Publier, Retirer (fond), le
  *     bouton son.
  *  5. LA SAISIE EST ALIGNÉE SUR CE QU'ELLE FAIT PEINDRE (défaut 1,
@@ -69,6 +76,7 @@ import { join } from 'node:path';
 
 import { launchChromium } from './lib/browser.mjs';
 import { startDistServer } from './lib/gate-server.mjs';
+import { writeOnStage } from './lib/stage-typing.mjs';
 
 const DIST = new URL('../dist/', import.meta.url).pathname;
 const ICON = new URL('../public/icon-192.png', import.meta.url).pathname;
@@ -84,6 +92,14 @@ let invariants = 0;
 const check = (ok, what) => {
   invariants += 1;
   if (!ok) failures.push(what);
+};
+
+/** Écrire sur la scène par le clic et le clavier (#8515) — jamais `page.fill`. */
+const writeAsAuthor = async (page, text, tag) => {
+  const why = await writeOnStage(page, text);
+  // Dit TOUT DE SUITE : l'attente suivante expirerait avant la liste des échecs.
+  if (why !== null) console.error(`  ${tag} « ${text.slice(0, 24)} » : ${why}`);
+  check(why === null, `${tag} : ${why}`);
 };
 
 const round = (v) => Math.round(v * 100) / 100;
@@ -196,8 +212,9 @@ async function runScheme(colorScheme) {
     await page.waitForSelector('[data-story-studio]', { timeout: 8000 });
 
     /* ── 1. Publier INERTE sur un brouillon vide (loi 4) ────────────────── */
-    const publishDisabled = await page.evaluate(() => document.querySelector('[data-story-publish]')?.disabled ?? null);
-    check(publishDisabled === true, `${tag} : Publier doit être désactivé sur un brouillon vide — ${publishDisabled}`);
+    // LOT 6 : sur un brouillon vide, AUCUNE capsule Publier — ni grisée, ni phrase.
+    const publishPresent = await page.evaluate(() => document.querySelector('[data-story-publish]') !== null);
+    check(!publishPresent, `${tag} : aucune capsule Publier ne doit paraître sur un brouillon vide`);
     check(await page.evaluate(() => document.querySelector('[data-scene-player]') === null), `${tag} : aucune scène avant toute pose`);
 
     /* ── 2. poser un fond + un son ⇒ le moteur PEINT réellement ─────────── */
@@ -238,16 +255,56 @@ async function runScheme(colorScheme) {
         `${tag} : carte centrée en (${round(cxCarte)}, ${round(cyCarte)}) — plateau (${round(cxPlateau)}, ${round(cyPlateau)})`,
       );
       measures[`${viewport.width}.carte`] = [round(carte.x), round(carte.y), round(carte.width), round(carte.height)];
+      const ecran = await page.evaluate(() => ({ width: innerWidth, height: innerHeight }));
+      const haut = await readBox(page, '[data-story-studio-top]');
+      const socle = await readBox(page, '[data-story-studio-bottom]');
+      check(
+        Math.abs(plateau.x) <= 1 && Math.abs(plateau.width - ecran.width) <= 1,
+        `${tag} : la zone de la scène prend toute la largeur (${JSON.stringify({ plateau, ecran })})`,
+      );
+      check(
+        haut !== null && socle !== null && Math.abs(plateau.y - (haut.y + haut.height)) <= 1 && Math.abs(plateau.y + plateau.height - socle.y) <= 1,
+        `${tag} : la zone de la scène s'étend ENTRE la barre haute et le socle (${JSON.stringify({ haut, plateau, socle })})`,
+      );
+      check(
+        haut !== null && socle !== null && carte.y >= haut.y + haut.height - 1 && carte.y + carte.height <= socle.y + 1,
+        `${tag} : ni la barre haute ni le socle ne se posent sur la carte (${JSON.stringify({ haut, carte, socle })})`,
+      );
     }
+    const flottants = await page.evaluate(() =>
+      ['[data-story-studio-rail="leading"]', '[data-story-studio-rail="trailing"]'].map((sel) => {
+        const el = document.querySelector(sel);
+        return { sel, position: el === null ? null : getComputedStyle(el).position };
+      }),
+    );
+    check(flottants.every((f) => f.position === 'absolute'), `${tag} : les deux rails flottent sur la scène — ${JSON.stringify(flottants)}`);
+    check(
+      await page.evaluate(() => document.querySelector('[data-story-studio-floor] img') !== null),
+      `${tag} : un fond image posé doit peindre le sol de la scène`,
+    );
+    /* LE SOL DU COMPOSITE (#8425) : dans un vrai navigateur, le rendu réduit
+       de la scène se hache (canvas hors écran, `blob:` de même origine) —
+       le sol quitte l'image de fond pour le hash du RÉSULTAT. */
+    const solHache = await page
+      .waitForSelector('[data-story-studio-floor="hash"]', { timeout: 4000 })
+      .then(() => true)
+      .catch(() => false);
+    check(solHache, `${tag} : le sol doit être peint du thumbhash du COMPOSITE de la scène ([data-story-studio-floor="hash"])`);
 
     /* ── 4. cinq cibles ≥ 44 px ──────────────────────────────────────────── */
-    const tailles = await targetSizesOf(page, [
-      'input[data-door="visual"]',
-      'input[data-door="sound"]',
-      '[data-story-publish]',
-      'button[aria-label="Retirer le fond"]',
-      '[data-story-studio-sound-toggle]',
-    ]);
+    /* « Retirer le fond » est un geste du RAIL des outils du fond (#8849,
+       l'ancien panneau Cadre retiré) — on l'ouvre pour mesurer. */
+    const avantCadre = await targetSizesOf(page, ['input[data-door="visual"]', 'input[data-door="sound"]', '[data-story-publish]', '[data-story-studio-sound-toggle]']);
+    await page.click('[data-story-option="frame"]');
+    await page.waitForSelector('[data-story-option="object:remove"]', { timeout: 8000 });
+    /* Plaque ouverte en bas, le SOCLE se retire sur mobile (lot 6). */
+    const socleRetire = await page.evaluate(() => {
+      const row = document.querySelector('[data-story-socle-row]');
+      return row === null || getComputedStyle(row).display === 'none';
+    });
+    check(socleRetire, `${tag} : outils du fond ouverts, le socle doit se retirer sur mobile`);
+    const tailles = { ...avantCadre, ...(await targetSizesOf(page, ['[data-story-option="object:remove"]'])) };
+    await page.click('[data-story-option="background:exit"]');
     for (const [selector, size] of Object.entries(tailles)) {
       // Les `<input type=file>` sont masqués (`sr-only`) : c'est leur `<label>`
       // englobant (`StudioDoorButton`) qui porte la cible visible et cliquable.
@@ -264,7 +321,7 @@ async function runScheme(colorScheme) {
       ['un texte long', 'Un texte suffisamment long pour forcer plusieurs lignes dans le moteur partagé et dans la saisie transparente qui le recouvre.'],
     ];
     for (const [label, text] of alignmentCases) {
-      await page.fill('#story-studio-text', text);
+      await writeAsAuthor(page, text, tag);
       await twoFrames(page);
       const alignement = await page.evaluate(() => {
         const textarea = document.querySelector('#story-studio-text');
@@ -299,7 +356,7 @@ async function runScheme(colorScheme) {
     }
 
     /* ── 6. un texte tapé SURVIT à un rechargement (brouillon) ──────────── */
-    await page.fill('#story-studio-text', 'Recette du gate');
+    await writeAsAuthor(page, 'Recette du gate', tag);
     await page.waitForTimeout(50); // l'effet qui persiste le brouillon n'est pas synchrone au frappé.
     await page.reload({ waitUntil: 'load' });
     await page.waitForSelector('[data-story-studio]', { timeout: 8000 });
@@ -433,6 +490,71 @@ async function runScheme(colorScheme) {
     check(
       afterPublish.value === 'COMMUNITY' && afterPublish.source === 'chosen' && afterPublish.text === '',
       `${tag} : rouvert après publication, le studio doit avoir purgé le brouillon et relu la mémoire (COMMUNITY/chosen, texte vide) — ${JSON.stringify(afterPublish)}`,
+    );
+
+    /* ── LE MODE ANIMÉ (#8415, #8516) : la pastille ouvre la frise, le couloir
+       gauche se retire et le rail droit ne garde que « Temps », la tête de
+       lecture AVANCE sur l'horloge du moteur ; « Temps » range la frise d'une
+       scène qui reste animée ; éteindre Animé rend la scène statique. ───── */
+    await writeAsAuthor(page, 'Animé', tag);
+    await page.click('[data-story-animated]');
+    await page.waitForSelector('[data-story-timeline] [data-story-track]', { timeout: 8000 });
+    const avant = await page.evaluate(() => document.querySelector('[data-story-timeline-head]')?.style.left ?? null);
+    // Une CONDITION, jamais un délai fixe : la tête doit quitter sa position.
+    await page
+      .waitForFunction((depart) => {
+        const left = document.querySelector('[data-story-timeline-head]')?.style.left ?? null;
+        return left !== null && left !== depart && left !== '0%';
+      }, avant, { timeout: 4000 })
+      .catch(() => undefined);
+    const railDroit = () =>
+      page.evaluate(() => [...document.querySelectorAll('[data-story-studio-rail="trailing"] [data-story-option]')].map((tile) => tile.getAttribute('data-story-option')));
+    const anime = await page.evaluate(() => ({
+      tete: document.querySelector('[data-story-timeline-head]')?.style.left ?? null,
+      couloir: document.querySelector('[data-story-studio-rail="leading"]') !== null,
+      pistes: document.querySelectorAll('[data-story-track]').length,
+      publier: document.querySelector('[data-story-publish]') !== null,
+      unite: document.querySelector('[data-story-timeline-duration]')?.parentElement?.textContent ?? null,
+    }));
+    const friseRail = await railDroit();
+    check(
+      !anime.couloir && JSON.stringify(friseRail) === '["time"]' && anime.pistes >= 1 && anime.publier,
+      `${tag} : frise ouverte, couloir retiré, seul « Temps » au rail droit, une piste par objet, Publier gardé — ${JSON.stringify({ ...anime, friseRail })}`,
+    );
+    check(avant !== anime.tete && anime.tete !== '0%', `${tag} : la tête de lecture doit avancer pendant la lecture (${avant} → ${anime.tete})`);
+    check(/ s \/ .* s$/.test(anime.unite ?? ''), `${tag} : le compteur de la frise porte son unité — « ${anime.unite} »`);
+    /* « Temps » range la frise ; la scène RESTE animée, les deux rails reviennent. */
+    await page.click('[data-story-option="time"]');
+    const range = await page.evaluate(() => ({
+      frise: document.querySelector('[data-story-timeline]') !== null,
+      anime: document.querySelector('[data-story-animated]')?.getAttribute('aria-pressed') ?? null,
+      rails: document.querySelectorAll('[data-story-studio-rail]').length,
+      ajoutEnHaut: document.querySelector('[data-story-studio-top] [data-story-option="add-page"]') !== null,
+    }));
+    const railRange = await railDroit();
+    check(
+      // #8713 : « Temps » au pied de la colonne droite, AU-DESSUS d'annuler ; le
+      // (+) de scène a quitté les rails pour la barre haute.
+      !range.frise &&
+        range.anime === 'true' &&
+        range.rails === 2 &&
+        railRange.includes('time') &&
+        railRange.indexOf('time') < railRange.indexOf('undo') &&
+        !railRange.includes('add-page') &&
+        range.ajoutEnHaut,
+      `${tag} : « Temps » range la frise d'une scène qui reste animée, rails rendus dans l'ordre d'iOS — ${JSON.stringify({ ...range, railRange })}`,
+    );
+    /* Éteindre Animé : la scène redevient STATIQUE — plus de « Temps ». */
+    await page.click('[data-story-animated]');
+    check(
+      await page.evaluate(
+        () =>
+          document.querySelector('[data-story-timeline]') === null &&
+          document.querySelector('[data-story-animated]')?.getAttribute('aria-pressed') === 'false' &&
+          document.querySelector('[data-story-option="time"]') === null &&
+          document.querySelectorAll('[data-story-studio-rail]').length === 2,
+      ),
+      `${tag} : éteindre Animé rend la scène statique (ni frise, ni « Temps »), les deux rails présents`,
     );
 
     check(pageErrors.length === 0, `${tag} : erreurs de page — ${pageErrors.join(' | ')}`);
@@ -589,10 +711,17 @@ async function runScheme(colorScheme) {
       `${tag} : rechargé, le brouillon rend ses trois pages ET la page courante`,
     );
 
-    /* (f) Post › « Une grande, les autres à côté » publie. */
+    /* (f) Post › « Une grande, les autres à côté » s'ARME au chevron sans
+       publier ; seul Publier envoie (maquette plein écran, #8281). */
     await pagesPage.click('[data-publish-kind-toggle]');
     await pagesPage.click('[data-publish-kind-choice="POST"]');
     await pagesPage.click('[data-publish-layout-choice="hero"]');
+    check(
+      new URL(pagesPage.url()).pathname !== '/feed' &&
+        (await pagesPage.getAttribute('[data-story-publish]', 'data-publish-kind')) === 'POST',
+      `${tag} : choisir une disposition au chevron publie au lieu d'armer la capsule`,
+    );
+    await pagesPage.click('[data-story-publish]');
     await pagesPage.waitForURL((url) => url.pathname.startsWith('/feed'), { timeout: 8000 });
 
     check(pagesErrors.length === 0, `${tag} : erreurs de page (plusieurs pages) — ${pagesErrors.join(' | ')}`);
@@ -643,14 +772,14 @@ for (const colorScheme of ['light', 'dark']) {
   await page.click('[data-self-create]');
   await page.waitForURL((url) => url.pathname === '/stories/new', { timeout: 8000 });
   await page.waitForSelector('[data-story-studio]', { timeout: 8000 });
-  await page.fill('#story-studio-text', 'Une');
+  await writeAsAuthor(page, 'Une', tag);
   for (const [text, count] of [
     ['Deux', 2],
     ['Trois', 3],
   ]) {
     await page.click('[data-story-option="add-page"]');
     await page.waitForFunction((n) => document.querySelectorAll('[data-story-studio-page]').length === n, count, { timeout: 8000 });
-    await page.fill('#story-studio-text', text);
+    await writeAsAuthor(page, text, tag);
   }
   check(
     await page.evaluate(() => document.querySelector('[data-publish-refusal]') === null),
@@ -689,6 +818,116 @@ for (const colorScheme of ['light', 'dark']) {
   await context.close();
 }
 
+/**
+ * ── 11. LA SCÈNE RESPIRE ET RESTE DANS L'ÉCRAN (lot 7, retour porteur
+ * 2026-09-28, miroir `ComposerRailGeometry.floatingInset = outerMargin`) ──
+ *
+ * La carte garde 10 px de chaque côté — la marge des rails, jamais collée au
+ * bord — et rien (sol flouté, image en cover) n'élargit la page au-delà de
+ * l'écran : aucun défilement horizontal, au repos comme frise ouverte, au
+ * téléphone (390) comme au bureau (1280).
+ */
+const SCENE_BREATH = 10;
+for (const viewport of [
+  { width: 390, height: 844 },
+  { width: 1280, height: 800 },
+]) {
+  const tag = `[respiration ${viewport.width}×${viewport.height}]`;
+  const context = await browser.newContext({ colorScheme: 'dark', locale: 'fr-FR', viewport, serviceWorkers: 'block' });
+  await context.addInitScript((session) => localStorage.setItem('meeshy.session', session), seedSession('e'.repeat(24)));
+  const page = await context.newPage();
+  await page.goto(`${BASE}/stories/new`, { waitUntil: 'load' });
+  await page.waitForSelector('[data-story-studio]', { timeout: 8000 });
+  await page.setInputFiles('input[data-door="visual"]', { name: 'fond.png', mimeType: 'image/png', buffer: icon });
+  await page.waitForSelector('[data-story-studio-floor] img', { timeout: 8000 });
+  await twoFrames(page);
+  const geometry = () =>
+    page.evaluate(() => {
+      const card = document.querySelector('[data-scene-stage]')?.getBoundingClientRect() ?? null;
+      return {
+        left: card === null ? null : card.left,
+        right: card === null ? null : innerWidth - card.right,
+        overflow: Math.max(document.documentElement.scrollWidth, document.body.scrollWidth) - innerWidth,
+      };
+    });
+  const rest = await geometry();
+  check(
+    rest.left !== null && rest.right !== null && rest.left >= SCENE_BREATH - 0.5 && rest.right >= SCENE_BREATH - 0.5,
+    `${tag} : la carte doit garder ${SCENE_BREATH} px de chaque côté — ${JSON.stringify(rest)}`,
+  );
+  check(rest.overflow <= 0, `${tag} : la page déborde de ${rest.overflow} px au repos`);
+  const rails = await page.evaluate(() =>
+    ['leading', 'trailing'].map((side) => {
+      const box = document.querySelector(`[data-story-studio-rail="${side}"]`)?.getBoundingClientRect() ?? null;
+      return box === null ? null : side === 'leading' ? box.left : innerWidth - box.right;
+    }),
+  );
+  check(
+    rails.every((edge) => edge !== null && edge >= SCENE_BREATH - 0.5),
+    `${tag} : les rails partent du même bord que la carte (${SCENE_BREATH} px) — ${JSON.stringify(rails)}`,
+  );
+  await page.click('[data-story-option="frame"]');
+  await page.waitForSelector('[data-story-frame-panel]', { timeout: 8000 });
+  await twoFrames(page);
+  const framed = await geometry();
+  check(framed.overflow <= 0, `${tag} : la page déborde de ${framed.overflow} px panneau Cadre ouvert`);
+  await page.click('[data-story-option="background:exit"]');
+  // Le calque se pose AVANT d'ouvrir Animé : la frise retire les couloirs.
+  await page.setInputFiles('input[data-door="overlay"]', { name: 'calque.png', mimeType: 'image/png', buffer: icon });
+  await page.waitForSelector('[data-scene-object-id="overlay"]', { timeout: 8000 });
+  await page.click('[data-story-animated]');
+  await page.waitForSelector('[data-story-timeline]', { timeout: 8000 });
+  await twoFrames(page);
+  const animated = await geometry();
+  check(animated.overflow <= 0, `${tag} : la page déborde de ${animated.overflow} px frise ouverte`);
+  /* LA FRISE SE RÈGLE À LA MAIN (lot 7) : la poignée de FIN tirée d'un quart
+     de piste raccourcit la fenêtre d'un quart de scène ; la barre glissée d'un
+     huitième la DÉPLACE d'un huitième, sa durée gardée. */
+  await page.click('[data-story-timeline-play]');
+  await page.waitForSelector('[data-story-track-bar="overlay"]', { timeout: 8000 });
+  const windowOf = () =>
+    page.evaluate(() => {
+      const track = document.querySelector('[data-story-track="overlay"]');
+      return { start: Number(track?.getAttribute('data-story-track-start')), end: Number(track?.getAttribute('data-story-track-end')) };
+    });
+  const centerOf = (selector) =>
+    page.evaluate((sel) => {
+      const box = document.querySelector(sel)?.getBoundingClientRect() ?? null;
+      return box === null ? null : { x: box.left + box.width / 2, y: box.top + box.height / 2 };
+    }, selector);
+  const laneWidth = await page.evaluate(() => document.querySelector('[data-story-track-lane]')?.getBoundingClientRect().width ?? 0);
+  const drag = async (from, dx) => {
+    await page.mouse.move(from.x, from.y);
+    await page.mouse.down();
+    await page.mouse.move(from.x + dx / 2, from.y, { steps: 4 });
+    await page.mouse.move(from.x + dx, from.y, { steps: 4 });
+    await page.mouse.up();
+    await twoFrames(page);
+  };
+  const barCenter = await centerOf('[data-story-track-bar="overlay"]');
+  check(barCenter !== null && laneWidth > 0, `${tag} : piste du calque introuvable`);
+  if (barCenter !== null && laneWidth > 0) {
+    await page.mouse.click(barCenter.x, barCenter.y);
+    await page.waitForSelector('[data-story-track-grip="end"]', { timeout: 8000 });
+    const before = await windowOf();
+    const endGrip = await centerOf('[data-story-track-grip="end"]');
+    if (endGrip !== null) await drag(endGrip, -laneWidth / 4);
+    const shortened = await windowOf();
+    check(
+      Math.abs(shortened.start - before.start) <= 0.02 && Math.abs(shortened.end - (before.end - 1.5)) <= 0.1,
+      `${tag} : la poignée de fin tirée d'un quart de piste doit ôter 1,5 s — avant ${JSON.stringify(before)}, après ${JSON.stringify(shortened)}`,
+    );
+    const bar = await centerOf('[data-story-track-bar="overlay"]');
+    if (bar !== null) await drag(bar, laneWidth / 8);
+    const moved = await windowOf();
+    check(
+      Math.abs(moved.start - (shortened.start + 0.75)) <= 0.1 && Math.abs(moved.end - moved.start - (shortened.end - shortened.start)) <= 0.02,
+      `${tag} : la barre glissée d'un huitième doit se décaler de 0,75 s, durée gardée — avant ${JSON.stringify(shortened)}, après ${JSON.stringify(moved)}`,
+    );
+  }
+  await context.close();
+}
+
 await browser.close();
 served.close();
 
@@ -698,7 +937,7 @@ if (failures.length > 0) {
   process.exit(1);
 }
 console.log(
-  `check-story-studio : vert — ${invariants} invariants : Publier inerte sur un brouillon vide, un fond + un son posés font ` +
+  `check-story-studio : vert — ${invariants} invariants : aucune capsule Publier sur un brouillon vide, un fond + un son posés font ` +
     'PEINDRE le moteur partagé, la carte est 9:16 centrée dans son plateau aux deux gabarits, cinq cibles ≥ 44 px, la saisie ' +
     'est alignée au pixel près sur ce que le moteur peint (une ligne et un texte long, sans défilement interne), le texte ' +
     'tapé survit à un rechargement, l’audience se choisit et voyage (pastille ≥ 44 px sans débordement, défaut FRIENDS ' +

@@ -1,6 +1,11 @@
 import { describe, expect, test } from 'bun:test';
 
-import { auditHookDeclaration, judgeStartPathReplay } from './check-capacitor-config.mjs';
+import {
+  auditHookDeclaration,
+  auditSyncedPlugins,
+  capacitorPluginsImportedBy,
+  judgeStartPathReplay,
+} from './check-capacitor-config.mjs';
 
 /**
  * `scripts/check-capacitor-config.mjs` — LE GATE QUI PROUVE QUE LA FORME iOS
@@ -89,5 +94,60 @@ describe('auditHookDeclaration — les quatre clés de package.json + le dossier
   test('ios.webDir ≠ "App/App/public" -> violation nommant le dossier natif visé', () => {
     const violations = auditHookDeclaration({ scripts }, { ios: { webDir: 'App/wrong/public' } });
     expect(violations.some((v) => v.includes('webDir'))).toBe(true);
+  });
+});
+
+/**
+ * #8090 — `cap sync` ne synchronise que `dependencies` et `devDependencies`
+ * (`@capacitor/cli` 8.5.1, `dist/plugin.js` § `getDependencies`). Un plugin
+ * importé par `src/` mais rangé en `optionalDependencies` n'entre jamais dans
+ * l'APK : `Capacitor.isPluginAvailable()` rend faux, en silence.
+ */
+describe('capacitorPluginsImportedBy — les plugins Capacitor que le code importe', () => {
+  test('retient les paquets @capacitor/* hors du cœur, de la CLI et des plateformes', () => {
+    const sources = [
+      "import { PushNotifications } from '@capacitor/push-notifications';",
+      "const m = await import('@capacitor/push-notifications');",
+      "import { Capacitor } from '@capacitor/core';",
+      "import type { CapacitorConfig } from '@capacitor/cli';",
+    ];
+    expect(capacitorPluginsImportedBy(sources)).toEqual(['@capacitor/push-notifications']);
+  });
+
+  test('aucun import de plugin -> liste vide', () => {
+    expect(capacitorPluginsImportedBy(["import { h } from 'preact';"])).toEqual([]);
+  });
+});
+
+describe('auditSyncedPlugins — un plugin importé doit être synchronisé par cap sync', () => {
+  test('plugin en optionalDependencies -> violation qui nomme le plugin', () => {
+    const packageJson = { optionalDependencies: { '@capacitor/push-notifications': '8.1.2' } };
+    const violations = auditSyncedPlugins(packageJson, ['@capacitor/push-notifications']);
+    expect(violations.length).toBe(1);
+    expect(violations[0]).toContain('@capacitor/push-notifications');
+  });
+
+  test('plugin en dependencies -> aucune violation', () => {
+    const packageJson = { dependencies: { '@capacitor/push-notifications': '8.1.2' } };
+    expect(auditSyncedPlugins(packageJson, ['@capacitor/push-notifications'])).toEqual([]);
+  });
+
+  test('plugin en devDependencies -> aucune violation (cap sync les lit aussi)', () => {
+    const packageJson = { devDependencies: { '@capacitor/push-notifications': '8.1.2' } };
+    expect(auditSyncedPlugins(packageJson, ['@capacitor/push-notifications'])).toEqual([]);
+  });
+
+  test('le package.json réel synchronise tous les plugins importés par src/', async () => {
+    const { readFileSync, readdirSync, statSync } = await import('node:fs');
+    const { join } = await import('node:path');
+    const root = new URL('..', import.meta.url).pathname;
+    const walk = (dir: string): string[] =>
+      readdirSync(dir).flatMap((name) => {
+        const path = join(dir, name);
+        if (statSync(path).isDirectory()) return walk(path);
+        return /\.(ts|tsx)$/.test(name) ? [readFileSync(path, 'utf8')] : [];
+      });
+    const packageJson = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
+    expect(auditSyncedPlugins(packageJson, capacitorPluginsImportedBy(walk(join(root, 'src'))))).toEqual([]);
   });
 });

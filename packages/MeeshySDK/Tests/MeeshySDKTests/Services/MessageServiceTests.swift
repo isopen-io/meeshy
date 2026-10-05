@@ -179,6 +179,76 @@ final class MessageServiceTests: XCTestCase {
         XCTAssertEqual(mock.lastRequest?.method, "GET")
     }
 
+    // MARK: - listMedia (#8095)
+
+    func test_listMedia_withCursor_requestsMediaViewBeforeTheCursor() async throws {
+        mock.stub("/conversations/\(convId)/messages", result: makeMessagesResponse())
+
+        let result = try await service.listMedia(conversationId: convId, before: "msg_old", limit: 50, languages: ["fr", "en"])
+
+        XCTAssertEqual(result.data.count, 1)
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/conversations/\(convId)/messages")
+        XCTAssertEqual(mock.lastRequest?.method, "GET")
+        let items = try XCTUnwrap(mock.lastRequest?.queryItems)
+        XCTAssertTrue(items.contains(URLQueryItem(name: "view", value: "media")), "\(items)")
+        XCTAssertTrue(items.contains(URLQueryItem(name: "before", value: "msg_old")), "\(items)")
+        XCTAssertTrue(items.contains(URLQueryItem(name: "limit", value: "50")), "\(items)")
+        XCTAssertTrue(items.contains(URLQueryItem(name: "languages", value: "fr,en")), "\(items)")
+    }
+
+    func test_listMedia_withoutCursor_startsFromTheNewestAndSendsNoBefore() async throws {
+        mock.stub("/conversations/\(convId)/messages", result: makeMessagesResponse())
+
+        _ = try await service.listMedia(conversationId: convId, before: nil, limit: 30, languages: nil)
+
+        let items = try XCTUnwrap(mock.lastRequest?.queryItems)
+        XCTAssertTrue(items.contains(URLQueryItem(name: "view", value: "media")), "\(items)")
+        XCTAssertFalse(items.contains { $0.name == "before" }, "\(items)")
+        XCTAssertFalse(items.contains { $0.name == "offset" }, "\(items)")
+        XCTAssertFalse(items.contains { $0.name == "languages" }, "\(items)")
+    }
+
+    // MARK: - listMedia kinds / q (#8103)
+
+    func test_listMedia_visualOnly_sendsNoKindsSoAPre8098GatewayStillAnswers() async throws {
+        mock.stub("/conversations/\(convId)/messages", result: makeMessagesResponse())
+
+        _ = try await service.listMedia(conversationId: convId, kinds: [.visual], query: nil, before: nil, limit: 30, languages: nil)
+
+        let items = try XCTUnwrap(mock.lastRequest?.queryItems)
+        XCTAssertFalse(items.contains { $0.name == "kinds" }, "\(items)")
+        XCTAssertFalse(items.contains { $0.name == "q" }, "\(items)")
+    }
+
+    func test_listMedia_withKinds_sendsTheUnionDeduplicatedInOrder() async throws {
+        mock.stub("/conversations/\(convId)/messages", result: makeMessagesResponse())
+
+        _ = try await service.listMedia(conversationId: convId, kinds: [.document, .audio, .document], query: nil, before: nil, limit: 30, languages: nil)
+
+        let items = try XCTUnwrap(mock.lastRequest?.queryItems)
+        XCTAssertTrue(items.contains(URLQueryItem(name: "kinds", value: "document,audio")), "\(items)")
+    }
+
+    func test_listMedia_withQuery_sendsTheTrimmedTerm() async throws {
+        mock.stub("/conversations/\(convId)/messages", result: makeMessagesResponse())
+
+        _ = try await service.listMedia(conversationId: convId, kinds: [.link], query: "  facture ", before: "m9", limit: 30, languages: nil)
+
+        let items = try XCTUnwrap(mock.lastRequest?.queryItems)
+        XCTAssertTrue(items.contains(URLQueryItem(name: "q", value: "facture")), "\(items)")
+        XCTAssertTrue(items.contains(URLQueryItem(name: "kinds", value: "link")), "\(items)")
+        XCTAssertTrue(items.contains(URLQueryItem(name: "before", value: "m9")), "\(items)")
+    }
+
+    func test_listMedia_withQueryShorterThanTheGatewayMinimum_sendsNoQ() async throws {
+        mock.stub("/conversations/\(convId)/messages", result: makeMessagesResponse())
+
+        _ = try await service.listMedia(conversationId: convId, kinds: [.document], query: " a ", before: nil, limit: 30, languages: nil)
+
+        let items = try XCTUnwrap(mock.lastRequest?.queryItems)
+        XCTAssertFalse(items.contains { $0.name == "q" }, "\(items)")
+    }
+
     // MARK: - listAfter
 
     func testListAfterCallsWithCorrectEndpoint() async throws {
@@ -315,6 +385,19 @@ final class MessageServiceTests: XCTestCase {
         XCTAssertFalse(result.isFullyConsumed)
         XCTAssertEqual(mock.requestCount, 1)
         XCTAssertEqual(mock.lastRequest?.endpoint, "/conversations/\(convId)/messages/\(msgId)/consume")
+        XCTAssertEqual(mock.lastRequest?.method, "POST")
+    }
+
+    // MARK: - consumeAfterRead (#8303)
+
+    func testConsumeAfterReadPostsTheIdsAndReturnsWhatWasConsumed() async throws {
+        let response = APIResponse(success: true, data: ConsumeAfterReadResponse(consumed: [msgId]), error: nil)
+        mock.stub("/conversations/\(convId)/messages/after-read/consume", result: response)
+
+        let consumed = try await service.consumeAfterRead(conversationId: convId, messageIds: [msgId, "étranger"])
+
+        XCTAssertEqual(consumed, [msgId])
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/conversations/\(convId)/messages/after-read/consume")
         XCTAssertEqual(mock.lastRequest?.method, "POST")
     }
 

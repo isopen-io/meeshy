@@ -20,26 +20,11 @@ import type { TranslationCompletedEvent } from '../zmq-translation/types';
 import type { SocialEventsHandler } from '../../socketio/handlers/SocialEventsHandler';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { translationTargetId, translationTargetNamespace } from '../zmq-translation/utils/zmq-helpers';
+import { detectContentLanguage } from '../../utils/content-language';
 
 const log = enhancedLogger.child({ module: 'MediaAltTranslationService' });
 
 const TOP_LANGUAGES = ['fr', 'en', 'es', 'ar', 'pt'];
-
-function detectLanguage(text: string): string {
-  if (!text) return 'en';
-  const lower = text.toLowerCase();
-  const langPatterns: Record<string, RegExp> = {
-    fr: /\b(le|la|les|un|une|des|je|tu|il|nous|vous|est|sont|avec|pour|dans|que|qui|pas|mais)\b/,
-    es: /\b(el|la|los|las|un|una|es|son|con|para|en|que|por|del|como|pero|más)\b/,
-    de: /\b(der|die|das|ein|eine|ist|sind|mit|für|und|ich|nicht|auf|dem|den)\b/,
-    pt: /\b(o|a|os|as|um|uma|é|são|com|para|em|que|por|do|da|não|mas)\b/,
-    ar: /[؀-ۿ]/,
-  };
-  for (const [lang, pattern] of Object.entries(langPatterns)) {
-    if (pattern.test(lower)) return lang;
-  }
-  return 'en';
-}
 
 export class MediaAltTranslationService {
   private static _shared: MediaAltTranslationService | null = null;
@@ -90,7 +75,7 @@ export class MediaAltTranslationService {
         return;
       }
 
-      const sourceLanguage = detectLanguage(alt);
+      const sourceLanguage = detectContentLanguage(alt);
 
       await this.prisma.postMedia.update({
         where: { id: mediaId },
@@ -139,7 +124,7 @@ export class MediaAltTranslationService {
       return;
     }
 
-    const sourceLang = media.altLanguage ?? detectLanguage(media.alt);
+    const sourceLang = media.altLanguage ?? detectContentLanguage(media.alt);
     if (sourceLang === targetLanguage) {
       log.info('MediaAltTranslation: target same as source, skipping', { mediaId, targetLanguage });
       return;

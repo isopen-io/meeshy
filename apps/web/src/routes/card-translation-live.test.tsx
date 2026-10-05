@@ -183,7 +183,7 @@ const SCREENS: readonly Screen[] = [
   { name: 'le Flux', url: '/feed', first: firstCard, type: 'POST', text: cardText, caption: cardCaption },
   { name: 'les enregistrées', url: '/me/bookmarks', first: firstCard, type: 'POST', text: cardText, caption: cardCaption },
   { name: 'la page d’un hashtag', url: '/hashtag/livraison', first: firstCard, type: 'POST', text: cardText, caption: cardCaption },
-  { name: 'le profil de l’auteur', url: '/u/kwame-mensah', first: firstCard, type: 'POST', text: cardText, caption: cardCaption },
+  { name: 'le profil de l’auteur', url: '/u/kwame-mensah?tab=posts', first: firstCard, type: 'POST', text: cardText, caption: cardCaption },
   { name: 'la fiche', url: '/post/post-image-fr', first: firstCard, type: 'POST', text: cardText, caption: cardCaption },
   {
     name: 'les Réels',

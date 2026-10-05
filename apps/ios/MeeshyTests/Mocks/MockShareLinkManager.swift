@@ -27,6 +27,27 @@ final class MockShareLinkManager: ShareLinkManaging, @unchecked Sendable {
         return try fetchLinkStatsResult.get()
     }
 
+    /// Pages rendues dans l'ordre des appels ; au-delà, `fetchLinkArrivalsResult`.
+    var fetchLinkArrivalsQueue: [Result<ShareLinkArrivalsPage, Error>] = []
+    var fetchLinkArrivalsResult: Result<ShareLinkArrivalsPage, Error> = .success(
+        ShareLinkArrivalsPage(arrivals: [], nextCursor: nil)
+    )
+    /// Retient la réponse pour que deux demandes se chevauchent.
+    var fetchLinkArrivalsDelayNanoseconds: UInt64 = 0
+    private(set) var fetchLinkArrivalsCursors: [String?] = []
+    private(set) var fetchLinkArrivalsLimits: [Int] = []
+    var fetchLinkArrivalsCallCount: Int { fetchLinkArrivalsCursors.count }
+
+    func fetchLinkArrivals(linkId: String, cursor: String?, limit: Int) async throws -> ShareLinkArrivalsPage {
+        fetchLinkArrivalsCursors.append(cursor)
+        fetchLinkArrivalsLimits.append(limit)
+        let result = fetchLinkArrivalsQueue.isEmpty ? fetchLinkArrivalsResult : fetchLinkArrivalsQueue.removeFirst()
+        if fetchLinkArrivalsDelayNanoseconds > 0 {
+            try? await Task.sleep(nanoseconds: fetchLinkArrivalsDelayNanoseconds)
+        }
+        return try result.get()
+    }
+
     func updateLink(linkId: String, settings: ShareLinkSettings) async throws {
         updateLinkCallCount += 1
         lastUpdatedSettings = settings

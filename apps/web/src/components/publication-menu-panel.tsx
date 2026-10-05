@@ -5,6 +5,7 @@ import type { PostToggleKind } from '@/lib/feed/interactions';
 import type { PostMenuEntry } from '@/lib/feed/publication-menu';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { readingModeScopeOf } from '@/lib/reading-mode/scope';
 import { href, navigate } from '@/routes/route-table';
 
 import type { PostMenuHost } from './feed-post-menu';
@@ -41,6 +42,8 @@ export type PostMenuPanelProps = {
   readonly originalText: string | undefined;
   readonly originalLanguage: string | undefined;
   readonly bookmarked: boolean;
+  /** Voir `FeedPostMenu` — « Modifier » rouvre le studio (#9317). */
+  readonly studioEditable: boolean;
   readonly menu: PostMenuHost;
   readonly onShare?: ((postId: string) => void) | undefined;
   readonly onGesture?: ((postId: string, kind: PostToggleKind) => void) | undefined;
@@ -67,6 +70,7 @@ export function PostMenuPanel(props: PostMenuPanelProps) {
     originalText,
     originalLanguage,
     bookmarked,
+    studioEditable,
     menu,
     onShare,
     onGesture,
@@ -103,7 +107,7 @@ export function PostMenuPanel(props: PostMenuPanelProps) {
         case 'pin':
           return { id, label: translate(language, 'feed.post.menu.pin'), icon: <Glyph name="pushPin" size={16} />, run: () => menu.onPin(postId) };
         case 'edit':
-          return { id, label: translate(language, 'feed.post.edit'), icon: <GlyphSvg glyph={THREAD_MENU_GLYPHS.pencilSimple} size={16} />, run: () => setEditing(true) };
+          return { id, label: translate(language, 'feed.post.edit'), icon: <GlyphSvg glyph={THREAD_MENU_GLYPHS.pencilSimple} size={16} />, run: () => (studioEditable ? navigate(href('postEdit', { post: postId })) : setEditing(true)) };
         case 'delete':
           return { id, label: translate(language, 'feed.post.menu.delete'), icon: <GlyphSvg glyph={NOTIFICATIONS_GLYPHS.trash} size={16} />, run: () => menu.onDelete(postId) };
         case 'report':
@@ -145,7 +149,7 @@ export function PostMenuPanel(props: PostMenuPanelProps) {
                       closeAndFocusButton();
                       item.run();
                     }}
-                    className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-title font-medium"
+                    className="flex w-full items-center gap-2.5 px-3 py-2 text-start text-title font-medium"
                     style={{
                       color: destructive ? 'var(--color-error)' : 'var(--color-ios-ink)',
                       minHeight: MENU_ITEM_HEIGHT,
@@ -184,6 +188,9 @@ export function PostMenuPanel(props: PostMenuPanelProps) {
             original={originalText ?? ''}
             originalLanguage={originalLanguage ?? ''}
             onSave={menu.onEdit}
+            {...(menu.editDrafts !== undefined && menu.viewerId !== null
+              ? { drafts: { store: menu.editDrafts, scope: readingModeScopeOf({ id: menu.viewerId }) } }
+              : {})}
             /* LE FOCUS REVIENT AU « ⋯ » — la feuille a démonté le bouton qui
                vient de l'ouvrir (`closeAndFocusButton`, déjà appelé à
                l'ouverture de la feuille, le referme une seconde fois sans

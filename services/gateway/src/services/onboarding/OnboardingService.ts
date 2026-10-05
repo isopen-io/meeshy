@@ -1,6 +1,5 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { calculateAge } from '@meeshy/shared/utils/age';
-import { ELAN_WINDOW_DAYS } from '@meeshy/shared/utils/engagement-elan';
 import {
   ONBOARDING_COMPLETION_STEP_IDS,
   ONBOARDING_MAX_SUGGESTIONS,
@@ -15,8 +14,9 @@ import {
   type OnboardingStepRewards,
   type OnboardingSuggestion,
 } from '@meeshy/shared/types/onboarding';
-import { hasAuthoredStory, storyPublishable } from '../posts/firstStory';
-import { elanInputOf, onboardingStepRewards } from './onboardingRewards';
+import { ACTIVATION_SELECT, mayPublish, resolveAccountActivation } from '../auth/account-activation';
+import { onboardingStepRewards } from './onboardingRewards';
+import { engagementScaleServiceFor } from '../engagement/EngagementScaleService';
 
 /**
  * L'état d'onboarding post-inscription (#7729) — le SEUL site qui le calcule,
@@ -122,7 +122,8 @@ const USER_STATE_SELECT = {
   blockedUserIds: true,
   onboardingCompletedAt: true,
   onboardingSteps: true,
-  emailVerifiedAt: true,
+  engagementScore: true,
+  ...ACTIVATION_SELECT,
 } as const;
 
 const CANDIDATE_SELECT = {
@@ -140,6 +141,7 @@ const CANDIDATE_SELECT = {
 
 type UserStateRow = {
   id: string;
+  engagementScore: number | null;
   createdAt: Date;
   birthDate: Date | null;
   systemLanguage: string;
@@ -148,6 +150,8 @@ type UserStateRow = {
   onboardingCompletedAt: Date | null;
   onboardingSteps: string[] | null;
   emailVerifiedAt: Date | null;
+  phoneNumber: string | null;
+  emailReleasedAt: Date | null;
 };
 
 type OnboardingPrisma = Pick<
@@ -161,6 +165,7 @@ type OnboardingPrisma = Pick<
   | 'engagementCounter'
   | 'engagementConversationCredit'
   | 'engagementMilestone'
+  | 'engagementScaleConfig'
 >;
 
 const languagesOf = (row: { systemLanguage: string; regionalLanguage: string | null }): string[] =>
@@ -194,14 +199,14 @@ export class OnboardingService {
     const protectedRegime = ageClass !== 'adult';
     const emailVerified = user.emailVerifiedAt !== null;
     const globalConversationId = await this.globalConversationId();
-    const [prefilledSteps, suggestions, storyAuthored, pendingFriendRequests, stepRewards] = await Promise.all([
+    const storyDefaultVisibility = protectedRegime ? 'friends' : 'public';
+    const [prefilledSteps, suggestions, pendingFriendRequests, stepRewards] = await Promise.all([
       this.prefilledSteps(user.id, globalConversationId, emailVerified),
       window === 'open' && globalConversationId
         ? this.suggestions({ user, ageClass, globalConversationId, now })
         : Promise.resolve([]),
-      emailVerified ? Promise.resolve(false) : hasAuthoredStory(this.prisma, user.id),
       this.prisma.friendRequest.count({ where: { senderId: user.id, status: 'pending' } }),
-      this.stepRewards(user.id, now),
+      this.stepRewards(user.id, user.engagementScore ?? 0, storyDefaultVisibility, now),
     ]);
     return {
       eligible: window === 'open',
@@ -210,10 +215,10 @@ export class OnboardingService {
       prefilledSteps,
       globalConversationId,
       protectedRegime,
-      storyDefaultVisibility: protectedRegime ? 'friends' : 'public',
+      storyDefaultVisibility,
       suggestions,
       emailVerified,
-      canPublishStory: storyPublishable({ emailVerified, hasAuthoredStory: storyAuthored }),
+      canPublishStory: mayPublish(resolveAccountActivation(user, now)),
       pendingFriendRequests,
       stepRewards,
     };
@@ -224,10 +229,16 @@ export class OnboardingService {
    * touchés sur la fenêtre de l'élan et les paliers qui font l'assise — deux
    * lectures indexées (`[userId]`, `[userId, milestoneType]`).
    */
-  private async stepRewards(userId: string, now: Date): Promise<OnboardingStepRewards> {
+  private async stepRewards(
+    userId: string,
+    engagementScore: number,
+    storyVisibility: 'public' | 'friends',
+    now: Date,
+  ): Promise<OnboardingStepRewards> {
+    const scale = await engagementScaleServiceFor(this.prisma).current();
     const [counters, milestones] = await Promise.all([
       this.prisma.engagementCounter.findMany({
-        where: { userId, updatedAt: { gte: new Date(now.getTime() - ELAN_WINDOW_DAYS * DAY_MS) } },
+        where: { userId, updatedAt: { gte: new Date(now.getTime() - scale.multiplier.windowDays * DAY_MS) } },
         select: { axisKey: true, updatedAt: true },
       }),
       this.prisma.engagementMilestone.findMany({
@@ -235,7 +246,7 @@ export class OnboardingService {
         select: { milestoneType: true, milestoneKey: true },
       }),
     ]);
-    return onboardingStepRewards(elanInputOf({ counters, milestones, now }));
+    return onboardingStepRewards({ scale, counters, milestones, engagementScore, now, storyVisibility });
   }
 
   private async closeExpired(userId: string, now: Date): Promise<Date> {

@@ -16,8 +16,9 @@
  */
 
 import { jest, describe, it, expect, beforeEach, afterEach } from '@jest/globals';
+import { CALL_REJOIN_GRACE_MS } from '@meeshy/shared/types/call-rules';
 
-const GRACE_EXPIRY_MS = 31_000;
+const GRACE_EXPIRY_MS = CALL_REJOIN_GRACE_MS + 1_000;
 
 // ---------------------------------------------------------------------------
 // Module-level mocks

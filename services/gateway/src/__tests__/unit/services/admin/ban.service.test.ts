@@ -91,7 +91,7 @@ describe('BanService', () => {
       await service.liftBan({ banId: 'ban1', liftedById: 'admin2' });
 
       expect(prisma.ban.findMany).toHaveBeenCalledWith({
-        where: { userId: 'u1', liftedAt: null, id: { not: 'ban1' } },
+        where: { userId: 'u1', OR: [{ liftedAt: null }, { liftedAt: { isSet: false } }], id: { not: 'ban1' } },
       });
     });
   });
@@ -142,7 +142,7 @@ describe('BanService', () => {
       await service.sweepExpiredBans(maintenant);
 
       expect(prisma.ban.findMany).toHaveBeenCalledWith({
-        where: { liftedAt: null, expiresAt: { not: null, lte: maintenant } },
+        where: { OR: [{ liftedAt: null }, { liftedAt: { isSet: false } }], expiresAt: { not: null, lte: maintenant } },
       });
     });
 

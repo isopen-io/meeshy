@@ -42,6 +42,12 @@ export function matchesNotificationWhere(
         matchesNotificationWhere(row, branch)
       );
     }
+    if (key === 'NOT') {
+      // La cloche retire les lignes LUES des types consommés (#8958) : une
+      // seule négation d'un objet, jamais une liste.
+      if (Array.isArray(condition)) throw new Error('double Prisma: NOT en liste non supporté');
+      return !matchesNotificationWhere(row, condition as Record<string, unknown>);
+    }
     if (key === 'AND') {
       return (condition as Array<Record<string, unknown>>).every((branch) =>
         matchesNotificationWhere(row, branch)

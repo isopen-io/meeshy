@@ -13,23 +13,74 @@ import type { Attachment } from '@/lib/api/types';
  * Hors de l'ouverture, c'est juste : rien du contenu ne s'affiche avant le
  * toucher. Dans le plein écran que le lecteur vient d'ouvrir, c'était le
  * contraire de ce qu'il demandait. `ViewOnceStage` pose donc ce contexte, et
- * les blocs de pièces y lèvent le SEUL masque de vue unique ; un flou reste un
- * flou.
+ * les blocs de pièces y lèvent le masque de vue unique ET celui du flou
+ * (#8567, décision porteur du 2026-09-29 : « sauf si c'est un attachement
+ * directement, alors c'est ouvert en plein écran en clair »).
  */
 export const ViewOnceOpenedContext = createContext(false);
 
-type ProtectedAttachment = Attachment & { readonly isViewOnce?: boolean; readonly effectFlags?: number };
+type ProtectedAttachment = Attachment & { readonly effectFlags?: number };
 
-const withoutViewOnce = (attachment: ProtectedAttachment): ProtectedAttachment => {
+/**
+ * UN FLOU RÉVÉLÉ SUR PLACE EST LE DROIT DE VOIR SES PIÈCES (#8389).
+ *
+ * Toucher un message flouté le révèle DANS le fil ; ses pièces portent le
+ * flou de leur message (#7498) et se rendraient encore « Photo protégée »
+ * dans la fenêtre qu'on vient d'ouvrir. `ProtectedContent` pose ce contexte
+ * autour du SEUL contenu révélé : les blocs de pièces y lèvent le SEUL masque
+ * de flou ; une vue unique reste une vue unique.
+ *
+ * `onViewer` dit à la fenêtre qu'un de ses médias est ouvert en plein écran :
+ * elle se tient tant qu'il l'est (`holdReveal`), et repart pour une fenêtre
+ * neuve à sa fermeture (`rearmReveal`).
+ */
+export type VeilReveal = { readonly onViewer: (open: boolean) => void };
+export const VeilRevealContext = createContext<VeilReveal | null>(null);
+
+const withoutBlur = (attachment: ProtectedAttachment): ProtectedAttachment => {
   const flags = attachment.effectFlags;
   return {
     ...attachment,
-    isViewOnce: false,
-    ...(typeof flags === 'number' ? { effectFlags: flags & ~MESSAGE_EFFECT_FLAGS.VIEW_ONCE } : {}),
+    isBlurred: false,
+    ...(typeof flags === 'number' ? { effectFlags: flags & ~MESSAGE_EFFECT_FLAGS.BLURRED } : {}),
   };
 };
 
 export function useAttachmentMasked(): (attachment: Attachment) => boolean {
   const opened = useContext(ViewOnceOpenedContext);
-  return opened ? (attachment) => maskedAttachment(withoutViewOnce(attachment)) : maskedAttachment;
+  const veil = useContext(VeilRevealContext);
+  if (opened) return (attachment) => maskedAttachment(revealedAttachment(attachment));
+  if (veil !== null) return (attachment) => maskedAttachment(withoutBlur(attachment));
+  return maskedAttachment;
+}
+
+/**
+ * LE MÉDIA QUE LE LECTEUR VIENT DE TOUCHER, EN CLAIR (#8008).
+ *
+ * Toucher une pièce floutée ou à vue unique OUVRE la visionneuse sur elle :
+ * c'est la seule surface où son fichier a le droit d'entrer dans le document.
+ * La pièce remise à la visionneuse perd ses TROIS canaux de masque —
+ * `isViewOnce`, `isBlurred` et les bits masquants d'`effectFlags`, l'inventaire
+ * de `maskedAttachment` —, et elle seule : ses voisines gardent les leurs.
+ */
+export function revealedAttachment(attachment: ProtectedAttachment): ProtectedAttachment {
+  const flags = attachment.effectFlags;
+  const masking = MESSAGE_EFFECT_FLAGS.VIEW_ONCE | MESSAGE_EFFECT_FLAGS.BLURRED;
+  return {
+    ...attachment,
+    isViewOnce: false,
+    isBlurred: false,
+    ...(typeof flags === 'number' ? { effectFlags: flags & ~masking } : {}),
+  };
+}
+
+/**
+ * LA PROTECTION D'UN MESSAGE, PORTÉE SUR SES PIÈCES (#8008) — ce que la
+ * passerelle écrit déjà à la liaison (#7498, `associateAttachmentsToMessage`),
+ * rejoué côté client pour une charge qui ne le porterait pas encore (cache
+ * ancien, envoi optimiste). Une pièce d'un message voilé se rend donc TOUJOURS
+ * par son substitut, jamais par son fichier.
+ */
+export function veiledAttachment(attachment: ProtectedAttachment): ProtectedAttachment {
+  return { ...attachment, isBlurred: true };
 }

@@ -4,7 +4,7 @@ import Foundation
 
 /// A single raw-URL → tracking-token mapping attached to a message or post by
 /// the gateway. The client never rewrites the message content; instead it
-/// resolves `https://meeshy.me/l/<token>` as the tappable destination for the
+/// resolves `<web origin>/l/<token>` as the tappable destination for the
 /// raw URL (capture + 302 redirect to the original page), keeping the displayed
 /// text and any video preview intact. Optional everywhere → older payloads
 /// without this field decode unchanged (rollout-safe).
@@ -23,6 +23,19 @@ extension Sequence where Element == TrackedLink {
     /// lookup. Last token wins on a duplicate URL (gateway sends one per URL).
     public var trackedLinkMap: [String: String] {
         reduce(into: [:]) { $0[$1.url] = $1.token }
+    }
+}
+
+extension TrackedLink {
+    /// La redirection suivie d'un jeton — `<origine web>/l/<token>` (#9075).
+    ///
+    /// L'origine est celle de l'environnement ACTIF (`MeeshyConfig.webOrigin` :
+    /// `staging.meeshy.me` sur staging), jamais `meeshy.me` en dur : un jeton
+    /// émis par la passerelle de staging n'existe pas en production, et le
+    /// routeur in-app ne reconnaît que l'hôte de l'environnement sélectionné.
+    public static func redirectURL(token: String,
+                                   webOrigin: String = MeeshyConfig.shared.webOrigin) -> URL? {
+        URL(string: "\(webOrigin)/l/\(token)")
     }
 }
 
@@ -507,6 +520,11 @@ public struct APIMessage: Sendable {
     /// Défaut posé comme pour `trackingLinks` : l'init memberwise reste
     /// compatible avec les sites d'appel existants (fixtures de test).
     public var joinNotice: JoinNoticeMetadata? = nil
+    /// L'événement système d'un avis que le SERVEUR complète sur place (#8565
+    /// — la ligne d'arrivées de Meeshy Global, qui ne part qu'en
+    /// `message:edited`). Même forme que `lastMessageSystemEvent` de
+    /// `conversation:updated` : la ligne de liste en relit clé, noms et compte.
+    public var systemEvent: LastMessageSystemEvent? = nil
     /// Outbound-link tracking mappings minted by the gateway. Parsed from the
     /// top-level `trackingLinks` (socket `message:new`) OR from
     /// `metadata.trackingLinks` (REST). `nil` when the payload predates the
@@ -531,7 +549,7 @@ extension APIMessage: Decodable {
         case reactionSummary, reactionCount, currentUserReactions
         case deliveredToAllAt, readByAllAt, deliveredCount, readCount, recipientCount
         case effectFlags, translations, mentionedUsers
-        case metadata
+        case metadata, systemEvent
         case trackingLinks
         // MongoDB fallback
         case _id
@@ -621,6 +639,7 @@ extension APIMessage: Decodable {
         // whole message decode, so swallow shape mismatches into nil.
         callSummary = try? c.decodeIfPresent(CallSummaryMetadata.self, forKey: .metadata)
         joinNotice = try? c.decodeIfPresent(JoinNoticeMetadata.self, forKey: .metadata)
+        systemEvent = try? c.decodeIfPresent(LastMessageSystemEvent.self, forKey: .systemEvent)
         // Outbound-link tracking: prefer the top-level `trackingLinks` (socket
         // `message:new`); otherwise read it from the `metadata` envelope (REST).
         // Both decodes are tolerant so a malformed shape leaves the field nil

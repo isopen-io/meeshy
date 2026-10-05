@@ -1,0 +1,130 @@
+import { useQuery } from '@tanstack/react-query';
+import { useEffect, useRef } from 'react';
+import { useStore } from 'zustand/react';
+
+import { ACTIVE_CALL_QUERY_KEY, type CallSession, loadActiveCall } from '@/lib/api/call-sessions';
+import { unwrap } from '@/lib/api/client';
+import { apiDeps } from '@/lib/api/deps';
+import { appQueryClient } from '@/lib/api/query-client';
+import { sessionStore } from '@/lib/api/session';
+import { resolveViewer } from '@/lib/api/viewer';
+import { callActions } from '@/lib/calls/call-actions';
+import { callIdentityOf } from '@/lib/calls/call-notice';
+import { forgetEndedCall, resumableCall } from '@/lib/calls/call-resume';
+import { callStore } from '@/lib/calls/call-store';
+import { translate } from '@/lib/i18n-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { useOptionalRoute } from '@/lib/router';
+
+import { Glyph, GlyphSvg } from './glyph';
+import { CALLS_GLYPHS } from './glyphs-calls';
+
+/**
+ * **LA BANNIÈRE « REPRENDRE L'APPEL »** (#3586, E7) — posée par la couche
+ * d'appel (`call-layer.tsx`) au-dessus de TOUTES les routes, comme la pastille
+ * d'un appel en cours : quitter la conversation, recharger l'onglet ou rouvrir
+ * la coque ne fait pas oublier qu'on est encore dans un appel.
+ *
+ * **Cache d'abord.** `GET /calls/active` est une requête TanStack persistée
+ * (`query-client.ts`) : au rechargement, la bannière se peint depuis le disque
+ * AVANT toute réponse, puis la lecture se refait au montage, au retour du
+ * focus et toutes les 30 s. La charge persistée est une PROJECTION
+ * (`call-sessions.ts`) : ni présence ni numéro.
+ *
+ * Dans le fil de la conversation de l'appel, elle se TAIT : la pastille
+ * « Rejoindre » de l'en-tête (`thread-call-button.tsx`) dit la même chose à
+ * l'endroit du geste, et la bannière la recouvrait.
+ *
+ * Un appel qui se termine EN LOCAL invalide la lecture : sans cela, la
+ * bannière rejouerait l'appel qu'on vient de raccrocher jusqu'au prochain
+ * sondage. Et comme la passerelle émet `call:ended` AVANT d'écrire la fin
+ * (#8366), la relecture peut encore le dire vivant : l'id de l'appel raccroché
+ * est retenu, et une réponse qui le porte ne rouvre pas la bannière.
+ */
+export const ACTIVE_CALL_POLL_MS = 30_000;
+const ENDED_CALLS_KEPT = 4;
+
+export default function CallResumeBanner() {
+  const language = currentInterfaceLanguage();
+  const session = useStore(sessionStore, (state) => state.session);
+  const signedIn = session.status === 'authenticated' || apiDeps.source === 'fixtures';
+  const local = useStore(callStore, (state) => state.call);
+  const route = useOptionalRoute();
+  const openThread = route?.key === 'thread' ? (route.params.conversation ?? null) : null;
+  const localPhase = local?.phase.kind ?? null;
+  const localCallId = local?.callId ?? null;
+  const previous = useRef(localPhase);
+  const previousCallId = useRef(localCallId);
+  const endedCallIds = useRef<readonly string[]>([]);
+
+  const active = useQuery(
+    {
+      queryKey: ACTIVE_CALL_QUERY_KEY,
+      queryFn: async ({ signal }) => unwrap(await loadActiveCall(apiDeps, signal)),
+      enabled: signedIn,
+      refetchInterval: ACTIVE_CALL_POLL_MS,
+      staleTime: 0,
+      retry: false,
+    },
+    appQueryClient,
+  );
+
+  useEffect(() => {
+    const was = previous.current;
+    const endedCallId = localCallId ?? previousCallId.current;
+    previous.current = localPhase;
+    previousCallId.current = localCallId;
+    const ended = was !== null && was !== 'ended' && (localPhase === null || localPhase === 'ended');
+    if (!ended && localCallId !== null && localPhase !== 'ended') endedCallIds.current = endedCallIds.current.filter((id) => id !== localCallId);
+    if (!ended) return;
+    if (endedCallId !== null) {
+      endedCallIds.current = [endedCallId, ...endedCallIds.current.filter((id) => id !== endedCallId)].slice(0, ENDED_CALLS_KEPT);
+      appQueryClient.setQueryData<CallSession | null>(ACTIVE_CALL_QUERY_KEY, (cached) => forgetEndedCall(cached, endedCallId));
+    }
+    void appQueryClient.invalidateQueries({ queryKey: ACTIVE_CALL_QUERY_KEY });
+  }, [localPhase, localCallId]);
+
+  if (!signedIn) return null;
+  const viewerId = resolveViewer({ source: apiDeps.source, session }).id ?? '';
+  const request = resumableCall({ active: active.data ?? null, local, viewerId, identityOf: callIdentityOf, openThread, endedCallIds: endedCallIds.current });
+  if (request === null) return null;
+
+  return (
+    <div className="pointer-events-none flex w-full justify-center">
+      <button
+        type="button"
+        data-call-resume={request.callId}
+        aria-label={translate(language, 'callJoin.resume.named', { name: request.title === '' ? translate(language, 'calls.unknown') : request.title })}
+        onClick={() => callActions.join(request)}
+        className="pointer-events-auto flex min-h-11 max-w-full items-center gap-2 rounded-chip py-1.5 pe-1.5 ps-3.5 shadow-lg focus-visible:outline-2 focus-visible:outline-offset-2"
+        style={{
+          backgroundColor: 'var(--color-ios-card)',
+          color: 'var(--color-ios-ink)',
+          outlineColor: 'var(--color-success)',
+          boxShadow: '0 0 0 1px color-mix(in srgb, var(--color-success) 45%, transparent), var(--shadow-lg)',
+        }}
+      >
+        <span aria-hidden="true" style={{ color: 'var(--color-success)' }}>
+          {request.media === 'video' ? <GlyphSvg glyph={CALLS_GLYPHS.videoCamera} size={16} /> : <Glyph name="phone" size={16} />}
+        </span>
+        <span aria-hidden="true" className="grid min-w-0 text-start leading-tight">
+          <span data-call-resume-title className="truncate text-check font-semibold" style={{ color: 'var(--color-success)' }}>
+            {translate(language, 'callJoin.resume.title')}
+          </span>
+          {request.title === '' ? null : (
+            <span data-call-resume-name className="truncate text-caption font-medium">
+              {request.title}
+            </span>
+          )}
+        </span>
+        <span
+          aria-hidden="true"
+          className="ms-1 grid shrink-0 place-items-center rounded-chip px-3 text-caption font-semibold text-ios-on-brand"
+          style={{ height: 32, backgroundColor: 'var(--ios-indigo-600)' }}
+        >
+          {translate(language, 'callJoin.resume.action')}
+        </span>
+      </button>
+    </div>
+  );
+}

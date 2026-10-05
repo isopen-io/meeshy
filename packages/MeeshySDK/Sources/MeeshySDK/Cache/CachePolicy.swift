@@ -49,6 +49,12 @@ public struct CachePolicy: Sendable {
 extension CachePolicy {
     public static let conversations = CachePolicy(ttl: .hours(24), staleTTL: .minutes(5), maxItemCount: nil, storageLocation: .grdb)
     public static let messages = CachePolicy(ttl: .months(6), staleTTL: .minutes(2), maxItemCount: 600, storageLocation: .grdb)
+    /// #8095 — l'INDEX des porteurs de médias d'une conversation (clé =
+    /// conversationId). Aucun plafond : il doit tenir la conversation ENTIÈRE,
+    /// là où `messages` ne garde qu'une fenêtre. Même rétention que les
+    /// messages ; fenêtre fraîche courte pour que chaque ouverture de la
+    /// galerie revalide en silence (SWR) ce qu'elle peint depuis le disque.
+    public static let conversationMedia = CachePolicy(ttl: .months(6), staleTTL: .minutes(10), maxItemCount: nil, storageLocation: .grdb)
     public static let participants = CachePolicy(ttl: .hours(24), staleTTL: .minutes(5), maxItemCount: nil, storageLocation: .grdb)
     /// Profil d'un autre utilisateur. TTL 30 j + fenêtre fraîche courte : affichage
     /// cache instantané, prolongé à chaque visite via `touch`, revalidation SWR
@@ -130,6 +136,10 @@ extension CachePolicy {
     /// privacy-forward positioning — see
     /// docs/superpowers/specs/2026-07-11-call-transcript-history-design.md.
     public static let callTranscripts = CachePolicy(ttl: .days(90), staleTTL: .days(90), maxItemCount: 1000, storageLocation: .grdb)
+    /// #8698 — the network and quality journal of each call, on this device
+    /// only. 30 days and 200 calls bound it: a journal serves the call's detail
+    /// sheet, not an archive. `staleTTL == ttl` keeps every read `.fresh`.
+    public static let callNetworkJournals = CachePolicy(ttl: .days(30), staleTTL: .days(30), maxItemCount: 200, storageLocation: .grdb)
 }
 
 // MARK: - TimeInterval Helpers

@@ -11,6 +11,8 @@ import {
   decodeAdminVoiceProfile,
   loadAdminUserReportsReceived,
   loadAdminUserSessions,
+  revokeAdminUserSession,
+  withoutSession,
 } from './admin-user-dossier';
 import { estClefSouveraine } from './souverain';
 
@@ -183,5 +185,37 @@ describe('les signalements reçus', () => {
       createdAt: null,
       excerpt: null,
     });
+  });
+});
+
+describe('révoquer une session', () => {
+  test('DELETE sur la session nommée, par le catalogue — l’accusé ne porte rien de la charge', async () => {
+    const calls: { path: string; method: string }[] = [];
+    const recording = {
+      request: async (requete: { path: string; method: string }) => {
+        calls.push(requete);
+        return { ok: true as const, data: { message: 'Session révoquée avec succès' } };
+      },
+    } as unknown as HttpTransport;
+
+    const resultat = await revokeAdminUserSession({ source: 'gateway', transport: recording, userId: 'u1', sessionId: 's/1' });
+
+    expect(calls).toEqual([{ method: 'DELETE', path: '/api/v1/admin/users/u1/sessions/s%2F1' }]);
+    expect(resultat).toEqual({ ok: true, data: { acknowledged: true } });
+  });
+
+  test('un refus passe tel quel, avec son statut', async () => {
+    const refusing = { request: async () => ({ ok: false as const, status: 403, error: 'Forbidden' }) } as unknown as HttpTransport;
+
+    expect(await revokeAdminUserSession({ source: 'gateway', transport: refusing, userId: 'u1', sessionId: 's1' })).toEqual({ ok: false, status: 403, error: 'Forbidden' });
+  });
+
+  test('l’effet immédiat retire la ligne et baisse le total ; une charge inconnue est rendue telle quelle', () => {
+    const page = { rows: [{ id: 's1' }, { id: 's2' }], total: 7, hasMore: true };
+
+    expect(withoutSession(page, 's1')).toEqual({ rows: [{ id: 's2' }], total: 6, hasMore: true });
+    expect(withoutSession(page, 'inconnue')).toEqual(page);
+    expect(withoutSession('autre chose', 's1')).toBe('autre chose');
+    expect(withoutSession({ rows: [{ id: 's1' }], total: 0 }, 's1')).toEqual({ rows: [], total: 0 });
   });
 });

@@ -26,6 +26,8 @@ import { hashPassword, verifyPassword } from '../utils/password-hash';
 import { unsetOrNull } from '../utils/prisma-unset';
 import { validatePasswordStrength } from '../utils/password-strength';
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../utils/recipient-language';
+import { emailProofFields, settleEmailAddressProof } from './auth/email-address-proof';
+import { scheduleContactJoinedAnnouncement } from './notifications/contact-joined';
 
 // Logger dédié pour PasswordResetService
 const logger = enhancedLogger.child({ module: 'PasswordResetService' });
@@ -151,17 +153,10 @@ export class PasswordResetService {
       // `recipientLanguage(user)` jusqu'à `RECIPIENT_LANG_SELECT` par cette liaison.
       const hasPassword = user.password !== null;
 
-      // 5. Email not verified — la garde ne vaut que pour un compte qui A un mot
-      // de passe (#6642). `MagicLinkService` livre déjà ses liens à une adresse
-      // non vérifiée : pour un compte sans mot de passe (inscription par e-mail
-      // seul, #6424), elle ne protégeait rien et le privait d'en définir un.
-      if (hasPassword && !user.emailVerifiedAt) {
-        logger.info('[PasswordResetService] ❌ Email not verified - returning generic response');
-        await this.logSecurityEvent(user.id, 'PASSWORD_RESET_UNVERIFIED_EMAIL', 'LOW', {
-          email: user.email
-        });
-        return this.genericSuccessResponse();
-      }
+      // 5. Une adresse NON vérifiée reçoit la réinitialisation NORMALE (#8238,
+      // précision porteur 2026-09-27) : l'USAGE du lien prouve l'adresse
+      // (`completePasswordReset`), il n'y a donc rien à garder ici. La garde
+      // de #6642 (adresse non vérifiée + mot de passe ⇒ aucun lien) est levée.
       logger.info(`[PasswordResetService] ✅ Reset link admitted hasPassword=${hasPassword}`);
 
       // 6. Check account lockout
@@ -419,13 +414,16 @@ export class PasswordResetService {
       // `emailVerifiedAt` s'il manquait, sans quoi un compte qui vient de définir
       // son premier mot de passe redeviendrait muet à sa prochaine demande. Un
       // jeton du parcours SMS ne prouve que le téléphone (`EMAIL_LINK_TOKEN_PREFIX`).
-      const mailboxProven = token.startsWith(EMAIL_LINK_TOKEN_PREFIX) && !user.emailVerifiedAt;
+      // Le fragment vient du site UNIQUE de la preuve d'adresse par e-mail
+      // (#8238, `./auth/email-address-proof`).
+      const provenAt = new Date();
+      const mailboxProof = token.startsWith(EMAIL_LINK_TOKEN_PREFIX) ? emailProofFields(user, provenAt) : {};
       await this.prisma.$transaction(async (tx) => {
         // Update password
         await tx.user.update({
           where: { id: user.id },
           data: {
-            ...(mailboxProven ? { emailVerifiedAt: new Date() } : {}),
+            ...mailboxProof,
             password: hashedPassword,
             lastPasswordChange: new Date(),
             passwordResetAttempts: 0,
@@ -465,6 +463,17 @@ export class PasswordResetService {
           }
         });
       });
+
+      if (mailboxProof.emailVerifiedAt) {
+        await settleEmailAddressProof(
+          {
+            prisma: this.prisma,
+            cache: this.cache,
+            announce: (userId) => scheduleContactJoinedAnnouncement(this.prisma, userId),
+          },
+          { userId: user.id, now: provenAt, newlyProven: true }
+        );
+      }
 
       // 14. Log successful reset
       await this.logSecurityEvent(user.id, 'PASSWORD_RESET_SUCCESS', 'MEDIUM', {

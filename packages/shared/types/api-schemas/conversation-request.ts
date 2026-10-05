@@ -182,3 +182,43 @@ export const editMessageRequestSchema = {
     }
   }
 } as const;
+
+/**
+ * Flamme-œil (#8302) — `POST /conversations/:id/messages/after-read/consume`.
+ *
+ * Le lecteur a VU puis QUITTÉ la conversation : chaque message flamme-œil
+ * listé disparaît chez LUI (et chez lui seul). Les identifiants qui ne
+ * désignent pas une flamme-œil de cette conversation reçue par l'appelant sont
+ * ignorés ; la réponse ne rend que ce qui est consommé. Idempotente.
+ */
+export const AFTER_READ_CONSUME_MAX_IDS = 200;
+
+export const consumeAfterReadRequestSchema = {
+  type: 'object',
+  required: ['messageIds'],
+  additionalProperties: false,
+  properties: {
+    messageIds: {
+      type: 'array',
+      minItems: 1,
+      maxItems: AFTER_READ_CONSUME_MAX_IDS,
+      items: { type: 'string', pattern: '^[0-9a-fA-F]{24}$' },
+      description: 'Messages flamme-œil vus puis quittés par l\'appelant'
+    }
+  }
+} as const;
+
+export const consumeAfterReadResponseDataSchema = {
+  type: 'object',
+  required: ['consumed'],
+  properties: {
+    consumed: {
+      type: 'array',
+      items: { type: 'string' },
+      description: 'Les messages consommés par l\'appelant (cet appel ou un précédent)'
+    }
+  }
+} as const;
+
+export type ConsumeAfterReadRequest = { readonly messageIds: readonly string[] };
+export type ConsumeAfterReadResponse = { readonly consumed: readonly string[] };

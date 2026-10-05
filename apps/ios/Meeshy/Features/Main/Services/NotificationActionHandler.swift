@@ -135,6 +135,7 @@ final class NotificationActionHandler: NotificationActionHandling {
     private let preferredLanguage: @MainActor () -> String?
     private let isRegisteredUser: @MainActor () -> Bool
     private let openNotification: @MainActor ([AnyHashable: Any]) -> Void
+    private let dialCallBack: @MainActor (CallBackRequest) -> Void
     private let localMarkRead: @MainActor (String) -> Void
     /// L'unique consommation du SDK, injectée pour que les tests l'observent :
     /// `NotificationToastManager` est un singleton `@MainActor` sans couture de
@@ -143,6 +144,11 @@ final class NotificationActionHandler: NotificationActionHandling {
     private let removeDeliveredForConversation: @MainActor (String) -> Void
     private let removeDeliveredForPost: @MainActor (String) -> Void
     private let removeDeliveredForNotificationIds: @MainActor ([String]) async -> Void
+    /// #8858 — les trois gestes du DÉTAIL d'un message : Plans, Contacts, et
+    /// le parcours de lien de conversation (Anonyme / Mon compte, #8726).
+    private let openExternalURL: @MainActor (URL) -> Void
+    private let openDeepLink: @MainActor (URL) -> Void
+    private let presentNewContact: @MainActor (NotificationContactCard) -> Void
     private var revocationSubscription: AnyCancellable?
     /// #7453 — l'abonnement au retour au premier plan, qui rejoue le balayage
     /// des bannières éphémères échues. Un nouvel appel REMPLACE l'abonnement :
@@ -191,6 +197,9 @@ final class NotificationActionHandler: NotificationActionHandling {
         openNotification: @escaping @MainActor ([AnyHashable: Any]) -> Void = {
             PushNotificationManager.shared.handleNotification(userInfo: $0)
         },
+        dialCallBack: @escaping @MainActor (CallBackRequest) -> Void = { request in
+            CallBackDialer.shared.dial(request)
+        },
         localMarkRead: @escaping @MainActor (String) -> Void = { conversationId in
             // Les trois surfaces du compteur, en un seul point d'écriture.
             ConversationReadSignal.markReadLocally(conversationId)
@@ -219,7 +228,12 @@ final class NotificationActionHandler: NotificationActionHandling {
                 matching: { revocation.covers($0) }
             )
         },
-        prepareReplyQueue: (@MainActor () async -> Void)? = nil
+        prepareReplyQueue: (@MainActor () async -> Void)? = nil,
+        openExternalURL: @escaping @MainActor (URL) -> Void = { UIApplication.shared.open($0) },
+        openDeepLink: @escaping @MainActor (URL) -> Void = { _ = DeepLinkRouter.shared.handle(url: $0) },
+        presentNewContact: @escaping @MainActor (NotificationContactCard) -> Void = {
+            NotificationContactPresenter.present($0)
+        }
     ) {
         self.messageService = messageService
         self.conversationService = conversationService
@@ -235,11 +249,15 @@ final class NotificationActionHandler: NotificationActionHandling {
         self.preferredLanguage = preferredLanguage
         self.isRegisteredUser = isRegisteredUser
         self.openNotification = openNotification
+        self.dialCallBack = dialCallBack
         self.localMarkRead = localMarkRead
         self.consume = consume
         self.removeDeliveredForConversation = removeDeliveredForConversation
         self.removeDeliveredForPost = removeDeliveredForPost
         self.removeDeliveredForNotificationIds = removeDeliveredForNotificationIds
+        self.openExternalURL = openExternalURL
+        self.openDeepLink = openDeepLink
+        self.presentNewContact = presentNewContact
     }
 
     // MARK: - Révocation (features 4/5)
@@ -360,13 +378,26 @@ final class NotificationActionHandler: NotificationActionHandling {
         case MeeshyNotificationAction.decline.rawValue:
             await handleFriendResponse(payload, userInfo: userInfo, accepted: false)
 
+        case MeeshyNotificationAction.callback.rawValue:
+            await consumeTapped(payload)
+            guard let request = CallBackRequest(notification: payload) else {
+                openNotification(userInfo)
+                return
+            }
+            dialCallBack(request)
+
         case MeeshyNotificationAction.view.rawValue,
-             MeeshyNotificationAction.callback.rawValue,
              MeeshyNotificationAction.answerCall.rawValue:
             // All of these surface the app to the relevant screen — the
             // deep-link router decides the destination based on payload.type.
             await consumeTapped(payload)
             openNotification(userInfo)
+
+        case MeeshyNotificationAction.openInMaps.rawValue,
+             MeeshyNotificationAction.addContact.rawValue,
+             MeeshyNotificationAction.joinInvite.rawValue:
+            await consumeTapped(payload)
+            handleDetailAction(actionIdentifier, userInfo: userInfo)
 
         case MeeshyNotificationAction.declineCall.rawValue:
             // Silent decline — no navigation. The VoIP layer handles the
@@ -376,6 +407,27 @@ final class NotificationActionHandler: NotificationActionHandling {
 
         default:
             await consumeTapped(payload)
+            openNotification(userInfo)
+        }
+    }
+
+    // MARK: - Détail d'un message (#8858)
+
+    /// Exécute le geste que la catégorie du détail propose. Le détail se relit
+    /// par la MÊME politique que l'extension a appliquée pour choisir la
+    /// catégorie — protection comprise. Faute de détail lisible, le geste
+    /// ouvre la notification : un bouton ne reste jamais inerte.
+    private func handleDetailAction(_ actionIdentifier: String, userInfo: [AnyHashable: Any]) {
+        switch (actionIdentifier, NotificationDetailPolicy.detail(userInfo: userInfo)) {
+        case (MeeshyNotificationAction.openInMaps.rawValue, .location(let place)?):
+            guard let url = place.mapsURL else { return openNotification(userInfo) }
+            openExternalURL(url)
+        case (MeeshyNotificationAction.addContact.rawValue, .contact(let card)?):
+            openNotification(userInfo)
+            presentNewContact(card)
+        case (MeeshyNotificationAction.joinInvite.rawValue, .invite(let invite)?):
+            openDeepLink(invite.url)
+        default:
             openNotification(userInfo)
         }
     }
@@ -439,7 +491,7 @@ final class NotificationActionHandler: NotificationActionHandling {
 
         do {
             try await messagePersistence.insertOptimistic(
-                makeOptimisticReplyRecord(
+                MessageRecord.optimisticText(
                     item: item,
                     senderId: userId,
                     replyToId: payload.messageId
@@ -488,43 +540,6 @@ final class NotificationActionHandler: NotificationActionHandling {
             logger.error("post-reply markRead failed: \(error.localizedDescription, privacy: .public)")
         }
         removeDeliveredForConversation(conversationId)
-    }
-
-    private func makeOptimisticReplyRecord(
-        item: OfflineQueueItem,
-        senderId: String,
-        replyToId: String?
-    ) -> MessageRecord {
-        MessageRecord(
-            localId: item.clientMessageId, serverId: nil,
-            conversationId: item.conversationId, senderId: senderId,
-            content: item.content,
-            originalLanguage: item.originalLanguage ?? "fr",
-            messageType: "text", messageSource: "user", contentType: "text",
-            state: .sending, retryCount: 0, lastError: nil,
-            isEncrypted: false, encryptionMode: nil, encryptedPayload: nil,
-            replyToId: replyToId, storyReplyToId: nil,
-            forwardedFromId: nil, forwardedFromConversationId: nil,
-            replyToJson: nil, forwardedFromJson: nil,
-            expiresAt: nil, effectFlags: 0,
-            maxViewOnceCount: nil, viewOnceCount: 0,
-            isEdited: false, editedAt: nil, deletedAt: nil,
-            pinnedAt: nil, pinnedBy: nil,
-            senderName: nil, senderUsername: nil,
-            senderColor: nil, senderAvatarURL: nil,
-            deliveredCount: 0, readCount: 0,
-            deliveredToAllAt: nil, readByAllAt: nil,
-            createdAt: Date(), sentAt: nil,
-            deliveredAt: nil, readAt: nil, updatedAt: Date(),
-            attachmentsJson: nil, reactionsJson: nil,
-            reactionCount: 0, currentUserReactionsJson: nil,
-            mentionedUsersJson: nil,
-            cachedBubbleWidth: nil, cachedBubbleHeight: nil,
-            cachedLastLineWidth: nil, cachedLineCount: nil,
-            cachedTimestampInline: nil,
-            layoutVersion: 0, layoutMaxWidth: nil,
-            changeVersion: 0
-        )
     }
 
     // MARK: - Inline comment on social pushes (R3/R4)

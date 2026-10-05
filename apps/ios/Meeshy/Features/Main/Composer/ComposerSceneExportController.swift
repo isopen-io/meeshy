@@ -97,7 +97,10 @@ final class ComposerSceneExportController: ObservableObject {
     /// l'encodeur et produiraient deux fichiers dont un serait orphelin. Le
     /// second appel est IGNORÉ plutôt que mis en file — l'auteur qui retape
     /// « Enregistrer » pendant un bake veut le même résultat, pas deux.
-    func export(_ destination: Destination, slide: StorySlide) {
+    /// `inputs` : ce que la scène tient en mémoire et que la slide ne porte
+    /// pas (#8599) — `StoryComposerViewModel.exportInputs(for:)`, la MÊME
+    /// construction que l'export timeline.
+    func export(_ destination: Destination, slide: StorySlide, inputs: StoryExportInputs) {
         guard !isExporting else { return }
         progress = 0
         let exporter = self.exporter
@@ -119,13 +122,11 @@ final class ComposerSceneExportController: ObservableObject {
                 languages: [],
                 watermark: watermark,
                 intro: identite,
-                // Vide : les images de stickers s'apparient depuis les MÉDIAS
-                // d'une story publiée (`StoryExporter.stickerImageSources`), que
-                // le composer n'a pas — ses stickers vivent encore dans la
-                // slide. Passer un dictionnaire vide dit la vérité ; en
-                // fabriquer un depuis une source absente ferait croire à un
-                // relais.
-                stickerImageSources: [:],
+                // La scène entière, pas seulement ses médias (#8599) : bitmaps
+                // retouchés et stickers collés, fichiers adoptés, sons de
+                // session. Un index vide peignait les stickers en 🖼️ et
+                // bakait un MP4 muet pour tout son pas encore téléversé.
+                inputs: inputs,
                 // **La carte de fin est DUE ici** (#7052). L'exception que ce
                 // paramètre porte vise l'export d'une SCÈNE DE POST, voulue
                 // sans habillage — ni interlude, ni carte, ni jingle. Ce
@@ -148,6 +149,34 @@ final class ComposerSceneExportController: ObservableObject {
                 return
             }
             await self.deliver(url, to: destination)
+        }
+    }
+
+    /// **Bake la scène pour la rendre au MESSAGE** (#9124) : ni filigrane, ni
+    /// interlude, ni carte de fin — la vidéo ne sort pas de Meeshy, elle part
+    /// dans une conversation. Le fichier appartient ensuite au message : il
+    /// n'est pas nettoyé ici.
+    func bakeForMessage(slide: StorySlide, inputs: StoryExportInputs,
+                        onReady: @escaping @MainActor (URL) -> Void) {
+        guard !isExporting else { return }
+        progress = 0
+        let exporter = self.exporter
+        task = Task { [weak self] in
+            let url = await exporter.prepareExport(
+                slide: slide, languages: [], watermark: nil, intro: nil, inputs: inputs,
+                appendsBrandOutro: false,
+                onProgress: { [weak self] fraction in self?.progress = fraction },
+                onPhaseChange: nil)
+            guard let self, !Task.isCancelled else {
+                if let url { exporter.cleanupExport(at: url) }
+                return
+            }
+            self.progress = nil
+            guard let url else {
+                self.toasts.showError(ComposerExportCopy.failed)
+                return
+            }
+            onReady(url)
         }
     }
 

@@ -19,18 +19,29 @@ import MeeshySDK
 /// la création de demande d'ami ou d'invitation de groupe.
 final class PrivacySettingsViewComingSoonTests: XCTestCase {
 
-    // MARK: - The 7 flagged placebo toggles
+    // MARK: - Les bascules encore sans effet (six depuis #8105)
 
-    func test_isComingSoon_hideProfileFromSearch_returnsTrue() {
-        XCTAssertTrue(PrivacySettingsView.isComingSoon(\.hideProfileFromSearch))
+    /// Appliqué par la passerelle à toute recherche par identifiant, et à
+    /// l'annonce « X a rejoint Meeshy » (#8104, #8105) : l'interrupteur a un
+    /// effet, il n'est plus « bientôt ».
+    func test_isComingSoon_hideProfileFromSearch_isLiveSinceTheGatewayAppliesIt() {
+        XCTAssertFalse(PrivacySettingsView.isComingSoon(\.hideProfileFromSearch))
+    }
+
+    /// La passerelle lit ce réglage avant d'annoncer « X était sur Meeshy
+    /// récemment » (#8285) : l'interrupteur a un effet dès sa naissance.
+    func test_isComingSoon_notifyContactsOnReturn_isLiveSinceTheGatewayAppliesIt() {
+        XCTAssertFalse(PrivacySettingsView.isComingSoon(\.notifyContactsOnReturn))
     }
 
     func test_isComingSoon_blockScreenshots_returnsTrue() {
         XCTAssertTrue(PrivacySettingsView.isComingSoon(\.blockScreenshots))
     }
 
-    func test_isComingSoon_allowCallsFromNonContacts_returnsTrue() {
-        XCTAssertTrue(PrivacySettingsView.isComingSoon(\.allowCallsFromNonContacts))
+    /// La passerelle refuse de faire sonner un non-contact quand le réglage
+    /// est coupé (#8073) : l'interrupteur a un effet, il n'est plus « bientôt ».
+    func test_isComingSoon_acceptCallsFromNonContacts_isLiveSinceTheGatewayAppliesIt() {
+        XCTAssertFalse(PrivacySettingsView.isComingSoon(\.acceptCallsFromNonContacts))
     }
 
     func test_isComingSoon_saveMediaToGallery_returnsTrue() {

@@ -4,6 +4,8 @@
  * They are also used as the base for creating new preferences
  */
 
+import { PRIVACY_PREFERENCE_DEFAULTS } from '@meeshy/shared/types/preferences';
+
 // ========== USER PREFERENCES DEFAULTS (Key-Value) ==========
 
 export const USER_PREFERENCES_DEFAULTS: Record<string, { value: string; valueType: string; description: string }> = {
@@ -200,9 +202,22 @@ export interface PrivacyPreferencesDefaults {
   allowContactRequests: boolean;
   allowGroupInvites: boolean;
 
+  // Qui peut faire SONNER (#8073) — lue par `services/calls/callRingPolicy.ts`.
+  // Postérieure à janvier 2026 : aucune ligne kebab-case héritée.
+  acceptCallsFromNonContacts: boolean;
+
   // Data settings
   saveMediaToGallery: boolean;
   allowAnalytics: boolean;
+
+  // Découvrabilité (#8104) — lue par `services/profile-discoverability.ts`.
+  // Postérieure à janvier 2026 : aucune ligne kebab-case héritée.
+  hideProfileFromSearch: boolean;
+
+  // « Prévenir mes contacts quand je reviens sur Meeshy » (#8285) — lue par
+  // `services/notifications/contact-recently-active.ts`. Postérieure à janvier
+  // 2026 : aucune ligne kebab-case héritée.
+  notifyContactsOnReturn: boolean;
 }
 
 export const PRIVACY_PREFERENCES_DEFAULTS: PrivacyPreferencesDefaults = {
@@ -221,9 +236,20 @@ export const PRIVACY_PREFERENCES_DEFAULTS: PrivacyPreferencesDefaults = {
   allowContactRequests: true,
   allowGroupInvites: true,
 
+  // Le défaut DÉCLARÉ par le schéma partagé, lu et non recopié : ce que
+  // l'écran montre est ce que la porte obéit.
+  acceptCallsFromNonContacts: PRIVACY_PREFERENCE_DEFAULTS.acceptCallsFromNonContacts,
+
   // Data settings
   saveMediaToGallery: false, // disabled by default for privacy
   allowAnalytics: false, // #4578 — gardée par un consentement, donc jamais vraie par défaut
+
+  // Trouvable par défaut : se cacher est un OPT-IN.
+  hideProfileFromSearch: false,
+
+  // Le défaut DÉCLARÉ par le schéma partagé : OPT-OUT, activé tant que
+  // l'utilisateur ne l'a pas coupé — un document sans la clé vaut « activé ».
+  notifyContactsOnReturn: PRIVACY_PREFERENCE_DEFAULTS.notifyContactsOnReturn,
 };
 
 /**

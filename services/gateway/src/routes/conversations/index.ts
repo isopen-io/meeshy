@@ -11,6 +11,8 @@ import { registerDeleteForMeRoutes } from './delete-for-me';
 import { registerBanRoutes } from './ban';
 import { registerStatsRoutes } from './stats';
 import { registerThreadsRoutes } from './threads';
+import { registerDirectConversationCardRoute } from './card';
+import { registerConversationEngagementRoute } from './engagement';
 
 /**
  * Point d'entrée principal pour toutes les routes de conversations
@@ -45,4 +47,6 @@ export async function conversationRoutes(fastify: FastifyInstance) {
   registerBanRoutes(fastify, prisma, optionalAuth, requiredAuth);
   registerStatsRoutes(fastify, prisma, requiredAuth);
   registerThreadsRoutes(fastify, prisma, requiredAuth);
+  registerDirectConversationCardRoute(fastify, prisma, optionalAuth);
+  registerConversationEngagementRoute(fastify, prisma, requiredAuth);
 }

@@ -24,6 +24,7 @@ import {
   type ColumnPlan,
 } from '../../utils/sparse-fieldset';
 import { apiPath } from '@meeshy/shared/api/prefix';
+import { refuserCommeIntrouvable } from '../conversations/utils/access-control';
 import { isConversationClosed } from '../../services/messaging/conversationWriteAdmission';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -493,7 +494,11 @@ export async function registerUserRoutes(fastify: FastifyInstance) {
           }
         },
         403: {
-          description: 'Registered user required, or not a member of the requested conversation',
+          description: 'Registered user required',
+          ...errorResponseSchema
+        },
+        404: {
+          description: 'Conversation not found — or the caller is not a member (#8116: both answer the same)',
           ...errorResponseSchema
         },
         500: {
@@ -538,8 +543,9 @@ export async function registerUserRoutes(fastify: FastifyInstance) {
           select: { role: true }
         });
 
+        // Un non-membre reçoit le 404 d'une conversation inexistante (#8116).
         if (!membership) {
-          return sendForbidden(reply, 'Vous devez être membre de cette conversation pour voir ses liens de partage');
+          return refuserCommeIntrouvable(reply);
         }
 
         viewerIsModerator = actorHasMinimumRole(

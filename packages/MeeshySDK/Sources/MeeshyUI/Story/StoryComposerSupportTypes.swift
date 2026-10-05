@@ -78,13 +78,6 @@ struct AudioEditorItemWrapper: Identifiable {
     var language: String? = nil
 }
 
-// MARK: - Media Editor Wrappers
-
-struct PendingImageWrapper: Identifiable {
-    let id = UUID()
-    let image: UIImage
-}
-
 /// Le fournisseur de caméra rendu PRÉSENTABLE (S5).
 ///
 /// `fullScreenCover(isPresented:)` présente dès que le drapeau passe à `true` —
@@ -100,14 +93,3 @@ nonisolated struct PresentedCameraCapture: Identifiable {
     let provider: StoryCameraCaptureProvider
 }
 
-struct EditingMediaImage: Identifiable {
-    let id = UUID()
-    let elementId: String
-    let image: UIImage
-}
-
-struct EditingMediaVideo: Identifiable {
-    let id = UUID()
-    let elementId: String
-    let url: URL
-}

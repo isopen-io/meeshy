@@ -24,6 +24,7 @@ import { useOnline } from '@/lib/net/online';
 import { useSearch } from '@/lib/router';
 
 import { ActionButton, ActionLink, LinkAlert, LinkPage, LinkText, REACH_FAILURE_BODY, type ActionTone } from './link-page-parts';
+import { PasswordInput } from '@/components/password-input';
 
 /**
  * **`/account/deletion` — LA SUPPRESSION DE COMPTE** (#6715), obligation
@@ -220,7 +221,7 @@ type RequestState =
   | { readonly phase: 'sending' }
   | { readonly phase: 'sent' };
 
-const FIELD_CLASS = 'w-full rounded-[14px] px-4 text-body focus-visible:outline-2';
+const FIELD_CLASS = 'w-full rounded-field px-4 text-body focus-visible:outline-2';
 
 const FIELD_STYLE = {
   minHeight: 52,
@@ -301,12 +302,11 @@ function DeletionRequestPage({ online, language, deps }: PageProps) {
         <label htmlFor="account-deletion-password" style={{ color: 'var(--color-ios-ink)' }}>
           {translate(language, 'accountDeletion.request.password')}
         </label>
-        <input
+        <PasswordInput
           id="account-deletion-password"
-          type="password"
           autoComplete="current-password"
           value={password}
-          onInput={(event) => setPassword(event.currentTarget.value)}
+          onValue={setPassword}
           className={FIELD_CLASS}
           style={FIELD_STYLE}
         />

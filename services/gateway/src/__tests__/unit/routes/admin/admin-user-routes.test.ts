@@ -97,7 +97,7 @@ const mockUser = {
   isActive: true,
   emailVerified: new Date(),
   phoneVerified: null,
-  twoFactorEnabled: null,
+  twoFactorSecret: 'JBSWY3DPEHPK3PXP', // appairé : armer le second facteur est admis (#8289)
   avatar: null,
   createdAt: new Date('2024-01-01'),
   lastActiveAt: null,
@@ -246,7 +246,7 @@ describe('GET /admin/users', () => {
       url: '/admin/users?search=foo&role=USER&sortBy=username&sortOrder=asc'
     });
     expect(mockUMS.getUsers).toHaveBeenCalledWith(
-      expect.objectContaining({ search: 'foo', role: 'USER', sortBy: 'username', sortOrder: 'asc' }),
+      expect.objectContaining({ search: 'foo', role: ['USER'], sortBy: 'username', sortOrder: 'asc' }),
       expect.any(Object)
     );
   });

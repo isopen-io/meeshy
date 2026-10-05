@@ -23,7 +23,16 @@ export const PrivacyPreferenceSchema = z.object({
   // Contrôle des communications
   allowContactRequests: z.boolean().default(true),
   allowGroupInvites: z.boolean().default(true),
-  allowCallsFromNonContacts: z.boolean().default(false),
+  // « Appels hors contacts » — OPT-OUT (défaut `true`) : tout le monde peut
+  // faire sonner, seul celui qui coupe le réglage ne sonne que pour ses amis
+  // acceptés. Porte de sonnerie : `services/gateway/src/services/calls/callRingPolicy.ts`.
+  acceptCallsFromNonContacts: z.boolean().default(true),
+  // Clé RETIRÉE (#8073) : les `false` qu'elle porte n'ont jamais été un choix —
+  // la bascule iOS était grisée et la synchronisation du bloc entier écrivait le
+  // défaut. Encore acceptée pour que les applications déjà publiées, qui la
+  // soumettent dans chaque bloc `privacy`, ne soient pas refusées par la
+  // validation stricte ; plus aucun code ne la lit.
+  allowCallsFromNonContacts: z.boolean().optional(),
 
   // Données et analytics
   saveMediaToGallery: z.boolean().default(false),
@@ -56,6 +65,10 @@ export const PrivacyPreferenceSchema = z.object({
   // Blocage et filtrage
   blockScreenshots: z.boolean().default(false),
   hideProfileFromSearch: z.boolean().default(false),
+  // « Prévenir mes contacts quand je reviens sur Meeshy » (#8285) — OPT-OUT
+  // (défaut `true`, décision porteur 2026-09-27). Coupé, ou `showOnlineStatus`
+  // coupé, rien ne part. Lue par `services/gateway/…/contact-recently-active.ts`.
+  notifyContactsOnReturn: z.boolean().default(true),
 
   // Encryption et sécurité
   encryptionPreference: z.enum(['disabled', 'optional', 'always']).default('optional'),
@@ -96,12 +109,13 @@ export const PRIVACY_PREFERENCE_DEFAULTS: PrivacyPreference = {
   showForwardSource: true,
   allowContactRequests: true,
   allowGroupInvites: true,
-  allowCallsFromNonContacts: false,
+  acceptCallsFromNonContacts: true,
   saveMediaToGallery: false,
   allowAnalytics: false,
   shareUsageData: false,
   blockScreenshots: false,
   hideProfileFromSearch: false,
+  notifyContactsOnReturn: true,
   encryptionPreference: 'optional',
   autoEncryptNewConversations: false,
   showEncryptionStatus: true,

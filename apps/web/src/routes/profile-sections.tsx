@@ -147,7 +147,7 @@ export function ProfileHeaderBar({
           style={{ color: 'var(--color-ios-brand)', outlineColor: 'var(--color-ios-brand)' }}
         >
           <ChromeActionDisc>
-            <Glyph name="caretLeft" size={16} />
+            <Glyph name="caretLeft" size={16} className="rtl:-scale-x-100" />
           </ChromeActionDisc>
         </Link>
       )}
@@ -208,7 +208,7 @@ function UploadVeil({
   return (
     <span
       className={`absolute inset-0 grid place-items-center ${round ? 'rounded-chip' : ''}`}
-      style={{ backgroundColor: 'rgb(0 0 0 / 0.45)' }}
+      style={{ backgroundColor: 'var(--color-scrim)' }}
     >
       <span className="sr-only">{translate(language, 'profile.image.uploading')}</span>
       <button
@@ -217,9 +217,9 @@ function UploadVeil({
         aria-label={translate(language, 'profile.image.cancel')}
         onClick={() => onCancel(kind)}
         className="grid place-items-center rounded-chip focus-visible:outline-2"
-        style={{ minWidth: 44, minHeight: 44, color: 'white', outlineColor: 'white' }}
+        style={{ minWidth: 44, minHeight: 44, color: 'var(--color-on-media)', outlineColor: 'var(--color-on-media)' }}
       >
-        <span className="grid place-items-center rounded-chip" style={{ width: 32, height: 32, backgroundColor: 'rgb(0 0 0 / 0.55)' }}>
+        <span className="grid place-items-center rounded-chip" style={{ width: 32, height: 32, backgroundColor: 'var(--color-scrim)' }}>
           <Glyph name="x" size={16} />
         </span>
       </button>
@@ -251,7 +251,7 @@ function PickButton({
     >
       <span
         className="grid place-items-center rounded-chip"
-        style={{ width: 32, height: 32, color: 'white', backgroundColor: 'color-mix(in srgb, var(--ios-indigo-700) 88%, black)' }}
+        style={{ width: 32, height: 32, color: 'var(--color-ios-on-brand)', backgroundColor: 'color-mix(in srgb, var(--ios-indigo-700) 88%, var(--color-media-backdrop))' }}
       >
         <GlyphSvg glyph={PROFILE_GLYPHS[glyph]} size={16} />
       </span>
@@ -378,7 +378,7 @@ export function IdentitySection({
                   onChange={(event) => onDraft({ ...draft, [key]: event.currentTarget.value })}
                   onFocus={() => setFocused(key)}
                   onBlur={() => setFocused(null)}
-                  className="min-w-0 flex-1 bg-transparent text-body outline-none"
+                  className="w-0 min-w-0 flex-1 bg-transparent text-body outline-none"
                   style={{ minHeight: 44, color: INK }}
                 />
               )}
@@ -402,7 +402,7 @@ export function IdentitySection({
                 onChange={(event) => onDraft({ ...draft, bio: event.currentTarget.value })}
                 onFocus={() => setFocused('bio')}
                 onBlur={() => setFocused(null)}
-                className="min-w-0 flex-1 resize-none bg-transparent py-3 text-body outline-none"
+                className="w-0 min-w-0 flex-1 resize-none bg-transparent py-3 text-body outline-none"
                 style={{ color: INK }}
               />
             )}
@@ -555,7 +555,7 @@ export function LanguagesSection({
                   </span>
                 )}
                 <span aria-hidden="true" style={{ color: INK_2 }}>
-                  <GlyphSvg glyph={PROFILE_GLYPHS.caretRight} size={12} />
+                  <GlyphSvg glyph={PROFILE_GLYPHS.caretRight} size={12} className="rtl:-scale-x-100" />
                 </span>
               </button>
               {clear !== null && code !== null && !disabled ? (
@@ -635,7 +635,7 @@ export function ProgressionEntry({ language }: { readonly language: InterfaceLan
         </span>
       </span>
       <span aria-hidden="true" style={{ color: INK_2 }}>
-        <GlyphSvg glyph={PROFILE_GLYPHS.caretRight} size={12} />
+        <GlyphSvg glyph={PROFILE_GLYPHS.caretRight} size={12} className="rtl:-scale-x-100" />
       </span>
     </Link>
   );
@@ -659,13 +659,13 @@ export function RequestsSection({ language, pending }: { readonly language: Inte
           <span
             data-pending-requests
             className="grid place-items-center rounded-chip px-1.5 text-chip font-bold"
-            style={{ minWidth: 22, height: 22, color: 'white', backgroundColor: 'var(--ios-indigo-600)' }}
+            style={{ minWidth: 22, height: 22, color: 'var(--color-ios-on-brand)', backgroundColor: 'var(--ios-indigo-600)' }}
           >
             {shown}
           </span>
         )}
         <span aria-hidden="true" style={{ color: INK_2 }}>
-          <GlyphSvg glyph={PROFILE_GLYPHS.caretRight} size={12} />
+          <GlyphSvg glyph={PROFILE_GLYPHS.caretRight} size={12} className="rtl:-scale-x-100" />
         </span>
       </Link>
     </Section>

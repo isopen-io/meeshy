@@ -129,6 +129,9 @@ export type MessageMenuClusterPlacement = {
   readonly anchorX: number;
   readonly menuLeft: number;
   readonly railLeft: number;
+  /** Ce que la liste perd sous le bas utile de l'écran (≤ 0 : rien) — la
+   * mesure que `revealFloor` (#9043) dégage en réduisant l'aperçu. */
+  readonly menuHiddenHeight: number;
 };
 
 export function placeMessageMenuCluster(input: MessageMenuClusterInput): MessageMenuClusterPlacement {
@@ -169,5 +172,5 @@ export function placeMessageMenuCluster(input: MessageMenuClusterInput): Message
     Math.min(viewport.width - sidePadding - clampedRailWidth, anchorX - clampedRailWidth / 2),
   );
 
-  return { railTop, previewTop, previewScale, menuTop, anchorX, menuLeft, railLeft };
+  return { railTop, previewTop, previewScale, menuTop, anchorX, menuLeft, railLeft, menuHiddenHeight: menuTop + menuHeight - availBottom };
 }

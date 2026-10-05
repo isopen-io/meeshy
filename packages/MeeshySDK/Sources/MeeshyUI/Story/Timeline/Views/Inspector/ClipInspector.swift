@@ -542,7 +542,7 @@ public struct ClipInspector: View {
 
     public var body: some View {
         let sections = Self.visibleSections(kind: clip.kind, isBackground: background)
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             header
             // Un fond couvre toute la slide : sa fenêtre début/durée est
             // ignorée par le moteur. Le dire reste utile même depuis que la
@@ -604,7 +604,7 @@ public struct ClipInspector: View {
     // MARK: - Sub-views
 
     private var header: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: MeeshySpacing.sm) {
             Image(systemName: kindSystemImage)
                 .font(.headline)
                 .foregroundStyle(MeeshyColors.indigo500)
@@ -644,7 +644,7 @@ public struct ClipInspector: View {
     /// steppers ±0,1 s pour seule édition : poser un début à 3,5 s demandait
     /// 35 pressions. Ils sont désormais visibles d'emblée et tapables.
     private var timingSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
             ClipTimingBar(
                 start: clip.startTime,
                 duration: clip.duration,
@@ -653,7 +653,7 @@ public struct ClipInspector: View {
                 onTrimStartCommitted: onStartTrimmed,
                 onTrimEndCommitted: onEndAdjusted
             )
-            HStack(alignment: .top, spacing: 8) {
+            HStack(alignment: .top, spacing: MeeshySpacing.sm) {
                 numericField(key: "start",
                              title: String(localized: "story.timeline.inspector.start",
                                            defaultValue: "Début", bundle: .module),
@@ -693,12 +693,12 @@ public struct ClipInspector: View {
     /// l'espace : impossible de lire ou corriger une position au chiffre près,
     /// alors que les modèles portent x/y/échelle/rotation/plan depuis toujours.
     private var transformSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
             Text(String(localized: "story.timeline.inspector.transform",
                         defaultValue: "Position dans le plan", bundle: .module).uppercased())
                 .font(.system(size: 9, weight: .semibold))
                 .foregroundStyle(.secondary)
-            HStack(alignment: .top, spacing: 8) {
+            HStack(alignment: .top, spacing: MeeshySpacing.sm) {
                 // x/y sont normalisés 0–1 dans le modèle ; on les présente en
                 // POURCENTAGE, plus lisible qu'un « 0,5 » pour dire « au centre ».
                 numericField(key: "tx", title: "X",
@@ -720,7 +720,7 @@ public struct ClipInspector: View {
                                  if let v = Self.parseDecimal($0) { onTransformChanged(.y(v / 100)) }
                              })
             }
-            HStack(alignment: .top, spacing: 8) {
+            HStack(alignment: .top, spacing: MeeshySpacing.sm) {
                 numericField(key: "scale",
                              title: String(localized: "story.timeline.inspector.scale",
                                            defaultValue: "Taille", bundle: .module),
@@ -756,9 +756,9 @@ public struct ClipInspector: View {
                              })
             }
         }
-        .padding(10)
+        .padding(MeeshySpacing.smPlus)
         .background(
-            RoundedRectangle(cornerRadius: 10)
+            RoundedRectangle(cornerRadius: MeeshyRadius.sm)
                 .fill(MeeshyColors.indigo500.opacity(0.08))
         )
     }
@@ -770,10 +770,10 @@ public struct ClipInspector: View {
                               onCommit: @escaping (String) -> Void) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(title.uppercased())
-                .font(.system(size: 9, weight: .semibold))
+                .font(.system(size: MeeshyFont.microSize, weight: .semibold))
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
-            HStack(spacing: 2) {
+            HStack(spacing: MeeshySpacing.xxs) {
                 TextField("", text: Binding(
                     get: { drafts[key] ?? value },
                     set: { drafts[key] = $0 }
@@ -789,15 +789,15 @@ public struct ClipInspector: View {
                 }
                 if !unit.isEmpty {
                     Text(unit)
-                        .font(.system(size: 9))
+                        .font(.system(size: MeeshyFont.microSize))
                         .foregroundStyle(.secondary)
                 }
             }
             .padding(.vertical, 5)
-            .padding(.horizontal, 4)
+            .padding(.horizontal, MeeshySpacing.xs)
             .background(RoundedRectangle(cornerRadius: 7)
                 .fill(MeeshyColors.indigo500.opacity(0.10)))
-            HStack(spacing: 4) {
+            HStack(spacing: MeeshySpacing.xs) {
                 stepButton(systemName: "minus.circle.fill") { onStep(-Self.timeStep) }
                 Spacer(minLength: 0)
                 stepButton(systemName: "plus.circle.fill") { onStep(Self.timeStep) }
@@ -818,10 +818,10 @@ public struct ClipInspector: View {
     }
 
     private var volumeSlider: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack(spacing: 6) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
+            HStack(spacing: MeeshySpacing.xsPlus) {
                 Text(String(localized: "story.timeline.inspector.volume", bundle: .module).uppercased())
-                    .font(.system(size: 9, weight: .semibold))
+                    .font(.system(size: MeeshyFont.microSize, weight: .semibold))
                     .foregroundStyle(.secondary)
                 Spacer(minLength: 0)
                 // Le chiffre est indispensable depuis que la course va jusqu'à
@@ -877,7 +877,7 @@ public struct ClipInspector: View {
     /// stocke la négation (`isDuckingDisabled`) : un interrupteur nommé
     /// « désactiver » se lit à l'envers une fois activé.
     private var duckingToggle: some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
             Toggle(isOn: Binding(
                 get: { !duckingDisabled },
                 set: { isOn in
@@ -899,7 +899,7 @@ public struct ClipInspector: View {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(.top, 6)
+        .padding(.top, MeeshySpacing.xsPlus)
     }
 
     /// Automation du volume : pose d'un point au playhead et liste des points
@@ -907,7 +907,7 @@ public struct ClipInspector: View {
     /// que 52 pt et ses gestes servent déjà au déplacement et au rognage.
     private var volumeAutomation: some View {
         let points = Self.sortedVolumePoints(clip.volumeKeyframes)
-        return VStack(alignment: .leading, spacing: 6) {
+        return VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
             Button {
                 onAddVolumePoint(volume)
             } label: {
@@ -935,7 +935,7 @@ public struct ClipInspector: View {
                     .fixedSize(horizontal: false, vertical: true)
             } else {
                 ForEach(points) { point in
-                    HStack(spacing: 8) {
+                    HStack(spacing: MeeshySpacing.sm) {
                         Text(Self.formatTime(seconds: point.absoluteTime))
                             .font(.system(.caption2, design: .monospaced))
                             .monospacedDigit()
@@ -961,7 +961,7 @@ public struct ClipInspector: View {
                 }
             }
         }
-        .padding(.top, 4)
+        .padding(.top, MeeshySpacing.xs)
     }
 
     /// Durées proposées pour les animations d'entrée/sortie (fondu). `0` = off.
@@ -981,7 +981,7 @@ public struct ClipInspector: View {
     /// d'animation au playhead avec sa légende. Repliée par défaut — la
     /// modale ne montre plus que l'essentiel (retour user 2026-07-11).
     private var animationConfig: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
             fadeChipRow(
                 title: String(localized: "story.timeline.inspector.fadeIn",
                               defaultValue: "Apparition (fondu)", bundle: .module),
@@ -1016,9 +1016,9 @@ public struct ClipInspector: View {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(10)
+        .padding(MeeshySpacing.smPlus)
         .background(
-            RoundedRectangle(cornerRadius: 10)
+            RoundedRectangle(cornerRadius: MeeshyRadius.sm)
                 .fill(MeeshyColors.indigo500.opacity(0.08))
         )
         .transition(reduceMotion ? .opacity : .opacity.combined(with: .move(edge: .top)))
@@ -1026,17 +1026,17 @@ public struct ClipInspector: View {
 
     private func fadeChipRow(title: String, systemImage: String,
                              value: Binding<Float>, onCommit: @escaping () -> Void) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 4) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
+            HStack(spacing: MeeshySpacing.xs) {
                 Image(systemName: systemImage)
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(.system(size: MeeshyIconSize.xxs, weight: .semibold))
                     .foregroundStyle(MeeshyColors.indigo400)
                     .accessibilityHidden(true)
                 Text(title.uppercased())
-                    .font(.system(size: 9, weight: .semibold))
+                    .font(.system(size: MeeshyFont.microSize, weight: .semibold))
                     .foregroundStyle(.secondary)
             }
-            HStack(spacing: 6) {
+            HStack(spacing: MeeshySpacing.xsPlus) {
                 ForEach(Self.fadePresets, id: \.self) { preset in
                     let isOn = Self.nearestFadePreset(to: value.wrappedValue) == preset
                     Button {
@@ -1050,8 +1050,8 @@ public struct ClipInspector: View {
                                            : String(format: "%.0f s", preset)))
                             .font(.caption2.weight(.semibold))
                             .monospacedDigit()
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
+                            .padding(.horizontal, MeeshySpacing.smPlus)
+                            .padding(.vertical, MeeshySpacing.xsPlus)
                             .background(Capsule().fill(
                                 isOn ? MeeshyColors.indigo500 : MeeshyColors.indigo500.opacity(0.14)))
                             .foregroundStyle(isOn ? .white : MeeshyColors.indigo400)
@@ -1067,8 +1067,8 @@ public struct ClipInspector: View {
 
     @ViewBuilder
     private var togglesRow: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 24) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
+            HStack(spacing: MeeshySpacing.xxl) {
                 if Self.supportsLoop(kind: clip.kind, isBackground: background) {
                     Toggle(isOn: Binding(
                         get: { loop },
@@ -1132,12 +1132,12 @@ public struct ClipInspector: View {
     private var actionsRow: some View {
         AdaptiveGlassContainer(spacing: 12) {
             ViewThatFits(in: .horizontal) {
-                HStack(spacing: 10) {
+                HStack(spacing: MeeshySpacing.smPlus) {
                     if !clip.isFollowingSlide { followSlideButton }
                     if Self.supportsSplit(kind: clip.kind) { splitButton }
                     if Self.supportsDeletion(kind: clip.kind) { deleteButton }
                 }
-                VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
                     if !clip.isFollowingSlide { followSlideButton }
                     if Self.supportsSplit(kind: clip.kind) { splitButton }
                     if Self.supportsDeletion(kind: clip.kind) { deleteButton }
@@ -1158,7 +1158,7 @@ public struct ClipInspector: View {
                 .font(.footnote.weight(.semibold))
                 .fixedSize(horizontal: true, vertical: false)
                 .glassControlForeground()
-                .padding(.horizontal, 12)
+                .padding(.horizontal, MeeshySpacing.md)
                 .frame(height: 36)
                 .adaptiveGlass(in: Capsule(), tint: MeeshyColors.indigo500, interactive: true)
                 .contentShape(Rectangle().inset(by: -4))
@@ -1179,7 +1179,7 @@ public struct ClipInspector: View {
                 .font(.footnote.weight(.semibold))
                 .fixedSize(horizontal: true, vertical: false)
                 .glassControlForeground()
-                .padding(.horizontal, 12)
+                .padding(.horizontal, MeeshySpacing.md)
                 .frame(height: 36)
                 .adaptiveGlass(in: Capsule(), tint: MeeshyColors.indigo500, interactive: true)
                 .contentShape(Rectangle().inset(by: -4))
@@ -1201,7 +1201,7 @@ public struct ClipInspector: View {
                 .font(.footnote.weight(.semibold))
                 .fixedSize(horizontal: true, vertical: false)
                 .foregroundStyle(.white)
-                .padding(.horizontal, 12)
+                .padding(.horizontal, MeeshySpacing.md)
                 .frame(height: 36)
                 .adaptiveGlassProminent(in: Capsule(), tint: MeeshyColors.error)
                 .contentShape(Rectangle().inset(by: -4))

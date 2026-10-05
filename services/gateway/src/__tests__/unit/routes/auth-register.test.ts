@@ -92,7 +92,8 @@ import { registerRegistrationRoutes } from '../../../routes/auth/register';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const MOCK_USER = { id: 'user-1', username: 'alice', email: 'alice@example.com', role: 'USER' };
+// Avec un numéro : le compte est actif tout de suite et la session s'ouvre (#8055).
+const MOCK_USER = { id: 'user-1', username: 'alice', email: 'alice@example.com', role: 'USER', phoneNumber: '+33600000000' };
 const MOCK_TOKEN = 'jwt.token.here';
 
 // ─── Factories ────────────────────────────────────────────────────────────────

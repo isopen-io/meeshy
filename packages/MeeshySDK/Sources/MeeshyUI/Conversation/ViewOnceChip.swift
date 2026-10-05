@@ -24,21 +24,25 @@ public struct ViewOnceChip: View, Equatable {
 
     public let state: State
     public let isDark: Bool
+    /// Ce que fait le toucher, dit à VoiceOver (#8009) : ouvrir un plein écran
+    /// ou lire sur place. L'hôte le sait (le contenu scellé n'est pas ici).
+    public let hint: String?
     private let onOpen: () -> Void
 
-    public init(state: State, isDark: Bool, onOpen: @escaping () -> Void) {
+    public init(state: State, isDark: Bool, hint: String? = nil, onOpen: @escaping () -> Void) {
         self.state = state
         self.isDark = isDark
+        self.hint = hint
         self.onOpen = onOpen
     }
 
     public static func == (lhs: ViewOnceChip, rhs: ViewOnceChip) -> Bool {
-        lhs.state == rhs.state && lhs.isDark == rhs.isDark
+        lhs.state == rhs.state && lhs.isDark == rhs.isDark && lhs.hint == rhs.hint
     }
 
     public var body: some View {
         Button(action: onOpen) {
-            HStack(spacing: 6) {
+            HStack(spacing: MeeshySpacing.xsPlus) {
                 Image(systemName: state == .sealed
                       ? MessageProtectionSymbols.viewOnceFilled
                       : MessageProtectionSymbols.viewOnce)
@@ -52,8 +56,8 @@ public struct ViewOnceChip: View, Equatable {
             .font(.footnote.weight(.semibold))
             .lineLimit(1)
             .fixedSize(horizontal: true, vertical: false)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
+            .padding(.horizontal, MeeshySpacing.md)
+            .padding(.vertical, MeeshySpacing.sm)
             .background(
                 Capsule()
                     .fill(MeeshyColors.stateViewOnce.opacity(Self.fillOpacity(for: state, isDark: isDark)))
@@ -61,12 +65,13 @@ public struct ViewOnceChip: View, Equatable {
                         MeeshyColors.stateViewOnce.opacity(state == .sealed ? 0.45 : 0.2), lineWidth: 0.75
                     ))
             )
-            .padding(.vertical, 4)
+            .padding(.vertical, MeeshySpacing.xs)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Self.accessibilityLabel(for: state))
+        .accessibilityHint(state == .sealed ? (hint ?? "") : "")
         .accessibilityAddTraits(state == .sealed ? .isButton : .isStaticText)
         .allowsHitTesting(state == .sealed)
     }

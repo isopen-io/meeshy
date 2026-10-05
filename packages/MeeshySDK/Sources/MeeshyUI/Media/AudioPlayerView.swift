@@ -346,7 +346,7 @@ public struct AudioPlayerView: View {
 
             if chromePlan.showsLanguageStrip && !translatedAudios.isEmpty && !context.isCompact {
                 languageSelector
-                    .padding(.top, 6)
+                    .padding(.top, MeeshySpacing.xsPlus)
                     .transition(.opacity)
             }
         }
@@ -512,8 +512,8 @@ public struct AudioPlayerView: View {
             if let slot = bottomSlot {
                 slotDivider
                 slot
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
+                    .padding(.horizontal, MeeshySpacing.smPlus)
+                    .padding(.vertical, MeeshySpacing.xsPlus)
             }
         }
         .background {
@@ -665,7 +665,7 @@ public struct AudioPlayerView: View {
     @ViewBuilder
     private var playButtonLabel: some View {
         let size: CGFloat = context.isCompact ? 34 : 40
-        VStack(spacing: 3) {
+        VStack(spacing: MeeshySpacing.xxs) {
             ZStack {
                 Circle()
                     .fill(
@@ -698,7 +698,7 @@ public struct AudioPlayerView: View {
                     if progress > 0 {
                         Circle()
                             .trim(from: 0, to: progress)
-                            .stroke(Color.white, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                            .stroke(Color.white, style: StrokeStyle(lineWidth: MeeshyBorder.strong, lineCap: .round))
                             .rotationEffect(.degrees(-90))
                             .frame(width: size * 0.5, height: size * 0.5)
                             .animation(.linear(duration: 0.2), value: progress)
@@ -721,7 +721,7 @@ public struct AudioPlayerView: View {
                 let label = AudioPlayerView.formattedNeedsDownloadLabel(fileSize: attachment.fileSize)
                 if !label.isEmpty {
                     Text(label)
-                        .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                        .font(.system(size: MeeshyFont.microSize, weight: .semibold, design: .monospaced))
                         .foregroundColor(isDark ? .white.opacity(0.65) : .black.opacity(0.55))
                         .lineLimit(1)
                         .minimumScaleFactor(0.6)
@@ -734,7 +734,7 @@ public struct AudioPlayerView: View {
                 )
                 if !label.isEmpty {
                     Text(label)
-                        .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                        .font(.system(size: MeeshyFont.microSize, weight: .semibold, design: .monospaced))
                         .foregroundColor(isDark ? .white.opacity(0.65) : .black.opacity(0.55))
                         .lineLimit(1)
                         .minimumScaleFactor(0.6)
@@ -997,11 +997,11 @@ public struct AudioPlayerView: View {
     @ViewBuilder
     private var contextActions: some View {
         if context == .composerAttachment {
-            HStack(spacing: 4) {
+            HStack(spacing: MeeshySpacing.xs) {
                 if let onEdit = onEdit {
                     Button { onEdit() } label: {
                         Image(systemName: "waveform.and.magnifyingglass")
-                            .font(.system(size: 12))
+                            .font(.system(size: MeeshyIconSize.xs))
                             .foregroundColor(isDark ? .white.opacity(0.45) : .black.opacity(0.35))
                             .frame(width: 26, height: 26)
                     }
@@ -1009,7 +1009,7 @@ public struct AudioPlayerView: View {
                 if let onDelete = onDelete {
                     Button { onDelete() } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 15))
+                            .font(.system(size: MeeshyIconSize.sm))
                             .foregroundColor(MeeshyColors.error)
                     }
                 }
@@ -1020,7 +1020,7 @@ public struct AudioPlayerView: View {
     // MARK: - Language Selector
     private var languageSelector: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
+            HStack(spacing: MeeshySpacing.xsPlus) {
                 audioLanguagePill(flag: "\u{1F50A}", code: "orig", label: String(localized: "media.audio.original", defaultValue: "Original", bundle: .module),
                                   isSelected: selectedAudioLanguage == "orig")
 
@@ -1034,7 +1034,7 @@ public struct AudioPlayerView: View {
                     )
                 }
             }
-            .padding(.horizontal, 8)
+            .padding(.horizontal, MeeshySpacing.sm)
         }
     }
 
@@ -1044,13 +1044,13 @@ public struct AudioPlayerView: View {
             externalLanguage?.wrappedValue = code == "orig" ? nil : code
             HapticFeedback.light()
         } label: {
-            HStack(spacing: 3) {
-                Text(flag).font(.system(size: 12))
-                Text(label).font(.system(size: 10, weight: isSelected ? .bold : .medium))
+            HStack(spacing: MeeshySpacing.xxs) {
+                Text(flag).font(.system(size: MeeshyFont.smallSize))
+                Text(label).font(.system(size: MeeshyFont.captionSize, weight: isSelected ? .bold : .medium))
             }
             .foregroundColor(isSelected ? .white : (isDark ? .white.opacity(0.55) : .black.opacity(0.45)))
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
+            .padding(.horizontal, MeeshySpacing.sm)
+            .padding(.vertical, MeeshySpacing.xs)
             .background(Capsule().fill(isSelected ? accent : (isDark ? Color.white.opacity(0.07) : Color.black.opacity(0.04))))
         }
     }
@@ -1061,7 +1061,7 @@ public struct AudioPlayerView: View {
             .fill(isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03))
             .overlay(
                 RoundedRectangle(cornerRadius: context.cornerRadius)
-                    .stroke(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.05), lineWidth: 0.5)
+                    .stroke(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.05), lineWidth: MeeshyBorder.hairline)
             )
     }
 

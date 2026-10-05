@@ -366,28 +366,6 @@ final class PhonebookViewModelTests: XCTestCase {
         XCTAssertNil(conversation)
     }
 
-    // MARK: - Erase
-
-    func test_eraseDirectory_clearsServerAndLocalList() async {
-        let (sut, directory, _, _, _) = makeSUT(contacts: [makeContact()])
-        await sut.load(forceNetwork: true)
-
-        await sut.eraseDirectory()
-
-        XCTAssertEqual(directory.clearCallCount, 1)
-        XCTAssertTrue(sut.contacts.isEmpty)
-    }
-
-    func test_eraseDirectory_failure_keepsTheDirectory() async {
-        let (sut, directory, _, _, _) = makeSUT(contacts: [makeContact()])
-        await sut.load(forceNetwork: true)
-        directory.clearResult = .failure(URLError(.badServerResponse))
-
-        await sut.eraseDirectory()
-
-        XCTAssertEqual(sut.contacts.count, 1)
-    }
-
     // MARK: - Invitation
 
     func test_invitationMessage_namesTheContact() {
@@ -495,7 +473,6 @@ private final class PagedDirectoryStub: ContactDirectoryServiceProviding, @unche
         )
     }
 
-    func clear() async throws -> DirectoryClearResult { DirectoryClearResult(removedCount: 0) }
 }
 
 final class DirectoryPagingTests: XCTestCase {

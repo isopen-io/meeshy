@@ -140,12 +140,23 @@ export const avatarOf = (conversation: Conversation, viewerId: string): string |
  * Deux lettres, jamais plus : « Amina Diallo » → « AD », « Équipe » → « ÉQ ».
  * Un seul mot rend ses deux premières lettres plutôt qu'une seule, parce
  * qu'une initiale seule dans un cercle de 44 px lit comme une erreur.
+ *
+ * DES LETTRES, RIEN D'AUTRE (#8131, #8143) — un nom de carnet porte souvent
+ * parenthèses, guillemets, emojis ou chiffres : « Théo (foot) » donnait
+ * « T( ». Un mot est donc une suite de LETTRES Unicode (latin accentué, arabe,
+ * CJK…), la ponctuation et les symboles le séparent sans y entrer. Sans aucune
+ * lettre, « ? » — jamais un signe dans le cercle.
  */
+const LETTER_WORD = /\p{L}+/gu;
+
+export const letterWordsOf = (name: string): readonly string[] => name.normalize('NFC').match(LETTER_WORD) ?? [];
+
 export const initialsOf = (name: string): string => {
-  const words = name.trim().split(/\s+/).filter(Boolean);
-  if (words.length === 0) return '?';
-  if (words.length === 1) return (words[0] ?? '').slice(0, 2).toUpperCase();
-  return `${words[0]?.[0] ?? ''}${words[1]?.[0] ?? ''}`.toUpperCase();
+  const words = letterWordsOf(name);
+  const [first, second] = words;
+  if (first === undefined) return '?';
+  if (second === undefined) return [...first].slice(0, 2).join('').toUpperCase();
+  return `${[...first][0] ?? ''}${[...second][0] ?? ''}`.toUpperCase();
 };
 
 /**
@@ -155,6 +166,12 @@ export const initialsOf = (name: string): string => {
  * serveur ne sert ni `isOnline` ni `lastActiveAt`, et un client ne fabrique
  * jamais ce que le serveur retire.
  *
+ * LE COMPTE D'ABORD (#9065) : quand la passerelle sert la présence du compte
+ * (`participant.user.isOnline`), c'est elle qui fait foi — la ligne de
+ * participant porte un `lastActiveAt` figé à son entrée dans la conversation,
+ * qui faisait tomber un pair en ligne dans la décroissance anti-stale. Un
+ * invité sans compte garde la présence de sa ligne.
+ *
  * `now` est INJECTABLE (repli `Date.now()`) : la loi 1/3/5 de
  * `getUserPresenceStatus` prend son horloge en paramètre, jamais en lecture
  * interne — sans l'injection ici, aucun témoin ne peut fixer les fenêtres
@@ -163,16 +180,17 @@ export const initialsOf = (name: string): string => {
 export const presenceOf = (
   participant: Participant | undefined,
   now: number = Date.now(),
-): UserPresenceStatus =>
-  getUserPresenceStatus(
-    participant === undefined
-      ? null
-      : {
-          isOnline: participant.isOnline,
-          ...(participant.lastActiveAt === undefined ? {} : { lastActiveAt: participant.lastActiveAt }),
-        },
+): UserPresenceStatus => {
+  if (participant === undefined) return getUserPresenceStatus(null, now);
+  const source = participant.user?.isOnline === undefined ? participant : participant.user;
+  return getUserPresenceStatus(
+    {
+      isOnline: source.isOnline ?? false,
+      ...(source.lastActiveAt === undefined ? {} : { lastActiveAt: source.lastActiveAt }),
+    },
     now,
   );
+};
 
 /**
  * LA FORME DE L'APERÇU DE LISTE — miroir de `LastMessageSummaryKind.swift:6-37`

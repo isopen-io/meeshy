@@ -2,21 +2,22 @@ import { useEffect, useRef } from 'react';
 
 import { hostMute, playerConfig, type ScenePlayerMode } from '@/lib/canvas/config';
 import type { CanvasDocument, CanvasScene } from '@/lib/canvas/document';
-import type { SceneCarrier } from '@/lib/canvas/carrier';
-import { backgroundFraming } from '@/lib/canvas/background';
+import { objectMediaSrc, type SceneCarrier } from '@/lib/canvas/carrier';
+import { backgroundBackdrop, backgroundFraming } from '@/lib/canvas/background';
 import { sceneRatio } from '@/lib/canvas/fit';
+import { backgroundPlaceholderHash } from '@/lib/canvas/scene-placeholder';
 import { hasTimedObjects, sceneDurationSeconds } from '@/lib/canvas/timeline';
 import { backgroundMedia } from '@/lib/feed/scene-framing';
 import { isDocumentAudible } from '@/lib/feed/scene-motion';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
-import { thumbHashPlaceholder } from '@/lib/media/thumbhash';
-import { letterboxHashes, letterboxIsServed } from '@/lib/stories/letterbox';
+import { letterboxFill, letterboxHashes } from '@/lib/stories/letterbox';
 
 import { GlyphSvg } from './glyph';
 import { FEED_GLYPHS } from './glyphs-feed';
 import { useSceneClock, type SceneClockHandle } from './scene-clock';
 import { BackgroundLayer, BlankBackground, type SceneCallbacks } from './scene-object-background';
+import { SceneGhostContext } from './scene-object-frame';
 import { SceneObjectAudio } from './scene-object-audio';
 import { SceneObjectDrawing } from './scene-object-drawing';
 import { SceneObjectMedia } from './scene-object-media';
@@ -40,9 +41,9 @@ import { SceneObjectText } from './scene-object-text';
  * Unnecessary Re-render).
  *
  * **LE SOL D'UN FOND AJUSTÉ** (`framing === 'fit'`, revue-correction #6901) se
- * peint ICI, dans le moteur — `BackgroundLayer` reçoit le placeholder ThumbHash
- * déjà résolu par `SceneCanvas` (`letterboxHashes` + `letterboxIsServed`,
- * `lib/stories/letterbox.ts`), la MÊME cascade que le lecteur de story, qui ne
+ * peint ICI, dans le moteur — `BackgroundLayer` reçoit le remplissage déjà
+ * résolu par `SceneCanvas` (`letterboxFill` : le fond choisi au Cadre, #8414,
+ * et la cascade `letterboxHashes`), la MÊME loi que le lecteur de story, qui ne
  * la pose plus lui-même (double-peint évité). `servesLetterboxFill` (par
  * défaut `true`, miroir `MeeshyScenePlayer.servesLetterboxFill`) est la SEULE
  * dérogation — le lecteur de story la coupe en verdict `imageOnly` (#6636).
@@ -89,6 +90,9 @@ export type ScenePlayerProps = {
    * son de fond (`key` changée) pour la repartir depuis `startOffsetMs`,
    * sans jamais remonter LE PLAYER (Zero Unnecessary Re-render). */
   readonly onLoop?: () => void;
+  /** LE FANTÔME (lot 6) — l'opacité d'un objet hors de sa fenêtre, au lieu de
+   * le cacher (`SceneGhostContext`). Absent : caché, comme partout. */
+  readonly ghostOutsideWindow?: number;
   /** Le remplissage des bandes d'un fond AJUSTÉ (`fit`) — PEINT par défaut,
    * miroir `MeeshyScenePlayer.servesLetterboxFill = true`
    * (`MeeshyScenePlayer.swift:79`). Le lecteur de story le coupe en verdict
@@ -100,6 +104,11 @@ export type ScenePlayerProps = {
    * redessine la scène au temps pointé et recale ses médias, sans rouvrir le
    * moteur. AJOUTÉ, jamais un renommage (D-11). */
   readonly onClock?: (clock: SceneClockHandle) => void;
+  /** LE GEL EN PHASE (#9277, miroir `onPlaybackProgressing` de
+   * `MeeshyScenePlayer`) — `false` quand un média de la scène bufferise (la
+   * scène l'attend), `true` quand la lecture reprend. L'hôte y gèle SA barre
+   * (le lecteur de story) et y montre l'attente. AJOUTÉ (D-11). */
+  readonly onPlaybackProgressing?: (progressing: boolean) => void;
 };
 
 /** Le rappel le plus RÉCENT d'un hôte, sans en faire une dépendance d'effet :
@@ -140,15 +149,21 @@ function SceneCanvas({
   // une seconde.
   const background = backgroundMedia(scene);
   const framing = backgroundFraming(scene);
-  // LE SOL D'UN FOND AJUSTÉ (revue-correction #6901) — la cascade des
-  // ThumbHash (`letterboxHashes`, déjà écrite pour l'hôte de story) devient le
-  // SITE UNIQUE, dans le MOTEUR : `servesLetterboxFill` (miroir
-  // `MeeshyScenePlayer.servesLetterboxFill`, `false` en verdict `imageOnly`
-  // côté story) est la SEULE dérogation, jamais une seconde loi de cadrage.
-  // Aucun repli quand aucun hash n'existe (`Source.none` côté iOS non plus :
-  // ce cas reste un écart de PARITÉ assumé, pas une régression de ce lot).
-  const letterboxCandidate = servesLetterboxFill && background !== undefined ? thumbHashPlaceholder(letterboxHashes(scene)[0]) : undefined;
-  const letterboxFillSrc = letterboxIsServed({ fitMode: framing, hasSource: letterboxCandidate !== undefined }) ? letterboxCandidate : undefined;
+  // LE SOL D'UN FOND AJUSTÉ (revue-correction #6901) — le SITE UNIQUE, dans
+  // le MOTEUR : `letterboxFill` y peint le fond choisi au panneau Cadre
+  // (#8414 : le média flouté par défaut, ou une teinte), et
+  // `servesLetterboxFill` (miroir `MeeshyScenePlayer.servesLetterboxFill`,
+  // `false` en verdict `imageOnly` côté story) reste la SEULE dérogation.
+  const letterbox =
+    servesLetterboxFill && background !== undefined
+      ? letterboxFill({
+          fitMode: framing,
+          backdrop: backgroundBackdrop(scene),
+          mediaSrc: objectMediaSrc(background, carrier),
+          mediaIsImage: !(typeof background.payload.mediaType === 'string' && background.payload.mediaType.startsWith('video')),
+          hashes: letterboxHashes(scene),
+        })
+      : undefined;
   // Le fond VISUEL (`backgroundMedia`) et le fond SONORE (`electBackgroundTrack`,
   // `lib/canvas/background-sound.ts`) sont DEUX fonds, et l'un comme l'autre
   // est servi HORS des couches d'objet : le premier par `BackgroundLayer`
@@ -168,7 +183,8 @@ function SceneCanvas({
           playing={playing}
           muted={muted}
           framing={framing}
-          letterboxFillSrc={letterboxFillSrc}
+          letterbox={letterbox}
+          placeholderHash={backgroundPlaceholderHash(background, scene)}
           callbacks={callbacks}
           seekClock={seekClock}
         />
@@ -227,6 +243,8 @@ export default function ScenePlayer({
   onLoop,
   servesLetterboxFill = true,
   onClock,
+  onPlaybackProgressing,
+  ghostOutsideWindow,
 }: ScenePlayerProps) {
   const scene = document.scenes[sceneIndex];
   const config = playerConfig(mode);
@@ -242,7 +260,17 @@ export default function ScenePlayer({
   const durationSeconds =
     declaredDurationSeconds ?? (config.showsChrome && fallbackDurationSeconds !== undefined ? fallbackDurationSeconds : null);
   const enabled = timed || (config.showsChrome && durationSeconds !== null);
-  const clock = useSceneClock({ enabled, playing, loops: config.loops, durationSeconds, onTime, onEnded, onLoop });
+  const progressing = useLatest(onPlaybackProgressing);
+  const clock = useSceneClock({
+    enabled,
+    playing,
+    loops: config.loops,
+    durationSeconds,
+    onTime,
+    onEnded,
+    onLoop,
+    onStall: (stalled) => progressing.current?.(!stalled),
+  });
   const clockReceiver = useLatest(onClock);
   useEffect(() => {
     clockReceiver.current?.(clock);
@@ -252,6 +280,7 @@ export default function ScenePlayer({
   if (scene === undefined) return null;
 
   const canvas = (
+    <SceneGhostContext.Provider value={ghostOutsideWindow ?? null}>
     <SceneCanvas
       scene={scene}
       carrier={carrier}
@@ -263,6 +292,7 @@ export default function ScenePlayer({
       clock={timed ? clock : null}
       seekClock={clock}
     />
+    </SceneGhostContext.Provider>
   );
 
   return (
@@ -296,9 +326,9 @@ export default function ScenePlayer({
         <span
           data-scene-sound="muted"
           className="pointer-events-none absolute end-2.5 bottom-2.5 grid place-items-center rounded-full"
-          style={{ width: 26, height: 26, backgroundColor: 'rgba(0,0,0,0.45)' }}
+          style={{ width: 26, height: 26, backgroundColor: 'var(--color-scrim)' }}
         >
-          <GlyphSvg glyph={FEED_GLYPHS.speakerSlash} size={14} title={translate(language, 'feed.scene.sound.muted')} style={{ color: 'white' }} />
+          <GlyphSvg glyph={FEED_GLYPHS.speakerSlash} size={14} title={translate(language, 'feed.scene.sound.muted')} style={{ color: 'var(--color-on-media)' }} />
         </span>
       ) : null}
     </span>

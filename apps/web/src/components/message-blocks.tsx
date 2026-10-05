@@ -6,15 +6,17 @@ import { forwardLabelOf, type MessageBadge } from '@/lib/view/message-badges';
 import { languageColor, flag, languageName } from '@/lib/languages';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
-import { META_TEXT_OPACITY, QUOTE_INDENT } from '@/lib/reading-mode/metrics';
+import { META_TEXT_OPACITY } from '@/lib/reading-mode/metrics';
 import { shouldRevealSendingClock } from '@/lib/send/send-clock';
 
 import { quotedPreviewOf, type QuotedMediaKind } from '@/lib/view/quoted-preview';
+import { quotedAudioOf } from '@/lib/view/quoted-audio';
 
 import { Glyph, GlyphSvg, type GlyphShape } from './glyph';
 import { GLYPHS, type GlyphName } from './glyphs';
 import { THREAD_STATES_GLYPHS } from './glyphs-thread-states';
 import { QuoteFrame } from './quote-frame';
+import { QuoteAudioPreview, QuoteOpenZone, QuoteVideoStill } from './quote-media';
 
 /**
  * LES BLOCS DE CONTENU D'UN MESSAGE — extraits de `bubble.tsx` (#5566, étape 0
@@ -203,8 +205,9 @@ export function ReactionChip({
   glyph: string;
   count: number;
   mine?: boolean;
-  /** Retire la réaction en tapant la capsule — fourni par l'hôte SEULEMENT
-   * quand `mine` est vrai (#5865). */
+  /** Bascule la réaction en tapant la capsule — la ligne basse ne le fournit
+   * que sur la MIENNE (#5865, retirer) ; la bande de l'élu Focal le fournit
+   * sur toutes (#8536 : retirer la mienne, poser la mienne sur celle d'autrui). */
   onToggle?: () => void;
 }) {
   const style = {
@@ -226,7 +229,7 @@ export function ReactionChip({
       <button
         type="button"
         onClick={onToggle}
-        aria-label={`Retirer votre réaction ${glyph}`}
+        aria-label={mine ? `Retirer votre réaction ${glyph}` : `Réagir avec ${glyph}`}
         /* `tap-target-chip` (`app.css`) étend la zone TACTILE à 44 px sans
            grandir le DESSIN de la capsule (même dispositif que
            `tap-target-22`/`tap-target-34` plus haut dans ce fichier). */
@@ -563,6 +566,7 @@ const QUOTE_GLYPH: Readonly<Record<QuotedMediaKind, GlyphShape>> = {
   video: THREAD_STATES_GLYPHS.videoCamera,
   audio: GLYPHS.microphone,
   file: GLYPHS.file,
+  contact: GLYPHS.user,
 };
 
 /** `Self.thumbnailSize` (`BubbleQuotedReply.swift`) — la vignette carrée de la citation. */
@@ -570,7 +574,7 @@ const QUOTE_THUMBNAIL_PX = 36;
 
 /**
  * LE FILET DE CITATION — celui de la citation texte (« Vous : … »), SITE
- * UNIQUE : `Quote` et `MoodQuote` le portent dans leur fond, `QuoteIndent` le
+ * UNIQUE : `Quote` et `MoodQuote` le portent dans leur fond, `RowQuote` le
  * pose devant une carte de story qui n'en a pas (#7929). La peau « mine »
  * (blanc) n'existe que pour le fond indigo de la bulle.
  */
@@ -579,38 +583,25 @@ export function QuoteRail({ isMine = false, className = '' }: { readonly isMine?
     <span
       data-quote-rail
       className={`w-1 shrink-0 rounded-full ${className}`}
-      style={{ backgroundColor: isMine ? 'color-mix(in srgb, white 70%, transparent)' : 'var(--accent)' }}
+      style={{ backgroundColor: isMine ? 'color-mix(in srgb, var(--color-ios-on-brand) 70%, transparent)' : 'var(--accent)' }}
       aria-hidden
     />
   );
 }
 
 /**
- * LE RETRAIT DE CITATION DE LA RANGÉE PLATE (#7929, règle porteur du
- * 2026-09-25) — en Script et en Focal, le contenu propre part sous l'avatar et
- * SEULES les citations sont décalées, toutes du même retrait
- * (`QUOTE_INDENT`) et du même filet. `railed` pose ce filet devant une
- * citation qui n'en dessine pas elle-même (la carte de story) ; `Quote` et
- * `MoodQuote` portent déjà le leur. `indented` tombe quand le contenu n'est
- * pas ramené sous l'avatar (mode sélection) : la citation reste alors à
- * l'origine du contenu, dans la colonne du nom. La bulle ne monte pas ce
- * cadre : Bulles garde sa propre mise en page.
+ * LA CITATION DE LA RANGÉE PLATE (#7995, directive porteur du 2026-09-26) —
+ * en Script et en Focal, toute citation part de l'ORIGINE DU CONTENU, la
+ * colonne du nom, comme le texte qu'elle introduit : « la citation est déjà
+ * identifiable avec la barre puis le fond teinté ». Aucun retrait. `railed`
+ * pose le filet devant une citation qui n'en dessine pas elle-même (la carte
+ * de story) ; `Quote` et `MoodQuote` portent déjà le leur. Supplante le
+ * retrait de citation du 2026-09-25 (#7929). La bulle ne monte pas ce cadre :
+ * Bulles garde sa propre mise en page.
  */
-export function QuoteIndent({
-  railed = false,
-  indented = true,
-  children,
-}: {
-  readonly railed?: boolean;
-  readonly indented?: boolean;
-  readonly children: ReactNode;
-}) {
+export function RowQuote({ railed = false, children }: { readonly railed?: boolean; readonly children: ReactNode }) {
   return (
-    <div
-      data-quote-indent
-      className={railed ? 'flex gap-1.5' : undefined}
-      style={indented ? { marginInlineStart: QUOTE_INDENT } : undefined}
-    >
+    <div data-row-quote className={railed ? 'flex gap-1.5' : undefined}>
       {railed ? <QuoteRail className="mb-1.5" /> : null}
       {children}
     </div>
@@ -622,9 +613,20 @@ export function Quote({
   isMine,
   languages,
   onJump,
+  citingId,
+  now,
 }: {
   quote: NonNullable<Message['replyTo']>;
   isMine: boolean;
+  /**
+   * LE MESSAGE QUI PORTE LA CITATION (#8320) — l'identité de la lecture d'un
+   * vocal cité auprès du coordinateur de média : deux réponses qui citent le
+   * même vocal sont deux lecteurs, et l'une doit se mettre en pause quand
+   * l'autre part.
+   */
+  citingId?: string;
+  /** L'HORLOGE de l'hôte (#8320) — un éphémère cité EXPIRÉ n'offre plus la lecture. */
+  now?: Date;
   /**
    * LE PRISME DU LECTEUR (#7556) — celui que la rangée hôte a déjà reçu. Sans
    * lui, `Quote` rendait `quote.content` BRUT : le même message cité
@@ -660,24 +662,44 @@ export function Quote({
      vocabulaire que `composeMessageLabel` (le bouton porte un `aria-label`,
      donc son contenu n'est PAS lu : sans ce segment, « une photo » n'était
      annoncée nulle part). */
-  const label = [`Aller au message de ${quote.sender?.displayName ?? 'l’expéditeur'}`, ...preview.inventory].join(', ');
+  const label = [
+    translate(currentInterfaceLanguage(), 'quote.jumpTo', { name: quote.sender?.displayName ?? 'l’expéditeur' }),
+    ...preview.inventory,
+  ].join(', ');
+
+  /* LES ZONES MÉDIA (#8233) — l'aperçu d'une image, d'une vidéo ou d'un vocal
+     OUVRE la pièce ; le reste de la citation saute au message. Deux boutons
+     VOISINS, jamais imbriqués. Une pièce protégée n'a pas de zone : ni
+     `openable`, ni `fileSrc` ne sortent du site unique pour elle. */
+  const still = media !== null && media.kind === 'video' && media.thumbnailSrc === null ? media.fileSrc : null;
+  const hasThumb = media !== null && media.frame === null && (media.thumbnailSrc !== null || still !== null);
+  /* LA ZONE LECTURE D'UN VOCAL (#8320) — sa PISTE suit le Prisme audio du
+     vocal d'origine (`quotedAudioOf` → `electAudio`), et un éphémère expiré
+     n'en a plus : le site unique rend `null` pour tout ce qui ne se joue pas. */
+  const played = media !== null && media.kind === 'audio' ? quotedAudioOf({ quoted: quote, readerLanguages: languages, now: now ?? new Date() }) : null;
+  const audio =
+    media !== null && media.kind === 'audio' && media.openable !== null && played !== null
+      ? { media: { ...media, openable: media.openable }, track: played }
+      : null;
+  const lowerZone = (media !== null && media.frame !== null) || audio !== null;
 
   return (
-    <button
-      type="button"
-      onClick={onJump}
-      className="mb-1.5 flex w-full rounded-quote text-left"
+    <div
+      data-quote-card
+      className="mb-1.5 flex w-full rounded-quote text-start"
       style={{ backgroundColor: isMine ? 'var(--color-quote-mine)' : 'var(--color-quote)' }}
-      {...(media === null ? {} : { 'data-quote-media': media.kind })}
-      aria-label={label}
     >
       <QuoteRail isMine={isMine} />
       {/* LA VIGNETTE (#7556) — `quotedThumbnail` (`BubbleQuotedReply.swift:
           382-411`). Le flou ThumbHash tient la case AVANT la requête réseau ;
-          `alt=""` + `aria-hidden` parce que le bouton porte déjà son nom. */}
-      {media !== null && media.frame === null && media.thumbnailSrc !== null ? (
-        <span
-          className="relative my-1.5 ml-1.5 shrink-0 overflow-hidden rounded-media"
+          `alt=""` parce que la zone porte déjà son nom. Une vidéo sans
+          vignette serveur y montre sa première image (#8233). */}
+      {media !== null && hasThumb ? (
+        <QuoteOpenZone
+          media={media}
+          quote={quote}
+          languages={languages}
+          className="relative my-1.5 ms-1.5 shrink-0 overflow-hidden rounded-media"
           style={{
             width: QUOTE_THUMBNAIL_PX,
             height: QUOTE_THUMBNAIL_PX,
@@ -685,64 +707,84 @@ export function Quote({
               ? {}
               : { backgroundImage: `url("${media.placeholderSrc}")`, backgroundSize: 'cover' }),
           }}
-          aria-hidden
         >
-          <img
-            data-quote-thumb={media.kind}
-            src={media.thumbnailSrc}
-            alt=""
-            loading="lazy"
-            decoding="async"
-            className="size-full object-cover"
-          />
-          {media.timebased ? <Glyph name="fillPlay" size={12} className="absolute inset-0 m-auto text-white" /> : null}
-        </span>
+          {media.thumbnailSrc !== null ? (
+            <img
+              data-quote-thumb={media.kind}
+              src={media.thumbnailSrc}
+              alt=""
+              loading="lazy"
+              decoding="async"
+              className="size-full object-cover"
+            />
+          ) : still !== null ? (
+            <QuoteVideoStill src={still} />
+          ) : null}
+          {media.timebased ? <Glyph name="fillPlay" size={12} className="absolute inset-0 m-auto text-on-media" /> : null}
+        </QuoteOpenZone>
       ) : null}
-      {/* Le nom et le texte cite COULENT DANS LE MEME PARAGRAPHE (directive
-          iOS #5103) : deux lignes separees feraient de la citation un bloc
-          aussi haut que le message, et c'est le message qu'on vient lire. */}
-      <span className="min-w-0 py-2 pr-2.5 pl-2 text-title">
-        <span className="font-semibold" style={{ color: isMine ? 'white' : 'var(--accent)' }}>
-          {quote.sender?.displayName ?? ''}{' '}
-        </span>
-        {media !== null && media.frame === null && media.thumbnailSrc === null && !preview.isProtected ? (
-          <GlyphSvg
-            glyph={QUOTE_GLYPH[media.kind]}
-            size={11}
-            className="mr-1 inline-block align-baseline"
-            style={{ color: ink }}
-          />
-        ) : null}
-        <span
-          className="line-clamp-2"
-          style={{ color: ink }}
-          {...(preview.language === '' ? {} : { lang: preview.language })}
+      <span className="flex min-w-0 flex-1 flex-col items-start pe-2.5 ps-2">
+        {/* Le nom et le texte cite COULENT DANS LE MEME PARAGRAPHE (directive
+            iOS #5103) : deux lignes separees feraient de la citation un bloc
+            aussi haut que le message, et c'est le message qu'on vient lire. */}
+        <button
+          type="button"
+          onClick={onJump}
+          data-quote-jump
+          className={`w-full min-w-0 pt-2 text-start text-title ${lowerZone ? '' : 'pb-2'}`}
+          {...(media === null ? {} : { 'data-quote-media': media.kind })}
+          aria-label={label}
         >
-          {preview.text}
-        </span>
-        {/* LA DURÉE, quand elle existe — `detailsLabel` (`QuotedReplyPresentation
-            .swift:107-151`) : « un ZÉRO n'est pas un fait », donc rien plutôt
-            qu'un « 0:00 » qu'on croirait. */}
-        {media !== null && media.durationLabel !== null ? (
+          <span className="font-semibold" style={{ color: isMine ? 'var(--color-ios-on-brand)' : 'var(--accent)' }}>
+            {quote.sender?.displayName ?? ''}{' '}
+          </span>
+          {media !== null && media.frame === null && !hasThumb && !preview.isProtected ? (
+            <GlyphSvg
+              glyph={QUOTE_GLYPH[media.kind]}
+              size={11}
+              className="me-1 inline-block align-baseline"
+              style={{ color: ink }}
+            />
+          ) : null}
           <span
-            data-quote-duration={media.durationLabel}
-            className="block text-check tabular-nums"
-            style={{ color: ink, opacity: META_TEXT_OPACITY }}
+            className="line-clamp-2"
+            style={{ color: ink }}
+            {...(preview.language === '' ? {} : { lang: preview.language })}
           >
-            {media.durationLabel}
+            {preview.text}
+          </span>
+          {/* LA DURÉE, quand elle existe — `detailsLabel` (`QuotedReplyPresentation
+              .swift:107-151`) : « un ZÉRO n'est pas un fait », donc rien plutôt
+              qu'un « 0:00 » qu'on croirait. La capsule d'un vocal porte la sienne. */}
+          {media !== null && media.durationLabel !== null && audio === null ? (
+            <span
+              data-quote-duration={media.durationLabel}
+              className="block text-check tabular-nums"
+              style={{ color: ink, opacity: META_TEXT_OPACITY }}
+            >
+              {media.durationLabel}
+            </span>
+          ) : null}
+        </button>
+        {media !== null && media.frame !== null ? (
+          <QuoteOpenZone media={media} quote={quote} languages={languages} className="mt-1.5 mb-2 block">
+            <QuoteFrame
+              frame={media.frame}
+              thumbnailSrc={media.thumbnailSrc}
+              stillSrc={still}
+              placeholderSrc={media.placeholderSrc}
+              kind={media.kind}
+              timebased={media.timebased}
+            />
+          </QuoteOpenZone>
+        ) : null}
+        {audio !== null ? (
+          <span className="mb-2 block">
+            <QuoteAudioPreview media={audio.media} track={audio.track} citingId={citingId ?? ''} isMine={isMine} />
           </span>
         ) : null}
-        {media !== null && media.frame !== null ? (
-          <QuoteFrame
-            frame={media.frame}
-            thumbnailSrc={media.thumbnailSrc}
-            placeholderSrc={media.placeholderSrc}
-            kind={media.kind}
-            timebased={media.timebased}
-          />
-        ) : null}
       </span>
-    </button>
+    </div>
   );
 }
 
@@ -787,7 +829,7 @@ export function FailedSendBand({
     reason === undefined
       ? translate(language, 'message.send.failed')
       : translate(language, 'message.send.failed.reason', { reason });
-  const className = 'mb-1.5 flex w-full items-center gap-1.5 rounded-quote px-2 text-left text-mini font-semibold';
+  const className = 'mb-1.5 flex w-full items-center gap-1.5 rounded-quote px-2 text-start text-mini font-semibold';
   const style = {
     backgroundColor: 'color-mix(in srgb, var(--color-error) 18%, transparent)',
     color: textColor,

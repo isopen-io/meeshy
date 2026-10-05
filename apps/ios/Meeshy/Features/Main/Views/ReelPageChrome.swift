@@ -38,15 +38,15 @@ struct ReelMetaRow: View {
     }
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: MeeshySpacing.sm) {
             Text(timestamp)
-                .font(.caption2)
-                .foregroundColor(.white.opacity(0.65))
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
+                .foregroundColor(MeeshyColors.mediaChromeTertiary)
 
             if !codes.isEmpty {
                 // Translation flags only (the translate toggle is disabled for now):
                 // tap a flag to read that language; the active one is underlined.
-                HStack(spacing: 6) {
+                HStack(spacing: MeeshySpacing.xsPlus) {
                     ForEach(codes, id: \.self) { code in
                         // Registre `.overlay` : la rangée flotte au-dessus de la
                         // vidéo, dont le tap pilote la lecture. Des cibles de
@@ -109,9 +109,9 @@ struct ReelScrubBar: View {
             let filledWidth = geo.size.width * CGFloat(progress)
 
             ZStack(alignment: .leading) {
-                Capsule().fill(Color.white.opacity(0.3)).frame(height: trackHeight)
+                Capsule().fill(Color.white.opacity(MeeshyOpacity.medium)).frame(height: trackHeight)
                 Capsule().fill(accent).frame(width: max(0, filledWidth), height: trackHeight)
-                Circle().fill(Color.white).frame(width: thumbSize, height: thumbSize)
+                Circle().fill(MeeshyColors.mediaChromeForeground).frame(width: thumbSize, height: thumbSize)
                     .shadow(color: .black.opacity(0.3), radius: 2, y: 1)
                     .scaleEffect(isSeeking ? 1.25 : 1.0)
                     .offset(x: max(0, min(filledWidth - thumbSize / 2, geo.size.width - thumbSize)))

@@ -24,12 +24,13 @@ final class StoryLetterboxFillLayerTests: XCTestCase {
 
     private let scene = CGSize(width: 405, height: 720)   // 9:16
 
-    private func makeLayer(fitMode: String?, hashes: [String] = []) -> StoryBackgroundLayer {
+    private func makeLayer(fitMode: String?, hashes: [String] = [],
+                           backdrop: String? = nil) -> StoryBackgroundLayer {
         let layer = StoryBackgroundLayer()
         layer.frame = CGRect(origin: .zero, size: scene)
         layer.configure(
             kind: .solidColor(.black),
-            transform: BackgroundTransform(videoFitMode: fitMode),
+            transform: BackgroundTransform(videoFitMode: fitMode, backdrop: backdrop),
             geometry: CanvasGeometry(renderSize: scene),
             resolver: nil,
             imageCache: nil,
@@ -144,5 +145,35 @@ final class StoryLetterboxFillLayerTests: XCTestCase {
         }
         let reduit = try XCTUnwrap(StoryBackgroundLayer.downsampledForFill(petite))
         XCTAssertEqual(reduit.size, CGSize(width: 8, height: 6))
+    }
+
+    // MARK: - Le fond choisi au panneau Cadre (#8414)
+
+    /// **Un fond UNI peint les bandes de sa teinte**, sans attendre aucune
+    /// matière : il ne dépend ni d'un hachage ni d'un bitmap.
+    func test_unFondUni_peintLesBandesDeSaTeinte_sansSource() throws {
+        let layer = makeLayer(fitMode: "fit", hashes: [], backdrop: "sand")
+        let fill = try XCTUnwrap(layer.letterboxFillLayer, "un fond uni se peint sans matière")
+        XCTAssertNil(fill.contents, "une teinte, pas des pixels")
+        var (r, g, b, a) = (CGFloat(0), CGFloat(0), CGFloat(0), CGFloat(0))
+        UIColor(cgColor: try XCTUnwrap(fill.backgroundColor)).getRed(&r, green: &g, blue: &b, alpha: &a)
+        XCTAssertEqual(r, 0xFD / 255, accuracy: 0.01)
+        XCTAssertEqual(g, 0xE6 / 255, accuracy: 0.01)
+        XCTAssertEqual(b, 0x8A / 255, accuracy: 0.01)
+        XCTAssertEqual(fill.opacity, 1, "le fond choisi est plein")
+        XCTAssertEqual(fill.frame, CGRect(origin: .zero, size: scene))
+    }
+
+    /// Le FLOU reste la loi d'avant : le hachage ou le bitmap étirés.
+    func test_leFlou_resteLeMediaEtire() throws {
+        let layer = makeLayer(fitMode: "fit", backdrop: "blur")
+        layer.noteStampedBackground(paysage())
+        let fill = try XCTUnwrap(layer.letterboxFillLayer)
+        XCTAssertNotNil(fill.contents)
+    }
+
+    /// En REMPLI, aucun fond n'a de bande où se voir.
+    func test_enModeREMPLI_leFondChoisiNePosePasDeLayer() {
+        XCTAssertNil(makeLayer(fitMode: "fill", backdrop: "black").letterboxFillLayer)
     }
 }

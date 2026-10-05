@@ -30,13 +30,13 @@ struct InviteInviterHeader: View {
         VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             HStack(spacing: MeeshySpacing.md) {
                 avatar
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     Text(InviteLandingCopy.invites(firstName))
                         .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .heavy, design: .rounded))
                         .foregroundColor(isDark ? MeeshyColors.indigo50 : MeeshyColors.indigo950)
                         .fixedSize(horizontal: false, vertical: true)
                     Text(verbatim: "@\(creator.username)")
-                        .font(MeeshyFont.relative(14))
+                        .font(MeeshyFont.relative(MeeshyFont.labelSize))
                         .foregroundColor(isDark ? MeeshyColors.indigo200 : MeeshyColors.neutral500)
                         .lineLimit(1)
                 }
@@ -46,12 +46,12 @@ struct InviteInviterHeader: View {
 
             if let text = trimmedMessage {
                 Text(text)
-                    .font(MeeshyFont.relative(16))
+                    .font(MeeshyFont.relative(MeeshyFont.calloutSize))
                     .foregroundColor(isDark ? MeeshyColors.indigo50 : MeeshyColors.indigo950)
                     .lineSpacing(3)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, MeeshySpacing.lg)
-                    .padding(.vertical, 14)
+                    .padding(.vertical, MeeshySpacing.mdPlus)
                     .background(
                         bubble
                             .fill(isDark ? MeeshyColors.indigo900.opacity(0.55) : Color.white)
@@ -73,9 +73,9 @@ struct InviteInviterHeader: View {
             enablePulse: false,
             isDark: isDark
         )
-        .padding(3)
+        .padding(MeeshySpacing.xxs)
         .background(Circle().fill(isDark ? MeeshyColors.indigo950 : Color.white))
-        .padding(3)
+        .padding(MeeshySpacing.xxs)
         .background(Circle().fill(MeeshyColors.brandGradient))
         .accessibilityHidden(true)
     }

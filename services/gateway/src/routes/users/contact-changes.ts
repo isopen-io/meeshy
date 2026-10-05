@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { scheduleContactJoinedAnnouncement } from '../../services/notifications/contact-joined';
 import { z } from 'zod';
 import { verifyPassword } from '../../utils/password-hash';
 import { logError } from '../../utils/logger';
@@ -24,6 +25,7 @@ import {
   verifierPlafondValeurCible,
 } from './contact-change';
 import { revokePasswordResetTokensForEmailChange } from '../../utils/password-reset-revocation';
+import { creditContactProof } from '../../services/auth/contact-proof-engagement';
 
 /**
  * `POST /users/me/contact-changes` et ses deux gestes satellites (#4341).
@@ -362,6 +364,9 @@ export async function verifyContactChange(fastify: FastifyInstance) {
           return u;
         });
         logger.info(`[CONTACT_CHANGE] Email changed successfully for user ${userId}`);
+        // « X a rejoint Meeshy » (#8105) : un identifiant NEUVEMENT vérifié.
+        scheduleContactJoinedAnnouncement(fastify.prisma, userId);
+        creditContactProof({ prisma: fastify.prisma }, userId, 'profile.email_verified');
       } else {
         if (!user.pendingPhoneNumber || !user.pendingPhoneVerificationCode) {
           return sendBadRequest(reply, 'No pending phone change');
@@ -400,6 +405,9 @@ export async function verifyContactChange(fastify: FastifyInstance) {
         });
         await oublierEssais(userId);
         logger.info(`[CONTACT_CHANGE] Phone changed successfully for user ${userId}`);
+        // « X a rejoint Meeshy » (#8105) : un identifiant NEUVEMENT vérifié.
+        scheduleContactJoinedAnnouncement(fastify.prisma, userId);
+        creditContactProof({ prisma: fastify.prisma }, userId, 'profile.phone_verified');
       }
 
       // La MATRICE, jamais une copie (#4152) — même garde que `profile.ts`.

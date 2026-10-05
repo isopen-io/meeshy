@@ -86,6 +86,15 @@ public enum MeeshyNotificationType: String, Codable, CaseIterable, Sendable {
     case contactAccepted = "contact_accepted"
     case friendRequest = "friend_request"
     case friendAccepted = "friend_accepted"
+    /// Un contact du carnet vient d'arriver sur Meeshy (#8105). L'acteur est
+    /// l'arrivant, nommé comme le destinataire l'a enregistré ; plusieurs
+    /// arrivées rapprochées se regroupent en une seule notification
+    /// (`metadata.joinerIds`). Suit la préférence « contacts ».
+    case contactJoined = "contact_joined"
+    /// Un ami, ou un contact du carnet, redevient actif sur Meeshy (#8285) —
+    /// au plus une fois toutes les 3 h par acteur, décidé par la passerelle.
+    /// L'acteur est celui qui revient ; le toucher ouvre son profil.
+    case contactRecentlyActive = "contact_recently_active"
 
     // Interaction events
     case userMentioned = "user_mentioned"
@@ -199,6 +208,8 @@ public enum MeeshyNotificationType: String, Codable, CaseIterable, Sendable {
         case .userMentioned, .mention, .legacyMention: return "at"
         case .friendRequest, .contactRequest, .legacyFriendRequest: return "person.badge.plus"
         case .friendAccepted, .contactAccepted, .legacyFriendAccepted: return "person.2.fill"
+        case .contactJoined: return "person.crop.circle.badge.plus"
+        case .contactRecentlyActive: return "person.crop.circle.badge.clock"
         case .communityInvite, .legacyGroupInvite: return "person.3.fill"
         case .communityJoined, .memberJoined, .legacyGroupJoined: return "person.badge.checkmark"
         case .communityLeft, .memberLeft, .legacyGroupLeft: return "person.badge.minus"
@@ -245,7 +256,8 @@ public enum MeeshyNotificationType: String, Codable, CaseIterable, Sendable {
             return "FF6B6B"
         case .userMentioned, .mention, .legacyMention:
             return "9B59B6"
-        case .friendRequest, .contactRequest, .legacyFriendRequest, .friendAccepted, .contactAccepted, .legacyFriendAccepted, .legacyStatusUpdate:
+        case .friendRequest, .contactRequest, .legacyFriendRequest, .friendAccepted, .contactAccepted, .legacyFriendAccepted, .legacyStatusUpdate,
+             .contactJoined, .contactRecentlyActive:
             return "4ECDC4"
         case .communityInvite, .communityJoined, .communityLeft, .memberJoined, .memberLeft, .memberRemoved, .memberPromoted, .memberDemoted, .memberRoleChanged, .legacyGroupInvite, .legacyGroupJoined, .legacyGroupLeft:
             return "F8B500"
@@ -598,14 +610,26 @@ public struct APINotification: Codable, Identifiable, Sendable, Equatable, Cache
         case .messageReply, .reply, .legacyStoryReply:
             return "Reponse de \(actorName)"
         case .messageReaction, .reaction, .legacyMessageReaction:
-            let emoji = metadata?.reactionEmoji ?? metadata?.emoji ?? content ?? "heart.fill"
-            return "\(actorName) a reagi \(emoji) a votre message"
+            // L'acteur seul (#9049) : la phrase « a réagi ❤️ à votre message :
+            // « … » » est le CORPS servi — la répéter ici la ferait lire deux fois.
+            return actorName
         case .userMentioned, .mention, .legacyMention:
             return "\(actorName) vous a mentionne"
         case .friendRequest, .contactRequest, .legacyFriendRequest:
             return "\(actorName) veut se connecter"
         case .friendAccepted, .contactAccepted, .legacyFriendAccepted:
             return "\(actorName) a accepte votre invitation"
+        case .contactJoined:
+            return "\(actorName) a rejoint Meeshy"
+        case .contactRecentlyActive:
+            return String(
+                format: String(
+                    localized: "notification.contactRecentlyActive.fallbackTitle",
+                    defaultValue: "%@ était sur Meeshy récemment",
+                    bundle: .main
+                ),
+                actorName
+            )
         case .newConversationDirect:
             // Direct DM: the conversation has no real title — surface the
             // sender name so the user immediately knows who started it.
@@ -727,8 +751,9 @@ public struct APINotification: Codable, Identifiable, Sendable, Equatable, Cache
     public var formattedBody: String? {
         switch notificationType {
         case .messageReaction, .reaction, .legacyMessageReaction:
-            // What message was reacted to.
-            return metadata?.messagePreview
+            // La phrase SERVIE (#9049) — « a réagi ❤️ à votre message : « … » » —
+            // à défaut l'extrait du message.
+            return Self.firstNonEmpty(content, metadata?.messagePreview)
         case .newMessage, .legacyNewMessage, .messageReply, .userMentioned, .mention, .legacyMention, .reply, .legacyStoryReply:
             // `content` already embeds attachment details (durée audio, taille,
             // dimensions) built server-side; fall back to the raw preview.

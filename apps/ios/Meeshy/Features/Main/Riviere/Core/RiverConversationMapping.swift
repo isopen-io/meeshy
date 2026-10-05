@@ -236,8 +236,14 @@ nonisolated enum RiverConversationMapping {
                 timeString: resolvedTime,
                 text: displayedText(of: message, text: text),
                 layout: geometry.layout,
+                // #8283 — la face du média cité est élue par la règle PARTAGÉE
+                // des autres modes, qui refuse d'abord tout média protégé.
                 replyPreview: message.sealedForDisplay.replyTo.map(QuotedReplyPresentation.displayed).map {
-                    RiverReplyPreview(authorDisplayName: singleLine($0.authorName), text: singleLine($0.previewText))
+                    RiverReplyPreview(
+                        authorDisplayName: singleLine($0.authorName),
+                        text: singleLine($0.previewText),
+                        media: RiverQuotedMedia.resolve($0)
+                    )
                 },
                 systemNotice: systemNotice(for: message, viewerId: viewerId, timeString: resolvedTime, text: text),
                 groupPosition: positions[bubble.messageId] ?? .solo,
@@ -281,6 +287,10 @@ nonisolated enum RiverConversationMapping {
                 isBurning: message.isBurning,
                 viewOnceChip: message.isViewOnceSealed ? .sealed : (message.isViewOnceOpened ? .opened : nil),
                 isViewOnceRevealed: message.isViewOnceRevealed && message.holdsViewOnce && !message.isViewOnceOpened,
+                protectedTap: protectedTap(of: message),
+                tapAfterReveal: tapAfterReveal(of: message),
+                linkEmbed: linkEmbed(of: message, text: text),
+                contactCards: RiverContactCards(items: contactCards(of: message)),
                 identity: bubble.isSystem ? nil : RiverBubbleIdentity(
                     avatarURL: message.senderAvatarURL,
                     presence: presence(message),
@@ -444,6 +454,35 @@ nonisolated enum RiverConversationMapping {
     /// Le texte que la rivière a le DROIT de rendre (#7618) : rien pour une vue
     /// unique scellée. La clé de mémo lit la même valeur, pour que l'ouverture
     /// d'une vue unique recompose la bulle.
+    /// Le lien du texte SERVI, jamais d'un texte voilé : une carte posée à côté
+    /// d'un message flouté ou à vue unique dirait ce que le voile cache.
+    @MainActor static func linkEmbed(of message: MeeshyMessage, text: (MeeshyMessage) -> String) -> BubbleContent.Text? {
+        guard !message.protection().requiresVeil else { return nil }
+        let displayed = displayedText(of: message, text: text)
+        guard !displayed.isEmpty else { return nil }
+        let resolved = BubbleContent.text(raw: displayed, trackedLinks: message.trackedLinkMap)
+        return resolved.firstLinkURL == nil ? nil : resolved
+    }
+
+    /// #8389 — le toucher du voile le lève SUR PLACE, flou comme vue unique
+    /// texte ; un message sans voile n'a rien à lever.
+    @MainActor static func protectedTap(of message: MeeshyMessage) -> ProtectedContentTap {
+        message.protection().requiresVeil ? .revealInPlace : .none
+    }
+
+    /// #8310 / #8389 — le toucher SUIVANT la révélation d'un message flouté
+    /// ouvre sa première image, par la règle UNIQUE
+    /// (`ProtectedContentTap.afterReveal`). La vue unique garde sa puce.
+    @MainActor static func tapAfterReveal(of message: MeeshyMessage) -> ProtectedContentTap {
+        guard message.effects.flags.contains(.blurred), !message.holdsViewOnce else { return .none }
+        return .afterReveal(media: message.attachments)
+    }
+
+    @MainActor static func contactCards(of message: MeeshyMessage) -> [MessageAttachment] {
+        guard !message.protection().requiresVeil, !message.holdsViewOnce else { return [] }
+        return message.attachments.filter(\.isContactCard)
+    }
+
     static func displayedText(of message: MeeshyMessage, text: (MeeshyMessage) -> String) -> String {
         message.isViewOnceSealed || message.isViewOnceOpened ? "" : text(message)
     }

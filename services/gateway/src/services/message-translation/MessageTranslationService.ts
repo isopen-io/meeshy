@@ -33,15 +33,10 @@ import { attachmentAudioRichView, type AttachmentAudioRichView } from '../audio/
 import { LIVE_MESSAGE_MARK } from '../messaging/liveMessage';
 import { diffTranslationTargets } from '../../utils/translation-targets';
 import { applyPreset, mergeVoiceCloneParams, type ChatterboxTTSParams, type VoiceCloneParameters } from '../../types/translation.types';
+import { isEmojiOnly } from '../../utils/emoji-only';
 
 const logger = enhancedLogger.child({ module: 'MessageTranslationService' });
 
-// Emoji-only detection: matches strings containing only emoji (+ optional whitespace)
-const EMOJI_REGEX = /^[\p{Emoji_Presentation}\p{Extended_Pictographic}\u{FE0F}\u{200D}\u{20E3}\u{E0020}-\u{E007F}\s]+$/u;
-function isEmojiOnly(text: string): boolean {
-  const trimmed = text.trim();
-  return trimmed.length > 0 && trimmed.length <= 40 && EMOJI_REGEX.test(trimmed);
-}
 
 export interface MessageData {
   id?: string;

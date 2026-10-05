@@ -39,6 +39,10 @@ public nonisolated struct StickerUsageEntry: Codable, Hashable, Identifiable, Se
         /// ignorée à l'affichage, exactement comme un gabarit retiré d'une
         /// version à l'autre — la même règle, deux magasins.
         case library
+        /// **Un Mee ou un Meo** (#9067) — `value` est son `MeeSticker.id`.
+        /// Une quatrième nature, et pas un `template` : son dessin est un FILM
+        /// du catalogue Mee, que la feuille relit par `MeeStickerCatalog`.
+        case mee
     }
 
     public let kind: Kind
@@ -64,6 +68,10 @@ public nonisolated struct StickerUsageEntry: Codable, Hashable, Identifiable, Se
 
     public static func library(_ item: StoryStickerLibraryItem) -> StickerUsageEntry {
         StickerUsageEntry(kind: .library, value: item.id)
+    }
+
+    public static func mee(_ sticker: MeeSticker) -> StickerUsageEntry {
+        StickerUsageEntry(kind: .mee, value: sticker.id)
     }
 }
 

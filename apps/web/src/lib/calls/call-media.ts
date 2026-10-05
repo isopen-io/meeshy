@@ -1,0 +1,131 @@
+import { captureShape, type DataProfile } from './call-data-profile';
+
+/**
+ * **LE MICRO ET LA CAMÉRA** (#6382) — contraintes reprises de l'ancien web
+ * (`call-media-constraints.ts`, tag `legacy-web-final`) : écho, bruit et gain
+ * traités par le navigateur, caméra avant par défaut comme iOS (§ 7.7 :
+ * caméra avant sur iPhone). La forme de la capture suit le profil de données
+ * (#8697, `captureShape`) : 720p et 30 i/s au plus en Wi-Fi, 640×480 à 24 i/s
+ * sans profil connu, moins encore en économie.
+ */
+
+export type Facing = 'user' | 'environment';
+
+export type MediaDevicesLike = Pick<MediaDevices, 'getUserMedia'>;
+
+export type DisplayDevicesLike = { readonly getDisplayMedia?: MediaDevices['getDisplayMedia'] };
+
+export const AUDIO_CONSTRAINTS: MediaTrackConstraints = {
+  echoCancellation: true,
+  noiseSuppression: true,
+  autoGainControl: true,
+};
+
+export function videoConstraints(facing: Facing, profile: DataProfile = 'cellular'): MediaTrackConstraints {
+  return { ...captureShape(profile), facingMode: facing };
+}
+
+export function audioInputConstraints(microphoneId: string | null): MediaTrackConstraints {
+  return microphoneId === null ? AUDIO_CONSTRAINTS : { ...AUDIO_CONSTRAINTS, deviceId: { ideal: microphoneId } };
+}
+
+/**
+ * La caméra choisie (#8046) tient lieu de caméra « de face » ; le bouton de bascule
+ * (`switchCamera`) cherche l'AUTRE face, sans identifiant. Garder les deux
+ * dans une même contrainte laisserait le navigateur arbitrer entre elles.
+ */
+export function videoInputConstraints(facing: Facing, cameraId: string | null, profile?: DataProfile): MediaTrackConstraints {
+  if (cameraId === null || facing !== 'user') return videoConstraints(facing, profile);
+  const { facingMode: _facing, ...rest } = videoConstraints(facing, profile);
+  return { ...rest, deviceId: { ideal: cameraId } };
+}
+
+/**
+ * L'orientation de la caméra réellement ouverte (#9094) : ce que la piste
+ * dit d'elle-même (`getSettings().facingMode`), sinon `fallback` — une
+ * webcam qui n'en dit rien est la caméra de l'utilisateur.
+ */
+export function facingOf(track: MediaStreamTrack, fallback: Facing): Facing {
+  const reported = typeof track.getSettings === 'function' ? track.getSettings().facingMode : undefined;
+  return reported === 'user' || reported === 'environment' ? reported : fallback;
+}
+
+export type MediaFailure = 'permission' | 'unavailable';
+
+export function mediaFailureOf(error: unknown): MediaFailure {
+  const name = error instanceof Error || (typeof error === 'object' && error !== null && 'name' in error) ? String((error as { name: unknown }).name) : '';
+  return name === 'NotAllowedError' || name === 'SecurityError' || name === 'PermissionDeniedError' ? 'permission' : 'unavailable';
+}
+
+function devices(): MediaDevicesLike | null {
+  return typeof navigator === 'undefined' || navigator.mediaDevices === undefined ? null : navigator.mediaDevices;
+}
+
+/**
+ * Le micro est EXIGÉ ; la caméra, si elle est refusée, rend un appel audio
+ * (iOS répond en audio quand la caméra est refusée — `IncomingCallView`).
+ */
+export type InputChoice = { readonly microphoneId?: string | null; readonly cameraId?: string | null; readonly profile?: DataProfile };
+
+export async function acquireCallMedia(options: { readonly video: boolean; readonly facing: Facing; readonly mediaDevices?: MediaDevicesLike | null } & InputChoice): Promise<MediaStream> {
+  const source = options.mediaDevices === undefined ? devices() : options.mediaDevices;
+  if (source === null) throw Object.assign(new Error('media-devices-missing'), { name: 'NotFoundError' });
+  const audio = audioInputConstraints(options.microphoneId ?? null);
+  if (!options.video) return source.getUserMedia({ audio, video: false });
+  try {
+    return await source.getUserMedia({ audio, video: videoInputConstraints(options.facing, options.cameraId ?? null, options.profile) });
+  } catch {
+    return source.getUserMedia({ audio, video: false });
+  }
+}
+
+type CameraRequest = { readonly facing: Facing; readonly mediaDevices?: MediaDevicesLike | null; readonly cameraId?: string | null; readonly video?: MediaTrackConstraints; readonly profile?: DataProfile };
+
+/** `video` : des contraintes déjà choisies (la caméra arrière qui zoome le plus loin, `rear-camera.ts`). */
+export async function acquireCamera(options: CameraRequest): Promise<MediaStreamTrack> {
+  const source = options.mediaDevices === undefined ? devices() : options.mediaDevices;
+  if (source === null) throw Object.assign(new Error('media-devices-missing'), { name: 'NotFoundError' });
+  const stream = await source.getUserMedia({ audio: false, video: options.video ?? videoInputConstraints(options.facing, options.cameraId ?? null, options.profile) });
+  const track = stream.getVideoTracks()[0];
+  if (track === undefined) throw Object.assign(new Error('no-camera'), { name: 'NotFoundError' });
+  return track;
+}
+
+export function stopStream(stream: MediaStream | null): void {
+  for (const track of stream?.getTracks() ?? []) track.stop();
+}
+
+/**
+ * Un appareil choisi au sélecteur (#8046), EXIGÉ (`exact`) : c'est un geste
+ * explicite, pas une préférence de démarrage — un appareil occupé doit
+ * échouer ici, pas ouvrir silencieusement son voisin. `null` rouvre le défaut
+ * du système.
+ */
+export async function acquireChosenInput(options: { readonly kind: 'camera' | 'microphone'; readonly deviceId: string | null; readonly mediaDevices?: MediaDevicesLike | null }): Promise<MediaStreamTrack> {
+  const source = options.mediaDevices === undefined ? devices() : options.mediaDevices;
+  if (source === null) throw Object.assign(new Error('media-devices-missing'), { name: 'NotFoundError' });
+  const exact = options.deviceId === null ? {} : { deviceId: { exact: options.deviceId } };
+  const stream =
+    options.kind === 'microphone'
+      ? await source.getUserMedia({ audio: { ...AUDIO_CONSTRAINTS, ...exact }, video: false })
+      : await source.getUserMedia({ audio: false, video: { ...videoInputConstraints('user', options.deviceId), ...exact } });
+  const track = (options.kind === 'microphone' ? stream.getAudioTracks() : stream.getVideoTracks())[0];
+  if (track === undefined) throw Object.assign(new Error('no-device'), { name: 'NotFoundError' });
+  return track;
+}
+
+/**
+ * L'écran, la fenêtre ou l'onglet que l'utilisateur choisit (#8063) — le
+ * sélecteur est celui du navigateur. Vidéo seule : le son de l'appel reste
+ * celui du micro. `contentHint: 'detail'` dit à l'encodeur de garder le texte
+ * net plutôt que la fluidité, comme ReplayKit côté iOS.
+ */
+export async function acquireDisplay(options: { readonly mediaDevices?: DisplayDevicesLike | null } = {}): Promise<MediaStreamTrack> {
+  const source = options.mediaDevices === undefined ? (devices() as DisplayDevicesLike | null) : options.mediaDevices;
+  if (source === null || typeof source.getDisplayMedia !== 'function') throw Object.assign(new Error('display-media-missing'), { name: 'NotSupportedError' });
+  const stream = await source.getDisplayMedia({ video: { frameRate: { ideal: 15, max: 30 } }, audio: false });
+  const track = stream.getVideoTracks()[0];
+  if (track === undefined) throw Object.assign(new Error('no-display'), { name: 'NotFoundError' });
+  track.contentHint = 'detail';
+  return track;
+}

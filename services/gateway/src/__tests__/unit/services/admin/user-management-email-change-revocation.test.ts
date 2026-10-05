@@ -1,5 +1,5 @@
 /**
- * UserManagementService.updateEmail — révocation des liens de réinitialisation (#6661)
+ * UserManagementService.updateUser — révocation des liens de réinitialisation (#6661, #8215)
  * @jest-environment node
  *
  * Un `PasswordResetToken` encore valide émis vers l'ANCIENNE adresse ne doit
@@ -7,44 +7,51 @@
  * administrateur — même règle que les deux chemins self-service
  * (`routes/users/contact-change.ts`, `contact-changes.ts`), dans la MÊME
  * écriture que le changement d'adresse.
+ *
+ * La règle vivait sur `updateEmail`, qu'aucune route n'appelait : la seule
+ * porte admin qui change réellement une adresse est le PATCH de la fiche
+ * (`updateUser`). #8215 a retiré la méthode morte et porté la révocation là
+ * où l'adresse change.
  */
 
 import { describe, it, expect } from '@jest/globals';
 
-jest.mock('../../../../utils/password-hash', () => ({
-  ...(jest.requireActual('../../../../utils/password-hash') as Record<string, unknown>),
-  hashPassword: jest.fn().mockResolvedValue('hashed_password'),
-  verifyPassword: jest.fn().mockResolvedValue(true),
-}));
-
 import { makeUser, makePrisma, makeService } from './user-management-mocks';
 
-describe('UserManagementService.updateEmail — révocation des jetons de réinitialisation', () => {
-  it('revokes still-valid password reset tokens for the account in the same transaction', async () => {
-    const findUnique = jest.fn().mockResolvedValue(makeUser({ password: 'hashed' }));
+describe('UserManagementService.updateUser — révocation des jetons de réinitialisation', () => {
+  it('revokes still-valid password reset tokens in the same transaction when the address changes', async () => {
+    const findUnique = jest.fn().mockResolvedValue(makeUser({ email: 'old@ex.com' }));
     const update = jest.fn().mockResolvedValue(makeUser({ email: 'new@ex.com' }));
     const passwordResetTokenUpdateMany = jest.fn().mockResolvedValue({ count: 1 });
     const prisma = makePrisma({ findUnique, update, passwordResetTokenUpdateMany });
     const svc = makeService(prisma);
 
-    await svc.updateEmail('user-id', { password: 'correct', newEmail: 'new@ex.com' });
+    await svc.updateUser('user-id', { email: 'new@ex.com' } as never);
 
+    expect(prisma.$transaction).toHaveBeenCalled();
     expect(passwordResetTokenUpdateMany).toHaveBeenCalledWith(expect.objectContaining({
       where: expect.objectContaining({ userId: 'user-id', isRevoked: false }),
       data: expect.objectContaining({ isRevoked: true, revokedReason: 'EMAIL_CHANGED' }),
     }));
   });
 
-  it('does not revoke anything when the password check fails and the email is left unchanged', async () => {
-    const findUnique = jest.fn().mockResolvedValue(makeUser({ password: 'hashed' }));
-    const passwordResetTokenUpdateMany = jest.fn().mockResolvedValue({ count: 0 });
-    const { verifyPassword } = jest.requireMock('../../../../utils/password-hash') as { verifyPassword: jest.Mock };
-    verifyPassword.mockResolvedValueOnce(false);
-    const prisma = makePrisma({ findUnique, passwordResetTokenUpdateMany });
-    const svc = makeService(prisma);
+  it('revokes nothing when the submitted address is the current one up to case', async () => {
+    const findUnique = jest.fn().mockResolvedValue(makeUser({ email: 'same@ex.com' }));
+    const update = jest.fn().mockResolvedValue(makeUser({ email: 'same@ex.com' }));
+    const passwordResetTokenUpdateMany = jest.fn();
+    const svc = makeService(makePrisma({ findUnique, update, passwordResetTokenUpdateMany }));
 
-    await expect(svc.updateEmail('user-id', { password: 'wrong', newEmail: 'new@ex.com' }))
-      .rejects.toThrow('Invalid password');
+    await svc.updateUser('user-id', { email: 'Same@Ex.com' } as never);
+
+    expect(passwordResetTokenUpdateMany).not.toHaveBeenCalled();
+  });
+
+  it('revokes nothing when the patch does not touch the address', async () => {
+    const update = jest.fn().mockResolvedValue(makeUser({ bio: 'x' }));
+    const passwordResetTokenUpdateMany = jest.fn();
+    const svc = makeService(makePrisma({ update, passwordResetTokenUpdateMany }));
+
+    await svc.updateUser('user-id', { bio: 'x' } as never);
 
     expect(passwordResetTokenUpdateMany).not.toHaveBeenCalled();
   });

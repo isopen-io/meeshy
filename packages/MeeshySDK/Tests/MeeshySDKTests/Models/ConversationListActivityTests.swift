@@ -1,10 +1,12 @@
 import XCTest
 @testable import MeeshySDK
 
-/// #7548 — le RANG d'une ligne de liste (règle client du contrat #7545,
-/// décision porteur #7546) : max(`lastMessageAt`, `lastReaction.createdAt`
-/// quand la réaction vise un message du LECTEUR). Une réaction à mon message
-/// remonte ma ligne ; une réaction entre tiers s'affiche sans la réordonner.
+/// Le RANG d'une ligne de liste. #9026 (directive porteur du 2026-10-01) : le
+/// serveur sert `listRankAt` = max(`lastMessageAt`, `lastActivityAt`) à TOUS les
+/// participants — réaction, appel, épingle remontent la ligne pour chacun.
+/// Le client prend max(`lastMessageAt`, `listRankAt`, et la règle client #7548 :
+/// `lastReaction.createdAt` quand la réaction vise un message du LECTEUR) — sans
+/// rang servi (serveur antérieur), une réaction entre tiers ne réordonne rien.
 final class ConversationListActivityTests: XCTestCase {
 
     private let lastMessageAt = Date(timeIntervalSince1970: 1_790_000_000)
@@ -114,5 +116,97 @@ final class ConversationListActivityTests: XCTestCase {
         let decoded = try JSONDecoder().decode(MeeshyConversation.self, from: JSONEncoder().encode(conversation))
 
         XCTAssertEqual(decoded.listActivityAt, reactedAt)
+    }
+
+    // MARK: - #9026 — le rang SERVI, le même pour tous les participants
+
+    private func merged(body extra: [String: Any], into base: MeeshyConversation? = nil,
+                        readerId: String = "u-me") throws -> MeeshyConversation? {
+        var body: [String: Any] = ["conversationId": "conv-1", "updatedAt": "2026-10-01T10:00:00.000Z"]
+        body.merge(extra) { _, new in new }
+        let event = try wireDecoder().decode(
+            ConversationUpdatedEvent.self, from: JSONSerialization.data(withJSONObject: body))
+        return ConversationStore.merging(base ?? row(),
+                                         with: ConversationStoreSocketBridge.mapConversationUpdated(event, readerId: readerId))
+    }
+
+    func test_aReactionBetweenOthers_withAServedRank_raisesTheRowForEveryone() throws {
+        let reactedAt = lastMessageAt.addingTimeInterval(300)
+
+        let conversation = try XCTUnwrap(merged(body: [
+            "lastReaction": reaction(target: "u-alice", at: reactedAt),
+            "listRankAt": WireDate.string(from: reactedAt),
+        ]))
+
+        XCTAssertEqual(conversation.listActivityAt, reactedAt)
+        XCTAssertEqual(conversation.lastMessageAt, lastMessageAt, "la date AFFICHÉE reste celle du dernier message")
+    }
+
+    func test_aRankOnlyEvent_callOrPin_raisesTheRow() throws {
+        let activityAt = lastMessageAt.addingTimeInterval(120)
+
+        let conversation = try XCTUnwrap(merged(body: ["listRankAt": WireDate.string(from: activityAt)]))
+
+        XCTAssertEqual(conversation.listRankAt, activityAt)
+        XCTAssertEqual(conversation.listActivityAt, activityAt)
+    }
+
+    func test_aServedRankOlderThanTheLastMessage_neverLowersTheRow() throws {
+        let conversation = try merged(body: ["listRankAt": WireDate.string(from: lastMessageAt.addingTimeInterval(-60))])
+
+        XCTAssertEqual(conversation?.listActivityAt ?? row().listActivityAt, lastMessageAt)
+    }
+
+    func test_aStaleRankArrivingLate_neverRewindsTheServedRank() throws {
+        let later = lastMessageAt.addingTimeInterval(600)
+        let first = try XCTUnwrap(merged(body: ["listRankAt": WireDate.string(from: later)]))
+
+        let second = try merged(body: ["listRankAt": WireDate.string(from: lastMessageAt.addingTimeInterval(300))], into: first)
+
+        XCTAssertNil(second, "un rang plus ancien ne change rien à la ligne")
+        XCTAssertEqual(first.listActivityAt, later)
+    }
+
+    func test_aRankOnlyEvent_reordersThePersistedList() throws {
+        let fresher = MeeshyConversation(id: "conv-2", identifier: "conv-2", type: .group,
+                                         lastMessageAt: lastMessageAt.addingTimeInterval(60),
+                                         lastMessagePreview: "plus récent", lastMessageId: "m-2")
+        let activityAt = lastMessageAt.addingTimeInterval(120)
+        let event = ConversationUpdatedStoreEvent(conversationId: "conv-1", listRankAt: activityAt)
+
+        let reordered = try XCTUnwrap(ConversationSyncEngine.applyingConversationUpdate(event, to: [fresher, row()]))
+
+        XCTAssertEqual(reordered.map(\.id), ["conv-1", "conv-2"])
+    }
+
+    func test_restRow_rankedByTheServedRank_forEveryReader() throws {
+        let activityAt = lastMessageAt.addingTimeInterval(900)
+        let payload: [String: Any] = [
+            "id": "conv-1", "type": "group", "createdAt": "2026-09-23T09:00:00.000Z",
+            "lastMessageAt": WireDate.string(from: lastMessageAt),
+            "listRankAt": WireDate.string(from: activityAt),
+        ]
+        let api = try wireDecoder().decode(APIConversation.self, from: JSONSerialization.data(withJSONObject: payload))
+
+        XCTAssertEqual(api.toConversation(currentUserId: "u-me").listActivityAt, activityAt)
+        XCTAssertEqual(api.toConversation(currentUserId: "u-other").listActivityAt, activityAt)
+    }
+
+    func test_theServedRankSurvivesTheCacheRoundTrip() throws {
+        let activityAt = lastMessageAt.addingTimeInterval(300)
+        let conversation = try XCTUnwrap(merged(body: ["listRankAt": WireDate.string(from: activityAt)]))
+
+        let decoded = try JSONDecoder().decode(MeeshyConversation.self, from: JSONEncoder().encode(conversation))
+
+        XCTAssertEqual(decoded.listActivityAt, activityAt)
+    }
+
+    func test_theEngineOwnsTheServedRank_whenTheViewPersistsItsSnapshot() throws {
+        let activityAt = lastMessageAt.addingTimeInterval(300)
+        let engineRow = try XCTUnwrap(merged(body: ["listRankAt": WireDate.string(from: activityAt)]))
+
+        let persisted = ConversationListLastMessage.persisting([row()], over: [engineRow])
+
+        XCTAssertEqual(persisted.first?.listActivityAt, activityAt)
     }
 }

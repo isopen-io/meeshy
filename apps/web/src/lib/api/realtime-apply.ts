@@ -27,6 +27,7 @@ import {
 } from './messages';
 import { messageReceiptsPeopleQueryKey } from './receipts';
 import type { Attachment, Message, Participant } from './types';
+import { keepLiveMessageOverFetch } from './realtime-thread-catch-up';
 import { purgeViewOnceIn, sealViewOnceIn } from './view-once-seal';
 
 /* Le puits de `conversation:updated` vit chez lui (#7547, budget de taille) ;
@@ -119,6 +120,12 @@ export function rawMessageFromSocket(raw: SocketIOMessage): Message & { readonly
     ...(raw.maxViewOnceCount !== undefined ? { maxViewOnceCount: raw.maxViewOnceCount } : {}),
     ...(raw.effectFlags !== undefined ? { effectFlags: raw.effectFlags } : {}),
     ...(raw.replyToId !== undefined ? { replyToId: raw.replyToId } : {}),
+    /* LA CITATION VOYAGE AVEC LA RÉPONSE (#7996) — la passerelle la sert sur
+       `message:new` (`buildMessageNewPayload`) ; l'énumération la jetait, et
+       l'écho de MA réponse remplaçait la rangée optimiste, qui la portait,
+       par une rangée amputée. Portée BRUTE, comme le reste de la charge :
+       `decodeMessage` la revit récursivement au `select` (D-26). */
+    ...(raw.replyTo === undefined || raw.replyTo === null ? {} : { replyTo: raw.replyTo }),
     ...(raw.storyReplyToId !== undefined ? { storyReplyToId: raw.storyReplyToId } : {}),
     ...(raw.forwardedFromId !== undefined ? { forwardedFromId: raw.forwardedFromId } : {}),
     ...(raw.forwardedFromConversationId !== undefined
@@ -208,6 +215,9 @@ export function applyMessageNew(
      elle était écrite ICI et dans `upsertConfirmed` (`send/perform-send.ts`),
      deux copies que leurs doc-comments déclaraient déjà identiques. */
   upsertThreadMessage(queryClient, raw.conversationId, message);
+  /* Une requête du fil EN VOL écraserait cette pose par sa réponse, partie
+     avant le message (#9291) : elle est relancée. */
+  keepLiveMessageOverFetch(queryClient, raw.conversationId);
 
   /* Le cid ne voyage QUE vers la room personnelle de l'expéditeur
      (`stripClientMessageId`, `MeeshySocketIOManager.ts:3011-3039`) : sa

@@ -69,10 +69,13 @@ final class StoryReaderScrimsTests: XCTestCase {
     // MARK: - Le montage
 
     /// Le lecteur monte LES voiles sur SON chrome : une règle juste qu'on
-    /// alimenterait d'une constante laisserait l'immersif assombri.
+    /// alimenterait d'une constante laisserait l'immersif assombri. Depuis
+    /// #8601, le chrome est celui de l'immersion ET de la saisie
+    /// (`StoryComposingFocus.showsChrome`) : écrire un commentaire lève les
+    /// voiles comme le reste des décorateurs.
     func test_theReaderMountsTheVeilsOnItsChrome() throws {
         let source = AppSourceGuard.stripComments(try String(contentsOf: canvasSource, encoding: .utf8))
-        XCTAssertEqual(source.components(separatedBy: "StoryReaderScrims(topInset: topInset, chromeVisible: chromeVisible)").count - 1,
+        XCTAssertEqual(source.components(separatedBy: "StoryReaderScrims(topInset: topInset, chromeVisible: readerChromeShown)").count - 1,
                        1, "un seul montage, alimenté par la visibilité du chrome")
         XCTAssertFalse(source.contains(".black.opacity(0.92)"),
                        "aucun voile inconditionnel ne reste dans l'hôte")

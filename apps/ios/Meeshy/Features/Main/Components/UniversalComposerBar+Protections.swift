@@ -25,13 +25,15 @@ extension UniversalComposerBar {
 
     @ViewBuilder
     var ephemeralToggleButton: some View {
-        let isActive = ephemeralDuration.wrappedValue != nil
+        let isImposed = imposedProtection.ephemeral != nil
+        let isActive = ephemeralChoice.wrappedValue != nil || isImposed
 
         Button {
+            guard !isImposed else { return }
             onAnyInteraction?()
             HapticFeedback.light()
             if isActive {
-                ephemeralDuration.wrappedValue = nil
+                ephemeralChoice.wrappedValue = nil
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                     showEphemeralPicker = false
                 }
@@ -42,19 +44,24 @@ extension UniversalComposerBar {
                 }
             }
         } label: {
-            HStack(spacing: 4) {
-                Image(systemName: isActive ? MessageProtectionSymbols.ephemeralFilled : MessageProtectionSymbols.ephemeral)
-                    .font(.caption.weight(.semibold))
-                    .foregroundColor(isActive ? ComposerProtection.ephemeral.tint : mutedColor)
+            HStack(spacing: MeeshySpacing.xs) {
+                if ephemeralChoice.wrappedValue == .afterRead {
+                    FlameEyeGlyph(size: 15, tint: armedTint(.ephemeral))
+                } else {
+                    Image(systemName: isActive ? MessageProtectionSymbols.ephemeralFilled : MessageProtectionSymbols.ephemeral)
+                        .font(.caption.weight(.semibold))
+                        .foregroundColor(isActive ? armedTint(.ephemeral) : iconTint)
+                }
 
-                if let duration = ephemeralDuration.wrappedValue {
+                if case .duration(let duration) = ephemeralChoice.wrappedValue {
                     Text(duration.label)
                         .font(.caption2).fontWeight(.bold)
-                        .foregroundColor(ComposerProtection.ephemeral.tint)
+                        .foregroundColor(armedTint(.ephemeral))
                 }
+                if isImposed { imposedLockGlyph(tint: armedTint(.ephemeral)) }
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
+            .padding(.horizontal, MeeshySpacing.sm)
+            .padding(.vertical, MeeshySpacing.xs)
             .background(
                 Capsule()
                     .fill(isActive
@@ -69,9 +76,12 @@ extension UniversalComposerBar {
                     )
             )
         }
-        .accessibilityLabel(isActive
-                            ? String(localized: "composer.ephemeral.active", defaultValue: "Mode ephemere actif: \(ephemeralDuration.wrappedValue?.displayLabel ?? "")", bundle: .main)
+        .accessibilityLabel(isImposed
+                            ? String(localized: "composer.ephemeral.imposed", defaultValue: "Mode éphémère imposé par le message cité : \(EphemeralChoiceCopy.displayLabel(ephemeralChoice.wrappedValue))", bundle: .main)
+                            : isActive
+                            ? String(localized: "composer.ephemeral.active", defaultValue: "Mode ephemere actif: \(EphemeralChoiceCopy.displayLabel(ephemeralChoice.wrappedValue))", bundle: .main)
                             : String(localized: "composer.ephemeral.activate", defaultValue: "Activer le mode éphémère", bundle: .main))
+        .accessibilityRemoveTraits(isImposed ? .isButton : [])
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isActive)
     }
 
@@ -79,71 +89,46 @@ extension UniversalComposerBar {
     // MARK: - Ephemeral Duration Picker
     // ========================================================================
 
+    /// La flamme-œil, 15 s, puis les durées existantes (#8303).
     var ephemeralDurationPicker: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 Button {
                     HapticFeedback.light()
-                    ephemeralDuration.wrappedValue = nil
+                    ephemeralChoice.wrappedValue = nil
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                         showEphemeralPicker = false
                     }
                 } label: {
                     Text(String(localized: "composer.ephemeral.off", defaultValue: "Désactivé", bundle: .main))
                         .font(.caption).fontWeight(.semibold)
-                        .foregroundColor(ephemeralDuration.wrappedValue == nil ? .white : mutedColor)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 6)
+                        .foregroundColor(ephemeralChoice.wrappedValue == nil ? .white : iconTint)
+                        .padding(.horizontal, MeeshySpacing.mdPlus)
+                        .padding(.vertical, MeeshySpacing.xsPlus)
                         .background(
                             Capsule()
-                                .fill(ephemeralDuration.wrappedValue == nil
+                                .fill(ephemeralChoice.wrappedValue == nil
                                       ? servedAccent
                                       : style == .dark ? Color.white.opacity(0.08) : Color.black.opacity(0.04))
                         )
                 }
 
-                ForEach(EphemeralDuration.allCases) { duration in
-                    Button {
-                        HapticFeedback.light()
-                        ephemeralDuration.wrappedValue = duration
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                            showEphemeralPicker = false
-                        }
-                    } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: MessageProtectionSymbols.ephemeralFilled)
-                                .font(.caption2)
-                            Text(duration.label)
-                                .font(.caption).fontWeight(.semibold)
-                        }
-                        .foregroundColor(ephemeralDuration.wrappedValue == duration ? .white : ComposerProtection.ephemeral.tint)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 6)
-                        .background(
-                            Capsule()
-                                .fill(ephemeralDuration.wrappedValue == duration
-                                      ? ComposerProtection.ephemeral.tint
-                                      : ComposerProtection.ephemeral.tint.opacity(0.1))
-                                .overlay(
-                                    Capsule()
-                                        .stroke(ComposerProtection.ephemeral.tint.opacity(0.3), lineWidth: 0.5)
-                                )
-                        )
-                    }
+                ForEach(EphemeralChoice.menu) { choice in
+                    ephemeralChoiceChip(choice)
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
+            .padding(.horizontal, MeeshySpacing.md)
+            .padding(.vertical, MeeshySpacing.sm)
         }
         .background(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                 .fill(railSurface)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 16)
-                        .stroke(ComposerProtection.ephemeral.tint.opacity(0.2), lineWidth: 0.5)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.lg)
+                        .stroke(ComposerProtection.ephemeral.tint.opacity(0.2), lineWidth: MeeshyBorder.hairline)
                 )
         )
-        .padding(.horizontal, 8)
+        .padding(.horizontal, MeeshySpacing.sm)
     }
 
     /// Le rail qui s'ouvre au-dessus de la barre d'outils garde cette marge
@@ -155,32 +140,70 @@ extension UniversalComposerBar {
         style == .dark || isDark ? Color.black.opacity(0.3) : Color.white.opacity(0.9)
     }
 
+    /// Une pastille du sélecteur : la flamme-œil porte son pictogramme et son
+    /// libellé, une durée porte la flamme et ses secondes.
+    func ephemeralChoiceChip(_ choice: EphemeralChoice) -> some View {
+        let isSelected = ephemeralChoice.wrappedValue == choice
+        let tint = ComposerProtection.ephemeral.tint
+        return Button {
+            HapticFeedback.light()
+            ephemeralChoice.wrappedValue = choice
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                showEphemeralPicker = false
+            }
+        } label: {
+            HStack(spacing: MeeshySpacing.xs) {
+                if choice == .afterRead {
+                    FlameEyeGlyph(size: 13, tint: isSelected ? .white : tint)
+                } else {
+                    Image(systemName: MessageProtectionSymbols.ephemeralFilled)
+                        .font(.caption2)
+                }
+                Text(EphemeralChoiceCopy.chipLabel(choice))
+                    .font(.caption).fontWeight(.semibold)
+            }
+            .foregroundColor(isSelected ? .white : tint)
+            .padding(.horizontal, MeeshySpacing.mdPlus)
+            .padding(.vertical, MeeshySpacing.xsPlus)
+            .background(
+                Capsule()
+                    .fill(isSelected ? tint : tint.opacity(0.1))
+                    .overlay(Capsule().stroke(tint.opacity(0.3), lineWidth: MeeshyBorder.hairline))
+            )
+        }
+        .accessibilityLabel(EphemeralChoiceCopy.displayLabel(choice))
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
     // ========================================================================
     // MARK: - Blur Toggle Button
     // ========================================================================
 
     @ViewBuilder
     var blurToggleButton: some View {
-        let isActive = isBlurEnabled.wrappedValue
+        let isImposed = imposedProtection.blurred
+        let isActive = isBlurEnabled.wrappedValue || isImposed
 
         Button {
+            guard !isImposed else { return }
             onAnyInteraction?()
             HapticFeedback.light()
             toggleVeil(.blurred)
         } label: {
-            HStack(spacing: 4) {
+            HStack(spacing: MeeshySpacing.xs) {
                 Image(systemName: isActive ? MessageProtectionSymbols.blurredFilled : MessageProtectionSymbols.blurred)
                     .font(.caption.weight(.semibold))
-                    .foregroundColor(isActive ? ComposerProtection.blurred.tint : mutedColor)
+                    .foregroundColor(isActive ? armedTint(.blurred) : iconTint)
 
                 if isActive {
                     Text(String(localized: "composer.blur.label", defaultValue: "Flou", bundle: .main))
                         .font(.caption2).fontWeight(.bold)
-                        .foregroundColor(ComposerProtection.blurred.tint)
+                        .foregroundColor(armedTint(.blurred))
                 }
+                if isImposed { imposedLockGlyph(tint: armedTint(.blurred)) }
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
+            .padding(.horizontal, MeeshySpacing.sm)
+            .padding(.vertical, MeeshySpacing.xs)
             .background(
                 Capsule()
                     .fill(isActive
@@ -195,9 +218,12 @@ extension UniversalComposerBar {
                     )
             )
         }
-        .accessibilityLabel(isActive
+        .accessibilityLabel(isImposed
+                            ? String(localized: "composer.blur.imposed", defaultValue: "Flou imposé par le message cité", bundle: .main)
+                            : isActive
                             ? String(localized: "composer.blur.active", defaultValue: "Mode flou actif", bundle: .main)
                             : String(localized: "composer.blur.activate", defaultValue: "Activer le mode flou", bundle: .main))
+        .accessibilityRemoveTraits(isImposed ? .isButton : [])
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isActive)
     }
 
@@ -214,19 +240,19 @@ extension UniversalComposerBar {
             HapticFeedback.light()
             toggleVeil(.viewOnce)
         } label: {
-            HStack(spacing: 4) {
+            HStack(spacing: MeeshySpacing.xs) {
                 Image(systemName: isActive ? MessageProtectionSymbols.viewOnceFilled : MessageProtectionSymbols.viewOnce)
                     .font(.caption.weight(.semibold))
-                    .foregroundColor(isActive ? ComposerProtection.viewOnce.tint : mutedColor)
+                    .foregroundColor(isActive ? armedTint(.viewOnce) : iconTint)
 
                 if isActive {
                     Text(String(localized: "composer.viewonce.label", defaultValue: "Vue unique", bundle: .main))
                         .font(.caption2).fontWeight(.bold)
-                        .foregroundColor(ComposerProtection.viewOnce.tint)
+                        .foregroundColor(armedTint(.viewOnce))
                 }
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
+            .padding(.horizontal, MeeshySpacing.sm)
+            .padding(.vertical, MeeshySpacing.xs)
             .background(
                 Capsule()
                     .fill(isActive
@@ -256,7 +282,7 @@ extension UniversalComposerBar {
     /// de la substituer.
     var dominantProtection: ComposerProtection? {
         ComposerProtection.dominant(
-            ephemeral: ephemeralDuration.wrappedValue != nil,
+            ephemeral: ephemeralChoice.wrappedValue != nil || imposedProtection.ephemeral != nil,
             viewOnce: isViewOnceEnabled.wrappedValue,
             blurred: isBlurEnabled.wrappedValue
         )
@@ -280,6 +306,39 @@ extension UniversalComposerBar {
 
     var servedSecondary: Color {
         dominantProtection?.tint ?? Color(hex: secondaryColor)
+    }
+
+    /// La teinte de TOUTES les icônes de la barre (#9121) — la couleur de
+    /// l'effet armé, sinon la couleur commune des icônes du thème.
+    var iconTint: Color {
+        ComposerIconTint.resolve(
+            protection: dominantProtection,
+            hasMessageEffect: pendingEffects.wrappedValue.hasAnyEffect
+        ).color(common: commonIconColor, isDark: iconSurfaceIsDark)
+    }
+
+    /// La couleur d'une bascule ARMÉE : celle de SA protection, à l'encre du
+    /// schéma — l'éphémère armé et les icônes qu'il teinte ont le même rouge.
+    func armedTint(_ protection: ComposerProtection) -> Color {
+        ComposerIconTint.protection(protection).color(common: commonIconColor, isDark: iconSurfaceIsDark)
+    }
+
+    private var commonIconColor: Color {
+        style == .dark ? .white.opacity(0.85) : theme.textSecondary
+    }
+
+    /// Le verre est sombre sous le style sombre (story, média) comme sous le
+    /// thème sombre.
+    private var iconSurfaceIsDark: Bool {
+        style == .dark || isDark
+    }
+
+    /// Le cadenas d'une protection imposée par le message cité (#8557).
+    func imposedLockGlyph(tint: Color) -> some View {
+        Image(systemName: "lock.fill")
+            .font(MeeshyFont.relative(8, weight: .bold))
+            .foregroundColor(tint)
+            .accessibilityHidden(true)
     }
 
     /// Flou et vue unique sont exclusifs : allumer l'un éteint l'autre.
@@ -309,28 +368,28 @@ extension UniversalComposerBar {
                 showEffectsPanel.toggle()
             }
         } label: {
-            HStack(spacing: 4) {
-                Image(systemName: isActive ? "wand.and.stars" : "wand.and.stars")
+            HStack(spacing: MeeshySpacing.xs) {
+                Image(systemName: "wand.and.stars")
                     .font(.caption.weight(.semibold))
-                    .foregroundColor(isActive ? servedAccent : mutedColor)
+                    .foregroundColor(iconTint)
 
                 if isActive {
                     Text("\(effectCount)")
                         .font(.caption2).fontWeight(.bold)
-                        .foregroundColor(servedAccent)
+                        .foregroundColor(iconTint)
                 }
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
+            .padding(.horizontal, MeeshySpacing.sm)
+            .padding(.vertical, MeeshySpacing.xs)
             .background(
                 Capsule()
                     .fill(isActive
-                          ? servedAccent.opacity(0.15)
+                          ? iconTint.opacity(0.15)
                           : Color.clear)
                     .overlay(
                         Capsule()
                             .stroke(isActive
-                                    ? servedAccent.opacity(0.3)
+                                    ? iconTint.opacity(0.3)
                                     : Color.clear,
                                     lineWidth: 0.5)
                     )
@@ -358,28 +417,28 @@ extension UniversalComposerBar {
                 showPermanentEffectsPicker.toggle()
             }
         } label: {
-            HStack(spacing: 4) {
-                Image(systemName: isActive ? "wand.and.stars" : "wand.and.stars")
+            HStack(spacing: MeeshySpacing.xs) {
+                Image(systemName: "wand.and.stars")
                     .font(.caption.weight(.semibold))
-                    .foregroundColor(isActive ? servedAccent : mutedColor)
+                    .foregroundColor(iconTint)
 
                 if isActive {
                     Text("\(activeCount)")
                         .font(.caption2).fontWeight(.bold)
-                        .foregroundColor(servedAccent)
+                        .foregroundColor(iconTint)
                 }
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
+            .padding(.horizontal, MeeshySpacing.sm)
+            .padding(.vertical, MeeshySpacing.xs)
             .background(
                 Capsule()
                     .fill(isActive
-                          ? servedAccent.opacity(0.15)
+                          ? iconTint.opacity(0.15)
                           : Color.clear)
                     .overlay(
                         Capsule()
                             .stroke(isActive
-                                    ? servedAccent.opacity(0.3)
+                                    ? iconTint.opacity(0.3)
                                     : Color.clear,
                                     lineWidth: 0.5)
                     )
@@ -404,7 +463,7 @@ extension UniversalComposerBar {
         ]
 
         return ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 ForEach(items, id: \.label) { item in
                     let isSelected = pendingEffects.wrappedValue.flags.contains(item.flag)
                     Button {
@@ -415,15 +474,15 @@ extension UniversalComposerBar {
                             pendingEffects.wrappedValue.flags.insert(item.flag)
                         }
                     } label: {
-                        HStack(spacing: 4) {
+                        HStack(spacing: MeeshySpacing.xs) {
                             Image(systemName: item.icon)
                                 .font(.caption2)
                             Text(item.label)
                                 .font(.caption).fontWeight(.semibold)
                         }
                         .foregroundColor(isSelected ? .white : servedAccent)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 6)
+                        .padding(.horizontal, MeeshySpacing.mdPlus)
+                        .padding(.vertical, MeeshySpacing.xsPlus)
                         .background(
                             Capsule()
                                 .fill(isSelected
@@ -431,7 +490,7 @@ extension UniversalComposerBar {
                                       : servedAccent.opacity(0.1))
                                 .overlay(
                                     Capsule()
-                                        .stroke(servedAccent.opacity(0.3), lineWidth: 0.5)
+                                        .stroke(servedAccent.opacity(0.3), lineWidth: MeeshyBorder.hairline)
                                 )
                         )
                     }
@@ -440,17 +499,17 @@ extension UniversalComposerBar {
                     .accessibilityAddTraits(isSelected ? .isSelected : [])
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
+            .padding(.horizontal, MeeshySpacing.md)
+            .padding(.vertical, MeeshySpacing.sm)
         }
         .background(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                 .fill(style == .dark ? Color.black.opacity(0.3) : isDark ? Color.black.opacity(0.3) : Color.white.opacity(0.9))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 16)
-                        .stroke(servedAccent.opacity(0.2), lineWidth: 0.5)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.lg)
+                        .stroke(servedAccent.opacity(0.2), lineWidth: MeeshyBorder.hairline)
                 )
         )
-        .padding(.horizontal, 8)
+        .padding(.horizontal, MeeshySpacing.sm)
     }
 }

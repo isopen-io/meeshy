@@ -1,0 +1,212 @@
+import XCTest
+import AVFoundation
+import MeeshySDK
+@testable import Meeshy
+
+/// **La capture rapide sur une scène vide** (#8653, directive porteur
+/// 2026-09-29).
+///
+/// > « Lorsque la scène est vide mettre en gris le fait de prendre une photo ou
+/// > vidéo rapidement — par tap simple ça ouvre et prend la photo, longpress
+/// > ouvre et lance la vidéo ! Il faut permettre de quitter à tout moment : le
+/// > (X) qui apparaît quand c'est en plein écran doit toujours être là, même
+/// > dans la scène. Enfin le flash doit activer vraiment le flash, et si la
+/// > caméra est par devant, alors transformer le sol, sombre ou de n'importe
+/// > quelle couleur, en BLANC brillant forte intensité ! »
+final class ComposerSceneQuickCaptureTests: XCTestCase {
+
+    private func slide(_ remplir: (inout StoryEffects) -> Void = { _ in }) -> StorySlide {
+        var effets = StoryEffects()
+        remplir(&effets)
+        return StorySlide(id: "s1", effects: effets)
+    }
+
+    // MARK: - « Scène vide »
+
+    func test_sceneIsBlank_slideSansMatiere_estVide_memeAvecUnFondDeCouleur() {
+        XCTAssertTrue(ComposerSceneQuickCapture.sceneIsBlank(slide()))
+        XCTAssertTrue(ComposerSceneQuickCapture.sceneIsBlank(slide { $0.background = "#FF0000" }),
+                      "une couleur de fond ne pose rien sur la scène")
+    }
+
+    func test_sceneIsBlank_unTexteOuUnMedia_rendLaSceneNonVide() {
+        XCTAssertFalse(ComposerSceneQuickCapture.sceneIsBlank(
+            slide { $0.textObjects = [StoryTextObject(id: "t1", text: "salut")] }))
+        XCTAssertFalse(ComposerSceneQuickCapture.sceneIsBlank(
+            slide { $0.stickerObjects = [StorySticker(emoji: "🔥")] }))
+    }
+
+    // MARK: - Quand le geste est offert
+
+    func test_offers_sceneVideCameraEteinteSansOutil_offreLaCapture() {
+        XCTAssertTrue(ComposerSceneQuickCapture.offers(sceneIsBlank: true, format: .story,
+                                                       stage: .off, toolIsOpen: false))
+    }
+
+    func test_offers_refuseHorsDeSonCas() {
+        XCTAssertFalse(ComposerSceneQuickCapture.offers(sceneIsBlank: false, format: .story,
+                                                        stage: .off, toolIsOpen: false))
+        XCTAssertFalse(ComposerSceneQuickCapture.offers(sceneIsBlank: true, format: .story,
+                                                        stage: .armed, toolIsOpen: false),
+                       "viseur déjà là : le geste appartient au déclencheur")
+        XCTAssertFalse(ComposerSceneQuickCapture.offers(sceneIsBlank: true, format: .story,
+                                                        stage: .off, toolIsOpen: true))
+        XCTAssertFalse(ComposerSceneQuickCapture.offers(sceneIsBlank: true, format: .status,
+                                                        stage: .off, toolIsOpen: false),
+                       "un statut n'a pas de viseur")
+    }
+
+    // MARK: - Ce que chaque geste fait
+
+    /// **La photo se prend en DEUX temps** (#8711, directive porteur
+    /// 2026-09-29 : « le premier tap arme et affiche avec les contrôleurs
+    /// habituels, second tap n'importe où sur la scène prend la photo »).
+    func test_tap_premierToucher_armeLeViseurSansRienPrendre() {
+        XCTAssertEqual(ComposerSceneQuickCapture.tap(format: .story), .arm)
+        XCTAssertEqual(ComposerSceneQuickCapture.tap(format: .post), .arm)
+        XCTAssertEqual(ComposerSceneQuickCapture.tap(format: .reel), .arm,
+                       "un réel arme aussi son viseur : c'est l'appui long qui filme")
+        XCTAssertNil(ComposerSceneQuickCapture.tap(format: .status))
+    }
+
+    func test_armedTap_viseurArmeDansUnFormatPhoto_prendLaPhoto() {
+        XCTAssertEqual(ComposerSceneQuickCapture.armedTap(stage: .armed, format: .story, pendingSegments: 0),
+                       .takePhoto)
+        XCTAssertEqual(ComposerSceneQuickCapture.armedTap(stage: .armed, format: .post, pendingSegments: 0),
+                       .takePhoto)
+    }
+
+    func test_armedTap_refuseHorsDuViseurArme() {
+        XCTAssertEqual(ComposerSceneQuickCapture.armedTap(stage: .off, format: .story, pendingSegments: 0),
+                       .ignore, "viseur éteint : le premier toucher appartient à l'armement")
+        XCTAssertEqual(ComposerSceneQuickCapture.armedTap(stage: .recording, format: .story, pendingSegments: 0),
+                       .ignore, "une prise en cours ne se coupe pas d'une photo")
+        XCTAssertEqual(ComposerSceneQuickCapture.armedTap(stage: .armed, format: .reel, pendingSegments: 0),
+                       .ignore, "un réel n'a pas de photo")
+        XCTAssertEqual(ComposerSceneQuickCapture.armedTap(stage: .armed, format: .story, pendingSegments: 2),
+                       .ignore, "des segments en attente de ✓ ne se perdent pas sous une photo")
+    }
+
+    // MARK: - Viseur armé : l'appui long FILME (#8846)
+
+    /// > « le longpress à partir de la scène doit déclencher la capture vidéo
+    /// > après avoir armé l'objectif » — directive porteur 2026-09-30.
+    func test_armedHold_viseurArme_demarreLaVideo_danstousLesFormatsQuiFilment() {
+        XCTAssertEqual(ComposerSceneQuickCapture.armedHold(stage: .armed, format: .story), .startFilming)
+        XCTAssertEqual(ComposerSceneQuickCapture.armedHold(stage: .armed, format: .post), .startFilming)
+        XCTAssertEqual(ComposerSceneQuickCapture.armedHold(stage: .armed, format: .reel), .startFilming)
+    }
+
+    func test_armedHold_horsViseurArme_ouSansVideo_nePrendRien() {
+        XCTAssertEqual(ComposerSceneQuickCapture.armedHold(stage: .off, format: .story), .ignore)
+        XCTAssertEqual(ComposerSceneQuickCapture.armedHold(stage: .recording, format: .story), .ignore,
+                       "une prise en cours n'en démarre pas une seconde")
+        XCTAssertEqual(ComposerSceneQuickCapture.armedHold(stage: .armed, format: .status), .ignore)
+    }
+
+    /// Le toucher reste la photo, l'appui long la vidéo : deux gestes, deux
+    /// intentions, sur la MÊME nappe du viseur armé.
+    func test_viseurArme_toucherEtAppuiLong_nePortentPasLaMemeIntention() {
+        XCTAssertEqual(ComposerSceneQuickCapture.armedTap(stage: .armed, format: .story, pendingSegments: 0),
+                       .takePhoto)
+        XCTAssertEqual(ComposerSceneQuickCapture.armedHold(stage: .armed, format: .story), .startFilming)
+    }
+
+    /// La nappe du viseur armé câble l'appui long vers la prise vidéo.
+    func test_nappeDuViseurArme_cableLAppuiLongVersLaVideo() throws {
+        let hote = try source("Meeshy/Features/Main/Composer/MeeshyComposerHost+Viewfinder.swift")
+        XCTAssertTrue(hote.contains("onHold: { handleArmedSceneHold() }"), "l'appui long de la nappe ne démarre rien")
+        // #9134 — la nappe est celle du chrome PARTAGÉ : sa levée est celle de la machine.
+        let chrome = try source("Meeshy/Features/Main/Composer/ComposerCaptureViews.swift")
+        XCTAssertTrue(chrome.contains(".onEnded { _ in session.endHold() }"), "relâcher n'arrête pas la prise")
+    }
+
+    /// La levée d'un appui long se lit désormais sur le cadenas (#8671) —
+    /// `ComposerCaptureHold.release`, éprouvée par `ComposerCaptureLockZoomFlashTests`.
+    func test_release_clotLaPrise_ouAnnuleCeQuiNAPasDemarre() {
+        XCTAssertEqual(ComposerCaptureHold.release(isRecording: true, phase: .holding), .closeTake)
+        XCTAssertEqual(ComposerCaptureHold.release(isRecording: true, phase: .locked), .keepFilming,
+                       "une prise verrouillée survit au relâchement")
+        XCTAssertEqual(ComposerCaptureHold.release(isRecording: false, phase: .holding), .cancelPending,
+                       "relâcher avant que la caméra soit prête ne prend RIEN — jamais une photo imprévue")
+    }
+
+    func test_hint_ditLesDeuxGestes_ouLaVideoSeule() {
+        XCTAssertEqual(ComposerSceneQuickCapture.hint(format: .story), .photoOrVideo)
+        XCTAssertEqual(ComposerSceneQuickCapture.hint(format: .reel), .videoOnly)
+        XCTAssertNil(ComposerSceneQuickCapture.hint(format: .status))
+    }
+
+    @MainActor
+    func test_hintCopy_estServiDansLesSeptLangues() {
+        let lignes = ComposerSceneQuickCapture.gestureLines(.photoOrVideo).map(ComposerSceneCameraCopy.gestureLine)
+        XCTAssertFalse(lignes.contains(where: \.isEmpty))
+        XCTAssertEqual(Set(lignes).count, lignes.count, "chaque temps a ses propres mots")
+    }
+
+    // MARK: - Le flash
+
+    func test_frontFlash_leSolSAllume_cameraAvantFlashActifViseurOuvert() {
+        XCTAssertTrue(ComposerFrontFlash.lightsFloor(flash: .on, position: .front, stage: .armed))
+        XCTAssertTrue(ComposerFrontFlash.lightsFloor(flash: .auto, position: .front, stage: .recording))
+        XCTAssertFalse(ComposerFrontFlash.lightsFloor(flash: .off, position: .front, stage: .armed))
+        XCTAssertFalse(ComposerFrontFlash.lightsFloor(flash: .on, position: .back, stage: .armed),
+                       "à l'arrière, c'est le vrai flash qui éclaire")
+        XCTAssertFalse(ComposerFrontFlash.lightsFloor(flash: .on, position: .front, stage: .off))
+    }
+
+    func test_torch_neSAllumeQuALArriere_pendantUneVideo() {
+        XCTAssertEqual(ComposerFrontFlash.torch(flash: .on, position: .back), .on)
+        XCTAssertEqual(ComposerFrontFlash.torch(flash: .auto, position: .back), .auto)
+        XCTAssertEqual(ComposerFrontFlash.torch(flash: .off, position: .back), .off)
+        XCTAssertEqual(ComposerFrontFlash.torch(flash: .on, position: .front), .off)
+    }
+
+    func test_previewRect_pleinEcranAllume_laisseUnAnneauBlanc() {
+        let plein = CGRect(x: 0, y: 0, width: 390, height: 844)
+        XCTAssertEqual(ComposerFrontFlash.previewRect(plein, size: .fullScreen, floorLit: false), plein)
+        XCTAssertEqual(ComposerFrontFlash.previewRect(plein, size: .card, floorLit: true), plein,
+                       "en carte, le sol autour de la carte suffit")
+        let bague = ComposerFrontFlash.previewRect(plein, size: .fullScreen, floorLit: true)
+        XCTAssertEqual(bague, plein.insetBy(dx: ComposerFrontFlash.fullScreenRim,
+                                            dy: ComposerFrontFlash.fullScreenRim))
+    }
+
+    // MARK: - La luminosité : montée le temps de la prise, puis RENDUE
+
+    @MainActor
+    func test_screenFlash_monteAuMax_puisRestitueLaLuminositeDAvant() {
+        let ecran = FakeScreen(brightness: 0.3)
+        let flash = ComposerScreenFlash(screen: ecran)
+        flash.light()
+        XCTAssertEqual(ecran.brightness, 1)
+        flash.light()
+        flash.restore()
+        XCTAssertEqual(ecran.brightness, 0.3, "un double allumage ne mémorise pas le maximum comme « avant »")
+        flash.restore()
+        XCTAssertEqual(ecran.brightness, 0.3, "restituer sans allumage ne touche à rien")
+    }
+
+    // MARK: - Le (x) toujours là
+
+    func test_laBarreDuViseur_montreLaCroix_enCarteCommeEnPleinEcran() throws {
+        let barre = try source("Meeshy/Features/Main/Composer/ComposerSceneCameraBar.swift")
+        XCTAssertTrue(barre.contains("ComposerSceneCameraCopy.disarmLabel"), "la croix a disparu")
+        XCTAssertFalse(barre.contains("showsClose"), "la croix ne dépend plus de la taille")
+    }
+
+    private func source(_ chemin: String) throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent(chemin)
+        return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+    }
+}
+
+@MainActor
+private final class FakeScreen: ScreenBrightnessControlling {
+    nonisolated deinit {}
+    var brightness: CGFloat
+    init(brightness: CGFloat) { self.brightness = brightness }
+}

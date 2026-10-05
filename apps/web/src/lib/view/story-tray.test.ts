@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, test } from 'bun:test';
-import { groupStoriesByAuthor, storyAuthorLabel, withMoods } from './story-tray';
+import { groupStoriesByAuthor, moodsByAuthor, storyAuthorLabel, withMoods } from './story-tray';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import type { StatusMoodPost, StoryTrayPost } from '@/lib/api/stories';
 
@@ -237,5 +237,22 @@ describe('withMoods', () => {
       viewedIds: new Set(),
     });
     expect(withMoods(groupes, [])).toBe(groupes);
+  });
+});
+
+describe('moodsByAuthor — le mood d’un auteur, avec ou sans story (#9065)', () => {
+  const mood = (id: string, authorId: string, moodEmoji: string | null): StatusMoodPost => ({ id, authorId, moodEmoji });
+
+  test('un auteur SANS story a son mood : la liste et le fil le lisent ici, pas dans le rail', () => {
+    expect(moodsByAuthor([mood('m1', 'b', '😎')]).get('b')).toBe('😎');
+  });
+
+  test('le plus récent gagne, une humeur vide ou nulle ne compte pas', () => {
+    const map = moodsByAuthor([mood('m1', 'a', ''), mood('m2', 'a', null), mood('m3', 'a', '🎉'), mood('m4', 'a', '😴')]);
+    expect(map.get('a')).toBe('🎉');
+  });
+
+  test('l’auteur se lit aussi sur `author.id`', () => {
+    expect(moodsByAuthor([{ id: 'm1', moodEmoji: '☕', author: { id: 'c', username: 'c' } }]).get('c')).toBe('☕');
   });
 });

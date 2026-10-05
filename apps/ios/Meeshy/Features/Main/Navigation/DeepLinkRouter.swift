@@ -29,6 +29,9 @@ enum DeepLinkDestination: Equatable {
     case chatLink(identifier: String)
     case post(id: String)
     case magicLink(token: String)
+    /// `/auth/verify-email?token=…&email=…` — le lien de l'e-mail « code +
+    /// lien » (#8035) : il vérifie l'adresse et ouvre la session.
+    case emailVerificationLink(token: String, email: String)
     case share(text: String?, url: String?)
     case userLinks
     case postDetail(postId: String)
@@ -43,6 +46,11 @@ enum DeepLinkDestination: Equatable {
     /// `meeshy://conversations/unread` — widgets « Non lus » (#7811).
     case unreadConversations
     case hashtag(tag: String)
+    /// Lien d'invitation (#8075) — `/signup/affiliate/<code>` (le lien que la
+    /// passerelle grave) ou `/signup?ref=<code>` : un CODE à mémoriser jusqu'à
+    /// l'inscription, pas un lieu de l'app.
+    case referral(code: String)
+    case call(conversationId: String, isVideo: Bool)
     case external(URL)
 }
 
@@ -51,6 +59,17 @@ enum DeepLinkDestination: Equatable {
 enum DeepLinkParser {
 
     private static let meeshyHosts: Set<String> = ["meeshy.me", "www.meeshy.me", "app.meeshy.me"]
+
+    /// Un hôte Meeshy : ceux de la production, plus l'hôte web de
+    /// l'environnement SÉLECTIONNÉ (`staging.meeshy.me` sur staging) — la
+    /// recette voit ce que la production verra (#8140). Égalité EXACTE : un
+    /// hôte qui ne fait que commencer ou finir comme celui-ci reste étranger.
+    static func isMeeshyHost(_ host: String, environmentWebOrigin: String) -> Bool {
+        let host = host.lowercased()
+        if meeshyHosts.contains(host) { return true }
+        guard let environmentHost = URL(string: environmentWebOrigin)?.host?.lowercased() else { return false }
+        return host == environmentHost || host == "www.\(environmentHost)"
+    }
 
     /// Segments accepted as the "post" keyword in any deep link shape. The
     /// short alias `p` mirrors the long form `post` so handwritten/dictated
@@ -132,12 +151,12 @@ enum DeepLinkParser {
     /// - `meeshy://auth/magic-link?token=...`
     ///
     /// Everything else -> `.external` (caller opens in Safari).
-    static func parse(_ url: URL) -> DeepLinkDestination {
+    static func parse(_ url: URL, environmentWebOrigin: String = MeeshyConfig.shared.webOrigin) -> DeepLinkDestination {
         if url.scheme?.lowercased() == "meeshy" {
             return parseCustomScheme(url)
         }
 
-        if let host = url.host?.lowercased(), meeshyHosts.contains(host) {
+        if let host = url.host, isMeeshyHost(host, environmentWebOrigin: environmentWebOrigin) {
             return parseMeeshyWeb(url)
         }
 
@@ -199,6 +218,22 @@ enum DeepLinkParser {
         return trimmed.isEmpty ? nil : trimmed
     }
 
+    /// `/auth/magic-link?token=…` ou `/auth/magic-link/<token>` ;
+    /// `/auth/verify-email?token=…&email=…` (#8035). Un jeton ou une adresse
+    /// vide n'ouvre rien : la validation échouerait, après avoir déconnecté.
+    private static func authLink(id: String?, components: [String], url: URL) -> DeepLinkDestination? {
+        switch id {
+        case "magic-link":
+            return (identifier(components, 2) ?? queryValue("token", in: url)).map { .magicLink(token: $0) }
+        case "verify-email":
+            guard let token = queryValue("token", in: url),
+                  let email = queryValue("email", in: url) else { return nil }
+            return .emailVerificationLink(token: token, email: email)
+        default:
+            return nil
+        }
+    }
+
     /// **La seule table des formes de lien Meeshy** (#7815), pour le web et le
     /// schéma `meeshy://`. Les surfaces propres aux widgets et aux App
     /// Shortcuts (`contact`, `quickreply`, `send`, `conversations`) ne sont
@@ -211,11 +246,8 @@ enum DeepLinkParser {
         case "me": return .ownProfile
         case "links": return .userLinks
         case "share": return parseShareQuery(url)
-        case "auth":
-            // `/auth/magic-link?token=…` ou `/auth/magic-link/<token>`.
-            guard id == "magic-link",
-                  let token = identifier(components, 2) ?? queryValue("token", in: url) else { return nil }
-            return .magicLink(token: token)
+        case "auth": return authLink(id: id, components: components, url: url)
+        case "signup": return referralCode(components: components, url: url).map { .referral(code: $0) }
         case "hashtag": return id.map { .hashtag(tag: $0) }
         // Invitation de conversation — `/join/<id>` (canonique).
         case "join": return id.map { .joinLink(identifier: $0) }
@@ -250,6 +282,8 @@ enum DeepLinkParser {
             return queryValue("contactId", in: url).map { .conversation(id: $0, draftText: queryValue("message", in: url)) }
         // Widgets « Non lus » / « Récentes » et App Shortcut (#7811).
         case "conversations" where customScheme: return id.flatMap(conversationListEntry)
+        case "call" where customScheme && components.count == 1:
+            return queryValue("contactId", in: url).map { .call(conversationId: $0, isVideo: queryValue("type", in: url) == "video") }
         default: break
         }
         // Post (`post`, `p`), story (`story`, `stories`, `s`), profil (`u`, `users`).
@@ -257,6 +291,24 @@ enum DeepLinkParser {
         if isStorySegment(head) { return id.map { .storyDetail(postId: $0) } }
         if isUserSegment(head) { return id.map { .userProfile(username: $0) } }
         return nil
+    }
+
+    /// Les clés d'adresse qui portent un code d'invitation, dans l'ordre du web
+    /// (`REFERRAL_SEARCH_KEYS`, `apps/web/src/lib/view/referral-code.ts`).
+    static let referralQueryKeys = ["ref", "parrain", "affiliate"]
+
+    /// Le code d'un lien d'invitation : `/signup/affiliate/<code>`, ou
+    /// `/signup?ref=<code>`. `nil` sans code bien formé (`ReferralCode`).
+    static func referralCode(components: [String], url: URL) -> String? {
+        switch components.count {
+        case 3 where components[1] == "affiliate":
+            return ReferralCode.normalized(components[2])
+        case 1:
+            let raw = referralQueryKeys.lazy.compactMap { queryValue($0, in: url) }.first
+            return raw.flatMap(ReferralCode.normalized)
+        default:
+            return nil
+        }
     }
 
     /// Un identifiant de communauté, jamais le segment réservé `new` (création).
@@ -301,6 +353,7 @@ enum DeepLink: Equatable {
     case trackedLink(token: String)
     case chatLink(identifier: String)
     case magicLink(token: String)
+    case emailVerificationLink(token: String, email: String)
     case conversation(id: String)
     case postDetail(postId: String)
     case storyDetail(postId: String)
@@ -338,13 +391,19 @@ enum DeepLink: Equatable {
     /// lien non résolu n'a rien à promettre.
     var opensAfterSignIn: Bool {
         switch self {
-        case .joinLink, .chatLink, .magicLink, .externalLink, .unresolvedTrackedLink:
+        case .joinLink, .chatLink, .magicLink, .emailVerificationLink, .externalLink, .unresolvedTrackedLink:
             return false
         case .trackedLink, .conversation, .postDetail, .storyDetail, .reel, .community,
              .recentConversation, .unreadConversations, .userProfile, .ownProfile, .userLinks, .hashtag:
             return true
         }
     }
+}
+
+/// Une destination ET le `/l/<jeton>` qui l'a produite (#9171).
+struct TrackedLinkOrigin: Equatable {
+    let token: String
+    let link: DeepLink
 }
 
 // MARK: - Deep Link Router (ObservableObject for join/conversation deep links)
@@ -373,6 +432,20 @@ final class DeepLinkRouter: ObservableObject {
     /// reprendre la résolution à zéro et reposerait la question.
     @Published var requestedGuestJoin: String?
 
+    /// Le `/l/<jeton>` d'où vient la destination en attente (#9171). La
+    /// résolution remplace le jeton par sa cible typée ; sans cette trace, un
+    /// visiteur sans compte ne pourrait plus apprendre QUI lui a partagé le
+    /// contenu. Il ne vaut que pour la destination qu'il a produite : un lien
+    /// ouvert ensuite, autrement, ne le reprend pas.
+    private(set) var trackedLinkOrigin: TrackedLinkOrigin?
+
+    /// Le jeton (`via`) du lien suivi qui a produit `link`, ou `nil` quand
+    /// `link` n'en vient pas.
+    func via(for link: DeepLink) -> String? {
+        guard let origin = trackedLinkOrigin, origin.link == link else { return nil }
+        return origin.token
+    }
+
     /// L'écran de compte que la page d'invitation a demandé, SANS compte
     /// (#7795) : « Se connecter » ou « Créer un compte ». `LoginView` le
     /// consomme — l'inscription s'y ouvre par sa propre feuille.
@@ -400,9 +473,26 @@ final class DeepLinkRouter: ObservableObject {
     /// raccourci (widget « Réponse rapide », App Shortcut « Send Message »)
     /// soit observable en test sans toucher aux `UserDefaults` du simulateur.
     private let drafts: DraftStore
+    /// Le code d'invitation mémorisé jusqu'à l'inscription (#8075).
+    private let referrals: PendingReferralStoreProviding
+    private let isAuthenticated: @MainActor () -> Bool
+    private let hasResolvedSession: @MainActor () -> Bool
+    private let dialConversationCall: @MainActor (String, Bool) -> Void
 
-    init(drafts: DraftStore = .shared) {
+    init(
+        drafts: DraftStore = .shared,
+        referrals: PendingReferralStoreProviding = PendingReferralStore.shared,
+        isAuthenticated: @escaping @MainActor () -> Bool = { AuthManager.shared.isAuthenticated },
+        hasResolvedSession: @escaping @MainActor () -> Bool = { AuthManager.shared.hasResolvedStoredSession },
+        dialConversationCall: @escaping @MainActor (String, Bool) -> Void = { conversationId, isVideo in
+            Task { await CallBackDialer.shared.dialConversation(id: conversationId, isVideo: isVideo) }
+        }
+    ) {
         self.drafts = drafts
+        self.referrals = referrals
+        self.isAuthenticated = isAuthenticated
+        self.hasResolvedSession = hasResolvedSession
+        self.dialConversationCall = dialConversationCall
     }
 
     // MARK: - Tracked link (`/l/<token>`) async resolution
@@ -422,7 +512,9 @@ final class DeepLinkRouter: ObservableObject {
             // n'attend son issue.
             Task { await resolver.recordClick(token: token) }
             let resolved = try? await resolver.resolve(token: token)
-            self.pendingDeepLink = Self.trackedDestination(for: resolved, token: token)
+            let destination = Self.trackedDestination(for: resolved, token: token)
+            self.trackedLinkOrigin = TrackedLinkOrigin(token: token, link: destination)
+            self.pendingDeepLink = destination
         }
     }
 
@@ -505,7 +597,8 @@ final class DeepLinkRouter: ObservableObject {
         case .joinLink(let identifier):   return .joinLink(identifier: identifier)
         case .chatLink(let identifier):   return .chatLink(identifier: identifier)
         case .magicLink(let token):       return .magicLink(token: token)
-        case .trackedLink, .share, .external: return nil
+        case .emailVerificationLink(let token, let email): return .emailVerificationLink(token: token, email: email)
+        case .trackedLink, .share, .referral, .call, .external: return nil
         }
     }
 
@@ -518,13 +611,24 @@ final class DeepLinkRouter: ObservableObject {
     /// résoudre un `/l/<token>`, déposer le brouillon d'un raccourci, et ne pas
     /// revendiquer ce qui n'est pas une destination (`/share`, le web externe).
     func handle(url: URL) -> Bool {
-        switch DeepLinkParser.parse(url) {
+        let parsed = DeepLinkParser.parse(url)
+        if case .trackedLink = parsed {} else { trackedLinkOrigin = nil }
+        switch parsed {
         case .trackedLink(let token):
             resolveTrackedLink(token)
             return true
         case .conversation(let id, let draftText):
             stageDraft(draftText, for: id)
             pendingDeepLink = .conversation(id: id)
+            return true
+        case .referral(let code):
+            return captureReferral(code)
+        case .call(let conversationId, let isVideo):
+            guard CallDialReadinessSnapshot.mayQueueDial(
+                sessionResolved: hasResolvedSession(),
+                authenticated: isAuthenticated()
+            ) else { return false }
+            dialConversationCall(conversationId, isVideo)
             return true
         case .share, .external:
             return false
@@ -533,6 +637,16 @@ final class DeepLinkRouter: ObservableObject {
             pendingDeepLink = link
             return true
         }
+    }
+
+    /// Sans compte, l'invitation MÉMORISE son code et ouvre l'inscription, qui
+    /// le fera voyager (`affiliateToken`, #8058). Un compte déjà connecté ne se
+    /// rattache à personne : rien ne change, et le lien n'est pas revendiqué.
+    private func captureReferral(_ code: String) -> Bool {
+        guard !isAuthenticated() else { return false }
+        referrals.remember(code)
+        requestedAccountEntry = .signUp
+        return true
     }
 
     /// Dépose le texte d'un raccourci dans le brouillon de la conversation.

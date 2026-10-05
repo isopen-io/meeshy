@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useStore } from 'zustand/react';
 
 import { LiveAnnouncement } from '@/components/live-announcement';
+import { endRevokedSession } from '@/lib/api/account-caches';
 import { apiConfig } from '@/lib/api/config';
 import { CONVERSATIONS_QUERY_KEY } from '@/lib/api/conversations';
 import { apiDeps } from '@/lib/api/deps';
@@ -25,11 +26,11 @@ import { appQueryClient } from '@/lib/api/query-client';
 import { sessionStore, type GuestIdentity } from '@/lib/api/session';
 import { translateInvite, type InviteCatalogKey } from '@/lib/i18n-invite-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
-import { joinChoicesOf } from '@/lib/links/invitation-view';
+import { ANONYMOUS_MODE, joinChoicesOf } from '@/lib/links/invitation-view';
 import { copyLinkText, LINK_ANNOUNCE_MS, type CopyOutcome } from '@/lib/links/link-copy';
 import { shareLinkUrl, webOriginOf } from '@/lib/links/web-origin';
 import { useOnline } from '@/lib/net/online';
-import { useParams } from '@/lib/router';
+import { useParams, useSearch } from '@/lib/router';
 import { partagerLien, portailDuNavigateur, type ResultatInvitation } from '@/lib/view/invitation';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
 import { defaultGuestLanguage, GuestForm, GuestSubmit } from '@/routes/chat-join-guest';
@@ -68,7 +69,10 @@ import { Link, href, navigate } from '@/routes/route-table';
  * lien autorise l'historique.
  *
  * TROIS PUBLICS, UNE ADRESSE :
- *  - un compte CONNECTÉ rejoint en un geste, puis arrive dans le fil ;
+ *  - un compte CONNECTÉ rejoint en un geste, puis arrive dans le fil — ou,
+ *    sur un lien qui l'accepte, choisit « Continuer en anonyme »
+ *    (`?mode=anonymous`, #8816) : l'identité anonyme est TENUE à côté du
+ *    compte, qui n'est ni remplacé ni fermé ;
  *  - un visiteur SANS session, sur un lien qui l'accepte, entre EN INVITÉ :
  *    pseudo et langue, « Continuer en anonyme », et la conversation s'ouvre ;
  *  - sur un lien qui exige un compte, il ne voit que les deux sorties — se
@@ -98,7 +102,9 @@ export type ChatJoinDeps = {
   /** Rejoindre SANS compte — la même porte, un autre corps (#5561). */
   readonly joinGuest: (link: string, body: GuestJoinBody) => Promise<ApiResult<LinkGuestJoined>>;
   /** Ouvrir la session d'invité. Séparée de `go` : le fil doit trouver la
-   * créance DÉJÀ posée quand il monte, sinon sa première requête part nue. */
+   * créance DÉJÀ posée quand il monte, sinon sa première requête part nue.
+   * Sous un compte, l'identité est TENUE à côté de lui (#8816) — jamais à sa
+   * place. */
   readonly adoptGuest: (sessionToken: string, guest: GuestIdentity) => void;
   readonly go: (url: string, replace: boolean) => void;
   /** Ce qui suit une jonction réussie : la liste doit compter la conversation
@@ -121,14 +127,20 @@ export type ChatJoinDeps = {
 
 const DEFAULT_DEPS: ChatJoinDeps = {
   load: (link, signal) => loadLinkInvitation({ ...apiDeps, link, signal }),
-  join: (link, language) => joinLinkAsMember(apiDeps, { link, language }),
+  /* Rejoindre sous son compte une conversation déjà rejointe en anonyme
+     (#8816) : le fil s'ouvre sous le COMPTE, l'identité anonyme est oubliée. */
+  join: async (link, language) => {
+    const result = await joinLinkAsMember(apiDeps, { link, language });
+    if (result.ok) sessionStore.getState().dropAnonymous(result.data.conversationId);
+    return result;
+  },
   joinGuest: (link, body) => joinLinkAsGuest(apiDeps, { link, body }),
-  adoptGuest: (sessionToken, guest) => sessionStore.getState().establishGuest({ sessionToken, guest }),
+  adoptGuest: (sessionToken, guest) => sessionStore.getState().adoptAnonymous({ sessionToken, guest }),
   go: navigate,
   joined: () => {
     void appQueryClient.invalidateQueries({ queryKey: CONVERSATIONS_QUERY_KEY });
   },
-  expireSession: () => sessionStore.getState().clearSession(),
+  expireSession: () => endRevokedSession(sessionStore),
   copyText: (url) => copyLinkText(url, portailDuNavigateur()),
   shareUrl: (data) => partagerLien(data),
   origin: () => webOriginOf(apiConfig.base, window.location.origin),
@@ -163,7 +175,8 @@ const PASSING_REFUSALS: ReadonlySet<LinkRefusal> = new Set<LinkRefusal>(['rate-l
 
 export default function ChatJoinScreen() {
   const { link } = useParams<'/chat/$link'>();
-  return <ChatJoin link={link} />;
+  const [search] = useSearch();
+  return <ChatJoin link={link} anonymousRequested={search.get('mode') === ANONYMOUS_MODE} />;
 }
 
 const MISSING_KEY: Readonly<Record<GuestField, Extract<InviteCatalogKey, `invite.missing.${GuestField}`>>> = {
@@ -186,7 +199,16 @@ const COPIED_MS = 2000;
 const PAGE_BACKGROUND =
   'radial-gradient(60% 30% at 12% 0%, color-mix(in srgb, var(--ios-indigo-500) 14%, transparent), transparent), radial-gradient(50% 30% at 90% 90%, color-mix(in srgb, var(--ios-purple-500) 10%, transparent), transparent), var(--color-ios-surface)';
 
-export function ChatJoin({ link, deps = DEFAULT_DEPS }: { readonly link: string; readonly deps?: ChatJoinDeps }) {
+export function ChatJoin({
+  link,
+  anonymousRequested = false,
+  deps = DEFAULT_DEPS,
+}: {
+  readonly link: string;
+  /** `?mode=anonymous` (#8816) — un compte connecté a choisi « Anonyme ». */
+  readonly anonymousRequested?: boolean;
+  readonly deps?: ChatJoinDeps;
+}) {
   const language = currentInterfaceLanguage();
   const session = useStore(sessionStore, (s) => s.session);
   const online = useOnline();
@@ -360,7 +382,7 @@ export function ChatJoin({ link, deps = DEFAULT_DEPS }: { readonly link: string;
   }, [announce, deps, language, title, url]);
 
   const joinRefusedForGood = join.kind === 'refused' && !PASSING_REFUSALS.has(join.refusal);
-  const choices = joinChoicesOf({ signedIn: isAccount, guestAllowed: invitation?.guest.allowed === true });
+  const choices = joinChoicesOf({ signedIn: isAccount, guestAllowed: invitation?.guest.allowed === true, anonymousRequested });
   const open = join.kind !== 'joined' && !joinRefusedForGood;
   const next = href('chatJoin', { link });
   const primary: ReactNode =
@@ -423,6 +445,12 @@ export function ChatJoin({ link, deps = DEFAULT_DEPS }: { readonly link: string;
               ) : null}
             </JoinPanel>
 
+            {(choices.anonymousOffer || choices.accountOffer) && open ? (
+              <div data-invite-identity-switch className="md:order-2 md:col-start-2">
+                <IdentitySwitch language={language} link={link} toAnonymous={choices.anonymousOffer} />
+              </div>
+            ) : null}
+
             {choices.signIn && !choices.accountRequired ? (
               <div data-invite-exits className="md:order-2 md:col-start-2">
                 <GuestExits language={language} next={next} withSeparator={choices.guest && open} accountRequired={false} />
@@ -451,7 +479,7 @@ function JoinPanel({ language, title, children }: { readonly language: Interface
     <section
       aria-labelledby="invite-join-title"
       data-invite-join
-      className="grid gap-3 rounded-[20px] p-4 md:col-start-2 md:rounded-[26px] md:p-6"
+      className="grid gap-3 rounded-hero p-4 md:col-start-2 md:rounded-sheet md:p-6"
       style={{ backgroundColor: 'var(--color-ios-card)', border: '1px solid color-mix(in srgb, var(--color-ios-ink-3) 22%, transparent)' }}
     >
       <h2 id="invite-join-title" className="text-thread font-extrabold" style={{ color: INK }}>
@@ -502,7 +530,7 @@ function JoinAction({
         onClick={onJoin}
         disabled={disabled}
         aria-busy={joining}
-        className="grid w-full place-items-center rounded-[18px] text-body font-extrabold text-white transition-opacity focus-visible:outline-2 focus-visible:outline-offset-2"
+        className="grid w-full place-items-center rounded-bubble text-body font-extrabold text-ios-on-brand transition-opacity focus-visible:outline-2 focus-visible:outline-offset-2"
         style={{ minHeight: 54, backgroundColor: INVITE_ACTION_FLOOR, backgroundImage: INVITE_ACTION_BACKGROUND, opacity: disabled ? 0.6 : 1, outlineColor: 'var(--color-ios-brand)' }}
       >
         {translateInvite(language, joining ? 'invite.join.joining' : 'invite.join.account')}
@@ -513,6 +541,23 @@ function JoinAction({
         </p>
       )}
     </div>
+  );
+}
+
+/**
+ * L'AUTRE IDENTITÉ D'UN COMPTE CONNECTÉ (#8816) — une ANCRE (un vrai `href`),
+ * secondaire : « Continuer en anonyme » sous son compte, « Rejoindre avec mon
+ * compte » sous le formulaire d'invité. La même adresse, le mode seul change.
+ */
+function IdentitySwitch({ language, link, toAnonymous }: { readonly language: InterfaceLanguage; readonly link: string; readonly toAnonymous: boolean }) {
+  return toAnonymous ? (
+    <Link to="chatJoin" params={{ link }} search={{ mode: ANONYMOUS_MODE }} data-invite-anonymous-offer className={INVITE_OUTLINE_BUTTON} style={INVITE_OUTLINE_STYLE}>
+      {translateInvite(language, 'invite.guest.continue')}
+    </Link>
+  ) : (
+    <Link to="chatJoin" params={{ link }} data-invite-account-offer className={INVITE_OUTLINE_BUTTON} style={INVITE_OUTLINE_STYLE}>
+      {translateInvite(language, 'invite.join.account')}
+    </Link>
   );
 }
 
@@ -562,7 +607,7 @@ function GuestExits({
           className={
             withSeparator
               ? INVITE_OUTLINE_BUTTON
-              : 'flex items-center justify-center rounded-[16px] px-3 text-body font-extrabold text-white focus-visible:outline-2 focus-visible:outline-offset-2'
+              : 'flex items-center justify-center rounded-card px-3 text-body font-extrabold text-ios-on-brand focus-visible:outline-2 focus-visible:outline-offset-2'
           }
           style={withSeparator ? INVITE_OUTLINE_STYLE : { minHeight: 48, backgroundColor: INVITE_ACTION_FLOOR, backgroundImage: INVITE_ACTION_BACKGROUND, outlineColor: 'var(--color-ios-brand)' }}
         >

@@ -130,3 +130,42 @@ describe('readClipboardImages — le bouton « Coller »', () => {
     expect(await readClipboardImages(undefined)).toEqual([]);
   });
 });
+
+describe('readClipboardImages — « Coller » dans la coque Android (#8640)', () => {
+  const refused = {
+    read: async (): Promise<ClipboardItems> => {
+      throw new DOMException('clipboard-read', 'NotAllowedError');
+    },
+  };
+
+  test('la coque lit le presse-papier système par son pont, que la WebView refuse', async () => {
+    const calls: object[] = [];
+    const nativeRead = async (options: object) => {
+      calls.push(options);
+      return { mimeType: 'image/png', data: btoa(String.fromCharCode(137, 80, 78, 71)) };
+    };
+
+    const [image, ...rest] = await readClipboardImages(refused, nativeRead);
+
+    expect(calls).toHaveLength(1);
+    expect(rest).toEqual([]);
+    expect(image?.type).toBe('image/png');
+    expect(Array.from(new Uint8Array(await (image as Blob).arrayBuffer()))).toEqual([137, 80, 78, 71]);
+  });
+
+  test('un presse-papier sans image, une réponse illisible ou un refus du pont : rien à coller', async () => {
+    const answers: readonly (() => Promise<unknown>)[] = [
+      async () => ({}),
+      async () => ({ mimeType: 'text/plain', data: btoa('bonjour') }),
+      async () => ({ mimeType: 'image/png', data: '' }),
+      async () => null,
+      async () => {
+        throw new Error('clipboard-unavailable');
+      },
+    ];
+
+    const results = await Promise.all(answers.map((answer) => readClipboardImages(refused, answer)));
+
+    expect(results).toEqual(answers.map(() => []));
+  });
+});

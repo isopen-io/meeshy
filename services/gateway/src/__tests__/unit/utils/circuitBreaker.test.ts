@@ -388,9 +388,7 @@ describe('CircuitBreaker', () => {
 
       await circuitBreaker.execute(() => Promise.resolve('test'));
 
-      expect(enhancedLogger.warn).toHaveBeenCalledWith(
-        'Circuit breaker OPEN, failing fast: TestBreaker'
-      );
+      expect(enhancedLogger.warn).toHaveBeenCalledWith('Circuit breaker OPEN, failing fast: TestBreaker', expect.any(Object));
     });
 
     it('should still increment totalRequests when failing fast', async () => {
@@ -821,7 +819,7 @@ describe('CircuitBreakerFactory', () => {
       expect(breaker).toBeInstanceOf(CircuitBreaker);
     });
 
-    it('should return null from fallback and log warning', async () => {
+    it('should return null from a silent fallback — the sampled fail-fast line speaks (#8272)', async () => {
       const breaker = CircuitBreakerFactory.createRedisBreaker();
 
       // Open the circuit (threshold is 3)
@@ -835,7 +833,7 @@ describe('CircuitBreakerFactory', () => {
       const result = await breaker.execute(() => Promise.resolve('test'));
 
       expect(result).toBeNull();
-      expect(enhancedLogger.warn).toHaveBeenCalledWith(
+      expect(enhancedLogger.warn).not.toHaveBeenCalledWith(
         'Redis circuit breaker OPEN, falling back to in-memory'
       );
     });

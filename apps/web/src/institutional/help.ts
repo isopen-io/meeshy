@@ -27,6 +27,7 @@ export const PAGE_HELP: ContentPage = {
   hero: "Comment faire ce que vous cherchez à faire — dans l'ordre où l'on s'y heurte quand on découvre Meeshy.",
   description:
     "Le centre d'aide de Meeshy : premiers pas, traduction automatique, messages vocaux, confidentialité et gestion du compte.",
+  mee: { sticker: 'mee-coucou', caption: 'Coucou ! Mee vous montre chaque geste, pas à pas.' },
   sections: [
     {
       title: 'Premiers pas',

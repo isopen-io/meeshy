@@ -23,6 +23,12 @@ struct FocalProtectedContent<Content: View>: View {
     var isDark: Bool = false
     let messageId: String
     let onConsumeViewOnce: ((String, @escaping (Bool) -> Void) -> Void)?
+    /// Ce que dit le voile à VoiceOver : le toucher le lève SUR PLACE (#8389).
+    var tap: ProtectedContentTap = .revealInPlace
+    /// Ce que fait le toucher SUIVANT sur le contenu révélé, là où l'hôte ne
+    /// rend aucune case (la Rivière) : le plein écran de sa première pièce.
+    var tapAfterReveal: ProtectedContentTap = .none
+    var onMediaTap: ((MessageAttachment) -> Void)? = nil
     @ViewBuilder let content: Content
 
     @StateObject private var reveal = BubbleBlurRevealController()
@@ -31,6 +37,9 @@ struct FocalProtectedContent<Content: View>: View {
 
     var body: some View {
         content
+            // #8537 — le message révélé lève AUSSI le voile de ses pièces
+            // floutées : un toucher montre l'image, le suivant l'ouvre.
+            .environment(\.focalMessageRevealed, reveal.isRevealed)
             .blur(radius: isMasked ? 18 : 0)
             .allowsHitTesting(!isMasked)
             .overlay {
@@ -44,6 +53,15 @@ struct FocalProtectedContent<Content: View>: View {
             .overlay {
                 if isMasked {
                     revealAffordance
+                } else if reveal.isRevealed, case .openFullscreen(let media) = tapAfterReveal, let onMediaTap {
+                    Button {
+                        HapticFeedback.light()
+                        onMediaTap(media)
+                    } label: {
+                        Color.clear.contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityHint(tapAfterReveal.accessibilityHint ?? "")
                 }
             }
     }
@@ -56,7 +74,7 @@ struct FocalProtectedContent<Content: View>: View {
         // MeeshyUI) : même libellé, même indice, même geste. Elle était
         // dupliquée ici avec ses propres clés i18n, et ni l'une ni l'autre ne
         // disait qu'une vue unique se CONSOMME au toucher.
-        ProtectedVeilAffordance(isViewOnce: isViewOnce, isDark: isDark) {
+        ProtectedVeilAffordance(isViewOnce: isViewOnce, isDark: isDark, hint: tap.accessibilityHint) {
             HapticFeedback.medium()
             reveal.requestReveal(
                 request: BubbleBlurRevealLifecycle.RevealRequest(
@@ -66,5 +84,19 @@ struct FocalProtectedContent<Content: View>: View {
                 consumeViewOnce: onConsumeViewOnce
             )
         }
+    }
+}
+
+/// Le message qui porte cette pièce est-il RÉVÉLÉ (`FocalProtectedContent`) ?
+/// Lu par `FocalGridCell` : une pièce floutée d'un message révélé se montre
+/// sans second voile « Contenu masqué » (#8537). La vue unique n'est pas visée.
+private struct FocalMessageRevealedKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    var focalMessageRevealed: Bool {
+        get { self[FocalMessageRevealedKey.self] }
+        set { self[FocalMessageRevealedKey.self] = newValue }
     }
 }

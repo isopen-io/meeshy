@@ -12,6 +12,40 @@ import MeeshyUI
 /// l'inventaire des portails vivant.
 extension MeeshyComposerHost {
 
+    /// Le portail courant, vu par UNE présentation : la feuille ne voit que
+    /// les feuilles, le plein écran que le plein écran. Une fermeture ne vide
+    /// que ce que sa présentation montrait.
+    func presentedPortal(as presentation: ComposerPortal.Presentation) -> Binding<ComposerPortal?> {
+        Binding(
+            get: { presentedPortal?.presentation == presentation ? presentedPortal : nil },
+            set: { nouveau in
+                guard nouveau != nil || presentedPortal?.presentation == presentation else { return }
+                presentedPortal = nouveau
+            })
+    }
+
+    /// Le contenu d'un portail, monté comme un NŒUD (#8387) : les dix
+    /// feuilles sortent du type de la pile et s'évaluent dans leur cadre.
+    func portalView(_ portail: ComposerPortal) -> some View {
+        ComposerHostPortal(host: self, observation: observation, portal: portail)
+    }
+
+    @ViewBuilder
+    func portalContent(_ portail: ComposerPortal) -> some View {
+        switch portail {
+        case .location:     documentLocationPickerSheet
+        case .emoji:        emojiPickerSheet
+        case .sticker:      stickerPickerSheet
+        case .sound:        composerSoundSheet
+        case .soundLibrary: soundLibrarySheet
+        case .reference:    referencePickerSheet
+        case .language:     documentLanguagePickerSheet
+        case .camera:       documentCameraSheet
+        case .hashtag:      composerHashtagSheet
+        case .audience:     composerAudienceSheet
+        }
+    }
+
     /// **Les PORTAILS d'ingestion appartiennent au MEUBLE, jamais à une
     /// surface** (#4120).
     ///
@@ -36,7 +70,9 @@ extension MeeshyComposerHost {
     /// Le contrôle de découvrabilité y est aussi, et pour la même raison : un
     /// lieu posé depuis la scène doit pouvoir se retirer.
     var surfaceWithIntakePortals: some View {
-        surface
+        // L'aiguillage est un NŒUD (#8387) : l'atelier et ses gestes sortent du
+        // type de la pile, évalués dans leur propre cadre.
+        surfaceNode
         // document : c'est l'ÉVENTAIL (le plateau, en tête), seul sélecteur de
         // mode. Le média qui qualifie fait respirer son offre (`reelGate` lit
         // `documentComposesReel`), et choisir RÉEL/STORY route vers la scène.
@@ -64,28 +100,9 @@ extension MeeshyComposerHost {
                     offersDiscoverability: documentOffersNearbyDiscoverability,
                     onRemovePlace: { documentLocation = nil }
                 )
-                .padding(.horizontal, 16)
-                .padding(.bottom, 10)
+                .padding(.horizontal, MeeshySpacing.lg)
+                .padding(.bottom, MeeshySpacing.smPlus)
             }
-        }
-        // **Le sixième outil (T2.6)**, même patron que le lieu juste au-dessus.
-        .confirmationDialog(ComposerMediaSourcePolicy.chooserTitle,
-                            isPresented: $showsMediaSourceChooser,
-                            titleVisibility: .visible) {
-            // Les boutons SORTENT de la règle : les écrire à la main ferait de
-            // ce bloc une seconde liste, que `allowsCapture` cesserait de
-            // gouverner au premier oubli.
-            ForEach(ComposerMediaSourcePolicy.offered(allowsCapture: profile.allowsCapture),
-                    id: \.self) { source in
-                Button(ComposerDocumentCopy.label(ComposerMediaSourcePolicy.namingTool(source))) {
-                    presentMediaIntake(source)
-                }
-            }
-            // **Annuler DÉSARME** (#6008). Ce corps était vide : l'intention
-            // posée par la porte du rail survivait à la feuille qu'elle venait
-            // d'ouvrir, et le média suivant — quelle que soit sa porte — se
-            // posait sur la scène courante au lieu d'ouvrir sa page.
-            Button(ComposerMediaSourcePolicy.cancel, role: .cancel) { abandonRailPosing() }
         }
         // **L'historique se remplit AU-DESSUS de l'aiguillage** (#4402), pas
         // sur la surface qui l'affiche. Un instantané pris seulement pendant
@@ -98,6 +115,9 @@ extension MeeshyComposerHost {
         // `historyTrigger` est déjà débouncé côté SDK ; la dédup du store fait
         // qu'un cycle sans changement réel des slides est un no-op.
         .onReceive(viewModel.historyTrigger) { _ in
+            // AVANT l'instantané : poser la fenêtre d'un objet neuf fait partie
+            // du geste qui l'a ajouté — un seul « annuler » les défait.
+            placeNewSceneObjectsAtPlayhead()
             viewModel.pushHistorySnapshot()
         }
         // La trajectoire part de l'état d'OUVERTURE : sans ce premier
@@ -105,6 +125,11 @@ extension MeeshyComposerHost {
         // et non à l'écran vierge — l'utilisateur perdrait la possibilité de
         // tout défaire.
         .task { viewModel.seedHistory() }
+        // **La photothèque s'ouvre d'office** à la création d'un post, d'une
+        // story ou d'un réel vierge (directive porteur 2026-09-28).
+        .task { await presentOpeningPickerIfNeeded() }
+        // La caméra de la barre d'une conversation arrive viseur armé (#9123).
+        .task { armViewfinderIfTheDoorAsks() }
         // **Les personnes à proposer, chargées UNE fois** (#4475) — mêmes amis
         // acceptés que la bande du document, par la même source. Deux
         // chargements auraient donné deux listes à faire diverger, et deux
@@ -181,21 +206,16 @@ extension MeeshyComposerHost {
         // quand l'autorisation de localisation est refusée : c'est l'injecteur
         // qui le décide, pas la feuille.
         .stickerNearbyPlacesProvided()
-        .sheet(item: $presentedPortal,
-               onDismiss: { forgetEditedSound(); resumePendingPresentation() }) { portail in
-            switch portail {
-            case .location:     documentLocationPickerSheet
-            case .emoji:        emojiPickerSheet
-            case .sticker:      stickerPickerSheet
-            case .sound:        composerSoundSheet
-            case .soundLibrary: soundLibrarySheet
-            case .reference:    referencePickerSheet
-            case .language:     documentLanguagePickerSheet
-            case .camera:       documentCameraSheet
-            case .hashtag:      composerHashtagSheet
-            case .audience:     composerAudienceSheet
-            }
-        }
+        // **La porte « Stickers » de l'atelier ouvre la feuille du MEUBLE**
+        // (#9189) : l'atelier n'en monte plus à lui, il la demande. Une seule
+        // feuille, celle de la conversation, avec tous ses onglets.
+        .storyStickerSheetRequestProvided { presentedPortal = .sticker }
+        .sheet(item: presentedPortal(as: .sheet),
+               onDismiss: { forgetEditedSound(); resumePendingPresentation() }) { portalView($0) }
+        // **La caméra s'ouvre SEULE en plein écran** (#9125) : le même
+        // portail, sa présentation dite par `ComposerPortal.presentation`.
+        .fullScreenCover(item: presentedPortal(as: .fullScreen),
+                         onDismiss: { resumePendingPresentation() }) { portalView($0) }
         // **L'éditeur d'objet plein écran** (#4634). Il vit AU-DESSUS de
         // l'aiguillage pour la même raison que les portails : ouvert depuis la
         // scène, il doit survivre à un changement de surface.

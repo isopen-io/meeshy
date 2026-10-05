@@ -100,6 +100,10 @@ export interface ReportFilters {
   status?: ReportStatus | string;
   reporterId?: string;
   moderatorId?: string;
+  /** Les signalements visant CETTE entité (quel que soit son genre). */
+  reportedEntityId?: string;
+  /** `true` : seulement les signalements sans modérateur assigné. */
+  unassigned?: boolean;
   createdAfter?: Date;
   createdBefore?: Date;
   sortBy?: 'createdAt' | 'updatedAt' | 'resolvedAt';

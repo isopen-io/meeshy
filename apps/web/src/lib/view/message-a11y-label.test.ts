@@ -121,6 +121,39 @@ describe('composeMessageLabel — l’ordre iOS', () => {
     expect(label).toContain('éphémère');
   });
 
+  /* #8635 — la protection se DIT au lecteur d'écran, dans la langue du
+     lecteur : la flamme-œil n'a ni capsule ni décompte (son filigrane est
+     muet), et le mot « éphémère » était du français en dur, gaté sur
+     `expiresAt` seul — un éphémère à durée servi sans échéance se taisait. */
+  const label = (partial: Partial<Message>, extra: Partial<Parameters<typeof composeMessageLabel>[0]> = {}) =>
+    composeMessageLabel({ language: 'fr', protection: 'standard', message: message(partial), isMine: false, servedText: 'Bonjour', delivery: 'sent', ...extra });
+
+  test('flamme-œil : « Message éphémère, disparaît après lecture »', () => {
+    expect(label({ effectFlags: MESSAGE_EFFECT_FLAGS.EPHEMERAL | MESSAGE_EFFECT_FLAGS.EPHEMERAL_AFTER_READ })).toContain(
+      'Message éphémère, disparaît après lecture',
+    );
+  });
+
+  test('éphémère à durée, sans échéance servie : « Message éphémère »', () => {
+    expect(label({ ephemeralDuration: 300 })).toContain('Message éphémère');
+  });
+
+  test('flou RÉVÉLÉ : « Flouté » ; vue unique RÉVÉLÉE : « Vue unique »', () => {
+    const revealed = { phase: { phase: 'revealed', until: Number.MAX_SAFE_INTEGER } } as const;
+    expect(label({ isBlurred: true }, { protection: 'veiled', ...revealed })).toContain('Flouté');
+    expect(label({ isViewOnce: true }, { protection: 'viewOnce', ...revealed })).toContain('Vue unique');
+  });
+
+  test('flou AU REPOS : le substitut suffit, pas de doublon', () => {
+    expect(label({ isBlurred: true }, { protection: 'veiled' })).not.toContain('Flouté');
+  });
+
+  test('dans la langue du lecteur', async () => {
+    await loadInterfaceCatalog('en');
+    const flame = MESSAGE_EFFECT_FLAGS.EPHEMERAL | MESSAGE_EFFECT_FLAGS.EPHEMERAL_AFTER_READ;
+    expect(label({ effectFlags: flame }, { language: 'en' })).toContain('Ephemeral message, disappears after reading');
+  });
+
   test('un texte SERVI vide (média-seul) n’ajoute AUCUN segment texte vide', () => {
     const label = composeMessageLabel({ language: 'fr', protection: 'standard',
       message: message({ attachments: [attachment({ mimeType: 'video/mp4' })] }),

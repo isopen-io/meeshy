@@ -1,4 +1,5 @@
 import Foundation
+import MeeshySDK
 
 // MARK: - Le geste qui ouvre la caméra depuis la scène (#4036, #4851)
 
@@ -68,4 +69,167 @@ nonisolated enum ComposerSceneCaptureGesture {
         guard format != .status else { return false }
         return backgroundIsEmpty
     }
+}
+
+// MARK: - La capture RAPIDE sur une scène vide (#8653, #8711)
+
+/// **Un toucher ARME le viseur, un second toucher prend la photo ; un appui
+/// long ouvre ET filme** (directives porteur 2026-09-29).
+///
+/// > « Lors de la prise de photo dans la scène, il faut prendre la photo en
+/// > deux temps. Le premier tap arme et affiche avec les contrôleurs (flash,
+/// > changement d'optique) habituels, second tap n'importe où sur la scène
+/// > prend la photo. » (#8711)
+///
+/// Elle SUPPLANTE le « un toucher ouvre et prend » du lot #8653, cité
+/// ci-dessous pour mémoire : un toucher qui prenait la photo AVANT que
+/// l'auteur voie son cadre et règle son flash rendait un cliché qu'il n'avait
+/// pas composé.
+///
+/// > « Lorsque la scène est vide mettre en gris le fait de prendre une photo ou
+/// > vidéo rapidement — par tap simple ça ouvre et prend la photo, longpress
+/// > ouvre et lance la vidéo ! »
+///
+/// Avant ce lot, seul l'appui long armait le viseur, et c'était sa LEVÉE qui
+/// choisissait : relâché tôt, une photo ; tenu, une vidéo. Deux intentions sur
+/// un seul geste, dont la plus courante — la photo — demandait d'appuyer
+/// longtemps puis de lâcher vite. Chaque geste porte désormais UNE intention,
+/// et l'indication grise de la scène vide les nomme.
+nonisolated enum ComposerSceneQuickCapture {
+
+    enum Tap: Equatable, Sendable {
+        /// **Le premier toucher ARME** : le viseur s'ouvre avec ses
+        /// contrôleurs — flash, optique, sortie — et RIEN n'est pris (#8711).
+        case arm
+    }
+
+    /// **Le second toucher, sur un viseur déjà armé** (#8711).
+    enum ArmedTap: Equatable, Sendable {
+        /// N'importe où sur la scène, hors contrôleurs : la photo part.
+        case takePhoto
+        /// Le toucher n'a rien à prendre — viseur éteint ou en prise, format
+        /// sans photo, segments vidéo en attente de leur `✓`.
+        case ignore
+    }
+
+    enum Release: Equatable, Sendable {
+        case closeTake
+        case keepFilming
+        /// Le doigt est parti avant que la caméra soit prête : rien n'est pris,
+        /// jamais une photo que personne n'a demandée.
+        case cancelPending
+    }
+
+    enum Hint: Equatable, Sendable {
+        case photoOrVideo
+        case videoOnly
+    }
+
+    /// **Rien n'est POSÉ sur la scène.** Une couleur de fond n'y pose rien ;
+    /// un texte, un média, un sticker, un tracé, un lieu ou un son, si.
+    static func sceneIsBlank(_ slide: StorySlide) -> Bool {
+        let effets = slide.effects
+        return slide.mediaURL == nil
+            && effets.textObjects.isEmpty
+            && (effets.mediaObjects ?? []).isEmpty
+            && (effets.stickerObjects ?? []).isEmpty
+            && (effets.stickers ?? []).isEmpty
+            && effets.drawingData == nil
+            && (effets.drawingStrokes ?? []).isEmpty
+            && effets.locationObjects.isEmpty
+            && (effets.audioPlayerObjects ?? []).isEmpty
+    }
+
+    /// Le geste — et son indication — n'existent que sur une scène vide, viseur
+    /// éteint, aucun outil ouvert, dans un format qui a un viseur.
+    static func offers(sceneIsBlank: Bool,
+                       format: ComposerFormat,
+                       stage: ComposerSceneCameraStage,
+                       toolIsOpen: Bool) -> Bool {
+        sceneIsBlank && stage == .off && !toolIsOpen && !ComposerSceneCamera.modes(for: format).isEmpty
+    }
+
+    static func tap(format: ComposerFormat) -> Tap? {
+        ComposerSceneCamera.modes(for: format).isEmpty ? nil : .arm
+    }
+
+    /// **La photo ne part que d'un viseur ARMÉ, dans un format qui la sert.**
+    /// Des segments vidéo en attente ne se perdent pas sous une photo : la
+    /// pose d'une prise referme le viseur, et avec lui ce qui n'a pas été
+    /// validé.
+    static func armedTap(stage: ComposerSceneCameraStage,
+                         format: ComposerFormat,
+                         pendingSegments: Int) -> ArmedTap {
+        guard stage == .armed,
+              pendingSegments == 0,
+              ComposerSceneCamera.modes(for: format).contains(.photo) else { return .ignore }
+        return .takePhoto
+    }
+
+    /// **L'appui long sur un viseur déjà ARMÉ** (#8846, directive porteur
+    /// 2026-09-30 : « le longpress à partir de la scène doit déclencher la
+    /// capture vidéo après avoir armé l'objectif »).
+    enum ArmedHold: Equatable, Sendable {
+        /// N'importe où sur la scène : la vidéo part, et relâcher l'arrête.
+        case startFilming
+        /// Viseur éteint ou déjà en prise, ou format sans vidéo.
+        case ignore
+    }
+
+    /// **La vidéo part d'un viseur ARMÉ, dans un format qui la sert.** Des
+    /// segments en attente n'y font PAS obstacle, à la différence de la
+    /// photo : une nouvelle prise s'y AJOUTE (vue `4b`), elle n'en efface
+    /// aucun.
+    ///
+    /// Aucune durée maximale n'est imposée ici : le dépôt n'en porte aucune
+    /// pour les vidéos de story, de post ou de réel (même doctrine que l'audio,
+    /// directive produit 2026-07-26 — « aussi longtemps que l'utilisateur le
+    /// souhaite »). La prise dure tant que le doigt reste, ou jusqu'au stop
+    /// d'une prise verrouillée.
+    static func armedHold(stage: ComposerSceneCameraStage, format: ComposerFormat) -> ArmedHold {
+        guard stage == .armed, ComposerSceneCamera.modes(for: format).contains(.video) else { return .ignore }
+        return .startFilming
+    }
+
+    /// **Un geste, une ligne, son icône** (#8671, complément porteur
+    /// 2026-09-29 : « l'instruction de taper photo peut avoir l'appareil photo
+    /// au-devant, et à la ligne une caméra vidéo pour la partie long press »).
+    ///
+    /// **La photo a DEUX lignes depuis #8711** — toucher arme, toucher encore
+    /// prend : l'indication dit les deux temps que le geste demande.
+    enum GestureLine: Equatable, Sendable {
+        case tapArm
+        case tapAgainPhoto
+        case holdFilm
+
+        var symbol: String {
+            switch self {
+            case .tapArm:        return "camera.viewfinder"
+            case .tapAgainPhoto: return "camera"
+            case .holdFilm:      return "video"
+            }
+        }
+    }
+
+    static func gestureLines(_ hint: Hint) -> [GestureLine] {
+        switch hint {
+        case .photoOrVideo: return [.tapArm, .tapAgainPhoto, .holdFilm]
+        case .videoOnly:    return [.holdFilm]
+        }
+    }
+
+    static func hint(format: ComposerFormat) -> Hint? {
+        guard tap(format: format) != nil else { return nil }
+        return ComposerSceneCamera.modes(for: format).contains(.photo) ? .photoOrVideo : .videoOnly
+    }
+
+    /// Au-delà, la caméra ne viendra pas (simulateur, matériel occupé) : le
+    /// viseur reste ouvert, et son propre déclencheur prend le relais.
+    static let readinessTimeout: TimeInterval = 3
+
+    /// **Le seuil de l'appui long du viseur armé** (#8846) — celui du système
+    /// (`UILongPressGestureRecognizer`, 0,5 s) : assez long pour qu'un toucher
+    /// photo ne parte jamais en vidéo, assez court pour que la prise démarre
+    /// sans que le doigt se demande s'il s'est passé quelque chose.
+    static let armedHoldDuration: TimeInterval = 0.5
 }

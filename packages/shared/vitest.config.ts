@@ -27,6 +27,7 @@ export default defineConfig({
         'types/attachment-transcription.ts',
         'types/translated-audio.ts',
         'types/notification.ts',
+        'types/notification-preferences.ts',
         'types/preferences/notification.ts',
         'types/preferences/video.ts',
         'types/preferences/audio.ts',

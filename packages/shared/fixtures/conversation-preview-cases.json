@@ -667,6 +667,143 @@
       "text": "Alice : 📷 Au bord du lac"
     },
     {
+      "id": "contact-card-legacy-file-name",
+      "matrix": "Carte de visite",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "file",
+          "originalLanguage": "fr",
+          "attachment": {
+            "mimeType": "text/vcard",
+            "originalName": "contact_80140BD0-3D81-42CA-B339-E67D81528456_Zoé Sanscompte.vcf",
+            "fileSize": 255
+          }
+        }
+      },
+      "expected": {
+        "tone": "default",
+        "icon": "contact",
+        "author": {
+          "kind": "member",
+          "id": "u-alice",
+          "label": "Alice"
+        },
+        "kind": "message",
+        "segments": [
+          {
+            "kind": "label",
+            "text": "Contact partagé"
+          },
+          {
+            "kind": "label",
+            "text": "Zoé Sanscompte"
+          }
+        ]
+      },
+      "text": "Alice : 👤 Contact partagé · Zoé Sanscompte"
+    },
+    {
+      "id": "contact-card-octet-stream",
+      "matrix": "Carte de visite",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "file",
+          "originalLanguage": "fr",
+          "attachment": {
+            "mimeType": "application/octet-stream",
+            "originalName": "Marc Dupont.vcf",
+            "fileSize": 512
+          }
+        }
+      },
+      "expected": {
+        "tone": "default",
+        "icon": "contact",
+        "author": {
+          "kind": "member",
+          "id": "u-alice",
+          "label": "Alice"
+        },
+        "kind": "message",
+        "segments": [
+          {
+            "kind": "label",
+            "text": "Contact partagé"
+          },
+          {
+            "kind": "label",
+            "text": "Marc Dupont"
+          }
+        ]
+      },
+      "text": "Alice : 👤 Contact partagé · Marc Dupont"
+    },
+    {
+      "id": "contact-card-without-name",
+      "matrix": "Carte de visite",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "file",
+          "originalLanguage": "fr",
+          "attachment": {
+            "mimeType": "text/x-vcard",
+            "originalName": "",
+            "fileSize": 255
+          }
+        }
+      },
+      "expected": {
+        "tone": "default",
+        "icon": "contact",
+        "author": {
+          "kind": "member",
+          "id": "u-alice",
+          "label": "Alice"
+        },
+        "kind": "message",
+        "segments": [
+          {
+            "kind": "label",
+            "text": "Contact partagé"
+          }
+        ]
+      },
+      "text": "Alice : 👤 Contact partagé"
+    },
+    {
       "id": "file",
       "matrix": "Fichier",
       "input": {
@@ -3119,6 +3256,216 @@
       "text": "Alice a créé le groupe"
     },
     {
+      "id": "system-generic-served-text",
+      "matrix": "Système — clé générique (message que le serveur ne sait pas typer) : son texte, comme dans le fil (#8561)",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-bob",
+          "senderName": "Bob",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "system",
+          "originalLanguage": "fr",
+          "content": "Bob a rejoint la conversation",
+          "systemEvent": {
+            "key": "system.generic",
+            "params": {}
+          }
+        }
+      },
+      "expected": {
+        "tone": "system",
+        "icon": null,
+        "author": null,
+        "kind": "system",
+        "segments": [
+          {
+            "kind": "text",
+            "text": "Bob a rejoint la conversation",
+            "language": null
+          }
+        ]
+      },
+      "text": "Bob a rejoint la conversation"
+    },
+    {
+      "id": "system-generic-served-translation",
+      "matrix": "Système — clé générique : le texte passe par le Prisme du lecteur (#8561)",
+      "input": {
+        "viewerId": "u-me",
+        "language": "en",
+        "preferredLanguages": [
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-bob",
+          "senderName": "Bob",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "system",
+          "originalLanguage": "fr",
+          "content": "Bob a rejoint la conversation",
+          "translations": {
+            "en": "Bob joined the conversation"
+          },
+          "systemEvent": {
+            "key": "system.generic",
+            "params": {}
+          }
+        }
+      },
+      "expected": {
+        "tone": "system",
+        "icon": null,
+        "author": null,
+        "kind": "system",
+        "segments": [
+          {
+            "kind": "text",
+            "text": "Bob joined the conversation",
+            "language": "en"
+          }
+        ]
+      },
+      "text": "Bob joined the conversation"
+    },
+    {
+      "id": "system-generic-without-text",
+      "matrix": "Système — clé générique sans texte : le libellé neutre",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-bob",
+          "senderName": "Bob",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "system",
+          "originalLanguage": "fr",
+          "content": "",
+          "systemEvent": {
+            "key": "system.generic",
+            "params": {}
+          }
+        }
+      },
+      "expected": {
+        "tone": "system",
+        "icon": null,
+        "author": null,
+        "kind": "system",
+        "segments": [
+          {
+            "kind": "label",
+            "text": "Conversation mise à jour"
+          }
+        ]
+      },
+      "text": "Conversation mise à jour"
+    },
+    {
+      "id": "system-members-arrived-one",
+      "matrix": "Système — arrivées regroupées de Meeshy Global, une arrivée (#7740, #8561)",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-bob",
+          "senderName": "Bob",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "system",
+          "originalLanguage": "fr",
+          "content": "Aïcha vient d’arriver — dis-lui salut",
+          "systemEvent": {
+            "key": "system.members-arrived",
+            "params": {
+              "first": "Aïcha",
+              "second": "",
+              "third": "",
+              "others": 0,
+              "count": 1
+            }
+          }
+        }
+      },
+      "expected": {
+        "tone": "system",
+        "icon": null,
+        "author": null,
+        "kind": "system",
+        "segments": [
+          {
+            "kind": "label",
+            "text": "Aïcha vient d’arriver — dis-lui salut"
+          }
+        ]
+      },
+      "text": "Aïcha vient d’arriver — dis-lui salut"
+    },
+    {
+      "id": "system-members-arrived-many",
+      "matrix": "Système — arrivées regroupées, au-delà de trois, dans la langue de cadrage (#7740, #8561)",
+      "input": {
+        "viewerId": "u-me",
+        "language": "en",
+        "preferredLanguages": [
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-bob",
+          "senderName": "Bob",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "system",
+          "originalLanguage": "fr",
+          "content": "Aïcha, Tom et 12 autres viennent d’arriver — dis-leur salut",
+          "systemEvent": {
+            "key": "system.members-arrived",
+            "params": {
+              "first": "Aïcha",
+              "second": "Tom",
+              "third": "",
+              "others": 12,
+              "count": 14
+            }
+          }
+        }
+      },
+      "expected": {
+        "tone": "system",
+        "icon": null,
+        "author": null,
+        "kind": "system",
+        "segments": [
+          {
+            "kind": "label",
+            "text": "Aïcha, Tom and 12 others just arrived — say hi"
+          }
+        ]
+      },
+      "text": "Aïcha, Tom and 12 others just arrived — say hi"
+    },
+    {
       "id": "voice-by-recorder-name",
       "matrix": "Vocal — nom de fichier d’enregistreur",
       "input": {
@@ -3620,6 +3967,108 @@
       "text": "Alice a réagi 😮 à « Vue unique »"
     },
     {
+      "id": "reaction-peer-direct",
+      "matrix": "Priorité 4 — réaction du pair en discussion directe : le titre le nomme déjà (#9049)",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastReaction": {
+          "reactorId": "p-alice",
+          "reactorUserId": "u-alice",
+          "reactorName": "Alice",
+          "messageId": "m-1",
+          "targetSenderId": "p-me",
+          "targetSenderUserId": "u-me",
+          "excerpt": "Bonjour…",
+          "excerptOriginalLanguage": "fr",
+          "excerptTranslations": null,
+          "excerptProtection": null,
+          "createdAt": "2026-09-23T09:59:59.000Z",
+          "emoji": "❤️"
+        },
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-me",
+          "senderName": "Moi",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "text",
+          "originalLanguage": "fr",
+          "content": "Bonjour tout le monde"
+        },
+        "isDirect": true
+      },
+      "expected": {
+        "tone": "default",
+        "icon": null,
+        "author": null,
+        "kind": "reaction",
+        "segments": [
+          {
+            "kind": "label",
+            "text": "a réagi ❤️ à « Bonjour… »"
+          }
+        ]
+      },
+      "text": "a réagi ❤️ à « Bonjour… »"
+    },
+    {
+      "id": "reaction-peer-direct-bare",
+      "matrix": "Priorité 4 — réaction du pair en discussion directe, sans extrait (#9049)",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastReaction": {
+          "reactorId": "p-alice",
+          "reactorUserId": "u-alice",
+          "reactorName": "Alice",
+          "messageId": "m-1",
+          "targetSenderId": "p-me",
+          "targetSenderUserId": "u-me",
+          "excerpt": null,
+          "excerptOriginalLanguage": null,
+          "excerptTranslations": null,
+          "excerptProtection": null,
+          "createdAt": "2026-09-23T09:59:59.000Z",
+          "emoji": "😂"
+        },
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-me",
+          "senderName": "Moi",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "image",
+          "originalLanguage": "fr",
+          "attachment": {
+            "mimeType": "image/jpeg"
+          }
+        },
+        "isDirect": true
+      },
+      "expected": {
+        "tone": "default",
+        "icon": null,
+        "author": null,
+        "kind": "reaction",
+        "segments": [
+          {
+            "kind": "label",
+            "text": "a réagi 😂"
+          }
+        ]
+      },
+      "text": "a réagi 😂"
+    },
+    {
       "id": "reaction-older-than-message",
       "matrix": "Priorité 4 — réaction plus ancienne que le message",
       "input": {
@@ -4010,6 +4459,228 @@
         ]
       },
       "text": "أنت: 🎤 رسالة صوتية · 0:12 · 48 KB"
+    },
+    {
+      "id": "after-read-received",
+      "matrix": "Flamme-œil reçue — ni texte ni traduction (#8634)",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "text",
+          "originalLanguage": "fr",
+          "content": "Le code est 4242",
+          "translations": {
+            "en": "The code is 4242"
+          },
+          "effectFlags": 9,
+          "expiresAt": "2026-09-30T09:59:00.000Z"
+        }
+      },
+      "expected": {
+        "tone": "default",
+        "icon": "ephemeral",
+        "author": {
+          "kind": "member",
+          "id": "u-alice",
+          "label": "Alice"
+        },
+        "kind": "message",
+        "segments": [
+          {
+            "kind": "label",
+            "text": "Disparaît après lecture"
+          }
+        ]
+      },
+      "text": "Alice : 🔥 Disparaît après lecture"
+    },
+    {
+      "id": "after-read-mine",
+      "matrix": "Flamme-œil envoyée — même placeholder chez l'expéditeur",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-me",
+          "senderName": "Moi",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "text",
+          "originalLanguage": "fr",
+          "content": "Le code est 4242",
+          "translations": {
+            "en": "The code is 4242"
+          },
+          "effectFlags": 9,
+          "expiresAt": "2026-09-30T09:59:00.000Z"
+        }
+      },
+      "expected": {
+        "tone": "default",
+        "icon": "ephemeral",
+        "author": {
+          "kind": "self",
+          "label": "Vous"
+        },
+        "kind": "message",
+        "segments": [
+          {
+            "kind": "label",
+            "text": "Disparaît après lecture"
+          }
+        ]
+      },
+      "text": "Vous : 🔥 Disparaît après lecture"
+    },
+    {
+      "id": "after-read-photo",
+      "matrix": "Flamme-œil photo — aucun détail de pièce jointe",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "text",
+          "originalLanguage": "fr",
+          "content": "",
+          "effectFlags": 9,
+          "expiresAt": "2026-09-30T09:59:00.000Z",
+          "attachment": {
+            "mimeType": "image/jpeg",
+            "originalName": "secret.jpg",
+            "fileSize": 204800,
+            "width": 1200,
+            "height": 800
+          }
+        }
+      },
+      "expected": {
+        "tone": "default",
+        "icon": "ephemeral",
+        "author": {
+          "kind": "member",
+          "id": "u-alice",
+          "label": "Alice"
+        },
+        "kind": "message",
+        "segments": [
+          {
+            "kind": "label",
+            "text": "Disparaît après lecture"
+          }
+        ]
+      },
+      "text": "Alice : 🔥 Disparaît après lecture"
+    },
+    {
+      "id": "after-read-consumed",
+      "matrix": "Flamme-œil consommée — l'échéance servie au lecteur est passée",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "text",
+          "originalLanguage": "fr",
+          "content": "Le code est 4242",
+          "translations": {
+            "en": "The code is 4242"
+          },
+          "effectFlags": 9,
+          "expiresAt": "2026-09-23T09:59:30.000Z"
+        }
+      },
+      "expected": {
+        "tone": "default",
+        "icon": "expired",
+        "author": {
+          "kind": "member",
+          "id": "u-alice",
+          "label": "Alice"
+        },
+        "kind": "message",
+        "segments": [
+          {
+            "kind": "label",
+            "text": "Message expiré"
+          }
+        ]
+      },
+      "text": "Alice : ⏱ Message expiré"
+    },
+    {
+      "id": "en-after-read-placeholder",
+      "matrix": "Flamme-œil — libellé dans la langue de cadrage, jamais traduit",
+      "input": {
+        "viewerId": "u-me",
+        "language": "en",
+        "preferredLanguages": [
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "text",
+          "originalLanguage": "fr",
+          "content": "Le code est 4242",
+          "translations": {
+            "en": "The code is 4242"
+          },
+          "effectFlags": 9,
+          "expiresAt": "2026-09-30T09:59:00.000Z"
+        }
+      },
+      "expected": {
+        "tone": "default",
+        "icon": "ephemeral",
+        "author": {
+          "kind": "member",
+          "id": "u-alice",
+          "label": "Alice"
+        },
+        "kind": "message",
+        "segments": [
+          {
+            "kind": "label",
+            "text": "Disappears after reading"
+          }
+        ]
+      },
+      "text": "Alice: 🔥 Disappears after reading"
     }
   ]
 }

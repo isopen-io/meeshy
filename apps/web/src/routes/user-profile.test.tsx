@@ -57,7 +57,7 @@ const settle = () =>
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
 
-async function mount(username: string): Promise<HTMLDivElement> {
+async function mount(username: string, tab?: 'posts' | 'conversations'): Promise<HTMLDivElement> {
   const container = document.createElement('div');
   document.body.appendChild(container);
   const root = createRoot(container);
@@ -71,39 +71,87 @@ async function mount(username: string): Promise<HTMLDivElement> {
   });
   await settle();
   await settle();
+  if (tab === undefined) return container;
+  act(() => (container.querySelector(`[data-profile-tab="${tab}"]`) as HTMLButtonElement).click());
+  await settle();
+  await settle();
   return container;
 }
 
 const text = (el: Element | null | undefined) => (el?.textContent ?? '').replace(/\s+/gu, ' ').trim();
 
-describe('les trois blocs arrivent ensemble', () => {
-  test('identité, relation, publications et statistiques sont peints', async () => {
+/**
+ * **LES ONGLETS DE `UserProfileSheet`** (#6330) — Publications, Conversations,
+ * Détails, Détails ouvert d'abord : l'essentiel tient sur le premier écran, et
+ * chaque liste longue a son onglet au lieu de pousser la suivante sous la
+ * ligne de flottaison.
+ */
+describe('la fiche se lit par onglets', () => {
+  const tabs = (el: Element) => [...el.querySelectorAll('[role="tab"]')].map((node) => node.getAttribute('data-profile-tab'));
+  const selected = (el: Element) => el.querySelector('[role="tab"][aria-selected="true"]')?.getAttribute('data-profile-tab');
+
+  test('trois onglets dans l’ordre d’iOS, Détails ouvert d’abord', async () => {
+    const el = await mount('kwame-mensah');
+    expect(tabs(el)).toEqual(['posts', 'conversations', 'details']);
+    expect(selected(el)).toBe('details');
+  });
+
+  test('Détails porte l’essentiel d’un coup : identité, relation, compteurs — sans la liste des publications', async () => {
     const el = await mount('kwame-mensah');
     expect(text(el.querySelector('[data-user-hero] p'))).toBe('Kwame Mensah');
     expect(text(el.querySelector('[data-user-hero] p:nth-of-type(2)'))).toBe('@kwame-mensah');
     expect(el.querySelector('[data-profile-relation]')).not.toBeNull();
-    expect(el.querySelector('[data-profile-posts]')).not.toBeNull();
     expect(el.querySelector('[data-profile-stats]')).not.toBeNull();
+    expect(el.querySelector('[data-profile-posts]')).toBeNull();
+    expect([...el.querySelectorAll('#contenu section h2')].map((node) => text(node))).toEqual(['CONNEXION', 'STATISTIQUES']);
   });
 
-  test('chaque bloc est une SECTION nommée par son titre — l’idiome de `/me`', async () => {
+  test('le panneau est nommé par son onglet, et l’onglet pointe son panneau', async () => {
     const el = await mount('kwame-mensah');
-    const titles = [...el.querySelectorAll('#contenu section h2')].map((node) => text(node));
-    /* AMENDÉ PAR #7124 — la QUATRIÈME section est arrivée, et l'ordre porte
-       une décision : « ce que vous partagez déjà » se lit APRÈS ce que la
-       personne publie et AVANT ses compteurs, parce que c'est la réponse à
-       « où nous sommes-nous déjà parlé ? » — une question de RELATION, pas de
-       mesure. Le témoin reste EXHAUSTIF et ORDONNÉ : c'est ce qui lui permet
-       de dire qu'une section a disparu, ou qu'une s'est glissée sans décision. */
-    expect(titles).toEqual(['CONNEXION', 'PUBLICATIONS', 'CONVERSATIONS', 'STATISTIQUES']);
+    const tab = el.querySelector('[role="tab"][aria-selected="true"]');
+    const panel = el.querySelector('[role="tabpanel"]');
+    expect(panel?.getAttribute('aria-labelledby')).toBe(tab?.id ?? 'absent');
+    expect(tab?.getAttribute('aria-controls')).toBe(panel?.id ?? 'absent');
+    expect(tab?.getAttribute('tabindex')).toBe('0');
+    expect(el.querySelectorAll('[role="tab"][tabindex="-1"]').length).toBe(2);
   });
 
-  test('le bandeau porte les comptes SERVIS, et le listing les publications de CET auteur', async () => {
-    const el = await mount('kwame-mensah');
+  test('toucher Publications ouvre le listing de CET auteur et son bandeau servi', async () => {
+    const el = await mount('kwame-mensah', 'posts');
+    expect(selected(el)).toBe('posts');
+    expect(el.querySelector('[data-profile-relation]')).toBeNull();
     expect(text(el.querySelector('[data-profile-tile="postsCount"]'))).toContain('3');
     expect([...el.querySelectorAll('[data-feed-card-id]')].length).toBeGreaterThan(0);
   });
 
+  test('les flèches parcourent les onglets et ouvrent celui qui prend le focus', async () => {
+    const el = await mount('kwame-mensah');
+    const details = el.querySelector('[data-profile-tab="details"]') as HTMLButtonElement;
+    details.focus();
+    await act(async () => {
+      details.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+    });
+    await settle();
+    expect(selected(el)).toBe('posts');
+    expect(document.activeElement?.getAttribute('data-profile-tab')).toBe('posts');
+    await act(async () => {
+      (document.activeElement as HTMLElement).dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true }));
+    });
+    expect(selected(el)).toBe('details');
+  });
+
+  test('sur SA PROPRE fiche, pas d’onglet Conversations', async () => {
+    const el = await mount('vous');
+    expect(tabs(el)).toEqual(['posts', 'details']);
+  });
+
+  test('sur un compte BLOQUÉ, aucun onglet : l’identité et « Débloquer »', async () => {
+    const el = await mount('yann.legoff');
+    expect(el.querySelector('[role="tablist"]')).toBeNull();
+  });
+});
+
+describe('la relation servie', () => {
   /* `report` a rejoint la liste au 2026-09-21 (#7187) — le port existait sans
      appelant. L'inventaire reste EXHAUSTIF et ORDONNÉ : c'est lui qui dirait
      qu'une action a disparu, ou qu'une s'est glissée sans décision. */
@@ -111,6 +159,25 @@ describe('les trois blocs arrivent ensemble', () => {
     const el = await mount('kwame-mensah');
     expect(el.querySelector('[data-profile-relation]')?.getAttribute('data-profile-relation')).toBe('none');
     expect([...el.querySelectorAll('[data-profile-action]')].map((n) => n.getAttribute('data-profile-action'))).toEqual(['add', 'write', 'block', 'report']);
+  });
+});
+
+/**
+ * **LA PRÉSENCE D'UN AMI** (#9063) — la fiche peint ce que la passerelle SERT :
+ * à un ami accepté, la pastille et sa ligne ; à un tiers, rien. La loi qui
+ * tranche est serveur (`resolvePresenceVisibility`) ; la fixture la rejoue.
+ */
+describe('la présence sur la fiche', () => {
+  test('un AMI : pastille sur l’avatar et « En ligne » après le pseudo', async () => {
+    const el = await mount('bruno.laurent');
+    expect(el.querySelector('[data-user-hero] [data-presence="online"]')).not.toBeNull();
+    expect(text(el.querySelector('[data-user-presence]'))).toBe('En ligne');
+  });
+
+  test('un TIERS : ni pastille ni ligne — rien de servi, rien de peint', async () => {
+    const el = await mount('kwame-mensah');
+    expect(el.querySelector('[data-user-presence]')).toBeNull();
+    expect(el.querySelector('[data-user-hero] [data-presence="online"]')).toBeNull();
   });
 });
 
@@ -126,7 +193,7 @@ describe('le filtre et la pagination', () => {
   const cards = (el: HTMLElement) => el.querySelectorAll('[data-feed-card-id]').length;
 
   test('sous un filtre, « Charger plus » reste offert — et il ramène ce que la tuile annonce', async () => {
-    const el = await mount('kwame-mensah');
+    const el = await mount('kwame-mensah', 'posts');
     const all = cards(el);
     act(() => (el.querySelector('[data-profile-filter="reels"]') as HTMLButtonElement).click());
     const filtered = cards(el);
@@ -147,7 +214,6 @@ describe('sa PROPRE fiche', () => {
     const el = await mount('vous');
     expect(text(el.querySelector('[data-user-hero] p'))).toBe('Awa Diallo');
     expect(el.querySelector('[data-profile-relation]')).toBeNull();
-    expect(el.querySelector('[data-profile-posts]')).not.toBeNull();
     /* Et les compteurs INTIMES, que le serveur ne sert qu'à soi. */
     expect(text(el.querySelector('[data-profile-stat="totalMessages"]'))).toContain('1204');
   });
@@ -178,8 +244,8 @@ describe('une demande REÇUE', () => {
  * qu'elle ne parte PAS là où elle n'a pas de sens.
  */
 describe('les conversations en commun', () => {
-  test('la section est peinte, et chaque rangée mène à son fil', async () => {
-    const el = await mount('kwame-mensah');
+  test('l’onglet est peint, et chaque rangée mène à son fil', async () => {
+    const el = await mount('kwame-mensah', 'conversations');
     const rangees = [...el.querySelectorAll('[data-profile-conversation] a')];
     expect(rangees.length).toBeGreaterThan(0);
     expect(rangees.every((a) => (a.getAttribute('href') ?? '').startsWith('/c/'))).toBe(true);
@@ -329,7 +395,7 @@ describe('le vide filtré et la page qui reste à lire', () => {
 
   test('tant qu’une page reste à lire, l’écran SE TAIT et ne montre que le geste qui trouve', async () => {
     seedPostsOnly(true);
-    const el = await mount('kwame-mensah');
+    const el = await mount('kwame-mensah', 'posts');
     act(() => (el.querySelector('[data-profile-filter="reels"]') as HTMLButtonElement).click());
     expect(el.querySelectorAll('[data-feed-card-id]').length).toBe(0);
     /* La tuile PROMET toujours, et c'est elle qui a raison. */
@@ -340,7 +406,7 @@ describe('le vide filtré et la page qui reste à lire', () => {
 
   test('la dernière page lue, le vide filtré se DIT — sinon la tuile surmonterait du vide', async () => {
     seedPostsOnly(false);
-    const el = await mount('kwame-mensah');
+    const el = await mount('kwame-mensah', 'posts');
     act(() => (el.querySelector('[data-profile-filter="reels"]') as HTMLButtonElement).click());
     expect(el.querySelector('[data-profile-posts-more]')).toBeNull();
     expect(text(el.querySelector('[data-profile-posts-empty]'))).toContain('Aucun réel');
@@ -435,7 +501,7 @@ describe('l’annonce d’un geste relationnel', () => {
  */
 describe('« Charger plus »', () => {
   test('il annonce ce qui est arrivé et rend le focus à la première carte NEUVE', async () => {
-    const el = await mount('kwame-mensah');
+    const el = await mount('kwame-mensah', 'posts');
     const more = el.querySelector('[data-profile-posts-more]') as HTMLButtonElement;
     more.focus();
     const before = el.querySelectorAll('[data-feed-card-id]').length;
@@ -451,7 +517,7 @@ describe('« Charger plus »', () => {
   });
 
   test('hors ligne, le tap n’a AUCUN effet — et le geste est désarmé comme ses trois voisins', async () => {
-    const el = await mount('kwame-mensah');
+    const el = await mount('kwame-mensah', 'posts');
     const before = el.querySelectorAll('[data-feed-card-id]').length;
     await act(async () => setOnline(false));
     const more = el.querySelector('[data-profile-posts-more]') as HTMLButtonElement;
@@ -485,7 +551,7 @@ describe('la fiche rend les gestes qui lui manquaient (#7188)', () => {
    * compte, et le dépôt a déjà payé une zone cliquable sans effet (cycle 123).
    */
   test('le compteur de commentaires d’une publication est un bouton', async () => {
-    const el = await mount('kwame-mensah');
+    const el = await mount('kwame-mensah', 'posts');
 
     expect(el.querySelector('[data-feed-gesture="comment"]')).not.toBe(null);
   });

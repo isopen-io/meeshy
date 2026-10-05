@@ -64,11 +64,22 @@ export function AuthColumn({ children, className }: { readonly children: ReactNo
  * d'historique de l'application, et le geste sortait de l'app (revue de #5555,
  * défaut 3).
  */
-export function AuthColumnBar({ to, title }: { readonly to: 'login' | 'list'; readonly title?: string }) {
+export function AuthColumnBar({
+  to,
+  title,
+  search,
+}: {
+  readonly to: 'login' | 'list';
+  readonly title?: string;
+  /** Ce que la fermeture TRANSMET à l'écran qu'elle rouvre — l'invitation,
+   * l'adresse déjà tapée (#8216). */
+  readonly search?: Readonly<Record<string, string | undefined>>;
+}) {
   return (
     <div className="flex shrink-0 items-center px-2 pt-1">
       <Link
         to={to}
+        {...(search === undefined ? {} : { search })}
         replace
         className="grid place-items-center rounded-chip"
         style={{ minHeight: 44, minWidth: 44, color: 'var(--color-ios-ink-2)' }}

@@ -35,8 +35,8 @@ private extension View {
         // (`EngagementGlyph(size: 17)` par défaut), et 17 + 2 × 13 = 43 — un
         // point sous le minimum. Mesuré à l'écran, pas calculé : deux des cinq
         // cibles sortaient à 43 après le premier réglage.
-        self.padding(.vertical, 14)
-            .padding(.horizontal, 14)
+        self.padding(.vertical, MeeshySpacing.mdPlus)
+            .padding(.horizontal, MeeshySpacing.mdPlus)
             .contentShape(Rectangle())
             .padding(.vertical, -14)
             .padding(.horizontal, -14)
@@ -339,7 +339,7 @@ struct PostDetailView: View {
         case .document: attachmentKind = .document
         case .image: attachmentKind = .image
         }
-        mediaSaveCoordinator.requestSave(MediaSaveRequest(
+        mediaSaveCoordinator.save(MediaSaveRequest(
             kind: attachmentKind,
             origin: .composed,
             remoteURLString: url,
@@ -448,7 +448,7 @@ struct PostDetailView: View {
     private var embedTrackedURL: URL? {
         guard let raw = LinkPreviewFetcher.firstURL(in: effectiveContent),
               let token = displayPost?.trackedLinkMap[raw] else { return nil }
-        return URL(string: "https://meeshy.me/l/\(token)")
+        return TrackedLink.redirectURL(token: token)
     }
 
     private var textTruncation: (text: String, isTruncated: Bool) {
@@ -531,8 +531,8 @@ struct PostDetailView: View {
             storyCanvasSection(post, renderedItem: renderedItem)
         } else if post.hasMedia, !isSharedStory {
             detailMediaSection(post.media, owner: DetailMediaAuthor(post: post))
-                .padding(.horizontal, 16)
-                .padding(.top, 8)
+                .padding(.horizontal, MeeshySpacing.lg)
+                .padding(.top, MeeshySpacing.sm)
         }
 
         // Lieu attaché au post (constat user 2026-07-30) : même paire de
@@ -554,8 +554,8 @@ struct PostDetailView: View {
                     }
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 8)
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.top, MeeshySpacing.sm)
         }
 
         // Repost embed
@@ -581,7 +581,7 @@ struct PostDetailView: View {
         Rectangle()
             .fill(theme.inputBorder.opacity(0.5))
             .frame(height: 1)
-            .padding(.horizontal, 16)
+            .padding(.horizontal, MeeshySpacing.lg)
 
         commentsHeader
             .id("commentsSection")
@@ -632,12 +632,12 @@ struct PostDetailView: View {
                 onLoadMoreReplies: { await viewModel.loadMoreReplies(comment.id, postId: postId) },
                 highlightedCommentId: highlightedCommentId
             )
-            .padding(.horizontal, 16)
+            .padding(.horizontal, MeeshySpacing.lg)
             .padding(.vertical, highlightedCommentId == comment.id ? 6 : 0)
             .background(
-                RoundedRectangle(cornerRadius: 12)
+                RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                     .fill(Color(hex: accentColor).opacity(highlightedCommentId == comment.id ? 0.12 : 0))
-                    .padding(.horizontal, 8)
+                    .padding(.horizontal, MeeshySpacing.sm)
             )
             .animation(.easeInOut(duration: 0.4), value: highlightedCommentId)
             // Anchor for notification-driven navigation: scroll/highlight targets
@@ -801,7 +801,8 @@ struct PostDetailView: View {
                         .adaptiveOnChange(of: viewModel.topLevelComments.count) { _, _ in
                             attemptScrollToTargetComment(using: scrollProxy)
                         }
-                        .onReceive(CallManager.shared.$callState) { state in
+                        .keepsReplyTargetInView(viewModel.replyingTo?.id, proxy: scrollProxy)
+                        .onReceive(CallManagerHost.shared.callStatePublisher) { state in
                             isCallActive = state.isActive
                         }
                     } // ScrollViewReader
@@ -850,7 +851,7 @@ struct PostDetailView: View {
                         )
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                     }
-                    composer
+                    composer.foldableComment(isReplying: viewModel.replyingTo != nil)
                 }
                 .animation(.spring(response: 0.3, dampingFraction: 0.8), value: mentionController.activeQuery != nil)
             }
@@ -859,11 +860,8 @@ struct PostDetailView: View {
         .navigationBarHidden(true)
         .task {
             // Wire persistence layer on first appearance
-            if viewModel.commentStore == nil {
-                let deps = DependencyContainer.shared
-                let commentStore = CommentStore(postId: postId, persistence: deps.feedPersistence)
-                viewModel.setupPersistence(commentStore: commentStore, persistence: deps.feedPersistence)
-                await commentStore.loadInitial()
+            if viewModel.feedPersistence == nil {
+                viewModel.setupPersistence(persistence: DependencyContainer.shared.feedPersistence)
             }
 
             if viewModel.post == nil {
@@ -1021,13 +1019,13 @@ struct PostDetailView: View {
                     originalContent: post.content,
                     originalLanguage: post.originalLanguage,
                     originalType: post.type,
-                    media: post.media.map { EditablePostMedia($0) },
+                    media: post.media.map { EditablePostMedia($0) }, originalStoryEffects: post.storyEffects,
                     originalLocation: post.location,
                     originalVisibility: post.visibility,
                     originalVisibilityUserIds: post.visibilityUserIds ?? [],
                     isRepost: post.repost != nil,
                     onSave: { draft in
-                        await viewModel.updatePost(content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds, location: draft.location, visibility: draft.visibility, visibilityUserIds: draft.visibilityUserIds, known: draft.known)
+                        await viewModel.updatePost(content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds, location: draft.location, visibility: draft.visibility, visibilityUserIds: draft.visibilityUserIds, known: draft.known, storyEffects: draft.storyEffects)
                     },
                     onDismiss: { isEditing = false }
                 )
@@ -1077,11 +1075,11 @@ struct PostDetailView: View {
     /// inline name tap).
     @ViewBuilder
     private func authorRevealView(_ post: FeedPost) -> some View {
-        HStack(spacing: 8) {
+        HStack(spacing: MeeshySpacing.sm) {
             Button {
                 selectedProfileUser = .from(feedPost: post)
             } label: {
-                HStack(spacing: 8) {
+                HStack(spacing: MeeshySpacing.sm) {
                     MeeshyAvatar(
                         name: post.author,
                         context: .custom(26),
@@ -1099,7 +1097,7 @@ struct PostDetailView: View {
                             isAuthor: isPostAuthor
                         )
                         if reach.pseudo != nil || reach.showsStats {
-                            HStack(spacing: 4) {
+                            HStack(spacing: MeeshySpacing.xs) {
                                 if let pseudo = reach.pseudo {
                                     Text(pseudo)
                                         .font(.caption2)
@@ -1112,7 +1110,7 @@ struct PostDetailView: View {
                                     if reach.pseudo != nil {
                                         MetaSeparator().font(.caption2).foregroundColor(theme.textMuted)
                                     }
-                                    HStack(spacing: 3) {
+                                    HStack(spacing: MeeshySpacing.xxs) {
                                         ReachMetricLabel(
                                             icon: "eye.fill",
                                             count: post.viewCount,
@@ -1262,7 +1260,7 @@ struct PostDetailView: View {
         let username = post.authorUsername ?? ""
         let hasUsername = !username.isEmpty
         if hasUsername || isPostAuthor {
-            HStack(spacing: 5) {
+            HStack(spacing: MeeshySpacing.xs) {
                 if hasUsername {
                     Text("@\(username)")
                         .font(.caption)
@@ -1272,7 +1270,7 @@ struct PostDetailView: View {
                     if hasUsername {
                         MetaSeparator().font(.caption2).foregroundColor(theme.textMuted)
                     }
-                    HStack(spacing: 3) {
+                    HStack(spacing: MeeshySpacing.xxs) {
                         ReachMetricLabel(
                             icon: "eye.fill",
                             count: post.viewCount,
@@ -1298,7 +1296,7 @@ struct PostDetailView: View {
     private func textZone(_ post: FeedPost) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             // Author header
-            HStack(spacing: 12) {
+            HStack(spacing: MeeshySpacing.md) {
                 MeeshyAvatar(
                     name: post.author,
                     context: .postAuthor,
@@ -1315,7 +1313,7 @@ struct PostDetailView: View {
                 )
                 .accessibilityHidden(true)
 
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     Text(post.author)
                         .font(.subheadline.weight(.bold))
                         .foregroundColor(theme.textPrimary)
@@ -1330,7 +1328,7 @@ struct PostDetailView: View {
                     // ne vit plus dans la barre d'actions du bas.
                     authorReachLine(post)
 
-                    HStack(spacing: 4) {
+                    HStack(spacing: MeeshySpacing.xs) {
                         Text(post.timestamp, style: .relative)
                             .font(.caption)
                             .foregroundColor(theme.textMuted)
@@ -1354,8 +1352,8 @@ struct PostDetailView: View {
 
                 Spacer()
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.vertical, MeeshySpacing.smPlus)
 
             // Story caption lives inside the canvas overlays → suppress the plain
             // body (caption + secondary translation + embed) for stories to avoid
@@ -1368,7 +1366,7 @@ struct PostDetailView: View {
             let bodyText = (truncation.isTruncated && !isTextExpanded)
                 ? truncation.text + "..."
                 : effectiveContent
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 MessageTextRenderer.render(bodyText, fontSize: 16, color: theme.textPrimary, mentionColor: MeeshyColors.mentionColor(isDark: theme.mode.isDark), hashtagColor: MeeshyColors.hashtagColor(isDark: theme.mode.isDark), accentColor: Color(hex: accentColor), trackedLinks: postTrackedLinks, validUsernames: post.validMentionUsernames)
                     .tint(Color(hex: accentColor))
                 if truncation.isTruncated {
@@ -1381,7 +1379,7 @@ struct PostDetailView: View {
             }
             .fixedSize(horizontal: false, vertical: true)
             .textSelection(.enabled)
-            .padding(.horizontal, 16)
+            .padding(.horizontal, MeeshySpacing.lg)
             .onTapGesture {
                 if truncation.isTruncated {
                     withAnimation(.easeInOut(duration: 0.25)) {
@@ -1399,14 +1397,14 @@ struct PostDetailView: View {
                 let langColor = Color(hex: LanguageDisplay.colorHex(for: code))
                 let display = LanguageDisplay.from(code: code)
                 VStack(spacing: 0) {
-                    HStack(spacing: 6) {
+                    HStack(spacing: MeeshySpacing.xsPlus) {
                         Rectangle().fill(langColor.opacity(0.4)).frame(height: 1)
                         Circle().fill(langColor).frame(width: 4, height: 4)
                         Rectangle().fill(langColor.opacity(0.4)).frame(height: 1)
                     }
-                    VStack(alignment: .leading, spacing: 4) {
+                    VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                         if let display {
-                            HStack(spacing: 4) {
+                            HStack(spacing: MeeshySpacing.xs) {
                                 Text(display.flag).font(.caption)
                                 Text(display.name)
                                     .font(.caption2.weight(.semibold))
@@ -1418,14 +1416,14 @@ struct PostDetailView: View {
                             .foregroundColor(theme.textPrimary.opacity(0.8))
                             .fixedSize(horizontal: false, vertical: true)
                     }
-                    .padding(.vertical, 8)
-                    .padding(.horizontal, 10)
+                    .padding(.vertical, MeeshySpacing.sm)
+                    .padding(.horizontal, MeeshySpacing.smPlus)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(langColor.opacity(0.08))
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
                 }
-                .padding(.horizontal, 16)
-                .padding(.top, 6)
+                .padding(.horizontal, MeeshySpacing.lg)
+                .padding(.top, MeeshySpacing.xsPlus)
                 .transition(.opacity.combined(with: .move(edge: .top)))
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel(String(format: String(localized: "a11y.post.secondary_translation", defaultValue: "Traduction en %1$@ : %2$@", bundle: .main), display?.name ?? code, content))
@@ -1434,8 +1432,8 @@ struct PostDetailView: View {
             // Embed vidéo (YouTube) détecté dans le contenu du post.
             if let embeddedVideo {
                 VideoEmbedContainer(video: embeddedVideo, accent: Color(hex: accentColor), trackedURL: embedTrackedURL)
-                    .padding(.horizontal, 16)
-                    .padding(.top, 8)
+                    .padding(.horizontal, MeeshySpacing.lg)
+                    .padding(.top, MeeshySpacing.sm)
             }
             } // if !post.isStory
 
@@ -1448,8 +1446,8 @@ struct PostDetailView: View {
                 accentColor: Color(hex: accentColor),
                 onTapReference: { selectedProfileUser = .from(reference: $0) }
             )
-            .padding(.horizontal, 16)
-            .padding(.top, 6)
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.top, MeeshySpacing.xsPlus)
         }
     }
 
@@ -1480,7 +1478,7 @@ struct PostDetailView: View {
                     }
                 }
             } label: {
-                HStack(spacing: 5) {
+                HStack(spacing: MeeshySpacing.xs) {
                     let heartColor: Color = detailIsLiked ? MeeshyColors.error : (detailLikeCount > 0 ? Color(hex: accentColor) : theme.textSecondary)
 EngagementGlyph(
                         outline: "heart",
@@ -1537,7 +1535,7 @@ EngagementGlyph(
                 HapticFeedback.light()
                 withAnimation { scrollProxy.scrollTo("commentsSection", anchor: .top) }
             } label: {
-                HStack(spacing: 5) {
+                HStack(spacing: MeeshySpacing.xs) {
                     let n = displayPost?.commentCount ?? 0
                     EngagementGlyph(
                         outline: "bubble.right",
@@ -1665,8 +1663,8 @@ EngagementGlyph(
                     : String(localized: "a11y.feed.post.sound.mute", defaultValue: "Couper le son du fond", bundle: .main))
             }
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 10)
+        .padding(.horizontal, MeeshySpacing.xl)
+        .padding(.vertical, MeeshySpacing.smPlus)
         // Le CADRE de la palette est ici, sur la barre ENTIÈRE : elle a la
         // largeur qu'une rangée de six émojis demande. Le geste, lui, reste
         // sur le bouton — cible petite et précise, cadre large et libre.
@@ -1679,7 +1677,7 @@ EngagementGlyph(
     // MARK: - Comments Header
 
     private var commentsHeader: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: MeeshySpacing.xsPlus) {
             Text(String(localized: "feed.post.detail.comments", defaultValue: "Commentaires", bundle: .main))
                 .font(.subheadline.weight(.bold))
                 .foregroundColor(theme.textPrimary)
@@ -1690,8 +1688,8 @@ EngagementGlyph(
 
             Spacer()
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.vertical, MeeshySpacing.sm)
         .accessibilityElement(children: .ignore)
         .accessibilityAddTraits(.isHeader)
         .accessibilityLabel(String(localized: "a11y.comment.section_header", defaultValue: "Commentaires", bundle: .main))
@@ -1704,11 +1702,11 @@ EngagementGlyph(
         // Mode ÉDITION : bandeau dédié (prioritaire sur la réponse).
         if let editing = viewModel.editingComment {
             return AnyView(
-                HStack(spacing: 8) {
+                HStack(spacing: MeeshySpacing.sm) {
                     Image(systemName: "pencil")
                         .font(.caption.weight(.semibold))
                         .foregroundColor(Color(hex: accentColor))
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                         Text(String(localized: "feed.comments.editing", defaultValue: "Modification du commentaire", bundle: .main))
                             .font(.caption.weight(.semibold))
                             .foregroundColor(theme.textSecondary)
@@ -1730,15 +1728,15 @@ EngagementGlyph(
                             .background(Circle().fill(theme.mode.isDark ? Color.white.opacity(0.1) : Color.black.opacity(0.05)))
                     }
                     .accessibilityLabel(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main))
-                    .meeshyTapTarget(44)
+                    .meeshyTapTarget(MeeshyControlSize.tapTarget)
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
+                .padding(.horizontal, MeeshySpacing.md)
+                .padding(.vertical, MeeshySpacing.sm)
                 .background(
-                    RoundedRectangle(cornerRadius: 14)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.md)
                         .fill(theme.surfaceGradient(tint: accentColor))
                         .overlay(
-                            RoundedRectangle(cornerRadius: 14)
+                            RoundedRectangle(cornerRadius: MeeshyRadius.md)
                                 .stroke(theme.border(tint: accentColor, intensity: 0.3), lineWidth: 1)
                         )
                 )
@@ -1746,12 +1744,12 @@ EngagementGlyph(
         }
         guard let reply = viewModel.replyingTo else { return nil }
         return AnyView(
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 RoundedRectangle(cornerRadius: 2)
                     .fill(Color(hex: reply.authorColor))
                     .frame(width: 3, height: 36)
 
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     Text(reply.author)
                         .font(.caption.weight(.semibold))
                         .foregroundColor(Color(hex: reply.authorColor))
@@ -1776,15 +1774,15 @@ EngagementGlyph(
                         .background(Circle().fill(theme.mode.isDark ? Color.white.opacity(0.1) : Color.black.opacity(0.05)))
                 }
                 .accessibilityLabel(String(localized: "a11y.comment.cancel_reply", defaultValue: "Annuler la réponse", bundle: .main))
-                .meeshyTapTarget(44)
+                .meeshyTapTarget(MeeshyControlSize.tapTarget)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
+            .padding(.horizontal, MeeshySpacing.md)
+            .padding(.vertical, MeeshySpacing.sm)
             .background(
-                RoundedRectangle(cornerRadius: 14)
+                RoundedRectangle(cornerRadius: MeeshyRadius.md)
                     .fill(theme.surfaceGradient(tint: accentColor))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 14)
+                        RoundedRectangle(cornerRadius: MeeshyRadius.md)
                             .stroke(theme.border(tint: accentColor, intensity: 0.3), lineWidth: 1)
                     )
             )

@@ -74,8 +74,8 @@ final class ReadingModesFlagIntegrationTests: XCTestCase {
     // MARK: - Installation neuve ⇒ modes de lecture actifs (la loi décide)
 
     /// Rien n'est posé. Peu de non-lus, lecteur présent (ouvert il y a une
-    /// minute) ⇒ branche par défaut de la loi : `.focal`, rendu tel quel.
-    func test_freshInstall_fewUnread_readerPresent_autoResolvesToFocal() throws {
+    /// minute) ⇒ branche par défaut de la loi : `.script` depuis #8147.
+    func test_freshInstall_fewUnread_readerPresent_autoResolvesToScript() throws {
         let defaults = try makeIsolatedDefaults()
         let now = Date(timeIntervalSince1970: 1_800_000_000)
         let store = InMemoryStore()
@@ -83,7 +83,7 @@ final class ReadingModesFlagIntegrationTests: XCTestCase {
 
         let controller = makeController(defaults: defaults, unreadCount: 3, store: store, now: now)
 
-        XCTAssertEqual(controller.mode, .focal, "Installation neuve ⇒ modes de lecture ACTIFS (directive 2026-09-14, #6482).")
+        XCTAssertEqual(controller.mode, .script, "Installation neuve ⇒ modes de lecture ACTIFS, Script par défaut (#6482, #8147).")
         XCTAssertEqual(controller.decision.reason, .default)
     }
 

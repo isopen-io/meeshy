@@ -32,6 +32,9 @@ extension ConversationView {
     /// ViewModel tient ces trois portes. Rend `true` quand un texte vient
     /// d'être révélé sur place.
     func openViewOnce(messageId: String) -> Bool {
+        // #8009 — l'appui long sur la puce ouvre le MENU ; son relâcher ne doit
+        // ni ouvrir ni consommer la vue unique.
+        guard !overlayState.showOverlayMenu else { return false }
         switch viewModel.openViewOnce(messageId: messageId) {
         case .fullscreen(let attachment):
             GalleryPrewarm.warm(attachment)
@@ -57,6 +60,9 @@ extension ConversationView {
     /// elle échoue, le message reste consommable, ce qui est le bon sens de
     /// l'échec : on ne détruit pas ce qu'on n'a pas pu confirmer.
     func consumeOpenedViewOnceOnExit() {
+        // #8303 — la flamme-œil suit la MÊME porte : ce qu'on y a lu disparaît
+        // quand on quitte (retour, arrière-plan, verrouillage).
+        viewModel.consumeAfterReadOnExit()
         viewModel.closeAllRevealedViewOnce()
         let lues = viewModel.viewOnceConsumableOnExit(scrollState.pendingViewOnceConsumption.takeAll())
         guard !lues.isEmpty else { return }

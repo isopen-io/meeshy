@@ -57,13 +57,26 @@ nonisolated enum ComposerRailMode: Equatable {
                         expandedDrawingTool: DrawingEditTool?,
                         expandedTextTool: TextEditTool?,
                         doors: [ComposerRailDoor]) -> ComposerRailMode {
+        let controls = toolControls(drawing: drawing,
+                                    textEditing: textEditing,
+                                    expandedDrawingTool: expandedDrawingTool,
+                                    expandedTextTool: expandedTextTool)
+        guard let controls else { return .doors(doors) }
+        return .tool(controls)
+    }
+
+    @MainActor
+    private static func toolControls(drawing: Bool,
+                                     textEditing: Bool,
+                                     expandedDrawingTool: DrawingEditTool?,
+                                     expandedTextTool: TextEditTool?) -> [ComposerToolControl]? {
         if drawing {
-            return .tool(DrawingEditTool.allCases.map {
+            return DrawingEditTool.allCases.map {
                 ComposerToolControl(id: "drawing.\($0.rawValue)",
                                     symbolName: $0.sfSymbol,
                                     label: $0.accessibilityLabel,
                                     isExpanded: expandedDrawingTool == $0)
-            })
+            }
         }
         if textEditing {
             // `TextEditTool.all`, jamais `allCases` : l'ordre des `case` porte
@@ -71,14 +84,22 @@ nonisolated enum ComposerRailMode: Equatable {
             // doigts — le même sur la rangée flottante et dans l'éditeur plein
             // écran. Les deux coïncidaient jusqu'à l'EFFET (#4870), ajouté en
             // queue de l'énuméré et deuxième sur la rangée.
-            return .tool(TextEditTool.all.map {
+            return TextEditTool.all.map {
                 ComposerToolControl(id: "text.\($0.rawValue)",
                                     symbolName: $0.sfSymbol,
                                     label: $0.accessibilityLabel,
                                     isExpanded: expandedTextTool == $0)
-            })
+            }
         }
-        return .doors(doors)
+        return nil
+    }
+
+    /// Un outil est-il ouvert ?
+    var opensTool: Bool {
+        switch self {
+        case .doors: return false
+        case .tool:  return true
+        }
     }
 }
 
@@ -103,5 +124,72 @@ nonisolated enum ComposerToolExitCopy {
     static var label: String {
         String(localized: "composer.rail.tool.exit",
                defaultValue: "Terminer l'outil", bundle: .main)
+    }
+}
+
+/// **Un outil ouvert prend TOUTE la place** (#8652, directive porteur
+/// 2026-09-29).
+///
+/// > « Il faudrait enlever le rail d'en-tête (X) (…) etc., les tools de la
+/// > scène principale laissent place aux tools de l'outil sélectionné avec
+/// > (X), et le rail du bas audience, publication ; les (+) n'ont pas besoin
+/// > d'être là quand un outil est ouvert ! »
+///
+/// Le lot #8558 posait les options d'un outil en colonne À CÔTÉ de sa porte :
+/// le rail gardait ses portes, la barre haute sa croix, le socle sa capsule —
+/// une colonne « en surplus » par-dessus un écran déjà complet. La règle
+/// devient une bascule : outil ouvert ⇒ ses contrôleurs et leur `(x)`, SEULS ;
+/// outil fermé ⇒ le chrome d'avant, exactement.
+///
+/// **Le `switch` est exhaustif** : une pièce de chrome ajoutée demain ne
+/// compilera pas tant qu'elle n'aura pas dit si elle cède à l'outil.
+nonisolated enum ComposerToolFocus {
+
+    enum Chrome: String, CaseIterable, Sendable {
+        /// La barre haute : `(x)` du composer, `(…)`, rail des scènes et son
+        /// `(+)`, bascule Animé.
+        case topBar
+        /// Le rail des PORTES — ce qui fait entrer de la matière.
+        case sceneDoors
+        /// Le rail droit : les options du moment, puis Temps et l'historique.
+        /// Il RESTE quand un outil s'ouvre (#8713) : « en bas on a undo et
+        /// redo toujours, même pour les outils type dessin », et les
+        /// contrôleurs de l'outil s'y posent au-dessus.
+        case trailingRail
+        /// Le socle : audience et publication.
+        case socle
+        /// La trace du son de fond, en tête.
+        case soundTrace
+        /// Le volet de description.
+        case description
+        /// Les contrôleurs de l'outil ouvert, et leur `(x)`.
+        case toolControls
+    }
+
+    /// **Qu'est-ce qu'un outil OUVERT ?** Un outil du rail (le dessin) — ou
+    /// l'édition EN PLACE d'un objet, fond compris (#8847, #9138) : « quand on
+    /// a les outils de droite ouverts on n'a pas besoin d'afficher l'audience
+    /// ou la publication ». Les deux mettent la scène en FOCUS, et le chrome
+    /// leur cède de la même façon ; il revient au `(x)`, retour à la gestion
+    /// de la scène.
+    static func toolIsOpen(railOpensTool: Bool, editsInline: Bool) -> Bool {
+        railOpensTool || editsInline
+    }
+
+    static func isShown(_ chrome: Chrome, toolIsOpen: Bool) -> Bool {
+        switch chrome {
+        case .toolControls:
+            return toolIsOpen
+        case .trailingRail:
+            return true
+        case .topBar, .sceneDoors, .socle, .soundTrace, .description:
+            return !toolIsOpen
+        }
+    }
+
+    /// Le fondu de la bascule — coupé sous Reduce Motion, où le chrome
+    /// s'échange sans mouvement.
+    static func transition(reduceMotion: Bool) -> Animation? {
+        reduceMotion ? nil : .easeInOut(duration: 0.22)
     }
 }

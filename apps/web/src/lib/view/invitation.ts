@@ -1,4 +1,5 @@
 import { annulationDuPont, appelNatif, coqueCourante, type CoqueNative } from '@/lib/native-shell';
+import { browserClipboard, copyPlainText } from '@/lib/view/copy-text';
 
 /**
  * **Partager Meeshy — le seul démarrage que la v3.1 sache VRAIMENT offrir.**
@@ -51,7 +52,12 @@ const PONT_PARTAGE = 'MeeshyShare';
  * pas un `AbortError` : `partagerLien` retombe donc sur la copie. Sa seule
  * annulation, elle, en devient un.
  */
-export function portailDe(hote: { readonly nav: NavigateurPartage; readonly coque: CoqueNative | undefined }): PortailPartage {
+export function portailDe(hote: {
+  readonly nav: NavigateurPartage;
+  readonly coque: CoqueNative | undefined;
+  /** Le repli `execCommand('copy')` (#8937) — injectable pour les témoins. */
+  readonly copieHistorique?: (texte: string) => boolean;
+}): PortailPartage {
   const { nav, coque } = hote;
   const pont = appelNatif(coque, PONT_PARTAGE);
   // `exactOptionalPropertyTypes` : une clé optionnelle s'OMET, elle ne se pose
@@ -67,10 +73,18 @@ export function portailDe(hote: { readonly nav: NavigateurPartage; readonly coqu
           },
         }
       : {};
-  const copie = nav.clipboard && typeof nav.clipboard.writeText === 'function'
-    ? { copier: (t: string) => nav.clipboard!.writeText(t) }
-    : {};
-  return { ...partage, ...copie };
+  /* LA COPIE A SON REPLI (#8937) — même chemin que le menu d'un message
+     (#8809) : `writeText` refusé (WebView Android, geste plus « frais ») ou
+     absent retombe sur `execCommand('copy')` ; seul l'échec des deux rejette. */
+  const clipboard = nav.clipboard && typeof nav.clipboard.writeText === 'function' ? nav.clipboard : undefined;
+  const env = {
+    writeText: clipboard === undefined ? undefined : (t: string) => clipboard.writeText(t),
+    legacyCopy: hote.copieHistorique ?? browserClipboard().legacyCopy,
+  };
+  const copier = async (t: string): Promise<void> => {
+    if ((await copyPlainText(t, env)) !== 'copied') throw new Error('copie impossible');
+  };
+  return { ...partage, copier };
 }
 
 /**

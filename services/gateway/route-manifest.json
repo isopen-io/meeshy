@@ -22,7 +22,7 @@
       "authenticated-only": "Authentifié (onRequest/preHandler référence fastify.authenticate) sans requirePermission/requireHierarchy/requireSovereign détecté, donc S2 ou S3. Les deux ne se distinguent pas mécaniquement : l'appartenance à la ressource (S3) peut être vérifiée à l'intérieur du corps du handler, invisible depuis le serveur assemblé."
     }
   },
-  "routeCount": 589,
+  "routeCount": 625,
   "routes": [
     {
       "method": "DELETE",
@@ -321,6 +321,34 @@
     },
     {
       "method": "DELETE",
+      "path": "/api/v1/calls/history",
+      "module": "callRoutes",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/calls/history/:callId",
+      "module": "callRoutes",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "DELETE",
       "path": "/api/v1/communities/:id",
       "module": "communityRoutes",
       "mountPrefix": "/api/v1",
@@ -421,20 +449,6 @@
       "method": "DELETE",
       "path": "/api/v1/directory/blocks/:userId",
       "module": "directoryBlocksRoutes",
-      "mountPrefix": "/api/v1/directory",
-      "securityLevel": "inconnu",
-      "securityLevelCandidates": [
-        "S2",
-        "S3"
-      ],
-      "securityBasisKey": "authenticated-only",
-      "hierarchyGated": false,
-      "adminPrefixed": false
-    },
-    {
-      "method": "DELETE",
-      "path": "/api/v1/directory/contacts",
-      "module": "directoryContactsRoutes",
       "mountPrefix": "/api/v1/directory",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
@@ -881,6 +895,20 @@
     },
     {
       "method": "DELETE",
+      "path": "/api/v1/sticker-packs/:slug/install",
+      "module": "stickerPacksRoutes",
+      "mountPrefix": "/api/v1/sticker-packs",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "DELETE",
       "path": "/api/v1/tracking-links/:token",
       "module": "trackingLinksRoutes",
       "mountPrefix": "/api/v1",
@@ -952,20 +980,6 @@
     {
       "method": "DELETE",
       "path": "/api/v1/users/:userId/block",
-      "module": "userRoutes",
-      "mountPrefix": "/api/v1",
-      "securityLevel": "inconnu",
-      "securityLevelCandidates": [
-        "S2",
-        "S3"
-      ],
-      "securityBasisKey": "authenticated-only",
-      "hierarchyGated": false,
-      "adminPrefixed": false
-    },
-    {
-      "method": "DELETE",
-      "path": "/api/v1/users/me/contacts",
       "module": "userRoutes",
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
@@ -1469,6 +1483,20 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/admin/audit-logs",
+      "module": "adminOversightRoutes",
+      "mountPrefix": "/api/v1/admin",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5"
+      ],
+      "securityBasisKey": "permission-gated",
+      "hierarchyGated": false,
+      "adminPrefixed": true
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/admin/broadcasts",
       "module": "broadcastRoutes",
       "mountPrefix": "/api/v1/admin/broadcasts",
@@ -1511,7 +1539,50 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/admin/communities/:communityId",
+      "module": "adminOversightRoutes",
+      "mountPrefix": "/api/v1/admin",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5"
+      ],
+      "securityBasisKey": "permission-gated",
+      "hierarchyGated": false,
+      "adminPrefixed": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/communities/:communityId/members",
+      "module": "adminOversightRoutes",
+      "mountPrefix": "/api/v1/admin",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5"
+      ],
+      "securityBasisKey": "permission-gated",
+      "hierarchyGated": false,
+      "adminPrefixed": true
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/admin/conversations",
+      "module": "userAdminRoutes",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5",
+        "S6"
+      ],
+      "securityBasisKey": "admin-rank",
+      "hierarchyGated": false,
+      "adminPrefixed": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/conversations/:conversationId",
       "module": "userAdminRoutes",
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
@@ -1564,6 +1635,21 @@
         "S5"
       ],
       "securityBasisKey": "permission-gated",
+      "hierarchyGated": false,
+      "adminPrefixed": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/engagement-scale",
+      "module": "engagementScaleAdminRoutes",
+      "mountPrefix": "/api/v1/admin",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5",
+        "S6"
+      ],
+      "securityBasisKey": "admin-rank",
       "hierarchyGated": false,
       "adminPrefixed": true
     },
@@ -1737,6 +1823,21 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/admin/monitoring",
+      "module": "adminOversightRoutes",
+      "mountPrefix": "/api/v1/admin",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5",
+        "S6"
+      ],
+      "securityBasisKey": "admin-rank",
+      "hierarchyGated": false,
+      "adminPrefixed": true
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/admin/posts",
       "module": "adminPostRoutes",
       "mountPrefix": "/api/v1/admin",
@@ -1905,6 +2006,48 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/admin/share-links/:id",
+      "module": "registerContentRoutes",
+      "mountPrefix": "/api/v1/admin",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5"
+      ],
+      "securityBasisKey": "permission-gated",
+      "hierarchyGated": false,
+      "adminPrefixed": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/tracking-links",
+      "module": "adminOversightRoutes",
+      "mountPrefix": "/api/v1/admin",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5"
+      ],
+      "securityBasisKey": "permission-gated",
+      "hierarchyGated": false,
+      "adminPrefixed": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/tracking-links/:linkId",
+      "module": "adminOversightRoutes",
+      "mountPrefix": "/api/v1/admin",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5"
+      ],
+      "securityBasisKey": "permission-gated",
+      "hierarchyGated": false,
+      "adminPrefixed": true
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/admin/translations",
       "module": "registerContentRoutes",
       "mountPrefix": "/api/v1/admin",
@@ -2027,6 +2170,20 @@
       ],
       "securityBasisKey": "permission-gated",
       "hierarchyGated": false,
+      "adminPrefixed": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/users/:userId/profile-image-candidates",
+      "module": "userAdminRoutes",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5"
+      ],
+      "securityBasisKey": "permission-gated",
+      "hierarchyGated": true,
       "adminPrefixed": true
     },
     {
@@ -2671,6 +2828,36 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/conversations/:id/card",
+      "module": "anonyme~2",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S0",
+        "S1",
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "optional-identity",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/conversations/:id/engagement",
+      "module": "anonyme~2",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/conversations/:id/messages",
       "module": "anonyme~2",
       "mountPrefix": "/api/v1",
@@ -3077,6 +3264,22 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/links/:identifier/card",
+      "module": "linksRoutes",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S0",
+        "S1",
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "optional-identity",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/links/:identifier/messages",
       "module": "linksRoutes",
       "mountPrefix": "/api/v1",
@@ -3088,6 +3291,20 @@
         "S3"
       ],
       "securityBasisKey": "optional-identity",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/links/:linkId/arrivals",
+      "module": "linksRoutes",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -3644,10 +3861,12 @@
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
+        "S0",
+        "S1",
         "S2",
         "S3"
       ],
-      "securityBasisKey": "authenticated-only",
+      "securityBasisKey": "optional-identity",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -4054,6 +4273,76 @@
       "path": "/api/v1/status-metrics",
       "module": "maintenanceRoutes",
       "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/sticker-packs",
+      "module": "stickerPacksRoutes",
+      "mountPrefix": "/api/v1/sticker-packs",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/sticker-packs/:slug",
+      "module": "stickerPacksRoutes",
+      "mountPrefix": "/api/v1/sticker-packs",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/sticker-packs/installed",
+      "module": "stickerPacksRoutes",
+      "mountPrefix": "/api/v1/sticker-packs",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/sticker-packs/pending",
+      "module": "stickerPacksRoutes",
+      "mountPrefix": "/api/v1/sticker-packs",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5"
+      ],
+      "securityBasisKey": "permission-gated",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/sticker-packs/submissions",
+      "module": "stickerPacksRoutes",
+      "mountPrefix": "/api/v1/sticker-packs",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
         "S2",
@@ -4775,6 +5064,50 @@
     },
     {
       "method": "PATCH",
+      "path": "/api/v1/admin/communities/:communityId",
+      "module": "adminOversightRoutes",
+      "mountPrefix": "/api/v1/admin",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5"
+      ],
+      "securityBasisKey": "permission-gated",
+      "hierarchyGated": false,
+      "adminPrefixed": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/admin/conversations/:conversationId",
+      "module": "userAdminRoutes",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5",
+        "S6"
+      ],
+      "securityBasisKey": "admin-rank",
+      "hierarchyGated": false,
+      "adminPrefixed": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/admin/conversations/:conversationId/participants/:userId",
+      "module": "userAdminRoutes",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5",
+        "S6"
+      ],
+      "securityBasisKey": "admin-rank",
+      "hierarchyGated": true,
+      "adminPrefixed": true
+    },
+    {
+      "method": "PATCH",
       "path": "/api/v1/admin/invitations/:id",
       "module": "invitationRoutes",
       "mountPrefix": "/api/v1/admin/invitations",
@@ -4812,6 +5145,21 @@
         "S5"
       ],
       "securityBasisKey": "permission-gated",
+      "hierarchyGated": false,
+      "adminPrefixed": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/admin/tracking-links/:linkId",
+      "module": "adminOversightRoutes",
+      "mountPrefix": "/api/v1/admin",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5",
+        "S6"
+      ],
+      "securityBasisKey": "admin-rank",
       "hierarchyGated": false,
       "adminPrefixed": true
     },
@@ -5629,6 +5977,21 @@
     },
     {
       "method": "POST",
+      "path": "/api/v1/admin/conversations/:conversationId/participants/:userId/remove",
+      "module": "userAdminRoutes",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5",
+        "S6"
+      ],
+      "securityBasisKey": "admin-rank",
+      "hierarchyGated": true,
+      "adminPrefixed": true
+    },
+    {
+      "method": "POST",
       "path": "/api/v1/admin/dashboard/invalidate-cache",
       "module": "dashboardRoutes",
       "mountPrefix": "/api/v1/admin",
@@ -5754,6 +6117,20 @@
     },
     {
       "method": "POST",
+      "path": "/api/v1/admin/users/:userId/password-proposals",
+      "module": "userAdminRoutes",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5"
+      ],
+      "securityBasisKey": "permission-gated",
+      "hierarchyGated": true,
+      "adminPrefixed": true
+    },
+    {
+      "method": "POST",
       "path": "/api/v1/admin/users/:userId/reset-password",
       "module": "userAdminRoutes",
       "mountPrefix": "/api/v1",
@@ -5783,6 +6160,20 @@
     {
       "method": "POST",
       "path": "/api/v1/admin/users/:userId/unlock",
+      "module": "userAdminRoutes",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5"
+      ],
+      "securityBasisKey": "permission-gated",
+      "hierarchyGated": true,
+      "adminPrefixed": true
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/users/:userId/verification-requests",
       "module": "userAdminRoutes",
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
@@ -6444,6 +6835,20 @@
     },
     {
       "method": "POST",
+      "path": "/api/v1/auth/verification/status",
+      "module": "authRoutes",
+      "mountPrefix": "/api/v1/auth",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S0",
+        "S1"
+      ],
+      "securityBasisKey": "no-standard-auth-hook",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "POST",
       "path": "/api/v1/auth/verify-email",
       "module": "authRoutes",
       "mountPrefix": "/api/v1/auth",
@@ -6487,6 +6892,20 @@
     {
       "method": "POST",
       "path": "/api/v1/calls/:callId/participants",
+      "module": "callRoutes",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/calls/:callId/recordings/:recordingId/attachment",
       "module": "callRoutes",
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
@@ -6587,6 +7006,20 @@
       "path": "/api/v1/communities/:id/members",
       "module": "communityRoutes",
       "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/contacts/resolve",
+      "module": "contactsResolveRoutes",
+      "mountPrefix": "/api/v1/contacts",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
         "S2",
@@ -6785,6 +7218,20 @@
     {
       "method": "POST",
       "path": "/api/v1/conversations/:id/messages/:messageId/consume",
+      "module": "anonyme~2",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/conversations/:id/messages/after-read/consume",
       "module": "anonyme~2",
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
@@ -7502,6 +7949,34 @@
     },
     {
       "method": "POST",
+      "path": "/api/v1/sticker-packs/:slug/review",
+      "module": "stickerPacksRoutes",
+      "mountPrefix": "/api/v1/sticker-packs",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5"
+      ],
+      "securityBasisKey": "permission-gated",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/sticker-packs/submissions",
+      "module": "stickerPacksRoutes",
+      "mountPrefix": "/api/v1/sticker-packs",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "POST",
       "path": "/api/v1/tracking-links",
       "module": "trackingLinksRoutes",
       "mountPrefix": "/api/v1",
@@ -8037,6 +8512,35 @@
     },
     {
       "method": "PUT",
+      "path": "/api/v1/admin/engagement-scale",
+      "module": "engagementScaleAdminRoutes",
+      "mountPrefix": "/api/v1/admin",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5",
+        "S6"
+      ],
+      "securityBasisKey": "admin-rank",
+      "hierarchyGated": false,
+      "adminPrefixed": true
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/admin/users/:userId/profile-images/:kind",
+      "module": "userAdminRoutes",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5"
+      ],
+      "securityBasisKey": "permission-gated",
+      "hierarchyGated": true,
+      "adminPrefixed": true
+    },
+    {
+      "method": "PUT",
       "path": "/api/v1/communities/:id",
       "module": "communityRoutes",
       "mountPrefix": "/api/v1",
@@ -8278,6 +8782,20 @@
       "path": "/api/v1/posts/:postId",
       "module": "anonyme~10",
       "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/sticker-packs/:slug/install",
+      "module": "stickerPacksRoutes",
+      "mountPrefix": "/api/v1/sticker-packs",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
         "S2",

@@ -18,6 +18,7 @@ struct IncomingCallView: View {
     @State private var ringScale: CGFloat = 0.8
     @State private var ringOpacity: Double = 1.0
     @State private var avatarBounce: Bool = false
+    @State private var isDeclineSheetPresented: Bool = false
 
     /// Tranche les permissions AVANT de laisser `CallManager` répondre.
     ///
@@ -47,7 +48,7 @@ struct IncomingCallView: View {
             // Pulsing ring animation — purely decorative; caller name announced below
             ringAnimation
                 .accessibilityHidden(true)
-                .padding(.bottom, 32)
+                .padding(.bottom, MeeshySpacing.xxxl)
 
             // Caller name
             Text(callManager.remoteUsername ?? String(localized: "call.incoming.unknown_caller", defaultValue: "Inconnu", bundle: .main))
@@ -55,7 +56,7 @@ struct IncomingCallView: View {
                 // Posé sur le fond sombre fixe de CallView → texte clair fixe
                 // (theme.textPrimary suit le système et virait au foncé en Light).
                 .foregroundColor(.white)
-                .padding(.bottom, 8)
+                .padding(.bottom, MeeshySpacing.sm)
 
             // Call type label
             Text(callManager.isVideoEnabled
@@ -63,7 +64,7 @@ struct IncomingCallView: View {
                 : String(localized: "call.incoming.audio", defaultValue: "Appel entrant", bundle: .main))
                 .font(.callout.weight(.medium))
                 .foregroundColor(.white.opacity(0.7))
-                .padding(.bottom, 12)
+                .padding(.bottom, MeeshySpacing.md)
 
             // Call type badge
             callTypeBadge
@@ -71,9 +72,28 @@ struct IncomingCallView: View {
 
             Spacer()
 
+            // #8480 — entendre l'appelant avant de décrocher
+            CallPreviewSoundButton(preview: .shared)
+                .padding(.bottom, MeeshySpacing.xxl)
+
             // Accept / Reject buttons
             actionButtons
-                .padding(.bottom, 80)
+                .padding(.bottom, MeeshySpacing.xl)
+
+            declineWithMessageButton
+                .padding(.bottom, 40)
+        }
+        // L'écran ENTIER, avant d'y poser l'aperçu : sans ce cadre, le
+        // `VStack` ne prenait que la largeur de ses boutons, et la vidéo de
+        // l'appelant n'était peinte que dans cette colonne — les côtés
+        // montraient un autre fond (2026-09-30, appel réel iPhone → simulateur).
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // #8480 — l'appelant, vu avant de décrocher
+        .background { CallPreviewBackdrop(preview: .shared) }
+        .sheet(isPresented: $isDeclineSheetPresented) {
+            CallDeclineSheet(callManager: callManager) {
+                isDeclineSheetPresented = false
+            }
         }
         .onAppear {
             let callerName = callManager.remoteUsername
@@ -186,6 +206,27 @@ struct IncomingCallView: View {
         )
     }
 
+    // MARK: - Decline With Message
+
+    private var declineWithMessageButton: some View {
+        Button {
+            isDeclineSheetPresented = true
+        } label: {
+            Label(
+                String(localized: "call.decline.open", defaultValue: "Message", bundle: .main),
+                systemImage: "message.fill"
+            )
+            .font(.callout.weight(.medium))
+            .foregroundColor(.white)
+            .padding(.horizontal, MeeshySpacing.xl)
+            .frame(minHeight: 44)
+            .adaptiveGlass(in: Capsule())
+        }
+        .pressable()
+        .accessibilityLabel(String(localized: "call.decline.open.label", defaultValue: "Refuser avec un message", bundle: .main))
+        .accessibilityHint(String(localized: "call.decline.open.hint", defaultValue: "Propose des réponses rapides qui refusent l'appel", bundle: .main))
+    }
+
     // MARK: - Action Buttons
 
     private var actionButtons: some View {
@@ -198,7 +239,7 @@ struct IncomingCallView: View {
                 Button {
                     callManager.rejectCall()
                 } label: {
-                    VStack(spacing: 10) {
+                    VStack(spacing: MeeshySpacing.smPlus) {
                         Image(systemName: "phone.down.fill")
                             // doctrine 82i — glyphe borné par le cercle de bouton fixe 70×70 ;
                             // le `Button` porte déjà son `.accessibilityLabel`/`.accessibilityHint`
@@ -220,7 +261,7 @@ struct IncomingCallView: View {
                 Button {
                     acceptCall()
                 } label: {
-                    VStack(spacing: 10) {
+                    VStack(spacing: MeeshySpacing.smPlus) {
                         Image(systemName: callManager.isVideoEnabled ? "video.fill" : "phone.fill")
                             // doctrine 82i — glyphe borné par le cercle de bouton fixe 70×70 ;
                             // le `Button` porte déjà son `.accessibilityLabel`/`.accessibilityHint`

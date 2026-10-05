@@ -173,12 +173,12 @@ public struct CountryPicker: View {
     }
 
     public var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: MeeshySpacing.sm) {
             // Country selector button
             Button {
                 showPicker = true
             } label: {
-                HStack(spacing: 4) {
+                HStack(spacing: MeeshySpacing.xs) {
                     Text(selectedCountry.flag)
                     Text(selectedCountry.dialCode)
                         .font(.subheadline)
@@ -188,15 +188,15 @@ public struct CountryPicker: View {
                         .foregroundStyle(.secondary)
                         .accessibilityHidden(true)
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 14)
+                .padding(.horizontal, MeeshySpacing.md)
+                .padding(.vertical, MeeshySpacing.mdPlus)
                 .background(
-                    RoundedRectangle(cornerRadius: 14)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.md)
                         .fill(Color(hex: "2D2D40").opacity(0.6))
                 )
                 .overlay(
-                    RoundedRectangle(cornerRadius: 14)
-                        .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                        .strokeBorder(Color.white.opacity(MeeshyOpacity.subtle), lineWidth: 1)
                 )
             }
             .buttonStyle(.plain)
@@ -207,15 +207,15 @@ public struct CountryPicker: View {
             // Phone number field
             TextField(String(localized: "auth.countryPicker.phoneNumber", defaultValue: "Numero de telephone", bundle: .module), text: $phoneNumber)
                 .keyboardType(.phonePad)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 14)
+                .padding(.horizontal, MeeshySpacing.lg)
+                .padding(.vertical, MeeshySpacing.mdPlus)
                 .background(
-                    RoundedRectangle(cornerRadius: 14)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.md)
                         .fill(Color(hex: "2D2D40").opacity(0.6))
                 )
                 .overlay(
-                    RoundedRectangle(cornerRadius: 14)
-                        .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                        .strokeBorder(Color.white.opacity(MeeshyOpacity.subtle), lineWidth: 1)
                 )
         }
         .sheet(isPresented: $showPicker) {

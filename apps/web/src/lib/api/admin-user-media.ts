@@ -1,9 +1,11 @@
+import * as adminEndpoints from '@meeshy/shared/api/endpoints/admin';
+
 import { type AdminDeps, asCount, asRecord, asText, pageServie, type PageServie } from './admin';
 import type { ApiResult } from './http';
 
 /**
  * **LES MÉDIAS D'UN MEMBRE** (#6819) —
- * `GET /api/v1/admin/users/:userId/media`, sous `canViewUsers` (jusqu'à
+ * `GET admin.usersByUserIdMedia`, sous `canViewUsers` (jusqu'à
  * AUDIT). La route fusionne `PostMedia` (par `post.authorId`) et
  * `MessageAttachment` (par `uploadedBy`), triés par récence.
  *
@@ -102,7 +104,7 @@ export async function loadAdminUserMedia(
 
   const result = await params.transport.request<unknown>({
     method: 'GET',
-    path: `/api/v1/admin/users/${encodeURIComponent(params.userId)}/media?${query.toString()}`,
+    path: `${adminEndpoints.usersByUserIdMedia(params.userId)}?${query.toString()}`,
     ...(params.signal === undefined ? {} : { signal: params.signal }),
   });
   if (!result.ok) return result;

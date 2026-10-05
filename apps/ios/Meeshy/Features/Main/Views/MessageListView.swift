@@ -31,9 +31,6 @@ struct BubbleInlinePagingPreferenceKey: PreferenceKey {
 /// banding past the zone (15% resistance) and haptic feedback at commit.
 struct BubbleSwipeContainer<Content: View>: View {
     let isMine: Bool
-    /// Identifier published via `MessageFramePreferenceKey` so the long-press
-    /// overlay can locate this cell's screen frame at gesture fire time.
-    let messageId: String
     /// Used by the swipe indicator to display a "day month / hh:mm" stamp
     /// before the user has dragged past the reply threshold.
     let messageCreatedAt: Date
@@ -160,7 +157,7 @@ struct BubbleSwipeContainer<Content: View>: View {
         // adapts to the bubble's intrinsic width.
         ZStack(alignment: indicatorAlignment) {
             swipeIndicator
-                .padding(.horizontal, 8)
+                .padding(.horizontal, MeeshySpacing.sm)
 
             content()
                 .padding(.leading, selectionShift)
@@ -245,10 +242,10 @@ struct BubbleSwipeContainer<Content: View>: View {
         .overlay(alignment: .topLeading) {
             if isSelectionModeActive {
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 20))
+                    .font(.system(size: MeeshyIconSize.xl))
                     .foregroundStyle(isSelected ? Color.accentColor : Color.secondary.opacity(0.6))
                     .background(Circle().fill(.background).frame(width: 18, height: 18))
-                    .padding(.top, 6)
+                    .padding(.top, MeeshySpacing.xsPlus)
                     .padding(.leading, selectionLeadingCircleInset)
                     .allowsHitTesting(false)
             }
@@ -259,7 +256,7 @@ struct BubbleSwipeContainer<Content: View>: View {
     private var swipeIndicator: some View {
         let directed = offset * replyDirection
         let isReplyDir = directed > 0
-        let isOverThreshold = abs(offset) >= 66
+        let isOverThreshold = BubbleSwipeResistance.commits(offset: abs(offset))
         let visibility = min(1.0, abs(offset) / 24.0)
 
         if abs(offset) > 8 {
@@ -270,18 +267,18 @@ struct BubbleSwipeContainer<Content: View>: View {
                     // direction, forward (curved arrow forward) for the
                     // opposite. Crossfade transition keeps the swap subtle.
                     Image(systemName: isReplyDir ? "arrowshape.turn.up.left.fill" : "arrowshape.turn.up.right.fill")
-                        .font(MeeshyFont.relative(22, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyIconSize.xxl, weight: .semibold))
                         .foregroundStyle(MeeshyColors.brandPrimary)
                         .transition(.scale.combined(with: .opacity))
                 } else {
                     // Under the threshold — day + hour stamp gives the user
                     // context (when the message was sent) while they decide
                     // whether to commit the gesture.
-                    VStack(spacing: 2) {
+                    VStack(spacing: MeeshySpacing.xxs) {
                         Text(swipeStampDay)
-                            .font(MeeshyFont.relative(11, weight: .medium))
+                            .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                         Text(swipeStampTime)
-                            .font(MeeshyFont.relative(12, weight: .semibold))
+                            .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
                     }
                     .foregroundColor(.secondary)
                     .transition(.opacity)
@@ -322,18 +319,11 @@ struct BubbleSwipeContainer<Content: View>: View {
                     ),
                     resistance: resistance
                 ) else { return }
-                let zone: CGFloat = 72
-                let absH = abs(h)
-                let sign: CGFloat = h > 0 ? 1 : -1
-                if absH > zone {
-                    offset = sign * (zone + (absH - zone) * 0.15)
-                } else {
-                    offset = h
-                }
+                offset = BubbleSwipeResistance.trackedOffset(translation: h)
                 // Light haptic the moment we cross the commit threshold
                 // (and only once per drag) so the user feels the bubble
                 // "snap" into the action zone before they let go.
-                let crossed = abs(offset) >= 66
+                let crossed = BubbleSwipeResistance.commits(offset: abs(offset))
                 if crossed && !didCrossThreshold {
                     didCrossThreshold = true
                     HapticFeedback.light()
@@ -343,10 +333,10 @@ struct BubbleSwipeContainer<Content: View>: View {
             }
             .onEnded { _ in
                 let directed = offset * replyDirection
-                if directed >= 66 {
+                if BubbleSwipeResistance.commits(offset: directed) {
                     onSwipeReply()
                     HapticFeedback.success()
-                } else if directed <= -66 {
+                } else if BubbleSwipeResistance.commits(offset: -directed) {
                     onSwipeForward()
                     HapticFeedback.success()
                 }
@@ -503,6 +493,9 @@ struct MessageListView: UIViewControllerRepresentable {
     /// (`DeviceLayout.safeAreaTop`) — sous `ignoresSafeArea`, ni le
     /// `GeometryReader` ni le contrôleur hébergé ne le connaissent.
     var topInset: CGFloat = 0
+    /// Hauteur MESURÉE de la bande d'en-tête flottant (#7998) — ancre des
+    /// pilules de jour et de la réserve de la rangée plate.
+    var headerBandHeight: CGFloat = 0
     /// Ce que le chrome flottant montre en ce moment (#6013) : en rangée
     /// plate, le fil s'efface sous l'en-tête et le composeur tant qu'ils sont
     /// posés, et retrouve le bord de l'écran quand le défilement les escamote.
@@ -543,7 +536,7 @@ struct MessageListView: UIViewControllerRepresentable {
     /// `ConversationViewModel.loadOlderMessages()` so pagination chains cache
     /// then network — bypassing this hook leaves the store stuck on whatever
     /// GRDB already holds.
-    var onLoadOlder: (() async -> Void)?
+    var onLoadOlder: (@MainActor () async -> Void)?
     /// Invoked when the scroll position crosses the near-bottom threshold.
     /// Drives the floating "scroll to latest" button in the parent SwiftUI view.
     var onNearBottomChanged: ((Bool) -> Void)?
@@ -578,11 +571,6 @@ struct MessageListView: UIViewControllerRepresentable {
     /// `MessageFramePreferenceKey` ne traverse la frontière UIKit qu'en mode
     /// Rivière (`RiverBubbleView`), jamais pour la liste standard.
     var onLongPress: ((String, CGRect?) -> Void)?
-    /// iOS 26+ : contenu du `.contextMenu` NATIF (Liquid Glass) d'une bulle,
-    /// construit par `ConversationView` (là où toutes les actions sont déjà
-    /// résolues) — mêmes callbacks que l'overlay custom. `nil` < iOS 26 (le
-    /// long-press custom → overlay reste alors le chemin).
-    var nativeMessageMenu: ((Message) -> AnyView)? = nil
     /// id de la bulle présentée dans l'overlay custom d'appui long — la
     /// cellule live correspondante est masquée (opacity 0) le temps de
     /// l'overlay (anti double-bulle fantôme). `nil` = aucune.
@@ -609,6 +597,8 @@ struct MessageListView: UIViewControllerRepresentable {
     /// qui BASCULE une coche dans un mode déjà actif : le menu doit armer.
     var onSelectMessage: ((String) -> Void)?
     var onComposeFromMessage: ((String) -> Void)?
+    /// « Imager » au double tap (#8692) — remplace « Composer » en tête de barre.
+    var onImagineFromMessage: ((String) -> Void)?
     /// « Plus… » ouvre le **GRAND** menu (`MessageMoreSheet`), pas l'overlay
     /// d'appui long — directive porteur : « le plus doit ouvrir le grand menu
     /// et non le menu longpress ». Les deux sont distincts : l'appui long
@@ -641,7 +631,6 @@ struct MessageListView: UIViewControllerRepresentable {
     var onShowReactions: ((String) -> Void)?
     /// Open the message detail sheet on the "language / translation" tab.
     var onShowTranslationDetail: ((String) -> Void)?
-    var onReadMore: ((FocalReadMorePayload) -> Void)?
     /// Lot 3.2 — carte lieu / partage fichier de la rangée plate.
     var onFocalTapLocation: ((SharedPlace) -> Void)?
     var onFocalShareFile: ((URL) -> Void)?
@@ -662,7 +651,10 @@ struct MessageListView: UIViewControllerRepresentable {
     @Environment(\.meeshyConversationList) private var conversationListViewModel
     @Environment(\.colorScheme) private var colorScheme
 
-    class Coordinator {
+    /// Porte aussi l'écoute des gestes du fil (#9061) : un toucher n'importe
+    /// où dans la liste — réagir, lancer un audio, ouvrir un menu — rend le
+    /// lecteur actif aux yeux de ses pairs, sans rien retenir du geste.
+    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
     // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
     // défaut) → double-free `pointer being freed was not allocated` (abrt)
     // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
@@ -672,9 +664,26 @@ struct MessageListView: UIViewControllerRepresentable {
         var lastScrollToMessageTrigger: Int = 0
         var lastFlushSeenTrigger: Int = 0
         var wasSearchingQuotedMessage: Bool = false
+
+        @MainActor @objc func threadTouched() {
+            ConversationViewingReporter.shared.touched()
+        }
+
+        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
+                               shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool { true }
     }
 
     func makeCoordinator() -> Coordinator { Coordinator() }
+
+    /// Le défilement du doigt relaie au parent ET au rapporteur de présence
+    /// (#9061) : défiler, c'est regarder.
+    private var scrollingRelay: (Bool) -> Void {
+        let parent = onScrollingActiveChanged
+        return { isActive in
+            parent?(isActive)
+            ConversationViewingReporter.shared.scrollingChanged(isActive)
+        }
+    }
 
     func makeUIViewController(context: Context) -> MessageListViewController {
         let vc = MessageListViewController(
@@ -692,8 +701,13 @@ struct MessageListView: UIViewControllerRepresentable {
         vc.onScrollToMessage = onScrollToMessage
         vc.onLoadOlder = onLoadOlder
         vc.onNearBottomChanged = onNearBottomChanged
-        vc.onScrollingActiveChanged = onScrollingActiveChanged
+        vc.onScrollingActiveChanged = scrollingRelay
         vc.isHeaderExpanded = isHeaderExpanded
+        let touches = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.threadTouched))
+        touches.cancelsTouchesInView = false
+        touches.delaysTouchesEnded = false
+        touches.delegate = context.coordinator
+        vc.view.addGestureRecognizer(touches)
         // WS-6 (F-085) : posées AVANT `applyBottomInset`/`applyTopInset`
         // ci-dessous — `applyTopInset` recompose `headInset` (§4.5) à partir
         // de `readingMode`/`hasReachedOldest`, qui doivent donc déjà être à
@@ -709,7 +723,6 @@ struct MessageListView: UIViewControllerRepresentable {
         vc.onSwipeReply = onSwipeReply
         vc.onSwipeForward = onSwipeForward
         vc.onLongPress = onLongPress
-        vc.nativeMessageMenu = nativeMessageMenu
         vc.overlaidMessageId = overlaidMessageId
         // #4005 — `didSet` gardés côté VC (même patron que `readingMode`).
         vc.isSelectionModeActive = isSelectionModeActive
@@ -718,6 +731,7 @@ struct MessageListView: UIViewControllerRepresentable {
         vc.onEditMessage = onEditMessage
         vc.onSelectMessage = onSelectMessage
         vc.onComposeFromMessage = onComposeFromMessage
+        vc.onImagineFromMessage = onImagineFromMessage
         vc.onOpenMoreSheet = onOpenMoreSheet
         vc.canEditMessage = canEditMessage
         vc.onAddReaction = onAddReaction
@@ -729,7 +743,6 @@ struct MessageListView: UIViewControllerRepresentable {
         vc.onRetry = onRetry
         vc.onShowReactions = onShowReactions
         vc.onShowTranslationDetail = onShowTranslationDetail
-        vc.onReadMore = onReadMore
         vc.onFocalTapLocation = onFocalTapLocation
         vc.onFocalShareFile = onFocalShareFile
         vc.onMediaTap = onMediaTap
@@ -744,6 +757,7 @@ struct MessageListView: UIViewControllerRepresentable {
         // qui vient de naître ferait glisser le fil à chaque ouverture de
         // conversation. Seul `updateUIViewController` suit une courbe.
         vc.applyBottomInset(bottomInset)
+        vc.headerBandHeight = headerBandHeight
         vc.applyTopInset(topInset)
         return vc
     }
@@ -797,7 +811,7 @@ struct MessageListView: UIViewControllerRepresentable {
         vc.onScrollToMessage = onScrollToMessage
         vc.onLoadOlder = onLoadOlder
         vc.onNearBottomChanged = onNearBottomChanged
-        vc.onScrollingActiveChanged = onScrollingActiveChanged
+        vc.onScrollingActiveChanged = scrollingRelay
         vc.isHeaderExpanded = isHeaderExpanded
         // #3947 — **la liste ne se dessine pas sous ce qui la recouvre.**
         //
@@ -828,7 +842,6 @@ struct MessageListView: UIViewControllerRepresentable {
         vc.onSwipeReply = onSwipeReply
         vc.onSwipeForward = onSwipeForward
         vc.onLongPress = onLongPress
-        vc.nativeMessageMenu = nativeMessageMenu
         vc.overlaidMessageId = overlaidMessageId
         // #4005 — `didSet` gardés côté VC (même patron que `readingMode`).
         vc.isSelectionModeActive = isSelectionModeActive
@@ -837,6 +850,7 @@ struct MessageListView: UIViewControllerRepresentable {
         vc.onEditMessage = onEditMessage
         vc.onSelectMessage = onSelectMessage
         vc.onComposeFromMessage = onComposeFromMessage
+        vc.onImagineFromMessage = onImagineFromMessage
         vc.onOpenMoreSheet = onOpenMoreSheet
         vc.canEditMessage = canEditMessage
         vc.onAddReaction = onAddReaction
@@ -848,7 +862,6 @@ struct MessageListView: UIViewControllerRepresentable {
         vc.onRetry = onRetry
         vc.onShowReactions = onShowReactions
         vc.onShowTranslationDetail = onShowTranslationDetail
-        vc.onReadMore = onReadMore
         vc.onFocalTapLocation = onFocalTapLocation
         vc.onFocalShareFile = onFocalShareFile
         vc.onMediaTap = onMediaTap
@@ -863,6 +876,7 @@ struct MessageListView: UIViewControllerRepresentable {
         // l'a causée (le clavier qui monte ou descend), jamais en un pas sec.
         // `transition == nil` retombe mot pour mot sur la pose sèche.
         vc.applyBottomInset(bottomInset, transition: bottomInsetTransition)
+        vc.headerBandHeight = headerBandHeight
         vc.applyTopInset(topInset)
     }
 

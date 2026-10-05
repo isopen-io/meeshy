@@ -448,13 +448,26 @@ final class ComposerForegroundSoundMountGuardTests: XCTestCase {
     /// `audioPlayerObjects`, donc `handleSingleTap` retombait sur sa branche
     /// « fond » et DÉSÉLECTIONNAIT. Pas un contrôle inerte — un contrôle qui
     /// fait l'inverse de ce qu'on attend.
-    func test_toucherUnePastilleAudio_ouvreLaFeuille() throws {
+    /// **Depuis #8714, toucher une pastille la SÉLECTIONNE** (directive porteur
+    /// 2026-09-29 : « lorsqu'on sélectionne une image, vidéo, texte ou son de la
+    /// scène par le simple toucher, les options d'édition apparaissent à
+    /// droite ») ; « Création audio » est l'entrée « Modifier » de ses options,
+    /// le même site que le double toucher.
+    func test_toucherUnePastilleAudio_laSelectionne_etModifierOuvreLaFeuille() throws {
         let surfaces = try source("MeeshyComposerHost+Surfaces.swift")
         guard let tap = corps("onItemTapped: { id, kind in", dans: surfaces) else {
             return XCTFail("`onItemTapped` introuvable — la garde ne mesurerait rien.")
         }
-        XCTAssertTrue(tap.contains("if kind == .audio { editSceneSound(id) }"),
-                      "le tap simple doit ouvrir « Création audio » sur la pastille touchée")
+        XCTAssertTrue(tap.contains("selectedSceneItemId = id"))
+        XCTAssertFalse(tap.contains("editSceneSound(id)"),
+                       "le tap simple sélectionne : la feuille s'ouvre par « Modifier »")
+        let colonnes = try source("MeeshyComposerHost+SceneColumns.swift")
+        guard let edition = corps("func editSceneItem(", dans: colonnes) else {
+            return XCTFail("`editSceneItem` introuvable.")
+        }
+        XCTAssertTrue(edition.contains("case .audio:"))
+        XCTAssertTrue(edition.contains("editSceneSound(id)"),
+                      "« Modifier » sur une pastille ouvre « Création audio »")
     }
 
     /// **Elle n'offre AUCUN placement, et se remplace à sa place.**

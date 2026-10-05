@@ -186,11 +186,3 @@ public struct DirectorySyncResult: Decodable, Sendable, Equatable {
         self.appliedAt = appliedAt
     }
 }
-
-public struct DirectoryClearResult: Decodable, Sendable, Equatable {
-    public let removedCount: Int
-
-    public init(removedCount: Int) {
-        self.removedCount = removedCount
-    }
-}

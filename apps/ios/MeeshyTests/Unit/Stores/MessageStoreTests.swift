@@ -18,7 +18,7 @@ final class MessageStoreTests: XCTestCase {
             conversationId: "conv-1",
             persistence: persistence
         )
-        store?.startObserving(dbPool: db)
+        store?.startObserving()
 
         weak var weakStore = store
         XCTAssertNotNil(weakStore, "Store should be alive before release")
@@ -35,7 +35,7 @@ final class MessageStoreTests: XCTestCase {
         let db = try makeInMemoryDatabase()
         let persistence = MessagePersistenceActor(dbWriter: db)
         let store = MessageStore(conversationId: "conv-2", persistence: persistence)
-        store.startObserving(dbPool: db)
+        store.startObserving()
         store.stopObserving()
         // After stopObserving(), no crash or hang should occur — the store is idle.
         // This is a smoke-test: the assertions live in the lack of test failure.

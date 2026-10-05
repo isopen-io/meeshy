@@ -143,7 +143,7 @@ describe('Visites / Arrivées / Sans compte', () => {
 
 describe('arrivés récemment', () => {
   test('nom, drapeau nommé, badge « sans compte » pour les seuls invités, ancienneté', () => {
-    const html = renderToStaticMarkup(<RecentArrivals language="fr" stats={STATS} now={NOW} />);
+    const html = renderToStaticMarkup(<RecentArrivals language="fr" linkId="mshy_l1" stats={STATS} now={NOW} />);
     expect(html).toContain('🇮🇳');
     expect(html).toContain('aria-label="Inde"');
     expect(html.match(/data-share-link-arrival-anonymous/gu)).toHaveLength(1);
@@ -152,8 +152,19 @@ describe('arrivés récemment', () => {
   });
 
   test('personne encore : l’état vide le dit', () => {
-    const html = renderToStaticMarkup(<RecentArrivals language="fr" stats={{ ...STATS, recentArrivals: [] }} now={NOW} />);
+    const html = renderToStaticMarkup(<RecentArrivals language="fr" linkId="mshy_l1" stats={{ ...STATS, arrivals: 0, recentArrivals: [] }} now={NOW} />);
     expect(plain(html)).toContain('Personne n’est encore arrivé par ce lien.');
+  });
+
+  test('plus d’arrivées que les récentes : « Voir les N arrivées » mène à la liste complète', () => {
+    const html = renderToStaticMarkup(<RecentArrivals language="fr" linkId="mshy_l1" stats={STATS} now={NOW} />);
+    expect(plain(html)).toContain('Voir les 412 arrivées');
+    expect(html).toContain('href="/links/share/mshy_l1/arrivals"');
+  });
+
+  test('toutes les arrivées sont déjà là : aucun renvoi vers la liste', () => {
+    const html = renderToStaticMarkup(<RecentArrivals language="fr" linkId="mshy_l1" stats={{ ...STATS, arrivals: 2 }} now={NOW} />);
+    expect(html).not.toContain('data-share-link-arrivals-all');
   });
 
   test('l’ancienneté suit la langue de l’interface', async () => {

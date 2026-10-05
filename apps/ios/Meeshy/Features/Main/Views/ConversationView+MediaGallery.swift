@@ -34,22 +34,79 @@ struct ConversationMediaGalleryLayer: ViewModifier {
     /// bannière du composer au premier ajustement de l'une.
     let onReply: (Message) -> Void
 
+    /// **TOUS les médias de la conversation, pas seulement la fenêtre** (#8095).
+    ///
+    /// Le catalogue vit le temps de la conversation mais ne TIENT rien tant que
+    /// la galerie est fermée : il s'ouvre avec elle (index persisté, puis pages
+    /// `view=media` en arrière-plan) et se vide à sa fermeture.
+    @StateObject private var catalog: ConversationMediaCatalog
+
+    init(viewModel: ConversationViewModel,
+         scrollState: Binding<ConversationScrollState>,
+         composerState: Binding<ConversationComposerState>,
+         accentColor: String,
+         onReply: @escaping (Message) -> Void) {
+        self.viewModel = viewModel
+        self._scrollState = scrollState
+        self._composerState = composerState
+        self.accentColor = accentColor
+        self.onReply = onReply
+        self._catalog = StateObject(wrappedValue: ConversationMediaCatalog(conversationId: viewModel.conversationId))
+    }
+
     func body(content: Content) -> some View {
-        content.fullScreenCover(item: $scrollState.galleryStartAttachment,
+        content.conversationCover(item: $scrollState.galleryStartAttachment,
                                 onDismiss: handleGalleryDismiss) { startAttachment in
-            ConversationMediaGalleryView(
-                allAttachments: Self.galleryAttachments(start: startAttachment, all: viewModel.allVisualAttachments),
-                startAttachmentId: startAttachment.id,
-                accentColor: accentColor,
-                captionMap: viewModel.mediaCaptionMap,
-                senderInfoMap: viewModel.mediaSenderInfoMap,
-                onComposeWithMedia: armCompose,
-                onReplyToMedia: replyToCarrier,
-                onSendReplyToMedia: sendReplyToMedia,
-                replyCitation: { viewModel.fullscreenReplyCitation(for: $0.id) },
-                onReactToMedia: reactToMedia
-            )
+            // Un vocal (cité, #8230) a son propre plein écran ; la galerie ne
+            // sait rendre que l'image et la vidéo.
+            if startAttachment.type == .audio {
+                audioFullscreen(start: startAttachment)
+            } else {
+                gallery(start: startAttachment)
+            }
         }
+    }
+
+    private func gallery(start startAttachment: MessageAttachment) -> some View {
+        ConversationMediaGalleryView(
+            allAttachments: Self.galleryAttachments(start: startAttachment, all: galleryPieces),
+            startAttachmentId: startAttachment.id,
+            accentColor: accentColor,
+            captionMap: viewModel.mediaCaptionMap.merging(catalog.snapshot.captions) { loaded, _ in loaded },
+            senderInfoMap: viewModel.mediaSenderInfoMap.merging(catalog.snapshot.senderInfo) { loaded, _ in loaded },
+            onComposeWithMedia: armCompose,
+            onReplyToMedia: replyToCarrier,
+            onSendReplyToMedia: sendReplyToMedia,
+            replyCitation: { viewModel.fullscreenReplyCitation(for: $0.id, carrier: carrier(of: $0)) },
+            onReactToMedia: reactToMedia,
+            reactableMedia: { catalog.snapshot.isLoaded($0.id) }
+        )
+        .onAppear(perform: openCatalog)
+        .onReceive(viewModel.$messages) { messages in
+            catalog.syncLive(messages, serverId: viewModel.serverId(for:))
+        }
+        .onDisappear { catalog.close() }
+    }
+
+    /// La fenêtre tant que le catalogue n'a rien fusionné — le premier rendu de
+    /// la galerie est donc exactement celui d'avant #8095 —, puis la fusion
+    /// fenêtre + index, qui ne fait que S'ÉTENDRE autour de la page ouverte.
+    private var galleryPieces: [MessageAttachment] {
+        catalog.snapshot.attachments.isEmpty ? viewModel.allVisualAttachments : catalog.snapshot.attachments
+    }
+
+    private func openCatalog() {
+        catalog.syncLive(viewModel.messages, serverId: viewModel.serverId(for:))
+        catalog.open(preferredLanguages: viewModel.preferredLanguages)
+    }
+
+    /// **Le porteur d'une pièce** : la fenêtre d'abord, sinon l'index des
+    /// médias — une pièce feuilletée depuis un message jamais chargé se cite et
+    /// se recompose comme les autres.
+    private func carrier(of attachment: MessageAttachment) -> Message? {
+        viewModel.messages.first { message in
+            message.attachments.contains { $0.id == attachment.id }
+        } ?? catalog.snapshot.carrier(ofAttachment: attachment.id)
     }
 
     /// Ce que le plein écran fait défiler (#7618) : la conversation sans ses
@@ -73,10 +130,7 @@ struct ConversationMediaGalleryLayer: ViewModifier {
     /// unique, flouté, chiffré, lot — donc un média non composable n'arme rien,
     /// et le plein écran se referme simplement.
     private func armCompose(_ attachment: MessageAttachment) {
-        let porteur = viewModel.messages.first { message in
-            message.attachments.contains { $0.id == attachment.id }
-        }
-        composerState.pendingComposeTarget = porteur.flatMap(ComposerSeedTarget.init(message:))
+        composerState.pendingComposeTarget = carrier(of: attachment).flatMap(ComposerSeedTarget.init(message:))
         scrollState.galleryStartAttachment = nil
     }
 
@@ -87,9 +141,7 @@ struct ConversationMediaGalleryLayer: ViewModifier {
     /// citation n'ouvre aucun second modal — elle pose une bannière dans un
     /// composer qui est déjà là, sous la galerie.
     private func replyToCarrier(_ attachment: MessageAttachment) {
-        guard let porteur = viewModel.messages.first(where: { message in
-            message.attachments.contains { $0.id == attachment.id }
-        }) else { return }
+        guard let porteur = carrier(of: attachment) else { return }
         onReply(porteur)
         scrollState.galleryStartAttachment = nil
     }
@@ -117,7 +169,8 @@ struct ConversationMediaGalleryLayer: ViewModifier {
                                   _ language: String) {
         Task {
             await viewModel.sendReplyToAttachment(
-                attachmentId: attachment.id, text: text, language: language
+                attachmentId: attachment.id, text: text, language: language,
+                carrier: carrier(of: attachment)
             )
         }
     }
@@ -180,5 +233,31 @@ struct ConversationMediaGalleryLayer: ViewModifier {
     private func handleGalleryDismiss() {
         consumeOpenedViewOnce()
         promotePendingCompose()
+    }
+}
+
+// MARK: - Le toucher d'un média du fil ouvre la galerie
+
+extension ConversationView {
+
+    /// **L'ouvreur UNIQUE du plein écran depuis le fil** — Bulles, Focal,
+    /// Script et, depuis #8310, la Rivière, dont le voile d'un message flouté
+    /// n'avait aucun ouvreur : l'image y restait inatteignable.
+    ///
+    /// Extrait de l'hôte, qui le portait en fermeture littérale : la Rivière
+    /// devait recevoir le MÊME geste, et une seconde copie aurait divergé à la
+    /// première règle ajoutée (la garde du menu, l'armement de la vue unique).
+    func openMediaFullscreen(_ attachment: MessageAttachment) {
+        // #8009 — le relâcher d'un appui long n'ouvre rien : son menu est déjà là.
+        guard !overlayState.showOverlayMenu else { return }
+        // Préchauffe ce que le plein écran AFFICHE (variante élue, poster net).
+        GalleryPrewarm.warm(attachment)
+        // #7499 — une vue unique s'OUVRE au toucher et se consomme à la
+        // FERMETURE. On arme ici, la galerie consomme en se refermant : c'est
+        // le seul endroit qui voie les deux.
+        if attachment.isViewOnce {
+            scrollState.pendingViewOnceConsumption.arm(attachment.messageId)
+        }
+        scrollState.galleryStartAttachment = attachment
     }
 }

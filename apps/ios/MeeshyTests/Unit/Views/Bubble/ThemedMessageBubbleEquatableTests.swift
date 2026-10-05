@@ -35,6 +35,12 @@ final class ThemedMessageBubbleEquatableTests: XCTestCase {
         XCTAssertNotEqual(a, b)
     }
 
+    func test_senderIsHereChange_invalidates() {
+        let a = makeBubble(senderIsHere: false)
+        let b = makeBubble(senderIsHere: true)
+        XCTAssertNotEqual(a, b)
+    }
+
     func test_senderMoodEmojiChange_invalidates() {
         let a = makeBubble(senderMoodEmoji: nil)
         let b = makeBubble(senderMoodEmoji: "🔥")
@@ -307,10 +313,34 @@ final class ThemedMessageBubbleEquatableTests: XCTestCase {
 
     // MARK: - Helpers
 
+    // MARK: - Vue unique (#8009) — l'ouverture ne bouge ni `updatedAt` ni les compteurs
+
+    /// Mesuré au simulateur : en Bulles, toucher la puce d'un TEXTE à vue unique
+    /// ne l'affichait pas — la révélation vivait sur le message, la porte
+    /// d'égalité ne la regardait pas, et le corps n'était pas réévalué. Le
+    /// second toucher (« retoucher referme ») consommait donc un texte que le
+    /// lecteur n'avait jamais vu.
+    func test_viewOnceRevealChange_invalidates() {
+        var sealed = makeMessage(updatedAt: Date(timeIntervalSince1970: 0), effects: .none, reactions: [])
+        sealed.isViewOnce = true
+        var revealed = sealed
+        revealed.isViewOnceRevealed = true
+        XCTAssertNotEqual(makeBubble(message: sealed), makeBubble(message: revealed))
+    }
+
+    func test_viewOnceOpenedChange_invalidates() {
+        var sealed = makeMessage(updatedAt: Date(timeIntervalSince1970: 0), effects: .none, reactions: [])
+        sealed.isViewOnce = true
+        var opened = sealed
+        opened.viewOnceOpenedAt = Date(timeIntervalSince1970: 10)
+        XCTAssertNotEqual(makeBubble(message: sealed), makeBubble(message: opened))
+    }
+
     private func makeBubble(
         updatedAt: Date = Date(timeIntervalSince1970: 0),
         isDirect: Bool = false,
         presenceState: PresenceState = .offline,
+        senderIsHere: ConversationHere = .absent,
         senderMoodEmoji: String? = nil,
         senderStoryRingState: StoryRingState = .none,
         isLastInGroup: Bool = true,
@@ -331,9 +361,11 @@ final class ThemedMessageBubbleEquatableTests: XCTestCase {
             isDark: false,
             showAvatar: showAvatar,
             presenceState: presenceState,
+            senderIsHere: senderIsHere,
             senderMoodEmoji: senderMoodEmoji,
             senderStoryRingState: senderStoryRingState,
             allAudioItems: allAudioItems,
+            messageAudioItems: allAudioItems,
             activeAudioLanguage: activeAudioLanguage,
             isLastInGroup: isLastInGroup,
             isLastReceivedMessage: false,

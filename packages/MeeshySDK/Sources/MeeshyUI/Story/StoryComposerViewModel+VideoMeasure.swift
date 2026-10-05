@@ -58,6 +58,14 @@ extension StoryComposerViewModel {
         }
     }
 
+    /// **Attendre les mesures en cours** (#9126, #9131) — une mesure écrit
+    /// ratio et durée APRÈS la pose. Qui prend un état de départ (la retouche
+    /// d'une pièce du fil) le prend après elles, sinon une vidéo intacte se
+    /// lit comme retouchée.
+    public func videoMeasurementsSettled() async {
+        for tache in Array(videoMeasureTasks.values) { await tache.value }
+    }
+
     /// Ce qu'un fichier vidéo dit de lui-même. `nil` sur chaque champ que
     /// l'asset ne rend pas — un ratio inventé serait pire qu'absent : il
     /// dimensionnerait le lecteur sur une forme que la vidéo n'a pas.

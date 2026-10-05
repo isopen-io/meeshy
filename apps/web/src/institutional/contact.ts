@@ -21,6 +21,7 @@ export const PAGE_CONTACT: ContentPage = {
   title: 'Contactez-nous',
   hero: "Nous sommes là pour vous aider. N'hésitez pas à nous contacter pour toute question ou suggestion.",
   description: "Nous sommes là pour vous aider. N'hésitez pas à nous contacter pour toute question ou suggestion.",
+  mee: { sticker: 'mee-lettre', caption: 'Mee porte votre message jusqu’à nous. Nous répondons à chacun, dans la langue de votre choix.' },
   sections: [
     {
       title: 'Notre Adresse',

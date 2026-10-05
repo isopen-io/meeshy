@@ -2,6 +2,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { ComposeProtection } from '@/lib/send/compose-protection';
 import type { ComposerDraft, DraftStore } from '@/lib/send/draft-store';
+import {
+  protectionPreferenceStore,
+  stickyProtectionOf,
+  type ProtectionPreferenceStore,
+  type StickyProtection,
+} from '@/lib/send/protection-preference';
 
 /** `DRAFT_DEBOUNCE_MS` — miroir `ConversationComposerTextModel.swift:19-78`
  * (« milieu de mot ⇒ 400 ms »). */
@@ -18,7 +24,7 @@ export type ComposerDraftReport = {
  * LA PERSISTANCE DU BROUILLON (#6175) — miroir de la politique
  * `ConversationComposerTextModel.swift:19-78` : fin de mot (espace, retour)
  * ou champ VIDÉ ⇒ persistance IMMÉDIATE ; milieu de mot ⇒ 400 ms ; sortie de
- * vue / perte de focus ⇒ `flush()` (miroir `flushPendingChange()`).
+ * vue, page masquée ou fermée ⇒ `flush()` (miroir `flushPendingChange()`).
  *
  * LA LECTURE EST SYNCHRONE (`useMemo`), PAS DIFFÉRÉE PAR UN EFFET
  * (revue-correction interne, avant toute livraison) — `usePersistedReadingMode`
@@ -44,10 +50,15 @@ export function useComposerDraft(params: {
   readonly store: DraftStore;
   readonly scope: string;
   readonly conversationId: string | undefined;
+  /** Les protections armées PAR conversation (#8306) — injectable pour les témoins. */
+  readonly preferences?: ProtectionPreferenceStore;
 }): {
   /** La graine, lue UNE fois par (scope, conversationId) — `null` : aucun
    * brouillon (ou le magasin pas encore interrogé). */
   readonly initial: ComposerDraft | null;
+  /** Les protections armées de la conversation (#8306) — `null` : aucune
+   * préférence, le brouillon sert de graine. */
+  readonly initialProtection: StickyProtection | null;
   /** Appelée à CHAQUE changement (texte, langue, protection, réponse) — la
    * politique de débounce décide SEULE quand l'écriture atteint le magasin. */
   readonly report: (draft: ComposerDraftReport) => void;
@@ -56,9 +67,14 @@ export function useComposerDraft(params: {
   readonly flush: () => void;
 } {
   const { store, scope, conversationId } = params;
+  const preferences = params.preferences ?? protectionPreferenceStore;
   const initial = useMemo(
     () => (conversationId === undefined ? null : store.getDraft(scope, conversationId)),
     [store, scope, conversationId],
+  );
+  const initialProtection = useMemo(
+    () => (conversationId === undefined ? null : preferences.get(scope, conversationId)),
+    [preferences, scope, conversationId],
   );
 
   const pendingRef = useRef<ComposerDraftReport | null>(null);
@@ -88,6 +104,10 @@ export function useComposerDraft(params: {
   const report = useCallback(
     (draft: ComposerDraftReport) => {
       if (conversationId === undefined) return;
+      /* LA PRÉFÉRENCE S'ÉCRIT SUR-LE-CHAMP (#8306) : un geste rare, jamais une
+         frappe — rien à débouncer, et elle doit survivre à une fermeture
+         immédiate de l'onglet. */
+      preferences.set(scope, conversationId, stickyProtectionOf(draft.protection));
       clearTimer();
       const atWordEnd = draft.text === '' || /[\s\n]$/u.test(draft.text);
       if (atWordEnd) {
@@ -100,12 +120,28 @@ export function useComposerDraft(params: {
         if (pendingRef.current !== null) writeNow(pendingRef.current);
       }, DRAFT_DEBOUNCE_MS);
     },
-    [clearTimer, writeNow, conversationId],
+    [clearTimer, writeNow, conversationId, preferences, scope],
   );
 
   useEffect(() => () => flush(), [flush]);
 
-  return { initial, report, flush };
+  /* LA PAGE QUI S'EFFACE ÉCRIT SA VALEUR EN ATTENTE (#8790) — miroir de
+     `willResignActiveNotification` (`ConversationView.swift`) : la coque
+     Android tue sa WebView en arrière-plan, et l'onglet fermé ne démonte rien. */
+  useEffect(() => {
+    if (typeof document === 'undefined') return undefined;
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') flush();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('pagehide', flush);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('pagehide', flush);
+    };
+  }, [flush]);
+
+  return { initial, initialProtection, report, flush };
 }
 
 /**
@@ -147,6 +183,7 @@ export function useThreadDraft(params: {
   readonly conversationId: string | undefined;
 }): {
   readonly initial: ComposerDraft | null;
+  readonly initialProtection: StickyProtection | null;
   /** L'identifiant du message CITÉ, `null` quand le composeur n'est pas
    * pré-adressé — possédé ici pour que sa persistance ne dépende pas d'une
    * frappe. */
@@ -157,7 +194,7 @@ export function useThreadDraft(params: {
    * la seule citation change. */
   readonly reportComposerDraft: (report: ComposerDraftReport) => void;
 } {
-  const { initial, report } = useComposerDraft(params);
+  const { initial, initialProtection, report } = useComposerDraft(params);
   const [replyTarget, setReplyTarget] = useState<string | null>(null);
   const lastComposerReport = useRef<ComposerDraftReport | null>(null);
   const replyRef = useRef<string | null>(null);
@@ -191,5 +228,5 @@ export function useThreadDraft(params: {
     report({ ...last, ...(replyTarget === null ? {} : { replyToId: replyTarget }) });
   }, [replyTarget, report]);
 
-  return { initial, replyTarget, setReplyTarget, reportComposerDraft };
+  return { initial, initialProtection, replyTarget, setReplyTarget, reportComposerDraft };
 }

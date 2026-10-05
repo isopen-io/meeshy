@@ -26,7 +26,7 @@ export const appelControles = (ctx) =>
     ${controle('mic', ctx.ui('call.control.mute.caption'))}
     ${controle('video', ctx.ui('call.control.video.caption'))}
     ${controle('captions', ctx.ui('call.control.transcript.caption'), { actif: true })}
-    ${controle('speaker', ctx.ui('call.control.speaker.caption'))}
+    ${controle('speaker', ctx.ui('call.control.output.caption'))}
     ${controle('hangup', '', { rouge: true })}
   </div>`
 
@@ -47,7 +47,7 @@ export const ecranAppel = (ctx) => {
   </div>`
 }
 
-// Lien d'invitation (CommunityLinkDetailView) : on entre SANS compte par /l/<lien>.
+// Lien d'invitation (CommunityLinkDetailView) : on entre SANS compte par /chat/<lien>.
 export const invitationCorps = (ctx) => {
   const L = DEMO.lienInvitation
   const total = L.langues.reduce((n, [, v]) => n + v, 0)

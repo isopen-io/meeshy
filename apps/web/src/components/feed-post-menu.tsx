@@ -2,6 +2,7 @@ import { lazy, Suspense, useState } from 'react';
 
 import type { EditPostOutcome } from '@/lib/api/publication-actions';
 import type { ReportReason } from '@/lib/api/reports';
+import type { DraftStore } from '@/lib/send/draft-store';
 import type { PostToggleKind } from '@/lib/feed/interactions';
 import { postMenuEntries } from '@/lib/feed/publication-menu';
 import { translate } from '@/lib/i18n-catalog';
@@ -46,6 +47,9 @@ export type PostMenuHost = {
   readonly onEdit: (postId: string, content: string) => Promise<EditPostOutcome>;
   readonly onDelete: (postId: string) => void;
   readonly onReport: (postId: string, reason: ReportReason) => void;
+  /** LE BROUILLON DE L'ÉDITION EN COURS (#8849, jumelle de #8848) — absent,
+   * la feuille ne sauvegarde rien. */
+  readonly editDrafts?: DraftStore;
 };
 
 const MENU_WIDTH = 240;
@@ -64,6 +68,7 @@ export function FeedPostMenu({
   originalText,
   originalLanguage,
   bookmarked,
+  studioEditable = false,
   isDetail,
   tone,
   menu,
@@ -82,6 +87,10 @@ export function FeedPostMenu({
   /** La langue de `originalText` — le `lang` du champ d'édition. */
   readonly originalLanguage: string | undefined;
   readonly bookmarked: boolean;
+  /** « MODIFIER » ROUVRE LE STUDIO (#9317) — la carte porte une scène ou un
+   * média, et n'est pas une republication : sa modification se fait dans le
+   * studio (`/posts/:id/edit`). Sinon, la feuille de texte (#7534). */
+  readonly studioEditable?: boolean;
   readonly isDetail: boolean;
   /** `card` sur le fond de la carte, `overlay` sur un média (le réel). */
   readonly tone: 'card' | 'overlay';
@@ -145,7 +154,7 @@ export function FeedPostMenu({
         /* UNE VRAIE BOÎTE DE 44 (`check-profile.mjs` mesure la boîte, pas un
            débord `::after`) ; le DISQUE visible garde 34, la cote iOS. */
         className="grid size-11 shrink-0 place-items-center rounded-chip focus-visible:outline-2 focus-visible:-outline-offset-2"
-        style={{ outlineColor: overlay ? 'white' : 'var(--color-ios-brand)' }}
+        style={{ outlineColor: overlay ? 'var(--color-on-media)' : 'var(--color-ios-brand)' }}
       >
         <span
           aria-hidden
@@ -153,8 +162,8 @@ export function FeedPostMenu({
           style={{
             width: DISC_SIZE,
             height: DISC_SIZE,
-            color: overlay ? 'white' : 'var(--color-ios-ink-3)',
-            backgroundColor: overlay ? 'rgba(0,0,0,0.35)' : 'transparent',
+            color: overlay ? 'var(--color-on-media)' : 'var(--color-ios-ink-3)',
+            backgroundColor: overlay ? 'var(--color-scrim-soft)' : 'transparent',
           }}
         >
           <GlyphSvg glyph={THREAD_MENU_GLYPHS.dotsThree} size={20} />
@@ -172,6 +181,7 @@ export function FeedPostMenu({
             originalText={originalText}
             originalLanguage={originalLanguage}
             bookmarked={bookmarked}
+            studioEditable={studioEditable}
             menu={menu}
             onShare={onShare}
             onGesture={onGesture}

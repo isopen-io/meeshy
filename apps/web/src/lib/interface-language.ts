@@ -23,6 +23,7 @@ import {
   DEFAULT_INTERFACE_LANGUAGE,
   INTERFACE_LANGUAGE_KEY,
   SUPPORTED_INTERFACE_LANGUAGES,
+  interfaceDirection,
   resolveInterfaceLanguageCode,
 } from './inline-interface-language-bootstrap.js';
 
@@ -50,6 +51,13 @@ export function currentInterfaceLanguage(): InterfaceLanguage {
   return isSupported(declared) ? declared : DEFAULT;
 }
 
+/** `lang` ET `dir` ensemble (#8803) : l'arabe retourne la page, en revenir la
+ *  remet à l'endroit — la même règle que le script d'amorçage. */
+function applyToDocument(language: InterfaceLanguage): void {
+  document.documentElement.lang = language;
+  document.documentElement.dir = interfaceDirection(language);
+}
+
 /**
  * Pose la langue d'interface — PERSISTE le choix (contrairement à
  * `applyScheme`/`followSystem`, qui ne persiste jamais un simple suivi
@@ -65,7 +73,7 @@ export function currentInterfaceLanguage(): InterfaceLanguage {
  */
 export async function setInterfaceLanguage(language: InterfaceLanguage): Promise<void> {
   await loadInterfaceCatalog(language);
-  document.documentElement.lang = language;
+  applyToDocument(language);
   try {
     localStorage.setItem(KEY, language);
   } catch {
@@ -124,6 +132,6 @@ export async function followBrowserInterfaceLanguage(languages: readonly string[
   } catch {
     /* Stockage refusé : rien n'était retenu. */
   }
-  document.documentElement.lang = language;
+  applyToDocument(language);
   notify();
 }

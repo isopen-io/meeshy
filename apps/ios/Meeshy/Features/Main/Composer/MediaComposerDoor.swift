@@ -351,13 +351,13 @@ struct MediaComposerDoor: View {
         .overlay(alignment: .topLeading) {
             Button(action: onDismiss) {
                 Text(MediaComposerCopy.cancel)
-                    .font(MeeshyFont.relative(15, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
                     .foregroundColor(.white)
-                    .padding(.horizontal, 16)
+                    .padding(.horizontal, MeeshySpacing.lg)
                     .frame(minHeight: 44)
                     .contentShape(Rectangle())
             }
-            .padding(.leading, 4)
+            .padding(.leading, MeeshySpacing.xs)
         }
     }
 

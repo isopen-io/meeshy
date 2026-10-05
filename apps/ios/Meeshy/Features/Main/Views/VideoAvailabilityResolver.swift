@@ -60,7 +60,7 @@ struct VideoAvailabilityResolver<Content: View>: View {
 
     var body: some View {
         content(availability) {
-            downloader.start(attachment: attachment, onShare: nil)
+            downloader.start(attachment: attachment, origin: .manual, onShare: nil)
         }
         .task(id: attachment.id) {
             // Branché sur le registre partagé AVANT toute résolution : un
@@ -75,7 +75,7 @@ struct VideoAvailabilityResolver<Content: View>: View {
                 let condition = NetworkConditionMonitor.shared.condition
                 let prefs = MediaDownloadPreferencesStore.shared.preferences
                 if Self.shouldAutoStart(autoDownload: autoDownload, condition: condition, prefs: prefs) {
-                    downloader.start(attachment: attachment, onShare: nil)
+                    downloader.start(attachment: attachment, origin: .automatic, onShare: nil)
                 }
             }
         }

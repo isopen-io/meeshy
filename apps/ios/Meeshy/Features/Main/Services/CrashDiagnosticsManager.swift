@@ -313,12 +313,6 @@ final class CrashDiagnosticsManager: NSObject {
         return dir
     }
 
-    private nonisolated static func makeEncoder() -> JSONEncoder {
-        let enc = JSONEncoder()
-        enc.dateEncodingStrategy = .iso8601
-        return enc
-    }
-
     private nonisolated static func makeDecoder() -> JSONDecoder {
         let dec = JSONDecoder()
         dec.dateDecodingStrategy = .iso8601

@@ -80,19 +80,19 @@ struct TimelineBannerOverlay: View {
         // `banner` est optionnel : le `if let` suffit à faire disparaître la
         // vue dès que les deux signaux sont acquittés.
         if let banner {
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 Image(systemName: banner.systemImage)
                     .imageScale(.small)
                 Text(banner.text)
                     .font(.footnote.weight(.medium))
                     .lineLimit(2)
             }
-            .padding(.horizontal, 14)
+            .padding(.horizontal, MeeshySpacing.mdPlus)
             .padding(.vertical, 9)
             .background(.ultraThinMaterial, in: Capsule())
             .overlay(Capsule().strokeBorder(.white.opacity(0.12)))
             .shadow(color: .black.opacity(0.25), radius: 10, y: 4)
-            .padding(.top, 8)
+            .padding(.top, MeeshySpacing.sm)
             .transition(.move(edge: .top).combined(with: .opacity))
             .accessibilityAddTraits(.isStaticText)
             .accessibilityLabel(banner.text)

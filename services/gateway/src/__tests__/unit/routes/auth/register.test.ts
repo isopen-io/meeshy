@@ -196,9 +196,14 @@ async function buildApp(opts: {
 
 // ─── POST /register ───────────────────────────────────────────────────────────
 
+/** Un compte inscrit AVEC un numéro : actif tout de suite, il naît avec sa session (#8055). */
+const avecNumero = () => makeAuthService({
+  register: jest.fn<any>().mockResolvedValue({ user: { ...mockUser, phoneNumber: '+33612345678' } }),
+});
+
 describe('POST /register — success', () => {
   it('returns 200 with user and token', async () => {
-    const { app, authService } = await buildApp();
+    const { app, authService } = await buildApp({ authService: avecNumero() });
     const res = await app.inject({
       method: 'POST', url: '/register',
       payload: { username: 'alice', password: 'Xk9$mQ2vLp8#nR4wZ', email: 'alice@test.com', firstName: 'Alice', lastName: 'Smith' },
@@ -225,7 +230,7 @@ describe('POST /register — le compte frais naît AVEC une session (#4264)', ()
   // le premier appareil devient révocable comme tous les autres.
 
   it('crée une session avec le contexte de la requête', async () => {
-    const { app } = await buildApp();
+    const { app } = await buildApp({ authService: avecNumero() });
     await app.inject({
       method: 'POST', url: '/register',
       payload: { username: 'alice', password: 'Xk9$mQ2vLp8#nR4wZ', email: 'alice@test.com', firstName: 'Alice', lastName: 'Smith' },
@@ -240,7 +245,7 @@ describe('POST /register — le compte frais naît AVEC une session (#4264)', ()
   });
 
   it('rattache le jeton à cette session — le cinquième site d\'émission n\'est pas oublié', async () => {
-    const { app, authService } = await buildApp();
+    const { app, authService } = await buildApp({ authService: avecNumero() });
     await app.inject({
       method: 'POST', url: '/register',
       payload: { username: 'alice', password: 'Xk9$mQ2vLp8#nR4wZ', email: 'alice@test.com', firstName: 'Alice', lastName: 'Smith' },
@@ -256,7 +261,7 @@ describe('POST /register — le compte frais naît AVEC une session (#4264)', ()
     // « Registration failed » générique. Un `sessionToken` non déclaré serait
     // retiré à la sérialisation et le client ne pourrait jamais glisser sa
     // fenêtre de session.
-    const { app } = await buildApp();
+    const { app } = await buildApp({ authService: avecNumero() });
     const res = await app.inject({
       method: 'POST', url: '/register',
       payload: { username: 'alice', password: 'Xk9$mQ2vLp8#nR4wZ', email: 'alice@test.com', firstName: 'Alice', lastName: 'Smith' },

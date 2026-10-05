@@ -95,7 +95,7 @@ struct OnboardingCardLayout<Illustration: View, Content: View>: View {
     private var moreBelow: some View {
         LinearGradient(
             colors: [MeeshyColors.backgroundPrimary(isDark: isDark).opacity(0),
-                     MeeshyColors.backgroundPrimary(isDark: isDark).opacity(0.85)],
+                     MeeshyColors.backgroundPrimary(isDark: isDark).opacity(MeeshyOpacity.intense)],
             startPoint: .top, endPoint: .bottom
         )
         .frame(height: 28)
@@ -131,7 +131,7 @@ struct OnboardingCardLayout<Illustration: View, Content: View>: View {
         )
         .background(
             RoundedRectangle(cornerRadius: 30, style: .continuous)
-                .fill(isDark ? MeeshyColors.indigo950.opacity(0.35) : Color.white.opacity(0.55))
+                .fill(isDark ? MeeshyColors.indigo950.opacity(MeeshyOpacity.medium) : Color.white.opacity(MeeshyOpacity.strong))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 30, style: .continuous)
@@ -260,7 +260,7 @@ struct OnboardingLevelGauge: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             Capsule()
-                .fill(isDark ? Color.white.opacity(0.10) : MeeshyColors.indigo100)
+                .fill(isDark ? Color.white.opacity(MeeshyOpacity.subtle) : MeeshyColors.indigo100)
                 .frame(height: 10)
                 .overlay(alignment: .leading) {
                     GeometryReader { proxy in
@@ -297,7 +297,7 @@ struct OnboardingChip: View {
                 .background(
                     Capsule().fill(isSelected
                                    ? AnyShapeStyle(MeeshyColors.brandGradient)
-                                   : AnyShapeStyle(isDark ? Color.white.opacity(0.08) : MeeshyColors.indigo50))
+                                   : AnyShapeStyle(isDark ? Color.white.opacity(MeeshyOpacity.subtle) : MeeshyColors.indigo50))
                 )
                 .overlay(Capsule().stroke(isSelected ? Color.clear : MeeshyColors.indigo200.opacity(isDark ? 0.25 : 1), lineWidth: 1))
                 .contentShape(Capsule())
@@ -365,12 +365,12 @@ struct OnboardingProgressBar: View {
     let isDark: Bool
 
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: MeeshySpacing.xsPlus) {
             ForEach(0..<max(count, 1), id: \.self) { index in
                 Capsule()
                     .fill(index < position
                           ? AnyShapeStyle(MeeshyColors.brandGradient)
-                          : AnyShapeStyle(isDark ? Color.white.opacity(0.12) : MeeshyColors.indigo100))
+                          : AnyShapeStyle(isDark ? Color.white.opacity(MeeshyOpacity.light) : MeeshyColors.indigo100))
                     .frame(height: 6)
                     .frame(maxWidth: index == position - 1 ? .infinity : 44)
             }

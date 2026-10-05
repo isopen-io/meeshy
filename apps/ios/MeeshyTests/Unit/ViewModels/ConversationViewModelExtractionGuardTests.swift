@@ -73,17 +73,17 @@ final class ConversationViewModelExtractionGuardTests: XCTestCase {
         ]),
         ("ConversationViewModel+MessageActions.swift", [
             "func toggleReaction(", "func deleteMessage(", "func editMessage(",
-            "func togglePin(", "func startLiveLocation(",
+            "func togglePin(",
         ]),
         ("ConversationViewModel+Search.swift", [
-            "func searchMessages(", "func loadMoreSearchResults(",
+            "func searchMessages(",
         ]),
         ("ConversationViewModel+Translations.swift", [
             "struct MessageTranslation", "func extractTextTranslations(",
             "func extractAttachmentTranscriptions(", "func preferredTranslation(",
         ]),
         ("ConversationViewModel+Projections.swift", [
-            "var messagesByDate", "var allAudioItems", "var mediaCaptionMap",
+            "var allAudioItems", "var mediaCaptionMap",
             "func topActiveMembersList(",
         ]),
         ("ConversationViewModel+SocketDelegate.swift", [

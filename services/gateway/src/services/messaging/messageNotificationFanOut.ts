@@ -3,17 +3,21 @@ import {
   maskedAttachment,
   protectedPreview,
   type NotificationActorProfile,
+  type NotificationAttachmentSummary,
   type PreviewPrismBasis,
 } from '../notifications/notification-preview';
+import { contactCardNameFromFileName, isContactCardAttachment } from '@meeshy/shared/utils/vcard';
 import {
   transcriptTranslationTexts,
   transcriptTranslationTracks,
 } from '@meeshy/shared/types/attachment-audio';
 import { getSharedNotificationService } from '../notifications/notification-service-registry';
+import { resolveContentDetail, shareLinkInviteLookup } from '../notifications/content-detail';
 import {
   retractMessageNotifications,
   type RetractedNotificationAnnouncer,
 } from './retractMessageNotifications';
+import { loadQuoteCascadeAudience } from './quoteCascade';
 
 export type { NotificationActorProfile };
 
@@ -38,8 +42,13 @@ export interface FanOutMessage {
   readonly isBlurred?: boolean | null;
   readonly effectFlags?: number | null;
   readonly expiresAt?: Date | null;
+  /** La durée DÉCLARÉE (secondes) — le suffixe de la bannière (#8344). */
+  readonly ephemeralDuration?: number | null;
   readonly createdAt?: Date | null;
   readonly encryptedContent?: string | null;
+  /** #8857 — `location`, `sticker`, `postReplyTo` : ce que la bannière DÉTAILLE. */
+  readonly metadata?: unknown;
+  readonly storyReplyToId?: string | null;
 }
 
 /**
@@ -61,6 +70,8 @@ export type FanOutPrisma = Pick<
   | 'messageAttachment'
   | 'userConversationPreferences'
   | 'notification'
+  | 'messageStatusEntry'
+  | 'conversationShareLink'
 >;
 
 /**
@@ -180,6 +191,26 @@ const attachmentTypeOf = (mimeType?: string | null): 'image' | 'video' | 'audio'
   mimeType?.startsWith('image/') ? 'image' :
   mimeType?.startsWith('video/') ? 'video' :
   mimeType?.startsWith('audio/') ? 'audio' : 'document';
+
+type BannerAttachmentRow = {
+  readonly mimeType?: string | null;
+  readonly fileName?: string | null;
+  readonly originalName?: string | null;
+};
+
+/**
+ * Ce qu'une pièce jointe DIT dans une bannière (#8122). Une carte de visite se
+ * dit par son contact — le nom lu dans son nom d'ORIGINE, jamais le nom de
+ * fichier STOCKÉ (`contact_<…>_<uuid>.vcf`), qui ne part plus avec l'annonce ;
+ * `contact.vcf` quand aucun nom n'est lisible.
+ */
+function bannerAttachmentOf(att: BannerAttachmentRow): NotificationAttachmentSummary {
+  if (!isContactCardAttachment({ mimeType: att.mimeType, fileName: att.originalName ?? att.fileName })) {
+    return { type: attachmentTypeOf(att.mimeType), filename: att.fileName };
+  }
+  const contactName = contactCardNameFromFileName(att.originalName);
+  return { type: 'contact', filename: `${contactName ?? 'contact'}.vcf`, contactName };
+}
 
 /**
  * Un éventail, isolé de ses frères.
@@ -316,9 +347,13 @@ export async function notifyMessageRecipients(params: {
   } = params;
   if (!notificationService) return;
 
-  const validatedMentionUserIds = params.validatedMentionUserIds ?? [];
-
   try {
+    // #8630 — une réponse à ce qui est déjà MORT pour un membre (flamme-œil
+    // consommée, éphémère échu, transitivement) est morte pour lui dès sa
+    // naissance : aucune bannière ne lui annonce son texte.
+    const deadFor = await loadQuoteCascadeAudience(prisma, message.replyToId);
+    const validatedMentionUserIds = (params.validatedMentionUserIds ?? []).filter((id) => !deadFor.has(id));
+
     // Le contenu qu'un message PROTÉGÉ (éphémère, vue unique, flouté, chiffré)
     // est autorisé à montrer sur un écran verrouillé — jamais le contenu lui-même.
     const protectedOverride = protectedPreview({
@@ -328,7 +363,7 @@ export async function notifyMessageRecipients(params: {
       isBlurred: message.isBlurred,
       effectFlags: message.effectFlags,
       expiresAt: message.expiresAt ?? null,
-      createdAt: message.createdAt ?? null,
+      ephemeralDuration: message.ephemeralDuration ?? null,
     });
     const notificationPreview = protectedOverride?.preview ?? processedContent;
     const notificationLocKey = protectedOverride?.locKey;
@@ -357,7 +392,7 @@ export async function notifyMessageRecipients(params: {
 
     const memberIds = conversation.participants
       .map(p => p.userId)
-      .filter((id): id is string => id !== null);
+      .filter((id): id is string => id !== null && !deadFor.has(id));
 
     // L'auteur du message auquel celui-ci répond, en `User.id`. Un auteur
     // anonyme n'a pas de ligne `Notification` possible : il reste `null`.
@@ -381,7 +416,7 @@ export async function notifyMessageRecipients(params: {
     const attachments = await prisma.messageAttachment.findMany({
       where: { messageId: message.id },
       select: {
-        mimeType: true, fileName: true, fileSize: true, duration: true,
+        mimeType: true, fileName: true, originalName: true, fileSize: true, duration: true,
         width: true, height: true, fileUrl: true, transcription: true,
         // Cycle 123 — les traductions de la TRANSCRIPTION, que la bannière d'un
         // vocal sert : elles vivent ici, jamais sur `Message.translations`.
@@ -390,6 +425,8 @@ export async function notifyMessageRecipients(params: {
         // `select` ne lisait pas : `MessageAttachment` porte les siens, et ils
         // ne suivent pas ceux du message qui la porte. Cf. `maskedAttachment`.
         isViewOnce: true, isBlurred: true, effectFlags: true,
+        // #8857 — la vignette d'une VIDÉO, déjà en base : la bannière la montre.
+        thumbnailUrl: true,
       },
     });
 
@@ -424,10 +461,7 @@ export async function notifyMessageRecipients(params: {
     // membres du fil recevaient la transcription.
     const bannerMedia = mediaMayTravel
       ? {
-          attachments: attachments.map(att => ({
-            type: attachmentTypeOf(att.mimeType),
-            filename: att.fileName,
-          })),
+          attachments: attachments.map(bannerAttachmentOf),
           firstAttachmentFileSize: first?.fileSize,
           firstAttachmentDuration: first?.duration,
           firstAttachmentWidth: first?.width,
@@ -444,13 +478,31 @@ export async function notifyMessageRecipients(params: {
           hasAttachments: attachments.length > 0,
           attachmentCount: attachments.length,
           firstAttachmentType: attachmentTypeOf(first?.mimeType),
-          firstAttachmentFilename: first?.fileName,
+          firstAttachmentFilename: first ? bannerAttachmentOf(first).filename ?? undefined : undefined,
           firstAttachmentUrl: first?.fileUrl || undefined,
           firstAttachmentMimeType: first?.mimeType || undefined,
         }
       : {};
 
     const attachmentInfo = { ...bannerMedia, ...richPushMedia };
+
+    // #8857 — le DÉTAIL du contenu (position, contact, invitation, lien,
+    // sticker, vignette vidéo, réponse à une story), sous le MÊME prédicat que
+    // le média : une position ou une invitation est le contenu d'un message
+    // protégé au même titre que sa photo. Lu UNE fois pour les trois lots ;
+    // best-effort — un détail manquant appauvrit la bannière, il ne la tait pas.
+    const contentDetail = mediaMayTravel
+      ? await resolveContentDetail(
+          {
+            text: processedContent,
+            metadata: message.metadata,
+            storyReplyToId: message.storyReplyToId,
+            firstAttachment: first,
+          },
+          shareLinkInviteLookup(prisma),
+        ).catch(() => null)
+      : null;
+    const detailFields = contentDetail ? { contentDetail } : {};
 
     // Phase A — un vocal déjà transcrit affiche son texte sur l'écran verrouillé ;
     // le fichier reste attaché pour la lecture inline.
@@ -554,6 +606,7 @@ export async function notifyMessageRecipients(params: {
             messageExpiresAt: message.expiresAt ?? null,
             previewBasis: pushPreviewBasis,
             ...bannerMedia,
+            ...detailFields,
             // Cycle 126 — la clé de PROTECTION, que seul le lot regular
             // recevait. Le cycle 125 bis a fait converger le TEXTE des trois
             // bannières ; celle-ci ne compose aucun texte, elle le QUALIFIE —
@@ -579,6 +632,7 @@ export async function notifyMessageRecipients(params: {
               // recevait un corps vide.
               messageContent: notificationPreviewForPush,
               ...bannerMedia,
+              ...detailFields,
               conversationId,
               messageId: message.id,
               // L'éventail tient déjà l'échéance du message : la transmettre
@@ -634,6 +688,7 @@ export async function notifyMessageRecipients(params: {
           // source, et la bannière d'un vocal descend enfin le Prisme.
           previewBasis: pushPreviewBasis,
           ...attachmentInfo,
+          ...detailFields,
           // Cycle 128 — les candidates de PISTE. L'élection est par lecteur, et
           // elle suit la langue du texte SERVI : cf. `servedAttachmentMedia`.
           attachmentTracks,

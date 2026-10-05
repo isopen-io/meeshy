@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { avatarOf, participantAvatarOf, presenceOf, previewKindOf, titleOf } from './conversation';
+import { avatarOf, initialsOf, participantAvatarOf, presenceOf, previewKindOf, titleOf } from './conversation';
 import type { Conversation, Message, Participant } from '@/lib/api/types';
 
 const NOW = Date.parse('2026-09-07T12:00:00.000Z');
@@ -57,6 +57,47 @@ describe('presenceOf — les fenêtres 1/3/5, `now` INJECTÉ (#5559 T10)', () =>
 
   test('participant undefined ⇒ offline', () => {
     expect(presenceOf(undefined, NOW)).toBe('offline');
+  });
+});
+
+/**
+ * LA PRÉSENCE EST CELLE DU COMPTE (#9065, recette staging 2026-10-02) — la
+ * passerelle sert DEUX niveaux : `Participant.lastActiveAt` (la colonne de la
+ * LIGNE de participant, figée à son entrée dans la conversation) et
+ * `user.lastActiveAt` (le compte, tenu à jour par la présence). Lire le premier
+ * avec `isOnline: true` faisait tomber un pair EN LIGNE dans la décroissance
+ * anti-stale : ni point vert, ni contour.
+ */
+describe('presenceOf — le compte d’abord, la ligne de participant en repli', () => {
+  test('en ligne au compte, ligne de participant figée depuis la veille ⇒ online', () => {
+    const p = participant({
+      isOnline: true,
+      lastActiveAt: minutesAgo(14 * 60),
+      user: { id: 'u1', username: 'fatou', isOnline: true, lastActiveAt: minutesAgo(0.3) } as Participant['user'],
+    });
+    expect(presenceOf(p, NOW)).toBe('online');
+  });
+
+  test('le compte dit hors ligne depuis 10 min ⇒ offline, même si la ligne prétend le contraire', () => {
+    const p = participant({
+      isOnline: true,
+      lastActiveAt: minutesAgo(0.2),
+      user: { id: 'u1', username: 'fatou', isOnline: false, lastActiveAt: minutesAgo(10) } as Participant['user'],
+    });
+    expect(presenceOf(p, NOW)).toBe('offline');
+  });
+
+  test('un invité sans compte garde la présence de sa ligne', () => {
+    const p = participant({ userId: undefined, isOnline: false, lastActiveAt: minutesAgo(2) });
+    expect(presenceOf(p, NOW)).toBe('away');
+  });
+
+  test('un compte dont la présence est masquée ne fabrique rien', () => {
+    const p = participant({
+      isOnline: false,
+      user: { id: 'u1', username: 'fatou', isOnline: false } as Participant['user'],
+    });
+    expect(presenceOf(p, NOW)).toBe('offline');
   });
 });
 
@@ -280,5 +321,35 @@ describe('participantAvatarOf — la loi partagée sur un participant seul (#697
 
   test('participant ABSENT ⇒ `undefined`', () => {
     expect(participantAvatarOf(undefined)).toBeUndefined();
+  });
+});
+
+describe('initialsOf — des LETTRES, jamais la ponctuation d’un nom de carnet (#8131, #8143)', () => {
+  test('« Théo (foot) » donne « TF », jamais « T( »', () => {
+    expect(initialsOf('Théo (foot)')).toBe('TF');
+  });
+
+  test('la ponctuation, les emojis et les chiffres autour des mots sont sautés', () => {
+    expect(initialsOf('« Maman » ❤️')).toBe('MA');
+    expect(initialsOf('Nadia 🎉 - Boulot')).toBe('NB');
+    expect(initialsOf('(Théo)')).toBe('TH');
+    expect(initialsOf('.Zoé 2024')).toBe('ZO');
+  });
+
+  test('un mot seul garde ses deux premières lettres, deux mots leurs initiales', () => {
+    expect(initialsOf('Alice')).toBe('AL');
+    expect(initialsOf('Fatou Bâ')).toBe('FB');
+  });
+
+  test('les écritures non latines restent des lettres', () => {
+    expect(initialsOf('سارة أحمد')).toBe('سأ');
+    expect(initialsOf('王小明')).toBe('王小');
+    expect(initialsOf('élodie écrit')).toBe('ÉÉ');
+  });
+
+  test('un nom sans aucune lettre rend « ? », jamais un signe', () => {
+    expect(initialsOf('')).toBe('?');
+    expect(initialsOf('   ')).toBe('?');
+    expect(initialsOf('(🎉) !!')).toBe('?');
   });
 });

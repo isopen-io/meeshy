@@ -63,47 +63,9 @@ public actor MessagePersistenceActor {
         /// below drops every one of them (a media-only or encrypted message
         /// ingested that way renders as an empty bubble — Sprint 2 RC2.2).
         case upsertAPIMessages([APIMessage], preferredLanguages: [String])
-        case batchDeliveryUpdate(conversationId: String, event: MessageEvent)
-    }
-
-    /// Minimal-data ingestion payload. Use ONLY when the caller genuinely has
-    /// nothing richer than these six fields (e.g. a NotificationServiceExtension
-    /// pre-persist). Any caller holding a decoded `APIMessage` MUST go through
-    /// `bufferIncomingAPIMessages` instead — `reconcileBatchSync` hard-codes
-    /// `attachmentsJson/reactionsJson/replyToJson = nil`, `messageType = "text"`
-    /// and `isEncrypted = false`, so media / encrypted / reply messages lose
-    /// their payload here.
-    public struct IncomingMessageData: Sendable {
-        public let id: String
-        public let conversationId: String
-        public let senderId: String
-        public let content: String?
-        public let createdAt: Date
-        public let computedState: MessageState
-        /// **Ce qui décide du RENDU** — un `system` s'affiche en avis dédié,
-        /// un `user` en parole avec avatar et nom.
-        ///
-        /// Cette forme est APPAUVRIE par nature : elle sert à réconcilier un
-        /// message aperçu ailleurs, pas à le décrire entièrement. Elle écrivait
-        /// donc `"user"` en dur, et un avis d'arrivée naissait en base comme
-        /// une parole (régression 2026-08-24). Le défaut reste `"user"` — tous
-        /// les appelants existants gardent leur comportement — mais celui qui
-        /// CONNAÎT la source doit pouvoir la transmettre.
-        public let messageSource: String
-        public let messageType: String
-
-        public init(id: String, conversationId: String, senderId: String,
-                    content: String?, createdAt: Date, computedState: MessageState,
-                    messageSource: String = "user", messageType: String = "text") {
-            self.id = id
-            self.conversationId = conversationId
-            self.senderId = senderId
-            self.content = content
-            self.messageSource = messageSource
-            self.messageType = messageType
-            self.createdAt = createdAt
-            self.computedState = computedState
-        }
+        /// #7433 — un `read-status:updated` posé sur la SEULE ligne qu'il
+        /// décrit (`MessagePersistenceActor+ReadStatusReceipt.swift`).
+        case readStatusSummary(conversationId: String, summary: ReadStatusSummary, currentUserId: String)
     }
 
     public init(dbWriter: any DatabaseWriter, currentUserId: String? = nil) {
@@ -238,13 +200,15 @@ public actor MessagePersistenceActor {
                     } catch {
                         Logger.messages.error("upsertFromAPIMessages dropped \(messages.count, privacy: .public) message(s): \(error.localizedDescription, privacy: .public)")
                     }
-                case .batchDeliveryUpdate(let convId, let event):
+                case .readStatusSummary(let convId, let summary, let currentUserId):
                     do {
-                        if try await self.batchDeliverySync(conversationId: convId, event: event) {
+                        if try await self.applyReadStatusSummarySync(
+                            conversationId: convId, summary: summary, currentUserId: currentUserId
+                        ) {
                             postMessageStoreRefresh(conversationIds: [convId])
                         }
                     } catch {
-                        Logger.messages.error("batchDeliverySync failed for conv=\(convId, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                        Logger.messages.error("applyReadStatusSummarySync failed for conv=\(convId, privacy: .public): \(error.localizedDescription, privacy: .public)")
                     }
                 }
             }
@@ -529,10 +493,12 @@ public actor MessagePersistenceActor {
         writeContinuation.yield(.upsertAPIMessages(messages, preferredLanguages: preferredLanguages))
     }
 
-    public func bufferBatchDelivery(conversationId: String, event: MessageEvent) {
+    /// Ordonné avec les autres écritures du flux : un accusé qui suit de près
+    /// l'ack d'envoi trouve la ligne déjà réconciliée sous son id serveur.
+    public func bufferReadStatusSummary(conversationId: String, summary: ReadStatusSummary, currentUserId: String) {
         // Notification is posted by the worker AFTER the GRDB write completes
         // (see `start()`).
-        writeContinuation.yield(.batchDeliveryUpdate(conversationId: conversationId, event: event))
+        writeContinuation.yield(.readStatusSummary(conversationId: conversationId, summary: summary, currentUserId: currentUserId))
     }
 
     /// Message ids carrying a still-pending outbox mutation of `kind`.
@@ -625,7 +591,7 @@ public actor MessagePersistenceActor {
                         replyToId: nil, storyReplyToId: nil,
                         forwardedFromId: nil, forwardedFromConversationId: nil,
                         replyToJson: nil, forwardedFromJson: nil,
-                        expiresAt: nil, effectFlags: 0,
+                        expiresAt: msg.expiresAt, effectFlags: msg.effectFlags,
                         maxViewOnceCount: nil, viewOnceCount: 0,
                         isEdited: false, editedAt: nil, deletedAt: nil,
                         pinnedAt: nil, pinnedBy: nil,
@@ -643,95 +609,14 @@ public actor MessagePersistenceActor {
                         cachedTimestampInline: nil,
                         layoutVersion: 0, layoutMaxWidth: nil,
                         cachedTimeString: MessageRecord.computeTimeString(for: msg.createdAt),
-                        changeVersion: 0
+                        changeVersion: 0,
+                        ephemeralDuration: msg.ephemeralDuration
                     )
                     try record.insert(db)
                     changedConvIds.insert(msg.conversationId)
                 }
             }
             return changedConvIds
-        }
-    }
-
-    /// Returns whether any row actually transitioned, so the worker only
-    /// posts a refresh for real changes — delivery/read events routinely
-    /// target conversations whose rows are already past the transition.
-    private func batchDeliverySync(conversationId: String, event: MessageEvent) throws -> Bool {
-        // Read frontier carried by the event (the peer's read/deliver moment).
-        // A message created AFTER it cannot have been received/read yet, so it
-        // must be skipped — otherwise a message sent right after the peer read
-        // would falsely advance to delivered/read. Mirrors the frontier guard in
-        // ConversationSyncEngine.applyReadReceipt (the cache path).
-        let frontier: Date? = {
-            switch event {
-            case .delivered(_, let at): return at
-            case .readBy(_, let at): return at
-            default: return nil
-            }
-        }()
-        return try dbWriter.write { db -> Bool in
-            // I3 (#7349) — `.delivered` MUST stay in this list. `MessageStateMachine`
-            // supports `.delivered → .read` on `.readBy` (a message is routinely
-            // delivered-to-all before it is read-by-all), but a query that only
-            // looked at `.sending`/`.sent` could never SEE a row once the first
-            // (delivered) batch had already advanced it — the row fell out of
-            // every future call, and a second, later "everyone has read it" event
-            // had nothing left to act on. The bubble stayed on a single grey check
-            // forever, with no gesture able to unstick it. `.read` is excluded on
-            // purpose: it is terminal, and `MessageStateMachine.apply` has no
-            // transition out of it anyway.
-            let records = try MessageRecord
-                .filter(Column("conversationId") == conversationId)
-                .filter([MessageState.sending.rawValue, MessageState.sent.rawValue,
-                         MessageState.delivered.rawValue]
-                    .contains(Column("state")))
-                .fetchAll(db)
-
-            var didChange = false
-            for var record in records {
-                if let frontier, record.createdAt > frontier { continue }
-                // Les horodatages déjà gravés sont SEMÉS dans la machine, et
-                // réassignés en repli — exactement comme le chemin à un seul
-                // message (`applyEvent`, plus haut dans ce fichier). Tant que
-                // la requête s'arrêtait à `.sending`/`.sent`, aucune ligne
-                // portant déjà un `deliveredAt` ne lui parvenait et la
-                // divergence entre les deux jumeaux ne coûtait rien ; en
-                // ouvrant `.delivered`, le second événement (`.readBy`)
-                // rendait une machine dont `deliveredAt` est nil et EFFAÇAIT
-                // l'instant de distribution d'une ligne qui venait de
-                // l'obtenir. C'est ce qui part À CÔTÉ du palier qu'on corrige.
-                var machine = MessageStateMachine(
-                    state: record.state, retryCount: record.retryCount,
-                    serverId: record.serverId,
-                    lastError: record.lastError,
-                    deliveredAt: record.deliveredAt,
-                    readAt: record.readAt
-                )
-                if let _ = machine.apply(event) {
-                    record.state = machine.state
-                    record.deliveredAt = machine.deliveredAt ?? record.deliveredAt
-                    record.readAt = machine.readAt ?? record.readAt
-                    // The caller (ConversationSocketHandler) only feeds this batch
-                    // a delivered/read event once the WHOLE group has received /
-                    // read (all-or-nothing). This path advances `state` but does
-                    // NOT carry per-row counters, so stamp the unambiguous "all"
-                    // markers the display resolver trusts — otherwise a real-time
-                    // group delivery/read would transiently regress to a single
-                    // check until the sibling counters write lands.
-                    if machine.state == .read {
-                        let at = machine.readAt ?? Date()
-                        record.readByAllAt = at
-                        record.deliveredToAllAt = record.deliveredToAllAt ?? machine.deliveredAt ?? at
-                    } else if machine.state == .delivered {
-                        record.deliveredToAllAt = machine.deliveredAt ?? Date()
-                    }
-                    record.updatedAt = Date()
-                    record.changeVersion += 1
-                    try record.update(db)
-                    didChange = true
-                }
-            }
-            return didChange
         }
     }
 
@@ -1580,17 +1465,15 @@ public actor MessagePersistenceActor {
                 // colonnes dérivées, donc une position affichée en ligne mais
                 // jamais hissée ici disparaîtrait au prochain chargement du
                 // cache (relaunch, pull-to-refresh).
-                let locationJson: String? = api.location.flatMap { place in
-                    encoder.encodeOrLog(place, field: "locationJson", id: api.id)
-                        .flatMap { String(data: $0, encoding: .utf8) }
-                }
+                let locationJson = MessageRecord.encodeJSONText(api.location, field: "locationJson", id: api.id)
 
                 // Sticker (#4823) — même mécanique et même raison que
                 // `locationJson` juste au-dessus.
-                let stickerJson: String? = api.sticker.flatMap { sticker in
-                    encoder.encodeOrLog(sticker, field: "stickerJson", id: api.id)
-                        .flatMap { String(data: $0, encoding: .utf8) }
-                }
+                let stickerJson = MessageRecord.encodeJSONText(api.sticker, field: "stickerJson", id: api.id)
+
+                // Carte des liens suivis (#9104) — même mécanique, même coalescence.
+                let trackedLinksJson = MessageRecord.encodeJSONText(
+                    api.trackingLinks.flatMap { $0.isEmpty ? nil : $0 }, field: "trackedLinksJson", id: api.id)
 
                 var effectFlags: UInt32 = api.effectFlags ?? 0
                 if effectFlags == 0 {
@@ -1776,23 +1659,12 @@ public actor MessagePersistenceActor {
                         existing.isEncrypted = api.isEncrypted ?? existing.isEncrypted
                         existing.encryptionMode = api.encryptionMode ?? existing.encryptionMode
                     }
-                    existing.deliveredCount = deliveredCount
-                    existing.readCount = readCount
-                    // `deliveredToAllAt` / `readByAllAt` are the unambiguous
-                    // "every recipient has received / read" markers that the live
-                    // all-or-nothing path stamps locally (and that the delivery
-                    // resolver trusts). Coalesce rather than hard-assign so a REST
-                    // refresh — which currently returns null for these (the
-                    // gateway no longer computes them under the cursor model) —
-                    // never CLEARS a marker the live path already confirmed. A
-                    // genuine server value, if ever provided, still wins.
-                    existing.deliveredToAllAt = api.deliveredToAllAt ?? existing.deliveredToAllAt
-                    existing.readByAllAt = api.readByAllAt ?? existing.readByAllAt
-                    // Authoritative recipient denominator: adopt a positive server
-                    // value, but never let a refresh that omits it (socket-origin
-                    // row, older gateway) clear a count already learned.
-                    if let rc = api.recipientCount, rc > 0 { existing.recipientCount = rc }
-                    existing.state = max(existing.state, computedState)
+                    existing.adoptServedReceipts(
+                        deliveredCount: deliveredCount, readCount: readCount,
+                        recipientCount: api.recipientCount,
+                        deliveredToAllAt: api.deliveredToAllAt, readByAllAt: api.readByAllAt,
+                        computedState: computedState
+                    )
                     // Self-heal rows that were upserted before we resolved
                     // sender.userId — their `senderId` column held the
                     // gateway's participantId, breaking `isMe` checks. Each
@@ -1836,6 +1708,7 @@ public actor MessagePersistenceActor {
                     // Même coalescence : un écho partiel sans `sticker` ne doit
                     // pas effacer celui qu'un instantané plus riche a persisté.
                     existing.stickerJson = stickerJson ?? existing.stickerJson
+                    existing.trackedLinksJson = trackedLinksJson ?? existing.trackedLinksJson
                     existing.effectFlags = effectFlags
                     // #7508 — l'horloge d'un éphémère COALESCE. Ses deux
                     // porteurs arrivent par des chemins différents et jamais
@@ -1949,7 +1822,8 @@ public actor MessagePersistenceActor {
                         locationJson: locationJson,
                         stickerJson: stickerJson,
                         // #7508 — le seul porteur d'horloge du temps réel.
-                        ephemeralDuration: api.ephemeralDuration
+                        ephemeralDuration: api.ephemeralDuration,
+                        trackedLinksJson: trackedLinksJson
                     )
                     if api.consumedByMe == true {
                         record.sealAsOpenedViewOnce(at: Date())

@@ -1015,7 +1015,7 @@ describe('MessageHandler — handleMessageEdit et les mentions', () => {
 /**
  * `message:edit` est le transport d'édition PRIMAIRE (le web y émet
  * `CLIENT_EVENTS.MESSAGE_EDIT`) et il écrivait le texte BRUT : coller
- * `[[https://example.com]]` dans une édition laissait les crochets en dur, pour
+ * `<https://example.com>` dans une édition laissait les crochets en dur, pour
  * toujours, alors que le même texte à l'envoi produit un `m+<token>`.
  */
 describe('MessageHandler — handleMessageEdit et les liens traçables', () => {
@@ -1025,7 +1025,7 @@ describe('MessageHandler — handleMessageEdit et les liens traçables', () => {
   let callback: jest.Mock<any>;
   let trackingLinkService: { processExplicitLinksInContent: jest.Mock<any> };
 
-  const RAW = 'regarde [[https://example.com]]';
+  const RAW = 'regarde <https://example.com>';
   const TRACKED = 'regarde m+abc123';
 
   const emittedTo = (room: string) => emitsTo(deps.io, room);

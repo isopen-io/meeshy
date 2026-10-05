@@ -1,5 +1,75 @@
 # @meeshy/agent
 
+## 1.0.61
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.33.0
+
+## 1.0.60
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.32.0
+
+## 1.0.59
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.31.0
+
+## 1.0.58
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.30.0
+
+## 1.0.57
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.29.0
+
+## 1.0.56
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.28.0
+
+## 1.0.55
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.27.0
+
+## 1.0.54
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.26.0
+
+## 1.0.53
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.25.0
+
+## 1.0.52
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.24.0
+
 ## 1.0.51
 
 ### Patch Changes

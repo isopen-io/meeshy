@@ -89,7 +89,7 @@ RUN test -s packages/shared/dist/utils/conversation-helpers.js \
 # n'atteindrait jamais le bundle. Sans cet `ARG`, `resolveApiConfig` retombe
 # sur l'origine de PRODUCTION — un défaut qui fonctionne, mais qui fait pointer
 # staging vers la passerelle de production. C'est le workflow qui déclare la
-# valeur par environnement (`docker.yml`, § build-args de `web-v31`).
+# valeur par environnement (`docker.yml`, § build-args de `webapp`).
 ARG VITE_API_BASE=""
 ENV VITE_API_BASE=${VITE_API_BASE}
 
@@ -102,7 +102,7 @@ ENV VITE_API_BASE=${VITE_API_BASE}
 #
 # Le défaut reste `fixtures` : un `bun run build` local n'exige alors aucune
 # passerelle. C'est le workflow qui pose `gateway` sur les images DÉPLOYÉES
-# (`docker.yml`, § build-args de `web-v31`), là où une passerelle existe.
+# (`docker.yml`, § build-args de `webapp`), là où une passerelle existe.
 ARG VITE_DATA_SOURCE=""
 ENV VITE_DATA_SOURCE=${VITE_DATA_SOURCE}
 

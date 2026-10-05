@@ -3,8 +3,11 @@ import { useEffect } from 'react';
 import { focalLoupeScale } from '@/lib/reading-mode/election';
 
 /**
- * LA LOUPE DU MESSAGE ÉLU (#6586/#6588) — pose `transform: scale(…)` sur la
- * rangée quand elle devient l'élue de la scène du Fil, la retire sinon.
+ * LA LOUPE DU MESSAGE DÉPLIÉ (#8147) — pose `transform: scale(…)` sur le
+ * contenu d'un message long déplié (`unfold-stage.tsx`), la retire sinon. Son
+ * verre reste à sa taille : la loupe s'écrête à sa marge verticale
+ * (`fixedGlass`). L'ÉLU de la scène du Fil a désormais son propre cadre, qui
+ * grandit avec son contenu (`use-focus-frame.ts`, #8506).
  *
  * **Pourquoi ce n'est PAS l'écriture continue que `reading-mode/scene.ts`
  * interdit** (règle 3 de son doc-comment de tête). Ce que cette règle retire
@@ -64,6 +67,7 @@ export function useFocalLoupe(row: { current: HTMLElement | null }, isFocused: b
         reducedMotion,
         width: element.offsetWidth,
         height: element.offsetHeight,
+        fixedGlass: true,
       });
       element.style.transform = scale === 1 ? '' : `scale(${scale})`;
     };

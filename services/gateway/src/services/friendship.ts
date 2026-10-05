@@ -33,3 +33,30 @@ export async function amitieAcceptee(
 
   return ligne !== null;
 }
+
+/**
+ * Lesquels, parmi `candidats`, sont AMIS de `sujet` — la même loi que
+ * {@link amitieAcceptee}, posée en une seule requête pour un éventail (la
+ * sonnerie d'un appel de groupe, #8073).
+ */
+export async function amisAcceptesParmi(
+  prisma: Pick<PrismaClient, 'friendRequest'>,
+  sujet: string,
+  candidats: ReadonlyArray<string>
+): Promise<Set<string>> {
+  const autres = [...new Set(candidats)].filter((id) => id && id !== sujet);
+  if (!sujet || autres.length === 0) return new Set();
+
+  const lignes = await prisma.friendRequest.findMany({
+    where: {
+      status: 'accepted',
+      OR: [
+        { senderId: sujet, receiverId: { in: autres } },
+        { senderId: { in: autres }, receiverId: sujet },
+      ],
+    },
+    select: { senderId: true, receiverId: true },
+  });
+
+  return new Set(lignes.map((l) => (l.senderId === sujet ? l.receiverId : l.senderId)));
+}

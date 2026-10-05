@@ -1,4 +1,5 @@
 import * as z from 'zod/mini';
+import * as communitiesEndpoints from '@meeshy/shared/api/endpoints/communities';
 
 import { unwrap } from './client';
 import type { DataSource } from './config';
@@ -8,15 +9,15 @@ import type { ApiResult, HttpTransport } from './http';
  * **LE PORT DES COMMUNAUTÉS** (#6364) — miroir `CommunityService` (iOS,
  * `packages/MeeshySDK/Sources/MeeshySDK/Services/CommunityService.swift`).
  *
- * - `GET /api/v1/communities?offset=&limit=&search=` — celles dont le lecteur
+ * - `GET communities.root?offset=&limit=&search=` — celles dont le lecteur
  *   est créateur ou membre (`services/gateway/src/routes/communities/core.ts`),
  *   pagination à l'OFFSET, recherche serveur à partir de deux caractères (le
  *   schéma de la route refuse en deçà : elle ne part donc pas).
- * - `GET /api/v1/communities/:id` — par id OU identifiant ; 403 sur une
+ * - `GET communities.byId` — par id OU identifiant ; 403 sur une
  *   communauté privée dont le lecteur n'est pas membre, 404 sinon.
- * - `GET /api/v1/communities/:id/conversations` — celles dont le lecteur est
+ * - `GET communities.byIdConversations` — celles dont le lecteur est
  *   participant, par page.
- * - `POST /api/v1/communities` — le créateur devient administrateur ; 201.
+ * - `POST communities.root` — le créateur devient administrateur ; 201.
  *
  * **Une communauté décodée est une PROJECTION.** La route de liste charge
  * `members[].user.isOnline` et le créateur ; la route de conversations charge
@@ -205,7 +206,7 @@ export async function loadCommunities(
   }
   const result = await params.transport.request<unknown>({
     method: 'GET',
-    path: `/api/v1/communities?${pageQuery(params.offset, params.search)}`,
+    path: `${communitiesEndpoints.root}?${pageQuery(params.offset, params.search)}`,
     ...withSignal(params.signal),
   });
   if (!result.ok) return result;
@@ -214,7 +215,7 @@ export async function loadCommunities(
   return { ok: true, data: { communities, nextOffset: hasMoreOf(result.pagination) ? params.offset + received : null } };
 }
 
-const communityPath = (communityId: string) => `/api/v1/communities/${encodeURIComponent(communityId)}`;
+const communityPath = (communityId: string) => communitiesEndpoints.byId(communityId);
 
 const communityResult = (result: ApiResult<unknown>): ApiResult<CommunitySummary> => {
   if (!result.ok) return result;
@@ -260,7 +261,7 @@ export async function createCommunity(deps: CommunitiesDeps, draft: CommunityDra
     const { fixtureCreateCommunity } = await import('./fixtures-communities');
     return fixtureCreateCommunity(validated.body);
   }
-  return communityResult(await deps.transport.request<unknown>({ method: 'POST', path: '/api/v1/communities', body: validated.body }));
+  return communityResult(await deps.transport.request<unknown>({ method: 'POST', path: communitiesEndpoints.root, body: validated.body }));
 }
 
 type PageContext = { readonly pageParam: number; readonly signal?: AbortSignal };

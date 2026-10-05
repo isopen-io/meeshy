@@ -116,8 +116,9 @@ export async function registerMemberRoutes(fastify: FastifyInstance) {
       const userId = authContext.userId;
 
       // Verifier l'acces a la communaute
-      const community = await fastify.prisma.community.findFirst({
-        where: { id },
+      // #8876 — communauté désactivée par l'administration : 404, comme pour les lecteurs publics.
+const community = await fastify.prisma.community.findFirst({
+        where: { id, isActive: true },
         select: {
           createdBy: true,
           isPrivate: true,
@@ -274,8 +275,9 @@ export async function registerMemberRoutes(fastify: FastifyInstance) {
       const userId = authContext.userId;
 
       // Verifier que la communaute existe et que l'utilisateur est admin
-      const community = await fastify.prisma.community.findFirst({
-        where: { id },
+      // #8876 — communauté désactivée par l'administration : 404, comme pour les lecteurs publics.
+const community = await fastify.prisma.community.findFirst({
+        where: { id, isActive: true },
         select: {
           createdBy: true,
           members: {

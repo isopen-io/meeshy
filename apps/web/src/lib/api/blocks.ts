@@ -1,5 +1,6 @@
 import type { InfiniteData } from '@tanstack/react-query';
 import * as z from 'zod/mini';
+import * as directoryEndpoints from '@meeshy/shared/api/endpoints/directory';
 
 import { unwrap } from './client';
 import { FRIENDS_STALE_TIME, decodePerson, type FriendRequestsDeps, type PersonSummary } from './friend-requests';
@@ -7,8 +8,8 @@ import type { ApiResult } from './http';
 
 /**
  * **LE PORT DES PERSONNES BLOQUÉES** (#6363) — miroir `BlockService` (iOS,
- * `DirectoryEndpoint.blocks`) : `GET /api/v1/directory/blocks?limit=&cursor=`
- * et `DELETE /api/v1/directory/blocks/:userId`
+ * `DirectoryEndpoint.blocks`) : `GET directory.blocks?limit=&cursor=`
+ * et `DELETE directory.blocksByUserId`
  * (`services/gateway/src/routes/directory/blocks.ts`). Débloquer est une
  * appartenance à un ensemble : le second appel ne refuse rien.
  *
@@ -34,7 +35,7 @@ const nextCursorOf = (pagination: unknown): string | null => {
 const blocksPath = (cursor: string | null): string => {
   const query = new URLSearchParams({ limit: String(BLOCKED_PAGE_SIZE) });
   if (cursor !== null) query.set('cursor', cursor);
-  return `/api/v1/directory/blocks?${query.toString()}`;
+  return `${directoryEndpoints.blocks}?${query.toString()}`;
 };
 
 export async function loadBlockedUsers(
@@ -86,7 +87,7 @@ export const flattenBlockedUsers = (data: BlockedData | undefined): readonly Per
   data?.pages.flatMap((page) => page.users) ?? [];
 
 /**
- * **BLOQUER** (#7083) — `PUT /api/v1/directory/blocks/:userId`
+ * **BLOQUER** (#7083) — `PUT directory.blocksByUserId`
  * (`services/gateway/src/routes/directory/blocks.ts:302`), la JUMELLE exacte
  * de `unblockUser` ci-dessous : même préfixe, même famille de clés, même
  * fichier. Un module à part aurait fabriqué deux vocabulaires pour les deux
@@ -103,7 +104,7 @@ export async function blockUser(deps: FriendRequestsDeps, userId: string): Promi
   }
   const result = await deps.transport.request<unknown>({
     method: 'PUT',
-    path: `/api/v1/directory/blocks/${encodeURIComponent(userId)}`,
+    path: directoryEndpoints.blocksByUserId(userId),
   });
   return result.ok ? { ...result, data: null } : result;
 }
@@ -115,7 +116,7 @@ export async function unblockUser(deps: FriendRequestsDeps, userId: string): Pro
   }
   const result = await deps.transport.request<unknown>({
     method: 'DELETE',
-    path: `/api/v1/directory/blocks/${encodeURIComponent(userId)}`,
+    path: directoryEndpoints.blocksByUserId(userId),
   });
   return result.ok ? { ...result, data: null } : result;
 }

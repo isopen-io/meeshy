@@ -4,6 +4,7 @@ import { PhoneTransferService } from '../../services/PhoneTransferService';
 import { SmsService } from '../../services/SmsService';
 import type { CacheStore } from '../../services/CacheStore';
 import type { AfterResponse } from '../../utils/after-response';
+import type { AccountActivation } from '@meeshy/shared/types/account-activation';
 
 /**
  * Context shared across all auth route modules
@@ -99,6 +100,12 @@ export interface UserResponseData {
   profileCompletionRate: number;
   createdAt: Date;
   updatedAt: Date;
+  /**
+   * Le délai de grâce de l'adresse (#8238). `undefined` ⇒ le producteur ne l'a
+   * pas calculé, et fast-json-stringify supprime la clé : un client sans
+   * champ n'affiche rien.
+   */
+  activation?: AccountActivation;
   permissions?: any;
 }
 
@@ -160,6 +167,7 @@ export function formatUserResponse(user: any, permissions?: any): UserResponseDa
     profileCompletionRate: user.profileCompletionRate,
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
+    activation: user.activation,
     permissions: permissions || user.permissions
   };
 }

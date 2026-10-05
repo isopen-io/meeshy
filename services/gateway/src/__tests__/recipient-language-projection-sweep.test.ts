@@ -237,6 +237,41 @@ describe('ce que la remontée sait suivre, et ce qu’elle refuse de deviner', (
     ]);
   });
 
+  it('suit le rappel d’une chaîne de tableau et un élément de `Promise.all` — et accuse leur projection étroite', () => {
+    // La forme de `services/notifications/contact-joined.ts` (#8105) : trois
+    // lectures en parallèle, puis `rows.filter(…).map((user) => …)`. Le
+    // paramètre du rappel EST un élément du tableau à la racine de la chaîne,
+    // et cet élément est la ligne que la requête a chargée à SON rang.
+    const source = (projection: string) =>
+      [
+        "import { RECIPIENT_LANG_SELECT, recipientLanguage } from './utils/recipient-language';",
+        'export async function f(prisma) {',
+        '  const [amis, lignes] = await Promise.all([',
+        '    prisma.friend.findMany({ select: { id: true } }),',
+        `    prisma.user.findMany({ select: { id: true, isActive: true, ${projection} } }),`,
+        '  ]);',
+        '  return lignes',
+        '    .filter((user) => user.isActive && !amis.includes(user.id))',
+        "    .map((user) => ({ id: user.id, lang: recipientLanguage(user, 'fr') }));",
+        '}',
+      ].join('\n');
+
+    const saine = bacAvec({
+      'utils/recipient-language.ts': SSOT_MINIMALE,
+      'rappel.ts': source('...RECIPIENT_LANG_SELECT'),
+    });
+    expect(balayerAppelsDeCadrage(saine).map((a) => a.verdict)).toEqual(['complete']);
+    expect(chainesNonRemontees(saine)).toEqual([]);
+
+    const etroite = bacAvec({
+      'utils/recipient-language.ts': SSOT_MINIMALE,
+      'rappel.ts': source('systemLanguage: true'),
+    });
+    expect(projectionsEtroites(etroite)).toEqual([
+      'rappel.ts — recipientLanguage(user) sans regionalLanguage, customDestinationLanguage, deviceLocale',
+    ]);
+  });
+
   it('rend `complete` une lecture SANS select — Prisma y sert tous les scalaires', () => {
     const racine = bacAvec({
       'nu.ts': [

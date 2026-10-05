@@ -35,7 +35,7 @@ import SwiftUI
 // `headerScrollOffset` recupere l'offset.
 
 public struct MeeshyRefreshableScroll<Content: View>: View {
-    private let onRefresh: () async -> Void
+    private let onRefresh: @MainActor () async -> Void
     private let coordinateSpaceName: String
     private let onScrollOffsetChange: ((CGFloat) -> Void)?
     private let topPadding: CGFloat
@@ -51,7 +51,7 @@ public struct MeeshyRefreshableScroll<Content: View>: View {
     private static var pullThreshold: CGFloat { 90 }
 
     public init(
-        onRefresh: @escaping () async -> Void,
+        onRefresh: @escaping @MainActor () async -> Void,
         coordinateSpaceName: String = "meeshyRefreshableScroll",
         onScrollOffsetChange: ((CGFloat) -> Void)? = nil,
         topPadding: CGFloat = 0,

@@ -1,6 +1,12 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+
+import { trackingLinksOf } from '@meeshy/shared/utils/text-segments';
 
 import { Avatar } from '@/components/avatar';
+import { CommentBody } from '@/components/comment-body';
+import { CommentMedia } from '@/components/comment-media';
+import { CommentRowMenu, type CommentMenuPick } from '@/components/comment-row-menu';
+import { CommentSwipe } from '@/components/comment-swipe';
 import { MentionFieldPanel } from '@/components/mention-suggestions';
 import { PersonName } from '@/components/person-name';
 import { GlyphSvg } from '@/components/glyph';
@@ -11,14 +17,21 @@ import type {
   CommentGestureReasonKey,
 } from '@/lib/api/comment-gestures';
 import { COMMENT_MAX_LENGTH, type PostComment } from '@/lib/api/publication-comments';
+import type { ReportReason } from '@/lib/api/reports';
 import { resolveFeedText } from '@/lib/feed/text';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
+import { STICKER_RENDER_SCALE, STICKER_SIDE } from '@/lib/reading-mode/metrics';
 import { shortRelativeTime } from '@/lib/relative-time';
+import { commentMenuEntries, type CommentMenuEntry } from '@/lib/view/comment-menu';
+import { commentStickerOf } from '@/lib/view/comment-sticker';
+import { replyTargetOf, type CommentReplyTarget } from '@/lib/view/comment-reply-target';
 import { initialsOf } from '@/lib/view/conversation';
 import type { MentionSource } from '@/lib/view/mention-source';
 import { useMentionField } from '@/lib/view/use-mention-field';
 import { PrismPastille } from './message-blocks';
+import { StickerArtwork } from './message-body-blocks';
+import { RichText } from './rich-text';
 
 /**
  * **UNE RANGÉE DE COMMENTAIRE ET SES TROIS GESTES** (#7135) — miroir de
@@ -53,10 +66,29 @@ export type CommentGestureHandlers = {
   /** L'identité qui décide de « Modifier » et « Supprimer » — jamais recalculée ici. */
   readonly viewerId: string;
   /** `on` est la direction VOULUE, élue ici parce que c'est ici qu'on voit
-   * l'état du cœur — et elle voyage ensuite avec la requête (défaut majeur 2). */
-  readonly onLike: (commentId: string, on: boolean) => void;
-  readonly onEdit: (commentId: string, content: string) => void;
-  readonly onDelete: (commentId: string) => void;
+   * l'état du cœur — et elle voyage ensuite avec la requête (défaut majeur 2).
+   * `parentId` n'est passé que pour une RÉPONSE (#8583) : le geste vise alors
+   * la caisse des réponses de sa racine. */
+  readonly onLike: (commentId: string, on: boolean, parentId?: string) => void;
+  readonly onEdit: (commentId: string, content: string, parentId?: string) => void;
+  readonly onDelete: (commentId: string, parentId?: string) => void;
+  /**
+   * RÉPONDRE (#8583) — le glissé vers la droite ET le bouton « Répondre »
+   * appellent CE rappel, avec la cible déjà composée (racine, extrait servi,
+   * mention) : deux portes, un seul geste. Absent ⇒ ni bouton ni glissé.
+   */
+  readonly onReply?: (target: CommentReplyTarget) => void;
+  /**
+   * « IMAGER » (#8693) — le commentaire ET le texte que la rangée en AFFICHE
+   * (le Prisme, ou l'original que le lecteur a demandé) : la carte montre ce
+   * qu'on lit. `withReplies` (#8734) : une racine emporte ses réponses sous
+   * elle. Absent ⇒ aucune entrée.
+   */
+  readonly onImage?: (comment: PostComment, servedText: string, options: { readonly withReplies: boolean }) => void;
+  /** « COPIER » (#8734) — le texte AFFICHÉ ; l'hôte annonce l'issue. Absent ⇒ aucune entrée. */
+  readonly onCopy?: (text: string) => void;
+  /** « SIGNALER » (#8734) — le motif choisi dans la feuille ; aux autres seuls. Absent ⇒ aucune entrée. */
+  readonly onReport?: (commentId: string, reason: ReportReason) => void;
   /** Le dernier geste EN ÉCHEC sur cette rangée, avec SA classe d'issue. */
   readonly failureOf: (commentId: string) => CommentGestureRowFailure | undefined;
   /** Rejoue ce geste-là — l'hôte se souvient duquel il s'agit. */
@@ -85,6 +117,9 @@ export type CommentRowProps = {
   readonly locale: string;
   readonly now: Date;
   readonly gestures?: CommentGestureHandlers | undefined;
+  /** LES RÉPONSES de cette racine (#8583), posées DANS sa rangée — une liste
+   * imbriquée appartient à l'élément qu'elle détaille. */
+  readonly children?: ReactNode;
 };
 
 /** LE PSEUDO, pour que l'avatar d'un commentaire ouvre le profil de son
@@ -98,6 +133,10 @@ const displayName = (author: PostComment['author']): string => {
   return display ?? username ?? '';
 };
 
+/** La racine d'une RÉPONSE, en argument optionnel — rien pour un premier niveau. */
+const parentArgs = (comment: PostComment): [] | [string] =>
+  typeof comment.parentId === 'string' && comment.parentId !== '' ? [comment.parentId] : [];
+
 const countOf = (value: number | null | undefined): number =>
   typeof value === 'number' && Number.isFinite(value) ? value : 0;
 
@@ -106,57 +145,39 @@ const countOf = (value: number | null | undefined): number =>
    SOUS l'icône (mesuré à la capture). `display` ne se surcharge pas en
    ajoutant `flex` derrière `grid` dans la liste de classes : c'est l'ordre de
    la FEUILLE qui tranche, pas celui de l'attribut. */
+const COMMENT_TEXT_STYLE = { color: 'var(--color-ios-ink)' } as const;
+
 const GESTURE_BUTTON =
   'inline-flex items-center justify-center gap-1 rounded-chip px-2 focus-visible:outline-2 focus-visible:outline-offset-2';
-
-/**
- * LE DÉLAI DE RÉTRACTATION DU VERBE DESTRUCTEUR — assez long pour viser
- * « Confirmer » sans se presser, assez court pour qu'un tap oublié ne laisse
- * pas une rangée armée quand on y revient. La valeur est ici, à son SITE
- * UNIQUE, pour que le témoin la lise plutôt que de la redire.
- */
-export const COMMENT_DELETE_CONFIRM_MS = 4000;
 
 function GestureBar({
   comment,
   language,
   gestures,
-  editRef,
-  onStartEdit,
-  onDelete,
+  menuEntries,
+  authorName,
+  menuRef,
+  onPick,
+  onReply,
 }: {
   readonly comment: PostComment;
   readonly language: InterfaceLanguage;
   readonly gestures: CommentGestureHandlers;
-  readonly editRef: { current: HTMLButtonElement | null };
-  readonly onStartEdit: () => void;
-  readonly onDelete: () => void;
+  readonly menuEntries: readonly CommentMenuEntry[];
+  readonly authorName: string;
+  readonly menuRef: { current: HTMLButtonElement | null };
+  readonly onPick: (pick: CommentMenuPick) => void;
+  readonly onReply: (() => void) | undefined;
 }) {
   const isLiked = comment.isLikedByMe === true;
   const likes = countOf(comment.likeCount);
-  const isMine = comment.author.id === gestures.viewerId;
   const busy = gestures.busyOf(comment.id);
-
-  /**
-   * **SUPPRIMER DEMANDE DEUX GESTES, COMME SUR iOS** (revue-correction #7135,
-   * défaut majeur 5). `CommentRowView.swift:364` enferme
-   * `Button(role: .destructive)` dans un menu « … » : ouvrir, puis choisir.
-   * Le web posait le verbe irréversible À DÉCOUVERT, immédiatement à droite du
-   * verbe réversible — un pouce qui vise « Modifier » atteignait « Supprimer »,
-   * et le commentaire partait sans qu'aucun dialogue ne s'interpose. La
-   * confirmation SUR PLACE coûte le même second geste qu'iOS sans imposer une
-   * feuille modale, et elle se rétracte seule.
-   */
-  const [confirming, setConfirming] = useState(false);
-  useEffect(() => {
-    if (!confirming) return undefined;
-    const timer = setTimeout(() => setConfirming(false), COMMENT_DELETE_CONFIRM_MS);
-    return () => clearTimeout(timer);
-  }, [confirming]);
 
   return (
     /* Le retrait compense le `px-2` des boutons : la rangée de gestes
-       s'aligne alors sur le TEXTE qu'elle suit, pas deux crans à sa droite. */
+       s'aligne alors sur le TEXTE qu'elle suit, pas deux crans à sa droite.
+       Le « … » (#8734) se pose au BOUT de la rangée, comme le `Menu` de
+       `CommentRowView.swift` après son `Spacer()`. */
     <div className="flex items-center gap-1 pt-0.5" style={{ marginInlineStart: -8 }}>
       <button
         type="button"
@@ -171,7 +192,7 @@ function GestureBar({
         aria-busy={busy}
         onClick={() => {
           if (busy) return;
-          gestures.onLike(comment.id, !isLiked);
+          gestures.onLike(comment.id, !isLiked, ...parentArgs(comment));
         }}
         className={GESTURE_BUTTON}
         style={{
@@ -199,54 +220,25 @@ function GestureBar({
         />
         {likes > 0 ? <span className="text-check">{likes}</span> : null}
       </button>
-      {isMine ? (
-        <>
-          <button
-            type="button"
-            ref={editRef}
-            data-comment-gesture="edit"
-            onClick={onStartEdit}
-            className={`${GESTURE_BUTTON} text-check`}
-            style={{ minHeight: 44, color: 'var(--color-ios-ink-3)', outlineColor: 'var(--color-ios-brand)' }}
-          >
-            {translate(language, 'comments.action.edit')}
-          </button>
-          {/* **L'ENCRE DESTRUCTRICE** — `Button(role: .destructive)`
-              (`CommentRowView.swift:364`), que SwiftUI peint en rouge. Ici le
-              signal compte DOUBLE : iOS enferme « Supprimer » dans un menu
-              « … » (deux gestes, et le rouge au bout), le web le pose à
-              découvert et détruit au PREMIER tap. Sans cette encre, le geste
-              irréversible avait l'apparence exacte du geste réversible posé
-              juste à sa gauche. Le MÊME jeton que l'alerte d'échec — une
-              seule encre de refus pour toute la rangée. */}
-          <button
-            type="button"
-            data-comment-gesture="delete"
-            data-comment-delete-armed={confirming ? '' : undefined}
-            onClick={() => {
-              if (!confirming) {
-                setConfirming(true);
-                return;
-              }
-              setConfirming(false);
-              onDelete();
-            }}
-            className={`${GESTURE_BUTTON} text-check`}
-            style={{
-              minHeight: 44,
-              /* L'ÉCART MESURÉ AU RECTANGLE, pas au texte — 4 px séparaient
-                 deux cibles dont l'une est irréversible, moitié moins que le
-                 minimum entre cibles adjacentes. `gap-1` (4) + 12 = 16 px. */
-              marginInlineStart: 12,
-              color: 'var(--color-error)',
-              fontWeight: confirming ? 600 : undefined,
-              outlineColor: 'var(--color-ios-brand)',
-            }}
-          >
-            {translate(language, confirming ? 'comments.action.delete.confirm' : 'comments.action.delete')}
-          </button>
-        </>
-      ) : null}
+      {/* **« RÉPONDRE » À LA SOURIS ET AU CLAVIER** (#8583) — le glissé est un
+          geste de DOIGT ; ce bouton est la même porte pour qui n'en a pas, et
+          il appelle le MÊME rappel que le glissé. */}
+      {onReply === undefined ? null : (
+        <button
+          type="button"
+          data-comment-gesture="reply"
+          onClick={onReply}
+          className={`${GESTURE_BUTTON} text-check`}
+          style={{ minHeight: 44, color: 'var(--color-ios-ink-3)', outlineColor: 'var(--color-ios-brand)' }}
+        >
+          {translate(language, 'comments.action.reply')}
+        </button>
+      )}
+      {/* **LE MENU « … »** (#8734) — Copier, Imager (avec les réponses),
+          Modifier et Supprimer (l'auteur), Signaler (les autres). SUPPRIMER y
+          coûte DEUX gestes, comme sur iOS : ouvrir, puis choisir le verbe
+          rouge — le web le posait à découvert, à côté du verbe réversible. */}
+      <CommentRowMenu entries={menuEntries} language={language} authorName={authorName} triggerRef={menuRef} onPick={onPick} />
     </div>
   );
 }
@@ -390,7 +382,7 @@ function EditForm({
           data-comment-edit-save
           disabled={!submittable}
           onClick={() => onSave(trimmed)}
-          className="rounded-chip px-5 text-check font-semibold text-white focus-visible:outline-2 focus-visible:outline-offset-2"
+          className="rounded-chip px-5 text-check font-semibold text-ios-on-brand focus-visible:outline-2 focus-visible:outline-offset-2"
           style={{
             minHeight: 44,
             backgroundColor: 'var(--color-ios-brand)',
@@ -414,7 +406,7 @@ function EditForm({
   );
 }
 
-export function CommentRow({ comment, language, preferredLanguages, locale, now, gestures }: CommentRowProps) {
+export function CommentRow({ comment, language, preferredLanguages, locale, now, gestures, children }: CommentRowProps) {
   const [editing, setEditing] = useState(false);
   const name = displayName(comment.author);
   const servi = resolveFeedText({
@@ -448,6 +440,14 @@ export function CommentRow({ comment, language, preferredLanguages, locale, now,
   const lu = showingOriginal
     ? { text: comment.content, language: originalLanguage, marque: originalLanguage !== '' }
     : { text: servi.text, language: servi.language, marque: servi.translated && servi.language !== '' };
+  /* LA CARTE DES ADRESSES SUIVIES (#9074) — décodée une fois par commentaire. */
+  const trackingLinks = useMemo(() => trackingLinksOf(comment), [comment]);
+  /* LE STICKER (#9080) — peint par le MÊME rendu que la bulle d'un message ;
+     un commentaire-sticker sans texte ne monte pas de paragraphe vide. */
+  const sticker = useMemo(() => commentStickerOf(comment), [comment]);
+  /* Les photos et vidéos jointes (#9167) — sans l'image du sticker, qui est
+     son premier média (`commentStickerOf`) et qu'il peint déjà. */
+  const media = useMemo(() => (sticker === null ? comment.media ?? [] : (comment.media ?? []).slice(1)), [comment.media, sticker]);
   const photo = typeof comment.author.avatar === 'string' && comment.author.avatar !== '' ? comment.author.avatar : undefined;
   /* Une rangée EN VOL n'a pas d'adresse chez la passerelle — aucun geste. */
   const actionable = comment.pending !== true ? gestures : undefined;
@@ -473,7 +473,7 @@ export function CommentRow({ comment, language, preferredLanguages, locale, now,
   const save = useCallback(
     (content: string) => {
       setEditing(false);
-      actionable?.onEdit(comment.id, content);
+      actionable?.onEdit(comment.id, content, ...parentArgs(comment));
     },
     [actionable, comment.id],
   );
@@ -492,87 +492,143 @@ export function CommentRow({ comment, language, preferredLanguages, locale, now,
       next?.querySelector<HTMLElement>('[data-comment-gesture="like"]') ??
       row?.closest<HTMLElement>('[data-comment-thread]') ??
       null;
-    actionable?.onDelete(comment.id);
+    actionable?.onDelete(comment.id, ...parentArgs(comment));
     target?.focus();
   }, [actionable, comment.id]);
+
+  const onReplyHandler = actionable?.onReply;
+  const reply = useMemo(
+    () =>
+      onReplyHandler === undefined || editing
+        ? undefined
+        : () => onReplyHandler(replyTargetOf(comment, { authorName: name, displayedText: lu.text })),
+    [onReplyHandler, editing, comment, name, lu.text],
+  );
+  const menuEntries =
+    actionable === undefined
+      ? []
+      : commentMenuEntries({
+          comment,
+          viewerId: actionable.viewerId,
+          servedText: lu.text,
+          canCopy: actionable.onCopy !== undefined,
+          canImage: actionable.onImage !== undefined,
+          canReport: actionable.onReport !== undefined,
+        });
+  const pick = (choice: CommentMenuPick) => {
+    switch (choice.entry) {
+      case 'copy':
+        actionable?.onCopy?.(lu.text);
+        return;
+      case 'image':
+      case 'imageWithReplies':
+        actionable?.onImage?.(comment, lu.text, { withReplies: choice.entry === 'imageWithReplies' });
+        return;
+      case 'edit':
+        setEditing(true);
+        return;
+      case 'delete':
+        requestDelete();
+        return;
+      case 'report':
+        actionable?.onReport?.(comment.id, choice.reason);
+        return;
+    }
+  };
 
   return (
     <li
       ref={rowRef}
       data-comment-row={comment.id}
       {...(comment.pending === true ? { 'data-comment-pending': '' } : {})}
-      className="flex gap-3 py-2"
       style={{ opacity: comment.pending === true ? 0.6 : 1 }}
     >
-      <Avatar
-        initials={initialsOf(name)}
-        color="var(--color-ios-brand)"
-        size={32}
-        name={name}
-        {...(photo === undefined ? {} : { src: photo })}
-        {...(handleOf(comment.author) === undefined ? {} : { profileUsername: handleOf(comment.author) as string })}
-      />
-      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <div className="flex min-w-0 items-baseline gap-2">
-          {/* LE NOM MÈNE OÙ L'AVATAR MÈNE (#7241) — même pseudo, même loi
-              (`identityTarget`), jamais une seconde décision à faire dériver. */}
-          <PersonName
+      <CommentSwipe onReply={reply}>
+        <div className="flex gap-3 py-2">
+          <Avatar
+            initials={initialsOf(name)}
+            color="var(--color-ios-brand)"
+            size={32}
             name={name}
-            username={handleOf(comment.author)}
-            className="truncate text-check font-semibold"
-            style={{ color: 'var(--color-ios-ink)' }}
+            {...(photo === undefined ? {} : { src: photo })}
+            {...(handleOf(comment.author) === undefined ? {} : { profileUsername: handleOf(comment.author) as string })}
           />
-          <span className="shrink-0 text-check" style={{ color: 'var(--color-ios-ink-3)' }}>
-            {comment.pending === true
-              ? translate(language, 'comments.row.pending')
-              : shortRelativeTime(new Date(comment.createdAt), now, locale)}
-          </span>
-          {/* LA PASTILLE SE GARDE ELLE-MÊME : `servedLanguage === originalLanguage`
-              ⇒ elle rend `null`. Une rangée non traduite n'annonce donc rien, et
-              aucune condition n'est à tenir ici en double. */}
-          <PrismPastille
-            servedLanguage={servi.language}
-            originalLanguage={originalLanguage}
-            active={showingOriginal ? originalLanguage : null}
-            language={language}
-            subject="comment"
-            onToggle={() => setShowingOriginal((open) => !open)}
-          />
+          <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+            <div className="flex min-w-0 items-baseline gap-2">
+              {/* LE NOM MÈNE OÙ L'AVATAR MÈNE (#7241) — même pseudo, même loi
+                  (`identityTarget`), jamais une seconde décision à faire dériver. */}
+              <PersonName
+                name={name}
+                username={handleOf(comment.author)}
+                className="truncate text-check font-semibold"
+                style={{ color: 'var(--color-ios-ink)' }}
+              />
+              <span className="shrink-0 text-check" style={{ color: 'var(--color-ios-ink-3)' }}>
+                {comment.pending === true
+                  ? translate(language, 'comments.row.pending')
+                  : shortRelativeTime(new Date(comment.createdAt), now, locale)}
+              </span>
+              {/* LA PASTILLE SE GARDE ELLE-MÊME : `servedLanguage === originalLanguage`
+                  ⇒ elle rend `null`. Une rangée non traduite n'annonce donc rien, et
+                  aucune condition n'est à tenir ici en double. */}
+              <PrismPastille
+                servedLanguage={servi.language}
+                originalLanguage={originalLanguage}
+                active={showingOriginal ? originalLanguage : null}
+                language={language}
+                subject="comment"
+                onToggle={() => setShowingOriginal((open) => !open)}
+              />
+            </div>
+            {editing && actionable !== undefined ? (
+              <EditForm
+                comment={comment}
+                language={language}
+                mentionSource={gestures?.mentionSource ?? null}
+                onSave={save}
+                onCancel={() => setEditing(false)}
+              />
+            ) : (
+              /* `lang` UNIQUEMENT quand le texte servi n'est PAS la langue du
+                 document : poser `lang` partout ferait mentir la voix sur les
+                 rangées non traduites. */
+              <CommentBody comment={comment} contentLength={lu.text.length}>
+                {sticker !== null ? (
+                  <div data-comment-sticker className="py-1">
+                    <StickerArtwork sticker={sticker.sticker} picture={sticker.picture} side={STICKER_SIDE * STICKER_RENDER_SCALE} />
+                  </div>
+                ) : null}
+                {(sticker === null && media.length === 0) || lu.text.trim() !== '' ? (
+                  <RichText
+                    text={lu.text}
+                    trackingLinks={trackingLinks}
+                    className="text-body break-words whitespace-pre-wrap"
+                    style={COMMENT_TEXT_STYLE}
+                    {...(lu.marque ? { lang: lu.language } : {})}
+                  />
+                ) : null}
+                {media.length > 0 ? <CommentMedia media={media} /> : null}
+              </CommentBody>
+            )}
+            {actionable !== undefined && !editing ? (
+              <GestureBar
+                comment={comment}
+                language={language}
+                gestures={actionable}
+                menuEntries={menuEntries}
+                authorName={name}
+                menuRef={editRef}
+                onPick={pick}
+                onReply={reply}
+              />
+            ) : null}
+            {actionable !== undefined && failure !== undefined ? (
+              <GestureFailure language={language} failure={failure} onRetry={() => actionable.onRetryGesture(comment.id)} />
+            ) : null}
+          </div>
         </div>
-        {editing && actionable !== undefined ? (
-          <EditForm
-            comment={comment}
-            language={language}
-            mentionSource={gestures?.mentionSource ?? null}
-            onSave={save}
-            onCancel={() => setEditing(false)}
-          />
-        ) : (
-          /* `lang` UNIQUEMENT quand le texte servi n'est PAS la langue du
-             document : poser `lang` partout ferait mentir la voix sur les
-             rangées non traduites. */
-          <p
-            className="text-body break-words whitespace-pre-wrap"
-            style={{ color: 'var(--color-ios-ink)' }}
-            {...(lu.marque ? { lang: lu.language } : {})}
-          >
-            {lu.text}
-          </p>
-        )}
-        {actionable !== undefined && !editing ? (
-          <GestureBar
-            comment={comment}
-            language={language}
-            gestures={actionable}
-            editRef={editRef}
-            onStartEdit={() => setEditing(true)}
-            onDelete={requestDelete}
-          />
-        ) : null}
-        {actionable !== undefined && failure !== undefined ? (
-          <GestureFailure language={language} failure={failure} onRetry={() => actionable.onRetryGesture(comment.id)} />
-        ) : null}
-      </div>
+      </CommentSwipe>
+      {children}
     </li>
   );
 }

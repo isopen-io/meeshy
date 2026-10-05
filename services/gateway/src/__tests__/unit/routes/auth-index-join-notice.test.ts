@@ -34,6 +34,7 @@ jest.mock('../../../routes/auth/register', () => ({ registerRegistrationRoutes: 
 jest.mock('../../../routes/auth/magic-link', () => ({ registerMagicLinkRoutes: jest.fn() }));
 jest.mock('../../../routes/auth/phone-transfer', () => ({ registerPhoneTransferRoutes: jest.fn() }));
 jest.mock('../../../routes/auth/revoke-all-sessions', () => ({ registerRevokeAllSessionsRoute: jest.fn() }));
+jest.mock('../../../routes/auth/verification-status', () => ({ registerVerificationStatusRoute: jest.fn() }));
 
 import { authRoutes } from '../../../routes/auth/index';
 

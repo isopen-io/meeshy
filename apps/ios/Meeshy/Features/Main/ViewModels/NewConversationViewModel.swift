@@ -212,7 +212,6 @@ final class NewConversationViewModel: ObservableObject {
 
             let friends = FriendListAggregator.aggregate(
                 received: collected,
-                sent: [],
                 currentUserId: currentUserIdProvider() ?? ""
             )
             contacts = friends.map(SearchedUser.init(friend:))

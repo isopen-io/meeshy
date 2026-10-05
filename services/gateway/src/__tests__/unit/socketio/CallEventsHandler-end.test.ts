@@ -228,10 +228,10 @@ describe('CallEventsHandler — call:end handler', () => {
       await handlers[CALL_EVENTS.END](END_DATA, ack);
     });
 
-    it('calls callService.endCall with the correct arguments', () => {
+    it('calls callService.endCall with the correct arguments, handing over the session it already read (#9088)', async () => {
       expect(mockEndCall).toHaveBeenCalledWith(
         CALL_ID, CALLER_ID, PARTICIPANT_ID, false, END_DATA.reason,
-        { preJoinDecline: false }
+        { preJoinDecline: false, session: await mockGetCallSession.mock.results[0].value }
       );
     });
 

@@ -182,9 +182,8 @@ export function applyConversationUpdated(queryClient: QueryClient, data: Convers
   if (!speaksOfPreview && !speaksOfSideband && !speaksOfRank) return;
 
   patchConversation(queryClient, data.conversationId, (served) => {
-    /* LE RANG SERVI (#7592) — posé tel quel par l'émission adressée à
-       l'auteur du message réagi ; les autres ne le reçoivent pas et ne
-       réordonnent rien. */
+    /* LE RANG SERVI (#9026) — posé tel quel : toute activité (réaction,
+       appel, épingle) le sert à CHAQUE participant, et la ligne remonte. */
     const row = withListRank(served, data);
     /* LA RÉACTION ET L'APPEL EN COURS (#7545) — posés d'abord, sans toucher au
        groupe d'aperçu. Une réaction seule ne remonte la ligne que par le

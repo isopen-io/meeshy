@@ -351,7 +351,7 @@ describe('registerParticipantsRoutes', () => {
       };
     }
 
-    it('should return 403 when conversation ID cannot be resolved', async () => {
+    it('should return 404 when conversation ID cannot be resolved', async () => {
       const route = getRoute(mockFastify, 'GET', '/participants');
       const request = createGetRequest({ params: { id: 'nonexistent' } });
       mockPrisma.conversation.findFirst.mockResolvedValue(null);
@@ -359,13 +359,13 @@ describe('registerParticipantsRoutes', () => {
 
       await route.handler(request, reply);
 
-      expect(reply.status).toHaveBeenCalledWith(403);
+      expect(reply.status).toHaveBeenCalledWith(404);
       expect(reply.send).toHaveBeenCalledWith(
-        expect.objectContaining({ success: false, error: 'Unauthorized access to this conversation' })
+        expect.objectContaining({ success: false, error: 'Conversation not found' })
       );
     });
 
-    it('should return 403 when canAccessConversation returns false', async () => {
+    it('should return the same 404 when the caller is not a member (#8099)', async () => {
       const route = getRoute(mockFastify, 'GET', '/participants');
       const request = createGetRequest();
       mockedCanAccess.mockResolvedValue(false);
@@ -373,9 +373,9 @@ describe('registerParticipantsRoutes', () => {
 
       await route.handler(request, reply);
 
-      expect(reply.status).toHaveBeenCalledWith(403);
+      expect(reply.status).toHaveBeenCalledWith(404);
       expect(reply.send).toHaveBeenCalledWith(
-        expect.objectContaining({ success: false, code: 'CONVERSATION_ACCESS_DENIED' })
+        expect.objectContaining({ success: false, error: 'Conversation not found' })
       );
     });
 

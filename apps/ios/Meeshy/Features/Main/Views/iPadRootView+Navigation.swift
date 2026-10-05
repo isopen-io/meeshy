@@ -161,7 +161,7 @@ extension iPadRootView {
                        defaultValue: "Ce lien n'a pas pu être ouvert",
                        bundle: .main)
             )
-        case .magicLink:
+        case .magicLink, .emailVerificationLink:
             break
         }
     }
@@ -294,7 +294,7 @@ extension iPadRootView {
 
         case .friendRequest, .contactRequest, .legacyFriendRequest,
              .friendAccepted, .contactAccepted, .legacyFriendAccepted,
-             .legacyStatusUpdate:
+             .contactJoined, .contactRecentlyActive, .legacyStatusUpdate:
             if let senderId = notification.senderId {
                 router.deepLinkProfileUser = ProfileSheetUser(userId: senderId, username: notification.senderName ?? senderId)
             }
@@ -367,7 +367,7 @@ extension iPadRootView {
                 )
             }
 
-        case .friendRequest, .contactRequest, .friendAccepted, .contactAccepted:
+        case .friendRequest, .contactRequest, .friendAccepted, .contactAccepted, .contactJoined, .contactRecentlyActive:
             if let senderId = event.senderId {
                 router.deepLinkProfileUser = ProfileSheetUser(
                     userId: senderId,
@@ -462,7 +462,7 @@ extension iPadRootView {
 
         case .friendRequest, .contactRequest, .legacyFriendRequest,
              .friendAccepted, .contactAccepted, .legacyFriendAccepted,
-             .legacyStatusUpdate:
+             .contactJoined, .contactRecentlyActive, .legacyStatusUpdate:
             if let senderId = payload.senderId {
                 router.deepLinkProfileUser = ProfileSheetUser(
                     userId: senderId,
@@ -607,7 +607,7 @@ extension iPadRootView {
         notifications.manager.dismissToast()
 
         if let existing = conversationViewModel.conversations.first(where: { $0.id == conversationId }) {
-            notificationPreviewConversation = existing
+            sheetTargets.notificationPreview = existing
             return
         }
         Task { @MainActor in
@@ -619,12 +619,12 @@ extension iPadRootView {
                 }
             }()
             if let cached = cachedConversations?.first(where: { $0.id == conversationId }) {
-                notificationPreviewConversation = cached
+                sheetTargets.notificationPreview = cached
                 return
             }
             let currentUserId = AuthManager.shared.currentUser?.id ?? ""
             if let apiConv = try? await ConversationService.shared.getById(conversationId) {
-                notificationPreviewConversation = apiConv.toConversation(currentUserId: currentUserId)
+                sheetTargets.notificationPreview = apiConv.toConversation(currentUserId: currentUserId)
             } else {
                 handleSocketNotificationTap(event)
             }

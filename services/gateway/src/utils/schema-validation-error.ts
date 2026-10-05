@@ -52,6 +52,14 @@ export type SchemaValidationErrorResponse = {
   readonly statusCode: 400;
   /** Une entrée par violation — le formulaire peut surligner chaque champ. */
   readonly details: readonly { readonly field: string; readonly message: string }[];
+  /**
+   * Les MÊMES violations, sous la forme que `errorResponseSchema` DÉCLARE et
+   * que le client iOS DÉCODE (`APIRejectionEnvelope.violations`, #8082).
+   * `details` seul laissait un pseudo trop long au bandeau « réessayez » :
+   * iOS ne le lit pas, et une route qui déclare son 400 par
+   * `errorResponseSchema` le retire à la sérialisation.
+   */
+  readonly violations: readonly { readonly path: string; readonly message: string }[];
 };
 
 type FastifyValidationViolation = {
@@ -94,5 +102,6 @@ export function schemaValidationErrorResponse(error: unknown): SchemaValidationE
     code: 'VALIDATION_ERROR',
     statusCode: 400,
     details,
+    violations: details.map(({ field, message }) => ({ path: field, message })),
   };
 }

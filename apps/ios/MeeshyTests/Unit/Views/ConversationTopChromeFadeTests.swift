@@ -140,13 +140,25 @@ final class ConversationTopChromeFadeTests: XCTestCase {
     func test_stickyDayPill_isAnchoredBelowFloatingHeader() throws {
         let source = try messageListControllerSource()
         XCTAssertTrue(
-            source.contains("constant: topInset + MessageDayStickyPlacement.topOffset"),
+            source.contains("constant: topInset + MessageDayStickyPlacement.topOffset(headerBandHeight: headerBandHeight)"),
             "The sticky day pill must be anchored with the named " +
             "MessageDayStickyPlacement.topOffset — the bare `constant: 4` put " +
             "it under the Dynamic Island / Live Activity band and over the " +
             "floating header row (user feedback 2026-08-12). Depuis que la vue " +
             "court jusqu'au bord haut de l'écran, l'ancre part du haut de la " +
             "vue et l'offset inclut `topInset` — même position à l'écran."
+        )
+    }
+
+    func test_stickyDayPill_hostTakesTheHeightOfThePill() throws {
+        // #7998 — sans hauteur, l'hôte (ancré par son seul bord haut) valait
+        // 0 pt et SwiftUI CENTRAIT la pill sur l'ancre : sa moitié haute
+        // montait dans l'en-tête, d'autant plus que Dynamic Type la grandit.
+        let source = try messageListControllerSource()
+        XCTAssertTrue(
+            source.contains("host.sizingOptions = .intrinsicContentSize"),
+            "L'hôte de la pill doit prendre la hauteur de son contenu pour " +
+            "que la pill DÉMARRE à son ancre au lieu d'y être centrée."
         )
     }
 

@@ -43,18 +43,18 @@ struct StoryLanguagePickerView: View {
                     dismiss()
                 } label: {
                     HStack {
-                        VStack(alignment: .leading, spacing: 2) {
+                        VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                             Text(item.name)
-                                .font(.system(size: 16, weight: selectedLanguage == item.code ? .semibold : .regular))
+                                .font(.system(size: MeeshyFont.calloutSize, weight: selectedLanguage == item.code ? .semibold : .regular))
                                 .foregroundColor(.primary)
                             Text(item.code)
-                                .font(.system(size: 12))
+                                .font(.system(size: MeeshyFont.smallSize))
                                 .foregroundColor(.secondary)
                         }
                         Spacer()
                         if selectedLanguage == item.code {
                             Image(systemName: "checkmark")
-                                .font(.system(size: 14, weight: .bold))
+                                .font(.system(size: MeeshyIconSize.sm, weight: .bold))
                                 .foregroundColor(MeeshyColors.indigo500)
                         }
                     }
@@ -99,17 +99,17 @@ struct MediaPillLabel: View {
             : fgBase.opacity(0.18)
 
         return HStack(spacing: 5) {
-            Image(systemName: icon).font(.system(size: 12, weight: .medium))
-            Text(text).font(.system(size: 11, weight: .medium))
+            Image(systemName: icon).font(.system(size: MeeshyIconSize.xs, weight: .medium))
+            Text(text).font(.system(size: MeeshyFont.footnoteSize, weight: .medium))
         }
         .foregroundColor(foreground)
-        .padding(.horizontal, 10).padding(.vertical, 7)
+        .padding(.horizontal, MeeshySpacing.smPlus).padding(.vertical, 7)
         .background(
-            RoundedRectangle(cornerRadius: 10)
+            RoundedRectangle(cornerRadius: MeeshyRadius.sm)
                 .fill(bgFill)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .stroke(strokeColor, lineWidth: 0.5)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.sm)
+                        .stroke(strokeColor, lineWidth: MeeshyBorder.hairline)
                 )
         )
     }

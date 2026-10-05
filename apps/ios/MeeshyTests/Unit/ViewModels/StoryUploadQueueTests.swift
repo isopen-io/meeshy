@@ -1,5 +1,6 @@
 import XCTest
 import Combine
+import ImageIO
 @testable import Meeshy
 import MeeshySDK
 import MeeshyUI
@@ -522,6 +523,83 @@ final class StoryUploadQueueTests: XCTestCase {
         let slides = try? decoder.decode([StorySlide].self, from: payload)
         XCTAssertNotNil(slides?.first?.effects.thumbHash,
                         "Le cas hors-ligne reçoit aussi ses thumbHashes, calculés en aval du persist")
+    }
+
+    /// **#8522 — une republication mise en file hors ligne garde son lien
+    /// d'origine.** Sans lui, le rejeu créait une publication orpheline.
+    func test_enqueueStoryForOfflinePublish_republication_porteRepostOfIdDansLaFile() async {
+        let slide = StorySlide()
+        await sut.enqueueStoryForOfflinePublish(
+            targetType: .post,
+            slides: [slide],
+            slideImages: [slide.id: Self.solidImage()],
+            loadedImages: [:],
+            loadedVideoURLs: [:],
+            repostOfId: "original-8522"
+        )
+
+        let pending = await StoryPublishQueue.shared.pendingItems
+        XCTAssertEqual(pending.first?.repostOfId, "original-8522")
+    }
+
+    /// **#8522 — un sticker GIF mis en file reste ANIMÉ au rejeu.** Le writer
+    /// aplatissait l'image en PNG et le rejeu ne reconstituait aucune animation.
+    func test_enqueueStoryForOfflinePublish_stickerAnime_resteAnimeAuRejeu() async throws {
+        let gif = try Self.makeGIF(frames: 3)
+        var slide = StorySlide()
+        slide.effects.stickerObjects = [StorySticker(id: "st-anime", emoji: "🖼️")]
+
+        await sut.enqueueStoryForOfflinePublish(
+            slides: [slide],
+            slideImages: [:],
+            loadedImages: ["st-anime": try XCTUnwrap(UIImage(data: gif))],
+            loadedVideoURLs: [:],
+            loadedStickerAnimations: ["st-anime": gif]
+        )
+
+        let pending = await StoryPublishQueue.shared.pendingItems
+        let refs = try XCTUnwrap(pending.first?.mediaReferences)
+        let media = try sut.loadMediaFromReferences(refs)
+        XCTAssertEqual(media.loadedStickerAnimations["st-anime"], gif,
+                       "Le rejeu doit retrouver les octets animés d'origine")
+        XCTAssertNotNil(media.loadedImages["st-anime"], "L'image fixe reste disponible pour le rendu")
+    }
+
+    /// **#8522 — le toast hors ligne nomme ce que l'auteur publie.**
+    func test_offlineQueuedCopy_suitLeTypePublie() {
+        XCTAssertEqual(StoryPublishCopy.queuedForOffline(.story),
+                       String(localized: "story.publish.queue.enqueued",
+                              defaultValue: "Story enregistrée — publication au retour en ligne"))
+        XCTAssertNotEqual(StoryPublishCopy.queuedForOffline(.post), StoryPublishCopy.queuedForOffline(.story))
+        XCTAssertNotEqual(StoryPublishCopy.queuedForOffline(.reel), StoryPublishCopy.queuedForOffline(.story))
+        XCTAssertFalse(StoryPublishCopy.queuedForOffline(.post).localizedCaseInsensitiveContains("story"))
+    }
+
+    /// **#8522 — VoiceOver annonce ce que l'auteur publie** (atelier du SDK).
+    func test_publishStartedAnnouncement_suitLeTypePublie() {
+        XCTAssertNotEqual(StoryComposerView.publishStartedAnnouncement(for: .post),
+                          StoryComposerView.publishStartedAnnouncement(for: .story))
+        XCTAssertFalse(StoryComposerView.publishStartedAnnouncement(for: .post)
+            .localizedCaseInsensitiveContains("story"))
+        XCTAssertFalse(StoryComposerView.publishStartedAnnouncement(for: .reel)
+            .localizedCaseInsensitiveContains("story"))
+    }
+
+    private static func makeGIF(frames: Int) throws -> Data {
+        let data = NSMutableData()
+        let destination = try XCTUnwrap(CGImageDestinationCreateWithData(
+            data as CFMutableData, "com.compuserve.gif" as CFString, frames, nil))
+        for index in 0..<frames {
+            let image = UIGraphicsImageRenderer(size: CGSize(width: 8, height: 8)).image { context in
+                UIColor(white: CGFloat(index) / CGFloat(max(frames - 1, 1)), alpha: 1).setFill()
+                context.fill(CGRect(x: 0, y: 0, width: 8, height: 8))
+            }
+            CGImageDestinationAddImage(destination, try XCTUnwrap(image.cgImage), [
+                kCGImagePropertyGIFDictionary: [kCGImagePropertyGIFUnclampedDelayTime: 0.1]
+            ] as CFDictionary)
+        }
+        XCTAssertTrue(CGImageDestinationFinalize(destination))
+        return data as Data
     }
 
     /// Le nettoyage de fixtures est le seul code de ce lot qui n'aurait aucune

@@ -6,12 +6,13 @@ import {
   type StickerDefinition,
   type StickerOrigin,
 } from '@meeshy/shared/types/sticker-definition';
+import * as meEndpoints from '@meeshy/shared/api/endpoints/me';
 
 import type { ConversationsDeps } from './conversations';
 import type { ApiResult } from './http';
 
 /**
- * **LE PORT DE « MES STICKERS »** (#7938) — `/api/v1/me/stickers`
+ * **LE PORT DE « MES STICKERS »** (#7938) — `me.stickers`
  * (`services/gateway/src/routes/me/stickers.ts`). La DÉFINITION servie est
  * celle de `@meeshy/shared/types/sticker-definition` ; ce port la décode
  * (`zod/mini`) et n'en invente aucune seconde forme.
@@ -61,7 +62,7 @@ export async function loadMyStickers(
   if (__FIXTURES__ && deps.source === 'fixtures') return { ok: true, data: fixtureStickers };
   const result = await deps.transport.request<unknown>({
     method: 'GET',
-    path: '/api/v1/me/stickers',
+    path: meEndpoints.stickers,
     ...(deps.signal === undefined ? {} : { signal: deps.signal }),
   });
   if (!result.ok) return result;
@@ -104,7 +105,7 @@ export async function createSticker(
   form.append('file', params.file, params.file instanceof File ? params.file.name : 'sticker');
   const result = await deps.transport.request<unknown>({
     method: 'POST',
-    path: '/api/v1/me/stickers',
+    path: meEndpoints.stickers,
     body: form,
     timeoutMs: CREATE_TIMEOUT_MS,
   });
@@ -118,12 +119,12 @@ export async function deleteSticker(deps: ConversationsDeps, stickerId: string):
     fixtureStickers = fixtureStickers.filter((s) => s.id !== stickerId);
     return { ok: true, data: { id: stickerId, removed: true } };
   }
-  return deps.transport.request<unknown>({ method: 'DELETE', path: `/api/v1/me/stickers/${stickerId}` });
+  return deps.transport.request<unknown>({ method: 'DELETE', path: meEndpoints.stickersByStickerId(stickerId) });
 }
 
 export async function markStickerUsed(deps: ConversationsDeps, stickerId: string): Promise<ApiResult<unknown>> {
   if (__FIXTURES__ && deps.source === 'fixtures') return { ok: true, data: null };
-  return deps.transport.request<unknown>({ method: 'POST', path: `/api/v1/me/stickers/${stickerId}/use` });
+  return deps.transport.request<unknown>({ method: 'POST', path: meEndpoints.stickersByStickerIdUse(stickerId) });
 }
 
 /** La bibliothèque réordonnée À L'INSTANT du geste : le sticker utilisé passe

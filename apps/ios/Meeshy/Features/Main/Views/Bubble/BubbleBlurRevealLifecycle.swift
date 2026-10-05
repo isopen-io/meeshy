@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import MeeshyUI
 
 /// Logique pure de cycle de vie pour la revelation d'un message floute.
 /// Was: ThemedMessageBubble.scheduleBlurReveal() + revealBlurredContent().
@@ -129,6 +130,26 @@ final class BubbleBlurRevealController: ObservableObject {
             withAnimation(.easeOut(duration: BubbleBlurRevealLifecycle.Phase.fogOut.duration)) {
                 self.fogOpacity = 0
             }
+        }
+    }
+}
+
+/// Gate le blur+mask sur le fait que la bulle soit floutable. Voir l'appel
+/// dans `BubbleStandardLayout.contentStack` pour le rationale (perf GPU au
+/// scroll). Sorti de `BubbleStandardLayout.swift`, hors budget de taille (#8009).
+struct BlurRevealModifier: ViewModifier {
+    let isBlurrable: Bool
+    let shouldBlur: Bool
+    func body(content: Content) -> some View {
+        if isBlurrable {
+            content
+                .blur(radius: shouldBlur ? 20 : 0)
+                .mask(
+                    RoundedRectangle(cornerRadius: MeeshyRadius.lgPlus, style: .continuous)
+                        .blur(radius: shouldBlur ? 5 : 0)
+                )
+        } else {
+            content
         }
     }
 }

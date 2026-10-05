@@ -1,4 +1,4 @@
-import { conversationAccentPalette } from '@meeshy/shared/utils/conversation-colors';
+import { conversationAccentPalette, type ConversationAccentPalette } from '@meeshy/shared/utils/conversation-colors';
 
 import type { CSSProperties } from 'react';
 
@@ -23,11 +23,13 @@ import type { Conversation } from '@/lib/api/types';
  * le mécanisme qui rend tenable la règle « aucun composant de conversation ne
  * code une couleur en dur ».
  */
-export const accentOf = (conversation: Conversation): string =>
+export const accentPaletteOf = (conversation: Pick<Conversation, 'id' | 'title' | 'identifier' | 'type'>): ConversationAccentPalette =>
   conversationAccentPalette({
     name: conversation.title ?? conversation.identifier ?? conversation.id,
     type: conversation.type,
-  }).primary;
+  });
+
+export const accentOf = (conversation: Conversation): string => accentPaletteOf(conversation).primary;
 
 /**
  * LA LUMINANCE RELATIVE WCAG — miroir EXACT de `Color.luminance`

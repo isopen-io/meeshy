@@ -18,8 +18,8 @@ struct MessageEditsDetailView: View {
         let accent = Color(hex: message.senderColor ?? "#6366F1")
         let revisions = editRevisions.sorted { $0.editedAt > $1.editedAt }
 
-        VStack(alignment: .leading, spacing: 14) {
-            timelineBanner(
+        VStack(alignment: .leading, spacing: MeeshySpacing.mdPlus) {
+            MessageDetailTimelineBanner(
                 icon: "pencil.and.list.clipboard",
                 text: revisions.isEmpty
                     ? String(localized: "message-detail.edits.none-title", defaultValue: "Aucune modification", bundle: .main)
@@ -32,10 +32,9 @@ struct MessageEditsDetailView: View {
             )
 
             if revisions.isEmpty {
-                emptyStateView(
+                MessageDetailEmptyState(
                     icon: "pencil.slash",
-                    text: String(localized: "message-detail.edits.empty", defaultValue: "L'historique des modifications apparaît ici", bundle: .main),
-                    accent: accent
+                    text: String(localized: "message-detail.edits.empty", defaultValue: "L'historique des modifications apparaît ici", bundle: .main)
                 )
             } else {
                 // Current (post-edit) version rendered first so the user
@@ -66,21 +65,21 @@ struct MessageEditsDetailView: View {
     // MARK: - Rows
 
     private func editRevisionRow(header: String, content: String, timestamp: Date, accent: Color, isCurrent: Bool) -> some View {
-        HStack(alignment: .top, spacing: 10) {
+        HStack(alignment: .top, spacing: MeeshySpacing.smPlus) {
             RoundedRectangle(cornerRadius: 3, style: .continuous)
                 .fill(isCurrent ? accent : accent.opacity(0.4))
                 .frame(width: 3)
-                .padding(.vertical, 2)
+                .padding(.vertical, MeeshySpacing.xxs)
 
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 6) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
+                HStack(spacing: MeeshySpacing.xsPlus) {
                     Text(header)
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(isCurrent ? accent : theme.textSecondary)
                         .textCase(.uppercase)
                         .tracking(0.4)
                     Spacer(minLength: 4)
-                    Text(formatTimeFR(timestamp))
+                    Text(MessageDetailClock.hourMinute(timestamp))
                         .font(.caption2.weight(.medium))
                         .foregroundStyle(theme.textMuted)
                 }
@@ -90,79 +89,14 @@ struct MessageEditsDetailView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
-        .padding(10)
+        .padding(MeeshySpacing.smPlus)
         .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(isDark ? Color.white.opacity(0.04) : Color.black.opacity(0.03))
+            RoundedRectangle(cornerRadius: MeeshyRadius.sm, style: .continuous)
+                .fill(MeeshyColors.surfaceFill(isDark: isDark))
         )
         // Single VoiceOver stop per revision: "Actuel, 14:30, <contenu>".
         // The colored rail is decorative (state is carried by the header text,
         // never by color alone).
-        .accessibilityElement(children: .combine)
-    }
-
-    // MARK: - Shared Components (copied from MessageDetailSheet)
-
-    private func timelineBanner(icon: String, text: String, detail: String, count: String? = nil, accent: Color) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: icon)
-                .font(.subheadline.weight(.semibold))
-                .foregroundColor(accent)
-                .accessibilityHidden(true)
-
-            VStack(alignment: .leading, spacing: 1) {
-                Text(text)
-                    .font(.footnote.weight(.semibold))
-                    .foregroundColor(theme.textPrimary)
-                Text(detail)
-                    .font(.caption2)
-                    .foregroundColor(theme.textMuted)
-            }
-
-            Spacer()
-
-            if let count {
-                Text(count)
-                    .font(.system(.caption, design: .monospaced).weight(.bold))
-                    .foregroundColor(accent)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .background(
-                        Capsule()
-                            .fill(accent.opacity(0.12))
-                    )
-                    // Numeric badge duplicates the count already spelled out in
-                    // `detail` ("3 versions précédentes") — hidden from VoiceOver.
-                    .accessibilityHidden(true)
-            }
-        }
-        .padding(12)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(accent.opacity(isDark ? 0.06 : 0.04))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(accent.opacity(0.12), lineWidth: 0.5)
-                )
-        )
-        // Header banner reads as one stop: title + detail sentence.
-        .accessibilityElement(children: .combine)
-    }
-
-    private func emptyStateView(icon: String, text: String, accent: Color) -> some View {
-        VStack(spacing: 8) {
-            // Decorative empty-state glyph — kept at a fixed 28pt (illustration,
-            // not text) and hidden from VoiceOver via the `.combine` parent.
-            Image(systemName: icon)
-                .font(.system(size: 28, weight: .light))
-                .foregroundColor(theme.textMuted.opacity(0.4))
-                .accessibilityHidden(true)
-            Text(text)
-                .font(.footnote.weight(.medium))
-                .foregroundColor(theme.textMuted)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 30)
         .accessibilityElement(children: .combine)
     }
 
@@ -173,9 +107,5 @@ struct MessageEditsDetailView: View {
             ? String(localized: "message-detail.edits.previous-one", defaultValue: "%d version précédente", bundle: .main)
             : String(localized: "message-detail.edits.previous-other", defaultValue: "%d versions précédentes", bundle: .main)
         return String(format: format, count)
-    }
-
-    private func formatTimeFR(_ date: Date) -> String {
-        date.formatted(.dateTime.hour().minute())
     }
 }

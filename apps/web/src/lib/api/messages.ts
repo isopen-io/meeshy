@@ -6,16 +6,18 @@ import { hasOlderMessagesOf, messagesOf, recordSentMessage } from './fixtures';
 import type { ApiResult, HttpTransport } from './http';
 import type { SharedPlace } from '@/lib/send/shared-place';
 import type { MessageSticker } from '@meeshy/shared/types/message-sticker';
+import * as conversationsEndpoints from '@meeshy/shared/api/endpoints/conversations';
 
 import { nextMessagesCursor, pageOfMessages, threadWindowOf } from './messages-pages';
 import type { MessagesInfiniteData, MessagesPage, MessagesPageParam } from './messages-pages';
 import type { Message } from './types';
 import { seedMineFromPage, snapshotMine } from './reactions-mine';
 import { sealedIfOpened } from './view-once-seal';
+import { withSenderAccount } from './sender-account';
 
 /**
  * LE PORT DU FIL (#5650, F2 ; PAGINÉ #6972) —
- * `GET /api/v1/conversations/:id/messages?limit=50[&before=<id>]`
+ * `GET conversations.byIdMessages?limit=50[&before=<id>]`
  * (`services/gateway/src/routes/conversations/messages-list.ts:91-201`,
  * `optionalAuth`).
  *
@@ -77,14 +79,47 @@ export async function loadMessages(
     }
     return { ok: true, data: page };
   }
-  const query = new URLSearchParams({
-    limit: String(MESSAGES_LIMIT),
-    ...(params.before !== undefined ? { before: params.before } : {}),
+  const served = await requestMessageRows({
+    ...params,
+    query: { limit: String(MESSAGES_LIMIT), ...(params.before !== undefined ? { before: params.before } : {}) },
   });
+  if (!served.ok) return served;
+  return {
+    ok: true,
+    data: {
+      messages: [...served.data.rows].reverse(),
+      hasOlder: served.data.hasMore,
+      /* LA MOITIÉ JETÉE (#6972) — `cursorPagination` était lu pour son SEUL
+         `hasMore`, et `nextCursor` — la valeur à renvoyer en `before` —
+         mourait ici. Le fil savait donc qu'un historique existait, sans
+         jamais pouvoir le demander. */
+      nextCursor: served.data.nextCursor,
+    },
+  };
+}
+
+/** Les rangées d'une page du fil, DANS L'ORDRE SERVI, et ce que la passerelle
+ * dit autour d'elles — `cursorPagination` et, en fenêtre `around`, `hasNewer`.
+ * Le SEUL site qui lit la réponse de `GET …/messages` : `loadMessages` et la
+ * fenêtre ancrée (`messages-window.ts`, #7420) n'en font que l'ordre. */
+export type ServedMessageRows = {
+  readonly rows: readonly Message[];
+  readonly hasMore: boolean;
+  readonly nextCursor: string | null;
+  readonly hasNewer: boolean;
+};
+
+export async function requestMessageRows(
+  params: ConversationsDeps & {
+    readonly conversationId: string;
+    readonly query: Readonly<Record<string, string>>;
+    readonly signal?: AbortSignal;
+  },
+): Promise<ApiResult<ServedMessageRows>> {
   const mineBefore = snapshotMine();
   const result = await params.transport.request<readonly Message[]>({
     method: 'GET',
-    path: `/api/v1/conversations/${params.conversationId}/messages?${query.toString()}`,
+    path: `${conversationsEndpoints.byIdMessages(params.conversationId)}?${new URLSearchParams(params.query).toString()}`,
     ...(params.signal !== undefined ? { signal: params.signal } : {}),
   });
   if (!result.ok) return result;
@@ -97,13 +132,10 @@ export async function loadMessages(
       /* UNE VUE UNIQUE DÉJÀ OUVERTE PAR MOI ARRIVE PURGÉE (#7580) — même si
          une passerelle antérieure à #7578 sert encore son contenu : rien
          n'en atteint le cache persisté. */
-      messages: [...result.data].reverse().map(sealedIfOpened),
-      hasOlder: result.cursorPagination?.hasMore === true,
-      /* LA MOITIÉ JETÉE (#6972) — `cursorPagination` était lu pour son SEUL
-         `hasMore`, et `nextCursor` — la valeur à renvoyer en `before` —
-         mourait ici. Le fil savait donc qu'un historique existait, sans
-         jamais pouvoir le demander. */
+      rows: result.data.map((message) => sealedIfOpened(withSenderAccount(message))),
+      hasMore: result.cursorPagination?.hasMore === true,
       nextCursor: result.cursorPagination?.nextCursor ?? null,
+      hasNewer: result.hasNewer === true,
     },
   };
 }
@@ -208,10 +240,24 @@ export function patchThreadMessages(
   conversationId: string,
   updater: ThreadMessagesUpdater,
 ): void {
-  queryClient.setQueryData<MessagesInfiniteData>(messagesQueryKey(conversationId), (data) => {
+  queryClient.setQueriesData<MessagesInfiniteData>({ queryKey: messagesQueryKey(conversationId) }, (data) => {
     if (data === undefined || !Array.isArray(data.pages)) return data;
     return { ...data, pages: data.pages.map((page) => ({ ...page, messages: updater(page.messages) })) };
   });
+}
+
+/**
+ * LES FENÊTRES DU FIL (#7420) — le présent (`messagesQueryKey`) ET les
+ * fenêtres ancrées autour d'un message (`messages-window.ts`), qui vivent sous
+ * le MÊME préfixe : une réaction, une traduction ou une consommation reçue
+ * pendant qu'on lit un message ancien doit atteindre la rangée qu'on lit.
+ * C'est pourquoi `patchThreadMessages` écrit par PRÉFIXE (`setQueriesData`).
+ */
+function threadWindowsOf(queryClient: QueryClient, conversationId: string): readonly MessagesInfiniteData[] {
+  return queryClient
+    .getQueriesData<MessagesInfiniteData>({ queryKey: messagesQueryKey(conversationId) })
+    .map(([, data]) => data)
+    .filter((data): data is MessagesInfiniteData => data !== undefined && Array.isArray(data.pages));
 }
 
 /**
@@ -236,6 +282,17 @@ export function upsertThreadMessage(
   const cid = message.clientMessageId;
   const matches = (m: Message): boolean =>
     m.id === message.id || (cid !== undefined && (m as { readonly clientMessageId?: string }).clientMessageId === cid);
+
+  /* LA FENÊTRE ANCRÉE (#7420) n'accueille que des REMPLACEMENTS : un message
+     neuf est plus récent qu'elle, il appartient au présent — l'y poser
+     ouvrirait un trou entre sa dernière page et lui. */
+  queryClient.setQueriesData<MessagesInfiniteData>(
+    { queryKey: messagesQueryKey(conversationId), predicate: (query) => query.queryKey.length > 3 },
+    (data) => {
+      if (data === undefined || !Array.isArray(data.pages) || !data.pages.some((page) => page.messages.some(matches))) return data;
+      return { ...data, pages: data.pages.map((page) => ({ ...page, messages: page.messages.map((m) => (matches(m) ? message : m)) })) };
+    },
+  );
 
   queryClient.setQueryData<MessagesInfiniteData>(messagesQueryKey(conversationId), (data) => {
     if (data === undefined || !Array.isArray(data.pages)) return data;
@@ -297,11 +354,11 @@ export function findCachedThreadMessage(
   conversationId: string,
   messageId: string,
 ): Message | undefined {
-  const data = queryClient.getQueryData<MessagesInfiniteData>(messagesQueryKey(conversationId));
-  if (data === undefined || !Array.isArray(data.pages)) return undefined;
-  for (const page of data.pages) {
-    const found = page.messages.find((m) => m.id === messageId);
-    if (found !== undefined) return found;
+  for (const data of threadWindowsOf(queryClient, conversationId)) {
+    for (const page of data.pages) {
+      const found = page.messages.find((m) => m.id === messageId);
+      if (found !== undefined) return found;
+    }
   }
   return undefined;
 }
@@ -347,7 +404,7 @@ export function latestCachedThreadMessage(queryClient: QueryClient, conversation
 
 /**
  * L'ENVOI D'UN MESSAGE (#5813, étape 2 ; étendu #5668 aux pièces jointes) —
- * `POST /api/v1/conversations/:id/messages`
+ * `POST conversations.byIdMessages`
  * (`services/gateway/src/routes/conversations/messages-send.ts:117-120`,
  * `SendMessageBodySchema:41-105`). SUCCÈS = **200**, pas 201
  * (`response.ts:38`, `messages-send.ts:391` — § 0 de la spécification #5813,
@@ -359,7 +416,7 @@ export function latestCachedThreadMessage(queryClient: QueryClient, conversation
  * n'est posé QUE hors du défaut serveur `'text'` (`messages-send.ts:59`,
  * `:142`) — la même discipline « aucune clé à sa valeur par défaut » que le
  * reste de ce port. `attachmentIds` : les ids rendus par
- * `POST /api/v1/attachments/upload` (`api/attachments.ts`), bornés à
+ * `POST attachments.upload` (`api/attachments.ts`), bornés à
  * `MAX_ATTACHMENTS_PER_MESSAGE` (`@meeshy/shared/types/attachment.ts:454`) —
  * la borne n'est PAS revérifiée ici, c'est `send/attachments.ts` /
  * `use-recorder.ts` qui composent la sélection, jamais un lot déjà hors
@@ -372,6 +429,8 @@ export type SendMessageBody = {
   readonly messageType?: 'image' | 'file' | 'audio' | 'video';
   readonly attachmentIds?: readonly string[];
   readonly replyToId?: string;
+  /** La pièce NOMMÉE d'une réponse (#6303, #6164) — `messages-send.ts:70`, vérifiée côté passerelle. */
+  readonly attachmentReplyTo?: { readonly attachmentId: string };
   /**
    * LE TRANSFERT (#5866) — `messages-send.ts:71-72`. Aucune route dédiée :
    * un transfert EST un envoi qui désigne sa source, et la passerelle copie
@@ -388,14 +447,25 @@ export type SendMessageBody = {
   /** OMIS quand la source est inconnue — `''` casse l'écriture `@db.ObjectId`. */
   readonly forwardedFromConversationId?: string;
   /**
+   * LA COPIE SERVEUR D'UNE PIÈCE, SANS RÉ-UPLOAD (#8884) — `messages-send.ts:79`.
+   * Le serveur recopie les pièces du message désigné vers le nouveau message
+   * (mêmes blobs) : c'est ce qui fait qu'un envoi à N personnes ne coûte qu'UN
+   * téléversement. Réservée à l'AUTEUR du message source. Exclusive de
+   * `attachmentIds` comme `forwardedFromId` (même `else if`,
+   * `MessageProcessor.ts:688`) ; `content` porte alors la légende.
+   */
+  readonly copyAttachmentsFromMessageId?: string;
+  /**
    * LA PROTECTION (#6175) — `SendMessageBodySchema:76-81`
    * (`services/gateway/src/routes/conversations/messages-send.ts`). Chaque
    * clé est OMISE à sa valeur par défaut (`protectionBodyOf`,
    * `send/perform-send.ts`) — jamais `false`/`0` posé explicitement.
    */
   readonly isBlurred?: boolean;
-  /** Chaîne ISO — le serveur la revit en `Date` (`messages-send.ts:317`). */
+  /** Chaîne ISO — le serveur n'en garde que la DISTANCE (`normalizeEphemeralDuration`) ; un client à jour envoie `ephemeralDuration`. */
   readonly expiresAt?: string;
+  /** Secondes — le décompte part de la RÉCEPTION de chaque destinataire (#7451, #8905). */
+  readonly ephemeralDuration?: number;
   readonly effectFlags?: number;
   readonly isViewOnce?: boolean;
   /**
@@ -494,7 +564,7 @@ export async function sendMessage(
   }
   const result = await params.transport.request<unknown>({
     method: 'POST',
-    path: `/api/v1/conversations/${params.conversationId}/messages`,
+    path: conversationsEndpoints.byIdMessages(params.conversationId),
     body: params.body,
     ...(params.signal !== undefined ? { signal: params.signal } : {}),
   });

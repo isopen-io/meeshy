@@ -120,6 +120,24 @@ describe('balayage — ce que la détection sait discriminer', () => {
   });
 
   /**
+   * Symétrique du cas précédent, côté SCHÉMA : des propriétés étalées depuis
+   * un objet partagé (`...verificationRequiredProperties`, #8055) peuvent
+   * déclarer les clés envoyées — la sonde ne sait pas les lire, elle se tait.
+   */
+  it('se tait quand les propriétés de `data` portent un spread', () => {
+    const source = `
+      fastify.post('/x', {
+        schema: { response: { 200: { type: 'object', properties: {
+          data: { type: 'object', properties: { id: { type: 'string' }, ...sharedProperties } }
+        } } } }
+      }, async (request, reply) => {
+        return sendSuccess(reply, { status: 'pending', email });
+      });`;
+
+    expect(scanFileForMismatches(source, 'x.ts')).toEqual([]);
+  });
+
+  /**
    * Un `...spread` peut apporter les clés déclarées : conclure à la perte
    * TOTALE serait faux. C'est exactement la forme des deux transports
    * d'édition (`{...updatedMessage, conversationId, translations}`).

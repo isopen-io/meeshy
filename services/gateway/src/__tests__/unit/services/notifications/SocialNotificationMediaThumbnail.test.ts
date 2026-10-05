@@ -20,6 +20,15 @@ jest.mock('../../../../utils/logger-enhanced', () => ({
   securityLogger: { logViolation: jest.fn() },
 }));
 
+/** Le post que le bâtisseur RELIT pour servir son extrait (#8731) — vivant, sans traduction. */
+const liveExcerptSource = (content: string) => ({
+  content,
+  originalLanguage: null,
+  translations: null,
+  deletedAt: null,
+  expiresAt: null,
+});
+
 const ACTOR_ID = '507f1f77bcf86cd799439011';
 const RECIPIENT_ID = '507f1f77bcf86cd799439012';
 const POST_ID = 'aaaaaaaaaaaaaaaaaaaaaaaa';
@@ -142,13 +151,13 @@ describe('Notifications sociales — vignette média du contenu visé', () => {
         thumbnailUrl: null,
       });
 
+      prisma.post = { ...prisma.post, findUnique: jest.fn().mockResolvedValue(liveExcerptSource('Mon plus beau voyage')) };
       await service.createPostLikeNotification({
         actorId: ACTOR_ID,
         postId: POST_ID,
         postAuthorId: RECIPIENT_ID,
         emoji: '😍',
         postType: 'POST',
-        postPreview: 'Mon plus beau voyage',
       });
 
       const payload = payloadOfType(mockIO, 'post_like');

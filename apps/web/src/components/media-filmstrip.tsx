@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { maskedAttachment } from '@meeshy/shared/utils/attachment-protection';
 
@@ -15,7 +15,11 @@ import {
   filmstripScrollOffset,
 } from '@/lib/view/media-stage';
 
+import type { InterfaceLanguage } from '@/lib/interface-language';
+
 import { Glyph } from './glyph';
+import { MediaUnavailable } from './media-unavailable';
+import { GLYPH_SIZE } from './ui-chrome';
 
 /**
  * `MediaFilmstrip` (#6221) — la pellicule en couloir bas de la visionneuse,
@@ -46,10 +50,12 @@ export function MediaFilmstrip({
   items,
   currentIndex,
   onSelect,
+  language,
 }: {
   readonly items: readonly Attachment[];
   readonly currentIndex: number;
   readonly onSelect: (index: number) => void;
+  readonly language: InterfaceLanguage;
 }) {
   const trackRef = useRef<HTMLDivElement | null>(null);
 
@@ -86,7 +92,7 @@ export function MediaFilmstrip({
       aria-label="Pellicule"
       ref={trackRef}
       onScroll={onScroll}
-      className="flex overflow-x-auto box-border"
+      className="pointer-events-auto flex overflow-x-auto box-border"
       style={{
         height: FILMSTRIP_RESERVED_HEIGHT,
         gap: FILMSTRIP.spacing,
@@ -111,29 +117,30 @@ export function MediaFilmstrip({
 
         return (
           <button
-            key={attachment.id}
+            key={`${index}:${attachment.id}`}
             type="button"
             data-filmstrip-item
+            data-attachment={attachment.id}
             {...(isMasked ? { 'data-protected-attachment': 'hidden' as const } : {})}
             aria-label={isMasked ? `Média protégé ${index + 1} sur ${items.length}` : `Média ${index + 1} sur ${items.length}`}
             {...(isCurrent ? { 'aria-current': 'true' as const } : {})}
             onClick={() => onSelect(index)}
-            className="media-filmstrip-item relative flex shrink-0 items-center justify-center overflow-hidden bg-black"
+            className="media-filmstrip-item relative flex shrink-0 items-center justify-center overflow-hidden bg-media-backdrop"
             style={{
               width: FILMSTRIP.itemSide,
               height: FILMSTRIP.itemSide,
               opacity: isCurrent ? 1 : 0.55,
               transform: isCurrent ? 'scale(1)' : 'scale(0.9)',
-              border: isCurrent ? '2px solid var(--accent)' : '1px solid rgba(255,255,255,0.18)',
+              border: isCurrent ? '2px solid var(--color-on-media)' : '1px solid var(--color-media-hairline)',
             }}
           >
             {isMasked ? (
-              <Glyph name="eyeSlash" size={14} className="media-filmstrip-masked-glyph" />
+              <Glyph name="eyeSlash" size={GLYPH_SIZE.sm} className="text-on-media-3" />
             ) : (
               <>
-                {thumb !== undefined ? <img src={thumb} alt="" aria-hidden className="size-full object-cover" /> : null}
+                {thumb !== undefined ? <FilmstripThumb src={thumb} language={language} /> : null}
                 {kindOf(attachment) === 'video' ? (
-                  <Glyph name="fillPlay" size={16} className="absolute inset-0 m-auto text-white" />
+                  <Glyph name="fillPlay" size={GLYPH_SIZE.md} className="absolute inset-0 m-auto text-on-media" />
                 ) : null}
               </>
             )}
@@ -142,4 +149,15 @@ export function MediaFilmstrip({
       })}
     </div>
   );
+}
+
+/**
+ * UNE VIGNETTE QUI NE SE CHARGE PAS (#8141) dit la même absence que la page :
+ * l'état dessiné compact, jamais l'icône brisée du navigateur. Retenue par
+ * adresse, pour qu'une case recyclée sur une autre pièce reparte d'elle-même.
+ */
+function FilmstripThumb({ src, language }: { readonly src: string; readonly language: InterfaceLanguage }) {
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  if (failedSrc === src) return <MediaUnavailable language={language} compact />;
+  return <img src={src} alt="" aria-hidden loading="lazy" decoding="async" className="size-full object-cover" onError={() => setFailedSrc(src)} />;
 }

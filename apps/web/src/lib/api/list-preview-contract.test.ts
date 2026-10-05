@@ -143,7 +143,7 @@ describe('activeCall (#7545 → #7547)', () => {
 describe('sous-groupe NATURE du dernier message (#7545 → #7547)', () => {
   const nature = {
     lastMessageType: 'system',
-    lastMessageEffectFlags: 8,
+    lastMessageEffectFlags: 256,
     lastMessageEphemeralDuration: 300,
     lastMessageIsForwarded: true,
     lastMessageSystemEvent: { key: 'system.member-joined', params: { name: 'Bob' } },
@@ -160,7 +160,7 @@ describe('sous-groupe NATURE du dernier message (#7545 → #7547)', () => {
     const last = rowOf(client)?.lastMessage as ListLastMessage | undefined;
     expect(last?.id).toBe('m-2');
     expect(last?.messageType).toBe('system');
-    expect(last?.effectFlags).toBe(8);
+    expect(last?.effectFlags).toBe(256);
     expect(last?.ephemeralDuration).toBe(300);
     expect(last?.isForwarded).toBe(true);
     expect(last?.systemEvent).toEqual(nature.lastMessageSystemEvent);

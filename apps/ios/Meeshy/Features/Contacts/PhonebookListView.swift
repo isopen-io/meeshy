@@ -18,6 +18,7 @@ struct PhonebookListView: View {
     @EnvironmentObject private var router: Router
 
     @State private var invitationTarget: PhonebookInvitation?
+    @State private var isOfferingPhone = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -33,37 +34,38 @@ struct PhonebookListView: View {
             // (DiscoverTab.swift) — pas de second composeur à maintenir.
             SMSComposerView(recipients: [invitation.phoneNumber], body: invitation.message)
         }
+        .phonePromptBeforeContactSearch(isPresented: $isOfferingPhone, onContinue: synchronize)
     }
 
     // MARK: - Header (sync + filters)
 
     private var header: some View {
-        VStack(spacing: 10) {
-            HStack(spacing: 10) {
+        VStack(spacing: MeeshySpacing.smPlus) {
+            HStack(spacing: MeeshySpacing.smPlus) {
                 ContactsSearchField(
                     placeholder: String(localized: "contacts.phonebook.search-placeholder", defaultValue: "Rechercher dans le répertoire", bundle: .main),
                     query: $viewModel.searchQuery
                 )
                 syncButton
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, MeeshySpacing.lg)
 
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
+                HStack(spacing: MeeshySpacing.sm) {
                     ForEach(DirectoryFilter.allCases, id: \.self) { filter in
                         filterChip(filter)
                     }
                 }
-                .padding(.horizontal, 16)
+                .padding(.horizontal, MeeshySpacing.lg)
             }
         }
-        .padding(.vertical, 8)
+        .padding(.vertical, MeeshySpacing.sm)
     }
 
     /// Synchronisation explicite : relit le carnet de l'appareil et le renvoie.
     private var syncButton: some View {
         Button {
-            Task { await viewModel.synchronize() }
+            offerPhoneThenSearch()
         } label: {
             Group {
                 if viewModel.isSyncing {
@@ -83,18 +85,9 @@ struct PhonebookListView: View {
 
     private func filterChip(_ filter: DirectoryFilter) -> some View {
         let isSelected = viewModel.activeFilter == filter
-        return Button {
+        return ContactsFilterChip(title: label(for: filter), isSelected: isSelected) {
             viewModel.setFilter(filter)
-        } label: {
-            Text(label(for: filter))
-                .font(.footnote.weight(.semibold))
-                .foregroundColor(isSelected ? .white : MeeshyColors.indigo500)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 7)
-                .background(Capsule().fill(isSelected ? MeeshyColors.indigo500 : Color.clear))
-                .overlay(Capsule().stroke(isSelected ? Color.clear : MeeshyColors.indigo900.opacity(0.3), lineWidth: 1))
         }
-        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 
     private func label(for filter: DirectoryFilter) -> String {
@@ -141,7 +134,7 @@ struct PhonebookListView: View {
                         platformSection
                     }
                 }
-                .padding(.top, 4)
+                .padding(.top, MeeshySpacing.xs)
             }
             .reportsContactsScroll(active: isActive, onChange: onScrollOffsetChange)
             .refreshable { await viewModel.load(forceNetwork: true) }
@@ -153,8 +146,8 @@ struct PhonebookListView: View {
     /// qu'aucune ligne ne se fasse passer pour un contact du carnet.
     @ViewBuilder
     private var platformSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 6) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
+            HStack(spacing: MeeshySpacing.xsPlus) {
                 Text(String(localized: "contacts.phonebook.platform-results", defaultValue: "Sur Meeshy, hors de ton répertoire", bundle: .main))
                     .font(.caption.weight(.semibold))
                     .foregroundColor(theme.textMuted)
@@ -163,15 +156,15 @@ struct PhonebookListView: View {
                     ProgressView().progressViewStyle(.circular).scaleEffect(0.6)
                 }
             }
-            .padding(.horizontal, 20)
-            .padding(.top, 16)
+            .padding(.horizontal, MeeshySpacing.xl)
+            .padding(.top, MeeshySpacing.lg)
 
             if viewModel.platformResults.isEmpty && !viewModel.isSearchingPlatform {
                 Text(String(localized: "contacts.phonebook.platform-none", defaultValue: "Aucun utilisateur ne correspond", bundle: .main))
                     .font(.subheadline)
                     .foregroundColor(theme.textMuted)
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 8)
+                    .padding(.horizontal, MeeshySpacing.xl)
+                    .padding(.vertical, MeeshySpacing.sm)
             } else {
                 ForEach(viewModel.platformResults) { user in
                     DirectoryPersonRow(
@@ -201,6 +194,20 @@ struct PhonebookListView: View {
     }
 
     // MARK: - Actions
+
+    /// Synchroniser, c'est chercher ses contacts : un compte sans numéro se voit
+    /// d'abord proposer d'en ajouter un (#8843), puis la synchronisation part.
+    private func offerPhoneThenSearch() {
+        guard PhonePromptPolicy.shouldOffer(user: AuthManager.shared.currentUser) else {
+            synchronize()
+            return
+        }
+        isOfferingPhone = true
+    }
+
+    private func synchronize() {
+        Task { await viewModel.synchronize() }
+    }
 
     private func open(_ contact: DirectoryContact) {
         Task {

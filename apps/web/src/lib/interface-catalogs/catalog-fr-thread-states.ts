@@ -31,7 +31,7 @@ const frThreadStates = {
   'message.withheld': 'Contenu retenu',
   'message.withheld.a11y': 'Contenu retenu : ce message existe et ne se montre pas',
   'message.veiled': 'Contenu masqué',
-  'message.veiled.hint': 'Toucher pour révéler le contenu',
+  'message.veiled.hint': 'Touchez pour afficher',
   'message.veiled.error': 'Révélation impossible pour l’instant',
   'message.ephemeral.a11y': 'Message éphémère, disparaît dans {remaining}',
   'message.ephemeral.awaiting': 'En attente de réception',
@@ -45,6 +45,7 @@ const frThreadStates = {
   'attachment.protected.video': 'Vidéo protégée',
   'attachment.protected.audio': 'Vocal protégé',
   'attachment.protected.file': 'Pièce protégée',
+  'attachment.protected.open.hint': 'toucher pour l’afficher en plein écran',
   /* LE GENRE D'UN MEDIA CITE (#7556) — miroir `AttachmentKind.shortLabel`
      (`packages/MeeshySDK/.../Models/AttachmentKind.swift:140-153`) : le libelle
      COURT qui remplace un apercu VIDE dans une citation (« Photo », « Video »…).

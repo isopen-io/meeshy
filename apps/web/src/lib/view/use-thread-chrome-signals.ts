@@ -7,7 +7,7 @@ import { served } from '@/lib/api/prism';
 import type { Message } from '@/lib/api/types';
 import type { PlacedMessage } from '@/lib/grouping';
 import { createDayPillRevealSubscriber, useDayPillReveal } from '@/lib/view/day-pill-reveal';
-import { createScrollerGestureSubscriber, useThreadChrome } from '@/lib/view/use-thread-chrome';
+import { composerKeyboard, createScrollerGestureSubscriber, useThreadChrome } from '@/lib/view/use-thread-chrome';
 import { isNearBottom, stickyDayOf, type VirtualRowSpan } from '@/lib/view/thread-chrome';
 import { initialUnreadBelowState, reduceUnreadBelow } from '@/lib/view/unread-below';
 import { SCROLL_TO_BOTTOM_FRAMES, pinToBottom } from '@/lib/view/pin-to-bottom';
@@ -60,16 +60,21 @@ export function useThreadChromeSignals(input: {
   readonly group: boolean;
   readonly readerLanguages: readonly string[];
   readonly noteProgrammaticScroll: () => void;
+  /** #7420 — la fenêtre ancrée ne touche pas le présent : son bas n'est pas le bas du fil. */
+  readonly detached?: boolean;
+  /** #7420 — revenir au présent (`returnToLatest` iOS), avant de poser le fil en bas. */
+  readonly onReturnToPresent?: () => void;
 }): ThreadChromeSignals {
-  const { scroller, mode, placed, virtualizer, messages, viewerId, group, readerLanguages, noteProgrammaticScroll } = input;
+  const { scroller, mode, placed, virtualizer, messages, viewerId, group, readerLanguages, noteProgrammaticScroll, detached = false, onReturnToPresent } = input;
   const ready = placed.length > 0;
 
   const host = useRef<HTMLDivElement | null>(null);
   const [composerEngaged, setComposerEngaged] = useState(false);
-  // `subscribeGesture` — identité STABLE (`scroller`, un objet ref, ne change
-  // jamais) : l'abonnement ne se refait pas à chaque rendu.
+  // `subscribeGesture` — identité STABLE (`scroller`, `host` : des objets
+  // ref, qui ne changent jamais) : l'abonnement ne se refait pas à chaque
+  // rendu. La sonde du clavier (#8000) lit le focus du composeur de `host`.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const subscribeGesture = useMemo(() => createScrollerGestureSubscriber(scroller), []);
+  const subscribeGesture = useMemo(() => createScrollerGestureSubscriber(scroller, { keyboard: composerKeyboard(host) }), []);
   useThreadChrome(host, {
     mode,
     // Aucun état de recherche n'existe côté web (`thread-header.tsx`, le
@@ -141,11 +146,12 @@ export function useThreadChromeSignals(input: {
    * `scrollToIndex(align: 'end')` laissait sous la fenêtre.
    */
   const onScrollToBottom = useCallback(() => {
+    if (detached) onReturnToPresent?.();
     const element = scroller.current;
     if (element === null) return;
     pinToBottom(element, { frames: SCROLL_TO_BOTTOM_FRAMES, onFirstFrame: noteProgrammaticScroll });
     dispatchUnreadBelow({ type: 'reset' });
-  }, [scroller, noteProgrammaticScroll]);
+  }, [scroller, noteProgrammaticScroll, detached, onReturnToPresent]);
 
   /**
    * LA PILULE DE JOUR COLLANTE — recalculée à chaque rendu déclenché par le
@@ -192,7 +198,7 @@ export function useThreadChromeSignals(input: {
      * CTA rendait le bouton, pas le CTA — chevauchement PHYSIQUE, pas
      * seulement visuel). Même porte que la loi du chrome : UNE SOURCE.
      */
-    scrollButtonVisible: mode !== 'summary' && !nearBottom,
+    scrollButtonVisible: mode !== 'summary' && (!nearBottom || detached),
     scrollButtonUnreadCount: unreadBelow.count,
     scrollButtonSenderName: group ? (lastUnreadMessage?.sender?.displayName ?? null) : null,
     scrollButtonPreviewText: lastUnreadServed?.text ?? null,

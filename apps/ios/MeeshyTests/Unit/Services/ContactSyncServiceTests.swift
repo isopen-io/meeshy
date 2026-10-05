@@ -60,9 +60,6 @@ private final class RecordingDirectoryService: ContactDirectoryServiceProviding,
         PaginatedAPIResponse(success: true, data: [], pagination: nil, error: nil)
     }
 
-    func clear() async throws -> DirectoryClearResult {
-        DirectoryClearResult(removedCount: 0)
-    }
 }
 
 private final class RecordingMatchService: ContactMatchServiceProviding, @unchecked Sendable {

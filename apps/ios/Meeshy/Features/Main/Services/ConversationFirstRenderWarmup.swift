@@ -179,10 +179,10 @@ enum ConversationFirstRenderWarmup {
         _ = vm.activeLiveLocations
         _ = vm.activeTranslationOverrides
         _ = vm.bubbleLanguageSelections
+        _ = vm.burningEphemeralIds
         _ = vm.currentConversation
         _ = vm.currentSearchQuery
-        _ = vm.editInProgress
-        _ = vm.ephemeralDuration
+        _ = vm.ephemeralChoice
         _ = vm.error
         _ = vm.firstUnreadMessageId
         _ = vm.hasNewerMessages
@@ -199,6 +199,7 @@ enum ConversationFirstRenderWarmup {
         _ = vm.isSearchingQuotedMessage
         _ = vm.isSending
         _ = vm.isViewOnceEnabled
+        _ = vm.armedReplyContagion
         _ = vm.lastUnreadMessage
         _ = vm.listenedAttachmentIds
         _ = vm.mentionController
@@ -211,10 +212,8 @@ enum ConversationFirstRenderWarmup {
         _ = vm.otherConversationsUnread
         _ = vm.pendingEffects
         _ = vm.preferredLanguageRevision
-        _ = vm.quotedMessageSearchTarget
         _ = vm.reactionDetails
         _ = vm.revealedViewOnceIds
-        _ = vm.scrollAnchorId
         _ = vm.searchHasMore
         _ = vm.searchResults
         _ = vm.translatingAudioLanguages

@@ -15,12 +15,10 @@ import MeeshyUI
 // suffire, parce que ce qui restait n'était pas gros par accident mais DEUX
 // choses dans un même fichier.
 //
-// **Le retrait de la feuille, lui, reste INTERDIT** tant que cinq capacités
-// n'ont pas rejoint le meuble — progression, références, dépôt, éditeur
-// d'image, son emprunté. `FeedComposerSheetRetirementInventoryTests` les tient
-// nommément, et sait désormais QUEL fichier porte chaque ancre : quatre ici,
-// une restée dans l'extension (`feedDeclaredReferences`, que les deux
-// publications audio survivantes lisent).
+// **Le retrait de la feuille, lui, reste INTERDIT** tant que trois capacités
+// n'ont pas rejoint le meuble — progression, dépôt, son emprunté.
+// `FeedComposerSheetRetirementInventoryTests` les tient nommément. Ses
+// images et ses vidéos s'éditent déjà dans la scène du meuble (#9166, #9170).
 
 // MARK: - Feed Composer Sheet (Fullscreen from ThemedFeedOverlay)
 struct FeedComposerSheet: View {
@@ -36,9 +34,9 @@ struct FeedComposerSheet: View {
     @ObservedObject private var authManager = AuthManager.shared
     @State private var composerText = ""
     @FocusState private var isFocused: Bool
-    @State private var editingAttachmentId: String?
+    @State private var editingImage: EditingAttachmentItem?
     @State private var videosToPreview: [URL] = []
-    @State private var editingVideoURL: URL?
+    @State private var editingVideo: PendingVideoEdit?
 
     @State private var pendingAttachments: [MessageAttachment] = []
     /// Lieu choisi via le picker, en attente d'envoi (Task 11/12,
@@ -61,7 +59,6 @@ struct FeedComposerSheet: View {
     @State private var showLocationPicker = false
     @State private var isUploading = false
     @State private var uploadProgress: UploadQueueProgress?
-    @State private var isLoadingMedia = false
     @State private var postVisibility: String = "PUBLIC"
     /// Audience nommée de la publication en cours (EXCEPT/ONLY) et le
     /// sélecteur de personnes qui la remplit. Vides tant que l'auteur reste
@@ -121,18 +118,18 @@ struct FeedComposerSheet: View {
             forcePlainPost.toggle()
             HapticFeedback.light()
         } label: {
-            HStack(spacing: 4) {
+            HStack(spacing: MeeshySpacing.xs) {
                 Image(systemName: forcePlainPost ? "doc.text" : "play.rectangle.on.rectangle.fill")
-                    .font(MeeshyFont.relative(10))
+                    .font(MeeshyFont.relative(MeeshyIconSize.xxs))
                 Text(forcePlainPost
                     ? String(localized: "feed.composer.type.post", defaultValue: "Publier", bundle: .main)
                     : String(localized: "feed.composer.type.reel", defaultValue: "Réel", bundle: .main))
-                    .font(MeeshyFont.relative(12))
+                    .font(MeeshyFont.relative(MeeshyFont.smallSize))
             }
             .foregroundColor(forcePlainPost ? theme.textMuted : MeeshyColors.indigo300)
         }
         .accessibilityHint(String(localized: "feed.composer.type.hint", defaultValue: "Bascule entre réel et post", bundle: .main))
-        .padding(.leading, 12)
+        .padding(.leading, MeeshySpacing.md)
     }
 
     var body: some View {
@@ -146,14 +143,14 @@ struct FeedComposerSheet: View {
                         cleanupAndDismiss()
                     } label: {
                         Text(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main))
-                            .font(MeeshyFont.relative(15, weight: .medium))
+                            .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .medium))
                             .foregroundColor(theme.textSecondary)
                     }
 
                     Spacer()
 
                     Text(String(localized: "feed.post.composer.title", defaultValue: "Nouveau post", bundle: .main))
-                        .font(MeeshyFont.relative(16, weight: .bold))
+                        .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .bold))
                         .foregroundColor(theme.textPrimary)
 
                     Spacer()
@@ -167,25 +164,25 @@ struct FeedComposerSheet: View {
                                 .scaleEffect(0.8)
                         } else {
                             Text(String(localized: "feed.post.composer.publish", defaultValue: "Publier", bundle: .main))
-                                .font(MeeshyFont.relative(15, weight: .bold))
+                                .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
                                 .foregroundColor(hasContent ? MeeshyColors.indigo300 : theme.textMuted)
                         }
                     }
                     .disabled(!hasContent || isUploading || postAudienceIncomplete)
                 }
-                .padding(16)
+                .padding(MeeshySpacing.lg)
                 .background(theme.backgroundSecondary)
 
                 Divider().background(theme.inputBorder)
 
                 // User row
-                HStack(spacing: 12) {
+                HStack(spacing: MeeshySpacing.md) {
                     MeeshyAvatar(
                         name: getUserDisplayName(authManager.currentUser, fallback: "M"),
                         context: .feedComposer,
                         avatarURL: authManager.currentUser?.avatar
                     )
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                         Text(getUserDisplayName(authManager.currentUser, fallback: String(localized: "feed.composer.me", defaultValue: "Moi", bundle: .main)))
                             .font(.subheadline.weight(.semibold))
                             .foregroundColor(theme.textPrimary)
@@ -218,11 +215,11 @@ struct FeedComposerSheet: View {
                                 }
                             }
                         } label: {
-                            HStack(spacing: 4) {
+                            HStack(spacing: MeeshySpacing.xs) {
                                 Image(systemName: selectedPostVisibility.icon)
-                                    .font(MeeshyFont.relative(10))
+                                    .font(MeeshyFont.relative(MeeshyIconSize.xxs))
                                 Text(selectedPostVisibility.label)
-                                    .font(MeeshyFont.relative(12))
+                                    .font(MeeshyFont.relative(MeeshyFont.smallSize))
                             }
                             .foregroundColor(theme.textMuted)
                         }
@@ -246,26 +243,26 @@ struct FeedComposerSheet: View {
                     }
                     Spacer()
                 }
-                .padding(.horizontal, 16)
-                .padding(.top, 12)
+                .padding(.horizontal, MeeshySpacing.lg)
+                .padding(.top, MeeshySpacing.md)
 
                 // Text editor
                 ZStack(alignment: .topLeading) {
                     if composerText.isEmpty {
                         Text(String(localized: "feed.post.composer.placeholder", defaultValue: "Qu'avez-vous en tête ?", bundle: .main))
-                            .font(MeeshyFont.relative(17))
+                            .font(MeeshyFont.relative(MeeshyFont.headlineSize))
                             .foregroundColor(theme.textMuted)
-                            .padding(.horizontal, 16)
-                            .padding(.top, 12)
+                            .padding(.horizontal, MeeshySpacing.lg)
+                            .padding(.top, MeeshySpacing.md)
                     }
                     TextEditor(text: $composerText)
                         .focused($isFocused)
                         .scrollContentBackground(.hidden)
                         .foregroundColor(theme.textPrimary)
-                        .font(MeeshyFont.relative(17))
+                        .font(MeeshyFont.relative(MeeshyFont.headlineSize))
                         .frame(minHeight: 120)
-                        .padding(.horizontal, 12)
-                        .padding(.top, 4)
+                        .padding(.horizontal, MeeshySpacing.md)
+                        .padding(.top, MeeshySpacing.xs)
                 }
 
                 // Première porte : la frappe `@`. Posée SOUS le champ — la
@@ -275,13 +272,13 @@ struct FeedComposerSheet: View {
                     ReferenceMentionSuggestions(text: $composerText,
                                                 references: $references,
                                                 background: theme.inputBackground)
-                        .padding(.horizontal, 16)
+                        .padding(.horizontal, MeeshySpacing.lg)
                 }
 
                 // Quoted post preview
                 if let quoted = quotePost {
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack(spacing: 8) {
+                    VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
+                        HStack(spacing: MeeshySpacing.sm) {
                             MeeshyAvatar(
                                 name: quoted.author,
                                 context: .postComment,
@@ -289,33 +286,33 @@ struct FeedComposerSheet: View {
                                 avatarURL: quoted.authorAvatarURL
                             )
                             Text(quoted.author)
-                                .font(MeeshyFont.relative(13, weight: .semibold))
+                                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                                 .foregroundColor(theme.accentText(quoted.authorColor))
                             MetaSeparator().foregroundColor(theme.textMuted)
                             Text(quoted.timestamp, style: .relative)
-                                .font(MeeshyFont.relative(11))
+                                .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
                                 .foregroundColor(theme.textMuted)
                         }
                         Text(quoted.displayContent)
-                            .font(MeeshyFont.relative(14))
+                            .font(MeeshyFont.relative(MeeshyFont.labelSize))
                             .foregroundColor(theme.textSecondary)
                             .lineLimit(4)
                     }
-                    .padding(12)
+                    .padding(MeeshySpacing.md)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(
-                        RoundedRectangle(cornerRadius: 12)
+                        RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                             .fill(theme.surfaceGradient(tint: quoted.authorColor))
                             .overlay(
-                                RoundedRectangle(cornerRadius: 12)
+                                RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                                     .stroke(theme.border(tint: quoted.authorColor, intensity: 0.2), lineWidth: 1)
                             )
                     )
-                    .padding(.horizontal, 16)
+                    .padding(.horizontal, MeeshySpacing.lg)
                 }
 
                 // Pending attachments
-                if !pendingAttachments.isEmpty || !preparingAttachments.isEmpty || isLoadingMedia || pendingPlace != nil {
+                if !pendingAttachments.isEmpty || !preparingAttachments.isEmpty || pendingPlace != nil {
                     sheetAttachmentsRow
                 }
 
@@ -327,15 +324,15 @@ struct FeedComposerSheet: View {
                         offersDiscoverability: true,
                         onRemovePlace: { pendingPlace = nil }
                     )
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 10)
+                    .padding(.horizontal, MeeshySpacing.lg)
+                    .padding(.bottom, MeeshySpacing.smPlus)
                 }
 
                 // Upload progress
                 if isUploading, let progress = uploadProgress {
                     UploadProgressBar(progress: progress, accentColor: MeeshyColors.brandPrimaryHex)
-                        .padding(.horizontal, 16)
-                        .padding(.bottom, 4)
+                        .padding(.horizontal, MeeshySpacing.lg)
+                        .padding(.bottom, MeeshySpacing.xs)
                 }
 
                 Spacer(minLength: 0)
@@ -346,45 +343,45 @@ struct FeedComposerSheet: View {
                 if declaresReferences {
                     ReferenceComposerBar(references: $references,
                                          accentColor: MeeshyColors.indigo500)
-                        .padding(.horizontal, 16)
-                        .padding(.bottom, 4)
+                        .padding(.horizontal, MeeshySpacing.lg)
+                        .padding(.bottom, MeeshySpacing.xs)
                 }
 
                 // Toolbar
-                HStack(spacing: 16) {
+                HStack(spacing: MeeshySpacing.lg) {
                     Button { showPhotoPicker = true; HapticFeedback.light() } label: {
                         Image(systemName: "photo.fill")
-                            .font(.system(size: 20))
+                            .font(.system(size: MeeshyIconSize.xl))
                             .foregroundColor(MeeshyColors.brandPrimary)
                     }
                     .accessibilityLabel(String(localized: "feed.attach.photo", defaultValue: "Ajouter une photo"))
                     Button { showCamera = true; HapticFeedback.light() } label: {
                         Image(systemName: "camera.fill")
-                            .font(.system(size: 20))
+                            .font(.system(size: MeeshyIconSize.xl))
                             .foregroundColor(MeeshyColors.error)
                     }
                     .accessibilityLabel(String(localized: "feed.attach.take-photo", defaultValue: "Prendre une photo"))
                     Button { showEmojiPicker = true; HapticFeedback.light() } label: {
                         Image(systemName: "face.smiling.fill")
-                            .font(.system(size: 20))
-                            .foregroundColor(Color(hex: "F8B500"))
+                            .font(.system(size: MeeshyIconSize.xl))
+                            .foregroundColor(MeeshyColors.tileSaffron)
                     }
                     .accessibilityLabel(String(localized: "feed.attach.emoji", defaultValue: "Ajouter un emoji"))
                     Button { showFilePicker = true; HapticFeedback.light() } label: {
                         Image(systemName: "doc.fill")
-                            .font(.system(size: 20))
-                            .foregroundColor(Color(hex: "9B59B6"))
+                            .font(.system(size: MeeshyIconSize.xl))
+                            .foregroundColor(MeeshyColors.tileAmethyst)
                     }
                     .accessibilityLabel(String(localized: "feed.attach.file", defaultValue: "Joindre un fichier"))
                     Button { showLocationPicker = true; HapticFeedback.light() } label: {
                         Image(systemName: "location.fill")
-                            .font(.system(size: 20))
+                            .font(.system(size: MeeshyIconSize.xl))
                             .foregroundColor(MeeshyColors.success)
                     }
                     .accessibilityLabel(String(localized: "feed.attach.location", defaultValue: "Partager la position"))
                     Button { showAudioComposer = true; HapticFeedback.light() } label: {
                         Image(systemName: "mic.fill")
-                            .font(.system(size: 20))
+                            .font(.system(size: MeeshyIconSize.xl))
                             .foregroundColor(MeeshyColors.errorStrong)
                     }
                     .accessibilityLabel(String(localized: "feed.attach.record-audio", defaultValue: "Enregistrer un audio"))
@@ -396,10 +393,10 @@ struct FeedComposerSheet: View {
                         HapticFeedback.light()
                     } label: {
                         Text(ComposerLanguageFlag.label(for: composerLanguage))
-                            .font(MeeshyFont.relative(13, weight: .semibold))
+                            .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                             .foregroundColor(MeeshyColors.indigo500)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
+                            .padding(.horizontal, MeeshySpacing.smPlus)
+                            .padding(.vertical, MeeshySpacing.xsPlus)
                             .background(
                                 Capsule()
                                     .fill(MeeshyColors.indigo100.opacity(isDark ? 0.15 : 1))
@@ -412,7 +409,7 @@ struct FeedComposerSheet: View {
                     .accessibilityLabel(String(localized: "feed.post.language", defaultValue: "Langue du post"))
                     .accessibilityValue(composerLanguageDisplayName)
                 }
-                .padding(16)
+                .padding(MeeshySpacing.lg)
                 .background(theme.backgroundSecondary)
             }
         }
@@ -448,17 +445,25 @@ struct FeedComposerSheet: View {
                 )
             )
         }
+        .sheet(isPresented: $showEmojiPicker) {
+            EmojiPickerSheet(quickReactions: MeeshyQuickReactions.standard,
+                             title: "composer.attach.emoji") { emoji in
+                composerText += emoji
+                showEmojiPicker = false
+            }
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+        }
         .photosPicker(isPresented: $showPhotoPicker, selection: $selectedPhotoItems, maxSelectionCount: 10, matching: .any(of: [.images, .videos]))
         .fileImporter(isPresented: $showFilePicker, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
             handleFileImport(result)
         }
         .fullScreenCover(isPresented: $showCamera) {
-            CameraView { result in
+            // Le viseur du composeur, seul en plein écran (#9125).
+            ComposerViewfinder { result in
                 switch result {
-                // Sixième et septième consommateurs de `CameraResult.photo`,
-                // élargi le 2026-09-04 pour porter l'EXIF (#4080). Le fil du
-                // feed ré-encode déjà l'image : les octets d'origine ne lui
-                // servent pas, et il les jette explicitement.
+                // Le fil du feed ré-encode déjà l'image : les octets d'origine
+                // ne lui servent pas, et il les jette explicitement.
                 case .photo(let image, _):
                     handleCameraCapture(image)
                 case .video(let url):
@@ -472,74 +477,55 @@ struct FeedComposerSheet: View {
                 handleLocationSelection(place)
             }
         }
-        .fullScreenCover(item: Binding<EditingAttachmentItem?>(
-            get: {
-                guard let id = editingAttachmentId, let image = pendingThumbnails[id] else { return nil }
-                return EditingAttachmentItem(id: id, image: image)
-            },
-            set: { editingAttachmentId = $0?.id }
-        )) { item in
-            MeeshyImageEditorView(image: item.image, context: .post) { editedImage in
-                pendingThumbnails[item.id] = editedImage
-                Task {
-                    let result = await MediaCompressor.shared.compressImage(editedImage)
-                    let fileName = "edited_\(UUID().uuidString).\(result.fileExtension)"
-                    let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
-                    try? result.data.write(to: tempURL)
-                    await MainActor.run {
-                        if let oldURL = pendingMediaFiles[item.id] {
-                            try? FileManager.default.removeItem(at: oldURL)
-                        }
-                        pendingMediaFiles[item.id] = tempURL
-                        if let idx = pendingAttachments.firstIndex(where: { $0.id == item.id }) {
-                            pendingAttachments[idx] = MessageAttachment(
-                                id: item.id,
-                                fileName: fileName,
-                                originalName: fileName,
-                                mimeType: result.mimeType,
-                                fileSize: result.data.count,
-                                fileUrl: tempURL.absoluteString,
-                                width: Int(editedImage.size.width),
-                                height: Int(editedImage.size.height),
-                                thumbnailColor: pendingAttachments[idx].thumbnailColor
-                            )
-                        }
-                    }
+        .fullScreenCover(item: $editingImage) { item in
+            // L'image en attente s'édite dans la SCÈNE, comme ses vidéos et
+            // les pièces d'un commentaire (#9170).
+            ConversationImageSceneEditor(image: item.image, staged: true, onDone: { media in
+                editingImage = nil
+                switch media {
+                case .image(let rendue): replaceSheetImage(id: item.id, with: rendue)
+                case .video(let rendue):
+                    removeSheetAttachment(id: item.id)
+                    handleCameraVideo(rendue)
                 }
-            }
-            .ignoresSafeArea()
+            }, onCancel: { editingImage = nil })
         }
-        // PhotosPicker videos queue → VideoPreviewView
+        // Une vidéo choisie s'ouvre dans la SCÈNE avant de rejoindre la
+        // citation, et la vignette d'une vidéo en attente aussi (#9166) — la
+        // même porte que la conversation et les commentaires.
         .fullScreenCover(isPresented: Binding(
             get: { !videosToPreview.isEmpty },
             set: { if !$0 { videosToPreview.removeAll() } }
         )) {
             if let url = videosToPreview.first {
-                MeeshyVideoEditorView(
-                    url: url,
-                    context: .post,
-                    onComplete: { result in
-                        handleCameraVideo(result.url)
-                        videosToPreview.removeFirst()
-                    },
-                    onCancel: {
-                        videosToPreview.removeFirst()
+                // La scène se retire elle-même : sa fermeture a pu vider la
+                // file avant ce rappel — on n'enlève qu'une tête qui existe.
+                ConversationVideoSceneEditor(url: url, staged: false, onDone: { media in
+                    videosToPreview = Array(videosToPreview.dropFirst())
+                    switch media {
+                    case .video(let rendue): handleCameraVideo(rendue)
+                    case .image(let image): handleCameraCapture(image)
                     }
-                )
+                }, onCancel: { videosToPreview = Array(videosToPreview.dropFirst()) })
             }
         }
-        // Tap pending video → unified video editor
         .fullScreenCover(isPresented: Binding(
-            get: { editingVideoURL != nil },
-            set: { if !$0 { editingVideoURL = nil } }
+            get: { editingVideo != nil },
+            set: { if !$0 { editingVideo = nil } }
         )) {
-            if let url = editingVideoURL {
-                MeeshyVideoEditorView(
-                    url: url,
-                    context: .post,
-                    onComplete: { _ in editingVideoURL = nil },
-                    onCancel: { editingVideoURL = nil }
-                )
+            if let target = editingVideo {
+                ConversationVideoSceneEditor(url: target.url, staged: true, onDone: { media in
+                    editingVideo = nil
+                    guard case .video(let rendue) = media else { return }
+                    let result = VideoEditResult(url: rendue, didEdit: true, duration: 0, transcriptionText: nil,
+                                                 captions: [], captionLanguageCode: nil)
+                    let issue = PendingVideoEditReplacement.apply(result, to: target.id,
+                                                                  files: pendingMediaFiles,
+                                                                  attachments: pendingAttachments)
+                    pendingMediaFiles = issue.files
+                    pendingAttachments = issue.attachments
+                    if let stale = issue.staleURL { try? FileManager.default.removeItem(at: stale) }
+                }, onCancel: { editingVideo = nil })
             }
         }
         .adaptiveOnChange(of: selectedPhotoItems) { _, items in
@@ -569,7 +555,7 @@ struct FeedComposerSheet: View {
     // MARK: - Attachments Row
     private var sheetAttachmentsRow: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 12) {
+            HStack(spacing: MeeshySpacing.md) {
                 ForEach(preparingAttachments) { prep in
                     AttachmentLoadingTile(prep: prep, size: 72) {
                         cancelSheetPreparation(prep)
@@ -581,59 +567,44 @@ struct FeedComposerSheet: View {
                 if let place = pendingPlace {
                     sheetPlaceTile(place)
                 }
-                if isLoadingMedia && preparingAttachments.isEmpty {
-                    ProgressView()
-                        .tint(MeeshyColors.brandPrimary)
-                        .padding(.horizontal, 12)
-                }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.vertical, MeeshySpacing.smPlus)
         }
         .frame(height: 116)
     }
 
     private func sheetAttachmentTile(_ attachment: MessageAttachment) -> some View {
-        VStack(spacing: 4) {
+        VStack(spacing: MeeshySpacing.xs) {
             ZStack {
                 if let thumb = pendingThumbnails[attachment.id] {
                     Image(uiImage: thumb)
                         .resizable()
                         .aspectRatio(contentMode: .fill)
                         .frame(width: 72, height: 72)
-                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
                         .onTapGesture {
                             if attachment.type == .image {
-                                editingAttachmentId = attachment.id
+                                openSheetImageScene(attachment)
                             } else if attachment.type == .video {
                                 if let url = pendingMediaFiles[attachment.id] {
-                                    editingVideoURL = url
+                                    editingVideo = PendingVideoEdit(id: attachment.id, url: url)
                                 }
                             }
                         }
 
                     if attachment.type == .video {
                         Image(systemName: "play.circle.fill")
-                            .font(.system(size: 22))
+                            .font(.system(size: MeeshyIconSize.xxl))
                             .foregroundStyle(.white, .black.opacity(0.4))
                             .accessibilityHidden(true)
                     }
-                } else if attachment.type == .location {
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(LinearGradient(colors: [MeeshyColors.success, MeeshyColors.successDeep], startPoint: .topLeading, endPoint: .bottomTrailing))
-                        .frame(width: 72, height: 72)
-                        .overlay(
-                            Image(systemName: "mappin.circle.fill")
-                                .font(.system(size: 26))
-                                .foregroundStyle(.white, .white.opacity(0.3))
-                                .accessibilityHidden(true)
-                        )
                 } else {
-                    RoundedRectangle(cornerRadius: 10)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.sm)
                         .fill(LinearGradient(colors: [Color(hex: attachment.thumbnailColor), Color(hex: attachment.thumbnailColor).opacity(0.7)], startPoint: .topLeading, endPoint: .bottomTrailing))
                         .frame(width: 72, height: 72)
                         .overlay(
-                            Image(systemName: sheetIconForType(attachment.type))
+                            Image(systemName: attachment.type.composerGlyph)
                                 .font(.system(size: 26))
                                 .foregroundColor(.white)
                                 .accessibilityHidden(true)
@@ -645,12 +616,7 @@ struct FeedComposerSheet: View {
                 Button {
                     HapticFeedback.light()
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        let id = attachment.id
-                        pendingAttachments.removeAll { $0.id == id }
-                        if let url = pendingMediaFiles.removeValue(forKey: id) {
-                            try? FileManager.default.removeItem(at: url)
-                        }
-                        pendingThumbnails.removeValue(forKey: id)
+                        removeSheetAttachment(id: attachment.id)
                     }
                 } label: {
                     // Glyphe chrome dans un cadre de tap fixe 20×20 : figé (doctrine 82i) ; le libellé porte le sens
@@ -668,8 +634,8 @@ struct FeedComposerSheet: View {
                 .offset(x: 6, y: -6)
             }
 
-            Text(sheetLabelForAttachment(attachment))
-                .font(MeeshyFont.relative(10, weight: .medium))
+            Text(MediaKindLabel.attachmentLabel(for: attachment))
+                .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
                 .foregroundColor(theme.textSecondary)
                 .lineLimit(1)
                 .frame(width: 72)
@@ -680,9 +646,9 @@ struct FeedComposerSheet: View {
     /// — cette tuile dédiée (même gabarit 72×72 pin-drop) est ce qui évite que
     /// le choix d'un lieu ne produise plus aucun retour visuel ici.
     private func sheetPlaceTile(_ place: SharedPlace) -> some View {
-        VStack(spacing: 4) {
+        VStack(spacing: MeeshySpacing.xs) {
             ZStack {
-                RoundedRectangle(cornerRadius: 10)
+                RoundedRectangle(cornerRadius: MeeshyRadius.sm)
                     .fill(LinearGradient(colors: [MeeshyColors.success, MeeshyColors.successDeep], startPoint: .topLeading, endPoint: .bottomTrailing))
                     .frame(width: 72, height: 72)
                     .overlay(
@@ -715,7 +681,7 @@ struct FeedComposerSheet: View {
             }
 
             Text(MediaKindLabel.placeLabel(place.name))
-                .font(MeeshyFont.relative(10, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
                 .foregroundColor(theme.textSecondary)
                 .lineLimit(1)
                 .frame(width: 72)
@@ -730,11 +696,9 @@ struct FeedComposerSheet: View {
         for item in items {
             let isVideo = item.supportedContentTypes.contains { $0.conforms(to: .movie) }
             if isVideo {
-                // Videos go through the editor first — compress + queue the
-                // compressed URL for the previewer. The editor is the source
-                // of truth for trimming/cover selection; once the user
-                // confirms there, `handleCameraVideo` (below) wires the
-                // preparation into the loading tray.
+                // Une vidéo passe d'abord par la scène (#9166) : compressée,
+                // puis mise en file ; « Terminé » la prépare comme une prise
+                // de la caméra (`handleCameraVideo`).
                 Task {
                     if let movieData = try? await item.loadTransferable(type: Data.self) {
                         let rawURL = FileManager.default.temporaryDirectory.appendingPathComponent("video_raw_\(UUID().uuidString).mp4")
@@ -756,6 +720,43 @@ struct FeedComposerSheet: View {
         }
     }
 
+    /// La scène part du FICHIER borné à 2 048 px (#8524) — la vignette du
+    /// plateau ne sert qu'à défaut ; un GIF ne s'y ouvre pas.
+    private func openSheetImageScene(_ attachment: MessageAttachment) {
+        guard ConversationImageRetouche.offersRetouche(mimeType: attachment.mimeType) else { return }
+        let id = attachment.id
+        Task {
+            var source: UIImage?
+            if let url = pendingMediaFiles[id] { source = await ConversationImageRetouche.loadSource(fileURL: url) }
+            guard let image = source ?? pendingThumbnails[id] else { return }
+            editingImage = EditingAttachmentItem(id: id, image: image)
+        }
+    }
+
+    /// **Écriture SÛRE** : la retouche n'entre au plateau qu'écrite et
+    /// vérifiée ; sinon la pièce d'origine reste celle qui partira.
+    private func replaceSheetImage(id: String, with image: UIImage) {
+        Task {
+            guard let ecrit = await ConversationImageRetouche.writeEdited(image) else { return }
+            let issue = PendingImageEditReplacement.apply(ecrit, size: image.size, to: id,
+                                                          files: pendingMediaFiles, attachments: pendingAttachments)
+            pendingMediaFiles = issue.files
+            pendingAttachments = issue.attachments
+            if issue.files[id] == ecrit.url { pendingThumbnails[id] = image } else {
+                try? FileManager.default.removeItem(at: ecrit.url)
+            }
+            if let stale = issue.staleURL { try? FileManager.default.removeItem(at: stale) }
+        }
+    }
+
+    private func removeSheetAttachment(id: String) {
+        pendingAttachments.removeAll { $0.id == id }
+        if let url = pendingMediaFiles.removeValue(forKey: id) {
+            try? FileManager.default.removeItem(at: url)
+        }
+        pendingThumbnails.removeValue(forKey: id)
+    }
+
     private func handleCameraCapture(_ image: UIImage) {
         let prep = AttachmentPreparationService.shared.prepareImage(
             image, context: .feedPost, accentColor: MeeshyColors.brandPrimaryHex
@@ -773,23 +774,8 @@ struct FeedComposerSheet: View {
     }
 
     private func trackSheetPreparation(_ prep: PreparingAttachment) {
-        preparingAttachments.append(prep)
-        Task { @MainActor [prep] in
-            let result = await prep.awaitCompletion()
-            switch result {
-            case .success(let prepared):
-                pendingMediaFiles[prepared.attachment.id] = prepared.fileURL
-                if let thumb = prep.thumbnail {
-                    pendingThumbnails[prepared.attachment.id] = thumb
-                }
-                pendingAttachments.append(prepared.attachment)
-                HapticFeedback.success()
-            case .failure(.preparationFailed(let message)):
-                HapticFeedback.error()
-                FeedbackToastManager.shared.showError(message)
-            }
-            preparingAttachments.removeAll { $0.id == prep.id }
-        }
+        PreparationTracking.track(prep, preparing: $preparingAttachments, attachments: $pendingAttachments,
+                                  mediaFiles: $pendingMediaFiles, thumbnails: $pendingThumbnails)
     }
 
     private func cancelSheetPreparation(_ prep: PreparingAttachment) {
@@ -802,7 +788,7 @@ struct FeedComposerSheet: View {
             guard url.startAccessingSecurityScopedResource() else { continue }
             defer { url.stopAccessingSecurityScopedResource() }
             let fileName = url.lastPathComponent
-            let mimeType = mimeTypeForURL(url)
+            let mimeType = MimeTypeResolver.mimeType(forURL: url)
             let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("file_\(UUID().uuidString)_\(fileName)")
             try? FileManager.default.copyItem(at: url, to: tempURL)
             appendSheetFileAttachment(tempURL: tempURL, fileName: fileName, mimeType: mimeType)
@@ -818,7 +804,7 @@ struct FeedComposerSheet: View {
     private func appendSheetFileAttachment(tempURL: URL, fileName: String, mimeType: String) {
         let fileSize = (try? FileManager.default.attributesOfItem(atPath: tempURL.path)[.size] as? Int) ?? 0
         let attachmentId = UUID().uuidString
-        let attachment = MessageAttachment(id: attachmentId, fileName: fileName, originalName: fileName, mimeType: mimeType, fileSize: fileSize, fileUrl: tempURL.absoluteString, thumbnailColor: "45B7D1")
+        let attachment = MessageAttachment(id: attachmentId, fileName: fileName, originalName: fileName, mimeType: mimeType, fileSize: fileSize, fileUrl: tempURL.absoluteString, thumbnailColor: MeeshyColors.tileSkyHex)
         pendingMediaFiles[attachmentId] = tempURL
         pendingAttachments.append(attachment)
     }
@@ -843,18 +829,10 @@ struct FeedComposerSheet: View {
                         try? FileManager.default.removeItem(at: url)
                         continue
                     }
-                    let prep = AttachmentPreparationService.shared.prepareImage(
-                        image, context: .feedPost, accentColor: MeeshyColors.brandPrimaryHex
-                    )
-                    trackSheetPreparation(prep)
+                    handleCameraCapture(image)
                     try? FileManager.default.removeItem(at: url)
                 case .video:
-                    let prep = AttachmentPreparationService.shared.prepareVideo(
-                        sourceURL: url,
-                        deleteSourceAfterCompression: true,
-                        context: .feedPost
-                    )
-                    trackSheetPreparation(prep)
+                    handleCameraVideo(url)
                 case .audio, .file:
                     appendSheetFileAttachment(tempURL: url, fileName: name, mimeType: mime)
                 }
@@ -938,7 +916,7 @@ struct FeedComposerSheet: View {
             HapticFeedback.success()
             if !text.isEmpty || pendingPlace != nil {
                 let lang = composerLanguage
-                Task { await viewModel.createPost(content: text, visibility: postVisibility, visibilityUserIds: postVisibilityUserIds.isEmpty ? nil : postVisibilityUserIds, originalLanguage: lang, location: pendingPlace, mentions: declared, discoverabilityPrecision: nearbyPrecision) }
+                Task { await viewModel.createPost(content: text, visibility: postVisibility, visibilityUserIds: postVisibilityUserIds.isEmpty ? nil : postVisibilityUserIds, originalLanguage: lang, location: capturedPlace, mentions: declared, discoverabilityPrecision: nearbyPrecision) }
             }
             return
         }
@@ -969,7 +947,7 @@ struct FeedComposerSheet: View {
                     visibility: postVisibility, visibilityUserIds: postVisibilityUserIds.isEmpty ? nil : postVisibilityUserIds,
                     originalLanguage: lang,
                     type: postType,
-                    location: pendingPlace,
+                    location: capturedPlace,
                     mentions: declared,
                     discoverabilityPrecision: nearbyPrecision,
                     mobileTranscription: nil,
@@ -1004,8 +982,7 @@ struct FeedComposerSheet: View {
                 var progressCancellable: AnyCancellable?
                 progressCancellable = uploader.progressPublisher
                     .receive(on: DispatchQueue.main)
-                    .sink { [progressCancellable] progress in
-                        _ = progressCancellable
+                    .sink { progress in
                         uploadProgress = progress
                     }
 
@@ -1068,7 +1045,7 @@ struct FeedComposerSheet: View {
     /// — c'est l'inverse exact du défaut d'hier, qui publiait PUBLIC sans rien
     /// dire.
     private func publishAudioFromSheet(audioURL: URL, mimeType: String, durationMs: Int, transcription: MobileTranscriptionPayload?) async {
-        await MainActor.run { isUploading = true }
+        isUploading = true
 
         await viewModel.publish(PublishIntent.audioRecording(
             fileURL: audioURL,
@@ -1084,20 +1061,18 @@ struct FeedComposerSheet: View {
             discoverabilityPrecision: nil
         ))
 
-        await MainActor.run {
-            isUploading = false
-            if viewModel.publishError != nil {
-                HapticFeedback.error()
-                FeedbackToastManager.shared.showError(String(localized: "feed.post.toast.audioPublishError", defaultValue: "Échec de la publication du post audio", bundle: .main))
-            } else {
-                onDismiss()
-                HapticFeedback.success()
-                FeedbackToastManager.shared.showSuccess(
-                    NetworkMonitor.shared.isOffline
-                        ? String(localized: "feed.post.toast.pendingOffline", defaultValue: "Publication en attente d'envoi", bundle: .main)
-                        : String(localized: "feed.post.toast.audioPublished", defaultValue: "Post audio publié", bundle: .main)
-                )
-            }
+        isUploading = false
+        if viewModel.publishError != nil {
+            HapticFeedback.error()
+            FeedbackToastManager.shared.showError(String(localized: "feed.post.toast.audioPublishError", defaultValue: "Échec de la publication du post audio", bundle: .main))
+        } else {
+            onDismiss()
+            HapticFeedback.success()
+            FeedbackToastManager.shared.showSuccess(
+                NetworkMonitor.shared.isOffline
+                    ? String(localized: "feed.post.toast.pendingOffline", defaultValue: "Publication en attente d'envoi", bundle: .main)
+                    : String(localized: "feed.post.toast.audioPublished", defaultValue: "Post audio publié", bundle: .main)
+            )
         }
     }
 
@@ -1105,22 +1080,20 @@ struct FeedComposerSheet: View {
     /// purs (`BorrowedSoundPost`), mais l'état (`isUploading`, `forcePlainPost`,
     /// `onDismiss`) est celui du composer sheet.
     private func publishBorrowedSoundFromSheet(_ sound: APISound) async {
-        await MainActor.run { isUploading = true }
+        isUploading = true
         await viewModel.createBorrowedSoundPost(
             type: BorrowedSoundPost.type(for: sound, forcePlainPost: forcePlainPost),
             storyEffects: BorrowedSoundPost.effects(for: sound),
             mentions: declaredReferences
         )
-        await MainActor.run {
-            isUploading = false
-            if viewModel.publishError == nil {
-                onDismiss()
-                HapticFeedback.success()
-                FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.toast.audioPublished", defaultValue: "Post audio publié", bundle: .main))
-            } else {
-                HapticFeedback.error()
-                FeedbackToastManager.shared.showError(String(localized: "feed.post.toast.audioPublishError", defaultValue: "Échec de la publication du post audio", bundle: .main))
-            }
+        isUploading = false
+        if viewModel.publishError == nil {
+            onDismiss()
+            HapticFeedback.success()
+            FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.toast.audioPublished", defaultValue: "Post audio publié", bundle: .main))
+        } else {
+            HapticFeedback.error()
+            FeedbackToastManager.shared.showError(String(localized: "feed.post.toast.audioPublishError", defaultValue: "Échec de la publication du post audio", bundle: .main))
         }
     }
 
@@ -1129,35 +1102,6 @@ struct FeedComposerSheet: View {
         onDismiss()
     }
 
-    // MARK: - Helpers
-    private func generateVideoThumbnail(url: URL) async -> UIImage? {
-        let asset = AVURLAsset(url: url)
-        let generator = AVAssetImageGenerator(asset: asset)
-        generator.appliesPreferredTrackTransform = true
-        generator.maximumSize = CGSize(width: 200, height: 200)
-        return try? await UIImage(cgImage: generator.image(at: .zero).image)
-    }
-
-    private func mimeTypeForURL(_ url: URL) -> String {
-        // Single source of truth lives in `MimeTypeResolver` (MeeshySDK).
-        // Replaces a deliberately-narrow table that excluded several formats
-        // (webp/heic/wav/audio/ogg/...) — the resolver covers all of them.
-        MimeTypeResolver.mimeType(forURL: url)
-    }
-
-    private func sheetIconForType(_ type: MessageAttachment.AttachmentType) -> String {
-        switch type {
-        case .image: return "photo.fill"
-        case .video: return "video.fill"
-        case .audio: return "waveform"
-        case .file: return "doc.fill"
-        case .location: return "location.fill"
-        }
-    }
-
-    private func sheetLabelForAttachment(_ attachment: MessageAttachment) -> String {
-        MediaKindLabel.attachmentLabel(for: attachment)
-    }
 }
 
 private struct EditingAttachmentItem: Identifiable {

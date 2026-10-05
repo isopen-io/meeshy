@@ -1,4 +1,6 @@
+import { attachmentSrc } from '@/lib/api/media-url';
 import type { StoryTrayMedia, StoryTrayPost } from '@/lib/api/stories';
+import { feedMediaKindOf } from '@/lib/feed/layout';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { thumbHashPlaceholder } from '@/lib/media/thumbhash';
 import { isStoryExpired, storyMediaUrl } from '@/lib/stories/playback';
@@ -57,9 +59,10 @@ export function myStoryThumbnail(media: readonly StoryTrayMedia[] | undefined): 
   const first = media?.[0];
   if (first === undefined) return { kind: 'placeholder' };
   const fromThumbnail = typeof first.thumbnailUrl === 'string' && first.thumbnailUrl !== '' ? first.thumbnailUrl : undefined;
+  if (fromThumbnail === undefined && feedMediaKindOf(first.mimeType) === 'video') return { kind: 'placeholder' };
   const url = fromThumbnail ?? storyMediaUrl(first);
   if (url === '') return { kind: 'placeholder' };
-  return { kind: 'photo', url, placeholder: thumbHashPlaceholder(first.thumbHash ?? undefined) };
+  return { kind: 'photo', url: attachmentSrc(url), placeholder: thumbHashPlaceholder(first.thumbHash ?? undefined) };
 }
 
 /** Un mois CALENDAIRE avant `now` — jamais 30 jours fixes (un mois de 31

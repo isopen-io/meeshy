@@ -1,0 +1,218 @@
+import { act } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
+import { afterEach, describe, expect, test } from 'bun:test';
+
+import { createStudioDraftStore } from '@/lib/stories/studio-draft-store';
+import { pendingAttachmentOf } from '@/lib/send/attachments';
+import type { StudioRetouchDeps } from '@/lib/stories/studio-retouch';
+import { VIEWER_ID, flush, harness, image, mount, onePageSnapshot, registerStudioBench, selectFile, typeText } from '@/test-support/story-studio-bench';
+
+import ComposerRetouch from '@/components/composer-retouch';
+
+/**
+ * LES COUCHES DU STUDIO (#8517) — Cadre, plaque d'édition, frise, texte du
+ * post et menu d'un objet sont des COUCHES : le retour matériel de la coque
+ * Android (un `popstate`) et Échap ferment la plus HAUTE, jamais le studio ni
+ * la retouche qui les porte. Au bureau, les plaques restent bornées et
+ * centrées (la géométrie est mesurée au navigateur) ; l'invite « Ajouter du
+ * texte » ne se peint pas sous un calque sélectionné.
+ */
+registerStudioBench();
+
+const click = (element: Element | null) => {
+  if (element === null) throw new Error('élément absent');
+  act(() => (element as HTMLElement).click());
+};
+
+const elements: Array<{ root: Root; host: HTMLElement }> = [];
+afterEach(() => {
+  act(() => elements.splice(0).forEach(({ root, host }) => (root.unmount(), host.remove())));
+});
+
+function mountElement(element: React.ReactElement): HTMLElement {
+  const host = document.createElement('div');
+  document.body.appendChild(host);
+  const root = createRoot(host);
+  elements.push({ root, host });
+  act(() => root.render(element));
+  return host;
+}
+
+const back = () => act(() => window.dispatchEvent(new PopStateEvent('popstate')));
+const escape = () => act(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
+
+const seeded = () => {
+  const drafts = createStudioDraftStore(null);
+  drafts.set(
+    VIEWER_ID,
+    onePageSnapshot({
+      texts: [],
+      background: { postMediaId: 'pm-bg', fileUrl: '2026/09/u/bg.jpg', mediaType: 'image', aspectRatio: 9 / 16 },
+      overlay: { postMediaId: 'pm-ov', fileUrl: '2026/09/u/ov.jpg', mediaType: 'image', aspectRatio: 1 },
+    }),
+  );
+  return harness({ drafts });
+};
+
+const tokens = (element: Element | null) => (element?.className ?? '').split(/\s+/);
+/** La borne commune des plaques (`STUDIO_PLATE`) : 36 rem au plus, centrée. */
+const bounded = (element: Element | null) => ['max-w-xl', 'mx-auto', 'w-full'].filter((token) => !tokens(element).includes(token));
+
+/** Le panneau des options (#9140) : à droite, depuis le haut ; au bureau, une
+ * carte de 320 px à côté du rail (`STUDIO_INLINE_PANEL.roomyWidth`). */
+const panelPlace = (element: Element | null) => {
+  const panel = element?.closest<HTMLElement>('[data-story-inline-panel]') ?? null;
+  return panel === null ? null : { top: panel.style.top, roomy: ['md:max-w-80', 'md:ms-auto'].every((token) => tokens(panel).includes(token)) };
+};
+
+describe('au bureau, les plaques restent BORNÉES', () => {
+  test('le Cadre et les options d’un objet partagent le MÊME panneau à droite, depuis le haut ; la frise garde la borne des plaques du bas', async () => {
+    const el = mount(harness({}).deps);
+    selectFile(el, 'visual', image());
+    click(el.querySelector('[data-story-option="frame"]'));
+    await flush(() => el.querySelector('[data-story-frame-panel]') !== null);
+    expect(panelPlace(el.querySelector('[data-story-frame-panel]'))).toEqual({ top: '8px', roomy: true });
+    click(el.querySelector('[data-story-frame-done]'));
+    click(el.querySelector('[data-story-option="background:exit"]'));
+
+    typeText(el, 'Bonjour');
+    click(el.querySelector('[data-story-object-edit="text-1"]'));
+    await flush(() => el.querySelector('[data-story-option="section:color"]') !== null);
+    click(el.querySelector('[data-story-option="section:color"]'));
+    await flush(() => el.querySelector('[data-story-object-editor]') !== null);
+    expect(panelPlace(el.querySelector('[data-story-object-editor]'))).toEqual({ top: '8px', roomy: true });
+    click(el.querySelector('[data-story-option="edit:exit"]'));
+
+    click(el.querySelector('[data-story-animated]'));
+    await flush(() => el.querySelector('[data-story-timeline]') !== null);
+    expect(bounded(el.querySelector('[data-story-timeline]'))).toEqual([]);
+  });
+
+  test('le texte du post aussi', async () => {
+    const el = mount(harness({}).deps, 'POST');
+    typeText(el, 'Sur la scène');
+    click(el.querySelector('[data-story-post-text]'));
+    await flush(() => el.querySelector('[data-story-post-text-frame]') !== null);
+    expect(bounded(el.querySelector('[data-story-post-text-frame]'))).toEqual([]);
+  });
+});
+
+describe('le retour matériel ferme la couche du DESSUS, jamais le studio', () => {
+  test('Cadre ouvert : le retour ferme le Cadre, le studio reste', async () => {
+    const el = mount(harness({}).deps);
+    selectFile(el, 'visual', image());
+    click(el.querySelector('[data-story-option="frame"]'));
+    await flush(() => el.querySelector('[data-story-frame-panel]') !== null);
+    back();
+    await flush(() => el.querySelector('[data-story-frame-panel]') === null);
+    expect(el.querySelector('[data-story-frame-panel]') === null).toBe(true);
+    expect(el.querySelector('[data-story-studio]') !== null).toBe(true);
+  });
+
+  test('édition ouverte : le retour range d’abord les options, puis l’édition', async () => {
+    const el = mount(harness({}).deps);
+    typeText(el, 'Bonjour');
+    click(el.querySelector('[data-story-object-edit="text-1"]'));
+    await flush(() => el.querySelector('[data-story-option="section:style"]') !== null);
+    click(el.querySelector('[data-story-option="section:style"]'));
+    await flush(() => el.querySelector('[data-story-inline-panel]') !== null);
+    back();
+    await flush(() => el.querySelector('[data-story-inline-panel]') === null);
+    expect(el.querySelector('[data-story-option="edit:exit"]') !== null).toBe(true);
+    back();
+    await flush(() => el.querySelector('[data-story-option="edit:exit"]') === null);
+    expect(el.querySelector('[data-story-option="edit:exit"]') === null).toBe(true);
+    expect(el.querySelector('[data-story-studio]') !== null).toBe(true);
+  });
+
+  test('frise ouverte : le retour la referme, la scène garde son texte', async () => {
+    const el = mount(harness({}).deps);
+    typeText(el, 'Bonjour');
+    click(el.querySelector('[data-story-animated]'));
+    await flush(() => el.querySelector('[data-story-timeline]') !== null);
+    back();
+    await flush(() => el.querySelector('[data-story-timeline]') === null);
+    expect(el.querySelector('[data-story-timeline]') === null).toBe(true);
+    expect(el.querySelector('[data-story-animated]')?.getAttribute('data-story-animated')).toBe('off');
+  });
+
+  test('texte du post ouvert : le retour le ferme', async () => {
+    const el = mount(harness({}).deps, 'POST');
+    typeText(el, 'Sur la scène');
+    click(el.querySelector('[data-story-post-text]'));
+    await flush(() => el.querySelector('[data-story-post-text-frame]') !== null);
+    back();
+    await flush(() => el.querySelector('[data-story-post-text-frame]') === null);
+    expect(el.querySelector('[data-story-post-text-frame]') === null).toBe(true);
+  });
+
+  test('menu d’un objet ouvert : le retour le ferme', async () => {
+    const el = mount(harness({}).deps);
+    typeText(el, 'Un');
+    await flush(() => el.querySelector('[data-scene-object-id="text-1"]') !== null);
+    const layer = el.querySelector<HTMLElement>('[data-story-stage-gestures]')!;
+    const painted = el.querySelector<HTMLElement>('[data-scene-object-id="text-1"]')!;
+    painted.getBoundingClientRect = () => ({ left: 10, top: 10, width: 100, height: 40, right: 110, bottom: 50, x: 10, y: 10, toJSON: () => ({}) }) as DOMRect;
+    act(() => layer.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 50, clientY: 30 })));
+    await flush(() => document.querySelector('[data-story-object-menu]') !== null);
+    back();
+    await flush(() => document.querySelector('[data-story-object-menu]') === null);
+    expect(document.querySelector('[data-story-object-menu]') === null).toBe(true);
+    expect(el.querySelector('[data-story-studio]') !== null).toBe(true);
+  });
+});
+
+/** Un canvas factice : la retouche rend un JPEG sans navigateur. */
+const fakeRender: StudioRetouchDeps = {
+  createCanvas: () => ({
+    context: new Proxy({}, { get: (_t, key) => (key === 'measureText' ? () => ({ width: 10 }) : () => undefined), set: () => true }) as never,
+    toBlob: async (type) => new Blob(['jpeg'], { type }),
+  }),
+  loadImage: async () => ({ naturalWidth: 4, naturalHeight: 3 }) as unknown as CanvasImageSource,
+};
+
+describe('Échap ferme la couche du DESSUS seule', () => {
+  test('retouche + Cadre : Échap range le Cadre, puis rend la scène, puis seulement quitte la retouche', async () => {
+    const cancels: string[] = [];
+    const photo = pendingAttachmentOf(new File([new Uint8Array([1, 2, 3])], 'plage.png', { type: 'image/png' }));
+    const el = mountElement(<ComposerRetouch pieces={[photo]} focus={0} onDone={() => undefined} onCancel={() => cancels.push('cancel')} render={fakeRender} />);
+    await flush(() => el.querySelector('[data-story-option="frame"]') !== null);
+    click(el.querySelector('[data-story-option="frame"]'));
+    await flush(() => el.querySelector('[data-story-frame-panel]') !== null);
+    escape();
+    await flush(() => el.querySelector('[data-story-frame-panel]') === null);
+    expect(el.querySelector('[data-story-frame-panel]') === null).toBe(true);
+    expect(cancels).toEqual([]);
+    escape();
+    await flush(() => el.querySelector('[data-story-option="background:exit"]') === null);
+    expect(cancels).toEqual([]);
+    escape();
+    expect(cancels).toEqual(['cancel']);
+  });
+
+  test('menu d’un objet par-dessus son édition : Échap ferme le menu, l’édition reste', async () => {
+    const el = mount(seeded().deps, 'STORY');
+    await flush(() => el.querySelector('[data-story-object-edit="overlay"]') !== null);
+    click(el.querySelector('[data-story-object-edit="overlay"]'));
+    await flush(() => el.querySelector('[data-story-option="edit:exit"]') !== null);
+    const layer = el.querySelector<HTMLElement>('[data-story-stage-gestures]')!;
+    const painted = el.querySelector<HTMLElement>('[data-scene-object-id="overlay"]')!;
+    painted.getBoundingClientRect = () => ({ left: 10, top: 10, width: 100, height: 40, right: 110, bottom: 50, x: 10, y: 10, toJSON: () => ({}) }) as DOMRect;
+    act(() => layer.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 50, clientY: 30 })));
+    await flush(() => document.querySelector('[data-story-object-menu]') !== null);
+    escape();
+    await flush(() => document.querySelector('[data-story-object-menu]') === null);
+    expect(document.querySelector('[data-story-object-menu]') === null).toBe(true);
+    expect(el.querySelector('[data-story-option="edit:exit"]') !== null).toBe(true);
+  });
+});
+
+describe('l’invite « Ajouter du texte » ne se peint pas sous un calque', () => {
+  test('le calque sélectionné : aucune invite sur la saisie de texte', async () => {
+    const el = mount(seeded().deps, 'STORY');
+    await flush(() => el.querySelector('[data-story-object-edit="overlay"]') !== null);
+    click(el.querySelector('[data-story-object-edit="overlay"]'));
+    await flush(() => el.querySelector('[data-story-option="edit:exit"]') !== null);
+    expect(el.querySelector('#story-studio-text')?.getAttribute('placeholder') ?? null).toBeNull();
+  });
+});

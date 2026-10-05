@@ -129,7 +129,7 @@ export default function CommunityNewScreen() {
                   onChange={(event) => edit('name', event.currentTarget.value)}
                   onFocus={() => setFocused('name')}
                   onBlur={() => setFocused(null)}
-                  className="min-w-0 flex-1 bg-transparent text-body outline-none"
+                  className="w-0 min-w-0 flex-1 bg-transparent text-body outline-none"
                   style={{ minHeight: 44, color: 'var(--color-ios-ink)' }}
                 />
               )}
@@ -158,7 +158,7 @@ export default function CommunityNewScreen() {
                     onChange={(event) => edit('identifier', event.currentTarget.value)}
                     onFocus={() => setFocused('identifier')}
                     onBlur={() => setFocused(null)}
-                    className="-ms-2 min-w-0 flex-1 bg-transparent text-body outline-none"
+                    className="-ms-2 w-0 min-w-0 flex-1 bg-transparent text-body outline-none"
                     style={{ minHeight: 44, color: 'var(--color-ios-ink)' }}
                   />
                 </>
@@ -182,7 +182,7 @@ export default function CommunityNewScreen() {
                   onChange={(event) => edit('description', event.currentTarget.value)}
                   onFocus={() => setFocused('description')}
                   onBlur={() => setFocused(null)}
-                  className="min-w-0 flex-1 resize-none bg-transparent py-3 text-body outline-none"
+                  className="w-0 min-w-0 flex-1 resize-none bg-transparent py-3 text-body outline-none"
                   style={{ color: 'var(--color-ios-ink)' }}
                 />
               )}

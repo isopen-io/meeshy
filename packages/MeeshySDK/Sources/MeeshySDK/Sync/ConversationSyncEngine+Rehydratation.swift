@@ -86,9 +86,10 @@ extension ConversationSyncEngine {
         let removedSet = Set(removedIds)
         for removedId in removedIds {
             await cache.messages.invalidate(for: removedId)
+            await cache.invalidateConversationMedia(conversationId: removedId)
             await SearchIndex.shared.removeConversation(id: removedId)
         }
-        await saveSorted(merged, to: "list", baseline: existing)
+        guard await saveSorted(merged, to: "list", baseline: existing) else { return .echouee }
         await SearchIndex.shared.indexConversations(
             recues.filter { $0.isActive && !removedSet.contains($0.id) }
         )

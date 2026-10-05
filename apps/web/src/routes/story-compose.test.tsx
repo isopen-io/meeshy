@@ -7,11 +7,11 @@ import { sessionStore } from '@/lib/api/session';
 import { storyReturn } from '@/lib/onboarding/story-return';
 import type { PublicationKind } from '@/lib/stories/publication-kind';
 import { createStudioDraftStore, type StudioDraftStore } from '@/lib/stories/studio-draft-store';
+import { offerStudioSeed } from '@/lib/stories/studio-seed';
 import { buttonNamed } from '@/test-support/act-mount';
 import StoryComposeScreen from './story-compose';
 import {
   VIEWER_ID,
-  fakeRect,
   flush,
   harness,
   image,
@@ -40,22 +40,23 @@ import {
 
 registerStudioBench();
 
-describe('StoryComposeScreen — le bouton Publier est INERTE sans contenu (loi 4)', () => {
-  test('brouillon vide : désactivé, et un clic n’envoie rien', async () => {
+/** LOT 6 (directive porteur 2026-09-27 soir) : PAS de capsule Publier tant
+ * qu'il n'y a rien à publier — ni bouton grisé, ni phrase. */
+describe('StoryComposeScreen — pas de Publier sans contenu (lot 6)', () => {
+  test('brouillon vide : aucune capsule, rien ne part', async () => {
     const bench = harness({});
     const el = mount(bench.deps);
-    expect(publishButton(el)?.disabled).toBe(true);
-    act(() => publishButton(el)!.click());
+    expect(publishButton(el)).toBeNull();
     await flush();
     expect(bench.posts).toHaveLength(0);
   });
 
-  test('un texte l’ARME, le vider le désarme', () => {
+  test('un texte la fait paraître, le vider la retire', () => {
     const el = mount(harness({}).deps);
     typeText(el, 'Bonjour');
     expect(publishButton(el)?.disabled).toBe(false);
     typeText(el, '   ');
-    expect(publishButton(el)?.disabled).toBe(true);
+    expect(publishButton(el)).toBeNull();
   });
 });
 
@@ -92,35 +93,29 @@ describe('StoryComposeScreen — l’aperçu par le moteur PARTAGÉ (D-79)', () 
     expect(textarea?.getAttribute('style') ?? '').not.toContain('text-shadow');
   });
 
-  test('la saisie ADOPTE la boîte RÉELLEMENT peinte par [data-scene-text], au pixel près — jamais une largeur/hauteur fixes (défaut 1, revue-correction)', () => {
+  test('la saisie ADOPTE la boîte RÉELLEMENT peinte par [data-scene-text] et la POSE de l’objet — jamais une largeur/hauteur fixes (défaut 1, #8681)', () => {
     const el = mount(harness({}).deps);
     typeText(el, 'Bonjour');
-    const stage = el.querySelector<HTMLElement>('[data-scene-stage]');
     const textNode = el.querySelector<HTMLElement>('[data-scene-text]');
-    expect(stage).not.toBeNull();
     expect(textNode).not.toBeNull();
 
-    // La carte occupe (50,100)-(350,600) sur l'écran ; le moteur peint le
-    // texte dans une boîte NARROW, décentrée verticalement — exactement ce
-    // qu'un texte court, shrink-to-fit, rend en pratique.
-    stage!.getBoundingClientRect = () => fakeRect({ top: 100, left: 50, width: 300, height: 500 });
-    textNode!.getBoundingClientRect = () => fakeRect({ top: 260, left: 140, width: 120, height: 30 });
+    // Le moteur peint le texte dans une boîte NARROW (shrink-to-fit) : sa
+    // taille de MISE EN PAGE, fractionnaire, avant toute transformation.
+    textNode!.style.width = '120.4px';
+    textNode!.style.height = '30px';
 
-    // Un second caractère force `useLayoutEffect` (dépendance `draft.text`) à
+    // Un second caractère force `useLayoutEffect` (dépendance `texts`) à
     // remesurer SYNCHRONEMENT, dans le MÊME tour — jamais un `flush` qui
     // masquerait un défaut d'alignement d'un frame.
     typeText(el, 'Bonjour!');
 
     const textarea = el.querySelector<HTMLTextAreaElement>('#story-studio-text')!;
-    // Relatif à la carte : top 260-100=160, left 140-50=90.
-    expect(textarea.style.top).toBe('160px');
-    expect(textarea.style.left).toBe('90px');
-    expect(textarea.style.width).toBe('120px');
+    expect(textarea.style.width).toBe('121.4px');
     expect(textarea.style.height).toBe('30px');
-    // La forme centrée par défaut (translation à 50 %) ne doit PLUS gouverner
-    // une fois la boîte réelle connue — elle décalait le curseur d'une ligne
-    // entière au-dessus du texte (défaut 1).
-    expect(textarea.style.transform).toBe('');
+    // La pose de `SceneObjectFrame` : ancre en %, puis translate / rotate / scale.
+    expect(textarea.style.left).toBe('50%');
+    expect(textarea.style.top).toBe('50%');
+    expect(textarea.style.transform).toBe('translate(-50%, -50%) rotate(0deg) scale(1)');
   });
 });
 
@@ -259,6 +254,24 @@ describe('StoryComposeScreen — le brouillon SURVIT, et un média PRÊT n’est
     expect(effects.scenes[0]!.objects.map((o) => o.payload.postMediaId).filter(Boolean)).toEqual(['pm-1']);
   });
 
+  /** #8849 (jumelle de #8848) — la création en cours se sauvegarde seule, son
+   * FORMAT compris : rouverte (rechargement, onglet tué, autre entrée), elle
+   * revient en post, pas en story. */
+  test('un POST en cours, rouvert par l’entrée story, revient en POST avec son texte', async () => {
+    const drafts = createStudioDraftStore(null);
+    const el = mount(harness({ drafts }).deps, 'POST');
+    typeText(el, 'Un post pas fini');
+    await flush(() => drafts.get(VIEWER_ID)?.kind === 'POST');
+
+    unmountAll();
+    const bench = harness({ drafts });
+    const remounted = mount(bench.deps, 'STORY');
+    expect(remounted.querySelector<HTMLTextAreaElement>('#story-studio-text')?.value).toBe('Un post pas fini');
+    act(() => publishButton(remounted)!.click());
+    await flush(() => bench.posts.length > 0);
+    expect(bench.posts[0]?.type).toBe('POST');
+  });
+
   test('une publication qui RÉUSSIT purge le brouillon', async () => {
     const drafts = createStudioDraftStore(null);
     const el = mount(harness({ drafts }).deps);
@@ -359,7 +372,8 @@ describe('StoryComposeScreen — les états refus, hors-ligne et échec de mont�
     });
     await flush();
     expect(bench.posts).toHaveLength(0);
-    expect(publishButton(el)?.textContent).toBe('Publier la story');
+    // Vidé, le brouillon n'a plus rien à publier : la capsule se retire (lot 6).
+    expect(publishButton(el)).toBeNull();
   });
 
   test('une image posée par la porte du SON est refusée, et rien ne part', async () => {
@@ -396,8 +410,8 @@ describe('StoryComposeScreen — le COMPOSER UNIQUE : `[Publier … | ▾]` (#74
   test('sans toucher au chevron, la story part comme indiqué — `type: STORY`, et la capsule le NOMME', async () => {
     const bench = harness({});
     const el = mount(bench.deps);
-    expect(publishButton(el)?.textContent).toBe('Publier la story');
     typeText(el, 'Une story');
+    expect(publishButton(el)?.textContent).toBe('Publier la story');
     act(() => publishButton(el)!.click());
     await flush(() => bench.posts.length > 0);
     expect(bench.posts[0]?.type).toBe('STORY');
@@ -406,22 +420,27 @@ describe('StoryComposeScreen — le COMPOSER UNIQUE : `[Publier … | ▾]` (#74
   test('ouvert depuis la porte du fil, le studio publie un POST — le même canevas', async () => {
     const bench = harness({});
     const el = mount(bench.deps, 'POST');
-    expect(publishButton(el)?.textContent).toBe('Publier le post');
     expect(el.querySelector('h1')?.textContent).toBe('Nouvelle publication');
     typeText(el, 'Un post');
+    expect(publishButton(el)?.textContent).toBe('Publier le post');
     act(() => publishButton(el)!.click());
     await flush(() => bench.posts.length > 0);
     expect(bench.posts[0]?.type).toBe('POST');
     expect((bench.posts[0]?.storyEffects as { v: number } | undefined)?.v).toBe(3);
   });
 
-  test('le chevron offre les trois formats et PUBLIE au format choisi', async () => {
+  test('le chevron offre les trois formats et CHOISIT sans publier — seul Publier envoie', async () => {
     const bench = harness({});
     const el = mount(bench.deps);
     typeText(el, 'Finalement un post');
     act(() => kindToggle(el)!.click());
     expect(['STORY', 'POST', 'REEL'].map((kind) => kindChoice(kind as PublicationKind) !== null)).toEqual([true, true, true]);
     act(() => kindChoice('POST')!.click());
+    await flush();
+    expect(bench.posts).toHaveLength(0);
+    expect(kindChoice('POST')).toBeNull();
+    expect(publishButton(el)?.textContent).toBe('Publier le post');
+    act(() => publishButton(el)!.click());
     await flush(() => bench.posts.length > 0);
     expect(bench.posts).toHaveLength(1);
     expect(bench.posts[0]?.type).toBe('POST');
@@ -757,5 +776,19 @@ describe('StoryComposeScreen — ouvert par l’accueil post-inscription (#7729)
     expect(storyReturn.take('post-1')).toBe(true);
     dispose();
     goTo(before);
+  });
+});
+
+describe('StoryComposeScreen — « Créer avec ce média » (#6303)', () => {
+  test('la pièce déposée par la visionneuse devient le fond de la page, montée comme un fichier choisi', async () => {
+    offerStudioSeed(image());
+    const el = mount(harness({}).deps);
+    await flush(() => el.querySelector('[data-asset-phase="ready"]') !== null);
+    expect(el.querySelector('[data-scene-player] img')?.getAttribute('src')?.startsWith('blob:')).toBe(true);
+  });
+
+  test('sans dépôt, le studio s’ouvre vide', () => {
+    const el = mount(harness({}).deps);
+    expect(el.querySelector('[data-scene-player]')).toBeNull();
   });
 });

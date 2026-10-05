@@ -314,3 +314,30 @@ describe('portailDe — la feuille de partage dans la coque Android (#7710)', ()
     expect(portailDe({ nav: copieur, coque: undefined }).share).toBeUndefined();
   });
 });
+
+/**
+ * LE PRESSE-PAPIER QUI REFUSE NE FAIT PLUS ÉCHOUER LA COPIE (#8937) — même
+ * chemin que le menu d'un message (#8809) : `navigator.clipboard.writeText`
+ * refusé (geste plus « frais », focus perdu — mesuré dans la WebView Android)
+ * ou absent retombe sur `execCommand('copy')`. Seul l'échec des DEUX se dit.
+ */
+describe('portailDe — la copie a son repli (#8937)', () => {
+  const refuse = { clipboard: { writeText: () => Promise.reject(new DOMException('refusé', 'NotAllowedError')) } };
+
+  test('writeText refuse, le repli copie : « copie »', async () => {
+    const copies: string[] = [];
+    const portail = portailDe({ nav: refuse, coque: undefined, copieHistorique: (t) => (copies.push(t), true) });
+    expect(await partagerInvitation(LIEN, portail)).toBe('copie');
+    expect(copies).toEqual([LIEN]);
+  });
+
+  test('aucun presse-papier, le repli copie : « copie »', async () => {
+    const portail = portailDe({ nav: {}, coque: undefined, copieHistorique: () => true });
+    expect(await partagerInvitation(LIEN, portail)).toBe('copie');
+  });
+
+  test('les deux échouent : « indisponible », jamais « copie »', async () => {
+    const portail = portailDe({ nav: refuse, coque: undefined, copieHistorique: () => false });
+    expect(await partagerInvitation(LIEN, portail)).toBe('indisponible');
+  });
+});

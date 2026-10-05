@@ -1,9 +1,14 @@
+import { useContext } from 'react';
+
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { avatarMenuEntries } from '@/lib/view/avatar-menu';
+import type { UserPresenceStatus } from '@/lib/api/types';
 import { initialsOf } from '@/lib/view/conversation';
 import type { ActiveMember } from '@/lib/view/top-active-members';
 import type { StoryRingOf } from '@/lib/view/use-author-story-rings';
+import { AuthorMoodsContext } from '@/lib/view/use-author-moods';
+import { ActivePeersContext, FocusedPeersContext, HerePeersContext } from '@/lib/view/use-conversation-viewing';
 
 import { Avatar } from './avatar';
 import { AvatarMenuTrigger } from './avatar-menu';
@@ -31,12 +36,19 @@ export function ActiveMembersStack({
   accent,
   storyRingOf,
   onOpenDetails,
+  presenceOf,
 }: {
   readonly members: readonly ActiveMember[];
+  /** La présence SERVIE de chaque membre (#9031) — vert, orange, gris ; « ici » (indigo) prime. */
+  readonly presenceOf?: ((memberId: string) => UserPresenceStatus) | undefined;
   readonly accent: string;
   readonly storyRingOf?: StoryRingOf | undefined;
   readonly onOpenDetails?: (() => void) | undefined;
 }) {
+  const herePeers = useContext(HerePeersContext);
+  const activePeers = useContext(ActivePeersContext);
+  const focusedPeers = useContext(FocusedPeersContext);
+  const moodOf = useContext(AuthorMoodsContext);
   if (members.length === 0) return null;
   const label = translate(currentInterfaceLanguage(), 'thread.header.active_members');
 
@@ -44,6 +56,7 @@ export function ActiveMembersStack({
     <ul aria-label={label} className="flex shrink-0 items-center" data-active-members>
       {members.map((member, index) => {
         const ring = storyRingOf?.(member.id);
+        const mood = moodOf(member.id);
         const entries = avatarMenuEntries({ username: member.username, storyRing: ring, details: onOpenDetails !== undefined });
         return (
           <li
@@ -58,9 +71,14 @@ export function ActiveMembersStack({
                 color={accent}
                 size={SIZE}
                 name={member.name}
+                here={herePeers.includes(member.id)}
+                hereActive={activePeers.includes(member.id)}
+                hereFocused={focusedPeers.includes(member.id)}
+                {...(presenceOf === undefined ? {} : { presence: presenceOf(member.id) })}
                 {...(member.avatar === undefined ? {} : { src: member.avatar })}
                 {...(member.username === undefined ? {} : { profileUsername: member.username })}
                 {...(ring === undefined ? {} : { storyRing: ring })}
+                {...(mood === undefined ? {} : { mood })}
               />
             </AvatarMenuTrigger>
           </li>

@@ -68,6 +68,14 @@ extension StoryCardView {
                 // pour que le lecteur de réel puisse aligner la sienne sur
                 // sa propre colonne (directive porteur 2026-09-01).
                 MediaCaptionOverlay(caption: description, isExpanded: isCaptionExpanded,
+                                    // #9075 — une adresse de la légende s'ouvre par
+                                    // le lien suivi `/l/<token>` de la carte servie.
+                                    // Le lien est rendu par le `Text` de la légende,
+                                    // montée AU-DESSUS de la couche de gestes
+                                    // (`zIndex(60)`) : le toucher qui l'ouvre n'avance
+                                    // pas la story.
+                                    trackedLinks: currentStory?.trackedLinkMap ?? [:],
+                                    validUsernames: currentStory?.validMentionUsernames,
                                     horizontalInset: 20,
                                     // Le rail d'actions occupe la bande droite
                                     // (x ≈ 318 → 386 sur un écran de 402).
@@ -125,7 +133,14 @@ extension StoryCardView {
             // MONTE depuis là où elle est, elle ne descend pas au bas de
             // l'écran. La marge basse était annulée au dépliage — le texte
             // changeait donc de place au moment où on demandait à en voir plus.
-            .padding(.bottom, topInset + 130)
+            //
+            // **Et « là où elle est », c'est posée sur le composeur** (#8431) :
+            // son bord bas touche le haut de la plaque de verre MESURÉE, plus
+            // la hauteur arbitraire qui la faisait flotter trop haut.
+            .padding(.bottom, captionBottomInset(geometry: geometry))
+            .animation(.spring(response: 0.32, dampingFraction: 0.85), value: composerBlockHeight)
+            // #8601 — écrire un commentaire tait la légende (`StoryComposingFocus`).
+            .storyFocusFade(readerDecorationsShown)
             .transition(.opacity)
             // **L'invite doit recevoir le doigt** (#4762, mesuré au
             // simulateur le 2026-09-02).
@@ -165,19 +180,21 @@ extension StoryCardView {
             VStack {
                 Spacer()
                 Text(transcription)
-                    .font(MeeshyFont.relative(14, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
                     .foregroundColor(.white)
                     .multilineTextAlignment(.center)
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 8)
+                    .padding(.horizontal, MeeshySpacing.xl)
+                    .padding(.vertical, MeeshySpacing.sm)
                     .background(
-                        RoundedRectangle(cornerRadius: 10)
-                            .fill(Color.black.opacity(0.55))
+                        RoundedRectangle(cornerRadius: MeeshyRadius.sm)
+                            .fill(MeeshyColors.mediaScrim)
                     )
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, topInset + 130)
+                    .padding(.horizontal, MeeshySpacing.xl)
+                    .padding(.bottom, captionBottomInset(geometry: geometry))
             }
             .allowsHitTesting(false)
+            .opacity(readerDecorationsShown ? 1 : 0)
+            .animation(StoryComposingFocus.fade, value: readerDecorationsShown)
             .transition(.opacity)
         }
     }
@@ -210,31 +227,33 @@ extension StoryCardView {
             }
             .frame(maxWidth: .infinity, alignment: .center)
             .allowsHitTesting(false)
+            .opacity(readerDecorationsShown ? 1 : 0)
+            .animation(StoryComposingFocus.fade, value: readerDecorationsShown)
         }
     }
 
     func backgroundAudioBadge(audio: StoryBackgroundAudioEntry) -> some View {
-        HStack(spacing: 6) {
+        HStack(spacing: MeeshySpacing.xsPlus) {
             Image(systemName: "music.note")
                 .font(MeeshyFont.relative(11, weight: .semibold))
             Text(audio.title)
-                .font(MeeshyFont.relative(12, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
                 .lineLimit(1)
                 .truncationMode(.tail)
             if let uploader = audio.uploaderName {
                 Text("· \(uploader)")
-                    .font(MeeshyFont.relative(11))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
                     .opacity(0.7)
                     .lineLimit(1)
             }
         }
         .foregroundColor(.white)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
+        .padding(.horizontal, MeeshySpacing.md)
+        .padding(.vertical, MeeshySpacing.xsPlus)
         .background(
             Capsule()
                 .fill(.ultraThinMaterial)
-                .overlay(Capsule().fill(Color.black.opacity(0.35)))
+                .overlay(Capsule().fill(MeeshyColors.mediaChromeFill))
         )
     }
 

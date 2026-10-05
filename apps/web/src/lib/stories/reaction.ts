@@ -3,7 +3,7 @@
  * passerelle sert réellement.
  *
  * Une story est une PUBLICATION éphémère : réagir passe par
- * `POST|DELETE /api/v1/posts/:postId/like`
+ * `POST|DELETE posts.byPostIdLike`
  * (`services/gateway/src/routes/posts/interactions.ts:86,265`), le MÊME
  * couple que « Aimer » au Flux, avec un corps `{ emoji }` optionnel
  * (`LikeSchema`/`UnlikeSchema`, `routes/posts/types.ts:560-575` — le POST

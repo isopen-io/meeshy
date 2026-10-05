@@ -2314,10 +2314,10 @@ final class ConversationViewModelTests: XCTestCase {
         """)
         mockMessageService.searchWithCursorResult = .success(secondPageResponse)
 
-        await sut.loadMoreSearchResults(query: "Hello")
+        await sut.searchHandler.loadMoreSearchResults(query: "Hello")
 
-        XCTAssertEqual(sut.searchResults.count, 2, "loadMore must append second page results to existing ones")
-        XCTAssertFalse(sut.searchHasMore, "searchHasMore must be false when server returns hasMore=false on last page")
+        XCTAssertEqual(sut.stateStore.searchResults.count, 2, "loadMore must append second page results to existing ones")
+        XCTAssertFalse(sut.stateStore.searchHasMore, "searchHasMore must be false when server returns hasMore=false on last page")
         XCTAssertEqual(mockMessageService.searchWithCursorCallCount, 1, "searchWithCursor must be called exactly once for the second page")
     }
 
@@ -2333,9 +2333,9 @@ final class ConversationViewModelTests: XCTestCase {
         XCTAssertFalse(sut.searchHasMore)
         let countAfterFirstPage = sut.searchResults.count
 
-        await sut.loadMoreSearchResults(query: "Hello")
+        await sut.searchHandler.loadMoreSearchResults(query: "Hello")
 
-        XCTAssertEqual(sut.searchResults.count, countAfterFirstPage, "loadMore when no more pages must not modify results")
+        XCTAssertEqual(sut.stateStore.searchResults.count, countAfterFirstPage, "loadMore when no more pages must not modify results")
         XCTAssertEqual(mockMessageService.searchWithCursorCallCount, 0, "searchWithCursor must not be called when there is no cursor")
     }
 
@@ -2354,9 +2354,9 @@ final class ConversationViewModelTests: XCTestCase {
         """)
         mockMessageService.searchWithCursorResult = .success(emptyNextPage)
 
-        await sut.loadMoreSearchResults(query: "Hello")
+        await sut.searchHandler.loadMoreSearchResults(query: "Hello")
 
-        XCTAssertFalse(sut.isSearching, "isSearching must be false once loadMoreSearchResults completes")
+        XCTAssertFalse(sut.stateStore.isSearching, "isSearching must be false once loadMoreSearchResults completes")
     }
 
     func test_loadMoreSearchResults_onNetworkFailure_preservesExistingResultsAndHasMore() async {
@@ -2371,13 +2371,13 @@ final class ConversationViewModelTests: XCTestCase {
         XCTAssertEqual(sut.searchResults.count, 1)
 
         mockMessageService.searchWithCursorResult = .failure(NSError(domain: "test", code: -1009))
-        await sut.loadMoreSearchResults(query: "Hello")
+        await sut.searchHandler.loadMoreSearchResults(query: "Hello")
 
-        XCTAssertEqual(sut.searchResults.count, 1,
+        XCTAssertEqual(sut.stateStore.searchResults.count, 1,
             "loadMore network failure must not remove existing search results")
-        XCTAssertTrue(sut.searchHasMore,
+        XCTAssertTrue(sut.stateStore.searchHasMore,
             "searchHasMore must remain true after a transient loadMore failure so the user can retry by scrolling")
-        XCTAssertFalse(sut.isSearching,
+        XCTAssertFalse(sut.stateStore.isSearching,
             "isSearching must be false even after a loadMore failure")
     }
 
@@ -2602,8 +2602,8 @@ final class ConversationViewModelTests: XCTestCase {
         sut.handleMentionQuery(in: "Hey @al")
 
         XCTAssertEqual(sut.activeMentionQuery, "al")
-        XCTAssertEqual(sut.mentionSuggestions.count, 1)
-        XCTAssertEqual(sut.mentionSuggestions.first?.username, "alice")
+        XCTAssertEqual(sut.mentionController.suggestions.count, 1)
+        XCTAssertEqual(sut.mentionController.suggestions.first?.username, "alice")
     }
 
     func test_activeMentionQuery_triggersSearch() {
@@ -2619,12 +2619,12 @@ final class ConversationViewModelTests: XCTestCase {
         sut.handleMentionQuery(in: "Hey @")
 
         XCTAssertEqual(sut.activeMentionQuery, "")
-        XCTAssertEqual(sut.mentionSuggestions.count, 2)
+        XCTAssertEqual(sut.mentionController.suggestions.count, 2)
 
         // Clear suggestions
         sut.clearMentionSuggestions()
 
-        XCTAssertTrue(sut.mentionSuggestions.isEmpty)
+        XCTAssertTrue(sut.mentionController.suggestions.isEmpty)
         XCTAssertNil(sut.activeMentionQuery)
     }
 
@@ -2952,6 +2952,7 @@ final class ConversationViewModelTests: XCTestCase {
         var rejoinResult = true
         private(set) var broughtUIForwardCount = 0
         private(set) var rejoinCalls: [(callId: String, conversationId: String, remoteUserId: String, remoteUsername: String, isVideo: Bool)] = []
+        private(set) var markedGroups: [String] = []
 
         var context: LiveCallJoinContext {
             LiveCallJoinContext(
@@ -2962,7 +2963,8 @@ final class ConversationViewModelTests: XCTestCase {
                 rejoinActiveCall: { [weak self] callId, conversationId, remoteUserId, remoteUsername, isVideo in
                     self?.rejoinCalls.append((callId, conversationId, remoteUserId, remoteUsername, isVideo))
                     return self?.rejoinResult ?? true
-                }
+                },
+                markGroupConversation: { [weak self] conversationId, _ in self?.markedGroups.append(conversationId) }
             )
         }
     }
@@ -3031,6 +3033,25 @@ final class ConversationViewModelTests: XCTestCase {
         XCTAssertEqual(spy.rejoinCalls.first?.remoteUserId, "peer-user-1")
         XCTAssertEqual(spy.rejoinCalls.first?.remoteUsername, "Peer")
         XCTAssertEqual(spy.rejoinCalls.first?.isVideo, true)
+    }
+
+    /// #9111 — la bulle vivante d'un GROUPE n'était pas touchable : `isDirect`
+    /// était testé avant `isLive`, et le geste s'arrêtait là.
+    func test_callBack_liveBubbleInGroup_joinsTheCallThroughTheMesh() async throws {
+        let spy = LiveCallJoinSpy()
+        let service = MockActiveCallService()
+        service.result = .success(ActiveCallSession(
+            id: "call-live-1", conversationId: testConversationId, mode: "p2p", status: "active",
+            participants: [ActiveCallParticipant(userId: testUserId), ActiveCallParticipant(userId: "peer-user-1"), ActiveCallParticipant(userId: "peer-user-2")]
+        ))
+        let sut = makeSUT(isDirect: false, participantUserId: nil, activeCallService: service, liveCallJoin: spy.context)
+
+        sut.callBack(for: makeLiveCallSummary())
+        for _ in 0..<50 where spy.rejoinCalls.isEmpty { try await Task.sleep(nanoseconds: 20_000_000) }
+
+        XCTAssertEqual(spy.rejoinCalls.count, 1)
+        XCTAssertEqual(spy.rejoinCalls.first?.remoteUserId, testConversationId, "un groupe se rejoint par sa conversation : le premier qui offre devient le principal")
+        XCTAssertEqual(spy.markedGroups, [testConversationId])
     }
 
     func test_joinOngoingCall_callEndedServerSide_toastsAndNeverRejoins() async {

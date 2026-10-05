@@ -239,6 +239,19 @@ struct ConversationMediaFilmstrip: View {
 
 // MARK: - Thumbnail
 
+/// Ce que la vignette DIT d'un fichier introuvable (#8141) — la phrase de la
+/// page de la visionneuse (`GalleryMediaUnavailableView`), à la suite de la
+/// position.
+nonisolated enum FilmstripThumbnailPresentation {
+    static var unavailableText: String {
+        String(localized: "gallery.media.unavailable", defaultValue: "Ce média n'est plus disponible", bundle: .main)
+    }
+
+    static func accessibilityLabel(position: String, isUnavailable: Bool) -> String {
+        isUnavailable ? "\(position), \(unavailableText)" : position
+    }
+}
+
 /// Une vignette de la pellicule.
 ///
 /// `Equatable` sans lire l'environnement : la comparaison décide seule du
@@ -253,7 +266,11 @@ private struct FilmstripThumbnail: View, Equatable {
     let accessibilityLabel: String
     let onTap: () -> Void
 
-    static func == (lhs: FilmstripThumbnail, rhs: FilmstripThumbnail) -> Bool {
+    /// Le réseau n'a pas rendu la vignette (404, 410, refus) : elle ne
+    /// l'affichera jamais, l'absence se dessine au lieu d'un aplat (#8141).
+    @State private var isUnavailable = false
+
+    static func ==(lhs: FilmstripThumbnail, rhs: FilmstripThumbnail) -> Bool {
         lhs.attachment.id == rhs.attachment.id
             && lhs.isCurrent == rhs.isCurrent
             && lhs.accentColor == rhs.accentColor
@@ -262,7 +279,7 @@ private struct FilmstripThumbnail: View, Equatable {
     }
 
     private var shape: RoundedRectangle {
-        RoundedRectangle(cornerRadius: 10, style: .continuous)
+        RoundedRectangle(cornerRadius: MeeshyRadius.sm, style: .continuous)
     }
 
     /// Une vignette n'affiche JAMAIS le fichier plein format : la vignette
@@ -277,17 +294,19 @@ private struct FilmstripThumbnail: View, Equatable {
                 thumbHash: attachment.thumbHash,
                 thumbnailUrl: thumbnailURL,
                 fullUrl: thumbnailURL,
-                targetSize: CGSize(width: side, height: side)
+                targetSize: CGSize(width: side, height: side),
+                onFullImageFailure: { isUnavailable = true }
             ) {
-                Color(hex: attachment.thumbnailColor).opacity(0.5)
+                Color(hex: attachment.thumbnailColor).opacity(MeeshyOpacity.strong)
             }
             .aspectRatio(contentMode: .fill)
             .frame(width: side, height: side)
+            .overlay { unavailableMark }
             .clipShape(shape)
             .overlay(alignment: .bottomTrailing) { videoGlyph }
             .overlay(
                 shape.strokeBorder(
-                    isCurrent ? Color(hex: accentColor) : Color.white.opacity(0.18),
+                    isCurrent ? Color(hex: accentColor) : Color.white.opacity(MeeshyOpacity.light),
                     lineWidth: isCurrent ? 2 : 1
                 )
             )
@@ -296,8 +315,26 @@ private struct FilmstripThumbnail: View, Equatable {
             .animation(.spring(response: 0.28, dampingFraction: 0.85), value: isCurrent)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(accessibilityLabel)
+        .accessibilityLabel(FilmstripThumbnailPresentation.accessibilityLabel(
+            position: accessibilityLabel, isUnavailable: isUnavailable
+        ))
         .accessibilityAddTraits(isCurrent ? [.isButton, .isSelected] : .isButton)
+    }
+
+    /// Même pictogramme que la page de la visionneuse, sur un fond sombre qui
+    /// remplace l'aplat : la vignette se lit « absente », pas « en attente ».
+    @ViewBuilder
+    private var unavailableMark: some View {
+        if isUnavailable {
+            ZStack {
+                MeeshyColors.mediaScrim
+                Image(systemName: "photo.badge.exclamationmark")
+                    .font(MeeshyFont.relative(MeeshyIconSize.lg, weight: .medium))
+                    .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+                    .foregroundColor(MeeshyColors.mediaChromeTertiary)
+            }
+            .accessibilityHidden(true)
+        }
     }
 
     /// Glyphe décoratif : le libellé VoiceOver de la vignette porte déjà la
@@ -308,9 +345,9 @@ private struct FilmstripThumbnail: View, Equatable {
             Image(systemName: "play.fill")
                 .font(.system(size: 8, weight: .black))
                 .foregroundColor(.white)
-                .padding(3)
-                .background(Circle().fill(Color.black.opacity(0.55)))
-                .padding(3)
+                .padding(MeeshySpacing.xxs)
+                .background(Circle().fill(MeeshyColors.mediaScrim))
+                .padding(MeeshySpacing.xxs)
                 .accessibilityHidden(true)
         }
     }

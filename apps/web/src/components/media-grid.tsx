@@ -16,6 +16,7 @@ import {
   type MediaGridFrame,
 } from '@/lib/view/media-grid-layout';
 import { MEDIA_GRID_MAX_WIDTH } from '@/lib/reading-mode/metrics';
+import { PIECE_RATIO_ATTRIBUTE, pieceAspectRatio } from '@/lib/view/message-preview';
 import { READER_LOCALE } from '@/lib/reader';
 
 import { AttachmentReactionBadge } from './attachment-reaction-badge';
@@ -83,6 +84,7 @@ export function ImageTile({
   return (
     <figure
       data-attachment={attachment.id}
+      {...{ [PIECE_RATIO_ATTRIBUTE]: pieceAspectRatio(attachment) }}
       /* `relative` + enfants `absolute inset-0` (revue #5805) — voir le
          doc-comment historique (le motif de la pile d'empilement) : NE PAS
          revenir à `grid` avec deux enfants au même `col-start-1 row-start-1`. */
@@ -130,13 +132,13 @@ export function ImageTile({
  * un re-rendu, l'état « visionneuse ouverte » restant chez `Attachments`.
  */
 const FRAME_CLASS: Readonly<Record<MediaGridFrame, string>> = {
-  box: 'relative overflow-hidden rounded-media bg-black',
+  box: 'relative overflow-hidden rounded-media bg-media-backdrop',
   tiles: 'relative',
 };
 
 const CELL_CLASS: Readonly<Record<MediaGridFrame, string>> = {
   box: 'relative size-full overflow-hidden',
-  tiles: 'relative size-full overflow-hidden rounded-media bg-black',
+  tiles: 'relative size-full overflow-hidden rounded-media bg-media-backdrop',
 };
 
 export const MediaGrid = memo(function MediaGrid({
@@ -146,6 +148,7 @@ export const MediaGrid = memo(function MediaGrid({
   displayLanguage,
   fallbackLanguage,
   onOpen,
+  maskedTap = 'open',
 }: {
   readonly items: readonly Attachment[];
   readonly frame: MediaGridFrame;
@@ -153,13 +156,26 @@ export const MediaGrid = memo(function MediaGrid({
   readonly displayLanguage?: string;
   readonly fallbackLanguage: string;
   readonly onOpen: (index: number) => void;
+  /**
+   * Ce que fait le toucher d'une case masquée (#8389) : ouvrir la visionneuse,
+   * révéler le message flouté sur place, ou rien — la forme au repos que
+   * l'aperçu de l'appui long reprend, sans aucun bouton.
+   */
+  readonly maskedTap?: 'open' | 'reveal' | 'none';
 }) {
   const maskedAttachment = useAttachmentMasked();
+  /* UNE CASE MASQUÉE S'OUVRE SI ELLE A QUELQUE CHOSE À OUVRIR (#8008) — la
+     même règle qu'`ImageTile` : sans URL (la lecture souveraine retient le
+     fichier au serveur, #6862), aucun bouton, faute de quoi le toucher
+     promettrait une visionneuse vide (loi 4). */
+  const openable = (attachment: Attachment, index: number) =>
+    maskedTap !== 'none' && typeof attachment.fileUrl === 'string' && attachment.fileUrl !== '' ? { onOpen: () => onOpen(index) } : {};
+  const tap = maskedTap === 'reveal' ? 'reveal' : 'open';
   if (items.length === 0) return null;
 
   if (items.length === 1) {
     const only = items[0]!;
-    if (maskedAttachment(only)) return <MaskedAttachment attachment={only} />;
+    if (maskedAttachment(only)) return <MaskedAttachment attachment={only} tap={tap} {...openable(only, 0)} />;
     if (kindOf(only) === 'video') {
       return <VideoTile attachment={only} solo onExpand={() => onOpen(0)} />;
     }
@@ -191,14 +207,18 @@ export const MediaGrid = memo(function MediaGrid({
   const cellShape = (index: number) => ({
     'data-slot-width': cellSizes[index]!.width,
     'data-slot-height': cellSizes[index]!.height,
+    [PIECE_RATIO_ATTRIBUTE]: pieceAspectRatio(items[index]!),
   });
 
   const cell = (attachment: Attachment, index: number, widthPx: number) => {
     const overflowCount = slots[index]!.overflowCount;
     if (maskedAttachment(attachment)) {
+      /* LA CASE MASQUÉE S'OUVRE (#8008) : son toucher ouvre la visionneuse
+         sur ELLE, et la visionneuse reçoit la pièce en clair (`Attachments`,
+         `revealedAttachment`). */
       return (
-        <div key={attachment.id} className={CELL_CLASS[frame]}>
-          <MaskedAttachment attachment={attachment} fill />
+        <div key={attachment.id} className={CELL_CLASS[frame]} {...{ [PIECE_RATIO_ATTRIBUTE]: pieceAspectRatio(attachment) }}>
+          <MaskedAttachment attachment={attachment} fill tap={tap} {...openable(attachment, index)} />
         </div>
       );
     }
@@ -303,8 +323,8 @@ function OverflowVeil({
       data-overflow={count}
       onClick={() => onOpen(index)}
       aria-label={`Ouvrir le média ${index + 1} sur ${total}, ${count} de plus`}
-      className="absolute inset-0 grid cursor-pointer appearance-none place-items-center border-0 font-bold text-white"
-      style={{ backgroundColor: `rgba(0,0,0,${OVERFLOW_VEIL_OPACITY})`, fontSize: OVERFLOW_LABEL_SIZE }}
+      className="absolute inset-0 grid cursor-pointer appearance-none place-items-center border-0 font-bold text-on-media"
+      style={{ backgroundColor: `color-mix(in srgb, var(--color-media-backdrop) ${OVERFLOW_VEIL_OPACITY * 100}%, transparent)`, fontSize: OVERFLOW_LABEL_SIZE }}
     >
       +{count}
     </button>

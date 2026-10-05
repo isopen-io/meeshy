@@ -44,7 +44,38 @@ extension MeeshyUser {
             timezone: timezone,
             registrationCountry: registrationCountry,
             profileCompletionRate: profileCompletionRate,
-            signalIdentityKeyPublic: signalIdentityKeyPublic
+            signalIdentityKeyPublic: signalIdentityKeyPublic,
+            activation: activation
+        )
+    }
+
+    /// Retire un avatar ou une bannière servis en `data:` avant de persister
+    /// l'utilisateur (Keychain) — extrait d'`AuthManager` (#8239) pour que ce
+    /// relais champ par champ vive à côté des autres copies de `MeeshyUser`.
+    public func droppingDataURIImages() -> MeeshyUser {
+        let hasDataAvatar = avatar?.hasPrefix("data:") == true
+        let hasDataBanner = banner?.hasPrefix("data:") == true
+        guard hasDataAvatar || hasDataBanner else { return self }
+        return MeeshyUser(
+            id: id, username: username, email: email,
+            firstName: firstName, lastName: lastName,
+            displayName: displayName, bio: bio,
+            avatar: hasDataAvatar ? nil : avatar,
+            banner: hasDataBanner ? nil : banner,
+            role: role, systemLanguage: systemLanguage,
+            regionalLanguage: regionalLanguage,
+            isOnline: isOnline, lastActiveAt: lastActiveAt,
+            createdAt: createdAt, updatedAt: updatedAt,
+            blockedUserIds: blockedUserIds, isActive: isActive,
+            deactivatedAt: deactivatedAt, isAnonymous: isAnonymous,
+            isMeeshyer: isMeeshyer, phoneNumber: phoneNumber,
+            emailVerifiedAt: emailVerifiedAt, phoneVerifiedAt: phoneVerifiedAt,
+            customDestinationLanguage: customDestinationLanguage,
+            autoTranslateEnabled: autoTranslateEnabled,
+            timezone: timezone, registrationCountry: registrationCountry,
+            profileCompletionRate: profileCompletionRate,
+            signalIdentityKeyPublic: signalIdentityKeyPublic,
+            activation: activation
         )
     }
 }

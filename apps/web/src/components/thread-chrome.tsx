@@ -1,6 +1,7 @@
 import { Glyph } from './glyph';
 import { TypingDots } from './typing-dots';
 import type { ListPaginationState } from '@/lib/lens/pagination';
+import type { ThreadLoadSignal } from '@/lib/view/thread-load-signal';
 import { lastMessageLine, scrollToBottomLabel, unreadHeadline } from '@/lib/view/thread-chrome';
 
 /**
@@ -49,6 +50,13 @@ export function DayPill({ label, headerExpanded }: { readonly label: string | nu
  * `ConversationScrollControlsView.swift`. `visible` gouverne le MONTAGE
  * (jamais un `opacity: 0` qui laisserait une cible fantôme sous les 44 pt
  * du composeur).
+ *
+ * `loading` (#9302) — le fil CHARGE (`ThreadReturnToBottom`) : miroir de
+ * `quotedMessageSearchContent` iOS, la capsule porte le libellé et les trois
+ * points pulsés, le bouton se monte même au bas du fil, se déclare occupé
+ * (`aria-busy`) et nomme son attente. Pendant un SAUT (`seeking`), il est
+ * insensible comme `.allowsHitTesting(!isSearchingQuotedMessage)` : revenir
+ * au présent avant que la fenêtre arrive la ferait atterrir par-dessus.
  */
 export function ScrollToBottomButton({
   visible,
@@ -56,6 +64,7 @@ export function ScrollToBottomButton({
   senderName,
   previewText,
   onClick,
+  loading = null,
 }: {
   readonly visible: boolean;
   readonly unreadCount: number;
@@ -63,18 +72,22 @@ export function ScrollToBottomButton({
   readonly senderName?: string | null;
   readonly previewText?: string | null;
   readonly onClick: () => void;
+  readonly loading?: { readonly kind: ThreadLoadSignal; readonly text: string } | null;
 }) {
-  if (!visible) return null;
-  const label = scrollToBottomLabel(unreadCount);
+  if (!visible && loading === null) return null;
+  const label = loading?.text ?? scrollToBottomLabel(unreadCount);
   const preview = lastMessageLine({ senderName, text: previewText });
   const showHeadline = unreadHeadline(unreadCount);
   const rich = unreadCount > 0 && preview !== null;
+  const inert = loading?.kind === 'seeking';
 
   return (
     <button
       type="button"
-      onClick={onClick}
+      onClick={inert ? undefined : onClick}
       aria-label={label}
+      {...(loading === null ? {} : { 'aria-busy': true, 'data-thread-loading': loading.kind })}
+      {...(inert ? { 'aria-disabled': true } : {})}
       /* `bottom` VARIABLE, jamais `bottom-2` (#6213) — le défileur couvrant
          désormais l'écran entier, ce bouton est un frère du composeur et non
          plus un enfant d'une enveloppe qui s'arrêtait au-dessus de lui : posé
@@ -91,10 +104,16 @@ export function ScrollToBottomButton({
            (`lib/accent.ts::inkOnAccent`, posée par `withAccent` sur l'hôte).
            Le blanc en dur valait 1,98:1 en schéma clair sur le premier accent
            du jeu — mesuré en revue de #5774. */
-        color: 'var(--accent-ink, #FFFFFF)',
+        color: 'var(--accent-ink, var(--color-ios-on-brand))',
       }}
     >
-      {rich ? (
+      {loading !== null ? (
+        <span className="flex max-w-[180px] items-center gap-2 px-3 py-1.5" aria-hidden>
+          {inert ? <Glyph name="magnifyingGlass" size={14} /> : null}
+          <span className="truncate text-mini font-semibold">{loading.text}</span>
+          <TypingDots color="currentColor" />
+        </span>
+      ) : rich ? (
         <span className="flex max-w-52 flex-col items-start gap-0.5 px-3 py-1.5 text-start" aria-hidden>
           {showHeadline ? <span className="text-mini font-semibold">{unreadCount} messages non lus</span> : null}
           <span className="truncate text-mini">{preview}</span>

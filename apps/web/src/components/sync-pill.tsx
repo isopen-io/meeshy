@@ -54,7 +54,7 @@ import { pillAnnouncesOffline } from '@/lib/view/sync-pill-voice';
  */
 
 const TEINTE = {
-  failed: { fond: 'var(--color-error)', encre: '#fff', glyphe: 'warningCircle' },
+  failed: { fond: 'var(--color-error)', encre: 'var(--color-ios-on-brand)', glyphe: 'warningCircle' },
   offline: { fond: 'var(--color-warn)', encre: 'var(--color-ios-ink)', glyphe: 'warningCircle' },
   syncing: { fond: 'var(--color-ios-card)', encre: 'var(--color-ios-ink-2)', glyphe: 'clock' },
 } as const;

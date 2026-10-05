@@ -71,6 +71,10 @@ const ROUTE_SURFACES: Record<string, Classification> = {
   // jumelle de la 1re sur `GET /admin/translations`, même portée découverte.
   'admin/content.ts': { kind: 'applies', reads: 5, applications: 2 },
   'admin/conversation-messages-sovereign.ts': { kind: 'applies', reads: 1, applications: 1 },
+  // #8876 — `enrichReports` nomme l'entité qu'un signalement désigne ; sa lecture
+  // de messages charge `sender` (l'auteur) et est enveloppée — un expéditeur
+  // disparu ne doit pas faire rejeter toute la page de modération.
+  'admin/reports-enrichment.ts': { kind: 'applies', reads: 1, applications: 1 },
   // `rankMessages` (la seule des trois à charger `sender`) est enveloppée ;
   // les deux lectures de `rankConversations` ne chargent qu'identifiant/titre.
   'admin/system-rankings.ts': { kind: 'applies', reads: 3, applications: 1 },
@@ -142,6 +146,7 @@ const SOCKETIO_SURFACES: Record<string, Classification> = {
   'MeeshySocketIOManager.ts': { kind: 'exempt', reads: 7, why: DOES_NOT_SELECT_SENDER },
   'utils/participant-resolver.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'utils/personalPreviewOverride.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  'announceCitedPostWithdrawal.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
 };
 
 /** `services/` — même règle, troisième racine. */
@@ -159,7 +164,12 @@ const SERVICE_SURFACES: Record<string, Classification> = {
   // servie ; sa portée est connue (les conversations des étoiles de la page).
   'messaging/messageStars/StarredMessagesReader.ts': { kind: 'applies', reads: 1, applications: 1 },
 
-  'AttachmentReactionService.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // Deux lectures depuis #9240 : `resolveConversationId` (projette le scalaire
+  // `conversationId`) et la garde d'admission d'écriture de
+  // `addAttachmentReaction` (projette `conversation: { isActive, closedAt }`).
+  // Ni l'une ni l'autre ne demande la relation `sender` — un expéditeur disparu
+  // n'entre dans aucune de leurs branches.
+  'AttachmentReactionService.ts': { kind: 'exempt', reads: 2, why: DOES_NOT_SELECT_SENDER },
   'attachments/attachmentReadVerdict.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   // Deux `create`/`update` (jamais `find*`) pour le message-résumé d'appel :
   // hors du périmètre `.message.find*` de ce garde, mais nommé ici pour la
@@ -199,6 +209,21 @@ const SERVICE_SURFACES: Record<string, Classification> = {
   // expéditeur disparu n'ouvre donc aucune trajectoire d'erreur : l'annonce
   // part vers la room du `Participant.id`, qui est exactement l'adresse que
   // `ROOMS.user()` attend d'un participant sans ligne `User`.
+  // #8302 — la flamme-œil consommée : `{ select: { id, senderId, effectFlags } }`,
+  // jamais `sender`. `senderId` sert à refuser qu'un auteur consomme le sien.
+  'messaging/consumeAfterReadMessages.ts': {
+    kind: 'exempt',
+    reads: 1,
+    why:
+      'Sélectionne `senderId` seul, pour exclure l\'auteur de sa propre consommation : ' +
+      'aucune identité d\'expéditeur n\'est servie, rien à réparer.',
+  },
+  // #8557 — la contagion d'une réponse relit le message CITÉ :
+  // `{ select: { effectFlags, isBlurred, ephemeralDuration } }`, jamais `sender`.
+  'messaging/replyProtectionContagion.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #8630 — la chaîne citée (vers le haut) et les réponses (vers le bas) :
+  // `senderId` en COLONNE, jamais la relation `sender`.
+  'messaging/quoteCascade.ts': { kind: 'exempt', reads: 2, why: DOES_NOT_SELECT_SENDER },
   'messaging/ephemeralCountdown.ts': {
     kind: 'exempt',
     reads: 1,
@@ -210,6 +235,11 @@ const SERVICE_SURFACES: Record<string, Classification> = {
   // jamais `sender`. Elle lie le message cité à la conversation de l'envoi ;
   // un expéditeur disparu n'entre dans aucune de ses branches.
   'messaging/attachmentReplySnapshot.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #8064 — le rattachement d'un enregistrement d'appel retrouve la bulle par
+  // `select: { id: true }` ; la relecture qui la rediffuse passe par
+  // `findUniqueOrThrow` avec `CALL_SUMMARY_MESSAGE_INCLUDE`, la même forme que
+  // les écritures du message-résumé de `CallService` (initiateur de l'appel).
+  'calls/callRecordingLink.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'messaging/conversationWriteAdmission.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'messaging/forwardAdmission.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'messaging/messageMentions.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
@@ -236,14 +266,17 @@ const SERVICE_SURFACES: Record<string, Classification> = {
   // orphelin qui bloque cette passe reste couvert par le balayage nocturne de
   // maintenance (`MaintenanceService.cleanupExpiredData`), qui répare AVANT
   // de nettoyer.
+  // #8630 — la 2e lecture charge les RÉPONSES que la destruction emporte, avec
+  // le même `select` que la passe : même balayage, même portée, même raison.
   'ExpiredMessagesCleanupService.ts': {
     kind: 'exempt',
-    reads: 1,
+    reads: 2,
     why:
       "Balayage de rétention côté serveur, sans lecteur et de portée GLOBALE (toute la base, " +
       "filtrée par `expiresAt` — jamais une conversation) : aucune liste de `conversationIds` " +
       "bornable ne peut être donnée à la réparation sans lire aussi large que la passe " +
-      'elle-même. Le balayage nocturne de maintenance répare les orphelins AVANT ce nettoyage.',
+      'elle-même. Le balayage nocturne de maintenance répare les orphelins AVANT ce nettoyage. ' +
+      "La lecture des réponses emportées (#8630) suit la passe qui les découvre, avec le même `select`.",
   },
   'CallService.ts': {
     kind: 'exempt',

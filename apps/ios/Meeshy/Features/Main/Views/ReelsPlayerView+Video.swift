@@ -147,7 +147,7 @@ struct ReelVideoView: View {
             // `.receive(on: .main)` so `isCallActive` is already cleared when the
             // guard re-checks it.
             .onReceive(
-                CallManager.shared.$callState
+                CallManagerHost.shared.callStatePublisher
                     .map(\.isActive)
                     .removeDuplicates()
                     .receive(on: DispatchQueue.main)

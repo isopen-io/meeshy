@@ -12,7 +12,9 @@ public protocol NotificationServiceProviding: Sendable {
         offset: Int?,
         cursor: String?,
         limit: Int,
-        unreadOnly: Bool
+        unreadOnly: Bool,
+        types: [String],
+        hideReadTypes: [String]
     ) async throws -> NotificationListResponse
     func unreadCount() async throws -> Int
     func markAsRead(notificationId: String) async throws
@@ -35,11 +37,17 @@ public final class NotificationService: NotificationServiceProviding, @unchecked
     /// `offset` reste formulable — le repli de compatibilité, jamais le défaut
     /// — et le curseur GAGNE quand les deux sont donnés : un appelant qui
     /// tient un curseur tient déjà mieux qu'un rang.
+    ///
+    /// `types` restreint la page à une catégorie de la cloche ; `hideReadTypes`
+    /// retire les lignes LUES des types consommés (#8958). Vides, ils ne
+    /// partent pas : la passerelle sert l'inbox entière.
     public func list(
         offset: Int? = nil,
         cursor: String? = nil,
         limit: Int = 20,
-        unreadOnly: Bool = false
+        unreadOnly: Bool = false,
+        types: [String] = [],
+        hideReadTypes: [String] = []
     ) async throws -> NotificationListResponse {
         var queryItems = [URLQueryItem(name: "limit", value: "\(limit)")]
         if let cursor {
@@ -49,6 +57,12 @@ public final class NotificationService: NotificationServiceProviding, @unchecked
         }
         if unreadOnly {
             queryItems.append(URLQueryItem(name: "unreadOnly", value: "true"))
+        }
+        if !types.isEmpty {
+            queryItems.append(URLQueryItem(name: "types", value: types.joined(separator: ",")))
+        }
+        if !hideReadTypes.isEmpty {
+            queryItems.append(URLQueryItem(name: "hideReadTypes", value: hideReadTypes.joined(separator: ",")))
         }
         return try await api.request(NotificationsEndpoint.root, queryItems: queryItems)
     }

@@ -1,3 +1,4 @@
+import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
 import { describe, it, expect, jest } from '@jest/globals';
 
 jest.mock('../../utils/logger-enhanced', () => {
@@ -64,6 +65,7 @@ interface MessageRow {
   attachments: Array<{ id: string; mimeType: string | null }>;
   isViewOnce?: boolean;
   ephemeralDuration?: number | null;
+  effectFlags?: number | null;
 }
 
 function messageRow(overrides: Partial<MessageRow> = {}): MessageRow {
@@ -476,6 +478,26 @@ describe('ExpiredMessagesCleanupService', () => {
     expect(result).toEqual({ burned: 0 });
     expect(updateCalls(prisma).some(([args]) => 'deletedAt' in args.data)).toBe(false);
     expect(manager?.emit).not.toHaveBeenCalled();
+  });
+
+  // #8345 — flamme-œil ET vue unique : la flamme gouverne la BULLE
+  // (`expiresAt`), la vue unique le seul CONTENU (`viewOnceBurnAt`). Classer la
+  // ligne en « vue unique héritée » annulerait la destruction promise par la
+  // flamme (`expiresAt: null`) et purgerait le contenu sur-le-champ.
+  it.each([
+    ['EPHEMERAL | EPHEMERAL_AFTER_READ', MESSAGE_EFFECT_FLAGS.EPHEMERAL | MESSAGE_EFFECT_FLAGS.EPHEMERAL_AFTER_READ],
+    ['EPHEMERAL_AFTER_READ seul', MESSAGE_EFFECT_FLAGS.EPHEMERAL_AFTER_READ],
+  ])('une flamme-œil à vue unique échue (%s) est DÉTRUITE, jamais réévaluée en vue unique héritée (#8345)', async (_label, effectFlags) => {
+    const { service, prisma } = buildService([
+      messageRow({ isViewOnce: true, ephemeralDuration: null, effectFlags }),
+    ]);
+
+    const result = await service.cleanup();
+
+    expect(result).toEqual({ burned: 1 });
+    const calls = updateCalls(prisma);
+    expect(calls.some(([args]) => 'deletedAt' in args.data)).toBe(true);
+    expect(calls.some(([args]) => 'viewOnceBurnAt' in args.data)).toBe(false);
   });
 
   it('`start` balaye immédiatement puis à intervalle, `stop` désarme', async () => {

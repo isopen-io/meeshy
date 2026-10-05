@@ -28,6 +28,9 @@
  *  3. `/login` avec une session déjà active redirige vers `/`.
  *  4. `/conversations/new` est PRIVÉE (un visiteur sans session en est sorti) et
  *     une recherche en ÉCHEC y peint une ALERTE, jamais un écran blanc (#5652).
+ *  5. Le VISITEUR sans compte (#9172, `lib/check-visitor.mjs`) : la story d'un
+ *     lien servie lentement paraît sans « Réessayer » ; `/reels` sans
+ *     identifiant invite à rejoindre.
  *
  * Construit dans `dist-gateway` (couvert par le motif `dist-*` du
  * `.gitignore`, jamais commité) — même discipline que `check-shell-dist.mjs`.
@@ -39,6 +42,7 @@ import { extname, join, normalize } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { launchChromium } from './lib/browser.mjs';
+import { checkVisitor } from './lib/check-visitor.mjs';
 import { allFiles } from './lib/files.mjs';
 import { FIXTURE_MARKERS } from './lib/fixture-markers.mjs';
 import { screenRoutes } from './lib/v31-routes.mjs';
@@ -921,6 +925,9 @@ async function main() {
     );
     await context.close();
   }
+
+  // --- 7. LE VISITEUR SANS COMPTE (#9172) : réseau lent, `/reels` nu -------
+  await checkVisitor({ browser, base, check });
 
   await browser.close();
   server.close();

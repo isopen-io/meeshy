@@ -20,7 +20,7 @@ extension StoryComposerView {
 
     var slideStrip: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
+            HStack(spacing: MeeshySpacing.xsPlus) {
                 ForEach(Array(viewModel.slides.enumerated()), id: \.element.id) { index, slide in
                     slideThumb(slide: slide, index: index)
                 }
@@ -33,7 +33,7 @@ extension StoryComposerView {
                     addSlideThumb
                 }
             }
-            .padding(.horizontal, 8)
+            .padding(.horizontal, MeeshySpacing.sm)
         }
     }
 

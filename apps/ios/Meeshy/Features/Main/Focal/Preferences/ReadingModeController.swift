@@ -59,6 +59,7 @@ final class ReadingModeController: ObservableObject {
         capabilities: ReadingModeOrchestrator.ReadingModeCapabilities,
         isFlagEnabled: Bool,
         forcedMode: ConversationReadingMode? = nil,
+        landsOnMessage: Bool = false,
         store: FocalReadingModePreferenceStoring = ReadingModePreferenceStore(),
         now: @escaping () -> Date = Date.init
     ) {
@@ -96,8 +97,27 @@ final class ReadingModeController: ObservableObject {
                 ),
                 isFlagEnabled: isFlagEnabled
             )
-            self.decision = resolved
-            self.mode = resolved.mode
+            let opening = landsOnMessage ? Self.landing(resolved) : resolved
+            self.decision = opening
+            self.mode = opening.mode
+        }
+    }
+
+    /// #8133 — une ouverture qui porte un message CIBLE (« Aller au message »,
+    /// tap de notification) atterrit sur le FIL. Le Résumé vivant et la Rivière
+    /// sont des hôtes dédiés qui ne montrent pas le fil et ne consomment pas le
+    /// défilement vers un message : ils s'ouvrent en Script. Un mode qui montre
+    /// le fil (Script, Bulles, Focal) est gardé — c'est le choix du lecteur.
+    /// Comme `forcedMode`, seule l'OUVERTURE est concernée : `select` et
+    /// `resetToAuto` reprennent la loi.
+    nonisolated static func landing(
+        _ decision: ReadingModeOrchestrator.OrchestratorDecision
+    ) -> ReadingModeOrchestrator.OrchestratorDecision {
+        switch decision.mode {
+        case .summary, .river:
+            return ReadingModeOrchestrator.OrchestratorDecision(mode: .script, reason: decision.reason)
+        case .script, .bubbles, .focal:
+            return decision
         }
     }
 

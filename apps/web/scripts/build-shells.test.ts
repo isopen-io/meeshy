@@ -4,6 +4,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
+  auditAndroidReleaseSigning,
   auditAndroidVersionCodeForm,
   auditAndroidVersionName,
   auditBuiltApkVersion,
@@ -659,5 +660,49 @@ describe('auditBuiltIosAppVersion — l’App.app construite porte ce que la con
         buildNumber: 31,
       }),
     ).toHaveLength(1);
+  });
+});
+
+describe('auditAndroidReleaseSigning — la release de la coque est signée par une clé HORS du dépôt (#8085)', () => {
+  const SIGNED = `android {
+    signingConfigs {
+        release {
+            def props = meeshyReleaseSigningProperties()
+            if (props != null) {
+                storeFile file(props['storeFile'])
+                storeType props['storeType'] ?: 'pkcs12'
+                storePassword props['storePassword']
+                keyAlias props['keyAlias']
+                keyPassword props['keyPassword']
+            }
+        }
+    }
+    buildTypes {
+        release {
+            signingConfig signingConfigs.release
+        }
+    }
+}`;
+
+  test('une release signée par la configuration hors dépôt passe', () => {
+    expect(auditAndroidReleaseSigning(SIGNED)).toEqual([]);
+  });
+
+  test('sans signingConfigs.release, la release ne peut pas être signée', () => {
+    expect(auditAndroidReleaseSigning('android { buildTypes { release { minifyEnabled false } } }').length).toBeGreaterThan(0);
+  });
+
+  test('un buildType release qui ne pointe pas signingConfigs.release est refusé', () => {
+    const unlinked = SIGNED.replace('signingConfig signingConfigs.release', 'minifyEnabled false');
+    expect(auditAndroidReleaseSigning(unlinked).join(' ')).toContain('signingConfig');
+  });
+
+  test('un mot de passe écrit en LITTÉRALE dans build.gradle est refusé', () => {
+    const leaked = SIGNED.replace("storePassword props['storePassword']", "storePassword 'hunter2'");
+    expect(auditAndroidReleaseSigning(leaked).join(' ')).toContain('storePassword');
+  });
+
+  test('le build.gradle RÉEL de la coque signe sa release hors dépôt', () => {
+    expect(auditAndroidReleaseSigning(readFileSync(REAL_GRADLE_PATH, 'utf8'))).toEqual([]);
   });
 });

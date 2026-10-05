@@ -55,8 +55,18 @@ const queryDate = (value: unknown): Date | undefined => {
   return Number.isNaN(date.getTime()) ? undefined : date;
 };
 
-const queryRole = (value: unknown): string | undefined =>
-  typeof value === 'string' && USER_ROLES.has(value) ? value : undefined;
+/**
+ * Un ou plusieurs rôles séparés par des virgules (`role=BIGBOSS,ADMIN`) — le rang
+ * d'administration est DEUX rôles, et la tuile « Administrateurs » du tableau de bord
+ * le compte ainsi : l'ouvrir sur `role=ADMIN` seul listait zéro compte quand le seul
+ * administrateur est le créateur (BIGBOSS). Un rôle inconnu est ignoré, jamais transmis ;
+ * s'il n'en reste aucun, le filtre ne restreint rien.
+ */
+const queryRole = (value: unknown): string[] | undefined => {
+  if (typeof value !== 'string') return undefined;
+  const roles = [...new Set(value.split(',').map((role) => role.trim()).filter((role) => USER_ROLES.has(role)))];
+  return roles.length === 0 ? undefined : roles;
+};
 
 const querySearch = (value: unknown): string | undefined =>
   typeof value === 'string' && value.length > 0 ? value : undefined;

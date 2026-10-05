@@ -11,17 +11,16 @@ import { FastifyInstance } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { UnifiedAuthRequest } from '../../middleware/auth';
-import { canAccessConversation } from './utils/access-control';
+import { ouvrirConversationLisible } from './utils/conversation-read-gate';
 import {
   applyHistoryFloor,
   historyReaderFromAuthContext,
   loadReaderHistoryFloor,
 } from '../../services/historyFloor';
-import { resolveConversationId } from '../../utils/conversation-id-cache';
 import { validatePagination } from '../../utils/pagination';
 import type { ConversationParams } from './types';
 import { enhancedLogger } from '../../utils/logger-enhanced';
-import { sendSuccess, sendForbidden, sendInternalError } from '../../utils/response';
+import { sendSuccess, sendInternalError } from '../../utils/response';
 
 // Logger dédié pour messages-advanced
 const logger = enhancedLogger.child({ module: 'messages-advanced' });
@@ -39,11 +38,16 @@ const CONVERSATION_STATUS_PAGE_SIZE = 50;
 
 /**
  * `GET /conversations/:id/reactions` et `GET /conversations/:id/status`.
- * Regroupées dans un seul registrar : même paire de gardes d'accès
- * (`resolveConversationId` + `canAccessConversation`), même plancher
+ * Regroupées dans un seul registrar : même porte de lecture
+ * (`ouvrirConversationLisible` — un non-membre reçoit le 404 d'une
+ * conversation inexistante, #8116), même plancher
  * d'historique, aucune dépendance à `socketIOHandler` / aux services
  * d'attachments ou de tracking links que portent les routes d'écriture.
  */
+const REFUS_DE_LECTURE = {
+  sansSession: 'Authentication required to read this conversation'
+} as const;
+
 export function registerMessagesAdvancedReadRoutes(
   fastify: FastifyInstance,
   prisma: PrismaClient,
@@ -102,16 +106,15 @@ export function registerMessagesAdvancedReadRoutes(
       const { id } = request.params;
       const authRequest = request as UnifiedAuthRequest;
 
-      // Résoudre l'ID de conversation réel
-      const conversationId = await resolveConversationId(prisma, id);
+      const conversationId = await ouvrirConversationLisible({
+        prisma,
+        reply,
+        authContext: authRequest.authContext,
+        identifiant: id,
+        messages: REFUS_DE_LECTURE
+      });
       if (!conversationId) {
-        return sendForbidden(reply, 'Unauthorized access to this conversation');
-      }
-
-      // Vérifier les permissions d'accès
-      const canAccess = await canAccessConversation(prisma, authRequest.authContext, conversationId, id);
-      if (!canAccess) {
-        return sendForbidden(reply, 'Unauthorized access to this conversation');
+        return;
       }
 
       // Une réaction NOMME un message et l'identité de qui l'a posée : sur un
@@ -260,16 +263,15 @@ export function registerMessagesAdvancedReadRoutes(
       const { id } = request.params;
       const authRequest = request as UnifiedAuthRequest;
 
-      // Résoudre l'ID de conversation réel
-      const conversationId = await resolveConversationId(prisma, id);
+      const conversationId = await ouvrirConversationLisible({
+        prisma,
+        reply,
+        authContext: authRequest.authContext,
+        identifiant: id,
+        messages: REFUS_DE_LECTURE
+      });
       if (!conversationId) {
-        return sendForbidden(reply, 'Unauthorized access to this conversation');
-      }
-
-      // Vérifier les permissions d'accès
-      const canAccess = await canAccessConversation(prisma, authRequest.authContext, conversationId, id);
-      if (!canAccess) {
-        return sendForbidden(reply, 'Unauthorized access to this conversation');
+        return;
       }
 
       // Le plancher d'historique du lecteur borne cette page comme il borne

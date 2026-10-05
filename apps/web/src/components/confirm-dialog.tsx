@@ -97,7 +97,7 @@ export function ConfirmDialog({
       aria-labelledby={titleId}
       aria-describedby={bodyId}
       onClose={onCancel}
-      className="m-auto w-[min(26rem,calc(100%-2rem))] rounded-card p-0 backdrop:bg-black/40"
+      className="m-auto w-[min(26rem,calc(100%-2rem))] rounded-card p-0 backdrop:bg-veil"
       style={{ backgroundColor: 'var(--color-ios-card)', color: 'var(--color-ios-ink)', border: 0 }}
     >
       <div className="grid gap-3 p-5">

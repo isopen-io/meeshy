@@ -102,7 +102,8 @@ export interface LastMessageCallSummary {
  * - `system.conversation-image` — params `{ actor }` : l'image a changé
  * - `system.encryption-enabled` — params `{ mode }` (`e2ee` | `server` | `hybrid`)
  * - `system.generic` — un message système que le serveur ne sait pas typer ;
- *   aucun paramètre, le client rend un libellé neutre.
+ *   aucun paramètre, le client rend son texte (Prisme compris), comme le fil,
+ *   et un libellé neutre seulement sans texte (#8561).
  */
 export type SystemEventKey =
   | 'system.member-joined'
@@ -123,14 +124,16 @@ export interface LastMessageSystemEvent {
 /**
  * Pourquoi un contenu est retenu. L'ORDRE est celui du cumul d'effets validé
  * par le porteur (#7546) : la sécurité l'emporte — `expired` > `view-once` >
- * `blurred` > `encrypted` > `ephemeral`.
+ * `blurred` > `encrypted` > `after-read` > `ephemeral`.
  *
  * `ephemeral` ne RETIENT rien : le texte d'un éphémère encore actif reste
  * servi (« 🔥 4 min · texte ») et son décompte part de la réception de chaque
- * lecteur (#7451). Les quatre autres retiennent texte, traductions et pièces
- * jointes.
+ * lecteur (#7451). Les autres retiennent texte, traductions et pièces
+ * jointes — `after-read` (la flamme-œil, #8634) compris : la lire dans la
+ * liste ne la consommerait pas. Un client qui ne connaît pas une valeur la
+ * rend comme `blurred`, jamais en clair.
  */
-export type PreviewProtection = 'expired' | 'view-once' | 'blurred' | 'encrypted' | 'ephemeral';
+export type PreviewProtection = 'expired' | 'view-once' | 'blurred' | 'encrypted' | 'after-read' | 'ephemeral';
 
 /**
  * La DERNIÈRE réaction posée dans la conversation, résolue pour le lecteur.
@@ -141,8 +144,9 @@ export type PreviewProtection = 'expired' | 'view-once' | 'blurred' | 'encrypted
  * anonyme) — c'est EUX qu'un client compare au sien pour « Vous avez réagi » et
  * « à votre message ».
  *
- * Rang de la ligne : règle SERVEUR, servie en `listRankAt` (#7592,
- * `utils/conversation-list-rank.ts`).
+ * Rang de la ligne : règle SERVEUR, servie en `listRankAt` (#9026,
+ * `utils/conversation-list-rank.ts`) — une réaction est une activité qui
+ * remonte la ligne pour tous les participants.
  *
  * `excerpt` suit la MÊME protection que l'aperçu : pour un message réagi
  * protégé, `excerpt` est `null`, `excerptTranslations` est `null` et

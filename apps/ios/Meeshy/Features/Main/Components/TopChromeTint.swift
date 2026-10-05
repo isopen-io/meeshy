@@ -121,6 +121,11 @@ struct TopChromeTint: Equatable, Sendable {
 /// la bande système, et pas un point de la barre qu'il prolonge. Mesuré au
 /// pixel par `TopChromeBandRenderTests` — pas déduit de la géométrie.
 ///
+/// Elle entre et sort en glissant de sa propre hauteur, avec la barre qu'elle
+/// prolonge (#9048). Elle se monte sur la rangée de tête, de hauteur nulle, de
+/// la pile de `CallPresentationLayer` : à ce rang, la barre qui sort par le haut
+/// passe DEVANT elle (`TopChromeBarMotion`).
+///
 /// Les deux autres propriétés, chacune pour sa raison :
 /// • hauteur = `DeviceLayout.safeAreaTop`, lue sur la FENÊTRE — un
 ///   `GeometryProxy.safeAreaInsets` rend 0 dans un sous-arbre qui ignore la
@@ -139,6 +144,7 @@ struct TopChromeBand: ViewModifier {
                         .frame(height: DeviceLayout.safeAreaTop)
                         .offset(y: -DeviceLayout.safeAreaTop)
                         .allowsHitTesting(false)
+                        .transition(.move(edge: .top))
                 }
             }
     }

@@ -35,9 +35,9 @@ extension ReelPageView {
             HapticFeedback.light()
         } label: {
             Image(systemName: BackgroundSoundBadge.muteIconName(isMuted: sceneSoundMuted))
-                .font(MeeshyFont.relative(10, weight: .semibold))
-                .foregroundColor(.white.opacity(0.85))
-                .frame(minWidth: 44, minHeight: 44)
+                .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .semibold))
+                .foregroundColor(MeeshyColors.mediaChromeSecondary)
+                .frame(minWidth: MeeshyControlSize.tapTarget, minHeight: MeeshyControlSize.tapTarget)
                 .contentShape(Rectangle())
         }
         .accessibilityLabel(sceneSoundMuted
@@ -193,7 +193,7 @@ struct ReelSceneView: View {
             .frame(width: geo.size.width, height: geo.size.height)
         }
             .onReceive(
-                CallManager.shared.$callState
+                CallManagerHost.shared.callStatePublisher
                     .map(\.isActive)
                     .removeDuplicates()
                     .receive(on: DispatchQueue.main)

@@ -105,6 +105,10 @@ nonisolated struct BubbleContent: Equatable {
         /// builder from `firstLinkURL` → `trackedLinks[firstLinkURL]` →
         /// `https://meeshy.me/l/<token>`. `nil` → façade opens the canonical watchURL.
         let embedTrackedURL: URL?
+        /// Conversation désignée par `firstLinkURL` (lien de partage ou lien
+        /// direct), précalculée une fois par le builder. Non-nil → la bulle
+        /// rend la carte de conversation (#8099) au lieu de l'aperçu OpenGraph.
+        var conversationCardTarget: ConversationCardTarget? = nil
     }
 
     struct Translation: Equatable {
@@ -157,6 +161,9 @@ nonisolated struct BubbleContent: Equatable {
             // (« image/jpeg ») laissaient la rangée plate sur son premier rendu.
             lhs.reference.attachmentType == rhs.reference.attachmentType
                 && lhs.reference.attachmentThumbnailUrl == rhs.reference.attachmentThumbnailUrl
+                // L'adresse du fichier cité décide qu'une vidéo sans vignette
+                // montre son poster (#8230) — elle arrive avec l'écho serveur.
+                && lhs.reference.attachmentFileUrl == rhs.reference.attachmentFileUrl
                 // La protection DECIDE si cette vignette est rendue et si la
                 // zone 2 est armee : elle influence le rendu autant que l'URL
                 // au-dessus. Absente d'ici, une citation figee sur une
@@ -210,6 +217,28 @@ nonisolated struct BubbleContent: Equatable {
         /// Full call timestamp, formatted (date + time) in the long-press detail
         /// sheet. Kept as a `Date` so the sheet controls its own formatting.
         let timestamp: Date
+        /// #8064 — l'enregistrement consenti de l'appel, rattaché à SA bulle :
+        /// on le réécoute là où l'appel est raconté.
+        var recording: CallRecording? = nil
+    }
+
+    /// La piste audio d'un appel enregistré. Égalité par identité et par
+    /// fichier servi : la bulle ne se redessine que si la piste change.
+    struct CallRecording: Equatable {
+        let attachment: MeeshyMessageAttachment
+
+        static func == (lhs: CallRecording, rhs: CallRecording) -> Bool {
+            lhs.attachment.id == rhs.attachment.id
+                && lhs.attachment.fileUrl == rhs.attachment.fileUrl
+                && lhs.attachment.duration == rhs.attachment.duration
+        }
+
+        /// #8437 — un appel enregistré en vidéo se rejoue en vidéo.
+        var isVideo: Bool { attachment.type == .video }
+
+        static func from(_ attachments: [MeeshyMessageAttachment]) -> CallRecording? {
+            attachments.first { $0.type == .audio || $0.type == .video }.map(CallRecording.init(attachment:))
+        }
     }
 
     /// Faits résolus d'un avis d'ARRIVÉE — tout ce dont la feuille
@@ -323,6 +352,9 @@ nonisolated struct BubbleContent: Equatable {
     /// fait passer à « déjà ouvert ». Projection de
     /// `MeeshyMessage.isViewOnceRevealed`, posée par le builder.
     var isViewOnceRevealed: Bool = false
+    /// Vue unique scellée dont le toucher ouvre un PLEIN ÉCRAN (#8009) —
+    /// l'image ou la vidéo que le sceau a retirée du modèle.
+    var viewOnceOpensFullscreen: Bool = false
     let isViewOnce: Bool
     let isPinned: Bool
     /// **Qui est nommé sous un message transféré — DÉJÀ TRANCHÉ** (#5058).
@@ -439,6 +471,7 @@ nonisolated struct BubbleContent: Equatable {
             && lhs.protection == rhs.protection
             && lhs.isBurning == rhs.isBurning
             && lhs.isViewOnceRevealed == rhs.isViewOnceRevealed
+            && lhs.viewOnceOpensFullscreen == rhs.viewOnceOpensFullscreen
             && lhs.isBlurred == rhs.isBlurred
             && lhs.isViewOnce == rhs.isViewOnce
             && lhs.isPinned == rhs.isPinned

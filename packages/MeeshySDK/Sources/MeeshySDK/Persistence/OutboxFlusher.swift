@@ -105,7 +105,7 @@ public actor OutboxFlusher {
     /// `Sendable` closure form lets call-sites inject the live `Network
     /// ConditionMonitor.shared.isOnline` getter from MainActor without the
     /// SDK Persistence layer importing UIKit/SwiftUI.
-    private let isNetworkReachable: @Sendable () async -> Bool
+    private let isNetworkReachable: @Sendable @concurrent () async -> Bool
 
     public init(
         pool: any DatabaseWriter,

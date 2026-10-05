@@ -26,12 +26,15 @@ public enum ConversationsEndpoint: MeeshyEndpoint, Sendable {
     case byConversationIdRestoreForMe(conversationId: String)
     case byId(id: String)
     case byIdAnalysis(id: String)
+    case byIdCard(id: String)
     case byIdDeleteForMe(id: String)
+    case byIdEngagement(id: String)
     case byIdInvite(id: String)
     case byIdLeave(id: String)
     case byIdMarkRead(id: String)
     case byIdMarkUnread(id: String)
     case byIdMessages(id: String)
+    case byIdMessagesAfterReadConsume(id: String)
     case byIdMessagesByMessageId(id: String, messageId: String)
     case byIdMessagesByMessageIdConsume(id: String, messageId: String)
     case byIdMessagesByMessageIdPin(id: String, messageId: String)
@@ -71,12 +74,15 @@ public enum ConversationsEndpoint: MeeshyEndpoint, Sendable {
         case .byConversationIdRestoreForMe(let conversationId): return "/api/v1/conversations/\(conversationId)/restore-for-me"
         case .byId(let id): return "/api/v1/conversations/\(id)"
         case .byIdAnalysis(let id): return "/api/v1/conversations/\(id)/analysis"
+        case .byIdCard(let id): return "/api/v1/conversations/\(id)/card"
         case .byIdDeleteForMe(let id): return "/api/v1/conversations/\(id)/delete-for-me"
+        case .byIdEngagement(let id): return "/api/v1/conversations/\(id)/engagement"
         case .byIdInvite(let id): return "/api/v1/conversations/\(id)/invite"
         case .byIdLeave(let id): return "/api/v1/conversations/\(id)/leave"
         case .byIdMarkRead(let id): return "/api/v1/conversations/\(id)/mark-read"
         case .byIdMarkUnread(let id): return "/api/v1/conversations/\(id)/mark-unread"
         case .byIdMessages(let id): return "/api/v1/conversations/\(id)/messages"
+        case .byIdMessagesAfterReadConsume(let id): return "/api/v1/conversations/\(id)/messages/after-read/consume"
         case .byIdMessagesByMessageId(let id, let messageId): return "/api/v1/conversations/\(id)/messages/\(messageId)"
         case .byIdMessagesByMessageIdConsume(let id, let messageId): return "/api/v1/conversations/\(id)/messages/\(messageId)/consume"
         case .byIdMessagesByMessageIdPin(let id, let messageId): return "/api/v1/conversations/\(id)/messages/\(messageId)/pin"

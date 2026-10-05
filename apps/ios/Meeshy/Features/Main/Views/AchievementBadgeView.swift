@@ -37,14 +37,14 @@ struct AchievementBadgeView: View {
             }
 
             Text(achievement.name)
-                .font(MeeshyFont.relative(11, weight: .bold))
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold))
                 .foregroundColor(
                     achievement.isUnlocked ? Color(hex: achievement.color) : theme.textMuted
                 )
                 .lineLimit(1)
 
             Text("\(achievement.current)/\(achievement.threshold)")
-                .font(MeeshyFont.relative(9, weight: .medium, design: .rounded))
+                .font(MeeshyFont.relative(MeeshyFont.microSize, weight: .medium, design: .rounded))
                 .foregroundColor(theme.textMuted)
         }
         .padding(.vertical, MeeshySpacing.md)

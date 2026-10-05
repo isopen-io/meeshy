@@ -1,3 +1,6 @@
+import * as postsEndpoints from '@meeshy/shared/api/endpoints/posts';
+import * as socialEndpoints from '@meeshy/shared/api/endpoints/social';
+
 import { unwrap } from './client';
 import type { DataSource } from './config';
 import { CANVAS_CAPS_HEADERS } from './feed-pages';
@@ -8,7 +11,7 @@ import type { ApiResult, HttpTransport } from './http';
  * (`conversations.ts:33-41`) : `source` résolue ICI, jamais dans le hook ni
  * dans l'écran, et les fixtures passent par le MÊME chemin.
  *
- * `GET /api/v1/social/posts?scope=stories&projection=tray` (#6249 — successeur
+ * `GET social.posts?scope=stories&projection=tray` (#6249 — successeur
  * de l'alias déprécié `GET /posts/feed/stories?projection=tray`,
  * `services/gateway/src/routes/posts/feed.ts:801-813`, authentification
  * REQUISE — 401 `UNAUTHORIZED` sans session). La lecture — `chargerStories`,
@@ -123,7 +126,7 @@ export async function loadStoryTray(
   }
   return params.transport.request<readonly StoryTrayPost[]>({
     method: 'GET',
-    path: '/api/v1/social/posts?scope=stories&projection=tray&limit=50',
+    path: `${socialEndpoints.posts}?scope=stories&projection=tray&limit=50`,
     headers: CANVAS_CAPS_HEADERS,
     ...(params.signal !== undefined ? { signal: params.signal } : {}),
   });
@@ -176,7 +179,7 @@ export async function loadStatusMoods(
   }
   return params.transport.request<readonly StatusMoodPost[]>({
     method: 'GET',
-    path: '/api/v1/social/posts?scope=statuses&limit=50',
+    path: `${socialEndpoints.posts}?scope=statuses&limit=50`,
     ...(params.signal !== undefined ? { signal: params.signal } : {}),
   });
 }
@@ -191,7 +194,7 @@ export function statusMoodsQueryOptions(deps: StoriesDeps) {
 
 /**
  * **LE CORPUS COMPLET DU LECTEUR** (#5817) — LE MÊME ENDPOINT que
- * `loadStoryTray` (#6249, `GET /api/v1/social/posts?scope=stories`), SANS
+ * `loadStoryTray` (#6249, `GET social.posts?scope=stories`), SANS
  * `?projection=tray` : `chargerStories`
  * (`services/gateway/src/routes/posts/feed.ts:801-813`) sert alors
  * `storyPostInclude` (`postIncludes.ts:382-385`) — contenu, langue
@@ -244,6 +247,10 @@ export type StoryFeedPost = {
    * (`storyEffectsV3.ts`, § 3 de la spécification `stories-lecteur`) : lu par
    * `storyEffectsBackgroundOf`/`parseCanvasDocument`, jamais un champ direct. */
   readonly storyEffects?: unknown;
+  /** La carte `{ url, token }` des adresses suivies (#9074) — `metadata.trackingLinks`
+   * en REST, hissée en `trackingLinks` par le socket ; décodée par `trackingLinksOf`. */
+  readonly metadata?: unknown;
+  readonly trackingLinks?: unknown;
 };
 
 export async function loadStoryFeed(
@@ -255,7 +262,7 @@ export async function loadStoryFeed(
   }
   return params.transport.request<readonly StoryFeedPost[]>({
     method: 'GET',
-    path: '/api/v1/social/posts?scope=stories&limit=50',
+    path: `${socialEndpoints.posts}?scope=stories&limit=50`,
     headers: CANVAS_CAPS_HEADERS,
     ...(params.signal !== undefined ? { signal: params.signal } : {}),
   });
@@ -271,9 +278,9 @@ export function storyFeedQueryOptions(deps: StoriesDeps) {
 /**
  * **LA TROISIÈME MARCHE DE LA CASCADE** (#5817, revue-correction, défaut 4)
  * — miroir de `StoryViewerContainer.swift:297-352` : cache → groupe déjà là
- * → `GET /posts/:id` UNITAIRE → `loadStories(forceNetwork:)` → 2,5 s →
- * `timedOut`. `loadStoryFeed` ne sert que les 50 stories les plus récentes
- * (`limit=50`, plafond serveur) ; une story partagée par LIEN mais plus
+ * → `GET /posts/:id` UNITAIRE → `loadStories(forceNetwork:)` → `timedOut`.
+ * `loadStoryFeed` ne sert que les 50 stories les plus récentes (`limit=50`,
+ * plafond serveur) ; une story partagée par LIEN mais plus
  * ancienne que ces 50-là (ou publiée par un auteur dont aucune autre story
  * ne figure dans la fenêtre) reste pourtant une adresse « partageable
  * publiquement » (`parity.md:310`). Cette marche la retrouve À LA DEMANDE,
@@ -287,14 +294,16 @@ export function storyFeedQueryOptions(deps: StoriesDeps) {
  * une projection plus large que `StoryFeedPost` mais qui la CONTIENT — le
  * même contrat de champs (`content`, `translations`, `storyEffects`,
  * `media`, `author`…) que `storyPostInclude` sert déjà à `loadStoryFeed`.
+ *
+ * **AUCUN DÉLAI PROPRE À CETTE MARCHE** (#9172). Elle a porté 2,5 s, lus dans
+ * `StoryViewerContainer.swift:346` — mais là-bas, les 2,5 s s'écoulent APRÈS
+ * le retour de toutes les requêtes, pour laisser les publications se poser :
+ * aucune requête iOS n'est coupée. Ici, elles coupaient la requête elle-même,
+ * et sur un réseau lent un visiteur sans compte (dont c'est la SEULE lecture,
+ * #9149) voyait « Réessayer » à la place de la story. La requête vit donc sous
+ * le délai du transport (`DEFAULT_TIMEOUT_MS`, 15 s mesurés, `http.ts`) :
+ * « Réessayer » ne dit qu'un échec réel.
  */
-/** `timedOut` (`StoryViewerContainer.swift:297-352`) — le délai de garde de
- * la cascade DE REPLI, jamais celui d'un appel ordinaire (`DEFAULT_TIMEOUT_MS`,
- * 15 s, `http.ts`) : la 3ᵉ marche n'a de raison d'exister que pour dire vite
- * « introuvable », pas pour attendre une passerelle lente aussi longtemps
- * qu'un chargement normal. */
-export const STORY_POST_FALLBACK_TIMEOUT_MS = 2500;
-
 export async function loadStoryPost(
   params: StoriesDeps & { readonly postId: string; readonly signal?: AbortSignal },
 ): Promise<ApiResult<StoryFeedPost>> {
@@ -308,8 +317,7 @@ export async function loadStoryPost(
   }
   return params.transport.request<StoryFeedPost>({
     method: 'GET',
-    path: `/api/v1/posts/${encodeURIComponent(params.postId)}`,
-    timeoutMs: STORY_POST_FALLBACK_TIMEOUT_MS,
+    path: postsEndpoints.byPostId(params.postId),
     headers: CANVAS_CAPS_HEADERS,
     ...(params.signal !== undefined ? { signal: params.signal } : {}),
   });
@@ -331,7 +339,7 @@ export function storyPostQueryOptions(deps: StoriesDeps & { readonly postId: str
 }
 
 /**
- * **MARQUER UNE STORY VUE** (#5817, migré #6249) — `POST /api/v1/social/events`
+ * **MARQUER UNE STORY VUE** (#5817, migré #6249) — `POST social.events`
  * (`services/gateway/src/routes/social/events.ts:670-696`, successeur de
  * l'alias déprécié `POST /posts/:postId/view`), corps
  * `{ events: [{ type: 'view', postId, durationMs? }] }` (`SocialEventSchema`,
@@ -351,7 +359,7 @@ export async function markStoryViewed(
   }
   const result = await params.transport.request<{ readonly recorded: number; readonly rejected: number }>({
     method: 'POST',
-    path: '/api/v1/social/events',
+    path: socialEndpoints.events,
     body: { events: [{ type: 'view', postId: params.postId, ...(params.durationMs === undefined ? {} : { durationMs: params.durationMs }) }] },
   });
   if (!result.ok) return result;

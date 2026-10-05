@@ -21,6 +21,7 @@ import { sendSuccess, sendUnauthorized, sendForbidden, sendNotFound, sendInterna
 import { HISTORY_FLOOR_PARTICIPANT_SELECT, loadHistoryFloor, applyHistoryFloor } from '../../services/historyFloor';
 import { applyPersonalHistoryHiding, loadPersonalHistoryHiding } from '../../services/personalHistoryFilter';
 import { carrierMessageStillServesBytes } from '../../services/attachments/carrierMessageLifecycle';
+import { refuserCommeIntrouvable } from '../conversations/utils/access-control';
 
 const logger = enhancedLogger.child({ module: 'AttachmentMetadataRoutes' });
 
@@ -68,6 +69,29 @@ const logger = enhancedLogger.child({ module: 'AttachmentMetadataRoutes' });
  * par un élargissement du schéma. La distinction liste / détail établie par
  * #4392 tient : le DÉTAIL (`GET /attachments/:id/metadata`,
  * `messageAttachmentSchema`) reste le seul à les servir.
+ *
+ * CE QUI Y EST ENTRÉ AU #9249 : `isViewOnce` et `isBlurred`, les drapeaux de
+ * protection PROPRES à la pièce jointe. Ce schéma épand
+ * `messageAttachmentMinimalSchema`, donc il hérite de `fileUrl` ET de
+ * `thumbnailUrl` : l'URL d'un média à vue unique ou flouté partait, et les deux
+ * champs qui disent au client de poser un voile étaient supprimés par
+ * `fast-json-stringify`. La projection les REND déjà
+ * (`AttachmentService.toAttachment`) ; seule la déclaration manquait.
+ *
+ * La protection d'une pièce jointe est DÉCLARÉE par ses champs et APPLIQUÉE
+ * par le client — c'est la décision du cycle 125 / #6189, qui a fait monter la
+ * loi dans `packages/shared/utils/attachment-protection.ts` pour que les trois
+ * clients puissent la lire. Une porte qui sert l'URL sans les drapeaux ne
+ * contourne pas cette garde : elle la rend INEXPRIMABLE. Les autres portes qui
+ * servent une pièce jointe brute ont rejoint cette règle une par une —
+ * `routes/admin/content.ts` (#4333), le producteur `message:new` /
+ * `message:edited` (#7070), la liste de messages (#5125) ; la galerie était la
+ * dernière restée en arrière.
+ *
+ * `effectFlags`, le TROISIÈME canal du OU, n'y entre pas : il est absent de
+ * l'interface `Attachment` elle-même (`packages/shared/types/attachment.ts`),
+ * donc de la projection de ce service. Le porter jusqu'ici élargit un type que
+ * trois services et trois clients lisent — un lot à soi, consigné dans #9249.
  */
 const conversationAttachmentListItemSchema = {
   ...messageAttachmentMinimalSchema,
@@ -80,6 +104,8 @@ const conversationAttachmentListItemSchema = {
     createdAt: { type: 'string', description: 'Upload date (ISO 8601)' },
     width: { type: 'number', nullable: true, description: 'Image/video width (px)' },
     height: { type: 'number', nullable: true, description: 'Image/video height (px)' },
+    isViewOnce: { type: 'boolean', description: 'Attachment-level view-once flag — the client must veil and count the view' },
+    isBlurred: { type: 'boolean', description: 'Attachment-level blur flag — the client must veil until the reader lifts it' },
   },
 } as const;
 
@@ -357,10 +383,11 @@ export async function registerMetadataRoutes(
    * Ce que cette LISTE sert, et pourquoi (#4392, critère 3 : « pour que le
    * prochain lot n'ait pas à reposer la question » ; #4887, critères 2 et 3).
    *
-   * SERVI : les TREIZE clés de `conversationAttachmentListItemSchema` (voir son
+   * SERVI : les QUINZE clés de `conversationAttachmentListItemSchema` (voir son
    * doc-comment) — les sept de `messageAttachmentMinimalSchema` qu'il épand,
-   * plus les six que la galerie REND. Et rien d'autre : `fast-json-stringify`
-   * supprime toute clé qu'aucun schéma ne déclare.
+   * plus les six que la galerie REND, plus les deux drapeaux de protection
+   * ajoutés au #9249. Et rien d'autre : `fast-json-stringify` supprime toute
+   * clé qu'aucun schéma ne déclare — c'est ce qui retenait les drapeaux.
    *
    * NI CHARGÉ NI SERVI : `transcription` et `translations`. #4392 avait mesuré
    * que `AttachmentService.getConversationAttachments` les demandait à MongoDB
@@ -449,16 +476,12 @@ export async function registerMetadataRoutes(
             description: 'Authentication required',
             ...errorResponseSchema
           },
-          403: {
-            description: 'Access denied to this conversation',
-            ...errorResponseSchema
-          },
           // #4856 — un invité anonyme dont le `participantId` de session ne
           // résout plus à aucune ligne (retiré entretemps) est un « je ne
           // trouve pas » sur SA PROPRE identité, pas un refus d'accès à un
           // tiers : rien à cacher.
           404: {
-            description: 'The anonymous participant this session was authenticated as no longer exists',
+            description: 'Conversation not found — or the caller is not a member (#8116: both answer the same) — or the anonymous participant this session was authenticated as no longer exists',
             ...errorResponseSchema
           },
           500: {
@@ -525,16 +548,17 @@ export async function registerMetadataRoutes(
           // session (son `participantId` de jeton), jamais celle d'un tiers
           // — son absence est un « je ne trouve pas ». La branche inscrite,
           // elle, cherche un membership sous l'identité de l'appelant dans
-          // CETTE conversation : rien ne distingue ici « pas membre » de
-          // « conversation inexistante », donc le 403 anti-énumération reste
-          // le bon statut, inchangé.
+          // CETTE conversation : rien n'y distingue « pas membre » de
+          // « conversation inexistante », et la réponse est celle de toute
+          // lecture d'une conversation (#8116) — le 404 d'une conversation
+          // introuvable, jamais un 403 qui dirait qu'elle existe.
           return isAnonymous
             ? sendNotFound(reply, 'Participant not found')
-            : sendForbidden(reply, 'Access denied to this conversation');
+            : refuserCommeIntrouvable(reply);
         }
 
         if (isAnonymous && participant.conversationId !== conversationId) {
-          return sendForbidden(reply, 'Access denied to this conversation');
+          return refuserCommeIntrouvable(reply);
         }
 
         // `participant.shareLinkId` et non la copie embarquée dans

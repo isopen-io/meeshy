@@ -83,22 +83,8 @@ public struct FullscreenImageView: View {
                 fallbackView
             }
 
-            // Close button
             VStack {
-                HStack {
-                    Spacer()
-                    Button {
-                        HapticFeedback.light()
-                        dismiss()
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 28, weight: .semibold))
-                            .foregroundColor(.white.opacity(0.8))
-                            .shadow(color: .black.opacity(0.3), radius: 4)
-                    }
-                    .padding(.trailing, 20)
-                    .padding(.top, 50)
-                }
+                FullscreenTopBar(onClose: { dismiss() })
                 Spacer()
             }
         }

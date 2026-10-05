@@ -2,62 +2,142 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
-/// People hub **Calls** tab: the call journal. Cache-first list of recent calls
-/// (received / missed / outgoing) over a 3-month window. Tap a row for details;
-/// use the trailing call button to redial. Missed calls read in red.
+/// People hub **Calls** tab: the call journal. Cache-first list of calls
+/// (received / missed / outgoing) over the whole 3-month window, loaded page
+/// after page as the list scrolls (#8066). The search and the video filter are
+/// answered by the gateway (#8203). Tap a row for details; use the
+/// trailing call button to redial; swipe a row to erase it from your own
+/// journal, or erase everything at once. Missed calls read in red.
 struct CallsTab: View {
     @ObservedObject var viewModel: CallsViewModel
     var isActive: Bool = true
     var onScrollOffsetChange: (CGFloat) -> Void = { _ in }
 
-    @Environment(\.colorScheme) private var colorScheme
     private var theme: ThemeManager { ThemeManager.shared }
     @State private var selectedCall: APICallRecord?
+    @State private var confirmsClearAll = false
+
+    private static let searchDebounceNanoseconds: UInt64 = 250_000_000
 
     var body: some View {
         VStack(spacing: 0) {
+            ContactsSearchField(
+                placeholder: String(localized: "calls.search.placeholder", defaultValue: "Rechercher un appel", bundle: .main),
+                query: $viewModel.searchQuery
+            )
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.top, MeeshySpacing.sm)
             filterChips
+            if viewModel.eraseFailed {
+                eraseFailedBanner
+            }
             content
         }
         .task { await viewModel.loadCalls() }
+        .task(id: viewModel.searchQuery) {
+            if viewModel.isSearching {
+                try? await Task.sleep(nanoseconds: Self.searchDebounceNanoseconds)
+                guard !Task.isCancelled else { return }
+            }
+            await viewModel.applySearch()
+        }
         .sheet(item: $selectedCall) { record in
             CallDetailSheet(record: record)
+        }
+        .confirmationDialog(
+            String(localized: "calls.clearAll.confirm.title", defaultValue: "Effacer tout le journal d'appels ?", bundle: .main),
+            isPresented: $confirmsClearAll,
+            titleVisibility: .visible
+        ) {
+            Button(String(localized: "calls.clearAll.confirm.action", defaultValue: "Effacer", bundle: .main), role: .destructive) {
+                HapticFeedback.medium()
+                Task { await viewModel.clearAll() }
+            }
+            Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) {}
+        } message: {
+            Text(String(localized: "calls.clearAll.confirm.message", defaultValue: "Les autres participants gardent le leur.", bundle: .main))
         }
     }
 
     // MARK: - Filter Chips
 
     private var filterChips: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: MeeshySpacing.sm) {
             chip(.all, label: String(localized: "calls.filter.all", defaultValue: "Tous", bundle: .main))
             chip(.missed, label: String(localized: "calls.filter.missed", defaultValue: "Manqués", bundle: .main))
+            videoChip
             Spacer()
+            if !viewModel.calls.isEmpty {
+                clearAllButton
+            }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.vertical, MeeshySpacing.smPlus)
     }
 
     private func chip(_ filter: CallHistoryFilter, label: String) -> some View {
         let isSelected = viewModel.filter == filter
-        return Button {
+        return ContactsFilterChip(title: label, isSelected: isSelected, hitTarget: true) {
             viewModel.setFilter(filter)
             HapticFeedback.light()
-        } label: {
-            Text(label)
-                .font(.footnote.weight(.semibold))
-                .foregroundColor(isSelected ? .white : MeeshyColors.indigo500)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 7)
-                .background(Capsule().fill(isSelected ? MeeshyColors.indigo500 : Color.clear))
-                .overlay(Capsule().stroke(isSelected ? Color.clear : MeeshyColors.indigo900.opacity(0.3), lineWidth: 1))
-                // The capsule stays visually compact, but the tappable area is
-                // widened to the 44x44pt HIG minimum (frame + contentShape) —
-                // the visible pill was ~27-30pt tall, under the tap-target floor.
-                .frame(minHeight: 44)
-                .contentShape(Rectangle())
         }
         .accessibilityLabel(label)
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
+    }
+
+    private var videoChip: some View {
+        let isSelected = viewModel.type == .video
+        let label = String(localized: "calls.filter.video", defaultValue: "Vidéo", bundle: .main)
+        return ContactsFilterChip(title: label, isSelected: isSelected, hitTarget: true) {
+            viewModel.setType(isSelected ? .all : .video)
+            HapticFeedback.light()
+        }
+        .accessibilityLabel(label)
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
+    }
+
+    private var clearAllButton: some View {
+        Button {
+            confirmsClearAll = true
+        } label: {
+            Text(String(localized: "calls.clearAll", defaultValue: "Tout effacer", bundle: .main))
+                .font(.subheadline.weight(.semibold))
+                .foregroundColor(MeeshyColors.error)
+                .padding(.horizontal, MeeshySpacing.sm)
+                .frame(minWidth: MeeshyControlSize.tapTarget, minHeight: MeeshyControlSize.tapTarget)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint(String(localized: "calls.clearAll.confirm.message", defaultValue: "Les autres participants gardent le leur.", bundle: .main))
+    }
+
+    private var eraseFailedBanner: some View {
+        HStack(spacing: MeeshySpacing.smPlus) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundColor(MeeshyColors.error)
+                .accessibilityHidden(true)
+            Text(String(localized: "calls.erase.failed", defaultValue: "L'effacement a échoué. Réessayez.", bundle: .main))
+                .font(.footnote.weight(.medium))
+                .foregroundColor(theme.textPrimary)
+            Spacer()
+            Button {
+                viewModel.dismissEraseFailure()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundColor(theme.textMuted)
+                    .frame(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
+        }
+        .padding(.leading, MeeshySpacing.md)
+        .background(MeeshyColors.error.opacity(MeeshyOpacity.light))
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.bottom, MeeshySpacing.xsPlus)
+        .accessibilityElement(children: .contain)
     }
 
     // MARK: - Content
@@ -66,6 +146,12 @@ struct CallsTab: View {
     private var content: some View {
         if viewModel.loadState == .loading && viewModel.calls.isEmpty {
             ContactsSkeletonList()
+        } else if viewModel.isSearching && viewModel.visibleCalls.isEmpty && viewModel.loadState != .loading {
+            EmptyStateView(
+                icon: "magnifyingglass",
+                title: String(format: String(localized: "calls.search.empty", defaultValue: "Aucun appel ne correspond à « %@ »", bundle: .main), viewModel.searchQuery),
+                subtitle: String(localized: "calls.search.empty.hint", defaultValue: "Le journal couvre les trois derniers mois.", bundle: .main)
+            )
         } else if viewModel.calls.isEmpty {
             EmptyStateView(
                 icon: "phone.arrow.up.right",
@@ -78,19 +164,55 @@ struct CallsTab: View {
     }
 
     private var list: some View {
-        ScrollView(.vertical, showsIndicators: false) {
+        List {
             ContactsScrollSentinel()
-            LazyVStack(spacing: 0) {
-                ForEach(viewModel.calls) { record in
-                    CallJournalRow(record: record, onTap: { selectedCall = record })
-                        .equatable()
-                    Divider().opacity(0.15).padding(.leading, 70)
-                }
+                .journalListRow()
+            ForEach(viewModel.visibleCalls) { record in
+                CallJournalRow(record: record, onTap: { selectedCall = record })
+                    .equatable()
+                    .journalListRow()
+                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                        Button(role: .destructive) {
+                            HapticFeedback.medium()
+                            Task { await viewModel.hide(callId: record.callId) }
+                        } label: {
+                            Label(String(localized: "calls.hide", defaultValue: "Effacer", bundle: .main), systemImage: "trash")
+                        }
+                    }
+                    .accessibilityAction(named: Text(String(localized: "calls.hide", defaultValue: "Effacer", bundle: .main))) {
+                        Task { await viewModel.hide(callId: record.callId) }
+                    }
             }
-            .padding(.top, 4)
+            if !viewModel.reachedEnd && viewModel.showsCurrentQuery {
+                loadMoreRow
+                    .journalListRow()
+            }
         }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
         .reportsContactsScroll(active: isActive, onChange: onScrollOffsetChange)
         .refreshable { await viewModel.loadCalls(forceNetwork: true) }
+    }
+
+    private var loadMoreRow: some View {
+        HStack {
+            Spacer()
+            ProgressView()
+                .accessibilityLabel(String(localized: "calls.loadingMore", defaultValue: "Chargement des appels plus anciens", bundle: .main))
+            Spacer()
+        }
+        .frame(minHeight: MeeshyControlSize.tapTarget)
+        .onAppear {
+            Task { await viewModel.loadMore() }
+        }
+    }
+}
+
+private extension View {
+    func journalListRow() -> some View {
+        listRowBackground(Color.clear)
+            .listRowInsets(EdgeInsets())
+            .listRowSeparator(.hidden)
     }
 }
 
@@ -102,7 +224,8 @@ private struct CallJournalRow: View, Equatable {
     let record: APICallRecord
     let onTap: () -> Void
 
-    @Environment(\.colorScheme) private var colorScheme
+    private static let shownParticipants = 2
+
     private var theme: ThemeManager { ThemeManager.shared }
 
     static func == (lhs: CallJournalRow, rhs: CallJournalRow) -> Bool {
@@ -113,71 +236,90 @@ private struct CallJournalRow: View, Equatable {
         let name = record.displayName(fallback: String(localized: "call.unknown", defaultValue: "Inconnu", bundle: .main))
         let color = DynamicColorGenerator.colorForName(name)
 
-        HStack(spacing: 14) {
-            Button(action: onTap) {
-                HStack(spacing: 14) {
-                    MeeshyAvatar(
-                        name: name,
-                        context: .userListItem,
-                        accentColor: color,
-                        avatarURL: record.avatarURL,
-                        presenceState: PresenceManager.shared.resolvedState(userId: record.peer?.userId, isOnline: record.peer?.isOnline)
-                    )
+        VStack(spacing: 0) {
+            HStack(spacing: MeeshySpacing.mdPlus) {
+                Button(action: onTap) {
+                    HStack(spacing: MeeshySpacing.mdPlus) {
+                        MeeshyAvatar(
+                            name: name,
+                            context: .userListItem,
+                            accentColor: color,
+                            avatarURL: record.avatarURL,
+                            presenceState: PresenceManager.shared.resolvedState(userId: record.peer?.userId, isOnline: record.peer?.isOnline)
+                        )
 
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(name)
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundColor(record.isMissed ? MeeshyColors.error : theme.textPrimary)
-                            .lineLimit(1)
+                        VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
+                            Text(name)
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundColor(record.isMissed ? MeeshyColors.error : theme.textPrimary)
+                                .lineLimit(1)
 
-                        HStack(spacing: 5) {
-                            Image(systemName: directionIcon)
-                                .font(.caption2.weight(.bold))
-                                .foregroundColor(record.isMissed ? MeeshyColors.error : theme.textMuted)
-                            if record.isVideo {
-                                Image(systemName: "video.fill")
-                                    .font(.caption2)
+                            if let participants = participantsLine {
+                                Text(participants)
+                                    .font(.caption)
                                     .foregroundColor(theme.textMuted)
+                                    .lineLimit(1)
                             }
-                            Text(record.startedAt.relativeTimeString)
-                                .font(.caption.weight(.medium))
-                                .foregroundColor(theme.textMuted)
-                            if !record.durationLabel.isEmpty {
-                                Text("· \(record.durationLabel)")
+
+                            HStack(spacing: MeeshySpacing.xs) {
+                                Image(systemName: directionIcon)
+                                    .font(.caption2.weight(.bold))
+                                    .foregroundColor(record.isMissed ? MeeshyColors.error : theme.textMuted)
+                                if record.isVideo {
+                                    Image(systemName: "video.fill")
+                                        .font(.caption2)
+                                        .foregroundColor(theme.textMuted)
+                                }
+                                Text(record.startedAt.relativeTimeString)
                                     .font(.caption.weight(.medium))
                                     .foregroundColor(theme.textMuted)
+                                if !record.durationLabel.isEmpty {
+                                    Text("· \(record.durationLabel)")
+                                        .font(.caption.weight(.medium))
+                                        .foregroundColor(theme.textMuted)
+                                }
                             }
                         }
-                    }
 
-                    Spacer()
+                        Spacer()
+                    }
+                }
+                .buttonStyle(.plain)
+                .contentShape(Rectangle())
+                // Scoped to this Button only — grouping the WHOLE row (including
+                // CallRowDialButton) under one combined element, as before, swallowed
+                // the redial Menu entirely: VoiceOver could never reach "Rappeler"
+                // (found in accessibility audit 2026-07-06/08). CallRowDialButton
+                // keeps its own accessibilityLabel/Hint as a separate, reachable element.
+                // Le `.accessibilityLabel` explicite REMPLACE le texte combiné des enfants
+                // (sémantique SwiftUI) — il doit donc recomposer TOUT ce que la rangée montre
+                // visuellement : type audio/vidéo, ancienneté et durée, sinon VoiceOver ne
+                // les annonce jamais (207i : le label ne portait que nom + direction).
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(rowAccessibilityLabel(name: name))
+
+                if let peer = record.peer {
+                    CallRowDialButton(
+                        userId: peer.userId,
+                        displayName: name,
+                        conversationId: record.conversationId,
+                        defaultIsVideo: record.isVideo
+                    )
                 }
             }
-            .buttonStyle(.plain)
-            .contentShape(Rectangle())
-            // Scoped to this Button only — grouping the WHOLE row (including
-            // CallRowDialButton) under one combined element, as before, swallowed
-            // the redial Menu entirely: VoiceOver could never reach "Rappeler"
-            // (found in accessibility audit 2026-07-06/08). CallRowDialButton
-            // keeps its own accessibilityLabel/Hint as a separate, reachable element.
-            // Le `.accessibilityLabel` explicite REMPLACE le texte combiné des enfants
-            // (sémantique SwiftUI) — il doit donc recomposer TOUT ce que la rangée montre
-            // visuellement : type audio/vidéo, ancienneté et durée, sinon VoiceOver ne
-            // les annonce jamais (207i : le label ne portait que nom + direction).
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel(rowAccessibilityLabel(name: name))
-
-            if let peer = record.peer {
-                CallRowDialButton(
-                    userId: peer.userId,
-                    displayName: name,
-                    conversationId: record.conversationId,
-                    defaultIsVideo: record.isVideo
-                )
-            }
+            .padding(.horizontal, MeeshySpacing.xl)
+            .padding(.vertical, MeeshySpacing.md)
+            Divider().opacity(MeeshyOpacity.light).padding(.leading, 70)
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 12)
+    }
+
+    /// The first participants of a group call, then how many others (#8066).
+    private var participantsLine: String? {
+        let summary = record.participantSummary(limit: Self.shownParticipants)
+        guard !summary.names.isEmpty else { return nil }
+        let names = summary.names.joined(separator: ", ")
+        guard summary.more > 0 else { return names }
+        return String(format: String(localized: "calls.participants.more", defaultValue: "%@ +%lld", bundle: .main), names, summary.more)
     }
 
     private var directionIcon: String {
@@ -187,50 +329,56 @@ private struct CallJournalRow: View, Equatable {
         }
     }
 
-    private var accessibilityDirection: String {
-        switch record.directionKind {
-        case .outgoing: return String(localized: "calls.direction.outgoing", defaultValue: "appel émis", bundle: .main)
-        case .incoming: return String(localized: "calls.direction.incoming", defaultValue: "appel reçu", bundle: .main)
-        case .missed: return String(localized: "calls.direction.missed", defaultValue: "appel manqué", bundle: .main)
-        }
-    }
-
     // Recompose le label VoiceOver de la rangée pour refléter EXACTEMENT le contenu
-    // visible : nom, direction, type (vocal/vidéo — réutilise les clés de CallDetailSheet),
-    // ancienneté, puis durée si présente (mêmes segments que la pastille visuelle). Zéro clé
-    // i18n neuve. Miroir de la détail-sheet, cohérent cross-écran.
+    // visible : nom, participants d'un appel de groupe (la liste entière), direction,
+    // type (vocal/vidéo — réutilise les clés de CallDetailSheet), ancienneté, puis
+    // durée si présente (mêmes segments que la pastille visuelle).
     private func rowAccessibilityLabel(name: String) -> String {
         let type = record.isVideo
             ? String(localized: "calls.type.video", defaultValue: "Appel video", bundle: .main)
             : String(localized: "calls.type.audio", defaultValue: "Appel vocal", bundle: .main)
-        var parts = [name, accessibilityDirection, type, record.startedAt.relativeTimeString]
-        if !record.durationLabel.isEmpty {
-            let durationWord = String(localized: "calls.detail.duration", defaultValue: "Durée", bundle: .main)
-            parts.append("\(durationWord) \(record.durationLabel)")
-        }
-        return parts.joined(separator: ", ")
+        let participants = record.participants.map(\.displayName)
+        let withParticipants = participants.isEmpty
+            ? []
+            : [String(format: String(localized: "calls.participants.a11y", defaultValue: "avec %@", bundle: .main), participants.joined(separator: ", "))]
+        let duration = record.durationLabel.isEmpty
+            ? []
+            : ["\(String(localized: "calls.detail.duration", defaultValue: "Durée", bundle: .main)) \(record.durationLabel)"]
+        return ([name] + withParticipants + [record.directionKind.localizedLabel, type, record.startedAt.relativeTimeString] + duration)
+            .joined(separator: ", ")
     }
 }
 
 // MARK: - Dial Button (audio / video menu)
 
-private struct CallRowDialButton: View {
+struct CallRowDialButton: View {
     let userId: String
     let displayName: String
-    let conversationId: String
-    let defaultIsVideo: Bool
+    var conversationId: String? = nil
+    var defaultIsVideo: Bool = false
+    /// Repli quand aucune conversation directe n'existe (le clavier ouvre le profil).
+    var onUnavailable: (() -> Void)? = nil
+    /// Libellé VoiceOver ; « Rappeler » par défaut (journal), « Appeler » sur le clavier.
+    var accessibilityLabel: String? = nil
+
+    private func dial(isVideo: Bool) {
+        if let onUnavailable {
+            CallStarter.start(userId: userId, displayName: displayName, isVideo: isVideo, conversationId: conversationId, onUnavailable: onUnavailable)
+        } else {
+            CallStarter.start(userId: userId, displayName: displayName, isVideo: isVideo, conversationId: conversationId)
+        }
+        HapticFeedback.medium()
+    }
 
     var body: some View {
         Menu {
             Button {
-                CallStarter.start(userId: userId, displayName: displayName, isVideo: false, conversationId: conversationId)
-                HapticFeedback.medium()
+                dial(isVideo: false)
             } label: {
                 Label(String(localized: "call.start.audio", defaultValue: "Appel vocal", bundle: .main), systemImage: "phone.fill")
             }
             Button {
-                CallStarter.start(userId: userId, displayName: displayName, isVideo: true, conversationId: conversationId)
-                HapticFeedback.medium()
+                dial(isVideo: true)
             } label: {
                 Label(String(localized: "call.start.video", defaultValue: "Appel video", bundle: .main), systemImage: "video.fill")
             }
@@ -239,10 +387,10 @@ private struct CallRowDialButton: View {
                 .font(.subheadline.weight(.semibold))
                 .foregroundColor(MeeshyColors.indigo500)
                 // 44x44 — Apple HIG minimum tap target (was 40x40).
-                .frame(width: 44, height: 44)
-                .background(Circle().fill(MeeshyColors.indigo500.opacity(0.12)))
+                .frame(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)
+                .background(Circle().fill(MeeshyColors.indigo500.opacity(MeeshyOpacity.light)))
         }
-        .accessibilityLabel(String(localized: "calls.redial", defaultValue: "Rappeler", bundle: .main))
+        .accessibilityLabel(accessibilityLabel ?? String(localized: "calls.redial", defaultValue: "Rappeler", bundle: .main))
         .accessibilityHint(String(localized: "calls.redial.hint", defaultValue: "Ouvre le choix entre appel vocal et appel vidéo", bundle: .main))
     }
 }

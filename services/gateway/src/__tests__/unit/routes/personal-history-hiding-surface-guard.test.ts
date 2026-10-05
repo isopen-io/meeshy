@@ -216,6 +216,14 @@ const SURFACES: Record<string, Classification> = {
   // de l'utilisateur pour construire son filtre. Deux lectures, exemptées au
   // même titre que leur fichier d'origine.
   'admin/user-reports.ts': { kind: 'exempt', reads: 2, why: 'Surface admin/modération.' },
+  // #8876 — `enrichReports` nomme ce qu'un signalement DÉSIGNE : UNE lecture de
+  // `Message` par page (auteur, conversation, extrait). Exempte au titre de la
+  // surface de modération — le modérateur lit ce que le signalant a vu, et le
+  // masquage personnel d'un PARTICIPANT n'a pas à décider de ce qu'un signalement
+  // lui montre. Ce qui PART est gardé ailleurs : l'extrait n'est servi qu'avec
+  // `canModerateContent`, jamais pour un contenu protégé ou retiré
+  // (`messageContentIsProtected`, `deletedAt`).
+  'admin/reports-enrichment.ts': { kind: 'exempt', reads: 1, why: 'Surface admin/modération.' },
   // #7845 — deux lectures de COMPTE (`count` des messages envoyés, `findMany`
   // des seuls identifiants pour compter les signalements reçus) : aucune ne
   // sert un message, la fiche d'un membre ne rend que des nombres.
@@ -362,12 +370,21 @@ const SERVICE_LAYER_SURFACES: Record<string, Classification> = {
       "l'appliquer rendrait une statistique différente par lecteur, pour une " +
       'valeur qui est stockée une fois et lue par tout le monde.',
   },
-  'ExpiredMessagesCleanupService.ts': {
+  'conversationCard.ts': {
     kind: 'exempt',
     reads: 1,
     why:
+      "Décompte des messages d'une carte de conversation (#8099) — un AGRÉGAT " +
+      "affiché à côté du nombre de membres, identique pour tout lecteur, jamais " +
+      'une liste : aucun message ne sort, seul le nombre. Même raison que ' +
+      '`ConversationMessageStatsService.ts`.',
+  },
+  'ExpiredMessagesCleanupService.ts': {
+    kind: 'exempt',
+    reads: 2,
+    why:
       "Balayage de rétention côté serveur : il détruit les messages arrivés à " +
-      "expiration, sans lecteur. Masquer une ligne à la destruction la ferait " +
+      "expiration, sans lecteur, et les réponses qui les citent (#8630). Masquer une ligne à la destruction la ferait " +
       'survivre indéfiniment à la préférence d\'affichage d\'un seul utilisateur.',
   },
 
@@ -419,6 +436,25 @@ const SERVICE_LAYER_SURFACES: Record<string, Classification> = {
       "Suggestions d'onboarding (#7729) : ne lit que des `senderId` récents de " +
       'Global pour proposer des personnes à suivre, jamais un contenu servi. ' +
       "Le masquage personnel porte sur l'historique affiché, pas sur qui parle.",
+  },
+  'messaging/consumeAfterReadMessages.ts': {
+    kind: 'exempt',
+    reads: 1,
+    why:
+      "Consommation flamme-œil (#8302) : elle lit le bitfield et l'expéditeur " +
+      "des messages que le lecteur VIENT de voir, et ne rend aucun contenu. " +
+      'Un masquage personnel empêcherait ce lecteur de faire disparaître ' +
+      'chez lui ce qu\'il a vu — le contraire de la directive.',
+  },
+  'messaging/quoteCascade.ts': {
+    kind: 'exempt',
+    reads: 2,
+    why:
+      "Chaîne citée (#8630) : elle lit identifiants, expéditeur et échéance des " +
+      "messages CITÉS (vers le haut) et les identifiants des RÉPONSES (vers le bas) " +
+      "pour décider ce qui est mort pour un lecteur, et ne rend aucun contenu. " +
+      "Masquer ici laisserait vivre, chez qui a effacé l'original de son historique, " +
+      "une réponse à un éphémère déjà détruit pour lui.",
   },
   'messaging/ephemeralCountdown.ts': {
     kind: 'exempt',

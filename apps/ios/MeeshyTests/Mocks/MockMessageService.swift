@@ -151,16 +151,27 @@ final class MockMessageService: MessageServiceProviding, @unchecked Sendable {
         return try listBeforeResult.get()
     }
 
+    /// Appelé PENDANT `listAfter`, avant la réponse — un témoin y lit l'état
+    /// « en vol » du modèle (#9304, `isLoadingNewer`).
+    var onListAfter: (() -> Void)?
+
+    /// Retient la réponse de `listAfter` APRÈS l'avoir tirée de la file : la
+    /// page reste « en vol » le temps qu'un témoin rejoue un saut (#9364).
+    var holdListAfter: (@MainActor @Sendable () async -> Void)?
+
     nonisolated func listAfter(conversationId: String, after: Date, limit: Int, includeReplies: Bool, includeTranslations: Bool, languages: [String]?) async throws -> MessagesAPIResponse {
-        try await MainActor.run {
+        let served: Result<MessagesAPIResponse, Error> = await MainActor.run {
             listAfterCallCount += 1
             lastListAfterConversationId = conversationId
             lastListAfterAfter = after
             lastListAfterLimit = limit
             lastListAfterLanguages = languages
-            if !listAfterResults.isEmpty { return listAfterResults.removeFirst() }
-            return try listAfterResult.get()
+            onListAfter?()
+            if !listAfterResults.isEmpty { return .success(listAfterResults.removeFirst()) }
+            return listAfterResult
         }
+        if let hold = await MainActor.run(body: { holdListAfter }) { await hold() }
+        return try served.get()
     }
 
     nonisolated func listAround(conversationId: String, around: String, limit: Int, includeReplies: Bool, includeTranslations: Bool, languages: [String]?) async throws -> MessagesAPIResponse {
@@ -171,6 +182,43 @@ final class MockMessageService: MessageServiceProviding, @unchecked Sendable {
             lastListAroundLanguages = languages
         }
         return try listAroundResult.get()
+    }
+
+    // MARK: - listMedia (#8095)
+
+    var listMediaResult: Result<MessagesAPIResponse, Error> = .success(
+        JSONStub.decode("""
+        {"success":true,"data":[],"pagination":null,"cursorPagination":null,"hasNewer":null}
+        """)
+    )
+    /// File des pages, consommée avant `listMediaResult` : un test y pose une
+    /// suite de pages pour prouver que la remontée s'arrête à l'épuisement.
+    var listMediaResults: [Result<MessagesAPIResponse, Error>] = []
+    var listMediaCallCount = 0
+    var listMediaCursors: [String?] = []
+    var lastListMediaLanguages: [String]?
+    /// #8103 — les genres et la recherche de chaque appel, dans l'ordre.
+    var listMediaKinds: [[ConversationMediaKind]] = []
+    var listMediaQueries: [String?] = []
+    /// Si posé, rend la page du genre demandé (premier genre de l'appel),
+    /// avant la file et le résultat par défaut.
+    var listMediaResultsByKind: [ConversationMediaKind: [Result<MessagesAPIResponse, Error>]] = [:]
+
+    nonisolated func listMedia(conversationId: String, kinds: [ConversationMediaKind], query: String?, before: String?, limit: Int, languages: [String]?) async throws -> MessagesAPIResponse {
+        try await MainActor.run {
+            listMediaCallCount += 1
+            listMediaCursors.append(before)
+            listMediaKinds.append(kinds)
+            listMediaQueries.append(query)
+            lastListMediaLanguages = languages
+            if let kind = kinds.first, var queue = listMediaResultsByKind[kind], !queue.isEmpty {
+                let next = queue.removeFirst()
+                listMediaResultsByKind[kind] = queue
+                return try next.get()
+            }
+            if !listMediaResults.isEmpty { return try listMediaResults.removeFirst().get() }
+            return try listMediaResult.get()
+        }
     }
 
     nonisolated func send(conversationId: String, request: SendMessageRequest) async throws -> SendMessageResponseData {

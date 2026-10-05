@@ -20,6 +20,7 @@ import { ConversationIdParamSchema, SetEncryptionModeBodySchema } from '../valid
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 import { sendSuccess, sendBadRequest, sendForbidden, sendNotFound, sendInternalError } from '../utils/response.js';
 import { LIVE_MESSAGE_MARK } from '../services/messaging/liveMessage';
+import { refuserCommeIntrouvable } from './conversations/utils/access-control';
 const logger = enhancedLogger.child({ module: 'ConversationEncryptionRoutes' });
 
 // EncryptionMode type - defined locally to avoid build order issues
@@ -100,14 +101,14 @@ export default async function encryptionRoutes(fastify: FastifyInstance) {
         });
 
         if (!conversation) {
-          return sendNotFound(reply, 'Conversation not found');
+          return refuserCommeIntrouvable(reply);
         }
 
-        // Check if user is a member
+        // Un non-membre reçoit le 404 d'une conversation inexistante (#8116).
         if (!authContext.isAnonymous) {
           const isMember = conversation.participants.some(m => m.userId === authContext.userId);
           if (!isMember) {
-            return sendForbidden(reply, 'Not a member of this conversation');
+            return refuserCommeIntrouvable(reply);
           }
         }
 

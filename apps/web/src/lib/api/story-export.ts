@@ -1,3 +1,5 @@
+import * as postsEndpoints from '@meeshy/shared/api/endpoints/posts';
+
 import { EXPORT_EXTENSION_BY_MIME } from '@/lib/media/export-extensions';
 import { storyMediaUrl, type StoryPlaybackMedia } from '@/lib/stories/playback';
 
@@ -11,7 +13,7 @@ import { resolveAttachmentSrc } from './media-url';
  * iOS BAKE la story entière (`StoryPhotoSaveService`, filigrane
  * `MeeshyExportWatermark`) ; le web ne sait pas baker, et télécharge le MÉDIA
  * de la story par la route d'export FILIGRANÉE de la passerelle —
- * `GET /api/v1/posts/:postId/media/:mediaId/export`
+ * `GET posts.byPostIdMediaByMediaIdExport`
  * (`services/gateway/src/routes/posts/media-export.ts:112-190`,
  * `preValidation: [requiredAuth]`, `mayConsumePost` sinon 404, filigrane
  * `@<username>` `:149-152`, `Content-Disposition: attachment` `:178-181`).
@@ -50,5 +52,5 @@ export function storyExportUrl(params: {
   readonly media: StoryPlaybackMedia;
 }): string {
   if (params.source === 'fixtures') return resolveAttachmentSrc(storyMediaUrl(params.media), params.base);
-  return `${params.base}/api/v1/posts/${encodeURIComponent(params.postId)}/media/${encodeURIComponent(params.media.id)}/export`;
+  return `${params.base}${postsEndpoints.byPostIdMediaByMediaIdExport(params.postId, params.media.id)}`;
 }

@@ -102,6 +102,9 @@ export const conversationLastMessagePreviewSelect = {
   // #7451 — dit à `resolveLastMessageSummaryKind` que `expiresAt` est l'heure
   // INTERNE de destruction, et non l'échéance d'un lecteur.
   ephemeralDuration: true,
+  // #8630 — la chaîne citée : une réponse meurt, pour son lecteur, avec ce
+  // qu'elle cite, et sa ligne de liste passe alors à « expiré ».
+  replyToId: true,
   // #7545 — la protection (chiffré) et la NATURE du message (système, appel,
   // transfert) que `resolveLastMessageNature` lit.
   isEncrypted: true,
@@ -281,9 +284,8 @@ export const conversationListQuerySelect = (viewerId: string) => ({
   // lecture batchée par page (`loadConversationListActivity`).
   lastReactionId: true,
   activeCallId: true,
-  // #7592 — le rang du lecteur (`listRankAt`, `utils/list-rank.ts`).
-  lastReactionAt: true,
-  lastReactionTargetKey: true,
+  // #9026 — le rang de la ligne (`listRankAt`, `utils/list-rank.ts`).
+  lastActivityAt: true,
   participants: {
     take: 5,
     where: {

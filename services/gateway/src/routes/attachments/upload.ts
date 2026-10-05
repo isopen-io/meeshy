@@ -25,6 +25,7 @@ import {
 import type { UploadedFile, UploadTextBody } from './types';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { classifyAnonymousAttachment } from '../../services/attachments/ContentSignature.js';
+import { normalizeContactCardMimeType } from '@meeshy/shared/utils/vcard';
 
 /**
  * Plafond RÉEL, en OCTETS, du champ `content` de `POST /attachments/upload-
@@ -147,7 +148,7 @@ export async function registerUploadRoutes(
             files.push({
               buffer,
               filename: part.filename,
-              mimeType: part.mimetype,
+              mimeType: normalizeContactCardMimeType(part.mimetype, part.filename),
               size: buffer.length,
             });
             fileIndex++;

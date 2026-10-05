@@ -286,14 +286,10 @@ extension ConversationViewModel {
     func deleteMessage(messageId: String, mode: DeleteMode = .everyone) async {
         switch mode {
         case .local:
-            // Optimistic: hide locally. LocallyHiddenMessagesStore persists
-            // the hidden id; messagesByDate filters it out on next evaluation.
+            // Optimistic: hide locally. LocallyHiddenMessagesStore persists the hidden id and governs display.
             // Reversible — an "Undo" affordance can call .unhide(messageId)
             // without any network round-trip.
             LocallyHiddenMessagesStore.shared.hide(messageId)
-            // Invalidate the date-group cache so the next messagesByDate
-            // recomputes without the hidden row.
-            _messagesByDate = nil
         case .everyone:
             // A `.failed` message never reached the server — it has no real
             // serverId (`serverId(for:)` falls back to the local optimistic
@@ -491,9 +487,6 @@ extension ConversationViewModel {
             return
         }
 
-        editInProgress.insert(messageId)
-        defer { editInProgress.remove(messageId) }
-
         do {
             _ = try await messageService.edit(messageId: serverId(for: messageId), content: trimmed)
         } catch {
@@ -515,10 +508,6 @@ extension ConversationViewModel {
         EditHistoryStore.shared.revisions(for: serverId(for: messageId))
     }
 
-    func isEditSaving(messageId: String) -> Bool {
-        editInProgress.contains(messageId)
-    }
-
     // MARK: - Report Message
 
     func reportMessage(messageId: String, reportType: String, reason: String?) async -> Bool {
@@ -529,27 +518,5 @@ extension ConversationViewModel {
             self.error = userFacingMessage(for: error)
             return false
         }
-    }
-
-    // MARK: - Location Sharing
-
-    func startLiveLocation(latitude: Double, longitude: Double, durationMinutes: Int) {
-        LocationService.shared.startLiveLocation(
-            conversationId: conversationId,
-            latitude: latitude, longitude: longitude,
-            durationMinutes: durationMinutes
-        )
-    }
-
-    func stopLiveLocation() {
-        LocationService.shared.stopLiveLocation(conversationId: conversationId)
-    }
-
-    func updateLiveLocation(latitude: Double, longitude: Double, speed: Double? = nil, heading: Double? = nil) {
-        LocationService.shared.updateLiveLocation(
-            conversationId: conversationId,
-            latitude: latitude, longitude: longitude,
-            speed: speed, heading: heading
-        )
     }
 }

@@ -411,3 +411,6 @@ scripts/pilotage/data.json
 # Kit marketing — rendus générés (scripts/marketing-kit/render.mjs), jamais committés (#7727, #7728)
 scripts/marketing-kit/out/
 apps/ios/fastlane/screenshots/
+
+# Production marketing (vidéos, voix, captures) — hors dépôt, volontairement
+/Marketing/

@@ -20,75 +20,75 @@ public struct CategoryPickerView: View {
         VStack(spacing: 0) {
             if isLoading {
                 ProgressView()
-                    .padding(.vertical, 12)
+                    .padding(.vertical, MeeshySpacing.md)
             } else {
                 ForEach(categories, id: \.id) { category in
                     Button {
                         selectedCategoryId = selectedCategoryId == category.id ? nil : category.id
                     } label: {
-                        HStack(spacing: 12) {
+                        HStack(spacing: MeeshySpacing.md) {
                             Image(systemName: "folder.fill")
-                                .font(MeeshyFont.relative(14))
-                                .foregroundColor(Color(hex: "3B82F6"))
+                                .font(MeeshyFont.relative(MeeshyIconSize.sm))
+                                .foregroundColor(MeeshyColors.blue500)
                                 .accessibilityHidden(true)
                             Text(category.name)
-                                .font(MeeshyFont.relative(15))
+                                .font(MeeshyFont.relative(MeeshyFont.bodySize))
                                 .foregroundColor(theme.textPrimary)
                             Spacer()
                             if selectedCategoryId == category.id {
                                 Image(systemName: "checkmark")
-                                    .font(MeeshyFont.relative(14, weight: .semibold))
-                                    .foregroundColor(Color(hex: "3B82F6"))
+                                    .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .semibold))
+                                    .foregroundColor(MeeshyColors.blue500)
                                     .accessibilityHidden(true)
                             }
                         }
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 10)
+                        .padding(.horizontal, MeeshySpacing.mdPlus)
+                        .padding(.vertical, MeeshySpacing.smPlus)
                     }
                     .accessibilityAddTraits(selectedCategoryId == category.id ? .isSelected : [])
                     Divider().padding(.leading, 52)
                 }
 
                 if isCreating {
-                    HStack(spacing: 12) {
+                    HStack(spacing: MeeshySpacing.md) {
                         Image(systemName: "folder.badge.plus")
-                            .font(MeeshyFont.relative(14))
-                            .foregroundColor(Color(hex: "3B82F6"))
+                            .font(MeeshyFont.relative(MeeshyIconSize.sm))
+                            .foregroundColor(MeeshyColors.blue500)
                             .accessibilityHidden(true)
                         TextField(
                             String(localized: "category.picker.new.placeholder", defaultValue: "Nom de la catégorie", bundle: .module),
                             text: $newCategoryName
                         )
-                            .font(MeeshyFont.relative(15))
+                            .font(MeeshyFont.relative(MeeshyFont.bodySize))
                             .foregroundColor(theme.textPrimary)
                             .onSubmit { Task { await createCategory() } }
                         Button {
                             Task { await createCategory() }
                         } label: {
                             Image(systemName: "checkmark.circle.fill")
-                                .foregroundColor(Color(hex: "3B82F6"))
+                                .foregroundColor(MeeshyColors.blue500)
                         }
                         .disabled(newCategoryName.trimmingCharacters(in: .whitespaces).isEmpty)
                         .accessibilityLabel(String(localized: "category.picker.create.a11y", defaultValue: "Créer la catégorie", bundle: .module))
                     }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
+                    .padding(.horizontal, MeeshySpacing.mdPlus)
+                    .padding(.vertical, MeeshySpacing.smPlus)
                 } else {
                     Button {
                         isCreating = true
                     } label: {
-                        HStack(spacing: 12) {
+                        HStack(spacing: MeeshySpacing.md) {
                             Image(systemName: "plus.circle.fill")
-                                .font(MeeshyFont.relative(14))
-                                .foregroundColor(Color(hex: "3B82F6"))
+                                .font(MeeshyFont.relative(MeeshyIconSize.sm))
+                                .foregroundColor(MeeshyColors.blue500)
                                 .accessibilityHidden(true)
                             Text(String(localized: "category.picker.new.button", defaultValue: "Nouvelle catégorie", bundle: .module))
-                                .font(MeeshyFont.relative(15))
-                                .foregroundColor(Color(hex: "3B82F6"))
+                                .font(MeeshyFont.relative(MeeshyFont.bodySize))
+                                .foregroundColor(MeeshyColors.blue500)
                             Spacer()
                         }
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 10)
+                        .padding(.horizontal, MeeshySpacing.mdPlus)
+                        .padding(.vertical, MeeshySpacing.smPlus)
                     }
                 }
             }

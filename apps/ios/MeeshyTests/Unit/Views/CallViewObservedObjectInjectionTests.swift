@@ -44,11 +44,16 @@ final class CallViewObservedObjectInjectionTests: XCTestCase {
     // encore l'ancien fichier et étaient donc ROUGES depuis l'extraction, sans
     // que rien ne le dise : un déplacement de code n'emporte pas les témoins qui
     // le désignent par son CHEMIN.
+    //
+    // 2026-09-29 (#8725) — l'adresse a changé une seconde fois : `CallView` vit
+    // désormais dans sa propre fenêtre (`CallWindowPresenter`), montée par
+    // `CallPresentationLayer`. L'exigence reste : la pile observée est remise
+    // telle quelle, jamais un défaut.
     func test_callPresentationLayer_injectsOwnCallManagerIntoCallView() throws {
-        let source = try source(of: "Views/RootLayers/CallPresentationLayer.swift")
+        let source = try source(of: "Views/RootLayers/CallWindowPresenter.swift")
         XCTAssertTrue(
-            source.contains("CallView(callManager: callManager)"),
-            "`CallPresentationLayer` must pass its own `callManager` into CallView " +
+            source.contains("CallView(callManager: manager, mesh: .shared)"),
+            "The call window must pass the observed `callManager` into CallView " +
             "instead of letting CallView default to CallManager.shared on every " +
             "reconstruction."
         )
@@ -122,14 +127,17 @@ final class CallViewObservedObjectInjectionTests: XCTestCase {
     }
 
     func test_callPresentationLayer_injectsOwnCallManagerIntoPillAndBubble() throws {
-        let source = try source(of: "Views/RootLayers/CallPresentationLayer.swift")
+        let layer = try source(of: "Views/RootLayers/CallPresentationLayer.swift")
         XCTAssertTrue(
-            source.contains("FloatingCallPillView(callManager: callManager)"),
+            layer.contains("FloatingCallPillView(callManager: callManager"),
             "`CallPresentationLayer` must pass its own `callManager` into FloatingCallPillView."
         )
+        // #8739 — la bulle vit dans la fenêtre passe-plat du point de retour,
+        // au-dessus de tout plein écran : c'est elle qui lui remet la pile.
+        let window = try source(of: "Views/RootLayers/CallWindowPresenter.swift")
         XCTAssertTrue(
-            source.contains("CallBubbleView(callManager: callManager)"),
-            "`CallPresentationLayer` must pass its own `callManager` into CallBubbleView."
+            window.contains("CallBubbleView(callManager: callManager"),
+            "The return-point window must pass its own `callManager` into CallBubbleView."
         )
     }
 

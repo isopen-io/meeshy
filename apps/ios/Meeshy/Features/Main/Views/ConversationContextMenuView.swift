@@ -83,11 +83,11 @@ struct ConversationContextMenuView: View {
             case .more: morePanel
             }
         }
-        .padding(.vertical, 6)
+        .padding(.vertical, MeeshySpacing.xsPlus)
         .frame(width: 260)
         // Liquid Glass natif iOS 26 (`.regular` pur, sans teinte ni ombre
         // manuelle) pour matcher le rendu système ; fallback material < 26.
-        .adaptiveGlass(in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .adaptiveGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.xlPlus, style: .continuous))
         .animation(.easeInOut(duration: 0.2), value: panel)
         .accessibilityElement(children: .contain)
     }
@@ -178,7 +178,7 @@ struct ConversationContextMenuView: View {
 
             divider
 
-            HStack(spacing: 6) {
+            HStack(spacing: MeeshySpacing.xsPlus) {
                 ForEach(Self.favoriteEmojis, id: \.self) { emoji in
                     Button {
                         HapticFeedback.light()
@@ -186,7 +186,7 @@ struct ConversationContextMenuView: View {
                         onDismiss()
                     } label: {
                         Text(emoji)
-                            .font(MeeshyFont.relative(22))
+                            .font(MeeshyFont.relative(MeeshyFont.titleSize))
                             .frame(maxWidth: .infinity, minHeight: rowMinHeight)
                             .contentShape(Rectangle())
                     }
@@ -195,7 +195,7 @@ struct ConversationContextMenuView: View {
                     .accessibilityAddTraits(.isButton)
                 }
             }
-            .padding(.horizontal, 12)
+            .padding(.horizontal, MeeshySpacing.md)
 
             if currentReaction != nil {
                 divider
@@ -307,27 +307,27 @@ struct ConversationContextMenuView: View {
             HapticFeedback.light()
             action()
         } label: {
-            HStack(spacing: 14) {
+            HStack(spacing: MeeshySpacing.mdPlus) {
                 Image(systemName: icon)
-                    .font(MeeshyFont.relative(17, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .medium))
                     .symbolRenderingMode(.hierarchical)
                     .frame(width: iconColumnWidth)
                 Text(label)
-                    .font(MeeshyFont.relative(16))
+                    .font(MeeshyFont.relative(MeeshyFont.calloutSize))
                     .multilineTextAlignment(.leading)
                 Spacer(minLength: 0)
                 if showsCheckmark {
                     Image(systemName: "checkmark")
-                        .font(MeeshyFont.relative(13, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
                 }
                 if showsChevron {
                     Image(systemName: "chevron.forward")
-                        .font(MeeshyFont.relative(13, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
                         .opacity(0.4)
                 }
             }
             .foregroundStyle(tint)
-            .padding(.horizontal, 16)
+            .padding(.horizontal, MeeshySpacing.lg)
             .frame(minHeight: rowMinHeight)
             .contentShape(Rectangle())
         }
@@ -340,17 +340,17 @@ struct ConversationContextMenuView: View {
         Button {
             navigate(to: .root)
         } label: {
-            HStack(spacing: 10) {
+            HStack(spacing: MeeshySpacing.smPlus) {
                 Image(systemName: "chevron.backward")
-                    .font(MeeshyFont.relative(15, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .semibold))
                     .symbolRenderingMode(.hierarchical)
                     .frame(width: iconColumnWidth)
                 Text(title)
-                    .font(MeeshyFont.relative(16, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .semibold))
                 Spacer(minLength: 0)
             }
             .foregroundStyle(accent)
-            .padding(.horizontal, 16)
+            .padding(.horizontal, MeeshySpacing.lg)
             .frame(minHeight: rowMinHeight)
             .contentShape(Rectangle())
         }
@@ -360,11 +360,11 @@ struct ConversationContextMenuView: View {
     }
 
     private var separator: some View {
-        Divider().overlay(accent.opacity(0.08)).padding(.leading, 52)
+        Divider().overlay(accent.opacity(MeeshyOpacity.subtle)).padding(.leading, 52)
     }
 
     private var divider: some View {
-        Divider().overlay(accent.opacity(0.12))
+        Divider().overlay(accent.opacity(MeeshyOpacity.light))
     }
 }
 
@@ -382,6 +382,6 @@ struct ConversationContextMenuView: View {
 struct MenuRowHighlightButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .background(configuration.isPressed ? Color.primary.opacity(0.08) : Color.clear)
+            .background(configuration.isPressed ? Color.primary.opacity(MeeshyOpacity.subtle) : Color.clear)
     }
 }

@@ -13,6 +13,7 @@ import { currentInterfaceLanguage, subscribeInterfaceLanguage } from '@/lib/inte
 import { useRoute } from '@/lib/router';
 import { followSystem } from '@/lib/scheme';
 import { landingAfterSession, resolveRouteAccess } from '@/lib/session-guard';
+import { useAnonymousScope } from '@/lib/view/use-anonymous-scope';
 import { Router, href, navigate } from '@/routes/route-table';
 
 /**
@@ -64,6 +65,14 @@ if (import.meta.env.DEV) void import('@/lib/api/dev-harness');
  * est déjà là, pas à ajouter.
  */
 function SessionGate({ children }: { children: ReactNode }) {
+  const route = useRoute();
+  /* L'IDENTITÉ SUIT LA CONVERSATION LUE (#8816) — posée AVANT la décision
+     d'accès : sous l'identité anonyme d'un compte, la liste redirigerait
+     sinon vers la connexion au lieu de rendre le compte. */
+  return useAnonymousScope(route) ? <RouteAccessGate>{children}</RouteAccessGate> : <Skeleton />;
+}
+
+function RouteAccessGate({ children }: { children: ReactNode }) {
   const { key, search } = useRoute();
   const status = useStore(sessionStore, (s) => s.session.status);
   const decision = resolveRouteAccess({ sessionStatus: status, source: apiDeps.source, routeKey: key });
@@ -161,6 +170,29 @@ if (__SHELL__) {
 }
 
 /**
+ * UNE IMAGE, UNE VIDÉO OU UN LIEN PARTAGÉ DEPUIS UNE AUTRE APPLICATION OUVRE LA
+ * FEUILLE D'ENVOI (#8884) — l'intent `SEND` de la coque Android est copié par
+ * `MeeshyShareIntentPlugin`, lu ici ; le partage d'un lancement à froid attend
+ * côté natif, celui d'un utilisateur pas encore connecté attend la connexion.
+ * Le web reçoit le même partage par le `share_target` de la PWA (`/share`).
+ */
+if (__SHELL__) {
+  void import('@/lib/share-incoming/native-start').then(({ startNativeShareInboxInShell }) => startNativeShareInboxInShell());
+}
+
+/**
+ * UN VOCAL CONTINUE DE JOUER QUAND ON QUITTE L'APP (#9257) — la coque Android
+ * tient un service au premier plan tant qu'un `<audio>` de la page joue ;
+ * sans lui, Android gèle le processus mis en cache au milieu du vocal. Un
+ * navigateur tient lui-même la lecture : hors coque, rien ne se charge.
+ */
+if (__SHELL__) {
+  void import('@/lib/view/shell-playback').then(({ holdWhileAudioPlays, shellPlaybackHold }) =>
+    holdWhileAudioPlays(document, shellPlaybackHold()),
+  );
+}
+
+/**
  * LA COQUE ANDROID REÇOIT SES PUSHS PAR FCM NATIF (#7307). La WebView n'a ni
  * Push API ni service worker : le jeton vient de `@capacitor/push-notifications`
  * et s'enregistre par le même port qu'iOS. Derrière `__SHELL__`, ce module et
@@ -210,6 +242,21 @@ if (!__SHELL__ && import.meta.env.PROD && 'serviceWorker' in navigator) {
       listenNotificationTapsInBrowser(),
     );
     /**
+     * ET « RÉPONDRE » SUR LA NOTIFICATION D'APPEL DÉCROCHE (#8043) : le fil
+     * ouvert par le worker décroche l'appel désigné dès qu'il sonne, et la
+     * notification disparaît quand l'appel quitte la sonnerie.
+     */
+    void import('@/lib/calls/call-answer-intent').then(({ listenCallAnswerIntentsInBrowser }) =>
+      listenCallAnswerIntentsInBrowser(),
+    );
+    void import('@/lib/calls/call-back-intent').then(({ listenCallBackIntentsInBrowser }) =>
+      listenCallBackIntentsInBrowser(),
+    );
+    /** ET « RÉPONDRE » SUR UNE NOTIFICATION DE MESSAGE MET LE CURSEUR DANS LE COMPOSEUR (#8860). */
+    void import('@/lib/notifications/composer-focus-intent').then(({ listenComposerFocusIntentsInBrowser }) =>
+      listenComposerFocusIntentsInBrowser(),
+    );
+    /**
      * ET LE WORKER PEUT ACCUSER LA REMISE D'UN PUSH, ONGLET FERMÉ (#7368,
      * W4). `sw-push.js` (script classique) ne lit ni `localStorage` ni aucun
      * module de `src/` : sans ce pont IndexedDB, posé dès que la session est
@@ -227,7 +274,7 @@ if (!__SHELL__ && import.meta.env.PROD && 'serviceWorker' in navigator) {
 
 /**
  * ET LA COQUE APPREND QU'UNE VERSION EST PUBLIÉE (#6937). Sans service worker,
- * c'est la passerelle qui le lui dit (`GET /api/v1/app/shell-version`), au
+ * c'est la passerelle qui le lui dit (`GET app.shellVersion`), au
  * démarrage et à chaque retour au premier plan ; la bannière ouvre alors la
  * fiche du magasin au lieu de recharger. Même horloge que l'inscription du
  * worker ci-dessus : après la première peinture, sur le `load`.

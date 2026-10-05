@@ -36,6 +36,7 @@ import { join } from 'node:path';
 
 import { launchChromium } from './lib/browser.mjs';
 import { startDistServer } from './lib/gate-server.mjs';
+import { writeOnStage } from './lib/stage-typing.mjs';
 
 const ROOT = new URL('../', import.meta.url).pathname;
 const DIST = join(ROOT, 'dist-gateway');
@@ -169,13 +170,54 @@ check(
   'le moteur devrait peindre UN objet texte avant l’ajout',
 );
 
+/* ── 1 bis. LA PREMIÈRE PORTE OUVRE DIRECTEMENT LA PHOTOTHÈQUE (#8681) ──────
+   Le disque est l'étiquette d'un `input[type=file]` : un clic ouvre le
+   sélecteur du système dans le même geste — aucune feuille, aucun menu. */
+const firstDoor = await page.evaluate(() => {
+  const input = document.querySelector('[data-story-studio-rail="leading"]')?.querySelector('input, button, [role="button"], [aria-haspopup]');
+  return input === null || input === undefined ? null : { tag: input.tagName, type: input.getAttribute('type'), door: input.dataset.door, accept: input.getAttribute('accept') };
+});
+check(
+  firstDoor?.tag === 'INPUT' && firstDoor.type === 'file' && firstDoor.door === 'visual' && firstDoor.accept === 'image/*,video/*',
+  `la première porte du couloir n’est pas le sélecteur des photos et vidéos — ${JSON.stringify(firstDoor)}`,
+);
+const chooser = await Promise.all([
+  page.waitForEvent('filechooser', { timeout: 4000 }),
+  page.click('[data-story-studio-rail="leading"] label:has(input[data-door="visual"])'),
+])
+  .then(([opened]) => opened)
+  .catch(() => null);
+check(chooser !== null, 'toucher la première porte n’ouvre PAS le sélecteur de fichiers — un intermédiaire s’interpose');
+check((await page.locator('[role="menu"], [role="dialog"]').count()) === 0, 'toucher la première porte ouvre un menu ou une feuille au lieu de la photothèque');
+
 /* ── 2. AJOUTER un second texte ⇒ deux objets, le neuf sélectionné ───────── */
 check(
   (await page.evaluate(() => document.querySelectorAll('[data-story-option]').length)) > 0,
   'aucun contrôle du rail n’est rendu',
 );
+/* « T+ » pose le texte ET ouvre sa saisie : on tape au CLAVIER, jamais par
+   `page.fill`, qui écrivait sous le calque des gestes (#8515). */
+/* L'invite du texte AJOUTÉ s'écrit à SA place — l'ancre du texte neuf, sur
+   88 % de la scène (la coupe d'iOS, SCENE_TEXT_WRAP_FRACTION, #9140) — jamais
+   dans la boîte du texte déjà écrit (#8681). */
 await page.click('[data-story-option="add-text"]');
-await page.fill('#story-studio-text', 'Hello');
+await page.waitForFunction(() => document.activeElement?.id === 'story-studio-text', null, { timeout: 4000 });
+await twoFrames();
+const invite = await page.evaluate(() => {
+  const stage = document.querySelector('[data-scene-stage]')?.getBoundingClientRect();
+  const field = document.querySelector('#story-studio-text');
+  if (stage === undefined || field === null) return null;
+  const r = field.getBoundingClientRect();
+  return { target: field.dataset.storyTextTarget, width: r.width / stage.width, cx: (r.x + r.width / 2 - stage.x) / stage.width, cy: (r.y + r.height / 2 - stage.y) / stage.height };
+});
+check(invite?.target === 'text-2', `l’invite n’écrit pas le texte ajouté — ${JSON.stringify(invite)}`);
+check(
+  invite !== null && Math.abs(invite.width - 0.88) < 0.01 && Math.abs(invite.cx - 0.5) < 0.01 && Math.abs(invite.cy - 0.5) < 0.01,
+  `l’invite du texte ajouté ne s’écrit pas à son ancre, sur 88 % de la scène — ${JSON.stringify(invite)}`,
+);
+const tPlus = await writeOnStage(page, 'Hello', { finish: false });
+if (tPlus !== null) console.error(`  « T+ » puis le clavier : ${tPlus}`);
+check(tPlus === null, `« T+ » puis le clavier : ${tPlus}`);
 await twoFrames();
 check(
   (await page.evaluate(() => document.querySelectorAll('[data-scene-object="text"]').length)) === 2,
@@ -187,15 +229,43 @@ check(
 );
 
 /* ── 3. les RÉGLAGES de l'objet — langue, police, effet, couleur, alignement ── */
-await page.click('[data-story-option="editor-toggle"]');
-await page.waitForSelector('[data-story-object-editor="text-2"]', { timeout: 8000 });
+/* « T+ » a ouvert l'ÉDITION du texte posé : ses SOUS-OUTILS sont au rail
+   droit ; chacun ouvre ses options dans un panneau à droite, depuis le haut
+   (#9140, jumelle de #9138). */
+await page.waitForSelector('[data-story-option="section:style"]', { timeout: 8000 });
+const openSection = async (section) => {
+  const tile = `[data-story-option="section:${section}"]`;
+  if ((await page.getAttribute(tile, 'aria-pressed')) !== 'true') await page.click(tile);
+  await page.waitForSelector(`[data-story-inline-panel="${section}"] [data-story-object-editor="text-2"]`, { timeout: 8000 });
+};
 const pick = async (section, value) => {
-  const selector = `[data-story-option="${section}:${value}"]`;
+  await openSection(section === 'textbg' ? 'background' : section);
+  const selector = `[data-story-inline-panel] [data-story-option="${section}:${value}"]`;
   await page.waitForSelector(selector, { timeout: 8000 });
   await page.click(selector);
   await twoFrames();
 };
 await pick('language', 'en');
+/* LE PANNEAU EST À DROITE, DEPUIS LE HAUT : aligné sur le haut de la colonne
+   des sous-outils, finissant une gouttière avant elle, sans déborder ni
+   recouvrir le rail. */
+const panelPlace = await page.evaluate(() => {
+  const panel = document.querySelector('[data-story-inline-panel]')?.getBoundingClientRect();
+  const column = document.querySelector('[data-story-trailing-options]')?.getBoundingClientRect();
+  const plateau = document.querySelector('[data-story-studio-plateau]')?.getBoundingClientRect();
+  if (panel === undefined || column === undefined || plateau === undefined) return null;
+  return {
+    topGap: Math.abs(panel.top - column.top),
+    gutter: column.left - panel.right,
+    start: panel.left - plateau.left,
+    bottomInside: panel.bottom <= plateau.bottom + 0.5,
+    overflow: Math.max(document.documentElement.scrollWidth, document.body.scrollWidth) - innerWidth,
+  };
+});
+check(
+  panelPlace !== null && panelPlace.topGap < 4 && panelPlace.gutter >= 4 && panelPlace.start >= 9 && panelPlace.bottomInside && panelPlace.overflow <= 0,
+  `les options du texte ne s’ouvrent pas à droite depuis le haut, à côté du rail — ${JSON.stringify(panelPlace)}`,
+);
 await pick('style', 'typewriter');
 await pick('effect', 'longShadow');
 await pick('color', 'F8B500');
@@ -365,40 +435,113 @@ check(
 await pick('style', 'typewriter');
 
 /* ── 4. DÉPLACER au POINTEUR, puis TOURNER et AGRANDIR au CLAVIER ────────── */
-const moveBox = await page.evaluate(() => {
-  const el = document.querySelector('[data-story-object-move]');
+/* LOT 6 : la sélection est SILENCIEUSE — aucun contour, aucune poignée. On
+   referme l'édition, puis on GLISSE l'objet lui-même ; le clavier passe par
+   le bouton de l'objet (flèches, `+`, `]`). */
+await page.click('[data-story-option="edit:exit"]');
+check(
+  (await page.evaluate(() => document.querySelector('[data-story-object-frame], [data-story-object-move], [data-story-object-grip]') === null)),
+  'la sélection ne doit plus entourer l’objet (ni contour, ni poignée)',
+);
+const objectBox = await page.evaluate(() => {
+  const el = document.querySelector('[data-scene-object-id="text-2"]');
   if (el === null) return null;
   const r = el.getBoundingClientRect();
-  return { x: r.x + r.width / 2, y: r.y + r.height / 2, width: r.width, height: r.height };
+  return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
 });
-check(moveBox !== null, 'aucune poignée de déplacement sur l’objet sélectionné');
-check(moveBox !== null && moveBox.width >= 43.5 && moveBox.height >= 43.5, `poignée de déplacement trop petite — ${JSON.stringify(moveBox)}`);
-if (moveBox !== null) {
-  await page.mouse.move(moveBox.x, moveBox.y);
+check(objectBox !== null, 'le texte sélectionné n’est pas peint sur la scène');
+if (objectBox !== null) {
+  await page.mouse.move(objectBox.x, objectBox.y);
   await page.mouse.down();
-  await page.mouse.move(moveBox.x + 40, moveBox.y - 60, { steps: 8 });
+  await page.mouse.move(objectBox.x + 40, objectBox.y - 60, { steps: 8 });
   await page.mouse.up();
   await twoFrames();
 }
 
-const gripBox = await page.evaluate(() => {
-  const el = document.querySelector('[data-story-object-grip]');
-  if (el === null) return null;
-  const r = el.getBoundingClientRect();
-  return { width: r.width, height: r.height };
-});
-check(gripBox !== null && gripBox.width >= 43.5 && gripBox.height >= 43.5, `poignée d’échelle/rotation trop petite — ${JSON.stringify(gripBox)}`);
-
 // Le CLAVIER fait tout ce que le pointeur fait (dimension 5).
-await page.focus('[data-story-object-move]');
+await page.focus('[data-story-object-edit="text-2"]');
 for (let i = 0; i < 4; i += 1) await page.keyboard.press(']');
 for (let i = 0; i < 3; i += 1) await page.keyboard.press('+');
 await page.keyboard.press('ArrowDown');
 await twoFrames();
 
-/* ── 5. le SON se place SUR LA SCÈNE, la LÉGENDE s'écrit ─────────────────── */
+/* ── 4 bis. LE DOUBLE-TOUCHER ROUVRE L'ÉDITION DE L'AJOUT, À L'ÉCHELLE DE LA
+   SCÈNE (#8681, jumelle de #8680) ─────────────────────────────────────────────
+   Le texte est maintenant déplacé, tourné et agrandi, dans la famille
+   « machine ». Le double-toucher doit rouvrir la MÊME édition que « T+ »
+   (outil qui prend toute la place, #8654) et la saisie doit avoir la pose,
+   la famille et la taille du texte peint — donc la taille PUBLIÉE rapportée
+   à la scène visible. Les options vivent à droite depuis le haut (#9140) :
+   aucune plaque ne monte du bas, la scène n'est plus réduite par l'outil. */
+if ((await page.locator('[data-story-option="edit:exit"]').count()) > 0) await page.click('[data-story-option="edit:exit"]');
+await twoFrames();
+const idleStage = await page.evaluate(() => document.querySelector('[data-scene-stage]')?.getBoundingClientRect().width ?? null);
+const target2 = await page.evaluate(() => {
+  const r = document.querySelector('[data-scene-object-id="text-2"] [data-scene-text]')?.getBoundingClientRect();
+  return r === undefined ? null : { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+});
+check(target2 !== null, 'le texte déplacé n’est plus peint');
+if (target2 !== null) {
+  await page.mouse.dblclick(target2.x, target2.y);
+  await page.waitForSelector('[data-story-option="section:style"]', { timeout: 8000 });
+  await page.waitForFunction(() => document.activeElement?.id === 'story-studio-text', null, { timeout: 4000 });
+  await twoFrames();
+  const writing = await page.evaluate(() => {
+    const stage = document.querySelector('[data-scene-stage]');
+    const field = document.querySelector('#story-studio-text');
+    const paintedText = document.querySelector('[data-scene-object-id="text-2"] [data-scene-text]');
+    const frame = document.querySelector('[data-scene-object-id="text-2"]');
+    if (stage === null || field === null || paintedText === null || frame === null) return null;
+    const matrix = (el) => new DOMMatrixReadOnly(getComputedStyle(el).transform);
+    const f = matrix(field);
+    const p = matrix(frame);
+    const scale = Math.hypot(p.a, p.b);
+    return {
+      focused: document.activeElement === field,
+      target: field.dataset.storyTextTarget,
+      chrome: document.querySelector('[data-story-studio-rail="leading"]')?.getAttribute('data-studio-chrome'),
+      stageWidth: stage.getBoundingClientRect().width,
+      fieldFont: Number.parseFloat(getComputedStyle(field).fontSize),
+      paintedFont: Number.parseFloat(getComputedStyle(paintedText).fontSize),
+      fieldFamily: getComputedStyle(field).fontFamily,
+      paintedFamily: getComputedStyle(paintedText).fontFamily,
+      linear: Math.max(Math.abs(f.a - p.a), Math.abs(f.b - p.b), Math.abs(f.c - p.c), Math.abs(f.d - p.d)),
+      scale,
+      centreGap: (() => {
+        const a = field.getBoundingClientRect();
+        const b = paintedText.getBoundingClientRect();
+        return Math.hypot(a.x + a.width / 2 - (b.x + b.width / 2), a.y + a.height / 2 - (b.y + b.height / 2));
+      })(),
+    };
+  });
+  check(writing !== null, 'le double-toucher n’a monté ni saisie ni texte peint');
+  if (writing !== null) {
+    check(writing.focused && writing.target === 'text-2', `le double-toucher ne rouvre pas la saisie du texte — ${JSON.stringify(writing)}`);
+    check(writing.chrome === 'hidden', `le double-toucher n’ouvre pas l’outil qui prend toute la place (#8654) — rail ${writing.chrome}`);
+    check(idleStage !== null && writing.stageWidth >= idleStage - 1, `l’outil a réduit la scène : ses options devraient s’ouvrir à droite, pas sous elle (#9140) — ${idleStage} → ${writing.stageWidth}`);
+    check(writing.scale > 1.05, `le texte n’a pas été agrandi avant la mesure — échelle ${writing.scale}`);
+    check(Math.abs(writing.fieldFont - writing.paintedFont) < 0.01, `la saisie n’a pas la police du texte peint — ${writing.fieldFont} ≠ ${writing.paintedFont}`);
+    check(writing.linear < 1e-3, `la saisie n’a pas l’angle ni l’échelle du texte peint — écart ${writing.linear}`);
+    check(writing.fieldFamily === writing.paintedFamily, `la saisie n’a pas la famille du texte peint — ${writing.fieldFamily}`);
+    check(writing.centreGap < 1.5, `la saisie n’est pas centrée sur le texte peint — ${writing.centreGap} px`);
+    /* LA LOI : taille rendue = fontSize/1080 × échelle × largeur de la scène VISIBLE. */
+    const rendered = (writing.fieldFont * writing.scale) / writing.stageWidth;
+    const published = (96 / 1080) * writing.scale;
+    check(Math.abs(rendered - published) < 1e-3, `la saisie n’est pas à l’échelle de la scène — ${rendered} ≠ ${published}`);
+  }
+  await page.click('[data-story-option="edit:exit"]');
+  await twoFrames();
+}
+
+/* ── 5. le SON se place SUR LA SCÈNE, la LÉGENDE s'écrit dans l'outil « Décrire »
+   du fond (#8849), ouvert depuis le rail droit ─────────────────────────────── */
 await page.click('[data-story-option="sound-plane:foreground"]');
+await page.click('[data-story-option="frame"]');
+await page.waitForSelector('[data-story-option="background:describe"]', { timeout: 8000 });
+await page.click('[data-story-option="background:describe"]');
+await page.waitForSelector('#story-studio-caption-visual', { timeout: 8000 });
 await page.fill('#story-studio-caption-visual', 'Au lever du jour');
+await page.click('[data-story-option="background:exit"]');
 await twoFrames();
 
 /* ── 6. PUBLIER, puis RELIRE le document qui part ────────────────────────── */
@@ -473,6 +616,8 @@ if (failures.length > 0) {
 console.log(
   `check-story-plateau : vert — ${invariants} invariants : deux objets texte posés, celui-ci déplacé au POINTEUR puis tourné et ` +
     'agrandi au CLAVIER, sa langue et son style choisis ET PEINTS, les TREIZE familles à police embarquée peintes par leur ' +
-    'propre fichier avec la pile native derrière elles (#6951), un son placé sur la scène, une légende écrite — et CHACUNE de ces ' +
+    'propre fichier avec la pile native derrière elles (#6951), la première porte ouvrant la photothèque sans intermédiaire, le ' +
+    'double-toucher rouvrant l’édition de l’ajout avec une saisie à la pose et à l’échelle de la scène (#8681), ses options ouvertes à droite depuis le haut (#9140), un son ' +
+    'placé sur la scène, une légende écrite — et CHACUNE de ces ' +
     'valeurs relue dans le corps de POST /api/v1/posts, un objet non sélectionné restant intact.',
 );

@@ -164,6 +164,9 @@ public struct ConversationPreviewInput: Sendable, Hashable, Decodable {
     public let draft: String?
     public let lastReaction: ConversationLastReaction?
     public let lastMessage: ConversationPreviewMessage?
+    /// Discussion DIRECTE (#9049) : le titre de la ligne nomme déjà le pair —
+    /// sa réaction se dit « a réagi ❤️ à « … » », sans répéter son nom.
+    public let isDirect: Bool?
 
     public init(
         viewerId: String,
@@ -175,7 +178,8 @@ public struct ConversationPreviewInput: Sendable, Hashable, Decodable {
         typing: [String]? = nil,
         draft: String? = nil,
         lastReaction: ConversationLastReaction? = nil,
-        lastMessage: ConversationPreviewMessage? = nil
+        lastMessage: ConversationPreviewMessage? = nil,
+        isDirect: Bool? = nil
     ) {
         self.viewerId = viewerId
         self.language = language
@@ -187,5 +191,6 @@ public struct ConversationPreviewInput: Sendable, Hashable, Decodable {
         self.draft = draft
         self.lastReaction = lastReaction
         self.lastMessage = lastMessage
+        self.isDirect = isDirect
     }
 }

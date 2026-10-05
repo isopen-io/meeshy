@@ -43,11 +43,20 @@ export function imageFilesOf(transfer: Pick<DataTransfer, 'files' | 'items'> | n
 
 /**
  * LE BOUTON « COLLER » — l'API asynchrone du presse-papier, là où le
- * navigateur la sert (Chromium, la WebView Android de la coque, Safari 13.1+).
- * Un refus de permission ou une API absente rend `[]` : l'écran dit alors
- * « rien à coller », jamais une erreur technique.
+ * navigateur la sert (Chromium, Safari 13.1+). La WebView de la coque Android
+ * ne la sert PAS (aucune permission `clipboard-read` accordée) : la coque lit
+ * le presse-papier système par son pont `MeeshyClipboard.readImage` (#8640),
+ * préféré dès qu'elle le déclare. Un refus, une API absente ou un
+ * presse-papier sans image rend `[]` : l'écran dit alors « rien à coller »,
+ * jamais une erreur technique.
  */
-export async function readClipboardImages(clipboard: Pick<Clipboard, 'read'> | undefined): Promise<readonly Blob[]> {
+export type NativeClipboardRead = (options: object) => Promise<unknown>;
+
+export async function readClipboardImages(
+  clipboard: Pick<Clipboard, 'read'> | undefined,
+  nativeRead: NativeClipboardRead | null = null,
+): Promise<readonly Blob[]> {
+  if (nativeRead !== null) return readThroughShell(nativeRead);
   if (clipboard?.read === undefined) return [];
   try {
     const items = await clipboard.read();
@@ -58,6 +67,17 @@ export async function readClipboardImages(clipboard: Pick<Clipboard, 'read'> | u
       }),
     );
     return blobs;
+  } catch {
+    return [];
+  }
+}
+
+async function readThroughShell(nativeRead: NativeClipboardRead): Promise<readonly Blob[]> {
+  try {
+    const answer = (await nativeRead({})) as { readonly mimeType?: unknown; readonly data?: unknown } | null;
+    const { mimeType, data } = answer ?? {};
+    if (typeof mimeType !== 'string' || !mimeType.startsWith('image/') || typeof data !== 'string' || data === '') return [];
+    return [new Blob([Uint8Array.from(atob(data), (c) => c.charCodeAt(0))], { type: mimeType })];
   } catch {
     return [];
   }

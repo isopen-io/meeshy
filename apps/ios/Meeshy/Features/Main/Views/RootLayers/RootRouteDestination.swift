@@ -26,7 +26,8 @@ struct RootRouteDestination: View {
                 // I-075 — override éphémère, jamais persistant :
                 // consommé ici comme `pendingReplyContext`
                 // ci-dessus, jamais écrit en préférence.
-                forcedReadingMode: router.pendingForcedReadingMode
+                forcedReadingMode: router.pendingForcedReadingMode,
+                landsOnMessage: router.landsOnMessage(in: conv.id)
             )
             // Identité par conversation — même fix que iPadRootView.
             // `Router.navigateToConversation` REMPLACE la pile en une
@@ -37,6 +38,7 @@ struct RootRouteDestination: View {
             // pour A survit et `.task` ne se relance pas : le contenu
             // restait sur A. `.id` force le teardown (flush du
             // brouillon de A via onDisappear) + une vue neuve pour B.
+            .reportsConversationViewing(conv.id)
             .id(conv.id)
             .navigationBarHidden(true)
             .onAppear {
@@ -121,7 +123,11 @@ struct RootRouteDestination: View {
                 onNotificationTap: { notification in
                     onNotificationTap(notification)
                 },
-                onDismiss: { router.pop() }
+                onDismiss: { router.pop() },
+                onQuickAction: { action in
+                    await NotificationQuickActionPerformer(openConversation: { router.navigateToConversation($0) })
+                        .perform(action)
+                }
             )
             .navigationBarHidden(true)
             .onDisappear {

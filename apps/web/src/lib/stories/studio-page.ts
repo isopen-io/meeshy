@@ -1,9 +1,13 @@
+import { clampMediaCrop, FULL_MEDIA_CROP, isFullMediaCrop, type MediaCropRect } from '@meeshy/shared/utils/media-crop';
+
 import type { ApiFailure } from '@/lib/api/http';
+import type { StoryFilterId } from '@/lib/canvas/media-filter';
+import type { SceneTransition } from '@/lib/canvas/scene-transition';
 
 import { MEDIA_CAPTION_MAX } from './media-caption';
-import type { StudioMediaKind, StudioPlane } from './story-document';
+import type { StoryFrame, StudioMediaKind, StudioPlane } from './story-document';
 import { clampPose, type StudioPose } from './studio-pose';
-import { newTextLayer, type StudioTextLayer } from './studio-text';
+import { newTextLayer, type StudioTextLayer, type StudioTiming } from './studio-text';
 
 /**
  * **UNE PAGE DU STUDIO** (#7684) — ce que #6900/#6943/#6944 posaient sur UN
@@ -52,9 +56,30 @@ export type StudioVisualAsset = {
   readonly durationMs?: number;
   /** LA LÉGENDE de CE média (#6944) — `PostMedia.caption`. */
   readonly caption: string;
+  /** LE TEXTE ALTERNATIF de CE média (#8518) — `PostMedia.alt`, ce qu'un
+   * lecteur d'écran dit de lui ; jamais affiché. Absent ⇒ aucun. */
+  readonly alt?: string;
   /** La pose du CALQUE. Le FOND n'en a pas d'utile (il remplit la scène). */
   readonly pose: StudioPose;
+  /** LE CADRE du FOND (#8414) — Ajuster/Remplir et ce qui se peint autour.
+   * Absent ⇒ ajusté, flou (`lib/canvas/backdrop.ts`). */
+  readonly frame?: StoryFrame;
+  /** La fenêtre d'apparition du CALQUE en mode Animé (#8415). */
+  readonly timing?: StudioTiming;
+  /** LE FILTRE de CE média (lot 7, `payload.filter`) — il ne peint que lui.
+   * Absent ⇒ aucun filtre. */
+  readonly filter?: StoryFilterId;
+  /** LA COUPE d'une vidéo (#9136, `sourceStart`/`sourceEnd`) — en secondes du
+   * fichier. Absente ⇒ le fichier entier. */
+  readonly trim?: StudioMediaTrim;
+  /** LE SON COUPÉ d'une vidéo (#9136). Absent ⇒ elle garde son son. */
+  readonly muted?: true;
+  /** LE RECADRAGE d'une image (#9136, `MediaCropRect` normalisé sur la
+   * source). Absent ⇒ le cadre entier. */
+  readonly crop?: MediaCropRect;
 };
+
+export type StudioMediaTrim = { readonly start: number; readonly end: number };
 
 export type StudioSoundAsset = {
   readonly file?: File;
@@ -81,6 +106,13 @@ export type StudioPage = {
   readonly background: StudioVisualAsset | null;
   readonly overlay: StudioVisualAsset | null;
   readonly sound: StudioSoundAsset | null;
+  /** LA DURÉE de la scène animée (#8415), en secondes — `timelineDuration`
+   * du document. Absente : une scène statique. */
+  readonly duration?: number;
+  /** L'ENTRÉE et la SORTIE de la scène (#8792) — `scene.opening` /
+   * `scene.closing` de CanvasV3. Absentes : aucune transition. */
+  readonly opening?: SceneTransition;
+  readonly closing?: SceneTransition;
 };
 
 /** Une page NEUVE, avec UN texte vide sélectionné — même loi que
@@ -96,6 +128,12 @@ export function emptyStudioPage(id: string, textId: string, language: string): S
 
 export function isStudioPageEmpty(page: StudioPage): boolean {
   return page.texts.every((layer) => layer.text.trim() === '') && page.background === null && page.overlay === null && page.sound === null;
+}
+
+/** La VIDÉO de la page (#9124) — le fond d'abord, sinon le calque. */
+export function studioPageVideo(page: StudioPage): StudioVisualAsset | null {
+  if (page.background?.mediaType === 'video') return page.background;
+  return page.overlay?.mediaType === 'video' ? page.overlay : null;
 }
 
 /** Une page ne peut pas partir si un de ses trois assets a ÉCHOUÉ — l'auteur
@@ -192,6 +230,63 @@ export function pageWithVisualCaption(page: StudioPage, door: 'visual' | 'overla
   const slot = visualSlot(door);
   const asset = page[slot];
   return asset === null ? page : { ...page, [slot]: { ...asset, caption: caption.slice(0, MEDIA_CAPTION_MAX) } };
+}
+
+/** LE CADRE du fond de CETTE page (#8414) — sans fond, rien ne change. */
+export function pageWithBackgroundFrame(page: StudioPage, frame: StoryFrame): StudioPage {
+  return page.background === null ? page : { ...page, background: { ...page.background, frame } };
+}
+
+/** LES ÉDITIONS DE BASE du fond (#9136) — une coupe vide, un son rendu ou un
+ * cadre entier s'écrivent par leur ABSENCE : une pièce ramenée à son état
+ * d'origine repart intacte. */
+export function pageWithBackgroundTrim(page: StudioPage, trim: StudioMediaTrim | null): StudioPage {
+  if (page.background === null) return page;
+  const { trim: _previous, ...rest } = page.background;
+  return { ...page, background: trim === null || trim.end <= trim.start ? rest : { ...rest, trim } };
+}
+
+export function pageWithBackgroundMuted(page: StudioPage, muted: boolean): StudioPage {
+  if (page.background === null) return page;
+  const { muted: _previous, ...rest } = page.background;
+  return { ...page, background: muted ? { ...rest, muted: true } : rest };
+}
+
+/** Les proportions que la retouche offre — `null` : le cadre d'origine. */
+export const STUDIO_CROP_RATIOS = [null, 1, 4 / 5, 9 / 16, 16 / 9] as const;
+
+/** **Le plus grand cadre CENTRÉ de rapport `target`** dans une source de
+ * rapport `source` (miroir `MediaCropRule.centered`) — en fractions de la
+ * source ; `null` (le cadre d'origine) rend le cadre entier. */
+export function centeredCrop(target: number | null, source: number): MediaCropRect {
+  if (target === null || !(source > 0)) return FULL_MEDIA_CROP;
+  const width = target >= source ? 1 : Math.min(1, target / source);
+  const height = target >= source ? Math.min(1, source / target) : 1;
+  return clampMediaCrop({ x: (1 - width) / 2, y: (1 - height) / 2, width, height });
+}
+
+export function pageWithBackgroundCrop(page: StudioPage, crop: MediaCropRect | null): StudioPage {
+  if (page.background === null) return page;
+  const { crop: _previous, ...rest } = page.background;
+  return { ...page, background: crop === null || isFullMediaCrop(crop) ? rest : { ...rest, crop: clampMediaCrop(crop) } };
+}
+
+/** LE TEXTE ALTERNATIF de CE média (#8518) — même borne que la légende
+ * (`CreatePostSchema.mediaAlt`, 1000 caractères). */
+export function pageWithVisualAlt(page: StudioPage, door: 'visual' | 'overlay', alt: string): StudioPage {
+  const slot = visualSlot(door);
+  const asset = page[slot];
+  return asset === null ? page : { ...page, [slot]: { ...asset, alt: alt.slice(0, MEDIA_CAPTION_MAX) } };
+}
+
+/** LE FILTRE de CE média (lot 7) — `null` le retire ; sans média, rien ne
+ * change. Le filtre d'un média ne touche jamais les autres. */
+export function pageWithVisualFilter(page: StudioPage, door: 'visual' | 'overlay', filter: StoryFilterId | null): StudioPage {
+  const slot = visualSlot(door);
+  const asset = page[slot];
+  if (asset === null || (asset.filter ?? null) === filter) return page;
+  const { filter: _previous, ...rest } = asset;
+  return { ...page, [slot]: filter === null ? rest : { ...rest, filter } };
 }
 
 export function pageWithVisualPose(page: StudioPage, door: 'visual' | 'overlay', pose: StudioPose): StudioPage {

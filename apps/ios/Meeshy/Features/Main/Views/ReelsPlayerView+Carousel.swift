@@ -76,7 +76,7 @@ struct ReelImageView: View {
     }
 
     private var dots: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: MeeshySpacing.xsPlus) {
             ForEach(images) { media in
                 Circle()
                     .fill(Color.white.opacity(media.id == currentImageId ? 0.95 : 0.4))
@@ -209,7 +209,7 @@ struct ReelImageBackdrop: View, Equatable {
                     .aspectRatio(contentMode: .fill)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .scaleEffect(1.18)
-                    .opacity(0.85)
+                    .opacity(MeeshyOpacity.intense)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -257,15 +257,15 @@ struct ReelMediaCountBadge: View {
     var body: some View {
         Button(action: action) {
             Text("\(currentIndex + 1) / \(total)")
-                .font(MeeshyFont.relative(12, weight: .bold, design: .monospaced))
-                .foregroundColor(.white)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
-                .background(Capsule().fill(.black.opacity(0.5)))
+                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .bold, design: .monospaced))
+                .foregroundColor(MeeshyColors.mediaChromeForeground)
+                .padding(.horizontal, MeeshySpacing.smPlus)
+                .padding(.vertical, MeeshySpacing.xs)
+                .background(Capsule().fill(MeeshyColors.mediaScrim))
                 // La capsule mesure ~28 pt de haut : le cadre porte la cible à
                 // 44 pt sans épaissir le dessin, la zone tactile débordant
                 // au-dessus et au-dessous de ce qui est peint.
-                .frame(minWidth: 44, minHeight: 44)
+                .frame(minWidth: MeeshyControlSize.tapTarget, minHeight: MeeshyControlSize.tapTarget)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

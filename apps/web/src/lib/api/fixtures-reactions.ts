@@ -5,7 +5,7 @@ import { VIEWER_ID } from './fixtures-base';
 import type { ApiResult } from './http';
 
 /**
- * LE BOUCHON DE `POST/DELETE /api/v1/reactions` (#5814, § 3 conséquence 3) —
+ * LE BOUCHON DE `POST/DELETE reactions.root` (#5814, § 3 conséquence 3) —
  * MIME `services/gateway/src/routes/reactions.ts` ligne à ligne : 201
  * (créée) / 200 (`addResult.unchanged`, `:181-187` — déjà posée) / 409
  * (plafond, `isReactionAllowed`, `:235-241`) pour l'ajout ; 200 / 404
@@ -35,7 +35,7 @@ function reactionDataOf(messageId: string, emoji: string): ReactionData {
   return { id: `fx-reaction-${counter}`, messageId, participantId: VIEWER_ID, emoji, createdAt: now, updatedAt: now };
 }
 
-/** Miroir `reactions.ts:132-270` (`POST /api/v1/reactions`). */
+/** Miroir `reactions.ts:132-270` (`POST reactions.root`). */
 export function fixtureAddReaction(params: {
   readonly messageId: string;
   readonly emoji: string;
@@ -55,7 +55,7 @@ export function fixtureAddReaction(params: {
   return { ok: true, data: reactionDataOf(messageId, emoji), status: 201 };
 }
 
-/** Miroir `reactions.ts:279-425` (`DELETE /api/v1/reactions/:messageId/:emoji`). */
+/** Miroir `reactions.ts:279-425` (`DELETE reactions.byMessageIdByEmoji`). */
 export function fixtureRemoveReaction(params: {
   readonly messageId: string;
   readonly emoji: string;

@@ -17,11 +17,11 @@ public struct SnapGuideView: View {
     }
 
     public var body: some View {
-        VStack(spacing: 4) {
+        VStack(spacing: MeeshySpacing.xs) {
             Text(label)
-                .font(.system(size: 9, weight: .bold))
+                .font(.system(size: MeeshyFont.microSize, weight: .bold))
                 .foregroundStyle(.white)
-                .padding(.horizontal, 6).padding(.vertical, 2)
+                .padding(.horizontal, MeeshySpacing.xsPlus).padding(.vertical, MeeshySpacing.xxs)
                 .background(
                     Capsule().fill(Color(hex: Self.snapColorHex))
                 )

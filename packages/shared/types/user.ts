@@ -157,7 +157,64 @@ export interface FullUser {
     sentMessages?: number;
     conversations?: number;
   };
+  /**
+   * Les colonnes dont `AdminUserMetadata` est tiré (#8876). OPTIONNELLES : un
+   * `FullUser` construit sans elles reste valide, et le bloc servi rend alors
+   * `null` / `0` plutôt que de refuser la ligne. `pendingEmail` et
+   * `pendingPhoneNumber` n'existent ici que pour que le serveur sache QU'UN
+   * changement attend — leur valeur ne quitte jamais cette interface.
+   */
+  deviceLocale?: string | null;
+  deviceCountry?: string | null;
+  birthDate?: Date | null;
+  ageVerifiedAt?: Date | null;
+  voiceProfileConsentAt?: Date | null;
+  voiceDataConsentAt?: Date | null;
+  dataProcessingConsentAt?: Date | null;
+  analyticsConsentAt?: Date | null;
+  voiceCloningEnabledAt?: Date | null;
+  termsAcceptedAt?: Date | null;
+  termsVersion?: string | null;
+  onboardingCompletedAt?: Date | null;
+  currentStreakDays?: number;
+  longestStreakDays?: number;
+  engagementScore?: number;
+  meeshBalance?: number;
+  blockedUserIds?: string[];
+  pendingEmail?: string | null;
+  pendingPhoneNumber?: string | null;
 }
+
+/**
+ * Les MÉTADONNÉES de compte d'un membre, telles que la fiche d'administration les
+ * sert (#8876, #8005) : ce qui aide à COMPRENDRE un compte sans ouvrir la base.
+ *
+ * Servies aux seuls rôles qui voient les données sensibles, et seulement sur la
+ * fiche. Jamais la valeur d'un changement en attente (`hasPendingEmail` /
+ * `hasPendingPhone` disent qu'il existe), jamais la liste des comptes bloqués
+ * (`blockedCount` en dit la taille).
+ */
+export type AdminUserMetadata = {
+  readonly deviceLocale: string | null;
+  readonly deviceCountry: string | null;
+  readonly birthDate: Date | null;
+  readonly ageVerifiedAt: Date | null;
+  readonly voiceProfileConsentAt: Date | null;
+  readonly voiceDataConsentAt: Date | null;
+  readonly dataProcessingConsentAt: Date | null;
+  readonly analyticsConsentAt: Date | null;
+  readonly voiceCloningEnabledAt: Date | null;
+  readonly termsAcceptedAt: Date | null;
+  readonly termsVersion: string | null;
+  readonly onboardingCompletedAt: Date | null;
+  readonly currentStreakDays: number;
+  readonly longestStreakDays: number;
+  readonly engagementScore: number;
+  readonly meeshBalance: number;
+  readonly blockedCount: number;
+  readonly hasPendingEmail: boolean;
+  readonly hasPendingPhone: boolean;
+};
 
 /**
  * Type pour les donnees publiques (visibles par tous les admins)
@@ -210,7 +267,12 @@ export interface AdminUser extends PublicUser {
   lockedUntil: Date | null;
   lockedReason: string | null;
   twoFactorEnabledAt: Date | null;
-  twoFactorBackupCodes: string[];
+  /**
+   * Le NOMBRE de codes de secours restants — jamais leurs empreintes (#8876).
+   * `FullUser.twoFactorBackupCodes` reste la colonne ; aucune ligne servie ne la
+   * porte.
+   */
+  twoFactorBackupCodesRemaining: number;
   lastLoginIp: string | null;
   lastLoginLocation: string | null;
   lastLoginDevice: string | null;
@@ -221,6 +283,8 @@ export interface AdminUser extends PublicUser {
   deletedAt: Date | null;
   deletedBy: string | null;
   userFeature?: UserFeatureData | null;
+  /** Présent sur la fiche seulement (#8876) ; absent d'une ligne de liste. */
+  adminMetadata?: AdminUserMetadata;
   _count?: {
     sentMessages?: number;
     conversations?: number;
@@ -284,6 +348,8 @@ export interface CreateUserDTO {
   role?: string;
   systemLanguage?: string;
   regionalLanguage?: string;
+  /** L'administrateur atteste l'adresse : le compte naît actif (#8217). */
+  emailVerified?: boolean;
 }
 
 /**
@@ -323,7 +389,7 @@ export interface ResetPasswordDTO {
  */
 export interface UserFilters {
   search?: string;  // username, email, nom, prenom
-  role?: string;
+  role?: string | readonly string[];  // un rôle, ou plusieurs (OU) — « le rang d'administration » = BIGBOSS + ADMIN
   isActive?: boolean;
   emailVerified?: boolean;
   phoneVerified?: boolean;
@@ -399,6 +465,13 @@ export enum UserAuditAction {
   VERIFY_EMAIL = 'VERIFY_EMAIL',
   VERIFY_PHONE = 'VERIFY_PHONE',
   VERIFY_AGE = 'VERIFY_AGE',
+  /**
+   * Relance, par un administrateur, de la vérification d'un contact (#8289) —
+   * un code + lien par e-mail, un SMS par téléphone. Distincte de
+   * `VERIFY_EMAIL`/`VERIFY_PHONE`, qui POSENT la preuve : celle-ci n'en écrit
+   * aucune, elle émet ce que le membre aurait pu redemander lui-même.
+   */
+  REQUEST_VERIFICATION = 'REQUEST_VERIFICATION',
 
   /**
    * Poser ou retirer, au nom d'un tiers, la preuve d'un consentement (#4154).

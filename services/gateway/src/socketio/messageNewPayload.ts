@@ -1,4 +1,5 @@
 import type { Message } from '@meeshy/shared/types/index';
+import { hasPerReaderEphemeralDeadline } from '@meeshy/shared/utils/ephemeral-countdown';
 import { resolveWireSenderId } from './messageEditedPayload';
 import { stickerFromMetadata } from '../services/stickers/messageSticker';
 import { servedQuotedMessage } from '../services/messaging/servedQuotedMessage';
@@ -174,7 +175,14 @@ export function buildMessageNewPayload(
     //
     // Un message NON éphémère garde sa colonne : c'est la grâce de vue unique.
     ephemeralDuration: message.ephemeralDuration ?? undefined,
-    expiresAt: message.ephemeralDuration ? undefined : message.expiresAt || undefined,
+    // Flamme-œil (#8302) : pas de durée, mais la colonne est le plafond de
+    // rétention — même règle, rien ne part.
+    expiresAt: hasPerReaderEphemeralDeadline({
+      ephemeralDuration: message.ephemeralDuration,
+      effectFlags: typeof raw['effectFlags'] === 'number' ? raw['effectFlags'] : 0,
+    })
+      ? undefined
+      : message.expiresAt || undefined,
     isEdited: Boolean(message.isEdited),
     deletedAt: message.deletedAt || undefined,
     createdAt: message.createdAt || new Date(),

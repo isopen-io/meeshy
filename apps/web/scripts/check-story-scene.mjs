@@ -41,17 +41,21 @@
  *     au-dessus de la feuille ne doivent ni reprendre la lecture ni naviguer
  *     ni emporter le brouillon. « Une couche de saisie réclame le geste comme
  *     elle réclame la touche » (`screenGestureYields`, même module).
+ *     7 septies — LE « … » D'UN COMMENTAIRE DE STORY (#8734) : Copier,
+ *     Imager, Signaler sur celui d'autrui, posé au-dessus de la feuille ;
+ *     Échap ferme le menu seul, puis les motifs de « Signaler » sans le fil.
  *  8. Aucune erreur de page ; clair et sombre rendent les MÊMES mesures (le
  *     lecteur force son canevas sombre, `story.tsx`).
  *  9. LE RAIL AUTEUR COMPLET (#7116) — sur MA story (`/story/st-mienne`,
- *     session semée) : le rail porte EXACTEMENT Vues, Partager, Enregistrer,
- *     Commentaires, dans cet ordre, sans rien de ce qu'un lecteur ferait à la
+ *     session semée) : le rail porte EXACTEMENT Envoyer, Vues, Partager,
+ *     Enregistrer, Commentaires, dans cet ordre, sans rien de ce qu'un lecteur ferait à la
  *     story d'autrui ; « Vues » ouvre la feuille (en-tête « 8 vues », trois
  *     lecteurs, story EN PAUSE, rail hors d'atteinte), Échap ferme LA FEUILLE
  *     — pas le lecteur, défaut mesuré sur le premier jet — et rend le focus
- *     à « Vues » ; « Partager » appelle la feuille du système SYNCHRONEMENT
- *     au clic (la seule preuve qu'elle s'ouvrirait sur Safari, D-48) avec
- *     l'adresse canonique ; « Enregistrer » pose l'anneau à SA place pendant
+ *     à « Vues » ; « Partager » ouvre la feuille d'envoi commune (#8884), dont
+ *     « Plus d'options… » appelle la feuille du système SYNCHRONEMENT au clic
+ *     (la seule preuve qu'elle s'ouvrirait sur Safari, D-48) avec l'adresse
+ *     canonique ; « Enregistrer » pose l'anneau à SA place pendant
  *     que « Partager » reste un bouton, puis LIVRE `meeshy-m4.svg` et le dit
  *     — premier jet mesuré : aucun téléchargement, aucun anneau, aucun mot.
  *     Aucun de ces gestes ne fait avancer la story.
@@ -66,6 +70,8 @@ import { startDistServer } from './lib/gate-server.mjs';
 import { confinementDe } from './lib/chrome-confinement.mjs';
 
 const DIST = new URL('../dist/', import.meta.url).pathname;
+/** Les captures de recette (#8643), quand `CAPTURE_DIR` le demande — jamais par défaut. */
+const SHOT_DIR = process.env.CAPTURE_DIR ?? null;
 /* Le serveur vit dans `lib/` depuis #6988 : celui qui était écrit ici
    repliait TOUT sur `index.html`, y compris un `/assets/*.js` dont la lecture
    échouait — le navigateur rendait alors « Failed to fetch dynamically imported
@@ -488,6 +494,73 @@ async function runScheme(colorScheme) {
       `${tag} st-amie-2 : une flèche PENDANT la frappe ne doit ni avancer la story ni emporter le brouillon — ${JSON.stringify(afterArrow)}`,
     );
 
+    /* ── 7 sexies. #8643 — ÉCRIRE RÉDUIT LA SCÈNE AU-DESSUS DE LA BARRE, LE
+           REPLI ⌄ VIT DANS LA PLAQUE, LIRE FLOUTE LA SCÈNE ─────────────────
+       Le champ a le focus : la liste se retire, la scène revient NETTE et se
+       réduit pour tenir ENTIÈRE au-dessus de la feuille (bord bas de la scène
+       ≤ bord haut de la feuille) ; le ⌄ est DANS la plaque du champ, à son
+       angle haut-droit. Replier rend la lecture : la liste revient, la scène
+       reprend sa taille et se floute. */
+    await page
+      .waitForFunction(() => document.querySelector('[data-story-scene-yield]')?.getAttribute('data-scene-yields') === 'writing', null, { timeout: 1500 })
+      .catch(() => undefined);
+    /* La TRANSITION finie, jamais un délai : la géométrie lue en vol serait celle d'une scène à mi-réduction. */
+    await page
+      .waitForFunction(() => document.querySelector('[data-story-scene-yield]')?.getAnimations().length === 0, null, { timeout: 1500 })
+      .catch(() => undefined);
+    const ecriture = await page.evaluate(() => {
+      const layer = document.querySelector('[data-story-scene-yield]');
+      const sheet = document.querySelector('[data-story-comments-sheet]');
+      const plate = document.querySelector('[data-comment-plate]');
+      const fold = document.querySelector('[data-comment-fold]');
+      const list = document.querySelector('[data-comment-thread-list]');
+      if (layer === null || sheet === null || plate === null || fold === null || list === null) return { manque: true };
+      const [l, s, p, f] = [layer, sheet, plate, fold].map((el) => el.getBoundingClientRect());
+      return {
+        etat: layer.getAttribute('data-scene-yields'),
+        filtre: getComputedStyle(layer).filter,
+        basScene: Math.round(l.bottom),
+        hautFeuille: Math.round(s.top),
+        echelle: Math.round((l.height / layer.offsetHeight) * 100) / 100,
+        listeCachee: list.hidden,
+        foldDansPlaque: f.top >= p.top - 0.5 && f.right <= p.right + 0.5 && f.left >= p.left - 0.5,
+        foldAngle: Math.abs(f.top - p.top) <= 1 && Math.abs(f.right - p.right) <= 1,
+      };
+    });
+    check(
+      ecriture.etat === 'writing' && ecriture.filtre === 'none' && ecriture.basScene <= ecriture.hautFeuille && ecriture.echelle < 1 && ecriture.listeCachee,
+      `${tag} st-amie-2 : champ pris, la scène doit être NETTE, réduite et ENTIÈRE au-dessus de la feuille, la liste retirée (#8643) — ${JSON.stringify(ecriture)}`,
+    );
+    check(
+      ecriture.foldDansPlaque && ecriture.foldAngle,
+      `${tag} st-amie-2 : le repli ⌄ doit vivre DANS la plaque du champ, à son angle haut-droit (#8643) — ${JSON.stringify(ecriture)}`,
+    );
+    if (SHOT_DIR !== null) await page.screenshot({ path: `${SHOT_DIR}/story-ecrire-${colorScheme}-${viewport.width}.png` });
+    await page.click('[data-comment-fold]');
+    await page
+      .waitForFunction(() => document.querySelector('[data-story-scene-yield]')?.getAttribute('data-scene-yields') === 'reading', null, { timeout: 1500 })
+      .catch(() => undefined);
+    /* La TRANSITION finie, jamais un délai : la géométrie lue en vol serait celle d'une scène à mi-réduction. */
+    await page
+      .waitForFunction(() => document.querySelector('[data-story-scene-yield]')?.getAnimations().length === 0, null, { timeout: 1500 })
+      .catch(() => undefined);
+    const lecture = await page.evaluate(() => {
+      const layer = document.querySelector('[data-story-scene-yield]');
+      return {
+        etat: layer?.getAttribute('data-scene-yields') ?? null,
+        filtre: layer === null ? null : getComputedStyle(layer).filter,
+        transform: layer === null ? null : getComputedStyle(layer).transform,
+        listeCachee: document.querySelector('[data-comment-thread-list]')?.hidden ?? null,
+        fold: document.querySelector('[data-comment-fold]') !== null,
+        brouillon: document.querySelector('[data-comment-field]')?.value ?? null,
+      };
+    });
+    check(
+      lecture.etat === 'reading' && /blur\(/.test(lecture.filtre ?? '') && lecture.transform === 'none' && lecture.listeCachee === false && !lecture.fold && lecture.brouillon === typed,
+      `${tag} st-amie-2 : replier (⌄) rend la lecture — scène pleine et floutée, liste revenue, brouillon gardé (#8643) — ${JSON.stringify(lecture)}`,
+    );
+    if (SHOT_DIR !== null) await page.screenshot({ path: `${SHOT_DIR}/story-lire-${colorScheme}-${viewport.width}.png` });
+
     /* ── 7 bis. LE MÊME DÉFAUT PAR L'AUTRE ENTRÉE : LE DOIGT (#7112, revue)
            ─────────────────────────────────────────────────────────────────
        La cession ci-dessus a été écrite pour les TOUCHES. La feuille
@@ -580,8 +653,107 @@ async function runScheme(colorScheme) {
        clic sur « muet » — un raccourci mort, pour corriger un vol de frappe.
        Un bouton ne réclame qu'Espace et Entrée ; les flèches restent à
        l'écran. */
+    /* ── 7 septies. #8734 — LE « … » D'UN COMMENTAIRE DE STORY ────────────
+       Le commentaire d'autrui offre Copier, Imager, Signaler — jamais
+       Modifier ni Supprimer. Le menu se pose AU-DESSUS de la feuille (le point
+       central de chaque entrée est à lui), dans l'écran, 44 px par entrée.
+       Échap ferme le MENU seul — la feuille, qui écoute Échap en capture,
+       reste — et rend le focus au « … ». « Signaler » ouvre les motifs, et
+       Échap les referme sans rien envoyer ni fermer le fil. */
+    const plus = '[data-comment-row="cm-st-2"] [data-comment-gesture="more"]';
+    /* Un FAIT attendu, et son absence est un VERDICT qui dit ce qu'il a vu —
+       jamais un `page.click` qui meurt en 30 s sans rien dire. */
+    const declencheurPresent = await page
+      .waitForSelector(plus, { state: 'visible', timeout: 8000 })
+      .then(() => true)
+      .catch(() => false);
+    const etatFeuille = await page.evaluate(() => ({
+      story: document.querySelector('[data-story-scene]')?.getAttribute('data-story-scene') ?? null,
+      feuille: document.querySelector('[data-story-comments-sheet]')?.getAttribute('data-story-comments-sheet') ?? null,
+      listeCachee: document.querySelector('[data-comment-thread-list]')?.hidden ?? null,
+      rangees: [...document.querySelectorAll('[data-comment-row]')].map((r) => r.getAttribute('data-comment-row')),
+      plus: document.querySelectorAll('[data-comment-gesture="more"]').length,
+    }));
+    check(declencheurPresent, `${tag} st-amie-2 : le « … » du commentaire cm-st-2 doit être visible dans la feuille (#8734) — ${JSON.stringify(etatFeuille)}`);
+    if (declencheurPresent) {
+    await page.click(plus);
+    await page.waitForSelector('[data-comment-menu]', { timeout: 3000 }).catch(() => undefined);
+    const menu = await page.evaluate((selecteur) => {
+      const panneau = document.querySelector('[data-comment-menu]');
+      const declencheur = document.querySelector(selecteur)?.getBoundingClientRect();
+      const entrees = [...(panneau?.querySelectorAll('[role="menuitem"]') ?? [])];
+      const boite = panneau?.getBoundingClientRect();
+      return {
+        entrees: entrees.map((e) => e.getAttribute('data-comment-gesture')),
+        hauteurs: entrees.map((e) => Math.round(e.getBoundingClientRect().height)),
+        declencheur: declencheur === undefined ? null : [Math.round(declencheur.width), Math.round(declencheur.height)],
+        dessus: entrees.length > 0 && entrees.every((e) => {
+          const r = e.getBoundingClientRect();
+          return document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)?.closest('[data-comment-menu]') === panneau;
+        }),
+        dansEcran: boite !== undefined && boite.left >= 0 && boite.right <= innerWidth && boite.top >= 0 && boite.bottom <= innerHeight,
+      };
+    }, plus);
+    check(
+      JSON.stringify(menu.entrees) === '["copy","image","report"]' && menu.hauteurs.every((h) => h >= 44) && (menu.declencheur?.every((c) => c >= 44) ?? false),
+      `${tag} st-amie-2 : le « … » d'un commentaire d'autrui offre Copier, Imager, Signaler, cibles de 44 px (#8734) — ${JSON.stringify(menu)}`,
+    );
+    check(menu.dessus && menu.dansEcran, `${tag} st-amie-2 : le menu se pose AU-DESSUS de la feuille, dans l'écran (#8734) — ${JSON.stringify(menu)}`);
+    if (SHOT_DIR !== null) await page.screenshot({ path: `${SHOT_DIR}/story-comment-menu-${colorScheme}-${viewport.width}.png` });
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => document.querySelector('[data-comment-menu]') === null, null, { timeout: 1500 }).catch(() => undefined);
+    const apresEchap = await page.evaluate(() => ({
+      menu: document.querySelector('[data-comment-menu]') !== null,
+      feuille: document.querySelector('[data-story-comments-sheet]') !== null,
+      focus: document.activeElement?.getAttribute('data-comment-gesture') ?? null,
+    }));
+    check(
+      !apresEchap.menu && apresEchap.feuille && apresEchap.focus === 'more',
+      `${tag} st-amie-2 : Échap ferme le MENU seul, la feuille reste et le focus revient au « … » (#8734) — ${JSON.stringify(apresEchap)}`,
+    );
+    await page.click(plus);
+    await page.click('[data-comment-menu] [data-comment-gesture="report"]');
+    await page.waitForSelector('[data-report-reason]', { timeout: 3000 }).catch(() => undefined);
+    const motifs = await page.evaluate(() => document.querySelectorAll('[data-report-reason]').length);
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => document.querySelector('[data-report-reason]') === null, null, { timeout: 1500 }).catch(() => undefined);
+    const apresMotifs = await page.evaluate(() => ({
+      motifs: document.querySelectorAll('[data-report-reason]').length,
+      feuille: document.querySelector('[data-story-comments-sheet]') !== null,
+    }));
+    check(
+      motifs === 8 && apresMotifs.motifs === 0 && apresMotifs.feuille,
+      `${tag} st-amie-2 : « Signaler » ouvre les huit motifs, et Échap les referme sans fermer le fil (#8734) — ${motifs} ${JSON.stringify(apresMotifs)}`,
+    );
+    }
+
+    /* ── 7 quater. #8601 — FEUILLE OUVERTE, LE CHROME CÈDE ─────────────────
+       L'en-tête (barres, auteur, fermer) restait peint au-dessus de la
+       feuille pendant qu'on écrivait. Une loi (`chromeYields`) : en-tête,
+       légende et rail s'effacent ENSEMBLE, inertes ; la feuille reste. */
+    await page
+      .waitForFunction(() => getComputedStyle(document.querySelector('[data-story-header]')).opacity === '0', null, { timeout: 1500 })
+      .catch(() => undefined);
+    const chromeOuvert = await page.evaluate(() => {
+      const header = document.querySelector('[data-story-header]');
+      const rail = document.querySelector('[data-story-action-rail]');
+      return {
+        opacite: header === null ? null : getComputedStyle(header).opacity,
+        inerte: header?.inert === true,
+        rail: rail === null || rail.inert === true,
+        feuille: document.querySelector('[data-story-comments-sheet]') !== null,
+      };
+    });
+    check(
+      chromeOuvert.opacite === '0' && chromeOuvert.inerte && chromeOuvert.rail && chromeOuvert.feuille,
+      `${tag} st-amie-2 : feuille ouverte, l'en-tête et le rail doivent s'effacer, inertes, la feuille restant — ${JSON.stringify(chromeOuvert)}`,
+    );
     await page.click('[data-story-comments-close]');
-    await page.waitForTimeout(250);
+    await page
+      .waitForFunction(() => getComputedStyle(document.querySelector('[data-story-header]')).opacity === '1', null, { timeout: 1500 })
+      .catch(() => undefined);
+    const chromeRendu = await page.evaluate(() => document.querySelector('[data-story-header]')?.inert === false);
+    check(chromeRendu, `${tag} st-amie-2 : feuille fermée, l'en-tête doit revenir atteignable`);
     /* LA FEUILLE REND LE FOCUS PAR OÙ IL EST ENTRÉ — elle le PREND au montage
        (sinon la touche suivante irait au plateau, qui navigue) ; ne pas le
        rendre le laisse tomber sur `<body>`, et au clavier on repart du haut
@@ -686,10 +858,10 @@ async function runAuthorRail(colorScheme) {
      ASSERTAIT l'absence d'un bouton que le produit sert désormais se met à
      jour, jamais l'inverse. */
   check(
-    JSON.stringify(rail) === JSON.stringify(['views', 'share', 'save', 'comments', 'translations']),
-    `${tag} : le rail de MA story doit porter EXACTEMENT Vues, Partager, Enregistrer, Commentaires, Traductions — reçu ${JSON.stringify(rail)}`,
+    JSON.stringify(rail) === JSON.stringify(['forward', 'views', 'share', 'save', 'comments', 'translations']),
+    `${tag} : le rail de MA story doit porter EXACTEMENT Envoyer, Vues, Partager, Enregistrer, Commentaires, Traductions — reçu ${JSON.stringify(rail)}`,
   );
-  const vuesCompte = await page.$eval('[data-story-action="views"]', (el) => el.textContent?.trim() ?? '');
+  const vuesCompte = await page.$eval('[data-story-action="views"] [data-viewer-count]', (el) => el.textContent?.trim() ?? '').catch(() => '');
   check(vuesCompte === '8', `${tag} : « Vues » doit porter le compte SERVI (8) — reçu « ${vuesCompte} »`);
   const cibles = await page.$$eval('[data-story-action-rail] [data-story-action]', (els) =>
     els.map((e) => {
@@ -754,16 +926,26 @@ async function runAuthorRail(colorScheme) {
     await page.waitForSelector('[data-story-action-rail] [data-story-action]', { timeout: 8000 });
   }
 
-  /* ── « Partager » : la feuille du système, DANS le geste ── */
+  /* ── « Partager » : la feuille d'envoi commune (#8884), puis, par « Plus
+        d'options… », la feuille du système DANS le geste (D-48) ── */
   await figer();
+  await page.evaluate(() => document.querySelector('[data-story-action="share"]')?.click());
+  const feuilleEnvoi = await page
+    .waitForSelector('[data-send-sheet-frame]', { timeout: 4000 })
+    .then(() => true)
+    .catch(() => false);
+  check(feuilleEnvoi, `${tag} : « Partager » doit ouvrir la feuille d'envoi commune`);
   const partage = await page.evaluate(() => {
-    document.querySelector('[data-story-action="share"]')?.click();
+    const plus = [...document.querySelectorAll('[data-send-sheet-frame] button')].find((b) => b.textContent?.trim() === 'Plus d’options…');
+    plus?.click();
     return window.__shareCalls.slice();
   });
   check(
     JSON.stringify(partage) === JSON.stringify(['https://meeshy.me/feeds/post/st-mienne']),
-    `${tag} : « Partager » doit ouvrir la feuille du système PENDANT le clic, sur l'adresse canonique (D-48) — ${JSON.stringify(partage)}`,
+    `${tag} : « Plus d'options… » doit ouvrir la feuille du système PENDANT le clic, sur l'adresse canonique (D-48) — ${JSON.stringify(partage)}`,
   );
+  await page.keyboard.press('Escape');
+  await page.waitForSelector('[data-send-sheet-frame]', { state: 'detached', timeout: 4000 }).catch(() => {});
 
   /* ── « Enregistrer » : l'anneau à SA place, puis le fichier livré et dit ── */
   await figer();

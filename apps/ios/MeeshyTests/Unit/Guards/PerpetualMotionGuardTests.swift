@@ -88,9 +88,9 @@ final class PerpetualMotionGuardTests: XCTestCase {
     func test_lIndicateurDeFrappeDecideDuMouvement() throws {
         try assertDeclarationDecidesAboutMotion(
             marker: "struct TypingIndicatorBubble",
-            file: "MessageListViewController.swift",
-            because: "les points de frappe bouclent sans fin, et le fichier décide du "
-                   + "mouvement 2 500 lignes plus haut, pour un tout autre sujet"
+            file: "TypingIndicatorBubble.swift",
+            because: "les points de frappe bouclent sans fin, et leur répétition "
+                   + "doit elle-même décider de Reduce Motion"
         )
     }
 

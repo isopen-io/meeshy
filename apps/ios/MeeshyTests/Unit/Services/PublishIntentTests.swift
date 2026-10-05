@@ -457,4 +457,22 @@ final class PublishIntentTests: XCTestCase {
         XCTAssertEqual(intent.mediaAlts, ["un chien sur la plage"])
         XCTAssertEqual(intent.mediaCaptions, [nil])
     }
+    /// #9179 — un RÉEL sans texte part avec sa légende de scène dans
+    /// `Post.content`, et la légende RESTE aussi sur son média.
+    func test_unReelSansTexte_portesaLegendeDansLeContenu_etSurLeMedia() {
+        let a = fichier("a")
+        let b = fichier("b")
+        let intent = PublishIntent.document(
+            localMedia: [a, b], declaredType: .reel, forcePlainPost: false,
+            content: "#voyage", visibility: "PUBLIC", visibilityUserIds: nil,
+            originalLanguage: "fr", mentions: nil, location: nil,
+            discoverabilityPrecision: nil, transcription: nil, storyEffects: nil,
+            mediaCaptions: [b.url: "Au bord de l'eau"], mediaAlts: [:], mediaObjectIds: [:],
+            allowSoundExtraction: nil)
+
+        XCTAssertEqual(intent.type, "REEL")
+        XCTAssertEqual(intent.content, "Au bord de l'eau\n#voyage")
+        XCTAssertEqual(intent.mediaCaptions, [nil, "Au bord de l'eau"])
+        XCTAssertEqual(intent.originalLanguage, "fr")
+    }
 }

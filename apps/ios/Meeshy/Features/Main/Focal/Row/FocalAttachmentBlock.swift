@@ -137,6 +137,13 @@ nonisolated enum FocalMediaProtectionState: Equatable {
     case blurred(isViewOnce: Bool)
 }
 
+nonisolated enum FocalCellTap: Equatable {
+    /// Lever le flou sur place.
+    case reveal
+    /// Ouvrir le plein écran ; `reblurs` : la case reprend son flou derrière.
+    case openFullscreen(reblurs: Bool)
+}
+
 nonisolated enum FocalMediaProtection {
     /// `attachment.isBlurred || attachment.isViewOnce`, ET pas encore
     /// révélé ⇒ `.blurred`. Une fois révélé (`isRevealed == true`), TOUJOURS
@@ -144,9 +151,28 @@ nonisolated enum FocalMediaProtection {
     /// temps de la fenêtre de révélation (portée par `BubbleBlurRevealController`,
     /// réutilisé tel quel côté vue, §WS-0-adjacent : lifecycle PUR, non
     /// `fileprivate`).
-    static func state(for attachment: MessageAttachment, isRevealed: Bool) -> FocalMediaProtectionState {
+    static func state(for attachment: MessageAttachment, isRevealed: Bool, messageRevealed: Bool = false) -> FocalMediaProtectionState {
         guard !isRevealed, attachment.isBlurred || attachment.isViewOnce else { return .none }
+        guard !(messageRevealed && !attachment.isViewOnce) else { return .none }
         return .blurred(isViewOnce: attachment.isViewOnce)
+    }
+
+    /// **Ce que fait un toucher sur une case** (#8537, directive porteur
+    /// 2026-09-28 : « permettre au toucher d'afficher directement le contenu
+    /// flouté […] et de voir l'image en plein écran avant que le flou ne
+    /// revienne »). Une pièce floutée se révèle sur place ; révélée, elle
+    /// s'ouvre en plein écran et son flou revient DERRIÈRE lui — on retrouve la
+    /// case voilée à la sortie. Une pièce que le MESSAGE révèle s'ouvre
+    /// directement : le minuteur du message rendra le flou. La vue unique ouvre
+    /// son plein écran directement (#8009).
+    static func tap(on attachment: MessageAttachment, isRevealed: Bool, messageRevealed: Bool) -> FocalCellTap {
+        guard case .blurred = state(for: attachment, isRevealed: isRevealed, messageRevealed: messageRevealed) else {
+            return .openFullscreen(reblurs: isRevealed && attachment.isBlurred && !attachment.isViewOnce)
+        }
+        switch ProtectedContentTap.resolve(cell: attachment) {
+        case .revealInPlace: return .reveal
+        default: return .openFullscreen(reblurs: false)
+        }
     }
 
     /// Pastille de compte « vue unique » — miroir de `viewCountBadge`
@@ -180,21 +206,20 @@ nonisolated enum FocalMediaProtection {
 /// conditionnelles inlinées — la cause du crash `swift_getTypeByMangledNameInContextImpl`
 /// documentée sur ce fichier) SANS réutiliser son TYPE. Le rendu réutilise
 /// les primitives réellement accessibles : `ProgressiveCachedImage`,
-/// `VideoAvailabilityResolver` + `MeeshyVideoPlayer`, `DownloadBadgeView`
-/// (`internal`, non `fileprivate` — vérifié).
+/// `VideoAvailabilityResolver` + `MeeshyVideoPlayer` (jeu inline minimal,
+/// #8231), `DownloadBadgeView` (`internal`, non `fileprivate` — vérifié).
 ///
 /// **Flou / voir-une-fois (arbitrage F-083bis, planche des 25 cas)** :
 /// `AttachmentBlurOverlayView` et `viewCountBadge` (`BubbleGridCell`) sont
 /// `private` — non réutilisables (même RE-PREUVE que `BubbleGridCell`
 /// lui-même). Reconstruits NATIVEMENT ici (même approche que
 /// `Focal/Row/FocalSystemRows.swift`) : mêmes clés i18n
-/// (`bubble.media.viewOnce`/`.masked`/`.holdToView`/`.a11y.*`, un seul
-/// domicile — jamais dupliquées), même geste (`onLongPressGesture(minimumDuration: 0.3)`),
-/// et la VRAIE machine à états de révélation (`BubbleBlurRevealController`,
-/// `Bubble/BubbleBlurRevealLifecycle.swift` — `internal`, PAS `fileprivate`,
-/// vérifié avant réutilisation) plutôt qu'un booléen local reconstruit à la
-/// main. La décision (« flouter ou pas ») est PURE (`FocalMediaProtection`,
-/// ci-dessus), testable sans rendu.
+/// (`bubble.media.viewOnce`/`.masked`/`.tapToView`/`.a11y.*`, un seul
+/// domicile — jamais dupliquées), même geste (`ProtectedContentTap`) : une
+/// pièce FLOUTÉE se révèle sur place dans sa case (#8389) et s'ouvre en plein
+/// écran au toucher suivant ; une pièce à VUE UNIQUE ouvre son plein écran
+/// directement (#8009). La décision (« flouter ou pas ») est PURE
+/// (`FocalMediaProtection`, ci-dessus), testable sans rendu.
 ///
 /// **La PASTILLE des réactions est entrée dans le périmètre le 2026-09-16**
 /// (#6793, directive porteur : « Les reactions des medias doivent etre remonté
@@ -226,10 +251,11 @@ struct FocalGridCell: View {
     /// d'appel : succès → révélation).
     var onConsumeViewOnce: ((String, @escaping (Bool) -> Void) -> Void)? = nil
 
-    @StateObject private var revealController = BubbleBlurRevealController()
+    @State private var isRevealed = false
+    @Environment(\.focalMessageRevealed) private var messageRevealed
 
     private var protectionState: FocalMediaProtectionState {
-        FocalMediaProtection.state(for: attachment, isRevealed: revealController.isRevealed)
+        FocalMediaProtection.state(for: attachment, isRevealed: isRevealed, messageRevealed: messageRevealed)
     }
 
     var body: some View {
@@ -244,10 +270,8 @@ struct FocalGridCell: View {
         .clipShape(RoundedRectangle(cornerRadius: FocalMetrics.Media.radius))
         .clipped()
         .contentShape(Rectangle())
-        .onTapGesture {
-            guard case .none = protectionState else { return }
-            onTap?(attachment)
-        }
+        .onTapGesture(perform: handleTap)
+        .task(id: isRevealed) { await reblurAfterVisibility() }
         .overlay { protectionOverlay }
         .overlay(alignment: .bottomTrailing) {
             if case .none = protectionState {
@@ -260,6 +284,30 @@ struct FocalGridCell: View {
         }
         .overlay(alignment: .topTrailing) { viewOnceBadge }
         .overlay(alignment: .bottomLeading) { reactionsBadge }
+    }
+
+    /// Une pièce floutée se révèle SUR PLACE (#8389) ; révélée, à vue unique
+    /// ou claire, le toucher ouvre son plein écran sur CETTE pièce — et le flou
+    /// d'une pièce révélée revient derrière lui (#8537).
+    private func handleTap() {
+        switch FocalMediaProtection.tap(on: attachment, isRevealed: isRevealed, messageRevealed: messageRevealed) {
+        case .reveal:
+            HapticFeedback.medium()
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { isRevealed = true }
+        case .openFullscreen(let reblurs):
+            if protectionState != .none { HapticFeedback.medium() }
+            if reblurs { isRevealed = false }
+            onTap?(attachment)
+        }
+    }
+
+    /// La révélation d'une case a une FIN, comme celle d'un message : sans
+    /// toucher, le flou revient après la durée de visibilité.
+    private func reblurAfterVisibility() async {
+        guard isRevealed, attachment.isBlurred, !attachment.isViewOnce else { return }
+        try? await Task.sleep(for: .seconds(BubbleBlurRevealLifecycle.defaultRevealDuration))
+        guard !Task.isCancelled else { return }
+        withAnimation(.easeOut(duration: BubbleBlurRevealLifecycle.Phase.blurApply.duration)) { isRevealed = false }
     }
 
     /// **Ce que la pièce a récolté** (#6793) — même coin et même dessin que la
@@ -277,7 +325,7 @@ struct FocalGridCell: View {
                 summary: attachment.reactionSummary,
                 currentUserReactions: attachment.currentUserReactions) {
             AttachmentReactionBadge(model: modèle, accent: Color(hex: accentHex))
-                .padding(5)
+                .padding(MeeshySpacing.xs)
         }
     }
 
@@ -300,16 +348,20 @@ struct FocalGridCell: View {
             .clipped()
 
         case .video:
+            // #8231 — lecture inline à trois contrôles (son, lecture/pause,
+            // plein écran) ; toucher la vidéo hors contrôles ouvre le plein
+            // écran. Les gestes du lecteur passent avant celui de la cellule.
             VideoAvailabilityResolver(attachment: attachment) { availability, onDownload in
                 MeeshyVideoPlayer(
                     attachment: attachment,
                     style: .inline,
-                    controls: .inlineDefault,
+                    controls: .inlineMinimal,
                     accentColor: accentHex,
                     frame: .bubble,
                     availability: availability,
                     performance: .inline,
                     playButtonDiameter: 44,
+                    surfaceTapExpands: true,
                     onDownload: onDownload,
                     onExpand: { onTap?(attachment) }
                 )
@@ -341,17 +393,17 @@ struct FocalGridCell: View {
         if case .blurred(let isViewOnce) = protectionState {
             ZStack {
                 Color.black.opacity(0.5)
-                VStack(spacing: 5) {
+                VStack(spacing: MeeshySpacing.xs) {
                     Image(systemName: "eye.slash.fill")
-                        .font(MeeshyFont.relative(16, weight: .medium))
+                        .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .medium))
                         .foregroundStyle(.white)
                     Text(isViewOnce
                         ? String(localized: "bubble.media.viewOnce", defaultValue: "Voir une fois", bundle: .main)
                         : String(localized: "bubble.media.masked", defaultValue: "Contenu masqué", bundle: .main))
-                        .font(MeeshyFont.relative(10, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
                         .foregroundStyle(.white)
-                    Text(String(localized: "bubble.media.holdToView", defaultValue: "Maintenir pour voir", bundle: .main))
-                        .font(MeeshyFont.relative(9))
+                    Text(String(localized: "bubble.media.tapToView", defaultValue: "Toucher pour voir", bundle: .main))
+                        .font(MeeshyFont.relative(MeeshyFont.microSize))
                         .foregroundStyle(.white.opacity(0.7))
                 }
             }
@@ -360,14 +412,9 @@ struct FocalGridCell: View {
             .accessibilityLabel(isViewOnce
                 ? String(localized: "bubble.media.a11y.viewOnce", defaultValue: "Média à voir une fois", bundle: .main)
                 : String(localized: "bubble.media.a11y.masked", defaultValue: "Média masqué", bundle: .main))
-            .accessibilityHint(String(localized: "bubble.media.a11y.holdToReveal", defaultValue: "Maintenir pour révéler le contenu", bundle: .main))
-            .onLongPressGesture(minimumDuration: 0.3) {
-                HapticFeedback.medium()
-                revealController.requestReveal(
-                    request: BubbleBlurRevealLifecycle.RevealRequest(messageId: attachment.id, isViewOnce: isViewOnce),
-                    consumeViewOnce: onConsumeViewOnce
-                )
-            }
+            .accessibilityHint(ProtectedContentTap.resolve(cell: attachment).accessibilityHint ?? "")
+            .accessibilityAddTraits(.isButton)
+            .onTapGesture(perform: handleTap)
         }
     }
 
@@ -377,11 +424,11 @@ struct FocalGridCell: View {
     private var viewOnceBadge: some View {
         if FocalMediaProtection.showsViewOnceBadge(for: attachment) {
             Text("\(attachment.viewOnceCount)")
-                .font(MeeshyFont.relative(9, weight: .bold, design: .monospaced))
+                .font(MeeshyFont.relative(MeeshyFont.microSize, weight: .bold, design: .monospaced))
                 .foregroundColor(.white)
                 .frame(width: 18, height: 18)
                 .background(Circle().fill(MeeshyColors.error.opacity(0.85)))
-                .padding(6)
+                .padding(MeeshySpacing.xsPlus)
                 .accessibilityLabel(Text(String(localized: "bubble.media.a11y.viewCount", defaultValue: "\(attachment.viewOnceCount) vues", bundle: .main)))
         }
     }
@@ -389,7 +436,7 @@ struct FocalGridCell: View {
 
 // MARK: - FocalAttachmentBlock (WS-3)
 
-/// Bloc média NU de la rangée plate — sous l'avatar (`Row.contentIndent`)
+/// Bloc média NU de la rangée plate — à la colonne du nom (`Row.contentIndent`)
 /// — grille 1/2/3/4+ via `FocalMediaGridLayout`,
 /// radius `16` (`FocalMetrics.Media.radius`). Aucune bulle, aucun fond.
 ///

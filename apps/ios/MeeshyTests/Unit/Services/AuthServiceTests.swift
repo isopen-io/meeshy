@@ -131,6 +131,80 @@ final class AuthServiceTests: XCTestCase {
         XCTAssertFalse(AuthManager.shared.isAuthenticated)
     }
 
+    // MARK: - #8035 — adresse inconnue ⇒ vérification ⇒ session
+
+    func test_login_verificationRequired_returnsPendingVerification_withoutSession() async {
+        stubAuthService.loginResult = .success(LoginResponseData(
+            user: nil, token: nil, sessionToken: nil, expiresIn: nil, requires2FA: nil, twoFactorToken: nil,
+            status: "verification-required", accountCreated: true, email: "nouveau@exemple.com"
+        ))
+
+        let outcome = await AuthManager.shared.login(username: "nouveau@exemple.com", password: "choisi")
+
+        XCTAssertEqual(outcome, .verificationRequired(PendingEmailVerification(email: "nouveau@exemple.com", accountCreated: true)))
+        XCTAssertFalse(AuthManager.shared.isAuthenticated)
+        XCTAssertNil(AuthManager.shared.errorMessage, "une vérification demandée n'est pas une erreur")
+        XCTAssertFalse(AuthManager.shared.isLoading)
+    }
+
+    func test_login_nominalSession_returnsAuthenticated() async {
+        stubAuthService.loginResult = .success(makeLoginData())
+
+        let outcome = await AuthManager.shared.login(username: "testuser", password: "password123")
+
+        XCTAssertEqual(outcome, .authenticated)
+    }
+
+    func test_confirmEmail_servedSession_opensSessionLikeALogin() async throws {
+        stubAuthService.confirmEmailResult = .success(makeLoginData(user: makeUser(id: "verified-1"), token: "jwt-verified"))
+
+        let opened = try await AuthManager.shared.confirmEmail(.code("123456", email: "nouveau@exemple.com", password: "choisi"))
+
+        XCTAssertTrue(opened)
+        XCTAssertTrue(AuthManager.shared.isAuthenticated)
+        XCTAssertEqual(AuthManager.shared.currentUser?.id, "verified-1")
+        XCTAssertEqual(AuthManager.shared.authToken, "jwt-verified")
+        XCTAssertEqual(stubAuthService.confirmEmailRequests, [.code("123456", email: "nouveau@exemple.com", password: "choisi")])
+    }
+
+    /// #8059 — prouver l'adresse ne pose PAS la session : poser la session
+    /// démonte l'écran de connexion, et la feuille du code encore présentée
+    /// par lui resterait orpheline. La session s'ouvre quand l'écran l'a
+    /// refermée, par `openSession`.
+    func test_verifyEmail_servedSession_doesNotOpenItUntilAsked() async throws {
+        stubAuthService.confirmEmailResult = .success(makeLoginData(user: makeUser(id: "verified-2"), token: "jwt-proven"))
+
+        let proven = try await AuthManager.shared.verifyEmail(.code("123456", email: "nouveau@exemple.com"))
+
+        XCTAssertFalse(AuthManager.shared.isAuthenticated)
+        XCTAssertEqual(proven?.token, "jwt-proven")
+
+        AuthManager.shared.openSession(try XCTUnwrap(proven))
+
+        XCTAssertTrue(AuthManager.shared.isAuthenticated)
+        XCTAssertEqual(AuthManager.shared.currentUser?.id, "verified-2")
+    }
+
+    func test_confirmEmail_verifiedWithoutSession_staysSignedOut() async throws {
+        stubAuthService.confirmEmailResult = .success(makeLoginData(token: nil, sessionToken: nil))
+
+        let opened = try await AuthManager.shared.confirmEmail(.link(token: "tok", email: "a@b.co"))
+
+        XCTAssertFalse(opened)
+        XCTAssertFalse(AuthManager.shared.isAuthenticated)
+    }
+
+    func test_confirmEmail_refused_throwsAndStaysSignedOut() async {
+        stubAuthService.confirmEmailResult = .failure(MeeshyError.server(statusCode: 400, message: "Code invalide"))
+
+        do {
+            _ = try await AuthManager.shared.confirmEmail(.code("000000", email: "a@b.co"))
+            XCTFail("un code refusé doit lever")
+        } catch {
+            XCTAssertFalse(AuthManager.shared.isAuthenticated)
+        }
+    }
+
     // MARK: - 2FA completion
 
     func test_completeLoginWith2FA_success_authenticatesAndClearsRequires2FA() async {
@@ -340,6 +414,22 @@ final class AuthServiceTests: XCTestCase {
         XCTAssertEqual(AuthManager.shared.currentUser?.id, "user-123")
     }
 
+    /// #8076 — prouver le lien de connexion ne pose PAS la session : un lien
+    /// ouvert pendant qu'une feuille d'accès est affichée attend qu'elle parte.
+    func test_verifyMagicLink_doesNotOpenTheSessionUntilAsked() async throws {
+        stubAuthService.validateMagicLinkResult = .success(makeLoginData(user: makeUser(id: "magic-proven"), token: "jwt-magic"))
+
+        let proven = try await AuthManager.shared.verifyMagicLink(token: "magic-token")
+
+        XCTAssertFalse(AuthManager.shared.isAuthenticated)
+        XCTAssertEqual(proven.token, "jwt-magic")
+
+        AuthManager.shared.openSession(proven)
+
+        XCTAssertTrue(AuthManager.shared.isAuthenticated)
+        XCTAssertEqual(AuthManager.shared.currentUser?.id, "magic-proven")
+    }
+
     func test_validateMagicLink_failure_setsErrorMessage() async {
         stubAuthService.validateMagicLinkResult = .failure(MeeshyError.auth(.sessionExpired))
 
@@ -388,6 +478,9 @@ private final class StubAuthServiceForAuthManager: AuthServiceProviding, @unchec
     var validateMagicLinkResult: Result<LoginResponseData, Error> = .failure(MeeshyError.network(.noConnection))
     var requestPasswordResetError: Error?
     var refreshTokenResult: Result<LoginResponseData, Error> = .failure(MeeshyError.network(.noConnection))
+    var confirmEmailResult: Result<LoginResponseData, Error> = .failure(MeeshyError.network(.noConnection))
+    private var _confirmEmailRequests: [EmailVerificationRequest] = []
+    var confirmEmailRequests: [EmailVerificationRequest] { lock.withLock { _confirmEmailRequests } }
 
     private var _loginCallCount = 0
     var loginCallCount: Int { lock.withLock { _loginCallCount } }
@@ -429,6 +522,11 @@ private final class StubAuthServiceForAuthManager: AuthServiceProviding, @unchec
     func requestPasswordReset(email: String) async throws {
         lock.withLock { _requestPasswordResetCallCount += 1 }
         if let requestPasswordResetError { throw requestPasswordResetError }
+    }
+
+    func confirmEmail(_ request: EmailVerificationRequest) async throws -> LoginResponseData {
+        lock.withLock { _confirmEmailRequests.append(request) }
+        return try confirmEmailResult.get()
     }
 
     func refreshToken(_ currentToken: String, sessionToken: String?) async throws -> LoginResponseData {

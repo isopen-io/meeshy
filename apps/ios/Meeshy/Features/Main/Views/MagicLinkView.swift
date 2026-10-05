@@ -4,15 +4,33 @@ import MeeshySDK
 import MeeshyUI
 import os
 
+// MARK: - Sent Email Code
+
+/// Un code et un lien DÉJÀ partis vers `email` (#8216) — l'inscription d'une
+/// adresse déjà utilisée les demande en un geste, puis ouvre CET écran sur son
+/// attente plutôt que sur une saisie à refaire.
+struct SentEmailCode: Identifiable, Equatable {
+    let email: String
+    let dispatch: EmailCodeDispatch
+    var id: String { email }
+}
+
 // MARK: - Magic Link View
 
 struct MagicLinkView: View {
     @EnvironmentObject var authManager: AuthManager
     private var theme: ThemeManager { ThemeManager.shared }
     @Environment(\.dismiss) private var dismiss
+    /// Code saisi et vérifié (#8059) : reçoit de quoi ouvrir la session, que
+    /// l'hôte pose une fois cet écran REFERMÉ — l'ouvrir pendant qu'il est
+    /// présenté démonte la connexion qui le présente, et il resterait figé.
+    var onVerified: ((@escaping ProvenSessionOpener) -> Void)?
+    /// L'envoi que l'hôte a DÉJÀ fait (#8216) : l'écran s'ouvre sur l'attente.
+    private let alreadySent: SentEmailCode?
 
-    @State private var email = ""
-    @State private var step: Step = .emailInput
+    @State private var email: String
+    @State private var step: Step
+    @State private var hasAdoptedSend = false
     @State private var errorMessage: String?
     @State private var isLoading = false
     @State private var countdownRemaining = 0
@@ -21,8 +39,27 @@ struct MagicLinkView: View {
     @FocusState private var isEmailFocused: Bool
     /// Le (i) DÉPLIÉ — un seul à la fois, comme à l'inscription (#6626).
     @State private var expandedHint: Hint?
+    /// L'e-mail envoyé porte un code ET un lien (#8035) : la saisie du code
+    /// suit l'envoi, pour l'adresse à laquelle il est parti.
+    @State private var codeEntry: EmailVerificationViewModel?
 
     private static let logger = Logger(subsystem: "me.meeshy.app", category: "magic-link")
+
+    /// - Parameters:
+    ///   - prefilledEmail: l'adresse déjà tapée ailleurs (#8216) — la retaper
+    ///     est un geste de trop, et une occasion de se tromper d'adresse.
+    ///   - alreadySent: un envoi déjà fait par l'hôte — l'écran s'ouvre sur
+    ///     son attente, compte à rebours et saisie du code compris.
+    init(
+        onVerified: ((@escaping ProvenSessionOpener) -> Void)? = nil,
+        prefilledEmail: String = "",
+        alreadySent: SentEmailCode? = nil
+    ) {
+        self.onVerified = onVerified
+        self.alreadySent = alreadySent
+        _email = State(initialValue: alreadySent?.email ?? prefilledEmail)
+        _step = State(initialValue: alreadySent == nil ? .emailInput : .waiting)
+    }
 
     private enum Step {
         case emailInput
@@ -92,6 +129,7 @@ struct MagicLinkView: View {
                 // plus dépendre de la façon dont on le présente.
                 .iPadFormWidth()
             }
+            .onAppear(perform: adoptAlreadySent)
             .onDisappear {
                 countdownTask?.cancel()
                 countdownTask = nil
@@ -178,7 +216,7 @@ struct MagicLinkView: View {
                     .accessibilityHint(howItWorksHint.text)
             }
             .padding(.horizontal, MeeshySpacing.lg)
-            .padding(.vertical, MeeshySpacing.md + 2)
+            .padding(.vertical, MeeshySpacing.mdPlus)
             .background(
                 RoundedRectangle(cornerRadius: MeeshyRadius.md)
                     .fill(theme.inputBackground)
@@ -254,7 +292,7 @@ struct MagicLinkView: View {
 
                 // Héros décoratif ≥40pt : taille fixe assumée (doctrine 84i/87i), masqué à VoiceOver.
                 Image(systemName: "envelope.open.fill")
-                    .font(.system(size: 48, weight: .light))
+                    .font(.system(size: MeeshyIconSize.hero, weight: .light))
                     .foregroundStyle(
                         LinearGradient(
                             colors: [MeeshyColors.indigo600, MeeshyColors.indigo400],
@@ -272,7 +310,7 @@ struct MagicLinkView: View {
                 .foregroundColor(theme.textPrimary)
 
             VStack(spacing: MeeshySpacing.xs) {
-                Text(String(localized: "auth.magiclink.sent.subtitle", defaultValue: "Ouvrez le lien reçu à", bundle: .main))
+                Text(String(localized: "auth.magiclink.sent.codeAndLink", defaultValue: "Code et lien envoyés à", bundle: .main))
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .regular))
                     .foregroundColor(theme.textMuted)
                     .multilineTextAlignment(.center)
@@ -282,6 +320,13 @@ struct MagicLinkView: View {
                     .foregroundColor(MeeshyColors.indigo400)
             }
             .accessibilityElement(children: .combine)
+
+            if let codeEntry {
+                EmailCodeEntry(viewModel: codeEntry)
+                    .onReceive(codeEntry.$verificationSuccess.filter { $0 }.first()) { _ in
+                        handOff(codeEntry)
+                    }
+            }
 
             if linkExpired {
                 Text(String(localized: "auth.magiclink.expired", defaultValue: "Lien expiré, renvoyez-en un nouveau", bundle: .main))
@@ -366,6 +411,12 @@ struct MagicLinkView: View {
         LocalizedNumber.spokenDuration(seconds: countdownRemaining)
     }
 
+    private func handOff(_ entry: EmailVerificationViewModel) {
+        guard let onVerified else { return entry.openProvenSession() }
+        onVerified(entry.openProvenSession)
+        dismiss()
+    }
+
     private func sendMagicLink() {
         guard isValidEmail else { return }
 
@@ -375,26 +426,38 @@ struct MagicLinkView: View {
 
         Task {
             do {
-                let expiresInSeconds = try await AuthService.shared.requestMagicLink(email: email)
-
+                let dispatch = try await AuthService.shared.requestEmailCode(email: email)
                 withAnimation(MeeshyAnimation.springDefault) {
-                    step = .waiting
                     isLoading = false
-                    expandedHint = nil
+                    enterWaiting(dispatch)
                 }
-
-                startCountdown(expiresInSeconds)
                 Self.logger.info("Magic link sent to \(email, privacy: .private)")
-            } catch let error as APIError {
-                errorMessage = error.errorDescription
-                isLoading = false
-                Self.logger.error("Magic link send failed: \(error.localizedDescription)")
             } catch {
-                errorMessage = String(localized: "auth.magiclink.error.generic", defaultValue: "Une erreur est survenue. Veuillez réessayer.", bundle: .main)
+                errorMessage = EmailProofErrorText.sendMessage(for: error)
                 isLoading = false
                 Self.logger.error("Magic link send failed: \(error.localizedDescription)")
             }
         }
+    }
+
+    /// L'attente d'UN envoi — le sien ou celui de l'hôte (#8216) : la saisie
+    /// du code pour CETTE adresse, son jeton d'attente, le compte à rebours.
+    private func enterWaiting(_ dispatch: EmailCodeDispatch) {
+        if codeEntry?.email != email {
+            codeEntry = EmailVerificationViewModel(email: email)
+        }
+        // #8083 — le jeton d'attente de CET envoi : l'écran saura dire
+        // que l'adresse a été confirmée sur un autre appareil.
+        codeEntry?.pendingSessionToken = dispatch.pendingSessionToken
+        step = .waiting
+        expandedHint = nil
+        startCountdown(dispatch.expiresInSeconds ?? 300)
+    }
+
+    private func adoptAlreadySent() {
+        guard let alreadySent, !hasAdoptedSend else { return }
+        hasAdoptedSend = true
+        enterWaiting(alreadySent.dispatch)
     }
 
     private func startCountdown(_ seconds: Int) {

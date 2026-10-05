@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { GENERATED_PASSWORD_LENGTH, generateStrongPassword, resetAdminUserPassword } from './admin-user-password';
+import { fetchAdminPasswordProposals, resetAdminUserPassword } from './admin-user-password';
 import type { HttpTransport } from './http';
 
 /**
@@ -8,21 +8,13 @@ import type { HttpTransport } from './http';
  * `POST /api/v1/admin/users/:userId/reset-password`, sous `canResetPasswords`
  * (ADMIN+) et `requireHierarchy`.
  *
- * ## Pourquoi l'écran GÉNÈRE au lieu de faire saisir
+ * ## Pourquoi les propositions viennent de la passerelle (#8051)
  *
- * La passerelle applique `validatePasswordStrength` (`users.ts:324`) : longueur
- * ≥ `PASSWORD_MIN_LENGTH` (6) ET un score `zxcvbn` **proportionnel à la
- * longueur** — `≥16 ⇒ 3`, `≥10 ⇒ 2`, sinon `1`. Aucune classe de caractères
- * n'est imposée.
- *
- * Un mot de passe tapé à la main par un administrateur pressé tombe donc dans
- * le palier le plus court avec le score le plus fragile, et peut être REFUSÉ
- * après coup. Un tirage de {@link GENERATED_PASSWORD_LENGTH} caractères entre
- * dans le palier `≥16` — celui dont le doc-comment de `password-strength.ts`
- * dit qu'« une passphrase de 16+ caractères atteint 3-4 sans classes forcées ».
- *
- * Et le geste est plus juste ainsi : l'administrateur TRANSMET un secret, il
- * n'a pas à le composer.
+ * La passerelle applique `validatePasswordStrength` : longueur ≥
+ * `PASSWORD_MIN_LENGTH` (6) ET un score `zxcvbn` **proportionnel à la
+ * longueur**. Un secret composé côté client à partir du pseudo pourrait être
+ * REFUSÉ après coup ; `POST …/password-proposals` compose ET juge les quatre
+ * niveaux, donc ce que l'écran affiche a déjà été accepté.
  *
  * ## Ce que le corps ne porte PAS
  *
@@ -45,33 +37,34 @@ const transportEspion = (reponse: unknown, ok = true) => {
 
 const deps = (transport: HttpTransport) => ({ source: 'gateway' as const, transport });
 
-describe('generateStrongPassword — franchir le plancher, pas le frôler', () => {
-  test('entre dans le palier des 16+, celui qui atteint le score 3', () => {
-    expect(GENERATED_PASSWORD_LENGTH).toBeGreaterThanOrEqual(16);
-    expect(generateStrongPassword()).toHaveLength(GENERATED_PASSWORD_LENGTH);
+const PROPOSITIONS = { simple: 'alice482', easy: 'Alice-4821!', medium: 'Alice.k7Qm!4821', hard: 'Xq4mR9pTw2sKfH7nJbVc' };
+
+describe('fetchAdminPasswordProposals — quatre niveaux, servis par la passerelle', () => {
+  test('vise POST /api/v1/admin/users/:userId/password-proposals, identifiant ENCODÉ, sans corps', async () => {
+    const { transport, appels } = transportEspion(PROPOSITIONS);
+
+    const resultat = await fetchAdminPasswordProposals({ ...deps(transport), userId: 'u 1/x' });
+
+    expect(appels[0]?.method).toBe('POST');
+    expect(appels[0]?.path).toBe(`/api/v1/admin/users/${encodeURIComponent('u 1/x')}/password-proposals`);
+    expect(appels[0]?.body).toBeUndefined();
+    expect(resultat).toEqual({ ok: true, data: PROPOSITIONS });
   });
 
-  test('deux tirages diffèrent — sinon ce n’est pas un secret', () => {
-    const tirages = new Set(Array.from({ length: 24 }, () => generateStrongPassword()));
+  test('refuse une réponse à laquelle il manque un niveau — un niveau absent n’est pas un niveau vide', async () => {
+    const { transport } = transportEspion({ simple: 'alice482', easy: 'Alice-4821!', hard: 'Xq4mR9pTw2sKfH7nJbVc' });
 
-    expect(tirages.size).toBe(24);
+    const resultat = await fetchAdminPasswordProposals({ ...deps(transport), userId: 'u-1' });
+
+    expect(resultat.ok).toBe(false);
   });
 
-  /**
-   * Un secret se lit à voix haute, se recopie, se dicte au téléphone. `O`/`0`
-   * et `l`/`1`/`I` s'y confondent — et un mot de passe mal recopié se solde
-   * par une seconde réinitialisation, donc un second secret en circulation.
-   */
-  test('n’emploie aucun caractère ambigu à l’œil', () => {
-    const tire = Array.from({ length: 40 }, () => generateStrongPassword()).join('');
+  test('relaie tel quel un refus de la passerelle', async () => {
+    const { transport } = transportEspion({ ok: false, status: 403, error: 'Access denied' }, false);
 
-    for (const ambigu of ['O', '0', 'l', '1', 'I']) {
-      expect(tire).not.toContain(ambigu);
-    }
-  });
+    const resultat = await fetchAdminPasswordProposals({ ...deps(transport), userId: 'u-1' });
 
-  test('reste dans un alphabet imprimable et sans espace', () => {
-    expect(generateStrongPassword()).toMatch(/^[A-Za-z2-9!@#$%^&*_+=?-]+$/);
+    expect(resultat).toEqual({ ok: false, status: 403, error: 'Access denied' });
   });
 });
 

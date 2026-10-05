@@ -1,0 +1,176 @@
+import type { ConnectionQualityLevel } from '@meeshy/shared/types/video-call';
+import { createStore, type StoreApi } from 'zustand/vanilla';
+
+import type { CallCaption, CaptionsMode, TranscriptionState } from './call-captions';
+import type { CallFeedbackPrompt } from './call-feedback';
+import type { SurvivalStage } from './call-survival';
+
+/**
+ * **L'ÉTAT D'UN APPEL** (#6382) — le magasin que lisent l'écran d'appel, la
+ * pastille, l'en-tête du fil et le journal, et qu'écrit SEUL le moteur
+ * (`calls/engine.ts`). Il ne connaît ni WebRTC ni le socket : c'est ce qui
+ * permet à la coquille, au fil et au journal de l'importer sans payer le
+ * moteur.
+ *
+ * Miroir de la machine d'`CallManager.swift` (`idle`, `ringing(isOutgoing)`,
+ * `connecting`, `connected`, `reconnecting`, `ended(reason)`) et de ses
+ * raisons de fin (`CallEndReason`, `WebRTCTypes.swift`).
+ */
+
+export type CallMedia = 'audio' | 'video';
+
+export type CallEndReason = 'local' | 'remote' | 'rejected' | 'missed' | 'connectionLost' | 'failed' | 'busy' | 'permission' | 'removed';
+
+export type CallPhase =
+  | { readonly kind: 'outgoing' }
+  | { readonly kind: 'incoming' }
+  | { readonly kind: 'connecting' }
+  | { readonly kind: 'connected' }
+  | { readonly kind: 'reconnecting' }
+  | { readonly kind: 'ended'; readonly reason: CallEndReason; readonly detail: string | null };
+
+export type CallMember = {
+  readonly userId: string;
+  readonly name: string;
+  readonly avatar: string | null;
+  readonly micMuted: boolean;
+  readonly cameraOn: boolean;
+  /** Le pair partage son écran (#8063) : sa piste vidéo porte l'écran, pas sa caméra. */
+  readonly screenSharing: boolean;
+  /** La passerelle signale que SON lien reste dégradé (`call:quality-alert`, #8047) ; s'éteint seul. */
+  readonly weakNetwork: boolean;
+  /** Il capture l'écran de l'appel (`call:screen-capture-alert`, #8047). */
+  readonly capturing: boolean;
+  /** `ringing` : invité dans l'appel en cours (#8433), il sonne et n'a pas encore décroché. */
+  readonly link: 'ringing' | 'waiting' | 'connecting' | 'connected' | 'reconnecting';
+};
+
+/**
+ * Ce que la boucle de qualité (`call-quality-loop.ts`, #8047) a lu au dernier
+ * relevé : le niveau du PIRE lien, son détail, et le stade de survie de MA vidéo.
+ */
+export type CallQuality = {
+  readonly level: ConnectionQualityLevel;
+  readonly packetLoss: number;
+  readonly rtt: number;
+  readonly jitter: number;
+  readonly audioKbps: number;
+  readonly videoKbps: number;
+  readonly survival: SurvivalStage;
+};
+
+/** `full` : l'écran d'appel ; `pill` : la pastille du haut ; `bubble` : la bulle déplaçable (`CallBubbleView.swift`). */
+export type CallDisplay = 'full' | 'pill' | 'bubble';
+
+export type ActiveCall = {
+  readonly callId: string | null;
+  readonly conversationId: string;
+  readonly media: CallMedia;
+  readonly direction: 'outgoing' | 'incoming';
+  readonly isGroup: boolean;
+  /** Le nom de ce qu'on appelle : le pair en direct, le groupe sinon. */
+  readonly title: string;
+  readonly avatar: string | null;
+  /** Qui appelle, pour l'écran entrant d'un groupe (« Alice appelle… »). */
+  readonly callerName: string | null;
+  /** Qui a lancé l'appel — son admin tant qu'il y est (#8438) ; `null` tant qu'on ne le sait pas. */
+  readonly initiatorId: string | null;
+  /** Le nom de qui m'invite dans un appel DÉJÀ en cours (#8433) : l'écran entrant le dit. */
+  readonly invitedBy: string | null;
+  readonly phase: CallPhase;
+  readonly connectedAt: number | null;
+  readonly endedDurationSec: number | null;
+  readonly micMuted: boolean;
+  readonly cameraOn: boolean;
+  readonly facing: 'user' | 'environment';
+  /** J'émets mon écran (#8063) : la caméra est éteinte le temps du partage et revient à son arrêt. */
+  readonly screenSharing: boolean;
+  readonly members: Readonly<Record<string, CallMember>>;
+  readonly display: CallDisplay;
+  readonly localStream: MediaStream | null;
+  readonly remoteStreams: Readonly<Record<string, MediaStream>>;
+  /** Le journal des sous-titres de l'appel (#8048), les deux sens, borné. */
+  readonly captions: readonly CallCaption[];
+  readonly captionsMode: CaptionsMode;
+  /** Les pairs qui ont ouvert LEUR panneau (`call:transcription-active`) : mon micro est transcrit pour eux. */
+  readonly captionPeers: readonly string[];
+  readonly transcription: TranscriptionState;
+  readonly quality: CallQuality | null;
+  /** Appelé (#8480) : l'appelant tel qu'on le voit et l'entend AVANT de décrocher ; `null` sans aperçu. */
+  readonly preview: MediaStream | null;
+  /** Appelant (#8480) : l'appelé me voit et m'entend pendant que ça sonne. */
+  readonly previewed: boolean;
+};
+
+export type WaitingCall = {
+  readonly callId: string;
+  readonly conversationId: string;
+  readonly media: CallMedia;
+  readonly callerName: string;
+  readonly callerAvatar: string | null;
+  readonly isGroup: boolean;
+  readonly title: string;
+};
+
+export type CallStoreState = {
+  readonly call: ActiveCall | null;
+  readonly waiting: WaitingCall | null;
+  /** Un refus qui n'ouvre aucun écran (« un appel est déjà en cours »). */
+  readonly notice: 'already-in-call' | null;
+  /** La note demandée après l'appel qui vient de finir (#8072), échantillonnée par `feedbackPromptFor`. */
+  readonly feedback: CallFeedbackPrompt | null;
+};
+
+export type CallStoreApi = StoreApi<CallStoreState>;
+
+export function createCallStore(): CallStoreApi {
+  return createStore<CallStoreState>(() => ({ call: null, waiting: null, notice: null, feedback: null }));
+}
+
+export const callStore = createCallStore();
+
+export function isCallLive(call: ActiveCall | null): boolean {
+  return call !== null && call.phase.kind !== 'ended';
+}
+
+/** L'appel en cours DANS cette conversation — ce qui change le bouton du fil en « Revenir à l'appel ». */
+export function liveCallIn(state: CallStoreState, conversationId: string): ActiveCall | null {
+  return isCallLive(state.call) && state.call?.conversationId === conversationId ? state.call : null;
+}
+
+/** `formattedDuration` d'iOS : `M:SS`, `H:MM:SS` passé une heure. */
+export function formatCallClock(seconds: number): string {
+  const safe = Math.max(0, Math.floor(seconds));
+  const hours = Math.floor(safe / 3600);
+  const minutes = Math.floor((safe % 3600) / 60);
+  const rest = String(safe % 60).padStart(2, '0');
+  return hours > 0 ? `${hours}:${String(minutes).padStart(2, '0')}:${rest}` : `${minutes}:${rest}`;
+}
+
+export function elapsedSeconds(call: Pick<ActiveCall, 'connectedAt'>, now: number): number {
+  return call.connectedAt === null ? 0 : Math.max(0, Math.floor((now - call.connectedAt) / 1000));
+}
+
+export function withMember(call: ActiveCall, member: CallMember): ActiveCall {
+  return { ...call, members: { ...call.members, [member.userId]: member } };
+}
+
+export function withoutMember(call: ActiveCall, userId: string): ActiveCall {
+  const { [userId]: _gone, ...members } = call.members;
+  const { [userId]: _stream, ...remoteStreams } = call.remoteStreams;
+  return { ...call, members, remoteStreams };
+}
+
+export function patchMember(call: ActiveCall, userId: string, patch: Partial<Omit<CallMember, 'userId'>>): ActiveCall {
+  const current = call.members[userId];
+  return current === undefined ? call : withMember(call, { ...current, ...patch });
+}
+
+/** La phase d'ensemble d'un maillage : le meilleur lien l'emporte (connecté > reconnexion > connexion). */
+export function meshPhase(members: Readonly<Record<string, CallMember>>): 'connected' | 'reconnecting' | 'connecting' | null {
+  const links = Object.values(members).map((member) => member.link);
+  if (links.includes('connected')) return 'connected';
+  if (links.includes('reconnecting')) return 'reconnecting';
+  if (links.includes('connecting')) return 'connecting';
+  return null;
+}

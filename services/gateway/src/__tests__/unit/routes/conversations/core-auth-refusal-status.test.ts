@@ -28,8 +28,8 @@
  *    Ce témoin lit `response.json()` — le corps tel qu'il part sur le fil.
  * 3. **Les deux refus restent DISCERNABLES.** Un correctif qui ferait tout
  *    passer en 401 serait aussi faux que le défaut : `canAccessConversation`
- *    refuse un non-membre AUTHENTIFIÉ, et ce refus-là doit rester
- *    `403 CONVERSATION_ACCESS_DENIED`. Le dernier témoin exerce donc la vraie
+ *    refuse un non-membre AUTHENTIFIÉ, et ce refus-là rend le MÊME 404 qu'une
+ *    conversation inexistante (#8099, anti-énumération). Le dernier témoin exerce donc la vraie
  *    chaîne d'authentification — JWT signé, session vivante, ligne `User`
  *    active — pour atteindre cette branche.
  *
@@ -194,16 +194,17 @@ describe('une session ABSENTE ou MORTE rend 401 UNAUTHORIZED (#4789)', () => {
   });
 });
 
-describe('un non-membre AUTHENTIFIÉ reste refusé en 403 — l\'autre refus, l\'autre statut', () => {
-  it('GET /conversations/:id — 403 CONVERSATION_ACCESS_DENIED', async () => {
+describe('un non-membre AUTHENTIFIÉ reçoit le 404 d\'une conversation inexistante (#8099)', () => {
+  it('GET /conversations/:id — 404 Conversation not found, sans code', async () => {
     const { statut, corps } = await appeler(
       `/conversations/${CONV_ID}`,
       JETON_VIVANT,
       PRISMA_MEMBRE_INCONNU
     );
 
-    expect(statut).toBe(403);
-    expect(corps.code).toBe('CONVERSATION_ACCESS_DENIED');
+    expect(statut).toBe(404);
+    expect(corps.error).toBe('Conversation not found');
+    expect(corps.code).toBeUndefined();
   });
 
   /**

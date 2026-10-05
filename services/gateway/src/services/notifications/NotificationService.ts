@@ -11,6 +11,8 @@
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { boundApnsPayload } from './boundApnsPayload';
 import { ephemeralPushFields } from './ephemeralPushFields';
+import { callBackPushFields } from './callBackPushFields';
+import { contentActionPushFields } from './contentActionPushFields';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import type { AttachmentTranslationTrack } from '@meeshy/shared/types/attachment-audio';
 import type {
@@ -28,12 +30,13 @@ import type {
   Notification,
 } from '@meeshy/shared/types/notification';
 import type { UserUpdatedEventData } from '@meeshy/shared/types/socketio-events';
-import { getDistinctConversationPartnerUserIds } from '../../utils/conversation-partners';
+import { emitUserUpdatedToPartners } from './user-updated-payload';
 import {
   NOTIFICATION_PREFERENCE_DEFAULTS,
   type NotificationPreference as NotifPrefs,
 } from '@meeshy/shared/types/preferences';
 import { isWithinDnd } from '@meeshy/shared/utils/notification-dnd';
+import { isNotificationTypeEnabledByPreference } from './type-preference';
 import {
   resolveUserLanguage,
   resolveUserLanguagesOrdered,
@@ -50,25 +53,28 @@ import { filterMutedRecipients } from './mutedRecipients';
 import { computeConversationUnreadBadge } from './conversationUnreadBadge';
 import { retractedNotificationOf, type RetractedNotification } from './retractedNotifications';
 import { sendNotificationRevocationPushes } from './notificationRevocationPush';
-import { reproducedPushData } from './reproducedNotificationPush';
+import { actorSubjectReplacementPushField, pushReachedADevice, reproducedPushData, staleBannerOf } from './reproducedNotificationPush';
 import { visibleNotificationsWhere } from './visibleNotificationsWhere';
 import type { ServerEmitIOWithRooms } from '../../socketio/serverEmit';
 import { PushNotificationService } from '../PushNotificationService';
 import { EmailService } from '../EmailService';
 import { loadPostAcl, canUserConsumePost } from '../posts/postVisibility';
 import { pushCategoryForNotificationType, buildPushHeader, dedupePushSubtitle } from './push-header';
+import { contentDetailCategory, contentDetailPushFields } from './content-detail';
+import { servedBannerBody } from './served-banner-body';
+import type { NotificationContentDetail } from '@meeshy/shared/types/notification-content-detail';
 import {
   type MessagePrismSource,
   type MessageBannerSource,
   type MessageLiveness,
   type PreviewPrismBasis,
   type NotificationBannerMedia,
+  type NotificationAttachmentSummary,
   type NotificationActorProfile,
   EMPTY_PRISM_SOURCE,
   UNKNOWN_BANNER_SOURCE,
   MESSAGE_CONTENT_BASIS,
   protectedPreview,
-  buildMessageNotificationBodyI18n,
   truncateMessage,
 } from './notification-preview';
 import type { FanoutDependencies } from './fanout/dependencies';
@@ -101,6 +107,7 @@ import {
   createPostRepostNotification,
   createCommentReplyNotification,
   createCommentLikeNotification,
+  createCommentReactionNotification,
 } from './builders/social-engagement';
 import {
   createConversationInviteNotification,
@@ -115,6 +122,7 @@ import {
   createTwoFactorNotification,
   createLoginNewDeviceNotification,
 } from './builders/account-security';
+import { sliceCodePoints } from '@meeshy/shared/utils/text-truncate';
 
 /** Budget APNs — au-delà, la charge est dégradée par étages (cf. `createNotification`). */
 const PUSHED_TRANSLATION_MAX_CHARS = 200;
@@ -133,13 +141,15 @@ function pickMetadataString(metadata: unknown, key: string): string {
 
 /**
  * Ce qu'il faut pour remplacer une bannière réécrite : la ligne RELUE (seule
- * source du texte d'après) et le cadrage déjà composé pour le socket, pour que
- * la bannière et le toast in-app disent exactement la même chose.
+ * source du texte d'après), le cadrage déjà composé pour le socket (bannière et
+ * toast in-app disent la même chose), et la bannière d'avant (`stale`), révoquée
+ * en REPLI si le remplacement n'atteint aucun appareil.
  */
 type ReproducedNotificationPush = {
   readonly row: Record<string, unknown>;
   readonly title: string;
   readonly subtitle?: string;
+  readonly stale: RetractedNotification;
 };
 
 /**
@@ -477,7 +487,7 @@ export class NotificationService {
   /**
    * La descente NUE — le couple `{ language, text }` élu, ou `null` ⇒ servir
    * l'original. Les deux consommateurs en sont des projections :
-   * {@link servedPreview} pour le corps affiché (cycle 122) et
+   * `servedPreview` (`served-banner-body.ts`) pour le corps affiché (cycle 122) et
    * {@link servedTranslationFields} pour les champs du fil push. Une descente,
    * deux projections — c'est ce qui les empêche de diverger (cycle 123).
    */
@@ -489,75 +499,6 @@ export class NotificationService {
       translations: source.translations,
       originalLanguage: source.originalLanguage,
       preferredLanguages,
-    });
-  }
-
-  /**
-   * Le texte que la bannière AFFICHE — cycle 122.
-   *
-   * Le Prisme ne s'arrête pas aux champs `translatedContent` /
-   * `translatedLanguage` du fil push : ils voyagent depuis le cycle 121 et
-   * AUCUN client ne les lit — ni la NSE iOS, ni l'application, ni Android, ni
-   * le service worker web. Le seul texte que les trois plateformes rendent est
-   * `payload.body`, composé depuis ce `content` : tant qu'il portait l'aperçu
-   * ORIGINAL, la bannière restait dans la langue de l'expéditeur pendant que la
-   * ligne de liste de la même application servait la traduction. Un contenu
-   * RÉSOLU n'est pas un contenu SERVI.
-   *
-   * La condition de substitution vit en amont, dans le choix de la SOURCE
-   * (`previewPrismSource`) : `Message.translations` ne traduit que
-   * `Message.content`, un placeholder de protection n'a pas de source, et une
-   * transcription a la sienne. Ici il ne reste qu'à servir ce qui a été élu.
-   */
-  private servedPreview(params: {
-    preview: string;
-    translation: { readonly text: string } | null;
-  }): string {
-    if (!params.translation) return params.preview;
-    // Un aperçu VIDE n'a rien à substituer : le corps se compose alors
-    // entièrement des badges de pièce jointe, localisés dans la langue de
-    // CADRAGE. Y injecter la traduction remplacerait « 📷 Foto » par un texte
-    // dont `Message.content` — vide — n'est pas la source.
-    if (params.preview.trim() === '') return params.preview;
-    return params.translation.text;
-  }
-
-  /**
-   * Le corps AFFICHÉ d'une bannière de message — cycle 125 bis.
-   *
-   * Deux compositions en une, et c'est leur ORDRE qui compte : le texte servi
-   * par le Prisme ({@link servedPreview}), puis le passage par
-   * `buildMessageNotificationBodyI18n`, qui remplace un texte ABSENT par le
-   * libellé de la première pièce jointe et suffixe les badges des suivantes.
-   *
-   * **Site UNIQUE pour les trois éventails**, et la raison est mesurée :
-   * `createMessageNotification` était le seul des trois à composer, si bien que
-   * la bannière d'une RÉPONSE ou d'une MENTION portant un vocal ou une photo
-   * sans légende arrivait avec un corps VIDE — le symptôme « deux textes pour
-   * un même message » (cycles 121-124) dans sa forme extrême, le second étant
-   * vide. C'est la leçon 271 : une règle écrite une fois par site finit par
-   * manquer à l'un d'eux.
-   *
-   * Sans média (`media` absent ou vide), le résultat est exactement le texte
-   * servi — les deux éventails qui n'en portaient pas gardent leur corps au
-   * caractère près.
-   */
-  private servedBannerBody(params: {
-    lang: string;
-    preview: string;
-    translation: { readonly text: string } | null;
-    media?: NotificationBannerMedia;
-  }): string {
-    return buildMessageNotificationBodyI18n(params.lang, {
-      messagePreview: this.servedPreview({
-        preview: params.preview,
-        translation: params.translation,
-      }),
-      attachments: params.media?.attachments,
-      firstAttachmentFileSize: params.media?.firstAttachmentFileSize,
-      firstAttachmentDuration: params.media?.firstAttachmentDuration,
-      firstAttachmentWidth: params.media?.firstAttachmentWidth,
-      firstAttachmentHeight: params.media?.firstAttachmentHeight,
     });
   }
 
@@ -746,6 +687,7 @@ export class NotificationService {
       prisma: this.prisma,
       createNotification: (params) => this.createNotification(params),
       resolveRecipientLang: (userId) => this.resolveRecipientLang(userId),
+      resolveRecipientPrism: (userId) => this.resolveRecipientPrism(userId),
       canNotifyAboutPost: (postId, recipientId) => this.canNotifyAboutPost(postId, recipientId),
       shouldCreateReactionNotification: (s, r) => this.shouldCreateReactionNotification(s, r),
       isConversationMutedFor: (u, c, t) => this.isConversationMutedFor(u, c, t),
@@ -785,53 +727,7 @@ export class NotificationService {
    * Mapping NotificationType → champ booléen dans UserPreferences.notification
    */
   private isTypeEnabled(prefs: NotifPrefs, type: NotificationType): boolean {
-    switch (type) {
-      case 'new_message':       return prefs.newMessageEnabled;
-      case 'missed_call':       return prefs.missedCallEnabled;
-      case 'system':            return prefs.systemEnabled;
-      case 'user_mentioned':
-      case 'mention':           return prefs.mentionEnabled;
-      case 'message_reaction':
-      case 'reaction':          return prefs.reactionEnabled;
-      case 'contact_request':
-      case 'contact_accepted':
-      case 'friend_request':
-      case 'friend_accepted':   return prefs.contactRequestEnabled;
-      case 'member_joined':     return prefs.memberJoinedEnabled;
-      case 'message_reply':
-      case 'reply':             return prefs.replyEnabled;
-      case 'translation_ready': return true; // toujours activé
-      case 'post_like':         return prefs.postLikeEnabled ?? true;
-      case 'post_comment':      return prefs.postCommentEnabled ?? true;
-      case 'post_repost':       return prefs.postRepostEnabled ?? true;
-      case 'story_reaction':    return prefs.storyReactionEnabled ?? true;
-      case 'status_reaction':   return prefs.storyReactionEnabled ?? true;
-      case 'comment_like':
-      case 'comment_reaction':  return prefs.commentLikeEnabled ?? true;
-      case 'comment_reply':     return prefs.commentReplyEnabled ?? true;
-      case 'story_new_comment':
-      case 'friend_story_comment':
-      case 'story_thread_reply': return prefs.postCommentEnabled ?? true;
-      case 'friend_new_post':
-      case 'friend_new_story':
-      case 'friend_new_mood':   return prefs.friendContentEnabled ?? true;
-      case 'new_conversation_direct':
-      case 'new_conversation_group':
-      case 'new_conversation':
-      case 'added_to_conversation':
-      case 'removed_from_conversation': return prefs.conversationEnabled;
-      case 'community_invite':      return prefs.groupInviteEnabled;
-      case 'member_removed':
-      case 'member_left':
-      case 'member_promoted':
-      case 'member_demoted':
-      case 'member_role_changed':   return prefs.memberLeftEnabled;
-      case 'password_changed':
-      case 'two_factor_enabled':
-      case 'two_factor_disabled':
-      case 'login_new_device':      return true; // sécurité = toujours actif
-      default:                  return true;
-    }
+    return isNotificationTypeEnabledByPreference(prefs, type);
   }
 
   // ==============================================
@@ -945,7 +841,7 @@ export class NotificationService {
       // (ex. « Votre publication : « aperçu » ») prime, sinon la base localisée
       // du builder. SANS date — le client append la date locale.
       const persistedSubtitle = (params.subtitle && params.subtitle.trim() !== '')
-        ? params.subtitle.trim().slice(0, 160)
+        ? sliceCodePoints(params.subtitle.trim(), 160)
         : (display.subtitle ?? null);
       // Titre persisté : le builder localisé quand il en a un (types sociaux),
       // sinon le titre explicite de l'appelant (annonce système : son sujet).
@@ -1087,7 +983,13 @@ export class NotificationService {
           // GW4 — native grouping + actionable banner set by the producer:
           // threadId groups by conversation on iOS; category selects the
           // action set (the NSE only fills these for legacy payloads).
-          const pushCategory = pushCategoryForNotificationType(params.type);
+          // #8857 — la catégorie du CONTENU (position, contact, invitation) sous la
+          // même retenue que ses clés `data` : ses actions le diraient à elles seules.
+          const detailTravels = showPreview && !params.context.notificationLocKey;
+          const pushCategory = pushCategoryForNotificationType(
+            params.type,
+            detailTravels ? contentDetailCategory(params.context.contentDetail) : undefined,
+          );
           const pushPayload = {
               title: showSenderName ? pushTitle : 'Meeshy',
               // Subtitle carries the conversation name for group/global chats
@@ -1158,9 +1060,9 @@ export class NotificationService {
                 senderDisplayName: params.actor?.displayName || '',
                 senderAvatar: params.actor?.avatar || '',
                 imageURL: params.actor?.avatar || '',
-                // Phase B — reactions. Emoji used so the iOS extension can format
-                // the body as "<sender> a réagi <emoji> à votre message" while the
-                // INSendMessageIntent path still renders the reactor's avatar.
+                // Réactions : l'emoji compose le corps ; le push remplace la bannière
+                // du même acteur sur le même sujet (❤️ → 😂 n'en laisse qu'une).
+                ...actorSubjectReplacementPushField(params.type),
                 reactionEmoji: (params.metadata && 'reactionEmoji' in params.metadata
                   ? String(params.metadata.reactionEmoji ?? '')
                   : ''),
@@ -1175,6 +1077,8 @@ export class NotificationService {
                 // l'échéance, qui est par destinataire. `effectFlags` dit à la
                 // NSE que la bulle est éphémère sans qu'elle ait à le déduire.
                 ...ephemeralPushFields(params.context),
+                ...(await callBackPushFields({ type: params.type, metadata: params.metadata, language: recipientLang })),
+                ...(await contentActionPushFields({ type: params.type, conversationId: params.context.conversationId, detail: params.context.contentDetail, detailTravels, language: recipientLang })),
                 // GW7 — showPreview:false : AUCUN champ porteur de contenu dans
                 // data. La NSE réécrit inconditionnellement le body depuis
                 // encryptedContent et attache le média d'attachmentUrl — les
@@ -1219,6 +1123,8 @@ export class NotificationService {
                       : '',
                   }),
                   encryptedContent: params.context.encryptedContent || '',
+                  // #8857 — le détail du contenu, sous le MÊME second verrou que le média.
+                  ...(params.context.notificationLocKey ? {} : contentDetailPushFields(params.context.contentDetail)),
                   ...(params.context.translatedContent ? {
                     translatedContent: params.context.translatedContent,
                     translatedLanguage: params.context.translatedLanguage || '',
@@ -1443,10 +1349,7 @@ export class NotificationService {
     /** Résumé léger de TOUS les attachments, dans l'ordre d'envoi. Le 1er est
      *  affiché en média inline, les suivants sont agrégés en badges `+N` par
      *  type dans le corps de la notification. */
-    attachments?: ReadonlyArray<{
-      type: 'image' | 'video' | 'audio' | 'document';
-      filename?: string | null;
-    }>;
+    attachments?: ReadonlyArray<NotificationAttachmentSummary>;
     /** URL accessible publiquement pour le 1er attachment (image/audio/video).
      *  L'extension iOS télécharge ce fichier et le rend en UNNotificationAttachment
      *  natif (waveform pour audio, preview pour image, thumbnail pour video). */
@@ -1462,6 +1365,8 @@ export class NotificationService {
     attachmentTracks?: Readonly<Record<string, AttachmentTranslationTrack>>;
     encryptedContent?: string;
     notificationLocKey?: string;
+    /** #8857 — le détail du contenu, retenu par l'éventail dès que le média ne voyage pas. */
+    contentDetail?: NotificationContentDetail;
     /**
      * Ce que `messagePreview` EST, donc ce qui le traduit — cf.
      * {@link PreviewPrismBasis}. Défaut : `message-content` (cas nominal).
@@ -1588,11 +1493,13 @@ export class NotificationService {
     // de service ci-dessus : c'est lui que les trois plateformes rendent.
     // Cycle 125 bis — et la composition vit dans `servedBannerBody`, que les
     // TROIS éventails partagent désormais.
-    const content = this.servedBannerBody({
+    const content = servedBannerBody({
       lang: recipientLang,
       preview: params.messagePreview,
       translation: servedTranslation,
       media: { ...params, firstAttachmentDuration: servedMedia.durationMs ?? null },
+      detail: params.contentDetail,
+      readerId: params.recipientUserId,
     });
 
     return this.createNotification({
@@ -1646,6 +1553,7 @@ export class NotificationService {
         firstAttachmentDurationMs: servedMedia.durationMs,
         encryptedContent: params.encryptedContent,
         notificationLocKey: params.notificationLocKey,
+        ...(params.contentDetail ? { contentDetail: params.contentDetail } : {}),
         // GW5 — champs de persistance NSE (timestamp serveur + type + Prisme).
         ...this.messageClockFields({
           createdAt: liveMessage.createdAt instanceof Date ? liveMessage.createdAt : null,
@@ -1729,6 +1637,8 @@ export class NotificationService {
      * second verrou de `createNotification`.
      */
     notificationLocKey?: string;
+    /** Cf. `createMessageNotification.contentDetail` — #8857. */
+    contentDetail?: NotificationContentDetail;
   }): Promise<Notification | null> {
     // Anti-spam: rate limit des mentions par paire (sender → recipient)
     if (!this.shouldCreateMentionNotification(params.mentionerUserId, params.mentionedUserId)) {
@@ -1782,11 +1692,13 @@ export class NotificationService {
       // les trois plateformes rendent, pas les champs de service du fil push.
       // Cycle 125 bis — et il se compose comme celui d'un message simple : le
       // libellé de la pièce jointe prend la place d'un texte absent.
-      content: this.servedBannerBody({
+      content: servedBannerBody({
         lang: prism.lang,
         preview: params.messagePreview,
         translation: servedTranslation,
         media: params,
+        detail: params.contentDetail,
+        readerId: params.mentionedUserId,
       }),
       collapseId: `conv-${params.conversationId}`,
       lang: prism.lang,
@@ -1830,6 +1742,7 @@ export class NotificationService {
         // unique producteur, donc sa présence DÉCLARE la protection là où une
         // base peut être omise par un appelant solo.
         notificationLocKey: params.notificationLocKey,
+        ...(params.contentDetail ? { contentDetail: params.contentDetail } : {}),
         ...this.messageClockFields(prismSource),
       },
 
@@ -1863,6 +1776,8 @@ export class NotificationService {
       previewBasis?: PreviewPrismBasis;
       /** Cf. `createMentionNotification.notificationLocKey`. */
       notificationLocKey?: string;
+      /** Cf. `createMessageNotification.contentDetail` — #8857. */
+      contentDetail?: NotificationContentDetail;
       /** Cf. `createMentionNotification.attachments` — cycle 125 bis. */
       attachments?: NotificationBannerMedia['attachments'];
       firstAttachmentFileSize?: number | null;
@@ -1994,7 +1909,6 @@ export class NotificationService {
       isBlurred: message?.isBlurred,
       effectFlags: message?.effectFlags,
       expiresAt: message?.expiresAt ?? null,
-      createdAt: message?.createdAt ?? null,
     }) !== null;
 
     const messagePreview = message?.content && !isProtected
@@ -2077,118 +1991,10 @@ export class NotificationService {
     }
   }
 
-  async createCommentReactionNotification(params: {
-    commentAuthorId: string;
-    reactorUserId: string;
-    commentId: string;
-    postId: string;
-    reactionEmoji: string;
-    /** Truncated comment content (≤ 80 chars) to inject into the body. */
-    commentPreview?: string;
-    /** Display name (fallback: username) of the post/story author. */
-    postAuthorName?: string;
-    /**
-     * Type d'entité portant le commentaire réagi. Mirror du sibling
-     * `createPostLikeNotification` : un REEL/STATUS ne s'effondre plus vers 'POST'
-     * dans la métadonnée ni dans le corps localisé.
-     */
-    postType?: 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL';
-  }): Promise<void> {
-    if (params.commentAuthorId === params.reactorUserId) return;
-
-    // Anti-spam: throttle reaction notifications per sender→recipient pair
-    if (!this.shouldCreateReactionNotification(params.reactorUserId, params.commentAuthorId)) {
-      return;
-    }
-
-    if (!(await this.canNotifyAboutPost(params.postId, params.commentAuthorId))) return;
-
-    const reactor = await this.prisma.user.findUnique({
-      where: { id: params.reactorUserId },
-      select: { username: true, displayName: true, avatar: true },
-    });
-
-    if (!reactor) return;
-
-    // Body verbeux (spec user 2026-05-28) : "[reactor] a réagi [emoji] à votre
-    // commentaire sur la story de [story_author]". Le précédent body
-    // ne contenait QUE `reactionEmoji` (e.g. "❤️"), trop sommaire — le
-    // destinataire ne savait pas QUI avait réagi NI sur QUEL commentaire /
-    // QUELLE story.
-    const reactorName = reactor.displayName?.trim()
-      || reactor.username?.trim()
-      || 'Quelqu’un';
-    const lang = await this.resolveRecipientLang(params.commentAuthorId);
-    const body = notificationString(lang, 'reaction.commentVerbose', {
-      actor: reactorName,
-      emoji: params.reactionEmoji,
-      author: params.postAuthorName,
-      postType: params.postType,
-    });
-
-    // Subtitle (rendu sous le title côté iOS — banner riche) : un aperçu du
-    // commentaire qui a reçu la réaction. Permet au destinataire de savoir
-    // *quel* de ses commentaires reçoit l'engagement sans avoir à ouvrir la
-    // notification.
-    // Extrait NORMALISÉ une fois : il sert au sertissage du sous-titre ET, en
-    // métadonnée, de clé de réécriture quand le commentaire est édité. Les
-    // dériver deux fois les ferait diverger au premier changement de troncature,
-    // et la substitution ne retrouverait alors plus sa chaîne.
-    const trimmedCommentPreview = params.commentPreview?.trim() ?? '';
-    const subtitle = trimmedCommentPreview !== ''
-      ? `« ${trimmedCommentPreview} »`
-      : undefined;
-
-    await this.createNotification({
-      userId: params.commentAuthorId,
-      type: 'comment_reaction',
-      priority: 'low',
-      content: body,
-      subtitle,
-      lang,
-
-      actor: {
-        id: params.reactorUserId,
-        username: reactor.username,
-        displayName: reactor.displayName,
-        avatar: reactor.avatar,
-      },
-
-      // postId/commentId vivent dans context (cible de navigation = contexte
-      // central de la notif). Ils sont désormais exposés par le schema de
-      // réponse (notificationContextSchema) — plus de strip côté REST.
-      context: {
-        postId: params.postId,
-        commentId: params.commentId,
-      },
-
-      metadata: {
-        action: 'view_post',
-        reactionEmoji: params.reactionEmoji,
-        // Entité portant le commentaire → le client affiche « Réel »/« Statut »/« Story »/
-        // « Publication » (et non un libellé générique). Ne s'effondre plus vers 'POST'
-        // pour les REEL/STATUS (F58) — cohérent avec le sibling post-reaction.
-        postType: params.postType ?? 'POST',
-        // L'extrait est SERTI dans le `subtitle` composé juste au-dessus
-        // (« « … » »), et le sertissage n'est pas inversible. Le ranger aussi
-        // ici rend la ligne AUTO-DESCRIPTIVE : c'est la seule chose qui permet
-        // à `reproduceEditedSubjectNotifications` de savoir quelle portion du
-        // sous-titre décrivait le commentaire, donc de la réécrire quand
-        // celui-ci est édité. Sans elle, ce type — et lui seul de toute la
-        // famille du fil — garderait l'ancien texte pour toujours. Même clé
-        // que ses voisins `comment_like` / `post_comment`.
-        //
-        // Stocké VERBATIM, et non re-tronqué : la réécriture cherche cette
-        // chaîne DANS le sous-titre, donc les deux doivent être identiques au
-        // caractère près. `truncateMessage` coupe aux MOTS — l'appliquer ici
-        // ferait diverger la copie du sertissage sur tout extrait long, et la
-        // substitution ne trouverait plus rien. Les appelants bornent déjà à
-        // ~80 caractères.
-        ...(trimmedCommentPreview !== ''
-          ? { commentPreview: trimmedCommentPreview }
-          : {}),
-      },
-    });
+  async createCommentReactionNotification(
+    params: Parameters<typeof createCommentReactionNotification>[1]
+  ): Promise<void> {
+    return createCommentReactionNotification(this.builderDependencies(), params);
   }
 
   // ==============================================
@@ -2239,7 +2045,7 @@ export class NotificationService {
   async createMissedCallNotification(params: {
     recipientUserId: string;
     callerId: string;
-    conversationId: string;
+    conversationId: string | null;
     callSessionId: string;
     callType: 'audio' | 'video';
   }): Promise<Notification | null> {
@@ -2248,7 +2054,7 @@ export class NotificationService {
         where: { id: params.callerId },
         select: { username: true, displayName: true, avatar: true },
       }),
-      this.prisma.conversation.findUnique({
+      params.conversationId === null ? null : this.prisma.conversation.findUnique({
         where: { id: params.conversationId },
         select: { title: true, type: true },
       }),
@@ -2276,7 +2082,7 @@ export class NotificationService {
       },
 
       context: {
-        conversationId: params.conversationId,
+        conversationId: params.conversationId ?? undefined,
         conversationTitle: conversation?.title,
         conversationType: conversation?.type as any,
         callSessionId: params.callSessionId,
@@ -2442,25 +2248,10 @@ export class NotificationService {
     });
   }
 
-  /**
-   * Propagates a profile change (displayName, avatar, banner, username) to
-   * every user sharing an active conversation with `userId`, instead of a
-   * full broadcast. Realtime-only signal — no `Notification` row, same
-   * pattern as `emitFriendRequestCancelled`. See
-   * tasks/socketio-events-cleanup.md #6.
-   */
-  async emitUserUpdated(params: {
-    userId: string;
-    changes: UserUpdatedEventData['changes'];
-  }): Promise<void> {
+  /** `user:updated` vers les co-participants, champs publics SEULS (#8889) — `user-updated-payload.ts`. */
+  async emitUserUpdated(params: { userId: string; changes: UserUpdatedEventData['changes'] }): Promise<void> {
     if (!this.io) return;
-    const partnerIds = await getDistinctConversationPartnerUserIds(this.prisma, params.userId);
-    if (partnerIds.length === 0) return;
-
-    const payload: UserUpdatedEventData = { userId: params.userId, changes: params.changes };
-    for (const partnerId of partnerIds) {
-      this.io.to(ROOMS.user(partnerId)).emit(SERVER_EVENTS.USER_UPDATED, payload);
-    }
+    await emitUserUpdatedToPartners({ io: this.io, prisma: this.prisma }, params);
   }
 
   // ==============================================
@@ -2541,6 +2332,8 @@ export class NotificationService {
      * second verrou de `createNotification`.
      */
     notificationLocKey?: string;
+    /** Cf. `createMessageNotification.contentDetail` — #8857. */
+    contentDetail?: NotificationContentDetail;
   }): Promise<Notification | null> {
     // GW3 — per-conversation mute suppresses reply notifications
     // (a reply is not a mention: it does not pierce the mute).
@@ -2587,11 +2380,13 @@ export class NotificationService {
       // Cycle 122 — cf. `createMentionNotification` : le corps servi descend le
       // Prisme, les champs du fil push ne suffisent pas.
       // Cycle 125 bis — et il se compose comme celui d'un message simple.
-      content: this.servedBannerBody({
+      content: servedBannerBody({
         lang: prism.lang,
         preview: params.messagePreview,
         translation: servedTranslation,
         media: params,
+        detail: params.contentDetail,
+        readerId: params.recipientUserId,
       }),
       collapseId: `conv-${params.conversationId}`,
       lang: prism.lang,
@@ -2628,6 +2423,7 @@ export class NotificationService {
         // unique producteur, donc sa présence DÉCLARE la protection là où une
         // base peut être omise par un appelant solo.
         notificationLocKey: params.notificationLocKey,
+        ...(params.contentDetail ? { contentDetail: params.contentDetail } : {}),
         ...this.messageClockFields(prismSource),
       },
 
@@ -3442,13 +3238,14 @@ export class NotificationService {
    * intermédiaire qui l'exige, puisqu'un client qui décrémente son badge en le
    * recevant doit pouvoir se recaler.
    *
-   * SUR L'APPAREIL, le même couple, dans le même ordre : un push de CONTRÔLE
-   * `notification_revoked` retire la bannière portant le texte d'avant, puis un
-   * push NOMINAL affiche celui d'après (`pushReproducedNotifications`). Sans le
-   * second, un destinataire dont l'app est tuée perdrait la bannière sans rien
-   * recevoir à la place — le socket n'atteint que les clients présents. Les
-   * trois éditions y passent : message (`reproduceEditedMessageNotifications`),
-   * post et commentaire (`reproduceEditedSubjectNotifications`).
+   * SUR L'APPAREIL, UN seul push : le NOMINAL portant le texte d'après, qui
+   * nomme lui-même la bannière qu'il annule (`replacesNotificationId`,
+   * `reproducedPushData`). Une révocation silencieuse séparée n'avait aucun
+   * ordre garanti par APNs — livrée après, elle effaçait la version d'après ;
+   * jamais livrée (app tuée), elle laissait celle d'avant à côté. Elle ne part
+   * plus que pour une ligne DISPARUE, ou en repli d'un remplacement qui n'a
+   * atteint aucun appareil (`pushReproducedNotifications`). Les trois éditions
+   * y passent : message, post et commentaire.
    */
   async announceNotificationsReproduced(
     reproduced: readonly { readonly id: string; readonly userId: string }[]
@@ -3469,13 +3266,14 @@ export class NotificationService {
       await this.emitBestEffort(SERVER_EVENTS.NOTIFICATION_DELETED, userId, () => {
         this.io!.to(ROOMS.user(userId)).emit(SERVER_EVENTS.NOTIFICATION_DELETED, { notificationId: id });
       });
-      // La bannière déjà livrée porte le texte D'AVANT : elle est révoquée que
-      // la ligne existe encore ou non — et, quand la ligne existe encore, un
-      // push NOMINAL la remplace par le texte D'APRÈS (voir plus bas).
-      revoked.push(
-        retractedNotificationOf({ id, userId, type: row?.type, context: row?.context, delivery: row?.delivery })
-      );
-      if (!row) continue;
+      // La bannière déjà livrée porte le texte D'AVANT. Ligne disparue : rien ne
+      // la remplacera, la révocation part. Ligne présente : le remplacement
+      // l'annule lui-même, la révocation n'en est que le repli.
+      const stale = staleBannerOf(id, userId, row);
+      if (!row) {
+        revoked.push(stale);
+        continue;
+      }
 
       const formatted = this.formatNotification(row);
       const { title, subtitle } = buildPushHeader({
@@ -3491,7 +3289,7 @@ export class NotificationService {
         ...formatted,
         title,
         subtitle: (row.subtitle && row.subtitle.trim() !== '')
-          ? row.subtitle.trim().slice(0, 120)
+          ? sliceCodePoints(row.subtitle.trim(), 120)
           : subtitle,
       };
 
@@ -3505,15 +3303,9 @@ export class NotificationService {
         )
       );
 
-      replacements.push({ row, title, subtitle: socketPayload.subtitle });
+      replacements.push({ row, title, subtitle: socketPayload.subtitle, stale });
     }
 
-    // L'ORDRE est la règle, pas un détail d'ordonnancement : les deux charges
-    // nomment la MÊME notification, et les clients indexent leur bannière par
-    // cette identité (`notificationId` sur le web et Android, `collapseId` /
-    // `threadId` sur iOS). Une révocation qui arriverait APRÈS le remplacement
-    // effacerait la version à jour et laisserait le destinataire sans rien.
-    // La file d'appareil garantit cet ordre sans faire attendre l'appelant.
     this.revokeDeliveredPushes(revoked);
     this.queueDeviceWork(() => this.pushReproducedNotifications(replacements));
 
@@ -3527,16 +3319,17 @@ export class NotificationService {
    * envoyée ET envoyer la nouvelle version », la moitié APPAREIL de ce que le
    * socket vient de faire pour les clients présents.
    *
-   * Du CONTENU, donc le chemin nominal : ni `silent`, ni `bypassDnd`. Le push
-   * de révocation qui le précède est un signal de CONTRÔLE et contourne les
-   * préférences (il RETIRE) ; celui-ci AFFICHE, et se soumet donc à DND, à
-   * `pushEnabled` et aux préférences de livraison comme un contenu neuf.
+   * Du CONTENU, donc le chemin nominal : ni `silent`, ni `bypassDnd` — il se
+   * soumet à DND, à `pushEnabled` et aux préférences de livraison comme un
+   * contenu neuf. Quand il n'atteint AUCUN appareil (bloqué, sans jeton, en
+   * panne), la bannière d'avant resterait avec son texte périmé : la révocation
+   * de CONTRÔLE part alors en repli, APRÈS lui — il n'a rien posé qu'elle
+   * puisse effacer.
    *
    * En SÉRIE, sur la file d'appareil, et jamais attendu par l'appelant :
-   * l'édition d'un post réécrit une audience entière par lots de 200
-   * (`reproduceEditedSubjectNotifications`), et le geste qui l'a demandée ne
-   * doit pas payer APNs. Un envoi qui lève n'emporte pas les suivants — et
-   * surtout pas la révocation, déjà partie.
+   * l'édition d'un post réécrit une audience entière par lots de 200, et le
+   * geste qui l'a demandée ne doit pas payer APNs. Un envoi qui lève n'emporte
+   * pas les suivants.
    */
   private async pushReproducedNotifications(
     replacements: readonly ReproducedNotificationPush[]
@@ -3544,18 +3337,18 @@ export class NotificationService {
     if (!this.pushService) return;
 
     for (const replacement of replacements) {
-      try {
-        await this.pushReproducedNotification(replacement);
-      } catch (error) {
+      const delivered = await this.pushReproducedNotification(replacement).catch((error) => {
         notificationLogger.warn('reproduced notification push failed — rewrite already durable', {
           notificationId: replacement.row.id,
           error: error instanceof Error ? error.message : String(error),
         });
-      }
+        return false;
+      });
+      if (!delivered) await sendNotificationRevocationPushes({ pushService: this.pushService, revoked: [replacement.stale] });
     }
   }
 
-  private async pushReproducedNotification(replacement: ReproducedNotificationPush): Promise<void> {
+  private async pushReproducedNotification(replacement: ReproducedNotificationPush): Promise<boolean> {
     const { row, title, subtitle } = replacement;
     const userId = row.userId as string;
 
@@ -3597,9 +3390,8 @@ export class NotificationService {
         ...(showPreview && subtitle ? { subtitle } : {}),
         body,
         ...(link ? { link } : {}),
-        // La bannière d'AVANT vient d'être révoquée ; celle-ci prend sa place
-        // sous la même identité, et se replie sur la coalescence native si la
-        // révocation n'a pas atteint l'appareil.
+        // `data.replacesNotificationId` annule la bannière d'AVANT ; la
+        // coalescence native sur la même identité en est le second filet.
         collapseId: row.id as string,
         ...(conversationId ? { threadId: conversationId } : {}),
         ...(category ? { category } : {}),
@@ -3612,6 +3404,7 @@ export class NotificationService {
     // désormais une bannière : sans ce flip, son RETRAIT ultérieur ne la
     // révoquerait pas — la garde `pushSent` la croirait jamais poussée.
     await this.markPushDelivered(row.id as string, results);
+    return pushReachedADevice(results);
   }
 
   /**
@@ -3623,8 +3416,7 @@ export class NotificationService {
    * faux si un seul des deux chemins de push le posait.
    */
   private async markPushDelivered(notificationId: string, results: unknown): Promise<void> {
-    const delivered = Array.isArray(results) && results.some((result) => (result as { success?: boolean })?.success);
-    if (!delivered) return;
+    if (!pushReachedADevice(results)) return;
     try {
       // RE-LIRE delivery juste avant d'écrire : un autre writer (digest
       // email quotidien) a pu poser emailSent:true entre-temps — le

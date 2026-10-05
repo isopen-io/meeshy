@@ -1,37 +1,41 @@
-import { Suspense, lazy, useEffect, useRef, useState } from 'react';
-import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from 'react';
+import { Suspense, lazy, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent, ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 
 import { maskedAttachment } from '@meeshy/shared/utils/attachment-protection';
-
-import { Avatar } from '@/components/avatar';
 
 import type { Attachment } from '@/lib/api/types';
 import { attachmentSrc } from '@/lib/api/media-url';
 import type { ConversationsDeps } from '@/lib/api/conversations';
 import type { SceneGalleryEntry } from '@/lib/feed/gallery-lot';
+import { useMediaLoadFailure } from '@/lib/media/media-failure';
 import { thumbHashPlaceholder } from '@/lib/media/thumbhash';
 import { initialsOf } from '@/lib/view/conversation';
 import { nextFocusIndex } from '@/lib/view/focus-trap';
 import { useLongPress } from '@/lib/view/long-press';
+import { useCarryOnClose } from '@/lib/view/audio-carry-on-close';
 import { electDescription, type MediaCarrier } from '@/lib/view/media';
+import { standaloneSharePage, type MediaViewerPage } from '@/lib/view/viewer-page-offers';
 import {
   CARDED_STAGE,
-  DISMISS_THRESHOLD,
   DOUBLE_TAP_SCALE,
   STAGE,
   rendersFullPixels,
-  resolveStageDrag,
   showsPausedBadge,
   stageAfter,
   type StagePresentation,
 } from '@/lib/view/media-stage';
 import { PROTECTED_ATTACHMENT_KEY, kindOf } from '@/lib/view/message';
 import { safeAreaInsets } from '@/lib/view/safe-area';
+import { prefersReducedMotion } from '@/lib/view/reduced-motion';
+import { SCENE_OPENING_EASING, SCENE_OPENING_MS, takeSceneOpening } from '@/lib/view/scene-opening';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
+import { useConversationViewingFocus } from '@/lib/view/use-conversation-viewing';
+import { useSendSheetOpen } from '@/lib/view/use-send-sheet-open';
 import { lateralSeek } from '@/lib/view/media-transport';
 import { useAttachmentOpenReport } from '@/lib/view/use-attachment-open-report';
 import { useMediaPlayback } from '@/lib/view/use-media-playback';
+import { takeVideoHandoff } from '@/lib/view/video-handoff';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { READER_LOCALE } from '@/lib/reader';
@@ -41,6 +45,12 @@ import '@/styles/media-viewer.css';
 import { Glyph, GlyphSvg } from './glyph';
 import { MEDIA_GLYPHS } from './glyphs-media';
 import { MediaFilmstrip } from './media-filmstrip';
+import { MediaUnavailable } from './media-unavailable';
+import { GLYPH_SIZE } from './ui-chrome';
+import { ViewerCaption } from './viewer-caption';
+import { ViewerBottomBar, ViewerTopBar, type ViewerIdentityModel } from './viewer-chrome';
+import { useViewerSwipe } from './viewer-chrome-gestures';
+import type { NoticeKey } from './viewer-media-actions';
 import { ViewerScenePage } from './viewer-scene-page';
 
 /**
@@ -54,6 +64,17 @@ import { ViewerScenePage } from './viewer-scene-page';
 const MediaTransport = lazy(() => import('./media-transport').then((module) => ({ default: module.MediaTransport })));
 
 /**
+ * LES ACTIONS DE LA PAGE (#6303) — Enregistrer, Réagir, Répondre, Créer avec
+ * ce média — sont un chunk À LA DEMANDE (`viewer-media-actions.tsx`, budget
+ * `viewer_media_actions`) : une page qui n'offre rien (pièce protégée, hôte
+ * sans action) ne le télécharge jamais, et la visionneuse garde son poids.
+ */
+const ViewerMediaActions = lazy(() => import('./viewer-media-actions'));
+
+/** LA PAGE AUDIO (#8333) — chunk à la demande : une visionneuse de photos ne la télécharge jamais (`budgets.json › viewer_audio_page`). */
+const ViewerAudioPage = lazy(() => import('./viewer-audio-page'));
+
+/**
  * `MediaViewer` (#6221, § 5 étape 5) — LA VISIONNEUSE PLEIN ÉCRAN, chunk À LA
  * DEMANDE (`lazy(() => import('./media-viewer'))`, `attachment-blocks.tsx`) :
  * scène noire, pellicule (`MediaFilmstrip`) SEULEMENT si `items.length > 1`,
@@ -62,11 +83,14 @@ const MediaTransport = lazy(() => import('./media-transport').then((module) => (
  * fantôme (`useBackDismiss`), piège à focus (`nextFocusIndex`), `#root`
  * `inert` le temps de l'ouverture.
  *
- * PELLICULE AU MESSAGE, PAS À LA CONVERSATION (D-54, Q2 de la spécification
- * #6221) : `items` est le tableau `visual` DÉJÀ partitionné par
- * `Attachments` — la projection conversation-entière est une ISSUE
- * COMPAGNON (avec réagir/répondre/composer), jamais un raccourci par un
- * magasin global depuis ce chunk.
+ * DEUX PELLICULES, UN SEUL CHUNK (D-54, amendé par #6303/#8103) : depuis le
+ * fil, `items` est le tableau `visual` DU MESSAGE (`Attachments`) ; depuis
+ * l'écran « Médias, liens et documents », c'est l'index VISUEL de la
+ * conversation ENTIÈRE (`conversation-media-hub.ts`), paginé — l'hôte
+ * l'étend quand la page courante approche du bout (`onNearEnd`) et remet
+ * l'auteur et la date de CHAQUE page (`carrierAt`). Ce chunk ne tient aucun
+ * magasin : la liste vient toujours de l'hôte, et ses octets ne se chargent
+ * que dans la fenêtre ±1.
  *
  * GESTES — ce qui est LIVRÉ : tap (bascule plateau ⇄ plein cadre), glissement
  * vertical qui SUIT le doigt (ferme ≥ 150, entre en plein cadre ≤ −150 depuis
@@ -105,10 +129,56 @@ export type MediaViewerProps = {
    * médias ORDINAIRE, comportement STRICTEMENT inchangé.
    */
   readonly scenes?: ReadonlyMap<string, SceneGalleryEntry>;
+  /**
+   * LE PORTEUR DE CHAQUE PAGE (#6303) — une pellicule conversation-entière
+   * feuillette des pièces de messages DIFFÉRENTS : l'auteur et la date
+   * suivent la page, jamais la première. Prime sur `carrier` quand il est posé.
+   */
+  readonly carrierAt?: (index: number) => MediaCarrier | undefined;
+  /**
+   * L'EXTENSION (#6303) — appelée quand la page courante est à moins de
+   * `NEAR_END_PAGES` du bout de `items` : l'hôte charge la page suivante de
+   * l'index et REMET une liste plus longue. Les pages ne s'ajoutent qu'à la
+   * FIN, donc la page courante ne bouge pas.
+   */
+  readonly onNearEnd?: () => void;
+  /** L'AUTEUR DE CHAQUE PAGE (#6303) — le rapport d'ouverture se ferme sur SA
+   * propre pièce, page par page ; prime sur `isMine` quand il est posé. */
+  readonly isMineAt?: (index: number) => boolean;
+  /**
+   * L'EXTENSION VERS LE PASSÉ (#6303) — la pellicule ouverte depuis le FIL est
+   * dans l'ordre du fil (le plus ancien d'abord) : ses pages plus anciennes
+   * arrivent par le DÉBUT. Appelée quand la page courante est à moins de
+   * `NEAR_END_PAGES` du début ; la page regardée ne bouge pas (épinglage par
+   * identité, voir `pinned`).
+   */
+  readonly onNearStart?: () => void;
+  /** LA LANGUE DE CHAQUE PAGE QUAND SA PIÈCE N'A PAS DE TRANSCRIPTION (#8333) — une pellicule de vocaux feuillette des messages d'auteurs différents ; prime sur `fallbackLanguage`. */
+  readonly fallbackLanguageAt?: (index: number) => string | undefined;
+  /**
+   * CE QUE LA PAGE OFFRE (#6303) — `null` ⇒ aucune action. L'hôte décide page
+   * par page (`mediaPageOffers`, sur la pièce ORIGINALE) ; la visionneuse ne
+   * fait que rendre.
+   */
+  readonly actionsAt?: (index: number) => MediaViewerPage | null;
+  /**
+   * UN MÉDIA NU QUE L'HÔTE SAIT PUBLIC (#8884) — l'image d'un commentaire, le
+   * média d'une publication : « Partager » seul, sans message (ni réaction ni
+   * citation). Explicite, JAMAIS déduit : voir le commentaire de `page`.
+   * Ignoré quand `actionsAt` est posé.
+   */
+  readonly shareMedia?: boolean;
+  /**
+   * OÙ SE POSE LA COUCHE (#8103) — `document.body` par défaut. Ouverte depuis
+   * une feuille (`<dialog>` en `showModal()`), elle doit vivre DANS ce
+   * dialogue : la couche supérieure du navigateur recouvre tout ce qui est
+   * hors d'elle, et le rend inerte.
+   */
+  readonly container?: Element | null;
 };
 
-/** Un seuil de balayage HORIZONTAL, indépendant du seuil vertical de fermeture — la pagination n'est pas un geste d'immersion. */
-const SWIPE_PAGE_THRESHOLD_PX = 60;
+/** À combien de pages du bout l'hôte est prié d'étendre la liste. */
+export const NEAR_END_PAGES = 3;
 
 function clampIndex(index: number, count: number): number {
   return Math.max(0, Math.min(count - 1, index));
@@ -127,8 +197,11 @@ function scenePageLabel(entry: SceneGalleryEntry, carrier: MediaCarrier | undefi
 }
 
 /**
- * `bottomMetadataOverlay` (auteur, date, `w × h`, poids, légende) — ABSENT
- * sans `carrier` (loi 4).
+ * LE PIED DE LA PAGE (`bottomMetadataOverlay`) — cotes, poids et légende ;
+ * ABSENT sans `carrier` (loi 4). L'AUTEUR et la DATE ne sont plus ici : ils
+ * montent dans la barre haute (`carrierIdentity`, #8879 — l'identité qualifie
+ * le média, elle ne se répète pas sous lui), et ce pied est la légende que
+ * `ViewerBottomBar` pose sur sa rangée.
  *
  * `sceneEntry` (#6902) — UNE SCÈNE N'A NI FORMAT, NI COTES, NI POIDS (miroir
  * `ConversationMediaGalleryView.swift:1080-1084`, `« une scène n'a ni format,
@@ -138,16 +211,13 @@ function scenePageLabel(entry: SceneGalleryEntry, carrier: MediaCarrier | undefi
  * visionneuse — deux scènes voisines d'un même lot peuvent porter des
  * légendes différentes, un `carrier.caption` unique ne le pourrait pas.
  */
-function CarrierFooter({
-  attachment,
-  carrier,
-  sceneEntry,
-}: {
+function carrierFooter(params: {
   readonly attachment: Attachment;
   readonly carrier: MediaCarrier | undefined;
   readonly sceneEntry?: SceneGalleryEntry;
-}) {
-  if (carrier === undefined) return null;
+}): ReactNode {
+  const { attachment, carrier, sceneEntry } = params;
+  if (carrier === undefined) return undefined;
   const captionText = sceneEntry !== undefined ? sceneEntry.caption : carrier.caption !== null ? carrier.caption.text : undefined;
   // UNE SEULE RÈGLE POUR `lang`, quelle que soit la nature de la page
   // (revue-correction #6902) : l'attribut ne se pose que sur un texte servi
@@ -159,43 +229,69 @@ function CarrierFooter({
   const kind = kindOf(attachment);
   const sizeLabel = attachment.width !== undefined && attachment.height !== undefined ? `${attachment.width} × ${attachment.height}` : undefined;
   const weightLabel = `${Math.max(1, Math.round(attachment.fileSize / 1024))} Ko`;
+  const hasCaption = captionText !== undefined && captionText !== '';
+  if (sceneEntry !== undefined && !hasCaption) return undefined;
 
   return (
-    <div data-viewer-footer className="media-viewer-chrome flex flex-col gap-1 px-4 pb-2 text-white">
-      {carrier.sender !== null ? (
-        <div className="flex items-center gap-2 text-mini">
-          {/* LA PHOTO DE L'AUTEUR (#6985). Elle VOYAGE dans le carrier, résolue
-              par l'hôte — ce module n'en descend aucune, comme il ne descend
-              pas la légende. `initialsOf` reste le repli quand `avatarUrl` est
-              nul : un visage s'affiche toujours, jamais un trou. */}
-          <Avatar
-            initials={initialsOf(carrier.sender.displayName)}
-            color="var(--accent)"
-            size={24}
-            name={carrier.sender.displayName}
-            {...(carrier.sender.avatarUrl === null ? {} : { src: carrier.sender.avatarUrl })}
-          />
-          <span className="font-medium">{carrier.sender.displayName}</span>
-          <time dateTime={carrier.sentAt} className="opacity-70">
-            {new Date(carrier.sentAt).toLocaleString(READER_LOCALE, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
-          </time>
-        </div>
-      ) : null}
+    <div data-viewer-meta className="flex flex-col gap-1">
       {sceneEntry === undefined ? (
-        <div className="flex items-center gap-1.5 text-mini opacity-70">
-          <Glyph name={kind === 'video' ? 'fillPlay' : 'image'} size={12} />
+        <div className="viewer-ink-muted flex items-center gap-1.5 text-mini">
+          <Glyph name={kind === 'video' ? 'fillPlay' : kind === 'audio' ? 'microphone' : 'image'} size={GLYPH_SIZE.xs} />
           {sizeLabel !== undefined ? <span>{sizeLabel}</span> : null}
           <span>·</span>
           <span>{weightLabel}</span>
         </div>
       ) : null}
-      {captionText !== undefined && captionText !== '' ? (
-        <p data-viewer-caption className="text-title" {...(captionLang !== undefined ? { lang: captionLang } : {})}>
-          {captionText}
-        </p>
+      {hasCaption ? (
+        <ViewerCaption
+          probe={{ 'data-viewer-caption-text': '' }}
+          text={captionText}
+          trackingLinks={carrier.trackingLinks}
+          className="line-clamp-4 text-body"
+          lang={captionLang}
+        />
       ) : null}
     </div>
   );
+}
+
+/**
+ * L'IDENTITÉ DU PORTEUR (#8879) — l'auteur et l'heure de la pièce, en haut,
+ * comme story et réel. LA PHOTO DE L'AUTEUR (#6985) VOYAGE dans le carrier,
+ * résolue par l'hôte : `initialsOf` reste le repli quand `avatarUrl` est nul,
+ * un visage s'affiche toujours, jamais un trou. Pas de `profileUsername` : le
+ * carrier ne porte que le nom affiché (suivi : le porter pour le lien profil).
+ */
+function carrierIdentity(carrier: MediaCarrier | undefined): ViewerIdentityModel | undefined {
+  if (carrier === undefined || carrier.sender === null) return undefined;
+  return {
+    name: carrier.sender.displayName,
+    initials: initialsOf(carrier.sender.displayName),
+    avatarColor: 'var(--accent)',
+    ...(carrier.sender.avatarUrl === null ? {} : { avatarSrc: carrier.sender.avatarUrl }),
+    time: {
+      iso: carrier.sentAt,
+      label: new Date(carrier.sentAt).toLocaleString(READER_LOCALE, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }),
+    },
+  };
+}
+
+/** L'issue d'une action, dite dans l'UNIQUE région vivante de la couche (#8879) — trois secondes, puis elle se tait. */
+function useNotice(): readonly [NoticeKey | null, (key: NoticeKey) => void] {
+  const [notice, setNotice] = useState<NoticeKey | null>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (timer.current !== null) clearTimeout(timer.current);
+    },
+    [],
+  );
+  const show = (key: NoticeKey): void => {
+    setNotice(key);
+    if (timer.current !== null) clearTimeout(timer.current);
+    timer.current = setTimeout(() => setNotice(null), 3_000);
+  };
+  return [notice, show];
 }
 
 function ViewerImagePage({
@@ -206,11 +302,16 @@ function ViewerImagePage({
   isActive,
   isMine,
   deps,
+  language,
+  onZoomChange,
 }: {
+  /** ZOOMER FAIT CÉDER LE CHROME (#8644) : la visionneuse l'apprend d'ici. */
+  readonly onZoomChange?: (zoomed: boolean) => void;
   readonly attachment: Attachment;
   readonly languages: readonly string[];
   readonly displayLanguage?: string;
   readonly fallbackLanguage: string;
+  readonly language: InterfaceLanguage;
   /** LA PAGE COURANTE (#7363, W6) — déclenche le rapport d'ouverture
    * (`useAttachmentOpenReport`) quand elle le devient. */
   readonly isActive: boolean;
@@ -222,6 +323,20 @@ function ViewerImagePage({
   const lang = described.language !== READER_LOCALE ? described.language : undefined;
   const [zoomed, setZoomed] = useState(false);
   const placeholder = thumbHashPlaceholder(attachment.thumbHash);
+  const src = attachment.fileUrl === '' ? '' : attachmentSrc(attachment.fileUrl);
+  const failure = useMediaLoadFailure(src);
+
+  /* UN FICHIER INTROUVABLE (#8141) : l'état dessiné REMPLACE l'image — jamais
+     l'icône brisée du navigateur avec le nom de fichier (son `alt`) au
+     centre. Le fond ThumbHash, lui, est retiré : il peindrait un média qui
+     n'existe plus. « Réessayer » seulement si l'échec est transitoire. */
+  if (src === '' || failure.failed) {
+    return (
+      <div data-viewer-media-failed className="relative flex size-full items-center justify-center overflow-hidden">
+        <MediaUnavailable language={language} {...(failure.retryable ? { onRetry: failure.retry } : {})} />
+      </div>
+    );
+  }
 
   return (
     <div
@@ -229,24 +344,21 @@ function ViewerImagePage({
       style={placeholder !== undefined ? { backgroundImage: `url("${placeholder}")`, backgroundSize: 'cover' } : undefined}
       onDoubleClick={(event) => {
         event.stopPropagation();
-        setZoomed((z) => !z);
+        const next = !zoomed;
+        setZoomed(next);
+        onZoomChange?.(next);
       }}
     >
-      {attachment.fileUrl === '' ? (
-        <div className="media-viewer-muted-text flex flex-col items-center gap-2">
-          <Glyph name="image" size={48} className="media-viewer-fallback-glyph" />
-          <span className="text-mini">Média indisponible</span>
-        </div>
-      ) : (
-        <img
-          src={attachmentSrc(attachment.fileUrl)}
-          alt={described.text}
-          {...(lang !== undefined ? { lang } : {})}
-          className="media-viewer-media transition-transform"
-          style={{ transform: zoomed ? `scale(${DOUBLE_TAP_SCALE})` : 'scale(1)' }}
-          draggable={false}
-        />
-      )}
+      <img
+        key={failure.attempt}
+        src={src}
+        onError={failure.onError}
+        alt={described.text}
+        {...(lang !== undefined ? { lang } : {})}
+        className="media-viewer-media transition-transform"
+        style={{ transform: zoomed ? `scale(${DOUBLE_TAP_SCALE})` : 'scale(1)' }}
+        draggable={false}
+      />
     </div>
   );
 }
@@ -287,15 +399,21 @@ function ViewerVideoPage({
    * doit remonter. Même verbe et mêmes champs que la tuile du fil
    * (`video-tile.tsx`) : `watched`, `lastWatchPositionMs`/`watchedComplete`. */
   const consumption = attachment.currentUserConsumption;
+  /* LA POSITION CONFIÉE PAR LA TUILE DU FIL (#8234) — passer au plein écran
+     pendant la lecture reprend à la même image ; elle prime sur la reprise
+     SERVIE, plus ancienne qu'elle par construction. Lue UNE fois, au montage. */
+  const [handedOffMs] = useState(() => takeVideoHandoff(attachment.id));
   const playback = useMediaPlayback({
     attachmentId: attachment.id,
     tracksTime: true,
     report: {
       kind: 'watched',
       ...(attachment.duration !== undefined ? { durationMs: attachment.duration } : {}),
-      ...(consumption != null
-        ? { resume: { positionMs: consumption.lastWatchPositionMs, complete: consumption.watchedComplete } }
-        : {}),
+      ...(handedOffMs !== null
+        ? { resume: { positionMs: handedOffMs, complete: false } }
+        : consumption != null
+          ? { resume: { positionMs: consumption.lastWatchPositionMs, complete: consumption.watchedComplete } }
+          : {}),
     },
   });
   const { status, toggle, bind } = playback;
@@ -318,6 +436,18 @@ function ViewerVideoPage({
 
   const posterUrl = attachment.thumbnailUrl !== undefined && attachment.thumbnailUrl !== '' ? attachmentSrc(attachment.thumbnailUrl) : undefined;
   const paused = showsPausedBadge(presentation, true, status === 'playing');
+  const videoSrc = attachmentSrc(attachment.fileUrl);
+  const failure = useMediaLoadFailure(videoSrc);
+
+  /* Une vidéo introuvable (#8141) dessine le MÊME état qu'une image : ni
+     lecteur noir muet, ni chargement sans fin. */
+  if (attachment.fileUrl === '' || failure.failed) {
+    return (
+      <div data-viewer-media-failed className="relative flex size-full items-center justify-center bg-media-backdrop">
+        <MediaUnavailable language={language} {...(failure.retryable ? { onRetry: failure.retry } : {})} />
+      </div>
+    );
+  }
 
   // `stopPropagation` seulement quand la zone latérale RÉCLAME le geste : au
   // centre, `lateralSeek` rend `null` et l'événement continue de remonter
@@ -332,18 +462,19 @@ function ViewerVideoPage({
   };
 
   return (
-    <div className="relative flex size-full items-center justify-center bg-black" onDoubleClick={isActive ? onLateralDoubleClick : undefined}>
+    <div className="relative flex size-full items-center justify-center bg-media-backdrop" onDoubleClick={isActive ? onLateralDoubleClick : undefined}>
       <video
-        key={attachment.fileUrl}
+        key={`${attachment.fileUrl}:${failure.attempt}`}
         ref={bind}
         playsInline
         preload="auto"
         {...(posterUrl !== undefined ? { poster: posterUrl } : {})}
-        src={attachmentSrc(attachment.fileUrl)}
+        src={videoSrc}
+        onError={failure.onError}
         className="media-viewer-media"
       />
       {paused ? (
-        <span className="media-viewer-paused-badge absolute rounded-full px-3 py-1 text-mini font-medium text-white">En pause</span>
+        <span className="absolute rounded-full bg-scrim px-3 py-1 text-mini font-medium text-on-media">En pause</span>
       ) : null}
       {isActive ? (
         <button
@@ -392,7 +523,7 @@ function ViewerBackdropPage({ attachment }: { readonly attachment: Attachment })
   const placeholder = thumbHashPlaceholder(attachment.thumbHash);
   return (
     <div
-      className="size-full bg-black"
+      className="size-full bg-media-backdrop"
       style={placeholder !== undefined ? { backgroundImage: `url("${placeholder}")`, backgroundSize: 'cover' } : undefined}
     />
   );
@@ -425,10 +556,10 @@ function ViewerMaskedPage({ attachment }: { readonly attachment: Attachment }) {
       data-protected-attachment="hidden"
       role="img"
       aria-label={libelle}
-      className="media-viewer-muted-text flex size-full flex-col items-center justify-center gap-2 bg-black"
+      className="flex size-full flex-col items-center justify-center gap-2 bg-media-backdrop text-on-media-3"
     >
       <Glyph name={kind === 'video' ? 'fillPlay' : 'image'} size={40} className="opacity-40" />
-      <Glyph name="eyeSlash" size={18} className="opacity-40" />
+      <Glyph name="eyeSlash" size={GLYPH_SIZE.lg} className="opacity-40" />
       <span className="text-mini">{libelle}</span>
     </div>
   );
@@ -445,28 +576,87 @@ export default function MediaViewer({
   scenes,
   isMine = false,
   deps,
+  carrierAt,
+  onNearEnd,
+  isMineAt,
+  onNearStart,
+  fallbackLanguageAt,
+  actionsAt,
+  shareMedia,
+  container,
 }: MediaViewerProps) {
-  const [index, setIndex] = useState(() => clampIndex(startIndex, items.length));
+  /* LA PAGE SE SUIT PAR SON IDENTITÉ (#6303), miroir `GalleryPagePinning`
+     (`+SourceGrowth.swift`) : la liste peut GRANDIR par le début (pages plus
+     anciennes) pendant qu'on regarde — une position figée glisserait alors sur
+     une autre photo. Une pièce retirée retombe sur sa dernière position. */
+  const [pinned, setPinned] = useState(() => {
+    const at = clampIndex(startIndex, items.length);
+    return { id: items[at]?.id, index: at };
+  });
+  const pinnedAt = pinned.id === undefined ? -1 : items.findIndex((attachment) => attachment.id === pinned.id);
+  const index = pinnedAt >= 0 ? pinnedAt : clampIndex(pinned.index, items.length);
+  /* L'OUVERTURE CONFIÉE PAR LA CARTE DU FIL (#8598) — reprise UNE fois, pour
+     la page d'entrée seule : une page atteinte ensuite ne rejoue rien. */
+  const [opening] = useState(() => {
+    const entry = items[pinned.index];
+    if (entry === undefined || scenes?.has(entry.id) !== true) return null;
+    const taken = takeSceneOpening(entry.id);
+    return taken === null ? null : { itemId: entry.id, opening: taken };
+  });
   const [presentation, setPresentation] = useState<StagePresentation>(CARDED_STAGE);
+  const [zoomedId, setZoomedId] = useState<string | null>(null);
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
   const previouslyFocusedRef = useRef<HTMLElement | null>(null);
   const activePlayToggleRef = useRef<(() => void) | null>(null);
-  const dragRef = useRef<{ readonly startX: number; readonly startY: number; dx: number; dy: number } | null>(null);
   const trackRef = useRef<HTMLDivElement | null>(null);
 
   useBackDismiss(onClose);
+  useConversationViewingFocus();
 
   const [transportSlot, setTransportSlot] = useState<HTMLElement | null>(null);
+  const [notice, announce] = useNotice();
   const language = currentInterfaceLanguage();
 
   const current = items[index];
+  const currentCarrier = carrierAt?.(index) ?? carrier;
+  /* FERMER N'ARRÊTE PAS LE VOCAL (#9256) — la page audio active remet ce
+     qu'elle jouait, le mini-lecteur de la coquille le reprend. */
+  /* « PARTAGER » D'UN MÉDIA NU (#8884) — l'image d'un commentaire, le média
+     d'une publication, sans message à citer ni à réagir : l'hôte qui SAIT son
+     média public le demande (`shareMedia`). JAMAIS par défaut : les visionneuses
+     de messages protégés reçoivent des pièces RÉVÉLÉES (drapeaux levés,
+     `revealedAttachment`) — un repli implicite les ferait sortir. Un hôte qui
+     répond `actionsAt` → `null` a dit qu'il ne sait pas : on ne lui invente rien. */
+  const page =
+    actionsAt !== undefined ? actionsAt(index) : shareMedia === true && current !== undefined ? standaloneSharePage(current) : null;
+  const registerCarry = useCarryOnClose({
+    currentId: current?.id,
+    title: currentCarrier?.sender?.displayName ?? null,
+    conversationId: page?.conversationId ?? null,
+    messageId: page?.messageId ?? null,
+  });
   const currentSceneEntry = current === undefined ? undefined : scenes?.get(current.id);
   const insets = safeAreaInsets();
   // La hauteur du couloir HAUT — le haut du plateau dans le repère du
   // viewport, que `fullStageBox` retranche pour recentrer une page scène
   // sur le viewport ENTIER (revue-correction #6902).
   const topCorridorHeight = STAGE.topCorridorHeight + insets.top;
+
+  /* LA FEUILLE D'ENVOI (#8884) est montée par la coquille, DANS `#root` : tant
+     que la visionneuse le tient inerte, « Partager » ouvrirait une feuille
+     qu'aucun doigt ni aucune touche n'atteint. Elle lève l'inertie le temps de
+     la feuille (modale elle-même : le reste est inerte par `showModal`) et la
+     rétablit à sa fermeture. DÉCLARÉ AVANT l'effet d'ouverture : au démontage,
+     les nettoyages courent dans l'ordre — celui-ci remet l'inertie, celui de
+     l'ouverture la retire, et `#root` ne reste jamais inerte derrière nous. */
+  const sendSheetOpen = useSendSheetOpen();
+  useEffect(() => {
+    if (!sendSheetOpen) return;
+    const root = document.getElementById('root');
+    root?.removeAttribute('inert');
+    return () => root?.setAttribute('inert', '');
+  }, [sendSheetOpen]);
 
   // #root INERT le temps de l'ouverture — même dispositif que le clone du
   // menu de message (`message-menu.tsx:380-391`), porté ICI au NIVEAU DE LA
@@ -485,8 +675,39 @@ export default function MediaViewer({
     };
   }, []);
 
+  /* LE FOND SE LÈVE AVEC LA SCÈNE (#8598) — ouverte depuis une carte, la
+     couche part TRANSPARENTE (le fil reste visible derrière la scène qui
+     grandit) et les couloirs apparaissent en fondu : jamais un noir qui tombe
+     d'un bloc. Même durée que la boîte (`ViewerScenePage`). */
+  useLayoutEffect(() => {
+    const dialog = dialogRef.current;
+    if (opening?.opening.origin == null || dialog === null || typeof dialog.animate !== 'function' || prefersReducedMotion()) return;
+    const timing = { duration: SCENE_OPENING_MS, easing: SCENE_OPENING_EASING };
+    dialog.animate(
+      [{ backgroundColor: 'color-mix(in srgb, var(--color-media-backdrop) 0%, transparent)' }, { backgroundColor: 'var(--color-media-backdrop)' }],
+      timing,
+    );
+    for (const chrome of dialog.querySelectorAll<HTMLElement>('[data-viewer-top-bar], [data-viewer-bottom-bar], [data-scene-viewer-controls]')) {
+      chrome.animate([{ opacity: 0 }, { opacity: 1 }], timing);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const onNearEndRef = useRef(onNearEnd);
+  onNearEndRef.current = onNearEnd;
+  useEffect(() => {
+    if (items.length - 1 - index < NEAR_END_PAGES) onNearEndRef.current?.();
+  }, [index, items.length]);
+
+  const onNearStartRef = useRef(onNearStart);
+  onNearStartRef.current = onNearStart;
+  useEffect(() => {
+    if (index < NEAR_END_PAGES) onNearStartRef.current?.();
+  }, [index, items.length]);
+
   const goTo = (next: number): void => {
-    setIndex(clampIndex(next, items.length));
+    const at = clampIndex(next, items.length);
+    setPinned({ id: items[at]?.id, index: at });
     setPresentation(CARDED_STAGE);
   };
 
@@ -517,7 +738,7 @@ export default function MediaViewer({
       const dialog = dialogRef.current;
       if (dialog === null) return;
       const focusables = Array.from(dialog.querySelectorAll<HTMLElement>('button, [href], [tabindex]:not([tabindex="-1"])')).filter(
-        (el) => !el.hasAttribute('disabled'),
+        (el) => !el.hasAttribute('disabled') && el.closest('[inert]') === null,
       );
       if (focusables.length === 0) return;
       const activeElement = document.activeElement;
@@ -528,49 +749,48 @@ export default function MediaViewer({
     }
   };
 
-  // Tap sur la scène — bascule le plateau. `stopPropagation` sur les
-  // contrôles (fermer, pellicule, bouton play) empêche cette bascule de se
-  // déclencher par-dessus une action réelle.
+  const audioPage = current !== undefined && kindOf(current) === 'audio';
+  const longPress = useLongPress({
+    onOpen: () => {
+      if (!audioPage) setPresentation(() => stageAfter(CARDED_STAGE, 'longPress'));
+    },
+  });
+
+  /* LE GESTE COMMUN DES PLEIN ÉCRANS (#8879, `viewer-chrome-gestures.ts`) :
+     glisser vers le bas FERME (la scène suit le doigt), l'horizontale
+     PAGINE, glisser vers le haut entre en plein cadre depuis la carte. La
+     visionneuse n'en porte plus la mécanique — story et réel ferment du même
+     doigt. Une image zoomée garde le doigt pour elle-même. */
+  const swipe = useViewerSwipe({
+    onDismiss: onClose,
+    onNext: () => goTo(index + 1),
+    onPrevious: () => goTo(index - 1),
+    onUp: () => {
+      if (presentation.kind === 'carded') setPresentation({ kind: 'full', pausedOnEntry: false });
+    },
+    follow: trackRef,
+    enabled: zoomedId === null || zoomedId !== current?.id,
+    rtl: document.dir === 'rtl',
+  });
+
+  // Tap sur la scène — bascule le plateau. Les contrôles du chrome coupent
+  // eux-mêmes leurs événements (`viewer-chrome.tsx`) : le tap sur une action
+  // réelle ne bascule rien. Un toucher qui a glissé n'est pas un tap.
   const onStageClick = (): void => {
-    if (dragRef.current !== null && (Math.abs(dragRef.current.dx) > 4 || Math.abs(dragRef.current.dy) > 4)) return;
+    if (swipe.wasDrag() || audioPage) return;
     setPresentation((p) => stageAfter(p, 'tap'));
   };
 
-  const longPress = useLongPress({
-    onOpen: () => setPresentation(() => stageAfter(CARDED_STAGE, 'longPress')),
-  });
-
-  const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>): void => {
-    dragRef.current = { startX: event.clientX, startY: event.clientY, dx: 0, dy: 0 };
-  };
-  const onPointerMove = (event: ReactPointerEvent<HTMLDivElement>): void => {
-    const drag = dragRef.current;
-    if (drag === null) return;
-    drag.dx = event.clientX - drag.startX;
-    drag.dy = event.clientY - drag.startY;
-    if (trackRef.current !== null && Math.abs(drag.dy) > Math.abs(drag.dx)) {
-      trackRef.current.style.transform = `translateY(${Math.max(0, drag.dy)}px)`;
-    }
-  };
-  const onPointerUp = (): void => {
-    const drag = dragRef.current;
-    dragRef.current = null;
-    if (drag === null) return;
-    if (trackRef.current !== null) trackRef.current.style.transform = '';
-
-    if (Math.abs(drag.dx) > Math.abs(drag.dy)) {
-      if (drag.dx <= -SWIPE_PAGE_THRESHOLD_PX) goTo(index + 1);
-      else if (drag.dx >= SWIPE_PAGE_THRESHOLD_PX) goTo(index - 1);
-      return;
-    }
-    const verdict = resolveStageDrag({ dx: drag.dx, dy: drag.dy, presentation, threshold: DISMISS_THRESHOLD });
-    if (verdict === 'dismisses') onClose();
-    else if (verdict === 'entersFull') setPresentation({ kind: 'full', pausedOnEntry: false });
-  };
-
-  const isFull = presentation.kind === 'full';
-
+  /* LE CHROME CÈDE AU PLEIN CADRE ET AU ZOOM (#8644) : une image agrandie ne
+     se lit pas sous « Fermer », sa légende et la pellicule. Au navigateur, un
+     double tap est aussi deux taps (la bascule plein cadre s'annule) : c'est
+     l'état zoomé de la page COURANTE qui compte. */
+  const chromeHidden = presentation.kind === 'full' || (zoomedId !== null && zoomedId === current?.id);
   if (current === undefined) return null;
+
+  const identity = carrierIdentity(currentCarrier);
+  const footer = carrierFooter({ attachment: current, carrier: currentCarrier, ...(currentSceneEntry !== undefined ? { sceneEntry: currentSceneEntry } : {}) });
+  const replyOffered = page !== null && page.offers.reply ? page.onReply : undefined;
 
   return createPortal(
     <div
@@ -580,36 +800,50 @@ export default function MediaViewer({
       aria-label={`${scenes !== undefined ? 'Scène' : 'Média'} ${index + 1} sur ${items.length}`}
       data-media-viewer
       data-viewer-index={index}
+      data-viewer-attachment={current.id}
       {...(scenes !== undefined ? { 'data-scene-fullscreen': '' } : {})}
-      className="media-viewer-layer fixed inset-0 flex flex-col bg-black"
+      className="media-viewer-layer fixed inset-0 flex flex-col bg-media-backdrop"
       onKeyDown={onKeyDown}
       tabIndex={-1}
     >
-      {/* Couloir haut — AU-DESSUS d'une page scène en plein viewport (`zIndex`, #6902).
-          `pointerEvents` SUIT `opacity` (#7040) : `opacity: 0` cache aux YEUX,
-          jamais au DOIGT. Sans lui, un appui en haut à gauche en plein cadre
-          FERMAIT la visionneuse — un contrôle invisible et vivant, pire qu'un
-          contrôle mort, puisqu'on ne peut ni le voir ni prévoir son effet. */}
-      <div
-        className="media-viewer-chrome relative flex items-center justify-between px-3"
-        style={{
-          height: topCorridorHeight,
-          paddingTop: insets.top,
-          opacity: isFull ? 0 : 1,
-          pointerEvents: isFull ? 'none' : 'auto',
-          zIndex: 10,
-        }}
+      {/* Barre haute — le chrome COMMUN des plein écrans (#8879) : l'auteur et
+          l'heure, « … » (Enregistrer y vit, iOS #6145), puis la croix EN FIN de
+          rangée. Dans le COULOIR noir au-dessus du plateau ; sa hauteur
+          (`safe-top + 56`) est exactement `topCorridorHeight`. Elle cède au
+          plein cadre ET au zoom (#8644) : inerte, donc intouchable autant
+          qu'invisible (#7040) — un appui en haut ne FERME jamais sous un doigt
+          qui ne voit rien. Au-dessus d'une page scène en plein viewport
+          (`z-10`, #6902). */}
+      <ViewerTopBar
+        placement="corridor"
+        hidden={chromeHidden}
+        exit={{ kind: 'close', label: 'Fermer', onExit: onClose, buttonRef: closeButtonRef }}
+        {...(identity !== undefined ? { identity } : {})}
+        {...(page !== null && page.offers.save
+          ? {
+              trailing: (
+                <Suspense fallback={null}>
+                  <ViewerMediaActions key={`menu:${current.id}`} slot="menu" page={page} language={language} onClose={onClose} announce={announce} />
+                </Suspense>
+              ),
+            }
+          : {})}
+      />
+
+      {/* L'issue d'une action : UNE région vivante pour toute la couche. */}
+      <p
+        role="status"
+        aria-live="polite"
+        data-viewer-notice={notice ?? ''}
+        className={
+          notice === null
+            ? 'sr-only'
+            : 'pointer-events-none absolute inset-x-0 z-20 mx-auto w-fit rounded-full bg-scrim px-3 py-1 text-mini text-on-media'
+        }
+        style={notice === null ? undefined : { top: 'calc(var(--safe-top, 0px) + 64px)' }}
       >
-        <button
-          ref={closeButtonRef}
-          type="button"
-          aria-label="Fermer"
-          onClick={onClose}
-          className="media-viewer-close tap-target-34 grid place-items-center rounded-full text-white"
-        >
-          <Glyph name="x" size={16} />
-        </button>
-      </div>
+        {notice === null ? '' : translate(language, notice)}
+      </p>
 
       {/* Le cadre — pages */}
       <div
@@ -618,18 +852,21 @@ export default function MediaViewer({
         onClick={onStageClick}
         onContextMenu={(e) => e.preventDefault()}
         onPointerDown={(e: ReactPointerEvent<HTMLDivElement>) => {
-          onPointerDown(e);
+          swipe.handlers.onPointerDown(e);
           longPress.onPointerDown(e);
         }}
         onPointerMove={(e: ReactPointerEvent<HTMLDivElement>) => {
-          onPointerMove(e);
+          swipe.handlers.onPointerMove(e);
           longPress.onPointerMove(e);
         }}
-        onPointerUp={() => {
-          onPointerUp();
+        onPointerUp={(e: ReactPointerEvent<HTMLDivElement>) => {
+          swipe.handlers.onPointerUp(e);
           longPress.onPointerUp();
         }}
-        onPointerCancel={() => longPress.onPointerCancel()}
+        onPointerCancel={(e: ReactPointerEvent<HTMLDivElement>) => {
+          swipe.handlers.onPointerCancel(e);
+          longPress.onPointerCancel();
+        }}
       >
         {items.map((attachment, i) => {
           const distance = i - index;
@@ -639,7 +876,7 @@ export default function MediaViewer({
           const sceneEntry = scenes?.get(attachment.id);
           return (
             <div
-              key={attachment.id}
+              key={attachment.id === '' ? String(i) : attachment.id}
               data-viewer-page
               data-full-pixels={fullPixels}
               className="media-viewer-page absolute inset-0"
@@ -662,14 +899,36 @@ export default function MediaViewer({
                   isActive={i === index}
                   preferredLanguages={languages}
                   topInset={topCorridorHeight}
-                  label={scenePageLabel(sceneEntry, carrier, language)}
+                  label={scenePageLabel(sceneEntry, carrierAt?.(i) ?? carrier, language)}
                   pausedOnEntry={presentation.kind === 'full' && presentation.pausedOnEntry}
                   onToggleRef={(fn) => {
                     if (i === index) activePlayToggleRef.current = fn;
                   }}
+                  corridorSlot={transportSlot}
+                  opening={opening !== null && opening.itemId === attachment.id ? opening.opening : null}
                 />
               ) : isMasked ? (
                 <ViewerMaskedPage attachment={attachment} />
+              ) : kindOf(attachment) === 'audio' ? (
+                <Suspense fallback={<ViewerBackdropPage attachment={attachment} />}>
+                  <ViewerAudioPage
+                    attachment={attachment}
+                    isActive={i === index}
+                    languages={languages}
+                    fallbackLanguage={fallbackLanguageAt?.(i) ?? fallbackLanguage}
+                    language={language}
+                    pageIndex={i}
+                    pageCount={items.length}
+                    onToggleRef={(fn) => {
+                      if (i === index) activePlayToggleRef.current = fn;
+                    }}
+                    onCarryRef={(carry) => {
+                      if (i === index) registerCarry(attachment.id, carry);
+                    }}
+                    {...(displayLanguage !== undefined ? { displayLanguage } : {})}
+                    {...(deps !== undefined ? { deps } : {})}
+                  />
+                </Suspense>
               ) : kindOf(attachment) === 'video' ? (
                 <ViewerVideoPage
                   attachment={attachment}
@@ -685,9 +944,11 @@ export default function MediaViewer({
                 <ViewerImagePage
                   attachment={attachment}
                   languages={languages}
-                  fallbackLanguage={fallbackLanguage}
+                  fallbackLanguage={fallbackLanguageAt?.(i) ?? fallbackLanguage}
                   isActive={i === index}
-                  isMine={isMine}
+                  isMine={isMineAt?.(i) ?? isMine}
+                  language={language}
+                  onZoomChange={(zoomed) => setZoomedId(zoomed ? attachment.id : null)}
                   {...(displayLanguage !== undefined ? { displayLanguage } : {})}
                   {...(deps !== undefined ? { deps } : {})}
                 />
@@ -697,40 +958,34 @@ export default function MediaViewer({
         })}
       </div>
 
-      {/* Couloir bas — AU-DESSUS d'une page scène en plein viewport (`zIndex`, #6902). */}
-      <div
-        className="media-viewer-chrome relative flex flex-col"
-        style={{
-          opacity: isFull ? 0 : 1,
-          /* Le JUMEAU du couloir haut (#7040) : même littéral, même défaut. Il
-             ne figurait dans aucun signalement — il a été trouvé en posant au
-             correctif la question que le dépôt pose aux siens, « qu'est-ce qui
-             part À CÔTÉ de ce que je viens de garder ? ». Ce couloir porte la
-             PELLICULE : sans cette ligne, ses vignettes se choisissaient à
-             l'aveugle sous un doigt qui ne voit rien. */
-          pointerEvents: isFull ? 'none' : 'auto',
-          paddingBottom: insets.bottom,
-          zIndex: 10,
-          /* LE VOILE BAS (revue-correction #6902) — une page SCÈNE prend le
-             viewport ENTIER : l'auteur, la date (70 % d'opacité) et la légende
-             ne tombent plus sur le NOIR du plateau mais sur la couleur de la
-             scène, quelle qu'elle soit. Mesuré sur la cible iOS, qui peint le
-             MÊME voile sous ce bloc (capture cible `scenes-plein-ecran.light`) ;
-             sans lui, une scène claire ramènerait la date sous AA. Posé
-             UNIQUEMENT sur une page scène : le rendu image/vidéo, dont deux
-             gates de conversation lisent la mise en page, ne bouge pas. */
-          ...(currentSceneEntry !== undefined
-            ? { background: 'linear-gradient(to top, rgba(0,0,0,0.78), rgba(0,0,0,0.5) 60%, transparent)' }
-            : {}),
-        }}
+      {/* Barre basse — légende, rail d'actions (Réagir, Créer) sur SA rangée,
+          capsule « Répondre… » (l'hôte seul décide qu'il sait répondre : loi 4),
+          puis la place de la barre de lecture (#6359, la page vidéo ACTIVE y
+          rend `MediaTransport` par un portail) et la pellicule. Posée SUR une
+          page scène en plein viewport avec le voile commun (#6902 : l'encre
+          tombe sur la couleur de la scène, jamais sur le noir du plateau) ;
+          dans le couloir sous une image ou une vidéo. */}
+      <ViewerBottomBar
+        placement={currentSceneEntry !== undefined ? 'overlay' : 'corridor'}
+        hidden={chromeHidden}
+        probe={{ 'data-viewer-footer': '' }}
+        {...(footer !== undefined ? { caption: footer } : {})}
+        {...(page !== null && (page.offers.react || page.offers.compose || page.offers.share)
+          ? {
+              rail: (
+                <Suspense fallback={null}>
+                  <ViewerMediaActions key={`rail:${current.id}`} slot="rail" page={page} language={language} onClose={onClose} announce={announce} hidden={chromeHidden} />
+                </Suspense>
+              ),
+            }
+          : {})}
+        reply={{ label: translate(language, 'media.viewer.reply'), onReply: replyOffered }}
       >
-        <CarrierFooter attachment={current} carrier={carrier} {...(currentSceneEntry !== undefined ? { sceneEntry: currentSceneEntry } : {})} />
-        {/* La place de la barre de lecture (#6359) : la page vidéo ACTIVE y rend `MediaTransport` par un portail ; vide sur une image. */}
         <div ref={setTransportSlot} data-viewer-transport-slot />
 
-        {items.length > 1 ? <MediaFilmstrip items={items} currentIndex={index} onSelect={goTo} /> : null}
-      </div>
+        {items.length > 1 && !audioPage ? <MediaFilmstrip items={items} currentIndex={index} onSelect={goTo} language={language} /> : null}
+      </ViewerBottomBar>
     </div>,
-    document.body,
+    container ?? document.body,
   );
 }

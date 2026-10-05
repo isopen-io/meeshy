@@ -1,10 +1,20 @@
+import { bridgeCallEvents } from '@/lib/calls/call-socket-bridge';
+import { setCallEngineWake } from '@/lib/calls/call-transport';
 import { conversationStore } from '@/lib/conversation-store';
 import { createSocketIOClient } from '@/lib/net/socket-io-factory';
+import { bridgeBannerRevocations } from '@/lib/notifications/banner-revocation';
 import { outboxStore } from '@/lib/send/outbox-store';
 
+import { endRevokedSession } from './account-caches';
+import { bindAppStatePresence, documentVisibility } from './app-state-presence';
 import { apiConfig } from './config';
+import { bindConversationViewing, viewingStore } from './conversation-viewing';
+import { bindConversationEngagement, engagementStore } from './conversation-engagement';
 import { apiDeps } from './deps';
 import { appQueryClient } from './query-client';
+import { setAttachmentReactionEmitter } from './attachment-reaction-emit';
+import { watchIdentityScopedStores } from './identity-scoped-stores';
+import { sendAttachmentReaction } from './attachment-reaction-socket';
 import { setTypingEmitter } from './typing-emit';
 import { sessionStore } from './session';
 import { createRealtimeConnection, type RealtimeConnection } from './socket';
@@ -43,6 +53,32 @@ let connectedToken: string | null = null;
 /** Garde la course : un second `syncConnection()` pendant que le `import()`
  * du bouchon résout ne doit pas ouvrir une SECONDE connexion de fixtures. */
 let fixturesConnecting = false;
+/** Le pont d'appel de la connexion courante (#6382) — refait à chaque connexion. */
+let unbridgeCalls: (() => void) | null = null;
+
+function bridgeCalls(next: RealtimeConnection | null): void {
+  unbridgeCalls?.();
+  if (next === null) {
+    unbridgeCalls = null;
+    return;
+  }
+  const unbridge = bridgeCallEvents(next.socket);
+  /* `presence:app-state` (B8) : la passerelle choisit la sonnerie socket ou la poussée selon que l'onglet est visible. */
+  const unwatch = typeof document === 'undefined' ? () => undefined : bindAppStatePresence({ socket: next.socket, visibility: documentVisibility(document) });
+  /* « est dans la conversation » (#8892) : l'écran de fil s'annonce, les pairs annoncés portent le point primaire. */
+  const unview = typeof document === 'undefined' ? () => undefined : bindConversationViewing({ socket: next.socket, visibility: documentVisibility(document), store: viewingStore, viewerId: currentViewerId });
+  /* « N (M) 🔥 » (#8906) : la passerelle pousse l'état d'engagement au seul lecteur crédité. */
+  const unengage = bindConversationEngagement({ socket: next.socket, store: engagementStore });
+  /* `notification:deleted` ferme aussi la bannière du service worker (#8752), comme la coque et iOS. */
+  const unrevoke = bridgeBannerRevocations(next.socket);
+  unbridgeCalls = () => {
+    unbridge();
+    unwatch();
+    unview();
+    unengage();
+    unrevoke();
+  };
+}
 
 function currentViewerId(): string {
   return resolveViewer({ source: apiDeps.source, session: sessionStore.getState().session }).id ?? '';
@@ -78,12 +114,14 @@ function syncConnection(): void {
           onClearSession: () => undefined,
         },
       );
+      bridgeCalls(connection);
     });
     return;
   }
 
   const session = sessionStore.getState().session;
   if (session.status !== 'authenticated') {
+    bridgeCalls(null);
     connection?.destroy();
     connection = null;
     connectedToken = null;
@@ -102,11 +140,15 @@ function syncConnection(): void {
       conversationStore,
       outbox: outboxStore,
       viewerId: currentViewerId,
-      onClearSession: () => sessionStore.getState().clearSession(),
+      onClearSession: () => endRevokedSession(sessionStore),
     },
   );
+  bridgeCalls(connection);
 }
 
+/* Les magasins en mémoire d'une identité (outbox, overrides de rangée,
+   frappe) se vident dès qu'elle change (#8674, `identity-scoped-stores.ts`). */
+watchIdentityScopedStores({ session: sessionStore, outbox: outboxStore, conversations: conversationStore, typing: typingStore, engagement: engagementStore });
 sessionStore.subscribe(syncConnection);
 // La session peut déjà être authentifiée au moment où ce module se charge
 // (restauration `localStorage`, `main.tsx` § « LA SESSION EST TENUE » —
@@ -130,3 +172,13 @@ syncConnection();
  * alors dans un socket détruit.
  */
 setTypingEmitter((conversationId, isTyping) => connection?.emitTyping(conversationId, isTyping));
+
+/** La réaction à une PIÈCE (#6303) — même inversion que la frappe : la visionneuse appelle le port, jamais ce module. */
+setAttachmentReactionEmitter((request) => sendAttachmentReaction(connection?.socket ?? null, request));
+
+/**
+ * UN APPEL REÇU CHARGE LE MOTEUR (#6382) — le port d'appel garde en file tout
+ * `call:*` arrivé avant lui et appelle ceci ; le moteur (WebRTC, écrans) n'est
+ * donc jamais payé par qui ne reçoit ni ne passe d'appel.
+ */
+setCallEngineWake(() => void import('@/lib/calls/call-actions').then((module) => module.loadCallEngine()));

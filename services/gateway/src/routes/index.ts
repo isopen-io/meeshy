@@ -108,6 +108,7 @@ import { reportCreationRoutes } from './reports';
 import * as AdminInvitations from './admin/invitations';
 import { analyticsRoutes } from './admin/analytics';
 import { languagesRoutes } from './admin/languages';
+import { engagementScaleAdminRoutes } from './admin/engagement-scale';
 import * as AdminMessages from './admin/messages';
 import { registerContentRoutes } from './admin/content';
 import { registerAdminShareLinkRoutes } from './admin/share-links';
@@ -118,6 +119,7 @@ import { adminPostRoutes } from './admin/posts';
 import { agentAdminRoutes } from './admin/agent';
 import { agentTopicsRoutes } from './admin/agent-topics';
 import { routeUsageAdminRoutes } from './admin/route-usage';
+import { adminOversightRoutes } from './admin/oversight';
 import { userRoutes } from './users';
 import meRoutes from './me';
 import { mePermissionsRoutes } from './me/permissions';
@@ -129,6 +131,7 @@ import { meMeeshRoutes } from './me/meesh';
 import { meOnboardingRoutes } from './me/onboarding';
 import { meStarredMessagesRoutes } from './me/starred-messages';
 import { meStickersRoutes } from './me/stickers';
+import { stickerPacksRoutes } from './sticker-packs';
 import { accountDeletionRoutes } from './account-deletion';
 import { directoryAvailabilityRoutes } from './directory/availability';
 import { directoryPeopleRoutes } from './directory/people';
@@ -137,6 +140,7 @@ import { directoryPresenceRoutes } from './directory/presence';
 import { directoryBlocksRoutes } from './directory/blocks';
 import { directoryFriendRequestsRoutes } from './directory/friend-requests';
 import { directoryContactsRoutes } from './directory/contacts';
+import { contactsResolveRoutes } from './contacts/resolve';
 import { pushTokenRoutes } from './push-tokens';
 import conversationPreferencesRoutes from './conversation-preferences';
 import communityPreferencesRoutes from './community-preferences';
@@ -268,6 +272,13 @@ export const ROUTE_TABLE_BEFORE_ATTACHMENTS: readonly RouteRegistrationEntry[] =
   { name: 'admin-agent', prefix: `${API_PREFIX}/admin/agent`, module: agentAdminRoutes },
   { name: 'admin-agent-topics', prefix: `${API_PREFIX}/admin/agent`, module: agentTopicsRoutes },
   { name: 'admin-route-usage', prefix: `${API_PREFIX}/admin`, module: routeUsageAdminRoutes },
+  // La « vue de dieu » (#8876) : journal d'audit, liens de suivi, fiche de
+  // communauté et supervision, sous le MÊME préfixe que `admin-content` /
+  // `admin-rankings`. Une seule entrée : le module enregistre ses quatre
+  // fichiers lui-même, pour que la table dise « une surface », pas quatre.
+  { name: 'admin-oversight', prefix: `${API_PREFIX}/admin`, module: adminOversightRoutes },
+  // Le barème d'engagement (#8906) — ADMIN/BIGBOSS, lecture et réglage.
+  { name: 'admin-engagement-scale', prefix: `${API_PREFIX}/admin`, module: engagementScaleAdminRoutes },
 
   // ── Utilisateur, annuaire ────────────────────────────────────────────
   { name: 'users', prefix: API_PREFIX, module: userRoutes },
@@ -303,6 +314,9 @@ export const ROUTE_TABLE_BEFORE_ATTACHMENTS: readonly RouteRegistrationEntry[] =
   // image ou un collage. Montage AUTONOME, même patron que
   // `me-starred-messages` juste au-dessus.
   { name: 'me-stickers', prefix: `${API_PREFIX}/me`, module: meStickersRoutes },
+  // Les packs de stickers (#9141) — boutique, installation, proposition par
+  // des tiers et modération. Montage AUTONOME, même patron que `me-stickers`.
+  { name: 'sticker-packs', prefix: `${API_PREFIX}/sticker-packs`, module: stickerPacksRoutes },
   { name: 'account-deletion', prefix: `${API_PREFIX}/account/deletion`, module: accountDeletionRoutes },
   { name: 'directory-availability', prefix: `${API_PREFIX}/directory`, module: directoryAvailabilityRoutes },
   { name: 'directory-people', prefix: `${API_PREFIX}/directory`, module: directoryPeopleRoutes },
@@ -311,6 +325,9 @@ export const ROUTE_TABLE_BEFORE_ATTACHMENTS: readonly RouteRegistrationEntry[] =
   { name: 'directory-blocks', prefix: `${API_PREFIX}/directory`, module: directoryBlocksRoutes },
   { name: 'directory-friend-requests', prefix: `${API_PREFIX}/directory`, module: directoryFriendRequestsRoutes },
   { name: 'directory-contacts', prefix: `${API_PREFIX}/directory`, module: directoryContactsRoutes },
+  // La carte de visite partagée (#8101) — vCard → profils publics. Montage
+  // AUTONOME ; même seau de débit que l'annuaire inversé (`profile-lookups`).
+  { name: 'contacts-resolve', prefix: `${API_PREFIX}/contacts`, module: contactsResolveRoutes },
 
   // ── Préférences, préférences dérivées, sécurité applicative ──────────
   { name: 'push-tokens', prefix: API_PREFIX, module: pushTokenRoutes },

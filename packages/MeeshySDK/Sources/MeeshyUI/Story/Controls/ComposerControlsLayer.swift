@@ -214,7 +214,7 @@ public struct ComposerControlsLayer: View {
                     )
                     Spacer()
                 }
-                .padding(.bottom, 16)
+                .padding(.bottom, MeeshySpacing.lg)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
                 // FABs posés SUR le canvas : leur lisibilité suit la
                 // luminance du FOND de la slide, pas le thème de l'app
@@ -254,7 +254,7 @@ public struct ComposerControlsLayer: View {
                     fabRestoreHandle
                     Spacer()
                 }
-                .padding(.bottom, 16)
+                .padding(.bottom, MeeshySpacing.lg)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
 
@@ -431,7 +431,7 @@ public struct ComposerControlsLayer: View {
             // 5 + 16 + 16 = 37 pt de haut : SOUS le minimum HIG, alors que c'est
             // l'UNIQUE recours quand le chrome est masqué. Le débord de contact
             // le porte à 44 sans bouger le rendu ni la hauteur de layout.
-            .padding(.vertical, 16)
+            .padding(.vertical, MeeshySpacing.lg)
             .composerHitTarget()
             .onTapGesture {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {

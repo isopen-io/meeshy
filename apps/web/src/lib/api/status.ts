@@ -1,14 +1,16 @@
+import * as postsEndpoints from '@meeshy/shared/api/endpoints/posts';
+
 import type { DataSource } from './config';
 import { VIEWER_ID as FIXTURE_VIEWER_ID } from './fixtures-base';
 import type { ApiResult, HttpTransport } from './http';
 
 /**
- * **LE PORT DE MON HUMEUR** (#6150) — `POST /api/v1/posts`, `type: 'STATUS'`.
+ * **LE PORT DE MON HUMEUR** (#6150) — `POST posts.root`, `type: 'STATUS'`.
  *
  * ## DEUX ADRESSES VOISINES, DEUX VERBES — et les confondre rend un 404
  *
- * La LECTURE des humeurs est `GET /api/v1/social/posts?scope=statuses`
- * (`loadStatusMoods`, `stories.ts`). L'ÉCRITURE est `POST /api/v1/posts` :
+ * La LECTURE des humeurs est `GET social.posts?scope=statuses`
+ * (`loadStatusMoods`, `stories.ts`). L'ÉCRITURE est `POST posts.root` :
  * `postRoutes` est monté sous `API_PREFIX` seul
  * (`services/gateway/src/route-registration.ts:288`) et `core.ts:370` y
  * déclare `fastify.post('/posts', …)`. Le préfixe `social/` n'appartient
@@ -92,7 +94,7 @@ export async function publishStatusMood(
 
   return params.transport.request<PublishedStatus>({
     method: 'POST',
-    path: '/api/v1/posts',
+    path: postsEndpoints.root,
     body,
     ...(params.signal !== undefined ? { signal: params.signal } : {}),
   });

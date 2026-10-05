@@ -563,7 +563,7 @@ public final class StoryMediaLayer: CALayer {
         // le fichier tmp et le file:// servirait l'original obsolète.
         if let imageCache,
            let synchronousReader = imageCache as? ComposerImageCacheReader,
-           let cached = CanvasImageOrientation.displayCGImage(synchronousReader.images[cacheKey]) {
+           let cached = CanvasImageOrientation.displayCGImage(Self.filtered(synchronousReader.images[cacheKey], for: media)) {
             contents = cached
             return
         }
@@ -575,7 +575,7 @@ public final class StoryMediaLayer: CALayer {
         // through the async cache.
         if let url = resolvedURL, url.isFileURL {
             if let data = try? Data(contentsOf: url),
-               let cgImage = CanvasImageOrientation.displayCGImage(UIImage(data: data)) {
+               let cgImage = CanvasImageOrientation.displayCGImage(Self.filtered(UIImage(data: data), for: media)) {
                 contents = cgImage
             }
             return
@@ -599,7 +599,7 @@ public final class StoryMediaLayer: CALayer {
             guard !Task.isCancelled else { return }
             // (1) Fast-path image cache (composer preview / disk-backed reader).
             if let imageCache,
-               let cached = CanvasImageOrientation.displayCGImage(await imageCache.cachedImage(for: cacheKey)) {
+               let cached = CanvasImageOrientation.displayCGImage(Self.filtered(await imageCache.cachedImage(for: cacheKey), for: media)) {
                 guard !Task.isCancelled else { return }
                 self.contents = cached
                 return
@@ -608,9 +608,20 @@ public final class StoryMediaLayer: CALayer {
             guard let url = resolvedURL else { return }
             let loaded = await loader.image(for: url.absoluteString)
             guard !Task.isCancelled,
-                  let cgImage = CanvasImageOrientation.displayCGImage(loaded) else { return }
+                  let cgImage = CanvasImageOrientation.displayCGImage(Self.filtered(loaded, for: media)) else { return }
             self.contents = cgImage
         }
+    }
+
+    /// **Le filtre PROPRE à l'objet** (retour porteur 2026-09-28), cuit dans
+    /// le bitmap au même point de passage que l'orientation — comme le fond le
+    /// fait pour le filtre de slide (`StoryBackgroundLayer.stampFinalImage`).
+    /// La clé de cache suit l'INSTANCE d'image : un bitmap retouché ne resservira
+    /// jamais le filtre de l'ancien.
+    static func filtered(_ image: UIImage?, for media: StoryMediaObject) -> UIImage? {
+        guard let image, let filtre = media.parsedFilter else { return image }
+        return StoryFilterProcessor.apply(filtre, to: image,
+                                          imageId: "\(media.id)-\(ObjectIdentifier(image).hashValue)")
     }
 
     // MARK: - Video path

@@ -151,9 +151,13 @@ platform :ios do
       app_identifier: [
         "me.meeshy.app",
         "me.meeshy.app.notification-service",
+        # #8859 / #8953 — la notification déployée (App ID T75359QHNV).
+        "me.meeshy.app.notification-content",
         "me.meeshy.app.widgets",
         # Ajouté 2026-07-28 avec le ré-embarquement de MeeshyShareExtension.
-        "me.meeshy.app.share-extension"
+        "me.meeshy.app.share-extension",
+        # #8063 / #8953 — le partage d'écran pendant un appel (App ID 67U4MGRB8C).
+        "me.meeshy.app.broadcast"
       ],
       api_key: api_key,
       # readonly skips the Dev Portal round-trip and just installs the certs/profiles
@@ -383,9 +387,13 @@ platform :ios do
       app_identifier: [
         "me.meeshy.app",
         "me.meeshy.app.notification-service",
+        # #8859 / #8953 — la notification déployée (App ID T75359QHNV).
+        "me.meeshy.app.notification-content",
         "me.meeshy.app.widgets",
         # Ajouté 2026-07-28 avec le ré-embarquement de MeeshyShareExtension.
-        "me.meeshy.app.share-extension"
+        "me.meeshy.app.share-extension",
+        # #8063 / #8953 — le partage d'écran pendant un appel (App ID 67U4MGRB8C).
+        "me.meeshy.app.broadcast"
       ],
       api_key: api_key,
       force: true,

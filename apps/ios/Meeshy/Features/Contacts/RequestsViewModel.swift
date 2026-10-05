@@ -10,15 +10,14 @@ final class RequestsViewModel: ObservableObject {
     @Published var sentRequests: [FriendRequest] = []
     @Published var loadState: LoadState = .idle
     @Published var receivedHasMore = true
-    @Published var sentHasMore = true
 
     private let friendService: FriendServiceProviding
     /// Injected so tests can drive the accept/reject outbox path (enqueue
     /// success/failure + terminal outcome) deterministically, mirroring the
     /// pattern used by FeedViewModel / StatusViewModel / EditProfileViewModel.
     private let offlineQueue: OfflineQueueing
+    private var profileRepaintSubscription: AnyCancellable?
     private var receivedOffset = 0
-    private var sentOffset = 0
     private let pageSize = 30
 
     /// In-flight silent revalidation tasks, kicked off when the cache returns
@@ -34,10 +33,21 @@ final class RequestsViewModel: ObservableObject {
 
     init(
         friendService: FriendServiceProviding = FriendService.shared,
-        offlineQueue: OfflineQueueing = OfflineQueue.shared
+        offlineQueue: OfflineQueueing = OfflineQueue.shared,
+        profileUpdates: AnyPublisher<UserUpdatedEvent, Never> = MessageSocketManager.shared.userUpdated.eraseToAnyPublisher()
     ) {
         self.friendService = friendService
         self.offlineQueue = offlineQueue
+        profileRepaintSubscription = profileUpdates
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in self?.repaint(with: event) }
+    }
+
+    /// #9307 — la partie renommée ou repeinte d'une demande l'est sans
+    /// relecture ; une liste intacte n'est pas republiée.
+    private func repaint(with event: UserUpdatedEvent) {
+        if let received = receivedRequests.repaintedElements(by: event.repainted) { receivedRequests = received }
+        if let sent = sentRequests.repaintedElements(by: event.repainted) { sentRequests = sent }
     }
 
     deinit {
@@ -91,7 +101,6 @@ final class RequestsViewModel: ObservableObject {
     // MARK: - Load Sent
 
     func loadSent(forceNetwork: Bool = false) async {
-        sentOffset = 0
         let friendService = self.friendService
         let pageSize = self.pageSize
         let store = await CacheCoordinator.shared.friendRequests
@@ -110,32 +119,12 @@ final class RequestsViewModel: ObservableObject {
         let apply: @MainActor @Sendable ([FriendRequest]) -> Void = { [weak self] requests in
             guard let self else { return }
             self.sentRequests = requests
-            self.sentOffset = requests.count
-            self.sentHasMore = requests.count >= pageSize
         }
         if forceNetwork {
             await loader.refresh(fetch: fetch, setLoadState: setLoadState, apply: apply)
             return
         }
         sentRevalidationTask = await loader.load(fetch: fetch, setLoadState: setLoadState, apply: apply)
-    }
-
-    func loadMoreSent() async {
-        guard sentHasMore else { return }
-        do {
-            let response = try await friendService.sentRequests(offset: sentOffset, limit: pageSize)
-            let pending = response.data.filter { $0.status == "pending" }
-            sentRequests.append(contentsOf: pending)
-            sentHasMore = response.pagination?.hasMore ?? false
-            // `sentOffset` tracks the FILTERED count (pending only) — `loadSent`
-            // initialises it to `requests.count` (post-filter). Incrementing by
-            // the unfiltered `response.data.count` would skip pending items the
-            // server returned on the previous page, dropping rows from the UI.
-            sentOffset += pending.count
-        } catch {
-            Self.logger.error("loadMoreSent failed: \(error.localizedDescription)")
-            sentHasMore = false
-        }
     }
 
     // MARK: - Accept / Reject (Wave 1 Phase B)

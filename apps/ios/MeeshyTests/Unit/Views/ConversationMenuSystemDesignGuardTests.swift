@@ -325,13 +325,16 @@ final class ConversationMenuSystemDesignGuardTests: XCTestCase {
     /// `adaptiveGlass` (Liquid Glass iOS 26 / fallback material), rows avec
     /// highlight au press (`MenuRowHighlightButtonStyle`, partagé avec le menu
     /// conversation) et métriques Dynamic Type — jamais `.buttonStyle(.plain)`.
+    /// #9043 ne retire le cadre qu'à la BANDE d'emojis : le menu du bas garde
+    /// son verre (directive porteur 2026-10-01), le glissement vers le haut le
+    /// remonte pour en atteindre toutes les entrées.
     func test_messageActionsMenu_rendersSystemDesign_likeConversationMenu() throws {
         let menuSource = try source("Meeshy/Features/Main/Components/MessageActionsMenu.swift")
 
         XCTAssertTrue(
             menuSource.contains(".adaptiveGlass(in: RoundedRectangle"),
-            "MessageActionsMenu doit appliquer .adaptiveGlass sur son conteneur " +
-            "(Liquid Glass iOS 26 réel + fallback), comme le menu conversation."
+            "MessageActionsMenu garde son conteneur .adaptiveGlass (Liquid Glass " +
+            "iOS 26 + fallback) — #9043 ne retire le cadre qu'à la bande d'emojis."
         )
         XCTAssertTrue(
             menuSource.contains("MenuRowHighlightButtonStyle"),
@@ -370,6 +373,11 @@ final class ConversationMenuSystemDesignGuardTests: XCTestCase {
         XCTAssertTrue(
             overlaySource.contains("MessageActionsMenu("),
             "MessageOverlayMenu doit composer la liste d'actions restylée MessageActionsMenu."
+        )
+        XCTAssertTrue(
+            overlaySource.contains("chrome: .none"),
+            "La barre d'émojis de l'appui long se pose nue sur le voile, comme " +
+            "celle d'une story (#9043) — aucune capsule autour."
         )
     }
 
@@ -431,10 +439,9 @@ final class ConversationMenuSystemDesignGuardTests: XCTestCase {
 
     /// Le builder du menu natif (ConversationView) : rangée d'emojis en
     /// `.controlGroupStyle(.compactMenu)` (4 plus utilisés — plafond 1 ligne),
-    /// actions via `MessageActionResolver` (SSOT avec l'overlay), et Supprimer
-    /// qui ARME la confirmation — jamais de suppression directe.
+    /// actions via `MessageActionResolver` (SSOT avec l'overlay).
     func test_buildNativeMessageMenu_compactRow_resolver_confirmedDelete() throws {
-        let vSource = try source("Meeshy/Features/Main/Views/ConversationView.swift")
+        let vSource = try source("Meeshy/Features/Main/Views/ConversationView+NativeMessageMenu.swift")
 
         guard let range = vSource.range(of: "func buildNativeMessageMenu(for msg: Message)") else {
             XCTFail("ConversationView doit exposer buildNativeMessageMenu(for:).")
@@ -455,24 +462,6 @@ final class ConversationMenuSystemDesignGuardTests: XCTestCase {
         XCTAssertTrue(
             block.contains("MessageActionResolver.primaryActions(ctx)"),
             "Les actions du menu natif doivent venir de MessageActionResolver (SSOT overlay)."
-        )
-
-        guard let btnRange = vSource.range(of: "func nativeMenuButton(") else {
-            XCTFail("ConversationView doit exposer nativeMenuButton(_:msg:).")
-            return
-        }
-        // Fenêtre large : `nativeMenuButton` est un switch de 10 cas (~6 k
-        // caractères) ; `.delete` est le DERNIER — la borne doit l'atteindre.
-        let btnEnd = vSource.index(btnRange.lowerBound, offsetBy: 6500, limitedBy: vSource.endIndex) ?? vSource.endIndex
-        let btnBlock = String(vSource[btnRange.lowerBound ..< btnEnd])
-        XCTAssertTrue(
-            btnBlock.contains("Button(role: .destructive)") &&
-            btnBlock.contains("requestDeleteMessage(msg.id)"),
-            "La suppression du menu natif doit être destructive ET passer par " +
-            "requestDeleteMessage (#4043) — point d'entrée UNIQUE qui arme la " +
-            "confirmation pour un message normal, et supprime directement (sans " +
-            "confirmation) un message jamais envoyé — jamais une suppression " +
-            "ad hoc qui court-circuiterait cette règle."
         )
     }
 

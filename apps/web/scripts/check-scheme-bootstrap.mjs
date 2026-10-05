@@ -8,9 +8,10 @@
  * `index.html` ne porte plus le texte du script bloquant clair/sombre, mais un
  * marqueur (`/*@INLINE_SCHEME_BOOTSTRAP@*​/`) que le greffon
  * `meeshy-inline-scheme-bootstrap` (vite.config.ts) remplace par
- * `INLINE_SCHEME_BOOTSTRAP` (src/lib/inline-scheme-bootstrap.js) — la MÊME
- * constante qu'importent `src/lib/scheme.ts` et
- * `scripts/prerender-institutional.tsx`. Le greffon jette si le marqueur est
+ * `INLINE_APP_SCHEME_BOOTSTRAP` (src/lib/inline-scheme-bootstrap.js), composé
+ * des MÊMES morceaux que le script des pages institutionnelles
+ * (`scripts/prerender-institutional.tsx`), plus le réglage de la barre du
+ * navigateur (#7970). Le greffon jette si le marqueur est
  * absent de la SOURCE ; il ne prouve pas que la SORTIE le porte encore — un
  * greffon désactivé, mal ordonné, ou dont Vite ignore silencieusement
  * `transformIndexHtml` laisserait passer le marqueur littéral jusqu'au
@@ -26,7 +27,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { INLINE_SCHEME_BOOTSTRAP } from '../src/lib/inline-scheme-bootstrap.js';
+import { INLINE_APP_SCHEME_BOOTSTRAP } from '../src/lib/inline-scheme-bootstrap.js';
 
 const APP = fileURLToPath(new URL('..', import.meta.url));
 const INDEX_HTML = join(APP, 'dist', 'index.html');
@@ -38,7 +39,7 @@ const failures = [];
 if (html.includes(MARKER)) {
   failures.push(`le marqueur ${MARKER} est encore présent : le greffon ne l'a pas remplacé`);
 }
-if (!html.includes(`<script>${INLINE_SCHEME_BOOTSTRAP}</script>`)) {
+if (!html.includes(`<script>${INLINE_APP_SCHEME_BOOTSTRAP}</script>`)) {
   failures.push("le script d'amorçage du schéma est absent, tronqué ou altéré dans dist/index.html");
 }
 

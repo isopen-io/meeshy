@@ -446,6 +446,12 @@ describe('joinLinkAsGuest — POST /api/v1/links/:key/members, corps d’invité
     });
   });
 
+  test('part SANS crédential de session (#8816) : un compte connecté entre en invité, jamais sous son nom', async () => {
+    const { transport, requests } = fakeTransport(served());
+    await joinLinkAsGuest({ source: 'gateway', transport }, { link: 'mshy_x', body: { language: 'fr' } });
+    expect(requests[0]?.credential).toBeNull();
+  });
+
   test('les droits ABSENTS ne se promettent pas', async () => {
     const { transport } = fakeTransport(served({ entry: { outcome: 'new' } }));
     const result = await joinLinkAsGuest({ source: 'gateway', transport }, { link: 'mshy_x', body: { language: 'fr' } });

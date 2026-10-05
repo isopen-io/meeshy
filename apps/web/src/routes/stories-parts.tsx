@@ -1,5 +1,7 @@
 import type { ReactNode, Ref } from 'react';
 
+import { CHROME_ACTION_HIT_CLASS } from '@/components/chrome-action';
+import { BackGlyph, SCREEN_HEADER_HEIGHT } from '@/components/ui-chrome';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { Link } from '@/routes/route-table';
@@ -34,14 +36,14 @@ export function StoriesHeader({
   readonly titleRef?: Ref<HTMLHeadingElement>;
 }) {
   return (
-    <header className="flex shrink-0 items-center gap-3 px-4 pt-3 pb-2">
+    <header className="flex shrink-0 items-center gap-1 px-2" style={{ height: SCREEN_HEADER_HEIGHT }}>
       <Link
         to="list"
         aria-label={translate(language, 'pending.back')}
-        className="grid size-11 shrink-0 place-items-center rounded-chip focus-visible:outline-2 focus-visible:outline-offset-2"
-        style={{ outlineColor: 'var(--color-ios-brand)' }}
+        className={CHROME_ACTION_HIT_CLASS}
+        style={{ color: 'var(--color-ios-brand)' }}
       >
-        <span aria-hidden="true" className="text-lg leading-none">‹</span>
+        <BackGlyph />
       </Link>
       <h1
         ref={titleRef}
@@ -58,7 +60,7 @@ export function StoriesHeader({
 
 export function StoriesLoading({ language }: { readonly language: InterfaceLanguage }) {
   return (
-    <p role="status" className="py-8 text-center text-check" style={{ color: 'var(--color-ios-ink-2)' }}>
+    <p role="status" className="py-8 text-center text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
       {translate(language, 'stories.loading')}
     </p>
   );
@@ -66,7 +68,7 @@ export function StoriesLoading({ language }: { readonly language: InterfaceLangu
 
 export function StoriesLoadError({ language }: { readonly language: InterfaceLanguage }) {
   return (
-    <p role="alert" className="py-8 text-center text-check" style={{ color: 'var(--color-ios-ink-2)' }}>
+    <p role="alert" className="py-8 text-center text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
       {translate(language, 'stories.error')}
     </p>
   );

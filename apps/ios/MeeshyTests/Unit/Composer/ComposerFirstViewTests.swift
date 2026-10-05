@@ -21,12 +21,12 @@ final class ComposerFirstViewTests: XCTestCase {
                         .descriptionPanel,
                         .backgroundPalette,
                         .drawingToolOptions,
-                        .objectChipsReading] {
+                        .objectChipsReading,
+                        .textToolControls] {
             XCTAssertTrue(ComposerFirstView.serves(surface),
                           "\(surface.rawValue) relève d'un des trois verbes et doit être servie")
         }
-        for surface in [ComposerFirstViewSurface.textToolControls,
-                        .textStylesBand,
+        for surface in [ComposerFirstViewSurface.textStylesBand,
                         .trimBand] {
             XCTAssertFalse(ComposerFirstView.serves(surface),
                            "\(surface.rawValue) règle un objet DÉJÀ POSÉ : elle appartient à "
@@ -44,6 +44,7 @@ final class ComposerFirstViewTests: XCTestCase {
         XCTAssertEqual(ComposerFirstView.verb(of: .doorRail), .add)
         XCTAssertEqual(ComposerFirstView.verb(of: .backgroundPalette), .add)
         XCTAssertEqual(ComposerFirstView.verb(of: .drawingToolOptions), .add)
+        XCTAssertEqual(ComposerFirstView.verb(of: .textToolControls), .add)
         XCTAssertEqual(ComposerFirstView.verb(of: .canvasGestures), .move)
         XCTAssertEqual(ComposerFirstView.verb(of: .objectChipsReading), .move)
         XCTAssertEqual(ComposerFirstView.verb(of: .descriptionPanel), .describe)
@@ -59,30 +60,27 @@ final class ComposerFirstViewTests: XCTestCase {
 
     // MARK: - Les deux portes que la règle gouverne
 
-    /// **Le rail ignore l'édition de texte, il ne l'interdit pas.**
-    ///
-    /// La distinction est ce que la signature dit : `enterTextEditingMode` est
-    /// appelée par `openObjectEditor` juste avant de monter l'écran plein, donc
-    /// l'état EXISTE pendant que la première vue est couverte. Un témoin qui
-    /// n'éprouverait que `textEditing: false` ne verrait pas la différence
-    /// entre « la règle ignore l'état » et « l'état n'arrive jamais ».
-    func test_leRail_neMontreJamaisLesBullesDunTexte_memeEnEdition() {
-        XCTAssertFalse(ComposerFirstView.railShowsTextTools(textEditing: true),
-                       "l'édition de texte appartient à l'écran plein, qui couvre cette surface")
+    /// **Le rail montre les options d'un texte EN COURS de saisie sur la
+    /// scène** (directive porteur 2026-09-28) — et rien quand aucun texte ne
+    /// s'édite. Les deux verdicts, sinon une règle constante passerait.
+    func test_leRail_montreLesOptionsDuTexte_seulementPendantSaSaisie() {
+        XCTAssertTrue(ComposerFirstView.railShowsTextTools(textEditing: true),
+                      "la porte TEXTE ouvre ses options à droite de son bouton")
         XCTAssertFalse(ComposerFirstView.railShowsTextTools(textEditing: false))
     }
 
-    /// **La zone basse ne porte que les options du DESSIN**, et elle les porte
-    /// vraiment — le témoin s'écrit sur les deux verdicts.
+    /// **La zone basse déplie les réglages de l'outil ouvert** — dessin ou
+    /// texte — et rien quand aucun outil ne l'est.
     ///
     /// N'éprouver que le refus laisserait passer une règle qui rend `false`
-    /// partout : le pinceau perdrait ses réglages, et la porte `drawing`
-    /// deviendrait inerte — un « correctif » qui casse, appliqué au nom d'une
-    /// directive de rangement.
-    func test_laZoneBasse_porteLesOptionsDuDessin_etCellesLaSeulement() {
-        XCTAssertTrue(ComposerFirstView.lowZoneShowsToolOptions(drawing: true),
+    /// partout : le pinceau et le texte perdraient leurs réglages, et leurs
+    /// colonnes deviendraient inertes.
+    func test_laZoneBasse_porteLesOptionsDeLOutilOuvert() {
+        XCTAssertTrue(ComposerFirstView.lowZoneShowsToolOptions(drawing: true, textEditing: false),
                       "les réglages du pinceau sont ceux du geste qui AJOUTE")
-        XCTAssertFalse(ComposerFirstView.lowZoneShowsToolOptions(drawing: false))
+        XCTAssertTrue(ComposerFirstView.lowZoneShowsToolOptions(drawing: false, textEditing: true),
+                      "un réglage de texte choisi dans la colonne se déplie en bas")
+        XCTAssertFalse(ComposerFirstView.lowZoneShowsToolOptions(drawing: false, textEditing: false))
     }
 
     // MARK: - Ce que la règle garde en vie, ailleurs

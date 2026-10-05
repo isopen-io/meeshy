@@ -99,8 +99,8 @@ struct ComposerAvatarSoundBadge: View {
     /// titre long pousserait la capsule sur le nom de l'auteur.
     private var capsule: some View {
         ComposerSoundTraceRow(sound: sound, tint: tint, creditMaxWidth: 150)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
+        .padding(.horizontal, MeeshySpacing.smPlus)
+        .padding(.vertical, MeeshySpacing.xsPlus)
         // **44 pt est un PLANCHER dès qu'elle s'ouvre.** La pastille mesurait
         // 28 pt de haut tant qu'elle ne faisait que se lire ; devenue bouton,
         // elle doit la cible que la dimension 5 exige.

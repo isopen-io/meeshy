@@ -1,7 +1,11 @@
 import { describe, expect, test } from 'bun:test';
 
 import {
+  centeredCrop,
   emptyStudioPage,
+  pageWithBackgroundCrop,
+  pageWithBackgroundMuted,
+  pageWithBackgroundTrim,
   isStudioPageEmpty,
   isStudioPagePublishable,
   pageMediaCount,
@@ -25,6 +29,7 @@ import {
   selectedTextLayerOf,
   studioDoorAccepts,
   studioFailureKey,
+  type StudioPage,
 } from './studio-page';
 import { IDENTITY_POSE } from './studio-pose';
 
@@ -333,5 +338,27 @@ describe('studioFailureKey — la cause se DIT dans la langue de l’interface, 
     expect(studioFailureKey(failure(400), 'publish')).toBe('story.studio.failure.refused');
     expect(studioFailureKey(failure(503), 'publish')).toBe('story.studio.failure.unavailable');
     expect(studioFailureKey(failure(0, 'MEDIA_NOT_CLAIMED'), 'publish')).toBe('story.studio.failure.refused');
+  });
+});
+
+describe('les éditions de base du fond (#9136)', () => {
+  const withBackground = (): StudioPage => ({
+    ...emptyStudioPage('p', 't', 'fr'),
+    background: { previewUrl: 'blob:v', mediaType: 'video', upload: { phase: 'uploading', progress: 0 }, caption: '', pose: IDENTITY_POSE },
+  });
+
+  test('une coupe, un muet, un recadrage s’écrivent ; leur valeur neutre s’écrit par l’ABSENCE', () => {
+    const coupee = pageWithBackgroundTrim(withBackground(), { start: 1, end: 4 });
+    expect(coupee.background?.trim).toEqual({ start: 1, end: 4 });
+    expect('trim' in (pageWithBackgroundTrim(coupee, null).background ?? {})).toBe(false);
+    expect(pageWithBackgroundMuted(withBackground(), true).background?.muted).toBe(true);
+    expect('muted' in (pageWithBackgroundMuted(pageWithBackgroundMuted(withBackground(), true), false).background ?? {})).toBe(false);
+    expect('crop' in (pageWithBackgroundCrop(withBackground(), { x: 0, y: 0, width: 1, height: 1 }).background ?? {})).toBe(false);
+  });
+
+  test('le cadre centré garde la plus grande part de la source au rapport visé', () => {
+    expect(centeredCrop(1, 4 / 3)).toEqual({ x: 0.125, y: 0, width: 0.75, height: 1 });
+    expect(centeredCrop(16 / 9, 9 / 16).width).toBe(1);
+    expect(centeredCrop(null, 4 / 3)).toEqual({ x: 0, y: 0, width: 1, height: 1 });
   });
 });

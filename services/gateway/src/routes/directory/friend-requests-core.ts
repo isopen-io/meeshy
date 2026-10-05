@@ -402,10 +402,16 @@ async function trancherDemande(
   // c'est lui qui a fait le premier geste.
   //
   // Tir-et-oublie, comme les treize autres axes : un compteur d'engagement ne
-  // fait jamais échouer l'acte qu'il mesure.
+  // fait jamais échouer l'acte qu'il mesure. La cible est l'AUTRE partie :
+  // l'opération paie une fois par personne, si bien qu'une amitié défaite puis
+  // renouée ne recrédite pas.
   const engagement = new EngagementService(fastify.prisma);
-  for (const partie of [demande.senderId, demande.receiverId]) {
-    engagement.recordActivity(partie, 'social.friendship')
+  const parties = [
+    { partie: demande.senderId, autre: demande.receiverId },
+    { partie: demande.receiverId, autre: demande.senderId },
+  ];
+  for (const { partie, autre } of parties) {
+    engagement.recordActivity(partie, 'social.friendship', { targetId: autre })
       .catch((err) => logError(fastify.log, 'engagement social.friendship failed:', err));
   }
 

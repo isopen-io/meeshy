@@ -1,6 +1,7 @@
 import type { QueryClient } from '@tanstack/react-query';
 import { isReactionAllowed, REACTION_LIMIT_REACHED_MESSAGE } from '@meeshy/shared/utils/reaction-limit';
 import type { ReactionData } from '@meeshy/shared/types/reaction';
+import * as reactionsEndpoints from '@meeshy/shared/api/endpoints/reactions';
 
 import { fixtureAddReaction, fixtureRemoveReaction } from './fixtures-reactions';
 import { patchThreadMessages } from './messages';
@@ -11,9 +12,9 @@ import type { ApiResult } from './http';
 import type { Message } from './types';
 
 /**
- * LE PORT DES RÉACTIONS (#5814, § 3) — `POST /api/v1/reactions`
+ * LE PORT DES RÉACTIONS (#5814, § 3) — `POST reactions.root`
  * (`services/gateway/src/routes/reactions.ts:72-92`) et
- * `DELETE /api/v1/reactions/:messageId/:emoji` (`:279-296`), les DEUX
+ * `DELETE reactions.byMessageIdByEmoji` (`:279-296`), les DEUX
  * `requiredAuth` `allowAnonymous: true`. En source `fixtures`, le bouchon
  * `fixtures-reactions.ts` MIME la même forme (201/200/409, 200/404) — les
  * réactions, à la différence des actions de rangée, passent par un « réseau »
@@ -26,7 +27,7 @@ export function addReaction(
   params: { readonly messageId: string; readonly emoji: string },
 ): Promise<ApiResult<ReactionData>> {
   if (__FIXTURES__ && deps.source === 'fixtures') return Promise.resolve(fixtureAddReaction(params));
-  return deps.transport.request<ReactionData>({ method: 'POST', path: '/api/v1/reactions', body: params });
+  return deps.transport.request<ReactionData>({ method: 'POST', path: reactionsEndpoints.root, body: params });
 }
 
 export function removeReaction(
@@ -36,7 +37,7 @@ export function removeReaction(
   if (__FIXTURES__ && deps.source === 'fixtures') return Promise.resolve(fixtureRemoveReaction(params));
   return deps.transport.request<{ readonly message: string }>({
     method: 'DELETE',
-    path: `/api/v1/reactions/${params.messageId}/${encodeURIComponent(params.emoji)}`,
+    path: reactionsEndpoints.byMessageIdByEmoji(params.messageId, params.emoji),
   });
 }
 

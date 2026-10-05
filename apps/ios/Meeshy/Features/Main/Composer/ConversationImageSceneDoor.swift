@@ -1,0 +1,201 @@
+import SwiftUI
+import MeeshySDK
+import MeeshyUI
+
+// **Les portes de la SCÈNE d'une conversation** (#8416, #9124, #9126) — le
+// composer plein écran, qui ne publie rien : « Terminé » rend le média composé
+// au brouillon du message (`MeeshyComposerHost.onReturnMedia`). Des portes à
+// part, comme toutes celles qui montent le meuble.
+
+/// **La retouche d'une IMAGE** : le composer semé de l'image.
+struct ConversationImageSceneEditor: View {
+    let staged: Bool
+    let onDone: (ComposerReturnedMedia) -> Void
+    let onCancel: () -> Void
+    @StateObject private var graine: ConversationImageSeed
+
+    init(image: UIImage, staged: Bool,
+         onDone: @escaping (ComposerReturnedMedia) -> Void, onCancel: @escaping () -> Void) {
+        self.staged = staged
+        self.onDone = onDone
+        self.onCancel = onCancel
+        _graine = StateObject(wrappedValue: ConversationImageSeed(image: image))
+    }
+
+    var body: some View {
+        ConversationSceneHost(origin: .conversationDraftMedia(staged: staged), seed: graine.seed,
+                              onDone: onDone, onCancel: onCancel)
+    }
+}
+
+/// **La retouche d'une VIDÉO** (#9124) — elle remplace `MeeshyVideoEditorView`
+/// dans la conversation : la vidéo est le fond de la scène, et « Terminé » la
+/// rend bakée (`StoryVideoExportService`) si l'auteur l'a retouchée.
+struct ConversationVideoSceneEditor: View {
+    let staged: Bool
+    let onDone: (ComposerReturnedMedia) -> Void
+    let onCancel: () -> Void
+    @StateObject private var graine: ConversationVideoSeed
+
+    init(url: URL, staged: Bool,
+         onDone: @escaping (ComposerReturnedMedia) -> Void, onCancel: @escaping () -> Void) {
+        self.staged = staged
+        self.onDone = onDone
+        self.onCancel = onCancel
+        _graine = StateObject(wrappedValue: ConversationVideoSeed(url: url))
+    }
+
+    var body: some View {
+        ConversationSceneHost(origin: .conversationDraftMedia(staged: staged), seed: graine.seed,
+                              onDone: { media in
+                                  graine.handOff(media)
+                                  onDone(media)
+                              }, onCancel: onCancel)
+    }
+}
+
+/// **« Éditer » sur une pièce en attente** (#9126) : TOUTES les pièces du
+/// message, une scène chacune, ouvertes sur la pièce touchée ; « Terminé » rend
+/// chaque scène retouchée à sa pièce, les autres restent telles quelles.
+struct ConversationRetouchSeriesEditor: View {
+    let series: ConversationRetouchSeries
+    let onDone: ([ComposerRetouchedPiece]) -> Void
+    let onCancel: () -> Void
+
+    var body: some View {
+        MeeshyComposerHost(
+            intent: ComposerIntent(origin: .conversationDraftMedia(staged: true)),
+            initialVisibility: "PUBLIC",
+            onPublishAllInBackground: { _, _, _, _, _, _, _, _, _, _, _, _, _ in false },
+            onPublishDocument: { _ in false },
+            moodSeed: nil,
+            mediaSeed: nil,
+            onPreview: { _, _, _, _, _ in },
+            onDismiss: onCancel,
+            retouchSeries: series.seed,
+            onReturnSeries: onDone
+        )
+    }
+}
+
+/// Le meuble monté pour une porte du fil : il ne publie jamais.
+private struct ConversationSceneHost: View {
+    let origin: ComposerOrigin
+    let seed: StoryComposerSeed?
+    let onDone: (ComposerReturnedMedia) -> Void
+    let onCancel: () -> Void
+
+    var body: some View {
+        MeeshyComposerHost(
+            intent: ComposerIntent(origin: origin),
+            initialVisibility: "PUBLIC",
+            onPublishAllInBackground: { _, _, _, _, _, _, _, _, _, _, _, _, _ in false },
+            onPublishDocument: { _ in false },
+            moodSeed: nil,
+            mediaSeed: seed,
+            onPreview: { _, _, _, _, _ in },
+            onDismiss: onCancel,
+            onReturnMedia: onDone
+        )
+    }
+}
+
+/// **Les pièces du message, prêtes pour la scène** (#9126). Une image part de
+/// son fichier borné à 2 048 px (#8524), écrit en temporaire et PURGÉ quand la
+/// retouche se ferme ; une vidéo part de son fichier, que la pose copie déjà.
+final class ConversationRetouchSeries: Identifiable {
+    let id = UUID()
+    let seed: ComposerRetouchSeed
+    private let temporaires: [URL]
+
+    private init(seed: ComposerRetouchSeed, temporaires: [URL]) {
+        self.seed = seed
+        self.temporaires = temporaires
+    }
+
+    /// `nil` quand la pièce touchée ne peut pas s'ouvrir — on n'ouvre pas les
+    /// autres à sa place.
+    static func prepare(_ candidates: [ComposerRetouchPiece], focusId: String) async -> ConversationRetouchSeries? {
+        guard let focus = candidates.firstIndex(where: { $0.attachmentId == focusId }) else { return nil }
+        let fenetre = candidates[ComposerRetouchSeries.window(count: candidates.count, focus: focus)]
+        var pieces: [ComposerRetouchPiece] = []
+        var temporaires: [URL] = []
+        for piece in fenetre {
+            guard piece.kind == .image else { pieces.append(piece); continue }
+            guard let image = await ConversationImageRetouche.loadSource(fileURL: piece.fileURL),
+                  let data = image.jpegData(compressionQuality: 0.92) else { continue }
+            let url = FileManager.default.temporaryDirectory
+                .appendingPathComponent("retouche-\(UUID().uuidString).jpg")
+            guard (try? data.write(to: url)) != nil else { continue }
+            temporaires.append(url)
+            pieces.append(ComposerRetouchPiece(attachmentId: piece.attachmentId, fileURL: url,
+                                               mimeType: "image/jpeg", kind: .image))
+        }
+        guard pieces.contains(where: { $0.attachmentId == focusId }) else {
+            temporaires.forEach { try? FileManager.default.removeItem(at: $0) }
+            return nil
+        }
+        return ConversationRetouchSeries(seed: ComposerRetouchSeed(pieces: pieces, focusId: focusId),
+                                         temporaires: temporaires)
+    }
+
+    // Sous l'isolation MainActor par défaut, la deinit synthétisée est isolée
+    // et double-libère sur iOS 26.1 (`MainActorDeinitSourceGuardTests`).
+    nonisolated deinit {
+        for url in temporaires { try? FileManager.default.removeItem(at: url) }
+    }
+}
+
+/// **La graine d'une retouche VIDÉO** (#9124) : la copie sous la convention du
+/// composer (`StoryComposerSeed.video(copying:)`), PURGÉE à la fermeture — sauf
+/// si c'est elle que « Terminé » a rendue telle quelle au message.
+final class ConversationVideoSeed: ObservableObject {
+    let seed: StoryComposerSeed?
+    private let copyURL: URL?
+    private nonisolated(unsafe) var keepsCopy = false
+
+    init(url: URL) {
+        seed = StoryComposerSeed.video(copying: url, declaredMimeType: MimeTypeResolver.mimeType(forURL: url))
+        copyURL = seed?.origin?.fileURL
+    }
+
+    func handOff(_ media: ComposerReturnedMedia) {
+        if case .video(let rendu) = media, rendu == copyURL { keepsCopy = true }
+    }
+
+    // Sous l'isolation MainActor par défaut, la deinit synthétisée est isolée
+    // et double-libère sur iOS 26.1 (`MainActorDeinitSourceGuardTests`).
+    nonisolated deinit {
+        guard !keepsCopy, let copyURL else { return }
+        try? FileManager.default.removeItem(at: copyURL)
+    }
+}
+
+/// **La graine d'une retouche, écrite UNE fois** : elle NOMME son fichier, ce
+/// qui la fait adopter comme fond de la scène (`ComposerSeedIngestion.plan`
+/// exige une origine). Un `@StateObject` la construit une seule fois par
+/// présentation, quel que soit le nombre de rendus du fil derrière.
+final class ConversationImageSeed: ObservableObject {
+    let seed: StoryComposerSeed
+    /// Le temporaire de la graine, PURGÉ quand la retouche se ferme (#8524) :
+    /// chaque ouverture en laissait un de plus dans `tmp/`.
+    let fileURL: URL
+
+    init(image: UIImage) {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("retouche-\(UUID().uuidString).jpg")
+        fileURL = url
+        if let data = image.jpegData(compressionQuality: 0.92), (try? data.write(to: url)) != nil {
+            seed = StoryComposerSeed(payload: .image(image),
+                                     origin: StoryComposerSeed.Origin(fileURL: url, mimeType: "image/jpeg"))
+        } else {
+            seed = StoryComposerSeed(payload: .image(image))
+        }
+    }
+
+    // Sous l'isolation MainActor par défaut, la deinit synthétisée est isolée
+    // et double-libère sur iOS 26.1 (`MainActorDeinitSourceGuardTests`).
+    nonisolated deinit {
+        try? FileManager.default.removeItem(at: fileURL)
+    }
+}

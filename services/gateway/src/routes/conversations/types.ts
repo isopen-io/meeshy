@@ -92,8 +92,10 @@ export interface MessagesQuery {
   view?: string;
   /** Requis par `view=thread` — synonyme de `replyToId`, qui reste accepté. */
   parentId?: string;
-  /** Requis par `view=search` — cherché dans le contenu ET les traductions. */
+  /** Requis par `view=search` — cherché dans le contenu ET les traductions ; facultatif sur `view=media` (#8098). */
   q?: string;
+  /** `view=media` seulement (#8098) : genres de l'index, séparés par des virgules. */
+  kinds?: string;
   include_reactions?: string;
   include_translations?: string;
   include_status?: string;

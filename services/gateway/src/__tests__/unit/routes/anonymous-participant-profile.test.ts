@@ -267,13 +267,13 @@ describe('GET /conversations/:id/participants/:participantId/profile — identit
     expect(data.shareLinkName).toBe('Invitation publique');
   });
 
-  it('refuse à qui n’est pas membre de la conversation', async () => {
+  it('répond à qui n’est pas membre comme à une conversation inexistante (#8099)', async () => {
     mockCanAccess.mockResolvedValue(false);
     const ctx = setup('member');
 
     await fetchProfile(ctx);
 
-    expect(ctx.reply._status).toBe(403);
+    expect(ctx.reply._status).toBe(404);
   });
 });
 

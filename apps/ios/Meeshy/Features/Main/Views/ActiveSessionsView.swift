@@ -104,7 +104,7 @@ struct ActiveSessionsView: View {
 
             Color.clear.frame(height: CollapsibleHeaderMetrics.expandedHeight)
 
-            VStack(spacing: 16) {
+            VStack(spacing: MeeshySpacing.lg) {
                 ForEach(viewModel.sessions) { session in
                     sessionRow(session)
                 }
@@ -115,8 +115,8 @@ struct ActiveSessionsView: View {
 
                 Spacer().frame(height: 40)
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 16)
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.top, MeeshySpacing.lg)
         }
         .coordinateSpace(name: "scroll")
         .onPreferenceChange(ScrollOffsetPreferenceKey.self) { scrollRelay.offset = $0 }      // iOS 16–17
@@ -126,12 +126,12 @@ struct ActiveSessionsView: View {
     // MARK: - Session Row
 
     private func sessionRow(_ session: UserSession) -> some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             // Bloc informatif (icône + libellés) groupé en UN seul élément VoiceOver
             // au lieu de ~5 arrêts fragmentés (168i, parité 142i/164i). VoiceOver lit
             // « <appareil>, Actuelle, <ip>, Actif <date> » d'une traite ; le bouton
             // Révoquer reste un élément actionnable distinct (sibling, hors du groupe).
-            HStack(spacing: 12) {
+            HStack(spacing: MeeshySpacing.md) {
                 Image(systemName: session.isCurrent ? "iphone" : "desktopcomputer")
                     // Glyphe décoratif borné par le cadre fixe 32×32 → police figée (86i) ;
                     // l'identité de l'appareil est portée par `deviceName` → masqué du rotor.
@@ -139,37 +139,37 @@ struct ActiveSessionsView: View {
                     .foregroundColor(session.isCurrent ? MeeshyColors.success : MeeshyColors.indigo400)
                     .frame(width: 32, height: 32)
                     .background(
-                        RoundedRectangle(cornerRadius: 8)
+                        RoundedRectangle(cornerRadius: MeeshyRadius.xs)
                             .fill((session.isCurrent ? MeeshyColors.success : MeeshyColors.indigo400).opacity(0.12))
                     )
                     .accessibilityHidden(true)
 
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 6) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
+                    HStack(spacing: MeeshySpacing.xsPlus) {
                         Text(session.deviceName ?? String(localized: "sessions_unknown_device", defaultValue: "Appareil inconnu"))
-                            .font(MeeshyFont.relative(14, weight: .semibold))
+                            .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
                             .foregroundColor(theme.textPrimary)
 
                         if session.isCurrent {
                             Text(String(localized: "sessions_current_badge", defaultValue: "Actuelle"))
-                                .font(MeeshyFont.relative(10, weight: .bold))
+                                .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .bold))
                                 .foregroundColor(.white)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
+                                .padding(.horizontal, MeeshySpacing.xsPlus)
+                                .padding(.vertical, MeeshySpacing.xxs)
                                 .background(Capsule().fill(MeeshyColors.success))
                         }
                     }
 
                     if let ip = session.ipAddress {
                         Text(ip)
-                            .font(MeeshyFont.relative(12, weight: .regular))
+                            .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .regular))
                             .foregroundColor(theme.textMuted)
                     }
 
                     if let lastActive = session.lastActive {
                         let formatted = lastActive.formatted(.relative(presentation: .named))
                         Text(String(localized: "sessions_last_active", defaultValue: "Actif") + " " + formatted)
-                            .font(MeeshyFont.relative(11, weight: .regular))
+                            .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .regular))
                             .foregroundColor(theme.textSecondary)
                     }
                 }
@@ -184,20 +184,20 @@ struct ActiveSessionsView: View {
                     Task { await viewModel.revokeSession(sessionId: session.id) }
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(MeeshyFont.relative(20))
+                        .font(MeeshyFont.relative(MeeshyIconSize.xl))
                         .foregroundColor(MeeshyColors.error.opacity(0.7))
                 }
                 .accessibilityLabel(String(localized: "sessions_revoke", defaultValue: "Révoquer cette session"))
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
+        .padding(.horizontal, MeeshySpacing.mdPlus)
+        .padding(.vertical, MeeshySpacing.md)
         .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(theme.surfaceGradient(tint: session.isCurrent ? "34D399" : "6366F1"))
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
+                .fill(theme.surfaceGradient(tint: session.isCurrent ? "34D399" : MeeshyColors.brandPrimaryHex))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 16)
-                        .stroke(theme.border(tint: session.isCurrent ? "34D399" : "6366F1"), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.lg)
+                        .stroke(theme.border(tint: session.isCurrent ? "34D399" : MeeshyColors.brandPrimaryHex), lineWidth: 1)
                 )
         )
     }
@@ -209,17 +209,17 @@ struct ActiveSessionsView: View {
             HapticFeedback.medium()
             Task { await viewModel.revokeAllOtherSessions() }
         } label: {
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 Image(systemName: "trash")
                     .font(MeeshyFont.relative(13, weight: .semibold))
                 Text(String(localized: "sessions_revoke_all", defaultValue: "Révoquer toutes les autres sessions"))
-                    .font(MeeshyFont.relative(14, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
             }
             .foregroundColor(.white)
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 12)
+            .padding(.vertical, MeeshySpacing.md)
             .background(
-                RoundedRectangle(cornerRadius: 12)
+                RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                     .fill(MeeshyColors.error)
             )
         }

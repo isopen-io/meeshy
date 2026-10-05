@@ -47,6 +47,11 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
     public var editableKinds: Set<StoryCanvasUIView.CanvasItemKind> = [.text, .media]
     /// #4046 — l'objet SORT de la scène ; l'hôte décide ce qu'il devient.
     public var onItemLeftScene: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)?
+    /// « Rogner » dans l'appui long — voir `StoryCanvasUIView.onItemTrimRequested`.
+    public var onItemTrimRequested: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)?
+    /// Le menu d'appui long peint par l'hôte (#8717) — voir
+    /// `StoryCanvasUIView.onItemMenuRequested`.
+    public var onItemMenuRequested: ((String, StoryCanvasUIView.CanvasItemKind, CGPoint) -> Void)?
     public var onItemDuplicated: ((_ oldId: String, _ newId: String, _ kind: StoryCanvasUIView.CanvasItemKind) -> Void)?
     public var editingTextId: String?
     public var onInlineTextChanged: ((String, String) -> Void)?
@@ -133,6 +138,10 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
     /// preview d'édition (directive user 2026-07-14). `postMediaId` étant vide
     /// pour un clip non publié, le resolver par `postMediaId` échouait.
     public var loadedAudioURLs: [String: URL] = [:]
+    /// Les médias adoptés rendus à leur fichier (`StoryReaderContext.localMediaAliases`).
+    public var localMediaAliases: [String: URL] = [:]
+    /// La saisie en ligne cède au doigt (voir `StoryCanvasUIView+InlineEditYield`).
+    public var inlineEditYieldsToManipulation: Bool = false
     /// Corner radius applied to the embedded `StoryCanvasUIView`'s backing layer
     /// so the rounded « card » actually clips the CALayer story content. A
     /// SwiftUI `.clipShape` on this representable cannot round the embedded
@@ -150,6 +159,8 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
                 onItemDoubleTapped: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)? = nil,
                 editableKinds: Set<StoryCanvasUIView.CanvasItemKind> = [.text, .media],
                 onItemLeftScene: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)? = nil,
+                onItemTrimRequested: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)? = nil,
+                onItemMenuRequested: ((String, StoryCanvasUIView.CanvasItemKind, CGPoint) -> Void)? = nil,
                 onItemDuplicated: ((String, String, StoryCanvasUIView.CanvasItemKind) -> Void)? = nil,
                 editingTextId: String? = nil,
                 onInlineTextChanged: ((String, String) -> Void)? = nil,
@@ -175,12 +186,18 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
                 loadedImagesVersion: UInt64 = 0,
                 loadedAudioURLs: [String: URL] = [:],
                 canvasCornerRadius: CGFloat = 0,
-                timelineBridge: StoryCanvasTimelineBridge? = nil) {
+                timelineBridge: StoryCanvasTimelineBridge? = nil,
+                localMediaAliases: [String: URL] = [:],
+                inlineEditYieldsToManipulation: Bool = false) {
+        self.localMediaAliases = localMediaAliases
+        self.inlineEditYieldsToManipulation = inlineEditYieldsToManipulation
         self._slide = slide
         self.onItemTapped = onItemTapped
         self.onItemDoubleTapped = onItemDoubleTapped
         self.editableKinds = editableKinds
         self.onItemLeftScene = onItemLeftScene
+        self.onItemTrimRequested = onItemTrimRequested
+        self.onItemMenuRequested = onItemMenuRequested
         self.onItemDuplicated = onItemDuplicated
         self.editingTextId = editingTextId
         self.onInlineTextChanged = onInlineTextChanged
@@ -217,6 +234,7 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
     nonisolated deinit {}
         var lastLoadedImagesVersion: UInt64?
         var lastLoadedAudioURLs: [String: URL]?
+        var lastLocalMediaAliases: [String: URL]?
     }
 
     /// Construit le `StoryReaderContext` d'édition : pont image (bitmaps édités
@@ -227,7 +245,22 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         let reader = ComposerImageCacheReader(images: loadedImages,
                                               animations: loadedStickerAnimations,
                                               version: loadedImagesVersion)
-        return StoryReaderContext(imageCache: reader, localAudioURLResolver: audioResolver)
+        // Un média POSÉ adopté se résout par son `postMediaId` vers son fichier
+        // local (`StoryMediaLayer.resolvedMediaURL`) ; sans alias, aucun
+        // résolveur, comme avant — la garde d'existence des `file://` reste
+        // celle du composer.
+        let aliases = localMediaAliases
+        var mediaResolver: (@Sendable (String) -> URL?)?
+        if !aliases.isEmpty {
+            mediaResolver = { (cle: String) -> URL? in
+                guard let local = aliases[cle], FileManager.default.fileExists(atPath: local.path) else { return nil }
+                return local
+            }
+        }
+        return StoryReaderContext(postMediaURLResolver: mediaResolver,
+                                  imageCache: reader,
+                                  localAudioURLResolver: audioResolver,
+                                  localMediaAliases: aliases)
     }
 
     public func makeCoordinator() -> Coordinator { Coordinator() }
@@ -250,6 +283,8 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         view.onItemDoubleTapped = onItemDoubleTapped
         view.editableKinds = editableKinds
         view.onItemLeftScene = onItemLeftScene
+        view.onItemTrimRequested = onItemTrimRequested
+        view.onItemMenuRequested = onItemMenuRequested
         view.onItemDuplicated = onItemDuplicated
         view.onInlineTextChanged = onInlineTextChanged
         view.onInlineTextEditEnded = onInlineTextEditEnded
@@ -278,6 +313,7 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         view.playsAudioInEditMode = true
         context.coordinator.lastLoadedImagesVersion = loadedImagesVersion
         context.coordinator.lastLoadedAudioURLs = loadedAudioURLs
+        context.coordinator.lastLocalMediaAliases = localMediaAliases
         timelineBridge?.canvas = view
         // Bootstrap : la couche initiale calculée par `init` n'a pas pu être
         // poussée au callback (nil à ce moment). On force l'émission après
@@ -295,6 +331,8 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         // pushing sheets, etc.). This is cheap — just a property assignment.
         uiView.onItemTapped = onItemTapped
         uiView.onItemDoubleTapped = onItemDoubleTapped
+        uiView.onItemTrimRequested = onItemTrimRequested
+        uiView.onItemMenuRequested = onItemMenuRequested
         // **Remis à jour à CHAQUE passe**, comme `onItemDoubleTapped` juste
         // au-dessus : une closure posée au seul `makeUIView` capture l'état de
         // la première composition. L'hôte qui présente le menu de fond lit le
@@ -337,9 +375,11 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         // `reconfigureAudioForPlayback`, qui lit alors le resolver à jour.
         let imageChanged = context.coordinator.lastLoadedImagesVersion != loadedImagesVersion
         let audioChanged = context.coordinator.lastLoadedAudioURLs != loadedAudioURLs
-        if imageChanged || audioChanged {
+        let aliasesChanged = context.coordinator.lastLocalMediaAliases != localMediaAliases
+        if imageChanged || audioChanged || aliasesChanged {
             context.coordinator.lastLoadedImagesVersion = loadedImagesVersion
             context.coordinator.lastLoadedAudioURLs = loadedAudioURLs
+            context.coordinator.lastLocalMediaAliases = localMediaAliases
             uiView.setReaderContext(makeComposerContext())
             if imageChanged { uiView.invalidateImageCache() }
         }
@@ -375,10 +415,17 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         // sauterait à la première frappe.
         uiView.inlineEditFloorGlobalY = inlineEditFloorGlobalY
         uiView.inlineEditCeilingGlobalY = inlineEditCeilingGlobalY
+        uiView.inlineEditYieldsToManipulation = inlineEditYieldsToManipulation
         if uiView.inlineEditingTextId != editingTextId {
             if let id = editingTextId {
-                uiView.beginInlineTextEdit(textId: id)
+                // Une saisie SUSPENDUE par le doigt ne se rouvre pas d'elle-même :
+                // c'est le tap sur le texte qui la reprend.
+                if uiView.suspendedInlineEditId != id {
+                    uiView.suspendedInlineEditId = nil
+                    uiView.beginInlineTextEdit(textId: id)
+                }
             } else {
+                uiView.suspendedInlineEditId = nil
                 uiView.endInlineTextEdit()
             }
         }

@@ -52,10 +52,22 @@ public enum FloatingButtonSafeZone {
     /// points de plus, ce qui ne gêne rien et reste déplaçable au doigt.
     nonisolated public static var maxTopInset: CGFloat { 62 }
 
-    /// Encoche + barre de titre étendue. La trail de stories vit dans cette
-    /// hauteur : la dégager dégage aussi ses boutons.
+    /// La bande de stories posée SOUS l'en-tête étendu, au repos (#9363) —
+    /// réservée, pas lue : le SDK ne connaît pas les écrans. C'est la plus
+    /// haute des bandes de l'app (le tray du flux, 120 pt) ; l'app vérifie
+    /// qu'aucune ne la dépasse (`FeedButtonAnchorTests`).
+    ///
+    /// **Le défaut qu'elle corrige** (iPhone 17 Pro 402 pt, iOS 26.1, position
+    /// par défaut) : D2 croyait la trail DANS l'en-tête ; elle vit dessous. Le
+    /// disque Flux (19,125 53×53) recouvrait ENTIÈREMENT « Ajouter une story »
+    /// de l'avatar — 16,142 18×18 dans la liste, 15,132 34×34 dans le flux — et
+    /// le toucher sur le « + » basculait liste ↔ flux.
+    nonisolated public static var storyBand: CGFloat { 120 }
+
+    /// Encoche + barre de titre étendue + bande de stories : la dégager
+    /// dégage aussi le « + » de l'avatar et les anneaux.
     nonisolated public static var top: CGFloat {
-        maxTopInset + CollapsibleHeaderMetrics.expandedHeight
+        maxTopInset + CollapsibleHeaderMetrics.expandedHeight + storyBand
     }
 }
 
@@ -316,13 +328,13 @@ public struct FreeFloatingButton<Content: View>: View {
             .background(
                 Circle()
                     .fill(.ultraThinMaterial)
-                    .shadow(color: Color.black.opacity(0.35), radius: 10, x: 0, y: 5)
+                    .shadow(color: Color.black.opacity(MeeshyOpacity.medium), radius: 10, x: 0, y: 5)
             )
             .overlay(
                 Circle()
                     .stroke(
                         LinearGradient(
-                            colors: [Color.white.opacity(0.35), Color.white.opacity(0.1)],
+                            colors: [Color.white.opacity(MeeshyOpacity.medium), Color.white.opacity(MeeshyOpacity.subtle)],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         ),
@@ -615,13 +627,13 @@ public struct LegacyFloatingButton<Content: View>: View {
             .background(
                 Circle()
                     .fill(.ultraThinMaterial)
-                    .shadow(color: Color.black.opacity(0.35), radius: 10, x: 0, y: 5)
+                    .shadow(color: Color.black.opacity(MeeshyOpacity.medium), radius: 10, x: 0, y: 5)
             )
             .overlay(
                 Circle()
                     .stroke(
                         LinearGradient(
-                            colors: [Color.white.opacity(0.35), Color.white.opacity(0.1)],
+                            colors: [Color.white.opacity(MeeshyOpacity.medium), Color.white.opacity(MeeshyOpacity.subtle)],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         ),
@@ -730,7 +742,7 @@ public struct NotificationBadge: View {
     public var body: some View {
         if count > 0 {
             Text(Self.displayed(count))
-                .font(MeeshyFont.relative(10, weight: Self.fontWeight))
+                .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: Self.fontWeight))
                 .foregroundColor(.white)
                 .lineLimit(1)
                 // Ni `minimumScaleFactor`, ni cadre carré figé : la pastille
@@ -742,7 +754,7 @@ public struct NotificationBadge: View {
                 .background(
                     Capsule()
                         .fill(MeeshyColors.error)
-                        .shadow(color: MeeshyColors.error.opacity(0.5), radius: 3)
+                        .shadow(color: MeeshyColors.error.opacity(MeeshyOpacity.strong), radius: 3)
                 )
                 // Halo pulsant en capsule et non en cercle : à trois glyphes un
                 // cercle centré déborderait des extrémités. `scaleEffect`

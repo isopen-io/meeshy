@@ -1,0 +1,49 @@
+/* LA MASCOTTE (#8907) — deux mouvements, finis, qui n'animent que `transform`
+   et `opacity`. Ils ne sont declares QUE sous `prefers-reduced-motion:
+   no-preference`, et la regle generale de @layer base (`app.css`, regle 32)
+   les couperait encore. Ils s'accrochent a des attributs `data-mascot-motion`,
+   jamais a des classes : ce fichier est importe par le composant, sa feuille
+   n'est pas celle que `check-utilities.mjs` oppose aux classes du source.
+
+   - `mascot-hop` : le saut de joie, trois fois, puis le repos.
+   - `mascot-coin` : la piece frappee monte en tournant, une fois, et reste. */
+@keyframes mascotHop {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+  40% {
+    transform: translateY(-14%) scale(1.04, 0.96);
+  }
+  70% {
+    transform: translateY(0) scale(0.97, 1.03);
+  }
+}
+
+@keyframes mascotCoin {
+  0% {
+    opacity: 0;
+    transform: translateY(40%) rotateY(0deg);
+  }
+  60% {
+    opacity: 1;
+    transform: translateY(-30%) rotateY(540deg);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) rotateY(720deg);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  [data-mascot-motion='hop'] {
+    animation: mascotHop 0.7s cubic-bezier(0.22, 1.2, 0.36, 1) 3 both;
+    transform-origin: 50% 100%;
+  }
+
+  [data-mascot-motion='coin'] {
+    animation: mascotCoin 0.9s cubic-bezier(0.2, 0.9, 0.3, 1.2) 1 both;
+    transform-box: fill-box;
+    transform-origin: 50% 50%;
+  }
+}

@@ -1,4 +1,5 @@
 import { served } from '@/lib/api/prism';
+import { contactCardLabelOf } from '@/lib/contact-card/label';
 import { attachmentSrc } from '@/lib/api/media-url';
 import { thumbHashPlaceholder } from '@/lib/media/thumbhash';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
@@ -37,7 +38,7 @@ import { attachmentDurationLabel } from './media-transport';
  * la piste audio d'une bannière.
  */
 
-export type QuotedMediaKind = 'image' | 'video' | 'audio' | 'file';
+export type QuotedMediaKind = 'image' | 'video' | 'audio' | 'file' | 'contact';
 
 /**
  * LE GENRE → SON LIBELLÉ COURT, miroir `AttachmentKind.shortLabel`
@@ -52,6 +53,7 @@ export const QUOTED_KIND_KEY = {
   video: 'attachment.kind.video',
   audio: 'attachment.kind.audio',
   file: 'attachment.kind.file',
+  contact: 'contactCard.shared',
 } as const satisfies Readonly<Record<QuotedMediaKind, InterfaceCatalogKey>>;
 
 export { quotedIsProtected };
@@ -76,6 +78,22 @@ export type QuotedMedia = {
    * décrivent ce que le lecteur n'a pas le droit de voir.
    */
   readonly frame: QuotedFrame | null;
+  /**
+   * LE FICHIER D'UNE PISTE TEMPORELLE (#8233) — la vidéo dont on tire la
+   * première image quand le serveur n'a servi aucune vignette, le vocal qu'on
+   * joue depuis la citation. `null` pour une image (sa vignette suffit), un
+   * document, une pièce sans fichier ou PROTÉGÉE : l'URL d'un secret est le
+   * secret (cycle 125).
+   */
+  readonly fileSrc: string | null;
+  /**
+   * LA PIÈCE QUE L'APERÇU OUVRE (#8233, miroir `ReplyReference.quotedAttachment`
+   * iOS) — image, vidéo ou vocal, reconstruite depuis la citation elle-même :
+   * elle s'ouvre même quand le message cité est hors de la fenêtre chargée.
+   * `null` sur un document, une pièce sans fichier ou protégée — la zone média
+   * n'existe alors pas, et le toucher reste « aller au message ».
+   */
+  readonly openable: Attachment | null;
 };
 
 /**
@@ -133,7 +151,7 @@ const namedPieceIdOf = (quoted: object): string | undefined => {
 };
 
 /** `single` — la citation vise UNE pièce : la pièce nommée, ou la seule du message cité. */
-const representativeOf = (
+export const representativeOf = (
   quoted: Pick<Message, 'attachments'>,
 ): { readonly attachment: Attachment; readonly single: boolean } | undefined => {
   const namedId = namedPieceIdOf(quoted);
@@ -150,6 +168,10 @@ const representativeOf = (
  * vaut QUE pour une image : servir le `fileUrl` d'une vidéo ou d'un PDF dans
  * un `<img>` peindrait une case brisée.
  */
+const OPENABLE_KINDS: ReadonlySet<QuotedMediaKind> = new Set(['image', 'video', 'audio']);
+
+const hasFile = (attachment: Attachment): boolean => typeof attachment.fileUrl === 'string' && attachment.fileUrl !== '';
+
 const thumbnailOf = (attachment: Attachment, kind: QuotedMediaKind): string | null => {
   const raw = attachment.thumbnailUrl ?? (kind === 'image' ? attachment.fileUrl : undefined);
   if (raw === undefined || raw === '') return null;
@@ -179,17 +201,23 @@ const mediaOf = (params: {
   readonly interfaceLanguage: InterfaceLanguage;
 }): QuotedMedia => {
   const { attachment, single, messageIsProtected, interfaceLanguage } = params;
-  const kind = kindOf(attachment);
+  /* UNE CARTE DE VISITE SE DIT PAR SON CONTACT (#8122), jamais « Fichier » ni
+     `contact_<UUID>_….vcf` — `contactCardLabelOf` est le site unique. */
+  const contactLabel = contactCardLabelOf(attachment, interfaceLanguage);
+  const kind: QuotedMediaKind = contactLabel !== null ? 'contact' : kindOf(attachment);
   const mayTravel = !messageIsProtected && !quotedIsProtected(attachment);
   const framed = mayTravel && single && (kind === 'image' || kind === 'video');
+  const timebased = kind === 'video' || kind === 'audio';
   return {
     kind,
-    label: translate(interfaceLanguage, QUOTED_KIND_KEY[kind]),
+    label: contactLabel ?? translate(interfaceLanguage, QUOTED_KIND_KEY[kind]),
     thumbnailSrc: mayTravel ? thumbnailOf(attachment, kind) : null,
     placeholderSrc: (mayTravel ? thumbHashPlaceholder(attachment.thumbHash) : undefined) ?? null,
     durationLabel: mayTravel ? attachmentDurationLabel(attachment.duration) : null,
-    timebased: kind === 'video' || kind === 'audio',
+    timebased,
     frame: framed ? frameOf(attachment) : null,
+    fileSrc: mayTravel && timebased && hasFile(attachment) ? attachmentSrc(attachment.fileUrl) : null,
+    openable: mayTravel && OPENABLE_KINDS.has(kind) && hasFile(attachment) ? attachment : null,
   };
 };
 
@@ -204,12 +232,29 @@ const mediaOf = (params: {
  *   premier appelant qui l'oublie, et le défaut serait invisible pour qui
  *   parle français.
  */
+/**
+ * #8631 — UNE CITATION SCELLÉE N'A PAS TOUJOURS ÉTÉ SUPPRIMÉE. La passerelle
+ * scelle la citation d'un éphémère échu pour son lecteur sous la forme d'une
+ * suppression datée de son échéance, et y joint `expiresAt` = la même date
+ * (`sealedQuotedMessage`) ; le scellement local fait de même. Une échéance
+ * atteinte AU PLUS TARD à la date de scellement dit une EXPIRATION ; une
+ * suppression posée avant l'échéance reste une suppression.
+ */
+const instantOf = (value: unknown): number => new Date(value as string).getTime();
+
+function sealedByExpiry(deletedAt: unknown, expiresAt: unknown): boolean {
+  if (expiresAt === undefined || expiresAt === null) return false;
+  const expiry = instantOf(expiresAt);
+  const sealed = instantOf(deletedAt);
+  return Number.isFinite(expiry) && Number.isFinite(sealed) && expiry <= sealed;
+}
+
 export function quotedPreviewOf(params: {
   readonly quoted: Pick<
     Message,
     'content' | 'originalLanguage' | 'translations' | 'attachments' | 'isViewOnce' | 'isBlurred' | 'isEncrypted' | 'effectFlags'
   > &
-    Partial<Pick<Message, 'deletedAt'>>;
+    Partial<Pick<Message, 'deletedAt' | 'expiresAt'>>;
   readonly readerLanguages: readonly string[];
   readonly interfaceLanguage: InterfaceLanguage;
 }): QuotedPreview {
@@ -219,7 +264,8 @@ export function quotedPreviewOf(params: {
      l'ancien texte, sa traduction ou sa pièce, même si une charge en garde
      encore une trace. Aucune langue de CONTENU : c'est de l'interface. */
   if (quoted.deletedAt !== undefined && quoted.deletedAt !== null) {
-    return { text: translate(interfaceLanguage, 'message.deleted'), language: '', media: null, inventory: [], isProtected: true };
+    const key = sealedByExpiry(quoted.deletedAt, quoted.expiresAt) ? 'message.expired.a11y' : 'message.deleted';
+    return { text: translate(interfaceLanguage, key), language: '', media: null, inventory: [], isProtected: true };
   }
   const messageIsProtected = quotedIsProtected(quoted);
   const piece = representativeOf(quoted);

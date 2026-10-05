@@ -32,7 +32,7 @@ export function ProfilePeekSheet({ username, onClose }: { readonly username: str
   const language = currentInterfaceLanguage();
   const online = useOnline();
   const profile = useProfileController(username, language);
-  const { view, person, name, accent, relation, actions, signedIn, busy, onAction } = profile;
+  const { view, person, name, accent, presence, relation, actions, signedIn, busy, onAction } = profile;
   const onSignIn = useCallback(() => navigate(href('login')), []);
 
   return (
@@ -42,7 +42,7 @@ export function ProfilePeekSheet({ username, onClose }: { readonly username: str
           {person !== undefined ? (
             <div className="mx-auto grid w-full max-w-xl gap-6 pb-12 pt-2">
               {online ? null : <ProfileOfflineBanner language={language} />}
-              <ProfileHero profile={person} name={name} accent={accent} />
+              <ProfileHero profile={person} name={name} accent={accent} presence={presence} />
               {relation.kind === 'blocked' ? (
                 <ProfileBlockedCard language={language} name={name} online={online} busy={busy} onAction={onAction} />
               ) : view.data?.isSelf === true ? (
@@ -67,6 +67,7 @@ export function ProfilePeekSheet({ username, onClose }: { readonly username: str
                 to="userProfile"
                 params={{ username: person.username }}
                 data-profile-peek-open-page
+                onClick={onClose}
                 className="flex items-center justify-center gap-2 rounded-[14px] px-4 text-body font-semibold focus-visible:outline-2 focus-visible:outline-offset-2"
                 style={{
                   minHeight: 44,
@@ -76,7 +77,7 @@ export function ProfilePeekSheet({ username, onClose }: { readonly username: str
                 }}
               >
                 {translate(language, 'userProfile.peek.openPage')}
-                <GlyphSvg glyph={FEED_GLYPHS.caretRight} size={16} />
+                <GlyphSvg glyph={FEED_GLYPHS.caretRight} size={16} className="rtl:-scale-x-100" />
               </Link>
             </div>
           ) : view.isError ? (

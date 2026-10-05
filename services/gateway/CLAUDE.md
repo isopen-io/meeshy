@@ -343,6 +343,8 @@ P2025 → NotFoundError
 ## Rate Limiting
 - Global: 300 req/min per IP
 - Mentions: max 50 per message, 5/min per recipient
+- Contact identifiers (#8104): `POST /users/me/contacts/match`, `POST /users/me/contacts/sync` and `PUT`/`PATCH /directory/contacts` share ONE bucket per account counted in submitted IDENTIFIERS (phones + emails + usernames), not requests — 20 000/hour and 50 000/day (`utils/contact-identifier-budget.ts`). A 5 000-contact book at 3 identifiers each passes in 2 000-contact batches; a repeated sweep gets `429 CONTACT_IDENTIFIER_BUDGET_EXCEEDED`
+- Discoverability (#8104): `hideProfileFromSearch` is honoured by EVERY identifier → account resolution (contacts match/sync/directory read, `/users/email/:email`, `/users/phone/:phone`, `/users/search`, `/directory/people`, mention directory) through ONE law, `services/profile-discoverability.ts` — hidden unless self or accepted friend, fail-closed
 - Status updates: throttled to once per 5 seconds
 - No per-account cap on message sending: `registerMessageRateLimiter` (20/min) had no production caller and was removed by #4687 — the global 300 req/min limiter is the only guard on `POST /messages`
 

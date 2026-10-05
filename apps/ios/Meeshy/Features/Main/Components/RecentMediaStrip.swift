@@ -86,7 +86,7 @@ final class RecentMediaStripModel: NSObject, ObservableObject, PHPhotoLibraryCha
 
     /// True once a fetch attempt has run, so the view never re-prompts.
     private var didLoad = false
-    private var fetchLimit = 40
+    private var fetchLimit = RecentMediaStrip.headSampleCount
     private var isObservingLibrary = false
 
     deinit {
@@ -102,7 +102,7 @@ final class RecentMediaStripModel: NSObject, ObservableObject, PHPhotoLibraryCha
     /// un prompt sans contexte, souvent refusé définitivement. Tant que l'accès
     /// n'est pas accordé, la vue affiche une tuile d'invitation dont le tap
     /// appelle `requestAccess()`.
-    func load(limit: Int = 40) {
+    func load(limit: Int = RecentMediaStrip.headSampleCount) {
         guard !didLoad else { return }
         didLoad = true
         fetchLimit = limit
@@ -329,9 +329,9 @@ final class RecentMediaStripModel: NSObject, ObservableObject, PHPhotoLibraryCha
 // MARK: - RecentMediaStrip
 // ============================================================================
 
-/// Two-row strip of the 19 most recent photos/videos, shown beneath the
-/// attachment carousel. Tapping a thumbnail hands the resolved media to
-/// `onSelect`.
+/// Scrollable four-column grid of the most recent photos/videos, shown beneath
+/// the attachment carousel and filling the rest of the panel. Tapping a
+/// thumbnail hands the resolved media to `onSelect`.
 ///
 /// La tuile « ouvrir la photothèque » (`onOpenLibrary`) est la PREMIÈRE cellule,
 /// avant la première image : la sortie vers la photothèque complète doit être
@@ -363,39 +363,22 @@ struct RecentMediaStrip: View {
     private let spacing: CGFloat = 8
     private let hPadding: CGFloat = 12
 
-    /// iPad / macOS use the roomy vertical grid; iPhone keeps the horizontal
-    /// strip. Keyed on the device idiom (NOT horizontalSizeClass) because a sheet
-    /// on iPad can report a `.compact` width even with ample room — and the
-    /// screen-width cell sizing only misfires on iPad/macOS where the sheet is far
-    /// narrower than the screen.
-    private var usesGridLayout: Bool { DeviceLayout.isPad }
-
-    /// Compact (iPhone): the composer fills the window width, so the window is a
-    /// faithful proxy for the container. Regular (iPad / macOS) MUST size from the
-    /// real container width — the comments sheet is far narrower than the window,
-    /// and sizing four cells off the full window is exactly what made the old
-    /// strip overflow into the unstructured mess.
-    ///
-    /// The window, not `UIScreen.main.bounds`: identical on iPhone (where this
-    /// branch runs, `usesGridLayout` being `false` only there), and correct by
-    /// construction if the compact branch is ever reached in a narrow window.
-    private var compactCell: CGFloat { cell(forContainerWidth: DeviceLayout.windowSize.width) }
-
+    /// Cells are sized from the REAL container width, never the window: the
+    /// composer panel is inset from the window edges (and a comments sheet on
+    /// iPad is far narrower), so window-sized cells overflowed the panel.
     private func cell(forContainerWidth width: CGFloat) -> CGFloat {
         max(40, ((width - hPadding * 2) - spacing * CGFloat(columns - 1)) / CGFloat(columns))
     }
 
-    /// Échantillon de tête : 19 médias. Avec la tuile « ouvrir la photothèque »
-    /// EN PREMIER, la bande compte 20 cellules — exactement 10 colonnes de deux
-    /// rangées sur iPhone, 5 rangées de quatre sur iPad. Aucun reste boiteux.
+    /// Échantillon de tête : TOUT ce que le modèle va chercher, 40 médias
+    /// (#8869). Le plafond de 19 masquait 21 médias déjà chargés, et la bande
+    /// horizontale de deux rangées n'en montrait que 7 sans défiler.
     ///
     /// `nonisolated static` pour être vérifiable telle quelle par un test, sans
     /// photothèque ni contexte d'acteur — même précédent que
     /// `RecentMediaStripModel.thumbnailRequestOptions()`.
-    nonisolated static let headSampleCount = 19
+    nonisolated static let headSampleCount = 40
 
-    /// Les deux dispositions montrent le même échantillon de tête ; seule la
-    /// géométrie change (bande horizontale iPhone / grille verticale iPad).
     private var samples: [PHAsset] { Array(model.assets.prefix(Self.headSampleCount)) }
 
     var body: some View {
@@ -407,13 +390,11 @@ struct RecentMediaStrip: View {
             Group {
                 if model.needsAuthorization {
                     authorizationTile
-                } else if usesGridLayout {
-                    regularGrid
                 } else {
-                    compactStrip
-                        .frame(maxHeight: .infinity, alignment: .top)
+                    grid
                 }
             }
+            .frame(maxHeight: .infinity, alignment: .top)
         }
         .task { model.load() }
         .adaptiveOnChange(of: selection.ids) { _, ids in onSelectionChanged?(ids) }
@@ -433,26 +414,26 @@ struct RecentMediaStrip: View {
                 Task { await model.requestAccess() }
             }
         } label: {
-            HStack(spacing: 10) {
+            HStack(spacing: MeeshySpacing.smPlus) {
                 Image(systemName: "photo.on.rectangle.angled")
-                    .font(MeeshyFont.relative(18, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyIconSize.lg, weight: .medium))
                     .foregroundColor(Color(hex: accentColor))
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     Text(model.isAuthorizationRefused
                          ? String(localized: "composer.recent.accessDenied", defaultValue: "Accès aux photos refusé", bundle: .main)
                          : String(localized: "composer.recent.grantAccess", defaultValue: "Autoriser l'accès aux photos", bundle: .main))
-                        .font(MeeshyFont.relative(13, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                         .foregroundColor(.primary)
                     Text(model.isAuthorizationRefused
                          ? String(localized: "composer.recent.accessDenied.hint", defaultValue: "Toucher pour ouvrir les Réglages", bundle: .main)
                          : String(localized: "composer.recent.grantAccess.hint", defaultValue: "Pour retrouver vos médias récents ici", bundle: .main))
-                        .font(MeeshyFont.relative(11))
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
                         .foregroundColor(.secondary)
                 }
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, hPadding)
-            .padding(.vertical, 14)
+            .padding(.vertical, MeeshySpacing.mdPlus)
         }
         .buttonStyle(.plain)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -466,7 +447,7 @@ struct RecentMediaStrip: View {
     /// `.ultraThinMaterial` / solid accent — same layout, no behavior change.
     private var selectionBar: some View {
         AdaptiveGlassContainer(spacing: 12) {
-            HStack(spacing: 10) {
+            HStack(spacing: MeeshySpacing.smPlus) {
                 Button {
                     HapticFeedback.light()
                     exitSelection()
@@ -474,8 +455,8 @@ struct RecentMediaStrip: View {
                     Text(String(localized: "composer.recent.cancelSelection", defaultValue: "Annuler", bundle: .main))
                         .font(.caption.weight(.semibold))
                         .foregroundColor(.secondary)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 7)
+                        .padding(.horizontal, MeeshySpacing.md)
+                        .padding(.vertical, MeeshySpacing.xsPlus)
                 }
                 .buttonStyle(.plain)
                 .adaptiveGlass(in: Capsule(), interactive: true)
@@ -486,7 +467,7 @@ struct RecentMediaStrip: View {
                 Button {
                     confirmSelection()
                 } label: {
-                    HStack(spacing: 6) {
+                    HStack(spacing: MeeshySpacing.xsPlus) {
                         if isBatchResolving {
                             ProgressView()
                                 .tint(.white)
@@ -499,8 +480,8 @@ struct RecentMediaStrip: View {
                             .font(.caption.weight(.bold))
                     }
                     .foregroundColor(.white)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 7)
+                    .padding(.horizontal, MeeshySpacing.mdPlus)
+                    .padding(.vertical, MeeshySpacing.xsPlus)
                 }
                 .buttonStyle(.plain)
                 .adaptiveGlassProminent(in: Capsule(), tint: Color(hex: accentColor))
@@ -509,14 +490,16 @@ struct RecentMediaStrip: View {
                 .accessibilityLabel(String(localized: "composer.a11y.addSelection", defaultValue: "Ajouter la sélection", bundle: .main))
             }
             .padding(.horizontal, hPadding)
-            .padding(.top, 8)
-            .padding(.bottom, 2)
+            .padding(.top, MeeshySpacing.sm)
+            .padding(.bottom, MeeshySpacing.xxs)
         }
     }
 
-    /// iPad / macOS — a roomy four-column vertical grid sized to the REAL
-    /// container width, scrollable so every recent item is reachable.
-    private var regularGrid: some View {
+    /// One layout for every idiom (#8869): a four-column vertical grid sized to
+    /// the REAL container width and scrolling inside the height the panel
+    /// gives it. The former iPhone strip — two fixed rows scrolling sideways —
+    /// sat mid-panel with a void above and below, and showed 7 media.
+    private var grid: some View {
         GeometryReader { geo in
             let c = cell(forContainerWidth: geo.size.width)
             let cols = Array(repeating: GridItem(.fixed(c), spacing: spacing), count: columns)
@@ -528,27 +511,8 @@ struct RecentMediaStrip: View {
                     }
                 }
                 .padding(.horizontal, hPadding)
-                .padding(.vertical, 10)
+                .padding(.vertical, MeeshySpacing.smPlus)
             }
-        }
-    }
-
-    /// iPhone — the original two-row horizontal strip.
-    private var compactStrip: some View {
-        let c = compactCell
-        let rows = [
-            GridItem(.fixed(c), spacing: spacing),
-            GridItem(.fixed(c), spacing: spacing)
-        ]
-        return ScrollView(.horizontal, showsIndicators: false) {
-            LazyHGrid(rows: rows, spacing: spacing) {
-                openLibraryTile(c)
-                ForEach(samples, id: \.localIdentifier) { asset in
-                    cellView(asset, size: c)
-                }
-            }
-            .padding(.horizontal, hPadding)
-            .padding(.vertical, 6)
         }
     }
 
@@ -675,13 +639,13 @@ struct RecentMediaStrip: View {
             onOpenLibrary(selection.ids)
         } label: {
             ZStack {
-                RoundedRectangle(cornerRadius: 12)
+                RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                     .fill(Color(hex: accentColor).opacity(0.12))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 12)
+                        RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                             .stroke(Color(hex: accentColor).opacity(0.3), style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
                     )
-                VStack(spacing: 4) {
+                VStack(spacing: MeeshySpacing.xs) {
                     Image(systemName: "photo.on.rectangle.angled")
                         .font(.title3)
                     Image(systemName: "plus")
@@ -726,7 +690,7 @@ private struct RecentMediaCell: View {
                         .frame(width: cell, height: cell)
                         .clipped()
                 } else {
-                    RoundedRectangle(cornerRadius: 12)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                         .fill(Color.gray.opacity(0.18))
                         .frame(width: cell, height: cell)
                         .overlay(ProgressView().scaleEffect(0.7))
@@ -743,8 +707,8 @@ private struct RecentMediaCell: View {
                             Spacer()
                         }
                         .foregroundColor(.white)
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 3)
+                        .padding(.horizontal, MeeshySpacing.xs)
+                        .padding(.vertical, MeeshySpacing.xxs)
                         .background(LinearGradient(colors: [.black.opacity(0.5), .clear], startPoint: .bottom, endPoint: .top))
                     }
                 }
@@ -754,15 +718,15 @@ private struct RecentMediaCell: View {
                 }
 
                 if isResolving {
-                    RoundedRectangle(cornerRadius: 12)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                         .fill(Color.black.opacity(0.35))
                     ProgressView().tint(.white)
                 }
             }
             .frame(width: cell, height: cell)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
             .overlay(
-                RoundedRectangle(cornerRadius: 12)
+                RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                     .stroke(Color(hex: accentColor), lineWidth: selectionIndex != nil ? 2 : 0)
             )
         }
@@ -826,7 +790,7 @@ private struct RecentMediaCell: View {
                 ZStack {
                     Circle()
                         .fill(selectionIndex != nil ? Color(hex: accentColor) : Color.black.opacity(0.25))
-                        .overlay(Circle().stroke(Color.white, lineWidth: 1.5))
+                        .overlay(Circle().stroke(Color.white, lineWidth: MeeshyBorder.emphasis))
                         .frame(width: 22, height: 22)
                     if let selectionIndex {
                         Text("\(selectionIndex + 1)")
@@ -834,7 +798,7 @@ private struct RecentMediaCell: View {
                             .foregroundColor(.white)
                     }
                 }
-                .padding(4)
+                .padding(MeeshySpacing.xs)
             }
             Spacer()
         }

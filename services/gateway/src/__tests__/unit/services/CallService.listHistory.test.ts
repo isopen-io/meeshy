@@ -76,7 +76,7 @@ function makeRow(overrides: Partial<{
   bytesSent: number | null;
   bytesReceived: number | null;
   metadata: unknown;
-  conversation: { type: string; title: string | null; avatar: string | null };
+  conversation: { type: string; title: string | null; avatar: string | null; participants: { id: string }[] };
 }> = {}) {
   return {
     id: 'call-1',
@@ -92,7 +92,7 @@ function makeRow(overrides: Partial<{
     bytesSent: null,
     bytesReceived: null,
     metadata: { type: 'audio' },
-    conversation: { type: 'direct', title: null, avatar: null },
+    conversation: { type: 'direct', title: null, avatar: null, participants: [{ id: 'p-reader' }] },
     ...overrides,
   };
 }
@@ -233,7 +233,7 @@ describe('CallService.listHistory', () => {
       const row = makeRow({
         id: 'call-1',
         conversationId: CONV_GROUP,
-        conversation: { type: 'group', title: 'Squad', avatar: null },
+        conversation: { type: 'group', title: 'Squad', avatar: null, participants: [{ id: 'p-reader' }] },
         initiatorId: 'other-user',
         answeredAt: new Date(),
       });
@@ -279,7 +279,7 @@ describe('CallService.listHistory', () => {
 
   describe('peer resolution for direct conversations', () => {
     it('attaches peer data for direct conversation calls', async () => {
-      const row = makeRow({ conversationId: CONV_DIRECT, conversation: { type: 'direct', title: null, avatar: null } });
+      const row = makeRow({ conversationId: CONV_DIRECT, conversation: { type: 'direct', title: null, avatar: null, participants: [{ id: 'p-reader' }] } });
       const peer = makePeer();
       const prisma = makePrisma({
         callSessionFindMany: jest.fn<any>().mockResolvedValue([row]),
@@ -293,7 +293,7 @@ describe('CallService.listHistory', () => {
     });
 
     it('returns null peer for group conversation calls', async () => {
-      const row = makeRow({ conversationId: CONV_GROUP, conversation: { type: 'group', title: 'Team', avatar: null } });
+      const row = makeRow({ conversationId: CONV_GROUP, conversation: { type: 'group', title: 'Team', avatar: null, participants: [{ id: 'p-reader' }] } });
       const prisma = makePrisma({
         callSessionFindMany: jest.fn<any>().mockResolvedValue([row]),
         participantFindMany: jest.fn<any>().mockResolvedValue([]),
@@ -305,7 +305,7 @@ describe('CallService.listHistory', () => {
 
     it('skips participants with null user when resolving direct call peers', async () => {
       // m.user === null → the if-guard at line 1029 is false → peer stays null
-      const row = makeRow({ conversationId: CONV_DIRECT, conversation: { type: 'direct', title: null, avatar: null } });
+      const row = makeRow({ conversationId: CONV_DIRECT, conversation: { type: 'direct', title: null, avatar: null, participants: [{ id: 'p-reader' }] } });
       const prisma = makePrisma({
         callSessionFindMany: jest.fn<any>().mockResolvedValue([row]),
         participantFindMany: jest.fn<any>().mockResolvedValue([
@@ -319,7 +319,7 @@ describe('CallService.listHistory', () => {
 
     it('maps null displayName to null in the peer object', async () => {
       // m.user.displayName is null → ?? null fires at line 1033
-      const row = makeRow({ conversationId: CONV_DIRECT, conversation: { type: 'direct', title: null, avatar: null } });
+      const row = makeRow({ conversationId: CONV_DIRECT, conversation: { type: 'direct', title: null, avatar: null, participants: [{ id: 'p-reader' }] } });
       const prisma = makePrisma({
         callSessionFindMany: jest.fn<any>().mockResolvedValue([row]),
         participantFindMany: jest.fn<any>().mockResolvedValue([
@@ -342,7 +342,7 @@ describe('CallService.listHistory', () => {
     });
 
     it('does NOT query participants when no direct calls are returned', async () => {
-      const row = makeRow({ conversation: { type: 'group', title: null, avatar: null } });
+      const row = makeRow({ conversation: { type: 'group', title: null, avatar: null, participants: [{ id: 'p-reader' }] } });
       const participantFindMany = jest.fn<any>().mockResolvedValue([]);
       const prisma = makePrisma({
         callSessionFindMany: jest.fn<any>().mockResolvedValue([row]),
@@ -396,7 +396,7 @@ describe('CallService.listHistory', () => {
       const prisma = makePrisma({ callSessionFindMany, participantFindMany: jest.fn<any>().mockResolvedValue([]) });
       const svc = new CallService(prisma);
       await svc.listHistory(USER_ID, { limit: 10, cursor: 'call-cursor-id', filter: 'all', viewer: null });
-      const callToFindMany = callSessionFindMany.mock.calls[0][0];
+      const callToFindMany = callSessionFindMany.mock.calls.at(-1)[0];
       expect(callToFindMany.cursor).toEqual({ id: 'call-cursor-id' });
       expect(callToFindMany.skip).toBe(1);
     });
@@ -408,7 +408,7 @@ describe('CallService.listHistory', () => {
       const prisma = makePrisma({ callSessionFindMany, participantFindMany: jest.fn<any>().mockResolvedValue([]) });
       const svc = new CallService(prisma);
       await svc.listHistory(USER_ID, { limit: 10, filter: 'missed', viewer: null });
-      const { where } = callSessionFindMany.mock.calls[0][0];
+      const { where } = callSessionFindMany.mock.calls.at(-1)[0];
       // The base terminal-status window (ended/missed/rejected/failed) must
       // survive — the missed filter narrows further via `where.OR` below, it
       // must never collapse the query down to `status: missed` alone (that
@@ -423,7 +423,7 @@ describe('CallService.listHistory', () => {
       const prisma = makePrisma({ callSessionFindMany, participantFindMany: jest.fn<any>().mockResolvedValue([]) });
       const svc = new CallService(prisma);
       await svc.listHistory(USER_ID, { limit: 10, filter: 'missed', viewer: null });
-      const { where } = callSessionFindMany.mock.calls[0][0];
+      const { where } = callSessionFindMany.mock.calls.at(-1)[0];
       expect(where.OR).toContainEqual({ status: CallStatus.missed });
     });
 
@@ -439,7 +439,7 @@ describe('CallService.listHistory', () => {
       const prisma = makePrisma({ callSessionFindMany, participantFindMany: jest.fn<any>().mockResolvedValue([]) });
       const svc = new CallService(prisma);
       await svc.listHistory(USER_ID, { limit: 10, filter: 'missed', viewer: null });
-      const { where } = callSessionFindMany.mock.calls[0][0];
+      const { where } = callSessionFindMany.mock.calls.at(-1)[0];
       expect(where.OR).toContainEqual({
         answeredAt: { not: null },
         participants: { none: { participant: { userId: USER_ID } } },
@@ -451,7 +451,7 @@ describe('CallService.listHistory', () => {
       const prisma = makePrisma({ callSessionFindMany, participantFindMany: jest.fn<any>().mockResolvedValue([]) });
       const svc = new CallService(prisma);
       await svc.listHistory(USER_ID, { limit: 10, filter: 'all', viewer: null });
-      const { where } = callSessionFindMany.mock.calls[0][0];
+      const { where } = callSessionFindMany.mock.calls.at(-1)[0];
       expect(where.initiatorId).toBeUndefined();
       expect(where.OR).toBeUndefined();
     });
@@ -465,7 +465,7 @@ describe('CallService.listHistory', () => {
     const ADMIN_VIEWER = { userId: USER_ID, role: 'ADMIN' as const };
 
     const directRow = () =>
-      makeRow({ conversationId: CONV_DIRECT, conversation: { type: 'direct', title: null, avatar: null } });
+      makeRow({ conversationId: CONV_DIRECT, conversation: { type: 'direct', title: null, avatar: null, participants: [{ id: 'p-reader' }] } });
 
     it('USER non ami (co-membre de la conversation seul) ⇒ peer.isOnline masqué à false', async () => {
       mockResolveForTargets.mockResolvedValue(
@@ -535,7 +535,7 @@ describe('CallService.listHistory', () => {
     });
 
     it("n'ouvre aucune résolution quand la page ne porte aucun appel direct (groupes seuls)", async () => {
-      const row = makeRow({ conversationId: CONV_GROUP, conversation: { type: 'group', title: 'Squad', avatar: null } });
+      const row = makeRow({ conversationId: CONV_GROUP, conversation: { type: 'group', title: 'Squad', avatar: null, participants: [{ id: 'p-reader' }] } });
       const prisma = makePrisma({
         callSessionFindMany: jest.fn<any>().mockResolvedValue([row]),
         participantFindMany: jest.fn<any>().mockResolvedValue([]),

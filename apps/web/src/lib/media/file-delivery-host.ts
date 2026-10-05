@@ -50,7 +50,7 @@ function currentEnvironment(): FileDeliveryEnvironment {
 
 const BLOC_BASE64 = 0x8000;
 
-async function base64De(blob: Blob): Promise<string> {
+export async function base64De(blob: Blob): Promise<string> {
   const octets = new Uint8Array(await blob.arrayBuffer());
   const blocs = Array.from({ length: Math.ceil(octets.length / BLOC_BASE64) }, (_, i) =>
     String.fromCharCode(...octets.subarray(i * BLOC_BASE64, (i + 1) * BLOC_BASE64)),
@@ -74,16 +74,24 @@ function partageParLePont(shell: CoqueNative | undefined): Pick<FileDeliveryHost
   };
 }
 
+/**
+ * LE PONT DE LA COQUE D'ABORD (#9038) — une coque qui DÉCLARE
+ * `MeeshyShare.shareFile` y remet le fichier, même si sa WebView expose
+ * `navigator.share` : une WebView peut n'en offrir que la moitié texte
+ * (`canShare({ files })` faux), et le geste « Partager » d'une carte imagée
+ * restait alors sans porte. Le pont porte les OCTETS, jamais un chemin.
+ */
 export function browserFileDeliveryHost(environment: FileDeliveryEnvironment = currentEnvironment()): FileDeliveryHost {
   if (environment.document === undefined) return {};
   const nav = environment.navigator;
+  const pont = partageParLePont(environment.shell);
   const fileShare =
-    nav !== undefined && typeof nav.canShare === 'function' && typeof nav.share === 'function'
+    pont.shareFiles === undefined && nav !== undefined && typeof nav.canShare === 'function' && typeof nav.share === 'function'
       ? {
           canShareFiles: (data: { readonly files: readonly File[] }) => nav.canShare?.({ files: [...data.files] }) === true,
           shareFiles: (data: { readonly files: readonly File[] }) => nav.share?.({ files: [...data.files] }) ?? Promise.resolve(),
         }
-      : partageParLePont(environment.shell);
+      : pont;
   const anchor =
     environment.shell === undefined
       ? { document: environment.document, createObjectURL: environment.urls.createObjectURL, revokeObjectURL: environment.urls.revokeObjectURL }

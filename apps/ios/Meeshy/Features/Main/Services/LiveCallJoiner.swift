@@ -42,11 +42,15 @@ struct LiveCallJoiner {
                 ?? remote?.user?.username
                 ?? request.fallbackDisplayName
                 ?? String(localized: "call.peer.fallback", defaultValue: "Appel", bundle: .main)
+            // #9111 — un groupe se rejoint par le maillage : la conversation est
+            // marquée AVANT la reprise, et le premier membre qui offre devient
+            // le pair principal (la poignée reste la conversation).
+            if request.isGroup { context.markGroupConversation(request.conversationId, request.fallbackDisplayName) }
             let joined = context.rejoinActiveCall(
                 request.callId,
                 request.conversationId,
-                remote?.userId ?? request.fallbackRemoteUserId ?? "",
-                displayName,
+                request.isGroup ? request.conversationId : (remote?.userId ?? request.fallbackRemoteUserId ?? ""),
+                request.isGroup ? (request.fallbackDisplayName ?? displayName) : displayName,
                 request.isVideo
             )
             if !joined {
@@ -69,6 +73,8 @@ struct LiveCallJoinRequest: Equatable {
     let currentUserId: String
     let fallbackRemoteUserId: String?
     let fallbackDisplayName: String?
+    /// Un appel de groupe — rejoint par le maillage, jamais par un pair désigné.
+    var isGroup: Bool = false
 }
 
 extension LiveCallJoinRequest {
@@ -81,7 +87,8 @@ extension LiveCallJoinRequest {
             isVideo: call.kind == "video",
             currentUserId: currentUserId,
             fallbackRemoteUserId: conversation.participantUserId,
-            fallbackDisplayName: conversation.name
+            fallbackDisplayName: conversation.name,
+            isGroup: conversation.type != .direct
         )
     }
 }

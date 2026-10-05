@@ -64,10 +64,8 @@ import {
   groupSocketsByLanguage,
 } from '../utils/message-payload-filter.js';
 import { resolveParticipant } from '../utils/participant-resolver.js';
-import {
-  resolveForwardSourceBroadcastPayload,
-  withoutForwardSourceOrItsPath,
-} from '../../services/preferences/forward-source-visibility.js';
+import { agentSenderIdentity } from './agentSenderIdentity.js';
+import { resolvePeerBroadcastSplit } from '../peerBroadcastSplit.js';
 import { buildMessageAckData, buildMessageFailureAck, messageRefusalEvent, stripClientMessageId, type MessageAckSource } from '../utils/message-ack-shaping.js';
 import { messageTypeFromMimeTypes } from '../../services/messaging/attachmentMessageType.js';
 import { BoundedTtlCache } from '../../utils/bounded-cache.js';
@@ -427,8 +425,7 @@ export class MessageHandler {
           id: message.id,
           conversationId: message.conversationId,
           senderId: message.senderId,
-          senderDisplayName: message.sender?.displayName ?? message.sender?.user?.username,
-          senderUsername: message.sender?.user?.username,
+          ...agentSenderIdentity(message.sender),
           content: message.content,
           originalLanguage: message.originalLanguage,
           replyToId: message.replyToId,
@@ -653,8 +650,7 @@ export class MessageHandler {
           id: message.id,
           conversationId: message.conversationId,
           senderId: message.senderId,
-          senderDisplayName: message.sender?.displayName ?? message.sender?.user?.username,
-          senderUsername: message.sender?.user?.username,
+          ...agentSenderIdentity(message.sender),
           content: message.content,
           originalLanguage: message.originalLanguage,
           replyToId: message.replyToId,
@@ -1372,15 +1368,16 @@ export class MessageHandler {
 
       // Réciprocité de la SOURCE d'un transfert (directive produit 2026-08-23) —
       // `visible ⇔ auteur ET lecteur`, fail-CLOSED si la liste des lecteurs est
-      // inconnue. Extrait dans `resolveForwardSourceBroadcastPayload`
-      // (services/preferences/forward-source-visibility.ts), qui documente le
-      // découpage par SALONS UTILISATEUR et le fail-closed en détail.
-      const { peerPayload, forwardSourceHiddenRooms, forwardSourceHiddenUserIds } =
-        await resolveForwardSourceBroadcastPayload(this.prisma, {
+      // inconnue — composée avec le scellement de la citation d'un éphémère
+      // déjà échu pour un lecteur (#8562) dans `resolvePeerBroadcastSplit`.
+      const { peerPayload, hiddenRooms: forwardSourceHiddenRooms, hiddenKeys, payloadForKey } =
+        await resolvePeerBroadcastSplit(this.prisma, {
           senderUserId,
           sharedParticipants,
           broadcastPayload,
-          userRoom: (userId) => ROOMS.user(userId),
+          userRoom: (key) => ROOMS.user(key),
+          quoted: message.replyTo,
+          senderKeys: [senderUserId, message.senderId],
         });
 
       // Opt-in (OFF by default) — flip per-deploy after staging measurement.
@@ -1432,14 +1429,11 @@ export class MessageHandler {
         }
       }
 
-      // Les lecteurs qui se sont retirés : le MÊME message, sans sa provenance.
-      // Émis après l'exclusion ci-dessus, jamais en plus d'elle — un
-      // destinataire reçoit exactement UN `message:new`, sinon le client
-      // insère la bulle deux fois.
-      if (forwardSourceHiddenRooms.length > 0) {
-        this.io
-          .to(forwardSourceHiddenRooms)
-          .emit(SERVER_EVENTS.MESSAGE_NEW, withoutForwardSourceOrItsPath(peerPayload));
+      // Les lecteurs exclus ci-dessus : le MÊME message, sans la provenance
+      // refusée ou avec la citation scellée. Émis après l'exclusion, jamais en
+      // plus d'elle — un destinataire reçoit exactement UN `message:new`.
+      for (const key of hiddenKeys) {
+        this.io.to(ROOMS.user(key)).emit(SERVER_EVENTS.MESSAGE_NEW, payloadForKey(key));
       }
       handlerLogger.debug('message:new emitted', { conversationId: normalizedId, messageId: message.id, senderUserId: senderUserId ?? 'anon' });
 
@@ -1486,14 +1480,7 @@ export class MessageHandler {
           // retrait quand c'est l'AUTEUR qui s'est retiré ; ceci ajoute le
           // retrait par LECTEUR, que seule la boucle par participant peut
           // faire.
-          ...(forwardSourceHiddenUserIds.size > 0
-            ? {
-                resolvePayloadForReader: (queueKey: string) =>
-                  forwardSourceHiddenUserIds.has(queueKey)
-                    ? withoutForwardSourceOrItsPath(peerPayload)
-                    : peerPayload,
-              }
-            : {}),
+          ...(hiddenKeys.size > 0 ? { resolvePayloadForReader: payloadForKey } : {}),
           participants: sharedParticipants,
         }
       );

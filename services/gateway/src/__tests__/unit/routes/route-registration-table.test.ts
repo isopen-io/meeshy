@@ -176,7 +176,22 @@ describe('ROUTE_TABLE (#4278)', () => {
     // d'accueil). Aucun alias, aucune route retirée ni renommée.
     // 69 : #7938 ajoute `me-stickers` — quatre routes NEUVES sous
     // `/api/v1/me/stickers` (la bibliothèque « Mes stickers »). Aucun alias.
-    expect(ROUTE_TABLE.length).toBe(69);
+    // 70 : #8101 ajoute `contacts-resolve` — l'adresse NEUVE `POST
+    // /api/v1/contacts/resolve` (la carte de visite partagée), montage
+    // autonome. Aucun alias, aucune route retirée ni renommée.
+    // 71 : #8876 ajoute `admin-oversight` — le montage AUTONOME des surfaces de
+    // supervision de la « vue de dieu » de l'administration (journal d'audit,
+    // liens de suivi, fiche de communauté, supervision). Une seule entrée sous
+    // `/api/v1/admin`, qui enregistre ses quatre modules elle-même ; aucun
+    // alias, aucune route retirée ni renommée.
+    // 72 : #8906 ajoute `admin-engagement-scale` — les adresses NEUVES
+    // `GET`/`PUT /api/v1/admin/engagement-scale` (le barème d'engagement).
+    // Aucun alias, aucune route retirée ni renommée.
+    // 73 : #9141 ajoute `sticker-packs` — le montage AUTONOME des packs de
+    // stickers sous `/api/v1/sticker-packs` (boutique, installation,
+    // proposition par des tiers, modération). Aucun alias, aucune route
+    // retirée ni renommée.
+    expect(ROUTE_TABLE.length).toBe(73);
   });
 });
 

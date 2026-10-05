@@ -6,6 +6,7 @@ const ptStoriesMine = {
   'storiesMine.empty.title': 'Nenhuma story enviada',
   'storiesMine.empty.subtitle': 'Suas stories publicadas aparecerão aqui enquanto estiverem ativas.',
   'storiesMine.action.open': 'Abrir',
+  'storiesMine.action.edit': 'Editar',
   'storiesMine.action.delete': 'Excluir',
   'storiesMine.delete.title': 'Excluir a story?',
   'storiesMine.delete.body': 'Esta ação é definitiva. A story deixará de ser visível para qualquer pessoa.',

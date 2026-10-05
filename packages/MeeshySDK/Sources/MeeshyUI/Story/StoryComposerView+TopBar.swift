@@ -110,7 +110,7 @@ extension StoryComposerView {
             if shouldShowFloatingSlideStrip {
                 slideStrip
                     .padding(.vertical, 5)
-                    .padding(.horizontal, 8)
+                    .padding(.horizontal, MeeshySpacing.sm)
                     .transition(.opacity)
             } else {
                 Spacer(minLength: 12)
@@ -142,8 +142,8 @@ extension StoryComposerView {
                 }
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 6)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.top, MeeshySpacing.xsPlus)
         .animation(.spring(response: 0.3, dampingFraction: 0.85),
                    value: shouldShowFloatingSlideStrip)
     }
@@ -188,7 +188,7 @@ extension StoryComposerView {
             presentPreview()
         } label: {
             Image(systemName: "play.fill")
-                .font(.system(size: 12, weight: .bold))
+                .font(.system(size: MeeshyIconSize.xs, weight: .bold))
                 .glassControlForeground()
                 .frame(width: ComposerControlMetrics.visualDiameter,
                        height: ComposerControlMetrics.visualDiameter)
@@ -256,16 +256,16 @@ extension StoryComposerView {
         } label: {
             let current = PostVisibility(rawValue: visibility) ?? .public
             let showCount = current.requiresUserSelection && !visibilityUserIds.isEmpty
-            HStack(spacing: 4) {
+            HStack(spacing: MeeshySpacing.xs) {
                 Image(systemName: current.icon)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(size: MeeshyIconSize.xs, weight: .semibold))
                 Text(showCount ? "\(current.label) (\(visibilityUserIds.count))" : current.label)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(size: MeeshyFont.smallSize, weight: .semibold))
                     .lineLimit(1)
             }
             .glassControlForeground()
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
+            .padding(.horizontal, MeeshySpacing.smPlus)
+            .padding(.vertical, MeeshySpacing.xsPlus)
             .adaptiveGlass(in: Capsule(), tint: MeeshyColors.brandPrimary.opacity(0.18))
             // Capsule d'environ 27 pt de haut (paddings 10/6 sur une police 12) :
             // le débord de contact la porte à 44 sans changer sa hauteur rendue.

@@ -3,13 +3,17 @@ import { useStore } from 'zustand/react';
 
 import { prismFor, served, type Served } from '@/lib/api/prism';
 import { protectionOf } from '@/lib/reading-mode/protection';
-import { forwardAction, reactAction } from '@/lib/api/query';
+import { reactAction } from '@/lib/api/query';
 import { reactionStore } from '@/lib/api/reaction-store';
 import type { Message } from '@/lib/api/types';
+import { readDefaultMessageCardFormat } from '@/lib/export/message-card-format';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { openSendSheet } from '@/lib/send/send-sheet-store';
+import { safeLocalStorage } from '@/lib/storage';
 
 import {
+  forwardMenuItems,
   messageMenuContextOf,
   messageMenuItems,
   translationChoices,
@@ -17,8 +21,9 @@ import {
   type MessageMenuItem,
   type TranslationChoice,
 } from './message-actions';
-import { admitForward } from './forward';
+import { admitForward, forwardRequestOf } from './forward';
 import { useLongPress, type LongPressAnchor } from './long-press';
+import { copyPlainText } from './copy-text';
 import { isMineOf } from './message';
 import { SELECTION_CAP, copyTextOf, orderedIds, selectionReducer, type SelectionState } from './selection';
 import { useMessageStar, type MessageStarEntry } from './use-message-star';
@@ -36,6 +41,9 @@ import { useMessageStar, type MessageStarEntry } from './use-message-star';
  * (`api/query.ts`, qui délègue à `performReaction`). Ce fichier ne fait que
  * les COMPOSER derrière une surface stable pour l'hôte.
  */
+
+/** `scope: 'discussion'` (#9039) — la carte de la discussion qui mène à ce message ; absent : la carte du seul message. */
+export type MessageExportRequest = { readonly messageId: string; readonly quick: boolean; readonly scope?: 'message' | 'discussion' };
 
 export type MessageMenuTargetState = { readonly messageId: string; readonly element: HTMLElement; readonly isMine: boolean };
 
@@ -66,9 +74,8 @@ export function useMessageMenu(params: {
   const [selection, setSelection] = useState<SelectionState | null>(null);
   const [detailFor, setDetailFor] = useState<string | null>(null);
   const [reactionSheetFor, setReactionSheetFor] = useState<string | null>(null);
-  /** Les ids à transférer, ADMIS — `null` ⇒ la feuille de destinataires est
-   * fermée. Elle n'est jamais ouverte sur une sélection refusée (#5866). */
-  const [forwardIds, setForwardIds] = useState<readonly string[] | null>(null);
+  /** La carte d'export ouverte — `quick` : « Export rapide », le format par défaut enregistré aussitôt peint. */
+  const [exportFor, setExportFor] = useState<MessageExportRequest | null>(null);
   const mine = useStore(reactionStore, (s) => s.mine);
 
   const messageOf = useCallback((id: string) => messages.find((m) => m.id === id), [messages]);
@@ -189,8 +196,9 @@ export function useMessageMenu(params: {
           announce(translate(currentInterfaceLanguage(), 'announce.messageProtected'));
           return;
         }
-        if (typeof navigator === 'object' && navigator.clipboard) void navigator.clipboard.writeText(text);
-        announce(translate(currentInterfaceLanguage(), 'announce.messageCopied'));
+        void copyPlainText(text).then((outcome) =>
+          announce(translate(currentInterfaceLanguage(), outcome === 'copied' ? 'announce.messageCopied' : 'feed.post.copy_failed')),
+        );
         return;
       }
       if (id === 'reply') {
@@ -213,6 +221,16 @@ export function useMessageMenu(params: {
       }
       if (id === 'more') {
         setDetailFor(messageId);
+        return;
+      }
+      if (id === 'export' || id === 'exportQuick') {
+        focusTakenRef.current = true;
+        setExportFor({ messageId, quick: id === 'exportQuick' });
+        return;
+      }
+      if (id === 'exportDiscussion') {
+        focusTakenRef.current = true;
+        setExportFor({ messageId, quick: false, scope: 'discussion' });
         return;
       }
       // `translate` ne passe jamais ici — `MessageMenu` l'intercepte en
@@ -238,13 +256,10 @@ export function useMessageMenu(params: {
     [announce],
   );
 
-  const onEndSelection = useCallback(() => {
-    setSelection(null);
-    setForwardIds(null);
-  }, []);
+  const onEndSelection = useCallback(() => setSelection(null), []);
 
   /**
-   * LE GESTE DE LA BARRE (#5866) — il ADMET d'abord, il ouvre ensuite.
+   * LE GESTE DE LA BARRE (#5866, #8884) — il ADMET d'abord, il ouvre ensuite.
    *
    * `admitForward` (`view/forward.ts`) rejoue `admitMessageForward`
    * (`forwardAdmission.ts`) : une vue unique est refusée, une source disparue
@@ -254,13 +269,22 @@ export function useMessageMenu(params: {
    *
    * L'ordre est celui du FIL (`orderedIds`), jamais celui des coches : ce qui
    * arrive chez le destinataire se lit comme ce qu'on a sélectionné.
+   *
+   * ADMISE, la sélection débouche sur LA FEUILLE D'ENVOI commune (#8884,
+   * `openSendSheet`) — personnes, groupes, ou publication en story / post /
+   * réel, avec une légende. Ce hook ne monte plus aucune feuille de
+   * destinataires : il REMET la demande (`forwardRequestOf`) et la sélection
+   * SE TERMINE, le geste étant fini du point de vue du fil. Le départ, son
+   * état par destinataire et ses échecs sont l'affaire de la feuille
+   * (`lib/send/`), qui les montre là où le lecteur regarde.
    */
   const onForwardSelection = useCallback(
     (placed: readonly { readonly message: { readonly id: string } }[]) => {
       if (selection === null) return;
       const ids = orderedIds(placed, new Set(selection.ids));
       const candidates = ids.map((id) => messageOf(id)).filter((m): m is Message => m !== undefined);
-      const admission = admitForward(candidates, Date.now());
+      const now = Date.now();
+      const admission = admitForward(candidates, now);
       if (!admission.admitted) {
         const lang = currentInterfaceLanguage();
         announce(
@@ -270,48 +294,10 @@ export function useMessageMenu(params: {
         );
         return;
       }
-      setForwardIds(admission.ids);
-    },
-    [selection, messageOf, announce],
-  );
-
-  const onCloseForward = useCallback(() => setForwardIds(null), []);
-
-  /**
-   * LE DÉPART (#5866) — `forwardAction` remet les messages ENTIERS au
-   * transport (`api/forward.ts`), qui compose un corps SANS `attachmentIds` :
-   * c'est la passerelle qui copie les pièces jointes depuis `forwardedFromId`,
-   * mêmes blobs, aucun ré-upload.
-   *
-   * LA FEUILLE SE FERME ET LA SÉLECTION SE TERMINE AVANT L'ACCUSÉ — le geste
-   * est fini du point de vue du lecteur, et l'issue lui revient par l'annonce
-   * (principe « Optimistic Updates » : le feedback est immédiat, le réseau
-   * confirme après). Un échec ne ressuscite pas la sélection : il le DIT,
-   * avec le motif du serveur, et le fil reste là où le lecteur l'a laissé.
-   */
-  const onForwardTo = useCallback(
-    (targetConversationId: string) => {
-      const ids = forwardIds;
-      if (ids === null) return;
-      const messagesToForward = ids.map((id) => messageOf(id)).filter((m): m is Message => m !== undefined);
-      setForwardIds(null);
       setSelection(null);
-      void forwardAction({ messages: messagesToForward, sourceConversationId: conversationId, targetConversationId }).then(
-        (result) => {
-          const lang = currentInterfaceLanguage();
-          if (!result.ok) {
-            announce(result.error === '' ? translate(lang, 'forward.announce.failed') : result.error);
-            return;
-          }
-          announce(
-            result.count > 1
-              ? translate(lang, 'forward.announce.sentMany', { count: new Intl.NumberFormat(lang).format(result.count) })
-              : translate(lang, 'forward.announce.sent'),
-          );
-        },
-      );
+      openSendSheet(forwardRequestOf({ conversationId, messages: candidates, now }));
     },
-    [forwardIds, messageOf, conversationId, announce],
+    [selection, messageOf, announce, conversationId],
   );
 
   const onCopySelection = useCallback(
@@ -323,11 +309,30 @@ export function useMessageMenu(params: {
         announce(translate(currentInterfaceLanguage(), 'announce.nothingToCopy'));
         return;
       }
-      if (typeof navigator === 'object' && navigator.clipboard) void navigator.clipboard.writeText(text);
-      const lang = currentInterfaceLanguage();
-      announce(text.includes('\n') ? translate(lang, 'announce.messagesCopied') : translate(lang, 'announce.messageCopied'));
+      void copyPlainText(text).then((outcome) => {
+        const lang = currentInterfaceLanguage();
+        if (outcome === 'failed') announce(translate(lang, 'feed.post.copy_failed'));
+        else announce(text.includes('\n') ? translate(lang, 'announce.messagesCopied') : translate(lang, 'announce.messageCopied'));
+      });
     },
     [selection, copyableTextOf, announce],
+  );
+
+  /**
+   * **LE GLISSÉ ET L'ICÔNE « RÉPONDRE » PASSENT PAR LE MENU** (#7559, #8899) —
+   * même loi d'offre (`messageMenuItems` : pas de réponse ni de transfert sur
+   * une vue unique, pas de transfert refusé par `canForward`), même effet
+   * (`onMenuAction`) : « Répondre » arme la citation, « Transférer » arme la
+   * sélection avec ce message coché (D-113), comme le fait iOS au glissé
+   * (`beginSelectionMode(seedingWith:)`). En sélection, rien ne s'offre.
+   */
+  const swipeActionsOf = useCallback(
+    (message: Message): { readonly canReply: boolean; readonly canForward: boolean } | undefined => {
+      if (selection !== null) return undefined;
+      const ids = messageMenuItems(messageMenuContextOf(message, { now: Date.now() })).map((item) => item.id);
+      return { canReply: ids.includes('reply'), canForward: ids.includes('forward') };
+    },
+    [selection],
   );
 
   /** Les données du menu OUVERT — `undefined` tant qu'aucun message n'est
@@ -344,12 +349,20 @@ export function useMessageMenu(params: {
    * doit PAS fuir par cette étiquette après avoir été retiré de « Copier ».
    */
   const menuData:
-    | { readonly items: readonly MessageMenuItem[]; readonly choices: readonly TranslationChoice[]; readonly subjectLabel: string }
+    | {
+        readonly items: readonly MessageMenuItem[];
+        readonly forwardItems: readonly MessageMenuItem[];
+        readonly choices: readonly TranslationChoice[];
+        readonly subjectLabel: string;
+      }
     | undefined = (() => {
     if (menuTarget === null) return undefined;
     const message = messageOf(menuTarget.messageId);
     if (message === undefined) return undefined;
-    const ctx = messageMenuContextOf(message, { now: Date.now() });
+    const ctx = {
+      ...messageMenuContextOf(message, { now: Date.now() }),
+      hasDefaultExportFormat: readDefaultMessageCardFormat(safeLocalStorage()) !== null,
+    };
     const servedLanguage = servedOf(menuTarget.messageId)?.language ?? '';
     const lang = currentInterfaceLanguage();
     const author = message.sender?.displayName ?? translate(lang, 'message.author.self');
@@ -358,6 +371,7 @@ export function useMessageMenu(params: {
       text === undefined ? translate(lang, 'message.excerpt.protected') : text.length > 80 ? `${text.slice(0, 80)}…` : text;
     return {
       items: messageMenuItems(ctx),
+      forwardItems: forwardMenuItems(ctx),
       choices: translationChoices({ message, preferredLanguages: readerLanguages, servedLanguage }),
       subjectLabel: translate(lang, 'a11y.message.menu.subject', { author, excerpt }),
     };
@@ -377,16 +391,16 @@ export function useMessageMenu(params: {
     onRowTap,
     onEndSelection,
     onCopySelection,
-    forwardIds,
     onForwardSelection,
-    onForwardTo,
-    onCloseForward,
     detailFor,
     setDetailFor,
     reactionSheetFor,
     setReactionSheetFor,
+    exportFor,
+    setExportFor,
     servedOf,
     starOf,
+    swipeActionsOf,
   };
 }
 

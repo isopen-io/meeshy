@@ -592,7 +592,7 @@ export class PostReactionHandler {
   ): Promise<void> {
     const post = await this.prisma.post.findUnique({
       where: { id: postId },
-      select: { authorId: true, type: true, content: true, createdAt: true, expiresAt: true },
+      select: { authorId: true, type: true, createdAt: true, expiresAt: true },
     });
 
     if (!post?.authorId) return;
@@ -609,7 +609,6 @@ export class PostReactionHandler {
         postAuthorId: post.authorId,
         emoji,
         postType: post.type,
-        postPreview: post.content?.slice(0, 80) ?? undefined,
         postCreatedAt: post.createdAt ?? undefined,
         postExpiresAt: post.expiresAt ?? undefined,
       })

@@ -12,19 +12,13 @@ struct OnboardingCardView: View {
     let onRetryStory: () -> Void
     let onExplore: () -> Void
 
-    @State private var showsAllSuggestions = false
-    @Environment(\.accessibilityReduceMotion) private var systemReduce
-    @Environment(\.meeshyForceReduceMotion) private var userForced
-
-    private var reduceMotion: Bool { MeeshyMotion.shouldReduce(system: systemReduce, userForced: userForced) }
-
     var body: some View {
         switch model.card {
         case .step(.languages): languages
         case .step(.email): email
         case .step(.global): global
         case .step(.story): story
-        case .step(.friends): friends
+        case .step(.friends): OnboardingFriendsCard(model: model, isDark: isDark)
         case .step(.notifications): notifications
         case .recap: recap
         case .none: EmptyView()
@@ -92,10 +86,10 @@ struct OnboardingCardView: View {
                 }
                 .padding(.horizontal, MeeshySpacing.lg)
                 .frame(minHeight: 54)
-                .background(RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(isDark ? Color.white.opacity(0.07) : Color.white))
-                .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .stroke(MeeshyColors.indigo300.opacity(0.6), lineWidth: 1.5))
+                .background(RoundedRectangle(cornerRadius: MeeshyRadius.lgPlus, style: .continuous)
+                    .fill(isDark ? Color.white.opacity(MeeshyOpacity.subtle) : Color.white))
+                .overlay(RoundedRectangle(cornerRadius: MeeshyRadius.lgPlus, style: .continuous)
+                    .stroke(MeeshyColors.indigo300.opacity(0.6), lineWidth: MeeshyBorder.emphasis))
             }
             .accessibilityIdentifier("onboarding.languages.primary")
             .accessibilityLabel(String.localizedStringWithFormat(
@@ -117,7 +111,7 @@ struct OnboardingCardView: View {
                         ) { model.toggleSecondaryLanguage(code) }
                     }
                 }
-                .padding(.vertical, 2)
+                .padding(.vertical, MeeshySpacing.xxs)
             }
         }
     }
@@ -230,10 +224,10 @@ struct OnboardingCardView: View {
                 .font(MeeshyFont.relative(MeeshyFont.bodySize + 1))
                 .foregroundStyle(MeeshyColors.textPrimary(isDark: isDark))
                 .padding(MeeshySpacing.md)
-                .background(RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(isDark ? Color.white.opacity(0.07) : Color.white))
-                .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .stroke(MeeshyColors.indigo300.opacity(0.6), lineWidth: 1.5))
+                .background(RoundedRectangle(cornerRadius: MeeshyRadius.lgPlus, style: .continuous)
+                    .fill(isDark ? Color.white.opacity(MeeshyOpacity.subtle) : Color.white))
+                .overlay(RoundedRectangle(cornerRadius: MeeshyRadius.lgPlus, style: .continuous)
+                    .stroke(MeeshyColors.indigo300.opacity(0.6), lineWidth: MeeshyBorder.emphasis))
                 .accessibilityLabel(String(localized: "onboarding.global.editor.a11y", bundle: .main))
                 .accessibilityIdentifier("onboarding.global.editor")
             Label(String(localized: "onboarding.global.hint", bundle: .main), systemImage: "pencil")
@@ -356,61 +350,7 @@ struct OnboardingCardView: View {
         }
     }
 
-    // MARK: 4 — trouve ta bande
-
-    private var friends: some View {
-        OnboardingCardLayout(
-            title: String(localized: "onboarding.friends.title", bundle: .main),
-            message: String.localizedStringWithFormat(String(localized: "onboarding.friends.body", bundle: .main), OnboardingRewards.friendship),
-            isDark: isDark,
-            primary: friendsPrimary,
-            secondary: nil,
-            illustration: { OnboardingFriendsIllustration(names: model.suggestions.map(\.displayName), isDark: isDark) },
-            content: {
-                VStack(spacing: MeeshySpacing.sm) {
-                    ForEach(OnboardingCardFit.visibleSuggestions(model.suggestions, expanded: showsAllSuggestions)) { suggestion in
-                        OnboardingSuggestionRow(
-                            suggestion: suggestion,
-                            isRequested: model.requestedProfileIds.contains(suggestion.id),
-                            didFail: model.failedProfileId == suggestion.id,
-                            isDark: isDark
-                        ) { Task { await model.addFriend(id: suggestion.id) } }
-                    }
-                    let hidden = OnboardingCardFit.hiddenSuggestionCount(model.suggestions, expanded: showsAllSuggestions)
-                    if hidden > 0 {
-                        Button {
-                            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.25)) { showsAllSuggestions = true }
-                        } label: {
-                            Label(String(localized: "onboarding.friends.more", bundle: .main), systemImage: "chevron.down")
-                                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold, design: .rounded))
-                                .foregroundStyle(MeeshyColors.indigo500)
-                                .frame(maxWidth: .infinity, minHeight: 44)
-                                .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityIdentifier("onboarding.friends.more")
-                    }
-                    Label(String.localizedStringWithFormat(String(localized: "onboarding.friends.pending", bundle: .main), OnboardingRewards.friendship),
-                          systemImage: "hourglass")
-                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                        .foregroundStyle(MeeshyColors.textMuted(isDark: isDark))
-                }
-            }
-        )
-    }
-
-    /// Avant tout ajout, « Plus tard » est la sortie réelle : elle tient la
-    /// place principale. « Continuer » ne la remplace qu'au premier ajout.
-    private var friendsPrimary: OnboardingAction {
-        switch OnboardingCardFit.friendsActions(hasRequests: !model.requestedProfileIds.isEmpty) {
-        case .laterOnly:
-            return OnboardingAction(title: String(localized: "onboarding.later", bundle: .main),
-                                    identifier: "onboarding.later") { Task { await model.continueFromFriends() } }
-        case .continueOnly:
-            return OnboardingAction(title: String(localized: "onboarding.continue", bundle: .main),
-                                    identifier: "onboarding.friends.continue") { Task { await model.continueFromFriends() } }
-        }
-    }
+    // MARK: 4 — trouve ta bande : `OnboardingFriendsCard` (#8105)
 
     // MARK: 5 — notifications
 
@@ -480,7 +420,7 @@ struct OnboardingCardView: View {
                                              @ViewBuilder leading: () -> Leading) -> some View {
         HStack(spacing: MeeshySpacing.md) {
             leading()
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(text)
                     .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
                     .foregroundStyle(MeeshyColors.textPrimary(isDark: isDark))
@@ -494,7 +434,7 @@ struct OnboardingCardView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(MeeshySpacing.md)
-        .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(tint.opacity(0.12)))
+        .background(RoundedRectangle(cornerRadius: MeeshyRadius.lgPlus, style: .continuous).fill(tint.opacity(MeeshyOpacity.light)))
         .accessibilityElement(children: .combine)
     }
 
@@ -505,7 +445,7 @@ struct OnboardingCardView: View {
             Image(systemName: "checkmark.circle.fill")
                 .font(MeeshyFont.relative(MeeshyFont.titleSize))
                 .foregroundStyle(MeeshyColors.success)
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(text)
                     .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
                     .foregroundStyle(MeeshyColors.textPrimary(isDark: isDark))
@@ -520,7 +460,7 @@ struct OnboardingCardView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(MeeshySpacing.md)
-        .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(MeeshyColors.success.opacity(0.12)))
+        .background(RoundedRectangle(cornerRadius: MeeshyRadius.lgPlus, style: .continuous).fill(MeeshyColors.success.opacity(MeeshyOpacity.light)))
         .accessibilityElement(children: .combine)
     }
 }
@@ -539,12 +479,12 @@ struct OnboardingSuggestionRow: View {
             MeeshyAvatar(name: suggestion.displayName, context: .postAuthor, avatarURL: suggestion.avatarUrl, isDark: isDark)
                 .allowsHitTesting(false)
                 .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(suggestion.displayName)
                     .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
                     .foregroundStyle(MeeshyColors.textPrimary(isDark: isDark))
                     .lineLimit(1)
-                HStack(spacing: 4) {
+                HStack(spacing: MeeshySpacing.xs) {
                     Text(verbatim: "@\(suggestion.username)")
                     Text(verbatim: suggestion.languages.map(LanguageFlagChip.flag(for:)).joined(separator: " "))
                 }
@@ -587,15 +527,29 @@ struct OnboardingSuggestionRow: View {
             .accessibilityIdentifier("onboarding.friends.add.\(suggestion.id)")
         }
         .padding(MeeshySpacing.sm)
-        .background(RoundedRectangle(cornerRadius: 20, style: .continuous)
-            .fill(isDark ? Color.white.opacity(0.05) : Color.white.opacity(0.8)))
+        .background(RoundedRectangle(cornerRadius: MeeshyRadius.xl, style: .continuous)
+            .fill(isDark ? Color.white.opacity(MeeshyOpacity.faint) : Color.white.opacity(MeeshyOpacity.intense)))
     }
 
     private var accessibilitySummary: String {
-        let names = suggestion.languages.map(LanguageFlagChip.spokenName(for:))
-        let languages = ListFormatter.localizedString(byJoining: names)
-        let base = String.localizedStringWithFormat(String(localized: "onboarding.friends.row.a11y", bundle: .main),
-                                                    suggestion.displayName, languages)
+        Self.accessibilitySummary(displayName: suggestion.displayName, username: suggestion.username,
+                                  languages: suggestion.languages, didFail: didFail)
+    }
+
+    /// Sans langue connue, la proposition « parle … » est OMISE (#8143) —
+    /// jamais un verbe sans complément : le nom et le @pseudo, tels qu'affichés.
+    static func accessibilitySummary(displayName: String, username: String, languages: [String], didFail: Bool) -> String {
+        let spoken = languages
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .map(LanguageFlagChip.spokenName(for:))
+        let base: String
+        if spoken.isEmpty {
+            base = username.isEmpty ? displayName : "\(displayName), @\(username)"
+        } else {
+            base = String.localizedStringWithFormat(String(localized: "onboarding.friends.row.a11y", bundle: .main),
+                                                    displayName, ListFormatter.localizedString(byJoining: spoken))
+        }
         return didFail ? base + ". " + String(localized: "onboarding.friends.failed", bundle: .main) : base
     }
 }
@@ -615,7 +569,7 @@ struct OnboardingRecapStats: View {
 
         return LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), spacing: MeeshySpacing.sm)], spacing: MeeshySpacing.sm) {
             ForEach(Array(tiles.enumerated()), id: \.offset) { _, tile in
-                VStack(spacing: 4) {
+                VStack(spacing: MeeshySpacing.xs) {
                     Image(systemName: tile.icon)
                         .foregroundStyle(tile.icon == "flame.fill" ? AnyShapeStyle(MeeshyColors.warning) : AnyShapeStyle(MeeshyColors.brandGradient))
                         .font(MeeshyFont.relative(MeeshyFont.titleSize))
@@ -630,8 +584,8 @@ struct OnboardingRecapStats: View {
                 }
                 .frame(maxWidth: .infinity, minHeight: 96)
                 .padding(.vertical, MeeshySpacing.sm)
-                .background(RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(isDark ? Color.white.opacity(0.06) : MeeshyColors.indigo50))
+                .background(RoundedRectangle(cornerRadius: MeeshyRadius.lgPlus, style: .continuous)
+                    .fill(isDark ? Color.white.opacity(MeeshyOpacity.subtle) : MeeshyColors.indigo50))
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(Text(verbatim: "\(tile.label) \(tile.value)"))
             }

@@ -32,6 +32,8 @@ struct ConversationRowItem: View {
     let rowWidth: CGFloat
     let isDragging: Bool
     let presenceState: PresenceState
+    /// Le pair a l'écran de CETTE conversation ouvert (#8892).
+    let isPeerHere: ConversationHere
     let isDark: Bool
     let storyRingState: StoryRingState
     let moodStatus: StatusEntry?
@@ -52,7 +54,7 @@ struct ConversationRowItem: View {
     let onMoodBadgeTap: (CGPoint) -> Void
     let onCreateShareLink: (() -> Void)?
     let onTap: () -> Void
-    let onLoadPreview: () async -> Void
+    let onLoadPreview: @MainActor () async -> Void
     /// Gates the opportunistic `.task { onLoadPreview() }` prefetch below to
     /// a bounded PREFIX of the list (`ConversationRowMetrics
     /// .autoPreviewLoadRowLimit`, computed by the caller via
@@ -283,6 +285,7 @@ struct ConversationRowItem: View {
                     availableWidth: rowWidth,
                     isDragging: isDragging,
                     presenceState: presenceState,
+                    isPeerHere: isPeerHere,
                     onViewStory: onViewStory,
                     onViewProfile: onViewProfile,
                     onViewConversationInfo: onViewConversationInfo,
@@ -306,6 +309,7 @@ struct ConversationRowItem: View {
                 availableWidth: rowWidth,
                 isDragging: isDragging,
                 presenceState: presenceState,
+                isPeerHere: isPeerHere,
                 onViewStory: onViewStory,
                 onViewProfile: onViewProfile,
                 onViewConversationInfo: onViewConversationInfo,
@@ -518,6 +522,7 @@ extension ConversationRowItem: @MainActor Equatable {
         lhs.rowWidth == rhs.rowWidth &&
         lhs.isDragging == rhs.isDragging &&
         lhs.presenceState == rhs.presenceState &&
+        lhs.isPeerHere == rhs.isPeerHere &&
         lhs.isDark == rhs.isDark &&
         lhs.storyRingState == rhs.storyRingState &&
         lhs.moodStatus?.id == rhs.moodStatus?.id &&
@@ -548,33 +553,55 @@ extension ConversationRowItem: @MainActor Equatable {
 
 /// Cursor-based infinite-scroll footer driven by `paginationState`.
 /// Extracted from `ConversationListView.paginationFooter`. Rendered once at
-/// the tail of the list, so it reads the view model directly rather than
-/// taking a dozen primitive inputs.
+/// the tail of the list, so it reads the view model directly and hands the
+/// pure `ConversationPaginationFooterContent` its primitives.
 struct ConversationPaginationFooter: View {
     @EnvironmentObject var conversationViewModel: ConversationListViewModel
 
     var body: some View {
-        switch conversationViewModel.paginationState {
+        ConversationPaginationFooterContent(
+            state: conversationViewModel.paginationState,
+            hasMore: conversationViewModel.hasMore,
+            conversationCount: conversationViewModel.conversations.count,
+            onLoadMore: { Task { await conversationViewModel.loadMore() } }
+        )
+    }
+}
+
+/// Le pied occupe UNE hauteur dans tous ses états (#8759). Le bloc « Et
+/// maintenant ? » est posé juste dessous : quand le pied passait de 1 pt
+/// (sentinelle) à 52 pt (spinner), 0 pt, 46 pt (« tout chargé ») ou 67 pt
+/// (erreur), le bloc descendait puis remontait à chaque page chargée.
+struct ConversationPaginationFooterContent: View {
+    let state: PaginationState
+    let hasMore: Bool
+    let conversationCount: Int
+    let onLoadMore: () -> Void
+
+    @ScaledMetric(relativeTo: .caption) private var slotHeight: CGFloat = 52
+
+    var body: some View {
+        stateContent
+            .frame(maxWidth: .infinity)
+            .frame(height: slotHeight)
+    }
+
+    @ViewBuilder
+    private var stateContent: some View {
+        switch state {
         case .loadingMore:
-            HStack {
-                Spacer()
-                ProgressView()
-                    .tint(MeeshyColors.indigo400)
-                Spacer()
-            }
-            .padding(.vertical, 16)
+            ProgressView()
+                .tint(MeeshyColors.indigo400)
         case .exhausted:
             // Show the "all loaded" hint only on lists that actually
             // had to paginate -- avoids cluttering empty/small lists.
-            if conversationViewModel.conversations.count > 30 {
+            if conversationCount > 30 {
                 Text(String(
                     localized: "conversations.pagination.allLoaded",
 
                 ))
                 .font(.caption)
                 .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
             }
         case .error:
             VStack(spacing: 6) {
@@ -585,7 +612,7 @@ struct ConversationPaginationFooter: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 Button {
-                    Task { await conversationViewModel.loadMore() }
+                    onLoadMore()
                 } label: {
                     Text(String(
                         localized: "conversations.pagination.retry",
@@ -595,18 +622,14 @@ struct ConversationPaginationFooter: View {
                     .foregroundStyle(MeeshyColors.indigo400)
                 }
             }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 16)
         case .idle:
             // Invisible sentinel: when the user scrolls deep enough to
             // reveal this row, fire `loadMore`. The ViewModel guards
             // against re-entry and short-circuits when hasMore=false.
-            if conversationViewModel.hasMore {
+            if hasMore {
                 Color.clear
                     .frame(height: 1)
-                    .onAppear {
-                        Task { await conversationViewModel.loadMore() }
-                    }
+                    .onAppear { onLoadMore() }
             }
         }
     }

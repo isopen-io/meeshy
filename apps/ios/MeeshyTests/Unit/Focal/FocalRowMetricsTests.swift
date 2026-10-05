@@ -119,9 +119,9 @@ final class FocalRowMetricsTests: XCTestCase {
     /// fixe la largeur disponible, donc le retour à la ligne, donc la hauteur ;
     /// le faire varier avec l'élection faisait changer la cellule de taille au
     /// basculement, et toute la liste sautait. La valeur retenue pour TOUTES
-    /// les rangées est celle de l'élue — `FocalMetrics.Focus.textIndent`
-    /// (`avatarSize + 7` = 41), la seule qui laisse la place à la pastille de
-    /// 34 que l'en-tête réserve désormais en permanence.
+    /// les rangées est, depuis #7995 (directive porteur 2026-09-26), la
+    /// colonne du nom — `FocalMetrics.Row.contentIndent` (= `Text.indent`,
+    /// 22 + 7), commune au contenu propre et aux citations.
     ///
     /// `FocalRow` a donc changé de COTE, pas de discipline : les deux sont
     /// nommées dans `FocalMetrics`, aucune n'est un littéral. Le témoin
@@ -135,14 +135,13 @@ final class FocalRowMetricsTests: XCTestCase {
         // rangées suivantes, il ne s'indente pas sous lui-même) et
         // `FocalConversationStartRow` (rangée centrée) en sont exclus.
         let indentedFiles = [
-            // #7928 (directive porteur 2026-09-25) : le CONTENU PROPRE sous
-            // l'avatar, les CITATIONS au retrait de citation — deux cotes, une
-            // par nature, et la rangée pose les deux (la carte de story est
-            // une citation).
+            // #7995 (directive porteur 2026-09-26) : UNE origine, la colonne
+            // du nom, pour le contenu propre ET les citations (carte de story
+            // comprise) — plus de cote de citation distincte (#7928, supplantée).
             "FocalRow.swift": "FocalMetrics.Row.contentIndent",
             "FocalAttachmentBlock.swift": "FocalMetrics.Row.contentIndent",
-            "FocalQuotedReplyView.swift": "FocalMetrics.Quote.indent",
-            "FocalQuoteRail.swift": "FocalMetrics.Quote.indent",
+            "FocalQuotedReplyView.swift": "FocalMetrics.Row.contentIndent",
+            "FocalQuoteRail.swift": "FocalMetrics.Row.contentIndent",
             "FocalMetaRow.swift": "FocalMetrics.Text.indent",
         ]
         for (fileName, cote) in indentedFiles {

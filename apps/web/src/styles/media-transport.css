@@ -7,12 +7,13 @@
 
 .media-transport {
   position: relative;
+  pointer-events: auto;
   display: flex;
   align-items: center;
   gap: 0.625rem;
   height: 3rem;
   padding-inline: 1rem;
-  color: #fff;
+  color: var(--color-on-media);
 }
 
 .media-transport-track {
@@ -134,8 +135,8 @@
   height: 4rem;
   margin: -2rem 0 0 -2rem;
   border-radius: 9999px;
-  color: #fff;
-  background-color: rgb(0 0 0 / 45%);
+  color: var(--color-on-media);
+  background-color: var(--color-scrim);
   opacity: 0.55;
 }
 

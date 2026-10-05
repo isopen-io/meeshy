@@ -313,8 +313,11 @@ final class SceneRotatedTextFloorSheetTests: XCTestCase {
     /// juger un rendu.
     private func peintQuelqueChose(_ image: UIImage) -> Bool {
         guard let cg = image.cgImage else { return false }
-        let points = [CGPoint(x: 0.25, y: 0.25), CGPoint(x: 0.75, y: 0.3),
-                      CGPoint(x: 0.5, y: 0.5), CGPoint(x: 0.4, y: 0.8)]
+        // Une grille, pas quatre points : sur un fond uni, seul le texte varie,
+        // et quatre points tombaient entre deux mots dès que le texte gardait
+        // ses lignes en grandissant (#9139).
+        let pas = stride(from: 0.1, through: 0.9, by: 0.05)
+        let points = pas.flatMap { y in pas.map { x in CGPoint(x: x, y: y) } }
         var couleurs = Set<UInt32>()
         let largeur = cg.width, hauteur = cg.height
         guard largeur > 0, hauteur > 0,

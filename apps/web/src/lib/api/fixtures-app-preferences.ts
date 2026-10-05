@@ -18,6 +18,10 @@ const INITIAL: AppPreferences = {
   showLastSeen: true,
   showReadReceipts: true,
   showTypingIndicator: true,
+  hideProfileFromSearch: false,
+  acceptCallsFromNonContacts: true,
+  notifyContactsOnReturn: true,
+  contactActivityEnabled: true,
 };
 
 const state: { preferences: AppPreferences } = { preferences: INITIAL };

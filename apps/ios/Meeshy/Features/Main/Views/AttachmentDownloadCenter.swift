@@ -3,6 +3,18 @@ import Combine
 import MeeshySDK
 import MeeshyUI
 
+// MARK: - Media Download Origin
+
+/// **Qui a demandé ce téléchargement** (#8573). Seul un téléchargement
+/// `manual` — provoqué par un tap de l'utilisateur — produit un retour
+/// haptique ; un téléchargement `automatic` (politique réseau, feed, galerie,
+/// préchargement) reste muet, au départ comme à la fin ou à l'échec.
+/// Paramètre OBLIGATOIRE à chaque lancement : chaque site DÉCLARE son origine.
+enum MediaDownloadOrigin: Equatable, Sendable {
+    case manual
+    case automatic
+}
+
 // MARK: - Attachment Download Center (UN téléchargement par média, partagé)
 
 /// **Le registre UNIQUE des téléchargements de médias de l'app** (#7492).
@@ -34,16 +46,18 @@ final class AttachmentDownloadCenter {
         case audio, image, video
     }
 
-    /// Les retours haptiques qu'un téléchargement DEMANDÉ produit. Injectés
-    /// pour qu'un témoin puisse prouver qu'un préchargement n'en produit
-    /// aucun (#7625) — le défaut en ligne de `HapticFeedback` ne se mesure pas.
+    /// Les retours haptiques qu'un téléchargement MANUEL produit. Injectés
+    /// pour qu'un témoin puisse prouver qu'un téléchargement automatique n'en
+    /// produit aucun (#7625, #8573) — le défaut en ligne de `HapticFeedback`
+    /// ne se mesure pas.
     enum Haptic: Equatable, Sendable {
         case light, success, error
     }
 
     private let haptics: @MainActor (Haptic) -> Void
-    /// Les clés lancées par `prefetch` : leur fin et leur échec ne vibrent pas.
-    private var silentKeys: Set<String> = []
+    /// L'origine de chaque téléchargement en cours : seule une clé `manual`
+    /// vibre à sa fin ou à son échec.
+    private var origins: [String: MediaDownloadOrigin] = [:]
 
     init(haptics: @escaping @MainActor (Haptic) -> Void = { AttachmentDownloadCenter.playHaptic($0) }) {
         self.haptics = haptics
@@ -106,10 +120,13 @@ final class AttachmentDownloadCenter {
     }
 
     /// Lance le téléchargement de `urlString` dans le cache typé — ou rejoint
-    /// celui qui tourne déjà pour la même clé.
-    func start(urlString: String, expectedSize: Int64, cacheStore: CacheStoreKind) {
+    /// celui qui tourne déjà pour la même clé. Seule l'origine `manual` vibre,
+    /// au départ, à la fin et à l'échec (#8573).
+    func start(urlString: String, expectedSize: Int64, cacheStore: CacheStoreKind, origin: MediaDownloadOrigin) {
+        let key = Self.key(for: urlString)
         guard launch(urlString: urlString, expectedSize: expectedSize, cacheStore: cacheStore) else { return }
-        haptics(.light)
+        origins[key] = origin
+        if origin == .manual { haptics(.light) }
     }
 
     /// **Précharge `urlString` en SILENCE** (#7625) — le média que l'écran
@@ -118,9 +135,7 @@ final class AttachmentDownloadCenter {
     /// REJOINT ce téléchargement, ou le trouve fini. Aucune vibration, ni au
     /// départ ni à la fin : l'utilisateur n'a rien demandé.
     func prefetch(urlString: String, expectedSize: Int64, cacheStore: CacheStoreKind) {
-        let key = Self.key(for: urlString)
-        guard launch(urlString: urlString, expectedSize: expectedSize, cacheStore: cacheStore) else { return }
-        silentKeys.insert(key)
+        start(urlString: urlString, expectedSize: expectedSize, cacheStore: cacheStore, origin: .automatic)
     }
 
     /// `false` quand il n'y a rien à lancer — URL vide, ou clé déjà en cours.
@@ -141,7 +156,7 @@ final class AttachmentDownloadCenter {
         guard tasks[key] != nil else { return }
         byteTasks[key]?.cancel()
         tasks[key]?.cancel()
-        silentKeys.remove(key)
+        origins[key] = nil
         publish(.cancelled, for: key)
         haptics(.light)
     }
@@ -152,16 +167,16 @@ final class AttachmentDownloadCenter {
 
     private func finish(key: String, size: Int64) {
         guard tasks[key] != nil else { return }
-        let silent = silentKeys.remove(key) != nil
+        let origin = origins.removeValue(forKey: key)
         publish(.finished(totalBytes: size), for: key)
-        if !silent { haptics(.success) }
+        if origin == .manual { haptics(.success) }
     }
 
     private func fail(key: String) {
         guard tasks[key] != nil else { return }
-        let silent = silentKeys.remove(key) != nil
+        let origin = origins.removeValue(forKey: key)
         publish(.failed, for: key)
-        if !silent { haptics(.error) }
+        if origin == .manual { haptics(.error) }
     }
 
     private func report(key: String, downloaded: Int64? = nil, total: Int64? = nil) {
@@ -442,7 +457,7 @@ final class AttachmentDownloader: ObservableObject {
         if cached { isCached = true }
     }
 
-    func start(attachment: MessageAttachment, onShare: ((URL) -> Void)?) {
+    func start(attachment: MessageAttachment, origin: MediaDownloadOrigin, onShare: ((URL) -> Void)?) {
         let store: CacheStoreKind
         switch attachment.type {
         case .audio: store = .audio
@@ -455,7 +470,8 @@ final class AttachmentDownloader: ObservableObject {
         startDownloadFlow(
             urlString: attachment.fileUrl,
             expectedSize: Int64(attachment.fileSize),
-            cacheStore: store
+            cacheStore: store,
+            origin: origin
         )
     }
 
@@ -466,15 +482,20 @@ final class AttachmentDownloader: ObservableObject {
     /// Note: if the network shifts wifi -> cellular while downloading, the
     /// download continues. The policy gates triggering, not continuation
     /// (spec §14.2, consistent with WhatsApp / Telegram).
-    func startTranslatedAudio(url: String, fileSize: Int64) {
-        startDownloadFlow(urlString: url, expectedSize: fileSize, cacheStore: .audio)
+    func startTranslatedAudio(url: String, fileSize: Int64, origin: MediaDownloadOrigin) {
+        startDownloadFlow(urlString: url, expectedSize: fileSize, cacheStore: .audio, origin: origin)
     }
 
-    private func startDownloadFlow(urlString: String, expectedSize: Int64, cacheStore: CacheStoreKind) {
+    private func startDownloadFlow(
+        urlString: String,
+        expectedSize: Int64,
+        cacheStore: CacheStoreKind,
+        origin: MediaDownloadOrigin
+    ) {
         guard !urlString.isEmpty else { return }
         observe(url: urlString)
         guard !isDownloading, !isCached else { return }
-        center.start(urlString: urlString, expectedSize: expectedSize, cacheStore: cacheStore)
+        center.start(urlString: urlString, expectedSize: expectedSize, cacheStore: cacheStore, origin: origin)
     }
 
     func cancel() {

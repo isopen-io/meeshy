@@ -126,3 +126,59 @@ export const shareLinkStatsJsonSchema = {
     },
   },
 } as const;
+
+/**
+ * LA LISTE COMPLÈTE DES ARRIVÉES D'UN LIEN (#7813) — `GET
+ * /api/v1/links/:linkId/arrivals?cursor=&limit=`, mêmes lecteurs que les
+ * statistiques. Une arrivée n'y porte QUE ce que la ligne affiche : nom, badge
+ * « sans compte », pays, langue et date. Ni identifiant, ni visage, ni
+ * présence : la liste se lit, elle n'ouvre aucun profil.
+ *
+ * Le curseur est opaque et stable (`joinedAt` puis identifiant, décroissants) :
+ * une arrivée nouvelle pendant le défilement ne décale aucune page.
+ */
+export const SHARE_LINK_ARRIVALS_PAGE_DEFAULT = 30;
+export const SHARE_LINK_ARRIVALS_PAGE_MAX = 100;
+
+export const shareLinkArrivalEntrySchema = z.object({
+  displayName: z.string(),
+  isAnonymous: z.boolean(),
+  /** ISO 3166-1 alpha-2, majuscules — `null` si inconnu. */
+  country: z.string().nullable(),
+  language: z.string().nullable(),
+  /** Instant ISO 8601. */
+  joinedAt: z.string(),
+});
+
+export type ShareLinkArrivalEntry = z.infer<typeof shareLinkArrivalEntrySchema>;
+
+export const shareLinkArrivalsPageSchema = z.object({
+  arrivals: z.array(shareLinkArrivalEntrySchema).max(SHARE_LINK_ARRIVALS_PAGE_MAX),
+  nextCursor: z.string().nullable(),
+});
+
+export type ShareLinkArrivalsPage = z.infer<typeof shareLinkArrivalsPageSchema>;
+
+export const shareLinkArrivalsPageJsonSchema = {
+  type: 'object',
+  required: ['arrivals', 'nextCursor'],
+  properties: {
+    arrivals: {
+      type: 'array',
+      maxItems: SHARE_LINK_ARRIVALS_PAGE_MAX,
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['displayName', 'isAnonymous', 'country', 'language', 'joinedAt'],
+        properties: {
+          displayName: { type: 'string' },
+          isAnonymous: { type: 'boolean' },
+          country: { type: 'string', nullable: true, description: 'ISO 3166-1 alpha-2' },
+          language: { type: 'string', nullable: true },
+          joinedAt: { type: 'string', format: 'date-time' },
+        },
+      },
+    },
+    nextCursor: { type: 'string', nullable: true, description: 'Opaque cursor of the next page, null on the last one' },
+  },
+} as const;

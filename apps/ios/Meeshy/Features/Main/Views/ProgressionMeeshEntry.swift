@@ -26,7 +26,7 @@ struct ProgressionMeeshEntry: View {
     private let tint = MeeshyColors.warning
 
     /// La forme de la pièce : plus RECTANGLE qu'une capsule (directive porteur 2026-09-14, #6466).
-    private static let forme = RoundedRectangle(cornerRadius: 12, style: .continuous)
+    private static let forme = RoundedRectangle(cornerRadius: MeeshyRadius.smPlus, style: .continuous)
 
     var body: some View {
         Button {
@@ -46,14 +46,14 @@ struct ProgressionMeeshEntry: View {
             // disait « récompense » en général ; le logo Meeshy (2026-09-09)
             // disait « marque ». Une Meesh est une MONNAIE : la pièce d'argent
             // (#6427) est le premier glyphe qui dit ce qu'est la chose.
-            HStack(spacing: 6) {
+            HStack(spacing: MeeshySpacing.xsPlus) {
                 Text("\(meesh.balance)")
-                    .font(MeeshyFont.relative(17, weight: .bold, design: .rounded))
+                    .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .bold, design: .rounded))
                     .monospacedDigit()
                     .foregroundColor(tint)
                 MeeshCoinGlyph(size: 20)
             }
-            .padding(.horizontal, 12)
+            .padding(.horizontal, MeeshySpacing.md)
             .frame(minHeight: CollapsibleHeaderMetrics.roundChromeDiameter)
             .adaptiveGlass(in: Self.forme, tint: tint.opacity(0.14), interactive: true)
             .frame(minHeight: 44)
@@ -81,7 +81,7 @@ struct ProgressionMeeshEntry: View {
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous)
-                        .stroke(tint.opacity(0.30), lineWidth: 1)
+                        .stroke(tint.opacity(MeeshyOpacity.medium), lineWidth: 1)
                 )
                 .presentationCompactAdaptationPopoverIfAvailable()
         }
@@ -134,7 +134,7 @@ struct ProgressionMeeshDetail: View {
             // solde nu : hors du bouton qui l'a ouvert, plus rien ne disait de
             // quelle monnaie on parlait, et « 3 Meesh » devait porter seul à la
             // fois le nom et le chiffre.
-            HStack(spacing: 6) {
+            HStack(spacing: MeeshySpacing.xsPlus) {
                 MeeshCoinGlyph(size: 16)
                 Text(ProgressionCopy.meeshEntryTitle)
                     .font(.caption2.weight(.semibold))
@@ -149,12 +149,12 @@ struct ProgressionMeeshDetail: View {
             // l'utilisateur reconnaît les mots, c'est à ça qu'il sait que c'est
             // la même chose.
             Text(ProgressionCopy.meeshBalance(meesh.balance))
-                .font(MeeshyFont.relative(20, weight: .bold, design: .rounded))
+                .font(MeeshyFont.relative(MeeshyFont.title3Size, weight: .bold, design: .rounded))
                 .foregroundColor(theme.textPrimary)
 
             if meesh.mintedLifetime > 0 {
                 Text(ProgressionCopy.meeshMintedLifetime(meesh.mintedLifetime))
-                    .font(MeeshyFont.relative(11, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                     .foregroundColor(theme.textMuted)
             }
 
@@ -196,7 +196,7 @@ struct ProgressionMeeshDetail: View {
                         )
                         .multilineTextAlignment(.center)
                     }
-                    .font(MeeshyFont.relative(14, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
                     .foregroundColor(theme.backgroundPrimary)
                     .frame(maxWidth: .infinity, minHeight: 44)
                     .background(RoundedRectangle(cornerRadius: MeeshyRadius.md).fill(tint))
@@ -210,20 +210,20 @@ struct ProgressionMeeshDetail: View {
                 // L'ÉCHEC se lit ICI, sous l'action qu'on peut retenter — et non
                 // en haut de l'écran, sous le détail qui le cache.
                 if let mintError, !isMinting {
-                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    HStack(alignment: .firstTextBaseline, spacing: MeeshySpacing.xsPlus) {
                         Image(systemName: "exclamationmark.triangle.fill")
                             .accessibilityHidden(true)
                         Text(mintError)
                             .fixedSize(horizontal: false, vertical: true)
                     }
-                    .font(MeeshyFont.relative(11, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                     .foregroundColor(MeeshyColors.error)
                     .accessibilityElement(children: .combine)
                     .accessibilityIdentifier("progression.meesh.mint.error")
                 }
             } else {
                 Text(ProgressionCopy.meeshMissing(missing: meesh.missingPoints, floor: meesh.floorPoints))
-                    .font(MeeshyFont.relative(11, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                     .foregroundColor(theme.textMuted)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -241,7 +241,7 @@ struct ProgressionMeeshDetail: View {
     @ViewBuilder
     private var bornes: some View {
         if let premiere = meesh.firstMintedAt {
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 borne(
                     String(localized: "progression.meesh.first_mint", defaultValue: "Première frappe", bundle: .main),
                     premiere
@@ -259,7 +259,7 @@ struct ProgressionMeeshDetail: View {
                 defaultValue: "Aucune frappe pour l’instant.",
                 bundle: .main
             ))
-            .font(MeeshyFont.relative(11, weight: .medium))
+            .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
             .foregroundColor(theme.textMuted)
         }
     }
@@ -272,7 +272,7 @@ struct ProgressionMeeshDetail: View {
             Text(date.formatted(date: .abbreviated, time: .omitted))
                 .foregroundColor(theme.textPrimary)
         }
-        .font(MeeshyFont.relative(11, weight: .medium))
+        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
         .accessibilityElement(children: .combine)
     }
 }

@@ -55,7 +55,7 @@ async function getEmailServiceWithEnv(envOverrides: Record<string, string> = {})
     }
   }));
 
-  // Import the fresh module
+  (await import('../../../services/email/recipient-policy')).registerEmailRecipientLookup(async () => 'verified'); // #8238
   const module = await import('../../../services/EmailService');
   return { EmailService: module.EmailService, module };
 }

@@ -70,7 +70,9 @@ final class MeeshyComposerHostPostSlidesGuardTests: XCTestCase {
     /// carrousel dont la première vue est vide.
     func test_sync_reusesTheVirginFirstSlide_beforeAddingAny() throws {
         let compacted = compact(try hostSource())
-        XCTAssertTrue(compacted.contains("ifslideIdByMediaURL.isEmpty,"),
+        // Une SÉRIE (#8540) a sa propre règle de réemploi, juste au-dessus :
+        // elle remplit la scène courante si elle n'a pas de fond.
+        XCTAssertTrue(compacted.contains("ifporte!=.sceneSeries,slideIdByMediaURL.isEmpty,"),
             "La dérivation doit d'abord regarder si AUCUN média n'a encore sa slide…")
         XCTAssertTrue(compacted.contains("(viewModel.currentSlide.effects.mediaObjects??[]).isEmpty{"),
             "…ET si la slide courante est vierge, pour la réemployer au lieu d'en ajouter une.")
@@ -108,8 +110,14 @@ final class MeeshyComposerHostPostSlidesGuardTests: XCTestCase {
     /// changé. Garder `onSelectMedia:` reviendrait à exiger le retour d'une
     /// indirection que le modèle des slides a rendue inutile.
     func test_thumbnailTap_selectsTheSlideOfThatMedia() throws {
+        // **#9126 — la retouche d'une série a sa PROPRE sélection.** Quand le
+        // meuble retouche les pièces en attente d'un message (`retouchSeries`),
+        // taper une vignette passe par `selectRetouchScene(at:)`, qui sélectionne la
+        // scène PUIS rouvre les outils de sa pièce ; hors retouche, le relais
+        // reste `viewModel.selectSlide(at:)`. Les deux branches sont exigées.
         let compacted = compact(try hostSource())
-        XCTAssertTrue(compacted.contains("onSelect:{viewModel.selectSlide(at:$0)}"),
+        XCTAssertTrue(compacted.contains(
+            "onSelect:{indexinifretouchSeries!=nil{selectRetouchScene(at:index)}else{viewModel.selectSlide(at:index)}}"),
             "Taper une vignette doit amener SA slide sur la scène — sans ce relais, le rail "
                 + "est un inventaire et le carrousel n'est pas navigable (loi 4).")
     }

@@ -278,7 +278,7 @@ const textObject = (overrides: Record<string, unknown>) => ({
 // que l'hôte soit le fil ou la story — un seul site, jamais un par hôte.
 const FIT_HASH = 'LHkC';
 describe('ScenePlayer — le sol d’un fond AJUSTÉ, peint DANS le moteur (revue-correction #6901)', () => {
-  test('fond `fit` + thumbHash ⇒ une bande peinte, SOUS le média, à l’opacité de la loi', () => {
+  test('fond `fit` (flou, le défaut du Cadre #8414) ⇒ l’image elle-même, floutée, SOUS le média, à l’opacité de la loi', () => {
     const el = mount(
       <ScenePlayer
         document={documentOf([fond({ postMediaId: 'img', thumbHash: FIT_HASH, transform: { videoFitMode: 'fit' } })])}
@@ -291,14 +291,46 @@ describe('ScenePlayer — le sol d’un fond AJUSTÉ, peint DANS le moteur (revu
     );
     const letterbox = el.querySelector('[data-scene-letterbox]') as HTMLImageElement | null;
     expect(letterbox).not.toBeNull();
+    expect(letterbox?.getAttribute('data-scene-backdrop')).toBe('blur');
     expect(letterbox?.style.opacity).toBe('0.85');
-    expect(letterbox?.getAttribute('src')).toContain('data:image/svg+xml');
+    expect(letterbox?.style.filter).toContain('blur');
+    expect(letterbox?.getAttribute('src')).toBe('photo.png');
     // SOUS le média : le média (`<img>` sans attribut `data-scene-letterbox`)
     // vient APRÈS dans le DOM (`BackgroundLayer`, aucun z-index explicite —
     // l'ORDRE fait la pile).
     const media = el.querySelector('img:not([data-scene-letterbox])');
     const position = letterbox !== null && media !== null ? letterbox.compareDocumentPosition(media) : 0;
     expect((position & Node.DOCUMENT_POSITION_FOLLOWING) !== 0).toBe(true);
+  });
+
+  test('fond VIDÉO `fit` flou ⇒ son thumbhash COMPLET étiré, jamais un aplat', () => {
+    const el = mount(
+      <ScenePlayer
+        document={documentOf([fond({ postMediaId: 'vid', mediaType: 'video', thumbHash: '3nQFFAT4WIiod4WYZ6joeo+u9w==', transform: { videoFitMode: 'fit' } })])}
+        sceneIndex={0}
+        mode="card"
+        playing={false}
+        carrier={carrier}
+        preferredLanguages={['fr']}
+      />,
+    );
+    expect(el.querySelector('[data-scene-letterbox]')?.getAttribute('src')).toMatch(/^data:image\/bmp;base64,/);
+  });
+
+  test('un fond TEINTÉ au Cadre (#8414) peint ses bandes de la teinte du contrat', () => {
+    const el = mount(
+      <ScenePlayer
+        document={documentOf([fond({ postMediaId: 'img', transform: { videoFitMode: 'fit', backdrop: 'sand' } })])}
+        sceneIndex={0}
+        mode="card"
+        playing={false}
+        carrier={carrier}
+        preferredLanguages={['fr']}
+      />,
+    );
+    const band = el.querySelector('[data-scene-letterbox]') as HTMLElement | null;
+    expect(band?.getAttribute('data-scene-backdrop')).toBe('sand');
+    expect(band?.style.backgroundColor).toBe('#FDE68A');
   });
 
   test('fond `fill` (le défaut) : le média couvre déjà le canvas, aucune bande', () => {
@@ -315,10 +347,10 @@ describe('ScenePlayer — le sol d’un fond AJUSTÉ, peint DANS le moteur (revu
     expect(el.querySelector('[data-scene-letterbox]')).toBeNull();
   });
 
-  test('fond `fit` SANS aucun ThumbHash ni ailleurs dans la scène : aucune source, aucune bande peinte (parité iOS assumée, `StoryLetterboxFill.Source.none`)', () => {
+  test('fond VIDÉO `fit` SANS aucun ThumbHash ni ailleurs dans la scène : aucune source, aucune bande peinte (parité iOS assumée, `StoryLetterboxFill.Source.none`)', () => {
     const el = mount(
       <ScenePlayer
-        document={documentOf([fond({ postMediaId: 'img', transform: { videoFitMode: 'fit' } })])}
+        document={documentOf([fond({ postMediaId: 'vid', mediaType: 'video', transform: { videoFitMode: 'fit' } })])}
         sceneIndex={0}
         mode="card"
         playing={false}
@@ -1127,5 +1159,27 @@ describe('ScenePlayer — mode reel, l’horloge d’une scène SANS objet tempo
       expect(ended).toBe(1);
       expect(loops).toBe(0);
     });
+  });
+});
+
+/** LE FANTÔME (lot 6, maquette `Main.dc.html`) — frise ouverte à l'arrêt, un
+ * objet hors de sa fenêtre se montre à .25 au lieu de disparaître ; sans la
+ * demande de l'hôte, il reste caché (lecture, lecteur). */
+describe('ScenePlayer — `ghostOutsideWindow`', () => {
+  const timed = textObject({ id: 'late', timing: { start: 2, end: 3 }, payload: { text: 'plus tard' } });
+
+  test('sans la demande : hors fenêtre, l’objet est caché', () => {
+    const el = mount(<ScenePlayer document={sceneDocumentOf([timed])} sceneIndex={0} mode="preview" playing={false} carrier={carrier} preferredLanguages={['fr']} />);
+    expect((el.querySelector('[data-scene-object-id="late"]') as HTMLElement | null)?.hidden).toBe(true);
+  });
+
+  test('avec la demande : hors fenêtre, un fantôme à l’opacité demandée', () => {
+    const el = mount(
+      <ScenePlayer document={sceneDocumentOf([timed])} sceneIndex={0} mode="preview" playing={false} carrier={carrier} preferredLanguages={['fr']} ghostOutsideWindow={0.25} />,
+    );
+    const object = el.querySelector('[data-scene-object-id="late"]') as HTMLElement | null;
+    expect(object?.hidden).toBe(false);
+    expect(object?.style.opacity).toBe('0.25');
+    expect(object?.hasAttribute('data-scene-ghost')).toBe(true);
   });
 });

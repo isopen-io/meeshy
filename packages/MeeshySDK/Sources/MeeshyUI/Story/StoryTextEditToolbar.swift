@@ -110,12 +110,12 @@ public struct StoryTextEditToolbar: View {
     private func bottomRow(expandedTool: TextEditTool?,
                            binding: Binding<StoryTextObject>) -> some View {
         AdaptiveGlassContainer(spacing: 10) {
-            VStack(spacing: 10) {
+            VStack(spacing: MeeshySpacing.smPlus) {
                 if let tool = expandedTool {
                     TextEditToolOptions(tool: tool, textObject: binding)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 10)
-                        .adaptiveGlass(in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                        .padding(.horizontal, MeeshySpacing.md)
+                        .padding(.vertical, MeeshySpacing.smPlus)
+                        .adaptiveGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.xl, style: .continuous))
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
                 TextEditFloatingBubbles(
@@ -127,7 +127,7 @@ public struct StoryTextEditToolbar: View {
                 )
             }
             .padding(.horizontal, TextEditToolbarMetrics.horizontalMargin)
-            .padding(.vertical, 12)
+            .padding(.vertical, MeeshySpacing.md)
         }
     }
 

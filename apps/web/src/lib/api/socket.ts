@@ -10,14 +10,17 @@ import type { TypingActionData, TypingEvent } from '@meeshy/shared/types/socketi
 import type { PostRoomActionData } from '@meeshy/shared/types/socketio-events/social';
 
 import type { ConversationStoreState } from '@/lib/conversation-store';
+import { noteGalleryReception } from '@/lib/gallery/auto-save-runtime';
 import type { SocketClient, SocketFactory } from '@/lib/net/socket';
 import type { OutboxState } from '@/lib/send/outbox-store';
+import { offerInAppBanner } from '@/lib/notifications/in-app-banner';
 import { decodeNotification } from '@/lib/notifications/record';
 
 import { attachmentStatusDetailsQueryKey } from './attachments';
 import { CONVERSATIONS_QUERY_KEY } from './conversations';
 import { messagesQueryKey } from './messages';
 import { applyAttachmentReactionUpdate, isAttachmentReactionUpdate } from './realtime-attachment-reactions';
+import { applyCitedPostWithdrawn, isCitedPostWithdrawnEvent } from './realtime-cited-post';
 import {
   applyMessageDeleted,
   applyMessageEdited,
@@ -37,6 +40,7 @@ import {
   applyServedRepost,
 } from './feed-realtime';
 import { FRIENDS_QUERY_PREFIX } from './friends-keys';
+import { profileRepaintOfUserUpdated, repaintProfile } from './my-portrait';
 import { PUBLIC_PROFILE_QUERY_PREFIX } from './public-profile';
 import { NOTIFICATION_COUNTS_QUERY_KEY, NOTIFICATION_LISTS_KEY } from './notifications';
 import { bindPublicationRoomTransport } from './publication-rooms';
@@ -47,6 +51,7 @@ import {
   applyNotificationNew,
   applyNotificationRead,
   applyNotificationReadBulk,
+  notificationIdOf,
 } from './notifications-realtime';
 import {
   applyConversationUnreadUpdated,
@@ -73,6 +78,7 @@ import {
   isMessageExpiredEvent,
   noteEphemeralDelivery,
 } from './realtime-ephemeral';
+import { catchUpThreadMessage } from './realtime-thread-catch-up';
 import { STARRED_MESSAGES_QUERY_ROOT, applyStarredEvent } from './starred-messages-cache';
 import { STORY_TRAY_QUERY_KEY } from './stories';
 import { TYPING_SAFETY_TIMEOUT_MS, type TypingStoreApi } from './typing-store';
@@ -94,6 +100,16 @@ import { TYPING_SAFETY_TIMEOUT_MS, type TypingStoreApi } from './typing-store';
  * pour les salles que les écrans tiennent (`publication-rooms.ts`, #7395) — la
  * passerelle ne peut pas deviner ce qu'un écran montre.
  */
+
+/** Les notifications qui annoncent l'ARRIVÉE d'un message — jamais une
+ * réaction ni une édition, qui nomment un message que le fil peut ne pas avoir
+ * chargé sans qu'il manque quoi que ce soit (#9291). */
+const MESSAGE_ARRIVAL_NOTIFICATIONS: ReadonlySet<string> = new Set([
+  'new_message',
+  'message_reply',
+  'user_mentioned',
+  'mention',
+]);
 
 function isTypingEvent(payload: unknown): payload is TypingEvent {
   if (typeof payload !== 'object' || payload === null) return false;
@@ -302,6 +318,9 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
     /* LE DÉCOMPTE PART D'ICI, PAS DU PREMIER PIXEL (#7454) — le fil peut être
        fermé quand l'éphémère arrive ; c'est cet instant-là qui fait foi. */
     noteEphemeralDelivery(payload, now());
+    /* LA GALERIE DE LA COQUE ANDROID (#8308) — à la RÉCEPTION, une seule fois,
+       jamais un média protégé ni le mien ; sans effet hors de la coque. */
+    noteGalleryReception(payload, deps.viewerId());
 
     const candidates = new Set([payload.senderId, payload.sender?.userId].filter((id): id is string => id !== undefined));
     for (const userId of candidates) {
@@ -339,6 +358,13 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   const onConversationUpdated = (payload: unknown): void => {
     if (!isConversationUpdated(payload)) return;
     applyConversationUpdated(deps.queryClient, payload);
+    /* LE FIL OUVERT RATTRAPE UN `message:new` PERDU (#9291) — cet évènement
+       voyage par la room PERSONNELLE ; `message:new`, par celle de la
+       conversation. Mes propres envois sont exclus : leur écho voyage par ma
+       room personnelle, et l'outbox tient la rangée optimiste. */
+    if (typeof payload.lastMessageId === 'string' && payload.updatedBy.id !== deps.viewerId()) {
+      catchUpThreadMessage(deps.queryClient, { conversationId: payload.conversationId, messageId: payload.lastMessageId });
+    }
   };
 
   /** `message:translation` (revue-correction #5793, défaut 2) — le pipeline
@@ -410,6 +436,12 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   const onMessageDeleted = (payload: unknown): void => {
     if (!isMessageDeletedEvent(payload)) return;
     applyMessageDeleted(deps.queryClient, payload);
+  };
+
+  /** `message:cited-post-withdrawn` (#7969) — la story citée est retirée : la carte passe « Story indisponible ». Règle : `realtime-cited-post.ts`. */
+  const onCitedPostWithdrawn = (payload: unknown): void => {
+    if (!isCitedPostWithdrawnEvent(payload)) return;
+    applyCitedPostWithdrawn(deps.queryClient, payload);
   };
 
   /**
@@ -747,10 +779,27 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
       if (oldest !== undefined) seenNotifications.delete(oldest);
     }
     applyNotificationNew(deps.queryClient, notification);
+    /* LA CLOCHE SONNE, LE FIL SUIT (#9291) — la notification d'un message
+       absent du fil ouvert le relit. */
+    const { conversationId, messageId } = notification.context;
+    if (MESSAGE_ARRIVAL_NOTIFICATIONS.has(notification.type) && conversationId !== undefined && messageId !== undefined) {
+      catchUpThreadMessage(deps.queryClient, { conversationId, messageId });
+    }
+    /* LA BANNIÈRE IN-APP (#8727) — seulement devant un onglet VISIBLE : un
+       onglet caché reçoit le push système, et une bannière posée pendant
+       l'absence surgirait, périmée, au retour. */
+    if (typeof document !== 'undefined' && !document.hidden) offerInAppBanner(notification, { pathname: window.location.pathname });
   };
   const onNotificationRead = (payload: unknown): void => applyNotificationRead(deps.queryClient, payload);
   const onNotificationReadBulk = (payload: unknown): void => applyNotificationReadBulk(deps.queryClient, payload);
-  const onNotificationDeleted = (payload: unknown): void => applyNotificationDeleted(deps.queryClient, payload);
+  /* Un id supprimé qui revient est une notification RÉÉCRITE (édition :
+     `notification:deleted` puis `notification:new`, même identité) — la
+     mémoire de dédoublonnage l'oublie pour la laisser reprendre sa place. */
+  const onNotificationDeleted = (payload: unknown): void => {
+    const id = notificationIdOf(payload);
+    if (id !== null) seenNotifications.delete(id);
+    applyNotificationDeleted(deps.queryClient, payload);
+  };
   const onNotificationDeletedBulk = (payload: unknown): void => applyNotificationDeletedBulk(deps.queryClient, payload);
   const onNotificationCounts = (payload: unknown): void => applyNotificationCounts(deps.queryClient, payload);
 
@@ -772,6 +821,12 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
        fraîcheur. Miroir d'`onReceive(FriendshipCache.objectWillChange)`
        (`UserProfileSheet.swift:156-158`). */
     void deps.queryClient.invalidateQueries({ queryKey: PUBLIC_PROFILE_QUERY_PREFIX });
+  };
+
+  /** `user:updated` (#8889, #8890) — la photo et le nom d'un pair repeints dans chaque copie du cache ; la loi vit dans `my-portrait.ts`. */
+  const onUserUpdated = (payload: unknown): void => {
+    const update = profileRepaintOfUserUpdated(payload);
+    if (update !== null) repaintProfile(deps.queryClient, update);
   };
 
   /**
@@ -885,6 +940,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   socket.on<unknown>(SERVER_EVENTS.REACTION_REMOVED, onMessageReactionChanged);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_EDITED, onMessageEdited);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_DELETED, onMessageDeleted);
+  socket.on<unknown>(SERVER_EVENTS.MESSAGE_CITED_POST_WITHDRAWN, onCitedPostWithdrawn);
   socket.on<unknown>(SERVER_EVENTS.READ_STATUS_UPDATED, onReadStatusUpdated);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_CONSUMED, onMessageConsumed);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_VIEW_ONCE_PURGED, onMessageViewOncePurged);
@@ -925,6 +981,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   socket.on<unknown>(SERVER_EVENTS.FRIEND_REQUEST_CANCELLED, onFriendshipChanged);
   socket.on<unknown>(SERVER_EVENTS.FRIEND_REQUEST_ACCEPTED, onFriendshipChanged);
   socket.on<unknown>(SERVER_EVENTS.FRIEND_REQUEST_REJECTED, onFriendshipChanged);
+  socket.on<unknown>(SERVER_EVENTS.USER_UPDATED, onUserUpdated);
   socket.on<AuthTokenExpiredEventData>(SERVER_EVENTS.AUTH_TOKEN_EXPIRED, onTokenExpired);
   socket.on<AuthSessionRevokedEventData>(SERVER_EVENTS.AUTH_SESSION_REVOKED, onSessionRevoked);
 
@@ -957,6 +1014,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
       socket.off<unknown>(SERVER_EVENTS.TYPING_STOP, onTypingStop);
       socket.off<unknown>(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, onUnreadUpdated);
       socket.off<unknown>(SERVER_EVENTS.CONVERSATION_UPDATED, onConversationUpdated);
+      socket.off<unknown>(SERVER_EVENTS.CONVERSATION_NEW, onConversationNew);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_TRANSLATION, onMessageTranslation);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED, onAttachmentUpdated);
       socket.off<unknown>(SERVER_EVENTS.ATTACHMENT_STATUS_UPDATED, onAttachmentStatusUpdated);
@@ -966,6 +1024,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
       socket.off<unknown>(SERVER_EVENTS.REACTION_REMOVED, onMessageReactionChanged);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_EDITED, onMessageEdited);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_DELETED, onMessageDeleted);
+      socket.off<unknown>(SERVER_EVENTS.MESSAGE_CITED_POST_WITHDRAWN, onCitedPostWithdrawn);
       socket.off<unknown>(SERVER_EVENTS.READ_STATUS_UPDATED, onReadStatusUpdated);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_CONSUMED, onMessageConsumed);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_VIEW_ONCE_PURGED, onMessageViewOncePurged);
@@ -1006,6 +1065,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
       socket.off<unknown>(SERVER_EVENTS.FRIEND_REQUEST_CANCELLED, onFriendshipChanged);
       socket.off<unknown>(SERVER_EVENTS.FRIEND_REQUEST_ACCEPTED, onFriendshipChanged);
       socket.off<unknown>(SERVER_EVENTS.FRIEND_REQUEST_REJECTED, onFriendshipChanged);
+      socket.off<unknown>(SERVER_EVENTS.USER_UPDATED, onUserUpdated);
       socket.off<AuthTokenExpiredEventData>(SERVER_EVENTS.AUTH_TOKEN_EXPIRED, onTokenExpired);
       socket.off<AuthSessionRevokedEventData>(SERVER_EVENTS.AUTH_SESSION_REVOKED, onSessionRevoked);
       socket.disconnect();

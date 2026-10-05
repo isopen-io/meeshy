@@ -6,6 +6,7 @@ import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../utils/recipient-lan
 import { createInvitationRateLimitConfig } from '../middleware/rate-limit';
 import { requireEmailVerification } from '../middleware/auth';
 import { generateUniqueAffiliateToken } from './affiliate';
+import { EngagementService } from '../services/engagement/EngagementService';
 
 const sendEmailInvitationSchema = z.object({
   email: z.email(),
@@ -90,6 +91,11 @@ export async function invitationRoutes(fastify: FastifyInstance) {
           downloadUrl: invitationUrl,
           language: recipientLanguage(user, 'fr'),
         });
+        // `social.email_invite` (#8959) — seulement quand l'e-mail est PARTI :
+        // une invitation restée en base sans envoi n'a invité personne.
+        new EngagementService(fastify.prisma)
+          .recordActivity(userId, 'social.email_invite')
+          .catch((error: unknown) => logWarn(fastify.log, 'engagement social.email_invite failed', error));
       } else {
         logWarn(fastify.log, 'EmailService not available, invitation not sent');
       }

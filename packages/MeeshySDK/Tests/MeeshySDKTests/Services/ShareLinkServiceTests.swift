@@ -164,6 +164,47 @@ final class ShareLinkServiceTests: XCTestCase {
         }
     }
 
+    // MARK: - fetchLinkArrivals (#7813)
+
+    func test_fetchLinkArrivals_firstPage_getsTheArrivalsAddressWithLimitAndNoCursor() async throws {
+        let page = ShareLinkArrivalsPage(arrivals: [
+            ShareLinkArrivalEntry(displayName: "Priya", isAnonymous: true, country: "IN", language: "hi", joinedAt: Date(timeIntervalSince1970: 1_759_000_000))
+        ], nextCursor: "c2")
+        mock.stub("/links/mshy_abc/arrivals", result: APIResponse<ShareLinkArrivalsPage>(success: true, data: page, error: nil))
+
+        let result = try await service.fetchLinkArrivals(linkId: "mshy_abc", cursor: nil, limit: 30)
+
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/links/mshy_abc/arrivals")
+        XCTAssertEqual(mock.lastRequest?.method, "GET")
+        XCTAssertEqual(mock.lastRequest?.queryItems, [URLQueryItem(name: "limit", value: "30")])
+        XCTAssertEqual(result, page)
+    }
+
+    func test_fetchLinkArrivals_nextPage_forwardsTheOpaqueCursor() async throws {
+        let page = ShareLinkArrivalsPage(arrivals: [], nextCursor: nil)
+        mock.stub("/links/mshy_abc/arrivals", result: APIResponse<ShareLinkArrivalsPage>(success: true, data: page, error: nil))
+
+        _ = try await service.fetchLinkArrivals(linkId: "mshy_abc", cursor: "eyJ0IjoxfQ", limit: 50)
+
+        XCTAssertEqual(mock.lastRequest?.queryItems, [
+            URLQueryItem(name: "limit", value: "50"),
+            URLQueryItem(name: "cursor", value: "eyJ0IjoxfQ")
+        ])
+    }
+
+    func test_fetchLinkArrivals_forbidden_propagates() async {
+        mock.stubError("/links/mshy_abc/arrivals", error: MeeshyError.server(statusCode: 403, message: "Forbidden"))
+
+        do {
+            _ = try await service.fetchLinkArrivals(linkId: "mshy_abc", cursor: nil, limit: 30)
+            XCTFail("Expected the 403 to propagate")
+        } catch let error as MeeshyError {
+            guard case .server(403, _) = error else { return XCTFail("Expected 403, got \(error)") }
+        } catch {
+            XCTFail("Expected MeeshyError, got \(type(of: error))")
+        }
+    }
+
     // MARK: - updateLink (#7797)
 
     private func makeSettings(maxUses: Int? = nil, expiresAt: Date? = nil) -> ShareLinkSettings {

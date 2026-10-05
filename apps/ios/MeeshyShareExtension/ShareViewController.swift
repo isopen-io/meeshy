@@ -363,7 +363,7 @@ struct ShareContentView: View {
     let media: [ShareStagedMedia]
     let stagingFailure: ShareMediaStagingError?
     let state: ShareScreenState
-    let onSend: (ShareSession, [String], String?, [ShareStagedMedia]) async -> SharePendingShare
+    let onSend: @MainActor (ShareSession, [String], String?, [ShareStagedMedia]) async -> SharePendingShare
     /// **Composer au lieu d'envoyer** (#5056, vue `2a`). Reçoit ce qui a été
     /// préparé ; c'est l'appelant qui écrit la fiche et rend la main.
     let onCompose: ([ShareStagedMedia], String?) -> Void

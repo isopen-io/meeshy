@@ -84,7 +84,7 @@ const ETATS: ReadonlyArray<Etat> = [
   {
     adresse: 'avec-mdp-non-verifie@example.com',
     compte: compte('avec-mdp-non-verifie@example.com', { password: '$2b$12$hash' }),
-    recoitUnLien: false
+    recoitUnLien: true // #8238 — l'usage du lien prouve l'adresse
   },
   {
     adresse: 'sans-mdp-non-verifie@example.com',

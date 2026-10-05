@@ -15,7 +15,7 @@ from typing import Dict, Any, Optional
 from dataclasses import dataclass
 from concurrent.futures import ThreadPoolExecutor
 
-from utils.text_segmentation import TextSegmenter
+from utils.text_segmentation import TextSegmenter, protect_entities
 
 logger = logging.getLogger(__name__)
 
@@ -289,7 +289,7 @@ class TranslationService:
                 logger.info(f"[STRUCTURED] Model switched: {original_model_type} → {model_type}")
 
             # Texte simple: utiliser traduction standard
-            if len(text) <= 100 and '\n\n' not in text and not self.text_segmenter.extract_emojis(text)[1]:
+            if len(text) <= 100 and '\n\n' not in text and not protect_entities(text)[1]:
                 return await self.translate(text, source_language, target_language, model_type, source_channel)
 
             logger.info(f"[STRUCTURED] Starting structured translation: {len(text)} chars")

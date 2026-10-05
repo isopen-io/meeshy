@@ -100,7 +100,7 @@ describe('Meeshy Global — aucun point pour un texte répété (#7740)', () => 
     run({ prisma: makePrisma({ recentContents: ['Bonjour à tous', 'Hola'] }), engagementService });
     await flush();
 
-    expect(engagementService.recordActivity).toHaveBeenCalledWith(USER_ID, 'content.text_message');
+    expect(engagementService.recordActivity).toHaveBeenCalledWith(USER_ID, 'content.text_message', { conversationId: expect.any(String) });
   });
 
   it('ne crédite PAS content.text_message pour un texte identique, à la casse, aux espaces et à la ponctuation près', async () => {
@@ -112,7 +112,7 @@ describe('Meeshy Global — aucun point pour un texte répété (#7740)', () => 
     });
     await flush();
 
-    expect(engagementService.recordActivity).not.toHaveBeenCalledWith(USER_ID, 'content.text_message');
+    expect(engagementService.recordActivity).not.toHaveBeenCalledWith(USER_ID, 'content.text_message', expect.anything());
   });
 
   it('crédite quand même l\'axe conversation et les autres effets pour un texte répété — le message part', async () => {
@@ -132,6 +132,7 @@ describe('Meeshy Global — aucun point pour un texte répété (#7740)', () => 
 
     run({ prisma, engagementService: makeEngagementService() });
     await flush();
+    const after = Date.now();
 
     expect(prisma.message.findMany).toHaveBeenCalledTimes(1);
     const args = prisma.message.findMany.mock.calls[0][0];
@@ -139,8 +140,8 @@ describe('Meeshy Global — aucun point pour un texte répété (#7740)', () => 
     expect(args.where.id).toEqual({ not: MSG_ID });
     expect(args.where.deletedAt).toBeNull();
     const since = (args.where.createdAt.gte as Date).getTime();
-    expect(before - since).toBeGreaterThanOrEqual(10 * 60 * 1000 - 50);
-    expect(before - since).toBeLessThanOrEqual(10 * 60 * 1000 + 1000);
+    expect(since).toBeGreaterThanOrEqual(before - 10 * 60 * 1000);
+    expect(since).toBeLessThanOrEqual(after - 10 * 60 * 1000);
     expect(args.orderBy).toEqual({ createdAt: 'desc' });
     expect(args.take).toBe(50);
     expect(args.select).toEqual({ content: true });
@@ -154,7 +155,7 @@ describe('Meeshy Global — aucun point pour un texte répété (#7740)', () => 
     await flush();
 
     expect(prisma.message.findMany).not.toHaveBeenCalled();
-    expect(engagementService.recordActivity).toHaveBeenCalledWith(USER_ID, 'content.text_message');
+    expect(engagementService.recordActivity).toHaveBeenCalledWith(USER_ID, 'content.text_message', { conversationId: expect.any(String) });
   });
 
   it('ne compare pas un message sans texte (pièce jointe seule) : il reste crédité', async () => {
@@ -165,7 +166,7 @@ describe('Meeshy Global — aucun point pour un texte répété (#7740)', () => 
     await flush();
 
     expect(prisma.message.findMany).not.toHaveBeenCalled();
-    expect(engagementService.recordActivity).toHaveBeenCalledWith(USER_ID, 'content.text_message');
+    expect(engagementService.recordActivity).toHaveBeenCalledWith(USER_ID, 'content.text_message', { conversationId: expect.any(String) });
   });
 
   it('ne touche pas au vocal : un audio répété crédite toujours content.audio_message', async () => {
@@ -175,7 +176,7 @@ describe('Meeshy Global — aucun point pour un texte répété (#7740)', () => 
     run({ prisma, engagementService, message: { attachmentMimeTypes: ['audio/m4a'] } });
     await flush();
 
-    expect(engagementService.recordActivity).toHaveBeenCalledWith(USER_ID, 'content.audio_message');
+    expect(engagementService.recordActivity).toHaveBeenCalledWith(USER_ID, 'content.audio_message', { conversationId: expect.any(String) });
   });
 
   it('une panne de lecture de l\'historique est signalée et ne crédite pas — une garde qui ne répond pas ne paie pas', async () => {
@@ -186,6 +187,6 @@ describe('Meeshy Global — aucun point pour un texte répété (#7740)', () => 
     await flush();
 
     expect(onError).toHaveBeenCalledWith('contentEngagement', expect.any(Error));
-    expect(engagementService.recordActivity).not.toHaveBeenCalledWith(USER_ID, 'content.text_message');
+    expect(engagementService.recordActivity).not.toHaveBeenCalledWith(USER_ID, 'content.text_message', expect.anything());
   });
 });

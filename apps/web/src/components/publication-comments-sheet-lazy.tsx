@@ -34,7 +34,7 @@ export const LazyPublicationCommentsSheet = lazy(() =>
 export function CommentsSheetPortal({ host }: { readonly host: CommentsSheetHost }) {
   return host.postId !== null ? (
     <Suspense fallback={null}>
-      <LazyPublicationCommentsSheet postId={host.postId} onClose={host.close} />
+      <LazyPublicationCommentsSheet postId={host.postId} onClose={host.close} onWritingBar={host.reportWriting} />
     </Suspense>
   ) : null;
 }

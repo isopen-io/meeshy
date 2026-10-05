@@ -61,6 +61,20 @@ describe('StickerArtwork — la priorité de RenderSource.resolve', () => {
     expect(html).not.toContain('data-sticker-emoji');
   });
 
+  test('un gabarit MEE (#9034) rend l’image jointe tant que son catalogue n’est pas chargé', () => {
+    const html = renderToStaticMarkup(<StickerArtwork sticker={{ templateId: 'mee.mee-coucou', emoji: '👋' }} picture={picture('a4')} side={160} />);
+    expect(html).toContain('<img');
+    expect(html).not.toContain('data-sticker-emoji');
+  });
+
+  test('un sticker de PACK (#9141) rend son image jointe — le GIF d’un pack cinématique reste animé, l’Instant porte son texte', () => {
+    const html = renderToStaticMarkup(
+      <StickerArtwork sticker={{ templateId: 'pack.chats-de-paris.dodo', emoji: '😴', slots: { texte: 'Léa' } }} picture={picture('a6')} side={160} />,
+    );
+    expect(html).toContain('<img');
+    expect(html).not.toContain('data-sticker-emoji');
+  });
+
   test('aucune pièce jointe ⇒ le glyphe, l’emoji du sticker s’il en a un, sinon le repli générique', () => {
     const withEmoji = renderToStaticMarkup(<StickerArtwork sticker={{ emoji: '🎉' }} picture={undefined} side={160} />);
     expect(withEmoji).toContain('🎉');
@@ -70,7 +84,7 @@ describe('StickerArtwork — la priorité de RenderSource.resolve', () => {
 
   test('le glyphe RÉSERVE son encombrement visuel — police 90, AUCUNE boîte fixe plus petite que lui (#7881)', () => {
     const html = renderToStaticMarkup(<StickerArtwork sticker={{ emoji: '🔥' }} picture={undefined} side={160} />);
-    expect(html).toContain('font-size:90px');
+    expect(html).toContain('font-size:180px');
     /* La boîte 60×60 (`BubbleSticker.emojiBox`) est l'ASSIETTE du mouvement
        côté iOS, jamais un cadre : `MessageStickerArtwork.swift:138-141` pose
        le `Text` en `.fixedSize()`, qui occupe la taille NATURELLE du glyphe.
@@ -89,6 +103,13 @@ describe('StickerArtwork — la priorité de RenderSource.resolve', () => {
     expect(html112).toContain('width="112"');
     const html160 = renderToStaticMarkup(<StickerArtwork sticker={{}} picture={picture('a5')} side={160} />);
     expect(html160).toContain('width="160"');
+  });
+
+  test('deux fois plus grand (#9319), mais jamais plus large que sa colonne', () => {
+    const html = renderToStaticMarkup(<StickerArtwork sticker={{}} picture={picture('a7')} side={320} />);
+    expect(html).toContain('width="320"');
+    expect(html).toContain('max-width:100%');
+    expect(html).toContain('height:auto');
   });
 });
 
@@ -114,6 +135,31 @@ describe('LocationCard — le libellé d’action tient AA (défaut majeur 5)', 
        porte JAMAIS l'accent en style de TEXTE. */
     expect(html).toContain('style="color:var(--color-ios-ink)">Ouvrir dans Plans');
     expect(html).not.toContain('style="color:#46bdca">Ouvrir dans Plans');
+  });
+});
+
+describe('LocationCard — la coque Android ouvre l’app de cartes du téléphone (#8262)', () => {
+  beforeAll(async () => {
+    await loadInterfaceCatalog('fr');
+  });
+
+  const render = (): string =>
+    renderToStaticMarkup(
+      <LocationCard place={{ latitude: 48.8584, longitude: 2.2945, name: 'Tour Eiffel', address: null }} accent="#46bdca" language="fr" />,
+    );
+
+  test('une coque qui se déclare android lie le lieu par geo:', () => {
+    const host = globalThis as { Capacitor?: { getPlatform: () => string } };
+    host.Capacitor = { getPlatform: () => 'android' };
+    try {
+      expect(render()).toContain('href="geo:48.85840,2.29450?q=48.85840,2.29450(Tour%20Eiffel)"');
+    } finally {
+      delete host.Capacitor;
+    }
+  });
+
+  test('hors coque, le lien reste Plans', () => {
+    expect(render()).toContain('href="https://maps.apple.com/?ll=48.85840,2.29450&amp;q=Tour%20Eiffel"');
   });
 });
 

@@ -77,8 +77,13 @@ final class ComposerDoorInventoryGuardTests: XCTestCase {
     /// `draft` reste : c'est la porte de la reprise de brouillon, et le
     /// meuble la construit par `draftId:` sans qu'aucun site ne compose son
     /// origine.
+    ///
+    /// `conversationCapture` y entre le 2026-10-04 : #9295 fait prendre la
+    /// caméra de la barre en plein écran, hors scène, et plus aucun site ne
+    /// compose cette origine. Elle en sort par son RETRAIT, lot à part.
     private static let declareesSansAppelant: [String: String] = [
         "draft": "c'est elle qui n'a pas d'appelant",
+        "conversationCapture": "Porte sans appelant depuis #9295",
     ]
 
     // MARK: - Lecture des sources

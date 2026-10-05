@@ -98,33 +98,33 @@ public struct ConnectionActionView: View {
     // MARK: - Sub-views
 
     private func badge(text: String, color: Color, icon: String? = nil) -> some View {
-        HStack(spacing: 4) {
+        HStack(spacing: MeeshySpacing.xs) {
             if let icon {
                 Image(systemName: icon)
-                    .font(.system(size: 10, weight: .bold))
+                    .font(.system(size: MeeshyIconSize.xxs, weight: .bold))
             }
             Text(text)
-                .font(.system(size: 12, weight: .semibold))
+                .font(.system(size: MeeshyFont.smallSize, weight: .semibold))
         }
         .foregroundColor(color)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 5)
-        .background(Capsule().fill(color.opacity(0.15)))
+        .padding(.horizontal, MeeshySpacing.smPlus)
+        .padding(.vertical, MeeshySpacing.xs)
+        .background(Capsule().fill(color.opacity(MeeshyOpacity.light)))
         .accessibilityLabel(text)
     }
 
     private func pendingReceivedButtons(requestId: String) -> some View {
         let declineLabel = String(localized: "connection.action.decline", defaultValue: "Refuser", bundle: .module)
         let acceptLabel = String(localized: "connection.action.accept", defaultValue: "Accepter", bundle: .module)
-        return HStack(spacing: 6) {
+        return HStack(spacing: MeeshySpacing.xsPlus) {
             Button {
                 Task { await decline(requestId: requestId) }
             } label: {
                 Image(systemName: "xmark")
-                    .font(.system(size: 11, weight: .bold))
+                    .font(.system(size: MeeshyIconSize.xxs, weight: .bold))
                     .foregroundColor(MeeshyColors.error)
-                    .frame(width: 28, height: 28)
-                    .background(Circle().fill(MeeshyColors.error.opacity(0.15)))
+                    .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
+                    .background(Circle().fill(MeeshyColors.error.opacity(MeeshyOpacity.light)))
             }
             .disabled(isBusy)
             .accessibilityLabel("\(declineLabel) — \(userName)")
@@ -133,9 +133,9 @@ public struct ConnectionActionView: View {
                 Task { await accept(requestId: requestId) }
             } label: {
                 Image(systemName: "checkmark")
-                    .font(.system(size: 11, weight: .bold))
+                    .font(.system(size: MeeshyIconSize.xxs, weight: .bold))
                     .foregroundColor(.white)
-                    .frame(width: 28, height: 28)
+                    .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
                     .background(Circle().fill(MeeshyColors.success))
             }
             .disabled(isBusy)
@@ -149,17 +149,17 @@ public struct ConnectionActionView: View {
         return Button {
             Task { await cancelSent() }
         } label: {
-            HStack(spacing: 4) {
+            HStack(spacing: MeeshySpacing.xs) {
                 Image(systemName: "clock")
-                    .font(.system(size: 10, weight: .bold))
+                    .font(.system(size: MeeshyIconSize.xxs, weight: .bold))
                 Text(pendingLabel)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(size: MeeshyFont.smallSize, weight: .semibold))
             }
             .foregroundColor(MeeshyColors.warning)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .background(Capsule().fill(MeeshyColors.warning.opacity(0.15)))
-            .overlay(Capsule().stroke(MeeshyColors.warning.opacity(0.5), lineWidth: 1))
+            .padding(.horizontal, MeeshySpacing.smPlus)
+            .padding(.vertical, MeeshySpacing.xs)
+            .background(Capsule().fill(MeeshyColors.warning.opacity(MeeshyOpacity.light)))
+            .overlay(Capsule().stroke(MeeshyColors.warning.opacity(MeeshyOpacity.strong), lineWidth: 1))
         }
         .disabled(isBusy)
         .accessibilityLabel("\(cancelLabel) — \(userName)")
@@ -170,15 +170,15 @@ public struct ConnectionActionView: View {
         return Button {
             Task { await sendRequest() }
         } label: {
-            HStack(spacing: 4) {
+            HStack(spacing: MeeshySpacing.xs) {
                 Image(systemName: "person.badge.plus")
-                    .font(.system(size: 10, weight: .bold))
+                    .font(.system(size: MeeshyIconSize.xxs, weight: .bold))
                 Text(addLabel)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(size: MeeshyFont.smallSize, weight: .semibold))
             }
             .foregroundColor(.white)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 5)
+            .padding(.horizontal, MeeshySpacing.md)
+            .padding(.vertical, MeeshySpacing.xs)
             .background(Capsule().fill(accentColor))
         }
         .disabled(isBusy)

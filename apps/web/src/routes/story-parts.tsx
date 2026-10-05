@@ -1,13 +1,15 @@
 import { useEffect, useRef, type CSSProperties } from 'react';
 
-import { Glyph } from '@/components/glyph';
+import type { ContentTrackingLink } from '@meeshy/shared/types/post';
+
 import { MediaUnavailable } from '@/components/media-unavailable';
 import { SceneScrubBar, type SceneScrubPainter } from '@/components/scene-scrub-bar';
+import { ViewerCaption } from '@/components/viewer-caption';
 import { isMediaAbsent, noteMediaAbsent } from '@/lib/api/media-absent';
+import { watchMediaStall } from '@/lib/media/media-stall';
 import { feedMediaKindOf } from '@/lib/feed/layout';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import type { StoryPlaybackGroup } from '@/lib/stories/playback';
-import { Link } from '@/routes/route-table';
 
 /**
  * LES PIÈCES PURES DU LECTEUR DE STORY (#6801) — extraites de `story.tsx`,
@@ -41,6 +43,8 @@ export { MediaUnavailable } from '@/components/media-unavailable';
  * suivi). `ABORTED` (1) et `DECODE` (3) ne prouvent rien sur son existence —
  * voir `échecVidéo` ci-dessous.
  */
+const STORY_TEXT_STYLE: CSSProperties = { fontSize: 28, lineHeight: 1.3 };
+
 const NETWORK_OR_SOURCE_ERROR: ReadonlySet<number> = new Set([2, 4]);
 
 export type StoryCaption = {
@@ -69,6 +73,8 @@ export type StoryMediaLayerProps = {
   readonly background: CSSProperties;
   /** Le texte SERVI PAR LE PRISME (`resolveStoryCaption`), ou `null`. */
   readonly caption: StoryCaption | null;
+  /** La carte `{ url, token }` de la story (#9074) : les adresses du texte s'ouvrent par `/l/`. */
+  readonly trackingLinks?: readonly ContentTrackingLink[] | undefined;
   readonly onReady: () => void;
   readonly onFailed: () => void;
   /** LA DURÉE DU MÉDIA, en millisecondes, dès que le décodeur la connaît
@@ -79,7 +85,41 @@ export type StoryMediaLayerProps = {
    * durée ne peut donc venir que de l'élément lui-même. Sans ce relais, la loi
    * de durée reste juste, testée par 38 témoins, et APPELÉE PAR PERSONNE. */
   readonly onDurationKnown?: ((durationMs: number) => void) | undefined;
+  /** LA LECTURE DEMANDÉE PAR LE LECTEUR (#9277) — `false` pendant l'appui
+   * long, une feuille, un appel : la VIDÉO s'arrête avec la barre. Absente ⇒
+   * elle lit. */
+  readonly playing?: boolean | undefined;
+  /** LE BUFFER, dit à l'hôte (#6925, miroir `onPlaybackProgressing` d'iOS) —
+   * `false` quand la vidéo attend ses octets, `true` quand elle reprend :
+   * l'hôte y gèle SA barre. */
+  readonly onPlaybackProgressing?: ((progressing: boolean) => void) | undefined;
 };
+
+/** La vidéo d'une story suit la lecture DEMANDÉE et annonce son buffer. */
+function useStoryVideoPlayback(params: {
+  readonly ref: { readonly current: HTMLVideoElement | null };
+  readonly playing: boolean;
+  readonly onPlaybackProgressing: ((progressing: boolean) => void) | undefined;
+  readonly source: string;
+}): void {
+  const { ref, playing, source } = params;
+  const progressing = useRef(params.onPlaybackProgressing);
+  progressing.current = params.onPlaybackProgressing;
+  useEffect(() => {
+    const el = ref.current;
+    if (el === null) return;
+    if (!playing) {
+      el.pause();
+      return;
+    }
+    void el.play().catch(() => undefined);
+  }, [ref, playing, source]);
+  useEffect(() => {
+    const el = ref.current;
+    if (el === null) return;
+    return watchMediaStall(el, (stalled) => progressing.current?.(!stalled));
+  }, [ref, source]);
+}
 
 /**
  * LA COUCHE MÉDIA DE LA SCÈNE — l'image, la vidéo, ou le repli dessiné.
@@ -92,10 +132,14 @@ export function StoryMediaLayer({
   hasMedia,
   background,
   caption,
+  trackingLinks,
   onReady,
   onFailed,
   onDurationKnown,
+  playing = true,
+  onPlaybackProgressing,
 }: StoryMediaLayerProps) {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
   /**
    * LA MÉMOIRE DE L'ÉCHEC, ET NON SEULEMENT SON ÉTAT (#7022). `showsMedia`
    * arrive de `story.tsx`, où il dérive de `mediaFailed` — un état qui se
@@ -144,6 +188,8 @@ export function StoryMediaLayer({
   };
 
   const connueAbsente = showsMedia && isMediaAbsent(mediaSrc);
+  const isVideo = showsMedia && !connueAbsente && feedMediaKindOf(mimeType) === 'video';
+  useStoryVideoPlayback({ ref: videoRef, playing, onPlaybackProgressing, source: isVideo ? `${storyId}:${mediaSrc}` : '' });
 
   /**
    * UNE SOURCE DÉJÀ CONNUE ABSENTE PRÉVIENT L'HÔTE (#7022 suivi — revue
@@ -235,6 +281,7 @@ export function StoryMediaLayer({
              que rien n'est décodé, donc on ne remonte que ce qui est utile ;
              au-dessus, l'évènement ne tire QUE lorsque la donnée existe. */
           ref={(el) => {
+            videoRef.current = el;
             if (el === null || onDurationKnown === undefined) return;
             const seconds = el.duration;
             if (Number.isFinite(seconds) && seconds > 0) onDurationKnown(seconds * 1000);
@@ -264,45 +311,15 @@ export function StoryMediaLayer({
            disparaîtraient en clair comme en sombre. */
         <MediaUnavailable language={currentInterfaceLanguage()} />
       ) : caption !== null ? (
-        <p
-          className="text-center text-title font-semibold"
-          style={{ fontSize: 28, lineHeight: 1.3 }}
-          lang={caption.language || undefined}
-        >
-          {caption.text}
-        </p>
+        <ViewerCaption
+          text={caption.text}
+          trackingLinks={trackingLinks}
+          className="viewer-ink-shadow text-center text-title font-semibold"
+          style={STORY_TEXT_STYLE}
+          lang={caption.language}
+        />
       ) : null}
     </div>
-  );
-}
-
-/**
- * **LA CROIX DU LECTEUR** — extraite de `story.tsx` (#7112, revue) parce que
- * le fichier hôte franchissait 1 000 lignes : « on extrait d'abord, on ajoute
- * ensuite » (CLAUDE.md § budget), jamais un plafond relevé.
- *
- * Elle porte `pointer-events-auto` : son conteneur est un chrome en
- * `pointer-events-none`, et sans cela la croix ne se toucherait pas. C'est
- * cette ré-activation qui rendait la croix CLIQUABLE sous un chrome masqué,
- * jusqu'à ce que l'hôte pose `inert` sur la région (D-90) — la protection se
- * pose donc sur le PARENT, et ce bouton ne la connaît pas : il se tient seul,
- * comme `StoryViewerView+ActionButton.swift:11`.
- *
- * `onPointerDown` stoppé : le plateau navigue au `pointerdown`/`pointerup`,
- * et sans cette coupure fermer le lecteur ferait AUSSI avancer d'une story.
- */
-export function CloseButton({ onClose }: { readonly onClose: () => void }) {
-  return (
-    <button
-      type="button"
-      onPointerDown={(e) => e.stopPropagation()}
-      onClick={onClose}
-      aria-label="Fermer"
-      className="pointer-events-auto grid shrink-0 place-items-center rounded-full"
-      style={{ width: 44, height: 44, background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.12)' }}
-    >
-      <Glyph name="x" size={16} style={{ color: '#fff' }} />
-    </button>
   );
 }
 
@@ -380,7 +397,7 @@ export function ProgressBars({
             className="flex-1 overflow-hidden rounded-full"
             style={{ background: SEGMENT_RAIL }}
           >
-            <span className="block size-full rounded-full" style={{ background: i < index ? '#fff' : 'transparent' }} />
+            <span className="block size-full rounded-full" style={{ background: i < index ? 'var(--color-on-media)' : 'transparent' }} />
           </span>
         ),
       )}
@@ -388,68 +405,8 @@ export function ProgressBars({
   );
 }
 
-/** La piste d'un segment — blanc 20 %, la même pour le segment courant. */
-const SEGMENT_RAIL = 'rgba(255,255,255,0.2)';
+/** La piste d'un segment — le filet des médias (blanc 20 %), le même pour le segment courant. */
+const SEGMENT_RAIL = 'var(--color-media-hairline)';
 
 /** Le dégradé du segment COURANT (`indigo500 → error → indigo400`). */
 const ACTIVE_SEGMENT_FILL = 'linear-gradient(90deg, var(--color-ios-brand), var(--ios-error), var(--color-i400))';
-
-/**
- * **LES DEUX ÉTATS D'ATTENTE DU LECTEUR** — EXTRAITS de `routes/story.tsx`
- * (§ 5.0 de la spécification #7114, budget 900 lignes) : « Chargement… » et
- * « Story introuvable » / « Hors ligne ». EXTRACTION PURE, comportement
- * INCHANGÉ — jusqu'ici ces deux blocs étaient un ternaire inline dans le
- * rendu du lecteur.
- */
-export function StoryWaitingStates({
-  state,
-  online,
-  onRetry,
-}: {
-  readonly state: 'loading' | 'not-found';
-  readonly online: boolean;
-  readonly onRetry: () => void;
-}) {
-  if (state === 'loading') {
-    return (
-      <div className="grid flex-1 place-items-center" role="status">
-        <div className="grid gap-3 justify-items-center">
-          <div
-            aria-hidden="true"
-            className="animate-pulse rounded-full"
-            style={{ width: 32, height: 32, background: 'rgba(255,255,255,0.25)' }}
-          />
-          <p className="text-body">Chargement…</p>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div role="alert" className="grid flex-1 content-center justify-items-center gap-4 px-8 text-center">
-      <Glyph name="warningCircle" size={38} style={{ color: 'rgba(255,255,255,0.7)' }} />
-      <p className="text-title font-bold">{online ? 'Story introuvable' : 'Hors ligne'}</p>
-      <p className="text-body" style={{ color: 'rgba(255,255,255,0.75)' }}>
-        {online ? 'Impossible de charger cette story. Réessayez ou fermez.' : 'Cette story s’affichera à la reconnexion.'}
-      </p>
-      <div className="flex gap-3">
-        <button
-          type="button"
-          onClick={onRetry}
-          className="rounded-full px-5 py-2 text-body font-semibold"
-          style={{ background: '#fff', color: '#000', minHeight: 44 }}
-        >
-          Réessayer
-        </button>
-        <Link
-          to="list"
-          replace
-          className="grid place-items-center rounded-full px-5 text-body font-semibold"
-          style={{ border: '1px solid rgba(255,255,255,0.4)', minHeight: 44 }}
-        >
-          Fermer
-        </Link>
-      </div>
-    </div>
-  );
-}

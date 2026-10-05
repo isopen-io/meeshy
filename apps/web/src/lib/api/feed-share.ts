@@ -1,4 +1,5 @@
 import type { QueryClient } from '@tanstack/react-query';
+import * as postsEndpoints from '@meeshy/shared/api/endpoints/posts';
 
 import { withServedCount } from '@/lib/feed/interactions';
 
@@ -7,7 +8,7 @@ import type { DataSource } from './config';
 import type { HttpTransport } from './http';
 
 /**
- * LE PARTAGE COMPTÉ (#6278, D-48) — `POST /api/v1/posts/:postId/share`
+ * LE PARTAGE COMPTÉ (#6278, D-48) — `POST posts.byPostIdShare`
  * (`services/gateway/src/routes/posts/share.ts:64`, requiredAuth, garde
  * d'audience `mayConsumePost`), appelé APRÈS que le lien est parti (feuille
  * du système ou presse-papier) : on compte un partage qui a eu lieu, jamais
@@ -32,7 +33,7 @@ export async function recordPostShare(params: { readonly postId: string; readonl
   if (__FIXTURES__ && deps.source === 'fixtures') return true;
 
   const result = await deps.transport
-    .request<unknown>({ method: 'POST', path: `/api/v1/posts/${encodeURIComponent(postId)}/share`, body: { platform: 'web' } })
+    .request<unknown>({ method: 'POST', path: postsEndpoints.byPostIdShare(postId), body: { platform: 'web' } })
     .catch(() => null);
   if (result === null || !result.ok) return false;
 

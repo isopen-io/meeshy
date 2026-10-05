@@ -15,6 +15,7 @@ import { UnifiedAuthRequest } from '../../middleware/auth';
 import { validateQuery, validateBody, validateParams } from '../../validation/helpers.js';
 import { BroadcastsListQuerySchema, CreateBroadcastBodySchema, UpdateBroadcastBodySchema, BroadcastIdParamSchema } from '../../validation/admin-schemas.js';
 import { requirePermission } from '../../middleware/authorize';
+import { loadAdminPeople } from './oversight-people';
 
 const logger = enhancedLogger.child({ module: 'BroadcastRoutes' });
 
@@ -57,6 +58,15 @@ const adminBroadcastListSelect = {
   sentCount: true,
   failedCount: true,
   createdAt: true,
+  // #8876 — ce que la console lit pour SUIVRE une diffusion sans ouvrir sa fiche :
+  // quand elle est partie et finie, dans quelle langue et vers lesquelles, et où
+  // en est le canal in-app. Toujours pas le corps, ni le ciblage, ni les traductions.
+  sentAt: true,
+  completedAt: true,
+  sourceLanguage: true,
+  targetLanguages: true,
+  inAppSentCount: true,
+  inAppSentAt: true,
 };
 
 // ---------------------------------------------------------------------------
@@ -75,10 +85,11 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       /* istanbul ignore next -- `BroadcastsListQuerySchema` pose `offset: paginationOffset()` et `limit: paginationLimit(20)`, tous deux `.prefault(…)` (`validation/admin-schemas.ts`), et `createValidator` RÉÉCRIT `request.query` avec le résultat validé (`validation/helpers.ts`, `request[source] = validated;`) : les valeurs par défaut du destructuring ne peuvent plus servir. Vérifié le 2026-09-24. */
-      const { offset = '0', limit = '20', status } = request.query as {
+      const { offset = '0', limit = '20', status, search } = request.query as {
         offset?: string;
         limit?: string;
         status?: string;
+        search?: string;
       };
 
       const offsetNum = Math.max(0, parseInt(offset, 10) || 0);
@@ -87,6 +98,12 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
       const where: Prisma.AdminBroadcastWhereInput = {};
       if (status) {
         where.status = status;
+      }
+      if (search) {
+        where.OR = [
+          { name: { contains: search, mode: 'insensitive' } },
+          { subject: { contains: search, mode: 'insensitive' } },
+        ];
       }
 
       const [broadcasts, total] = await Promise.all([
@@ -106,7 +123,9 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
           total,
           offset: offsetNum,
           limit: limitNum,
-          hasMore: offsetNum + limitNum < total,
+          // #8876 — la page RENDUE, pas la page DEMANDÉE : `offset + limit` annonçait
+          // une page de plus à la dernière page incomplète.
+          hasMore: offsetNum + broadcasts.length < total,
         },
       });
     } catch (error: unknown) {
@@ -198,7 +217,20 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
         return sendNotFound(reply, 'Broadcast non trouve');
       }
 
-      return sendSuccess(reply, broadcast);
+      // #8876 — QUI l'a créée, envoyée et publiée dans l'application : des
+      // personnes nommées, une seule lecture de comptes. Les `*ById` restent servis.
+      const people = await loadAdminPeople(fastify.prisma, [
+        broadcast.createdById,
+        broadcast.sentById,
+        broadcast.inAppSentById,
+      ]);
+
+      return sendSuccess(reply, {
+        ...broadcast,
+        createdBy: people.get(broadcast.createdById) ?? null,
+        sentBy: broadcast.sentById ? (people.get(broadcast.sentById) ?? null) : null,
+        inAppSentBy: broadcast.inAppSentById ? (people.get(broadcast.inAppSentById) ?? null) : null,
+      });
     } catch (error: unknown) {
       logger.error('Error fetching broadcast');
       return sendInternalError(reply, 'Erreur lors de la recuperation du broadcast');

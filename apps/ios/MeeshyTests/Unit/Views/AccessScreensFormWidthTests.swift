@@ -117,7 +117,7 @@ final class AccessScreensFormWidthTests: XCTestCase {
 
     func test_emailVerification_holdsItsColumnAtTheCentre() {
         assertCentredColumn(identifier: "emailVerification.submit") {
-            EmailVerificationView(email: "ada@meeshy.me", authService: MockAuthServiceSDK())
+            EmailVerificationView(email: "ada@meeshy.me", authService: MockAuthServiceSDK(), onVerified: { _ in })
         }
     }
 

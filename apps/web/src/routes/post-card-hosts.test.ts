@@ -86,7 +86,7 @@ describe('le compteur de commentaires est offert partout où la carte est monté
     expect(hotes).toContain('routes/feed.tsx');
     expect(hotes).toContain('routes/hashtag.tsx');
     expect(hotes).toContain('routes/post.tsx');
-    expect(hotes).toContain('routes/user-profile.tsx');
+    expect(hotes).toContain('routes/user-profile-posts.tsx');
   });
 });
 
@@ -195,7 +195,7 @@ describe('toute caisse qui peint une carte est atteinte par le registre', () => 
     'routes/post.tsx': [{ names: 'usePost', queryKey: postQueryOptions({ ...deps, postId: 'p' }).queryKey, holds: 'card' }],
     'routes/bookmarks.tsx': [{ names: 'bookmarkedPostsQuery', queryKey: bookmarkedPostsQuery(deps).queryKey, holds: 'pages' }],
     'routes/hashtag.tsx': [{ names: 'hashtagInfiniteOptions', queryKey: hashtagInfiniteOptions({ ...deps, tag: 'voyage' }).queryKey, holds: 'pages' }],
-    'routes/user-profile.tsx': [
+    'routes/user-profile-posts.tsx': [
       { names: 'authorPostsInfiniteOptions', queryKey: authorPostsInfiniteOptions({ ...deps, authorId: 'u' }).queryKey, holds: 'pages' },
     ],
   };

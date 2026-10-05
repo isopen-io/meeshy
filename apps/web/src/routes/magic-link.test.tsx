@@ -6,6 +6,7 @@ import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-su
 import type { ApiResult } from '@/lib/api/http';
 import { createIntervalClock, type IntervalClockScheduler } from '@/lib/view/interval-clock';
 import type { MagicLinkRequestData } from '@/lib/view/magic-link';
+import type { VerifyEmailData, VerifyEmailRequest } from '@/lib/api/verify-email';
 
 import { MagicLinkFlow, type MagicLinkFlowDeps } from '@/components/magic-link-flow';
 import { MagicLinkValidation } from '@/components/magic-link-validation';
@@ -271,7 +272,7 @@ describe('MagicLinkFlow — (d) attente + compte à rebours', () => {
     });
 
     expect(el.textContent).toContain('E-mail envoyé');
-    expect((el.textContent ?? '').replace(/\s+/gu, ' ')).toContain('Ouvrez le lien reçu à ada@meeshy.example');
+    expect((el.textContent ?? '').replace(/\s+/gu, ' ')).toContain('Entrez le code à 6 chiffres reçu à ada@meeshy.example, ou ouvrez le lien du même e-mail.');
     expect(perceivableText(el)).not.toMatch(/magi(que|c)/iu);
     const timer = () => el.querySelector('[role="timer"]');
     expect(timer()?.textContent).toBe('10:00');
@@ -420,5 +421,85 @@ describe('MagicLinkFlow — (g) hors-ligne', () => {
     fill(el, 'ada@meeshy.example');
     const button = el.querySelector('button[type="submit"]') as HTMLButtonElement;
     expect(button.disabled).toBe(true);
+  });
+});
+
+/**
+ * « E-MAIL SEUL → CODE + LIEN » (#8034, arbitrage porteur 2026-09-26) — la
+ * connexion par e-mail envoie, compte existant OU nouveau, un e-mail portant
+ * un code à 6 chiffres ET un lien. L'étape « e-mail envoyé » propose donc la
+ * saisie du code SUR PLACE ; le code rend une session, et l'écran mène là où
+ * une connexion mène.
+ */
+describe('MagicLinkFlow — (h) le code reçu se saisit sur place (#8034)', () => {
+  const SESSION: VerifyEmailData = {
+    verified: true,
+    token: 'jwt',
+    sessionToken: 'sess',
+    user: { id: 'u-1', username: 'ada', displayName: 'Ada' },
+  };
+
+  async function sentTo(email: string, verifyEmail: (r: VerifyEmailRequest) => Promise<ApiResult<VerifyEmailData>>, next: string | null = null) {
+    const { clock, now } = fakeClock();
+    const stub = requestStub([{ ok: true, data: { expiresInSeconds: 600 }, status: 200 }]);
+    const el = mount({ request: stub.request, clock, now, verifyEmail }, next);
+    fill(el, email);
+    await act(async () => {
+      submit(el);
+      await Promise.resolve();
+    });
+    return el;
+  }
+
+  function enterCode(el: HTMLDivElement, value: string) {
+    const input = el.querySelector('#verify-email-code') as HTMLInputElement;
+    act(() => {
+      input.value = value;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+  }
+
+  afterEach(() => window.history.replaceState({}, '', '/'));
+
+  test('le champ du code est là, dès l’étape « e-mail envoyé »', async () => {
+    const el = await sentTo('ada@meeshy.example', async () => ({ ok: true, data: SESSION, status: 200 }));
+    expect(el.textContent).toContain('E-mail envoyé');
+    expect(el.querySelector('#verify-email-code')).not.toBeNull();
+  });
+
+  test('code juste ⇒ UN appel { email, code }, puis `next` (ou l’accueil)', async () => {
+    const calls: VerifyEmailRequest[] = [];
+    window.history.replaceState({}, '', '/login');
+    const el = await sentTo(
+      'ada@meeshy.example',
+      async (r) => {
+        calls.push(r);
+        return { ok: true, data: SESSION, status: 200 };
+      },
+      '/chat/mshy_x',
+    );
+    enterCode(el, '123456');
+    await act(async () => {
+      (el.querySelector('#verify-email-code')?.closest('form') as HTMLFormElement).dispatchEvent(
+        new Event('submit', { bubbles: true, cancelable: true }),
+      );
+      await Promise.resolve();
+    });
+
+    expect(calls).toEqual([{ email: 'ada@meeshy.example', code: '123456' }]);
+    expect(window.location.pathname).toBe('/chat/mshy_x');
+  });
+
+  test('code faux ⇒ le refus SOUS le champ, on reste sur l’étape', async () => {
+    const el = await sentTo('ada@meeshy.example', async () => ({ ok: false, status: 400, error: 'bad' }));
+    enterCode(el, '000000');
+    await act(async () => {
+      (el.querySelector('#verify-email-code')?.closest('form') as HTMLFormElement).dispatchEvent(
+        new Event('submit', { bubbles: true, cancelable: true }),
+      );
+      await Promise.resolve();
+    });
+    expect(el.querySelector('#verify-email-code-error')?.textContent).toBe('Code invalide ou expiré');
+    expect(el.textContent).toContain('E-mail envoyé');
   });
 });

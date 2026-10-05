@@ -226,27 +226,6 @@ nonisolated enum NSEDataSync {
         }
     }
 
-    /// Called by the main app on foreground resume to consume pending messages.
-    /// Returns array of (conversationId, messageJSON) tuples.
-    static func consumePendingMessages() -> [(conversationId: String, data: Data)] {
-        guard let dir = pendingDirectory() else { return [] }
-
-        let fm = FileManager.default
-        guard let files = try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil) else {
-            return []
-        }
-
-        var results: [(String, Data)] = []
-        for file in files where file.pathExtension == "json" {
-            let name = file.deletingPathExtension().lastPathComponent
-            let parts = name.split(separator: "_", maxSplits: 1)
-            guard parts.count == 2, let data = try? Data(contentsOf: file) else { continue }
-            results.append((String(parts[0]), data))
-            nseRemoveFile(file, context: "consumed staged message")
-        }
-        return results
-    }
-
     private static func pendingPostsDirectory() -> URL? {
         guard let container = FileManager.default.containerURL(
             forSecurityApplicationGroupIdentifier: appGroupId
@@ -293,38 +272,19 @@ nonisolated enum NSEDataSync {
     // MARK: - Trusted base URL resolution
     //
     // The NSE never trusts a URL coming from the push payload (see security
-    // note on syncMessage). The base URL is resolved from a small allowlist
-    // matching the xcconfig environments (Production, Staging, Localhost).
-    // The main app writes the active environment to App Group UserDefaults
-    // (`meeshy_api_base_url`) when the user switches environment via the
-    // dev menu; the NSE reads it at request time. Anything outside the
-    // allowlist falls back to production.
+    // note on syncMessage). The allowlist lives in `NSETrustedOrigin`, shared
+    // with the content extension (#8859).
 
-    private static let allowedApiBaseURLs: Set<String> = [
-        "https://gate.meeshy.me",
-        "https://gate.staging.meeshy.me",
-        "http://localhost:3000"
-    ]
-    private static let defaultApiBaseURL = "https://gate.meeshy.me"
-    private static let apiBaseURLDefaultsKey = "meeshy_api_base_url"
-
-    /// L'origine API de confiance, telle que résolue par l'allowlist ci-dessus.
+    /// L'origine API de confiance (`NSETrustedOrigin`).
     ///
     /// Exposée parce que le NSE en a besoin AILLEURS que pour ses propres
     /// requêtes : les URLs média du payload push (avatar de l'auteur, pièce
     /// jointe du message) arrivent en chemin relatif et doivent être résolues
     /// contre cette même origine — jamais contre une base dictée par le
     /// payload, qui n'est pas une source de confiance.
-    static var trustedApiBaseURL: String { resolveApiBaseURL() }
+    static var trustedApiBaseURL: String { NSETrustedOrigin.apiBaseURL }
 
-    private static func resolveApiBaseURL() -> String {
-        guard let defaults = UserDefaults(suiteName: appGroupId),
-              let stored = defaults.string(forKey: apiBaseURLDefaultsKey),
-              allowedApiBaseURLs.contains(stored) else {
-            return defaultApiBaseURL
-        }
-        return stored
-    }
+    private static func resolveApiBaseURL() -> String { NSETrustedOrigin.apiBaseURL }
 
     // MARK: - Auth token from shared Keychain
 

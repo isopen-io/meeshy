@@ -1560,7 +1560,7 @@ describe('AuthService - 2FA during authenticate', () => {
     expect(result?.session.location).toBe('Paris');
   });
 
-  it('should resend verification email when email not verified on login', async () => {
+  it('no longer resends the verification email on login — the grace period asks nothing (#8238)', async () => {
     const unverifiedUser = {
       ...mockUser,
       twoFactorEnabledAt: null,
@@ -1568,8 +1568,7 @@ describe('AuthService - 2FA during authenticate', () => {
     };
 
     mockPrisma.user.findFirst
-      .mockResolvedValueOnce(unverifiedUser) // initial login lookup
-      .mockResolvedValueOnce(unverifiedUser); // resendVerificationEmail lookup
+      .mockResolvedValueOnce(unverifiedUser); // initial login lookup — nothing else is read
 
     mockBcryptCompare.mockResolvedValue(true);
     mockPrisma.user.update.mockResolvedValue(unverifiedUser);
@@ -1577,8 +1576,8 @@ describe('AuthService - 2FA during authenticate', () => {
     const result = await authService.authenticate({ username: 'testuser', password: 'pass' });
 
     expect(result).not.toBeNull();
-    // resendVerificationEmail should be called; verify it updated user with new token
-    expect(mockPrisma.user.update).toHaveBeenCalledTimes(2);
+    // only the presence write: no verification pair is minted at login
+    expect(mockPrisma.user.update).toHaveBeenCalledTimes(1);
   });
 
   it('should continue login even when resendVerificationEmail throws', async () => {
@@ -1798,170 +1797,8 @@ describe('AuthService - completeAuthWith2FA', () => {
   });
 });
 
-describe('AuthService - verifyEmail', () => {
-  let authService: AuthService;
-  const jwtSecret = 'test-jwt-secret';
-
-  beforeEach(() => {
-    jest.clearAllMocks();
-    mockGenerateSessionToken.mockReturnValue('mock-session-token');
-    mockCreateSession.mockResolvedValue(mockSessionData);
-    authService = new AuthService(mockPrisma, jwtSecret);
-  });
-
-  it('should return alreadyVerified when email already verified', async () => {
-    const verifiedAt = new Date('2026-01-01');
-    mockPrisma.user.findFirst.mockResolvedValue({
-      id: 'user-123',
-      email: 'test@example.com',
-      emailVerifiedAt: verifiedAt,
-      emailVerificationToken: null,
-      emailVerificationCode: null,
-      emailVerificationExpiry: null
-    });
-
-    const result = await authService.verifyEmail('any-token', 'test@example.com');
-
-    expect(result.success).toBe(true);
-    expect(result.alreadyVerified).toBe(true);
-    expect(result.verifiedAt).toEqual(verifiedAt);
-  });
-
-  it('should verify email using OTP code successfully', async () => {
-    mockPrisma.user.findFirst
-      .mockResolvedValueOnce({
-        id: 'user-123',
-        email: 'test@example.com',
-        emailVerifiedAt: null,
-        emailVerificationToken: 'hashed-token',
-        emailVerificationCode: '123456',
-        emailVerificationExpiry: new Date(Date.now() + 3600000)
-      }) // initial check (not already verified)
-      .mockResolvedValueOnce({
-        id: 'user-123',
-        email: 'test@example.com'
-      }); // OTP code match
-
-    mockPrisma.user.update.mockResolvedValue({});
-
-    const result = await authService.verifyEmail('123456', 'test@example.com', true);
-
-    expect(result.success).toBe(true);
-    expect(result.verifiedAt).toBeInstanceOf(Date);
-    expect(mockPrisma.user.update).toHaveBeenCalledWith({
-      where: { id: 'user-123' },
-      data: {
-        emailVerifiedAt: expect.any(Date),
-        emailVerificationToken: null,
-        emailVerificationCode: null,
-        emailVerificationExpiry: null
-      }
-    });
-  });
-
-  it('should return expired error when OTP code is expired', async () => {
-    mockPrisma.user.findFirst
-      .mockResolvedValueOnce({
-        id: 'user-123',
-        email: 'test@example.com',
-        emailVerifiedAt: null
-      }) // not already verified
-      .mockResolvedValueOnce(null) // no active OTP match
-      .mockResolvedValueOnce({ id: 'user-123' }); // expired code found
-
-    const result = await authService.verifyEmail('123456', 'test@example.com', true);
-
-    expect(result.success).toBe(false);
-    expect(result.error).toContain('expiré');
-  });
-
-  it('should return invalid error when OTP code not found at all', async () => {
-    mockPrisma.user.findFirst
-      .mockResolvedValueOnce({
-        id: 'user-123',
-        email: 'test@example.com',
-        emailVerifiedAt: null
-      })
-      .mockResolvedValueOnce(null) // no active OTP
-      .mockResolvedValueOnce(null); // no expired OTP either
-
-    const result = await authService.verifyEmail('wrong-code', 'test@example.com', true);
-
-    expect(result.success).toBe(false);
-    expect(result.error).toContain('invalide');
-  });
-
-  it('should verify email using token link successfully', async () => {
-    const crypto = require('crypto');
-    const rawToken = 'a'.repeat(64); // 32 bytes hex = 64 chars
-    const hashedToken = crypto.createHash('sha256').update(rawToken).digest('hex');
-
-    mockPrisma.user.findFirst
-      .mockResolvedValueOnce({
-        id: 'user-123',
-        email: 'test@example.com',
-        emailVerifiedAt: null
-      })
-      .mockResolvedValueOnce({
-        id: 'user-123',
-        email: 'test@example.com'
-      }); // token match
-
-    mockPrisma.user.update.mockResolvedValue({});
-
-    const result = await authService.verifyEmail(rawToken, 'test@example.com', false);
-
-    expect(result.success).toBe(true);
-    expect(result.verifiedAt).toBeInstanceOf(Date);
-  });
-
-  it('should return expired error when token link is expired', async () => {
-    mockPrisma.user.findFirst
-      .mockResolvedValueOnce({ id: 'user-123', email: 'test@example.com', emailVerifiedAt: null })
-      .mockResolvedValueOnce(null) // no active token
-      .mockResolvedValueOnce({ id: 'user-123' }); // expired token found
-
-    const result = await authService.verifyEmail('expired-token', 'test@example.com', false);
-
-    expect(result.success).toBe(false);
-    expect(result.error).toContain('expiré');
-  });
-
-  it('should return invalid error when token link not found at all', async () => {
-    mockPrisma.user.findFirst
-      .mockResolvedValueOnce({ id: 'user-123', email: 'test@example.com', emailVerifiedAt: null })
-      .mockResolvedValueOnce(null) // no active token
-      .mockResolvedValueOnce(null); // no expired token either
-
-    const result = await authService.verifyEmail('nonexistent-token', 'test@example.com', false);
-
-    expect(result.success).toBe(false);
-    expect(result.error).toContain('invalide');
-  });
-
-  it('should handle database error gracefully', async () => {
-    mockPrisma.user.findFirst.mockRejectedValue(new Error('DB error'));
-
-    const result = await authService.verifyEmail('token', 'test@example.com');
-
-    expect(result.success).toBe(false);
-    expect(result.error).toBeDefined();
-  });
-
-  it('should return success when user does not exist (no leak)', async () => {
-    mockPrisma.user.findFirst.mockResolvedValue(null);
-
-    // Token flow: user not found in initial check, then no active token
-    mockPrisma.user.findFirst
-      .mockResolvedValueOnce(null) // existingUser check returns null
-      .mockResolvedValueOnce(null) // active token check
-      .mockResolvedValueOnce(null); // expired token check
-
-    const result = await authService.verifyEmail('some-token', 'noone@example.com');
-
-    expect(result.success).toBe(false);
-  });
-});
+// `verifyEmail` — depuis #8033 la preuve ouvre une session : ses témoins vivent
+// dans `email-proof.test.ts` (empreinte, usage unique, expiration, mot de passe).
 
 describe('AuthService - resendVerificationEmail', () => {
   let authService: AuthService;
@@ -2443,8 +2280,7 @@ describe('AuthService - renvoi de vérification pendant la CONNEXION', () => {
     const unverifiedUser = { ...mockUser, twoFactorEnabledAt: null, emailVerifiedAt: null };
 
     mockPrisma.user.findFirst
-      .mockResolvedValueOnce(unverifiedUser) // authenticate lookup
-      .mockResolvedValueOnce(unverifiedUser); // resendVerificationEmail lookup
+      .mockResolvedValueOnce(unverifiedUser); // authenticate lookup
 
     mockBcryptCompare.mockResolvedValue(true);
     mockPrisma.user.update.mockResolvedValue(unverifiedUser);
@@ -2452,7 +2288,7 @@ describe('AuthService - renvoi de vérification pendant la CONNEXION', () => {
     const result = await authServiceForResend.authenticate({ username: 'testuser', password: 'pass' });
 
     expect(result).not.toBeNull();
-    // resendVerificationEmail was called and succeeded
-    expect(mockSendEmailVerification).toHaveBeenCalled();
+    // #8238 — no email at login during the grace period
+    expect(mockSendEmailVerification).not.toHaveBeenCalled();
   });
 });

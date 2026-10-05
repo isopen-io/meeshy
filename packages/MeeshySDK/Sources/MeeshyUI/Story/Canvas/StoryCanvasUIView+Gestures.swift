@@ -110,6 +110,7 @@ extension StoryCanvasUIView {
     @objc func handleSingleTap(_ recognizer: UITapGestureRecognizer) {
         guard mode == .edit, recognizer.state == .ended else { return }
         let location = recognizer.location(in: self)
+        if let touche = hitTestItem(at: location), resumeSuspendedInlineEdit(tappedId: touche) { return }
         guard let id = hitTestItem(at: location), let kind = itemKind(forId: id) else {
             // Tap sur une zone vide du canvas pendant l'édition de texte en
             // place → sortie de l'édition (déclencheur nº2 de la spec). `endEditing`
@@ -234,6 +235,7 @@ extension StoryCanvasUIView {
         }
         switch recognizer.state {
         case .began:
+            let saisi = suspendInlineEditForManipulation(at: recognizer.location(in: self))
             // Routage par couche : `.canvas` absorbe (recognizer cancelled),
             // `.background` cible le bg media, `.foreground` hit-teste les fg
             // (avec fallback bg si le doigt ne touche aucun foreground).
@@ -246,12 +248,13 @@ extension StoryCanvasUIView {
             // reader voient le changement live via @Binding/slide.didSet,
             // updateManipulatedItemLayer route le bg vers backgroundLayer
             // pour le rendu live sur le canvas principal).
-            guard let id = resolveManipulationTarget(at: recognizer.location(in: self)) else {
+            guard let id = saisi ?? resolveManipulationTarget(at: recognizer.location(in: self)) else {
                 recognizer.state = .cancelled
                 return
             }
             manipulatedItemId = id
             baseScale = currentScale(forId: id) ?? 1.0
+            showManipulationLimits()
             if id != backgroundMediaObjectId {
                 bringForegroundToFront(id: id)
             }
@@ -269,7 +272,9 @@ extension StoryCanvasUIView {
             slide = updateScale(slideId: id, scale: newScale)
             onItemModified?(slide)
         case .ended, .cancelled, .failed:
+            releaseParkedInlineEditor()
             manipulatedItemId = nil
+            hideManipulationLimits()
             slideContentRevision &+= 1
             rebuildLayers()
         default:
@@ -288,7 +293,8 @@ extension StoryCanvasUIView {
         guard mode == .edit else { return }
         switch recognizer.state {
         case .began:
-            guard let id = resolveManipulationTarget(at: recognizer.location(in: self)) else {
+            let saisi = suspendInlineEditForManipulation(at: recognizer.location(in: self))
+            guard let id = saisi ?? resolveManipulationTarget(at: recognizer.location(in: self)) else {
                 recognizer.state = .cancelled
                 return
             }
@@ -303,6 +309,7 @@ extension StoryCanvasUIView {
             }
             manipulatedItemId = id
             baseRotation = currentRotation(forId: id) ?? 0
+            showManipulationLimits()
             bringForegroundToFront(id: id)
         case .changed:
             guard let id = manipulatedItemId else { return }
@@ -315,7 +322,9 @@ extension StoryCanvasUIView {
             slide = updateRotation(slideId: id, rotation: baseRotation + degrees)
             onItemModified?(slide)
         case .ended, .cancelled, .failed:
+            releaseParkedInlineEditor()
             manipulatedItemId = nil
+            hideManipulationLimits()
             slideContentRevision &+= 1
             rebuildLayers()
         default:
@@ -328,7 +337,8 @@ extension StoryCanvasUIView {
         let location = recognizer.location(in: self)
         switch recognizer.state {
         case .began:
-            guard let id = resolveManipulationTarget(at: location),
+            let saisi = suspendInlineEditForManipulation(at: location)
+            guard let id = saisi ?? resolveManipulationTarget(at: location),
                   let (sx, sy) = currentItemNormalizedPosition(forId: id) else {
                 recognizer.state = .cancelled
                 return
@@ -336,6 +346,7 @@ extension StoryCanvasUIView {
             manipulatedItemId = id
             dragStartSlideX = sx
             dragStartSlideY = sy
+            showManipulationLimits()
             lastBgSnapX = nil
             lastBgSnapY = nil
 
@@ -399,10 +410,12 @@ extension StoryCanvasUIView {
             slide = updatePosition(slideId: id, x: snappedX, y: snappedY)
             onItemModified?(slide)
         case .ended, .cancelled, .failed:
+            releaseParkedInlineEditor()
             manipulatedItemId = nil
             lastBgSnapX = nil
             lastBgSnapY = nil
             hideSnapGuides()
+            hideManipulationLimits()
             slideContentRevision &+= 1
             rebuildLayers()
         default:
@@ -569,20 +582,14 @@ extension StoryCanvasUIView {
             CATransaction.setDisableActions(true)
             layer.position = renderPosition(x: text.x, y: text.y)
             // Échelle LIVE pendant le pinch (user 2026-07-11 « le zoom/dézoom
-            // de texte doit être rendu en temps réel ») : le scale d'un texte
-            // est CUIT dans `fontSize` au configure (`text.fontSize ×
-            // text.scale`, cf. StoryTextLayer) — la layer restait donc FIGÉE à
-            // sa taille d'avant-geste, seul le rebuild `.ended` montrait la
-            // nouvelle taille. On applique un ratio transitoire (scale modèle
-            // courant / scale cuit lu sur `StoryTextLayer.textObject`) par-
-            // dessus la rotation ; hors geste le ratio vaut 1 (pas de
-            // double-scale — régression 2026-05-27 toujours couverte) et le
-            // rebuild de fin de geste re-rend les glyphes NETS à la taille
-            // finale.
-            let bakedScale = (layer as? StoryTextLayer)?.textObject?.scale ?? text.scale
-            layer.transform = Self.liveTextGestureTransform(rotationDegrees: text.rotation,
-                                                            modelScale: text.scale,
-                                                            bakedScale: bakedScale)
+            // de texte doit être rendu en temps réel »). Depuis le #9139 le
+            // scale d'un texte n'est plus cuit dans sa police : c'est la
+            // transformation du calque qui agrandit le cadre entier — la même
+            // que pose `StoryTextLayer.configure`, donc les lignes ne bougent
+            // ni pendant le geste ni au rebuild `.ended`, qui re-rasterise
+            // seulement NET à la taille finale.
+            layer.transform = StoryTextLayer.sceneTransform(rotationDegrees: text.rotation,
+                                                            scale: text.scale)
             CATransaction.commit()
         } else if let sticker = slide.effects.stickerObjects?.first(where: { $0.id == id }) {
             CATransaction.begin()
@@ -596,8 +603,8 @@ extension StoryCanvasUIView {
                 // L'imposer écrasait la décoration dans un carré faux pendant
                 // tout le geste, puis la laissait sauter au rebuild de fin.
                 //
-                // Même remède que le texte et la pastille de lieu, dont la
-                // boîte est mesurée pour les mêmes raisons : un RATIO
+                // Même remède que la pastille de lieu, dont la boîte est
+                // mesurée pour les mêmes raisons : un RATIO
                 // transitoire par-dessus la rotation, la re-rasterisation nette
                 // venant à `.ended`. On ne touche pas aux bounds : les
                 // remesurer à chaque image coûterait un dessin Core Graphics
@@ -643,7 +650,10 @@ extension StoryCanvasUIView {
         }
     }
 
-    /// Transform de geste LIVE d'un texte : rotation modèle + ratio d'échelle
+    /// Transform de geste LIVE d'un objet dont l'échelle est cuite dans le
+    /// rendu (gabarit de sticker, pastille de lieu — plus le texte depuis le
+    /// #9139, mis à l'échelle par `StoryTextLayer.sceneTransform`) : rotation
+    /// modèle + ratio d'échelle
     /// transitoire (scale modèle courant ÷ scale cuit dans le rendu au dernier
     /// configure). L'échelle uniforme commute avec la rotation 2D — l'ordre de
     /// composition est donc indifférent. `bakedScale` ≤ 0 (layer jamais

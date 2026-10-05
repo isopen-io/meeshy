@@ -94,6 +94,8 @@ struct FocalRowInput: Equatable {
     let senderThumbHash: String?
     let senderColorHex: String
     let senderPresence: PresenceState
+    /// L'auteur a l'écran de CETTE conversation ouvert (#8892).
+    let senderIsHere: ConversationHere
     let senderStoryRing: StoryRingState
     let senderMoodEmoji: String?
     /// L'auteur n'a PAS de compte (`MeeshyMessage.senderIsAnonymous`, dérivé de
@@ -166,11 +168,14 @@ struct FocalRowInput: Equatable {
     /// Focal (2026-08-21) : le message EN FOCUS — celui de la carte teintée.
     /// Il porte ses détails même en continuation de groupe (avatar, présence,
     /// mood, date ET heure d'envoi). Son texte garde le MÊME plafond que les
-    /// autres rangées (`BubbleExpandableText.truncateLimit`) : aucune hauteur
+    /// autres rangées (`LongMessageExcerpt`) : aucune hauteur
     /// ne dépend du focus (décision 2026-08-22 bis, retrait du plafond
     /// `FocalMetrics.Focus.maxCharacters` le 2026-08-25 — L1-01). Posé par
     /// l'hôte au tick d'élection (une superposition, jamais une hauteur).
     let isFocused: Bool
+    /// Le message long DÉPLIÉ dans le fil (#8147) — un seul à la fois, tenu
+    /// par l'hôte. Il reçoit le bloc de verre de l'effet Focal.
+    let isExpanded: Bool
     /// Date complète du message en focus, PRÉ-CALCULÉE à la configuration
     /// (directive 2026-08-22 : « la date doit être pré-calculée et affichée
     /// instantanément ») — jamais formatée dans un body.
@@ -196,6 +201,7 @@ struct FocalRowInput: Equatable {
         senderThumbHash: String?,
         senderColorHex: String,
         senderPresence: PresenceState,
+        senderIsHere: ConversationHere = .absent,
         senderStoryRing: StoryRingState,
         senderMoodEmoji: String?,
         senderIsAnonymous: Bool = false,
@@ -219,6 +225,7 @@ struct FocalRowInput: Equatable {
         effects: MessageEffects = .none,
         isLastReceivedMessage: Bool = false,
         isFocused: Bool = false,
+        isExpanded: Bool = false,
         sentAt: Date? = nil,
         focusTimestamp: String? = nil,
         availableWidth: CGFloat? = nil
@@ -236,6 +243,7 @@ struct FocalRowInput: Equatable {
         self.senderThumbHash = senderThumbHash
         self.senderColorHex = senderColorHex
         self.senderPresence = senderPresence
+        self.senderIsHere = senderIsHere
         self.senderStoryRing = senderStoryRing
         self.senderMoodEmoji = senderMoodEmoji
         self.senderIsAnonymous = senderIsAnonymous
@@ -259,6 +267,7 @@ struct FocalRowInput: Equatable {
         self.effects = effects
         self.isLastReceivedMessage = isLastReceivedMessage
         self.isFocused = isFocused
+        self.isExpanded = isExpanded
         self.sentAt = sentAt
         self.focusTimestamp = focusTimestamp
         self.availableWidth = availableWidth
@@ -286,6 +295,7 @@ struct FocalRowInput: Equatable {
             && lhs.senderThumbHash == rhs.senderThumbHash
             && lhs.senderColorHex == rhs.senderColorHex
             && lhs.senderPresence == rhs.senderPresence
+            && lhs.senderIsHere == rhs.senderIsHere
             && lhs.senderIsAnonymous == rhs.senderIsAnonymous
             && lhs.senderStoryRing == rhs.senderStoryRing
             && lhs.senderMoodEmoji == rhs.senderMoodEmoji
@@ -313,6 +323,7 @@ struct FocalRowInput: Equatable {
             && lhs.effects == rhs.effects
             && lhs.isLastReceivedMessage == rhs.isLastReceivedMessage
             && lhs.isFocused == rhs.isFocused
+            && lhs.isExpanded == rhs.isExpanded
             && lhs.sentAt == rhs.sentAt
             && lhs.focusTimestamp == rhs.focusTimestamp
             && lhs.availableWidth == rhs.availableWidth
@@ -326,6 +337,9 @@ struct FocalRowActions {
     var onOpenReactPicker: ((String) -> Void)?
     var onShowReactions: ((String) -> Void)?
     var onShowReadStatus: ((String) -> Void)?
+    /// La date de l'élu Focal ouvre les DÉTAILS du message (#8537) — la même
+    /// feuille qu'« Infos » dans la bulle, jamais une seconde.
+    var onShowMessageInfo: ((String) -> Void)?
     var onRetry: ((String) -> Void)?
     var onReplyTap: ((String) -> Void)?
     var onStoryReplyTap: ((String) -> Void)?
@@ -340,16 +354,16 @@ struct FocalRowActions {
     var onMediaTap: ((MessageAttachment) -> Void)?
     /// Lot 3.2 (2026-08-18) — cartes lieu/fichier réelles en rangée plate :
     /// tap sur la carte lieu → plein écran (présenté par ConversationView,
-    /// même chaîne que `onReadMore`) ; partage d'un fichier téléchargé.
+    /// comme les autres plein écrans du fil) ; partage d'un fichier téléchargé.
     var onTapLocation: ((SharedPlace) -> Void)?
     var onShareFile: ((URL) -> Void)?
     var onConsumeViewOnce: ((String, @escaping (Bool) -> Void) -> Void)?
     var onReactToAttachment: ((String, String) -> Void)?
     var onRequestTranslation: ((String, String) -> Void)?
     var onShowTranslationDetail: ((String) -> Void)?
-    /// « Lire plus » (spec Magnificence §3) : la rangée fournit son texte
-    /// effectif DÉJÀ résolu, la sheet scrollable vit côté ConversationView.
-    var onReadMore: ((FocalReadMorePayload) -> Void)?
+    /// « Lire la suite » / « Réduire » (#8147) : l'hôte déplie le message EN
+    /// PLACE et replie le précédent — il n'existe plus de feuille de lecture.
+    var onToggleExpanded: (() -> Void)?
     var onSetActiveDisplayLanguage: ((String, String?) -> Void)?
     /// Tap sur le drapeau de la rangée ORDINAIRE (jamais magnifiée) — cette
     /// rangée n'est montée que sur le DERNIER message d'un groupe (#3919),

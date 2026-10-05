@@ -68,12 +68,6 @@ public struct StoryComposerView: View {
     /// code — la décision n'est connue qu'après la réponse de l'utilisateur.
     @State var showGalleryPicker = false
 
-    // MARK: - Media editor (triggered by edit button on canvas elements)
-
-    @State var editingBgImage: UIImage?
-    @State var editingElementImage: EditingMediaImage?
-    @State var editingElementVideo: EditingMediaVideo?
-
     // MARK: - Audio pickers
 
     @State var showAudioDocumentPicker = false
@@ -84,8 +78,9 @@ public struct StoryComposerView: View {
     @State var recorderFollowUp: StoryRecorderFollowUp?
     /// Sélecteur de la bibliothèque de sons — « Mes sons » et « Tendances ».
     @State var showSoundLibrary = false
-    /// C8 — picker de stickers (bouton « Stickers » du panneau Texte).
-    @State var showStickerPicker = false
+    /// La porte « Stickers » du panneau Texte DEMANDE la feuille à l'hôte
+    /// (#9189) : l'atelier ne monte plus de feuille de stickers à lui.
+    @Environment(\.storyStickerSheetRequest) var stickerSheetRequest
     /// T20 — sélecteur de lieu (chip « Lieu » du panneau Texte). La VUE du
     /// picker est injectée par l'app via `\.storyLocationPicker` : MapKit et les
     /// permissions restent app-side (SDK purity).
@@ -263,7 +258,7 @@ public struct StoryComposerView: View {
 
     // MARK: - Callbacks (public API preserved)
 
-    public var onPublishSlide: (StorySlide, UIImage?, [String: UIImage], [String: URL], String?) async throws -> Void
+    public var onPublishSlide: @MainActor (StorySlide, UIImage?, [String: UIImage], [String: URL], String?) async throws -> Void
     /// Retourne `true` quand le hand-off est ACCEPTÉ, c'est-à-dire quand
     /// l'hôte ferme réellement le composer. Un `false` (édition hors-ligne,
     /// surface qui ne publie pas) laisse le composer ouvert ET son bouton
@@ -347,7 +342,7 @@ public struct StoryComposerView: View {
         chromeOwner: ComposerChromeOwner = .atelier,
         publishTrigger: ComposerPublishTrigger? = nil,
         publishTargetType: PostType = .story,
-        onPublishSlide: @escaping (StorySlide, UIImage?, [String: UIImage], [String: URL], String?) async throws -> Void = { _, _, _, _, _ in },
+        onPublishSlide: @escaping @MainActor (StorySlide, UIImage?, [String: UIImage], [String: URL], String?) async throws -> Void = { _, _, _, _, _ in },
         onPublishAllInBackground: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL], [String: Data], String?, String, [String], String, [ComposerReference], ComposerMediaAccessibility, PostType) -> Bool,
         onPreview: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL]) -> Void,
         onDismiss: @escaping () -> Void,
@@ -381,7 +376,7 @@ public struct StoryComposerView: View {
         chromeOwner: ComposerChromeOwner = .atelier,
         publishTrigger: ComposerPublishTrigger? = nil,
         publishTargetType: PostType = .story,
-        onPublishSlide: @escaping (StorySlide, UIImage?, [String: UIImage], [String: URL], String?) async throws -> Void = { _, _, _, _, _ in },
+        onPublishSlide: @escaping @MainActor (StorySlide, UIImage?, [String: UIImage], [String: URL], String?) async throws -> Void = { _, _, _, _, _ in },
         onPublishAllInBackground: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL], [String: Data], String?, String, [String], String, [ComposerReference], ComposerMediaAccessibility, PostType) -> Bool,
         onPreview: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL]) -> Void = { _, _, _, _, _ in },
         onDismiss: @escaping () -> Void,
@@ -446,7 +441,7 @@ public struct StoryComposerView: View {
                         discardOfferedDraft()
                     }
                 )
-                .padding(.horizontal, 16)
+                .padding(.horizontal, MeeshySpacing.lg)
                 // Dégage le rail de FABs (48 pt + marge + safe area), comme les
                 // amorces de page blanche : le bandeau se pose AU-DESSUS des
                 // outils, il ne les recouvre pas. MÊME constante que les

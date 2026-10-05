@@ -1,8 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <application
         android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
@@ -10,11 +13,12 @@
         android:theme="@style/AppTheme">
 
         <activity
-            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density|fontScale|fontWeightAdjustment|layoutDirection"
             android:name=".MainActivity"
             android:label="@string/title_activity_main"
             android:theme="@style/AppTheme.NoActionBarLaunch"
             android:launchMode="singleTask"
+            android:supportsPictureInPicture="true"
             android:exported="true">
 
             <intent-filter>
@@ -44,6 +48,7 @@
                 <data android:pathPrefix="/reel/" />
                 <data android:pathPrefix="/communities/" />
                 <data android:pathPrefix="/auth/magic-link" />
+                <data android:path="/auth/verify-email" />
                 <data android:path="/me" />
                 <data android:path="/links" />
                 <data android:path="/reels" />
@@ -57,6 +62,28 @@
                 <data android:scheme="meeshy" />
             </intent-filter>
 
+            <!-- #8884 — Meeshy figure dans la feuille de partage d'Android : une
+                 image, une vidéo ou un lien partagé depuis une autre application
+                 arrive sur la feuille d'envoi. MeeshyShareIntentPlugin copie les
+                 contenus (`content://`, illisibles pour la WebView) en fichiers
+                 temporaires et les remet au web (src/lib/share-incoming/native-inbox.ts).
+                 Les types sont ceux que la feuille sait envoyer, et la catégorie
+                 DEFAULT est ce qui fait proposer l'app par le système (garde :
+                 scripts/check-android-manifest.mjs, auditShareIntentFilters). -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+                <data android:mimeType="video/*" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+                <data android:mimeType="video/*" />
+            </intent-filter>
+
         </activity>
 
         <provider
@@ -68,6 +95,63 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths"></meta-data>
         </provider>
+
+        <!-- #7307 — la bannière d'un push rendue par FCM, app fermée : sans ces
+             deux entrées, Android prend l'icône de lancement (un carré blanc
+             dans la barre d'état) et le canal par défaut de FCM au lieu de
+             celui que la passerelle nomme. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_stat_meeshy" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_color"
+            android:resource="@color/meeshy_notification_accent" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="meeshy_notifications" />
+
+        <!-- #8049 — l'appel natif de la coque. Le MessagingService du plugin
+             @capacitor/push-notifications est RETIRÉ à la fusion : deux services
+             MESSAGING_EVENT se concurrencent (FCM n'en sert qu'un). Le nôtre
+             l'ÉTEND (MeeshyMessagingService) : il sonne un appel entrant data-only
+             et remet tout autre message au plugin, inchangé. -->
+        <service
+            android:name="com.capacitorjs.plugins.pushnotifications.MessagingService"
+            tools:node="remove" />
+        <service
+            android:name=".MeeshyMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
+        <!-- #8049 — l'appel en cours tient au premier plan (micro, caméra) : sans
+             lui, Android coupe le micro de la WebView dès que l'écran s'éteint
+             ou que l'utilisateur quitte l'app. -->
+        <service
+            android:name=".CallForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="microphone|camera" />
+
+        <!-- #9238 — le message vocal en cours tient le micro au premier plan :
+             sans lui, quitter l'app pendant l'enregistrement le rend muet. -->
+        <service
+            android:name=".RecordingForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="microphone" />
+
+        <!-- #9257 — le message vocal écouté tient la lecture au premier plan :
+             sans lui, Android gèle l'app mise en cache au milieu du vocal. -->
+        <service
+            android:name=".PlaybackForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
+
+        <!-- #8049 — « Refuser » de la notification d'appel, app tuée comprise. -->
+        <receiver
+            android:name=".DeclineCallReceiver"
+            android:exported="false" />
     </application>
 
     <!-- Permissions -->
@@ -89,4 +173,53 @@
          rend « denied » sans dialogue. Le manifeste du plugin ne la fournit
          pas (il ne déclare que son MessagingService). -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- #8007 — la tuile « Position » du composeur (navigator.geolocation)
+         passe par BridgeWebChromeClient.onGeolocationPermissionsShowPrompt,
+         qui demande ces deux permissions a l'execution : non declarees,
+         Android les refuse sans dialogue et la tuile tombe toujours sur
+         « refuse ». L'app native gelee (apps/android) les declare deja. -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+
+    <!-- #8045 — l'appel vidéo : getUserMedia({ video }) de la WebView passe
+         par BridgeWebChromeClient.onPermissionRequest, qui demande CAMERA à
+         l'exécution ; non déclarée, Android la refuse sans dialogue. La
+         caméra reste FACULTATIVE : l'appel vocal sert les appareils sans. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+
+    <!-- #8049 — l'appel natif de la coque (C10, C11, D6, D15, D16, D19, J1, J2).
+         FOREGROUND_SERVICE + ses deux types : l'appel en cours tient micro et
+         caméra écran éteint (CallForegroundService). USE_FULL_SCREEN_INTENT :
+         la sonnerie plein écran d'un appel reçu app tuée. BLUETOOTH_CONNECT :
+         router l'appel vers un casque (API 31+). WAKE_LOCK : le capteur de
+         proximité éteint l'écran contre l'oreille. VIBRATE : l'haptique aux
+         transitions de l'appel. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
+    <!-- #9257 — la lecture d'un vocal tenue écran éteint (PlaybackForegroundService). -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+
+    <!-- #8336 — la galerie (@capacitor-community/media, hors androidGalleryMode)
+         écrit dans Android/media/<appId>/Meeshy : dossier propre à l'app,
+         indexé par MediaStore, sans AUCUNE permission de stockage à aucun
+         niveau d'API. READ_MEDIA_* / *_EXTERNAL_STORAGE sont INTERDITES par
+         scripts/check-android-manifest.mjs (FORBIDDEN_PERMISSIONS). -->
+
+    <!-- #7930 — la tuile « Appareil photo » du composeur (<input capture>)
+         passe par BridgeWebChromeClient.showImageCapturePicker, qui ne lance
+         IMAGE_CAPTURE que si resolveActivity trouve une application photo.
+         Depuis l'API 30, la visibilité des paquets la cache sans cette
+         requête : le pont retombait sur le sélecteur de fichiers. -->
+    <queries>
+        <intent>
+            <action android:name="android.media.action.IMAGE_CAPTURE" />
+        </intent>
+    </queries>
 </manifest>

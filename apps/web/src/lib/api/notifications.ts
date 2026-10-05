@@ -1,4 +1,5 @@
 import type { InfiniteData, QueryClient } from '@tanstack/react-query';
+import * as notificationsEndpoints from '@meeshy/shared/api/endpoints/notifications';
 
 import { categoryQuery, type NotificationCategory } from '@/lib/notifications/categories';
 import { decodeNotifications, type NotificationRecord } from '@/lib/notifications/record';
@@ -12,7 +13,7 @@ import type { ApiResult, HttpTransport } from './http';
  * `source` résolue ICI, jamais dans l'écran (motif `conversations.ts`) : les
  * fixtures sont servies par le MÊME chemin.
  *
- * - `GET /notifications?limit=30[&types=…|&unreadOnly=true][&cursor=…]` — AU
+ * - `GET /notifications?limit=30[&types=…|&unreadOnly=true][&hideReadTypes=…][&cursor=…]` — AU
  *   CURSEUR : `offset` absent retire le `count()` complet du chemin nominal dès
  *   la première page (`:152-170`). Une catégorie est un filtre SERVEUR
  *   (`lib/notifications/categories.ts`), chacune sa liste en cache.
@@ -88,16 +89,17 @@ export async function loadNotificationsPage(
       }),
     };
   }
-  const { types, unreadOnly } = categoryQuery(params.category);
+  const { types, unreadOnly, hideReadTypes } = categoryQuery(params.category);
   const query = new URLSearchParams({
     limit: String(NOTIFICATIONS_PAGE_SIZE),
     ...(types === undefined ? {} : { types }),
     ...(unreadOnly === undefined ? {} : { unreadOnly: 'true' }),
+    ...(hideReadTypes === undefined ? {} : { hideReadTypes }),
     ...(params.cursor === undefined ? {} : { cursor: params.cursor }),
   });
   const result = await params.transport.request<unknown>({
     method: 'GET',
-    path: `/api/v1/notifications?${query.toString()}`,
+    path: `${notificationsEndpoints.root}?${query.toString()}`,
     ...(params.signal === undefined ? {} : { signal: params.signal }),
   });
   if (!result.ok) return result;
@@ -122,7 +124,7 @@ export async function loadNotificationCounts(
   }
   const result = await params.transport.request<unknown>({
     method: 'GET',
-    path: '/api/v1/notifications/counts',
+    path: notificationsEndpoints.counts,
     ...(params.signal === undefined ? {} : { signal: params.signal }),
   });
   if (!result.ok) return result;
@@ -135,7 +137,7 @@ export async function postNotificationRead(deps: NotificationsDeps, id: string):
     const { fixtureMarkNotificationRead } = await import('./fixtures-notifications');
     return fixtureMarkNotificationRead(id);
   }
-  return deps.transport.request({ method: 'POST', path: `/api/v1/notifications/${encodeURIComponent(id)}/read` });
+  return deps.transport.request({ method: 'POST', path: notificationsEndpoints.byIdRead(id) });
 }
 
 export async function postAllNotificationsRead(deps: NotificationsDeps): Promise<ApiResult<unknown>> {
@@ -143,7 +145,7 @@ export async function postAllNotificationsRead(deps: NotificationsDeps): Promise
     const { fixtureMarkAllNotificationsRead } = await import('./fixtures-notifications');
     return fixtureMarkAllNotificationsRead();
   }
-  return deps.transport.request({ method: 'POST', path: '/api/v1/notifications/read-all' });
+  return deps.transport.request({ method: 'POST', path: notificationsEndpoints.readAll });
 }
 
 export async function removeNotification(deps: NotificationsDeps, id: string): Promise<ApiResult<unknown>> {
@@ -151,7 +153,7 @@ export async function removeNotification(deps: NotificationsDeps, id: string): P
     const { fixtureDeleteNotification } = await import('./fixtures-notifications');
     return fixtureDeleteNotification(id);
   }
-  return deps.transport.request({ method: 'DELETE', path: `/api/v1/notifications/${encodeURIComponent(id)}` });
+  return deps.transport.request({ method: 'DELETE', path: notificationsEndpoints.byId(id) });
 }
 
 /** Aplatit les pages, dédoublonnées par id — la première occurrence gagne (une

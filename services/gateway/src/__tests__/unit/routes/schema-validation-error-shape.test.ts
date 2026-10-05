@@ -87,6 +87,26 @@ describe('refus de schéma — le client apprend CE QUI ne va pas', () => {
     expect(res.json().details.length).toBeGreaterThan(0);
   });
 
+  /**
+   * #8082 — `details` n'est lu par AUCUN client iOS : `APIRejectionEnvelope`
+   * décode `violations: [{ path, message }]`, la forme que `errorResponseSchema`
+   * DÉCLARE. Un pseudo de 17 caractères tombait donc au bandeau générique
+   * « réessayez » au lieu de se poser sous le champ pseudo.
+   */
+  it('nomme le champ sous la forme déclarée par errorResponseSchema — violations[].path', async () => {
+    const res = await post({ password: 'abc' });
+
+    expect(res.json().violations).toEqual([
+      { path: 'password', message: expect.any(String) },
+    ]);
+  });
+
+  it('nomme un champ MANQUANT par son nom, pas par la racine', async () => {
+    const res = await post({});
+
+    expect(res.json().violations[0].path).toBe('password');
+  });
+
   it('expose un code machine — le client route sans lire le texte', async () => {
     const res = await post({ password: 'abc' });
 

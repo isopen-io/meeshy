@@ -264,10 +264,10 @@ jobs:
       matrix:
         # Pas d'entrée `web` : l'image `meeshy-web` était celle du legacy
         # Next.js, qui a quitté le dépôt (#7668). L'application web est
-        # construite et publiée par `docker.yml` seul (image `meeshy-web-v31`,
+        # construite et publiée par `docker.yml` seul (image `meeshy-webapp`,
         # avec son `VITE_API_BASE`) ; la construire ICI sans ce paramètre
         # publierait sous un nom de production une image qui appelle la
-        # mauvaise API. Le nom de l'image est l'affaire de #7709.
+        # mauvaise API.
         include:
           - service: gateway
             context: .

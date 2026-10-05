@@ -12,16 +12,42 @@ import MeeshySDK
 public struct StoryFilterGridView: View {
     @ObservedObject var viewModel: StoryComposerViewModel
     var previewImage: UIImage?
+    /// **L'objet dont la grille règle le filtre** (retour porteur 2026-09-28 :
+    /// les réglages d'un objet ne touchent que lui). `nil` ⇒ le filtre de la
+    /// SLIDE, porté par le fond ; un id ⇒ `StoryMediaObject.filter` de cet
+    /// objet, sans curseur d'intensité (le filtre d'un objet est plein).
+    var objectId: String?
+    /// Appelé APRÈS chaque choix (#8792) — l'hôte y rejoue les transitions de
+    /// la scène pour montrer le nouvel effet en situation.
+    var onChoose: ((String?) -> Void)?
 
-    public init(viewModel: StoryComposerViewModel, previewImage: UIImage? = nil) {
+    public init(viewModel: StoryComposerViewModel, previewImage: UIImage? = nil, objectId: String? = nil,
+                onChoose: ((String?) -> Void)? = nil) {
         self.viewModel = viewModel
         self.previewImage = previewImage
+        self.objectId = objectId
+        self.onChoose = onChoose
+    }
+
+    private var selectedRaw: String? {
+        guard let objectId else { return viewModel.selectedFilter }
+        return viewModel.mediaObjectFilter(id: objectId)
+    }
+
+    private func choose(_ raw: String?) {
+        if let objectId {
+            viewModel.applyMediaObjectFilter(id: objectId, raw)
+        } else {
+            viewModel.applyFilter(raw)
+        }
+        onChoose?(raw)
     }
 
     @Environment(\.colorScheme) private var colorScheme
-    /// Tile-sized downsample of `previewImage`, computed once per slide so each
-    /// tile's `StoryFilterProcessor.apply` runs on a small bitmap (cheap + cached).
-    @State private var thumbnailBase: UIImage?
+    /// Les vignettes du fond COURANT (#8792), rendues hors du fil principal par
+    /// `StoryFilterThumbnails` — vides tant qu'elles se calculent : la tuile
+    /// montre alors son dégradé, jamais un sablier.
+    @State private var tiles: [String: UIImage] = [:]
 
     public var body: some View {
         // Header interne + background ultraThinMaterial retires : le bandeau parent
@@ -39,7 +65,7 @@ public struct StoryFilterGridView: View {
                 .padding(.horizontal, 12)
             }
 
-            if viewModel.selectedFilter != nil {
+            if objectId == nil, viewModel.selectedFilter != nil {
                 intensitySlider
             }
         }
@@ -50,22 +76,19 @@ public struct StoryFilterGridView: View {
 
     @ViewBuilder
     private func filterThumbnail(filter: StoryFilter?, label: String) -> some View {
-        let isSelected = viewModel.selectedFilter == filter?.rawValue
+        let isSelected = selectedRaw == filter?.rawValue
 
         Button {
-            viewModel.applyFilter(filter?.rawValue)
+            choose(filter?.rawValue)
             HapticFeedback.light()
         } label: {
             VStack(spacing: 4) {
                 Group {
-                    if let base = thumbnailBase {
-                        // Same recipe the canvas uses (full strength on tiles, à la
-                        // Instagram) — cached by slide id + filter so this is computed
-                        // once per slide. The intensity slider only drives the canvas.
-                        Image(uiImage: StoryFilterProcessor.apply(filter, to: base,
-                                                                  imageId: viewModel.currentSlide.id))
+                    if let tile = tiles[filter?.rawValue ?? StoryFilterThumbnails.originalKey] {
+                        Image(uiImage: tile)
                             .resizable()
                             .scaledToFill()
+                            .transition(.opacity)
                     } else {
                         fallbackGradient(for: filter)
                     }
@@ -83,6 +106,7 @@ public struct StoryFilterGridView: View {
             }
         }
         .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     @ViewBuilder
@@ -126,23 +150,19 @@ public struct StoryFilterGridView: View {
         .padding(.horizontal, 16)
     }
 
-    private var thumbnailTaskKey: String {
-        "\(viewModel.currentSlide.id)_\(previewImage != nil)"
+    private var thumbnailSourceKey: String? {
+        previewImage.map { StoryFilterThumbnails.sourceKey(slideId: objectId ?? viewModel.currentSlide.id, image: $0) }
     }
 
-    /// Downsamples `previewImage` to a tile-sized square once per slide so each
-    /// tile's `StoryFilterProcessor.apply` runs on a small bitmap. Mirrors the
-    /// proven thumbnail-generation pattern (off-main downsample).
+    private var thumbnailTaskKey: String { thumbnailSourceKey ?? "" }
+
     private func prepareThumbnailBase() async {
-        guard let source = previewImage else {
-            thumbnailBase = nil
+        guard let source = previewImage, let key = thumbnailSourceKey else {
+            tiles = [:]
             return
         }
-        let target = CGSize(width: 128, height: 128)
-        let small = await Task.detached(priority: .userInitiated) {
-            let renderer = UIGraphicsImageRenderer(size: target)
-            return renderer.image { _ in source.draw(in: CGRect(origin: .zero, size: target)) }
-        }.value
-        thumbnailBase = small
+        let rendered = await StoryFilterThumbnails.tiles(for: source, sourceKey: key)
+        guard !Task.isCancelled else { return }
+        withAnimation(.easeOut(duration: 0.2)) { tiles = rendered }
     }
 }

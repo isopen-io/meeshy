@@ -30,6 +30,7 @@ export {
 // Export des types unifies Phase 1
 export * from './conversation.js';
 export * from './conversation-preview.js';
+export * from './conversation-card.js';
 export * from './user.js';
 export * from './anonymous.js';
 export * from './api-responses.js';
@@ -55,6 +56,7 @@ export * from './share-link-stats.js';
 // Sticker porté par un message (#4823) — descripteur dédié, hissé depuis `metadata.sticker`
 export * from './message-sticker.js';
 export * from './sticker-definition.js';
+export * from './sticker-pack.js';
 
 // Favori de message (#7377) — étoile personnelle, liste et paramètres
 export * from './message-star.js';
@@ -66,6 +68,11 @@ export * from './attachment.js';
 
 // Export des types unifiés Phase 6 - Video Calls
 export * from './video-call.js';
+export * from './call-rules.js';
+export * from './call-recording.js';
+export * from './call-controls.js';
+export * from './call-preview.js';
+export * from './call-live-frame.js';
 
 // Export des types unifiés Phase 7 - Audio Effects Timeline
 export * from './audio-effects-timeline.js';
@@ -99,6 +106,9 @@ export * from './mention.js';
 
 // Export des types d'engagement (streaks/badges — catalogue des axes, #5530)
 export * from './engagement.js';
+// Barème réglable et état par conversation « N (M) 🔥 » (#8906)
+export * from './engagement-scale.js';
+export * from './engagement-operations.js';
 
 // Export des types références de post (Prisme des références — parité Swift)
 export type {
@@ -126,6 +136,7 @@ export * from './security.js';
 
 // Export des types Magic Link (authentification sans mot de passe)
 export * from './magic-link.js';
+export * from './account-activation.js';
 
 // Export des types Signal Protocol database (pre-key bundles, conversation keys)
 export * from './signal-database.js';
@@ -185,22 +196,26 @@ export {
   type NotificationResponse,
   type NotificationCounts,
 
-  // Preferences
-  type NotificationPreference,
-  type CreateNotificationPreferenceDTO,
-  type UpdateNotificationPreferenceDTO,
-
   // Utility functions
   isNotificationExpired,
   isNotificationUnread,
+} from './notification.js';
+
+// Les préférences de notification et leurs règles d'envoi (extraites de
+// `notification.ts`, budget de taille #4532).
+export {
+  type NotificationPreference,
+  type CreateNotificationPreferenceDTO,
+  type UpdateNotificationPreferenceDTO,
   isDNDActive,
   isNotificationTypeEnabled,
   shouldSendNotification,
   getDefaultNotificationPreferences,
-} from './notification.js';
+} from './notification-preferences.js';
 
 // Le média inline d'une bannière — hérité par `NotificationContext` (#7003).
 export type { NotificationAttachmentWire } from './notification-attachment-wire.js';
+export type { NotificationContentDetail, NotificationContentCategory } from './notification-content-detail.js';
 
 // Legacy aliases for backwards compatibility
 export type { Notification as PrismaNotification } from './notification.js';
@@ -749,3 +764,4 @@ export { AGENT_TYPES, SCAN_STALE_MS, isScanActive } from './agent.js';
 // ===== LA LENTILLE — modes de lecture + pont ✦ (contrat §3.1-3.3, C-010) =====
 export * from './reading-modes.js';
 export * from './conversation-bridge.js';
+export * from './contact-card.js';

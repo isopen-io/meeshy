@@ -10,6 +10,8 @@
  * `packages/MeeshySDK/.../Models/CallModels.swift`. Keep the two in sync.
  */
 
+import { parseCallReactionCounts, type CallReactionCounts } from '@meeshy/shared/types/call-controls';
+
 export type CallDirection = 'incoming' | 'outgoing' | 'missed';
 
 export interface CallHistoryPeer {
@@ -26,6 +28,15 @@ export interface CallHistoryPeer {
    * "hidden" folds to `false`, never to `null`.
    */
   isOnline: boolean;
+}
+
+/** Someone who joined a GROUP call — no presence, no contact field (#8066). */
+export interface CallHistoryParticipant {
+  participantId: string;
+  userId: string | null;
+  username: string | null;
+  displayName: string;
+  avatar: string | null;
 }
 
 export interface CallHistoryItem {
@@ -48,6 +59,10 @@ export interface CallHistoryItem {
   bytesReceived: number | null;
   /** The other party for a P2P/direct call; null for group calls. */
   peer: CallHistoryPeer | null;
+  /** Who joined a group call, reader excluded, in join order; empty for a direct call. */
+  participants: CallHistoryParticipant[];
+  /** Reactions sent during the call, counted per emoji (#8439); `{}` when none. */
+  reactionCounts: CallReactionCounts;
 }
 
 /** The minimal `CallSession` projection the builder consumes. */
@@ -65,6 +80,8 @@ export interface CallHistoryRow {
   bytesSent: number | null;
   bytesReceived: number | null;
   metadata: unknown;
+  /** `CallSession.reactionCounts` as stored — read without trust. */
+  reactionCounts?: unknown;
   conversation: { type: string; title: string | null; avatar: string | null };
 }
 
@@ -126,7 +143,8 @@ export function buildCallHistoryItem(
   userId: string,
   peer: CallHistoryPeer | null,
   /** Does `userId` have their own `CallParticipant` row for this call? Irrelevant (and safe to pass `false`) when `userId` is the initiator. */
-  userParticipated: boolean
+  userParticipated: boolean,
+  participants: readonly CallHistoryParticipant[] = []
 ): CallHistoryItem {
   return {
     callId: row.id,
@@ -146,5 +164,7 @@ export function buildCallHistoryItem(
     bytesSent: clampNonNegativeInt(row.bytesSent),
     bytesReceived: clampNonNegativeInt(row.bytesReceived),
     peer,
+    participants: [...participants],
+    reactionCounts: parseCallReactionCounts(row.reactionCounts),
   };
 }

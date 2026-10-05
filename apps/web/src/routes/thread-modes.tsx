@@ -1,11 +1,15 @@
-import { Suspense, lazy, useCallback, useState, type Ref } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useState, type Ref } from 'react';
 import type { Virtualizer } from '@tanstack/react-virtual';
 
 import type { ConversationReadingMode } from '@meeshy/shared/types/reading-modes';
 
+import { AfterReadSeenProbe } from '@/components/after-read-seen-probe';
+import { AfterReadWatermark, afterReadReachOf } from '@/components/after-read-watermark';
 import { Bubble } from '@/components/bubble';
 import { FocalRow } from '@/components/focal-row';
 import { MessageEffectsHost } from '@/components/message-effects-host';
+import { MessageSwipe } from '@/components/message-swipe';
+import { UnfoldStage } from '@/components/unfold-stage';
 import { SummarySkeleton } from '@/components/summary/summary-skeleton';
 import { TypingRosterCell } from '@/components/typing-roster-cell';
 import { UnreadSeparator } from '@/components/unread-separator';
@@ -22,15 +26,18 @@ import type { useLongPress } from '@/lib/view/long-press';
 import { checkStatusOf, isMineOf } from '@/lib/view/message';
 import type { LocalDelivery } from '@/lib/view/message';
 import { unreadSeparatorLabel } from '@/lib/view/unread-separator';
+import { collapseUnfolded } from '@/lib/view/unfold-store';
 import { composeMessageLabel } from '@/lib/view/message-a11y-label';
 import { isSystemMessage } from '@/lib/view/message-badges';
 import { served } from '@/lib/api/prism';
 import type { SelectionState } from '@/lib/view/selection';
 import { usesFlatRow } from '@/lib/reading-mode/decision';
 import { protectionOf } from '@/lib/reading-mode/protection';
+import { isAfterReadMessage } from '@/lib/view/after-read';
 import { destructionPhaseOf } from '@/lib/view/ephemeral-destruction';
 import { resolveEphemeralDeadline } from '@/lib/view/ephemeral-reception';
 import type { ThreadScene } from '@/lib/reading-mode/scene';
+import type { SwipeOutcome } from '@/lib/view/swipe';
 import type { StoryRingOf } from '@/lib/view/use-author-story-rings';
 
 /**
@@ -103,13 +110,16 @@ const EMPTY_IDS: ReadonlySet<string> = new Set();
 function OlderHead({
   state,
   sentinelRef,
+  edge = 'older',
 }: {
   readonly state: ListPaginationState;
   readonly sentinelRef: Ref<HTMLDivElement>;
+  /** `newer` (#7420) : la MÊME prise, posée au PIED d'une fenêtre ancrée détachée du présent. */
+  readonly edge?: 'older' | 'newer';
 }) {
   return (
     <div
-      data-thread-older={state}
+      {...(edge === 'older' ? { 'data-thread-older': state } : { 'data-thread-newer': state })}
       aria-hidden
       className="shrink-0"
       style={{ height: 1 }}
@@ -155,6 +165,8 @@ export function ThreadModes({
   selection,
   onRowTap,
   longPress,
+  swipeActionsOf,
+  onSwipeAction,
   onPickLanguage,
   onReact,
   onOpenDetail,
@@ -163,6 +175,7 @@ export function ThreadModes({
   typistAvatarOf,
   accent = 'var(--color-ios-brand)',
   older,
+  newer,
   readTrackingSentinelRef,
   unreadSeparatorMessageId = null,
   unreadCount = 0,
@@ -234,6 +247,10 @@ export function ThreadModes({
   readonly selection?: SelectionState | null;
   readonly onRowTap?: (messageId: string) => void;
   readonly longPress?: ReturnType<typeof useLongPress>;
+  /** Glisser → répondre, ← transférer, et l'icône « Répondre » du pointeur
+   * fin (#7559, #8899) — l'offre et l'effet du MENU (`useMessageMenu`). */
+  readonly swipeActionsOf?: (message: Message) => { readonly canReply: boolean; readonly canForward: boolean } | undefined;
+  readonly onSwipeAction?: (messageId: string, outcome: SwipeOutcome) => void;
   readonly onPickLanguage?: (messageId: string, code: string) => void;
   /** Retire une réaction MIENNE en tapant sa capsule (#5865) — même geste
    * que `onPickLanguage`, une seule loi vers `useMessageMenu.onMenuReact`. */
@@ -286,6 +303,11 @@ export function ThreadModes({
     readonly state: ListPaginationState;
     readonly sentinelRef: Ref<HTMLDivElement>;
   };
+  /** LA PAGINATION VERS LE PRÉSENT (#7420) — le pied d'une fenêtre ancrée loin du présent ; même capacité qu'`older`. */
+  readonly newer?: {
+    readonly state: ListPaginationState;
+    readonly sentinelRef: Ref<HTMLDivElement>;
+  };
   /**
    * LE MARQUAGE-LU (#7201, W1) — la sentinelle de PIED, symétrique
    * d'`OlderHead` : une prise d'un pixel après la dernière rangée, dont
@@ -334,6 +356,9 @@ export function ThreadModes({
    * l'effacement ou `consumed`), mesurés à ≈ 1,1 ms pour 20 rangées visibles.
    */
   const [revealPhases, setRevealPhases] = useState<ReadonlyMap<string, RevealPhase>>(() => new Map());
+  /* Quitter le fil replie le message long déplié (#8147) : rouvrir une
+     conversation ne ressuscite pas un dépliage d'une autre visite. */
+  useEffect(() => collapseUnfolded, []);
   const publishRevealPhase = useCallback((messageId: string, phase: RevealPhase) => {
     setRevealPhases((current) => {
       const held = current.get(messageId);
@@ -445,6 +470,7 @@ export function ThreadModes({
       )}
 
       <ol
+        data-thread-rows={placed.length}
         style={{
           position: 'relative',
           width: '100%',
@@ -546,6 +572,7 @@ export function ThreadModes({
           });
           const rowExpired = rowPhase === 'gone';
           const rowProtection = rowExpired ? 'expired' : protectionOf(p.message, renderNow);
+          const rowAfterRead = isAfterReadMessage(p.message) && rowProtection !== 'deleted' && rowProtection !== 'expired';
           /* LA PHASE DE RÉVÉLATION EST ALIMENTÉE (#7142) — elle vit SOUS ce
              nœud (`ProtectedContent`, `useState`) alors qu'`aria-label` se
              pose AU-DESSUS, sur `[data-row]` ; elle remonte par le canal
@@ -570,6 +597,14 @@ export function ThreadModes({
             contentWithheld: rowWithheld,
             phase: revealPhases.get(p.message.id) ?? { phase: 'hidden' },
           });
+          const rowSwipeOffer =
+            rowSelected !== undefined || isSystemMessage(p.message) || onSwipeAction === undefined
+              ? undefined
+              : swipeActionsOf?.(p.message);
+          const rowSwipeActions =
+            rowSwipeOffer === undefined || onSwipeAction === undefined
+              ? undefined
+              : { ...rowSwipeOffer, onAction: (outcome: SwipeOutcome) => onSwipeAction(p.message.id, outcome) };
           return (
             <li
               key={p.message.id}
@@ -665,6 +700,7 @@ export function ThreadModes({
                   `prefers-reduced-motion`, la feuille retombe sur un fondu. */}
               <div
                 {...(rowPhase === 'destroying' ? { 'data-destroying': '', className: 'ephemeral-destroying' } : {})}
+                {...(rowAfterRead ? { style: { position: 'relative', isolation: 'isolate' } } : {})}
                 {...(isSystemMessage(p.message) ? {} : { 'data-row': p.message.id })}
                 {...(isSystemMessage(p.message) || longPress === undefined ? {} : { tabIndex: 0, ...longPress })}
                 role="article"
@@ -677,61 +713,88 @@ export function ThreadModes({
                 {/* LES EFFETS S'EXÉCUTENT ICI (#7596), sur le nœud qui enveloppe
                     LES DEUX peaux — même raison que la destruction ci-dessus :
                     un mode ajouté demain les joue sans rien câbler. */}
-                <MessageEffectsHost effectFlags={p.message.effectFlags}>
-                  {usesFlatRow(mode) ? (
-                    <FocalRow
-                      mode={mode}
-                      place={p}
-                      languages={readerLanguages}
-                      viewerId={viewerId}
-                      onJumpToMessage={jumpToMessage}
-                      highlighted={highlightedId === p.message.id}
-                      elected={isElected}
-                      expired={rowExpired}
-                      ephemeralDeadline={rowDeadline}
-                      revealable={!rowWithheld}
-                      {...(consume === undefined ? {} : { onConsumeViewOnce: consume })}
-                      {...(onEphemeralExpired === undefined ? {} : { onEphemeralExpired })}
-                      {...(rowDisplayLanguage === undefined ? {} : { displayLanguage: rowDisplayLanguage })}
-                      {...(onPickLanguage === undefined
-                        ? {}
-                        : { onPickLanguage: (code: string) => onPickLanguage(p.message.id, code) })}
-                      {...(rowMyReactions === undefined ? {} : { myReactions: rowMyReactions })}
-                      {...(rowStoryRing === undefined ? {} : { senderStoryRing: rowStoryRing })}
-                      {...(onReact === undefined ? {} : { onReact: (emoji: string) => onReact(p.message.id, emoji) })}
-                      {...(rowSelected === undefined || onRowTap === undefined
-                        ? {}
-                        : { selected: rowSelected, onToggleSelect: onRowTap })}
-                      {...sendProps}
-                    />
-                  ) : (
-                    <Bubble
-                      place={p}
-                      languages={readerLanguages}
-                      isGrouped={group}
-                      viewerId={viewerId}
-                      onJumpToMessage={jumpToMessage}
-                      highlighted={highlightedId === p.message.id}
-                      expired={rowExpired}
-                      ephemeralDeadline={rowDeadline}
-                      revealable={!rowWithheld}
-                      {...(consume === undefined ? {} : { onConsumeViewOnce: consume })}
-                      {...(onEphemeralExpired === undefined ? {} : { onEphemeralExpired })}
-                      {...(rowDisplayLanguage === undefined ? {} : { displayLanguage: rowDisplayLanguage })}
-                      {...(onPickLanguage === undefined
-                        ? {}
-                        : { onPickLanguage: (code: string) => onPickLanguage(p.message.id, code) })}
-                      {...(rowMyReactions === undefined ? {} : { myReactions: rowMyReactions })}
-                      {...(rowStoryRing === undefined ? {} : { senderStoryRing: rowStoryRing })}
-                      {...(onReact === undefined ? {} : { onReact: (emoji: string) => onReact(p.message.id, emoji) })}
-                      {...(rowSelected === undefined || onRowTap === undefined
-                        ? {}
-                        : { selected: rowSelected, onToggleSelect: onRowTap })}
-                      {...(onOpenDetail === undefined ? {} : { onOpenDetail })}
-                      {...sendProps}
-                    />
-                  )}
-                </MessageEffectsHost>
+                {/* LE DÉPLIAGE D'UN MESSAGE LONG (#8147) : même nœud, même
+                    raison — le verre, la loupe et l'atténuation des voisins
+                    valent pour toutes les peaux. */}
+                {/* LE FILIGRANE DE LA FLAMME-ŒIL (#8304) — sur le nœud des
+                    DEUX peaux, comme la destruction : tous les modes le
+                    reçoivent, et il remplace la pastille de décompte. */}
+                {rowAfterRead && !rowIsMine ? <AfterReadSeenProbe messageId={p.message.id} /> : null}
+                {rowAfterRead ? (
+                  <AfterReadWatermark
+                    reach={afterReadReachOf({
+                      flat: usesFlatRow(mode),
+                      mediaOnly: p.message.content.trim() === '' && (p.message.attachments?.length ?? 0) > 0,
+                    })}
+                  />
+                ) : null}
+                <MessageSwipe
+                  actions={rowSwipeActions}
+                  flat={usesFlatRow(mode)}
+                  isMine={rowIsMine}
+                  attachments={p.message.attachments}
+                  createdAt={p.message.createdAt}
+                  locale={readerLocale}
+                >
+                <UnfoldStage messageId={p.message.id}>
+                  <MessageEffectsHost effectFlags={p.message.effectFlags}>
+                    {usesFlatRow(mode) ? (
+                      <FocalRow
+                        mode={mode}
+                        place={p}
+                        languages={readerLanguages}
+                        viewerId={viewerId}
+                        onJumpToMessage={jumpToMessage}
+                        highlighted={highlightedId === p.message.id}
+                        elected={isElected}
+                        expired={rowExpired}
+                        ephemeralDeadline={rowDeadline}
+                        revealable={!rowWithheld}
+                        {...(consume === undefined ? {} : { onConsumeViewOnce: consume })}
+                        {...(onEphemeralExpired === undefined ? {} : { onEphemeralExpired })}
+                        {...(rowDisplayLanguage === undefined ? {} : { displayLanguage: rowDisplayLanguage })}
+                        {...(onPickLanguage === undefined
+                          ? {}
+                          : { onPickLanguage: (code: string) => onPickLanguage(p.message.id, code) })}
+                        {...(rowMyReactions === undefined ? {} : { myReactions: rowMyReactions })}
+                        {...(rowStoryRing === undefined ? {} : { senderStoryRing: rowStoryRing })}
+                        {...(onReact === undefined ? {} : { onReact: (emoji: string) => onReact(p.message.id, emoji) })}
+                        {...(rowSelected === undefined || onRowTap === undefined
+                          ? {}
+                          : { selected: rowSelected, onToggleSelect: onRowTap })}
+                        {...(onOpenDetail === undefined ? {} : { onOpenDetail })}
+                        {...sendProps}
+                      />
+                    ) : (
+                      <Bubble
+                        place={p}
+                        languages={readerLanguages}
+                        isGrouped={group}
+                        viewerId={viewerId}
+                        onJumpToMessage={jumpToMessage}
+                        highlighted={highlightedId === p.message.id}
+                        expired={rowExpired}
+                        ephemeralDeadline={rowDeadline}
+                        revealable={!rowWithheld}
+                        {...(consume === undefined ? {} : { onConsumeViewOnce: consume })}
+                        {...(onEphemeralExpired === undefined ? {} : { onEphemeralExpired })}
+                        {...(rowDisplayLanguage === undefined ? {} : { displayLanguage: rowDisplayLanguage })}
+                        {...(onPickLanguage === undefined
+                          ? {}
+                          : { onPickLanguage: (code: string) => onPickLanguage(p.message.id, code) })}
+                        {...(rowMyReactions === undefined ? {} : { myReactions: rowMyReactions })}
+                        {...(rowStoryRing === undefined ? {} : { senderStoryRing: rowStoryRing })}
+                        {...(onReact === undefined ? {} : { onReact: (emoji: string) => onReact(p.message.id, emoji) })}
+                        {...(rowSelected === undefined || onRowTap === undefined
+                          ? {}
+                          : { selected: rowSelected, onToggleSelect: onRowTap })}
+                        {...(onOpenDetail === undefined ? {} : { onOpenDetail })}
+                        {...sendProps}
+                      />
+                    )}
+                  </MessageEffectsHost>
+                </UnfoldStage>
+                </MessageSwipe>
               </div>
             </li>
           );
@@ -743,6 +806,10 @@ export function ThreadModes({
           (`aria-hidden`, comme `OlderHead`). Montée dès qu'il y a au moins
           une rangée — même garde que la tête : une sentinelle qui intersecte
           IMMÉDIATEMENT sur un fil vide n'aurait rien à accuser. */}
+      {newer === undefined || placed.length === 0 ? null : (
+        <OlderHead state={newer.state} sentinelRef={newer.sentinelRef} edge="newer" />
+      )}
+
       {readTrackingSentinelRef === undefined || placed.length === 0 ? null : (
         <div aria-hidden className="shrink-0" style={{ height: 1 }} ref={readTrackingSentinelRef} />
       )}

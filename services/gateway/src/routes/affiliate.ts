@@ -15,6 +15,8 @@ import { UnifiedAuthRequest } from '../middleware/auth';
 import { generateUniquePublicIdentifier } from '../utils/public-identifier';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendBadRequest, sendPaginatedSuccess } from '../utils/response';
+import { EngagementService } from '../services/engagement/EngagementService';
+import { linkVisitorFromRequest } from './links/utils/link-visitor';
 
 const logger = enhancedLogger.child({ module: 'AffiliateRoutes' });
 
@@ -80,6 +82,21 @@ export async function generateUniqueAffiliateToken(prisma: {
 }
 
 export default async function affiliateRoutes(fastify: FastifyInstance) {
+  const engagement = new EngagementService(fastify.prisma);
+
+  /**
+   * `social.link_visit` (#8959) : une visite par un lien d'affiliation crédite
+   * son créateur, hors du chemin de la réponse. Le visiteur est établi depuis
+   * la REQUÊTE — le corps de `track-visit` porte des « données visiteur » que
+   * le client choisit, et qui ne doivent décider ni qui compte ni combien.
+   */
+  const creditAffiliateVisit = (request: FastifyRequest, creatorId: string, token: string): void => {
+    const visitor = linkVisitorFromRequest(request as FastifyRequest & Partial<UnifiedAuthRequest>);
+    engagement
+      .recordLinkVisit({ creatorId, linkKey: `affiliate:${token}`, visitorKey: visitor.key, visitorUserId: visitor.userId })
+      .catch((err: unknown) => logger.warn('engagement social.link_visit failed', { err } as never));
+  };
+
   /**
    * POST /affiliate/tokens
    * Create a new affiliate/referral token for user invitations
@@ -200,6 +217,12 @@ export default async function affiliateRoutes(fastify: FastifyInstance) {
           }
         }
       });
+
+      // `social.affiliate_link_created` (#8959) — le geste de l'auteur, pas les
+      // jetons qu'une invitation par e-mail fabrique pour lui.
+      engagement
+        .recordActivity(userId, 'social.affiliate_link_created')
+        .catch((err: unknown) => logger.warn('engagement social.affiliate_link_created failed', { err } as never));
 
       // Construire le lien d'affiliation avec le format /signup/affiliate/TOKEN
       const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3100';
@@ -638,9 +661,18 @@ export default async function affiliateRoutes(fastify: FastifyInstance) {
       const body = trackVisitSchema.parse(request.body);
       const { token, visitorData } = body;
 
-      const result = await AffiliateTrackingService.trackAffiliateVisit(fastify.prisma, token, visitorData || {});
+      // L'adresse et le navigateur ENREGISTRÉS sont ceux de la requête : le
+      // corps ne fait que les prétendre (`request.ip` est l'appelant depuis
+      // que `trustProxy` est posé, #4137).
+      const userAgent = request.headers['user-agent'];
+      const result = await AffiliateTrackingService.trackAffiliateVisit(fastify.prisma, token, {
+        ...visitorData,
+        ipAddress: request.ip,
+        userAgent: typeof userAgent === 'string' ? userAgent : undefined,
+      });
 
       if (result.success) {
+        creditAffiliateVisit(request, result.data.affiliateUserId, token);
         return sendSuccess(reply, { sessionKey: result.data.sessionKey });
       } else {
         return sendBadRequest(reply, result.error);
@@ -810,6 +842,8 @@ export default async function affiliateRoutes(fastify: FastifyInstance) {
         where: { id: affiliateToken.id },
         data: { clickCount: { increment: 1 } },
       });
+
+      creditAffiliateVisit(request, affiliateToken.createdBy, token);
 
       return sendSuccess(reply, { tracked: true });
     } catch (error) {

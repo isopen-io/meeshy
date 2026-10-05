@@ -17,6 +17,14 @@ final class PermissionGateSourceGuardTests: XCTestCase {
 
     // MARK: - Helpers
 
+    /// L'écran d'inscription est découpé par surface (#8288) : la garde lit
+    /// l'écran ENTIER, pas le seul fichier qui portait le champ avant l'extraction.
+    private func signupScreenSource() throws -> String {
+        try ["SignupView.swift", "SignupView+Card.swift", "SignupView+Phone.swift"]
+            .map { try source("Meeshy/Features/Auth/Signup/\($0)") }
+            .joined(separator: "\n")
+    }
+
     private func source(_ relativePath: String) throws -> String {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()  // Services
@@ -78,7 +86,7 @@ final class PermissionGateSourceGuardTests: XCTestCase {
     /// vide sans jamais comprendre. Le chemin CallKit ne permet aucune demande
     /// en amont, d'où la garde ici.
     func test_answerCall_endsCallWhenMicrophoneMissing() throws {
-        let src = try source("Meeshy/Features/Main/Services/CallManager.swift")
+        let src = try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
         let fn = try body(from: "func answerCall() {", to: "ringbackPlayer.stop()", in: src)
 
         XCTAssertTrue(fn.contains("MediaPermissionState.microphone.isUsable"),
@@ -96,7 +104,7 @@ final class PermissionGateSourceGuardTests: XCTestCase {
     /// sans toast ni raccroché : miroir exact du bug déjà corrigé sur
     /// `answerCall()`, resté ouvert sur son propre point d'entrée.
     func test_answerCallReady_endsCallWhenMicrophoneMissing() throws {
-        let src = try source("Meeshy/Features/Main/Services/CallManager.swift")
+        let src = try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
         let fn = try body(from: "func answerCallReady() async {", to: "// MARK: - Reject Call", in: src)
 
         XCTAssertTrue(fn.contains("MediaPermissionState.microphone.isUsable"),
@@ -129,7 +137,7 @@ final class PermissionGateSourceGuardTests: XCTestCase {
     /// silencieux au tap sur « rejoindre » — miroir exact du bug déjà corrigé
     /// sur les deux autres points d'entrée, resté ouvert sur celui-ci.
     func test_rejoinActiveCall_refusesWhenMicrophoneMissing() throws {
-        let src = try source("Meeshy/Features/Main/Services/CallManager.swift")
+        let src = try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
         let fn = try body(from: "func rejoinActiveCall(callId: String", to: "// MARK: - VoIP Push Incoming Call", in: src)
 
         XCTAssertTrue(fn.contains("MediaPermissionState.microphone.isUsable"),
@@ -190,14 +198,20 @@ final class PermissionGateSourceGuardTests: XCTestCase {
     /// Le micro était demandé dès l'ouverture de la caméra, y compris pour une
     /// simple photo — un prompt sans motif visible, souvent refusé
     /// définitivement. Il doit désormais arriver au passage en mode Vidéo.
+    /// Un micro DÉJÀ autorisé entre, lui, à l'ouverture (#9328) : aucune
+    /// demande, et plus de reconfiguration qui noircit l'aperçu au déclenchement.
     func test_cameraSession_doesNotAddAudioInputEagerly() throws {
-        let src = try source("Meeshy/Features/Main/Components/CameraView.swift")
+        let src = try source("Meeshy/Features/Main/Components/CameraModel.swift")
         let setup = try body(from: "private func setupSession() {", to: "func enableAudioCaptureIfNeeded", in: src)
 
         XCTAssertFalse(
-            setup.contains("AVCaptureDevice.default(for: .audio)"),
-            "setupSession() ne doit plus brancher le micro : l'entrée audio est " +
-            "ajoutée paresseusement par enableAudioCaptureIfNeeded() au mode Vidéo."
+            setup.contains("AVCaptureDevice.default(for: .audio)") || setup.contains("ensureMicrophone"),
+            "setupSession() ne DEMANDE jamais le micro : la demande reste à " +
+            "enableAudioCaptureIfNeeded(), au mode Vidéo."
+        )
+        XCTAssertTrue(
+            setup.contains("CameraAudioArming.armsAtSetup(microphone: AVCaptureDevice.authorizationStatus(for: .audio),"),
+            "Seul un micro déjà autorisé entre à l'ouverture (#9328)."
         )
 
         let configure = try body(from: "func configure() {", to: "private func setupSession", in: src)
@@ -218,13 +232,17 @@ final class PermissionGateSourceGuardTests: XCTestCase {
 
     /// Le panneau de refus (et son bouton Réglages) est la seule chose qui
     /// distingue « caméra refusée » d'un bug d'affichage.
+    /// #9125 — l'ancienne `CameraView` a quitté le dépôt : le viseur du
+    /// composeur, servi seul en plein écran, porte la même promesse.
     func test_cameraView_rendersDeniedPanelInsteadOfBlackPreview() throws {
-        let src = try source("Meeshy/Features/Main/Components/CameraView.swift")
-        XCTAssertTrue(src.contains("permissionDeniedPanel"),
-                      "CameraView doit exposer un panneau de refus.")
-        XCTAssertTrue(src.contains("camera.permission.needsSettingsRedirect"),
+        // #9134 — l'aperçu est PARTAGÉ par les deux montages du viseur.
+        let src = try source("Meeshy/Features/Main/Composer/ComposerCaptureViews.swift")
+        XCTAssertTrue(src.contains("CameraPermissionPanel()"),
+                      "Le viseur doit exposer un panneau de refus.")
+        XCTAssertTrue(src.contains("ComposerSceneCameraSurface.shown(stage: session.stage, permission: session.camera.permission)"),
                       "Le rendu doit basculer sur l'état d'autorisation publié par le modèle.")
-        XCTAssertTrue(src.contains("MediaPermissionCoordinator.openSettings()"),
+        let panneau = try source("Meeshy/Features/Main/Components/CameraPermissionPanel.swift")
+        XCTAssertTrue(panneau.contains("MediaPermissionCoordinator.openSettings()"),
                       "Le panneau doit offrir l'ouverture des Réglages.")
     }
 
@@ -234,7 +252,7 @@ final class PermissionGateSourceGuardTests: XCTestCase {
     /// réclamer l'accès aux photos avant toute intention de l'utilisateur.
     func test_recentMediaStrip_doesNotPromptOnLoad() throws {
         let src = try source("Meeshy/Features/Main/Components/RecentMediaStrip.swift")
-        let fn = try body(from: "func load(limit: Int = 40) {", to: "func requestAccess()", in: src)
+        let fn = try body(from: "func load(limit: Int", to: "func requestAccess()", in: src)
 
         XCTAssertFalse(
             fn.contains("requestAuthorization"),
@@ -380,7 +398,12 @@ final class PermissionGateSourceGuardTests: XCTestCase {
         // fichier qui annonçait une extension de `FeedView`.
         let src = try source("Meeshy/Features/Main/Views/FeedComposerSheet.swift")
         let publish = try body(from: "private func publishPost()", to: "// MARK:", in: src)
-        XCTAssertTrue(publish.contains("location: pendingPlace"),
+        // Le lieu est CAPTURÉ avant `onDismiss()` (la feuille est démontée
+        // aussitôt, une lecture tardive depuis la Task ne trouverait plus
+        // rien) : c'est la capture qui part, jamais le `@State` relu.
+        XCTAssertTrue(publish.contains("let capturedPlace = pendingPlace"),
+                      "publishPost doit capturer la position avant de refermer la feuille.")
+        XCTAssertTrue(publish.contains("location: capturedPlace"),
                       "publishPost perd la position dans sa branche sans fichier.")
 
         XCTAssertTrue(publish.contains("pendingPlace != nil"),
@@ -615,7 +638,8 @@ final class PermissionGateSourceGuardTests: XCTestCase {
 
     // MARK: - Mot de passe
 
-    /// Sans `.newPassword`, iOS ne propose ni mot de passe fort ni — surtout —
+    /// Sans `.newPassword` — que `MeeshyPasswordField` pose pour le rôle `.new`
+    /// (#8054) —, iOS ne propose ni mot de passe fort ni — surtout —
     /// l'enregistrement au trousseau en fin d'inscription.
     ///
     /// **UN seul site depuis #5218**, contre deux auparavant : la confirmation
@@ -629,15 +653,26 @@ final class PermissionGateSourceGuardTests: XCTestCase {
     /// garde vérifie donc qu'un identifiant est déclaré, sans imposer lequel —
     /// l'imposer reviendrait à exiger le retour d'un champ supprimé.
     func test_signupPasswordFields_optIntoKeychainSave() throws {
-        let src = try source("Meeshy/Features/Auth/Signup/SignupView.swift")
+        let src = try signupScreenSource()
         XCTAssertEqual(
-            src.components(separatedBy: ".textContentType(.newPassword)").count - 1, 1,
-            "Une seule saisie de mot de passe, et elle doit être `.newPassword`."
+            src.components(separatedBy: "role: .new").count - 1, 1,
+            "Une seule saisie de mot de passe, et elle doit être `.newPassword` (`MeeshyPasswordField` rôle `.new`, #8054)."
         )
         XCTAssertTrue(
             src.contains(".textContentType(.emailAddress)") || src.contains(".textContentType(.username)"),
             "iOS a besoin de l'identifiant pour savoir quoi enregistrer avec le mot de passe."
         )
+    }
+
+    /// `fieldBlock` posait `.accessibilityLabel(label)` sur tout son contenu :
+    /// l'œil du mot de passe se lisait « Mot de passe, Masqué » au lieu de
+    /// « Afficher le mot de passe » (mesuré au simulateur, #8054). Le champ de
+    /// mot de passe se libelle LUI-MÊME, et le bloc ne l'écrase pas.
+    func test_signupPasswordField_keepsTheEyeButtonAccessibilityLabel() throws {
+        let src = try signupScreenSource()
+        let block = try XCTUnwrap(src.range(of: "var passwordField: some View").map { String(src[$0.lowerBound...].prefix(1200)) })
+        XCTAssertTrue(block.contains("labelsContent: false"), "Le bloc ne doit pas écraser le libellé de l'œil.")
+        XCTAssertTrue(block.contains("accessibilityLabel:"), "Le champ porte son propre libellé VoiceOver.")
     }
 
     /// `webcredentials:` est ce qui associe l'app au domaine dans le trousseau

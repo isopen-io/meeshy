@@ -104,6 +104,79 @@ final class RiverConversationMappingTests: XCTestCase {
         XCTAssertEqual(bob?.layout, geometry.layout)
     }
 
+    // MARK: - #8283 — la citation d'un média montre son aperçu
+
+    private func quoteContent(_ reference: ReplyReference) -> RiverBubbleContent? {
+        var reply = message("m2", sender: "bob", name: "Bob", minutes: 1, replyTo: "m1")
+        reply.replyTo = reference
+        let messages = [message("m1", sender: "alice", name: "Alice", minutes: 0), reply]
+        let geometry = RiverLaneResolver.resolveRiverLanes(RiverConversationMapping.lanesInput(messages: messages, viewerId: "me"))
+        return RiverConversationMapping.contents(
+            geometry: geometry, messages: messages, viewerId: "me",
+            text: { $0.content }, time: { _ in "12:45" }
+        ).first { $0.bubble.messageId == "m2" }
+    }
+
+    func test_contents_quotedVideoWithoutThumbnail_carriesThePosterFace_andTheReferenceToOpen() {
+        let reference = ReplyReference(messageId: "m1", authorName: "Alice", previewText: "",
+                                       attachmentType: "video/mp4", attachmentFileUrl: "https://cdn.meeshy.me/v.mp4")
+        let media = quoteContent(reference)?.replyPreview?.media
+        XCTAssertEqual(media?.face, .videoPoster, "la Rivière montre le MÊME poster que Bulles, Focal et Script")
+        XCTAssertEqual(media?.reference.attachmentFileUrl, "https://cdn.meeshy.me/v.mp4",
+                       "la zone média remet au plein écran la citation qui sait reconstruire la pièce")
+    }
+
+    func test_contents_quotedVoice_carriesTheAudioFace() {
+        let reference = ReplyReference(messageId: "m1", authorName: "Alice", previewText: "", attachmentType: "audio/m4a")
+        XCTAssertEqual(quoteContent(reference)?.replyPreview?.media?.face, .audio)
+    }
+
+    func test_contents_quotedProtectedMedia_carriesNoFace() {
+        let reference = ReplyReference(messageId: "m1", authorName: "Alice", previewText: "",
+                                       attachmentType: "video/mp4", attachmentThumbnailUrl: "https://cdn.meeshy.me/t.jpg",
+                                       attachmentFileUrl: "https://cdn.meeshy.me/v.mp4", attachmentIsProtected: true)
+        let preview = quoteContent(reference)?.replyPreview
+        XCTAssertNotNil(preview, "la citation reste — seul son aperçu disparaît")
+        XCTAssertNil(preview?.media, "un média protégé n'a ni aperçu ni ouverture, dans la Rivière comme ailleurs")
+    }
+
+    // MARK: - #8389 — toucher un message flouté le révèle sur place en Rivière
+
+    private func contents(of messages: [MeeshyMessage]) -> [RiverBubbleContent] {
+        let geometry = RiverLaneResolver.resolveRiverLanes(RiverConversationMapping.lanesInput(messages: messages, viewerId: "me"))
+        return RiverConversationMapping.contents(geometry: geometry, messages: messages, viewerId: "me",
+                                                 text: { $0.content }, time: { _ in "12:45" })
+    }
+
+    private func photo(_ id: String, messageId: String) -> MeeshyMessageAttachment {
+        MeeshyMessageAttachment(id: id, messageId: messageId, fileName: "p.jpg", mimeType: "image/jpeg",
+                                fileUrl: "https://staging.meeshy.me/p.jpg", isBlurred: true)
+    }
+
+    func test_contents_blurredPhotoMessage_firstTapRevealsInPlace_nextTapOpensThePhoto() {
+        var blurred = message("m1", sender: "bob", minutes: 0)
+        blurred.attachments = [photo("p1", messageId: "m1"), photo("p2", messageId: "m1")]
+        blurred.effects.flags.insert(.blurred)
+        let content = contents(of: [blurred]).first
+        XCTAssertEqual(content?.protectedTap, .revealInPlace, "le premier toucher lève le voile, jamais le plein écran")
+        XCTAssertEqual(content?.tapAfterReveal, .openFullscreen(photo("p1", messageId: "m1")),
+                       "la Rivière ne rend pas le média : le toucher suivant l'ouvre")
+    }
+
+    func test_contents_blurredTextMessage_tapRevealsInPlace() {
+        var blurred = message("m1", sender: "bob", minutes: 0)
+        blurred.effects.flags.insert(.blurred)
+        let content = contents(of: [blurred]).first
+        XCTAssertEqual(content?.protectedTap, .revealInPlace)
+        XCTAssertEqual(content?.tapAfterReveal, ProtectedContentTap.none)
+    }
+
+    func test_contents_unprotectedMessage_tapIsNone() {
+        let content = contents(of: [message("m1", sender: "bob", minutes: 0)]).first
+        XCTAssertEqual(content?.protectedTap, ProtectedContentTap.none)
+        XCTAssertEqual(content?.tapAfterReveal, ProtectedContentTap.none)
+    }
+
     func test_initialCursor_isTheMostRecentBubble_orTheReadersShoreWhenEmpty() {
         let messages = [message("m1", sender: "alice", minutes: 0), message("m2", sender: "bob", minutes: 1), message("m3", sender: "alice", minutes: 2)]
         let geometry = RiverLaneResolver.resolveRiverLanes(RiverConversationMapping.lanesInput(messages: messages, viewerId: "me"))

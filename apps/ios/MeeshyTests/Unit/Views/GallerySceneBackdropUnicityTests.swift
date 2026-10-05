@@ -170,7 +170,10 @@ final class GallerySceneBackdropUnicityTests: XCTestCase {
         // vit dans `SceneCard`, le composant unique que cette page et le
         // lecteur de stories montent tous deux. La page ne PEUT donc plus
         // peindre d'office — elle ne peint plus du tout.
-        XCTAssertTrue(suite.contains("SceneCard(layout: stage.layout"),
+        // #8598 — la carte est posée au cadre de RÉFÉRENCE (la loi en plein
+        // cadre) et amenée au cadre de l'état par une échelle : c'est
+        // toujours LA carte, aux cotes de LA loi.
+        XCTAssertTrue(suite.contains("SceneCard(layout: reference.layout"),
                       "la page monte LA carte de scène, seul peintre du hors-champ d'une scène")
         XCTAssertFalse(suite.contains("SceneBackdropView("),
                        "la page ne peint plus son fond elle-même : deux assemblages avaient divergé")

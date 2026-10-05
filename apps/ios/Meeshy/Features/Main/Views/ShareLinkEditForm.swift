@@ -123,7 +123,7 @@ struct ShareLinkEditForm: View {
                     toggleLanguage(code)
                 } label: {
                     Text(verbatim: LanguageData.autonym(for: code))
-                        .font(MeeshyFont.relative(14, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
                         .foregroundColor(selected ? .white : (isDark ? MeeshyColors.indigo100 : MeeshyColors.indigo900))
@@ -169,17 +169,17 @@ struct ShareLinkEditForm: View {
     }
 
     private func labeledField<Field: View>(_ label: String, @ViewBuilder field: () -> Field) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
             Text(label)
                 .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                 .foregroundColor(isDark ? MeeshyColors.indigo200 : MeeshyColors.neutral500)
                 .accessibilityHidden(true)
             field()
                 .padding(.horizontal, MeeshySpacing.md)
-                .padding(.vertical, 10)
+                .padding(.vertical, MeeshySpacing.smPlus)
                 .background(
                     RoundedRectangle(cornerRadius: MeeshyRadius.sm, style: .continuous)
-                        .fill(isDark ? MeeshyColors.indigo900.opacity(0.55) : MeeshyColors.indigo50)
+                        .fill(isDark ? MeeshyColors.indigo900.opacity(MeeshyOpacity.strong) : MeeshyColors.indigo50)
                 )
         }
     }
@@ -205,7 +205,7 @@ struct ShareLinkEditForm: View {
     }
 
     private var actions: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: MeeshySpacing.smPlus) {
             Button(action: onSave) {
                 ZStack {
                     Text(ShareLinkDetailCopy.save).opacity(isSaving ? 0 : 1)
@@ -217,14 +217,14 @@ struct ShareLinkEditForm: View {
                 .background(
                     LinearGradient(colors: [MeeshyColors.indigo500, MeeshyColors.purple600], startPoint: .topLeading, endPoint: .bottomTrailing)
                 )
-                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lgPlus, style: .continuous))
                 .opacity(canSave || isSaving ? 1 : 0.45)
             }
             .buttonStyle(.plain)
             .disabled(!canSave)
             .accessibilityIdentifier("share-link-save")
 
-            HStack(spacing: 10) {
+            HStack(spacing: MeeshySpacing.smPlus) {
                 secondaryButton(isActive ? ShareLinkDetailCopy.disable : ShareLinkDetailCopy.activate,
                                 color: isActive ? MeeshyColors.warning : MeeshyColors.successDeep,
                                 action: onToggleActive)
@@ -242,7 +242,7 @@ struct ShareLinkEditForm: View {
                 .frame(maxWidth: .infinity, minHeight: 48)
                 .overlay(
                     RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous)
-                        .stroke(color.opacity(0.6), lineWidth: 1.5)
+                        .stroke(color.opacity(0.6), lineWidth: MeeshyBorder.emphasis)
                 )
                 .contentShape(Rectangle())
         }

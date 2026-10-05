@@ -3,6 +3,8 @@ import SwiftUI
 import Combine
 import PhotosUI
 import AVFoundation
+import Contacts
+import os
 import MeeshySDK
 import MeeshyUI
 
@@ -175,6 +177,7 @@ extension ConversationView {
             onPhotoLibrary: { composerState.showPhotoPicker = true },
             onCamera: { composerState.showCamera = true },
             onFilePicker: { composerState.showFilePicker = true },
+            onContactPicker: { composerState.showContactPicker = true },
             onShowAttachments: {
                 // Carrousel de pièces jointes ouvert → ferme le panneau emoji
                 // pour ne jamais empiler deux surfaces d'entrée sous la barre.
@@ -204,9 +207,9 @@ extension ConversationView {
             onRecentMediaEdit: { pick in editRecentMediaPick(pick) },
             onPhotoLibraryPreselecting: { ids in openPhotoLibraryPreselecting(ids) },
             injectedEmoji: $composerState.emojiToInject,
-            ephemeralDuration: $viewModel.ephemeralDuration,
+            ephemeralChoice: $viewModel.composerEphemeralChoice,
             hideEphemeral: composerState.editingMessageId != nil,
-            isBlurEnabled: $viewModel.isBlurEnabled,
+            isBlurEnabled: $viewModel.composerBlurEnabled,
             hideBlur: composerState.editingMessageId != nil,
             // #7472 — la vue unique s'arme d'un TAP, à côté du flou, et se
             // cache dans les mêmes cas que lui : en ÉDITION, où la protection
@@ -216,18 +219,24 @@ extension ConversationView {
             // `forceHideAttachment` est passé plus haut (sa propriété est
             // déclarée avant `selectedLanguage`, l'init memberwise l'exige à
             // cette position).
-            isViewOnceEnabled: $viewModel.isViewOnceEnabled,
+            isViewOnceEnabled: $viewModel.composerViewOnceEnabled,
             hideViewOnce: composerState.editingMessageId != nil,
+            // #8557 — la citation impose son flou et son éphémère, verrouillés.
+            imposedProtection: composerState.editingMessageId == nil ? viewModel.replyImposedProtection : .none,
             pendingEffects: $viewModel.pendingEffects,
             hideEffects: composerState.editingMessageId != nil,
             // Porte de focus (#6003) : une réponse lève le clavier sans tap.
             focusTrigger: $composerState.focusRequested
             )
         }
-        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.ephemeralDuration != nil)
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.ephemeralChoice != nil)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.isBlurEnabled)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.isViewOnceEnabled)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.pendingEffects.hasAnyEffect)
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.armedReplyContagion)
+        .adaptiveOnChange(of: outgoingReplyRoute.replyToId, initial: true) { _, replyToId in
+            viewModel.armReplyContagion(quoting: replyToId)
+        }
     }
 
     /// 2e maillon de la chaîne (voir garde anti-débordement sur `themedComposer`) :
@@ -241,26 +250,15 @@ extension ConversationView {
         .fileImporter(isPresented: $composerState.showFilePicker, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
             handleFileImport(result)
         }
-        .fullScreenCover(isPresented: $composerState.showCamera) {
-            CameraView { result in
-                switch result {
-                // **Le CINQUIÈME consommateur** de `CameraResult.photo`, élargi
-                // le 2026-09-04 pour porter les octets d'origine — donc l'EXIF
-                // (#4080). Ce chemin est celui de la CONVERSATION, qui ré-encode
-                // déjà l'image avant l'envoi : les octets ne lui servent à rien,
-                // et il les jette explicitement plutôt que de faire croire
-                // qu'il les préserve.
-                //
-                // Il m'avait échappé : `git grep` sur `.photo(` rendait quatre
-                // sites, et seul le COMPILATEUR compte les consommateurs d'un
-                // membre élargi.
-                case .photo(let image, _):
-                    handleCameraCapture(image)
-                case .video(let url):
-                    handleCameraVideo(url)
-                }
+        // **La caméra de la barre prend EN PLEIN ÉCRAN, hors de toute scène**
+        // (directive porteur 2026-10-04) : le viseur du composeur servi seul,
+        // le même que le fil, le statut et la page blanche. La prise rejoint
+        // le message en attente ; la scène reste à un geste, par « Éditer » sur
+        // la pièce posée (#9126).
+        .conversationCover(isPresented: $composerState.showCamera) {
+            ComposerViewfinder { result in
+                stageSceneMedia(ComposerReturnedMedia(capture: result))
             }
-            .ignoresSafeArea()
         }
         .sheet(isPresented: $composerState.showLocationPicker) {
             LocationPickerView(accentColor: accentColor) { place in
@@ -288,36 +286,18 @@ extension ConversationView {
     ///
     /// La feuille se FERME au choix : dans une conversation un sticker est un
     /// message à part entière, pas une décoration qu'on empile sur une scène.
-    /// Les trois injecteurs sont ceux du composer de story
-    /// (`MeeshyComposerHost+Surfaces`) — sans `storyStickerLibraryProvided`,
-    /// l'onglet « Mes stickers » n'est pas rendu ; sans `storyPasteProvided`,
-    /// sa capsule « Coller » non plus ; sans `stickerNearbyPlacesProvided`,
-    /// l'onglet « Lieu » est absent (loi 4, jamais grisé) ; sans
-    /// `storyLocationPickerProvided`, la carte l'est aussi (#7922).
+    ///
+    /// **La feuille est celle de tout le produit** (#9189) : `MeeshyStickerSheet`
+    /// porte les injecteurs et les détentes, une fois. La conversation ne dit
+    /// que sa destination — ENVOYER — et que ses gabarits partent contournés
+    /// de blanc, comme Mee (#9060).
     private func composerStickerSheet(_ content: AnyView) -> AnyView {
         AnyView(content
         .sheet(isPresented: $composerState.showStickerPicker) {
-            StickerPickerView(onStickerSelected: { emoji in
+            MeeshyStickerSheet(destination: StickerSheetDestination(diesCut: true) { choice in
                 composerState.showStickerPicker = false
-                sendEmojiSticker(emoji)
-            }, onLibraryStickerSelected: { item in
-                composerState.showStickerPicker = false
-                sendLibrarySticker(item)
-            }, onTemplateSelected: { gabarit, emplacements in
-                composerState.showStickerPicker = false
-                sendTemplateSticker(gabarit, slots: emplacements)
-            }, onLocationTemplateSelected: { lieu, gabarit in
-                composerState.showStickerPicker = false
-                sendLocationTemplateSticker(place: lieu, template: gabarit)
-            })
-            .storyPasteProvided()
-            .storyStickerLibraryProvided()
-            .stickerNearbyPlacesProvided()
-            // « Ma position… » ouvre la carte : adresse, lieu, monument
-            // nommé (#7922). Sans ce fournisseur, la puce n'est pas rendue.
-            .storyLocationPickerProvided(accentColor: accentColor)
-            .presentationDetents([.medium, .large])
-            .presentationDragIndicator(.visible)
+                sendStickerChoice(choice)
+            }, accentColor: accentColor)
         })
     }
 
@@ -326,108 +306,48 @@ extension ConversationView {
     /// le plus dense en types de closures distincts (un par éditeur média).
     private func composerEditingCovers(_ content: AnyView) -> AnyView {
         AnyView(content
-        // C. Tap pending image → MeeshyImageEditorView
-        //
-        // Bug fix (2026-07-09): `isPresented` used to be driven solely by
-        // `editingPendingAttachmentId != nil` while the content required a
-        // SEPARATE `pendingThumbnails[id]` lookup to succeed. Whenever that
-        // dictionary lookup missed — a since-removed attachment, a thumbnail
-        // that failed to generate, any race between the tap and the
-        // dictionaries settling — the cover still presented (isPresented was
-        // already true) but its content body evaluated to nothing, which
-        // reads to the user as the composer "crashing" on tap: a full-screen
-        // cover appears with no way to dismiss it from inside. The two must
-        // share one source of truth so the cover can never present empty.
-        .fullScreenCover(isPresented: Binding(
-            get: { scrollState.editingPendingAttachmentId != nil },
-            set: { if !$0 { scrollState.editingPendingAttachmentId = nil } }
-        )) {
-            if let id = scrollState.editingPendingAttachmentId,
-               let thumb = composerState.pendingThumbnails[id] {
-                MeeshyImageEditorView(image: thumb, context: .message, accentColor: accentColor) { editedImage in
-                    composerState.pendingThumbnails[id] = editedImage
-                    Task {
-                        let result = await MediaCompressor.shared.compressImage(editedImage)
-                        let fileName = "edited_\(UUID().uuidString).\(result.fileExtension)"
-                        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
-                        try? result.data.write(to: tempURL)
-                        await MainActor.run {
-                            if let oldURL = composerState.pendingMediaFiles[id] {
-                                try? FileManager.default.removeItem(at: oldURL)
-                            }
-                            composerState.pendingMediaFiles[id] = tempURL
-                            if let idx = composerState.pendingAttachments.firstIndex(where: { $0.id == id }) {
-                                composerState.pendingAttachments[idx] = MessageAttachment(
-                                    id: id, fileName: fileName, originalName: fileName,
-                                    mimeType: result.mimeType, fileSize: result.data.count,
-                                    fileUrl: tempURL.absoluteString,
-                                    width: Int(editedImage.size.width),
-                                    height: Int(editedImage.size.height),
-                                    thumbnailColor: accentColor
-                                )
-                            }
-                            scrollState.editingPendingAttachmentId = nil
-                        }
-                    }
-                }
-            } else {
-                // The thumbnail vanished out from under the presentation
-                // (attachment removed mid-race, or generation never
-                // succeeded) — never present a silently-empty cover; give the
-                // user a dismissable state instead.
-                attachmentPreviewUnavailableFallback { scrollState.editingPendingAttachmentId = nil }
-            }
-        }
-        // D. Tap pending video → VideoPreviewView
-        .fullScreenCover(isPresented: Binding(
-            get: { scrollState.videoToEdit != nil },
-            set: { if !$0 { scrollState.videoToEdit = nil } }
-        )) {
-            if let url = scrollState.videoToEdit {
-                MeeshyVideoEditorView(
-                    url: url,
-                    context: .message,
-                    accentColor: accentColor,
-                    onComplete: { _ in scrollState.videoToEdit = nil },
-                    onCancel: { scrollState.videoToEdit = nil }
-                )
-            }
+        // C. « Éditer » sur une pièce en attente (image ou vidéo) → TOUTES les
+        // pièces du message en scènes, ouvertes sur la touchée (#9126) ;
+        // « Terminé » rend chaque scène retouchée à SA pièce, en place. La
+        // série est préparée AVANT la présentation : la couverture ne peut pas
+        // s'ouvrir vide.
+        .conversationCover(item: Binding(
+            get: { scrollState.retouchSeries },
+            set: { scrollState.retouchSeries = $0 }
+        )) { serie in
+            ConversationRetouchSeriesEditor(series: serie, onDone: { rendues in
+                replacePendingWithRetouchedPieces(rendues)
+            }, onCancel: { scrollState.retouchSeries = nil })
         }
         // D2. "Éditer" from the recent-media strip → the editor opens BEFORE
         // staging; the edited output goes through the same preparation pipeline
         // as a camera capture (the pre-edit original is never staged).
-        .fullScreenCover(isPresented: Binding(
+        .conversationCover(isPresented: Binding(
             get: { scrollState.recentImageToEdit != nil },
             set: { if !$0 { scrollState.recentImageToEdit = nil } }
         )) {
             if let image = scrollState.recentImageToEdit {
-                MeeshyImageEditorView(image: image, context: .message, accentColor: accentColor, onAccept: { edited in
+                ConversationImageSceneEditor(image: image, staged: false, onDone: { media in
                     scrollState.recentImageToEdit = nil
-                    handleCameraCapture(edited)
+                    stageSceneMedia(media)
                 }, onCancel: {
                     scrollState.recentImageToEdit = nil
                 })
             }
         }
-        .fullScreenCover(isPresented: Binding(
+        .conversationCover(isPresented: Binding(
             get: { scrollState.recentVideoToEdit != nil },
             set: { if !$0 { scrollState.recentVideoToEdit = nil } }
         )) {
             if let url = scrollState.recentVideoToEdit {
-                MeeshyVideoEditorView(
-                    url: url,
-                    context: .message,
-                    accentColor: accentColor,
-                    onComplete: { result in
-                        scrollState.recentVideoToEdit = nil
-                        handleCameraVideo(result.url)
-                    },
-                    onCancel: { scrollState.recentVideoToEdit = nil }
-                )
+                ConversationVideoSceneEditor(url: url, staged: false, onDone: { media in
+                    scrollState.recentVideoToEdit = nil
+                    stageSceneMedia(media)
+                }, onCancel: { scrollState.recentVideoToEdit = nil })
             }
         }
         // E. Audio → MeeshyAudioEditorView
-        .fullScreenCover(item: Binding(
+        .conversationCover(item: Binding(
             get: { scrollState.audioToEdit },
             set: { scrollState.audioToEdit = $0 }
         )) { target in
@@ -493,14 +413,25 @@ extension ConversationView {
 
     // MARK: - Contact Selection Handler
 
-    func handleContactSelection(_ contact: SharedContact) {
-        // For now, send the contact info as a text message
-        var parts: [String] = [contact.fullName]
-        for phone in contact.phoneNumbers { parts.append(phone) }
-        for email in contact.emails { parts.append(email) }
-        let contactText = parts.joined(separator: "\n")
-
-        composerText.text = contactText
-        HapticFeedback.success()
+    /// Le contact choisi part en PIÈCE JOINTE vCard (#8101) — plus jamais en
+    /// texte collé. Il rejoint le tiroir par la même voie qu'un fichier
+    /// importé : bulle optimiste, brouillon durable et envoi inchangés.
+    func handleContactSelection(_ contact: CNContact) {
+        guard let export = ContactCardExporter.export(contact) else {
+            FeedbackToastManager.shared.showError(
+                String(localized: "contact-card.export-failed", defaultValue: "Ce contact ne peut pas être partagé", bundle: .main)
+            )
+            return
+        }
+        do {
+            let url = try ContactCardExporter.writeTemporaryFile(export)
+            appendPendingFileAttachment(tempURL: url, fileName: export.fileName, mimeType: ContactCardMime.mimeType, fileSize: export.data.count)
+            HapticFeedback.light()
+        } catch {
+            Logger.messages.error("Contact card export failed: \(error.localizedDescription, privacy: .public)")
+            FeedbackToastManager.shared.showError(
+                String(localized: "contact-card.export-failed", defaultValue: "Ce contact ne peut pas être partagé", bundle: .main)
+            )
+        }
     }
 }

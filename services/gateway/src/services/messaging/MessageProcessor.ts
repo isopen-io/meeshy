@@ -5,8 +5,8 @@
 
 import * as path from 'path';
 import { composeMessageEffectFlags, ephemeralSendFields } from './ephemeralSendFields';
-import { PrismaClient, Message } from '@meeshy/shared/prisma/client';
-import type { Prisma } from '@meeshy/shared/prisma/client';
+import { declaredReplyProtection } from './replyProtectionContagion';
+import { PrismaClient, Message, type Prisma } from '@meeshy/shared/prisma/client';
 import { TrackingLinkService } from '../TrackingLinkService';
 import { processExplicitLinks } from './messageLinks';
 import { MentionService } from '../MentionService';
@@ -78,10 +78,10 @@ export class MessageProcessor {
   }
 
   /**
-   * Traite les liens du contenu selon les règles suivantes :
-   * - Règle 1 : Markdown [texte](url) → lien normal (pas de tracking)
-   * - Règle 2 : URLs brutes → aucun tracking automatique (cf. `buildRawUrlTrackingLinks`)
-   * - Règle 3 : [[url]] → force le tracking → m+token
+   * Traite les liens du contenu selon les règles suivantes (#9093) :
+   * - Règle 1 : Markdown [texte](url) → contenu intact, suivi par la carte (cf. `buildRawUrlTrackingLinks`)
+   * - Règle 2 : URLs brutes → contenu intact, suivies par la carte (cf. `buildRawUrlTrackingLinks`)
+   * - Règle 3 : [[url]] → contenu intact, AUCUN suivi
    * - Règle 4 : <url> → force le tracking → m+token
    *
    * Le corps de ces quatre étapes vivait ICI, en second exemplaire complet de
@@ -277,7 +277,7 @@ export class MessageProcessor {
    * existing record's `translations` blob is empty (translator was down on
    * the first attempt).
    */
-  async saveMessage(data: {
+  async saveMessage(request: {
     conversationId: string;
     senderId: string;
     content: string;
@@ -313,6 +313,7 @@ export class MessageProcessor {
     /** Pièce NOMMÉE citée (#6164) — même doctrine : admise par `admitAttachmentReply`, forme gardée par `parseAttachmentReplyTo`. */
     attachmentReplyTo?: unknown;
   }): Promise<Message> {
+    const data = await declaredReplyProtection(this.prisma, request);
     const corr: Record<string, any> = {
       clientMessageId: data.clientMessageId,
       conversationId: data.conversationId,
@@ -424,7 +425,7 @@ export class MessageProcessor {
       encryptionMetadata: encryptionContext.encryptionMetadata,
       isBlurred: data.isBlurred || false,
       // #7451 — la DURÉE s'enregistre ; `expiresAt` devient interne.
-      ...ephemeralSendFields({ ephemeralDuration: data.ephemeralDuration, expiresAt: data.expiresAt, isViewOnce: data.isViewOnce, now: new Date() }),
+      ...ephemeralSendFields({ ephemeralDuration: data.ephemeralDuration, expiresAt: data.expiresAt, isViewOnce: data.isViewOnce, effectFlags, now: new Date() }),
       effectFlags,
       isViewOnce: data.isViewOnce || false,
       maxViewOnceCount: data.maxViewOnceCount ?? null,

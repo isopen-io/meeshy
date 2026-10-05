@@ -39,6 +39,32 @@ struct ComposerTopBar: View {
 
     let onClose: () -> Void
 
+    /// **La teinte du verre de la croix** (#8370). Sur la scène plein écran, la
+    /// barre flotte sur la scène elle-même : nu, le verre d'iOS 26 vire au clair
+    /// sur une photo claire et la croix blanche disparaît (mesuré au simulateur
+    /// le 2026-09-27). Teinté du plateau, il reste sombre partout.
+    let plateauTint: Color
+
+    /// Une pastille posée avant le `⋯` — le `(+)` d'une nouvelle scène depuis
+    /// #8713 (l'éclair « Animé » y vivait, #8415). `nil` ⇒ rien.
+    var trailingAccessory: AnyView? = nil
+    /// La marge de bord : 16 pt sur téléphone, celle de la maquette iPad/Mac
+    /// (`ComposerRailGeometry.roomyMargin`) sur grand écran.
+    var edgeMargin: CGFloat = 16
+
+    static let topPadding: CGFloat = 12
+
+    /// Le haut de la rangée de la Dynamic Island : la barre de la scène plein
+    /// écran monte jusque-là (`ComposerSceneSurface.chromeLift`).
+    static let islandRowTop: CGFloat = 4
+    /// La part de la zone sûre que la barre remonte : la moitié la pose juste
+    /// sous la Dynamic Island (retour porteur 2026-09-28, « redescendre »).
+    static let liftShare: CGFloat = 0.5
+
+    /// **Ce que la barre occupe sous la zone sûre** — lu par la scène plein
+    /// écran (#8370) pour se poser JUSTE SOUS la croix, jamais dessous.
+    static var height: CGFloat { topPadding + ComposerControlMetrics.visualDiameter }
+
     // **L'historique a quitté cette barre le 2026-08-30.** Il y lisait mal :
     // pendant qu'un outil est ouvert, « Annuler » se comprend comme « fermer
     // l'outil » et non « défaire le dernier geste » — le mot dit les deux en
@@ -47,7 +73,7 @@ struct ComposerTopBar: View {
     // l'envoi : rien autour de lui ne se ferme.
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             Button(action: onClose) {
                 Image(systemName: "xmark")
                     .font(.system(size: 13, weight: .bold))
@@ -59,15 +85,16 @@ struct ComposerTopBar: View {
                     .foregroundColor(MeeshyColors.textPrimary(isDark: true))
                     .frame(width: ComposerControlMetrics.visualDiameter,
                            height: ComposerControlMetrics.visualDiameter)
-                    .adaptiveGlass(in: Circle())
+                    .adaptiveLiquidGlass(in: Circle(), tint: plateauTint.opacity(0.55), interactive: true)
             }
             .accessibilityLabel(Text(ComposerDocumentCopy.close))
             slideRail
             Spacer(minLength: 0)
+            if let trailingAccessory { trailingAccessory.fixedSize() }
             if let overflowMenu { overflowMenu.fixedSize() }
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 12)
+        .padding(.horizontal, edgeMargin)
+        .padding(.top, Self.topPadding)
     }
 
 
@@ -87,10 +114,12 @@ struct ComposerTopBar: View {
     /// scène existait alors sans tuile. Le doc-comment qui vivait ici l'écrivait
     /// comme une définition — c'est ce qui l'a rendue invisible.
     ///
-    /// **Aucun `＋` ici, et c'est une RÉPONSE.** La planche en dessine un ; la
-    /// création d'une scène est le geste du rail DROIT (§ 2 bis), et deux portes
-    /// pour un seul geste sont le motif que « une porte n'a pas de jumelle »
-    /// interdit.
+    /// **Le `(+)` d'une nouvelle scène vit dans cette barre depuis #8713**
+    /// (directive porteur 2026-09-29 : « mets à la place [de l'éclair] le bouton
+    /// (+) pour créer une nouvelle scène »), posé par l'hôte en
+    /// `trailingAccessory`. Il a QUITTÉ le rail droit dans le même geste : deux
+    /// portes pour un seul geste sont le motif que « une porte n'a pas de
+    /// jumelle » interdit.
     @ViewBuilder
     private var slideRail: some View {
         if let slideRailSlot {

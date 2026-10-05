@@ -93,24 +93,37 @@ final class ConversationInfoSheetLiveConversationTests: XCTestCase {
 
     // MARK: - 2. `ConversationView` CAPTURE la mise à jour
 
+    /// #8103 — le montage de la feuille a quitté `ConversationView.body` pour
+    /// `ConversationInfoSheetLayer` (`ConversationView+InfoSheet.swift`). La
+    /// garde suit le MONTAGE : l'hôte remet la conversation VIVANTE et
+    /// l'écrivain de l'override au calque, qui les remet tels quels à la feuille.
     func test_conversationView_capturesTheUpdate_whenItMountsTheInfoSheet() throws {
         let view = try code(conversationViewPath)
+        let layer = try code(infoSheetLayerPath)
 
+        let nearLayer = try vicinity(after: "ConversationInfoSheetLayer(", in: view, span: 400)
         XCTAssertTrue(
-            view.contains("if let conv = liveConversation {"),
+            nearLayer.contains("conversation: liveConversation"),
             "La feuille d'info doit être montée sur la conversation VIVANTE : montée sur la valeur " +
             "figée, elle rouvrirait sur le titre d'avant l'édition qu'elle vient elle-même de faire " +
             "enregistrer."
         )
-
-        let nearSheet = try vicinity(after: "ConversationInfoSheet(", in: view, span: 220)
         XCTAssertTrue(
-            nearSheet.contains("onConversationUpdated: { conversationOverride = $0 }"),
+            nearLayer.contains("onConversationUpdated: { conversationOverride = $0 }"),
             "Le site de montage doit stocker la conversation confirmée dans `conversationOverride` " +
             "— c'est le seul écrivain de cet état, et le seul moment où le serveur dit ce que " +
             "l'écran doit désormais afficher."
         )
+
+        let nearSheet = try vicinity(after: "ConversationInfoSheet(", in: layer, span: 300)
+        XCTAssertTrue(layer.contains("if let conversation {"), "Le calque monte la feuille sur la conversation qu'on lui remet.")
+        XCTAssertTrue(
+            nearSheet.contains("onConversationUpdated: onConversationUpdated"),
+            "Le calque remet l'écrivain de l'override à la feuille, tel quel."
+        )
     }
+
+    private var infoSheetLayerPath: String { "Features/Main/Views/ConversationView+InfoSheet.swift" }
 
     func test_conversationView_resolvesLiveConversation_overrideBeforeFrozenValue() throws {
         let view = try code(conversationViewPath)

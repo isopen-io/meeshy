@@ -9,18 +9,22 @@ import { VitePWA } from 'vite-plugin-pwa';
 
 import { INSTITUTIONAL_PATTERN } from './scripts/lib/institutional-routes.mjs';
 import { INLINE_INTERFACE_LANGUAGE_BOOTSTRAP } from './src/lib/inline-interface-language-bootstrap.js';
-import { INLINE_SCHEME_BOOTSTRAP } from './src/lib/inline-scheme-bootstrap.js';
+import { INLINE_APP_SCHEME_BOOTSTRAP } from './src/lib/inline-scheme-bootstrap.js';
 import { declaredBuildFlag } from './src/lib/build-flag';
+import { apiCacheIdentityPlugin } from './src/lib/net/api-cache-identity';
 import { API_RESPONSE_CACHE_PATTERN } from './src/lib/net/api-runtime-cache';
+import { EMAIL_TOKEN_NAVIGATIONS } from './src/lib/net/email-token-navigations';
 import { NETWORK_ONLY_NAVIGATIONS } from './src/lib/net/network-only-navigations';
+import { SHARE_TARGET } from './src/lib/share-incoming/share-target';
 import { SW_RUNTIME_CACHES } from './src/lib/sw-caches';
 
 /**
  * `index.html` ne porte plus le TEXTE du script d'amorçage du schéma, mais un
  * marqueur — voir son commentaire. Trois lecteurs (`index.html` via ce
  * greffon, `scripts/prerender-institutional.tsx`, `src/lib/scheme.ts`) importent
- * désormais la MÊME constante plutôt que de la recopier (#5588) : la clé et le
- * script ne peuvent plus diverger entre eux.
+ * désormais le MÊME module plutôt que de le recopier (#5588) : la clé et le
+ * script ne peuvent plus diverger entre eux. `index.html` reçoit la variante
+ * qui règle aussi la barre du navigateur (#7970).
  */
 const SCHEME_BOOTSTRAP_MARKER = '/*@INLINE_SCHEME_BOOTSTRAP@*/';
 
@@ -33,7 +37,7 @@ const inlineSchemeBootstrap = (): Plugin => ({
           "schéma ne serait plus injecté, et le premier rendu à froid basculerait de couleur (#5588).",
       );
     }
-    return html.replace(SCHEME_BOOTSTRAP_MARKER, INLINE_SCHEME_BOOTSTRAP);
+    return html.replace(SCHEME_BOOTSTRAP_MARKER, INLINE_APP_SCHEME_BOOTSTRAP);
   },
 });
 
@@ -257,9 +261,14 @@ const prerenderInstitutionalPages = (): Plugin => {
  *    le worker généré n'en avait AUCUN, pendant que la passerelle composait
  *    déjà toute la charge web (`PushNotificationService`, branche
  *    `platform === 'web'`). Une SEULE ligne l'accroche aux deux régimes :
- *    l'`importScripts` de la variante A, et son retrait de la coque.
+ *    l'`importScripts` de la variante A, et son retrait de la coque ;
+ *  - `sw-share-target.js` reçoit le `POST /share` du système (#8884) : une
+ *    image, une vidéo ou un lien partagé depuis une autre application arrive
+ *    sur la feuille d'envoi. Le `share_target` du manifeste (plus bas) l'y
+ *    adresse ; la coque Android reçoit le même partage par un intent, pas par
+ *    ce worker.
  */
-const SERVICE_WORKER_SCRIPTS = ['sw-institutional.js', 'sw-legacy-purge.js', 'sw-push.js'] as const;
+const SERVICE_WORKER_SCRIPTS = ['sw-institutional.js', 'sw-legacy-purge.js', 'sw-push.js', 'sw-share-target.js'] as const;
 
 /**
  * LES SCRIPTS DU SERVICE WORKER N'ENTRENT PAS DANS LA COQUE (#5604,
@@ -285,10 +294,92 @@ const dropServiceWorkerScripts = (): Plugin => ({
 });
 
 /**
+ * LES CAPTURES DE `/download` N'ENTRENT PAS DANS LA COQUE (#8801).
+ *
+ * `public/store-shots/` porte ~1,9 Mo de captures d'écran que seule la page
+ * `/download` du WEB affiche : dans l'APK et l'IPA, elles seraient du poids
+ * mort. La page les charge depuis l'origine publique quand `__SHELL__` est
+ * vrai (`routes/download.tsx`).
+ */
+const dropWebOnlyAssets = (): Plugin => ({
+  name: 'meeshy-drop-web-only-assets',
+  apply: 'build',
+  writeBundle(options) {
+    if (options.dir === undefined) return;
+    rmSync(join(options.dir, 'store-shots'), { recursive: true, force: true });
+  },
+});
+
+/**
  * LES SIX FABRIQUES DE FIXTURES — nommées ICI, lues par la règle d'élagage
  * (§ `build.rollupOptions.treeshake`, revue #5815).
  */
 const FIXTURE_MODULE = /\/src\/lib\/api\/fixtures[\w-]*\.ts$/;
+
+/**
+ * UN `.env` HÉRITÉ NE FAIT PLUS D'UN `vite build` UN BUILD DE DÉVELOPPEMENT
+ * (#9176).
+ *
+ * Le legacy Next.js a laissé, non suivi, `apps/web/.env` avec
+ * `NODE_ENV=development`. Pour Vite, c'est la manière DOCUMENTÉE de demander un
+ * build de développement : le bundle sortait en silence avec
+ * `import.meta.env.PROD` faux — sans service worker, avec `dev-harness` — et
+ * faussait chaque gate local qui lit un comportement de production (#9118).
+ *
+ * Seul le SHELL demande désormais un build de développement
+ * (`NODE_ENV=development vite build`). Un `NODE_ENV` venu d'un fichier est
+ * écarté AVANT que Vite ne lise ses fichiers : `loadEnv` ne recopie
+ * `NODE_ENV` dans `VITE_USER_NODE_ENV` que si cette dernière est absente, et
+ * une chaîne vide n'y bascule rien. Les `VITE_*` du fichier restent lus. Puis
+ * `configResolved` VÉRIFIE le résultat : si une version de Vite changeait ce
+ * mécanisme, le build échouerait plutôt que de repartir en silence.
+ */
+const ENV_FILE_NODE_ENV = /^\s*(?:export\s+)?NODE_ENV\s*=\s*["']?([^"'\s#]*)/gm;
+
+const declaredNodeEnv = (dir: string, name: string): string | undefined => {
+  const text = (() => {
+    try {
+      return readFileSync(join(dir, name), 'utf8');
+    } catch {
+      return undefined;
+    }
+  })();
+  return text === undefined ? undefined : [...text.matchAll(ENV_FILE_NODE_ENV)].at(-1)?.[1];
+};
+
+const productionBuildGuard = (): Plugin => {
+  const state: { shellAsksDevelopment: boolean } = { shellAsksDevelopment: false };
+  return {
+    name: 'meeshy-production-build-guard',
+    enforce: 'pre',
+    config(userConfig, { command, mode }) {
+      if (command !== 'build') return;
+      state.shellAsksDevelopment = process.env.NODE_ENV === 'development';
+      if (state.shellAsksDevelopment) return;
+      const envDir = resolve(userConfig.root ?? process.cwd(), typeof userConfig.envDir === 'string' ? userConfig.envDir : '');
+      const inherited = ['.env', '.env.local', `.env.${mode}`, `.env.${mode}.local`].filter(
+        (name) => declaredNodeEnv(envDir, name) === 'development',
+      );
+      if (inherited.length === 0) return;
+      process.env.VITE_USER_NODE_ENV = '';
+      console.warn(
+        `[meeshy] NODE_ENV=development ignoré dans ${inherited.map((name) => join(envDir, name)).join(', ')} : ` +
+          'ce build reste de PRODUCTION. Un build de développement se demande depuis le shell ' +
+          '(NODE_ENV=development vite build) ; le fichier, hérité du legacy Next.js, peut être supprimé.',
+      );
+    },
+    configResolved(config) {
+      if (config.command !== 'build' || config.isProduction || state.shellAsksDevelopment) return;
+      throw new Error(
+        `vite build produirait un build de DÉVELOPPEMENT (NODE_ENV=${process.env.NODE_ENV}) sans que le shell l'ait ` +
+          'demandé — un fichier .env le pose. Retirez NODE_ENV de ce fichier, ou lancez ' +
+          'NODE_ENV=development vite build si c’est voulu (#9176).',
+      );
+    },
+  };
+};
+
+const proxyTarget = process.env.MEESHY_PROXY_TARGET ?? 'https://gate.staging.meeshy.me';
 
 export default defineConfig({
   /**
@@ -350,6 +441,9 @@ export default defineConfig({
      */
     __FIXTURES__: JSON.stringify(declaredDataSource !== 'gateway'),
     __APP_VERSION__: JSON.stringify(appVersion),
+    /** La passerelle que le proxy de dev vise (#8287) — l'écran de connexion la
+     * montre EN DÉVELOPPEMENT seulement, comme le sélecteur iOS au simulateur. */
+    __API_PROXY_TARGET__: JSON.stringify(proxyTarget),
   },
   /**
    * LE PROXY DE DEV (#5605, staging) — DEV UNIQUEMENT, zéro octet dans `dist/`.
@@ -375,7 +469,7 @@ export default defineConfig({
   server: {
     proxy: {
       '/api/v1': {
-        target: process.env.MEESHY_PROXY_TARGET ?? 'https://gate.staging.meeshy.me',
+        target: proxyTarget,
         changeOrigin: true,
         configure: (proxy) => {
           proxy.on('proxyReq', (proxyReq) => proxyReq.removeHeader('origin'));
@@ -392,7 +486,7 @@ export default defineConfig({
        * verrait passer `localhost:5173` telle quelle et la refuserait.
        */
       '/socket.io': {
-        target: process.env.MEESHY_PROXY_TARGET ?? 'https://gate.staging.meeshy.me',
+        target: proxyTarget,
         ws: true,
         changeOrigin: true,
         configure: (proxy) => {
@@ -408,11 +502,12 @@ export default defineConfig({
     ],
   },
   plugins: [
+    productionBuildGuard(),
     tailwind(),
     inlineSchemeBootstrap(),
     inlineInterfaceLanguageBootstrap(),
     prerenderInstitutionalPages(),
-    ...(forCapacitor ? [dropServiceWorkerScripts()] : []),
+    ...(forCapacitor ? [dropServiceWorkerScripts(), dropWebOnlyAssets()] : []),
     /**
      * VARIANTE A (PWA). Desactivee sous Capacitor : la coque native gere
      * elle-meme son cycle de vie, et un service worker par-dessus ferait deux
@@ -468,6 +563,8 @@ export default defineConfig({
                 { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
                 { src: '/icon-512-maskable.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
               ],
+              /* #8884 — Meeshy figure dans la feuille de partage du système. */
+              share_target: SHARE_TARGET,
             },
             workbox: {
               /**
@@ -515,9 +612,10 @@ export default defineConfig({
                * ne croise pas les `/`, donc l'`index.html` de la racine — la
                * coquille de l'application — n'est PAS exclu.
                *
-               * Deux SCRIPTS IMPORTÉS n'y entrent pas non plus (#6702,
-               * étendu #7305) : `sw-legacy-purge.js` et `sw-push.js`, tous
-               * deux chargés par `importScripts` — le navigateur garde déjà
+               * Trois SCRIPTS IMPORTÉS n'y entrent pas non plus (#6702,
+               * étendu #7305, #8884) : `sw-legacy-purge.js`, `sw-push.js` et
+               * `sw-share-target.js`, tous
+               * chargés par `importScripts` — le navigateur garde déjà
                * les scripts importés avec le worker. Les précacher ferait
                * payer leurs octets une seconde fois, à chaque installation,
                * pour une copie que personne ne lit.
@@ -555,7 +653,13 @@ export default defineConfig({
                 '*/index.html',
                 'sw-legacy-purge.js',
                 'sw-push.js',
+                'sw-share-target.js',
                 'assets/*.woff2',
+                /* Le flou d'arrière-plan par segmentation (#8471) : MediaPipe
+                   et son chargeur WebAssembly ne se téléchargent qu'au premier
+                   flou que la caméra ne fait pas — jamais à l'installation. */
+                'assets/video-effects-segmentation-*.js',
+                'assets/vision_wasm_*',
               ],
               /**
                * Chargés EN TÊTE du service worker généré, donc leurs écouteurs
@@ -582,8 +686,12 @@ export default defineConfig({
                * visiteur qui revient recevrait la coquille à la place d'une
                * redirection 308 (`src/lib/net/network-only-navigations.ts`,
                * confrontée à la table des routes par son témoin).
+               *
+               * La TROISIÈME (#8053) : les liens d'e-mail qui portent un jeton
+               * — la coquille d'une version en attente ne sait pas toujours le
+               * consommer (`src/lib/net/email-token-navigations.ts`).
                */
-              navigateFallbackDenylist: [INSTITUTIONAL_PATTERN, ...NETWORK_ONLY_NAVIGATIONS],
+              navigateFallbackDenylist: [INSTITUTIONAL_PATTERN, ...NETWORK_ONLY_NAVIGATIONS, ...EMAIL_TOKEN_NAVIGATIONS],
               /**
                * La zone rurale est la raison d'etre de ce cache : le shell est
                * precache une fois, puis JAMAIS retelecharge tant que son hash
@@ -660,6 +768,12 @@ export default defineConfig({
                     cacheName: SW_RUNTIME_CACHES.api,
                     networkTimeoutSeconds: 3,
                     expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 * 7 },
+                    /* CHAQUE RÉPONSE SOUS L'IDENTITÉ QUI L'A DEMANDÉE (#8674) :
+                       sans lui, deux comptes du même appareil partageaient
+                       l'entrée d'une URL, et un réseau lent servait à B la
+                       réponse d'A. Autonome — Workbox le stringifie ;
+                       `check-sw-api-cache.mjs` le fait décider depuis sw.js. */
+                    plugins: [apiCacheIdentityPlugin],
                   },
                 },
                 /* AUDIO ET VIDÉO RESTENT HORS CACHE, ET C'EST UNE DÉCISION
@@ -689,6 +803,13 @@ export default defineConfig({
           }),
         ]),
   ],
+  /**
+   * LE WORKER DES EFFETS D'APPEL EST UN MODULE (#9099, #8471) — le format
+   * `iife` par défaut interdit le découpage : le modèle de segmentation
+   * (`video-effects-segmentation.ts`, MediaPipe) doit rester un chunk que le
+   * worker ne charge qu'au premier flou.
+   */
+  worker: { format: 'es' },
   build: {
     target: 'es2022',
     cssCodeSplit: true,
@@ -775,6 +896,16 @@ export default defineConfig({
              * du socle ne lit.
              */
             if (id.includes('/node_modules/zod/') || id.includes('/zod@')) return 'zod';
+            /**
+             * MEDIAPIPE (#8471) — ~44 Ko gzip, atteint UNIQUEMENT par
+             * `lib/calls/video-effects-segmentation.ts`, chargé au premier
+             * flou d'arrière-plan que la caméra ne fait pas. Ni `core` (la
+             * première peinture de tous : mesuré, 126 Ko au lieu de ~82) ni
+             * un chunk NOMMÉ (que le socle importait encore) : AUCUN nom — il
+             * rejoint son seul importeur (`budgets.json` ›
+             * `call_video_segmentation`), hors du précache (`globIgnores`).
+             */
+            if (id.includes('@mediapipe/tasks-vision')) return undefined;
             return 'core';
           }
           /**

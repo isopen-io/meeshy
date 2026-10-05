@@ -95,7 +95,7 @@ public final class FriendshipCache: ObservableObject, @unchecked Sendable {
 
     /// Lecture par défaut du seed : les stores GRDB déjà persistés
     /// (friends_list, requests:received, requests:sent), au-delà du TTL.
-    private static let defaultSeedSource: @Sendable () async -> FriendshipSeed? = {
+    private static let defaultSeedSource: @Sendable @concurrent () async -> FriendshipSeed? = {
         let coord = CacheCoordinator.shared
         let friends = await coord.friends.loadIgnoringExpiry(for: PersistenceKeys.friendsList)
         let received = await coord.friendRequests.loadIgnoringExpiry(for: PersistenceKeys.receivedRequests)

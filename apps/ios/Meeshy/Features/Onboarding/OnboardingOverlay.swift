@@ -166,6 +166,11 @@ struct OnboardingHost: ViewModifier {
                 .receive(on: DispatchQueue.main)) { isElsewhere in
                 model.routingChanged(isElsewhere: isElsewhere)
             }
+            // La célébration de l'arrivée (#8089) passe AVANT la première
+            // carte : lue, comme le routage, avant l'état serveur.
+            .onReceive(ArrivalCelebrationController.shared.$isShowing.removeDuplicates()) { showing in
+                model.celebrationChanged(isShowing: showing)
+            }
             .onReceive(AuthManager.shared.$currentUser.receive(on: DispatchQueue.main)) { user in
                 guard let user, startedForUserId != user.id else { return }
                 startedForUserId = user.id
@@ -195,7 +200,10 @@ struct OnboardingHost: ViewModifier {
             // Le lien de vérification se touche dans l'app Mail : au retour,
             // l'état se relit et la carte en attente avance d'elle-même.
             .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
-                Task { await model.refreshVerification() }
+                Task {
+                    await model.refreshVerification()
+                    await model.refreshContactsAccess()
+                }
             }
             // Les célébrations plein écran attendent que le calque parte
             // (#7914) : elles lisent ce signal, jamais le modèle.

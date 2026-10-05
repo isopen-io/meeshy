@@ -101,13 +101,13 @@ struct FeedCaptionOverlay: View {
     @ViewBuilder
     private func contenu(caption: String, abrege: String) -> some View {
         let tronquee = Self.isTruncated(caption)
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
             Text(deplie ? Self.full(caption) : abrege)
                 .font(.subheadline.weight(.medium))
                 .foregroundColor(.white)
                 .multilineTextAlignment(.leading)
                 .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal, 14)
+                .padding(.horizontal, MeeshySpacing.mdPlus)
                 .padding(.top, 28)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 // Le texte lui-même ne prend aucun geste : le doigt posé
@@ -127,8 +127,8 @@ struct FeedCaptionOverlay: View {
                         // La cible dépasse le glyphe : « plus… » fait six
                         // caractères, et une cible de six caractères n'est pas
                         // une cible (44 pt, HIG).
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 10)
+                        .padding(.horizontal, MeeshySpacing.mdPlus)
+                        .padding(.vertical, MeeshySpacing.smPlus)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -140,7 +140,7 @@ struct FeedCaptionOverlay: View {
                 .accessibilityHidden(true)
             }
         }
-        .padding(.bottom, 12)
+        .padding(.bottom, MeeshySpacing.md)
         // Le dégradé n'existe que SOUS la légende : sans elle, rien ne
         // s'assombrit. Un voile permanent ferait payer à toutes les cartes le
         // coût de celles qui parlent.

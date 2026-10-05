@@ -26,16 +26,6 @@ final class OrientationManager: ObservableObject {
         orientationLock = .allButUpsideDown
     }
 
-    func lockPortrait() {
-        orientationLock = .portrait
-        if #available(iOS 16.0, *) {
-            // La scène ACTIVE, pas `connectedScenes.first` : sur un `Set` non
-            // ordonné, `.first` pouvait faire pivoter une fenêtre d'arrière-plan
-            // pendant que celle du lecteur restait dans son orientation.
-            guard let windowScene = DeviceLayout.activeWindowScene else { return }
-            windowScene.requestGeometryUpdate(.iOS(interfaceOrientations: .portrait))
-        }
-    }
 }
 
 // MARK: - FullscreenAVPlayerLayerView
@@ -144,8 +134,8 @@ struct VideoFullscreenPlayer: View {
                 HStack {
                     Button { dismiss() } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .font(MeeshyFont.relative(28))
-                            .foregroundColor(.white.opacity(0.8))
+                            .font(MeeshyFont.relative(MeeshyIconSize.xxxl))
+                            .foregroundColor(.white.opacity(MeeshyOpacity.intense))
                             .padding()
                     }
                     .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))

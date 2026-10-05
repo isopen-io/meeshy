@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
-import { SUBSTITUTED_ACCENT_VAR, composerChromeAccentStyle } from './composer-accent';
+import { composerAccentOf } from './compose-protection';
+import { SUBSTITUTED_ACCENT_VAR, composerChromeAccentStyle, composerIconTintOf, composerIconTintStyle } from './composer-accent';
 
 describe('composerChromeAccentStyle — le jeton d’ÉTAT de la protection, aucune teinte inventée (#6175, #7667)', () => {
   test('rien d’armé ⇒ undefined (l’appelant garde l’accent hérité)', () => {
@@ -26,5 +27,35 @@ describe('composerChromeAccentStyle — le jeton d’ÉTAT de la protection, auc
   test('la table couvre les quatre états non nuls, un jeton DISTINCT par état', () => {
     expect(Object.keys(SUBSTITUTED_ACCENT_VAR).sort()).toEqual(['blur', 'effects', 'ephemeral', 'viewOnce']);
     expect(new Set(Object.values(SUBSTITUTED_ACCENT_VAR)).size).toBe(4);
+  });
+});
+
+describe('composerIconTintOf — UNE loi de teinte d’icône (#9121, miroir `ComposerIconTint`)', () => {
+  test('rien d’armé ⇒ la couleur COMMUNE des icônes', () => {
+    expect(composerIconTintOf(null)).toBe('var(--color-ios-ink-2)');
+  });
+
+  test('une protection armée ⇒ SA couleur', () => {
+    expect(composerIconTintOf('ephemeral')).toBe('var(--color-error)');
+    expect(composerIconTintOf('viewOnce')).toBe('var(--ios-state-view-once)');
+    expect(composerIconTintOf('blur')).toBe('var(--ios-state-concealed)');
+  });
+
+  test('un effet de message, sans couleur propre ⇒ la couleur de MARQUE', () => {
+    expect(composerIconTintOf('effects')).toBe('var(--color-ios-brand)');
+  });
+
+  test('plusieurs effets armés ⇒ la protection la plus forte (éphémère > vue unique > flou), puis l’effet de message — l’ordre iOS', () => {
+    const tintOf = (protection: Parameters<typeof composerAccentOf>[0]) => composerIconTintOf(composerAccentOf(protection));
+    expect(tintOf({ ephemeralSeconds: 15, viewOnce: true, effectFlags: 1 })).toBe('var(--color-error)');
+    expect(tintOf({ viewOnce: true, effectFlags: 1 })).toBe('var(--ios-state-view-once)');
+    expect(tintOf({ blurred: true, effectFlags: 1 })).toBe('var(--ios-state-concealed)');
+    expect(tintOf({ effectFlags: 1 })).toBe('var(--color-ios-brand)');
+    expect(tintOf({})).toBe('var(--color-ios-ink-2)');
+  });
+
+  test('le style pose `--composer-icon` sur la racine, armée ou non', () => {
+    expect(composerIconTintStyle(null)).toEqual({ '--composer-icon': 'var(--color-ios-ink-2)' });
+    expect(composerIconTintStyle('ephemeral')).toEqual({ '--composer-icon': 'var(--color-error)' });
   });
 });

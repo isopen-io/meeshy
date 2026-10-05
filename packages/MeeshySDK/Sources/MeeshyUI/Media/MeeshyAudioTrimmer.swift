@@ -109,7 +109,7 @@ public struct MeeshyAudioTrimmer: View {
     }
 
     public var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             playButton
             strip
         }
@@ -130,9 +130,9 @@ public struct MeeshyAudioTrimmer: View {
             HapticFeedback.light()
         } label: {
             Image(systemName: player.isPlaying ? "stop.fill" : "play.fill")
-                .font(.system(size: 17, weight: .bold))
+                .font(.system(size: MeeshyIconSize.md, weight: .bold))
                 .foregroundStyle(.white)
-                .frame(width: 44, height: 44)
+                .frame(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)
                 .background(Circle().fill(tint))
         }
         .buttonStyle(.plain)
@@ -146,7 +146,7 @@ public struct MeeshyAudioTrimmer: View {
     private var strip: some View {
         GeometryReader { proxy in
             ZStack(alignment: .leading) {
-                RoundedRectangle(cornerRadius: 14)
+                RoundedRectangle(cornerRadius: MeeshyRadius.md)
                     .fill(tint.opacity(0.10))
 
                 Canvas { context, size in
@@ -157,8 +157,8 @@ public struct MeeshyAudioTrimmer: View {
                 handle(.start)
                 handle(.end)
             }
-            .contentShape(RoundedRectangle(cornerRadius: 14))
-            .clipShape(RoundedRectangle(cornerRadius: 14))
+            .contentShape(RoundedRectangle(cornerRadius: MeeshyRadius.md))
+            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.md))
             .gesture(scrollGesture)
             .simultaneousGesture(pinchGesture)
             .onAppear { stripWidth = proxy.size.width }
@@ -194,7 +194,7 @@ public struct MeeshyAudioTrimmer: View {
         let horsChamp = brut < 0 || brut > stripWidth
         let x = min(max(brut, Self.handleWidth / 2), max(Self.handleWidth / 2, stripWidth - Self.handleWidth / 2))
 
-        return RoundedRectangle(cornerRadius: 7)
+        return RoundedRectangle(cornerRadius: MeeshyRadius.xs)
             .fill(tint)
             .overlay(
                 Image(systemName: horsChamp

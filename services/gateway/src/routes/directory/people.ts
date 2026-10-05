@@ -15,6 +15,7 @@ import {
 import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 import { contactLookupScope, blockedIdsAroundViewer } from '../../services/ContactDirectoryService';
+import { keepDiscoverable } from '../../services/profile-discoverability';
 
 const logger = enhancedLogger.child({ module: 'DirectoryPeople' });
 
@@ -202,13 +203,17 @@ export async function directoryPeopleRoutes(fastify: FastifyInstance) {
 
       const hasMore = lignes.length > taille;
       const page = hasMore ? lignes.slice(0, taille) : lignes;
+      // Le curseur reste celui de la page LUE : une page amputée des comptes
+      // cachés (#8104) ne doit ni sauter ni rejouer des lignes.
+      const curseur = hasMore ? (page[page.length - 1] as { username: string }).username : null;
+      const trouvables = await keepDiscoverable(fastify.prisma, viewerId, page);
 
-      const servi = avecPresence ? await gaterPresence(fastify, presenceViewer, page) : page;
+      const servi = avecPresence ? await gaterPresence(fastify, presenceViewer, trouvables) : trouvables;
 
       return sendSuccess(reply, servi, {
         pagination: {
           hasMore,
-          nextCursor: hasMore ? (page[page.length - 1] as { username: string }).username : null,
+          nextCursor: curseur,
           limit: taille,
         },
       } as never);

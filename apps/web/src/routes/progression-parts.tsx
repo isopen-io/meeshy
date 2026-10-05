@@ -15,6 +15,7 @@
 import { Glyph, GlyphSvg, type GlyphShape } from '@/components/glyph';
 import { GLYPHS } from '@/components/glyphs';
 import { PROGRESSION_GLYPHS } from '@/components/glyphs-progression';
+import { milestoneGlyph } from '@/components/milestone-glyph';
 import { ProgressBar } from '@/components/progress-bar';
 import { meeshMissing } from '@/lib/view/meesh-copy';
 import {
@@ -71,10 +72,8 @@ export const INK = 'var(--color-ios-ink)';
 export const INK_2 = 'var(--color-ios-ink-2)';
 export const CARD = 'var(--color-ios-card)';
 
-/** Les glyphes d'axe viennent des DEUX jeux — le socle (`user`, `smiley`, `microphone`) et celui de l'écran. */
-export function axisGlyph(name: ProgressionGlyph): GlyphShape {
-  return name in PROGRESSION_GLYPHS ? PROGRESSION_GLYPHS[name as keyof typeof PROGRESSION_GLYPHS] : GLYPHS[name as keyof typeof GLYPHS];
-}
+/** Les glyphes d'axe — la table unique que la ligne de notification d'un badge lit aussi (`milestone-glyph.ts`, #8727). */
+export const axisGlyph = (name: ProgressionGlyph): GlyphShape => milestoneGlyph(name);
 
 export function Card({ tint, children, className }: { tint: string; children: React.ReactNode; className?: string }) {
   return (
@@ -403,7 +402,7 @@ export function ProgressionError({ message, online, onRetry }: { message: string
       <button
         type="button"
         onClick={onRetry}
-        className="grid place-items-center rounded-chip px-5 text-body font-semibold text-white"
+        className="grid place-items-center rounded-chip px-5 text-body font-semibold text-ios-on-brand"
         style={{ backgroundColor: BRAND, minHeight: 44 }}
       >
         Réessayer

@@ -41,8 +41,7 @@ jest.mock('../../../services/ConversationMessageStatsService', () => ({
 }));
 
 jest.mock('../../../routes/conversations/utils/access-control', () => ({
-  canAccessConversation: jest.fn<any>(),
-}));
+  ...(jest.requireActual('../../../routes/conversations/utils/access-control') as Record<string, unknown>), canAccessConversation: jest.fn<any>() }));
 
 // ─── Imports ─────────────────────────────────────────────────────────────────
 
@@ -1132,11 +1131,11 @@ describe('registerStatsRoutes — GET /conversations/:id/stats', () => {
     expect(mockedSendNotFound).toHaveBeenCalledWith(reply, expect.any(String));
   });
 
-  it('returns 403 when user has no access', async () => {
+  it('returns the same 404 as a missing conversation when user has no access (#8099)', async () => {
     const { route, reply } = setup();
     mockedCanAccess.mockResolvedValue(false);
     await route.handler(makeStatsRequest(), reply);
-    expect(mockedSendForbidden).toHaveBeenCalledWith(reply, expect.any(String));
+    expect(mockedSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found');
   });
 
   it('returns enriched stats with user info', async () => {

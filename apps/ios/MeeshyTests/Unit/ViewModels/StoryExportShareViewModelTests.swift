@@ -206,6 +206,7 @@ final class MockShareExporter: StoryVideoExportServiceProviding {
     private(set) var lastIntro: StoryExportIntroContent?
     /// Index `postMediaId → adresse` des stickers image reçu par le bake (#4852).
     private(set) var lastStickerImageSources: [String: String] = [:]
+    private(set) var lastInputs: StoryExportInputs?
     /// Le drapeau de marque REÇU (#7052) — retenu, jamais ignoré : un double
     /// qui laisse tomber un paramètre laisse passer l'appelant qui cesse de le
     /// poser, et une scène ressortirait marquée sans qu'aucun témoin ne tombe.
@@ -221,7 +222,7 @@ final class MockShareExporter: StoryVideoExportServiceProviding {
         languages: [String],
         watermark: StoryExportWatermark?,
         intro: StoryExportIntroContent?,
-        stickerImageSources: [String: String],
+        inputs: StoryExportInputs,
         appendsBrandOutro: Bool,
         onProgress: ((Double) -> Void)?,
         onPhaseChange: ((StoryExportPhase) -> Void)?
@@ -230,7 +231,8 @@ final class MockShareExporter: StoryVideoExportServiceProviding {
         lastAppendsBrandOutro = appendsBrandOutro
         lastLanguages = languages
         lastIntro = intro
-        lastStickerImageSources = stickerImageSources
+        lastStickerImageSources = inputs.stickerImageSources
+        lastInputs = inputs
 
         switch behavior {
         case .success:

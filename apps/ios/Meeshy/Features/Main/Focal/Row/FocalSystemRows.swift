@@ -56,7 +56,7 @@ struct FocalSystemNoticeRow: View, Equatable {
     var timeString: String? = nil
 
     var body: some View {
-        VStack(spacing: 3) {
+        VStack(spacing: MeeshySpacing.xxs) {
             if let timeString, !timeString.isEmpty {
                 Text(timeString)
                     .font(MeeshyFont.relative(9.5, weight: .semibold))

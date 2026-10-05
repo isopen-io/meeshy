@@ -12,13 +12,15 @@ import {
   isSystemNotification,
   isNotificationExpired,
   isNotificationUnread,
+  type Notification,
+} from '../../types/notification.js';
+import {
   isDNDActive,
   isNotificationTypeEnabled,
   shouldSendNotification,
   getDefaultNotificationPreferences,
-  type Notification,
   type NotificationPreference,
-} from '../../types/notification.js';
+} from '../../types/notification-preferences.js';
 
 function makeNotification(type: string, stateOverrides: Partial<Notification['state']> = {}): Notification {
   return {

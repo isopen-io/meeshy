@@ -35,6 +35,7 @@ jest.mock('../../../utils/logger', () => ({
 
 import { CallCleanupService } from '../../../services/CallCleanupService';
 import { CallStatus, CallEndReason } from '@meeshy/shared/prisma/client';
+import { CALL_RING_GC_MS } from '@meeshy/shared/types/call-rules';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -448,7 +449,7 @@ describe('CallCleanupService', () => {
       );
     });
 
-    it('tier 1 (initiated/ringing) cutoff is 120s from startedAt', async () => {
+    it('tier 1 (initiated/ringing) cutoff is the shared ring GC budget from startedAt', async () => {
       const service = new CallCleanupService(prisma as any);
 
       prisma.callSession.findMany
@@ -463,10 +464,9 @@ describe('CallCleanupService', () => {
       expect(tier1Where.status).toEqual({ in: expect.arrayContaining(['initiated', 'ringing']) });
       expect(tier1Where.startedAt).toBeDefined();
 
-      // Cutoff must be ~120s in the past (VoIP push + user-answer latency budget).
       const cutoff = tier1Where.startedAt.lt.getTime();
-      expect(before - cutoff).toBeGreaterThanOrEqual(120_000);
-      expect(after - cutoff).toBeLessThanOrEqual(120_000 + 1_000);
+      expect(before - cutoff).toBeGreaterThanOrEqual(CALL_RING_GC_MS);
+      expect(after - cutoff).toBeLessThanOrEqual(CALL_RING_GC_MS + 1_000);
     });
 
     it('force-GC-ENDED a stale active call (>2h) → cleaned:1', async () => {

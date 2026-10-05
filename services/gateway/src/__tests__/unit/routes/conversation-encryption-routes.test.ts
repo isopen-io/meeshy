@@ -157,10 +157,11 @@ describe('GET /conversations/:conversationId/encryption-status', () => {
     await app.close();
   });
 
-  it('returns 403 when user is not a member (non-anonymous)', async () => {
+  it('returns the 404 of an unknown conversation when user is not a member (non-anonymous, #8116)', async () => {
     const app = await buildApp({ conversation: { participants: [{ userId: OTHER_ID }] } });
     const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/encryption-status`, headers: AUTH });
-    expect(res.statusCode).toBe(403);
+    expect(res.statusCode).toBe(404);
+    expect(res.json()).toMatchObject({ success: false, error: 'Conversation not found' });
     await app.close();
   });
 

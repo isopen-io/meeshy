@@ -9,7 +9,7 @@ import { Socket } from 'socket.io';
 import { REACTION_SYNC_BUDGET } from '@meeshy/shared/types/socketio-events';
 import { logger } from './logger.js';
 
-interface RateLimitConfig {
+export interface RateLimitConfig {
   maxRequests: number;
   windowMs: number;
   keyPrefix?: string;
@@ -98,6 +98,48 @@ export const SOCKET_RATE_LIMITS = {
     maxRequests: 10,
     windowMs: 60000, // 1 minute
     keyPrefix: 'socket:call:analytics'
+  },
+  // La note d'après-appel (#8072) : une par appel terminé, quelques-unes
+  // par minute laissent la marge d'une correction.
+  CALL_QUALITY_FEEDBACK: {
+    maxRequests: 10,
+    windowMs: 60000, // 1 minute
+    keyPrefix: 'socket:call:quality-feedback'
+  },
+  CALL_RECORDING: {
+    maxRequests: 20,
+    windowMs: 60000,
+    keyPrefix: 'socket:call:recording'
+  },
+  /** #8433 — inviter quelqu'un dans un appel en cours fait sonner un tiers : rare par nature. */
+  CALL_INVITE: {
+    maxRequests: 10,
+    windowMs: 60000,
+    keyPrefix: 'socket:call:invite'
+  },
+  /** #8438 — couper le micro d'un participant. */
+  CALL_MODERATION: {
+    maxRequests: 20,
+    windowMs: 60000,
+    keyPrefix: 'socket:call:moderation'
+  },
+  /** #8439 — réactions d'appel : cinq par seconde et par personne. */
+  CALL_REACTION: {
+    maxRequests: 5,
+    windowMs: 1000,
+    keyPrefix: 'socket:call:reaction'
+  },
+  /** #9214 — choisir le cadre en direct d'un appel à deux : dix choix par dix secondes et par personne. */
+  CALL_FRAME_SELECT: {
+    maxRequests: 10,
+    windowMs: 10000,
+    keyPrefix: 'socket:call:frame-select'
+  },
+  /** #8480 — demander l'aperçu d'un appel qui sonne : une fois par sonnerie, plus les reprises de socket. */
+  CALL_PREVIEW_REQUEST: {
+    maxRequests: 10,
+    windowMs: 60000,
+    keyPrefix: 'socket:call:preview-request'
   },
   CALL_SCREEN_CAPTURE: {
     maxRequests: 20,
@@ -217,6 +259,21 @@ export const SOCKET_RATE_LIMITS = {
     maxRequests: 20,
     windowMs: 60000, // 1 minute
     keyPrefix: 'socket:message:delete'
+  },
+  // #8892 — `viewing:start` : une ouverture de conversation. Le geste est
+  // rare (naviguer d'un fil à l'autre) ; le budget n'arrête que le script.
+  CONVERSATION_VIEWING: {
+    maxRequests: 60,
+    windowMs: 60000,
+    keyPrefix: 'socket:viewing'
+  },
+  // #9061 — `viewing:activity` : le client émet au plus une fois toutes les
+  // deux secondes pendant qu'on défile, écoute ou agit (30/min) ; le budget
+  // laisse deux appareils actifs et n'arrête que le script.
+  CONVERSATION_ACTIVITY: {
+    maxRequests: 90,
+    windowMs: 60000,
+    keyPrefix: 'socket:viewing-activity'
   },
   TYPING_INDICATOR: {
     maxRequests: 60,

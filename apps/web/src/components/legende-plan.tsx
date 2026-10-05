@@ -111,7 +111,7 @@ export function LegendePlan({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex flex-col bg-black/95 text-white"
+      className="fixed inset-0 z-50 flex flex-col bg-media-backdrop/95 text-on-media"
       role="dialog"
       aria-modal="true"
       aria-label="Légender les images avant l’envoi"
@@ -129,7 +129,7 @@ export function LegendePlan({
           className="grid size-11 place-items-center"
           aria-label="Revenir au composeur sans envoyer"
         >
-          <Glyph name="caretLeft" size={20} />
+          <Glyph name="caretLeft" size={20} className="rtl:-scale-x-100" />
         </button>
         <span className="text-mini opacity-80" data-legende-compteur>
           {index + 1} / {pending.length}
@@ -141,7 +141,7 @@ export function LegendePlan({
           aria-label={`Retirer ${courante.name} de l’envoi`}
         >
           <span
-            className="grid size-[22px] place-items-center rounded-full text-white"
+            className="grid size-[22px] place-items-center rounded-full text-ios-on-brand"
             style={{ backgroundColor: 'var(--color-error)' }}
             aria-hidden
           >
@@ -203,7 +203,7 @@ export function LegendePlan({
           onInput={(event) => noter({ texte: (event.target as HTMLTextAreaElement).value })}
           placeholder="Ajouter une légende à cette image…"
           rows={1}
-          className="min-h-11 flex-1 resize-none rounded-[18px] bg-white/10 px-3 py-2 text-body placeholder:text-white/50"
+          className="min-h-11 flex-1 resize-none rounded-[18px] bg-media-fill px-3 py-2 text-body placeholder:text-on-media-3"
           aria-label={`Légende de ${courante.name}`}
           data-legende-champ
         />

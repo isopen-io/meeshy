@@ -1,12 +1,13 @@
 import { isEngagementProgressPayload, type EngagementProgressPayload } from '@meeshy/shared/types/engagement';
 import { resolveEngagementProgress, type EngagementProgress } from '@meeshy/shared/utils/engagement-progress';
+import * as meEndpoints from '@meeshy/shared/api/endpoints/me';
 
 import type { DataSource } from './config';
 import { ENGAGEMENT_PROGRESS_FIXTURE } from './engagement-fixture';
 import type { ApiResult, HttpTransport } from './http';
 
 /**
- * LE PORT DE LA PROGRESSION (#5547) — `GET /api/v1/me/engagement`
+ * LE PORT DE LA PROGRESSION (#5547) — `GET me.engagement`
  * (`services/gateway/src/routes/me/engagement.ts`, #5670) : compteurs par
  * axe, paliers déjà gravés, série et score de l'utilisateur AUTHENTIFIÉ.
  * Lecture seule, le verbe fait partie du contrat (`net/transport.ts`).
@@ -28,7 +29,7 @@ import type { ApiResult, HttpTransport } from './http';
  * `VITE_DATA_SOURCE`) — la garde y reste tant que la liste et le fil ne le
  * font pas aussi.
  */
-export const ENGAGEMENT_PROGRESS_PATH = '/api/v1/me/engagement';
+export const ENGAGEMENT_PROGRESS_PATH = meEndpoints.engagement;
 
 export const ENGAGEMENT_PROGRESS_QUERY_KEY = ['me', 'engagement'] as const;
 
@@ -66,7 +67,7 @@ export async function loadEngagementProgress(params: {
 }
 
 /**
- * LA FRAPPE D'UNE MEESH — `POST /api/v1/me/meesh/mint` (#5743).
+ * LA FRAPPE D'UNE MEESH — `POST me.meeshMint` (#5743).
  *
  * `requestId` est fourni par l'APPELANT et porte l'idempotence : un double-tap,
  * un retry réseau ou une reprise d'onglet ne frappent qu'une fois. Il est donc
@@ -74,7 +75,7 @@ export async function loadEngagementProgress(params: {
  * le retry deviendrait une seconde frappe, ce que l'identifiant est justement
  * là pour empêcher.
  */
-export const MEESH_MINT_PATH = '/api/v1/me/meesh/mint';
+export const MEESH_MINT_PATH = meEndpoints.meeshMint;
 
 export type MeeshMintResult = {
   readonly status: 'minted' | 'already-minted' | 'insufficient';

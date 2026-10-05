@@ -18,21 +18,34 @@ final class MockSignupRegistrar: SignupRegistering {
     // hors d'une tâche. Garde : MainActorDeinitSourceGuardTests.
     nonisolated deinit {}
 
-    var registerResult: Result<Void, Error> = .success(())
+    var registerResult: Result<RegistrationOutcome, Error> = .success(.authenticated)
     private(set) var registerCallCount = 0
     /// La charge EXACTE que le ViewModel a composée — c'est elle que les
     /// témoins de contrat inspectent, pas un état interne.
     private(set) var lastRegisterRequest: RegisterRequest?
 
-    func register(_ request: RegisterRequest) async throws {
+    func register(_ request: RegisterRequest) async throws -> RegistrationOutcome {
         registerCallCount += 1
         lastRegisterRequest = request
-        try registerResult.get()
+        return try registerResult.get()
+    }
+
+    /// #8288 — « Valider mon compte maintenant » : la session est TENUE.
+    var holdResult: Result<RegistrationHold, Error> = .success(.verificationRequired(
+        PendingEmailVerification(email: "awa@example.com", accountCreated: true)
+    ))
+    private(set) var holdCallCount = 0
+
+    func registerHoldingSession(_ request: RegisterRequest) async throws -> RegistrationHold {
+        holdCallCount += 1
+        lastRegisterRequest = request
+        return try holdResult.get()
     }
 
     func reset() {
-        registerResult = .success(())
+        registerResult = .success(.authenticated)
         registerCallCount = 0
+        holdCallCount = 0
         lastRegisterRequest = nil
     }
 }
@@ -63,5 +76,46 @@ final class MockPushPermissionDeferral: PushPermissionDeferring {
         isPending = false
         postponeCallCount = 0
         resolveCallCount = 0
+    }
+}
+
+/// Test double pour `PendingReferralStoreProviding` (#8075) — le code
+/// d'invitation EN MÉMOIRE, sans toucher aux `UserDefaults` du simulateur.
+final class MockPendingReferralStore: PendingReferralStoreProviding {
+    private(set) var code: String?
+    private(set) var forgetCallCount = 0
+
+    init(code: String? = nil) { self.code = code }
+
+    func remember(_ code: String) { self.code = code }
+    func recall() -> String? { code }
+    func forget() {
+        forgetCallCount += 1
+        code = nil
+    }
+}
+
+/// Test double pour `SignInLinkRequesting` (#8216) — la demande du lien de
+/// connexion d'une adresse déjà utilisée, sans parler à la passerelle.
+@MainActor
+final class MockSignInLinkRequester: SignInLinkRequesting {
+    nonisolated deinit {}
+
+    var requestResult: Result<EmailCodeDispatch, Error> = .success(
+        EmailCodeDispatch(expiresInSeconds: 600, pendingSessionToken: "attente-8216")
+    )
+    private(set) var requestCallCount = 0
+    private(set) var lastRequestedEmail: String?
+
+    func requestEmailCode(email: String) async throws -> EmailCodeDispatch {
+        requestCallCount += 1
+        lastRequestedEmail = email
+        return try requestResult.get()
+    }
+
+    func reset() {
+        requestResult = .success(EmailCodeDispatch(expiresInSeconds: 600, pendingSessionToken: "attente-8216"))
+        requestCallCount = 0
+        lastRequestedEmail = nil
     }
 }

@@ -45,22 +45,22 @@ public struct CommunityInviteView: View {
     // MARK: - Search Bar
 
     private var searchBar: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: MeeshySpacing.smPlus) {
             Image(systemName: "magnifyingglass")
                 .foregroundColor(theme.textMuted)
             TextField(String(localized: "community.invite.search.placeholder", defaultValue: "Search users...", bundle: .module), text: $viewModel.searchText)
-                .font(.system(size: 16, design: .rounded))
+                .font(.system(size: MeeshyFont.calloutSize, design: .rounded))
                 .foregroundColor(theme.textPrimary)
                 .textFieldStyle(.plain)
                 .autocapitalization(.none)
                 .disableAutocorrection(true)
                 .onSubmit { Task { await viewModel.searchUsers() } }
         }
-        .padding(12)
+        .padding(MeeshySpacing.md)
         .background(theme.backgroundSecondary.opacity(0.5))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.vertical, MeeshySpacing.md)
     }
 
     // MARK: - Results
@@ -78,7 +78,7 @@ public struct CommunityInviteView: View {
                     subtitle: String(localized: "community.invite.empty.subtitle", defaultValue: "Try a different search term", bundle: .module)
                 )
             } else if !viewModel.invitedUserIds.isEmpty {
-                VStack(spacing: 12) {
+                VStack(spacing: MeeshySpacing.md) {
                     invitedSection
                     searchResultsSection
                 }
@@ -91,12 +91,12 @@ public struct CommunityInviteView: View {
     @ViewBuilder
     private var invitedSection: some View {
         if !viewModel.recentlyInvited.isEmpty {
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
                 Text(String(localized: "community.invite.recentlyInvited", defaultValue: "Recently Invited", bundle: .module))
-                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                    .font(.system(size: MeeshyFont.smallSize, weight: .bold, design: .rounded))
                     .foregroundColor(theme.textMuted)
                     .textCase(.uppercase)
-                    .padding(.horizontal, 16)
+                    .padding(.horizontal, MeeshySpacing.lg)
 
                 ForEach(viewModel.recentlyInvited, id: \.id) { user in
                     inviteRow(user: user, alreadyInvited: true)
@@ -121,7 +121,7 @@ public struct CommunityInviteView: View {
     }
 
     private func inviteRow(user: UserSearchResult, alreadyInvited: Bool) -> some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             MeeshyAvatar(
                 name: user.displayName ?? user.username,
                 context: .userListItem,
@@ -130,14 +130,14 @@ public struct CommunityInviteView: View {
                 presenceState: UserPresence(isOnline: user.isOnline ?? false).state
             )
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(user.displayName ?? user.username)
-                    .font(.system(size: 15, weight: .semibold, design: .rounded))
+                    .font(.system(size: MeeshyFont.bodySize, weight: .semibold, design: .rounded))
                     .foregroundColor(theme.textPrimary)
                     .lineLimit(1)
 
                 Text("@\(user.username)")
-                    .font(.system(size: 12, weight: .regular))
+                    .font(.system(size: MeeshyFont.smallSize, weight: .regular))
                     .foregroundColor(theme.textSecondary)
             }
 
@@ -145,25 +145,25 @@ public struct CommunityInviteView: View {
 
             if alreadyInvited {
                 Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 20))
+                    .font(.system(size: MeeshyIconSize.xl))
                     .foregroundColor(MeeshyColors.success)
             } else {
                 Button {
                     Task { await viewModel.inviteUser(userId: user.id) }
                 } label: {
                     Text(String(localized: "community.invite.button", defaultValue: "Invite", bundle: .module))
-                        .font(.system(size: 13, weight: .semibold, design: .rounded))
+                        .font(.system(size: MeeshyFont.subheadSize, weight: .semibold, design: .rounded))
                         .foregroundColor(.white)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 6)
+                        .padding(.horizontal, MeeshySpacing.lg)
+                        .padding(.vertical, MeeshySpacing.xsPlus)
                         .background(MeeshyColors.indigo500)
                         .clipShape(Capsule())
                 }
                 .disabled(viewModel.invitingUserId == user.id)
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.vertical, MeeshySpacing.smPlus)
     }
 }
 

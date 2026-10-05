@@ -85,7 +85,7 @@ struct PostSceneSoundHeader: View {
                 HapticFeedback.light()
                 onTogglePlayback()
             }) {
-                HStack(spacing: 8) {
+                HStack(spacing: MeeshySpacing.sm) {
                     ComposerSoundTraceRow(
                         sound: trace,
                         tint: tint,
@@ -99,7 +99,7 @@ struct PostSceneSoundHeader: View {
                     )
                     Spacer(minLength: 4)
                     Image(systemName: isPaused ? "play.fill" : "pause.fill")
-                        .font(MeeshyFont.relative(12, weight: .bold))
+                        .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .bold))
                         .foregroundStyle(tint)
                         .frame(width: 28, height: 28)
                         .background(Circle().fill(tint.opacity(0.12)))

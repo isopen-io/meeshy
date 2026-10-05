@@ -1,5 +1,4 @@
 import SwiftUI
-import Combine
 import MeeshySDK
 import MeeshyUI
 
@@ -13,7 +12,7 @@ final class DiscoverViewModel: ObservableObject {
     @Published var isSendingInvite = false
     @Published var contactMatches: [ContactMatch] = []
     @Published var isImportingContacts = false
-    @Published var hasImportedContacts = false
+    private(set) var hasImportedContacts = false
 
     /// Backwards-compatibility shim — earlier consumers read `isSearching`
     /// directly. Derived from `loadState` so existing call sites keep
@@ -24,13 +23,6 @@ final class DiscoverViewModel: ObservableObject {
     private let userService: UserServiceProviding
     private let contactSync: ContactSyncProviding
     private let directoryService: ContactDirectoryServiceProviding
-    private let cache = FriendshipCache.shared
-    private let resolver: UserRelationshipResolver
-    /// Injected so tests can drive the send-request outbox path (enqueue
-    /// success/failure + terminal `.exhausted` outcome) deterministically,
-    /// mirroring `RequestsViewModel`'s accept/reject pattern.
-    private let offlineQueue: OfflineQueueing
-    private var cancellables: Set<AnyCancellable> = []
 
     private var suggestionsRevalidationTask: Task<Void, Never>?
     private let suggestionsKey = "discover:suggestions"
@@ -39,36 +31,12 @@ final class DiscoverViewModel: ObservableObject {
         friendService: FriendServiceProviding = FriendService.shared,
         userService: UserServiceProviding = UserService.shared,
         contactSync: ContactSyncProviding = ContactSyncService.shared,
-        directoryService: ContactDirectoryServiceProviding = ContactDirectoryService.shared,
-        resolver: UserRelationshipResolver = .shared,
-        offlineQueue: OfflineQueueing = OfflineQueue.shared
+        directoryService: ContactDirectoryServiceProviding = ContactDirectoryService.shared
     ) {
         self.friendService = friendService
         self.userService = userService
         self.contactSync = contactSync
         self.directoryService = directoryService
-        self.resolver = resolver
-        self.offlineQueue = offlineQueue
-        // Bridge external state changes into our own objectWillChange so the
-        // Discover row badges flip when a request is accepted/blocked from
-        // any other screen (Requests tab, profile sheet, push notification).
-        // Without this, `relationshipState(for:)` would return the right
-        // value but SwiftUI wouldn't know to re-evaluate the row.
-        //
-        // `.receive(on: DispatchQueue.main)` hops the value to MainActor
-        // before we touch `objectWillChange` — `@MainActor` isolation
-        // requires it, and the publisher emits from whatever queue mutated
-        // the cache.
-        cache.$version
-            .dropFirst()
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in self?.objectWillChange.send() }
-            .store(in: &cancellables)
-        BlockService.shared.$blockedUserIds
-            .dropFirst()
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in self?.objectWillChange.send() }
-            .store(in: &cancellables)
     }
 
     deinit {
@@ -130,98 +98,6 @@ final class DiscoverViewModel: ObservableObject {
             return
         }
         suggestionsRevalidationTask = await loader.load(fetch: fetch, setLoadState: setLoadState, apply: apply)
-    }
-
-    /// Resolves the relationship state for a search result row. Combines
-    /// friendship + block state into a single value via the shared resolver,
-    /// so Discover stays consistent with the rest of the app.
-    func relationshipState(for userId: String) -> UserRelationshipState {
-        resolver.resolve(userId: userId)
-    }
-
-    // MARK: - Send Friend Request
-
-    /// Routed through the `.sendFriendRequest` outbox (dispatcher already
-    /// implemented — `OutboxDispatcher.dispatchSendFriendRequest` — but
-    /// nothing enqueued it: this call site posted `FriendService` directly,
-    /// so an offline tap failed with a toast and lost the request). The
-    /// cache flips to `.pendingSent` — and the success haptic fires —
-    /// BEFORE the network attempt, matching the optimistic-update principle
-    /// (capture → apply local → send → rollback on failure) instead of the
-    /// old ordering where the haptic fired with no accompanying state
-    /// change at all, well before the request even reached the network.
-    ///
-    /// `requestId` for the optimistic cache entry is the `clientMutationId`
-    /// — the real gateway-assigned friend-request id isn't known until the
-    /// outbox flushes, and the outcome stream only carries the terminal
-    /// cmid, not a result payload. This is sufficient for the common paths
-    /// (row shows "En attente", `RequestsTab`/notifications reconcile the
-    /// real id on next load) — cancelling a request that is STILL queued
-    /// offline (not yet flushed) is a known narrow gap, unchanged from
-    /// before this fix.
-    func sendRequest(to userId: String) async {
-        let cmid = ClientMutationId.generate()
-        cache.didSendRequest(to: userId, requestId: cmid)
-        objectWillChange.send()
-        HapticFeedback.success()
-        observeSendRequestOutcome(
-            cmid: cmid,
-            rollback: { [weak self] in
-                self?.cache.didCancelRequest(to: userId)
-                self?.objectWillChange.send()
-            }
-        )
-        let payload = SendFriendRequestPayload(clientMutationId: cmid, targetUserId: userId)
-        do {
-            try await offlineQueue.enqueue(.sendFriendRequest, payload: payload, conversationId: nil)
-            FeedbackToastManager.shared.showSuccess(String(localized: "contacts.discover.request.sent", defaultValue: "Demande envoyée", bundle: .main))
-        } catch {
-            cache.didCancelRequest(to: userId)
-            objectWillChange.send()
-            HapticFeedback.error()
-            FeedbackToastManager.shared.showError(String(localized: "contacts.discover.request.error", defaultValue: "Impossible d'envoyer", bundle: .main))
-        }
-    }
-
-    /// Mirrors `RequestsViewModel.observeOutcome`: subscribes to the
-    /// outbox's terminal-event stream for `cmid` and rolls back the
-    /// optimistic cache entry if the OutboxFlusher exhausts its retry
-    /// budget. `.applied` is a no-op — the optimistic state is already the
-    /// final state.
-    private func observeSendRequestOutcome(
-        cmid: String,
-        rollback: @escaping @MainActor () -> Void
-    ) {
-        let offlineQueue = self.offlineQueue
-        Task { @MainActor in
-            let stream = await offlineQueue.outcomeStream(for: cmid)
-            for await event in stream {
-                if case .exhausted = event {
-                    rollback()
-                    FeedbackToastManager.shared.showError(String(localized: "contacts.discover.request.error", defaultValue: "Impossible d'envoyer", bundle: .main))
-                    HapticFeedback.error()
-                }
-            }
-        }
-    }
-
-    // MARK: - Accept Received Request
-
-    func acceptReceivedRequest(from userId: String) async {
-        let status = cache.status(for: userId)
-        guard case .pendingReceived(let requestId) = status else { return }
-        cache.didAcceptRequest(from: userId)
-        objectWillChange.send()
-        HapticFeedback.success()
-        do {
-            _ = try await friendService.respond(requestId: requestId, accepted: true)
-            FeedbackToastManager.shared.showSuccess(String(localized: "contacts.discover.accept.success", defaultValue: "Connexion acceptée", bundle: .main))
-        } catch {
-            cache.rollbackAccept(senderId: userId, requestId: requestId)
-            objectWillChange.send()
-            HapticFeedback.error()
-            FeedbackToastManager.shared.showError(String(localized: "contacts.discover.accept.error", defaultValue: "Impossible d'accepter", bundle: .main))
-        }
     }
 
     // MARK: - Email Invitation

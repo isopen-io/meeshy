@@ -83,6 +83,13 @@ nonisolated enum MediaKindLabel {
 
     // MARK: - Cas nommé : la puce d'un vocal fraîchement enregistré
 
+    /// Titre d'un vocal REÇU, sans durée ni nom de fichier : la surface porte
+    /// déjà sa durée, et le nom d'origine trahirait la piste originale (#9010).
+    static func voiceMessage(bundle: Bundle = .main,
+                             locale: Locale = .current) -> String {
+        String(localized: "attachment.voice", defaultValue: "Message vocal", bundle: bundle, locale: locale)
+    }
+
     /// Nom porté par la puce du composeur pour un vocal qui vient d'être
     /// enregistré : « Message vocal (0:12) ».
     ///

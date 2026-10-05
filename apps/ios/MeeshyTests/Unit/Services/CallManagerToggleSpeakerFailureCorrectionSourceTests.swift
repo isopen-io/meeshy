@@ -54,7 +54,7 @@ final class CallManagerToggleSpeakerFailureCorrectionSourceTests: XCTestCase {
 
     func test_callManager_toggleSpeaker_revertsIsSpeakerOnFailure() {
         guard let fn = body(
-            source(for: "CallManager.swift"),
+            ((try? AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")) ?? ""),
             from: "func toggleSpeaker() {",
             to: "/// §5.4"
         ) else { return }
@@ -63,23 +63,67 @@ final class CallManagerToggleSpeakerFailureCorrectionSourceTests: XCTestCase {
             "toggleSpeaker must capture the pre-toggle speaker state before flipping it optimistically."
         )
         XCTAssertTrue(
-            fn.contains("if !applySpeakerRoute() {"),
-            "toggleSpeaker must inspect applySpeakerRoute()'s outcome — discarding it silently accepts a " +
-            "failed route override as if it had succeeded."
+            fn.contains("applySpeakerRouteOffMain { [weak self] applied in")
+                && fn.contains("guard let self, !applied, self.isSpeaker == intended else { return }"),
+            "toggleSpeaker must inspect the route override's outcome — discarding it silently accepts a " +
+            "failed route override as if it had succeeded — and revert only if no later tap moved the state."
         )
         XCTAssertTrue(
-            fn.contains("isSpeaker = previousSpeaker"),
+            fn.contains("self.isSpeaker = previousSpeaker"),
             "toggleSpeaker must revert isSpeaker when the underlying route override fails — otherwise the " +
             "speaker button desyncs from the real audio route (e.g. Bluetooth stays active) with no " +
             "correction path until an unrelated route-change event happens to re-apply it."
         )
     }
 
+    /// #8735 — « Sortie » répond au premier toucher : l'état basculé et
+    /// l'haptique partent dans l'image du toucher, la route s'applique HORS du
+    /// fil principal. Un `audioSessionQueue.sync` ici bloquait le dessin de
+    /// l'état basculé jusqu'au retour de la session audio.
+    func test_toggleSpeaker_neverWaitsForTheAudioSessionOnTheMainThread() {
+        guard let fn = body(
+            ((try? AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")) ?? ""),
+            from: "func toggleSpeaker() {",
+            to: "/// §5.4"
+        ) else { return }
+        XCTAssertFalse(fn.contains(".sync"), "toggleSpeaker must never block the main thread on audioSessionQueue")
+        XCTAssertFalse(fn.contains("applySpeakerRoute()"), "the synchronous route is for the audio-session lifecycle, not a tap")
+        guard let flip = fn.range(of: "isSpeaker.toggle()"),
+              let haptic = fn.range(of: "HapticFeedback.light()"),
+              let route = fn.range(of: "applySpeakerRouteOffMain") else {
+            return XCTFail("toggleSpeaker must flip, give its haptic, then apply the route off the main thread")
+        }
+        XCTAssertLessThan(flip.lowerBound, route.lowerBound)
+        XCTAssertLessThan(haptic.lowerBound, route.lowerBound)
+    }
+
+    func test_applySpeakerRouteOffMain_appliesOnTheAudioQueue_andAnswersOnTheMainActor() {
+        guard let fn = body(
+            source(for: "CallManager+Speaker.swift"),
+            from: "func applySpeakerRouteOffMain(",
+            to: "fileprivate extension Logger"
+        ) else { return }
+        XCTAssertTrue(fn.contains("completion: @escaping @MainActor @Sendable (Bool) -> Void"))
+        XCTAssertTrue(fn.contains("audioSessionQueue.async {"))
+        XCTAssertFalse(fn.contains(".sync"))
+        XCTAssertTrue(fn.contains("Task { @MainActor in completion(applied) }"))
+    }
+
+    func test_speakerRoute_reportsAFailedOverride() {
+        guard let fn = body(
+            source(for: "CallManager+Speaker.swift"),
+            from: "static func override(_ port: AVAudioSession.PortOverride, isSpeaker: Bool) -> Bool {",
+            to: "extension CallManager {"
+        ) else { return }
+        XCTAssertTrue(fn.contains("try session.overrideOutputAudioPort(port)"))
+        XCTAssertTrue(fn.contains("return false"), "a thrown override must surface as a failure the caller can revert")
+    }
+
     func test_applySpeakerRoute_reportsOutcomeToCaller() {
         guard let fn = body(
-            source(for: "CallManager.swift"),
-            from: "fileprivate func applySpeakerRoute() -> Bool {",
-            to: "private func updateProximityMonitoring()"
+            ((try? AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")) ?? ""),
+            from: "func applySpeakerRoute() -> Bool {",
+            to: "func updateProximityMonitoring()"
         ) else { return }
         XCTAssertTrue(
             fn.contains("var succeeded = true"),
@@ -94,5 +138,27 @@ final class CallManagerToggleSpeakerFailureCorrectionSourceTests: XCTestCase {
             fn.contains("return succeeded"),
             "applySpeakerRoute must return its tracked outcome so toggleSpeaker() can act on it."
         )
+    }
+
+    /// #8978 — basculer la caméra ne bloque plus le fil principal sur la session audio : le mode
+    /// `.videoChat`/`.voiceChat` s'applique sur la file audio, sans que l'interface l'attende. Un
+    /// `audioSessionQueue.sync` ici figeait l'écran d'appel le temps de reconfigurer la session.
+    func test_videoModeUpdate_neverWaitsForTheAudioSessionOnTheMainThread() {
+        guard let fn = body(
+            ((try? AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")) ?? ""),
+            from: "func updateAudioSessionModeForCurrentVideoState() {",
+            to: "func applySpeakerRoute() -> Bool {"
+        ) else { return }
+        XCTAssertFalse(fn.contains("audioSessionQueue.sync"), "the video mode update must never block the main thread")
+        XCTAssertTrue(fn.contains("audioSessionQueue.async {"))
+    }
+
+    /// #8978 — la qualité du lien ne se republie que si elle CHANGE : chaque publication recalcule
+    /// tout l'écran d'appel, et ce relevé tombe toutes les 5 s même quand rien ne bouge.
+    func test_linkQuality_republishesOnlyOnChange() {
+        let manager = ((try? AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")) ?? "")
+        XCTAssertFalse(manager.contains("self.liveVideoQualityLevel = level\n"), "unconditional quality publish")
+        XCTAssertTrue(manager.contains("if self.liveVideoQualityLevel != level { self.liveVideoQualityLevel = level }"))
+        XCTAssertTrue(manager.contains("if self.isLinkQualityDegraded != degraded { self.isLinkQualityDegraded = degraded }"))
     }
 }

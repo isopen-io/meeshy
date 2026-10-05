@@ -19,7 +19,6 @@ struct FeedPostCard: View {
     /// raccourci vers une coordonnée DÉJÀ affichée publiquement, pas une
     /// autorisation.
     var onSeeNearby: ((SharedPlace) -> Void)? = nil
-    var isCommentsExpanded: Bool = false
     /// Socket-driven liked state. When nil, falls back to post.isLiked (legacy path).
     var isLiked: Bool? = nil
     /// Display like count with optimistic delta already applied. When nil, falls back to post.likes.
@@ -41,7 +40,6 @@ struct FeedPostCard: View {
     var isRepostInFlight: Bool = false
     /// True while a share request is in-flight (mint short link).
     var isShareInFlight: Bool = false
-    var onToggleComments: (() -> Void)? = nil
     /// Hoiste la présentation de la feuille de commentaires chez l'HÔTE. La
     /// carte empile déjà plusieurs `.sheet`/`.fullScreenCover` sur sa propre
     /// vue : présentée à l'intérieur d'une feuille (profil), la sheet interne
@@ -85,7 +83,10 @@ struct FeedPostCard: View {
     // Lecture directe sans @ObservedObject — leaf view rendue dans un ForEach,
     // évite que chaque changement de thème force un re-render de toutes les cards.
     var theme: ThemeManager { ThemeManager.shared }
-    @State private var showCommentsSheet = false
+    @State var showCommentsSheet = false
+    /// Commentaire auquel la feuille s'ouvre EN RÉPONSE — posé par le glissé
+    /// d'un commentaire de l'aperçu (#8582), effacé à la fermeture.
+    @State var commentsReplyTarget: FeedComment?
     @State var showTranslationSheet = false
     @State private var showRepostOptions = false
     @State var selectedProfileUser: ProfileSheetUser?
@@ -99,7 +100,7 @@ struct FeedPostCard: View {
     @State var showFullscreenGallery = false
     @State private var isTextExpanded = false
     /// Lieu du post ouvert plein écran (tap sur le sticker ou la carte).
-    @State private var fullscreenPlace: BubbleFullscreenPlace?
+    @State var fullscreenPlace: BubbleFullscreenPlace?
     /// Flux « Enregistrer en local » du menu « … » — déclenché uniquement
     /// quand le post a un média (sinon Enregistrer bascule le favori in-app).
     @StateObject private var mediaSaveCoordinator = MediaSaveCoordinator()
@@ -273,13 +274,6 @@ struct FeedPostCard: View {
         }
     }
 
-    /// Vidéo embeddable (YouTube) détectée dans le contenu affiché. Dérivée (non stockée) :
-    /// le gate `.equatable()` (compare `post.content`) ne ré-évalue le body que si le contenu
-    /// change, donc le NSDataDetector ne tourne pas à chaque re-render parent.
-    private var embeddedVideo: EmbeddedVideo? {
-        EmbeddableVideoResolver.resolve(in: effectiveContent)
-    }
-
     /// Teinte des liens cliquables dans le corps du post.
     private var postLinkTint: Color { Color(hex: accentColor) }
 
@@ -408,20 +402,12 @@ struct FeedPostCard: View {
                      defaultValue: "Touche deux fois pour ouvrir la publication", bundle: .main)
     }
 
-    /// Destination trackée `/l/<token>` pour la façade vidéo, dérivée de la
-    /// première URL du contenu via `post.trackedLinkMap`. `nil` → watchURL.
-    private var embedTrackedURL: URL? {
-        guard let raw = LinkPreviewFetcher.firstURL(in: effectiveContent),
-              let token = post.trackedLinkMap[raw] else { return nil }
-        return URL(string: "https://meeshy.me/l/\(token)")
-    }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Main content
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.md) {
                 // Tappable content area (author, text, media, repost)
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.md) {
                     // Author header
                     authorHeader
 
@@ -495,15 +481,15 @@ struct FeedPostCard: View {
                         let display = LanguageDisplay.from(code: code)
 
                         VStack(spacing: 0) {
-                            HStack(spacing: 6) {
+                            HStack(spacing: MeeshySpacing.xsPlus) {
                                 Rectangle().fill(langColor.opacity(0.4)).frame(height: 1)
                                 Circle().fill(langColor).frame(width: 4, height: 4)
                                 Rectangle().fill(langColor.opacity(0.4)).frame(height: 1)
                             }
 
-                            VStack(alignment: .leading, spacing: 4) {
+                            VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                                 if let display {
-                                    HStack(spacing: 4) {
+                                    HStack(spacing: MeeshySpacing.xs) {
                                         Text(display.flag).font(.caption)
                                         Text(display.name)
                                             .font(.caption2.weight(.semibold))
@@ -515,11 +501,11 @@ struct FeedPostCard: View {
                                     .foregroundColor(theme.textPrimary.opacity(0.8))
                                     .fixedSize(horizontal: false, vertical: true)
                             }
-                            .padding(.vertical, 8)
-                            .padding(.horizontal, 10)
+                            .padding(.vertical, MeeshySpacing.sm)
+                            .padding(.horizontal, MeeshySpacing.smPlus)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .background(langColor.opacity(0.08))
-                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
                         }
                         .transition(.opacity.combined(with: .move(edge: .top)))
                         .accessibilityElement(children: .combine)
@@ -544,10 +530,8 @@ struct FeedPostCard: View {
 
                 // Embed vidéo (YouTube) détecté dans le contenu : player façade
                 // (vignette → lecture inline), hors du geste d'ouverture du post.
-                if let embeddedVideo {
-                    VideoEmbedContainer(video: embeddedVideo, accent: Color(hex: accentColor), trackedURL: embedTrackedURL)
-                        .padding(.top, 8)
-                }
+                FeedPostEmbedRow(content: effectiveContent, accentHex: accentColor, trackedLinks: post.trackedLinkMap)
+                    .equatable()
 
                 // Scène du POST (Task E3) : le post porte son PROPRE canvas v3
                 // (composé, pas reposté) — la scène le remplace entièrement, elle
@@ -584,6 +568,7 @@ struct FeedPostCard: View {
                             else { onTapPost?(post) }
                         }
                     )
+                    .sceneZoomSource(postId: post.id)
                     // **La légende paraît dans TOUS les modes, tronquée**
                     // (directive porteur 2026-09-06, qui ABOLIT la règle « pas
                     // de légende en mosaïque ») — mais elle est peinte PAR
@@ -607,6 +592,7 @@ struct FeedPostCard: View {
                         // la voir en grand, pas à lire ses commentaires.
                         onTapScene: cardSceneOpensFullscreen ? { openSceneFullscreen() } : nil
                     )
+                        .sceneZoomSource(postId: post.id)
                         // **La légende PAR-DESSUS la scène** (directive porteur
                         // 2026-09-05). La carte de scène n'en affichait aucune :
                         // l'auteur composait sa légende, la retrouvait en plein
@@ -700,7 +686,7 @@ struct FeedPostCard: View {
                 // Actions bar (not inside the tap target)
                 actionsBar
             }
-            .padding(16)
+            .padding(MeeshySpacing.lg)
 
             // Comments preview (compact)
             if !post.comments.isEmpty {
@@ -709,16 +695,16 @@ struct FeedPostCard: View {
             }
         }
         .background(
-            RoundedRectangle(cornerRadius: 20)
+            RoundedRectangle(cornerRadius: MeeshyRadius.xl)
                 .fill(theme.surfaceGradient(tint: accentColor))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 20)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.xl)
                         .stroke(theme.border(tint: accentColor, intensity: 0.25), lineWidth: 1)
                 )
         )
-        .padding(.horizontal, 16)
-        .sheet(isPresented: $showCommentsSheet) {
-            CommentsSheetView(post: post, accentColor: accentColor)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .sheet(isPresented: $showCommentsSheet, onDismiss: { commentsReplyTarget = nil }) {
+            CommentsSheetView(post: post, accentColor: accentColor, initialReplyTarget: commentsReplyTarget)
         }
         .sheet(isPresented: $showTranslationSheet) {
             PostTranslationSheet(
@@ -790,10 +776,15 @@ struct FeedPostCard: View {
             startMediaId: fullscreenMediaId,
             startSceneIndex: fullscreenSceneIndex,
             accentColor: accentColor,
-            preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+            preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? [],
+            zoomSourceID: SceneZoomTransition.destinationID(postId: post.id, hasScene: cardSceneDocument != nil,
+                                                            startMediaId: fullscreenMediaId)
         )
         .audioFullscreenCover($audioFullscreen, accentColor: accentColor)
         .mediaSaveFlow(mediaSaveCoordinator)
+        #if DEBUG
+        .onAppear { VitrineRendu.shared.signaler(.fil) }
+        #endif
     }
 
     /// Déclenche le flux unifié « Enregistrer en local » sur le média principal
@@ -809,7 +800,7 @@ struct FeedPostCard: View {
         case .document: attachmentKind = .document
         case .image: attachmentKind = .image
         }
-        mediaSaveCoordinator.requestSave(MediaSaveRequest(
+        mediaSaveCoordinator.save(MediaSaveRequest(
             kind: attachmentKind,
             origin: .composed,
             remoteURLString: url,
@@ -824,9 +815,9 @@ struct FeedPostCard: View {
             HapticFeedback.light()
             onTapRepost?(Self.repostTapTargetId(for: repost))
         } label: {
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
                 // Original author
-                HStack(spacing: 8) {
+                HStack(spacing: MeeshySpacing.sm) {
                     MeeshyAvatar(
                         name: repost.author,
                         context: .postComment,
@@ -841,14 +832,14 @@ struct FeedPostCard: View {
                     MetaSeparator()
                         .foregroundColor(theme.textMuted)
 
-                    Text(timeAgo(from: repost.timestamp))
+                    Text(RelativeTimeFormatter.shortString(for: repost.timestamp))
                         .font(.caption)
                         .foregroundColor(theme.textMuted)
                 }
 
                 // Original content — préfixé du mood emoji pour un STATUS
                 // reposté (sinon un mood republié n'afficherait qu'un corps vide).
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                HStack(alignment: .firstTextBaseline, spacing: MeeshySpacing.xsPlus) {
                     if let mood = repost.moodEmoji, !mood.isEmpty {
                         Text(mood)
                             .font(.body)
@@ -878,8 +869,8 @@ struct FeedPostCard: View {
                 }
 
                 // Original stats
-                HStack(spacing: 12) {
-                    HStack(spacing: 4) {
+                HStack(spacing: MeeshySpacing.md) {
+                    HStack(spacing: MeeshySpacing.xs) {
                         Image(systemName: "heart.fill")
                             .font(.caption2)
                             .accessibilityHidden(true)
@@ -892,13 +883,13 @@ struct FeedPostCard: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
+            .padding(.horizontal, MeeshySpacing.md)
+            .padding(.vertical, MeeshySpacing.smPlus)
             .background(
-                RoundedRectangle(cornerRadius: 14)
+                RoundedRectangle(cornerRadius: MeeshyRadius.md)
                     .fill(theme.mode.isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 14)
+                        RoundedRectangle(cornerRadius: MeeshyRadius.md)
                             .stroke(theme.accentText(repost.authorColor).opacity(0.2), lineWidth: 1)
                     )
             )
@@ -932,7 +923,7 @@ struct FeedPostCard: View {
                 onLike?(post.id)
                 HapticFeedback.light()
             } label: {
-                HStack(spacing: 6) {
+                HStack(spacing: MeeshySpacing.xsPlus) {
                     ZStack {
                         // Burst ring behind heart
                         if effectiveIsLiked {
@@ -944,7 +935,7 @@ struct FeedPostCard: View {
 
                         let heartColor: Color = effectiveIsLiked ? MeeshyColors.error : (effectiveLikeCount > 0 ? Color(hex: accentColor) : theme.textSecondary)
                         Image(systemName: effectiveIsLiked || effectiveLikeCount > 0 ? "heart.fill" : "heart")
-                            .font(MeeshyFont.relative(18))
+                            .font(MeeshyFont.relative(MeeshyIconSize.lg))
                             .foregroundColor(heartColor)
                             .scaleEffect(likeAnimating ? 1.3 : (effectiveIsLiked ? 1.1 : 1.0))
                             .rotationEffect(.degrees(likeAnimating ? -15 : 0))
@@ -952,7 +943,7 @@ struct FeedPostCard: View {
                         // Accent BORDER on the glyph when the current user liked.
                         if effectiveIsLiked {
                             Image(systemName: "heart")
-                                .font(MeeshyFont.relative(18))
+                                .font(MeeshyFont.relative(MeeshyIconSize.lg))
                                 .foregroundColor(Color(hex: accentColor))
                                 .scaleEffect(likeAnimating ? 1.3 : 1.1)
                                 .rotationEffect(.degrees(likeAnimating ? -15 : 0))
@@ -987,7 +978,7 @@ struct FeedPostCard: View {
                 }
                 HapticFeedback.light()
             } label: {
-                HStack(spacing: 6) {
+                HStack(spacing: MeeshySpacing.xsPlus) {
                     Image(systemName: "bubble.right")
                         .font(MeeshyFont.relative(17))
 
@@ -1013,7 +1004,7 @@ struct FeedPostCard: View {
                 showRepostOptions = true
                 HapticFeedback.light()
             } label: {
-                HStack(spacing: 6) {
+                HStack(spacing: MeeshySpacing.xsPlus) {
                     ZStack {
                         Image(systemName: isReposted ? "arrow.2.squarepath.circle.fill" : "arrow.2.squarepath")
                             .font(MeeshyFont.relative(17))
@@ -1059,7 +1050,7 @@ struct FeedPostCard: View {
                 onBookmark?(post.id)
                 HapticFeedback.light()
             } label: {
-                HStack(spacing: 6) {
+                HStack(spacing: MeeshySpacing.xsPlus) {
                     ZStack {
                         Image(systemName: isBookmarked ? "bookmark.fill" : "bookmark")
                             .font(MeeshyFont.relative(17))
@@ -1100,7 +1091,7 @@ struct FeedPostCard: View {
                 onShare?(post.id)
                 HapticFeedback.light()
             } label: {
-                HStack(spacing: 6) {
+                HStack(spacing: MeeshySpacing.xsPlus) {
                     ZStack {
                         Image(systemName: "square.and.arrow.up")
                             .font(MeeshyFont.relative(17))
@@ -1140,215 +1131,7 @@ struct FeedPostCard: View {
             // (`backgroundSoundAnnouncement`, rangée auteur, E1) reste seul
             // — un bouton sans lecteur à piloter serait décoratif.
         }
-        .padding(.top, 4)
-    }
-
-    // MARK: - Comments Preview (Top 3 Comments)
-    /// L'aperçu ne montre que trois commentaires — le plein écran, lui, feuillette
-    /// les médias de TOUS ceux que la carte connaît.
-    private var commentsPreview: some View {
-        Button {
-            showCommentsSheet = true
-            HapticFeedback.light()
-        } label: {
-            VStack(alignment: .leading, spacing: 0) {
-                // Divider
-                Rectangle()
-                    .fill(theme.inputBorder.opacity(0.5))
-                    .frame(height: 1)
-                    .padding(.horizontal, 16)
-
-                VStack(alignment: .leading, spacing: 12) {
-                    let comments = post.topComments
-                    ForEach(Array(comments.enumerated()), id: \.element.id) { index, comment in
-                        topCommentRow(comment: comment, isLast: index == comments.count - 1)
-                    }
-
-                    // "See all comments" link
-                    HStack(spacing: 8) {
-                        // Stacked avatars of remaining commenters
-                        if post.comments.count > 3 {
-                            HStack(spacing: -6) {
-                                ForEach(Array(post.comments.dropFirst(3).prefix(3).enumerated()), id: \.element.id) { index, comment in
-                                    MeeshyAvatar(
-                                        name: comment.author,
-                                        context: .postReaction,
-                                        accentColor: comment.authorColor,
-                                        avatarURL: comment.authorAvatarURL
-                                    )
-                                        .overlay(
-                                            Circle()
-                                                .stroke(theme.backgroundPrimary, lineWidth: 1.5)
-                                        )
-                                        .zIndex(Double(3 - index))
-                                }
-                            }
-                        }
-
-                        Text(String(localized: "feed.post.view_comments", defaultValue: "Voir les \(post.comments.count) commentaires", bundle: .main))
-                            .font(.footnote.weight(.semibold))
-                            .foregroundColor(theme.accentText(accentColor))
-
-                        Spacer()
-
-                        Image(systemName: "chevron.forward")
-                            .font(.caption.weight(.semibold))
-                            .foregroundColor(theme.textMuted)
-                            .accessibilityHidden(true)
-                    }
-                    .padding(.top, 4)
-                }
-                .padding(14)
-            }
-        }
-        .buttonStyle(PlainButtonStyle())
-        .accessibilityLabel(String(localized: "feed.post.view_comments", defaultValue: "Voir les \(post.comments.count) commentaires", bundle: .main))
-        .accessibilityHint(String(localized: "feed.post.view_comments.hint", defaultValue: "Ouvre la liste des commentaires", bundle: .main))
-    }
-
-    // MARK: - Top Comment Row
-    private func topCommentRow(comment: FeedComment, isLast: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .top, spacing: 10) {
-                // Avatar
-                let commentMood = moodLookup?(comment.authorId)
-                MeeshyAvatar(
-                    name: comment.author,
-                    context: .postComment,
-                    accentColor: comment.authorColor,
-                    avatarURL: comment.authorAvatarURL,
-                    moodEmoji: commentMood?.emoji,
-                    onViewProfile: { selectedProfileUser = .from(feedComment: comment) },
-                    onMoodTap: commentMood?.tapHandler,
-                    contextMenuItems: [
-                        AvatarContextMenuItem(label: String(localized: "feed.post.view_profile", defaultValue: "Voir le profil", bundle: .main), icon: "person.fill") {
-                            selectedProfileUser = .from(feedComment: comment)
-                        }
-                    ]
-                )
-
-                VStack(alignment: .leading, spacing: 4) {
-                    // Author name + language flags
-                    HStack(spacing: 4) {
-                        Text(comment.author)
-                            .font(.footnote.weight(.semibold))
-                            .foregroundColor(theme.accentText(comment.authorColor))
-
-                        if let origLang = comment.originalLanguage, comment.translatedContent != nil {
-                            MetaSeparator().font(.caption2).foregroundColor(theme.textMuted)
-
-                            let userLangs = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
-                            let targetLang = userLangs.first?.lowercased() ?? "fr"
-                            // Ces trois glyphes ne disent qu'UNE chose : « ce
-                            // commentaire a été traduit, de là vers ici ». Lus un
-                            // par un, VoiceOver annonçait deux PAYS — « drapeau du
-                            // Royaume-Uni, drapeau de la France ». Ils s'annoncent
-                            // donc en une phrase, et une seule. La paire n'est PAS
-                            // interactive ici (l'aperçu ouvre le commentaire) :
-                            // pas de `LanguageFlagChip`, qui est un contrôle.
-                            HStack(spacing: 4) {
-                                Text(LanguageFlagChip.flag(for: origLang))
-                                    .font(.caption2)
-                                Text(LanguageFlagChip.flag(for: targetLang))
-                                    .font(.caption2)
-                                Image(systemName: "translate")
-                                    .font(.caption2.weight(.medium))
-                                    .foregroundColor(MeeshyColors.indigo400)
-                            }
-                            .accessibilityElement(children: .ignore)
-                            .accessibilityLabel(
-                                LanguageFlagChip.translationSummary(from: origLang, to: targetLang)
-                            )
-                        }
-                    }
-
-                    // Content (Prisme Linguistique) — masqué pour un commentaire
-                    // média-seul (displayContent vide) : évite une ligne fantôme.
-                    if !comment.displayContent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        Text(comment.displayContent)
-                            .font(.footnote)
-                            .foregroundColor(theme.textPrimary)
-                            .lineLimit(2)
-                    }
-
-                    // Média unique (image/vidéo/audio) — rendu inline dans l'aperçu
-                    // du feed avec les MÊMES building blocks que la sheet. L'audio est
-                    // ainsi lisible/arrêtable directement (le player porte son propre
-                    // bouton, qui capte le tap sans ouvrir la sheet).
-                    if let media = comment.media.first {
-                        CommentMediaView(
-                            media: media,
-                            accentColor: accentColor,
-                            commentId: comment.id,
-                            carrierText: comment.displayContent,
-                            carrierOriginalLanguage: comment.originalLanguage,
-                            authorName: comment.author,
-                            authorAvatarURL: comment.authorAvatarURL,
-                            authorColor: comment.authorColor,
-                            sentAt: comment.timestamp
-                        )
-                        .padding(.top, 2)
-                    }
-
-                    // Lieu attaché au commentaire — sticker cliquable (même
-                    // véhicule SharedPlace que le post porteur).
-                    if let place = comment.location {
-                        FeedPostLocationSticker(place: place) {
-                            fullscreenPlace = BubbleFullscreenPlace(place: place)
-                        }
-                        .padding(.top, 2)
-                    }
-
-                    // Stats row: likes and replies
-                    HStack(spacing: 16) {
-                        // Likes
-                        HStack(spacing: 4) {
-                            Image(systemName: "heart.fill")
-                                .font(.caption)
-                                .foregroundColor(MeeshyColors.error)
-                                .accessibilityHidden(true)
-                            Text("\(comment.likes)")
-                                .font(.caption.weight(.medium))
-                                .foregroundColor(theme.textMuted)
-                        }
-
-                        // Replies
-                        if comment.replies > 0 {
-                            HStack(spacing: 4) {
-                                Image(systemName: "arrowshape.turn.up.left.fill")
-                                    .font(.caption2)
-                                    .foregroundColor(theme.accentText(accentColor).opacity(0.7))
-                                    .accessibilityHidden(true)
-                                Text(PostStatAccessibility.repliesLabel(comment.replies))
-                                    .font(.caption.weight(.medium))
-                                    .foregroundColor(theme.textMuted)
-                            }
-                        }
-
-                        Spacer()
-
-                        // Timestamp
-                        Text(timeAgo(from: comment.timestamp))
-                            .font(.caption2)
-                            .foregroundColor(theme.textMuted)
-                    }
-                    .padding(.top, 2)
-                }
-            }
-
-            // Separator (except for last item)
-            if !isLast {
-                Rectangle()
-                    .fill(theme.inputBorder.opacity(0.3))
-                    .frame(height: 1)
-                    .padding(.leading, 42)
-                    .padding(.top, 10)
-            }
-        }
-    }
-
-    func timeAgo(from date: Date) -> String {
-        RelativeTimeFormatter.shortString(for: date)
+        .padding(.top, MeeshySpacing.xs)
     }
 }
 
@@ -1377,7 +1160,6 @@ extension FeedPostCard: Equatable {
             && lhs.post.mentions == rhs.post.mentions
             && lhs.post.translatedContent == rhs.post.translatedContent
             && Self.translatableSignature(of: lhs.post) == Self.translatableSignature(of: rhs.post)
-            && lhs.isCommentsExpanded == rhs.isCommentsExpanded
             && lhs.authorMoodEmoji == rhs.authorMoodEmoji
             && lhs.authorStoryRing == rhs.authorStoryRing
     }

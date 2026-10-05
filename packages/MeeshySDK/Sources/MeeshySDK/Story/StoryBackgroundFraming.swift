@@ -86,3 +86,32 @@ public enum StoryBackgroundFraming {
         rendersFilled(current) ? fit : fill
     }
 }
+
+/// **Le fond des bandes d'un média AJUSTÉ** (#8414, panneau Cadre de la
+/// maquette plein écran).
+///
+/// Un média ajusté tient entier dans la scène et laisse des bandes. Elles se
+/// peignaient toujours du flou du média ; l'auteur choisit désormais leur fond.
+/// Les valeurs brutes et les teintes sont le CONTRAT COMMUN avec le web
+/// (`backgroundTransform.backdrop`) : les changer ici sans lui ferait lire deux
+/// fonds différents à la même scène.
+public enum StoryBackdrop: String, CaseIterable, Sendable {
+    case blur, black, white, indigo, sand
+
+    /// L'absence et toute valeur inconnue rendent le FLOU — le comportement
+    /// d'avant le panneau, que les scènes déjà publiées gardent sans migration.
+    public static func resolve(_ raw: String?) -> StoryBackdrop {
+        raw.flatMap(StoryBackdrop.init(rawValue:)) ?? .blur
+    }
+
+    /// La teinte d'un fond UNI, `nil` pour le flou.
+    public var solidHex: String? {
+        switch self {
+        case .blur:   return nil
+        case .black:  return "000000"
+        case .white:  return "F5F5F4"
+        case .indigo: return "312E81"
+        case .sand:   return "FDE68A"
+        }
+    }
+}

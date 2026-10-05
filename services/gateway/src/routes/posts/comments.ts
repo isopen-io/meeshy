@@ -17,6 +17,7 @@ import { createSocialTranslateRateLimitConfig } from './socialRateLimit';
 import { withMutationLog, MutationResultGone } from '../../utils/withMutationLog';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
 import { hoistLocationOnto } from '../../services/location/sharedPlace';
+import { hoistStickerOnto } from '../../services/stickers/messageSticker';
 import { admitQuotedPostMedia } from '../../services/posts/quotedPostMediaSnapshot';
 import { serveCitedPostMedia } from '../../services/posts/citedPostMediaBackfill';
 import {
@@ -26,6 +27,7 @@ import {
   resolveInteractionTarget,
   resolveConsumptionTarget,
 } from '../../services/posts/postVisibility';
+import { sliceCodePointsOrUndefined } from '@meeshy/shared/utils/text-truncate';
 
 /**
  * Hisse `metadata.trackingLinks` ([{ url, token }]) en top-level sur le payload
@@ -43,14 +45,15 @@ function hoistCommentTrackingLinks<T extends Record<string, unknown>>(comment: T
 }
 
 /**
- * Hisse `metadata.location` en top-level `location` sur un commentaire —
- * appliqué à la liste (GET), aux réponses (GET replies) ET à la réponse de
- * création (POST), en plus du payload socket. Source UNIQUE partagée avec
- * `core.ts` (via `hoistLocationDeep`, qui l'applique aussi aux commentaires
- * embarqués dans un post) — pas de copie locale de la logique de hoist.
+ * Hisse `metadata.location` et `metadata.sticker` (#9080) en top-level
+ * `location` / `sticker` sur un commentaire — appliqué à la liste (GET), aux
+ * réponses (GET replies), à la création (POST) et à l'édition (PATCH), donc
+ * aussi aux payloads socket qui en partent. Mêmes sources UNIQUES que les
+ * messages (`hoistLocationOnto`, `hoistStickerOnto`) et que l'aperçu embarqué
+ * dans un post (`hoistLocationDeep`) — pas de copie locale de la logique.
  */
-function hoistCommentLocation<T extends Record<string, unknown>>(comment: T): T {
-  return hoistLocationOnto(comment);
+function hoistCommentCarriers<T extends Record<string, unknown>>(comment: T): T {
+  return hoistStickerOnto(hoistLocationOnto(comment));
 }
 
 export function registerCommentRoutes(
@@ -111,7 +114,7 @@ export function registerCommentRoutes(
       // cite.
       const servis = await serveCitedPostMedia(
         prisma,
-        result.items.map((c) => hoistCommentLocation(c as unknown as Record<string, unknown>)),
+        result.items.map((c) => hoistCommentCarriers(c as unknown as Record<string, unknown>)),
       );
       return sendSuccess(reply, servis, {
         pagination: { limit, hasMore: result.hasMore, nextCursor: result.nextCursor },
@@ -163,7 +166,7 @@ export function registerCommentRoutes(
       reply.header('Cache-Control', 'private, no-cache');
       const reponsesServies = await serveCitedPostMedia(
         prisma,
-        result.items.map((r) => hoistCommentLocation(r as unknown as Record<string, unknown>)),
+        result.items.map((r) => hoistCommentCarriers(r as unknown as Record<string, unknown>)),
       );
       return sendSuccess(reply, reponsesServies, {
         pagination: { limit, hasMore: result.hasMore, nextCursor: result.nextCursor },
@@ -260,6 +263,7 @@ export function registerCommentRoutes(
               mediaIds: parsed.data.attachmentIds,
               mobileTranscription: parsed.data.mobileTranscription,
               location: parsed.data.location,
+              sticker: parsed.data.sticker,
               quotedPostMedia: citation.snapshot,
             },
           );
@@ -285,7 +289,7 @@ export function registerCommentRoutes(
       // forme exacte du défaut que `hoistCommentTrackingLinks` avait déjà
       // (hissé sur l'écho, absent de la réponse).
       const [commentCite] = await serveCitedPostMedia(prisma, [
-        hoistCommentLocation(comment as unknown as Record<string, unknown>),
+        hoistCommentCarriers(comment as unknown as Record<string, unknown>),
       ]);
 
       // Broadcast comment added via Socket.IO — porte l'id de la CIBLE réelle
@@ -294,7 +298,7 @@ export function registerCommentRoutes(
       const socialEvents = fastify.socialEvents;
       const post = await fastify.prisma?.post?.findUnique({
         where: { id: targetPostId },
-        select: { authorId: true, commentCount: true, type: true, content: true, createdAt: true, expiresAt: true, visibility: true, visibilityUserIds: true },
+        select: { authorId: true, commentCount: true, type: true, createdAt: true, expiresAt: true, visibility: true, visibilityUserIds: true },
       });
       if (socialEvents && post) {
         socialEvents.broadcastCommentAdded({
@@ -334,7 +338,7 @@ export function registerCommentRoutes(
               postId: targetPostId,
               commenterId: authContext.registeredUser.id,
               mentionedUserIds,
-              commentExcerpt: parsed.data.content?.slice(0, 100),
+              commentExcerpt: sliceCodePointsOrUndefined(parsed.data.content, 100),
               // Discriminant d'entité → surface ouverte au tap côté client.
               postType: post?.type as 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL' | undefined,
               // Un commentaire n'a pas d'audience propre : il hérite de celle du
@@ -369,7 +373,7 @@ export function registerCommentRoutes(
               commentId: comment.id,
               parentCommentId: parsed.data.parentId,
               replyPreview: parsed.data.content,
-              parentCommentPreview: parentComment.content?.slice(0, 80),
+              parentCommentPreview: sliceCodePointsOrUndefined(parentComment.content, 80),
               // Précise « sur votre story/réel/… » + date côté client (du JJ/MM/AAAA HH:MM).
               postType: post?.type as 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL' | undefined,
               postCreatedAt: post?.createdAt ?? undefined,
@@ -389,7 +393,6 @@ export function registerCommentRoutes(
             commentId: comment.id,
             commentPreview: parsed.data.content,
             postType: post.type as 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL',
-            postPreview: post.content?.slice(0, 80),
             postCreatedAt: post.createdAt ?? undefined,
             postExpiresAt: post.expiresAt ?? undefined,
           }).catch((err) => enhancedLogger.warn('[POST /posts/:postId/comments]: notify post comment failed', { err }));
@@ -404,7 +407,7 @@ export function registerCommentRoutes(
           commentId: comment.id,
           storyAuthorId: post.authorId,
           commenterId: authContext.registeredUser.id,
-          commentExcerpt: parsed.data.content?.slice(0, 100),
+          commentExcerpt: sliceCodePointsOrUndefined(parsed.data.content, 100),
           postType: post.type as 'STORY' | 'POST' | 'MOOD' | 'STATUS' | 'REEL',
           postCreatedAt: post.createdAt ?? undefined,
           postExpiresAt: post.expiresAt ?? undefined,
@@ -576,7 +579,7 @@ export function registerCommentRoutes(
       // `updateComment` conserve. Le média, lui, se RELIT : entre la création et
       // l'édition il a pu être recadré, relégendé ou supprimé.
       const [commentEditeCite] = await serveCitedPostMedia(prisma, [
-        hoistCommentLocation(comment as unknown as Record<string, unknown>),
+        hoistCommentCarriers(comment as unknown as Record<string, unknown>),
       ]);
 
       // Broadcast comment:updated — mêmes rooms et même filtrage de visibilité
@@ -751,7 +754,7 @@ export function registerCommentRoutes(
           commentId,
           commentAuthorId: result.authorId,
           emoji,
-          commentPreview: likedComment?.content?.slice(0, 80),
+          commentPreview: sliceCodePointsOrUndefined(likedComment?.content, 80),
           postType: likedPost?.type as 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL' | undefined,
         }).catch((err) => enhancedLogger.warn('[POST /posts/:postId/comments/:commentId/like]: notify comment like failed', { err }));
       }

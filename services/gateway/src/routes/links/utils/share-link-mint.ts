@@ -13,6 +13,13 @@ import { generateUniqueShareLinkId, ensureUniqueShareLinkIdentifier, generateCon
 import { FOUNDING_MEMBER_PERMISSIONS } from '../../../services/participantRights';
 import type { ParticipantPermissions } from '@meeshy/shared/types/participant';
 import type { CreateLinkInput } from '../types';
+import { EngagementService } from '../../../services/engagement/EngagementService';
+import { enhancedLogger } from '../../../utils/logger-enhanced.js';
+
+const engagementLogger = enhancedLogger.child({ module: 'ShareLinkMint' });
+
+/** Ce que la fabrication d'un lien demande au moteur d'engagement (#8959) — un double en test. */
+export type ShareLinkMintEngagement = Pick<EngagementService, 'recordActivity'>;
 
 /**
  * **La porte UNIQUE de création d'un lien de partage (#4169).**
@@ -130,6 +137,8 @@ export type MintShareLinkParams = {
   /** `User.role` (plateforme), déjà résolu par l'appelant — cette fonction ne relit jamais l'acteur. */
   readonly userRole: string;
   readonly input: CreateLinkInput;
+  /** `social.conversation_link_created` — le moteur partagé par défaut. */
+  readonly engagement?: ShareLinkMintEngagement;
 };
 
 /**
@@ -352,6 +361,12 @@ export async function mintConversationShareLink(params: MintShareLinkParams): Pr
       identifier: uniqueIdentifier
     }
   });
+
+  // `social.conversation_link_created` (#8959) — le lien est écrit : il paie
+  // son auteur, sous le plafond journalier du barème.
+  (params.engagement ?? new EngagementService(prisma))
+    .recordActivity(userId, 'social.conversation_link_created')
+    .catch((err: unknown) => engagementLogger.warn('engagement social.conversation_link_created failed', { err }));
 
   // ─── Notification aux admins / au créateur — best-effort ────────────────
   try {

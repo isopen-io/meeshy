@@ -8,6 +8,7 @@ import '@/styles/onboarding.css';
 import { apiDeps } from '@/lib/api/deps';
 import { performSendRequest, type FriendActionOutcome } from '@/lib/api/friend-actions';
 import { ONBOARDING_QUERY_KEY, ONBOARDING_STEPS, onboardingQueryOptions, type OnboardingDeps } from '@/lib/api/onboarding';
+import { appProfileActionDeps } from '@/lib/api/profile-action-deps';
 import { performProfileEdit } from '@/lib/api/profile-actions';
 import { retrySendAction, sendAction } from '@/lib/api/query';
 import { appQueryClient } from '@/lib/api/query-client';
@@ -134,7 +135,7 @@ export const defaultOnboardingScreenDeps: OnboardingScreenDeps = {
   saveLanguages: async (patch) => {
     const outcome = await performProfileEdit({
       patch,
-      deps: { ...apiDeps, queryClient: appQueryClient, session: sessionStore, isOnline: () => navigator.onLine },
+      deps: appProfileActionDeps(),
     });
     return outcome.status === 'saved' ? 'saved' : outcome.status === 'offline' ? 'offline' : 'failed';
   },

@@ -65,10 +65,10 @@ struct ThemedActionButton: View {
 
                 if badge > 0 {
                     Text(NotificationBadge.displayed(badge))
-                        .font(MeeshyFont.relative(9, weight: NotificationBadge.fontWeight))
+                        .font(MeeshyFont.relative(MeeshyFont.microSize, weight: NotificationBadge.fontWeight))
                         .foregroundColor(Color(hex: color))
                         .lineLimit(1)
-                        .padding(.horizontal, 5)
+                        .padding(.horizontal, MeeshySpacing.xs)
                         .frame(minWidth: 16, minHeight: 16)
                         .background(Capsule().fill(Color.white))
                         .offset(x: size * 0.33, y: -size * 0.33)
@@ -126,12 +126,11 @@ struct ThemedFeedOverlay: View {
     @EnvironmentObject var router: Router
     @EnvironmentObject var storyViewModel: StoryViewModel
     @EnvironmentObject var statusViewModel: StatusViewModel
-    @EnvironmentObject var conversationListViewModel: ConversationListViewModel
+    @Environment(\.meeshyConversationList) var conversationListViewModel
     /// Présentation unifiée du story viewer (`.fullScreenCover(item:)` au root).
     /// Remplace l'ancien cover local `(isPresented:)` + `selectedStoryUserId`
     /// séparé, dont la capture périmée d'uid provoquait l'écran noir « introuvable ».
     @EnvironmentObject var storyViewerCoordinator: StoryViewerCoordinator
-    @FocusState private var isComposerFocused: Bool
     @State private var showStatusComposer = false
     @State private var showFullComposer = false
 
@@ -167,12 +166,6 @@ struct ThemedFeedOverlay: View {
 
     private struct LikeRESTPayload: Decodable { let liked: Bool? }
     private struct BookmarkRESTPayload: Decodable { let bookmarked: Bool? }
-    private struct SharePayload: Decodable {
-        let shared: Bool?
-        let shareCount: Int?
-        let shortUrl: String?
-        let token: String?
-    }
 
     @MainActor
     private func togglePostHeart(post: FeedPost) {
@@ -409,7 +402,7 @@ struct ThemedFeedOverlay: View {
             backgroundColor: theme.backgroundPrimary,
             titleView: {
                 Text(verbatim: "Meeshy Feed")
-                    .font(MeeshyFont.relative(28, weight: .bold, design: .rounded))
+                    .font(MeeshyFont.relative(MeeshyFont.displaySize, weight: .bold, design: .rounded))
                     .foregroundStyle(
                         LinearGradient(colors: [MeeshyColors.indigo500, MeeshyColors.indigo700], startPoint: .leading, endPoint: .trailing)
                     )
@@ -446,7 +439,7 @@ struct ThemedFeedOverlay: View {
     /// fusionné dans « À proximité » le 2026-08-26 — mode Discover, réservé au
     /// staff de la plateforme.
     private var feedHeaderActions: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: MeeshySpacing.sm) {
             reelsButton
             nearbyButton
         }
@@ -461,9 +454,9 @@ struct ThemedFeedOverlay: View {
             ReelsPresenter.shared.presentFresh()
         } label: {
             Image(systemName: "play.rectangle.on.rectangle.fill")
-                .font(MeeshyFont.relative(18, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyIconSize.lg, weight: .semibold))
                 .foregroundColor(MeeshyColors.indigo500)
-                .frame(width: 40, height: 40)
+                .frame(width: MeeshyControlSize.large, height: MeeshyControlSize.large)
                 .adaptiveGlass(in: Circle(), interactive: true)
         }
         .accessibilityLabel(String(localized: "feed.header.reels", defaultValue: "Lancer les Réels", bundle: .main))
@@ -480,9 +473,9 @@ struct ThemedFeedOverlay: View {
             router.push(.nearbyDiscovery())
         } label: {
             Image(systemName: "dot.radiowaves.left.and.right")
-                .font(MeeshyFont.relative(17, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .semibold))
                 .foregroundColor(MeeshyColors.indigo500)
-                .frame(width: 40, height: 40)
+                .frame(width: MeeshyControlSize.large, height: MeeshyControlSize.large)
                 .adaptiveGlass(in: Circle(), interactive: true)
         }
         .accessibilityLabel(String(localized: "feed.nearby.open", defaultValue: "Publications à proximité", bundle: .main))
@@ -703,7 +696,7 @@ struct ThemedFeedOverlay: View {
                         showFullComposer = true
                         HapticFeedback.light()
                     } label: {
-                        HStack(spacing: 12) {
+                        HStack(spacing: MeeshySpacing.md) {
                             MeeshyAvatar(
                                 name: getUserDisplayName(AuthManager.shared.currentUser, fallback: "M"),
                                 context: .feedComposer
@@ -716,7 +709,7 @@ struct ThemedFeedOverlay: View {
                             Spacer()
 
                             Image(systemName: "photo.on.rectangle.angled")
-                                .font(MeeshyFont.relative(16))
+                                .font(MeeshyFont.relative(MeeshyIconSize.md))
                                 .foregroundColor(MeeshyColors.indigo400)
                         }
                         .padding(MeeshySpacing.md)
@@ -897,13 +890,13 @@ struct ThemedFeedOverlay: View {
                 originalContent: post.content,
                 originalLanguage: post.originalLanguage,
                 originalType: post.type,
-                media: post.media.map { EditablePostMedia($0) },
+                media: post.media.map { EditablePostMedia($0) }, originalStoryEffects: post.storyEffects,
                 originalLocation: post.location,
                 originalVisibility: post.visibility,
                 originalVisibilityUserIds: post.visibilityUserIds ?? [],
                 isRepost: post.repost != nil,
                 onSave: { draft in
-                    await viewModel.updatePost(post.id, content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds, location: draft.location, visibility: draft.visibility, visibilityUserIds: draft.visibilityUserIds, known: draft.known)
+                    await viewModel.updatePost(post.id, content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds, location: draft.location, visibility: draft.visibility, visibilityUserIds: draft.visibilityUserIds, known: draft.known, storyEffects: draft.storyEffects)
                 },
                 onDismiss: { editingPost = nil }
             )

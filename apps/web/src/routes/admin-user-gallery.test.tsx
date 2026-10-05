@@ -2,6 +2,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 import { act } from 'react';
 
+import { MEMBER_EXTRAS } from '@/lib/admin/member-fixture';
 import type { AdminUserDetail } from '@/lib/api/admin-user-detail';
 import type { ApiResult, HttpRequest, HttpTransport } from '@/lib/api/http';
 import { appQueryClient } from '@/lib/api/query-client';
@@ -67,6 +68,7 @@ const membre = (surcharge: Partial<AdminUserDetail> = {}): AdminUserDetail => ({
   lastActiveAt: null,
   createdAt: null,
   updatedAt: null,
+  ...MEMBER_EXTRAS,
   ...surcharge,
 });
 
@@ -128,6 +130,28 @@ describe('le carrousel d’images d’un membre', () => {
     const scene = hote.querySelector('[data-admin-gallery-slide="m3"]');
     expect(scene?.querySelector('img')).toBeNull();
     expect(scene?.textContent).toContain('protégé');
+  });
+
+  test('aucune vignette n’efface le contour de focus du clavier ; la vignette ouverte est marquée par un anneau', async () => {
+    const hote = await monter(membre(), MEDIAS);
+    const vignettes = [...hote.querySelectorAll<HTMLElement>('[data-admin-gallery-thumb]')];
+    for (const vignette of vignettes) {
+      expect(vignette.style.outlineStyle).not.toBe('none');
+      expect(vignette.style.outline).not.toContain('none');
+      expect(vignette.className).toContain('focus-visible:outline-2');
+    }
+    expect(vignettes[0]?.style.boxShadow).toContain('var(--color-ios-brand)');
+    expect(vignettes[1]?.style.boxShadow).toBe('none');
+    act(() => vignettes[1]?.click());
+    expect(hote.querySelector<HTMLElement>('[data-admin-gallery-thumb="banner"]')?.style.boxShadow).toContain('var(--color-ios-brand)');
+    expect(hote.querySelector<HTMLElement>('[data-admin-gallery-thumb="avatar"]')?.style.boxShadow).toBe('none');
+  });
+
+  test('une vignette protégée porte le glyphe cadenas du kit, jamais un émoji', async () => {
+    const hote = await monter(membre(), MEDIAS);
+    const protegee = hote.querySelector('[data-admin-gallery-thumb="m3"]');
+    expect(protegee?.querySelector('svg')).not.toBeNull();
+    expect(protegee?.textContent).not.toContain('🔒');
   });
 
   test('sans photo, bannière ni image, il le dit', async () => {

@@ -52,7 +52,7 @@ public struct ReferenceMentionSuggestions: View {
                     choose(mode, for: user)
                 }
             }
-            .background(RoundedRectangle(cornerRadius: 12).fill(background))
+            .background(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus).fill(background))
             .transition(.opacity)
         }
     }
@@ -104,7 +104,7 @@ public struct ReferenceComposerBar: View {
     }
 
     public var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             chip
             ReferenceChipRow(references: references, accentColor: accentColor) {
                 showPicker = true

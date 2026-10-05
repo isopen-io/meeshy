@@ -68,6 +68,9 @@ struct GalleryImagePage: View, Equatable {
     @State private var committedScale: CGFloat = 1
     @State private var offset: CGSize = .zero
     @State private var committedOffset: CGSize = .zero
+    /// Un fichier introuvable (404/410/refus) sort de l'état « chargement »
+    /// vers un état dessiné avec « Réessayer » (#8141).
+    @State private var loadPhase = GalleryImageLoadPhase()
 
     private static let maxScale: CGFloat = 5
     private static let dismissThreshold: CGFloat = 150
@@ -112,8 +115,8 @@ struct GalleryImagePage: View, Equatable {
     /// format malgré une source partielle, ex. thumbHash seul).
     private var emptyStateGlyph: some View {
         Image(systemName: "photo")
-            .font(.system(size: 48))
-            .foregroundColor(.white.opacity(0.3))
+            .font(.system(size: MeeshyIconSize.hero))
+            .foregroundColor(.white.opacity(MeeshyOpacity.medium))
             .accessibilityHidden(true)
     }
 
@@ -128,7 +131,9 @@ struct GalleryImagePage: View, Equatable {
                                                    thumbHash: attachment.thumbHash)
             )
 
-            if hasRenderableSource {
+            if hasRenderableSource, rendersFullPixels, loadPhase.isFailed {
+                GalleryMediaUnavailableView(onRetry: { loadPhase.retry() })
+            } else if hasRenderableSource {
                 imageLayer
                     /*
                      **LA TAILLE VIENT DU SOLVEUR, PAS D'UN `.aspectRatio`**
@@ -255,14 +260,17 @@ struct GalleryImagePage: View, Equatable {
                 isFullResident: fullPixelURL.map(FullscreenImageSource.isResident) ?? false
             )
             if let mount {
+                let attempt = loadPhase.attempt
                 ProgressiveCachedImage(
                     thumbHash: mount.backdropThumbHash,
                     thumbnailUrl: mount.isResident ? nil : thumbnailURL,
                     fullUrl: mount.fullURL,
-                    autoLoad: true
+                    autoLoad: true,
+                    onFullImageFailure: { loadPhase.fail(attempt: attempt) }
                 ) {
                     ProgressView().tint(.white)
                 }
+                .id(attempt)
             } else {
                 emptyStateGlyph
             }
@@ -599,7 +607,7 @@ struct GalleryVideoPage: View, Equatable {
                 if MediaDownloadPolicyEngine.shouldAutoDownload(
                     kind: .video, condition: condition, prefs: prefs
                 ) {
-                    downloader.start(attachment: attachment, onShare: nil)
+                    downloader.start(attachment: attachment, origin: .automatic, onShare: nil)
                 }
             }
             await resolvePosterIfNeeded()
@@ -781,15 +789,14 @@ struct GalleryVideoPage: View, Equatable {
                 onCacheActivation()
                 HapticFeedback.light()
             case .needsDownload:
-                downloader.start(attachment: attachment, onShare: nil)
-                HapticFeedback.light()
+                downloader.start(attachment: attachment, origin: .manual, onShare: nil)
             case .downloading:
                 break
             }
         } label: {
             buttonContent
                 .frame(width: 64, height: 64)
-                .adaptiveGlassProminent(in: Circle(), tint: Color(hex: accentColor).opacity(0.85))
+                .adaptiveGlassProminent(in: Circle(), tint: Color(hex: accentColor).opacity(MeeshyOpacity.intense))
         }
         .disabled({
             if case .downloading = availability { return true }
@@ -819,18 +826,18 @@ struct GalleryVideoPage: View, Equatable {
         switch availability {
         case .ready:
             Image(systemName: "play.fill")
-                .font(.system(size: 22, weight: .bold))
-                .foregroundColor(.white)
+                .font(.system(size: MeeshyIconSize.xxl, weight: .bold))
+                .foregroundColor(MeeshyColors.mediaChromeForeground)
                 .offset(x: 2)
         case .needsDownload:
-            VStack(spacing: 2) {
+            VStack(spacing: MeeshySpacing.xxs) {
                 Image(systemName: "arrow.down.to.line")
-                    .font(.system(size: 20, weight: .bold))
-                    .foregroundColor(.white)
+                    .font(.system(size: MeeshyIconSize.xl, weight: .bold))
+                    .foregroundColor(MeeshyColors.mediaChromeForeground)
                 if attachment.fileSize > 0 {
                     Text(AttachmentDownloader.fmt(Int64(attachment.fileSize)))
                         .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                        .foregroundColor(.white.opacity(0.9))
+                        .foregroundColor(MeeshyColors.mediaChromeSecondary)
                 }
             }
         case .downloading(let progress):

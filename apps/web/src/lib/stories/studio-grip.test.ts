@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { KEYBOARD_NUDGE, KEYBOARD_ROTATE, KEYBOARD_SCALE, gripPose, keyboardPose, pointerFraction } from './studio-grip';
+import { KEYBOARD_NUDGE, KEYBOARD_ROTATE, KEYBOARD_SCALE, gripPose, keyboardPose, pinchPose, pointerFraction } from './studio-grip';
 import { IDENTITY_POSE } from './studio-pose';
 
 const stage = { left: 0, top: 0, width: 400, height: 800 } as const;
@@ -93,5 +93,31 @@ describe('keyboardPose — TOUT ce que le pointeur fait, le clavier le fait auss
   test('le clavier respecte les MÊMES bornes que le geste', () => {
     expect(keyboardPose({ ...IDENTITY_POSE, x: 1 }, 'ArrowRight', true)!.x).toBe(1);
     expect(keyboardPose({ ...IDENTITY_POSE, scale: 4 }, '+', false)!.scale).toBe(4);
+  });
+});
+
+describe('pinchPose — pincer et tourner à DEUX doigts (#8515, miroir iOS)', () => {
+  const at = (x: number, y: number) => ({ x, y });
+
+  test('écarter les doigts du double agrandit du double, sans déplacer l’objet', () => {
+    const pose = pinchPose(IDENTITY_POSE, [at(100, 100), at(200, 100)], [at(50, 100), at(250, 100)]);
+    expect(pose).toEqual({ ...IDENTITY_POSE, scale: 2 });
+  });
+
+  test('tourner les doigts de 90° tourne l’objet de 45° — la sensibilité d’iOS est divisée par deux', () => {
+    const pose = pinchPose(IDENTITY_POSE, [at(100, 100), at(200, 100)], [at(150, 50), at(150, 150)]);
+    expect(pose.rotation).toBeCloseTo(45, 6);
+    expect(pose.scale).toBeCloseTo(1, 6);
+  });
+
+  test('le pincement COMPOSE avec la pose de départ et respecte les bornes', () => {
+    const origin = { ...IDENTITY_POSE, scale: 3, rotation: 170 };
+    const pose = pinchPose(origin, [at(0, 0), at(100, 0)], [at(0, 0), at(0, 200)]);
+    expect(pose.scale).toBe(4);
+    expect(pose.rotation).toBeCloseTo(-145, 6);
+  });
+
+  test('deux doigts confondus au départ : aucun effet plutôt qu’une division par zéro', () => {
+    expect(pinchPose(IDENTITY_POSE, [at(10, 10), at(10, 10)], [at(0, 0), at(90, 0)])).toEqual(IDENTITY_POSE);
   });
 });

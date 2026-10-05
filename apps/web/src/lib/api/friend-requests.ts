@@ -1,5 +1,6 @@
 import type { InfiniteData } from '@tanstack/react-query';
 import * as z from 'zod/mini';
+import * as directoryEndpoints from '@meeshy/shared/api/endpoints/directory';
 
 import { unwrap } from './client';
 import type { DataSource } from './config';
@@ -10,7 +11,7 @@ import type { ApiResult, HttpTransport } from './http';
  * (iOS, `packages/MeeshySDK/Sources/MeeshySDK/Services/FriendService.swift`)
  * et de ce que `FriendshipCache.hydrate` en tire.
  *
- * `GET /api/v1/directory/friend-requests?direction=&status=&limit=&cursor=`,
+ * `GET directory.friendRequests?direction=&status=&limit=&cursor=`,
  * `POST` pour envoyer, `PATCH …/:id {action}` pour accepter, refuser, annuler
  * (`services/gateway/src/routes/directory/friend-requests.ts`). La route
  * DÉPRÉCIÉE `/friend-requests` n'est pas appelée : un client neuf ne s'inscrit
@@ -122,7 +123,7 @@ const BUCKET_QUERY: Readonly<Record<FriendRequestBucket, { readonly direction: s
 const listPath = (bucket: FriendRequestBucket, cursor: string | null): string => {
   const query = new URLSearchParams({ ...BUCKET_QUERY[bucket], limit: String(FRIEND_REQUESTS_PAGE_SIZE) });
   if (cursor !== null) query.set('cursor', cursor);
-  return `/api/v1/directory/friend-requests?${query.toString()}`;
+  return `${directoryEndpoints.friendRequests}?${query.toString()}`;
 };
 
 const decodeAll = (raw: unknown): readonly FriendRequestRecord[] =>
@@ -222,7 +223,7 @@ export async function respondToFriendRequest(
   }
   const result = await deps.transport.request<unknown>({
     method: 'PATCH',
-    path: `/api/v1/directory/friend-requests/${encodeURIComponent(id)}`,
+    path: directoryEndpoints.friendRequestsById(id),
     body: { action },
   });
   return result.ok ? { ...result, data: decodeFriendRequest(result.data) } : result;
@@ -233,7 +234,7 @@ export async function sendFriendRequest(deps: FriendRequestsDeps, receiverId: st
     const { fixtureSendFriendRequest } = await import('./fixtures-friends');
     return fixtureSendFriendRequest(receiverId);
   }
-  const result = await deps.transport.request<unknown>({ method: 'POST', path: '/api/v1/directory/friend-requests', body: { receiverId } });
+  const result = await deps.transport.request<unknown>({ method: 'POST', path: directoryEndpoints.friendRequests, body: { receiverId } });
   if (!result.ok) return result;
   const request = decodeFriendRequest(result.data);
   return request === null ? { ok: false, status: 0, error: 'Demande illisible' } : { ...result, data: request };

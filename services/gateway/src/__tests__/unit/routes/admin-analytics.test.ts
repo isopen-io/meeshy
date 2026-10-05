@@ -657,6 +657,28 @@ describe('GET /calls — call reliability aggregate', () => {
     await app.close();
   });
 
+  it('adds the post-call ratings to the aggregate (#8072)', async () => {
+    mockCacheGet.mockResolvedValue(null);
+    const findMany = jest.fn<any>().mockResolvedValue([
+      { ...analyticsRow(), feedback: { rating: 4, issues: [] } },
+      { ...analyticsRow(), feedback: { rating: 2, issues: ['echo'] } },
+      { ...analyticsRow(), feedback: null },
+    ]);
+    const app = await buildApp('ADMIN', { callParticipant: { findMany } });
+
+    const res = await app.inject({ method: 'GET', url: '/calls' });
+
+    expect(res.statusCode).toBe(200);
+    expect(findMany.mock.calls[0][0].select).toEqual({ analytics: true, feedback: true });
+    expect(res.json().data.feedback).toEqual({
+      ratedCalls: 2,
+      avgRating: 3,
+      ratingDistribution: { 1: 0, 2: 1, 3: 0, 4: 1, 5: 0 },
+      byIssue: { echo: 1 },
+    });
+    await app.close();
+  });
+
   it('returns a zeroed summary when no call reported telemetry', async () => {
     mockCacheGet.mockResolvedValue(null);
     // #4157 — ANALYST n'a plus `canAccessAdmin` : ce test vise l'agrégat vide,

@@ -31,12 +31,13 @@ describe('PrivacyPreferenceSchema', () => {
       showForwardSource: false,
       allowContactRequests: true,
       allowGroupInvites: false,
-      allowCallsFromNonContacts: false,
+      acceptCallsFromNonContacts: false,
       saveMediaToGallery: false,
       allowAnalytics: true,
       shareUsageData: false,
       blockScreenshots: false,
       hideProfileFromSearch: false,
+      notifyContactsOnReturn: false,
       encryptionPreference: 'optional' as const,
       autoEncryptNewConversations: false,
       showEncryptionStatus: true,
@@ -50,6 +51,21 @@ describe('PrivacyPreferenceSchema', () => {
   test('devrait appliquer les valeurs par défaut', () => {
     const result = PrivacyPreferenceSchema.parse({});
     expect(result).toEqual(PRIVACY_PREFERENCE_DEFAULTS);
+  });
+
+  test('« Appels hors contacts » est ouvert à tous par défaut (#8073)', () => {
+    expect(PrivacyPreferenceSchema.parse({}).acceptCallsFromNonContacts).toBe(true);
+  });
+
+  test('« Prévenir mes contacts quand je reviens » est activé par défaut, y compris pour un compte qui ne l’a jamais réglé (#8285)', () => {
+    expect(PrivacyPreferenceSchema.parse({}).notifyContactsOnReturn).toBe(true);
+    expect(PRIVACY_PREFERENCE_DEFAULTS.notifyContactsOnReturn).toBe(true);
+    expect(PrivacyPreferenceSchema.strict().parse({ notifyContactsOnReturn: false }).notifyContactsOnReturn).toBe(false);
+  });
+
+  test("l'ancienne clé allowCallsFromNonContacts est encore acceptée mais ne ferme plus rien (#8073)", () => {
+    const result = PrivacyPreferenceSchema.strict().parse({ allowCallsFromNonContacts: false });
+    expect(result.acceptCallsFromNonContacts).toBe(true);
   });
 
   test('devrait rejeter des types invalides', () => {
@@ -192,11 +208,17 @@ describe('NotificationPreferenceSchema', () => {
       storyReactionEnabled: true,
       commentReplyEnabled: true,
       commentLikeEnabled: false,
-      friendContentEnabled: false
+      friendContentEnabled: false,
+      contactActivityEnabled: false
     };
 
     const result = NotificationPreferenceSchema.parse(valid);
     expect(result).toEqual(valid);
+  });
+
+  test('« Quand un contact revient sur Meeshy » est reçu par défaut (#8285)', () => {
+    expect(NotificationPreferenceSchema.parse({}).contactActivityEnabled).toBe(true);
+    expect(NOTIFICATION_PREFERENCE_DEFAULTS.contactActivityEnabled).toBe(true);
   });
 
   test('devrait valider le format des heures DND', () => {

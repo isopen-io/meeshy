@@ -36,8 +36,8 @@ export type PendingAttachment = {
 
 let counter = 0;
 
-/** TÉMOIN SEUL — même discipline que `debounceEntryCountForTests`
- * (`perform-send.ts`) : l'identifiant vit pour la durée du PROCESSUS. */
+/** TÉMOIN SEUL — même discipline que `resetSentMessagesForTests`
+ * (`api/fixtures.ts`) : l'identifiant vit pour la durée du PROCESSUS. */
 export function resetPendingAttachmentIdsForTests(): void {
   counter = 0;
 }
@@ -188,6 +188,18 @@ export function removePendingAttachment(
   localId: string,
 ): readonly PendingAttachment[] {
   return list.filter((a) => a.localId !== localId);
+}
+
+/** REMPLACER une pièce par sa RETOUCHE (#8416) — à son rang, sous une
+ * identité neuve : l'URL d'aperçu est mémoïsée par `localId`
+ * (`attachment-preview-url.ts`), la garder rendrait l'image d'AVANT. */
+export function replacePendingAttachment(
+  list: readonly PendingAttachment[],
+  localId: string,
+  file: File,
+): readonly PendingAttachment[] {
+  if (!list.some((a) => a.localId === localId)) return list;
+  return list.map((a) => (a.localId === localId ? pendingAttachmentOf(file) : a));
 }
 
 /**

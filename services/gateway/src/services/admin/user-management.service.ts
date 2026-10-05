@@ -4,15 +4,17 @@ import {
   UserFilters,
   CreateUserDTO,
   UpdateUserProfileDTO,
-  UpdateEmailDTO,
   UpdateRoleDTO,
   UpdateStatusDTO,
   ResetPasswordDTO
 } from '@meeshy/shared/types';
-import { hashPassword, verifyPassword } from '../../utils/password-hash';
+import { hashPassword } from '../../utils/password-hash';
+import { normalizeEmail } from '../../utils/normalize';
+import { AdminIdentifierTakenError, rethrowIdentifierTaken } from './admin-identifier-taken';
 import { logger, logWarn } from '../../utils/logger';
 import { recipientLanguage } from '../../utils/recipient-language';
 import { searchTokensFor } from '../../utils/search-tokens';
+import { candidatsDePseudo } from '../../utils/username-candidates';
 import {
   ensureGlobalConversationMembership,
   type GlobalMembershipSocketManager,
@@ -110,6 +112,10 @@ export class UserManagementService {
     if (filters.search) {
       where.OR = [
         { username: { contains: filters.search, mode: 'insensitive' } },
+        // #8876 — le NOM AFFICHÉ est ce que la console montre d'un compte : chercher
+        // « Awa Diop » doit trouver Awa, même quand ni son prénom ni son nom de
+        // famille ne contiennent ces lettres.
+        { displayName: { contains: filters.search, mode: 'insensitive' } },
         { firstName: { contains: filters.search, mode: 'insensitive' } },
         { lastName: { contains: filters.search, mode: 'insensitive' } },
         { email: { contains: filters.search, mode: 'insensitive' } }
@@ -117,7 +123,7 @@ export class UserManagementService {
     }
 
     if (filters.role) {
-      where.role = filters.role;
+      where.role = typeof filters.role === 'string' ? filters.role : { in: [...filters.role] };
     }
 
     if (filters.isActive !== undefined) {
@@ -218,6 +224,10 @@ export class UserManagementService {
     // hash quatre fois moins cher à casser que celui d'un compte inscrit par la
     // porte publique, sans que rien ne le signale. Le facteur vit désormais dans
     // `utils/password-hash`, et il n'y a plus de site où le retaper.
+    const email = normalizeEmail(data.email);
+    await this.assertEmailAvailable(email);
+    await this.assertUsernameAvailable(data.username);
+
     const hashedPassword = await hashPassword(data.password);
 
     const user = await this.prisma.user.create({
@@ -225,7 +235,7 @@ export class UserManagementService {
         username: data.username,
         firstName: data.firstName,
         lastName: data.lastName,
-        email: data.email,
+        email,
         password: hashedPassword,
         displayName: data.displayName,
         // Écrits en même temps que les noms : un compte créé sans jetons serait
@@ -242,10 +252,13 @@ export class UserManagementService {
         systemLanguage: data.systemLanguage || 'en',
         regionalLanguage: data.regionalLanguage || 'en',
         isActive: true,
-        lastActiveAt: new Date()
+        lastActiveAt: new Date(),
+        // L'administrateur ATTESTE l'adresse (#8217) : sans numéro, un compte
+        // n'est actif qu'une fois son adresse prouvée (#8055).
+        ...(data.emailVerified === true ? { emailVerifiedAt: new Date() } : {})
         // TODO: Initialize UserPreferences.application when implemented
       }
-    });
+    }).catch(rethrowIdentifierTaken);
 
     try {
       await ensureGlobalConversationMembership(
@@ -279,20 +292,95 @@ export class UserManagementService {
       data.firstName !== undefined ||
       data.lastName !== undefined;
 
+    const email = data.email === undefined ? undefined : normalizeEmail(data.email);
+    const emailChanges = email !== undefined && await this.emailDiffersFromCurrent(userId, email);
+    if (email !== undefined) await this.assertEmailAvailable(email, userId);
+    if (data.username !== undefined) await this.assertUsernameAvailable(data.username, userId);
+
     const searchTokens = touchesName
       ? searchTokensFor(await this.resolveNameFields(userId, data))
       : undefined;
 
-    const user = await this.prisma.user.update({
+    const write = {
       where: { id: userId },
       data: {
         ...data,
+        ...(email !== undefined ? { email } : {}),
         ...(searchTokens ? { searchTokens } : {}),
         updatedAt: new Date()
       },
-    });
+    };
+
+    // Un changement d'adresse révoque, dans la MÊME écriture, les liens de
+    // réinitialisation émis vers l'ancienne (#6661) — la règle vivait sur
+    // `updateEmail`, méthode qu'aucune route n'appelait, retirée par #8215.
+    const user = await (emailChanges
+      ? this.prisma.$transaction(async (tx) => {
+          const written = await tx.user.update(write);
+          await revokePasswordResetTokensForEmailChange(tx, userId);
+          return written;
+        })
+      : this.prisma.user.update(write)
+    ).catch(rethrowIdentifierTaken);
 
     return user as unknown as FullUser;
+  }
+
+  /**
+   * Refuse une adresse déjà portée par une AUTRE ligne, à la casse près
+   * (#8215) — la même question que les portes publiques
+   * (`routes/users/contact-change.ts`, l'inscription).
+   */
+  private async assertEmailAvailable(email: string, exceptUserId?: string): Promise<void> {
+    const taken = await this.prisma.user.findFirst({
+      where: {
+        email: { equals: email, mode: 'insensitive' },
+        ...(exceptUserId ? { id: { not: exceptUserId } } : {}),
+      },
+      select: { id: true },
+    });
+    if (taken) throw new AdminIdentifierTakenError('email');
+  }
+
+  /**
+   * La même question pour le pseudonyme (#8217) — celle que pose
+   * l'inscription publique (`registration-identity.ts`), insensible à la casse.
+   * Au renommage (#8289), le membre lui-même est exclu : changer la CASSE de
+   * son propre pseudo n'est pas le prendre à quelqu'un. Le refus porte les
+   * candidats libres, testés en UNE requête comme `GET /directory/availability`.
+   */
+  private async assertUsernameAvailable(username: string, exceptUserId?: string): Promise<void> {
+    const taken = await this.prisma.user.findFirst({
+      where: {
+        username: { equals: username, mode: 'insensitive' },
+        ...(exceptUserId ? { id: { not: exceptUserId } } : {}),
+      },
+      select: { id: true },
+    });
+    if (taken) throw new AdminIdentifierTakenError('username', await this.freeUsernameCandidates(username));
+  }
+
+  /** Best-effort : une suggestion qui échoue ne change pas un 409 en 500. */
+  private async freeUsernameCandidates(username: string): Promise<string[]> {
+    const candidats = candidatsDePseudo(username);
+    try {
+      const pris = await this.prisma.user.findMany({
+        where: { username: { in: candidats, mode: 'insensitive' } },
+        select: { username: true },
+      });
+      const occupes = new Set((pris ?? []).map((u: { username: string }) => u.username.toLowerCase()));
+      return candidats.filter((c) => !occupes.has(c.toLowerCase())).slice(0, 3);
+    } catch {
+      return [];
+    }
+  }
+
+  private async emailDiffersFromCurrent(userId: string, email: string): Promise<boolean> {
+    const current = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true },
+    });
+    return normalizeEmail(current?.email ?? '') !== email;
   }
 
   private async resolveNameFields(
@@ -315,44 +403,6 @@ export class UserManagementService {
       firstName: data.firstName !== undefined ? data.firstName : current?.firstName,
       lastName: data.lastName !== undefined ? data.lastName : current?.lastName,
     };
-  }
-
-  /**
-   * Met à jour l'email d'un utilisateur
-   */
-  async updateEmail(
-    userId: string,
-    data: UpdateEmailDTO
-  ): Promise<FullUser> {
-    // Vérifier le mot de passe actuel
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId }
-    });
-
-    if (!user) {
-      throw new Error('User not found');
-    }
-
-    const isPasswordValid = await verifyPassword(data.password, user.password);
-    if (!isPasswordValid) {
-      throw new Error('Invalid password');
-    }
-
-    // Mettre à jour l'email — dans la MÊME écriture, révoquer les liens de
-    // réinitialisation encore valides de l'ancienne adresse (#6661).
-    const updatedUser = await this.prisma.$transaction(async (tx) => {
-      const u = await tx.user.update({
-        where: { id: userId },
-        data: {
-          email: data.newEmail,
-          updatedAt: new Date()
-        },
-      });
-      await revokePasswordResetTokensForEmailChange(tx, userId);
-      return u;
-    });
-
-    return updatedUser as unknown as FullUser;
   }
 
   /**
