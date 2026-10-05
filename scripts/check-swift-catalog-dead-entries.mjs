@@ -366,7 +366,15 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // CONSTRUCTION : #9141 livre les routes gateway et la Boutique WEB ; les
 // onglets par pack côté iOS sont un suivi à part, qui n'existe pas encore.
 // Valeur MESURÉE le 2026-10-02.
-const BASELINE_DEAD_ENTRIES = 289;
+// 289 -> 294 (#9399, 2026-10-05) : les cinq entrées `MeEndpoint.game*`
+// (`.gameChestClaim`, `.gameFlameFreezes`, `.gameFlameRelight`,
+// `.gameGuideSeen`, `.gameMissionsByMissionIdReroll`) GÉNÉRÉES depuis
+// `route-manifest.json` en régénérant `MeEndpoint.swift` (le fichier était
+// resté périmé après le lot du jeu, #9382). Mortes à la naissance PAR
+// CONSTRUCTION, même motif que `StickerPacksEndpoint` ci-dessus : le jeu
+// (chests, flamme, missions) est livré côté gateway et web ; aucun écran iOS
+// ne les appelle encore. Valeur MESURÉE le 2026-10-05.
+const BASELINE_DEAD_ENTRIES = 294;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;
 // Une déclaration de cas n'a jamais de point après `case` ; une branche de

@@ -1,5 +1,7 @@
 import * as adminEndpoints from '@meeshy/shared/api/endpoints/admin';
 
+import { decodeHtmlText } from '@/lib/admin/interpret/html-text';
+
 import { type AdminDeps, asCount, asRecord, asText } from './admin';
 import { adminPageOf, type AdminPage } from './admin-page';
 import type { ApiResult } from './http';
@@ -76,6 +78,8 @@ export type AdminBroadcast = {
   readonly sourceLanguage: string;
   readonly targeting: AdminBroadcastTargeting;
   readonly translations: readonly AdminBroadcastTranslation[];
+  /** Les langues CIBLES (jamais la source) que la préparation n'a pas traduites : chacune lira le texte d'origine. */
+  readonly untranslated: readonly string[];
   readonly targetLanguages: readonly string[];
   readonly status: string;
   readonly totalRecipients: number;
@@ -96,7 +100,12 @@ export type AdminBroadcast = {
 };
 
 export type AdminBroadcastPreview = {
+  /** Le compte historique — celui du canal e-mail (rétrocompatible). */
   readonly recipientCount: number;
+  /** Les comptes joignables par e-mail (adresse vérifiée) ; `recipientCount` d'un ancien serveur. */
+  readonly emailRecipients: number;
+  /** Les comptes joignables dans l'application (sans contrainte de canal) ; `null` d'un ancien serveur, qui ne le sert pas. */
+  readonly inAppRecipients: number | null;
   readonly byLanguage: readonly { readonly language: string; readonly count: number }[];
   /** `country: null` = pays d'inscription inconnu (absent ou vide côté compte). */
   readonly byCountry: readonly { readonly country: string | null; readonly count: number }[];
@@ -133,6 +142,9 @@ const textOrNull = (value: unknown): string | null => {
   const text = asText(value).trim();
   return text === '' ? null : text;
 };
+
+/** Un texte que la passerelle a sérialisé en HTML (`sanitizeText`) : ses entités redeviennent des caractères — du texte, jamais du HTML. */
+const servedText = (value: unknown): string => decodeHtmlText(asText(value));
 
 const instantOrNull = (value: unknown): string | null => (typeof value === 'string' && value !== '' ? value : null);
 
@@ -173,8 +185,8 @@ export function decodeAdminBroadcastRow(raw: unknown): AdminBroadcastRow | null 
   if (typeof id !== 'string' || id === '' || typeof status !== 'string' || typeof createdAt !== 'string') return null;
   return {
     id,
-    name: asText(row.name),
-    subject: asText(row.subject),
+    name: servedText(row.name),
+    subject: servedText(row.subject),
     status,
     totalRecipients: asCount(row.totalRecipients),
     sentCount: asCount(row.sentCount),
@@ -188,8 +200,13 @@ export function decodeAdminBroadcastRow(raw: unknown): AdminBroadcastRow | null 
 
 const textsByLanguage = (raw: unknown): ReadonlyMap<string, string> => {
   const record = asRecord(raw) ?? {};
-  return new Map(Object.entries(record).flatMap(([language, text]) => (typeof text === 'string' && text.trim() !== '' ? [[language, text] as const] : [])));
+  return new Map(
+    Object.entries(record).flatMap(([language, text]) => (typeof text === 'string' && text.trim() !== '' ? [[language, decodeHtmlText(text)] as const] : [])),
+  );
 };
+
+/** La langue de base d'un code (`fr-FR` → `fr`) : la source se reconnaît sous toutes ses variantes. */
+const baseOf = (code: string): string => code.trim().toLowerCase().split(/[-_]/)[0] ?? '';
 
 /**
  * Les traductions, UNE entrée par langue : l'objet et le corps viennent de deux
@@ -197,10 +214,12 @@ const textsByLanguage = (raw: unknown): ReadonlyMap<string, string> => {
  * des langues cibles posées à la préparation, puis le code pour le reste — il est
  * donc stable d'une lecture à l'autre, et ne dépend pas de l'ordre des clés du JSON.
  */
-function decodeTranslations(subjects: unknown, bodies: unknown, targetLanguages: readonly string[]): readonly AdminBroadcastTranslation[] {
+function decodeTranslations(subjects: unknown, bodies: unknown, targetLanguages: readonly string[], sourceLanguage: string): readonly AdminBroadcastTranslation[] {
   const subjectOf = textsByLanguage(subjects);
   const bodyOf = textsByLanguage(bodies);
-  const languages = [...new Set([...subjectOf.keys(), ...bodyOf.keys()])];
+  /* La langue SOURCE n'est pas une traduction (audit 2026-10-04) : une paraphrase `fr → fr` servie se tait. */
+  const source = baseOf(sourceLanguage);
+  const languages = [...new Set([...subjectOf.keys(), ...bodyOf.keys()])].filter((language) => baseOf(language) !== source);
   const rank = (language: string): number => {
     const index = targetLanguages.indexOf(language);
     return index === -1 ? targetLanguages.length : index;
@@ -216,14 +235,18 @@ export function decodeAdminBroadcast(raw: unknown): AdminBroadcast | null {
   const { id, status, createdAt } = row;
   if (typeof id !== 'string' || id === '' || typeof status !== 'string' || typeof createdAt !== 'string') return null;
   const targetLanguages = distinctTexts(row.targetLanguages, (code) => code);
+  const sourceLanguage = asText(row.sourceLanguage);
+  const translations = decodeTranslations(row.translatedSubjects, row.translatedBodies, targetLanguages, sourceLanguage);
+  const translated = new Set(translations.map((translation) => baseOf(translation.language)));
   return {
     id,
-    name: asText(row.name),
-    subject: asText(row.subject),
-    body: asText(row.body),
-    sourceLanguage: asText(row.sourceLanguage),
+    name: servedText(row.name),
+    subject: servedText(row.subject),
+    body: servedText(row.body),
+    sourceLanguage,
     targeting: decodeBroadcastTargeting(row.targeting),
-    translations: decodeTranslations(row.translatedSubjects, row.translatedBodies, targetLanguages),
+    translations,
+    untranslated: targetLanguages.filter((code) => baseOf(code) !== baseOf(sourceLanguage) && !translated.has(baseOf(code))),
     targetLanguages,
     status,
     totalRecipients: asCount(row.totalRecipients),
@@ -266,8 +289,11 @@ export function decodeBroadcastPreview(raw: unknown): AdminBroadcastPreview | nu
     countries.set(country, (countries.get(country) ?? 0) + line.count);
   });
 
+  const count = (value: unknown): number | null => (typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null);
   return {
     recipientCount: preview.recipientCount,
+    emailRecipients: count(preview.emailRecipients) ?? preview.recipientCount,
+    inAppRecipients: count(preview.inAppRecipients),
     byLanguage: byCountDescending(languages),
     byCountry: byCountDescending([...countries].map(([country, count]) => ({ country, count }))),
   };

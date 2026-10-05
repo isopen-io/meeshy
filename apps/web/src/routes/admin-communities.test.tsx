@@ -96,6 +96,12 @@ describe('AdminCommunitiesPanel — de vrais noms, des métadonnées interprét�
     expect(row?.textContent).toContain('@awa');
   });
 
+  test('la description servie se lit en extrait sous le nom ; sans description, rien n’est peint (audit 2026-10-04)', async () => {
+    const { host } = await ouvrir(() => served([community(3, { description: 'Les amateurs de jazz de Douala se retrouvent ici chaque jeudi soir.' }), community(4)]));
+    expect(host.querySelector(`[data-admin-row="${ID(3)}"] [data-admin-community-description]`)?.textContent).toContain('Les amateurs de jazz de Douala');
+    expect(host.querySelector(`[data-admin-row="${ID(4)}"] [data-admin-community-description]`)).toBeNull();
+  });
+
   test('la visibilité et l’état se disent en mots, et la date en relatif', async () => {
     const { host } = await ouvrir();
     const open = host.querySelector(`[data-admin-row="${ID(3)}"]`)?.textContent ?? '';

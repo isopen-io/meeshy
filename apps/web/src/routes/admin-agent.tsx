@@ -9,15 +9,20 @@ import { AdminDenied, AdminScreenFrame, AdminSkeleton } from '@/routes/admin-par
 /**
  * **LE PILOTAGE DE L'AGENT** (#6733, #8876) — `/adm/agent` et `/admin/agent`.
  *
- * Le périmètre tranché par le porteur : vue d'ensemble, conversations suivies,
- * relance / arrêt, journal des scans. Les onglets LLM, sujets, rôles et file de
- * livraison sont un second lot.
+ * Vue d'ensemble (chiffres, activité récente, statistiques du journal),
+ * conversations suivies (relance / arrêt, et la fiche de l'agent sur chacune :
+ * réglages, résumé, planning, rôles, messages publiés), journal des scans, et
+ * quatre modales : modèle et configuration globale, file de livraison, sujets,
+ * remises à zéro (lot Agent complet, #9000–#9005).
  *
  * ## AUCUNE ROUTE NEUVE
  *
  * Les 35 routes `/admin/agent/*` existent depuis longtemps
- * (`services/gateway/src/routes/admin/agent-*.ts`). Cet écran en CONSOMME sept,
- * via `lib/api/admin-agent.ts`, qui documente pour chacune ce que son HANDLER sert.
+ * (`services/gateway/src/routes/admin/agent-*.ts`). Cet écran les CONSOMME toutes,
+ * via `lib/api/admin-agent.ts` et ses ports voisins (`admin-agent-activity.ts`,
+ * `admin-agent-settings.ts`, `admin-agent-conversation.ts`,
+ * `admin-agent-topics.ts`), qui documentent pour chacune ce que son HANDLER sert.
+ * Chaque geste écrit est tracé au journal d'audit par la passerelle.
  *
  * ## LA GARDE EST LUE ICI, PAS HÉRITÉE
  *

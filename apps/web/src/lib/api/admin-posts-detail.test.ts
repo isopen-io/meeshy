@@ -9,8 +9,10 @@ import { adminPostQueryKey, decodeAdminPostFiche, loadAdminPost, removeAdminPost
  * LA FICHE D'UNE PUBLICATION (#8876) — `GET /admin/posts/:postId`, dont le
  * schéma est ouvert (`additionalProperties: true`) : TOUT ce que la requête
  * charge part. Le décodeur est donc la seule barrière — position, liste des
- * personnes visées par l'audience, traductions, réactions, effets de story n'en
- * sortent jamais.
+ * personnes visées par l'audience, texte des traductions, détail de qui a réagi,
+ * blob de scène d'une story n'en sortent jamais ; le résumé des réactions, le
+ * lien et le style d'une story, la piste audio et les compteurs d'audience, si
+ * (audit 2026-10-04).
  */
 const ID = (n: number) => `64f1c2a9e8b7d6c5b4a3928${n}`;
 const person = (n: number, name: string) => ({ id: ID(n), username: name.toLowerCase(), displayName: name, avatar: null });
@@ -30,7 +32,22 @@ const served = (overrides: Record<string, unknown> = {}) => ({
   communityId: ID(3),
   repostOfId: ID(8),
   isQuote: true,
-  storyEffects: { background: '#ff0000' },
+  storyEffects: {
+    background: '#ff0000',
+    textStyle: 'neon',
+    filter: 'warm',
+    linkUrl: 'https://club-jazz.example/soiree',
+    linkPreview: { title: 'La soirée', domain: 'club-jazz.example', image: 'https://cdn/secret-preview.jpg' },
+    stickers: [{ emoji: '🎷', x: 0.2, y: 0.4 }],
+  },
+  audioDuration: 8000,
+  reactionSummary: { '❤️': 5, '🔥': 9, '': 3 },
+  reactionCount: 14,
+  impressionCount: 900,
+  postOpenCount: 410,
+  qualifiedViewCount: 220,
+  playCount: 75,
+  downloadCount: 4,
   moodEmoji: '🎉',
   audioUrl: 'https://cdn/a.mp3',
   expiresAt: '2026-09-30T20:00:00.000Z',
@@ -107,11 +124,42 @@ describe('decodeAdminPostFiche — champ par champ', () => {
     expect(decodeAdminPostFiche(served({ visibility: 'PUBLIC', visibilityUserIds: [] }))?.audienceCount).toBeNull();
   });
 
-  test('la position, les métadonnées, les effets, les réactions et les vues embarquées ne sortent pas', () => {
+  test('la position, les métadonnées, le blob de scène, le détail des réactions et les vues embarquées ne sortent pas', () => {
     const text = JSON.stringify(fiche);
-    for (const sensitive of ['geoPoint', 'coordinates', 'geoPrecision', 'secret-token', 'trackingLinks', 'storyEffects', '#ff0000', 'reactions', 'storyViews', 'audioUrl']) {
+    for (const sensitive of ['geoPoint', 'coordinates', 'geoPrecision', 'secret-token', 'trackingLinks', 'storyEffects', '#ff0000', 'secret-preview', 'reactions', 'storyViews', 'audioUrl']) {
       expect(text).not.toContain(sensitive);
     }
+  });
+
+  test('ce que la fiche servait sans écran (audit 2026-10-04) : audio, story, réactions, audience', () => {
+    expect(fiche?.audio).toEqual({ url: 'https://cdn/a.mp3', durationMs: 8000 });
+    expect(fiche?.story).toEqual({
+      linkUrl: 'https://club-jazz.example/soiree',
+      linkTitle: 'La soirée',
+      linkDomain: 'club-jazz.example',
+      stickerCount: 1,
+      textStyle: 'neon',
+      filter: 'warm',
+      layout: null,
+      sceneCount: 0,
+    });
+    expect(fiche?.reactionTally).toEqual({ total: 14, byEmoji: [{ emoji: '🔥', count: 9 }, { emoji: '❤️', count: 5 }] });
+    expect(fiche?.metrics).toEqual({ impressions: 900, opens: 410, qualifiedViews: 220, plays: 75, downloads: 4 });
+  });
+
+  test('un document de scènes v3 compte ses autocollants et nomme sa disposition ; sans effets, pas de story', () => {
+    const v3 = decodeAdminPostFiche(
+      served({ storyEffects: { v: 3, layout: 'hero', scenes: [{ id: 's1', objects: [{ id: 'o1', kind: 'sticker' }, { id: 'o2', kind: 'text' }] }, { id: 's2', objects: [{ id: 'o3', kind: 'sticker' }] }] } }),
+    );
+    expect(v3?.story).toMatchObject({ stickerCount: 2, layout: 'hero', sceneCount: 2, linkUrl: null });
+    expect(decodeAdminPostFiche(served({ storyEffects: null, audioUrl: null }))).toMatchObject({ story: null, audio: null });
+  });
+
+  test('d’un ancien serveur sans ces champs, rien n’est inventé : zéros et absences', () => {
+    const bare = decodeAdminPostFiche(served({ reactionSummary: undefined, reactionCount: undefined, impressionCount: undefined, audioDuration: undefined }));
+    expect(bare?.reactionTally).toEqual({ total: 0, byEmoji: [] });
+    expect(bare?.metrics.impressions).toBe(0);
+    expect(bare?.audio).toEqual({ url: 'https://cdn/a.mp3', durationMs: null });
   });
 
   test('les six compteurs, et les totaux de commentaires et de spectateurs', () => {
@@ -130,10 +178,10 @@ describe('decodeAdminPostFiche — champ par champ', () => {
     expect(JSON.stringify(fiche)).not.toContain('originel');
   });
 
-  test('les médias gardent ce que la vignette et la légende montrent, pas les chemins ni les transcriptions', () => {
+  test('les médias gardent ce que la vignette, la légende et la transcription montrent, pas les chemins', () => {
     expect(fiche?.media).toEqual([
-      { id: 'm1', mimeType: 'image/jpeg', fileUrl: 'https://cdn/1.jpg', thumbnailUrl: 'https://cdn/1-t.jpg', caption: 'La scène', alt: 'Une scène éclairée', fileSize: 204800, durationMs: null },
-      { id: 'm2', mimeType: 'audio/mpeg', fileUrl: 'https://cdn/2.mp3', thumbnailUrl: null, caption: null, alt: null, fileSize: 1024, durationMs: 12500 },
+      { id: 'm1', mimeType: 'image/jpeg', fileUrl: 'https://cdn/1.jpg', thumbnailUrl: 'https://cdn/1-t.jpg', caption: 'La scène', alt: 'Une scène éclairée', fileSize: 204800, durationMs: null, transcription: { text: 'dit', language: null } },
+      { id: 'm2', mimeType: 'audio/mpeg', fileUrl: 'https://cdn/2.mp3', thumbnailUrl: null, caption: null, alt: null, fileSize: 1024, durationMs: 12500, transcription: null },
     ]);
     expect(JSON.stringify(fiche)).not.toContain('/srv/secret');
   });
@@ -145,12 +193,15 @@ describe('decodeAdminPostFiche — champ par champ', () => {
       content: 'Commentaire 0',
       author: { id: ID(2), username: 'jean', displayName: 'Jean', avatar: null },
       createdAt: '2026-09-30T10:00:00.000Z',
+      likeCount: 0,
+      replyCount: 0,
+      isEdited: false,
     });
   });
 
-  test('les derniers spectateurs sont au plus douze, nommés, sans leur durée de vue', () => {
+  test('les derniers spectateurs sont au plus douze, nommés, avec la durée de leur vue', () => {
     expect(fiche?.viewers).toHaveLength(12);
-    expect(fiche?.viewers[0]).toEqual({ user: { id: ID(2), username: 'jean', displayName: 'Jean', avatar: null }, viewedAt: '2026-09-30T10:00:00.000Z' });
+    expect(fiche?.viewers[0]).toEqual({ user: { id: ID(2), username: 'jean', displayName: 'Jean', avatar: null }, viewedAt: '2026-09-30T10:00:00.000Z', durationMs: 4000 });
   });
 
   test('sans `_count`, les totaux retombent sur ce qui est servi', () => {
@@ -162,7 +213,7 @@ describe('decodeAdminPostFiche — champ par champ', () => {
   test('un commentaire ou un spectateur sans personne lisible est écarté, jamais réparé', () => {
     const partial = decodeAdminPostFiche(served({ views: [{ viewedAt: '2026-09-30T10:00:00.000Z', user: null }], comments: [{ id: 'c1', content: 'x', author: null }] }));
     expect(partial?.viewers).toEqual([]);
-    expect(partial?.comments).toEqual([{ id: 'c1', content: 'x', author: null, createdAt: null }]);
+    expect(partial?.comments).toEqual([{ id: 'c1', content: 'x', author: null, createdAt: null, likeCount: 0, replyCount: 0, isEdited: false }]);
   });
 
   test('sans identifiant, pas de fiche', () => {

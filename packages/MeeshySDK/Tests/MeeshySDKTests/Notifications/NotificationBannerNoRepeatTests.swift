@@ -89,16 +89,17 @@ struct NotificationBannerNoRepeatTests {
         #expect(banner.contentSymbol == nil)
     }
 
-    @Test("une réaction à un message : pas de case-symbole, l'émoji reste rendu")
+    @Test("une réaction à un message : pas de case-symbole, l'émoji dit une fois par la phrase servie")
     func messageReaction_keepsTheEmojiWithoutATile() throws {
         let banner = try event("""
         { "id": "m7", "userId": "u", "type": "message_reaction", "title": "Grace",
-          "content": "a réagi à votre message", "actor": { "id": "a", "displayName": "Grace" },
+          "content": "a réagi 🔥 à votre message", "actor": { "id": "a", "displayName": "Grace" },
           "context": { "conversationType": "direct" }, "metadata": { "reactionEmoji": "🔥" } }
         """).bannerPresentation()
         #expect(banner.contentSymbol == nil)
         #expect(banner.showsContentTile == false)
-        #expect(banner.reactionBadge == "🔥")
+        #expect(banner.body == "a réagi 🔥 à votre message")
+        #expect([banner.headline, banner.body ?? ""].joined(separator: "\n").components(separatedBy: "🔥").count - 1 == 1)
     }
 
     @Test("un contenu social sans miniature garde sa case typée", arguments: [

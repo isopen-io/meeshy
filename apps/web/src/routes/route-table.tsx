@@ -170,6 +170,13 @@ export const ROUTES = {
   progressionBadges: { pattern: '/me/progression/badges', screen: () => import('@/routes/progression-badges') },
   progressionDefis: { pattern: '/me/progression/defis', screen: () => import('@/routes/progression-defis') },
   progressionSucces: { pattern: '/me/progression/succes', screen: () => import('@/routes/progression-succes') },
+  /* LE CARNET DES RÈGLES (#9379) — « Comment ça marche », depuis Progression :
+     les huit règles du jeu et les sept cartes de l'intégration, en entier. Une
+     page qui n'explique que ; aucune lecture réseau. */
+  progressionRegles: { pattern: '/me/progression/regles', screen: () => import('@/routes/progression-rules') },
+  /* LE CARNET DE PROGRESSION (#9382) — les photos des grands moments, gardées
+     sur l'appareil, et les moments laissés en attente sept jours. */
+  progressionCarnet: { pattern: '/me/progression/carnet', screen: () => import('@/routes/progression-carnet') },
   /* LES PUBLICATIONS ENREGISTRÉES (#7286) — miroir `Route.bookmarks`
      (`Router.swift`), atteinte depuis Réglages › Outils comme sur iOS.
 

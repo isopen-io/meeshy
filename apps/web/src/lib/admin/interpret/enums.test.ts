@@ -12,7 +12,9 @@ import {
   interpretEnum,
   interpretPresence,
   interpretReportAction,
+  interpretLockReason,
   interpretRole,
+  interpretSessionEnd,
   interpretTranslationQuality,
   shareLinkStateOf,
   trackingLinkStateOf,
@@ -31,8 +33,8 @@ const families = Object.keys(ENUM_FAMILIES) as AdminEnumFamily[];
 const codesOf = (family: AdminEnumFamily): readonly string[] => Object.keys(ENUM_FAMILIES[family]);
 
 describe('chaque code de chaque famille est nommé dans les quatre langues de l’administration', () => {
-  test('la table couvre les vingt-neuf tables de la spécification (qualité d’appel et de traduction se partagent la leur)', () => {
-    expect(families).toHaveLength(29);
+  test('la table couvre les vingt-neuf tables de la spécification (qualité d’appel et de traduction se partagent la leur), plus le motif d’un verrou et la fin d’une session (lot Personnes)', () => {
+    expect(families).toHaveLength(31);
   });
 
   for (const family of families) {
@@ -182,5 +184,19 @@ describe('shareLinkStateOf et trackingLinkStateOf', () => {
     expect(trackingLinkStateOf({ isActive: true, expiresAt: null }, NOW, 'fr').label).toBe('Actif');
     expect(trackingLinkStateOf({ isActive: true, expiresAt: PAST }, NOW, 'fr').label).toBe('Expiré');
     expect(trackingLinkStateOf({ isActive: false, expiresAt: PAST }, NOW, 'fr').label).toBe('Désactivé');
+  });
+});
+
+describe('les deux familles du lot Personnes (audit 2026-10-04)', () => {
+  test('le motif d’un verrou se dit en mots, jamais `FAILED_LOGIN`', () => {
+    const value = interpretLockReason('FAILED_LOGIN', 'fr');
+    expect(value.label).toBe('Trop d’essais de connexion');
+    expect(value.explain).toContain('quinze minutes');
+    expect(interpretLockReason('too many attempts', 'fr').label).not.toContain('too many');
+  });
+
+  test('la fin d’une session lit `password reset` (espace) comme `password_reset`', () => {
+    expect(interpretSessionEnd('password reset', 'fr').label).toBe('Mot de passe réinitialisé');
+    expect(interpretSessionEnd('admin_revoke', 'en').label).toBe('Revoked by an administrator');
   });
 });

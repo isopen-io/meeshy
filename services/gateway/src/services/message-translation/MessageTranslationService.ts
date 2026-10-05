@@ -1031,7 +1031,7 @@ export class MessageTranslationService extends EventEmitter {
         return;
       }
 
-      this.stats.incrementTranslationsReceived();
+      this.stats.recordTranslationReceived(data.result.processingTime); // compte + moyenne (s → ms)
       
       // SAUVEGARDE EN BASE DE DONNÉES (traduction validée par le Translator)
       let translationId: string | null = null;

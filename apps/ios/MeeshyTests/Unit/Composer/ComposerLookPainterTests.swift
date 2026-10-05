@@ -34,6 +34,13 @@ final class ComposerLookPainterTests: XCTestCase {
         XCTAssertEqual(attendu, CGSize(width: 216, height: 384))
     }
 
+    func test_scene_classic_isPaintedInLayersAtTheSessionDate() throws {
+        let look = ComposerPhotoLook(frame: .montage(.classic(.polaroid)))
+        let scene = try XCTUnwrap(ComposerLookPainter.scene(for: look, canvas: CGSize(width: 108, height: 192),
+                                                            date: date, person: auteur))
+        XCTAssertEqual(scene.inputs.texts.date, ComposerPhotoLookSource.caption(at: date).subtitle)
+    }
+
     func test_paint_withoutLook_isTheSourceFilledIntoTheCanvas() throws {
         let image = ComposerLookPainter.paint(Self.source(), look: ComposerPhotoLook(), framing: .identity,
                                               scene: nil, canvas: CGSize(width: 90, height: 160), declared: nil)
@@ -120,6 +127,77 @@ final class ComposerLookPainterTests: XCTestCase {
         XCTAssertNil(cache.cached(cle), "la fermeture du viseur vide le cache")
     }
 
+    // MARK: - Relecture du lot (#9347)
+
+    func test_paint_uniformSourceUpscaled_keepsOpaqueUnchangedCorners() throws {
+        let toile = CGSize(width: 90, height: 160)
+        let image = ComposerLookPainter.paint(CIImage(cgImage: Self.uniforme(width: 40, height: 64)),
+                                              look: ComposerPhotoLook(), framing: .identity,
+                                              scene: nil, canvas: toile, declared: nil)
+        let octets = try Self.rgba(image, size: toile)
+        let centre = Self.pixel(octets, x: 45, y: 80, width: 90)
+        for (x, y) in [(0, 0), (89, 0), (0, 159), (89, 159)] {
+            let i = (y * 90 + x) * 4
+            XCTAssertEqual(octets[i + 3], 255, "coin (\(x),\(y)) : aucun liseré transparent au bord")
+            XCTAssertEqual(Int(octets[i]), Int(centre.red), accuracy: 2, "coin (\(x),\(y)) : la couleur ne fonce pas")
+            XCTAssertEqual(Int(octets[i + 2]), Int(centre.blue), accuracy: 2, "coin (\(x),\(y))")
+        }
+    }
+
+    func test_renderPreview_paintsAtTheDesignCanvas_neverAtTheNativeResolution() async throws {
+        let grande = Self.uniforme(width: 1440, height: 2560)
+        let apercu = await ComposerLookPainter.renderPreview(grande, look: ComposerPhotoLook(filter: .warm),
+                                                             framing: .identity, person: auteur, date: date,
+                                                             scenes: ComposerLookSceneCache(countLimit: 2))
+        let image = try XCTUnwrap(apercu)
+        XCTAssertEqual(CGSize(width: image.width, height: image.height), ComposerLookPainter.designCanvas,
+                       "l'aperçu de la revue ne se peint jamais à la définition de la prise")
+    }
+
+    func test_renderPreview_inACancelledTask_paintsNothing() async {
+        let personne = auteur
+        let jour = date
+        let tache = Task { () -> CGImage? in
+            withUnsafeCurrentTask { $0?.cancel() }
+            return await ComposerLookPainter.renderPreview(Self.cgSource(), look: ComposerPhotoLook(filter: .warm),
+                                                           framing: .identity, person: personne, date: jour,
+                                                           scenes: ComposerLookSceneCache(countLimit: 2))
+        }
+        let rendu = await tache.value
+        XCTAssertNil(rendu, "un aperçu remplacé par un autre look s'arrête au lieu de se peindre")
+    }
+
+    func test_scene_largerThanTheDesignCanvas_leavesNoLayersInTheCallCache() throws {
+        let cadre = try XCTUnwrap(Self.premierCadreDuCatalogue())
+        let dessin = try XCTUnwrap(ComposerLiveLookRule.design(for: cadre))
+        let textes = ComposerPhotoLookSource.texts(at: date)
+        let grande = CGSize(width: 1440, height: 2560)
+        CallFrameRenderer.purgeLayers()
+        XCTAssertNotNil(ComposerLookPainter.scene(for: ComposerPhotoLook(frame: cadre), canvas: grande,
+                                                  date: date, person: auteur))
+        XCTAssertNil(CallFrameRenderer.cachedLayers(for: CallFrameStage(frame: dessin, people: [auteur],
+                                                                         texts: textes, size: grande)),
+                     "les couches d'une photo pleine définition n'évincent pas celles de l'aperçu")
+        let petite = CGSize(width: 108, height: 192)
+        XCTAssertNotNil(ComposerLookPainter.scene(for: ComposerPhotoLook(frame: cadre), canvas: petite,
+                                                  date: date, person: auteur))
+        XCTAssertNotNil(CallFrameRenderer.cachedLayers(for: CallFrameStage(frame: dessin, people: [auteur],
+                                                                            texts: textes, size: petite)),
+                        "l'aperçu garde son cache de couches")
+    }
+
+    func test_disarm_purgesTheFrameLayers() throws {
+        let cadre = try XCTUnwrap(Self.premierCadreDuCatalogue())
+        let dessin = try XCTUnwrap(ComposerLiveLookRule.design(for: cadre))
+        let petite = CGSize(width: 108, height: 192)
+        _ = ComposerLookPainter.scene(for: ComposerPhotoLook(frame: cadre), canvas: petite, date: date, person: auteur)
+        let stage = CallFrameStage(frame: dessin, people: [auteur], texts: ComposerPhotoLookSource.texts(at: date),
+                                   size: petite)
+        XCTAssertNotNil(CallFrameRenderer.cachedLayers(for: stage))
+        ComposerCaptureSession().disarm()
+        XCTAssertNil(CallFrameRenderer.cachedLayers(for: stage), "fermer le viseur relâche les couches des cadres")
+    }
+
     // MARK: - Outils
 
     private final class Compteur: @unchecked Sendable {
@@ -149,6 +227,15 @@ final class ComposerLookPainterTests: XCTestCase {
     }
 
     static func source() -> CIImage { CIImage(cgImage: cgSource()) }
+
+    static func uniforme(width: Int, height: Int) -> CGImage {
+        let contexte = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+                                 space: CGColorSpaceCreateDeviceRGB(),
+                                 bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        contexte.setFillColor(CGColor(red: 0.8, green: 0.6, blue: 0.4, alpha: 1))
+        contexte.fill(CGRect(x: 0, y: 0, width: width, height: height))
+        return contexte.makeImage()!
+    }
 
     struct Pixel { let red: UInt8; let green: UInt8; let blue: UInt8 }
 

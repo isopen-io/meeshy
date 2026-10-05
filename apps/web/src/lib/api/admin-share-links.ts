@@ -199,14 +199,15 @@ export async function reopenAdminShareLink(params: AdminDeps & { readonly shareL
  * geste consigné. Le résultat est REMIS à l'appelant, qui l'affiche UNE fois : cette
  * fonction n'écrit dans aucun cache, et ses appelants ne la passent jamais à
  * `useQuery`. Une charge sans clés lisibles est un échec, pas un secret vide.
+ * Un motif ABSENT (`null`/`undefined`) part sans `reason` : la passerelle l'admet du seul rang souverain (spec 2026-10-04 § 4) et refuse les autres.
  */
 export async function revealAdminShareLink(
-  params: AdminDeps & { readonly shareLinkId: string; readonly reason: string },
+  params: AdminDeps & { readonly shareLinkId: string; readonly reason?: string | null },
 ): Promise<ApiResult<AdminShareLinkSecret>> {
   const result = await params.transport.request<unknown>({
     method: 'POST',
     path: adminEndpoints.shareLinksByIdReveal(params.shareLinkId),
-    body: { reason: params.reason },
+    body: params.reason === null || params.reason === undefined ? {} : { reason: params.reason },
   });
   if (!result.ok) return result;
   const secret = decodeAdminShareLinkSecret(result.data);

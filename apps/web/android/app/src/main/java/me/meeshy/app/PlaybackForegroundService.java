@@ -12,7 +12,9 @@ import android.graphics.drawable.Icon;
 import android.media.session.MediaSession;
 import android.media.session.PlaybackState;
 import android.os.Build;
+import android.os.Handler;
 import android.os.IBinder;
+import android.os.Looper;
 import android.util.Log;
 
 /**
@@ -27,11 +29,20 @@ import android.util.Log;
  * `src/lib/view/shell-playback.ts` pilote tant qu'un `<audio>` de la page
  * joue ; sa notification discrete rouvre l'application, et sa « Pause »
  * (#9301) — celle de la notification media de Chrome Android — est remise a
- * la page, qui met ses `<audio>` en pause et rend ainsi la lecture.
+ * la page, qui met ses `<audio>` en pause.
  *
  * Le bouton d'un casque ou d'ecouteurs Bluetooth suit la meme voie (#9344) :
  * le service porte une `MediaSession` active, en lecture, qui n'accepte que
  * la pause — celle que Chrome Android ouvre pour un `<audio>` qui joue.
+ *
+ * Et sa notification est un LECTEUR lie a cette session (#9367), comme celle
+ * de Chrome : le systeme la montre sur l'ecran verrouille et dans les
+ * reglages rapides, la Pause visible sans deplier.
+ *
+ * Une pause demandee ici GARE la lecture (#9394), comme Chrome garde son
+ * lecteur : la session passe en pause, la notification offre « Lecture » et
+ * quitte le premier plan, donc se balaie. « Lecture », a la notification ou
+ * au casque, repasse au premier plan et remet la reprise a la page.
  */
 public class PlaybackForegroundService extends Service {
 
@@ -39,6 +50,9 @@ public class PlaybackForegroundService extends Service {
     private static final int NOTIFICATION_ID = 0x4d50; // "MP"
     private static final String TAG = "MeeshyPlayback";
     static final String ACTION_PAUSE = "me.meeshy.app.playback.PAUSE";
+    static final String ACTION_PLAY = "me.meeshy.app.playback.PLAY";
+
+    private static volatile PlaybackForegroundService running;
 
     static void start(Context context) {
         Intent intent = new Intent(context, PlaybackForegroundService.class);
@@ -58,28 +72,73 @@ public class PlaybackForegroundService extends Service {
         context.stopService(new Intent(context, PlaybackForegroundService.class));
     }
 
+    static void park() {
+        PlaybackForegroundService service = running;
+        if (service != null) new Handler(Looper.getMainLooper()).post(() -> service.parked());
+    }
+
     private MediaSession session;
 
     @Override
     public void onCreate() {
         super.onCreate();
+        running = this;
         session = new MediaSession(this, TAG);
         session.setCallback(new MediaSession.Callback() {
             @Override
             public void onPause() {
                 if (!MeeshyPlaybackPlugin.pauseRequested()) stopSelf();
             }
+
+            @Override
+            public void onPlay() {
+                resume();
+            }
         });
-        session.setPlaybackState(new PlaybackState.Builder()
-            .setActions(PlaybackState.ACTION_PAUSE | PlaybackState.ACTION_PLAY_PAUSE)
-            .setState(PlaybackState.STATE_PLAYING, PlaybackState.PLAYBACK_POSITION_UNKNOWN, 1f)
-            .build());
+        session.setPlaybackState(state(true));
         session.setActive(true);
+    }
+
+    private static PlaybackState state(boolean playing) {
+        return new PlaybackState.Builder()
+            .setActions(playing
+                ? PlaybackState.ACTION_PAUSE | PlaybackState.ACTION_PLAY_PAUSE
+                : PlaybackState.ACTION_PLAY | PlaybackState.ACTION_PLAY_PAUSE)
+            .setState(
+                playing ? PlaybackState.STATE_PLAYING : PlaybackState.STATE_PAUSED,
+                PlaybackState.PLAYBACK_POSITION_UNKNOWN,
+                playing ? 1f : 0f)
+            .build();
+    }
+
+    /** La page a mis ses vocaux en pause a la demande de la coque. */
+    void parked() {
+        MediaSession current = session;
+        if (current == null) return;
+        current.setPlaybackState(state(false));
+        NotificationManager manager = getSystemService(NotificationManager.class);
+        if (manager != null) manager.notify(NOTIFICATION_ID, notification(false));
+        stopForeground(Service.STOP_FOREGROUND_DETACH);
+    }
+
+    /** « Lecture » : repasser au premier plan, puis remettre la reprise a la page. */
+    void resume() {
+        if (!MeeshyPlaybackPlugin.playRequested()) {
+            // Plus de page pour reprendre : la notification garee s'en va aussi.
+            stopSelf();
+            return;
+        }
+        if (session != null) session.setPlaybackState(state(true));
+        foreground();
     }
 
     @Override
     public void onDestroy() {
+        if (running == this) running = null;
         if (session != null) session.release();
+        // Une notification garee a quitte le premier plan : elle ne part pas seule.
+        NotificationManager manager = getSystemService(NotificationManager.class);
+        if (manager != null) manager.cancel(NOTIFICATION_ID);
         session = null;
         super.onDestroy();
     }
@@ -91,17 +150,26 @@ public class PlaybackForegroundService extends Service {
             if (!MeeshyPlaybackPlugin.pauseRequested()) stopSelf();
             return START_NOT_STICKY;
         }
+        if (intent != null && ACTION_PLAY.equals(intent.getAction())) {
+            resume();
+            return START_NOT_STICKY;
+        }
+        if (session != null) session.setPlaybackState(state(true));
+        foreground();
+        return START_NOT_STICKY;
+    }
+
+    private void foreground() {
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                startForeground(NOTIFICATION_ID, notification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK);
+                startForeground(NOTIFICATION_ID, notification(true), ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK);
             } else {
-                startForeground(NOTIFICATION_ID, notification());
+                startForeground(NOTIFICATION_ID, notification(true));
             }
         } catch (RuntimeException refused) {
             Log.w(TAG, "premier plan refuse", refused);
             stopSelf();
         }
-        return START_NOT_STICKY;
     }
 
     /** L'app balayee des recentes emporte la WebView, donc la lecture. */
@@ -117,17 +185,17 @@ public class PlaybackForegroundService extends Service {
     }
 
     @SuppressWarnings("deprecation")
-    private Notification notification() {
+    private Notification notification(boolean playing) {
         PendingIntent open = PendingIntent.getActivity(
             this,
             NOTIFICATION_ID,
             new Intent(this, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
             PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
         );
-        PendingIntent pause = PendingIntent.getService(
+        PendingIntent toggle = PendingIntent.getService(
             this,
-            NOTIFICATION_ID + 1,
-            new Intent(this, PlaybackForegroundService.class).setAction(ACTION_PAUSE),
+            playing ? NOTIFICATION_ID + 1 : NOTIFICATION_ID + 2,
+            new Intent(this, PlaybackForegroundService.class).setAction(playing ? ACTION_PAUSE : ACTION_PLAY),
             PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
         );
         Notification.Builder builder;
@@ -146,17 +214,20 @@ public class PlaybackForegroundService extends Service {
         }
         return builder
             .setSmallIcon(android.R.drawable.ic_media_play)
-            .setContentTitle(getString(R.string.playback_ongoing))
+            .setContentTitle(getString(playing ? R.string.playback_ongoing : R.string.playback_paused))
             .setContentText(getString(R.string.playback_return))
             .setCategory(Notification.CATEGORY_SERVICE)
-            .setOngoing(true)
+            .setOngoing(playing)
             .setShowWhen(false)
             .setVisibility(Notification.VISIBILITY_PUBLIC)
             .setContentIntent(open)
+            .setStyle(new Notification.MediaStyle()
+                .setMediaSession(session.getSessionToken())
+                .setShowActionsInCompactView(0))
             .addAction(new Notification.Action.Builder(
-                Icon.createWithResource(this, android.R.drawable.ic_media_pause),
-                getString(R.string.playback_pause),
-                pause
+                Icon.createWithResource(this, playing ? android.R.drawable.ic_media_pause : android.R.drawable.ic_media_play),
+                getString(playing ? R.string.playback_pause : R.string.playback_play),
+                toggle
             ).build())
             .build();
     }

@@ -29,34 +29,21 @@ nonisolated enum ComposerLiveLookPanelLayout {
 /// Les lois du look en direct — pures, éprouvables sans caméra.
 nonisolated enum ComposerLiveLookRule {
 
-    /// **Les cadres en direct sont ceux du catalogue** — ceux que l'appel
-    /// compose en direct (`CallLiveFrameSurface`). Un classique du Montage est
-    /// le peintre d'une image FIGÉE : il reste offert à la prise d'une photo
-    /// (`ComposerPhotoLookReview`), pas au flux.
-    ///
-    /// Seuls ceux que l'appel compose en direct s'offrent
-    /// (`CallLiveFrameRule.isEligible`) : un cadre lourd tiendrait l'aperçu
-    /// sous ses 30 images par seconde.
+    /// **Les cadres en direct : les classiques du Montage, puis les ambiances du
+    /// catalogue** (#9348). Un classique se peint désormais en couches GPU
+    /// (`CallMontageRenderer.layers`) : il se compose en direct comme un cadre.
     static func chips() -> [CallMontageMoodChip] {
         ComposerPhotoLookRule.chips().filter { puce in
-            puce != .classics && frames(for: puce).contains { $0 != ComposerPhotoFrame.none }
+            frames(for: puce).contains { $0 != ComposerPhotoFrame.none }
         }
     }
 
-    /// « Aucun cadre » en tête, puis les cadres de l'ambiance qui se composent
-    /// en direct.
+    /// « Aucun cadre » en tête ; un cadre du catalogue ne s'offre que s'il se
+    /// compose en direct (`CallLiveFrameRule.isEligible`).
     static func frames(for chip: CallMontageMoodChip) -> [ComposerPhotoFrame] {
         ComposerPhotoLookRule.frames(for: chip).filter { cadre in
-            guard isLive(cadre) else { return false }
-            guard let dessin = design(for: cadre) else { return cadre == ComposerPhotoFrame.none }
-            return CallLiveFrameRule.isEligible(dessin)
-        }
-    }
-
-    static func isLive(_ frame: ComposerPhotoFrame) -> Bool {
-        switch frame {
-        case .none, .montage(.frame): return true
-        case .montage(.classic): return false
+            guard case .montage(.frame) = cadre else { return true }
+            return design(for: cadre).map(CallLiveFrameRule.isEligible) ?? false
         }
     }
 
@@ -65,10 +52,9 @@ nonisolated enum ComposerLiveLookRule {
         frames(for: chip).first { $0 != ComposerPhotoFrame.none } ?? .none
     }
 
-    /// La puce ouverte pour un look : celle de son cadre, sinon la première.
+    /// La puce ouverte pour un look : celle de son cadre.
     static func chip(for look: ComposerPhotoLook) -> CallMontageMoodChip? {
-        let ouverte = ComposerPhotoLookRule.chip(of: look.frame)
-        return ouverte == .classics ? chips().first : ouverte
+        ComposerPhotoLookRule.chip(of: look.frame)
     }
 
     /// Le dessin du cadre à composer ; `nil` sans cadre, ou pour un cadre
@@ -81,7 +67,7 @@ nonisolated enum ComposerLiveLookRule {
     /// **Sans look, l'aperçu reste la couche système** — aucun coût, aucune
     /// trame retenue.
     static func rendersLive(_ look: ComposerPhotoLook) -> Bool {
-        !look.isUntouched && isLive(look.frame)
+        !look.isUntouched
     }
 
     /// **Le look ne change plus une fois la prise commencée.** Une vidéo

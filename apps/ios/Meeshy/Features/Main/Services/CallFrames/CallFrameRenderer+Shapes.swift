@@ -366,7 +366,7 @@ nonisolated extension CallFrameRenderer {
         switch slot.tone {
         case .color:
             return
-        case .mono:
+        case .mono, .luminosity:
             blend(context, rect, .saturation, gray)
         case .sepia:
             blend(context, rect, .saturation, gray)

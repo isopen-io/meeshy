@@ -24,6 +24,8 @@ import { AdminConversationPanel } from './admin-conversation';
  */
 const { mount, mounter } = setupAdminKitTests();
 const BIGBOSS = adminIdentityFixture({ role: 'BIGBOSS' });
+/* Le motif écrit se mesure sur un ADMIN : le rang souverain n'en écrit pas (spec 2026-10-04 § 4). */
+const ADMIN = adminIdentityFixture({ role: 'ADMIN' });
 const NOW = new Date('2026-09-30T12:00:00.000Z');
 const CONVERSATION = OBJECT_ID(1);
 const MOTIVE = 'Signalement #9142 — mise en conformité';
@@ -60,7 +62,7 @@ function Screen({ deps }: { readonly deps: AdminDeps }) {
   );
 }
 
-async function open(deps: AdminDeps, identity = BIGBOSS) {
+async function open(deps: AdminDeps, identity = BIGBOSS, section?: string) {
   const { Router } = createRouter(
     { adminConversation: { pattern: '/admin/conversations/$conversation', screen: async () => ({ default: () => <Screen deps={deps} /> }) } },
     () => <p>absent</p>,
@@ -71,13 +73,21 @@ async function open(deps: AdminDeps, identity = BIGBOSS) {
     await mounter.settle();
   }
   await mounter.settle();
+  if (section !== undefined) await openSection(host, section);
   return host;
 }
 
-const meta = (host: ParentNode, anchor: string) => host.querySelector(`[data-admin-meta="${anchor}"]`);
+/** Ouvre la carte `section` : son détail monte dans une modale (spec 2026-10-04 § 3), rendue hors de l'hôte. */
+async function openSection(host: ParentNode, section: string) {
+  await act(async () => host.querySelector<HTMLButtonElement>(`[data-admin-summary="${section}"] [data-admin-summary-open]`)?.click());
+  await mounter.settle();
+  await mounter.settle();
+}
+const panel = (section: string) => document.querySelector(`[data-admin-conversation-panel="${section}"]`);
+const meta = (_host: ParentNode, anchor: string) => document.querySelector(`[data-admin-meta="${anchor}"]`);
 const stat = (host: ParentNode, id: string) => host.querySelector(`[data-admin-stat="${id}"]`)?.textContent ?? '';
-const roleCell = (host: ParentNode, row: number) => host.querySelector(`[data-admin-row="${OBJECT_ID(100 + row)}"] td:nth-child(2)`)?.textContent ?? '';
-const gesture = (host: ParentNode, name: string, row: string) => host.querySelector<HTMLElement>(`[data-admin-row="${OBJECT_ID(100 + Number(row))}"] [data-admin-action="${name}"]`);
+const roleCell = (_host: ParentNode, row: number) => document.querySelector(`[data-admin-row="${OBJECT_ID(100 + row)}"] td:nth-child(2)`)?.textContent ?? '';
+const gesture = (_host: ParentNode, name: string, row: string) => document.querySelector<HTMLElement>(`[data-admin-row="${OBJECT_ID(100 + Number(row))}"] [data-admin-action="${name}"]`);
 const writes = (calls: () => readonly HttpRequest[]) => calls().filter((call) => call.method !== 'GET');
 
 describe('l’identité et les chiffres', () => {
@@ -125,16 +135,52 @@ describe('l’identité et les chiffres', () => {
 });
 
 describe('la mise en page de la fiche', () => {
-  test('les membres portent leurs gestes sur TOUTE la largeur ; les métadonnées restent dans la colonne latérale', async () => {
-    const { deps } = setup(fiche(), members(MEMBERS));
+  test('le détail est une grille de cartes ; aucune modale n’est montée au repos, et rien du détail n’est lu', async () => {
+    const { deps, calls } = setup(fiche(), members(MEMBERS));
     const host = await open(deps);
 
-    const aside = host.querySelector('[data-admin-fiche-aside]');
-    expect(aside).not.toBeNull();
-    expect(aside?.querySelector('[data-admin-meta]')).not.toBeNull();
-    expect(aside?.querySelector('[data-admin-fiche-section="members"]')).toBeNull();
-    expect(host.querySelector('[data-admin-fiche-section="members"]')).not.toBeNull();
-    expect(host.querySelector('[data-admin-fiche-section="reading"]')?.closest('[data-admin-fiche-aside]')).toBeNull();
+    const cards = [...host.querySelectorAll('[data-admin-conversation-cards] [data-admin-summary]')].map((card) => card.getAttribute('data-admin-summary'));
+    /* Sans agent servi (aucune réponse à `…/live`), la carte Agent n'est pas posée. */
+    expect(cards).toEqual(['members', 'settings', 'reading', 'community', 'links']);
+    expect(document.querySelector('[data-admin-conversation-panel]')).toBeNull();
+    expect(calls().some((call) => pathOf(call).endsWith('/participants'))).toBe(false);
+    const button = host.querySelector<HTMLButtonElement>('[data-admin-summary="members"] [data-admin-summary-open]');
+    expect(button?.style.minHeight).toBe('44px');
+  });
+
+  test('les cartes disent les chiffres de la fiche : membres, type et état, messages, communauté, liens', async () => {
+    const { deps } = setup(fiche({ memberCount: 12408, messageCount: 1204, shareLinkCount: 0 }), members(MEMBERS));
+    const host = await open(deps);
+
+    expect(host.querySelector('[data-admin-summary="members"]')?.textContent).toMatch(/12\s?408/);
+    expect(host.querySelector('[data-admin-summary="settings"]')?.textContent).toContain('Groupe');
+    expect(host.querySelector('[data-admin-summary="settings"]')?.textContent).toContain('Active');
+    expect(host.querySelector('[data-admin-summary="reading"]')?.textContent).toMatch(/1\s?204/);
+    expect(host.querySelector('[data-admin-summary="community"]')?.textContent).toContain('Lycée Njanda');
+    expect(host.querySelector('[data-admin-summary="links"]')?.textContent).toContain('Aucun lien de partage');
+  });
+
+  test('« Ouvrir » écrit la section dans l’adresse (?open=) et monte les membres, sur toute la largeur de la modale', async () => {
+    const { deps, calls } = setup(fiche(), members(MEMBERS));
+    const host = await open(deps, BIGBOSS, 'members');
+
+    expect(window.location.search).toBe('?open=members');
+    expect(panel('members')?.querySelector('[data-admin-fiche-section="members"]')).not.toBeNull();
+    expect(host.querySelector('[data-admin-fiche-aside]')).toBeNull();
+    expect(calls().some((call) => pathOf(call).endsWith('/participants'))).toBe(true);
+  });
+
+  test('la carte Communauté ouvre la communauté NOMMÉE avec son adresse publique', async () => {
+    const { deps } = setup(fiche(), members(MEMBERS));
+    await open(deps, BIGBOSS, 'community');
+    expect(panel('community')?.textContent).toContain('Lycée Njanda');
+    expect(panel('community')?.textContent).toContain('lycee-njanda');
+  });
+
+  test('une conversation hors communauté n’a pas de carte Communauté', async () => {
+    const { deps } = setup(fiche({ community: null }), members(MEMBERS));
+    const host = await open(deps);
+    expect(host.querySelector('[data-admin-summary="community"]')).toBeNull();
   });
 
   test('l’agent actif se dit « Agent actif » dans l’en-tête, sans se confondre avec l’état de la conversation', async () => {
@@ -153,7 +199,7 @@ describe('les métadonnées, interprétées', () => {
       fiche({ settings: servedSettings({ defaultWriteRole: 'moderator', isAnnouncementChannel: true, slowModeSeconds: 90 }) }),
       members(MEMBERS),
     );
-    const host = await open(deps);
+    const host = await open(deps, BIGBOSS, 'settings');
 
     expect(meta(host, 'writeRole')?.textContent).toContain('Modérateurs et plus');
     expect(meta(host, 'announcement')?.textContent).toContain('Oui : seuls les administrateurs y écrivent');
@@ -163,7 +209,7 @@ describe('les métadonnées, interprétées', () => {
 
   test('sans mode lent : « Désactivé » ; conversation ordinaire : « Non : conversation ordinaire »', async () => {
     const { deps } = setup(fiche(), members(MEMBERS));
-    const host = await open(deps);
+    const host = await open(deps, BIGBOSS, 'settings');
 
     expect(meta(host, 'slowMode')?.textContent).toContain('Désactivé');
     expect(meta(host, 'announcement')?.textContent).toContain('Non : conversation ordinaire');
@@ -172,7 +218,7 @@ describe('les métadonnées, interprétées', () => {
 
   test('un direct n’a aucune hiérarchie d’écriture : ces trois lignes ne sont pas dessinées', async () => {
     const { deps } = setup(fiche({ type: 'direct', title: 'Awa et Jean' }), members(MEMBERS));
-    const host = await open(deps);
+    const host = await open(deps, BIGBOSS, 'settings');
 
     expect(meta(host, 'writeRole')).toBeNull();
     expect(meta(host, 'announcement')).toBeNull();
@@ -182,7 +228,7 @@ describe('les métadonnées, interprétées', () => {
 
   test('chiffrée de bout en bout : la conséquence est dite — le serveur ne lit pas, donc pas de traduction', async () => {
     const { deps } = setup(fiche({ settings: servedSettings({ encryptionMode: 'e2ee', autoTranslateEnabled: true }) }), members(MEMBERS));
-    const host = await open(deps);
+    const host = await open(deps, BIGBOSS, 'settings');
 
     expect(meta(host, 'encryption')?.textContent).toContain('Chiffrée de bout en bout');
     expect(meta(host, 'encryption')?.textContent).toContain('Le serveur ne lit pas les messages');
@@ -191,7 +237,7 @@ describe('les métadonnées, interprétées', () => {
 
   test('sans mode de chiffrement servi : « Non chiffrée », jamais « Non renseigné »', async () => {
     const { deps } = setup(fiche({ settings: servedSettings({ encryptionMode: null }) }), members(MEMBERS));
-    const host = await open(deps);
+    const host = await open(deps, BIGBOSS, 'settings');
 
     expect(meta(host, 'encryption')?.textContent).toContain('Non chiffrée');
   });
@@ -201,7 +247,7 @@ describe('les métadonnées, interprétées', () => {
       fiche({ closedAt: '2026-09-20T09:00:00.000Z', closedBy: { id: OBJECT_ID(3), username: 'awa', displayName: 'Awa Diop', avatar: null } }),
       members(MEMBERS),
     );
-    const host = await open(deps);
+    const host = await open(deps, BIGBOSS, 'settings');
 
     expect(meta(host, 'state')?.textContent).toContain('Fermée à l’écriture');
     expect(meta(host, 'state')?.textContent).toContain('n’y écrivent plus');
@@ -212,7 +258,7 @@ describe('les métadonnées, interprétées', () => {
 
   test('archivée : le dit, et dit que plus personne n’y écrit', async () => {
     const { deps } = setup(fiche({ isActive: false }), members(MEMBERS));
-    const host = await open(deps);
+    const host = await open(deps, BIGBOSS, 'settings');
 
     expect(meta(host, 'state')?.textContent).toContain('Archivée');
     expect(meta(host, 'state')?.textContent).toContain('plus personne n’y écrit');
@@ -221,28 +267,36 @@ describe('les métadonnées, interprétées', () => {
 
   test('dates absolues ET relatives ; une conversation muette le dit', async () => {
     const { deps } = setup(fiche({ lastMessageAt: null }), members(MEMBERS));
-    const host = await open(deps);
+    const host = await open(deps, BIGBOSS, 'settings');
 
     expect(meta(host, 'created')?.textContent).toMatch(/2026/);
     expect(meta(host, 'created')?.textContent).toMatch(/il y a 2 mois/);
     expect(meta(host, 'lastMessage')?.textContent).toContain('Aucun message pour le moment');
   });
 
+  test('la communauté se dit par son nom ET son adresse publique, jamais par son identifiant technique', async () => {
+    const { deps } = setup(fiche(), members(MEMBERS));
+    const host = await open(deps, BIGBOSS, 'settings');
+
+    expect(meta(host, 'community')?.textContent).toContain('Lycée Njanda');
+    expect(meta(host, 'community')?.textContent).toContain('lycee-njanda');
+  });
+
   test('l’identifiant technique vit seul dans sa ligne copiable', async () => {
     const { deps } = setup(fiche(), members(MEMBERS));
-    const host = await open(deps);
+    await open(deps, BIGBOSS, 'settings');
 
-    expect(host.querySelector('[data-admin-technical-id]')?.textContent).toBe(CONVERSATION);
-    expect(host.querySelector('[data-admin-action="copy-technical-id"]')).not.toBeNull();
+    expect(document.querySelector('[data-admin-technical-id]')?.textContent).toBe(CONVERSATION);
+    expect(document.querySelector('[data-admin-action="copy-technical-id"]')).not.toBeNull();
   });
 });
 
 describe('les membres — nommés, avec leurs gestes', () => {
   test('nom, @pseudo, rôle en mots, état et présence ; un invité sans compte porte son nom', async () => {
     const { deps } = setup(fiche(), members(MEMBERS));
-    const host = await open(deps);
+    const host = await open(deps, BIGBOSS, 'members');
 
-    const text = host.querySelector('[data-admin-fiche-section="members"]')?.textContent ?? '';
+    const text = document.querySelector('[data-admin-fiche-section="members"]')?.textContent ?? '';
     for (const expected of ['Awa Diop', '@membre1', 'Créateur', 'Modérateur', 'Membre', 'Visiteur', 'Actif', 'A quitté la conversation', 'En ligne', 'Hors ligne']) {
       expect(text).toContain(expected);
     }
@@ -250,27 +304,48 @@ describe('les membres — nommés, avec leurs gestes', () => {
     expectNoRawIdentifiers(host);
   });
 
+  test('un membre parti dit POURQUOI : banni, a quitté (daté), retiré ; et son surnom rejoint son @pseudo', async () => {
+    const { deps } = setup(
+      fiche(),
+      members([
+        servedMember(1, { role: 'creator', nickname: 'Tata', leftAt: null, bannedAt: null }),
+        servedMember(2, { isActive: false, leftAt: '2026-09-01T10:00:00.000Z', bannedAt: '2026-09-28T10:00:00.000Z' }),
+        servedMember(3, { isActive: false, leftAt: '2026-09-29T10:00:00.000Z', bannedAt: null }),
+        servedMember(6, { isActive: false, leftAt: null, bannedAt: null }),
+      ]),
+    );
+    await open(deps, BIGBOSS, 'members');
+
+    const row = (n: number) => document.querySelector(`[data-admin-row="${OBJECT_ID(100 + n)}"]`);
+    expect(row(1)?.textContent).toContain('Surnom : Tata');
+    expect(row(2)?.querySelector('[data-admin-member-departure="banned"]')?.textContent).toContain('Banni');
+    expect(row(2)?.textContent).toContain('28 sept. 2026');
+    expect(row(3)?.querySelector('[data-admin-member-departure="left"]')?.textContent).toContain('A quitté');
+    expect(row(3)?.textContent).toContain('29 sept. 2026');
+    expect(row(6)?.querySelector('[data-admin-member-departure="removed"]')?.textContent).toContain('Retiré');
+  });
+
   test('chaque membre ouvre sa fiche, dans l’espace courant ; un invité, sa fiche d’anonyme par sa ligne de participation', async () => {
     const { deps } = setup(fiche(), members(MEMBERS));
-    const host = await open(deps);
+    await open(deps, BIGBOSS, 'members');
 
-    const hrefOf = (row: number) => host.querySelector(`[data-admin-row="${OBJECT_ID(100 + row)}"] td a`)?.getAttribute('href');
+    const hrefOf = (row: number) => document.querySelector(`[data-admin-row="${OBJECT_ID(100 + row)}"] td a`)?.getAttribute('href');
     expect(hrefOf(2)).toBe(`/admin/users/${OBJECT_ID(2)}`);
     expect(hrefOf(4)).toBe(`/admin/anonymous/${OBJECT_ID(104)}`);
   });
 
   test('le créateur est protégé : aucun geste, et la phrase le DIT', async () => {
     const { deps } = setup(fiche(), members(MEMBERS));
-    const host = await open(deps);
+    const host = await open(deps, BIGBOSS, 'members');
 
     expect(gesture(host, 'member-role', '1')).toBeNull();
     expect(gesture(host, 'member-remove', '1')).toBeNull();
-    expect(host.querySelector(`[data-admin-row="${OBJECT_ID(101)}"] [data-admin-member-protected]`)?.textContent).toContain('le créateur ne peut être ni rétrogradé ni retiré');
+    expect(document.querySelector(`[data-admin-row="${OBJECT_ID(101)}"] [data-admin-member-protected]`)?.textContent).toContain('le créateur ne peut être ni rétrogradé ni retiré');
   });
 
   test('un invité anonyme et un membre parti n’ont aucun geste : les routes se disent en identifiant de compte', async () => {
     const { deps } = setup(fiche(), members(MEMBERS));
-    const host = await open(deps);
+    const host = await open(deps, BIGBOSS, 'members');
 
     for (const row of ['4', '5']) {
       expect(gesture(host, 'member-role', row)).toBeNull();
@@ -281,7 +356,7 @@ describe('les membres — nommés, avec leurs gestes', () => {
 
   test('changer un rôle : le choix ouvre la confirmation, qui dit qui, de quel rôle à quel rôle', async () => {
     const { deps, calls } = setup(fiche(), members(MEMBERS));
-    const host = await open(deps);
+    const host = await open(deps, BIGBOSS, 'members');
 
     typeInto(gesture(host, 'member-role', '3') as HTMLSelectElement, 'admin');
     await mounter.settle();
@@ -298,7 +373,7 @@ describe('les membres — nommés, avec leurs gestes', () => {
       members(MEMBERS),
       (req) => (req.method === 'PATCH' ? { ok: true, data: { conversationId: CONVERSATION, userId: OBJECT_ID(3), participantId: OBJECT_ID(103), role: 'admin' } } : undefined),
     );
-    const host = await open(deps);
+    const host = await open(deps, ADMIN, 'members');
     typeInto(gesture(host, 'member-role', '3') as HTMLSelectElement, 'admin');
     await mounter.settle();
 
@@ -323,7 +398,7 @@ describe('les membres — nommés, avec leurs gestes', () => {
       served = MEMBERS.map((member) => (member.id === OBJECT_ID(103) ? { ...member, role: 'admin' } : member));
       return { ok: true, data: { conversationId: CONVERSATION, userId: OBJECT_ID(3), participantId: OBJECT_ID(103), role: 'admin' } };
     });
-    const host = await open(deps);
+    const host = await open(deps, ADMIN, 'members');
     typeInto(gesture(host, 'member-role', '3') as HTMLSelectElement, 'admin');
     await mounter.settle();
     mounter.type(document.body, '[data-admin-motive]', MOTIVE);
@@ -335,7 +410,7 @@ describe('les membres — nommés, avec leurs gestes', () => {
 
   test('un refus DÉFAIT l’effet optimiste et le dit dans la confirmation, qui reste ouverte', async () => {
     const { deps } = setup(fiche(), members(MEMBERS), (req) => (req.method === 'PATCH' ? { ok: false, status: 500, error: 'boom' } : undefined));
-    const host = await open(deps);
+    const host = await open(deps, ADMIN, 'members');
     typeInto(gesture(host, 'member-role', '3') as HTMLSelectElement, 'admin');
     await mounter.settle();
     mounter.type(document.body, '[data-admin-motive]', MOTIVE);
@@ -348,7 +423,7 @@ describe('les membres — nommés, avec leurs gestes', () => {
 
   test('« Annuler » referme sans rien envoyer, et le choix retombe sur le rôle servi', async () => {
     const { deps, calls } = setup(fiche(), members(MEMBERS));
-    const host = await open(deps);
+    const host = await open(deps, BIGBOSS, 'members');
     typeInto(gesture(host, 'member-role', '3') as HTMLSelectElement, 'admin');
     await mounter.settle();
 
@@ -361,7 +436,7 @@ describe('les membres — nommés, avec leurs gestes', () => {
 
   test('un 403 « créateur protégé » se dit par sa phrase, pas par « permission refusée »', async () => {
     const { deps } = setup(fiche(), members(MEMBERS), (req) => (req.method === 'PATCH' ? { ok: false, status: 403, error: 'refusé', code: 'CREATOR_PROTECTED' } : undefined));
-    const host = await open(deps);
+    const host = await open(deps, ADMIN, 'members');
     typeInto(gesture(host, 'member-role', '3') as HTMLSelectElement, 'moderator');
     await mounter.settle();
     mounter.type(document.body, '[data-admin-motive]', MOTIVE);
@@ -376,7 +451,7 @@ describe('les membres — nommés, avec leurs gestes', () => {
       members(MEMBERS),
       (req) => (req.method === 'POST' ? { ok: true, data: { conversationId: CONVERSATION, userId: OBJECT_ID(3), participantId: OBJECT_ID(103), removed: true } } : undefined),
     );
-    const host = await open(deps);
+    const host = await open(deps, ADMIN, 'members');
 
     await mounter.click(gesture(host, 'member-remove', '3'));
     expect(document.querySelector('[data-admin-confirm]')?.textContent).toContain('Léa Moreau sera retiré de la conversation');
@@ -392,7 +467,7 @@ describe('les membres — nommés, avec leurs gestes', () => {
 
   test('la conversation globale ne se vide pas : pas de bouton « Retirer » ; un direct n’a pas de rôle à changer', async () => {
     const global = setup(fiche({ type: 'global' }), members(MEMBERS));
-    const hostGlobal = await open(global.deps);
+    const hostGlobal = await open(global.deps, BIGBOSS, 'members');
     expect(gesture(hostGlobal, 'member-remove', '3')).toBeNull();
     expect(gesture(hostGlobal, 'member-role', '3')).not.toBeNull();
   });
@@ -401,7 +476,7 @@ describe('les membres — nommés, avec leurs gestes', () => {
     Object.defineProperty(window.navigator, 'onLine', { configurable: true, value: false });
     try {
       const { deps } = setup(fiche(), members(MEMBERS));
-      const host = await open(deps);
+      const host = await open(deps, BIGBOSS, 'members');
       await act(async () => {
         window.dispatchEvent(new Event('offline'));
       });
@@ -419,12 +494,21 @@ describe('les membres — nommés, avec leurs gestes', () => {
 });
 
 describe('la lecture souveraine — le contrat reste', () => {
-  test('le portillon est là dès l’ouverture, AVANT toute requête de messages', async () => {
+  test('fermée, la carte de lecture ne lit RIEN — même au rang souverain, qui lit sans motif', async () => {
     const { deps, calls } = setup(fiche(), members(MEMBERS));
     const host = await open(deps);
 
-    expect(host.querySelector('[data-admin-reading-gate]')).not.toBeNull();
-    expect(host.querySelector('[data-admin-reason]')).not.toBeNull();
+    expect(host.querySelector('[data-admin-summary="reading"]')?.textContent).toContain('Lecture directe');
+    expect(document.querySelector('[data-admin-conversation-panel="reading"]')).toBeNull();
+    expect(calls().some((call) => pathOf(call).endsWith('/messages'))).toBe(false);
+  });
+
+  test('le portillon est là dès l’ouverture, AVANT toute requête de messages', async () => {
+    const { deps, calls } = setup(fiche(), members(MEMBERS));
+    await open(deps, ADMIN, 'reading');
+
+    expect(document.querySelector('[data-admin-reading-gate]')).not.toBeNull();
+    expect(document.querySelector('[data-admin-reason]')).not.toBeNull();
     expect(calls().some((call) => pathOf(call).endsWith('/messages'))).toBe(false);
   });
 
@@ -434,17 +518,46 @@ describe('la lecture souveraine — le contrat reste', () => {
       members(MEMBERS),
       (req) => (pathOf(req) === `${CONVERSATION_PATH}/messages` ? resultatServi({ data: [], pagination: { total: 0, offset: 0, limit: 30, hasMore: false } }) : undefined),
     );
-    const host = await open(deps);
+    await open(deps, ADMIN, 'reading');
 
-    mounter.type(host, '[data-admin-reason]', 'Neuf care');
-    expect(host.querySelector<HTMLButtonElement>('[data-admin-reason-submit]')?.disabled).toBe(true);
+    mounter.type(document.body, '[data-admin-reason]', 'Neuf care');
+    expect(document.querySelector<HTMLButtonElement>('[data-admin-reason-submit]')?.disabled).toBe(true);
 
-    mounter.type(host, '[data-admin-reason]', MOTIVE);
-    await mounter.click(host.querySelector<HTMLElement>('[data-admin-reason-submit]'));
+    mounter.type(document.body, '[data-admin-reason]', MOTIVE);
+    await mounter.click(document.querySelector<HTMLElement>('[data-admin-reason-submit]'));
 
     const read = calls().find((call) => pathOf(call).endsWith('/messages'));
     expect(new URL(read?.path ?? '', 'https://x.test').searchParams.get('reason')).toBe(MOTIVE);
-    expect(host.querySelector('[data-admin-reading-empty]')).not.toBeNull();
+    expect(document.querySelector('[data-admin-reading-empty]')).not.toBeNull();
+  });
+
+  test('le rang souverain lit SANS motif : aucun portillon, GET …/messages sans `reason`', async () => {
+    const { deps, calls } = setup(
+      fiche(),
+      members(MEMBERS),
+      (req) => (pathOf(req) === `${CONVERSATION_PATH}/messages` ? resultatServi({ data: [], pagination: { total: 0, offset: 0, limit: 30, hasMore: false } }) : undefined),
+    );
+    await open(deps, BIGBOSS, 'reading');
+    await mounter.settle();
+
+    expect(document.querySelector('[data-admin-reason]')).toBeNull();
+    const read = calls().find((call) => pathOf(call).endsWith('/messages'));
+    expect(read).toBeDefined();
+    expect(new URL(read?.path ?? '', 'https://x.test').searchParams.has('reason')).toBe(false);
+  });
+
+  test('le rang souverain change un rôle SANS motif : PATCH sans `reason`', async () => {
+    const { deps, calls } = setup(
+      fiche(),
+      members(MEMBERS),
+      (req) => (req.method === 'PATCH' ? { ok: true, data: { conversationId: CONVERSATION, userId: OBJECT_ID(3), participantId: OBJECT_ID(103), role: 'admin' } } : undefined),
+    );
+    const host = await open(deps, BIGBOSS, 'members');
+    typeInto(gesture(host, 'member-role', '3') as HTMLSelectElement, 'admin');
+    await mounter.settle();
+    expect(document.querySelector('[data-admin-motive]')).toBeNull();
+    await mounter.click(document.querySelector<HTMLElement>('[data-admin-action="confirm"]'));
+    expect(writes(calls)[0]?.body).toEqual({ role: 'admin' });
   });
 
   test('aucune trace du motif ni du fil dans le cache persistable : les clés sont souveraines', async () => {
@@ -459,7 +572,7 @@ describe('la lecture souveraine — le contrat reste', () => {
 
   test('si la fiche échoue, la lecture reste offerte sous l’avis d’erreur', async () => {
     const { deps } = setup((req) => (req.method === 'GET' && pathOf(req) === CONVERSATION_PATH ? { ok: false, status: 500, error: 'boom' } : undefined), members(MEMBERS));
-    const host = await open(deps);
+    const host = await open(deps, ADMIN, 'reading');
 
     expect(host.querySelector('[data-admin-conversation-fiche-error] [data-admin-error]')).not.toBeNull();
     expect(host.querySelector('[data-admin-reading-gate]')).not.toBeNull();
@@ -498,8 +611,53 @@ describe('configurer, et l’agent', () => {
         : undefined;
 
     const withAgent = await open(setup(fiche({ agentEnabled: true }), members(MEMBERS), live).deps);
-    expect(withAgent.querySelector(`[data-agent-conversation-control="${CONVERSATION}"]`)).not.toBeNull();
-    expect(withAgent.querySelector(`[data-agent-relaunch-effect="${CONVERSATION}"]`)?.textContent).toContain('publier un message');
+    expect(withAgent.querySelector('[data-admin-summary="agent"]')).not.toBeNull();
+    expect(document.querySelector(`[data-agent-conversation-control="${CONVERSATION}"]`)).toBeNull();
+    await openSection(withAgent, 'agent');
+    expect(document.querySelector(`[data-agent-conversation-control="${CONVERSATION}"]`)).not.toBeNull();
+    expect(document.querySelector(`[data-agent-relaunch-effect="${CONVERSATION}"]`)?.textContent).toContain('publier un message');
+  });
+
+  test('un membre piloté se dit par son nom, son @pseudo ET sa langue résolue — jamais le « fr » inventé (2e2842185b)', async () => {
+    const live = (req: HttpRequest): ApiResult<unknown> | undefined =>
+      req.method === 'GET' && pathOf(req) === `/api/v1/admin/agent/configs/${CONVERSATION}/live`
+        ? {
+            ok: true,
+            data: {
+              conversationId: CONVERSATION,
+              isScanning: false,
+              currentNode: null,
+              controlledUsers: [{ userId: 'a'.repeat(24), displayName: 'Awa Diop', username: 'awa', systemLanguage: 'fr', language: 'wo' }],
+            },
+          }
+        : undefined;
+
+    const host = await open(setup(fiche({ agentEnabled: true }), members(MEMBERS), live).deps);
+    await openSection(host, 'agent');
+
+    const users = document.querySelector(`[data-agent-conversation-control="${CONVERSATION}"]`)?.textContent ?? '';
+    expect(users).toContain('Awa Diop');
+    expect(users).toContain('@awa');
+    expect(users).toContain('Wolof');
+    expect(users).not.toContain('Français');
+  });
+
+  test('sans configuration, la passerelle rend 404 sur `…/live` : c’est « pas d’agent » — ni carte, ni erreur', async () => {
+    const absent = (req: HttpRequest): ApiResult<unknown> | undefined =>
+      pathOf(req) === `/api/v1/admin/agent/configs/${CONVERSATION}/live` ? { ok: false, status: 404, error: 'Aucune configuration' } : undefined;
+    const host = await open(setup(fiche({ agentEnabled: false }), members(MEMBERS), absent).deps);
+
+    expect(host.querySelector('[data-admin-summary="agent"]')).toBeNull();
+    expect(host.querySelector('[data-admin-error], [role="alert"]')).toBeNull();
+  });
+
+  test('une autre panne de `…/live` se dit sur la carte Agent, avec « Réessayer »', async () => {
+    const down = (req: HttpRequest): ApiResult<unknown> | undefined =>
+      pathOf(req) === `/api/v1/admin/agent/configs/${CONVERSATION}/live` ? { ok: false, status: 500, error: 'boom' } : undefined;
+    const host = await open(setup(fiche({ agentEnabled: true }), members(MEMBERS), down).deps);
+
+    expect(host.querySelector('[data-admin-summary="agent"]')?.getAttribute('data-admin-summary-state')).toBe('error');
+    expect(host.querySelector('[data-admin-summary="agent"] [data-admin-retry]')).not.toBeNull();
   });
 
   test('sans `canManageAgent`, le bloc agent ne se peint pas et rien n’est lu', async () => {
@@ -564,9 +722,9 @@ describe('les états dessinés et l’accès', () => {
 
   test('les membres en erreur ne cassent pas la fiche : leur bloc dit l’erreur, le reste sert', async () => {
     const { deps } = setup(fiche(), (req) => (pathOf(req).endsWith('/participants') ? { ok: false, status: 500, error: 'boom' } : undefined));
-    const host = await open(deps);
+    const host = await open(deps, BIGBOSS, 'members');
 
-    expect(host.querySelector('[data-admin-fiche-section="members"] [data-admin-error]')).not.toBeNull();
+    expect(document.querySelector('[data-admin-fiche-section="members"] [data-admin-error]')).not.toBeNull();
     expect(host.querySelector('[data-admin-page-title]')?.textContent).toBe('Atelier du jeudi');
   });
 

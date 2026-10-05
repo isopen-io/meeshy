@@ -154,6 +154,7 @@ final class ComposerCaptureSession: ObservableObject {
         dismissDrag = 0
         extinguishFlash()
         ComposerLookSceneCache.shared.purge()
+        CallFrameRenderer.purgeLayers()
         camera.stop()
     }
 

@@ -41,6 +41,10 @@ struct StoryTrayView: View {
     @State private var myStoriesFollowUp = DeferredSheetFollowUp<MyStoriesFollowUp>()
     /// Session d'édition d'une story publiée (composer en mode édition).
     @State private var editingStorySession: StoryEditSession?
+    /// La hauteur de la bande — la réserve `FloatingButtonSafeZone.storyBand`
+    /// la dégage des bulles flottantes (#9363), et doit la contenir.
+    static let trayHeight: CGFloat = 120
+
     var body: some View {
         VStack(spacing: 0) {
             // Cache-first: only show the skeleton row when the carousel
@@ -56,7 +60,7 @@ struct StoryTrayView: View {
                 storyScrollView
             }
         }
-        .frame(height: 120)
+        .frame(height: Self.trayHeight)
         .myStoriesSheet(
             isPresented: $showMyStories,
             followUp: $myStoriesFollowUp,
@@ -352,6 +356,8 @@ private struct MyStoryButton: View {
     var onManageStories: (() -> Void)?
     var onShowProfile: (() -> Void)?
 
+    private static let plusHitMargin = (MeeshyControlSize.tapTarget - MeeshyControlSize.compact) / 2
+
     // Lecture directe sans @ObservedObject — leaf view rendue dans le tray,
     // évite que chaque changement de thème force un re-render du bouton.
     private var theme: ThemeManager { ThemeManager.shared }
@@ -520,8 +526,13 @@ private struct MyStoryButton: View {
                                     .fill(MeeshyColors.brandGradient)
                                     .overlay(Circle().stroke(theme.backgroundPrimary, lineWidth: MeeshyBorder.strong))
                             )
+                            // Cible de 44 pt autour du disque de 32 (#9363),
+                            // dessin inchangé : la marge du tray l'accueille.
+                            .padding(Self.plusHitMargin)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
+                    .offset(x: -Self.plusHitMargin, y: -Self.plusHitMargin)
                     .accessibilityLabel(String(localized: "story.tray.addStory",
                                                defaultValue: "Ajouter une story"))
                 }

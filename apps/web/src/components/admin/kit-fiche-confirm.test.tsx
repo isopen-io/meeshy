@@ -256,3 +256,44 @@ describe('AdminConfirmSheet — tout geste sensible passe par ici', () => {
     expect(confirmer(primaire.host)?.style.backgroundColor).toBe('var(--color-ios-brand)');
   });
 });
+
+describe('AdminConfirmSheet — le rang souverain n’écrit pas de motif (spec 2026-10-04 § 4)', () => {
+  const ADMIN = adminIdentityFixture({ role: 'ADMIN' });
+
+  async function ouvrirEnTantQue(identity: ReturnType<typeof adminIdentityFixture>, required: boolean) {
+    const confirmations: (string | null)[] = [];
+    const host = await mount(
+      <AdminConfirmSheet
+        language="fr"
+        title="Retirer la publication"
+        body="La publication disparaît du fil."
+        confirmLabel="Retirer"
+        tone="danger"
+        busy={false}
+        motive={{ label: 'Motif', minLength: 10, required }}
+        onConfirm={(value) => confirmations.push(value)}
+        onCancel={() => undefined}
+      />,
+      identity,
+    );
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    });
+    return { host, confirmations };
+  }
+
+  test('souverain : aucun champ, confirmation directe, le geste part SANS motif (null)', async () => {
+    const { host, confirmations } = await ouvrirEnTantQue(BIGBOSS, true);
+    expect(host.querySelector('[data-admin-motive]')).toBeNull();
+    const bouton = host.querySelector<HTMLButtonElement>('[data-admin-action="confirm"]');
+    expect(bouton?.disabled).toBe(false);
+    await act(async () => bouton?.click());
+    expect(confirmations).toEqual([null]);
+  });
+
+  test('ADMIN : le champ obligatoire reste, la confirmation bloquée sous le minimum', async () => {
+    const { host } = await ouvrirEnTantQue(ADMIN, true);
+    expect(host.querySelector('[data-admin-motive]')).not.toBeNull();
+    expect(host.querySelector<HTMLButtonElement>('[data-admin-action="confirm"]')?.disabled).toBe(true);
+  });
+});

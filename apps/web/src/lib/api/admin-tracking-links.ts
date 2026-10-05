@@ -49,6 +49,8 @@ export type AdminTrackingLinkRow = {
   readonly medium: string | null;
   readonly originalUrl: string;
   readonly shortUrl: string;
+  /** L'adresse ABSOLUE du lien (b980cc5db7) ; `null` d'un ancien serveur, qui ne sert que `shortUrl` (relative). */
+  readonly fullUrl: string | null;
   readonly targetType: string;
   readonly target: AdminTrackingTarget | null;
   readonly conversation: AdminLinkConversation | null;
@@ -114,6 +116,7 @@ export function decodeAdminTrackingLinkRow(raw: unknown): AdminTrackingLinkRow |
     medium: textOrNull(link.medium),
     originalUrl: asText(link.originalUrl),
     shortUrl: asText(link.shortUrl),
+    fullUrl: textOrNull(link.fullUrl),
     targetType: asText(link.targetType),
     target: decodeTarget(link.target),
     conversation: decodeAdminLinkConversation(link.conversation),

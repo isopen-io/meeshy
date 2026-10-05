@@ -31,6 +31,19 @@ nonisolated enum CallLiveFrameGeometry {
         return fill.concatenating(turn)
     }
 
+    /// La vidéo remplie dans `photo` (repère de la case, y vers le bas), puis
+    /// portée dans la toile Core Image par la transformation relevée — rotation
+    /// autour de n'importe quel centre comprise.
+    static func placed(source: CGRect, photo: CGRect, toCanvas: CGAffineTransform) -> CGAffineTransform {
+        guard source.width > 0, source.height > 0, photo.width > 0, photo.height > 0 else { return .identity }
+        let scale = max(photo.width / source.width, photo.height / source.height)
+        let fill = CGAffineTransform(translationX: -source.midX, y: -source.midY)
+            .concatenating(CGAffineTransform(scaleX: scale, y: scale))
+            .concatenating(CGAffineTransform(translationX: photo.midX, y: photo.midY))
+        let retourne = CGAffineTransform(a: 1, b: 0, c: 0, d: -1, tx: 0, ty: photo.minY + photo.maxY)
+        return fill.concatenating(retourne).concatenating(toCanvas)
+    }
+
     /// La scène peinte à `scene` remplit l'écran à `drawable` (même proportion à l'arrondi près).
     static func fit(scene: CGSize, into drawable: CGSize) -> CGAffineTransform {
         guard scene.width > 0, scene.height > 0 else { return .identity }
@@ -51,6 +64,9 @@ nonisolated struct CallLiveFrameSlot: @unchecked Sendable {
     let placeholder: CIImage
     let tone: CallFrameTone
     let duotone: CallFrameDuotone?
+    /// Repère de la case → repère de la toile, relevé à la peinture d'un
+    /// classique (#9348). `nil` ⇒ la case se pose par `photo` + `rotation`.
+    var placement: CGAffineTransform? = nil
 }
 
 /// Les couches CUITES d'un cadre (doc frames 02 § 3.3) : peintes une fois par le processeur,
@@ -94,9 +110,15 @@ nonisolated final class CallLiveFrameCompositor: CallLiveFrameCompositing, @unch
     // MARK: - Peindre (processeur, une fois)
 
     func paint(design: CallFrameDesign, inputs: CallLiveFrameLayerInputs) -> CallLiveFrameScene? {
+        paint(design: design, inputs: inputs, cachingLayers: true)
+    }
+
+    /// `cachingLayers: false` : les couches de cette toile ne restent pas dans le cache
+    /// du peintre (`CallFrameRenderer.layers(for:caching:)`).
+    func paint(design: CallFrameDesign, inputs: CallLiveFrameLayerInputs, cachingLayers: Bool) -> CallLiveFrameScene? {
         guard inputs.size.width >= 1, inputs.size.height >= 1 else { return nil }
         let stage = CallFrameStage(frame: design, people: inputs.people, texts: inputs.texts, size: inputs.size)
-        guard let layers = CallFrameRenderer.layers(for: stage),
+        guard let layers = CallFrameRenderer.layers(for: stage, caching: cachingLayers),
               let backdrop = Self.baked(layers.backdrop),
               let overlay = Self.baked(layers.overlay) else { return nil }
         let slots = zip(stage.boxes, inputs.people).compactMap { box, person in
@@ -182,8 +204,24 @@ nonisolated final class CallLiveFrameCompositor: CallLiveFrameCompositing, @unch
     }
 
     func place(_ video: CIImage, in slot: CallLiveFrameSlot, canvasHeight: CGFloat) -> CIImage {
-        let transform = CallLiveFrameGeometry.videoTransform(source: video.extent, photo: slot.photo, degrees: slot.rotation, canvasHeight: canvasHeight)
-        return Self.toned(video.transformed(by: transform), slot: slot).cropped(to: slot.mask.extent)
+        let transform = slot.placement.map {
+            CallLiveFrameGeometry.placed(source: video.extent, photo: slot.photo, toCanvas: $0)
+        } ?? CallLiveFrameGeometry.videoTransform(source: video.extent, photo: slot.photo, degrees: slot.rotation,
+                                                  canvasHeight: canvasHeight)
+        return Self.toned(Self.opaqueCore(video).clampedToExtent().transformed(by: transform), slot: slot)
+            .cropped(to: slot.mask.extent)
+    }
+
+    /// Les seuls pixels ENTIERS d'une image : un bord fractionnaire (une prise déjà
+    /// recadrée) est en partie transparent, et l'étendre ferait un liseré translucide.
+    static func opaqueCore(_ image: CIImage) -> CIImage {
+        let etendue = image.extent
+        guard !etendue.isInfinite, !etendue.isNull else { return image }
+        let minX = etendue.minX.rounded(.up), minY = etendue.minY.rounded(.up)
+        let coeur = CGRect(x: minX, y: minY, width: etendue.maxX.rounded(.down) - minX,
+                           height: etendue.maxY.rounded(.down) - minY)
+        guard coeur.width >= 1, coeur.height >= 1 else { return image }
+        return image.cropped(to: coeur)
     }
 
     /// Le ton d'une case (§ 4.2 de la spec des cadres) par les filtres intégrés de Core Image —
@@ -194,6 +232,8 @@ nonisolated final class CallLiveFrameCompositor: CallLiveFrameCompositing, @unch
             return image
         case .mono:
             return image.applyingFilter("CIPhotoEffectMono")
+        case .luminosity:
+            return luminance(image)
         case .noir:
             return image.applyingFilter("CIPhotoEffectNoir")
         case .sepia:
@@ -208,6 +248,19 @@ nonisolated final class CallLiveFrameCompositor: CallLiveFrameCompositing, @unch
             let pair = slot.duotone ?? CallFrameDuotone(shadow: "#1E1B4B", light: "#F0ABFC")
             return image.applyingFilter("CIFalseColor", parameters: ["inputColor0": ciColor(pair.shadow), "inputColor1": ciColor(pair.light)])
         }
+    }
+
+    /// La luminance 0,30 R + 0,59 V + 0,11 B sur les valeurs ENCODÉES (sRGB), comme le
+    /// mode `.saturation` du peintre CPU sur un gris — quel que soit l'espace de travail.
+    static func luminance(_ image: CIImage) -> CIImage {
+        guard let srgb = CGColorSpace(name: CGColorSpace.sRGB),
+              let encodee = image.matchedFromWorkingSpace(to: srgb) else { return image }
+        let poids = CIVector(x: 0.30, y: 0.59, z: 0.11, w: 0)
+        let gris = encodee.applyingFilter("CIColorMatrix", parameters: [
+            "inputRVector": poids, "inputGVector": poids, "inputBVector": poids,
+            "inputAVector": CIVector(x: 0, y: 0, z: 0, w: 1), "inputBiasVector": CIVector(x: 0, y: 0, z: 0, w: 0),
+        ])
+        return gris.matchedToWorkingSpace(from: srgb) ?? gris
     }
 
     static func ciColor(_ hex: String) -> CIColor {

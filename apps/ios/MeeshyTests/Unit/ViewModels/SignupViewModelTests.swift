@@ -542,6 +542,59 @@ final class SignupViewModelTests: XCTestCase {
         XCTAssertNil(sut.error(for: .phoneNumber))
     }
 
+    // MARK: - « S'inscrire » inactif EXPLIQUE (#9362)
+
+    /// Le bouton touché pendant la première frappe d'un numéro trop court : le
+    /// motif paraît sous le champ, et la main revient au champ.
+    func test_explainInactivePrimary_tooShortPhoneWhileTyping_saysWhyAndTargetsThePhone() {
+        let (sut, registrar) = makeSUT()
+        sut.form.phoneDigits = "061234"
+        XCTAssertEqual(sut.primaryAction, .signUp(enabled: false))
+        XCTAssertNil(sut.error(for: .phoneNumber))
+
+        let target = sut.explainInactivePrimary()
+
+        XCTAssertEqual(target, .phoneNumber)
+        XCTAssertEqual(sut.error(for: .phoneNumber), SignupViewModel.phoneRefusalMessage(.implausible(.tooShort)))
+        XCTAssertEqual(registrar.registerCallCount, 0)
+    }
+
+    func test_explainInactivePrimary_emptyPhone_saysTheNumberIsRequired() {
+        let (sut, _) = makeSUT()
+
+        XCTAssertEqual(sut.explainInactivePrimary(), .phoneNumber)
+        XCTAssertEqual(sut.error(for: .phoneNumber), SignupViewModel.phoneRefusalMessage(.missing))
+    }
+
+    /// Un numéro plausible n'a rien à se reprocher : le bouton inactif pour une
+    /// autre raison ne gronde pas le téléphone.
+    func test_explainInactivePrimary_plausiblePhone_saysNothingAboutThePhone() {
+        let (sut, _) = makeSUT()
+        sut.form.phoneDigits = "612345678"
+        sut.form.email = "awa@"
+
+        XCTAssertNil(sut.explainInactivePrimary())
+        XCTAssertNil(sut.error(for: .phoneNumber))
+    }
+
+    func test_explainInactivePrimary_activeButton_isNotItsBusiness() {
+        let (sut, _) = makeSUT()
+        fillValidForm(sut)
+        XCTAssertEqual(sut.primaryAction, .signUp(enabled: true))
+
+        XCTAssertNil(sut.explainInactivePrimary())
+    }
+
+    /// VoiceOver lit le motif SUR le bouton, avant même qu'on le touche.
+    func test_inactivePrimaryReason_isThePhoneRefusal_untilTheNumberIsPlausible() {
+        let (sut, _) = makeSUT()
+        sut.form.phoneDigits = "061234"
+        XCTAssertEqual(sut.inactivePrimaryReason, SignupViewModel.phoneRefusalMessage(.implausible(.tooShort)))
+
+        sut.form.phoneDigits = "0612345678"
+        XCTAssertNil(sut.inactivePrimaryReason)
+    }
+
     func test_phoneRefusalMessages_areDistinctAndNeverEmpty() {
         let missing = SignupViewModel.phoneRefusalMessage(.missing)
         let tooShort = SignupViewModel.phoneRefusalMessage(.implausible(.tooShort))

@@ -84,6 +84,9 @@ nonisolated enum CallFrameTone: String, CaseIterable, Equatable, Sendable {
     case cool
     case faded
     case duotone
+    /// La luminance seule (0,30 R + 0,59 V + 0,11 B), comme le mode `.saturation`
+    /// du peintre sur un gris : le ton du classique `noir` (#9348).
+    case luminosity
 }
 
 nonisolated enum CallFrameTilt: String, CaseIterable, Equatable, Sendable {

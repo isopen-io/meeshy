@@ -166,6 +166,24 @@ describe('la santé — ouverture et blocs', () => {
     expect(host.querySelector('[data-admin-notice="warning"]')?.textContent).toContain('Le service de traduction est injoignable.');
   });
 
+  test('un traducteur servi mais `reachable: false` se dit injoignable, comme un traducteur absent', async () => {
+    const translator = { requestsSent: 0, received: 0, errors: 0, poolFullRejections: 0, avgProcessingTimeMs: 0, cacheHitRate: 0, memoryUsageMb: 0, uptimeSeconds: 0, reachable: false };
+    const { deps } = scripted(() => healthy({ translator, circuitBreakers: CLOSED }));
+    const host = await open(deps);
+
+    expect(host.querySelector('[data-admin-monitoring-section="translator"]')?.textContent).toContain('Service de traduction injoignable');
+    expect(host.querySelector('[data-admin-stat="translator-sent"]')).toBeNull();
+    expect(host.querySelector('[data-admin-notice="warning"]')?.textContent).toContain('Le service de traduction est injoignable.');
+  });
+
+  test('un temps moyen de traitement à 0 n’est pas une mesure : « — », jamais « 0 ms »', async () => {
+    const { deps } = scripted(() => healthy({ translator: { requestsSent: 0, received: 0, errors: 0, poolFullRejections: 0, avgProcessingTimeMs: 0, cacheHitRate: 0, memoryUsageMb: 10, uptimeSeconds: 60, reachable: true } }));
+    const host = await open(deps);
+
+    expect(stat(host, 'translator-avg-time')).toContain('—');
+    expect(stat(host, 'translator-avg-time')).not.toContain('0 ms');
+  });
+
   test('la présence : trois chiffres, le taux lu sur 0–100', async () => {
     const { deps } = scripted(() => healthy());
     const host = await open(deps);

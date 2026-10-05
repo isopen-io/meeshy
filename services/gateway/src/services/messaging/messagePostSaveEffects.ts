@@ -126,6 +126,7 @@ export type PostSaveEffect =
   | 'attachmentEngagement'
   | 'quoteEngagement'
   | 'forwardEngagement'
+  | 'gameSignals'
   | 'locationEngagement';
 
 /**
@@ -152,6 +153,19 @@ export interface PostSaveEngagementService {
     conversationId: string,
     options?: { readonly signature?: string },
   ): Promise<void>;
+  /**
+   * Les signaux du JEU (#9375, #9377) : réponse dans une conversation distincte,
+   * autre langue, réponse reçue. Optionnelle — un service d'engagement qui ne
+   * porte pas le jeu (double de test, ancien appelant) ne reçoit rien.
+   */
+  recordMessageSignals?(input: {
+    readonly senderUserId: string;
+    readonly conversationId: string;
+    readonly messageId: string;
+    readonly replyToId: string | null;
+    readonly quotedAuthorUserId: string | null;
+    readonly originalLanguage: string;
+  }): Promise<void>;
 }
 
 /**
@@ -458,6 +472,26 @@ export function runMessagePostSaveEffects(params: {
         engagementService.recordActivity(senderUserId, 'tool.attachment', { conversationId: message.conversationId })
       )
       .catch(report('attachmentEngagement'));
+  }
+
+  // Les signaux du jeu (#9375, #9377) : ce qu'un message committé apprend aux
+  // missions (réponse dans une conversation distincte, autre langue, réponse
+  // reçue) et les +3 points de l'auteur répondu. Un compte anonyme n'a pas de jeu.
+  if (engagementService?.recordMessageSignals && message.senderUserId) {
+    const senderUserId = message.senderUserId;
+    const recordMessageSignals = engagementService.recordMessageSignals.bind(engagementService);
+    void Promise.resolve()
+      .then(() =>
+        recordMessageSignals({
+          senderUserId,
+          conversationId: message.conversationId,
+          messageId: message.id,
+          replyToId: message.replyToId ?? null,
+          quotedAuthorUserId: message.quoted?.authorUserId ?? null,
+          originalLanguage,
+        })
+      )
+      .catch(report('gameSignals'));
   }
 
   if (engagementService && message.senderUserId) {

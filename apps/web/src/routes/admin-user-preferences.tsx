@@ -48,8 +48,12 @@ const LIBELLES_CATEGORIES = {
   application: 'admin.prefs.application',
 } as const satisfies Readonly<Record<AdminPreferenceCategory, string>>;
 
+/**
+ * La passerelle sert le refus de consentement sous `code` (fd52a01818) ; un serveur
+ * d'avant ne le portait que dans `error` — les deux se lisent pareil.
+ */
 const motifDuRefus = (echec: ApiFailure, language: AdminLanguage): string => {
-  if (echec.code === 'CONSENT_REQUIRED') return translateAdmin(language, 'admin.prefs.consent');
+  if (echec.code === 'CONSENT_REQUIRED' || echec.error === 'CONSENT_REQUIRED') return translateAdmin(language, 'admin.prefs.consent');
   if (echec.status === 403) return translateAdmin(language, 'admin.prefs.reserved');
   if (echec.status === 400) return translateAdmin(language, 'admin.prefs.invalid');
   return translateAdmin(language, 'admin.prefs.failed');

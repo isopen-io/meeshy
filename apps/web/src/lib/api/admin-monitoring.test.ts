@@ -39,6 +39,7 @@ describe('decodeAdminMonitoring — la santé', () => {
         cacheHitRate: 62.5,
         memoryUsageMb: 150,
         uptimeSeconds: 273_500,
+        reachable: true,
       },
       circuitBreakers: [
         { name: 'translator-zmq', state: 'CLOSED', failures: 0, successes: 4_120, lastFailureAt: null },
@@ -50,6 +51,10 @@ describe('decodeAdminMonitoring — la santé', () => {
   });
 
   test('le traducteur et la présence valent `null` quand la passerelle n’a rien à lire : pas de zéros fabriqués', () => {
+    const legacy = decodeAdminMonitoring(servedMonitoring({ translator: { requestsSent: 1, avgProcessingTimeMs: 0 } }));
+    expect(legacy?.translator?.reachable).toBeNull();
+    expect(decodeAdminMonitoring(servedMonitoring({ translator: { reachable: false } }))?.translator?.reachable).toBe(false);
+
     const monitoring = decodeAdminMonitoring(servedMonitoring({ translator: null, presenceUpdates: null }));
 
     expect(monitoring?.translator).toBeNull();

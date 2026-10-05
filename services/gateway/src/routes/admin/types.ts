@@ -57,6 +57,7 @@ export interface TranslationListQuery extends PaginationParams {
 export interface ShareLinkListQuery extends PaginationParams {
   search?: string;
   isActive?: string;
+  conversationId?: string;
 }
 
 export interface AnalyticsQuery {

@@ -327,6 +327,32 @@ describe('GET /admin/audit-logs — les vrais noms', () => {
     await app.close();
   });
 
+  // Audit 2026-10-04 : une diffusion SUPPRIMÉE n'a plus de ligne, mais son
+  // journal garde son nom dans metadata — c'est le libellé de repli.
+  it('une diffusion supprimée se nomme par metadata.name', async () => {
+    const prisma = makePrisma([auditRow({ action: 'DELETE_BROADCAST', entity: 'Broadcast', entityId: '507f1f77bcf86cd7994390bb', metadata: JSON.stringify({ name: 'Soldes', subject: 'x' }) })]);
+    prisma.adminBroadcast.findMany.mockResolvedValue([]);
+    const row = await firstRow(prisma);
+    expect(row.target).toMatchObject({ type: 'Broadcast', label: 'Soldes' });
+  });
+
+  // Une ligne dont le « sujet » est l'administrateur lui-même sur une cible qui
+  // n'est pas un compte (diffusion, configuration…) n'a pas de sujet : le servir
+  // faisait lire « Awa a agi sur Awa ».
+  it('sert subject null quand userId === adminId sur une cible qui n’est pas un compte', async () => {
+    const row = await firstRow(makePrisma([auditRow({ entity: 'Broadcast', entityId: BROADCAST, userId: AWA, adminId: AWA })]));
+    expect(row.subject).toBeNull();
+    const surSoi = await firstRow(makePrisma([auditRow({ entity: 'User', entityId: AWA, userId: AWA, adminId: AWA })]));
+    expect(surSoi.subject).toMatchObject({ id: AWA });
+  });
+
+  it('nomme une configuration du barème', async () => {
+    const prisma = makePrisma([auditRow({ entity: 'EngagementScaleConfig', entityId: 'global' })]);
+    const app = await buildApp(prisma);
+    expect((await get(app, '?entity=EngagementScaleConfig')).statusCode).toBe(200);
+    await app.close();
+  });
+
   it('un identifiant qui n’est pas un ObjectId n’atteint jamais la base', async () => {
     const prisma = makePrisma([auditRow({ entity: 'Conversation', entityId: 'ALL' })]);
     await firstRow(prisma);

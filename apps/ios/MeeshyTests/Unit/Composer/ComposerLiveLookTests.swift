@@ -14,29 +14,26 @@ final class ComposerLiveLookTests: XCTestCase {
 
     // MARK: - Le choix : les teintes et les cadres en direct de l'appel
 
-    func test_puces_sontLesAmbiancesDuCatalogue_sansLesClassiques() {
-        let puces = ComposerLiveLookRule.chips()
-        XCTAssertFalse(puces.isEmpty, "le viseur offre au moins une ambiance de cadres")
-        XCTAssertFalse(puces.contains(.classics),
-                       "un classique du Montage peint une image figée : il reste à la prise d'une photo")
-        XCTAssertTrue(Set(puces).isSubset(of: Set(ComposerPhotoLookRule.chips())),
-                      "les ambiances du viseur sont celles du Montage, rien de plus")
-    }
-
     func test_carrousel_aucunCadreEnTete_puisDesCadresQuiSeComposentEnDirect() throws {
-        let puce = try XCTUnwrap(ComposerLiveLookRule.chips().first)
+        let puce = try XCTUnwrap(ComposerLiveLookRule.chips().last)
         let cadres = ComposerLiveLookRule.frames(for: puce)
         XCTAssertEqual(cadres.first, ComposerPhotoFrame.none)
         XCTAssertGreaterThan(cadres.count, 1)
-        XCTAssertTrue(cadres.allSatisfy(ComposerLiveLookRule.isLive))
         XCTAssertTrue(cadres.dropFirst().allSatisfy { ComposerLiveLookRule.design(for: $0) != nil },
                       "chaque cadre offert a un dessin que le compositeur de l'appel sait poser")
     }
 
-    func test_unClassique_neSeComposePasEnDirect() {
-        XCTAssertFalse(ComposerLiveLookRule.isLive(.montage(.classic(.polaroid))))
-        XCTAssertTrue(ComposerLiveLookRule.isLive(.none))
-        XCTAssertNil(ComposerLiveLookRule.design(for: .montage(.classic(.polaroid))))
+    func test_chips_includeTheClassics_firstThenTheCatalogMoods() {
+        let puces = ComposerLiveLookRule.chips()
+        XCTAssertEqual(puces.first, .classics, "les classiques se choisissent en direct (#9348)")
+        XCTAssertTrue(Set(puces).isSubset(of: Set(ComposerPhotoLookRule.chips())))
+    }
+
+    func test_frames_classics_areOfferedLive() {
+        let cadres = ComposerLiveLookRule.frames(for: .classics)
+        XCTAssertEqual(cadres.first, ComposerPhotoFrame.none)
+        XCTAssertTrue(cadres.contains(.montage(.classic(.polaroid))))
+        XCTAssertTrue(ComposerLiveLookRule.rendersLive(ComposerPhotoLook(frame: .montage(.classic(.noir)))))
     }
 
     func test_toucherUneAmbiance_montreSonPremierCadre() throws {
@@ -167,6 +164,7 @@ final class ComposerLiveLookTests: XCTestCase {
     func test_seulsLesCadresQueLAppelComposeEnDirect_sOffrent() {
         for puce in ComposerLiveLookRule.chips() {
             for cadre in ComposerLiveLookRule.frames(for: puce).dropFirst() {
+                guard case .montage(.frame) = cadre else { continue }
                 let dessin = ComposerLiveLookRule.design(for: cadre)
                 XCTAssertTrue(dessin.map(CallLiveFrameRule.isEligible) ?? false,
                               "un cadre lourd tiendrait l'aperçu sous ses 30 images par seconde")

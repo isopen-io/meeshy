@@ -28,6 +28,7 @@ export const AUDIT_ENTITIES = [
   'FriendRequest',
   'AgentLlmConfig',
   'Agent',
+  'EngagementScaleConfig',
 ] as const;
 
 export type AuditEntityType = (typeof AUDIT_ENTITIES)[number];

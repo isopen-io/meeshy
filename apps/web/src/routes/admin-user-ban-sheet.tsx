@@ -16,10 +16,12 @@ import {
   type AdminBanActor,
 } from '@/lib/api/admin-user-bans';
 import type { AdminDeps } from '@/lib/api/admin';
+import { adminUserDetailQueryKey } from '@/lib/api/admin-user-detail';
 import { apiDeps } from '@/lib/api/deps';
 import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { translate } from '@/lib/i18n-catalog';
 import { ActionButton } from '@/routes/link-page-parts';
+import { useAdminReach } from '@/lib/admin/use-admin-reach';
 
 import { AdminSkeleton } from './admin-parts';
 
@@ -109,7 +111,11 @@ export function AdminUserBanSheet({
   const [dateRefusee, setDateRefusee] = useState(false);
 
   const premierJour = tomorrowOf(now());
-  const motifPret = motif.trim().length >= 3;
+  /* Le rang souverain bannit sans motif (spec 2026-10-04 § 4) : le champ reste, FACULTATIF —
+     un motif commencé se valide encore (trois caractères), un champ vide part sans `reason`. */
+  const souverain = useAdminReach().isSovereign;
+  const motifSaisi = motif.trim();
+  const motifPret = souverain ? motifSaisi === '' || motifSaisi.length >= 3 : motifSaisi.length >= 3;
 
   /**
    * Les deux clés sont EN DUR, et ce n'est pas une simplification : passées en
@@ -126,7 +132,14 @@ export function AdminUserBanSheet({
     setEnvoi(false);
 
     onAnnounce(translateAdmin(language, resultat.ok ? 'admin.ban.done' : 'admin.ban.failed'));
-    if (resultat.ok) void client.invalidateQueries({ queryKey: adminUserBansQueryKey(userId) });
+    /* Un ban change l'ÉTAT du compte : l'historique, la fiche (son badge « Banni ») et la
+       liste des comptes se relisent — n'invalider que l'historique laissait les deux autres
+       dire l'état d'avant (audit 2026-10-04). */
+    if (resultat.ok) {
+      void client.invalidateQueries({ queryKey: adminUserBansQueryKey(userId) });
+      void client.invalidateQueries({ queryKey: adminUserDetailQueryKey(userId), exact: true });
+      void client.invalidateQueries({ queryKey: ['admin', 'users'] });
+    }
     return resultat;
   }
 
@@ -140,7 +153,7 @@ export function AdminUserBanSheet({
     }
 
     const resultat = await appliquer(() =>
-      banAdminUser({ ...deps, userId, reason: motif, ...(expiresAt === null ? {} : { expiresAt }) }),
+      banAdminUser({ ...deps, userId, reason: souverain && motifSaisi === '' ? null : motif, ...(expiresAt === null ? {} : { expiresAt }) }),
     );
     if (!resultat.ok) return;
     setMotif('');
@@ -150,7 +163,7 @@ export function AdminUserBanSheet({
   return (
     <Sheet title={translateAdmin(language, 'admin.ban.title')} presentation="centered" closeLabel={translateAdmin(language, 'admin.kit.close')} onClose={onClose}>
       <div className="grid gap-4 px-4 pb-6">
-        <Field id="admin-ban-reason" label={translateAdmin(language, 'admin.ban.reason')} tint={BRAND} focused={focus}>
+        <Field id="admin-ban-reason" label={souverain ? translateAdmin(language, 'admin.kit.motiveOptional') : translateAdmin(language, 'admin.ban.reason')} tint={BRAND} focused={focus}>
           {({ id, describedBy }) => (
             <input
               id={id}

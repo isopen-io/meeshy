@@ -7,6 +7,7 @@ import { AdminEntityList, type AdminColumn } from '@/components/admin/entity-lis
 import { AdminListToolbar } from '@/components/admin/list-toolbar';
 import { AdminMomentText, AdminNotProvided } from '@/components/admin/meta';
 import type { AdminTarget } from '@/lib/admin/admin-routes';
+import type { AdminEntityRef } from '@/components/admin/entity-chip';
 import { NARROW_LIST_FRAME, useLocalAdminList, type LocalListState } from '@/lib/admin/conversation-paged-list';
 import { memberGestures, memberRefOf, participantName, type MemberGestures } from '@/lib/admin/conversation-model';
 import { interpretParticipantRole, interpretPresence } from '@/lib/admin/interpret/enums';
@@ -21,6 +22,7 @@ import {
   adminConversationMembersKey,
   loadAdminConversationMembers,
   type AdminConversationMember,
+  type AdminMemberDeparture,
 } from '@/lib/api/admin-conversation-fiche';
 import {
   MOTIF_LONGUEUR_MINIMALE,
@@ -30,7 +32,7 @@ import {
 } from '@/lib/api/admin-conversation-settings';
 import { ADMIN_CONVERSATIONS_ROOT_KEY } from '@/lib/api/admin-conversations';
 import type { ApiResult } from '@/lib/api/http';
-import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
+import { translateAdmin, type AdminLanguage, type AdminPlainCatalogKey } from '@/lib/i18n-admin-catalog';
 import type { AnnouncementTone } from '@/lib/view/use-live-announcer';
 
 /**
@@ -83,6 +85,52 @@ const memberTarget = (member: AdminConversationMember): AdminTarget | null => {
   if (member.kind === 'anonymous') return { kind: 'entity', entity: 'anonymous', id: member.id };
   return member.userId === null ? null : { kind: 'entity', entity: 'user', id: member.userId };
 };
+
+/** Le surnom propre à la conversation rejoint le @pseudo : « @awa · Surnom : Tata ». */
+function withNickname(ref: AdminEntityRef, nickname: string | null, language: AdminLanguage): AdminEntityRef {
+  if (nickname === null) return ref;
+  const said = translateAdmin(language, 'admin.conversation.members.nickname', { nickname });
+  return { ...ref, secondary: ref.secondary === undefined || ref.secondary === null ? said : `${ref.secondary} · ${said}` };
+}
+
+const DEPARTURE_KEY = {
+  banned: 'admin.conversation.members.state.banned',
+  left: 'admin.conversation.members.state.leftOn',
+  removed: 'admin.conversation.members.state.removed',
+  unknown: 'admin.conversation.members.state.left',
+} as const satisfies Readonly<Record<AdminMemberDeparture['kind'], AdminPlainCatalogKey>>;
+
+/**
+ * L'ÉTAT D'UN MEMBRE, et pour un membre parti, POURQUOI (`leftAt` / `bannedAt`) :
+ * banni, a quitté (daté), retiré — ou, d'un ancien serveur qui ne sert pas ces
+ * dates, la phrase d'hier qui n'en affirme pas davantage.
+ */
+function MemberState({ language, member, now }: { readonly language: AdminLanguage; readonly member: AdminConversationMember; readonly now: Date }) {
+  if (member.isActive || member.departure === null) {
+    return (
+      <Unbroken>
+        <AdminBadge tone="success" glyph="checkCircle">
+          {translateAdmin(language, 'admin.conversation.members.state.active')}
+        </AdminBadge>
+      </Unbroken>
+    );
+  }
+  const { kind, at } = member.departure;
+  return (
+    <span className="grid gap-1" data-admin-member-departure={kind}>
+      <Unbroken>
+        <AdminBadge tone={kind === 'banned' ? 'danger' : 'neutral'} glyph={kind === 'banned' ? 'prohibit' : 'userMinus'}>
+          {translateAdmin(language, DEPARTURE_KEY[kind])}
+        </AdminBadge>
+      </Unbroken>
+      {at === null ? null : (
+        <span className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
+          <AdminMomentText moment={adminMomentOf(at, now, language)} />
+        </span>
+      )}
+    </span>
+  );
+}
 
 const isRole = (value: string): value is AdminParticipantRole => ROLES.some((role) => role === value);
 
@@ -207,7 +255,8 @@ export function ConversationMembers({
   };
 
   const confirm = async (motive: string | null) => {
-    if (pending === null || motive === null) return;
+    /* `motive` vaut `null` pour le rang souverain : la feuille n'a pas demandé de motif, le geste part sans `reason`. */
+    if (pending === null) return;
     const { member } = pending;
     const userId = member.userId;
     if (userId === null) return;
@@ -222,7 +271,11 @@ export function ConversationMembers({
         : await perform({
             call: () => creatorGuarded(removeAdminConversationMember({ ...deps, conversationId, userId, reason: motive })),
             success: 'admin.conversation.members.remove.done',
-            optimistic: { key: pageKey, apply: patchedRows(member.id, (row) => ({ ...row, isActive: false, isOnline: false })) },
+            /* La passerelle écrit `leftAt` au retrait : l'effet optimiste dit la même chose que la relecture. */
+            optimistic: {
+              key: pageKey,
+              apply: patchedRows(member.id, (row) => ({ ...row, isActive: false, isOnline: false, departure: { kind: 'left', at: new Date().toISOString() } })),
+            },
             invalidate,
           });
     if (done !== null) setPending(null);
@@ -250,7 +303,7 @@ export function ConversationMembers({
       id: 'member',
       header: translateAdmin(language, 'admin.conversation.members.col.member'),
       primary: true,
-      cell: (row) => <AdminEntityIdentity language={language} entity={memberRefOf(row, language)} />,
+      cell: (row) => <AdminEntityIdentity language={language} entity={withNickname(memberRefOf(row, language), row.nickname, language)} />,
     },
     {
       id: 'role',
@@ -277,13 +330,7 @@ export function ConversationMembers({
     {
       id: 'state',
       header: translateAdmin(language, 'admin.conversation.members.col.state'),
-      cell: (row) => (
-        <Unbroken>
-          <AdminBadge tone={row.isActive ? 'success' : 'neutral'} glyph={row.isActive ? 'checkCircle' : 'userMinus'}>
-            {translateAdmin(language, row.isActive ? 'admin.conversation.members.state.active' : 'admin.conversation.members.state.left')}
-          </AdminBadge>
-        </Unbroken>
-      ),
+      cell: (row) => <MemberState language={language} member={row} now={now} />,
     },
     { id: 'joined', header: translateAdmin(language, 'admin.conversation.members.col.joined'), priority: 3, cell: (row) => moment(row.joinedAt) },
     {

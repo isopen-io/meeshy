@@ -52,9 +52,9 @@ The `docker-entrypoint.sh` uses `sed` to replace `__RUNTIME_*__` placeholders. Q
 
 **Et la purge PRÉCÈDE le `pull`** : après, elle arrive trop tard, puisque c'est l'écriture des couches téléchargées qui manque de place. `docker image prune -a` n'ôte jamais une image portée par un conteneur — la version servie survit ; la fenêtre `--filter "until=168h"` garde de quoi revenir en arrière d'une semaine. Les volumes ne se purgent pas au passage (`system prune --volumes` emporterait des données qu'on croit anonymes).
 
-**Le déploiement automatique s'arrête à `dev` → staging. La production ne part JAMAIS toute seule** — ni sur une poussée dans `main`, ni sur un tag : elle se déploie à la main, par un humain qui l'a décidé.
+**Le déploiement automatique s'arrête à `dev` → staging. La production ne part JAMAIS toute seule** — ni sur une poussée dans `main`, ni sur un tag. Elle se PROMEUT sur demande (directive 2026-10-04, #9223) par `.github/workflows/promote-production.yml` : un digest déjà servi par staging, `workflow_dispatch` seul, environnement protégé `production`, retour arrière en une commande. Côté hôte : `infrastructure/scripts/meeshy-promote-production.sh` ; installation unique : `infrastructure/scripts/meeshy-promote-production.md` (#9325).
 
-Sites : `infrastructure/scripts/meeshy-deploy-staging.sh` (**la source de `/usr/local/bin/meeshy-deploy-staging.sh`**, ce que la clé SSH contrainte de la CI exécute sur l'hôte — son installation reste un geste manuel, documenté en tête du fichier), les scripts de release de `infrastructure/scripts/` et `scripts/`, et le job `deploy-staging` de `.github/workflows/docker.yml`. Garde : `scripts/check-docker-prune-noninteractive.mjs` (job `quality` de `ci.yml`), qui tient les trois règles ensemble.
+Sites : `infrastructure/scripts/meeshy-deploy-staging.sh` (**la source de `/usr/local/bin/meeshy-deploy-staging.sh`**, ce que la clé SSH contrainte de la CI exécute sur l'hôte — son installation reste un geste manuel, documenté en tête du fichier), les scripts de release de `infrastructure/scripts/` et `scripts/`, et le job `deploy-staging` de `.github/workflows/docker.yml`. Garde : `scripts/check-docker-prune-noninteractive.mjs` (job `quality` de `ci.yml`), qui tient les quatre règles ensemble.
 
 ### Production vs Repo Differences
 | | Repo | Production |

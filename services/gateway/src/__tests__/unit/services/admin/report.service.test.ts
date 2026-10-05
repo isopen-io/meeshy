@@ -229,6 +229,20 @@ describe('ReportService.updateReport', () => {
     expect(callData.moderatorId).toBe('mod-1');
   });
 
+  // Spec 2026-10-04 § 7 : rouvrir efface la résolution précédente et laisse
+  // le signalement sans modérateur — sinon il réapparaît « résolu le … par … ».
+  it('rouvrir (pending) remet resolvedAt, actionTaken et moderatorId à null', async () => {
+    const update = jest.fn().mockResolvedValue(makeReport({ status: 'pending' }));
+    const svc = makeService(makePrisma({ update }));
+
+    await svc.updateReport('report-id', 'mod-1', { status: 'pending' });
+
+    const callData = (update.mock.calls[0] as any[])[0].data;
+    expect(callData.resolvedAt).toBeNull();
+    expect(callData.actionTaken).toBeNull();
+    expect(callData.moderatorId).toBeNull();
+  });
+
   it('always sets updatedAt', async () => {
     const update = jest.fn().mockResolvedValue(makeReport());
     const svc = makeService(makePrisma({ update }));

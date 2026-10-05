@@ -95,12 +95,23 @@ nonisolated enum CallFrameRenderer {
     // MARK: - Couches
 
     static func layers(for stage: CallFrameStage) -> CallFrameLayers? {
+        layers(for: stage, caching: true)
+    }
+
+    /// `caching: false` peint sans rien garder : une toile ponctuelle (la photo d'une
+    /// prise, à sa pleine définition) n'évince pas les couches qui servent à chaque image.
+    static func layers(for stage: CallFrameStage, caching: Bool) -> CallFrameLayers? {
         let key = layerKey(stage) as NSString
         if let hit = layerCache.object(forKey: key) { return hit }
         guard let backdrop = renderBackdrop(stage), let overlay = renderOverlay(stage) else { return nil }
         let painted = CallFrameLayers(backdrop: backdrop, overlay: overlay)
-        layerCache.setObject(painted, forKey: key, cost: painted.cost)
+        if caching { layerCache.setObject(painted, forKey: key, cost: painted.cost) }
         return painted
+    }
+
+    /// Les couches déjà gardées pour cette scène, sans rien peindre.
+    static func cachedLayers(for stage: CallFrameStage) -> CallFrameLayers? {
+        layerCache.object(forKey: layerKey(stage) as NSString)
     }
 
     static func layerKey(_ stage: CallFrameStage) -> String {

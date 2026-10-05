@@ -545,6 +545,7 @@ export function OnboardingJourney({
             load={deps.loadRecap}
             onExplore={() => leave(state.globalConversationId === null ? href('list') : href('thread', { conversation: state.globalConversationId }))}
             onDone={() => leave(href('list'))}
+            onGame={() => leave(href('progression'))}
           />
         )}
       </div>

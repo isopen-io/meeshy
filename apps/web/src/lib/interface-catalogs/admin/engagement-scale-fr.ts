@@ -152,6 +152,9 @@ const f = {
   'admin.scale.abuse.heavyPoints': 'Seuil d’un gros poids (points)',
   'admin.scale.abuse.clawbackHours': 'Reprise si supprimé dans les (heures)',
   'admin.scale.abuse.unverifiedMaxPoints': 'Maximum pour un compte non vérifié',
+  /* ─── Barème : confirmation avant d’enregistrer (audit 2026-10-04) ─── */
+  'admin.scale.confirm.title': 'Enregistrer le barème ?',
+  'admin.scale.confirm.body': 'Les nouveaux points s’appliquent aux prochaines actions de tous les membres. Le réglage est consigné au journal, avec ce qui a changé.',
 } as const;
 
 export default f;

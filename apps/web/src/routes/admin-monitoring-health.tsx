@@ -10,7 +10,7 @@ import { interpretServiceStatus } from '@/lib/admin/interpret/enums';
 import { formatBytes, formatCount, formatPercent } from '@/lib/admin/interpret/numbers';
 import { adminMomentOf, formatDuration } from '@/lib/admin/interpret/time';
 import { HEALTH_REFRESH_MS, healthRefetchInterval } from '@/lib/admin/monitoring-state';
-import { breakerStateOf, healthIssuesOf, megabytesToBytes } from '@/lib/admin/monitoring-view';
+import { breakerStateOf, healthIssuesOf, megabytesToBytes, translatorUnreachable } from '@/lib/admin/monitoring-view';
 import { useDocumentVisible } from '@/lib/admin/monitoring-visibility';
 import type { AdminDeps } from '@/lib/api/admin';
 import { ADMIN_MONITORING_HEALTH_KEY, loadAdminMonitoring, type AdminCircuitBreaker, type AdminMonitoring } from '@/lib/api/admin-monitoring';
@@ -152,7 +152,7 @@ function HealthBody({ language, monitoring, now }: { readonly language: AdminLan
       </MonitoringSection>
 
       <MonitoringSection id="translator" title={t('admin.monitoring.translator.title')}>
-        {translator === null ? (
+        {translator === null || translatorUnreachable(monitoring) ? (
           <AdminEmptyState
             title={t('admin.monitoring.translator.unreachable')}
             hint={t('admin.monitoring.translator.unreachable.hint')}
@@ -164,7 +164,7 @@ function HealthBody({ language, monitoring, now }: { readonly language: AdminLan
             <AdminStatCard language={language} anchor="translator-received" label={t('admin.monitoring.translator.received')} value={count(translator.received)} />
             <AdminStatCard language={language} anchor="translator-errors" label={t('admin.monitoring.translator.errors')} value={count(translator.errors)} />
             <AdminStatCard language={language} anchor="translator-pool-full" label={t('admin.monitoring.translator.poolFull')} value={count(translator.poolFullRejections)} caption={t('admin.monitoring.translator.poolFull.caption')} />
-            <AdminStatCard language={language} anchor="translator-avg-time" label={t('admin.monitoring.translator.avgTime')} value={formatDuration(translator.avgProcessingTimeMs, 'ms', language)} />
+            <AdminStatCard language={language} anchor="translator-avg-time" label={t('admin.monitoring.translator.avgTime')} value={translator.avgProcessingTimeMs > 0 ? formatDuration(translator.avgProcessingTimeMs, 'ms', language) : '—'} />
             <AdminStatCard
               language={language}
               anchor="translator-cache-hit"

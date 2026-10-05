@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
 import { describe, expect, test } from 'bun:test';
 
 import { BROADCAST_LIST_SPEC, BROADCAST_STATUSES, broadcastListQuery } from './broadcast-list';
@@ -12,8 +15,14 @@ import { parseListState, serializeListState } from './list-state';
 const read = (address: string) => parseListState(new URLSearchParams(address), BROADCAST_LIST_SPEC);
 
 describe('la spécification de liste', () => {
-  test('les six statuts servis, dans l’ordre de vie d’une diffusion', () => {
-    expect(BROADCAST_STATUSES).toEqual(['DRAFT', 'TRANSLATING', 'READY', 'SENDING', 'SENT', 'FAILED']);
+  test('les cinq statuts que la passerelle ÉCRIT, dans l’ordre de vie d’une diffusion — jamais TRANSLATING (audit 2026-10-04)', () => {
+    expect(BROADCAST_STATUSES).toEqual(['DRAFT', 'READY', 'SENDING', 'SENT', 'FAILED']);
+  });
+
+  test('chaque statut offert est écrit quelque part par la passerelle', () => {
+    const gateway = fileURLToPath(new URL('../../../../../services/gateway/src', import.meta.url));
+    const sources = ['routes/admin/broadcasts.ts', 'jobs/broadcast-sender.ts', 'jobs/broadcast-inapp-sender.ts'].map((path) => readFileSync(`${gateway}/${path}`, 'utf8')).join('\n');
+    for (const status of BROADCAST_STATUSES) expect(sources).toMatch(new RegExp(`status: '${status}'`));
   });
 
   test('aucun tri n’est offert : une seule clé, celle que la passerelle applique', () => {

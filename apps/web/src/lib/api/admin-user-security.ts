@@ -54,18 +54,19 @@ export async function setAdminUserConsent(
     readonly userId: string;
     readonly consent: AdminConsent;
     readonly granted: boolean;
-    readonly reason: string;
+    /** Absent (`null`) : sans motif — la passerelle ne l'admet que du rang souverain (spec 2026-10-04 § 4). */
+    readonly reason: string | null;
     readonly signal?: AbortSignal;
   },
 ): Promise<ApiResult<AdminUserDetail>> {
-  const motif = params.reason.trim();
-  if (motif.length < CONSENT_MOTIVE_MIN) {
+  const motif = params.reason === null ? null : params.reason.trim();
+  if (motif !== null && motif.length < CONSENT_MOTIVE_MIN) {
     return { ok: false, status: 0, error: `Le motif doit compter au moins ${CONSENT_MOTIVE_MIN} caractères` };
   }
   const result = await params.transport.request<unknown>({
     method: 'PATCH',
     path: adminEndpoints.usersByUserIdConsents(params.userId),
-    body: { [params.consent]: params.granted, reason: motif },
+    body: { [params.consent]: params.granted, ...(motif === null ? {} : { reason: motif }) },
     ...withSignal(params.signal),
   });
   return memberFromResult(result);

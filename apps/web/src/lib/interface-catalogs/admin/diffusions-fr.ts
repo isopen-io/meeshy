@@ -161,6 +161,20 @@ const f = {
   'admin.broadcast.done.sent': 'Envoi par e-mail lancé',
   'admin.broadcast.done.inApp': 'Publication dans l’application lancée',
   'admin.broadcast.done.deleted': 'Diffusion supprimée',
+  /* ─── Diffusion : fiche en cartes, deux canaux comptés, publication échouée, traductions manquantes (lot Modération, croissance, plateforme, 2026-10-05) ─── */
+  'admin.broadcast.cards.title': 'La diffusion, par section',
+  'admin.broadcast.card.translations': 'Traductions',
+  'admin.broadcast.card.byEmail': 'Par e-mail',
+  'admin.broadcast.card.inApp': 'Dans l’application',
+  'admin.broadcast.translations.missing': 'Sans traduction : {languages} — ces comptes liront le texte d’origine.',
+  'admin.broadcast.inApp.state.failed': 'Publication échouée',
+  'admin.broadcast.inApp.error': 'Erreur servie',
+  'admin.broadcast.audience.inAppRecipients': 'Comptes joignables dans l’application',
+  'admin.broadcast.audience.emailRecipients': 'Comptes joignables par e-mail (adresse vérifiée)',
+  'admin.broadcast.notice.inAppFailed': 'La publication dans l’application a échoué : {message}',
+  'admin.broadcast.notice.inAppFailedNoMessage': 'La publication dans l’application a échoué, sans qu’aucune notification ne soit livrée.',
+  'admin.broadcast.notice.noEmailRecipients': 'Aucun compte de cette audience n’a d’adresse e-mail vérifiée : l’envoi par e-mail ne toucherait personne. La publication dans l’application reste possible.',
+  'admin.broadcast.confirm.inApp.bodyUncounted': 'Audience : {audience}. Le nombre de comptes joignables dans l’application n’est compté qu’à la préparation, et cette page ne l’a pas en mémoire. Chacun reçoit une notification dans son centre de notifications, avec un envoi push. Elle ne peut pas être retirée, et ne se publie qu’une fois.',
 } as const;
 
 export default f;

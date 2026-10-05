@@ -1,4 +1,4 @@
-import { Suspense, lazy, useCallback, useEffect, useState, type Ref } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useState, type ReactNode, type Ref } from 'react';
 import type { Virtualizer } from '@tanstack/react-virtual';
 
 import type { ConversationReadingMode } from '@meeshy/shared/types/reading-modes';
@@ -162,6 +162,7 @@ export function ThreadModes({
   displayLanguageOf,
   myReactionsOf,
   contentWithheld,
+  rowNoteOf,
   selection,
   onRowTap,
   longPress,
@@ -244,6 +245,13 @@ export function ThreadModes({
    * ignore le chiffrement, que `messageContentIsProtected` compte.
    */
   readonly contentWithheld?: (messageId: string) => boolean;
+  /**
+   * UNE NOTE SOUS LA RANGÉE, posée par l'hôte (audit 2026-10-04) — la lecture
+   * souveraine y dit qu'un message est ÉPHÉMÈRE et pour combien de temps, sans
+   * confier sa durée au fil (qui poserait une réception et lancerait le
+   * décompte). Absente ou `null` : rien n'est peint.
+   */
+  readonly rowNoteOf?: (messageId: string) => ReactNode;
   readonly selection?: SelectionState | null;
   readonly onRowTap?: (messageId: string) => void;
   readonly longPress?: ReturnType<typeof useLongPress>;
@@ -796,6 +804,7 @@ export function ThreadModes({
                 </UnfoldStage>
                 </MessageSwipe>
               </div>
+              {rowNoteOf?.(p.message.id) ?? null}
             </li>
           );
         })}

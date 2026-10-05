@@ -112,6 +112,11 @@ describe('auditTargetOf — chaque genre d’élément se nomme', () => {
     expect(auditTargetOf(target('Agent', null), 'fr')).toEqual({ kind: 'plain', label: 'Agent', secondary: null });
   });
 
+  test('le barème de points est un genre nommé, filtrable, sans fiche', () => {
+    expect(auditTargetOf(target('EngagementScaleConfig', null), 'fr')).toEqual({ kind: 'plain', label: 'Barème de points', secondary: null });
+    expect(auditEntityLabel('EngagementScaleConfig', 'fr')).not.toBe(auditEntityLabel('SomethingNew', 'fr'));
+  });
+
   test('un genre inconnu se dit « Élément » : jamais le nom brut du genre', () => {
     expect(auditTargetOf(target('SomethingNew', null), 'fr')).toEqual({ kind: 'plain', label: 'Élément', secondary: null });
   });

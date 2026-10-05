@@ -223,7 +223,8 @@ describe('GET /admin/communities/:communityId — la fiche', () => {
     expect(convArgs.take).toBe(20);
     expect(convArgs.where).toEqual({ communityId: COMMUNITY });
     expect(convArgs.select._count).toEqual({ select: { participants: { where: { isActive: true } } } });
-    expect(prisma.post.count.mock.calls[0][0].where).toEqual({ communityId: COMMUNITY, deletedAt: null });
+    // NOT_DELETED (leçon 318) : un post vivant n'a pas la colonne `deletedAt`.
+    expect(prisma.post.count.mock.calls[0][0].where).toEqual({ communityId: COMMUNITY, deletedAt: { isSet: false } });
     await app.close();
   });
 
@@ -523,6 +524,25 @@ describe('PATCH /admin/communities/:communityId — le geste', () => {
   it('rend 404 pour une communauté inconnue', async () => {
     const app = await buildApp(makePrisma(null));
     expect((await patch(app, { isActive: false, reason: REASON })).statusCode).toBe(404);
+    await app.close();
+  });
+  // Spec 2026-10-04 § 4 : le rang souverain n'a rien à justifier.
+  it('admet BIGBOSS sans motif : le geste a lieu et laisse sa trace, sans motif', async () => {
+    const prisma = withStaff(makePrisma());
+    const app = await buildApp(prisma, 'BIGBOSS');
+    expect((await patch(app, { isActive: false })).statusCode).toBe(200);
+    expect(prisma.community.update).toHaveBeenCalledTimes(1);
+    const audit = prisma.adminAuditLog.create.mock.calls[0][0].data;
+    expect(audit.action).toBe('ADMIN_COMMUNITY_UPDATED');
+    expect(audit.metadata).toBeUndefined();
+    await app.close();
+  });
+
+  it('refuse BIGBOSS avec un motif fourni trop court — un motif écrit est validé', async () => {
+    const prisma = withStaff(makePrisma());
+    const app = await buildApp(prisma, 'BIGBOSS');
+    expect((await patch(app, { isActive: false, reason: 'trop bref' })).statusCode).toBe(400);
+    expect(prisma.community.update).not.toHaveBeenCalled();
     await app.close();
   });
 });

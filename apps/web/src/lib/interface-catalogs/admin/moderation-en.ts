@@ -130,7 +130,7 @@ const f = {
   'admin.moderation.confirm.dismiss.title': 'Close this report without action',
   'admin.moderation.confirm.dismiss.body': 'The report will be closed without action. It will not count toward the average time to resolve.',
   'admin.moderation.confirm.reopen.title': 'Reopen this report',
-  'admin.moderation.confirm.reopen.body': 'The report goes back to “Pending” and you become its moderator.',
+  'admin.moderation.confirm.reopen.body': 'The report goes back to “Pending”: its resolution, the recorded action and its moderator are cleared, and it returns to the queue.',
   'admin.moderation.confirm.delete.title': 'Delete this report',
   'admin.moderation.confirm.delete.body':
     'The report is deleted for good: only the trace of its deletion stays in the audit log. This cannot be undone.',
@@ -151,6 +151,10 @@ const f = {
   'admin.moderation.meta.resolved': 'Resolved on',
   'admin.moderation.meta.resolvedDismissed': 'Reports closed without action have no resolution date.',
   'admin.moderation.meta.resolvedOpen': 'The report is open: it has no resolution date yet.',
+  /* ─── Signalement : fiche en cartes (lot Modération, croissance, plateforme, 2026-10-05) ─── */
+  'admin.moderation.cards.title': 'The case, section by section',
+  'admin.moderation.card.steps': 'Steps',
+  'admin.moderation.card.links': 'Pages to act from',
 } satisfies AdminCatalogFragment<typeof fr>;
 
 export default f;

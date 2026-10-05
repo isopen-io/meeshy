@@ -11,6 +11,10 @@ struct OnboardingCardView: View {
     let onOpenStory: () -> Void
     let onRetryStory: () -> Void
     let onExplore: () -> Void
+    /// LA PORTE VERS LE JEU (#9379) — mène à Progression, où Mee ouvre la première
+    /// des sept cartes de l'intégration. Facultative : un hôte qui ne la fournit
+    /// pas garde le récapitulatif d'avant, avec ses deux sorties.
+    var onGame: (() -> Void)?
 
     var body: some View {
         switch model.card {
@@ -387,10 +391,25 @@ struct OnboardingCardView: View {
             },
             illustration: { OnboardingTrophyIllustration() },
             content: {
-                if let recap = model.recap {
-                    OnboardingRecapStats(recap: recap, isDark: isDark)
-                } else {
-                    ProgressView().frame(maxWidth: .infinity, minHeight: 80)
+                VStack(spacing: MeeshySpacing.md) {
+                    if let recap = model.recap {
+                        OnboardingRecapStats(recap: recap, isDark: isDark)
+                    } else {
+                        ProgressView().frame(maxWidth: .infinity, minHeight: 80)
+                    }
+                    if let onGame {
+                        Button {
+                            HapticFeedback.light()
+                            onGame()
+                        } label: {
+                            Label(String(localized: "onboarding.recap.game", bundle: .main), systemImage: "gamecontroller.fill")
+                                .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold, design: .rounded))
+                                .foregroundStyle(MeeshyColors.brandPrimary)
+                                .frame(maxWidth: .infinity, minHeight: 44)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("onboarding.recap.game")
+                    }
                 }
             }
         )

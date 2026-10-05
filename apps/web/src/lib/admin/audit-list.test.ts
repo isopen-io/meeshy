@@ -83,7 +83,17 @@ describe('la spécification — une liste blanche, rien de plus', () => {
       'FriendRequest',
       'AgentLlmConfig',
       'Agent',
+      'EngagementScaleConfig',
     ]);
+  });
+
+  test('chaque genre que la passerelle filtre est offert — le barème compris (audit 2026-10-04)', () => {
+    const source = readFileSync(GATEWAY_ROUTE, 'utf8');
+    const block = /const AUDIT_ENTITIES = \[([^\]]+)\]/.exec(source)?.[1] ?? '';
+    const served = [...block.matchAll(/'([A-Za-z]+)'/g)].map((match) => match[1]);
+
+    expect(served).toContain('EngagementScaleConfig');
+    expect([...AUDIT_ENTITIES].sort()).toEqual([...served].sort());
   });
 });
 

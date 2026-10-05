@@ -161,7 +161,7 @@ const f = {
   'admin.tracking.list.onCreator': 'Links criados por {name}',
   'admin.tracking.list.onCreatorGeneric': 'Links criados por um único membro',
   'admin.tracking.list.onCreatorReset': 'Ver todos os links',
-  'admin.tracking.search.label': 'Buscar por nome, campanha ou endereço',
+  'admin.tracking.search.label': 'Buscar por nome, campanha ou token',
   'admin.tracking.filter.state': 'Estado',
   'admin.tracking.filter.active': 'Ativo',
   'admin.tracking.filter.inactive': 'Desativado',
@@ -246,6 +246,20 @@ const f = {
   'admin.tracking.confirm.motive': 'Motivo (opcional, registrado no registro de auditoria)',
   'admin.tracking.done.deactivated': 'Link de rastreamento desativado',
   'admin.tracking.done.reactivated': 'Link de rastreamento reativado',
+  /* ─── Lien de partage : fiche en cartes (lot Échanges et contenus, 2026-10-05) ─── */
+  'admin.shareLink.cards.title': 'O detalhe, por seção',
+  'admin.shareLink.card.outOf': '{count} de {total}',
+  'admin.shareLink.card.allowed': 'Permitidos',
+  'admin.shareLink.card.required': 'Exigidos',
+  'admin.shareLink.card.present': 'Presentes entre os recentes',
+  /* ─── Lien de suivi : fiche en cartes, adresse absolue, valeurs génériques (lot Modération, croissance, plateforme, 2026-10-05) ─── */
+  'admin.tracking.cards.title': 'O link, por seção',
+  'admin.tracking.card.share': 'Para compartilhar: {address}',
+  'admin.tracking.card.countries': 'Países',
+  'admin.tracking.card.recent': 'Cliques listados',
+  'admin.tracking.card.lastFrom': 'O mais recente: {place}',
+  'admin.tracking.dest.original.redacted': 'Ela é mostrada sem seus parâmetros (o que vem depois de “?” ou “#”): a cópia também não os leva.',
+  'admin.tracking.value.other': 'Outro',
 } satisfies AdminCatalogFragment<typeof fr>;
 
 export default f;
