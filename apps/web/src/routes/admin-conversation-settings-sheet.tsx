@@ -1,6 +1,17 @@
-import { useState, type ReactNode } from 'react';
+import { useState } from 'react';
 
-import { Sheet } from '@/components/sheet';
+import {
+  AdminFormActions,
+  AdminFormSheet,
+  AdminReasonField,
+  AdminSelect,
+  AdminSwitch,
+  AdminTextInput,
+  motiveState,
+  useArmedConfirm,
+} from '@/components/admin/form';
+import { AdminInlineNotice } from '@/components/admin/states';
+import { INK2 } from '@/components/admin/tone';
 import { interpretConversationType } from '@/lib/admin/interpret/enums';
 import { conversationLabel } from '@/lib/admin/interpret/labels';
 import { useAdminReach } from '@/lib/admin/use-admin-reach';
@@ -18,8 +29,6 @@ import type { AdminConversation } from '@/lib/api/admin-user-conversations';
 import { apiDeps } from '@/lib/api/deps';
 import type { ApiFailure } from '@/lib/api/http';
 import { translateAdmin, type AdminPlainCatalogKey, type AdminLanguage } from '@/lib/i18n-admin-catalog';
-import { translate } from '@/lib/i18n-catalog';
-import { ActionButton } from '@/routes/link-page-parts';
 
 /**
  * **CONFIGURER UNE CONVERSATION, DEPUIS LA FICHE D'UN MEMBRE** (#7845, #7999).
@@ -63,11 +72,14 @@ import { ActionButton } from '@/routes/link-page-parts';
  *
  * « Droits du créateur, jamais au-dessus » : ni rôle, ni retrait. L'écran le
  * DIT plutôt que de griser deux contrôles sans explication.
+ *
+ * ## Les pièces du kit (#9463)
+ *
+ * Champs, listes, bascules, motif, confirmation armée et gestes sont ceux de
+ * `components/admin/form` ; la règle du motif est `motiveState`, la même que
+ * celle du bannissement et du mot de passe. La feuille ne garde que ce qui est
+ * à elle : le brouillon, ce qui en part, et par quelle route.
  */
-
-const INK = 'var(--color-ios-ink)';
-const INK2 = 'var(--color-ios-ink-2)';
-const BRAND = 'var(--color-ios-brand)';
 
 const ROLES_ECRITURE = ['everyone', 'member', 'moderator', 'admin', 'creator'] as const;
 type RoleEcriture = (typeof ROLES_ECRITURE)[number];
@@ -144,55 +156,6 @@ export function conversationEditFrom(c: AdminConversation, b: Brouillon): AdminC
   };
 }
 
-const CONTROLE = { minHeight: 44, backgroundColor: 'var(--color-ios-surface)', border: '1px solid var(--color-edge)', color: INK } as const;
-
-function Champ({ label, children }: { readonly label: string; readonly children: ReactNode }) {
-  return (
-    <label className="grid gap-1">
-      <span className="text-caption" style={{ color: INK2 }}>
-        {label}
-      </span>
-      {children}
-    </label>
-  );
-}
-
-function Interrupteur({
-  label,
-  actif,
-  data,
-  disabled = false,
-  onBascule,
-}: {
-  readonly label: string;
-  readonly actif: boolean;
-  readonly data: string;
-  readonly disabled?: boolean;
-  readonly onBascule: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={actif}
-      disabled={disabled}
-      data-admin-conv-toggle={data}
-      onClick={onBascule}
-      className="flex items-center justify-between gap-3 rounded-chip px-4 text-start text-body disabled:opacity-50"
-      style={CONTROLE}
-    >
-      <span>{label}</span>
-      <span
-        aria-hidden="true"
-        className="relative h-6 w-10 shrink-0 rounded-full"
-        style={{ backgroundColor: actif ? BRAND : 'color-mix(in srgb, var(--color-ios-ink-3) 35%, transparent)' }}
-      >
-        <span className="absolute top-0.5 size-5 rounded-full bg-ios-on-brand" style={{ insetInlineStart: actif ? 18 : 2 }} />
-      </span>
-    </button>
-  );
-}
-
 export function AdminConversationSettingsSheet({
   conversation,
   userId,
@@ -223,7 +186,8 @@ export function AdminConversationSettingsSheet({
   const memberId = userId ?? conversation.membership?.userId ?? '';
   const [role, setRole] = useState(roleServi);
   const [motif, setMotif] = useState('');
-  const [confirme, setConfirme] = useState<'save' | 'remove' | null>(null);
+  const confirmation = useArmedConfirm<'save' | 'remove'>();
+  const confirme = confirmation.armed;
   const [envoi, setEnvoi] = useState(false);
 
   const createur = roleServi === 'creator';
@@ -235,16 +199,16 @@ export function AdminConversationSettingsSheet({
   const champs = conversationEditFieldsOf(edit);
   const roleChange = !createur && role !== roleServi && estRoleMembre(role);
   const souverain = useAdminReach().isSovereign;
-  const motifSaisi = motif.trim();
-  const motifValide = motifSaisi.length >= MOTIF_LONGUEUR_MINIMALE || (souverain && motifSaisi === '');
+  const motive = motiveState({ text: motif, minLength: MOTIF_LONGUEUR_MINIMALE, required: true, sovereign: souverain, whenSovereign: 'optional' });
+  const motifValide = motive.ready;
   /** Le motif qui part : aucun pour le souverain qui n'en a pas écrit. */
-  const motifEnvoye = souverain && motifSaisi === '' ? null : motif;
+  const motifEnvoye = motive.sent;
   const destructeur = edit.isActive === false || edit.closed === true;
   const peutEnregistrer = motifValide && !envoi && (champs.length > 0 || roleChange);
 
   const poser = (partie: Partial<Brouillon>) => {
     setBrouillon((avant) => ({ ...avant, ...partie }));
-    setConfirme(null);
+    confirmation.disarm();
   };
 
   const echec = (resultat: ApiFailure) =>
@@ -253,7 +217,7 @@ export function AdminConversationSettingsSheet({
   async function enregistrer() {
     if (!peutEnregistrer) return;
     if (destructeur && confirme !== 'save') {
-      setConfirme('save');
+      confirmation.arm('save');
       return;
     }
     setEnvoi(true);
@@ -283,7 +247,7 @@ export function AdminConversationSettingsSheet({
   async function retirer() {
     if (!motifValide || envoi || createur) return;
     if (confirme !== 'remove') {
-      setConfirme('remove');
+      confirmation.arm('remove');
       return;
     }
     setEnvoi(true);
@@ -299,161 +263,150 @@ export function AdminConversationSettingsSheet({
   }
 
   const texte = (id: 'title' | 'description' | 'avatar' | 'banner', label: AdminPlainCatalogKey) => (
-    <Champ label={t(label)}>
-      <input
-        data-admin-conv-field={id}
-        value={brouillon[id]}
-        {...(id === 'avatar' || id === 'banner' ? { type: 'url', inputMode: 'url' as const } : {})}
-        onInput={(event) => poser({ [id]: event.currentTarget.value })}
-        className="rounded-chip px-4 text-body"
-        style={CONTROLE}
-      />
-    </Champ>
+    <AdminTextInput
+      id={`admin-conv-field-${id}`}
+      label={t(label)}
+      value={brouillon[id]}
+      {...(id === 'avatar' || id === 'banner' ? { type: 'url' as const, inputMode: 'url' as const } : {})}
+      onValue={(valeur) => poser({ [id]: valeur })}
+      data={{ 'data-admin-conv-field': id }}
+    />
   );
 
   return (
-    <Sheet title={t('admin.convSettings.title')} bodyAs="div" presentation="centered" closeLabel={t('admin.kit.close')} onClose={onClose}>
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-6" data-admin-conv-settings={conversation.id}>
-        <div className="grid gap-4">
-          <p className="truncate text-caption" style={{ color: INK2 }}>
-            {conversationLabel(
-              {
-                title: conversation.title,
-                type: conversation.type,
-                participants: conversation.participants.map((participant) => ({ displayName: participant.displayName })),
-                total: conversation.memberCount,
-              },
-              language,
-            )}{' '}
-            · {interpretConversationType(conversation.type, language).label}
-          </p>
+    <AdminFormSheet language={language} title={t('admin.convSettings.title')} onClose={onClose} data={{ 'data-admin-conv-settings': conversation.id }}>
+      <p className="truncate text-caption" style={{ color: INK2 }}>
+        {conversationLabel(
+          {
+            title: conversation.title,
+            type: conversation.type,
+            participants: conversation.participants.map((participant) => ({ displayName: participant.displayName })),
+            total: conversation.memberCount,
+          },
+          language,
+        )}{' '}
+        · {interpretConversationType(conversation.type, language).label}
+      </p>
 
-          {texte('title', 'admin.convSettings.titleField')}
-          {texte('description', 'admin.convSettings.description')}
-          {texte('avatar', 'admin.convSettings.avatar')}
-          {texte('banner', 'admin.convSettings.banner')}
+      {texte('title', 'admin.convSettings.titleField')}
+      {texte('description', 'admin.convSettings.description')}
+      {texte('avatar', 'admin.convSettings.avatar')}
+      {texte('banner', 'admin.convSettings.banner')}
 
-          {direct ? null : (
-            <>
-              <Champ label={t('admin.convSettings.writeRole')}>
-                <select
-                  data-admin-conv-field="defaultWriteRole"
-                  value={brouillon.defaultWriteRole}
-                  onChange={(event) => {
-                    const valeur = event.currentTarget.value;
-                    if (estRoleEcriture(valeur)) poser({ defaultWriteRole: valeur });
-                  }}
-                  className="rounded-chip px-4 text-body"
-                  style={CONTROLE}
-                >
-                  {brouillon.defaultWriteRole === '' ? <option value="">—</option> : null}
-                  {ROLES_ECRITURE.map((r) => (
-                    <option key={r} value={r}>
-                      {t(LIBELLES_ECRITURE[r])}
-                    </option>
-                  ))}
-                </select>
-              </Champ>
-              <Interrupteur
-                label={t('admin.convSettings.announcement')}
-                actif={brouillon.isAnnouncementChannel}
-                data="announcement"
-                onBascule={() => poser({ isAnnouncementChannel: !brouillon.isAnnouncementChannel })}
-              />
-              <Champ label={t('admin.convSettings.slowMode')}>
-                <input
-                  type="number"
-                  min={0}
-                  inputMode="numeric"
-                  data-admin-conv-field="slowModeSeconds"
-                  value={String(brouillon.slowModeSeconds)}
-                  onInput={(event) => {
-                    const secondes = Number(event.currentTarget.value);
-                    if (event.currentTarget.value !== '' && Number.isInteger(secondes) && secondes >= 0) poser({ slowModeSeconds: secondes });
-                  }}
-                  className="rounded-chip px-4 text-body tabular-nums"
-                  style={CONTROLE}
-                />
-              </Champ>
-            </>
-          )}
-
-          <Interrupteur
-            label={t('admin.convSettings.autoTranslate')}
-            actif={brouillon.autoTranslateEnabled}
-            data="autoTranslate"
-            disabled={e2ee}
-            onBascule={() => poser({ autoTranslateEnabled: !brouillon.autoTranslateEnabled })}
+      {direct ? null : (
+        <>
+          <AdminSelect
+            id="admin-conv-field-defaultWriteRole"
+            label={t('admin.convSettings.writeRole')}
+            value={brouillon.defaultWriteRole}
+            options={ROLES_ECRITURE.map((r) => ({ value: r, label: t(LIBELLES_ECRITURE[r]) }))}
+            fallbackLabel={() => '—'}
+            onValue={(valeur) => {
+              if (estRoleEcriture(valeur)) poser({ defaultWriteRole: valeur });
+            }}
+            data={{ 'data-admin-conv-field': 'defaultWriteRole' }}
           />
-          <Interrupteur
-            label={t(conversation.isActive ? 'admin.convSettings.archive' : 'admin.convSettings.restore')}
-            actif={conversation.isActive ? !brouillon.isActive : brouillon.isActive}
-            data="archive"
-            onBascule={() => poser({ isActive: !brouillon.isActive })}
+          <AdminSwitch
+            id="admin-conv-toggle-announcement"
+            label={t('admin.convSettings.announcement')}
+            checked={brouillon.isAnnouncementChannel}
+            onToggle={(isAnnouncementChannel) => poser({ isAnnouncementChannel })}
+            data={{ 'data-admin-conv-toggle': 'announcement' }}
           />
-          <Interrupteur
-            label={t(conversation.closedAt === null ? 'admin.convSettings.close' : 'admin.convSettings.reopen')}
-            actif={conversation.closedAt === null ? brouillon.closed : !brouillon.closed}
-            data="close"
-            onBascule={() => poser({ closed: !brouillon.closed })}
+          <AdminTextInput
+            id="admin-conv-field-slowModeSeconds"
+            type="number"
+            min={0}
+            inputMode="numeric"
+            label={t('admin.convSettings.slowMode')}
+            value={String(brouillon.slowModeSeconds)}
+            onValue={(valeur) => {
+              const secondes = Number(valeur);
+              if (valeur !== '' && Number.isInteger(secondes) && secondes >= 0) poser({ slowModeSeconds: secondes });
+            }}
+            data={{ 'data-admin-conv-field': 'slowModeSeconds' }}
           />
+        </>
+      )}
 
-          {!membre ? null : createur ? (
-            <p className="rounded-card px-4 py-3 text-caption" style={{ color: INK2, backgroundColor: 'color-mix(in srgb, var(--color-ios-ink-3) 10%, transparent)' }}>
-              {t('admin.convSettings.creatorProtected')}
-            </p>
-          ) : (
-            <Champ label={t('admin.convSettings.memberRole')}>
-              <select
-                data-admin-conv-member-role
-                value={role}
-                onChange={(event) => {
-                  setRole(event.currentTarget.value);
-                  setConfirme(null);
-                }}
-                className="rounded-chip px-4 text-body"
-                style={CONTROLE}
-              >
-                {estRoleMembre(roleServi) ? null : <option value={roleServi}>{roleServi || '—'}</option>}
-                {ROLES_MEMBRE.map((r) => (
-                  <option key={r} value={r}>
-                    {t(LIBELLES_MEMBRE[r])}
-                  </option>
-                ))}
-              </select>
-            </Champ>
-          )}
+      <AdminSwitch
+        id="admin-conv-toggle-autoTranslate"
+        label={t('admin.convSettings.autoTranslate')}
+        checked={brouillon.autoTranslateEnabled}
+        disabled={e2ee}
+        onToggle={(autoTranslateEnabled) => poser({ autoTranslateEnabled })}
+        data={{ 'data-admin-conv-toggle': 'autoTranslate' }}
+      />
+      <AdminSwitch
+        id="admin-conv-toggle-archive"
+        label={t(conversation.isActive ? 'admin.convSettings.archive' : 'admin.convSettings.restore')}
+        checked={conversation.isActive ? !brouillon.isActive : brouillon.isActive}
+        onToggle={() => poser({ isActive: !brouillon.isActive })}
+        data={{ 'data-admin-conv-toggle': 'archive' }}
+      />
+      <AdminSwitch
+        id="admin-conv-toggle-close"
+        label={t(conversation.closedAt === null ? 'admin.convSettings.close' : 'admin.convSettings.reopen')}
+        checked={conversation.closedAt === null ? brouillon.closed : !brouillon.closed}
+        onToggle={() => poser({ closed: !brouillon.closed })}
+        data={{ 'data-admin-conv-toggle': 'close' }}
+      />
 
-          <Champ label={t(souverain ? 'admin.kit.motiveOptional' : 'admin.convSettings.reason')}>
-            <input
-              data-admin-conv-reason
-              value={motif}
-              onInput={(event) => setMotif(event.currentTarget.value)}
-              className="rounded-chip px-4 text-body"
-              style={CONTROLE}
-            />
-          </Champ>
+      {!membre ? null : createur ? (
+        <AdminInlineNotice tone="neutral" text={t('admin.convSettings.creatorProtected')} />
+      ) : (
+        <AdminSelect
+          id="admin-conv-member-role"
+          label={t('admin.convSettings.memberRole')}
+          value={role}
+          options={ROLES_MEMBRE.map((r) => ({ value: r, label: t(LIBELLES_MEMBRE[r]) }))}
+          fallbackLabel={(valeur) => valeur || '—'}
+          onValue={(valeur) => {
+            setRole(valeur);
+            confirmation.disarm();
+          }}
+          data={{ 'data-admin-conv-member-role': '' }}
+        />
+      )}
 
-          <div className="grid gap-2 pt-2">
-            <ActionButton
-              tone={destructeur ? 'danger' : 'primary'}
-              data={{ 'data-admin-conv-save': '' }}
-              disabled={!peutEnregistrer}
-              onClick={() => void enregistrer()}
-            >
-              {t(confirme === 'save' ? 'admin.convSettings.confirm' : 'admin.convSettings.save')}
-            </ActionButton>
-            {!membre || createur ? null : (
-              <ActionButton tone="danger" data={{ 'data-admin-conv-remove': '' }} disabled={!motifValide || envoi} onClick={() => void retirer()}>
-                {t(confirme === 'remove' ? 'admin.convSettings.confirm' : 'admin.convSettings.remove')}
-              </ActionButton>
-            )}
-            <ActionButton tone="secondary" onClick={onClose}>
-              {translate(language, 'common.cancel')}
-            </ActionButton>
-          </div>
-        </div>
-      </div>
-    </Sheet>
+      <AdminReasonField
+        id="admin-conv-reason"
+        language={language}
+        label={t('admin.convSettings.reason')}
+        value={motif}
+        onValue={setMotif}
+        minLength={MOTIF_LONGUEUR_MINIMALE}
+        required
+        sovereign={souverain}
+        whenSovereign="optional"
+        data={{ 'data-admin-conv-reason': '' }}
+      />
+
+      <AdminFormActions
+        language={language}
+        primary={{
+          label: t(confirme === 'save' ? 'admin.convSettings.confirm' : 'admin.convSettings.save'),
+          tone: destructeur ? 'danger' : 'primary',
+          busy: envoi,
+          disabled: !peutEnregistrer,
+          onClick: () => void enregistrer(),
+          data: { 'data-admin-conv-save': '' },
+        }}
+        secondary={
+          !membre || createur
+            ? []
+            : [
+                {
+                  label: t(confirme === 'remove' ? 'admin.convSettings.confirm' : 'admin.convSettings.remove'),
+                  tone: 'danger',
+                  disabled: !motifValide,
+                  onClick: () => void retirer(),
+                  data: { 'data-admin-conv-remove': '' },
+                },
+              ]
+        }
+        onCancel={onClose}
+      />
+    </AdminFormSheet>
   );
 }
