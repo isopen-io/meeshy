@@ -132,7 +132,8 @@ export function chooseGuideMomentAny(
   seen: Iterable<string>,
 ): GuideMoment | GuideMomentV2 | null {
   const seenSet = new Set(seen);
-  if (!events.some(isEventV2)) return chooseGuideMoment(events as readonly GuideEvent[], seenSet);
+  const legacy = events.filter((e): e is GuideEvent => !isEventV2(e));
+  if (legacy.length === events.length) return chooseGuideMoment(legacy, seenSet);
   const rank = (e: GuideEvent | GuideEventV2): number => GUIDE_MOMENT_PRIORITY_ALL.indexOf(e.kind);
   const byPriority = [...events].sort((a, b) => rank(a) - rank(b));
   const chosen = byPriority.find((e) => !seenSet.has(e.kind)) ?? byPriority[0];
