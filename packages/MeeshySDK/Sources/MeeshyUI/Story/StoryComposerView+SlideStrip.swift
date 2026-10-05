@@ -85,7 +85,8 @@ extension StoryComposerView {
                 bgImage: viewModel.slideImages[slide.id],
                 drawingData: drawData,
                 loadedImages: viewModel.loadedImages,
-                index: index
+                index: index,
+                thumbnails: SceneThumbnailCache.shared
             )
             .frame(width: thumbW, height: thumbH)
             .clipShape(RoundedRectangle(cornerRadius: 3))
@@ -153,7 +154,8 @@ extension StoryComposerView {
         // `.onMove` (offset post-cible). Câble enfin `moveSlide` (it.37).
         .draggable(slide.id) {
             SlideMiniPreview(effects: slide.effects, bgImage: viewModel.slideImages[slide.id],
-                             drawingData: drawData, loadedImages: viewModel.loadedImages, index: index)
+                             drawingData: drawData, loadedImages: viewModel.loadedImages, index: index,
+                             thumbnails: SceneThumbnailCache.shared)
                 .frame(width: thumbW, height: thumbH)
                 .clipShape(RoundedRectangle(cornerRadius: 3))
         }

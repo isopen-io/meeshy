@@ -1,5 +1,6 @@
 import Foundation
 import UIKit
+import MeeshyUI
 import os
 
 /// Le magasin des brouillons du meuble (#8848).
@@ -187,8 +188,12 @@ nonisolated final class ComposerAutosaveStore: ComposerAutosaveProviding, @unche
                 carte[nom] = copie
             }
         }
+        // À la taille PUBLIÉE (#6922) : un brouillon écrit avant le plafond
+        // tient encore ses photos pleine taille, et les relire entières
+        // rendrait à la reprise la mémoire que la pose ne prend plus.
         let bitmaps: [String: UIImage] = bitmapFiles.reduce(into: [:]) { carte, nom in
-            carte[nom] = UIImage(contentsOfFile: media.appendingPathComponent(nom).path)
+            carte[nom] = SceneImageDownsampling.image(fileAt: media.appendingPathComponent(nom),
+                                                      maxPixelSize: SceneImageDownsampling.workingMaxPixelSize)
         }
         let blobs: [String: Data] = blobFiles.reduce(into: [:]) { carte, nom in
             carte[nom] = try? Data(contentsOf: media.appendingPathComponent(nom))
