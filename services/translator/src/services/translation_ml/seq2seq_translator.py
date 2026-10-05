@@ -7,6 +7,8 @@ import logging
 from typing import List, Union, Dict, Optional
 from enum import Enum
 
+from utils.generation_guard import GenerationOutcome, greedy_generation_kwargs, settle_generation
+
 logger = logging.getLogger(__name__)
 
 
@@ -238,9 +240,11 @@ class Seq2SeqTranslator:
             except Exception:
                 pass
 
-        # Préparer les arguments de génération
+        # Budget proportionnel à la source la plus longue + arrêt sur boucle (#9309) :
+        # `max_length` n'est plus qu'un plafond, jamais la longueur visée.
+        source_tokens = max(sum(row) for row in inputs['attention_mask'].tolist())
         generate_kwargs = {
-            'max_length': max_length,
+            **greedy_generation_kwargs(source_tokens, ceiling=max_length),
             'num_beams': num_beams,
             'do_sample': do_sample,
             **kwargs
@@ -253,8 +257,14 @@ class Seq2SeqTranslator:
         # Générer les traductions
         outputs = self.model.generate(**inputs, **generate_kwargs)
 
-        # Décoder les résultats
-        translations = self.tokenizer.batch_decode(outputs, skip_special_tokens=True)
+        # Une boucle coupée ne garde qu'une copie de son bloc avant décodage
+        pad_id = getattr(self.tokenizer, 'pad_token_id', None)
+        budget = generate_kwargs['max_new_tokens']
+        settled = [settle_generation(row, budget, pad_id) for row in outputs.tolist()]
+        self._report_cut_generations([outcome for _, outcome in settled])
+        translations = self.tokenizer.batch_decode(
+            [kept for kept, _ in settled], skip_special_tokens=True
+        )
 
         # Formater comme pipeline transformers (pour compatibilité)
         results = [{'translation_text': t} for t in translations]
@@ -264,6 +274,16 @@ class Seq2SeqTranslator:
             return results[0]
 
         return results
+
+    def _report_cut_generations(self, outcomes: List[GenerationOutcome]) -> None:
+        looped = sum(outcome.looped for outcome in outcomes)
+        capped = sum(outcome.hit_budget for outcome in outcomes)
+        if looped or capped:
+            logger.warning(
+                f"[NLLB] génération coupée (#9309) {self.src_lang}→{self.tgt_lang} : "
+                f"{looped} boucle(s), {capped} au budget de {outcomes[0].budget} jetons "
+                f"sur {len(outcomes)} segment(s)"
+            )
 
     def get_model_info(self) -> Dict:
         """
