@@ -16303,43 +16303,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "المس مرتين: صورة"
+            "value": "ثم المس مرتين: صورة"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Doppeltippen: Foto"
+            "value": "Dann doppeltippen: Foto"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Double-tap: photo"
+            "value": "Then double-tap: photo"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Toca dos veces: foto"
+            "value": "Luego toca dos veces: foto"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Toucher deux fois : photo"
+            "value": "Puis toucher deux fois : photo"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tocca due volte: foto"
+            "value": "Poi tocca due volte: foto"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Toque duas vezes: foto"
+            "value": "Depois toque duas vezes: foto"
           }
         }
       }
