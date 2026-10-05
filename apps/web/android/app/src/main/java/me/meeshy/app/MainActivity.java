@@ -60,6 +60,9 @@ public class MainActivity extends BridgeActivity {
     private View fullscreenView;
     private WebChromeClient.CustomViewCallback fullscreenCallback;
 
+    /** #9410 — le plein ecran demande pour flotter : il flotte des qu'il est montre. */
+    private boolean floatOnFullscreen;
+
     static boolean isInForeground() {
         return inForeground;
     }
@@ -101,6 +104,28 @@ public class MainActivity extends BridgeActivity {
             }
         } catch (IllegalStateException refused) {
             // PiP coupee pour Meeshy dans les reglages : l'appel ou la video continue en arriere-plan.
+        }
+    }
+
+    /**
+     * #9410 — le bouton « image dans l'image » d'une video, que la WebView
+     * n'offre pas : la page a passe la video en plein ecran, l'activite flotte
+     * maintenant, ou des que la vue plein ecran lui est confiee.
+     */
+    boolean floatVideo() {
+        boolean supported = getPackageManager().hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE);
+        if (!FullscreenPictureInPicture.floats(Build.VERSION.SDK_INT, true, supported)) return false;
+        if (fullscreenView != null) return enterFloat();
+        floatOnFullscreen = true;
+        return true;
+    }
+
+    @SuppressLint("NewApi")
+    private boolean enterFloat() {
+        try {
+            return enterPictureInPictureMode(new PictureInPictureParams.Builder().build());
+        } catch (IllegalStateException refused) {
+            return false;
         }
     }
 
@@ -158,10 +183,15 @@ public class MainActivity extends BridgeActivity {
                 WindowInsetsControllerCompat bars = WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
                 bars.setSystemBarsBehavior(WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
                 bars.hide(WindowInsetsCompat.Type.systemBars());
+                if (floatOnFullscreen) {
+                    floatOnFullscreen = false;
+                    enterFloat();
+                }
             }
 
             @Override
             public void onHideCustomView() {
+                floatOnFullscreen = false;
                 if (fullscreenView == null) {
                     return;
                 }
