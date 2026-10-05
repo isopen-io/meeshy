@@ -172,6 +172,13 @@ const MISSION_PHRASES: Readonly<Record<string, MissionPhrase>> = {
   'long-chat': single('game.mission.long_chat'),
   'gold-replies-received': single('game.mission.gold_replies_received'),
   'gold-reply-conversations': single('game.mission.reply_conversations'),
+  /* LA MISSION EN DUO (#9385) : six gabarits qui se jouent avec les phrases des missions. */
+  'duo-messages': plural('game.mission.send_texts'),
+  'duo-voice': plural('game.mission.send_voice'),
+  'duo-reactions': plural('game.mission.react_messages'),
+  'duo-replies': single('game.mission.reply_conversations'),
+  'duo-stories': plural('game.mission.publish_story'),
+  'duo-prism': plural('game.mission.prism_foreign_messages'),
 };
 
 /** La mission en clair ; un gabarit que ce client ne connaît pas encore reste « Mission du jour ». */
@@ -192,7 +199,25 @@ type ErrorKey =
   | 'game.error.mission_reroll_unavailable'
   | 'game.error.missions_locked'
   | 'game.error.chest_not_ready'
-  | 'game.error.request_id_conflict';
+  | 'game.error.request_id_conflict'
+  | 'game.error.league_locked'
+  | 'game.error.league_minor'
+  | 'game.error.league_consent_required'
+  | 'game.error.league_pseudonym_invalid'
+  | 'game.error.league_pseudonym_taken'
+  | 'game.error.league_pseudonym_forbidden'
+  | 'game.error.duo_locked'
+  | 'game.error.duo_not_friends'
+  | 'game.error.duo_already_active'
+  | 'game.error.duo_not_found'
+  | 'game.error.duo_transition_refused'
+  | 'game.error.season_not_open'
+  | 'game.error.season_step_not_found'
+  | 'game.error.season_step_locked'
+  | 'game.error.season_step_already_claimed'
+  | 'game.error.seal_already_owned'
+  | 'game.error.prestige_level_too_low'
+  | 'game.error.prestige_at_maximum';
 
 const ERRORS: Readonly<Record<string, ErrorKey>> = {
   [GAME_ERROR_CODES.insufficientPoints]: 'game.error.insufficient_points',
@@ -205,6 +230,24 @@ const ERRORS: Readonly<Record<string, ErrorKey>> = {
   [GAME_ERROR_CODES.missionsLocked]: 'game.error.missions_locked',
   [GAME_ERROR_CODES.chestNotReady]: 'game.error.chest_not_ready',
   [GAME_ERROR_CODES.requestIdConflict]: 'game.error.request_id_conflict',
+  [GAME_ERROR_CODES.leagueLocked]: 'game.error.league_locked',
+  [GAME_ERROR_CODES.leagueMinor]: 'game.error.league_minor',
+  [GAME_ERROR_CODES.leagueConsentRequired]: 'game.error.league_consent_required',
+  [GAME_ERROR_CODES.leaguePseudonymInvalid]: 'game.error.league_pseudonym_invalid',
+  [GAME_ERROR_CODES.leaguePseudonymTaken]: 'game.error.league_pseudonym_taken',
+  [GAME_ERROR_CODES.leaguePseudonymForbidden]: 'game.error.league_pseudonym_forbidden',
+  [GAME_ERROR_CODES.duoLocked]: 'game.error.duo_locked',
+  [GAME_ERROR_CODES.duoNotFriends]: 'game.error.duo_not_friends',
+  [GAME_ERROR_CODES.duoAlreadyActive]: 'game.error.duo_already_active',
+  [GAME_ERROR_CODES.duoNotFound]: 'game.error.duo_not_found',
+  [GAME_ERROR_CODES.duoTransitionRefused]: 'game.error.duo_transition_refused',
+  [GAME_ERROR_CODES.seasonNotOpen]: 'game.error.season_not_open',
+  [GAME_ERROR_CODES.seasonStepNotFound]: 'game.error.season_step_not_found',
+  [GAME_ERROR_CODES.seasonStepLocked]: 'game.error.season_step_locked',
+  [GAME_ERROR_CODES.seasonStepAlreadyClaimed]: 'game.error.season_step_already_claimed',
+  [GAME_ERROR_CODES.sealAlreadyOwned]: 'game.error.seal_already_owned',
+  [GAME_ERROR_CODES.prestigeLevelTooLow]: 'game.error.prestige_level_too_low',
+  [GAME_ERROR_CODES.prestigeAtMaximum]: 'game.error.prestige_at_maximum',
 };
 
 export function gameErrorMessage(code: string | undefined, language: Language = currentInterfaceLanguage()): string {

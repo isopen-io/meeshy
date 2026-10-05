@@ -72,6 +72,16 @@
   --game-enamel-comment: #0d9488;
   --game-enamel-tool: #d97706;
 
+  /* LES GEMMES DE LIGUE (#9384) : huit pierres, du Quartz au Prisme (le Prisme
+     prend le dégradé irisé de la matière). Illustration : pas de variante de thème. */
+  --game-league-quartz: #e5e7eb;
+  --game-league-ambre: #f59e0b;
+  --game-league-jade: #10b981;
+  --game-league-saphir: #3b82f6;
+  --game-league-rubis: #e11d48;
+  --game-league-amethyste: #8b5cf6;
+  --game-league-diamant: #bae6fd;
+
   --game-tier-etincelle: var(--ios-error);
   --game-tier-lueur: #fb923c;
   --game-tier-lumiere: var(--ios-warning);

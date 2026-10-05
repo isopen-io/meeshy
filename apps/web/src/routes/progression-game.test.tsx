@@ -5,7 +5,7 @@ import { resolveEngagementProgress } from '@meeshy/shared/utils/engagement-progr
 
 import type { EngagementWithGame } from '@/lib/api/engagement';
 import { ENGAGEMENT_PROGRESS_FIXTURE } from '@/lib/api/engagement-fixture';
-import { gameBlockFixture } from '@/lib/api/game-fixture';
+import { gameBlockFixture, gameBlockWithExtrasFixture } from '@/lib/api/game-fixture';
 
 import { ProgressionBody } from './progression';
 import type { GameActions } from './progression-game-actions';
@@ -147,5 +147,17 @@ describe('un ancien serveur (aucun bloc game) : l’écran actuel est intact', (
 
   test('la mascotte actuelle parle encore', () => {
     expect(legacy).toContain('data-mascot-coach');
+  });
+});
+
+describe('la vague 2 sur le hub (#9481)', () => {
+  test('un serveur qui sert les extensions : les portes se posent avant les règles', () => {
+    const page = body({ ...base, game: gameBlockWithExtrasFixture() });
+    expect(page).toContain('data-game-doors');
+    expect(page.indexOf('data-game-doors')).toBeLessThan(page.lastIndexOf('/me/progression/regles'));
+  });
+
+  test('un ancien serveur : aucune porte de plus', () => {
+    expect(body(withGame())).not.toContain('data-game-doors');
   });
 });

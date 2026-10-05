@@ -19,6 +19,7 @@ const PRIVATE_ROUTES: readonly RouteKey[] = [
   'thread',
   'conversationsNew',
   'progression',
+  'progressionLigue',
   'bookmarks',
   'starredMessages',
   'stories',

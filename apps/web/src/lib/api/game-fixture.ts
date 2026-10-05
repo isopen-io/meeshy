@@ -1,5 +1,6 @@
 import { buildGameBlock, type GameBlockFacts } from '@meeshy/shared/utils/game/game-block';
 import { buildGameBlockExtras, type GameBlockExtrasFacts } from '@meeshy/shared/utils/game/game-block-extras';
+import { flameTrophy, leagueCupTrophy, trophyKey } from '@meeshy/shared/utils/game/trophies';
 import type { GameBlock, GameMission } from '@meeshy/shared/types/game';
 
 /**
@@ -24,6 +25,9 @@ const mission = (patch: Partial<GameMission> & Pick<GameMission, 'id' | 'difficu
 });
 
 export const GAME_FIXTURE_TODAY = '2026-10-05';
+
+/** Un lundi de la quatrième semaine de la saison 1 : la ligue, le duo et la saison sont ouverts. */
+export const GAME_EXTRAS_TODAY = '2026-11-02';
 
 export const gameFactsFixture = (patch: Partial<GameBlockFacts> = {}): GameBlockFacts => ({
   userId: 'user-demo',
@@ -61,7 +65,7 @@ export const gameBlockFixture = (patch: Partial<GameBlockFacts> = {}): GameBlock
  * sur 30, dans la zone de montée), duo actif, saison 1 à mi-parcours, trois
  * trophées, l'Atlas à quatre tampons, le Prestige à zéro étoile.
  *
- * Le jour est FIXE (`GAME_FIXTURE_TODAY`, un lundi) : une semaine de ligue qui
+ * Le jour est FIXE (`GAME_EXTRAS_TODAY`, un lundi de la saison 1) : une semaine de ligue qui
  * suivrait l'horloge ferait changer les captures et les témoins d'un lundi à l'autre.
  */
 const leagueMembers = [
@@ -71,7 +75,7 @@ const leagueMembers = [
 
 export const gameExtrasFactsFixture = (patch: Partial<GameBlockExtrasFacts> = {}): GameBlockExtrasFacts => ({
   userId: 'user-demo',
-  today: GAME_FIXTURE_TODAY,
+  today: GAME_EXTRAS_TODAY,
   minuteOfDay: 14 * 60,
   score: 1244,
   levelRecord: null,
@@ -95,15 +99,15 @@ export const gameExtrasFactsFixture = (patch: Partial<GameBlockExtrasFacts> = {}
     status: 'active',
     role: 'inviter',
     partner: { userId: 'friend-1', displayName: 'Amina' },
-    mission: { weekKey: GAME_FIXTURE_TODAY, templateKey: 'duo-messages', signal: 'axis:content.text_message', prism: false, partTarget: 40, commonTarget: 80, basePoints: 300 },
+    mission: { weekKey: GAME_EXTRAS_TODAY, templateKey: 'duo-messages', signal: 'axis:content.text_message', prism: false, partTarget: 40, commonTarget: 80, basePoints: 300 },
     mine: 22,
     partnerProgress: 31,
   },
   season: { stars: 56, claimedSteps: [1, 2, 3], sealOwned: false },
   trophies: [
-    { key: 'league-cup:2026-09-28:jade:silver', awardedAt: '2026-10-04T18:00:00.000Z' },
-    { key: 'flame:100', awardedAt: '2026-09-12T08:00:00.000Z' },
-    { key: 'league-cup:2026-09-21:ambre:gold', awardedAt: '2026-09-27T18:00:00.000Z' },
+    { key: trophyKey(leagueCupTrophy({ weekKey: '2026-10-26', league: 'jade', cup: 'silver' })), awardedAt: '2026-11-01T18:00:00.000Z' },
+    { key: trophyKey(flameTrophy(100)), awardedAt: '2026-09-12T08:00:00.000Z' },
+    { key: trophyKey(leagueCupTrophy({ weekKey: '2026-10-19', league: 'ambre', cup: 'gold' })), awardedAt: '2026-10-25T18:00:00.000Z' },
   ],
   showcaseOrder: [],
   atlas: {

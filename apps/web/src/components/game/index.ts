@@ -7,6 +7,7 @@ export { Flame } from './flame';
 export { GameBadge, type GameBadgeShape } from './game-badge';
 export { GameBird } from './game-bird';
 export { GameEffectLayer } from './game-effect-layer';
+export { LeagueGem } from './league-gem';
 export { LevelRing } from './level-ring';
 export { GameMedal } from './medal';
 export { MeeshCoin, MeeshCoinFlip, type MeeshCoinSide } from './meesh-coin';

@@ -5,6 +5,7 @@ import { Link } from '@/routes/route-table';
 
 import type { EngagementWithGame } from '@/lib/api/engagement';
 import { gameText } from '@/lib/view/game-copy';
+import { GameDoors } from '@/components/game-doors';
 import { GameFlamePanel } from '@/components/game-flame-panel';
 import { GameGauges } from '@/components/game-gauges';
 import { GameHero } from '@/components/game-hero';
@@ -88,6 +89,7 @@ export function GameSection({ progress, host }: { readonly progress: EngagementW
         onRelight={actions.relight}
         errors={{ freeze: actions.errors.freeze, relight: actions.errors.relight }}
       />
+      <GameDoors game={game} />
       <Link
         to="progressionRegles"
         className="flex items-center justify-center rounded-card px-4 text-body font-semibold"
