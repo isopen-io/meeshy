@@ -105,8 +105,15 @@ export class PrestigeService {
     return written ? glory : 0;
   }
 
+  /**
+   * La demande est déjà réclamée. Sans étoile écrite, le passage est EN COURS (ou
+   * tombé avant son écriture) : on ne paie rien d'un Prestige qui n'a pas eu
+   * lieu — l'erreur est transitoire, le client rejoue.
+   */
   private async replayed(userId: string, now: Date): Promise<PrestigeResponse> {
-    const stars = Math.max(1, (await this.account(userId))?.prestige ?? 1);
+    const written = (await this.account(userId))?.prestige ?? 0;
+    if (!(written >= 1)) throw new Error('prestige request in flight');
+    const stars = written;
     await this.followUps(userId, stars, GLORY_POINTS.prestige, now);
     return { status: 'already-passed', prestige: stars, score: 0, level: 1, gloryGained: 0, trophyKey: trophyKey(prestigeTrophy(stars)) };
   }
