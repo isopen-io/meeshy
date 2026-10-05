@@ -1,6 +1,6 @@
 /**
  * Le contrat d'API de la vague 2 (#9384 à #9392) : sept extensions du bloc
- * `game`, treize routes, seize codes d'erreur, les écritures idempotentes.
+ * `game`, treize routes, dix-sept codes d'erreur, les écritures idempotentes.
  * Le bloc ne casse ni un ancien serveur, ni un ancien client.
  */
 

@@ -22,6 +22,7 @@ import {
   buildGameVectors,
   evaluateGameVector,
   type GameVectorInput,
+  GAME_VECTOR_LAWS_V2,
 } from '../game/game-vectors-law.js';
 
 const FILE = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'fixtures', 'reading-modes', 'game.vectors.json');
@@ -62,6 +63,7 @@ describe('game.vectors.json ne diverge pas de la loi', () => {
         'mission-reroll',
         'chest',
         'guide',
+        ...GAME_VECTOR_LAWS_V2,
       ].sort(),
     );
   });
