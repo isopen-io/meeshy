@@ -128,6 +128,8 @@ const onboardingScreen = () =>
    paie les octets. */
 const progressionScreen = () =>
   Promise.all([import('@/routes/progression'), loadGameCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+const progressionBadgesScreen = () =>
+  Promise.all([import('@/routes/progression-badges'), loadGameCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
 const progressionRulesScreen = () =>
   Promise.all([import('@/routes/progression-rules'), loadGameCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
 const progressionCarnetScreen = () =>
@@ -179,7 +181,7 @@ export const ROUTES = {
      son propre retour, son propre titre et son propre compte — un panneau qui
      se déplie dans le hub n'aurait ni l'un ni les autres, et le bouton système
      « retour » refermerait l'écran entier au lieu du panneau. */
-  progressionBadges: { pattern: '/me/progression/badges', screen: () => import('@/routes/progression-badges') },
+  progressionBadges: { pattern: '/me/progression/badges', screen: progressionBadgesScreen },
   progressionDefis: { pattern: '/me/progression/defis', screen: () => import('@/routes/progression-defis') },
   progressionSucces: { pattern: '/me/progression/succes', screen: () => import('@/routes/progression-succes') },
   /* LE CARNET DES RÈGLES (#9379) — « Comment ça marche », depuis Progression :

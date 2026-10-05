@@ -14,6 +14,8 @@ import {
   type GamePluralBase,
   type TranslateGameArgs,
 } from '@/lib/i18n-game-catalog';
+import type { GameMaterial } from '@/lib/game/materials';
+import type { Medal } from '@/lib/game/medal';
 import { tierOrdinal } from '@/lib/game/tier-emblem';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 
@@ -90,6 +92,28 @@ export const levelRingLabel = (level: number, tier: LevelTierKey, language: Lang
     tier: levelTierName(tier, language),
     ordinal: translateGame(language, TIER_ORDINALS[tierOrdinal(tier) - 1] ?? TIER_ORDINALS[0]),
   });
+
+export const materialName = (material: GameMaterial, language: Language = currentInterfaceLanguage()): string =>
+  translateGame(language, `game.material.${material}`);
+
+/** Ce que la médaille d'un axe donne à lire : « Messages texte, Or, 100 sur 500 vers Platine » (#9466). */
+export function medalLabel(
+  medal: Pick<Medal, 'tier' | 'material' | 'nextMaterial' | 'value' | 'nextThreshold' | 'missing'>,
+  axisName: string,
+  language: Language = currentInterfaceLanguage(),
+): string {
+  const { material, nextMaterial, value, nextThreshold, missing } = medal;
+  if (material === null) {
+    return translateGame(language, 'game.medal.label_off', { axis: axisName, missing: formatGameNumber(language, missing ?? 0) });
+  }
+  const base = { axis: axisName, material: materialName(material, language), value: formatGameNumber(language, value) };
+  if (nextThreshold === null || nextMaterial === null) return translateGame(language, 'game.medal.label_top', base);
+  return translateGame(language, 'game.medal.label', {
+    ...base,
+    next: formatGameNumber(language, nextThreshold),
+    nextMaterial: materialName(nextMaterial, language),
+  });
+}
 
 export const rankName = (rank: GloryRankOrMythic, language: Language = currentInterfaceLanguage()): string =>
   translateGame(language, `game.rank.${rank}`);

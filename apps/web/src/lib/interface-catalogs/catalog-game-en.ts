@@ -372,6 +372,16 @@ const en = {
   'game.tier.ordinal.8': 'eighth tier',
   'game.tier.ordinal.9': 'ninth tier',
   'game.tier.ordinal.10': 'tenth tier',
+  'game.material.copper': 'Copper',
+  'game.material.bronze': 'Bronze',
+  'game.material.silver': 'Silver',
+  'game.material.gold': 'Gold',
+  'game.material.platinum': 'Platinum',
+  'game.material.obsidian': 'Obsidian',
+  'game.material.prism': 'Prism',
+  'game.medal.label': '{axis}, {material}, {value} of {next} toward {nextMaterial}',
+  'game.medal.label_top': '{axis}, {material}, {value}',
+  'game.medal.label_off': '{axis}, not earned yet, {missing} to go',
 } as const satisfies GameCatalog;
 
 export default en;

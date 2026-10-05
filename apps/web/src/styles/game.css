@@ -63,6 +63,15 @@
   --game-flame-2: #fde047;
   --game-flame-ink: #7c2d12;
 
+  /* L'ÉMAIL d'une médaille (#9466) : un champ de couleur par FAMILLE d'axe,
+     l'illustration de la planche (contenu indigo, lien rose, conversation
+     violet, commentaire sarcelle, outil ambre) — il n'a pas de variante de thème. */
+  --game-enamel-content: var(--ios-indigo-600);
+  --game-enamel-social: #e11d48;
+  --game-enamel-conversation: #7c3aed;
+  --game-enamel-comment: #0d9488;
+  --game-enamel-tool: #d97706;
+
   --game-tier-etincelle: var(--ios-error);
   --game-tier-lueur: #fb923c;
   --game-tier-lumiere: var(--ios-warning);

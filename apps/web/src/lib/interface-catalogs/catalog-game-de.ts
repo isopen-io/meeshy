@@ -372,6 +372,16 @@ const de = {
   'game.tier.ordinal.8': 'achte Stufe',
   'game.tier.ordinal.9': 'neunte Stufe',
   'game.tier.ordinal.10': 'zehnte Stufe',
+  'game.material.copper': 'Kupfer',
+  'game.material.bronze': 'Bronze',
+  'game.material.silver': 'Silber',
+  'game.material.gold': 'Gold',
+  'game.material.platinum': 'Platin',
+  'game.material.obsidian': 'Obsidian',
+  'game.material.prism': 'Prisma',
+  'game.medal.label': '{axis}, {material}, {value} von {next} auf dem Weg zu {nextMaterial}',
+  'game.medal.label_top': '{axis}, {material}, {value}',
+  'game.medal.label_off': '{axis}, noch nicht erreicht, noch {missing}',
 } as const satisfies GameCatalog;
 
 export default de;

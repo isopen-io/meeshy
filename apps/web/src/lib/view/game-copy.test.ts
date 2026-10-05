@@ -22,6 +22,8 @@ import {
   levelRingLabel,
   levelTierName,
   levelsLabel,
+  materialName,
+  medalLabel,
   meeshCount,
   missionTitle,
   pointsLabel,
@@ -148,6 +150,38 @@ describe('les refus du serveur se disent', () => {
     for (const language of SUPPORTED_INTERFACE_LANGUAGES) {
       expect(NAMED(gameErrorMessage('INSUFFICIENT_POINTS', language))).toBe(true);
       expect(gameErrorMessage('INSUFFICIENT_POINTS', language)).not.toBe(gameErrorMessage('???', language));
+    }
+  });
+});
+
+describe('la médaille se dit en toutes lettres (#9466)', () => {
+  const axisName = 'Messages texte';
+
+  test('« Messages texte, Or, 100 sur 500 vers Platine »', () => {
+    const medal = { tier: 4, material: 'gold', nextMaterial: 'platinum', value: 100, nextThreshold: 500, missing: null } as const;
+    expect(medalLabel(medal, axisName, 'fr')).toBe('Messages texte, Or, 100 sur 500 vers Platine');
+  });
+
+  test('l’échelle complète ne promet aucun palier suivant', () => {
+    const medal = { tier: 5, material: 'platinum', nextMaterial: null, value: 900, nextThreshold: null, missing: null } as const;
+    expect(medalLabel(medal, axisName, 'fr')).toBe('Messages texte, Platine, 900');
+  });
+
+  test('un badge éteint dit ce qu’il manque', () => {
+    const medal = { tier: 0, material: null, nextMaterial: null, value: 0, nextThreshold: 1, missing: 1 } as const;
+    expect(medalLabel(medal, axisName, 'fr')).toContain('pas encore obtenu');
+  });
+
+  test('dans chaque langue : les sept matières ont un nom, et les trois phrases se disent', () => {
+    for (const language of SUPPORTED_INTERFACE_LANGUAGES) {
+      for (const material of ['copper', 'bronze', 'silver', 'gold', 'platinum', 'obsidian', 'prism'] as const) {
+        expect({ language, material, ok: NAMED(materialName(material, language)) }).toEqual({ language, material, ok: true });
+      }
+      const climbing = medalLabel({ tier: 4, material: 'gold', nextMaterial: 'platinum', value: 100, nextThreshold: 500, missing: null }, 'X', language);
+      const top = medalLabel({ tier: 5, material: 'platinum', nextMaterial: null, value: 900, nextThreshold: null, missing: null }, 'X', language);
+      const off = medalLabel({ tier: 0, material: null, nextMaterial: null, value: 0, nextThreshold: 1, missing: 1 }, 'X', language);
+      for (const sentence of [climbing, top, off]) expect({ language, ok: NAMED(sentence) }).toEqual({ language, ok: true });
+      expect(new Set([climbing, top, off]).size).toBe(3);
     }
   });
 });

@@ -384,6 +384,16 @@ const ar = {
   'game.tier.ordinal.8': 'المرحلة الثامنة',
   'game.tier.ordinal.9': 'المرحلة التاسعة',
   'game.tier.ordinal.10': 'المرحلة العاشرة',
+  'game.material.copper': 'نحاس',
+  'game.material.bronze': 'برونز',
+  'game.material.silver': 'فضة',
+  'game.material.gold': 'ذهب',
+  'game.material.platinum': 'بلاتين',
+  'game.material.obsidian': 'سبج',
+  'game.material.prism': 'منشور',
+  'game.medal.label': '{axis}، {material}، {value} من {next} نحو {nextMaterial}',
+  'game.medal.label_top': '{axis}، {material}، {value}',
+  'game.medal.label_off': '{axis}، لم تُنَل بعد، يتبقّى {missing}',
 } as const satisfies GameCatalog;
 
 export default ar;

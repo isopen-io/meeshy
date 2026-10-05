@@ -386,6 +386,16 @@ const fr = {
   'game.tier.ordinal.8': 'huitième palier',
   'game.tier.ordinal.9': 'neuvième palier',
   'game.tier.ordinal.10': 'dixième palier',
+  'game.material.copper': 'Cuivre',
+  'game.material.bronze': 'Bronze',
+  'game.material.silver': 'Argent',
+  'game.material.gold': 'Or',
+  'game.material.platinum': 'Platine',
+  'game.material.obsidian': 'Obsidienne',
+  'game.material.prism': 'Prisme',
+  'game.medal.label': '{axis}, {material}, {value} sur {next} vers {nextMaterial}',
+  'game.medal.label_top': '{axis}, {material}, {value}',
+  'game.medal.label_off': '{axis}, pas encore obtenu, encore {missing}',
 } as const;
 
 export default fr;

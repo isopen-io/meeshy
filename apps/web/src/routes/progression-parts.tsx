@@ -12,17 +12,18 @@
  */
 
 
+import { GameMedal } from '@/components/game/medal';
 import { Glyph, GlyphSvg, type GlyphShape } from '@/components/glyph';
 import { GLYPHS } from '@/components/glyphs';
 import { PROGRESSION_GLYPHS } from '@/components/glyphs-progression';
 import { milestoneGlyph } from '@/components/milestone-glyph';
 import { ProgressBar } from '@/components/progress-bar';
+import { medalOfAxis } from '@/lib/game/medal';
 import { meeshMissing } from '@/lib/view/meesh-copy';
 import {
   ACHIEVEMENT_COPY,
   ACHIEVEMENT_SECTION_TITLES,
   generatedAchievementLabel,
-  AXIS_GLYPHS,
   AXIS_LABELS,
   BADGE_UNIT,
   nextStepLabel,
@@ -134,15 +135,30 @@ export function TierDots({ tiers, tint, axisLabel }: { tiers: readonly Engagemen
   );
 }
 
-export function AxisRow({ axis }: { axis: EngagementAxisProgress }) {
+/**
+ * LA LIGNE D'UN BADGE (#9466) — un badge d'accumulation est une MÉDAILLE
+ * (`components/game/medal.tsx`) : lunette de métal à la hauteur atteinte, émail
+ * de la famille, pictogramme d'axe, perles de palier, arc vers le suivant ;
+ * éteint, son empreinte. La ligne dit déjà l'axe, le palier et ce qui manque :
+ * la médaille reste décorative sauf quand l'hôte lui passe `medalLabel`
+ * (« Messages texte, Or, 100 sur 500 vers Platine »).
+ */
+export function AxisRow({ axis, medalLabel }: { axis: EngagementAxisProgress; medalLabel?: string }) {
   const label = AXIS_LABELS[axis.axisKey];
+  const medal = medalOfAxis(axis);
   return (
     <li className="flex items-center gap-3 py-2.5">
-      <span
-        className="grid size-9 shrink-0 place-items-center rounded-field"
-        style={{ color: BRAND, backgroundColor: 'color-mix(in srgb, var(--color-ios-brand) 12%, transparent)' }}
-      >
-        <GlyphSvg glyph={axisGlyph(AXIS_GLYPHS[axis.axisKey])} size={16} />
+      <span className="grid w-12 shrink-0 place-items-center">
+        <GameMedal
+          size={44}
+          family={medal.family}
+          pictogram={medal.pictogram}
+          tier={medal.tier}
+          progress={medal.progress}
+          {...(medal.threshold === null ? {} : { threshold: String(medal.threshold) })}
+          {...(medal.missing === null ? {} : { missing: `−${medal.missing}` })}
+          {...(medalLabel === undefined ? {} : { label: medalLabel })}
+        />
       </span>
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <div className="flex items-baseline justify-between gap-2">

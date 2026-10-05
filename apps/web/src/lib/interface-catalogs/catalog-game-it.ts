@@ -372,6 +372,16 @@ const it = {
   'game.tier.ordinal.8': 'ottava fascia',
   'game.tier.ordinal.9': 'nona fascia',
   'game.tier.ordinal.10': 'decima fascia',
+  'game.material.copper': 'Rame',
+  'game.material.bronze': 'Bronzo',
+  'game.material.silver': 'Argento',
+  'game.material.gold': 'Oro',
+  'game.material.platinum': 'Platino',
+  'game.material.obsidian': 'Ossidiana',
+  'game.material.prism': 'Prisma',
+  'game.medal.label': '{axis}, {material}, {value} su {next} verso {nextMaterial}',
+  'game.medal.label_top': '{axis}, {material}, {value}',
+  'game.medal.label_off': '{axis}, non ancora ottenuta, ne mancano {missing}',
 } as const satisfies GameCatalog;
 
 export default it;
