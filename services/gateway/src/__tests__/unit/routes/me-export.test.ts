@@ -175,6 +175,12 @@ function makePrisma(opts: PrismaOpts = {}) {
     postMedia: { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) },
     userVoiceModel: { findFirst: jest.fn().mockResolvedValue(null) },
     userSession: { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) },
+    // Le jeu (#9384) : des collections vides, comme un compte qui n'a jamais joué.
+    ...Object.fromEntries(
+      ['gameProfile', 'leaguePseudonym', 'leagueMembership', 'gameWeekPoints', 'gameDuo', 'gameSeason', 'gameTrophy', 'atlasStamp', 'dailyMission', 'gloryLedger', 'meeshLedger'].map(
+        (model) => [model, { findMany: jest.fn().mockResolvedValue([]), findUnique: jest.fn().mockResolvedValue(null) }],
+      ),
+    ),
   };
 }
 

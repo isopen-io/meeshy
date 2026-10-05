@@ -13,6 +13,7 @@ import {
   exportVoiceProfile,
   exportSessions,
 } from './export-sections';
+import { exportGame } from './export-game';
 
 const logger = enhancedLogger.child({ module: 'DataExport' });
 
@@ -28,10 +29,11 @@ type ExportType =
   | 'reactions'
   | 'media'
   | 'voiceProfile'
-  | 'sessions';
+  | 'sessions'
+  | 'game';
 
 const VALID_TYPES: ExportType[] = [
-  'profile', 'messages', 'contacts', 'posts', 'stories', 'comments', 'reactions', 'media', 'voiceProfile', 'sessions',
+  'profile', 'messages', 'contacts', 'posts', 'stories', 'comments', 'reactions', 'media', 'voiceProfile', 'sessions', 'game',
 ];
 
 type ExportFormat = 'json' | 'csv';
@@ -79,6 +81,28 @@ export function toCsv(headers: string[], rows: Record<string, unknown>[]): strin
 // `me/export.ts|200` porte déjà trois entrées héritées à ce défaut — ne pas
 // en ajouter sept de plus. Chaque schéma ci-dessous nomme EXACTEMENT les
 // colonnes du `select` correspondant dans `export-sections.ts`.
+
+const gameRowsSchema = { type: 'array', items: { type: 'object', additionalProperties: true } } as const;
+
+const gameExportSchema = {
+  type: 'object',
+  nullable: true,
+  properties: {
+    progress: { type: 'object', additionalProperties: true, nullable: true },
+    settings: { type: 'object', additionalProperties: true, nullable: true },
+    pseudonym: { type: 'object', additionalProperties: true, nullable: true },
+    leagueHistory: gameRowsSchema,
+    weekPoints: gameRowsSchema,
+    duos: gameRowsSchema,
+    seasons: gameRowsSchema,
+    trophies: gameRowsSchema,
+    atlas: gameRowsSchema,
+    missions: gameRowsSchema,
+    gloryLedger: gameRowsSchema,
+    meeshLedger: gameRowsSchema,
+    hasMore: { type: 'boolean' },
+  },
+} as const;
 
 const postExportItemSchema = {
   type: 'object',
@@ -249,8 +273,8 @@ export async function dataExportRoutes(fastify: FastifyInstance) {
             types: {
               type: 'string',
               description:
-                'Comma-separated: profile,messages,contacts,posts,stories,comments,reactions,media,voiceProfile,sessions. ' +
-                'Defaults to all ten.',
+                'Comma-separated: profile,messages,contacts,posts,stories,comments,reactions,media,voiceProfile,sessions,game. ' +
+                'Defaults to all eleven.',
             },
             limit: {
               type: 'string',
@@ -359,6 +383,7 @@ export async function dataExportRoutes(fastify: FastifyInstance) {
                   sessions: { type: 'array', items: sessionExportItemSchema, nullable: true },
                   sessionsCount: { type: 'integer', nullable: true },
                   sessionsHasMore: { type: 'boolean', nullable: true },
+                  game: gameExportSchema,
                   csv: {
                     type: 'object',
                     additionalProperties: { type: 'string' },
@@ -571,6 +596,10 @@ export async function dataExportRoutes(fastify: FastifyInstance) {
           exportData.sessionsHasMore = section.hasMore;
         }
 
+        if (requestedTypes.includes('game')) {
+          exportData.game = await exportGame(fastify.prisma, userId, page);
+        }
+
         if (format === 'csv') {
           const csvSections: Record<string, string> = {};
 
@@ -624,6 +653,17 @@ export async function dataExportRoutes(fastify: FastifyInstance) {
                 csvSections[`${parentKey}.${childKey}`] = toCsv(Object.keys(rows[0]), rows);
               }
             }
+          }
+
+          // Le jeu : une table par liste, et une ligne pour la progression et les réglages.
+          const game = exportData.game as Record<string, unknown> | undefined;
+          for (const [childKey, value] of Object.entries(game ?? {})) {
+            const rows = Array.isArray(value)
+              ? (value as Record<string, unknown>[])
+              : value && typeof value === 'object'
+                ? [value as Record<string, unknown>]
+                : [];
+            if (rows.length > 0) csvSections[`game.${childKey}`] = toCsv(Object.keys(rows[0]), rows);
           }
 
           exportData.csv = csvSections;
