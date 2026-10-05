@@ -27,10 +27,16 @@ export type GameFriends = {
   readonly names: ReadonlyMap<string, string>;
 };
 
+/** L'identifiant du lecteur, `null` sans session — la clé des mémoires par appareil (`game-guide/memory.ts`). */
+export function useViewerId(): string | null {
+  const session = useStore(sessionStore, (state) => state.session);
+  return resolveViewer({ source: apiDeps.source, session }).id ?? null;
+}
+
 export function useGameFriends(): GameFriends {
   const session = useStore(sessionStore, (state) => state.session);
   const enabled = apiDeps.source === 'fixtures' || session.status === 'authenticated';
-  const viewerId = resolveViewer({ source: apiDeps.source, session }).id ?? null;
+  const viewerId = useViewerId();
   const accepted = useInfiniteQuery({ ...friendRequestsQueryOptions(apiDeps, 'accepted'), enabled }, appQueryClient);
   useExhaustPages(accepted, enabled);
 

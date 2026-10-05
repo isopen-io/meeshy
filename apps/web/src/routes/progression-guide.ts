@@ -3,12 +3,8 @@ import { useQueryClient } from '@tanstack/react-query';
 
 import type { GameBlock } from '@meeshy/shared/types/game';
 import { dayDiff, isDayKey } from '@meeshy/shared/utils/game/day-prng';
-import {
-  ONBOARDING_STEPS,
-  chooseGuideMoment,
-  nextOnboardingStep,
-  onboardingStepSeenKey,
-} from '@meeshy/shared/utils/game/guide';
+import { ONBOARDING_STEPS, nextOnboardingStep, onboardingStepSeenKey } from '@meeshy/shared/utils/game/guide';
+import { chooseGuideMomentAny } from '@meeshy/shared/utils/game/guide-v2';
 
 import { httpTransport } from '@/lib/api/client';
 import { newClientMessageId } from '@/lib/api/client-message-id';
@@ -17,6 +13,9 @@ import { markGuideSeen } from '@/lib/api/game';
 import type { HttpTransport } from '@/lib/api/http';
 import { cardOfMoment, cardOfStep, type GuideCard } from '@/lib/game-guide/card';
 import { standingGuideEvents, transitionGuideEvents } from '@/lib/game-guide/events';
+import { eventsBetween, snapshotOf, standingGuideEventsV2, transitionGuideEventsV2 } from '@/lib/game-guide/events-v2';
+import { recallSnapshot, rememberSnapshot } from '@/lib/game-guide/memory';
+import type { GuideSnapshot } from '@/lib/game-guide/events-v2';
 import { awaitingGesture, openingStep } from '@/lib/game-guide/gesture';
 import { safeLocalStorage, type SafeStorage } from '@/lib/storage';
 import { localDayOf } from '@/lib/view/engagement-pill';
@@ -85,10 +84,28 @@ function rememberVisit(storage: SafeStorage, day: string): void {
   }
 }
 
-function openingCard(view: EngagementWithGame, game: GameBlock, seen: ReadonlySet<string>, daysAway: number | null): GuideCard | null {
+/**
+ * Les moments de l'ouverture : l'ÉTAT (les découvertes, les urgences) et, depuis
+ * la vague 2, ce qui est arrivé PENDANT l'absence — la comparaison à l'instantané
+ * que l'appareil a gardé (`memory.ts`) : une montée de ligue tombe le dimanche soir.
+ */
+function openingCard(
+  view: EngagementWithGame,
+  game: GameBlock,
+  seen: ReadonlySet<string>,
+  daysAway: number | null,
+  remembered: GuideSnapshot | null,
+): GuideCard | null {
   const step = openingStep(view, seen);
   if (step !== null) return cardOfStep(step, view);
-  const moment = chooseGuideMoment(standingGuideEvents(game, seen, { daysAway }), seen);
+  const moment = chooseGuideMomentAny(
+    [
+      ...standingGuideEvents(game, seen, { daysAway }),
+      ...standingGuideEventsV2(game, seen),
+      ...(remembered === null ? [] : eventsBetween(remembered, snapshotOf(game))),
+    ],
+    seen,
+  );
   return moment === null ? null : cardOfMoment(moment);
 }
 
@@ -111,8 +128,11 @@ export function useGameGuide(params: {
   readonly settled?: boolean;
   /** Le jour civil de l'appareil (`AAAA-MM-JJ`) ; injectable pour les témoins. */
   readonly today?: () => string;
+  /** Le compte : la mémoire de l'appareil (`memory.ts`) est clée par lui. `null` : pas de mémoire, le guide ne raconte que l'état. */
+  readonly userId?: string | null;
 }): GameGuide {
   const { view } = params;
+  const userId = params.userId ?? null;
   const settled = params.settled ?? true;
   const today = useRef(params.today ?? (() => localDayOf(Date.now())));
   const transport = params.transport ?? httpTransport;
@@ -149,20 +169,23 @@ export function useGameGuide(params: {
       const day = today.current();
       const last = lastVisit(storage.current);
       rememberVisit(storage.current, day);
-      setCard(openingCard(view, game, seen.current, last === null ? null : dayDiff(last, day)));
+      const remembered = userId === null ? null : recallSnapshot(storage.current, userId);
+      setCard(openingCard(view, game, seen.current, last === null ? null : dayDiff(last, day), remembered));
+      if (userId !== null) rememberSnapshot(storage.current, userId, snapshotOf(game));
       return;
     }
+    if (userId !== null) rememberSnapshot(storage.current, userId, snapshotOf(game));
     setCard((current) => {
       const advanced = advancedStep(current, view, seen.current);
       return advanced === undefined ? current : advanced;
     });
     if (before === null) return;
-    const events = transitionGuideEvents(before, view);
+    const events = [...transitionGuideEvents(before, view), ...transitionGuideEventsV2(before, view)];
     if (events.length === 0) return;
-    const moment = chooseGuideMoment(events, seen.current);
+    const moment = chooseGuideMomentAny(events, seen.current);
     if (moment === null) return;
     setCard((current) => (current?.step !== undefined ? current : cardOfMoment(moment)));
-  }, [view, settled]);
+  }, [view, settled, userId]);
 
   useEffect(() => {
     if (card === null || seen.current.has(card.key)) return;

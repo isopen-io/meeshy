@@ -1,10 +1,11 @@
-import { Flame, GameBird, LevelRing, MeeshCoin, RankBlason, Signature, Trophy } from '@/components/game';
+import { Flame, GameBird, LeagueGem, LevelRing, MeeshCoin, RankBlason, Signature, Trophy } from '@/components/game';
 import { flameForm } from '@meeshy/shared/utils/game/flame';
 
 import { PHOTO_FORMATS, photoLayout, type BannerLayout, type PhotoFormat, type Rect, type TextLine } from '@/lib/game-photo/layout';
 import type { PhotoEmblem, PhotoMoment } from '@/lib/game-photo/moments';
 import { fitBannerLine, type PhotoReferral } from '@/lib/game-photo/referral';
 import { formatCount, gameText, rankName } from '@/lib/view/game-copy';
+import { trophyView } from '@/lib/view/game-copy-v2';
 
 import '@/styles/game-photo.css';
 
@@ -49,6 +50,16 @@ function PhotoEmblemDrawing({ emblem }: { readonly emblem: PhotoEmblem }) {
       return <Flame form={emblem.form} size={512} />;
     case 'achievement':
       return <Trophy kind="league" material="gold" size={512} />;
+    case 'trophy': {
+      const view = trophyView(emblem.trophyKey);
+      return <Trophy kind={view?.kind ?? 'league'} size={512} {...(view?.material === undefined ? {} : { material: view.material })} {...(view === null ? {} : { label: view.plate })} />;
+    }
+    case 'league-up':
+      return <LeagueGem league={emblem.league} size={512} />;
+    case 'season':
+      return <Trophy kind="season" size={512} label={gameText('game.trophy.plate.season', { number: formatCount(emblem.season) })} />;
+    case 'prestige':
+      return <Trophy kind="prestige" size={512} label={gameText('game.trophy.plate.prestige', { number: formatCount(emblem.number) })} />;
   }
 }
 

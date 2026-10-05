@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 
 import { photoLayout } from '@/lib/game-photo/layout';
 import { referralOf } from '@/lib/game-photo/referral';
-import { flameMoment, levelHundredMoment, meeshMoment, rankMoment, startMoment, tierMoment, treasuryMoment, type PhotoMoment } from '@/lib/game-photo/moments';
+import { flameMoment, levelHundredMoment, meeshMoment, photoMomentOfEmblemV2, rankMoment, startMoment, tierMoment, treasuryMoment, type PhotoMoment } from '@/lib/game-photo/moments';
 
 import { GamePhotoFrame } from './game-photo-frame';
 
@@ -151,5 +151,37 @@ describe('le bandeau de parrainage', () => {
 
   test('aucune couleur écrite dans le bandeau', () => {
     expect(withBanner()).not.toMatch(/(?:color|background)[^;"]*:[^;"]*#[0-9a-f]{3,8}/i);
+  });
+});
+
+/**
+ * LES EMBLÈMES DE LA VAGUE 2 (#9481) — le trophée, la gemme de la ligue gagnée,
+ * la coupe de saison et celle de Prestige se posent dans le MÊME cadre que les
+ * autres moments : Mee et Meo les frappent en place.
+ */
+describe('les emblèmes de la vague 2', () => {
+  test('un trophée de ligue : la coupe de sa matière, sa plaque, le texte du moment', () => {
+    const html = render(photoMomentOfEmblemV2({ kind: 'trophy', trophyKey: 'trophy.league-cup.2026-10-26.jade.silver' }));
+    expect(html).toContain('data-game-trophy="league"');
+    expect(html).toContain('-p-silver)');
+    expect(html).toContain('>JADE · S44<');
+    expect(text(html)).toContain('Nouveau trophée');
+  });
+
+  test('une montée de ligue : la gemme de la ligue atteinte', () => {
+    const html = render(photoMomentOfEmblemV2({ kind: 'league-up', league: 'saphir', weekKey: '2026-11-09' }));
+    expect(html).toContain('data-game-league-gem="saphir"');
+    expect(text(html)).toContain('Ligue Saphir');
+  });
+
+  test('une saison terminée et un Prestige : leur coupe, plaque numérotée', () => {
+    expect(render(photoMomentOfEmblemV2({ kind: 'season', season: 1 }))).toContain('>SAISON 1<');
+    const prestige = render(photoMomentOfEmblemV2({ kind: 'prestige', number: 2 }));
+    expect(prestige).toContain('data-game-trophy="prestige"');
+    expect(prestige).toContain('>PRESTIGE 2<');
+  });
+
+  test('un trophée d’une version plus récente : la coupe neutre, jamais une erreur', () => {
+    expect(() => render(photoMomentOfEmblemV2({ kind: 'trophy', trophyKey: 'trophy.cometa.9' }))).not.toThrow();
   });
 });
