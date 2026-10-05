@@ -12,3 +12,4 @@ export * from './guide.js';
 export * from './game-block.js';
 export * from './badge-tiers.js';
 export * from './league.js';
+export * from './duo.js';
