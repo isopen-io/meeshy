@@ -126,16 +126,13 @@ nonisolated enum ComposerOrigin: Equatable {
     /// (`MeeshyComposerHost.onReturnMedia`) — elle ne se publie jamais.
     /// `staged` : la pièce est DÉJÀ en attente (intacte ⇒ elle reste) ; sinon
     /// elle vient de la bande des médias récents (intacte ⇒ elle repart telle
-    /// quelle, `ComposerConversationCapture.returnsUntouchedMedia`).
-    case conversationDraftMedia(staged: Bool)
-    /// **La caméra de la barre de composition d'une conversation** (#9123) :
-    /// le composer plein écran, viseur ARMÉ dès l'ouverture — le geste de
-    /// l'auteur a déjà dit « prendre ». La prise s'édite dans la scène et
-    /// « Terminé » la rend au message en attente ; rien ne se publie.
+    /// quelle, `ComposerReturnMedia.returnsUntouchedMedia`).
     ///
-    /// Porte sans appelant depuis #9295 : la caméra de la barre prend en plein écran, hors scène.
-    /// Son retrait — le cas, `ComposerConversationCapture` et ses lecteurs — est un lot à part.
-    case conversationCapture
+    /// La caméra de la barre n'ouvre plus le composer (#9295) : elle prend en
+    /// plein écran, hors scène, et verse sa prise au message
+    /// (`ComposerReturnedMedia(capture:)`). Sa porte d'origine (#9123) a été
+    /// retirée avec ce qui n'existait que pour elle (#9298).
+    case conversationDraftMedia(staged: Bool)
 }
 
 nonisolated extension ComposerFormat {
@@ -183,7 +180,7 @@ nonisolated extension ComposerOrigin {
         case .repost(let postId, _):
             return postId
         case .storyTray, .feedComposer, .moodChip, .edit, .draft, .share, .conversationMedia, .socialMedia,
-             .conversationDraftMedia, .conversationCapture:
+             .conversationDraftMedia:
             return nil
         }
     }
@@ -212,7 +209,7 @@ nonisolated extension ComposerOrigin {
         case .draft(let id):
             return id
         case .storyTray, .feedComposer, .moodChip, .edit, .repost, .share, .conversationMedia, .socialMedia,
-             .conversationDraftMedia, .conversationCapture:
+             .conversationDraftMedia:
             return nil
         }
     }
@@ -851,18 +848,6 @@ nonisolated extension ComposerProfile {
                 routesToLegacy: nil
             )
 
-        case .conversationCapture:
-            // La même scène que la retouche, mais VIDE et viseur promis : le
-            // viseur s'y arme à l'ouverture (`ComposerConversationCapture`).
-            return ComposerProfile(
-                initialFormat: .story,
-                offeredFormats: [.story],
-                showsSlides: true,
-                showsTimeline: true,
-                opensWith: .cameraReady,
-                allowsCapture: true,
-                routesToLegacy: nil
-            )
         }
     }
 }
