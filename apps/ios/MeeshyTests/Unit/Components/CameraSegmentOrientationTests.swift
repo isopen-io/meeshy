@@ -80,11 +80,13 @@ final class CameraSegmentOrientationTests: XCTestCase {
         let second = try await segment(transform: deboutEnMiroir)
         defer { [premier, second].forEach { try? FileManager.default.removeItem(at: $0) } }
 
-        let fusion = try XCTUnwrap(await CameraModel.mergeSegments([premier, second]))
+        let fusionnee = await CameraModel.mergeSegments([premier, second])
+        let fusion = try XCTUnwrap(fusionnee)
         defer { try? FileManager.default.removeItem(at: fusion) }
 
         let asset = AVURLAsset(url: fusion)
-        let piste = try XCTUnwrap(try await asset.loadTracks(withMediaType: .video).first)
+        let pistes = try await asset.loadTracks(withMediaType: .video)
+        let piste = try XCTUnwrap(pistes.first)
         let taille = try await piste.load(.naturalSize)
         let transformee = try await piste.load(.preferredTransform)
         let affichee = CGRect(origin: .zero, size: taille).applying(transformee)
