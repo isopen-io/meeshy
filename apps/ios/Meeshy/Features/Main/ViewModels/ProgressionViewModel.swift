@@ -77,7 +77,7 @@ final class ProgressionViewModel: ObservableObject {
     /// Les gestes du jeu en vol : tant qu'il y en a un, la lecture montrée est
     /// l'optimiste — le guide et les propositions de photo attendent qu'il soit
     /// réglé pour célébrer (un geste refusé ne se célèbre pas).
-    var gesturesInFlight = 0
+    @Published private(set) var gesturesInFlight = 0
     /// Une écriture du cache demandée PENDANT un geste attend qu'il soit réglé : ce qui est
     /// affiché alors est l'optimiste, et le cache ne garde jamais une valeur que le geste,
     /// s'il échoue, rendra fausse (#9383).
