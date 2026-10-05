@@ -331,6 +331,24 @@ const SERVICE_LAYER_SURFACES: Record<string, Classification> = {
    *     l'utilisateur a nettoyé sa vue — or un succès atteint reste à vie
    *     (règle porteur).
    */
+  /**
+   * #9315 — le verdict de la route par CHEMIN (`GET /attachments/file/*`). Une
+   * lecture, qui ne projette que l'ÉTAT des messages porteurs d'un fichier
+   * (`deletedAt`, `expiresAt`, `viewOnceBurnAt`, `isViewOnce`) pour décider si
+   * ses octets peuvent encore partir. Aucun contenu, aucun aperçu, aucun
+   * auteur n'est servi par elle : le masquage personnel protège ce qu'un
+   * lecteur VOIT dans son historique, et une adresse de fichier n'en est pas
+   * une surface (la route ne connaît pas le lecteur, #9315 « aucune
+   * authentification exigée »).
+   */
+  'attachments/fileRouteVerdict.ts': {
+    kind: 'exempt',
+    reads: 1,
+    why:
+      "Projette seulement l'état des messages porteurs d'un fichier (supprimé, " +
+      'expiré, vue unique consommée) pour décider si ses octets partent encore ; ' +
+      "aucun contenu servi, et la route ne connaît pas le lecteur dont l'historique serait masqué.",
+  },
   'achievements/GlobalAchievements.ts': {
     kind: 'exempt',
     reads: 3,
