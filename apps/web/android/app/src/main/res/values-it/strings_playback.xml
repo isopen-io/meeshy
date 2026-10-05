@@ -6,4 +6,6 @@
     <string name="playback_ongoing">Riproduzione audio in corso</string>
     <string name="playback_return">Tocca per tornare a Meeshy</string>
     <string name="playback_pause">Pausa</string>
+    <string name="playback_play">Riproduci</string>
+    <string name="playback_paused">Audio in pausa</string>
 </resources>
