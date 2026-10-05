@@ -62,7 +62,8 @@ describe('la lecture d’un vocal tenue au premier plan dans la coque Android (#
 
   test('le service passe au premier plan avec le type mediaPlayback', () => {
     const service = sansCommentaires(lire(...JAVA, 'PlaybackForegroundService.java'));
-    expect(corpsDe(service, 'int onStartCommand(')).toContain('ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK');
+    expect(corpsDe(service, 'int onStartCommand(')).toContain('foreground()');
+    expect(corpsDe(service, 'private void foreground(')).toContain('ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK');
   });
 
   test('sa notification parle les sept langues de l’app', () => {
@@ -100,8 +101,10 @@ describe('la lecture d’un vocal tenue au premier plan dans la coque Android (#
     const creation = corpsDe(service, 'public void onCreate(');
     expect(creation).toContain('new MediaSession(');
     expect(creation).toContain('setActive(true)');
-    expect(creation).toContain('PlaybackState.STATE_PLAYING');
-    expect(creation).toContain('PlaybackState.ACTION_PAUSE');
+    expect(creation).toContain('setPlaybackState(state(true))');
+    const etat = corpsDe(service, 'PlaybackState state(');
+    expect(etat).toContain('PlaybackState.STATE_PLAYING');
+    expect(etat).toContain('PlaybackState.ACTION_PAUSE');
     expect(corpsDe(service, 'public void onPause(')).toContain('MeeshyPlaybackPlugin.pauseRequested(');
     expect(corpsDe(service, 'public void onDestroy(')).toContain('.release()');
   });
