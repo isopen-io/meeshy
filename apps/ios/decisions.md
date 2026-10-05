@@ -49,3 +49,4 @@
 - [2026-09-27 : plusieurs comptes sur l'appareil — changer de compte GARDE les sessions, « Déconnexion » les ferme ; le trousseau porte les jetons de chaque compte gardé](decisions/2026-09-27-plusieurs-comptes-sur-l-appareil.md)
 - [2026-09-28 : en Focal, la loupe porte le seul CONTENU de l'élu, et son cadre débordant est touchable](decisions/2026-09-28-en-focal-la-loupe-porte-le-seul-contenu-et-le-cadre-de-l-elu-est-touchable.md)
 - [2026-10-02 : un accusé de lecture ne touche que le message qu'il DÉCRIT — et le REST guérit les coches déjà fausses](decisions/2026-10-02-un-accuse-de-lecture-ne-touche-que-le-message-qu-il-decrit.md)
+- [2026-10-04 : une citation gravée ne suit un pair renommé que si elle porte son id — RETENUE (#9371)](decisions/2026-10-04-une-citation-gravee-ne-suit-un-pair-renomme-que-si-elle-porte-son-id.md)
