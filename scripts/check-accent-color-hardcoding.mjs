@@ -251,6 +251,12 @@
 // `GameSurface.swift` ajoutés par #9406 ci-dessus, en passant `warmText` et
 // `goodText` par des jetons au lieu de `Color(hex:)`. Valeur MESURÉE le
 // 2026-10-05.
+//
+// 2026-10-05 (#9380) — littéraux 110 → 109 : `GameMaterial.swift` centralise
+// les matières et couleurs de palier du jeu (cadre déclaré, ruban de l'écu,
+// marges) ; `LevelRingView.swift`, `RankBlasonView.swift` et
+// `SignatureMark.swift` lisent désormais ce jeton unique au lieu de
+// `Color(hex:)` répété. Valeur MESURÉE le 2026-10-05.
 const REFERENCE_LITERAL_COLOR_COUNT = 109;
 const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 445;
 
