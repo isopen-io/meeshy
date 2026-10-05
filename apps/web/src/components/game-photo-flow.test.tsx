@@ -96,7 +96,7 @@ describe('la proposition', () => {
   test('Mee propose trois choses : le selfie, la carte seule, plus tard — et dit où reste la photo', async () => {
     const { env: e, log } = env();
     const host = await open(rank, e, log);
-    expect(choose(host, 'selfie')?.textContent).toBe('Selfie avec Mee et Meo');
+    expect(choose(host, 'selfie')?.textContent).toBe('Selfie avec nous');
     expect(choose(host, 'card')?.textContent).toBe('Carte seule');
     expect(choose(host, 'later')?.textContent).toBe('Plus tard');
     expect(host.textContent).toContain('On immortalise ?');

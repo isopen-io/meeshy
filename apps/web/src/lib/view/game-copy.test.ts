@@ -1,90 +1,122 @@
-import { describe, expect, test } from 'bun:test';
+import { beforeAll, describe, expect, test } from 'bun:test';
 
 import { FLAME_FORMS } from '@meeshy/shared/utils/game/flame';
 import { GLORY_RANKS } from '@meeshy/shared/utils/game/glory';
 import { LEVEL_TIER_KEYS } from '@meeshy/shared/utils/game/levels';
-import { MISSION_TEMPLATES } from '@meeshy/shared/utils/game/missions';
+import { MISSION_DIFFICULTIES, MISSION_TEMPLATES } from '@meeshy/shared/utils/game/missions';
 import { TREASURY_TIERS } from '@meeshy/shared/utils/game/treasury';
 
+import { loadGameCatalog } from '@/lib/i18n-game-catalog';
+import { SUPPORTED_INTERFACE_LANGUAGES } from '@/lib/inline-interface-language-bootstrap.js';
+
 import {
-  FLAME_FORM_NAMES,
-  LEVEL_TIER_NAMES,
-  RANK_NAMES,
-  TREASURY_NAMES,
   boundedPercent,
+  convertiblePointsLabel,
+  daysLabel,
+  difficultyName,
   divisionLabel,
   editionName,
+  flameFormName,
+  formatCount,
   gameErrorMessage,
-  convertiblePointsLabel,
+  levelTierName,
+  levelsLabel,
   meeshCount,
   missionTitle,
   pointsLabel,
   rankLabel,
+  rankName,
+  treasuryName,
 } from './game-copy';
 
+beforeAll(async () => {
+  await Promise.all(SUPPORTED_INTERFACE_LANGUAGES.map((language) => loadGameCatalog(language)));
+});
+
 /**
- * CE QUE LE JEU DIT (#9383) — chaque clé stable du catalogue partagé a son
- * nom. Les tables sont typées `Record<clé, …>` : une clé ajoutée au catalogue
- * sans mot ne compile plus ; ces témoins rejouent l'exhaustivité sur les
- * valeurs, pour qu'un nom vide ne passe pas non plus.
+ * CE QUE LE JEU DIT (#9383, #9379) — chaque clé stable du catalogue partagé a
+ * son nom, dans CHACUNE des sept langues de l'interface. Les noms viennent du
+ * catalogue (`i18n-game-catalog.ts`) : ces témoins rejouent l'exhaustivité sur
+ * les valeurs, pour qu'un nom vide ou une clé nue ne passe pas non plus.
  */
-describe('les noms du jeu couvrent tout le catalogue partagé', () => {
-  for (const key of LEVEL_TIER_KEYS) {
-    test(`palier ${key}`, () => {
-      expect(LEVEL_TIER_NAMES[key].length).toBeGreaterThan(0);
+const NAMED = (text: string): boolean => text.trim().length > 0 && !text.startsWith('game.') && !text.includes('{') && !text.includes('undefined');
+
+describe('les noms du jeu couvrent tout le catalogue partagé, dans les sept langues', () => {
+  for (const language of SUPPORTED_INTERFACE_LANGUAGES) {
+    test(`${language} : paliers, rangs, trésor, Flamme, difficultés, éditions`, () => {
+      for (const key of LEVEL_TIER_KEYS) expect({ key, ok: NAMED(levelTierName(key, language)) }).toEqual({ key, ok: true });
+      for (const { key } of GLORY_RANKS) expect({ key, ok: NAMED(rankName(key, language)) }).toEqual({ key, ok: true });
+      expect(NAMED(rankName('mythe', language))).toBe(true);
+      for (const { key } of TREASURY_TIERS) expect({ key, ok: NAMED(treasuryName(key, language)) }).toEqual({ key, ok: true });
+      for (const { key } of FLAME_FORMS) expect({ key, ok: NAMED(flameFormName(key, language)) }).toEqual({ key, ok: true });
+      for (const key of MISSION_DIFFICULTIES) expect({ key, ok: NAMED(difficultyName(key, language)) }).toEqual({ key, ok: true });
+      for (const edition of ['silver', 'gold', 'prism'] as const) expect({ edition, ok: NAMED(editionName(edition, language)) }).toEqual({ edition, ok: true });
+    });
+
+    test(`${language} : chaque gabarit de mission se dit en clair, au singulier comme au pluriel`, () => {
+      for (const { key, baseTarget } of MISSION_TEMPLATES) {
+        for (const target of [1, baseTarget, 2, 5, 11, 100]) {
+          const title = missionTitle(key, target, language);
+          expect({ key, target, ok: NAMED(title) && !title.includes(key) }).toEqual({ key, target, ok: true });
+        }
+        expect(missionTitle(key, baseTarget, language)).not.toBe(missionTitle('gabarit-de-2027', baseTarget, language));
+      }
     });
   }
-  for (const { key } of GLORY_RANKS) {
-    test(`rang ${key}`, () => {
-      expect(RANK_NAMES[key].length).toBeGreaterThan(0);
-    });
-  }
+
   test('le Mythe a son nom', () => {
-    expect(RANK_NAMES.mythe).toBe('Mythe');
+    expect(rankName('mythe', 'fr')).toBe('Mythe');
+    expect(rankName('mythe', 'en')).toBe('Myth');
   });
-  for (const { key } of TREASURY_TIERS) {
-    test(`trésor ${key}`, () => {
-      expect(TREASURY_NAMES[key].length).toBeGreaterThan(0);
-    });
-  }
-  for (const { key } of FLAME_FORMS) {
-    test(`Flamme ${key}`, () => {
-      expect(FLAME_FORM_NAMES[key].length).toBeGreaterThan(0);
-    });
-  }
-  for (const { key, baseTarget } of MISSION_TEMPLATES) {
-    test(`mission ${key} se dit en clair`, () => {
-      const title = missionTitle(key, baseTarget);
-      expect(title).not.toBe('Mission du jour');
-      expect(title).not.toContain(key);
-    });
-  }
+
+  test('les noms sont traduits, pas recopiés du français', () => {
+    expect(levelTierName('etincelle', 'en')).toBe('Spark');
+    expect(rankName('voix', 'es')).toBe('Voz');
+    expect(treasuryName('coffre', 'de')).not.toBe(treasuryName('coffre', 'fr'));
+    expect(flameFormName('soleil', 'ar')).not.toBe(flameFormName('soleil', 'fr'));
+  });
 });
 
 describe('les nombres s’accordent', () => {
   test('1 point, 0 point, 2 points', () => {
-    expect(pointsLabel(1)).toBe('1 point');
-    expect(pointsLabel(0)).toBe('0 point');
-    expect(pointsLabel(2)).toBe('2 points');
+    expect(pointsLabel(1, 'fr')).toBe('1 point');
+    expect(pointsLabel(0, 'fr')).toBe('0 point');
+    expect(pointsLabel(2, 'fr')).toBe('2 points');
+  });
+  test('l’anglais met zéro au pluriel', () => {
+    expect(pointsLabel(0, 'en')).toBe('0 points');
+    expect(pointsLabel(1, 'en')).toBe('1 point');
   });
   test('les milliers se lisent avec une espace', () => {
-    expect(pointsLabel(1294).replace(/\s/g, ' ')).toBe('1 294 points');
+    expect(pointsLabel(1294, 'fr').replace(/\s/g, ' ')).toBe('1 294 points');
+    expect(pointsLabel(1294, 'en')).toBe('1,294 points');
+    expect(formatCount(1221, 'de')).toBe('1.221');
   });
   test('points convertibles', () => {
-    expect(convertiblePointsLabel(1)).toBe('1 point convertible');
-    expect(convertiblePointsLabel(621)).toBe('621 points convertibles');
+    expect(convertiblePointsLabel(1, 'fr')).toBe('1 point convertible');
+    expect(convertiblePointsLabel(621, 'fr')).toBe('621 points convertibles');
   });
   test('Meeshes', () => {
-    expect(meeshCount(0)).toBe('Aucune Meesh');
-    expect(meeshCount(1)).toBe('1 Meesh');
-    expect(meeshCount(4)).toBe('4 Meeshes');
+    expect(meeshCount(0, 'fr')).toBe('Aucune Meesh');
+    expect(meeshCount(1, 'fr')).toBe('1 Meesh');
+    expect(meeshCount(4, 'fr')).toBe('4 Meeshes');
+    expect(meeshCount(0, 'en')).toBe('No Meesh');
+  });
+  test('jours et niveaux, en arabe : duel, 3 à 10, puis le singulier du compté', () => {
+    expect(daysLabel(2, 'ar')).toBe('يومان');
+    expect(daysLabel(7, 'ar')).toBe('7 أيام');
+    expect(daysLabel(12, 'ar')).toBe('12 يومًا');
+    expect(levelsLabel(2, 'ar')).toBe('مستويان');
   });
   test('une mission au pluriel et au singulier', () => {
-    expect(missionTitle('publish-story', 1)).toBe('Publier une story');
-    expect(missionTitle('send-texts', 5)).toBe('Envoyer 5 messages');
+    expect(missionTitle('publish-story', 1, 'fr')).toBe('Publier une story');
+    expect(missionTitle('send-texts', 5, 'fr')).toBe('Envoyer 5 messages');
+    expect(missionTitle('send-texts', 5, 'en')).toBe('Send 5 messages');
+    expect(missionTitle('send-texts', 1, 'en')).toBe('Send 1 message');
   });
   test('un gabarit futur se dit sans casser l’écran', () => {
-    expect(missionTitle('gabarit-de-2027', 3)).toBe('Mission du jour');
+    expect(missionTitle('gabarit-de-2027', 3, 'fr')).toBe('Mission du jour');
+    expect(missionTitle('gabarit-de-2027', 3, 'en')).toBe('Mission of the day');
   });
 });
 
@@ -93,22 +125,29 @@ describe('rang et division', () => {
     expect(divisionLabel(3)).toBe('III');
     expect(divisionLabel(2)).toBe('II');
     expect(divisionLabel(1)).toBe('I');
-    expect(rankLabel('voix', 2)).toBe('Voix II');
-    expect(rankLabel('mythe', null)).toBe('Mythe');
+    expect(rankLabel('voix', 2, 'fr')).toBe('Voix II');
+    expect(rankLabel('mythe', null, 'fr')).toBe('Mythe');
   });
   test('édition de la Meesh', () => {
-    expect(editionName('silver')).toBe('argent');
-    expect(editionName('gold')).toBe('or');
-    expect(editionName('prism')).toBe('prisme');
+    expect(editionName('silver', 'fr')).toBe('argent');
+    expect(editionName('gold', 'fr')).toBe('or');
+    expect(editionName('prism', 'fr')).toBe('prisme');
   });
 });
 
 describe('les refus du serveur se disent', () => {
   test('un code connu a sa phrase, un code inconnu une phrase neutre qui invite à réessayer', () => {
-    expect(gameErrorMessage('INSUFFICIENT_MEESHES')).toContain('Meesh');
-    expect(gameErrorMessage('FREEZE_AT_MAXIMUM')).toContain('gel');
-    expect(gameErrorMessage('???')).toContain('réessaie');
-    expect(gameErrorMessage(undefined)).toContain('réessaie');
+    expect(gameErrorMessage('INSUFFICIENT_MEESHES', 'fr')).toContain('Meesh');
+    expect(gameErrorMessage('FREEZE_AT_MAXIMUM', 'fr')).toContain('gel');
+    expect(gameErrorMessage('???', 'fr')).toContain('réessaie');
+    expect(gameErrorMessage(undefined, 'fr')).toContain('réessaie');
+  });
+
+  test('dans chaque langue, un code connu et l’inconnu ont leur phrase', () => {
+    for (const language of SUPPORTED_INTERFACE_LANGUAGES) {
+      expect(NAMED(gameErrorMessage('INSUFFICIENT_POINTS', language))).toBe(true);
+      expect(gameErrorMessage('INSUFFICIENT_POINTS', language)).not.toBe(gameErrorMessage('???', language));
+    }
   });
 });
 

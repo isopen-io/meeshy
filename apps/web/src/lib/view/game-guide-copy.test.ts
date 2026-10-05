@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test';
+import { beforeAll, describe, expect, test } from 'bun:test';
 
 import {
   GUIDE_ACTIONS,
@@ -9,7 +9,14 @@ import {
   type GuideMomentKey,
 } from '@meeshy/shared/utils/game/guide';
 
-import { ACTION_LABELS, GAME_RULES, momentCopy, stepCopy } from './game-guide-copy';
+import { loadGameCatalog } from '@/lib/i18n-game-catalog';
+import { SUPPORTED_INTERFACE_LANGUAGES } from '@/lib/inline-interface-language-bootstrap.js';
+
+import { actionLabel, gameRules, momentCopy, stepCopy } from './game-guide-copy';
+
+beforeAll(async () => {
+  await Promise.all(SUPPORTED_INTERFACE_LANGUAGES.map((language) => loadGameCatalog(language)));
+});
 
 /**
  * CE QUE DISENT MEE ET MEO (#9379) — la structure de la conception, partie
@@ -39,7 +46,7 @@ const plain = (copy: ReturnType<typeof momentCopy>) => ({
   means: copy.means.replace(/\s/g, ' '),
   next: copy.next.replace(/\s/g, ' '),
 });
-const copyOf = (key: GuideMomentKey, seen: readonly string[] = []) => plain(momentCopy(guideMoment(EVENTS[key], seen)));
+const copyOf = (key: GuideMomentKey, seen: readonly string[] = []) => plain(momentCopy(guideMoment(EVENTS[key], seen), 'fr'));
 
 describe('chaque moment du catalogue a ses quatre parties', () => {
   for (const key of GUIDE_MOMENT_KEYS) {
@@ -68,7 +75,7 @@ describe('les chiffres du moment se disent', () => {
   });
   test('un seul niveau perdu s’accorde au singulier', () => {
     const moment = guideMoment({ kind: 'first-mint-possible', price: 1221, levelsLost: 1, gloryGain: 100 }, []);
-    expect(momentCopy(moment).means).toContain('1 niveau,');
+    expect(momentCopy(moment, 'fr').means).toContain('1 niveau,');
   });
   test('première frappe : 14 → 9 et le Vent arrière', () => {
     const copy = copyOf('first-mint');
@@ -80,7 +87,7 @@ describe('les chiffres du moment se disent', () => {
     expect(copyOf('badge-extinguished').next).toContain('37 actions');
   });
   test('un seul pas pour rallumer', () => {
-    expect(momentCopy(guideMoment({ kind: 'badge-extinguished', missingActions: 1 }, [])).next).toContain('1 action ');
+    expect(momentCopy(guideMoment({ kind: 'badge-extinguished', missingActions: 1 }, []), 'fr').next).toContain('1 action ');
   });
   test('le prix monte : la prochaine', () => {
     expect(copyOf('price-rises').next).toContain('1 294 points');
@@ -94,7 +101,7 @@ describe('les chiffres du moment se disent', () => {
   });
   test('Flamme éteinte et plus rallumable : on dit ce qui arrive ensuite', () => {
     const moment = guideMoment({ kind: 'flame-out', lostDays: 0, relightPrice: 3, canRelight: false }, []);
-    expect(momentCopy(moment).next).toContain('prochain geste');
+    expect(momentCopy(moment, 'fr').next).toContain('prochain geste');
   });
   test('retour : les jours d’absence', () => {
     expect(copyOf('return-after-absence').means).toContain('9 jours');
@@ -107,7 +114,7 @@ describe('les chiffres du moment se disent', () => {
 describe('les boutons mènent quelque part', () => {
   for (const action of GUIDE_ACTIONS) {
     test(`${action} a son libellé`, () => {
-      expect(ACTION_LABELS[action].length).toBeGreaterThan(3);
+      expect(actionLabel(action, 'fr').length).toBeGreaterThan(3);
     });
   }
 });
@@ -116,22 +123,91 @@ describe('l’intégration en sept étapes', () => {
   test('sept cartes, chacune complète', () => {
     expect(ONBOARDING_STEPS).toHaveLength(7);
     for (const step of ONBOARDING_STEPS) {
-      const copy = stepCopy(step);
+      const copy = stepCopy(step, { language: 'fr' });
       expect(copy.what.length).toBeGreaterThan(3);
       expect(copy.means.length).toBeGreaterThan(3);
       expect(copy.next.length).toBeGreaterThan(3);
-      expect(copy.action).toBe(ACTION_LABELS[step.action]);
+      expect(copy.action).toBe(actionLabel(step.action, 'fr'));
     }
   });
 });
 
 describe('le carnet des règles', () => {
   test('huit règles, numérotées, chacune avec son titre et sa phrase', () => {
-    expect(GAME_RULES).toHaveLength(8);
-    GAME_RULES.forEach((rule, i) => {
+    const rules = gameRules('fr');
+    expect(rules).toHaveLength(8);
+    rules.forEach((rule, i) => {
       expect(rule.index).toBe(i + 1);
       expect(rule.title.length).toBeGreaterThan(3);
       expect(rule.body.length).toBeGreaterThan(10);
     });
+  });
+});
+
+describe('l’étape qui attend son geste nomme le geste', () => {
+  const stepOf = (key: string) => {
+    const step = ONBOARDING_STEPS.find((candidate) => candidate.key === key);
+    if (step === undefined) throw new Error(`étape attendue : ${key}`);
+    return step;
+  };
+
+  test('missions et Flamme remplacent « l’étape d’après » par le geste attendu', () => {
+    expect(stepCopy(stepOf('missions'), { awaiting: true, language: 'fr' }).next).toContain('mission la plus facile');
+    expect(stepCopy(stepOf('flame'), { awaiting: true, language: 'fr' }).next).toContain('Reviens demain');
+    expect(stepCopy(stepOf('missions'), { language: 'fr' }).next).toBe('Une Flamme grandit tant que tu reviens.');
+  });
+
+  test('le bouton suit l’action qu’on lui donne', () => {
+    expect(stepCopy(stepOf('missions'), { awaiting: true, action: 'see-missions', language: 'fr' }).action).toBe('Voir les missions');
+  });
+});
+
+/**
+ * LES SEPT LANGUES (#9379) — le guide dit la même chose au même moment partout :
+ * chaque moment, chaque étape, chaque action et chaque règle existe dans les
+ * sept langues, sans paramètre resté en clair ni clé nue.
+ */
+describe('Mee et Meo parlent les sept langues', () => {
+  const clean = (text: string): boolean => text.trim().length > 3 && !/\{\w+\}|undefined|NaN|^game\./.test(text);
+
+  for (const language of SUPPORTED_INTERFACE_LANGUAGES) {
+    test(`${language} : les treize moments, les sept étapes, les vingt et une actions, les huit règles`, () => {
+      for (const key of GUIDE_MOMENT_KEYS) {
+        const copy = momentCopy(guideMoment(EVENTS[key], []), language);
+        for (const part of [copy.what, copy.means, copy.next, copy.short, copy.action]) expect({ key, part, ok: clean(part) }).toEqual({ key, part, ok: true });
+      }
+      for (const step of ONBOARDING_STEPS) {
+        const copy = stepCopy(step, { language });
+        for (const part of [copy.what, copy.means, copy.next, copy.action]) expect({ step: step.key, part, ok: clean(part) }).toEqual({ step: step.key, part, ok: true });
+        const awaiting = stepCopy(step, { awaiting: true, language });
+        expect(clean(awaiting.next)).toBe(true);
+      }
+      for (const action of GUIDE_ACTIONS) expect({ action, ok: clean(actionLabel(action, language)) }).toEqual({ action, ok: true });
+      for (const rule of gameRules(language)) expect({ rule: rule.index, ok: clean(rule.title) && clean(rule.body) }).toEqual({ rule: rule.index, ok: true });
+    });
+  }
+
+  test('les variantes d’un moment suivent la donnée : premier rang du dernier palier, Flamme rallumable ou non, Prestige ou sommet', () => {
+    for (const language of SUPPORTED_INTERFACE_LANGUAGES) {
+      const variants: GuideEvent[] = [
+        { kind: 'new-tier', tier: 'galaxie', nextTierLevel: null },
+        { kind: 'new-rank', rank: 'mythe', division: null, glory: 99999, gloryMissing: null },
+        { kind: 'treasury-tier', tier: 'reserve', nextTierMissing: null },
+        { kind: 'flame-out', lostDays: 0, relightPrice: 3, canRelight: false },
+        { kind: 'level-100', canPrestige: false },
+        { kind: 'first-mint-possible', price: 1221, levelsLost: 0, gloryGain: 100 },
+      ];
+      for (const event of variants) {
+        const copy = momentCopy(guideMoment(event, []), language);
+        for (const part of [copy.what, copy.means, copy.next, copy.short]) expect({ event: event.kind, part, ok: clean(part) }).toEqual({ event: event.kind, part, ok: true });
+      }
+    }
+  });
+
+  test('une phrase traduite n’est pas celle du français', () => {
+    const french = momentCopy(guideMoment(EVENTS['first-mint'], []), 'fr');
+    for (const language of SUPPORTED_INTERFACE_LANGUAGES.filter((code) => code !== 'fr')) {
+      expect(momentCopy(guideMoment(EVENTS['first-mint'], []), language).what).not.toBe(french.what);
+    }
   });
 });

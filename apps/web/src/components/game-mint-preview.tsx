@@ -5,7 +5,9 @@ import { gloryStanding } from '@meeshy/shared/utils/game/glory';
 import type { MeeshEdition } from '@meeshy/shared/utils/game/mint';
 
 import { MintScene } from '@/components/game';
-import { convertiblePointsLabel, editionName, formatCount, meeshCount, pointsLabel, rankLabel } from '@/lib/view/game-copy';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { translateGamePlural } from '@/lib/i18n-game-catalog';
+import { convertiblePointsLabel, editionName, formatCount, gameText, meeshCount, pointsLabel, rankLabel } from '@/lib/view/game-copy';
 
 import { GAME_BRAND, GAME_ERROR, GAME_INK, GAME_INK_2, GAME_ON_WARM, GAME_WARM, GameCard } from './game-surface';
 
@@ -48,7 +50,7 @@ export type GameMintPreviewProps = {
   readonly onMint: () => void;
 };
 
-const TAILWIND_PERCENT = 25;
+const fromTo = (from: string, to: string): string => gameText('game.fmt.from_to', { from, to });
 
 function Row({ label, children }: { readonly label: string; readonly children: React.ReactNode }) {
   return (
@@ -62,7 +64,7 @@ function Row({ label, children }: { readonly label: string; readonly children: R
 }
 
 const badgesLine = (lost: number): string =>
-  lost === 0 ? 'Aucun badge ne s’éteint' : lost === 1 ? '1 badge redescend' : `${lost} badges redescendent`;
+  lost === 0 ? gameText('game.mint.badges.none') : translateGamePlural(currentInterfaceLanguage(), 'game.mint.badges', lost);
 
 function Scene({ mint, celebration }: { readonly mint: MintPreview; readonly celebration: MintCelebration | null }) {
   const [face, setFace] = useState<'obverse' | 'reverse'>('obverse');
@@ -82,7 +84,7 @@ function Scene({ mint, celebration }: { readonly mint: MintPreview; readonly cel
       face={celebration === null ? 'obverse' : face}
       edition={shown.edition}
       number={shown.number}
-      numberLabel={`N° ${shown.number}`}
+      numberLabel={gameText('game.mint.number_label', { number: formatCount(shown.number) })}
       playKey={playKey}
     />
   );
@@ -100,40 +102,40 @@ export function GameMintPreview(props: GameMintPreviewProps) {
         <Scene mint={mint} celebration={celebration} />
         <div className="min-w-0">
           <h2 id="game-mint-title" className="text-body font-bold" style={{ color: GAME_INK }}>
-            Prochaine Meesh · n° {mint.number}
+            {gameText('game.mint.next_title', { number: formatCount(mint.number) })}
           </h2>
           <p className="text-caption" style={{ color: GAME_INK_2 }}>
-            Édition {editionName(mint.edition)} · {pointsLabel(mint.price)}
+            {gameText('game.mint.next_subtitle', { edition: editionName(mint.edition), price: pointsLabel(mint.price) })}
           </p>
         </div>
       </div>
 
       {celebration === null ? null : (
         <p role="status" className="text-body font-bold" style={{ color: GAME_BRAND }}>
-          Meesh n° {celebration.number} frappée, {editionName(celebration.edition)}.
+          {gameText('game.mint.minted_line', { number: formatCount(celebration.number), edition: editionName(celebration.edition) })}
         </p>
       )}
 
       {mint.canMint ? (
         <>
           <dl className="flex flex-col gap-1 text-caption">
-            <Row label="Prix">{pointsLabel(mint.price)}</Row>
-            <Row label="Niveau">
-              {mint.levelBefore} → {mint.levelAfter}
-              {mint.levelsLost > 0 ? ` (−${mint.levelsLost})` : ''}
+            <Row label={gameText('game.mint.row.price')}>{pointsLabel(mint.price)}</Row>
+            <Row label={gameText('game.mint.row.level')}>
+              {fromTo(formatCount(mint.levelBefore), formatCount(mint.levelAfter))}
+              {mint.levelsLost > 0 ? ` (${gameText('game.fmt.minus', { value: formatCount(mint.levelsLost) })})` : ''}
             </Row>
-            <Row label="Trésor">
-              {treasury.held} → {meeshCount(treasury.held + 1)}
+            <Row label={gameText('game.mint.row.treasury')}>
+              {fromTo(formatCount(treasury.held), meeshCount(treasury.held + 1))}
             </Row>
-            <Row label="Gloire">
-              +{formatCount(mint.gloryGained)}
-              {rankChanges ? ` · ${rankLabel(glory.rank, glory.division)} → ${rankLabel(after.rank, after.division)}` : ''}
+            <Row label={gameText('game.mint.row.glory')}>
+              {gameText('game.fmt.signed', { value: formatCount(mint.gloryGained) })}
+              {rankChanges
+                ? ` · ${fromTo(rankLabel(glory.rank, glory.division), rankLabel(after.rank, after.division))}`
+                : ''}
             </Row>
-            {badgesLost === undefined ? null : <Row label="Badges">{badgesLine(badgesLost)}</Row>}
+            {badgesLost === undefined ? null : <Row label={gameText('game.mint.row.badges')}>{badgesLine(badgesLost)}</Row>}
             {tailwind ? (
-              <Row label="Vent arrière">
-                +{TAILWIND_PERCENT} % sur tes points jusqu’au niveau {levelRecord}
-              </Row>
+              <Row label={gameText('game.mint.row.tailwind')}>{gameText('game.mint.tailwind_value', { level: formatCount(levelRecord) })}</Row>
             ) : null}
           </dl>
           <button
@@ -145,17 +147,17 @@ export function GameMintPreview(props: GameMintPreviewProps) {
             className="mt-1 rounded-chip px-4 text-body font-bold disabled:opacity-80"
             style={{ minHeight: 44, backgroundColor: GAME_WARM, color: GAME_ON_WARM }}
           >
-            {minting ? 'Frappe en cours…' : 'Frapper avec Mee et Meo'}
+            {minting ? gameText('game.mint.minting') : gameText('game.mint.action')}
           </button>
           {online ? null : (
             <p className="text-caption" style={{ color: GAME_INK_2 }}>
-              Hors ligne : la frappe reprendra avec la connexion.
+              {gameText('game.mint.offline')}
             </p>
           )}
         </>
       ) : (
         <p className="text-caption" style={{ color: GAME_INK_2 }}>
-          Encore {convertiblePointsLabel(mint.missingPoints)} avant la prochaine Meesh : elle coûte {pointsLabel(mint.price)}.
+          {gameText('game.mint.missing', { missing: convertiblePointsLabel(mint.missingPoints), price: pointsLabel(mint.price) })}
         </p>
       )}
 

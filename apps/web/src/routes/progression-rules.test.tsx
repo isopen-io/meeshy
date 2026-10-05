@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 
-import { GAME_RULES } from '@/lib/view/game-guide-copy';
+import { gameRules } from '@/lib/view/game-guide-copy';
 
 import ProgressionRulesScreen, { RulesBody } from './progression-rules';
 
@@ -16,13 +16,13 @@ const text = body.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
  */
 describe('les huit règles', () => {
   test('numérotées de 1 à 8, dans l’ordre de la conception', () => {
-    const positions = GAME_RULES.map((rule) => text.indexOf(rule.title));
+    const positions = gameRules('fr').map((rule) => text.indexOf(rule.title));
     expect(positions.every((i) => i >= 0)).toBe(true);
     expect([...positions].sort((a, b) => a - b)).toEqual(positions);
   });
 
   test('chaque règle dit sa phrase, pas seulement son titre', () => {
-    for (const rule of GAME_RULES) expect(text).toContain(rule.body);
+    for (const rule of gameRules('fr')) expect(text).toContain(rule.body);
   });
 
   test('c’est une liste numérotée : le lecteur d’écran annonce « 3 sur 8 »', () => {

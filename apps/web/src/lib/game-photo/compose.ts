@@ -1,3 +1,5 @@
+import { currentInterfaceLanguage } from '@/lib/interface-language';
+
 import { resolveCssVars } from './css-vars';
 import { containFit, coverFit, type PhotoLayout, type Rect } from './layout';
 import type { PhotoMoment } from './moments';
@@ -133,7 +135,7 @@ function paintText(ctx: PaintContext, input: PaintInput): void {
 
   ctx.fillStyle = palette.inkSoft;
   ctx.font = `600 ${layout.kicker.size}px ${fontFamily}`;
-  ctx.fillText(moment.kicker.toLocaleUpperCase('fr'), layout.kicker.x, layout.kicker.y);
+  ctx.fillText(moment.kicker.toLocaleUpperCase(currentInterfaceLanguage()), layout.kicker.x, layout.kicker.y);
 
   ctx.fillStyle = palette.ink;
   ctx.font = `700 ${layout.title.size}px ${fontFamily}`;
