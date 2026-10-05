@@ -22,13 +22,9 @@ public enum CanvasChromeScheme {
         if h.hasPrefix("#") { h.removeFirst() }
         guard h.count == 6, h.allSatisfy(\.isHexDigit),
               let v = UInt32(h, radix: 16) else { return nil }
-        func lin(_ c: Double) -> Double {
-            c <= 0.03928 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4)
-        }
-        let r = lin(Double((v >> 16) & 0xFF) / 255)
-        let g = lin(Double((v >> 8) & 0xFF) / 255)
-        let b = lin(Double(v & 0xFF) / 255)
-        return 0.2126 * r + 0.7152 * g + 0.0722 * b
+        return luminance(red: Double((v >> 16) & 0xFF) / 255,
+                         green: Double((v >> 8) & 0xFF) / 255,
+                         blue: Double(v & 0xFF) / 255)
     }
 
     /// Luminance d'un fond de slide SÉRIALISÉ (`RRGGBB`, `#RRGGBB` ou
@@ -126,5 +122,54 @@ public enum CanvasChromeScheme {
     /// alors le bord du glyphe.
     public nonisolated static func legibilityHalo(for scheme: ColorScheme) -> Color {
         scheme == .dark ? .black : .white
+    }
+
+    // MARK: - Un TEXTE posé sur la scène (#9450)
+
+    /// **L'opacité du voile sans bord posé sous un texte de scène** — la légende du
+    /// composer. Le voile est le halo (`legibilityHalo`) étalé sous le bloc de texte.
+    ///
+    /// Le flou `.ultraThinMaterial` seul ne se calcule pas hors appareil, et il ne
+    /// suffisait pas : sur le rose `FF2E63` (L 0,24, juste au-dessus de `darkThreshold`),
+    /// l'invite mesurait 2,71:1. Près de la frontière, ni l'encre claire ni l'encre
+    /// sombre ne tiennent 4,5:1 à nu (indigo950 sur L 0,18 : 3,4:1). Le voile éloigne
+    /// le fond de la frontière, dans le sens de l'encre que le schéma a élue.
+    ///
+    /// 0,25 : le pire cas de la palette du composer, teintes ET dégradés échantillonnés
+    /// sur toute leur course, tombe à 5,33:1 (dégradé `9B59B6 → FF6B6B`) — 0,20 donnait
+    /// 4,89:1, trop près du seuil pour un modèle qui compose en sRGB encodé. Le flou
+    /// reste dessous, non compté : il pousse vers la même polarité que le voile.
+    public nonisolated static let sceneTextVeilOpacity: Double = 0.25
+
+    /// **L'encre d'un texte posé sur la scène : PRIMAIRE, jamais secondaire.**
+    /// `textSecondary(isDark: false)` (indigo700 à 0,8) plafonne à 4,98:1 sur du BLANC
+    /// pur : aucun voile discret ne le porte à 4,5:1 sur une teinte moyenne. L'invite se
+    /// distingue du texte par sa forme, pas par une encre plus pâle.
+    public static func sceneTextInk(for scheme: ColorScheme) -> Color {
+        MeeshyColors.textPrimary(isDark: scheme == .dark)
+    }
+
+    /// Luminance WCAG d'un fond sRGB (canaux 0…1) une fois couvert du voile de
+    /// `scheme` à `sceneTextVeilOpacity` — composition « source over » en sRGB
+    /// encodé, celle du compositeur.
+    public nonisolated static func luminanceUnderSceneTextVeil(red: Double, green: Double, blue: Double,
+                                                               scheme: ColorScheme) -> Double {
+        let halo: Double = scheme == .dark ? 0 : 1
+        let a = sceneTextVeilOpacity
+        func veiled(_ c: Double) -> Double { halo * a + c * (1 - a) }
+        return luminance(red: veiled(red), green: veiled(green), blue: veiled(blue))
+    }
+
+    /// Rapport de contraste WCAG 2.x entre deux luminances relatives.
+    public nonisolated static func contrastRatio(_ a: Double, _ b: Double) -> Double {
+        (max(a, b) + 0.05) / (min(a, b) + 0.05)
+    }
+
+    /// Luminance relative WCAG 2.x de canaux sRGB encodés (0…1).
+    public nonisolated static func luminance(red: Double, green: Double, blue: Double) -> Double {
+        func lin(_ c: Double) -> Double {
+            c <= 0.03928 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4)
+        }
+        return 0.2126 * lin(red) + 0.7152 * lin(green) + 0.0722 * lin(blue)
     }
 }
