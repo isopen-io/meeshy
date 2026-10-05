@@ -511,6 +511,63 @@ export async function auditIdentiteDuSeauApi(source) {
   }
 }
 
+/**
+ * LE SEAU `medias` RESPECTE LA FRAÎCHEUR QUE LA PASSERELLE DÉCLARE (#9478).
+ *
+ * Une vue unique part en `private, no-store`, un éphémère en
+ * `private, no-cache` (#9315). Sans le greffon
+ * (`src/lib/net/media-cache-freshness.ts`), `CacheFirst` les écrit trente jours
+ * et les resert sans réseau. Le gate EXTRAIT ses deux crochets de l'artefact
+ * et les FAIT DÉCIDER : protégé refusé, ORDINAIRE gardé — le Cache-First
+ * nominal compte autant que la garde.
+ */
+export async function auditFraicheurDuSeauMedias(source) {
+  const appel = appelDuSeau(source, 'medias');
+  if (appel === null) return ['aucun seau `medias` dans le service worker construit'];
+
+  const crochet = (nom) => {
+    const debut = appel.strategie.indexOf(`${nom}:`);
+    return debut === -1 ? null : decoupePremierArgument(appel.strategie, debut + nom.length + 1);
+  };
+  const reponse = (cacheControl) => new Response('octets', { headers: { 'Cache-Control': cacheControl } });
+  const PROTEGES = ['private, no-store', 'private, no-cache'];
+  const ORDINAIRE = 'private, max-age=31536000';
+
+  const juge = async (nom, appelle) => {
+    const texte = crochet(nom);
+    if (texte === null) {
+      return [
+        `le seau \`medias\` ne porte aucun \`${nom}\` : une vue unique (\`no-store\`) ou un éphémère ` +
+          '(`no-cache`) y reste trente jours et se relit sans réseau après sa fin de vie (#9478)',
+      ];
+    }
+    try {
+      const fonction = new Function(`"use strict"; return (${texte});`)();
+      const violations = [];
+      for (const directive of PROTEGES) {
+        if ((await appelle(fonction, reponse(directive))) !== null) {
+          violations.push(`\`${nom}\` laisse passer une réponse \`${directive}\` — un média protégé resterait relisible depuis le seau`);
+        }
+      }
+      const ordinaire = reponse(ORDINAIRE);
+      if ((await appelle(fonction, ordinaire)) !== ordinaire) {
+        violations.push(`\`${nom}\` refuse un média ordinaire (\`${ORDINAIRE}\`) — le Cache-First nominal serait perdu`);
+      }
+      return violations;
+    } catch (err) {
+      return [
+        `greffon de fraîcheur \`${nom}\` NON AUTONOME : ${err.message}. ` +
+          'Workbox le stringifie — il ne peut dépendre d’aucun identifiant importé.',
+      ];
+    }
+  };
+
+  return [
+    ...(await juge('cacheWillUpdate', (f, r) => f({ response: r }))),
+    ...(await juge('cachedResponseWillBeUsed', (f, r) => f({ cachedResponse: r }))),
+  ];
+}
+
 function applique(matcher, href, destination = '') {
   const url = new URL(href);
   if (matcher instanceof RegExp) return matcher.test(url.href);
@@ -775,6 +832,7 @@ async function main() {
     ['le seau `medias`', auditSeauMedias(source)],
     ['le routage', auditRoutage(source)],
     ['l’identité du seau `api`', await auditIdentiteDuSeauApi(source)],
+    ['la fraîcheur du seau `medias`', await auditFraicheurDuSeauMedias(source)],
   ];
 
   if (process.argv.includes(DRAPEAU_NAVIGATEUR)) {
@@ -795,7 +853,8 @@ async function main() {
       'hors du disque TOUTE réponse /api/v1/admin/**, et range chaque réponse sous ' +
       'l’identité qui l’a demandée (#8674).\n' +
       '  sw.js : le seau `medias` prend les images de la passerelle AVANT le seau `api` ' +
-      '(`statuses: [0, 200]`) ; audio et vidéo restent hors cache, par décision.',
+      '(`statuses: [0, 200]`), n’y écrit ni n’y resert aucun média `no-store` / `no-cache` ' +
+      '(#9478) ; audio et vidéo restent hors cache, par décision.',
   );
 
   if (!process.argv.includes(DRAPEAU_NAVIGATEUR)) {
