@@ -250,7 +250,7 @@ describe('la fiche — nommée, métadonnées interprétées', () => {
 
 describe('ce que rapportent les clics', () => {
   test('huit graphiques, chacun avec son titre', async () => {
-    const host = await open(fakeServer(), BIGBOSS, 'stats');
+    await open(fakeServer(), BIGBOSS, 'stats');
 
     const titles = [...document.querySelectorAll('[data-admin-fiche-section="stats"] figure')].map((figure) => figure.getAttribute('data-admin-chart'));
     expect(titles).toEqual(['tracking-days', 'tracking-countries', 'tracking-devices', 'tracking-browsers', 'tracking-systems', 'tracking-social', 'tracking-referrers', 'tracking-redirects']);
@@ -317,7 +317,7 @@ describe('ce que rapportent les clics', () => {
       topReferrers: [],
       byRedirectStatus: [],
     });
-    const host = await open(fakeServer({ link: servedTrackingLinkFiche({ stats: empty, totalClicks: 0, uniqueClicks: 0 }) }), BIGBOSS, 'stats');
+    await open(fakeServer({ link: servedTrackingLinkFiche({ stats: empty, totalClicks: 0, uniqueClicks: 0 }) }), BIGBOSS, 'stats');
 
     const empties = document.querySelectorAll('[data-admin-fiche-section="stats"] [data-admin-chart-empty]');
     expect(empties).toHaveLength(8);
