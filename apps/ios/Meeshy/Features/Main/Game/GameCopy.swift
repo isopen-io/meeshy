@@ -287,6 +287,42 @@ enum GameCopy {
             String(localized: "game.error.chest_not_ready", defaultValue: "Termine d’abord les missions du jour pour ouvrir le coffre.", bundle: .main)
         case .requestIdConflict:
             String(localized: "game.error.request_id_conflict", defaultValue: "Cette demande a déjà servi pour une autre action : réessaie.", bundle: .main)
+        case .leagueLocked:
+            String(localized: "game.error.league_locked", defaultValue: "Les ligues s’ouvrent au niveau 10.", bundle: .main)
+        case .leagueMinor:
+            String(localized: "game.error.league_minor", defaultValue: "La ligue publique est réservée aux comptes dont la majorité est vérifiée.", bundle: .main)
+        case .leagueConsentRequired:
+            String(localized: "game.error.league_consent_required", defaultValue: "Accepte d’abord de rejoindre la ligue publique.", bundle: .main)
+        case .leaguePseudonymInvalid:
+            String(localized: "game.error.league_pseudonym_invalid", defaultValue: "Ce pseudonyme n’est pas valable : 3 à 20 lettres, chiffres, points, tirets ou tirets bas.", bundle: .main)
+        case .leaguePseudonymTaken:
+            String(localized: "game.error.league_pseudonym_taken", defaultValue: "Ce pseudonyme est déjà pris.", bundle: .main)
+        case .leaguePseudonymForbidden:
+            String(localized: "game.error.league_pseudonym_forbidden", defaultValue: "Ce pseudonyme n’est pas permis : ni un nom réservé, ni ton nom.", bundle: .main)
+        case .duoLocked:
+            String(localized: "game.error.duo_locked", defaultValue: "Le duo s’ouvre au niveau 20, pour vous deux.", bundle: .main)
+        case .duoNotFriends:
+            String(localized: "game.error.duo_not_friends", defaultValue: "Le duo se joue avec un ami accepté.", bundle: .main)
+        case .duoAlreadyActive:
+            String(localized: "game.error.duo_already_active", defaultValue: "L’un de vous a déjà un duo cette semaine.", bundle: .main)
+        case .duoNotFound:
+            String(localized: "game.error.duo_not_found", defaultValue: "Ce duo n’existe plus : l’écran se remet à jour.", bundle: .main)
+        case .duoTransitionRefused:
+            String(localized: "game.error.duo_transition_refused", defaultValue: "Ce geste n’a pas de sens pour ce duo.", bundle: .main)
+        case .seasonNotOpen:
+            String(localized: "game.error.season_not_open", defaultValue: "Aucune saison n’est ouverte pour l’instant.", bundle: .main)
+        case .seasonStepNotFound:
+            String(localized: "game.error.season_step_not_found", defaultValue: "Cette étape n’existe pas.", bundle: .main)
+        case .seasonStepLocked:
+            String(localized: "game.error.season_step_locked", defaultValue: "Cette étape n’est pas encore atteinte.", bundle: .main)
+        case .seasonStepAlreadyClaimed:
+            String(localized: "game.error.season_step_already_claimed", defaultValue: "Cette récompense est déjà réclamée.", bundle: .main)
+        case .sealAlreadyOwned:
+            String(localized: "game.error.seal_already_owned", defaultValue: "Tu as déjà le Sceau de cette saison.", bundle: .main)
+        case .prestigeLevelTooLow:
+            String(localized: "game.error.prestige_level_too_low", defaultValue: "Le Prestige s’ouvre au niveau 100.", bundle: .main)
+        case .prestigeAtMaximum:
+            String(localized: "game.error.prestige_at_maximum", defaultValue: "Tu as déjà posé les cinq étoiles du Prestige.", bundle: .main)
         case nil:
             String(localized: "game.error.generic", defaultValue: "Ça n’a pas abouti — vérifie ta connexion et réessaie.", bundle: .main)
         }

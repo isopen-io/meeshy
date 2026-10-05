@@ -1,0 +1,55 @@
+import Foundation
+
+// MARK: - Le Prestige (#9389)
+//
+// MIROIR de `packages/shared/utils/game/prestige.ts` — la vie après le niveau 100.
+// Au niveau 100, on peut passer en Prestige : le niveau retombe à 1 (le score en
+// poche repart de zéro), une étoile se pose sur l'anneau (cinq au plus), le
+// joueur gagne +1 000 de Gloire et un trophée de Prestige numéroté.
+//
+// **Ce que le passage ne touche PAS** : le trésor (les Meeshes gardées), la
+// Gloire acquise et le rang, les badges, la Flamme.
+//
+// Le niveau RECORD retombe à 1 avec le niveau : sinon le Vent arrière (+25 %
+// « jusqu'à revenir au niveau record ») resterait actif sur les cent niveaux de
+// la nouvelle boucle. Conséquence à DIRE à l'utilisateur : la ligue (niveau 10)
+// et le duo (niveau 20) se lisent sur le record — la confirmation l'annonce.
+
+public enum PrestigeRefusal: String, Sendable, Hashable {
+    case levelTooLow = "level-too-low"
+    case atMaximum = "at-maximum"
+}
+
+public struct PrestigePassage: Sendable, Equatable {
+    public let prestigeAfter: Int
+    public let scoreAfter = 0
+    public let levelAfter = 1
+    public let levelRecordAfter = 1
+    public let gloryGained: Int
+    public let trophyKey: String
+
+    public init(prestigeAfter: Int, gloryGained: Int, trophyKey: String) {
+        self.prestigeAfter = prestigeAfter
+        self.gloryGained = gloryGained
+        self.trophyKey = trophyKey
+    }
+}
+
+public enum PrestigeTransition: Sendable, Equatable {
+    case allowed(PrestigePassage)
+    case refused(PrestigeRefusal)
+}
+
+public enum GamePrestige {
+    public static func transition(score: Int, prestige: Int) -> PrestigeTransition {
+        let stars = max(0, prestige)
+        if stars >= GameLevels.maxPrestige { return .refused(.atMaximum) }
+        if GameLevels.level(forScore: score) < GameLevels.maxLevel { return .refused(.levelTooLow) }
+        let after = stars + 1
+        return .allowed(PrestigePassage(
+            prestigeAfter: after,
+            gloryGained: GameGlory.points.prestige,
+            trophyKey: GameTrophies.key(of: .prestige(number: after))
+        ))
+    }
+}
