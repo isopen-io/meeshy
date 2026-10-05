@@ -10,7 +10,7 @@ import { adminMomentOf } from '@/lib/admin/interpret/time';
 import type { AdminAuditChange, AdminAuditEntry, AdminAuditPerson } from '@/lib/api/admin-audit';
 import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
-import { AdminAnnouncement } from '@/routes/admin-parts';
+import { AdminAnnouncement } from '@/components/admin/announcement';
 
 import { ActionGlyph, AuditPerson, AuditTarget, SovereignBadge } from './admin-audit-parts';
 

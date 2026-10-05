@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react';
 
 import { AdminGlyph } from '@/components/admin/admin-glyph';
+import { AdminField } from '@/components/admin/form';
 import { BRAND, EDGE, INK, INK2, INK3, SURFACE } from '@/components/admin/tone';
 import { formatCount } from '@/lib/admin/interpret/numbers';
 import type { ChoiceOption } from '@/lib/admin/broadcast-form';
@@ -8,9 +9,9 @@ import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 /**
  * **LES CHAMPS DE LA FEUILLE DE COMPOSITION** (#8876, #6731) — un champ texte, un
- * choix dans une liste, et la SÉLECTION MULTIPLE NOMMÉE (langues, pays) : le kit
- * d'administration n'a pas de formulaire, ces pièces sont locales au lot et
- * signalées dans le rapport.
+ * choix dans une liste, et la SÉLECTION MULTIPLE NOMMÉE (langues, pays) : le
+ * cadre de chaque champ (libellé, indice, refus annoncé) est `AdminField` du kit
+ * (#9463) ; les contrôles restent ici, le temps de passer sur ceux du kit.
  *
  * Chaque champ porte son libellé (`<label for>`), son indice et son erreur
  * rattachés par `aria-describedby`, une erreur annoncée (`role="alert"`) et
@@ -28,7 +29,7 @@ const fieldStyle = (invalid: boolean) =>
   }) as const;
 
 const describedBy = (id: string, hint: boolean, error: boolean): string | undefined => {
-  const ids = [hint ? `${id}-hint` : null, error ? `${id}-error` : null].flatMap((entry) => (entry === null ? [] : [entry]));
+  const ids = [hint ? `${id}-note` : null, error ? `${id}-error` : null].flatMap((entry) => (entry === null ? [] : [entry]));
   return ids.length === 0 ? undefined : ids.join(' ');
 };
 
@@ -46,21 +47,16 @@ function FieldFrame({
   readonly children: ReactNode;
 }) {
   return (
-    <div data-admin-field={id} className="grid gap-1">
-      <label htmlFor={id} className="text-caption font-medium" style={{ color: INK2 }}>
-        {label}
-      </label>
-      {children}
-      {hint === undefined ? null : (
-        <p id={`${id}-hint`} className="text-caption" style={{ color: INK3 }}>
-          {hint}
-        </p>
-      )}
-      {error === undefined || error === null ? null : (
-        <p id={`${id}-error`} role="alert" data-admin-field-error className="text-caption font-medium" style={{ color: 'var(--color-danger)' }}>
-          {error}
-        </p>
-      )}
+    <div data-admin-field={id}>
+      <AdminField
+        id={id}
+        label={label}
+        note={hint}
+        error={error === null ? undefined : error}
+        errorData={{ 'data-admin-field-error': '' }}
+      >
+        {children}
+      </AdminField>
     </div>
   );
 }

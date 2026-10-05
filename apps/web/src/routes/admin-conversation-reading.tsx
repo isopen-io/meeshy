@@ -2,7 +2,8 @@ import { useQuery } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 
-import { AdminDeniedInline, AdminEmptyState, AdminErrorState } from '@/components/admin/states';
+import { BRAND, INK, INK2 } from '@/components/admin/tone';
+import { AdminDeniedInline, AdminEmptyState, AdminErrorState, AdminSkeleton } from '@/components/admin/states';
 import {
   ADMIN_MESSAGES_PAGE_SIZE,
   adminConversationMessagesQueryKey,
@@ -18,7 +19,6 @@ import type { Viewer } from '@/lib/api/viewer';
 import { place } from '@/lib/grouping';
 import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { useThreadScene } from '@/lib/reading-mode/scene';
-import { AdminSkeleton } from '@/routes/admin-parts';
 import { ThreadModes } from '@/routes/thread-modes';
 
 /**
@@ -80,9 +80,6 @@ import { ThreadModes } from '@/routes/thread-modes';
  * sache rien.
  */
 
-const INK = 'var(--color-ios-ink)';
-const INK2 = 'var(--color-ios-ink-2)';
-const BRAND = 'var(--color-ios-brand)';
 const FOCUS = 'focus-visible:outline-2 focus-visible:outline-offset-2';
 
 /**

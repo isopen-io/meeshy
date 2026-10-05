@@ -2,7 +2,7 @@ import type { Interpreted } from '@/lib/admin/interpret/types';
 import { interpretRole } from '@/lib/admin/interpret/enums';
 import { languageName, sentenceCase } from '@/lib/admin/interpret/language';
 import type { AdminTone } from '@/lib/admin/interpret/types';
-import type { AdminLanguage } from '@/lib/i18n-admin-catalog';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 import { AdminGlyph, type AdminGlyphName } from './admin-glyph';
 import { TONE_COLOR, toneBackground } from './tone';
@@ -65,5 +65,29 @@ export function AdminLanguageBadge({ language, code }: { readonly language: Admi
     <AdminBadge tone="neutral" glyph="globe">
       {sentenceCase(languageName(code, language), language)}
     </AdminBadge>
+  );
+}
+
+/**
+ * **VÉRIFIÉ OU NON** (repris de la fiche d'un membre, #8289 → #9463) — le MOT porte l'état, la
+ * couleur ne fait que l'appuyer, et le ✓ ne marque que le vérifié. Ses teintes sont celles du
+ * succès et de l'encre discrète, pas celles d'`AdminBadge` : un contact non vérifié n'est pas
+ * une alerte, c'est une information.
+ */
+export function AdminVerifiedBadge({ verified, language }: { readonly verified: boolean; readonly language: AdminLanguage }) {
+  const tint = verified ? 'var(--color-success)' : 'var(--color-ios-ink-2)';
+  return (
+    <span
+      data-admin-verified={verified ? 'true' : 'false'}
+      className="inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-caption font-semibold"
+      style={{
+        color: tint,
+        backgroundColor: `color-mix(in srgb, ${tint} 14%, transparent)`,
+        border: `1px solid color-mix(in srgb, ${tint} 40%, transparent)`,
+      }}
+    >
+      {verified ? <span aria-hidden="true">✓</span> : null}
+      {translateAdmin(language, verified ? 'admin.contact.verified' : 'admin.contact.unverified')}
+    </span>
   );
 }

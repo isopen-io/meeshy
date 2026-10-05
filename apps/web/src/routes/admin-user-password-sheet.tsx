@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react';
 import { PASSWORD_PROPOSAL_LEVELS, type PasswordProposalLevel } from '@meeshy/shared/types/admin-password-proposal';
 
-import { Field } from '@/components/field';
-import { Sheet } from '@/components/sheet';
+import { AdminButton } from '@/components/admin/button';
+import { AdminCheckbox, AdminFormActions, AdminFormSheet, AdminReasonField, AdminTextInput, motiveState } from '@/components/admin/form';
+import { AdminFilterChips } from '@/components/admin/list-toolbar';
+import { AdminInlineNotice } from '@/components/admin/states';
+import { INK2 } from '@/components/admin/tone';
 import type { AdminDeps } from '@/lib/api/admin';
 import {
   ADMIN_PASSWORD_MIN_LENGTH,
@@ -13,9 +16,7 @@ import {
 } from '@/lib/api/admin-user-password';
 import { apiDeps } from '@/lib/api/deps';
 import { translateAdmin, type AdminPlainCatalogKey, type AdminLanguage } from '@/lib/i18n-admin-catalog';
-import { translate } from '@/lib/i18n-catalog';
 import { portailDuNavigateur, type PortailPartage } from '@/lib/view/invitation';
-import { ActionButton } from '@/routes/link-page-parts';
 
 /**
  * **RÉINITIALISER LE MOT DE PASSE D'UN MEMBRE** (#6819, #8051) — la feuille,
@@ -63,11 +64,14 @@ import { ActionButton } from '@/routes/link-page-parts';
  * d'affirmer que `navigator.clipboard` existe. Le contrat vient de
  * `@/lib/view/invitation` — l'espace NEUTRE, pas celui des liens : on réutilise
  * l'abstraction partagée, jamais l'emballage dont le nom démentirait l'usage.
+ *
+ * ## Les pièces du kit (#9463)
+ *
+ * Puces, champ, motif, case et gestes sont ceux de `components/admin` ; la règle du
+ * motif est `motiveState`, la même que celle du bannissement et de la conversation.
+ * L'avertissement est un avis `warning` (un `role="status"`) et non `danger` : une
+ * alerte criée à chaque ouverture apprendrait à ne plus l'écouter.
  */
-
-const BRAND = 'var(--color-ios-brand)';
-const INK = 'var(--color-ios-ink)';
-const INK2 = 'var(--color-ios-ink-2)';
 
 type Copie = 'none' | 'copied' | 'failed';
 type Chargement = 'loading' | 'ready' | 'failed';
@@ -102,13 +106,11 @@ export function AdminUserPasswordSheet({
   readonly sovereign?: boolean;
 }) {
   const [motif, setMotif] = useState('');
-  const [focusMotif, setFocusMotif] = useState(false);
   const [prevenir, setPrevenir] = useState(false);
   const [propositions, setPropositions] = useState<PasswordProposals | null>(null);
   const [chargement, setChargement] = useState<Chargement>('loading');
   const [niveau, setNiveau] = useState<Niveau>(NIVEAU_INITIAL);
   const [motDePasse, setMotDePasse] = useState('');
-  const [focus, setFocus] = useState(false);
   const [copie, setCopie] = useState<Copie>('none');
   const [refus, setRefus] = useState<string | null>(null);
   const [envoi, setEnvoi] = useState(false);
@@ -168,17 +170,16 @@ export function AdminUserPasswordSheet({
     }
   }
 
-  const motifSaisi = motif.trim();
-  const motifTropCourt = !sovereign && motifSaisi !== '' && motifSaisi.length < ADMIN_PASSWORD_MOTIVE_MIN_LENGTH;
+  const motive = motiveState({ text: motif, minLength: ADMIN_PASSWORD_MOTIVE_MIN_LENGTH, required: false, sovereign, whenSovereign: 'hide' });
 
   async function appliquer() {
-    if (envoi || motDePasse.length < ADMIN_PASSWORD_MIN_LENGTH || motifTropCourt) return;
+    if (envoi || motDePasse.length < ADMIN_PASSWORD_MIN_LENGTH || !motive.ready) return;
     setEnvoi(true);
     const resultat = await resetAdminUserPassword({
       ...deps,
       userId,
       newPassword: motDePasse,
-      ...(sovereign || motifSaisi === '' ? {} : { reason: motifSaisi }),
+      ...(motive.sent === null ? {} : { reason: motive.sent }),
       ...(prevenir ? { sendEmail: true } : {}),
     });
     setEnvoi(false);
@@ -192,143 +193,85 @@ export function AdminUserPasswordSheet({
     onClose();
   }
 
-  const pretAAppliquer = !envoi && motDePasse.length >= ADMIN_PASSWORD_MIN_LENGTH && !motifTropCourt;
+  const pretAAppliquer = motDePasse.length >= ADMIN_PASSWORD_MIN_LENGTH && motive.ready;
 
   return (
-    <Sheet title={translateAdmin(language, 'admin.password.title')} presentation="centered" closeLabel={translateAdmin(language, 'admin.kit.close')} onClose={onClose}>
-      <div className="grid gap-4 px-4 pb-6">
-        <p
-          className="rounded-card px-4 py-3 text-caption"
-          style={{ backgroundColor: 'color-mix(in srgb, var(--color-danger) 10%, transparent)', color: 'var(--color-danger)' }}
-        >
-          {translateAdmin(language, 'admin.password.warn')}
+    <AdminFormSheet language={language} title={translateAdmin(language, 'admin.password.title')} onClose={onClose}>
+      <AdminInlineNotice tone="warning" text={translateAdmin(language, 'admin.password.warn')} />
+
+      <AdminFilterChips
+        label={translateAdmin(language, 'admin.password.level')}
+        options={PASSWORD_PROPOSAL_LEVELS.map((candidat) => ({ value: candidat, label: translateAdmin(language, LIBELLES_NIVEAUX[candidat]) }))}
+        value={niveau}
+        anchor="data-admin-password-level"
+        disabled={propositions === null}
+        onChange={(candidat) => {
+          const choisi = PASSWORD_PROPOSAL_LEVELS.find((connu) => connu === candidat);
+          if (choisi !== undefined) choisir(choisi);
+        }}
+      />
+
+      <div className="grid gap-2">
+        <AdminTextInput
+          id="admin-password-value"
+          label={translateAdmin(language, 'admin.password.field')}
+          value={motDePasse}
+          onValue={saisir}
+          mono
+          {...(chargement === 'loading' ? { placeholder: translateAdmin(language, 'admin.password.loading') } : {})}
+          note={translateAdmin(language, chargement === 'failed' ? 'admin.password.proposals.failed' : 'admin.password.editable')}
+          error={refus === null ? undefined : translateAdmin(language, 'admin.password.refused', { reason: refus })}
+          data={{ 'data-admin-password': '' }}
+        />
+        <p className="text-caption" style={{ color: INK2 }}>
+          {translateAdmin(language, 'admin.password.generated')}
         </p>
-
-        <div
-          role="group"
-          aria-label={translateAdmin(language, 'admin.password.level')}
-          className="flex gap-2 overflow-x-auto"
-        >
-          {PASSWORD_PROPOSAL_LEVELS.map((candidat) => {
-            const enfonce = candidat === niveau;
-            return (
-              <button
-                key={candidat}
-                type="button"
-                aria-pressed={enfonce}
-                disabled={propositions === null}
-                data-admin-password-level={candidat}
-                onClick={() => choisir(candidat)}
-                className="shrink-0 rounded-chip px-4 text-body font-semibold disabled:opacity-40 focus-visible:outline-2 focus-visible:outline-offset-2"
-                style={{
-                  minHeight: 44,
-                  color: enfonce ? 'var(--color-ios-on-brand)' : INK,
-                  backgroundColor: enfonce ? BRAND : 'var(--color-ios-surface)',
-                  border: `1px solid ${enfonce ? BRAND : 'var(--color-edge)'}`,
-                  outlineColor: BRAND,
-                }}
-              >
-                {translateAdmin(language, LIBELLES_NIVEAUX[candidat])}
-              </button>
-            );
-          })}
-        </div>
-
-        <div className="grid gap-2">
-          <Field
-            id="admin-password-value"
-            label={translateAdmin(language, 'admin.password.field')}
-            tint={BRAND}
-            focused={focus}
-            error={refus === null ? undefined : translateAdmin(language, 'admin.password.refused', { reason: refus })}
-          >
-            {({ id, describedBy }) => (
-              <input
-                id={id}
-                type="text"
-                data-admin-password
-                value={motDePasse}
-                placeholder={chargement === 'loading' ? translateAdmin(language, 'admin.password.loading') : undefined}
-                autoCapitalize="none"
-                autoComplete="off"
-                spellCheck={false}
-                aria-describedby={describedBy}
-                onInput={(event) => saisir(event.currentTarget.value)}
-                onFocus={() => setFocus(true)}
-                onBlur={() => setFocus(false)}
-                className="w-full bg-transparent font-mono text-body font-semibold outline-none"
-                style={{ minHeight: 44, color: INK }}
-              />
-            )}
-          </Field>
-          <p className="text-caption" style={{ color: INK2 }}>
-            {translateAdmin(language, chargement === 'failed' ? 'admin.password.proposals.failed' : 'admin.password.editable')}
-          </p>
-          <p className="text-caption" style={{ color: INK2 }}>
-            {translateAdmin(language, 'admin.password.generated')}
-          </p>
-        </div>
-
-        <div className="grid grid-cols-2 gap-2">
-          <ActionButton tone="secondary" disabled={chargement === 'loading'} onClick={() => setTirage((n) => n + 1)} data={{ 'data-admin-password-regenerate': '' }}>
-            {translateAdmin(language, 'admin.password.regenerate')}
-          </ActionButton>
-          <ActionButton tone="secondary" disabled={motDePasse === ''} onClick={() => void copier()}>
-            {translateAdmin(language, copie === 'copied' ? 'admin.password.copied' : 'admin.password.copy')}
-          </ActionButton>
-        </div>
-
-        {sovereign ? null : (
-          <Field
-            id="admin-password-motive"
-            label={translateAdmin(language, 'admin.people.password.motive')}
-            tint={BRAND}
-            focused={focusMotif}
-            error={motifTropCourt ? translateAdmin(language, 'admin.people.password.motiveShort') : undefined}
-          >
-            {({ id, describedBy }) => (
-              <input
-                id={id}
-                type="text"
-                data-admin-password-motive
-                value={motif}
-                aria-describedby={describedBy}
-                onInput={(event) => setMotif(event.currentTarget.value)}
-                onFocus={() => setFocusMotif(true)}
-                onBlur={() => setFocusMotif(false)}
-                className="w-full bg-transparent text-body outline-none"
-                style={{ minHeight: 44, color: INK }}
-              />
-            )}
-          </Field>
-        )}
-
-        <label className="flex cursor-pointer items-start gap-3 text-body" style={{ minHeight: 44, color: INK }}>
-          <input
-            type="checkbox"
-            data-admin-password-notify
-            checked={prevenir}
-            onChange={(event) => setPrevenir(event.currentTarget.checked)}
-            className="mt-3 size-5 shrink-0 focus-visible:outline-2 focus-visible:outline-offset-2"
-            style={{ accentColor: BRAND, outlineColor: BRAND }}
-          />
-          <span className="grid gap-1 py-2">
-            <span>{translateAdmin(language, 'admin.people.password.notify')}</span>
-            <span className="text-caption" style={{ color: INK2 }}>
-              {translateAdmin(language, 'admin.people.password.notifyHint')}
-            </span>
-          </span>
-        </label>
-
-        <div className="grid gap-2 pt-2">
-          <ActionButton tone="danger" disabled={!pretAAppliquer} onClick={() => void appliquer()} data={{ 'data-admin-password-apply': '' }}>
-            {translateAdmin(language, 'admin.password.apply')}
-          </ActionButton>
-          <ActionButton tone="secondary" onClick={onClose}>
-            {translate(language, 'common.cancel')}
-          </ActionButton>
-        </div>
       </div>
-    </Sheet>
+
+      <div className="flex flex-wrap gap-2">
+        <AdminButton disabled={chargement === 'loading'} onClick={() => setTirage((n) => n + 1)} data={{ 'data-admin-password-regenerate': '' }}>
+          {translateAdmin(language, 'admin.password.regenerate')}
+        </AdminButton>
+        <AdminButton disabled={motDePasse === ''} onClick={() => void copier()}>
+          {translateAdmin(language, copie === 'copied' ? 'admin.password.copied' : 'admin.password.copy')}
+        </AdminButton>
+      </div>
+
+      <AdminReasonField
+        id="admin-password-motive"
+        language={language}
+        label={translateAdmin(language, 'admin.people.password.motive')}
+        value={motif}
+        onValue={setMotif}
+        minLength={ADMIN_PASSWORD_MOTIVE_MIN_LENGTH}
+        required={false}
+        sovereign={sovereign}
+        whenSovereign="hide"
+        {...(motive.tooShort ? { error: translateAdmin(language, 'admin.people.password.motiveShort') } : {})}
+        data={{ 'data-admin-password-motive': '' }}
+      />
+
+      <AdminCheckbox
+        id="admin-password-notify"
+        label={translateAdmin(language, 'admin.people.password.notify')}
+        hint={translateAdmin(language, 'admin.people.password.notifyHint')}
+        checked={prevenir}
+        onToggle={setPrevenir}
+        data={{ 'data-admin-password-notify': '' }}
+      />
+
+      <AdminFormActions
+        language={language}
+        primary={{
+          label: translateAdmin(language, 'admin.password.apply'),
+          tone: 'danger',
+          busy: envoi,
+          disabled: !pretAAppliquer,
+          onClick: () => void appliquer(),
+          data: { 'data-admin-password-apply': '' },
+        }}
+        onCancel={onClose}
+      />
+    </AdminFormSheet>
   );
 }

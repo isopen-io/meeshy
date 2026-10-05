@@ -7,7 +7,7 @@ import { AdminLink } from '@/components/admin/entity-chip';
 import { AdminFiche, AdminIdentityHeader, AdminStatStrip } from '@/components/admin/fiche';
 import { AdminPageHeader } from '@/components/admin/page-header';
 import { AdminSectionScreen } from '@/components/admin/section-screen';
-import { AdminDeniedInline, AdminEmptyState, AdminErrorState, AdminInlineNotice, AdminOfflineNotice } from '@/components/admin/states';
+import { AdminDeniedInline, AdminEmptyState, AdminErrorState, AdminInlineNotice, AdminOfflineNotice, AdminSkeleton } from '@/components/admin/states';
 import { AdminSummaryCard, AdminSummaryGrid } from '@/components/admin/summary-card';
 import { BROADCAST_POLL_MS, broadcastPollInterval, inAppStateOf, recipientsToReach } from '@/lib/admin/broadcast-gestures';
 import { broadcastLabel } from '@/lib/admin/broadcast-labels';
@@ -32,7 +32,7 @@ import { currentAdminLanguage, suspendForAdminInterfaceCatalog, translateAdmin, 
 import { useOnline } from '@/lib/net/online';
 import { useParams } from '@/lib/router';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
-import { AdminAnnouncement, AdminSkeleton } from '@/routes/admin-parts';
+import { AdminAnnouncement } from '@/components/admin/announcement';
 import { href, navigate } from '@/routes/route-table';
 
 import { BroadcastGestures } from './admin-broadcast-gestures';

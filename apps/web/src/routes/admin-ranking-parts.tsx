@@ -7,7 +7,7 @@ import { BRAND, EDGE, INK, INK2, SURFACE, TONE_COLOR, toneBackground } from '@/c
 import { formatCount } from '@/lib/admin/interpret/numbers';
 import type { RankingRowView } from '@/lib/admin/ranking-view';
 import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
-import { PlainTh, Td } from '@/routes/admin-table';
+import { PlainTh, Td } from '@/components/admin/table-cells';
 
 /**
  * **LES PIÈCES DU CLASSEMENT** (#8876, #6730) — le rang, le podium des trois

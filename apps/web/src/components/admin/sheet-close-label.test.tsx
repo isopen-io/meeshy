@@ -106,8 +106,11 @@ describe('toute feuille montée par l’administration passe son closeLabel', ()
     expect(missing).toEqual([]);
   });
 
+  /* Une `<AdminFormSheet` est une feuille : elle monte `<Sheet` en lui passant le `closeLabel` du kit
+     (#9463). Les cinq feuilles éditables de l'administration y sont passées ; ne compter que les
+     `<Sheet` brutes ferait tomber le témoin sous son seuil sans qu'aucune feuille n'ait disparu. */
   test('le balayage trouve bien les feuilles (un balayage vide resterait vert)', () => {
-    const total = files.reduce((count, file) => count + [...readFileSync(file, 'utf8').matchAll(/<Sheet\s+[a-zA-Z]/g)].length, 0);
+    const total = files.reduce((count, file) => count + [...readFileSync(file, 'utf8').matchAll(/<(?:Sheet|AdminFormSheet)\s+[a-zA-Z]/g)].length, 0);
     expect(total).toBeGreaterThanOrEqual(10);
   });
 });

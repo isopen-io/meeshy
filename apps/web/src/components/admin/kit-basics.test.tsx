@@ -7,10 +7,11 @@ import { adminIdentityFixture, expectNoRawIdentifiers } from '@/test-support/adm
 import { setupAdminKitTests } from '@/test-support/admin-harness';
 
 import { AdminGlyph } from './admin-glyph';
-import { AdminBadge, AdminInterpretedBadge, AdminLanguageBadge, AdminRoleBadge } from './badges';
+import { AdminBadge, AdminInterpretedBadge, AdminLanguageBadge, AdminRoleBadge, AdminVerifiedBadge } from './badges';
 import { AdminMetaPanel, AdminMetaRow, AdminMomentText, AdminTechnicalId } from './meta';
 import { AdminPageHeader } from './page-header';
-import { AdminDeniedInline, AdminEmptyState, AdminErrorState, AdminInlineNotice, AdminOfflineNotice } from './states';
+import { AdminAnnouncement } from './announcement';
+import { AdminDeniedInline, AdminDeniedScreen, AdminEmptyState, AdminErrorState, AdminInlineNotice, AdminOfflineNotice, AdminSkeleton } from './states';
 
 const { mount } = setupAdminKitTests({ languages: ['fr', 'en'] });
 
@@ -266,5 +267,74 @@ describe('les états', () => {
     const horsLigne = await mount(<AdminOfflineNotice language="fr" />);
     expect(horsLigne.querySelector('[data-admin-notice="warning"]')?.textContent).toContain('hors ligne');
     Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
+  });
+});
+
+/**
+ * **CE QUE `routes/admin-parts` PORTAIT, REPRIS PAR LE KIT** (#9463) — le squelette, le refus
+ * plein écran et l'annonce vivent désormais dans `components/admin` ; leur DOM est un contrat
+ * (`data-admin-announcement`, `main#contenu p.text-screen`, `data-admin-<anchor>`) que les
+ * témoins des écrans lisent.
+ */
+describe('les pièces reprises de routes/admin-parts', () => {
+  test('le squelette : une région de chargement annoncée, ses barres masquées, son ancre posée', async () => {
+    const host = await mount(<AdminSkeleton rows={3} language="fr" anchor="bans-loading" />);
+    const region = host.querySelector('[role="status"]');
+    expect(region?.getAttribute('aria-busy')).toBe('true');
+    expect(region?.hasAttribute('data-admin-bans-loading')).toBe(true);
+    expect(region?.querySelectorAll('[aria-hidden="true"] > div')).toHaveLength(3);
+    expect(region?.textContent).toBe('Chargement…');
+  });
+
+  test('le refus plein écran : le titre en text-screen, le message, et un retour de 44 px', async () => {
+    const host = await mount(<AdminDeniedScreen language="fr" />);
+    const titre = host.querySelector('p.text-screen');
+    expect(titre?.textContent?.length).toBeGreaterThan(0);
+    expect(host.querySelector('[data-admin-denied-screen]')).not.toBeNull();
+    expect(host.querySelector<HTMLAnchorElement>('a')?.style.minHeight).toBe('44px');
+  });
+
+  test('l’annonce : montée vide en sr-only, puis dite en role=status', async () => {
+    const vide = await mount(<AdminAnnouncement text="" />);
+    const region = vide.querySelector('[data-admin-announcement]');
+    expect(region?.getAttribute('role')).toBe('status');
+    expect(region?.className).toBe('sr-only');
+    const dite = await mount(<AdminAnnouncement text="Compte créé" />);
+    expect(dite.querySelector('[data-admin-announcement]')?.textContent).toBe('Compte créé');
+  });
+
+  test('l’état vide porte l’ancre de l’écran qui le monte', async () => {
+    const host = await mount(<AdminEmptyState title="Aucune image publique" data={{ 'data-admin-image-candidates-empty': '' }} />);
+    expect(host.querySelector('[data-admin-image-candidates-empty]')?.textContent).toBe('Aucune image publique');
+    expect(host.querySelector('[data-admin-empty]')).not.toBeNull();
+  });
+});
+
+describe('les pièces reprises de la fiche d’un membre (LOT-PANELS)', () => {
+  test('le refus d’un bloc dit son propre motif, sous l’ancre de l’écran qui le monte', async () => {
+    const host = await mount(<AdminDeniedInline language="fr" message="Réservé au pilotage de l’agent" data={{ 'data-admin-agent-denied': '' }} />);
+    const bloc = host.querySelector('[data-admin-agent-denied]');
+    expect(bloc?.hasAttribute('data-admin-denied-inline')).toBe(true);
+    expect(bloc?.textContent).toBe('Réservé au pilotage de l’agent');
+  });
+
+  test('un avis porte l’ancre de l’écran, et le danger reste une alerte', async () => {
+    const host = await mount(<AdminInlineNotice tone="danger" text="Le rôle change ses droits" data={{ 'data-admin-edit-warning': 'role' }} />);
+    const avis = host.querySelector('[data-admin-edit-warning="role"]');
+    expect(avis?.getAttribute('role')).toBe('alert');
+    expect(avis?.getAttribute('data-admin-notice')).toBe('danger');
+    expect(avis?.textContent).toBe('Le rôle change ses droits');
+  });
+
+  test('vérifié ou non : le MOT porte l’état, le glyphe ✓ n’appuie que le vérifié', async () => {
+    const host = await mount(
+      <div>
+        <AdminVerifiedBadge verified language="fr" />
+        <AdminVerifiedBadge verified={false} language="fr" />
+      </div>,
+    );
+    const [oui, non] = [...host.querySelectorAll('[data-admin-verified]')];
+    expect([oui?.getAttribute('data-admin-verified'), oui?.textContent]).toEqual(['true', '✓Vérifié']);
+    expect([non?.getAttribute('data-admin-verified'), non?.textContent]).toEqual(['false', 'Non vérifié']);
   });
 });

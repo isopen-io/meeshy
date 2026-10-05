@@ -1,6 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 
+import { AdminButton } from '@/components/admin/button';
 import { AdminConfirmSheet } from '@/components/admin/confirm-sheet';
 import { useAdminAction } from '@/lib/admin/use-admin-action';
 import { useAdminReach } from '@/lib/admin/use-admin-reach';
@@ -13,7 +14,7 @@ import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { useOnline } from '@/lib/net/online';
 import type { AnnouncementTone } from '@/lib/view/use-live-announcer';
 
-import { GLASS_CARD_CLASS, GLASS_CARD_EDGE, SectionButton } from './admin-member-parts';
+import { GLASS_CARD_CLASS, GLASS_CARD_EDGE } from './admin-member-parts';
 
 /**
  * **SUPPRIMER OU RESTAURER UN COMPTE** (audit 2026-10-04) — la passerelle servait
@@ -96,13 +97,13 @@ export function AdminMemberLifecycle({
       style={GLASS_CARD_EDGE}
     >
       {deleted ? (
-        <SectionButton tone="primary" disabled={!online || running} data={{ 'data-admin-action': 'restore-user' }} onClick={() => setPending('restore')}>
+        <AdminButton tone="primary" disabled={!online || running} data={{ 'data-admin-action': 'restore-user' }} onClick={() => setPending('restore')}>
           {translateAdmin(language, 'admin.people.restore.action')}
-        </SectionButton>
+        </AdminButton>
       ) : (
-        <SectionButton tone="danger" disabled={!online || running} data={{ 'data-admin-action': 'delete-user' }} onClick={() => setPending('delete')}>
+        <AdminButton tone="danger" disabled={!online || running} data={{ 'data-admin-action': 'delete-user' }} onClick={() => setPending('delete')}>
           {translateAdmin(language, 'admin.people.delete.action')}
-        </SectionButton>
+        </AdminButton>
       )}
 
       {pending === null ? null : (

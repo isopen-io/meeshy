@@ -1,11 +1,12 @@
 import { useQuery } from '@tanstack/react-query';
 import { useId, useState } from 'react';
 
+import { AdminFormError } from '@/components/admin/form';
 import { AdminBadge } from '@/components/admin/badges';
 import { AdminButton } from '@/components/admin/button';
 import { AdminEntityChip } from '@/components/admin/entity-chip';
 import { AdminFicheSection } from '@/components/admin/fiche';
-import { AdminEmptyState, AdminErrorState } from '@/components/admin/states';
+import { AdminEmptyState, AdminErrorState, AdminSkeleton } from '@/components/admin/states';
 import { BRAND, EDGE, INK, INK2, SURFACE } from '@/components/admin/tone';
 import { conversationLabel, personLabel } from '@/lib/admin/interpret/labels';
 import { formatCount } from '@/lib/admin/interpret/numbers';
@@ -15,7 +16,6 @@ import { agentQueueQueryKey, cancelAgentQueueItem, editAgentQueueItem, loadAgent
 import { unwrap } from '@/lib/api/client';
 import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { useOnline } from '@/lib/net/online';
-import { AdminSkeleton } from '@/routes/admin-parts';
 
 import { useAgentConfirm, useAgentGesture, type AgentGesture } from './admin-agent-form';
 
@@ -183,11 +183,7 @@ function QueueRow({
               className="w-full rounded-chip px-3 py-2 text-body focus-visible:outline-2 focus-visible:outline-offset-2"
               style={{ minHeight: 44, backgroundColor: SURFACE, border: `1px solid ${EDGE}`, color: INK, outlineColor: BRAND }}
             />
-            {gesture.errorOf(editId) === null ? null : (
-              <p role="alert" className="text-caption font-medium" style={{ color: 'var(--color-danger)' }}>
-                {gesture.errorOf(editId)}
-              </p>
-            )}
+            <AdminFormError text={gesture.errorOf(editId) ?? ''} />
             <div className="flex flex-wrap justify-end gap-2">
               <AdminButton
                 onClick={() => {

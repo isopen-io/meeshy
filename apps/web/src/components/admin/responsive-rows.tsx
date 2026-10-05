@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 
 import type { AdminTarget } from '@/lib/admin/admin-routes';
-import { PlainTh, Td } from '@/routes/admin-table';
+import { PlainTh, Td } from './table-cells';
 
 import { AdminCardMode, AdminLink } from './entity-chip';
 import { EDGE, INK, INK2, SURFACE } from './tone';

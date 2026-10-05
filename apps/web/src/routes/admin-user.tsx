@@ -7,7 +7,7 @@ import { AdminFiche, AdminIdentityHeader } from '@/components/admin/fiche';
 import { AdminPageHeader } from '@/components/admin/page-header';
 import { AdminLink } from '@/components/admin/entity-chip';
 import { AdminSectionScreen } from '@/components/admin/section-screen';
-import { AdminDeniedInline, AdminErrorState, AdminOfflineNotice } from '@/components/admin/states';
+import { AdminDeniedInline, AdminErrorState, AdminOfflineNotice, AdminSkeleton } from '@/components/admin/states';
 import { AdminDetailSheet } from '@/components/admin/detail-sheet';
 import { AdminSummaryCard, AdminSummaryGrid } from '@/components/admin/summary-card';
 import { accountStateOf } from '@/lib/admin/interpret/enums';
@@ -42,7 +42,7 @@ import { AdminMemberQuickActions } from './admin-member-quick-actions';
 import { AdminMemberRoleSection } from './admin-member-role';
 import { AdminMemberSecuritySection } from './admin-member-security';
 import { AdminMemberStats } from './admin-member-stats';
-import { AdminAnnouncement, AdminSkeleton } from './admin-parts';
+import { AdminAnnouncement } from '@/components/admin/announcement';
 import { AdminUserBanSheet } from './admin-user-ban-sheet';
 import {
   AdminUserCommunitiesTab,
