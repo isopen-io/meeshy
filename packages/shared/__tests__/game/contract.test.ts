@@ -190,6 +190,7 @@ describe('les routes', () => {
 
   it('nomme ses codes d\'erreur', () => {
     expect(Object.values(GAME_ERROR_CODES)).toContain('INSUFFICIENT_MEESHES');
+    expect(Object.values(GAME_ERROR_CODES)).toContain('REQUEST_ID_CONFLICT');
     expect(new Set(Object.values(GAME_ERROR_CODES)).size).toBe(Object.values(GAME_ERROR_CODES).length);
   });
 });
