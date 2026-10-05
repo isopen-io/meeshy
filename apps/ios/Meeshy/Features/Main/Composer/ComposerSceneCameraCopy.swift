@@ -168,6 +168,11 @@ enum ComposerSceneCameraCopy {
         Double(factor).formatted(.number.precision(.fractionLength(1))) + "×"
     }
 
+    /// Un cran de la pastille, lu comme l'appareil photo : « 0,5× », « 1× », « 2× ».
+    static func zoomPresetValue(_ factor: CGFloat) -> String {
+        Double(factor).formatted(.number.precision(.fractionLength(0...1))) + "×"
+    }
+
     static var flashIntensityLabel: String {
         String(localized: "composer.camera.flashIntensity",
                defaultValue: "Intensité du flash", bundle: .main)

@@ -301,8 +301,8 @@ final class CameraModel: NSObject, ObservableObject {
     /// de zoom n'y a aucun effet.
     var zoomRange: ClosedRange<CGFloat> {
         guard let device = activeVideoDevice else { return 1...1 }
-        return ComposerCaptureZoom.range(deviceMin: device.minAvailableVideoZoomFactor,
-                                         deviceMax: device.maxAvailableVideoZoomFactor)
+        return ComposerCaptureZoomScale(base: 1).displayedRange(deviceMin: device.minAvailableVideoZoomFactor,
+                                                                deviceMax: device.maxAvailableVideoZoomFactor)
     }
 
     /// Affectation directe sous `lockForConfiguration` : le doigt pilote déjà
