@@ -123,6 +123,7 @@ final class ComposerCaptureSession: ObservableObject {
             locked: holdPhase == .locked || mode == ComposerShutterGesture.mode(locked: true),
             zoomFactor: camera.zoomFactor,
             zoomPresets: ComposerCaptureZoomScale.presets(in: camera.zoomRange),
+            flipping: camera.isSwitchingCamera,
             flashIntensity: flashIntensity)
     }
 

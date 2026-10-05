@@ -20,7 +20,14 @@ nonisolated final class ComposerCameraFeed: NSObject, AVCaptureVideoDataOutputSa
     /// l'export.
     private var space: CGColorSpace?
     private var position: AVCaptureDevice.Position = .back
+    /// L'objectif qui a PRIS la trame retenue — lu sur sa connexion, jamais
+    /// sur l'état publié : pendant une bascule, une trame de l'ancien objectif
+    /// ne se redresse pas comme celles du nouveau (#9464).
+    private var latestPosition: AVCaptureDevice.Position = .back
     private var active = false
+    /// Une bascule attend la prochaine trame de l'ancien objectif, look ou non.
+    private var wantsHold = false
+    private var held: CIImage?
     /// Une source sert PLUSIEURS peintres — l'aperçu et la bande —, chacun
     /// sous son identifiant.
     private var frameHandlers: [ObjectIdentifier: @Sendable (TimeInterval) -> Void] = [:]
@@ -59,6 +66,8 @@ nonisolated final class ComposerCameraFeed: NSObject, AVCaptureVideoDataOutputSa
         lock.lock()
         defer { lock.unlock() }
         latest = nil
+        held = nil
+        wantsHold = false
         space = nil
     }
 
@@ -68,31 +77,91 @@ nonisolated final class ComposerCameraFeed: NSObject, AVCaptureVideoDataOutputSa
         return space
     }
 
-    /// La trame la plus récente, redressée comme l'aperçu système.
+    /// La trame la plus récente, redressée comme l'aperçu système — selon
+    /// l'objectif qui l'a prise.
     func latestImage() -> CIImage? {
         lock.lock()
         let buffer = latest
-        let orientation = ComposerLiveLookRule.orientation(for: position)
+        let orientation = ComposerLiveLookRule.orientation(for: latestPosition)
         lock.unlock()
         return buffer.map { CIImage(cvPixelBuffer: $0).oriented(orientation) }
+    }
+
+    /// L'objectif de la trame retenue ; `nil` sans trame.
+    var latestFramePosition: AVCaptureDevice.Position? {
+        lock.lock()
+        defer { lock.unlock() }
+        return latest == nil ? nil : latestPosition
     }
 
     func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer,
                        from connection: AVCaptureConnection) {
         guard let buffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
+        let objectif = (connection.inputPorts.first?.input as? AVCaptureDeviceInput)?.device.position
+        guard ingest(buffer, position: objectif ?? publishedPosition) else { return }
+        let presentation = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+        announce(at: presentation.isValid ? presentation.seconds : CACurrentMediaTime())
+    }
+
+    private var publishedPosition: AVCaptureDevice.Position {
         lock.lock()
-        guard active else {
-            lock.unlock()
-            return
+        defer { lock.unlock() }
+        return position
+    }
+
+    /// Une trame arrive de `position`. `true` ⇒ elle est retenue pour l'aperçu
+    /// et les peintres sont prévenus.
+    @discardableResult
+    func ingest(_ buffer: CVPixelBuffer, position objectif: AVCaptureDevice.Position) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        if wantsHold {
+            wantsHold = false
+            held = CIImage(cvPixelBuffer: buffer).oriented(ComposerLiveLookRule.orientation(for: objectif))
         }
+        guard active else { return false }
         latest = buffer
+        latestPosition = objectif
         if space == nil {
             space = CVBufferCopyAttachments(buffer, .shouldPropagate)
                 .flatMap { CVImageBufferCreateColorSpaceFromAttachments($0)?.takeRetainedValue() }
         }
-        lock.unlock()
-        let presentation = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
-        announce(at: presentation.isValid ? presentation.seconds : CACurrentMediaTime())
+        return true
+    }
+
+    // MARK: - La trame qui couvre une bascule (#9464)
+
+    /// La prochaine trame sera gardée, même sans look — une seule.
+    func requestHold() {
+        lock.lock()
+        defer { lock.unlock() }
+        held = nil
+        wantsHold = true
+    }
+
+    /// La trame gardée, rendue une fois.
+    func takeHeldFrame() -> CIImage? {
+        lock.lock()
+        defer { lock.unlock() }
+        let image = held
+        held = nil
+        wantsHold = false
+        return image
+    }
+
+    /// Sur la file de la session, AVANT la bascule : la prochaine trame de
+    /// l'objectif encore en place, attendue au plus `timeout`.
+    func holdNextFrame(timeout: TimeInterval) -> CIImage? {
+        requestHold()
+        let echeance = Date().addingTimeInterval(timeout)
+        while Date() < echeance {
+            lock.lock()
+            let image = held
+            lock.unlock()
+            if image != nil { return takeHeldFrame() }
+            Thread.sleep(forTimeInterval: 0.005)
+        }
+        return takeHeldFrame()
     }
 
     /// Poser ou retirer le sien ne touche jamais celui d'un autre peintre.

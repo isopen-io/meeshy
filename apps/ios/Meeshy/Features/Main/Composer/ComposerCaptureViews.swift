@@ -56,6 +56,14 @@ struct ComposerCapturePreview: View {
                                                     surfaceScale: session.thermalBudget.surfaceScale,
                                                     onFirstFrame: { metalHasFrame = true })
                         }
+                        if let couverture = session.camera.switchCover {
+                            Image(decorative: couverture, scale: 1)
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: toile.width, height: toile.height)
+                                .clipped()
+                                .transition(.opacity)
+                        }
                         if showsThermalNotice {
                             VStack {
                                 Text(ComposerCaptureCopy.thermalNotice)
@@ -70,6 +78,7 @@ struct ComposerCapturePreview: View {
                         }
                     }
                     .frame(width: toile.width, height: toile.height)
+                    .animation(.easeOut(duration: 0.15), value: session.camera.switchCover != nil)
                     .position(x: toile.midX, y: toile.midY)
                 }
             case .permissionRefused:

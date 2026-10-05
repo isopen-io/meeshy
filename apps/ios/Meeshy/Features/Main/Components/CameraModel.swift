@@ -76,6 +76,10 @@ final class CameraModel: NSObject, ObservableObject {
     }
     /// Publiée : le sol blanc du flash avant (#8653) suit l'objectif actif.
     @Published private(set) var currentPosition: AVCaptureDevice.Position = .back
+    /// Une bascule d'objectif est en cours (#9464) : le bouton se tait.
+    @Published private(set) var isSwitchingCamera = false
+    /// La dernière trame de l'ancien objectif, floutée, qui couvre la bascule.
+    @Published private(set) var switchCover: CGImage?
     private var recordingTimer: Timer?
     /// Le guet de la scène après un double toucher (#9295) — `nil` hors session.
     /// `nonisolated(unsafe)` : la deinit, non isolée, le retire ; il n'est
@@ -238,7 +242,9 @@ final class CameraModel: NSObject, ObservableObject {
     /// stopped, and reopens a new segment on the new camera. A no-op while a
     /// previous switch is still settling (guards rapid double-taps).
     func switchCamera() {
+        guard ComposerCameraSwitchRule.mayFlip(isSwitching: isSwitchingCamera) else { return }
         guard !isSwitchingCameraDuringRecording else { return }
+        isSwitchingCamera = true
         if isRecordingVideo {
             isSwitchingCameraDuringRecording = true
             pendingSwitchPosition = currentPosition == .back ? .front : .back
@@ -254,15 +260,33 @@ final class CameraModel: NSObject, ObservableObject {
                                      then: @escaping @MainActor @Sendable () -> Void = {}) {
         sessionQueue.perform { [weak self] in
             guard let self else { return }
+            let couverture = self.liveFeed.holdNextFrame(timeout: ComposerCameraSwitchRule.frameWait)
+                .flatMap(ComposerCameraSwitchRule.cover(from:))
+                .map(ComposerCameraSwitchRule.Cover.init(image:))
+            if let couverture {
+                DispatchQueue.main.async {
+                    MainActor.assumeIsolated { self.switchCover = couverture.image }
+                }
+            }
             let installe = Self.installVideoInput(in: self.session, position: position)
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
                     if let installe { self.adopt(installe) }
+                    self.endSwitch()
                     then()
                 }
             }
         }
         HapticFeedback.light()
+    }
+
+    /// La couverture reste le temps que le nouvel objectif serve, puis s'efface.
+    private func endSwitch() {
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(ComposerCameraSwitchRule.coverHold * 1_000_000_000))
+            self?.switchCover = nil
+            self?.isSwitchingCamera = false
+        }
     }
 
     func takePhoto(flash: AVCaptureDevice.FlashMode) {
@@ -530,6 +554,8 @@ final class CameraModel: NSObject, ObservableObject {
     /// verrait le point rouge d'une vidéo que personne n'écrit.
     private func endRecordingWithoutOutput() {
         isSwitchingCameraDuringRecording = false
+        isSwitchingCamera = false
+        switchCover = nil
         isRecordingVideo = false
         recordingTimer?.invalidate()
         recordingTimer = nil
@@ -555,6 +581,7 @@ final class CameraModel: NSObject, ObservableObject {
     func stop() {
         if isRecordingVideo { stopRecording() }
         liveFeed.flush()
+        switchCover = nil
         stopWatchingSubjectArea()
         sessionQueue.setRunning(false, session)
     }
@@ -575,6 +602,7 @@ final class CameraModel: NSObject, ObservableObject {
             // La bascule se fait sur la file de la session : le segment suivant
             // ne s'ouvre qu'une fois le nouvel objectif EN PLACE (#9464).
             guard let position = pendingSwitchPosition else {
+                endSwitch()
                 resumeRecordingAfterSwitch()
                 return
             }
