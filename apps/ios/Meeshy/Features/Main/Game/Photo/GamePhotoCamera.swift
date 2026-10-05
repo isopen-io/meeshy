@@ -37,9 +37,16 @@ final class GamePhotoCamera: NSObject, GamePhotoCameraProviding {
     nonisolated deinit {}
 
     nonisolated(unsafe) let session = AVCaptureSession()
+    /// Le traitement UNIQUE de toute prise photo de l'app (#8695) : redressée, bornée, améliorée.
+    nonisolated let photoProcessor: any PhotoCaptureProcessorProviding
     private let output = AVCapturePhotoOutput()
     private var configured = false
     private var pending: CheckedContinuation<UIImage?, Never>?
+
+    init(photoProcessor: any PhotoCaptureProcessorProviding = PhotoCaptureProcessor.shared) {
+        self.photoProcessor = photoProcessor
+        super.init()
+    }
 
     func start() async -> CameraFailure? {
         guard await MediaPermissionCoordinator.ensureCamera(announcesRefusal: false) else {
@@ -100,7 +107,9 @@ final class GamePhotoCamera: NSObject, GamePhotoCameraProviding {
 
 extension GamePhotoCamera: AVCapturePhotoCaptureDelegate {
     nonisolated func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
-        let data = error == nil ? photo.fileDataRepresentation() : nil
+        let original = error == nil ? photo.fileDataRepresentation() : nil
+        // Une prise photo ne sort jamais non traitée : le même processeur que le viseur de l'app.
+        let data = original.map { photoProcessor.process(encoded: $0, settings: .capture)?.data ?? $0 }
         Task { @MainActor in self.finish(with: data) }
     }
 }

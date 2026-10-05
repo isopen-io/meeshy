@@ -67,7 +67,8 @@ final class ComposerCaptureSessionTests: XCTestCase {
 
     func test_laBarreEtLAperçu_sontMontesParLesVuesPartagees() {
         XCTAssertEqual(sitesAppelant("ComposerSceneCameraBar("), ["ComposerCaptureViews.swift"])
-        XCTAssertEqual(sitesAppelant("CameraPreviewLayer(session:"), ["ComposerCaptureViews.swift"])
+        // + la caméra avant du moment photo du jeu (#9382), qui n'est pas un viseur du composer.
+        XCTAssertEqual(Set(sitesAppelant("CameraPreviewLayer(session:")), ["ComposerCaptureViews.swift", "GamePhotoFlowView.swift"])
     }
 
     func test_lesDeuxMontages_serventLaMemeMachine() throws {
