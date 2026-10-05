@@ -281,10 +281,14 @@ async function attempt(params: {
   // (témoin 4.5, point 11).
   await deps.queryClient.cancelQueries({ queryKey: messagesQueryKey(conversationId) });
   /* `upsertThreadMessage` (#6972, étape 1) — le SITE UNIQUE qui porte
-     « remplace par id OU clientMessageId, sinon append » (`api/messages.ts`).
+     « FUSIONNE par id OU clientMessageId, sinon append » (`api/messages.ts`).
      C'était `upsertConfirmed`, ici, jumelle de celle de `applyMessageNew`
      (`api/realtime-apply.ts`) que leurs doc-comments déclaraient déjà être
-     « la MÊME règle » (D-11/D-28) — sans l'être tout à fait. */
+     « la MÊME règle » (D-11/D-28) — sans l'être tout à fait.
+     Elle REMPLAÇAIT jusqu'à #9262 : `confirmed` ne porte ni `recipientCount`
+     ni traductions, et ses compteurs retombent à 0 — ce chemin-ci est celui
+     qui faisait redescendre la coche de ✓✓ à ✓ quand l'accusé arrivait après
+     un `read-status:updated`. La loi de fusion est chez elle, pas ici. */
   upsertThreadMessage(deps.queryClient, conversationId, confirmed);
   /* L'ACCUSÉ PASSE PAR LA GARDE D'ORDRE (#7547) : s'il revient après une
      réponse plus récente, il ne ramène pas mon ancien message dans la ligne.

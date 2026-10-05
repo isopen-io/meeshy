@@ -211,9 +211,12 @@ export function applyMessageNew(
   const cid = raw.clientMessageId;
 
   /* `upsertThreadMessage` (#6972, étape 1) — le SITE UNIQUE qui porte la loi
-     « remplace par id OU clientMessageId, sinon append » (`api/messages.ts`) :
+     « FUSIONNE par id OU clientMessageId, sinon append » (`api/messages.ts`) :
      elle était écrite ICI et dans `upsertConfirmed` (`send/perform-send.ts`),
-     deux copies que leurs doc-comments déclaraient déjà identiques. */
+     deux copies que leurs doc-comments déclaraient déjà identiques. Elle
+     remplaçait jusqu'à #9262 ; `rawMessageFromSocket` sert un message
+     serveur COMPLET, donc ce chemin-ci ne perdait rien — c'est l'autre
+     appelant qui régressait. */
   upsertThreadMessage(queryClient, raw.conversationId, message);
   /* Une requête du fil EN VOL écraserait cette pose par sa réponse, partie
      avant le message (#9291) : elle est relancée. */
