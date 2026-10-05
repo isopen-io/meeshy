@@ -187,6 +187,37 @@ nonisolated enum ComposerToolFocus {
         }
     }
 
+    /// **Écrire une légende ou un corps de post retire les contrôleurs du bas**
+    /// (#6131, loi #6132 : « si le clavier s'affiche, on a pas besoin d'avoir
+    /// d'autre contrôleur en bas »).
+    ///
+    /// Le rail des portes, ses pastilles réparties sur la hauteur, chevauchait
+    /// le socle et passait sous le clavier. La question de l'issue — se
+    /// resserrer ou s'effacer — est tranchée pour l'effacement : écrire n'est
+    /// pas poser un objet, et un rail resserré resterait un contrôleur que le
+    /// geste en cours ne peut pas utiliser. Ce qui QUALIFIE ou TERMINE
+    /// l'écriture reste — le volet de la légende (c'est le champ), la barre
+    /// haute (la sortie), la trace du son (en tête, loin du clavier).
+    ///
+    /// Sans écriture, la réponse est exactement celle de l'outil : tout ce qui
+    /// s'est effacé pendant la frappe revient à la sortie du geste.
+    static func isShown(_ chrome: Chrome, toolIsOpen: Bool, writesText: Bool) -> Bool {
+        guard writesText else { return isShown(chrome, toolIsOpen: toolIsOpen) }
+        switch chrome {
+        case .sceneDoors, .trailingRail, .socle:
+            return false
+        case .topBar, .soundTrace, .description, .toolControls:
+            return isShown(chrome, toolIsOpen: toolIsOpen)
+        }
+    }
+
+    /// **Les étages du bas de la scène** — références, jetons d'objet, rangée
+    /// basse, options d'outil — cèdent tous au clavier pendant l'écriture
+    /// (#6132) : ils sont couverts, hors de portée du pouce, ou sans rapport.
+    static func lowerFloorsAreShown(writesText: Bool) -> Bool {
+        !writesText
+    }
+
     /// Le fondu de la bascule — coupé sous Reduce Motion, où le chrome
     /// s'échange sans mouvement.
     static func transition(reduceMotion: Bool) -> Animation? {
