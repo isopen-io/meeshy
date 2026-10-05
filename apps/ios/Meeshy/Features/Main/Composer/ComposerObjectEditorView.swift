@@ -119,7 +119,11 @@ struct ComposerObjectEditorView: View {
     /// place : l'outil reste sélectionné, donc rouvrir ramène celui qu'on
     /// réglait. Le rendre optionnel aurait cassé l'invariant de #4936 pour
     /// exprimer un état que ce booléen dit sans y toucher.
-    @State private var optionsAreCollapsed = false
+    @State private var panel = ComposerObjectEditorPanelState.open
+    /// Lu partout, ÉCRIT nulle part : le panneau change par la règle —
+    /// `panelState(explicitlyCollapsed:)` pour un geste de l'auteur,
+    /// `panelState(keyboardRises:…)` pour le clavier (#6156).
+    private var optionsAreCollapsed: Bool { panel.optionsAreCollapsed }
     /// Ce que le clavier vient d'annoncer — lu par l'exclusion de #6156.
     @State private var keyboardTransition: KeyboardTransition?
 
@@ -195,7 +199,7 @@ struct ComposerObjectEditorView: View {
         }
         // **Le clavier du canvas et le panneau s'excluent** (#6156).
         .excludingOptionsWhileTyping(keyboardTransition: $keyboardTransition,
-                                     optionsAreCollapsed: $optionsAreCollapsed,
+                                     panel: $panel,
                                      section: selectedTool)
         // **Les options s'ANCRENT au bas, elles ne suivent pas la pile** (#5083,
         // directive porteur 2026-09-04 : « dans la page plein écran d'ajout de
@@ -504,7 +508,7 @@ struct ComposerObjectEditorView: View {
                         }
                         selectedTool = entree
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.9)) {
-                            optionsAreCollapsed = range
+                            panel = ComposerObjectEditorRail.panelState(explicitlyCollapsed: range)
                         }
                     } label: {
                         Image(systemName: ComposerObjectEditorRail.symbolName(entree))
@@ -618,7 +622,7 @@ struct ComposerObjectEditorView: View {
     private func yieldScreenToScene() {
         yieldKeyboard()
         withAnimation(.spring(response: 0.3, dampingFraction: 0.9)) {
-            optionsAreCollapsed = true
+            panel = ComposerObjectEditorRail.panelState(explicitlyCollapsed: true)
         }
         HapticFeedback.light()
     }

@@ -74,7 +74,7 @@ final class ComposerRailPlateauOrderTests: XCTestCase {
         // `iPad.dc.html`, retour porteur 2026-09-28) — une seule règle, lue
         // de `isRoomy`.
         // Le rail droit CÈDE à un outil ouvert (#8652), par la règle.
-        XCTAssertTrue(libre.contains("HStack(alignment:isRoomy?.center:.bottom,spacing:0){floatingRailSpacer(minLength:0)ifComposerToolFocus.isShown(.trailingRail,toolIsOpen:toolIsOpen){ComposerTrailingRail("),
+        XCTAssertTrue(libre.contains("HStack(alignment:isRoomy?.center:.bottom,spacing:0){floatingRailSpacer(minLength:0)ifComposerToolFocus.isShown(.trailingRail,toolIsOpen:toolIsOpen,writesText:writesText){ComposerTrailingRail("),
                       "Rail gauche, ressort, rail droit — dans cet ordre, au bas sur téléphone, centrés sur grand écran.")
         XCTAssertTrue(code.contains("freeZone"))
     }
