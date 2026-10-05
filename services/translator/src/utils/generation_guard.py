@@ -41,7 +41,7 @@ def trailing_loop_period(
     return None
 
 
-def _without_trailing(ids: Sequence[int], pad_id: int | None) -> list[int]:
+def strip_padding(ids: Sequence[int], pad_id: int | None) -> list[int]:
     kept = list(ids)
     while pad_id is not None and kept and kept[-1] == pad_id:
         kept.pop()
@@ -49,7 +49,7 @@ def _without_trailing(ids: Sequence[int], pad_id: int | None) -> list[int]:
 
 
 def collapse_trailing_loop(ids: Sequence[int], pad_id: int | None = None) -> list[int]:
-    kept = _without_trailing(ids, pad_id)
+    kept = strip_padding(ids, pad_id)
     period = trailing_loop_period(kept)
     if period is None:
         return kept
@@ -75,6 +75,19 @@ class GenerationOutcome:
     @property
     def hit_budget(self) -> bool:
         return self.generated_tokens >= self.budget
+
+
+def settle_generation(
+    row: Sequence[int], budget: int, pad_id: int | None = None
+) -> tuple[list[int], GenerationOutcome]:
+    generated = strip_padding(row, pad_id)
+    kept = collapse_trailing_loop(generated)
+    outcome = GenerationOutcome(
+        generated_tokens=max(0, len(generated) - 1),
+        budget=budget,
+        looped=len(kept) < len(generated),
+    )
+    return kept, outcome
 
 
 def greedy_generation_kwargs(source_tokens: int, ceiling: int = GENERATION_CEILING) -> dict[str, Any]:
