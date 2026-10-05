@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
+import { suspendForGameCatalog } from '@/lib/i18n-game-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { useQuery } from '@tanstack/react-query';
 
 import { Glyph, GlyphSvg } from '@/components/glyph';
@@ -618,6 +620,7 @@ export function ProgressionBody({
 }
 
 export default function ProgressionScreen() {
+  suspendForGameCatalog(currentInterfaceLanguage());
   const online = useOnline();
 
   /**

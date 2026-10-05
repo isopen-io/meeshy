@@ -1,5 +1,7 @@
 import { ONBOARDING_STEPS } from '@meeshy/shared/utils/game/guide';
 
+import { suspendForGameCatalog } from '@/lib/i18n-game-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { Glyph } from '@/components/glyph';
 import { GameBird } from '@/components/game';
 import { GlassBack } from '@/components/glass-surface';
@@ -100,6 +102,7 @@ export function RulesBody() {
 }
 
 export default function ProgressionRulesScreen() {
+  suspendForGameCatalog(currentInterfaceLanguage());
   return (
     <div className="flex h-dvh flex-col overflow-hidden pt-safe">
       <header className="glass z-10 shrink-0">

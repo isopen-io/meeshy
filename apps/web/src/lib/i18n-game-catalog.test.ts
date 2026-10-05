@@ -156,3 +156,26 @@ describe('translateGame', () => {
     expect(translateGame('en', 'game.level.to_next', { points: '12 points', level: '5' })).toBe('12 points more before level 5');
   });
 });
+
+describe('suspendForGameCatalog', () => {
+  test('un catalogue chargé : rien ne se jette', async () => {
+    const { suspendForGameCatalog } = await import('./i18n-game-catalog');
+    await loadGameCatalog('fr');
+    expect(() => suspendForGameCatalog('fr')).not.toThrow();
+  });
+
+  test('un catalogue pas encore chargé : la promesse en cours est jetée, que Suspense rattrape', async () => {
+    /* Une COPIE du module, aux caches vides : l'identité de la requête diffère. */
+    const specifier = './i18n-game-catalog?fresh=suspense';
+    const fresh = (await import(specifier)) as typeof import('./i18n-game-catalog');
+    let thrown: unknown;
+    try {
+      fresh.suspendForGameCatalog('de');
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown).toBeInstanceOf(Promise);
+    await thrown;
+    expect(() => fresh.suspendForGameCatalog('de')).not.toThrow();
+  });
+});

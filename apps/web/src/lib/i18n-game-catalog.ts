@@ -75,6 +75,19 @@ export function loadGameCatalog(language: InterfaceLanguage): Promise<GameCatalo
   return request;
 }
 
+/**
+ * LECTURE EN MODE SUSPENSE — jette la promesse en cours si le catalogue de la
+ * langue n'est pas encore chargé ; la limite Suspense la plus proche la
+ * rattrape et réessaie. Pour les écrans du jeu (`routes/progression*.tsx`) : la
+ * route charge le catalogue AVANT de rendre, mais un changement de langue
+ * pendant que l'écran est ouvert (`interface-language.ts` ne charge que le
+ * catalogue d'interface) rendrait sinon une langue sans texte.
+ */
+export function suspendForGameCatalog(language: InterfaceLanguage): void {
+  if (loaded.has(language)) return;
+  throw loadGameCatalog(language);
+}
+
 const PLACEHOLDER = /\{(\w+)\}/g;
 
 const catalogOf = (language: InterfaceLanguage): GameCatalog => {

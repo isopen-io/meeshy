@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 
+import { suspendForGameCatalog } from '@/lib/i18n-game-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { Glyph } from '@/components/glyph';
 import { GameBird } from '@/components/game';
 import { GamePhotoFlow } from '@/components/game-photo-flow';
@@ -208,6 +210,7 @@ export function CarnetBody({ env }: { readonly env: PhotoEnv }) {
 }
 
 export default function ProgressionCarnetScreen() {
+  suspendForGameCatalog(currentInterfaceLanguage());
   return (
     <div className="flex h-dvh flex-col overflow-hidden pt-safe">
       <header className="glass z-10 shrink-0">
