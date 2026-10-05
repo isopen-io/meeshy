@@ -38,10 +38,13 @@ async function bench(initial: EngagementWithGame | undefined, notebookEntries: r
   const env = { notebook: { list: async () => notebookEntries as NotebookEntry[] } } as unknown as PhotoEnv;
   let current: PhotoMoments | null = null;
   let setView: (next: EngagementWithGame | undefined) => void = () => undefined;
+  let setSettled: (next: boolean) => void = () => undefined;
   function Probe() {
     const [shown, set] = useState<EngagementWithGame | undefined>(initial);
+    const [settled, mark] = useState(true);
     setView = set;
-    current = usePhotoMoments({ view: shown, env: () => env });
+    setSettled = mark;
+    current = usePhotoMoments({ view: shown, env: () => env, settled });
     return null;
   }
   await mount(<Probe />);
@@ -52,6 +55,20 @@ async function bench(initial: EngagementWithGame | undefined, notebookEntries: r
     },
     show: async (next: EngagementWithGame | undefined) => {
       await act(async () => setView(next));
+      await settle();
+    },
+    pending: async (next: EngagementWithGame) => {
+      await act(async () => {
+        setSettled(false);
+        setView(next);
+      });
+      await settle();
+    },
+    confirm: async (next?: EngagementWithGame) => {
+      await act(async () => {
+        if (next !== undefined) setView(next);
+        setSettled(true);
+      });
       await settle();
     },
   };
@@ -78,6 +95,22 @@ describe('une célébration pendant que l’écran est ouvert', () => {
     const b = await bench(view({ streak: 6 }));
     await b.show(view({ streak: 7 }));
     expect(ids(b.photo().offers)).toEqual(['flame:7']);
+  });
+
+  test('un geste encore en vol ne propose rien ; confirmé, il propose', async () => {
+    const b = await bench(view({ streak: 6 }));
+    await b.pending(view({ streak: 7 }));
+    expect(b.photo().offers).toEqual([]);
+    await b.confirm();
+    expect(ids(b.photo().offers)).toEqual(['flame:7']);
+  });
+
+  test('un geste refusé et restauré ne propose rien', async () => {
+    const before = view({ streak: 6 });
+    const b = await bench(before);
+    await b.pending(view({ streak: 7 }));
+    await b.confirm(before);
+    expect(b.photo().offers).toEqual([]);
   });
 
   test('la dixième Meesh', async () => {

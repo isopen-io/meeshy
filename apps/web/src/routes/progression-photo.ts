@@ -17,6 +17,9 @@ import { photoMomentsOfTransition, type PhotoMoment } from '@/lib/game-photo/mom
  *    d'après un « plus tard ») — le carnet n'est lu qu'à ce moment-là, donc
  *    l'écran ne paie l'ouverture d'IndexedDB que quand une proposition naît.
  *
+ * Et jamais pendant qu'un geste est EN VOL (`settled` faux) : la lecture
+ * montrée est l'optimiste, un geste refusé ne se photographie pas.
+ *
  * `start` ouvre le déroulé pour un moment donné — une proposition, la photo de
  * départ (fin de l'intégration), ou le moment qu'une carte du guide vient de
  * dire. L'environnement est résolu à l'usage (`env`) : l'écran passe celui de
@@ -36,8 +39,10 @@ export type PhotoMoments = {
 export function usePhotoMoments(params: {
   readonly view: EngagementWithGame | undefined;
   readonly env?: () => PhotoEnv;
+  readonly settled?: boolean;
 }): PhotoMoments {
   const { view } = params;
+  const settled = params.settled ?? true;
   const resolveEnv = params.env ?? appPhotoEnv;
   const [offers, setOffers] = useState<readonly PhotoMoment[]>([]);
   const [active, setActive] = useState<PhotoMoment | null>(null);
@@ -45,7 +50,7 @@ export function usePhotoMoments(params: {
   const proposed = useRef(new Set<string>());
 
   useEffect(() => {
-    if (view?.game === undefined) return;
+    if (view?.game === undefined || !settled) return;
     const before = previous.current;
     previous.current = view;
     if (before === null) return;
@@ -59,7 +64,7 @@ export function usePhotoMoments(params: {
         const fresh = moments.filter((moment) => !known.has(moment.id));
         if (fresh.length > 0) setOffers((current) => [...current, ...fresh]);
       });
-  }, [view, resolveEnv]);
+  }, [view, resolveEnv, settled]);
 
   const start = useCallback((moment: PhotoMoment) => {
     setOffers((current) => current.filter((offer) => offer.id !== moment.id));

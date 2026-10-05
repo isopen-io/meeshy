@@ -12,7 +12,7 @@ import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import { pathOf, routedTransport } from '@/test-support/routed-transport';
 
-import { useGameActions, type GameActions } from './progression-game-actions';
+import { GAME_MUTATION_KEY, useGameActions, type GameActions } from './progression-game-actions';
 
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
 const { mount, unmountAll } = createActMounter();
@@ -76,6 +76,32 @@ const gameOf = (v: EngagementWithGame) => {
   if (v.game === undefined) throw new Error('bloc game attendu');
   return v.game;
 };
+
+describe('les gestes en vol', () => {
+  test('un geste en vol se compte parmi les gestes du jeu (le guide et les photos l’attendent)', async () => {
+    const hold = new Promise<ApiResult<unknown>>(() => undefined);
+    const { actions, client } = await bench(seed(), () => undefined, hold);
+    await act(async () => actions().buyFreeze());
+    await settle();
+    expect(client.isMutating({ mutationKey: GAME_MUTATION_KEY })).toBe(1);
+  });
+
+  test('sans crypto.randomUUID (ancienne WebView Android), le geste part avec un identifiant d’idempotence', async () => {
+    const original = globalThis.crypto;
+    const getRandomValues = original.getRandomValues.bind(original);
+    Object.defineProperty(globalThis, 'crypto', { configurable: true, value: { getRandomValues } });
+    try {
+      const { actions, calls } = await bench(seed(), () => ok({ status: 'bought', freezes: 1, balance: 0 }));
+      await act(async () => actions().buyFreeze());
+      await settle();
+      const ids = calls().map((c) => (c.body as { requestId?: string }).requestId ?? '');
+      expect(ids).toHaveLength(1);
+      expect(ids[0]?.length ?? 0).toBeGreaterThanOrEqual(8);
+    } finally {
+      Object.defineProperty(globalThis, 'crypto', { configurable: true, value: original });
+    }
+  });
+});
 
 describe('la frappe', () => {
   test('POST sur la frappe, avec UN requestId ; le niveau redescend sans attendre', async () => {

@@ -1,4 +1,5 @@
 import { useCallback } from 'react';
+import { useIsMutating } from '@tanstack/react-query';
 
 import { GameGuideCard } from '@/components/game-guide-card';
 import { GamePhotoFlow } from '@/components/game-photo-flow';
@@ -11,6 +12,7 @@ import { appPhotoEnv } from '@/lib/game-photo/app-env';
 import type { PhotoEnv } from '@/lib/game-photo/env';
 import { photoMomentFromCard, startMoment, type PhotoMoment } from '@/lib/game-photo/moments';
 import { useGameGuide } from '@/routes/progression-guide';
+import { GAME_MUTATION_KEY } from '@/routes/progression-game-actions';
 import { usePhotoMoments } from '@/routes/progression-photo';
 import { href, navigate } from '@/routes/route-table';
 
@@ -52,8 +54,9 @@ export function GameLead({
   readonly navigateTo?: (to: 'list' | 'progressionBadges') => void;
   readonly scrollTo?: (id: string) => void;
 }) {
-  const guide = useGameGuide({ view, ...(transport === undefined ? {} : { transport }) });
-  const photo = usePhotoMoments({ view, env });
+  const settled = useIsMutating({ mutationKey: GAME_MUTATION_KEY }) === 0;
+  const guide = useGameGuide({ view, settled, ...(transport === undefined ? {} : { transport }) });
+  const photo = usePhotoMoments({ view, env, settled });
   const game = view.game;
 
   const cardMoment = useCallback(

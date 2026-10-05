@@ -11,12 +11,14 @@ import {
 } from '@meeshy/shared/utils/game/guide';
 
 import { httpTransport } from '@/lib/api/client';
+import { newClientMessageId } from '@/lib/api/client-message-id';
 import { ENGAGEMENT_PROGRESS_QUERY_KEY, type EngagementWithGame } from '@/lib/api/engagement';
 import { markGuideSeen } from '@/lib/api/game';
 import type { HttpTransport } from '@/lib/api/http';
 import { cardOfMoment, cardOfStep, type GuideCard } from '@/lib/game-guide/card';
 import { standingGuideEvents, transitionGuideEvents } from '@/lib/game-guide/events';
 import { safeLocalStorage, type SafeStorage } from '@/lib/storage';
+import { localDayOf } from '@/lib/view/engagement-pill';
 
 /**
  * LE GUIDE D'UNE OUVERTURE D'ÉCRAN (#9379) — quelle carte Mee et Meo montrent,
@@ -38,7 +40,14 @@ import { safeLocalStorage, type SafeStorage } from '@/lib/storage';
  *
  * Le dernier passage (jour, dans le fuseau du joueur) se garde en local, avec
  * un `try/catch` partout : il ne sert qu'à dire « content de te revoir » après
- * sept jours, jamais à quoi que ce soit d'autre.
+ * sept jours, jamais à quoi que ce soit d'autre. Le jour est celui de
+ * l'APPAREIL : la première lecture peut venir du cache (cache-first), et son
+ * `dayKey` est alors celui de la dernière visite — le compter ferait taire le
+ * retour, puis le dire à tort la fois suivante.
+ *
+ * `settled` est faux tant qu'un geste du jeu est EN VOL : la lecture montrée
+ * est alors l'optimiste, et une transition ne se célèbre qu'une fois le geste
+ * réglé — un geste refusé (restauré) ne laisse ni carte ni clé vue.
  */
 
 export type GameGuide = {
@@ -79,8 +88,13 @@ export function useGameGuide(params: {
   readonly view: EngagementWithGame | undefined;
   readonly transport?: HttpTransport;
   readonly storage?: SafeStorage;
+  readonly settled?: boolean;
+  /** Le jour civil de l'appareil (`AAAA-MM-JJ`) ; injectable pour les témoins. */
+  readonly today?: () => string;
 }): GameGuide {
   const { view } = params;
+  const settled = params.settled ?? true;
+  const today = useRef(params.today ?? (() => localDayOf(Date.now())));
   const transport = params.transport ?? httpTransport;
   const client = useQueryClient();
   const storage = useRef(params.storage ?? safeLocalStorage());
@@ -98,21 +112,21 @@ export function useGameGuide(params: {
           ? current
           : { ...current, game: { ...current.game, guideSeen: [...new Set([...current.game.guideSeen, ...keys])] } },
       );
-      void markGuideSeen(transport, crypto.randomUUID(), keys).catch(() => undefined);
+      void markGuideSeen(transport, newClientMessageId(), keys).catch(() => undefined);
     },
     [client, transport],
   );
 
   useEffect(() => {
     const game = view?.game;
-    if (view === undefined || game === undefined) return;
+    if (view === undefined || game === undefined || !settled) return;
     for (const key of game.guideSeen) seen.current.add(key);
     const before = previous.current;
     previous.current = view;
 
     if (!opened.current) {
       opened.current = true;
-      const day = game.missions.dayKey;
+      const day = today.current();
       const last = lastVisit(storage.current);
       rememberVisit(storage.current, day);
       setCard(openingCard(game, seen.current, last === null ? null : dayDiff(last, day)));
@@ -124,7 +138,7 @@ export function useGameGuide(params: {
     const moment = chooseGuideMoment(events, seen.current);
     if (moment === null) return;
     setCard((current) => (current?.step !== undefined ? current : cardOfMoment(moment)));
-  }, [view]);
+  }, [view, settled]);
 
   useEffect(() => {
     if (card === null || seen.current.has(card.key)) return;
