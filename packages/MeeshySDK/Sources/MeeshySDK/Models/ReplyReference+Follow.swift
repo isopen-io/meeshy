@@ -31,7 +31,8 @@ public extension ReplyReference {
             previewText: "",
             isMe: isMe,
             authorColor: authorColor,
-            authorAvatarUrl: authorAvatarUrl
+            authorAvatarUrl: authorAvatarUrl,
+            authorUserId: authorUserId
         )
         sealed.quotedMessageDeletedAt = date
         sealed.quotedExpiresAt = expired ? date : quotedExpiresAt.flatMap { $0 <= date ? $0 : nil }
@@ -65,7 +66,8 @@ public extension ReplyReference {
                 durationMs: attachmentDurationMs, fileSize: attachmentFileSize,
                 pageCount: attachmentPageCount, mimeType: attachmentMimeType
             ),
-            storyUnavailable: storyUnavailable
+            storyUnavailable: storyUnavailable,
+            authorUserId: authorUserId
         )
         copy.quotedMessageDeletedAt = quotedMessageDeletedAt
         copy.quotedExpiresAt = quotedExpiresAt

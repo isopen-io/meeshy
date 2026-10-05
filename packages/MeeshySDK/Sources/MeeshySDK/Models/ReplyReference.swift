@@ -16,8 +16,11 @@ import Foundation
 /// peut plus être oublié par un hôte.
 public struct ReplyReference: Codable, Equatable, Sendable {
     public let messageId: String
-    public let authorName: String
-    public let authorColor: String
+    /// Nom, couleur et portrait de l'auteur cité : GRAVÉS, et repeints par la
+    /// seule loi `UserUpdatedEvent.repainted(_:)` quand `authorUserId` désigne
+    /// le pair renommé (#9371).
+    public internal(set) var authorName: String
+    public internal(set) var authorColor: String
     /// Avatar de l'auteur cite, GRAVE dans la citation — jamais re-resolu au
     /// rendu.
     ///
@@ -38,7 +41,7 @@ public struct ReplyReference: Codable, Equatable, Sendable {
     /// presents a tous les sites de construction, donc l'avatar se dessine
     /// quand meme en initiales colorees. La porte vers le profil ne depend
     /// jamais de la presence d'une photo.
-    public let authorAvatarUrl: String?
+    public internal(set) var authorAvatarUrl: String?
     public let previewText: String
     public let isMe: Bool
     public let attachmentType: String?
@@ -132,6 +135,15 @@ public struct ReplyReference: Codable, Equatable, Sendable {
     /// Auteur de la story ou de l'humeur citée — la clé de `StoryReplyAdmission`
     /// (#7883). `nil` sur toute citation de message et sur les blobs anciens.
     public var storyAuthorId: String?
+    /// L'identifiant d'UTILISATEUR de l'auteur cité (#9371), gravé à la
+    /// RÉCEPTION depuis `replyTo.sender` — jamais `replyTo.senderId`, qui est
+    /// l'appartenance à la conversation. C'est la SEULE clé par laquelle
+    /// `user:updated` apparie une citation : sans lui, la citation garde le
+    /// nom gravé (apparier sur le nom repeindrait un homonyme).
+    ///
+    /// **Optionnel, et il doit le rester** : un blob `replyToJson` gravé avant
+    /// ce champ se relit sans lui. Même discipline que `authorAvatarUrl`.
+    public var authorUserId: String?
     /// La story citée a DISPARU sans laisser d'instantané (#7895) : la
     /// passerelle n'a servi que `storyReplyToId`, sans `postReplyTo` — le
     /// message n'en gravait pas et le post n'existe plus. Posé par un seul
@@ -225,7 +237,7 @@ public struct ReplyReference: Codable, Equatable, Sendable {
 
     public init(messageId: String = "", authorName: String, previewText: String, isMe: Bool = false, authorColor: String? = nil, authorAvatarUrl: String? = nil, attachmentType: String? = nil, attachmentId: String? = nil, attachmentThumbnailUrl: String? = nil, attachmentFileUrl: String? = nil, attachmentIsProtected: Bool? = nil, isStoryReply: Bool = false,
                 storyPublishedAt: Date? = nil, storyReactionCount: Int? = nil, storyCommentCount: Int? = nil, storyShareCount: Int? = nil, storyThumbnailUrl: String? = nil, moodEmoji: String? = nil, storyAuthorId: String? = nil,
-                attachmentFacts: QuotedAttachmentFacts? = nil, storyUnavailable: Bool? = nil) {
+                attachmentFacts: QuotedAttachmentFacts? = nil, storyUnavailable: Bool? = nil, authorUserId: String? = nil) {
         self.messageId = messageId
         self.authorName = authorName
         self.previewText = previewText
@@ -253,6 +265,7 @@ public struct ReplyReference: Codable, Equatable, Sendable {
         self.moodEmoji = moodEmoji
         self.storyAuthorId = storyAuthorId
         self.storyUnavailable = storyUnavailable
+        self.authorUserId = authorUserId
     }
 }
 
@@ -353,11 +366,16 @@ public struct ForwardReference: Codable, Sendable {
     /// `MeeshyConversation.ConversationType`. Optionnel : les caches GRDB
     /// antérieurs au champ décodent en `nil` sans migration.
     public let conversationType: String?
+    /// L'identifiant d'UTILISATEUR de l'expéditeur d'origine (#9371), gravé à
+    /// la réception depuis `forwardedFrom.sender` : la clé par laquelle
+    /// `user:updated` repeint la référence. Optionnel : un blob gravé avant
+    /// lui se relit sans lui, et la référence garde alors le nom gravé.
+    public let senderUserId: String?
 
     public init(originalMessageId: String = "", senderName: String, senderAvatar: String? = nil,
                 previewText: String, conversationId: String? = nil, conversationName: String? = nil,
                 attachmentType: String? = nil, attachmentThumbnailUrl: String? = nil,
-                conversationType: String? = nil) {
+                conversationType: String? = nil, senderUserId: String? = nil) {
         self.originalMessageId = originalMessageId
         self.senderName = senderName
         self.senderAvatar = senderAvatar
@@ -367,5 +385,6 @@ public struct ForwardReference: Codable, Sendable {
         self.attachmentType = attachmentType
         self.attachmentThumbnailUrl = attachmentThumbnailUrl
         self.conversationType = conversationType
+        self.senderUserId = senderUserId
     }
 }

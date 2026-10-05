@@ -202,7 +202,9 @@ public extension APIMessageReplyTo {
             // Retenue par l'init dès que la citation est déclarée protégée.
             attachmentFileUrl: representative?.fileUrl,
             attachmentIsProtected: isProtected ? true : representative?.declaredProtection,
-            attachmentFacts: representative.map { ReplyReference.QuotedAttachmentFacts($0) }
+            attachmentFacts: representative.map { ReplyReference.QuotedAttachmentFacts($0) },
+            // #9371 — la PERSONNE citée, pour que `user:updated` la repeigne.
+            authorUserId: sender?.resolvedUserId
         )
         // #8320 — la zone lecture : l'échéance d'un éphémère, et les pistes
         // traduites d'un audio cité pour élire hors fenêtre la piste du
