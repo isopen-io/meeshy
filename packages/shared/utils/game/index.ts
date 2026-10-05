@@ -18,3 +18,5 @@ export * from './trophies.js';
 export * from './atlas.js';
 export * from './prestige.js';
 export * from './rarity.js';
+export * from './guide-v2.js';
+export * from './photo-moments.js';
