@@ -53,9 +53,78 @@ final class CallVideoEffectsPerformanceTests: XCTestCase {
             return (CACurrentMediaTime() - start) * 1000
         }.dropFirst(10).sorted()
         let p95 = durations[Int(Double(durations.count - 1) * 0.95)]
-        XCTContext.runActivity(named: "blur p95 = \(String(format: "%.2f", p95)) ms (simulateur, masque synthétique)") { _ in }
-        print("CallVideoEffectsPerformance blur p95 ms:", String(format: "%.2f", p95))
+        let report = "blur p95 = \(String(format: "%.2f", p95)) ms, dégradé = \(sut.isAutoDegraded) (simulateur, masque synthétique)"
+        XCTContext.runActivity(named: report) { _ in }
+        print("CallVideoEffectsPerformance", report)
+    }
+
+    // MARK: - Règle de dégradation, au temps simulé (#9454)
+
+    private func makeScriptedSUT(frameMs: Double, segmenter: CountingSegmenter) -> (VideoFilterPipeline, TestClock) {
+        let clock = TestClock()
+        let stopwatch = ScriptedStopwatch(frameMs: frameMs)
+        let sut = VideoFilterPipeline(
+            faceEffects: CallFaceEffectsRenderer(detector: SilentFaceDetector(), executor: InlineVisionExecutor()),
+            segmenter: segmenter,
+            segmentationExecutor: InlineVisionExecutor(),
+            clock: { clock.now },
+            stopwatch: { stopwatch.read() },
+            isPowerConstrained: { false }
+        )
+        sut.config = VideoFilterConfig.default.withBackgroundBlur(true)
+        return (sut, clock)
+    }
+
+    private func feed(_ sut: VideoFilterPipeline, clock: TestClock, frames: Int) {
+        let frame = CallSyntheticFrame.make(width: 64, height: 48)
+        (0..<frames).forEach { _ in
+            _ = sut.process(frame, averageBrightness: 120, rotation: 0)
+            clock.now += 1.0 / 30
+        }
+    }
+
+    func test_process_blurFramesUnderBudget_neverDegrade() {
+        let segmenter = CountingSegmenter(maskValue: 96)
+        let (sut, clock) = makeScriptedSUT(frameMs: CallVideoDegradation.restoreBudgetMs - 5, segmenter: segmenter)
+
+        feed(sut, clock: clock, frames: 120)
+
         XCTAssertFalse(sut.isAutoDegraded)
+        XCTAssertEqual(Set(segmenter.qualities), [.balanced], "sous le budget, le flou garde sa qualité d'origine")
+    }
+
+    func test_process_blurFramesAtTheBudget_neverDegrade() {
+        let segmenter = CountingSegmenter(maskValue: 96)
+        let (sut, clock) = makeScriptedSUT(frameMs: CallVideoDegradation.overBudgetMs, segmenter: segmenter)
+
+        feed(sut, clock: clock, frames: 120)
+
+        XCTAssertFalse(sut.isAutoDegraded, "le budget est un plafond inclus : seule une image AU-DELÀ compte")
+        XCTAssertEqual(Set(segmenter.qualities), [.balanced])
+    }
+
+    func test_process_blurFramesOverBudget_descendOneTierPerStreakBeforeStopping() {
+        let segmenter = CountingSegmenter(maskValue: 96)
+        let (sut, clock) = makeScriptedSUT(frameMs: CallVideoDegradation.overBudgetMs + 5, segmenter: segmenter)
+        let streak = CallVideoDegradation.overBudgetFrames
+
+        feed(sut, clock: clock, frames: streak)
+        XCTAssertFalse(sut.isAutoDegraded, "une série trop lente descend d'un palier, elle ne coupe pas le flou")
+        XCTAssertEqual(Set(segmenter.qualities), [.balanced])
+
+        let callsAtFast = segmenter.calls
+        feed(sut, clock: clock, frames: streak)
+        XCTAssertFalse(sut.isAutoDegraded)
+        XCTAssertEqual(Set(segmenter.qualities.dropFirst(callsAtFast)), [.fast], "deuxième palier : segmentation rapide")
+
+        feed(sut, clock: clock, frames: streak - 1)
+        XCTAssertFalse(sut.isAutoDegraded)
+        feed(sut, clock: clock, frames: 1)
+        XCTAssertTrue(sut.isAutoDegraded, "trois séries trop lentes épuisent l'échelle")
+
+        let callsWhenStopped = segmenter.calls
+        feed(sut, clock: clock, frames: streak)
+        XCTAssertEqual(segmenter.calls, callsWhenStopped, "au dernier palier, plus aucune segmentation")
     }
 
     func test_process_skinSmoothingWithFace_1280x720() {
@@ -76,6 +145,22 @@ final class CallVideoEffectsPerformanceTests: XCTestCase {
 
     func test_process_volcano_1280x720() {
         measureProcess(VideoFilterConfig.default.selectingFaceEffect(.volcano))
+    }
+}
+
+/// Chaque lecture avance d'une durée fixe : `process` lit le chronomètre au
+/// début et à la fin d'une image, qui dure donc exactement `frameMs`.
+final class ScriptedStopwatch: @unchecked Sendable {
+    private let step: CFTimeInterval
+    private var now: CFTimeInterval = 0
+
+    init(frameMs: Double) {
+        self.step = frameMs / 1000
+    }
+
+    func read() -> CFTimeInterval {
+        now += step
+        return now
     }
 }
 
