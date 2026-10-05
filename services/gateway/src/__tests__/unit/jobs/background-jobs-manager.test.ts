@@ -151,6 +151,52 @@ describe('BackgroundJobsManager', () => {
      * `startAll()`, et il tombe si quelqu'un le déplace dans une branche
      * jamais prise.
      */
+    /**
+     * #9474 — la purge est un travail d'ENTRETIEN best-effort, et son rappel
+     * est SYNCHRONE : un `throw` dedans n'a aucun `try/catch` englobant à
+     * invoquer, parce que la pile d'un rappel de `setInterval` part de la
+     * boucle d'événements et non de `startAll()`. Il devient une exception
+     * non interceptée, et termine le processus — toute la passerelle tombée
+     * pour une table de cache qui n'a pas pu se vider.
+     *
+     * Les deux voisins de cette méthode étaient déjà gardés (le balayage des
+     * sessions par un `.catch`, les six jobs à classe chez eux) ; celui-ci ne
+     * l'était pas. Les deux cas qui suivent sont calqués sur ceux que portait
+     * `claude/brave-archimedes-ce1g42`, dont c'était la seule part que `dev`
+     * n'avait pas reprise.
+     */
+    it('une levée de la purge GeoIP ne remonte pas — startAll() aboutit', () => {
+      jest.mocked(cleanGeoCache).mockImplementationOnce(() => {
+        throw new Error('geo purge boom');
+      });
+
+      expect(() => manager.startAll()).not.toThrow();
+      expect(manager.isJobsRunning()).toBe(true);
+      manager.stopAll();
+    });
+
+    it('le battement suivant a lieu APRÈS une levée — l’intervalle n’est pas perdu', () => {
+      jest.useFakeTimers();
+      try {
+        jest.mocked(cleanGeoCache).mockClear();
+        jest.mocked(cleanGeoCache).mockImplementationOnce(() => {
+          throw new Error('geo purge boom');
+        });
+
+        manager.startAll();
+        expect(cleanGeoCache).toHaveBeenCalledTimes(1);
+
+        jest.advanceTimersByTime(10 * 60 * 1000);
+
+        /* Le deuxième appel est la MESURE : un rappel qui lève sans garde
+           n'arrive jamais là — le processus serait déjà tombé. */
+        expect(cleanGeoCache).toHaveBeenCalledTimes(2);
+        manager.stopAll();
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
     it('startAll() purge le cache GeoIP tout de suite, sans attendre le premier intervalle', () => {
       /* Le compteur se remet à zéro ICI, pas dans un `beforeEach` : trois cas
          de ce bloc appellent déjà `startAll()`, donc une assertion sur le
