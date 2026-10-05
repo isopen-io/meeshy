@@ -57,6 +57,15 @@ describe('AchievementRarityService.recomputeRarity', () => {
     expect(db.achievementRarityStat.rows[0]).toMatchObject({ holders: 2, population: 1000 });
   });
 
+  it('un compte dont `deletedAt` est ABSENT (tous ceux d’avant la colonne) compte dans la population : `deletedAt: null` ne l’atteint pas sur MongoDB (leçon 318)', async () => {
+    const db = fakeGameDb();
+    for (let n = 1; n <= 1000; n += 1) db.user.rows.push({ id: uid(n), isActive: true });
+    hold(db, 'achievement.editor', Array.from({ length: 150 }, (_, i) => i + 1));
+
+    expect(await new AchievementRarityService(db.prisma).recomputeRarity()).toEqual({ population: 1000, keys: 1 });
+    expect(db.achievementRarityStat.rows[0]?.rarity).toBe('rare');
+  });
+
   it('est idempotent : rejouer ne duplique rien', async () => {
     const db = fakeGameDb();
     accounts(db, 1000);
@@ -112,6 +121,14 @@ describe('AchievementRarityService.recomputeMythic', () => {
 
     expect(chosen).toEqual([uid(2), uid(1)]);
     expect(db.gameProfile.rows.find((p) => p.userId === uid(9))?.mythicAt).toBeNull();
+  });
+
+  it('une Légende dont `deletedAt` est ABSENT reçoit son drapeau : l’absence ne vaut pas suppression', async () => {
+    const db = fakeGameDb();
+    db.user.rows.push({ id: uid(1), isActive: true });
+    glory(db, 1, 90_000);
+
+    expect(await new AchievementRarityService(db.prisma).recomputeMythic()).toEqual([uid(1)]);
   });
 
   it('aucune liste globale n’est écrite : seul le drapeau par compte l’est', async () => {

@@ -26,6 +26,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { AchievementRarity } from '@meeshy/shared/utils/game/glory';
 import { GLORY_RANKS } from '@meeshy/shared/utils/game/glory';
 import { measureRarity, mythicUserIds, rarityShareDisplayable } from '@meeshy/shared/utils/game/rarity';
+import { unsetOrNull } from '../../utils/prisma-unset';
 
 const PAGE = 500;
 
@@ -42,7 +43,7 @@ export class AchievementRarityService {
 
   /** Recalcule l'instantané de rareté de chaque succès. */
   async recomputeRarity(now: Date = new Date()): Promise<{ readonly population: number; readonly keys: number }> {
-    const population = await this.prisma.user.count({ where: { isActive: true, deletedAt: null } });
+    const population = await this.prisma.user.count({ where: { isActive: true, ...unsetOrNull('deletedAt') } });
     const all = await this.prisma.engagementMilestone.groupBy({ by: ['milestoneKey'], where: { milestoneType: 'achievement' }, _count: { _all: true } });
     const fromDeleted = await this.holdersAmongDeletedAccounts();
 
@@ -109,7 +110,7 @@ export class AchievementRarityService {
     const live = new Set(
       ids.length === 0
         ? []
-        : (await this.prisma.user.findMany({ where: { id: { in: ids }, isActive: true, deletedAt: null }, select: { id: true }, take: ids.length })).map((u) => u.id),
+        : (await this.prisma.user.findMany({ where: { id: { in: ids }, isActive: true, ...unsetOrNull('deletedAt') }, select: { id: true }, take: ids.length })).map((u) => u.id),
     );
     const chosen = mythicUserIds(sums.filter((row) => live.has(row.userId)).map((row) => ({ userId: row.userId, glory: row._sum.delta ?? 0 })));
 
