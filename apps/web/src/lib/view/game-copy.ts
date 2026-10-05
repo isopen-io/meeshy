@@ -25,6 +25,9 @@ const singulier = (count: number): boolean => REGLE_FR.select(count) === 'one';
 
 export const formatCount = (count: number): string => NOMBRE.format(count);
 
+/** Un pourcentage servi se borne ICI, à l'affichage : la frontière (`lib/api/game.ts`) ne refuse que la forme. */
+export const boundedPercent = (value: number): number => Math.min(100, Math.max(0, value));
+
 export const pointsLabel = (count: number): string =>
   singulier(count) ? `${formatCount(count)} point` : `${formatCount(count)} points`;
 

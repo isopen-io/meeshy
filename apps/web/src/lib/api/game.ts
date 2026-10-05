@@ -26,6 +26,11 @@ import type { ApiResult, HttpTransport } from './http';
  * bloc partiel est refusé ENTIER (`readGameBlock` → `null`), jamais lu à moitié
  * — l'écran retombe alors sur l'état actuel, comme devant un ancien serveur.
  *
+ * LA FORME EST STRICTE, LES BORNES SONT TOLÉRANTES : un serveur qui relèverait
+ * un plafond (le bonus de Flamme au-delà de 50 %, un sixième Prestige) ne doit
+ * pas faire retomber l'écran sur l'ancien en silence. Une borne se pose à
+ * l'AFFICHAGE (`boundedPercent`, `game-copy.ts`), jamais à la frontière.
+ *
  * Les chaînes OUVERTES (`templateKey`, `signal`) restent libres à dessein : un
  * gabarit ajouté au serveur avant la mise à jour du client ne casse rien. Les
  * clés FERMÉES (palier, rang, forme, trésor) sont vérifiées contre le catalogue
@@ -66,7 +71,7 @@ const isLevel = (value: unknown): boolean =>
     pointsToNext: (v) => isInt(v),
     progress: isFraction,
     record: (v) => isInt(v, 1, 100),
-    prestige: (v) => isInt(v, 0, 5),
+    prestige: (v) => isInt(v),
     canPrestige: isBool,
   });
 
@@ -146,7 +151,7 @@ const isFlame = (value: unknown): boolean =>
   shape(value, {
     days: (v) => isInt(v),
     form: orNull(isFlameForm),
-    bonusPercent: (v) => isInt(v, 0, 50),
+    bonusPercent: (v) => isInt(v),
     freezes: (v) => isInt(v),
     maxFreezes: (v) => isInt(v),
     freezePrice: (v) => isInt(v),

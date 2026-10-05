@@ -11,6 +11,7 @@ import {
   LEVEL_TIER_NAMES,
   RANK_NAMES,
   TREASURY_NAMES,
+  boundedPercent,
   divisionLabel,
   editionName,
   gameErrorMessage,
@@ -108,5 +109,16 @@ describe('les refus du serveur se disent', () => {
     expect(gameErrorMessage('FREEZE_AT_MAXIMUM')).toContain('gel');
     expect(gameErrorMessage('???')).toContain('réessaie');
     expect(gameErrorMessage(undefined)).toContain('réessaie');
+  });
+});
+
+describe('un pourcentage servi se borne à l’affichage', () => {
+  test('un bonus au-delà de l’ancien plafond (50) s’affiche tel quel', () => {
+    expect(boundedPercent(80)).toBe(80);
+  });
+
+  test('un pourcentage hors de 0 à 100 est ramené dans la plage, jamais refusé', () => {
+    expect(boundedPercent(-4)).toBe(0);
+    expect(boundedPercent(250)).toBe(100);
   });
 });

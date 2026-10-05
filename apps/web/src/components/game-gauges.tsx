@@ -8,6 +8,7 @@ import {
   LEVEL_TIER_NAMES,
   RANK_NAMES,
   TREASURY_NAMES,
+  boundedPercent,
   formatCount,
   meeshCount,
   pointsLabel,
@@ -174,7 +175,7 @@ function FlameTile({ game }: { readonly game: GameBlock }) {
         {flame.days === 0 ? 'Pas de série' : flame.days === 1 ? '1 jour' : `${flame.days} jours`}
       </p>
       <p className="text-caption" style={{ color: GAME_INK_2 }}>
-        {flame.form === null ? 'Flamme éteinte' : `${FLAME_FORM_NAMES[flame.form]} · +${flame.bonusPercent} % sur les missions`}
+        {flame.form === null ? 'Flamme éteinte' : `${FLAME_FORM_NAMES[flame.form]} · +${boundedPercent(flame.bonusPercent)} % sur les missions`}
       </p>
       {status === null ? null : (
         <p className="text-caption font-semibold" style={{ color: flame.status === 'at-risk' || out ? GAME_WARM : GAME_INK_2 }}>
