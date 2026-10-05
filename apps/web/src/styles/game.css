@@ -1,0 +1,155 @@
+/* LE DÉCOR DU JEU (#9380, #9381) — les matières et les gestes des objets
+   Meeshy (pièces, blasons, badges, coupes, coffre).
+
+   UN MÉTAL N'A PAS DE SCHÉMA : l'argent est de l'argent en clair comme en
+   sombre. Ces jetons sont donc déclarés UNE fois, sur :root, et lus par les
+   dégradés SVG des composants (`components/game/`) — le code, lui, n'écrit
+   aucune couleur. `lib/game/materials.test.ts` garde l'inventaire : un jeton
+   que le code cite et que cette feuille ne déclare pas ne peint rien.
+
+   Les mouvements n'animent que `transform` et `opacity`, et n'existent que
+   sous `prefers-reduced-motion: no-preference` (le moteur WAAPI de
+   `lib/game/choreography.ts` rend lui-même un fondu seul quand l'utilisateur
+   limite les animations). */
+:root {
+  --game-shade: #2b3342;
+  --game-glint: #ffffff;
+  --game-edge: var(--ios-indigo-950);
+  --game-track: color-mix(in srgb, var(--ios-ink) 14%, transparent);
+  --game-rim: #5f6a7d;
+  --game-ash: var(--ios-neutral-500);
+
+  --game-copper-0: #f3b48a;
+  --game-copper-1: #a5552b;
+  --game-copper-ink: #5a2a12;
+  --game-bronze-0: #e7c08d;
+  --game-bronze-1: #8a5a24;
+  --game-bronze-ink: #4a3010;
+  --game-silver-0: #f4f6fa;
+  --game-silver-1: #8e98a8;
+  --game-silver-ink: #3f4858;
+  --game-gold-0: #fde68a;
+  --game-gold-1: #b7791f;
+  --game-gold-ink: #6b4610;
+  --game-platinum-0: #e0f2fe;
+  --game-platinum-1: #5b7c99;
+  --game-platinum-ink: #2c4459;
+  --game-obsidian-0: #55527a;
+  --game-obsidian-1: #0e0d1a;
+  --game-obsidian-ink: #d7d4f2;
+  --game-prism-0: #f87171;
+  --game-prism-1: #fbbf24;
+  --game-prism-2: #34d399;
+  --game-prism-3: #60a5fa;
+  --game-prism-4: #a855f7;
+  --game-prism-ink: var(--ios-indigo-950);
+
+  --game-coin-silver-0: #f3f5f9;
+  --game-coin-silver-1: var(--ios-meesh-silver);
+  --game-coin-silver-2: #5f6a7d;
+  --game-coin-silver-ink: #3f4858;
+  --game-coin-silver-in-0: #e3e7ee;
+  --game-coin-silver-in-1: #8f99aa;
+  --game-coin-silver-in-ink: #3f4858;
+  --game-coin-gold-0: #fff1b8;
+  --game-coin-gold-1: #e2a72e;
+  --game-coin-gold-2: #8a5a10;
+  --game-coin-gold-ink: #6b4610;
+  --game-indigo-0: var(--ios-indigo-500);
+  --game-indigo-1: var(--ios-indigo-900);
+  --game-indigo-ink: #ffffff;
+  --game-flame-0: var(--ios-error-strong);
+  --game-flame-1: #f97316;
+  --game-flame-2: #fde047;
+  --game-flame-ink: #7c2d12;
+
+  --game-tier-etincelle: var(--ios-error);
+  --game-tier-lueur: #fb923c;
+  --game-tier-lumiere: var(--ios-warning);
+  --game-tier-eclat: #a3e635;
+  --game-tier-rayon: var(--ios-success);
+  --game-tier-aurore: #22d3ee;
+  --game-tier-comete: var(--ios-info);
+  --game-tier-etoile: var(--ios-indigo-400);
+  --game-tier-constellation: var(--ios-purple-500);
+}
+
+/* Les parties que la chorégraphie vise gardent leur origine : un trait de la
+   Signature se grave depuis sa gauche, un couvercle pivote sur sa charnière. */
+[data-game-dash] {
+  transform-box: fill-box;
+  transform-origin: 0 50%;
+}
+
+[data-game-lid-closed],
+[data-game-lid-open] {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+}
+
+[data-game-spark] {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+}
+
+[data-game-ring-arc],
+[data-game-mint-face],
+[data-game-shield],
+[data-game-badge-body] {
+  transform-box: fill-box;
+  transform-origin: 50% 50%;
+}
+
+[data-game-badge-body] {
+  transform-origin: 50% 100%;
+}
+
+/* Le reflet de repli — quand WebGL2 manque, le trait blanc du dessin balaie
+   le métal, trois fois, puis se repose. Hors de ce mode (`data-game-gl='on'`),
+   c'est le canvas qui le joue et le trait SVG se tait. */
+@media (prefers-reduced-motion: no-preference) {
+  [data-game-sheen] {
+    animation: gameSheen 3.6s ease-in-out 3 both;
+  }
+
+  [data-game-flicker] {
+    transform-origin: 50% 90%;
+    transform-box: fill-box;
+    animation: gameFlicker 1.6s ease-in-out infinite alternate;
+  }
+
+  [data-game-shockwave='css'] {
+    animation: gameShockwave 0.9s cubic-bezier(0.2, 0.7, 0.3, 1) both;
+  }
+}
+
+[data-game-gl='on'] [data-game-sheen] {
+  display: none;
+}
+
+@keyframes gameSheen {
+  0%,
+  55% {
+    transform: translateX(-90px);
+  }
+  100% {
+    transform: translateX(130px);
+  }
+}
+
+@keyframes gameFlicker {
+  to {
+    transform: scale(1.04, 1.08);
+  }
+}
+
+@keyframes gameShockwave {
+  0% {
+    opacity: 0.7;
+    transform: scale(0.2);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.4);
+  }
+}
