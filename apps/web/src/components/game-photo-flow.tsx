@@ -119,11 +119,44 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null }: Props)
       live = false;
     };
   }, [env]);
-  const referral = useMemo(() => referralOf(link, flameDays), [link, flameDays]);
+  /* CE QUE LA CARTE PORTE SE CHOISIT (conformité H-2) : le lien d'invitation et la
+     Flamme sont chacun retirables AVANT la prise, et l'aperçu du cadre montre
+     exactement ce qui sera composé. Sans lien, il n'y a rien à retirer. */
+  const [withLink, setWithLink] = useState(true);
+  const [withFlame, setWithFlame] = useState(true);
+  const referral = useMemo(
+    () => (withLink ? referralOf(link, withFlame ? flameDays : null) : null),
+    [link, flameDays, withLink, withFlame],
+  );
   /* Lu au moment de composer, jamais une dépendance : un lien qui arrive pendant
      la frappe ne la rejoue pas. */
   const referralRef = useRef(referral);
   referralRef.current = referral;
+  const options =
+    link === null ? null : (
+      <fieldset className="flex flex-col gap-1" data-photo-options="">
+        <legend className="text-caption font-semibold" style={{ color: GAME_INK_2 }}>
+          {gameText('game.photo.referral.options')}
+        </legend>
+        <label className="flex items-center gap-3" style={{ minHeight: 44, color: GAME_INK }}>
+          <input type="checkbox" data-photo-with-link="" checked={withLink} onChange={(event) => setWithLink(event.currentTarget.checked)} className="size-5 accent-[var(--color-ios-brand)]" />
+          <span className="text-body">{gameText('game.photo.referral.with_link')}</span>
+        </label>
+        {flameDays === null || flameDays <= 0 ? null : (
+          <label className="flex items-center gap-3" style={{ minHeight: 44, color: GAME_INK }}>
+            <input
+              type="checkbox"
+              data-photo-with-flame=""
+              checked={withFlame && withLink}
+              disabled={!withLink}
+              onChange={(event) => setWithFlame(event.currentTarget.checked)}
+              className="size-5 accent-[var(--color-ios-brand)]"
+            />
+            <span className="text-body">{gameText('game.photo.referral.with_flame')}</span>
+          </label>
+        )}
+      </fieldset>
+    );
   const galleryUrl = useObjectUrl(galleryFile);
   const stillUrl = useObjectUrl(still);
   const previewUrl = useObjectUrl(files === null ? null : files[format]);
@@ -347,6 +380,7 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null }: Props)
             <p className="text-caption" style={{ color: GAME_INK_2 }}>
               {gameText('game.photo.private')}
             </p>
+            {options}
             <Button attr={{ 'data-photo-choice': 'selfie' }} primary onClick={() => dispatch({ type: 'selfie' })}>
               {gameText('game.photo.selfie')}
             </Button>
@@ -394,6 +428,10 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null }: Props)
                 {gameText('game.photo.gallery.unreadable')}
               </p>
             ) : null}
+            <p className="text-caption" style={{ color: GAME_INK_2 }} data-photo-image-right="">
+              {gameText('game.photo.image_right')}
+            </p>
+            {options}
             {state.camera === 'live' ? (
               <Button attr={{ 'data-photo-shutter': '' }} primary onClick={shoot}>
                 {gameText('game.photo.shutter')}

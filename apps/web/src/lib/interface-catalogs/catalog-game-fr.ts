@@ -685,6 +685,10 @@ const fr = {
   'game.profile.see_showcase': 'Voir toute la vitrine',
   'game.profile.visitor_title': 'Vitrine de {name}',
   'game.profile.no_trophy': 'Pas encore de trophée.',
+  'game.photo.referral.with_link': 'Ajouter mon lien d’invitation',
+  'game.photo.referral.with_flame': 'Ajouter ma Flamme',
+  'game.photo.referral.options': 'Ce que la carte porte',
+  'game.photo.image_right': 'Meo : si d’autres personnes sont sur la photo, demande-leur leur accord avant de la partager.',
 } as const;
 
 export default fr;

@@ -683,6 +683,10 @@ const ar = {
   'game.profile.see_showcase': 'عرض الواجهة كاملة',
   'game.profile.visitor_title': 'واجهة {name}',
   'game.profile.no_trophy': 'لا كؤوس بعد.',
+  'game.photo.referral.with_link': 'إضافة رابط دعوتي',
+  'game.photo.referral.with_flame': 'إضافة شعلتي',
+  'game.photo.referral.options': 'ما تحمله البطاقة',
+  'game.photo.image_right': 'ميو: إن ظهر أشخاص آخرون في الصورة فاطلب موافقتهم قبل مشاركتها.',
 } as const satisfies GameCatalog;
 
 export default ar;

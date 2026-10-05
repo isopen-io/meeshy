@@ -671,6 +671,10 @@ const es = {
   'game.profile.see_showcase': 'Ver toda la vitrina',
   'game.profile.visitor_title': 'Vitrina de {name}',
   'game.profile.no_trophy': 'Aún no hay trofeos.',
+  'game.photo.referral.with_link': 'Añadir mi enlace de invitación',
+  'game.photo.referral.with_flame': 'Añadir mi Llama',
+  'game.photo.referral.options': 'Lo que lleva la tarjeta',
+  'game.photo.image_right': 'Meo: si hay otras personas en la foto, pide su consentimiento antes de compartirla.',
 } as const satisfies GameCatalog;
 
 export default es;

@@ -634,3 +634,83 @@ describe('le lien de parrainage accompagne la carte', () => {
     expect(asked).toBe(1);
   });
 });
+
+/**
+ * CE QUE LA CARTE PORTE SE CHOISIT (conformité H-2) — le lien d'invitation et la
+ * Flamme sont chacun retirables AVANT la prise ; l'aperçu du cadre montre
+ * exactement ce qui sera composé, et le partage ne redit le lien en texte que
+ * s'il est sur la carte.
+ */
+describe('le lien et la Flamme se retirent de la carte', () => {
+  const LINK = 'https://meeshy.me/signup/affiliate/aff_abc';
+  const open = async (flameDays: number | null = 23) => {
+    const bench = env({ referral: async () => LINK });
+    const host = await mount(<GamePhotoFlow moment={rank} env={bench.env} flameDays={flameDays} onClose={(result) => bench.log.closed.push(result)} />);
+    await settle();
+    return { ...bench, host };
+  };
+  const toggle = async (host: HTMLElement, attribute: string): Promise<void> => click(host.querySelector<HTMLElement>(`[${attribute}]`));
+
+  test('deux cases, cochées : le lien et la Flamme', async () => {
+    const { host } = await open();
+    expect(host.querySelector<HTMLInputElement>('[data-photo-with-link]')?.checked).toBe(true);
+    expect(host.querySelector<HTMLInputElement>('[data-photo-with-flame]')?.checked).toBe(true);
+  });
+
+  test('retirer la Flamme : le lien part, sans jours', async () => {
+    const { host, log } = await open();
+    await toggle(host, 'data-photo-with-flame');
+    await click(choose(host, 'card'));
+    await settle();
+    expect(log.referrals[0]).toEqual({ url: LINK, display: 'meeshy.me/signup/affiliate/aff_abc', flameDays: null });
+  });
+
+  test('retirer le lien : la carte part sans bandeau, sans Flamme et sans texte', async () => {
+    const { host, log } = await open();
+    await toggle(host, 'data-photo-with-link');
+    await click(choose(host, 'card'));
+    await settle();
+    expect(log.referrals).toEqual([null]);
+    await click(by(host, 'data-photo-share'));
+    await settle();
+    expect(log.texts).toEqual([undefined]);
+  });
+
+  test('sans lien le lien est coché mais retiré : la case de la Flamme se suspend', async () => {
+    const { host } = await open();
+    await toggle(host, 'data-photo-with-link');
+    expect(host.querySelector<HTMLInputElement>('[data-photo-with-flame]')?.disabled).toBe(true);
+  });
+
+  test('l’aperçu de la caméra suit le choix : sans lien, plus de bandeau', async () => {
+    const { host } = await open();
+    await toggle(host, 'data-photo-with-link');
+    await click(choose(host, 'selfie'));
+    await settle();
+    expect(host.textContent).not.toContain('Rejoins-moi sur Meeshy');
+  });
+
+  test('Flamme éteinte (0 jour) : aucune case de Flamme, jamais une option vide', async () => {
+    const { host } = await open(0);
+    expect(host.querySelector('[data-photo-with-flame]')).toBeNull();
+    expect(host.querySelector('[data-photo-with-link]')).not.toBeNull();
+  });
+
+  test('pas de lien du tout : aucune option à retirer', async () => {
+    const bench = env({ referral: async () => null });
+    const host = await mount(<GamePhotoFlow moment={rank} env={bench.env} flameDays={23} onClose={() => undefined} />);
+    await settle();
+    expect(host.querySelector('[data-photo-options]')).toBeNull();
+  });
+});
+
+describe('le droit à l’image (conformité H-3)', () => {
+  test('à l’étape de la caméra, Meo rappelle de demander l’accord des personnes photographiées', async () => {
+    const bench = env({});
+    const host = await mount(<GamePhotoFlow moment={rank} env={bench.env} onClose={() => undefined} />);
+    await settle();
+    await click(choose(host, 'selfie'));
+    await settle();
+    expect(host.querySelector('[data-photo-image-right]')?.textContent).toContain('demande-leur leur accord');
+  });
+});

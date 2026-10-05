@@ -671,6 +671,10 @@ const en = {
   'game.profile.see_showcase': 'See the whole showcase',
   'game.profile.visitor_title': '{name}’s showcase',
   'game.profile.no_trophy': 'No trophy yet.',
+  'game.photo.referral.with_link': 'Add my invitation link',
+  'game.photo.referral.with_flame': 'Add my Flame',
+  'game.photo.referral.options': 'What the card carries',
+  'game.photo.image_right': 'Meo: if other people are in the photo, ask for their agreement before sharing it.',
 } as const satisfies GameCatalog;
 
 export default en;
