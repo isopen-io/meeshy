@@ -87,11 +87,13 @@ final class GameGuideSession: ObservableObject {
     }
 
     /// Appelée à chaque lecture du bloc `game` (réseau, cache, geste réglé).
-    func observe(game: GameBlock, settled: Bool) {
+    func observe(game: GameBlock, settled: Bool, badgeImpact: MintBadgeImpact? = nil) {
         guard settled else { return }
         seen.formUnion(game.guideSeen)
         let before = previous
+        let impactBefore = previousImpact
         previous = game
+        previousImpact = badgeImpact
 
         guard opened else {
             opened = true
