@@ -1,7 +1,9 @@
 /**
  * Un faux client Prisma EN MÉMOIRE pour les tests du jeu : il ne reproduit que
  * ce que les services du jeu lisent et écrivent, mais il reproduit CE QUE
- * MONGODB FAIT — un champ absent se relit null, un index unique rejette avec
+ * MONGODB FAIT — un champ absent se relit null mais ne matche PAS `{ f: null }`
+ * (seul `isSet: false` l'atteint), seuls les `@default` du schéma sont posés à la
+ * création, un index unique rejette avec
  * `P2002`, une transaction s'annule en bloc, `NOT`/absence ne s'inventent pas.
  *
  * Un faux qui traiterait l'absence comme un zéro ferait passer pour correct le
@@ -24,7 +26,9 @@ const isOperator = (value: unknown): value is Record<string, unknown> =>
 
 const matchField = (actual: unknown, expected: unknown): boolean => {
   if (!isOperator(expected)) {
-    if (expected === null) return actual === null || actual === undefined;
+    // Prisma sur MongoDB : `{ f: null }` ne matche QUE le champ PRÉSENT à null,
+    // jamais le champ ABSENT (leçon 318) — seul `isSet: false` l'atteint.
+    if (expected === null) return actual === null;
     return actual instanceof Date && expected instanceof Date ? actual.getTime() === expected.getTime() : actual === expected;
   }
   return Object.entries(expected).every(([op, value]) => {
@@ -34,6 +38,7 @@ const matchField = (actual: unknown, expected: unknown): boolean => {
     if (op === 'gt') return typeof actual === 'number' && actual > (value as number);
     if (op === 'not') return !matchField(actual, value);
     if (op === 'has') return Array.isArray(actual) && actual.includes(value);
+    if (op === 'isSet') return (actual !== undefined) === value;
     throw new Error(`opérateur non reproduit par le faux : ${op}`);
   });
 };
@@ -73,7 +78,12 @@ const project = (row: Row | undefined, select?: Record<string, boolean>): Row | 
   return out as Row;
 };
 
-type ModelOptions = { readonly uniques?: readonly (readonly string[])[]; readonly defaults?: () => Record<string, unknown> };
+type ModelOptions = {
+  readonly uniques?: readonly (readonly string[])[];
+  readonly defaults?: () => Record<string, unknown>;
+  /** Les champs optionnels du schéma : ABSENTS en base, relus `null` par Prisma. */
+  readonly optional?: readonly string[];
+};
 
 class Model {
   rows: Row[] = [];
@@ -92,6 +102,12 @@ class Model {
     return this.rows.find((row) => matches(row, where));
   }
 
+  private read(row: Row | undefined, select?: Record<string, boolean>): Row | null {
+    if (!row || select) return project(row, select);
+    const absent = (this.options.optional ?? []).filter((key) => row[key] === undefined);
+    return { ...Object.fromEntries(absent.map((key) => [key, null])), ...project(row) } as Row;
+  }
+
   async create(args: { data: Record<string, unknown>; select?: Record<string, boolean> }) {
     const row: Row = { id: nextId(), createdAt: new Date(), ...(this.options.defaults?.() ?? {}), ...args.data };
     this.assertUnique(row);
@@ -100,11 +116,11 @@ class Model {
   }
 
   async findUnique(args: { where: Where; select?: Record<string, boolean> }) {
-    return project(this.find(args.where), args.select);
+    return this.read(this.find(args.where), args.select);
   }
 
   async findFirst(args: { where?: Where; select?: Record<string, boolean> }) {
-    return project(this.rows.find((row) => matches(row, args.where ?? {})), args.select);
+    return this.read(this.rows.find((row) => matches(row, args.where ?? {})), args.select);
   }
 
   async findMany(args: { where?: Where; select?: Record<string, boolean>; orderBy?: Record<string, 'asc' | 'desc'>; take?: number } = {}) {
@@ -114,7 +130,7 @@ class Model {
       const [field, dir] = order;
       found = [...found].sort((a, b) => ((a[field] as number) - (b[field] as number)) * (dir === 'asc' ? 1 : -1));
     }
-    return found.slice(0, args.take ?? found.length).map((row) => project(row, args.select));
+    return found.slice(0, args.take ?? found.length).map((row) => this.read(row, args.select));
   }
 
   async count(args: { where?: Where } = {}) {
@@ -200,8 +216,8 @@ export function fakeGameDb(): FakeGameDb {
   const user = flattenCompound(new Model());
   const gloryLedger = flattenCompound(new Model({ uniques: [['userId', 'requestId']] }));
   const meeshLedger = flattenCompound(new Model({ uniques: [['userId', 'requestId']] }));
-  const dailyMission = flattenCompound(new Model({ uniques: [['userId', 'dayKey', 'slot']], defaults: () => ({ progress: 0, seen: [], prism: false, glory: 0, completedAt: null, rerolledAt: null, paidPoints: null }) }));
-  const gameDay = flattenCompound(new Model({ uniques: [['userId', 'dayKey']], defaults: () => ({ rerollCount: 0, chestClaimedAt: null, chestPoints: null, chestFragment: null, chestFreeze: null }) }));
+  const dailyMission = flattenCompound(new Model({ uniques: [['userId', 'dayKey', 'slot']], defaults: () => ({ progress: 0, seen: [], prism: false, glory: 0 }), optional: ['completedAt', 'paidPoints', 'rerolledAt'] }));
+  const gameDay = flattenCompound(new Model({ uniques: [['userId', 'dayKey']], defaults: () => ({ rerollCount: 0 }), optional: ['chestClaimedAt', 'chestPoints', 'chestFragment', 'chestFreeze'] }));
   const engagementCounter = flattenCompound(new Model({ uniques: [['userId', 'axisKey']] }));
   const engagementQuota = flattenCompound(new Model({ uniques: [['userId', 'operationKey', 'bucket']] }));
   const engagementMilestone = flattenCompound(new Model({ uniques: [['userId', 'milestoneType', 'milestoneKey']] }));

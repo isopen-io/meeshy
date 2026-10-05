@@ -87,6 +87,14 @@ export type SignalOptions = {
 
 export type ChestResult = { readonly status: 'claimed' | 'already-claimed'; readonly reward: GameChestReward; readonly score: number };
 
+/**
+ * « Pas encore faite » — le champ À NULL **ou ABSENT**. Sur MongoDB, Prisma ne fait
+ * matcher `{ f: null }` qu'au champ présent à null (leçon 318) : une ligne écrite
+ * sans le champ ne serait jamais réclamée, la mission jamais payée.
+ */
+const NOT_COMPLETED = { OR: [{ completedAt: null }, { completedAt: { isSet: false } }] };
+const CHEST_UNCLAIMED = { OR: [{ chestClaimedAt: null }, { chestClaimedAt: { isSet: false } }] };
+
 function isP2002(err: unknown): boolean {
   return typeof err === 'object' && err !== null && (err as { code?: string }).code === 'P2002';
 }
@@ -181,6 +189,10 @@ export class MissionService {
             reward: mission.reward,
             glory: mission.glory,
             seen: [],
+            // Posés À NULL, jamais omis : un champ omis est ABSENT en base.
+            completedAt: null,
+            paidPoints: null,
+            rerolledAt: null,
           },
         });
       } catch (err) {
@@ -239,7 +251,7 @@ export class MissionService {
     for (let attempt = 0; attempt < 3 && current !== null; attempt += 1) {
       if (current.completedAt !== null || current.seen.includes(key)) return null;
       const written = await this.prisma.dailyMission.updateMany({
-        where: { id: current.id, progress: current.progress, completedAt: null },
+        where: { id: current.id, progress: current.progress, ...NOT_COMPLETED },
         data: { progress: current.progress + 1, seen: { push: key } },
       });
       if (written.count === 1) return current.progress + 1;
@@ -260,7 +272,7 @@ export class MissionService {
     const paid = row.reward * (inPrismHour ? PRISM_HOUR_MULTIPLIER : 1);
 
     const claimed = await this.prisma.dailyMission.updateMany({
-      where: { id: row.id, completedAt: null },
+      where: { id: row.id, ...NOT_COMPLETED },
       data: { completedAt: now, paidPoints: paid },
     });
     if (claimed.count === 0) return;
@@ -287,7 +299,9 @@ export class MissionService {
     const present = await this.prisma.gameDay.findUnique({ where: { userId_dayKey: { userId, dayKey } }, select: { id: true } });
     if (present) return;
     try {
-      await this.prisma.gameDay.create({ data: { userId, dayKey } });
+      await this.prisma.gameDay.create({
+        data: { userId, dayKey, chestClaimedAt: null, chestPoints: null, chestFragment: null, chestFreeze: null },
+      });
     } catch (err) {
       if (!isP2002(err)) throw err;
     }
@@ -394,20 +408,26 @@ export class MissionService {
     await this.ensureGameDay(userId, dayKey);
     const reward = this.chestOf({ userId, dayKey });
     const claimed = await this.prisma.gameDay.updateMany({
-      where: { userId, dayKey, chestClaimedAt: null },
+      where: { userId, dayKey, ...CHEST_UNCLAIMED },
       data: { chestClaimedAt: now, chestPoints: reward.points, chestFragment: reward.fragment, chestFreeze: reward.freeze },
     });
     if (claimed.count === 0) return this.alreadyClaimed(userId, await this.gameDay(userId, dayKey));
 
     try {
       await this.deps.creditPoints(userId, reward.points, GAME_BONUS_AXIS);
-      if (reward.freeze) await this.grantFreeze(userId);
     } catch (error) {
       await this.prisma.gameDay.updateMany({
         where: { userId, dayKey, chestClaimedAt: now },
         data: { chestClaimedAt: null, chestPoints: null, chestFragment: null, chestFreeze: null },
       });
       throw error;
+    }
+    // Les points sont PAYÉS : rendre le coffre maintenant les ferait payer deux
+    // fois. Le gel offert est un appoint — son échec se journalise, sans plus.
+    if (reward.freeze) {
+      await this.grantFreeze(userId).catch((error: unknown) =>
+        log.warn('chest freeze not granted', { userId, error: error instanceof Error ? error.message : String(error) }),
+      );
     }
     return { status: 'claimed', reward, score: (await this.userRow(userId))?.engagementScore ?? 0 };
   }

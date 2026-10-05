@@ -231,6 +231,39 @@ describe('MissionService.onSignal — la progression au geste', () => {
     expect(db.dailyMission.rows[0]?.completedAt).not.toBeNull();
   });
 
+  it('une mission dont `completedAt` est ABSENT (ligne écrite sans lui) avance, se termine et paie', async () => {
+    const { db, service, creditPoints } = setup();
+    const row = insertMission(db, { target: 1, reward: 40 });
+    delete (row as Record<string, unknown>).completedAt;
+    delete (row as Record<string, unknown>).paidPoints;
+
+    await service.onSignal(USER, 'axis:content.text_message', { now: NOW });
+
+    expect(creditPoints).toHaveBeenCalledTimes(1);
+    expect(db.dailyMission.rows[0]).toMatchObject({ completedAt: NOW, paidPoints: 40 });
+  });
+
+  it('un signal DISTINCT fait avancer une mission dont `completedAt` est ABSENT', async () => {
+    const { db, service } = setup();
+    const row = insertMission(db, { signal: 'reply-distinct-conversations', templateKey: 'reply-conversations', target: 3 });
+    delete (row as Record<string, unknown>).completedAt;
+
+    await service.onSignal(USER, 'reply-distinct-conversations', { now: NOW, key: 'conv-a' });
+
+    expect(db.dailyMission.rows[0]).toMatchObject({ progress: 1, seen: ['conv-a'] });
+  });
+
+  it('les missions TIRÉES par le service se terminent et paient (champs posés comme Prisma les écrit)', async () => {
+    const { db, service, creditPoints } = setup();
+    const today = await service.ensureToday(USER, NOW);
+    const easy = today.rows[0]!;
+
+    for (let i = 0; i < easy.target; i += 1) await service.onSignal(USER, easy.signal, { now: NOW, key: `cle-${i}` });
+
+    expect(creditPoints).toHaveBeenCalledTimes(1);
+    expect(db.dailyMission.rows.find((r) => r.id === easy.id)?.completedAt).toEqual(NOW);
+  });
+
   it('sans mission aujourd’hui, le premier geste tire les trois puis compte', async () => {
     const { db, service } = setup();
 
@@ -372,6 +405,36 @@ describe('MissionService.claimChest — le coffre du jour', () => {
 
     expect(issue.reward).toEqual({ points: 100, fragment: true, freeze: true });
     expect(db.user.rows[0]?.flameFreezes).toBe(2);
+  });
+
+  it('un coffre écrit SANS ses champs de réclamation (état du jour posé avant lui) s’ouvre quand même', async () => {
+    const { db, service, creditPoints } = setup();
+    allDone(db);
+    db.gameDay.rows.push({ id: 'jour-1', userId: USER, dayKey: DAY, rerollCount: 1 });
+
+    const issue = await service.claimChest({ userId: USER, requestId: 'coffre-0006', now: NOW });
+
+    expect(issue.status).toBe('claimed');
+    expect(creditPoints).toHaveBeenCalledTimes(1);
+  });
+
+  it('un gel du coffre qui échoue ne rend pas le coffre : les points ne sont jamais payés deux fois', async () => {
+    const { db, creditPoints } = setup({ flameFreezes: 1 });
+    const service = new MissionService(db.prisma, {
+      creditPoints,
+      chest: () => ({ points: 100, fragment: false, freeze: true }),
+    });
+    allDone(db);
+    const update = db.user.update.bind(db.user);
+    db.user.update = (async () => {
+      throw new Error('écriture du gel indisponible');
+    }) as typeof db.user.update;
+
+    await service.claimChest({ userId: USER, requestId: 'coffre-0007', now: NOW }).catch(() => undefined);
+    db.user.update = update;
+    await service.claimChest({ userId: USER, requestId: 'coffre-0008', now: NOW }).catch(() => undefined);
+
+    expect(creditPoints).toHaveBeenCalledTimes(1);
   });
 
   it('un gel du coffre emplit la réserve quand il y a de la place', async () => {

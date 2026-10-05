@@ -119,7 +119,12 @@ export class GloryService {
 
     const record = recordLevel({ level, previousRecord: params.previousRecord });
     await this.prisma.user.updateMany({
-      where: { id: params.userId, OR: [{ levelRecord: null }, { levelRecord: { lt: record } }] },
+      // `isSet: false` : sur MongoDB, `{ levelRecord: null }` n'atteint PAS un
+      // champ ABSENT — celui de tous les comptes d'avant le jeu (leçon 318).
+      where: {
+        id: params.userId,
+        OR: [{ levelRecord: null }, { levelRecord: { isSet: false } }, { levelRecord: { lt: record } }],
+      },
       data: { levelRecord: record },
     });
     return gained;
