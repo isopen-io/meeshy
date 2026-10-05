@@ -54,11 +54,16 @@ final class CameraModel: NSObject, ObservableObject {
     private var hasAudioInput = false
     private var didAnnounceMicrophoneRefusal = false
 
-    private let photoOutput = AVCapturePhotoOutput()
-    private let videoOutput = AVCaptureMovieFileOutput()
+    /// Les sorties se branchent sur la file de la session (`sessionQueue`) ;
+    /// le fil principal n'en lit que les connexions.
+    nonisolated(unsafe) private let photoOutput = AVCapturePhotoOutput()
+    nonisolated(unsafe) private let videoOutput = AVCaptureMovieFileOutput()
     /// Les trames de l'objectif pour le look en direct (#9329) — guettées, mais
     /// gardées seulement quand un look est choisi.
-    private let frameOutput = AVCaptureVideoDataOutput()
+    nonisolated(unsafe) private let frameOutput = AVCaptureVideoDataOutput()
+    /// **La file UNIQUE de la session** (#9464) : configuration, lancement et
+    /// arrêt, dans l'ordre. Ce qu'elle installe est publié ensuite ici.
+    nonisolated let sessionQueue = ComposerCaptureSessionQueue()
     nonisolated let liveFeed = ComposerCameraFeed()
     /// #8695 — le traitement UNIQUE de toute prise photo de l'app : chaque
     /// consommateur (conversation, fil, composer, story) reçoit la photo déjà
@@ -110,27 +115,32 @@ final class CameraModel: NSObject, ObservableObject {
         }
     }
 
+    /// La configuration se fait sur la file de la session ; l'objectif installé
+    /// et le micro reviennent au fil principal, dans l'ordre de la file.
     private func setupSession() {
-        session.beginConfiguration()
-        session.sessionPreset = .high
-
-        addVideoInput(position: .back)
-
-        if session.canAddOutput(photoOutput) { session.addOutput(photoOutput) }
-        if session.canAddOutput(videoOutput) { session.addOutput(videoOutput) }
-        frameOutput.alwaysDiscardsLateVideoFrames = true
-        frameOutput.setSampleBufferDelegate(liveFeed, queue: liveFeed.queue)
-        if session.canAddOutput(frameOutput) { session.addOutput(frameOutput) }
-        if CameraAudioArming.armsAtSetup(microphone: AVCaptureDevice.authorizationStatus(for: .audio),
-                                         otherAudioPlaying: AVAudioSession.sharedInstance().isOtherAudioPlaying) {
-            addAudioInput()
+        let armeLeMicro = CameraAudioArming.armsAtSetup(
+            microphone: AVCaptureDevice.authorizationStatus(for: .audio),
+            otherAudioPlaying: AVAudioSession.sharedInstance().isOtherAudioPlaying)
+        sessionQueue.perform { [weak self] in
+            guard let self else { return }
+            self.session.beginConfiguration()
+            self.session.sessionPreset = .high
+            if self.session.canAddOutput(self.photoOutput) { self.session.addOutput(self.photoOutput) }
+            if self.session.canAddOutput(self.videoOutput) { self.session.addOutput(self.videoOutput) }
+            self.frameOutput.alwaysDiscardsLateVideoFrames = true
+            self.frameOutput.setSampleBufferDelegate(self.liveFeed, queue: self.liveFeed.queue)
+            if self.session.canAddOutput(self.frameOutput) { self.session.addOutput(self.frameOutput) }
+            let installe = Self.installVideoInput(in: self.session, position: .back)
+            let micro = armeLeMicro && Self.addAudioInput(to: self.session)
+            self.session.commitConfiguration()
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    if let installe { self.adopt(installe) }
+                    if micro { self.hasAudioInput = true }
+                }
+            }
         }
-
-        session.commitConfiguration()
-
-        Task.detached { [weak self] in
-            self?.session.startRunning()
-        }
+        sessionQueue.setRunning(true, session)
     }
 
     /// Demande le micro et branche l'entrée audio, au premier passage en mode
@@ -156,48 +166,70 @@ final class CameraModel: NSObject, ObservableObject {
             return
         }
 
-        session.beginConfiguration()
-        addAudioInput()
-        session.commitConfiguration()
+        hasAudioInput = await sessionQueue.run { [weak self] in
+            guard let self else { return false }
+            self.session.beginConfiguration()
+            defer { self.session.commitConfiguration() }
+            return Self.addAudioInput(to: self.session)
+        }
     }
 
-    /// Branche le micro DANS une configuration ouverte par l'appelant.
-    private func addAudioInput() {
-        guard !hasAudioInput, let audioDevice = AVCaptureDevice.default(for: .audio) else { return }
+    /// Branche le micro DANS une configuration ouverte par l'appelant, sur la
+    /// file de la session. `true` ⇒ la session a son micro.
+    nonisolated private static func addAudioInput(to session: AVCaptureSession) -> Bool {
+        let present = session.inputs.contains { ($0 as? AVCaptureDeviceInput)?.device.hasMediaType(.audio) == true }
+        guard !present else { return true }
+        guard let audioDevice = AVCaptureDevice.default(for: .audio) else { return false }
         let audioInput: AVCaptureDeviceInput
         do {
             audioInput = try AVCaptureDeviceInput(device: audioDevice)
         } catch {
             Logger.media.error("Failed to create audio capture input: \(error.localizedDescription, privacy: .public)")
-            return
+            return false
         }
-        guard session.canAddInput(audioInput) else { return }
+        guard session.canAddInput(audioInput) else { return false }
         session.addInput(audioInput)
-        hasAudioInput = true
+        return true
+    }
+
+    /// L'objectif que la file vient d'installer, et ce que le fil principal en publie.
+    nonisolated struct InstalledCamera: @unchecked Sendable {
+        let device: AVCaptureDevice
+        let position: AVCaptureDevice.Position
+        let zoomScale: ComposerCaptureZoomScale
     }
 
     /// **La nouvelle entrée naît AVANT que l'ancienne parte** (#9464) : un
     /// objectif qui ne s'ouvre pas, ou que la session refuse, laisse l'ancien
     /// en place — l'aperçu ne noircit pas et `currentPosition` reste vrai.
-    private func addVideoInput(position: AVCaptureDevice.Position) {
+    /// Sur la file de la session ; `nil` ⇒ rien n'a changé.
+    nonisolated private static func installVideoInput(in session: AVCaptureSession,
+                                                      position: AVCaptureDevice.Position) -> InstalledCamera? {
         let ancienne = session.inputs.compactMap { $0 as? AVCaptureDeviceInput }.first { $0.device.hasMediaType(.video) }
-        let nouvelle = Self.videoInput(position: position)
+        let nouvelle = videoInput(position: position)
         guard ComposerCameraInputSwap.swap(in: session, replacing: ancienne, with: nouvelle) == .swapped,
-              let device = nouvelle?.device else { return }
-        currentPosition = position
-        liveFeed.setPosition(position)
-        zoomScale = Self.zoomScale(of: device)
+              let device = nouvelle?.device else { return nil }
+        let echelle = zoomScale(of: device)
         do {
             try device.lockForConfiguration()
             device.videoZoomFactor = min(device.maxAvailableVideoZoomFactor,
-                                         max(device.minAvailableVideoZoomFactor, zoomScale.opening))
+                                         max(device.minAvailableVideoZoomFactor, echelle.opening))
             device.unlockForConfiguration()
         } catch {
             Logger.media.error("Zoom opening failed: \(error.localizedDescription, privacy: .public)")
         }
-        zoomFactor = 1
         apply(ComposerCaptureFocus.continuous(focusCapabilities(of: device)), to: device)
-        watchSubjectArea(of: device)
+        return InstalledCamera(device: device, position: position, zoomScale: echelle)
+    }
+
+    /// Ce que l'objectif installé change à l'écran — publié APRÈS le commit.
+    private func adopt(_ installe: InstalledCamera) {
+        activeVideoDevice = installe.device
+        currentPosition = installe.position
+        liveFeed.setPosition(installe.position)
+        zoomScale = installe.zoomScale
+        zoomFactor = 1
+        watchSubjectArea(of: installe.device)
     }
 
     /// Switches the active camera. While recording, this cannot reconfigure the
@@ -216,10 +248,20 @@ final class CameraModel: NSObject, ObservableObject {
         performCameraSwitch(to: currentPosition == .back ? .front : .back)
     }
 
-    private func performCameraSwitch(to position: AVCaptureDevice.Position) {
-        session.beginConfiguration()
-        addVideoInput(position: position)
-        session.commitConfiguration()
+    /// La bascule se fait sur la file ; `then` passe sur le fil principal une
+    /// fois l'objectif publié.
+    private func performCameraSwitch(to position: AVCaptureDevice.Position,
+                                     then: @escaping @MainActor @Sendable () -> Void = {}) {
+        sessionQueue.perform { [weak self] in
+            guard let self else { return }
+            let installe = Self.installVideoInput(in: self.session, position: position)
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    if let installe { self.adopt(installe) }
+                    then()
+                }
+            }
+        }
         HapticFeedback.light()
     }
 
@@ -289,11 +331,8 @@ final class CameraModel: NSObject, ObservableObject {
         }
     }
 
-    private var activeVideoDevice: AVCaptureDevice? {
-        session.inputs
-            .compactMap { ($0 as? AVCaptureDeviceInput)?.device }
-            .first { $0.hasMediaType(.video) }
-    }
+    /// L'objectif en place, tel que la file l'a installé.
+    private var activeVideoDevice: AVCaptureDevice?
 
     /// **Le cadrage de l'objectif actif** (#8671) — publié pour le badge du
     /// viseur en facteur AFFICHÉ (#9350), remis à ×1 à chaque changement d'objectif.
@@ -361,15 +400,15 @@ final class CameraModel: NSObject, ObservableObject {
     /// couche d'aperçu (`CameraPreviewFocusPoints`).
     func focus(at devicePoint: CGPoint) {
         guard let device = activeVideoDevice else { return }
-        apply(ComposerCaptureFocus.focusing(at: devicePoint, focusCapabilities(of: device)), to: device)
+        Self.apply(ComposerCaptureFocus.focusing(at: devicePoint, Self.focusCapabilities(of: device)), to: device)
     }
 
     private func resumeContinuousFocus() {
         guard let device = activeVideoDevice else { return }
-        apply(ComposerCaptureFocus.continuous(focusCapabilities(of: device)), to: device)
+        Self.apply(ComposerCaptureFocus.continuous(Self.focusCapabilities(of: device)), to: device)
     }
 
-    private func focusCapabilities(of device: AVCaptureDevice) -> ComposerCaptureFocus.Capabilities {
+    nonisolated private static func focusCapabilities(of device: AVCaptureDevice) -> ComposerCaptureFocus.Capabilities {
         ComposerCaptureFocus.Capabilities(
             focusPointOfInterest: device.isFocusPointOfInterestSupported,
             autoFocus: device.isFocusModeSupported(.autoFocus),
@@ -381,7 +420,7 @@ final class CameraModel: NSObject, ObservableObject {
 
     /// Le POINT se pose AVANT le mode : c'est le changement de mode qui lance
     /// la mesure — l'inverse viserait l'ancien point.
-    private func apply(_ plan: ComposerCaptureFocus.Plan, to device: AVCaptureDevice) {
+    nonisolated private static func apply(_ plan: ComposerCaptureFocus.Plan, to device: AVCaptureDevice) {
         do {
             try device.lockForConfiguration()
             defer { device.unlockForConfiguration() }
@@ -517,9 +556,7 @@ final class CameraModel: NSObject, ObservableObject {
         if isRecordingVideo { stopRecording() }
         liveFeed.flush()
         stopWatchingSubjectArea()
-        Task.detached { [weak self] in
-            self?.session.stopRunning()
-        }
+        sessionQueue.setRunning(false, session)
     }
 
     /// Handles every `fileOutput(didFinishRecordingTo:...)` callback — both the
@@ -535,24 +572,38 @@ final class CameraModel: NSObject, ObservableObject {
         recordedSegmentURLs.append(url)
 
         if isSwitchingCameraDuringRecording {
-            isSwitchingCameraDuringRecording = false
-            if let position = pendingSwitchPosition {
-                performCameraSwitch(to: position)
-                pendingSwitchPosition = nil
+            // La bascule se fait sur la file de la session : le segment suivant
+            // ne s'ouvre qu'une fois le nouvel objectif EN PLACE (#9464).
+            guard let position = pendingSwitchPosition else {
+                resumeRecordingAfterSwitch()
+                return
             }
-            if pendingStopRequested {
-                pendingStopRequested = false
-                videoOutput.stopRecording()
-            } else if !startSegment() {
-                // La connexion a disparu PENDANT la bascule — un cas que le
-                // changement de caméra rend possible par construction. Sans ce
-                // repli, l'enregistrement continuait « en cours » sans sortie.
-                endRecordingWithoutOutput()
-            }
+            pendingSwitchPosition = nil
+            performCameraSwitch(to: position) { [weak self] in self?.resumeRecordingAfterSwitch() }
             return
         }
 
         // Final stop.
+        await deliverRecording()
+    }
+
+    /// Le nouvel objectif est en place : la prise reprend — ou se clôt, si
+    /// l'auteur a demandé l'arrêt pendant la bascule.
+    private func resumeRecordingAfterSwitch() {
+        isSwitchingCameraDuringRecording = false
+        if pendingStopRequested {
+            pendingStopRequested = false
+            Task { @MainActor [weak self] in await self?.deliverRecording() }
+        } else if !startSegment() {
+            // La connexion a disparu PENDANT la bascule — un cas que le
+            // changement de caméra rend possible par construction. Sans ce
+            // repli, l'enregistrement continuait « en cours » sans sortie.
+            endRecordingWithoutOutput()
+        }
+    }
+
+    /// La prise est close : les segments se rassemblent et partent.
+    private func deliverRecording() async {
         isRecordingVideo = false
         recordingTimer?.invalidate()
         recordingTimer = nil
