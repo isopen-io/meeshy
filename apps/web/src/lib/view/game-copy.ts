@@ -2,138 +2,160 @@ import type { FlameFormKey } from '@meeshy/shared/utils/game/flame';
 import type { GloryDivision, GloryRankOrMythic } from '@meeshy/shared/utils/game/glory';
 import type { LevelTierKey } from '@meeshy/shared/utils/game/levels';
 import type { MeeshEdition } from '@meeshy/shared/utils/game/mint';
+import type { MissionDifficulty } from '@meeshy/shared/utils/game/missions';
 import type { TreasuryTierKey } from '@meeshy/shared/utils/game/treasury';
 import { GAME_ERROR_CODES } from '@meeshy/shared/types/game-routes';
+
+import {
+  formatGameNumber,
+  translateGame,
+  translateGamePlural,
+  type GameCatalogKey,
+  type GamePluralBase,
+  type TranslateGameArgs,
+} from '@/lib/i18n-game-catalog';
+import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 
 /**
  * CE QUE LE JEU DIT (#9383, #9379) — les noms, les accords et les phrases de
  * refus. La loi partagée (`@meeshy/shared/utils/game`) ne prononce rien : elle
- * rend des clés stables, ce fichier les habille — même séparation que
+ * rend des clés stables, ce fichier les habille depuis le catalogue du jeu
+ * (`i18n-game-catalog.ts`, sept langues) — même séparation que
  * `progression.ts` pour les axes.
  *
- * DETTE NOMMÉE, la même que `meesh-copy.ts` et `mascot-copy.ts` : l'écran
- * Progression n'appelle pas encore `translate()`, toute sa copie est du
- * français. L'accord passe par `Intl.PluralRules`, jamais par un `=== 1`, et
- * chaque nom vit dans une table `Record<clé, …>` : le jour du catalogue des
- * sept langues, le point de bascule est déjà au bon endroit.
+ * LA LANGUE est celle de l'interface, lue à l'appel (`currentInterfaceLanguage`)
+ * et jamais figée à l'import : changer de langue redessine l'écran dans la
+ * nouvelle. Chaque fonction accepte la langue en dernier paramètre — c'est ce
+ * qui permet de la tester dans les sept. L'accord passe par `Intl.PluralRules`
+ * de la langue (`translateGamePlural`), jamais par un `=== 1`.
  */
 
-const REGLE_FR = new Intl.PluralRules('fr-FR');
-const NOMBRE = new Intl.NumberFormat('fr-FR');
+type Language = InterfaceLanguage;
 
-const singulier = (count: number): boolean => REGLE_FR.select(count) === 'one';
+/** Une phrase du catalogue dans la langue COURANTE de l'interface — la forme que les écrans du jeu appellent. */
+export function gameText<K extends GameCatalogKey>(key: K, ...params: TranslateGameArgs<K>): string;
+export function gameText(key: GameCatalogKey, params?: Readonly<Record<string, string>>): string {
+  return (translateGame as (language: Language, key: GameCatalogKey, params?: Readonly<Record<string, string>>) => string)(
+    currentInterfaceLanguage(),
+    key,
+    params,
+  );
+}
 
-export const formatCount = (count: number): string => NOMBRE.format(count);
+export const formatCount = (count: number, language: Language = currentInterfaceLanguage()): string =>
+  formatGameNumber(language, count);
 
-export const pointsLabel = (count: number): string =>
-  singulier(count) ? `${formatCount(count)} point` : `${formatCount(count)} points`;
+/** Un pourcentage servi se borne ICI, à l'affichage : la frontière (`lib/api/game.ts`) ne refuse que la forme. */
+export const boundedPercent = (value: number): number => Math.min(100, Math.max(0, value));
 
-export const convertiblePointsLabel = (count: number): string =>
-  singulier(count) ? `${formatCount(count)} point convertible` : `${formatCount(count)} points convertibles`;
+export const pointsLabel = (count: number, language: Language = currentInterfaceLanguage()): string =>
+  translateGamePlural(language, 'game.points', count);
 
-export const meeshCount = (count: number): string =>
-  count === 0 ? 'Aucune Meesh' : singulier(count) ? `${formatCount(count)} Meesh` : `${formatCount(count)} Meeshes`;
+export const convertiblePointsLabel = (count: number, language: Language = currentInterfaceLanguage()): string =>
+  translateGamePlural(language, 'game.points.convertible', count);
 
-export const LEVEL_TIER_NAMES: Readonly<Record<LevelTierKey, string>> = {
-  etincelle: 'Étincelle',
-  lueur: 'Lueur',
-  lumiere: 'Lumière',
-  eclat: 'Éclat',
-  rayon: 'Rayon',
-  aurore: 'Aurore',
-  comete: 'Comète',
-  etoile: 'Étoile',
-  constellation: 'Constellation',
-  galaxie: 'Galaxie',
-};
+export const meeshCount = (count: number, language: Language = currentInterfaceLanguage()): string =>
+  count === 0 ? translateGame(language, 'game.meeshes.none') : translateGamePlural(language, 'game.meeshes', count);
 
-export const RANK_NAMES: Readonly<Record<GloryRankOrMythic, string>> = {
-  murmure: 'Murmure',
-  echo: 'Écho',
-  voix: 'Voix',
-  conteur: 'Conteur',
-  passeur: 'Passeur',
-  polyglotte: 'Polyglotte',
-  ambassadeur: 'Ambassadeur',
-  orateur: 'Orateur',
-  oracle: 'Oracle',
-  legende: 'Légende',
-  mythe: 'Mythe',
-};
+export const daysLabel = (count: number, language: Language = currentInterfaceLanguage()): string =>
+  translateGamePlural(language, 'game.days', count);
 
-export const TREASURY_NAMES: Readonly<Record<TreasuryTierKey, string>> = {
-  bourse: 'Bourse',
-  escarcelle: 'Escarcelle',
-  coffret: 'Coffret',
-  coffre: 'Coffre',
-  tresor: 'Trésor',
-  reserve: 'Réserve',
-};
+export const actionsLabel = (count: number, language: Language = currentInterfaceLanguage()): string =>
+  translateGamePlural(language, 'game.actions', count);
 
-export const FLAME_FORM_NAMES: Readonly<Record<FlameFormKey, string>> = {
-  braise: 'Braise',
-  flamme: 'Flamme',
-  brasier: 'Brasier',
-  astre: 'Astre',
-  soleil: 'Soleil',
-};
+export const levelsLabel = (count: number, language: Language = currentInterfaceLanguage()): string =>
+  translateGamePlural(language, 'game.levels', count);
+
+export const levelTierName = (tier: LevelTierKey, language: Language = currentInterfaceLanguage()): string =>
+  translateGame(language, `game.tier.${tier}`);
+
+export const rankName = (rank: GloryRankOrMythic, language: Language = currentInterfaceLanguage()): string =>
+  translateGame(language, `game.rank.${rank}`);
+
+export const treasuryName = (tier: TreasuryTierKey, language: Language = currentInterfaceLanguage()): string =>
+  translateGame(language, `game.treasury.${tier}`);
+
+export const flameFormName = (form: FlameFormKey, language: Language = currentInterfaceLanguage()): string =>
+  translateGame(language, `game.flame.form.${form}`);
+
+export const difficultyName = (difficulty: MissionDifficulty, language: Language = currentInterfaceLanguage()): string =>
+  translateGame(language, `game.difficulty.${difficulty}`);
+
+export const editionName = (edition: MeeshEdition, language: Language = currentInterfaceLanguage()): string =>
+  translateGame(language, `game.edition.${edition}`);
 
 const DIVISIONS: Readonly<Record<GloryDivision, string>> = { 3: 'III', 2: 'II', 1: 'I' };
 
 export const divisionLabel = (division: GloryDivision): string => DIVISIONS[division];
 
-export const rankLabel = (rank: GloryRankOrMythic, division: GloryDivision | null): string =>
-  division === null ? RANK_NAMES[rank] : `${RANK_NAMES[rank]} ${divisionLabel(division)}`;
+export const rankLabel = (rank: GloryRankOrMythic, division: GloryDivision | null, language: Language = currentInterfaceLanguage()): string =>
+  division === null ? rankName(rank, language) : `${rankName(rank, language)} ${divisionLabel(division)}`;
 
-const EDITIONS: Readonly<Record<MeeshEdition, string>> = { silver: 'argent', gold: 'or', prism: 'prisme' };
+/** Un gabarit de mission : une phrase qui s'accorde au nombre, ou une phrase unique qui le porte. */
+type SingleMissionKey =
+  | 'game.mission.reply_conversations'
+  | 'game.mission.prism_foreign_exchange'
+  | 'game.mission.long_chat'
+  | 'game.mission.gold_replies_received';
+type MissionPhrase = { readonly plural: GamePluralBase } | { readonly single: SingleMissionKey };
 
-export const editionName = (edition: MeeshEdition): string => EDITIONS[edition];
-
-export const DIFFICULTY_NAMES = { easy: 'Facile', medium: 'Moyenne', hard: 'Difficile', gold: 'Or' } as const;
-
-type MissionPhrase = (target: number) => string;
-
-const plural = (target: number, one: string, many: string): string => (singulier(target) ? one : many);
+const plural = (base: GamePluralBase): MissionPhrase => ({ plural: base });
+const single = (key: SingleMissionKey): MissionPhrase => ({ single: key });
 
 const MISSION_PHRASES: Readonly<Record<string, MissionPhrase>> = {
-  'react-messages': (n) => `Réagir à ${n} ${plural(n, 'message', 'messages')}`,
-  'send-voice': (n) => `Envoyer ${plural(n, 'un message vocal', `${n} messages vocaux`)}`,
-  'send-texts': (n) => `Envoyer ${n} ${plural(n, 'message', 'messages')}`,
-  'use-stickers': (n) => `Envoyer ${plural(n, 'un sticker', `${n} stickers`)}`,
-  'send-attachments': (n) => `Envoyer ${plural(n, 'une pièce jointe', `${n} pièces jointes`)}`,
-  'reply-conversations': (n) => `Répondre dans ${n} conversations différentes`,
-  'reply-conversations-wide': (n) => `Répondre dans ${n} conversations différentes`,
-  'comment-text': (n) => `Écrire ${plural(n, 'un commentaire', `${n} commentaires`)}`,
-  'publish-story': (n) => `Publier ${plural(n, 'une story', `${n} stories`)}`,
-  'publish-post': (n) => `Publier ${plural(n, 'un post', `${n} posts`)}`,
-  'publish-posts': (n) => `Publier ${plural(n, 'un post', `${n} posts`)}`,
-  'share-link': (n) => `Partager ${plural(n, 'un lien', `${n} liens`)}`,
-  'prism-foreign-messages': (n) => `Écrire ${plural(n, 'un message', `${n} messages`)} dans une autre langue que la tienne`,
-  'prism-foreign-exchange': (n) => `Écrire ${n} messages dans une autre langue que la tienne`,
-  'voice-comments': (n) => `Laisser ${plural(n, 'un commentaire vocal', `${n} commentaires vocaux`)}`,
-  'publish-reel': (n) => `Publier ${plural(n, 'un réel', `${n} réels`)}`,
-  'long-chat': (n) => `Envoyer ${n} messages`,
-  'gold-replies-received': (n) => `Recevoir des réponses de ${n} personnes différentes`,
-  'gold-reply-conversations': (n) => `Répondre dans ${n} conversations différentes`,
+  'react-messages': plural('game.mission.react_messages'),
+  'send-voice': plural('game.mission.send_voice'),
+  'send-texts': plural('game.mission.send_texts'),
+  'use-stickers': plural('game.mission.use_stickers'),
+  'send-attachments': plural('game.mission.send_attachments'),
+  'reply-conversations': single('game.mission.reply_conversations'),
+  'reply-conversations-wide': single('game.mission.reply_conversations'),
+  'comment-text': plural('game.mission.comment_text'),
+  'publish-story': plural('game.mission.publish_story'),
+  'publish-post': plural('game.mission.publish_post'),
+  'publish-posts': plural('game.mission.publish_post'),
+  'share-link': plural('game.mission.share_link'),
+  'prism-foreign-messages': plural('game.mission.prism_foreign_messages'),
+  'prism-foreign-exchange': single('game.mission.prism_foreign_exchange'),
+  'voice-comments': plural('game.mission.voice_comments'),
+  'publish-reel': plural('game.mission.publish_reel'),
+  'long-chat': single('game.mission.long_chat'),
+  'gold-replies-received': single('game.mission.gold_replies_received'),
+  'gold-reply-conversations': single('game.mission.reply_conversations'),
 };
 
 /** La mission en clair ; un gabarit que ce client ne connaît pas encore reste « Mission du jour ». */
-export const missionTitle = (templateKey: string, target: number): string =>
-  MISSION_PHRASES[templateKey]?.(target) ?? 'Mission du jour';
+export function missionTitle(templateKey: string, target: number, language: Language = currentInterfaceLanguage()): string {
+  const phrase = MISSION_PHRASES[templateKey];
+  if (phrase === undefined) return translateGame(language, 'game.mission.generic');
+  if ('plural' in phrase) return translateGamePlural(language, phrase.plural, target);
+  return translateGame(language, phrase.single, { count: formatGameNumber(language, target) });
+}
 
-const ERRORS: Readonly<Record<string, string>> = {
-  [GAME_ERROR_CODES.insufficientPoints]: 'Pas assez de points convertibles pour frapper une Meesh.',
-  [GAME_ERROR_CODES.insufficientMeeshes]: 'Il te faut une Meesh de plus pour ça.',
-  [GAME_ERROR_CODES.freezeAtMaximum]: 'Tu as déjà deux gels en réserve : c’est le maximum.',
-  [GAME_ERROR_CODES.relightNotAllowed]: 'La Flamme ne peut pas être rallumée maintenant.',
-  [GAME_ERROR_CODES.missionNotFound]: 'Cette mission n’existe plus : l’écran se remet à jour.',
-  [GAME_ERROR_CODES.missionRerollExhausted]: 'Tu as déjà changé une mission aujourd’hui.',
-  [GAME_ERROR_CODES.missionRerollUnavailable]: 'Cette mission ne peut pas être changée.',
-  [GAME_ERROR_CODES.missionsLocked]: 'Les missions s’ouvrent au niveau 5.',
-  [GAME_ERROR_CODES.chestNotReady]: 'Termine d’abord les missions du jour pour ouvrir le coffre.',
+type ErrorKey =
+  | 'game.error.insufficient_points'
+  | 'game.error.insufficient_meeshes'
+  | 'game.error.freeze_at_maximum'
+  | 'game.error.relight_not_allowed'
+  | 'game.error.mission_not_found'
+  | 'game.error.mission_reroll_exhausted'
+  | 'game.error.mission_reroll_unavailable'
+  | 'game.error.missions_locked'
+  | 'game.error.chest_not_ready';
+
+const ERRORS: Readonly<Record<string, ErrorKey>> = {
+  [GAME_ERROR_CODES.insufficientPoints]: 'game.error.insufficient_points',
+  [GAME_ERROR_CODES.insufficientMeeshes]: 'game.error.insufficient_meeshes',
+  [GAME_ERROR_CODES.freezeAtMaximum]: 'game.error.freeze_at_maximum',
+  [GAME_ERROR_CODES.relightNotAllowed]: 'game.error.relight_not_allowed',
+  [GAME_ERROR_CODES.missionNotFound]: 'game.error.mission_not_found',
+  [GAME_ERROR_CODES.missionRerollExhausted]: 'game.error.mission_reroll_exhausted',
+  [GAME_ERROR_CODES.missionRerollUnavailable]: 'game.error.mission_reroll_unavailable',
+  [GAME_ERROR_CODES.missionsLocked]: 'game.error.missions_locked',
+  [GAME_ERROR_CODES.chestNotReady]: 'game.error.chest_not_ready',
 };
 
-const GENERIC_ERROR = 'Ça n’a pas abouti — vérifie ta connexion et réessaie.';
-
-export const gameErrorMessage = (code: string | undefined): string =>
-  (code === undefined ? undefined : ERRORS[code]) ?? GENERIC_ERROR;
+export function gameErrorMessage(code: string | undefined, language: Language = currentInterfaceLanguage()): string {
+  const key = code === undefined ? undefined : ERRORS[code];
+  return translateGame(language, key ?? 'game.error.generic');
+}

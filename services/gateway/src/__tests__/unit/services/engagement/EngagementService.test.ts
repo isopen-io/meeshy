@@ -76,6 +76,7 @@ function makePrisma(overrides: Partial<{
       // fields) exercises `updateStreak`'s "brand new streak" branch harmlessly.
       findUnique: overrides.findUnique ?? jest.fn().mockResolvedValue({ systemLanguage: 'fr' }),
       update: overrides.userUpdate ?? jest.fn().mockResolvedValue({}),
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
     },
     $runCommandRaw: makeRawScore(),
   } as unknown as PrismaClient;
@@ -87,7 +88,7 @@ function makeStreakPrisma(streakState: {
   longestStreakDays: number;
   lastStreakDate: Date | null;
   timezone?: string | null;
-}, overrides: Partial<{ create: jest.Mock; userUpdate: jest.Mock }> = {}) {
+}, overrides: Partial<{ create: jest.Mock; userUpdate: jest.Mock; userUpdateMany: jest.Mock }> = {}) {
   // Same answer for every call: the streak-state read AND the (fallback-to-'fr')
   // language lookup a crossed threshold triggers — `recipientLanguage` degrades
   // gracefully when the object it's handed carries no language fields.
@@ -113,6 +114,7 @@ function makeStreakPrisma(streakState: {
     user: {
       findUnique,
       update: overrides.userUpdate ?? jest.fn().mockResolvedValue({}),
+      updateMany: overrides.userUpdateMany ?? jest.fn().mockResolvedValue({ count: 1 }),
     },
     $runCommandRaw: makeRawScore(),
   } as unknown as PrismaClient;
@@ -389,10 +391,10 @@ describe('EngagementService streak tracking (#5544)', () => {
   });
 
   it('starts a fresh streak at 1 for a user who has never had one', async () => {
-    const userUpdate = jest.fn().mockResolvedValue({});
+    const userUpdate = jest.fn().mockResolvedValue({ count: 1 });
     const prisma = makeStreakPrisma(
       { currentStreakDays: 0, longestStreakDays: 0, lastStreakDate: null },
-      { userUpdate },
+      { userUpdateMany: userUpdate },
     );
     mockGetSharedNotificationService.mockReturnValue(makeSharedNotificationService());
     const svc = new EngagementService(prisma);
@@ -400,16 +402,16 @@ describe('EngagementService streak tracking (#5544)', () => {
     await svc.recordActivity('user-1', 'content.text_message');
 
     expect(userUpdate).toHaveBeenCalledWith({
-      where: { id: 'user-1' },
+      where: expect.objectContaining({ id: 'user-1' }),
       data: { currentStreakDays: 1, longestStreakDays: 1, lastStreakDate: TODAY_UTC_MIDNIGHT },
     });
   });
 
   it('increments the streak the day right after the last qualifying activity', async () => {
-    const userUpdate = jest.fn().mockResolvedValue({});
+    const userUpdate = jest.fn().mockResolvedValue({ count: 1 });
     const prisma = makeStreakPrisma(
       { currentStreakDays: 4, longestStreakDays: 6, lastStreakDate: YESTERDAY_UTC_MIDNIGHT },
-      { userUpdate },
+      { userUpdateMany: userUpdate },
     );
     mockGetSharedNotificationService.mockReturnValue(makeSharedNotificationService());
     const svc = new EngagementService(prisma);
@@ -417,19 +419,18 @@ describe('EngagementService streak tracking (#5544)', () => {
     await svc.recordActivity('user-1', 'content.text_message');
 
     expect(userUpdate).toHaveBeenCalledWith({
-      where: { id: 'user-1' },
+      where: expect.objectContaining({ id: 'user-1' }),
       data: { currentStreakDays: 5, longestStreakDays: 6, lastStreakDate: TODAY_UTC_MIDNIGHT },
     });
   });
 
   it('does not increment the streak twice for two activities on the same day', async () => {
-    // `userUpdate` is still called by `updateEngagementScore` (an orthogonal
-    // concern, exercised in its own describe block below) — this test asserts
-    // only that none of those calls carry STREAK fields.
-    const userUpdate = jest.fn().mockResolvedValue({ engagementScore: 0 });
+    // The streak is written by a CONDITIONAL `updateMany` (#9376) — this test
+    // asserts only that none of those calls carry STREAK fields.
+    const userUpdate = jest.fn().mockResolvedValue({ count: 1 });
     const prisma = makeStreakPrisma(
       { currentStreakDays: 3, longestStreakDays: 3, lastStreakDate: TODAY_UTC_MIDNIGHT },
-      { userUpdate },
+      { userUpdateMany: userUpdate },
     );
     mockGetSharedNotificationService.mockReturnValue(makeSharedNotificationService());
     const svc = new EngagementService(prisma);
@@ -443,10 +444,10 @@ describe('EngagementService streak tracking (#5544)', () => {
   });
 
   it('resets a skipped-day streak to 1 without lowering the recorded longest streak, keeping the lost streak for a relight (#9376)', async () => {
-    const userUpdate = jest.fn().mockResolvedValue({});
+    const userUpdate = jest.fn().mockResolvedValue({ count: 1 });
     const prisma = makeStreakPrisma(
       { currentStreakDays: 10, longestStreakDays: 20, lastStreakDate: THREE_DAYS_AGO_UTC_MIDNIGHT },
-      { userUpdate },
+      { userUpdateMany: userUpdate },
     );
     mockGetSharedNotificationService.mockReturnValue(makeSharedNotificationService());
     const svc = new EngagementService(prisma);
@@ -454,7 +455,7 @@ describe('EngagementService streak tracking (#5544)', () => {
     await svc.recordActivity('user-1', 'content.text_message');
 
     expect(userUpdate).toHaveBeenCalledWith({
-      where: { id: 'user-1' },
+      where: expect.objectContaining({ id: 'user-1' }),
       data: {
         currentStreakDays: 1,
         longestStreakDays: 20,
@@ -466,18 +467,18 @@ describe('EngagementService streak tracking (#5544)', () => {
   });
 
   it('treats a legacy user with absent streak fields as a brand new streak, never NaN', async () => {
-    const userUpdate = jest.fn().mockResolvedValue({});
+    const userUpdate = jest.fn().mockResolvedValue({ count: 1 });
     // Pre-migration `User` document: the fields are ABSENT, not defaulted to 0
     // (Mongo does not backfill `@default` on existing rows — see the
     // `updateStreak` doc-comment and `packages/shared/CLAUDE.md`).
-    const prisma = makeStreakPrisma({} as any, { userUpdate });
+    const prisma = makeStreakPrisma({} as any, { userUpdateMany: userUpdate });
     mockGetSharedNotificationService.mockReturnValue(makeSharedNotificationService());
     const svc = new EngagementService(prisma);
 
     await svc.recordActivity('user-1', 'content.text_message');
 
     expect(userUpdate).toHaveBeenCalledWith({
-      where: { id: 'user-1' },
+      where: expect.objectContaining({ id: 'user-1' }),
       data: { currentStreakDays: 1, longestStreakDays: 1, lastStreakDate: TODAY_UTC_MIDNIGHT },
     });
   });
@@ -541,7 +542,7 @@ describe('EngagementService streak tracking honors User.timezone (#5734)', () =>
     const NOW_UTC = new Date('2026-09-08T05:00:00.000Z'); // 2026-09-07T22:00 America/Los_Angeles
     jest.useFakeTimers().setSystemTime(NOW_UTC);
 
-    const userUpdate = jest.fn().mockResolvedValue({});
+    const userUpdate = jest.fn().mockResolvedValue({ count: 1 });
     const prisma = makeStreakPrisma(
       {
         currentStreakDays: 4,
@@ -549,7 +550,7 @@ describe('EngagementService streak tracking honors User.timezone (#5734)', () =>
         lastStreakDate: LAST_STREAK_MARKER,
         timezone: 'America/Los_Angeles',
       },
-      { userUpdate },
+      { userUpdateMany: userUpdate },
     );
     mockGetSharedNotificationService.mockReturnValue(makeSharedNotificationService());
     const svc = new EngagementService(prisma);
@@ -566,7 +567,7 @@ describe('EngagementService streak tracking honors User.timezone (#5734)', () =>
     const NOW_UTC = new Date('2026-09-08T17:00:00.000Z'); // 2026-09-08T10:00 America/Los_Angeles
     jest.useFakeTimers().setSystemTime(NOW_UTC);
 
-    const userUpdate = jest.fn().mockResolvedValue({});
+    const userUpdate = jest.fn().mockResolvedValue({ count: 1 });
     const prisma = makeStreakPrisma(
       {
         currentStreakDays: 4,
@@ -574,7 +575,7 @@ describe('EngagementService streak tracking honors User.timezone (#5734)', () =>
         lastStreakDate: LAST_STREAK_MARKER,
         timezone: 'America/Los_Angeles',
       },
-      { userUpdate },
+      { userUpdateMany: userUpdate },
     );
     mockGetSharedNotificationService.mockReturnValue(makeSharedNotificationService());
     const svc = new EngagementService(prisma);
@@ -582,7 +583,7 @@ describe('EngagementService streak tracking honors User.timezone (#5734)', () =>
     await svc.recordActivity('user-1', 'content.text_message');
 
     expect(userUpdate).toHaveBeenCalledWith({
-      where: { id: 'user-1' },
+      where: expect.objectContaining({ id: 'user-1' }),
       data: {
         currentStreakDays: 5,
         longestStreakDays: 6,
@@ -596,7 +597,7 @@ describe('EngagementService streak tracking honors User.timezone (#5734)', () =>
     const EVENING_TWO_NOW = new Date('2026-09-08T02:00:00.000Z'); // 2026-09-07T19:00 America/Los_Angeles
     jest.useFakeTimers().setSystemTime(EVENING_TWO_NOW);
 
-    const userUpdate = jest.fn().mockResolvedValue({});
+    const userUpdate = jest.fn().mockResolvedValue({ count: 1 });
     const prisma = makeStreakPrisma(
       {
         currentStreakDays: 1,
@@ -604,7 +605,7 @@ describe('EngagementService streak tracking honors User.timezone (#5734)', () =>
         lastStreakDate: EVENING_ONE,
         timezone: 'America/Los_Angeles',
       },
-      { userUpdate },
+      { userUpdateMany: userUpdate },
     );
     mockGetSharedNotificationService.mockReturnValue(makeSharedNotificationService());
     const svc = new EngagementService(prisma);
@@ -612,7 +613,7 @@ describe('EngagementService streak tracking honors User.timezone (#5734)', () =>
     await svc.recordActivity('user-1', 'content.text_message');
 
     expect(userUpdate).toHaveBeenCalledWith({
-      where: { id: 'user-1' },
+      where: expect.objectContaining({ id: 'user-1' }),
       data: {
         currentStreakDays: 2,
         longestStreakDays: 2,
@@ -625,7 +626,7 @@ describe('EngagementService streak tracking honors User.timezone (#5734)', () =>
     const TODAY = new Date('2026-09-08T14:00:00.000Z');
     jest.useFakeTimers().setSystemTime(TODAY);
 
-    const userUpdate = jest.fn().mockResolvedValue({});
+    const userUpdate = jest.fn().mockResolvedValue({ count: 1 });
     const prisma = makeStreakPrisma(
       {
         currentStreakDays: 4,
@@ -633,7 +634,7 @@ describe('EngagementService streak tracking honors User.timezone (#5734)', () =>
         lastStreakDate: new Date('2026-09-07T00:00:00.000Z'),
         timezone: null,
       },
-      { userUpdate },
+      { userUpdateMany: userUpdate },
     );
     mockGetSharedNotificationService.mockReturnValue(makeSharedNotificationService());
     const svc = new EngagementService(prisma);
@@ -641,7 +642,7 @@ describe('EngagementService streak tracking honors User.timezone (#5734)', () =>
     await svc.recordActivity('user-1', 'content.text_message');
 
     expect(userUpdate).toHaveBeenCalledWith({
-      where: { id: 'user-1' },
+      where: expect.objectContaining({ id: 'user-1' }),
       data: {
         currentStreakDays: 5,
         longestStreakDays: 6,
@@ -654,7 +655,7 @@ describe('EngagementService streak tracking honors User.timezone (#5734)', () =>
     const TODAY = new Date('2026-09-08T14:00:00.000Z');
     jest.useFakeTimers().setSystemTime(TODAY);
 
-    const userUpdate = jest.fn().mockResolvedValue({});
+    const userUpdate = jest.fn().mockResolvedValue({ count: 1 });
     const prisma = makeStreakPrisma(
       {
         currentStreakDays: 4,
@@ -662,7 +663,7 @@ describe('EngagementService streak tracking honors User.timezone (#5734)', () =>
         lastStreakDate: new Date('2026-09-07T00:00:00.000Z'),
         timezone: 'Not/A_Zone',
       },
-      { userUpdate },
+      { userUpdateMany: userUpdate },
     );
     mockGetSharedNotificationService.mockReturnValue(makeSharedNotificationService());
     const svc = new EngagementService(prisma);
@@ -670,7 +671,7 @@ describe('EngagementService streak tracking honors User.timezone (#5734)', () =>
     await svc.recordActivity('user-1', 'content.text_message');
 
     expect(userUpdate).toHaveBeenCalledWith({
-      where: { id: 'user-1' },
+      where: expect.objectContaining({ id: 'user-1' }),
       data: {
         currentStreakDays: 5,
         longestStreakDays: 6,

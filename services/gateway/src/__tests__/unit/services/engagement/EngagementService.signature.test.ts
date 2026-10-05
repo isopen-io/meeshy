@@ -38,6 +38,7 @@ function makePrisma(overrides: Partial<{
     user: {
       findUnique: jest.fn().mockResolvedValue({ systemLanguage: 'fr' }),
       update: jest.fn().mockResolvedValue({}),
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
     },
     $runCommandRaw: jest.fn().mockResolvedValue({ ok: 1, value: { engagementScore: 0 } }),
   } as unknown as PrismaClient;

@@ -128,7 +128,13 @@ class Model {
     const order = args.orderBy && Object.entries(args.orderBy)[0];
     if (order) {
       const [field, dir] = order;
-      found = [...found].sort((a, b) => ((a[field] as number) - (b[field] as number)) * (dir === 'asc' ? 1 : -1));
+      const rank = (value: unknown): number | string => (value instanceof Date ? value.getTime() : (value as number | string));
+      const compare = (a: Row, b: Row): number => {
+        const left = rank(a[field]);
+        const right = rank(b[field]);
+        return left < right ? -1 : left > right ? 1 : 0;
+      };
+      found = [...found].sort((a, b) => compare(a, b) * (dir === 'asc' ? 1 : -1));
     }
     return found.slice(0, args.take ?? found.length).map((row) => this.read(row, args.select));
   }

@@ -83,6 +83,15 @@ final class GameSourceGuardTests: XCTestCase {
         XCTAssertTrue(text.contains("GameShaders.precompile()"))
     }
 
+    /// CoreHaptics appelle `resetHandler` sur SA file. Une fermeture écrite dans une classe
+    /// `@MainActor` hérite de cet isolement en Swift 6, et le contrôle d'exécuteur inséré
+    /// à son entrée fait planter l'app au premier redémarrage du moteur (services média
+    /// réinitialisés). `@Sendable` la détache ; elle ne revient au `MainActor` que par sa tâche.
+    func test_theHapticEngineResetHandlerIsNotIsolatedToTheMainActor() throws {
+        let text = try String(contentsOf: iosRoot.appendingPathComponent("Meeshy/Features/Main/Game/Choreography/GameHaptics.swift"), encoding: .utf8)
+        XCTAssertTrue(text.contains("resetHandler = { @Sendable"), "le gestionnaire de réinitialisation tourne hors du fil principal")
+    }
+
     // MARK: - Sept langues, traduites et non recopiées
 
     private let locales = ["fr", "en", "es", "de", "it", "pt-BR", "ar"]

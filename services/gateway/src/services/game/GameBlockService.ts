@@ -68,6 +68,7 @@ export class GameBlockService {
     const block = buildGameBlock({
       userId,
       today: day.dayKey,
+      flameToday: facts.today,
       score: user?.engagementScore ?? 0,
       levelRecord: user?.levelRecord ?? null,
       prestige: user?.prestige ?? 0,

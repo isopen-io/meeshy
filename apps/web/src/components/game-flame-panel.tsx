@@ -1,7 +1,7 @@
 import type { GameFlame } from '@meeshy/shared/types/game';
 import { FLAME_BONUS_PERCENT_MAX, FLAME_BONUS_PERCENT_PER_DAY } from '@meeshy/shared/utils/game/flame';
 
-import { meeshCount } from '@/lib/view/game-copy';
+import { formatCount, gameText, meeshCount } from '@/lib/view/game-copy';
 
 import { GAME_BRAND, GAME_ERROR, GAME_INK, GAME_INK_2, GAME_ON_WARM, GAME_WARM, GameCard } from './game-surface';
 
@@ -28,8 +28,6 @@ export type GameFlamePanelProps = {
   readonly onRelight: () => void;
   readonly errors?: { readonly freeze?: string | undefined; readonly relight?: string | undefined };
 };
-
-const missing = (needed: number): string => `Il te faut ${meeshCount(needed)}`;
 
 function ActionButton({ marker, busy, disabled, onClick, children }: { readonly marker: string; readonly busy: boolean; readonly disabled: boolean; readonly onClick: () => void; readonly children: React.ReactNode }) {
   const attributes = { [marker]: '' };
@@ -66,27 +64,27 @@ export function GameFlamePanel(props: GameFlamePanelProps) {
   return (
     <GameCard id="game-flame-panel" labelledBy="game-flame-panel-title">
       <h2 id="game-flame-panel-title" className="text-body font-bold" style={{ color: GAME_INK }}>
-        Protéger la Flamme
+        {gameText('game.flame_panel.title')}
       </h2>
       <p className="text-caption" style={{ color: GAME_INK_2 }}>
-        +{FLAME_BONUS_PERCENT_PER_DAY} % par jour de série sur les récompenses de mission, jusqu’à +{FLAME_BONUS_PERCENT_MAX} %.
+        {gameText('game.flame_panel.bonus', { perDay: formatCount(FLAME_BONUS_PERCENT_PER_DAY), max: formatCount(FLAME_BONUS_PERCENT_MAX) })}
       </p>
 
       <p className="text-body font-semibold" style={{ color: GAME_INK }}>
-        Gels en réserve : {flame.freezes} / {flame.maxFreezes}
+        {gameText('game.flame_panel.freezes', { held: formatCount(flame.freezes), max: formatCount(flame.maxFreezes) })}
       </p>
       {full ? (
         <p className="text-caption" style={{ color: GAME_INK_2 }}>
-          Réserve pleine : un gel couvre un jour manqué, tu n’en as pas besoin d’un de plus.
+          {gameText('game.flame_panel.freeze_full')}
         </p>
       ) : (
         <>
           <ActionButton marker="data-game-freeze-buy" busy={buyingFreeze} disabled={!online || cannotPayFreeze} onClick={onBuyFreeze}>
-            Acheter un gel · {meeshCount(flame.freezePrice)}
+            {gameText('game.flame_panel.freeze_buy', { price: meeshCount(flame.freezePrice) })}
           </ActionButton>
           {cannotPayFreeze ? (
             <p className="text-caption" style={{ color: GAME_INK_2 }}>
-              {missing(flame.freezePrice)} pour un gel.
+              {gameText('game.flame_panel.freeze_missing', { missing: meeshCount(flame.freezePrice) })}
             </p>
           ) : null}
         </>
@@ -96,14 +94,14 @@ export function GameFlamePanel(props: GameFlamePanelProps) {
       {out && flame.canRelight ? (
         <>
           <p className="text-caption" style={{ color: GAME_INK_2 }}>
-            Ta Flamme s’est éteinte : rallume-la maintenant, elle repart là où elle s’était arrêtée.
+            {gameText('game.flame_panel.relight_intro')}
           </p>
           <ActionButton marker="data-game-relight" busy={relighting} disabled={!online || cannotPayRelight} onClick={onRelight}>
-            Rallumer la Flamme · {meeshCount(flame.relightPrice)}
+            {gameText('game.flame_panel.relight', { price: meeshCount(flame.relightPrice) })}
           </ActionButton>
           {cannotPayRelight ? (
             <p className="text-caption" style={{ color: GAME_INK_2 }}>
-              {missing(flame.relightPrice)} pour la rallumer.
+              {gameText('game.flame_panel.relight_missing', { missing: meeshCount(flame.relightPrice) })}
             </p>
           ) : null}
           <Alert message={errors?.relight} />
@@ -111,17 +109,17 @@ export function GameFlamePanel(props: GameFlamePanelProps) {
       ) : null}
       {out && !flame.canRelight && cannotPayRelight ? (
         <p className="text-caption" style={{ color: GAME_INK_2 }}>
-          {missing(flame.relightPrice)} pour la rallumer, si elle s’est éteinte il y a moins de 48 h.
+          {gameText('game.flame_panel.relight_missing_window', { missing: meeshCount(flame.relightPrice) })}
         </p>
       ) : null}
       {out && !flame.canRelight && !cannotPayRelight ? (
         <p className="text-caption" style={{ color: GAME_BRAND }}>
-          Cette Flamme ne peut plus être rallumée. Une nouvelle Flamme commence dès ton prochain geste.
+          {gameText('game.flame_panel.relight_closed')}
         </p>
       ) : null}
       {!online ? (
         <p className="text-caption" style={{ color: GAME_INK_2 }}>
-          Hors ligne : les gels et le rallumage reprendront avec la connexion.
+          {gameText('game.flame_panel.offline')}
         </p>
       ) : null}
     </GameCard>

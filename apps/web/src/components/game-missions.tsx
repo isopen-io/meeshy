@@ -4,7 +4,7 @@ import type { GameBlock, GameChest, GameMission, GameMissions as GameMissionsBlo
 
 import { Chest, useChoreography } from '@/components/game';
 import { ProgressBar } from '@/components/progress-bar';
-import { DIFFICULTY_NAMES, formatCount, missionTitle, pointsLabel } from '@/lib/view/game-copy';
+import { difficultyName, formatCount, gameText, missionTitle, pointsLabel } from '@/lib/view/game-copy';
 
 import { GAME_BRAND, GAME_ERROR, GAME_GOOD, GAME_INK, GAME_INK_2, GAME_ON_WARM, GAME_WARM, GameCard, GameChip } from './game-surface';
 
@@ -44,12 +44,13 @@ export type GameMissionsProps = {
   readonly errors?: { readonly reroll?: string | undefined; readonly chest?: string | undefined };
 };
 
+/** Le prix d'un changement ; le libellé du bouton le dit dans la phrase du catalogue (« Changer · 1 Meesh »), comme sur iOS. */
 const REROLL_PRICE = 1;
 
 const clock = (minute: number): string =>
   `${String(Math.floor(minute / 60)).padStart(2, '0')}:${String(minute % 60).padStart(2, '0')}`;
 
-const chance = (fraction: number): string => `1 chance sur ${Math.round(1 / fraction)}`;
+const chance = (fraction: number): string => gameText('game.chest.chance', { odds: formatCount(Math.round(1 / fraction)) });
 
 function MissionRow({
   mission,
@@ -76,9 +77,9 @@ function MissionRow({
       style={{ backgroundColor: 'color-mix(in srgb, var(--color-ios-ink-3) 10%, transparent)', opacity: pending ? 0.6 : 1 }}
     >
       <div className="flex flex-wrap items-center gap-1.5">
-        <GameChip tint={mission.difficulty === 'gold' ? GAME_WARM : GAME_BRAND}>{DIFFICULTY_NAMES[mission.difficulty]}</GameChip>
-        {mission.prism ? <GameChip tint={GAME_BRAND}>Prisme</GameChip> : null}
-        {done ? <GameChip tint={GAME_GOOD}>Faite</GameChip> : null}
+        <GameChip tint={mission.difficulty === 'gold' ? GAME_WARM : GAME_BRAND}>{difficultyName(mission.difficulty)}</GameChip>
+        {mission.prism ? <GameChip tint={GAME_BRAND}>{gameText('game.mission.prism')}</GameChip> : null}
+        {done ? <GameChip tint={GAME_GOOD}>{gameText('game.mission.done')}</GameChip> : null}
       </div>
       <p className="text-body font-semibold" style={{ color: GAME_INK }}>
         {title}
@@ -86,22 +87,24 @@ function MissionRow({
       <ProgressBar progress={mission.progress / mission.target} tint={done ? GAME_GOOD : GAME_BRAND} label={title} />
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-caption" style={{ color: GAME_INK_2 }}>
-          {Math.min(mission.progress, mission.target)} / {mission.target}
+          {gameText('game.fmt.fraction', { done: formatCount(Math.min(mission.progress, mission.target)), total: formatCount(mission.target) })}
           {' · '}
-          <span style={{ color: GAME_INK, fontWeight: 700 }}>+{pointsLabel(mission.reward)}</span>
-          {mission.glory > 0 ? <span style={{ color: GAME_WARM, fontWeight: 700 }}> · +{mission.glory} Gloire</span> : null}
+          <span style={{ color: GAME_INK, fontWeight: 700 }}>{gameText('game.fmt.signed', { value: pointsLabel(mission.reward) })}</span>
+          {mission.glory > 0 ? (
+            <span style={{ color: GAME_WARM, fontWeight: 700 }}> · {gameText('game.mission.glory', { glory: formatCount(mission.glory) })}</span>
+          ) : null}
         </p>
         {canReroll && !done ? (
           <button
             type="button"
             data-game-reroll=""
             disabled={!online || pending || held < REROLL_PRICE}
-            aria-label={`Changer la mission « ${title} » contre ${REROLL_PRICE} Meesh`}
+            aria-label={gameText('game.mission.reroll.a11y', { title })}
             onClick={() => onReroll(mission.id)}
             className="rounded-chip px-3 text-check font-semibold disabled:opacity-50"
             style={{ minHeight: 44, color: GAME_BRAND, backgroundColor: 'color-mix(in srgb, var(--color-ios-brand) 12%, transparent)' }}
           >
-            Changer · {REROLL_PRICE} Meesh
+            {gameText('game.mission.reroll')}
           </button>
         ) : null}
       </div>
@@ -111,18 +114,18 @@ function MissionRow({
 
 function Rewards({ reward }: { readonly reward: NonNullable<GameChest['reward']> }) {
   return (
-    <ul className="flex flex-wrap justify-center gap-2" aria-label="Contenu du coffre">
+    <ul className="flex flex-wrap justify-center gap-2" aria-label={gameText('game.chest.contents')}>
       <li data-game-reward="" className="rounded-chip px-2.5 py-1 text-check font-semibold" style={{ backgroundColor: 'color-mix(in srgb, var(--ios-warning) 18%, transparent)', color: GAME_INK }}>
-        +{pointsLabel(reward.points)}
+        {gameText('game.fmt.signed', { value: pointsLabel(reward.points) })}
       </li>
       {reward.fragment ? (
         <li data-game-reward="" className="rounded-chip px-2.5 py-1 text-check font-semibold" style={{ backgroundColor: 'color-mix(in srgb, var(--ios-warning) 18%, transparent)', color: GAME_INK }}>
-          Un fragment de Meesh
+          {gameText('game.chest.reward.fragment')}
         </li>
       ) : null}
       {reward.freeze ? (
         <li data-game-reward="" className="rounded-chip px-2.5 py-1 text-check font-semibold" style={{ backgroundColor: 'color-mix(in srgb, var(--ios-warning) 18%, transparent)', color: GAME_INK }}>
-          Un gel de Flamme
+          {gameText('game.chest.reward.freeze')}
         </li>
       ) : null}
     </ul>
@@ -152,16 +155,16 @@ function ChestCard({ chest, opening, online, onClaim, error }: { readonly chest:
         <Chest state={open ? 'open' : 'closed'} size={90} />
       </div>
       <h3 className="text-body font-bold" style={{ color: GAME_INK }}>
-        Coffre du jour
+        {gameText('game.chest.title')}
       </h3>
       {state === 'locked' ? (
         <p className="text-caption" style={{ color: GAME_INK_2 }}>
-          Termine les missions du jour pour l’ouvrir.
+          {gameText('game.chest.locked')}
         </p>
       ) : null}
       {state === 'opening' ? (
         <p role="status" className="text-caption" style={{ color: GAME_INK_2 }}>
-          Ouverture en cours…
+          {gameText('game.chest.opening')}
         </p>
       ) : null}
       {state === 'ready' ? (
@@ -173,16 +176,21 @@ function ChestCard({ chest, opening, online, onClaim, error }: { readonly chest:
           className="rounded-chip px-4 text-body font-bold disabled:opacity-50"
           style={{ minHeight: 44, backgroundColor: GAME_WARM, color: GAME_ON_WARM }}
         >
-          Ouvrir le coffre
+          {gameText('game.chest.open')}
         </button>
       ) : null}
       {state === 'claimed' ? (
         <p className="text-caption" style={{ color: GAME_INK_2 }}>
-          Reviens demain pour le prochain.
+          {gameText('game.chest.claimed')}
         </p>
       ) : null}
       <p className="text-center text-caption" style={{ color: GAME_INK_2 }}>
-        {formatCount(odds.minPoints)} à {pointsLabel(odds.maxPoints)} · {chance(odds.fragment)} d’un fragment · {chance(odds.freeze)} d’un gel
+        {gameText('game.chest.odds', {
+          min: formatCount(odds.minPoints),
+          max: pointsLabel(odds.maxPoints),
+          fragment: chance(odds.fragment),
+          freeze: chance(odds.freeze),
+        })}
       </p>
       {error === undefined || opening ? null : (
         <p role="alert" className="text-caption" style={{ color: GAME_ERROR }}>
@@ -200,10 +208,10 @@ export function GameMissions(props: GameMissionsProps) {
     return (
       <GameCard id="game-missions" labelledBy="game-missions-title">
         <h2 id="game-missions-title" className="text-body font-bold" style={{ color: GAME_INK }}>
-          Missions du jour
+          {gameText('game.missions.title')}
         </h2>
         <p className="text-caption" style={{ color: GAME_INK_2 }}>
-          Les missions s’ouvrent au niveau 5 : trois par jour, et un coffre. Tu es au niveau {level}.
+          {gameText('game.missions.locked', { level: formatCount(level) })}
         </p>
       </GameCard>
     );
@@ -212,16 +220,16 @@ export function GameMissions(props: GameMissionsProps) {
   return (
     <GameCard id="game-missions" labelledBy="game-missions-title">
       <h2 id="game-missions-title" className="text-body font-bold" style={{ color: GAME_INK }}>
-        Missions du jour
+        {gameText('game.missions.title')}
       </h2>
       {missions.prismDay ? (
         <p className="text-caption" style={{ color: GAME_INK_2 }}>
-          Jour du Prisme : une des missions se joue dans une autre langue que la tienne.
+          {gameText('game.missions.prism_day')}
         </p>
       ) : null}
       {prismHour === null ? null : (
         <p className="text-caption" style={{ color: GAME_INK_2 }}>
-          Heure du Prisme : {clock(prismHour.startMinute)} – {clock(prismHour.endMinute)} — tes missions comptent double.
+          {gameText('game.missions.prism_hour', { start: clock(prismHour.startMinute), end: clock(prismHour.endMinute) })}
         </p>
       )}
       <ul className="flex flex-col gap-2">
@@ -244,7 +252,7 @@ export function GameMissions(props: GameMissionsProps) {
       )}
       {online ? null : (
         <p className="text-caption" style={{ color: GAME_INK_2 }}>
-          Hors ligne : changer une mission ou ouvrir le coffre reprendra en ligne.
+          {gameText('game.missions.offline')}
         </p>
       )}
       <ChestCard chest={chest} opening={chestOpening} online={online} onClaim={onClaim} error={errors?.chest} />

@@ -109,8 +109,10 @@ public enum GameFlame {
     }
 
     /// Le bonus en pour cent entier — la forme exacte que les récompenses emploient.
+    /// Les jours se bornent au plafond avant la multiplication : une série démesurée
+    /// reçue du réseau ne déborde pas, elle se lit au plafond.
     public static func bonusPercent(forDays days: Int) -> Int {
-        min(bonusPercentMax, bonusPercentPerDay * max(0, days))
+        min(bonusPercentMax, bonusPercentPerDay * min(max(0, days), bonusPercentMax))
     }
 
     /// min(0,5 ; 0,02 × jours).

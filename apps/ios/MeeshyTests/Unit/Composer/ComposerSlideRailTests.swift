@@ -108,4 +108,116 @@ final class ComposerSlideRailTests: XCTestCase {
         let tuile = try XCTUnwrap(code.range(of: "private func tuile("))
         XCTAssertTrue(code[tuile.lowerBound...].contains(".contentShape(RoundedRectangle(cornerRadius: MeeshyRadius.xxs))"))
     }
+
+    // MARK: - La tuile EST la vignette de la scène (#5009 + #5037)
+
+    /// **Une scène existe, sa vignette se voit** (#5037 : « dès qu'une scène
+    /// existe »). Le rail se taisait sous deux scènes ; la story la plus simple
+    /// — une seule scène — n'avait donc jamais d'aperçu.
+    func test_showsRail_uneScenePresente_vrai() {
+        XCTAssertTrue(ComposerHeaderTiles.showsRail(sceneCount: 1, scenePresent: true))
+    }
+
+    /// Le document d'un post sans scène montée n'a rien à résumer : une
+    /// vignette noire y annoncerait une scène que l'auteur n'a pas.
+    func test_showsRail_uneSceneNonMontee_faux() {
+        XCTAssertFalse(ComposerHeaderTiles.showsRail(sceneCount: 1, scenePresent: false))
+    }
+
+    func test_showsRail_deuxScenes_vrai_aucune_faux() {
+        XCTAssertTrue(ComposerHeaderTiles.showsRail(sceneCount: 2, scenePresent: false))
+        XCTAssertFalse(ComposerHeaderTiles.showsRail(sceneCount: 0, scenePresent: true))
+    }
+
+    /// **Une vignette seule n'est pas un bouton** (loi 4) : elle ne navigue vers
+    /// rien, VoiceOver la lit comme un aperçu.
+    func test_tilesNavigate_seulementAPartirDeDeuxScenes() {
+        XCTAssertFalse(ComposerHeaderTiles.tilesNavigate(sceneCount: 1))
+        XCTAssertTrue(ComposerHeaderTiles.tilesNavigate(sceneCount: 2))
+    }
+
+    /// **Toucher (+) : la scène naît, sélectionnée, et sa vignette est NOIRE**
+    /// (#5009). Les deux premiers points passaient déjà ; le troisième est ce
+    /// que l'auteur VOIT — c'est lui qui manquait.
+    @MainActor
+    func test_addSlide_laNouvelleScene_estPresente_selectionnee_etNoire() {
+        let vm = StoryComposerViewModel()
+        var premiere = vm.currentSlide
+        premiere.effects.background = "FF2E63"
+        vm.currentSlide = premiere
+        vm.addSlide()
+        let tuiles = ComposerHeaderTiles.tiles(for: vm.slides)
+        XCTAssertEqual(tuiles.count, 2)
+        XCTAssertEqual(vm.currentSlideIndex, 1, "la scène créée est celle qu'on compose")
+        XCTAssertTrue(ComposerHeaderTiles.showsRail(sceneCount: tuiles.count, scenePresent: true))
+        XCTAssertTrue(SceneThumbnailContent.isBlank(tuiles[1], bgImage: nil),
+                      "une scène neuve n'a rien : sa vignette est noire")
+        XCTAssertFalse(SceneThumbnailContent.isBlank(tuiles[0], bgImage: nil))
+    }
+
+    /// **Le plafond de dix scènes se DIT** (#5009) : `addSlide()` y est un
+    /// no-op, et un geste sans effet visible se lit comme un bouton inerte.
+    func test_additionOutcome_auPlafond_refuseEtAnnonce() {
+        XCTAssertEqual(ComposerSceneAddition.outcome(canAddSlide: true), .added)
+        XCTAssertEqual(ComposerSceneAddition.outcome(canAddSlide: false), .refusedAtCap)
+    }
+
+    // MARK: - Quand repeindre une vignette
+
+    /// La première image d'une tuile se peint TOUT DE SUITE — une tuile qui
+    /// naît vide attendrait le débounce pour rien.
+    func test_refresh_premiereImage_immediate() {
+        XCTAssertFalse(ComposerSceneThumbnailRefresh.waits(isShowingImage: false, isCached: false, isBlank: false))
+    }
+
+    /// Une vignette en cache ou une scène vide (du noir) ne coûtent rien.
+    func test_refresh_cacheOuSceneVide_immediate() {
+        XCTAssertFalse(ComposerSceneThumbnailRefresh.waits(isShowingImage: true, isCached: true, isBlank: false))
+        XCTAssertFalse(ComposerSceneThumbnailRefresh.waits(isShowingImage: true, isCached: false, isBlank: true))
+    }
+
+    /// **Pendant un geste sur la scène, la vignette attend que la main se
+    /// pose** : l'image précédente reste à l'écran (jamais de trou), le rendu
+    /// part après le débounce — et pas à chaque image du glisser.
+    func test_refresh_sceneQuiChange_debounce() {
+        XCTAssertTrue(ComposerSceneThumbnailRefresh.waits(isShowingImage: true, isCached: false, isBlank: false))
+        XCTAssertGreaterThan(ComposerSceneThumbnailRefresh.debounceNanoseconds, 0)
+        XCTAssertLessThanOrEqual(ComposerSceneThumbnailRefresh.debounceNanoseconds, 300_000_000)
+    }
+
+    /// **La tuile ne monte plus `SlideMiniPreview`** — le second chemin de rendu
+    /// que #5037 nommait comme piège : elle peint la vignette du composite
+    /// partagé (`SceneThumbnailRenderer`).
+    func test_laTuile_peintLaVignetteDuCompositePartage() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Composer/ComposerSlideRail.swift")
+        let code = try String(contentsOf: url, encoding: .utf8)
+        XCTAssertFalse(code.contains("SlideMiniPreview("))
+        XCTAssertTrue(code.contains("SceneThumbnailRenderer.thumbnail("))
+    }
+
+    /// **Le refus du onzième `(+)` se VOIT** (#5009) : le meuble est présenté
+    /// en `fullScreenCover` par chacune de ses portes, qui couvre l'hôte de
+    /// toasts de la racine. L'hôte est donc monté par le meuble lui-même, une
+    /// seule fois — une porte qui le reposerait doublerait chaque toast.
+    func test_leMeuble_monteSonHoteDeToasts_uneSeuleFois() throws {
+        let racine = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        func code(_ chemin: String) throws -> String {
+            AppSourceGuard.stripComments(
+                try String(contentsOf: racine.appendingPathComponent(chemin), encoding: .utf8))
+        }
+        let couches = try code("Meeshy/Features/Main/Composer/MeeshyComposerHost+Layers.swift")
+        XCTAssertTrue(couches.contains(".feedbackToastOverlay()"),
+                      "le meuble doit monter l'hôte des toasts sur son chrome")
+        for porte in ["DocumentComposerDoor", "MediaComposerDoor", "ShareComposeDoor",
+                      "StoryEditComposer", "StoryRepublishComposer", "ConversationImageSceneDoor",
+                      "ComposerMoodSurface"] {
+            XCTAssertFalse(try code("Meeshy/Features/Main/Composer/\(porte).swift").contains(".feedbackToastOverlay()"),
+                           "\(porte) repose l'hôte des toasts : chaque toast paraîtrait deux fois")
+        }
+    }
 }

@@ -73,6 +73,31 @@ public enum GameMaterial: String, CaseIterable, Sendable, Hashable {
     }
 }
 
+/// Les dix couleurs de palier de la planche, du rouge Étincelle au prisme de Galaxie.
+public enum LevelTierPalette {
+    public static func color(for tier: LevelTierKey) -> Color {
+        switch tier {
+        case .etincelle: Color(hex: "f87171")
+        case .lueur: Color(hex: "fb923c")
+        case .lumiere: Color(hex: "fbbf24")
+        case .eclat: Color(hex: "a3e635")
+        case .rayon: Color(hex: "34d399")
+        case .aurore: Color(hex: "22d3ee")
+        case .comete: Color(hex: "60a5fa")
+        case .etoile: Color(hex: "818cf8")
+        case .constellation: Color(hex: "a855f7")
+        case .galaxie: Color(hex: "a855f7")
+        }
+    }
+
+    /// Le trait de l'arc : une couleur franche, ou le prisme tournant de Galaxie.
+    static func style(for tier: LevelTierKey) -> AnyShapeStyle {
+        tier == .galaxie
+            ? AnyShapeStyle(AngularGradient(stops: GamePalette.prismStops, center: .center))
+            : AnyShapeStyle(color(for: tier))
+    }
+}
+
 /// Les autres dégradés et couleurs de la planche, nommés une fois.
 enum GamePalette {
     static let prismStops: [Gradient.Stop] = [
@@ -110,6 +135,8 @@ enum GamePalette {
     static let violet = Color(hex: "8b5cf6")
     static let gold = Color(hex: "fbbf24")
     static let laurel = Color(hex: "10b981")
+    /// L'ombre portée de la Signature frappée ou gravée.
+    static let signatureShadow = Color(hex: "2b3342")
 
     static func shading(_ stops: [Gradient.Stop], from: UnitPoint, to: UnitPoint, in box: CGRect) -> GraphicsContext.Shading {
         .linearGradient(

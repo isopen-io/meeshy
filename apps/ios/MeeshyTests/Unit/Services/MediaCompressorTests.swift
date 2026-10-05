@@ -300,6 +300,60 @@ final class MediaCompressorTests: XCTestCase {
         XCTAssertEqual(result.mimeType, "image/jpeg")
     }
 
+    // MARK: - compressImage — l'orientation visible survit à la réduction (#9403)
+
+    func test_compressImage_portraitRightOrientedLargeImage_keepsPortraitPixels() async {
+        let sut = makeSUT()
+        let image = makeOrientedImage(pixelWidth: 4000, pixelHeight: 3000, orientation: .right)
+
+        let result = await sut.compressImage(image, maxDimension: 2048)
+
+        let decoded = decodedPixels(result.data)
+        XCTAssertEqual(decoded?.width, 1536)
+        XCTAssertEqual(decoded?.height, 2048)
+        XCTAssertEqual(decoded?.orientation, 1)
+    }
+
+    func test_compressImage_portraitRightOrientedLargeImage_isSeenUpright() async {
+        let sut = makeSUT()
+        let image = makeOrientedImage(pixelWidth: 4000, pixelHeight: 3000, orientation: .right)
+
+        let result = await sut.compressImage(image, maxDimension: 2048)
+
+        let seen = UIImage(data: result.data)
+        XCTAssertEqual(seen?.size.width, 1536)
+        XCTAssertEqual(seen?.size.height, 2048)
+    }
+
+    func test_compressImage_upOrientedLargeImage_keepsLandscapePixels() async {
+        let sut = makeSUT()
+        let image = makeOrientedImage(pixelWidth: 4000, pixelHeight: 3000, orientation: .up)
+
+        let result = await sut.compressImage(image, maxDimension: 2048)
+
+        let decoded = decodedPixels(result.data)
+        XCTAssertEqual(decoded?.width, 2048)
+        XCTAssertEqual(decoded?.height, 1536)
+        XCTAssertEqual(decoded?.orientation, 1)
+    }
+
+    private func makeOrientedImage(pixelWidth: CGFloat, pixelHeight: CGFloat,
+                                   orientation: UIImage.Orientation) -> UIImage {
+        let raw = makeTestImage(width: pixelWidth, height: pixelHeight)
+        return UIImage(cgImage: raw.cgImage!, scale: 1, orientation: orientation)
+    }
+
+    private func decodedPixels(_ data: Data) -> (width: Int, height: Int, orientation: Int)? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+              let width = properties[kCGImagePropertyPixelWidth] as? Int,
+              let height = properties[kCGImagePropertyPixelHeight] as? Int else {
+            return nil
+        }
+        let orientation = properties[kCGImagePropertyOrientation] as? Int ?? 1
+        return (width, height, orientation)
+    }
+
     // MARK: - Factory Helpers
 
     private func makeTestImage(width: CGFloat, height: CGFloat) -> UIImage {

@@ -17,31 +17,6 @@ import MeeshySDK
 // le vide (« l'anneau se remplit, le chiffre roule » / « se vide calmement »).
 // La brique n'anime rien d'elle-même : la chorégraphie est celle de l'app.
 
-/// Les dix couleurs de palier de la planche, du rouge Étincelle au prisme de Galaxie.
-public enum LevelTierPalette {
-    public static func color(for tier: LevelTierKey) -> Color {
-        switch tier {
-        case .etincelle: Color(hex: "f87171")
-        case .lueur: Color(hex: "fb923c")
-        case .lumiere: Color(hex: "fbbf24")
-        case .eclat: Color(hex: "a3e635")
-        case .rayon: Color(hex: "34d399")
-        case .aurore: Color(hex: "22d3ee")
-        case .comete: Color(hex: "60a5fa")
-        case .etoile: Color(hex: "818cf8")
-        case .constellation: Color(hex: "a855f7")
-        case .galaxie: Color(hex: "a855f7")
-        }
-    }
-
-    /// Le trait de l'arc : une couleur franche, ou le prisme tournant de Galaxie.
-    static func style(for tier: LevelTierKey) -> AnyShapeStyle {
-        tier == .galaxie
-            ? AnyShapeStyle(AngularGradient(stops: GamePalette.prismStops, center: .center))
-            : AnyShapeStyle(color(for: tier))
-    }
-}
-
 public struct LevelRingView: View {
 
     private let level: Int

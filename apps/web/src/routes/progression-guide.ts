@@ -17,6 +17,7 @@ import { markGuideSeen } from '@/lib/api/game';
 import type { HttpTransport } from '@/lib/api/http';
 import { cardOfMoment, cardOfStep, type GuideCard } from '@/lib/game-guide/card';
 import { standingGuideEvents, transitionGuideEvents } from '@/lib/game-guide/events';
+import { awaitingGesture, openingStep } from '@/lib/game-guide/gesture';
 import { safeLocalStorage, type SafeStorage } from '@/lib/storage';
 import { localDayOf } from '@/lib/view/engagement-pill';
 
@@ -37,6 +38,13 @@ import { localDayOf } from '@/lib/view/engagement-pill';
  *     pas la carte : c'est le prix d'un hors-ligne, la carte se redira.
  *  4. Chaque étape peut se passer ; passer une étape montre la suivante, passer
  *     l'intégration marque les restantes en UN envoi.
+ *
+ * Trois étapes demandent un GESTE (`lib/game-guide/gesture.ts` : le premier
+ * geste, la mission facile, revenir le lendemain pour la Flamme). Elles
+ * n'avancent pas par une carte : à l'ouverture, la dernière étape vue dont le
+ * geste manque se REDIT au lieu de passer à la suivante, et pendant que l'écran
+ * est ouvert elle avance d'elle-même dès que le bloc `game` montre que le geste
+ * a eu lieu. « Passer » reste possible à tout moment.
  *
  * Le dernier passage (jour, dans le fuseau du joueur) se garde en local, avec
  * un `try/catch` partout : il ne sert qu'à dire « content de te revoir » après
@@ -77,11 +85,23 @@ function rememberVisit(storage: SafeStorage, day: string): void {
   }
 }
 
-function openingCard(game: GameBlock, seen: ReadonlySet<string>, daysAway: number | null): GuideCard | null {
-  const step = nextOnboardingStep(seen);
-  if (step !== null) return cardOfStep(step);
+function openingCard(view: EngagementWithGame, game: GameBlock, seen: ReadonlySet<string>, daysAway: number | null): GuideCard | null {
+  const step = openingStep(view, seen);
+  if (step !== null) return cardOfStep(step, view);
   const moment = chooseGuideMoment(standingGuideEvents(game, seen, { daysAway }), seen);
   return moment === null ? null : cardOfMoment(moment);
+}
+
+/**
+ * L'étape qui attendait son geste et l'a vu avoir lieu avance : la carte de la
+ * suivante, ou `null` quand l'intégration est finie. `undefined` : rien ne
+ * change (la carte n'attend pas, ou son geste manque encore).
+ */
+function advancedStep(current: GuideCard | null, view: EngagementWithGame, seen: ReadonlySet<string>): GuideCard | null | undefined {
+  if (current?.awaiting !== true || current.stepKey === undefined) return undefined;
+  if (awaitingGesture(current.stepKey, view)) return undefined;
+  const next = nextOnboardingStep(seen);
+  return next === null ? null : cardOfStep(next, view);
 }
 
 export function useGameGuide(params: {
@@ -129,9 +149,13 @@ export function useGameGuide(params: {
       const day = today.current();
       const last = lastVisit(storage.current);
       rememberVisit(storage.current, day);
-      setCard(openingCard(game, seen.current, last === null ? null : dayDiff(last, day)));
+      setCard(openingCard(view, game, seen.current, last === null ? null : dayDiff(last, day)));
       return;
     }
+    setCard((current) => {
+      const advanced = advancedStep(current, view, seen.current);
+      return advanced === undefined ? current : advanced;
+    });
     if (before === null) return;
     const events = transitionGuideEvents(before, view);
     if (events.length === 0) return;
@@ -149,7 +173,7 @@ export function useGameGuide(params: {
     setCard((current) => {
       if (current?.step === undefined) return null;
       const next = nextOnboardingStep(seen.current);
-      return next === null ? null : cardOfStep(next);
+      return next === null ? null : cardOfStep(next, previous.current ?? undefined);
     });
   }, []);
 

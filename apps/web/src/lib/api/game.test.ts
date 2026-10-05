@@ -68,6 +68,25 @@ describe('readGameBlock — jamais à moitié lu', () => {
     expect(readGameBlock(futur)?.missions.items[0]?.templateKey).toBe('gabarit-de-2027');
   });
 
+  test('un serveur qui relèverait le plafond du bonus de Flamme (ou du Prestige) ne fait pas retomber l’écran sur l’ancien', () => {
+    const block = gameBlockFixture();
+    const relevé = {
+      ...block,
+      flame: { ...block.flame, bonusPercent: 80 },
+      level: { ...block.level, prestige: 9 },
+    };
+    const read = readGameBlock(relevé);
+    expect(read).not.toBeNull();
+    expect(read?.flame.bonusPercent).toBe(80);
+  });
+
+  test('la FORME reste stricte : un bonus négatif ou fractionnaire est refusé', () => {
+    const block = gameBlockFixture();
+    expect(readGameBlock({ ...block, flame: { ...block.flame, bonusPercent: -2 } })).toBeNull();
+    expect(readGameBlock({ ...block, flame: { ...block.flame, bonusPercent: 2.5 } })).toBeNull();
+    expect(readGameBlock({ ...block, flame: { ...block.flame, bonusPercent: '12' } })).toBeNull();
+  });
+
   test('un coffre ouvert porte sa récompense, un coffre fermé non', () => {
     const open = gameBlockFixture({ chestClaimed: true, chestReward: { points: 90, fragment: true, freeze: false } });
     expect(readGameBlock(open)?.chest.reward).toEqual({ points: 90, fragment: true, freeze: false });

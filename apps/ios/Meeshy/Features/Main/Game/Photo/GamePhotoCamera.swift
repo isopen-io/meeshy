@@ -42,6 +42,9 @@ final class GamePhotoCamera: NSObject, GamePhotoCameraProviding {
     nonisolated let photoProcessor: any PhotoCaptureProcessorProviding
     private let output = AVCapturePhotoOutput()
     private var configured = false
+    /// Ce que le déroulé VEUT : démarrage et arrêt partent chacun sur leur tâche, sans
+    /// ordre garanti ; un arrêt demandé pendant le démarrage est rejoué à son issue.
+    private var wantsRunning = false
     private var pending: CheckedContinuation<UIImage?, Never>?
 
     init(photoProcessor: any PhotoCaptureProcessorProviding = PhotoCaptureProcessor.shared) {
@@ -69,17 +72,27 @@ final class GamePhotoCamera: NSObject, GamePhotoCameraProviding {
             session.commitConfiguration()
             configured = true
         }
+        wantsRunning = true
         Task.detached { [weak self] in
             self?.session.startRunning()
+            await self?.settleAfterStart()
         }
         guard await waitUntilRunning(timeout: 3) else { return .unavailable }
         return nil
     }
 
     func stop() {
+        wantsRunning = false
         Task.detached { [weak self] in
             self?.session.stopRunning()
         }
+    }
+
+    /// Le déroulé s'est refermé pendant que la caméra démarrait : l'arrêt parti avant
+    /// le démarrage n'a rien arrêté, il se rejoue maintenant.
+    private func settleAfterStart() {
+        guard !wantsRunning else { return }
+        stop()
     }
 
     func capture() async -> UIImage? {
@@ -93,7 +106,7 @@ final class GamePhotoCamera: NSObject, GamePhotoCameraProviding {
     private func waitUntilRunning(timeout: TimeInterval) async -> Bool {
         let limit = Date().addingTimeInterval(timeout)
         while !session.isRunning {
-            guard !Task.isCancelled, Date() < limit else { return false }
+            guard wantsRunning, !Task.isCancelled, Date() < limit else { return false }
             try? await Task.sleep(nanoseconds: 50_000_000)
         }
         return true

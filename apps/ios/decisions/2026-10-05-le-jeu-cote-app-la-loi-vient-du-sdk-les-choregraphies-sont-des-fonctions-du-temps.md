@@ -18,3 +18,4 @@
 - La ligne « badges qui redescendent » de l'aperçu et le moment « un badge s'est éteint » lisent `GameMintBadgeImpact`, un port Swift du plan de débit (`computeMeeshMintPlan`) qui rend `nil` — jamais zéro — quand le serveur ne sert pas les points par axe.
 - Reste à faire, consigné dans les issues : `BadgeStage` (0,7 s) attend un hôte qui montre les badges avec `GameBadgeView` ; le plan de débit n'a pas encore de vecteurs partagés rejoués par les deux plateformes.
 - Le miroir Kotlin est gelé (directive 2026-09-16) et ne reçoit rien de ce lot.
+- Preuve : run `ci/jeu-ios-10` (37292059807), suite complète — aucun témoin du jeu en échec ; deux cliquets de charte (`Color(hex:)`, `cornerRadius`) restent rouges à cause des littéraux du SDK (`GameMaterial`, `LevelRingView`), hors de ce lot.

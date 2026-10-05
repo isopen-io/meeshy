@@ -548,6 +548,39 @@ describe('GET /admin/audit-logs — le motif et les changements', () => {
     expect(boss.changes[0]).toEqual({ field: 'email', before: 'awa@exemple.fr', after: 'awa@autre.fr' });
     expect(JSON.stringify(audit)).not.toContain('awa@exemple.fr');
   });
+
+  /**
+   * #9423 — les préférences d'un membre ne se lisent qu'avec `canViewSensitiveData` (#8003).
+   * Le journal ne doit pas les rendre par la bande : une ligne UPDATE_PREFERENCES porte la
+   * valeur AVANT, c'est-à-dire le choix du membre lui-même. AUDIT voit QUELLES clés ont bougé,
+   * jamais leurs valeurs ; BIGBOSS (le seul autre lecteur du journal) les voit.
+   */
+  it('masque les valeurs d’une modification de préférences pour qui n’a pas canViewSensitiveData (#9423)', async () => {
+    const changes = JSON.stringify({
+      'privacy.showOnlineStatus': { before: true, after: false },
+      'notification.dndEnabled': { before: false, after: true },
+    });
+    const ligne = auditRow({ action: 'UPDATE_PREFERENCES', changes });
+    const audit = await firstRow(makePrisma([ligne]), 'AUDIT');
+    const boss = await firstRow(makePrisma([ligne]), 'BIGBOSS');
+
+    expect(audit.changes).toEqual([
+      { field: 'privacy.showOnlineStatus', before: '•••', after: '•••' },
+      { field: 'notification.dndEnabled', before: '•••', after: '•••' },
+    ]);
+    expect(boss.changes).toEqual([
+      { field: 'privacy.showOnlineStatus', before: 'true', after: 'false' },
+      { field: 'notification.dndEnabled', before: 'false', after: 'true' },
+    ]);
+  });
+
+  it('ne masque pas pour autant les valeurs des autres actions à AUDIT (#9423)', async () => {
+    const row = await firstRow(
+      makePrisma([auditRow({ action: 'UPDATE_PROFILE', changes: JSON.stringify({ displayName: { before: 'Jean', after: 'Jean D.' } }) })]),
+      'AUDIT'
+    );
+    expect(row.changes).toEqual([{ field: 'displayName', before: 'Jean', after: 'Jean D.' }]);
+  });
 });
 
 describe('GET /admin/audit-logs — ce qui part à côté', () => {

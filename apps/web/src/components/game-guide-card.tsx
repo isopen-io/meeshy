@@ -3,6 +3,7 @@ import { useId, useState } from 'react';
 import { GameBird } from '@/components/game';
 import { guideActionTarget } from '@/lib/game-guide/action-target';
 import { guideBirds, type GuideCard } from '@/lib/game-guide/card';
+import { formatCount, gameText } from '@/lib/view/game-copy';
 
 import { GAME_BRAND, GAME_INK, GAME_INK_2, GameCard } from './game-surface';
 
@@ -34,7 +35,8 @@ export type GameGuideCardProps = {
   readonly onPhoto?: () => void;
 };
 
-const SPEAKER_NAMES = { mee: 'Mee', meo: 'Meo', duo: 'Mee et Meo' } as const;
+const speakerName = (speaker: GuideCard['speaker']): string =>
+  gameText(speaker === 'mee' ? 'game.guide.speaker.mee' : speaker === 'meo' ? 'game.guide.speaker.meo' : 'game.guide.speaker.duo');
 
 const BUTTON_STYLE = { minHeight: 44 } as const;
 
@@ -53,8 +55,10 @@ export function GameGuideCard({ card, onAction, onDismiss, onSkipAll, onPhoto }:
           {birds.mee === undefined ? null : <GameBird bird={birds.mee} size={card.speaker === 'duo' ? 56 : 72} />}
           <div className="min-w-0 flex-1 pb-1">
             <h2 id={titleId} className="text-check font-semibold uppercase tracking-wide" style={{ color: GAME_INK_2 }}>
-              {SPEAKER_NAMES[card.speaker]}
-              {card.step === undefined ? '' : ` · Étape ${card.step.index} sur ${card.step.total}`}
+              {speakerName(card.speaker)}
+              {card.step === undefined
+                ? ''
+                : ` · ${gameText('game.guide.step_of', { index: formatCount(card.step.index), total: formatCount(card.step.total) })}`}
             </h2>
             <p className="text-body font-bold" style={{ color: GAME_INK }}>
               {expanded ? card.copy.what : card.copy.short}
@@ -66,7 +70,7 @@ export function GameGuideCard({ card, onAction, onDismiss, onSkipAll, onPhoto }:
               type="button"
               data-game-guide-help=""
               aria-expanded={false}
-              aria-label="Voir l’explication complète"
+              aria-label={gameText('game.guide.more')}
               onClick={() => setReopened(true)}
               className="grid shrink-0 place-items-center rounded-chip px-3 text-body font-bold"
               style={{ ...BUTTON_STYLE, minWidth: 44, color: GAME_BRAND, backgroundColor: 'color-mix(in srgb, var(--color-ios-brand) 12%, transparent)' }}
@@ -91,12 +95,12 @@ export function GameGuideCard({ card, onAction, onDismiss, onSkipAll, onPhoto }:
             type="button"
             data-game-guide-help=""
             aria-expanded
-            aria-label="Replier l’explication"
+            aria-label={gameText('game.guide.collapse_a11y')}
             onClick={() => setReopened(false)}
             className="self-start rounded-chip px-3 text-check font-semibold"
             style={{ ...BUTTON_STYLE, color: GAME_BRAND }}
           >
-            Replier
+            {gameText('game.guide.collapse')}
           </button>
         ) : null}
 
@@ -118,7 +122,7 @@ export function GameGuideCard({ card, onAction, onDismiss, onSkipAll, onPhoto }:
               className="rounded-chip px-3 text-body font-semibold"
               style={{ ...BUTTON_STYLE, color: GAME_BRAND, backgroundColor: 'color-mix(in srgb, var(--color-ios-brand) 12%, transparent)' }}
             >
-              Immortaliser
+              {gameText('game.guide.photo')}
             </button>
           ) : null}
           <button
@@ -128,7 +132,7 @@ export function GameGuideCard({ card, onAction, onDismiss, onSkipAll, onPhoto }:
             className="rounded-chip px-3 text-body font-semibold"
             style={{ ...BUTTON_STYLE, color: GAME_INK_2 }}
           >
-            {isStep ? 'Passer' : 'Plus tard'}
+            {isStep ? gameText('game.guide.skip') : gameText('game.guide.dismiss')}
           </button>
           {isStep && onSkipAll !== undefined ? (
             <button
@@ -138,7 +142,7 @@ export function GameGuideCard({ card, onAction, onDismiss, onSkipAll, onPhoto }:
               className="rounded-chip px-3 text-check font-semibold"
               style={{ ...BUTTON_STYLE, color: GAME_INK_2 }}
             >
-              Passer l’intégration
+              {gameText('game.guide.skip_all')}
             </button>
           ) : null}
         </div>

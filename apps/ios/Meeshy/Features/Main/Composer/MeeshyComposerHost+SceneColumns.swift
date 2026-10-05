@@ -20,8 +20,16 @@ extension MeeshyComposerHost {
     var sceneAddSlideButton: AnyView {
         AnyView(
             Button {
-                viewModel.addSlide()
-                HapticFeedback.light()
+                // La scène naît sélectionnée et sa vignette paraît au rail
+                // (#5009) ; au plafond, le refus se DIT au lieu de se taire.
+                switch ComposerSceneAddition.outcome(canAddSlide: viewModel.canAddSlide) {
+                case .added:
+                    viewModel.addSlide()
+                    HapticFeedback.light()
+                case .refusedAtCap:
+                    HapticFeedback.error()
+                    FeedbackToastManager.shared.showError(ComposerSlideRailCopy.capReached)
+                }
             } label: {
                 Image(systemName: "plus")
                     .font(.footnote.weight(.bold))

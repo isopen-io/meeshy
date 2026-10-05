@@ -76,9 +76,11 @@ public enum GameLevels {
         10 * level * level
     }
 
-    /// Le niveau (1 à 100) que porte ce score ; un score négatif vaut 0.
+    /// Le niveau (1 à 100) que porte ce score ; un score négatif vaut 0. Le score se
+    /// borne au seuil du niveau 100 avant tout calcul : au-delà, le niveau ne change
+    /// plus, et `10 × N²` déborderait sur un score démesuré reçu du réseau.
     public static func level(forScore score: Int) -> Int {
-        let s = max(0, score)
+        let s = min(max(0, score), threshold(of: maxLevel))
         let guess = Int((Double(s) / 10).squareRoot().rounded(.down))
         let exact = [guess - 1, guess, guess + 1]
             .filter { $0 >= 0 && threshold(of: $0) <= s }

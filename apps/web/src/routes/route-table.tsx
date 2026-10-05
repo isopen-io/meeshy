@@ -4,6 +4,7 @@ import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { loadInviteCatalog } from '@/lib/i18n-invite-catalog';
 import { loadLinkFamiliesCatalog } from '@/lib/i18n-link-families-catalog';
 import { loadNotificationRowCatalog } from '@/lib/i18n-notification-row-catalog';
+import { loadGameCatalog } from '@/lib/i18n-game-catalog';
 import { loadOnboardingCatalog } from '@/lib/i18n-onboarding-catalog';
 import { createRouter } from '@/lib/router';
 
@@ -121,6 +122,17 @@ const adminEngagementScaleScreen = () =>
 const onboardingScreen = () =>
   Promise.all([import('@/routes/onboarding'), loadOnboardingCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
 
+/* LE JEU (#9379) — Progression, le carnet des règles et le carnet de
+   progression attendent leur chunk ET le catalogue `game.*` en parallèle :
+   `translateGame` lève sur un catalogue non chargé, et aucun autre écran n'en
+   paie les octets. */
+const progressionScreen = () =>
+  Promise.all([import('@/routes/progression'), loadGameCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+const progressionRulesScreen = () =>
+  Promise.all([import('@/routes/progression-rules'), loadGameCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+const progressionCarnetScreen = () =>
+  Promise.all([import('@/routes/progression-carnet'), loadGameCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+
 /* LES INVITATIONS (#7796, #7797) — la page d'accueil d'un lien et la page de
    son créateur attendent leur chunk ET le catalogue `invite.*`/`linkDetail.*`
    en parallèle, comme l'administration et l'accueil : `translateInvite` lève
@@ -162,7 +174,7 @@ export const ROUTES = {
   /* Le tableau de bord des streaks & badges (#5547) — sous `/me/`, l'espace
      du profil (inventaire de parité : `/me` est V4.0.0), privé (garde de
      session), découpé comme les autres : aucun octet avant le premier pixel. */
-  progression: { pattern: '/me/progression', screen: () => import('@/routes/progression') },
+  progression: { pattern: '/me/progression', screen: progressionScreen },
   /* Les trois PAGES DÉDIÉES du hub (#5843). Chacune a sa route parce qu'elle a
      son propre retour, son propre titre et son propre compte — un panneau qui
      se déplie dans le hub n'aurait ni l'un ni les autres, et le bouton système
@@ -173,10 +185,10 @@ export const ROUTES = {
   /* LE CARNET DES RÈGLES (#9379) — « Comment ça marche », depuis Progression :
      les huit règles du jeu et les sept cartes de l'intégration, en entier. Une
      page qui n'explique que ; aucune lecture réseau. */
-  progressionRegles: { pattern: '/me/progression/regles', screen: () => import('@/routes/progression-rules') },
+  progressionRegles: { pattern: '/me/progression/regles', screen: progressionRulesScreen },
   /* LE CARNET DE PROGRESSION (#9382) — les photos des grands moments, gardées
      sur l'appareil, et les moments laissés en attente sept jours. */
-  progressionCarnet: { pattern: '/me/progression/carnet', screen: () => import('@/routes/progression-carnet') },
+  progressionCarnet: { pattern: '/me/progression/carnet', screen: progressionCarnetScreen },
   /* LES PUBLICATIONS ENREGISTRÉES (#7286) — miroir `Route.bookmarks`
      (`Router.swift`), atteinte depuis Réglages › Outils comme sur iOS.
 

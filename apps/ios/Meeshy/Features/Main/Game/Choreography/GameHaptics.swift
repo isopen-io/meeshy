@@ -104,8 +104,11 @@ final class GameHaptics: GameHapticsProviding {
     private func makeEngine() throws -> CHHapticEngine {
         let created = try CHHapticEngine()
         created.isAutoShutdownEnabled = true
-        created.resetHandler = { [weak self] in
-            Task { @MainActor in self?.engine = nil }
+        // Appelé sur la file de CoreHaptics : `@Sendable` l'empêche d'hériter du
+        // `MainActor` de la classe (contrôle d'exécuteur ⇒ plantage en Swift 6).
+        created.resetHandler = { @Sendable [weak self] in
+            guard let self else { return }
+            Task { @MainActor in self.engine = nil }
         }
         engine = created
         return created

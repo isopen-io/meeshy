@@ -167,7 +167,7 @@ struct GamePhotoFlowView: View {
                 } label: {
                     Circle()
                         .strokeBorder(Color.white, lineWidth: 4)
-                        .background(Circle().fill(Color.white.opacity(phase == .live ? 0.9 : 0.25)).padding(6))
+                        .background(Circle().fill(Color.white.opacity(phase == .live ? 0.9 : 0.25)).padding(MeeshySpacing.xsPlus))
                         .frame(width: 72, height: 72)
                 }
                 .buttonStyle(.plain)

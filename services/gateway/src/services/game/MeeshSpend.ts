@@ -6,7 +6,9 @@
  * seule transaction. Même loi que la frappe :
  *
  *  - **idempotente** — `(userId, requestId)` est unique. Rejouer rend la
- *    première dépense (`already-spent`), jamais une seconde ;
+ *    première dépense (`already-spent`), jamais une seconde ; un `requestId`
+ *    déjà porté par une AUTRE écriture du registre (autre type de dépense,
+ *    frappe, octroi) est refusé (`REQUEST_ID_CONFLICT`), sans effet ;
  *  - **lue au registre** — le solde est `Σ(delta)`, jamais la colonne
  *    `meeshBalance`, qui n'est qu'une projection (#6428) ;
  *  - **atomique** — la ligne et l'effet (`apply`) s'écrivent ensemble ou pas
@@ -19,6 +21,7 @@
 import type { Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
 import { withRetry } from '../MessageMediaConsumptionService';
 import { meeshTotalsFromLedger } from '../meesh/MeeshService';
+import { GameRefusal } from './GameRefusal';
 
 export type SpendKind = 'flame-freeze' | 'flame-relight' | 'mission-reroll';
 
@@ -47,6 +50,17 @@ export type SpendOutcome<T> =
   | { readonly status: 'already-spent'; readonly balance: number; readonly meta: unknown }
   | { readonly status: 'insufficient'; readonly balance: number };
 
+type LedgerLine = { readonly reason: string; readonly meta: unknown };
+
+const LEDGER_LINE_SELECT = { id: true, reason: true, meta: true } as const;
+
+/** La ligne déjà écrite sous ce `requestId` est-elle CETTE dépense ? */
+const isSameSpend = (line: LedgerLine, kind: SpendKind): boolean =>
+  line.reason === 'spend' &&
+  typeof line.meta === 'object' &&
+  line.meta !== null &&
+  (line.meta as { kind?: unknown }).kind === kind;
+
 function isP2002(err: unknown): boolean {
   return typeof err === 'object' && err !== null && (err as { code?: string }).code === 'P2002';
 }
@@ -63,17 +77,19 @@ export class MeeshSpend {
     return withRetry(() => this.spendOnce(request));
   }
 
-  private async replay<T>(request: SpendRequest<T>, meta: unknown): Promise<SpendOutcome<T>> {
-    return { status: 'already-spent', balance: await this.balance(request.userId), meta };
+  /** Le rejeu rend la PREMIÈRE dépense — à condition que ce soit la même. */
+  private async replay<T>(request: SpendRequest<T>, line: LedgerLine | null): Promise<SpendOutcome<T>> {
+    if (line !== null && !isSameSpend(line, request.kind)) throw new GameRefusal('REQUEST_ID_CONFLICT', { kind: request.kind });
+    return { status: 'already-spent', balance: await this.balance(request.userId), meta: line?.meta ?? null };
   }
 
   private async spendOnce<T>(request: SpendRequest<T>): Promise<SpendOutcome<T>> {
     const { userId, requestId, price, kind } = request;
     const existing = await this.prisma.meeshLedger.findUnique({
       where: { userId_requestId: { userId, requestId } },
-      select: { id: true, meta: true },
+      select: LEDGER_LINE_SELECT,
     });
-    if (existing) return this.replay(request, existing.meta);
+    if (existing) return this.replay(request, existing);
     await request.guard?.();
 
     try {
@@ -104,9 +120,9 @@ export class MeeshSpend {
       if (isP2002(err)) {
         const first = await this.prisma.meeshLedger.findUnique({
           where: { userId_requestId: { userId, requestId } },
-          select: { id: true, meta: true },
+          select: LEDGER_LINE_SELECT,
         });
-        return this.replay(request, first?.meta ?? null);
+        return this.replay(request, first);
       }
       throw err;
     }

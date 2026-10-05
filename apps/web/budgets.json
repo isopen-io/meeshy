@@ -888,6 +888,15 @@
         "status": "CIBLE -- MESUREE PAR #6408, #6409, #6410, NON ARBITREE",
         "source": "Mesure du 2026-10-04 (`bun run build` puis gzip -9) : 13,64 Ko pour les SEPT catalogues des trois autres familles de « Mes liens » (cles `linkFamilies.*` et `links.hub.{tracking,community,affiliate}.*`, 118 cles : listes, details et creations des liens de suivi, de parrainage et de communaute). Sortis du catalogue principal parce qu'ils le portaient au-dela de son plafond (190,17 Ko > 180) : une FAMILLE entiere, le seuil de rentabilite que l'entree `interface_catalogs` ecrit elle-meme. Charges avec le hub et ces ecrans seulement (`i18n-link-families-catalog`, `route-table.tsx`), jamais avec la premiere peinture ; un lecteur n'en telecharge qu'UN. Arrondi au Ko SUPERIEUR (14) + 1 Ko de marge."
       }
+    },
+    "interface_catalogs_game": {
+      "pattern": "^assets/catalog-game-(fr|en|es|pt|de|it|ar)-[A-Za-z0-9_-]+\\.js$",
+      "dynamic_only": true,
+      "kb": {
+        "value": 48,
+        "status": "CIBLE -- ESTIMEE PAR #9379, NON MESUREE PAR BUILD, NON ARBITREE",
+        "source": "Estimation du 2026-10-05 (gzip -9 des SEPT sources `catalog-game-<l>.ts`, sans `bun run build` : 6,13 Ko (en) a 7,17 Ko (ar), 46,5 Ko au total) pour les 358 cles `game.*` du jeu (noms de paliers, rangs, formes de Flamme, paliers du tresor, missions, coffre, guide de Mee et Meo, carnet des regles, frappe, depenses, moments photo). Charges avec Progression, le carnet des regles et le carnet de progression (`routes/route-table.tsx`) seulement ; un lecteur n'en telecharge qu'UN (~6,5 Ko). A REMESURER au prochain build (`node scripts/measure-weight.mjs`) et a resserrer. Arrondi au Ko SUPERIEUR (47) + 1 Ko de marge."
+      }
     }
   },
   "network_note": "Le profil est REPRIS TEL QUEL de apps/web/budgets.json — deux chiffres mesures sur deux profils differents ne se comparent pas, et la comparaison v3 / v4 est precisement ce que ce POC doit rendre.",

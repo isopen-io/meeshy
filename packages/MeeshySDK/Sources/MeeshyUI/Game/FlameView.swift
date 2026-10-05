@@ -16,8 +16,10 @@ import MeeshySDK
 // reste entière et grandit avec la série.
 //
 // Elle vacille tant qu'elle est visible (1,6 s, aller-retour), et s'arrête
-// quand l'utilisateur limite les animations ou que la vue quitte l'écran : un
-// vacillement continu hors écran est une consommation pour rien.
+// quand l'utilisateur limite les animations ou que la vue quitte la zone visible
+// — y compris dans un `ScrollView` non paresseux, où `onDisappear` ne vient
+// jamais (`GameOnScreen`) : un vacillement continu hors écran est une
+// consommation pour rien.
 
 public struct FlameView: View {
 
@@ -27,6 +29,8 @@ public struct FlameView: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var flickerPhase = false
+    /// Faux quand la flamme a quitté la zone visible (défilement) — voir `GameOnScreen`.
+    @State private var onScreen = true
 
     /// - Parameters:
     ///   - form: la forme (`GameFlame.form(forDays:)`).
@@ -52,7 +56,7 @@ public struct FlameView: View {
         "M36 10 c 12 16 22 26 18 42 a18 18 0 0 1 -36 0 c -2 -12 8 -18 10 -28 c 4 6 6 10 8 12 c 2 -8 2 -16 0 -26 z")
     private static let foot = CGPoint(x: 36, y: 70)
 
-    private var animates: Bool { flickers && !reduceMotion }
+    private var animates: Bool { flickers && !reduceMotion && onScreen }
 
     public var body: some View {
         Canvas { context, size in
@@ -64,14 +68,26 @@ public struct FlameView: View {
         .aspectRatio(1, contentMode: .fit)
         .scaleEffect(x: animates && flickerPhase ? 1.04 : 1, y: animates && flickerPhase ? 1.08 : 1,
                      anchor: UnitPoint(x: 0.5, y: 0.9))
-        .onAppear {
-            guard animates else { return }
-            withAnimation(.easeInOut(duration: 1.6).repeatForever(autoreverses: true)) { flickerPhase = true }
-        }
-        .onDisappear {
-            withTransaction(Transaction(animation: nil)) { flickerPhase = false }
-        }
+        .gameOnScreen { onScreen = $0 }
+        .onAppear { syncFlicker() }
+        .onDisappear { stopFlicker() }
+        .adaptiveOnChange(of: animates) { _, _ in syncFlicker() }
         .gameAccessibility(label: accessibilityLabel)
+    }
+
+    /// Le vacillement tourne tant que la flamme est visible ET que le mouvement est permis ;
+    /// il s'arrête net sinon (une boucle sans spectateur ne coûte que de l'énergie).
+    private func syncFlicker() {
+        guard animates else {
+            stopFlicker()
+            return
+        }
+        guard !flickerPhase else { return }
+        withAnimation(.easeInOut(duration: 1.6).repeatForever(autoreverses: true)) { flickerPhase = true }
+    }
+
+    private func stopFlicker() {
+        withTransaction(Transaction(animation: nil)) { flickerPhase = false }
     }
 
     private func drawHalo(in context: inout GraphicsContext) {

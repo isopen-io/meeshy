@@ -211,6 +211,17 @@ final class DesignLiteralRatchetGuardTests: XCTestCase {
             globs: ["\(app)/Components/LanguageFlagChip.swift"]
         ),
         Exemption(
+            reason: "jeu : les matières et les couleurs de palier de la planche (docs/product/jeu-meeshy-conception.html), définies une fois — cuivre, or, prisme ne sont pas des jetons d'interface",
+            globs: ["\(ui)/Game/GameMaterial.swift"]
+        ),
+        Exemption(
+            reason: "jeu : dessins de la planche portés à l'identique — leurs rayons sont la géométrie d'un viewBox, pas un rayon d'interface",
+            globs: [
+                "\(ui)/Game/TrophyView.swift",
+                "\(ui)/Game/ChestView.swift",
+            ]
+        ),
+        Exemption(
             reason: "code : thèmes de coloration syntaxique",
             globs: [
                 "\(ui)/Media/SyntaxHighlighter.swift",

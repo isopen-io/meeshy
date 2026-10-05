@@ -6,6 +6,7 @@ import { paintUrl, safeUid, tokenVar } from '@/lib/game/materials';
 
 import { PaintDefs } from './paint-defs';
 import { SignatureGlyph } from './signature';
+import { useOnScreen } from './use-on-screen';
 
 /**
  * LA FLAMME (#9380) — cinq formes, que la loi partagée choisit selon la série
@@ -15,8 +16,10 @@ import { SignatureGlyph } from './signature';
  * 7 jours le cœur porte la Signature, en aplat clair.
  *
  * Elle vacille tant qu'elle est visible : `data-game-flicker` est la cible du
- * repli CSS (`transform` seul, sous `no-preference`). `out` : la flamme
- * ÉTEINTE — de cendre, immobile.
+ * repli CSS (`transform` seul, sous `no-preference`). Sortie de la fenêtre,
+ * elle se met en pause (`data-game-offscreen`, `use-on-screen.ts`, #9381) : une
+ * animation infinie ne brûle pas de batterie pour une flamme qu'on ne voit pas.
+ * `out` : la flamme ÉTEINTE — de cendre, immobile.
  *
  * DÉCORATIF (`aria-hidden`) : l'hôte dit « Flamme, 12 jours ».
  */
@@ -35,9 +38,19 @@ export function Flame({ form, size, out = false }: Props) {
   const uid = safeUid(useId());
   const s = SCALE[form];
   const halo = HALO[form];
+  const { observe, visible } = useOnScreen();
   const body = `M36 ${(66 - 56 * s).toFixed(1)} c 12 16 22 26 18 42 a18 18 0 0 1 -36 0 c -2 -12 8 -18 10 -28 c 4 6 6 10 8 12 c 2 -8 2 -16 0 -26z`;
   return (
-    <svg viewBox="0 0 72 72" width={size} height={size} aria-hidden="true" focusable="false" data-game-flame={form}>
+    <svg
+      ref={observe}
+      viewBox="0 0 72 72"
+      width={size}
+      height={size}
+      aria-hidden="true"
+      focusable="false"
+      data-game-flame={form}
+      {...(visible ? {} : { 'data-game-offscreen': '' })}
+    >
       <defs>
         <PaintDefs uid={uid} paints={['flame']} />
       </defs>

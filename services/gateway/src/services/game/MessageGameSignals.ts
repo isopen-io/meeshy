@@ -10,7 +10,8 @@
  *  - « réponse reçue d'un auteur distinct » — signal de l'AUTEUR répondu, clé = le
  *    répondant ;
  *  - **+3 points à l'auteur répondu**, une fois par message d'origine, si la
- *    réponse tombe dans l'heure, d'un autre compte de plus de 24 h et non bloqué.
+ *    réponse tombe dans l'heure, d'un autre compte de plus de 24 h et non bloqué,
+ *    et au plus `REPLY_RECEIVED_DAILY_CAP` fois par jour civil de l'auteur.
  *
  * Aucune règle n'est réécrite ici : les barèmes et la décision d'éligibilité
  * viennent de `GameAbuseGuard`, les paliers de `MissionService`. Chaque branche
@@ -19,9 +20,10 @@
  */
 
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { REPLY_RECEIVED_DAILY_CAP } from '@meeshy/shared/utils/game/boosts';
 import { civilDayInTimezone } from '../engagement/civilDay';
 import { CONVERSATION_ENGAGEMENT_SELECT, dayCountsFor } from '../engagement/ConversationEngagementRecorder';
-import { EngagementQuotas } from '../engagement/EngagementQuotas';
+import { EngagementQuotas, dayBucket } from '../engagement/EngagementQuotas';
 import { GameAbuseGuard, quarterPoints, type MessageVerdict } from './GameAbuseGuard';
 import { GAME_BONUS_AXIS, type MissionService } from './MissionService';
 import { dayKeyOf } from './gameClock';
@@ -153,6 +155,11 @@ export class MessageGameSignals {
     if (!verdict.withinWindow) return;
     // UNE fois par message d'origine : le seau tranche, jamais une relecture.
     if (!(await this.quotas.claim(authorId, QUOTA_OPERATION, `message:${input.replyToId}`, 1))) return;
+    // Puis le plafond du JOUR de l'auteur : un seau de message déjà pris ne
+    // consomme jamais une place du jour.
+    const author = await this.prisma.user.findUnique({ where: { id: authorId }, select: { timezone: true } });
+    const day = dayBucket(civilDayInTimezone(now, author?.timezone ?? null));
+    if (!(await this.quotas.claim(authorId, QUOTA_OPERATION, day, REPLY_RECEIVED_DAILY_CAP))) return;
     await this.deps.creditPoints(
       authorId,
       worth === 'quarter' ? quarterPoints(REPLY_RECEIVED_POINTS) : REPLY_RECEIVED_POINTS,

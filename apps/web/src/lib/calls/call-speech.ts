@@ -4,9 +4,10 @@ import type { SpeechSource } from './call-captions-controller';
  * **LA RECONNAISSANCE VOCALE DU NAVIGATEUR** (#8048) — l'API Web Speech
  * (`SpeechRecognition`, préfixée `webkitSpeechRecognition` dans Chrome, Edge et
  * Safari) derrière la forme `SpeechSource` du contrôleur. DÉTECTÉE, jamais
- * supposée : Firefox ne l'a pas — on y reçoit les sous-titres des autres, on
- * n'y émet pas les siens. La WebView de la coque Android ne l'a pas non plus :
- * la coque y prête le `SpeechRecognizer` du système (`shell-speech.ts`, #9446).
+ * supposée : Firefox et la WebView de la coque Android ne l'ont pas — on y
+ * reçoit les sous-titres des autres. La coque qui déclare `MeeshySpeech` prête
+ * le `SpeechRecognizer` d'Android au même contrat (`call-shell-speech.ts`,
+ * #9446) ; Firefox et une coque plus ancienne n'émettent toujours pas.
  *
  * La reconnaissance continue s'arrête d'elle-même après un silence : elle est
  * relancée tant que la capture est voulue, et abandonnée après cinq relances

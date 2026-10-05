@@ -11,6 +11,11 @@ import {
 
 import { GAME_BIRD_KEYS } from '@/lib/game/birds';
 
+import { resolveEngagementProgress } from '@meeshy/shared/utils/engagement-progress';
+
+import { ENGAGEMENT_PROGRESS_FIXTURE } from '@/lib/api/engagement-fixture';
+import { gameBlockFixture } from '@/lib/api/game-fixture';
+
 import { cardOfMoment, cardOfStep, guideBirds, isPhotoMoment } from './card';
 
 /**
@@ -108,5 +113,46 @@ describe('une carte pour une étape de l’intégration', () => {
     expect(card.step).toEqual({ index: 3, total: 7 });
     expect(card.presentation).toBe('full');
     expect(card.speaker).toBe('meo');
+  });
+});
+
+describe('une étape qui attend son geste', () => {
+  const stepOf = (key: string) => {
+    const step = ONBOARDING_STEPS.find((candidate) => candidate.key === key);
+    if (step === undefined) throw new Error(`étape attendue : ${key}`);
+    return step;
+  };
+  const view = (patch: Parameters<typeof gameBlockFixture>[0]) => ({
+    ...resolveEngagementProgress(ENGAGEMENT_PROGRESS_FIXTURE),
+    game: gameBlockFixture(patch),
+  });
+
+  test('la carte le dit, et son bouton mène là où le geste se fait', () => {
+    const waiting = cardOfStep(stepOf('missions'), view({ score: 800, missions: [] }));
+    expect(waiting.awaiting).toBe(true);
+    expect(waiting.action).toBe('see-missions');
+    expect(waiting.copy.action).toBe('Voir les missions');
+    expect(waiting.copy.next).toContain('mission la plus facile');
+    expect(waiting.stepKey).toBe('missions');
+  });
+
+  test('le geste déjà fait : une carte ordinaire, avec le bouton de la loi', () => {
+    const done = cardOfStep(
+      stepOf('missions'),
+      view({
+        score: 800,
+        missions: [
+          { id: 'm', difficulty: 'easy', templateKey: 'send-texts', signal: 'axis:content.text_message', prism: false, target: 5, progress: 5, reward: 36, glory: 0, completedAt: '2026-10-05T08:00:00.000Z' },
+        ],
+      }),
+    );
+    expect(done.awaiting).toBe(false);
+    expect(done.action).toBe('see-flame');
+  });
+
+  test('sans lecture du jeu, ou pour une étape sans geste : une carte ordinaire', () => {
+    expect(cardOfStep(stepOf('levels')).awaiting).toBe(false);
+    expect(cardOfStep(stepOf('missions')).awaiting).toBe(false);
+    expect(cardOfStep(stepOf('levels'), view({})).awaiting).toBe(false);
   });
 });

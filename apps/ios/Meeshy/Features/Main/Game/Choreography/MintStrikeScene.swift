@@ -48,6 +48,7 @@ struct MintStrikeScene: View {
                     .offset(x: reduced ? 0 : (strike?.hammer ?? 0) * -8, y: reduced ? 0 : (strike?.hammer ?? 0) * 6)
             }
             coin(strike: strike, reduced: reduced, fade: fade)
+                .gamePrismTilt(active: edition == .prism)
             if let strike, !reduced, strike.burst > 0.05 {
                 Text(String(localized: "game.mint.tchak", defaultValue: "Tchak !", bundle: .main))
                     .font(MeeshyFont.relative(15, weight: .heavy, design: .rounded))

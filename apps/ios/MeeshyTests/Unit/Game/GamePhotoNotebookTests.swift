@@ -118,6 +118,42 @@ final class GamePhotoNotebookTests: XCTestCase {
         XCTAssertTrue(entries.isEmpty)
     }
 
+    func test_concurrentWrites_neverLoseAnEntry() async {
+        let (sut, _, _) = makeSUT()
+        let moments = (0..<24).map { GamePhotoMoments.levelHundred(prestige: $0) }
+        let kept = photo()
+
+        var results: [Bool] = []
+        await withTaskGroup(of: Bool.self) { group in
+            for (index, moment) in moments.enumerated() {
+                group.addTask { @MainActor in
+                    index.isMultiple(of: 2) ? await sut.keep(moment, photo: kept) : await sut.postpone(moment)
+                }
+            }
+            for await written in group { results.append(written) }
+        }
+
+        let entries = await sut.list()
+        XCTAssertEqual(results.filter { $0 }.count, moments.count)
+        XCTAssertEqual(Set(entries.map(\.momentId)), Set(moments.map(\.id)), "aucune écriture n'en défait une autre")
+    }
+
+    func test_twoNotebooksOnTheSameDirectory_shareOneSerialDisk() async {
+        let directory = makeDirectory()
+        let (first, _, _) = makeSUT(directory: directory)
+        let (second, _, _) = makeSUT(directory: directory)
+        let a = GamePhotoMoments.levelHundred(prestige: 1)
+        let b = GamePhotoMoments.levelHundred(prestige: 2)
+
+        let image = photo()
+        async let kept = first.keep(a, photo: image)
+        async let postponed = second.postpone(b)
+        _ = await (kept, postponed)
+
+        let entries = await first.list()
+        XCTAssertEqual(Set(entries.map(\.momentId)), Set([a.id, b.id]))
+    }
+
     func test_sanitized_makesASafeFileStem() {
         XCTAssertEqual(GamePhotoNotebook.sanitized("rank:voix:2"), "rank_voix_2")
         XCTAssertEqual(GamePhotoNotebook.sanitized("level-100:0"), "level-100_0")

@@ -33,8 +33,13 @@ enum GameGuideEvents {
     }
 
     /// Un ordre total des (rang, division) : une division gagnée est une marche, un rang aussi.
-    private static func standingOrder(_ game: GameBlock) -> Int {
+    static func standingOrder(_ game: GameBlock) -> Int {
         game.glory.rank.index * 4 + (game.glory.division.map { 3 - $0.rawValue } ?? 3)
+    }
+
+    /// Une marche GAGNÉE — jamais la marche retrouvée quand un geste refusé restaure la lecture d'avant.
+    static func rankClimbed(from before: GameBlock, to after: GameBlock) -> Bool {
+        standingOrder(after) > standingOrder(before)
     }
 
     private static func nextTierLevel(_ game: GameBlock) -> Int? {
@@ -113,7 +118,7 @@ enum GameGuideEvents {
         if after.mint.number > before.mint.number, let impact = badgeImpactBefore, impact.lost > 0 {
             events.append(.badgeExtinguished(missingActions: impact.regain))
         }
-        if standingOrder(after) > standingOrder(before) {
+        if rankClimbed(from: before, to: after) {
             events.append(rankEvent(after))
         }
         if treasuryIndex(after) > treasuryIndex(before), let tier = after.treasury.tier {

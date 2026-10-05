@@ -108,7 +108,11 @@ struct ComposerSceneDescriptionEditor: View {
                        tint: plateauTint.opacity(0.55))
         .padding(.horizontal, MeeshySpacing.sm)
         .padding(.bottom, MeeshySpacing.xs)
-        .transition(.move(edge: .bottom).combined(with: .opacity))
+        // **Un fondu, plus un glissement** (#9448) : en glissant vers le bas,
+        // le panneau traversait les rangées @ # et la barre Public / Publier
+        // qui revenaient. Il s'efface sur place, et le chrome attend la fin
+        // du fondu (`ComposerWritingExit`).
+        .transition(ComposerWritingExit.zoneTransition(reduceMotion: reduceMotion))
         .environment(\.colorScheme, .dark)
     }
 
@@ -117,6 +121,8 @@ struct ComposerSceneDescriptionEditor: View {
     /// sa taille naturelle, ce qui est le seul défaut sûr : une valeur devinée
     /// ferait sauter la scène à la première image.
     @State private var mesureHauteur: CGFloat?
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var editeur: some View {
         ComposerDescriptionLayer(

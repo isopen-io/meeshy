@@ -51,7 +51,7 @@ public struct RankBlasonView: View {
     private static let crestCrownPath = GameSVGPath.make("M78 26 l6 -16 8 10 8 -14 8 14 8 -10 6 16 z")
     private static let ribbonPath = GameSVGPath.make("M52 140 h96 l-7 8 7 8 h-96 l7 -8z")
     private static let laurelStems = GameSVGPath.make("M60 132 q-18 -12 -14 -40 M140 132 q18 -12 14 -40")
-    private static let ribbonColor = Color(hex: "4f46e5")
+    private static let ribbonColor = MeeshyColors.indigo600
 
     private var index: Int { rank.index }
     private var hasTenants: Bool { index >= 6 }
