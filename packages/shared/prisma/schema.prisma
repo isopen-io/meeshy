@@ -323,6 +323,14 @@ model User {
   /// Clés de guide déjà vues (étapes d'intégration et moments de Mee et Meo).
   guideSeen           String[] @default([])
 
+  /// Le consentement à la ligue PUBLIQUE (#9384, conformité A-1/A-14) — daté par
+  /// le SERVEUR, retirable d'un geste. Même régime que les `*ConsentAt` voisins :
+  /// `PUT /me/consents/public-league` et `POST /me/game/league/consent` écrivent
+  /// la MÊME colonne, jamais chacun la leur. `null`/absent = pas de consentement.
+  publicLeagueConsentAt      DateTime?
+  /// La version de la notice sous laquelle il a été donné (`CONSENT_POLICY_VERSION`).
+  publicLeagueConsentVersion String?
+
   // ============================================
   // E2EE / SIGNAL PROTOCOL ENCRYPTION FIELDS
   // ============================================
@@ -5181,6 +5189,210 @@ model GameDay {
   createdAt      DateTime  @default(now())
 
   @@unique([userId, dayKey])
+}
+
+/// Les RÉGLAGES du jeu d'UN compte (#9384 à #9392) : visibilité de la vitrine,
+/// du rang, du trésor et de l'Atlas, « Jeu masqué », ordre de la vitrine,
+/// opposition à la ligue Amis, drapeau Mythe. Un document par compte, créé au
+/// premier réglage — absent, tout se lit à son défaut (vitrine « amis », Atlas
+/// « moi seul », rien de masqué). Une valeur de visibilité inconnue se lit « moi
+/// seul » (fail-closed, `capShowcaseVisibility`).
+model GameProfile {
+  id                    String    @id @default(auto()) @map("_id") @db.ObjectId
+  userId                String    @unique @db.ObjectId
+  showcaseVisibility    String?
+  rankVisibility        String?
+  treasuryVisibility    String?
+  atlasVisibility       String?
+  /// « Jeu masqué » : le compte sort des classements, des vitrines et des listes.
+  gameHiddenAt          DateTime?
+  /// L'opposition à la ligue Amis (intérêt légitime, RGPD art. 21).
+  friendsLeagueOptOutAt DateTime?
+  /// L'ordre choisi des trophées de la vitrine (clés).
+  showcaseOrder         String[]  @default([])
+  /// Posé chaque nuit : le compte est parmi les 100 Légendes les plus glorieuses.
+  /// Aucune liste globale n'existe — un drapeau par compte (conformité A-13).
+  mythicAt              DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+}
+
+/// Le PSEUDONYME de ligue (#9384, conformité A-4/A-5) : tiré au CSPRNG, STOCKÉ,
+/// unique, renouvelé à chaque saison (`kind: "drawn"`), ou choisi par la
+/// personne (`kind: "chosen"`, derrière un drapeau tant que la modération n'est
+/// pas prête). `pseudonymKey` est la forme PLIÉE (casse, accents, séparateurs)
+/// qui porte l'unicité : « Colibri-0a1b » et « colibri0a1b » sont le même nom.
+model LeaguePseudonym {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId       String   @unique @db.ObjectId
+  pseudonym    String
+  pseudonymKey String   @unique
+  /// "drawn" | "chosen"
+  kind         String
+  /// La saison pour laquelle un pseudonyme tiré a été posé.
+  seasonNumber Int?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+/// Un GROUPE de ligue pour une semaine (#9384) : au plus 30 inscrits d'une même
+/// ligue. `snapshot` est le classement FIGÉ que les AUTRES membres voient
+/// (`{ userId: points }`, rafraîchi une fois par jour à 4 h dans le fuseau du
+/// groupe — conformité A-6) ; seule la ligne du lecteur est lue en direct.
+/// Supprimé au plus tard 4 semaines après la saison (conformité A-9).
+model LeagueGroupWeek {
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  groupId     String    @unique
+  weekKey     String
+  league      String
+  /// Le fuseau (IANA) du groupe : celui de la majorité de ses membres.
+  timezone    String
+  memberCount Int
+  /// L'instant (UTC) de la fermeture : dimanche 20 h dans le fuseau du groupe.
+  closeAt     DateTime
+  snapshotDay String?
+  snapshot    Json?
+  settledAt   DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([weekKey])
+  @@index([settledAt, closeAt])
+}
+
+/// L'appartenance d'un compte à un groupe pour une semaine (#9384) — le résultat
+/// du règlement s'y grave (`finalRank`, `zone`, `cup`). Même rétention que le
+/// groupe.
+model LeagueMembership {
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  userId      String    @db.ObjectId
+  weekKey     String
+  groupId     String
+  league      String
+  finalRank   Int?
+  finalPoints Int?
+  zone        String?
+  cup         String?
+  settledAt   DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@unique([userId, weekKey])
+  @@index([groupId])
+  @@index([weekKey])
+}
+
+/// Les points GAGNÉS dans une semaine locale par un compte (#9384, #9385) : ce
+/// que la ligue publique et la ligue Amis classent. Incrémenté au crédit d'un
+/// gain (`GameWeekPoints`), jamais recalculé. Même rétention que les groupes.
+model GameWeekPoints {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String   @db.ObjectId
+  weekKey   String
+  points    Int      @default(0)
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, weekKey])
+  @@index([weekKey])
+}
+
+/// La mission en DUO d'une semaine (#9385) : deux amis, une mission commune, une
+/// part chacun. L'état suit `duoTransition` ; la progression se compte au signal.
+model GameDuo {
+  id              String    @id @default(auto()) @map("_id") @db.ObjectId
+  weekKey         String
+  inviterId       String    @db.ObjectId
+  inviteeId       String    @db.ObjectId
+  /// "invited" | "active" | "completed" | "abandoned" | "expired"
+  status          String
+  templateKey     String?
+  signal          String?
+  prism           Boolean?
+  partTarget      Int?
+  commonTarget    Int?
+  inviterProgress Int       @default(0)
+  inviteeProgress Int       @default(0)
+  inviterPaidAt   DateTime?
+  inviteePaidAt   DateTime?
+  createdAt       DateTime  @default(now())
+  acceptedAt      DateTime?
+  endedAt         DateTime?
+
+  @@index([inviterId, weekKey])
+  @@index([inviteeId, weekKey])
+  @@index([status, weekKey])
+}
+
+/// L'emplacement de duo d'un compte pour une semaine (#9385) : la contrainte
+/// unique `(userId, weekKey)` tranche « un duo par semaine » — jamais une
+/// relecture. Libéré quand le duo est abandonné ou expire.
+model GameDuoSlot {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String   @db.ObjectId
+  weekKey   String
+  duoId     String   @db.ObjectId
+  createdAt DateTime @default(now())
+
+  @@unique([userId, weekKey])
+  @@index([duoId])
+}
+
+/// La progression d'un compte dans une SAISON (#9386) : étoiles, étapes
+/// réclamées, Sceau, règlement. Hors argent : le Sceau s'achète en Meeshes.
+model GameSeason {
+  id           String    @id @default(auto()) @map("_id") @db.ObjectId
+  userId       String    @db.ObjectId
+  number       Int
+  stars        Int       @default(0)
+  claimedSteps Int[]     @default([])
+  sealOwnedAt  DateTime?
+  settledAt    DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@unique([userId, number])
+  @@index([number, settledAt])
+}
+
+/// Un TROPHÉE de la vitrine (#9387) : coupe de ligue, coupe de saison, Prestige,
+/// Flamme de 100 / 365 jours. `key` est la clé de `trophyKey` (`@meeshy/shared`) ;
+/// l'attribution est idempotente par `(userId, key)`.
+model GameTrophy {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String   @db.ObjectId
+  key       String
+  awardedAt DateTime @default(now())
+
+  @@unique([userId, key])
+  @@index([userId, awardedAt])
+}
+
+/// Un TAMPON de l'Atlas des langues (#9388) : la langue, les deux sens et la
+/// date — JAMAIS l'interlocuteur ni la conversation (conformité E-4). Effaçable
+/// à la demande ; disparaît avec le compte.
+model AtlasStamp {
+  id         String    @id @default(auto()) @map("_id") @db.ObjectId
+  userId     String    @db.ObjectId
+  language   String
+  sentAt     DateTime?
+  receivedAt DateTime?
+  /// Le jour (`AAAA-MM-JJ`, fuseau du compte) où le second sens a posé le tampon.
+  stampedOn  String?
+  createdAt  DateTime  @default(now())
+
+  @@unique([userId, language])
+}
+
+/// L'INSTANTANÉ de rareté d'un succès (#9390), recalculé chaque nuit : combien
+/// de comptes l'ont, sur quelle population. La rareté ne se SERT qu'à partir de
+/// 20 titulaires et 1 000 comptes (`rarityShareDisplayable`) ; la Gloire d'un
+/// succès est FIGÉE à l'obtention, jamais relue ici après coup.
+model AchievementRarityStat {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  milestoneKey String   @unique
+  holders      Int
+  population   Int
+  /// "common" | "rare" | "epic" | "legendary" | "mythic" — absent sous 1 000 comptes.
+  rarity       String?
+  measuredAt   DateTime @default(now())
 }
 
 /// « Mes stickers » — un sticker de BIBLIOTHÈQUE qu'un utilisateur possède (#7938).
