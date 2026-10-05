@@ -47,6 +47,8 @@ nonisolated enum ComposerCaptureFocus {
         let exposure: Mode?
         /// Surveiller la scène, pour repartir en continu quand elle change.
         let watchesSubjectArea: Bool
+        /// Pendant une prise, la netteté glisse au lieu de pomper (#9464).
+        var smoothFocus = false
     }
 
     /// Le centre du capteur — là où repart une mise au point continue.
@@ -62,7 +64,7 @@ nonisolated enum ComposerCaptureFocus {
     /// **Le double toucher** : mise au point ET exposition sur le point touché.
     /// Un objectif qui ne sait pas viser un point garde son réglage continu —
     /// le geste n'a alors aucun effet plutôt qu'un effet faux.
-    static func focusing(at devicePoint: CGPoint, _ objectif: Capabilities) -> Plan {
+    static func focusing(at devicePoint: CGPoint, _ objectif: Capabilities, smooth: Bool = false) -> Plan {
         let point = clamped(devicePoint)
         let focus: Mode? = objectif.focusPointOfInterest && objectif.autoFocus
             ? .once(at: point)
@@ -71,7 +73,14 @@ nonisolated enum ComposerCaptureFocus {
             ? .once(at: point)
             : (objectif.continuousAutoExposure ? .continuous : nil)
         return Plan(focus: focus, exposure: exposure,
-                    watchesSubjectArea: isOnce(focus) || isOnce(exposure))
+                    watchesSubjectArea: isOnce(focus) || isOnce(exposure), smoothFocus: smooth)
+    }
+
+    /// **Le plan vise-t-il quelque chose ?** Faux ⇒ ni anneau ni vibration :
+    /// l'objectif ne règle ni la netteté ni l'exposition sur un point (#9464).
+    /// L'exposition seule (objectif avant) suffit.
+    static func aims(_ plan: Plan) -> Bool {
+        isOnce(plan.focus) || isOnce(plan.exposure)
     }
 
     /// Un point du capteur vit dans `0...1` sur les deux axes ; un toucher au

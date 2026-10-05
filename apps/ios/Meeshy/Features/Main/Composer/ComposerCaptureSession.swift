@@ -487,11 +487,8 @@ final class ComposerCaptureSession: ObservableObject {
     /// paraît pas pour une mise au point qui n'a pas eu lieu.
     @discardableResult
     func focus(atGlobalPoint point: CGPoint) -> Bool {
-        guard ComposerCaptureFocus.focusesOnTap(stage: stage),
-              let capteur = focusPoints.devicePoint(fromGlobalPoint: point) else { return false }
-        camera.focus(at: capteur)
-        HapticFeedback.light()
-        return true
+        guard let local = focusPoints.localPoint(fromGlobalPoint: point) else { return false }
+        return focus(atPreviewPoint: local, previewSize: focusPoints.previewFrame.size)
     }
 
     /// VoiceOver ne glisse pas : il incrémente.

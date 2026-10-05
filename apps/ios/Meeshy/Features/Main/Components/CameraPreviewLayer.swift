@@ -76,12 +76,13 @@ final class CameraPreviewFocusPoints {
         self.host = host
     }
 
-    /// `nil` quand l'aperçu n'est pas à l'écran, ou que le toucher tombe hors
-    /// de l'image — viser hors champ n'a pas de sens.
-    func devicePoint(fromGlobalPoint point: CGPoint) -> CGPoint? {
-        guard let host, host.window != nil,
-              let local = Self.layerPoint(global: point, previewFrame: previewFrame) else { return nil }
-        return host.previewLayer.captureDevicePointConverted(fromLayerPoint: local)
+    /// Le toucher dans le repère de l'aperçu ; `nil` quand l'aperçu n'est pas
+    /// à l'écran, ou que le toucher tombe hors de lui. La conversion vers le
+    /// capteur suit l'image AFFICHÉE (`ComposerCaptureFocusGeometry`, #9464) —
+    /// pas la couche système, cachée quand la vue Metal peint.
+    func localPoint(fromGlobalPoint point: CGPoint) -> CGPoint? {
+        guard let host, host.window != nil else { return nil }
+        return Self.layerPoint(global: point, previewFrame: previewFrame)
     }
 
     /// Le toucher, ramené au repère de la couche — `nil` hors de l'aperçu.

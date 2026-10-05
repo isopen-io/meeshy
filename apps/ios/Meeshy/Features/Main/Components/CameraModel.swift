@@ -223,6 +223,8 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
             try device.lockForConfiguration()
             device.videoZoomFactor = min(device.maxAvailableVideoZoomFactor,
                                          max(device.minAvailableVideoZoomFactor, echelle.opening))
+            // La luminosité réglée sur un objectif ne suit pas sur l'autre.
+            device.setExposureTargetBias(0, completionHandler: nil)
             device.unlockForConfiguration()
         } catch {
             Logger.media.error("Zoom opening failed: \(error.localizedDescription, privacy: .public)")
@@ -464,9 +466,29 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     /// exposition, une fois ; la scène qui change rend l'objectif au continu.
     /// `devicePoint` est en coordonnées capteur (`0...1`), converties par la
     /// couche d'aperçu (`CameraPreviewFocusPoints`).
-    func focus(at devicePoint: CGPoint) {
+    /// `false` ⇒ l'objectif ne règle ni la netteté ni l'exposition sur un point :
+    /// rien n'a été visé, et l'écran ne doit pas le prétendre (#9464).
+    @discardableResult
+    func focus(at devicePoint: CGPoint, smooth: Bool) -> Bool {
+        guard let device = activeVideoDevice else { return false }
+        let plan = ComposerCaptureFocus.focusing(at: devicePoint, Self.focusCapabilities(of: device), smooth: smooth)
+        guard ComposerCaptureFocus.aims(plan) else { return false }
+        Self.apply(plan, to: device)
+        return true
+    }
+
+    /// **La luminosité visée** (#9464) — bornée à ce que l'objectif sert. Le
+    /// curseur vertical du viseur (Task 15) passera par ici.
+    func setExposureBias(_ bias: Float) {
         guard let device = activeVideoDevice else { return }
-        Self.apply(ComposerCaptureFocus.focusing(at: devicePoint, Self.focusCapabilities(of: device)), to: device)
+        do {
+            try device.lockForConfiguration()
+            defer { device.unlockForConfiguration() }
+            device.setExposureTargetBias(min(device.maxExposureTargetBias, max(device.minExposureTargetBias, bias)),
+                                         completionHandler: nil)
+        } catch {
+            Logger.media.error("Exposure bias failed: \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     private func resumeContinuousFocus() {
@@ -511,6 +533,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
                 break
             }
             device.isSubjectAreaChangeMonitoringEnabled = plan.watchesSubjectArea
+            if device.isSmoothAutoFocusSupported { device.isSmoothAutoFocusEnabled = plan.smoothFocus }
         } catch {
             Logger.media.error("Focus configuration failed: \(error.localizedDescription, privacy: .public)")
         }
