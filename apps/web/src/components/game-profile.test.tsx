@@ -88,6 +88,23 @@ describe('le profil d’un autre', () => {
     expect(t).not.toMatch(/Obtenu le/);
   });
 
+  test('la vitrine de démonstration est celle qu’un visiteur reçoit : aucune semaine dans ses clés (D-3)', () => {
+    expect(JSON.stringify(open)).not.toMatch(/\d{4}-\d{2}-\d{2}/);
+    expect(open.order.some((key) => key.startsWith('trophy.league-cup.'))).toBe(true);
+  });
+
+  test('une coupe de ligue au MOIS se nomme, sans semaine ni jour, et dit combien de fois elle a été gagnée', () => {
+    const shown: UserShowcaseResponse = {
+      visible: true,
+      items: [{ key: 'trophy.league-cup.2026-10.jade.gold', awardedMonth: '2026-10', count: 2 }],
+      order: ['trophy.league-cup.2026-10.jade.gold'],
+    };
+    const t = text(renderToStaticMarkup(<GameProfileVisitor showcase={shown} name="Amina" />));
+    expect(t).toContain('ligue Jade, octobre 2026');
+    expect(t).toContain('×2');
+    expect(t).not.toMatch(/semaine|S\d{1,2}\b/);
+  });
+
   test('fermée par son réglage : RIEN — pas un mot qui dise qu’elle existe', () => {
     expect(renderToStaticMarkup(<GameProfileVisitor showcase={{ visible: false, items: [], order: [] }} name="Amina" />)).toBe('');
   });

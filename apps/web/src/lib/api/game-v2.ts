@@ -281,7 +281,10 @@ const isVisibilityResponse = (value: unknown): value is ShowcaseVisibilityRespon
 const isUserShowcase = (value: unknown): value is UserShowcaseResponse =>
   shape(value, {
     visible: isBool,
-    items: arrayOf((v) => shape(v, { key: isTrophyKey, awardedMonth: (n) => typeof n === 'string' && /^\d{4}-\d{2}$/.test(n) }), 500),
+    items: arrayOf(
+      (v) => shape(v, { key: isTrophyKey, awardedMonth: (n) => typeof n === 'string' && /^\d{4}-\d{2}$/.test(n), count: (n) => n === undefined || isInt(n, 2, 500) }),
+      500,
+    ),
     order: arrayOf(isTrophyKey, 500),
   });
 const isPrestigeResponse = (value: unknown): value is PrestigeResponse =>

@@ -1,6 +1,6 @@
 import { leagueStandings, leagueWeekClose, leagueSnapshotDay, friendsLeagueRanking } from '@meeshy/shared/utils/game/league';
 import type { LeagueFriendsResponse, LeagueWeekResponse, UserShowcaseResponse } from '@meeshy/shared/types/game';
-import { visitorAwardedMonth } from '@meeshy/shared/utils/game/trophies';
+import { visitorShowcase } from '@meeshy/shared/utils/game/trophies';
 
 import type { DataSource } from './config';
 import { GAME_EXTRAS_TODAY, gameExtrasFactsFixture } from './game-fixture';
@@ -84,11 +84,8 @@ export const userShowcaseQueryKey = (userId: string) => [...GAME_V2_QUERY_PREFIX
 
 export function userShowcaseFixture(): UserShowcaseResponse {
   const facts = gameExtrasFactsFixture();
-  const items = facts.trophies.flatMap((trophy) => {
-    const month = visitorAwardedMonth(trophy.awardedAt);
-    return month === null ? [] : [{ key: trophy.key, awardedMonth: month }];
-  });
-  return { visible: true, items, order: items.map((item) => item.key) };
+  const view = visitorShowcase({ owned: facts.trophies, order: facts.showcaseOrder });
+  return { visible: true, items: [...view.items], order: [...view.order] };
 }
 
 export async function loadUserShowcase(deps: Deps & { readonly userId: string }): Promise<ApiResult<UserShowcaseResponse>> {

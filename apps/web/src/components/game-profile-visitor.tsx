@@ -1,5 +1,6 @@
 import type { UserShowcaseResponse } from '@meeshy/shared/types/game';
 
+import { formatGameNumber } from '@/lib/i18n-game-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { gameText } from '@/lib/view/game-copy';
 import { awardedMonthLabel, trophyView } from '@/lib/view/game-copy-v2';
@@ -13,7 +14,9 @@ import { GAME_INK, GameCard } from './game-surface';
  * Le serveur décide (`visible`) ; quand il ferme la vitrine à ce lecteur, l'écran
  * ne dit PAS qu'elle existe : il ne dessine rien (une carte « vitrine fermée »
  * apprendrait qu'il y en a une). Un visiteur ne voit que le MOIS d'obtention d'un
- * trophée, jamais le jour (conformité D-3).
+ * trophée, jamais le jour (conformité D-3) : une coupe de ligue lui arrive avec
+ * une clé au MOIS (`visitorTrophyKey`), et deux coupes identiques du même mois
+ * sur UNE ligne comptée (`count`).
  *
  * Les clés de trophées d'une version plus récente ne se montrent pas : on ne nomme
  * pas ce qu'on ne comprend pas. Le rang, le niveau et le trésor d'un autre ne sont
@@ -21,14 +24,18 @@ import { GAME_INK, GameCard } from './game-surface';
  */
 const entriesOf = (showcase: UserShowcaseResponse): ShelfEntry[] => {
   const language = currentInterfaceLanguage();
-  const months = new Map(showcase.items.map((item) => [item.key, item.awardedMonth]));
-  const ordered = [...new Set([...showcase.order, ...showcase.items.map((item) => item.key)])].filter((key) => months.has(key));
+  const items = new Map(showcase.items.map((item) => [item.key, item]));
+  const ordered = [...new Set([...showcase.order, ...showcase.items.map((item) => item.key)])].filter((key) => items.has(key));
   return ordered.flatMap((key) => {
     const view = trophyView(key, language);
-    const month = months.get(key);
-    return view === null || month === undefined
-      ? []
-      : [{ key, view, caption: gameText('game.showcase.awarded_month', { month: awardedMonthLabel(month, language) }) }];
+    const item = items.get(key);
+    if (view === null || item === undefined) return [];
+    const month = awardedMonthLabel(item.awardedMonth, language);
+    const caption =
+      item.count === undefined || item.count < 2
+        ? gameText('game.showcase.awarded_month', { month })
+        : gameText('game.showcase.awarded_month_count', { month, count: formatGameNumber(language, item.count) });
+    return [{ key, view, caption }];
   });
 };
 
