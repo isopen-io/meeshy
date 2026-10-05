@@ -8,7 +8,7 @@ import { AdminEntityChip, AdminLink } from '@/components/admin/entity-chip';
 import { AdminFiche, AdminFicheSection, AdminIdentityHeader, AdminStatStrip } from '@/components/admin/fiche';
 import { AdminPageHeader } from '@/components/admin/page-header';
 import { AdminSectionScreen } from '@/components/admin/section-screen';
-import { AdminDeniedInline, AdminEmptyState, AdminErrorState, AdminOfflineNotice } from '@/components/admin/states';
+import { AdminDeniedInline, AdminEmptyState, AdminErrorState, AdminOfflineNotice, AdminSkeleton } from '@/components/admin/states';
 import { AdminSummaryCard, AdminSummaryGrid } from '@/components/admin/summary-card';
 import { agentAccess } from '@/lib/admin/agent-access';
 import { conversationStateOf, ficheNameOf, sheetConversationOf } from '@/lib/admin/conversation-model';
@@ -42,7 +42,7 @@ import { ConversationMembers } from '@/routes/admin-conversation-members';
 import { ConversationMeta } from '@/routes/admin-conversation-meta';
 import { AdminConversationReading } from '@/routes/admin-conversation-reading';
 import { AdminConversationSettingsSheet } from '@/routes/admin-conversation-settings-sheet';
-import { AdminAnnouncement, AdminSkeleton } from '@/routes/admin-parts';
+import { AdminAnnouncement } from '@/components/admin/announcement';
 
 /**
  * **LA FICHE D'UNE CONVERSATION** (#6862, #8876) — `/admin/conversations/$conversation`.

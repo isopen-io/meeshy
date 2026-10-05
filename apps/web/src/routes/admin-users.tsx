@@ -25,7 +25,7 @@ import { currentAdminLanguage, suspendForAdminInterfaceCatalog, translateAdmin, 
 import { useRoute } from '@/lib/router';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
 
-import { AdminAnnouncement } from './admin-parts';
+import { AdminAnnouncement } from '@/components/admin/announcement';
 import { AdminUserCreateSheet } from './admin-user-create-sheet';
 import { href, navigate } from './route-table';
 

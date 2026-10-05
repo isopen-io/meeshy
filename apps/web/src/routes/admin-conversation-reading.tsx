@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 
-import { AdminDeniedInline, AdminEmptyState, AdminErrorState } from '@/components/admin/states';
+import { AdminDeniedInline, AdminEmptyState, AdminErrorState, AdminSkeleton } from '@/components/admin/states';
 import {
   ADMIN_MESSAGES_PAGE_SIZE,
   adminConversationMessagesQueryKey,
@@ -18,7 +18,6 @@ import type { Viewer } from '@/lib/api/viewer';
 import { place } from '@/lib/grouping';
 import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { useThreadScene } from '@/lib/reading-mode/scene';
-import { AdminSkeleton } from '@/routes/admin-parts';
 import { ThreadModes } from '@/routes/thread-modes';
 
 /**

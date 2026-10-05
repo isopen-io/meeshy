@@ -19,7 +19,7 @@ import type { AdminDeps } from '@/lib/api/admin';
 import type { AdminAuditEntry } from '@/lib/api/admin-audit';
 import { apiDeps } from '@/lib/api/deps';
 import { currentAdminLanguage, suspendForAdminInterfaceCatalog, translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
-import type { AdminOption } from '@/routes/admin-table';
+import type { AdminOption } from '@/components/admin/list-toolbar';
 
 import { AuditDetailSheet } from './admin-audit-detail';
 import { AuditActionCell, AuditPerson, AuditTarget } from './admin-audit-parts';

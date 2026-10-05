@@ -12,7 +12,7 @@ import { attachmentSrc } from '@/lib/api/media-url';
 import { gallerySlidesOf, stepSlide, type GallerySlide } from '@/lib/admin/user-gallery';
 import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
-import { AdminSkeleton } from './admin-parts';
+import { AdminSkeleton } from '@/components/admin/states';
 
 /**
  * **LE CARROUSEL D'IMAGES D'UN MEMBRE** (#7845) — sa photo, sa bannière et

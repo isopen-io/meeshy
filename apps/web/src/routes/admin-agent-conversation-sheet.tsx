@@ -5,7 +5,7 @@ import { AdminButton } from '@/components/admin/button';
 import { AdminDetailSheet } from '@/components/admin/detail-sheet';
 import { AdminFicheSection } from '@/components/admin/fiche';
 import { AdminMetaRow, AdminMomentText } from '@/components/admin/meta';
-import { AdminErrorState, AdminInlineNotice } from '@/components/admin/states';
+import { AdminErrorState, AdminInlineNotice, AdminSkeleton } from '@/components/admin/states';
 import { EDGE, INK, INK2, SURFACE } from '@/components/admin/tone';
 import { AGENT_CONFIG_FIELDS, AGENT_CONFIG_SECTIONS } from '@/lib/admin/agent-settings-form';
 import { languageName, sentenceCase } from '@/lib/admin/interpret/language';
@@ -29,7 +29,6 @@ import {
 import { unwrap } from '@/lib/api/client';
 import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { useOnline } from '@/lib/net/online';
-import { AdminSkeleton } from '@/routes/admin-parts';
 
 import { AgentSettingsForm, agentVocabulary, useAgentConfirm, useAgentGesture, type AgentGesture } from './admin-agent-form';
 import { AgentRolesBlock } from './admin-agent-roles';

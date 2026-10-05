@@ -17,7 +17,7 @@ import { unwrap } from '@/lib/api/client';
 import { apiDeps } from '@/lib/api/deps';
 import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
-import { AdminAnnouncement } from '@/routes/admin-parts';
+import { AdminAnnouncement } from '@/components/admin/announcement';
 
 import { AgentActivityDetail } from './admin-agent-activity';
 import { AgentConversationSheet } from './admin-agent-conversation-sheet';

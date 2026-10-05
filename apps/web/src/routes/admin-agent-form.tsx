@@ -18,7 +18,7 @@ import { AGENT_ROOT_KEY } from '@/lib/api/admin-agent';
 import type { ApiResult } from '@/lib/api/http';
 import { translateAdmin, translateAdminMaybe, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
-import { AdminAnnouncement } from '@/routes/admin-parts';
+import { AdminAnnouncement } from '@/components/admin/announcement';
 
 /**
  * **LES PIÈCES COMMUNES DES GESTES DE L'AGENT** (lot Agent complet) — un champ

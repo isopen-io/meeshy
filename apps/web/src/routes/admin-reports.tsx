@@ -25,7 +25,7 @@ import type { AdminDeps } from '@/lib/api/admin';
 import { adminReportsListKey, loadAdminReports, type AdminReport } from '@/lib/api/admin-reports';
 import { apiDeps } from '@/lib/api/deps';
 import { currentAdminLanguage, suspendForAdminInterfaceCatalog, translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
-import type { AdminOption } from '@/routes/admin-table';
+import type { AdminOption } from '@/components/admin/list-toolbar';
 
 import { ReportPerson, ReportReasonBadge, ReportStatusBadge, ReportedElement } from './admin-report-parts';
 import { AdminReportsStats } from './admin-reports-stats';

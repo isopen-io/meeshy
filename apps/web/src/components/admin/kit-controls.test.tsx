@@ -8,7 +8,7 @@ import { createRouter, navigate } from '@/lib/router';
 import { AdminFilterChips, AdminListToolbar } from './list-toolbar';
 import { AdminSortControl } from './sort-control';
 import { AdminTabPanel, AdminTabs, adminTabId, adminTabPanelId, useAdminTab } from './tabs';
-import { AdminPager } from '@/routes/admin-table';
+import { AdminPager } from './pager';
 
 const { mount, mounter } = setupAdminKitTests();
 
@@ -41,6 +41,13 @@ describe('AdminListToolbar — ne dessine que ce que la passerelle sert', () => 
     expect(champ?.style.minHeight).toBe('44px');
     mounter.type(host, '[data-admin-search]', 'awa');
     expect(tapes).toEqual(['awa']);
+  });
+
+  test('un filtre peut porter en plus l’ancre que son écran a déjà publiée à ses témoins', async () => {
+    const host = await mount(<AdminListToolbar language="fr" filters={[{ ...status, id: 'admin-user-conv-order', anchor: 'data-admin-user-conv-order' }]} />);
+    const choix = host.querySelector('[data-admin-user-conv-order]');
+    expect(choix?.getAttribute('data-admin-filter')).toBe('admin-user-conv-order');
+    expect(choix?.tagName).toBe('SELECT');
   });
 
   test('un filtre remonte sa valeur', async () => {

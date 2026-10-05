@@ -6,7 +6,7 @@ import { AdminDetailSheet } from '@/components/admin/detail-sheet';
 import { AdminFiche, AdminIdentityHeader, AdminStatStrip } from '@/components/admin/fiche';
 import { AdminPageHeader } from '@/components/admin/page-header';
 import { AdminSectionScreen } from '@/components/admin/section-screen';
-import { AdminDeniedInline, AdminEmptyState, AdminErrorState, AdminOfflineNotice } from '@/components/admin/states';
+import { AdminDeniedInline, AdminEmptyState, AdminErrorState, AdminOfflineNotice, AdminSkeleton } from '@/components/admin/states';
 import { AdminSummaryCard, AdminSummaryGrid } from '@/components/admin/summary-card';
 import { sectionOfEntity } from '@/lib/admin/admin-routes';
 import { AdminLink } from '@/components/admin/entity-chip';
@@ -38,7 +38,7 @@ import { currentAdminLanguage, suspendForAdminInterfaceCatalog, translateAdmin, 
 import { useOnline } from '@/lib/net/online';
 import { useParams } from '@/lib/router';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
-import { AdminAnnouncement, AdminSkeleton } from '@/routes/admin-parts';
+import { AdminAnnouncement } from '@/components/admin/announcement';
 import { href, navigate } from '@/routes/route-table';
 
 import { ReportGestures } from './admin-report-gestures';

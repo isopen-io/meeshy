@@ -24,7 +24,7 @@ import { unwrap } from '@/lib/api/client';
 import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { useOnline } from '@/lib/net/online';
 import { useLiveAnnouncer, type AnnouncementTone } from '@/lib/view/use-live-announcer';
-import { AdminAnnouncement } from '@/routes/admin-parts';
+import { AdminAnnouncement } from '@/components/admin/announcement';
 
 /**
  * **LE GESTE DE RELANCE, ÉCRIT UNE FOIS** (#6733, #8876) — la section Agent et la

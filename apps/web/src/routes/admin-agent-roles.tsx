@@ -5,7 +5,7 @@ import { AdminBadge } from '@/components/admin/badges';
 import { AdminButton } from '@/components/admin/button';
 import { AdminEntityChip } from '@/components/admin/entity-chip';
 import { AdminFicheSection } from '@/components/admin/fiche';
-import { AdminErrorState } from '@/components/admin/states';
+import { AdminErrorState, AdminSkeleton } from '@/components/admin/states';
 import { BRAND, EDGE, INK, INK2, SURFACE } from '@/components/admin/tone';
 import { personLabel, personSecondary } from '@/lib/admin/interpret/labels';
 import { formatPercent } from '@/lib/admin/interpret/numbers';
@@ -25,7 +25,6 @@ import {
 import { unwrap } from '@/lib/api/client';
 import { translateAdmin, translateAdminMaybe, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { useOnline } from '@/lib/net/online';
-import { AdminSkeleton } from '@/routes/admin-parts';
 
 import type { AgentGesture, useAgentConfirm } from './admin-agent-form';
 

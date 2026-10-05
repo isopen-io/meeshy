@@ -8,7 +8,7 @@ import { AdminConfirmSheet } from '@/components/admin/confirm-sheet';
 import { AdminLink } from '@/components/admin/entity-chip';
 import { AdminFicheSection } from '@/components/admin/fiche';
 import { AdminResponsiveRows, type AdminColumn } from '@/components/admin/responsive-rows';
-import { AdminErrorState } from '@/components/admin/states';
+import { AdminErrorState, AdminSkeleton } from '@/components/admin/states';
 import { INK2 } from '@/components/admin/tone';
 import { adminMoment } from '@/lib/admin/format';
 import { personLabel } from '@/lib/admin/interpret/labels';
@@ -34,7 +34,7 @@ import { translateAdmin, type AdminLanguage, type AdminPlainCatalogKey } from '@
 import { LabeledNumber, NumberField } from '@/routes/admin-engagement-scale-fields';
 import { OperationsSections } from '@/routes/admin-engagement-scale-operations';
 import { AbuseSection, LinkVisitSection, StreakBonusSection } from '@/routes/admin-engagement-scale-rules';
-import { AdminAnnouncement, AdminSkeleton } from '@/routes/admin-parts';
+import { AdminAnnouncement } from '@/components/admin/announcement';
 
 /**
  * LE BARÈME DE POINTS (#8906, #8959) — chaque opération de la plateforme,

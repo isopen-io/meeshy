@@ -4,7 +4,7 @@ import { useId, useState } from 'react';
 import { AdminBadge } from '@/components/admin/badges';
 import { AdminButton } from '@/components/admin/button';
 import { AdminFicheSection } from '@/components/admin/fiche';
-import { AdminEmptyState, AdminErrorState } from '@/components/admin/states';
+import { AdminEmptyState, AdminErrorState, AdminSkeleton } from '@/components/admin/states';
 import { BRAND, EDGE, INK, INK2, SURFACE } from '@/components/admin/tone';
 import { AGENT_TOPIC_FIELDS, topicChangesOf, topicDraftOf, topicInputOf, type AgentTopicDraft, type AgentTopicField } from '@/lib/admin/agent-topic-form';
 import { formatCount } from '@/lib/admin/interpret/numbers';
@@ -25,7 +25,6 @@ import {
 import { unwrap } from '@/lib/api/client';
 import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { useOnline } from '@/lib/net/online';
-import { AdminSkeleton } from '@/routes/admin-parts';
 
 import { failureMessage, useAgentConfirm, useAgentGesture, type AgentGesture } from './admin-agent-form';
 

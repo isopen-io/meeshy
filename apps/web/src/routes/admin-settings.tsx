@@ -7,7 +7,7 @@ import { apiDeps } from '@/lib/api/deps';
 import { currentAdminLanguage, suspendForAdminInterfaceCatalog, translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { useOnline } from '@/lib/net/online';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
-import { AdminAnnouncement } from '@/routes/admin-parts';
+import { AdminAnnouncement } from '@/components/admin/announcement';
 
 import { AccessBlock } from './admin-settings-access';
 import { DashboardBlock, SpaceBlock } from './admin-settings-blocks';

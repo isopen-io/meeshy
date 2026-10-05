@@ -5,7 +5,7 @@ import { AdminBadge } from '@/components/admin/badges';
 import { AdminButton } from '@/components/admin/button';
 import { AdminEntityChip } from '@/components/admin/entity-chip';
 import { AdminFicheSection } from '@/components/admin/fiche';
-import { AdminEmptyState, AdminErrorState } from '@/components/admin/states';
+import { AdminEmptyState, AdminErrorState, AdminSkeleton } from '@/components/admin/states';
 import { BRAND, EDGE, INK, INK2, SURFACE } from '@/components/admin/tone';
 import { conversationLabel, personLabel } from '@/lib/admin/interpret/labels';
 import { formatCount } from '@/lib/admin/interpret/numbers';
@@ -15,7 +15,6 @@ import { agentQueueQueryKey, cancelAgentQueueItem, editAgentQueueItem, loadAgent
 import { unwrap } from '@/lib/api/client';
 import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { useOnline } from '@/lib/net/online';
-import { AdminSkeleton } from '@/routes/admin-parts';
 
 import { useAgentConfirm, useAgentGesture, type AgentGesture } from './admin-agent-form';
 

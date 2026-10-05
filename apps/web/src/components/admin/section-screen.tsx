@@ -5,7 +5,9 @@ import { useAdminReach, type AdminReach } from '@/lib/admin/use-admin-reach';
 import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { translate } from '@/lib/i18n-catalog';
 import { useOptionalRoute } from '@/lib/router';
-import { AdminDenied, AdminScreenFrame, AdminSkeleton } from '@/routes/admin-parts';
+import { AdminScreenFrame } from '@/routes/admin-shell';
+
+import { AdminDeniedScreen, AdminSkeleton } from './states';
 
 /**
  * **LA GARDE DE TOUT ÉCRAN DE SECTION** (#8876) — identité en vol → squelette ;
@@ -61,7 +63,7 @@ export function AdminSectionScreen({
   if (!reach.opens(section)) {
     return (
       <AdminScreenFrame {...frame}>
-        <AdminDenied language={language} />
+        <AdminDeniedScreen language={language} />
       </AdminScreenFrame>
     );
   }

@@ -6,7 +6,7 @@ import { AdminFiche, AdminFicheSection, AdminIdentityHeader, AdminStatStrip } fr
 import { AdminMetaPanel, AdminMetaRow, AdminMomentText, AdminTechnicalId } from '@/components/admin/meta';
 import { AdminPageHeader } from '@/components/admin/page-header';
 import { AdminSectionScreen } from '@/components/admin/section-screen';
-import { AdminDeniedInline, AdminEmptyState, AdminErrorState, AdminInlineNotice, AdminOfflineNotice } from '@/components/admin/states';
+import { AdminDeniedInline, AdminEmptyState, AdminErrorState, AdminInlineNotice, AdminOfflineNotice, AdminSkeleton } from '@/components/admin/states';
 import { interpretInvitationStatus } from '@/lib/admin/interpret/enums';
 import { invitationLabel } from '@/lib/admin/interpret/labels';
 import { adminMomentOf } from '@/lib/admin/interpret/time';
@@ -19,7 +19,7 @@ import { currentAdminLanguage, suspendForAdminInterfaceCatalog, translateAdmin, 
 import { useOnline } from '@/lib/net/online';
 import { useParams } from '@/lib/router';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
-import { AdminAnnouncement, AdminSkeleton } from '@/routes/admin-parts';
+import { AdminAnnouncement } from '@/components/admin/announcement';
 
 import { InvitationGestures } from './admin-invitation-gestures';
 import { InvitationStatusBadge } from './admin-invitation-parts';

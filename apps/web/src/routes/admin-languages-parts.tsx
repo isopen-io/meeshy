@@ -6,7 +6,7 @@ import { accuracyConfidenceText, accuracyQuality, growthView, languageTitle, pai
 import { formatCount, formatPercent } from '@/lib/admin/interpret/numbers';
 import type { LanguagePair, LanguageRow, TranslationAccuracyRow } from '@/lib/api/admin-languages';
 import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
-import { PlainTh, Td } from '@/routes/admin-table';
+import { PlainTh, Td } from '@/components/admin/table-cells';
 
 type StaticColumn<Row> = {
   readonly id: string;

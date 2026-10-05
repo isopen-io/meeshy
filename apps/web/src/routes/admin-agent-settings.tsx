@@ -3,7 +3,7 @@ import { useId, useState } from 'react';
 
 import { AdminFicheSection } from '@/components/admin/fiche';
 import { AdminMetaRow, AdminMomentText } from '@/components/admin/meta';
-import { AdminErrorState, AdminInlineNotice } from '@/components/admin/states';
+import { AdminErrorState, AdminInlineNotice, AdminSkeleton } from '@/components/admin/states';
 import { BRAND, EDGE, INK, INK2, SURFACE } from '@/components/admin/tone';
 import { PasswordInput } from '@/components/password-input';
 import { AGENT_GLOBAL_FIELDS, AGENT_GLOBAL_SECTIONS, AGENT_LLM_FIELDS } from '@/lib/admin/agent-settings-form';
@@ -23,7 +23,6 @@ import {
 } from '@/lib/api/admin-agent-settings';
 import { unwrap } from '@/lib/api/client';
 import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
-import { AdminSkeleton } from '@/routes/admin-parts';
 
 import { AgentSettingsForm, agentVocabulary, providerName, useAgentConfirm, useAgentGesture } from './admin-agent-form';
 
