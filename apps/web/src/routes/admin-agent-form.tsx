@@ -54,14 +54,20 @@ export function failureMessage(language: AdminLanguage, failure: { readonly stat
     : translateAdmin(language, 'admin.agent.failed');
 }
 
+/** Un refus que le geste sait dire lui-même (`null` : la phrase générique). */
+export type AgentFailureDescriber = (failure: { readonly status: number; readonly error: string }) => string | null;
+
 export type AgentGesture = {
   readonly busy: string | null;
   readonly error: string | null;
   /** Le refus du geste `id`, s'il est le dernier à avoir échoué — un bloc ne peint pas l'échec d'un autre. */
   readonly errorOf: (id: string) => string | null;
   readonly clear: () => void;
-  /** Lance le geste ; annonce son issue ; relit l'agent ; rend `true` s'il a réussi. */
-  readonly run: (id: string, act: () => Promise<ApiResult<unknown>>, success: string) => Promise<boolean>;
+  /**
+   * Lance le geste ; annonce son issue ; relit l'agent ; rend `true` s'il a réussi.
+   * `describe` dit un refus que le geste sait nommer mieux que la phrase générique.
+   */
+  readonly run: (id: string, act: () => Promise<ApiResult<unknown>>, success: string, describe?: AgentFailureDescriber) => Promise<boolean>;
   readonly announce: (message: string, tone?: 'neutral' | 'error') => void;
   /** La région vivante de la modale, à poser une fois dedans. */
   readonly announcement: ReactNode;
@@ -73,13 +79,13 @@ export function useAgentGesture(language: AdminLanguage): AgentGesture {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<{ readonly id: string; readonly message: string } | null>(null);
 
-  const run = async (id: string, act: () => Promise<ApiResult<unknown>>, success: string): Promise<boolean> => {
+  const run = async (id: string, act: () => Promise<ApiResult<unknown>>, success: string, describe?: AgentFailureDescriber): Promise<boolean> => {
     setBusy(id);
     setError(null);
     const outcome = await act();
     setBusy(null);
     if (!outcome.ok) {
-      const message = failureMessage(language, outcome);
+      const message = describe?.(outcome) ?? failureMessage(language, outcome);
       setError({ id, message });
       announcer.announce(message, 'error');
       return false;
@@ -111,6 +117,7 @@ export type AgentConfirmRequest = {
   readonly withMotive?: boolean;
   readonly act: (motive: string | null) => Promise<ApiResult<unknown>>;
   readonly success: string;
+  readonly describeFailure?: AgentFailureDescriber;
   readonly after?: () => void;
 };
 
@@ -131,7 +138,7 @@ export function useAgentConfirm(language: AdminLanguage, gesture: AgentGesture) 
         busy={gesture.busy === request.id}
         error={gesture.error}
         onConfirm={(motive) =>
-          void gesture.run(request.id, () => request.act(motive), request.success).then((done) => {
+          void gesture.run(request.id, () => request.act(motive), request.success, request.describeFailure).then((done) => {
             if (!done) return;
             setRequest(null);
             request.after?.();

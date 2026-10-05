@@ -164,6 +164,31 @@ describe('le modèle et la configuration globale', () => {
     expect($<HTMLInputElement>('[data-agent-llm-key] input')?.value).toBe('');
   });
 
+  test('la clé enregistrée se reconnaît à ses quatre derniers caractères, jamais plus', async () => {
+    const DERNIERS: RoutedReply = (req) =>
+      req.method === 'GET' && pathOf(req) === '/api/v1/admin/agent/llm'
+        ? ok({ provider: 'openai', model: 'gpt-4o-mini', hasApiKey: true, apiKeyLast4: 'abcd', hasFallbackApiKey: true, fallbackApiKeyLast4: 'wxyz' })
+        : undefined;
+    await monter(ADMIN, DERNIERS);
+    await ouvrir('model');
+    expect($('[data-admin-meta="llm-key"]')?.textContent ?? $('[data-agent-llm]')?.textContent).toContain('…abcd');
+    expect($('[data-agent-llm]')?.textContent).toContain('…wxyz');
+  });
+
+  test('un 503 au PUT (pas de clé de chiffrement des secrets sur le serveur) se dit clairement', async () => {
+    const SANS_CHIFFREMENT: RoutedReply = (req) =>
+      req.method === 'PUT' && req.path.endsWith('/admin/agent/llm')
+        ? { ok: false, status: 503, error: 'Le chiffrement des secrets n’est pas configuré' }
+        : undefined;
+    await monter(BIGBOSS, SANS_CHIFFREMENT);
+    await ouvrir('model');
+    mounter.type(document, '[data-agent-llm-key] input', 'sk-nouvelle');
+    await soumettre('[data-agent-form="llm"]');
+    await confirmer();
+    expect(annonce()).toContain(translateAdmin('fr', 'admin.agentPanel.llm.noSecretsKey'));
+    expect($('[data-admin-confirm]')?.textContent).toContain(translateAdmin('fr', 'admin.agentPanel.llm.noSecretsKey'));
+  });
+
   test('la configuration globale n’envoie que le champ changé, après confirmation', async () => {
     const { calls } = await monter(ADMIN);
     await ouvrir('model');
@@ -373,6 +398,27 @@ describe('la file de livraison nomme où et au nom de qui', () => {
     expect(persona?.textContent).toContain('Awa Diallo');
     expect(persona?.textContent).toContain('@awa');
     expect($('[data-agent-queue-item="q1"]')?.textContent).not.toContain(translateAdmin('fr', 'admin.agentPanel.queue.conversation'));
+  });
+
+  test('une conversation sans titre se nomme par ses membres (« Awa, Jean et 5 autres »)', async () => {
+    const SANS_TITRE: RoutedReply = (req) =>
+      req.method === 'GET' && pathOf(req) === '/api/v1/admin/agent/delivery-queue'
+        ? ok([
+            {
+              id: 'q1',
+              conversationId: C,
+              conversation: { id: C, title: null, participants: [{ displayName: 'Awa', username: 'awa' }, { displayName: 'Jean', username: 'jean' }], total: 7 },
+              persona: null,
+              action: { type: 'message', asUserId: U, content: 'Salut' },
+            },
+          ])
+        : undefined;
+    await monter(ADMIN, SANS_TITRE);
+    await ouvrir('queue');
+    const nom = $('[data-agent-queue-item="q1"] [data-agent-queue-conversation]')?.textContent ?? '';
+    expect(nom).toContain('Awa');
+    expect(nom).toContain('Jean');
+    expect(nom).not.toContain(translateAdmin('fr', 'admin.value.conversation.untitled'));
   });
 
   test('un serveur d’avant (ni conversation ni persona) : le lien générique reste, aucun membre inventé', async () => {

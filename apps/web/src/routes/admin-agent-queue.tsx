@@ -7,7 +7,7 @@ import { AdminEntityChip } from '@/components/admin/entity-chip';
 import { AdminFicheSection } from '@/components/admin/fiche';
 import { AdminEmptyState, AdminErrorState } from '@/components/admin/states';
 import { BRAND, EDGE, INK, INK2, SURFACE } from '@/components/admin/tone';
-import { personLabel } from '@/lib/admin/interpret/labels';
+import { conversationLabel, personLabel } from '@/lib/admin/interpret/labels';
 import { formatCount } from '@/lib/admin/interpret/numbers';
 import { adminMomentOf } from '@/lib/admin/interpret/time';
 import type { AdminDeps } from '@/lib/api/admin';
@@ -85,10 +85,10 @@ export function AgentQueueDetail({ language, deps, now }: { readonly language: A
  */
 function QueueWho({ language, item }: { readonly language: AdminLanguage; readonly item: AgentQueueItem }) {
   const conversationId = item.conversation?.id ?? item.conversationId;
-  const conversationLabel =
+  const conversationName =
     item.conversation === null
       ? translateAdmin(language, 'admin.agentPanel.queue.conversation')
-      : (item.conversation.title ?? translateAdmin(language, 'admin.value.conversation.untitled'));
+      : conversationLabel(item.conversation, language);
   const persona = item.persona;
   if (conversationId === '' && persona === null) return null;
 
@@ -100,7 +100,7 @@ function QueueWho({ language, item }: { readonly language: AdminLanguage; readon
             {translateAdmin(language, 'admin.agentPanel.queue.in')}
           </dt>
           <dd className="min-w-0">
-            <AdminEntityChip language={language} size="sm" entity={{ kind: 'conversation', id: conversationId, label: conversationLabel }} />
+            <AdminEntityChip language={language} size="sm" entity={{ kind: 'conversation', id: conversationId, label: conversationName }} />
           </dd>
         </div>
       )}

@@ -18,6 +18,7 @@ import {
   loadAgentLlm,
   saveAgentGlobalConfig,
   saveAgentLlm,
+  SECRETS_UNAVAILABLE_STATUS,
   type AgentLlmConfig,
 } from '@/lib/api/admin-agent-settings';
 import { unwrap } from '@/lib/api/client';
@@ -73,6 +74,14 @@ type BlockProps = {
 
 const llmLabel = (language: AdminLanguage) => (key: string) => translateAdmin(language, `admin.agentPanel.llm.${key as 'provider' | 'model' | 'dailyBudgetUsd' | 'maxCostPerCall'}`);
 
+/** « Enregistrée · …abcd » quand la passerelle sert les quatre derniers caractères ; jamais plus de la clé. */
+const keyState = (language: AdminLanguage, has: boolean, last4: string | null): string =>
+  !has
+    ? translateAdmin(language, 'admin.agentPanel.llm.keyMissing')
+    : last4 === null
+      ? translateAdmin(language, 'admin.agentPanel.llm.keySet')
+      : translateAdmin(language, 'admin.agentPanel.llm.keySetLast4', { last4 });
+
 function AgentLlmBlock({ language, deps, now, gesture, ask }: BlockProps & { readonly now: () => Date }) {
   const reach = useAdminReach();
   const [apiKey, setApiKey] = useState('');
@@ -121,6 +130,7 @@ function AgentLlmBlock({ language, deps, now, gesture, ask }: BlockProps & { rea
       withMotive: true,
       act: (reason) => saveAgentLlm({ ...deps, changes, apiKey, reason }),
       success: translateAdmin(language, 'admin.agentPanel.llm.saved'),
+      describeFailure: (failure) => (failure.status === SECRETS_UNAVAILABLE_STATUS ? translateAdmin(language, 'admin.agentPanel.llm.noSecretsKey') : null),
       after: () => {
         setApiKey('');
         setGeneration((value) => value + 1);
@@ -140,8 +150,15 @@ function AgentLlmBlock({ language, deps, now, gesture, ask }: BlockProps & { rea
             <AdminMetaRow
               anchor="llm-key"
               label={translateAdmin(language, 'admin.agentPanel.llm.key')}
-              value={translateAdmin(language, config.hasApiKey ? 'admin.agentPanel.llm.keySet' : 'admin.agentPanel.llm.keyMissing')}
+              value={keyState(language, config.hasApiKey, config.apiKeyLast4)}
             />
+            {config.hasFallbackApiKey ? (
+              <AdminMetaRow
+                anchor="llm-fallback-key"
+                label={translateAdmin(language, 'admin.agentPanel.llm.fallbackKey')}
+                value={keyState(language, true, config.fallbackApiKeyLast4)}
+              />
+            ) : null}
             <AdminMetaRow anchor="llm-tokens" label={translateAdmin(language, 'admin.agentPanel.llm.tokens')} value={formatCount(config.maxTokens, language)} />
             <AdminMetaRow
               anchor="llm-temperature"

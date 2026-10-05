@@ -128,6 +128,15 @@ describe('le modèle et la configuration globale', () => {
     expect(vide.ok && vide.data).toBeNull();
   });
 
+  test('GET /llm : les quatre derniers caractères des clés, facultatifs (un ancien serveur ne les sert pas)', async () => {
+    const servi = await loadAgentLlm(
+      deps(transportQui(() => ok({ provider: 'openai', hasApiKey: true, apiKeyLast4: 'abcd', hasFallbackApiKey: true, fallbackApiKeyLast4: 'wxyz' })).transport),
+    );
+    expect(servi.ok && servi.data).toMatchObject({ hasApiKey: true, apiKeyLast4: 'abcd', hasFallbackApiKey: true, fallbackApiKeyLast4: 'wxyz' });
+    const ancien = await loadAgentLlm(deps(transportQui(() => ok({ provider: 'openai', hasApiKey: true })).transport));
+    expect(ancien.ok && ancien.data).toMatchObject({ hasApiKey: true, apiKeyLast4: null, hasFallbackApiKey: false, fallbackApiKeyLast4: null });
+  });
+
   test('PUT /llm : la clé ne part que saisie, le motif que s’il est écrit', async () => {
     const { transport, vues } = transportQui(() => ok({ provider: 'openai' }));
     await saveAgentLlm({ ...deps(transport), changes: { model: 'gpt' }, apiKey: '  ', reason: null });
@@ -343,11 +352,41 @@ describe('la file de livraison', () => {
     );
     const resultat = await loadAgentQueue(deps(transport));
     expect(resultat.ok && resultat.data.map((item) => [item.conversation, item.persona])).toEqual([
-      [{ id: C, title: 'Les amis du jeudi' }, { id: U, username: 'lea', displayName: 'Léa Martin' }],
-      [{ id: C, title: null }, { id: U, username: 'lea', displayName: null }],
+      [{ id: C, title: 'Les amis du jeudi', participants: [], total: null }, { id: U, username: 'lea', displayName: 'Léa Martin' }],
+      [{ id: C, title: null, participants: [], total: null }, { id: U, username: 'lea', displayName: null }],
       [null, null],
       [null, null],
     ]);
+  });
+
+  test('une conversation sans titre porte l’aperçu de ses membres (trois au plus) et leur total', async () => {
+    const { transport } = transportQui(() =>
+      ok([
+        {
+          id: 'q1',
+          conversationId: C,
+          conversation: {
+            id: C,
+            title: null,
+            participants: [{ displayName: 'Awa', username: 'awa' }, { displayName: null, username: 'jean' }, 'abîmé', { displayName: 'Zoé' }, { username: 'quatre' }],
+            total: 7,
+          },
+          persona: null,
+          action: { type: 'message', asUserId: U, content: 'Bonjour' },
+        },
+      ]),
+    );
+    const resultat = await loadAgentQueue(deps(transport));
+    expect(resultat.ok && resultat.data[0]?.conversation).toEqual({
+      id: C,
+      title: null,
+      participants: [
+        { displayName: 'Awa', username: 'awa' },
+        { displayName: null, username: 'jean' },
+        { displayName: 'Zoé', username: null },
+      ],
+      total: 7,
+    });
   });
 
   test('PATCH réécrit le texte (`{ content }`), DELETE annule sans corps', async () => {

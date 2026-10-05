@@ -524,6 +524,9 @@ const f = {
   'admin.agentPanel.cfg.reactionBoostFactor.help': 'Os membros cujas mensagens recebem reações falam este número de vezes mais.',
   'admin.agentPanel.cfg.freshTopicProbability.help': 'De 0 a 1, a cada passagem: com 0,2, cerca de uma em cada cinco traz um tema atual. Exige a pesquisa na web.',
   'admin.agentPanel.cfg.freshTopicCategoryHints.help': 'Temas que orientam a busca de temas novos («culinária», «futebol»…).',
+  'admin.agentPanel.llm.keySetLast4': 'Chave salva · …{last4}',
+  'admin.agentPanel.llm.fallbackKey': 'Chave de API de reserva',
+  'admin.agentPanel.llm.noSecretsKey': 'O servidor não tem chave de criptografia de segredos: a chave de API não pode ser salva.',
 } as const satisfies AdminCatalogFragment<typeof fr>;
 
 export default f;

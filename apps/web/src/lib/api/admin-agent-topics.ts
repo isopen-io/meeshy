@@ -165,7 +165,29 @@ export type AgentQueueItem = {
   readonly persona: AgentQueuePersona | null;
 };
 
-export type AgentQueueConversation = { readonly id: string; readonly title: string | null };
+export type AgentQueueParticipant = { readonly displayName: string | null; readonly username: string | null };
+/** `title` null : une conversation sans titre, nommée par l'aperçu de ses membres (trois au plus) et leur `total`. */
+export type AgentQueueConversation = {
+  readonly id: string;
+  readonly title: string | null;
+  readonly participants: readonly AgentQueueParticipant[];
+  readonly total: number | null;
+};
+
+const QUEUE_PARTICIPANTS_MAX = 3;
+
+function decodeQueueParticipants(raw: unknown): readonly AgentQueueParticipant[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((entry) => {
+      const charge = asRecord(entry);
+      if (charge === null) return null;
+      const person = { displayName: nonEmptyOrNull(charge.displayName), username: nonEmptyOrNull(charge.username) };
+      return person.displayName === null && person.username === null ? null : person;
+    })
+    .filter((person): person is AgentQueueParticipant => person !== null)
+    .slice(0, QUEUE_PARTICIPANTS_MAX);
+}
 export type AgentQueuePersona = { readonly id: string; readonly username: string; readonly displayName: string | null };
 
 const nonEmptyOrNull = (value: unknown): string | null => (typeof value === 'string' && value.trim() !== '' ? value : null);
@@ -174,7 +196,9 @@ const nonEmptyOrNull = (value: unknown): string | null => (typeof value === 'str
 function decodeQueueConversation(raw: unknown): AgentQueueConversation | null {
   const charge = asRecord(raw);
   const id = nonEmptyOrNull(charge?.id);
-  return charge === null || id === null ? null : { id, title: nonEmptyOrNull(charge.title) };
+  if (charge === null || id === null) return null;
+  const total = typeof charge.total === 'number' && Number.isInteger(charge.total) && charge.total >= 0 ? charge.total : null;
+  return { id, title: nonEmptyOrNull(charge.title), participants: decodeQueueParticipants(charge.participants), total };
 }
 
 function decodeQueuePersona(raw: unknown): AgentQueuePersona | null {

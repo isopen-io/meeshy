@@ -524,6 +524,9 @@ const f = {
   'admin.agentPanel.cfg.reactionBoostFactor.help': 'Members whose messages get reactions speak this many times more often.',
   'admin.agentPanel.cfg.freshTopicProbability.help': 'From 0 to 1, on each pass: at 0.2, about one pass in five brings a current topic. Requires web search.',
   'admin.agentPanel.cfg.freshTopicCategoryHints.help': 'Themes that steer the search for fresh topics (“cooking”, “football”…).',
+  'admin.agentPanel.llm.keySetLast4': 'Key saved · …{last4}',
+  'admin.agentPanel.llm.fallbackKey': 'Fallback API key',
+  'admin.agentPanel.llm.noSecretsKey': 'The server has no secrets encryption key: the API key cannot be saved.',
 } as const satisfies AdminCatalogFragment<typeof fr>;
 
 export default f;

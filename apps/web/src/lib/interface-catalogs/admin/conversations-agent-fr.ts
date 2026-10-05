@@ -526,6 +526,9 @@ const f = {
   'admin.agentPanel.cfg.reactionBoostFactor.help': 'Les membres dont les messages reçoivent des réactions parlent ce nombre de fois plus souvent.',
   'admin.agentPanel.cfg.freshTopicProbability.help': 'De 0 à 1, à chaque passage : à 0,2, environ un passage sur cinq apporte un sujet d’actualité. Exige la recherche web.',
   'admin.agentPanel.cfg.freshTopicCategoryHints.help': 'Des thèmes qui orientent la recherche des sujets frais (« cuisine », « football »…).',
+  'admin.agentPanel.llm.keySetLast4': 'Clé enregistrée · …{last4}',
+  'admin.agentPanel.llm.fallbackKey': 'Clé API de repli',
+  'admin.agentPanel.llm.noSecretsKey': 'Le serveur n’a pas de clé de chiffrement des secrets : la clé d’API ne peut pas être enregistrée.',
 } as const;
 
 export default f;
