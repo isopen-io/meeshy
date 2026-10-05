@@ -168,6 +168,13 @@ class Model {
     return this.create({ data: args.create, ...(args.select ? { select: args.select } : {}) });
   }
 
+  async delete(args: { where: Where }) {
+    const row = this.find(args.where);
+    if (!row) throw Object.assign(new Error('Record not found'), { code: 'P2025' });
+    this.rows = this.rows.filter((r) => r !== row);
+    return { ...row };
+  }
+
   async deleteMany(args: { where?: Where } = {}) {
     const before = this.rows.length;
     this.rows = this.rows.filter((row) => !matches(row, args.where ?? {}));
@@ -205,7 +212,7 @@ class Model {
 /** Les clés composées de Prisma (`userId_requestId`) se lisent comme leurs champs. */
 const flattenCompound = (model: Model): Model => {
   const proto = model as unknown as Record<string, (args: { where?: Where }) => unknown>;
-  for (const method of ['findUnique', 'update', 'upsert'] as const) {
+  for (const method of ['findUnique', 'update', 'upsert', 'delete'] as const) {
     const original = proto[method]!.bind(model);
     proto[method] = (args: { where?: Where }) => {
       const where: Where = {};
@@ -245,6 +252,7 @@ export type FakeGameDb = {
   readonly achievementRarityStat: Model;
   readonly friendRequest: Model;
   readonly userPreferences: Model;
+  readonly conversation: Model;
 };
 
 export function fakeGameDb(): FakeGameDb {
@@ -281,6 +289,7 @@ export function fakeGameDb(): FakeGameDb {
   const achievementRarityStat = flattenCompound(new Model({ uniques: [['milestoneKey']] }));
   const friendRequest = new Model();
   const userPreferences = new Model();
+  const conversation = new Model();
   const models = {
     user,
     gloryLedger,
@@ -306,6 +315,7 @@ export function fakeGameDb(): FakeGameDb {
     achievementRarityStat,
     friendRequest,
     userPreferences,
+    conversation,
   };
 
   /**

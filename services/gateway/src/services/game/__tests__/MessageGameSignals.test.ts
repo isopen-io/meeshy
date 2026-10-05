@@ -271,3 +271,35 @@ describe('MessageGameSignals — l’entre-soi ne fait avancer aucune mission (#
     expect(creditPoints).toHaveBeenCalledWith(OTHER, 3, GAME_BONUS_AXIS);
   });
 });
+
+describe('MessageGameSignals — l’Atlas et le chiffrement de bout en bout (#9388, E-3)', () => {
+  it('un message nourrit l’Atlas : envoyé pour l’expéditeur, reçu pour l’autre', async () => {
+    const { db, signals } = setup();
+
+    await signals.record(reply({ replyToId: null, quotedAuthorUserId: null, originalLanguage: 'es' }));
+
+    expect(db.atlasStamp.rows.map((r) => [r.userId, r.language, r.sentAt != null, r.receivedAt != null])).toEqual([
+      [USER, 'es', true, false],
+      [OTHER, 'es', false, true],
+    ]);
+  });
+
+  it('une conversation chiffrée ne produit ni mission de langue ni tampon', async () => {
+    const { db, signals, onSignal } = setup();
+    db.conversation.rows.push({ id: CONV, encryptionEnabledAt: new Date('2026-10-01T00:00:00Z') });
+
+    await signals.record(reply({ replyToId: null, quotedAuthorUserId: null, originalLanguage: 'es' }));
+
+    expect(signalsOf(onSignal, 'foreign-language-message')).toHaveLength(0);
+    expect(db.atlasStamp.rows).toHaveLength(0);
+  });
+
+  it('en conversation chiffrée, les signaux qui ne parlent pas de langue continuent', async () => {
+    const { db, signals, onSignal } = setup();
+    db.conversation.rows.push({ id: CONV, encryptionEnabledAt: new Date('2026-10-01T00:00:00Z') });
+
+    await signals.record(reply({ originalLanguage: 'es' }));
+
+    expect(onSignal).toHaveBeenCalledWith(USER, 'reply-distinct-conversations', expect.objectContaining({ key: CONV }));
+  });
+});

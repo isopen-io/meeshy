@@ -9,9 +9,17 @@
  *    fait du Prisme que les missions linguistiques attendent ;
  *  - « réponse reçue d'un auteur distinct » — signal de l'AUTEUR répondu, clé = le
  *    répondant ;
+ *  - l'ATLAS des langues (#9388) : la langue du message est ENVOYÉE pour l'expéditeur,
+ *    REÇUE pour ses destinataires — voir `AtlasService` ;
  *  - **+3 points à l'auteur répondu**, une fois par message d'origine, si la
  *    réponse tombe dans l'heure, d'un autre compte de plus de 24 h et non bloqué,
  *    et au plus `REPLY_RECEIVED_DAILY_CAP` fois par jour civil de l'auteur.
+ *
+ * **Une conversation chiffrée de bout en bout ne nourrit AUCUN signal de langue**
+ * (conformité E-3, #9224) : ni la mission « message dans une autre langue », ni
+ * l'Atlas. Le serveur n'y voit pas le texte ; sa langue détectée n'est pas un
+ * fait sur lequel bâtir un jeu. Les signaux qui ne parlent pas de langue (réponse
+ * dans une conversation distincte, réponse reçue) ne changent pas.
  *
  * Aucune règle n'est réécrite ici : les barèmes et la décision d'éligibilité
  * viennent de `GameAbuseGuard`, les paliers de `MissionService`. Chaque branche
@@ -24,6 +32,7 @@ import { REPLY_RECEIVED_DAILY_CAP } from '@meeshy/shared/utils/game/boosts';
 import { civilDayInTimezone } from '../engagement/civilDay';
 import { CONVERSATION_ENGAGEMENT_SELECT, dayCountsFor } from '../engagement/ConversationEngagementRecorder';
 import { EngagementQuotas, dayBucket } from '../engagement/EngagementQuotas';
+import { AtlasService } from './AtlasService';
 import { GameAbuseGuard, quarterPoints, type MessageVerdict } from './GameAbuseGuard';
 import { GAME_BONUS_AXIS, type MissionService } from './MissionService';
 import { dayKeyOf } from './gameClock';
@@ -51,6 +60,7 @@ export type MessageGameSignalsDeps = {
   readonly missions: Pick<MissionService, 'onSignal'>;
   readonly creditPoints: (userId: string, points: number, axisKey: typeof GAME_BONUS_AXIS) => Promise<void>;
   readonly guard?: GameAbuseGuard;
+  readonly atlas?: Pick<AtlasService, 'recordMessage' | 'conversationIsEncrypted'>;
 };
 
 const baseLanguage = (code: string): string => code.trim().toLowerCase().split(/[-_]/)[0] ?? '';
@@ -66,12 +76,15 @@ export class MessageGameSignals {
 
   private readonly quotas: EngagementQuotas;
 
+  private readonly atlas: NonNullable<MessageGameSignalsDeps['atlas']>;
+
   constructor(
     private readonly prisma: PrismaClient,
     private readonly deps: MessageGameSignalsDeps,
   ) {
     this.guard = deps.guard ?? new GameAbuseGuard(prisma);
     this.quotas = new EngagementQuotas(prisma);
+    this.atlas = deps.atlas ?? new AtlasService(prisma);
   }
 
   async record(input: MessageSignalInput): Promise<void> {
@@ -84,7 +97,18 @@ export class MessageGameSignals {
     // ni ne paie la réponse reçue ; au-delà de 50 par jour à deux, ÷ 4.
     const verdict = await this.messageVerdict(input, sender?.timezone ?? null, now);
     if (verdict === 'none') return;
-    await this.isolated('sender signals', () => this.senderSignals(input, sender, now));
+    const encrypted = await this.atlas.conversationIsEncrypted(input.conversationId);
+    await this.isolated('sender signals', () => this.senderSignals(input, sender, now, encrypted));
+    if (!encrypted) {
+      await this.isolated('atlas', async () => {
+        await this.atlas.recordMessage({
+          senderUserId: input.senderUserId,
+          conversationId: input.conversationId,
+          originalLanguage: input.originalLanguage,
+          now,
+        });
+      });
+    }
     if (input.replyToId !== null && input.quotedAuthorUserId !== null) {
       await this.isolated('reply received', () => this.replyReceived(input, input.quotedAuthorUserId as string, verdict, now));
     }
@@ -120,6 +144,7 @@ export class MessageGameSignals {
     input: MessageSignalInput,
     sender: { readonly systemLanguage: string | null; readonly timezone: string | null } | null,
     now: Date,
+    encrypted: boolean,
   ): Promise<void> {
     const dayKey = dayKeyOf(now, sender?.timezone);
     const common = { now, dayKey, timezone: sender?.timezone ?? null };
@@ -130,7 +155,7 @@ export class MessageGameSignals {
     }
 
     const systemLanguage = sender?.systemLanguage;
-    if (systemLanguage && isKnownLanguage(input.originalLanguage) && baseLanguage(input.originalLanguage) !== baseLanguage(systemLanguage)) {
+    if (!encrypted && systemLanguage && isKnownLanguage(input.originalLanguage) && baseLanguage(input.originalLanguage) !== baseLanguage(systemLanguage)) {
       await this.deps.missions.onSignal(input.senderUserId, 'foreign-language-message', common);
     }
   }
