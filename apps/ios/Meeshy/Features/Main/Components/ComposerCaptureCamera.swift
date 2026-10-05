@@ -22,6 +22,9 @@ protocol ComposerCaptureCameraProviding: AnyObject {
     func focus(at devicePoint: CGPoint, smooth: Bool) -> Bool
     /// La luminosité visée, en EV — le curseur vertical du viseur (Task 15).
     func setExposureBias(_ bias: Float)
+    /// Attend, au plus `timeout`, que l'objectif puisse prendre — jamais pendant
+    /// une bascule. `false` ⇒ il ne l'a pas pu.
+    func waitUntilCaptureReady(timeout: TimeInterval) async -> Bool
 }
 
 /// **La lumière d'une prise suit l'objectif qui bascule** (#9464).

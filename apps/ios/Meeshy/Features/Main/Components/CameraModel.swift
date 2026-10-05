@@ -336,7 +336,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
         // Même exception ObjC que l'enregistrement sans connexion active, donc
         // même prévention devant l'appel — un `do/catch` ne la rattraperait pas.
         let connection = photoOutput.connection(with: .video)
-        guard CameraRecordingReadiness.mayCapturePhoto(
+        guard !isSwitchingCamera, CameraRecordingReadiness.mayCapturePhoto(
             sessionIsRunning: session.isRunning,
             hasVideoConnection: connection != nil,
             connectionIsActive: connection?.isActive ?? false,
@@ -352,10 +352,11 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
 
     /// **La session peut-elle rendre une image ?** Les mêmes quatre faits que
     /// `takePhoto` exige — lus ici pour qu'un geste qui OUVRE la caméra et
-    /// PREND dans le même mouvement (#8653) attende qu'elle le puisse.
+    /// PREND dans le même mouvement (#8653) attende qu'elle le puisse. Jamais
+    /// pendant une bascule : l'entrée en place va être retirée (#9464).
     var isCaptureReady: Bool {
         let connection = photoOutput.connection(with: .video)
-        return CameraRecordingReadiness.mayCapturePhoto(
+        return !isSwitchingCamera && CameraRecordingReadiness.mayCapturePhoto(
             sessionIsRunning: session.isRunning,
             hasVideoConnection: connection != nil,
             connectionIsActive: connection?.isActive ?? false,

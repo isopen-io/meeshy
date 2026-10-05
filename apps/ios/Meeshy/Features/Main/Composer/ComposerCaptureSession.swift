@@ -199,7 +199,7 @@ final class ComposerCaptureSession: ObservableObject {
     /// est le flash (#8653) — la luminosité monte, l'image part sous elle,
     /// sans le flash de l'objectif : jamais deux éclairs (#9464).
     func takePhoto() {
-        guard stage == .armed, !camera.isTakingPhoto else { return }
+        guard stage == .armed, !camera.isTakingPhoto, !controls.isSwitchingCamera else { return }
         mode = .photo
         HapticFeedback.medium()
         let flashDeLaPrise = flash
@@ -220,7 +220,7 @@ final class ComposerCaptureSession: ObservableObject {
     /// caméra (#8671) la fait partir DÉJÀ verrouillée ; la vidéo s'éclaire
     /// aussi (#8653), à l'intensité du curseur.
     func startFilming() {
-        guard stage == .armed else { return }
+        guard stage == .armed, !controls.isSwitchingCamera else { return }
         mode = ComposerShutterGesture.mode(locked: holdPhase == .locked)
         stage = .recording
         controls.setTorch(ComposerFrontFlash.torch(flash: flash, position: controls.currentPosition),
@@ -315,7 +315,7 @@ final class ComposerCaptureSession: ObservableObject {
     func photographWhenReady() {
         holdTask?.cancel()
         holdTask = Task { @MainActor in
-            guard await camera.waitUntilCaptureReady(timeout: ComposerSceneQuickCapture.readinessTimeout),
+            guard await controls.waitUntilCaptureReady(timeout: ComposerSceneQuickCapture.readinessTimeout),
                   !Task.isCancelled else { return }
             takePhoto()
         }
@@ -331,7 +331,7 @@ final class ComposerCaptureSession: ObservableObject {
         lockProgress = 0
         holdTask?.cancel()
         holdTask = Task { @MainActor in
-            guard await camera.waitUntilCaptureReady(timeout: ComposerSceneQuickCapture.readinessTimeout),
+            guard await controls.waitUntilCaptureReady(timeout: ComposerSceneQuickCapture.readinessTimeout),
                   !Task.isCancelled,
                   holdStartedAt != nil || holdPhase == .locked else { return }
             startFilming()
