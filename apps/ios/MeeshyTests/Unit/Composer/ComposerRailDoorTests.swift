@@ -524,7 +524,7 @@ final class ComposerLeadingRailSourceGuardTests: XCTestCase {
         // qui se peint. Que les contrôleurs soient peints se vérifie sans
         // épingler par quoi ils sont enveloppés.
         XCTAssertTrue(source.contains("case.tool(letcontrols):"))
-        XCTAssertTrue(source.contains("ForEach(controls)"))
+        XCTAssertTrue(source.contains("ForEach(controls.map{AsyncRenderRow(id:$0.id,content:toolButton($0))}"))
     }
 
     /// **La vue ne décide de rien.** Elle reçoit `doors` déjà filtrées ; si elle

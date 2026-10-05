@@ -81,30 +81,37 @@ extension UniversalComposerBar {
 
             // **La caméra à l'angle droit du verre** (#9082), juste avant le ⌄ ;
             // la photothèque (images ET vidéos) à côté d'elle (#9120).
+            // Construites ICI, sur le fil principal : le `ForEach` ne fait que
+            // les relire (#9456, `AsyncRenderRow`).
             ForEach(ComposerGlassDoors.trailing(offersLibrary: onPhotoLibrary != nil,
                                                 offersCamera: onCamera != nil,
-                                                offersFold: resolvedFoldControl != nil), id: \.self) { door in
-                switch door {
-                case .library:
-                    if let openLibrary = onPhotoLibrary {
-                        glassDoorButton(
-                            symbol: "photo.on.rectangle.angled",
-                            label: String(localized: "composer.attach.photo", defaultValue: "Photos", bundle: .main),
-                            action: openLibrary)
-                    }
-                case .camera:
-                    if let openCamera = onCamera {
-                        glassDoorButton(
-                            symbol: "camera.fill",
-                            label: String(localized: "composer.attach.camera", defaultValue: "Caméra", bundle: .main),
-                            action: openCamera)
-                    }
-                case .fold:
-                    if let fold = resolvedFoldControl {
-                        foldButton(fold)
-                            .transition(.opacity.combined(with: .scale(scale: 0.8, anchor: .topTrailing)))
-                    }
-                }
+                                                offersFold: resolvedFoldControl != nil)
+                        .map { AsyncRenderRow(id: $0, content: trailingGlassDoor($0)) },
+                    content: asyncRenderRowContent)
+        }
+    }
+
+    @ViewBuilder
+    private func trailingGlassDoor(_ door: ComposerGlassDoors.TrailingDoor) -> some View {
+        switch door {
+        case .library:
+            if let openLibrary = onPhotoLibrary {
+                glassDoorButton(
+                    symbol: "photo.on.rectangle.angled",
+                    label: String(localized: "composer.attach.photo", defaultValue: "Photos", bundle: .main),
+                    action: openLibrary)
+            }
+        case .camera:
+            if let openCamera = onCamera {
+                glassDoorButton(
+                    symbol: "camera.fill",
+                    label: String(localized: "composer.attach.camera", defaultValue: "Caméra", bundle: .main),
+                    action: openCamera)
+            }
+        case .fold:
+            if let fold = resolvedFoldControl {
+                foldButton(fold)
+                    .transition(.opacity.combined(with: .scale(scale: 0.8, anchor: .topTrailing)))
             }
         }
     }
@@ -305,29 +312,31 @@ struct ComposerToolbarStrip<Leading: View, Pinned: View, Trailing: View>: View {
         }
     }
 
-    /// Le décalage se lit par le patron de `ScrollOffsetTracking` : sentinelle
-    /// de préférence jusqu'à iOS 17, `onScrollGeometryChange` à partir d'iOS 18.
-    /// Il est gardé hors du rendu (`ComposerToolbarOffsetBox`) : la bande ne se
+    /// Le décalage se lit par le cadre du contenu dans la fenêtre défilante
+    /// jusqu'à iOS 17, par `onScrollGeometryChange` à partir d'iOS 18. Il est
+    /// gardé hors du rendu (`ComposerToolbarOffsetBox`) : la bande ne se
     /// réévalue qu'au moment où le fondu s'allume ou s'éteint, jamais à chaque
     /// image du défilement.
+    ///
+    /// **Aucun `GeometryReader`** (#9456) : ce candidat du `ViewThatFits` est
+    /// mesuré sur le rendu asynchrone d'iOS 26 quand le clavier ou Dynamic
+    /// Type change la largeur, et la fermeture d'un `GeometryReader`, isolée au
+    /// main actor, y trapperait. `onGeometryChange` prend une transformation
+    /// `@Sendable` — non isolée — et rend son action sur le fil principal.
     private var scrollingTools: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
+        let space = Self.scrollSpace
+        return ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) { leading }
-                .background(GeometryReader { content in
-                    Color.clear
-                        .preference(key: HorizontalScrollOffsetKey.self,
-                                    value: -content.frame(in: .named(Self.scrollSpace)).minX)
-                        .onAppear { contentWidth = content.size.width; refreshFade() }
-                        .onChange(of: content.size.width) { contentWidth = $0; refreshFade() }
-                })
+                .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(space)) } action: { frame in
+                    contentWidth = frame.width
+                    record(offset: -frame.minX)
+                }
         }
-        .coordinateSpace(name: Self.scrollSpace)
-        .background(GeometryReader { viewport in
-            Color.clear
-                .onAppear { viewportWidth = viewport.size.width; refreshFade() }
-                .onChange(of: viewport.size.width) { viewportWidth = $0; refreshFade() }
-        })
-        .onPreferenceChange(HorizontalScrollOffsetKey.self) { record(offset: $0) }
+        .coordinateSpace(name: space)
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width in
+            viewportWidth = width
+            refreshFade()
+        }
         .trackScrollContentOffsetX { record(offset: $0) }
         .mask {
             HStack(spacing: 0) {
