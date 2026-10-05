@@ -1,6 +1,7 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 import { act } from 'react';
 
+import { appQueryClient } from '@/lib/api/query-client';
 import { gamePrefs } from '@/lib/game/preferences';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
@@ -10,15 +11,35 @@ import { ContactGameStripSlot, GameProfileOwnSlot, GameProfileVisitorSlot } from
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
 const { mount, unmountAll } = createActMounter();
 
+/**
+ * Les emplacements lisent `appQueryClient`, le cache PARTAGÉ par tout le
+ * process `bun test` : sans le vider, « d’abord rien » et « sans session : rien »
+ * dépendent de ce qu’un témoin précédent — de ce fichier ou d’un autre — y a
+ * laissé sous `['me', 'engagement']`. Dans la suite complète, le profil se
+ * dessinait dès le montage ; l’échec d’un `toBeNull()` sur un élément monté par
+ * React met ~13 s à se formater (et ne lève pas sous bun 1.3.14), le témoin
+ * dépassait son délai, et son corps abandonné poursuivait ses `act()` par-dessus
+ * les fichiers suivants (3 523 rouges, #9481). Les verdicts sur ces éléments se
+ * lisent donc en booléens : un échec y coûte une milliseconde et reste local.
+ *
+ * Le chunk du jeu peut déjà être chargé par un fichier précédent : au montage,
+ * on voit alors le profil entier tout de suite. « D’abord rien » se lit donc
+ * « rien OU le profil entier » — jamais un squelette, jamais une moitié.
+ */
 beforeAll(() => {
   ensureHappyDomRegistered({ url: 'http://localhost/me' });
   globals.IS_REACT_ACT_ENVIRONMENT = true;
 });
 afterAll(async () => {
+  appQueryClient.clear();
+  gamePrefs.set({ hidden: false });
   delete globals.IS_REACT_ACT_ENVIRONMENT;
   await releaseHappyDomIfRegistered();
 });
-beforeEach(() => gamePrefs.set({ hidden: false }));
+beforeEach(() => {
+  appQueryClient.clear();
+  gamePrefs.set({ hidden: false });
+});
 afterEach(unmountAll);
 
 /** Le chunk du jeu, son catalogue et la lecture se résolvent l’un après l’autre : on laisse passer quelques tours. */
@@ -34,22 +55,23 @@ const settle = async (): Promise<void> => {
 describe('mon profil', () => {
   test('le jeu arrive quand il est prêt, et jamais avant : d’abord rien', async () => {
     const host = await mount(<GameProfileOwnSlot enabled />);
-    expect(host.querySelector('#game-profile')).toBeNull();
+    const drawn = host.querySelector('#game-profile') !== null;
+    expect(drawn || host.innerHTML === '').toBe(true);
     await settle();
-    expect(host.querySelector('#game-profile')).not.toBeNull();
+    expect(host.querySelector('#game-profile') !== null).toBe(true);
   });
 
   test('« Jeu masqué » : le jeu ne se dessine pas sur le profil', async () => {
     gamePrefs.set({ hidden: true });
     const host = await mount(<GameProfileOwnSlot enabled />);
     await settle();
-    expect(host.querySelector('#game-profile')).toBeNull();
+    expect(host.querySelector('#game-profile') === null).toBe(true);
   });
 
   test('sans session (lecture désactivée) : rien ne part, rien ne se dessine', async () => {
     const host = await mount(<GameProfileOwnSlot enabled={false} />);
     await settle();
-    expect(host.querySelector('#game-profile')).toBeNull();
+    expect(host.querySelector('#game-profile') === null).toBe(true);
   });
 });
 
@@ -63,7 +85,7 @@ describe('le profil d’un autre et la carte de contact', () => {
   test('la bande de la carte de contact : les coupes, en lecture seule', async () => {
     const host = await mount(<ContactGameStripSlot userId="friend-1" enabled />);
     await settle();
-    expect(host.querySelector('[data-game-contact-strip]')).not.toBeNull();
+    expect(host.querySelector('[data-game-contact-strip]') !== null).toBe(true);
   });
 
   test('lecture désactivée (et rien en cache pour ce membre) : rien', async () => {
