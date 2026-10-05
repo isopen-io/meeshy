@@ -72,6 +72,22 @@ struct GameLawTests {
         #expect(GameMint.price(forNumber: 0) == 1221)
     }
 
+    /// Les entrées viennent du réseau (`mint.number`, `level.score`, `flame.days`) : une
+    /// valeur démesurée se lit au plafond de la loi, comme en TypeScript — jamais un
+    /// débordement d'entier qui ferait planter l'app sur une charge reçue.
+    @Test("une valeur démesurée reçue du réseau se lit au plafond, sans planter")
+    func hugeValuesReadAtTheCeiling() {
+        #expect(GameMint.price(forNumber: 7_000) == 4884)
+        #expect(GameMint.price(forNumber: 200_000) == 4884)
+        #expect(GameMint.price(forNumber: Int.max) == 4884)
+        #expect(GameMint.preview(score: 0, mintedLifetime: Int.max, debitablePoints: 0).price == 4884)
+        #expect(GameLevels.level(forScore: Int.max) == 100)
+        #expect(GameLevels.progress(forScore: Int.max).isMax)
+        #expect(GameFlame.bonusPercent(forDays: Int.max) == 50)
+        #expect(GameMissions.reward(basePoints: 30, level: 1, flameDays: Int.max)
+            == GameMissions.reward(basePoints: 30, level: 1, flameDays: 25))
+    }
+
     @Test("chaque centième est en or, chaque millième en prisme")
     func editions() {
         #expect(GameMint.edition(forNumber: 13) == .silver)
