@@ -63,7 +63,7 @@ nonisolated enum ComposerScenePicking {
         case .storyTray, .feedComposer:
             return true
         case .moodChip, .repost, .edit, .draft, .share, .conversationMedia, .socialMedia,
-             .conversationDraftMedia, .conversationCapture:
+             .conversationDraftMedia:
             return false
         }
     }

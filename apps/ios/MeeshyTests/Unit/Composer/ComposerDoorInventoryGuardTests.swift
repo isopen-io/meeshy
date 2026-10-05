@@ -78,12 +78,11 @@ final class ComposerDoorInventoryGuardTests: XCTestCase {
     /// meuble la construit par `draftId:` sans qu'aucun site ne compose son
     /// origine.
     ///
-    /// `conversationCapture` y entre le 2026-10-04 : #9295 fait prendre la
-    /// caméra de la barre en plein écran, hors scène, et plus aucun site ne
-    /// compose cette origine. Elle en sort par son RETRAIT, lot à part.
+    /// `conversationCapture` y est entrée le 2026-10-04 (#9295 faisait prendre
+    /// la caméra de la barre en plein écran, hors scène) et en est sortie par
+    /// son RETRAIT (#9298) — le troisième état que la garde admet.
     private static let declareesSansAppelant: [String: String] = [
         "draft": "c'est elle qui n'a pas d'appelant",
-        "conversationCapture": "Porte sans appelant depuis #9295",
     ]
 
     // MARK: - Lecture des sources
