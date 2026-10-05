@@ -68,9 +68,9 @@ describe('les phrases de palier', () => {
   });
 
   test('une échelle complète le dit, sans palier inventé', () => {
-    // Le dernier palier, jamais un nombre en dur (#9392 a étendu
+    // Le plus haut palier, jamais un nombre en dur (#9392 a étendu
     // BADGE_THRESHOLDS à 1 000 et 5 000 sans que ce témoin ne suive).
-    const dernierPalier = BADGE_THRESHOLDS[BADGE_THRESHOLDS.length - 1];
+    const dernierPalier = Math.max(...BADGE_THRESHOLDS);
     const complete = resolveEngagementProgress({
       ...ENGAGEMENT_PROGRESS_FIXTURE,
       counters: [{ axisKey: 'tool.sticker', count: dernierPalier }],
