@@ -100,7 +100,7 @@ export const prestigeResponse = envelope(
 export const userShowcaseResponse = envelope(
   strict({
     visible: { type: 'boolean' },
-    items: { type: 'array', items: strict({ key: { type: 'string' }, awardedMonth: { type: 'string' } }) },
+    items: { type: 'array', items: strict({ key: { type: 'string' }, awardedMonth: { type: 'string' }, count: { type: 'number' } }) },
     order: { type: 'array', items: { type: 'string' } },
   }),
 );

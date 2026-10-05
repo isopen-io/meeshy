@@ -395,6 +395,63 @@ describe('GET /users/:userId/game/showcase', () => {
     await friend.close();
   });
 
+  const leagueCups = (db: FakeGameDb) =>
+    db.gameTrophy.rows.push(
+      { id: 'c1', userId: USER, key: 'trophy.league-cup.2026-10-05.jade.gold', awardedAt: new Date('2026-10-12T00:05:00Z') },
+      { id: 'c2', userId: USER, key: 'trophy.league-cup.2026-10-19.jade.gold', awardedAt: new Date('2026-10-26T00:05:00Z') },
+      { id: 'c3', userId: USER, key: 'trophy.league-cup.2026-09-28.ambre.bronze', awardedAt: new Date('2026-10-05T00:05:00Z') },
+      { id: 'c4', userId: USER, key: 'trophy.flame.365', awardedAt: new Date('2026-11-02T08:42:17Z') },
+    );
+  const DAY = /\d{4}-\d{2}-\d{2}/;
+
+  it('un ami ne reçoit AUCUN jour ni AUCUNE semaine, quel que soit le trophée — deux coupes du même mois se comptent (D-3)', async () => {
+    const db = fakeGameDb();
+    player(db, USER);
+    player(db, OTHER);
+    befriend(db);
+    leagueCups(db);
+    db.gameProfile.rows.push({ id: 'p', userId: USER, showcaseOrder: ['trophy.league-cup.2026-10-19.jade.gold'] });
+
+    const app = await showcaseApp(db, OTHER);
+    const res = await call(app, 'GET', gameUserShowcasePath(USER));
+
+    expect(res.body).not.toMatch(DAY);
+    expect(userShowcaseResponseSchema.parse(res.json().data)).toEqual({
+      visible: true,
+      items: [
+        { key: 'trophy.league-cup.2026-10.jade.gold', awardedMonth: '2026-10', count: 2 },
+        { key: 'trophy.flame.365', awardedMonth: '2026-11' },
+        { key: 'trophy.league-cup.2026-10.ambre.bronze', awardedMonth: '2026-10' },
+      ],
+      order: ['trophy.league-cup.2026-10.jade.gold', 'trophy.flame.365', 'trophy.league-cup.2026-10.ambre.bronze'],
+    });
+    await app.close();
+  });
+
+  it('un ADMIN, que la porte laisse entrer, ne lit pas plus fin que le mois', async () => {
+    const db = fakeGameDb();
+    player(db, USER);
+    player(db, OTHER, { role: 'ADMIN' });
+    leagueCups(db);
+    const app = await showcaseApp(db, OTHER, 'ADMIN');
+    const res = await call(app, 'GET', gameUserShowcasePath(USER));
+    expect(res.json().data.visible).toBe(true);
+    expect(res.body).not.toMatch(DAY);
+    await app.close();
+  });
+
+  it('soi reçoit ses clés COMPLÈTES — la semaine est à lui', async () => {
+    const db = fakeGameDb();
+    player(db, USER);
+    leagueCups(db);
+    const app = await showcaseApp(db, USER);
+    const data = userShowcaseResponseSchema.parse((await call(app, 'GET', gameUserShowcasePath(USER))).json().data);
+    expect(data.order).toContain('trophy.league-cup.2026-10-05.jade.gold');
+    expect(data.order).toContain('trophy.league-cup.2026-10-19.jade.gold');
+    expect(data.items).toContainEqual({ key: 'trophy.league-cup.2026-09-28.ambre.bronze', awardedMonth: '2026-10' });
+    await app.close();
+  });
+
   it('un compte inconnu rend la même réponse qu’un refus : on ne révèle pas son existence', async () => {
     const db = fakeGameDb();
     player(db, OTHER);
