@@ -177,6 +177,17 @@ describe('intégrité référentielle après la purge', () => {
     expect(paid).toEqual([]);
   });
 
+  it('un crédit du partenaire qui échoue ne retient JAMAIS l’effacement : le compte est purgé, le duo aussi', async () => {
+    const db = duoWorld(true);
+    const creditPoints = async () => {
+      throw new Error('credit down');
+    };
+
+    await expect(purgeGameData(db.prisma, USER, { creditPoints })).resolves.toBeDefined();
+    expect(db.gameDuo.rows).toEqual([]);
+    expect(db.gameDuoSlot.rows).toEqual([]);
+  });
+
   it('une invitation en attente envoyée au compte effacé libère l’emplacement de l’invitant', async () => {
     const db = fakeGameDb();
     seedUser(db, {}, USER);

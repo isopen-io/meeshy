@@ -482,7 +482,12 @@ export class DuoService {
       if (duo.status === 'active' && duo.partTarget !== null) {
         const partnerRole = duo.inviterId === userId ? 'invitee' : 'inviter';
         const partnerProgress = partnerRole === 'inviter' ? duo.inviterProgress : duo.inviteeProgress;
-        if (partnerProgress >= duo.partTarget) await this.pay(duo, partnerRole, false, now);
+        // L'effacement d'un compte ne dépend JAMAIS d'un bonus : un crédit qui tombe se journalise.
+        if (partnerProgress >= duo.partTarget) {
+          await this.pay(duo, partnerRole, false, now).catch((error: unknown) =>
+            log.warn('duo partner reward failed during account erasure', { duoId: duo.id, error: error instanceof Error ? error.message : String(error) }),
+          );
+        }
       }
       await this.end(duo, 'abandoned', now);
     }
