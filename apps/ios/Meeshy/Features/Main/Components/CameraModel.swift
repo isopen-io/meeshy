@@ -176,21 +176,14 @@ final class CameraModel: NSObject, ObservableObject {
         hasAudioInput = true
     }
 
+    /// **La nouvelle entrée naît AVANT que l'ancienne parte** (#9464) : un
+    /// objectif qui ne s'ouvre pas, ou que la session refuse, laisse l'ancien
+    /// en place — l'aperçu ne noircit pas et `currentPosition` reste vrai.
     private func addVideoInput(position: AVCaptureDevice.Position) {
-        session.inputs.compactMap { $0 as? AVCaptureDeviceInput }.filter { $0.device.hasMediaType(.video) }
-            .forEach { session.removeInput($0) }
-
-        guard let device = Self.videoDevice(position: position) else { return }
-        let input: AVCaptureDeviceInput
-        do {
-            input = try AVCaptureDeviceInput(device: device)
-        } catch {
-            Logger.media.error("Failed to create video capture input: \(error.localizedDescription, privacy: .public)")
-            return
-        }
-        guard session.canAddInput(input) else { return }
-
-        session.addInput(input)
+        let ancienne = session.inputs.compactMap { $0 as? AVCaptureDeviceInput }.first { $0.device.hasMediaType(.video) }
+        let nouvelle = Self.videoInput(position: position)
+        guard ComposerCameraInputSwap.swap(in: session, replacing: ancienne, with: nouvelle) == .swapped,
+              let device = nouvelle?.device else { return }
         currentPosition = position
         liveFeed.setPosition(position)
         zoomScale = Self.zoomScale(of: device)
@@ -316,6 +309,16 @@ final class CameraModel: NSObject, ObservableObject {
         let trouves = AVCaptureDevice.DiscoverySession(deviceTypes: types, mediaType: .video,
                                                        position: position).devices
         return types.lazy.compactMap { type in trouves.first { $0.deviceType == type } }.first
+    }
+
+    nonisolated static func videoInput(position: AVCaptureDevice.Position) -> AVCaptureDeviceInput? {
+        guard let device = videoDevice(position: position) else { return nil }
+        do {
+            return try AVCaptureDeviceInput(device: device)
+        } catch {
+            Logger.media.error("Failed to create video capture input: \(error.localizedDescription, privacy: .public)")
+            return nil
+        }
     }
 
     nonisolated static func zoomScale(of device: AVCaptureDevice) -> ComposerCaptureZoomScale {
