@@ -197,4 +197,27 @@ final class ComposerSlideRailTests: XCTestCase {
         XCTAssertFalse(code.contains("SlideMiniPreview("))
         XCTAssertTrue(code.contains("SceneThumbnailRenderer.thumbnail("))
     }
+
+    /// **Le refus du onzième `(+)` se VOIT** (#5009) : le meuble est présenté
+    /// en `fullScreenCover` par chacune de ses portes, qui couvre l'hôte de
+    /// toasts de la racine. L'hôte est donc monté par le meuble lui-même, une
+    /// seule fois — une porte qui le reposerait doublerait chaque toast.
+    func test_leMeuble_monteSonHoteDeToasts_uneSeuleFois() throws {
+        let racine = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        func code(_ chemin: String) throws -> String {
+            AppSourceGuard.stripComments(
+                try String(contentsOf: racine.appendingPathComponent(chemin), encoding: .utf8))
+        }
+        let couches = try code("Meeshy/Features/Main/Composer/MeeshyComposerHost+Layers.swift")
+        XCTAssertTrue(couches.contains(".feedbackToastOverlay()"),
+                      "le meuble doit monter l'hôte des toasts sur son chrome")
+        for porte in ["DocumentComposerDoor", "MediaComposerDoor", "ShareComposeDoor",
+                      "StoryEditComposer", "StoryRepublishComposer", "ConversationImageSceneDoor",
+                      "ComposerMoodSurface"] {
+            XCTAssertFalse(try code("Meeshy/Features/Main/Composer/\(porte).swift").contains(".feedbackToastOverlay()"),
+                           "\(porte) repose l'hôte des toasts : chaque toast paraîtrait deux fois")
+        }
+    }
 }
