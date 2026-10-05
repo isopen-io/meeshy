@@ -59,7 +59,20 @@ export function capabilityOpensText(row: CapabilityRow, language: AdminLanguage)
 
 /**
  * Les gestes que le rang de CRÉATEUR ouvre (`requireSovereign()`, BIGBOSS et lui seul) :
- * ils ouvrent du privé ou touchent toute la plateforme, exigent presque toujours un motif
- * écrit, et laissent leur trace dans le journal d'audit.
+ * ils ouvrent du privé ou touchent toute la plateforme, et laissent leur trace dans le
+ * journal d'audit. Le créateur n'écrit AUCUN motif (spec 2026-10-04 § 4) : la passerelle
+ * le valide seulement s'il en fournit un.
  */
 export const SOVEREIGN_GESTURES = ['readMessages', 'listConversations', 'revealLink', 'consents', 'agentModel', 'agentReset'] as const;
+
+export type SovereignGesture = (typeof SOVEREIGN_GESTURES)[number];
+
+/**
+ * Les gestes souverains qui ont leur PORTE dans l'écran Agent : la modale qu'ils ouvrent
+ * (`?open=` de `admin-agent-parts.tsx`). Les autres se font depuis la fiche de ce qu'ils
+ * touchent (une conversation, un lien, un membre) : pas de lien générique vers eux.
+ */
+export const SOVEREIGN_GESTURE_AGENT_MODAL: Readonly<Partial<Record<SovereignGesture, 'model' | 'reset'>>> = {
+  agentModel: 'model',
+  agentReset: 'reset',
+};

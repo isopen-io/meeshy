@@ -265,7 +265,7 @@ const f = {
   'admin.settings.cap.canManageAgent.label': 'Run the agent',
   'admin.settings.cap.canManageAgent.explain': 'Configure and observe the conversational agent.',
   'admin.settings.sovereign.title': 'Gestures reserved to the creator',
-  'admin.settings.sovereign.intro': 'These gestures open private content or affect the whole platform: they require the creator rank, almost always a written reason, and leave a trace in the audit log.',
+  'admin.settings.sovereign.intro': 'These gestures open private content or affect the whole platform: they require the creator rank, with no reason to write, and leave a trace in the audit log.',
   'admin.settings.sovereign.readMessages': 'Read the messages of a private conversation',
   'admin.settings.sovereign.listConversations': 'Browse every conversation on the platform',
   'admin.settings.sovereign.revealLink': 'Reveal the secret address of a share link',

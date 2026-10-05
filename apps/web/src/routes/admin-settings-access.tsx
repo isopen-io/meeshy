@@ -2,11 +2,13 @@ import { AdminGlyph } from '@/components/admin/admin-glyph';
 import { AdminBadge, AdminRoleBadge } from '@/components/admin/badges';
 import { AdminFicheSection } from '@/components/admin/fiche';
 import { AdminMetaRow } from '@/components/admin/meta';
-import { INK, INK2, INK3, TONE_COLOR } from '@/components/admin/tone';
+import { BRAND, INK, INK2, INK3, TONE_COLOR } from '@/components/admin/tone';
 import { interpretRole } from '@/lib/admin/interpret/enums';
-import { SOVEREIGN_GESTURES, capabilityOpensText, capabilityRows } from '@/lib/admin/settings-access';
+import { adminListRoute } from '@/lib/admin/admin-routes';
+import { SOVEREIGN_GESTURES, SOVEREIGN_GESTURE_AGENT_MODAL, capabilityOpensText, capabilityRows } from '@/lib/admin/settings-access';
 import type { AdminReach } from '@/lib/admin/use-admin-reach';
 import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
+import { Link } from '@/routes/route-table';
 
 /**
  * **VOTRE ACCÈS** (#8876, #6732) — le rôle, les dix capacités servies dites en mots
@@ -75,16 +77,33 @@ export function AccessBlock({ language, reach }: { readonly language: AdminLangu
             {translateAdmin(language, 'admin.settings.sovereign.intro')}
           </p>
           <ul className="grid gap-2" data-admin-sovereign-gestures>
-            {SOVEREIGN_GESTURES.map((gesture) => (
-              <li key={gesture} data-admin-sovereign-gesture={gesture} className="flex items-start gap-3" style={{ minHeight: 28 }}>
-                <span aria-hidden="true" className="mt-0.5 shrink-0" style={{ color: TONE_COLOR.info }}>
-                  <AdminGlyph name={SOVEREIGN_GLYPH} size={18} />
-                </span>
-                <span className="min-w-0 break-words text-body" style={{ color: INK }}>
-                  {translateAdmin(language, `admin.settings.sovereign.${gesture}`)}
-                </span>
-              </li>
-            ))}
+            {SOVEREIGN_GESTURES.map((gesture) => {
+              const modal = SOVEREIGN_GESTURE_AGENT_MODAL[gesture];
+              const label = translateAdmin(language, `admin.settings.sovereign.${gesture}`);
+              return (
+                <li key={gesture} data-admin-sovereign-gesture={gesture} className="flex items-start gap-3" style={{ minHeight: 28 }}>
+                  <span aria-hidden="true" className="mt-0.5 shrink-0" style={{ color: TONE_COLOR.info }}>
+                    <AdminGlyph name={SOVEREIGN_GLYPH} size={18} />
+                  </span>
+                  {/* Le geste qui a sa porte dans l'écran Agent y MÈNE — la modale qu'il ouvre, dans l'adresse (`?open=`). */}
+                  {modal === undefined || !reach.opens('agent') ? (
+                    <span className="min-w-0 break-words text-body" style={{ color: INK }}>
+                      {label}
+                    </span>
+                  ) : (
+                    <Link
+                      to={adminListRoute('agent', reach.space)}
+                      search={{ open: modal }}
+                      className="inline-flex min-w-0 items-center gap-1 break-words text-body font-medium underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2"
+                      style={{ minHeight: 44, color: BRAND, outlineColor: BRAND }}
+                    >
+                      {label}
+                      <AdminGlyph name="caretRight" size={14} />
+                    </Link>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         </AdminFicheSection>
       ) : null}

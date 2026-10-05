@@ -270,7 +270,7 @@ const f = {
   'admin.settings.cap.canManageAgent.label': 'Piloter l’agent',
   'admin.settings.cap.canManageAgent.explain': 'Configurer et observer l’agent conversationnel.',
   'admin.settings.sovereign.title': 'Gestes réservés au créateur',
-  'admin.settings.sovereign.intro': 'Ces gestes ouvrent du privé ou touchent toute la plateforme : ils exigent le rang de créateur, presque toujours un motif écrit, et laissent une trace dans le journal d’audit.',
+  'admin.settings.sovereign.intro': 'Ces gestes ouvrent du privé ou touchent toute la plateforme : ils exigent le rang de créateur, sans motif à écrire, et laissent une trace dans le journal d’audit.',
   'admin.settings.sovereign.readMessages': 'Lire les messages d’une conversation privée',
   'admin.settings.sovereign.listConversations': 'Parcourir toutes les conversations de la plateforme',
   'admin.settings.sovereign.revealLink': 'Révéler l’adresse secrète d’un lien de partage',

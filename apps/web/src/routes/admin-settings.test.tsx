@@ -186,6 +186,23 @@ describe('les gestes du créateur — seulement au rang souverain', () => {
     expect(host.querySelector('[data-admin-sovereign-gestures]')?.textContent).toContain('Changer le modèle de l’agent');
   });
 
+  test('« Changer le modèle » et « Réinitialiser l’agent » mènent aux modales de l’écran Agent', async () => {
+    const { deps } = scripted();
+    const host = await open(deps);
+
+    const lien = (gesture: string) => host.querySelector<HTMLAnchorElement>(`[data-admin-sovereign-gesture="${gesture}"] a`);
+    expect(lien('agentModel')?.getAttribute('href')).toBe('/admin/agent?open=model');
+    expect(lien('agentReset')?.getAttribute('href')).toBe('/admin/agent?open=reset');
+    expect(lien('readMessages')).toBeNull();
+  });
+
+  test('l’introduction ne dit plus qu’un motif écrit est exigé', async () => {
+    const { deps } = scripted();
+    const host = await open(deps);
+
+    expect(host.querySelector('[data-admin-fiche-section="settings-sovereign"]')?.textContent).not.toContain('motif écrit');
+  });
+
   test('ADMIN n’a pas le rang souverain : le bloc n’est pas dessiné', async () => {
     const { deps } = scripted();
     const host = await open(deps, adminIdentityFixture({ role: 'ADMIN' }));
