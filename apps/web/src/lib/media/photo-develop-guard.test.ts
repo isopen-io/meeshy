@@ -26,6 +26,7 @@ const NOT_A_CAPTURE: Readonly<Record<string, string>> = {
   'lib/export/message-card-paint.ts': 'la carte d’un message, dessinée',
   'lib/stories/studio-filter-thumbnails.ts': 'la miniature réduite d’un fond déjà posé, pour les effets visuels (#8794)',
   'lib/mee/png.ts': 'l’image fixe d’un sticker de Mee, dessinée (#9034)',
+  'lib/game-photo/render.ts': 'le moment photo du jeu (#9382) : la photo déjà capturée (caméra ou galerie) se COMPOSE avec le cadre, le texte et la palette du moment sur un canvas — comme la carte d’un message, c’est un dessin, pas une prise de vue.',
 };
 
 const CAPTURE_SITES: readonly string[] = [
