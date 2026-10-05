@@ -73,15 +73,11 @@ type DuoRow = {
   readonly inviteeProgress: number;
   readonly inviterSeen: readonly string[];
   readonly inviteeSeen: readonly string[];
-  readonly inviterTodayKey: string | null;
-  readonly inviterToday: number;
-  readonly inviteeTodayKey: string | null;
-  readonly inviteeToday: number;
   readonly inviterPaidAt: Date | null;
   readonly inviteePaidAt: Date | null;
 };
 
-const ACCOUNT_SELECT = { ...FLAME_USER_SELECT, engagementScore: true, levelRecord: true, displayName: true, firstName: true, lastName: true, username: true } as const;
+const ACCOUNT_SELECT = { ...FLAME_USER_SELECT, isActive: true, deletedAt: true, engagementScore: true, levelRecord: true, displayName: true, firstName: true, lastName: true, username: true } as const;
 
 const recordOf = (row: { engagementScore?: number | null; levelRecord?: number | null } | null): number =>
   Math.max(levelFromScore(row?.engagementScore ?? 0), row?.levelRecord ?? 0);
@@ -105,6 +101,12 @@ export class DuoService {
     return this.prisma.user.findUnique({ where: { id: userId }, select: ACCOUNT_SELECT });
   }
 
+  /** Un compte réel et vivant : un compte inconnu, désactivé ou supprimé n'est jamais un partenaire. */
+  private async livingAccount(userId: string) {
+    const row = await this.account(userId);
+    return row !== null && row.isActive !== false && row.deletedAt == null ? row : null;
+  }
+
   private weekOf(now: Date, timezone: string | null | undefined): string {
     return leagueWeekOfMoment({ dayKey: dayKeyOf(now, timezone), minuteOfDay: minuteOfDayInTimezone(now, timezone) });
   }
@@ -122,7 +124,7 @@ export class DuoService {
   async invite(params: { readonly inviterId: string; readonly friendId: string; readonly now?: Date }): Promise<DuoInviteResponse> {
     const { inviterId, friendId } = params;
     const now = params.now ?? new Date();
-    const [inviter, invitee] = await Promise.all([this.account(inviterId), this.account(friendId)]);
+    const [inviter, invitee] = await Promise.all([this.account(inviterId), this.livingAccount(friendId)]);
     const weekKey = this.weekOf(now, inviter?.timezone);
 
     const existing = (await this.prisma.gameDuo.findFirst({
@@ -165,10 +167,6 @@ export class DuoService {
         inviteeProgress: 0,
         inviterSeen: [],
         inviteeSeen: [],
-        inviterToday: 0,
-        inviteeToday: 0,
-        inviterTodayKey: null,
-        inviteeTodayKey: null,
         inviterPaidAt: null,
         inviteePaidAt: null,
         acceptedAt: null,
@@ -176,9 +174,15 @@ export class DuoService {
       },
       select: { id: true },
     });
+    // UN duo par compte et par semaine, QUELLE QUE SOIT la direction : les deux
+    // emplacements se réservent ICI, l'unicité `(userId, weekKey)` tranche — deux
+    // invitations croisées simultanées ne peuvent pas toutes deux réussir.
     try {
-      await this.prisma.gameDuoSlot.create({ data: { userId: inviterId, weekKey, duoId: duo.id }, select: { id: true } });
+      for (const userId of [inviterId, friendId]) {
+        await this.prisma.gameDuoSlot.create({ data: { userId, weekKey, duoId: duo.id }, select: { id: true } });
+      }
     } catch (err) {
+      await this.prisma.gameDuoSlot.deleteMany({ where: { duoId: duo.id } });
       await this.prisma.gameDuo.delete({ where: { id: duo.id } });
       if (isP2002(err)) throw new GameRefusal('DUO_ALREADY_ACTIVE');
       throw err;
@@ -223,15 +227,8 @@ export class DuoService {
       await this.end(duo, 'abandoned', now);
       throw new GameRefusal('DUO_NOT_FRIENDS');
     }
-    try {
-      await this.prisma.gameDuoSlot.create({ data: { userId, weekKey: duo.weekKey, duoId }, select: { id: true } });
-    } catch (err) {
-      if (isP2002(err)) throw new GameRefusal('DUO_ALREADY_ACTIVE');
-      throw err;
-    }
     const activated = await this.prisma.gameDuo.updateMany({ where: { id: duoId, status: 'invited' }, data: { status: 'active', acceptedAt: now } });
     if (activated.count === 0) {
-      await this.prisma.gameDuoSlot.deleteMany({ where: { userId, duoId } });
       const fresh = await this.load(duoId);
       if (fresh?.status === 'active') return { status: 'already-active', duoId };
       throw new GameRefusal('DUO_TRANSITION_REFUSED', { status: fresh?.status ?? null });
@@ -257,8 +254,9 @@ export class DuoService {
 
   /** Termine un duo : l'état, la date, et les emplacements libérés. */
   private async end(duo: DuoRow, status: 'abandoned' | 'expired' | 'completed', now: Date): Promise<void> {
-    await this.prisma.gameDuo.updateMany({ where: { id: duo.id, status: { in: ['invited', 'active'] } }, data: { status, endedAt: now } });
-    await this.prisma.gameDuoSlot.deleteMany({ where: { duoId: duo.id } });
+    const ended = await this.prisma.gameDuo.updateMany({ where: { id: duo.id, status: { in: ['invited', 'active'] } }, data: { status, endedAt: now } });
+    // Seul un duo qui vient d'être terminé SANS être accompli libère ses emplacements.
+    if (ended.count > 0 && status !== 'completed') await this.prisma.gameDuoSlot.deleteMany({ where: { duoId: duo.id } });
   }
 
   // --- La progression ---
@@ -286,22 +284,17 @@ export class DuoService {
     }
     const role = this.roleOf(duo, userId);
     if (role === null) return;
-    const today = dayKeyOf(now, me?.timezone);
-
     for (let attempt = 0; attempt < 3 && duo !== null; attempt += 1) {
       const mine = role === 'inviter' ? duo.inviterProgress : duo.inviteeProgress;
       const seen = role === 'inviter' ? duo.inviterSeen : duo.inviteeSeen;
-      const todayKey = role === 'inviter' ? duo.inviterTodayKey : duo.inviteeTodayKey;
-      const todayCount = role === 'inviter' ? duo.inviterToday : duo.inviteeToday;
       if (mine >= duo.partTarget) return;
       if (options.key !== undefined && seen.includes(options.key)) return;
       const gained = options.key !== undefined ? 1 : Math.max(1, options.amount ?? 1);
-      const nextToday = todayKey === today ? todayCount + gained : gained;
 
       const data =
         role === 'inviter'
-          ? { inviterProgress: mine + gained, inviterTodayKey: today, inviterToday: nextToday, ...(options.key !== undefined ? { inviterSeen: { push: options.key } } : {}) }
-          : { inviteeProgress: mine + gained, inviteeTodayKey: today, inviteeToday: nextToday, ...(options.key !== undefined ? { inviteeSeen: { push: options.key } } : {}) };
+          ? { inviterProgress: mine + gained, ...(options.key !== undefined ? { inviterSeen: { push: options.key } } : {}) }
+          : { inviteeProgress: mine + gained, ...(options.key !== undefined ? { inviteeSeen: { push: options.key } } : {}) };
       const written = await this.prisma.gameDuo.updateMany({
         where: { id: duo.id, status: 'active', ...(role === 'inviter' ? { inviterProgress: mine } : { inviteeProgress: mine }) },
         data,
@@ -322,7 +315,8 @@ export class DuoService {
     if (!(duo.inviterProgress >= duo.partTarget && duo.inviteeProgress >= duo.partTarget)) return;
     const done = await this.prisma.gameDuo.updateMany({ where: { id: duoId, status: 'active' }, data: { status: 'completed', endedAt: now } });
     if (done.count === 0) return;
-    await this.prisma.gameDuoSlot.deleteMany({ where: { duoId } });
+    // Les emplacements d'un duo ACCOMPLI restent pris jusqu'à la fin de la semaine :
+    // ni réinvitation ni autre partenaire — un duo ne se paie qu'une fois par compte et par semaine.
     for (const role of ['inviter', 'invitee'] as const) {
       await this.pay(duo, role, true, now).catch((error: unknown) =>
         log.warn('duo reward failed, claim handed back', { duoId, role, error: error instanceof Error ? error.message : String(error) }),
@@ -373,14 +367,19 @@ export class DuoService {
       }
       await this.end(duo, 'expired', now);
     }
+    // Les emplacements des semaines révolues (duos accomplis compris) se libèrent.
+    await this.prisma.gameDuoSlot.deleteMany({ where: { weekKey: { lt: cutoff } } });
     return stale.length;
   }
 
   // --- La lecture ---
 
   /**
-   * Le duo de la semaine tel que le bloc `game` le sert. La part du PARTENAIRE se
-   * montre à la fin de la veille quand il a coupé sa présence en ligne.
+   * Le duo de la semaine tel que le bloc `game` le sert. **Aucune présence n'en
+   * sort** (loi de présence, conformité B-3 et A-7) : la part du partenaire est
+   * ARRONDIE (au quart de la cible, vers le bas), sans clé de jour ni horodatage
+   * — ce qui permettrait de lire QUAND il a agi. Si le partenaire a coupé son
+   * statut en ligne, ou masqué son jeu, on ne sert RIEN de sa part (0).
    */
   async current(userId: string, now: Date = new Date()): Promise<NonNullable<GameBlockExtrasFacts['duo']> | null> {
     const me = await this.account(userId);
@@ -397,13 +396,13 @@ export class DuoService {
     }
     const partnerId = role === 'inviter' ? duo.inviteeId : duo.inviterId;
     const partner = await this.account(partnerId);
-    const cut = (await presenceCutAmong(this.prisma, [partnerId])).has(partnerId);
-
+    const [cut, hidden] = await Promise.all([
+      presenceCutAmong(this.prisma, [partnerId]),
+      this.prisma.gameProfile.findUnique({ where: { userId: partnerId }, select: { gameHiddenAt: true } }),
+    ]);
+    const withheld = cut.has(partnerId) || hidden?.gameHiddenAt != null;
     const partnerTotal = role === 'inviter' ? duo.inviteeProgress : duo.inviterProgress;
-    const partnerToday = role === 'inviter' ? duo.inviteeToday : duo.inviterToday;
-    const partnerTodayKey = role === 'inviter' ? duo.inviteeTodayKey : duo.inviterTodayKey;
-    const partnerDay = dayKeyOf(now, partner?.timezone);
-    const partnerProgress = cut && partnerTodayKey === partnerDay ? Math.max(0, partnerTotal - partnerToday) : partnerTotal;
+    const partnerProgress = withheld || duo.partTarget === null ? 0 : roundedPartnerProgress(partnerTotal, duo.partTarget);
 
     const mission: DuoMission | null =
       duo.templateKey === null || duo.signal === null || duo.partTarget === null || duo.commonTarget === null
@@ -421,3 +420,9 @@ export class DuoService {
   }
 }
 
+/** La part du partenaire, au quart de la cible vers le bas : 0, 25 %, 50 %, 75 %, 100 %. */
+export function roundedPartnerProgress(progress: number, target: number): number {
+  if (!(target > 0)) return 0;
+  const clamped = Math.min(Math.max(0, Math.trunc(progress)), target);
+  return Math.floor((Math.floor((clamped * 4) / target) * target) / 4);
+}
