@@ -593,6 +593,149 @@ final class ComposerAutosaveTests: XCTestCase {
         XCTAssertEqual(fichiers.count, 3)
     }
 
+    // MARK: - Une photo, deux adresses (#9420, réouverture)
+
+    /// Le chemin RÉEL de l'import : la pièce jointe du document garde le
+    /// fichier du sélecteur (`localMedia`, `objectIdBySource`…), et la pose
+    /// (`applyContentMedia`) le COPIE sous `tmp/<objectId>.jpg` pour l'objet de
+    /// scène (`mediaURL`, ou `adoptedLocalMedia` une fois pré-monté). Deux
+    /// adresses, les mêmes octets.
+    private func makeImportedThreeImageState(preUploaded: Bool) -> ComposerAutosaveState {
+        let selecteur = makeTempDirectory()
+        let pose = makeTempDirectory()
+        var etat = makeState(format: .post)
+        let sources = (0..<3).map { makeJPEGFile(named: "photo-\($0).jpg", in: selecteur) }
+        let copies = sources.enumerated().map { index, source -> URL in
+            let copie = pose.appendingPathComponent("obj-\(index).jpg")
+            try? FileManager.default.copyItem(at: source, to: copie)
+            return copie
+        }
+        etat.porters = ComposerMediaPorters(
+            localMedia: sources.map { ComposerDocumentMedia(url: $0, mimeType: "image/jpeg", durationMs: nil) },
+            roleByURL: Dictionary(uniqueKeysWithValues: sources.map { ($0, ComposerMediaRole.background) }),
+            slideIdByMediaURL: Dictionary(uniqueKeysWithValues: sources.enumerated().map { ($1, "s\($0)") }),
+            objectIdBySource: Dictionary(uniqueKeysWithValues: sources.enumerated().map { ($1, "obj-\($0)") }),
+            captions: Dictionary(uniqueKeysWithValues: sources.enumerated().map { ($1, "Légende \($0)") }),
+            altsByObjectId: [:], transcriptions: [:], railPosedURLs: [])
+        etat.slides = (0..<3).map { index in
+            var slide = StorySlide(id: "s\(index)")
+            slide.effects.mediaObjects = [preUploaded
+                ? StoryMediaObject(id: "obj-\(index)", postMediaId: "pm-\(index)",
+                                   mediaURL: "https://cdn.meeshy.me/pm-\(index).jpg",
+                                   mediaType: "image", aspectRatio: 1)
+                : StoryMediaObject(id: "obj-\(index)", mediaURL: copies[index].absoluteString,
+                                   mediaType: "image", aspectRatio: 1)]
+            return slide
+        }
+        etat.adoptedLocalMedia = preUploaded
+            ? copies.enumerated().reduce(into: [:]) { carte, entree in
+                carte["pm-\(entree.offset)"] = entree.element
+                carte["https://cdn.meeshy.me/pm-\(entree.offset).jpg"] = entree.element
+            }
+            : [:]
+        etat.images = (0..<3).reduce(into: [:]) { carte, index in
+            let image = makeImage()
+            carte["obj-\(index)"] = image
+            if preUploaded {
+                carte["pm-\(index)"] = image
+                carte["https://cdn.meeshy.me/pm-\(index).jpg"] = image
+            }
+        }
+        return etat
+    }
+
+    func test_save_importedPhotosPreUploaded_writeOneFileEachDespiteTheirSceneCopy() {
+        let (store, racine) = makeStoreAndRoot()
+        let compte = makeAccount()
+        let etat = makeImportedThreeImageState(preUploaded: true)
+
+        (1...3).forEach { _ in
+            store.save(ComposerAutosaveCodec.write(from: etat), account: compte, slot: .creation)
+        }
+        store.waitForPendingWrites()
+
+        let fichiers = mediaFiles(root: racine, account: compte)
+        XCTAssertEqual(fichiers.count, 3, "Une photo = UN fichier, quelle que soit son adresse : \(fichiers)")
+    }
+
+    func test_save_importedPhotosStillLocal_writeOneFileEachDespiteTheirSceneCopy() {
+        let (store, racine) = makeStoreAndRoot()
+        let compte = makeAccount()
+
+        store.save(ComposerAutosaveCodec.write(from: makeImportedThreeImageState(preUploaded: false)),
+                   account: compte, slot: .creation)
+        store.waitForPendingWrites()
+
+        let fichiers = mediaFiles(root: racine, account: compte)
+        XCTAssertEqual(fichiers.count, 3, "Une photo = UN fichier, quelle que soit son adresse : \(fichiers)")
+    }
+
+    /// Relu, chaque porteur et chaque objet de scène retrouve un fichier — et
+    /// la sauvegarde suivante n'en écrit pas un de plus.
+    func test_load_dedupedPhotos_everyPorterAndSceneObjectGetsItsFile() throws {
+        let (store, racine) = makeStoreAndRoot()
+        let compte = makeAccount()
+        store.save(ComposerAutosaveCodec.write(from: makeImportedThreeImageState(preUploaded: false)),
+                   account: compte, slot: .creation)
+
+        let relu = try XCTUnwrap(ComposerAutosaveCodec.state(from: XCTUnwrap(store.load(account: compte, slot: .creation))))
+
+        XCTAssertEqual(relu.porters.localMedia.count, 3)
+        for media in relu.porters.localMedia {
+            XCTAssertTrue(FileManager.default.fileExists(atPath: media.url.path))
+            XCTAssertNotNil(relu.porters.objectIdBySource[media.url])
+            XCTAssertNotNil(relu.porters.captions[media.url])
+        }
+        let objets = relu.slides.flatMap { $0.effects.mediaObjects ?? [] }
+        XCTAssertEqual(objets.count, 3)
+        for objet in objets {
+            let url = try XCTUnwrap(objet.mediaURL.flatMap(URL.init(string:)))
+            XCTAssertTrue(url.isFileURL)
+            XCTAssertTrue(FileManager.default.fileExists(atPath: url.path), "objet \(objet.id) sans fichier")
+            XCTAssertNotNil(relu.images[objet.id])
+        }
+
+        store.save(ComposerAutosaveCodec.write(from: relu), account: compte, slot: .creation)
+        store.waitForPendingWrites()
+        XCTAssertEqual(mediaFiles(root: racine, account: compte).count, 3)
+    }
+
+    /// Rétrocompatibilité : un brouillon écrit avant ce correctif tient DEUX
+    /// fichiers par photo et ne déclare aucun alias. Il se relit, et la
+    /// sauvegarde suivante balaie les doublons.
+    func test_save_draftWithTwoFilesPerPhoto_isReadAndSweptToOneEach() throws {
+        let (store, racine) = makeStoreAndRoot()
+        let compte = makeAccount()
+        var ancien = makeImportedThreeImageState(preUploaded: false)
+        let pont = ancien.porters.objectIdBySource
+        ancien.porters.objectIdBySource = [:]
+        store.save(ComposerAutosaveCodec.write(from: ancien), account: compte, slot: .creation)
+        store.waitForPendingWrites()
+        XCTAssertEqual(mediaFiles(root: racine, account: compte).count, 6,
+                       "le brouillon d'avant : deux fichiers par photo")
+
+        var relu = try XCTUnwrap(ComposerAutosaveCodec.state(from: XCTUnwrap(store.load(account: compte, slot: .creation))))
+        let sourceParLegende = Dictionary(uniqueKeysWithValues: relu.porters.localMedia.compactMap { media in
+            relu.porters.captions[media.url].map { ($0, media.url) }
+        })
+        relu.porters.objectIdBySource = pont.reduce(into: [:]) { carte, entree in
+            guard let legende = ancien.porters.captions[entree.key],
+                  let url = sourceParLegende[legende] else { return }
+            carte[url] = entree.value
+        }
+        XCTAssertEqual(relu.porters.objectIdBySource.count, 3)
+
+        store.save(ComposerAutosaveCodec.write(from: relu), account: compte, slot: .creation)
+        store.waitForPendingWrites()
+
+        XCTAssertEqual(mediaFiles(root: racine, account: compte).count, 3)
+        let reluEncore = try XCTUnwrap(ComposerAutosaveCodec.state(from: XCTUnwrap(store.load(account: compte, slot: .creation))))
+        for objet in reluEncore.slides.flatMap({ $0.effects.mediaObjects ?? [] }) {
+            let url = try XCTUnwrap(objet.mediaURL.flatMap(URL.init(string:)))
+            XCTAssertTrue(FileManager.default.fileExists(atPath: url.path))
+        }
+    }
+
     /// « Tout effacer » vide le dossier, médias compris.
     func test_deleteAll_afterSavingImages_leavesNoMediaFile() {
         let (store, racine) = makeStoreAndRoot()

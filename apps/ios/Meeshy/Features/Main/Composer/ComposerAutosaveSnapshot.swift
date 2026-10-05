@@ -130,6 +130,10 @@ nonisolated struct ComposerAutosaveSnapshot: Codable, Sendable {
     var stickerAnimations: [String: String]
     /// Absent d'un instantané écrit avant #9419 : il se relit sans choix armé.
     var publishChoice: PublishChoice?
+    /// Les adresses de scène qui ne sont qu'une COPIE d'un autre fichier du
+    /// brouillon (#9420) : nom désigné → nom écrit. Absent d'un instantané
+    /// écrit avant : chaque nom y a son propre fichier.
+    var fileAliases: [String: String]?
 }
 
 /// Ce que le meuble tient au moment de la capture — des VALEURS, lues sur le
