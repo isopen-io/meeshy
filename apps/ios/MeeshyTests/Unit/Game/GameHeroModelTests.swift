@@ -23,7 +23,8 @@ final class GameHeroModelTests: XCTestCase {
 
     func test_settingAWeightChangesTheList_withoutTouchingAString() {
         let retuned = GameHero.earnItems(weights: [.content: 2, .social: 11, .conversation: 5, .comment: 5, .tool: 1])
-        XCTAssertEqual(retuned.map(\.family), [.social, .conversation, .comment, .content, .tool])
+        // À poids égal (conversation et comment : 5), l'ordre du catalogue décide — comment précède conversation.
+        XCTAssertEqual(retuned.map(\.family), [.social, .comment, .conversation, .content, .tool])
         XCTAssertEqual(retuned.first?.weight, 11)
     }
 
