@@ -120,6 +120,27 @@ describe('playChoreography — le plan rejoué sur des éléments', () => {
   });
 });
 
+describe('l’annulation d’une animation REJETTE sa promesse `finished`', () => {
+  test('le lecteur l’absorbe : annuler en plein geste ne laisse aucun rejet non géré', async () => {
+    const unhandled: unknown[] = [];
+    const watch = (reason: unknown): void => void unhandled.push(reason);
+    process.on('unhandledRejection', watch);
+    const rejecting: PlayableTarget = {
+      animate: () => {
+        let reject: (reason: unknown) => void = () => undefined;
+        const finished = new Promise<unknown>((_, r) => void (reject = r));
+        return { finished, cancel: () => reject(new Error('AbortError')) };
+      },
+      style: { willChange: '' },
+    };
+    const handle = playChoreography(rootOf({ '[data-game-shield]': [rejecting] }), 'rank', { reducedMotion: false, haptics: false, schedule: clock().schedule });
+    handle.cancel();
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    process.off('unhandledRejection', watch);
+    expect(unhandled).toEqual([]);
+  });
+});
+
 describe('repères et haptique', () => {
   test('la frappe : le repère « strike » et le choc arrivent AU moment du plan', () => {
     const c = clock();

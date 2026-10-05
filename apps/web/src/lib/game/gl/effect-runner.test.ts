@@ -162,6 +162,28 @@ describe('hors écran : plus rien ne tourne', () => {
   });
 });
 
+describe('autoStart: false — un effet qui n’attend que son moment', () => {
+  test('rien ne tourne au montage ; le contexte est prêt (programmes compilés d’avance) ; replay() le déclenche', () => {
+    const h = harness();
+    const effect = startEffect({ effect: 'shockwave', circle: true, autoStart: false }, h.env);
+    expect(effect.backend).toBe('webgl2');
+    expect(h.events.createGl).toBe(1);
+    expect(h.events.rafRequests).toBe(0);
+    effect.replay();
+    expect(h.queued()).toBe(1);
+    h.runUntil(SHOCKWAVE_MS * 2, 50);
+    expect(h.events.clears).toBe(1);
+  });
+
+  test('masqué puis visible, un effet qui n’a pas été déclenché ne démarre pas tout seul', () => {
+    const h = harness();
+    startEffect({ effect: 'shockwave', autoStart: false }, h.env);
+    h.visible(false);
+    h.visible(true);
+    expect(h.queued()).toBe(0);
+  });
+});
+
 describe('replay', () => {
   test('relance l’effet depuis le début, même terminé', () => {
     const h = harness();

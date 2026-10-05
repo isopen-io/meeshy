@@ -33,6 +33,8 @@ export type EffectSpec = {
   readonly circle?: boolean;
   /** Passages du reflet (défaut : 3). */
   readonly passes?: number;
+  /** `false` : le contexte est créé et les programmes compilés d'avance, mais rien ne tourne avant `replay()` (l'onde attend le « tchak »). Défaut : vrai. */
+  readonly autoStart?: boolean;
 };
 
 export type EffectEnv = {
@@ -69,7 +71,7 @@ export const startEffect = (spec: EffectSpec, env: EffectEnv): EffectController 
   let rafId: number | null = null;
   let elapsed = 0;
   let last: number | null = null;
-  let finished = false;
+  let finished = spec.autoStart === false;
   let tilt: Tilt = REST;
   let pendingTilt = false;
 
@@ -134,7 +136,7 @@ export const startEffect = (spec: EffectSpec, env: EffectEnv): EffectController 
   });
 
   if (sensed) paint(0, REST);
-  else requestFrame(onTimedFrame);
+  else if (!finished) requestFrame(onTimedFrame);
 
   return {
     backend: 'webgl2',

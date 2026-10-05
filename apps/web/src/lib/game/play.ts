@@ -65,14 +65,17 @@ export const playChoreography = (root: PlayableRoot, kind: ChoreographyKind, opt
       if (typeof el.animate !== 'function') return;
       if (el.style !== undefined) el.style.willChange = WILL_CHANGE;
       touched.add(el);
-      animations.push(
-        el.animate([...step.keyframes], {
-          duration: step.durationMs,
-          delay: extraDelayMs + index * (step.staggerMs ?? 0),
-          easing: step.easing,
-          fill: step.fill,
-        }),
-      );
+      const animation = el.animate([...step.keyframes], {
+        duration: step.durationMs,
+        delay: extraDelayMs + index * (step.staggerMs ?? 0),
+        easing: step.easing,
+        fill: step.fill,
+      });
+      /* Annuler une animation REJETTE sa promesse `finished` (AbortError) : sans
+         gestionnaire, c'est un rejet non géré à chaque fin de plan. On ne s'en
+         sert pas — le plan a sa propre horloge — donc on l'absorbe. */
+      Promise.resolve(animation.finished).catch(() => undefined);
+      animations.push(animation);
     });
   };
 
