@@ -1,5 +1,6 @@
 import { beforeAll, describe, expect, test } from 'bun:test';
 
+import { ENGAGEMENT_AXIS_FAMILIES } from '@meeshy/shared/types/engagement';
 import { FLAME_FORMS } from '@meeshy/shared/utils/game/flame';
 import { GLORY_RANKS } from '@meeshy/shared/utils/game/glory';
 import { LEVEL_TIER_KEYS } from '@meeshy/shared/utils/game/levels';
@@ -16,6 +17,7 @@ import {
   difficultyName,
   divisionLabel,
   editionName,
+  familyName,
   flameFormName,
   formatCount,
   gameErrorMessage,
@@ -150,6 +152,16 @@ describe('les refus du serveur se disent', () => {
     for (const language of SUPPORTED_INTERFACE_LANGUAGES) {
       expect(NAMED(gameErrorMessage('INSUFFICIENT_POINTS', language))).toBe(true);
       expect(gameErrorMessage('INSUFFICIENT_POINTS', language)).not.toBe(gameErrorMessage('???', language));
+    }
+  });
+});
+
+describe('les familles du barème se nomment (#5841)', () => {
+  test('les cinq familles ont un nom, dans les sept langues, tous différents', () => {
+    for (const language of SUPPORTED_INTERFACE_LANGUAGES) {
+      const names = ENGAGEMENT_AXIS_FAMILIES.map((family) => familyName(family, language));
+      for (const name of names) expect({ language, ok: NAMED(name) }).toEqual({ language, ok: true });
+      expect(new Set(names).size).toBe(5);
     }
   });
 });

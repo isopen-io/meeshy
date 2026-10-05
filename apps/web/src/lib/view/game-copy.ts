@@ -1,3 +1,4 @@
+import type { EngagementAxisFamily } from '@meeshy/shared/types/engagement';
 import type { FlameFormKey } from '@meeshy/shared/utils/game/flame';
 import type { GloryDivision, GloryRankOrMythic } from '@meeshy/shared/utils/game/glory';
 import type { LevelTierKey } from '@meeshy/shared/utils/game/levels';
@@ -92,6 +93,9 @@ export const levelRingLabel = (level: number, tier: LevelTierKey, language: Lang
     tier: levelTierName(tier, language),
     ordinal: translateGame(language, TIER_ORDINALS[tierOrdinal(tier) - 1] ?? TIER_ORDINALS[0]),
   });
+
+export const familyName = (family: EngagementAxisFamily, language: Language = currentInterfaceLanguage()): string =>
+  translateGame(language, `game.family.${family}`);
 
 export const materialName = (material: GameMaterial, language: Language = currentInterfaceLanguage()): string =>
   translateGame(language, `game.material.${material}`);

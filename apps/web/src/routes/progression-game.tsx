@@ -7,16 +7,19 @@ import type { EngagementWithGame } from '@/lib/api/engagement';
 import { gameText } from '@/lib/view/game-copy';
 import { GameFlamePanel } from '@/components/game-flame-panel';
 import { GameGauges } from '@/components/game-gauges';
+import { GameHero } from '@/components/game-hero';
 import { GameMintPreview } from '@/components/game-mint-preview';
 import { GameMissions } from '@/components/game-missions';
 
 import type { GameActions } from './progression-game-actions';
 
 /**
- * LE JEU SUR « PROGRESSION » (#9383) — l'en-tête aux quatre jauges, puis les
- * missions et le coffre, l'aperçu de frappe, la Flamme à protéger. La séquence
- * est celle de la planche (conception, partie VII) : l'écran existant
- * s'enrichit EN HAUT, ses portes (Badges, Défis, Succès) restent en dessous.
+ * LE JEU SUR « PROGRESSION » (#9383, #5841) — le HÉROS pleine largeur en
+ * deuxième position (où j'en suis, comment je gagne, comment je frappe), les
+ * deux jauges du trésor et de la Flamme, puis les missions et le coffre,
+ * l'aperçu de frappe, la Flamme à protéger. La séquence est celle de la
+ * planche (conception, parties VII et XII) : l'écran existant s'enrichit EN
+ * HAUT, ses portes (Badges, Défis, Succès) restent en dessous.
  *
  * Le bloc `game` est la seule source : ce fichier ne calcule ni niveau, ni
  * rang, ni prix. Il distribue ce que `useGameActions` pilote (retour
@@ -29,16 +32,26 @@ export type GameHost = {
   readonly online: boolean;
   /** La carte du guide (#9379), posée au-dessus des jauges. */
   readonly guide?: ReactNode;
+  /** La ligne courte du guide du moment : Mee la dit sur le coin du héros (#5841). `null` : Mee propose les règles. */
+  readonly guideLine?: string | null;
 };
 
 export function GameSection({ progress, host }: { readonly progress: EngagementWithGame; readonly host: GameHost }) {
   const game = progress.game;
   if (game === undefined) return null;
-  const { actions, online, guide } = host;
+  const { actions, online, guide, guideLine } = host;
 
   return (
     <>
       {guide ?? null}
+      <GameHero
+        game={game}
+        online={online}
+        minting={actions.pending.mint}
+        mintError={actions.errors.mint}
+        onMint={actions.mint}
+        guideLine={guideLine ?? null}
+      />
       <GameGauges game={game} />
       <GameMissions
         missions={game.missions}

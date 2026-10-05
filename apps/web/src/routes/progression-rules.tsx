@@ -1,3 +1,5 @@
+import { useEffect } from 'react';
+
 import { ONBOARDING_STEPS } from '@meeshy/shared/utils/game/guide';
 
 import { suspendForGameCatalog } from '@/lib/i18n-game-catalog';
@@ -9,6 +11,7 @@ import { GAME_BRAND, GAME_CARD, GAME_INK, GAME_INK_2 } from '@/components/game-s
 import { guideBirds } from '@/lib/game-guide/card';
 import { formatCount, gameText } from '@/lib/view/game-copy';
 import { gameRules, stepCopy } from '@/lib/view/game-guide-copy';
+import { useOptionalRoute } from '@/lib/router';
 import { Link } from '@/routes/route-table';
 
 /**
@@ -49,7 +52,29 @@ function StepCard({ step }: { readonly step: (typeof ONBOARDING_STEPS)[number] }
   );
 }
 
-export function RulesBody() {
+const RULES_COUNT = 8;
+
+/** La règle que l'adresse désigne (`?regle=1`) : un entier de 1 à 8, sinon aucune. */
+export function ruleTarget(value: string | null): number | undefined {
+  if (value === null || !/^\d+$/.test(value)) return undefined;
+  const index = Number(value);
+  return index >= 1 && index <= RULES_COUNT ? index : undefined;
+}
+
+const reducedMotion = (): boolean => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/**
+ * `target` est la règle qu'une puce du héros désigne : elle se distingue d'un
+ * liseré de la marque et vient se poser à l'écran. Le liseré n'anime que
+ * l'ombre ; le défilement est instantané quand l'utilisateur limite les
+ * animations.
+ */
+export function RulesBody({ target }: { readonly target?: number }) {
+  useEffect(() => {
+    if (target === undefined) return;
+    document.getElementById(`regle-${target}`)?.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'center' });
+  }, [target]);
+
   return (
     <div className="flex flex-col gap-5 px-4 py-3">
       <section className="flex items-end gap-2 px-1">
@@ -66,7 +91,13 @@ export function RulesBody() {
         </h2>
         <ol className="flex flex-col gap-2">
           {gameRules().map((rule) => (
-            <li key={rule.index} className="flex items-start gap-3 rounded-card px-3 py-3" style={{ backgroundColor: GAME_CARD }}>
+            <li
+              key={rule.index}
+              id={`regle-${rule.index}`}
+              {...(rule.index === target ? { 'data-game-rule-target': '' } : {})}
+              className="flex items-start gap-3 rounded-card px-3 py-3"
+              style={{ backgroundColor: GAME_CARD, ...(rule.index === target ? { boxShadow: `0 0 0 2px ${GAME_BRAND}` } : {}) }}
+            >
               <span
                 aria-hidden="true"
                 className="grid size-8 shrink-0 place-items-center rounded-chip text-body font-bold"
@@ -103,6 +134,7 @@ export function RulesBody() {
 
 export default function ProgressionRulesScreen() {
   suspendForGameCatalog(currentInterfaceLanguage());
+  const target = ruleTarget(useOptionalRoute()?.search.get('regle') ?? null);
   return (
     <div className="flex h-dvh flex-col overflow-hidden pt-safe">
       <header className="glass z-10 shrink-0">
@@ -118,7 +150,7 @@ export default function ProgressionRulesScreen() {
         </div>
       </header>
       <main id="contenu" className="flex-1 overflow-y-auto pb-safe">
-        <RulesBody />
+        <RulesBody {...(target === undefined ? {} : { target })} />
       </main>
     </div>
   );

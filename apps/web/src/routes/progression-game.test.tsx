@@ -43,8 +43,8 @@ describe('un serveur qui sert le bloc game', () => {
   const page = body(withGame());
   const position = (needle: string): number => page.indexOf(needle);
 
-  test('les quatre jauges ouvrent l’écran, avant les missions, l’aperçu et la Flamme', () => {
-    const order = ['data-game-gauges', 'id="game-missions"', 'id="game-mint"', 'id="game-flame-panel"'].map(position);
+  test('le héros ouvre l’écran, puis les deux jauges, avant les missions, l’aperçu et la Flamme', () => {
+    const order = ['data-game-hero', 'data-game-gauges', 'id="game-missions"', 'id="game-mint"', 'id="game-flame-panel"'].map(position);
     expect(order.every((i) => i >= 0)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
   });
@@ -88,7 +88,8 @@ describe('un serveur qui sert le bloc game', () => {
       />,
     );
     expect(withGuide.indexOf('data-guide-slot')).toBeGreaterThanOrEqual(0);
-    expect(withGuide.indexOf('data-guide-slot')).toBeLessThan(withGuide.indexOf('data-game-gauges'));
+    expect(withGuide.indexOf('data-guide-slot')).toBeLessThan(withGuide.indexOf('data-game-hero'));
+    expect(withGuide.indexOf('data-game-hero')).toBeLessThan(withGuide.indexOf('data-game-gauges'));
   });
 
   test('aucune bulle de conversation : la mascotte-bulle cède à la carte du jeu', () => {
@@ -107,8 +108,26 @@ describe('les actions se branchent sur les actions du crochet', () => {
     expect(page).toContain('Pas assez de points convertibles');
   });
 
-  test('hors ligne : les gestes d’argent se taisent', () => {
-    expect(body(withGame(), { online: false })).toMatch(/data-game-mint-action=""[^>]*disabled/);
+  test('hors ligne : les gestes d’argent se taisent, au héros comme à l’aperçu', () => {
+    const page = body(withGame(), { online: false });
+    expect(page).toMatch(/data-game-mint-action=""[^>]*disabled/);
+    expect(page).toMatch(/data-game-hero-mint=""[^>]*disabled/);
+  });
+
+  test('la frappe en cours occupe aussi le bouton du héros', () => {
+    expect(body(withGame(), { actions: { ...idle, pending: { ...idle.pending, mint: true } } })).toMatch(/data-game-hero-mint=""[^>]*aria-busy="true"/);
+  });
+
+  test('la ligne du guide arrive au héros, dite par Mee', () => {
+    const page = renderToStaticMarkup(
+      <ProgressionBody
+        progress={withGame()}
+        onMint={() => undefined}
+        isMinting={false}
+        game={{ actions: idle, online: true, guideLine: 'Content de te revoir.' }}
+      />,
+    );
+    expect(page).toContain('Content de te revoir.');
   });
 });
 

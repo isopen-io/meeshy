@@ -396,6 +396,20 @@ const fr = {
   'game.medal.label': '{axis}, {material}, {value} sur {next} vers {nextMaterial}',
   'game.medal.label_top': '{axis}, {material}, {value}',
   'game.medal.label_off': '{axis}, pas encore obtenu, encore {missing}',
+  'game.family.content': 'Contenu',
+  'game.family.comment': 'Commentaires',
+  'game.family.conversation': 'Conversations',
+  'game.family.tool': 'Outils',
+  'game.family.social': 'Lien social',
+  'game.hero.earn_title': 'Comment gagner des points',
+  'game.hero.earn_chip': '{family} +{points}',
+  'game.hero.earn_chip_a11y': '{family} : {points} par geste. Voir les règles.',
+  'game.hero.mint_title': 'Comment frapper',
+  'game.hero.mint_price': '{price} → une Meesh',
+  'game.hero.mint_cost': 'coûte {levels}',
+  'game.hero.mint_glory': '+{glory} Gloire',
+  'game.hero.mint_missing': 'Encore {missing}',
+  'game.hero.mee_idle': 'Une question ? Touche-moi, je t’explique.',
 } as const;
 
 export default fr;

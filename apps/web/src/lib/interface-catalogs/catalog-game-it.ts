@@ -382,6 +382,20 @@ const it = {
   'game.medal.label': '{axis}, {material}, {value} su {next} verso {nextMaterial}',
   'game.medal.label_top': '{axis}, {material}, {value}',
   'game.medal.label_off': '{axis}, non ancora ottenuta, ne mancano {missing}',
+  'game.family.content': 'Contenuti',
+  'game.family.comment': 'Commenti',
+  'game.family.conversation': 'Conversazioni',
+  'game.family.tool': 'Strumenti',
+  'game.family.social': 'Legami',
+  'game.hero.earn_title': 'Come guadagnare punti',
+  'game.hero.earn_chip': '{family} +{points}',
+  'game.hero.earn_chip_a11y': '{family}: {points} per gesto. Vedi le regole.',
+  'game.hero.mint_title': 'Come coniare',
+  'game.hero.mint_price': '{price} → una Meesh',
+  'game.hero.mint_cost': 'costa {levels}',
+  'game.hero.mint_glory': '+{glory} Gloria',
+  'game.hero.mint_missing': 'Ancora {missing}',
+  'game.hero.mee_idle': 'Una domanda? Toccami, ti spiego.',
 } as const satisfies GameCatalog;
 
 export default it;

@@ -394,6 +394,20 @@ const ar = {
   'game.medal.label': '{axis}، {material}، {value} من {next} نحو {nextMaterial}',
   'game.medal.label_top': '{axis}، {material}، {value}',
   'game.medal.label_off': '{axis}، لم تُنَل بعد، يتبقّى {missing}',
+  'game.family.content': 'المحتوى',
+  'game.family.comment': 'التعليقات',
+  'game.family.conversation': 'المحادثات',
+  'game.family.tool': 'الأدوات',
+  'game.family.social': 'الروابط',
+  'game.hero.earn_title': 'كيف تكسب النقاط',
+  'game.hero.earn_chip': '{family} ⁦+{points}⁩',
+  'game.hero.earn_chip_a11y': '{family}: {points} لكل إجراء. عرض القواعد.',
+  'game.hero.mint_title': 'كيف تسكّ',
+  'game.hero.mint_price': 'Meesh واحدة مقابل {price}',
+  'game.hero.mint_cost': 'تكلّف {levels}',
+  'game.hero.mint_glory': '⁦+{glory}⁩ مجد',
+  'game.hero.mint_missing': 'بقي {missing}',
+  'game.hero.mee_idle': 'عندك سؤال؟ المسني وسأشرح لك.',
 } as const satisfies GameCatalog;
 
 export default ar;

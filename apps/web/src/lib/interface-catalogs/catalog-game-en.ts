@@ -382,6 +382,20 @@ const en = {
   'game.medal.label': '{axis}, {material}, {value} of {next} toward {nextMaterial}',
   'game.medal.label_top': '{axis}, {material}, {value}',
   'game.medal.label_off': '{axis}, not earned yet, {missing} to go',
+  'game.family.content': 'Content',
+  'game.family.comment': 'Comments',
+  'game.family.conversation': 'Conversations',
+  'game.family.tool': 'Tools',
+  'game.family.social': 'Social ties',
+  'game.hero.earn_title': 'How to earn points',
+  'game.hero.earn_chip': '{family} +{points}',
+  'game.hero.earn_chip_a11y': '{family}: {points} per action. See the rules.',
+  'game.hero.mint_title': 'How to mint',
+  'game.hero.mint_price': '{price} → one Meesh',
+  'game.hero.mint_cost': 'costs {levels}',
+  'game.hero.mint_glory': '+{glory} Glory',
+  'game.hero.mint_missing': '{missing} more',
+  'game.hero.mee_idle': 'A question? Tap me, I’ll explain.',
 } as const satisfies GameCatalog;
 
 export default en;
