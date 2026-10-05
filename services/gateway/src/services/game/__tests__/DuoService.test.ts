@@ -496,3 +496,57 @@ describe('DuoService — autorisation et nuisance', () => {
     expect(db.gameDuo.rows).toHaveLength(0);
   });
 });
+
+describe('DuoService — nuisance et déni de service (#9385)', () => {
+  it('une invitation REFUSÉE par l’invité ne se renouvelle pas la même semaine, mais la semaine suivante oui', async () => {
+    const { service } = setup();
+    const { duoId } = await service.invite({ inviterId: USER, friendId: OTHER, now: NOW });
+    await service.abandon({ userId: OTHER, duoId, now: NOW });
+
+    await expect(service.invite({ inviterId: USER, friendId: OTHER, now: NOW })).rejects.toMatchObject({
+      code: 'DUO_TRANSITION_REFUSED',
+      details: { reason: 'declined-this-week' },
+    });
+    await expect(service.invite({ inviterId: USER, friendId: OTHER, now: new Date('2026-10-21T12:00:00Z') })).resolves.toMatchObject({ status: 'invited' });
+  });
+
+  it('l’invitant qui retire SA propre invitation peut la refaire : seul le refus de l’invité la verrouille', async () => {
+    const { service } = setup();
+    const { duoId } = await service.invite({ inviterId: USER, friendId: OTHER, now: NOW });
+    await service.abandon({ userId: USER, duoId, now: NOW });
+    await expect(service.invite({ inviterId: USER, friendId: OTHER, now: NOW })).resolves.toMatchObject({ status: 'invited' });
+  });
+
+  it('le refus d’un invité ne le prive de rien : il peut inviter l’invitant refusé, le duo se fait dans l’autre sens', async () => {
+    const { service } = setup();
+    const { duoId } = await service.invite({ inviterId: USER, friendId: OTHER, now: NOW });
+    await service.abandon({ userId: OTHER, duoId, now: NOW });
+    await expect(service.invite({ inviterId: OTHER, friendId: USER, now: NOW })).resolves.toMatchObject({ status: 'invited' });
+  });
+
+  it('une invitation coûte un nombre BORNÉ de requêtes, toutes par clé indexée (aucun balayage, aucune boucle sur les invitations)', async () => {
+    const { db, service } = setup();
+    for (let i = 0; i < 4; i += 1) {
+      const friend = `68e0000000000000000000${String(i).padStart(2, '0')}`;
+      seedUser(db, { engagementScore: SCORE, levelRecord: 20 }, friend);
+      db.friendRequest.rows.push({ id: `fz${i}`, status: 'accepted', senderId: friend, receiverId: OTHER });
+      await service.invite({ inviterId: friend, friendId: OTHER, now: NOW });
+    }
+    const calls: string[] = [];
+    for (const name of ['gameDuo', 'gameDuoSlot', 'friendRequest', 'user'] as const) {
+      const model = db[name] as unknown as Record<string, (...args: unknown[]) => unknown>;
+      for (const method of ['findFirst', 'findMany', 'findUnique', 'count', 'create', 'update', 'updateMany']) {
+        const original = model[method]!.bind(model);
+        model[method] = (...args: unknown[]) => {
+          calls.push(`${name}.${method}`);
+          return original(...args);
+        };
+      }
+    }
+
+    await service.invite({ inviterId: USER, friendId: OTHER, now: NOW });
+
+    expect(calls.length).toBeLessThanOrEqual(16);
+    expect(calls.filter((c) => c.endsWith('.findMany'))).toEqual([]);
+  });
+});

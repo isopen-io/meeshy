@@ -22,45 +22,14 @@ import type { EngagementAxisKey } from '@meeshy/shared/types/engagement';
 import { EngagementService } from '../../services/engagement/EngagementService';
 import { FlameService } from '../../services/game/FlameService';
 import { GameBlockService } from '../../services/game/GameBlockService';
-import { GameRefusal } from '../../services/game/GameRefusal';
 import { MissionService } from '../../services/game/MissionService';
-import { AUTH_ERROR_CODES } from '../../utils/auth-error-codes';
-import { logError } from '../../utils/logger';
-import { sendError, sendInternalError, sendSuccess, sendUnauthorized } from '../../utils/response.js';
+import { gameRateLimitConfig, okResponse, refusalResponse, requestIdSchema, runGameWrite, writeBody } from './game-shared';
+import { meGameWave2Routes } from './game-wave2';
 
 export type GameRoutesOptions = {
   /** Le crédit des points de jeu — l'`EngagementService` partagé, remplaçable en test. */
   readonly engagement?: { creditGamePoints(userId: string, points: number, axisKey: EngagementAxisKey): Promise<void> };
 };
-
-/**
- * Débit par COMPTE. Les dépenses de Meeshes sont FAIL-CLOSED (une panne du
- * magasin de débit les ferme : on ne dépense pas une monnaie pendant que sa
- * garde est aveugle, le refus ne coûte rien) ; les clés de guide, qui ne
- * touchent aucune valeur, restent ouvertes.
- */
-function gameRateLimitConfig(name: string, max: number, failClosed: boolean) {
-  return {
-    max,
-    timeWindow: '1 minute',
-    hook: 'preHandler' as const,
-    skipOnError: !failClosed,
-    keyGenerator: (request: FastifyRequest) => {
-      const userId = request.auth?.userId;
-      return userId ? `me:game:${name}:${userId}` : `me:game:${name}:ip:${request.ip}`;
-    },
-    errorResponseBuilder: () => ({ success: false, error: 'Trop de requêtes. Veuillez patienter.', statusCode: 429 }),
-  };
-}
-
-const requestIdSchema = { type: 'string', minLength: 8, maxLength: 64 } as const;
-
-const writeBody = {
-  type: 'object',
-  required: ['requestId'],
-  properties: { requestId: requestIdSchema },
-  additionalProperties: false,
-} as const;
 
 const guideBody = {
   type: 'object',
@@ -72,26 +41,6 @@ const guideBody = {
   additionalProperties: false,
 } as const;
 
-/** La forme exacte est celle du schéma partagé, vérifiée par les tests de contrat. */
-const okResponse = {
-  type: 'object',
-  properties: { success: { type: 'boolean' }, data: { type: 'object', additionalProperties: true } },
-} as const;
-
-/**
- * Le 409 déclare EN PLUS les champs d'appoint que `sendError` étale à la racine
- * (`reason`, `balance`) : sans quoi le sérialiseur les supprime, et l'écran ne
- * saurait pas POURQUOI le geste est refusé.
- */
-const refusalResponse = {
-  ...errorResponseSchema,
-  properties: {
-    ...errorResponseSchema.properties,
-    reason: { type: 'string' },
-    balance: { type: 'number' },
-  },
-} as const;
-
 export async function meGameRoutes(fastify: FastifyInstance, options: GameRoutesOptions = {}) {
   const engagement = options.engagement ?? new EngagementService(fastify.prisma);
   const creditPoints = (userId: string, points: number, axisKey: EngagementAxisKey) =>
@@ -100,20 +49,7 @@ export async function meGameRoutes(fastify: FastifyInstance, options: GameRoutes
   const flame = new FlameService(fastify.prisma);
   const blocks = new GameBlockService(fastify.prisma, { missions });
 
-  /** Authentifie, exécute, sert le résultat ou le refus motivé. */
-  const write = async <T>(request: FastifyRequest, reply: FastifyReply, work: (userId: string) => Promise<T>) => {
-    const userId = request.auth?.userId;
-    if (!userId) return sendUnauthorized(reply, 'Authentication required', { code: AUTH_ERROR_CODES.UNAUTHORIZED });
-    try {
-      return sendSuccess(reply, await work(userId));
-    } catch (error) {
-      if (error instanceof GameRefusal) {
-        return sendError(reply, 409, error.code, { code: error.code, ...(error.details ? { details: { ...error.details } } : {}) });
-      }
-      logError('Error in game write', error, { source: 'me-game-routes' });
-      return sendInternalError(reply, 'GAME_WRITE_FAILED');
-    }
-  };
+  const write = runGameWrite;
 
   fastify.post(
     '/game/missions/:missionId/reroll',
@@ -202,4 +138,11 @@ export async function meGameRoutes(fastify: FastifyInstance, options: GameRoutes
     (request: FastifyRequest<{ Body: { requestId: string; keys: string[] } }>, reply: FastifyReply) =>
       write(request, reply, async (userId) => ({ guideSeen: await blocks.markGuideSeen(userId, request.body.keys) })),
   );
+
+  // La vague 2 (ligues, duo, saison, vitrine, Prestige) : des routes NEUVES à côté de
+  // celles-ci, qui partagent leur débit, leur enveloppe et leur exécuteur d'écriture.
+  await fastify.register(meGameWave2Routes, {
+    creditPoints,
+    grantFreeze: (userId) => missions.grantFreeze(userId),
+  });
 }

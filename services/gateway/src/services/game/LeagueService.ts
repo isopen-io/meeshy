@@ -50,6 +50,22 @@ export const FRIENDS_LEAGUE_CAP = 200;
 
 const momentOf = (now: Date, timezone: string | null) => ({ dayKey: dayKeyOf(now, timezone), minuteOfDay: minuteOfDayInTimezone(now, timezone) });
 
+export type LeaguePlacement = {
+  readonly weekKey: string;
+  readonly moment: { readonly dayKey: string; readonly minuteOfDay: number };
+  readonly consented: boolean;
+  readonly adultVerified: boolean;
+  readonly group: {
+    readonly groupId: string;
+    readonly league: LeagueKey;
+    readonly snapshotDay: string;
+    readonly members: readonly { readonly userId: string; readonly weekPoints: number }[];
+    readonly names: ReadonlyMap<string, string>;
+  } | null;
+};
+
+export type FriendsFacts = { readonly weekKey: string; readonly friendIds: readonly string[]; readonly weekPoints: Readonly<Record<string, number>> };
+
 export type LeagueServiceDeps = {
   readonly pseudonyms?: LeaguePseudonymService;
   readonly weekPoints?: GameWeekPointsRecorder;
@@ -113,6 +129,18 @@ export class LeagueService {
     return { consent: true, pseudonym };
   }
 
+  /**
+   * Choisit son pseudonyme — réservé à qui joue la ligue : le niveau, la majorité
+   * vérifiée et le consentement passent AVANT le nom (mêmes refus que le consentement).
+   */
+  async choosePseudonym(userId: string, value: string, now: Date = new Date()): Promise<string> {
+    const access = accessOf(await loadLeagueFacts(this.prisma, userId, now));
+    if (access.status === 'locked') throw new GameRefusal('LEAGUE_LOCKED', { requiredLevel: LEAGUE_MIN_LEVEL });
+    if (access.status === 'minor') throw new GameRefusal('LEAGUE_MINOR');
+    if (access.status === 'consent-required') throw new GameRefusal('LEAGUE_CONSENT_REQUIRED');
+    return this.pseudonyms.choose({ userId, value });
+  }
+
   /** Sort de la ligue : pseudonyme, appartenance de la semaine, ligne de l'instantané. */
   private async leave(userId: string): Promise<void> {
     await this.pseudonyms.release(userId);
@@ -134,31 +162,27 @@ export class LeagueService {
 
   // --- Le classement de MA semaine ---
 
-  async weekBoard(userId: string, now: Date = new Date()): Promise<LeagueWeekResponse> {
+  /**
+   * Où le joueur est placé cette semaine, et les totaux que SA vue peut montrer :
+   * les autres sur l'instantané, lui en direct, les blocages et les suspendus
+   * écartés. Un site unique pour l'écran de la ligue et le bloc `game`.
+   */
+  async placement(userId: string, now: Date = new Date()): Promise<LeaguePlacement> {
     const facts = await loadLeagueFacts(this.prisma, userId, now);
     const moment = momentOf(now, facts.timezone);
     const weekKey = leagueWeekOfMoment(moment);
-    const closes = leagueWeekClose(weekKey);
-    const unplaced = (snapshotDay: string): LeagueWeekResponse => ({
-      weekKey,
-      snapshotDay,
-      closes,
-      placed: false,
-      league: null,
-      groupId: null,
-      entries: [],
-    });
+    const base = { weekKey, moment, consented: facts.consented, adultVerified: facts.adultVerified, group: null } as const;
 
     const open = accessOf(facts).status === 'open' && !(await suspendedAmong(this.prisma, [userId])).has(userId);
-    if (!open) return unplaced(leagueSnapshotDay(moment));
+    if (!open) return base;
 
-    const membership = await this.prisma.leagueMembership.findUnique({ where: { userId_weekKey: { userId, weekKey } }, select: { groupId: true, league: true } });
-    if (membership === null) return unplaced(leagueSnapshotDay(moment));
+    const membership = await this.prisma.leagueMembership.findUnique({ where: { userId_weekKey: { userId, weekKey } }, select: { groupId: true } });
+    if (membership === null) return base;
     const group = await this.prisma.leagueGroupWeek.findUnique({
       where: { groupId: membership.groupId },
       select: { groupId: true, league: true, timezone: true, snapshotDay: true, snapshot: true },
     });
-    if (group === null) return unplaced(leagueSnapshotDay(moment));
+    if (group === null) return base;
 
     const [rows, related] = await Promise.all([
       this.prisma.leagueMembership.findMany({ where: { groupId: group.groupId }, select: { userId: true }, take: 40 }),
@@ -175,17 +199,36 @@ export class LeagueService {
       .filter((id) => id === userId || (!suspended.has(id) && names.has(id)))
       .map((id) => ({ userId: id, weekPoints: id === userId ? (mine[userId] ?? 0) : (frozen[id] ?? 0) }));
 
-    const standings = leagueStandings({ groupId: group.groupId, league: group.league as LeagueKey, members });
     return {
-      weekKey,
-      snapshotDay: group.snapshotDay ?? leagueSnapshotDay(momentOf(now, group.timezone)),
+      ...base,
+      group: {
+        groupId: group.groupId,
+        league: group.league as LeagueKey,
+        snapshotDay: group.snapshotDay ?? leagueSnapshotDay(momentOf(now, group.timezone)),
+        members,
+        names,
+      },
+    };
+  }
+
+  async weekBoard(userId: string, now: Date = new Date()): Promise<LeagueWeekResponse> {
+    const placement = await this.placement(userId, now);
+    const closes = leagueWeekClose(placement.weekKey);
+    if (placement.group === null) {
+      return { weekKey: placement.weekKey, snapshotDay: leagueSnapshotDay(placement.moment), closes, placed: false, league: null, groupId: null, entries: [] };
+    }
+    const { group } = placement;
+    const standings = leagueStandings({ groupId: group.groupId, league: group.league, members: group.members });
+    return {
+      weekKey: placement.weekKey,
+      snapshotDay: group.snapshotDay,
       closes,
       placed: true,
-      league: group.league as LeagueKey,
+      league: group.league,
       groupId: group.groupId,
       entries: standings.map((entry) => ({
         rank: entry.rank,
-        displayName: names.get(entry.userId) ?? '',
+        displayName: group.names.get(entry.userId) ?? '',
         weekPoints: entry.weekPoints,
         zone: entry.zone,
         cup: entry.cup,
@@ -197,18 +240,17 @@ export class LeagueService {
   // --- La ligue Amis ---
 
   /**
-   * La ligue Amis : le MÊME classement restreint au joueur et à ses amis
-   * acceptés. Audience de la loi de présence : un ami qui a coupé sa présence
-   * en ligne se montre à la granularité du jour (fin de la veille) — son total
-   * ne bouge pas à la minute (conformité B-3). L'opposition (`friendsLeagueOptOutAt`)
-   * retire un compte de la ligue des autres, et son propriétaire de la sienne
-   * (conformité B-2) ; « Jeu masqué » aussi. Les blocages sont écartés.
+   * Les amis de la ligue Amis et leur total de la semaine. Audience de la loi de
+   * présence : un ami qui a coupé sa présence en ligne se montre à la
+   * granularité du jour (fin de la veille) — son total ne bouge pas à la minute
+   * (conformité B-3). L'opposition (`friendsLeagueOptOutAt`) retire un compte de
+   * la ligue des autres, et son propriétaire de la sienne (conformité B-2) ;
+   * « Jeu masqué » aussi. Les blocages sont écartés.
    */
-  async friendsBoard(userId: string, now: Date = new Date()): Promise<LeagueFriendsResponse> {
+  async friendsFacts(userId: string, now: Date = new Date()): Promise<FriendsFacts> {
     const facts = await loadLeagueFacts(this.prisma, userId, now);
     const moment = momentOf(now, facts.timezone);
     const weekKey = leagueWeekOfMoment(moment);
-    const closes = leagueWeekClose(weekKey);
 
     const mySettings = await this.profile.settings(userId);
     const optedOutMyself = mySettings.friendsLeagueOptedOut || mySettings.gameHidden;
@@ -221,16 +263,20 @@ export class LeagueService {
     );
 
     const [days, cut] = await Promise.all([this.points.weekDays(weekKey, [userId, ...friendIds]), presenceCutAmong(this.prisma, friendIds)]);
-    const today = moment.dayKey;
     const weekPoints: Record<string, number> = {
       [userId]: totalOfDays(days.get(userId)),
-      ...Object.fromEntries(friendIds.map((id) => [id, totalOfDays(days.get(id), cut.has(id) ? { before: today } : {})])),
+      ...Object.fromEntries(friendIds.map((id) => [id, totalOfDays(days.get(id), cut.has(id) ? { before: moment.dayKey } : {})])),
     };
+    return { weekKey, friendIds, weekPoints };
+  }
 
+  /** La ligue Amis : le MÊME classement restreint au joueur et à ses amis acceptés. */
+  async friendsBoard(userId: string, now: Date = new Date()): Promise<LeagueFriendsResponse> {
+    const { weekKey, friendIds, weekPoints } = await this.friendsFacts(userId, now);
     const ranking = friendsLeagueRanking({ weekKey, viewerId: userId, friendIds, weekPoints });
     return {
       weekKey,
-      closes,
+      closes: leagueWeekClose(weekKey),
       entries: ranking.map((entry) => ({ rank: entry.rank, userId: entry.userId, weekPoints: entry.weekPoints, isMe: entry.isMe })),
     };
   }

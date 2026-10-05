@@ -5323,6 +5323,8 @@ model GameDuo {
   createdAt       DateTime  @default(now())
   acceptedAt      DateTime?
   endedAt         DateTime?
+  /// L'invité a REFUSÉ cette invitation : elle ne se renouvelle pas la même semaine.
+  declinedAt      DateTime?
 
   @@index([inviterId, weekKey])
   @@index([inviteeId, weekKey])

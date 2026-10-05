@@ -144,6 +144,12 @@ export class DuoService {
       select: { id: true },
     });
     if (reverse !== null) throw new GameRefusal('DUO_ALREADY_ACTIVE', { reason: 'reverse-invitation' });
+    // Une invitation REFUSÉE par l'invité ne se renouvelle pas la même semaine : on n'insiste pas.
+    const declined = await this.prisma.gameDuo.findFirst({
+      where: { weekKey, inviterId, inviteeId: friendId, declinedAt: { not: null } },
+      select: { id: true },
+    });
+    if (declined !== null) throw new GameRefusal('DUO_TRANSITION_REFUSED', { reason: 'declined-this-week' });
     const [sent, pending] = await Promise.all([
       this.prisma.gameDuo.count({ where: { weekKey, inviterId } }),
       this.prisma.gameDuo.count({ where: { weekKey, inviteeId: friendId, status: 'invited' } }),
@@ -269,13 +275,15 @@ export class DuoService {
     if (duoTransition({ status: duo.status as DuoStatus, action: 'abandon', actor: role }) === null) {
       throw new GameRefusal('DUO_TRANSITION_REFUSED', { status: duo.status });
     }
-    await this.end(duo, 'abandoned', now);
+    // L'invité qui refuse une invitation encore EN ATTENTE la verrouille pour la semaine.
+    const declining = role === 'invitee' && duo.status === 'invited';
+    await this.end(duo, 'abandoned', now, declining ? { declinedAt: now } : {});
     return { status: 'abandoned', duoId };
   }
 
   /** Termine un duo : l'état, la date, et les emplacements libérés. */
-  private async end(duo: DuoRow, status: 'abandoned' | 'expired' | 'completed', now: Date): Promise<void> {
-    const ended = await this.prisma.gameDuo.updateMany({ where: { id: duo.id, status: { in: ['invited', 'active'] } }, data: { status, endedAt: now } });
+  private async end(duo: DuoRow, status: 'abandoned' | 'expired' | 'completed', now: Date, extra: { readonly declinedAt?: Date } = {}): Promise<void> {
+    const ended = await this.prisma.gameDuo.updateMany({ where: { id: duo.id, status: { in: ['invited', 'active'] } }, data: { status, endedAt: now, ...extra } });
     // Seul un duo qui vient d'être terminé SANS être accompli libère ses emplacements.
     if (ended.count > 0 && status !== 'completed') await this.prisma.gameDuoSlot.deleteMany({ where: { duoId: duo.id } });
   }
