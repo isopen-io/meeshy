@@ -1,5 +1,8 @@
 import type { ReactNode } from 'react';
 
+import { GAME_BRAND, GAME_CARD } from '@/components/game-surface';
+import { Link } from '@/routes/route-table';
+
 import type { EngagementWithGame } from '@/lib/api/engagement';
 import { GameFlamePanel } from '@/components/game-flame-panel';
 import { GameGauges } from '@/components/game-gauges';
@@ -71,6 +74,13 @@ export function GameSection({ progress, host }: { readonly progress: EngagementW
         onRelight={actions.relight}
         errors={{ freeze: actions.errors.freeze, relight: actions.errors.relight }}
       />
+      <Link
+        to="progressionRegles"
+        className="flex items-center justify-center rounded-card px-4 text-body font-semibold"
+        style={{ minHeight: 44, backgroundColor: GAME_CARD, color: GAME_BRAND }}
+      >
+        Comment ça marche
+      </Link>
     </>
   );
 }

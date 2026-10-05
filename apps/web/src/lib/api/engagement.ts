@@ -4,7 +4,7 @@ import * as meEndpoints from '@meeshy/shared/api/endpoints/me';
 
 import type { GameBlock } from '@meeshy/shared/types/game';
 
-import { badgesDroppedByMint } from '@/lib/view/game-mint';
+import { mintBadgeImpact, type MintBadgeImpact } from '@/lib/view/game-mint';
 
 import type { DataSource } from './config';
 import { ENGAGEMENT_PROGRESS_FIXTURE } from './engagement-fixture';
@@ -71,10 +71,14 @@ export async function fetchEngagementProgress(
 export type EngagementWithGame = EngagementProgress & {
   readonly game?: GameBlock;
   readonly mintBadgeLoss?: number;
+  /** Actions à refaire pour rallumer le badge le plus proche de ceux qu'une frappe éteindrait. */
+  readonly mintBadgeRegain?: number;
 };
 
-const withGame = (progress: EngagementProgress, game: GameBlock | null, badgeLoss: number | null): EngagementWithGame =>
-  game === null ? progress : { ...progress, game, ...(badgeLoss === null ? {} : { mintBadgeLoss: badgeLoss }) };
+const withGame = (progress: EngagementProgress, game: GameBlock | null, impact: MintBadgeImpact | null): EngagementWithGame =>
+  game === null
+    ? progress
+    : { ...progress, game, ...(impact === null ? {} : { mintBadgeLoss: impact.lost, mintBadgeRegain: impact.regain }) };
 
 export async function loadEngagementProgress(params: {
   readonly source: DataSource;
@@ -88,7 +92,7 @@ export async function loadEngagementProgress(params: {
       data: withGame(
         resolveEngagementProgress(ENGAGEMENT_PROGRESS_FIXTURE),
         game,
-        badgesDroppedByMint(ENGAGEMENT_PROGRESS_FIXTURE.counters, game.mint.price),
+        mintBadgeImpact(ENGAGEMENT_PROGRESS_FIXTURE.counters, game.mint.price),
       ),
     };
   }
@@ -100,7 +104,7 @@ export async function loadEngagementProgress(params: {
     data: withGame(
       resolveEngagementProgress(result.data),
       game,
-      game === null ? null : badgesDroppedByMint(result.data.counters, game.mint.price),
+      game === null ? null : mintBadgeImpact(result.data.counters, game.mint.price),
     ),
   };
 }

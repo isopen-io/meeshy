@@ -67,6 +67,12 @@ describe('un serveur qui sert le bloc game', () => {
     expect(page).toContain('progression-elans');
   });
 
+  test('« Comment ça marche » mène au carnet des règles, d’une cible de 44 points', () => {
+    expect(page).toContain('/me/progression/regles');
+    expect(page).toContain('Comment ça marche');
+    expect(page).toMatch(/<a[^>]*min-height:44px[^>]*>Comment ça marche/);
+  });
+
   test('aucune bulle de conversation : la mascotte-bulle cède à la carte du jeu', () => {
     expect(page).not.toContain('data-mascot-coach');
   });
