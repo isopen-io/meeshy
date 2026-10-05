@@ -96,6 +96,7 @@ const fr = {
   'onboarding.recap.friends': 'Demandes en route : {count}',
   'onboarding.recap.tomorrow': 'Demain, ta série peut passer à {next}.',
   'onboarding.recap.explore': 'Continuer à explorer',
+  'onboarding.recap.game': 'Découvrir le jeu avec Mee et Meo',
   'onboarding.recap.done': 'C’est bon pour aujourd’hui',
 } as const;
 
