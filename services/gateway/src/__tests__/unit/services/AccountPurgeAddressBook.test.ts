@@ -21,6 +21,7 @@ jest.mock('../../../utils/password-hash', () => ({
 }));
 
 import { purgeAccountIsolatedData } from '../../../services/AccountPurgeService';
+import { GAME_PURGED_MODELS } from '../../../services/game/GamePurge';
 
 const PARTI = '507f1f77bcf86cd799439011';
 const AUTRE = '507f1f77bcf86cd799439022';
@@ -44,6 +45,7 @@ function table(rows: Row[]) {
     state,
     findMany: jest.fn(async (args?: { where?: Record<string, unknown> }) =>
       state.rows.filter((row) => matches(row, args?.where))),
+    updateMany: jest.fn(async () => ({ count: 0 })),
     deleteMany: jest.fn(async (args?: { where?: Record<string, unknown> }) => {
       const before = state.rows.length;
       state.rows = state.rows.filter((row) => !matches(row, args?.where));
@@ -80,6 +82,11 @@ function base() {
     userContact,
     contactJoinNotice,
     notification,
+    // Le jeu (#9384) : des collections vides.
+    ...Object.fromEntries(
+      [...GAME_PURGED_MODELS, 'gameDuo'].map((model) => [model, table([])]),
+    ),
+    user: { updateMany: async () => ({ count: 1 }) },
   };
   return { prisma, userContact, contactJoinNotice, notification };
 }

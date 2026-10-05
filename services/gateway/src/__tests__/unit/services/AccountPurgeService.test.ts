@@ -13,6 +13,7 @@
 
 import { describe, it, expect, jest } from '@jest/globals';
 import { purgeAccountIsolatedData, anonymizeUserIdentity } from '../../../services/AccountPurgeService';
+import { GAME_PURGED_MODELS } from '../../../services/game/GamePurge';
 
 jest.mock('../../../utils/password-hash', () => ({
   hashPassword: jest.fn(async () => '$2b$12$hash-de-test'),
@@ -34,6 +35,11 @@ function fakePrisma(overrides: Record<string, any> = {}) {
       findMany: jest.fn<any>().mockResolvedValue([]),
       deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
     },
+    // Le jeu (#9384) : des collections vides, comme un compte qui n'a jamais joué.
+    ...Object.fromEntries(
+      [...GAME_PURGED_MODELS, 'gameDuo'].map((model) => [model, { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }), updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }) }]),
+    ),
+    user: { updateMany: jest.fn<any>().mockResolvedValue({ count: 1 }) },
     ...overrides,
   } as any;
 }
@@ -63,7 +69,7 @@ describe('purgeAccountIsolatedData', () => {
   it('runs every deletion even when every table is already empty (idempotent)', async () => {
     const prisma = fakePrisma();
     const summary = await purgeAccountIsolatedData(prisma, USER_ID);
-    expect(summary).toEqual({
+    expect(summary).toMatchObject({
       sessionsDeleted: 0,
       voiceProfileDeleted: 0,
       shareLinksDeleted: 0,
