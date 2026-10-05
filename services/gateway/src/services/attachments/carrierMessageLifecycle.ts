@@ -37,19 +37,20 @@
  * comportement changer selon qu'il arrive avant ou après. Un 403 aurait en plus
  * confirmé l'existence d'un contenu que l'émetteur a voulu disparu.
  *
- * ─── CE QUE CE PRÉDICAT NE FERME PAS ────────────────────────────────────────
+ * ─── LA ROUTE PAR CHEMIN ────────────────────────────────────────────────────
  *
- * L'URL publique qu'un client atteint ne pointe PAS ici : ce qui se persiste
- * est la CLÉ DE STOCKAGE (#7022), que le client repose contre sa propre base
- * pour former `/attachments/file/<clé>` — servie SANS authentification et par
- * chemin, donc sans identifiant de pièce jointe à partir duquel remonter au
- * message. C'est une URL-capacité (nom de fichier en UUIDv4, 122 bits), pas une
- * énumération ; son défaut est l'absence de révocation, et il se referme
- * aujourd'hui par l'`unlink` du balayage, pas par une garde. Y ajouter une
- * lecture base coûterait un aller-retour sur la route la plus chaude du produit
- * (chaque avatar, chaque vignette) pour ne gagner que la fenêtre d'une minute
- * qui sépare l'échéance du balayage. Le compromis est assumé et documenté, pas
- * oublié.
+ * L'URL qu'un client atteint ne pointe pas ici : ce qui se persiste est la CLÉ
+ * DE STOCKAGE (#7022), que le client repose contre sa propre base pour former
+ * `/attachments/file/<clé>`, sans identité. Elle a longtemps été laissée hors de
+ * cette loi, au motif qu'une lecture base coûterait sur la route la plus chaude
+ * pour ne gagner que la minute qui sépare l'échéance du balayage. Ce calcul
+ * oubliait les fichiers DÉRIVÉS — miniature, variantes WebP, pistes traduites —
+ * que le balayage n'effaçait pas. Depuis #9315, `fileRouteVerdict.ts` remonte
+ * de la clé à ses lignes par index et applique ce même prédicat tant que ces
+ * lignes existent ; les avatars s'en dispensent, n'étant jamais une pièce
+ * jointe. Un fichier qui SURVIT à ses lignes (dérivés antérieurs à
+ * ef9db52467, `unlink` en échec) n'est plus reconnaissable comme pièce jointe
+ * et reste servi : il relève de la purge des orphelins.
  */
 
 /**
