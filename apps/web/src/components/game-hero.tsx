@@ -11,13 +11,13 @@ import {
   familyName,
   formatCount,
   gameText,
-  levelRingLabel,
   levelTierName,
   levelsLabel,
   pointsLabel,
   rankLabel,
   rankName,
 } from '@/lib/view/game-copy';
+import { levelRingLabelWithPrestige } from '@/lib/view/game-copy-v2';
 import { Link } from '@/routes/route-table';
 
 import { GAME_CARD, GAME_ERROR, GAME_INK, GAME_INK_2, GAME_ON_WARM, GAME_WARM, GameChip } from './game-surface';
@@ -131,7 +131,7 @@ function WhereIAm({ game }: { readonly game: GameBlock }) {
           record={level.record}
           showTier
           prestige={level.prestige}
-          label={levelRingLabel(level.level, level.tier)}
+          label={levelRingLabelWithPrestige(level.level, level.tier, level.prestige)}
         />
       </div>
       <div className="flex min-w-40 flex-1 flex-col gap-0.5">

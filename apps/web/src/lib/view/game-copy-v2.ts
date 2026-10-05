@@ -1,5 +1,6 @@
 import type { GameVisibility } from '@meeshy/shared/types/game';
 import type { AchievementRarity } from '@meeshy/shared/utils/game/glory';
+import { GAME_PRESTIGE_MAX, type LevelTierKey } from '@meeshy/shared/utils/game/levels';
 import type { LeagueKey, LeagueZone } from '@meeshy/shared/utils/game/league';
 import { parseTrophyKey } from '@meeshy/shared/utils/game/trophies';
 
@@ -7,6 +8,7 @@ import type { TrophyKind } from '@/components/game/trophy';
 import type { GameMaterial } from '@/lib/game/materials';
 
 import { formatGameNumber, translateGame, translateGamePlural } from '@/lib/i18n-game-catalog';
+import { levelRingLabel } from './game-copy';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 
 /**
@@ -160,3 +162,15 @@ export function dayLabel(dayKey: string, language: Language = currentInterfaceLa
 
 export const rarityName = (rarity: AchievementRarity, language: Language = currentInterfaceLanguage()): string =>
   translateGame(language, `game.rarity.${rarity}`);
+
+/**
+ * Ce que lit un lecteur d'écran sur l'anneau de niveau : « Niveau 34, palier Éclat,
+ * quatrième palier », et, quand des étoiles de Prestige sont posées, « Étoiles : 2
+ * sur 5 » — le dessin les porte, le texte doit les dire aussi.
+ */
+export function levelRingLabelWithPrestige(level: number, tier: LevelTierKey, prestige: number, language: Language = currentInterfaceLanguage()): string {
+  const base = levelRingLabel(level, tier, language);
+  if (prestige <= 0) return base;
+  const stars = translateGame(language, 'game.prestige.stars', { stars: formatGameNumber(language, Math.min(prestige, GAME_PRESTIGE_MAX)), max: formatGameNumber(language, GAME_PRESTIGE_MAX) });
+  return `${base}, ${stars}`;
+}

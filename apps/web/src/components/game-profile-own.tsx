@@ -1,8 +1,8 @@
 import type { EngagementWithGame } from '@/lib/api/engagement';
 import { medalOfAxis } from '@/lib/game/medal';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
-import { formatCount, gameText, levelRingLabel, levelTierName, meeshCount, rankLabel, rankName, treasuryName, daysLabel, medalLabel } from '@/lib/view/game-copy';
-import { trophyView } from '@/lib/view/game-copy-v2';
+import { formatCount, gameText, levelTierName, meeshCount, rankLabel, rankName, treasuryName, daysLabel, medalLabel } from '@/lib/view/game-copy';
+import { levelRingLabelWithPrestige, trophyView } from '@/lib/view/game-copy-v2';
 import { Link } from '@/routes/route-table';
 import { engagementAxisLabel } from '@meeshy/shared/utils/engagement-labels';
 
@@ -51,7 +51,7 @@ export function GameProfileOwn({ progress }: { readonly progress: EngagementWith
         {gameText('game.profile.title')}
       </h2>
       <div className="flex items-center gap-4">
-        <LevelRing level={level.level} tier={level.tier} progress={level.progress} size={80} prestige={level.prestige} label={levelRingLabel(level.level, level.tier, language)} />
+        <LevelRing level={level.level} tier={level.tier} progress={level.progress} size={80} prestige={level.prestige} label={levelRingLabelWithPrestige(level.level, level.tier, level.prestige, language)} />
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
           <p className="text-body font-bold" style={{ color: GAME_INK }}>
             {gameText('game.profile.level', { level: formatCount(level.level), tier: levelTierName(level.tier) })}

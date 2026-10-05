@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
-import { useState } from 'react';
+import { act, useState } from 'react';
 
 import { resolveEngagementProgress } from '@meeshy/shared/utils/engagement-progress';
 
@@ -89,5 +89,22 @@ describe('la page Ligue', () => {
     const host = await mount(<Harness view={progress(gameBlockFixture())} />);
     expect(host.textContent).toContain('pas encore disponible');
     expect(host.querySelector('[role="tablist"]')).toBeNull();
+  });
+});
+
+describe('le clavier sur les onglets', () => {
+  test('les flèches passent d’un onglet à l’autre, et seul l’onglet choisi est dans l’ordre de tabulation', async () => {
+    const host = await mount(<Harness view={progress()} />);
+    const list = host.querySelector('[role="tablist"]');
+    expect(host.querySelector('[data-game-league-tab="mine"]')?.getAttribute('tabindex')).toBe('0');
+    expect(host.querySelector('[data-game-league-tab="friends"]')?.getAttribute('tabindex')).toBe('-1');
+    await act(async () => {
+      list?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true }));
+    });
+    expect(host.querySelector('[data-game-league-tab="friends"]')?.getAttribute('aria-selected')).toBe('true');
+    await act(async () => {
+      list?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Home', bubbles: true, cancelable: true }));
+    });
+    expect(host.querySelector('[data-game-league-tab="mine"]')?.getAttribute('aria-selected')).toBe('true');
   });
 });

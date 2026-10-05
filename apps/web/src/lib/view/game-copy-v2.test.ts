@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import { SUPPORTED_INTERFACE_LANGUAGES } from '../inline-interface-language-bootstrap.js';
 import { loadGameCatalog } from '../i18n-game-catalog';
-import { awardedDate, dayLabel, awardedMonthLabel, isoWeekNumber, languageName, leagueName, remainingLabel, seasonThemeName, trophyView, visibilityLabel, weekLabel, zoneLabel } from './game-copy-v2';
+import { levelRingLabelWithPrestige, awardedDate, dayLabel, awardedMonthLabel, isoWeekNumber, languageName, leagueName, remainingLabel, seasonThemeName, trophyView, visibilityLabel, weekLabel, zoneLabel } from './game-copy-v2';
 
 /**
  * CE QUE LA VAGUE 2 DIT (#9481) — les noms des huit ligues, des zones, des
@@ -114,5 +114,12 @@ describe('les jours', () => {
   test('un jour local se dit dans la langue, sans glisser d’un fuseau à l’autre', () => {
     expect(dayLabel('2026-08-02', 'fr')).toBe('2 août 2026');
     expect(dayLabel('2026-08-02', 'en')).toBe('August 2, 2026');
+  });
+});
+
+describe('l’anneau de niveau, lu', () => {
+  test('sans Prestige : le libellé d’avant ; avec : les étoiles se disent aussi', () => {
+    expect(levelRingLabelWithPrestige(34, 'eclat', 0, 'fr')).toBe('Niveau 34, palier Éclat, quatrième palier');
+    expect(levelRingLabelWithPrestige(34, 'eclat', 2, 'fr')).toBe('Niveau 34, palier Éclat, quatrième palier, Étoiles : 2 sur 5');
   });
 });

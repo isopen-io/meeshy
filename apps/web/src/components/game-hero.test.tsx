@@ -199,3 +199,15 @@ describe('les gestes', () => {
     expect(minted).toBe(0);
   });
 });
+
+describe('les étoiles de Prestige sur l’anneau du héros (#9389)', () => {
+  test('autant d’étoiles que de Prestiges, et l’anneau les dit aux lecteurs d’écran', () => {
+    const markup = html({ prestige: 2 });
+    expect((markup.match(/data-game-prestige-star/g) ?? []).length).toBe(2);
+    expect(markup).toContain('Étoiles : 2 sur 5');
+  });
+
+  test('sans Prestige : aucune étoile', () => {
+    expect(html()).not.toContain('data-game-prestige-star');
+  });
+});

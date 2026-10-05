@@ -76,7 +76,28 @@ export function LigueBody(props: LigueBodyProps) {
 
   return (
     <>
-      <div role="tablist" aria-label={gameText('game.league.title')} className="flex gap-2">
+      <div
+        role="tablist"
+        aria-label={gameText('game.league.title')}
+        className="flex gap-2"
+        onKeyDown={(event) => {
+          /* Le clavier circule entre les onglets (flèches, début, fin) : le focus suit la sélection. */
+          const order = tabs.map(([key]) => key);
+          const index = order.indexOf(tab);
+          const target =
+            event.key === 'ArrowRight' || event.key === 'ArrowLeft'
+              ? order[(index + 1) % order.length]
+              : event.key === 'Home'
+                ? order[0]
+                : event.key === 'End'
+                  ? order[order.length - 1]
+                  : undefined;
+          if (target === undefined) return;
+          event.preventDefault();
+          onTab(target);
+          requestAnimationFrame(() => document.getElementById(`game-league-tab-${target}`)?.focus());
+        }}
+      >
         {tabs.map(([key, label]) => (
           <button
             key={key}
@@ -84,6 +105,7 @@ export function LigueBody(props: LigueBodyProps) {
             role="tab"
             id={`game-league-tab-${key}`}
             aria-selected={tab === key}
+            tabIndex={tab === key ? 0 : -1}
             aria-controls="game-league-panel"
             data-game-league-tab={key}
             onClick={() => onTab(key)}
@@ -144,7 +166,8 @@ function LigueScreenBody({ progress }: { readonly progress: EngagementWithGame }
 
   const week = useQuery({
     queryKey: LEAGUE_WEEK_QUERY_KEY,
-    enabled: open && tab === 'mine',
+    /* Pas pendant que le consentement part : la ligue vient de s'ouvrir EN LOCAL, la passerelle ne la sert pas encore — la relecture qui suit le geste la rend. */
+    enabled: open && tab === 'mine' && !actions.consent.pending,
     queryFn: async ({ signal }): Promise<LeagueWeekResponse> => unwrap(await loadLeagueWeek({ ...apiDeps, signal })),
   });
   const friendsQuery = useQuery({
