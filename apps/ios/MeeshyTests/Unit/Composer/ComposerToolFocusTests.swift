@@ -90,10 +90,11 @@ final class ComposerToolFocusTests: XCTestCase {
         for interdit in ["flyoutColumn", "ComposerRailFlyoutAnchorKey", ".flyout("] {
             XCTAssertFalse(surface.contains(interdit), "la colonne en surplus est revenue : \(interdit)")
         }
-        for question in [".topBar", ".description"] {
-            XCTAssertTrue(surface.contains("ComposerToolFocus.isShown(\(question), toolIsOpen: toolIsOpen)"),
-                          "\(question) doit répondre à l'outil par la règle")
-        }
+        XCTAssertTrue(surface.contains("ComposerToolFocus.isShown(.topBar, toolIsOpen: toolIsOpen)"),
+                      ".topBar doit répondre à l'outil par la règle")
+        // La légende sait QUEL texte on écrit (#9448) — même règle, plus fine.
+        XCTAssertTrue(surface.contains("ComposerToolFocus.isShown(.description, toolIsOpen: toolIsOpen, writing: writing)"),
+                      ".description doit répondre à l'outil et au texte écrit par la règle")
         // Le rail droit répond AUSSI à l'écriture (#6131) — même règle.
         XCTAssertTrue(surface.contains("ComposerToolFocus.isShown(.trailingRail, toolIsOpen: toolIsOpen, writesText: writesText)"),
                       ".trailingRail doit répondre à l'outil et à l'écriture par la règle")
