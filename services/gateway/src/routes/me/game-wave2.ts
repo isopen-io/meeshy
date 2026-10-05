@@ -51,6 +51,7 @@ import {
   leaguePseudonymResponse,
   leagueWeekResponse,
   prestigeResponse,
+  privacyResponse,
   seasonClaimResponse,
   seasonSealResponse,
   showcaseOrderResponse,
@@ -322,6 +323,38 @@ export async function meGameWave2Routes(fastify: FastifyInstance, options: GameW
       const { requestId: _requestId, ...patch } = request.body;
       if (Object.keys(patch).length === 0) return sendBadRequest(reply, 'VISIBILITY_EMPTY', { message: 'au moins un réglage' });
       return runGameWrite(request, reply, async (userId) => ({ visibility: await profile.updateVisibility(userId, patch) }));
+    },
+  );
+
+  fastify.put(
+    '/game/privacy',
+    {
+      onRequest: [fastify.authenticate],
+      config: { rateLimit: gameRateLimitConfig('privacy', 20, false) },
+      schema: {
+        description:
+          '« Jeu masqué » et l\'opposition à la ligue Amis (#9384, #9385) : deux interrupteurs, à tout moment. « Jeu masqué » sort le compte des ' +
+          'classements, des vitrines et des listes (la vitrine retombe à « moi seul ») ; l\'opposition le retire de la ligue Amis des autres. Au moins un.',
+        tags: ['me', 'game'],
+        summary: 'Hide the game or opt out of the friends league',
+        body: {
+          type: 'object',
+          required: ['requestId'],
+          properties: { requestId: requestIdSchema, gameHidden: { type: 'boolean' }, friendsLeagueOptOut: { type: 'boolean' } },
+          additionalProperties: false,
+        },
+        response: { 200: privacyResponse, 400: errorResponseSchema, ...reasonedErrors },
+      },
+    },
+    async (request: FastifyRequest<{ Body: { requestId: string; gameHidden?: boolean; friendsLeagueOptOut?: boolean } }>, reply: FastifyReply) => {
+      const { gameHidden, friendsLeagueOptOut } = request.body;
+      if (gameHidden === undefined && friendsLeagueOptOut === undefined) return sendBadRequest(reply, 'PRIVACY_EMPTY', { message: 'au moins un interrupteur' });
+      return runGameWrite(request, reply, async (userId) => {
+        if (gameHidden !== undefined) await profile.setGameHidden(userId, gameHidden);
+        if (friendsLeagueOptOut !== undefined) await profile.setFriendsLeagueOptOut(userId, friendsLeagueOptOut);
+        const settings = await profile.settings(userId);
+        return { gameHidden: settings.gameHidden, friendsLeagueOptOut: settings.friendsLeagueOptedOut };
+      });
     },
   );
 

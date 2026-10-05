@@ -104,3 +104,5 @@ export const userShowcaseResponse = envelope(
     order: { type: 'array', items: { type: 'string' } },
   }),
 );
+
+export const privacyResponse = envelope(strict({ gameHidden: { type: 'boolean' }, friendsLeagueOptOut: { type: 'boolean' } }));

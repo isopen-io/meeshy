@@ -27,6 +27,7 @@ import {
   showcaseVisibilityResponseSchema,
   userShowcaseResponseSchema,
   gameUserShowcasePath,
+  gamePrivacyResponseSchema,
 } from '@meeshy/shared/types/game';
 import { fakeGameDb, seedUser, USER, OTHER, type FakeGameDb } from '../../../../services/game/__tests__/fakeGameDb';
 import { LeagueService } from '../../../../services/game/LeagueService';
@@ -330,6 +331,30 @@ describe('la vitrine, la visibilité, le Prestige', () => {
     const res = await call(app, 'POST', GAME_ROUTES.prestige, { requestId: 'prest-0002' });
     expect(prestigeResponseSchema.parse(res.json().data)).toMatchObject({ status: 'passed', prestige: 1, gloryGained: 1000 });
     await app.close();
+  });
+});
+
+describe('PUT /game/privacy', () => {
+  it('« Jeu masqué » et l’opposition se posent et se retirent, indépendamment ; aucun interrupteur = 400', async () => {
+    const db = fakeGameDb();
+    player(db, USER);
+    const app = await buildApp(db);
+
+    const hidden = await call(app, 'PUT', GAME_ROUTES.privacy, { requestId: 'priv-00001', gameHidden: true });
+    expect(gamePrivacyResponseSchema.parse(hidden.json().data)).toEqual({ gameHidden: true, friendsLeagueOptOut: false });
+    const both = await call(app, 'PUT', GAME_ROUTES.privacy, { requestId: 'priv-00002', friendsLeagueOptOut: true });
+    expect(both.json().data).toEqual({ gameHidden: true, friendsLeagueOptOut: true });
+    const back = await call(app, 'PUT', GAME_ROUTES.privacy, { requestId: 'priv-00003', gameHidden: false });
+    expect(back.json().data).toEqual({ gameHidden: false, friendsLeagueOptOut: true });
+    expect((await call(app, 'PUT', GAME_ROUTES.privacy, { requestId: 'priv-00004' })).statusCode).toBe(400);
+    await app.close();
+  });
+
+  it('« Jeu masqué » ramène la vitrine à « moi seul » : même un ami ne la voit plus', async () => {
+    const db = fakeGameDb();
+    player(db, USER);
+    await (await buildApp(db)).inject({ method: 'PUT', url: `/api/v1${GAME_ROUTES.privacy}`, payload: { requestId: 'priv-00001', gameHidden: true } });
+    expect(db.gameProfile.rows[0]!.gameHiddenAt).toBeInstanceOf(Date);
   });
 });
 

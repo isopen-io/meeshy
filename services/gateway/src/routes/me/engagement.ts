@@ -35,6 +35,7 @@ import { AchievementReachService } from '../../services/achievements/Achievement
 import { GlobalAchievements } from '../../services/achievements/GlobalAchievements';
 import { meeshTotalsFromLedger } from '../../services/meesh/MeeshService';
 import { GameBlockService, type AxisRow } from '../../services/game/GameBlockService';
+import { knowsGameWave2, milestonesServedTo } from '../../services/game/clientCapabilities';
 import { MissionService, READ_ONLY_CREDIT } from '../../services/game/MissionService';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
@@ -330,7 +331,9 @@ export async function meEngagementRoutes(fastify: FastifyInstance, options: Enga
 
         return sendSuccess(reply, {
           counters: counterRows,
-          milestones: milestones.map((m: { milestoneType: string; milestoneKey: string; reachedAt: Date }) => ({
+          // Les paliers 1 000 et 5 000 ne partent qu'aux clients qui déclarent la vague 2 :
+          // un ancien client garde sa liste d'avant (#9392, rétrocompatibilité).
+          milestones: milestonesServedTo(milestones, { knowsExtendedTiers: knowsGameWave2(request.headers) }).map((m: { milestoneType: string; milestoneKey: string; reachedAt: Date }) => ({
             milestoneType: m.milestoneType,
             milestoneKey: m.milestoneKey,
             reachedAt: m.reachedAt.toISOString(),
