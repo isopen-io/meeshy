@@ -73,6 +73,12 @@ export type MissionServiceDeps = {
   readonly creditPoints: (userId: string, points: number, axisKey: EngagementAxisKey) => Promise<void>;
   readonly chest?: (params: { readonly userId: string; readonly dayKey: string }) => DailyChest;
   readonly glory?: GloryService;
+  /**
+   * Une mission vient d'être ACHEVÉE ET PAYÉE (#9386) : la saison en tire ses
+   * étoiles. Appelé UNE fois par mission (l'achèvement est réclamé), isolé — un
+   * échec ne rend jamais la mission.
+   */
+  readonly onMissionCompleted?: (event: { readonly userId: string; readonly difficulty: MissionDifficulty; readonly now: Date }) => Promise<void>;
 };
 
 export type MissionDay = {
@@ -334,6 +340,12 @@ export class MissionService {
       log.warn('mission reward failed, completion handed back', { userId: row.userId, missionId: row.id });
       throw error;
     }
+    // La mission est PAYÉE : ce qui suit est un appoint, jamais une raison de la rendre.
+    if (this.deps.onMissionCompleted && isDifficulty(row.difficulty)) {
+      await this.deps.onMissionCompleted({ userId: row.userId, difficulty: row.difficulty, now }).catch((error: unknown) =>
+        log.warn('mission completion follow-up failed', { userId: row.userId, error: error instanceof Error ? error.message : String(error) }),
+      );
+    }
   }
 
   private async ensureGameDay(userId: string, dayKey: string): Promise<void> {
@@ -478,7 +490,7 @@ export class MissionService {
    * L'écriture est conditionnelle à la réserve LUE : un gel acheté entre-temps
    * fait relire, jamais écraser l'achat.
    */
-  private async grantFreeze(userId: string): Promise<void> {
+  async grantFreeze(userId: string): Promise<void> {
     for (let attempt = 0; attempt < STREAK_WRITE_ATTEMPTS; attempt += 1) {
       const row = await this.prisma.user.findUnique({ where: { id: userId }, select: { flameFreezes: true } });
       if (!row) return;

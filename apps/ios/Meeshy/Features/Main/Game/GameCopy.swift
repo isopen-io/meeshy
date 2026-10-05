@@ -1,5 +1,6 @@
 import Foundation
 import MeeshySDK
+import MeeshyUI
 
 /// CE QUE LE JEU DIT (#9383, #9379) — les noms, les accords et les phrases de
 /// refus. La loi (`MeeshySDK/Game`) ne prononce rien : elle rend des clés
@@ -85,6 +86,45 @@ enum GameCopy {
         case .etoile: String(localized: "game.tier.etoile", defaultValue: "Étoile", bundle: .main)
         case .constellation: String(localized: "game.tier.constellation", defaultValue: "Constellation", bundle: .main)
         case .galaxie: String(localized: "game.tier.galaxie", defaultValue: "Galaxie", bundle: .main)
+        }
+    }
+
+    /// « quatrième » : le rang du palier, accordé au mot « palier » de la langue (masculin en français
+    /// et en espagnol, féminin en italien, portugais, allemand et arabe).
+    static func tierOrdinal(_ tier: LevelTierKey) -> String {
+        switch tier {
+        case .etincelle: String(localized: "game.tier.ordinal.1", defaultValue: "premier", bundle: .main)
+        case .lueur: String(localized: "game.tier.ordinal.2", defaultValue: "deuxième", bundle: .main)
+        case .lumiere: String(localized: "game.tier.ordinal.3", defaultValue: "troisième", bundle: .main)
+        case .eclat: String(localized: "game.tier.ordinal.4", defaultValue: "quatrième", bundle: .main)
+        case .rayon: String(localized: "game.tier.ordinal.5", defaultValue: "cinquième", bundle: .main)
+        case .aurore: String(localized: "game.tier.ordinal.6", defaultValue: "sixième", bundle: .main)
+        case .comete: String(localized: "game.tier.ordinal.7", defaultValue: "septième", bundle: .main)
+        case .etoile: String(localized: "game.tier.ordinal.8", defaultValue: "huitième", bundle: .main)
+        case .constellation: String(localized: "game.tier.ordinal.9", defaultValue: "neuvième", bundle: .main)
+        case .galaxie: String(localized: "game.tier.ordinal.10", defaultValue: "dixième", bundle: .main)
+        }
+    }
+
+    /// Ce que VoiceOver lit sur l'anneau de niveau : « Niveau 34, palier Éclat, quatrième palier ».
+    static func levelRingAccessibility(level: Int, tier: LevelTierKey) -> String {
+        String(
+            localized: "game.level.ring.a11y",
+            defaultValue: "Niveau \(formatCount(level)), palier \(tierName(tier)), \(tierOrdinal(tier)) palier",
+            bundle: .main
+        )
+    }
+
+    static func materialName(_ material: GameMaterial) -> String {
+        switch material {
+        case .copper: String(localized: "game.material.copper", defaultValue: "Cuivre", bundle: .main)
+        case .bronze: String(localized: "game.material.bronze", defaultValue: "Bronze", bundle: .main)
+        case .silver: String(localized: "game.material.silver", defaultValue: "Argent", bundle: .main)
+        case .gold: String(localized: "game.material.gold", defaultValue: "Or", bundle: .main)
+        case .platinum: String(localized: "game.material.platinum", defaultValue: "Platine", bundle: .main)
+        case .obsidian: String(localized: "game.material.obsidian", defaultValue: "Obsidienne", bundle: .main)
+        case .prism: String(localized: "game.material.prism", defaultValue: "Prisme", bundle: .main)
+        case .flame: String(localized: "game.material.flame", defaultValue: "Flamme", bundle: .main)
         }
     }
 

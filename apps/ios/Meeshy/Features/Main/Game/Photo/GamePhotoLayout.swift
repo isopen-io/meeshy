@@ -38,6 +38,9 @@ nonisolated struct PhotoLayout: Equatable, Sendable {
     let mee: CGRect
     let meo: CGRect
     let signature: CGRect
+    /// Le bandeau de parrainage (#7742), en bas de l'image ; `nil` sans lien. Quand il est là, il porte
+    /// sa propre Signature : celle du bas de la carte n'est pas peinte, et `signature` n'est que la place qu'elle y tient.
+    let banner: CGRect?
 }
 
 nonisolated enum GamePhotoLayout {
@@ -51,28 +54,41 @@ nonisolated enum GamePhotoLayout {
         let dateY: CGFloat
         let birdSize: CGFloat
         let signatureSize: CGFloat
+        /// La hauteur du bandeau de parrainage, en fraction de la largeur.
+        let bannerHeight: CGFloat
     }
 
-    private static func proportions(_ format: PhotoFormat) -> Proportions {
-        switch format {
-        case .story:
-            Proportions(emblemSize: 0.36, emblemTop: 0.07, kickerY: 0.4, titleY: 0.45, dateY: 0.5, birdSize: 0.26, signatureSize: 0.1)
-        case .square:
-            Proportions(emblemSize: 0.3, emblemTop: 0.06, kickerY: 0.49, titleY: 0.58, dateY: 0.65, birdSize: 0.22, signatureSize: 0.07)
+    private static func proportions(_ format: PhotoFormat, referral: Bool) -> Proportions {
+        switch (format, referral) {
+        case (.story, false):
+            Proportions(emblemSize: 0.36, emblemTop: 0.07, kickerY: 0.4, titleY: 0.45, dateY: 0.5, birdSize: 0.26, signatureSize: 0.1, bannerHeight: 0)
+        case (.square, false):
+            Proportions(emblemSize: 0.3, emblemTop: 0.06, kickerY: 0.49, titleY: 0.58, dateY: 0.65, birdSize: 0.22, signatureSize: 0.07, bannerHeight: 0)
+        // Le bandeau prend le bas : 66 unités sur 248 de la planche en story, plus bas en carré. Mee et
+        // Meo montent au-dessus de lui ; en carré, le texte monte aussi et les tenants rapetissent.
+        case (.story, true):
+            Proportions(emblemSize: 0.36, emblemTop: 0.07, kickerY: 0.4, titleY: 0.45, dateY: 0.5, birdSize: 0.26, signatureSize: 0.1, bannerHeight: 0.24)
+        case (.square, true):
+            Proportions(emblemSize: 0.3, emblemTop: 0.06, kickerY: 0.42, titleY: 0.5, dateY: 0.57, birdSize: 0.15, signatureSize: 0.07, bannerHeight: 0.176)
         }
     }
 
     private static let margin: CGFloat = 0.05
 
-    static func layout(_ format: PhotoFormat) -> PhotoLayout {
+    /// `referral` : la carte porte le bandeau de parrainage en bas (#7742).
+    static func layout(_ format: PhotoFormat, referral: Bool = false) -> PhotoLayout {
         let width = format.size.width
         let height = format.size.height
-        let p = proportions(format)
+        let p = proportions(format, referral: referral)
         let emblem = width * p.emblemSize
         let bird = width * p.birdSize
         let signature = width * p.signatureSize
         let edge = width * margin
-        let birdTop = height - edge - bird
+        let bannerHeight = width * p.bannerHeight
+        let banner = referral
+            ? CGRect(x: edge, y: height - edge - bannerHeight, width: width - 2 * edge, height: bannerHeight)
+            : nil
+        let birdTop = (banner?.minY ?? height) - (banner == nil ? edge : edge / 2) - bird
         return PhotoLayout(
             width: width,
             height: height,
@@ -82,7 +98,8 @@ nonisolated enum GamePhotoLayout {
             date: PhotoTextLine(x: width / 2, y: height * p.dateY, size: width * 0.035),
             mee: CGRect(x: edge, y: birdTop, width: bird, height: bird),
             meo: CGRect(x: width - edge - bird, y: birdTop, width: bird, height: bird),
-            signature: CGRect(x: (width - signature) / 2, y: height - edge - signature, width: signature, height: signature)
+            signature: CGRect(x: (width - signature) / 2, y: height - edge - signature, width: signature, height: signature),
+            banner: banner
         )
     }
 }

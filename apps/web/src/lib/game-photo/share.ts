@@ -21,14 +21,18 @@ type ShareNavigator = {
   readonly share?: (data: ShareData) => Promise<void>;
 };
 
+/** Le texte qui accompagne l'image (le lien de parrainage) ; un texte vide n'est pas un texte. */
+const withText = (text: string | undefined): { readonly text?: string } => (text === undefined || text === '' ? {} : { text });
+
 export async function shareImage(params: {
   readonly file: File;
   readonly title: string;
+  readonly text?: string | undefined;
   readonly nav: ShareNavigator;
   readonly download: (file: File) => void;
 }): Promise<ShareOutcome> {
   const { file, title, nav, download } = params;
-  const data: ShareData = { files: [file], title };
+  const data: ShareData = { files: [file], title, ...withText(params.text) };
 
   const canShareFiles = typeof nav.share === 'function' && typeof nav.canShare === 'function' && nav.canShare(data);
   if (canShareFiles) {
@@ -80,11 +84,12 @@ const anchorDownload = (host: FileDeliveryHost): ((file: File) => void) | null =
   };
 };
 
-const bridgeShare = async (file: File, host: FileDeliveryHost): Promise<ShareOutcome | null> => {
+const bridgeShare = async (file: File, host: FileDeliveryHost, text?: string): Promise<ShareOutcome | null> => {
   const { canShareFiles, shareFiles } = host;
-  if (canShareFiles === undefined || shareFiles === undefined || !canShareFiles({ files: [file] })) return null;
+  const data = { files: [file], ...withText(text) };
+  if (canShareFiles === undefined || shareFiles === undefined || !canShareFiles(data)) return null;
   try {
-    await shareFiles({ files: [file] });
+    await shareFiles(data);
     return 'shared';
   } catch (error) {
     return error instanceof Error && error.name === 'AbortError' ? 'cancelled' : null;
@@ -94,13 +99,20 @@ const bridgeShare = async (file: File, host: FileDeliveryHost): Promise<ShareOut
 const navigatorShares = (nav: ShareNavigator, data: ShareData): boolean =>
   typeof nav.share === 'function' && typeof nav.canShare === 'function' && nav.canShare(data);
 
-/** Partager : la feuille du navigateur (avec le titre), sinon celle de la coque, sinon un téléchargement — sinon l'échec, dit. */
-export async function sharePhoto(file: File, title: string, doors: PhotoDoors): Promise<ShareOutcome> {
+/**
+ * Partager : la feuille du navigateur (avec le titre et le texte), sinon celle
+ * de la coque, sinon un téléchargement — sinon l'échec, dit. `text` est le lien
+ * de parrainage (#7742) : l'image porte déjà son bandeau, le texte le redit.
+ * Le pont de la coque (`MeeshyShare.shareFile`) ne porte que les octets : le
+ * texte lui est offert, il le laisse tomber.
+ */
+export async function sharePhoto(file: File, title: string, doors: PhotoDoors, text?: string): Promise<ShareOutcome> {
   const download = anchorDownload(doors.host);
-  if (navigatorShares(doors.nav, { files: [file], title })) {
+  if (navigatorShares(doors.nav, { files: [file], title, ...withText(text) })) {
     return shareImage({
       file,
       title,
+      text,
       nav: doors.nav,
       download: (f) => {
         if (download === null) throw new Error('Aucun téléchargement');
@@ -108,7 +120,7 @@ export async function sharePhoto(file: File, title: string, doors: PhotoDoors): 
       },
     });
   }
-  const bridged = await bridgeShare(file, doors.host);
+  const bridged = await bridgeShare(file, doors.host, text);
   if (bridged !== null) return bridged;
   if (download === null) return 'failed';
   try {

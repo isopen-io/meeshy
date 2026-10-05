@@ -3,6 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import type { PhotoArt, PhotoPalette } from './compose';
 import { dateLabelOf, fileNameOf, renderPhotoFiles } from './render';
 import { rankMoment } from './moments';
+import { referralOf } from './referral';
 
 /**
  * LES DEUX IMAGES (#9382) — 9:16 pour la story, 1:1 pour le profil, rendues
@@ -88,6 +89,34 @@ describe('renderPhotoFiles', () => {
         }) as unknown as HTMLCanvasElement,
     };
     expect(await renderPhotoFiles({ moment, photo: null, art, palette, fontFamily: 'system-ui', now: when, ...broken })).toBeNull();
+  });
+});
+
+describe('le lien de parrainage sur les deux images (#7742)', () => {
+  const referral = referralOf('https://meeshy.me/signup/affiliate/aff_abc', 23);
+
+  test('les deux formats portent le bandeau : la phrase, le lien court et les jours de Flamme', async () => {
+    const { made, createCanvas } = fakeCanvasFactory();
+    await renderPhotoFiles({ moment, photo: null, art: { ...art, flame: {} as CanvasImageSource }, palette, fontFamily: 'system-ui', now: when, timeZone: 'UTC', createCanvas, referral });
+    for (const entry of made) {
+      expect(entry.texts).toContain('Rejoins-moi sur Meeshy');
+      expect(entry.texts).toContain('meeshy.me/signup/affiliate/aff_abc');
+      expect(entry.texts).toContain('23 j');
+    }
+  });
+
+  test('sans lien, la carte part sans bandeau : aucune phrase d’invitation', async () => {
+    const { made, createCanvas } = fakeCanvasFactory();
+    await renderPhotoFiles({ moment, photo: null, art, palette, fontFamily: 'system-ui', now: when, timeZone: 'UTC', createCanvas, referral: null });
+    for (const entry of made) expect(entry.texts).not.toContain('Rejoins-moi sur Meeshy');
+  });
+
+  test('Flamme éteinte : le lien part, sans jours', async () => {
+    const { made, createCanvas } = fakeCanvasFactory();
+    const cold = referralOf('https://meeshy.me/signup/affiliate/aff_abc', 0);
+    await renderPhotoFiles({ moment, photo: null, art: { ...art, flame: {} as CanvasImageSource }, palette, fontFamily: 'system-ui', now: when, timeZone: 'UTC', createCanvas, referral: cold });
+    expect(made[0]?.texts).toContain('meeshy.me/signup/affiliate/aff_abc');
+    expect(made[0]?.texts.some((text) => / j$/.test(text))).toBe(false);
   });
 });
 

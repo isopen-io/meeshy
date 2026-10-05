@@ -23,7 +23,7 @@ import { withRetry } from '../MessageMediaConsumptionService';
 import { meeshTotalsFromLedger } from '../meesh/MeeshService';
 import { GameRefusal } from './GameRefusal';
 
-export type SpendKind = 'flame-freeze' | 'flame-relight' | 'mission-reroll';
+export type SpendKind = 'flame-freeze' | 'flame-relight' | 'mission-reroll' | 'season-seal';
 
 /** La transaction que `apply` reçoit : le client Prisme interactif. */
 export type SpendTx = Prisma.TransactionClient;

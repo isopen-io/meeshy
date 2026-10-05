@@ -131,9 +131,9 @@
       }
     },
     {
-      "_label": "échelles complètes — plus de palier suivant, barres à 1",
+      "_label": "échelles complètes — plus de palier suivant, barres à 1 (sept paliers de badge depuis #9392)",
       "input": {
-        "counters": [{ "axisKey": "tool.sticker", "count": 500 }],
+        "counters": [{ "axisKey": "tool.sticker", "count": 5000 }],
         "milestones": [],
         "streak": { "currentStreakDays": 100, "longestStreakDays": 120 },
         "level": { "engagementScore": 2600 }
@@ -145,10 +145,31 @@
         "streakNext": null,
         "streakProgress": 1,
         "streakReached": 6,
+        "badgesEarned": 7,
+        "isEmpty": false,
+        "achievements": [],
+        "axes": { "tool.sticker": { "reachedCount": 7, "nextThreshold": null, "progress": 1 } }
+      }
+    },
+    {
+      "_label": "cinq cents autocollants — les cinq anciens paliers tenus, Obsidienne (1 000) est le suivant (#9392)",
+      "input": {
+        "counters": [{ "axisKey": "tool.sticker", "count": 500 }],
+        "milestones": [],
+        "streak": { "currentStreakDays": 0, "longestStreakDays": 0 },
+        "level": { "engagementScore": 0 }
+      },
+      "expected": {
+        "level": 0,
+        "levelNext": 10,
+        "levelProgress": 0,
+        "streakNext": 3,
+        "streakProgress": 0,
+        "streakReached": 0,
         "badgesEarned": 5,
         "isEmpty": false,
         "achievements": [],
-        "axes": { "tool.sticker": { "reachedCount": 5, "nextThreshold": null, "progress": 1 } }
+        "axes": { "tool.sticker": { "reachedCount": 5, "nextThreshold": 1000, "progress": 0 } }
       }
     },
     {

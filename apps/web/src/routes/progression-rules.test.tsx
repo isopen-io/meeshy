@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 
 import { gameRules } from '@/lib/view/game-guide-copy';
 
-import ProgressionRulesScreen, { RulesBody } from './progression-rules';
+import ProgressionRulesScreen, { RulesBody, ruleTarget } from './progression-rules';
 
 const body = renderToStaticMarkup(<RulesBody />);
 const text = body.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
@@ -66,5 +66,32 @@ describe('l’écran', () => {
 
   test('un seul titre de page', () => {
     expect(page.match(/<h1/g)).toHaveLength(1);
+  });
+});
+
+/**
+ * LA LIGNE QUE LE HÉROS DÉSIGNE (#5841) — une puce de « Comment gagner » ouvre
+ * le carnet des règles À LA BONNE LIGNE : chaque règle est ancrée, et celle
+ * qu'on vise se distingue sans rien déplacer d'autre.
+ */
+describe('une règle visée par le héros', () => {
+  test('chaque règle porte son ancre « regle-N »', () => {
+    for (let i = 1; i <= 8; i += 1) expect(body).toContain(`id="regle-${i}"`);
+  });
+
+  test('sans cible, aucune règle n’est mise en avant', () => {
+    expect(body).not.toContain('data-game-rule-target');
+  });
+
+  test('avec la cible 1, seule la première règle est désignée', () => {
+    const page = renderToStaticMarkup(<RulesBody target={1} />);
+    expect(page.match(/data-game-rule-target/g)).toHaveLength(1);
+    expect(page).toMatch(/id="regle-1"[^>]*data-game-rule-target=""|data-game-rule-target=""[^>]*id="regle-1"/);
+  });
+
+  test('ruleTarget lit « regle » : 1 à 8, tout le reste est ignoré', () => {
+    expect(ruleTarget('1')).toBe(1);
+    expect(ruleTarget('8')).toBe(8);
+    for (const bad of [null, '', '0', '9', '-1', '2.5', 'abc', '1 2']) expect(ruleTarget(bad)).toBeUndefined();
   });
 });

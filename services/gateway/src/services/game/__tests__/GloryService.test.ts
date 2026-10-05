@@ -114,3 +114,30 @@ describe('GloryService.creditFlameRecords', () => {
     expect(await service.total(USER)).toBe(50);
   });
 });
+
+describe('GloryService.creditAchievement — la Gloire d’un succès, figée à l’obtention (#9390)', () => {
+  const KEY = 'achievement.first_voice';
+
+  it('sans instantané de rareté, le succès vaut « commun » (10)', async () => {
+    const db = fakeGameDb();
+    const gained = await new GloryService(db.prisma).creditAchievement(USER, KEY);
+    expect(gained).toBe(10);
+    expect(db.gloryLedger.rows[0]).toMatchObject({ reason: 'achievement', requestId: `achievement:${KEY}`, delta: 10 });
+  });
+
+  it('suit la rareté mesurée au moment de l’obtention', async () => {
+    const db = fakeGameDb();
+    db.achievementRarityStat.rows.push({ id: 's', milestoneKey: KEY, holders: 3, population: 5000, rarity: 'legendary' });
+    expect(await new GloryService(db.prisma).creditAchievement(USER, KEY)).toBe(150);
+  });
+
+  it('est FIGÉE : une rareté qui change ensuite ne paie rien de plus ni ne reprend rien', async () => {
+    const db = fakeGameDb();
+    const service = new GloryService(db.prisma);
+    await service.creditAchievement(USER, KEY);
+    db.achievementRarityStat.rows.push({ id: 's', milestoneKey: KEY, holders: 1, population: 9000, rarity: 'mythic' });
+
+    expect(await service.creditAchievement(USER, KEY)).toBe(0);
+    expect(await service.total(USER)).toBe(10);
+  });
+});

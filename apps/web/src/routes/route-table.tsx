@@ -128,6 +128,18 @@ const onboardingScreen = () =>
    paie les octets. */
 const progressionScreen = () =>
   Promise.all([import('@/routes/progression'), loadGameCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+const progressionLigueScreen = () =>
+  Promise.all([import('@/routes/progression-ligue'), loadGameCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+const progressionSaisonScreen = () =>
+  Promise.all([import('@/routes/progression-saison'), loadGameCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+const progressionVitrineScreen = () =>
+  Promise.all([import('@/routes/progression-vitrine'), loadGameCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+const progressionAtlasScreen = () =>
+  Promise.all([import('@/routes/progression-atlas'), loadGameCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+const progressionPrestigeScreen = () =>
+  Promise.all([import('@/routes/progression-prestige'), loadGameCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+const progressionBadgesScreen = () =>
+  Promise.all([import('@/routes/progression-badges'), loadGameCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
 const progressionRulesScreen = () =>
   Promise.all([import('@/routes/progression-rules'), loadGameCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
 const progressionCarnetScreen = () =>
@@ -179,7 +191,16 @@ export const ROUTES = {
      son propre retour, son propre titre et son propre compte — un panneau qui
      se déplie dans le hub n'aurait ni l'un ni les autres, et le bouton système
      « retour » refermerait l'écran entier au lieu du panneau. */
-  progressionBadges: { pattern: '/me/progression/badges', screen: () => import('@/routes/progression-badges') },
+  progressionBadges: { pattern: '/me/progression/badges', screen: progressionBadgesScreen },
+  /* LA LIGUE (#9384, #9385) — la ligue publique, la ligue entre amis et la
+     mission en duo. PRIVÉE : `session-guard.ts`. */
+  progressionLigue: { pattern: '/me/progression/ligue', screen: progressionLigueScreen },
+  /* LA SAISON (#9386) — huit semaines, quarante étapes gratuites, la rangée Sceau. PRIVÉE. */
+  progressionSaison: { pattern: '/me/progression/saison', screen: progressionSaisonScreen },
+  /* LA VITRINE, L'ATLAS ET LE PRESTIGE (#9387, #9388, #9389) — PRIVÉES. */
+  progressionVitrine: { pattern: '/me/progression/vitrine', screen: progressionVitrineScreen },
+  progressionAtlas: { pattern: '/me/progression/atlas', screen: progressionAtlasScreen },
+  progressionPrestige: { pattern: '/me/progression/prestige', screen: progressionPrestigeScreen },
   progressionDefis: { pattern: '/me/progression/defis', screen: () => import('@/routes/progression-defis') },
   progressionSucces: { pattern: '/me/progression/succes', screen: () => import('@/routes/progression-succes') },
   /* LE CARNET DES RÈGLES (#9379) — « Comment ça marche », depuis Progression :

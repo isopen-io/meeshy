@@ -631,6 +631,8 @@ export default function ProgressionScreen() {
    */
   const [mascotEvent, setMascotEvent] = useState<MascotEvent | null>(null);
   const seenProgressRef = useRef<EngagementProgress | null>(null);
+  /** La ligne courte du guide du moment : Mee la dit sur le coin du héros (#5841). */
+  const [guideLine, setGuideLine] = useState<string | null>(null);
 
   /**
    * LES GESTES (#9383) — la frappe y est, avec les quatre autres gestes du jeu.
@@ -703,7 +705,7 @@ export default function ProgressionScreen() {
             isMinting={actions.pending.mint}
             mintError={actions.errors.mint}
             mascotEvent={mascotEvent}
-            game={{ actions, online, guide: <GameLead view={query.data} /> }}
+            game={{ actions, online, guide: <GameLead view={query.data} onGuideLine={setGuideLine} />, guideLine }}
           />
         ) : query.isError ? (
           <ProgressionError message={query.error.message} online={online} onRetry={() => void query.refetch()} />

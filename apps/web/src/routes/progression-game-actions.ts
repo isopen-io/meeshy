@@ -3,6 +3,8 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import type { GameMintPreview, MissionRerollResponse } from '@meeshy/shared/types/game';
 
+import { GAME_ERROR_CODES } from '@meeshy/shared/types/game-routes';
+
 import { httpTransport, unwrap, ApiError } from '@/lib/api/client';
 import { newClientMessageId } from '@/lib/api/client-message-id';
 import { ENGAGEMENT_PROGRESS_QUERY_KEY, mintMeesh, type EngagementWithGame, type MeeshMintResult } from '@/lib/api/engagement';
@@ -73,6 +75,9 @@ export const GAME_MUTATION_KEY = ['game', 'gesture'] as const;
 
 const messageOf = (error: unknown): string => gameErrorMessage(error instanceof ApiError ? error.code : undefined);
 
+/** Un identifiant que la passerelle dit déjà pris par UNE AUTRE écriture ne sert plus : le prochain geste en génère un neuf. */
+const isIdConflict = (error: unknown): boolean => error instanceof ApiError && error.code === GAME_ERROR_CODES.requestIdConflict;
+
 export function useGameActions(
   options: { readonly transport?: HttpTransport; readonly onMinted?: (result: MeeshMintResult) => void } = {},
 ): GameActions {
@@ -123,7 +128,10 @@ export function useGameActions(
       const preview = read()?.game?.mint;
       return { ...(await begin(afterMint)), preview };
     },
-    onError: (_error, _vars, context) => restore(context),
+    onError: (error, _vars, context) => {
+      if (isIdConflict(error)) spent('mint');
+      restore(context);
+    },
     onSuccess: (result, _vars, context) => {
       spent('mint');
       options.onMinted?.(result);
@@ -141,7 +149,10 @@ export function useGameActions(
     mutationKey: GAME_MUTATION_KEY,
     mutationFn: async (missionId) => unwrap(await rerollMission(transport, missionId, idFor(`reroll:${missionId}`))),
     onMutate: () => begin(afterReroll),
-    onError: (_error, _missionId, context) => restore(context),
+    onError: (error, missionId, context) => {
+      if (isIdConflict(error)) spent(`reroll:${missionId}`);
+      restore(context);
+    },
     onSuccess: (result, missionId) => {
       spent(`reroll:${missionId}`);
       write((view) => withRerolled(view, missionId, result.mission, result.balance));
@@ -153,7 +164,10 @@ export function useGameActions(
     mutationKey: GAME_MUTATION_KEY,
     mutationFn: async () => unwrap(await claimChest(transport, idFor('chest'))),
     onMutate: () => begin(afterChestOpening),
-    onError: (_error, _vars, context: Snapshot | undefined) => restore(context),
+    onError: (error, _vars, context: Snapshot | undefined) => {
+      if (isIdConflict(error)) spent('chest');
+      restore(context);
+    },
     onSuccess: (result) => {
       spent('chest');
       write((view) => withChestReward(view, result.reward, result.score));
@@ -165,7 +179,10 @@ export function useGameActions(
     mutationKey: GAME_MUTATION_KEY,
     mutationFn: async () => unwrap(await buyFlameFreeze(transport, idFor('freeze'))),
     onMutate: () => begin(afterFreeze),
-    onError: (_error, _vars, context: Snapshot | undefined) => restore(context),
+    onError: (error, _vars, context: Snapshot | undefined) => {
+      if (isIdConflict(error)) spent('freeze');
+      restore(context);
+    },
     onSuccess: () => spent('freeze'),
     onSettled: refresh,
   });
@@ -174,7 +191,10 @@ export function useGameActions(
     mutationKey: GAME_MUTATION_KEY,
     mutationFn: async () => unwrap(await relightFlame(transport, idFor('relight'))),
     onMutate: () => begin(afterRelight),
-    onError: (_error, _vars, context: Snapshot | undefined) => restore(context),
+    onError: (error, _vars, context: Snapshot | undefined) => {
+      if (isIdConflict(error)) spent('relight');
+      restore(context);
+    },
     onSuccess: (result) => {
       spent('relight');
       write((view) => withRelit(view, result.streak, result.balance));

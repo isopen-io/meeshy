@@ -22,6 +22,8 @@ import { computeMeeshMintPlan } from '@meeshy/shared/utils/meesh';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { meeshTotalsFromLedger } from '../meesh/MeeshService';
 import { FLAME_USER_SELECT, brokenFlame, flameFactsOf } from './FlameService';
+import { GameBlockExtrasService } from './GameBlockExtrasService';
+import { GameProfileService } from './GameProfileService';
 import { gloryTotalFromLedger } from './GloryService';
 import { toGameMission, type MissionService } from './MissionService';
 
@@ -34,10 +36,22 @@ const GAME_USER_SELECT = { ...FLAME_USER_SELECT, engagementScore: true, levelRec
 export type AxisRow = { readonly axisKey: string; readonly count: number; readonly points: number };
 
 export class GameBlockService {
+  private readonly extras: Pick<GameBlockExtrasService, 'build'>;
+
+  private readonly profile: Pick<GameProfileService, 'settings'>;
+
   constructor(
     private readonly prisma: PrismaClient,
-    private readonly deps: { readonly missions: Pick<MissionService, 'ensureToday' | 'gameDay'> },
-  ) {}
+    private readonly deps: {
+      readonly missions: Pick<MissionService, 'ensureToday' | 'gameDay'>;
+      /** Les sept extensions de la vague 2 ; remplaçable en test. */
+      readonly extras?: Pick<GameBlockExtrasService, 'build'>;
+      readonly profile?: Pick<GameProfileService, 'settings'>;
+    },
+  ) {
+    this.extras = deps.extras ?? new GameBlockExtrasService(prisma);
+    this.profile = deps.profile ?? new GameProfileService(prisma);
+  }
 
   /**
    * Le bloc, ou `null` s'il ne tient pas le contrat. `counters` : les lignes que
@@ -58,6 +72,7 @@ export class GameBlockService {
     const gameDay = await this.deps.missions.gameDay(userId, day.dayKey);
 
     const facts = flameFactsOf(user ?? {}, now);
+    const settings = await this.profile.settings(userId).catch(() => null);
     const plan = computeMeeshMintPlan(
       counters
         .filter((c) => (ENGAGEMENT_AXES as readonly string[]).includes(c.axisKey))
@@ -73,9 +88,9 @@ export class GameBlockService {
       levelRecord: user?.levelRecord ?? null,
       prestige: user?.prestige ?? 0,
       glory,
-      // Le drapeau Mythe (les 100 Légendes les plus glorieuses) n'est pas encore
-      // calculé : il se pose avec les classements de la vague 2.
-      mythic: false,
+      // Le drapeau Mythe (les 100 Légendes les plus glorieuses), posé chaque nuit :
+      // un drapeau PAR COMPTE, jamais une liste globale (conformité A-13).
+      mythic: settings?.mythic ?? false,
       mintedLifetime: totals.mintedLifetime,
       debitablePoints: plan.debitablePoints,
       balance: totals.balance,
@@ -93,7 +108,18 @@ export class GameBlockService {
       guideSeen: user?.guideSeen ?? [],
     });
 
-    const valid = parseGameBlock(block);
+    const extensions = await this.extras.build({
+      userId,
+      score: user?.engagementScore ?? 0,
+      levelRecord: user?.levelRecord ?? null,
+      prestige: user?.prestige ?? 0,
+      flameDays: facts.streak,
+      balance: totals.balance,
+      timezone: user?.timezone ?? null,
+      now,
+    });
+
+    const valid = parseGameBlock(extensions === null ? block : { ...block, ...extensions });
     if (valid === null) log.error('game block refused by the shared schema', { userId });
     return valid;
   }

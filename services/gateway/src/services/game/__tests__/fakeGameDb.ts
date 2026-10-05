@@ -33,10 +33,13 @@ const matchField = (actual: unknown, expected: unknown): boolean => {
   }
   return Object.entries(expected).every(([op, value]) => {
     if (op === 'in') return (value as unknown[]).includes(actual);
-    if (op === 'gte') return typeof actual === 'number' ? actual >= (value as number) : actual instanceof Date && actual >= (value as Date);
-    if (op === 'lt') return typeof actual === 'number' ? actual < (value as number) : actual instanceof Date && actual < (value as Date);
-    if (op === 'gt') return typeof actual === 'number' && actual > (value as number);
-    if (op === 'not') return !matchField(actual, value);
+    if (op === 'gte') return typeof actual === 'number' ? actual >= (value as number) : actual instanceof Date ? actual >= (value as Date) : typeof actual === 'string' && actual >= (value as string);
+    if (op === 'lt') return typeof actual === 'number' ? actual < (value as number) : actual instanceof Date ? actual < (value as Date) : typeof actual === 'string' && actual < (value as string);
+    if (op === 'lte') return typeof actual === 'number' ? actual <= (value as number) : actual instanceof Date && actual <= (value as Date);
+    if (op === 'notIn') return !(value as unknown[]).includes(actual);
+    if (op === 'startsWith') return typeof actual === 'string' && actual.startsWith(value as string);
+    if (op === 'gt') return typeof actual === 'number' ? actual > (value as number) : typeof actual === 'string' && actual > (value as string);
+    if (op === 'not') return value === null ? actual !== null && actual !== undefined : !matchField(actual, value);
     if (op === 'has') return Array.isArray(actual) && actual.includes(value);
     if (op === 'isSet') return (actual !== undefined) === value;
     throw new Error(`opérateur non reproduit par le faux : ${op}`);
@@ -47,6 +50,7 @@ const matches = (row: Row, where: Where): boolean =>
   Object.entries(where).every(([key, expected]) => {
     if (key === 'OR') return (expected as Where[]).some((clause) => matches(row, clause));
     if (key === 'AND') return (expected as Where[]).every((clause) => matches(row, clause));
+    if (key === 'NOT') return !matches(row, expected as Where);
     return matchField(row[key], expected);
   });
 
@@ -165,6 +169,13 @@ class Model {
     return this.create({ data: args.create, ...(args.select ? { select: args.select } : {}) });
   }
 
+  async delete(args: { where: Where }) {
+    const row = this.find(args.where);
+    if (!row) throw Object.assign(new Error('Record not found'), { code: 'P2025' });
+    this.rows = this.rows.filter((r) => r !== row);
+    return { ...row };
+  }
+
   async deleteMany(args: { where?: Where } = {}) {
     const before = this.rows.length;
     this.rows = this.rows.filter((row) => !matches(row, args.where ?? {}));
@@ -175,6 +186,30 @@ class Model {
     const found = this.rows.filter((row) => matches(row, args.where ?? {}));
     const field = Object.keys(args._sum ?? {})[0];
     return { _sum: { [field ?? 'x']: found.length === 0 || !field ? null : found.reduce((s, r) => s + (r[field] as number), 0) } };
+  }
+
+  async groupBy(args: {
+    by: string[];
+    where?: Where;
+    _count?: { _all?: boolean };
+    _sum?: Record<string, boolean>;
+    having?: Record<string, { _sum?: { gte?: number } }>;
+  }) {
+    const found = this.rows.filter((row) => matches(row, args.where ?? {}));
+    const groups = new Map<string, Row[]>();
+    for (const row of found) {
+      const key = args.by.map((field) => String(row[field])).join('|');
+      groups.set(key, [...(groups.get(key) ?? []), row]);
+    }
+    return [...groups.values()]
+      .map((rows) => ({
+        ...Object.fromEntries(args.by.map((field) => [field, rows[0]![field]])),
+        _count: { _all: rows.length },
+        _sum: Object.fromEntries(Object.keys(args._sum ?? {}).map((field) => [field, rows.reduce((s, r) => s + (r[field] as number), 0)])),
+      }))
+      .filter((group) =>
+        Object.entries(args.having ?? {}).every(([field, rule]) => rule._sum?.gte === undefined || (group._sum[field] ?? 0) >= rule._sum.gte),
+      );
   }
 
   snapshot(): Row[] {
@@ -189,7 +224,7 @@ class Model {
 /** Les clés composées de Prisma (`userId_requestId`) se lisent comme leurs champs. */
 const flattenCompound = (model: Model): Model => {
   const proto = model as unknown as Record<string, (args: { where?: Where }) => unknown>;
-  for (const method of ['findUnique', 'update', 'upsert'] as const) {
+  for (const method of ['findUnique', 'update', 'upsert', 'delete'] as const) {
     const original = proto[method]!.bind(model);
     proto[method] = (args: { where?: Where }) => {
       const where: Where = {};
@@ -216,6 +251,20 @@ export type FakeGameDb = {
   readonly participant: Model;
   readonly message: Model;
   readonly conversationEngagement: Model;
+  readonly gameProfile: Model;
+  readonly leaguePseudonym: Model;
+  readonly leagueGroupWeek: Model;
+  readonly leagueMembership: Model;
+  readonly gameWeekPoints: Model;
+  readonly gameDuo: Model;
+  readonly gameDuoSlot: Model;
+  readonly gameSeason: Model;
+  readonly gameTrophy: Model;
+  readonly atlasStamp: Model;
+  readonly achievementRarityStat: Model;
+  readonly friendRequest: Model;
+  readonly userPreferences: Model;
+  readonly conversation: Model;
 };
 
 export function fakeGameDb(): FakeGameDb {
@@ -230,7 +279,56 @@ export function fakeGameDb(): FakeGameDb {
   const participant = new Model();
   const message = new Model();
   const conversationEngagement = flattenCompound(new Model({ uniques: [['userId', 'conversationId']] }));
-  const models = { user, gloryLedger, meeshLedger, dailyMission, gameDay, engagementCounter, engagementQuota, engagementMilestone, participant, message, conversationEngagement };
+  const gameProfile = flattenCompound(new Model({ uniques: [['userId']] }));
+  const leaguePseudonym = flattenCompound(new Model({ uniques: [['userId'], ['pseudonymKey']] }));
+  const leagueGroupWeek = flattenCompound(new Model({ uniques: [['groupId']], optional: ['snapshotDay', 'snapshot', 'settledAt'] }));
+  const leagueMembership = flattenCompound(
+    new Model({ uniques: [['userId', 'weekKey']], optional: ['finalRank', 'finalPoints', 'zone', 'cup', 'settledAt'] }),
+  );
+  const gameWeekPoints = flattenCompound(new Model({ uniques: [['userId', 'weekKey', 'dayKey']], defaults: () => ({ points: 0 }) }));
+  const gameDuo = flattenCompound(
+    new Model({
+      defaults: () => ({ inviterProgress: 0, inviteeProgress: 0 }),
+      optional: ['acceptedAt', 'endedAt', 'inviterPaidAt', 'inviteePaidAt', 'templateKey', 'signal', 'prism', 'partTarget', 'commonTarget'],
+    }),
+  );
+  const gameDuoSlot = flattenCompound(new Model({ uniques: [['userId', 'weekKey']] }));
+  const gameSeason = flattenCompound(
+    new Model({ uniques: [['userId', 'number']], defaults: () => ({ stars: 0, claimedSteps: [] }), optional: ['sealOwnedAt', 'settledAt'] }),
+  );
+  const gameTrophy = flattenCompound(new Model({ uniques: [['userId', 'key']] }));
+  const atlasStamp = flattenCompound(new Model({ uniques: [['userId', 'language']], optional: ['sentAt', 'receivedAt', 'stampedOn'] }));
+  const achievementRarityStat = flattenCompound(new Model({ uniques: [['milestoneKey']] }));
+  const friendRequest = new Model();
+  const userPreferences = new Model();
+  const conversation = new Model();
+  const models = {
+    user,
+    gloryLedger,
+    meeshLedger,
+    dailyMission,
+    gameDay,
+    engagementCounter,
+    engagementQuota,
+    engagementMilestone,
+    participant,
+    message,
+    conversationEngagement,
+    gameProfile,
+    leaguePseudonym,
+    leagueGroupWeek,
+    leagueMembership,
+    gameWeekPoints,
+    gameDuo,
+    gameDuoSlot,
+    gameSeason,
+    gameTrophy,
+    atlasStamp,
+    achievementRarityStat,
+    friendRequest,
+    userPreferences,
+    conversation,
+  };
 
   /**
    * La seule commande brute que le service émet : `findAndModify` sur `User`

@@ -11,29 +11,55 @@ import MeeshyUI
 /// Une page qui EXPLIQUE, sans geste : aucun bouton n'y agit, rien n'y est promis
 /// qui ne soit dit ailleurs. Pas de lecture réseau : elle s'ouvre instantanément,
 /// hors ligne comme en ligne.
+///
+/// `focusedRule` (#5841) : la page s'ouvre À LA BONNE LIGNE — « Comment gagner » du héro mène à
+/// « Chaque geste rapporte », « Comment frapper » à « On frappe des Meeshes ». La règle visée
+/// défile en haut et se teinte un instant ; sans règle visée, la page s'ouvre en haut.
 struct GameRulesPage: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private var theme: ThemeManager { ThemeManager.shared }
+
+    var focusedRule: Int?
+
+    @State private var highlighted: Int?
 
     var body: some View {
         ZStack {
             theme.backgroundGradient.ignoresSafeArea()
             VStack(spacing: 0) {
                 GamePageHeader(title: String(localized: "game.rules.page_title", defaultValue: "Comment ça marche", bundle: .main), onBack: { dismiss() })
-                ScrollView(showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: MeeshySpacing.xl) {
-                        intro
-                        rules
-                        steps
+                ScrollViewReader { proxy in
+                    ScrollView(showsIndicators: false) {
+                        VStack(alignment: .leading, spacing: MeeshySpacing.xl) {
+                            intro
+                            rules
+                            steps
+                        }
+                        .padding(.horizontal, MeeshySpacing.lg)
+                        .padding(.vertical, MeeshySpacing.md)
                     }
-                    .padding(.horizontal, MeeshySpacing.lg)
-                    .padding(.vertical, MeeshySpacing.md)
+                    .task { await focus(on: proxy) }
                 }
             }
         }
         .accessibilityIdentifier("game.rules.page")
     }
+
+    /// Fait défiler la règle visée en haut, la teinte un instant, puis la relâche. Un tick d'attente :
+    /// la mise en page doit exister avant qu'on y défile.
+    private func focus(on proxy: ScrollViewProxy) async {
+        guard let focusedRule else { return }
+        try? await Task.sleep(nanoseconds: 250_000_000)
+        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.35)) {
+            proxy.scrollTo(Self.rowID(focusedRule), anchor: .top)
+            highlighted = focusedRule
+        }
+        try? await Task.sleep(nanoseconds: 1_600_000_000)
+        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.4)) { highlighted = nil }
+    }
+
+    static func rowID(_ index: Int) -> String { "game-rule-\(index)" }
 
     private var intro: some View {
         HStack(alignment: .bottom, spacing: MeeshySpacing.sm) {
@@ -79,6 +105,12 @@ struct GameRulesPage: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
+                .padding(MeeshySpacing.xs)
+                .background(
+                    RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous)
+                        .fill(MeeshyColors.brandPrimary.opacity(highlighted == rule.index ? 0.14 : 0))
+                )
+                .id(Self.rowID(rule.index))
                 .accessibilityElement(children: .combine)
             }
         }

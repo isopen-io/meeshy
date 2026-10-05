@@ -15,10 +15,13 @@ import type { PhotoArt } from './compose';
 
 export const ART_SLOTS = ['emblem', 'mee', 'meo', 'signature'] as const;
 export type ArtSlot = (typeof ART_SLOTS)[number];
-export type ArtMarkup = Readonly<Record<ArtSlot, string>>;
+/** La Flamme du bandeau de parrainage (#7742) : un dessin FACULTATIF — son absence ou son échec ne défait pas la carte. */
+const FLAME_SLOT = 'flame';
+export type ArtMarkup = Readonly<Record<ArtSlot, string>> & { readonly flame?: string };
 
 /** Les tailles de rastérisation (côté le plus large) : deux fois ce que la plus grande mise en page demande. */
 const SIZES: Readonly<Record<ArtSlot, number>> = { emblem: 768, mee: 512, meo: 512, signature: 256 };
+const FLAME_SIZE = 256;
 
 export function collectArtMarkup(root: ParentNode): ArtMarkup | null {
   const found: Partial<Record<ArtSlot, string>> = {};
@@ -27,7 +30,8 @@ export function collectArtMarkup(root: ParentNode): ArtMarkup | null {
     if (svg === null) return null;
     found[slot] = svg.outerHTML;
   }
-  return found as ArtMarkup;
+  const flame = root.querySelector(`[data-photo-art="${FLAME_SLOT}"] svg`);
+  return { ...(found as Record<ArtSlot, string>), ...(flame === null ? {} : { flame: flame.outerHTML }) };
 }
 
 export async function loadArt(params: {
@@ -43,5 +47,7 @@ export async function loadArt(params: {
     ),
   );
   const [emblem, mee, meo, signature] = images;
-  return emblem && mee && meo && signature ? { emblem, mee, meo, signature } : null;
+  if (!(emblem && mee && meo && signature)) return null;
+  const flame = markup.flame === undefined ? null : await params.raster(prepareSvgMarkup(markup.flame, { size: FLAME_SIZE, read: params.read }).markup);
+  return { emblem, mee, meo, signature, ...(flame === null ? {} : { flame }) };
 }

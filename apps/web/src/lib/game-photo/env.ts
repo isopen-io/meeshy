@@ -1,6 +1,11 @@
+import { apiConfig } from '@/lib/api/config';
+import { apiDeps } from '@/lib/api/deps';
+import { sessionStore } from '@/lib/api/session';
 import { currentGallerySaver } from '@/lib/gallery/gallery-saver';
+import { webOriginOf } from '@/lib/links/web-origin';
 import type { PlayOptions } from '@/lib/game/play';
 import { browserFileDeliveryHost } from '@/lib/media/file-delivery-host';
+import { memoriserLienParLecteur } from '@/lib/view/invitation';
 
 import { loadArt } from './art';
 import { openFrontCamera, type CameraResult } from './camera';
@@ -9,6 +14,7 @@ import { rasterizeSvg } from './compose';
 import { rootVarReader } from './css-vars';
 import type { PhotoMoment } from './moments';
 import { createNotebook, lazyBackend, openIndexedDbBackend, type Notebook } from './notebook';
+import type { PhotoReferral } from './referral';
 import { renderPhotoFiles, type PhotoFiles } from './render';
 import { savePhoto, sharePhoto, type PhotoDoors, type ShareOutcome } from './share';
 
@@ -27,11 +33,24 @@ import { savePhoto, sharePhoto, type PhotoDoors, type ShareOutcome } from './sha
 export type PhotoEnv = {
   readonly openCamera: () => Promise<CameraResult>;
   readonly notebook: Notebook;
-  readonly share: (file: File, title: string) => Promise<ShareOutcome>;
+  /** `text` : le lien de parrainage (#7742), que la feuille de partage redit à côté de l'image. */
+  readonly share: (file: File, title: string, text?: string) => Promise<ShareOutcome>;
   /** `downloaded` : enregistrée (galerie de la coque, ou fichier du navigateur). */
   readonly save: (file: File) => Promise<ShareOutcome>;
   /** Compose les deux images depuis le cadre affiché (ses dessins) et la photo ; `null` si le navigateur ne sait pas. */
-  readonly render: (input: { readonly moment: PhotoMoment; readonly photo: PhotoSource | null; readonly frame: HTMLElement | null }) => Promise<PhotoFiles | null>;
+  readonly render: (input: {
+    readonly moment: PhotoMoment;
+    readonly photo: PhotoSource | null;
+    readonly frame: HTMLElement | null;
+    /** Le bandeau de parrainage (#7742) ; `null` ou absent : la carte part sans lui. */
+    readonly referral?: PhotoReferral | null;
+  }) => Promise<PhotoFiles | null>;
+  /**
+   * Le lien de parrainage COURT de l'utilisateur (#7742), `null` quand le service
+   * n'en rend pas (hors ligne, refus). Absent : l'environnement n'en sait pas,
+   * la carte part sans bandeau.
+   */
+  readonly referral?: () => Promise<string | null>;
   readonly captureVideo: (video: HTMLVideoElement) => PhotoSource | null;
   readonly readGallery: (file: File) => Promise<PhotoSource | null>;
   readonly now: () => Date;
@@ -82,6 +101,23 @@ async function readGallery(file: File): Promise<PhotoSource | null> {
   }
 }
 
+/**
+ * **Le lien de parrainage**, depuis le service existant (`loadShareableReferralLink`,
+ * #6707) : le même que « Inviter des amis ». Chargé AU GESTE (`import()`, le
+ * décodage passe par `zod`), gardé pour le lecteur courant — le déroulé suivant
+ * ne refait aucune requête. Un échec rend `null`, jamais un lien à moitié bon.
+ */
+const shareableReferralLink = memoriserLienParLecteur(async () => {
+  const { loadShareableReferralLink } = await import('@/lib/api/referral-link');
+  const result = await loadShareableReferralLink({ origin: webOriginOf(apiConfig.base, window.location.origin), now: new Date(), deps: apiDeps });
+  return result.ok ? result.data : null;
+});
+
+const currentReader = (): string | null => {
+  const session = sessionStore.getState().session;
+  return session.status === 'authenticated' ? session.user.id : null;
+};
+
 const doors = (): PhotoDoors => ({
   nav: typeof navigator === 'undefined' ? {} : navigator,
   host: browserFileDeliveryHost(),
@@ -97,9 +133,10 @@ export function browserPhotoEnv(): PhotoEnv {
   return {
     openCamera: () => openFrontCamera(typeof navigator === 'undefined' ? undefined : navigator.mediaDevices),
     notebook,
-    share: (file, title) => sharePhoto(file, title, doors()),
+    share: (file, title, text) => sharePhoto(file, title, doors(), text),
+    referral: () => shareableReferralLink(currentReader()),
     save: (file) => savePhoto(file, doors()),
-    render: async ({ moment, photo, frame }) => {
+    render: async ({ moment, photo, frame, referral }) => {
       if (frame === null) return null;
       const read = rootVarReader({ getComputedStyle: (root) => getComputedStyle(root), root: document.documentElement });
       const art = await loadArt({
@@ -113,7 +150,7 @@ export function browserPhotoEnv(): PhotoEnv {
           }),
       });
       if (art === null) return null;
-      return renderPhotoFiles({ moment, photo, art, palette: paletteFrom(read), fontFamily: fontFamilyFrom(read), now: now(), createCanvas });
+      return renderPhotoFiles({ moment, photo, art, palette: paletteFrom(read), fontFamily: fontFamilyFrom(read), now: now(), createCanvas, referral: referral ?? null });
     },
     captureVideo,
     readGallery,

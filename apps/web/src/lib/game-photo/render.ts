@@ -1,8 +1,11 @@
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 
-import { paintPhoto, type PaintContext, type PhotoArt, type PhotoPalette, type PhotoSource } from './compose';
+import { formatCount, gameText } from '@/lib/view/game-copy';
+
+import { paintPhoto, type PaintContext, type PhotoArt, type PhotoBanner, type PhotoPalette, type PhotoSource } from './compose';
 import { PHOTO_FORMATS, photoLayout, type PhotoFormat } from './layout';
 import type { PhotoMoment } from './moments';
+import type { PhotoReferral } from './referral';
 
 /**
  * LES DEUX IMAGES (#9382) — la story en 9:16 et le profil en 1:1, rendues d'un
@@ -39,6 +42,13 @@ export const fileNameOf = (momentId: string, format: PhotoFormat): string =>
 const toBlob = (canvas: HTMLCanvasElement): Promise<Blob | null> =>
   new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
 
+/** Les textes du bandeau, dans la langue de l'interface : la phrase, le lien court, les jours de Flamme. */
+const bannerOf = (referral: PhotoReferral): PhotoBanner => ({
+  headline: gameText('game.photo.referral.headline'),
+  link: referral.display,
+  flameLabel: referral.flameDays === null ? null : gameText('game.photo.referral.flame_days', { days: formatCount(referral.flameDays) }),
+});
+
 async function renderOne(
   params: RenderParams,
   format: PhotoFormat,
@@ -47,8 +57,10 @@ async function renderOne(
   const canvas = params.createCanvas(width, height);
   const ctx = canvas.getContext('2d');
   if (ctx === null) return null;
+  const referral = params.referral ?? null;
   paintPhoto(ctx as unknown as PaintContext, {
-    layout: photoLayout(format),
+    layout: photoLayout(format, { banner: referral !== null }),
+    ...(referral === null ? {} : { banner: bannerOf(referral) }),
     moment: params.moment,
     dateLabel: dateLabelOf(params.now, params.timeZone),
     photo: params.photo,
@@ -68,6 +80,8 @@ type RenderParams = {
   readonly fontFamily: string;
   readonly now: Date;
   readonly timeZone?: string;
+  /** Le lien de parrainage de l'utilisateur et sa Flamme (#7742) ; `null` ou absent : la carte part sans bandeau. */
+  readonly referral?: PhotoReferral | null;
   readonly createCanvas: (width: number, height: number) => HTMLCanvasElement;
 };
 

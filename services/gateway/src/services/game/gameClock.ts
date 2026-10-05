@@ -38,3 +38,44 @@ export function minuteOfDayInTimezone(date: Date, timezone: string | null | unde
   };
   return (timezone ? read(timezone) : null) ?? read('UTC') ?? date.getUTCHours() * 60 + date.getUTCMinutes();
 }
+
+const instantFormat = (zone: string): Intl.DateTimeFormat =>
+  new Intl.DateTimeFormat('en-US', {
+    timeZone: zone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  });
+
+/** L'écart (en minutes) entre l'heure murale de `zone` et UTC à cet instant ; `null` si le fuseau est inconnu. */
+function zoneOffsetMinutes(date: Date, zone: string): number | null {
+  try {
+    const parts = instantFormat(zone).formatToParts(date);
+    const read = (type: string): number => Number(parts.find((p) => p.type === type)?.value);
+    const wall = Date.UTC(read('year'), read('month') - 1, read('day'), read('hour') % 24, read('minute'), read('second'));
+    return Number.isFinite(wall) ? Math.round((wall - Math.floor(date.getTime() / 1000) * 1000) / 60_000) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Le fuseau, ou UTC s'il est absent ou invalide — la MÊME repli que `dayKeyOf`. */
+export const effectiveZone = (timezone: string | null | undefined): string =>
+  timezone && zoneOffsetMinutes(new Date(0), timezone) !== null ? timezone : 'UTC';
+
+/**
+ * L'instant UTC où l'horloge murale de `timezone` marque `dayKey` à
+ * `minuteOfDay`. Deux passes : le décalage lu à l'instant visé corrige celui
+ * qu'avait supposé la première (heure d'été).
+ */
+export function instantOfLocal(params: { readonly dayKey: string; readonly minuteOfDay: number; readonly timezone: string | null | undefined }): Date {
+  const zone = effectiveZone(params.timezone);
+  const wallAsUtc = markerOfDayKey(params.dayKey).getTime() + params.minuteOfDay * 60_000;
+  const first = wallAsUtc - (zoneOffsetMinutes(new Date(wallAsUtc), zone) ?? 0) * 60_000;
+  const second = wallAsUtc - (zoneOffsetMinutes(new Date(first), zone) ?? 0) * 60_000;
+  return new Date(second);
+}

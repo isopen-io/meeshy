@@ -730,6 +730,7 @@ export class EngagementService {
       if (isP2002(err)) return;
       throw err;
     }
+    await this.game.onAchievement(userId, achievementKey);
 
     try {
       const user = await this.prisma.user.findUnique({ where: { id: userId }, select: RECIPIENT_LANG_SELECT });
@@ -929,6 +930,8 @@ export class EngagementService {
     // La Gloire du premier passage de chaque niveau (#9374) : le record rendu
     // par la MÊME commande que le score — aucune lecture de plus sur la voie chaude.
     await this.game.onScore(userId, newScore, levelRecord);
+    // Les points de la SEMAINE (#9384) : le total que les ligues classent.
+    await this.game.onPointsGained(userId, points);
   }
 
   /**

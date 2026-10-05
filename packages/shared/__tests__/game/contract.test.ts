@@ -178,8 +178,8 @@ describe('à côté des champs actuels de GET /me/engagement', () => {
 });
 
 describe('les routes', () => {
-  it('nomme les chemins publics (préfixe /api/v1)', () => {
-    expect(GAME_ROUTES).toEqual({
+  it('nomme les chemins publics (préfixe /api/v1) — les treize de la vague 2 sont gardés par contract-v2.test.ts', () => {
+    expect(GAME_ROUTES).toMatchObject({
       engagement: '/me/engagement',
       mint: '/me/meesh/mint',
       missionReroll: '/me/game/missions/:missionId/reroll',

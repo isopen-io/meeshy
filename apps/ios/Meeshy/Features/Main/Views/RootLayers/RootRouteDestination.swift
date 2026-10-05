@@ -146,8 +146,8 @@ struct RootRouteDestination: View {
             // survit à une barre masquée ; c'était la FEUILLE qui l'empêchait.
             ProgressionSectionPage(section: section)
                 .navigationBarHidden(true)
-        case .progressionRules:
-            GameRulesPage()
+        case .progressionRules(let rule):
+            GameRulesPage(focusedRule: rule)
                 .navigationBarHidden(true)
         case .progressionNotebook:
             GameNotebookPage()

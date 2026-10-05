@@ -25,6 +25,7 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import {
   BADGE_THRESHOLDS,
+  LEGACY_BADGE_THRESHOLDS,
   ENGAGEMENT_ACHIEVEMENT_KEYS,
   ENGAGEMENT_AXES,
   ENGAGEMENT_AXIS_FAMILIES,
@@ -97,7 +98,13 @@ describe('catalogue de streaks & badges — TS et Swift ne peuvent pas diverger'
   });
 
   it('les paliers de badge, de série et de niveau', () => {
-    expect(swiftIntArray(swift, 'badgeThresholds')).toEqual([...BADGE_THRESHOLDS]);
+    // Depuis #9392 le TS porte sept paliers (1 000 et 5 000 s'ajoutent). Le miroir
+    // Swift peut ENCORE porter les cinq d'origine le temps que le lot iOS le rejoigne :
+    // il ne peut jamais DIVERGER — c'est un PRÉFIXE de l'échelle TS, qui commence par
+    // les cinq paliers d'origine. Le jour où iOS porte les sept, cet écart se referme.
+    const swiftBadges = swiftIntArray(swift, 'badgeThresholds');
+    expect([...BADGE_THRESHOLDS].slice(0, swiftBadges.length)).toEqual(swiftBadges);
+    expect(swiftBadges.length).toBeGreaterThanOrEqual(LEGACY_BADGE_THRESHOLDS.length);
     expect(swiftIntArray(swift, 'streakThresholds')).toEqual([...STREAK_THRESHOLDS]);
     expect(swiftIntArray(swift, 'levelThresholds')).toEqual([...LEVEL_THRESHOLDS]);
   });
@@ -111,7 +118,8 @@ describe('catalogue de streaks & badges — TS et Swift ne peuvent pas diverger'
   });
 
   it('contre-épreuve : le TS porte bien le socle § 7 du modèle', () => {
-    expect([...BADGE_THRESHOLDS]).toEqual([1, 10, 50, 100, 500]);
+    expect([...LEGACY_BADGE_THRESHOLDS]).toEqual([1, 10, 50, 100, 500]);
+    expect([...BADGE_THRESHOLDS]).toEqual([1, 10, 50, 100, 500, 1000, 5000]);
     expect([...STREAK_THRESHOLDS]).toEqual([3, 7, 14, 30, 60, 100]);
     expect([...LEVEL_THRESHOLDS]).toEqual([10, 50, 150, 400, 1000, 2500]);
     // 13 axes d'origine + les 4 du LIEN SOCIAL (#5766, 2026-09-09) + réaction

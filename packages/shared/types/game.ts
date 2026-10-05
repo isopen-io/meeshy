@@ -24,21 +24,13 @@ import { TREASURY_TIERS } from '../utils/game/treasury.js';
 import { FLAME_FORMS } from '../utils/game/flame.js';
 import { MISSION_DIFFICULTIES } from '../utils/game/missions.js';
 import type { EngagementProgressPayload } from './engagement.js';
+import { dayKey, enumOf, fraction, isoDate, nonNegativeInt, requestIdSchema, writeRequest } from './game-schema-kit.js';
+import { gameBlockExtensionShape } from './game-v2.js';
 
 export * from './game-routes.js';
+export * from './game-v2.js';
 
-const nonNegativeInt = z.number().int().min(0);
-const fraction = z.number().min(0).max(1);
-const dayKey = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
-const isoDate = z.string().min(1);
-
-/** Identifiant d'idempotence : borné comme celui de la frappe — un UUID, pas un champ libre. */
-export const requestIdSchema = z.string().min(8).max(64);
-
-const writeRequest = z.object({ requestId: requestIdSchema });
-
-/** Une énumération Zod bâtie sur une liste de clés du catalogue — la clé reste typée. */
-const enumOf = <T extends string>(values: readonly T[]) => z.enum(values as unknown as readonly [T, ...T[]]);
+export { requestIdSchema };
 
 const rankKeys = enumOf<GloryRankOrMythic>([...GLORY_RANKS.map((r) => r.key), 'mythe']);
 const tierKeys = enumOf(LEVEL_TIER_KEYS);
@@ -159,6 +151,12 @@ export const gameBlockSchema = z.object({
   boosts: gameBoostsSchema,
   /** Clés de guide déjà vues (moments et étapes d'intégration). */
   guideSeen: z.array(z.string().min(1).max(64)).max(200),
+  /**
+   * La vague 2 (ligues, duo, saison, trophées, Atlas, Prestige, visibilité) : chaque
+   * extension est OPTIONNELLE et TOLÉRANTE — un serveur antérieur ne la sert pas, et une
+   * extension que ce client ne sait pas lire tombe seule (`undefined`) sans emporter le bloc.
+   */
+  ...gameBlockExtensionShape,
 });
 
 export type GameLevel = z.infer<typeof gameLevelSchema>;

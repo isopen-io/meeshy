@@ -41,6 +41,18 @@ export type RouteKey =
   | 'conversationsNew'
   | 'progression'
   /**
+   * LES PAGES DE LA VAGUE 2 DU JEU (#9384 à #9389) — PRIVÉES, comme
+   * `progression` : chacune lit un corpus qui n'existe que pour le lecteur
+   * connecté (`GET /me/engagement`, `/me/game/*`) et rend 401 sans session. Non
+   * déclarées ici, elles seraient PUBLIQUES par défaut : l'écran se peindrait
+   * en squelette sans fin devant un visiteur.
+   */
+  | 'progressionLigue'
+  | 'progressionSaison'
+  | 'progressionVitrine'
+  | 'progressionAtlas'
+  | 'progressionPrestige'
+  /**
    * LES PUBLICATIONS ENREGISTRÉES (#7286) — PRIVÉE, comme `feed` et pour la
    * même raison : `GET /social/posts?scope=bookmarks` lit la table des favoris
    * DU LECTEUR et rend 401 sans session, bien que `optionalAuth` garde la
@@ -295,6 +307,12 @@ const PRIVATE_ROUTES: ReadonlySet<string> = new Set<RouteKey>([
   'thread',
   'conversationsNew',
   'progression',
+  /* LES PAGES DE LA VAGUE 2 DU JEU (#9384 à #9389) — voir la raison écrite sur `RouteKey`. */
+  'progressionLigue',
+  'progressionSaison',
+  'progressionVitrine',
+  'progressionAtlas',
+  'progressionPrestige',
   /* LES PUBLICATIONS ENREGISTRÉES (#7286) — voir la raison écrite sur
      `RouteKey` plus haut. */
   'bookmarks',

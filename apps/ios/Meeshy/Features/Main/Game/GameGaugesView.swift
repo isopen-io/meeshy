@@ -2,32 +2,21 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
-/// LES TROIS JAUGES, ET LA FLAMME (#9383) — l'en-tête de Progression : niveau,
-/// rang, trésor, Flamme. Conception, partie I : « un haut niveau, un haut rang et
-/// un gros trésor en même temps » — aucune action ne fait monter les trois, c'est
-/// pourquoi on les montre côte à côte. Miroir de `apps/web/src/components/game-gauges.tsx`.
+/// LE TRÉSOR ET LA FLAMME (#9383) — sous le héro de Progression (`GameHeroView`, #5841), qui
+/// porte désormais le niveau et le rang. Conception, partie I : « un haut niveau, un haut rang
+/// et un gros trésor en même temps » — aucune action ne fait monter les trois, c'est pourquoi on
+/// les montre ensemble. Miroir de `apps/web/src/components/game-gauges.tsx`.
 ///
-/// Les dessins sont les briques du SDK, DÉCORATIVES : chaque tuile dit en toutes
-/// lettres ce qu'elle montre. Le niveau qui bouge (une frappe l'a fait redescendre,
-/// une mission l'a fait monter) joue sa chorégraphie sur l'anneau ; un rang ou une
-/// division nouveaux jouent celle de l'écu. **Rien ne se joue au premier rendu** :
-/// un écran qu'on ouvre ne rejoue pas ce qui est déjà arrivé.
+/// Les dessins sont les briques du SDK, DÉCORATIVES : chaque tuile dit en toutes lettres ce
+/// qu'elle montre. **Rien ne se joue au premier rendu** : un écran qu'on ouvre ne rejoue pas ce
+/// qui est déjà arrivé.
 struct GameGaugesView: View {
     let game: GameBlock
-    var haptics: GameHapticsProviding = GameHaptics.shared
-    /// Aucun geste du jeu n'est en vol : seule une montée lue ALORS est « gagnée ».
-    var settled = true
 
     var body: some View {
-        VStack(spacing: MeeshySpacing.md) {
-            HStack(alignment: .top, spacing: MeeshySpacing.md) {
-                GameLevelTile(game: game, haptics: haptics, settled: settled)
-                GameRankTile(game: game, haptics: haptics)
-            }
-            HStack(alignment: .top, spacing: MeeshySpacing.md) {
-                GameTreasuryTile(game: game)
-                GameFlameTile(game: game)
-            }
+        HStack(alignment: .top, spacing: MeeshySpacing.md) {
+            GameTreasuryTile(game: game)
+            GameFlameTile(game: game)
         }
     }
 }
@@ -73,165 +62,6 @@ private func caption(_ text: String, tone: Color? = nil) -> some View {
         .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
         .foregroundColor(tone ?? ThemeManager.shared.textMuted)
         .fixedSize(horizontal: false, vertical: true)
-}
-
-// MARK: - Niveau
-
-private struct GameLevelTile: View {
-    let game: GameBlock
-    let haptics: GameHapticsProviding
-    let settled: Bool
-
-    @State private var shownLevel: Int
-    @State private var shownProgress: Double
-    @State private var confirmation: GameLevelConfirmation
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    init(game: GameBlock, haptics: GameHapticsProviding, settled: Bool) {
-        self.game = game
-        self.haptics = haptics
-        self.settled = settled
-        _confirmation = State(initialValue: GameLevelConfirmation(confirmed: game.level.level))
-        _shownLevel = State(initialValue: game.level.level)
-        _shownProgress = State(initialValue: game.level.progress)
-    }
-
-    private var level: GameBlock.Level { game.level }
-
-    var body: some View {
-        GameTile(
-            title: String(localized: "game.gauge.level", defaultValue: "Niveau", bundle: .main),
-            anchor: .level,
-            drawing: {
-                LevelRingView(
-                    level: shownLevel, progress: shownProgress, tier: level.tier, prestige: level.prestige,
-                    // Redescendu : le repère du record reste au bout de la barre.
-                    recordMarker: level.record > level.level ? 1 : nil,
-                    trackColor: ThemeManager.shared.textMuted.opacity(0.22),
-                    inkColor: ThemeManager.shared.textPrimary,
-                    mutedColor: ThemeManager.shared.textMuted
-                )
-                .frame(width: 72, height: 72)
-            },
-            lines: {
-                headline(String(
-                    localized: "game.level.title",
-                    defaultValue: "Niveau \(GameCopy.formatCount(level.level)) · \(GameCopy.tierName(level.tier))",
-                    bundle: .main
-                ))
-                caption(level.nextThreshold == nil
-                    ? String(localized: "game.level.top", defaultValue: "Tu es au sommet.", bundle: .main)
-                    : String(
-                        localized: "game.level.to_next",
-                        defaultValue: "Encore \(GameCopy.points(level.pointsToNext)) avant le niveau \(GameCopy.formatCount(level.level + 1))",
-                        bundle: .main
-                    ))
-                if level.record > level.level {
-                    GameChip(text: recordText, tint: MeeshyColors.warning)
-                }
-            }
-        )
-        .adaptiveOnChange(of: level.level) { old, new in
-            animateLevel(from: old, to: new)
-            playTapIfConfirmedGain()
-        }
-        .adaptiveOnChange(of: settled) { _, _ in playTapIfConfirmedGain() }
-        .adaptiveOnChange(of: level.progress) { _, new in
-            if level.level == shownLevel { settle(progress: new) }
-        }
-    }
-
-    private var recordText: String {
-        let record = String(
-            localized: "game.level.record",
-            defaultValue: "Record : niveau \(GameCopy.formatCount(level.record))",
-            bundle: .main
-        )
-        guard game.boosts.tailwind > 1 else { return record }
-        let factor = game.boosts.tailwind.formatted(.number.precision(.fractionLength(0...2)))
-        return record + String(localized: "game.level.tailwind", defaultValue: " · Vent arrière ×\(factor)", bundle: .main)
-    }
-
-    private func playTapIfConfirmedGain() {
-        if confirmation.observe(level: level.level, settled: settled) {
-            haptics.play(GameHapticPattern.levelGain)
-        }
-    }
-
-    private func settle(progress: Double) {
-        withAnimation(reduceMotion ? nil : .easeInOut(duration: GameTimeline.levelGainDuration)) { shownProgress = progress }
-    }
-
-    /// Gagné : l'anneau se remplit, le chiffre roule (0,6 s). Perdu à la frappe : il se
-    /// vide calmement (0,8 s), le repère du record reste. La tape légère n'est PAS jouée
-    /// ici : un niveau qui remonte parce qu'une frappe refusée l'a rendu n'est pas gagné.
-    private func animateLevel(from old: Int, to new: Int) {
-        let gained = new > old
-        let duration = gained ? GameTimeline.levelGainDuration : GameTimeline.levelLossDuration
-        withAnimation(reduceMotion ? nil : .easeInOut(duration: duration)) {
-            shownLevel = new
-            shownProgress = level.progress
-        }
-    }
-}
-
-// MARK: - Rang
-
-private struct GameRankTile: View {
-    let game: GameBlock
-    let haptics: GameHapticsProviding
-
-    @State private var play = 0
-    @State private var seenOrder: Int
-
-    init(game: GameBlock, haptics: GameHapticsProviding) {
-        self.game = game
-        self.haptics = haptics
-        _seenOrder = State(initialValue: GameGuideEvents.standingOrder(game))
-    }
-
-    private var glory: GameBlock.Glory { game.glory }
-
-    var body: some View {
-        GameTile(
-            title: String(localized: "game.gauge.rank", defaultValue: "Rang", bundle: .main),
-            anchor: .rank,
-            drawing: {
-                RankBlasonStage(
-                    rank: glory.rank, division: glory.division, title: GameCopy.rankName(glory.rank),
-                    play: play, accessibilityLabel: nil
-                )
-                .frame(width: 80, height: 74)
-            },
-            lines: {
-                headline(GameCopy.rankLabel(glory.rank, division: glory.division))
-                caption(String(
-                    localized: "game.rank.glory",
-                    defaultValue: "Gloire \(GameCopy.formatCount(glory.glory))",
-                    bundle: .main
-                ))
-                caption(nextText ?? String(localized: "game.rank.top", defaultValue: "Le rang le plus haut", bundle: .main))
-            }
-        )
-        .adaptiveOnChange(of: GameGuideEvents.standingOrder(game)) { _, now in
-            // Seule une marche GAGNÉE joue l'écu : la division retrouvée quand un geste
-            // refusé restaure la Gloire d'avant n'est pas une promotion.
-            let climbed = now > seenOrder
-            seenOrder = now
-            guard climbed else { return }
-            play += 1
-            haptics.play(GameHapticPattern.rank)
-        }
-    }
-
-    private var nextText: String? {
-        guard let next = glory.next, let missing = glory.gloryMissing else { return nil }
-        return String(
-            localized: "game.rank.next",
-            defaultValue: "Encore \(GameCopy.formatCount(missing)) de Gloire avant \(GameCopy.rankLabel(next.rank, division: next.division))",
-            bundle: .main
-        )
-    }
 }
 
 // MARK: - Trésor

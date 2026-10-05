@@ -7,6 +7,7 @@ import type { PhotoEnv } from '@/lib/game-photo/env';
 import { flowReducer, type FlowState } from '@/lib/game-photo/flow';
 import type { PhotoFormat } from '@/lib/game-photo/layout';
 import type { PhotoMoment } from '@/lib/game-photo/moments';
+import { referralOf, referralShareText } from '@/lib/game-photo/referral';
 import type { PhotoFiles } from '@/lib/game-photo/render';
 import type { ShareOutcome } from '@/lib/game-photo/share';
 import { dateLabelOf } from '@/lib/game-photo/render';
@@ -43,6 +44,8 @@ type Props = {
   readonly moment: PhotoMoment;
   readonly env: PhotoEnv;
   readonly onClose: (result: PhotoFlowResult) => void;
+  /** Les jours de la Flamme (#7742) : le bandeau de la carte les porte à côté du lien de parrainage. */
+  readonly flameDays?: number | null;
 };
 
 const BUTTON = { minHeight: 44 } as const;
@@ -80,7 +83,7 @@ function Button({ attr, primary = false, onClick, children, disabled = false }: 
   );
 }
 
-export function GamePhotoFlow({ moment, env, onClose }: Props) {
+export function GamePhotoFlow({ moment, env, onClose, flameDays = null }: Props) {
   const [state, dispatch] = useReducer(flowReducer, { step: 'offer' } as FlowState);
   const panel = useRef<HTMLDivElement>(null);
   const close = useCallback(() => dispatch({ type: 'close' }), []);
@@ -101,6 +104,26 @@ export function GamePhotoFlow({ moment, env, onClose }: Props) {
   const [notice, setNotice] = useState<{ readonly tone: 'good' | 'error'; readonly text: string } | null>(null);
 
   const dateLabel = useMemo(() => dateLabelOf(env.now()), [env]);
+
+  /* Le lien de parrainage (#7742) : demandé UNE fois à l'ouverture. Un échec ou
+     une absence ne retient jamais la carte — elle part simplement sans bandeau. */
+  const [link, setLink] = useState<string | null>(null);
+  useEffect(() => {
+    let live = true;
+    void (env.referral?.() ?? Promise.resolve(null))
+      .then((url) => {
+        if (live) setLink(url);
+      })
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [env]);
+  const referral = useMemo(() => referralOf(link, flameDays), [link, flameDays]);
+  /* Lu au moment de composer, jamais une dépendance : un lien qui arrive pendant
+     la frappe ne la rejoue pas. */
+  const referralRef = useRef(referral);
+  referralRef.current = referral;
   const galleryUrl = useObjectUrl(galleryFile);
   const stillUrl = useObjectUrl(still);
   const previewUrl = useObjectUrl(files === null ? null : files[format]);
@@ -176,7 +199,7 @@ export function GamePhotoFlow({ moment, env, onClose }: Props) {
     let live = true;
     const source = strikingMode === 'card' ? null : photo.current;
     const handle = play('mint');
-    void Promise.all([handle?.finished ?? Promise.resolve(), env.render({ moment, photo: source, frame: stage.current })])
+    void Promise.all([handle?.finished ?? Promise.resolve(), env.render({ moment, photo: source, frame: stage.current, referral: referralRef.current })])
       .then(([, rendered]) => {
         if (!live) return;
         if (rendered === null) {
@@ -250,8 +273,8 @@ export function GamePhotoFlow({ moment, env, onClose }: Props) {
 
   const share = useCallback(async () => {
     if (chosen === null) return;
-    announce(await env.share(chosen, moment.title), gameText('game.photo.notice.share_failed'));
-  }, [announce, chosen, env, moment.title]);
+    announce(await env.share(chosen, moment.title, referral === null ? undefined : referralShareText(referral)), gameText('game.photo.notice.share_failed'));
+  }, [announce, chosen, env, moment.title, referral]);
 
   const save = useCallback(async () => {
     if (chosen === null) return;
@@ -350,7 +373,7 @@ export function GamePhotoFlow({ moment, env, onClose }: Props) {
               <img data-photo-still="" src={stillUrl} alt="" className="absolute inset-0 size-full object-cover" style={{ transform: 'scaleX(-1)' }} />
             ) : null}
             {stageMode === 'gallery' && galleryUrl !== null ? <img src={galleryUrl} alt="" className="absolute inset-0 size-full object-cover" /> : null}
-            <GamePhotoFrame moment={moment} dateLabel={dateLabel} format="story" />
+            <GamePhotoFrame moment={moment} dateLabel={dateLabel} format="story" referral={referral} />
           </div>
         ) : null}
 

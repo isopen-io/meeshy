@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useEffect } from 'react';
 import { useIsMutating } from '@tanstack/react-query';
 
 import { GameGuideCard } from '@/components/game-guide-card';
@@ -47,12 +47,15 @@ export function GameLead({
   transport,
   navigateTo = defaultNavigateTo,
   scrollTo = defaultScrollTo,
+  onGuideLine,
 }: {
   readonly view: EngagementWithGame;
   readonly env?: () => PhotoEnv;
   readonly transport?: HttpTransport;
   readonly navigateTo?: (to: 'list' | 'progressionBadges') => void;
   readonly scrollTo?: (id: string) => void;
+  /** La ligne COURTE de la carte affichée (`null` : aucune carte) — Mee la dit sur le coin du héros (#5841). */
+  readonly onGuideLine?: (line: string | null) => void;
 }) {
   const settled = useIsMutating({ mutationKey: GAME_MUTATION_KEY }) === 0;
   const guide = useGameGuide({ view, settled, ...(transport === undefined ? {} : { transport }) });
@@ -84,6 +87,10 @@ export function GameLead({
   );
 
   const card = guide.card;
+  const shortLine = card === null ? null : card.copy.short;
+  useEffect(() => {
+    onGuideLine?.(shortLine);
+  }, [shortLine, onGuideLine]);
   const cardPhoto = card === null || !card.photo ? null : cardMoment(card);
   const offers = photo.offers.filter((offer) => offer.id !== cardPhoto?.id);
 
@@ -109,7 +116,7 @@ export function GameLead({
       {offers.map((offer) => (
         <GamePhotoOffer key={offer.id} moment={offer} onStart={photo.start} onLater={later} />
       ))}
-      {photo.active === null ? null : <GamePhotoFlow moment={photo.active} env={env()} onClose={photo.close} />}
+      {photo.active === null ? null : <GamePhotoFlow moment={photo.active} env={env()} flameDays={game?.flame.days ?? null} onClose={photo.close} />}
     </>
   );
 }

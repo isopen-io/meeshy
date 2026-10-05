@@ -19,6 +19,8 @@ nonisolated enum PhotoEmblem: Equatable, Codable, Sendable {
     case meesh(number: Int, edition: MeeshEdition)
     case treasury(TreasuryTierKey)
     case flame(FlameFormKey, days: Int)
+    /// Un succès révélé (#7742) : la coupe d'or, la Signature frappée sur la panse.
+    case achievement
 }
 
 nonisolated struct PhotoMoment: Equatable, Identifiable, Codable, Sendable {
@@ -40,6 +42,18 @@ enum GamePhotoMoments {
             emblem: .start,
             kicker: String(localized: "game.photo.kicker.start", defaultValue: "Premiers pas", bundle: .main),
             title: String(localized: "game.photo.title.start", defaultValue: "Mon départ sur Meeshy", bundle: .main)
+        )
+    }
+
+    /// Le succès qu'on vient de révéler : la même carte se propose à la révélation (#7742). L'identité
+    /// porte la clé du succès (`EngagementReveal.id`, déjà préfixée « achievement: ») — le même succès
+    /// n'est jamais proposé deux fois au carnet.
+    static func achievement(id: String, title: String) -> PhotoMoment {
+        PhotoMoment(
+            id: id.hasPrefix("achievement:") ? id : "achievement:\(id)",
+            emblem: .achievement,
+            kicker: String(localized: "game.photo.kicker.achievement", defaultValue: "Succès", bundle: .main),
+            title: title
         )
     }
 

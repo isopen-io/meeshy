@@ -27,6 +27,7 @@ import { canPrestige, levelProgress, recordLevel } from './levels.js';
 import { previewMint } from './mint.js';
 import { MISSIONS_MIN_LEVEL, MISSION_REROLL_PER_DAY, MISSION_REROLL_PRICE, isPrismDay } from './missions.js';
 import { treasuryTier } from './treasury.js';
+import { buildGameBlockExtras, type GameBlockExtrasFacts } from './game-block-extras.js';
 import type { GameBlock, GameMission } from '../../types/game.js';
 
 /** Une mission telle que la passerelle la persiste. */
@@ -78,6 +79,12 @@ export type GameBlockFacts = {
   readonly chestClaimed: boolean;
   readonly chestReward: DailyChest | null;
   readonly guideSeen: readonly string[];
+  /**
+   * Les faits de la VAGUE 2 (ligues, duo, saison, trophées, Atlas, Prestige,
+   * visibilité). Absents, le bloc garde exactement la forme de la vague 1 — un
+   * serveur qui n'a pas encore ces données persistées ne sert rien de plus.
+   */
+  readonly extras?: GameBlockExtrasFacts;
 };
 
 export function buildGameBlock(facts: GameBlockFacts): GameBlock {
@@ -165,5 +172,6 @@ export function buildGameBlock(facts: GameBlockFacts): GameBlock {
       prismHour: { ...prismHourWindow({ userId: facts.userId, dayKey: facts.today }), multiplier: PRISM_HOUR_MULTIPLIER },
     },
     guideSeen: [...facts.guideSeen],
+    ...(facts.extras === undefined ? {} : buildGameBlockExtras(facts.extras)),
   };
 }

@@ -12,17 +12,21 @@
  */
 
 
+import { GameMedal } from '@/components/game/medal';
+import { GameRarityLine } from '@/components/game-rarity';
 import { Glyph, GlyphSvg, type GlyphShape } from '@/components/glyph';
 import { GLYPHS } from '@/components/glyphs';
 import { PROGRESSION_GLYPHS } from '@/components/glyphs-progression';
 import { milestoneGlyph } from '@/components/milestone-glyph';
 import { ProgressBar } from '@/components/progress-bar';
+import { medalOfAxis } from '@/lib/game/medal';
+import { rarityRim, visibleRarity, type AchievementRarityMap } from '@/lib/game/rarity';
+import { gameText } from '@/lib/view/game-copy';
 import { meeshMissing } from '@/lib/view/meesh-copy';
 import {
   ACHIEVEMENT_COPY,
   ACHIEVEMENT_SECTION_TITLES,
   generatedAchievementLabel,
-  AXIS_GLYPHS,
   AXIS_LABELS,
   BADGE_UNIT,
   nextStepLabel,
@@ -35,6 +39,7 @@ import {
   type EngagementProgress,
   type EngagementTier,
 } from '@meeshy/shared/utils/engagement-progress';
+import type { EngagementAchievementKey } from '@meeshy/shared/types/engagement';
 import type { AchievementSectionView } from '@meeshy/shared/utils/achievement-view';
 
 /**
@@ -134,15 +139,30 @@ export function TierDots({ tiers, tint, axisLabel }: { tiers: readonly Engagemen
   );
 }
 
-export function AxisRow({ axis }: { axis: EngagementAxisProgress }) {
+/**
+ * LA LIGNE D'UN BADGE (#9466) — un badge d'accumulation est une MÉDAILLE
+ * (`components/game/medal.tsx`) : lunette de métal à la hauteur atteinte, émail
+ * de la famille, pictogramme d'axe, perles de palier, arc vers le suivant ;
+ * éteint, son empreinte. La ligne dit déjà l'axe, le palier et ce qui manque :
+ * la médaille reste décorative sauf quand l'hôte lui passe `medalLabel`
+ * (« Messages texte, Or, 100 sur 500 vers Platine »).
+ */
+export function AxisRow({ axis, medalLabel }: { axis: EngagementAxisProgress; medalLabel?: string }) {
   const label = AXIS_LABELS[axis.axisKey];
+  const medal = medalOfAxis(axis);
   return (
     <li className="flex items-center gap-3 py-2.5">
-      <span
-        className="grid size-9 shrink-0 place-items-center rounded-field"
-        style={{ color: BRAND, backgroundColor: 'color-mix(in srgb, var(--color-ios-brand) 12%, transparent)' }}
-      >
-        <GlyphSvg glyph={axisGlyph(AXIS_GLYPHS[axis.axisKey])} size={16} />
+      <span className="grid w-12 shrink-0 place-items-center">
+        <GameMedal
+          size={44}
+          family={medal.family}
+          pictogram={medal.pictogram}
+          tier={medal.tier}
+          progress={medal.progress}
+          {...(medal.threshold === null ? {} : { threshold: String(medal.threshold) })}
+          {...(medal.missing === null ? {} : { missing: `−${medal.missing}` })}
+          {...(medalLabel === undefined ? {} : { label: medalLabel })}
+        />
       </span>
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <div className="flex items-baseline justify-between gap-2">
@@ -164,7 +184,17 @@ export function AxisRow({ axis }: { axis: EngagementAxisProgress }) {
   );
 }
 
-export function AchievementsSection({ progress }: { progress: EngagementProgress }) {
+export function AchievementsSection({
+  progress,
+  onPhoto,
+  rarities,
+}: {
+  progress: EngagementProgress;
+  /** La rareté mesurée de chaque succès (#9390) ; absente (ancien serveur) : l'écran d'avant. */
+  rarities?: AchievementRarityMap | undefined;
+  /** La révélation d'un succès se photographie (#7742) ; absent : aucun bouton. */
+  onPhoto?: (key: EngagementAchievementKey) => void;
+}) {
   const unlocked = progress.achievements.filter((a) => a.unlocked).length;
   return (
     <section aria-labelledby="progression-achievements" className="flex flex-col gap-2">
@@ -180,8 +210,15 @@ export function AchievementsSection({ progress }: { progress: EngagementProgress
           {progress.achievements.map((achievement) => {
             const copy = ACHIEVEMENT_COPY[achievement.key];
             const dated = reachedAtLabel(achievement.reachedAt);
+            const entry = rarities?.[achievement.key];
+            const shown = visibleRarity(entry);
             return (
-              <li key={achievement.key} className="flex items-center gap-3 py-2.5">
+              <li
+                key={achievement.key}
+                {...(shown === null ? {} : { 'data-game-rim': shown })}
+                className="flex items-center gap-3 py-2.5"
+                style={shown === null ? undefined : { ...rarityRim(shown), paddingInlineStart: 10 }}
+              >
                 <span
                   className="grid size-9 shrink-0 place-items-center rounded-field"
                   style={{
@@ -200,7 +237,20 @@ export function AchievementsSection({ progress }: { progress: EngagementProgress
                   <span className="text-check" style={{ color: INK_2 }}>
                     {achievement.unlocked ? (dated ?? 'Débloqué') : copy.condition}
                   </span>
+                  <GameRarityLine entry={entry} />
                 </div>
+                {achievement.unlocked && onPhoto !== undefined ? (
+                  <button
+                    type="button"
+                    data-achievement-photo={achievement.key}
+                    aria-label={`${gameText('game.photo.offer.start')} — ${copy.title}`}
+                    onClick={() => onPhoto(achievement.key)}
+                    className="grid size-11 shrink-0 place-items-center rounded-chip"
+                    style={{ color: BRAND }}
+                  >
+                    <Glyph name="image" size={18} />
+                  </button>
+                ) : null}
               </li>
             );
           })}

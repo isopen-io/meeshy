@@ -76,8 +76,9 @@ enum Route: Hashable {
     /// le web.
     case progressionSection(ProgressionSection)
     /// « Comment ça marche » (#9379) — les huit règles du jeu et les sept cartes
-    /// de l'intégration, la page que Mee et Meo rouvrent.
-    case progressionRules
+    /// de l'intégration, la page que Mee et Meo rouvrent. `rule` : la règle (1 à 8) à
+    /// laquelle la page s'ouvre — « Comment gagner » du héro (#5841) mène à la première.
+    case progressionRules(rule: Int? = nil)
     /// Le carnet de progression (#9382) — les photos des grands moments, sur
     /// l'appareil.
     case progressionNotebook

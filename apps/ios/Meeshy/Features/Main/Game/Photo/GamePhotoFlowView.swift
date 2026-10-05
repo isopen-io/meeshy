@@ -28,6 +28,8 @@ struct GamePhotoFlowView: View {
             content
         }
         .overlay(alignment: .topTrailing) { closeButton }
+        // Le lien de parrainage se lit pendant que l'utilisateur choisit : la carte est prête quand il déclenche.
+        .task { await session.prepareReferral() }
         .adaptiveOnChange(of: pickerItem) { _, item in
             guard let item else { return }
             Task {
@@ -255,6 +257,18 @@ struct GamePhotoFlowView: View {
                 }
                 .pickerStyle(.segmented)
                 .padding(.horizontal, MeeshySpacing.xl)
+                // La Flamme révèle un rythme d'usage : l'utilisateur voit la carte telle qu'elle partira,
+                // et peut la retirer (conformité H-2). Sans lien, le bandeau n'existe pas : rien à régler.
+                if session.hasFlame, session.referral != nil {
+                    Toggle(isOn: Binding(get: { session.flameOnCard }, set: { session.setFlameOnCard($0) })) {
+                        Text(String(localized: "game.referral.flame_toggle", defaultValue: "Ma Flamme sur la carte", bundle: .main))
+                            .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
+                            .foregroundColor(.white)
+                    }
+                    .tint(MeeshyColors.warning)
+                    .padding(.horizontal, MeeshySpacing.xl)
+                    .accessibilityIdentifier("game.photo.flame_toggle")
+                }
             }
             if let notice = session.notice {
                 Text(notice.text)
@@ -282,8 +296,9 @@ struct GamePhotoFlowView: View {
             .padding(.bottom, MeeshySpacing.lg)
         }
         .sheet(isPresented: $showsShare) {
-            if let composed = session.composed {
-                ShareSheet(activityItems: [squareFormat ? composed.square : composed.story]) { completed in
+            if session.composed != nil {
+                // L'image, puis le lien de parrainage en texte (#7742) : le même partage, un item de plus.
+                ShareSheet(activityItems: session.shareItems(square: squareFormat)) { completed in
                     session.shared(completed: completed)
                 }
             }
@@ -337,7 +352,7 @@ struct GamePhotoFlowView: View {
         return GamePhotoCanvasView(
             moment: session.moment,
             dateLabel: GamePhotoComposer.dateLabel(Date()),
-            format: format, background: background, strike: strike
+            format: format, background: background, strike: strike, referral: session.referral
         )
         .frame(width: format.size.width, height: format.size.height)
         .scaleEffect(scale, anchor: .topLeading)
