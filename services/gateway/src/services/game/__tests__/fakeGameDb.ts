@@ -33,8 +33,11 @@ const matchField = (actual: unknown, expected: unknown): boolean => {
   }
   return Object.entries(expected).every(([op, value]) => {
     if (op === 'in') return (value as unknown[]).includes(actual);
-    if (op === 'gte') return typeof actual === 'number' ? actual >= (value as number) : actual instanceof Date && actual >= (value as Date);
-    if (op === 'lt') return typeof actual === 'number' ? actual < (value as number) : actual instanceof Date && actual < (value as Date);
+    if (op === 'gte') return typeof actual === 'number' ? actual >= (value as number) : actual instanceof Date ? actual >= (value as Date) : typeof actual === 'string' && actual >= (value as string);
+    if (op === 'lt') return typeof actual === 'number' ? actual < (value as number) : actual instanceof Date ? actual < (value as Date) : typeof actual === 'string' && actual < (value as string);
+    if (op === 'lte') return typeof actual === 'number' ? actual <= (value as number) : actual instanceof Date && actual <= (value as Date);
+    if (op === 'notIn') return !(value as unknown[]).includes(actual);
+    if (op === 'startsWith') return typeof actual === 'string' && actual.startsWith(value as string);
     if (op === 'gt') return typeof actual === 'number' && actual > (value as number);
     if (op === 'not') return !matchField(actual, value);
     if (op === 'has') return Array.isArray(actual) && actual.includes(value);
@@ -177,6 +180,19 @@ class Model {
     return { _sum: { [field ?? 'x']: found.length === 0 || !field ? null : found.reduce((s, r) => s + (r[field] as number), 0) } };
   }
 
+  async groupBy(args: { by: string[]; where?: Where; _count?: { _all?: boolean } }) {
+    const found = this.rows.filter((row) => matches(row, args.where ?? {}));
+    const groups = new Map<string, Row[]>();
+    for (const row of found) {
+      const key = args.by.map((field) => String(row[field])).join('|');
+      groups.set(key, [...(groups.get(key) ?? []), row]);
+    }
+    return [...groups.values()].map((rows) => ({
+      ...Object.fromEntries(args.by.map((field) => [field, rows[0]![field]])),
+      _count: { _all: rows.length },
+    }));
+  }
+
   snapshot(): Row[] {
     return this.rows.map((row) => ({ ...row }));
   }
@@ -216,6 +232,19 @@ export type FakeGameDb = {
   readonly participant: Model;
   readonly message: Model;
   readonly conversationEngagement: Model;
+  readonly gameProfile: Model;
+  readonly leaguePseudonym: Model;
+  readonly leagueGroupWeek: Model;
+  readonly leagueMembership: Model;
+  readonly gameWeekPoints: Model;
+  readonly gameDuo: Model;
+  readonly gameDuoSlot: Model;
+  readonly gameSeason: Model;
+  readonly gameTrophy: Model;
+  readonly atlasStamp: Model;
+  readonly achievementRarityStat: Model;
+  readonly friendRequest: Model;
+  readonly userPreferences: Model;
 };
 
 export function fakeGameDb(): FakeGameDb {
@@ -230,7 +259,54 @@ export function fakeGameDb(): FakeGameDb {
   const participant = new Model();
   const message = new Model();
   const conversationEngagement = flattenCompound(new Model({ uniques: [['userId', 'conversationId']] }));
-  const models = { user, gloryLedger, meeshLedger, dailyMission, gameDay, engagementCounter, engagementQuota, engagementMilestone, participant, message, conversationEngagement };
+  const gameProfile = flattenCompound(new Model({ uniques: [['userId']] }));
+  const leaguePseudonym = flattenCompound(new Model({ uniques: [['userId'], ['pseudonymKey']] }));
+  const leagueGroupWeek = flattenCompound(new Model({ uniques: [['groupId']], optional: ['snapshotDay', 'snapshot', 'settledAt'] }));
+  const leagueMembership = flattenCompound(
+    new Model({ uniques: [['userId', 'weekKey']], optional: ['finalRank', 'finalPoints', 'zone', 'cup', 'settledAt'] }),
+  );
+  const gameWeekPoints = flattenCompound(new Model({ uniques: [['userId', 'weekKey']], defaults: () => ({ points: 0 }) }));
+  const gameDuo = flattenCompound(
+    new Model({
+      defaults: () => ({ inviterProgress: 0, inviteeProgress: 0 }),
+      optional: ['acceptedAt', 'endedAt', 'inviterPaidAt', 'inviteePaidAt', 'templateKey', 'signal', 'prism', 'partTarget', 'commonTarget'],
+    }),
+  );
+  const gameDuoSlot = flattenCompound(new Model({ uniques: [['userId', 'weekKey']] }));
+  const gameSeason = flattenCompound(
+    new Model({ uniques: [['userId', 'number']], defaults: () => ({ stars: 0, claimedSteps: [] }), optional: ['sealOwnedAt', 'settledAt'] }),
+  );
+  const gameTrophy = flattenCompound(new Model({ uniques: [['userId', 'key']] }));
+  const atlasStamp = flattenCompound(new Model({ uniques: [['userId', 'language']], optional: ['sentAt', 'receivedAt', 'stampedOn'] }));
+  const achievementRarityStat = flattenCompound(new Model({ uniques: [['milestoneKey']] }));
+  const friendRequest = new Model();
+  const userPreferences = new Model();
+  const models = {
+    user,
+    gloryLedger,
+    meeshLedger,
+    dailyMission,
+    gameDay,
+    engagementCounter,
+    engagementQuota,
+    engagementMilestone,
+    participant,
+    message,
+    conversationEngagement,
+    gameProfile,
+    leaguePseudonym,
+    leagueGroupWeek,
+    leagueMembership,
+    gameWeekPoints,
+    gameDuo,
+    gameDuoSlot,
+    gameSeason,
+    gameTrophy,
+    atlasStamp,
+    achievementRarityStat,
+    friendRequest,
+    userPreferences,
+  };
 
   /**
    * La seule commande brute que le service émet : `findAndModify` sur `User`

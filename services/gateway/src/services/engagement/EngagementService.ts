@@ -929,6 +929,8 @@ export class EngagementService {
     // La Gloire du premier passage de chaque niveau (#9374) : le record rendu
     // par la MÊME commande que le score — aucune lecture de plus sur la voie chaude.
     await this.game.onScore(userId, newScore, levelRecord);
+    // Les points de la SEMAINE (#9384) : le total que les ligues classent.
+    await this.game.onPointsGained(userId, points);
   }
 
   /**

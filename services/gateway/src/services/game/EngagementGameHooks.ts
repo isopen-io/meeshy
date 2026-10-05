@@ -19,6 +19,7 @@ import { GameAbuseGuard, quarterPoints, type MessageVerdict } from './GameAbuseG
 import { GloryService } from './GloryService';
 import { MessageGameSignals, type MessageSignalInput } from './MessageGameSignals';
 import { MissionService } from './MissionService';
+import { GameWeekPointsRecorder } from './GameWeekPoints';
 import type { StreakPlan } from './FlameService';
 
 const log = enhancedLogger.child({ module: 'EngagementGameHooks' });
@@ -43,6 +44,8 @@ export class EngagementGameHooks {
 
   readonly abuse: GameAbuseGuard;
 
+  readonly weekPoints: GameWeekPointsRecorder;
+
   private readonly signals: MessageGameSignals;
 
   constructor(
@@ -52,6 +55,7 @@ export class EngagementGameHooks {
     this.glory = new GloryService(prisma);
     this.missions = new MissionService(prisma, { creditPoints, glory: this.glory });
     this.abuse = new GameAbuseGuard(prisma);
+    this.weekPoints = new GameWeekPointsRecorder(prisma);
     this.signals = new MessageGameSignals(prisma, { missions: this.missions, creditPoints });
   }
 
@@ -79,6 +83,15 @@ export class EngagementGameHooks {
     await this.isolated('mission progress', () =>
       this.missions.onSignal(params.userId, signal, { dayKey: params.dayKey, timezone: params.timezone, record: params.record }),
     );
+  }
+
+  /**
+   * Des points viennent d'être GAGNÉS (#9384, #9385) : la semaine du compte
+   * monte d'autant — le total que les ligues classent. Un débit ne passe jamais
+   * ici.
+   */
+  async onPointsGained(userId: string, points: number): Promise<void> {
+    await this.isolated('week points', () => this.weekPoints.record(userId, points));
   }
 
   /** Le score vient de changer : la Gloire du premier passage de chaque niveau. */
