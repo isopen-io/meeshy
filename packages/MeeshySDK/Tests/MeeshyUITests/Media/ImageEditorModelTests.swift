@@ -1,6 +1,7 @@
 import XCTest
 import CoreGraphics
 @testable import MeeshyUI
+import MeeshySDK
 
 /// Unit tests for the pure model layer of the image editor: `ImageEditState`,
 /// `ImageAdjustments`, `AdjustmentKind` and `ImageEditorMode`.
