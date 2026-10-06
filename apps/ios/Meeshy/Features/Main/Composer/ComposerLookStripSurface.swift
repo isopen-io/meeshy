@@ -82,9 +82,9 @@ struct ComposerLookStripSurface: UIViewRepresentable {
 /// Le moteur de la bande : la trame réduite UNE fois, chaque case peinte par le
 /// peintre unique dans sa place de l'atlas, l'atlas recopié dans le drawable.
 final class ComposerLookStripRenderer: NSObject, MTKViewDelegate {
-    private let scenes: any ComposerLookSceneProviding
+    private let scenes: ComposerLookStripScenes
     /// La cadence du palier, jugée sur la file de l'objectif.
-    private let gate = ComposerFrameGate(fps: 0)
+    private let gate = ComposerLookStripFrameGate(fps: 0)
     private var source: (any ComposerFrameSourcing)?
     private var tiles: [ComposerLookStripTile] = []
     private var person = ComposerPhotoLookPerson.author(id: nil, displayName: nil, username: nil)
@@ -101,7 +101,7 @@ final class ComposerLookStripRenderer: NSObject, MTKViewDelegate {
     nonisolated deinit {}
 
     init(scenes: any ComposerLookSceneProviding) {
-        self.scenes = scenes
+        self.scenes = ComposerLookStripScenes(provider: scenes)
         super.init()
     }
 
@@ -132,11 +132,15 @@ final class ComposerLookStripRenderer: NSObject, MTKViewDelegate {
             self.source = source
             let gate = self.gate
             source.setFrameHandler({ [weak self] presentedAt in
-                guard gate.admit(presentedAt: presentedAt) else { return }
-                Task { @MainActor [weak self] in self?.frameArrived() }
+                let admission = gate.admit(presentedAt: presentedAt)
+                guard admission != .refused else { return }
+                Task { @MainActor [weak self] in self?.frameArrived(live: admission == .paced) }
             }, for: ObjectIdentifier(self))
         }
-        if perime { slots = [:] }
+        if perime {
+            slots = [:]
+            scenes.reset()
+        }
         let changed = perime || tiles != self.tiles
         self.tiles = tiles
         self.person = person
@@ -154,9 +158,9 @@ final class ComposerLookStripRenderer: NSObject, MTKViewDelegate {
         reducedBuffer = nil
     }
 
-    private func frameArrived() {
+    private func frameArrived(live: Bool) {
         guard !tiles.isEmpty else { return }
-        frameDue = true
+        frameDue = frameDue || live
         view?.setNeedsDisplay()
     }
 
@@ -173,6 +177,7 @@ final class ComposerLookStripRenderer: NSObject, MTKViewDelegate {
                                                           scenesReady: scenesReady()),
                   into: atlas, cell: cellule, scale: echelle, buffer: buffer)
             present(atlas, into: drawable.texture, scale: echelle, buffer: buffer)
+            if ComposerLookStripPaintRule.needsFrame(tiles, painted: slots, slots: slotCount) { gate.requestFrame() }
         } else {
             clear(drawable.texture, buffer: buffer)
         }
@@ -186,7 +191,7 @@ final class ComposerLookStripRenderer: NSObject, MTKViewDelegate {
         return Set(tiles.filter { tile in
             guard tile.look.frame != ComposerPhotoFrame.none,
                   slots[slot(of: tile)].map({ $0.index == tile.index && !$0.complete }) ?? false else { return false }
-            return scenes.cached(ComposerLookSceneKey(look: tile.look, canvas: toile, date: date, person: person)) != nil
+            return scenes.isReady(ComposerLookSceneKey(look: tile.look, canvas: toile, date: date, person: person))
         }.map(\.index))
     }
 
@@ -206,10 +211,8 @@ final class ComposerLookStripRenderer: NSObject, MTKViewDelegate {
         let toile = ComposerLookPainter.thumbnailCanvas
         tiles.forEach { tile in
             let cle = ComposerLookSceneKey(look: tile.look, canvas: toile, date: date, person: person)
-            let scene = scenes.cached(cle)
-            if tile.look.frame != ComposerPhotoFrame.none, scene == nil {
-                scenes.prepare(cle) { [weak self] in self?.view?.setNeedsDisplay() }
-            }
+            let scene = tile.look.frame == ComposerPhotoFrame.none
+                ? nil : scenes.scene(for: cle) { [weak self] in self?.view?.setNeedsDisplay() }
             let look = tile.look.frame != ComposerPhotoFrame.none && scene == nil
                 ? ComposerPhotoLook(filter: tile.look.filter) : tile.look
             let peinte = ComposerLookPainter.paint(petit, look: look, framing: framing, scene: scene, canvas: toile,

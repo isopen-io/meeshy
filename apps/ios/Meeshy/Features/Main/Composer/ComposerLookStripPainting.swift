@@ -31,3 +31,81 @@ nonisolated enum ComposerLookStripPaintRule {
         !tilesToPaint(tiles, painted: painted, slots: slots, live: false, scenesReady: []).isEmpty
     }
 }
+
+/// **Une cuisson par clé, jamais une boucle** (#9351) : une scène de cadre qui
+/// ne cuit pas (mémoire, design absent) ne se redemande pas à chaque dessin, et
+/// sa fin ne redemande un dessin que si la scène est vraiment là. Le cache
+/// périmé (`reset`) rouvre les demandes.
+final class ComposerLookStripScenes {
+    private let provider: any ComposerLookSceneProviding
+    private var requested: Set<NSString> = []
+
+    nonisolated deinit {}
+
+    init(provider: any ComposerLookSceneProviding) {
+        self.provider = provider
+    }
+
+    func scene(for key: ComposerLookSceneKey,
+               onReady: @escaping @MainActor @Sendable () -> Void) -> CallLiveFrameScene? {
+        if let scene = provider.cached(key) { return scene }
+        let cle = key.cacheKey
+        guard !requested.contains(cle) else { return nil }
+        requested.insert(cle)
+        let provider = self.provider
+        provider.prepare(key) {
+            guard provider.cached(key) != nil else { return }
+            onReady()
+        }
+        return nil
+    }
+
+    func isReady(_ key: ComposerLookSceneKey) -> Bool {
+        provider.cached(key) != nil
+    }
+
+    func reset() {
+        requested = []
+    }
+}
+
+/// **La porte des trames de la bande** (#9351) : la cadence du palier, plus UNE
+/// trame demandée quand une case n'a pas encore d'image — y compris figée
+/// (`fps = 0`), sans quoi une bande armée à chaud resterait faite de glyphes.
+nonisolated final class ComposerLookStripFrameGate: @unchecked Sendable {
+    enum Admission: Equatable, Sendable {
+        case refused
+        /// Une trame au rythme du palier : toutes les cases vivent.
+        case paced
+        /// La trame demandée : seules les cases sans image se peignent.
+        case requested
+    }
+
+    private let lock = NSLock()
+    private let paced: ComposerFrameGate
+    private var wanted = false
+
+    init(fps: Int) {
+        paced = ComposerFrameGate(fps: fps)
+    }
+
+    func setFPS(_ fps: Int) {
+        paced.setFPS(fps)
+    }
+
+    func requestFrame() {
+        lock.lock()
+        defer { lock.unlock() }
+        wanted = true
+    }
+
+    func admit(presentedAt time: TimeInterval) -> Admission {
+        let rythme = paced.admit(presentedAt: time)
+        lock.lock()
+        defer { lock.unlock() }
+        let demandee = wanted
+        wanted = false
+        if rythme { return .paced }
+        return demandee ? .requested : .refused
+    }
+}
