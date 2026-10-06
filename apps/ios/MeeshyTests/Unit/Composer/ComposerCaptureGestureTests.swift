@@ -148,4 +148,55 @@ final class ComposerCaptureGestureTests: XCTestCase {
                                                lastTap: ComposerCaptureLastTap(zone: .scene, at: t0), armedAt: nil)
         XCTAssertEqual(table.action, .focus)
     }
+
+    // MARK: - Les équivalents VoiceOver (#9351)
+
+    private func offertes(_ zone: ComposerCaptureZone,
+                          _ contexte: ComposerCaptureGestureContext = ComposerCaptureGestureContext()) -> [ComposerCaptureAction] {
+        ComposerCaptureGesture.accessibilityActions(zone: zone, context: contexte)
+    }
+
+    func test_accessibilityActions_armedScene_photoFilmAndFocus() {
+        XCTAssertEqual(offertes(.scene), [.photoToEdit, .filmSegment, .focus])
+        XCTAssertEqual(offertes(.scene, ComposerCaptureGestureContext(pendingSegments: 1)), [.filmSegment, .focus],
+                       "la table refuse la photo avec des segments : VoiceOver aussi")
+        XCTAssertEqual(offertes(.scene, ComposerCaptureGestureContext(allowsVideo: false)), [.photoToEdit, .focus])
+    }
+
+    func test_accessibilityActions_recording_offersStop() {
+        let enCours = ComposerCaptureGestureContext(stage: .recording)
+        XCTAssertEqual(offertes(.scene, enCours), [.stopTake, .focus])
+        XCTAssertEqual(offertes(.chosenThumbnail, enCours), [.stopTake])
+    }
+
+    func test_accessibilityActions_chosenThumbnail_goesToTheGallery() {
+        XCTAssertEqual(offertes(.chosenThumbnail), [.photoToGallery, .filmToGallery])
+        XCTAssertEqual(offertes(.chosenThumbnail, ComposerCaptureGestureContext(pendingSegments: 2)), [])
+    }
+
+    func test_accessibilityActions_buttonsOffViewfinderAndEditing_offerNothing() {
+        XCTAssertEqual(offertes(.rail), [])
+        XCTAssertEqual(offertes(.otherThumbnail), [])
+        XCTAssertEqual(offertes(.scene, ComposerCaptureGestureContext(stage: .off)), [])
+        XCTAssertEqual(offertes(.scene, ComposerCaptureGestureContext(editing: true)), [])
+    }
+
+    func test_accessibilityName_everyOfferedActionIsNamed_andNamesAreDistinct() {
+        let offertesPartout: [ComposerCaptureAction] = [.photoToEdit, .filmSegment, .stopTake, .focus,
+                                                         .photoToGallery, .filmToGallery]
+        let noms = offertesPartout.compactMap(ComposerCaptureGesture.accessibilityName(of:))
+        XCTAssertEqual(noms.count, offertesPartout.count)
+        XCTAssertEqual(Set(noms).count, noms.count)
+        XCTAssertFalse(noms.contains { $0.hasPrefix("composer.capture.a11y.") }, "chaque nom est au catalogue")
+        XCTAssertNil(ComposerCaptureGesture.accessibilityName(of: .zoom))
+    }
+
+    // MARK: - Cas de bord de la table
+
+    func test_action_edgeCases_railWithSegments_offAndDragWithoutHold() {
+        XCTAssertEqual(action(.rail, .tap, ComposerCaptureGestureContext(pendingSegments: 1)), .none)
+        XCTAssertEqual(action(.otherThumbnail, .tap, ComposerCaptureGestureContext(stage: .off)), .none)
+        XCTAssertEqual(action(.rail, .tap, ComposerCaptureGestureContext(stage: .off)), .none)
+        XCTAssertEqual(action(.chosenThumbnail, .drag), .none)
+    }
 }

@@ -99,6 +99,52 @@ nonisolated enum ComposerCaptureGesture {
                                          memory: ComposerCaptureLastTap(zone: zone, at: now))
     }
 
+    /// **Les équivalents VoiceOver** (#9351, contraintes globales § Accessibilité) :
+    /// VoiceOver capte le double toucher et l'appui long, donc chaque zone offre
+    /// ses prises en actions NOMMÉES, projetées de la table — jamais une liste
+    /// réécrite à côté. Une prise lancée par VoiceOver tient sans doigt : en
+    /// enregistrement, la scène et la miniature choisie offrent « Arrêter ».
+    /// Les autres miniatures et le rail sont des boutons : leur activation suffit.
+    static func accessibilityActions(zone: ComposerCaptureZone,
+                                     context: ComposerCaptureGestureContext) -> [ComposerCaptureAction] {
+        guard !context.editing, context.stage != .off else { return [] }
+        switch zone {
+        case .scene:
+            guard context.stage == .armed else { return [.stopTake, .focus] }
+            return [action(zone: .scene, gesture: .doubleTap, context: context),
+                    action(zone: .scene, gesture: .longPress, context: context),
+                    .focus].filter { $0 != .none }
+        case .chosenThumbnail:
+            guard context.stage == .armed else { return [.stopTake] }
+            return [action(zone: .chosenThumbnail, gesture: .doubleTap, context: context),
+                    action(zone: .chosenThumbnail, gesture: .longPress, context: context)].filter { $0 != .none }
+        case .otherThumbnail, .rail:
+            return []
+        }
+    }
+
+    /// Le nom lu par VoiceOver ; `nil` pour une action qui n'est pas offerte.
+    static func accessibilityName(of action: ComposerCaptureAction) -> String? {
+        switch action {
+        case .photoToEdit:
+            return String(localized: "composer.capture.a11y.takePhoto", defaultValue: "Prendre une photo", bundle: .main)
+        case .filmSegment:
+            return String(localized: "composer.capture.a11y.film", defaultValue: "Filmer", bundle: .main)
+        case .stopTake:
+            return String(localized: "composer.capture.a11y.stop", defaultValue: "Arrêter", bundle: .main)
+        case .focus:
+            return String(localized: "composer.capture.a11y.focus", defaultValue: "Mettre au point", bundle: .main)
+        case .photoToGallery:
+            return String(localized: "composer.capture.a11y.photoToGallery", defaultValue: "Photo vers la galerie",
+                          bundle: .main)
+        case .filmToGallery:
+            return String(localized: "composer.capture.a11y.videoToGallery", defaultValue: "Vidéo vers la galerie",
+                          bundle: .main)
+        case .none, .zoom, .steerTake, .close, .select, .openFamily, .reframe:
+            return nil
+        }
+    }
+
     private static func lookIsLocked(_ context: ComposerCaptureGestureContext) -> Bool {
         ComposerLiveLookRule.isLocked(stage: context.stage, pendingSegments: context.pendingSegments)
     }
