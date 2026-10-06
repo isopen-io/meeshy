@@ -145,6 +145,7 @@ const f = {
   'admin.people.pref.notification.commentLikeEnabled': 'J’aime sur mes commentaires',
   'admin.people.pref.notification.friendContentEnabled': 'Publications de mes amis',
   'admin.people.pref.notification.contactActivityEnabled': 'Retour d’un contact sur Meeshy',
+  'admin.people.pref.notification.gameEnabled': 'Notifications du jeu',
   'admin.people.pref.notification.dndEnabled': 'Ne pas déranger',
   'admin.people.pref.notification.dndStartTime': 'Ne pas déranger : début',
   'admin.people.pref.notification.dndEndTime': 'Ne pas déranger : fin',

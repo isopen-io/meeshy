@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react';
 
-import { ACHIEVEMENT_RARITIES, type AchievementRarity } from '@meeshy/shared/utils/game/glory';
+import type { GameAchievementRarities, GameAchievementRarityEntry } from '@meeshy/shared/types/game';
+import type { AchievementRarity } from '@meeshy/shared/utils/game/glory';
 import { RARITY_BORDERS, rarityShareDisplayable } from '@meeshy/shared/utils/game/rarity';
 
 /**
@@ -16,17 +17,14 @@ import { RARITY_BORDERS, rarityShareDisplayable } from '@meeshy/shared/utils/gam
  * réidentifierait. Le client est FAIL-CLOSED : une entrée sans comptes, ou sans
  * rareté mesurée, ne montre rien — il ne devine jamais.
  *
- * Le web ne COMPTE rien : il lit la carte `achievementRarities` que la passerelle
- * mesure chaque nuit. Absente (ancien serveur), l'écran des succès reste celui
- * d'avant.
+ * Le web ne COMPTE rien : il lit la carte `achievementRarities`, extension
+ * DÉCLARÉE du contrat (`game-v2.ts` de `@meeshy/shared`), que la passerelle mesure
+ * chaque nuit. Absente (ancien serveur), l'écran des succès reste celui d'avant ;
+ * un succès absent de la carte dit « rareté en cours de mesure ».
  */
-export type RarityEntry = {
-  readonly rarity: AchievementRarity | null;
-  readonly holders: number;
-  readonly population: number;
-};
+export type RarityEntry = GameAchievementRarityEntry;
 
-export type AchievementRarityMap = Readonly<Record<string, RarityEntry>>;
+export type AchievementRarityMap = GameAchievementRarities;
 
 export const rarityToken = (rarity: AchievementRarity): 'slate' | 'blue' | 'violet' | 'gold' | 'prism' => RARITY_BORDERS[rarity];
 
@@ -44,7 +42,7 @@ export function rarityRim(rarity: AchievementRarity): CSSProperties {
 
 /** La rareté qu'on a le DROIT de montrer, ou `null` : pas assez de titulaires ou de comptes, ou rien de mesuré. */
 export function visibleRarity(entry: RarityEntry | undefined): AchievementRarity | null {
-  if (entry === undefined || entry.rarity === null) return null;
+  if (entry === undefined) return null;
   return rarityShareDisplayable({ holders: entry.holders, population: entry.population }) ? entry.rarity : null;
 }
 
@@ -54,19 +52,4 @@ export function rarityPercent(entry: RarityEntry, language = 'fr'): string {
   const format = (value: number, digits: number): string => new Intl.NumberFormat(language, { maximumFractionDigits: digits, minimumFractionDigits: digits }).format(value);
   if (share < 0.1) return `< ${format(0.1, 1)} %`;
   return share < 1 ? `${format(share, 1)} %` : `${format(Math.round(share), 0)} %`;
-}
-
-const isRarity = (value: unknown): value is AchievementRarity => typeof value === 'string' && (ACHIEVEMENT_RARITIES as readonly string[]).includes(value);
-
-/** La carte servie, entrée par entrée : une entrée illisible tombe SEULE ; rien de lisible ou pas un objet : `undefined`. */
-export function readAchievementRarities(value: unknown): AchievementRarityMap | undefined {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined;
-  const entries = Object.entries(value as Record<string, unknown>).flatMap(([key, raw]): Array<readonly [string, RarityEntry]> => {
-    if (typeof raw !== 'object' || raw === null) return [];
-    const { rarity, holders, population } = raw as Record<string, unknown>;
-    const validRarity = rarity === null || isRarity(rarity);
-    const validCount = (n: unknown): n is number => typeof n === 'number' && Number.isInteger(n) && n >= 0;
-    return validRarity && validCount(holders) && validCount(population) ? [[key, { rarity: rarity as AchievementRarity | null, holders, population }]] : [];
-  });
-  return entries.length === 0 ? undefined : Object.fromEntries(entries);
 }

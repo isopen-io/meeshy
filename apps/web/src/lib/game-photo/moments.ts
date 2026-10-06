@@ -2,7 +2,7 @@ import type { GameBlock } from '@meeshy/shared/types/game';
 import type { EngagementAchievementKey } from '@meeshy/shared/types/engagement';
 import { engagementAchievementTitle } from '@meeshy/shared/utils/engagement-labels';
 import { flameForm, type FlameFormKey } from '@meeshy/shared/utils/game/flame';
-import type { GloryDivision, GloryRankOrMythic } from '@meeshy/shared/utils/game/glory';
+import type { AchievementRarity, GloryDivision, GloryRankOrMythic } from '@meeshy/shared/utils/game/glory';
 import type { GuideMomentKey } from '@meeshy/shared/utils/game/guide';
 import { photoMomentId, photoMomentOfGuideEvent, type PhotoMomentEmblemV2 } from '@meeshy/shared/utils/game/photo-moments';
 import type { LeagueKey } from '@meeshy/shared/utils/game/league';
@@ -14,7 +14,7 @@ import type { EngagementWithGame } from '@/lib/api/engagement';
 import { transitionGuideEventsV2 } from '@/lib/game-guide/events-v2';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { editionName, formatCount, levelTierName, rankLabel, treasuryName } from '@/lib/view/game-copy';
-import { leagueName, trophyView } from '@/lib/view/game-copy-v2';
+import { leagueName, rarityName, trophyView } from '@/lib/view/game-copy-v2';
 import { translateGame } from '@/lib/i18n-game-catalog';
 
 /**
@@ -44,7 +44,8 @@ export type PhotoEmblem =
   | { readonly kind: 'meesh'; readonly number: number; readonly edition: MeeshEdition }
   | { readonly kind: 'treasury'; readonly tier: TreasuryTierKey }
   | { readonly kind: 'flame'; readonly form: FlameFormKey; readonly days: number }
-  | { readonly kind: 'achievement'; readonly key: EngagementAchievementKey }
+  /* `rarity` : la rareté MESURÉE, présente seulement quand on a le droit de la montrer (`visibleRarity`). */
+  | { readonly kind: 'achievement'; readonly key: EngagementAchievementKey; readonly rarity?: AchievementRarity }
   /* LA VAGUE 2 (#9481) — les quatre moments que la loi range parmi les photos (`photo-moments.ts`). */
   | { readonly kind: 'trophy'; readonly trophyKey: string }
   | { readonly kind: 'league-up'; readonly league: LeagueKey; readonly weekKey: string }
@@ -105,7 +106,13 @@ export function momentLines(
         title: translateGame(language, 'game.photo.title.flame_days', { count: formatCount(emblem.days, language) }),
       };
     case 'achievement':
-      return { kicker: translateGame(language, 'game.photo.kicker.achievement'), title: engagementAchievementTitle(language, emblem.key) };
+      return {
+        kicker:
+          emblem.rarity === undefined
+            ? translateGame(language, 'game.photo.kicker.achievement')
+            : translateGame(language, 'game.photo.kicker.achievement_rarity', { rarity: rarityName(emblem.rarity, language) }),
+        title: engagementAchievementTitle(language, emblem.key),
+      };
     case 'trophy': {
       const kicker = translateGame(language, 'game.photo.kicker.trophy');
       return { kicker, title: trophyView(emblem.trophyKey, language)?.title ?? kicker };
@@ -135,8 +142,12 @@ export const levelHundredMoment = (prestige: number): PhotoMoment =>
 export const meeshMoment = (params: { readonly number: number; readonly edition: MeeshEdition }): PhotoMoment =>
   moment(`meesh:${params.number}`, { kind: 'meesh', number: params.number, edition: params.edition });
 
-/** Un succès qui vient de se révéler (#7742) : la même carte se propose, avec le bandeau de parrainage. */
-export const achievementMoment = (key: EngagementAchievementKey): PhotoMoment => moment(`achievement:${key}`, { kind: 'achievement', key });
+/**
+ * Un succès qui vient de se révéler (#7742) : la même carte se propose, avec le bandeau de parrainage.
+ * `rarity` n'est posée que si l'écran a le DROIT de la montrer : l'identité du moment n'en dépend pas.
+ */
+export const achievementMoment = (key: EngagementAchievementKey, rarity?: AchievementRarity | null): PhotoMoment =>
+  moment(`achievement:${key}`, { kind: 'achievement', key, ...(rarity == null ? {} : { rarity }) });
 
 /** Le moment photo que la loi de la vague 2 nomme (`photoMomentOfGuideEvent`) : son identité est celle de la loi. */
 export const photoMomentOfEmblemV2 = (emblem: PhotoMomentEmblemV2): PhotoMoment => {

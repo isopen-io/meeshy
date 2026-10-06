@@ -692,6 +692,7 @@ const de = {
   'game.photo.referral.with_flame': 'Meine Flamme hinzufügen',
   'game.photo.referral.options': 'Was die Karte trägt',
   'game.photo.image_right': 'Meo: Sind andere Personen auf dem Foto, frage sie um Erlaubnis, bevor du es teilst.',
+  'game.photo.kicker.achievement_rarity': 'Erfolg freigeschaltet · {rarity}',
 } as const satisfies GameCatalog;
 
 export default de;

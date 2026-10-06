@@ -692,6 +692,7 @@ const it = {
   'game.photo.referral.with_flame': 'Aggiungi la mia Fiamma',
   'game.photo.referral.options': 'Cosa porta la carta',
   'game.photo.image_right': 'Meo: se nella foto ci sono altre persone, chiedi il loro consenso prima di condividerla.',
+  'game.photo.kicker.achievement_rarity': 'Traguardo sbloccato · {rarity}',
 } as const satisfies GameCatalog;
 
 export default it;

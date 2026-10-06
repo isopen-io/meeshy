@@ -4,7 +4,7 @@ import { describe, expect, test } from 'bun:test';
 
 import { ACHIEVEMENT_RARITIES } from '@meeshy/shared/utils/game/glory';
 
-import { rarityPercent, rarityRim, rarityToken, readAchievementRarities, visibleRarity } from './rarity';
+import { rarityPercent, rarityRim, rarityToken, visibleRarity } from './rarity';
 
 const CSS = readFileSync(new URL('../../styles/game.css', import.meta.url), 'utf8');
 
@@ -45,31 +45,13 @@ describe('ce que l’écran a le droit d’afficher', () => {
     expect(visibleRarity({ rarity: 'rare', holders: 300, population: 999 })).toBeNull();
   });
 
-  test('aucune entrée, ou une rareté non mesurée : rien', () => {
+  test('aucune entrée (le succès est absent de la carte) : rien', () => {
     expect(visibleRarity(undefined)).toBeNull();
-    expect(visibleRarity({ rarity: null, holders: 40, population: 1500 })).toBeNull();
   });
 
   test('le pourcentage se calcule sur les comptes servis, en entiers, jamais sous 0,1 %', () => {
     expect(rarityPercent({ rarity: 'epic', holders: 60, population: 1500 })).toBe('4 %');
     expect(rarityPercent({ rarity: 'legendary', holders: 20, population: 5000 })).toBe('0,4 %');
     expect(rarityPercent({ rarity: 'mythic', holders: 20, population: 50_000 })).toBe('< 0,1 %');
-  });
-});
-
-describe('la lecture à la frontière', () => {
-  test('une carte lisible est lue ; une entrée illisible tombe SEULE', () => {
-    const read = readAchievementRarities({
-      'first-message': { rarity: 'common', holders: 900, population: 1200 },
-      broken: { rarity: 'enormous', holders: 3, population: 1200 },
-      noisy: { rarity: 'rare', holders: -4, population: 1200 },
-    });
-    expect(Object.keys(read ?? {})).toEqual(['first-message']);
-  });
-
-  test('absente ou n’importe quoi : undefined, jamais une carte vide devinée', () => {
-    expect(readAchievementRarities(undefined)).toBeUndefined();
-    expect(readAchievementRarities('x')).toBeUndefined();
-    expect(readAchievementRarities([])).toBeUndefined();
   });
 });

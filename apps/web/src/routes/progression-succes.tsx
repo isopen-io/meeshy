@@ -7,7 +7,7 @@ import type { EngagementWithGame } from '@/lib/api/engagement';
 import { appPhotoEnv } from '@/lib/game-photo/app-env';
 import type { PhotoEnv } from '@/lib/game-photo/env';
 import { achievementMoment, type PhotoMoment } from '@/lib/game-photo/moments';
-import type { AchievementRarityMap } from '@/lib/game/rarity';
+import { visibleRarity, type AchievementRarityMap } from '@/lib/game/rarity';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { suspendForGameCatalog } from '@/lib/i18n-game-catalog';
 import { ProgressionPage } from '@/routes/progression-page';
@@ -42,7 +42,7 @@ export function SuccesBody({
   const [taking, setTaking] = useState<PhotoMoment | null>(null);
   return (
     <>
-      <AchievementsSection progress={progress} rarities={rarities} onPhoto={(key) => setTaking(achievementMoment(key))} />
+      <AchievementsSection progress={progress} rarities={rarities} onPhoto={(key) => setTaking(achievementMoment(key, visibleRarity(rarities?.[key])))} />
       {taking === null ? null : <GamePhotoFlow moment={taking} env={env} flameDays={flameDays} onClose={() => setTaking(null)} />}
     </>
   );

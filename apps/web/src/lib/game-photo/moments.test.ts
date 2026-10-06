@@ -47,6 +47,14 @@ describe('un succès révélé se photographie (#7742)', () => {
     expect(moment.title).not.toBe(moment.kicker);
   });
 
+  test('un succès dont la rareté est mesurée la dit dans la ligne du dessus, sans changer d’identité', () => {
+    const moment = achievementMoment('achievement.first_voice', 'epic');
+    expect(moment.emblem).toEqual({ kind: 'achievement', key: 'achievement.first_voice', rarity: 'epic' });
+    expect(moment.kicker).toBe('Succès débloqué · Épique');
+    expect(moment.id).toBe(achievementMoment('achievement.first_voice').id);
+    expect(achievementMoment('achievement.first_voice', null).emblem).toEqual({ kind: 'achievement', key: 'achievement.first_voice' });
+  });
+
   test('deux succès sont deux moments, un même succès toujours le même', () => {
     expect(achievementMoment('achievement.editor').id).not.toBe(achievementMoment('achievement.first_voice').id);
     expect(achievementMoment('achievement.editor')).toEqual(achievementMoment('achievement.editor'));

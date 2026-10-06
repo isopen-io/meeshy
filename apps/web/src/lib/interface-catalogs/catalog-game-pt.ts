@@ -692,6 +692,7 @@ const pt = {
   'game.photo.referral.with_flame': 'Adicionar minha Chama',
   'game.photo.referral.options': 'O que o cartão leva',
   'game.photo.image_right': 'Meo: se houver outras pessoas na foto, peça o consentimento delas antes de compartilhar.',
+  'game.photo.kicker.achievement_rarity': 'Conquista desbloqueada · {rarity}',
 } as const satisfies GameCatalog;
 
 export default pt;

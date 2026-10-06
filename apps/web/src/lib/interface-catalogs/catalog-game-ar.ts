@@ -704,6 +704,7 @@ const ar = {
   'game.photo.referral.with_flame': 'إضافة شعلتي',
   'game.photo.referral.options': 'ما تحمله البطاقة',
   'game.photo.image_right': 'ميو: إن ظهر أشخاص آخرون في الصورة فاطلب موافقتهم قبل مشاركتها.',
+  'game.photo.kicker.achievement_rarity': 'تم فتح إنجاز · {rarity}',
 } as const satisfies GameCatalog;
 
 export default ar;

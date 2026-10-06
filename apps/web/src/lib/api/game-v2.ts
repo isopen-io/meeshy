@@ -3,6 +3,7 @@ import type {
   DuoAbandonResponse,
   DuoAcceptResponse,
   DuoInviteResponse,
+  GameAchievementRarities,
   GameAtlasBlock,
   GameBlock,
   GameDuoBlock,
@@ -23,16 +24,16 @@ import type {
   UserShowcaseResponse,
 } from '@meeshy/shared/types/game';
 import { DUO_STATUSES } from '@meeshy/shared/utils/game/duo';
+import { ACHIEVEMENT_RARITIES } from '@meeshy/shared/utils/game/glory';
 import { LEAGUE_KEYS } from '@meeshy/shared/utils/game/league';
 import { SEASON_STEPS } from '@meeshy/shared/utils/game/season';
 import { SHOWCASE_VISIBILITIES } from '@meeshy/shared/utils/game/trophies';
 
-import { readAchievementRarities, type AchievementRarityMap } from '@/lib/game/rarity';
-import { isBool, isFraction, isInt, isOneOf, isText, orNull, shape, type Rec } from './game-guards';
+import { isBool, isFraction, isInt, isOneOf, isRec, isText, orNull, shape, type Rec } from './game-guards';
 import type { ApiResult, HttpTransport } from './http';
 
 /**
- * LE PORT DE LA VAGUE 2 DU JEU (#9384 à #9392, #9481) — les SEPT extensions du
+ * LE PORT DE LA VAGUE 2 DU JEU (#9384 à #9392, #9481) — les HUIT extensions du
  * bloc `game` et les treize routes nouvelles (`game-routes.ts`).
  *
  * UNE EXTENSION ILLISIBLE TOMBE SEULE. Le contrat l'exige (`gameBlockExtensionShape` :
@@ -152,16 +153,25 @@ const isVisibilityBlock = (value: unknown): value is GameVisibility =>
   shape(value, { showcase: isVisibility, rank: isVisibility, treasury: isVisibility, atlas: isVisibility });
 
 /**
- * LES CLÉS QUE LE WEB LIT EN PLUS DU CONTRAT (#9390) — `achievementRarities`, la
- * rareté mesurée de chaque succès, entrée par entrée. Elle n'est pas dans le
- * contrat partagé (`game-v2.ts` de `packages/shared`) : le web la lit
- * TOLÉRAMMENT, et un serveur qui ne la sert pas laisse l'écran des succès
- * comme avant. Une entrée illisible tombe seule.
+ * LA RARETÉ MESURÉE DES SUCCÈS (#9390, #9489) — `achievementRarities`, une extension DÉCLARÉE du
+ * contrat (`gameBlockExtensionShape`), lue comme les sept autres : toute la carte, ou rien. Une
+ * carte d'une forme que ce client ne sait pas lire tombe SEULE et l'écran des succès reste celui
+ * d'avant. Fail-closed côté serveur : un succès sous 20 titulaires ou 1 000 comptes en est ABSENT
+ * (jamais servi avec une rareté nulle) — son absence dit « rareté en cours de mesure ».
  */
-export type GameWebExtras = { readonly achievementRarities?: AchievementRarityMap };
+const RARITY_KEY_MAX = 96;
 
-/** Les sept extensions que le bloc `game` peut porter. */
-export type GameExtensions = GameWebExtras & {
+const isAchievementRarities = (value: unknown): value is GameAchievementRarities =>
+  isRec(value) &&
+  Object.entries(value).every(
+    ([key, entry]) =>
+      key.length >= 1 &&
+      key.length <= RARITY_KEY_MAX &&
+      shape(entry, { rarity: isOneOf(ACHIEVEMENT_RARITIES), holders: (n) => isInt(n), population: (n) => isInt(n) }),
+  );
+
+/** Les huit extensions que le bloc `game` peut porter. */
+export type GameExtensions = {
   readonly league?: GameLeagueBlock;
   readonly duo?: GameDuoBlock;
   readonly season?: GameSeasonBlock | null;
@@ -169,6 +179,7 @@ export type GameExtensions = GameWebExtras & {
   readonly atlas?: GameAtlasBlock;
   readonly prestige?: GamePrestigeBlock;
   readonly visibility?: GameVisibility;
+  readonly achievementRarities?: GameAchievementRarities;
 };
 
 /** Les extensions de ce bloc, chacune lue SEULE : une extension illisible n'est pas posée, les autres le sont. */
@@ -182,14 +193,14 @@ export function readGameExtensions(block: Rec): GameExtensions {
     ...(isAtlasBlock(block['atlas']) ? { atlas: block['atlas'] } : {}),
     ...(isPrestigeBlock(block['prestige']) ? { prestige: block['prestige'] } : {}),
     ...(isVisibilityBlock(block['visibility']) ? { visibility: block['visibility'] } : {}),
-    ...(readAchievementRarities(block['achievementRarities']) === undefined ? {} : { achievementRarities: readAchievementRarities(block['achievementRarities']) as AchievementRarityMap }),
+    ...(isAchievementRarities(block['achievementRarities']) ? { achievementRarities: block['achievementRarities'] } : {}),
   };
 }
 
 export const GAME_EXTENSION_KEYS = ['league', 'duo', 'season', 'trophies', 'atlas', 'prestige', 'visibility', 'achievementRarities'] as const;
 
-/** Le bloc `game` tel que le web le lit : le contrat, plus ce que le web lit en tolérant. */
-export type GameBlockV2 = GameBlock & GameWebExtras;
+/** Le bloc `game` tel que le web le lit : le contrat, tel quel. */
+export type GameBlockV2 = GameBlock;
 
 /** Le bloc SANS ses extensions brutes : `readGameBlock` y repose les extensions LUES. */
 export function withoutExtensions<T extends Rec>(block: T): Omit<T, (typeof GAME_EXTENSION_KEYS)[number]> {

@@ -142,6 +142,7 @@ const f = {
   'admin.people.pref.notification.commentLikeEnabled': 'Likes on my comments',
   'admin.people.pref.notification.friendContentEnabled': 'Posts from my friends',
   'admin.people.pref.notification.contactActivityEnabled': 'A contact coming back on Meeshy',
+  'admin.people.pref.notification.gameEnabled': 'Game notifications',
   'admin.people.pref.notification.dndEnabled': 'Do not disturb',
   'admin.people.pref.notification.dndStartTime': 'Do not disturb: start',
   'admin.people.pref.notification.dndEndTime': 'Do not disturb: end',

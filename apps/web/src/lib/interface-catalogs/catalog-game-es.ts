@@ -692,6 +692,7 @@ const es = {
   'game.photo.referral.with_flame': 'Añadir mi Llama',
   'game.photo.referral.options': 'Lo que lleva la tarjeta',
   'game.photo.image_right': 'Meo: si hay otras personas en la foto, pide su consentimiento antes de compartirla.',
+  'game.photo.kicker.achievement_rarity': 'Logro desbloqueado · {rarity}',
 } as const satisfies GameCatalog;
 
 export default es;
