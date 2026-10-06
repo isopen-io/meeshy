@@ -1,10 +1,12 @@
 import Foundation
 
-// MARK: - Les routes et refus du Jeu Meeshy (#9378)
+// MARK: - Les refus et l'en-tête de version du Jeu Meeshy (#9378, #9535)
 //
-// MIROIR de `packages/shared/types/game-routes.ts`. Les chemins sont ceux de la
-// passerelle SANS le préfixe `/api/v1` — `GameEndpoint` (catalogue d'adresses
-// typées) les complète, et `GameRoutesTests` les compare à la table TS.
+// Les CHEMINS ne vivent plus ici : le client du jeu appelle le catalogue généré
+// (`MeEndpoint.game*`, `UsersEndpoint.byUserIdGame*`), et `GameRoutesTests` compare
+// ses chemins à `packages/shared/types/game-routes.ts` (`GAME_ROUTES`,
+// `GAME_INTEGRATION_ROUTES`). Une table jumelle de plus était une route de plus à
+// renommer aux deux endroits sans que rien ne rougisse.
 
 public enum GameRoutes {
     /// L'en-tête par lequel un client déclare ce qu'il sait du jeu : un entier, 2 pour la vague 2.
@@ -12,93 +14,6 @@ public enum GameRoutes {
     public static let versionHeader = "X-Meeshy-Game-Version"
     /// La vague que ce binaire sait lire.
     public static let waveVersion = 2
-
-    /// Lecture : la charge actuelle, plus le bloc `game` à côté de ses champs.
-    public static let engagement = "/me/engagement"
-    /// La frappe existe déjà ; sa réponse est étendue (`APIMeeshMintResult`).
-    public static let mint = "/me/meesh/mint"
-    /// Changer une mission du jour — 1 Meesh, une fois par jour, même difficulté.
-    public static let missionReroll = "/me/game/missions/:missionId/reroll"
-    public static let chestClaim = "/me/game/chest/claim"
-    /// Acheter UN gel de Flamme (1 Meesh, 2 en réserve au plus).
-    public static let flameFreezes = "/me/game/flame/freezes"
-    public static let flameRelight = "/me/game/flame/relight"
-    /// Marquer des moments du guide comme vus.
-    public static let guideSeen = "/me/game/guide/seen"
-
-    // MARK: La vague 2 (#9384 à #9392) — tout est NOUVEAU, rien ne remplace une route actuelle.
-
-    /// Consentir à la ligue publique (ou retirer son consentement). POST.
-    public static let leagueConsent = "/me/game/league/consent"
-    /// Choisir son pseudonyme de ligue. PUT.
-    public static let leaguePseudonym = "/me/game/league/pseudonym"
-    /// Le classement de MON groupe cette semaine, sous pseudonymes. GET.
-    public static let leagueWeek = "/me/game/league/week"
-    /// La ligue Amis : le même classement, restreint aux amis acceptés. GET.
-    public static let leagueFriends = "/me/game/league/friends"
-    /// Inviter un ami à la mission en duo de la semaine. POST.
-    public static let duoInvite = "/me/game/duo/invite"
-    public static let duoAccept = "/me/game/duo/:duoId/accept"
-    /// Décliner, annuler ou quitter : un seul geste. POST.
-    public static let duoAbandon = "/me/game/duo/:duoId/abandon"
-    /// Réclamer la récompense d'une étape de la saison. POST.
-    public static let seasonClaim = "/me/game/season/steps/:step/claim"
-    /// Acheter le Sceau de la saison (10 Meeshes). POST.
-    public static let seasonSeal = "/me/game/season/seal"
-    /// Ranger les trophées de la vitrine. PUT.
-    public static let showcaseOrder = "/me/game/showcase/order"
-    /// Régler qui voit la vitrine, le rang, le trésor et l'Atlas. PUT.
-    public static let showcaseVisibility = "/me/game/visibility"
-    /// La vitrine d'un autre membre, selon son réglage. GET.
-    public static let userShowcase = "/users/:userId/game/showcase"
-    /// Passer en Prestige au niveau 100. POST.
-    public static let prestige = "/me/game/prestige"
-    /// « Jeu masqué » et l'opposition à la ligue Amis : deux interrupteurs. PUT.
-    public static let privacy = "/me/game/privacy"
-
-    /// L'identifiant d'une mission vient d'une charge serveur : il est ENCODÉ avant
-    /// d'entrer dans le chemin, un `/`, un `?` ou un `..` ne peuvent donc pas
-    /// rediriger l'écriture vers une autre route (#9378).
-    public static func missionRerollPath(missionId: String) -> String {
-        missionReroll.replacingOccurrences(of: ":missionId", with: encodedSegment(missionId))
-    }
-
-    public static func duoAcceptPath(duoId: String) -> String {
-        duoAccept.replacingOccurrences(of: ":duoId", with: encodedSegment(duoId))
-    }
-
-    public static func duoAbandonPath(duoId: String) -> String {
-        duoAbandon.replacingOccurrences(of: ":duoId", with: encodedSegment(duoId))
-    }
-
-    public static func seasonClaimPath(step: Int) -> String {
-        seasonClaim.replacingOccurrences(of: ":step", with: String(step))
-    }
-
-    public static func userShowcasePath(userId: String) -> String {
-        userShowcase.replacingOccurrences(of: ":userId", with: encodedSegment(userId))
-    }
-
-    private static let segmentAllowed = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_~")
-
-    fileprivate static func encodedSegment(_ value: String) -> String {
-        value.addingPercentEncoding(withAllowedCharacters: segmentAllowed) ?? ""
-    }
-}
-
-/// Les routes de LECTURE d'intégration (#9481) — MIROIR de `GAME_INTEGRATION_ROUTES`. Une table À PART : `GameRoutes`
-/// garde ses vingt et une entrées, comparées une à une par `GameRoutesTests` — y ajouter une route ferait rougir ce qui
-/// n'a rien à voir avec elle.
-public enum GameIntegrationRoutes {
-    /// Les réglages du jeu, en LECTURE (le chemin de l'écriture `GameRoutes.privacy`, la méthode GET).
-    public static let settings = "/me/game/privacy"
-    /// Le jeu d'un autre membre (niveau, palier, rang, trésor, Flamme), selon son réglage. GET.
-    public static let userGame = "/users/:userId/game"
-
-    /// L'identifiant vient d'une charge serveur : ENCODÉ avant d'entrer dans le chemin.
-    public static func userGamePath(userId: String) -> String {
-        userGame.replacingOccurrences(of: ":userId", with: GameRoutes.encodedSegment(userId))
-    }
 }
 
 /// Codes d'erreur des écritures du jeu (champ `code` de la réponse). Un refus est

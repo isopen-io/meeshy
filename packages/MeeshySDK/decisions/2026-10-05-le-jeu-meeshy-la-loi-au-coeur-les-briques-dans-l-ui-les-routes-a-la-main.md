@@ -13,10 +13,14 @@ flamme, coffre) que l'app compose en célébrations.
   silencieux.
 - **Le bloc `game` se lit à côté de la charge d'engagement, jamais à moitié** : `APIEngagementProgress.game` est décodé
   en `try?` — un bloc incompris ne coûte pas la progression, et l'écran n'affiche alors aucun élément du jeu.
-- **Les cinq écritures** (`GameService`, protocole `GameServiceProviding`) portent un `requestId` par INTENTION. Leurs
-  adresses sont écrites à la main (`Networking/Endpoints/GameEndpoint.swift`, sans en-tête de générateur) tant que le
-  manifeste de la passerelle ne porte pas `/me/game/*` ; `GameRoutesTests` les compare à `GAME_ROUTES`. Quand le
-  manifeste les porte, `MeEndpoint` les génère et `GameEndpoint` se retire.
+- **Les écritures** (`GameService`, protocoles `GameServiceProviding` et suivants) portent un `requestId` par INTENTION.
+  **Mise à jour 2026-10-07 (#9535) : les routes ne sont plus écrites à la main.** Le manifeste de la passerelle porte
+  `/me/game/*` et `/users/:userId/game*` ; `MeEndpoint.game*` et `UsersEndpoint.byUserIdGame*` sont générés, et
+  `GameService` les appelle. `GameEndpoint` et la table de chemins de `GameRoutes` sont retirés ; `GameRoutesTests`
+  compare les adresses du catalogue à `GAME_ROUTES` et `GAME_INTEGRATION_ROUTES`. Ce que la jumelle disait et que le
+  générateur ne dit pas vit à la main dans `Networking/Endpoints/GameEndpointPolicy.swift` : les refus 409 typés
+  (`rejectionPolicy == .structured`) et les fabriques qui ENCODENT un identifiant venu d'une charge serveur avant de
+  l'écrire dans le chemin.
 - **Les briques vivent dans `MeeshyUI/Game/`** : elles DESSINENT (les chemins SVG de la planche sont lus par
   `GameSVGPath`, pas recopiés), reçoivent des paramètres opaques et ne touchent aucun singleton Meeshy. Décoratives et
   masquées par défaut ; l'hôte qui connaît la phrase localisée passe `accessibilityLabel`. Les chiffres dessinés

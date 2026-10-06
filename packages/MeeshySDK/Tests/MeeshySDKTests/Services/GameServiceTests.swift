@@ -107,4 +107,23 @@ final class GameServiceTests: XCTestCase {
             XCTAssertEqual(GameService.refusal(of: error), .chestNotReady)
         }
     }
+
+    // MARK: - Le client appelle le catalogue généré (#9535)
+
+    func test_rerollMission_encodesAHostileMissionIdBeforeItEntersThePath() async throws {
+        let hostile = "../chest/claim?x=1#y"
+        let encoded = "%2E%2E%2Fchest%2Fclaim%3Fx%3D1%23y"
+        let reply = MissionRerollResponse(mission: mission(), balance: 8)
+        mock.stub("/me/game/missions/\(encoded)/reroll", result: APIResponse<MissionRerollResponse>(success: true, data: reply, error: nil))
+
+        _ = try await service.rerollMission(missionId: hostile, requestId: "reroll-req-002")
+
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/me/game/missions/\(encoded)/reroll")
+    }
+
+    func test_everyGameEndpointTheServiceCallsDeclaresStructuredRefusals() {
+        XCTAssertEqual(MeEndpoint.gameChestClaim.rejectionPolicy, .structured)
+        XCTAssertEqual(MeEndpoint.gameMissionReroll(missionId: "m").rejectionPolicy, .structured)
+        XCTAssertEqual(UsersEndpoint.gameOf(userId: "u").rejectionPolicy, .structured)
+    }
 }

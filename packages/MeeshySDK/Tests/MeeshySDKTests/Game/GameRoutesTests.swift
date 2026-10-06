@@ -32,63 +32,82 @@ struct GameRoutesTests {
         })
     }
 
-    @Test("les routes Swift sont celles de GAME_ROUTES")
-    func routesMatchTheSharedTable() throws {
-        let shared = try Self.quotedValues(of: "GAME_ROUTES", in: Self.source())
-        #expect(shared.count == 21)
-        #expect(shared["engagement"] == GameRoutes.engagement)
-        #expect(shared["mint"] == GameRoutes.mint)
-        #expect(shared["missionReroll"] == GameRoutes.missionReroll)
-        #expect(shared["chestClaim"] == GameRoutes.chestClaim)
-        #expect(shared["flameFreezes"] == GameRoutes.flameFreezes)
-        #expect(shared["flameRelight"] == GameRoutes.flameRelight)
-        #expect(shared["guideSeen"] == GameRoutes.guideSeen)
+    /// Le chemin de l'adresse du CATALOGUE généré, sans le préfixe public : ce que `GAME_ROUTES` écrit.
+    private static func publicPath(_ endpoint: any MeeshyEndpoint) -> String {
+        let prefix = "/api/v1"
+        return endpoint.path.hasPrefix(prefix) ? String(endpoint.path.dropFirst(prefix.count)) : endpoint.path
     }
 
-    @Test("les quatorze routes de la vague 2 sont celles de GAME_ROUTES")
-    func wave2RoutesMatchTheSharedTable() throws {
+    private static let mid = "65a1b2c3d4e5f60718293a4b"
+
+    /// Chaque clé de `GAME_ROUTES`, avec l'adresse du catalogue généré qui la sert (segments variables remplis).
+    private static func catalogRoutes() -> [(key: String, endpoint: any MeeshyEndpoint, params: [String: String])] {
+        [
+            ("engagement", MeEndpoint.engagement, [:]),
+            ("mint", MeEndpoint.meeshMint, [:]),
+            ("missionReroll", MeEndpoint.gameMissionReroll(missionId: mid), [":missionId": mid]),
+            ("chestClaim", MeEndpoint.gameChestClaim, [:]),
+            ("flameFreezes", MeEndpoint.gameFlameFreezes, [:]),
+            ("flameRelight", MeEndpoint.gameFlameRelight, [:]),
+            ("guideSeen", MeEndpoint.gameGuideSeen, [:]),
+            ("leagueConsent", MeEndpoint.gameLeagueConsent, [:]),
+            ("leaguePseudonym", MeEndpoint.gameLeaguePseudonym, [:]),
+            ("leagueWeek", MeEndpoint.gameLeagueWeek, [:]),
+            ("leagueFriends", MeEndpoint.gameLeagueFriends, [:]),
+            ("duoInvite", MeEndpoint.gameDuoInvite, [:]),
+            ("duoAccept", MeEndpoint.gameDuoAccept(duoId: mid), [":duoId": mid]),
+            ("duoAbandon", MeEndpoint.gameDuoAbandon(duoId: mid), [":duoId": mid]),
+            ("seasonClaim", MeEndpoint.gameSeasonClaim(step: 12), [":step": "12"]),
+            ("seasonSeal", MeEndpoint.gameSeasonSeal, [:]),
+            ("showcaseOrder", MeEndpoint.gameShowcaseOrder, [:]),
+            ("showcaseVisibility", MeEndpoint.gameVisibility, [:]),
+            ("userShowcase", UsersEndpoint.gameShowcaseOf(userId: mid), [":userId": mid]),
+            ("prestige", MeEndpoint.gamePrestige, [:]),
+            ("privacy", MeEndpoint.gamePrivacy, [:]),
+        ]
+    }
+
+    private static func filled(_ template: String, _ params: [String: String]) -> String {
+        params.reduce(template) { $0.replacingOccurrences(of: $1.key, with: $1.value) }
+    }
+
+    @Test("le catalogue généré sert, route pour route, les vingt et une entrées de GAME_ROUTES")
+    func theCatalogServesEveryRouteOfTheSharedTable() throws {
         let shared = try Self.quotedValues(of: "GAME_ROUTES", in: Self.source())
-        #expect(shared["leagueConsent"] == GameRoutes.leagueConsent)
-        #expect(shared["leaguePseudonym"] == GameRoutes.leaguePseudonym)
-        #expect(shared["leagueWeek"] == GameRoutes.leagueWeek)
-        #expect(shared["leagueFriends"] == GameRoutes.leagueFriends)
-        #expect(shared["duoInvite"] == GameRoutes.duoInvite)
-        #expect(shared["duoAccept"] == GameRoutes.duoAccept)
-        #expect(shared["duoAbandon"] == GameRoutes.duoAbandon)
-        #expect(shared["seasonClaim"] == GameRoutes.seasonClaim)
-        #expect(shared["seasonSeal"] == GameRoutes.seasonSeal)
-        #expect(shared["showcaseOrder"] == GameRoutes.showcaseOrder)
-        #expect(shared["showcaseVisibility"] == GameRoutes.showcaseVisibility)
-        #expect(shared["userShowcase"] == GameRoutes.userShowcase)
-        #expect(shared["prestige"] == GameRoutes.prestige)
-        #expect(shared["privacy"] == GameRoutes.privacy)
+        let routes = Self.catalogRoutes()
+        #expect(shared.count == 21)
+        #expect(Set(routes.map(\.key)) == Set(shared.keys), "une route ajoutée côté TS sans adresse du catalogue rougit ici")
+        for route in routes {
+            let template = try #require(shared[route.key], "GAME_ROUTES ne porte pas \(route.key)")
+            #expect(Self.publicPath(route.endpoint) == Self.filled(template, route.params), "\(route.key)")
+        }
     }
 
     @Test("les deux routes de lecture d'intégration sont celles de GAME_INTEGRATION_ROUTES, et GAME_ROUTES garde ses 21 entrées")
     func integrationRoutesMatchTheirOwnSharedTable() throws {
         let shared = try Self.quotedValues(of: "GAME_INTEGRATION_ROUTES", in: Self.source())
         #expect(shared.count == 2)
-        #expect(shared["settings"] == GameIntegrationRoutes.settings)
-        #expect(shared["userGame"] == GameIntegrationRoutes.userGame)
-        #expect(GameIntegrationRoutes.settings == GameRoutes.privacy, "la lecture porte le chemin de l'écriture")
+        #expect(shared["settings"] == "/me/game/privacy")
+        #expect(Self.publicPath(MeEndpoint.gamePrivacy) == shared["settings"])
+        #expect(Self.publicPath(UsersEndpoint.gameOf(userId: Self.mid))
+            == shared["userGame"].map { Self.filled($0, [":userId": Self.mid]) })
         #expect(try Self.quotedValues(of: "GAME_ROUTES", in: Self.source()).count == 21)
     }
 
     @Test("le jeu d'un autre : l'identifiant est encodé dans son segment, et l'adresse lit sans écrire")
     func userGamePathEncodesItsSegment() {
-        #expect(GameEndpoint.userGame(userId: "65a1b2c3d4e5f60718293a4b").path == "/api/v1/users/65a1b2c3d4e5f60718293a4b/game")
-        #expect(GameEndpoint.userGame(userId: "../me?x=1").path == "/api/v1/users/%2E%2E%2Fme%3Fx%3D1/game")
-        #expect(GameEndpoint.settings.path == "/api/v1/me/game/privacy")
-        #expect(GameEndpoint.settings.rejectionPolicy == .structured)
+        #expect(UsersEndpoint.gameOf(userId: "65a1b2c3d4e5f60718293a4b").path == "/api/v1/users/65a1b2c3d4e5f60718293a4b/game")
+        #expect(UsersEndpoint.gameOf(userId: "../me?x=1").path == "/api/v1/users/%2E%2E%2Fme%3Fx%3D1/game")
+        #expect(MeEndpoint.gamePrivacy.path == "/api/v1/me/game/privacy")
     }
 
     @Test("les identifiants des routes de la vague 2 sont encodés dans leur segment")
     func wave2PathsEncodeTheirSegment() {
-        #expect(GameEndpoint.duoAccept(duoId: "../x?y").path == "/api/v1/me/game/duo/%2E%2E%2Fx%3Fy/accept")
-        #expect(GameEndpoint.duoAbandon(duoId: "65a1b2c3d4e5f60718293a4b").path
+        #expect(MeEndpoint.gameDuoAccept(duoId: "../x?y").path == "/api/v1/me/game/duo/%2E%2E%2Fx%3Fy/accept")
+        #expect(MeEndpoint.gameDuoAbandon(duoId: "65a1b2c3d4e5f60718293a4b").path
             == "/api/v1/me/game/duo/65a1b2c3d4e5f60718293a4b/abandon")
-        #expect(GameEndpoint.seasonClaim(step: 12).path == "/api/v1/me/game/season/steps/12/claim")
-        #expect(GameEndpoint.userShowcase(userId: "a/b").path == "/api/v1/users/a%2Fb/game/showcase")
+        #expect(MeEndpoint.gameSeasonClaim(step: 12).path == "/api/v1/me/game/season/steps/12/claim")
+        #expect(UsersEndpoint.gameShowcaseOf(userId: "a/b").path == "/api/v1/users/a%2Fb/game/showcase")
     }
 
     @Test("les codes de refus Swift sont ceux de GAME_ERROR_CODES")
@@ -99,28 +118,28 @@ struct GameRoutesTests {
 
     @Test("un identifiant de mission est encodé : aucun caractère ne sort de son segment")
     func missionIdIsEncodedIntoItsSegment() {
-        #expect(GameEndpoint.missionReroll(missionId: "../chest/claim?x=1#y").path
+        #expect(MeEndpoint.gameMissionReroll(missionId: "../chest/claim?x=1#y").path
             == "/api/v1/me/game/missions/%2E%2E%2Fchest%2Fclaim%3Fx%3D1%23y/reroll")
-        #expect(GameEndpoint.missionReroll(missionId: "65a1b2c3d4e5f60718293a4b").path
+        #expect(MeEndpoint.gameMissionReroll(missionId: "65a1b2c3d4e5f60718293a4b").path
             == "/api/v1/me/game/missions/65a1b2c3d4e5f60718293a4b/reroll")
-    }
-
-    @Test("les adresses typées complètent le préfixe public sans rien redéfinir")
-    func endpointsPrefixTheSharedRoutes() {
-        #expect(GameEndpoint.chestClaim.path == "/api/v1" + GameRoutes.chestClaim)
-        #expect(GameEndpoint.flameFreezes.path == "/api/v1" + GameRoutes.flameFreezes)
-        #expect(GameEndpoint.flameRelight.path == "/api/v1" + GameRoutes.flameRelight)
-        #expect(GameEndpoint.guideSeen.path == "/api/v1" + GameRoutes.guideSeen)
-        #expect(GameEndpoint.missionReroll(missionId: "m1").path == "/api/v1" + GameRoutes.missionRerollPath(missionId: "m1"))
     }
 
     @Test("les refus du jeu sont typés : l'écran sait POURQUOI")
     func rejectionsAreStructured() {
-        for endpoint: GameEndpoint in [.chestClaim, .flameFreezes, .flameRelight, .guideSeen, .missionReroll(missionId: "m"),
-                                       .leagueConsent, .leaguePseudonym, .leagueWeek, .leagueFriends, .duoInvite,
-                                       .duoAccept(duoId: "d"), .duoAbandon(duoId: "d"), .seasonClaim(step: 1), .seasonSeal,
-                                       .showcaseOrder, .showcaseVisibility, .userShowcase(userId: "u"), .prestige, .privacy] {
-            #expect(endpoint.rejectionPolicy == .structured)
+        let game: [any MeeshyEndpoint] = Self.catalogRoutes()
+            .filter { $0.key != "engagement" && $0.key != "mint" }
+            .map(\.endpoint) + [UsersEndpoint.gameOf(userId: "u")]
+        #expect(game.count == 20)
+        for endpoint in game {
+            #expect(endpoint.rejectionPolicy == .structured, "\(endpoint.path)")
         }
+    }
+
+    @Test("le reste du catalogue garde ses refus opaques : le typage du jeu ne déborde pas")
+    func otherEndpointsStayOpaque() {
+        #expect(MeEndpoint.engagement.rejectionPolicy == .opaque)
+        #expect(MeEndpoint.meeshMint.rejectionPolicy == .opaque)
+        #expect(MeEndpoint.preferencesAudio.rejectionPolicy == .opaque)
+        #expect(UsersEndpoint.me.rejectionPolicy == .opaque)
     }
 }

@@ -403,7 +403,18 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // Elles ne reviendront au compte que le jour où `GameEndpoint` se retire au
 // profit du catalogue généré, comme son en-tête l'annonce. Valeur MESURÉE le
 // 2026-10-06.
-const BASELINE_DEAD_ENTRIES = 309;
+// 309 -> 289 (#9535, 2026-10-07) : le jour annoncé ci-dessus est arrivé.
+// `GameEndpoint` (le catalogue du jeu écrit à la main) est RETIRÉ ; `GameService`
+// appelle le catalogue généré — dix-huit `MeEndpoint.game*` et les deux
+// `UsersEndpoint.byUserIdGame*` reviennent au compte des entrées appelées, soit
+// vingt de moins. Ce que la jumelle apportait que le générateur ne dit pas vit
+// désormais dans `GameEndpointPolicy.swift` : les refus 409 typés
+// (`rejectionPolicy == .structured`) et l'encodage des identifiants (fabriques
+// `MeEndpoint.gameMissionReroll(missionId:)`, `.gameDuoAccept`, `.gameDuoAbandon`,
+// `.gameSeasonClaim`, `UsersEndpoint.gameOf`, `.gameShowcaseOf`). `GameRoutesTests`
+// compare les adresses du CATALOGUE à `GAME_ROUTES` et `GAME_INTEGRATION_ROUTES`.
+// Valeur MESURÉE le 2026-10-07.
+const BASELINE_DEAD_ENTRIES = 289;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;
 // Une déclaration de cas n'a jamais de point après `case` ; une branche de
