@@ -13,15 +13,18 @@ const video = (adjustments: unknown) => mediaAdjustmentsPaint({ adjustments }, {
 const NOTHING = { filter: undefined, overlays: [] };
 
 describe('mediaAdjustmentsPaint — ce qui ne peint rien', () => {
-  test.each([
+  const cases: readonly (readonly [string, unknown])[] = [
     ['aucune charge', undefined],
     ['un objet vide', {}],
     ['des valeurs neutres', { exposure: 0, brightness: 0, contrast: 1, saturation: 1, vibrance: 0, temperature: 0, sharpness: 0, blur: 0, vignette: 0 }],
     ['une forme illisible', 'fort'],
     ['des valeurs non numériques ou inconnues', { exposure: 'x', grain: 0.4 }],
-  ])('%s', (_label, adjustments) => {
-    expect(image(adjustments)).toEqual(NOTHING);
-  });
+  ];
+  for (const [label, adjustments] of cases) {
+    test(label, () => {
+      expect(image(adjustments)).toEqual(NOTHING);
+    });
+  }
 
   test('la netteté n’a pas d’équivalent CSS : elle ne peint rien', () => {
     expect(image({ sharpness: 1 })).toEqual(NOTHING);
@@ -29,7 +32,7 @@ describe('mediaAdjustmentsPaint — ce qui ne peint rien', () => {
 });
 
 describe('mediaAdjustmentsPaint — chaque réglage', () => {
-  test.each([
+  const cases: readonly (readonly [string, Record<string, number>, string])[] = [
     ['exposition +2 EV : ×2^(EV/2,2) en espace sRGB', { exposure: 2 }, 'brightness(1.8779)'],
     ['exposition −1 EV', { exposure: -1 }, 'brightness(0.7297)'],
     ['luminosité +0,2 : égale au gris moyen (0,5 + b) / 0,5', { brightness: 0.2 }, 'brightness(1.4)'],
@@ -39,9 +42,12 @@ describe('mediaAdjustmentsPaint — chaque réglage', () => {
     ['vibrance +1 : une saturation à demi-force', { vibrance: 1 }, 'saturate(1.5)'],
     ['vibrance −1', { vibrance: -1 }, 'saturate(0.5)'],
     ['flou 0,5 : 8 px de la source sur le repère 1080', { blur: 0.5 }, 'blur(0.7407cqw)'],
-  ])('%s', (_label, adjustments, filter) => {
-    expect(image(adjustments)).toEqual({ filter, overlays: [] });
-  });
+  ];
+  for (const [label, adjustments, filter] of cases) {
+    test(label, () => {
+      expect(image(adjustments)).toEqual({ filter, overlays: [] });
+    });
+  }
 
   test('le flou suit l’échelle de la source : une source deux fois plus large floute deux fois moins', () => {
     expect(image({ blur: 0.5 }, 0.5).filter).toBe('blur(0.3704cqw)');
