@@ -296,3 +296,52 @@ describe('les notifications du duo, de la route au service de notification (#949
     }
   });
 });
+
+describe('GET /users/:userId/game — un identifiant qui ne désigne aucun compte vivant (revue adversariale #9481)', () => {
+  const HEX24 = /^[0-9a-f]{24}$/i;
+  const idsIn = (where: unknown): string[] => {
+    if (where === null || typeof where !== 'object') return [];
+    return Object.entries(where as Record<string, unknown>).flatMap(([key, value]) =>
+      (key === 'id' || key === 'userId') && typeof value === 'string' ? [value] : idsIn(value),
+    );
+  };
+  const asMongo = (db: FakeGameDb): FakeGameDb => {
+    for (const model of [db.user, db.gameProfile] as unknown as Array<Record<string, (args: { where?: unknown }) => unknown>>) {
+      for (const method of ['findUnique', 'findFirst', 'findMany'] as const) {
+        const original = model[method]!.bind(model);
+        model[method] = (args: { where?: unknown } = {}) => {
+          if (idsIn(args.where).some((id) => !HEX24.test(id))) throw new Error('Malformed ObjectID: provided hex string representation must be exactly 12 bytes');
+          return original(args);
+        };
+      }
+    }
+    return db;
+  };
+
+  it('un identifiant MALFORMÉ rend la réponse vide (200), jamais une erreur 500 — même pour un ADMIN', async () => {
+    const db = asMongo(fakeGameDb());
+    seedUser(db, { engagementScore: 4000 }, STRANGER);
+    for (const role of ['USER', 'ADMIN']) {
+      const app = await profileApp(db, STRANGER, role);
+      const res = await get(app, gameUserGamePath('pas-un-compte'));
+      expect(res.statusCode).toBe(200);
+      expect(res.json().data).toEqual({ visible: false, standing: null, treasury: null });
+      const showcase = await get(app, '/users/pas-un-compte/game/showcase');
+      expect(showcase.statusCode).toBe(200);
+      expect(showcase.json().data).toEqual({ visible: false, items: [], order: [] });
+    }
+  });
+
+  it('un compte SUPPRIMÉ ou désactivé se lit comme un compte inconnu — même sur « tout le monde », même pour un ADMIN', async () => {
+    for (const gone of [{ isActive: false, deletedAt: new Date() }, { isActive: false, deletedAt: null }]) {
+      const db = fakeGameDb();
+      seedUser(db, { engagementScore: 12_180, currentStreakDays: 40, lastStreakDate: TODAY, ...gone }, USER);
+      seedUser(db, {}, STRANGER);
+      db.gameProfile.rows.push({ id: 'gp', userId: USER, rankVisibility: 'everyone', treasuryVisibility: 'everyone' });
+      for (const role of ['USER', 'ADMIN']) {
+        const data = (await get(await profileApp(db, STRANGER, role), gameUserGamePath(USER))).json().data;
+        expect(data).toEqual({ visible: false, standing: null, treasury: null });
+      }
+    }
+  });
+});
