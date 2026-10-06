@@ -1,0 +1,257 @@
+/**
+ * LES LECTURES D'INTÉGRATION DU JEU (#9481) — route → service → base, seule la
+ * base est un faux :
+ *  - `GET /me/game/privacy` : les clients relisent l'ÉTAT des réglages, ils ne
+ *    gardent plus la dernière réponse `PUT` ;
+ *  - `GET /users/:userId/game` : le niveau, le palier, le rang, les étoiles, la
+ *    forme de la Flamme et le palier du trésor d'UN AUTRE membre, selon SON
+ *    réglage. Un refus rend les mêmes réponses vides qu'un compte inexistant.
+ *
+ * @jest-environment node
+ */
+
+import { describe, it, expect, jest } from '@jest/globals';
+import Fastify, { FastifyInstance, FastifyRequest } from 'fastify';
+import { gameSettingsResponseSchema, gameUserGamePath, GAME_ROUTES, userGameProfileResponseSchema } from '@meeshy/shared/types/game';
+import { fakeGameDb, seedUser, USER, OTHER, type FakeGameDb } from '../../../../services/game/__tests__/fakeGameDb';
+import { meGameRoutes } from '../../../../routes/me/game';
+import { userGameShowcaseRoutes } from '../../../../routes/users/game-showcase';
+
+jest.mock('../../../../utils/logger', () => ({ logError: jest.fn() }));
+jest.mock('../../../../utils/logger-enhanced', () => ({
+  enhancedLogger: { child: () => ({ info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() }) },
+}));
+const privacy = new Map<string, Record<string, unknown>>();
+jest.mock('../../../../services/preferences/privacy-cache', () => ({
+  loadPrivacyPreferencesCached: async (_prisma: unknown, ids: string[]) => new Map(ids.map((id) => [id, privacy.get(id) ?? {}])),
+}));
+
+const STRANGER = '68a000000000000000000003';
+const UNKNOWN = '68c000000000000000000077';
+const TODAY = new Date();
+
+const settingsApp = async (db: FakeGameDb, userId: string | null = USER): Promise<FastifyInstance> => {
+  const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
+  app.decorate('prisma', db.prisma as never);
+  app.decorate('authenticate', async (req: FastifyRequest) => {
+    (req as any).auth = userId ? { userId, isAuthenticated: true } : undefined;
+  });
+  await app.register(meGameRoutes, { prefix: '/api/v1/me', engagement: { creditGamePoints: async () => undefined } });
+  await app.ready();
+  return app;
+};
+
+const profileApp = async (db: FakeGameDb, viewerId: string, role = 'USER'): Promise<FastifyInstance> => {
+  const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
+  app.decorate('prisma', db.prisma as never);
+  await app.register(userGameShowcaseRoutes, {
+    prefix: '/api/v1/users',
+    authenticate: async (req: FastifyRequest) => {
+      (req as any).authContext = { type: 'user', userId: viewerId, registeredUser: { role } };
+    },
+  });
+  await app.ready();
+  return app;
+};
+
+const get = (app: FastifyInstance, route: string) => app.inject({ method: 'GET', url: `/api/v1${route}` });
+
+describe('GET /me/game/privacy', () => {
+  it('sert les défauts d’un compte qui n’a rien réglé : amis par défaut, Atlas privé', async () => {
+    const db = fakeGameDb();
+    seedUser(db);
+    const res = await get(await settingsApp(db), GAME_ROUTES.settings);
+    expect(res.statusCode).toBe(200);
+    expect(gameSettingsResponseSchema.parse(res.json().data)).toEqual({
+      gameHidden: false,
+      friendsLeagueOptOut: false,
+      visibility: { showcase: 'friends', rank: 'friends', treasury: 'friends', atlas: 'me' },
+    });
+  });
+
+  it('relit l’ÉTAT du serveur : ce que `PUT` a posé, y compris les visibilités', async () => {
+    const db = fakeGameDb();
+    seedUser(db);
+    const app = await settingsApp(db);
+    await app.inject({ method: 'PUT', url: `/api/v1${GAME_ROUTES.privacy}`, payload: { requestId: 'priv-00001', gameHidden: true, friendsLeagueOptOut: true } });
+    await app.inject({ method: 'PUT', url: `/api/v1${GAME_ROUTES.showcaseVisibility}`, payload: { requestId: 'vis-000001', treasury: 'me', rank: 'everyone' } });
+
+    const data = gameSettingsResponseSchema.parse((await get(app, GAME_ROUTES.settings)).json().data);
+
+    expect(data).toEqual({
+      gameHidden: true,
+      friendsLeagueOptOut: true,
+      visibility: { showcase: 'friends', rank: 'everyone', treasury: 'me', atlas: 'me' },
+    });
+  });
+
+  it('ne sert que les réglages DE L’AUTHENTIFIÉ — aucun paramètre ne désigne un autre compte', async () => {
+    const db = fakeGameDb();
+    seedUser(db, {}, USER);
+    seedUser(db, {}, OTHER);
+    db.gameProfile.rows.push({ id: 'gp', userId: OTHER, gameHiddenAt: new Date() });
+    const data = (await get(await settingsApp(db), GAME_ROUTES.settings)).json().data;
+    expect(data.gameHidden).toBe(false);
+  });
+
+  it('sans compte : 401', async () => {
+    expect((await get(await settingsApp(fakeGameDb(), null), GAME_ROUTES.settings)).statusCode).toBe(401);
+  });
+});
+
+describe('GET /users/:userId/game', () => {
+  const veteran = (db: FakeGameDb, id: string, fields: Record<string, unknown> = {}) =>
+    seedUser(
+      db,
+      {
+        engagementScore: 12_180,
+        levelRecord: 36,
+        prestige: 2,
+        currentStreakDays: 40,
+        lastStreakDate: TODAY,
+        ...fields,
+      },
+      id,
+    );
+  const befriend = (db: FakeGameDb, a = USER, b = OTHER) =>
+    db.friendRequest.rows.push({ id: `f-${a}-${b}`, status: 'accepted', senderId: a, receiverId: b, updatedAt: new Date() });
+  const seedWealth = (db: FakeGameDb, userId: string, balance: number, glory: number) => {
+    db.meeshLedger.rows.push({ id: `m-${userId}`, userId, delta: balance, reason: 'grant', requestId: `rq-m-${userId}` });
+    db.gloryLedger.rows.push({ id: `g-${userId}`, userId, delta: glory, reason: 'mint', requestId: `rq-g-${userId}` });
+  };
+
+  it('un AMI lit le niveau, le palier, les étoiles, la forme de la Flamme, le rang et le palier du trésor — jamais un compte exact', async () => {
+    const db = fakeGameDb();
+    veteran(db, USER);
+    veteran(db, OTHER);
+    befriend(db);
+    seedWealth(db, USER, 63, 4000);
+
+    const res = await get(await profileApp(db, OTHER), gameUserGamePath(USER));
+
+    const data = userGameProfileResponseSchema.parse(res.json().data);
+    expect(data).toEqual({
+      visible: true,
+      standing: { level: 34, tier: 'eclat', prestige: 2, flame: 'brasier', rank: 'conteur', division: 3 },
+      treasury: { tier: 'coffret' },
+    });
+    const raw = JSON.stringify(res.json());
+    for (const forbidden of ['63', '4000', '12180', 'currentStreakDays', 'held', 'glory', 'lastStreakDate', 'lastActive']) {
+      expect(raw).not.toContain(forbidden);
+    }
+  });
+
+  it('un inconnu (ni ami, ni admin) ne lit RIEN sur « amis » — la réponse d’un compte inexistant', async () => {
+    const db = fakeGameDb();
+    veteran(db, USER);
+    veteran(db, STRANGER);
+    seedWealth(db, USER, 63, 4000);
+    const app = await profileApp(db, STRANGER);
+
+    const refused = (await get(app, gameUserGamePath(USER))).json();
+    const unknown = (await get(app, gameUserGamePath(UNKNOWN))).json();
+
+    expect(refused).toEqual({ success: true, data: { visible: false, standing: null, treasury: null } });
+    expect(unknown).toEqual(refused);
+  });
+
+  it('chaque facette suit SON réglage : le rang à tout le monde, le trésor à moi seul', async () => {
+    const db = fakeGameDb();
+    veteran(db, USER);
+    veteran(db, STRANGER);
+    seedWealth(db, USER, 63, 4000);
+    db.gameProfile.rows.push({ id: 'gp', userId: USER, rankVisibility: 'everyone', treasuryVisibility: 'me' });
+
+    const data = userGameProfileResponseSchema.parse((await get(await profileApp(db, STRANGER), gameUserGamePath(USER))).json().data);
+
+    expect(data.visible).toBe(true);
+    expect(data.standing).not.toBeNull();
+    expect(data.treasury).toBeNull();
+  });
+
+  it('un blocage ferme TOUT, même sur « tout le monde »', async () => {
+    const db = fakeGameDb();
+    veteran(db, USER, { blockedUserIds: [OTHER] });
+    veteran(db, OTHER);
+    db.gameProfile.rows.push({ id: 'gp', userId: USER, rankVisibility: 'everyone', treasuryVisibility: 'everyone' });
+    const data = (await get(await profileApp(db, OTHER), gameUserGamePath(USER))).json().data;
+    expect(data).toEqual({ visible: false, standing: null, treasury: null });
+  });
+
+  it('« Jeu masqué » plafonne tout à « moi seul », même pour un ami', async () => {
+    const db = fakeGameDb();
+    veteran(db, USER);
+    veteran(db, OTHER);
+    befriend(db);
+    db.gameProfile.rows.push({ id: 'gp', userId: USER, rankVisibility: 'everyone', treasuryVisibility: 'everyone', gameHiddenAt: new Date() });
+    expect((await get(await profileApp(db, OTHER), gameUserGamePath(USER))).json().data.visible).toBe(false);
+  });
+
+  it('« caché de la recherche » plafonne à « amis » : un inconnu ne lit rien sur « tout le monde »', async () => {
+    const db = fakeGameDb();
+    veteran(db, USER);
+    veteran(db, STRANGER);
+    db.gameProfile.rows.push({ id: 'gp', userId: USER, rankVisibility: 'everyone', treasuryVisibility: 'everyone' });
+    privacy.set(USER, { hideProfileFromSearch: true });
+    try {
+      expect((await get(await profileApp(db, STRANGER), gameUserGamePath(USER))).json().data.visible).toBe(false);
+    } finally {
+      privacy.clear();
+    }
+  });
+
+  it('soi lit son propre profil, un administrateur aussi', async () => {
+    const db = fakeGameDb();
+    veteran(db, USER);
+    veteran(db, STRANGER);
+    expect((await get(await profileApp(db, USER), gameUserGamePath(USER))).json().data.visible).toBe(true);
+    expect((await get(await profileApp(db, STRANGER, 'ADMIN'), gameUserGamePath(USER))).json().data.visible).toBe(true);
+  });
+
+  it('un administrateur qui lit un compte INCONNU reçoit la réponse vide, pas une erreur', async () => {
+    const db = fakeGameDb();
+    veteran(db, STRANGER);
+    const res = await get(await profileApp(db, STRANGER, 'ADMIN'), gameUserGamePath(UNKNOWN));
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data).toEqual({ visible: false, standing: null, treasury: null });
+  });
+
+  it('Mythe : le drapeau du compte l’emporte sur la division, et il suit la visibilité du RANG', async () => {
+    const db = fakeGameDb();
+    veteran(db, USER);
+    veteran(db, OTHER);
+    befriend(db);
+    seedWealth(db, USER, 0, 90_000);
+    db.gameProfile.rows.push({ id: 'gp', userId: USER, mythicAt: new Date() });
+    const data = userGameProfileResponseSchema.parse((await get(await profileApp(db, OTHER), gameUserGamePath(USER))).json().data);
+    expect(data.standing).toMatchObject({ rank: 'mythe', division: null });
+  });
+
+  it('une Flamme éteinte ne se montre pas : forme nulle, jamais « éteinte depuis »', async () => {
+    const db = fakeGameDb();
+    veteran(db, USER, { lastStreakDate: new Date('2026-01-05T00:00:00Z'), flameFreezes: 0 });
+    veteran(db, OTHER);
+    befriend(db);
+    const data = userGameProfileResponseSchema.parse((await get(await profileApp(db, OTHER), gameUserGamePath(USER))).json().data);
+    expect(data.standing?.flame).toBeNull();
+  });
+
+  it('la Flamme « à risque » d’hier se montre comme celle d’aujourd’hui : rien ne dit qu’on n’est pas venu', async () => {
+    const db = fakeGameDb();
+    const yesterday = new Date(TODAY.getTime() - 24 * 3600 * 1000);
+    veteran(db, USER, { lastStreakDate: yesterday });
+    veteran(db, OTHER);
+    befriend(db);
+    const data = userGameProfileResponseSchema.parse((await get(await profileApp(db, OTHER), gameUserGamePath(USER))).json().data);
+    expect(data.standing?.flame).toBe('brasier');
+  });
+
+  it('sans contexte d’authentification : 401', async () => {
+    const db = fakeGameDb();
+    const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
+    app.decorate('prisma', db.prisma as never);
+    await app.register(userGameShowcaseRoutes, { prefix: '/api/v1/users', authenticate: async () => undefined });
+    await app.ready();
+    expect((await get(app, gameUserGamePath(USER))).statusCode).toBe(401);
+  });
+});

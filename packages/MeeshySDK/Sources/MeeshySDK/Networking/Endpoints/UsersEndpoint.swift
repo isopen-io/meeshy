@@ -15,6 +15,7 @@ public enum UsersEndpoint: MeeshyEndpoint, Sendable {
     case byId(id: String)
     case byUserIdAffiliateToken(userId: String)
     case byUserIdBlock(userId: String)
+    case byUserIdGame(userId: String)
     case byUserIdGameShowcase(userId: String)
     case byUserIdStats(userId: String)
     case emailByEmail(email: String)
@@ -54,6 +55,7 @@ public enum UsersEndpoint: MeeshyEndpoint, Sendable {
         case .byId(let id): return "/api/v1/users/\(id)"
         case .byUserIdAffiliateToken(let userId): return "/api/v1/users/\(userId)/affiliate-token"
         case .byUserIdBlock(let userId): return "/api/v1/users/\(userId)/block"
+        case .byUserIdGame(let userId): return "/api/v1/users/\(userId)/game"
         case .byUserIdGameShowcase(let userId): return "/api/v1/users/\(userId)/game/showcase"
         case .byUserIdStats(let userId): return "/api/v1/users/\(userId)/stats"
         case .emailByEmail(let email): return "/api/v1/users/email/\(email)"
