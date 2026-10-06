@@ -5,8 +5,9 @@ import MeeshySDK
 //
 // MIROIR de `coinAvers` / `coinRevers` de `docs/product/jeu-meeshy-conception.html`
 // (§ IV.2). Avers : la Signature frappée, « MEESHY · UNE MEESH » en couronne,
-// tranche cannelée (le pointillé). Revers : Mee et Meo face à face, le numéro de
-// frappe et l'année. L'argent est la règle ; chaque centième est en or, chaque
+// tranche cannelée (le pointillé). Revers : Mee et Meo face à face, GRAVÉS dans le
+// métal et COLORÉS (relief : lumière haute, ombre basse, émail dans les creux —
+// `GameEngravedBirds`, #9540), jamais deux autocollants ; le numéro de frappe et l'année. L'argent est la règle ; chaque centième est en or, chaque
 // millième en prisme — des éditions qui ne valent rien de plus en jeu, elles se
 // collectionnent.
 //
@@ -24,7 +25,6 @@ public struct MeeshCoinView: View {
 
     private let face: Face
     private let edition: MeeshEdition
-    private let figures: GameFigures?
     private let accessibilityLabel: String?
 
     @ScaledMetric(relativeTo: .body) private var typeScale: CGFloat = 1
@@ -32,14 +32,14 @@ public struct MeeshCoinView: View {
     /// - Parameters:
     ///   - face: l'avers (Signature frappée) ou le revers (numéro et année).
     ///   - edition: argent, or (chaque centième) ou prisme (chaque millième).
-    ///   - figures: les films de Mee et de Meo du revers — `nil` pour un revers
-    ///     sans figures (aperçu hors ligne, miniature).
+    ///   - figures: IGNORÉ depuis #9540 — le revers EST Mee et Meo face à face, gravés dans le métal et colorés, quelle
+    ///     que soit la taille ; la pièce ne porte plus de sticker (les films de Mee et de Meo). Le paramètre reste pour
+    ///     ne casser aucun appelant.
     ///   - accessibilityLabel: `nil` ⇒ décorative ; l'hôte dit « Meesh n° 13 ».
     public init(face: Face = .obverse, edition: MeeshEdition = .silver, figures: GameFigures? = .standard,
                 accessibilityLabel: String? = nil) {
         self.face = face
         self.edition = edition
-        self.figures = figures
         self.accessibilityLabel = accessibilityLabel
     }
 
@@ -62,16 +62,9 @@ public struct MeeshCoinView: View {
                 drawBody(in: &context)
                 switch face {
                 case .obverse: drawObverse(in: &context)
-                case .reverse(let number, let year): drawReverse(number: number, year: year, in: &context)
+                case .reverse(let number, let year):
+                    drawReverse(number: number, year: year, in: &context)
                 }
-            }
-            if case .reverse = face, let figures {
-                GameTenantsLayer(
-                    figures: figures,
-                    viewBox: CGSize(width: Self.viewSize, height: Self.viewSize),
-                    mee: .init(center: CGPoint(x: 38.5, y: 55.5), side: 51),
-                    meo: .init(center: CGPoint(x: 81.5, y: 55.5), side: 51)
-                )
             }
         }
         .aspectRatio(1, contentMode: .fit)
@@ -127,8 +120,16 @@ public struct MeeshCoinView: View {
 
     // MARK: Revers
 
+    /// Mee à gauche, Meo retourné à droite, face à face — les positions de la planche (`translate(13 30) scale(.34)` et
+    /// `translate(107 30) scale(-.34 .34)`), gravés dans le métal avec leurs couleurs.
+    private func drawEngravedBirds(in context: inout GraphicsContext) {
+        GameEngravedBirds.draw(.meeJoy, in: &context, origin: CGPoint(x: 13, y: 30), scale: 0.34)
+        GameEngravedBirds.draw(.meoOpen, in: &context, origin: CGPoint(x: 107, y: 30), scale: 0.34, flipped: true)
+    }
+
     private func drawReverse(number: Int, year: Int, in context: inout GraphicsContext) {
         drawInner(radius: 45, strokeWidth: 1.4, in: &context)
+        drawEngravedBirds(in: &context)
         let scale = min(typeScale, GameTypeScale.maximum)
         let numberSize = min(13 * max(scale, 1), 17)
         context.draw(
