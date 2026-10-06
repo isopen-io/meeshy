@@ -53,14 +53,9 @@ public enum GameMissionClock {
         return calendar.date(byAdding: .day, value: 1, to: start)
     }
 
-    /// Une date ISO 8601 du serveur, avec ou sans fractions de seconde.
+    /// Une date ISO 8601 du serveur, avec ou sans fractions de seconde — par `WireDate`, jamais un formateur local.
     public static func parse(_ iso: String) -> Date? {
-        let fractional = ISO8601DateFormatter()
-        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let date = fractional.date(from: iso) { return date }
-        let plain = ISO8601DateFormatter()
-        plain.formatOptions = [.withInternetDateTime]
-        return plain.date(from: iso)
+        WireDate.date(from: iso)
     }
 
     /// Le rythme de rafraîchissement du compte à rebours : une fois par minute tant qu'il en reste plus d'une heure,
