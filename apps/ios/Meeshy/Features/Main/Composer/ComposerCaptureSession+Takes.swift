@@ -126,9 +126,9 @@ extension ComposerCaptureSession {
     /// refusée : « tenir, lâcher, retenir » accumule ses segments. Au-delà de la
     /// borne, elle renonce proprement — l'armé, sans cadenas.
     func awaitPreviousTake() async -> Bool {
+        defer { awaitsPreviousTake = false }
         guard controls.recordingIsPending else { return true }
         awaitsPreviousTake = true
-        defer { awaitsPreviousTake = false }
         let limite = Date().addingTimeInterval(Self.previousTakeTimeout)
         while controls.recordingIsPending {
             guard !Task.isCancelled else { return false }

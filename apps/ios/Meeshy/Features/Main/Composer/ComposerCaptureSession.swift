@@ -384,6 +384,7 @@ final class ComposerCaptureSession: ObservableObject {
         guard holdStartedAt == nil, !isPinching, !holdSpoiledByPinch else { return }
         filmIntent = .edit
         let attend = controls.recordingIsPending
+        awaitsPreviousTake = attend
         if !attend { HapticFeedback.medium() }
         holdStartedAt = Date()
         holdPhase = .holding
