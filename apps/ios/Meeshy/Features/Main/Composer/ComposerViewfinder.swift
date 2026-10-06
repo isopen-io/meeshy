@@ -128,6 +128,8 @@ struct ComposerViewfinder: View {
         .animation(.easeInOut(duration: 0.2), value: pendingPhoto?.id)
         .background(Color.black.ignoresSafeArea())
         .onAppear {
+            capture.deliversRawPhoto = reviewsPhoto
+            capture.onDeliver = { resultat in receive(resultat) }
             camera.configure()
             capture.watchThermalState()
             // La porte qui promet la vidéo arme le micro À L'OUVERTURE : le
@@ -137,24 +139,6 @@ struct ComposerViewfinder: View {
             }
         }
         .onDisappear { capture.disarm() }
-        .onReceive(camera.$capturedPhotoId) { id in
-            guard let id, !delivered, pendingPhoto == nil, let image = camera.capturedPhoto else { return }
-            guard reviewsPhoto else {
-                // Une porte sans prise verse dans une scène : la photo y part
-                // avec le look choisi en direct (#9329).
-                capture.lookedPhoto(image, data: camera.capturedPhotoData) { deliver($0) }
-                return
-            }
-            // La session reste ouverte sous la prise : « Reprendre » rend le
-            // viseur à l'image suivante, sans rouvrir la caméra.
-            pendingPhoto = ComposerPendingPhoto(id: id, image: image, data: camera.capturedPhotoData,
-                                                look: capture.look)
-        }
-        // Une vidéo s'ACCUMULE (#4099) : `✓` concatène et rend.
-        .onReceive(camera.$capturedVideoId) { id in
-            guard id != nil, !delivered, let url = camera.capturedVideoURL else { return }
-            capture.collectSegment(url)
-        }
         .statusBarHidden()
     }
 
@@ -213,6 +197,16 @@ struct ComposerViewfinder: View {
     }
 
     // MARK: - La sortie
+
+    /// **La prise de la scène arrive par la session** (#9351). Une porte sans
+    /// prise la reçoit regardée et la verse ; une porte qui revoit la reçoit
+    /// brute, et la session reste ouverte sous la prise : « Reprendre » rend le
+    /// viseur à l'image suivante, sans rouvrir la caméra.
+    private func receive(_ result: CameraResult) {
+        guard reviewsPhoto, case .photo(let image, let data) = result else { return deliver(result) }
+        guard !delivered, pendingPhoto == nil else { return }
+        pendingPhoto = ComposerPendingPhoto(id: UUID().uuidString, image: image, data: data, look: capture.look)
+    }
 
     /// **Une prise ne part qu'une fois** : deux touchers rapprochés sur
     /// « Valider » pendant que le viseur se retire poseraient deux pièces.

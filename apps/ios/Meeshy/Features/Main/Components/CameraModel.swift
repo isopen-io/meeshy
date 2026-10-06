@@ -40,6 +40,8 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     /// tant qu'aucune photo n'a été prise.
     var capturedPhotoData: Data?
     var capturedVideoURL: URL?
+    /// L'enregistrement du BRUT de la dernière prise, posé AVANT son identifiant (#9351).
+    var librarySave: Task<Bool, Never>?
     @Published var capturedPhotoId: String?
     @Published var capturedVideoId: String?
     @Published var isTakingPhoto = false
@@ -811,40 +813,18 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
             // last recorded segment rather than losing the whole capture.
             if let lastSegment = segments.last {
                 capturedVideoURL = lastSegment
+                librarySave = Task { await Self.saveToPhotoLibrary { await PhotoLibraryManager.shared.saveVideo(at: lastSegment) } }
                 capturedVideoId = UUID().uuidString
-                Task { await Self.saveToPhotoLibrary { await PhotoLibraryManager.shared.saveVideo(at: lastSegment) } }
             }
             return
         }
         capturedVideoURL = finalURL
+        librarySave = Task { await Self.saveToPhotoLibrary { await PhotoLibraryManager.shared.saveVideo(at: finalURL) } }
         capturedVideoId = UUID().uuidString
-        Task { await Self.saveToPhotoLibrary { await PhotoLibraryManager.shared.saveVideo(at: finalURL) } }
         if segments.count > 1 {
             for segment in segments where segment != finalURL {
                 FileManager.default.removeItemLogging(at: segment, context: "merged recording segment", logger: .media)
             }
-        }
-    }
-
-    /// Enregistre une capture dans l'album Meeshy et **rend le refus visible**.
-    /// `PhotoLibraryManager` demande `.addOnly` et renvoie `false` sur refus,
-    /// mais les trois appels de ce fichier jetaient ce booléen : une photo prise
-    /// puis jamais retrouvée dans Photos, sans un mot. Le média part de toute
-    /// façon dans le composer — l'échec de sauvegarde n'est donc pas bloquant.
-    nonisolated static func saveToPhotoLibrary(_ save: () async -> Bool) async {
-        guard await save() == false else { return }
-        let state = PhotoLibraryManager.shared.authorizationState
-        await MainActor.run {
-            guard state.needsSettingsRedirect else {
-                FeedbackToastManager.shared.showError(
-                    String(localized: "camera.save.failed",
-                           defaultValue: "Impossible d'enregistrer dans Photos", bundle: .main)
-                )
-                return
-            }
-            FeedbackToastManager.shared.showError(
-                MediaPermissionCoordinator.deniedMessage(for: .photoLibraryAdd)
-            ) { MediaPermissionCoordinator.openSettings() }
         }
     }
 
@@ -961,14 +941,6 @@ extension CameraModel: AVCapturePhotoCaptureDelegate {
             Task { @MainActor in self.isTakingPhoto = false }
             return
         }
-        Task { @MainActor in
-            self.isTakingPhoto = false
-            self.capturedPhoto = image
-            // Les octets TRAITÉS, publiés à côté de l'image : ils portent
-            // l'EXIF de la prise, qu'une `UIImage` ne rend pas.
-            self.capturedPhotoData = data
-            self.capturedPhotoId = UUID().uuidString
-        }
         // Persist the processed encoded bytes AS-IS (HEIC/JPEG, EXIF kept):
         // `saveImage(_ data:)` decodes to a UIImage and loses the EXIF,
         // `saveImageFile` hands Photos the bytes untouched (#9347).
@@ -976,7 +948,16 @@ extension CameraModel: AVCapturePhotoCaptureDelegate {
         // `performChanges` block runs on Photos' own queue without the
         // executor-isolation SIGTRAP the previous inline save hit.
         let nom = ComposerPhotoEncoding.fileName(for: data, id: UUID().uuidString)
-        Task { await CameraModel.saveToPhotoLibrary { await PhotoLibraryManager.shared.saveImageFile(data, fileName: nom) } }
+        let enregistrement = Task { await CameraModel.saveToPhotoLibrary { await PhotoLibraryManager.shared.saveImageFile(data, fileName: nom) } }
+        Task { @MainActor in
+            self.isTakingPhoto = false
+            self.capturedPhoto = image
+            // Les octets TRAITÉS, publiés à côté de l'image : ils portent
+            // l'EXIF de la prise, qu'une `UIImage` ne rend pas.
+            self.capturedPhotoData = data
+            self.librarySave = enregistrement
+            self.capturedPhotoId = UUID().uuidString
+        }
     }
 }
 

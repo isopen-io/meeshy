@@ -73,6 +73,25 @@ final class ComposerCaptureSession: ObservableObject {
     let thermal: any ThermalStateMonitorProviding
     /// Ce que l'aperçu et la bande ont le droit de coûter maintenant.
     @Published private(set) var thermalBudget = ComposerThermalBudget.budget(for: .nominal)
+    /// Où part la prochaine photo, la prochaine vidéo (#9351) : la scène mène à
+    /// l'édition, la miniature choisie à la galerie.
+    var photoIntent = ComposerTakeIntent.edit
+    var filmIntent = ComposerTakeIntent.edit
+    /// Une intention par enregistrement PARTI, dans l'ordre : le fichier qui
+    /// arrive dépile la sienne (un segment relancé avant l'arrivée d'une vidéo
+    /// « galerie » ne lui vole pas son intention).
+    var filmIntents: [ComposerTakeIntent] = []
+    /// Qui reçoit la prise de la scène — posé par l'hôte qui monte la capture,
+    /// retiré au désarmement : un viseur fermé ne remet plus rien.
+    var onDeliver: (@MainActor (CameraResult) -> Void)?
+    /// La porte qui REVOIT la photo (`ComposerPhotoLookReview`, jusqu'à la
+    /// Tâche 15) la reçoit brute : elle y applique le look elle-même, une fois.
+    var deliversRawPhoto = false
+    let gallery: any ComposerGalleryProviding
+    let scenes: any ComposerLookSceneProviding
+    var takeSubscriptions = Set<AnyCancellable>()
+    /// Les rendus qui partent en galerie pendant qu'on reste en capture.
+    @Published private(set) var pendingGallerySaves = 0
     /// Chaque désarmement ouvre une nouvelle génération : un rendu lancé avant
     /// ne remet plus rien à un viseur que l'auteur a fermé.
     private var renderGeneration = 0
@@ -106,16 +125,21 @@ final class ComposerCaptureSession: ObservableObject {
          camera: CameraModel = CameraModel(),
          controls: (any ComposerCaptureCameraProviding)? = nil,
          defaults: UserDefaults = .standard,
-         thermal: (any ThermalStateMonitorProviding)? = nil) {
+         thermal: (any ThermalStateMonitorProviding)? = nil,
+         gallery: any ComposerGalleryProviding = ComposerGallery.shared,
+         scenes: any ComposerLookSceneProviding = ComposerLookSceneCache.shared) {
         self.stage = stage
         self.mode = mode
         self.camera = camera
         self.controls = controls ?? camera
         self.defaults = defaults
         self.thermal = thermal ?? ThermalStateMonitor()
+        self.gallery = gallery
+        self.scenes = scenes
         flashIntensity = defaults.object(forKey: ComposerFlashIntensity.storageKey) as? Double
             ?? ComposerFlashIntensity.defaultLevel
         relais = camera.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }
+        subscribeToTakes()
     }
 
     // Deinit synthétisée ISOLÉE sous SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor :
@@ -174,6 +198,8 @@ final class ComposerCaptureSession: ObservableObject {
         isRenderingLook = false
         stage = .off
         mode = nil
+        photoIntent = .edit
+        onDeliver = nil
         discardSegments()
         resetHold()
         holdStartedAt = nil
@@ -181,7 +207,7 @@ final class ComposerCaptureSession: ObservableObject {
         resetPinch()
         dismissDrag = 0
         extinguishFlash()
-        ComposerLookSceneCache.shared.purge()
+        scenes.purge()
         CallFrameRenderer.purgeLayers()
         camera.stop()
         stopWatchingThermalState()
@@ -200,6 +226,9 @@ final class ComposerCaptureSession: ObservableObject {
         segments = []
         pendingSegmentDuration = 0
     }
+
+    func beginGallerySave() { pendingGallerySaves += 1 }
+    func endGallerySave() { pendingGallerySaves = max(0, pendingGallerySaves - 1) }
 
     // MARK: - La prise
 
@@ -230,6 +259,7 @@ final class ComposerCaptureSession: ObservableObject {
     func startFilming() {
         guard stage == .armed, !controls.isSwitchingCamera else { return }
         mode = ComposerShutterGesture.mode(locked: holdPhase == .locked)
+        noteRecordingStarted()
         stage = .recording
         controls.setTorch(ComposerFrontFlash.torch(flash: flash, position: controls.currentPosition),
                         level: flashIntensity)
@@ -237,6 +267,7 @@ final class ComposerCaptureSession: ObservableObject {
         Task { @MainActor in
             await camera.enableAudioCaptureIfNeeded()
             camera.startRecording()
+            if !camera.isRecordingVideo { filmIntents = Array(filmIntents.dropLast()) }
         }
     }
 
@@ -319,12 +350,19 @@ final class ComposerCaptureSession: ObservableObject {
     // MARK: - La tenue, le cadenas, la levée
 
     /// **Le toucher prend la photo** dès que la session peut écrire — un
-    /// toucher arrivé trop tôt attend plutôt que de se perdre.
+    /// toucher arrivé trop tôt attend plutôt que de se perdre. La demande part
+    /// vers l'édition (#9351) — une photo déjà en vol garde son intention, et
+    /// une attente vaine ne lègue rien.
     func photographWhenReady() {
+        if !camera.isTakingPhoto { photoIntent = .edit }
         holdTask?.cancel()
         holdTask = Task { @MainActor in
-            guard await controls.waitUntilCaptureReady(timeout: ComposerSceneQuickCapture.readinessTimeout),
-                  !Task.isCancelled else { return }
+            let pret = await controls.waitUntilCaptureReady(timeout: ComposerSceneQuickCapture.readinessTimeout)
+            guard !Task.isCancelled else { return }
+            guard pret else {
+                photoIntent = .edit
+                return
+            }
             takePhoto()
         }
     }
@@ -333,6 +371,7 @@ final class ComposerCaptureSession: ObservableObject {
     /// le doigt reste — ou au-delà, verrouillé.
     func beginHold() {
         guard holdStartedAt == nil, !isPinching, !holdSpoiledByPinch else { return }
+        filmIntent = .edit
         HapticFeedback.medium()
         holdStartedAt = Date()
         holdPhase = .holding
@@ -397,6 +436,7 @@ final class ComposerCaptureSession: ObservableObject {
     private func resetHold() {
         holdTask?.cancel()
         holdTask = nil
+        filmIntent = .edit
         holdPhase = nil
         lockProgress = 0
     }
@@ -552,10 +592,11 @@ extension ComposerCaptureSession {
         let regard = look
         let auteur = lookPerson
         let date = lookDate
+        let cache = scenes
         Task { @MainActor in
             guard let rendu = await ComposerLookPainter.renderPhoto(debout, look: regard, framing: .identity,
                                                                     person: auteur, date: date,
-                                                                    scenes: ComposerLookSceneCache.shared) else {
+                                                                    scenes: cache) else {
                 deliver(.photo(image, data: data))
                 return
             }

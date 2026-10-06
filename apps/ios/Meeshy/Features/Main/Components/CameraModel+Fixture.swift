@@ -223,6 +223,7 @@ extension CameraModel {
         guard let image = driver.photo() else { return }
         capturedPhoto = image
         capturedPhotoData = image.jpegData(compressionQuality: 0.9)
+        librarySave = nil
         capturedPhotoId = UUID().uuidString
     }
 
@@ -231,6 +232,7 @@ extension CameraModel {
         Task { @MainActor in
             guard let url = await driver.movieCopy() else { return }
             capturedVideoURL = url
+            librarySave = nil
             capturedVideoId = UUID().uuidString
         }
     }
