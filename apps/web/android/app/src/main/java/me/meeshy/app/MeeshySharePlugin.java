@@ -39,7 +39,9 @@ import java.io.IOException;
  * `DownloadListener`. Le contenu arrive en base64, s'ecrit dans le cache
  * (`partages/`, vide a chaque appel) et part par le `FileProvider` deja
  * declare (`file_paths.xml`, `cache-path`), avec la meme feuille et la meme
- * annulation que `share`.
+ * annulation que `share`. Un `text` offert (le lien de parrainage d'une
+ * carte photo, #9492) part a cote en `EXTRA_TEXT`, comme le fait Chrome
+ * pour `navigator.share({ files, text })`.
  */
 @CapacitorPlugin(name = "MeeshyShare")
 public class MeeshySharePlugin extends Plugin {
@@ -93,6 +95,10 @@ public class MeeshySharePlugin extends Plugin {
         Intent send = new Intent(Intent.ACTION_SEND);
         send.setType(mimeType.isEmpty() ? "application/octet-stream" : mimeType);
         send.putExtra(Intent.EXTRA_STREAM, uri);
+        String text = call.getString("text", "");
+        if (!text.isEmpty()) {
+            send.putExtra(Intent.EXTRA_TEXT, text);
+        }
         send.setClipData(ClipData.newRawUri("", uri));
         send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
 

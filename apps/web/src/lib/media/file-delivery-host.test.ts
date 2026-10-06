@@ -1,5 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
+import { GALLERY_BRIDGE_MAX_BYTES } from '@/lib/gallery/gallery-saver';
+
 import { fileDeliveryPortal } from './deliver-file';
 import { browserFileDeliveryHost, hasFileDeliveryDoor } from './file-delivery-host';
 
@@ -94,6 +96,28 @@ describe('browserFileDeliveryHost — la coque Android partage le FICHIER par so
     expect(appels).toEqual([
       { plugin: 'MeeshyShare', methode: 'shareFile', options: { fileName: 'story.jpg', mimeType: 'image/jpeg', data: btoa('Meeshy!') } },
     ]);
+  });
+
+  test('un texte offert avec le fichier (le lien de parrainage) part avec lui, comme `navigator.share({ files, text })` (#9492)', async () => {
+    const { shell, appels } = coqueAndroid({ methodes: ['share', 'shareFile'] });
+    const host = browserFileDeliveryHost({ document: documentLike(), navigator: {}, urls, shell });
+    const file = new File(['Meeshy!'], 'carte.png', { type: 'image/png' });
+    await host.shareFiles?.({ files: [file], text: 'https://meeshy.me/signup/affiliate/aff_1' });
+    expect(appels).toEqual([
+      {
+        plugin: 'MeeshyShare',
+        methode: 'shareFile',
+        options: { fileName: 'carte.png', mimeType: 'image/png', data: btoa('Meeshy!'), text: 'https://meeshy.me/signup/affiliate/aff_1' },
+      },
+    ]);
+  });
+
+  test('un fichier au-delà du plafond du pont n’y est jamais copié, comme la galerie le refuse déjà (#9512)', () => {
+    const { shell } = coqueAndroid({ methodes: ['share', 'shareFile'] });
+    const host = browserFileDeliveryHost({ document: documentLike(), navigator: {}, urls, shell });
+    const fichier = (size: number) => ({ name: 'longue.mp4', type: 'video/mp4', size }) as File;
+    expect(host.canShareFiles?.({ files: [fichier(GALLERY_BRIDGE_MAX_BYTES + 1)] })).toBe(false);
+    expect(host.canShareFiles?.({ files: [fichier(GALLERY_BRIDGE_MAX_BYTES)] })).toBe(true);
   });
 
   test('la feuille fermée sans choix (CANCELED) ⇒ annulé, comme sur le web', async () => {

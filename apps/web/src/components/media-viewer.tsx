@@ -35,6 +35,7 @@ import { useSendSheetOpen } from '@/lib/view/use-send-sheet-open';
 import { lateralSeek } from '@/lib/view/media-transport';
 import { useAttachmentOpenReport } from '@/lib/view/use-attachment-open-report';
 import { useMediaPlayback } from '@/lib/view/use-media-playback';
+import { useViewerPinch } from '@/lib/view/use-viewer-pinch';
 import { takeVideoHandoff } from '@/lib/view/video-handoff';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
@@ -95,13 +96,11 @@ const ViewerAudioPage = lazy(() => import('./viewer-audio-page'));
  * GESTES — ce qui est LIVRÉ : tap (bascule plateau ⇄ plein cadre), glissement
  * vertical qui SUIT le doigt (ferme ≥ 150, entre en plein cadre ≤ −150 depuis
  * `carded`), appui long 500 ms (plein cadre + pause), double-tap (zoom
- * 1 ↔ 2,5 sur une page IMAGE), flèches/pellicule pour la pagination. CE QUI
- * NE L'EST PAS (D-54, écart ASSUMÉ, faute de temps sur ce tour) : le
- * pincement à deux doigts et le déplacement d'une image zoomée au doigt — la
- * loi PURE qui les gouvernerait (`MAX_SCALE`, `media-stage.ts`) est déjà
- * dérivée et testée, seule la mécanique `PointerEvent` à deux points manque.
- * Un contournement matériel n'existe pas : le double-tap reste le chemin
- * complet pour explorer une image en grand.
+ * 1 ↔ 2,5 sur une page IMAGE), pincement à deux doigts (#9532, borné par
+ * `MAX_SCALE`, centré où les doigts se posent — `useViewerPinch` ; un second
+ * doigt n'est jamais un glissé ni un appui long), flèches/pellicule pour la
+ * pagination. CE QUI NE L'EST PAS (D-54, écart ASSUMÉ) : le déplacement d'une
+ * image agrandie au doigt.
  */
 export type MediaViewerProps = {
   readonly items: readonly Attachment[];
@@ -321,7 +320,16 @@ function ViewerImagePage({
   useAttachmentOpenReport({ attachmentId: attachment.id, isActive, isMine, ...(deps !== undefined ? { deps } : {}) });
   const described = electDescription({ attachment, readerLanguages: languages, displayLanguage, fallbackLanguage });
   const lang = described.language !== READER_LOCALE ? described.language : undefined;
-  const [zoomed, setZoomed] = useState(false);
+  const [zoom, setZoom] = useState({ scale: 1, origin: '50% 50%' });
+  const imageRef = useRef<HTMLImageElement>(null);
+  const pinch = useViewerPinch({
+    scale: zoom.scale,
+    image: imageRef,
+    onCommit: (scale, origin) => {
+      setZoom({ scale, origin });
+      onZoomChange?.(scale > 1);
+    },
+  });
   const placeholder = thumbHashPlaceholder(attachment.thumbHash);
   const src = attachment.fileUrl === '' ? '' : attachmentSrc(attachment.fileUrl);
   const failure = useMediaLoadFailure(src);
@@ -341,22 +349,24 @@ function ViewerImagePage({
   return (
     <div
       className="relative flex size-full items-center justify-center overflow-hidden"
-      style={placeholder !== undefined ? { backgroundImage: `url("${placeholder}")`, backgroundSize: 'cover' } : undefined}
+      style={{ touchAction: 'none', ...(placeholder !== undefined ? { backgroundImage: `url("${placeholder}")`, backgroundSize: 'cover' } : {}) }}
+      {...pinch}
       onDoubleClick={(event) => {
         event.stopPropagation();
-        const next = !zoomed;
-        setZoomed(next);
-        onZoomChange?.(next);
+        const next = zoom.scale > 1 ? 1 : DOUBLE_TAP_SCALE;
+        setZoom({ scale: next, origin: '50% 50%' });
+        onZoomChange?.(next > 1);
       }}
     >
       <img
+        ref={imageRef}
         key={failure.attempt}
         src={src}
         onError={failure.onError}
         alt={described.text}
         {...(lang !== undefined ? { lang } : {})}
         className="media-viewer-media transition-transform"
-        style={{ transform: zoomed ? `scale(${DOUBLE_TAP_SCALE})` : 'scale(1)' }}
+        style={{ transform: `scale(${zoom.scale})`, transformOrigin: zoom.origin }}
         draggable={false}
       />
     </div>
@@ -852,6 +862,11 @@ export default function MediaViewer({
         onClick={onStageClick}
         onContextMenu={(e) => e.preventDefault()}
         onPointerDown={(e: ReactPointerEvent<HTMLDivElement>) => {
+          if (!e.isPrimary) {
+            swipe.handlers.onPointerCancel(e);
+            longPress.onPointerCancel();
+            return;
+          }
           swipe.handlers.onPointerDown(e);
           longPress.onPointerDown(e);
         }}
