@@ -120,6 +120,21 @@ final class ComposerLookStripTests: XCTestCase {
         XCTAssertFalse(bande.contains("TapGesture(count: 2)"), "un double toucher ne retarde jamais le toucher simple")
     }
 
+    func test_strip_reducesTheFrameInsideItsOwnCommandBuffer() throws {
+        let surface = try Self.code("Meeshy/Features/Main/Composer/ComposerLookStripSurface.swift")
+        XCTAssertFalse(surface.contains("CVPixelBuffer"),
+                       "aucun rendu synchrone vers un tampon réécrit pendant qu'un dessin précédent le lit")
+        XCTAssertTrue(surface.contains("CIImage(mtlTexture:"), "la trame réduite est une texture du même passage")
+    }
+
+    func test_strip_laysItsCellsLeftToRight_whateverTheLanguage() throws {
+        let bande = try Self.code("Meeshy/Features/Main/Composer/ComposerLookStrip.swift")
+        XCTAssertTrue(bande.contains(".environment(\\.layoutDirection, .leftToRight)"),
+                      "en arabe, l'atlas Metal et les cases gardent le même ordre")
+        XCTAssertFalse(bande.contains("@State private var scrollSettle"),
+                       "le minuteur du défilement n'invalide pas la vue à chaque image")
+    }
+
     private static func code(_ relative: String) throws -> String {
         let racine = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
