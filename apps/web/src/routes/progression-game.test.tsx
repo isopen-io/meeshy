@@ -20,6 +20,7 @@ const idle: GameActions = {
   pending: { mint: false, rerollId: null, chest: false, freeze: false, relight: false },
   errors: {},
   celebration: null,
+  strikeKey: 0,
 };
 
 const base = resolveEngagementProgress(ENGAGEMENT_PROGRESS_FIXTURE);
