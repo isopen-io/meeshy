@@ -3,6 +3,7 @@ import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { resolveCssVars } from './css-vars';
 import { containFit, coverFit, type BannerLayout, type PhotoLayout, type Rect } from './layout';
 import { fitBannerLine } from './referral';
+import { QR_DARK, QR_LIGHT, type QrSquare } from './referral-qr';
 import type { PhotoMoment } from './moments';
 
 /**
@@ -37,7 +38,7 @@ export type PaintContext = {
   beginPath?(): void;
   roundRect?(x: number, y: number, w: number, h: number, radius: number): void;
   fill?(): void;
-  /** Les pointillés de l'EMPLACEMENT du lien ; absents d'un vieux moteur : l'emplacement n'est pas cerné. */
+  /** Les pointillés de l'EMPLACEMENT du carré QR ; absents d'un vieux moteur : l'emplacement n'est pas cerné. */
   setLineDash?(segments: number[]): void;
   strokeRect?(x: number, y: number, w: number, h: number): void;
   strokeStyle?: string | CanvasGradient | CanvasPattern;
@@ -62,11 +63,11 @@ export type PhotoArt = {
 /** Les textes du bandeau de parrainage (#7742), déjà localisés par l'appelant. */
 export type PhotoBanner = {
   readonly headline: string;
-  /** Le lien court tel qu'il se lit sur la carte. */
-  readonly link: string;
+  /** Le lien, en carré QR (#9554) ; `null` : pas de lien encore, ou un lien que la place ne rendrait pas lisible. */
+  readonly qr: QrSquare | null;
   /** « 23 j » ; `null` : la Flamme est éteinte, ni dessin ni jours. */
   readonly flameLabel: string | null;
-  /** Le lien n'existe pas encore (aucun jeton) : l'aperçu cerne son emplacement de pointillés. */
+  /** Le lien n'existe pas encore (aucun jeton) : l'aperçu cerne l'emplacement VIDE du carré de pointillés. */
   readonly placeholder?: true;
 };
 
@@ -186,9 +187,8 @@ function drawContained(ctx: PaintContext, image: CanvasImageSource, frame: Rect)
 }
 
 const BANNER_RADIUS = 0.2;
-/** Largeur d'un caractère, en fraction du corps : le gras sans empattement, et la chasse fixe du lien. */
+/** Largeur d'un caractère, en fraction du corps : le gras sans empattement. */
 const SANS_ADVANCE = 0.58;
-const MONO_ADVANCE = 0.62;
 
 function paintBannerFrame(ctx: PaintContext, banner: BannerLayout, palette: PhotoPalette): void {
   const { x, y, w, h } = banner.frame;
@@ -202,41 +202,47 @@ function paintBannerFrame(ctx: PaintContext, banner: BannerLayout, palette: Phot
   ctx.fillRect(x, y, w, h);
 }
 
-/** L'EMPLACEMENT du lien (aucun jeton encore) : un cadre en pointillé autour du texte, rendu ensuite au trait plein. */
-function traceLinkPlaceholder(ctx: PaintContext, banner: BannerLayout, link: { readonly text: string; readonly size: number }, palette: PhotoPalette): void {
+/** L'EMPLACEMENT du carré (aucun jeton encore) : un cadre en pointillé, VIDE — jamais le QR d'un lien qui n'existe pas. */
+function traceQrPlaceholder(ctx: PaintContext, slot: Rect, palette: PhotoPalette): void {
   if (ctx.setLineDash === undefined || ctx.strokeRect === undefined) return;
-  const pad = link.size * 0.35;
+  const line = Math.max(2, slot.w * 0.02);
   ctx.strokeStyle = palette.inkSoft;
-  ctx.lineWidth = Math.max(1, link.size * 0.06);
-  ctx.setLineDash([link.size * 0.3, link.size * 0.25]);
-  ctx.strokeRect(banner.link.x - pad, banner.link.y - link.size - pad * 0.4, link.text.length * link.size * MONO_ADVANCE + pad * 2, link.size * 1.25 + pad);
+  ctx.lineWidth = line;
+  ctx.setLineDash([slot.w * 0.08, slot.w * 0.06]);
+  ctx.strokeRect(slot.x + line / 2, slot.y + line / 2, slot.w - line, slot.h - line);
   ctx.setLineDash([]);
 }
 
-/** Le texte du bandeau, après sa Signature : la phrase, le lien court (qui tient dans sa place), la Flamme et ses jours. */
+/** Le carré QR : un fond clair sur toute sa place (la marge de silence en fait partie), puis les modules sombres, au pixel entier. */
+function paintQr(ctx: PaintContext, slot: Rect, square: QrSquare): void {
+  ctx.fillStyle = QR_LIGHT;
+  ctx.fillRect(slot.x, slot.y, slot.w, slot.h);
+  ctx.fillStyle = QR_DARK;
+  for (const run of square.runs) ctx.fillRect(slot.x + run.x, slot.y + run.y, run.w, run.h);
+}
+
+/** Le contenu du bandeau, après sa Signature : la phrase, la Flamme et ses jours, puis le carré QR du lien en fin de ligne. */
 function paintBannerContent(ctx: PaintContext, banner: BannerLayout, input: PaintInput, text: PhotoBanner): void {
   const { palette, fontFamily, art } = input;
   ctx.textBaseline = 'alphabetic';
   ctx.shadowBlur = 0;
-  ctx.textAlign = 'left';
+  ctx.textAlign = banner.direction === 'rtl' ? 'right' : 'left';
 
   const headline = fitBannerLine({ text: text.headline, size: banner.headline.size, maxWidth: banner.maxTextWidth, minSize: banner.headline.size * 0.6, advance: SANS_ADVANCE });
   ctx.fillStyle = palette.ink;
   ctx.font = `800 ${headline.size}px ${fontFamily}`;
   ctx.fillText(headline.text, banner.headline.x, banner.headline.y);
 
-  const link = fitBannerLine({ text: text.link, size: banner.link.size, maxWidth: banner.maxTextWidth, minSize: banner.link.size * 0.7, advance: MONO_ADVANCE });
-  ctx.fillStyle = palette.inkSoft;
-  ctx.font = `500 ${link.size}px ui-monospace, monospace`;
-  ctx.fillText(link.text, banner.link.x, banner.link.y);
-  if (text.placeholder === true) traceLinkPlaceholder(ctx, banner, link, palette);
+  if (text.flameLabel !== null && art.flame !== undefined) {
+    drawContained(ctx, art.flame, banner.flame);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = palette.ink;
+    ctx.font = `600 ${banner.flameDays.size}px ${fontFamily}`;
+    ctx.fillText(text.flameLabel, banner.flameDays.x, banner.flameDays.y);
+  }
 
-  if (text.flameLabel === null || art.flame === undefined) return;
-  drawContained(ctx, art.flame, banner.flame);
-  ctx.textAlign = 'center';
-  ctx.fillStyle = palette.ink;
-  ctx.font = `600 ${banner.flameDays.size}px ${fontFamily}`;
-  ctx.fillText(text.flameLabel, banner.flameDays.x, banner.flameDays.y);
+  if (text.placeholder === true) return traceQrPlaceholder(ctx, banner.qr, palette);
+  if (text.qr !== null) paintQr(ctx, banner.qr, text.qr);
 }
 
 export function paintPhoto(ctx: PaintContext, input: PaintInput): void {

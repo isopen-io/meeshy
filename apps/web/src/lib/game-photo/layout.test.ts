@@ -77,7 +77,7 @@ for (const format of FORMATS) {
 
 /**
  * LE BANDEAU DE PARRAINAGE (#7742) — au pied de la carte : la Signature, « Rejoins-moi
- * sur Meeshy », le lien court et la Flamme. Quand il est là, Mee et Meo montent
+ * sur Meeshy », la Flamme et le carré QR du lien (#9554). Quand il est là, Mee et Meo montent
  * AU-DESSUS ; sans lien, la carte part comme avant, à l'identique.
  */
 for (const format of FORMATS) {
@@ -113,11 +113,12 @@ for (const format of FORMATS) {
       expect(layout.kicker.y).toBeGreaterThan(layout.emblem.y + layout.emblem.h);
     });
 
-    test('les quatre pièces du bandeau tiennent dedans : Signature, phrase, lien, Flamme', () => {
+    test('les quatre pièces du bandeau tiennent dedans : Signature, phrase, Flamme, carré QR', () => {
       if (banner === undefined) throw new Error('bandeau attendu');
       expect(within(banner.signature, banner.frame)).toBe(true);
       expect(within(banner.flame, banner.frame)).toBe(true);
-      for (const line of [banner.headline, banner.link, banner.flameDays]) {
+      expect(within(banner.qr, banner.frame)).toBe(true);
+      for (const line of [banner.headline, banner.flameDays]) {
         expect(line.x).toBeGreaterThanOrEqual(banner.frame.x);
         expect(line.x).toBeLessThanOrEqual(banner.frame.x + banner.frame.w);
         expect(line.y).toBeGreaterThan(banner.frame.y);
@@ -126,21 +127,54 @@ for (const format of FORMATS) {
       }
     });
 
-    test('de gauche à droite : la Signature, puis la phrase, puis la Flamme', () => {
+    test('de gauche à droite : la Signature, la phrase, la Flamme, puis le carré QR en fin de ligne', () => {
       if (banner === undefined) throw new Error('bandeau attendu');
+      expect(banner.direction).toBe('ltr');
       expect(banner.signature.x + banner.signature.w).toBeLessThanOrEqual(banner.headline.x);
       expect(banner.headline.x).toBeLessThan(banner.flame.x);
+      expect(banner.flame.x + banner.flame.w).toBeLessThanOrEqual(banner.qr.x);
     });
 
-    test('la phrase est au-dessus du lien', () => {
+    test('le lien n’a plus de ligne : le carré QR le porte (#9554)', () => {
       if (banner === undefined) throw new Error('bandeau attendu');
-      expect(banner.headline.y).toBeLessThan(banner.link.y);
+      expect(Object.keys(banner)).not.toContain('link');
     });
 
-    test('la place du lien : il tient entre la Signature et la Flamme', () => {
+    test('le carré QR est un CARRÉ, posé au pixel, assez grand pour une version 6 à deux pixels le module', () => {
+      if (banner === undefined) throw new Error('bandeau attendu');
+      const { qr } = banner;
+      expect(qr.w).toBe(qr.h);
+      for (const value of [qr.x, qr.y, qr.w]) expect(Number.isInteger(value)).toBe(true);
+      expect(qr.w).toBeGreaterThanOrEqual((41 + 8) * 2);
+      expect(Math.abs(qr.y + qr.h / 2 - (banner.frame.y + banner.frame.h / 2))).toBeLessThanOrEqual(1);
+    });
+
+    test('la place de la phrase : elle tient entre la Signature et la Flamme', () => {
       if (banner === undefined) throw new Error('bandeau attendu');
       expect(banner.maxTextWidth).toBeGreaterThan(width * 0.4);
       expect(banner.headline.x + banner.maxTextWidth).toBeLessThanOrEqual(banner.flame.x);
+    });
+
+    test('de droite à gauche, le bandeau se retourne : le carré QR reste en FIN de ligne, donc à gauche', () => {
+      const mirrored = photoLayout(format, { banner: true, rtl: true }).banner;
+      if (banner === undefined || mirrored === undefined) throw new Error('bandeau attendu');
+      const flip = (r: Rect): Rect => ({ ...r, x: width - r.x - r.w });
+      expect(mirrored.direction).toBe('rtl');
+      expect(mirrored.frame).toEqual(banner.frame);
+      expect(mirrored.qr).toEqual(flip(banner.qr));
+      expect(mirrored.signature).toEqual(flip(banner.signature));
+      expect(mirrored.flame).toEqual(flip(banner.flame));
+      expect(mirrored.headline).toEqual({ ...banner.headline, x: width - banner.headline.x });
+      expect(mirrored.flameDays).toEqual({ ...banner.flameDays, x: width - banner.flameDays.x });
+      expect(mirrored.maxTextWidth).toBe(banner.maxTextWidth);
+      expect(mirrored.qr.x).toBeLessThan(mirrored.flame.x);
+      expect(mirrored.flame.x + mirrored.flame.w).toBeLessThanOrEqual(mirrored.headline.x);
+    });
+
+    test('le reste de la carte ne se retourne pas avec le bandeau', () => {
+      const mirrored = photoLayout(format, { banner: true, rtl: true });
+      expect({ ...mirrored, banner: undefined, signature: undefined }).toEqual({ ...layout, banner: undefined, signature: undefined });
+      expect(mirrored.signature).toEqual(mirrored.banner?.signature as Rect);
     });
   });
 }

@@ -2,7 +2,10 @@ import { describe, expect, test } from 'bun:test';
 
 import { photoLayout } from './layout';
 import { paintPhoto, prepareSvgMarkup, rasterizeSvg, withAlpha, type PaintContext, type PhotoArt, type PhotoPalette } from './compose';
+import { encodeQr } from '@/lib/qr';
+
 import { rankMoment } from './moments';
+import { QR_DARK, QR_LIGHT, referralQr, type QrSquare } from './referral-qr';
 
 /**
  * LA COMPOSITION DE L'IMAGE (#9382) — conception, partie VI : « cadre du moment
@@ -286,17 +289,29 @@ describe('withAlpha — le voile ne recouvre jamais la photo', () => {
 
 /**
  * LE BANDEAU DE PARRAINAGE PEINT (#7742) — au pied de la carte : un fond, la
- * Signature, « Rejoins-moi sur Meeshy », le lien court, la Flamme et ses jours.
- * Sans bandeau, la carte est peinte à l'identique ; une Flamme éteinte ne laisse
- * ni dessin ni jours.
+ * Signature, « Rejoins-moi sur Meeshy », la Flamme et ses jours, et le lien en
+ * CARRÉ QR (#9554) — il n'est plus écrit. Sans bandeau, la carte est peinte à
+ * l'identique ; une Flamme éteinte ne laisse ni dessin ni jours.
  */
 describe('le bandeau de parrainage', () => {
-  const bannerText = { headline: 'Rejoins-moi sur Meeshy', link: 'meeshy.me/signup/affiliate/aff_abc', flameLabel: '23 j' as string | null };
+  const LINK = 'https://meeshy.me/signup/affiliate/aff_abc';
+  const squareFor = (rtl = false): QrSquare | null => referralQr({ url: LINK }, photoLayout('story', { banner: true, rtl }).banner?.qr.w ?? 0);
+  const bannerText = { headline: 'Rejoins-moi sur Meeshy', qr: squareFor(), flameLabel: '23 j' as string | null };
+  /** Les rectangles remplis, chacun avec la couleur posée juste avant lui. */
+  const filled = (calls: readonly Call[]): readonly { readonly style: unknown; readonly rect: readonly number[] }[] =>
+    calls.reduce<{ readonly style: unknown; readonly out: readonly { readonly style: unknown; readonly rect: readonly number[] }[] }>(
+      (state, call) => {
+        if (call.op === 'fillStyle') return { ...state, style: call.args[0] };
+        if (call.op !== 'fillRect') return state;
+        return { ...state, out: [...state.out, { style: state.style, rect: call.args as readonly number[] }] };
+      },
+      { style: undefined, out: [] },
+    ).out;
   const artWithFlame = (): PhotoArt => ({ ...art(), flame: { id: 'flame' } as unknown as CanvasImageSource });
 
-  const paintBanner = (patch: { flame?: boolean; text?: Partial<typeof bannerText> } = {}) => {
+  const paintBanner = (patch: { flame?: boolean; rtl?: boolean; format?: 'story' | 'square'; text?: Partial<typeof bannerText> } = {}) => {
     const fake = fakeContext();
-    const layout = photoLayout('story', { banner: true });
+    const layout = photoLayout(patch.format ?? 'story', { banner: true, rtl: patch.rtl === true });
     paintPhoto(fake.ctx, {
       layout,
       moment,
@@ -330,25 +345,68 @@ describe('le bandeau de parrainage', () => {
     expect(x + Number(signatures[0]?.args[3])).toBeLessThanOrEqual(banner.frame.x + banner.frame.w);
   });
 
-  test('la phrase puis le lien, alignés à gauche, aux positions de la mise en page', () => {
+  test('la phrase, alignée à gauche, à la position de la mise en page', () => {
     const { calls, layout } = paintBanner();
-    const texts = calls.filter((c) => c.op === 'fillText');
-    const headline = texts.find((t) => t.args[0] === bannerText.headline);
-    const link = texts.find((t) => t.args[0] === bannerText.link);
+    const headline = calls.filter((c) => c.op === 'fillText').find((t) => t.args[0] === bannerText.headline);
     expect(headline?.args.slice(1, 3)).toEqual([layout.banner?.headline.x, layout.banner?.headline.y]);
-    expect(link?.args.slice(1, 3)).toEqual([layout.banner?.link.x, layout.banner?.link.y]);
     expect(headline?.args[5]).toBe('left');
-    expect(link?.args[5]).toBe('left');
     expect(String(headline?.args[3])).toContain('800');
   });
 
-  test('un lien trop long rétrécit, sans déborder sur la Flamme', () => {
-    const long = `meeshy.me/signup/affiliate/${'x'.repeat(60)}`;
-    const { calls, layout } = paintBanner({ text: { link: long } });
-    const link = calls.filter((c) => c.op === 'fillText').find((t) => String(t.args[0]).startsWith('meeshy.me'));
-    const size = Number(/(\d+(?:\.\d+)?)px/.exec(String(link?.args[3]))?.[1]);
-    expect(size).toBeLessThan(layout.banner?.link.size ?? 0);
-    expect(size * 0.6 * String(link?.args[0]).length).toBeLessThanOrEqual((layout.banner?.maxTextWidth ?? 0) + 1);
+  test('le lien n’est PLUS écrit sur l’image : aucun texte ne le porte, aucune chasse fixe (#9554)', () => {
+    const { calls } = paintBanner();
+    const texts = calls.filter((c) => c.op === 'fillText');
+    expect(texts.map((t) => String(t.args[0])).filter((text) => /meeshy\.me|https?:|aff_abc/i.test(text))).toEqual([]);
+    expect(texts.map((t) => String(t.args[3])).filter((font) => font.includes('monospace'))).toEqual([]);
+    expect(texts.map((t) => t.args[0])).toEqual(['NOUVEAU RANG', 'Voix II', '5 octobre 2026', 'Rejoins-moi sur Meeshy', '23 j']);
+  });
+
+  for (const format of ['story', 'square'] as const) {
+    test(`${format} : un carré clair à la place du carré QR, puis les modules sombres — relus, ils redonnent le lien`, () => {
+      const { calls, layout } = paintBanner({ format });
+      const slot = layout.banner?.qr;
+      const square = bannerText.qr;
+      if (slot === undefined || square === null) throw new Error('carré attendu');
+      const rects = filled(calls);
+      const lightIndex = rects.findIndex((r) => r.style === QR_LIGHT);
+      expect(rects[lightIndex]?.rect).toEqual([slot.x, slot.y, slot.w, slot.h]);
+      expect(rects.filter((r) => r.style === QR_LIGHT)).toHaveLength(1);
+      const dark = rects.filter((r) => r.style === QR_DARK);
+      expect(rects.slice(lightIndex + 1)).toEqual([...dark]);
+
+      const pixels = Array.from({ length: slot.h }, () => new Uint8Array(slot.w));
+      for (const { rect } of dark) {
+        const [x = 0, y = 0, w = 0, h = 0] = rect;
+        for (const value of rect) expect(Number.isInteger(value)).toBe(true);
+        for (let row = y; row < y + h; row += 1) pixels[row - slot.y]?.fill(1, x - slot.x, x - slot.x + w);
+      }
+      const center = (index: number): number => square.origin + index * square.module + Math.floor(square.module / 2);
+      const read = Array.from({ length: square.size }, (_, y) => Array.from({ length: square.size }, (_, x) => pixels[center(y)]?.[center(x)] === 1));
+      expect(read).toEqual(encodeQr(LINK)?.modules.map((row) => [...row]) ?? []);
+      expect(square.module).toBeGreaterThanOrEqual(2);
+      expect(Math.min(...dark.map((r) => r.rect[0] ?? 0)) - slot.x).toBeGreaterThanOrEqual(4 * square.module);
+      expect(slot.x + slot.w - Math.max(...dark.map((r) => (r.rect[0] ?? 0) + (r.rect[2] ?? 0)))).toBeGreaterThanOrEqual(4 * square.module);
+    });
+  }
+
+  test('de droite à gauche : la phrase s’ancre à droite, le carré QR passe en fin de ligne — à gauche', () => {
+    const { calls, layout } = paintBanner({ rtl: true, text: { qr: squareFor(true) } });
+    const ltr = photoLayout('story', { banner: true }).banner;
+    const slot = layout.banner?.qr;
+    if (slot === undefined || ltr === undefined) throw new Error('bandeau attendu');
+    const headline = calls.filter((c) => c.op === 'fillText').find((t) => t.args[0] === bannerText.headline);
+    expect(headline?.args[5]).toBe('right');
+    expect(headline?.args[1]).toBe(layout.width - ltr.headline.x);
+    expect(filled(calls).find((r) => r.style === QR_LIGHT)?.rect).toEqual([slot.x, slot.y, slot.w, slot.h]);
+    expect(slot.x).toBeLessThan(layout.width / 2);
+    const days = calls.filter((c) => c.op === 'fillText').find((t) => t.args[0] === '23 j');
+    expect(days?.args[5]).toBe('center');
+  });
+
+  test('un lien que la place ne rend pas lisible : ni carré clair ni module, le reste du bandeau part', () => {
+    const { calls } = paintBanner({ text: { qr: null } });
+    expect(filled(calls).filter((r) => r.style === QR_LIGHT || r.style === QR_DARK)).toEqual([]);
+    expect(calls.filter((c) => c.op === 'fillText').map((t) => t.args[0])).toContain('Rejoins-moi sur Meeshy');
   });
 
   test('la Flamme et ses jours, sous elle, centrés', () => {
@@ -378,7 +436,7 @@ describe('le bandeau de parrainage', () => {
     expect(calls.filter((c) => c.op === 'fillText').map((t) => t.args[0])).toEqual(['NOUVEAU RANG', 'Voix II', '5 octobre 2026']);
   });
 
-  test('l’EMPLACEMENT du lien (aucun jeton encore) est cerné de pointillés ; un vrai lien ne l’est jamais', () => {
+  test('sans jeton, le carré est un EMPLACEMENT VIDE en pointillé : aucun module, aucun fond clair, aucun texte de lien (#7742, #9554)', () => {
     const traced = (placeholder: boolean) => {
       const fake = fakeContext();
       const ops: { op: string; args: unknown[] }[] = [];
@@ -389,15 +447,25 @@ describe('le bandeau de parrainage', () => {
         lineWidth: 1,
       });
       const layout = photoLayout('story', { banner: true });
-      paintPhoto(ctx, { layout, moment, dateLabel: 'x', photo: null, art: art(), palette, fontFamily: 'system-ui', banner: { ...bannerText, link: 'meeshy.me/r/…', ...(placeholder ? { placeholder: true as const } : {}) } });
-      return { ops, layout };
+      paintPhoto(ctx, { layout, moment, dateLabel: 'x', photo: null, art: art(), palette, fontFamily: 'system-ui', banner: placeholder ? { headline: bannerText.headline, flameLabel: null, qr: null, placeholder: true } : bannerText });
+      return { ops, layout, calls: fake.calls };
     };
-    const { ops, layout } = traced(true);
-    const stroke = ops.find((o) => o.op === 'strokeRect');
-    expect(stroke).toBeDefined();
-    expect(Number(stroke?.args[0])).toBeLessThanOrEqual(layout.banner?.link.x ?? 0);
+    const { ops, layout, calls } = traced(true);
+    const slot = layout.banner?.qr;
+    if (slot === undefined) throw new Error('bandeau attendu');
+    const stroke = ops.find((o) => o.op === 'strokeRect')?.args as number[] | undefined;
+    if (stroke === undefined) throw new Error('pointillé attendu');
+    const [x = 0, y = 0, w = 0, h = 0] = stroke;
+    expect(w).toBe(h);
+    expect(x).toBeGreaterThanOrEqual(slot.x);
+    expect(y).toBeGreaterThanOrEqual(slot.y);
+    expect(x + w).toBeLessThanOrEqual(slot.x + slot.w);
+    expect(y + h).toBeLessThanOrEqual(slot.y + slot.h);
+    expect(w).toBeGreaterThan(slot.w * 0.9);
     expect((ops.find((o) => o.op === 'setLineDash')?.args[0] as number[]).length).toBeGreaterThan(0);
     expect(ops.at(-1)).toEqual({ op: 'setLineDash', args: [[]] });
+    expect(filled(calls).filter((r) => r.style === QR_LIGHT || r.style === QR_DARK)).toEqual([]);
+    expect(calls.filter((c) => c.op === 'fillText').map((t) => t.args[0])).toEqual(['NOUVEAU RANG', 'Voix II', 'x', 'Rejoins-moi sur Meeshy']);
     expect(traced(false).ops.filter((o) => o.op === 'strokeRect')).toHaveLength(0);
   });
 

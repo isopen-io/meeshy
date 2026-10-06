@@ -1,9 +1,14 @@
 import { Flame, GameBird, LeagueGem, LevelRing, MeeshCoin, RankBlason, Signature, Trophy } from '@/components/game';
 import { flameForm } from '@meeshy/shared/utils/game/flame';
 
+import { useMemo } from 'react';
+
 import { PHOTO_FORMATS, photoLayout, type BannerLayout, type PhotoFormat, type Rect, type TextLine } from '@/lib/game-photo/layout';
 import type { PhotoEmblem, PhotoMoment } from '@/lib/game-photo/moments';
 import { fitBannerLine, type PhotoReferral } from '@/lib/game-photo/referral';
+import { QR_DARK, QR_LIGHT, qrPath, referralQr } from '@/lib/game-photo/referral-qr';
+import { interfaceDirection } from '@/lib/inline-interface-language-bootstrap.js';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { formatCount, gameText, rankName } from '@/lib/view/game-copy';
 import { trophyView } from '@/lib/view/game-copy-v2';
 
@@ -22,12 +27,16 @@ import '@/styles/game-photo.css';
  * Meo le « frappent en place » avec la chorégraphie de la frappe.
  *
  * Le BANDEAU DE PARRAINAGE (#7742) se pose au pied du cadre quand l'utilisateur
- * a un lien : la Signature, « Rejoins-moi sur Meeshy », le lien court et la
- * Flamme — la même mise en page que l'image finale (`layout.banner`). Sans lien,
- * le cadre est celui d'avant.
+ * a un lien : la Signature, « Rejoins-moi sur Meeshy », la Flamme et le lien en
+ * CARRÉ QR (#9554) — la même mise en page que l'image finale (`layout.banner`),
+ * et le MÊME carré (`referralQr` : une matrice, deux peintres). Le lien ne
+ * s'écrit plus. Sans jeton, le carré est un emplacement VIDE en pointillé. Sans
+ * lien, le cadre est celui d'avant.
  *
- * DÉCORATIF (`aria-hidden`) : le dialogue qui l'héberge dit le moment en toutes
- * lettres. Aucune couleur écrite ici : les dessins lisent les jetons du jeu.
+ * DÉCORATIF : tout le dessin vit sous UNE couche `aria-hidden`, le dialogue qui
+ * l'héberge dit le moment en toutes lettres. Le carré QR est la seule pièce qui
+ * s'annonce — il est donc posé HORS de cette couche. Aucune couleur écrite ici,
+ * sauf les deux du carré : un QR se lit sombre sur clair dans les deux thèmes.
  */
 
 const percent = (value: number, of: number): string => `${((value / of) * 100).toFixed(2)}%`;
@@ -91,24 +100,21 @@ function Line({ line, width, height, tone, weight, children }: { readonly line: 
 }
 
 const SANS_ADVANCE = 0.58;
-const MONO_ADVANCE = 0.62;
 
-/** Une ligne du bandeau, alignée à gauche (`center` : centrée sur `x`), à la taille de la mise en page. */
-function BannerLine({ line, width, height, text, size, weight, tone, center = false, mono = false, dashed = false }: { readonly line: TextLine; readonly width: number; readonly height: number; readonly text: string; readonly size: number; readonly weight: number; readonly tone: string; readonly center?: boolean; readonly mono?: boolean; readonly dashed?: boolean }) {
+/** Une ligne du bandeau, ancrée sur `x` par son début de ligne (`center` : centrée sur `x`), à la taille de la mise en page. */
+function BannerLine({ line, width, height, text, size, weight, tone, rtl, center = false }: { readonly line: TextLine; readonly width: number; readonly height: number; readonly text: string; readonly size: number; readonly weight: number; readonly tone: string; readonly rtl: boolean; readonly center?: boolean }) {
+  const anchoredRight = rtl && !center;
   return (
     <p
-      {...(dashed ? { 'data-photo-banner-placeholder': '' } : {})}
       className="game-photo-text"
       style={{
         insetInline: 'auto',
-        left: percent(line.x, width),
+        ...(anchoredRight ? { right: percent(width - line.x, width) } : { left: percent(line.x, width) }),
         top: percent(line.y - line.size, height),
         transform: center ? 'translateX(-50%)' : undefined,
-        textAlign: center ? 'center' : 'start',
+        textAlign: center ? 'center' : anchoredRight ? 'right' : 'left',
         fontSize: `${((size / width) * 100).toFixed(2)}cqw`,
         fontWeight: weight,
-        fontFamily: mono ? 'ui-monospace, monospace' : undefined,
-        ...(dashed ? { outline: '1px dashed currentColor', outlineOffset: '0.3em', borderRadius: '0.2em' } : {}),
         color: tone,
       }}
     >
@@ -117,27 +123,36 @@ function BannerLine({ line, width, height, text, size, weight, tone, center = fa
   );
 }
 
+const placed = (rect: Rect, width: number, height: number) => ({
+  position: 'absolute' as const,
+  left: percent(rect.x, width),
+  top: percent(rect.y, height),
+  width: percent(rect.w, width),
+  height: percent(rect.h, height),
+});
+
 function ReferralBanner({ banner, referral, width, height }: { readonly banner: BannerLayout; readonly referral: PhotoReferral; readonly width: number; readonly height: number }) {
   const headline = fitBannerLine({ text: gameText('game.photo.referral.headline'), size: banner.headline.size, maxWidth: banner.maxTextWidth, minSize: banner.headline.size * 0.6, advance: SANS_ADVANCE });
-  const link = fitBannerLine({ text: referral.display, size: banner.link.size, maxWidth: banner.maxTextWidth, minSize: banner.link.size * 0.7, advance: MONO_ADVANCE });
   const form = referral.flameDays === null ? null : flameForm(referral.flameDays);
   const radius = `${(((banner.frame.h * 0.2) / width) * 100).toFixed(2)}cqw`;
+  const rtl = banner.direction === 'rtl';
   return (
     <>
       <span
         data-photo-banner=""
         style={{
-          position: 'absolute',
-          left: percent(banner.frame.x, width),
-          top: percent(banner.frame.y, height),
-          width: percent(banner.frame.w, width),
-          height: percent(banner.frame.h, height),
+          ...placed(banner.frame, width, height),
           borderRadius: radius,
           backgroundColor: 'color-mix(in srgb, var(--ios-indigo-950) 86%, transparent)',
         }}
       />
-      <BannerLine line={banner.headline} width={width} height={height} text={headline.text} size={headline.size} weight={800} tone="var(--ios-on-brand)" />
-      <BannerLine line={banner.link} width={width} height={height} text={link.text} size={link.size} weight={500} tone="var(--ios-indigo-200)" mono dashed={referral.placeholder === true} />
+      <BannerLine line={banner.headline} width={width} height={height} text={headline.text} size={headline.size} weight={800} tone="var(--ios-on-brand)" rtl={rtl} />
+      {referral.placeholder !== true ? null : (
+        <span
+          data-photo-banner-placeholder=""
+          style={{ ...placed(banner.qr, width, height), boxSizing: 'border-box', border: `${((banner.qr.w * 0.02) / width * 100).toFixed(2)}cqw dashed var(--ios-indigo-200)` }}
+        />
+      )}
       {form === null || referral.flameDays === null ? null : (
         <>
           <Placed rect={banner.flame} width={width} height={height}>
@@ -153,11 +168,26 @@ function ReferralBanner({ banner, referral, width, height }: { readonly banner: 
             size={banner.flameDays.size}
             weight={600}
             tone="var(--ios-on-brand)"
+            rtl={rtl}
             center
           />
         </>
       )}
     </>
+  );
+}
+
+/** Le lien en carré QR : les rectangles de l'image exportée, dans une vue à ses pixels. Seule pièce du cadre qui s'annonce. */
+function ReferralQr({ slot, referral, width, height }: { readonly slot: Rect; readonly referral: PhotoReferral; readonly width: number; readonly height: number }) {
+  const square = useMemo(() => referralQr(referral, slot.w), [referral, slot.w]);
+  if (square === null) return null;
+  return (
+    <span data-photo-banner-qr="" role="img" aria-label={gameText('game.photo.referral.qr_label')} style={placed(slot, width, height)}>
+      <svg aria-hidden="true" viewBox={`0 0 ${square.side} ${square.side}`} shapeRendering="crispEdges" style={{ display: 'block', width: '100%', height: '100%' }}>
+        <rect width={square.side} height={square.side} fill={QR_LIGHT} />
+        <path d={qrPath(square)} fill={QR_DARK} />
+      </svg>
+    </span>
   );
 }
 
@@ -173,63 +203,65 @@ export function GamePhotoFrame({
   /** Le lien de parrainage et la Flamme (#7742) ; `null` : le cadre n'a pas de bandeau. */
   readonly referral?: PhotoReferral | null;
 }) {
-  const layout = photoLayout(format, { banner: referral !== null });
+  const layout = photoLayout(format, { banner: referral !== null, rtl: interfaceDirection(currentInterfaceLanguage()) === 'rtl' });
   const { width, height } = PHOTO_FORMATS[format];
   return (
     <div
-      aria-hidden="true"
       data-photo-frame={format}
       className="game-photo-frame"
       style={{ position: 'absolute', inset: 0, pointerEvents: 'none', aspectRatio: `${width} / ${height}` }}
     >
-      <div
-        style={{
-          position: 'absolute',
-          inset: 0,
-          background: 'linear-gradient(to bottom, color-mix(in srgb, var(--ios-indigo-950) 55%, transparent), transparent 40%, transparent 35%, color-mix(in srgb, var(--ios-indigo-950) 70%, transparent))',
-        }}
-      />
-      <Placed rect={layout.emblem} width={width} height={height}>
-        <span data-game-coin-flip="" style={{ position: 'relative', display: 'block', width: '100%', height: '100%' }}>
-          <span data-game-face-wrap="reverse" style={{ display: 'block', width: '100%', height: '100%' }}>
-            <span data-photo-art="emblem" className="game-photo-art">
-              <PhotoEmblemDrawing emblem={moment.emblem} />
+      <div aria-hidden="true" style={{ position: 'absolute', inset: 0 }}>
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            background: 'linear-gradient(to bottom, color-mix(in srgb, var(--ios-indigo-950) 55%, transparent), transparent 40%, transparent 35%, color-mix(in srgb, var(--ios-indigo-950) 70%, transparent))',
+          }}
+        />
+        <Placed rect={layout.emblem} width={width} height={height}>
+          <span data-game-coin-flip="" style={{ position: 'relative', display: 'block', width: '100%', height: '100%' }}>
+            <span data-game-face-wrap="reverse" style={{ display: 'block', width: '100%', height: '100%' }}>
+              <span data-photo-art="emblem" className="game-photo-art">
+                <PhotoEmblemDrawing emblem={moment.emblem} />
+              </span>
+            </span>
+            <span data-game-shockwave="" style={{ position: 'absolute', inset: 0 }} />
+          </span>
+        </Placed>
+
+        <Line line={layout.kicker} width={width} height={height} tone="var(--ios-indigo-200)" weight={600}>
+          {moment.kicker}
+        </Line>
+        <Line line={layout.title} width={width} height={height} tone="var(--ios-on-brand)" weight={700}>
+          {moment.title}
+        </Line>
+        <Line line={layout.date} width={width} height={height} tone="var(--ios-indigo-200)" weight={500}>
+          {dateLabel}
+        </Line>
+
+        <Placed rect={layout.mee} width={width} height={height}>
+          <span data-game-actor="mee" style={{ display: 'block', width: '100%', height: '100%' }}>
+            <span data-photo-art="mee" className="game-photo-art">
+              <GameBird bird="meeGuide" size={512} />
             </span>
           </span>
-          <span data-game-shockwave="" style={{ position: 'absolute', inset: 0 }} />
-        </span>
-      </Placed>
-
-      <Line line={layout.kicker} width={width} height={height} tone="var(--ios-indigo-200)" weight={600}>
-        {moment.kicker}
-      </Line>
-      <Line line={layout.title} width={width} height={height} tone="var(--ios-on-brand)" weight={700}>
-        {moment.title}
-      </Line>
-      <Line line={layout.date} width={width} height={height} tone="var(--ios-indigo-200)" weight={500}>
-        {dateLabel}
-      </Line>
-
-      <Placed rect={layout.mee} width={width} height={height}>
-        <span data-game-actor="mee" style={{ display: 'block', width: '100%', height: '100%' }}>
-          <span data-photo-art="mee" className="game-photo-art">
-            <GameBird bird="meeGuide" size={512} />
+        </Placed>
+        <Placed rect={layout.meo} width={width} height={height}>
+          <span data-game-actor="meo" style={{ display: 'block', width: '100%', height: '100%' }}>
+            <span data-photo-art="meo" className="game-photo-art">
+              <GameBird bird="meoGuide" size={512} flip />
+            </span>
           </span>
-        </span>
-      </Placed>
-      <Placed rect={layout.meo} width={width} height={height}>
-        <span data-game-actor="meo" style={{ display: 'block', width: '100%', height: '100%' }}>
-          <span data-photo-art="meo" className="game-photo-art">
-            <GameBird bird="meoGuide" size={512} flip />
+        </Placed>
+        {layout.banner === undefined || referral === null ? null : <ReferralBanner banner={layout.banner} referral={referral} width={width} height={height} />}
+        <Placed rect={layout.signature} width={width} height={height}>
+          <span data-photo-art="signature" className="game-photo-art">
+            <Signature size={256} color="var(--ios-on-brand)" />
           </span>
-        </span>
-      </Placed>
-      {layout.banner === undefined || referral === null ? null : <ReferralBanner banner={layout.banner} referral={referral} width={width} height={height} />}
-      <Placed rect={layout.signature} width={width} height={height}>
-        <span data-photo-art="signature" className="game-photo-art">
-          <Signature size={256} color="var(--ios-on-brand)" />
-        </span>
-      </Placed>
+        </Placed>
+      </div>
+      {layout.banner === undefined || referral === null ? null : <ReferralQr slot={layout.banner.qr} referral={referral} width={width} height={height} />}
     </div>
   );
 }

@@ -465,6 +465,7 @@ const ar = {
   'game.photo.referral.headline': 'انضم إليّ على Meeshy',
   'game.photo.referral.share_text': 'انضم إليّ على Meeshy: ⁦{link}⁩',
   'game.photo.referral.flame_days': '⁦{days}⁩ ي',
+  'game.photo.referral.qr_label': 'رمز QR لرابط دعوتك',
   'game.duration.days_hours': '⁦{days}⁩ ي ⁦{hours}⁩ س',
   'game.duration.hours': '⁦{hours}⁩ س',
   'game.duration.minutes': '⁦{minutes}⁩ د',

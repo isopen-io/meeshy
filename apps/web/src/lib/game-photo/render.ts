@@ -1,11 +1,13 @@
+import { interfaceDirection } from '@/lib/inline-interface-language-bootstrap.js';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 
 import { formatCount, gameText } from '@/lib/view/game-copy';
 
 import { paintPhoto, type PaintContext, type PhotoArt, type PhotoBanner, type PhotoPalette, type PhotoSource } from './compose';
-import { PHOTO_FORMATS, photoLayout, type PhotoFormat } from './layout';
+import { PHOTO_FORMATS, photoLayout, type BannerLayout, type PhotoFormat } from './layout';
 import type { PhotoMoment } from './moments';
 import type { PhotoReferral } from './referral';
+import { referralQr } from './referral-qr';
 
 /**
  * LES DEUX IMAGES (#9382) — la story en 9:16 et le profil en 1:1, rendues d'un
@@ -42,10 +44,10 @@ export const fileNameOf = (momentId: string, format: PhotoFormat): string =>
 const toBlob = (canvas: HTMLCanvasElement): Promise<Blob | null> =>
   new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
 
-/** Les textes du bandeau, dans la langue de l'interface : la phrase, le lien court, les jours de Flamme. */
-const bannerOf = (referral: PhotoReferral): PhotoBanner => ({
+/** Ce que le bandeau porte, dans la langue de l'interface : la phrase, les jours de Flamme, et le lien en carré QR (#9554). */
+const bannerOf = (referral: PhotoReferral, layout: BannerLayout | undefined): PhotoBanner => ({
   headline: gameText('game.photo.referral.headline'),
-  link: referral.display,
+  qr: layout === undefined ? null : referralQr(referral, layout.qr.w),
   flameLabel: referral.flameDays === null ? null : gameText('game.photo.referral.flame_days', { days: formatCount(referral.flameDays) }),
   ...(referral.placeholder === true ? { placeholder: true as const } : {}),
 });
@@ -59,9 +61,10 @@ async function renderOne(
   const ctx = canvas.getContext('2d');
   if (ctx === null) return null;
   const referral = params.referral ?? null;
+  const layout = photoLayout(format, { banner: referral !== null, rtl: interfaceDirection(currentInterfaceLanguage()) === 'rtl' });
   paintPhoto(ctx as unknown as PaintContext, {
-    layout: photoLayout(format, { banner: referral !== null }),
-    ...(referral === null ? {} : { banner: bannerOf(referral) }),
+    layout,
+    ...(referral === null ? {} : { banner: bannerOf(referral, layout.banner) }),
     moment: params.moment,
     dateLabel: dateLabelOf(params.now, params.timeZone),
     photo: params.photo,
