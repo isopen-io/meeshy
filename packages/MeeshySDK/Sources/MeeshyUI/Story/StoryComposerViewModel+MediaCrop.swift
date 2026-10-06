@@ -1,10 +1,18 @@
 import UIKit
 import MeeshySDK
 
-// **Recadrer une image** (#9136) — la borne s'écrit sur l'objet
-// (`StoryMediaObject.crop`, normalisée sur la source) et le bitmap affiché la
-// suit, comme toute édition sur place du composer : `loadedImages[id]` porte ce
-// qu'on voit, le FICHIER reste l'original d'où chaque nouveau cadre se recoupe.
+// **Recadrer une image** (#9136, #9499) — la borne s'écrit sur l'objet
+// (`StoryMediaObject.crop`, normalisée sur la source). Ce que montre le bitmap
+// (`loadedImages[id]`) dépend de QUI peint l'objet :
+//
+// | rôle | peint par | bitmap montré |
+// |---|---|---|
+// | fond | `StoryBackgroundLayer`, qui ignore la borne | la part gardée, recoupée du FICHIER |
+// | posé | `StoryMediaLayer`, qui coupe par `contentsRect` | la source ENTIÈRE |
+//
+// Recouper le bitmap d'une image posée la recadrerait deux fois — et c'est ce
+// bitmap qui part à la publication, sous une borne qui le recouperait encore
+// chez chaque lecteur (planche `4c` : « aucun ne ré-encode »).
 
 public enum MediaCropBitmap {
 
@@ -26,33 +34,50 @@ public enum MediaCropBitmap {
 
 public extension StoryComposerViewModel {
 
-    /// Écrit la borne — le cadre ENTIER s'écrit par son absence — et le bitmap
-    /// montré la suit.
+    /// Écrit la borne — le cadre ENTIER s'écrit par son absence. Le bitmap d'un
+    /// FOND la suit ; celui d'une image posée reste entier, le calque la coupe.
     func setMediaCrop(id: String, crop: MediaCropRect?) {
         var effets = currentEffects
         guard let index = effets.mediaObjects?.firstIndex(where: { $0.id == id }) else { return }
         effets.mediaObjects?[index].crop = crop.flatMap { $0.isFull ? nil : MediaCropRule.clamped($0) }
         currentEffects = effets
-        refreshMediaCropPreview(id: id)
+        if effets.mediaObjects?[index].isBackground == true {
+            refreshMediaCropPreview(id: id)
+        } else {
+            refreshStaleCropPreviews(of: (effets.mediaObjects ?? []).filter { $0.id == id })
+        }
     }
 
     /// **Après un annuler / rétablir**, le bitmap d'une image dont la borne a
-    /// changé ne la montre plus : ses proportions le disent, et lui seul se
-    /// recoupe — aucun fichier relu pour une image que l'historique n'a pas
-    /// touchée.
+    /// changé ne la montre plus.
     func refreshStaleCropPreviews(in restored: [StorySlide]) {
-        restored.flatMap { $0.effects.mediaObjects ?? [] }
+        refreshStaleCropPreviews(of: restored.flatMap { $0.effects.mediaObjects ?? [] })
+    }
+
+    /// **Le bitmap d'une image ne montre plus ce que son rôle demande** — après
+    /// un annuler / rétablir, un recadrage, ou un passage de fond à posé (et
+    /// retour). Ses proportions le disent, et lui seul se relit : aucun fichier
+    /// relu pour une image que rien n'a touchée, et une image posée retouchée
+    /// par l'ancien éditeur garde son bitmap tant que ses proportions tiennent.
+    func refreshStaleCropPreviews(of medias: [StoryMediaObject]) {
+        medias
             .filter { media in
                 guard media.kind == .image, let ratio = media.measuredAspectRatio,
                       let montre = loadedImages[media.id], montre.size.height > 0 else { return false }
-                let attendu = MediaCropRule.effectiveRatio(sourceRatio: ratio, crop: media.crop)
-                return abs(montre.size.width / montre.size.height - attendu) > 0.01
+                return abs(montre.size.width / montre.size.height - Self.shownRatio(of: media, source: ratio)) > 0.01
             }
             .forEach { refreshMediaCropPreview(id: $0.id) }
     }
 
-    /// Le bitmap montré d'une IMAGE suit sa borne — recoupé depuis le fichier
-    /// d'origine, jamais depuis le bitmap déjà recadré.
+    /// Le rapport que le bitmap montré doit avoir : recadré pour un fond, celui
+    /// de la source pour une image posée.
+    nonisolated static func shownRatio(of media: StoryMediaObject, source: Double) -> Double {
+        media.isBackground ? MediaCropRule.effectiveRatio(sourceRatio: source, crop: media.crop) : source
+    }
+
+    /// Le bitmap montré d'une IMAGE suit son rôle — la part gardée d'un fond,
+    /// la source entière d'une image posée — relu du fichier d'origine, jamais
+    /// depuis un bitmap déjà recadré.
     ///
     /// **Décodé à la taille PUBLIÉE du cadre, jamais pleine taille** (#6922) :
     /// la source se lit juste assez grande pour que le cadre sorte à
@@ -61,11 +86,12 @@ public extension StoryComposerViewModel {
     func refreshMediaCropPreview(id: String) {
         guard let media = currentEffects.mediaObjects?.first(where: { $0.id == id }),
               media.kind == .image,
-              let adresse = media.mediaURL.flatMap(URL.init(string:)), adresse.isFileURL,
-              let source = SceneImageDownsampling.image(
-                fileAt: adresse, maxPixelSize: Self.cropDecodeMaxPixelSize(media.crop, fileAt: adresse))
+              let adresse = media.mediaURL.flatMap(URL.init(string:)), adresse.isFileURL else { return }
+        let coupe = media.isBackground ? media.crop : nil
+        guard let source = SceneImageDownsampling.image(
+                fileAt: adresse, maxPixelSize: Self.cropDecodeMaxPixelSize(coupe, fileAt: adresse))
         else { return }
-        let montre = media.crop.map { MediaCropBitmap.cropped(source, to: $0) } ?? source
+        let montre = coupe.map { MediaCropBitmap.cropped(source, to: $0) } ?? source
         registerLoadedImage(SceneImageDownsampling.downsampled(
             montre, maxPixelSize: SceneImageDownsampling.workingMaxPixelSize), for: id)
     }

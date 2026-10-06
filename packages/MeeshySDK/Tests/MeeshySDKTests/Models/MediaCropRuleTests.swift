@@ -98,4 +98,34 @@ final class MediaCropRuleTests: XCTestCase {
             MediaCropRule.effectiveRatio(sourceRatio: 2, crop: .full),
             2, accuracy: 0.0001)
     }
+
+    /// **UNE liste de proportions** (#9499) — l'union de l'ancien éditeur
+    /// (1:1 · 4:3 · 16:9 · 9:16) et de la retouche du fond (#9136 : 1:1 · 4:5 ·
+    /// 9:16), dans l'ordre de `MEDIA_CROP_RATIOS` (`packages/shared/utils/media-crop.ts`) :
+    /// deux listes divergeraient au premier ajout.
+    func test_lesProportions_sontLaListePartagee_dansSonOrdre() {
+        XCTAssertEqual(MediaCropRatio.allCases.map(\.notation),
+                       [nil, "1:1", "4:5", "3:4", "9:16", "4:3", "16:9"])
+    }
+
+    func test_chaqueNotation_ditSonRapport() {
+        for ratio in MediaCropRatio.allCases {
+            guard let notation = ratio.notation else {
+                XCTAssertNil(ratio.value)
+                continue
+            }
+            let parts = notation.split(separator: ":").compactMap { Double($0) }
+            XCTAssertEqual(parts.count, 2)
+            XCTAssertEqual(ratio.value ?? 0, parts[0] / parts[1], accuracy: 0.000_001, "\(notation)")
+        }
+    }
+
+    /// Une proportion PAYSAGE dans un portrait garde toute la largeur, et le
+    /// rapport effectif est bien celui visé.
+    func test_unPaysage169_dansUnPortrait_gardeToutLaLargeur() {
+        let cadre = MediaCropRule.centered(ratio: .landscape169, sourceRatio: 9.0 / 16.0)
+        XCTAssertEqual(cadre.width, 1, accuracy: 0.0001)
+        XCTAssertEqual(MediaCropRule.effectiveRatio(sourceRatio: 9.0 / 16.0, crop: cadre),
+                       16.0 / 9.0, accuracy: 0.0001)
+    }
 }

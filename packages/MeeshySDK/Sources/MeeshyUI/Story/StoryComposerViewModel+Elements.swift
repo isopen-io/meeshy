@@ -1064,6 +1064,7 @@ extension StoryComposerViewModel {
             // → retour au canvas vertical par défaut (plus aucune image de fond).
             effects.canvasAspectRatio = Self.canvasAspectRatio(forBackgroundOf: effects)
             currentEffects = effects
+            refreshStaleCropPreviews(of: effects.mediaObjects ?? [])   // fond ⇄ posé : le bitmap suit (#9499)
             return
         }
 

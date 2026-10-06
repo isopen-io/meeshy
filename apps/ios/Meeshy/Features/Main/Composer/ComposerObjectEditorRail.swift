@@ -65,7 +65,10 @@ nonisolated enum MediaEditTool: String, CaseIterable, Hashable, Sendable {
     case trim
     /// Muet et quart de tour — existent tous deux.
     case actions
-    /// ⌗ RECADRER — au contrat depuis `a0f2a86aa9`, retenu par #5100.
+    /// ⌗ RECADRER — hors de `served`, parce que sa portée n'est pas une
+    /// famille entière : `ComposerInlineEditing.sections` le sert à l'IMAGE
+    /// posée (#9499) et au fond image d'une retouche (#9136), ses pastilles
+    /// attendant un ratio mesuré (#5100). La table ci-dessus date du 2026-09-04.
     case crop
     /// ✂ COUPER — absent du contrat (#5085).
     case split

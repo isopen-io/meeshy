@@ -211,9 +211,11 @@ extension StoryCanvasUIView {
             if m.isBackground {
                 return CGRect(origin: .zero, size: g.renderSize)
             }
-            let side: CGFloat = 540
-            let designSize = CGSize(width: side * CGFloat(m.scale),
-                                    height: side * CGFloat(m.scale) / CGFloat(max(m.aspectRatio, 0.01)))
+            // Le cadre du CALQUE, recadrage compris (#9499) : VoiceOver
+            // désigne ce que l'œil voit.
+            let base = StoryMediaLayer.baseMediaDesignSize(for: m)
+            let designSize = CGSize(width: base.width * CGFloat(m.scale),
+                                    height: base.height * CGFloat(m.scale))
             return centeredFrame(normalizedX: CGFloat(m.x),
                                  normalizedY: CGFloat(m.y),
                                  designSize: designSize,
