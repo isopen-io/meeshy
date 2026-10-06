@@ -159,8 +159,13 @@ public struct PlayerBannerView: View {
             discColor: palette.disc
         )
         .gameSpecularSheen(progress: reduceMotion ? 0 : sheen)
-        .frame(width: min(ringSide, 76))
+        .frame(width: ringWidth, height: ringHeight)
     }
+
+    private var ringWidth: CGFloat { min(ringSide, 76) }
+
+    /// Les étoiles de Prestige se posent SOUS l'anneau : la boîte de l'anneau grandit d'autant (56 × 66 au lieu de 56 × 56).
+    private var ringHeight: CGFloat { model.prestige > 0 ? ringWidth * 66 / 56 : ringWidth }
 
     // MARK: La jauge
 
