@@ -103,6 +103,13 @@
                 android:resource="@xml/file_paths"></meta-data>
         </provider>
 
+        <!-- #9530 — l'app et meeshy.me partagent leurs identifiants, comme
+             webcredentials sur iOS : le Gestionnaire de mots de passe de Google
+             propose dans la coque le mot de passe enregistré sur le site. -->
+        <meta-data
+            android:name="asset_statements"
+            android:resource="@string/asset_statements" />
+
         <!-- #7307 — la bannière d'un push rendue par FCM, app fermée : sans ces
              deux entrées, Android prend l'icône de lancement (un carré blanc
              dans la barre d'état) et le canal par défaut de FCM au lieu de
