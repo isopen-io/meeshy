@@ -91,8 +91,18 @@ export const ENGAGEMENT_ACHIEVEMENT_KEYS = [
 
 export type EngagementAchievementKey = (typeof ENGAGEMENT_ACHIEVEMENT_KEYS)[number];
 
-/** Paliers par échelle — socle initial, tunable (§ 7). */
-export const BADGE_THRESHOLDS = [1, 10, 50, 100, 500] as const;
+/**
+ * Les cinq paliers d'ORIGINE d'un badge d'accumulation. Ils restent servis tels
+ * quels à un client qui ne connaît pas les deux ajoutés par #9392
+ * (`servedBadgeThresholds`, `utils/game/badge-tiers.ts`), jusqu'à zéro usage mesuré.
+ */
+export const LEGACY_BADGE_THRESHOLDS = [1, 10, 50, 100, 500] as const;
+/**
+ * Paliers par échelle — socle initial, tunable (§ 7). **Sept paliers depuis #9392** :
+ * 1 000 (Obsidienne) et 5 000 (Prisme) s'AJOUTENT à la suite des cinq d'origine,
+ * rien ne se retire — la clé gravée (`badgeMilestoneKey`) des anciens paliers ne bouge pas.
+ */
+export const BADGE_THRESHOLDS = [...LEGACY_BADGE_THRESHOLDS, 1000, 5000] as const;
 export const STREAK_THRESHOLDS = [3, 7, 14, 30, 60, 100] as const;
 export const LEVEL_THRESHOLDS = [10, 50, 150, 400, 1000, 2500] as const;
 

@@ -49,6 +49,9 @@ extension ComposerObjectEditorView {
     /// image (retour porteur 2026-09-28).
     var objectHasTrimmableSource: Bool { viewModel.sourceTrim(id: objectId) != nil }
     var objectOffersFilter: Bool { mediaObject?.kind != .video }
+    /// Les réglages se peignent sur tout média de la scène — image (#9175),
+    /// vidéo (#9169) et fond, que sa couche peint (#9496).
+    var objectOffersAdjust: Bool { mediaObject?.kind != nil }
 
     var mediaObject: StoryMediaObject? {
         viewModel.currentEffects.mediaObjects?.first { $0.id == objectId }
@@ -72,6 +75,17 @@ extension ComposerObjectEditorView {
                 section(ComposerObjectEditorCopy.media(.filter), .media(.filter)) {
                     ComposerMediaFilterGrid(viewModel: viewModel, media: media,
                                             isBackground: media.isBackground)
+                }
+                if objectOffersAdjust {
+                    section(ComposerAdjustCopy.title, .media(.adjust)) {
+                        ComposerMediaAdjustPanel(viewModel: viewModel, mediaId: media.id)
+                    }
+                }
+                // **✦ EFFETS** (#9498) — le bloom et le grain d'une IMAGE.
+                if objectOffersAdjust && objectOffersFilter {
+                    section(ComposerAdjustCopy.effectsTitle, .media(.effects)) {
+                        ComposerMediaAdjustPanel(viewModel: viewModel, mediaId: media.id, family: .effect)
+                    }
                 }
                 if let source = viewModel.sourceTrim(id: objectId) {
                     section(ComposerObjectEditorCopy.trim, .media(.trim)) {

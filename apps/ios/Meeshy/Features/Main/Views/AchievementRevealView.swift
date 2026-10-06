@@ -56,6 +56,14 @@ struct AchievementRevealView: View {
     /// consultation, où l'on VIENT du tableau de bord et où y « aller » n'aurait
     /// aucun sens.
     var onVoirProgression: (() -> Void)?
+    /// **La même carte se propose à la révélation d'un SUCCÈS** (#7742) : la carte 9:16 du moment photo,
+    /// avec le lien de parrainage. `nil` ⇒ pas d'offre (consultation, badge, série, niveau : seuls les
+    /// succès se photographient). Reçoit le moment, dont le titre est celui que la vue affiche.
+    var onPhoto: ((PhotoMoment) -> Void)?
+    /// **La rareté MESURÉE du succès** (#9390) : la célébration porte son liseré, comme la ligne du succès sur
+    /// Progression. `nil` — un badge, une série, un niveau, un ancien serveur, une rareté non mesurée ou « Jeu
+    /// masqué » — et la célébration reste celle d'avant.
+    var rarity: GameRarityEntry?
 
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -160,6 +168,15 @@ struct AchievementRevealView: View {
         occasion.estObtenu ? reveal.symbolName : "lock.fill"
     }
 
+    /// La médaille d'un BADGE obtenu : la même que sur l'étagère de Progression (#9466). Un palier qu'on n'a pas
+    /// encore reste un disque gris et son cadenas — la médaille, c'est ce qui est GAGNÉ.
+    private var medaille: RevealMedal? {
+        occasion.estObtenu ? RevealMedal(reveal: reveal) : nil
+    }
+
+    /// Le liseré de la rareté, quand elle a le droit de se montrer.
+    private var liseré: RarityBorder? { RevealRim.border(for: rarity) }
+
     /// Ce que la sortie FAIT — elle ferme, et son mot le dit.
     ///
     /// Il disait « Voir ma progression » en célébration, pour une action qui ne
@@ -169,6 +186,19 @@ struct AchievementRevealView: View {
         occasion.estCelebration
             ? String(localized: "reveal.ok", defaultValue: "OK", bundle: .main)
             : String(localized: "reveal.close", defaultValue: "Fermer", bundle: .main)
+    }
+
+    private var libellePhoto: String {
+        String(localized: "reveal.achievement.photo", defaultValue: "En faire une carte", bundle: .main)
+    }
+
+    /// Seul un succès OBTENU, célébré, se photographie.
+    private var momentPhoto: PhotoMoment? {
+        guard occasion.estCelebration, onPhoto != nil else { return nil }
+        switch reveal {
+        case .achievement, .composedAchievement: return GamePhotoMoments.achievement(id: reveal.id, title: titre)
+        case .badge, .streak, .level: return nil
+        }
     }
 
     private var libelleProgression: String {
@@ -195,7 +225,15 @@ struct AchievementRevealView: View {
         // <explication> » se lit d'un trait. Trois éléments séparés feraient
         // balayer trois fois ce qui est une seule nouvelle.
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(bandeau). \(titre). \(explication)")
+        .accessibilityLabel(phraseAccessible)
+    }
+
+    /// « Succès débloqué. <titre>. <explication> », puis la rareté en toutes lettres : la couleur du liseré n'est
+    /// jamais la seule information.
+    private var phraseAccessible: String {
+        let base = "\(bandeau). \(titre). \(explication)"
+        guard let visible = rarity?.visibleRarity else { return base }
+        return "\(base). \(GameText.rarityName(visible))"
     }
 
     // MARK: - Pièces
@@ -218,31 +256,63 @@ struct AchievementRevealView: View {
             // Et ils ne se peignent QUE pour un palier OBTENU : un rayonnement
             // dit « ta-daa ». Le servir à ce qui n'est pas encore acquis
             // félicite pour rien — même erreur que la couleur, une couche
-            // au-dessus.
+            // au-dessus. Avec un liseré de rareté, ils tournent plus loin : la plaque les précède.
             if !reduceMotion && occasion.estObtenu {
                 ForEach(0..<12, id: \.self) { i in
                     Capsule()
                         .fill(teinte.opacity(0.35))
                         .frame(width: 3, height: 18)
-                        .offset(y: -78)
+                        .offset(y: liseré == nil ? -78 : -104)
                         .rotationEffect(.degrees(Double(i) / 12 * 360))
                         .scaleEffect(halo ? 1.15 : 0.6)
                         .opacity(apparu ? 1 : 0)
                 }
             }
 
-            Circle()
-                .fill(LinearGradient(colors: [teinte, teinte.opacity(0.55)],
-                                     startPoint: .topLeading, endPoint: .bottomTrailing))
-                .frame(width: 128, height: 128)
-                .shadow(color: teinte.opacity(0.45), radius: 24, y: 10)
-
-            Image(systemName: symbole)
-                .font(MeeshyFont.relative(56, weight: .semibold))
-                .foregroundColor(.white)
+            plaque
         }
         .scaleEffect(apparu ? 1 : 0.4)
         .opacity(apparu ? 1 : 0)
+    }
+
+    /// Le disque du palier — ou la médaille du badge —, dans la plaque que le liseré de rareté cerne.
+    @ViewBuilder
+    private var plaque: some View {
+        if liseré != nil {
+            emblème
+                .padding(MeeshySpacing.xl)
+                .background(
+                    RoundedRectangle(cornerRadius: 36, style: .continuous).fill(teinte.opacity(isDark ? 0.14 : 0.08))
+                )
+                .gameRarityRim(liseré, cornerRadius: 36)
+        } else {
+            emblème
+        }
+    }
+
+    @ViewBuilder
+    private var emblème: some View {
+        if let medaille {
+            GameMedalView(
+                family: medaille.family, glyph: medaille.glyph, material: medaille.material,
+                state: .lit, progress: 0, label: GameCopy.formatCount(medaille.threshold)
+            )
+            .frame(width: 128)
+            .shadow(color: teinte.opacity(0.45), radius: 24, y: 10)
+            .gamePrismTilt(active: medaille.material == .prism)
+        } else {
+            ZStack {
+                Circle()
+                    .fill(LinearGradient(colors: [teinte, teinte.opacity(0.55)],
+                                         startPoint: .topLeading, endPoint: .bottomTrailing))
+                    .frame(width: 128, height: 128)
+                    .shadow(color: teinte.opacity(0.45), radius: 24, y: 10)
+
+                Image(systemName: symbole)
+                    .font(MeeshyFont.relative(56, weight: .semibold))
+                    .foregroundColor(.white)
+            }
+        }
     }
 
     private var texte: some View {
@@ -262,6 +332,9 @@ struct AchievementRevealView: View {
                 .foregroundColor(MeeshyColors.textSecondary(isDark: isDark))
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
+
+            // « Épique · 4 % des comptes » : le nom de la rareté, lu en toutes lettres sous le liseré.
+            GameRarityLine(entry: rarity)
         }
         .opacity(apparu ? 1 : 0)
         .offset(y: apparu ? 0 : MeeshySpacing.lg)
@@ -282,6 +355,20 @@ struct AchievementRevealView: View {
                         .background(Capsule().fill(teinte))
                 }
                 .buttonStyle(.plain)
+            }
+
+            if let moment = momentPhoto {
+                Button {
+                    HapticFeedback.light()
+                    onPhoto?(moment)
+                } label: {
+                    Label(libellePhoto, systemImage: "camera.fill")
+                        .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .semibold))
+                        .foregroundColor(teinte)
+                        .frame(maxWidth: .infinity, minHeight: 52)
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("reveal.achievement.photo")
             }
 
             // La fermeture. Pleine quand elle est SEULE (consultation), en

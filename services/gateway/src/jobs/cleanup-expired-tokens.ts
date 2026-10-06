@@ -7,6 +7,7 @@ import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 import { unsetOrNull } from '../utils/prisma-unset';
 import { sweepAbandonedEmailClaims } from '../services/auth/email-claim';
+import { guardedInterval } from '../utils/guarded-timer.js';
 
 const logger = enhancedLogger.child({ module: 'CleanupExpiredTokens' });
 
@@ -31,9 +32,9 @@ export class CleanupExpiredTokens {
     this.cleanup();
 
     // Then run on interval
-    this.intervalId = setInterval(() => {
+    this.intervalId = guardedInterval({ name: 'expired-tokens-cleanup', everyMs: this.intervalMinutes * 60 * 1000, logger, run: () => {
       this.cleanup();
-    }, this.intervalMinutes * 60 * 1000);
+    } });
     this.intervalId.unref?.();
   }
 

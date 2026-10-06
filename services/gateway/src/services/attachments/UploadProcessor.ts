@@ -29,6 +29,7 @@ import { isExifStrippable, stripExifFromImageBuffer } from './ExifStrip.js';
 import { verifyDeclaredMimeType } from './ContentSignature.js';
 import { NORMALIZED_AUDIO, normalizedAudioPath } from './audio-normalization.js';
 import { UnsupportedMediaTypeError, PayloadTooLargeError } from '../../errors/custom-errors.js';
+import { guardedTimeout } from '../../utils/guarded-timer.js';
 
 export interface FileToUpload {
   buffer: Buffer;
@@ -270,10 +271,10 @@ export class UploadProcessor {
     return new Promise((resolve, reject) => {
       const proc = spawn('ffmpeg', args);
       let stderr = '';
-      const timer = setTimeout(() => {
+      const timer = guardedTimeout({ name: 'ffmpeg-transcode-timeout', afterMs: timeoutMs, logger, run: () => {
         proc.kill('SIGKILL');
         reject(new Error('ffmpeg transcode timeout'));
-      }, timeoutMs);
+      } });
       proc.stderr.on('data', (d) => { stderr += d.toString(); });
       proc.on('close', (code) => {
         clearTimeout(timer);

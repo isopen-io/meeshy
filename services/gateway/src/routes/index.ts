@@ -129,6 +129,7 @@ import { meTermsRoutes } from './me/terms';
 import { meEngagementRoutes } from './me/engagement';
 import { meMeeshRoutes } from './me/meesh';
 import { meGameRoutes } from './me/game';
+import { userGameShowcaseRoutes } from './users/game-showcase';
 import { meOnboardingRoutes } from './me/onboarding';
 import { meStarredMessagesRoutes } from './me/starred-messages';
 import { meStickersRoutes } from './me/stickers';
@@ -308,6 +309,11 @@ export const ROUTE_TABLE_BEFORE_ATTACHMENTS: readonly RouteRegistrationEntry[] =
   // coffre, acheter un gel, rallumer la Flamme, mémoriser les clés de guide.
   // Montage AUTONOME, même patron que `me-meesh` juste au-dessus.
   { name: 'me-game', prefix: `${API_PREFIX}/me`, module: meGameRoutes },
+  // La vitrine de trophées d'UN AUTRE membre (#9387) — `GET /users/:userId/game/showcase`,
+  // selon SON réglage (amis par défaut), sous le préfixe `users` (le contrat l'y met).
+  // Montage AUTONOME, authentification propre (la loi de présence a besoin du RÔLE
+  // du lecteur) ; aucune route des `users` existants n'est touchée.
+  { name: 'users-game-showcase', prefix: `${API_PREFIX}/users`, module: userGameShowcaseRoutes },
   // L'onboarding post-inscription (#7729) — état du parcours et étapes vues.
   // Montage AUTONOME, même patron que `me-engagement` juste au-dessus.
   { name: 'me-onboarding', prefix: `${API_PREFIX}/me`, module: meOnboardingRoutes },

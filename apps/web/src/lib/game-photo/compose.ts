@@ -1,7 +1,8 @@
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 
 import { resolveCssVars } from './css-vars';
-import { containFit, coverFit, type PhotoLayout, type Rect } from './layout';
+import { containFit, coverFit, type BannerLayout, type PhotoLayout, type Rect } from './layout';
+import { fitBannerLine } from './referral';
 import type { PhotoMoment } from './moments';
 
 /**
@@ -32,6 +33,15 @@ export type PaintContext = {
   fillRect(x: number, y: number, w: number, h: number): void;
   fillText(text: string, x: number, y: number): void;
   createLinearGradient(x0: number, y0: number, x1: number, y1: number): { addColorStop(offset: number, color: string): void };
+  /** Le tracé d'un rectangle arrondi (le fond du bandeau) ; absent d'un vieux moteur : `fillRect` le remplace. */
+  beginPath?(): void;
+  roundRect?(x: number, y: number, w: number, h: number, radius: number): void;
+  fill?(): void;
+  /** Les pointillés de l'EMPLACEMENT du lien ; absents d'un vieux moteur : l'emplacement n'est pas cerné. */
+  setLineDash?(segments: number[]): void;
+  strokeRect?(x: number, y: number, w: number, h: number): void;
+  strokeStyle?: string | CanvasGradient | CanvasPattern;
+  lineWidth?: number;
   fillStyle: string | CanvasGradient | CanvasPattern;
   font: string;
   textAlign: CanvasTextAlign;
@@ -45,6 +55,19 @@ export type PhotoArt = {
   readonly mee: CanvasImageSource;
   readonly meo: CanvasImageSource;
   readonly signature: CanvasImageSource;
+  /** La Flamme du bandeau de parrainage ; absente sans bandeau ou si elle n'a pas pu être dessinée. */
+  readonly flame?: CanvasImageSource;
+};
+
+/** Les textes du bandeau de parrainage (#7742), déjà localisés par l'appelant. */
+export type PhotoBanner = {
+  readonly headline: string;
+  /** Le lien court tel qu'il se lit sur la carte. */
+  readonly link: string;
+  /** « 23 j » ; `null` : la Flamme est éteinte, ni dessin ni jours. */
+  readonly flameLabel: string | null;
+  /** Le lien n'existe pas encore (aucun jeton) : l'aperçu cerne son emplacement de pointillés. */
+  readonly placeholder?: true;
 };
 
 export type PhotoPalette = {
@@ -79,6 +102,8 @@ export type PaintInput = {
   readonly art: PhotoArt;
   readonly palette: PhotoPalette;
   readonly fontFamily: string;
+  /** Présent avec `layout.banner` : le lien de parrainage au pied de la carte. */
+  readonly banner?: PhotoBanner;
 };
 
 /**
@@ -160,14 +185,70 @@ function drawContained(ctx: PaintContext, image: CanvasImageSource, frame: Rect)
   ctx.drawImage(image, rect.x, rect.y, rect.w, rect.h);
 }
 
+const BANNER_RADIUS = 0.2;
+/** Largeur d'un caractère, en fraction du corps : le gras sans empattement, et la chasse fixe du lien. */
+const SANS_ADVANCE = 0.58;
+const MONO_ADVANCE = 0.62;
+
+function paintBannerFrame(ctx: PaintContext, banner: BannerLayout, palette: PhotoPalette): void {
+  const { x, y, w, h } = banner.frame;
+  ctx.fillStyle = withAlpha(palette.scrim, 0.86);
+  if (ctx.beginPath !== undefined && ctx.roundRect !== undefined && ctx.fill !== undefined) {
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, h * BANNER_RADIUS);
+    ctx.fill();
+    return;
+  }
+  ctx.fillRect(x, y, w, h);
+}
+
+/** L'EMPLACEMENT du lien (aucun jeton encore) : un cadre en pointillé autour du texte, rendu ensuite au trait plein. */
+function traceLinkPlaceholder(ctx: PaintContext, banner: BannerLayout, link: { readonly text: string; readonly size: number }, palette: PhotoPalette): void {
+  if (ctx.setLineDash === undefined || ctx.strokeRect === undefined) return;
+  const pad = link.size * 0.35;
+  ctx.strokeStyle = palette.inkSoft;
+  ctx.lineWidth = Math.max(1, link.size * 0.06);
+  ctx.setLineDash([link.size * 0.3, link.size * 0.25]);
+  ctx.strokeRect(banner.link.x - pad, banner.link.y - link.size - pad * 0.4, link.text.length * link.size * MONO_ADVANCE + pad * 2, link.size * 1.25 + pad);
+  ctx.setLineDash([]);
+}
+
+/** Le texte du bandeau, après sa Signature : la phrase, le lien court (qui tient dans sa place), la Flamme et ses jours. */
+function paintBannerContent(ctx: PaintContext, banner: BannerLayout, input: PaintInput, text: PhotoBanner): void {
+  const { palette, fontFamily, art } = input;
+  ctx.textBaseline = 'alphabetic';
+  ctx.shadowBlur = 0;
+  ctx.textAlign = 'left';
+
+  const headline = fitBannerLine({ text: text.headline, size: banner.headline.size, maxWidth: banner.maxTextWidth, minSize: banner.headline.size * 0.6, advance: SANS_ADVANCE });
+  ctx.fillStyle = palette.ink;
+  ctx.font = `800 ${headline.size}px ${fontFamily}`;
+  ctx.fillText(headline.text, banner.headline.x, banner.headline.y);
+
+  const link = fitBannerLine({ text: text.link, size: banner.link.size, maxWidth: banner.maxTextWidth, minSize: banner.link.size * 0.7, advance: MONO_ADVANCE });
+  ctx.fillStyle = palette.inkSoft;
+  ctx.font = `500 ${link.size}px ui-monospace, monospace`;
+  ctx.fillText(link.text, banner.link.x, banner.link.y);
+  if (text.placeholder === true) traceLinkPlaceholder(ctx, banner, link, palette);
+
+  if (text.flameLabel === null || art.flame === undefined) return;
+  drawContained(ctx, art.flame, banner.flame);
+  ctx.textAlign = 'center';
+  ctx.fillStyle = palette.ink;
+  ctx.font = `600 ${banner.flameDays.size}px ${fontFamily}`;
+  ctx.fillText(text.flameLabel, banner.flameDays.x, banner.flameDays.y);
+}
+
 export function paintPhoto(ctx: PaintContext, input: PaintInput): void {
-  const { layout, art } = input;
+  const { layout, art, banner } = input;
   paintBackground(ctx, input);
   drawContained(ctx, art.emblem, layout.emblem);
   paintText(ctx, input);
   drawContained(ctx, art.mee, layout.mee);
   drawContained(ctx, art.meo, layout.meo);
+  if (layout.banner !== undefined && banner !== undefined) paintBannerFrame(ctx, layout.banner, input.palette);
   drawContained(ctx, art.signature, layout.signature);
+  if (layout.banner !== undefined && banner !== undefined) paintBannerContent(ctx, layout.banner, input, banner);
 }
 
 const SVG_NS = 'http://www.w3.org/2000/svg';

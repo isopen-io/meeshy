@@ -396,7 +396,28 @@ export const callersIn = (contents, nsNames) => {
 // l'écran web et ses tests contre vingt-et-une entrées qui n'avaient encore
 // aucun appelant — dont les cinq `me.game*` ci-dessus. Valeur MESURÉE le
 // 2026-10-05.
-const BASELINE_DEAD_ENTRIES = 260;
+// 260 → 274 (#9507, 2026-10-05) : quatorze entrées GÉNÉRÉES depuis
+// `route-manifest.json` en régénérant `api/endpoints.ts` (resté périmé après
+// la vague 2 du jeu — ligues, duos, saisons, prestige, parrainage —
+// #9225/#9230, #9504) : `me.gameDuoByDuoIdAbandon`, `.gameDuoByDuoIdAccept`,
+// `.gameDuoInvite`, `.gameLeagueConsent`, `.gameLeagueFriends`,
+// `.gameLeaguePseudonym`, `.gameLeagueWeek`, `.gamePrestige`, `.gamePrivacy`,
+// `.gameSeasonSeal`, `.gameSeasonStepsByStepClaim`, `.gameShowcaseOrder`,
+// `.gameVisibility`, et `users.byUserIdGameShowcase`. Mortes à la naissance
+// PAR CONSTRUCTION, même motif que #9399 ci-dessus : la vague 2 est livrée
+// côté gateway ; aucun écran web ne les appelle encore. Valeur MESURÉE le
+// 2026-10-05.
+// 274 → 275 (#9529, 2026-10-06) : `users.byUserIdGame`
+// (`GET /users/:userId/game`), GÉNÉRÉE depuis `route-manifest.json` par
+// `e0a8b73588` (#9481) sans relever cette référence — la jumelle TS de
+// `UsersEndpoint.byUserIdGame` (`check-swift-catalog-dead-entries.mjs`, même
+// issue, même commit). Le web APPELLE cette route (`fetchUserGame`,
+// `apps/web/src/lib/api/game-integration.ts`), mais par la table du jeu
+// `GAME_INTEGRATION_ROUTES` / `gameUserGamePath`
+// (`packages/shared/types/game-routes.ts`), jamais par le catalogue généré —
+// comme `users.byUserIdGameShowcase` et les `me.game*` ci-dessus. Valeur
+// MESURÉE le 2026-10-06.
+const BASELINE_DEAD_ENTRIES = 275;
 
 export const readWorld = (root) => {
   const groupFiles = readdirSync(join(root, GROUPS_DIR)).filter((name) => name.endsWith('.ts')).sort();

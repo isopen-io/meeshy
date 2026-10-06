@@ -137,7 +137,7 @@ nonisolated struct CallSkinMaskGeometry: Equatable, Sendable {
 nonisolated enum CallSkinRetouchKernel {
     static let functionName = "meeshySkinRetouch"
 
-    nonisolated(unsafe) static let shared: CIColorKernel? = {
+    static let shared: CIColorKernel? = {
         guard let url = Bundle(for: CallSkinRetouchBundleToken.self).url(forResource: "default", withExtension: "metallib"),
               let data = try? Data(contentsOf: url) else { return nil }
         return try? CIColorKernel(functionName: functionName, fromMetalLibraryData: data)

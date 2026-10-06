@@ -87,6 +87,66 @@ struct GameBricksRenderTests {
         #expect(hexagon.distance(to: silver) > 3)
     }
 
+    // MARK: - Les médailles (#9466)
+
+    private func medal(_ family: GameMedalFamily = .content, glyph: GameMedalGlyph = .text, material: GameMaterial = .gold,
+                       state: GameMedalView.State = .lit, progress: Double = 0.5, label: String? = "100") throws -> GameRenderProbe {
+        try probe(GameMedalView(family: family, glyph: glyph, material: material, state: state, progress: progress, label: label),
+                  width: 100, height: 112)
+    }
+
+    @Test("la médaille peint sa lunette, ne peint pas son cadre, et la matière la distingue")
+    func medalMaterials() throws {
+        let probes = try [GameMaterial.copper, .bronze, .silver, .gold, .platinum, .obsidian, .prism].map { try medal(material: $0) }
+        #expect(probes.allSatisfy { $0.coverage > 0.3 })
+        #expect(probes.allSatisfy { $0.cornerIsTransparent })
+        for (index, lhs) in probes.enumerated() {
+            for rhs in probes[(index + 1)...] {
+                #expect(lhs.distance(to: rhs) > 1)
+            }
+        }
+    }
+
+    @Test("l'émail prend la couleur de la famille : les cinq familles ne se confondent pas")
+    func medalFamilies() throws {
+        let probes = try GameMedalFamily.allCases.map { try medal($0) }
+        for (index, lhs) in probes.enumerated() {
+            for rhs in probes[(index + 1)...] {
+                #expect(lhs.distance(to: rhs) > 3)
+            }
+        }
+    }
+
+    @Test("les neuf pictogrammes d'axe se distinguent")
+    func medalGlyphs() throws {
+        let probes = try GameMedalGlyph.allCases.map { try medal(glyph: $0, label: nil) }
+        for (index, lhs) in probes.enumerated() {
+            for rhs in probes[(index + 1)...] {
+                #expect(lhs.distance(to: rhs) > 0.05)
+            }
+        }
+    }
+
+    @Test("l'arc de progression se remplit, et un ruban apparaît à partir de l'Or")
+    func medalArcAndRibbon() throws {
+        let low = try medal(progress: 0.2)
+        let high = try medal(progress: 0.8)
+        #expect(low.distance(to: high) > 0.3)
+        let silver = try medal(material: .silver, label: "50")
+        let gold = try medal(material: .gold, label: "100")
+        #expect(gold.coverage > silver.coverage, "le ruban de l'Or ajoute de la matière sous la médaille")
+    }
+
+    @Test("l'empreinte d'une médaille éteinte est en creux : une plaque sans métal, ni ruban, ni arc")
+    func medalImprint() throws {
+        let lit = try medal()
+        let imprint = try medal(state: .imprint, label: "−37")
+        // La plaque est PLEINE (la couleur de surface, comme la planche) : ce qui la distingue d'une
+        // médaille allumée n'est pas la part de pixels peints mais leur nature — pas de métal, de ruban ni d'arc.
+        #expect(imprint.coverage < lit.coverage)
+        #expect(imprint.distance(to: lit) > 5)
+    }
+
     @Test("le médaillon de collection montre combien de pastilles sont pleines")
     func collectionDots() throws {
         let few = try probe(GameBadgeView(shape: .collection(filled: 1, total: 6), material: .prism))
@@ -106,6 +166,39 @@ struct GameBricksRenderTests {
         #expect(low.distance(to: high) > 1)
         #expect(low.distance(to: other) > 0.5)
         #expect(low.distance(to: marked) > 0.1)
+    }
+
+    @Test("les dix emblèmes de palier peignent, ne peignent pas leur cadre, et se distinguent")
+    func tierEmblemsAreAllDistinct() throws {
+        let probes = try LevelTierKey.allCases.map { try probe(TierEmblemView(tier: $0)) }
+        #expect(probes.allSatisfy { $0.coverage > 0.03 })
+        #expect(probes.allSatisfy { $0.cornerIsTransparent })
+        for (index, lhs) in probes.enumerated() {
+            for rhs in probes[(index + 1)...] {
+                #expect(lhs.distance(to: rhs) > 0.2)
+            }
+        }
+    }
+
+    @Test("le filigrane de l'emblème est transparent : il pèse moins que l'emblème plein")
+    func emblemWatermarkIsTransparent() throws {
+        let full = try probe(TierEmblemView(tier: .etoile))
+        let watermark = try probe(TierEmblemView(tier: .etoile, opacity: 0.18))
+        let empty = try probe(Color.clear)
+        #expect(watermark.distance(to: empty) < full.distance(to: empty))
+        #expect(watermark.distance(to: empty) > 0)
+    }
+
+    @Test("l'anneau porte l'emblème du palier : deux paliers de même niveau ne se confondent pas, et le disque central est peint")
+    func levelRingCarriesTheTierEmblemAndNumeral() throws {
+        func ring(_ tier: LevelTierKey, disc: Color = .white) -> LevelRingView {
+            LevelRingView(level: 34, progress: 0.4, tier: tier, discColor: disc)
+        }
+        let eclat = try probe(ring(.eclat), width: 112, height: 112)
+        let rayon = try probe(ring(.rayon), width: 112, height: 112)
+        let onBlack = try probe(ring(.eclat, disc: .black), width: 112, height: 112)
+        #expect(eclat.distance(to: rayon) > 2)
+        #expect(eclat.distance(to: onBlack) > 10)
     }
 
     @Test("une barre vide ne peint pas d'arc, une barre pleine boucle l'anneau")
@@ -153,5 +246,106 @@ struct GameBricksRenderTests {
         let colors = LevelTierKey.allCases.map { LevelTierPalette.color(for: $0) }
         #expect(colors.count == 10)
         #expect(LevelTierPalette.color(for: .etincelle) != LevelTierPalette.color(for: .lueur))
+    }
+
+    @Test("les huit gemmes de ligue se distinguent, chacune peint une gemme et jamais son cadre")
+    func leagueGems() throws {
+        let probes = try LeagueKey.allCases.map { try probe(LeagueGemView(league: $0), width: 72, height: 72) }
+        #expect(probes.allSatisfy { $0.coverage > 0.15 && $0.cornerIsTransparent })
+        for (index, lhs) in probes.enumerated() {
+            for rhs in probes[(index + 1)...] {
+                #expect(lhs.distance(to: rhs) > 0.5)
+            }
+        }
+    }
+
+    @Test("le tampon d'Atlas : tamponné, à moitié échangé et à découvrir ne se confondent pas")
+    func atlasStamp() throws {
+        let stamped = try probe(AtlasStampView(code: "JA", tint: .purple, state: .stamped), width: 72, height: 72)
+        let pending = try probe(AtlasStampView(code: "JA", tint: .purple, state: .pending), width: 72, height: 72)
+        let empty = try probe(AtlasStampView(code: "", tint: .purple, state: .undiscovered), width: 72, height: 72)
+        #expect(stamped.coverage > 0.05)
+        #expect(stamped.cornerIsTransparent)
+        #expect(stamped.distance(to: pending) > 0.3)
+        #expect(stamped.distance(to: empty) > 0.3)
+        #expect(pending.distance(to: empty) > 0.3)
+    }
+
+    @Test("le liseré de rareté : cinq teintes, et aucun trait quand la rareté n'est pas mesurée")
+    func rarityRim() throws {
+        let card = Color.white.frame(width: 90, height: 60)
+        let none = try probe(card.gameRarityRim(nil), width: 90, height: 60)
+        let rims = try [RarityBorder.slate, .blue, .violet, .gold, .prism].map {
+            try probe(card.gameRarityRim($0), width: 90, height: 60)
+        }
+        #expect(rims.allSatisfy { none.distance(to: $0) > 0.2 })
+        for (index, lhs) in rims.enumerated() {
+            for rhs in rims[(index + 1)...] {
+                #expect(lhs.distance(to: rhs) > 0.05)
+            }
+        }
+    }
+
+    @Test("l'anneau de niveau pose une étoile de plus par Prestige")
+    func prestigeStarsOnTheRing() throws {
+        let rings = try (0...GameLevels.maxPrestige).map {
+            try probe(LevelRingView(level: 40, progress: 0.5, tier: .rayon, prestige: $0), width: 88, height: 104)
+        }
+        for (index, lhs) in rings.enumerated().dropLast() {
+            #expect(lhs.distance(to: rings[index + 1]) > 0.05)
+        }
+    }
+}
+
+// MARK: - La bannière du joueur (#9494)
+
+@MainActor
+@Suite("Jeu Meeshy — la bannière du joueur (MeeshyUI)")
+struct PlayerBannerRenderTests {
+
+    private let palette = PlayerBannerView.Palette(surface: Color(hex: "f4f6dc"), ink: Color(hex: "1c1941"), muted: Color(hex: "6b7280"))
+
+    private func complete(tier: LevelTierKey = .eclat, progress: Double = 0.78) -> GamePlayerBanner {
+        GamePlayerBanner(
+            level: 34, tier: tier, progress: progress, score: 1240, nextLevel: 35, pointsToNext: 350, meeshes: 12,
+            rank: GamePlayerBanner.Rank(rank: .conteur, division: .iii), league: GamePlayerBanner.League(league: .jade, place: 4),
+            flame: GamePlayerBanner.Flame(form: .flamme, days: 23)
+        )
+    }
+
+    private func bare(tier: LevelTierKey = .eclat, progress: Double = 0.78) -> GamePlayerBanner {
+        GamePlayerBanner(level: 34, tier: tier, progress: progress, score: 1240, nextLevel: 35, pointsToNext: 350)
+    }
+
+    private let texts = PlayerBannerView.Texts(points: "1 240 pts", missing: "encore 350", meeshes: "12", place: "4e", flameDays: "23")
+    private let bareTexts = PlayerBannerView.Texts(points: "1 240 pts", missing: "encore 350")
+
+    private func render(_ model: GamePlayerBanner, texts: PlayerBannerView.Texts, width: CGFloat = 390) throws -> GameRenderProbe {
+        try #require(GameRenderProbe.render(PlayerBannerView(model: model, texts: texts, palette: palette), width: width, height: 64))
+    }
+
+    @Test("la bannière peint son aplat bord à bord, qu'elle soit complète ou nue")
+    func paintsItsSurface() throws {
+        #expect(try render(complete(), texts: texts).coverage > 0.9)
+        #expect(try render(bare(), texts: bareTexts).coverage > 0.9)
+    }
+
+    @Test("seulement ce qui existe : la bannière complète ne ressemble pas à la bannière d'un nouveau joueur")
+    func piecesChangeThePicture() throws {
+        #expect(try render(complete(), texts: texts).distance(to: render(bare(), texts: bareTexts)) > 0.3)
+    }
+
+    @Test("la jauge avance avec la progression")
+    func gaugeFollowsProgress() throws {
+        let low = try render(bare(progress: 0.2), texts: bareTexts)
+        let high = try render(bare(progress: 0.9), texts: bareTexts)
+        #expect(low.distance(to: high) > 0.2)
+    }
+
+    @Test("le palier teinte l'anneau, la jauge et le filigrane")
+    func tierTintsTheBanner() throws {
+        let spark = try render(bare(tier: .etincelle), texts: bareTexts)
+        let radiance = try render(bare(tier: .rayon), texts: bareTexts)
+        #expect(spark.distance(to: radiance) > 0.5)
     }
 }

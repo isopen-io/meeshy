@@ -1,5 +1,6 @@
 import { beforeAll, describe, expect, test } from 'bun:test';
 
+import { ENGAGEMENT_AXIS_FAMILIES } from '@meeshy/shared/types/engagement';
 import { FLAME_FORMS } from '@meeshy/shared/utils/game/flame';
 import { GLORY_RANKS } from '@meeshy/shared/utils/game/glory';
 import { LEVEL_TIER_KEYS } from '@meeshy/shared/utils/game/levels';
@@ -16,11 +17,15 @@ import {
   difficultyName,
   divisionLabel,
   editionName,
+  familyName,
   flameFormName,
   formatCount,
   gameErrorMessage,
+  levelRingLabel,
   levelTierName,
   levelsLabel,
+  materialName,
+  medalLabel,
   meeshCount,
   missionTitle,
   pointsLabel,
@@ -147,6 +152,79 @@ describe('les refus du serveur se disent', () => {
     for (const language of SUPPORTED_INTERFACE_LANGUAGES) {
       expect(NAMED(gameErrorMessage('INSUFFICIENT_POINTS', language))).toBe(true);
       expect(gameErrorMessage('INSUFFICIENT_POINTS', language)).not.toBe(gameErrorMessage('???', language));
+    }
+  });
+});
+
+describe('les familles du barème se nomment (#5841)', () => {
+  test('les cinq familles ont un nom, dans les sept langues, tous différents', () => {
+    for (const language of SUPPORTED_INTERFACE_LANGUAGES) {
+      const names = ENGAGEMENT_AXIS_FAMILIES.map((family) => familyName(family, language));
+      for (const name of names) expect({ language, ok: NAMED(name) }).toEqual({ language, ok: true });
+      expect(new Set(names).size).toBe(5);
+    }
+  });
+});
+
+describe('la médaille se dit en toutes lettres (#9466)', () => {
+  const axisName = 'Messages texte';
+
+  test('« Messages texte, Or, 100 sur 500 vers Platine »', () => {
+    const medal = { tier: 4, material: 'gold', nextMaterial: 'platinum', value: 100, nextThreshold: 500, missing: null } as const;
+    expect(medalLabel(medal, axisName, 'fr')).toBe('Messages texte, Or, 100 sur 500 vers Platine');
+  });
+
+  test('l’échelle complète ne promet aucun palier suivant', () => {
+    const medal = { tier: 5, material: 'platinum', nextMaterial: null, value: 900, nextThreshold: null, missing: null } as const;
+    expect(medalLabel(medal, axisName, 'fr')).toBe('Messages texte, Platine, 900');
+  });
+
+  test('un badge éteint dit ce qu’il manque', () => {
+    const medal = { tier: 0, material: null, nextMaterial: null, value: 0, nextThreshold: 1, missing: 1 } as const;
+    expect(medalLabel(medal, axisName, 'fr')).toContain('pas encore obtenu');
+  });
+
+  test('dans chaque langue : les sept matières ont un nom, et les trois phrases se disent', () => {
+    for (const language of SUPPORTED_INTERFACE_LANGUAGES) {
+      for (const material of ['copper', 'bronze', 'silver', 'gold', 'platinum', 'obsidian', 'prism'] as const) {
+        expect({ language, material, ok: NAMED(materialName(material, language)) }).toEqual({ language, material, ok: true });
+      }
+      const climbing = medalLabel({ tier: 4, material: 'gold', nextMaterial: 'platinum', value: 100, nextThreshold: 500, missing: null }, 'X', language);
+      const top = medalLabel({ tier: 5, material: 'platinum', nextMaterial: null, value: 900, nextThreshold: null, missing: null }, 'X', language);
+      const off = medalLabel({ tier: 0, material: null, nextMaterial: null, value: 0, nextThreshold: 1, missing: 1 }, 'X', language);
+      for (const sentence of [climbing, top, off]) expect({ language, ok: NAMED(sentence) }).toEqual({ language, ok: true });
+      expect(new Set([climbing, top, off]).size).toBe(3);
+    }
+  });
+});
+
+describe('l’anneau de niveau se dit en toutes lettres (#9481)', () => {
+  test('« Niveau 34, palier Éclat, quatrième palier »', () => {
+    expect(levelRingLabel(34, 'eclat', 'fr')).toBe('Niveau 34, palier Éclat, quatrième palier');
+  });
+
+  test('dans chaque langue, chacun des dix paliers dit son niveau, son nom et son rang', () => {
+    for (const language of SUPPORTED_INTERFACE_LANGUAGES) {
+      for (const [index, tier] of LEVEL_TIER_KEYS.entries()) {
+        const label = levelRingLabel(index * 10 + 5, tier, language);
+        expect({ language, tier, ok: NAMED(label) && label.includes(levelTierName(tier, language)) }).toEqual({ language, tier, ok: true });
+      }
+    }
+  });
+
+  test('les dix rangs ordinaux sont distincts dans une langue', () => {
+    for (const language of SUPPORTED_INTERFACE_LANGUAGES) {
+      const labels = LEVEL_TIER_KEYS.map((tier) => levelRingLabel(1, tier, language));
+      expect(new Set(labels).size).toBe(10);
+    }
+  });
+});
+
+describe('un identifiant de requête déjà pris', () => {
+  test('REQUEST_ID_CONFLICT a sa phrase dans chaque langue, distincte de la phrase neutre', () => {
+    for (const language of SUPPORTED_INTERFACE_LANGUAGES) {
+      expect(NAMED(gameErrorMessage('REQUEST_ID_CONFLICT', language))).toBe(true);
+      expect(gameErrorMessage('REQUEST_ID_CONFLICT', language)).not.toBe(gameErrorMessage('???', language));
     }
   });
 });

@@ -13,8 +13,8 @@ const stepsOn = (p: ChoreographyPlan, target: string) => p.steps.filter((s) => s
  * `choreography-play.test.ts` rejoue ces plans sur des éléments.
  */
 describe('durées — celles de la conception', () => {
-  test('frappe 1,2 s · rang 1,6 s · niveau 0,6 s · niveau perdu 0,8 s · badge 0,7 s · coffre 1,4 s', () => {
-    expect(CHOREOGRAPHY_DURATION_MS).toEqual({ mint: 1200, rank: 1600, levelGain: 600, levelLoss: 800, badgeLight: 700, badgeExtinguish: 700, chest: 1400 });
+  test('frappe 1,2 s · rang 1,6 s · niveau 0,6 s · niveau perdu 0,8 s · badge 0,7 s · coffre 1,4 s · Prestige 2 s', () => {
+    expect(CHOREOGRAPHY_DURATION_MS).toEqual({ mint: 1200, rank: 1600, levelGain: 600, levelLoss: 800, badgeLight: 700, badgeExtinguish: 700, chest: 1400, prestige: 2000 });
     for (const kind of KINDS) expect(plan(kind, 3).durationMs).toBe(CHOREOGRAPHY_DURATION_MS[kind]);
   });
 });
@@ -207,5 +207,33 @@ describe('prefers-reduced-motion — un fondu, rien d’autre', () => {
   test('la première tape seulement : on ne rejoue pas une rafale de vibrations', () => {
     expect(reducedPlan(plan('rank')).haptics).toEqual([{ atMs: 0, haptic: 'tap' }]);
     expect(reducedPlan(plan('levelLoss')).haptics).toEqual([]);
+  });
+});
+
+describe('le Prestige — l’anneau se vide, le trophée tombe, Mee et Meo descendent, les étoiles s’allument', () => {
+  const p = plan('prestige');
+  const targets = p.steps.map((step) => step.target);
+
+  test('cinq gestes, dans l’ordre du passage', () => {
+    expect(targets).toEqual(['[data-game-ring-sweep]', '[data-game-level-text]', '[data-game-prestige-trophy]', '[data-game-pose]', '[data-game-prestige-star]']);
+  });
+
+  test('le trophée se pose AVANT Mee et Meo, et les étoiles viennent en dernier', () => {
+    const start = (target: string): number => p.steps.find((step) => step.target === target)?.delayMs ?? Number.POSITIVE_INFINITY;
+    expect(start('[data-game-prestige-trophy]')).toBeLessThan(start('[data-game-pose]'));
+    expect(start('[data-game-pose]')).toBeLessThan(start('[data-game-prestige-star]'));
+  });
+
+  test('cinq étoiles, une par cran du Prestige, décalées', () => {
+    const stars = p.steps.find((step) => step.target === '[data-game-prestige-star]');
+    expect(stars?.count).toBe(5);
+    expect(stars?.staggerMs).toBeGreaterThan(0);
+  });
+
+  test('le repère de l’irisation tombe quand le trophée se pose', () => {
+    const shine = p.beats.find((beat) => beat.name === 'shine')?.atMs ?? 0;
+    const trophy = p.steps.find((step) => step.target === '[data-game-prestige-trophy]');
+    expect(shine).toBeGreaterThanOrEqual(trophy?.delayMs ?? 0);
+    expect(shine).toBeLessThanOrEqual(trophy === undefined ? 0 : endOfStep(trophy));
   });
 });

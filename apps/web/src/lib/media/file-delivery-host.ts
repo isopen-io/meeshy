@@ -23,13 +23,13 @@ export type FileDeliveryHost = {
   readonly document?: Pick<Document, 'createElement'> & { readonly body: Pick<HTMLElement, 'appendChild' | 'removeChild'> };
   readonly createObjectURL?: (blob: Blob) => string;
   readonly revokeObjectURL?: (url: string) => void;
-  readonly canShareFiles?: (data: { readonly files: readonly File[] }) => boolean;
-  readonly shareFiles?: (data: { readonly files: readonly File[] }) => Promise<void>;
+  readonly canShareFiles?: (data: { readonly files: readonly File[]; readonly text?: string }) => boolean;
+  readonly shareFiles?: (data: { readonly files: readonly File[]; readonly text?: string }) => Promise<void>;
 };
 
 type FileShareNavigator = {
-  readonly canShare?: (data: { files: File[] }) => boolean;
-  readonly share?: (data: { files: File[] }) => Promise<void>;
+  readonly canShare?: (data: { files: File[]; text?: string }) => boolean;
+  readonly share?: (data: { files: File[]; text?: string }) => Promise<void>;
 };
 
 export type FileDeliveryEnvironment = {
@@ -58,16 +58,25 @@ export async function base64De(blob: Blob): Promise<string> {
   return btoa(blocs.join(''));
 }
 
+/**
+ * LE PLAFOND DU PONT DE LA COQUE (#8336, #9512) — un fichier y voyage en base64
+ * dans une chaîne, recopiée par le pont puis par Java : au-delà, la copie fait
+ * courir un OOM à l'application. La galerie (`gallery-saver.ts`) et la feuille
+ * de partage lisent ce même plafond, sans quoi la seconde copierait ce que la
+ * première vient de refuser.
+ */
+export const NATIVE_BRIDGE_MAX_BYTES = 32 * 1024 * 1024;
+
 function partageParLePont(shell: CoqueNative | undefined): Pick<FileDeliveryHost, 'canShareFiles' | 'shareFiles'> {
   const pont = appelNatifMethode(shell, 'MeeshyShare', 'shareFile');
   if (pont === null) return {};
   return {
-    canShareFiles: (data) => data.files.length === 1,
-    shareFiles: async ({ files }) => {
+    canShareFiles: (data) => data.files.length === 1 && (data.files[0]?.size ?? 0) <= NATIVE_BRIDGE_MAX_BYTES,
+    shareFiles: async ({ files, text }) => {
       const [file] = files;
       if (file === undefined) return;
       const data = await base64De(file);
-      await pont({ fileName: file.name, mimeType: file.type, data }).catch((erreur: unknown) => {
+      await pont({ fileName: file.name, mimeType: file.type, data, ...(text === undefined ? {} : { text }) }).catch((erreur: unknown) => {
         throw annulationDuPont(erreur);
       });
     },
@@ -88,8 +97,10 @@ export function browserFileDeliveryHost(environment: FileDeliveryEnvironment = c
   const fileShare =
     pont.shareFiles === undefined && nav !== undefined && typeof nav.canShare === 'function' && typeof nav.share === 'function'
       ? {
-          canShareFiles: (data: { readonly files: readonly File[] }) => nav.canShare?.({ files: [...data.files] }) === true,
-          shareFiles: (data: { readonly files: readonly File[] }) => nav.share?.({ files: [...data.files] }) ?? Promise.resolve(),
+          canShareFiles: (data: { readonly files: readonly File[]; readonly text?: string }) =>
+            nav.canShare?.({ files: [...data.files], ...(data.text === undefined ? {} : { text: data.text }) }) === true,
+          shareFiles: (data: { readonly files: readonly File[]; readonly text?: string }) =>
+            nav.share?.({ files: [...data.files], ...(data.text === undefined ? {} : { text: data.text }) }) ?? Promise.resolve(),
         }
       : pont;
   const anchor =

@@ -15,6 +15,7 @@ import { callStore } from '@/lib/calls/call-store';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { useOptionalRoute } from '@/lib/router';
+import { reportCallResumeShown } from '@/lib/view/top-band';
 
 import { Glyph, GlyphSvg } from './glyph';
 import { CALLS_GLYPHS } from './glyphs-calls';
@@ -84,9 +85,14 @@ export default function CallResumeBanner() {
     void appQueryClient.invalidateQueries({ queryKey: ACTIVE_CALL_QUERY_KEY });
   }, [localPhase, localCallId]);
 
-  if (!signedIn) return null;
   const viewerId = resolveViewer({ source: apiDeps.source, session }).id ?? '';
-  const request = resumableCall({ active: active.data ?? null, local, viewerId, identityOf: callIdentityOf, openThread, endedCallIds: endedCallIds.current });
+  const request = signedIn ? resumableCall({ active: active.data ?? null, local, viewerId, identityOf: callIdentityOf, openThread, endedCallIds: endedCallIds.current }) : null;
+  /* Le bandeau du haut (#9494) lit ici que la place est prise : la bannière du joueur s'efface tant que celle-ci se montre. */
+  const shown = request !== null;
+  useEffect(() => {
+    reportCallResumeShown(shown);
+  }, [shown]);
+  useEffect(() => () => reportCallResumeShown(false), []);
   if (request === null) return null;
 
   return (

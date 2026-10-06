@@ -10,6 +10,7 @@ import { describe, it, expect, jest } from '@jest/globals';
 import { gameBlockSchema } from '@meeshy/shared/types/game';
 import { GameBlockService } from '../GameBlockService';
 import { MissionService } from '../MissionService';
+import { PersonalMissionService } from '../PersonalMissionService';
 import { fakeGameDb, seedUser, USER, type FakeGameDb } from './fakeGameDb';
 
 jest.mock('../../../utils/logger-enhanced', () => ({
@@ -179,5 +180,69 @@ describe('GameBlockService.markGuideSeen', () => {
     expect(seen).toHaveLength(200);
     expect(seen.at(-1)).toBe('nouvelle');
     expect(seen).not.toContain('k0');
+  });
+});
+
+
+describe('GameBlockService.build — la mission personnelle (#9539)', () => {
+  const buildWith = async (db: FakeGameDb, now: Date) => {
+    const missions = new MissionService(db.prisma, { creditPoints: async () => undefined });
+    const personal = new PersonalMissionService(db.prisma, { missions });
+    return new GameBlockService(db.prisma, { missions, personal }).build({ userId: USER, now });
+  };
+
+  it('sert `missions.personal` à côté des trois missions du jour, avec sa plage et son état, et passe le schéma partagé', async () => {
+    const db = fakeGameDb();
+    seedUser(db, { engagementScore: 10 * 20 * 20, levelRecord: 20 });
+
+    const block = await buildWith(db, new Date('2026-10-05T06:00:00Z'));
+
+    expect(block).not.toBeNull();
+    expect(gameBlockSchema.safeParse(block).success).toBe(true);
+    expect(block!.missions.items).toHaveLength(3);
+    expect(block!.missions.personal).toMatchObject({ state: 'upcoming' });
+    expect(Date.parse(block!.missions.personal!.endsAt) - Date.parse(block!.missions.personal!.startsAt)).toBe(2 * 60 * 60 * 1000);
+    expect(block!.chest.status).toBe('locked');
+  });
+
+  it('l’état suit l’instant de la lecture : en cours dans la plage, manquée après', async () => {
+    const db = fakeGameDb();
+    seedUser(db, { engagementScore: 10 * 20 * 20, levelRecord: 20 });
+    const first = await buildWith(db, new Date('2026-10-05T06:00:00Z'));
+    const startsAt = new Date(first!.missions.personal!.startsAt);
+    const endsAt = new Date(first!.missions.personal!.endsAt);
+
+    expect((await buildWith(db, new Date(startsAt.getTime() + 60_000)))!.missions.personal?.state).toBe('active');
+    expect((await buildWith(db, new Date(endsAt.getTime() + 60_000)))!.missions.personal?.state).toBe('missed');
+  });
+
+  it('sans service de mission personnelle, le bloc garde exactement la forme d’avant', async () => {
+    const db = fakeGameDb();
+    seedUser(db, { engagementScore: 10 * 20 * 20, levelRecord: 20 });
+
+    const block = await build(db);
+
+    expect('personal' in block.missions).toBe(false);
+  });
+
+  it('une panne du tirage personnel n’emporte pas le bloc', async () => {
+    const db = fakeGameDb();
+    seedUser(db, { engagementScore: 10 * 20 * 20, levelRecord: 20 });
+    const missions = new MissionService(db.prisma, { creditPoints: async () => undefined });
+    const personal = { ensure: async () => { throw new Error('mongo down'); } };
+
+    const block = await new GameBlockService(db.prisma, { missions, personal }).build({ userId: USER, now: NOW });
+
+    expect(block).not.toBeNull();
+    expect(block!.missions.personal).toBeUndefined();
+  });
+
+  it('un compte sous le niveau 5 n’a ni missions ni mission personnelle', async () => {
+    const db = fakeGameDb();
+    seedUser(db, { engagementScore: 10 * 4 * 4, levelRecord: 4 });
+
+    const block = await buildWith(db, NOW);
+
+    expect(block!.missions.personal).toBeUndefined();
   });
 });

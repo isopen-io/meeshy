@@ -713,3 +713,37 @@ describe('MeeshHero est MONTÉ, et sous le niveau (#6497)', () => {
     expect(rendu).not.toContain('progression-meesh');
   });
 });
+
+/**
+ * MEE ET MEO FRAPPENT DANS LA FEUILLE DU COMPTEUR (#9537) — la feuille que le
+ * compteur de Meeshes ouvre en haut à droite montre la scène de la frappe ; le
+ * compteur, lui, ne monte qu'à la fin du geste (`useGameActions`, porte de la
+ * frappe). Devant un ancien serveur (aucun aperçu de frappe), la feuille reste
+ * celle d'avant.
+ */
+describe('MeeshDetail — la scène de frappe (#9537)', () => {
+  const frappable = resolveEngagementProgress({
+    ...ENGAGEMENT_PROGRESS_FIXTURE,
+    meesh: { balance: 3, mintedLifetime: 3, debitablePoints: 1500, floorPoints: 0, missingPoints: 0, mintCost: 1221 },
+  }).meesh!;
+  const strike = { strikeKey: 0, next: { number: 4, edition: 'silver' as const }, confirmed: null };
+
+  test('avec l’aperçu de frappe : Mee et Meo sont dans la feuille', () => {
+    const rendu = renderToStaticMarkup(<MeeshDetail meesh={frappable} onMint={() => {}} isMinting={false} strike={strike} />);
+    expect(rendu).toContain('data-meesh-strike');
+    expect(rendu).toContain('data-game-actor="mee"');
+    expect(rendu).toContain('data-game-actor="meo"');
+    expect(rendu).toContain('data-game-mint-scene');
+  });
+
+  test('la scène est au-dessus du solde : on voit frapper avant de lire le compteur', () => {
+    const rendu = renderToStaticMarkup(<MeeshDetail meesh={frappable} onMint={() => {}} isMinting={false} strike={strike} />);
+    expect(rendu.indexOf('data-meesh-strike')).toBeLessThan(rendu.indexOf('3 Meeshes'));
+  });
+
+  test('un ancien serveur : aucune scène, la feuille d’avant', () => {
+    const rendu = renderToStaticMarkup(<MeeshDetail meesh={frappable} onMint={() => {}} isMinting={false} />);
+    expect(rendu).not.toContain('data-meesh-strike');
+    expect(rendu).not.toContain('data-game-actor');
+  });
+});

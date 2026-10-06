@@ -2,7 +2,8 @@ import { describe, expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import { photoLayout } from '@/lib/game-photo/layout';
-import { flameMoment, levelHundredMoment, meeshMoment, rankMoment, startMoment, tierMoment, treasuryMoment, type PhotoMoment } from '@/lib/game-photo/moments';
+import { referralOf, referralPlaceholder } from '@/lib/game-photo/referral';
+import { flameMoment, levelHundredMoment, meeshMoment, photoMomentOfEmblemV2, rankMoment, startMoment, tierMoment, treasuryMoment, type PhotoMoment } from '@/lib/game-photo/moments';
 
 import { GamePhotoFrame } from './game-photo-frame';
 
@@ -90,5 +91,104 @@ describe('l’accessibilité', () => {
     const html = render(rankMoment({ rank: 'voix', division: 2 }));
     expect(html).not.toMatch(/(?:color|background)[^;"]*:[^;"]*#[0-9a-f]{3,8}/i);
     expect(html).toContain('var(--ios-on-brand)');
+  });
+});
+
+/**
+ * LE BANDEAU DE PARRAINAGE (#7742) — l'aperçu en direct porte le même bandeau
+ * que l'image finale : la Signature, « Rejoins-moi sur Meeshy », le lien court
+ * et la Flamme. Sans lien, le cadre est celui d'avant, à l'identique.
+ */
+describe('le bandeau de parrainage', () => {
+  const moment = rankMoment({ rank: 'voix', division: 2 });
+  const referral = referralOf('https://meeshy.me/signup/affiliate/aff_abc', 23);
+  const withBanner = (format: 'story' | 'square' = 'story', link = referral): string =>
+    renderToStaticMarkup(<GamePhotoFrame moment={moment} dateLabel="5 octobre 2026" format={format} referral={link} />);
+
+  test('la phrase, le lien court et les jours de Flamme se lisent dans le cadre', () => {
+    const page = text(withBanner());
+    expect(page).toContain('Rejoins-moi sur Meeshy');
+    expect(page).toContain('meeshy.me/signup/affiliate/aff_abc');
+    expect(page).toContain('23 j');
+  });
+
+  test('le fond du bandeau est posé à la place que la mise en page lui donne', () => {
+    const layout = photoLayout('story', { banner: true });
+    const html = withBanner();
+    const percent = (n: number, of: number) => `${((n / of) * 100).toFixed(2)}%`;
+    const frame = layout.banner?.frame;
+    if (frame === undefined) throw new Error('bandeau attendu');
+    expect(html).toMatch(new RegExp(`data-photo-banner=""[^>]*left:${percent(frame.x, layout.width).replace('.', '\\.')}`));
+  });
+
+  test('la Flamme est un cinquième dessin de la composition, avec le sien', () => {
+    expect(withBanner()).toMatch(/data-photo-art="flame"[^>]*>\s*<svg/);
+    expect(withBanner()).toContain('data-game-flame=');
+  });
+
+  test('il n’y a qu’UNE Signature : celle du bandeau, plus celle du pied de carte', () => {
+    expect(withBanner().match(/data-photo-art="signature"/g)).toHaveLength(1);
+  });
+
+  test('sans lien, aucun bandeau : le cadre d’avant', () => {
+    const html = withBanner('story', null);
+    expect(html).not.toContain('data-photo-banner');
+    expect(html).not.toContain('data-photo-art="flame"');
+    expect(text(html)).not.toContain('Rejoins-moi');
+    expect(html).toBe(render(moment));
+  });
+
+  test('Flamme éteinte : le lien reste, la Flamme et ses jours s’effacent', () => {
+    const html = withBanner('story', referralOf('https://meeshy.me/signup/affiliate/aff_abc', 0));
+    expect(text(html)).toContain('meeshy.me/signup/affiliate/aff_abc');
+    expect(html).not.toContain('data-photo-art="flame"');
+    expect(text(html)).not.toMatch(/\d+ j\b/);
+  });
+
+  test('le carré porte aussi le bandeau', () => {
+    expect(text(withBanner('square'))).toContain('Rejoins-moi sur Meeshy');
+  });
+
+  test('aucun jeton encore : l’emplacement « meeshy.me/r/… », cerné de pointillés ; un vrai lien ne l’est pas', () => {
+    const html = withBanner('story', referralPlaceholder(23));
+    expect(text(html)).toContain('meeshy.me/r/…');
+    expect(html).toMatch(/data-photo-banner-placeholder=""[^>]*dashed/);
+    expect(withBanner()).not.toContain('data-photo-banner-placeholder');
+  });
+
+  test('aucune couleur écrite dans le bandeau', () => {
+    expect(withBanner()).not.toMatch(/(?:color|background)[^;"]*:[^;"]*#[0-9a-f]{3,8}/i);
+  });
+});
+
+/**
+ * LES EMBLÈMES DE LA VAGUE 2 (#9481) — le trophée, la gemme de la ligue gagnée,
+ * la coupe de saison et celle de Prestige se posent dans le MÊME cadre que les
+ * autres moments : Mee et Meo les frappent en place.
+ */
+describe('les emblèmes de la vague 2', () => {
+  test('un trophée de ligue : la coupe de sa matière, sa plaque, le texte du moment', () => {
+    const html = render(photoMomentOfEmblemV2({ kind: 'trophy', trophyKey: 'trophy.league-cup.2026-10-26.jade.silver' }));
+    expect(html).toContain('data-game-trophy="league"');
+    expect(html).toContain('-p-silver)');
+    expect(html).toContain('>JADE · S44<');
+    expect(text(html)).toContain('Nouveau trophée');
+  });
+
+  test('une montée de ligue : la gemme de la ligue atteinte', () => {
+    const html = render(photoMomentOfEmblemV2({ kind: 'league-up', league: 'saphir', weekKey: '2026-11-09' }));
+    expect(html).toContain('data-game-league-gem="saphir"');
+    expect(text(html)).toContain('Ligue Saphir');
+  });
+
+  test('une saison terminée et un Prestige : leur coupe, plaque numérotée', () => {
+    expect(render(photoMomentOfEmblemV2({ kind: 'season', season: 1 }))).toContain('>SAISON 1<');
+    const prestige = render(photoMomentOfEmblemV2({ kind: 'prestige', number: 2 }));
+    expect(prestige).toContain('data-game-trophy="prestige"');
+    expect(prestige).toContain('>PRESTIGE 2<');
+  });
+
+  test('un trophée d’une version plus récente : la coupe neutre, jamais une erreur', () => {
+    expect(() => render(photoMomentOfEmblemV2({ kind: 'trophy', trophyKey: 'trophy.cometa.9' }))).not.toThrow();
   });
 });

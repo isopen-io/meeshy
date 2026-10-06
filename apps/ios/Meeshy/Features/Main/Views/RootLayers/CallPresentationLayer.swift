@@ -38,12 +38,16 @@ struct CallPresentationLayer: ViewModifier {
         miniPlayerOnTapBody: @escaping () -> Void,
         miniPlayerCurrentConversationId: @escaping () -> String?,
         miniPlayerCoordinator: ConversationAudioCoordinator? = nil,
+        playerBannerHosted: Bool = false,
+        onPlayerBannerTap: @escaping () -> Void = {},
         calls: CallManagerHost = .shared,
         incomingCallGate: IncomingCallWakeGate = .shared
     ) {
         self.miniPlayerOnTapBody = miniPlayerOnTapBody
         self.miniPlayerCurrentConversationId = miniPlayerCurrentConversationId
         self.miniPlayerCoordinator = miniPlayerCoordinator
+        self.playerBannerHosted = playerBannerHosted
+        self.onPlayerBannerTap = onPlayerBannerTap
         self._calls = ObservedObject(wrappedValue: calls)
         self.incomingCallGate = incomingCallGate
     }
@@ -61,6 +65,16 @@ struct CallPresentationLayer: ViewModifier {
     // `FloatingCallPillView`).
     let miniPlayerOnTapBody: () -> Void
     let miniPlayerCurrentConversationId: () -> String?
+
+    /// L'écran courant porte la BANNIÈRE DU JOUEUR (#9494) — un écran principal, ni un fil ni une visionneuse
+    /// (`PlayerBannerPlacement`). Une PRIMITIVE injectée par la racine, qui observe son routeur : ce conteneur
+    /// n'a lui-même aucun accès au routeur, et ne doit pas en observer un (voir plus haut le churn d'appel).
+    let playerBannerHosted: Bool
+    /// Un toucher sur la bannière ouvre Progression.
+    let onPlayerBannerTap: () -> Void
+
+    /// L'aplat de la bannière À L'ÉCRAN, remonté par son emplacement : la bande de la barre d'état le reprend.
+    @State private var bannerSurface: Color?
 
     /// `nil` en production ⇒ `MiniAudioPlayerBar` prend `.shared`.
     ///
@@ -137,7 +151,7 @@ struct CallPresentationLayer: ViewModifier {
             // qui sort par le haut, dont elle masquerait sinon le contenu à la
             // traversée de l'encart (`TopChromeBarMotion`).
             Color.clear.frame(height: 0)
-                .modifier(TopChromeBand(callIsActive: pillShowing, audio: audioBarContext))
+                .modifier(TopChromeBand(callIsActive: pillShowing, audio: audioBarContext, banner: bannerSurface))
                 .zIndex(TopChromeBarMotion.bandLayer)
             if let callManager {
                 FloatingCallPillView(callManager: callManager, isLastBar: audioBarContext == nil, topInset: topInset)
@@ -149,6 +163,16 @@ struct CallPresentationLayer: ViewModifier {
                 onDisplayedContextChange: { audioBarContext = $0 },
                 isLastBar: !pillShowing,
                 topInset: topInset
+            )
+            // La BANNIÈRE DU JOUEUR (#9494, conception XIII.1) : le bandeau du haut, quand ni l'appel ni l'audio ne
+            // l'occupent. L'appel prime, puis l'audio ; elle s'efface quand l'un arrive et revient, à la même place,
+            // quand ils partent.
+            PlayerBannerSlot(
+                isHosted: playerBannerHosted,
+                isFree: !pillShowing && audioBarContext == nil,
+                topInset: topInset,
+                onTap: onPlayerBannerTap,
+                onSurfaceChange: { bannerSurface = $0 }
             )
             content
         }

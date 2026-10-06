@@ -25,6 +25,15 @@ struct PhotoNotice: Equatable {
 ///     partager, ou garder au carnet.
 ///  5. « Plus tard » laisse le moment en attente 7 jours dans le carnet.
 ///
+/// La carte porte le lien de parrainage court de l'utilisateur et sa Flamme (#7742, `ReferralCard`) ;
+/// le partage transmet aussi le lien en texte. Le lien d'un jeton EXISTANT se lit PENDANT la proposition
+/// (cache d'abord) ; arrivé après la composition, il recompose la carte.
+///
+/// **Aucun jeton ne se crée sans geste.** Tant que l'utilisateur n'en a aucun, l'aperçu montre un EMPLACEMENT
+/// « meeshy.me/r/… » en pointillé ; le jeton se crée au toucher de « Partager » (`prepareShare`), et la carte
+/// est recomposée avec le vrai lien AVANT de partir. Ce qui sort de l'app (Photos, carnet, partage) porte le
+/// vrai lien ou rien — jamais l'emplacement.
+///
 /// L'étape vit dans `GamePhotoFlow` (réducteur pur) ; cette classe y branche les
 /// effets : la caméra, la composition, le carnet, la photothèque, le haptique.
 /// Chacun est INJECTÉ (`.shared` / réel par défaut) pour que le déroulé se teste
@@ -42,6 +51,13 @@ final class GamePhotoSession: ObservableObject {
     @Published private(set) var notice: PhotoNotice?
     /// Le moment a été reporté (« plus tard ») : l'hôte referme la proposition.
     private(set) var wasDeferred = false
+    /// Ce que la carte porte en plus du moment (le bandeau de parrainage) ; `nil` tant qu'aucun lien n'est lu.
+    @Published private(set) var referral: ReferralCard?
+    /// La Flamme se montre sur la carte tant que l'utilisateur ne l'a pas retirée (conformité H-2).
+    @Published private(set) var flameOnCard = true
+    /// Le lien d'invitation se montre sur la carte — et part en texte — tant que l'utilisateur ne l'a pas retiré
+    /// (conformité H-2 : le lien est retirable, comme la Flamme).
+    @Published private(set) var linkOnCard = true
 
     let moment: PhotoMoment
     let camera: GamePhotoCameraProviding
@@ -52,6 +68,26 @@ final class GamePhotoSession: ObservableObject {
     private let haptics: GameHapticsProviding
     private let now: () -> Date
     private let strikeDuration: UInt64
+    private let flame: ReferralCard.Flame?
+    private let referralLinks: ReferralLinkProviding
+    private var referralLink: String?
+    /// La lecture d'un jeton existant a eu lieu (qu'elle ait trouvé un lien ou non).
+    private var referralPrepared = false
+    /// Le geste de partage a demandé un jeton et la passerelle n'en a rendu aucun : plus d'emplacement.
+    private var linkUnavailable = false
+    private var preparingReferral = false
+    /// La création demandée par un toucher de « Partager » ; un second toucher l'attend au lieu de partir sans lien.
+    private var shareInFlight: Task<Void, Never>?
+    private var composedSource: UIImage?
+    private var composedMode: PhotoMode?
+
+    /// La Flamme de l'utilisateur, quand elle brûle : c'est ce que le bandeau peut montrer.
+    var hasFlame: Bool { flame != nil }
+    /// Un lien d'invitation a été lu : la carte PEUT porter le bandeau, l'utilisateur choisit s'il le porte.
+    var hasReferralLink: Bool { referralLink != nil }
+    /// Le bandeau est offert au choix de l'utilisateur : le lien existe, ou son emplacement attend le geste
+    /// de partage qui créera le jeton. Faux tant que rien n'est lu, et quand le geste n'a pu en obtenir aucun.
+    var offersLinkChoice: Bool { referralLink != nil || (referralPrepared && !linkUnavailable) }
 
     init(
         moment: PhotoMoment,
@@ -61,7 +97,9 @@ final class GamePhotoSession: ObservableObject {
         library: PhotoLibrarySaving = PhotoLibraryManagerAdapter(),
         haptics: GameHapticsProviding = GameHaptics.shared,
         now: @escaping () -> Date = { Date() },
-        strikeDuration: UInt64 = 1_200_000_000
+        strikeDuration: UInt64 = 1_200_000_000,
+        flame: ReferralCard.Flame? = nil,
+        referralLinks: ReferralLinkProviding = ReferralLinkService.shared
     ) {
         self.moment = moment
         self.camera = camera
@@ -71,10 +109,121 @@ final class GamePhotoSession: ObservableObject {
         self.haptics = haptics
         self.now = now
         self.strikeDuration = strikeDuration
+        self.flame = flame
+        self.referralLinks = referralLinks
     }
 
     private func send(_ event: PhotoFlowEvent) {
         state = GamePhotoFlow.reduce(state, event)
+    }
+
+    // MARK: - Le lien de parrainage (#7742)
+
+    /// Lit le lien d'un jeton EXISTANT (cache d'abord) et le pose sur la carte — SANS rien créer. Sans jeton,
+    /// la carte montre l'emplacement du lien. Un lien qui arrive quand la carte est déjà composée la
+    /// recompose : l'aperçu montré est toujours celui qui partira.
+    func prepareReferral() async {
+        guard !referralPrepared, !preparingReferral else { return }
+        preparingReferral = true
+        defer { preparingReferral = false }
+        let link = await referralLinks.existingLink()
+        referralPrepared = true
+        referralLink = referralLink ?? link
+        refreshCard()
+        recompose()
+    }
+
+    /// Au toucher de « Partager » : le seul geste qui crée un jeton, quand l'utilisateur n'en a aucun. La
+    /// carte est recomposée avec le vrai lien — ou sans bandeau si la passerelle n'en donne aucun — avant
+    /// que la feuille de partage ne s'ouvre. Sans bandeau voulu (« Mon lien » retiré), rien ne se crée.
+    ///
+    /// Un second toucher pendant la création ATTEND la même création — un seul jeton, et aucune feuille ne s'ouvre
+    /// sur une carte privée du lien que le premier toucher est en train d'obtenir.
+    func prepareShare() async {
+        if let shareInFlight {
+            await shareInFlight.value
+            return
+        }
+        guard linkOnCard, referralLink == nil, !linkUnavailable else { return }
+        let creation = Task { @MainActor [weak self] in
+            guard let self else { return }
+            let link = await self.referralLinks.shareableLink()
+            self.adoptShareableLink(link)
+        }
+        shareInFlight = creation
+        await creation.value
+        shareInFlight = nil
+    }
+
+    private func adoptShareableLink(_ link: String?) {
+        if let link {
+            referralLink = link
+        } else {
+            linkUnavailable = true
+        }
+        referralPrepared = true
+        refreshCard()
+        recompose()
+    }
+
+    /// « Ma Flamme sur la carte » : l'utilisateur la retire ou la remet, et la carte composée suit.
+    func setFlameOnCard(_ shown: Bool) {
+        guard flameOnCard != shown else { return }
+        flameOnCard = shown
+        refreshCard()
+        recompose()
+    }
+
+    /// « Mon lien sur la carte » : sans lien, le bandeau n'existe pas — la Flamme part avec lui — et rien ne part
+    /// en texte, ni jeton créé. Le lien reste lu : le remettre ne rappelle pas le réseau.
+    func setLinkOnCard(_ shown: Bool) {
+        guard linkOnCard != shown else { return }
+        linkOnCard = shown
+        refreshCard()
+        recompose()
+    }
+
+    private func refreshCard() {
+        guard linkOnCard else {
+            referral = nil
+            return
+        }
+        let shownFlame = flameOnCard ? flame : nil
+        if let referralLink {
+            referral = ReferralCard(link: referralLink, flame: shownFlame)
+        } else {
+            referral = referralPrepared && !linkUnavailable ? .placeholder(flame: shownFlame) : nil
+        }
+    }
+
+    /// Le texte qui part avec l'image : le lien en clair, pour qu'il se copie. `nil` sans lien — et jamais
+    /// pour l'emplacement, qui n'est pas un lien.
+    var shareText: String? {
+        guard let referral, !referral.isPlaceholder else { return nil }
+        return String(localized: "game.referral.share_text", defaultValue: "Rejoins-moi sur Meeshy : \(referral.link)", bundle: .main)
+    }
+
+    /// Ce que la feuille de partage reçoit : l'image du format choisi, puis le lien en texte quand il existe.
+    func shareItems(square: Bool) -> [Any] {
+        guard let outgoing = exportable() else { return [] }
+        let image: Any = square ? outgoing.square : outgoing.story
+        return [image] + (shareText.map { [$0 as Any] } ?? [])
+    }
+
+    /// L'image qui SORT de l'app (Photos, carnet, partage) : celle de l'aperçu, sauf quand l'aperçu porte
+    /// l'EMPLACEMENT du lien — elle est alors recomposée sans bandeau. Aucune image ne part avec un lien
+    /// factice (conformité H-8). `nil` si la recomposition échoue : mieux vaut ne rien sortir.
+    private func exportable() -> ComposedPhoto? {
+        guard let composed else { return nil }
+        guard referral?.isPlaceholder == true, let mode = composedMode else { return composed }
+        return composer.compose(moment: moment, source: composedSource, mode: mode, date: now(), referral: nil)
+    }
+
+    private func recompose() {
+        guard case .result = state, let mode = composedMode else { return }
+        if let result = composer.compose(moment: moment, source: composedSource, mode: mode, date: now(), referral: referral) {
+            composed = result
+        }
     }
 
     // MARK: - Étape 1 : la proposition
@@ -140,7 +289,9 @@ final class GamePhotoSession: ObservableObject {
         } else {
             strike = 1
         }
-        guard let result = composer.compose(moment: moment, source: source, mode: mode, date: now()) else {
+        composedSource = source
+        composedMode = mode
+        guard let result = composer.compose(moment: moment, source: source, mode: mode, date: now(), referral: referral) else {
             send(.composeFailed)
             return
         }
@@ -151,8 +302,9 @@ final class GamePhotoSession: ObservableObject {
     // MARK: - Étape 4 : le résultat
 
     func keep() async {
-        guard case .result = state, let composed else { return }
-        let ok = await notebook.keep(moment, photo: composed.kept)
+        guard case .result = state else { return }
+        var ok = false
+        if let kept = exportable()?.kept { ok = await notebook.keep(moment, photo: kept) }
         send(.kept(ok))
         notice = ok
             ? PhotoNotice(tone: .good, text: String(localized: "game.photo.notice.kept", defaultValue: "Gardée au carnet de progression.", bundle: .main))
@@ -161,9 +313,9 @@ final class GamePhotoSession: ObservableObject {
 
     /// Enregistre dans Photos (autorisation en ajout seul) l'image du format choisi.
     func save(square: Bool) async {
-        guard case .result = state, let composed else { return }
+        guard case .result = state, let outgoing = exportable() else { return }
         do {
-            try await library.saveImage(square ? composed.squareData : composed.storyData)
+            try await library.saveImage(square ? outgoing.squareData : outgoing.storyData)
             notice = PhotoNotice(tone: .good, text: String(localized: "game.photo.notice.saved", defaultValue: "Image enregistrée dans Photos.", bundle: .main))
         } catch {
             notice = PhotoNotice(tone: .error, text: String(localized: "game.photo.notice.save_failed", defaultValue: "L’enregistrement n’a pas pu aboutir.", bundle: .main))

@@ -494,6 +494,7 @@ const pt = {
   'settings.export_data': 'Exportar meus dados',
   'settings.section.tools': 'Ferramentas',
   'settings.tools.progression': 'Progresso',
+  'settings.tools.game': 'Jogo',
   'settings.section.about': 'Sobre',
   'settings.terms': 'Termos de uso',
   'settings.privacy_policy': 'Política de privacidade',

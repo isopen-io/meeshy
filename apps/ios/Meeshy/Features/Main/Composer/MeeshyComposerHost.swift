@@ -570,6 +570,8 @@ struct MeeshyComposerHost: View {
     /// `ComposerInlineEditing.resolved` (`activeInlineEdit`), jamais telle
     /// quelle.
     @State var inlineEdit: ComposerInlineEdit?
+    /// L'image dont la scène montre l'ORIGINAL, le temps d'un appui sur « Comparer » (#9175).
+    @State var comparingLookObjectId: String?
     /// Le menu d'appui long d'un OBJET, peint en verre par le meuble (#8717).
     /// Celui du FOND garde son état d'origine, `backgroundMenuObjectId`.
     @State var sceneObjectMenu: ComposerSceneMenuRequest?
@@ -861,6 +863,12 @@ struct MeeshyComposerHost: View {
     /// zone contextuelle restant montée pour toujours.
     func handleSceneBackgroundTap() {
         if handleSceneQuickTap() { return }
+        // Sur la scène, ce toucher ouvre les outils du FOND (#9521) — la règle
+        // se lit AVANT d'effacer, sinon elle verrait toujours « rien ».
+        let fond = ComposerSceneBackgroundTapPolicy.backgroundToEdit(
+            currentSelection: selectedSceneItemKind,
+            effectIsOpen: openSceneEffect != nil,
+            backgroundMediaId: sceneBackgroundMedia?.id)
         selectedSceneItemKind = ComposerSceneBackgroundTapPolicy.selection(
             currentSelection: selectedSceneItemKind,
             backgroundIsMedia: viewModel.currentSlide.effects.hasVisualBackgroundMedia
@@ -871,6 +879,7 @@ struct MeeshyComposerHost: View {
         selectedSceneItemId = nil
         inlineEdit = nil
         openSceneEffect = nil
+        if let fond { beginInlineEdit(fond) }
     }
 
     /// **Trois couches NOMINALES, jamais une seule expression** (#8387). Le

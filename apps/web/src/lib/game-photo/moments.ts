@@ -1,14 +1,20 @@
 import type { GameBlock } from '@meeshy/shared/types/game';
+import type { EngagementAchievementKey } from '@meeshy/shared/types/engagement';
+import { engagementAchievementTitle } from '@meeshy/shared/utils/engagement-labels';
 import { flameForm, type FlameFormKey } from '@meeshy/shared/utils/game/flame';
-import type { GloryDivision, GloryRankOrMythic } from '@meeshy/shared/utils/game/glory';
+import type { AchievementRarity, GloryDivision, GloryRankOrMythic } from '@meeshy/shared/utils/game/glory';
 import type { GuideMomentKey } from '@meeshy/shared/utils/game/guide';
+import { photoMomentId, photoMomentOfGuideEvent, type PhotoMomentEmblemV2 } from '@meeshy/shared/utils/game/photo-moments';
+import type { LeagueKey } from '@meeshy/shared/utils/game/league';
 import { LEVEL_TIER_KEYS, type LevelTierKey } from '@meeshy/shared/utils/game/levels';
 import { meeshEdition, type MeeshEdition } from '@meeshy/shared/utils/game/mint';
 import { TREASURY_TIERS, type TreasuryTierKey } from '@meeshy/shared/utils/game/treasury';
 
 import type { EngagementWithGame } from '@/lib/api/engagement';
+import { transitionGuideEventsV2 } from '@/lib/game-guide/events-v2';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { editionName, formatCount, levelTierName, rankLabel, treasuryName } from '@/lib/view/game-copy';
+import { leagueName, rarityName, trophyView } from '@/lib/view/game-copy-v2';
 import { translateGame } from '@/lib/i18n-game-catalog';
 
 /**
@@ -37,7 +43,14 @@ export type PhotoEmblem =
   | { readonly kind: 'level-hundred'; readonly prestige: number }
   | { readonly kind: 'meesh'; readonly number: number; readonly edition: MeeshEdition }
   | { readonly kind: 'treasury'; readonly tier: TreasuryTierKey }
-  | { readonly kind: 'flame'; readonly form: FlameFormKey; readonly days: number };
+  | { readonly kind: 'flame'; readonly form: FlameFormKey; readonly days: number }
+  /* `rarity` : la rareté MESURÉE, présente seulement quand on a le droit de la montrer (`visibleRarity`). */
+  | { readonly kind: 'achievement'; readonly key: EngagementAchievementKey; readonly rarity?: AchievementRarity }
+  /* LA VAGUE 2 (#9481) — les quatre moments que la loi range parmi les photos (`photo-moments.ts`). */
+  | { readonly kind: 'trophy'; readonly trophyKey: string }
+  | { readonly kind: 'league-up'; readonly league: LeagueKey; readonly weekKey: string }
+  | { readonly kind: 'season'; readonly season: number }
+  | { readonly kind: 'prestige'; readonly number: number };
 
 export type PhotoMoment = {
   readonly id: string;
@@ -92,6 +105,24 @@ export function momentLines(
         kicker: translateGame(language, 'game.photo.kicker.flame'),
         title: translateGame(language, 'game.photo.title.flame_days', { count: formatCount(emblem.days, language) }),
       };
+    case 'achievement':
+      return {
+        kicker:
+          emblem.rarity === undefined
+            ? translateGame(language, 'game.photo.kicker.achievement')
+            : translateGame(language, 'game.photo.kicker.achievement_rarity', { rarity: rarityName(emblem.rarity, language) }),
+        title: engagementAchievementTitle(language, emblem.key),
+      };
+    case 'trophy': {
+      const kicker = translateGame(language, 'game.photo.kicker.trophy');
+      return { kicker, title: trophyView(emblem.trophyKey, language)?.title ?? kicker };
+    }
+    case 'league-up':
+      return { kicker: translateGame(language, 'game.photo.kicker.league_up'), title: translateGame(language, 'game.photo.title.league_up', { league: leagueName(emblem.league, language) }) };
+    case 'season':
+      return { kicker: translateGame(language, 'game.photo.kicker.season'), title: translateGame(language, 'game.door.season', { number: formatCount(emblem.season, language) }) };
+    case 'prestige':
+      return { kicker: translateGame(language, 'game.photo.kicker.prestige'), title: translateGame(language, 'game.photo.title.prestige', { count: formatCount(emblem.number, language) }) };
   }
 }
 
@@ -110,6 +141,28 @@ export const levelHundredMoment = (prestige: number): PhotoMoment =>
 
 export const meeshMoment = (params: { readonly number: number; readonly edition: MeeshEdition }): PhotoMoment =>
   moment(`meesh:${params.number}`, { kind: 'meesh', number: params.number, edition: params.edition });
+
+/**
+ * Un succès qui vient de se révéler (#7742) : la même carte se propose, avec le bandeau de parrainage.
+ * `rarity` n'est posée que si l'écran a le DROIT de la montrer : l'identité du moment n'en dépend pas.
+ */
+export const achievementMoment = (key: EngagementAchievementKey, rarity?: AchievementRarity | null): PhotoMoment =>
+  moment(`achievement:${key}`, { kind: 'achievement', key, ...(rarity == null ? {} : { rarity }) });
+
+/** Le moment photo que la loi de la vague 2 nomme (`photoMomentOfGuideEvent`) : son identité est celle de la loi. */
+export const photoMomentOfEmblemV2 = (emblem: PhotoMomentEmblemV2): PhotoMoment => {
+  const id = photoMomentId(emblem);
+  switch (emblem.kind) {
+    case 'trophy':
+      return moment(id, { kind: 'trophy', trophyKey: emblem.trophyKey });
+    case 'league-up':
+      return moment(id, { kind: 'league-up', league: emblem.league, weekKey: emblem.weekKey });
+    case 'season':
+      return moment(id, { kind: 'season', season: emblem.season });
+    case 'prestige':
+      return moment(id, { kind: 'prestige', number: emblem.number });
+  }
+};
 
 export const treasuryMoment = (tier: TreasuryTierKey): PhotoMoment => moment(`treasury:${tier}`, { kind: 'treasury', tier });
 
@@ -160,17 +213,26 @@ export function photoMomentsOfTransition(previous: EngagementWithGame, next: Eng
     after.glory.rank !== before.glory.rank ||
     (after.glory.division !== null && before.glory.division !== null && after.glory.division < before.glory.division);
 
+  /* La vague 2 : trophée, montée de ligue, saison terminée, Prestige. Le Prestige a sa propre carte (le
+     trophée numéroté) : la carte « niveau 100 » de la vague 1 ne la double pas. */
+  const emblemsV2 = transitionGuideEventsV2(previous, next).flatMap((event) => {
+    const emblem = photoMomentOfGuideEvent(event);
+    return emblem === null ? [] : [emblem];
+  });
+  const prestigeCard = emblemsV2.some((emblem) => emblem.kind === 'prestige');
+
   const moments: (PhotoMoment | null)[] = [
     rankUp && after.glory.glory > before.glory.glory ? rankMoment({ rank: after.glory.rank, division: after.glory.division }) : null,
     LEVEL_TIER_KEYS.indexOf(after.level.tier) > LEVEL_TIER_KEYS.indexOf(before.level.tier)
       ? tierMoment({ tier: after.level.tier, level: tierLevel(after.level.tier) })
       : null,
-    after.level.prestige > before.level.prestige ? levelHundredMoment(after.level.prestige) : null,
+    after.level.prestige > before.level.prestige && !prestigeCard ? levelHundredMoment(after.level.prestige) : null,
     after.mint.number > before.mint.number && (minted === 1 || minted % 10 === 0)
       ? meeshMoment({ number: minted, edition: meeshEdition(minted) })
       : null,
     treasuryIndex(after) > treasuryIndex(before) && after.treasury.tier !== null ? treasuryMoment(after.treasury.tier) : null,
     crossedFlame ? flameMoment(after.flame.days) : null,
+    ...emblemsV2.map(photoMomentOfEmblemV2),
   ];
   return moments.filter((moment): moment is PhotoMoment => moment !== null);
 }

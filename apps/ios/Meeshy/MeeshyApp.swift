@@ -144,6 +144,11 @@ struct MeeshyApp: App {
                                 // mêmes contacts que celles de l'app, réchauffés
                                 // de la même façon.
                                 .environment(\.mentionContactsProvider, MentionContactsAudienceBridge())
+                                // #9481 — la vitrine de trophées d'un AUTRE membre, dans son profil : ce que SA
+                                // visibilité autorise, rien sinon. Une seule injection, toutes les feuilles de profil la reçoivent.
+                                .environment(\.profileGameSection, ProfileGameSection { userId, name in
+                                    AnyView(GameProfileVisitorCard(userId: userId, name: name))
+                                })
                         } else if hasCheckedSession && !Self.onboardingPreviewReplacesLogin && !authManager.isSwitchingAccount {
                             LoginView()
                                 .safeAreaInset(edge: .top, spacing: 0) {

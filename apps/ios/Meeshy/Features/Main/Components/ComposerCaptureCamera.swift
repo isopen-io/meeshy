@@ -8,6 +8,8 @@ protocol ComposerCaptureCameraProviding: AnyObject {
     var currentPosition: AVCaptureDevice.Position { get }
     /// Une bascule est en cours : le bouton se tait.
     var isSwitchingCamera: Bool { get }
+    /// La prise précédente est arrêtée mais pas encore livrée (#9351).
+    var recordingIsPending: Bool { get }
     /// Le cadrage, en facteur AFFICHÉ (#9350).
     var zoomFactor: CGFloat { get }
     var zoomRange: ClosedRange<CGFloat> { get }
@@ -22,6 +24,9 @@ protocol ComposerCaptureCameraProviding: AnyObject {
     func focus(at devicePoint: CGPoint, smooth: Bool) -> Bool
     /// La luminosité visée, en EV — le curseur vertical du viseur (Task 15).
     func setExposureBias(_ bias: Float)
+    /// Attend, au plus `timeout`, que l'objectif puisse prendre — jamais pendant
+    /// une bascule. `false` ⇒ il ne l'a pas pu.
+    func waitUntilCaptureReady(timeout: TimeInterval) async -> Bool
 }
 
 /// **La lumière d'une prise suit l'objectif qui bascule** (#9464).

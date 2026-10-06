@@ -218,11 +218,13 @@ export function FloatingMenus({ routeKey }: { readonly routeKey: string }) {
       className="floating-menus pointer-events-none fixed inset-0 z-30"
       /* LES COULOIRS SONT POSÉS DEPUIS LA LOI (`lib/view/floating-corridor.ts`),
          que le chrome du Flux lit aussi — la feuille ne garde que le couloir
-         bas, qu'aucun écran ne partage. */
+         bas, qu'aucun écran ne partage. Le couloir haut part de `--safe-top`, pas
+         de `env()` : quand le bandeau du haut réserve sa place (#9536), l'en-tête
+         descend, et des disques restés à l'encoche recouvraient ses contrôles. */
       style={
         {
           '--float-side': `${FLOATING_SIDE}px`,
-          '--float-top': `calc(env(safe-area-inset-top, 0px) + ${FLOATING_TOP}px)`,
+          '--float-top': `calc(var(--safe-top, env(safe-area-inset-top, 0px)) + ${FLOATING_TOP}px)`,
         } as React.CSSProperties
       }
     >

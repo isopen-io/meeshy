@@ -21,6 +21,10 @@ extension UserProfileSheet {
             aboutSection
             voiceSection
             if !isCurrentUser { actionsSection }
+            if !isCurrentUser, let userId = resolvedUserId, !userId.isEmpty, let gameSection {
+                gameSection.build(userId, displayUser.displayName ?? displayUser.username)
+                    .padding(.horizontal, MeeshySpacing.xl)
+            }
             statsSection
         }
         .confirmationDialog(

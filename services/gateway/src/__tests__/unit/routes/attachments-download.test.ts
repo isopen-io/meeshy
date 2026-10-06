@@ -77,9 +77,33 @@ const DEFAULT_STAT = {
 // ─── App factory ─────────────────────────────────────────────────────────────
 
 /** Prisma minimal : le contrôle d'accès remonte du message à la participation. */
+/**
+ * La route PAR CHEMIN remonte aussi aux lignes `MessageAttachment` (#9315) :
+ * ici aucune ne porte les clés servies, donc ces fichiers gardent le régime
+ * d'un fichier qui n'est pas une pièce jointe. Le cycle de vie par chemin a
+ * ses témoins dans `attachments-file-route-verdict.test.ts`.
+ */
+/**
+ * Les routes PAR IDENTIFIANT lisent le cache de la pièce jointe dans la même
+ * loi (#9478) : sa ligne porte `STORED_KEY`, son message `msg-1` est vivant et
+ * ordinaire. Aucune ligne ne porte les clés servies par chemin.
+ */
+const STORED_KEY = '2026/10/stored/file.jpg';
+
 function makeAccessPrisma(granted: boolean, message: unknown = { conversationId: 'conv-1' }) {
   return {
-    message: { findUnique: jest.fn<any>().mockResolvedValue(message) },
+    message: {
+      findUnique: jest.fn<any>().mockResolvedValue(message),
+      findMany: jest.fn<any>().mockResolvedValue([{ id: 'msg-1' }]),
+    },
+    messageAttachment: {
+      findMany: jest.fn<any>().mockImplementation(async ({ where }: { where: { filePath?: string } }) =>
+        where.filePath === STORED_KEY ? [{ messageId: 'msg-1', isViewOnce: false }] : []
+      ),
+      findUnique: jest.fn<any>().mockImplementation(async ({ where }: { where: { id: string } }) =>
+        where.id === ATTACHMENT_ID ? { filePath: STORED_KEY } : null
+      ),
+    },
     participant: { findFirst: jest.fn<any>().mockResolvedValue(granted ? { id: 'part-1' } : null) },
   } as any;
 }

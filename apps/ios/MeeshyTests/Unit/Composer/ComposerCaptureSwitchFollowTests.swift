@@ -26,6 +26,7 @@ final class ComposerCaptureSwitchFollowTests: XCTestCase {
 
     func test_flipCamera_whenDone_bringsTheZoomBackToOne_andForgetsTheAnchors() {
         let (session, camera) = makeSUT(stage: .recording)
+        session.dragZoom(translationY: 0)
         session.dragZoom(translationY: -ComposerCaptureZoom.pointsPerDoubling)
         XCTAssertEqual(camera.zoomFactor, 2, accuracy: 0.01)
         session.flipCamera()

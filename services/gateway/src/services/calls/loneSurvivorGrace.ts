@@ -1,4 +1,5 @@
 import { CallStatus } from '@meeshy/shared/prisma/client';
+import { guardedTimeout } from '../../utils/guarded-timer';
 
 const ANSWERED_LIVE_STATUSES: readonly string[] = [CallStatus.connecting, CallStatus.active, CallStatus.reconnecting];
 
@@ -97,10 +98,10 @@ export class LoneSurvivorGrace {
   /** Après un départ d'un appel de groupe qui continue : l'échéance relira l'appel. */
   arm(callId: string): void {
     this.cancel(callId);
-    const timer = setTimeout(() => {
+    const timer = guardedTimeout({ name: 'lone-survivor-grace', afterMs: this.deps.graceMs, logger: { error: (_message: string, error?: unknown) => this.deps.onError(callId, error) }, run: () => {
       this.timers.delete(callId);
       void this.expire(callId).catch((error: unknown) => this.deps.onError(callId, error));
-    }, this.deps.graceMs);
+    } });
     timer.unref?.();
     this.timers.set(callId, timer);
   }

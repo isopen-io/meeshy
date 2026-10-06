@@ -213,3 +213,39 @@ describe('la proposition après la célébration', () => {
     expect(r.host.querySelector('[data-photo-offer]')).toBeNull();
   });
 });
+
+/**
+ * LA LIGNE DU GUIDE AU HÉROS (#5841) — Mee se pose sur le coin du héros et dit
+ * la ligne COURTE de la carte du moment : le guide la remonte à l'écran, qui la
+ * passe au héros. Pas de carte, pas de ligne : Mee propose alors les règles.
+ */
+describe('la ligne courte du guide est remontée au héros', () => {
+  async function announced(initial: EngagementWithGame) {
+    const b = bench(initial);
+    const lines: (string | null)[] = [];
+    const host = await mount(
+      <QueryClientProvider client={b.client}>
+        <GameLead view={initial} env={() => b.env} transport={b.transport} onGuideLine={(line) => lines.push(line)} />
+      </QueryClientProvider>,
+    );
+    await settle();
+    return { lines, host };
+  }
+
+  test('un compte neuf : la ligne courte de la carte de bienvenue', async () => {
+    const { lines, host } = await announced(view({ guideSeen: [] }));
+    expect(host.querySelector('[data-game-guide="onboarding.welcome"]')).not.toBeNull();
+    const last = lines.at(-1);
+    expect(typeof last).toBe('string');
+    expect((last ?? '').length).toBeGreaterThan(0);
+    expect(host.textContent).toContain(last ?? '\u0000');
+  });
+
+  test('quand la carte disparaît, la ligne disparaît avec elle', async () => {
+    const { lines, host } = await announced(view({ guideSeen: [] }));
+    await click(by(host, 'data-game-guide-skip-all'));
+    await settle();
+    expect(host.querySelector('[data-game-guide]')).toBeNull();
+    expect(lines.at(-1)).toBeNull();
+  });
+});

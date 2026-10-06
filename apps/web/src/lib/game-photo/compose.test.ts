@@ -27,7 +27,7 @@ function fakeContext() {
     scale: record('scale'),
     drawImage: record('drawImage'),
     fillRect: record('fillRect'),
-    fillText: (...args: unknown[]) => void calls.push({ op: 'fillText', args: [...args, props.font, props.fillStyle] }),
+    fillText: (...args: unknown[]) => void calls.push({ op: 'fillText', args: [...args, props.font, props.fillStyle, props.textAlign] }),
     createLinearGradient: (...args: unknown[]) => {
       calls.push({ op: 'createLinearGradient', args });
       const gradient = { stops: [] as [number, string][], addColorStop: (offset: number, color: string) => void gradient.stops.push([offset, color]) };
@@ -281,5 +281,135 @@ describe('withAlpha — le voile ne recouvre jamais la photo', () => {
   test('toute autre forme de couleur se mélange à du transparent, elle ne reste pas opaque', () => {
     expect(withAlpha('oklch(20% 0.05 270)', 0.55)).toBe('color-mix(in srgb, oklch(20% 0.05 270) 55%, transparent)');
     expect(withAlpha('oklch(20% 0.05 270)', 0)).toBe('color-mix(in srgb, oklch(20% 0.05 270) 0%, transparent)');
+  });
+});
+
+/**
+ * LE BANDEAU DE PARRAINAGE PEINT (#7742) — au pied de la carte : un fond, la
+ * Signature, « Rejoins-moi sur Meeshy », le lien court, la Flamme et ses jours.
+ * Sans bandeau, la carte est peinte à l'identique ; une Flamme éteinte ne laisse
+ * ni dessin ni jours.
+ */
+describe('le bandeau de parrainage', () => {
+  const bannerText = { headline: 'Rejoins-moi sur Meeshy', link: 'meeshy.me/signup/affiliate/aff_abc', flameLabel: '23 j' as string | null };
+  const artWithFlame = (): PhotoArt => ({ ...art(), flame: { id: 'flame' } as unknown as CanvasImageSource });
+
+  const paintBanner = (patch: { flame?: boolean; text?: Partial<typeof bannerText> } = {}) => {
+    const fake = fakeContext();
+    const layout = photoLayout('story', { banner: true });
+    paintPhoto(fake.ctx, {
+      layout,
+      moment,
+      dateLabel: '5 octobre 2026',
+      photo: null,
+      art: patch.flame === false ? art() : artWithFlame(),
+      palette,
+      fontFamily: 'system-ui',
+      banner: { ...bannerText, ...patch.text },
+    });
+    return { ...fake, layout };
+  };
+
+  test('un fond au pied de la carte, posé AVANT la Signature qu’il porte', () => {
+    const { calls, layout } = paintBanner();
+    const frame = layout.banner?.frame;
+    const rectIndex = calls.findIndex((c) => c.op === 'fillRect' && c.args[0] === frame?.x && c.args[1] === frame?.y && c.args[2] === frame?.w && c.args[3] === frame?.h);
+    const signatureIndex = calls.findIndex((c) => c.op === 'drawImage' && (c.args[0] as { id: string }).id === 'signature');
+    expect(rectIndex).toBeGreaterThanOrEqual(0);
+    expect(rectIndex).toBeLessThan(signatureIndex);
+  });
+
+  test('la Signature est celle du bandeau : une seule, dans le cadre', () => {
+    const { calls, layout } = paintBanner();
+    const signatures = calls.filter((c) => c.op === 'drawImage' && (c.args[0] as { id: string }).id === 'signature');
+    expect(signatures).toHaveLength(1);
+    const banner = layout.banner;
+    if (banner === undefined) throw new Error('bandeau attendu');
+    const x = Number(signatures[0]?.args[1]);
+    expect(x).toBeGreaterThanOrEqual(banner.frame.x);
+    expect(x + Number(signatures[0]?.args[3])).toBeLessThanOrEqual(banner.frame.x + banner.frame.w);
+  });
+
+  test('la phrase puis le lien, alignés à gauche, aux positions de la mise en page', () => {
+    const { calls, layout } = paintBanner();
+    const texts = calls.filter((c) => c.op === 'fillText');
+    const headline = texts.find((t) => t.args[0] === bannerText.headline);
+    const link = texts.find((t) => t.args[0] === bannerText.link);
+    expect(headline?.args.slice(1, 3)).toEqual([layout.banner?.headline.x, layout.banner?.headline.y]);
+    expect(link?.args.slice(1, 3)).toEqual([layout.banner?.link.x, layout.banner?.link.y]);
+    expect(headline?.args[5]).toBe('left');
+    expect(link?.args[5]).toBe('left');
+    expect(String(headline?.args[3])).toContain('800');
+  });
+
+  test('un lien trop long rétrécit, sans déborder sur la Flamme', () => {
+    const long = `meeshy.me/signup/affiliate/${'x'.repeat(60)}`;
+    const { calls, layout } = paintBanner({ text: { link: long } });
+    const link = calls.filter((c) => c.op === 'fillText').find((t) => String(t.args[0]).startsWith('meeshy.me'));
+    const size = Number(/(\d+(?:\.\d+)?)px/.exec(String(link?.args[3]))?.[1]);
+    expect(size).toBeLessThan(layout.banner?.link.size ?? 0);
+    expect(size * 0.6 * String(link?.args[0]).length).toBeLessThanOrEqual((layout.banner?.maxTextWidth ?? 0) + 1);
+  });
+
+  test('la Flamme et ses jours, sous elle, centrés', () => {
+    const { calls, layout } = paintBanner();
+    expect(drawn(calls)).toEqual(['emblem', 'mee', 'meo', 'signature', 'flame']);
+    const days = calls.filter((c) => c.op === 'fillText').find((t) => t.args[0] === '23 j');
+    expect(days?.args.slice(1, 3)).toEqual([layout.banner?.flameDays.x, layout.banner?.flameDays.y]);
+    expect(days?.args[5]).toBe('center');
+  });
+
+  test('Flamme éteinte : ni dessin ni jours', () => {
+    const { calls } = paintBanner({ text: { flameLabel: null } });
+    expect(drawn(calls)).not.toContain('flame');
+    expect(calls.filter((c) => c.op === 'fillText').map((t) => t.args[0])).not.toContain('23 j');
+  });
+
+  test('la Flamme n’a pas pu être dessinée : on ne devine pas, les jours non plus', () => {
+    const { calls } = paintBanner({ flame: false });
+    expect(drawn(calls)).not.toContain('flame');
+    expect(calls.filter((c) => c.op === 'fillText').map((t) => t.args[0])).not.toContain('23 j');
+  });
+
+  test('sans bandeau, la carte est peinte comme avant : une Signature au centre, pas de fond de bandeau', () => {
+    const { calls, layout } = paint('story', null);
+    expect(drawn(calls)).toEqual(['emblem', 'mee', 'meo', 'signature']);
+    expect(layout.banner).toBeUndefined();
+    expect(calls.filter((c) => c.op === 'fillText').map((t) => t.args[0])).toEqual(['NOUVEAU RANG', 'Voix II', '5 octobre 2026']);
+  });
+
+  test('l’EMPLACEMENT du lien (aucun jeton encore) est cerné de pointillés ; un vrai lien ne l’est jamais', () => {
+    const traced = (placeholder: boolean) => {
+      const fake = fakeContext();
+      const ops: { op: string; args: unknown[] }[] = [];
+      const ctx = Object.assign(fake.ctx, {
+        setLineDash: (segments: number[]) => void ops.push({ op: 'setLineDash', args: [segments] }),
+        strokeRect: (...args: number[]) => void ops.push({ op: 'strokeRect', args }),
+        strokeStyle: '',
+        lineWidth: 1,
+      });
+      const layout = photoLayout('story', { banner: true });
+      paintPhoto(ctx, { layout, moment, dateLabel: 'x', photo: null, art: art(), palette, fontFamily: 'system-ui', banner: { ...bannerText, link: 'meeshy.me/r/…', ...(placeholder ? { placeholder: true as const } : {}) } });
+      return { ops, layout };
+    };
+    const { ops, layout } = traced(true);
+    const stroke = ops.find((o) => o.op === 'strokeRect');
+    expect(stroke).toBeDefined();
+    expect(Number(stroke?.args[0])).toBeLessThanOrEqual(layout.banner?.link.x ?? 0);
+    expect((ops.find((o) => o.op === 'setLineDash')?.args[0] as number[]).length).toBeGreaterThan(0);
+    expect(ops.at(-1)).toEqual({ op: 'setLineDash', args: [[]] });
+    expect(traced(false).ops.filter((o) => o.op === 'strokeRect')).toHaveLength(0);
+  });
+
+  test('un fond arrondi quand le contexte sait tracer un rectangle arrondi', () => {
+    const fake = fakeContext();
+    const ops: string[] = [];
+    const ctx = Object.assign(fake.ctx, {
+      beginPath: () => void ops.push('beginPath'),
+      roundRect: () => void ops.push('roundRect'),
+      fill: () => void ops.push('fill'),
+    });
+    paintPhoto(ctx, { layout: photoLayout('story', { banner: true }), moment, dateLabel: 'x', photo: null, art: artWithFlame(), palette, fontFamily: 'system-ui', banner: bannerText });
+    expect(ops).toEqual(['beginPath', 'roundRect', 'fill']);
   });
 });

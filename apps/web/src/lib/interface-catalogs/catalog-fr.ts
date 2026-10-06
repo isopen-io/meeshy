@@ -487,6 +487,7 @@ const fr = {
   'settings.export_data': 'Exporter mes données',
   'settings.section.tools': 'Outils',
   'settings.tools.progression': 'Progression',
+  'settings.tools.game': 'Jeu',
   'settings.section.about': 'À propos',
   'settings.terms': "Conditions d'utilisation",
   'settings.privacy_policy': 'Politique de confidentialité',

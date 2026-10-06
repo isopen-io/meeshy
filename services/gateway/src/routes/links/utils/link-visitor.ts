@@ -1,4 +1,4 @@
-import { createHash } from 'crypto';
+import { createHmac, randomBytes } from 'crypto';
 import type { IncomingHttpHeaders } from 'http';
 import type { UnifiedAuthContext } from '../../../middleware/auth';
 
@@ -33,11 +33,34 @@ const userAgentOf = (headers: IncomingHttpHeaders): string => {
   return Array.isArray(value) ? value.join(' ') : value ?? '';
 };
 
+/**
+ * LA CLÉ du visiteur non inscrit (conformité H-6, RGPD art. 4(5) et 5(1)(e)) : une
+ * empreinte HMAC à clé SECRÈTE ET TOURNANTE, jamais un `sha256(ip|ua)` sans clé — un
+ * condensé d'une adresse IP se retrouve en quelques secondes en essayant les
+ * adresses, donc n'est pas une anonymisation. La clé de la période est dérivée du
+ * secret du serveur (`LINK_VISITOR_HMAC_SECRET`, à défaut un secret tiré au
+ * démarrage du processus — il ne sort jamais) et de la SEMAINE : passé la
+ * rotation, deux visites du même visiteur ne se relient plus. Les seaux
+ * `visit:*` qui portent ces empreintes sont purgés à la fin de la fenêtre
+ * (`EngagementQuotas.purgeVisitBuckets`).
+ */
+const PROCESS_SECRET = randomBytes(32).toString('hex');
+const ROTATION_MS = 7 * 24 * 60 * 60 * 1000;
+
+const visitorSecret = (): string => process.env.LINK_VISITOR_HMAC_SECRET || PROCESS_SECRET;
+
+/** Le numéro de la période de rotation : change toutes les semaines. */
+export const visitorKeyPeriod = (now: number = Date.now()): number => Math.floor(now / ROTATION_MS);
+
+export function anonymousVisitorFingerprint(params: { readonly ip: string; readonly userAgent: string; readonly now?: number }): string {
+  const periodKey = createHmac('sha256', visitorSecret()).update(`period:${visitorKeyPeriod(params.now)}`).digest();
+  return createHmac('sha256', periodKey).update(`${params.ip}|${params.userAgent}`).digest('hex');
+}
+
 export function linkVisitorFromRequest(request: LinkVisitorRequest): LinkVisitor {
   const userId = registeredUserId(request.authContext);
   if (userId) return { key: `user:${userId}`, userId };
-  const fingerprint = createHash('sha256').update(`${request.ip}|${userAgentOf(request.headers)}`).digest('hex');
-  return { key: `anon:${fingerprint}`, userId: null };
+  return { key: `anon:${anonymousVisitorFingerprint({ ip: request.ip, userAgent: userAgentOf(request.headers) })}`, userId: null };
 }
 
 /** Ce qu'un site de visite demande au moteur d'engagement — un double en test. */

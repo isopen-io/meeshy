@@ -61,7 +61,8 @@ const CONVERSATION_TYPES: readonly ConversationType[] = ['direct', 'group', 'pub
 /**
  * Les champs STRUCTURÉS de `metadata` que la ligne lit (#8724) : les extraits
  * du commentaire, de son parent et du POST qui le porte, le média d'un contenu
- * sans texte, et la clé du palier d'engagement — jamais la prose du corps.
+ * sans texte, la clé du palier d'engagement et la section du jeu (`gameSection`,
+ * #9490) — jamais la prose du corps.
  */
 type MetadataField =
   | 'postType'
@@ -75,7 +76,8 @@ type MetadataField =
   | 'excerpt'
   | 'mediaType'
   | 'axisKey'
-  | 'achievementKey';
+  | 'achievementKey'
+  | 'gameSection';
 
 const METADATA_FIELDS: readonly MetadataField[] = [
   'postType',
@@ -90,6 +92,7 @@ const METADATA_FIELDS: readonly MetadataField[] = [
   'mediaType',
   'axisKey',
   'achievementKey',
+  'gameSection',
 ];
 
 type MetadataNumberField = 'threshold' | 'level';

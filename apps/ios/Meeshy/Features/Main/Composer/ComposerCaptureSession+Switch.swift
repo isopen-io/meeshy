@@ -18,7 +18,7 @@ extension ComposerCaptureSession {
         zoomAnchor = nil
         pinchAnchor = nil
         controls.setZoom(1)
-        controls.setExposureBias(0)
+        resetExposure()
         let suite = ComposerCameraSwitchFollow.after(switchingTo: position, flash: flash, stage: stage)
         if let torche = suite.torch { controls.setTorch(torche, level: flashIntensity) }
         switch suite.screen {

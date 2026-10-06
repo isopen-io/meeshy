@@ -56,8 +56,15 @@ struct ProgressionView: View {
     /// Le décalage du défilement, que seul l'en-tête lit (#6480).
     @State private var scrollRelay = ScrollOffsetRelay()
 
-    init(viewModel: ProgressionViewModel? = nil) {
+    /// L'ancre qu'une notification de mission demande (#9539) et la façon de la ramasser UNE fois. Passées PAR l'hôte
+    /// (qui tient le routeur) plutôt que lues dans le corps : la vue se monte sans routeur dans les témoins de rendu.
+    private let pendingAnchor: GameAnchor?
+    private let consumeAnchor: () -> Void
+
+    init(viewModel: ProgressionViewModel? = nil, pendingAnchor: GameAnchor? = nil, consumeAnchor: @escaping () -> Void = {}) {
         _viewModel = StateObject(wrappedValue: viewModel ?? ProgressionViewModel())
+        self.pendingAnchor = pendingAnchor
+        self.consumeAnchor = consumeAnchor
     }
 
     var body: some View {
@@ -78,6 +85,8 @@ struct ProgressionView: View {
         // célébration (#9381) : la frappe qui joue sa première onde ne doit pas
         // attendre la compilation. Sans effet avant iOS 18, où ils tournent à vide.
         .task { await GameShaders.precompile() }
+        // Les réglages du jeu sont ceux du SERVEUR (#9481) : « Jeu masqué » posé depuis un autre appareil se lit ici.
+        .task { await GameSettingsSync().refresh() }
         .task {
             await viewModel.load()
             #if DEBUG
@@ -91,8 +100,11 @@ struct ProgressionView: View {
             // montre que de l'OBTENU, d'où `unlocked: true`.
             AchievementRevealView(
                 reveal: palier.reveal,
-                occasion: .consultation(unlocked: palier.unlocked, reachedAt: palier.reachedAt)
-            ) { reveal = nil }
+                occasion: .consultation(unlocked: palier.unlocked, reachedAt: palier.reachedAt),
+                onContinue: { reveal = nil },
+                // Le liseré de la rareté mesurée (#9390), comme sur la ligne du succès — « Jeu masqué » le retire.
+                rarity: RevealRim.entry(of: palier.reveal, in: viewModel.game, hidden: GameDevicePrefsStore.current().prefs.hidden)
+            )
         }
     }
 
@@ -123,6 +135,8 @@ struct ProgressionView: View {
                         meesh: meesh,
                         isMinting: viewModel.isMinting,
                         mintError: viewModel.mintError,
+                        // La pièce que la feuille frappe (#9537) : elle se grave au numéro que le serveur sert.
+                        next: viewModel.game.map { GameMintNext(number: $0.mint.number, edition: $0.mint.edition) },
                         onMint: { Task { await viewModel.mint() } }
                     )
                 }
@@ -185,8 +199,9 @@ struct ProgressionView: View {
                             },
                             onOpenConversations: { router.popToRoot() },
                             onOpenBadges: { router.push(.progressionSection(.badges)) },
-                            onOpenRules: { router.push(.progressionRules) },
-                            onOpenNotebook: { router.push(.progressionNotebook) }
+                            onOpenRules: { router.push(.progressionRules(rule: $0)) },
+                            onOpenNotebook: { router.push(.progressionNotebook) },
+                            onOpenPage: { router.push(.gamePage($0)) }
                         )
                     }
                     /*
@@ -261,6 +276,15 @@ struct ProgressionView: View {
         .coordinateSpace(name: "scroll")
         .onPreferenceChange(ScrollOffsetPreferenceKey.self) { scrollRelay.offset = $0 }      // iOS 16–17
         .trackScrollContentOffset { scrollRelay.offset = -$0 }                               // iOS 18+
+        // Le toucher d'une notification de mission (#9539) pose une ANCRE avant l'ouverture : elle se ramasse UNE fois,
+        // quand le jeu est à l'écran — `initial: true` couvre le démarrage à froid, où l'ancre précède l'écran.
+        .adaptiveOnChange(of: pendingAnchor != nil && viewModel.game != nil, initial: true) { _, ready in
+            guard ready, let anchor = pendingAnchor else { return }
+            consumeAnchor()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                withAnimation(.easeInOut(duration: 0.35)) { proxy.scrollTo(anchor, anchor: .top) }
+            }
+        }
         }
     }
 }

@@ -1,4 +1,4 @@
-import { clampMediaCrop, FULL_MEDIA_CROP, isFullMediaCrop, type MediaCropRect } from '@meeshy/shared/utils/media-crop';
+import { clampMediaCrop, isFullMediaCrop, type MediaCropRect } from '@meeshy/shared/utils/media-crop';
 
 import type { ApiFailure } from '@/lib/api/http';
 import type { StoryFilterId } from '@/lib/canvas/media-filter';
@@ -250,19 +250,6 @@ export function pageWithBackgroundMuted(page: StudioPage, muted: boolean): Studi
   if (page.background === null) return page;
   const { muted: _previous, ...rest } = page.background;
   return { ...page, background: muted ? { ...rest, muted: true } : rest };
-}
-
-/** Les proportions que la retouche offre — `null` : le cadre d'origine. */
-export const STUDIO_CROP_RATIOS = [null, 1, 4 / 5, 9 / 16, 16 / 9] as const;
-
-/** **Le plus grand cadre CENTRÉ de rapport `target`** dans une source de
- * rapport `source` (miroir `MediaCropRule.centered`) — en fractions de la
- * source ; `null` (le cadre d'origine) rend le cadre entier. */
-export function centeredCrop(target: number | null, source: number): MediaCropRect {
-  if (target === null || !(source > 0)) return FULL_MEDIA_CROP;
-  const width = target >= source ? 1 : Math.min(1, target / source);
-  const height = target >= source ? Math.min(1, source / target) : 1;
-  return clampMediaCrop({ x: (1 - width) / 2, y: (1 - height) / 2, width, height });
 }
 
 export function pageWithBackgroundCrop(page: StudioPage, crop: MediaCropRect | null): StudioPage {

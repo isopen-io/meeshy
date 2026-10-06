@@ -115,6 +115,10 @@ describe('l’historique des bannissements', () => {
 describe('bannir — l’échéance se lit en heure locale et la saisie survit à un refus', () => {
   /* Le 30 septembre 2026 à midi, HEURE LOCALE — « demain » est le 2026-10-01 quel que soit le fuseau. */
   const NOW = () => new Date(2026, 8, 30, 12, 0, 0);
+  /* Une date que la passerelle ACCEPTE : `banAdminUser` refuse une échéance passée selon
+     l'horloge RÉELLE, pas celle de la feuille — le 2026-10-05 écrit ici avant cette date
+     rougissait ces témoins dès le lendemain. Une année lointaine est future pour les deux. */
+  const LOINTAIN = '2036-10-05';
 
   const banPath = `/api/v1/admin/users/${USER}/ban`;
   const posted = (calls: () => readonly HttpRequest[]) => calls().filter((call) => call.method === 'POST' && pathOf(call) === banPath);
@@ -192,24 +196,24 @@ describe('bannir — l’échéance se lit en heure locale et la saisie survit �
   test('un bannissement REFUSÉ par la passerelle garde le motif ET la date saisis', async () => {
     const gateway = await openBan({ ban: refuse });
     typeInto(reason(), 'Spam répété');
-    typeInto(until(), '2026-10-05');
+    typeInto(until(), LOINTAIN);
     await mounter.settle();
     await apply();
 
     expect(posted(gateway.calls)).toHaveLength(1);
     expect(reason()?.value).toBe('Spam répété');
-    expect(until()?.value).toBe('2026-10-05');
+    expect(until()?.value).toBe(LOINTAIN);
   });
 
   test('un bannissement RÉUSSI efface les deux champs, et l’échéance part comme la FIN du jour choisi en heure locale', async () => {
     const gateway = await openBan({ ban: accept });
     typeInto(reason(), 'Spam répété');
-    typeInto(until(), '2026-10-05');
+    typeInto(until(), LOINTAIN);
     await mounter.settle();
     await apply();
 
     const [call] = posted(gateway.calls);
-    expect((call?.body as { expiresAt?: string }).expiresAt).toBe(new Date(2026, 9, 5, 23, 59, 59, 999).toISOString());
+    expect((call?.body as { expiresAt?: string }).expiresAt).toBe(new Date(2036, 9, 5, 23, 59, 59, 999).toISOString());
     expect(reason()?.value).toBe('');
     expect(until()?.value).toBe('');
   });

@@ -35,7 +35,7 @@ struct GameRoutesTests {
     @Test("les routes Swift sont celles de GAME_ROUTES")
     func routesMatchTheSharedTable() throws {
         let shared = try Self.quotedValues(of: "GAME_ROUTES", in: Self.source())
-        #expect(shared.count == 7)
+        #expect(shared.count == 21)
         #expect(shared["engagement"] == GameRoutes.engagement)
         #expect(shared["mint"] == GameRoutes.mint)
         #expect(shared["missionReroll"] == GameRoutes.missionReroll)
@@ -43,6 +43,52 @@ struct GameRoutesTests {
         #expect(shared["flameFreezes"] == GameRoutes.flameFreezes)
         #expect(shared["flameRelight"] == GameRoutes.flameRelight)
         #expect(shared["guideSeen"] == GameRoutes.guideSeen)
+    }
+
+    @Test("les quatorze routes de la vague 2 sont celles de GAME_ROUTES")
+    func wave2RoutesMatchTheSharedTable() throws {
+        let shared = try Self.quotedValues(of: "GAME_ROUTES", in: Self.source())
+        #expect(shared["leagueConsent"] == GameRoutes.leagueConsent)
+        #expect(shared["leaguePseudonym"] == GameRoutes.leaguePseudonym)
+        #expect(shared["leagueWeek"] == GameRoutes.leagueWeek)
+        #expect(shared["leagueFriends"] == GameRoutes.leagueFriends)
+        #expect(shared["duoInvite"] == GameRoutes.duoInvite)
+        #expect(shared["duoAccept"] == GameRoutes.duoAccept)
+        #expect(shared["duoAbandon"] == GameRoutes.duoAbandon)
+        #expect(shared["seasonClaim"] == GameRoutes.seasonClaim)
+        #expect(shared["seasonSeal"] == GameRoutes.seasonSeal)
+        #expect(shared["showcaseOrder"] == GameRoutes.showcaseOrder)
+        #expect(shared["showcaseVisibility"] == GameRoutes.showcaseVisibility)
+        #expect(shared["userShowcase"] == GameRoutes.userShowcase)
+        #expect(shared["prestige"] == GameRoutes.prestige)
+        #expect(shared["privacy"] == GameRoutes.privacy)
+    }
+
+    @Test("les deux routes de lecture d'intégration sont celles de GAME_INTEGRATION_ROUTES, et GAME_ROUTES garde ses 21 entrées")
+    func integrationRoutesMatchTheirOwnSharedTable() throws {
+        let shared = try Self.quotedValues(of: "GAME_INTEGRATION_ROUTES", in: Self.source())
+        #expect(shared.count == 2)
+        #expect(shared["settings"] == GameIntegrationRoutes.settings)
+        #expect(shared["userGame"] == GameIntegrationRoutes.userGame)
+        #expect(GameIntegrationRoutes.settings == GameRoutes.privacy, "la lecture porte le chemin de l'écriture")
+        #expect(try Self.quotedValues(of: "GAME_ROUTES", in: Self.source()).count == 21)
+    }
+
+    @Test("le jeu d'un autre : l'identifiant est encodé dans son segment, et l'adresse lit sans écrire")
+    func userGamePathEncodesItsSegment() {
+        #expect(GameEndpoint.userGame(userId: "65a1b2c3d4e5f60718293a4b").path == "/api/v1/users/65a1b2c3d4e5f60718293a4b/game")
+        #expect(GameEndpoint.userGame(userId: "../me?x=1").path == "/api/v1/users/%2E%2E%2Fme%3Fx%3D1/game")
+        #expect(GameEndpoint.settings.path == "/api/v1/me/game/privacy")
+        #expect(GameEndpoint.settings.rejectionPolicy == .structured)
+    }
+
+    @Test("les identifiants des routes de la vague 2 sont encodés dans leur segment")
+    func wave2PathsEncodeTheirSegment() {
+        #expect(GameEndpoint.duoAccept(duoId: "../x?y").path == "/api/v1/me/game/duo/%2E%2E%2Fx%3Fy/accept")
+        #expect(GameEndpoint.duoAbandon(duoId: "65a1b2c3d4e5f60718293a4b").path
+            == "/api/v1/me/game/duo/65a1b2c3d4e5f60718293a4b/abandon")
+        #expect(GameEndpoint.seasonClaim(step: 12).path == "/api/v1/me/game/season/steps/12/claim")
+        #expect(GameEndpoint.userShowcase(userId: "a/b").path == "/api/v1/users/a%2Fb/game/showcase")
     }
 
     @Test("les codes de refus Swift sont ceux de GAME_ERROR_CODES")
@@ -70,7 +116,10 @@ struct GameRoutesTests {
 
     @Test("les refus du jeu sont typés : l'écran sait POURQUOI")
     func rejectionsAreStructured() {
-        for endpoint: GameEndpoint in [.chestClaim, .flameFreezes, .flameRelight, .guideSeen, .missionReroll(missionId: "m")] {
+        for endpoint: GameEndpoint in [.chestClaim, .flameFreezes, .flameRelight, .guideSeen, .missionReroll(missionId: "m"),
+                                       .leagueConsent, .leaguePseudonym, .leagueWeek, .leagueFriends, .duoInvite,
+                                       .duoAccept(duoId: "d"), .duoAbandon(duoId: "d"), .seasonClaim(step: 1), .seasonSeal,
+                                       .showcaseOrder, .showcaseVisibility, .userShowcase(userId: "u"), .prestige, .privacy] {
             #expect(endpoint.rejectionPolicy == .structured)
         }
     }

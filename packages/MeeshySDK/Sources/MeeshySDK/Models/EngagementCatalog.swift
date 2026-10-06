@@ -94,7 +94,10 @@ public enum EngagementCatalog {
         .tool: 1,
     ]
 
-    public static let badgeThresholds: [Int] = [1, 10, 50, 100, 500]
+    /// Les cinq paliers d'origine — ce qu'un client qui ignore les deux derniers lit (#9392).
+    public static let legacyBadgeThresholds: [Int] = [1, 10, 50, 100, 500]
+    /// Sept paliers : 1 000 (Obsidienne) et 5 000 (Prisme) s'ajoutent, rien n'est retiré (#9392).
+    public static let badgeThresholds: [Int] = [1, 10, 50, 100, 500, 1000, 5000]
     public static let streakThresholds: [Int] = [3, 7, 14, 30, 60, 100]
     public static let levelThresholds: [Int] = [10, 50, 150, 400, 1000, 2500]
 

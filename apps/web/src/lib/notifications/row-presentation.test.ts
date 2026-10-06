@@ -207,3 +207,50 @@ describe('les gestes d’une ligne', () => {
     expect(notificationQuickActions({ ...invite, actor: null }, { isFriend: false })).toEqual([]);
   });
 });
+
+/**
+ * LES NOTIFICATIONS DU JEU (#9490) — le serveur compose la phrase dans la langue du destinataire. Un duo se
+ * joue entre amis : l'ami est l'acteur, son avatar tient la place. Une ligue et une saison n'ont personne à
+ * nommer : la ligne porte la SIGNATURE de Meeshy à la place d'un avatar, et la phrase est dans le corps.
+ */
+describe('les notifications du jeu', () => {
+  test('un duo : l’ami en avatar, le titre cadré par le serveur, la phrase en corps', () => {
+    const row = present(
+      record({
+        type: 'game_duo_invited',
+        title: 'Amina t’invite à la mission en duo',
+        content: 'Ouvre la mission de la semaine pour répondre.',
+        actor: { id: 'u-amina', username: 'amina', displayName: 'Amina', avatar: null },
+        context: {},
+        metadata: { gameSection: 'duo' },
+      }),
+    );
+    expect(row.leading).toEqual({ kind: 'avatar' });
+    expect(row.title).toBe('Amina t’invite à la mission en duo');
+    expect(row.body).toBe('Ouvre la mission de la semaine pour répondre.');
+  });
+
+  test('un résultat de ligue et une étape de saison : la Signature de Meeshy, la phrase du serveur en corps', () => {
+    for (const type of ['game_league_result', 'game_season_step']) {
+      const row = present(record({ type, title: null, content: 'Étape 12 franchie : une récompense t’attend.', actor: null, context: {}, metadata: { gameSection: 'season' } }));
+      expect(row.leading).toEqual({ kind: 'game' });
+      expect(row.title).toBe('Meeshy');
+      expect(row.body).toBe('Étape 12 franchie : une récompense t’attend.');
+      expect(row.footer).toBeNull();
+    }
+  });
+
+  test('l’annonce d’une plage de mission est la ligne du jeu : la Signature en tête, le texte servi, aucun nom (#9539)', () => {
+    const row = present(record({ type: 'game_mission_window', title: null, content: 'Ta mission du jour : envoyer 3 messages, entre 18:00 et 20:00.', actor: null, context: {}, metadata: { gameSection: 'missions' } }));
+    expect(row.leading).toEqual({ kind: 'game' });
+    expect(row.title).toBe('Meeshy');
+    expect(row.body).toBe('Ta mission du jour : envoyer 3 messages, entre 18:00 et 20:00.');
+  });
+
+  test('aucune rangée du jeu ne porte de geste rapide : pas d’« Écrire », pas de « Se connecter »', () => {
+    for (const type of ['game_duo_invited', 'game_duo_accepted', 'game_league_result', 'game_season_step', 'game_mission_window']) {
+      const actor = { id: 'u-amina', username: 'amina', displayName: 'Amina', avatar: null };
+      expect(notificationQuickActions(record({ type, actor }), { isFriend: false })).toEqual([]);
+    }
+  });
+});

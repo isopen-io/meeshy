@@ -1,6 +1,10 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import type { GameBlock, GameChest, GameMission, GameMissions as GameMissionsBlock } from '@meeshy/shared/types/game';
+
+import { dailyMissionClock, endOfGameDay, type DailyMissionClock } from '@/lib/game/mission-clock';
+import { personalMissionClock } from '@/lib/game/personal-mission-clock';
+import { timerLabel } from '@/lib/view/game-copy-v2';
 
 import { Chest, useChoreography } from '@/components/game';
 import { ProgressBar } from '@/components/progress-bar';
@@ -42,6 +46,8 @@ export type GameMissionsProps = {
   readonly onReroll: (missionId: string) => void;
   readonly onClaim: () => void;
   readonly errors?: { readonly reroll?: string | undefined; readonly chest?: string | undefined };
+  /** L'horloge des minuteurs (#9539) ; absente, les cartes lisent l'heure et se mettent à jour d'elles-mêmes. */
+  readonly now?: Date | undefined;
 };
 
 /** Le prix d'un changement ; le libellé du bouton le dit dans la phrase du catalogue (« Changer · 1 Meesh »), comme sur iOS. */
@@ -54,6 +60,7 @@ const chance = (fraction: number): string => gameText('game.chest.chance', { odd
 
 function MissionRow({
   mission,
+  clock: timer,
   canReroll,
   pending,
   online,
@@ -61,6 +68,8 @@ function MissionRow({
   onReroll,
 }: {
   readonly mission: GameMission;
+  /** Où en est le jour de la mission (#9539) ; `null` quand le jour servi est illisible : pas de minuteur. */
+  readonly clock: DailyMissionClock | null;
   readonly canReroll: boolean;
   readonly pending: boolean;
   readonly online: boolean;
@@ -69,22 +78,33 @@ function MissionRow({
 }) {
   const done = mission.completedAt !== null;
   const title = missionTitle(mission.templateKey, mission.target);
+  const ended = timer?.phase === 'finished' || timer?.phase === 'missed';
   return (
     <li
       data-game-mission={mission.id}
+      {...(timer === null ? {} : { 'data-game-mission-phase': timer.phase })}
       aria-busy={pending}
       className="flex flex-col gap-1.5 rounded-card px-3 py-3"
-      style={{ backgroundColor: 'color-mix(in srgb, var(--color-ios-ink-3) 10%, transparent)', opacity: pending ? 0.6 : 1 }}
+      style={{ backgroundColor: 'color-mix(in srgb, var(--color-ios-ink-3) 10%, transparent)', opacity: pending ? 0.6 : timer?.phase === 'missed' ? 0.7 : 1 }}
     >
       <div className="flex flex-wrap items-center gap-1.5">
         <GameChip tint={mission.difficulty === 'gold' ? GAME_WARM : GAME_BRAND}>{difficultyName(mission.difficulty)}</GameChip>
         {mission.prism ? <GameChip tint={GAME_BRAND}>{gameText('game.mission.prism')}</GameChip> : null}
-        {done ? <GameChip tint={GAME_GOOD}>{gameText('game.mission.done')}</GameChip> : null}
+        {ended ? (
+          <GameChip tint={timer.phase === 'finished' ? GAME_GOOD : GAME_INK_2}>{gameText(timer.phase === 'finished' ? 'game.mission.personal.completed' : 'game.mission.personal.missed')}</GameChip>
+        ) : done ? (
+          <GameChip tint={GAME_GOOD}>{gameText('game.mission.done')}</GameChip>
+        ) : null}
       </div>
       <p className="text-body font-semibold" style={{ color: GAME_INK }}>
         {title}
       </p>
       <ProgressBar progress={mission.progress / mission.target} tint={done ? GAME_GOOD : GAME_BRAND} label={title} />
+      {timer?.phase !== 'active' || timer.remainingMs === null ? null : (
+        <p data-game-mission-timer="" className="text-caption font-semibold" style={{ color: GAME_INK_2 }}>
+          {gameText('game.mission.personal.active', { remaining: timerLabel(timer.remainingMs) })}
+        </p>
+      )}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-caption" style={{ color: GAME_INK_2 }}>
           {gameText('game.fmt.fraction', { done: formatCount(Math.min(mission.progress, mission.target)), total: formatCount(mission.target) })}
@@ -94,7 +114,7 @@ function MissionRow({
             <span style={{ color: GAME_WARM, fontWeight: 700 }}> · {gameText('game.mission.glory', { glory: formatCount(mission.glory) })}</span>
           ) : null}
         </p>
-        {canReroll && !done ? (
+        {canReroll && !done && (timer?.actionable ?? true) ? (
           <button
             type="button"
             data-game-reroll=""
@@ -108,6 +128,85 @@ function MissionRow({
           </button>
         ) : null}
       </div>
+    </li>
+  );
+}
+
+/** Les minuteurs se rafraîchissent à la minute près : jamais de secondes qui défilent, une lecture calme. */
+const TICK_MS = 15_000;
+
+/**
+ * Le minuteur ne coûte rien hors écran : AUCUN intervalle tant que l'onglet est caché, aucun une fois la fin
+ * de la plage passée (rien ne change plus), et une relecture immédiate au retour — la carte ne montre jamais
+ * l'heure d'avant l'absence (#9539).
+ */
+function useClockNow(fixed: Date | undefined, end: number): Date {
+  const [now, setNow] = useState(() => fixed ?? new Date());
+  useEffect(() => {
+    if (fixed !== undefined) return;
+    let id: ReturnType<typeof setInterval> | undefined;
+    const stop = () => {
+      if (id !== undefined) clearInterval(id);
+      id = undefined;
+    };
+    const tick = () => {
+      const current = new Date();
+      setNow(current);
+      if (current.getTime() >= end) stop();
+    };
+    const start = () => {
+      stop();
+      if (document.visibilityState === 'hidden' || Date.now() >= end) return;
+      id = setInterval(tick, TICK_MS);
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') return stop();
+      tick();
+      start();
+    };
+    start();
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      stop();
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [fixed, end]);
+  return fixed ?? now;
+}
+
+/**
+ * LA MISSION PERSONNELLE (#9539) — une mission de plus, avec sa plage. Le minuteur court jusqu'au début (à
+ * venir) puis jusqu'à la FIN (en cours) ; passée la fin, la carte dit « Terminée » ou « Manquée », sans
+ * décompte. Elle ne se change pas : le tirage est le sien, une fois par jour.
+ */
+function PersonalMissionRow({ mission, now }: { readonly mission: NonNullable<GameMissionsBlock['personal']>; readonly now: Date }) {
+  const clock = personalMissionClock({ startsAt: mission.startsAt, endsAt: mission.endsAt, completedAt: mission.completedAt, now });
+  const done = clock.phase === 'completed';
+  const title = missionTitle(mission.templateKey, mission.target);
+  const status =
+    clock.phase === 'completed' || clock.phase === 'missed'
+      ? gameText(`game.mission.personal.${clock.phase}`)
+      : gameText(clock.phase === 'upcoming' ? 'game.mission.personal.upcoming' : 'game.mission.personal.active', { remaining: timerLabel(clock.remainingMs ?? 0) });
+  return (
+    <li
+      data-game-personal={mission.id}
+      data-game-personal-phase={clock.phase}
+      className="flex flex-col gap-1.5 rounded-card px-3 py-3"
+      style={{ backgroundColor: 'color-mix(in srgb, var(--color-ios-brand) 10%, transparent)', opacity: clock.phase === 'missed' ? 0.7 : 1 }}
+    >
+      <div className="flex flex-wrap items-center gap-1.5">
+        <GameChip tint={GAME_BRAND}>{gameText('game.mission.personal.chip')}</GameChip>
+        <GameChip tint={done ? GAME_GOOD : clock.phase === 'missed' ? GAME_INK_2 : GAME_WARM}>{status}</GameChip>
+      </div>
+      <p className="text-body font-semibold" style={{ color: GAME_INK }}>
+        {title}
+      </p>
+      <ProgressBar progress={mission.progress / mission.target} tint={done ? GAME_GOOD : GAME_BRAND} label={title} />
+      <p className="text-caption" style={{ color: GAME_INK_2 }}>
+        {gameText('game.fmt.fraction', { done: formatCount(Math.min(mission.progress, mission.target)), total: formatCount(mission.target) })}
+        {' · '}
+        <span style={{ color: GAME_INK, fontWeight: 700 }}>{gameText('game.fmt.signed', { value: pointsLabel(mission.reward) })}</span>
+      </p>
     </li>
   );
 }
@@ -201,8 +300,19 @@ function ChestCard({ chest, opening, online, onClaim, error }: { readonly chest:
   );
 }
 
+/**
+ * La dernière fin de plage de la carte : passé elle, plus rien ne change et l'horloge s'arrête. UNE horloge pour
+ * toutes les cartes (les trois du jour et la personnelle), jamais un intervalle par ligne.
+ */
+function lastWindowEnd(missions: GameMissionsBlock): number {
+  const day = missions.items.some((mission) => mission.completedAt === null) ? endOfGameDay(missions.dayKey)?.getTime() ?? 0 : 0;
+  const personal = missions.personal == null ? Number.NaN : new Date(missions.personal.endsAt).getTime();
+  return Math.max(day, Number.isNaN(personal) ? 0 : personal);
+}
+
 export function GameMissions(props: GameMissionsProps) {
   const { missions, chest, held, level, prismHour, online, pendingRerollId, chestOpening, onReroll, onClaim, errors } = props;
+  const now = useClockNow(props.now, missions.unlocked ? lastWindowEnd(missions) : 0);
 
   if (!missions.unlocked) {
     return (
@@ -237,6 +347,7 @@ export function GameMissions(props: GameMissionsProps) {
           <MissionRow
             key={mission.id}
             mission={mission}
+            clock={dailyMissionClock({ dayKey: missions.dayKey, completed: mission.completedAt !== null, now })}
             canReroll={missions.rerollAvailable}
             pending={pendingRerollId === mission.id}
             online={online}
@@ -244,6 +355,7 @@ export function GameMissions(props: GameMissionsProps) {
             onReroll={onReroll}
           />
         ))}
+        {missions.personal == null ? null : <PersonalMissionRow mission={missions.personal} now={now} />}
       </ul>
       {errors?.reroll === undefined ? null : (
         <p role="alert" className="text-caption" style={{ color: GAME_ERROR }}>

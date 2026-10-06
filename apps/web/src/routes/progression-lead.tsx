@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useEffect } from 'react';
 import { useIsMutating } from '@tanstack/react-query';
 
 import { GameGuideCard } from '@/components/game-guide-card';
@@ -6,11 +6,13 @@ import { GamePhotoFlow } from '@/components/game-photo-flow';
 import { GamePhotoOffer } from '@/components/game-photo-offer';
 import type { EngagementWithGame } from '@/lib/api/engagement';
 import type { HttpTransport } from '@/lib/api/http';
-import { guideActionTarget } from '@/lib/game-guide/action-target';
+import { guideActionTarget, type GuideRoute } from '@/lib/game-guide/action-target';
 import type { GuideCard } from '@/lib/game-guide/card';
 import { appPhotoEnv } from '@/lib/game-photo/app-env';
 import type { PhotoEnv } from '@/lib/game-photo/env';
-import { photoMomentFromCard, startMoment, type PhotoMoment } from '@/lib/game-photo/moments';
+import { photoMomentFromCard, photoMomentOfEmblemV2, startMoment, type PhotoMoment } from '@/lib/game-photo/moments';
+import { useGamePrefs } from '@/lib/game/preferences';
+import { useViewerId } from '@/routes/game-friends';
 import { useGameGuide } from '@/routes/progression-guide';
 import { GAME_MUTATION_KEY } from '@/routes/progression-game-actions';
 import { usePhotoMoments } from '@/routes/progression-photo';
@@ -39,7 +41,7 @@ const defaultScrollTo = (id: string): void => {
   });
 };
 
-const defaultNavigateTo = (to: 'list' | 'progressionBadges'): void => navigate(href(to));
+const defaultNavigateTo = (to: GuideRoute): void => navigate(href(to));
 
 export function GameLead({
   view,
@@ -47,21 +49,31 @@ export function GameLead({
   transport,
   navigateTo = defaultNavigateTo,
   scrollTo = defaultScrollTo,
+  onGuideLine,
 }: {
   readonly view: EngagementWithGame;
   readonly env?: () => PhotoEnv;
   readonly transport?: HttpTransport;
-  readonly navigateTo?: (to: 'list' | 'progressionBadges') => void;
+  readonly navigateTo?: (to: GuideRoute) => void;
   readonly scrollTo?: (id: string) => void;
+  /** La ligne COURTE de la carte affichée (`null` : aucune carte) — Mee la dit sur le coin du héros (#5841). */
+  readonly onGuideLine?: (line: string | null) => void;
 }) {
   const settled = useIsMutating({ mutationKey: GAME_MUTATION_KEY }) === 0;
-  const guide = useGameGuide({ view, settled, ...(transport === undefined ? {} : { transport }) });
-  const photo = usePhotoMoments({ view, env, settled });
+  const userId = useViewerId();
+  /* Les célébrations se règlent par appareil (`lib/game/preferences.ts`) : éteintes, ou le jeu masqué, les crochets ne reçoivent
+     aucune lecture — ni carte, ni proposition de photo, et rien n'est marqué « vu » à la place de la personne. */
+  const prefs = useGamePrefs();
+  const awake = prefs.celebrations && !prefs.hidden;
+  const guide = useGameGuide({ view: awake ? view : undefined, settled, userId, ...(transport === undefined ? {} : { transport }) });
+  const photo = usePhotoMoments({ view: awake ? view : undefined, env, settled });
   const game = view.game;
 
   const cardMoment = useCallback(
     (card: GuideCard): PhotoMoment | null => {
       if (card.action === 'take-start-photo') return startMoment();
+      /* Un moment de la vague 2 porte l'emblème que la loi nomme (trophée, montée, saison, Prestige). */
+      if (card.emblemV2 !== undefined) return photoMomentOfEmblemV2(card.emblemV2);
       return game === undefined ? null : photoMomentFromCard(card.key as Parameters<typeof photoMomentFromCard>[0], game);
     },
     [game],
@@ -84,6 +96,10 @@ export function GameLead({
   );
 
   const card = guide.card;
+  const shortLine = card === null ? null : card.copy.short;
+  useEffect(() => {
+    onGuideLine?.(shortLine);
+  }, [shortLine, onGuideLine]);
   const cardPhoto = card === null || !card.photo ? null : cardMoment(card);
   const offers = photo.offers.filter((offer) => offer.id !== cardPhoto?.id);
 
@@ -109,7 +125,7 @@ export function GameLead({
       {offers.map((offer) => (
         <GamePhotoOffer key={offer.id} moment={offer} onStart={photo.start} onLater={later} />
       ))}
-      {photo.active === null ? null : <GamePhotoFlow moment={photo.active} env={env()} onClose={photo.close} />}
+      {photo.active === null ? null : <GamePhotoFlow moment={photo.active} env={env()} flameDays={game?.flame.days ?? null} onClose={photo.close} />}
     </>
   );
 }

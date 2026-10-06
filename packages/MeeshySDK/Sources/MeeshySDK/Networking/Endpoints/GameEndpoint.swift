@@ -22,6 +22,24 @@ public enum GameEndpoint: MeeshyEndpoint, Sendable {
     case flameFreezes
     case flameRelight
     case guideSeen
+    // La vague 2 (#9384 à #9392).
+    case leagueConsent
+    case leaguePseudonym
+    case leagueWeek
+    case leagueFriends
+    case duoInvite
+    case duoAccept(duoId: String)
+    case duoAbandon(duoId: String)
+    case seasonClaim(step: Int)
+    case seasonSeal
+    case showcaseOrder
+    case showcaseVisibility
+    case userShowcase(userId: String)
+    case prestige
+    case privacy
+    // Les lectures d'intégration (#9481).
+    case settings
+    case userGame(userId: String)
 
     public var path: String {
         switch self {
@@ -30,6 +48,22 @@ public enum GameEndpoint: MeeshyEndpoint, Sendable {
         case .flameFreezes: "/api/v1/me/game/flame/freezes"
         case .flameRelight: "/api/v1/me/game/flame/relight"
         case .guideSeen: "/api/v1/me/game/guide/seen"
+        case .leagueConsent: "/api/v1" + GameRoutes.leagueConsent
+        case .leaguePseudonym: "/api/v1" + GameRoutes.leaguePseudonym
+        case .leagueWeek: "/api/v1" + GameRoutes.leagueWeek
+        case .leagueFriends: "/api/v1" + GameRoutes.leagueFriends
+        case .duoInvite: "/api/v1" + GameRoutes.duoInvite
+        case .duoAccept(let duoId): "/api/v1" + GameRoutes.duoAcceptPath(duoId: duoId)
+        case .duoAbandon(let duoId): "/api/v1" + GameRoutes.duoAbandonPath(duoId: duoId)
+        case .seasonClaim(let step): "/api/v1" + GameRoutes.seasonClaimPath(step: step)
+        case .seasonSeal: "/api/v1" + GameRoutes.seasonSeal
+        case .showcaseOrder: "/api/v1" + GameRoutes.showcaseOrder
+        case .showcaseVisibility: "/api/v1" + GameRoutes.showcaseVisibility
+        case .userShowcase(let userId): "/api/v1" + GameRoutes.userShowcasePath(userId: userId)
+        case .prestige: "/api/v1" + GameRoutes.prestige
+        case .privacy: "/api/v1" + GameRoutes.privacy
+        case .settings: "/api/v1" + GameIntegrationRoutes.settings
+        case .userGame(let userId): "/api/v1" + GameIntegrationRoutes.userGamePath(userId: userId)
         }
     }
 

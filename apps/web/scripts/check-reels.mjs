@@ -356,7 +356,12 @@ try {
       );
       const headerBox = await page.$eval('[data-feed-reels]', (el) => {
         const r = el.getBoundingClientRect();
-        return { right: innerWidth - r.right, top: r.top, href: el.getAttribute('href') };
+        /* Le bandeau du haut (#9536) allonge l'encoche pendant l'ouverture : l'en-tête descend d'autant. */
+        const bande = (() => {
+          const hote = document.querySelector('[data-top-band-host]');
+          return hote === null ? 0 : Number.parseFloat(getComputedStyle(hote).getPropertyValue('--top-band')) || 0;
+        })();
+        return { right: innerWidth - r.right, top: r.top - bande, bande, href: el.getAttribute('href') };
       });
       check(headerBox.href === '/reels' && headerBox.right <= 16 && headerBox.top < 80, `${label} : en haut à droite, sans graine (${JSON.stringify(headerBox)})`);
       await capture(page, `reels-flux-entete-${slug}`);

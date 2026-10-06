@@ -621,6 +621,16 @@ export function ToolsSection({ language, showAdmin = false }: { readonly languag
         <RowText label={translate(language, 'settings.tools.progression')} />
         <Chevron />
       </Link>
+      {/* LES RÉGLAGES DU JEU (#9481) — la porte des réglages « Jeu » : célébrations,
+          « Jeu masqué », qui voit quoi, ligue publique. Juste sous Progression :
+          c'est le même univers, et c'est là qu'on la cherche. */}
+      <Link to="progressionReglages" data-settings-game className={ROW_CLASS} style={ROW_STYLE}>
+        <RowIcon tint="var(--ios-indigo-400)">
+          <Glyph name="trophy" size={15} />
+        </RowIcon>
+        <RowText label={translate(language, 'settings.tools.game')} />
+        <Chevron />
+      </Link>
       {showAdmin ? (
         <Link to="admin" data-settings-admin className={ROW_CLASS} style={ROW_STYLE}>
           <RowIcon tint="var(--color-ios-brand)">

@@ -19,6 +19,14 @@ nonisolated enum PhotoEmblem: Equatable, Codable, Sendable {
     case meesh(number: Int, edition: MeeshEdition)
     case treasury(TreasuryTierKey)
     case flame(FlameFormKey, days: Int)
+    /// Un succès révélé (#7742) : la coupe d'or, la Signature frappée sur la panse.
+    case achievement
+    // La vague 2 (#9481) : le trophée qui vient d'arriver, la gemme de la ligue gagnée, la coupe de la saison
+    // terminée, le trophée numéroté du Prestige.
+    case trophy(key: String)
+    case leagueUp(LeagueKey)
+    case season(Int)
+    case prestige(number: Int)
 }
 
 nonisolated struct PhotoMoment: Equatable, Identifiable, Codable, Sendable {
@@ -40,6 +48,18 @@ enum GamePhotoMoments {
             emblem: .start,
             kicker: String(localized: "game.photo.kicker.start", defaultValue: "Premiers pas", bundle: .main),
             title: String(localized: "game.photo.title.start", defaultValue: "Mon départ sur Meeshy", bundle: .main)
+        )
+    }
+
+    /// Le succès qu'on vient de révéler : la même carte se propose à la révélation (#7742). L'identité
+    /// porte la clé du succès (`EngagementReveal.id`, déjà préfixée « achievement: ») — le même succès
+    /// n'est jamais proposé deux fois au carnet.
+    static func achievement(id: String, title: String) -> PhotoMoment {
+        PhotoMoment(
+            id: id.hasPrefix("achievement:") ? id : "achievement:\(id)",
+            emblem: .achievement,
+            kicker: String(localized: "game.photo.kicker.achievement", defaultValue: "Succès", bundle: .main),
+            title: title
         )
     }
 
@@ -157,12 +177,15 @@ enum GamePhotoMoments {
         if (after.glory.rank != before.glory.rank || divisionRose) && after.glory.glory > before.glory.glory {
             moments.append(rank(after.glory.rank, division: after.glory.division))
         }
+        // Le Prestige a sa propre carte (le trophée numéroté) : la carte « niveau 100 » de la vague 1 ne la double pas.
+        let wave2 = ofTransitionV2(from: before, to: after)
+        let prestigeCard = wave2.contains { if case .prestige = $0.emblem { true } else { false } }
         let tierBefore = LevelTierKey.allCases.firstIndex(of: before.level.tier) ?? 0
         let tierAfter = LevelTierKey.allCases.firstIndex(of: after.level.tier) ?? 0
         if tierAfter > tierBefore {
             moments.append(tier(after.level.tier, level: tierLevel(after.level.tier)))
         }
-        if after.level.prestige > before.level.prestige {
+        if after.level.prestige > before.level.prestige && !prestigeCard {
             moments.append(levelHundred(prestige: after.level.prestige))
         }
         if after.mint.number > before.mint.number && (minted == 1 || minted % 10 == 0) {
@@ -174,6 +197,7 @@ enum GamePhotoMoments {
         if flameThresholds.contains(where: { before.flame.days < $0 && after.flame.days >= $0 }) {
             moments.append(flame(days: after.flame.days))
         }
+        moments.append(contentsOf: wave2)
         return moments
     }
 }

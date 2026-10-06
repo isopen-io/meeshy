@@ -17,6 +17,12 @@ import {
 import { CreatePostSchema, UpdatePostSchema, TranslatePostSchema, PostParams, PublishAttachmentSchema, postIdParamsSchema } from './types';
 import { MediaService } from '../../services/MediaService';
 import {
+  publishStoryAlsoAsReel,
+  ReelCompanionNotQualifiedError,
+  REEL_NOT_QUALIFIED,
+  ALSO_AS_REEL_REQUIRES_STORY,
+} from '../../services/posts/storyReelCompanion';
+import {
   planAttachmentPublication,
   postMediaFieldsFromAttachment,
   defaultVisibilityForPostType,
@@ -174,6 +180,9 @@ export function registerCoreRoutes(
   optionalAuth: ReturnType<typeof createUnifiedAuthMiddleware> = requiredAuth
 ) {
   const postService = new PostService(prisma);
+  // Les octets que « aussi en réel » COPIE (#9476) — la même interface que
+  // l'instantané de republication (`MediaStorage`).
+  const companionStorage = new MediaService();
   // #4147 critère 2 — seau PARTAGÉ avec POST /posts/:postId/repost
   // (interactions.ts, sa PROPRE instance de ce même preHandler) :
   // `config.rateLimit` ne PEUT PAS le faire (chaque route qui le déclare
@@ -403,7 +412,16 @@ export function registerCoreRoutes(
         return;
       }
 
+      // « Aussi en réel » (#9476) : une STORY originale seulement — une
+      // republication désigne les médias de sa SOURCE, et aucun autre type n'a
+      // de second format à porter.
+      const { alsoAsReel, ...creation } = parsed.data;
+      if (alsoAsReel === true && (creation.type !== 'STORY' || creation.repostOfId)) {
+        return sendBadRequest(reply, 'alsoAsReel requires an original story', { code: ALSO_AS_REEL_REQUIRES_STORY });
+      }
+      const authorId = authContext.registeredUser.id;
       type CreatedPost = Awaited<ReturnType<typeof postService.createPost>>;
+      let companionReel: (CreatedPost & { id: string }) | undefined;
       const post = await withMutationLog<CreatedPost>({
         request,
         fastify,
@@ -420,12 +438,26 @@ export function registerCoreRoutes(
           // sur la détection regex du serveur au lieu de la mesure on-device
           // déjà faite à la création. Elle traverse donc par le spread comme le
           // reste de `parsed.data`, au même titre qu'`originalLanguage`.
-          return postService.createPost({
-            ...parsed.data,
-            content: parsed.data.content !== undefined ? SecuritySanitizer.sanitizeText(parsed.data.content) : undefined,
-            type: parsed.data.type ?? 'POST',
-            visibility: parsed.data.visibility ?? (parsed.data.type === 'STORY' ? 'FRIENDS' : 'PUBLIC'),
-          }, authContext.registeredUser.id) as Promise<CreatedPost & { id: string }>;
+          const input = {
+            ...creation,
+            content: creation.content !== undefined ? SecuritySanitizer.sanitizeText(creation.content) : undefined,
+            type: creation.type ?? 'POST',
+            visibility: creation.visibility ?? (creation.type === 'STORY' ? 'FRIENDS' : 'PUBLIC'),
+          };
+          if (alsoAsReel !== true) {
+            return postService.createPost(input, authorId) as Promise<CreatedPost & { id: string }>;
+          }
+          // Les DEUX publications, ou aucune. Le journal de mutation retient la
+          // STORY (l'id rendu) ; le réel voyage à côté, dans `reel`.
+          return publishStoryAlsoAsReel({
+            prisma,
+            storage: companionStorage,
+            createPost: (post, author) => postService.createPost(post, author) as Promise<CreatedPost & { id: string }>,
+            retractPost: (postId, author) => postService.deletePost(postId, author, { actorRole: 'USER', reason: 'also-as-reel-rollback' }),
+          }, input, authorId).then(({ story, reel }) => {
+            companionReel = reel;
+            return story;
+          });
         },
         onDuplicate: async (resultId) => {
           const replayed = await postService.getPostById(resultId, authContext.registeredUser.id);
@@ -466,8 +498,29 @@ export function registerCoreRoutes(
         porte: 'POST /posts',
       });
 
-      return sendSuccess(reply, served, { statusCode: 201 });
+      if (!companionReel) {
+        return sendSuccess(reply, served, { statusCode: 201 });
+      }
+      // Le réel est une publication à part entière : il passe par le MÊME
+      // noyau (Prisme, mentions, diffusion, hashtags, éventail d'amis).
+      const servedReel = await runPublicationEffects({
+        ...publicationContext,
+        request,
+        post: companionReel as unknown as PublishedPostRow,
+        authorId,
+        postType: 'REEL',
+        submittedContent: parsed.data.content,
+        storyEffects: companionReel.storyEffects,
+        declaredMentions: parsed.data.mentions,
+        detectedLanguage: parsed.data.detectedLanguage,
+        editedInApp: parsed.data.editedInApp,
+        porte: 'POST /posts',
+      });
+      return sendSuccess(reply, { ...served, reel: servedReel }, { statusCode: 201 });
     } catch (error) {
+      if (error instanceof ReelCompanionNotQualifiedError) {
+        return sendError(reply, 422, 'The composition does not qualify as a reel', { code: REEL_NOT_QUALIFIED });
+      }
       // Le cmid a bien été appliqué, mais son résultat n'est plus relisible
       // (contenu supprimé, expiré, ou hors de la tranche ACL du lecteur) et
       // l'op DIVERGE — la rejouer recréerait une ligne que l'auteur a fait

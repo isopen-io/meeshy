@@ -50,6 +50,35 @@ final class GameProgressionRenderTests: XCTestCase {
         }
     }
 
+    /// Le héro (#5841) : pleine largeur, une puce par famille. Et le héro de frappe — le SEUL (#9537) — avec sa porte.
+    func test_theHeroIsMounted_withOneChipPerFamily_andTheOnlyMintHero() async {
+        let vm = await loadedViewModel(GameFixture.snapshot(GameFixture.game(chestStatus: .ready)))
+
+        let identifiants = monter(ProgressionView(viewModel: vm)).identifiers
+
+        for attendu in ["game.hero", "game.mint.hero", "game.mint.info"] + EngagementAxisFamily.allCases.map({ "game.hero.earn.\($0.rawValue)" }) {
+            XCTAssertTrue(identifiants.contains(attendu), "« \(attendu) » n'est pas dans l'arbre rendu. Vus : \(identifiants)")
+        }
+        // UNE seule section Héro de frappe : le compte des identifiants d'un conteneur dépend de la façon dont le
+        // harnais lit l'arbre (le même bouton peut y paraître deux fois) — la garde sûre est la SOURCE.
+        let sections = (try? String(contentsOf: URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Game/GameSection.swift"), encoding: .utf8)) ?? ""
+        XCTAssertEqual(sections.components(separatedBy: "GameMintPreviewView(").count - 1, 1, "UNE seule section Héro de frappe")
+        XCTAssertEqual(identifiants.filter { $0 == "game.mint.action" }.count, 1, "UN seul bouton de frappe sur l'écran")
+        XCTAssertFalse(identifiants.contains { $0.hasPrefix("game.hero.mint") }, "le doublon du héro de niveau a disparu : \(identifiants)")
+    }
+
+    func test_theMintHeroSaysHowManyPointsAreMissing_insteadOfAGreyedButton() async {
+        let poor = GameFixture.game(score: 400, debitable: 400, held: 0)
+        let vm = await loadedViewModel(GameFixture.snapshot(poor, meesh: GameFixture.meesh(balance: 0, minted: 0, debitable: 400)))
+
+        let identifiants = monter(ProgressionView(viewModel: vm)).identifiers
+
+        XCTAssertTrue(identifiants.contains("game.mint.missing"), "« Encore N points » : une phrase lisible à la place du bouton")
+        XCTAssertFalse(identifiants.contains("game.mint.action"), "un bouton grisé : la directive est « sinon pas de bouton »")
+    }
+
     func test_anOldServerWithoutTheBlock_leavesTheScreenAsItWas() async {
         let sans = APIEngagementProgress(
             counters: [], milestones: [], streak: .init(currentStreakDays: 0, longestStreakDays: 0),

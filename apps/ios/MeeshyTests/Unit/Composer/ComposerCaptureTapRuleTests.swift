@@ -59,7 +59,7 @@ final class ComposerCaptureTapRuleTests: XCTestCase {
                        "un double à la SwiftUI ferait attendre le toucher simple")
         XCTAssertFalse(chrome.contains("TapGesture().onEnded"))
         let copie = try Self.code("Meeshy/Features/Main/Composer/ComposerSceneCameraCopy.swift")
-        XCTAssertTrue(copie.contains("defaultValue: \"Toucher deux fois : photo\""))
+        XCTAssertTrue(copie.contains("defaultValue: \"Puis toucher deux fois : photo\""))
     }
 
     private static func code(_ relative: String) throws -> String {

@@ -19,9 +19,27 @@ export const PHOTO_FORMATS: Readonly<Record<PhotoFormat, { readonly width: numbe
 export type Rect = { readonly x: number; readonly y: number; readonly w: number; readonly h: number };
 export type TextLine = { readonly x: number; readonly y: number; readonly size: number };
 
+/**
+ * LE BANDEAU DE PARRAINAGE (#7742) — au pied de la carte : la Signature, la
+ * phrase d'invitation, le lien court et la Flamme. Les textes de gauche
+ * s'alignent sur `x` (début de ligne) et ne dépassent pas `maxTextWidth` ; les
+ * jours de la Flamme sont centrés sous elle.
+ */
+export type BannerLayout = {
+  readonly frame: Rect;
+  readonly signature: Rect;
+  readonly headline: TextLine;
+  readonly link: TextLine;
+  readonly maxTextWidth: number;
+  readonly flame: Rect;
+  readonly flameDays: TextLine;
+};
+
 export type PhotoLayout = {
   readonly width: number;
   readonly height: number;
+  /** Présent seulement quand la carte porte le lien de parrainage. */
+  readonly banner?: BannerLayout;
   readonly emblem: Rect;
   readonly kicker: TextLine;
   readonly title: TextLine;
@@ -47,17 +65,49 @@ const PROPORTIONS: Readonly<Record<PhotoFormat, Proportions>> = {
   square: { emblemSize: 0.3, emblemTop: 0.06, kickerY: 0.49, titleY: 0.58, dateY: 0.65, birdSize: 0.22, signatureSize: 0.07 },
 };
 
-const MARGIN = 0.05;
+/** Avec le bandeau, le profil (1:1) n'a plus la place des grands oiseaux : tout se resserre. */
+const PROPORTIONS_WITH_BANNER: Readonly<Record<PhotoFormat, Proportions>> = {
+  story: PROPORTIONS.story,
+  square: { emblemSize: 0.26, emblemTop: 0.05, kickerY: 0.42, titleY: 0.5, dateY: 0.56, birdSize: 0.16, signatureSize: 0.07 },
+};
 
-export function photoLayout(format: PhotoFormat): PhotoLayout {
+const MARGIN = 0.05;
+const BANNER_HEIGHT = 0.13;
+const BANNER_GAP = 0.02;
+
+function bannerOf(width: number, height: number): BannerLayout {
+  const margin = width * MARGIN;
+  const h = width * BANNER_HEIGHT;
+  const frame: Rect = { x: margin, y: height - margin - h, w: width - margin * 2, h };
+  const pad = h * 0.2;
+  const signatureSize = h * 0.5;
+  const signature: Rect = { x: frame.x + pad, y: frame.y + (h - signatureSize) / 2, w: signatureSize, h: signatureSize };
+  const flameSize = h * 0.4;
+  const flame: Rect = { x: frame.x + frame.w - pad - flameSize, y: frame.y + h * 0.1, w: flameSize, h: flameSize };
+  const textX = signature.x + signature.w + pad * 0.7;
+  return {
+    frame,
+    signature,
+    headline: { x: textX, y: frame.y + h * 0.45, size: width * 0.036 },
+    link: { x: textX, y: frame.y + h * 0.75, size: width * 0.028 },
+    maxTextWidth: flame.x - width * 0.012 - textX,
+    flame,
+    flameDays: { x: flame.x + flame.w / 2, y: frame.y + h * 0.88, size: width * 0.026 },
+  };
+}
+
+export function photoLayout(format: PhotoFormat, options: { readonly banner?: boolean } = {}): PhotoLayout {
   const { width, height } = PHOTO_FORMATS[format];
-  const p = PROPORTIONS[format];
+  const withBanner = options.banner === true;
+  const p = (withBanner ? PROPORTIONS_WITH_BANNER : PROPORTIONS)[format];
   const emblem = width * p.emblemSize;
   const bird = width * p.birdSize;
   const signature = width * p.signatureSize;
   const margin = width * MARGIN;
-  const birdTop = height - margin - bird;
+  const banner = withBanner ? bannerOf(width, height) : undefined;
+  const birdTop = (banner === undefined ? height - margin : banner.frame.y - width * BANNER_GAP) - bird;
   return {
+    ...(banner === undefined ? {} : { banner }),
     width,
     height,
     emblem: { x: (width - emblem) / 2, y: height * p.emblemTop, w: emblem, h: emblem },
@@ -66,7 +116,7 @@ export function photoLayout(format: PhotoFormat): PhotoLayout {
     date: { x: width / 2, y: height * p.dateY, size: width * 0.035 },
     mee: { x: margin, y: birdTop, w: bird, h: bird },
     meo: { x: width - margin - bird, y: birdTop, w: bird, h: bird },
-    signature: { x: (width - signature) / 2, y: height - margin - signature, w: signature, h: signature },
+    signature: banner === undefined ? { x: (width - signature) / 2, y: height - margin - signature, w: signature, h: signature } : banner.signature,
   };
 }
 

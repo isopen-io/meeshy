@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { GAME_BIRD_KEYS, birdCutFilter, gameBirdMarkup, gameBirdPlacement } from './birds';
+import { GAME_BIRD_KEYS, birdCutFilter, birdEngraveFilter, gameBirdMarkup, gameBirdPlacement } from './birds';
 
 /**
  * MEE ET MEO DANS LE DÉCOR (#9380) — le dessin n'est PAS refait : il vient du
@@ -47,5 +47,28 @@ describe('gameBirdPlacement', () => {
 describe('birdCutFilter — le contour blanc d’un sticker découpé', () => {
   test('porte l’identifiant demandé', () => {
     expect(birdCutFilter('gA-cut')).toContain('<filter id="gA-cut"');
+  });
+});
+
+describe('birdEngraveFilter — Mee et Meo gravés dans le métal (#9540)', () => {
+  test('porte l’identifiant demandé', () => {
+    expect(birdEngraveFilter('gA-engrave')).toContain('<filter id="gA-engrave"');
+  });
+
+  test('aucun contour d’autocollant : ni dilatation, ni papier blanc', () => {
+    const filter = birdEngraveFilter('g-engrave');
+    expect(filter).not.toContain('dilate');
+    expect(filter).not.toContain('paper');
+  });
+
+  test('relief : la lumière HAUTE et l’ombre BASSE, le dessin coloré restant au centre', () => {
+    const filter = birdEngraveFilter('g-engrave');
+    expect(filter).toContain('data-relief="light"');
+    expect(filter).toContain('data-relief="shade"');
+    expect(filter).toContain('in="SourceGraphic"');
+    const light = filter.indexOf('data-relief="light"');
+    const shade = filter.indexOf('data-relief="shade"');
+    expect(filter.slice(light, light + 200)).toMatch(/dy="-/);
+    expect(filter.slice(shade, shade + 200)).toMatch(/dy="[0-9]/);
   });
 });

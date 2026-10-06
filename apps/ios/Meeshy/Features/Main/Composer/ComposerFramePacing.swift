@@ -100,6 +100,12 @@ nonisolated enum ComposerCaptureSurfaceRule {
     static func showsThermalNotice(look: ComposerPhotoLook, budget: ComposerThermalBudget) -> Bool {
         budget.systemLayerOnly && ComposerLiveLookRule.rendersLive(look)
     }
+
+    /// En édition, rien ne vient de l'objectif : la photo figée et la boucle se
+    /// dessinent au rythme du palier, et encore au palier critique (10 i/s).
+    static func editFPS(_ budget: ComposerThermalBudget) -> Int {
+        max(10, budget.previewFPS)
+    }
 }
 
 /// Les mots de la capture unifiée.
@@ -107,5 +113,25 @@ enum ComposerCaptureCopy {
     static var thermalNotice: String {
         String(localized: "composer.capture.thermal.notice",
                defaultValue: "Aperçu simplifié : l'appareil chauffe. La prise garde tout l'effet.", bundle: .main)
+    }
+
+    /// La vidéo se rend avec son look : le `✓` attend, et le dit.
+    static var rendering: String {
+        String(localized: "composer.capture.looks.rendering", defaultValue: "Application du filtre…", bundle: .main)
+    }
+
+    /// ✓ « Terminé » : le seul ajout de l'édition (spec § 3.3).
+    static var done: String {
+        String(localized: "common.done", defaultValue: "Terminé", bundle: .main)
+    }
+
+    /// La croix, en édition : elle abandonne la retouche et revient viser.
+    static var cancelEdit: String {
+        String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main)
+    }
+
+    /// Ce que VoiceOver lit de la scène en édition : le média s'y recadre.
+    static var reframe: String {
+        String(localized: "composer.object.editor.crop", defaultValue: "Recadrer", bundle: .main)
     }
 }

@@ -44,6 +44,15 @@ struct GameLawTests {
         #expect(GameLevels.tier(of: 100) == .galaxie)
     }
 
+    @Test("le palier a un rang de 1 à 10 et s'écrit en chiffres romains de I à X")
+    func tierOrdinalAndRoman() {
+        #expect(LevelTierKey.allCases.map(\.ordinal) == Array(1...10))
+        #expect(LevelTierKey.allCases.map(\.romanNumeral) == ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"])
+        #expect(LevelTierKey.eclat.ordinal == 4)
+        #expect(GameLevels.tier(of: 34).romanNumeral == "IV")
+        #expect(GameLevels.tier(of: 100).romanNumeral == "X")
+    }
+
     @Test("le record ne redescend jamais, et seuls les niveaux inédits comptent")
     func recordNeverDrops() {
         #expect(GameLevels.record(level: 32, previousRecord: 36) == 36)

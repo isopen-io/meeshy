@@ -490,6 +490,7 @@ const it = {
   'settings.export_data': 'Esporta i miei dati',
   'settings.section.tools': 'Strumenti',
   'settings.tools.progression': 'Progressi',
+  'settings.tools.game': 'Gioco',
   'settings.section.about': 'Informazioni',
   'settings.terms': "Condizioni d'uso",
   'settings.privacy_policy': 'Informativa sulla privacy',

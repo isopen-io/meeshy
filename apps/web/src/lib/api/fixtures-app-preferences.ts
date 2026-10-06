@@ -22,6 +22,7 @@ const INITIAL: AppPreferences = {
   acceptCallsFromNonContacts: true,
   notifyContactsOnReturn: true,
   contactActivityEnabled: true,
+  gameEnabled: true,
 };
 
 const state: { preferences: AppPreferences } = { preferences: INITIAL };

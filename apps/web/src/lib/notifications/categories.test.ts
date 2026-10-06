@@ -1,11 +1,14 @@
 import { describe, expect, test } from 'bun:test';
 
+import { GAME_NOTIFICATION_TYPES } from '@meeshy/shared/utils/game/notifications';
+
 import {
   NOTIFICATION_CATEGORIES,
   categoryAccepts,
   categoryHue,
   categoryQuery,
   notificationAccent,
+  notificationFamily,
 } from './categories';
 
 /**
@@ -171,6 +174,17 @@ describe('« Engagements » regroupe les paliers (#8960)', () => {
     for (const type of ['achievement_unlocked', 'ACHIEVEMENT_UNLOCKED', 'streak_milestone', 'level_up', 'badge_earned']) {
       expect(engagement).toContain(type);
       expect(system).not.toContain(type);
+    }
+  });
+
+  test('les quatre notifications du jeu (#9490) y sont — et se RELISENT une fois lues, comme un palier', () => {
+    const engagement = categoryQuery('engagement').types?.split(',') ?? [];
+    for (const type of GAME_NOTIFICATION_TYPES) {
+      expect(engagement).toContain(type);
+      expect(notificationFamily(type)).toBe('engagement');
+      expect(notificationAccent(type)).toBe('var(--ios-warning)');
+      expect(categoryAccepts('engagement', { type, state: { isRead: true } })).toBe(true);
+      expect(categoryAccepts('all', { type, state: { isRead: true } })).toBe(true);
     }
   });
 

@@ -212,14 +212,19 @@ final class DesignLiteralRatchetGuardTests: XCTestCase {
         ),
         Exemption(
             reason: "jeu : les matières et les couleurs de palier de la planche (docs/product/jeu-meeshy-conception.html), définies une fois — cuivre, or, prisme ne sont pas des jetons d'interface",
-            globs: ["\(ui)/Game/GameMaterial.swift"]
+            globs: ["\(ui)/Game/GameMaterial.swift", "\(ui)/Game/GameLeagueBricks.swift"]
         ),
         Exemption(
             reason: "jeu : dessins de la planche portés à l'identique — leurs rayons sont la géométrie d'un viewBox, pas un rayon d'interface",
             globs: [
                 "\(ui)/Game/TrophyView.swift",
                 "\(ui)/Game/ChestView.swift",
+                "\(ui)/Game/GameMedalView.swift",
             ]
+        ),
+        Exemption(
+            reason: "jeu : le bandeau de parrainage est dessiné dans une IMAGE partagée hors de l'app (#7742) — ses couleurs et ses rayons sont fixes, jamais ceux du thème de celui qui compose la carte",
+            globs: ["\(ui)/Game/GameReferralBannerView.swift"]
         ),
         Exemption(
             reason: "code : thèmes de coloration syntaxique",

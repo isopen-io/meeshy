@@ -1,11 +1,12 @@
-import { describe, expect, test } from 'bun:test';
+import { afterEach, describe, expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import { resolveEngagementProgress } from '@meeshy/shared/utils/engagement-progress';
 
 import type { EngagementWithGame } from '@/lib/api/engagement';
 import { ENGAGEMENT_PROGRESS_FIXTURE } from '@/lib/api/engagement-fixture';
-import { gameBlockFixture } from '@/lib/api/game-fixture';
+import { gameBlockFixture, gameBlockWithExtrasFixture } from '@/lib/api/game-fixture';
+import { gamePrefs } from '@/lib/game/preferences';
 
 import { ProgressionBody } from './progression';
 import type { GameActions } from './progression-game-actions';
@@ -19,6 +20,7 @@ const idle: GameActions = {
   pending: { mint: false, rerollId: null, chest: false, freeze: false, relight: false },
   errors: {},
   celebration: null,
+  strikeKey: 0,
 };
 
 const base = resolveEngagementProgress(ENGAGEMENT_PROGRESS_FIXTURE);
@@ -43,8 +45,8 @@ describe('un serveur qui sert le bloc game', () => {
   const page = body(withGame());
   const position = (needle: string): number => page.indexOf(needle);
 
-  test('les quatre jauges ouvrent l’écran, avant les missions, l’aperçu et la Flamme', () => {
-    const order = ['data-game-gauges', 'id="game-missions"', 'id="game-mint"', 'id="game-flame-panel"'].map(position);
+  test('le héros ouvre l’écran, puis les deux jauges, avant les missions, le héros de frappe et la Flamme', () => {
+    const order = ['data-game-hero', 'data-game-gauges', 'id="game-missions"', 'id="game-mint"', 'id="game-flame-panel"'].map(position);
     expect(order.every((i) => i >= 0)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
   });
@@ -88,11 +90,41 @@ describe('un serveur qui sert le bloc game', () => {
       />,
     );
     expect(withGuide.indexOf('data-guide-slot')).toBeGreaterThanOrEqual(0);
-    expect(withGuide.indexOf('data-guide-slot')).toBeLessThan(withGuide.indexOf('data-game-gauges'));
+    expect(withGuide.indexOf('data-guide-slot')).toBeLessThan(withGuide.indexOf('data-game-hero'));
+    expect(withGuide.indexOf('data-game-hero')).toBeLessThan(withGuide.indexOf('data-game-gauges'));
   });
 
   test('aucune bulle de conversation : la mascotte-bulle cède à la carte du jeu', () => {
     expect(page).not.toContain('data-mascot-coach');
+  });
+});
+
+describe('UNE seule section de frappe (#9537)', () => {
+  const page = body(withGame());
+
+  test('un seul héros de frappe, un seul bouton ; l’ancienne ligne « Comment frapper » du héros de niveau a disparu', () => {
+    expect(page.match(/id="game-mint"/g)).toHaveLength(1);
+    expect(page.match(/data-game-mint-action/g)).toHaveLength(1);
+    expect(page).not.toContain('data-game-hero-mint');
+    expect(page).not.toContain('Comment frapper');
+  });
+
+  test('l’ancien héros Meesh du serveur d’avant ne s’ajoute pas à la section de frappe', () => {
+    expect(page).not.toContain('progression-meesh');
+  });
+});
+
+describe('le détail de ligue précède le héros de frappe (#9541)', () => {
+  test('placé dans la ligue : le détail se lit AVANT le bouton de frappe', () => {
+    const page = body({ ...base, game: gameBlockWithExtrasFixture() });
+    expect(page).toContain('data-game-league-summary');
+    expect(page.indexOf('data-game-league-summary')).toBeGreaterThan(page.indexOf('id="game-missions"'));
+    expect(page.indexOf('data-game-league-summary')).toBeLessThan(page.indexOf('id="game-mint"'));
+    expect(page.indexOf('data-game-league-summary')).toBeLessThan(page.indexOf('data-game-mint-action'));
+  });
+
+  test('pas de ligue servie : aucun détail', () => {
+    expect(body(withGame())).not.toContain('data-game-league-summary');
   });
 });
 
@@ -107,8 +139,20 @@ describe('les actions se branchent sur les actions du crochet', () => {
     expect(page).toContain('Pas assez de points convertibles');
   });
 
-  test('hors ligne : les gestes d’argent se taisent', () => {
+  test('hors ligne : la frappe se tait', () => {
     expect(body(withGame(), { online: false })).toMatch(/data-game-mint-action=""[^>]*disabled/);
+  });
+
+  test('la ligne du guide arrive au héros, dite par Mee', () => {
+    const page = renderToStaticMarkup(
+      <ProgressionBody
+        progress={withGame()}
+        onMint={() => undefined}
+        isMinting={false}
+        game={{ actions: idle, online: true, guideLine: 'Content de te revoir.' }}
+      />,
+    );
+    expect(page).toContain('Content de te revoir.');
   });
 });
 
@@ -128,5 +172,34 @@ describe('un ancien serveur (aucun bloc game) : l’écran actuel est intact', (
 
   test('la mascotte actuelle parle encore', () => {
     expect(legacy).toContain('data-mascot-coach');
+  });
+});
+
+describe('la vague 2 sur le hub (#9481)', () => {
+  test('un serveur qui sert les extensions : les portes se posent avant les règles', () => {
+    const page = body({ ...base, game: gameBlockWithExtrasFixture() });
+    expect(page).toContain('data-game-doors');
+    expect(page.indexOf('data-game-doors')).toBeLessThan(page.lastIndexOf('/me/progression/regles'));
+  });
+
+  test('un ancien serveur : aucune porte de plus', () => {
+    expect(body(withGame())).not.toContain('data-game-doors');
+  });
+});
+
+describe('« Jeu masqué » sur le hub (#9481)', () => {
+  afterEach(() => gamePrefs.set({ hidden: false }));
+
+  test('masqué : une carte qui le dit remplace tout le jeu, et rien du reste du jeu ne se peint', () => {
+    gamePrefs.set({ hidden: true });
+    const page = body(withGame());
+    expect(page).toContain('id="game-hidden"');
+    expect(page).not.toContain('data-game-hero');
+    expect(page).not.toContain('id="game-missions"');
+    expect(page).not.toContain('id="game-flame-panel"');
+  });
+
+  test('la porte vers les réglages du jeu est sur le hub', () => {
+    expect(body(withGame())).toContain('href="/me/progression/reglages"');
   });
 });

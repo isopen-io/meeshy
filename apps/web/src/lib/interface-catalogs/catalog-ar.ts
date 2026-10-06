@@ -488,6 +488,7 @@ const ar = {
   'settings.export_data': 'تصدير بياناتي',
   'settings.section.tools': 'الأدوات',
   'settings.tools.progression': 'التقدّم',
+  'settings.tools.game': 'اللعبة',
   'settings.section.about': 'حول',
   'settings.terms': 'شروط الاستخدام',
   'settings.privacy_policy': 'سياسة الخصوصية',

@@ -65,7 +65,10 @@ nonisolated enum MediaEditTool: String, CaseIterable, Hashable, Sendable {
     case trim
     /// Muet et quart de tour — existent tous deux.
     case actions
-    /// ⌗ RECADRER — au contrat depuis `a0f2a86aa9`, retenu par #5100.
+    /// ⌗ RECADRER — hors de `served`, parce que sa portée n'est pas une
+    /// famille entière : `ComposerInlineEditing.sections` le sert à l'IMAGE
+    /// posée (#9499) et au fond image d'une retouche (#9136), ses pastilles
+    /// attendant un ratio mesuré (#5100). La table ci-dessus date du 2026-09-04.
     case crop
     /// ✂ COUPER — absent du contrat (#5085).
     case split
@@ -83,6 +86,24 @@ nonisolated enum MediaEditTool: String, CaseIterable, Hashable, Sendable {
     /// sert pour toute sélection `.media`. Un filtre PAR média serait un ajout
     /// de contrat, de la même nature que recadrer et couper (#5085).
     case filter
+    /// **◐ RÉGLER — exposition, contraste, température… d'une IMAGE posée**
+    /// (#9175). Ce que l'éditeur d'image plein écran offrait en composition et
+    /// que la scène n'offrait plus depuis #9170 : les réglages sont une
+    /// propriété de l'objet (`StoryMediaObject.adjustments`), cuite par le
+    /// player après son filtre. La VIDÉO posée les reçoit aussi depuis #9169 :
+    /// son player les peint trame par trame (`StoryVideoAdjustmentsProcessor`),
+    /// sans netteté ni flou (`AdjustmentKind.served(for: .video)`). Le FOND,
+    /// image ou vidéo, les reçoit depuis #9496 : sa couche les peint par
+    /// `StoryBackgroundLook`, après le filtre de slide.
+    case adjust
+    /// **✦ EFFETS — le bloom et le grain d'une IMAGE** (#9498), ce que l'outil
+    /// « Effets » de l'éditeur d'image plein écran offrait de PLUS que les
+    /// réglages ; son flou, sa vignette et sa netteté sont des curseurs de
+    /// `adjust`. Ils voyagent dans le même sac (`StoryMediaObject.adjustments`,
+    /// famille `.effect`) et se cuisent à la suite des réglages. Une IMAGE
+    /// seulement — posée ou fond : aucune vidéo ne les peint
+    /// (`AdjustmentKind.isServedForVideo`), donc le sous-outil suit le filtre.
+    case effects
     /// **⌾ DÉCRIRE — le texte alternatif du média** (#4756).
     ///
     /// Servi, et c'est la loi 4 qui l'exige autant qu'elle l'autorise : le
@@ -113,7 +134,11 @@ nonisolated enum MediaEditTool: String, CaseIterable, Hashable, Sendable {
     /// `altText` ferme la liste : on décrit un média une fois qu'on a fini de
     /// le régler, et c'est le seul des quatre qui s'adresse à quelqu'un d'autre
     /// que soi.
-    static let served: [MediaEditTool] = [.filter, .trim, .actions, .altText]
+    ///
+    /// `adjust` suit le filtre (#9175) : on choisit un rendu, puis on le règle —
+    /// l'ordre de l'éditeur d'image, dont la scène reprend la chaîne. `effects`
+    /// suit les réglages (#9498), comme l'étage effet clôt cette chaîne.
+    static let served: [MediaEditTool] = [.filter, .adjust, .effects, .trim, .actions, .altText]
 }
 
 nonisolated enum ComposerObjectEditorSection: Hashable, Sendable {
@@ -253,11 +278,20 @@ nonisolated enum ComposerObjectEditorRail {
     ///
     /// **`offersFilter`** (même retour) : le filtre d'un objet se cuit dans son
     /// IMAGE ; une vidéo posée n'en rend aucun, et l'outil y serait inerte.
+    ///
+    /// **`offersAdjust`** (#9175, #9169, #9496) : les réglages se peignent sur
+    /// tout média de la scène — posé ou fond, image ou vidéo.
+    ///
+    /// **Les effets** (#9498) se cuisent dans une IMAGE qui se règle : ils
+    /// suivent le filtre ET les réglages, sans paramètre de plus.
     static func entries(for family: MeeshySceneObject.Kind,
                         hasTrimmableSource: Bool = true,
-                        offersFilter: Bool = true) -> [ComposerObjectEditorSection] {
+                        offersFilter: Bool = true,
+                        offersAdjust: Bool = true) -> [ComposerObjectEditorSection] {
         entriesOfFamily(family).filter {
             (hasTrimmableSource || $0 != .media(.trim)) && (offersFilter || $0 != .media(.filter))
+                && (offersAdjust || $0 != .media(.adjust))
+                && ((offersFilter && offersAdjust) || $0 != .media(.effects))
         }
     }
 
@@ -441,8 +475,10 @@ nonisolated enum ComposerObjectEditorRail {
     static func selection(forFamily family: MeeshySceneObject.Kind,
                           keeping current: ComposerObjectEditorSection,
                           hasTrimmableSource: Bool = true,
-                          offersFilter: Bool = true) -> ComposerObjectEditorSection {
-        let servies = entries(for: family, hasTrimmableSource: hasTrimmableSource, offersFilter: offersFilter)
+                          offersFilter: Bool = true,
+                          offersAdjust: Bool = true) -> ComposerObjectEditorSection {
+        let servies = entries(for: family, hasTrimmableSource: hasTrimmableSource, offersFilter: offersFilter,
+                              offersAdjust: offersAdjust)
         guard let premiere = servies.first else { return current }
         return servies.contains(current) ? current : premiere
     }
@@ -477,6 +513,8 @@ nonisolated enum ComposerObjectEditorRail {
             case .crop:    return "crop"
             case .split:   return "square.split.2x1"
             case .filter:  return "camera.filters"
+            case .adjust:  return "dial.min"
+            case .effects: return "sparkles"
             // Le glyphe d'accessibilité d'Apple, celui que le système emploie
             // partout pour VoiceOver — un `text.bubble` aurait dit « commenter »,
             // un `eye` aurait dit « aperçu ».

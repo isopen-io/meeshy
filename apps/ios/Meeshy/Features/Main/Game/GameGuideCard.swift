@@ -24,6 +24,12 @@ struct GuideCard: Equatable, Identifiable {
     let step: Step?
     /// Le moment se photographie (conception, partie VI) : la carte propose « Immortaliser ».
     let photo: Bool
+    /// La vague 2 (#9481) : la page du jeu où mène le bouton (ligue, saison, vitrine, Atlas, Prestige). Absente
+    /// pour les treize moments d'origine, dont `action` dit la destination.
+    var wave2Page: GamePage? = nil
+    /// Le moment photo d'un moment de la vague 2, déjà bâti : une carte « trophée » ne se déduit pas de l'état du
+    /// jeu, elle porte la clé du trophée qui vient d'arriver.
+    var photoMoment: PhotoMoment? = nil
 
     var id: String { key }
 }
@@ -57,6 +63,25 @@ enum GameGuideCard {
             presentation: moment.presentation,
             step: nil,
             photo: isPhotoMoment(moment.key)
+        )
+    }
+
+    /// La carte d'un moment de la vague 2 (#9481) : mêmes champs, la destination est une PAGE du jeu. L'`action` de
+    /// la loi d'origine n'a pas de sens ici — elle reste `seeProgress`, et `wave2Page` la supplante.
+    static func ofMomentV2(_ moment: GuideMomentV2) -> GuideCard {
+        let emblem = GamePhotoMomentsV2.emblem(of: moment.event)
+        let photo = emblem.map(GamePhotoMoments.ofEmblemV2)
+        return GuideCard(
+            key: moment.key.rawValue,
+            speaker: moment.speaker,
+            mood: moment.mood,
+            copy: GameGuideCopy.momentV2(moment),
+            action: .seeProgress,
+            presentation: moment.presentation,
+            step: nil,
+            photo: photo != nil,
+            wave2Page: GameGuideTarget.page(for: moment.action),
+            photoMoment: photo
         )
     }
 

@@ -10,6 +10,7 @@ final class MockComposerCaptureCamera: ComposerCaptureCameraProviding {
 
     var currentPosition: AVCaptureDevice.Position = .back
     var isSwitchingCamera = false
+    var recordingIsPending = false
     var zoomFactor: CGFloat = 1
     var zoomRange: ClosedRange<CGFloat> = 0.5...10
 
@@ -60,5 +61,15 @@ final class MockComposerCaptureCamera: ComposerCaptureCameraProviding {
 
     func setExposureBias(_ bias: Float) {
         exposureBiases.append(bias)
+    }
+
+    /// Prête dès qu'aucune bascule n'est en cours — comme `CameraModel.isCaptureReady`.
+    func waitUntilCaptureReady(timeout: TimeInterval) async -> Bool {
+        let limite = Date().addingTimeInterval(timeout)
+        while isSwitchingCamera {
+            guard !Task.isCancelled, Date() < limite else { return false }
+            try? await Task.sleep(nanoseconds: 10_000_000)
+        }
+        return !Task.isCancelled
     }
 }

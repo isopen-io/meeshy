@@ -1,6 +1,7 @@
 import UIKit
 import CoreImage
 import CoreImage.CIFilterBuiltins
+import MeeshySDK
 
 // MARK: - Image Filter
 
@@ -257,48 +258,10 @@ public final class ImageFilterEngine {
 
     // MARK: - Adjustment stage
 
+    /// The adjustment stage lives in `ImageAdjustmentStage` (#9175) so the
+    /// scene's player bakes an image's adjustments with the SAME chain.
     private func applyAdjustments(_ input: CIImage, _ adjustments: ImageAdjustments, extent: CGRect) -> CIImage {
-        guard !adjustments.isNeutral else { return input }
-        var result = input
-
-        if abs(adjustments.exposure) > 0.001 {
-            result = ciFilter("CIExposureAdjust", on: result, [kCIInputEVKey: adjustments.exposure])
-        }
-
-        if abs(adjustments.brightness) > 0.001
-            || abs(adjustments.contrast - 1) > 0.001
-            || abs(adjustments.saturation - 1) > 0.001 {
-            result = colorControls(
-                result,
-                saturation: adjustments.saturation,
-                contrast: adjustments.contrast,
-                brightness: adjustments.brightness
-            )
-        }
-
-        if abs(adjustments.vibrance) > 0.001 {
-            result = ciFilter("CIVibrance", on: result, ["inputAmount": adjustments.vibrance])
-        }
-
-        if abs(adjustments.temperature) > 0.001 {
-            result = temperature(result, target: 6500 + adjustments.temperature * 1800)
-        }
-
-        if adjustments.sharpness > 0.001 {
-            result = ciFilter("CISharpenLuminance", on: result, [kCIInputSharpnessKey: adjustments.sharpness])
-        }
-
-        if adjustments.blur > 0.001 {
-            let radius = adjustments.blur * 16
-            let blurred = ciFilter("CIGaussianBlur", on: result.clampedToExtent(), [kCIInputRadiusKey: radius])
-            result = blurred.cropped(to: extent)
-        }
-
-        if adjustments.vignette > 0.001 {
-            result = vignette(result, intensity: adjustments.vignette, radius: 1)
-        }
-
-        return result
+        ImageAdjustmentStage.apply(input, adjustments, extent: extent)
     }
 
     // MARK: - Effect stage
@@ -314,16 +277,18 @@ public final class ImageFilterEngine {
             return vignette(input, intensity: 2, radius: 1)
         case .sharpen:
             return ciFilter("CISharpenLuminance", on: input, [kCIInputSharpnessKey: 0.8])
+        // Le bloom et le grain vivent dans `ImageAdjustmentStage` (#9498) : la
+        // scène les peint par la MÊME écriture, à la valeur de son curseur ;
+        // le préréglage de cet éditeur en est la mi-course.
         case .bloom:
-            let bloomed = ciFilter("CIBloom", on: input, [
-                kCIInputRadiusKey: 10.0,
-                kCIInputIntensityKey: 0.5
-            ])
-            return bloomed.cropped(to: extent)
+            return ImageAdjustmentStage.bloom(input, amount: Self.presetAmount, extent: extent)
         case .grain:
-            return grain(input, extent: extent)
+            return ImageAdjustmentStage.grain(input, amount: Self.presetAmount, extent: extent)
         }
     }
+
+    /// La course d'un effet en un toucher : la mi-course du curseur de la scène.
+    nonisolated static let presetAmount: Float = 0.5
 
     // MARK: - Filter helpers
 
@@ -332,12 +297,7 @@ public final class ImageFilterEngine {
     }
 
     private func ciFilter(_ name: String, on input: CIImage, _ parameters: [String: Any]) -> CIImage {
-        guard let filter = CIFilter(name: name) else { return input }
-        filter.setValue(input, forKey: kCIInputImageKey)
-        for (key, value) in parameters {
-            filter.setValue(value, forKey: key)
-        }
-        return filter.outputImage ?? input
+        ImageAdjustmentStage.ciFilter(name, on: input, parameters)
     }
 
     private func colorControls(
@@ -346,42 +306,14 @@ public final class ImageFilterEngine {
         contrast: Float = 1,
         brightness: Float = 0
     ) -> CIImage {
-        ciFilter("CIColorControls", on: input, [
-            kCIInputBrightnessKey: brightness,
-            kCIInputContrastKey: contrast,
-            kCIInputSaturationKey: saturation
-        ])
+        ImageAdjustmentStage.colorControls(input, saturation: saturation, contrast: contrast, brightness: brightness)
     }
 
     private func temperature(_ input: CIImage, target: Float) -> CIImage {
-        guard let filter = CIFilter(name: "CITemperatureAndTint") else { return input }
-        filter.setValue(input, forKey: kCIInputImageKey)
-        filter.setValue(CIVector(x: 6500, y: 0), forKey: "inputNeutral")
-        filter.setValue(CIVector(x: CGFloat(target), y: 0), forKey: "inputTargetNeutral")
-        return filter.outputImage ?? input
+        ImageAdjustmentStage.temperature(input, target: target)
     }
 
     private func vignette(_ input: CIImage, intensity: Float, radius: Float) -> CIImage {
-        ciFilter("CIVignette", on: input, [
-            kCIInputIntensityKey: intensity,
-            kCIInputRadiusKey: radius
-        ])
-    }
-
-    private func grain(_ input: CIImage, extent: CGRect) -> CIImage {
-        guard let noise = CIFilter(name: "CIRandomGenerator")?.outputImage else { return input }
-        let cropped = noise.cropped(to: extent)
-
-        let grainLayer = ciFilter("CIColorMatrix", on: cropped, [
-            "inputRVector": CIVector(x: 0, y: 0, z: 0, w: 0),
-            "inputGVector": CIVector(x: 0, y: 0, z: 0, w: 0),
-            "inputBVector": CIVector(x: 0, y: 0, z: 0, w: 0),
-            "inputAVector": CIVector(x: 0, y: 0, z: 0, w: 0.05)
-        ])
-
-        guard let composite = CIFilter(name: "CISourceOverCompositing") else { return input }
-        composite.setValue(grainLayer, forKey: kCIInputImageKey)
-        composite.setValue(input, forKey: kCIInputBackgroundImageKey)
-        return composite.outputImage?.cropped(to: extent) ?? input
+        ImageAdjustmentStage.vignette(input, intensity: intensity, radius: radius)
     }
 }

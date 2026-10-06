@@ -196,7 +196,12 @@ describe('ROUTE_TABLE (#4278)', () => {
     // rallumer la Flamme, mémoriser les clés de guide), montage autonome. Aucun
     // alias, aucune route retirée ni renommée ; `POST /me/meesh/mint` garde son
     // adresse et sa forme (sa réponse s'étend, additivement).
-    expect(ROUTE_TABLE.length).toBe(74);
+    // 75 : #9387 ajoute `users-game-showcase` — `GET /api/v1/users/:userId/game/showcase`,
+    // la vitrine d'un autre membre selon son réglage, montage autonome sous
+    // `/api/v1/users`. Les douze autres routes de la vague 2 du jeu rejoignent
+    // `me-game` (même préfixe) : aucune entrée de plus pour elles. Aucun alias,
+    // aucune route retirée ni renommée.
+    expect(ROUTE_TABLE.length).toBe(75);
   });
 });
 

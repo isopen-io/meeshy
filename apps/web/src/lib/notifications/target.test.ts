@@ -86,6 +86,35 @@ describe('les autres familles', () => {
     }
   });
 
+  /* LE JEU (#9490) — le serveur pose l'indice `route: 'progression'` sur les quatre notifications du jeu ;
+     il mène à la Progression, qui n'est pas l'écran de la chose annoncée. Le TYPE, plus précis, prime sur
+     l'indice : l'invitation de duo vit dans la page Ligue (la mission en duo), le résultat de ligue y
+     est, l'étape de saison a sa page. */
+  test('une invitation ou une acceptation de duo, et un résultat de ligue, ouvrent la page Ligue', () => {
+    for (const type of ['game_duo_invited', 'game_duo_accepted', 'game_league_result']) {
+      expect(notificationTarget(record({ type }))).toEqual({ route: 'progressionLigue' });
+      expect(resolveTarget({ type, route: 'progression' })).toEqual({ route: 'progressionLigue' });
+    }
+  });
+
+  test('une étape de saison ouvre la page Saison', () => {
+    expect(notificationTarget(record({ type: 'game_season_step' }))).toEqual({ route: 'progressionSaison' });
+    expect(resolveTarget({ type: 'game_season_step', route: 'progression' })).toEqual({ route: 'progressionSaison' });
+  });
+
+  /* LA MISSION PERSONNELLE (#9539) — l'annonce du début de plage ouvre la Progression À LA section des
+     missions : le toucher mène à la carte qui décompte, pas au haut de la page. */
+  test('l’annonce d’une mission personnelle ouvre la section des missions de la Progression', () => {
+    const expected = { route: 'progression', search: { section: 'missions' } };
+    expect(notificationTarget(record({ type: 'game_mission_window' }))).toEqual(expected);
+    expect(resolveTarget({ type: 'game_mission_window', route: 'progression' })).toEqual(expected);
+    expect(pushTapTarget({ type: 'game_mission_window', route: 'progression' })).toEqual(expected);
+  });
+
+  test('un tap de bannière du jeu atterrit sur la même page', () => {
+    expect(pushTapTarget({ type: 'game_league_result', route: 'progression' })).toEqual({ route: 'progressionLigue' });
+  });
+
   test('une alerte de sécurité ouvre les réglages', () => {
     expect(notificationTarget(record({ type: 'login_new_device' }))).toEqual({ route: 'settings' });
   });

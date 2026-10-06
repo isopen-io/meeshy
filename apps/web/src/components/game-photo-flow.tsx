@@ -7,6 +7,7 @@ import type { PhotoEnv } from '@/lib/game-photo/env';
 import { flowReducer, type FlowState } from '@/lib/game-photo/flow';
 import type { PhotoFormat } from '@/lib/game-photo/layout';
 import type { PhotoMoment } from '@/lib/game-photo/moments';
+import { referralOf, referralPlaceholder, referralShareText, type PhotoReferral } from '@/lib/game-photo/referral';
 import type { PhotoFiles } from '@/lib/game-photo/render';
 import type { ShareOutcome } from '@/lib/game-photo/share';
 import { dateLabelOf } from '@/lib/game-photo/render';
@@ -43,6 +44,8 @@ type Props = {
   readonly moment: PhotoMoment;
   readonly env: PhotoEnv;
   readonly onClose: (result: PhotoFlowResult) => void;
+  /** Les jours de la Flamme (#7742) : le bandeau de la carte les porte à côté du lien de parrainage. */
+  readonly flameDays?: number | null;
 };
 
 const BUTTON = { minHeight: 44 } as const;
@@ -80,7 +83,7 @@ function Button({ attr, primary = false, onClick, children, disabled = false }: 
   );
 }
 
-export function GamePhotoFlow({ moment, env, onClose }: Props) {
+export function GamePhotoFlow({ moment, env, onClose, flameDays = null }: Props) {
   const [state, dispatch] = useReducer(flowReducer, { step: 'offer' } as FlowState);
   const panel = useRef<HTMLDivElement>(null);
   const close = useCallback(() => dispatch({ type: 'close' }), []);
@@ -99,8 +102,72 @@ export function GamePhotoFlow({ moment, env, onClose }: Props) {
   const [files, setFiles] = useState<PhotoFiles | null>(null);
   const [format, setFormat] = useState<PhotoFormat>('story');
   const [notice, setNotice] = useState<{ readonly tone: 'good' | 'error'; readonly text: string } | null>(null);
+  /* Le bandeau que porte l'image COMPOSÉE — pas celui que la carte porterait maintenant : un lien lu
+     après la frappe ne change ni l'image qui part, ni son texte. */
+  const [composedReferral, setComposedReferral] = useState<PhotoReferral | null>(null);
 
   const dateLabel = useMemo(() => dateLabelOf(env.now()), [env]);
+
+  /* Le lien de parrainage (#7742) : le lien EXISTANT, lu UNE fois à l'ouverture,
+     SANS rien créer (décision porteur : aucun jeton sans geste). Sans jeton, et
+     quand l'environnement sait en créer un, l'aperçu montre l'EMPLACEMENT
+     « meeshy.me/r/… » ; le jeton se crée au toucher de « Partager ». Un échec ou
+     une absence ne retient jamais la carte — elle part simplement sans bandeau. */
+  const [link, setLink] = useState<string | null>(null);
+  const [lookedUp, setLookedUp] = useState(false);
+  const [linkUnavailable, setLinkUnavailable] = useState(false);
+  useEffect(() => {
+    let live = true;
+    const done = (url: string | null): void => {
+      if (!live) return;
+      setLink(url);
+      setLookedUp(true);
+    };
+    void (env.referral?.() ?? Promise.resolve(null)).then(done, () => done(null));
+    return () => {
+      live = false;
+    };
+  }, [env]);
+  const linkOffered = link !== null || (lookedUp && env.createReferral !== undefined && !linkUnavailable);
+  /* CE QUE LA CARTE PORTE SE CHOISIT (conformité H-2) : le lien d'invitation et la
+     Flamme sont chacun retirables AVANT la prise, et l'aperçu du cadre montre
+     exactement ce qui sera composé. Sans lien, il n'y a rien à retirer. */
+  const [withLink, setWithLink] = useState(true);
+  const [withFlame, setWithFlame] = useState(true);
+  const shownFlame = withFlame ? flameDays : null;
+  const referral = useMemo((): PhotoReferral | null => {
+    if (!withLink || !linkOffered) return null;
+    return link === null ? referralPlaceholder(shownFlame) : referralOf(link, shownFlame);
+  }, [link, linkOffered, shownFlame, withLink]);
+  /* Lu au moment de composer, jamais une dépendance : un lien qui arrive pendant
+     la frappe ne la rejoue pas. */
+  const referralRef = useRef(referral);
+  referralRef.current = referral;
+  const options =
+    !linkOffered ? null : (
+      <fieldset className="flex flex-col gap-1" data-photo-options="">
+        <legend className="text-caption font-semibold" style={{ color: GAME_INK_2 }}>
+          {gameText('game.photo.referral.options')}
+        </legend>
+        <label className="flex items-center gap-3" style={{ minHeight: 44, color: GAME_INK }}>
+          <input type="checkbox" data-photo-with-link="" checked={withLink} onChange={(event) => setWithLink(event.currentTarget.checked)} className="size-5 accent-[var(--color-ios-brand)]" />
+          <span className="text-body">{gameText('game.photo.referral.with_link')}</span>
+        </label>
+        {flameDays === null || flameDays <= 0 ? null : (
+          <label className="flex items-center gap-3" style={{ minHeight: 44, color: GAME_INK }}>
+            <input
+              type="checkbox"
+              data-photo-with-flame=""
+              checked={withFlame && withLink}
+              disabled={!withLink}
+              onChange={(event) => setWithFlame(event.currentTarget.checked)}
+              className="size-5 accent-[var(--color-ios-brand)]"
+            />
+            <span className="text-body">{gameText('game.photo.referral.with_flame')}</span>
+          </label>
+        )}
+      </fieldset>
+    );
   const galleryUrl = useObjectUrl(galleryFile);
   const stillUrl = useObjectUrl(still);
   const previewUrl = useObjectUrl(files === null ? null : files[format]);
@@ -176,7 +243,8 @@ export function GamePhotoFlow({ moment, env, onClose }: Props) {
     let live = true;
     const source = strikingMode === 'card' ? null : photo.current;
     const handle = play('mint');
-    void Promise.all([handle?.finished ?? Promise.resolve(), env.render({ moment, photo: source, frame: stage.current })])
+    const banner = referralRef.current;
+    void Promise.all([handle?.finished ?? Promise.resolve(), env.render({ moment, photo: source, frame: stage.current, referral: banner })])
       .then(([, rendered]) => {
         if (!live) return;
         if (rendered === null) {
@@ -184,6 +252,7 @@ export function GamePhotoFlow({ moment, env, onClose }: Props) {
           return;
         }
         setFiles(rendered);
+        setComposedReferral(banner);
         dispatch({ type: 'composed' });
       })
       .catch(() => {
@@ -238,7 +307,20 @@ export function GamePhotoFlow({ moment, env, onClose }: Props) {
     [env, holdPhoto],
   );
 
-  const chosen = files === null ? null : files[format];
+  /* L'image qui SORT de l'appareil ne porte jamais l'emplacement du lien : elle est
+     recomposée — avec le vrai lien, ou sans bandeau — depuis les dessins du cadre
+     gardé (`artFrame`) et la même photo. */
+  const artFrame = useRef<HTMLDivElement>(null);
+  const resultMode = state.step === 'result' ? state.mode : null;
+  const recompose = useCallback(
+    (next: PhotoReferral | null) => env.render({ moment, photo: resultMode === 'card' ? null : photo.current, frame: artFrame.current, referral: next }).catch(() => null),
+    [env, moment, resultMode],
+  );
+  const outgoingFiles = useCallback(
+    async (): Promise<PhotoFiles | null> => (composedReferral?.placeholder === true ? recompose(null) : files),
+    [composedReferral, files, recompose],
+  );
+  const sharing = useRef(false);
 
   const announce = useCallback((outcome: ShareOutcome, failure: string) => {
     dispatch({ type: 'shared', outcome });
@@ -248,26 +330,57 @@ export function GamePhotoFlow({ moment, env, onClose }: Props) {
     else setNotice(null);
   }, []);
 
+  /* « Partager » : le SEUL geste qui crée un jeton, quand la carte montre
+     l'emplacement du lien. La carte est recomposée avec le vrai lien — ou sans
+     bandeau si aucun ne vient — AVANT de partir, et l'aperçu la suit. */
+  const prepareShare = useCallback(async (): Promise<{ readonly files: PhotoFiles; readonly referral: PhotoReferral | null } | null> => {
+    if (files === null) return null;
+    if (composedReferral?.placeholder !== true) return { files, referral: composedReferral };
+    const url = await (env.createReferral?.() ?? Promise.resolve(null)).catch(() => null);
+    const next = url === null ? null : referralOf(url, composedReferral.flameDays);
+    const recomposed = await recompose(next);
+    if (!alive.current || recomposed === null) return null;
+    if (next === null) setLinkUnavailable(true);
+    else setLink(url);
+    setFiles(recomposed);
+    setComposedReferral(next);
+    return { files: recomposed, referral: next };
+  }, [composedReferral, env, files, recompose]);
+
   const share = useCallback(async () => {
-    if (chosen === null) return;
-    announce(await env.share(chosen, moment.title), gameText('game.photo.notice.share_failed'));
-  }, [announce, chosen, env, moment.title]);
+    if (files === null || sharing.current) return;
+    sharing.current = true;
+    try {
+      const outgoing = await prepareShare();
+      if (outgoing === null) {
+        if (alive.current) announce('failed', gameText('game.photo.notice.share_failed'));
+        return;
+      }
+      const text = outgoing.referral === null ? undefined : referralShareText(outgoing.referral);
+      announce(await env.share(outgoing.files[format], moment.title, text), gameText('game.photo.notice.share_failed'));
+    } finally {
+      sharing.current = false;
+    }
+  }, [announce, env, files, format, moment.title, prepareShare]);
 
   const save = useCallback(async () => {
-    if (chosen === null) return;
-    announce(await env.save(chosen), gameText('game.photo.notice.save_failed'));
-  }, [announce, chosen, env]);
+    const outgoing = await outgoingFiles();
+    if (outgoing === null) return;
+    announce(await env.save(outgoing[format]), gameText('game.photo.notice.save_failed'));
+  }, [announce, env, format, outgoingFiles]);
 
   const keep = useCallback(async () => {
-    if (files === null || state.step !== 'result') return;
-    const ok = await env.notebook.keep(moment, { story: files.story, square: files.square, mode: state.mode });
+    if (state.step !== 'result') return;
+    const outgoing = await outgoingFiles();
+    if (outgoing === null) return;
+    const ok = await env.notebook.keep(moment, { story: outgoing.story, square: outgoing.square, mode: state.mode });
     dispatch({ type: 'kept', ok });
     setNotice(
       ok
         ? { tone: 'good', text: gameText('game.photo.notice.kept') }
         : { tone: 'error', text: gameText('game.photo.notice.keep_failed') },
     );
-  }, [env, files, moment, state]);
+  }, [env, moment, outgoingFiles, state]);
 
   /* Le piège de focus : Tab ne sort jamais du dialogue. */
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
@@ -324,6 +437,7 @@ export function GamePhotoFlow({ moment, env, onClose }: Props) {
             <p className="text-caption" style={{ color: GAME_INK_2 }}>
               {gameText('game.photo.private')}
             </p>
+            {options}
             <Button attr={{ 'data-photo-choice': 'selfie' }} primary onClick={() => dispatch({ type: 'selfie' })}>
               {gameText('game.photo.selfie')}
             </Button>
@@ -350,7 +464,7 @@ export function GamePhotoFlow({ moment, env, onClose }: Props) {
               <img data-photo-still="" src={stillUrl} alt="" className="absolute inset-0 size-full object-cover" style={{ transform: 'scaleX(-1)' }} />
             ) : null}
             {stageMode === 'gallery' && galleryUrl !== null ? <img src={galleryUrl} alt="" className="absolute inset-0 size-full object-cover" /> : null}
-            <GamePhotoFrame moment={moment} dateLabel={dateLabel} format="story" />
+            <GamePhotoFrame moment={moment} dateLabel={dateLabel} format="story" referral={referral} />
           </div>
         ) : null}
 
@@ -371,6 +485,10 @@ export function GamePhotoFlow({ moment, env, onClose }: Props) {
                 {gameText('game.photo.gallery.unreadable')}
               </p>
             ) : null}
+            <p className="text-caption" style={{ color: GAME_INK_2 }} data-photo-image-right="">
+              {gameText('game.photo.image_right')}
+            </p>
+            {options}
             {state.camera === 'live' ? (
               <Button attr={{ 'data-photo-shutter': '' }} primary onClick={shoot}>
                 {gameText('game.photo.shutter')}
@@ -433,6 +551,12 @@ export function GamePhotoFlow({ moment, env, onClose }: Props) {
                 {notice.text}
               </p>
             )}
+          </div>
+        ) : null}
+
+        {state.step === 'result' && composedReferral?.placeholder === true ? (
+          <div ref={artFrame} hidden data-photo-art-frame="" className="relative" style={{ aspectRatio: '9 / 16' }}>
+            <GamePhotoFrame moment={moment} dateLabel={dateLabel} format="story" referral={composedReferral} />
           </div>
         ) : null}
 

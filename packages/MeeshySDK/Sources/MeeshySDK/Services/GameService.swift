@@ -70,3 +70,135 @@ public final class GameService: GameServiceProviding, @unchecked Sendable {
         return GameErrorCode(rawValue: code)
     }
 }
+
+// MARK: - Les écritures et lectures de la vague 2 (#9384 à #9392)
+//
+// Un SECOND protocole, jamais une extension du premier : ajouter une méthode à
+// `GameServiceProviding` ferait rougir chaque double de test qui s'y conforme, et
+// la vague 2 est opt-in (un serveur antérieur ne sert pas ces routes).
+//
+// Mêmes règles que le premier lot : chaque `requestId` est généré UNE fois par
+// INTENTION ; un refus d'état (409) lève `MeeshyError.rejected`, que
+// `GameService.refusal(of:)` lit en `GameErrorCode`.
+public protocol GameWave2ServiceProviding: Sendable {
+    func setLeagueConsent(_ consent: Bool, pseudonym: String?, requestId: String) async throws -> LeagueConsentResponse
+    func setLeaguePseudonym(_ pseudonym: String, requestId: String) async throws -> LeaguePseudonymResponse
+    func fetchLeagueWeek() async throws -> LeagueWeekResponse
+    func fetchFriendsLeague() async throws -> LeagueFriendsResponse
+    func inviteToDuo(friendId: String, requestId: String) async throws -> DuoInviteResponse
+    func acceptDuo(duoId: String, requestId: String) async throws -> DuoStatusResponse
+    func abandonDuo(duoId: String, requestId: String) async throws -> DuoStatusResponse
+    func claimSeasonStep(_ step: Int, requestId: String) async throws -> SeasonClaimResponse
+    func buySeasonSeal(requestId: String) async throws -> SeasonSealResponse
+    func setShowcaseOrder(_ order: [String], requestId: String) async throws -> ShowcaseOrderResponse
+    func setVisibility(_ request: ShowcaseVisibilityRequest) async throws -> ShowcaseVisibilityResponse
+    func fetchUserShowcase(userId: String) async throws -> UserShowcaseResponse
+    func passPrestige(requestId: String) async throws -> PrestigeResponse
+    func setPrivacy(gameHidden: Bool?, friendsLeagueOptOut: Bool?, requestId: String) async throws -> GamePrivacyResponse
+}
+
+extension GameService: GameWave2ServiceProviding {
+    public func setLeagueConsent(_ consent: Bool, pseudonym: String?, requestId: String) async throws -> LeagueConsentResponse {
+        let response: APIResponse<LeagueConsentResponse> = try await api.post(
+            GameEndpoint.leagueConsent, body: LeagueConsentRequest(requestId: requestId, consent: consent, pseudonym: pseudonym))
+        return response.data
+    }
+
+    public func setLeaguePseudonym(_ pseudonym: String, requestId: String) async throws -> LeaguePseudonymResponse {
+        let response: APIResponse<LeaguePseudonymResponse> = try await api.put(
+            GameEndpoint.leaguePseudonym, body: LeaguePseudonymRequest(requestId: requestId, pseudonym: pseudonym))
+        return response.data
+    }
+
+    public func fetchLeagueWeek() async throws -> LeagueWeekResponse {
+        let response: APIResponse<LeagueWeekResponse> = try await api.request(GameEndpoint.leagueWeek)
+        return response.data
+    }
+
+    public func fetchFriendsLeague() async throws -> LeagueFriendsResponse {
+        let response: APIResponse<LeagueFriendsResponse> = try await api.request(GameEndpoint.leagueFriends)
+        return response.data
+    }
+
+    public func inviteToDuo(friendId: String, requestId: String) async throws -> DuoInviteResponse {
+        let response: APIResponse<DuoInviteResponse> = try await api.post(
+            GameEndpoint.duoInvite, body: DuoInviteRequest(requestId: requestId, friendId: friendId))
+        return response.data
+    }
+
+    public func acceptDuo(duoId: String, requestId: String) async throws -> DuoStatusResponse {
+        let response: APIResponse<DuoStatusResponse> = try await api.post(
+            GameEndpoint.duoAccept(duoId: duoId), body: GameWriteRequest(requestId: requestId))
+        return response.data
+    }
+
+    public func abandonDuo(duoId: String, requestId: String) async throws -> DuoStatusResponse {
+        let response: APIResponse<DuoStatusResponse> = try await api.post(
+            GameEndpoint.duoAbandon(duoId: duoId), body: GameWriteRequest(requestId: requestId))
+        return response.data
+    }
+
+    public func claimSeasonStep(_ step: Int, requestId: String) async throws -> SeasonClaimResponse {
+        let response: APIResponse<SeasonClaimResponse> = try await api.post(
+            GameEndpoint.seasonClaim(step: step), body: GameWriteRequest(requestId: requestId))
+        return response.data
+    }
+
+    public func buySeasonSeal(requestId: String) async throws -> SeasonSealResponse {
+        let response: APIResponse<SeasonSealResponse> = try await api.post(
+            GameEndpoint.seasonSeal, body: GameWriteRequest(requestId: requestId))
+        return response.data
+    }
+
+    public func setShowcaseOrder(_ order: [String], requestId: String) async throws -> ShowcaseOrderResponse {
+        let response: APIResponse<ShowcaseOrderResponse> = try await api.put(
+            GameEndpoint.showcaseOrder, body: ShowcaseOrderRequest(requestId: requestId, order: order))
+        return response.data
+    }
+
+    public func setVisibility(_ request: ShowcaseVisibilityRequest) async throws -> ShowcaseVisibilityResponse {
+        let response: APIResponse<ShowcaseVisibilityResponse> = try await api.put(GameEndpoint.showcaseVisibility, body: request)
+        return response.data
+    }
+
+    public func fetchUserShowcase(userId: String) async throws -> UserShowcaseResponse {
+        let response: APIResponse<UserShowcaseResponse> = try await api.request(GameEndpoint.userShowcase(userId: userId))
+        return response.data
+    }
+
+    public func passPrestige(requestId: String) async throws -> PrestigeResponse {
+        let response: APIResponse<PrestigeResponse> = try await api.post(
+            GameEndpoint.prestige, body: GameWriteRequest(requestId: requestId))
+        return response.data
+    }
+
+    public func setPrivacy(gameHidden: Bool?, friendsLeagueOptOut: Bool?, requestId: String) async throws -> GamePrivacyResponse {
+        let response: APIResponse<GamePrivacyResponse> = try await api.put(
+            GameEndpoint.privacy,
+            body: GamePrivacyRequest(requestId: requestId, gameHidden: gameHidden, friendsLeagueOptOut: friendsLeagueOptOut))
+        return response.data
+    }
+}
+
+// MARK: - Les lectures d'intégration (#9481)
+//
+// Un TROISIÈME protocole, pour la même raison que le second : ajouter une méthode à
+// `GameWave2ServiceProviding` ferait rougir chaque double de test qui s'y conforme.
+public protocol GameIntegrationServiceProviding: Sendable {
+    /// L'état des réglages du jeu (`GET /me/game/privacy`) : les interrupteurs et les quatre visibilités.
+    func fetchSettings() async throws -> GameSettingsResponse
+    /// Ce que le jeu d'un AUTRE membre montre à ce lecteur (`GET /users/:userId/game`).
+    func fetchUserGame(userId: String) async throws -> UserGameProfileResponse
+}
+
+extension GameService: GameIntegrationServiceProviding {
+    public func fetchSettings() async throws -> GameSettingsResponse {
+        let response: APIResponse<GameSettingsResponse> = try await api.request(GameEndpoint.settings)
+        return response.data
+    }
+
+    public func fetchUserGame(userId: String) async throws -> UserGameProfileResponse {
+        let response: APIResponse<UserGameProfileResponse> = try await api.request(GameEndpoint.userGame(userId: userId))
+        return response.data
+    }
+}

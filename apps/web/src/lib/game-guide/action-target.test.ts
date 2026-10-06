@@ -60,3 +60,12 @@ describe('les destinations', () => {
     expect(guideActionTarget('take-start-photo')).toEqual({ kind: 'photo' });
   });
 });
+
+describe('les destinations de la vague 2 (#9481)', () => {
+  test('chaque nouveau bouton mène à sa page', () => {
+    expect(guideActionTarget('see-league')).toEqual({ kind: 'route', to: 'progressionLigue' });
+    expect(guideActionTarget('see-season')).toEqual({ kind: 'route', to: 'progressionSaison' });
+    expect(guideActionTarget('see-trophies')).toEqual({ kind: 'route', to: 'progressionVitrine' });
+    expect(guideActionTarget('see-atlas')).toEqual({ kind: 'route', to: 'progressionAtlas' });
+  });
+});

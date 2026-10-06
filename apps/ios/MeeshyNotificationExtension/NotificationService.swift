@@ -789,7 +789,9 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
         "comment_like", "comment_reply", "comment_reaction",
         "story_new_comment", "story_thread_reply", "friend_story_comment",
         "friend_new_story", "friend_new_post", "friend_new_mood",
-        "friend_request", "contact_request", "contact_joined", "contact_recently_active"
+        "friend_request", "contact_request", "contact_joined", "contact_recently_active",
+        // Le jeu (#9490) : un duo vient d'un ami, dont l'avatar dit QUI. La ligue et la saison n'ont pas d'acteur.
+        "game_duo_invited", "game_duo_accepted"
     ]
 
     /// Creates an `INSendMessageIntent` and returns updated notification content

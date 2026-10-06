@@ -55,6 +55,7 @@ const preferencesOf = (overrides: Partial<AppPreferences> = {}): AppPreferences 
   acceptCallsFromNonContacts: true,
   notifyContactsOnReturn: true,
   contactActivityEnabled: true,
+  gameEnabled: true,
   ...overrides,
 });
 
@@ -457,6 +458,12 @@ describe('les réglages ne mènent plus au legacy', () => {
 describe('les outils', () => {
   test('la progression mène à son écran', () => {
     expect(linkTo(dom(<ToolsSection language="fr" />), '/me/progression')?.textContent).toContain('Progression');
+  });
+
+  test('les réglages du jeu (#9481) ont leur rangée, juste sous Progression', () => {
+    const rows = [...dom(<ToolsSection language="fr" />).querySelectorAll('a[href]')].map((a) => a.getAttribute('href'));
+    expect(linkTo(dom(<ToolsSection language="fr" />), '/me/progression/reglages')?.textContent).toContain('Jeu');
+    expect(rows.indexOf('/me/progression/reglages')).toBe(rows.indexOf('/me/progression') + 1);
   });
 
   /**

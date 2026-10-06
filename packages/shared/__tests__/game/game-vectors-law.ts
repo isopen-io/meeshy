@@ -40,8 +40,9 @@ import {
   type MissionSignal,
 } from '../../utils/game/missions.js';
 import { treasuryTier } from '../../utils/game/treasury.js';
+import { GAME_VECTOR_LAWS_V2, buildGameVectorsV2, evaluateGameVectorV2, isGameVectorInputV2, type GameVectorInputV2 } from './game-vectors-law-v2.js';
 
-export type GameVectorInput =
+export type GameVectorInputV1 =
   | { readonly law: 'level'; readonly score: number }
   | { readonly law: 'level-record'; readonly level: number; readonly previousRecord: number | null; readonly prestige: number }
   | { readonly law: 'mint-price'; readonly n: number }
@@ -93,10 +94,18 @@ export type GameVectorInput =
   | { readonly law: 'chest'; readonly userId: string; readonly dayKey: string }
   | { readonly law: 'guide'; readonly event: GuideEvent; readonly seen: readonly string[] };
 
+/** La vague 1 puis la vague 2 : un seul fichier de vecteurs, une seule table de lois. */
+export type GameVectorInput = GameVectorInputV1 | GameVectorInputV2;
+
 const round6 = (value: number): number => Math.round(value * 1e6) / 1e6;
 
 /** La sortie de la loi pour une entrée : c'est elle que le fichier fige et qu'iOS rejoue. */
 export function evaluateGameVector(input: GameVectorInput): unknown {
+  if (isGameVectorInputV2(input)) return evaluateGameVectorV2(input);
+  return evaluateGameVectorV1(input);
+}
+
+function evaluateGameVectorV1(input: GameVectorInputV1): unknown {
   switch (input.law) {
     case 'level': {
       const p = levelProgress(input.score);
@@ -398,14 +407,17 @@ export function buildGameVectors() {
     ...rerolls,
     ...chests,
     ...guides,
+    ...buildGameVectorsV2(),
   ];
 }
 
+export { GAME_VECTOR_LAWS_V2 };
+
 export const GAME_VECTORS_FORMAT = {
   input:
-    "{ law, ...paramètres } — `law` nomme la loi du Jeu Meeshy (level, level-record, mint-price, mint-preview, glory-standing, glory-gain, treasury, flame-form, flame-advance, flame-status, flame-relight, tailwind, prism-hour, mission-objective, mission-reward, rng, missions-draw, mission-reroll, chest, guide). Les jours sont des clés AAAA-MM-JJ ; le jour, le fuseau et la graine sont des paramètres.",
+    "{ law, ...paramètres } — `law` nomme la loi du Jeu Meeshy (level, level-record, mint-price, mint-preview, glory-standing, glory-gain, treasury, flame-form, flame-advance, flame-status, flame-relight, tailwind, prism-hour, mission-objective, mission-reward, rng, missions-draw, mission-reroll, chest, guide, puis — vague 2, #9384 à #9392 — league-week, league-week-points, league-access, league-pseudonym, league-pseudonym-draw, league-pseudonym-check, league-snapshot, league-groups, league-settle, league-friends, league-visibility, duo-draw, duo-progress, duo-reward, duo-invite, duo-transition, season-calendar, season-at, season-progress, season-reward, season-claim, season-settlement, season-stars, season-seal, trophy-key, trophy-parse, trophy-flame, showcase-order, showcase-view, showcase-cap, trophy-month, atlas, atlas-language, prestige, rarity, rarity-display, mythic, badge-tier, badge-served, guide-v2, guide-choose, photo-moment). Les jours sont des clés AAAA-MM-JJ ; le jour, le fuseau et la graine sont des paramètres.",
   expected:
-    'La sortie de la loi TS (packages/shared/utils/game/*) : level → {level, tier, floorScore, nextThreshold, pointsToNext, progress, isMax} ; mint-price → {price, edition} ; glory-standing → {rank, division, …} ; flame-* → la transition ou la décision ; rng → {seed FNV-1a 32 bits de « userId|jour|sel », 5 tirages mulberry32} ; missions-draw → {dayKey, prismDay, missions[]} ; guide → le moment. Les fractions sont arrondies à 1e-6 et comparées à 1e-4.',
+    'La sortie de la loi TS (packages/shared/utils/game/*) : level → {level, tier, floorScore, nextThreshold, pointsToNext, progress, isMax} ; mint-price → {price, edition} ; glory-standing → {rank, division, …} ; flame-* → la transition ou la décision ; rng → {seed FNV-1a 32 bits de « userId|jour|sel », 5 tirages mulberry32} ; missions-draw → {dayKey, prismDay, missions[]} ; guide → le moment ; league-groups → {groups:[{groupId, memberIds}]} ; league-settle → {settled:[{userId, weekPoints, rank, zone, cup, outcome}], pointsToPromotion} ; season-calendar → le calendrier ; atlas → le résumé et les entrées ; rarity → {rarity, measured, border, glory} ; guide-v2 / guide-choose / photo-moment → le moment, la carte choisie, l\'emblème. Les fractions sont arrondies à 1e-6 et comparées à 1e-4.',
   provenance:
-    "Contrat cross-plateforme de la loi du Jeu Meeshy (#9373). TS le produit (__tests__/game/game-vectors-law.ts) et le rejoue (__tests__/vectors/game.vectors.test.ts) ; iOS le rejoue (GameLawVectorTests). Sur divergence, c'est le TS qui a raison — le miroir bouge, jamais le vecteur sans lui. Régénérer : UPDATE_GAME_VECTORS=1 npx vitest run __tests__/vectors/game.vectors.test.ts.",
+    "Contrat cross-plateforme de la loi du Jeu Meeshy (#9373, vague 2 #9384 à #9392 : les cas de la vague 2 viennent APRÈS ceux de la vague 1, jamais mêlés). TS le produit (__tests__/game/game-vectors-law.ts) et le rejoue (__tests__/vectors/game.vectors.test.ts) ; iOS le rejoue (GameLawVectorTests). Sur divergence, c'est le TS qui a raison — le miroir bouge, jamais le vecteur sans lui. Régénérer : UPDATE_GAME_VECTORS=1 npx vitest run __tests__/vectors/game.vectors.test.ts.",
 } as const;

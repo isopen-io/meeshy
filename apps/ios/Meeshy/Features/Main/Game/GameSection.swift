@@ -22,34 +22,67 @@ struct GameSection: View {
     let onScrollTo: (GameAnchor) -> Void
     let onOpenConversations: () -> Void
     let onOpenBadges: () -> Void
-    let onOpenRules: () -> Void
+    /// Le carnet des règles, ouvert à la règle donnée (`nil` ⇒ en haut).
+    let onOpenRules: (Int?) -> Void
     let onOpenNotebook: () -> Void
+    /// Une page du jeu (ligue, saison, vitrine, Atlas, Prestige, réglages) — la vague 2 (#9481).
+    let onOpenPage: (GamePage) -> Void
+
+    @State private var showsFullGuide = false
+    /// « Jeu masqué » et « Célébrations » : deux commodités PAR APPAREIL (#9481).
+    @ObservedObject private var prefs = GameDevicePrefsStore.current()
 
     private var theme: ThemeManager { ThemeManager.shared }
 
     private var cardPhoto: PhotoMoment? {
         guard let card = guide.card, card.photo else { return nil }
+        if let moment = card.photoMoment { return moment }
         guard let key = GuideMomentKey(rawValue: card.key) else { return nil }
         return GamePhotoMoments.fromCard(key: key, game: game)
     }
 
+    private var celebrates: Bool { prefs.prefs.celebrations }
+
     var body: some View {
+        if prefs.prefs.hidden {
+            GameHiddenCard(onSettings: { onOpenPage(.settings) })
+        } else {
+            shown
+        }
+    }
+
+    private var shown: some View {
         VStack(spacing: MeeshySpacing.xl) {
-            guideCard
-            ForEach(photos.offers.filter { $0.id != cardPhoto?.id }) { offer in
+            if celebrates { guideCard }
+            ForEach(celebrates ? photos.offers.filter { $0.id != cardPhoto?.id } : []) { offer in
                 GamePhotoOfferView(moment: offer, onStart: { photos.start($0) }, onLater: { photos.later($0) })
             }
-            GameGaugesView(game: game, settled: viewModel.isSettled)
+            // LE HÉRO (#5841) : où j'en suis, comment je gagne — pleine largeur, court (#9537).
+            // Mee se pose dans son coin avec la ligne COURTE du guide ; la version complète s'ouvre au toucher.
+            GameHeroView(
+                game: game,
+                cornerFigure: celebrates && cornerLine != nil ? cornerFigure : nil,
+                cornerLine: celebrates ? cornerLine : nil,
+                settled: viewModel.isSettled,
+                onOpenRule: { onOpenRules($0) },
+                onOpenGuide: { showsFullGuide = true }
+            )
+            GameGaugesView(game: game)
             GameMissionsView(
                 game: game, online: viewModel.isOnline, pendingRerollId: viewModel.pending.rerollMissionId,
                 chestOpening: viewModel.pending.chest, errors: viewModel.gameErrors,
                 onReroll: { id in Task { await viewModel.reroll(missionId: id) } },
                 onClaim: { Task { await viewModel.claimChest() } }
             )
+            // Le DÉTAIL DE LIGUE se lit AVANT la frappe (#9541) : la ligue est ce qui se joue cette semaine, la
+            // frappe est le geste qui coûte. Sans ligue ouverte ni groupe, rien — la porte plus bas dit pourquoi.
+            if let league = GameLeagueDetailCard.make(league: game.league, onOpen: { onOpenPage(.league) }) { league }
+            // LE héro de frappe — le SEUL de l'écran (#9537).
             GameMintPreviewView(
                 game: game, badgesLost: viewModel.mintBadgeImpact?.lost, online: viewModel.isOnline,
                 minting: viewModel.isMinting, error: viewModel.mintError,
-                celebration: viewModel.celebration, onMint: { Task { await viewModel.mint() } }
+                celebration: viewModel.celebration, onMint: { Task { await viewModel.mint() } },
+                onOpenRule: { onOpenRules(GameHero.mintRule) }
             )
             GameBadgeShelfView(items: viewModel.progress.map(GameBadges.items(for:)) ?? [])
             GameFlamePanelView(
@@ -58,19 +91,49 @@ struct GameSection: View {
                 onBuyFreeze: { Task { await viewModel.buyFreeze() } },
                 onRelight: { Task { await viewModel.relight() } }
             )
-            door(String(localized: "game.door.rules", defaultValue: "Comment ça marche", bundle: .main), symbol: "questionmark.circle", id: "game.door.rules", action: onOpenRules)
+            GameDoorsView(game: game, onOpen: onOpenPage)
+            door(String(localized: "game.door.rules", defaultValue: "Comment ça marche", bundle: .main), symbol: "questionmark.circle", id: "game.door.rules", action: { onOpenRules(nil) })
+            door(GameText.doorSettings, symbol: "gearshape", id: "game.door.settings", action: { onOpenPage(.settings) })
             door(String(localized: "game.door.notebook", defaultValue: "Carnet de progression", bundle: .main), symbol: "book.closed", id: "game.door.notebook", action: onOpenNotebook)
         }
         .fullScreenCover(item: Binding(get: { photos.active }, set: { if $0 == nil { photos.close() } })) { session in
             GamePhotoFlowView(session: session) { photos.close() }
         }
+        .sheet(isPresented: $showsFullGuide) { fullGuide }
     }
 
     // MARK: - Le guide
 
+    /// La ligne COURTE que Mee dit dans le coin du héro ; `nil` quand la carte doit s'afficher en entier.
+    private var cornerLine: String? { GameHero.cornerLine(for: guide.card) }
+
+    private var cornerFigure: String {
+        guide.card.flatMap { GameGuideCard.figures(speaker: $0.speaker, mood: $0.mood).meeFilmID } ?? "mee-sourire"
+    }
+
+    /// La version complète, ouverte par un toucher sur Mee : mêmes boutons que la carte.
+    @ViewBuilder
+    private var fullGuide: some View {
+        if let card = guide.card {
+            ScrollView {
+                GameGuideCardView(
+                    card: card.presenting(.full),
+                    onAction: { showsFullGuide = false; act(on: card) },
+                    onDismiss: { showsFullGuide = false; guide.dismiss() },
+                    onSkipAll: nil,
+                    onPhoto: cardPhoto.map { moment in { showsFullGuide = false; photos.start(moment) } }
+                )
+                .padding(MeeshySpacing.lg)
+            }
+            .background(theme.backgroundGradient.ignoresSafeArea())
+        }
+    }
+
+    /// La carte entière : première fois, étape d'intégration. Quand le coin du héro dit la ligne
+    /// courte, la carte ne se répète pas au-dessus.
     @ViewBuilder
     private var guideCard: some View {
-        if let card = guide.card {
+        if let card = guide.card, cornerLine == nil {
             GameGuideCardView(
                 card: card,
                 onAction: { act(on: card) },
@@ -85,6 +148,11 @@ struct GameSection: View {
     /// Le bouton d'une carte mène où la loi le dit (`GameGuideTarget`) : défiler jusqu'à
     /// la carte visée, ouvrir une autre page, ou ouvrir la photo.
     private func act(on card: GuideCard) {
+        if let page = card.wave2Page {
+            guide.dismiss()
+            onOpenPage(page)
+            return
+        }
         let target = GameGuideTarget.target(for: card.action)
         let moment: PhotoMoment? = card.action == .takeStartPhoto ? GamePhotoMoments.start() : cardPhoto
         guide.dismiss()

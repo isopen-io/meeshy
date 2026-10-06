@@ -27,7 +27,7 @@
  *     `PUSH_ROUTE_PATTERNS` doit être, au caractère, celui que
  *     `route-table.tsx` déclare pour la même clé. Une route renommée ou
  *     déplacée dans l'application rougit ici.
- *  2. **Le jumeau contre le RÉSOLVEUR.** Les sept tables de types de
+ *  2. **Le jumeau contre le RÉSOLVEUR.** Les neuf tables de types de
  *     `target.ts` (et les deux paramètres de recherche de `discover/view.ts`)
  *     doivent être identiques dans le worker. Un type ajouté d'un seul côté
  *     rougit ici.
@@ -54,13 +54,15 @@ import { fileURLToPath } from 'node:url';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const APP = join(HERE, '..');
 
-/** Les sept tables de types du résolveur, plus la liste des routes qu'un indice serveur peut nommer. */
+/** Les neuf tables de types du résolveur, plus la liste des routes qu'un indice serveur peut nommer. */
 const TABLES = [
   'EPHEMERAL_ENTITIES',
   'EPHEMERAL_ONLY_TYPES',
   'REQUEST_TYPES',
   'PROFILE_TYPES',
   'PROGRESSION_TYPES',
+  'GAME_LEAGUE_TYPES',
+  'GAME_SEASON_TYPES',
   'SECURITY_TYPES',
   'HINTED_ROUTES',
 ];
@@ -131,6 +133,9 @@ const ADRESSES = [
   [{ type: 'contact_recently_active', senderUsername: 'marie' }, '/u/marie'],
   [{ type: 'login_new_device' }, '/settings'],
   [{ type: 'badge_earned' }, '/me/progression'],
+  [{ type: 'game_duo_invited', route: 'progression' }, '/me/progression/ligue'],
+  [{ type: 'game_league_result', route: 'progression' }, '/me/progression/ligue'],
+  [{ type: 'game_season_step', route: 'progression' }, '/me/progression/saison'],
   [{ type: 'un_type_sans_ecran' }, '/notifications'],
 ];
 

@@ -54,7 +54,13 @@ final class SceneObjectFieldCensusTests: XCTestCase {
     /// objet posé (le filtre de slide reste celui du fond). À la question du
     /// témoin : le gateway le valide (`StoryMediaObjectSchema.filter`) ; le web
     /// le reçoit au lot 7 web (#8474, en cours) ; Android natif est gelé.
-    private static let recensementEcrit = 122
+    ///
+    /// **123 depuis #9175** — `StoryMediaObject.adjustments`, les réglages
+    /// d'une image posée. À la question du témoin : il est EXERCÉ par
+    /// `CanvasV3ExhaustivityTests` (peuplé, aller-retour v1 et v3) ; le gateway
+    /// le borne (`StoryMediaObjectSchema.adjustments`) ; le web ne le peint pas
+    /// encore (suivi à ouvrir) ; Android natif est gelé.
+    private static let recensementEcrit = 123
 
     private func champs<T>(_ instance: T) -> Int {
         Mirror(reflecting: instance).children.count

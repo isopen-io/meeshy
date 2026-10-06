@@ -94,11 +94,13 @@ final class ProgressionViewModel: ObservableObject {
     private(set) lazy var guide = GameGuideSession(
         service: gameService,
         visits: UserDefaultsGameVisitStore(userId: userId),
-        onSeen: { [weak self] keys in self?.markGuideSeenLocally(keys) }
+        onSeen: { [weak self] keys in self?.markGuideSeenLocally(keys) },
+        memory: UserDefaultsGuideSnapshotStore(userId: userId)
     )
     /// Les propositions de photo (#9382) et le déroulé ouvert.
-    private(set) lazy var photos = GamePhotoCoordinator(notebook: notebook) { [notebook] moment in
-        GamePhotoSession(moment: moment, notebook: notebook)
+    private(set) lazy var photos = GamePhotoCoordinator(notebook: notebook) { [notebook, weak self] moment in
+        // La Flamme du bandeau de parrainage (#7742) : celle que la lecture courante sert, quand elle brûle.
+        GamePhotoSession(moment: moment, notebook: notebook, flame: self?.game.flatMap { ReferralCard.Flame(game: $0.flame) })
     }
     let notebook: GamePhotoNotebooking
 
@@ -317,6 +319,9 @@ final class ProgressionViewModel: ObservableObject {
         Task {
             let store = await CacheCoordinator.shared.engagementProgress
             try? await store.save([snapshot], for: key)
+            // La bannière du joueur (#9494) relit ce cache : elle montre le niveau, les Meeshes et la Flamme que
+            // Progression vient d'écrire, sans attendre une revalidation.
+            NotificationCenter.default.post(name: .engagementSnapshotPersisted, object: nil)
         }
     }
 }

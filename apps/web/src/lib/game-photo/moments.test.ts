@@ -4,13 +4,15 @@ import { resolveEngagementProgress } from '@meeshy/shared/utils/engagement-progr
 
 import type { EngagementWithGame } from '@/lib/api/engagement';
 import { ENGAGEMENT_PROGRESS_FIXTURE } from '@/lib/api/engagement-fixture';
-import { gameBlockFixture } from '@/lib/api/game-fixture';
+import { gameBlockFixture, gameBlockWithExtrasFixture } from '@/lib/api/game-fixture';
 
 import {
+  achievementMoment,
   flameMoment,
   levelHundredMoment,
   meeshMoment,
   photoMomentFromCard,
+  photoMomentOfEmblemV2,
   photoMomentsOfTransition,
   rankMoment,
   startMoment,
@@ -34,6 +36,30 @@ const gameOf = (v: EngagementWithGame) => {
   if (v.game === undefined) throw new Error('bloc game attendu');
   return v.game;
 };
+
+describe('un succès révélé se photographie (#7742)', () => {
+  test('le moment porte la clé du succès, son titre dans la langue du lecteur et un kicker', () => {
+    const moment = achievementMoment('achievement.first_voice');
+    expect(moment.id).toBe('achievement:achievement.first_voice');
+    expect(moment.emblem).toEqual({ kind: 'achievement', key: 'achievement.first_voice' });
+    expect(moment.kicker).toBe('Succès débloqué');
+    expect(moment.title.length).toBeGreaterThan(0);
+    expect(moment.title).not.toBe(moment.kicker);
+  });
+
+  test('un succès dont la rareté est mesurée la dit dans la ligne du dessus, sans changer d’identité', () => {
+    const moment = achievementMoment('achievement.first_voice', 'epic');
+    expect(moment.emblem).toEqual({ kind: 'achievement', key: 'achievement.first_voice', rarity: 'epic' });
+    expect(moment.kicker).toBe('Succès débloqué · Épique');
+    expect(moment.id).toBe(achievementMoment('achievement.first_voice').id);
+    expect(achievementMoment('achievement.first_voice', null).emblem).toEqual({ kind: 'achievement', key: 'achievement.first_voice' });
+  });
+
+  test('deux succès sont deux moments, un même succès toujours le même', () => {
+    expect(achievementMoment('achievement.editor').id).not.toBe(achievementMoment('achievement.first_voice').id);
+    expect(achievementMoment('achievement.editor')).toEqual(achievementMoment('achievement.editor'));
+  });
+});
 
 describe('chaque moment porte son identité, son emblème et ses mots', () => {
   test('le départ', () => {
@@ -155,5 +181,58 @@ describe('photoMomentsOfTransition — ce qui se propose APRÈS la célébration
     const legacy = resolveEngagementProgress(ENGAGEMENT_PROGRESS_FIXTURE);
     expect(photoMomentsOfTransition(legacy, view())).toEqual([]);
     expect(gameOf(view()).level.level).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * LES MOMENTS PHOTO DE LA VAGUE 2 (#9481) — trophée, montée de ligue, saison
+ * terminée, Prestige : les quatre que la loi range parmi les photos
+ * (`photoMomentOfGuideEvent`). Une première ligue, une descente, une saison
+ * inachevée et un tampon ne se photographient pas.
+ */
+describe('les moments photo de la vague 2', () => {
+  const base = (): EngagementWithGame => ({ ...resolveEngagementProgress(ENGAGEMENT_PROGRESS_FIXTURE), game: gameBlockWithExtrasFixture() });
+  const onGame = (patch: (game: NonNullable<EngagementWithGame['game']>) => NonNullable<EngagementWithGame['game']>): EngagementWithGame => {
+    const v = base();
+    return v.game === undefined ? v : { ...v, game: patch(v.game) };
+  };
+
+  test('un trophée : l’identité de la loi, la coupe nommée, la ligne « Nouveau trophée »', () => {
+    const moment = photoMomentOfEmblemV2({ kind: 'trophy', trophyKey: 'trophy.league-cup.2026-10-26.jade.gold' });
+    expect(moment.id).toBe('trophy:trophy.league-cup.2026-10-26.jade.gold');
+    expect(moment.kicker).toBe('Nouveau trophée');
+    expect(moment.title).toBe('Coupe d’or — ligue Jade, semaine du 26 octobre');
+  });
+
+  test('une montée de ligue, une saison, un Prestige', () => {
+    expect(photoMomentOfEmblemV2({ kind: 'league-up', league: 'saphir', weekKey: '2026-11-09' })).toMatchObject({ id: 'league-up:2026-11-09:saphir', kicker: 'Montée de ligue', title: 'Ligue Saphir' });
+    expect(photoMomentOfEmblemV2({ kind: 'season', season: 1 })).toMatchObject({ id: 'season:1', kicker: 'Saison terminée', title: 'Saison 1' });
+    expect(photoMomentOfEmblemV2({ kind: 'prestige', number: 2 })).toMatchObject({ id: 'prestige:2', kicker: 'Nouveau Prestige', title: 'Prestige 2' });
+  });
+
+  test('un trophée reçu pendant que l’écran est ouvert se propose', () => {
+    const next = onGame((g) => (g.trophies === undefined ? g : { ...g, trophies: { items: [...g.trophies.items, { key: 'trophy.season-cup.1', awardedAt: '2026-11-09T10:00:00.000Z' }], order: g.trophies.order } }));
+    expect(photoMomentsOfTransition(base(), next).map((m) => m.id)).toEqual(['trophy:trophy.season-cup.1']);
+  });
+
+  test('un tampon d’Atlas ne se photographie pas', () => {
+    const next = onGame((g) => (g.atlas === undefined ? g : { ...g, atlas: { ...g.atlas, stamped: 5, stamps: [...g.atlas.stamps, { language: 'ja', stampedOn: '2026-11-09' }] } }));
+    expect(photoMomentsOfTransition(base(), next)).toEqual([]);
+  });
+
+  test('un Prestige ne se propose QU’UNE fois : la carte du trophée remplace celle du niveau 100', () => {
+    const next = onGame((g) => ({ ...g, level: { ...g.level, prestige: g.level.prestige + 1 } }));
+    expect(photoMomentsOfTransition(base(), next).map((m) => m.id)).toEqual(['prestige:1']);
+  });
+
+  test('le Prestige se lit du niveau (vague 1) : un ancien serveur le célèbre aussi, par la carte du trophée', () => {
+    const before = view();
+    const next: EngagementWithGame = before.game === undefined ? before : { ...before, game: { ...before.game, level: { ...before.game.level, prestige: before.game.level.prestige + 1 } } };
+    expect(photoMomentsOfTransition(before, next).map((m) => m.id)).toEqual(['prestige:1']);
+  });
+
+  test('une entrée du carnet écrite hier se relit dans la langue d’aujourd’hui : le titre se déduit de l’emblème', () => {
+    const moment = photoMomentOfEmblemV2({ kind: 'prestige', number: 3 });
+    expect(moment.emblem).toEqual({ kind: 'prestige', number: 3 });
   });
 });

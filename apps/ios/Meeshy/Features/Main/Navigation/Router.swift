@@ -76,11 +76,15 @@ enum Route: Hashable {
     /// le web.
     case progressionSection(ProgressionSection)
     /// « Comment ça marche » (#9379) — les huit règles du jeu et les sept cartes
-    /// de l'intégration, la page que Mee et Meo rouvrent.
-    case progressionRules
+    /// de l'intégration, la page que Mee et Meo rouvrent. `rule` : la règle (1 à 8) à
+    /// laquelle la page s'ouvre — « Comment gagner » du héro (#5841) mène à la première.
+    case progressionRules(rule: Int? = nil)
     /// Le carnet de progression (#9382) — les photos des grands moments, sur
     /// l'appareil.
     case progressionNotebook
+    /// Une page de la vague 2 du jeu (#9481) — Ligue, Saison, Vitrine, Atlas, Prestige, Réglages. Poussée dans la
+    /// pile comme les autres pages du jeu, jamais présentée en feuille.
+    case gamePage(GamePage)
     case links
     case affiliate
     case trackingLinks
@@ -178,6 +182,8 @@ extension Route {
             return String(localized: "game.rules.page_title", defaultValue: "Comment ça marche", bundle: .main)
         case .progressionNotebook:
             return String(localized: "game.notebook.page_title", defaultValue: "Carnet de progression", bundle: .main)
+        case .gamePage(let page):
+            return page.title
         case .links:
             return String(localized: "route.title.links", defaultValue: "Liens", bundle: .main)
         case .affiliate:
@@ -361,6 +367,17 @@ final class Router: ObservableObject {
         guard let palier = pendingEngagementReveal else { return nil }
         pendingEngagementReveal = nil
         return palier
+    }
+
+    /// L'endroit de Progression où le toucher d'une notification de mission pose le regard (#9539) : la section Héro
+    /// des missions. Posé AVANT l'ouverture de Progression, ramassé UNE fois quand le jeu est à l'écran.
+    @Published var pendingGameAnchor: GameAnchor?
+
+    /// Ramasse l'ancre demandée, UNE fois — même site unique de remise à plat que le palier à célébrer.
+    func consumePendingGameAnchor() -> GameAnchor? {
+        guard let anchor = pendingGameAnchor else { return nil }
+        pendingGameAnchor = nil
+        return anchor
     }
 
     /// Ramasse la demande de composeur de flux, UNE fois.

@@ -169,3 +169,50 @@ describe('sharePhoto et savePhoto', () => {
     expect(await savePhoto(file, { nav: noNav, host: {}, saver: null })).toBe('failed');
   });
 });
+
+/**
+ * LE LIEN VOYAGE AUSSI EN TEXTE (#7742) — la carte porte le lien de parrainage
+ * dans son bandeau, et le partage le redit en texte : l'image se recadre, se
+ * rogne, se capture ; le lien, lui, se touche.
+ */
+describe('le lien de parrainage accompagne l’image', () => {
+  const noNav = {};
+
+  test('le navigateur reçoit le texte avec le fichier et le titre', async () => {
+    const shared: ShareData[] = [];
+    const nav = { canShare: () => true, share: async (data: ShareData) => void shared.push(data) };
+    const outcome = await sharePhoto(file, 'Voix II', { nav, host: {}, saver: null }, 'Rejoins-moi sur Meeshy : https://meeshy.me/signup/affiliate/abc');
+    expect(outcome).toBe('shared');
+    expect(shared[0]?.text).toBe('Rejoins-moi sur Meeshy : https://meeshy.me/signup/affiliate/abc');
+    expect(shared[0]?.files).toEqual([file]);
+    expect(shared[0]?.title).toBe('Voix II');
+  });
+
+  test('la question « le système sait-il partager ? » porte le même contenu que le partage', async () => {
+    const asked: ShareData[] = [];
+    const nav = { canShare: (data: ShareData) => (asked.push(data), true), share: async () => undefined };
+    await sharePhoto(file, 'x', { nav, host: {}, saver: null }, 'le lien');
+    expect(asked[0]?.text).toBe('le lien');
+  });
+
+  test('sans lien, aucun champ texte ne part', async () => {
+    const shared: ShareData[] = [];
+    const nav = { canShare: () => true, share: async (data: ShareData) => void shared.push(data) };
+    await sharePhoto(file, 'x', { nav, host: {}, saver: null });
+    expect('text' in (shared[0] ?? {})).toBe(false);
+  });
+
+  test('la porte de l’hôte reçoit aussi le texte', async () => {
+    const received: { files: readonly File[]; text?: string }[] = [];
+    const host = { canShareFiles: () => true, shareFiles: async (data: { files: readonly File[]; text?: string }) => void received.push(data) };
+    expect(await sharePhoto(file, 'x', { nav: noNav, host, saver: null }, 'le lien')).toBe('shared');
+    expect(received[0]?.text).toBe('le lien');
+  });
+
+  test('un texte vide n’est pas un texte', async () => {
+    const shared: ShareData[] = [];
+    const nav = { canShare: () => true, share: async (data: ShareData) => void shared.push(data) };
+    await sharePhoto(file, 'x', { nav, host: {}, saver: null }, '');
+    expect('text' in (shared[0] ?? {})).toBe(false);
+  });
+});

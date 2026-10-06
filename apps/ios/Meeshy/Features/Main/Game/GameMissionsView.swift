@@ -56,8 +56,22 @@ struct GameMissionsView: View {
                 ForEach(missions.items) { mission in
                     GameMissionRow(
                         mission: mission,
+                        window: GameMissionWindow(start: nil, end: GameMissionClock.endOfDay(missions.dayKey)),
+                        personal: false,
                         canReroll: missions.rerollAvailable,
                         pending: pendingRerollId == mission.id,
+                        online: online,
+                        held: game.treasury.held,
+                        onReroll: onReroll
+                    )
+                }
+                if let personal = missions.personal {
+                    GameMissionRow(
+                        mission: personal.mission,
+                        window: GameMissionWindow(start: personal.startsAtDate, end: personal.endsAtDate),
+                        personal: true,
+                        canReroll: false,
+                        pending: false,
                         online: online,
                         held: game.treasury.held,
                         onReroll: onReroll
@@ -80,8 +94,22 @@ struct GameMissionsView: View {
     }
 }
 
+/// La plage d'une carte : celle de la mission personnelle (deux heures), ou la fin du jour local pour les trois du jour.
+/// Sans fin lisible, la carte n'a pas de minuteur (#9539).
+struct GameMissionWindow: Equatable {
+    let start: Date?
+    let end: Date?
+
+    func phase(completed: Bool, now: Date) -> GameMissionClock.Phase? {
+        guard let end else { return nil }
+        return GameMissionClock.phase(start: start, end: end, completed: completed, now: now)
+    }
+}
+
 private struct GameMissionRow: View {
     let mission: GameBlock.Mission
+    let window: GameMissionWindow
+    let personal: Bool
     let canReroll: Bool
     let pending: Bool
     let online: Bool
@@ -92,15 +120,34 @@ private struct GameMissionRow: View {
     private var done: Bool { mission.isCompleted }
     private var title: String { GameCopy.missionTitle(templateKey: mission.templateKey, target: mission.target) }
 
+    /// Le minuteur est CALME (heures et minutes) : un rafraîchissement par minute tant qu'il reste plus d'une heure, puis
+    /// plus serré ; une plage passée ne bat plus qu'à l'heure.
+    private var tick: TimeInterval {
+        guard let end = window.end else { return 3600 }
+        let remaining = end.timeIntervalSinceNow
+        return remaining > 0 ? GameMissionClock.refreshInterval(remaining: remaining) : 3600
+    }
+
     var body: some View {
+        TimelineView(.periodic(from: Date(), by: tick)) { context in
+            card(phase: window.phase(completed: done, now: context.date))
+        }
+    }
+
+    private func card(phase: GameMissionClock.Phase?) -> some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
             HStack(spacing: MeeshySpacing.xs) {
+                if personal {
+                    GameChip(text: GameCopy.personalMissionName, tint: MeeshyColors.indigo500)
+                }
                 GameChip(text: GameCopy.difficultyName(mission.difficulty),
                          tint: mission.difficulty == .gold ? MeeshyColors.warning : MeeshyColors.brandPrimary)
                 if mission.prism {
                     GameChip(text: String(localized: "game.mission.prism", defaultValue: "Prisme", bundle: .main))
                 }
-                if done {
+                if let ending = GameCopy.missionEnding(phase) {
+                    GameChip(text: ending.text, tint: ending.isSuccess ? MeeshyColors.success : MeeshyColors.warning)
+                } else if done {
                     GameChip(text: String(localized: "game.mission.done", defaultValue: "Faite", bundle: .main), tint: MeeshyColors.success)
                 }
             }
@@ -119,9 +166,22 @@ private struct GameMissionRow: View {
                     .foregroundColor(theme.textMuted)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)
-                if canReroll && !done {
+                if canReroll && !done && (phase?.allowsAction ?? true) {
                     rerollButton
                 }
+            }
+            if let line = GameCopy.missionTimerLine(phase, window: personal ? window : nil) {
+                Label {
+                    Text(line)
+                        .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
+                        .foregroundColor(theme.textMuted)
+                        .fixedSize(horizontal: false, vertical: true)
+                } icon: {
+                    Image(systemName: "timer")
+                        .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
+                        .foregroundColor(theme.textMuted)
+                }
+                .accessibilityIdentifier("game.mission.timer")
             }
         }
         .padding(MeeshySpacing.md)

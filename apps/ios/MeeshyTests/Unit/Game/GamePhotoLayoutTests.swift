@@ -43,4 +43,40 @@ final class GamePhotoLayoutTests: XCTestCase {
             XCTAssertEqual(GamePhotoLayout.layout(format).emblem.midX, format.size.width / 2, accuracy: 0.001)
         }
     }
+
+    // MARK: - Le bandeau de parrainage (#7742)
+
+    func test_withoutALink_thereIsNoBanner() {
+        for format in PhotoFormat.allCases {
+            XCTAssertNil(GamePhotoLayout.layout(format).banner)
+        }
+    }
+
+    func test_theBanner_sitsAtTheBottom_insideTheImage_andAboveNothingElse() {
+        for format in PhotoFormat.allCases {
+            let layout = GamePhotoLayout.layout(format, referral: true)
+            let bounds = CGRect(origin: .zero, size: format.size)
+            guard let banner = layout.banner else { return XCTFail("\(format) : pas de bandeau") }
+            XCTAssertTrue(bounds.contains(banner), "\(format)")
+            XCTAssertGreaterThan(banner.width / banner.height, 3, "\(format) : un bandeau, pas une carte")
+            XCTAssertEqual(banner.midX, format.size.width / 2, accuracy: 0.001)
+        }
+    }
+
+    func test_withTheBanner_meeAndMeoStayAboveIt_andBelowTheDate() {
+        for format in PhotoFormat.allCases {
+            let layout = GamePhotoLayout.layout(format, referral: true)
+            guard let banner = layout.banner else { return XCTFail("\(format)") }
+            XCTAssertLessThanOrEqual(layout.mee.maxY, banner.minY, "\(format)")
+            XCTAssertLessThanOrEqual(layout.meo.maxY, banner.minY, "\(format)")
+            XCTAssertLessThan(layout.date.y, layout.mee.minY, "\(format)")
+            XCTAssertLessThan(layout.emblem.maxY, layout.kicker.y - layout.kicker.size / 2, "\(format)")
+        }
+    }
+
+    func test_theBannerDoesNotMoveTheEmblem() {
+        for format in PhotoFormat.allCases {
+            XCTAssertEqual(GamePhotoLayout.layout(format, referral: true).emblem, GamePhotoLayout.layout(format).emblem)
+        }
+    }
 }

@@ -2,6 +2,7 @@ import Redis from 'ioredis';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { CircuitBreakerFactory, circuitBreakerManager, CircuitState } from '../utils/circuitBreaker';
 import { readEventLoopLag, startEventLoopLagMonitor } from '../utils/eventLoopLag';
+import { guardedInterval } from '../utils/guarded-timer';
 
 const logger = enhancedLogger.child({ module: 'CacheStore' });
 
@@ -91,14 +92,14 @@ export class RedisCacheStore implements CacheStore {
   }
 
   private startMemoryCacheCleanup(): void {
-    this.cleanupInterval = setInterval(() => {
+    this.cleanupInterval = guardedInterval({ name: 'cache-store-memory-purge', everyMs: 60000, logger, run: () => {
       const now = Date.now();
       for (const [key, entry] of this.memoryCache.entries()) {
         if (entry.expiresAt < now) {
           this.memoryCache.delete(key);
         }
       }
-    }, 60000);
+    } });
     this.cleanupInterval.unref?.();
   }
 

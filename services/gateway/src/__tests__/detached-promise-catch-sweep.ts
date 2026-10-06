@@ -52,7 +52,7 @@ const EXPRESSION_KEY_LENGTH = 120;
  * porte trois. Les chaînes le sont parce qu'un `'void x()'` dans un message de
  * journal n'est pas du code.
  */
-function blankOutNonCode(source: string): string {
+export function blankOutNonCode(source: string): string {
   let out = '';
   let i = 0;
   while (i < source.length) {
@@ -143,7 +143,7 @@ function readStatementExpression(source: string, start: number): { text: string;
   return { text, end: i };
 }
 
-function walk(dir: string, out: string[] = []): string[] {
+export function walk(dir: string, out: string[] = []): string[] {
   for (const entry of readdirSync(dir)) {
     const full = join(dir, entry);
     if (statSync(full).isDirectory()) {

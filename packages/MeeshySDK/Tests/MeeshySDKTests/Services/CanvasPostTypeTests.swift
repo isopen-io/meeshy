@@ -157,6 +157,64 @@ final class CanvasPostTypeTests: XCTestCase {
         XCTAssertEqual(body["originalLanguage"] as? String, "fr")
     }
 
+    // MARK: - « Aussi en réel » (#9476)
+
+    /// Un ancien appelant n'envoie PAS la clé : le serveur publie exactement ce
+    /// qu'il publiait.
+    func test_theCanvasBody_omitsAlsoAsReel_byDefault() throws {
+        let json = try encoded(CreateStoryRequest(content: "coucou"))
+
+        XCTAssertNil(json["alsoAsReel"], "Un corps historique ne doit rien dire du réel.")
+    }
+
+    func test_publishingAStoryAlsoAsReel_sendsTheFlagOnTheStoryBody() async throws {
+        stubCreation()
+
+        _ = try await service.createCanvasPost(
+            type: .story, content: nil, storyEffects: canvas(),
+            visibility: "FRIENDS", visibilityUserIds: nil, originalLanguage: nil,
+            mediaIds: ["m1"], repostOfId: nil, mentions: nil,
+            allowSoundExtraction: nil, mediaAlt: nil, mediaCaption: nil, alsoAsReel: true
+        )
+
+        let body = try XCTUnwrap(mock.lastRequest?.bodyJSON)
+        XCTAssertEqual(body["type"] as? String, "STORY", "Le geste publie la story ; le réel en est l'option.")
+        XCTAssertEqual(body["alsoAsReel"] as? Bool, true)
+    }
+
+    func test_theShortCanvasCreation_neverAsksForTheReel() async throws {
+        stubCreation()
+
+        _ = try await service.createCanvasPost(
+            type: .story, content: nil, storyEffects: canvas(),
+            visibility: "FRIENDS", visibilityUserIds: nil, originalLanguage: nil,
+            mediaIds: nil, repostOfId: nil, mentions: nil,
+            allowSoundExtraction: nil, mediaAlt: nil
+        )
+
+        XCTAssertNil(mock.lastRequest?.bodyJSON?["alsoAsReel"])
+    }
+
+    /// La file hors ligne relit une row écrite AVANT le champ : la story part
+    /// seule, et la ligne ne se perd pas au décodage.
+    func test_aQueueRowWrittenBeforeTheField_decodesWithoutTheReel() throws {
+        let item = StoryPublishQueueItem(visibility: "FRIENDS", slidesPayload: Data("[]".utf8))
+        var raw = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(item)) as? [String: Any])
+        raw.removeValue(forKey: "alsoAsReelPayload")
+        let decoded = try JSONDecoder().decode(StoryPublishQueueItem.self,
+                                               from: JSONSerialization.data(withJSONObject: raw))
+
+        XCTAssertNil(decoded.alsoAsReelPayload)
+    }
+
+    func test_aQueueRow_keepsTheReelAcrossARelaunch() throws {
+        let item = StoryPublishQueueItem(visibility: "FRIENDS", slidesPayload: Data("[]".utf8),
+                                         targetTypePayload: "STORY", alsoAsReelPayload: true)
+        let decoded = try JSONDecoder().decode(StoryPublishQueueItem.self, from: JSONEncoder().encode(item))
+
+        XCTAssertEqual(decoded.alsoAsReelPayload, true)
+    }
+
     // MARK: - Garde de source POSITIVE
 
     /// Le type est une PROPRIÉTÉ posée par l'appelant, pas une constante.

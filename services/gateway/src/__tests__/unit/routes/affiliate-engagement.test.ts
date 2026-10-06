@@ -8,7 +8,7 @@
  * @jest-environment node
  */
 
-import { createHash } from 'crypto';
+import { anonymousVisitorFingerprint } from '../../../routes/links/utils/link-visitor';
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
 
@@ -59,7 +59,7 @@ const tokenRow = {
 };
 
 const anonKey = (ip: string, userAgent: string): string =>
-  `anon:${createHash('sha256').update(`${ip}|${userAgent}`).digest('hex')}`;
+  `anon:${anonymousVisitorFingerprint({ ip, userAgent })}`;
 
 async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });

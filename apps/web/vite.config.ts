@@ -14,6 +14,7 @@ import { declaredBuildFlag } from './src/lib/build-flag';
 import { apiCacheIdentityPlugin } from './src/lib/net/api-cache-identity';
 import { API_RESPONSE_CACHE_PATTERN } from './src/lib/net/api-runtime-cache';
 import { EMAIL_TOKEN_NAVIGATIONS } from './src/lib/net/email-token-navigations';
+import { mediaCacheFreshnessPlugin } from './src/lib/net/media-cache-freshness';
 import { NETWORK_ONLY_NAVIGATIONS } from './src/lib/net/network-only-navigations';
 import { SHARE_TARGET } from './src/lib/share-incoming/share-target';
 import { SW_RUNTIME_CACHES } from './src/lib/sw-caches';
@@ -749,6 +750,13 @@ export default defineConfig({
                       maxAgeSeconds: 60 * 60 * 24 * 30,
                       purgeOnQuotaError: true,
                     },
+                    /* LA FRAÎCHEUR QUE LA PASSERELLE DÉCLARE (#9478) : une vue
+                       unique (`no-store`) ou un éphémère (`no-cache`) n'entre
+                       pas dans ce seau et n'en ressort pas sans réseau — le
+                       média ordinaire, lui, reste en Cache-First. Autonome —
+                       Workbox le stringifie ; `check-sw-api-cache.mjs` le fait
+                       décider depuis sw.js. */
+                    plugins: [mediaCacheFreshnessPlugin],
                   },
                 },
                 {

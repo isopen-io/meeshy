@@ -190,6 +190,9 @@ public protocol PostServiceProviding: Sendable {
     /// `createStory(… mentions:)` : les protocoles Swift ne portent pas de
     /// valeur par défaut, et tout double de test aurait cessé de conformer.
     func createCanvasPost(type: PostType, content: String?, storyEffects: StoryEffects?, visibility: String, visibilityUserIds: [String]?, originalLanguage: String?, mediaIds: [String]?, repostOfId: String?, mentions: [PostMentionInput]?, allowSoundExtraction: Bool?, mediaAlt: [String: String]?, mediaCaption: [String: String]?) async throws -> APIPost
+    /// La même publication, avec « AUSSI en réel » (#9476) : `alsoAsReel: true`
+    /// sur une STORY fait partir la story ET son réel en un geste.
+    func createCanvasPost(type: PostType, content: String?, storyEffects: StoryEffects?, visibility: String, visibilityUserIds: [String]?, originalLanguage: String?, mediaIds: [String]?, repostOfId: String?, mentions: [PostMentionInput]?, allowSoundExtraction: Bool?, mediaAlt: [String: String]?, mediaCaption: [String: String]?, alsoAsReel: Bool?) async throws -> APIPost
     func createWithType(_ type: PostType, content: String, visibility: String, moodEmoji: String?, storyEffects: StoryEffects?) async throws -> APIPost
     func requestTranslation(postId: String, targetLanguage: String) async throws
     /// `POST /posts/media/:mediaId/caption/translate` — traduction à la demande de
@@ -261,6 +264,15 @@ public extension PostServiceProviding {
                               visibilityUserIds: visibilityUserIds, originalLanguage: originalLanguage,
                               mediaIds: mediaIds, repostOfId: repostOfId, mentions: mentions,
                               allowSoundExtraction: allowSoundExtraction, mediaAlt: mediaAlt, mediaCaption: mediaCaption)
+    }
+
+    /// Défaut : un conformeur qui ignore « aussi en réel » (mocks existants)
+    /// reste valide — il publie la story seule. `PostService` la surcharge.
+    func createCanvasPost(type: PostType, content: String?, storyEffects: StoryEffects?, visibility: String, visibilityUserIds: [String]?, originalLanguage: String?, mediaIds: [String]?, repostOfId: String?, mentions: [PostMentionInput]?, allowSoundExtraction: Bool?, mediaAlt: [String: String]?, mediaCaption: [String: String]?, alsoAsReel: Bool?) async throws -> APIPost {
+        try await createCanvasPost(type: type, content: content, storyEffects: storyEffects, visibility: visibility,
+                                   visibilityUserIds: visibilityUserIds, originalLanguage: originalLanguage,
+                                   mediaIds: mediaIds, repostOfId: repostOfId, mentions: mentions,
+                                   allowSoundExtraction: allowSoundExtraction, mediaAlt: mediaAlt, mediaCaption: mediaCaption)
     }
 
     /// Défaut : un conformeur qui n'implémente que la signature SANS mentions
@@ -849,12 +861,20 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
     /// confondus — c'est ce qui garantit qu'un post composé emporte exactement
     /// ce qu'une story emporte, moins le type.
     public func createCanvasPost(type: PostType, content: String?, storyEffects: StoryEffects?, visibility: String, visibilityUserIds: [String]?, originalLanguage: String?, mediaIds: [String]?, repostOfId: String?, mentions: [PostMentionInput]?, allowSoundExtraction: Bool?, mediaAlt: [String: String]?, mediaCaption: [String: String]? = nil) async throws -> APIPost {
+        try await createCanvasPost(type: type, content: content, storyEffects: storyEffects, visibility: visibility,
+                                   visibilityUserIds: visibilityUserIds, originalLanguage: originalLanguage,
+                                   mediaIds: mediaIds, repostOfId: repostOfId, mentions: mentions,
+                                   allowSoundExtraction: allowSoundExtraction, mediaAlt: mediaAlt,
+                                   mediaCaption: mediaCaption, alsoAsReel: nil)
+    }
+
+    public func createCanvasPost(type: PostType, content: String?, storyEffects: StoryEffects?, visibility: String, visibilityUserIds: [String]?, originalLanguage: String?, mediaIds: [String]?, repostOfId: String?, mentions: [PostMentionInput]?, allowSoundExtraction: Bool?, mediaAlt: [String: String]?, mediaCaption: [String: String]?, alsoAsReel: Bool?) async throws -> APIPost {
         // Strip composer-local `file://` paths from mediaObjects before the
         // payload hits the wire — they only resolve in the author's sandbox
         // and break the canvas for every reader (cf. StoryEffects+Sanitization
         // and StoryMediaLayer.swift:132-134).
         let sanitizedEffects = storyEffects?.sanitizedForServerPublish()
-        let body = CreateStoryRequest(type: type.rawValue, content: content, storyEffects: sanitizedEffects, visibility: visibility, visibilityUserIds: visibilityUserIds, originalLanguage: originalLanguage, mediaIds: mediaIds, repostOfId: repostOfId, mentions: mentions, allowSoundExtraction: allowSoundExtraction, mediaAlt: mediaAlt, mediaCaption: mediaCaption)
+        let body = CreateStoryRequest(type: type.rawValue, content: content, storyEffects: sanitizedEffects, visibility: visibility, visibilityUserIds: visibilityUserIds, originalLanguage: originalLanguage, mediaIds: mediaIds, repostOfId: repostOfId, mentions: mentions, allowSoundExtraction: allowSoundExtraction, mediaAlt: mediaAlt, mediaCaption: mediaCaption, alsoAsReel: alsoAsReel)
         let response: APIResponse<APIPost> = try await api.post(PostsEndpoint.root, body: body)
         return response.data
     }

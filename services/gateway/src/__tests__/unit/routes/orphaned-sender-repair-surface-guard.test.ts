@@ -171,6 +171,8 @@ const SERVICE_SURFACES: Record<string, Classification> = {
   // n'entre dans aucune de leurs branches.
   'AttachmentReactionService.ts': { kind: 'exempt', reads: 2, why: DOES_NOT_SELECT_SENDER },
   'attachments/attachmentReadVerdict.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #9315 — même nature que son voisin : l'état des messages porteurs d'un fichier, sans `sender`.
+  'attachments/fileRouteVerdict.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   // Deux `create`/`update` (jamais `find*`) pour le message-résumé d'appel :
   // hors du périmètre `.message.find*` de ce garde, mais nommé ici pour la
   // même raison que #6501 l'a nommé dans l'issue — `sender` y est
@@ -198,6 +200,8 @@ const SERVICE_SURFACES: Record<string, Classification> = {
   // #7740 — la ligne d'arrivées de Global relit ses messages système (`id`,
   // `metadata`, `deletedAt`) pour retrouver la ligne ouverte : aucun `sender`.
   'conversations/globalArrivalsNotice.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #9539 — heures habituelles d'écriture pour la mission personnelle : `select: { createdAt: true }`, aucun expéditeur chargé.
+  'game/MissionHabits.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   // #7729 — suggestions d'onboarding : `select: { senderId: true }`, la relation n'est jamais chargée.
   'onboarding/OnboardingService.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   // #7578 — purge serveur du contenu d'une vue unique : ni expéditeur ni contenu servi.

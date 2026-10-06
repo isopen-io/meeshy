@@ -23,7 +23,8 @@ final class GameSourceGuardTests: XCTestCase {
     /// « La photo reste sur l'appareil tant qu'on ne la partage pas. » — le déroulé photo
     /// n'a aucun chemin vers le réseau : ni client d'API, ni session, ni téléversement.
     func test_thePhotoFlowNeverTouchesTheNetwork() throws {
-        let forbidden = ["URLSession", "APIClient", "TusUpload", "upload(", "MediaUpload", "StoryUpload", "multipart"]
+        let forbidden = ["URLSession", "APIClient", "TusUpload", "upload(", "MediaUpload", "StoryUpload", "multipart",
+                         "AffiliateService", "CacheCoordinator"]
         let files = try swiftFiles(under: "Meeshy/Features/Main/Game/Photo")
         XCTAssertGreaterThan(files.count, 6, "le balayage ne voit presque rien : le dossier a bougé")
         for file in files {
@@ -32,6 +33,24 @@ final class GameSourceGuardTests: XCTestCase {
                 XCTAssertFalse(text.contains(word), "\(file.lastPathComponent) touche au réseau (« \(word) ») : aucune image ne part au serveur")
             }
         }
+    }
+
+    // MARK: - Aucun jeton de parrainage sans geste (#7742)
+
+    /// L'ouverture du déroulé LIT le jeton qui existe ; seul « Partager » en CRÉE un. Un témoin de COMPORTEMENT
+    /// le tient (`GamePhotoSessionTests`) ; celui-ci tient la SOURCE : ni la vue ni la lecture d'ouverture ne
+    /// nomment la création.
+    func test_openingThePhotoFlowNeverReachesTheTokenCreation() throws {
+        let photo = iosRoot.appendingPathComponent("Meeshy/Features/Main/Game/Photo")
+        let session = try String(contentsOf: photo.appendingPathComponent("GamePhotoSession.swift"), encoding: .utf8)
+        let opening = try XCTUnwrap(session.components(separatedBy: "func prepareReferral()").dropFirst().first?
+            .components(separatedBy: "func prepareShare()").first)
+        XCTAssertFalse(opening.contains("shareableLink"), "prepareReferral s'exécute à l'ouverture : il ne crée aucun jeton")
+        XCTAssertTrue(opening.contains("existingLink"))
+
+        let view = try String(contentsOf: photo.appendingPathComponent("GamePhotoFlowView.swift"), encoding: .utf8)
+        XCTAssertFalse(view.contains("shareableLink"), "la vue ne parle qu'à la session")
+        XCTAssertTrue(view.contains("prepareShare()"), "« Partager » crée le jeton, puis ouvre la feuille")
     }
 
     // MARK: - Les clés d'usage et la fréquence d'images
@@ -101,7 +120,7 @@ final class GameSourceGuardTests: XCTestCase {
         "game.chest.reward.points", "game.points.one", "game.points.other", "game.meeshes.one", "game.meeshes.other",
         "game.actions.one", "game.actions.other", "game.tier.constellation", "game.rank.oracle",
         "game.guide.speaker.mee", "game.guide.speaker.meo", "game.mission.progress", "game.photo.format.story",
-        "game.photo.title.prestige", "game.mint.row.badges",
+        "game.photo.title.prestige", "game.mint.row.badges", "game.material.bronze",
     ]
 
     private func gameCatalogEntries() throws -> [String: [String: String]] {

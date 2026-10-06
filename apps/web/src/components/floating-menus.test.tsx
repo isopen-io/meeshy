@@ -115,6 +115,13 @@ describe('au repos', () => {
     expect(container.querySelector('[role="menu"]')).toBeNull();
   });
 
+  test('le couloir haut part de l’encoche SERVIE (`--safe-top`), que le bandeau du haut allonge — jamais de `env()` lu en direct', () => {
+    const host = monter();
+    const couche = host.querySelector<HTMLElement>('.floating-menus');
+
+    expect(couche?.style.getPropertyValue('--float-top')).toContain('var(--safe-top');
+  });
+
   test('les deux boutons sont là, et le menu s’annonce fermé', () => {
     monter();
     expect(container.querySelector('[data-floating-feed]')).not.toBeNull();

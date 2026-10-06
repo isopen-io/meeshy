@@ -317,6 +317,22 @@
   --safe-bottom: env(safe-area-inset-bottom, 0px);
 }
 
+/*
+ * LE BANDEAU DU HAUT RÉSERVE SA PLACE (#9494) — sur les hubs, la bannière du
+ * joueur est permanente : posée par-dessus l'en-tête, elle le cacherait. La
+ * coquille (`shell.tsx`) mesure la pile du haut et la reporte dans
+ * `--top-band` ; l'arbre de la coquille ajoute cette hauteur à son encoche.
+ * Tout ce qui lit `--safe-top` (`pt-safe` en tête) descend d'autant, comme le
+ * viewport iOS sous `CallPresentationLayer`. Hors des hubs, ou bandeau vide,
+ * la coquille ne pose pas l'attribut : rien ne bouge, et l'encoche simulée
+ * sur `:root` par les gates (`check-thread-scroll-edges.mjs`) reste lue. Ce
+ * qui sort de l'arbre par un portail (l'écran d'appel, les feuilles modales)
+ * garde l'encoche réelle de `:root`.
+ */
+[data-top-band-host] {
+  --safe-top: calc(env(safe-area-inset-top, 0px) + var(--top-band, 0px));
+}
+
 @utility pt-safe {
   padding-top: var(--safe-top);
 }

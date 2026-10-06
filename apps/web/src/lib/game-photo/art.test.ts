@@ -78,3 +78,34 @@ describe('loadArt', () => {
     expect(called).toBe(0);
   });
 });
+
+/**
+ * LA FLAMME DU BANDEAU (#7742) — un cinquième dessin, FACULTATIF : il n'existe
+ * que sur une carte qui porte le lien de parrainage et une Flamme allumée. Son
+ * absence — ou son échec — ne défait pas la carte : seule la Flamme manque.
+ */
+describe('la Flamme du bandeau, dessin facultatif', () => {
+  const image = (id: string) => ({ id }) as unknown as HTMLImageElement;
+
+  test('lue quand le cadre la porte, absente sinon — jamais exigée', () => {
+    expect(Object.keys(collectArtMarkup(frame([...ALL, 'flame'])) ?? {}).sort()).toEqual([...ALL, 'flame'].sort());
+    expect(Object.keys(collectArtMarkup(frame(ALL)) ?? {})).not.toContain('flame');
+  });
+
+  test('rasterisée avec les autres, et remise à la composition', async () => {
+    const art = await loadArt({ root: frame([...ALL, 'flame']), read: () => '', raster: async (markup) => image(markup.includes('data-slot="flame"') ? 'flame' : 'x') });
+    expect((art?.flame as unknown as { id: string } | undefined)?.id).toBe('flame');
+  });
+
+  test('un cadre sans Flamme : la carte est complète, sans elle', async () => {
+    const art = await loadArt({ root: frame(ALL), read: () => '', raster: async () => image('x') });
+    expect(art).not.toBeNull();
+    expect(art?.flame).toBeUndefined();
+  });
+
+  test('une Flamme qui ne se rasterise pas ne fait pas échouer la carte', async () => {
+    const art = await loadArt({ root: frame([...ALL, 'flame']), read: () => '', raster: async (markup) => (markup.includes('data-slot="flame"') ? null : image('x')) });
+    expect(art).not.toBeNull();
+    expect(art?.flame).toBeUndefined();
+  });
+});

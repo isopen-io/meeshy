@@ -24,6 +24,7 @@ import {
   recipientDateLocale,
   recipientLanguage,
 } from '../utils/recipient-language';
+import { guardedInterval } from '../utils/guarded-timer';
 
 export class MaintenanceService {
   private prisma: PrismaClient;
@@ -147,20 +148,20 @@ export class MaintenanceService {
     // tombée pour une passe de maintenance best-effort (leçon 230/307). Ne jamais
     // s'appuyer sur le try/catch interne du callee : il est faux dès qu'une
     // instruction non gardée précède son propre catch.
-    this.maintenanceInterval = setInterval(() => {
+    this.maintenanceInterval = guardedInterval({ name: 'maintenance', everyMs: 15000, logger, run: () => {
       logger.debug('🔄 Exécution de la tâche de maintenance automatique...');
       void this.updateOfflineUsers().catch((error) =>
         logger.error('❌ Tâche de maintenance périodique échouée:', error)
       );
-    }, 15000); // Vérifier toutes les 15 secondes (4x plus rapide)
+    } }); // Vérifier toutes les 15 secondes (4x plus rapide)
     this.maintenanceInterval.unref?.();
 
     // Tâche de nettoyage journalier (toutes les heures, mais ne s'exécute qu'une fois par jour)
-    this.dailyCleanupInterval = setInterval(() => {
+    this.dailyCleanupInterval = guardedInterval({ name: 'maintenance-daily-cleanup', everyMs: 60 * 60 * 1000, logger, run: () => {
       void this.runDailyCleanup().catch((error) =>
         logger.error('❌ Nettoyage journalier périodique échoué:', error)
       );
-    }, 60 * 60 * 1000); // Vérifier toutes les heures
+    } }); // Vérifier toutes les heures
     this.dailyCleanupInterval.unref?.();
 
     // Exécuter immédiatement le nettoyage journalier au démarrage

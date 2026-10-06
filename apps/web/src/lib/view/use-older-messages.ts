@@ -37,18 +37,41 @@ import { useLoadMoreSentinel } from './use-load-more-sentinel';
  *
  * Préfixer cinquante rangées fait grandir la liste virtualisée PAR LE HAUT :
  * sans correction, la fenêtre glisse d'un écran entier sous les yeux du
- * lecteur. On tient donc la DISTANCE AU BAS du contenu
- * (`scrollHeight − scrollTop`), la seule grandeur qu'une insertion EN TÊTE
- * laisse invariante, et on la repose dans un effet de MISE EN PAGE — avant la
- * peinture, jamais après.
+ * lecteur. **C'est le VIRTUALISEUR qui tient l'ancre, et lui seul** (#9216,
+ * #9219) : `useHeadAnchor` lui passe `anchorTo: 'end'` au rendu où la tête
+ * change, et il repère, PENDANT ce rendu, la rangée posée à l'offset courant
+ * et son décalage, déplace son propre offset sur la nouvelle position de
+ * cette rangée AVANT de calculer la plage montée, puis écrit `scrollTop` dans
+ * son effet de mise en page — avant la peinture.
  *
- * Les rangées préfixées ne sont pas encore MESURÉES à cet instant (elles
- * valent l'estimation) : leurs corrections de taille arrivent ensuite, et
- * c'est le virtualiseur qui les absorbe — il n'ajuste `scrollTop` que pour les
- * rangées situées AVANT l'offset courant, ce qui est précisément leur cas.
- * C'est le mécanisme que le critère 4 de
- * `scripts/check-thread-virtualization.mjs` mesure déjà ; son critère 5,
- * ajouté par ce lot, mesure celui-ci.
+ * ### POURQUOI PLUS DE REPÈRE MAISON
+ *
+ * Ce hook tenait auparavant la DISTANCE AU BAS (`scrollHeight − scrollTop`),
+ * capturée au DÉCLENCHEMENT et reposée en valeur ABSOLUE dans son propre effet
+ * de mise en page. Deux ancrages se disputaient alors le défileur, et le
+ * vainqueur dépendait d'une HORLOGE interne du virtualiseur :
+ *
+ * 1. Le virtualiseur ignore l'insertion : au commit qui l'apporte, il calcule
+ *    encore sa plage pour l'ANCIEN offset — donc sur les rangées PRÉFIXÉES,
+ *    jamais mesurées.
+ * 2. Si la page arrive plus de 150 ms après le dernier `scroll`
+ *    (`isScrollingResetDelay` — une page servie par le réseau, le cas
+ *    nominal), il MESURE ces rangées dans le même commit et compense chacune
+ *    par un `scrollTo` RELATIF, calculé sur son offset périmé.
+ * 3. L'écriture ABSOLUE de ce hook effaçait ces compensations, alors que les
+ *    tailles mesurées, elles, restaient : la croissance des rangées préfixées
+ *    n'était plus compensée par personne, et le fil glissait de leur somme
+ *    (179 px sur la CI de `main`, plusieurs écrans sous contention — mesuré
+ *    au navigateur, `scrollHeight − scrollTop` passant de 8 334 à 11 654 px).
+ * 4. Arrivée dans la fenêtre des 150 ms, la même page ne mesurait rien au
+ *    commit, et le fil restait immobile. D'où un gate tantôt rouge, tantôt
+ *    vert, sur le même code.
+ *
+ * Le repère capturé au déclenchement avait un second défaut, que le premier
+ * masquait : il PÉRIMAIT pendant le vol de la page. Un lecteur qui continue de
+ * remonter pendant 300 ms de réseau était ramené, à l'arrivée, là où la
+ * sentinelle l'avait vu. L'ancre du virtualiseur se prend au rendu qui insère,
+ * donc sur la position du moment.
  *
  * ## LA CLÉ DE L'EFFET EST LA TÊTE DU FIL, JAMAIS LE COMPTE
  *
@@ -63,10 +86,43 @@ export type OlderMessages = {
   /** À poser sur la PRISE d'état en tête du fil (`ref={sentinelRef}`) — réf de
    * RAPPEL de `useLoadMoreSentinel`. */
   readonly sentinelRef: (node: Element | null) => void;
-  /** Le rejeu d'un refus : le MÊME geste que la sentinelle, capture du repère
-   * comprise — un « Réessayer » qui sauterait l'ancrage ferait bondir le fil. */
+  /** Le rejeu d'un refus : le MÊME geste que la sentinelle — la page qu'il
+   * apporte change la tête, et c'est ce changement qui pose l'ancre. */
   readonly retry: () => void;
 };
+
+/** L'option `anchorTo` du virtualiseur — `'end'` le temps du seul rendu où la tête change. */
+export type HeadAnchor = 'start' | 'end';
+
+/**
+ * LA LOI DE L'ANCRE, PURE. Une tête qui APPARAÎT (premier chargement) n'a rien
+ * à tenir : aucune rangée n'était sous les yeux du lecteur. Une tête qui
+ * DISPARAÎT (fil vidé) non plus. Seule une tête REMPLACÉE — une page préfixée,
+ * une purge du haut, une fenêtre ancrée qui rejoint le présent — demande au
+ * virtualiseur de garder en place la rangée qu'on lit ; s'il ne la retrouve
+ * pas dans la nouvelle liste, il ne déplace rien.
+ *
+ * `'end'` est le nom que `@tanstack/virtual-core` donne à ce mode (le fil de
+ * discussion, qu'on lit vers le bas et qu'on remonte) ; hors de ce rendu le
+ * fil reste en `'start'`, son comportement d'avant ce lot.
+ */
+export function headAnchorOf(committedHead: string | undefined, renderedHead: string | undefined): HeadAnchor {
+  return committedHead !== undefined && renderedHead !== undefined && committedHead !== renderedHead ? 'end' : 'start';
+}
+
+/**
+ * `anchorTo` pour `useVirtualizer`, à appeler AVANT lui : c'est pendant SON
+ * rendu (`setOptions`) qu'il compare les bords de la liste et repère sa rangée.
+ * La tête de référence est la dernière COMMISE — relevée dans un effet de mise
+ * en page, jamais écrite pendant le rendu.
+ */
+export function useHeadAnchor(firstMessageId: string | undefined): HeadAnchor {
+  const committed = useRef(firstMessageId);
+  useLayoutEffect(() => {
+    committed.current = firstMessageId;
+  });
+  return headAnchorOf(committed.current, firstMessageId);
+}
 
 /**
  * L'ESTIMATION D'UNE RANGÉE DU FIL — UNE valeur, deux lecteurs :
@@ -99,16 +155,14 @@ export function useOlderMessages(params: {
 }): OlderMessages {
   const { scroller, state, rowCount, firstMessageId, fetchOlder, noteProgrammaticScroll } = params;
 
-  /** Le REPÈRE : la distance au bas du contenu au moment du déclenchement.
-   * `null` ⇒ aucune page n'a été demandée depuis ce dernier changement de
-   * tête, donc rien à reposer. */
-  const pin = useRef<number | null>(null);
+  /** Une page a été DEMANDÉE depuis le dernier changement de tête : le
+   * déplacement que le virtualiseur fera à son arrivée est le nôtre. */
+  const requested = useRef(false);
 
   const loadOlder = useCallback(() => {
-    const el = scroller.current;
-    if (el !== null) pin.current = el.scrollHeight - el.scrollTop;
+    requested.current = true;
     fetchOlder();
-  }, [scroller, fetchOlder]);
+  }, [fetchOlder]);
 
   const { observe } = useLoadMoreSentinel({
     root: scroller,
@@ -118,16 +172,12 @@ export function useOlderMessages(params: {
   });
 
   useLayoutEffect(() => {
-    const captured = pin.current;
-    if (captured === null) return;
-    pin.current = null;
-    const el = scroller.current;
-    if (el === null) return;
-    /* ANNONCE le défilement PROGRAMMÉ : reposer l'ancre n'est pas une
-       intention de l'utilisateur, elle ne doit ni révéler ni armer la scène du
-       fil (§5.8 de la spécification #5648, D-15). */
+    if (!requested.current) return;
+    requested.current = false;
+    /* ANNONCE le défilement PROGRAMMÉ : l'ancre que le virtualiseur vient de
+       reposer n'est pas une intention de l'utilisateur, elle ne doit ni
+       révéler ni armer la scène du fil (§5.8 de la spécification #5648, D-15). */
     noteProgrammaticScroll();
-    el.scrollTop = el.scrollHeight - captured;
     // Volontairement sur la seule TÊTE du fil — voir le doc-comment § « la clé
     // de l'effet est la tête du fil, jamais le compte ».
     // eslint-disable-next-line react-hooks/exhaustive-deps

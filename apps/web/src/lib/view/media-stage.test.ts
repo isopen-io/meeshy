@@ -9,9 +9,11 @@ import {
   filmstripMaxScrollOffset,
   filmstripScrollOffset,
   longPressArmed,
+  MAX_SCALE,
   prefetchRange,
   rendersFullPixels,
   resolveStageDrag,
+  scaleAfterViewerPinch,
   showsPausedBadge,
   stageAfter,
 } from './media-stage';
@@ -183,5 +185,21 @@ describe('fullStageBox — une page qui prend le VIEWPORT, décalée de son coul
 
   test('un viewport non mesuré (0 × 0) ⇒ boîte nulle, jamais une division par zéro', () => {
     expect(fullStageBox({ viewport: { width: 0, height: 0 }, ratio: RATIO, topInset: 56 })).toEqual({ width: 0, height: 0, left: 0, top: -56 });
+  });
+});
+
+describe('scaleAfterViewerPinch — le pincement de la visionneuse (#9532)', () => {
+  test('l’échelle suit l’écart des deux doigts, depuis celle du début du geste', () => {
+    expect(scaleAfterViewerPinch({ startScale: 1, startDistance: 100, distance: 200 })).toBe(2);
+    expect(scaleAfterViewerPinch({ startScale: 2, startDistance: 100, distance: 150 })).toBe(3);
+  });
+
+  test('bornée entre 1 et MAX_SCALE, comme la page iOS', () => {
+    expect(scaleAfterViewerPinch({ startScale: 1, startDistance: 200, distance: 50 })).toBe(1);
+    expect(scaleAfterViewerPinch({ startScale: 4, startDistance: 100, distance: 400 })).toBe(MAX_SCALE);
+  });
+
+  test('deux doigts posés au même point ne divisent jamais par zéro', () => {
+    expect(scaleAfterViewerPinch({ startScale: 2.5, startDistance: 0, distance: 120 })).toBe(2.5);
   });
 });

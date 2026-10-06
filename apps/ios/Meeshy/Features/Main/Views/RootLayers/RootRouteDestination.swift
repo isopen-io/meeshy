@@ -137,7 +137,7 @@ struct RootRouteDestination: View {
             UserStatsView()
                 .navigationBarHidden(true)
         case .progression:
-            ProgressionView()
+            ProgressionView(pendingAnchor: router.pendingGameAnchor, consumeAnchor: { _ = router.consumePendingGameAnchor() })
                 .navigationBarHidden(true)
         case .progressionSection(let section):
             // `navigationBarHidden(true)` comme ses voisines : la page porte son
@@ -146,11 +146,14 @@ struct RootRouteDestination: View {
             // survit à une barre masquée ; c'était la FEUILLE qui l'empêchait.
             ProgressionSectionPage(section: section)
                 .navigationBarHidden(true)
-        case .progressionRules:
-            GameRulesPage()
+        case .progressionRules(let rule):
+            GameRulesPage(focusedRule: rule)
                 .navigationBarHidden(true)
         case .progressionNotebook:
             GameNotebookPage()
+                .navigationBarHidden(true)
+        case .gamePage(let page):
+            GamePageView(page: page)
                 .navigationBarHidden(true)
         case .links:
             LinksHubView()

@@ -1,8 +1,12 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { logger } from '../utils/logger';
 import { cleanupExpiredSessions } from './SessionService';
+import { AffiliateTrackingService } from './AffiliateTrackingService';
+import { EngagementQuotas } from './engagement/EngagementQuotas';
 import { repairOrphanedMessageSenders } from './messaging/repairOrphanedMessageSenders';
 
+/** Une empreinte de visiteur ne survit pas à la période de rotation de sa clé. */
+const VISIT_BUCKET_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 const ANONYMOUS_PARTICIPANT_TTL_MS = 24 * 60 * 60 * 1000;
 
 /**
@@ -87,5 +91,27 @@ export async function cleanupExpiredData(prisma: PrismaClient): Promise<void> {
     }
   } catch (error) {
     logger.error('❌ Erreur lors de l\'invalidation des sessions expirées:', error);
+  }
+
+  // Les visites de parrainage expirées (#7742, conformité H-9) : l'index TTL les retire
+  // côté base, cette purge double la garantie. Les lignes d'ancien format ne sont PAS
+  // touchées ici (feu vert du porteur, après sauvegarde vérifiée).
+  try {
+    const visits = await AffiliateTrackingService.cleanupExpiredVisitSessions(prisma);
+    if (visits.success && (visits.deletedCount ?? 0) > 0) {
+      logger.info(`🧹 ${visits.deletedCount} visites de parrainage expirées supprimées`);
+    }
+  } catch (error) {
+    logger.error('❌ Erreur lors de la purge des visites de parrainage:', error);
+  }
+
+  // Les empreintes des visiteurs non inscrits d'un lien (#9225, conformité H-6) : un seau
+  // `visit:*` n'a plus d'objet une fois sa fenêtre de dédoublonnage passée (7 jours au plus,
+  // la période de rotation de la clé de l'empreinte).
+  try {
+    const purged = await new EngagementQuotas(prisma as never).purgeVisitBuckets(VISIT_BUCKET_RETENTION_MS);
+    if (purged > 0) logger.info(`🧹 ${purged} empreintes de visiteurs de lien purgées`);
+  } catch (error) {
+    logger.error('❌ Erreur lors de la purge des empreintes de visiteurs:', error);
   }
 }

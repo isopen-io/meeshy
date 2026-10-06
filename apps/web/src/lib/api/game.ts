@@ -14,6 +14,8 @@ import { FLAME_FORMS } from '@meeshy/shared/utils/game/flame';
 import { MISSION_DIFFICULTIES } from '@meeshy/shared/utils/game/missions';
 import { TREASURY_TIERS } from '@meeshy/shared/utils/game/treasury';
 
+import { isBool, isFraction, isInt, isOneOf, isText, orNull, shape } from './game-guards';
+import { readGameExtensions, withoutExtensions, type GameBlockV2 } from './game-v2';
 import type { ApiResult, HttpTransport } from './http';
 
 /**
@@ -40,26 +42,12 @@ import type { ApiResult, HttpTransport } from './http';
  * intention, jamais par requête — même règle que la frappe, `engagement.ts`).
  */
 
-type Rec = Readonly<Record<string, unknown>>;
-
-const isRec = (value: unknown): value is Rec => typeof value === 'object' && value !== null && !Array.isArray(value);
-const isInt = (value: unknown, min = 0, max = Number.MAX_SAFE_INTEGER): value is number =>
-  typeof value === 'number' && Number.isInteger(value) && value >= min && value <= max;
-const isFraction = (value: unknown): value is number => typeof value === 'number' && value >= 0 && value <= 1;
-const isBool = (value: unknown): value is boolean => typeof value === 'boolean';
-const isText = (value: unknown): value is string => typeof value === 'string' && value.length > 0;
-const isOneOf = (keys: readonly string[]) => (value: unknown): boolean => typeof value === 'string' && keys.includes(value);
-const orNull = (check: (value: unknown) => boolean) => (value: unknown): boolean => value === null || check(value);
-
 const isTier = isOneOf(LEVEL_TIER_KEYS);
 const isRank = isOneOf([...GLORY_RANKS.map((rank) => rank.key), 'mythe']);
 const isTreasuryKey = isOneOf(TREASURY_TIERS.map((tier) => tier.key));
 const isFlameForm = isOneOf(FLAME_FORMS.map((form) => form.key));
 const isDivision = (value: unknown): boolean => value === 1 || value === 2 || value === 3;
 const isEdition = isOneOf(['silver', 'gold', 'prism']);
-
-const shape = (value: unknown, fields: Readonly<Record<string, (field: unknown) => boolean>>): value is Rec =>
-  isRec(value) && Object.entries(fields).every(([key, check]) => check(value[key]));
 
 const isLevel = (value: unknown): boolean =>
   shape(value, {
@@ -185,8 +173,14 @@ const isGameBlock = (value: unknown): value is GameBlock =>
     guideSeen: (v) => Array.isArray(v) && v.length <= 200 && v.every((key) => isText(key) && key.length <= 64),
   });
 
-/** Le bloc `game`, ou `null` s'il est absent ou partiel — jamais à moitié lu. */
-export const readGameBlock = (value: unknown): GameBlock | null => (isGameBlock(value) ? value : null);
+/**
+ * Le bloc `game`, ou `null` s'il est absent ou partiel — jamais à moitié lu.
+ *
+ * Les huit extensions (dont `achievementRarities`, déclarée par le contrat) sont lues SEULES par
+ * `readGameExtensions` : une extension illisible tombe, le bloc survit (#9526).
+ */
+export const readGameBlock = (value: unknown): GameBlockV2 | null =>
+  isGameBlock(value) ? { ...withoutExtensions(value), ...readGameExtensions(value) } : null;
 
 const API_PREFIX = '/api/v1';
 

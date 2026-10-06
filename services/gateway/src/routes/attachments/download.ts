@@ -7,6 +7,11 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { AttachmentService } from '../../services/attachments';
 import { thumbnailContentType } from '../../services/attachments/thumbnail';
 import { resolveAttachmentReadVerdict, denyAttachmentRead } from '../../services/attachments/attachmentReadVerdict';
+import {
+  resolveAttachmentByIdCacheControl,
+  resolveFileRouteVerdict,
+  type FileRouteVerdictPrisma,
+} from '../../services/attachments/fileRouteVerdict';
 import { createReadStream } from 'fs';
 import { stat } from 'fs/promises';
 import { relative as pathRelative, resolve as pathResolve, sep as pathSep } from 'path';
@@ -71,7 +76,7 @@ export async function registerDownloadRoutes(
       // corrupt Content-Range/Content-Length. Enforced at the proxy layer
       // (Traefik compress@file excludedContentTypes), not in-app.
       schema: {
-        description: 'Stream the original file by attachment ID. Returns the file with appropriate content-type headers for inline display. Supports cross-origin requests with CORS headers. Files are cached for 1 year (immutable).',
+        description: 'Stream the original file by attachment ID. Returns the file with appropriate content-type headers for inline display. Supports cross-origin requests with CORS headers. Ordinary files are cached for 1 year (immutable); view-once and ephemeral files get the same Cache-Control as the by-path route.',
         tags: ['attachments'],
         summary: 'Get attachment file',
         params: {
@@ -147,7 +152,8 @@ export async function registerDownloadRoutes(
           reply.header('Content-Security-Policy', "default-src 'none'; sandbox");
         }
         reply.header('X-Content-Type-Options', 'nosniff');
-        reply.header('Cache-Control', 'private, max-age=31536000, immutable');
+        // #9478 — le même cache que la route par chemin pour un média protégé.
+        reply.header('Cache-Control', await resolveAttachmentByIdCacheControl(attachmentId, prisma, new Date()));
 
         const stream = createReadStream(filePath);
         return reply.send(stream);
@@ -229,7 +235,7 @@ export async function registerDownloadRoutes(
         // (always JPEG bytes whatever their extension) stay image/jpeg.
         reply.header('Content-Type', thumbnailContentType(thumbnailPath));
         reply.header('Content-Disposition', 'inline');
-        reply.header('Cache-Control', 'private, max-age=31536000, immutable');
+        reply.header('Cache-Control', await resolveAttachmentByIdCacheControl(attachmentId, prisma, new Date()));
 
         const stream = createReadStream(thumbnailPath);
         return reply.send(stream);
@@ -245,7 +251,7 @@ export async function registerDownloadRoutes(
   // pointent les `fileUrl` persistées en base depuis des années. L'extraction lui
   // donne un site UNIQUE — un alias qui RECOPIERAIT le handler recréerait la
   // jumelle qu'il prétend fermer (issue #4187).
-  registerFileStreamRoute(fastify);
+  registerFileStreamRoute(fastify, prisma);
 }
 
 /**
@@ -264,7 +270,7 @@ export async function registerDownloadRoutes(
  * Fonction et non plugin : les DEUX montages appellent le MÊME site, sans copie
  * de handler ni encapsulation supplémentaire.
  */
-export function registerFileStreamRoute(fastify: FastifyInstance): void {
+export function registerFileStreamRoute(fastify: FastifyInstance, prisma: FileRouteVerdictPrisma): void {
   /**
    * GET /attachments/file/*
    * Stream un fichier via son chemin (utilisé pour les URLs générées)
@@ -370,6 +376,19 @@ export function registerFileStreamRoute(fastify: FastifyInstance): void {
         }
         const fileSize = fileStats.size;
 
+        // #9315 — le même cycle de vie que les routes par identifiant. La clé
+        // est relue sur le chemin RÉSOLU : double barre, `./`, remontée ou
+        // double encodage atteignent le même fichier, donc le même verdict. Un
+        // refus rend la réponse exacte d'un fichier déjà effacé du disque.
+        const storageKey = pathRelative(baseAbs, filePath).split(pathSep).join('/');
+        const isStableProfilePath = storageKey.split('/')[0] === 'avatars';
+        const verdict = isStableProfilePath
+          ? { kind: 'not-an-attachment' as const }
+          : await resolveFileRouteVerdict(storageKey, prisma, new Date());
+        if (verdict.kind === 'gone') {
+          return sendNotFound(reply, 'File not found');
+        }
+
         const ext = decodedPath.toLowerCase().slice(decodedPath.lastIndexOf('.'));
         const mimeTypes: Record<string, string> = {
           '.jpg': 'image/jpeg',
@@ -406,10 +425,15 @@ export function registerFileStreamRoute(fastify: FastifyInstance): void {
         // long-cacheable (their URL changes with every new upload) — in the
         // client's OWN cache only (#9315): `private` keeps a proxy or CDN from
         // holding a conversation's bytes and replaying them to someone else.
-        const isStableProfilePath = pathRelative(baseAbs, filePath).split(pathSep)[0] === 'avatars';
-        const cacheControl = isStableProfilePath
-          ? 'public, no-cache'
-          : 'private, max-age=31536000';
+        //
+        // Un fichier de message reçoit le cache que son porteur autorise : une
+        // vue unique n'est jamais stockée, un éphémère se revalide à chaque
+        // usage (#9315).
+        const cacheControl = verdict.kind === 'serve'
+          ? verdict.cacheControl
+          : isStableProfilePath
+            ? 'public, no-cache'
+            : 'private, max-age=31536000';
 
         const ifNoneMatch = request.headers['if-none-match'];
         if (ifNoneMatch && ifNoneMatch === etag) {

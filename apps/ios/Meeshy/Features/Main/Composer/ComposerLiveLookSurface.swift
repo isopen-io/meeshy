@@ -118,7 +118,12 @@ final class ComposerLiveLookRenderer: NSObject, MTKViewDelegate {
         scene = nil
     }
 
-    func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {}
+    /// Une source figée (#9352) ne prévient qu'une fois, parfois avant que la vue
+    /// ait sa taille : la toile qui change de taille se redessine, sans attendre
+    /// une trame qui ne viendra pas.
+    func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {
+        view.setNeedsDisplay()
+    }
 
     func draw(in view: MTKView) {
         guard let commandQueue = ComposerLookGPU.commandQueue,

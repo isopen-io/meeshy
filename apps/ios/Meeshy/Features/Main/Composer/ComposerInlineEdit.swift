@@ -99,16 +99,25 @@ nonisolated enum ComposerInlineEditing {
     /// et les offrir ailleurs serait servir un contrôle sans effet — ce que la
     /// loi 4 bannit. Un fond, lui, dure la slide entière.
     ///
-    /// **Une RETOUCHE d'image du fil se recadre, d'abord** (#9136) : le
-    /// recadrage n'est servi qu'au FOND IMAGE d'une pièce retouchée — c'est là
-    /// qu'il se cuit dans la pièce rendue. Ailleurs, le lecteur ne recadre pas
-    /// un fond : l'offrir serait un contrôle sans effet.
+    /// **Une IMAGE se recadre, d'abord** — l'ordre des décisions de la vue
+    /// `2d`. Deux images le servent : le FOND IMAGE d'une pièce retouchée
+    /// (#9136), où il se cuit dans la pièce rendue, et l'image POSÉE (#9499),
+    /// dont le calque, le lecteur web et la vignette lisent la borne. Un fond
+    /// hors retouche ne l'offre pas — le lecteur ne recadre pas un fond — ni une
+    /// vidéo, dont le player ne lit pas encore la borne (#9153) : ce seraient
+    /// des contrôles sans effet.
+    ///
+    /// **Les RÉGLAGES vont à tout média qui les PEINT** — l'image posée
+    /// (#9175), la vidéo dont le player peint les trames (#9169), et le fond,
+    /// image ou vidéo, que sa couche peint par `StoryBackgroundLook` (#9496).
+    /// Les EFFETS (#9498) vont à l'IMAGE, posée ou fond : ils suivent le filtre.
     static func sections(for family: ComposerInlineFamily,
                          hasTrimmableSource: Bool,
                          retouching: Bool = false) -> [ComposerObjectEditorSection] {
         let servies = ComposerObjectEditorRail.entries(for: family.sceneKind,
                                                        hasTrimmableSource: hasTrimmableSource,
-                                                       offersFilter: !family.isVideo)
+                                                       offersFilter: !family.isVideo,
+                                                       offersAdjust: family.sceneKind == .media)
             .filter { section in
                 switch section {
                 case .timing, .plan:  return family == .text
@@ -116,7 +125,7 @@ nonisolated enum ComposerInlineEditing {
                 case .tool:           return true
                 }
             }
-        let recadre = retouching && family == .background(isVideo: false)
+        let recadre = family == .image || (retouching && family == .background(isVideo: false))
         return (recadre ? [.media(.crop)] : []) + servies
     }
 
@@ -232,6 +241,65 @@ nonisolated enum ComposerInlinePanelLayout {
     static func height(content: CGFloat, freeHeight: CGFloat) -> CGFloat {
         min(max(content, 1), maxHeight(freeHeight: freeHeight))
     }
+
+    // MARK: Laisser voir l'objet qu'on règle (#9495)
+
+    /// **Les sous-outils qui changent le RENDU de l'objet** — filtre, réglages,
+    /// effets (#9498) et recadrage (#9499). On les juge à l'œil : le panneau ne doit pas cacher ce qu'il
+    /// règle, et « Comparer » n'a de sens que si l'image comparée se voit.
+    static func keepsObjectInSight(_ section: ComposerObjectEditorSection) -> Bool {
+        [.media(.filter), .media(.adjust), .media(.effects), .media(.crop)].contains(section)
+    }
+
+    /// **Le haut ou le bas de la scène libre, du côté qui laisse voir l'objet**
+    /// (#9495). Le panneau part du haut (#9138) ; il ne descend au bas que si
+    /// le haut couvre l'objet ET que le bas le couvre moins. Sans cadre connu,
+    /// il reste en haut.
+    static func edge(object: CGRect?, free: CGSize, panelHeight: CGFloat,
+                     roomy: Bool = false) -> ComposerInlinePanelEdge {
+        guard let object, !object.isNull, !object.isEmpty else { return .top }
+        let enHaut = covered(object, by: frame(edge: .top, free: free, panelHeight: panelHeight, roomy: roomy))
+        guard enHaut > 0 else { return .top }
+        let enBas = covered(object, by: frame(edge: .bottom, free: free, panelHeight: panelHeight, roomy: roomy))
+        return enBas < enHaut ? .bottom : .top
+    }
+
+    /// Le rectangle du panneau dans la scène libre — calé à gauche de la colonne
+    /// des sous-outils, sur sa gouttière du haut ou du bas.
+    static func frame(edge: ComposerInlinePanelEdge, free: CGSize, panelHeight: CGFloat,
+                      roomy: Bool = false) -> CGRect {
+        let largeur = width(freeWidth: free.width, roomy: roomy)
+        let hauteur = height(content: panelHeight, freeHeight: free.height)
+        let droite = free.width - ComposerRailGeometry.edgeMargin(roomy: roomy)
+            - ComposerRailGeometry.railWidth - ComposerRailGeometry.gutter
+        let y = edge == .top ? ComposerRailGeometry.gutter : free.height - ComposerRailGeometry.gutter - hauteur
+        return CGRect(x: droite - largeur, y: max(0, y), width: largeur, height: hauteur)
+    }
+
+    /// La part de l'objet que le panneau recouvre, en points carrés.
+    static func covered(_ object: CGRect, by panel: CGRect) -> CGFloat {
+        let commun = object.intersection(panel)
+        return commun.isNull ? 0 : commun.width * commun.height
+    }
+
+    /// **Le cadre d'un objet de la carte, ramené dans le repère du panneau** —
+    /// la boîte englobante de son rectangle tourné autour de son ancre.
+    static func objectFrame(center: CGPoint, size: CGSize, anchor: CGPoint, rotationDegrees: Double,
+                            card: CGRect, container: CGRect) -> CGRect {
+        let origine = CGPoint(x: card.minX - container.minX + center.x - anchor.x * size.width,
+                              y: card.minY - container.minY + center.y - anchor.y * size.height)
+        let pivot = CGPoint(x: origine.x + anchor.x * size.width, y: origine.y + anchor.y * size.height)
+        let rotation = CGAffineTransform(translationX: pivot.x, y: pivot.y)
+            .rotated(by: CGFloat(rotationDegrees) * .pi / 180)
+            .translatedBy(x: -pivot.x, y: -pivot.y)
+        return CGRect(origin: origine, size: size).applying(rotation)
+    }
+}
+
+/// Le côté de la scène libre où le panneau d'options se range.
+nonisolated enum ComposerInlinePanelEdge: Equatable, Sendable {
+    case top
+    case bottom
 }
 
 nonisolated enum ComposerInlineEditCopy {

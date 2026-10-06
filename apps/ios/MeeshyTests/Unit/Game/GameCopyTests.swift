@@ -1,6 +1,7 @@
 import XCTest
 @testable import Meeshy
 import MeeshySDK
+import MeeshyUI
 
 /// Ce que le jeu DIT (#9383, #9379) : aucun nom ne sort comme une clé brute, l'accord
 /// ne passe pas par un `== 1` isolé, et chaque refus a sa phrase.
@@ -44,6 +45,20 @@ final class GameCopyTests: XCTestCase {
         for form in FlameFormKey.allCases { assertNotRaw(GameCopy.flameFormName(form), "flamme \(form)") }
         for edition in MeeshEdition.allCases { assertNotRaw(GameCopy.editionName(edition), "édition \(edition)") }
         for difficulty in MissionDifficulty.allCases { assertNotRaw(GameCopy.difficultyName(difficulty), "difficulté \(difficulty)") }
+    }
+
+    func test_everyMaterialAndEveryTierOrdinal_hasAWord_andTheOrdinalsAreDistinct() {
+        for material in GameMaterial.allCases { assertNotRaw(GameCopy.materialName(material), "matière \(material)") }
+        for tier in LevelTierKey.allCases { assertNotRaw(GameCopy.tierOrdinal(tier), "ordinal \(tier)") }
+        XCTAssertEqual(Set(LevelTierKey.allCases.map(GameCopy.tierOrdinal)).count, LevelTierKey.allCases.count)
+    }
+
+    func test_theLevelRingReads_levelTierAndItsOrdinal() {
+        let text = GameCopy.levelRingAccessibility(level: 34, tier: .eclat)
+        assertNotRaw(text, "anneau")
+        XCTAssertTrue(text.contains(GameCopy.formatCount(34)))
+        XCTAssertTrue(text.contains(GameCopy.tierName(.eclat)))
+        XCTAssertTrue(text.contains(GameCopy.tierOrdinal(.eclat)))
     }
 
     func test_theNamesAreAllDistinct() {
@@ -175,5 +190,55 @@ final class GameCopyTests: XCTestCase {
         let means = GameGuideCopy.moment(moment).means
         XCTAssertTrue(means.contains(GameCopy.formatCount(14)))
         XCTAssertTrue(means.contains(GameCopy.formatCount(9)))
+    }
+
+    // MARK: - Le minuteur d'une mission (#9539)
+
+    func test_calmDuration_showsHoursAndMinutes_neverSeconds() {
+        let text = GameCopy.calmDuration(3600 + 23 * 60 + 40)
+        XCTAssertTrue(text.contains("1"))
+        XCTAssertTrue(text.contains("24"), "les secondes s'arrondissent à la minute supérieure : \(text)")
+        assertNotRaw(text, "durée")
+    }
+
+    func test_calmDuration_underAnHour_isMinutesOnly_andNeverZero() {
+        XCTAssertTrue(GameCopy.calmDuration(12 * 60).contains("12"))
+        XCTAssertTrue(GameCopy.calmDuration(5).contains("1"), "moins d'une minute se lit « 1 min », jamais « 0 »")
+    }
+
+    func test_missionEnding_speaksOnlyOncePastTheWindow() {
+        XCTAssertNil(GameCopy.missionEnding(.running(remaining: 60)))
+        XCTAssertNil(GameCopy.missionEnding(.upcoming(startsIn: 60)))
+        XCTAssertNil(GameCopy.missionEnding(.done))
+        XCTAssertNil(GameCopy.missionEnding(nil))
+        XCTAssertEqual(GameCopy.missionEnding(.finished)?.isSuccess, true)
+        XCTAssertEqual(GameCopy.missionEnding(.missed)?.isSuccess, false)
+        assertNotRaw(GameCopy.missionEnding(.finished)?.text ?? "", "Terminée")
+        assertNotRaw(GameCopy.missionEnding(.missed)?.text ?? "", "Manquée")
+    }
+
+    func test_missionTimerLine_countsWhileTheWindowRuns_andIsSilentOnceDone() {
+        let start = Date(timeIntervalSince1970: 1_790_000_000)
+        let window = GameMissionWindow(start: start, end: start.addingTimeInterval(7200))
+        XCTAssertNotNil(GameCopy.missionTimerLine(.running(remaining: 4500), window: window))
+        XCTAssertNotNil(GameCopy.missionTimerLine(.upcoming(startsIn: 900), window: window))
+        XCTAssertNil(GameCopy.missionTimerLine(.done, window: window))
+        XCTAssertNil(GameCopy.missionTimerLine(nil, window: window))
+    }
+
+    func test_missionTimerLine_afterThePersonalWindow_recallsTheRange_butNotForADailyMission() {
+        let start = Date(timeIntervalSince1970: 1_790_000_000)
+        let window = GameMissionWindow(start: start, end: start.addingTimeInterval(7200))
+        XCTAssertNotNil(GameCopy.missionTimerLine(.missed, window: window))
+        XCTAssertNil(GameCopy.missionTimerLine(.missed, window: nil), "une mission du jour n'a pas de plage à rappeler")
+    }
+
+    func test_theMissionCard_hidesItsActionOncePastTheEnd() throws {
+        let here = URL(fileURLWithPath: #filePath)
+        let root = here.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let view = try String(contentsOf: root.appendingPathComponent("Meeshy/Features/Main/Game/GameMissionsView.swift"), encoding: .utf8)
+        XCTAssertTrue(view.contains("phase?.allowsAction"), "l'action disparaît passé la fin")
+        XCTAssertTrue(view.contains("missions.personal"), "la mission personnelle a sa carte")
+        XCTAssertTrue(view.contains("TimelineView"), "le minuteur vit")
     }
 }

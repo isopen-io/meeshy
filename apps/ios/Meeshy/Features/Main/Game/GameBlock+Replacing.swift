@@ -16,6 +16,7 @@ extension GameBlock.Level {
         pointsToNext: Int? = nil,
         progress: Double? = nil,
         record: Int? = nil,
+        prestige: Int? = nil,
         canPrestige: Bool? = nil
     ) -> GameBlock.Level {
         GameBlock.Level(
@@ -27,7 +28,7 @@ extension GameBlock.Level {
             pointsToNext: pointsToNext ?? self.pointsToNext,
             progress: progress ?? self.progress,
             record: record ?? self.record,
-            prestige: prestige,
+            prestige: prestige ?? self.prestige,
             canPrestige: canPrestige ?? self.canPrestige
         )
     }
@@ -68,7 +69,8 @@ extension GameBlock.Missions {
             prismDay: prismDay,
             unlocked: unlocked,
             items: items ?? self.items,
-            rerollAvailable: rerollAvailable ?? self.rerollAvailable
+            rerollAvailable: rerollAvailable ?? self.rerollAvailable,
+            personal: personal
         )
     }
 }
@@ -118,7 +120,8 @@ extension GameBlock {
         chest: Chest? = nil,
         flame: Flame? = nil,
         boosts: Boosts? = nil,
-        guideSeen: [String]? = nil
+        guideSeen: [String]? = nil,
+        wave2: GameWave2? = nil
     ) -> GameBlock {
         GameBlock(
             level: level ?? self.level,
@@ -129,7 +132,8 @@ extension GameBlock {
             chest: chest ?? self.chest,
             flame: flame ?? self.flame,
             boosts: boosts ?? self.boosts,
-            guideSeen: guideSeen ?? self.guideSeen
+            guideSeen: guideSeen ?? self.guideSeen,
+            wave2: wave2 ?? self.wave2
         )
     }
 }

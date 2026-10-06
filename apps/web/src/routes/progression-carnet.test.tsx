@@ -50,8 +50,8 @@ const pending = (moment: PhotoMoment, createdAt: string, expiresAt: string): Not
   expiresAt,
 });
 
-function bench(entries: readonly NotebookEntry[] | 'broken') {
-  const state = { entries: [...(entries === 'broken' ? [] : entries)], removed: [] as string[], shared: [] as File[] };
+function bench(entries: readonly NotebookEntry[] | 'broken', link: string | null = null) {
+  const state = { entries: [...(entries === 'broken' ? [] : entries)], removed: [] as string[], shared: [] as File[], texts: [] as (string | undefined)[] };
   const notebook: Notebook = {
     defer: async () => true,
     keep: async () => true,
@@ -64,7 +64,8 @@ function bench(entries: readonly NotebookEntry[] | 'broken') {
   };
   const env = {
     notebook,
-    share: async (file: File) => (state.shared.push(file), 'shared' as const),
+    share: async (file: File, _title: string, text?: string) => (state.shared.push(file), state.texts.push(text), 'shared' as const),
+    referral: async () => link,
     now: () => new Date('2026-10-05T10:00:00.000Z'),
     playOptions: { reducedMotion: false, haptics: false, schedule: (run: () => void) => (run(), () => undefined) },
   } as unknown as PhotoEnv;
@@ -131,6 +132,25 @@ describe('les photos gardées', () => {
     await settle();
     expect(state.shared).toHaveLength(1);
     expect(state.shared[0]?.type).toBe('image/png');
+  });
+
+  test('« Partager » redit aussi le lien de parrainage en texte (#7742)', async () => {
+    const { env, state } = bench(entries, 'https://meeshy.me/signup/affiliate/aff_abc');
+    const host = await mount(<CarnetBody env={env} />);
+    await settle();
+    await click(by(host, 'data-carnet-share'));
+    await settle();
+    expect(state.texts).toEqual(['Rejoins-moi sur Meeshy : https://meeshy.me/signup/affiliate/aff_abc']);
+  });
+
+  test('sans lien, l’image part seule', async () => {
+    const { env, state } = bench(entries, null);
+    const host = await mount(<CarnetBody env={env} />);
+    await settle();
+    await click(by(host, 'data-carnet-share'));
+    await settle();
+    expect(state.shared).toHaveLength(1);
+    expect(state.texts).toEqual([undefined]);
   });
 
   test('retirer demande une confirmation, puis retire', async () => {

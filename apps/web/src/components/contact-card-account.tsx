@@ -7,6 +7,7 @@ import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 
 import { Avatar } from './avatar';
+import { ContactGameStripSlot } from './game-profile-slots';
 
 /**
  * **LE COMPTE MEESHY D'UNE CARTE DE VISITE** (#8101) — une seule écriture,
@@ -66,6 +67,8 @@ export function ContactAccountRow({
           {account.bio}
         </p>
       ) : null}
+      {/* LE JEU DE CE COMPTE (#9481) — la vitrine, SI sa visibilité l'autorise : fermée, rien ne se dessine. Fiche complète seulement, jamais sur soi. */}
+      {full && account.relation !== 'self' ? <ContactGameStripSlot userId={account.userId} enabled /> : null}
       {view.state !== null ? (
         <p className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }} data-contact-state="">
           {translate(language, view.state)}

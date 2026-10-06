@@ -64,7 +64,7 @@ describe('resolveEngagementProgress — les badges par axe', () => {
   it('un compteur tient pour atteints les paliers qu’il dépasse, et mesure le pas vers le suivant DEPUIS le dernier franchi', () => {
     const progress = resolveEngagementProgress(payload({ counters: [{ axisKey: 'content.text_message', count: 12 }] }));
     const messages = axis(progress, 'content.text_message');
-    expect(messages.tiers.map((t) => t.reached)).toEqual([true, true, false, false, false]);
+    expect(messages.tiers.map((t) => t.reached)).toEqual([true, true, false, false, false, false, false]);
     expect(messages).toMatchObject({ value: 12, reachedCount: 2, previousThreshold: 10, nextThreshold: 50 });
     // 2 pas sur 40 depuis le palier 10 — pas 12 sur 50 depuis zéro.
     expect(messages.progress).toBeCloseTo(0.05, 6);
@@ -96,8 +96,13 @@ describe('resolveEngagementProgress — les badges par axe', () => {
   });
 
   it('une échelle complète n’a plus de palier suivant et vaut 1', () => {
+    const progress = resolveEngagementProgress(payload({ counters: [{ axisKey: 'tool.sticker', count: 5000 }] }));
+    expect(axis(progress, 'tool.sticker')).toMatchObject({ reachedCount: 7, nextThreshold: null, previousThreshold: 5000, progress: 1 });
+  });
+
+  it('le palier 500 n\'est plus le sommet : Obsidienne (1 000) puis Prisme (5 000) le suivent (#9392)', () => {
     const progress = resolveEngagementProgress(payload({ counters: [{ axisKey: 'tool.sticker', count: 500 }] }));
-    expect(axis(progress, 'tool.sticker')).toMatchObject({ reachedCount: 5, nextThreshold: null, previousThreshold: 500, progress: 1 });
+    expect(axis(progress, 'tool.sticker')).toMatchObject({ reachedCount: 5, nextThreshold: 1000, previousThreshold: 500, progress: 0 });
   });
 
   it('un axe inconnu du catalogue et un palier hors catalogue sont IGNORÉS, jamais une exception', () => {

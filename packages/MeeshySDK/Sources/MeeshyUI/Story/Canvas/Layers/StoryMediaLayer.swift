@@ -258,6 +258,12 @@ public final class StoryMediaLayer: CALayer {
     /// la surface qui le porte.
     private nonisolated(unsafe) var playsAProvidedPlayer = false
 
+    /// Les réglages que l'item courant PEINT (#9169) — son identité et la
+    /// signature des valeurs —, et la construction en vol de sa composition.
+    /// Voir `StoryMediaLayer+VideoLook.swift`.
+    nonisolated(unsafe) var appliedVideoLook: (item: ObjectIdentifier, signature: String)?
+    nonisolated(unsafe) var videoLookTask: Task<Void, Never>?
+
     public override nonisolated init() { super.init() }
     public override nonisolated init(layer: Any) { super.init(layer: layer) }
 
@@ -422,14 +428,14 @@ public final class StoryMediaLayer: CALayer {
     /// **La taille et le centre qu'un média pose dans le canvas** — la moitié
     /// géométrique de `configure`, isolée pour rester testable seule. Le
     /// mesureur qui la consommait à distance (`StorySceneFootprint`, #6636)
-    /// est parti avec la carte unique (#6904, décision porteur du 2026-09-17) :
-    /// `configure` en reste l'unique appelant. Le recadrage change les
+    /// est parti avec la carte unique (#6904, décision porteur du 2026-09-17).
+    /// Publique depuis #9495 : le composer y lit le cadre de l'objet qu'il
+    /// règle, pour ranger son panneau du côté qui le laisse voir — la même
+    /// géométrie que le calque peint, jamais une copie. Le recadrage change les
     /// proportions de l'objet (#5085).
-    static func renderedPose(for media: StoryMediaObject,
-                             geometry: CanvasGeometry) -> (size: CGSize, center: CGPoint) {
-        let effectiveRatio = MediaCropRule.effectiveRatio(
-            sourceRatio: media.aspectRatio, crop: media.crop)
-        let baseDesignSize = baseMediaDesignSize(aspectRatio: effectiveRatio)
+    public static func renderedPose(for media: StoryMediaObject,
+                                    geometry: CanvasGeometry) -> (size: CGSize, center: CGPoint) {
+        let baseDesignSize = baseMediaDesignSize(for: media)
         let scaledDesignSize = CGSize(width: baseDesignSize.width * CGFloat(media.scale),
                                       height: baseDesignSize.height * CGFloat(media.scale))
         let designCenter = CGPoint(x: geometry.designLength(forNormalized: CGFloat(media.x)),
@@ -618,10 +624,13 @@ public final class StoryMediaLayer: CALayer {
     /// fait pour le filtre de slide (`StoryBackgroundLayer.stampFinalImage`).
     /// La clé de cache suit l'INSTANCE d'image : un bitmap retouché ne resservira
     /// jamais le filtre de l'ancien.
+    /// Les RÉGLAGES de l'objet (#9175) suivent le filtre, dans l'ordre de
+    /// l'éditeur d'image : filtre, puis réglages.
     static func filtered(_ image: UIImage?, for media: StoryMediaObject) -> UIImage? {
-        guard let image, let filtre = media.parsedFilter else { return image }
-        return StoryFilterProcessor.apply(filtre, to: image,
-                                          imageId: "\(media.id)-\(ObjectIdentifier(image).hashValue)")
+        guard let image else { return nil }
+        let instance = "\(media.id)-\(ObjectIdentifier(image).hashValue)"
+        let filtree = media.parsedFilter.map { StoryFilterProcessor.apply($0, to: image, imageId: instance) } ?? image
+        return StoryMediaAdjustmentsProcessor.apply(media.adjustments, to: filtree, imageId: "\(instance)-\(media.filter ?? "")")
     }
 
     // MARK: - Video path
@@ -729,6 +738,9 @@ public final class StoryMediaLayer: CALayer {
             // le niveau de BASE, la couche porte le niveau COURANT (base +
             // automation + ducking).
             existing.volume = volume
+            // Un réglage changé à URL constante (curseur du composer) se
+            // repeint sans toucher à la lecture (#9169).
+            applyVideoLook(to: existing.currentItem)
             return
         }
         attachedURL = url
@@ -760,6 +772,7 @@ public final class StoryMediaLayer: CALayer {
         }
 
         guard let player = avPlayerLayer?.player else { return }
+        applyVideoLook(to: player.currentItem)
 
         // Stampe l'état mute courant : si l'utilisateur a déjà tapé Mute dans
         // la sidebar AVANT que la layer attache son `AVPlayer` (cas du switch
@@ -1113,6 +1126,7 @@ public final class StoryMediaLayer: CALayer {
             NotificationCenter.default.removeObserver(token)
             loopObserver = nil
         }
+        releaseVideoLook(from: avPlayerLayer?.player?.currentItem)
         if let player = avPlayerLayer?.player {
             player.pause()
             if !playsAProvidedPlayer {

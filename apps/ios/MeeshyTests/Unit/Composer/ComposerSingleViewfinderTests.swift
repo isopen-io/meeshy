@@ -85,10 +85,10 @@ final class ComposerSingleViewfinderTests: XCTestCase {
     /// La croix, elle, reste — quitter à tout moment (#8653).
     func test_leViseurPleinEcran_neProposePasDeReduction() throws {
         let viseur = try code("Meeshy/Features/Main/Composer/ComposerViewfinder.swift")
-        XCTAssertTrue(viseur.contains("size: .fullScreen"))
+        XCTAssertTrue(viseur.contains("size: .constant(.fullScreen)"))
         XCTAssertTrue(viseur.contains("offersSizeToggle: false"))
-        XCTAssertTrue(viseur.contains("ComposerCapturePreview(session: capture"),
-                      "l'aperçu partagé rend le panneau de refus, pas un aperçu noir (#9134)")
+        XCTAssertTrue(viseur.contains("ComposerCaptureMount(session: capture"),
+                      "le montage unique rend le panneau de refus, pas un aperçu noir (#9134, #9351)")
         let vues = try code("Meeshy/Features/Main/Composer/ComposerCaptureViews.swift")
         XCTAssertTrue(vues.contains("CameraPermissionPanel()"), "un refus rend le panneau, pas un aperçu noir")
     }
@@ -110,13 +110,6 @@ final class ComposerPhotoLookTests: XCTestCase {
         XCTAssertTrue(ComposerPhotoLook().isUntouched)
         XCTAssertFalse(ComposerPhotoLook(filter: .warm, frame: .none).isUntouched)
         XCTAssertFalse(ComposerPhotoLook(filter: .natural, frame: .montage(.classic(.polaroid))).isUntouched)
-    }
-
-    func test_originalBytes_neSuiventQueLaPhotoDOrigine() {
-        let octets = Data([0xFF, 0xD8])
-        XCTAssertEqual(ComposerViewfinderRules.originalBytes(octets, look: ComposerPhotoLook()), octets)
-        XCTAssertNil(ComposerViewfinderRules.originalBytes(octets, look: ComposerPhotoLook(filter: .vivid)),
-                     "un EXIF qui décrirait une autre image mentirait sur ce qui part")
     }
 
     func test_filtres_sontLesPreReglagesDeLAppel_naturelEnTete() {
@@ -158,21 +151,6 @@ final class ComposerPhotoLookTests: XCTestCase {
         XCTAssertEqual(ComposerPhotoLookRule.chip(of: .montage(.classic(.neon))), .classics)
     }
 
-    func test_captureLook_traduitLeChoixPourLePeintreDeLAppel() throws {
-        XCTAssertNil(ComposerPhotoLookRule.captureLook(for: .none))
-        XCTAssertEqual(ComposerPhotoLookRule.captureLook(for: .montage(.classic(.polaroid))), .classic(.polaroid))
-        XCTAssertNil(ComposerPhotoLookRule.captureLook(for: .montage(.frame("inconnu.inconnu.duo"))),
-                     "un cadre inconnu ne peint rien plutôt qu'un autre cadre")
-        let duo = try XCTUnwrap(CallFrameCatalogue.frames(forPeople: 2).first)
-        XCTAssertEqual(ComposerPhotoLookRule.captureLook(for: .montage(.frame(duo.id))), .frame(duo))
-    }
-
-    func test_downscale_borneSansJamaisAgrandir() {
-        XCTAssertEqual(ComposerPhotoLookRule.downscale(for: CGSize(width: 4000, height: 3000), maxPixel: 1000), 0.25,
-                       accuracy: 0.0001)
-        XCTAssertEqual(ComposerPhotoLookRule.downscale(for: CGSize(width: 300, height: 200), maxPixel: 1000), 1)
-    }
-
     func test_auteur_nomDAffichageSinonPseudo() {
         let nomme = ComposerPhotoLookPerson.author(id: "u1", displayName: "Jean", username: "jcnm")
         XCTAssertEqual(nomme, CallFramePerson(id: "u1", name: "Jean", handle: "jcnm", isSelf: true))
@@ -188,62 +166,9 @@ final class ComposerPhotoLookTests: XCTestCase {
         XCTAssertTrue(VideoFilterColorimetry.graded(image, config: VideoFilterPreset.natural.config) === image)
     }
 
-    func test_graded_sansBorneNiFiltre_rendLaPhotoElleMeme() {
-        let photo = Self.photo()
-        XCTAssertTrue(ComposerPhotoLookRenderer.graded(photo, filter: .natural, maxPixel: nil) === photo,
-                      "aucun ré-encodage d'une prise intacte")
-    }
-
-    func test_graded_filtreDeLAppel_changeLesPixelsEtGardeLaTaille() throws {
-        let photo = Self.photo()
-        let filtree = try XCTUnwrap(ComposerPhotoLookRenderer.graded(photo, filter: .vivid, maxPixel: nil))
-        XCTAssertEqual(filtree.width, photo.width)
-        XCTAssertEqual(filtree.height, photo.height)
-        XCTAssertNotEqual(Self.moyenne(filtree), Self.moyenne(photo))
-    }
-
-    func test_graded_borne_reduitLaPlusGrandeDimension() throws {
-        let reduite = try XCTUnwrap(ComposerPhotoLookRenderer.graded(Self.photo(), filter: .natural, maxPixel: 100))
-        XCTAssertEqual(max(reduite.width, reduite.height), 100)
-    }
-
-    func test_render_sansCadre_rendLaPhotoFiltree() throws {
-        let source = Self.source()
-        let rendu = try XCTUnwrap(ComposerPhotoLookRenderer.render(
-            ComposerPhotoLook(filter: .warm), source: source, maxPixel: nil, frameCanvas: CGSize(width: 108, height: 192)))
-        XCTAssertEqual(rendu.width, source.photo.width, "sans cadre, la photo garde son format")
-    }
-
-    func test_render_cadreClassique_peintSurLaToileDuMontage() throws {
-        let toile = CGSize(width: 108, height: 192)
-        let rendu = try XCTUnwrap(ComposerPhotoLookRenderer.render(
-            ComposerPhotoLook(frame: .montage(.classic(.polaroid))), source: Self.source(), maxPixel: nil, frameCanvas: toile))
-        XCTAssertEqual(rendu.width, 108)
-        XCTAssertEqual(rendu.height, 192)
-    }
-
-    func test_render_cadreDuDuo_peintUneSeulePersonne() throws {
-        let duo = try XCTUnwrap(CallFrameCatalogue.frames(forPeople: 2).first)
-        let rendu = try XCTUnwrap(ComposerPhotoLookRenderer.render(
-            ComposerPhotoLook(frame: .montage(.frame(duo.id))), source: Self.source(), maxPixel: nil,
-            frameCanvas: CGSize(width: 108, height: 192)))
-        XCTAssertEqual(rendu.width, 108)
-    }
-
-    func test_vignettes_unePourChaqueFiltreEtChaqueCadre() {
-        let filtres = ComposerPhotoLookThumbnails.paintingFilters(source: Self.source())
-        XCTAssertEqual(Set(filtres.filters.keys), Set(VideoFilterPreset.allCases))
-        let cadres = Array(ComposerPhotoLookRule.frames(for: .classics).prefix(3))
-        let vignettes = ComposerPhotoLookThumbnails.paintingFrames(source: Self.source(), filter: .natural, frames: cadres)
-        XCTAssertEqual(Set(vignettes.frames.keys), Set(cadres))
-    }
-
-    func test_leViseur_neRemetQuUneFois_etMasqueSaCameraSousLaPrise() throws {
+    func test_leViseur_neRemetQuUneFois() throws {
         let viseur = try Self.code("Meeshy/Features/Main/Composer/ComposerViewfinder.swift")
-        XCTAssertTrue(viseur.contains("guard !delivered else { return }"), "deux touchers sur « Valider » posaient deux pièces")
-        XCTAssertTrue(viseur.contains(".accessibilityHidden(pendingPhoto != nil)"),
-                      "VoiceOver n'atteint pas l'obturateur caché sous la prise")
-        XCTAssertTrue(viseur.contains(".accessibilityAddTraits(.isModal)"))
+        XCTAssertTrue(viseur.contains("guard !delivered else { return }"), "deux validations rapprochées posaient deux pièces")
     }
 
     // MARK: - Les couleurs de la prise (#9327)
@@ -256,30 +181,6 @@ final class ComposerPhotoLookTests: XCTestCase {
         XCTAssertEqual(ComposerPhotoLookRule.colorSpace(of: Self.photoGrise()).name, CGColorSpace.sRGB)
     }
 
-    func test_graded_filtre_rendLaPhotoDansSonEspace() throws {
-        let filtree = try XCTUnwrap(ComposerPhotoLookRenderer.graded(Self.photoP3(), filter: .warm, maxPixel: nil))
-        XCTAssertEqual(filtree.colorSpace?.name, CGColorSpace.displayP3,
-                       "un filtre change la teinte qu'il annonce, jamais l'espace de la photo")
-    }
-
-    func test_graded_unRougeHorsGamutSRGB_survitALaReduction() throws {
-        let reduite = try XCTUnwrap(ComposerPhotoLookRenderer.graded(Self.photoP3(), filter: .natural, maxPixel: 100))
-        let centre = Self.pixelP3(reduite)
-        XCTAssertGreaterThan(centre[0], 245)
-        XCTAssertLessThan(centre[1], 10, "écrêté en sRGB, le rouge P3 ressortirait délavé : \(centre)")
-    }
-
-    func test_render_naturelEtCadre_gardeLeRougeDeLaPhoto() throws {
-        let toile = CGSize(width: 108, height: 192)
-        let rendu = try XCTUnwrap(ComposerPhotoLookRenderer.render(
-            ComposerPhotoLook(frame: .montage(.classic(.screen))), source: Self.source(photo: Self.photoP3()),
-            maxPixel: nil, frameCanvas: toile))
-        XCTAssertEqual(rendu.colorSpace?.name, CGColorSpace.displayP3, "le cadre se peint dans l'espace de la photo")
-        let centre = Self.pixelP3(rendu)
-        XCTAssertGreaterThan(centre[0], 245)
-        XCTAssertLessThan(centre[1], 10, "choisir un cadre ne délave pas la photo : \(centre)")
-    }
-
     func test_cubeDeLAppel_resteEnSRGBParDefaut() throws {
         let peintre = try Self.code("Meeshy/Features/Main/Services/CallColorLook.swift")
         XCTAssertTrue(peintre.contains("colorSpace: CGColorSpace = CallColorLook.callColorSpace"),
@@ -288,8 +189,8 @@ final class ComposerPhotoLookTests: XCTestCase {
 
     // MARK: - Le relief Liquid Glass (#9330)
 
-    func test_lesBoutonsDuViseurEtDeLaPrise_ontLeReliefLiquidGlass() throws {
-        for fichier in ["ComposerSceneCameraBar.swift", "ComposerPhotoLookReview.swift", "ComposerViewfinder.swift"] {
+    func test_lesBoutonsDuViseur_ontLeReliefLiquidGlass() throws {
+        for fichier in ["ComposerSceneCameraBar.swift", "ComposerCaptureRefusedChrome.swift", "ComposerExposureSlider.swift"] {
             let code = try Self.code("Meeshy/Features/Main/Composer/\(fichier)")
             XCTAssertFalse(code.contains(".adaptiveGlass(in:"),
                            "\(fichier) : un verre plat sous iOS 26 — le relief passe par adaptiveLiquidGlass")
@@ -298,36 +199,33 @@ final class ComposerPhotoLookTests: XCTestCase {
         let barre = try Self.code("Meeshy/Features/Main/Composer/ComposerSceneCameraBar.swift")
         XCTAssertTrue(barre.contains(".adaptiveLiquidGlass(in: Circle(), interactive: true)"),
                       "un bouton du viseur réagit au toucher")
-        let prise = try Self.code("Meeshy/Features/Main/Composer/ComposerPhotoLookReview.swift")
-        XCTAssertTrue(prise.contains(".adaptiveGlassProminent(in: Capsule()"),
-                      "« Valider » est l'action terminale, sur verre proéminent")
-        XCTAssertFalse(prise.contains("Capsule().fill(MeeshyColors.indigo500)"))
     }
 
     // MARK: - Le câblage : les pièces de l'appel, aucune jumelle
 
-    func test_leViseur_monteLaPrise_etLaScenePasse() throws {
+    /// **#9295 → #9351 : la revue photo est partie, la bande la remplace.** Le
+    /// viseur monte le montage unique ; la page blanche verse dans une scène.
+    func test_leViseur_monteLeMontageUnique_etLaScenePasse() throws {
         let viseur = try Self.code("Meeshy/Features/Main/Composer/ComposerViewfinder.swift")
-        XCTAssertTrue(viseur.contains("ComposerPhotoLookReview("), "une photo passe par la prise")
+        XCTAssertTrue(viseur.contains("ComposerCaptureMount("), "le viseur monte l'objet unique")
         let pont = try Self.code("Meeshy/Features/Main/Composer/ComposerViewfinder+Provider.swift")
-        XCTAssertTrue(pont.contains("ComposerViewfinder(reviewsPhoto: false)"),
-                      "la page blanche verse dans une scène, où la photo s'édite déjà")
+        XCTAssertTrue(pont.contains("ComposerViewfinder {"), "la porte de l'atelier monte le même viseur")
     }
 
-    func test_laPrise_monteLesVuesDeLAppel() throws {
-        let prise = try Self.code("Meeshy/Features/Main/Composer/ComposerPhotoLookReview.swift")
-        for vue in ["CallModeCarousel(", "CallModeThumbnail(", "CallFrameMoodChips(",
-                    "CallEffectsCopy.presetName", "CallFrameCopy.choiceName"] {
-            XCTAssertTrue(prise.contains(vue), "la prise ne réutilise plus \(vue)")
+    func test_laBande_nommeAvecLesMotsDeLAppel() throws {
+        let bande = try Self.code("Meeshy/Features/Main/Composer/ComposerLookStrip.swift")
+        for vue in ["CallEffectsCopy.presetName", "CallFrameCopy.choiceName", "CallEffectsCopy.presetSymbol"] {
+            XCTAssertTrue(bande.contains(vue), "la bande ne réutilise plus \(vue)")
         }
     }
 
     func test_lePeintre_estCeluiDeLAppel() throws {
-        let peintre = try Self.code("Meeshy/Features/Main/Composer/ComposerPhotoLook.swift")
-        XCTAssertTrue(peintre.contains("CallCaptureController.render("), "les cadres se peignent comme à l'appel")
-        XCTAssertTrue(peintre.contains("VideoFilterColorimetry.graded("), "les filtres passent par la colorimétrie du flux")
-        XCTAssertFalse(peintre.contains("CITemperatureAndTint"), "aucune jumelle de la colorimétrie")
-        XCTAssertFalse(peintre.contains("CIColorControls"), "aucune jumelle de la colorimétrie")
+        let loi = try Self.code("Meeshy/Features/Main/Composer/ComposerLiveLook.swift")
+        XCTAssertTrue(loi.contains("VideoFilterColorimetry.graded("), "les filtres passent par la colorimétrie du flux")
+        let peintre = try Self.code("Meeshy/Features/Main/Composer/ComposerLookPainter.swift")
+        for jumelle in ["CITemperatureAndTint", "CIColorControls"] {
+            XCTAssertFalse(peintre.contains(jumelle) || loi.contains(jumelle), "aucune jumelle de la colorimétrie")
+        }
         let flux = try Self.code("Meeshy/Features/Main/Services/VideoFilterPipeline.swift")
         XCTAssertTrue(flux.contains("image = VideoFilterColorimetry.graded(image, config: cfg)"),
                       "le flux d'appel et la photo partagent UNE colorimétrie")
@@ -342,11 +240,6 @@ final class ComposerPhotoLookTests: XCTestCase {
         contexte.setFillColor(CGColor(red: 0.55, green: 0.45, blue: 0.35, alpha: 1))
         contexte.fill(CGRect(x: 0, y: 0, width: width, height: height))
         return contexte.makeImage()!
-    }
-
-    private static func source(photo: CGImage = photo()) -> ComposerPhotoLookSource {
-        ComposerPhotoLookSource.taken(photo, by: CallFramePerson(id: "u1", name: "Jean", handle: "jcnm", isSelf: true),
-                                      at: Date(timeIntervalSince1970: 1_790_000_000))
     }
 
     /// Un rouge Display P3 PUR — hors du gamut sRGB : écrêté, il pâlit.
@@ -365,27 +258,6 @@ final class ComposerPhotoLookTests: XCTestCase {
         contexte.setFillColor(gray: 0.5, alpha: 1)
         contexte.fill(CGRect(x: 0, y: 0, width: 8, height: 8))
         return contexte.makeImage()!
-    }
-
-    /// Le pixel CENTRAL, lu en Display P3.
-    private static func pixelP3(_ image: CGImage) -> [UInt8] {
-        let centre = image.cropping(to: CGRect(x: image.width / 2, y: image.height / 2, width: 1, height: 1))!
-        let contexte = CGContext(data: nil, width: 1, height: 1, bitsPerComponent: 8, bytesPerRow: 4,
-                                 space: CGColorSpace(name: CGColorSpace.displayP3)!,
-                                 bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
-        contexte.draw(centre, in: CGRect(x: 0, y: 0, width: 1, height: 1))
-        let octets = contexte.data!.bindMemory(to: UInt8.self, capacity: 4)
-        return (0..<4).map { octets[$0] }
-    }
-
-    /// La couleur moyenne, lue sur un pixel unique.
-    private static func moyenne(_ image: CGImage) -> [UInt8] {
-        let contexte = CGContext(data: nil, width: 1, height: 1, bitsPerComponent: 8, bytesPerRow: 4,
-                                 space: CGColorSpaceCreateDeviceRGB(),
-                                 bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
-        contexte.draw(image, in: CGRect(x: 0, y: 0, width: 1, height: 1))
-        let octets = contexte.data!.bindMemory(to: UInt8.self, capacity: 4)
-        return (0..<4).map { octets[$0] }
     }
 
     private static func code(_ relative: String) throws -> String {

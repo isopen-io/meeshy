@@ -217,6 +217,8 @@ struct iPadCoversAndChromeLayer: ViewModifier {
     @Binding var showStoryViewerFromConv: Bool
     let selectedStoryUserIdFromConv: String?
     let activeConversationId: String?
+    /// La route ouverte dans le panneau de droite : un écran profond y cache la bannière du joueur (#9494).
+    var rightPanelRoute: Route? = nil
     let onStoryReply: (ReplyContext) -> Void
     let onSyncPillTap: (OutboxUIItem.Source) -> Void
     let activeConversationIdForBanner: () -> String?
@@ -327,7 +329,13 @@ struct iPadCoversAndChromeLayer: ViewModifier {
             }
             .modifier(CallPresentationLayer(
                 miniPlayerOnTapBody: onMiniPlayerTap,
-                miniPlayerCurrentConversationId: { activeConversationId }
+                miniPlayerCurrentConversationId: { activeConversationId },
+                // La BANNIÈRE DU JOUEUR (#9494), comme sur iPhone : la colonne des conversations reste là, mais un fil
+                // ouvert a besoin de toute sa hauteur, et le lecteur de réels est plein cadre.
+                playerBannerHosted: PlayerBannerPlacement.hostsOnTablet(
+                    conversationIsOpen: activeConversationId != nil, panelRoute: rightPanelRoute,
+                    reelsAreOpen: reelsPresenter.launch != nil),
+                onPlayerBannerTap: { router.push(.progression) }
             ))
             // L'onboarding post-inscription (#7729) — le même hôte que sur
             // iPhone, au même rang : APRÈS la pastille et la présentation

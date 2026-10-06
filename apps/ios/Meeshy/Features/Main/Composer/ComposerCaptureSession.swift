@@ -32,8 +32,11 @@ final class ComposerCaptureSession: ObservableObject {
     /// accroche, le toucher du chrome le lit.
     let focusPoints = CameraPreviewFocusPoints()
 
-    /// L'étape du viseur — la loi est dans `ComposerSceneCamera`.
-    @Published var stage: ComposerSceneCameraStage
+    /// L'étape du viseur — la loi est dans `ComposerSceneCamera`. Le guet des
+    /// trames la suit : la bande peint dès le viseur armé (#9351).
+    @Published var stage: ComposerSceneCameraStage {
+        didSet { refreshFeed() }
+    }
     /// La pastille annoncée ; `nil` tant que rien n'est armé.
     @Published var mode: ComposerSceneCameraMode?
     @Published var flash: AVCaptureDevice.FlashMode = .off
@@ -54,10 +57,32 @@ final class ComposerCaptureSession: ObservableObject {
     @Published var look = ComposerPhotoLook() {
         didSet { refreshFeed() }
     }
-    /// Le sélecteur d'effets est déplié.
-    @Published var looksOpen = false
-    /// La vidéo se rend avec son look : le `✓` attend, et le dit.
-    @Published private(set) var isRenderingLook = false
+    /// La luminosité visée, en EV (#9351) — le curseur vertical sous le flash.
+    @Published var exposureBias = ComposerExposureRule.neutral
+    /// La famille dont la bande est ouverte ; `nil` ⇒ la bande se replie sur la
+    /// seule miniature choisie, qui sert de déclencheur (#9351).
+    @Published var openFamily: ComposerLookFamily?
+    /// Le cadrage de la prise ; la retouche le règle (#9352).
+    @Published var framing = ComposerFraming.identity
+    /// On vise, ou on retouche (#9352).
+    @Published var phase = ComposerCapturePhase.capturing
+    /// La photo figée de l'édition, debout.
+    var editPhoto: CGImage?
+    /// Les octets de la prise : leur EXIF suit le rendu final.
+    var editPhotoData: Data?
+    /// Ce que le peintre lit en édition : la photo figée, ou la vidéo en boucle.
+    var editSource: (any ComposerFrameSourcing)?
+    /// La vidéo en boucle de l'édition (#9352).
+    var loopPlayer: (any ComposerLoopPlayerProviding)?
+    /// La plage gardée de la vidéo éditée (#9353).
+    @Published var trim: ClosedRange<TimeInterval>?
+    /// La plage que la boucle JOUE : celle du dernier geste fini.
+    var loopedTrim: ClosedRange<TimeInterval>?
+    /// Ce qui ouvre la boucle d'un fichier — une doublure dans les témoins.
+    let loopPlayerFactory: @MainActor (URL) async -> (any ComposerLoopPlayerProviding)?
+    /// Les segments s'assemblent, ou la vidéo se rend avec son look : le `✓`
+    /// attend, et le dit.
+    @Published var isRenderingLook = false
     /// La date de la séance de prise : l'aperçu, la photo et la vidéo écrivent
     /// la MÊME dans leur cadre.
     let lookDate = Date()
@@ -65,9 +90,34 @@ final class ComposerCaptureSession: ObservableObject {
     let thermal: any ThermalStateMonitorProviding
     /// Ce que l'aperçu et la bande ont le droit de coûter maintenant.
     @Published private(set) var thermalBudget = ComposerThermalBudget.budget(for: .nominal)
+    /// Où part la prochaine vidéo DEMANDÉE (#9351) : la scène mène à l'édition,
+    /// la miniature choisie à la galerie. Une photo porte la sienne en paramètre.
+    var filmIntent = ComposerTakeIntent.edit
+    /// L'intention de la photo EN VOL, figée quand l'obturateur part.
+    var photoInFlightIntent = ComposerTakeIntent.edit
+    /// La rampe du flash avant (0,25 s) : l'obturateur est parti, `isTakingPhoto`
+    /// pas encore — une seconde demande y est refusée.
+    var photoIsRamping = false
+    /// La tenue attend la livraison de la prise précédente : ni haptique, ni
+    /// cadenas, ni lumière tant qu'elle ne filme pas.
+    var awaitsPreviousTake = false
+    /// L'intention de chaque enregistrement, par SON jeton (`CameraModel.recordingId`) :
+    /// une fin sans fichier ne décale jamais la suivante.
+    var filmIntents: [String: ComposerTakeIntent] = [:]
+    /// Les enregistrements en galerie passent un par un : jamais deux rendus
+    /// pleine définition en mémoire à la fois.
+    var galleryChain: Task<Void, Never>?
+    /// Qui reçoit la prise de la scène — posé par l'hôte qui monte la capture,
+    /// retiré au désarmement : un viseur fermé ne remet plus rien.
+    var onDeliver: (@MainActor (CameraResult) -> Void)?
+    let gallery: any ComposerGalleryProviding
+    let scenes: any ComposerLookSceneProviding
+    var takeSubscriptions = Set<AnyCancellable>()
+    /// Les rendus qui partent en galerie pendant qu'on reste en capture.
+    @Published private(set) var pendingGallerySaves = 0
     /// Chaque désarmement ouvre une nouvelle génération : un rendu lancé avant
     /// ne remet plus rien à un viseur que l'auteur a fermé.
-    private var renderGeneration = 0
+    private(set) var renderGeneration = 0
 
     /// La durée du segment en cours, saisie À LA CLÔTURE : l'horloge du modèle
     /// repart à zéro au démarrage suivant, et le fichier n'arrive qu'après.
@@ -89,7 +139,7 @@ final class ComposerCaptureSession: ObservableObject {
     /// L'armement, et le dernier toucher du viseur (#9464) : un double ne
     /// s'ouvre jamais sur le toucher qui a armé.
     var armedAt: Date?
-    var lastViewfinderTapAt: Date?
+    var lastViewfinderTap: ComposerCaptureLastTap?
     private let defaults: UserDefaults
     private var relais: AnyCancellable?
 
@@ -98,16 +148,25 @@ final class ComposerCaptureSession: ObservableObject {
          camera: CameraModel = CameraModel(),
          controls: (any ComposerCaptureCameraProviding)? = nil,
          defaults: UserDefaults = .standard,
-         thermal: (any ThermalStateMonitorProviding)? = nil) {
+         thermal: (any ThermalStateMonitorProviding)? = nil,
+         gallery: any ComposerGalleryProviding = ComposerGallery.shared,
+         scenes: any ComposerLookSceneProviding = ComposerLookSceneCache.shared,
+         loopPlayerFactory: @escaping @MainActor (URL) async -> (any ComposerLoopPlayerProviding)? = {
+             await ComposerLoopPlayer.load(url: $0)
+         }) {
         self.stage = stage
         self.mode = mode
         self.camera = camera
         self.controls = controls ?? camera
         self.defaults = defaults
         self.thermal = thermal ?? ThermalStateMonitor()
+        self.gallery = gallery
+        self.scenes = scenes
+        self.loopPlayerFactory = loopPlayerFactory
         flashIntensity = defaults.object(forKey: ComposerFlashIntensity.storageKey) as? Double
             ?? ComposerFlashIntensity.defaultLevel
         relais = camera.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }
+        subscribeToTakes()
     }
 
     // Deinit synthétisée ISOLÉE sous SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor :
@@ -132,7 +191,7 @@ final class ComposerCaptureSession: ObservableObject {
             locked: holdPhase == .locked || mode == ComposerShutterGesture.mode(locked: true),
             zoomFactor: camera.zoomFactor,
             zoomPresets: ComposerCaptureZoomScale.presets(in: camera.zoomRange),
-            flipping: camera.isSwitchingCamera,
+            flipping: camera.isSwitchingCamera || camera.recordingIsPending,
             flashIntensity: flashIntensity)
     }
 
@@ -141,6 +200,7 @@ final class ComposerCaptureSession: ObservableObject {
     /// `configure()` demande la permission PUIS ouvre la session — un refus
     /// rend le panneau explicatif plutôt qu'un aperçu noir.
     func arm(mode: ComposerSceneCameraMode) {
+        resetIntents()
         self.mode = mode
         stage = .armed
         armedAt = Date()
@@ -149,10 +209,13 @@ final class ComposerCaptureSession: ObservableObject {
     }
 
     /// **Une entrée, pas un mode** : la prise rendue, le viseur se retire et la
-    /// session se ferme. L'étape d'arrivée vient de la loi.
+    /// session se ferme. L'étape d'arrivée vient de la loi. Une retouche encore
+    /// ouverte se referme avec lui : ni lecteur ni lien d'affichage ne survivent.
     func finishCapture() {
+        leaveEditing()
         stage = ComposerSceneCamera.stageAfterCapture
         mode = nil
+        onDeliver = nil
         extinguishFlash()
         camera.stop()
         stopWatchingThermalState()
@@ -164,8 +227,11 @@ final class ComposerCaptureSession: ObservableObject {
     func disarm() {
         renderGeneration += 1
         isRenderingLook = false
+        abandonEditing()
         stage = .off
         mode = nil
+        resetIntents()
+        onDeliver = nil
         discardSegments()
         resetHold()
         holdStartedAt = nil
@@ -173,7 +239,7 @@ final class ComposerCaptureSession: ObservableObject {
         resetPinch()
         dismissDrag = 0
         extinguishFlash()
-        ComposerLookSceneCache.shared.purge()
+        scenes.purge()
         CallFrameRenderer.purgeLayers()
         camera.stop()
         stopWatchingThermalState()
@@ -182,6 +248,8 @@ final class ComposerCaptureSession: ObservableObject {
     func applyThermal(_ state: ProcessInfo.ThermalState) {
         thermalBudget = ComposerThermalBudget.budget(for: state)
         refreshFeed()
+        loopPlayer?.configure(fps: ComposerCaptureSurfaceRule.editFPS(thermalBudget),
+                              declaredSpace: camera.liveFeed.declaredSpace)
     }
 
     func discardSegments() {
@@ -193,13 +261,17 @@ final class ComposerCaptureSession: ObservableObject {
         pendingSegmentDuration = 0
     }
 
+    func beginGallerySave() { pendingGallerySaves += 1 }
+    func endGallerySave() { pendingGallerySaves = max(0, pendingGallerySaves - 1) }
+
     // MARK: - La prise
 
     /// **Un appui bref PREND une photo.** Objectif avant, flash actif : l'ÉCRAN
     /// est le flash (#8653) — la luminosité monte, l'image part sous elle,
     /// sans le flash de l'objectif : jamais deux éclairs (#9464).
-    func takePhoto() {
-        guard stage == .armed, !camera.isTakingPhoto else { return }
+    func takePhoto(intent: ComposerTakeIntent = .edit) {
+        guard stage == .armed, !camera.isTakingPhoto, !photoIsRamping, !controls.isSwitchingCamera else { return }
+        photoInFlightIntent = intent
         mode = .photo
         HapticFeedback.medium()
         let flashDeLaPrise = flash
@@ -208,10 +280,14 @@ final class ComposerCaptureSession: ObservableObject {
             return
         }
         ComposerScreenFlash.shared.light(level: flashIntensity)
+        photoIsRamping = true
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: UInt64(ComposerFrontFlash.brightnessRamp * 1_000_000_000))
+            photoIsRamping = false
+            guard stage == .armed else { return }
             controls.takePhoto(flash: .off)
             try? await Task.sleep(nanoseconds: UInt64(ComposerFrontFlash.photoHold * 1_000_000_000))
+            guard stage == .armed else { return }
             ComposerScreenFlash.shared.restore()
         }
     }
@@ -220,15 +296,18 @@ final class ComposerCaptureSession: ObservableObject {
     /// caméra (#8671) la fait partir DÉJÀ verrouillée ; la vidéo s'éclaire
     /// aussi (#8653), à l'intensité du curseur.
     func startFilming() {
-        guard stage == .armed else { return }
+        guard stage == .armed, !controls.isSwitchingCamera else { return }
         mode = ComposerShutterGesture.mode(locked: holdPhase == .locked)
+        let intent = noteRecordingStarted()
         stage = .recording
         controls.setTorch(ComposerFrontFlash.torch(flash: flash, position: controls.currentPosition),
                         level: flashIntensity)
         if floorIsLit { ComposerScreenFlash.shared.light(level: flashIntensity) }
         Task { @MainActor in
             await camera.enableAudioCaptureIfNeeded()
+            let avant = camera.recordingId
             camera.startRecording()
+            bindRecording(intent, to: camera.isRecordingVideo && camera.recordingId != avant ? camera.recordingId : nil)
         }
     }
 
@@ -268,56 +347,38 @@ final class ComposerCaptureSession: ObservableObject {
         HapticFeedback.light()
     }
 
-    /// **`✓` concatène et rend.** Un segment unique EST le fichier final ; une
-    /// concaténation qui échoue retombe sur le dernier segment plutôt que de
-    /// perdre la prise entière.
-    func validateSegments(deliver: @escaping @MainActor (URL) -> Void) {
+    /// **`✓` assemble les segments et ouvre la retouche** (#9352, spec § 3.2) :
+    /// rien ne part avant « Terminé ». Un segment unique EST le fichier ; un
+    /// assemblage qui échoue retombe sur le dernier segment plutôt que de perdre
+    /// la prise entière. Un viseur fermé entre-temps n'ouvre rien.
+    func validateSegments() {
         let pris = segments
         guard ComposerCaptureSegments.canValidate(pris) else { return }
         segments = []
-        let regard = look
-        let auteur = lookPerson
-        let espace = camera.liveFeed.declaredSpace?.name as String?
         let generation = renderGeneration
-        isRenderingLook = ComposerLiveLookRule.rendersLive(regard)
+        let assemble = ComposerCaptureSegments.needsMerge(pris)
+        isRenderingLook = assemble
         Task { @MainActor in
-            let finale = ComposerCaptureSegments.needsMerge(pris)
-                ? await CameraModel.mergeSegments(pris.map(\.url))
-                : pris.first?.url
-            guard let url = finale ?? pris.last?.url else {
-                isRenderingLook = false
-                return
-            }
-            // La vidéo part avec le look qu'on voyait (#9329) ; un rendu qui
-            // échoue rend la prise brute plutôt que de la perdre.
-            let regardee = await ComposerLookVideoExporter.export(url, look: regard, person: auteur, date: lookDate,
-                                                                   declaredSpaceName: espace)
-            guard generation == renderGeneration else {
-                if let regardee, regardee != url {
-                    FileManager.default.removeItemLogging(at: regardee, context: "rendu d'un viseur fermé",
-                                                          logger: .media)
-                }
-                return
-            }
+            let finale = assemble ? await CameraModel.mergeSegments(pris.map(\.url)) : pris.first?.url
+            guard generation == renderGeneration else { return }
             isRenderingLook = false
-            if let regardee, regardee != url {
-                FileManager.default.removeItemLogging(at: url, context: "prise brute remplacée par son look",
-                                                      logger: .media)
-            }
-            deliver(regardee ?? url)
+            guard let url = finale ?? pris.last?.url else { return }
+            await beginEditing(video: url)
         }
     }
 
     // MARK: - La tenue, le cadenas, la levée
 
     /// **Le toucher prend la photo** dès que la session peut écrire — un
-    /// toucher arrivé trop tôt attend plutôt que de se perdre.
-    func photographWhenReady() {
+    /// toucher arrivé trop tôt attend plutôt que de se perdre. La demande part
+    /// où son intention la mène (#9351) — portée par l'appel : une attente
+    /// annulée ou vaine ne lègue rien.
+    func photographWhenReady(intent: ComposerTakeIntent = .edit) {
         holdTask?.cancel()
         holdTask = Task { @MainActor in
-            guard await camera.waitUntilCaptureReady(timeout: ComposerSceneQuickCapture.readinessTimeout),
+            guard await controls.waitUntilCaptureReady(timeout: ComposerSceneQuickCapture.readinessTimeout),
                   !Task.isCancelled else { return }
-            takePhoto()
+            takePhoto(intent: intent)
         }
     }
 
@@ -325,15 +386,20 @@ final class ComposerCaptureSession: ObservableObject {
     /// le doigt reste — ou au-delà, verrouillé.
     func beginHold() {
         guard holdStartedAt == nil, !isPinching, !holdSpoiledByPinch else { return }
-        HapticFeedback.medium()
+        filmIntent = .edit
+        let attend = controls.recordingIsPending
+        awaitsPreviousTake = attend
+        if !attend { HapticFeedback.medium() }
         holdStartedAt = Date()
         holdPhase = .holding
         lockProgress = 0
         holdTask?.cancel()
         holdTask = Task { @MainActor in
-            guard await camera.waitUntilCaptureReady(timeout: ComposerSceneQuickCapture.readinessTimeout),
+            guard await awaitPreviousTake(),
+                  await controls.waitUntilCaptureReady(timeout: ComposerSceneQuickCapture.readinessTimeout),
                   !Task.isCancelled,
                   holdStartedAt != nil || holdPhase == .locked else { return }
+            if attend { HapticFeedback.medium() }
             startFilming()
         }
     }
@@ -345,7 +411,7 @@ final class ComposerCaptureSession: ObservableObject {
         if stage == .recording { dragZoom(translationY: translation.y) }
         // Deux doigts qui s'écartent à l'horizontale zooment ; ils ne
         // verrouillent pas la prise.
-        guard holdPhase != .locked, !isPinching else { return }
+        guard holdPhase != .locked, !isPinching, !awaitsPreviousTake else { return }
         lockProgress = ComposerShutterGesture.lockProgress(translationX: translation.x)
         guard ComposerCaptureHold.phase(translation: translation, wasLocked: false) == .locked else { return }
         holdPhase = .locked
@@ -389,6 +455,7 @@ final class ComposerCaptureSession: ObservableObject {
     private func resetHold() {
         holdTask?.cancel()
         holdTask = nil
+        filmIntent = .edit
         holdPhase = nil
         lockProgress = 0
     }
@@ -469,13 +536,15 @@ final class ComposerCaptureSession: ObservableObject {
         dismissDrag = dismissDragSpoiled ? 0 : translationY
     }
 
-    /// La levée du glissé : `true` ⇒ le viseur se range.
+    /// La levée du glissé : `true` ⇒ le viseur se range. En édition le doigt
+    /// cadre le média : il ne range rien.
     func releaseDismissDrag(translationY: CGFloat) -> Bool {
         let gate = dismissDragSpoiled || isPinching
         dismissDragActive = false
         dismissDragSpoiled = false
         dismissDrag = 0
         return !gate
+            && !phase.isEditing
             && ComposerCaptureHold.verticalDrag(stage: stage) == .dismiss
             && ComposerSceneCameraFrame.dismisses(translationY: translationY)
     }
@@ -530,29 +599,5 @@ extension ComposerCaptureSession {
     /// Le look ne change plus une fois la prise commencée.
     var lookIsLocked: Bool {
         ComposerLiveLookRule.isLocked(stage: stage, pendingSegments: segments.count)
-    }
-
-    /// **La photo part avec ce qu'on voyait** : le canevas 9:16 du peintre unique,
-    /// à la date de la session, hors du fil principal, encodée avec l'EXIF de la
-    /// prise rendu vrai pour elle. Le BRUT est déjà en galerie (`CameraModel`) ;
-    /// un rendu qui échoue rend la prise d'origine plutôt que rien.
-    func lookedPhoto(_ image: UIImage, data: Data?, deliver: @escaping @MainActor (CameraResult) -> Void) {
-        guard let debout = ComposerPhotoLookSource.upright(image) else {
-            deliver(.photo(image, data: data))
-            return
-        }
-        let regard = look
-        let auteur = lookPerson
-        let date = lookDate
-        Task { @MainActor in
-            guard let rendu = await ComposerLookPainter.renderPhoto(debout, look: regard, framing: .identity,
-                                                                    person: auteur, date: date,
-                                                                    scenes: ComposerLookSceneCache.shared) else {
-                deliver(.photo(image, data: data))
-                return
-            }
-            let octets = await ComposerPhotoEncoding.encode(rendu, like: data)
-            deliver(.photo(UIImage(cgImage: rendu), data: octets))
-        }
     }
 }

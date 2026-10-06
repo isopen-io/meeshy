@@ -7,7 +7,7 @@
  * @jest-environment node
  */
 
-import { createHash } from 'crypto';
+import { anonymousVisitorFingerprint } from '../../../routes/links/utils/link-visitor';
 import { describe, it, expect, jest } from '@jest/globals';
 import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
 
@@ -87,7 +87,7 @@ describe('aperçu d’un lien d’invitation — crédit de la visite', () => {
     await app.inject({ method: 'GET', url: `/anonymous/link/${LINK_ID}`, headers: { 'user-agent': 'UA-test' } });
     await executeur.settle();
 
-    const expected = createHash('sha256').update('127.0.0.1|UA-test').digest('hex');
+    const expected = anonymousVisitorFingerprint({ ip: '127.0.0.1', userAgent: 'UA-test' });
     expect(recordLinkVisit).toHaveBeenCalledWith(expect.objectContaining({
       visitorKey: `anon:${expected}`,
       visitorUserId: null,

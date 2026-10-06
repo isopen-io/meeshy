@@ -83,6 +83,12 @@ async function buildApp(opts: {
     postMedia: { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) },
     userVoiceModel: { findFirst: jest.fn().mockResolvedValue(null) },
     userSession: { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) },
+    // Le jeu (#9384) : des collections vides, comme un compte qui n'a jamais joué.
+    ...Object.fromEntries(
+      ['gameProfile', 'leaguePseudonym', 'leagueMembership', 'gameWeekPoints', 'gameDuo', 'gameSeason', 'gameTrophy', 'atlasStamp', 'dailyMission', 'gloryLedger', 'meeshLedger'].map(
+        (model) => [model, { findMany: jest.fn().mockResolvedValue([]), findUnique: jest.fn().mockResolvedValue(null) }],
+      ),
+    ),
   } as any);
 
   app.decorate('authenticate', async (req: FastifyRequest) => {
@@ -129,10 +135,10 @@ describe('GET /export — default JSON (all types)', () => {
     expect(body.data).toBeDefined();
     expect(body.data.exportDate).toBeDefined();
     expect(body.data.format).toBe('json');
-    // #3633 — le défaut couvre désormais les dix types, pas seulement les trois
+    // #3633 — le défaut couvre désormais les onze types (le jeu, #9384, en plus), pas seulement les trois
     // premiers (l'export RGPD ne doit pas exiger de connaître chaque catégorie).
     expect(body.data.requestedTypes).toEqual([
-      'profile', 'messages', 'contacts', 'posts', 'stories', 'comments', 'reactions', 'media', 'voiceProfile', 'sessions',
+      'profile', 'messages', 'contacts', 'posts', 'stories', 'comments', 'reactions', 'media', 'voiceProfile', 'sessions', 'game',
     ]);
     expect(body.data.profile).toBeDefined();
     expect(body.data.profile.id).toBe(USER_ID);

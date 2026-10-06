@@ -1219,9 +1219,14 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
         let branche = compact(aiguillage)
 
         XCTAssertTrue(
-            branche.contains("case.atelier:publishTrigger.requestPublish("),
+            branche.contains("case.atelier(lettype,letalsoAsReel):publishTrigger.requestPublish("),
             "Sous l'atelier, la flèche du socle presse la TÉLÉCOMMANDE : c'est l'atelier qui publie, et "
                 + "fabriquer un brouillon ici serait le second chemin d'envoi que la doctrine interdit."
+        )
+        // #9476 : la télécommande porte aussi « aussi en réel », arbitré par le menu.
+        XCTAssertTrue(
+            branche.contains("alsoAsReel:alsoAsReel"),
+            "… et le choix « aussi en réel » du menu : sans lui, l'atelier ne publierait que la story."
         )
         XCTAssertTrue(
             branche.contains("visibility:composerVisibility.rawValue"),
@@ -1242,7 +1247,7 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
         // est exigée, pas ses deux appels séparément : un `else` qui
         // disparaîtrait, ou une condition qui glisserait sur `.reel`, rougirait.
         XCTAssertTrue(
-            branche.contains("switchComposerPublishMenuRule.route(surface:mountedSurface,choice:choice)"),
+            branche.contains("switchComposerPublishMenuRule.dispatch(surface:mountedSurface,choice:choice)"),
             "… et sous les deux autres surfaces, le routage est une RÈGLE (#4869), plus une liste "
                 + "de formats écrite dans le corps du publieur."
         )

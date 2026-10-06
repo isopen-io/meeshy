@@ -19,6 +19,8 @@
 import type { Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
 import { FLAME_RECORD_GLORY, GLORY_POINTS } from '@meeshy/shared/utils/game/glory';
 import { levelFromScore, newLevelsReached, recordLevel } from '@meeshy/shared/utils/game/levels';
+import type { AchievementRarity } from '@meeshy/shared/utils/game/glory';
+import { achievementGloryAtEarning } from '@meeshy/shared/utils/game/rarity';
 
 export type GloryReason =
   | 'mint'
@@ -149,5 +151,29 @@ export class GloryService {
       if (written) gained += record.glory;
     }
     return gained;
+  }
+
+  /**
+   * La Gloire d'un succès OBTENU (#9390), FIGÉE à l'obtention : le montant dépend
+   * de la rareté mesurée par le dernier instantané nocturne (`commun` quand il
+   * n'y en a pas : sous 1 000 comptes, ou succès trop récent), et ne bouge
+   * JAMAIS ensuite — un succès qui devient commun ne reprend rien, un succès
+   * devenu rare ne paie rien de plus. Une ligne par succès (`achievement:<clé>`) :
+   * le graver deux fois, ou le revoir au balayage, ne le paie qu'une fois.
+   *
+   * @returns la Gloire gravée par CET appel (0 si la ligne existait déjà).
+   */
+  async creditAchievement(userId: string, milestoneKey: string): Promise<number> {
+    const stat = await this.prisma.achievementRarityStat.findUnique({ where: { milestoneKey }, select: { rarity: true } });
+    const rarity = (stat?.rarity ?? null) as AchievementRarity | null;
+    const delta = achievementGloryAtEarning(rarity);
+    const written = await this.credit({
+      userId,
+      delta,
+      reason: 'achievement',
+      requestId: `achievement:${milestoneKey}`,
+      meta: { milestoneKey, rarity: rarity ?? 'common' },
+    });
+    return written ? delta : 0;
   }
 }

@@ -3,6 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import { catalogPlaceholders } from './i18n-catalog';
 import {
   formatGameNumber,
+  GAME_ORDINAL_BASES,
   gamePluralCategory,
   loadGameCatalog,
   translateGame,
@@ -32,6 +33,10 @@ const PLURAL_FORM = /^(.+)\.(zero|one|two|few|many|other)$/;
 const extraCategories = (language: InterfaceLanguage): readonly string[] =>
   new Intl.PluralRules(language).resolvedOptions().pluralCategories.filter((category) => category !== 'one' && category !== 'other');
 
+/** Celles d'une famille ORDINALE (« 4th », #9494) : ses catégories ordinales autres que `one` et `other`. */
+const extraOrdinalCategories = (language: InterfaceLanguage): readonly string[] =>
+  new Intl.PluralRules(language, { type: 'ordinal' }).resolvedOptions().pluralCategories.filter((category) => category !== 'one' && category !== 'other');
+
 describe('chaque langue porte toutes les clés game.* du français', () => {
   test('toutes les clés du français, et seules s’y ajoutent les formes de pluriel de la langue', async () => {
     const french = sorted(Object.keys(await loadGameCatalog('fr')));
@@ -43,7 +48,8 @@ describe('chaque langue porte toutes les clés game.* du français', () => {
         const match = PLURAL_FORM.exec(key);
         const base = match?.[1];
         const category = match?.[2];
-        return base !== undefined && category !== undefined && french.includes(`${base}.other`) && extraCategories(language).includes(category);
+        if (base === undefined || category === undefined || !french.includes(`${base}.other`)) return false;
+        return (GAME_ORDINAL_BASES as readonly string[]).includes(base) ? extraOrdinalCategories(language).includes(category) : extraCategories(language).includes(category);
       });
       expect({ language, extra }).toEqual({ language, extra: allowed });
     }
@@ -147,6 +153,29 @@ describe('le pluriel suit les catégories de la langue de l’interface', () => 
     expect(formatGameNumber('en', 1221)).toBe('1,221');
     expect(formatGameNumber('de', 1221)).toBe('1.221');
     expect(formatGameNumber('ar', 1221)).toMatch(/^1\D221$/);
+  });
+});
+
+/**
+ * LE PSEUDONYME DE LIGUE — `isValidLeaguePseudonym` accepte le tiret bas : le
+ * message qui refuse un pseudonyme énumère ce que la loi accepte, il ne le
+ * rétrécit pas.
+ */
+const UNDERSCORE_WORD: Readonly<Record<InterfaceLanguage, string>> = {
+  fr: 'tiret bas',
+  en: 'underscore',
+  es: 'guion bajo',
+  pt: 'sublinhado',
+  it: 'trattino basso',
+  de: 'Unterstrich',
+  ar: 'شرطة سفلية',
+};
+
+describe('le refus d’un pseudonyme de ligue cite le tiret bas', () => {
+  const KEYS = ['game.league.pseudonym.invalid', 'game.error.league_pseudonym_invalid'] as const;
+  test('dans les sept langues, pour le champ comme pour le refus de la passerelle', async () => {
+    const verdicts = (await loadAll()).flatMap(([language, catalog]) => KEYS.map((key) => [language, key, (catalog[key] ?? '').includes(UNDERSCORE_WORD[language])] as const));
+    expect(verdicts.filter(([, , cites]) => !cites)).toEqual([]);
   });
 });
 

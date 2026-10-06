@@ -1,6 +1,6 @@
 import { isImageMimeType, isVideoMimeType } from '@meeshy/shared/types/attachment';
 
-import { base64De } from '@/lib/media/file-delivery-host';
+import { base64De, NATIVE_BRIDGE_MAX_BYTES } from '@/lib/media/file-delivery-host';
 import { appelNatifMethode, coqueCourante, type CoqueNative } from '@/lib/native-shell';
 
 /**
@@ -28,12 +28,18 @@ import { appelNatifMethode, coqueCourante, type CoqueNative } from '@/lib/native
  * Le fichier voyage en `data:` base64 : les URL de pièces jointes exigent un
  * `Authorization` que le téléchargement natif du plugin n'enverrait pas. Le
  * pont Capacitor porte ce texte en MÉMOIRE (JS puis Java) : au-delà de
- * `GALLERY_BRIDGE_MAX_BYTES`, la pièce n'est pas confiée au plugin.
+ * `GALLERY_BRIDGE_MAX_BYTES`, la pièce passe par TRANCHES (#9514) dans le
+ * récepteur de la coque (`MeeshyFileSink`), qui l'écrit dans un fichier de son
+ * cache ; le plugin copie ce fichier dans l'album, puis le récepteur l'efface.
+ * Une coque construite avant le récepteur garde le refus.
  */
 export const GALLERY_ALBUM = 'Meeshy';
 
 /** Au-delà, le `data:` base64 (×4/3, puis recopié par le pont) ferait courir un OOM à la WebView. */
-export const GALLERY_BRIDGE_MAX_BYTES = 32 * 1024 * 1024;
+export const GALLERY_BRIDGE_MAX_BYTES = NATIVE_BRIDGE_MAX_BYTES;
+
+/** Une tranche du récepteur : quelques Mo dans le pont, jamais la pièce entière. */
+export const SINK_CHUNK_BYTES = 4 * 1024 * 1024;
 
 export type GallerySaveOutcome = 'saved' | 'unavailable' | 'failed';
 
@@ -53,6 +59,45 @@ export function galleryMediaEssence(mimeType: string): string | null {
 export const NULL_GALLERY_SAVER: GallerySaver = { available: false, save: async () => 'unavailable' };
 
 const MEDIA_PLUGIN = 'Media';
+const SINK_PLUGIN = 'MeeshyFileSink';
+
+type NativeMethod = (options: object) => Promise<unknown>;
+type FileSink = { readonly open: NativeMethod; readonly append: NativeMethod; readonly close: NativeMethod; readonly discard: NativeMethod };
+
+function fileSinkOf(shell: CoqueNative | undefined): FileSink | null {
+  const open = appelNatifMethode(shell, SINK_PLUGIN, 'open');
+  const append = appelNatifMethode(shell, SINK_PLUGIN, 'append');
+  const close = appelNatifMethode(shell, SINK_PLUGIN, 'close');
+  const discard = appelNatifMethode(shell, SINK_PLUGIN, 'discard');
+  if (open === null || append === null || close === null || discard === null) return null;
+  return { open, append, close, discard };
+}
+
+const fieldOf = (result: unknown, field: string): string => {
+  const value = (result as Record<string, unknown> | null)?.[field];
+  if (typeof value !== 'string' || value === '') throw new Error(`file-sink: ${field} missing`);
+  return value;
+};
+
+/** Écrit la pièce par tranches dans le récepteur, rend le chemin du fichier, puis l'efface quoi qu'il arrive à `use`. */
+async function throughSink(params: {
+  readonly sink: FileSink;
+  readonly blob: Blob;
+  readonly mimeType: string;
+  readonly chunkBytes: number;
+  readonly use: (path: string) => Promise<unknown>;
+}): Promise<void> {
+  const { sink, blob, mimeType, chunkBytes, use } = params;
+  const id = fieldOf(await sink.open({ mimeType }), 'id');
+  try {
+    for (let offset = 0; offset < blob.size; offset += chunkBytes) {
+      await sink.append({ id, data: await base64De(blob.slice(offset, offset + chunkBytes)) });
+    }
+    await use(fieldOf(await sink.close({ id }), 'path'));
+  } finally {
+    await sink.discard({ id }).catch(() => undefined);
+  }
+}
 
 type MediaAlbum = { readonly name: string; readonly identifier: string };
 
@@ -78,12 +123,16 @@ function fileStemOf(fileName: string): string {
   return /[\p{L}\p{N}]/u.test(stem) ? stem : 'meeshy';
 }
 
-export function shellGallerySaver(shell: CoqueNative | undefined): GallerySaver {
+export type GallerySaverLimits = { readonly bridgeMaxBytes?: number; readonly chunkBytes?: number };
+
+export function shellGallerySaver(shell: CoqueNative | undefined, limits: GallerySaverLimits = {}): GallerySaver {
+  const { bridgeMaxBytes = GALLERY_BRIDGE_MAX_BYTES, chunkBytes = SINK_CHUNK_BYTES } = limits;
   const getAlbums = appelNatifMethode(shell, MEDIA_PLUGIN, 'getAlbums');
   const createAlbum = appelNatifMethode(shell, MEDIA_PLUGIN, 'createAlbum');
   const savePhoto = appelNatifMethode(shell, MEDIA_PLUGIN, 'savePhoto');
   const saveVideo = appelNatifMethode(shell, MEDIA_PLUGIN, 'saveVideo');
   if (getAlbums === null || createAlbum === null || savePhoto === null || saveVideo === null) return NULL_GALLERY_SAVER;
+  const sink = fileSinkOf(shell);
 
   let album: Promise<string | null> | null = null;
   let written = 0;
@@ -104,7 +153,8 @@ export function shellGallerySaver(shell: CoqueNative | undefined): GallerySaver 
     available: true,
     save: async ({ blob, fileName, mimeType }) => {
       const essence = galleryMediaEssence(mimeType);
-      if (essence === null || blob.size > GALLERY_BRIDGE_MAX_BYTES) return 'unavailable';
+      const chunked = blob.size > bridgeMaxBytes;
+      if (essence === null || (chunked && sink === null)) return 'unavailable';
       const write = isImageMimeType(essence) ? savePhoto : saveVideo;
       try {
         album ??= resolveAlbum();
@@ -113,8 +163,9 @@ export function shellGallerySaver(shell: CoqueNative | undefined): GallerySaver 
           album = null;
           return 'failed';
         }
-        const path = `data:${essence};base64,${await base64De(blob)}`;
-        await write({ path, albumIdentifier, fileName: nativeFileName(fileName) });
+        const writeAt = (path: string): Promise<unknown> => write({ path, albumIdentifier, fileName: nativeFileName(fileName) });
+        if (chunked && sink !== null) await throughSink({ sink, blob, mimeType: essence, chunkBytes, use: writeAt });
+        else await writeAt(`data:${essence};base64,${await base64De(blob)}`);
         return 'saved';
       } catch {
         album = null;

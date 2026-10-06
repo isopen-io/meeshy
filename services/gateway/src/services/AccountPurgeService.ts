@@ -4,6 +4,7 @@ import { enhancedLogger } from '../utils/logger-enhanced';
 import { hashPassword } from '../utils/password-hash';
 import { clearPendingTwoFactor } from './auth/pending-two-factor';
 import { eraseAddressBookOf } from './ContactDirectoryService';
+import { purgeGameData, type GamePurgeSummary } from './game/GamePurge';
 
 const logger = enhancedLogger.child({ module: 'AccountPurgeService' });
 
@@ -15,6 +16,7 @@ export type AccountPurgeSummary = {
   readonly addressBookContactsDeleted: number;
   readonly contactJoinNoticesDeleted: number;
   readonly arrivalAnnouncementsDeleted: number;
+  readonly game: GamePurgeSummary;
 };
 
 /**
@@ -54,15 +56,17 @@ export async function purgeAccountIsolatedData(
   prisma: Pick<
     PrismaClient,
     'userSession' | 'userVoiceModel' | 'conversationShareLink' | 'notification' | 'userContact' | 'contactJoinNotice'
-  >,
+  > &
+    Parameters<typeof purgeGameData>[0],
   userId: string,
 ): Promise<AccountPurgeSummary> {
-  const [sessions, voiceProfile, shareLinks, notifications, addressBook] = await Promise.all([
+  const [sessions, voiceProfile, shareLinks, notifications, addressBook, game] = await Promise.all([
     prisma.userSession.deleteMany({ where: { userId } }),
     prisma.userVoiceModel.deleteMany({ where: { userId } }),
     prisma.conversationShareLink.deleteMany({ where: { createdBy: userId } }),
     prisma.notification.deleteMany({ where: { userId } }),
     eraseAddressBookOf(prisma, userId),
+    purgeGameData(prisma, userId),
   ]);
 
   const summary: AccountPurgeSummary = {
@@ -73,13 +77,14 @@ export async function purgeAccountIsolatedData(
     addressBookContactsDeleted: addressBook.contactsDeleted,
     contactJoinNoticesDeleted: addressBook.joinNoticesDeleted,
     arrivalAnnouncementsDeleted: addressBook.arrivalAnnouncementsDeleted,
+    game,
   };
 
   logger.info(
     `[AccountPurge] user=${userId} sessions=${summary.sessionsDeleted} voiceProfile=${summary.voiceProfileDeleted} ` +
       `shareLinks=${summary.shareLinksDeleted} notifications=${summary.notificationsDeleted} ` +
       `addressBook=${summary.addressBookContactsDeleted} joinNotices=${summary.contactJoinNoticesDeleted} ` +
-      `arrivalAnnouncements=${summary.arrivalAnnouncementsDeleted}`
+      `arrivalAnnouncements=${summary.arrivalAnnouncementsDeleted} gameDuos=${summary.game.duosDeleted}`
   );
 
   return summary;

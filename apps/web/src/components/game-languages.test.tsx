@@ -15,6 +15,10 @@ import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-su
 import { GameFlamePanel } from './game-flame-panel';
 import { GameGauges } from './game-gauges';
 import { GameGuideCard } from './game-guide-card';
+import { GameHero } from './game-hero';
+import { PlayerBanner } from './player-banner';
+import { playerBannerModel } from '@/lib/view/player-banner';
+import { gameBlockWithExtrasFixture } from '@/lib/api/game-fixture';
 import { GameMintPreview } from './game-mint-preview';
 import { GameMissions } from './game-missions';
 import { GamePhotoOffer } from './game-photo-offer';
@@ -51,12 +55,17 @@ const inLanguage = (language: InterfaceLanguage): void => {
 const game = gameBlockFixture({ levelRecord: 20, glory: 620, balance: 4, streak: 6, freezes: 1 });
 const outFlame = gameBlockFixture({ streak: 0, broken: { streak: 6, lastActiveDay: '2026-10-03' }, balance: 2 }).flame;
 
-type Surfaces = Readonly<Record<'gauges' | 'missions' | 'flame' | 'mint' | 'guide' | 'moment' | 'offer' | 'rules', string>>;
+type Surfaces = Readonly<Record<'hero' | 'gauges' | 'missions' | 'flame' | 'mint' | 'guide' | 'moment' | 'offer' | 'rules' | 'banner', string>>;
+
+const bannerGame = gameBlockWithExtrasFixture({ balance: 12, streak: 23 });
 
 function surfaces(): Surfaces {
   const step = ONBOARDING_STEPS[3];
   if (step === undefined) throw new Error('étape attendue');
+  const bannerModel = playerBannerModel(bannerGame);
+  if (bannerModel === null) throw new Error('un bandeau était attendu');
   return {
+    hero: text(renderToStaticMarkup(<GameHero game={game} />)),
     gauges: text(renderToStaticMarkup(<GameGauges game={game} />)),
     missions: text(
       renderToStaticMarkup(
@@ -83,9 +92,6 @@ function surfaces(): Surfaces {
       renderToStaticMarkup(
         <GameMintPreview
           mint={game.mint}
-          glory={game.glory}
-          treasury={game.treasury}
-          levelRecord={game.level.record}
           badgesLost={2}
           online
           minting={false}
@@ -107,6 +113,8 @@ function surfaces(): Surfaces {
     ),
     offer: text(renderToStaticMarkup(<GamePhotoOffer moment={rankMoment({ rank: 'voix', division: 2 })} onStart={() => undefined} onLater={() => undefined} />)),
     rules: text(renderToStaticMarkup(<RulesBody />)),
+    /* La bannière ne montre que des chiffres et des dessins : sa langue est dans la phrase lue (#9494). */
+    banner: renderToStaticMarkup(<PlayerBanner model={bannerModel} />).match(/aria-label="([^"]*)"/)?.[1] ?? '',
   };
 }
 
@@ -132,7 +140,11 @@ describe('chaque surface du jeu se rend dans la langue de l’interface', () => 
   test('en : les surfaces disent ce qu’un anglophone attend', () => {
     inLanguage('en');
     const rendered = surfaces();
-    expect(rendered.gauges).toContain('Level');
+    /* Le niveau a quitté les jauges pour le héros pleine largeur (#5841) : c'est là qu'un anglophone le lit. */
+    expect(rendered.hero).toContain('Level');
+    expect(rendered.gauges).toContain('Treasury');
+    expect(rendered.gauges).toContain('Flame');
+    expect(rendered.banner).toMatch(/^Level \d+, /);
     expect(rendered.missions).toContain('Missions of the day');
     expect(rendered.missions).toContain('Chest of the day');
     expect(rendered.offer).toContain('Shall we capture it?');

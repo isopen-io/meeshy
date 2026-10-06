@@ -109,6 +109,7 @@ import {
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { getSocketRateLimiter, SOCKET_RATE_LIMITS } from '../../utils/socket-rate-limiter.js';
 import { EngagementService } from '../../services/engagement/EngagementService';
+import { guardedTimeout } from '../../utils/guarded-timer.js';
 
 const logger = enhancedLogger.child({ module: 'LocationHandler' });
 
@@ -512,13 +513,13 @@ export class LocationHandler {
     this._closeSession(key);
     this.sessions.set(key, session);
 
-    const timer = setTimeout(() => {
+    const timer = guardedTimeout({ name: 'live-location-expiry', afterMs: Math.max(0, session.expiresAt.getTime() - session.startedAt.getTime()), logger, run: () => {
       this.expiryTimers.delete(key);
       // L'entrée SURVIT à son terme, elle n'est pas supprimée ici : c'est elle
       // qui fait taire les `live-update` d'après (cf. handleLiveLocationUpdate).
       // La déconnexion du partageur est ce qui la ramasse.
       this._broadcastStopped(session);
-    }, Math.max(0, session.expiresAt.getTime() - session.startedAt.getTime()));
+    } });
     if (typeof (timer as { unref?: () => void }).unref === 'function') {
       (timer as { unref: () => void }).unref();
     }

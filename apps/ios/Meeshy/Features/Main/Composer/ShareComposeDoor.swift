@@ -71,7 +71,8 @@ struct ShareComposeDoor: View {
                     references: references,
                     composerMediaTexts: ComposerMediaTexts(alt: accessibility.mediaAlt ?? [:],
                                                            caption: accessibility.mediaCaption ?? [:]),
-                    allowSoundExtraction: accessibility.allowSoundExtraction
+                    allowSoundExtraction: accessibility.allowSoundExtraction,
+                    alsoAsReel: accessibility.alsoAsReel
                 )
                 onFinish()
                 // La création accepte TOUJOURS : hors-ligne, la publication part

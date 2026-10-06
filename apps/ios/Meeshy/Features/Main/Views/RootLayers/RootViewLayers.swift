@@ -275,7 +275,13 @@ struct RootChromeLayer: ViewModifier {
                 // Hide the bar whenever the user is already inside the
                 // conversation playing the audio — the in-place audio bubble
                 // owns the controls there.
-                miniPlayerCurrentConversationId: { router.currentConversationId }
+                miniPlayerCurrentConversationId: { router.currentConversationId },
+                // La BANNIÈRE DU JOUEUR (#9494) : sur les écrans principaux seulement, comme les menus
+                // flottants — ni un fil, ni Progression elle-même, ni le lecteur de réels. Une primitive
+                // calculée ICI, où le routeur et le lecteur de réels sont observés.
+                playerBannerHosted: PlayerBannerPlacement.hosts(
+                    routeIsDeep: router.isDeepRoute, reelsAreOpen: reelsPresenter.launch != nil),
+                onPlayerBannerTap: { router.push(.progression) }
             ))
             .animation(.spring(response: 0.4, dampingFraction: 0.85), value: showFeed)
             .animation(.spring(), value: showMenu)

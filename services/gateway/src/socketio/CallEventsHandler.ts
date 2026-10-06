@@ -112,6 +112,7 @@ import type {
   CallTranscriptionActiveEvent,
   CallIceServersRefreshedEvent,
 } from '@meeshy/shared/types/video-call';
+import { guardedInterval, guardedTimeout } from '../utils/guarded-timer';
 
 /**
  * CALL-RESILIENCE — the shape of an active participation row read by the
@@ -301,7 +302,7 @@ export class CallEventsHandler {
     // call ended via a path that skipped clearBufferedOffer (error branches,
     // GC teardown). Complements the inline sweep in bufferOffer which only
     // runs when a new offer arrives.
-    this.bufferCleanupInterval = setInterval(() => {
+    this.bufferCleanupInterval = guardedInterval({ name: 'call-offer-buffer-cleanup', everyMs: 60_000, logger, run: () => {
       const now = Date.now();
       for (const [key, entry] of this.bufferedOffers) {
         if (now - entry.bufferedAt > CallEventsHandler.OFFER_BUFFER_TTL_MS) {
@@ -323,7 +324,7 @@ export class CallEventsHandler {
           this.callCancellationPushSentAt.delete(callId);
         }
       }
-    }, 60_000).unref();
+    } }).unref();
   }
 
   /** Release the periodic cleanup interval. Call when shutting down the handler. */
@@ -584,7 +585,7 @@ export class CallEventsHandler {
     logger.info('📞 Call socket dropped — arming reconnect grace window', {
       callId, userId, graceMs, status: participation.callSession.status
     });
-    const timer = setTimeout(() => {
+    const timer = guardedTimeout({ name: 'call-disconnect-grace', afterMs: graceMs, logger, run: () => {
       this.disconnectGraceTimers.delete(key);
       // `.catch` OBLIGATOIRE (leçon 230), et le raisonnement « le callee avale
       // ses erreurs » est FAUX ici : `onDisconnectGraceExpired` porte trois
@@ -595,7 +596,7 @@ export class CallEventsHandler {
       void this.onDisconnectGraceExpired(opts).catch((error: unknown) =>
         logger.error('📞 Disconnect grace expiry rejected', { callId, userId, error })
       );
-    }, graceMs);
+    } });
     timer.unref?.();
     this.disconnectGraceTimers.set(key, timer);
   }
@@ -653,7 +654,7 @@ export class CallEventsHandler {
             maxExtensions: MAX_GRACE_EXTENSIONS
           });
           const key = this.graceKey(callId, userId);
-          const timer = setTimeout(() => {
+          const timer = guardedTimeout({ name: 'call-disconnect-grace', afterMs: GRACE_EXTENSION_MS, logger, run: () => {
             this.disconnectGraceTimers.delete(key);
             // Même garde que l'armement initial, et pour la même raison : le
             // `try` qui entoure CETTE ligne appartient à l'invocation courante,
@@ -662,7 +663,7 @@ export class CallEventsHandler {
               (error: unknown) =>
                 logger.error('📞 Extended disconnect grace expiry rejected', { callId, userId, error })
             );
-          }, GRACE_EXTENSION_MS);
+          } });
           timer.unref?.();
           this.disconnectGraceTimers.set(key, timer);
           return;

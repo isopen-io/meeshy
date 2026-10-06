@@ -55,6 +55,13 @@ describe('MeeshCoin — le revers', () => {
     expect(html).toMatch(/data-game-bird="meoOpen" transform="translate\(107 30\) scale\(-0\.34 0\.34\)"/);
   });
 
+  test('Mee et Meo sont GRAVÉS dans le métal, colorés, jamais en autocollant (#9540)', () => {
+    expect(html).toContain('-engrave"');
+    expect(html).toMatch(/filter="url\(#[^)]*-engrave\)"/);
+    expect(html).not.toContain('-cut');
+    expect(html).not.toContain('dilate');
+  });
+
   test('le numéro de frappe et l’année', () => {
     expect(html).toContain('N° 13');
     expect(html).toContain('2026');

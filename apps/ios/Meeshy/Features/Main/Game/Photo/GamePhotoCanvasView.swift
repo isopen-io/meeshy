@@ -30,8 +30,11 @@ struct GamePhotoCanvasView: View {
     let background: Background
     /// 0 à 1 : la frappe « en place » — l'emblème se pose et reçoit son reflet.
     var strike: Double = 1
+    /// Le lien de parrainage et la Flamme (#7742) : le bandeau du bas. `nil` ⇒ la carte part sans lien,
+    /// avec la Signature du bas comme avant.
+    var referral: ReferralCard?
 
-    private var layout: PhotoLayout { GamePhotoLayout.layout(format) }
+    private var layout: PhotoLayout { GamePhotoLayout.layout(format, referral: referral != nil) }
 
     var body: some View {
         let l = layout
@@ -47,9 +50,23 @@ struct GamePhotoCanvasView: View {
             text(l.date, text: dateLabel, weight: UIFont.Weight.medium, color: MeeshyColors.indigo200)
             figure(id: "mee-sourire", rect: l.mee, mirrored: false)
             figure(id: "meo-salut", rect: l.meo, mirrored: true)
-            SignatureMark(style: .flat, color: .white)
-                .frame(width: l.signature.width, height: l.signature.height)
-                .offset(x: l.signature.minX, y: l.signature.minY)
+            if let banner = l.banner, let referral {
+                GameReferralBannerView(
+                    title: String(localized: "game.referral.title", defaultValue: "Rejoins-moi sur Meeshy", bundle: .main),
+                    link: referral.displayLink,
+                    flameForm: referral.flame?.form,
+                    flameLabel: referral.flame.map {
+                        String(localized: "game.referral.flame_days", defaultValue: "\(GameCopy.formatCount($0.days)) j", bundle: .main)
+                    },
+                    isPlaceholder: referral.isPlaceholder
+                )
+                .frame(width: banner.width, height: banner.height)
+                .offset(x: banner.minX, y: banner.minY)
+            } else {
+                SignatureMark(style: .flat, color: .white)
+                    .frame(width: l.signature.width, height: l.signature.height)
+                    .offset(x: l.signature.minX, y: l.signature.minY)
+            }
         }
         .frame(width: l.width, height: l.height, alignment: .topLeading)
         .clipped()
@@ -110,6 +127,20 @@ struct GamePhotoCanvasView: View {
             MeeshCoinView(face: .obverse, edition: .silver, figures: nil)
         case .flame(let form, _):
             FlameView(form: form, flickers: false)
+        case .achievement:
+            TrophyView(material: .gold, label: moment.kicker.uppercased())
+        case .trophy(let key):
+            if let view = GameTrophyPresentation.of(key: key) {
+                TrophyView(material: view.material, label: view.plate, figures: view.kind == .prestige ? GameFigures.standard : nil)
+            } else {
+                TrophyView(material: .gold, label: moment.kicker.uppercased())
+            }
+        case .leagueUp(let league):
+            LeagueGemView(league: league)
+        case .season(let season):
+            TrophyView(material: .platinum, label: GameText.trophyPlateSeason(number: GameCopy.formatCount(season)))
+        case .prestige(let number):
+            TrophyView(material: .prism, label: GameText.trophyPlatePrestige(number: GameCopy.formatCount(number)), figures: GameFigures.standard)
         }
     }
 

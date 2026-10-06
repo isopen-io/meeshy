@@ -1,6 +1,6 @@
 import type { GameGl } from './engine';
 import type { GameEffect } from './shaders';
-import { SHEEN_PASSES, driftTilt, sheenState, shockwaveState, type Tilt } from './timeline';
+import { SHEEN_PASSES, SHEEN_SWEEP_START_MS, driftTilt, sheenState, shockwaveState, type Tilt } from './timeline';
 
 /**
  * LE CHEF D'ORCHESTRE D'UN EFFET (#9381) — choisit le moteur, mène la boucle,
@@ -35,6 +35,12 @@ export type EffectSpec = {
   readonly passes?: number;
   /** `false` : le contexte est créé et les programmes compilés d'avance, mais rien ne tourne avant `replay()` (l'onde attend le « tchak »). Défaut : vrai. */
   readonly autoStart?: boolean;
+  /**
+   * Le reflet saute son repos : le trait balaie TOUT DE SUITE (le passage d'un
+   * niveau n'attend pas deux secondes). Sans effet sur l'onde et l'irisation.
+   * Avec `passes: 1`, l'effet dure le seul balayage (1,6 s).
+   */
+  readonly immediate?: boolean;
 };
 
 export type EffectEnv = {
@@ -69,7 +75,8 @@ export const startEffect = (spec: EffectSpec, env: EffectEnv): EffectController 
   let disposed = false;
   let visible = true;
   let rafId: number | null = null;
-  let elapsed = 0;
+  const origin = spec.immediate === true && spec.effect === 'sheen' ? SHEEN_SWEEP_START_MS : 0;
+  let elapsed = origin;
   let last: number | null = null;
   let finished = spec.autoStart === false;
   let tilt: Tilt = REST;
@@ -145,7 +152,7 @@ export const startEffect = (spec: EffectSpec, env: EffectEnv): EffectController 
     backend: 'webgl2',
     replay: () => {
       if (disposed || sensed) return;
-      elapsed = 0;
+      elapsed = origin;
       last = null;
       finished = false;
       requestFrame(onTimedFrame);

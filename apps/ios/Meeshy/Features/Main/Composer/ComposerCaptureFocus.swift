@@ -55,10 +55,11 @@ nonisolated enum ComposerCaptureFocus {
     static let center = CGPoint(x: 0.5, y: 0.5)
 
     /// **À l'ouverture, et chaque fois que la scène change après un toucher.**
-    static func continuous(_ objectif: Capabilities) -> Plan {
+    /// `smooth` : pendant une prise, le retour au continu reste lissé (#9464).
+    static func continuous(_ objectif: Capabilities, smooth: Bool = false) -> Plan {
         Plan(focus: objectif.continuousAutoFocus ? .continuous : nil,
              exposure: objectif.continuousAutoExposure ? .continuous : nil,
-             watchesSubjectArea: false)
+             watchesSubjectArea: false, smoothFocus: smooth)
     }
 
     /// **Le toucher** : mise au point ET exposition sur le point touché.

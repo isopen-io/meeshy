@@ -31,6 +31,8 @@
  * couleur de marque ni d'état. Les textes, eux, restent aux jetons d'encre.
  */
 
+import { GAME_NOTIFICATION_TYPES } from '@meeshy/shared/utils/game/notifications';
+
 export const NOTIFICATION_CATEGORIES = [
   'all',
   'unread',
@@ -86,7 +88,15 @@ const FAMILY_TYPES: Readonly<Record<FamilyCategory, readonly string[]>> = {
     'friend_new_post',
     'friend_new_mood',
   ],
-  engagement: ['achievement_unlocked', 'ACHIEVEMENT_UNLOCKED', 'streak_milestone', 'level_up', 'badge_earned'],
+  engagement: [
+    'achievement_unlocked',
+    'ACHIEVEMENT_UNLOCKED',
+    'streak_milestone',
+    'level_up',
+    'badge_earned',
+    /* Le jeu (#9490) : une invitation de duo, son acceptation, le résultat d'une ligue, une étape de saison. */
+    ...GAME_NOTIFICATION_TYPES,
+  ],
   contacts: [
     'friend_request',
     'contact_request',
@@ -252,7 +262,7 @@ const ACCENTS: ReadonlyArray<readonly [string, readonly string[]]> = [
       'member_role_changed',
     ],
   ],
-  ['var(--ios-warning)', ['achievement_unlocked', 'ACHIEVEMENT_UNLOCKED', 'streak_milestone', 'level_up', 'badge_earned']],
+  ['var(--ios-warning)', FAMILY_TYPES.engagement],
   ['#E91E63', FAMILY_TYPES.calls], // harmony-exempt: palette catégorielle miroir de NotificationCategory.swift, à remonter dans le SDK (#8879)
   ['#2ECC71', ['AFFILIATE_SIGNUP']], // harmony-exempt: palette catégorielle miroir de NotificationCategory.swift, à remonter dans le SDK (#8879)
   ['var(--ios-error-strong)', ['security_alert', 'login_new_device', 'SYSTEM_ALERT', 'password_changed', 'two_factor_enabled', 'two_factor_disabled']],

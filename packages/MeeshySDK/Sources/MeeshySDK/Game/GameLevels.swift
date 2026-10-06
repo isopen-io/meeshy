@@ -25,6 +25,22 @@ public enum LevelTierKey: String, CaseIterable, Codable, Sendable, Hashable {
     case galaxie
 }
 
+public extension LevelTierKey {
+    /// Le rang du palier, de 1 (Étincelle) à 10 (Galaxie) : la source du chiffre romain et de
+    /// « quatrième palier ». L'ordre des cas EST l'ordre des paliers.
+    var ordinal: Int {
+        (Self.allCases.firstIndex(of: self) ?? 0) + 1
+    }
+
+    /// Le rang du palier en chiffres romains, de I à X — ce que l'anneau de niveau écrit dans son
+    /// cartouche. Les chiffres romains ne se localisent pas : ils sont les mêmes dans les sept langues.
+    var romanNumeral: String {
+        Self.romanNumerals[ordinal - 1]
+    }
+
+    private static let romanNumerals = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"]
+}
+
 /// Où se tient un score sur l'échelle des cent niveaux.
 public struct GameLevelProgress: Sendable, Equatable {
     public let level: Int

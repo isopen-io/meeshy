@@ -10,6 +10,7 @@ import { gameBlockFixture } from '@/lib/api/game-fixture';
 import type { ApiResult, HttpRequest } from '@/lib/api/http';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
+import { createStrikeGate } from '@/lib/game/strike-gate';
 import { pathOf, routedTransport } from '@/test-support/routed-transport';
 
 import { GAME_MUTATION_KEY, useGameActions, type GameActions } from './progression-game-actions';
@@ -40,6 +41,7 @@ async function bench(
   view: EngagementWithGame,
   answer: (req: HttpRequest) => ApiResult<unknown> | undefined,
   hold?: Promise<ApiResult<unknown>>,
+  strike?: ReturnType<typeof createStrikeGate>,
 ) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity }, mutations: { retry: false } } });
   client.setQueryData(ENGAGEMENT_PROGRESS_QUERY_KEY, view);
@@ -55,7 +57,7 @@ async function bench(
   }
   let current: GameActions | null = null;
   function Probe() {
-    current = useGameActions({ transport });
+    current = useGameActions({ transport, ...(strike === undefined ? {} : { strike }) });
     return null;
   }
   await mount(
@@ -176,6 +178,41 @@ describe('la frappe', () => {
   });
 });
 
+describe('un identifiant déjà pris par une autre écriture (REQUEST_ID_CONFLICT)', () => {
+  test('le refus se dit en toutes lettres, et le geste suivant part avec un NOUVEL identifiant', async () => {
+    let attempt = 0;
+    const { actions, calls } = await bench(seed(), (req) => {
+      if (pathOf(req) !== '/api/v1/me/meesh/mint') return undefined;
+      attempt += 1;
+      return attempt === 1 ? refused('REQUEST_ID_CONFLICT') : ok({ status: 'minted', balance: 5, mintedLifetime: 4 });
+    });
+    await act(async () => actions().mint());
+    await settle();
+    expect(actions().errors.mint).toContain('identifiant');
+    expect(actions().errors.mint).not.toContain('connexion');
+    await act(async () => actions().mint());
+    await settle();
+    const ids = calls().map((c) => (c.body as { requestId: string }).requestId);
+    expect(ids).toHaveLength(2);
+    expect(ids[1]).not.toBe(ids[0]);
+  });
+
+  test('un refus d’un autre ordre garde l’identifiant : le retry reste le même geste', async () => {
+    let attempt = 0;
+    const { actions, calls } = await bench(seed(), (req) => {
+      if (pathOf(req) !== '/api/v1/me/game/flame/freezes') return undefined;
+      attempt += 1;
+      return attempt === 1 ? refused('FREEZE_AT_MAXIMUM') : ok({ status: 'bought', freezes: 1, balance: 0 });
+    });
+    await act(async () => actions().buyFreeze());
+    await settle();
+    await act(async () => actions().buyFreeze());
+    await settle();
+    const ids = calls().map((c) => (c.body as { requestId: string }).requestId);
+    expect(ids[1]).toBe(ids[0]);
+  });
+});
+
 describe('changer une mission', () => {
   const replacement = { ...gameBlockFixture().missions.items[1]!, id: 'm-new', templateKey: 'comment-text', progress: 0 };
 
@@ -258,5 +295,66 @@ describe('le coffre, le gel et le rallumage', () => {
     expect(gameOf(cached()).flame.days).toBe(9);
     expect(gameOf(cached()).flame.status).toBe('lit');
     expect(gameOf(cached()).treasury.held).toBe(2);
+  });
+});
+
+/**
+ * LA FRAPPE EST SÉQUENCÉE (#9537) — Mee et Meo frappent d'abord, le compteur
+ * monte ensuite : optimiste (la requête part tout de suite) mais retenu
+ * jusqu'à la fin du geste ; un refus restaure.
+ */
+describe('la frappe séquencée', () => {
+  const staged = () => {
+    const jobs: (() => void)[] = [];
+    const gate = createStrikeGate({ staged: () => true, reducedMotion: () => false, schedule: (run) => (jobs.push(run), () => undefined) });
+    return { gate, finishTheGesture: () => act(async () => jobs.splice(0).forEach((run) => run())) };
+  };
+  const mintPath = (req: HttpRequest): boolean => pathOf(req) === '/api/v1/me/meesh/mint';
+
+  test('la requête part tout de suite, mais le compteur ne bouge pas tant que le geste joue', async () => {
+    const before = seed();
+    const { gate } = staged();
+    const { actions, cached, calls } = await bench(before, (req) => (mintPath(req) ? ok({ status: 'minted', balance: 5, mintedLifetime: 4 }) : undefined), undefined, gate);
+    await act(async () => actions().mint());
+    await settle();
+    expect(calls().filter((c) => mintPath(c))).toHaveLength(1);
+    expect(gameOf(cached()).treasury.held).toBe(gameOf(before).treasury.held);
+    expect(gameOf(cached()).level.level).toBe(gameOf(before).level.level);
+    expect(actions().strikeKey).toBe(1);
+  });
+
+  test('le geste fini, le compteur monte et la pièce est célébrée', async () => {
+    const before = seed();
+    const { gate, finishTheGesture } = staged();
+    const { actions, cached } = await bench(before, (req) => (mintPath(req) ? ok({ status: 'minted', balance: 5, mintedLifetime: 4, number: 4, edition: 'silver' }) : undefined), undefined, gate);
+    await act(async () => actions().mint());
+    await settle();
+    expect(actions().celebration).toBeNull();
+    await finishTheGesture();
+    await settle();
+    expect(gameOf(cached()).treasury.held).toBe(gameOf(before).treasury.held + 1);
+    expect(actions().celebration?.number).toBe(4);
+  });
+
+  test('la passerelle refuse pendant le geste : le compteur n’a jamais bougé, l’erreur se lit', async () => {
+    const before = seed();
+    const { gate, finishTheGesture } = staged();
+    const { actions, cached } = await bench(before, (req) => (mintPath(req) ? refused('INSUFFICIENT_POINTS') : undefined), undefined, gate);
+    await act(async () => actions().mint());
+    await settle();
+    await finishTheGesture();
+    await settle();
+    expect(gameOf(cached()).treasury.held).toBe(gameOf(before).treasury.held);
+    expect(actions().errors.mint).toBeDefined();
+    expect(actions().pending.mint).toBe(false);
+  });
+
+  test('sans scène à l’écran, rien n’attend : le compteur monte tout de suite', async () => {
+    const before = seed();
+    const gate = createStrikeGate({ staged: () => false });
+    const { actions, cached } = await bench(before, (req) => (mintPath(req) ? ok({ status: 'minted', balance: 5, mintedLifetime: 4 }) : undefined), undefined, gate);
+    await act(async () => actions().mint());
+    await settle();
+    expect(gameOf(cached()).treasury.held).toBe(gameOf(before).treasury.held + 1);
   });
 });

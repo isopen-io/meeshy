@@ -50,6 +50,10 @@
                 <!-- #9468 — le lien d'invitation, réclamé par l'AASA depuis #8075 :
                      ouvert dans la coque, le code est retenu par l'app qui inscrira. -->
                 <data android:pathPrefix="/signup/affiliate/" />
+                <!-- #9520 — sa forme courte /signup?ref=, réclamée par l'AASA. Le
+                     filtre ne lit pas la requête : sans code, la coque ouvre son
+                     propre écran d'inscription. -->
+                <data android:path="/signup" />
                 <data android:pathPrefix="/auth/magic-link" />
                 <data android:path="/auth/verify-email" />
                 <data android:path="/me" />
@@ -98,6 +102,13 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths"></meta-data>
         </provider>
+
+        <!-- #9530 — l'app et meeshy.me partagent leurs identifiants, comme
+             webcredentials sur iOS : le Gestionnaire de mots de passe de Google
+             propose dans la coque le mot de passe enregistré sur le site. -->
+        <meta-data
+            android:name="asset_statements"
+            android:resource="@string/asset_statements" />
 
         <!-- #7307 — la bannière d'un push rendue par FCM, app fermée : sans ces
              deux entrées, Android prend l'icône de lancement (un carré blanc

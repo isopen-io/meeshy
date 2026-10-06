@@ -103,15 +103,6 @@ nonisolated enum ComposerSceneQuickCapture {
         case arm
     }
 
-    /// **Le second toucher, sur un viseur déjà armé** (#8711).
-    enum ArmedTap: Equatable, Sendable {
-        /// N'importe où sur la scène, hors contrôleurs : la photo part.
-        case takePhoto
-        /// Le toucher n'a rien à prendre — viseur éteint ou en prise, format
-        /// sans photo, segments vidéo en attente de leur `✓`.
-        case ignore
-    }
-
     enum Release: Equatable, Sendable {
         case closeTake
         case keepFilming
@@ -151,44 +142,6 @@ nonisolated enum ComposerSceneQuickCapture {
 
     static func tap(format: ComposerFormat) -> Tap? {
         ComposerSceneCamera.modes(for: format).isEmpty ? nil : .arm
-    }
-
-    /// **La photo ne part que d'un viseur ARMÉ, dans un format qui la sert.**
-    /// Des segments vidéo en attente ne se perdent pas sous une photo : la
-    /// pose d'une prise referme le viseur, et avec lui ce qui n'a pas été
-    /// validé.
-    static func armedTap(stage: ComposerSceneCameraStage,
-                         format: ComposerFormat,
-                         pendingSegments: Int) -> ArmedTap {
-        guard stage == .armed,
-              pendingSegments == 0,
-              ComposerSceneCamera.modes(for: format).contains(.photo) else { return .ignore }
-        return .takePhoto
-    }
-
-    /// **L'appui long sur un viseur déjà ARMÉ** (#8846, directive porteur
-    /// 2026-09-30 : « le longpress à partir de la scène doit déclencher la
-    /// capture vidéo après avoir armé l'objectif »).
-    enum ArmedHold: Equatable, Sendable {
-        /// N'importe où sur la scène : la vidéo part, et relâcher l'arrête.
-        case startFilming
-        /// Viseur éteint ou déjà en prise, ou format sans vidéo.
-        case ignore
-    }
-
-    /// **La vidéo part d'un viseur ARMÉ, dans un format qui la sert.** Des
-    /// segments en attente n'y font PAS obstacle, à la différence de la
-    /// photo : une nouvelle prise s'y AJOUTE (vue `4b`), elle n'en efface
-    /// aucun.
-    ///
-    /// Aucune durée maximale n'est imposée ici : le dépôt n'en porte aucune
-    /// pour les vidéos de story, de post ou de réel (même doctrine que l'audio,
-    /// directive produit 2026-07-26 — « aussi longtemps que l'utilisateur le
-    /// souhaite »). La prise dure tant que le doigt reste, ou jusqu'au stop
-    /// d'une prise verrouillée.
-    static func armedHold(stage: ComposerSceneCameraStage, format: ComposerFormat) -> ArmedHold {
-        guard stage == .armed, ComposerSceneCamera.modes(for: format).contains(.video) else { return .ignore }
-        return .startFilming
     }
 
     /// **Un geste, une ligne, son icône** (#8671, complément porteur

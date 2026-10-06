@@ -16,10 +16,12 @@ import Foundation
 ///   raison en une ligne.
 public struct NotificationRowPresentation: Equatable, Sendable {
 
-    /// Ce qui ouvre la ligne : l'avatar de l'acteur, ou le médaillon d'un palier.
+    /// Ce qui ouvre la ligne : l'avatar de l'acteur, le médaillon d'un palier, ou la Signature de la
+    /// marque (une notification de jeu sans acteur — la ligue, la saison).
     public enum Leading: Equatable, Sendable {
         case avatar
         case milestone(symbol: String)
+        case signature
     }
 
     /// Le pied de ligne : OÙ ça s'est passé.
@@ -153,7 +155,7 @@ public extension APINotification {
         let parts = rowParts
         let texts = NotificationRowText.distinct([formattedTitle, parts.body, parts.quote])
         return NotificationRowPresentation(
-            leading: .avatar,
+            leading: wearsSignature ? .signature : .avatar,
             title: formattedTitle,
             body: texts[1],
             quote: texts[2],
@@ -184,6 +186,15 @@ public extension APINotification {
             return (formattedBody, nil, contentFooter)
         default:
             return (formattedBody, nil, conversationOrPlainFooter)
+        }
+    }
+
+    /// Une notification de jeu SANS acteur (la ligue, la saison) n'a pas d'avatar à montrer : la Signature
+    /// de la marque tient la place. Un duo, lui, vient d'un ami — son avatar dit QUI.
+    private var wearsSignature: Bool {
+        switch notificationType {
+        case .gameLeagueResult, .gameSeasonStep, .gameMissionWindow: return true
+        default: return false
         }
     }
 

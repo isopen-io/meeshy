@@ -1170,6 +1170,17 @@ struct RootView: View {
             router.pendingEngagementReveal = ctx.reveal
             router.push(.progression)
 
+        case .gameDuoInvited, .gameDuoAccepted, .gameLeagueResult, .gameSeasonStep:
+            // Une notification du jeu (#9490) ouvre la page qui la restitue : la Ligue (son duo y est posé)
+            // ou la Saison. Le type décide, jamais la forme de la métadonnée.
+            router.push(.gamePage(GamePage.opened(by: ctx.type) ?? .league))
+
+        case .gameMissionWindow:
+            // La plage de la mission personnelle s'est ouverte (#9539) : le toucher ouvre Progression sur la
+            // section Héro des missions — pas une page du jeu.
+            router.pendingGameAnchor = .missions
+            router.push(.progression)
+
         case .legacyAffiliateSignup:
             router.push(.affiliate)
 

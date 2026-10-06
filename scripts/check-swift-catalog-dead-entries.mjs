@@ -374,7 +374,36 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // CONSTRUCTION, même motif que `StickerPacksEndpoint` ci-dessus : le jeu
 // (chests, flamme, missions) est livré côté gateway et web ; aucun écran iOS
 // ne les appelle encore. Valeur MESURÉE le 2026-10-05.
-const BASELINE_DEAD_ENTRIES = 294;
+// 294 -> 308 (#9506, 2026-10-05) : quatorze entrées GÉNÉRÉES depuis
+// `route-manifest.json` en régénérant `MeEndpoint.swift` et
+// `UsersEndpoint.swift` (restés périmés après la vague 2 du jeu — ligues,
+// duos, saisons, prestige, parrainage — #9225/#9230, #9504) :
+// `MeEndpoint.gameDuoByDuoIdAbandon`, `.gameDuoByDuoIdAccept`,
+// `.gameDuoInvite`, `.gameLeagueConsent`, `.gameLeagueFriends`,
+// `.gameLeaguePseudonym`, `.gameLeagueWeek`, `.gamePrestige`, `.gamePrivacy`,
+// `.gameSeasonSeal`, `.gameSeasonStepsByStepClaim`, `.gameShowcaseOrder`,
+// `.gameVisibility`, et `UsersEndpoint.byUserIdGameShowcase`. Mortes à la
+// naissance PAR CONSTRUCTION, même motif que les deux entrées ci-dessus : la
+// vague 2 est livrée côté gateway ; aucun écran iOS ne les appelle encore.
+// Valeur MESURÉE le 2026-10-05.
+// 308 -> 309 (#9529, 2026-10-06) : `UsersEndpoint.byUserIdGame`
+// (`GET /users/:userId/game`, le jeu d'un autre membre selon son réglage),
+// GÉNÉRÉE depuis `route-manifest.json` par `e0a8b73588` (#9481), qui a livré
+// la route gateway et régénéré `UsersEndpoint.swift` sans relever cette
+// référence. Trouvée en comparant la liste triée de `fe1c386e6f` (308) à celle
+// de la tête de `dev` (309) : une entrée de plus, aucune n'a regagné
+// d'appelant. iOS APPELLE cette route (`GameService.fetchUserGame`,
+// `ef03716ee9`), mais par `GameEndpoint.userGame` — le catalogue du jeu ÉCRIT
+// À LA MAIN, qui encode l'identifiant avant de le poser dans le chemin
+// (`GameIntegrationRoutes.userGamePath`, témoin `GameRoutesTests`) et déclare
+// les refus typés (`rejectionPolicy == .structured`) ; l'entrée générée
+// interpole l'identifiant brut et n'a pas cette politique, la lui substituer
+// retirerait les deux. Même cas que `byUserIdGameShowcase` et les dix-huit
+// `MeEndpoint.game*` ci-dessus, dont chacune a sa jumelle dans `GameEndpoint`.
+// Elles ne reviendront au compte que le jour où `GameEndpoint` se retire au
+// profit du catalogue généré, comme son en-tête l'annonce. Valeur MESURÉE le
+// 2026-10-06.
+const BASELINE_DEAD_ENTRIES = 309;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;
 // Une déclaration de cas n'a jamais de point après `case` ; une branche de

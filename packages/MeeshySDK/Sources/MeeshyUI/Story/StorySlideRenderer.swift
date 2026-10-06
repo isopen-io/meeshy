@@ -147,8 +147,15 @@ public enum StorySlideRenderer {
             //    manquait au thumbnail/thumbHash. L'audio (pas de frame chargée) est
             //    naturellement ignoré (le `if let img` échoue).
             for obj in slide.effects.resolvedForegroundMediaObjects {
+                // Le filtre et les réglages PROPRES à une IMAGE (#8474, #9175),
+                // cuits par la même fonction que le player — qui ne les peint
+                // pas sur une vidéo.
+                // La VIGNETTE d'une vidéo posée porte ses réglages (#9169), par
+                // la même chaîne que sa lecture.
                 if let img = loadedImages[obj.id] {
-                    drawMediaObject(obj, image: img, in: size, ctx: cgCtx)
+                    let peinte = obj.kind == .image ? StoryMediaLayer.filtered(img, for: obj) ?? img
+                        : StoryVideoAdjustmentsProcessor.poster(img, for: obj)
+                    drawMediaObject(obj, image: MediaCropPresentation.keptPart(peinte, of: obj), in: size, ctx: cgCtx)
                 }
             }
 
@@ -218,10 +225,13 @@ public enum StorySlideRenderer {
     ///
     /// Résultat : la miniature de tray et le placeholder ThumbHash ne
     /// correspondaient pas à la story jouée — un saut de couleur au chargement.
+    ///
+    /// Depuis #9496, le fond porte aussi les RÉGLAGES de son média, cuits après
+    /// le filtre par la même fonction que la couche de fond du lecteur
+    /// (`StoryBackgroundLook`) — une affiche de fond vidéo n'en reçoit ni
+    /// netteté ni flou, comme ses trames.
     static func filterBackground(_ image: UIImage, effects: StoryEffects) -> UIImage {
-        guard let raw = effects.filter, let filter = StoryFilter(rawValue: raw) else { return image }
-        let intensity = Float(max(0.0, min(1.0, effects.filterIntensity ?? 1.0)))
-        return StoryFilterProcessor.apply(filter, to: image, intensity: intensity)
+        StoryBackgroundLook.image(image, effects: effects)
     }
 
     /// Compute thumbHash for a complete slide composite.
@@ -356,7 +366,7 @@ public enum StorySlideRenderer {
     /// (jamais étirée) et clippée aux coins arrondis (`cornerRadiusFraction`), avec
     /// un bord blanc 2px comme `applyForegroundFrames` du canvas.
     private static func drawMediaObject(_ obj: StoryMediaObject, image: UIImage, in size: CGSize, ctx: CGContext) {
-        let designBox = StoryMediaLayer.baseMediaDesignSize(aspectRatio: obj.aspectRatio)
+        let designBox = StoryMediaLayer.baseMediaDesignSize(for: obj)
         let projection = size.width / CanvasGeometry.designWidth
         let boxW = designBox.width * CGFloat(obj.scale) * projection
         let boxH = designBox.height * CGFloat(obj.scale) * projection

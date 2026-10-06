@@ -17,17 +17,21 @@ import os
 /// pas rendue couchée — la prise brute repart plutôt que perdue.
 nonisolated enum ComposerLookVideoExporter {
 
-    /// - Returns: la vidéo regardée, `url` telle quelle sans look, `nil` si le
-    ///   rendu a échoué (l'appelant garde alors la prise brute).
+    /// - Returns: la vidéo regardée, `url` telle quelle sans look, sans cadrage
+    ///   et sans découpe, `nil` si le rendu a échoué (l'appelant ne remet alors
+    ///   rien : le brut porte ce que la découpe et le cadrage ont retiré).
     ///
     /// `@concurrent` : peindre les couches du cadre et monter l'export ne se
     /// fait jamais sur le fil principal, d'où le `✓` l'appelle.
     /// `declaredSpaceName` : l'espace que déclaraient les trames du viseur — le
     /// cube y lit la vidéo comme il y lisait l'aperçu.
+    /// `timeRange` : la plage gardée par la découpe (#9353) — elle seule part,
+    /// image et son ; `nil` ⇒ le clip entier.
     @concurrent
     static func export(_ url: URL, look: ComposerPhotoLook, framing: ComposerFraming = .identity,
-                       person: CallFramePerson, date: Date, declaredSpaceName: String? = nil) async -> URL? {
-        guard ComposerLiveLookRule.rendersLive(look) || !framing.isIdentity else { return url }
+                       timeRange: CMTimeRange? = nil, person: CallFramePerson, date: Date,
+                       declaredSpaceName: String? = nil) async -> URL? {
+        guard ComposerLiveLookRule.rendersLive(look) || !framing.isIdentity || timeRange != nil else { return url }
         let asset = AVURLAsset(url: url)
         do {
             guard let track = try await asset.loadTracks(withMediaType: .video).first else { return nil }
@@ -48,7 +52,7 @@ nonisolated enum ComposerLookVideoExporter {
             composition.colorPrimaries = AVVideoColorPrimaries_P3_D65
             composition.colorTransferFunction = AVVideoTransferFunction_ITU_R_709_2
             composition.colorYCbCrMatrix = AVVideoYCbCrMatrix_ITU_R_709_2
-            return await write(asset, composition: composition)
+            return await write(asset, composition: composition, timeRange: timeRange)
         } catch {
             Logger.media.error("Live look video export failed: \(error.localizedDescription, privacy: .public)")
             return nil
@@ -57,7 +61,8 @@ nonisolated enum ComposerLookVideoExporter {
 
     private struct UnpaintedFrame: Error {}
 
-    private static func write(_ asset: AVAsset, composition: AVVideoComposition) async -> URL? {
+    private static func write(_ asset: AVAsset, composition: AVVideoComposition,
+                              timeRange: CMTimeRange?) async -> URL? {
         guard let session = AVAssetExportSession(asset: asset, presetName: AVAssetExportPresetHighestQuality) else {
             return nil
         }
@@ -68,6 +73,7 @@ nonisolated enum ComposerLookVideoExporter {
         session.videoComposition = composition
         // La date de création et le lieu de la prise suivent la vidéo rendue.
         session.metadata = (try? await asset.load(.metadata)) ?? []
+        if let timeRange { session.timeRange = timeRange }
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             session.exportAsynchronously { continuation.resume() }
         }
