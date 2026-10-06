@@ -1,23 +1,11 @@
 import SwiftUI
 import MeeshySDK
 
-/// **La toile à l'écran** (#9347) : le canevas 9:16, ajusté et centré — la
-/// couche système comme la vue Metal s'y posent, donc l'écran montre exactement
-/// ce qui part.
-nonisolated enum ComposerCaptureCanvas {
-    static func fitted(in bounds: CGRect) -> CGRect {
-        let toile = ComposerLookPainter.designCanvas
-        guard bounds.width > 0, bounds.height > 0 else { return bounds }
-        let echelle = min(bounds.width / toile.width, bounds.height / toile.height)
-        let taille = CGSize(width: toile.width * echelle, height: toile.height * echelle)
-        return CGRect(x: bounds.midX - taille.width / 2, y: bounds.midY - taille.height / 2,
-                      width: taille.width, height: taille.height)
-    }
-}
-
 /// **L'aperçu du viseur — un seul montage de `CameraPreviewLayer` pour les deux
 /// présentations** (#9134). La carte en scène et le plein écran le posent à la
-/// taille qu'ils choisissent ; il n'en prend aucun doigt : l'appui long qui a
+/// taille qu'ils choisissent, et il la REMPLIT (#9557) : le plein écran est le
+/// plein écran, la toile peinte prend les proportions de ce rectangle, et ce
+/// qui part les garde. Il n'en prend aucun doigt : l'appui long qui a
 /// armé le viseur est toujours en cours SOUS lui, et c'est sa levée qui décide.
 ///
 /// **En édition, la même toile montre la source retouchée** (#9352, spec § 3.3) :
@@ -50,7 +38,9 @@ struct ComposerCapturePreview: View {
                 EmptyView()
             case .viewfinder:
                 GeometryReader { exterieur in
-                    let toile = ComposerCaptureCanvas.fitted(in: CGRect(origin: .zero, size: exterieur.size))
+                    let toile = CGRect(origin: .zero, size: exterieur.size)
+                    let proportions = ComposerLookPainter.aspect(of: exterieur.size)
+                    let canevas = ComposerLookPainter.previewCanvas(aspect: proportions)
                     ZStack {
                         CameraPreviewLayer(session: session.camera.session, focusPoints: session.focusPoints,
                                            mirrorsFrames: ComposerCaptureSurfaceRule.mirrorsSystemLayer(
@@ -63,14 +53,14 @@ struct ComposerCapturePreview: View {
                         if let source = editedSource {
                             ComposerLiveLookSurface(look: session.look, person: session.lookPerson,
                                                     date: session.lookDate, framing: session.framing,
-                                                    source: source,
+                                                    source: source, canvas: canevas,
                                                     fps: ComposerCaptureSurfaceRule.editFPS(session.thermalBudget))
                                 .id(session.phase)
                         } else {
                             if session.paintsWithMetal {
                                 ComposerLiveLookSurface(look: session.look, person: session.lookPerson,
                                                         date: session.lookDate, framing: .identity,
-                                                        source: session.camera.liveFeed,
+                                                        source: session.camera.liveFeed, canvas: canevas,
                                                         fps: session.thermalBudget.previewFPS,
                                                         surfaceScale: session.thermalBudget.surfaceScale,
                                                         onFirstFrame: { metalHasFrame = true })
@@ -100,6 +90,9 @@ struct ComposerCapturePreview: View {
                     .frame(width: toile.width, height: toile.height)
                     .animation(.easeOut(duration: 0.15), value: session.camera.switchCover != nil)
                     .position(x: toile.midX, y: toile.midY)
+                    .adaptiveOnChange(of: proportions, initial: true) { _, vues in
+                        session.canvasAspect = vues
+                    }
                 }
             case .permissionRefused:
                 CameraPermissionPanel()

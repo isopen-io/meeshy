@@ -19,10 +19,12 @@ extension ComposerCaptureSession {
         ComposerCaptureSurfaceRule.paintsWithMetal(look: look, budget: thermalBudget, fixture: camera.runsFixture)
     }
 
-    /// **La miniature choisie est vivante dès le viseur armé** ; la bande ouverte
-    /// l'est aussi — tant que le palier garde au moins une case (#9351).
+    /// **La bande ouverte est vivante, la miniature d'un look choisi aussi** —
+    /// tant que le palier garde au moins une case (#9351). Sans filtre ni cadre
+    /// et bande repliée, rien ne se peint : aucune trame n'est retenue (#9557).
     var stripNeedsFeed: Bool {
         stage != .off && thermalBudget.thumbnailCells > 0
+            && ComposerLookStripRule.paintsLive(look: look, familyOpen: openFamily != nil)
     }
 
     /// Toucher une famille ouvre sa bande ; la retoucher la replie. Le look

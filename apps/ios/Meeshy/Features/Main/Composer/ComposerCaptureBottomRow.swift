@@ -49,6 +49,12 @@ struct ComposerCaptureBottomRow: View {
         return (url, lecteur.duration)
     }
 
+    /// La phrase du geste se tait pendant la prise et la retouche — et sous un
+    /// cadre, dont le bas porte sa propre écriture (#9557).
+    private var showsHint: Bool {
+        !recording && !editing && session.look.frame == ComposerPhotoFrame.none
+    }
+
     /// La table dit si le rail ouvre une famille ; sinon il reste là, éteint.
     private var railEnabled: Bool {
         ComposerCaptureGesture.action(zone: .rail, gesture: .tap, context: context) == .openFamily
@@ -70,7 +76,7 @@ struct ComposerCaptureBottomRow: View {
                 }
                 .environment(\.layoutDirection, .leftToRight)
             }
-            if !recording, !editing {
+            if showsHint {
                 Text(showsLock ? ComposerSceneCameraCopy.lockHint
                                : ComposerSceneCameraCopy.hint(mode: session.mode ?? .photo, stage: session.stage))
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, design: .monospaced))

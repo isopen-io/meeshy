@@ -93,7 +93,12 @@ final class ComposerLookStripTests: XCTestCase {
         let thermique = MockThermalStateMonitor(state: .nominal)
         let session = ComposerCaptureSession(stage: .armed, thermal: thermique)
         session.watchThermalState()
-        XCTAssertTrue(session.stripNeedsFeed, "la miniature choisie est vivante dès le viseur armé")
+        XCTAssertFalse(session.stripNeedsFeed, "sans look ni bande ouverte, rien ne recopie la caméra : aucune trame retenue")
+        session.openFamily = .filters
+        XCTAssertTrue(session.stripNeedsFeed, "la bande ouverte est vivante")
+        session.openFamily = nil
+        session.look = ComposerPhotoLook(filter: .warm)
+        XCTAssertTrue(session.stripNeedsFeed, "la miniature d'un look choisi est vivante")
         thermique.emit(.critical)
         XCTAssertFalse(session.stripNeedsFeed, "au palier critique, les miniatures sont coupées")
         session.disarm()
@@ -116,6 +121,56 @@ final class ComposerLookStripTests: XCTestCase {
         XCTAssertTrue(bande.contains("ComposerLookStripRule.collapsedTrigger("), "la règle dit ce que la bande repliée montre")
         let thermique = try Self.code("Meeshy/Features/Main/Composer/ComposerCaptureSession+Thermal.swift")
         XCTAssertTrue(thermique.contains("ComposerLookStripRule.paintsLive("), "le guet des trames suit la même règle")
+    }
+
+    func test_collapsedTrigger_isAShutterWithoutALook_theThumbnailWithOne_andNothingWhileEditing() {
+        let nu = ComposerPhotoLook()
+        let chaud = ComposerPhotoLook(filter: .warm)
+        XCTAssertEqual(ComposerLookStripRule.collapsedTrigger(look: nu, editing: false), .shutter)
+        XCTAssertEqual(ComposerLookStripRule.collapsedTrigger(look: chaud, editing: false), .thumbnail)
+        XCTAssertEqual(ComposerLookStripRule.collapsedTrigger(look: nu, editing: true), .hidden)
+        XCTAssertEqual(ComposerLookStripRule.collapsedTrigger(look: chaud, editing: true), .thumbnail)
+        XCTAssertFalse(ComposerLookStripRule.paintsLive(look: nu, familyOpen: false))
+        XCTAssertTrue(ComposerLookStripRule.paintsLive(look: nu, familyOpen: true))
+    }
+
+    /// « Aucun » ouvre les deux familles : on revient au viseur nu d'un toucher.
+    func test_bothFamilies_startWithNone() {
+        XCTAssertEqual(ComposerLookStripRule.items(.filters).first, .filter(.natural))
+        XCTAssertEqual(ComposerLookStripRule.items(.frames).first, .frame(.none))
+    }
+
+    /// Le déclencheur simple photographie d'UN toucher et filme à l'appui long.
+    func test_shutter_shootsOnASingleTap_filmsOnAHold_andStopsALockedTake() {
+        let arme = ComposerCaptureGestureContext()
+        XCTAssertEqual(ComposerCaptureGesture.action(zone: .shutter, gesture: .tap, context: arme), .photoToEdit)
+        XCTAssertEqual(ComposerCaptureGesture.action(zone: .shutter, gesture: .longPress, context: arme), .filmSegment)
+        let issue = ComposerCaptureGesture.tap(zone: .shutter, context: arme, now: Date(), lastTap: nil, armedAt: nil)
+        XCTAssertEqual(issue.action, .photoToEdit, "le premier toucher photographie, sans attendre un second")
+        var verrouillee = ComposerCaptureGestureContext(stage: .recording)
+        XCTAssertEqual(ComposerCaptureGesture.action(zone: .shutter, gesture: .tap, context: verrouillee), .none)
+        verrouillee.locked = true
+        XCTAssertEqual(ComposerCaptureGesture.action(zone: .shutter, gesture: .tap, context: verrouillee), .stopTake)
+        let segments = ComposerCaptureGestureContext(pendingSegments: 1)
+        XCTAssertEqual(ComposerCaptureGesture.action(zone: .shutter, gesture: .tap, context: segments), .none,
+                       "des segments en attente : pas de photo isolée")
+        XCTAssertEqual(ComposerCaptureGesture.action(zone: .shutter, gesture: .longPress, context: segments), .filmSegment)
+        let sansPhoto = ComposerCaptureGestureContext(allowsPhoto: false)
+        XCTAssertEqual(ComposerCaptureGesture.action(zone: .shutter, gesture: .tap, context: sansPhoto), .none)
+        XCTAssertEqual(ComposerCaptureGesture.accessibilityActions(zone: .shutter, context: arme), [.photoToEdit, .filmSegment])
+        XCTAssertEqual(ComposerCaptureGesture.accessibilityActions(zone: .shutter, context: verrouillee), [.stopTake])
+    }
+
+    /// Le toucher du déclencheur se reconnaît À CÔTÉ de la tenue (#9557) : derrière
+    /// elle, il ne partait jamais. La levée d'une tenue, elle, n'est pas un toucher.
+    func test_triggerTap_isRecognisedBesideTheHold_andAHoldReleaseIsNotATap() throws {
+        let bande = try Self.code("Meeshy/Features/Main/Composer/ComposerLookStrip.swift")
+        XCTAssertTrue(bande.contains(".simultaneously(with: TapGesture()"), "le toucher n'attend pas l'échec de l'appui long")
+        XCTAssertFalse(bande.contains(".exclusively(before: TapGesture()"))
+        let fin = Date(timeIntervalSince1970: 1_000)
+        XCTAssertTrue(ComposerLookStrip.followsAHold(fin, now: fin.addingTimeInterval(0.05)))
+        XCTAssertFalse(ComposerLookStrip.followsAHold(fin, now: fin.addingTimeInterval(0.5)))
+        XCTAssertFalse(ComposerLookStrip.followsAHold(nil, now: fin))
     }
 
     func test_chosenLookName_saysBothHalvesOfTheLook() {

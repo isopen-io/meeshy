@@ -14,12 +14,37 @@ nonisolated enum ComposerLookStripItem: Hashable, Sendable {
     case frame(ComposerPhotoFrame)
 }
 
+/// Ce que la bande REPLIÉE montre à la place du déclencheur (#9557).
+nonisolated enum ComposerLookStripTrigger: Equatable, Sendable {
+    /// Rien n'est choisi : un déclencheur simple, aucune trame peinte.
+    case shutter
+    /// Un look est choisi : sa miniature vivante, qui déclenche.
+    case thumbnail
+    /// On retouche sans look : rien à montrer, rien à déclencher.
+    case hidden
+}
+
 /// **Les lois de la bande** (#9351, spec § 3.1 et § 5) — décision du porteur :
 /// les miniatures sont VIVANTES (le direct avant la prise, le média après),
 /// filtre et cadre se COMBINENT, et la case choisie est encadrée.
 nonisolated enum ComposerLookStripRule {
 
     static let cellSize = CGSize(width: 56, height: 100)
+
+    /// **Sans filtre ni cadre, rien ne recopie la caméra en bas de l'écran**
+    /// (porteur 2026-10-07, #9557) : une miniature du viseur nu n'apprend rien.
+    /// La bande repliée devient un déclencheur simple ; en retouche, où rien ne
+    /// se déclenche, elle s'efface.
+    static func collapsedTrigger(look: ComposerPhotoLook, editing: Bool) -> ComposerLookStripTrigger {
+        guard look.isUntouched else { return .thumbnail }
+        return editing ? .hidden : .shutter
+    }
+
+    /// La bande peint-elle des trames ? Ouverte, toujours ; repliée, seulement
+    /// la miniature d'un look choisi.
+    static func paintsLive(look: ComposerPhotoLook, familyOpen: Bool) -> Bool {
+        familyOpen || !look.isUntouched
+    }
     static let spacing: CGFloat = 8
     static var pitch: CGFloat { cellSize.width + spacing }
 

@@ -29,7 +29,8 @@ nonisolated enum ComposerLookVideoExporter {
     /// image et son ; `nil` ⇒ le clip entier.
     @concurrent
     static func export(_ url: URL, look: ComposerPhotoLook, framing: ComposerFraming = .identity,
-                       timeRange: CMTimeRange? = nil, person: CallFramePerson, date: Date,
+                       timeRange: CMTimeRange? = nil, aspect: CGFloat = ComposerLookPainter.designAspect,
+                       person: CallFramePerson, date: Date,
                        declaredSpaceName: String? = nil) async -> URL? {
         guard ComposerLiveLookRule.rendersLive(look) || !framing.isIdentity || timeRange != nil else { return url }
         let asset = AVURLAsset(url: url)
@@ -38,7 +39,7 @@ nonisolated enum ComposerLookVideoExporter {
             let natural = try await track.load(.naturalSize)
             let transform = try await track.load(.preferredTransform)
             let upright = MeeshyVideoWatermarkBaker.orientedSize(natural: natural, transform: transform)
-            let toile = ComposerLookPainter.canvas(for: upright)
+            let toile = ComposerLookPainter.canvas(for: upright, aspect: aspect)
             let scene = ComposerLookPainter.scene(for: look, canvas: toile, date: date, person: person)
             if look.frame != ComposerPhotoFrame.none, scene == nil { throw UnpaintedFrame() }
             let composition = AVMutableVideoComposition(asset: asset) { @Sendable request in

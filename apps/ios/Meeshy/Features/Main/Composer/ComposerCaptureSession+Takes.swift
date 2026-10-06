@@ -21,7 +21,7 @@ extension ComposerCaptureCopy {
 ///
 /// Brut ET rendu partent ensemble en galerie (décision porteur) : le brut, à la
 /// prise, par `CameraModel` ; le rendu — filtre et cadre combinés, sur le canevas
-/// 9:16 qu'on voyait — ici. Une vidéo sans effet n'en fait qu'UN, son rendu
+/// qu'on voyait — ici. Une vidéo sans effet n'en fait qu'UN, son rendu
 /// étant identique au brut. « Enregistré » ne se dit que quand tout a réussi ;
 /// un refus se dit, lui, par `reportPhotoLibraryRefusal`.
 extension ComposerCaptureSession {
@@ -190,12 +190,14 @@ extension ComposerCaptureSession {
         let galerie = gallery
         let brut = camera.librarySave
         let precedent = galleryChain
+        let proportions = canvasAspect
         beginGallerySave()
         galleryChain = Task { @MainActor in
             defer { endGallerySave() }
             await precedent?.value
             guard await brut?.value ?? true,
-                  let octets = await Self.renderedPhotoBytes(data, fallback: repli, look: regard, person: auteur,
+                  let octets = await Self.renderedPhotoBytes(data, fallback: repli, look: regard,
+                                                             aspect: proportions, person: auteur,
                                                              date: date, scenes: cache),
                   await galerie.saveImage(octets) else { return }
             FeedbackToastManager.shared.showSuccess(ComposerCaptureCopy.savedToPhotos)
@@ -208,10 +210,10 @@ extension ComposerCaptureSession {
     /// fasse attendre. L'image ne sert que sans octets.
     @concurrent
     nonisolated static func renderedPhotoBytes(_ data: Data?, fallback: UIImage?, look: ComposerPhotoLook,
-                                               person: CallFramePerson, date: Date,
+                                               aspect: CGFloat, person: CallFramePerson, date: Date,
                                                scenes: any ComposerLookSceneProviding) async -> Data? {
         guard let debout = data.flatMap(uprightImage) ?? fallback.flatMap(ComposerPhotoLookSource.upright),
-              let rendu = await ComposerLookPainter.renderPhoto(debout, look: look, framing: .identity,
+              let rendu = await ComposerLookPainter.renderPhoto(debout, look: look, framing: .identity, aspect: aspect,
                                                                 person: person, date: date, scenes: scenes)
         else { return nil }
         return await ComposerPhotoEncoding.encode(rendu, like: data)
@@ -242,6 +244,7 @@ extension ComposerCaptureSession {
         let espace = camera.liveFeed.declaredSpace?.name as String?
         let brut = camera.librarySave
         let precedent = galleryChain
+        let proportions = canvasAspect
         beginGallerySave()
         galleryChain = Task { @MainActor in
             defer {
@@ -250,7 +253,8 @@ extension ComposerCaptureSession {
             }
             await precedent?.value
             guard await brut?.value ?? true else { return }
-            let rendue = await ComposerLookVideoExporter.export(url, look: regard, person: auteur, date: date,
+            let rendue = await ComposerLookVideoExporter.export(url, look: regard, aspect: proportions,
+                                                                 person: auteur, date: date,
                                                                  declaredSpaceName: espace)
             guard let rendue else { return }
             if rendue != url {
