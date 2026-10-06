@@ -42,6 +42,10 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     var capturedVideoURL: URL?
     /// L'enregistrement du BRUT de la dernière prise, posé AVANT son identifiant (#9351).
     var librarySave: Task<Bool, Never>?
+    /// Le jeton de l'enregistrement en cours : `capturedVideoId` le porte à
+    /// l'arrivée du fichier, `abandonedRecordingId` quand aucun fichier ne viendra.
+    private(set) var recordingId: String?
+    @Published var abandonedRecordingId: String?
     @Published var capturedPhotoId: String?
     @Published var capturedVideoId: String?
     @Published var isTakingPhoto = false
@@ -652,6 +656,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
             guard !isRecordingVideo, !isSwitchingCamera else { return }
             recordingDuration = 0
             isRecordingVideo = true
+            recordingId = UUID().uuidString
             recordingTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
                 Task { @MainActor [weak self] in self?.recordingDuration += 0.5 }
             }
@@ -668,6 +673,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
         // une vidéo que rien n'écrit — un enregistrement fantôme, avec son
         // indicateur rouge et son compteur qui monte.
         guard startSegment() else { return }
+        recordingId = UUID().uuidString
         recordingTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 self?.recordingDuration += 0.5
@@ -717,6 +723,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
                                                   logger: .media)
         }
         recordedSegmentURLs = []
+        abandonedRecordingId = recordingId
     }
 
     /// Ends the recording. If a camera switch is mid-flight, the stop is queued
@@ -814,13 +821,15 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
             if let lastSegment = segments.last {
                 capturedVideoURL = lastSegment
                 librarySave = Task { await Self.saveToPhotoLibrary { await PhotoLibraryManager.shared.saveVideo(at: lastSegment) } }
-                capturedVideoId = UUID().uuidString
+                capturedVideoId = recordingId ?? UUID().uuidString
+            } else {
+                abandonedRecordingId = recordingId
             }
             return
         }
         capturedVideoURL = finalURL
         librarySave = Task { await Self.saveToPhotoLibrary { await PhotoLibraryManager.shared.saveVideo(at: finalURL) } }
-        capturedVideoId = UUID().uuidString
+        capturedVideoId = recordingId ?? UUID().uuidString
         if segments.count > 1 {
             for segment in segments where segment != finalURL {
                 FileManager.default.removeItemLogging(at: segment, context: "merged recording segment", logger: .media)

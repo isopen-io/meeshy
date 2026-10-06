@@ -230,10 +230,13 @@ extension CameraModel {
     /// Le film de recette, publié comme un vrai segment.
     func deliverFixtureMovie(_ driver: ComposerCaptureFixtureDriver) {
         Task { @MainActor in
-            guard let url = await driver.movieCopy() else { return }
+            guard let url = await driver.movieCopy() else {
+                abandonedRecordingId = recordingId
+                return
+            }
             capturedVideoURL = url
             librarySave = nil
-            capturedVideoId = UUID().uuidString
+            capturedVideoId = recordingId ?? UUID().uuidString
         }
     }
 }
