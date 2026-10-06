@@ -150,35 +150,30 @@ struct GameProfileVisitorCard: View {
     var standingLoader = GameUserGameLoader()
 
     @ObservedObject private var prefs = GameDevicePrefsStore.current()
-    @State private var entries: [GameVisitorShowcase.Entry] = []
-    @State private var standing: GameStandingContent?
+    @State private var read: GameVisitorRead?
 
     private var theme: ThemeManager { ThemeManager.shared }
 
     var body: some View {
         Group {
-            if !entries.isEmpty || standing != nil {
-                GameCard(title: standing != nil ? GameText.visitorGameTitle(name: name) : GameText.profileVisitorTitle(name: name)) {
-                    if let standing { GameStandingView(content: standing) }
-                    if !entries.isEmpty { showcaseGrid }
+            if let shown = GameVisitorRead.shown(read, for: userId, hidden: prefs.prefs.hidden) {
+                GameCard(title: shown.standing != nil ? GameText.visitorGameTitle(name: name) : GameText.profileVisitorTitle(name: name)) {
+                    if let standing = shown.standing { GameStandingView(content: standing) }
+                    if !shown.entries.isEmpty { showcaseGrid(shown.entries) }
                 }
                 .accessibilityIdentifier("game.profile.visitor")
             }
         }
         .task(id: userId) {
             guard !prefs.prefs.hidden else { return }
-            // Cache-first : ce que le disque a gardé se peint tout de suite, la lecture servie le remplace — ou
-            // l'efface, quand le membre a fermé son réglage entre-temps.
-            if entries.isEmpty { entries = GameVisitorShowcase.entries(await loader.cached(userId: userId)) }
-            if standing == nil { standing = await standingLoader.cached(userId: userId) }
-            async let freshShowcase = loader.load(userId: userId)
-            async let freshStanding = standingLoader.load(userId: userId)
-            entries = GameVisitorShowcase.entries(await freshShowcase)
-            standing = await freshStanding
+            if let fresh = await GameVisitorLoading.read(userId: userId, kept: read, showcase: loader, standing: standingLoader,
+                                                         paintCached: { read = $0 }) {
+                read = fresh
+            }
         }
     }
 
-    private var showcaseGrid: some View {
+    private func showcaseGrid(_ entries: [GameVisitorShowcase.Entry]) -> some View {
         LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: MeeshySpacing.lg) {
             ForEach(entries) { entry in
                 VStack(spacing: MeeshySpacing.xs) {
@@ -199,6 +194,28 @@ struct GameProfileVisitorCard: View {
     }
 }
 
+/// La lecture commune à la carte du profil et à la bande de la carte de contact. Cache d'abord : ce que le disque a
+/// gardé se peint tout de suite (sauf si la vue montre déjà CE membre), la lecture servie le remplace — ou l'efface,
+/// quand le membre a fermé son réglage entre-temps. Une lecture ANNULÉE (la vue est passée à un autre membre) ne
+/// rend rien : arrivée après celle du suivant, elle l'écraserait.
+enum GameVisitorLoading {
+    static func read(
+        userId: String, kept: GameVisitorRead?, showcase: GameShowcaseLoader, standing: GameUserGameLoader,
+        paintCached: (GameVisitorRead) -> Void
+    ) async -> GameVisitorRead? {
+        if kept?.userId != userId {
+            let cachedShowcase = await showcase.cached(userId: userId)
+            let cachedStanding = await standing.cached(userId: userId)
+            guard !Task.isCancelled else { return nil }
+            paintCached(GameVisitorRead(userId: userId, entries: GameVisitorShowcase.entries(cachedShowcase), standing: cachedStanding))
+        }
+        async let freshShowcase = showcase.load(userId: userId)
+        async let freshStanding = standing.load(userId: userId)
+        let read = GameVisitorRead(userId: userId, entries: GameVisitorShowcase.entries(await freshShowcase), standing: await freshStanding)
+        return Task.isCancelled ? nil : read
+    }
+}
+
 /// LA BANDE DE LA CARTE DE CONTACT (#9481) — le niveau et le rang (rangée compacte) puis trois coupes au plus, en
 /// lecture seule, sous le nom d'un compte Meeshy dans la fiche complète d'une carte de visite. Même règle que la
 /// vitrine : ce que le serveur ne sert pas ne se dessine pas.
@@ -208,15 +225,14 @@ struct GameContactStrip: View {
     var standingLoader = GameUserGameLoader()
 
     @ObservedObject private var prefs = GameDevicePrefsStore.current()
-    @State private var entries: [GameVisitorShowcase.Entry] = []
-    @State private var standing: GameStandingContent?
+    @State private var read: GameVisitorRead?
 
     var body: some View {
         Group {
-            if !entries.isEmpty || standing != nil {
+            if let shown = GameVisitorRead.shown(read, for: userId, hidden: prefs.prefs.hidden) {
                 VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
-                    if let standing { GameStandingView(content: standing, compact: true) }
-                    if !entries.isEmpty { trophies }
+                    if let standing = shown.standing { GameStandingView(content: standing, compact: true) }
+                    if !shown.entries.isEmpty { trophies(shown.entries) }
                 }
                 .accessibilityElement(children: .contain)
                 .accessibilityIdentifier("game.contact.strip")
@@ -224,18 +240,14 @@ struct GameContactStrip: View {
         }
         .task(id: userId) {
             guard !prefs.prefs.hidden else { return }
-            // Cache-first : ce que le disque a gardé se peint tout de suite, la lecture servie le remplace — ou
-            // l'efface, quand le membre a fermé son réglage entre-temps.
-            if entries.isEmpty { entries = GameVisitorShowcase.entries(await loader.cached(userId: userId)) }
-            if standing == nil { standing = await standingLoader.cached(userId: userId) }
-            async let freshShowcase = loader.load(userId: userId)
-            async let freshStanding = standingLoader.load(userId: userId)
-            entries = GameVisitorShowcase.entries(await freshShowcase)
-            standing = await freshStanding
+            if let fresh = await GameVisitorLoading.read(userId: userId, kept: read, showcase: loader, standing: standingLoader,
+                                                         paintCached: { read = $0 }) {
+                read = fresh
+            }
         }
     }
 
-    private var trophies: some View {
+    private func trophies(_ entries: [GameVisitorShowcase.Entry]) -> some View {
         HStack(alignment: .bottom, spacing: MeeshySpacing.sm) {
             ForEach(entries.prefix(3)) { entry in
                 GameTrophyArt(view: entry.presentation, height: 32)

@@ -411,6 +411,21 @@ final class GameWave2ModelTests: XCTestCase {
         XCTAssertTrue(label.contains(GameCopy.treasuryName(.coffre)), label)
     }
 
+    /// La carte d'un visiteur est montée par une injection `AnyView` à une place FIXE de la feuille de profil :
+    /// passer d'un membre à un autre garde la vue et son état. Sans l'identifiant de la lecture, le niveau et les
+    /// trophées de A se peignaient sous le nom de B jusqu'à la réponse du réseau — et pour toujours hors ligne.
+    func test_aVisitorRead_isPaintedOnlyForTheMemberItWasReadFor_andNeverUnderAHiddenGame() throws {
+        let standing = try XCTUnwrap(GameStandingContent.of(otherGame()))
+        let read = GameVisitorRead(userId: "a", entries: [], standing: standing)
+
+        XCTAssertEqual(GameVisitorRead.shown(read, for: "a", hidden: false), read)
+        XCTAssertNil(GameVisitorRead.shown(read, for: "b", hidden: false), "le niveau de A ne se peint jamais sous le nom de B")
+        XCTAssertNil(GameVisitorRead.shown(read, for: "a", hidden: true), "« Jeu masqué » : rien, même déjà lu")
+        XCTAssertNil(GameVisitorRead.shown(GameVisitorRead(userId: "a", entries: [], standing: nil), for: "a", hidden: false),
+                     "rien à montrer : aucune carte")
+        XCTAssertNil(GameVisitorRead.shown(nil, for: "a", hidden: false))
+    }
+
     // MARK: - Les propositions de photo suivent les réglages de l'appareil
 
     func test_photoOffers_followTheHiddenGameAndTheCelebrationsSwitch() {

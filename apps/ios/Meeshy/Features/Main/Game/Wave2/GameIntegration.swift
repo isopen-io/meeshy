@@ -45,6 +45,22 @@ struct GameStandingContent: Equatable, Sendable {
     }
 }
 
+/// Ce que la carte d'un visiteur a LU, et POUR QUI. La carte est montée par une injection `AnyView` à une place
+/// fixe de la feuille de profil (`profileGameSection`) : passer d'un membre à un autre GARDE la vue et son état.
+/// Sans l'identifiant, le niveau et les trophées du membre précédent se peignaient sous le nom du suivant jusqu'à
+/// la réponse du réseau — et pour de bon hors ligne.
+struct GameVisitorRead: Equatable {
+    let userId: String
+    let entries: [GameVisitorShowcase.Entry]
+    let standing: GameStandingContent?
+
+    /// Ce qui se peint pour `userId` : rien sous « Jeu masqué », rien d'un autre membre, rien de vide.
+    static func shown(_ read: GameVisitorRead?, for userId: String, hidden: Bool) -> GameVisitorRead? {
+        guard !hidden, let read, read.userId == userId, !read.entries.isEmpty || read.standing != nil else { return nil }
+        return read
+    }
+}
+
 /// Lit le jeu d'un AUTRE membre : le cache disque d'abord, le réseau ensuite — la MÊME règle que la vitrine
 /// (`GameShowcaseLoader`). Quand le serveur a RÉPONDU (refus, blocage, réglage fermé depuis — conformité D-5), la
 /// copie gardée est oubliée, jamais rouverte depuis le disque : elle ne sert que sur une panne de transport.
