@@ -361,6 +361,30 @@ final class ComposerCaptureTakesTests: XCTestCase {
         session.disarm()
     }
 
+    /// S-1 : retourner la caméra pendant la finalisation de A est refusé en
+    /// silence — sinon le fichier de A passe pour une coupure de bascule et une
+    /// prise que personne n'a demandée repart. Le bouton se tait pendant ce temps.
+    func test_flipCamera_whilePreviousTakeFinalizes_isRefusedAndTheTakeIsDelivered() async throws {
+        _ = await ComposerCaptureFixture.movie()
+        let camera = CameraModel(fixture: ComposerCaptureFixtureDriver())
+        let session = ComposerCaptureSession(stage: .armed, camera: camera, gallery: MockComposerGallery())
+        session.beginHold()
+        await Self.waitUntil(timeout: 3) { session.filmIntents.count == 1 }
+        let a = try XCTUnwrap(camera.recordingId)
+        session.endHold()
+        XCTAssertTrue(camera.recordingIsPending)
+        XCTAssertTrue(session.barCapture.flipping, "le bouton de bascule se tait pendant la finalisation")
+        session.flipCamera()
+        XCTAssertFalse(camera.isSwitchingCamera, "la bascule est refusée")
+        await Self.waitUntil(timeout: 5) { camera.recordingId == nil }
+        XCTAssertNil(camera.recordingId, "A est livrée sous son jeton (\(a))")
+        XCTAssertEqual(session.segments.count, 1, "A devient un segment")
+        XCTAssertFalse(camera.isRecordingVideo, "aucune prise fantôme ne démarre")
+        XCTAssertFalse(camera.recordingIsPending)
+        XCTAssertFalse(session.barCapture.flipping, "le bouton revient une fois A livrée")
+        session.disarm()
+    }
+
     /// m-e : l'attente est posée dès le toucher — un glissé traité avant le premier
     /// tour de la tâche ne verrouille rien.
     func test_beginHold_whilePreviousTakeFinalizes_aSwipeBeforeTheFirstTurnLocksNothing() {
