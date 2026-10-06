@@ -17,6 +17,18 @@ final class GameProgressionRenderTests: XCTestCase {
         super.tearDown()
     }
 
+    /// Combien de fois un motif paraît dans les sources du jeu (hors tests) : la garde d'unicité, indépendante du harnais.
+    private func sourceCount(of needle: String) throws -> Int {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Game")
+        let files = FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil)?.compactMap { $0 as? URL }
+            .filter { $0.pathExtension == "swift" } ?? []
+        return try files.reduce(0) { total, file in
+            total + (try String(contentsOf: file, encoding: .utf8)).components(separatedBy: needle).count - 1
+        }
+    }
+
     private func loadedViewModel(_ payload: APIEngagementProgress) async -> ProgressionViewModel {
         let service = MockEngagementProgressService()
         service.fetchProgressResult = .success(payload)
@@ -59,13 +71,10 @@ final class GameProgressionRenderTests: XCTestCase {
         for attendu in ["game.hero", "game.mint.hero", "game.mint.info"] + EngagementAxisFamily.allCases.map({ "game.hero.earn.\($0.rawValue)" }) {
             XCTAssertTrue(identifiants.contains(attendu), "« \(attendu) » n'est pas dans l'arbre rendu. Vus : \(identifiants)")
         }
-        // UNE seule section Héro de frappe : le compte des identifiants d'un conteneur dépend de la façon dont le
-        // harnais lit l'arbre (le même bouton peut y paraître deux fois) — la garde sûre est la SOURCE.
-        let sections = (try? String(contentsOf: URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Game/GameSection.swift"), encoding: .utf8)) ?? ""
-        XCTAssertEqual(sections.components(separatedBy: "GameMintPreviewView(").count - 1, 1, "UNE seule section Héro de frappe")
-        XCTAssertEqual(identifiants.filter { $0 == "game.mint.action" }.count, 1, "UN seul bouton de frappe sur l'écran")
+        // Le compte des identifiants dépend de la façon dont le harnais lit l'arbre (un même élément peut y paraître
+        // deux fois) : l'unicité se garde par la SOURCE.
+        XCTAssertEqual(try? sourceCount(of: "GameMintPreviewView("), 1, "UNE seule section Héro de frappe")
+        XCTAssertEqual(try? sourceCount(of: ": \"game.mint.action\""), 1, "UN seul bouton de frappe sur l'écran")
         XCTAssertFalse(identifiants.contains { $0.hasPrefix("game.hero.mint") }, "le doublon du héro de niveau a disparu : \(identifiants)")
     }
 
