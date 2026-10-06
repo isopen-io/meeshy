@@ -354,7 +354,7 @@ export class AffiliateTrackingService {
    * déjà côté base ; cette purge applicative double la garantie, branchée dans
    * `cleanupExpiredData` (conformité H-9).
    */
-  static async cleanupExpiredVisitSessions(prisma: PrismaClient, now: Date = new Date()) {
+  static async cleanupExpiredVisitSessions(prisma: Pick<PrismaClient, 'affiliateVisitSession'>, now: Date = new Date()) {
     try {
       const deleted = await prisma.affiliateVisitSession.deleteMany({ where: { expiresAt: { lt: now } } });
       return { success: true, deletedCount: deleted.count };

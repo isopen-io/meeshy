@@ -1250,6 +1250,7 @@
 		729D380A4ADDDF0139C1B6F6 /* MainTurnCoalescerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2AE2DC121AFD2873C4BE4F60 /* MainTurnCoalescerTests.swift */; };
 		72C9DDBD23E1DB10CE993654 /* MessageMenuKeyboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61557EF39A541508FAB0764C /* MessageMenuKeyboard.swift */; };
 		72FD03693BE9FB031D3A0887 /* CallManagerSelectCameraFailureCorrectionSourceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36059291DBC7DF96A6E34D7C /* CallManagerSelectCameraFailureCorrectionSourceTests.swift */; };
+		731C44E6E728EA67156A90CF /* ComposerCaptureGesture.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C18C4F252550B19FD2EC0F8 /* ComposerCaptureGesture.swift */; };
 		7328D28858ED928424617DBD /* CallManager+TranscriptionSegments.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C915E7FB3811FAC3A097DFD /* CallManager+TranscriptionSegments.swift */; };
 		732D8331B7A1D64640FDEBCC /* QuickEmojiGrid.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8A1529BF608BCA5D7924678 /* QuickEmojiGrid.swift */; };
 		7337FCFF0281DC99F757F5D3 /* BubbleLocationRenderingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D56640F01E442F120C2B2665 /* BubbleLocationRenderingTests.swift */; };
@@ -1632,6 +1633,7 @@
 		9840377901B9914E09F8A944 /* CallVideoBadgeAccessibility.swift in Sources */ = {isa = PBXBuildFile; fileRef = B59D22ED016BFDEADB473427 /* CallVideoBadgeAccessibility.swift */; };
 		9844871EE6DEB9B237991A4D /* TrackEngagementModifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = C57EAC6880801A36821CE99A /* TrackEngagementModifier.swift */; };
 		9853BD0DD85C8CC1740D2655 /* MockContactSyncService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D41A2A8ADE2BFB8C1E1848BF /* MockContactSyncService.swift */; };
+		986DC435BCA814BB76D7B2ED /* CameraModel+Fixture.swift in Sources */ = {isa = PBXBuildFile; fileRef = C34F4EF160D9D90DBEA1BB19 /* CameraModel+Fixture.swift */; };
 		986E4DC1D4FEFA46630C44A5 /* P2PWebRTCClient+DataProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE1A042EE8759161B8F31151 /* P2PWebRTCClient+DataProfile.swift */; };
 		988FE2FBBD0973CC53AA689B /* RequestsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1186A67AF3496D57A908C9C9 /* RequestsViewModel.swift */; };
 		9895A7FA5FA32ED2B2A8EAC8 /* LivingSummaryAssembly.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37FE3B19297E6805A0DD7017 /* LivingSummaryAssembly.swift */; };
@@ -2618,6 +2620,7 @@
 		ECFC77660443FDC563B817C5 /* SectionFoldedUnreadTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 510B4F35377A5D866B745A96 /* SectionFoldedUnreadTests.swift */; };
 		ED1BDD89025A4688D1CB480B /* ComposerLeadingRail.swift in Sources */ = {isa = PBXBuildFile; fileRef = 868EA371ABA7F924638897DA /* ComposerLeadingRail.swift */; };
 		ED49344D4A5F9C40E9BC2CB2 /* CallManager+GroupMesh.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27E52142DB2F56BEDB5D78D7 /* CallManager+GroupMesh.swift */; };
+		ED589C33957DF2B9AC840C4F /* ComposerLookStripRule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0913811E0AE4E514415F15F5 /* ComposerLookStripRule.swift */; };
 		ED5EEDA93E2A28BB639AA871 /* LivingSummaryViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 353C0DDAFEF8ED9D69AE7394 /* LivingSummaryViewModel.swift */; };
 		ED6ACD5F6D605FF90ED7A6B9 /* CallManager+Reconnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 895C3963040C2A1220070AC2 /* CallManager+Reconnection.swift */; };
 		ED724E1FBA5611B00BC36AD6 /* ChangePasswordView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB4AD409FFD738B15411E8EE /* ChangePasswordView.swift */; };
@@ -3051,6 +3054,7 @@
 		08C732678EC5FE36F89C7C18 /* MessageCardMotionExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageCardMotionExporter.swift; sourceTree = "<group>"; };
 		08D484DA7D3473562D5D9754 /* FilmstripThumbnailUnavailableTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilmstripThumbnailUnavailableTests.swift; sourceTree = "<group>"; };
 		0902793FA7209012EF4B1849 /* ComposerCaptureDuringSwitchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerCaptureDuringSwitchTests.swift; sourceTree = "<group>"; };
+		0913811E0AE4E514415F15F5 /* ComposerLookStripRule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerLookStripRule.swift; sourceTree = "<group>"; };
 		0915B0F681AADD8A414D3504 /* ReportSubmitButtonAccessibilityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReportSubmitButtonAccessibilityTests.swift; sourceTree = "<group>"; };
 		091C2005B90A2D56096760C7 /* CameraSegmentOrientation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraSegmentOrientation.swift; sourceTree = "<group>"; };
 		091CAF8CD327E727352E4662 /* ReelPosterFitGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReelPosterFitGuardTests.swift; sourceTree = "<group>"; };
@@ -3266,6 +3270,7 @@
 		1BE37C801AE5B8327FD284CA /* MeeshyNotificationContentExtension.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = MeeshyNotificationContentExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		1C07680A91356AAEB6FD6CFA /* SessionPurgeDecision.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionPurgeDecision.swift; sourceTree = "<group>"; };
 		1C0F56AB87CA6E0999DBBBDB /* ScrollOffsetRelayAdoptionSourceGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScrollOffsetRelayAdoptionSourceGuardTests.swift; sourceTree = "<group>"; };
+		1C18C4F252550B19FD2EC0F8 /* ComposerCaptureGesture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerCaptureGesture.swift; sourceTree = "<group>"; };
 		1C1C322A5004BD04C4BDA35A /* WebRTCTypesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebRTCTypesTests.swift; sourceTree = "<group>"; };
 		1C42E41A77283BFC2570509E /* CallFeedbackViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallFeedbackViewModel.swift; sourceTree = "<group>"; };
 		1C44F61C53AC45EAE2C42AD8 /* ConversationViewModelLiveEphemeralExpiryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationViewModelLiveEphemeralExpiryTests.swift; sourceTree = "<group>"; };
@@ -5097,6 +5102,7 @@
 		C30D867109CF09FDE3894F2D /* CameraPreviewLayerUpdateUIViewSourceGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraPreviewLayerUpdateUIViewSourceGuardTests.swift; sourceTree = "<group>"; };
 		C3127B42E1E0E2927826AACF /* PiPVideoRendererTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PiPVideoRendererTests.swift; sourceTree = "<group>"; };
 		C344EC3823A404DC9F65CD54 /* CallLiveFrameSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallLiveFrameSession.swift; sourceTree = "<group>"; };
+		C34F4EF160D9D90DBEA1BB19 /* CameraModel+Fixture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CameraModel+Fixture.swift"; sourceTree = "<group>"; };
 		C3547DA6EE85382045E499F4 /* CallPresentationLayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallPresentationLayer.swift; sourceTree = "<group>"; };
 		C35C12911F542075E22ECFCE /* MentionContactsFirstTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MentionContactsFirstTests.swift; sourceTree = "<group>"; };
 		C364B9343C31867C12EDB0D4 /* CommentDraftStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommentDraftStoreTests.swift; sourceTree = "<group>"; };
@@ -6390,6 +6396,7 @@
 				8E4A48F2DA0358A24D57D7A6 /* ComposerCameraFlash.swift */,
 				DCAA460ECE85D18F17871190 /* ComposerCaptureFocus.swift */,
 				0D3D8782CFED9EFFA4271C2B /* ComposerCaptureFocusGeometry.swift */,
+				1C18C4F252550B19FD2EC0F8 /* ComposerCaptureGesture.swift */,
 				24BBD491717C012069B08B65 /* ComposerCaptureHold.swift */,
 				CDD51D369D815988DE76CA22 /* ComposerCaptureOrientation.swift */,
 				E5983441907982271CEE7FC0 /* ComposerCaptureSegments.swift */,
@@ -6426,6 +6433,7 @@
 				675E6826809C8BDD67F113D9 /* ComposerLiveLookSurface.swift */,
 				4280C6F1ABEE69A8A1900E4C /* ComposerLookPainter.swift */,
 				724DE0052A7BF3C0185D83E4 /* ComposerLookSceneCache.swift */,
+				0913811E0AE4E514415F15F5 /* ComposerLookStripRule.swift */,
 				9B7030E74D9D2F0B9A782856 /* ComposerLookVideoExporter.swift */,
 				61E33B4BF7D5E0357824B220 /* ComposerMediaAdjust.swift */,
 				44C1AE6349CC4D3716192F74 /* ComposerMediaControls.swift */,
@@ -6754,6 +6762,7 @@
 				56029F3DDF8F82EE7A32FCB5 /* CallSignalGlyph.swift */,
 				D90B7446AB64637E3F4CB72E /* CallTypeBadgeView.swift */,
 				13ADC1DF51A4D9A7F1F5B782 /* CameraModel.swift */,
+				C34F4EF160D9D90DBEA1BB19 /* CameraModel+Fixture.swift */,
 				5F4A2C68CC2A0849B00A3A0D /* CameraPermissionPanel.swift */,
 				6D80321A6B15B7702C474818 /* CameraPreviewLayer.swift */,
 				5B1ED56E33CD433CF96DC3F3 /* CameraRecordingReadiness.swift */,
@@ -10347,6 +10356,7 @@
 				229CA02CA0FB543B2AD6E001 /* CallZoomLensControls.swift in Sources */,
 				237896B0490F4D0F8298D491 /* CallsTab.swift in Sources */,
 				4E866BAFE12995C8337AAC53 /* CallsViewModel.swift in Sources */,
+				986DC435BCA814BB76D7B2ED /* CameraModel+Fixture.swift in Sources */,
 				3974C242BFF62FFD20D43B15 /* CameraModel.swift in Sources */,
 				19ACB7621B757D044920B069 /* CameraPermissionPanel.swift in Sources */,
 				670E165B4388F48B68BFB9EA /* CameraPreviewLayer.swift in Sources */,
@@ -10396,6 +10406,7 @@
 				E0F8E0C9EC76B26134EC1CF4 /* ComposerCaptureCamera.swift in Sources */,
 				0FBBA710B21DE5A0C8068FED /* ComposerCaptureFocus.swift in Sources */,
 				A89A47E390F9C163F86AECD7 /* ComposerCaptureFocusGeometry.swift in Sources */,
+				731C44E6E728EA67156A90CF /* ComposerCaptureGesture.swift in Sources */,
 				7B7FE750CDFF840BA44A7E97 /* ComposerCaptureHold.swift in Sources */,
 				C56528038A8B0A9B1238E7F8 /* ComposerCaptureMirrorRule.swift in Sources */,
 				F8443DC181E66B8E2B90745F /* ComposerCaptureOrientation.swift in Sources */,
@@ -10437,6 +10448,7 @@
 				9A4C5825F871772A701055D6 /* ComposerLiveLookSurface.swift in Sources */,
 				C938AF4A34AF305D90AC0BDC /* ComposerLookPainter.swift in Sources */,
 				49AF98CC5FBB5E55C5900ED9 /* ComposerLookSceneCache.swift in Sources */,
+				ED589C33957DF2B9AC840C4F /* ComposerLookStripRule.swift in Sources */,
 				E09918AE92C0404E14754429 /* ComposerLookVideoExporter.swift in Sources */,
 				2034580FE15A7222C6609474 /* ComposerMediaAdjust.swift in Sources */,
 				2E9D6CB7E1D2F629B0C15B88 /* ComposerMediaControls.swift in Sources */,
