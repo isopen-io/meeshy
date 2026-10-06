@@ -39,6 +39,29 @@ final class GameWave2NamesTests: XCTestCase {
         XCTAssertNil(GameTrophyPresentation.of(key: "trophy.prestige.6"))
     }
 
+    // MARK: - Le Prestige : ce qui reste
+
+    func test_thePrestigeConfirmation_endsOnTheLeagueConsentThatStaysOnRecord() {
+        let lines = GameText.prestigeConfirmationLines
+        XCTAssertEqual(lines.count, 4)
+        XCTAssertEqual(lines, [
+            GameText.prestigeConfirmResets, GameText.prestigeConfirmKeeps,
+            GameText.prestigeConfirmAccess, GameText.prestigeConfirmConsent,
+        ])
+        XCTAssertFalse(GameText.prestigeConfirmConsent.isEmpty)
+        XCTAssertFalse(GameText.prestigeConfirmConsent.hasPrefix("game2."), "la clé doit se résoudre en phrase, jamais s'afficher brute")
+        XCTAssertEqual(Set(lines).count, 4, "quatre phrases distinctes")
+    }
+
+    func test_thePrestigeConfirmationView_readsItsLinesFromTheCopy_notFromALocalList() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Meeshy/Features/Main/Game/Wave2/GamePrestigeViews.swift"), encoding: .utf8)
+        XCTAssertTrue(source.contains("GameText.prestigeConfirmationLines"))
+        XCTAssertFalse(source.contains("[GameText.prestigeConfirmResets"), "une liste locale rouvrirait l'oubli du consentement")
+    }
+
     // MARK: - Les dates
 
     func test_aDay_isReadInUTC_neverSlidingByADay() {

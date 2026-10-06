@@ -249917,6 +249917,53 @@
         }
       }
     },
+    "game2.prestige.confirm.consent": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تبقى موافقتك على الدوري العام مسجّلة: تستعيد دوريك عند المستوى 10."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deine Zustimmung zur öffentlichen Liga bleibt gespeichert: Du bekommst deine Liga ab Level 10 zurück."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your consent to the public league stays on record: you get your league back at level 10."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tu consentimiento a la liga pública sigue registrado: recuperas tu liga en el nivel 10."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ton consentement à la ligue publique reste enregistré : tu retrouves ta ligue au niveau 10."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Il tuo consenso alla lega pubblica resta registrato: ritrovi la tua lega al livello 10."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seu consentimento à liga pública continua registrado: você reencontra sua liga no nível 10."
+          }
+        }
+      }
+    },
     "game2.prestige.confirm.keeps": {
       "extractionState": "manual",
       "localizations": {
