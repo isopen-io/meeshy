@@ -49,7 +49,7 @@ final class EngagementProgressResolverTests: XCTestCase {
         let progress = EngagementProgressResolver.resolve(makePayload(counters: [.init(axisKey: "content.text_message", count: 12)]))
         let messages = axis(progress, .textMessage).scale
 
-        XCTAssertEqual(messages.tiers.map(\.reached), [true, true, false, false, false])
+        XCTAssertEqual(messages.tiers.map(\.reached), [true, true, false, false, false, false, false])
         XCTAssertEqual(messages.reachedCount, 2)
         XCTAssertEqual(messages.previousThreshold, 10)
         XCTAssertEqual(messages.nextThreshold, 50)
@@ -85,10 +85,10 @@ final class EngagementProgressResolverTests: XCTestCase {
     }
 
     func test_resolve_completeScale_hasNoNextThresholdAndIsFull() {
-        let progress = EngagementProgressResolver.resolve(makePayload(counters: [.init(axisKey: "tool.sticker", count: 500)]))
+        let progress = EngagementProgressResolver.resolve(makePayload(counters: [.init(axisKey: "tool.sticker", count: 5_000)]))
         let stickers = axis(progress, .sticker).scale
 
-        XCTAssertEqual(stickers.reachedCount, 5)
+        XCTAssertEqual(stickers.reachedCount, EngagementCatalog.badgeThresholds.count)
         XCTAssertNil(stickers.nextThreshold)
         XCTAssertNil(stickers.remainingToNext)
         XCTAssertEqual(stickers.progress, 1)
