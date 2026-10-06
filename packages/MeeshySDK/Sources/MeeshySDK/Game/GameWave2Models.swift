@@ -330,15 +330,18 @@ public struct GameVisibility: Codable, Sendable, Equatable {
     }
 }
 
-/// La rareté MESURÉE d'un succès (#9390) : `holders` titulaires sur `population` comptes. La clé
-/// du dictionnaire est celle du succès (`achievement.first_content`). Le client est FAIL-CLOSED :
-/// une rareté ne se MONTRE qu'avec assez de titulaires et de comptes (`visibleRarity`).
+/// La rareté MESURÉE d'un succès (#9390, #9489) : `holders` titulaires sur `population` comptes. La clé
+/// du dictionnaire est celle du succès (`achievement.first_content`). Le champ est DÉCLARÉ par le contrat
+/// partagé (`gameAchievementRarityEntrySchema`) : la passerelle ne sert un succès que mesuré (20 titulaires,
+/// 1 000 comptes) — un succès absent de la carte dit « rareté en cours de mesure », jamais une rareté nulle.
+/// Le client reste FAIL-CLOSED : une rareté ne se MONTRE qu'avec assez de titulaires et de comptes
+/// (`visibleRarity`), et une entrée sans rareté lisible tombe SEULE.
 public struct GameRarityEntry: Codable, Sendable, Equatable {
-    public let rarity: GameGlory.AchievementRarity?
+    public let rarity: GameGlory.AchievementRarity
     public let holders: Int
     public let population: Int
 
-    public init(rarity: GameGlory.AchievementRarity?, holders: Int, population: Int) {
+    public init(rarity: GameGlory.AchievementRarity, holders: Int, population: Int) {
         self.rarity = rarity
         self.holders = holders
         self.population = population
@@ -346,8 +349,7 @@ public struct GameRarityEntry: Codable, Sendable, Equatable {
 
     /// La rareté qu'on a le DROIT de montrer, `nil` sous 20 titulaires ou 1 000 comptes, ou non mesurée.
     public var visibleRarity: GameGlory.AchievementRarity? {
-        guard let rarity, GameRarity.isShareDisplayable(holders: holders, population: population) else { return nil }
-        return rarity
+        GameRarity.isShareDisplayable(holders: holders, population: population) ? rarity : nil
     }
 
     /// La part des comptes, de 0 à 100.
@@ -374,7 +376,8 @@ public struct GameWave2: Sendable, Equatable {
     public let atlas: GameAtlasBlock?
     public let prestige: GamePrestigeBlock?
     public let visibility: GameVisibility?
-    /// La rareté mesurée de chaque succès — HORS contrat partagé : lue en tolérant, comme le web.
+    /// La rareté mesurée de chaque succès — extension DÉCLARÉE du contrat partagé (`gameAchievementRaritiesSchema`),
+    /// optionnelle et tolérante : une entrée illisible tombe seule, la carte vide vaut `nil`.
     public let achievementRarities: [String: GameRarityEntry]?
 
     public static let empty = GameWave2()

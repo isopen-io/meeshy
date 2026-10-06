@@ -179,3 +179,26 @@ extension GameService: GameWave2ServiceProviding {
         return response.data
     }
 }
+
+// MARK: - Les lectures d'intégration (#9481)
+//
+// Un TROISIÈME protocole, pour la même raison que le second : ajouter une méthode à
+// `GameWave2ServiceProviding` ferait rougir chaque double de test qui s'y conforme.
+public protocol GameIntegrationServiceProviding: Sendable {
+    /// L'état des réglages du jeu (`GET /me/game/privacy`) : les interrupteurs et les quatre visibilités.
+    func fetchSettings() async throws -> GameSettingsResponse
+    /// Ce que le jeu d'un AUTRE membre montre à ce lecteur (`GET /users/:userId/game`).
+    func fetchUserGame(userId: String) async throws -> UserGameProfileResponse
+}
+
+extension GameService: GameIntegrationServiceProviding {
+    public func fetchSettings() async throws -> GameSettingsResponse {
+        let response: APIResponse<GameSettingsResponse> = try await api.request(GameEndpoint.settings)
+        return response.data
+    }
+
+    public func fetchUserGame(userId: String) async throws -> UserGameProfileResponse {
+        let response: APIResponse<UserGameProfileResponse> = try await api.request(GameEndpoint.userGame(userId: userId))
+        return response.data
+    }
+}

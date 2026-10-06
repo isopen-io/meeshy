@@ -37,6 +37,9 @@ public enum GameEndpoint: MeeshyEndpoint, Sendable {
     case userShowcase(userId: String)
     case prestige
     case privacy
+    // Les lectures d'intégration (#9481).
+    case settings
+    case userGame(userId: String)
 
     public var path: String {
         switch self {
@@ -59,6 +62,8 @@ public enum GameEndpoint: MeeshyEndpoint, Sendable {
         case .userShowcase(let userId): "/api/v1" + GameRoutes.userShowcasePath(userId: userId)
         case .prestige: "/api/v1" + GameRoutes.prestige
         case .privacy: "/api/v1" + GameRoutes.privacy
+        case .settings: "/api/v1" + GameIntegrationRoutes.settings
+        case .userGame(let userId): "/api/v1" + GameIntegrationRoutes.userGamePath(userId: userId)
         }
     }
 

@@ -81,8 +81,23 @@ public enum GameRoutes {
 
     private static let segmentAllowed = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_~")
 
-    private static func encodedSegment(_ value: String) -> String {
+    fileprivate static func encodedSegment(_ value: String) -> String {
         value.addingPercentEncoding(withAllowedCharacters: segmentAllowed) ?? ""
+    }
+}
+
+/// Les routes de LECTURE d'intégration (#9481) — MIROIR de `GAME_INTEGRATION_ROUTES`. Une table À PART : `GameRoutes`
+/// garde ses vingt et une entrées, comparées une à une par `GameRoutesTests` — y ajouter une route ferait rougir ce qui
+/// n'a rien à voir avec elle.
+public enum GameIntegrationRoutes {
+    /// Les réglages du jeu, en LECTURE (le chemin de l'écriture `GameRoutes.privacy`, la méthode GET).
+    public static let settings = "/me/game/privacy"
+    /// Le jeu d'un autre membre (niveau, palier, rang, trésor, Flamme), selon son réglage. GET.
+    public static let userGame = "/users/:userId/game"
+
+    /// L'identifiant vient d'une charge serveur : ENCODÉ avant d'entrer dans le chemin.
+    public static func userGamePath(userId: String) -> String {
+        userGame.replacingOccurrences(of: ":userId", with: GameRoutes.encodedSegment(userId))
     }
 }
 

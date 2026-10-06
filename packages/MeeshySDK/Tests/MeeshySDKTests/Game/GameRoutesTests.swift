@@ -64,6 +64,24 @@ struct GameRoutesTests {
         #expect(shared["privacy"] == GameRoutes.privacy)
     }
 
+    @Test("les deux routes de lecture d'intégration sont celles de GAME_INTEGRATION_ROUTES, et GAME_ROUTES garde ses 21 entrées")
+    func integrationRoutesMatchTheirOwnSharedTable() throws {
+        let shared = try Self.quotedValues(of: "GAME_INTEGRATION_ROUTES", in: Self.source())
+        #expect(shared.count == 2)
+        #expect(shared["settings"] == GameIntegrationRoutes.settings)
+        #expect(shared["userGame"] == GameIntegrationRoutes.userGame)
+        #expect(GameIntegrationRoutes.settings == GameRoutes.privacy, "la lecture porte le chemin de l'écriture")
+        #expect(try Self.quotedValues(of: "GAME_ROUTES", in: Self.source()).count == 21)
+    }
+
+    @Test("le jeu d'un autre : l'identifiant est encodé dans son segment, et l'adresse lit sans écrire")
+    func userGamePathEncodesItsSegment() {
+        #expect(GameEndpoint.userGame(userId: "65a1b2c3d4e5f60718293a4b").path == "/api/v1/users/65a1b2c3d4e5f60718293a4b/game")
+        #expect(GameEndpoint.userGame(userId: "../me?x=1").path == "/api/v1/users/%2E%2E%2Fme%3Fx%3D1/game")
+        #expect(GameEndpoint.settings.path == "/api/v1/me/game/privacy")
+        #expect(GameEndpoint.settings.rejectionPolicy == .structured)
+    }
+
     @Test("les identifiants des routes de la vague 2 sont encodés dans leur segment")
     func wave2PathsEncodeTheirSegment() {
         #expect(GameEndpoint.duoAccept(duoId: "../x?y").path == "/api/v1/me/game/duo/%2E%2E%2Fx%3Fy/accept")
