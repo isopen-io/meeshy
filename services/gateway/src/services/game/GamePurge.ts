@@ -83,10 +83,27 @@ async function settleOpenDuos(prisma: PurgeDb, userId: string, deps: GamePurgeDe
   return new DuoService(prisma as unknown as PrismaClient, { creditPoints }).settleForDeletedAccount(userId);
 }
 
-/** Retire le compte de chaque groupe où il figure : appartenance, instantané, effectif ; supprime un groupe vidé. */
+/** La taille d'une page de purge : on PAGINE jusqu'à épuisement, jamais « les 500 premiers ». */
+const PURGE_PAGE = 500;
+
+/**
+ * Retire le compte de chaque groupe où il figure : appartenance, instantané, effectif ; supprime un
+ * groupe vidé. Pagine jusqu'à épuisement — chaque page SUPPRIME ses appartenances, la suivante repart
+ * donc du reste ; une page qui ne fait rien reculer arrête la boucle (jamais de tour sans fin).
+ */
 async function removeFromLeagueGroups(prisma: PurgeDb, userId: string): Promise<number> {
-  const memberships = await prisma.leagueMembership.findMany({ where: { userId }, select: { groupId: true }, take: 500 });
-  const groupIds = [...new Set(memberships.map((m) => m.groupId))];
+  const touched = new Set<string>();
+  for (;;) {
+    const memberships = await prisma.leagueMembership.findMany({ where: { userId }, select: { groupId: true }, take: PURGE_PAGE });
+    const groupIds = [...new Set(memberships.map((m) => m.groupId))];
+    if (groupIds.length === 0 || groupIds.every((id) => touched.has(id))) break;
+    await removeFromGroups(prisma, userId, groupIds);
+    groupIds.forEach((id) => touched.add(id));
+  }
+  return touched.size;
+}
+
+async function removeFromGroups(prisma: PurgeDb, userId: string, groupIds: readonly string[]): Promise<void> {
   for (const groupId of groupIds) {
     const group = await prisma.leagueGroupWeek.findUnique({ where: { groupId }, select: { snapshot: true } });
     const snapshot = (group?.snapshot ?? null) as Record<string, number> | null;
@@ -99,16 +116,27 @@ async function removeFromLeagueGroups(prisma: PurgeDb, userId: string): Promise<
       await prisma.leagueGroupWeek.updateMany({ where: { groupId }, data: { memberCount: remaining, ...(rest ? { snapshot: rest } : {}) } });
     }
   }
-  return groupIds.length;
+}
+
+/** Les duos du compte, page par page : les ids se relèvent puis se SUPPRIMENT, la page suivante repart du reste. */
+async function deleteDuos(prisma: PurgeDb, userId: string): Promise<number> {
+  const where = { OR: [{ inviterId: userId }, { inviteeId: userId }] };
+  let deleted = 0;
+  for (;;) {
+    const page = await prisma.gameDuo.findMany({ where, select: { id: true }, take: PURGE_PAGE });
+    if (page.length === 0) return deleted;
+    const duoIds = page.map((d) => d.id);
+    await prisma.gameDuoSlot.deleteMany({ where: { duoId: { in: duoIds } } });
+    const removed = await prisma.gameDuo.deleteMany({ where: { id: { in: duoIds } } });
+    if (removed.count === 0) return deleted;
+    deleted += removed.count;
+  }
 }
 
 export async function purgeGameData(prisma: PurgeDb, userId: string, deps: GamePurgeDeps = {}): Promise<GamePurgeSummary> {
   // 1. Les duos ouverts se TERMINENT proprement avant d'être effacés.
   const duosSettled = await settleOpenDuos(prisma, userId, deps);
-  const duos = await prisma.gameDuo.findMany({ where: { OR: [{ inviterId: userId }, { inviteeId: userId }] }, select: { id: true }, take: 500 });
-  const duoIds = duos.map((d) => d.id);
-  if (duoIds.length > 0) await prisma.gameDuoSlot.deleteMany({ where: { duoId: { in: duoIds } } });
-  const duosDeleted = await prisma.gameDuo.deleteMany({ where: { OR: [{ inviterId: userId }, { inviteeId: userId }] } });
+  const duosDeleted = await deleteDuos(prisma, userId);
 
   // 2. Aucun membre fantôme dans un groupe de ligue.
   const leagueGroupsTouched = await removeFromLeagueGroups(prisma, userId);
@@ -155,5 +183,5 @@ export async function purgeGameData(prisma: PurgeDb, userId: string, deps: GameP
       brokenStreakLastDay: null,
     },
   });
-  return { deleted, duosDeleted: duosDeleted.count, duosSettled, leagueGroupsTouched };
+  return { deleted, duosDeleted, duosSettled, leagueGroupsTouched };
 }
