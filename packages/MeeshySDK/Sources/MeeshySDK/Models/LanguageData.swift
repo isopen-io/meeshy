@@ -129,6 +129,13 @@ public enum LanguageData {
         LanguageInfo(code: "lg", name: "Luganda", nativeName: "Luganda", flag: "\u{1F1FA}\u{1F1EC}", colorHex: "CA8A04"),
         LanguageInfo(code: "so", name: "Somali", nativeName: "Soomaali", flag: "\u{1F1F8}\u{1F1F4}", colorHex: "2563EB"),
         LanguageInfo(code: "mg", name: "Malagasy", nativeName: "Malagasy", flag: "\u{1F1F2}\u{1F1EC}", colorHex: "16A34A"),
+        LanguageInfo(code: "om", name: "Oromo", nativeName: "Afaan Oromoo", flag: "\u{1F1EA}\u{1F1F9}", colorHex: "DC2626"),
+        LanguageInfo(code: "ti", name: "Tigrinya", nativeName: "\u{1275}\u{130D}\u{122D}\u{129B}", flag: "\u{1F1EA}\u{1F1F7}", colorHex: "3B82F6"),
+        LanguageInfo(code: "ny", name: "Chichewa", nativeName: "Chinyanja", flag: "\u{1F1F2}\u{1F1FC}", colorHex: "DC2626"),
+
+        // Cameroon (transcription only: no NLLB-200 mapping, no TTS)
+        LanguageInfo(code: "ksf", name: "Bafia", nativeName: "Rikpa", flag: "\u{1F1E8}\u{1F1F2}", colorHex: "16A34A"),
+        LanguageInfo(code: "nnh", name: "Ngiemboon", nativeName: "Ngiemboon", flag: "\u{1F1E8}\u{1F1F2}", colorHex: "16A34A"),
     ]
 
     // MARK: - Interface Languages (UI only)
