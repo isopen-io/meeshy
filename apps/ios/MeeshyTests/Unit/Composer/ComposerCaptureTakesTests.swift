@@ -1,3 +1,4 @@
+import AVFoundation
 import XCTest
 @testable import Meeshy
 
@@ -17,13 +18,13 @@ final class ComposerCaptureTakesTests: XCTestCase {
         session.look = ComposerPhotoLook(filter: .warm)
         var remis = 0
         session.onDeliver = { _ in remis += 1 }
-        session.photoIntent = .gallery
+        session.photoInFlightIntent = .gallery
         Self.publishPhoto(on: session)
         await Self.waitUntil { galerie.saveImageCount == 1 && session.pendingGallerySaves == 0 }
         XCTAssertEqual(galerie.saveImageCount, 1, "le RENDU part en galerie (le brut y est déjà, par CameraModel)")
         XCTAssertEqual(remis, 0, "on reste en capture")
         XCTAssertEqual(session.stage, .armed)
-        XCTAssertEqual(session.photoIntent, .edit, "l'intention ne vaut que pour UNE prise")
+        XCTAssertEqual(session.photoInFlightIntent, .edit, "l'intention ne vaut que pour UNE prise")
         XCTAssertEqual(FeedbackToastManager.shared.currentToast?.message, ComposerCaptureCopy.savedToPhotos)
     }
 
@@ -32,25 +33,24 @@ final class ComposerCaptureTakesTests: XCTestCase {
     func test_photoArrived_galleryIntent_untouchedLook_stillSavesTheRendered() async {
         let galerie = MockComposerGallery()
         let session = ComposerCaptureSession(stage: .armed, gallery: galerie)
-        session.photoIntent = .gallery
+        session.photoInFlightIntent = .gallery
         Self.publishPhoto(on: session)
         await Self.waitUntil { galerie.saveImageCount == 1 && session.pendingGallerySaves == 0 }
         XCTAssertEqual(galerie.saveImageCount, 1, "le rendu part avec le brut, même sans effet")
-        XCTAssertEqual(session.photoIntent, .edit)
+        XCTAssertEqual(session.photoInFlightIntent, .edit)
     }
 
     func test_saveRenderedPhoto_galleryRefuses_staysCapturingAndSaysNothingSaved() async {
         let galerie = MockComposerGallery(imageResult: false)
         let session = ComposerCaptureSession(stage: .armed, gallery: galerie)
         session.look = ComposerPhotoLook(filter: .warm)
-        session.photoIntent = .gallery
+        session.photoInFlightIntent = .gallery
         Self.publishPhoto(on: session)
         await Self.waitUntil { galerie.saveImageCount == 1 && session.pendingGallerySaves == 0 }
         XCTAssertEqual(session.stage, .armed)
         XCTAssertEqual(session.pendingGallerySaves, 0)
         XCTAssertFalse(session.isRenderingLook)
-        XCTAssertNotEqual(FeedbackToastManager.shared.currentToast?.message, ComposerCaptureCopy.savedToPhotos,
-                          "un enregistrement refusé ne se dit jamais « enregistré »")
+        XCTAssertNil(FeedbackToastManager.shared.currentToast, "un enregistrement refusé ne se dit jamais « enregistré »")
     }
 
     func test_photoArrived_editIntent_deliversTheLookedPhoto() async {
@@ -109,31 +109,48 @@ final class ComposerCaptureTakesTests: XCTestCase {
         let galerie = MockComposerGallery()
         let session = ComposerCaptureSession(stage: .armed, gallery: galerie)
         session.look = ComposerPhotoLook(filter: .warm)
-        session.filmIntent = .gallery
-        session.noteRecordingStarted()
+        session.bindRecording(.gallery, to: "prise")
         let url = try Self.tempFile()
         session.camera.capturedVideoURL = url
-        session.camera.capturedVideoId = UUID().uuidString
+        session.camera.capturedVideoId = "prise"
         await Self.waitUntil { session.pendingGallerySaves == 0 }
         XCTAssertTrue(session.segments.isEmpty, "une vidéo vers la galerie n'est jamais un segment")
-        XCTAssertEqual(session.filmIntent, .edit)
         XCTAssertTrue(session.filmIntents.isEmpty)
         XCTAssertFalse(FileManager.default.fileExists(atPath: url.path), "le brut est en galerie : le temporaire part")
     }
 
-    func test_videoArrived_intentsAreMatchedInRecordingOrder() throws {
+    func test_videoArrived_twoCloseTakes_keepTheirOwnIntent() throws {
         let session = ComposerCaptureSession(stage: .armed, gallery: MockComposerGallery())
-        session.filmIntent = .gallery
-        session.noteRecordingStarted()
-        session.filmIntent = .edit
-        session.noteRecordingStarted()
+        session.bindRecording(.gallery, to: "galerie")
+        session.bindRecording(.edit, to: "segment")
         let versGalerie = try Self.tempFile(), segment = try Self.tempFile()
-        session.camera.capturedVideoURL = versGalerie
-        session.camera.capturedVideoId = UUID().uuidString
         session.camera.capturedVideoURL = segment
-        session.camera.capturedVideoId = UUID().uuidString
+        session.camera.capturedVideoId = "segment"
+        session.camera.capturedVideoURL = versGalerie
+        session.camera.capturedVideoId = "galerie"
         XCTAssertEqual(session.segments.map(\.url), [segment],
-                       "un segment lancé avant l'arrivée du fichier galerie ne lui vole pas son intention")
+                       "chaque fichier retrouve l'intention de SON enregistrement, quel que soit l'ordre d'arrivée")
+    }
+
+    func test_videoArrived_afterAnAbandonedRecording_isNotShifted() throws {
+        let session = ComposerCaptureSession(stage: .armed, gallery: MockComposerGallery())
+        session.bindRecording(.gallery, to: "ratée")
+        session.camera.abandonedRecordingId = "ratée"
+        session.bindRecording(.edit, to: "segment")
+        let segment = try Self.tempFile()
+        session.camera.capturedVideoURL = segment
+        session.camera.capturedVideoId = "segment"
+        XCTAssertEqual(session.segments.map(\.url), [segment], "une fin sans fichier ne décale pas la suivante")
+        XCTAssertTrue(session.filmIntents.isEmpty)
+    }
+
+    func test_arm_forgetsOrphanIntents() {
+        let session = ComposerCaptureSession(stage: .armed, gallery: MockComposerGallery())
+        session.bindRecording(.gallery, to: "orpheline")
+        session.photoIntent = .gallery
+        session.arm(mode: .photo)
+        XCTAssertTrue(session.filmIntents.isEmpty)
+        XCTAssertEqual(session.photoIntent, .edit)
     }
 
     func test_videoArrived_editIntent_isASegment() throws {
@@ -147,8 +164,7 @@ final class ComposerCaptureTakesTests: XCTestCase {
     func test_videoArrived_afterDisarm_discardsFileAndKeepsNoSegment() throws {
         let galerie = MockComposerGallery()
         let session = ComposerCaptureSession(stage: .armed, gallery: galerie)
-        session.filmIntent = .gallery
-        session.noteRecordingStarted()
+        session.bindRecording(.gallery, to: "prise")
         session.disarm()
         let url = try Self.tempFile()
         session.camera.capturedVideoURL = url
@@ -175,10 +191,132 @@ final class ComposerCaptureTakesTests: XCTestCase {
         XCTAssertTrue(prises.contains("camera.$capturedPhotoId"))
         XCTAssertTrue(prises.contains("camera.$capturedVideoId"))
         let machine = try Self.code("Meeshy/Features/Main/Composer/ComposerCaptureSession.swift")
-        XCTAssertTrue(machine.contains("noteRecordingStarted()"), "chaque enregistrement PARTI pose son intention")
+        XCTAssertTrue(machine.contains("noteRecordingStarted()"), "chaque enregistrement PARTI fige son intention")
+    }
+
+    // MARK: - L'intention suit LA photo (I2)
+
+    func test_takePhoto_refusedGalleryRequest_nextShutterTakesForEdit() {
+        let objectif = MockComposerCaptureCamera()
+        let session = ComposerCaptureSession(stage: .armed, controls: objectif, gallery: MockComposerGallery())
+        session.deliversRawPhoto = true
+        var remis = 0
+        session.onDeliver = { _ in remis += 1 }
+        objectif.isSwitchingCamera = true
+        session.photoIntent = .gallery
+        session.takePhoto()
+        XCTAssertTrue(objectif.photoFlashes.isEmpty, "aucune prise pendant une bascule")
+        XCTAssertEqual(session.photoIntent, .edit, "une demande refusée ne lègue pas son intention")
+        objectif.isSwitchingCamera = false
+        session.takePhoto()
+        Self.publishPhoto(on: session)
+        XCTAssertEqual(remis, 1, "l'obturateur suivant prend pour la scène")
+    }
+
+    func test_takePhoto_duringTheFrontFlashRamp_keepsTheInFlightIntent() async {
+        let objectif = MockComposerCaptureCamera()
+        objectif.currentPosition = .front
+        let session = ComposerCaptureSession(stage: .armed, controls: objectif, gallery: MockComposerGallery())
+        session.flash = .on
+        XCTAssertTrue(session.floorIsLit)
+        session.takePhoto()
+        session.photoIntent = .gallery
+        session.takePhoto()
+        XCTAssertEqual(session.photoInFlightIntent, .edit, "la seconde demande n'écrase pas la photo en vol")
+        XCTAssertEqual(session.photoIntent, .edit)
+        await Self.waitUntil(timeout: 2) { !objectif.photoFlashes.isEmpty && !session.photoIsRamping }
+        try? await Task.sleep(nanoseconds: 400_000_000)
+        XCTAssertEqual(objectif.photoFlashes, [.off], "un seul déclenchement pour la rampe")
+        session.disarm()
+    }
+
+    // MARK: - Brut et rendu (I3, I4, M8)
+
+    func test_saveRenderedPhoto_rawRefused_paintsNothingAndSaysNothing() async {
+        let galerie = MockComposerGallery()
+        let session = ComposerCaptureSession(stage: .armed, gallery: galerie)
+        session.look = ComposerPhotoLook(filter: .warm)
+        session.camera.librarySave = Task { false }
+        session.photoInFlightIntent = .gallery
+        Self.publishPhoto(on: session)
+        await Self.waitUntil { session.pendingGallerySaves == 0 }
+        XCTAssertEqual(galerie.saveImageCount, 0, "brut refusé : aucun rendu peint ni enregistré")
+        XCTAssertNil(FeedbackToastManager.shared.currentToast, "ni « Enregistré » ni son haptique")
+    }
+
+    func test_saveRenderedPhoto_twoTakes_areSavedOneAfterTheOther() async {
+        let galerie = MockComposerGallery()
+        let session = ComposerCaptureSession(stage: .armed, gallery: galerie)
+        session.look = ComposerPhotoLook(filter: .warm)
+        session.photoInFlightIntent = .gallery
+        Self.publishPhoto(on: session)
+        session.photoInFlightIntent = .gallery
+        Self.publishPhoto(on: session)
+        XCTAssertEqual(session.pendingGallerySaves, 2)
+        await Self.waitUntil { session.pendingGallerySaves == 0 }
+        XCTAssertEqual(galerie.saveImageCount, 2)
+        XCTAssertEqual(galerie.maxConcurrentSaves, 1, "jamais deux rendus pleine définition à la fois")
+    }
+
+    func test_videoArrived_galleryIntent_realMovie_savesTheRendered() async throws {
+        let galerie = MockComposerGallery()
+        let session = ComposerCaptureSession(stage: .armed, gallery: galerie)
+        session.look = ComposerPhotoLook(filter: .warm)
+        session.bindRecording(.gallery, to: "film")
+        let url = try await Self.tinyMovie()
+        session.camera.capturedVideoURL = url
+        session.camera.capturedVideoId = "film"
+        await Self.waitUntil(timeout: 30) { session.pendingGallerySaves == 0 }
+        XCTAssertEqual(galerie.saveVideoCount, 1, "le rendu de la vidéo part en galerie")
+        XCTAssertEqual(FeedbackToastManager.shared.currentToast?.message, ComposerCaptureCopy.savedToPhotos)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
+    }
+
+    /// M8 (#9351) : sans effet, brut et rendu sont identiques au pixel près — UN fichier.
+    func test_videoArrived_galleryIntent_untouchedLook_savesOneFile() async throws {
+        let galerie = MockComposerGallery()
+        let session = ComposerCaptureSession(stage: .armed, gallery: galerie)
+        session.bindRecording(.gallery, to: "film")
+        let url = try Self.tempFile()
+        session.camera.capturedVideoURL = url
+        session.camera.capturedVideoId = "film"
+        await Self.waitUntil { session.pendingGallerySaves == 0 }
+        XCTAssertEqual(galerie.saveVideoCount, 0, "le brut enregistré par la caméra est déjà le rendu")
+        XCTAssertEqual(FeedbackToastManager.shared.currentToast?.message, ComposerCaptureCopy.savedToPhotos)
     }
 
     // MARK: - Outils
+
+    /// Un vrai petit film H.264 de six images, 64×112.
+    static func tinyMovie() async throws -> URL {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("film_\(UUID().uuidString).mov")
+        let writer = try AVAssetWriter(outputURL: url, fileType: .mov)
+        let input = AVAssetWriterInput(mediaType: .video, outputSettings: [
+            AVVideoCodecKey: AVVideoCodecType.h264, AVVideoWidthKey: 64, AVVideoHeightKey: 112])
+        input.expectsMediaDataInRealTime = false
+        let adaptor = AVAssetWriterInputPixelBufferAdaptor(assetWriterInput: input, sourcePixelBufferAttributes: [
+            kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
+            kCVPixelBufferWidthKey as String: 64, kCVPixelBufferHeightKey as String: 112])
+        writer.add(input)
+        XCTAssertTrue(writer.startWriting())
+        writer.startSession(atSourceTime: .zero)
+        for image in 0..<6 {
+            while !input.isReadyForMoreMediaData { try await Task.sleep(nanoseconds: 5_000_000) }
+            var tampon: CVPixelBuffer?
+            CVPixelBufferCreate(nil, 64, 112, kCVPixelFormatType_32BGRA, nil, &tampon)
+            let pixels = try XCTUnwrap(tampon)
+            CVPixelBufferLockBaseAddress(pixels, [])
+            memset(CVPixelBufferGetBaseAddress(pixels), Int32(30 + 30 * image), CVPixelBufferGetDataSize(pixels))
+            CVPixelBufferUnlockBaseAddress(pixels, [])
+            XCTAssertTrue(adaptor.append(pixels, withPresentationTime: CMTime(value: CMTimeValue(image), timescale: 30)))
+        }
+        input.markAsFinished()
+        await withCheckedContinuation { (fin: CheckedContinuation<Void, Never>) in
+            writer.finishWriting { fin.resume() }
+        }
+        XCTAssertEqual(writer.status, .completed)
+        return url
+    }
 
     static func publishPhoto(on session: ComposerCaptureSession) {
         let contexte = CGContext(data: nil, width: 30, height: 40, bitsPerComponent: 8, bytesPerRow: 0,
@@ -215,8 +353,11 @@ final class ComposerCaptureTakesTests: XCTestCase {
 final class MockComposerGallery: ComposerGalleryProviding, @unchecked Sendable {
     private let imageResult: Bool
     private let videoResult: Bool
-    private(set) var saveImageCount = 0
-    private(set) var saveVideoCount = 0
+    private let verrou = NSLock()
+    private var images = 0
+    private var videos = 0
+    private var enCours = 0
+    private var pointe = 0
 
     nonisolated deinit {}
 
@@ -225,15 +366,26 @@ final class MockComposerGallery: ComposerGalleryProviding, @unchecked Sendable {
         self.videoResult = videoResult
     }
 
+    var saveImageCount: Int { verrou.withLock { images } }
+    var saveVideoCount: Int { verrou.withLock { videos } }
+    /// Le plus grand nombre d'enregistrements vus EN MÊME TEMPS.
+    var maxConcurrentSaves: Int { verrou.withLock { pointe } }
+
     @concurrent
     func saveImage(_ data: Data) async -> Bool {
-        saveImageCount += 1
+        verrou.withLock {
+            images += 1
+            enCours += 1
+            pointe = max(pointe, enCours)
+        }
+        try? await Task.sleep(nanoseconds: 50_000_000)
+        verrou.withLock { enCours -= 1 }
         return imageResult
     }
 
     @concurrent
     func saveVideo(at url: URL) async -> Bool {
-        saveVideoCount += 1
+        verrou.withLock { videos += 1 }
         return videoResult
     }
 }
