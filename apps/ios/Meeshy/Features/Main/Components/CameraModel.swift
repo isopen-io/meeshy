@@ -28,6 +28,8 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     /// le sien (`segmentTokens`) : `capturedVideoId` à l'arrivée, `abandonedRecordingId` sans fichier.
     private(set) var recordingId: String?
     private(set) var segmentTokens: [URL: String] = [:]
+    /// L'arrêt est demandé, le fichier pas encore livré : `isRecordingVideo` reste vrai jusqu'au délégué.
+    private(set) var stopIsRequested = false
     @Published var abandonedRecordingId: String?
     @Published var capturedPhotoId: String?
     @Published var capturedVideoId: String?
@@ -131,6 +133,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     func closeRecordingToken(_ token: String?) {
         guard let token, recordingId == token else { return }
         recordingId = nil
+        stopIsRequested = false
     }
 
     /// Une prise jamais livrée (session coupée pendant une bascule) ne bloque pas
@@ -733,14 +736,15 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     func stopRecording() {
         #if DEBUG
         if let fixture {
-            guard isRecordingVideo else { return }
-            isRecordingVideo = false
+            guard isRecordingVideo, !stopIsRequested else { return }
+            stopIsRequested = true
             recordingTimer?.invalidate()
             recordingTimer = nil
             deliverFixtureMovie(fixture)
             return
         }
         #endif
+        stopIsRequested = recordingId != nil
         guard !isSwitchingCameraDuringRecording else {
             pendingStopRequested = true
             return

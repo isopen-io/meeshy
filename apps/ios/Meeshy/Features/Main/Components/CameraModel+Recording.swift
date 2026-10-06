@@ -15,7 +15,9 @@ extension CameraModel {
     }
 
     /// La prise précédente est arrêtée mais pas encore livrée : la suivante l'attend.
+    /// Après l'arrêt, `isRecordingVideo` reste vrai jusqu'au délégué d'AVFoundation ;
+    /// pendant la fusion d'une bascule, il est déjà faux.
     var recordingIsPending: Bool {
-        recordingId != nil && !isRecordingVideo
+        recordingId != nil && (!isRecordingVideo || stopIsRequested)
     }
 }
