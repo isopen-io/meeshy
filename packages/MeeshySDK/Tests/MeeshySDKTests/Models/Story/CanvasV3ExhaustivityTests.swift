@@ -123,7 +123,8 @@ struct CanvasV3ExhaustivityTests {
         media.filter = "vintage"
         // #9175 — les réglages d'une image. Voyagent pour TOUT média, fond
         // compris : leur clé v3 `payload.adjustments` n'est partagée avec rien.
-        media.adjustments = ImageAdjustments(exposure: 0.5, contrast: 1.25, vignette: 0.75)
+        // #9498 — et les effets (bloom, grain), dans le même sac.
+        media.adjustments = ImageAdjustments(exposure: 0.5, contrast: 1.25, vignette: 0.75, bloom: 0.5, grain: 0.25)
         return media
     }
 

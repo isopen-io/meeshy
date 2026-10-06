@@ -81,6 +81,12 @@ extension ComposerObjectEditorView {
                         ComposerMediaAdjustPanel(viewModel: viewModel, mediaId: media.id)
                     }
                 }
+                // **✦ EFFETS** (#9498) — le bloom et le grain d'une IMAGE.
+                if objectOffersAdjust && objectOffersFilter {
+                    section(ComposerAdjustCopy.effectsTitle, .media(.effects)) {
+                        ComposerMediaAdjustPanel(viewModel: viewModel, mediaId: media.id, family: .effect)
+                    }
+                }
                 if let source = viewModel.sourceTrim(id: objectId) {
                     section(ComposerObjectEditorCopy.trim, .media(.trim)) {
                         trimBand(source)

@@ -97,6 +97,9 @@ struct ComposerInlineToolPanel: View {
             }
         case .media(.adjust):
             ComposerMediaAdjustPanel(viewModel: viewModel, mediaId: edit.objectId, onCompare: onCompareLook)
+        case .media(.effects):
+            ComposerMediaAdjustPanel(viewModel: viewModel, mediaId: edit.objectId, family: .effect,
+                                     onCompare: onCompareLook)
         case .media(.trim):
             if let source = viewModel.sourceTrim(id: edit.objectId) {
                 ComposerMediaTrimBand(viewModel: viewModel, objectId: edit.objectId, source: source,

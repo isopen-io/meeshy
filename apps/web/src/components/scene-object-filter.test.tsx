@@ -140,7 +140,7 @@ describe('ScenePlayer — les réglages par objet', () => {
   });
 
   test('une charge sans réglages, ou aux valeurs illisibles, ne peint rien et ne casse rien', () => {
-    const el = mount(player([overlay({ adjustments: { exposure: 'fort', grain: 3 } })]));
+    const el = mount(player([overlay({ adjustments: { exposure: 'fort', halo: 3 } })]));
     expect(overlayMedia(el)?.style.filter ?? '').toBe('');
     expect(overlayLayers(el)).toEqual([]);
   });
@@ -233,5 +233,49 @@ describe('ScenePlayer — les réglages du fond', () => {
   test('un fond vidéo réglé ne reçoit ni netteté ni flou', () => {
     const el = mount(player([background({ mediaType: 'video', adjustments: { blur: 1, sharpness: 1, saturation: 0 } })]));
     expect(fondVideo(el)?.style.filter).toBe('saturate(0)');
+  });
+});
+
+/**
+ * LES EFFETS D'UNE IMAGE (#9498, D-176) — le bloom se peint en halo (un filtre
+ * SVG que le média référence, après ses réglages), le grain en calque de bruit,
+ * sur l'image posée comme sur le fond ; jamais sur une vidéo.
+ */
+describe('ScenePlayer — les effets', () => {
+  const glowFilterOf = (el: HTMLElement, media: HTMLElement | null | undefined) => {
+    const ref = /url\(#([^)]+)\)/.exec(media?.style.filter ?? '')?.[1];
+    return ref === undefined ? null : el.querySelector(`filter[id="${ref}"]`);
+  };
+
+  test('une image au bloom référence SON halo, après ses réglages, et le halo est déclaré à côté d’elle', () => {
+    const el = mount(player([background(), overlay({ adjustments: { contrast: 1.3, bloom: 0.5 } })]));
+    const media = overlayMedia(el);
+    expect(media?.style.filter).toMatch(/^contrast\(1\.3\) url\(#[^)]+\)$/);
+    const halo = glowFilterOf(el, media);
+    expect(halo).not.toBeNull();
+    expect(halo?.querySelector('feGaussianBlur')).not.toBeNull();
+    expect(halo?.querySelector('feBlend')?.getAttribute('mode')).toBe('screen');
+    expect(fondImage(el)?.style.filter ?? '').toBe('');
+  });
+
+  test('deux images au bloom ont deux halos distincts', () => {
+    const second = { ...overlay({ adjustments: { bloom: 1 } }), id: 'overlay-2' };
+    const el = mount(player([overlay({ adjustments: { bloom: 0.5 } }), second]));
+    const ids = [...el.querySelectorAll('filter')].map((f) => f.getAttribute('id'));
+    expect(ids.length).toBe(2);
+    expect(new Set(ids).size).toBe(2);
+  });
+
+  test('le fond porte ses effets : son halo et son grain', () => {
+    const el = mount(player([background({ aspectRatio: 0.75, adjustments: { bloom: 0.5, grain: 0.5 } })]));
+    expect(glowFilterOf(el, fondImage(el))).not.toBeNull();
+    expect(el.querySelector('[data-scene-background-crop] [data-media-adjustment-layer]')?.getAttribute('style') ?? '').toContain('feTurbulence');
+  });
+
+  test('une vidéo ne reçoit ni halo ni grain', () => {
+    const el = mount(player([overlay({ mediaType: 'video', adjustments: { bloom: 1, grain: 1 } })]));
+    expect(overlayMedia(el)?.style.filter ?? '').toBe('');
+    expect(el.querySelector('filter')).toBeNull();
+    expect(overlayLayers(el)).toEqual([]);
   });
 });

@@ -654,7 +654,7 @@ public struct MeeshyImageEditorView: View {
     }
 
     private var visibleAdjustments: [AdjustmentKind] {
-        viewModel.mode.isPro ? AdjustmentKind.allCases : AdjustmentKind.allCases.filter(\.isEssential)
+        viewModel.mode.isPro ? AdjustmentKind.toneCases : AdjustmentKind.toneCases.filter(\.isEssential)
     }
 
     private func adjustmentRow(_ kind: AdjustmentKind) -> some View {

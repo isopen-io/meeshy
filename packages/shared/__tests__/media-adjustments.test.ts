@@ -13,9 +13,10 @@ import {
  * (`packages/MeeshySDK/Sources/MeeshySDK/Models/Story/ImageAdjustments.swift`).
  */
 describe('le vocabulaire des réglages', () => {
-  it('les neuf réglages, dans l’ordre de `AdjustmentKind.allCases`', () => {
+  it('les neuf réglages puis les deux effets, dans l’ordre de `AdjustmentKind.allCases`', () => {
     expect(MEDIA_ADJUSTMENT_KINDS).toEqual([
       'exposure', 'brightness', 'contrast', 'saturation', 'vibrance', 'temperature', 'sharpness', 'blur', 'vignette',
+      'bloom', 'grain',
     ]);
   });
 
@@ -30,13 +31,17 @@ describe('le vocabulaire des réglages', () => {
       sharpness: { min: 0, max: 1 },
       blur: { min: 0, max: 1 },
       vignette: { min: 0, max: 2 },
+      bloom: { min: 0, max: 1 },
+      grain: { min: 0, max: 1 },
     });
+    expect(MEDIA_ADJUSTMENT_NEUTRAL.bloom).toBe(0);
+    expect(MEDIA_ADJUSTMENT_NEUTRAL.grain).toBe(0);
     expect(MEDIA_ADJUSTMENT_NEUTRAL.contrast).toBe(1);
     expect(MEDIA_ADJUSTMENT_NEUTRAL.saturation).toBe(1);
     expect(MEDIA_ADJUSTMENT_NEUTRAL.exposure).toBe(0);
   });
 
-  it('une vidéo ne reçoit ni netteté ni flou ; une image reçoit tout', () => {
+  it('une vidéo ne reçoit ni netteté, ni flou, ni bloom, ni grain ; une image reçoit tout', () => {
     expect(MEDIA_ADJUSTMENT_KINDS.filter((k) => isAdjustmentServed(k, 'video'))).toEqual([
       'exposure', 'brightness', 'contrast', 'saturation', 'vibrance', 'temperature', 'vignette',
     ]);
@@ -58,12 +63,20 @@ describe('readMediaAdjustments — la lecture tolérante de `payload.adjustments
 
   it('une valeur neutre, non numérique, non finie ou inconnue ne compte pas', () => {
     expect(
-      readMediaAdjustments({ adjustments: { contrast: 1, saturation: 'x', exposure: Number.NaN, blur: Infinity, grain: 0.3 } }, 'image'),
+      readMediaAdjustments({ adjustments: { contrast: 1, saturation: 'x', exposure: Number.NaN, blur: Infinity, halo: 0.3 } }, 'image'),
     ).toBeNull();
   });
 
   it('une valeur hors bornes est ramenée à la borne de son curseur', () => {
     expect(readMediaAdjustments({ adjustments: { blur: 400, exposure: -9, vignette: 10 } }, 'image')).toEqual({ blur: 1, exposure: -2, vignette: 2 });
+  });
+
+  it('les effets d’une image (#9498) se lisent comme ses réglages, bornés', () => {
+    expect(readMediaAdjustments({ adjustments: { bloom: 0.5, grain: 3 } }, 'image')).toEqual({ bloom: 0.5, grain: 1 });
+  });
+
+  it('une vidéo perd le bloom et le grain que sa charge porterait (#9498)', () => {
+    expect(readMediaAdjustments({ adjustments: { bloom: 0.5, grain: 0.5 } }, 'video')).toBeNull();
   });
 
   it('une vidéo perd la netteté et le flou que sa charge porterait', () => {

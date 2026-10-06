@@ -110,6 +110,7 @@ nonisolated enum ComposerInlineEditing {
     /// **Les RÉGLAGES vont à tout média qui les PEINT** — l'image posée
     /// (#9175), la vidéo dont le player peint les trames (#9169), et le fond,
     /// image ou vidéo, que sa couche peint par `StoryBackgroundLook` (#9496).
+    /// Les EFFETS (#9498) vont à l'IMAGE, posée ou fond : ils suivent le filtre.
     static func sections(for family: ComposerInlineFamily,
                          hasTrimmableSource: Bool,
                          retouching: Bool = false) -> [ComposerObjectEditorSection] {
@@ -243,11 +244,11 @@ nonisolated enum ComposerInlinePanelLayout {
 
     // MARK: Laisser voir l'objet qu'on règle (#9495)
 
-    /// **Les sous-outils qui changent le RENDU de l'objet** — filtre, réglages
-    /// et recadrage (#9499). On les juge à l'œil : le panneau ne doit pas cacher ce qu'il
+    /// **Les sous-outils qui changent le RENDU de l'objet** — filtre, réglages,
+    /// effets (#9498) et recadrage (#9499). On les juge à l'œil : le panneau ne doit pas cacher ce qu'il
     /// règle, et « Comparer » n'a de sens que si l'image comparée se voit.
     static func keepsObjectInSight(_ section: ComposerObjectEditorSection) -> Bool {
-        section == .media(.filter) || section == .media(.adjust) || section == .media(.crop)
+        [.media(.filter), .media(.adjust), .media(.effects), .media(.crop)].contains(section)
     }
 
     /// **Le haut ou le bas de la scène libre, du côté qui laisse voir l'objet**
