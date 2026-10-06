@@ -26,6 +26,7 @@ import { gloryStanding } from './glory.js';
 import { canPrestige, levelProgress, recordLevel } from './levels.js';
 import { previewMint } from './mint.js';
 import { MISSIONS_MIN_LEVEL, MISSION_REROLL_PER_DAY, MISSION_REROLL_PRICE, isPrismDay } from './missions.js';
+import { personalMissionState } from './personal-mission.js';
 import { treasuryTier } from './treasury.js';
 import { buildGameBlockExtras, type GameBlockExtrasFacts } from './game-block-extras.js';
 import type { GameBlock, GameMission } from '../../types/game.js';
@@ -75,6 +76,13 @@ export type GameBlockFacts = {
   readonly freezes: number;
   readonly lastRelightDay: string | null;
   readonly missions: readonly GameMissionRecord[];
+  /** La mission personnelle du jour (#9539) : sa plage, et l'instant qui fixe son état. Absente : rien n'est servi. */
+  readonly personalMission?: {
+    readonly record: GameMissionRecord;
+    readonly startsAt: string;
+    readonly endsAt: string;
+    readonly now: string;
+  } | null;
   readonly rerollsUsedToday: number;
   readonly chestClaimed: boolean;
   readonly chestReward: DailyChest | null;
@@ -145,6 +153,21 @@ export function buildGameBlock(facts: GameBlockFacts): GameBlock {
       prismDay: isPrismDay({ userId: facts.userId, dayKey: facts.today }),
       unlocked,
       items: [...facts.missions],
+      ...(facts.personalMission == null
+        ? {}
+        : {
+            personal: {
+              ...facts.personalMission.record,
+              startsAt: facts.personalMission.startsAt,
+              endsAt: facts.personalMission.endsAt,
+              state: personalMissionState({
+                startsAt: new Date(facts.personalMission.startsAt),
+                endsAt: new Date(facts.personalMission.endsAt),
+                completedAt: facts.personalMission.record.completedAt === null ? null : new Date(facts.personalMission.record.completedAt),
+                now: new Date(facts.personalMission.now),
+              }),
+            },
+          }),
       rerollAvailable:
         unlocked &&
         facts.missions.some((m) => m.completedAt === null) &&

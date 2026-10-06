@@ -348,6 +348,12 @@ export const gameStandingSchema = z.object({
   rank: enumOf<(typeof GLORY_RANKS)[number]['key'] | 'mythe'>([...GLORY_RANKS.map((r) => r.key), 'mythe']),
   /** `null` pour Mythe. */
   division: z.union([z.literal(3), z.literal(2), z.literal(1)]).nullable(),
+  /**
+   * Ses points et le nombre de ses trophées — servis aux AMIS seulement (décision porteur 2026-10-06, #9541),
+   * jamais à un autre lecteur : absents, le client n'affiche rien. Optionnels, car un ancien serveur n'en sert pas.
+   */
+  points: z.number().int().min(0).optional(),
+  trophyCount: z.number().int().min(0).optional(),
 });
 
 export const gameShownTreasurySchema = z.object({ tier: enumOf(TREASURY_TIERS.map((tier) => tier.key)).nullable() });

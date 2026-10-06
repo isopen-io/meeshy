@@ -153,6 +153,7 @@ export function isNotificationTypeEnabled(
     case 'game_duo_accepted':
     case 'game_league_result':
     case 'game_season_step':
+    case 'game_mission_window':
       return prefs.gameEnabled !== false;
     case 'member_joined':
     case 'member_left':

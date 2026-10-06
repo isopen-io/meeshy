@@ -137,6 +137,18 @@ describe('le profil de jeu d’un autre membre', () => {
     expect(userGameProfileResponseSchema.parse(open)).toEqual(open);
   });
 
+  it('sert aux AMIS ses points et le nombre de ses trophées, en plus du reste (#9541) — optionnels, un ancien serveur n\'en sert pas', () => {
+    const friend = {
+      visible: true,
+      standing: { level: 34, tier: 'rayon', prestige: 2, flame: 'brasier', rank: 'legende', division: 1, points: 12_180, trophyCount: 14 },
+      treasury: null,
+    };
+    expect(userGameProfileResponseSchema.parse(friend)).toEqual(friend);
+    const old = { visible: true, standing: { level: 34, tier: 'rayon', prestige: 2, flame: null, rank: 'conteur', division: 2 }, treasury: null };
+    expect(userGameProfileResponseSchema.parse(old)).toEqual(old);
+    expect(userGameProfileResponseSchema.safeParse({ ...friend, standing: { ...friend.standing, points: -1 } }).success).toBe(false);
+  });
+
   it('retire, par construction, tout champ que le contrat ne déclare pas', () => {
     const leaky = {
       visible: true,

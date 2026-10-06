@@ -173,6 +173,8 @@ export enum NotificationTypeEnum {
   GAME_LEAGUE_RESULT = 'game_league_result',
   /** Une étape de la saison est atteinte. */
   GAME_SEASON_STEP = 'game_season_step',
+  /** La mission personnelle du jour commence : sa plage horaire est dans le texte (#9539). */
+  GAME_MISSION_WINDOW = 'game_mission_window',
 
   // ===== PAYMENT/SUBSCRIPTION =====
   SUBSCRIPTION_EXPIRING = 'subscription_expiring',

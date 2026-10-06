@@ -30,7 +30,7 @@ export const NOTIFICATION_STRING_KEYS = [
   'game.duoInvitedAction', 'game.duoInvitedBody', 'game.duoAcceptedAction', 'game.duoAcceptedBody',
   'game.leaguePromoted', 'game.leagueStayed', 'game.leagueRelegated',
   'game.leagueCupGold', 'game.leagueCupSilver', 'game.leagueCupBronze',
-  'game.seasonStep', 'game.seasonDone',
+  'game.seasonStep', 'game.seasonDone', 'game.missionWindow',
   'repost',
   'invitation.group', 'invitation.direct',
   'group.added', 'group.newContact',
@@ -85,6 +85,10 @@ export type NotificationStringParams = {
   readonly author?: string;
   readonly count?: number;
   readonly callIcon?: string;
+  /** `game.missionWindow` : l'activité de la mission et les deux bornes de sa plage, déjà localisées. */
+  readonly mission?: string;
+  readonly start?: string;
+  readonly end?: string;
   /**
    * L'entité nommée par le libellé. Typée en clé de PROSE, pas en valeur de
    * fil : le catalogue est un dictionnaire, il RENDRA ce qu'on lui donne — y
@@ -309,6 +313,9 @@ export function notificationString(
     author: params.author ?? '',
     count: params.count != null ? String(params.count) : '',
     callIcon: params.callIcon ?? '',
+    mission: params.mission ?? '',
+    start: params.start ?? '',
+    end: params.end ?? '',
   };
 
   if (params.postType) {

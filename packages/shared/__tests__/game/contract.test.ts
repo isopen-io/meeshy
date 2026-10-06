@@ -154,6 +154,57 @@ describe('le bloc game', () => {
     expect(block({ balance: 0 }).missions.rerollAvailable).toBe(false);
   });
 
+  describe('la mission personnelle (#9539)', () => {
+    const personal = {
+      record: {
+        id: '64b7f0c2a1b2c3d4e5f6a7c1',
+        difficulty: 'medium' as const,
+        templateKey: 'publish-post',
+        signal: 'axis:content.post' as const,
+        prism: false,
+        target: 2,
+        progress: 0,
+        reward: 80,
+        glory: 0,
+        completedAt: null,
+      },
+      startsAt: '2026-10-05T16:00:00.000Z',
+      endsAt: '2026-10-05T18:00:00.000Z',
+      now: '2026-10-05T15:00:00.000Z',
+    };
+
+    it('se sert À CÔTÉ des trois missions du jour, avec sa plage et son état', () => {
+      const b = block({ personalMission: personal });
+      expect(b.missions.items).toHaveLength(3);
+      expect(b.missions.personal).toMatchObject({ templateKey: 'publish-post', startsAt: personal.startsAt, endsAt: personal.endsAt, state: 'upcoming' });
+      expect(block({ personalMission: { ...personal, now: '2026-10-05T17:00:00.000Z' } }).missions.personal?.state).toBe('active');
+      expect(block({ personalMission: { ...personal, now: '2026-10-05T18:00:00.000Z' } }).missions.personal?.state).toBe('missed');
+      expect(
+        block({ personalMission: { ...personal, record: { ...personal.record, completedAt: '2026-10-05T16:30:00.000Z', progress: 2 }, now: '2026-10-06T08:00:00.000Z' } }).missions.personal?.state,
+      ).toBe('completed');
+    });
+
+    it('est absente d’un bloc sans mission personnelle — la forme d’avant, intacte', () => {
+      expect(block().missions.personal).toBeUndefined();
+      expect('personal' in block().missions).toBe(false);
+    });
+
+    it('ne gouverne NI le coffre NI le changement de mission', () => {
+      const done = missionRecords(34).map((m) => ({ ...m, progress: m.target, completedAt: '2026-10-05T10:00:00.000Z' }));
+      expect(block({ missions: done, personalMission: personal }).chest.status).toBe('ready');
+      const allDone = block({ missions: done, personalMission: personal });
+      expect(allDone.missions.rerollAvailable).toBe(false);
+    });
+
+    it('un ancien client lit toujours le bloc : la clé en plus est ignorée', () => {
+      const b = block({ personalMission: personal });
+      const legacyShape = { ...b, missions: { ...b.missions, personal: 'illisible' } };
+      const parsed = parseGameBlock(legacyShape);
+      expect(parsed).not.toBeNull();
+      expect(parsed?.missions.personal).toBeUndefined();
+    });
+  });
+
   it('refuse un bloc partiel', () => {
     const { flame: _flame, ...partial } = block();
     expect(parseGameBlock(partial)).toBeNull();
