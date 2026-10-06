@@ -334,7 +334,7 @@ final class ComposerCaptureTakesTests: XCTestCase {
         return url
     }
 
-    static func waitUntil(timeout: TimeInterval = 10, _ condition: @MainActor () -> Bool) async {
+    static func waitUntil(timeout: TimeInterval = 10, _ condition: @escaping @MainActor () -> Bool) async {
         let limite = Date().addingTimeInterval(timeout)
         while !condition(), Date() < limite {
             try? await Task.sleep(nanoseconds: 20_000_000)
