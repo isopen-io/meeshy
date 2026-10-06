@@ -157,6 +157,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(MeeshyPlaybackPlugin.class);
         registerPlugin(MeeshySpeechPlugin.class);
         registerPlugin(ScreenBrightnessPlugin.class);
+        registerPlugin(MeeshyFileSinkPlugin.class);
         super.onCreate(savedInstanceState);
         suivreTailleDuTexte(getResources().getConfiguration());
         SilentNotificationChannel.ensure(this);
