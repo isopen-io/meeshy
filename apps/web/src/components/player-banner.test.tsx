@@ -1,4 +1,5 @@
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
+import { readFileSync } from 'node:fs';
 import { act } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 
@@ -81,10 +82,10 @@ describe('seulement ce qui existe', () => {
 });
 
 describe('le décor', () => {
-  test('la teinte du palier naît derrière l’anneau, du côté où la ligne commence — à droite en arabe', async () => {
+  test('la teinte du palier naît derrière l’anneau, du côté où la ligne commence — à droite en arabe', () => {
     const html = markup(newcomer());
     expect(html).toMatch(/data-player-banner=""[^>]*background:linear-gradient\(var\(--player-banner-sweep, 100deg\)/);
-    const css = await Bun.file(new URL('../styles/player-banner.css', import.meta.url)).text();
+    const css = readFileSync(new URL('../styles/player-banner.css', import.meta.url), 'utf8');
     expect(css).toMatch(/\[dir='rtl'\] \.player-banner \{\s*--player-banner-sweep: 260deg;/);
   });
 
