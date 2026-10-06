@@ -564,7 +564,9 @@ extension StoryCanvasUIView {
             // "media grossit après rotation puis pan" (2026-05-27). Même
             // pattern que la branche text plus bas qui ne pose que la
             // rotation parce que scale est déjà cuit dans fontSize.
-            let baseDesign = StoryMediaLayer.baseMediaDesignSize(aspectRatio: media.aspectRatio)
+            // Au rapport RECADRÉ (#9499) : le geste ne rend pas sa forme
+            // d'origine à une image recadrée.
+            let baseDesign = StoryMediaLayer.baseMediaDesignSize(for: media)
             let scaledDesign = CGSize(width: baseDesign.width * CGFloat(media.scale),
                                       height: baseDesign.height * CGFloat(media.scale))
             let renderedSize = geo.render(scaledDesign)

@@ -99,10 +99,13 @@ nonisolated enum ComposerInlineEditing {
     /// et les offrir ailleurs serait servir un contrôle sans effet — ce que la
     /// loi 4 bannit. Un fond, lui, dure la slide entière.
     ///
-    /// **Une RETOUCHE d'image du fil se recadre, d'abord** (#9136) : le
-    /// recadrage n'est servi qu'au FOND IMAGE d'une pièce retouchée — c'est là
-    /// qu'il se cuit dans la pièce rendue. Ailleurs, le lecteur ne recadre pas
-    /// un fond : l'offrir serait un contrôle sans effet.
+    /// **Une IMAGE se recadre, d'abord** — l'ordre des décisions de la vue
+    /// `2d`. Deux images le servent : le FOND IMAGE d'une pièce retouchée
+    /// (#9136), où il se cuit dans la pièce rendue, et l'image POSÉE (#9499),
+    /// dont le calque, le lecteur web et la vignette lisent la borne. Un fond
+    /// hors retouche ne l'offre pas — le lecteur ne recadre pas un fond — ni une
+    /// vidéo, dont le player ne lit pas encore la borne (#9153) : ce seraient
+    /// des contrôles sans effet.
     ///
     /// **Les RÉGLAGES vont à tout média qui les PEINT** — l'image posée
     /// (#9175), la vidéo dont le player peint les trames (#9169), et le fond,
@@ -121,7 +124,7 @@ nonisolated enum ComposerInlineEditing {
                 case .tool:           return true
                 }
             }
-        let recadre = retouching && family == .background(isVideo: false)
+        let recadre = family == .image || (retouching && family == .background(isVideo: false))
         return (recadre ? [.media(.crop)] : []) + servies
     }
 
@@ -240,11 +243,11 @@ nonisolated enum ComposerInlinePanelLayout {
 
     // MARK: Laisser voir l'objet qu'on règle (#9495)
 
-    /// **Les sous-outils qui changent le RENDU de l'objet** — filtre et
-    /// réglages. On les juge à l'œil : le panneau ne doit pas cacher ce qu'il
+    /// **Les sous-outils qui changent le RENDU de l'objet** — filtre, réglages
+    /// et recadrage (#9499). On les juge à l'œil : le panneau ne doit pas cacher ce qu'il
     /// règle, et « Comparer » n'a de sens que si l'image comparée se voit.
     static func keepsObjectInSight(_ section: ComposerObjectEditorSection) -> Bool {
-        section == .media(.filter) || section == .media(.adjust)
+        section == .media(.filter) || section == .media(.adjust) || section == .media(.crop)
     }
 
     /// **Le haut ou le bas de la scène libre, du côté qui laisse voir l'objet**

@@ -2,7 +2,10 @@ import { act, type ReactElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
+import { centeredMediaCrop } from '@meeshy/shared/utils/media-crop';
+
 import type { SceneCarrier } from '@/lib/canvas/carrier';
+import { placedMediaDesignSize } from '@/lib/canvas/media-size';
 import { parseCanvasDocument, type CanvasDocument } from '@/lib/canvas/document';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
@@ -140,6 +143,49 @@ describe('ScenePlayer — les réglages par objet', () => {
     const el = mount(player([overlay({ adjustments: { exposure: 'fort', grain: 3 } })]));
     expect(overlayMedia(el)?.style.filter ?? '').toBe('');
     expect(overlayLayers(el)).toEqual([]);
+  });
+});
+
+/**
+ * LE RECADRAGE D'UNE IMAGE POSÉE (#9499) — posé sur iOS aux proportions de
+ * `MEDIA_CROP_RATIOS`, il se lit ici par `readMediaCrop` : le CADRE de l'objet
+ * prend le rapport recadré (`StoryMediaLayer.renderedPose`), l'image montre la
+ * part gardée, et les réglages se peignent sur cette part, dans ce cadre.
+ */
+describe('ScenePlayer — le recadrage d’une image posée', () => {
+  const overlayBox = (el: HTMLElement) => el.querySelector<HTMLElement>('[data-scene-object-id="overlay"] > span');
+
+  test('une photo 4:3 recadrée en 3:4 pose un cadre 3:4, et garde ses réglages sur la part gardée', () => {
+    const crop = centeredMediaCrop(3 / 4, 4 / 3);
+    const el = mount(
+      player([
+        overlay({
+          aspectRatio: 4 / 3,
+          cropX: crop.x,
+          cropY: crop.y,
+          cropW: crop.width,
+          cropH: crop.height,
+          adjustments: { contrast: 1.3 },
+        }),
+      ]),
+    );
+    expect(overlayBox(el)?.style.overflow).toBe('hidden');
+    expect(overlayMedia(el)?.style.width).toBe(`${100 / crop.width}%`);
+    expect(overlayMedia(el)?.style.left).toBe(`${(-crop.x / crop.width) * 100}%`);
+    expect(overlayMedia(el)?.style.filter).toBe('contrast(1.3)');
+  });
+
+  test('sans recadrage, l’image remplit son cadre sans décalage', () => {
+    const el = mount(player([overlay({ aspectRatio: 4 / 3 })]));
+    expect(overlayMedia(el)?.style.left ?? '').toBe('');
+    expect(overlayMedia(el)?.style.position ?? '').toBe('');
+  });
+
+  test('le cadre prend le rapport recadré — 3:4 dans une photo 4:3 (la taille se lit par la loi pure, happy-dom refusant `cqw`)', () => {
+    const crop = centeredMediaCrop(3 / 4, 4 / 3);
+    const size = placedMediaDesignSize({ aspectRatio: 4 / 3, crop });
+    expect(size.width / size.height).toBeCloseTo(3 / 4, 6);
+    expect(size.height).toBeCloseTo(702, 6);
   });
 });
 

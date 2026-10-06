@@ -1,13 +1,11 @@
-import { isFullMediaCrop } from '@meeshy/shared/utils/media-crop';
+import { centeredMediaCrop, isFullMediaCrop, MEDIA_CROP_RATIOS, type MediaCropRatioOption } from '@meeshy/shared/utils/media-crop';
 
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import {
-  centeredCrop,
   pageWithBackgroundCrop,
   pageWithBackgroundMuted,
   pageWithBackgroundTrim,
-  STUDIO_CROP_RATIOS,
   type StudioVisualAsset,
 } from '@/lib/stories/studio-page';
 import type { StudioPageEdit } from '@/lib/stories/studio-page-edit';
@@ -100,19 +98,17 @@ export function StudioSoundControls({ lang, asset, onPage }: { readonly lang: In
   );
 }
 
-const ratioLabel = (lang: InterfaceLanguage, ratio: number | null): string => {
-  if (ratio === null) return translate(lang, 'story.studio.crop.original');
-  if (ratio === 1) return '1:1';
-  if (ratio === 4 / 5) return '4:5';
-  return ratio < 1 ? '9:16' : '16:9';
-};
+/** La notation d'une proportion se lit telle quelle dans toutes les langues ;
+ * seul le cadre d'origine se traduit. */
+const ratioLabel = (lang: InterfaceLanguage, ratio: MediaCropRatioOption): string =>
+  ratio.notation ?? translate(lang, 'story.studio.crop.original');
 
 export function StudioCropControls({ lang, asset, onPage }: { readonly lang: InterfaceLanguage; readonly asset: StudioVisualAsset; readonly onPage: StudioPageEdit }) {
   const source = asset.aspectRatio ?? 0;
   const current = asset.crop;
   const chosen = (ratio: number | null): boolean => {
     if (ratio === null) return current === undefined || isFullMediaCrop(current);
-    const target = centeredCrop(ratio, source);
+    const target = centeredMediaCrop(ratio, source);
     return current !== undefined && Math.abs(current.width - target.width) < 0.001 && Math.abs(current.height - target.height) < 0.001;
   };
   return (
@@ -121,17 +117,17 @@ export function StudioCropControls({ lang, asset, onPage }: { readonly lang: Int
         {translate(lang, 'story.studio.crop.ratio')}
       </p>
       <div role="radiogroup" aria-label={translate(lang, 'story.studio.crop.ratio')} className="flex flex-wrap gap-1.5">
-        {STUDIO_CROP_RATIOS.map((ratio) => {
-          const on = chosen(ratio);
+        {MEDIA_CROP_RATIOS.map((ratio) => {
+          const on = chosen(ratio.value);
           return (
             <button
-              key={ratio ?? 'original'}
+              key={ratio.notation ?? 'original'}
               type="button"
               role="radio"
               aria-checked={on}
-              disabled={ratio !== null && source <= 0}
-              data-story-crop-ratio={ratioLabel('en', ratio)}
-              onClick={() => onPage((page) => pageWithBackgroundCrop(page, centeredCrop(ratio, source)))}
+              disabled={ratio.value !== null && source <= 0}
+              data-story-crop-ratio={ratio.notation ?? 'original'}
+              onClick={() => onPage((page) => pageWithBackgroundCrop(page, centeredMediaCrop(ratio.value, source)))}
               className="whitespace-nowrap rounded-xl px-3 text-caption font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-40"
               style={{
                 minHeight: 44,

@@ -435,9 +435,7 @@ public final class StoryMediaLayer: CALayer {
     /// proportions de l'objet (#5085).
     public static func renderedPose(for media: StoryMediaObject,
                                     geometry: CanvasGeometry) -> (size: CGSize, center: CGPoint) {
-        let effectiveRatio = MediaCropRule.effectiveRatio(
-            sourceRatio: media.aspectRatio, crop: media.crop)
-        let baseDesignSize = baseMediaDesignSize(aspectRatio: effectiveRatio)
+        let baseDesignSize = baseMediaDesignSize(for: media)
         let scaledDesignSize = CGSize(width: baseDesignSize.width * CGFloat(media.scale),
                                       height: baseDesignSize.height * CGFloat(media.scale))
         let designCenter = CGPoint(x: geometry.designLength(forNormalized: CGFloat(media.x)),

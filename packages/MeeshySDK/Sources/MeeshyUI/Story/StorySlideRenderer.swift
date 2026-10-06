@@ -155,7 +155,7 @@ public enum StorySlideRenderer {
                 if let img = loadedImages[obj.id] {
                     let peinte = obj.kind == .image ? StoryMediaLayer.filtered(img, for: obj) ?? img
                         : StoryVideoAdjustmentsProcessor.poster(img, for: obj)
-                    drawMediaObject(obj, image: peinte, in: size, ctx: cgCtx)
+                    drawMediaObject(obj, image: MediaCropPresentation.keptPart(peinte, of: obj), in: size, ctx: cgCtx)
                 }
             }
 
@@ -366,7 +366,7 @@ public enum StorySlideRenderer {
     /// (jamais étirée) et clippée aux coins arrondis (`cornerRadiusFraction`), avec
     /// un bord blanc 2px comme `applyForegroundFrames` du canvas.
     private static func drawMediaObject(_ obj: StoryMediaObject, image: UIImage, in size: CGSize, ctx: CGContext) {
-        let designBox = StoryMediaLayer.baseMediaDesignSize(aspectRatio: obj.aspectRatio)
+        let designBox = StoryMediaLayer.baseMediaDesignSize(for: obj)
         let projection = size.width / CanvasGeometry.designWidth
         let boxW = designBox.width * CGFloat(obj.scale) * projection
         let boxH = designBox.height * CGFloat(obj.scale) * projection
