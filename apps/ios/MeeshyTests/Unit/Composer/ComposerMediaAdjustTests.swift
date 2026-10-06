@@ -31,8 +31,61 @@ final class ComposerMediaAdjustTests: XCTestCase {
         let video = ComposerMediaAdjustPanel.kinds(for: .video)
         XCTAssertFalse(video.contains(.sharpness))
         XCTAssertFalse(video.contains(.blur))
-        XCTAssertEqual(ComposerMediaAdjustPanel.kinds(for: .image), AdjustmentKind.allCases)
-        XCTAssertEqual(ComposerMediaAdjustPanel.kinds(for: nil), AdjustmentKind.allCases)
+        XCTAssertEqual(ComposerMediaAdjustPanel.kinds(for: .image), AdjustmentKind.toneCases)
+        XCTAssertEqual(ComposerMediaAdjustPanel.kinds(for: nil), AdjustmentKind.toneCases)
+    }
+
+    // MARK: - Les EFFETS de l'ancien éditeur (#9498)
+
+    /// Le panneau Réglages ne montre pas les effets, et le panneau Effets ne
+    /// montre que ce que l'ancien outil offrait de PLUS : le bloom et le grain.
+    /// Son flou, sa vignette et sa netteté sont les curseurs des Réglages.
+    func test_lesEffets_sontLeBloomEtLeGrain_horsDesReglages() {
+        XCTAssertEqual(ComposerMediaAdjustPanel.kinds(for: .image, family: .effect), [.bloom, .grain])
+        XCTAssertFalse(ComposerMediaAdjustPanel.kinds(for: .image).contains(.bloom))
+        XCTAssertTrue(ComposerMediaAdjustPanel.kinds(for: .image).contains(.blur))
+        XCTAssertTrue(ComposerMediaAdjustPanel.kinds(for: .image).contains(.vignette))
+        XCTAssertTrue(ComposerMediaAdjustPanel.kinds(for: .image).contains(.sharpness))
+        XCTAssertEqual(ComposerMediaAdjustPanel.kinds(for: .video, family: .effect), [])
+    }
+
+    func test_lesEffets_suiventLesReglages_surLImagePoseeEtLeFondImage() {
+        for famille in [ComposerInlineFamily.image, .background(isVideo: false)] {
+            let sections = ComposerInlineEditing.sections(for: famille, hasTrimmableSource: false)
+            XCTAssertEqual(sections.firstIndex(of: .media(.effects)),
+                           sections.firstIndex(of: .media(.adjust)).map { $0 + 1 }, "\(famille)")
+        }
+    }
+
+    /// Un effet n'a rien à peindre sur une vidéo : le sous-outil n'y paraît pas.
+    func test_lesEffets_nonServisAUneVideo_niAuxAutresFamilles() {
+        let familles: [ComposerInlineFamily] = [.video, .background(isVideo: true), .text, .audio, .sticker, .place]
+        for famille in familles {
+            XCTAssertFalse(ComposerInlineEditing.sections(for: famille, hasTrimmableSource: true)
+                .contains(.media(.effects)), "\(famille) offrirait un effet que rien ne peint")
+        }
+        XCTAssertFalse(ComposerObjectEditorRail.entries(for: .media, offersFilter: false).contains(.media(.effects)),
+                       "L'éditeur d'objet suit la même règle : ce qui se cuit dans une image.")
+        XCTAssertTrue(ComposerObjectEditorRail.entries(for: .media).contains(.media(.effects)))
+    }
+
+    func test_lesEffets_portentLeurMotLeurGlyphe_etGardentLObjetEnVue() {
+        XCTAssertTrue(MediaEditTool.served.contains(.effects))
+        XCTAssertFalse(ComposerObjectEditorCopy.media(.effects).isEmpty)
+        XCTAssertNotEqual(ComposerObjectEditorCopy.media(.effects), ComposerObjectEditorCopy.media(.adjust))
+        XCTAssertFalse(ComposerObjectEditorRail.symbolName(.media(.effects)).isEmpty)
+        XCTAssertTrue(ComposerInlinePanelLayout.keepsObjectInSight(.media(.effects)),
+                      "Un effet se juge à l'œil, comme un réglage.")
+    }
+
+    /// « Réinitialiser » du panneau Effets ne touche pas aux réglages, et
+    /// l'inverse : chaque sous-outil remet à zéro ce qu'il montre.
+    func test_reinitialiser_neRemetAZeroQueLaFamilleDuPanneau() {
+        let charge = ImageAdjustments(contrast: 1.3, bloom: 0.6, grain: 0.2)
+        XCTAssertEqual(ComposerMediaAdjustPanel.reset(charge, family: .effect), ImageAdjustments(contrast: 1.3))
+        XCTAssertEqual(ComposerMediaAdjustPanel.reset(charge, family: .tone), ImageAdjustments(bloom: 0.6, grain: 0.2))
+        XCTAssertTrue(ComposerMediaAdjustPanel.canReset(charge, family: .effect))
+        XCTAssertFalse(ComposerMediaAdjustPanel.canReset(ImageAdjustments(contrast: 1.3), family: .effect))
     }
 
     /// Ce que VoiceOver annonce pendant la comparaison nomme le bon média.

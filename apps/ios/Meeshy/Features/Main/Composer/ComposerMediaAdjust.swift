@@ -69,6 +69,11 @@ nonisolated enum ComposerAdjustCopy {
         String(localized: "composer.object.editor.adjust", defaultValue: "Réglages", bundle: .main)
     }
 
+    /// Le sous-outil EFFETS (#9498) — le mot de l'outil de l'éditeur d'image.
+    static var effectsTitle: String {
+        String(localized: "composer.object.editor.effects", defaultValue: "Effets", bundle: .main)
+    }
+
     static var reset: String {
         String(localized: "composer.object.editor.adjust.reset", defaultValue: "Réinitialiser", bundle: .main)
     }
@@ -118,6 +123,10 @@ nonisolated enum ComposerAdjustCopy {
             return String(localized: "composer.object.editor.adjust.blur", defaultValue: "Flou", bundle: .main)
         case .vignette:
             return String(localized: "composer.object.editor.adjust.vignette", defaultValue: "Vignette", bundle: .main)
+        case .bloom:
+            return String(localized: "composer.object.editor.effects.bloom", defaultValue: "Bloom", bundle: .main)
+        case .grain:
+            return String(localized: "composer.object.editor.effects.grain", defaultValue: "Grain", bundle: .main)
         }
     }
 
@@ -153,9 +162,15 @@ nonisolated enum ComposerAdjustCopy {
 /// peint le même objet, suit le doigt image par image. Toucher deux fois la
 /// valeur remet le réglage choisi à zéro — le geste de l'éditeur Photos, sans
 /// bouton de plus.
+///
+/// **Le même panneau sert le sous-outil EFFETS** (#9498) : `family: .effect`
+/// n'y montre que le bloom et le grain, du même sac, avec la même rangée, le
+/// même curseur et la même comparaison. « Réinitialiser » n'y remet à zéro que
+/// ce que le panneau montre.
 struct ComposerMediaAdjustPanel: View {
     @ObservedObject var viewModel: StoryComposerViewModel
     let mediaId: String
+    var family: AdjustmentFamily = .tone
     /// Vrai pendant l'appui maintenu sur « Comparer » : le meuble montre alors
     /// l'original dans la scène (`ComposerLookComparison`). `nil` ⇒ la surface
     /// ne sait pas montrer l'original, et le contrôle ne se peint pas (loi 4).
@@ -167,8 +182,19 @@ struct ComposerMediaAdjustPanel: View {
     /// **Les curseurs qu'un média offre** — ceux qu'il PEINT (#9169) : une
     /// vidéo n'a ni netteté ni flou (`AdjustmentKind.served(for:)`). Un genre
     /// inconnu garde la liste de l'image, celle d'avant #9169.
-    nonisolated static func kinds(for mediaKind: StoryMediaKind?) -> [AdjustmentKind] {
-        AdjustmentKind.served(for: mediaKind ?? .image)
+    nonisolated static func kinds(for mediaKind: StoryMediaKind?,
+                                  family: AdjustmentFamily = .tone) -> [AdjustmentKind] {
+        AdjustmentKind.served(for: mediaKind ?? .image, in: family)
+    }
+
+    /// Ce que « Réinitialiser » laisse : les curseurs de l'AUTRE sous-outil.
+    nonisolated static func reset(_ adjustments: ImageAdjustments, family: AdjustmentFamily) -> ImageAdjustments {
+        adjustments.resetting(family)
+    }
+
+    /// « Réinitialiser » ne se peint que si ce panneau a quelque chose à remettre.
+    nonisolated static func canReset(_ adjustments: ImageAdjustments, family: AdjustmentFamily) -> Bool {
+        adjustments.activeCount(in: family) > 0
     }
 
     /// **Le réglage que le curseur unique pilote** : celui qu'on a touché, tant
@@ -185,10 +211,10 @@ struct ComposerMediaAdjustPanel: View {
     var body: some View {
         let reglages = viewModel.mediaObjectAdjustments(id: mediaId)
         let porteUnRendu = ComposerLookComparison.carriesLook(viewModel.currentEffects, id: mediaId)
-        let offerts = Self.kinds(for: mediaKind)
+        let offerts = Self.kinds(for: mediaKind, family: family)
         VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             if porteUnRendu {
-                actions(canReset: reglages.activeCount > 0)
+                actions(canReset: Self.canReset(reglages, family: family))
             }
             if let kind = Self.shown(chosen, among: offerts) {
                 slider(kind, value: reglages[kind])
@@ -233,7 +259,8 @@ struct ComposerMediaAdjustPanel: View {
 
     private func resetControl(titled: Bool) -> some View {
         Button {
-            viewModel.applyMediaObjectAdjustments(id: mediaId, .neutral)
+            viewModel.applyMediaObjectAdjustments(id: mediaId,
+                                                  Self.reset(viewModel.mediaObjectAdjustments(id: mediaId), family: family))
             HapticFeedback.light()
         } label: {
             capsule(ComposerAdjustCopy.reset, symbol: "arrow.uturn.backward", isOn: false, titled: titled)

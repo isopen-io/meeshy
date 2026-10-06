@@ -47,9 +47,12 @@ final class ComposerInlineEditTests: XCTestCase {
     /// Une image POSÉE se recadre d'abord (#9499) — la borne est lue par son
     /// calque (`contentsRect`), son lecteur web et sa vignette : le contrôle a
     /// un effet partout où l'objet se peint.
-    func test_sections_image_recadrageFiltreReglagesActionsDescription() {
+    /// Les EFFETS (#9498) suivent les réglages : on règle l'image, puis on y
+    /// pose un look.
+    func test_sections_image_recadrageFiltreReglagesEffetsActionsDescription() {
         XCTAssertEqual(ComposerInlineEditing.sections(for: .image, hasTrimmableSource: false),
-                       [.media(.crop), .media(.filter), .media(.adjust), .media(.actions), .media(.altText)])
+                       [.media(.crop), .media(.filter), .media(.adjust), .media(.effects), .media(.actions),
+                        .media(.altText)])
     }
 
     func test_sections_video_reglagesRognageActionsDescription_sansFiltre() {
