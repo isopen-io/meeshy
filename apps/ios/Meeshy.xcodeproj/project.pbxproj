@@ -1250,6 +1250,7 @@
 		729D380A4ADDDF0139C1B6F6 /* MainTurnCoalescerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2AE2DC121AFD2873C4BE4F60 /* MainTurnCoalescerTests.swift */; };
 		72C9DDBD23E1DB10CE993654 /* MessageMenuKeyboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61557EF39A541508FAB0764C /* MessageMenuKeyboard.swift */; };
 		72FD03693BE9FB031D3A0887 /* CallManagerSelectCameraFailureCorrectionSourceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36059291DBC7DF96A6E34D7C /* CallManagerSelectCameraFailureCorrectionSourceTests.swift */; };
+		731C44E6E728EA67156A90CF /* ComposerCaptureGesture.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C18C4F252550B19FD2EC0F8 /* ComposerCaptureGesture.swift */; };
 		7328D28858ED928424617DBD /* CallManager+TranscriptionSegments.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C915E7FB3811FAC3A097DFD /* CallManager+TranscriptionSegments.swift */; };
 		732D8331B7A1D64640FDEBCC /* QuickEmojiGrid.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8A1529BF608BCA5D7924678 /* QuickEmojiGrid.swift */; };
 		7337FCFF0281DC99F757F5D3 /* BubbleLocationRenderingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D56640F01E442F120C2B2665 /* BubbleLocationRenderingTests.swift */; };
@@ -3267,6 +3268,7 @@
 		1BE37C801AE5B8327FD284CA /* MeeshyNotificationContentExtension.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = MeeshyNotificationContentExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		1C07680A91356AAEB6FD6CFA /* SessionPurgeDecision.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionPurgeDecision.swift; sourceTree = "<group>"; };
 		1C0F56AB87CA6E0999DBBBDB /* ScrollOffsetRelayAdoptionSourceGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScrollOffsetRelayAdoptionSourceGuardTests.swift; sourceTree = "<group>"; };
+		1C18C4F252550B19FD2EC0F8 /* ComposerCaptureGesture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerCaptureGesture.swift; sourceTree = "<group>"; };
 		1C1C322A5004BD04C4BDA35A /* WebRTCTypesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebRTCTypesTests.swift; sourceTree = "<group>"; };
 		1C42E41A77283BFC2570509E /* CallFeedbackViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallFeedbackViewModel.swift; sourceTree = "<group>"; };
 		1C44F61C53AC45EAE2C42AD8 /* ConversationViewModelLiveEphemeralExpiryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationViewModelLiveEphemeralExpiryTests.swift; sourceTree = "<group>"; };
@@ -6392,6 +6394,7 @@
 				8E4A48F2DA0358A24D57D7A6 /* ComposerCameraFlash.swift */,
 				DCAA460ECE85D18F17871190 /* ComposerCaptureFocus.swift */,
 				0D3D8782CFED9EFFA4271C2B /* ComposerCaptureFocusGeometry.swift */,
+				1C18C4F252550B19FD2EC0F8 /* ComposerCaptureGesture.swift */,
 				24BBD491717C012069B08B65 /* ComposerCaptureHold.swift */,
 				CDD51D369D815988DE76CA22 /* ComposerCaptureOrientation.swift */,
 				E5983441907982271CEE7FC0 /* ComposerCaptureSegments.swift */,
@@ -10400,6 +10403,7 @@
 				E0F8E0C9EC76B26134EC1CF4 /* ComposerCaptureCamera.swift in Sources */,
 				0FBBA710B21DE5A0C8068FED /* ComposerCaptureFocus.swift in Sources */,
 				A89A47E390F9C163F86AECD7 /* ComposerCaptureFocusGeometry.swift in Sources */,
+				731C44E6E728EA67156A90CF /* ComposerCaptureGesture.swift in Sources */,
 				7B7FE750CDFF840BA44A7E97 /* ComposerCaptureHold.swift in Sources */,
 				C56528038A8B0A9B1238E7F8 /* ComposerCaptureMirrorRule.swift in Sources */,
 				F8443DC181E66B8E2B90745F /* ComposerCaptureOrientation.swift in Sources */,
