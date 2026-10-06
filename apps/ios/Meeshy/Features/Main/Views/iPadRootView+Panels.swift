@@ -61,6 +61,9 @@ struct iPadRightPanel: View {
 /// `_ConditionalContent` plus la chaîne de chaque cas — entrait dans le type
 /// concret de `iPadRootView.body`. Ici la racine ne voit qu'un nom.
 struct iPadPanelDestination: View {
+    /// Le routeur de la racine, déjà dans l'environnement de ses panneaux (Progression s'en sert pour ses pushes) :
+    /// l'ancre d'une notification de mission en part (#9539).
+    @EnvironmentObject private var router: Router
     let route: Route
     @Binding var rightPanelRoute: Route?
     let notificationManager: NotificationToastManager
@@ -158,7 +161,7 @@ struct iPadPanelDestination: View {
             UserStatsView()
                                 .navigationBarHidden(true)
         case .progression:
-            ProgressionView()
+            ProgressionView(pendingAnchor: router.pendingGameAnchor, consumeAnchor: { _ = router.consumePendingGameAnchor() })
                                 .navigationBarHidden(true)
         case .progressionSection(let section):
             ProgressionSectionPage(section: section)

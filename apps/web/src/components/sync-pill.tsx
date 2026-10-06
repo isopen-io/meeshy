@@ -101,7 +101,7 @@ export function SyncPill() {
   return (
     <div
       className="sync-pill pointer-events-none fixed inset-x-0 z-50 flex justify-center px-4"
-      style={{ top: `calc(env(safe-area-inset-top, 0px) + ${top}px)` }}
+      style={{ top: `calc(var(--safe-top, env(safe-area-inset-top, 0px)) + ${top}px)` }}
       role="status"
       aria-live="polite"
     >

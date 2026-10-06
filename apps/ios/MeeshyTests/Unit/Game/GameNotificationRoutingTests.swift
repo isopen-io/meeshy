@@ -52,7 +52,11 @@ final class GameNotificationRoutingTests: XCTestCase {
         XCTAssertEqual(ipad.components(separatedBy: "router.pendingGameAnchor = .missions").count - 1, 3)
 
         let progression = try source("Meeshy/Features/Main/Views/ProgressionView.swift")
-        XCTAssertTrue(progression.contains("consumePendingGameAnchor()"), "Progression ramasse l'ancre, UNE fois")
+        XCTAssertTrue(progression.contains("consumeAnchor()"), "Progression ramasse l'ancre, UNE fois")
+        XCTAssertFalse(progression.contains("router.pendingGameAnchor"), "le corps ne lit pas le routeur : il se monte sans lui dans les témoins")
+        for host in ["Meeshy/Features/Main/Views/RootLayers/RootRouteDestination.swift", "Meeshy/Features/Main/Views/iPadRootView+Panels.swift"] {
+            XCTAssertTrue(try source(host).contains("ProgressionView(pendingAnchor: router.pendingGameAnchor"), "\(host) remet l'ancre")
+        }
     }
 
     @MainActor

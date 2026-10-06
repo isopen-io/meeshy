@@ -427,7 +427,7 @@ try {
 
       const publicSections = await page.$$eval('#contenu section h2', (els) => els.map((el) => (el.textContent ?? '').trim()));
       check(
-        JSON.stringify(publicSections) === JSON.stringify(['CONNEXION', 'STATISTIQUES']),
+        JSON.stringify(publicSections) === JSON.stringify(['Le jeu de Kwame Mensah', 'CONNEXION', 'STATISTIQUES']),
         `${label} : /u/ — Détails porte la connexion et les compteurs, d'un coup (${JSON.stringify(publicSections)})`,
       );
       /* LE DÉFAUT D'iOS QU'ON NE COPIE PAS : `servedUserStats` retire quatre

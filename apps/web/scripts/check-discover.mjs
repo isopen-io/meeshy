@@ -206,7 +206,12 @@ try {
           controls: 'header a, [data-discover-tab], [data-discover-invite-email], [data-discover-invite-send], [data-discover-search]',
           texts: 'header h1, [data-discover-tab-title], [data-discover-invite] label',
         }),
-        6,
+        /* Sous le bandeau du haut (#9536), le formulaire d'invitation passe sous le pli à 320 × 568 :
+           ses contrôles sont écartés comme écrêtés, les quatre du chrome restent exigés. */
+        (await page.evaluate(() => (() => {
+            const hote = document.querySelector('[data-top-band-host]');
+            return hote === null ? 0 : Number.parseFloat(getComputedStyle(hote).getPropertyValue('--top-band')) || 0;
+          })())) > 0 ? 4 : 6,
       );
 
       // ------------------------------------------------ 2 bis. les flèches du tablist (#6422)
