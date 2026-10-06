@@ -1632,6 +1632,7 @@
 		9840377901B9914E09F8A944 /* CallVideoBadgeAccessibility.swift in Sources */ = {isa = PBXBuildFile; fileRef = B59D22ED016BFDEADB473427 /* CallVideoBadgeAccessibility.swift */; };
 		9844871EE6DEB9B237991A4D /* TrackEngagementModifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = C57EAC6880801A36821CE99A /* TrackEngagementModifier.swift */; };
 		9853BD0DD85C8CC1740D2655 /* MockContactSyncService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D41A2A8ADE2BFB8C1E1848BF /* MockContactSyncService.swift */; };
+		986DC435BCA814BB76D7B2ED /* CameraModel+Fixture.swift in Sources */ = {isa = PBXBuildFile; fileRef = C34F4EF160D9D90DBEA1BB19 /* CameraModel+Fixture.swift */; };
 		986E4DC1D4FEFA46630C44A5 /* P2PWebRTCClient+DataProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE1A042EE8759161B8F31151 /* P2PWebRTCClient+DataProfile.swift */; };
 		988FE2FBBD0973CC53AA689B /* RequestsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1186A67AF3496D57A908C9C9 /* RequestsViewModel.swift */; };
 		9895A7FA5FA32ED2B2A8EAC8 /* LivingSummaryAssembly.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37FE3B19297E6805A0DD7017 /* LivingSummaryAssembly.swift */; };
@@ -5097,6 +5098,7 @@
 		C30D867109CF09FDE3894F2D /* CameraPreviewLayerUpdateUIViewSourceGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraPreviewLayerUpdateUIViewSourceGuardTests.swift; sourceTree = "<group>"; };
 		C3127B42E1E0E2927826AACF /* PiPVideoRendererTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PiPVideoRendererTests.swift; sourceTree = "<group>"; };
 		C344EC3823A404DC9F65CD54 /* CallLiveFrameSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallLiveFrameSession.swift; sourceTree = "<group>"; };
+		C34F4EF160D9D90DBEA1BB19 /* CameraModel+Fixture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CameraModel+Fixture.swift"; sourceTree = "<group>"; };
 		C3547DA6EE85382045E499F4 /* CallPresentationLayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallPresentationLayer.swift; sourceTree = "<group>"; };
 		C35C12911F542075E22ECFCE /* MentionContactsFirstTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MentionContactsFirstTests.swift; sourceTree = "<group>"; };
 		C364B9343C31867C12EDB0D4 /* CommentDraftStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommentDraftStoreTests.swift; sourceTree = "<group>"; };
@@ -6754,6 +6756,7 @@
 				56029F3DDF8F82EE7A32FCB5 /* CallSignalGlyph.swift */,
 				D90B7446AB64637E3F4CB72E /* CallTypeBadgeView.swift */,
 				13ADC1DF51A4D9A7F1F5B782 /* CameraModel.swift */,
+				C34F4EF160D9D90DBEA1BB19 /* CameraModel+Fixture.swift */,
 				5F4A2C68CC2A0849B00A3A0D /* CameraPermissionPanel.swift */,
 				6D80321A6B15B7702C474818 /* CameraPreviewLayer.swift */,
 				5B1ED56E33CD433CF96DC3F3 /* CameraRecordingReadiness.swift */,
@@ -10347,6 +10350,7 @@
 				229CA02CA0FB543B2AD6E001 /* CallZoomLensControls.swift in Sources */,
 				237896B0490F4D0F8298D491 /* CallsTab.swift in Sources */,
 				4E866BAFE12995C8337AAC53 /* CallsViewModel.swift in Sources */,
+				986DC435BCA814BB76D7B2ED /* CameraModel+Fixture.swift in Sources */,
 				3974C242BFF62FFD20D43B15 /* CameraModel.swift in Sources */,
 				19ACB7621B757D044920B069 /* CameraPermissionPanel.swift in Sources */,
 				670E165B4388F48B68BFB9EA /* CameraPreviewLayer.swift in Sources */,

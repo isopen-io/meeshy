@@ -16,7 +16,7 @@ extension ComposerCaptureSession {
 
     /// Avec effet, la vue Metal seule ; sans, la couche système seule (#9349).
     var paintsWithMetal: Bool {
-        ComposerCaptureSurfaceRule.paintsWithMetal(look: look, budget: thermalBudget, fixture: false)
+        ComposerCaptureSurfaceRule.paintsWithMetal(look: look, budget: thermalBudget, fixture: camera.runsFixture)
     }
 
     /// La bande ouverte peint des miniatures VIVANTES : elle aussi veut les trames (#9351).

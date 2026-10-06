@@ -180,5 +180,11 @@ nonisolated final class ComposerCameraFeed: NSObject, AVCaptureVideoDataOutputSa
 
     #if DEBUG
     func announceForTesting(at presentedAt: TimeInterval = 0) { announce(at: presentedAt) }
+
+    /// La trame de la caméra de recette (#9351), comme une trame de l'objectif arrière.
+    func inject(_ buffer: CVPixelBuffer) {
+        guard ingest(buffer, position: .back) else { return }
+        announce(at: CACurrentMediaTime())
+    }
     #endif
 }
