@@ -42,12 +42,46 @@ final class StoryMediaObjectEffectsRenderTests: XCTestCase {
 
     // MARK: - Le rendu : le player CUIT l'effet
 
+    /// Un carré clair au centre d'un fond noir : le halo se juge sur le NOIR
+    /// qui le borde. Sur un aplat uniforme, flouter puis recombiner ne change
+    /// rien — un tel témoin ne verrait pas le bloom (mesuré : 102 → 102).
+    private func carreClairSurNoir(side: CGFloat = 64, carre: CGFloat = 16) -> UIImage {
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1
+        return UIGraphicsImageRenderer(size: CGSize(width: side, height: side), format: format).image { ctx in
+            UIColor.black.setFill()
+            ctx.fill(CGRect(x: 0, y: 0, width: side, height: side))
+            UIColor.white.setFill()
+            ctx.fill(CGRect(x: (side - carre) / 2, y: (side - carre) / 2, width: carre, height: carre))
+        }
+    }
+
+    /// La luminance moyenne d'une bande NOIRE à 3 px à gauche du carré clair.
+    private func luminanceDuBord(_ image: UIImage?) throws -> Double {
+        let cg = try XCTUnwrap(image?.cgImage)
+        let largeur = cg.width, hauteur = cg.height
+        var pixels = [UInt8](repeating: 0, count: largeur * hauteur * 4)
+        let contexte = try XCTUnwrap(CGContext(data: &pixels, width: largeur, height: hauteur, bitsPerComponent: 8,
+                                               bytesPerRow: largeur * 4, space: CGColorSpaceCreateDeviceRGB(),
+                                               bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+        contexte.draw(cg, in: CGRect(x: 0, y: 0, width: largeur, height: hauteur))
+        let echelle = Double(largeur) / 64
+        let x = Int(21 * echelle)
+        let lignes = Int(26 * echelle)..<Int(38 * echelle)
+        let somme = lignes.reduce(0) { total, y in
+            let i = (y * largeur + x) * 4
+            return total + Int(pixels[i]) + Int(pixels[i + 1]) + Int(pixels[i + 2])
+        }
+        return Double(somme) / Double(lignes.count * 3)
+    }
+
     @MainActor
     func test_leBloom_eclaireLImagePeinte() throws {
-        let image = uni(0.4)
-        let avant = try luminanceMoyenne(image)
-        let apres = try luminanceMoyenne(StoryMediaLayer.filtered(image, for: posee(ImageAdjustments(bloom: 1))))
-        XCTAssertGreaterThan(apres, avant + 10, "Le bloom ajoute l'image floutée sur elle-même.")
+        let image = carreClairSurNoir()
+        let avant = try luminanceDuBord(image)
+        let apres = try luminanceDuBord(StoryMediaLayer.filtered(image, for: posee(ImageAdjustments(bloom: 1))))
+        XCTAssertLessThan(avant, 1, "le bord est noir avant le bloom")
+        XCTAssertGreaterThan(apres, avant + 10, "Le bloom fait déborder la lumière du carré sur le noir qui le borde.")
     }
 
     @MainActor
