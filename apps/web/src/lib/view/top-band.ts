@@ -29,6 +29,46 @@ export function topBandSlots({ call, audio, player }: TopBandSlots): TopBandSlot
 }
 
 /**
+ * LA SORTIE DE LA BANNIÈRE (#9494) — « la bannière s'efface quand l'un d'eux
+ * arrive et revient quand ils partent, en glissant à la même place » : elle ne
+ * disparaît jamais sèchement. Quatre phases :
+ *
+ *   · `shown`   — dans la pile ;
+ *   · `holding` — l'occupant arrive mais n'est pas PRÊT (le chunk du
+ *                 mini-lecteur se charge) : elle RESTE, le bandeau n'est
+ *                 jamais vide ;
+ *   · `leaving` — l'occupant est prêt : elle sort de la pile et glisse
+ *                 (`BANNER_EXIT_MS`), l'occupant prend sa place tout de suite ;
+ *   · `gone`    — retirée.
+ *
+ * Quand AUCUN occupant ne la remplace (jeu masqué, route sans bannière,
+ * déconnexion), il n'y a rien à glisser : elle part tout de suite. Voulue de
+ * nouveau, elle est `shown` d'où qu'elle vienne.
+ */
+export type BannerPhase = 'shown' | 'holding' | 'leaving' | 'gone';
+
+export const BANNER_EXIT_MS = 220;
+
+export function nextBannerPhase({ phase, wanted, occupied, occupantReady }: {
+  readonly phase: BannerPhase;
+  readonly wanted: boolean;
+  readonly occupied: boolean;
+  readonly occupantReady: boolean;
+}): BannerPhase {
+  if (wanted) return 'shown';
+  if (!occupied || phase === 'gone') return 'gone';
+  if (phase === 'leaving') return 'leaving';
+  return occupantReady ? 'leaving' : 'holding';
+}
+
+/** Le chunk du mini-lecteur est chargé : la bannière peut lui céder la place sans laisser le bandeau vide. */
+export const miniPlayerReadyStore = createStore<{ readonly ready: boolean }>(() => ({ ready: false }));
+
+export function reportMiniPlayerReady(): void {
+  if (!miniPlayerReadyStore.getState().ready) miniPlayerReadyStore.setState({ ready: true });
+}
+
+/**
  * « REPRENDRE L'APPEL » SE DÉCLARE (#9494) — la bannière de reprise décide
  * seule si elle se montre (`resumableCall` : la lecture `GET /calls/active`,
  * l'appel local, le fil ouvert). La coquille n'a pas à refaire ce calcul pour

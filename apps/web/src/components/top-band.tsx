@@ -1,12 +1,23 @@
-import { lazy, Suspense, useLayoutEffect, useRef } from 'react';
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useStore } from 'zustand/react';
 
 import { callStore } from '@/lib/calls/call-store';
+import { prefersReducedMotion } from '@/lib/game/haptics';
 import { useGamePrefs } from '@/lib/game/preferences';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { audioCarryStore } from '@/lib/view/audio-carry';
-import { callResumeShownStore, showsPlayerBanner, topBandSlots, type TopBandSlots } from '@/lib/view/top-band';
+import {
+  BANNER_EXIT_MS,
+  callResumeShownStore,
+  miniPlayerReadyStore,
+  nextBannerPhase,
+  reportMiniPlayerReady,
+  showsPlayerBanner,
+  topBandSlots,
+  type BannerPhase,
+  type TopBandSlots,
+} from '@/lib/view/top-band';
 
 import { CallResumeSlot } from './call-layer';
 
@@ -17,7 +28,10 @@ import { CallResumeSlot } from './call-layer';
  * confiée.
  */
 const MiniAudioPlayerHost = lazy(() =>
-  Promise.all([import('./mini-audio-player'), loadInterfaceCatalog(currentInterfaceLanguage())]).then(([m]) => m),
+  Promise.all([import('./mini-audio-player'), loadInterfaceCatalog(currentInterfaceLanguage())]).then(([m]) => {
+    reportMiniPlayerReady();
+    return m;
+  }),
 );
 
 /**
@@ -54,11 +68,18 @@ export function TopBand({
   const audio = useStore(audioCarryStore, (state) => state.carried !== null);
   const localCall = useStore(callStore, (state) => state.call !== null || state.waiting !== null);
   const resumeShown = useStore(callResumeShownStore, (state) => state.shown);
+  const miniPlayerReady = useStore(miniPlayerReadyStore, (state) => state.ready);
   const prefs = useGamePrefs();
   const reserves = showsPlayerBanner(routeKey);
-  const slots = topBandSlots({ call: localCall || resumeShown, audio, player: signedIn && !prefs.hidden && reserves });
+  const eligible = signedIn && !prefs.hidden && reserves;
+  const slots = topBandSlots({ call: localCall || resumeShown, audio, player: eligible });
   const column = useRef<HTMLDivElement | null>(null);
   useBandInset(column, reserves, onInset);
+  const banner = useBannerPresence({
+    wanted: slots.player,
+    occupied: eligible && (slots.call || slots.audio),
+    occupantReady: slots.call || !slots.audio || miniPlayerReady,
+  });
 
   return (
     <div
@@ -74,13 +95,40 @@ export function TopBand({
           <MiniAudioPlayerHost />
         </Suspense>
       ) : null}
-      {slots.player ? (
-        <Suspense fallback={null}>
-          <PlayerBannerHost />
-        </Suspense>
-      ) : null}
+      {banner === 'gone' ? null : (
+        <div data-player-slot={banner === 'leaving' ? 'leaving' : 'shown'} className={banner === 'leaving' ? 'player-banner-slot-leaving' : undefined}>
+          <Suspense fallback={null}>
+            <PlayerBannerHost />
+          </Suspense>
+        </div>
+      )}
     </div>
   );
+}
+
+/**
+ * LA PRÉSENCE DE LA BANNIÈRE (#9494) — la phase que `nextBannerPhase` décide,
+ * posée AVANT la peinture (`useLayoutEffect`) : une bannière qui doit sortir ne
+ * se peint jamais une image de trop dans la pile. La sortie dure
+ * `BANNER_EXIT_MS` (aucune sous `prefers-reduced-motion`), puis la bannière est
+ * retirée.
+ */
+function useBannerPresence(input: { readonly wanted: boolean; readonly occupied: boolean; readonly occupantReady: boolean }): BannerPhase {
+  const { wanted, occupied, occupantReady } = input;
+  const [phase, setPhase] = useState<BannerPhase>(wanted ? 'shown' : 'gone');
+  useLayoutEffect(() => {
+    setPhase((current) => nextBannerPhase({ phase: current, wanted, occupied, occupantReady }));
+  }, [wanted, occupied, occupantReady]);
+  useEffect(() => {
+    if (phase !== 'leaving') return undefined;
+    if (prefersReducedMotion()) {
+      setPhase('gone');
+      return undefined;
+    }
+    const id = setTimeout(() => setPhase('gone'), BANNER_EXIT_MS);
+    return () => clearTimeout(id);
+  }, [phase]);
+  return wanted ? 'shown' : phase;
 }
 
 /** La marge sous le bandeau : son décalage du haut (8 px) et une respiration (4 px). */
