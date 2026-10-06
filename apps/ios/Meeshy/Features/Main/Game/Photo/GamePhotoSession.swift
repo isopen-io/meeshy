@@ -50,6 +50,9 @@ final class GamePhotoSession: ObservableObject {
     @Published private(set) var referral: ReferralCard?
     /// La Flamme se montre sur la carte tant que l'utilisateur ne l'a pas retirée (conformité H-2).
     @Published private(set) var flameOnCard = true
+    /// Le lien d'invitation se montre sur la carte — et part en texte — tant que l'utilisateur ne l'a pas retiré
+    /// (conformité H-2 : le lien est retirable, comme la Flamme).
+    @Published private(set) var linkOnCard = true
 
     let moment: PhotoMoment
     let camera: GamePhotoCameraProviding
@@ -69,6 +72,8 @@ final class GamePhotoSession: ObservableObject {
 
     /// La Flamme de l'utilisateur, quand elle brûle : c'est ce que le bandeau peut montrer.
     var hasFlame: Bool { flame != nil }
+    /// Un lien d'invitation a été lu : la carte PEUT porter le bandeau, l'utilisateur choisit s'il le porte.
+    var hasReferralLink: Bool { referralLink != nil }
 
     init(
         moment: PhotoMoment,
@@ -120,8 +125,17 @@ final class GamePhotoSession: ObservableObject {
         recompose()
     }
 
+    /// « Mon lien sur la carte » : sans lien, le bandeau n'existe pas — la Flamme part avec lui — et rien ne part
+    /// en texte. Le lien reste lu : le remettre ne rappelle pas le réseau.
+    func setLinkOnCard(_ shown: Bool) {
+        guard linkOnCard != shown else { return }
+        linkOnCard = shown
+        refreshCard()
+        recompose()
+    }
+
     private func refreshCard() {
-        referral = referralLink.map { ReferralCard(link: $0, flame: flameOnCard ? flame : nil) }
+        referral = linkOnCard ? referralLink.map { ReferralCard(link: $0, flame: flameOnCard ? flame : nil) } : nil
     }
 
     /// Le texte qui part avec l'image : le lien en clair, pour qu'il se copie. `nil` sans lien.

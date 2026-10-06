@@ -257,8 +257,18 @@ struct GamePhotoFlowView: View {
                 }
                 .pickerStyle(.segmented)
                 .padding(.horizontal, MeeshySpacing.xl)
-                // La Flamme révèle un rythme d'usage : l'utilisateur voit la carte telle qu'elle partira,
-                // et peut la retirer (conformité H-2). Sans lien, le bandeau n'existe pas : rien à régler.
+                // Le lien d'invitation et la Flamme se retirent chacun d'un geste (conformité H-2) : l'utilisateur
+                // voit la carte telle qu'elle partira. Sans lien lu, le bandeau n'existe pas : rien à régler.
+                if session.hasReferralLink {
+                    Toggle(isOn: Binding(get: { session.linkOnCard }, set: { session.setLinkOnCard($0) })) {
+                        Text(String(localized: "game.referral.link_toggle", defaultValue: "Mon lien d'invitation sur la carte", bundle: .main))
+                            .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
+                            .foregroundColor(.white)
+                    }
+                    .tint(MeeshyColors.brandPrimary)
+                    .padding(.horizontal, MeeshySpacing.xl)
+                    .accessibilityIdentifier("game.photo.link_toggle")
+                }
                 if session.hasFlame, session.referral != nil {
                     Toggle(isOn: Binding(get: { session.flameOnCard }, set: { session.setFlameOnCard($0) })) {
                         Text(String(localized: "game.referral.flame_toggle", defaultValue: "Ma Flamme sur la carte", bundle: .main))

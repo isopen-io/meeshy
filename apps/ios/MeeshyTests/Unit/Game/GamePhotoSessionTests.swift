@@ -256,4 +256,26 @@ final class GamePhotoSessionTests: XCTestCase {
         XCTAssertFalse(rig.sut.hasFlame)
         XCTAssertNil(rig.sut.referral?.flame)
     }
+
+    func test_theLinkCanBeTakenOffTheCard_andNothingOfItTravels() async {
+        let rig = makeRig(link: Self.link, flame: Self.flame)
+        await rig.sut.prepareReferral()
+        await rig.sut.chooseCard()
+        XCTAssertTrue(rig.sut.hasReferralLink)
+
+        rig.sut.setLinkOnCard(false)
+
+        XCTAssertFalse(rig.sut.linkOnCard)
+        XCTAssertNil(rig.sut.referral, "sans lien, le bandeau n'existe plus — la Flamme part avec lui")
+        XCTAssertNil(rig.composer.composed.last?.referral, "la carte est recomposée sans bandeau")
+        XCTAssertNil(rig.sut.shareText)
+        XCTAssertEqual(rig.sut.shareItems(square: false).count, 1, "le lien ne part pas non plus en texte")
+        XCTAssertTrue(rig.sut.hasReferralLink, "le lien reste lu : le remettre ne rappelle pas le réseau")
+
+        rig.sut.setLinkOnCard(true)
+
+        XCTAssertEqual(rig.sut.referral, ReferralCard(link: Self.link, flame: Self.flame))
+        XCTAssertEqual(rig.composer.composed.last?.referral?.link, Self.link)
+        XCTAssertEqual(rig.links.calls, 1)
+    }
 }
