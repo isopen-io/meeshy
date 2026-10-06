@@ -146,6 +146,11 @@ describe('decodeNotification — le CONTEXTE que la ligne dit (#8724)', () => {
     });
   });
 
+  test('la section du jeu (#9490) voyage, les champs voisins du jeu — identifiants, semaine — ne sont pas lus', () => {
+    const n = decodeNotification(servie({ type: 'game_duo_invited', metadata: { gameSection: 'duo', duoId: 'd1', weekKey: '2026-11-02', route: 'progression' } }));
+    expect(n?.metadata).toEqual({ gameSection: 'duo' });
+  });
+
   test('un sous-titre vide ou nul n’existe pas', () => {
     expect(decodeNotification(servie({ subtitle: '  ' }))?.subtitle).toBeUndefined();
     expect(decodeNotification(servie())?.subtitle).toBeUndefined();

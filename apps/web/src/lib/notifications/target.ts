@@ -49,7 +49,7 @@ export type NotificationTarget =
   | { readonly route: 'story' | 'post'; readonly params: { readonly post: string } }
   | { readonly route: 'discover'; readonly search: Readonly<Record<string, string>> }
   | { readonly route: 'userProfile'; readonly params: { readonly username: string } }
-  | { readonly route: 'progression' | 'settings' };
+  | { readonly route: 'progression' | 'progressionLigue' | 'progressionSaison' | 'settings' };
 
 /**
  * **LA DESTINATION D'UN TAP DE BANNIÈRE — elle n'est JAMAIS nulle** (#7305).
@@ -129,6 +129,14 @@ const PROGRESSION_TYPES: ReadonlySet<string> = new Set([
   'level_up',
 ]);
 
+/**
+ * Les notifications du JEU (#9490) : le serveur leur pose l'indice `route: 'progression'`, qui mène au hub —
+ * pas à la chose annoncée. Le type est plus précis. Un duo se joue dans la page Ligue (la mission en duo y
+ * est), le résultat d'une ligue aussi ; une étape de saison a sa page.
+ */
+const GAME_LEAGUE_TYPES: ReadonlySet<string> = new Set(['game_duo_invited', 'game_duo_accepted', 'game_league_result']);
+const GAME_SEASON_TYPES: ReadonlySet<string> = new Set(['game_season_step']);
+
 const SECURITY_TYPES: ReadonlySet<string> = new Set([
   'security_alert',
   'login_new_device',
@@ -170,8 +178,9 @@ function hinted(route: string): PushTapTarget | null {
 
 /**
  * **LE NOYAU, dans l'ordre des signaux du plus FORT au plus faible** : l'entité
- * que la notification porte, puis l'indice explicite du serveur, puis la
- * déduction par type — la seule qui devine.
+ * que la notification porte, puis le type du JEU (plus précis que l'indice
+ * `progression` que le serveur lui pose), puis l'indice explicite du serveur,
+ * puis la déduction par type — la seule qui devine.
  */
 export function resolveTarget(input: NotificationTargetInput): PushTapTarget | null {
   const postId = present(input.postId);
@@ -185,6 +194,9 @@ export function resolveTarget(input: NotificationTargetInput): PushTapTarget | n
 
   const username = present(input.senderUsername);
   if (PROFILE_TYPES.has(type) && username !== '') return { route: 'userProfile', params: { username } };
+
+  if (GAME_LEAGUE_TYPES.has(type)) return { route: 'progressionLigue' };
+  if (GAME_SEASON_TYPES.has(type)) return { route: 'progressionSaison' };
 
   const indice = hinted(present(input.route));
   if (indice !== null) return indice;

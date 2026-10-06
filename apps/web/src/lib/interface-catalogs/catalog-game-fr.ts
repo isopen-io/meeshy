@@ -710,6 +710,9 @@ const fr = {
   'game.standing.title': 'Le jeu de {name}',
   'game.standing.treasury': 'Trésor : {tier}',
   'game.standing.flame': 'Flamme : {form}',
+  'game.settings.notifications.title': 'Notifications du jeu',
+  'game.settings.notifications.body': 'Une invitation à la mission en duo, un résultat de ligue, une étape de saison : au plus une notification du jeu par jour. Ce réglage vaut pour ton compte, sur tous tes appareils.',
+  'game.settings.notifications.switch': 'Recevoir les notifications du jeu',
 } as const;
 
 export default fr;

@@ -698,6 +698,9 @@ const en = {
   'game.standing.title': '{name}’s game',
   'game.standing.treasury': 'Treasury: {tier}',
   'game.standing.flame': 'Flame: {form}',
+  'game.settings.notifications.title': 'Game notifications',
+  'game.settings.notifications.body': 'A duo mission invitation, a league result, a season step: at most one game notification a day. This setting applies to your account, on all your devices.',
+  'game.settings.notifications.switch': 'Receive game notifications',
 } as const satisfies GameCatalog;
 
 export default en;

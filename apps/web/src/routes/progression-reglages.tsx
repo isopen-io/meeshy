@@ -1,15 +1,23 @@
+import { useState } from 'react';
+
+import { useQuery } from '@tanstack/react-query';
+
 import type { GameVisibility } from '@meeshy/shared/types/game';
 
 import { GameSettings } from '@/components/game-settings';
 import { GAME_BRAND } from '@/components/game-surface';
 import type { EngagementWithGame } from '@/lib/api/engagement';
 import type { GameHiddenOutcome } from '@/lib/game/game-hidden';
+import { appPreferencesQueryOptions } from '@/lib/api/app-preferences';
+import { performPreferenceEdit } from '@/lib/api/app-preferences-actions';
+import { apiDeps } from '@/lib/api/deps';
+import { appQueryClient } from '@/lib/api/query-client';
 import { gamePrefs, useGamePrefs } from '@/lib/game/preferences';
 import { setGameHidden, useGameSettings } from '@/lib/game/use-game-settings';
 import { suspendForGameCatalog } from '@/lib/i18n-game-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
-import { gameText } from '@/lib/view/game-copy';
+import { gameErrorMessage, gameText } from '@/lib/view/game-copy';
 import { useGameV2Actions, type GameV2Actions } from '@/routes/game-v2-actions';
 import { ProgressionPage } from '@/routes/progression-page';
 
@@ -39,6 +47,7 @@ export function ReglagesBody({
   online,
   hide,
   visibility,
+  notifications,
 }: {
   readonly progress: EngagementWithGame;
   readonly actions: GameV2Actions;
@@ -46,6 +55,8 @@ export function ReglagesBody({
   readonly hide: (on: boolean) => void;
   /** Les visibilités lues par `GET /me/game/privacy` ; absentes, celles du bloc `game`. */
   readonly visibility?: GameVisibility | undefined;
+  /** Les notifications du jeu (#9490) — absent : pas de carte. */
+  readonly notifications?: { readonly enabled: boolean | undefined; readonly onToggle: (on: boolean) => void; readonly error?: string | undefined } | undefined;
 }) {
   const prefs = useGamePrefs();
   const game = progress.game;
@@ -57,7 +68,9 @@ export function ReglagesBody({
       online={online}
       savingVisibility={actions.visibility.pending}
       leavingLeague={actions.consent.pending}
-      errors={{ visibility: actions.visibility.error, league: actions.consent.error }}
+      errors={{ visibility: actions.visibility.error, league: actions.consent.error, notifications: notifications?.error }}
+      gameNotifications={notifications?.enabled}
+      onGameNotifications={notifications?.onToggle}
       onCelebrations={(on) => gamePrefs.set({ celebrations: on })}
       onHidden={hide}
       onVisibility={actions.visibility.run}
@@ -96,7 +109,28 @@ function ReglagesScreenBody({ progress }: { readonly progress: EngagementWithGam
   const online = useOnline();
   const actions = useGameV2Actions();
   const settings = useGameSettings(true);
-  return <ReglagesBody progress={progress} actions={actions} online={online} hide={(on) => hideGame({ on, progress, actions })} visibility={settings.data?.visibility} />;
+  const preferences = useQuery({ ...appPreferencesQueryOptions(apiDeps), enabled: true }, appQueryClient);
+  const [notificationsError, setNotificationsError] = useState<string | undefined>(undefined);
+  const toggleNotifications = (on: boolean): void => {
+    setNotificationsError(undefined);
+    void performPreferenceEdit({
+      patch: { gameEnabled: on },
+      deps: { ...apiDeps, queryClient: appQueryClient, isOnline: () => navigator.onLine },
+    }).then((outcome) => {
+      if (outcome.status === 'offline') setNotificationsError(gameText('game.offline.action'));
+      if (outcome.status === 'refused') setNotificationsError(gameErrorMessage(undefined));
+    });
+  };
+  return (
+    <ReglagesBody
+      progress={progress}
+      actions={actions}
+      online={online}
+      hide={(on) => hideGame({ on, progress, actions })}
+      visibility={settings.data?.visibility}
+      notifications={{ enabled: preferences.data?.gameEnabled, onToggle: toggleNotifications, error: notificationsError }}
+    />
+  );
 }
 
 export default function ProgressionReglagesScreen() {

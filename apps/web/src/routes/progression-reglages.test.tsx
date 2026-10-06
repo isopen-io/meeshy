@@ -72,6 +72,18 @@ describe('la page Réglages du jeu', () => {
     expect(calls).toEqual([{ consent: false }]);
   });
 
+  test('les notifications du jeu : l’interrupteur envoie son nouvel état, le refus se lit dessous (#9490)', async () => {
+    const calls: boolean[] = [];
+    const host = await mount(
+      <ReglagesBody progress={progress} actions={actions()} online hide={() => undefined} notifications={{ enabled: true, onToggle: (on) => calls.push(on), error: 'Réessaie.' }} />,
+    );
+    const input = host.querySelector<HTMLInputElement>('[data-game-setting-notifications]');
+    expect(input?.checked).toBe(true);
+    await click(input);
+    expect(calls).toEqual([false]);
+    expect(host.querySelector('#game-settings-notifications [role="alert"]')?.textContent).toBe('Réessaie.');
+  });
+
   test('masquer le jeu appelle le geste composé de l’écran', async () => {
     const hidden: boolean[] = [];
     const host = await mount(<ReglagesBody progress={progress} actions={actions()} online hide={(on) => hidden.push(on)} />);

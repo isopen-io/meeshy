@@ -22,7 +22,7 @@ import { GLYPHS } from './glyphs';
 import { milestoneGlyph } from './milestone-glyph';
 import { preloadConversationPreview } from './conversation-preview-chunks';
 import { CategoryGlyphView } from './notification-category-glyph';
-import { CONTENT_GLYPHS, MilestoneMedallion, TargetLink, type SurfaceProps } from './notification-row';
+import { CONTENT_GLYPHS, GameMedallion, MilestoneMedallion, TargetLink, type SurfaceProps } from './notification-row';
 
 /**
  * **LA BANNIÈRE IN-APP, EN RELIEF** (#8727, jumelle de `NotificationToastView`
@@ -52,6 +52,7 @@ const timeFormat = (language: InterfaceLanguage) => new Intl.DateTimeFormat(lang
 
 function Leading({ notification, banner, accent }: { readonly notification: NotificationRecord; readonly banner: BannerPresentation; readonly accent: string }) {
   if (banner.milestone !== null) return <MilestoneMedallion glyph={milestoneGlyph(banner.milestone)} accent={accent} />;
+  if (banner.game) return <GameMedallion accent={accent} />;
   const avatar = notification.actor?.avatar ?? null;
   return (
     <span className="relative shrink-0" style={{ filter: 'drop-shadow(0 2px 4px var(--color-scrim-soft))' }}>

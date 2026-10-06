@@ -85,6 +85,54 @@ describe('« Jeu masqué »', () => {
   });
 });
 
+/**
+ * LES NOTIFICATIONS DU JEU (#9490) — un interrupteur « Jeu » dans les réglages du jeu, branché sur la
+ * préférence du COMPTE (`notification.gameEnabled`, défaut reçu). Au plus une notification du jeu par jour :
+ * l'écran le dit.
+ */
+describe('les notifications du jeu', () => {
+  test('un interrupteur, coché par défaut, qui envoie son nouvel état', async () => {
+    const calls: boolean[] = [];
+    const host = await mount(<GameSettings {...props({ gameNotifications: true, onGameNotifications: (on) => calls.push(on) })} />);
+    const input = host.querySelector<HTMLInputElement>('[data-game-setting-notifications]');
+    expect(input?.checked).toBe(true);
+    await click(input);
+    expect(calls).toEqual([false]);
+  });
+
+  test('le texte dit « au plus une par jour »', () => {
+    const html = renderToStaticMarkup(<GameSettings {...props({ gameNotifications: true, onGameNotifications: () => undefined })} />);
+    expect(text(html)).toContain('Notifications du jeu');
+    expect(text(html)).toContain('au plus une notification du jeu par jour');
+  });
+
+  test('réglage du compte éteint : l’interrupteur est décoché', () => {
+    const html = renderToStaticMarkup(<GameSettings {...props({ gameNotifications: false, onGameNotifications: () => undefined })} />);
+    expect(html).toMatch(/data-game-setting-notifications=""[^>]*/);
+    expect(html).not.toMatch(/data-game-setting-notifications=""[^>]*checked/);
+  });
+
+  test('pas encore lu : l’interrupteur attend (désactivé) plutôt que de deviner un état', async () => {
+    const host = await mount(<GameSettings {...props({ gameNotifications: undefined, onGameNotifications: () => undefined })} />);
+    expect(host.querySelector<HTMLInputElement>('[data-game-setting-notifications]')?.disabled).toBe(true);
+  });
+
+  test('hors ligne : suspendu, comme tout geste qui écrit le compte', async () => {
+    const host = await mount(<GameSettings {...props({ online: false, gameNotifications: true, onGameNotifications: () => undefined })} />);
+    expect(host.querySelector<HTMLInputElement>('[data-game-setting-notifications]')?.disabled).toBe(true);
+  });
+
+  test('un refus se lit sous l’interrupteur', () => {
+    const html = renderToStaticMarkup(<GameSettings {...props({ gameNotifications: true, onGameNotifications: () => undefined, errors: { notifications: 'Réessaie.' } })} />);
+    expect(html).toContain('role="alert"');
+    expect(text(html)).toContain('Réessaie.');
+  });
+
+  test('sans branchement, la carte n’existe pas (l’écran d’avant)', () => {
+    expect(renderToStaticMarkup(<GameSettings {...props()} />)).not.toContain('data-game-setting-notifications');
+  });
+});
+
 describe('qui voit quoi', () => {
   test('quatre sélecteurs : rang et niveau, trésor et Flamme, vitrine, Atlas', () => {
     const html = renderToStaticMarkup(<GameSettings {...props()} />);

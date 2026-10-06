@@ -19,6 +19,8 @@ export type BannerPresentation = {
   /** Le contenu visé (sa case porte son icône quand il n'a pas de vignette) — `null` hors contenu social. */
   readonly content: ContentKind | null;
   readonly milestone: MilestoneGlyph | null;
+  /** La ligne du jeu sans personne à nommer (#9490) : la Signature de Meeshy tient la place de l'avatar. */
+  readonly game: boolean;
 };
 
 export function bannerPresentation(notification: NotificationRecord, options: { readonly language: InterfaceLanguage; readonly now: Date }): BannerPresentation {
@@ -26,7 +28,7 @@ export function bannerPresentation(notification: NotificationRecord, options: { 
   const footer = row.footer;
   const content = footer?.kind === 'content' ? footer.content : null;
   const body = row.body ?? row.quote ?? (footer?.kind === 'content' || footer?.kind === 'plain' ? footer.text : null);
-  return { headline: row.title, body, content, milestone: row.leading.kind === 'milestone' ? row.leading.glyph : null };
+  return { headline: row.title, body, content, milestone: row.leading.kind === 'milestone' ? row.leading.glyph : null, game: row.leading.kind === 'game' };
 }
 
 /**

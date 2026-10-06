@@ -696,6 +696,9 @@ const it = {
   'game.standing.title': 'Il gioco di {name}',
   'game.standing.treasury': 'Tesoro: {tier}',
   'game.standing.flame': 'Fiamma: {form}',
+  'game.settings.notifications.title': 'Notifiche del gioco',
+  'game.settings.notifications.body': 'Un invito alla missione in coppia, un risultato di lega, una tappa della stagione: al massimo una notifica del gioco al giorno. Questa impostazione vale per il tuo account, su tutti i tuoi dispositivi.',
+  'game.settings.notifications.switch': 'Ricevi le notifiche del gioco',
 } as const satisfies GameCatalog;
 
 export default it;

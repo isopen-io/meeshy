@@ -318,6 +318,47 @@ describe('la rangée dit son contexte, une fois', () => {
     expect(html).toContain('Badge débloqué · palier 10');
   });
 
+  /* LE JEU (#9490) — le serveur compose la phrase ; la ligne la porte, sous la Signature de Meeshy quand il n'y a
+     personne à nommer, et elle ouvre la page de ce qu'elle annonce. */
+  test('un résultat de ligue : la Signature à la place d’un avatar, la phrase du serveur, la page Ligue', () => {
+    const html = row(
+      record({
+        type: 'game_league_result',
+        title: null,
+        content: 'Ligue Jade : tu montes en ligue Ambre.',
+        actor: null,
+        context: {},
+        metadata: { gameSection: 'league' },
+      }),
+    );
+    expect(html).toContain('data-notification-game');
+    expect(html).toContain('data-game-signature');
+    expect(html).toContain('Ligue Jade : tu montes en ligue Ambre.');
+    expect(html).toContain('href="/me/progression/ligue"');
+    expect(html).not.toContain('data-notification-milestone');
+  });
+
+  test('une étape de saison ouvre la page Saison', () => {
+    const html = row(record({ type: 'game_season_step', title: null, content: 'Étape 12 franchie.', actor: null, context: {}, metadata: { gameSection: 'season' } }));
+    expect(html).toContain('href="/me/progression/saison"');
+  });
+
+  test('une invitation de duo garde l’avatar de l’ami et ouvre la page Ligue', () => {
+    const html = row(
+      record({
+        type: 'game_duo_invited',
+        title: 'Amina t’invite à la mission en duo',
+        content: 'Ouvre la mission de la semaine.',
+        actor: { id: 'u-amina', username: 'amina', displayName: 'Amina', avatar: null },
+        context: {},
+        metadata: { gameSection: 'duo' },
+      }),
+    );
+    expect(html).not.toContain('data-notification-game');
+    expect(html).toContain('>AM</span>');
+    expect(html).toContain('href="/me/progression/ligue"');
+  });
+
   test('l’ami parrainé : « Écrire » et « Se connecter », HORS du lien — « Écrire » seul entre amis', () => {
     const invite = record({
       type: 'badge_earned',

@@ -696,6 +696,9 @@ const pt = {
   'game.standing.title': 'O jogo de {name}',
   'game.standing.treasury': 'Tesouro: {tier}',
   'game.standing.flame': 'Chama: {form}',
+  'game.settings.notifications.title': 'Notificações do jogo',
+  'game.settings.notifications.body': 'Um convite para a missão em dupla, um resultado de liga, uma etapa da temporada: no máximo uma notificação do jogo por dia. Este ajuste vale para a sua conta, em todos os seus dispositivos.',
+  'game.settings.notifications.switch': 'Receber as notificações do jogo',
 } as const satisfies GameCatalog;
 
 export default pt;

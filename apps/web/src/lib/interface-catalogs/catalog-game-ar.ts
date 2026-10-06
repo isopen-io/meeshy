@@ -708,6 +708,9 @@ const ar = {
   'game.standing.title': 'لعبة {name}',
   'game.standing.treasury': 'الكنز: {tier}',
   'game.standing.flame': 'الشعلة: {form}',
+  'game.settings.notifications.title': 'إشعارات اللعبة',
+  'game.settings.notifications.body': 'دعوة إلى مهمة الثنائي، نتيجة الدوري، مرحلة من الموسم: إشعار واحد للعبة في اليوم على الأكثر. يسري هذا الإعداد على حسابك في جميع أجهزتك.',
+  'game.settings.notifications.switch': 'تلقي إشعارات اللعبة',
 } as const satisfies GameCatalog;
 
 export default ar;

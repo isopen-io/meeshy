@@ -66,6 +66,8 @@ const PUSH_ROUTE_PATTERNS = {
   discover: '/discover',
   userProfile: '/u/$username',
   progression: '/me/progression',
+  progressionLigue: '/me/progression/ligue',
+  progressionSaison: '/me/progression/saison',
   settings: '/settings',
   notifications: '/notifications',
 };
@@ -94,6 +96,8 @@ const PROGRESSION_TYPES = [
   'streak_milestone',
   'level_up',
 ];
+const GAME_LEAGUE_TYPES = ['game_duo_invited', 'game_duo_accepted', 'game_league_result'];
+const GAME_SEASON_TYPES = ['game_season_step'];
 const SECURITY_TYPES = [
   'security_alert',
   'login_new_device',
@@ -310,6 +314,9 @@ function resolvePushTarget(data) {
 
   const pseudo = texte(data.senderUsername);
   if (PROFILE_TYPES.indexOf(type) >= 0 && pseudo !== '') return { route: 'userProfile', params: { username: pseudo }, search: {} };
+
+  if (GAME_LEAGUE_TYPES.indexOf(type) >= 0) return { route: 'progressionLigue', params: {}, search: {} };
+  if (GAME_SEASON_TYPES.indexOf(type) >= 0) return { route: 'progressionSaison', params: {}, search: {} };
 
   const indice = texte(data.route);
   if (HINTED_ROUTES.indexOf(indice) >= 0) {
@@ -914,6 +921,8 @@ self.meeshyPushTarget = {
   EPHEMERAL_ONLY_TYPES: EPHEMERAL_ONLY_TYPES,
   REQUEST_TYPES: REQUEST_TYPES,
   PROFILE_TYPES: PROFILE_TYPES,
+  GAME_LEAGUE_TYPES: GAME_LEAGUE_TYPES,
+  GAME_SEASON_TYPES: GAME_SEASON_TYPES,
   PROGRESSION_TYPES: PROGRESSION_TYPES,
   SECURITY_TYPES: SECURITY_TYPES,
   HINTED_ROUTES: HINTED_ROUTES,

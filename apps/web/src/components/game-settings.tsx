@@ -10,7 +10,7 @@ import { GameVisibilityPicker } from './game-visibility-picker';
 
 /**
  * LES RÉGLAGES DU JEU (#9481) — un seul écran pour ce que le jeu laisse
- * choisir : les célébrations de Mee et Meo, le mode « Jeu masqué », qui voit
+ * choisir : les célébrations de Mee et Meo, les notifications du jeu (#9490), le mode « Jeu masqué », qui voit
  * quoi (rang, trésor, vitrine, Atlas — #5738), la ligue publique (consentement
  * et pseudonyme), et le carnet des règles.
  *
@@ -32,7 +32,13 @@ export type GameSettingsProps = {
   readonly online: boolean;
   readonly savingVisibility: boolean;
   readonly leavingLeague: boolean;
-  readonly errors: { readonly visibility?: string | undefined; readonly league?: string | undefined };
+  readonly errors: { readonly visibility?: string | undefined; readonly league?: string | undefined; readonly notifications?: string | undefined };
+  /**
+   * L'interrupteur « Notifications du jeu » (#9490) — `notification.gameEnabled`, la préférence du COMPTE. `undefined` :
+   * pas encore lu (il attend, désactivé). Le branchement (`onGameNotifications`) est facultatif : sans lui, pas de carte.
+   */
+  readonly gameNotifications?: boolean | undefined;
+  readonly onGameNotifications?: ((on: boolean) => void) | undefined;
   readonly onCelebrations: (on: boolean) => void;
   readonly onHidden: (on: boolean) => void;
   readonly onVisibility: (patch: Partial<GameVisibility>) => void;
@@ -101,6 +107,29 @@ export function GameSettings(props: GameSettingsProps) {
           </p>
         )}
       </GameCard>
+
+      {props.onGameNotifications === undefined ? null : (
+        <GameCard id="game-settings-notifications" labelledBy="game-settings-notifications-title">
+          <h2 id="game-settings-notifications-title" className="text-body font-bold" style={{ color: GAME_INK }}>
+            {gameText('game.settings.notifications.title')}
+          </h2>
+          <p className="text-caption" style={{ color: GAME_INK_2 }}>
+            {gameText('game.settings.notifications.body')}
+          </p>
+          <SwitchRow
+            marker="data-game-setting-notifications"
+            label={gameText('game.settings.notifications.switch')}
+            checked={props.gameNotifications ?? true}
+            disabled={!online || props.gameNotifications === undefined}
+            onChange={props.onGameNotifications}
+          />
+          {errors.notifications === undefined ? null : (
+            <p role="alert" className="text-caption" style={{ color: GAME_ERROR }}>
+              {errors.notifications}
+            </p>
+          )}
+        </GameCard>
+      )}
 
       {visibility === undefined ? null : (
         <GameCard id="game-settings-visibility" labelledBy="game-settings-visibility-title">

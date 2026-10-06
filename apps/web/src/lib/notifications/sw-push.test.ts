@@ -563,6 +563,14 @@ describe('le tap atterrit à l’adresse de la v2, jamais à celle du legacy', (
     expect(worker.opened).toEqual(['/u/marie']);
   });
 
+  test('une notification du jeu ouvre la page de ce qu’elle annonce, malgré l’indice `progression` du serveur (#9490)', async () => {
+    const worker = mount();
+    await worker.dispatch('notificationclick', clic({ type: 'game_duo_invited', route: 'progression' }).event);
+    await worker.dispatch('notificationclick', clic({ type: 'game_league_result', route: 'progression' }).event);
+    await worker.dispatch('notificationclick', clic({ type: 'game_season_step', route: 'progression' }).event);
+    expect(worker.opened).toEqual(['/me/progression/ligue', '/me/progression/ligue', '/me/progression/saison']);
+  });
+
   test('sans destination, le tap ouvre la liste des notifications — il atterrit toujours', async () => {
     const worker = mount();
     await worker.dispatch('notificationclick', clic({ type: 'un_type_sans_ecran' }).event);
@@ -577,6 +585,8 @@ describe('le tap atterrit à l’adresse de la v2, jamais à celle du legacy', (
       discover: '/discover',
       userProfile: '/u/$username',
       progression: '/me/progression',
+      progressionLigue: '/me/progression/ligue',
+      progressionSaison: '/me/progression/saison',
       settings: '/settings',
       notifications: '/notifications',
     });
