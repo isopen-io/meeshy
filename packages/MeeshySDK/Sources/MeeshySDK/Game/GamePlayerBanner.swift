@@ -7,11 +7,17 @@ import Foundation
 // niveau suivant, Meeshes, blason du rang, gemme de ligue et place, Flamme.
 //
 // SEULEMENT CE QUI EXISTE : un élément sans donnée vaut `nil` et ne se dessine pas — jamais un zéro, un tiret ou
-// une case vide. Un nouveau joueur n'a que son anneau et sa jauge ; le trésor paraît à la première Meesh gardée, le
-// rang à la première Gloire, la ligue au consentement (avec un groupe), la Flamme quand elle brûle.
+// une case vide. Un joueur qui n'a rien fait n'a PAS de bandeau ; le détail du niveau paraît au niveau 2, le total
+// de points au premier point, le trésor à la première Meesh gardée, le rang à la première Gloire, la ligue au
+// consentement (avec un groupe), la Flamme quand elle brûle.
 //
 // Le modèle ne calcule RIEN : il LIT le bloc `game` servi (le cache d'abord) et ne fait que choisir ce qui se
 // montre. Aucune règle du jeu n'est réécrite ici.
+//
+// « N'AFFICHER QUE CE QUI A DU SENS » (#9536, directive porteur 2026-10-06) : `make(game:)` est LA fonction qui
+// décide. Toutes les données à zéro ⇒ `nil` (aucun bandeau) ; sinon chaque morceau se tait tant qu'il n'a rien à dire :
+// pas de points ⇒ pas de total (`showsScore`) ; niveau 1 ⇒ ni anneau ni jauge (`showsLevel`) ; pas de Meeshes, de
+// Gloire, de ligue ni de Flamme ⇒ rien d'eux (leurs champs valent `nil`).
 
 public struct GamePlayerBanner: Equatable, Sendable {
 
@@ -101,6 +107,25 @@ public struct GamePlayerBanner: Equatable, Sendable {
         } else {
             self.flame = nil
         }
+    }
+
+    /// LA décision : le bandeau du joueur, ou `nil` quand rien n'a de sens à dire — un joueur qui n'a encore rien
+    /// fait (niveau 1, aucun point, aucune Meesh, aucune Gloire, aucune ligue, aucune Flamme) n'a pas de bandeau.
+    public static func make(game: GameBlock) -> GamePlayerBanner? {
+        let banner = GamePlayerBanner(game: game)
+        return banner.hasAnythingToSay ? banner : nil
+    }
+
+    /// Le détail du niveau (anneau, palier, jauge vers le suivant) n'a de sens qu'au-delà du niveau 1 — ou après un
+    /// Prestige, qui ramène au niveau 1 en laissant ses étoiles.
+    public var showsLevel: Bool { level > 1 || prestige > 0 }
+
+    /// Le total de points n'a de sens qu'une fois le premier point gagné.
+    public var showsScore: Bool { score > 0 }
+
+    /// Au moins un morceau a quelque chose à dire.
+    public var hasAnythingToSay: Bool {
+        showsLevel || showsScore || meeshes != nil || rank != nil || league != nil || flame != nil
     }
 
     /// Un `NaN` ou une valeur hors de [0, 1] ne casse jamais la jauge.
