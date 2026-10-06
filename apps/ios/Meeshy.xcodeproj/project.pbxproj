@@ -177,6 +177,7 @@
 		0F914FCF8E8C3F96DC98D873 /* ComposerProtectionToneTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0AAA667DA20C59EED66AED0 /* ComposerProtectionToneTests.swift */; };
 		0FBBA710B21DE5A0C8068FED /* ComposerCaptureFocus.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCAA460ECE85D18F17871190 /* ComposerCaptureFocus.swift */; };
 		0FBFADBCA7ABE320AB7F7099 /* CallModeRules.swift in Sources */ = {isa = PBXBuildFile; fileRef = A586418C24F7C4BD9FC5F63F /* CallModeRules.swift */; };
+		0FBFEE8469FA4B1C09FD3481 /* CameraModel+Recording.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C94A900A303C90881FC818D /* CameraModel+Recording.swift */; };
 		0FD2322332888736761FE0C9 /* CallManager+IncomingSignal.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0A294F0BF0A2DD17F345F1B /* CallManager+IncomingSignal.swift */; };
 		0FE8033BB70995E5053072EA /* AudioTrackLanguageResolverTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD12A3004402B053B1D9F56B /* AudioTrackLanguageResolverTests.swift */; };
 		0FF8531559CD0D1F94BBF34A /* MessageStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BAD80671A1707CA1A2604776 /* MessageStoreTests.swift */; };
@@ -3140,6 +3141,7 @@
 		0C7B100384946F1CADFB6FE6 /* CommentMenuPolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommentMenuPolicyTests.swift; sourceTree = "<group>"; };
 		0C7FAFBB2E979FC60DAF11D5 /* SocialAudioTrack.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SocialAudioTrack.swift; sourceTree = "<group>"; };
 		0C8230364F556BB42A17601C /* ComposerLiveLookTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerLiveLookTests.swift; sourceTree = "<group>"; };
+		0C94A900A303C90881FC818D /* CameraModel+Recording.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CameraModel+Recording.swift"; sourceTree = "<group>"; };
 		0CC4AA0ADB72BD8D313DF8AC /* ComposeLanguageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposeLanguageTests.swift; sourceTree = "<group>"; };
 		0D218074EE027B958057E149 /* ConversationListViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationListViewModel.swift; sourceTree = "<group>"; };
 		0D3D8782CFED9EFFA4271C2B /* ComposerCaptureFocusGeometry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerCaptureFocusGeometry.swift; sourceTree = "<group>"; };
@@ -6860,6 +6862,7 @@
 				13ADC1DF51A4D9A7F1F5B782 /* CameraModel.swift */,
 				C34F4EF160D9D90DBEA1BB19 /* CameraModel+Fixture.swift */,
 				423099AC7AB164C4861E995C /* CameraModel+PhotoLibrary.swift */,
+				0C94A900A303C90881FC818D /* CameraModel+Recording.swift */,
 				5F4A2C68CC2A0849B00A3A0D /* CameraPermissionPanel.swift */,
 				6D80321A6B15B7702C474818 /* CameraPreviewLayer.swift */,
 				5B1ED56E33CD433CF96DC3F3 /* CameraRecordingReadiness.swift */,
@@ -10527,6 +10530,7 @@
 				4E866BAFE12995C8337AAC53 /* CallsViewModel.swift in Sources */,
 				986DC435BCA814BB76D7B2ED /* CameraModel+Fixture.swift in Sources */,
 				9EA23C456CBB87AC4C1AF53E /* CameraModel+PhotoLibrary.swift in Sources */,
+				0FBFEE8469FA4B1C09FD3481 /* CameraModel+Recording.swift in Sources */,
 				3974C242BFF62FFD20D43B15 /* CameraModel.swift in Sources */,
 				19ACB7621B757D044920B069 /* CameraPermissionPanel.swift in Sources */,
 				670E165B4388F48B68BFB9EA /* CameraPreviewLayer.swift in Sources */,

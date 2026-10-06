@@ -42,9 +42,10 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     var capturedVideoURL: URL?
     /// L'enregistrement du BRUT de la dernière prise, posé AVANT son identifiant (#9351).
     var librarySave: Task<Bool, Never>?
-    /// Le jeton de l'enregistrement en cours : `capturedVideoId` le porte à
-    /// l'arrivée du fichier, `abandonedRecordingId` quand aucun fichier ne viendra.
-    private(set) var recordingId: String?
+    /// Le jeton de la prise, de son départ à sa LIVRAISON — chaque fichier porte
+    /// le sien (`segmentTokens`) : `capturedVideoId` à l'arrivée, `abandonedRecordingId` sans fichier.
+    var recordingId: String?
+    var segmentTokens: [URL: String] = [:]
     @Published var abandonedRecordingId: String?
     @Published var capturedPhotoId: String?
     @Published var capturedVideoId: String?
@@ -144,6 +145,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     ///
     /// Le micro n'est PAS demandé ici — voir `enableAudioCaptureIfNeeded()`.
     func configure() {
+        forgetStaleRecording()
         #if DEBUG
         if let fixture {
             permission = .granted
@@ -653,7 +655,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     func startRecording() {
         #if DEBUG
         if fixture != nil {
-            guard !isRecordingVideo, !isSwitchingCamera else { return }
+            guard !isRecordingVideo, !isSwitchingCamera, recordingId == nil else { return }
             recordingDuration = 0
             isRecordingVideo = true
             recordingId = UUID().uuidString
@@ -663,6 +665,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
             return
         }
         #endif
+        guard recordingId == nil else { return }
         recordedSegmentURLs = []
         isSwitchingCameraDuringRecording = false
         pendingSwitchPosition = nil
@@ -672,8 +675,8 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
         // la garde : démarrer le minuteur d'abord ferait courir une durée sur
         // une vidéo que rien n'écrit — un enregistrement fantôme, avec son
         // indicateur rouge et son compteur qui monte.
-        guard startSegment() else { return }
         recordingId = UUID().uuidString
+        guard startSegment() else { return closeRecordingToken(recordingId) }
         recordingTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 self?.recordingDuration += 0.5
@@ -695,6 +698,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
         }
         let tempURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("video_\(UUID().uuidString).mov")
+        segmentTokens[tempURL] = recordingId
         videoOutput.startRecording(to: tempURL, recordingDelegate: self)
         isRecordingVideo = true
         setSmoothFocus(true)
@@ -708,7 +712,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     /// de chrono, et les segments déjà pris rendus au système de fichiers. Un
     /// refus silencieux garderait `isRecordingVideo` à vrai — l'utilisateur
     /// verrait le point rouge d'une vidéo que personne n'écrit.
-    private func endRecordingWithoutOutput() {
+    private func endRecordingWithoutOutput(token: String?) {
         isSwitchingCameraDuringRecording = false
         isSwitchingCamera = false
         switchCover = nil
@@ -723,7 +727,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
                                                   logger: .media)
         }
         recordedSegmentURLs = []
-        abandonedRecordingId = recordingId
+        abandonRecording(token: token)
     }
 
     /// Ends the recording. If a camera switch is mid-flight, the stop is queued
@@ -762,10 +766,11 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     /// intermediate segment closes from a mid-recording camera switch and the
     /// final stop. See `recordedSegmentURLs`'s doc-comment for the overall design.
     private func handleSegmentFinished(url: URL, error: Error?) async {
+        let jeton = segmentTokens.removeValue(forKey: url) ?? recordingId
         guard error == nil else {
             // A genuine recording error (not a deliberate mid-switch stop, which
             // always completes with error == nil) — end cleanly, discard segments.
-            endRecordingWithoutOutput()
+            endRecordingWithoutOutput(token: jeton)
             return
         }
         recordedSegmentURLs.append(url)
@@ -784,7 +789,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
         }
 
         // Final stop.
-        await deliverRecording()
+        await deliverRecording(token: jeton)
     }
 
     /// Le nouvel objectif est en place : la prise reprend — ou se clôt, si
@@ -796,17 +801,18 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
         suite?(currentPosition)
         if pendingStopRequested {
             pendingStopRequested = false
-            Task { @MainActor [weak self] in await self?.deliverRecording() }
+            let jeton = recordingId
+            Task { @MainActor [weak self] in await self?.deliverRecording(token: jeton) }
         } else if !startSegment() {
             // La connexion a disparu PENDANT la bascule — un cas que le
             // changement de caméra rend possible par construction. Sans ce
             // repli, l'enregistrement continuait « en cours » sans sortie.
-            endRecordingWithoutOutput()
+            endRecordingWithoutOutput(token: recordingId)
         }
     }
 
     /// La prise est close : les segments se rassemblent et partent.
-    private func deliverRecording() async {
+    private func deliverRecording(token: String?) async {
         isRecordingVideo = false
         setSmoothFocus(false)
         recordingTimer?.invalidate()
@@ -821,15 +827,15 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
             if let lastSegment = segments.last {
                 capturedVideoURL = lastSegment
                 librarySave = Task { await Self.saveToPhotoLibrary { await PhotoLibraryManager.shared.saveVideo(at: lastSegment) } }
-                capturedVideoId = recordingId ?? UUID().uuidString
-            } else {
-                abandonedRecordingId = recordingId
+                capturedVideoId = token ?? UUID().uuidString
+                return closeRecordingToken(token)
             }
-            return
+            return abandonRecording(token: token)
         }
         capturedVideoURL = finalURL
         librarySave = Task { await Self.saveToPhotoLibrary { await PhotoLibraryManager.shared.saveVideo(at: finalURL) } }
-        capturedVideoId = recordingId ?? UUID().uuidString
+        capturedVideoId = token ?? UUID().uuidString
+        closeRecordingToken(token)
         if segments.count > 1 {
             for segment in segments where segment != finalURL {
                 FileManager.default.removeItemLogging(at: segment, context: "merged recording segment", logger: .media)

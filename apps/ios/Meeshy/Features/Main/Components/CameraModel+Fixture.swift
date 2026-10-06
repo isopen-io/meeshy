@@ -227,16 +227,16 @@ extension CameraModel {
         capturedPhotoId = UUID().uuidString
     }
 
-    /// Le film de recette, publié comme un vrai segment.
+    /// Le film de recette, publié comme un vrai segment — sous le jeton de SA
+    /// prise, lu avant l'attente de la copie.
     func deliverFixtureMovie(_ driver: ComposerCaptureFixtureDriver) {
+        let jeton = recordingId
         Task { @MainActor in
-            guard let url = await driver.movieCopy() else {
-                abandonedRecordingId = recordingId
-                return
-            }
+            guard let url = await driver.movieCopy() else { return abandonRecording(token: jeton) }
             capturedVideoURL = url
             librarySave = nil
-            capturedVideoId = recordingId ?? UUID().uuidString
+            capturedVideoId = jeton ?? UUID().uuidString
+            closeRecordingToken(jeton)
         }
     }
 }
