@@ -34,7 +34,7 @@ extension ComposerCaptureSession {
             .sink { [weak self] _ in self?.photoArrived() }
             .store(in: &takeSubscriptions)
         camera.$capturedVideoId.compactMap { $0 }
-            .sink { [weak self] _ in self?.videoArrived() }
+            .sink { [weak self] id in self?.videoArrived(id) }
             .store(in: &takeSubscriptions)
         camera.$abandonedRecordingId.compactMap { $0 }
             .sink { [weak self] id in self?.filmIntents[id] = nil }
@@ -162,10 +162,12 @@ extension ComposerCaptureSession {
     }
 
     /// Une vidéo arrivée APRÈS la fermeture ne devient rien : son brut est déjà en
-    /// galerie, son fichier temporaire part.
-    func videoArrived() {
+    /// galerie, son fichier temporaire part. Le jeton est celui que l'éditeur
+    /// PUBLIE : `@Published` émet avant d'écrire, `camera.capturedVideoId` serait
+    /// encore l'ancien.
+    func videoArrived(_ id: String) {
         guard let url = camera.capturedVideoURL else { return }
-        let intent = camera.capturedVideoId.flatMap { filmIntents.removeValue(forKey: $0) } ?? .edit
+        let intent = filmIntents.removeValue(forKey: id) ?? .edit
         guard stage != .off else {
             discardTake(url, context: "prise arrivée après la fermeture du viseur")
             return
