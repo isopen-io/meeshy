@@ -61,6 +61,7 @@ import { studioPreviewDocument } from '@/lib/stories/studio-preview';
 import { studioDraftStore, type StudioDraftStore } from '@/lib/stories/studio-draft-store';
 import { settlePages, studioPublishPlan } from '@/lib/stories/studio-publish';
 import { publishStudioPlan } from '@/lib/stories/studio-publish-flow';
+import { armedPublishChoice, companionReelOffered, publishChoiceTitleKey, publishedKinds, toggledPublishChoice } from '@/lib/stories/publish-also-as-reel';
 import { useStudioReelOffer } from '@/routes/story-compose-reel-offer';
 import type { StudioCompositeDeps } from '@/lib/stories/studio-composite-plan';
 import { studioFloor } from '@/lib/stories/studio-floor';
@@ -74,7 +75,7 @@ import type { StudioTextLayer } from '@/lib/stories/studio-text';
 import { studioWritingStyle } from '@/lib/stories/studio-writing';
 import { useComposeLanguage } from '@/lib/view/use-compose-language';
 import { useReaderLanguages } from '@/lib/view/use-reader';
-import { PublishSplitButton, publishTitleKey } from '@/components/publish-split-button';
+import { PublishSplitButton } from '@/components/publish-split-button';
 import { href, navigate } from '@/routes/route-table';
 import { StudioShell } from '@/routes/story-compose-shell';
 import { AudienceChip, type AudienceSource } from '@/routes/story-compose-audience';
@@ -560,6 +561,7 @@ function StoryStudio({
       language,
       postText: current.postText,
       promotedFromPost: promoted || reelAuto.autoArmed,
+      alsoAsReel: armedPublishChoice(chosen, companionReelOffered({ draft: current, editing: false })).alsoAsReel === true,
       signal: send.signal,
       onPublished: ({ pageIds, published, total }) => {
         dropPublishedPages(pageIds, chosen.kind);
@@ -582,6 +584,7 @@ function StoryStudio({
     if (viewerId !== null) deps.drafts.clear(viewerId);
     current.pages.forEach(revokePageMedia);
     if (chosen.kind === 'STORY') {
+      if (chosen.alsoAsReel === true) void refreshFeedAction().catch(() => undefined);
       await appQueryClient.invalidateQueries({ queryKey: STORIES_QUERY_PREFIX });
       // La PREMIÈRE story de la séquence — celle par laquelle le lecteur
       // commence — porte le retour de l'accueil post-inscription.
@@ -638,6 +641,9 @@ function StoryStudio({
 
   const canPublish = canPublishStudioDraft(draft);
   const kindRefusal = studioPublishRefusal(draft, kind);
+  /** « Aussi en réel » (#9476) : ce qui est armé, réel compris s'il est OFFERT. */
+  const companionOffered = companionReelOffered({ draft, editing: reopened !== undefined });
+  const armed = armedPublishChoice(choice, companionOffered);
   const publishablePageCount = studioPublishablePageCount(draft);
   /** **CE QUI PARTIRA** (#7683) — l'audience CHOISIE, sinon le défaut de la
    * passerelle pour le format en cours (`defaultAudienceOf`) : la pastille
@@ -657,7 +663,7 @@ function StoryStudio({
       : translate(lang, reopened !== undefined ? 'story.studio.edit.saving' : 'story.studio.publishing')
     : awaitingNetwork
       ? translate(lang, 'story.studio.publish.waiting')
-      : translate(lang, reopened !== undefined ? 'story.studio.edit.save' : publishTitleKey(kind));
+      : translate(lang, reopened !== undefined ? 'story.studio.edit.save' : publishChoiceTitleKey(armed));
 
   const objectName = (id: string): string =>
     id === 'overlay'
@@ -1047,6 +1053,8 @@ function StoryStudio({
               }}
               audienceLabelOf={(candidate) => translate(lang, audienceLabelKey(audienceOf(candidate)))}
               layoutsServedFor={(candidate) => layoutIsServed({ publishablePageCount, kind: candidate })}
+              checkedKinds={publishedKinds(armed)}
+              toggleOf={(candidate) => toggledPublishChoice(candidate, armed, companionOffered)}
               onPrimary={requestPublish}
               onChoose={(chosen) => {
                 reelAuto.authorChose();
