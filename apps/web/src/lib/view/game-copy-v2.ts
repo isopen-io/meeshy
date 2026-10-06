@@ -53,6 +53,19 @@ export function durationLabel(milliseconds: number, language: Language = current
   return translateGame(language, 'game.duration.minutes', { minutes: count(minutes) });
 }
 
+/**
+ * Le décompte d'une carte de mission (#9539) : des heures ET des minutes (« 1 h 59 min »), jamais de secondes.
+ * `durationLabel` seul dirait « 1 h » pendant cinquante-neuf minutes d'une plage de deux heures. Même lecture
+ * que `calmDuration` (iOS).
+ */
+export function timerLabel(milliseconds: number, language: Language = currentInterfaceLanguage()): string {
+  const minutes = Math.max(1, Math.ceil(milliseconds / MINUTE));
+  const rest = minutes % 60;
+  if (minutes < 60 || minutes >= 24 * 60 || rest === 0) return durationLabel(milliseconds, language);
+  const count = (value: number): string => formatGameNumber(language, value);
+  return `${translateGame(language, 'game.duration.hours', { hours: count(Math.floor(minutes / 60)) })} ${translateGame(language, 'game.duration.minutes', { minutes: count(rest) })}`;
+}
+
 /** « Semaine du 2 novembre » : la semaine s'identifie par son lundi local. */
 export function weekLabel(weekKey: string, language: Language = currentInterfaceLanguage()): string {
   const [year, month, day] = weekKey.split('-').map(Number);
