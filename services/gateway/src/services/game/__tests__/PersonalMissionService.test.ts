@@ -42,6 +42,32 @@ const eveningMessages = (db: FakeGameDb, hourUtc: number, count = 30) => {
 };
 
 describe('PersonalMissionService.ensure — le tirage', () => {
+  it('ne tire jamais pour une journée de jeu qui n’est plus le jour civil : la plage tomberait hors de sa journée (revue adversariale #9539)', async () => {
+    const { db, service } = setup({ timezone: 'UTC' });
+
+    expect(await service.ensure(USER, new Date('2026-10-05T22:30:00Z'))).toBeNull();
+    // La fausse base date ses lignes à l'horloge réelle : la journée du 5 s'est ouverte à 22 h 30.
+    db.dailyMission.rows.forEach((row) => Object.assign(row, { createdAt: new Date('2026-10-05T22:30:00Z') }));
+    // 7 h 30 plus tard : la journée de jeu du 5 continue (moins de 20 h), le jour civil est le 6.
+    expect(await service.ensure(USER, new Date('2026-10-06T06:00:00Z'))).toBeNull();
+    expect(personalRows(db)).toHaveLength(0);
+
+    const row = await service.ensure(USER, new Date('2026-10-06T19:00:00Z'));
+    expect(row?.dayKey).toBe('2026-10-06');
+    expect((row!.startsAt as Date).toISOString().slice(0, 10)).toBe('2026-10-06');
+  });
+
+  it('ne lit ni messages ni compteurs quand plus aucune plage ne tient ce soir (revue adversariale #9539)', async () => {
+    const { db, service } = setup({ timezone: 'UTC' });
+    const messages = jest.spyOn(db.prisma.message, 'findMany');
+    const counters = jest.spyOn(db.prisma.engagementCounter, 'findMany');
+
+    expect(await service.ensure(USER, new Date('2026-10-06T22:30:00Z'))).toBeNull();
+
+    expect(messages).not.toHaveBeenCalled();
+    expect(counters).not.toHaveBeenCalled();
+  });
+
   it('pose UNE mission à l’emplacement 3, avec une plage de deux heures, à côté des trois du jour', async () => {
     const { db, service } = setup();
 

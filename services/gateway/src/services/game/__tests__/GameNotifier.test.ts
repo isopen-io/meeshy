@@ -291,6 +291,21 @@ describe('le créneau du jour ne se brûle pas sur une notification qui n’a pa
     expect(await notifier.notify(invited(), new Date(NOW.getTime() + 3600_000))).toBe('sent');
   });
 
+  it('une panne rend aussi la clé « une seule fois » : le passage suivant réessaie et l’annonce part (revue adversariale #9539)', async () => {
+    const notifier = sequenced(['throw', 'create']);
+    const event: GameNotificationEvent = {
+      kind: 'mission-window',
+      recipientId: USER,
+      missionId: 'mission-1',
+      dayKey: '2026-10-14',
+      templateKey: 'send-voice',
+      startsAt: new Date('2026-10-14T12:00:00Z'),
+      endsAt: new Date('2026-10-14T14:00:00Z'),
+    };
+    expect(await notifier.notify(event, NOW)).toBe('failed');
+    expect(await notifier.notify(event, new Date(NOW.getTime() + 5 * 60_000))).toBe('sent');
+  });
+
   it('une panne du service rend le créneau aussi', async () => {
     const notifier = sequenced(['throw', 'create']);
     expect(await notifier.notify(step(), NOW)).toBe('failed');

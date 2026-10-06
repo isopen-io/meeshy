@@ -39,6 +39,9 @@ const active = (db: FakeGameDb, n: number, over: Record<string, unknown> = {}) =
 
 const personalRows = (db: FakeGameDb) => db.dailyMission.rows.filter((r) => r.slot === PERSONAL_MISSION_SLOT);
 
+/** La fausse base date ses lignes à l'horloge réelle : le témoin les redate à l'instant du passage. */
+const openedAt = (db: FakeGameDb, at: Date): void => db.dailyMission.rows.forEach((row) => Object.assign(row, { createdAt: at }));
+
 describe('le tirage à l’avance', () => {
   it('tire la mission personnelle d’un compte actif, en journée dans son fuseau', async () => {
     const { db, job } = world();
@@ -81,6 +84,30 @@ describe('le tirage à l’avance', () => {
 
     expect(second?.drawn).toBe(0);
     expect(personalRows(db)).toHaveLength(1);
+  });
+
+  it('retire le LENDEMAIN : la mission d’hier, posée il y a 24 h, ne vaut pas pour aujourd’hui (revue adversariale #9539)', async () => {
+    const { db, job } = world();
+    active(db, 1, { timezone: 'UTC', lastActiveAt: new Date('2026-10-06T05:00:00Z') });
+
+    await job.runNow(new Date('2026-10-05T06:00:00Z'));
+    openedAt(db, new Date('2026-10-05T06:00:00Z'));
+    const next = await job.runNow(new Date('2026-10-06T06:00:00Z'));
+
+    expect(next?.drawn).toBe(1);
+    expect(personalRows(db).map((r) => r.dayKey)).toEqual(['2026-10-05', '2026-10-06']);
+  });
+
+  it('ne compte pas comme tirée la mission d’hier qu’une journée de jeu encore ouverte lui rend', async () => {
+    const { db, job } = world();
+    active(db, 1, { timezone: 'UTC', lastActiveAt: new Date('2026-10-06T05:00:00Z') });
+
+    await job.runNow(new Date('2026-10-05T19:00:00Z'));
+    openedAt(db, new Date('2026-10-05T19:00:00Z'));
+    const next = await job.runNow(new Date('2026-10-06T06:00:00Z'));
+
+    expect(next?.drawn).toBe(0);
+    expect(personalRows(db).map((r) => r.dayKey)).toEqual(['2026-10-05']);
   });
 
   it('borne le lot par passage et reprend où il s’est arrêté, jusqu’à boucler', async () => {

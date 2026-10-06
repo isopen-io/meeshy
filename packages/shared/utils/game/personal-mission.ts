@@ -119,10 +119,20 @@ const hourWeights = (activeHours: readonly number[] | null, startHours: readonly
   return startHours.map((hour) => (known ? 1 + finite(activeHours[hour]) + finite(activeHours[hour + 1]) : defaultHourWeight(hour)));
 };
 
-export function drawPersonalMission(input: PersonalMissionInput): PersonalMissionDraw | null {
-  const startHours = Array.from({ length: WINDOW_LATEST_START_HOUR - WINDOW_EARLIEST_START_HOUR + 1 }, (_, i) => WINDOW_EARLIEST_START_HOUR + i).filter(
-    (hour) => (hour * 60 + PERSONAL_WINDOW_MINUTES) - input.nowMinute >= MIN_REMAINING_MINUTES,
+/** Les heures de début encore tenables à cette minute locale : il reste au moins une heure de plage. */
+const openStartHours = (nowMinute: number): number[] =>
+  Array.from({ length: WINDOW_LATEST_START_HOUR - WINDOW_EARLIEST_START_HOUR + 1 }, (_, i) => WINDOW_EARLIEST_START_HOUR + i).filter(
+    (hour) => (hour * 60 + PERSONAL_WINDOW_MINUTES) - nowMinute >= MIN_REMAINING_MINUTES,
   );
+
+/**
+ * Une plage tient-elle encore aujourd'hui ? À demander AVANT de lire les habitudes du compte : quand la
+ * réponse est non, `drawPersonalMission` rend `null` quelles que soient ses autres entrées.
+ */
+export const personalWindowStillFits = (nowMinute: number): boolean => openStartHours(nowMinute).length > 0;
+
+export function drawPersonalMission(input: PersonalMissionInput): PersonalMissionDraw | null {
+  const startHours = openStartHours(input.nowMinute);
   if (startHours.length === 0) return null;
 
   const tier = tierOf(input.level);

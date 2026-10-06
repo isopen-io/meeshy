@@ -21,7 +21,7 @@ import { PERSONAL_MISSION_SLOT } from '@meeshy/shared/utils/game/personal-missio
 import { GameNotifier } from '../services/game/GameNotifier.js';
 import { MissionService, READ_ONLY_CREDIT } from '../services/game/MissionService.js';
 import { PersonalMissionService } from '../services/game/PersonalMissionService.js';
-import { minuteOfDayInTimezone } from '../services/game/gameClock.js';
+import { dayKeyOf, minuteOfDayInTimezone } from '../services/game/gameClock.js';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 import { guardedInterval } from '../utils/guarded-timer.js';
 
@@ -30,8 +30,6 @@ const logger = enhancedLogger.child({ module: 'GameMissionWindowJob' });
 export const GAME_MISSION_WINDOW_INTERVAL_MS = 5 * 60 * 1000;
 export const MISSION_SWEEP_BATCH = 200;
 const ACTIVE_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
-/** Une ligne personnelle posée il y a moins de 30 h est celle de la journée en cours. */
-const RECENT_ROW_MS = 30 * 60 * 60 * 1000;
 const FIRST_LOCAL_MINUTE = 5 * 60;
 const LAST_LOCAL_MINUTE = 21 * 60;
 
@@ -130,12 +128,16 @@ export class GameMissionWindowJob {
     });
     if (awake.length === 0) return 0;
 
+    // « Déjà tirée » se juge sur la CLÉ DU JOUR du compte, jamais sur l'âge de la ligne : la mission d'hier,
+    // posée il y a moins d'un jour, ne vaut pas pour aujourd'hui.
+    const todayOf = new Map(awake.map((user) => [user.id, dayKeyOf(now, user.timezone)]));
+    const earliestDay = [...todayOf.values()].reduce((min, key) => (key < min ? key : min));
     const already = await this.prisma.dailyMission.findMany({
-      where: { userId: { in: awake.map((user) => user.id) }, slot: PERSONAL_MISSION_SLOT, createdAt: { gte: new Date(now.getTime() - RECENT_ROW_MS) } },
-      select: { userId: true },
-      take: awake.length,
+      where: { userId: { in: awake.map((user) => user.id) }, slot: PERSONAL_MISSION_SLOT, dayKey: { gte: earliestDay } },
+      select: { userId: true, dayKey: true },
+      take: awake.length * 3,
     });
-    const has = new Set(already.map((row) => row.userId));
+    const has = new Set(already.filter((row) => row.dayKey >= (todayOf.get(row.userId) ?? row.dayKey)).map((row) => row.userId));
 
     let drawn = 0;
     for (const user of awake.filter((u) => !has.has(u.id))) {
@@ -143,7 +145,8 @@ export class GameMissionWindowJob {
         logger.warn('Personal mission pre-draw failed for one account', { userId: user.id, error: error instanceof Error ? error.message : String(error) });
         return null;
       });
-      if (row !== null) drawn += 1;
+      // Une journée de jeu qui continue rend la ligne d'HIER : rien n'a été tiré, rien ne se compte.
+      if (row !== null && row.dayKey >= (todayOf.get(user.id) ?? row.dayKey)) drawn += 1;
     }
     return drawn;
   }

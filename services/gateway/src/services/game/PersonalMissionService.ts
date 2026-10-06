@@ -7,7 +7,8 @@
  *    l'avance par le job ; `(userId, dayKey, slot)` est unique, deux accès concurrents n'en font qu'une ;
  *  - **la plage se lit dans le fuseau du compte** (`instantOfLocal`) et se stocke en INSTANTS (`startsAt`,
  *    `endsAt`) : le serveur juge sur des instants, jamais sur une heure murale ;
- *  - **fail-closed** — tirée trop tard pour qu'une plage tienne, la mission n'existe pas ce jour-là ;
+ *  - **fail-closed** — tirée trop tard pour qu'une plage tienne, la mission n'existe pas ce jour-là ; et tant
+ *    que la journée de jeu n'est pas le jour civil du compte, rien ne se tire (la plage sortirait de sa journée) ;
  *  - **l'annonce part UNE fois** — la réclamation (`notifiedAt`) est posée AVANT l'envoi, par une écriture
  *    conditionnelle ; un envoi qui ÉCHOUE rend la réclamation (le passage suivant réessaie), un envoi
  *    ÉCARTÉ (réglage « Jeu » coupé, jeu masqué, plafond) ne se rejoue pas.
@@ -17,7 +18,7 @@ import type { DailyMission, PrismaClient } from '@meeshy/shared/prisma/client';
 import { flameStatus } from '@meeshy/shared/utils/game/flame';
 import { levelFromScore } from '@meeshy/shared/utils/game/levels';
 import type { MissionSignal } from '@meeshy/shared/utils/game/missions';
-import { PERSONAL_MISSION_SLOT, drawPersonalMission } from '@meeshy/shared/utils/game/personal-mission';
+import { PERSONAL_MISSION_SLOT, drawPersonalMission, personalWindowStillFits } from '@meeshy/shared/utils/game/personal-mission';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { FLAME_USER_SELECT, flameFactsOf } from './FlameService';
 import type { GameNotificationEvent, GameNotifyResult } from './GameNotifier';
@@ -74,6 +75,12 @@ export class PersonalMissionService {
 
     const user = await this.prisma.user.findUnique({ where: { id: userId }, select: USER_SELECT });
     if (!user) return null;
+    // La plage se pose sur le jour CIVIL et la mission n'avance que dans SA journée de jeu : quand les deux
+    // diffèrent (une journée ouverte tard continue après minuit), la plage tomberait hors de sa journée —
+    // annoncée, jamais réalisable. Et sans plage qui tienne encore, aucune habitude n'est lue.
+    const civilDay = dayKeyOf(now, user.timezone);
+    const nowMinute = minuteOfDayInTimezone(now, user.timezone);
+    if (civilDay !== today.dayKey || !personalWindowStillFits(nowMinute)) return null;
     const level = levelFromScore(user.engagementScore ?? 0);
     const facts = flameFactsOf(user, now);
     const status = flameStatus({ lastActiveDay: facts.lastActiveDay, today: today.dayKey, streak: facts.streak, freezes: facts.freezes });
@@ -87,7 +94,7 @@ export class PersonalMissionService {
       dayKey: today.dayKey,
       level,
       flameDays: status === 'out' ? 0 : facts.streak,
-      nowMinute: minuteOfDayInTimezone(now, user.timezone),
+      nowMinute,
       activeHours,
       usage,
       multilingual: isMultilingual(user),
@@ -95,7 +102,6 @@ export class PersonalMissionService {
     });
     if (draw === null) return null;
 
-    const civilDay = dayKeyOf(now, user.timezone);
     try {
       return await this.prisma.dailyMission.create({
         data: {

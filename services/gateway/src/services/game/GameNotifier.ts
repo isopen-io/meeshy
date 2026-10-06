@@ -252,7 +252,8 @@ export class GameNotifier {
     if (await this.optedOut(event.recipientId)) return 'skipped:opted-out';
 
     const throttle = this.deps.throttle ?? getCacheStore();
-    if (!(await throttle.setnx(`notif:game:once:${event.recipientId}:${plan.onceKey}`, now.toISOString(), ONCE_TTL_SECONDS))) return 'skipped:duplicate';
+    const onceKey = `notif:game:once:${event.recipientId}:${plan.onceKey}`;
+    if (!(await throttle.setnx(onceKey, now.toISOString(), ONCE_TTL_SECONDS))) return 'skipped:duplicate';
     // `GAME_NOTIFICATION_DAILY_CAP` vaut 1 : le créneau du jour se PREND, il ne se compte pas. Les duos
     // et la mission du jour en sortent (#9541) : ni comptés, ni pris.
     const dayKey = `notif:game:day:${event.recipientId}:${dayKeyOf(now, recipient.timezone)}`;
@@ -280,6 +281,9 @@ export class GameNotifier {
       })
       .catch(async (error: unknown) => {
         await release();
+        // Une PANNE n'a rien annoncé : la clé « une seule fois » se rend aussi, sinon le réessai de l'appelant
+        // (la mission du jour, #9539) se lirait « déjà annoncé » et l'annonce ne partirait jamais.
+        await throttle.del?.(onceKey).catch(() => undefined);
         throw error;
       });
     if (created === null) {

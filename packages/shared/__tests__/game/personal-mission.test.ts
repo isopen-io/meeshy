@@ -15,6 +15,7 @@ import {
   isPersonalMissionOpen,
   personalMissionActivity,
   personalMissionState,
+  personalWindowStillFits,
   type PersonalMissionInput,
 } from '../../utils/game/personal-mission.js';
 import { personalMissionPhrase } from '../../utils/game/personal-mission-copy.js';
@@ -74,6 +75,14 @@ describe('la mission personnelle', () => {
     const late = drawPersonalMission(input({ nowMinute: 20 * 60 + 30 }))!;
     expect(late.endMinute - (20 * 60 + 30)).toBeGreaterThanOrEqual(60);
     expect(drawPersonalMission(input({ nowMinute: 22 * 60 + 30 }))).toBeNull();
+  });
+
+  it('dit AVANT le tirage si une plage tient encore : même verdict que le tirage, minute par minute', () => {
+    for (const nowMinute of [0, 5 * 60, 20 * 60 + 30, 22 * 60, 22 * 60 + 1, 23 * 60 + 59]) {
+      expect(personalWindowStillFits(nowMinute)).toBe(drawPersonalMission(input({ nowMinute })) !== null);
+    }
+    expect(personalWindowStillFits(22 * 60)).toBe(true);
+    expect(personalWindowStillFits(22 * 60 + 1)).toBe(false);
   });
 
   it('suit le niveau : facile sous le 10, moyenne sous le 30, difficile ensuite', () => {
