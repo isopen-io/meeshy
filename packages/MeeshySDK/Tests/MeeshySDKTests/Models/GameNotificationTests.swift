@@ -123,6 +123,30 @@ final class GameNotificationTests: XCTestCase {
         XCTAssertEqual(try decode(leagueJSON).quickActions, [])
     }
 
+    // MARK: - Bannière in-app
+
+    func test_inAppBanner_leagueResultWithoutActor_namesTheSurface_andShowsTheServedSentence() throws {
+        let event = try JSONDecoder().decode(SocketNotificationEvent.self, from: Data("""
+        {"id":"n9","userId":"me","type":"game_league_result","content":"Tu montes en Jade cette semaine."}
+        """.utf8))
+
+        let banner = event.bannerPresentation()
+        XCTAssertEqual(banner.headline, "Ta ligue de la semaine", "jamais « Quelqu'un »")
+        XCTAssertEqual(banner.body, "Tu montes en Jade cette semaine.")
+    }
+
+    func test_inAppBanner_aDuoInvitationNamesTheFriend() throws {
+        let event = try JSONDecoder().decode(SocketNotificationEvent.self, from: Data("""
+        {"id":"n8","userId":"me","type":"game_duo_invited","title":"Marie","subtitle":"t’invite à un duo",
+         "content":"La mission de la semaine se joue à deux.",
+         "actor":{"id":"x42","username":"marie","displayName":"Marie"}}
+        """.utf8))
+
+        let banner = event.bannerPresentation()
+        XCTAssertEqual(banner.headline, "Marie t’invite à un duo")
+        XCTAssertEqual(banner.body, "La mission de la semaine se joue à deux.")
+    }
+
     // MARK: - Préférence « Jeu »
 
     func test_preference_followsGameEnabled_notTheOtherSwitches() {

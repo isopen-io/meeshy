@@ -136,12 +136,18 @@ public extension SocketNotificationEvent {
             // (`buildPushHeader`) : l'acteur, ou « Meeshy » quand il n'y en a
             // pas. `subtitle` est la phrase d'action localisée. Leur somme EST
             // le titre riche que le serveur persiste — on ne le réécrit pas ici.
-            let head = nonBlank(title) ?? actor
+            // Une notification de jeu SANS acteur (la ligue, la saison) n'a pas de titre serveur : le client nomme la
+            // surface — sans quoi la bannière dirait « Quelqu'un ».
+            let head = nonBlank(title) ?? (hasActor ? nil : notificationType.gameSurfaceTitle) ?? actor
             // Un titre serveur qui PORTE déjà l'action (« Marie était sur
             // Meeshy récemment ») ne la reçoit pas une seconde fois.
             guard let action = nonBlank(subtitle), !head.hasSuffix(action) else { return head }
             return "\(head) \(action)"
         }
+    }
+
+    private var hasActor: Bool {
+        nonBlank(senderDisplayName) != nil || nonBlank(senderUsername) != nil
     }
 
     // MARK: Body

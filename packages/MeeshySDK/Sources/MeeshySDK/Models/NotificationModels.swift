@@ -314,6 +314,19 @@ public extension MeeshyNotificationType {
     /// `true` pour les quatre notifications du jeu — celles que la préférence « Jeu » gouverne.
     var isGame: Bool { gameDestination != nil }
 
+    /// Le titre d'une notification de jeu SANS acteur (la ligue, la saison) : la passerelle ne sert pas de titre, la
+    /// phrase est dans le corps, et le client nomme la surface. `nil` pour tout le reste — un duo, lui, est « <ami> … ».
+    var gameSurfaceTitle: String? {
+        switch self {
+        case .gameLeagueResult:
+            return String(localized: "notification.game.leagueResult.fallbackTitle", defaultValue: "Ta ligue de la semaine", bundle: .main)
+        case .gameSeasonStep:
+            return String(localized: "notification.game.seasonStep.fallbackTitle", defaultValue: "Ta saison", bundle: .main)
+        default:
+            return nil
+        }
+    }
+
     /// Où le toucher mène, `nil` pour tout ce qui n'est pas une notification de jeu.
     var gameDestination: GameNotificationDestination? {
         switch self {
@@ -708,10 +721,8 @@ public struct APINotification: Codable, Identifiable, Sendable, Equatable, Cache
                 format: String(localized: "notification.game.duoAccepted.fallbackTitle", defaultValue: "%@ a accepté ton duo", bundle: .main),
                 actorName
             )
-        case .gameLeagueResult:
-            return String(localized: "notification.game.leagueResult.fallbackTitle", defaultValue: "Ta ligue de la semaine", bundle: .main)
-        case .gameSeasonStep:
-            return String(localized: "notification.game.seasonStep.fallbackTitle", defaultValue: "Ta saison", bundle: .main)
+        case .gameLeagueResult, .gameSeasonStep:
+            return notificationType.gameSurfaceTitle ?? ""
         case .newConversationDirect:
             // Direct DM: the conversation has no real title — surface the
             // sender name so the user immediately knows who started it.
