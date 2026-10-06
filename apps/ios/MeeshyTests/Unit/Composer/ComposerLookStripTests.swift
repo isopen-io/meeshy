@@ -54,11 +54,29 @@ final class ComposerLookStripTests: XCTestCase {
         XCTAssertNil(session.openFamily)
     }
 
-    func test_perform_select_combinesTheItemWithTheCurrentLook() {
+    func test_perform_selectAFrame_keepsTheFilter() throws {
         let session = ComposerCaptureSession(stage: .armed)
         session.look = ComposerPhotoLook(filter: .warm)
-        session.perform(.select, item: .frame(.none))
+        let cadre = try XCTUnwrap(Self.firstRealFrame())
+        session.perform(.select, item: .frame(cadre))
+        XCTAssertEqual(session.look.frame, cadre, "le cadre choisi est posé")
         XCTAssertEqual(session.look.filter, .warm, "choisir un cadre garde le filtre")
+    }
+
+    func test_perform_selectAFilter_keepsTheFrame() throws {
+        let session = ComposerCaptureSession(stage: .armed)
+        let cadre = try XCTUnwrap(Self.firstRealFrame())
+        session.look = ComposerPhotoLook(filter: .natural, frame: cadre)
+        session.perform(.select, item: .filter(.cool))
+        XCTAssertEqual(session.look.filter, .cool, "le filtre choisi est posé")
+        XCTAssertEqual(session.look.frame, cadre, "choisir un filtre garde le cadre")
+    }
+
+    private static func firstRealFrame() -> ComposerPhotoFrame? {
+        ComposerLookStripRule.items(.frames).lazy.compactMap { item -> ComposerPhotoFrame? in
+            guard case .frame(let cadre) = item, cadre != ComposerPhotoFrame.none else { return nil }
+            return cadre
+        }.first
     }
 
     func test_stripNeedsFeed_armedWithCells_offOrCriticalWithout() {
