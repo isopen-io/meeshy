@@ -19,8 +19,23 @@ public enum AdjustmentKind: String, Codable, Sendable, CaseIterable, Identifiabl
     case sharpness
     case blur
     case vignette
+    /// **Les EFFETS de l'ancien éditeur d'image** (#9498) — ce que son outil
+    /// « Effets » offrait de PLUS que les réglages. Son flou, sa vignette et sa
+    /// netteté y étaient des préréglages de curseurs qui existent déjà
+    /// ci-dessus ; ils ne reviennent pas une seconde fois.
+    case bloom
+    case grain
 
     public var id: String { rawValue }
+
+    /// Le sous-outil qui offre ce curseur : RÉGLAGES ou EFFETS (#9498). Les deux
+    /// familles partagent le sac, le fil et la chaîne de rendu.
+    public var family: AdjustmentFamily {
+        switch self {
+        case .bloom, .grain: return .effect
+        default: return .tone
+        }
+    }
 
     /// Adjustments surfaced in Simple mode. Pro mode shows every case.
     public var isEssential: Bool {
@@ -41,6 +56,8 @@ public enum AdjustmentKind: String, Codable, Sendable, CaseIterable, Identifiabl
         case .sharpness: return "wand.and.rays"
         case .blur: return "aqi.medium"
         case .vignette: return "camera.filters"
+        case .bloom: return "sun.haze"
+        case .grain: return "circle.dotted"
         }
     }
 
@@ -56,6 +73,8 @@ public enum AdjustmentKind: String, Codable, Sendable, CaseIterable, Identifiabl
         case .sharpness: return 0.0...1.0
         case .blur: return 0.0...1.0
         case .vignette: return 0.0...2.0
+        case .bloom: return 0.0...1.0
+        case .grain: return 0.0...1.0
         }
     }
 
@@ -78,8 +97,17 @@ public enum AdjustmentKind: String, Codable, Sendable, CaseIterable, Identifiabl
         case .sharpness: return "Nettet\u{00E9}"
         case .blur: return "Flou"
         case .vignette: return "Vignette"
+        case .bloom: return "Bloom"
+        case .grain: return "Grain"
         }
     }
+}
+
+/// **Les deux sous-outils d'un média de la scène** (#9498) : les RÉGLAGES, des
+/// corrections de ton et de netteté, et les EFFETS, des looks posés sur l'image.
+public enum AdjustmentFamily: String, Codable, Sendable, CaseIterable {
+    case tone
+    case effect
 }
 
 // MARK: - What a VIDEO paints (#9169)
@@ -92,9 +120,14 @@ extension AdjustmentKind {
     /// l'étage le plus coûteux de la chaîne, et une vidéo le paierait à chaque
     /// trame. Ni l'un ni l'autre n'est servi — et une charge qui les porte sur
     /// une vidéo ne les fait pas peindre (`ImageAdjustments.served(for:)`).
+    ///
+    /// **Aucun EFFET n'est servi à une vidéo** (#9498) : le bloom est un flou
+    /// gaussien de plus à chaque trame, pour la même raison que le flou ; le
+    /// grain est un bruit que la compression ne tient pas — il scintille d'une
+    /// trame à l'autre et fait exploser le débit à l'export.
     public var isServedForVideo: Bool {
         switch self {
-        case .sharpness, .blur: return false
+        case .sharpness, .blur, .bloom, .grain: return false
         default: return true
         }
     }
@@ -105,6 +138,16 @@ extension AdjustmentKind {
         case .image: return allCases
         case .video: return allCases.filter(\.isServedForVideo)
         }
+    }
+
+    /// Les RÉGLAGES seuls, sans les effets — ce que l'éditeur plein écran de
+    /// l'avatar offre en curseurs, ses effets restant un préréglage d'un
+    /// toucher (`ImageEffect`).
+    public static var toneCases: [AdjustmentKind] { allCases.filter { $0.family == .tone } }
+
+    /// Les curseurs d'UN sous-outil qu'un média de ce genre offre et peint.
+    public static func served(for kind: StoryMediaKind, in family: AdjustmentFamily) -> [AdjustmentKind] {
+        served(for: kind).filter { $0.family == family }
     }
 }
 
@@ -131,6 +174,8 @@ public struct ImageAdjustments: Codable, Hashable, Sendable {
     public var sharpness: Float
     public var blur: Float
     public var vignette: Float
+    public var bloom: Float
+    public var grain: Float
 
     public init(
         exposure: Float = 0,
@@ -141,7 +186,9 @@ public struct ImageAdjustments: Codable, Hashable, Sendable {
         temperature: Float = 0,
         sharpness: Float = 0,
         blur: Float = 0,
-        vignette: Float = 0
+        vignette: Float = 0,
+        bloom: Float = 0,
+        grain: Float = 0
     ) {
         self.exposure = exposure
         self.brightness = brightness
@@ -152,6 +199,8 @@ public struct ImageAdjustments: Codable, Hashable, Sendable {
         self.sharpness = sharpness
         self.blur = blur
         self.vignette = vignette
+        self.bloom = bloom
+        self.grain = grain
     }
 
     public static let neutral = ImageAdjustments()
@@ -170,6 +219,8 @@ public struct ImageAdjustments: Codable, Hashable, Sendable {
             case .sharpness: return sharpness
             case .blur: return blur
             case .vignette: return vignette
+            case .bloom: return bloom
+            case .grain: return grain
             }
         }
         set {
@@ -184,6 +235,8 @@ public struct ImageAdjustments: Codable, Hashable, Sendable {
             case .sharpness: sharpness = clamped
             case .blur: blur = clamped
             case .vignette: vignette = clamped
+            case .bloom: bloom = clamped
+            case .grain: grain = clamped
             }
         }
     }
@@ -196,6 +249,19 @@ public struct ImageAdjustments: Codable, Hashable, Sendable {
     /// Count of adjustments that currently differ from neutral.
     public var activeCount: Int {
         AdjustmentKind.allCases.filter(isActive).count
+    }
+
+    /// Count of the adjustments of one sub-tool that differ from neutral (#9498).
+    public func activeCount(in family: AdjustmentFamily) -> Int {
+        AdjustmentKind.allCases.filter { $0.family == family && isActive($0) }.count
+    }
+
+    /// These values with every adjustment of `family` back to neutral — the
+    /// « Réinitialiser » of ONE sub-tool, which leaves the other one alone.
+    public func resetting(_ family: AdjustmentFamily) -> ImageAdjustments {
+        AdjustmentKind.allCases.filter { $0.family == family }.reduce(into: self) { result, kind in
+            result[kind] = kind.neutralValue
+        }
     }
 
     /// The active values only, keyed by `AdjustmentKind.rawValue` — what travels.

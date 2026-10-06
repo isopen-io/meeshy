@@ -58,7 +58,53 @@ nonisolated enum ImageAdjustmentStage {
             result = vignette(result, intensity: adjustments.vignette, radius: 1)
         }
 
+        // Les EFFETS (#9498) closent la chaîne, comme l'étage « effet » de
+        // l'éditeur plein écran le faisait après ses réglages.
+        if adjustments.bloom > 0.001 {
+            result = bloom(result, amount: adjustments.bloom, extent: extent)
+        }
+
+        if adjustments.grain > 0.001 {
+            result = grain(result, amount: adjustments.grain, extent: extent)
+        }
+
         return result
+    }
+
+    // MARK: Les effets (#9498) — UNE écriture, l'éditeur et la scène
+
+    /// Le rayon de `CIBloom`, en pixels de la source — celui du préréglage de
+    /// l'ancien éditeur.
+    static let bloomRadius: Double = 10
+    /// L'alpha du grain à pleine course : à mi-course (0,5), les 0,05 du
+    /// préréglage de l'ancien éditeur.
+    static let grainAlphaPerUnit: CGFloat = 0.1
+
+    /// **Le BLOOM** : l'image floutée, ajoutée sur elle-même à `amount` (0…1) —
+    /// 0,5 rend le préréglage « Bloom » de l'ancien éditeur.
+    static func bloom(_ input: CIImage, amount: Float, extent: CGRect) -> CIImage {
+        ciFilter("CIBloom", on: input, [
+            kCIInputRadiusKey: bloomRadius,
+            kCIInputIntensityKey: Double(amount)
+        ]).cropped(to: extent)
+    }
+
+    /// **Le GRAIN** : un bruit noir posé sur l'image, d'alpha au plus
+    /// `amount × 0,1`. `CIRandomGenerator` est déterministe : le même grain
+    /// d'un rendu à l'autre, donc d'une image du cache à la suivante.
+    static func grain(_ input: CIImage, amount: Float, extent: CGRect) -> CIImage {
+        guard let noise = CIFilter(name: "CIRandomGenerator")?.outputImage else { return input }
+        let alpha = CGFloat(amount) * grainAlphaPerUnit
+        let layer = ciFilter("CIColorMatrix", on: noise.cropped(to: extent), [
+            "inputRVector": CIVector(x: 0, y: 0, z: 0, w: 0),
+            "inputGVector": CIVector(x: 0, y: 0, z: 0, w: 0),
+            "inputBVector": CIVector(x: 0, y: 0, z: 0, w: 0),
+            "inputAVector": CIVector(x: 0, y: 0, z: 0, w: alpha)
+        ])
+        guard let composite = CIFilter(name: "CISourceOverCompositing") else { return input }
+        composite.setValue(layer, forKey: kCIInputImageKey)
+        composite.setValue(input, forKey: kCIInputBackgroundImageKey)
+        return composite.outputImage?.cropped(to: extent) ?? input
     }
 
     static func ciFilter(_ name: String, on input: CIImage, _ parameters: [String: Any]) -> CIImage {
