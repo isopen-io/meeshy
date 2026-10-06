@@ -93,14 +93,15 @@ public struct PlayerBannerView: View {
     private var stacked: Bool { typeSize > .xxLarge }
 
     public var body: some View {
+        // Jamais de `ViewThatFits` : sous iOS 26 il mesure ses candidats sur le rendu asynchrone, où les fermetures
+        // de `GeometryReader` (l'anneau, la jauge) trappent à l'isolation du main actor (#9135, #9456). La
+        // disposition se choisit sur la taille du texte, et la ligne tient sur 320 pt en laissant ses textes
+        // se réduire.
         Group {
             if stacked {
                 stackedLayout
             } else {
-                ViewThatFits(in: .horizontal) {
-                    singleRow
-                    stackedLayout
-                }
+                singleRow
             }
         }
         .padding(.horizontal, 12)
@@ -134,7 +135,7 @@ public struct PlayerBannerView: View {
         }
     }
 
-    /// Au-delà de XXL (ou quand la ligne ne tient pas) : l'anneau et les pièces en haut, la jauge SOUS l'anneau.
+    /// Au-delà de XXL : l'anneau et les pièces en haut, la jauge SOUS l'anneau.
     private var stackedLayout: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .center, spacing: 10) {
@@ -189,7 +190,7 @@ public struct PlayerBannerView: View {
                     .minimumScaleFactor(0.8)
             }
         }
-        .frame(minWidth: 64, maxWidth: .infinity, alignment: .leading)
+        .frame(minWidth: 44, maxWidth: .infinity, alignment: .leading)
     }
 
     // MARK: Les pièces — seulement ce qui existe
@@ -199,7 +200,7 @@ public struct PlayerBannerView: View {
     }
 
     private var pieces: some View {
-        HStack(spacing: 10) { pieceViews }
+        HStack(spacing: 8) { pieceViews }
     }
 
     @ViewBuilder
@@ -228,9 +229,9 @@ public struct PlayerBannerView: View {
                     .monospacedDigit()
                     .foregroundColor(palette.ink)
                     .lineLimit(1)
+                    .minimumScaleFactor(0.7)
             }
         }
-        .fixedSize(horizontal: true, vertical: false)
     }
 }
 
