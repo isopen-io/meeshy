@@ -74,6 +74,12 @@ describe('la proposition au niveau 100', () => {
     expect(t).toContain('ligue (niveau 10) et ton duo (niveau 20) se referment');
   });
 
+  test('la confirmation dit que le consentement à la ligue publique reste enregistré', async () => {
+    const host = await mount(<GamePrestige {...props()} />);
+    await click(host.querySelector('[data-game-prestige-go]'));
+    expect(host.textContent ?? '').toContain('Ton consentement à la ligue publique reste enregistré : tu retrouves ta ligue au niveau 10.');
+  });
+
   test('confirmer envoie UN passage, et l’écran annonce la nouvelle étoile', async () => {
     let passes = 0;
     const host = await mount(<GamePrestige {...props(undefined, 1, { onPass: () => (passes += 1) })} />);
