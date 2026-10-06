@@ -245840,37 +245840,37 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "%1$@ % bis Level %2$@"
+            "value": "%1$@ %% bis Level %2$@"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "%1$@% to %2$@"
+            "value": "%1$@%% to %2$@"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "%1$@ % hacia el %2$@"
+            "value": "%1$@ %% hacia el %2$@"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "%1$@ % vers le %2$@"
+            "value": "%1$@ %% vers le %2$@"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "%1$@% verso il %2$@"
+            "value": "%1$@%% verso il %2$@"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "%1$@% rumo ao %2$@"
+            "value": "%1$@%% rumo ao %2$@"
           }
         }
       }
