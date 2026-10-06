@@ -68,6 +68,7 @@ extension Route {
         case .progressionSection(let section): return "Progression.\(section.rawValue)"
         case .progressionRules: return "Progression.Rules"
         case .progressionNotebook: return "Progression.Notebook"
+        case .gamePage(let page): return page.analyticsName
         case .links: return "Links"
         case .affiliate: return "Affiliate"
         case .trackingLinks: return "TrackingLinks"

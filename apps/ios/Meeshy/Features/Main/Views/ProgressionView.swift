@@ -186,7 +186,8 @@ struct ProgressionView: View {
                             onOpenConversations: { router.popToRoot() },
                             onOpenBadges: { router.push(.progressionSection(.badges)) },
                             onOpenRules: { router.push(.progressionRules(rule: $0)) },
-                            onOpenNotebook: { router.push(.progressionNotebook) }
+                            onOpenNotebook: { router.push(.progressionNotebook) },
+                            onOpenPage: { router.push(.gamePage($0)) }
                         )
                     }
                     /*

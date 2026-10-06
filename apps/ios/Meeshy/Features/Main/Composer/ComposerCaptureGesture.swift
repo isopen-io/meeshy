@@ -44,13 +44,29 @@ nonisolated struct ComposerCaptureGestureContext: Equatable, Sendable {
     var allowsVideo = true
 }
 
+/// Le toucher précédent, et la zone où il est tombé : un double ne se fait
+/// jamais d'une zone à l'autre.
+nonisolated struct ComposerCaptureLastTap: Equatable, Sendable {
+    let zone: ComposerCaptureZone
+    let at: Date
+}
+
+/// Ce qu'un toucher produit, et la mémoire à garder pour le suivant : `nil`
+/// quand il a fini un double — un troisième en ouvre un nouveau.
+nonisolated struct ComposerCaptureTapOutcome: Equatable, Sendable {
+    let action: ComposerCaptureAction
+    let consumedDouble: Bool
+    let memory: ComposerCaptureLastTap?
+}
+
 /// **La table des gestes de la capture** (#9351, spec § 3) — zone × geste ×
 /// phase × verrou → action. Pure : la vue ne décide rien.
 ///
 /// Un `doubleTap` n'est jamais reconnu par un `TapGesture(count: 2)`, qui
 /// retarderait le toucher simple : c'est la règle du porteur
 /// (`ComposerCaptureTapRule`, #9464) qui dit si un toucher est le second d'un
-/// double — `tap(zone:context:now:lastTapAt:armedAt:)` la consulte.
+/// double — `tap(zone:context:now:lastTap:armedAt:)` la consulte, et la
+/// session (`tapAction(at:)`) n'en est que la projection.
 nonisolated enum ComposerCaptureGesture {
 
     static func action(zone: ComposerCaptureZone, gesture: ComposerCaptureGestureKind,
@@ -65,17 +81,68 @@ nonisolated enum ComposerCaptureGesture {
         }
     }
 
-    /// **Un toucher, lu par la règle du porteur** (#9464) : le premier vise tout
-    /// de suite ; le second, dans la fenêtre et après l'armement, est un double.
-    /// Un double que la table refuse (segments en attente, format sans photo)
-    /// reste un toucher : il vise encore.
+    /// **Un toucher, lu par la règle du porteur** (#9464) — le SEUL décideur du
+    /// toucher : le premier vise tout de suite ; le second, dans la fenêtre,
+    /// après l'armement et DANS LA MÊME ZONE, est un double. Un double que la
+    /// table refuse (segments en attente, format sans photo) reste un toucher :
+    /// il vise encore. L'issue rend la mémoire à garder pour le toucher suivant.
     static func tap(zone: ComposerCaptureZone, context: ComposerCaptureGestureContext,
-                    now: Date, lastTapAt: Date?, armedAt: Date?) -> ComposerCaptureAction {
-        let regle = ComposerCaptureTapRule.action(stage: context.stage, now: now, lastTapAt: lastTapAt, armedAt: armedAt)
-        let simple = action(zone: zone, gesture: .tap, context: context)
-        guard regle == .photo else { return simple }
-        let double = action(zone: zone, gesture: .doubleTap, context: context)
-        return double == .none ? simple : double
+                    now: Date, lastTap: ComposerCaptureLastTap?, armedAt: Date?) -> ComposerCaptureTapOutcome {
+        let precedent = lastTap.flatMap { $0.zone == zone ? $0.at : nil }
+        let regle = ComposerCaptureTapRule.action(stage: context.stage, now: now, lastTapAt: precedent, armedAt: armedAt)
+        let double = regle == .photo ? action(zone: zone, gesture: .doubleTap, context: context) : .none
+        guard double == .none else {
+            return ComposerCaptureTapOutcome(action: double, consumedDouble: true, memory: nil)
+        }
+        return ComposerCaptureTapOutcome(action: action(zone: zone, gesture: .tap, context: context),
+                                         consumedDouble: false,
+                                         memory: ComposerCaptureLastTap(zone: zone, at: now))
+    }
+
+    /// **Les équivalents VoiceOver** (#9351, contraintes globales § Accessibilité) :
+    /// VoiceOver capte le double toucher et l'appui long, donc chaque zone offre
+    /// ses prises en actions NOMMÉES, projetées de la table — jamais une liste
+    /// réécrite à côté. Une prise lancée par VoiceOver tient sans doigt : en
+    /// enregistrement, la scène et la miniature choisie offrent « Arrêter ».
+    /// Les autres miniatures et le rail sont des boutons : leur activation suffit.
+    static func accessibilityActions(zone: ComposerCaptureZone,
+                                     context: ComposerCaptureGestureContext) -> [ComposerCaptureAction] {
+        guard !context.editing, context.stage != .off else { return [] }
+        switch zone {
+        case .scene:
+            guard context.stage == .armed else { return [.stopTake, .focus] }
+            return [action(zone: .scene, gesture: .doubleTap, context: context),
+                    action(zone: .scene, gesture: .longPress, context: context),
+                    .focus].filter { $0 != .none }
+        case .chosenThumbnail:
+            guard context.stage == .armed else { return [.stopTake] }
+            return [action(zone: .chosenThumbnail, gesture: .doubleTap, context: context),
+                    action(zone: .chosenThumbnail, gesture: .longPress, context: context)].filter { $0 != .none }
+        case .otherThumbnail, .rail:
+            return []
+        }
+    }
+
+    /// Le nom lu par VoiceOver ; `nil` pour une action qui n'est pas offerte.
+    static func accessibilityName(of action: ComposerCaptureAction) -> String? {
+        switch action {
+        case .photoToEdit:
+            return String(localized: "composer.capture.a11y.takePhoto", defaultValue: "Prendre une photo", bundle: .main)
+        case .filmSegment:
+            return String(localized: "composer.capture.a11y.film", defaultValue: "Filmer", bundle: .main)
+        case .stopTake:
+            return String(localized: "composer.capture.a11y.stop", defaultValue: "Arrêter", bundle: .main)
+        case .focus:
+            return String(localized: "composer.capture.a11y.focus", defaultValue: "Mettre au point", bundle: .main)
+        case .photoToGallery:
+            return String(localized: "composer.capture.a11y.photoToGallery", defaultValue: "Photo vers la galerie",
+                          bundle: .main)
+        case .filmToGallery:
+            return String(localized: "composer.capture.a11y.videoToGallery", defaultValue: "Vidéo vers la galerie",
+                          bundle: .main)
+        case .none, .zoom, .steerTake, .close, .select, .openFamily, .reframe:
+            return nil
+        }
     }
 
     private static func lookIsLocked(_ context: ComposerCaptureGestureContext) -> Bool {

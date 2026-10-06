@@ -6,7 +6,7 @@ import { resolveEngagementProgress } from '@meeshy/shared/utils/engagement-progr
 import type { EngagementWithGame } from '@/lib/api/engagement';
 import { ENGAGEMENT_PROGRESS_FIXTURE } from '@/lib/api/engagement-fixture';
 import { gameBlockFixture, gameBlockWithExtrasFixture } from '@/lib/api/game-fixture';
-import { leagueFriendsFixture, leagueWeekFixture } from '@/lib/api/game-v2-queries';
+import { leagueFriendsFixture, leagueWeekFixture } from '@/lib/api/game-v2-queries-fixture';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 

@@ -571,6 +571,10 @@ struct ComposerSceneSurface: View {
     /// s'y proportionne. `0` avant la première passe ⇒ le volet se mesure seul.
     @State private var sceneCardWidth: CGFloat = 0
 
+    /// Le cadre du DESSIN dans l'écran : le panneau d'options s'y repère pour
+    /// laisser voir l'objet qu'il règle (#9495).
+    @State private var sceneCardFrame: CGRect = .null
+
     /// **La hauteur des étages du bas, mesurée** (#8712) — ce qu'un panneau
     /// ouvert y occupe, et donc de combien la scène doit REMONTER.
     @State private var lowerFloorsHeight: CGFloat = 0
@@ -614,6 +618,7 @@ struct ComposerSceneSurface: View {
         }
         .onPreferenceChange(ComposerSceneCardLeadingKey.self) { sceneCardLeading = $0 }
         .onPreferenceChange(ComposerSceneCardWidthPreferenceKey.self) { sceneCardWidth = $0 }
+        .onPreferenceChange(ComposerSceneCardFrameKey.self) { sceneCardFrame = $0 }
         .onPreferenceChange(ComposerLowerFloorsHeightKey.self) { lowerFloorsHeight = $0 }
         // **La bascule outil <-> scène se fait en fondu** (#8652), coupé sous
         // Reduce Motion ; VoiceOver est prévenu que l'écran a changé, et son
@@ -784,6 +789,11 @@ struct ComposerSceneSurface: View {
                 .aspectRatio(aspectRatio, contentMode: .fit)
                 .anchorPreference(key: ComposerSceneCameraFrameKey.self,
                                   value: .bounds) { $0 }
+                .background {
+                    GeometryReader { geo in
+                        Color.clear.preference(key: ComposerSceneCardFrameKey.self, value: geo.frame(in: .global))
+                    }
+                }
                 .padding(.horizontal, edge)
                 .allowsHitTesting(false)
         }
@@ -948,7 +958,9 @@ struct ComposerSceneSurface: View {
         // — sur la scène libre, alignées sur le haut de la colonne droite.
         .overlay {
             if timelinePanel == nil, let inlinePanel {
-                inlinePanel.transition(.opacity)
+                inlinePanel
+                    .environment(\.composerSceneCardFrame, sceneCardFrame)
+                    .transition(.opacity)
             }
         }
     }

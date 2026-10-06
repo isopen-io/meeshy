@@ -14,9 +14,36 @@ type Call =
   | { readonly op: 'pauseAt'; readonly time: unknown }
   | { readonly op: 'runFor'; readonly ticks: number };
 
+type RequestListener = (request: FakeRequest) => void;
+
+type FakeRequest = {
+  readonly url: () => string;
+  readonly resourceType: () => string;
+  readonly frame: () => { readonly url: () => string };
+};
+
+const PAGE_URL = 'http://127.0.0.1:4173/c/c-live';
+
+const fakeRequest = (url: string, resourceType = 'script'): FakeRequest => ({
+  url: () => url,
+  resourceType: () => resourceType,
+  frame: () => ({ url: () => PAGE_URL }),
+});
+
 const fakePage = () => {
   const calls: Call[] = [];
+  const listeners = new Map<string, RequestListener[]>();
+  const context = {
+    on: (event: string, listener: RequestListener) => {
+      listeners.set(event, [...(listeners.get(event) ?? []), listener]);
+      return context;
+    },
+  };
+  const emit = (event: string, request: FakeRequest) => {
+    for (const listener of listeners.get(event) ?? []) listener(request);
+  };
   const page = {
+    context: () => context,
     clock: {
       install: (options: { time: unknown }) => {
         calls.push({ op: 'install', time: options.time });
@@ -32,7 +59,13 @@ const fakePage = () => {
       },
     },
   };
-  return { page, calls };
+  return { page, calls, emit };
+};
+
+const runsOf = (calls: readonly Call[]) => calls.filter((c) => c.op === 'runFor');
+
+const flushMicrotasks = async () => {
+  for (let i = 0; i < 20; i += 1) await Promise.resolve();
 };
 
 describe('pausedChronology', () => {
@@ -188,6 +221,69 @@ describe('pausedChronology', () => {
 
     expect(marked).toBe(400);
     expect(calls.filter((c) => c.op === 'runFor').length).toBe(runsBefore);
+  });
+
+  /**
+   * LE TEMPS SIMULÉ N'AVANCE PAS PENDANT QUE LE CODE ARRIVE (#9267). Sous
+   * horloge en pause, un chunk chargé à la demande (`import()` du fil, du
+   * temps réel, du bouchon de fixtures) arrive en temps MURAL ; chaque pas
+   * franchi pendant son vol consomme le budget SIMULÉ d'un fait sans que le
+   * produit ait pu y répondre — le budget mesurait alors la vitesse du réseau
+   * local, et le fil de `c-live` « ne montait jamais » une fois sur trois.
+   */
+  test('factBefore ne franchit aucun pas tant qu’un script de la page est en vol', async () => {
+    const { page, calls, emit } = fakePage();
+    const chrono = await pausedChronology(page as never, { time: 0, stepMs: 50 });
+    const chunk = fakeRequest('http://127.0.0.1:4173/assets/thread-abc.js');
+    let loaded = false;
+    emit('request', chunk);
+
+    const pending = chrono.factBefore(1_500, () => loaded && chrono.now() >= 50);
+    await flushMicrotasks();
+    expect(runsOf(calls)).toEqual([]);
+
+    loaded = true;
+    emit('requestfinished', chunk);
+
+    expect(await pending).toBe(true);
+    expect(runsOf(calls)).toEqual([{ op: 'runFor', ticks: 50 }]);
+  });
+
+  test('advanceTo attend aussi le code en vol, et un échec réseau le libère comme une arrivée', async () => {
+    const { page, calls, emit } = fakePage();
+    const chrono = await pausedChronology(page as never, { time: 0 });
+    const chunk = fakeRequest('http://127.0.0.1:4173/assets/realtime-abc.js');
+    emit('request', chunk);
+
+    const pending = chrono.advanceTo(300);
+    await flushMicrotasks();
+    expect(runsOf(calls)).toEqual([]);
+
+    emit('requestfailed', chunk);
+    await pending;
+
+    expect(runsOf(calls)).toEqual([{ op: 'runFor', ticks: 300 }]);
+  });
+
+  test('une image ou une ressource d’une autre origine ne retient pas l’horloge', async () => {
+    const { page, calls, emit } = fakePage();
+    const chrono = await pausedChronology(page as never, { time: 0 });
+    emit('request', fakeRequest('http://127.0.0.1:4173/avatar.png', 'image'));
+    emit('request', fakeRequest('https://fonts.example.org/font.css', 'stylesheet'));
+
+    await chrono.advanceTo(300);
+
+    expect(runsOf(calls)).toEqual([{ op: 'runFor', ticks: 300 }]);
+  });
+
+  test('un code qui n’arrive jamais ne bloque pas : le plafond MURAL rend la main, sans lever', async () => {
+    const { page, calls, emit } = fakePage();
+    const chrono = await pausedChronology(page as never, { time: 0, codeCeilingMs: 20 });
+    emit('request', fakeRequest('http://127.0.0.1:4173/assets/lost.js'));
+
+    await chrono.advanceTo(300);
+
+    expect(runsOf(calls)).toEqual([{ op: 'runFor', ticks: 300 }]);
   });
 
   test('le pas par défaut vaut 50 ms — une constante nommée, une fois', () => {

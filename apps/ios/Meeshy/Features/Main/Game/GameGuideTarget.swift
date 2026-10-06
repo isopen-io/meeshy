@@ -44,3 +44,17 @@ enum GameGuideTarget {
         }
     }
 }
+
+extension GameGuideTarget {
+    /// La page où mène le bouton d'un moment de la vague 2 : la ligue, la saison, la vitrine, l'Atlas — et le Prestige,
+    /// dont le moment dit « voir le niveau » et ouvre la page qui l'explique (#9481).
+    static func page(for action: GuideActionV2) -> GamePage {
+        switch action {
+        case .seeLeague: .league
+        case .seeSeason: .season
+        case .seeTrophies: .showcase
+        case .seeAtlas: .atlas
+        case .seeLevel: .prestige
+        }
+    }
+}

@@ -4,6 +4,7 @@ import { mediaCropStyle, readMediaCrop } from '@meeshy/shared/utils/media-crop';
 
 import { objectMediaIdentity, objectMediaSrc, type SceneCarrier } from '@/lib/canvas/carrier';
 import type { CanvasObject } from '@/lib/canvas/document';
+import { mediaAdjustmentsPaint } from '@/lib/canvas/media-adjustments';
 import { mediaFilterCss } from '@/lib/canvas/media-filter';
 import { MEDIA_CORNER_FRACTION, placedMediaDesignSize } from '@/lib/canvas/media-size';
 import { objectMediaTimeline } from '@/lib/canvas/media-seek';
@@ -60,16 +61,28 @@ export function SceneObjectMedia({
   const isVideo = mediaType?.startsWith('video') === true;
   const loop = payload.loop === true;
 
-  // LE FILTRE DE CET OBJET (lot 7) — sur sa boîte, donc sur lui seul.
-  const filter = mediaFilterCss(payload);
+  // LE FILTRE PUIS LES RÉGLAGES DE CET OBJET (lot 7, #9497) — sur le média
+  // lui-même, dans l'ordre d'iOS (`StoryMediaLayer.filtered` : filtre, puis
+  // `ImageAdjustmentStage`) ; la teinte et la vignette en calques au-dessus de
+  // lui, dans sa boîte, donc sur lui seul.
+  const sourceVisibleWidth = carried?.width !== undefined && carried.width > 0 ? carried.width * (crop?.width ?? 1) : undefined;
+  const adjustments = mediaAdjustmentsPaint(payload, {
+    target: isVideo ? 'video' : 'image',
+    ...(sourceVisibleWidth !== undefined ? { designPixelsPerSourcePixel: size.width / sourceVisibleWidth } : {}),
+  });
+  const filter = [mediaFilterCss(payload), adjustments.filter].filter((step) => step !== undefined).join(' ');
   const boxStyle = {
     width: cqw(size.width / DESIGN_WIDTH),
     height: cqw(size.height / DESIGN_WIDTH),
     borderRadius: cqw((MEDIA_CORNER_FRACTION * Math.min(size.width, size.height)) / DESIGN_WIDTH),
     overflow: 'hidden' as const,
-    ...(filter !== undefined ? { filter } : {}),
+    ...(adjustments.overlays.length > 0 ? { isolation: 'isolate' as const } : {}),
   };
-  const innerStyle = crop !== null ? { ...mediaCropStyle(crop), position: 'absolute' as const, objectFit: 'fill' as const } : {};
+  const mediaStyle = {
+    ...(crop !== null ? { ...mediaCropStyle(crop), position: 'absolute' as const, objectFit: 'fill' as const } : {}),
+    ...(filter !== '' ? { filter } : {}),
+  };
+  const hasMediaStyle = Object.keys(mediaStyle).length > 0;
 
   // `hidden={errored}` sur l'élément lui-même (miroir `GridCellImage`,
   // `media-grid.tsx:322-328`) — jamais un `return null` du composant ENTIER :
@@ -89,7 +102,7 @@ export function SceneObjectMedia({
             hidden={errored}
             {...(poster !== undefined ? { poster } : {})}
             className="size-full object-cover"
-            style={crop !== null ? innerStyle : undefined}
+            style={hasMediaStyle ? mediaStyle : undefined}
             onError={() => setErrored(true)}
           />
         ) : (
@@ -101,10 +114,21 @@ export function SceneObjectMedia({
             loading="lazy"
             hidden={errored}
             className="size-full object-cover"
-            style={crop !== null ? innerStyle : undefined}
+            style={hasMediaStyle ? mediaStyle : undefined}
             onError={() => setErrored(true)}
           />
         )}
+        {errored
+          ? null
+          : adjustments.overlays.map((layer, index) => (
+              <span
+                key={index}
+                data-media-adjustment-layer={index}
+                aria-hidden="true"
+                className="absolute inset-0"
+                style={{ background: layer.background, ...(layer.mixBlendMode !== undefined ? { mixBlendMode: layer.mixBlendMode } : {}) }}
+              />
+            ))}
       </span>
     </SceneObjectFrame>
   );

@@ -68,8 +68,10 @@ nonisolated enum ComposerLookStripRule {
     }
 
     /// **Les cases peintes** : visibles ±1, au plus `cells` (palier thermique), les
-    /// plus proches du centre d'abord, la choisie toujours. En enregistrement, la
-    /// choisie seule.
+    /// plus proches du centre d'abord, la choisie dès qu'elle est à portée. En
+    /// enregistrement, la choisie seule — c'est elle qui déclenche, la bande
+    /// la garde à l'écran. `visibleRange` compte l'espacement qui suit une case
+    /// comme sien ; le retrait de bord de la bande est à l'appelant.
     static func paintedIndices(visible: ClosedRange<Int>?, count: Int, cells: Int, chosen: Int?,
                                recording: Bool) -> [Int] {
         guard cells > 0, count > 0 else { return [] }

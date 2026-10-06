@@ -7,7 +7,7 @@ import type { UserShowcaseResponse } from '@meeshy/shared/types/game';
 import type { EngagementWithGame } from '@/lib/api/engagement';
 import { ENGAGEMENT_PROGRESS_FIXTURE } from '@/lib/api/engagement-fixture';
 import { gameBlockFixture, gameBlockWithExtrasFixture } from '@/lib/api/game-fixture';
-import { userShowcaseFixture } from '@/lib/api/game-v2-queries';
+import { userShowcaseFixture } from '@/lib/api/game-v2-queries-fixture';
 
 import { GameProfileOwn } from './game-profile-own';
 import { ContactGameStrip, GameProfileVisitor } from './game-profile-visitor';

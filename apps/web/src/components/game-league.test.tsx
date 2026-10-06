@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import type { GameLeagueBlock } from '@meeshy/shared/types/game';
 
 import { gameBlockWithExtrasFixture } from '@/lib/api/game-fixture';
-import { leagueFriendsFixture, leagueWeekFixture } from '@/lib/api/game-v2-queries';
+import { leagueFriendsFixture, leagueWeekFixture } from '@/lib/api/game-v2-queries-fixture';
 import { buttonNamed, createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 

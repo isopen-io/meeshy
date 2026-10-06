@@ -511,7 +511,14 @@ struct ProfileView: View {
     /// découpage (1 000 lignes, directive 2026-09-02) — on n'y ajoute que la
     /// ligne qui la monte.
     private var progressionEntry: some View {
-        ProfileProgressionEntry { router.push(.progression) }
+        VStack(alignment: .leading, spacing: MeeshySpacing.md) {
+            // #9481 — le jeu sur SON profil : l'anneau, le rang, la vitrine, les médailles.
+            GameProfileOwnCard(
+                onOpenProgression: { router.push(.progression) },
+                onOpenShowcase: { router.push(.gamePage(.showcase)) }
+            )
+            ProfileProgressionEntry { router.push(.progression) }
+        }
     }
 
     // Recompose le bouton de stats en UN seul élément VoiceOver cohérent : sans
