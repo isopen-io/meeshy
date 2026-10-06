@@ -1,5 +1,6 @@
 import XCTest
 import AVFoundation
+import CoreImage
 @testable import Meeshy
 
 #if DEBUG
@@ -28,6 +29,37 @@ final class ComposerCaptureFixtureTests: XCTestCase {
         let debout = try XCTUnwrap(flux.latestImage())
         XCTAssertEqual(debout.extent.width, 1080)
         XCTAssertEqual(debout.extent.height, 1440)
+        let ciel = pixel(debout, x: 0, fromTop: 0)
+        XCTAssertGreaterThan(ciel.red, ciel.blue, "en haut à gauche, le ciel chaud : l'image n'est pas retournée")
+        let sol = pixel(debout, x: 0, fromTop: 1439)
+        XCTAssertGreaterThan(sol.blue, sol.red, "en bas, le bleu")
+        XCTAssertGreaterThan(pixel(debout, x: 800, fromTop: 459).green, 0.85, "le soleil à droite : rien n'est en miroir")
+        XCTAssertLessThan(pixel(debout, x: 280, fromTop: 459).green, 0.8)
+        XCTAssertLessThan(pixel(debout, x: 540, fromTop: 1019).red, 0.25, "la silhouette en bas, au centre")
+    }
+
+    func test_driver_paintsOnlyWhenSomeoneReadsTheFrames() async throws {
+        let flux = ComposerCameraFeed()
+        let pilote = ComposerCaptureFixtureDriver()
+        pilote.start(feeding: flux)
+        try await Task.sleep(nanoseconds: 300_000_000)
+        XCTAssertEqual(pilote.paintedFrames, 0, "aucun lecteur, aucun rendu")
+        flux.isActive = true
+        let trame = expectation(description: "une trame de recette arrive")
+        trame.assertForOverFulfill = false
+        flux.setFrameHandler({ _ in trame.fulfill() }, for: ObjectIdentifier(self))
+        await fulfillment(of: [trame], timeout: 2)
+        flux.setFrameHandler(nil, for: ObjectIdentifier(self))
+        pilote.stop()
+        XCTAssertGreaterThan(pilote.paintedFrames, 0)
+        XCTAssertNotNil(flux.latestImage())
+    }
+
+    func test_driver_keepsTickingWhileTheStripScrolls() throws {
+        let code = try String(contentsOf: Self.racine.appendingPathComponent(
+            "Meeshy/Features/Main/Components/CameraModel+Fixture.swift"), encoding: .utf8)
+        XCTAssertTrue(code.contains("RunLoop.main.add(minuteur, forMode: .common)"),
+                      "en mode .default, le minuteur se tait pendant le défilement")
     }
 
     func test_inject_onAnIdleFeed_keepsNothing() throws {
@@ -44,6 +76,8 @@ final class ComposerCaptureFixtureTests: XCTestCase {
     }
 
     func test_movie_isThreeSecondsUprightNineSixteen() async throws {
+        try? FileManager.default.removeItem(at: FileManager.default.temporaryDirectory
+            .appendingPathComponent("capture-fixture.mov"))
         let url = try XCTUnwrap(await ComposerCaptureFixture.movie())
         let asset = AVURLAsset(url: url)
         let duree = try await asset.load(.duration).seconds
@@ -73,13 +107,24 @@ final class ComposerCaptureFixtureTests: XCTestCase {
     }
 
     func test_fixtureCode_neverShipsInRelease() throws {
-        let racine = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent().deletingLastPathComponent()
-            .deletingLastPathComponent().deletingLastPathComponent()
-        let fichier = try String(contentsOf: racine.appendingPathComponent(
+        let fichier = try String(contentsOf: Self.racine.appendingPathComponent(
             "Meeshy/Features/Main/Components/CameraModel+Fixture.swift"), encoding: .utf8)
         XCTAssertTrue(fichier.hasPrefix("#if DEBUG"))
         XCTAssertTrue(fichier.trimmingCharacters(in: .whitespacesAndNewlines).hasSuffix("#endif"))
+    }
+
+    // MARK: - Outils
+
+    private static let racine = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent()
+
+    private func pixel(_ image: CIImage, x: CGFloat, fromTop: CGFloat) -> (red: Double, green: Double, blue: Double) {
+        var octets = [UInt8](repeating: 0, count: 4)
+        let point = CGRect(x: image.extent.minX + x, y: image.extent.maxY - 1 - fromTop, width: 1, height: 1)
+        CIContext().render(image, toBitmap: &octets, rowBytes: 4, bounds: point, format: .RGBA8,
+                           colorSpace: CGColorSpace(name: CGColorSpace.sRGB))
+        return (Double(octets[0]) / 255, Double(octets[1]) / 255, Double(octets[2]) / 255)
     }
 }
 #endif
