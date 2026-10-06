@@ -112,10 +112,10 @@ final class ComposerSceneShutterWiringTests: XCTestCase {
         XCTAssertTrue(corps.contains("ComposerSceneQuickCapture.armedTap("))
         XCTAssertTrue(corps.contains("sceneCapture.photographWhenReady()"))
         let machine = try source("ComposerCaptureSession.swift")
-        guard let photo = machine.range(of: "funcphotographWhenReady(){"),
+        guard let photo = machine.range(of: "funcphotographWhenReady(intent:ComposerTakeIntent=.edit){"),
               let finPhoto = machine.range(of: "funcbeginHold(){", range: photo.upperBound..<machine.endIndex)
         else { return XCTFail("la photo au toucher a changé de forme") }
-        XCTAssertTrue(String(machine[photo.upperBound..<finPhoto.lowerBound]).contains("takePhoto()"))
+        XCTAssertTrue(String(machine[photo.upperBound..<finPhoto.lowerBound]).contains("takePhoto(intent:intent)"))
         // Depuis #8846 le toucher passe APRÈS l'appui long (qui filme), sur
         // la même nappe — celle du chrome PARTAGÉ (#9134).
         XCTAssertTrue(code.contains("onTap:{handleArmedSceneTap()}"),
