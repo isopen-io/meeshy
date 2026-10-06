@@ -98,6 +98,20 @@ describe('la bannière sort en glissant, elle ne disparaît pas sèchement', () 
     expect(host.querySelector('[data-player-slot]')).toBeNull();
   });
 
+  test('en sortie, elle n’est plus atteignable : ni clic par-dessus l’appel, ni Tab, ni lecteur d’écran', async () => {
+    const host = await mount(<TopBand routeKey="list" signedIn />);
+    expect(await waitForBanner(host)).not.toBeNull();
+    expect(host.querySelector('[data-player-slot]')?.hasAttribute('inert')).toBe(false);
+    await act(async () => reportCallResumeShown(true));
+    const slot = host.querySelector('[data-player-slot="leaving"]');
+    expect(slot?.hasAttribute('inert')).toBe(true);
+    expect(slot?.getAttribute('aria-hidden')).toBe('true');
+    await leftTheBand(host);
+    await act(async () => reportCallResumeShown(false));
+    expect(host.querySelector('[data-player-slot]')?.hasAttribute('inert')).toBe(false);
+    expect(host.querySelector('[data-player-slot]')?.hasAttribute('aria-hidden')).toBe(false);
+  });
+
   test('elle revient quand l’appel part, à sa place, sans rester marquée en sortie', async () => {
     const host = await mount(<TopBand routeKey="list" signedIn />);
     expect(await waitForBanner(host)).not.toBeNull();

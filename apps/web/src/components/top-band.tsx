@@ -96,7 +96,10 @@ export function TopBand({
         </Suspense>
       ) : null}
       {banner === 'gone' ? null : (
-        <div data-player-slot={banner === 'leaving' ? 'leaving' : 'shown'} className={banner === 'leaving' ? 'player-banner-slot-leaving' : undefined}>
+        <div
+          data-player-slot={banner === 'leaving' ? 'leaving' : 'shown'}
+          {...(banner === 'leaving' ? { inert: true, 'aria-hidden': 'true' as const, className: 'player-banner-slot-leaving' } : {})}
+        >
           <Suspense fallback={null}>
             <PlayerBannerHost />
           </Suspense>
@@ -111,7 +114,9 @@ export function TopBand({
  * posée AVANT la peinture (`useLayoutEffect`) : une bannière qui doit sortir ne
  * se peint jamais une image de trop dans la pile. La sortie dure
  * `BANNER_EXIT_MS` (aucune sous `prefers-reduced-motion`), puis la bannière est
- * retirée.
+ * retirée. Pendant qu'elle glisse, elle est INERTE : posée par-dessus
+ * l'occupant qui arrive, elle ne prend ni son clic, ni le focus, ni le lecteur
+ * d'écran.
  */
 function useBannerPresence(input: { readonly wanted: boolean; readonly occupied: boolean; readonly occupantReady: boolean }): BannerPhase {
   const { wanted, occupied, occupantReady } = input;
