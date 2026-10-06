@@ -281,6 +281,60 @@ final class ComposerCaptureTakesTests: XCTestCase {
         session.discardSegments()
     }
 
+    // MARK: - La tenue attend la prise précédente (R1-bis)
+
+    func test_beginHold_whilePreviousTakeFinalizes_waitsWithoutLockThenFilms() async throws {
+        let objectif = MockComposerCaptureCamera()
+        objectif.recordingIsPending = true
+        let camera = CameraModel(fixture: ComposerCaptureFixtureDriver())
+        let session = ComposerCaptureSession(stage: .armed, camera: camera, controls: objectif,
+                                             gallery: MockComposerGallery())
+        session.beginHold()
+        await Self.waitUntil(timeout: 2) { session.awaitsPreviousTake }
+        session.holdChanged(CGPoint(x: 400, y: 0))
+        XCTAssertEqual(session.holdPhase, .holding, "aucun cadenas tant que la prise précédente se livre")
+        XCTAssertEqual(session.stage, .armed, "aucune barre rouge pendant l'attente")
+        XCTAssertTrue(objectif.torchRequests.isEmpty, "aucune lumière pendant l'attente")
+        objectif.recordingIsPending = false
+        await Self.waitUntil(timeout: 3) { camera.isRecordingVideo }
+        XCTAssertTrue(camera.isRecordingVideo, "la tenue filme dès la prise précédente livrée")
+        XCTAssertEqual(session.stage, .recording)
+        XCTAssertEqual(session.filmIntents.count, 1)
+        session.disarm()
+    }
+
+    func test_beginHold_previousTakeNeverDelivered_returnsToArmedWithoutLock() async {
+        let objectif = MockComposerCaptureCamera()
+        objectif.recordingIsPending = true
+        let session = ComposerCaptureSession(stage: .armed, controls: objectif, gallery: MockComposerGallery())
+        session.beginHold()
+        await Self.waitUntil(timeout: 2) { session.awaitsPreviousTake }
+        session.holdChanged(CGPoint(x: 400, y: 0))
+        await Self.waitUntil(timeout: 4) { session.holdStartedAt == nil }
+        XCTAssertNil(session.holdStartedAt, "au-delà de la borne, la tenue renonce")
+        XCTAssertNil(session.holdPhase, "aucun cadenas fantôme")
+        XCTAssertEqual(session.lockProgress, 0)
+        XCTAssertEqual(session.stage, .armed)
+        XCTAssertFalse(session.awaitsPreviousTake)
+        XCTAssertTrue(objectif.torchRequests.isEmpty)
+    }
+
+    func test_startFilming_refusedByTheCamera_returnsToArmed() async {
+        let objectif = MockComposerCaptureCamera()
+        let camera = CameraModel(fixture: ComposerCaptureFixtureDriver())
+        camera.startRecording()
+        let session = ComposerCaptureSession(stage: .armed, camera: camera, controls: objectif,
+                                             gallery: MockComposerGallery())
+        session.beginHold()
+        await Self.waitUntil(timeout: 3) { !objectif.torchRequests.isEmpty && session.stage == .armed }
+        XCTAssertEqual(session.stage, .armed, "une prise que rien n'écrit ne reste pas affichée")
+        XCTAssertNil(session.holdStartedAt, "le doigt encore posé ne verrouille plus rien")
+        XCTAssertNil(session.holdPhase)
+        XCTAssertTrue(session.filmIntents.isEmpty)
+        session.disarm()
+        camera.stopRecording()
+    }
+
     func test_recording_aLateEndOfA_keepsTheIntentOfB() throws {
         let camera = CameraModel(fixture: ComposerCaptureFixtureDriver())
         let session = ComposerCaptureSession(stage: .armed, camera: camera, gallery: MockComposerGallery())
@@ -312,7 +366,7 @@ final class ComposerCaptureTakesTests: XCTestCase {
         session.look = ComposerPhotoLook(filter: .warm)
         session.bindRecording(.gallery, to: "film")
         session.camera.librarySave = Task { false }
-        let url = try Self.tempFile()
+        let url = try await Self.tinyMovie()
         session.camera.capturedVideoURL = url
         session.camera.capturedVideoId = "film"
         await Self.waitUntil { session.pendingGallerySaves == 0 }
