@@ -15,6 +15,13 @@
  * - une valeur neutre ne compte pas ;
  * - une vidéo ne peint ni la NETTETÉ ni le FLOU (`AdjustmentKind.isServedForVideo`).
  *
+ * **Les EFFETS de l'ancien éditeur d'image (#9498) voyagent dans le MÊME sac.**
+ * Ce que son outil « Effets » offrait de plus que les réglages — le BLOOM et le
+ * GRAIN — sont deux clés de plus, de 0 à 1, neutres à 0. Son flou, sa vignette
+ * et sa netteté étaient déjà des réglages : ils ne reviennent pas une seconde
+ * fois. Aucune vidéo ne les peint : le bloom est un flou gaussien de plus à
+ * chaque trame, et le grain est un bruit que la compression ne sait pas tenir.
+ *
  * La PEINTURE reste chez chaque client : ce module ne dit que ce qui se peint.
  */
 
@@ -28,6 +35,8 @@ export const MEDIA_ADJUSTMENT_KINDS = [
   'sharpness',
   'blur',
   'vignette',
+  'bloom',
+  'grain',
 ] as const;
 
 export type MediaAdjustmentKind = (typeof MEDIA_ADJUSTMENT_KINDS)[number];
@@ -49,6 +58,8 @@ export const MEDIA_ADJUSTMENT_RANGES: Readonly<Record<MediaAdjustmentKind, Media
   sharpness: { min: 0, max: 1 },
   blur: { min: 0, max: 1 },
   vignette: { min: 0, max: 2 },
+  bloom: { min: 0, max: 1 },
+  grain: { min: 0, max: 1 },
 };
 
 export const MEDIA_ADJUSTMENT_NEUTRAL: Readonly<Record<MediaAdjustmentKind, number>> = {
@@ -61,11 +72,13 @@ export const MEDIA_ADJUSTMENT_NEUTRAL: Readonly<Record<MediaAdjustmentKind, numb
   sharpness: 0,
   blur: 0,
   vignette: 0,
+  bloom: 0,
+  grain: 0,
 };
 
 const ACTIVE_EPSILON = 0.0001;
 
-const NOT_SERVED_FOR_VIDEO: ReadonlySet<MediaAdjustmentKind> = new Set(['sharpness', 'blur']);
+const NOT_SERVED_FOR_VIDEO: ReadonlySet<MediaAdjustmentKind> = new Set(['sharpness', 'blur', 'bloom', 'grain']);
 
 export const isAdjustmentServed = (kind: MediaAdjustmentKind, target: MediaAdjustmentTarget): boolean =>
   target === 'image' || !NOT_SERVED_FOR_VIDEO.has(kind);

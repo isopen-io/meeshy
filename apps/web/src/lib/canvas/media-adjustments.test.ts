@@ -18,7 +18,7 @@ describe('mediaAdjustmentsPaint — ce qui ne peint rien', () => {
     ['un objet vide', {}],
     ['des valeurs neutres', { exposure: 0, brightness: 0, contrast: 1, saturation: 1, vibrance: 0, temperature: 0, sharpness: 0, blur: 0, vignette: 0 }],
     ['une forme illisible', 'fort'],
-    ['des valeurs non numériques ou inconnues', { exposure: 'x', grain: 0.4 }],
+    ['des valeurs non numériques ou inconnues', { exposure: 'x', halo: 0.4 }],
   ];
   for (const [label, adjustments] of cases) {
     test(label, () => {
@@ -93,5 +93,35 @@ describe('mediaAdjustmentsPaint — bornes, ordre et vidéo', () => {
       filter: 'saturate(0)',
       overlays: [{ background: 'radial-gradient(ellipse at center, rgba(0, 0, 0, 0) 45%, rgba(0, 0, 0, 0.5) 100%)' }],
     });
+  });
+});
+
+/**
+ * LES EFFETS D'UNE IMAGE (#9498, D-176) — le bloom et le grain, ce que l'outil
+ * « Effets » de l'ancien éditeur offrait de plus que les réglages. Le bloom est
+ * un HALO (un filtre SVG que le média référence), le grain un calque de bruit.
+ */
+describe('mediaAdjustmentsPaint — les effets', () => {
+  test('le bloom ne touche pas la chaîne CSS : il dit son intensité, que le média peint en halo', () => {
+    expect(image({ bloom: 0.5 })).toEqual({ filter: undefined, overlays: [], glow: 0.5 });
+  });
+
+  test('le grain pose un calque de bruit noir, d’opacité 0,1 × la valeur, au-dessus de la vignette', () => {
+    const { overlays } = image({ grain: 0.5, vignette: 1 });
+    expect(overlays.length).toBe(2);
+    expect(overlays[0]?.background).toContain('radial-gradient');
+    const svg = decodeURIComponent(overlays[1]?.background ?? '');
+    expect(svg).toContain('feTurbulence');
+    expect(svg).toContain('0.05 0 0 0 0');
+    expect(overlays[1]?.mixBlendMode).toBeUndefined();
+  });
+
+  test('un effet hors bornes est peint à la borne de son curseur', () => {
+    expect(image({ bloom: 7 })).toEqual(image({ bloom: 1 }));
+    expect(image({ grain: 7 })).toEqual(image({ grain: 1 }));
+  });
+
+  test('une vidéo ne reçoit ni bloom ni grain', () => {
+    expect(video({ bloom: 1, grain: 1 })).toEqual(NOTHING);
   });
 });
