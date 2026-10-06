@@ -134,6 +134,7 @@ const deStudioChrome = {
   'story.studio.edit.save': 'Speichern',
   'story.studio.edit.saving': 'Wird gespeichert…',
   'story.studio.edit.cancel': 'Änderungen verwerfen',
+  'story.studio.publish.as.storyAndReel': 'Story und Reel veröffentlichen',
 } satisfies StudioChromeCatalogSlice;
 
 export default deStudioChrome;

@@ -111,6 +111,12 @@ final class ComposerLookStripTests: XCTestCase {
         XCTAssertEqual(surface.components(separatedBy: "MTKView(frame:").count - 1, 1, "UNE vue Metal pour toute la bande")
         XCTAssertTrue(surface.contains("ComposerLookPainter.paint("), "les miniatures sortent du peintre unique")
         XCTAssertTrue(surface.contains("makeBlitCommandEncoder"), "l'atlas garde les cases qui ne se repeignent pas")
+        XCTAssertTrue(surface.contains("ComposerLookStripPaintRule.tilesToPaint("), "le dessin applique la règle de repeint")
+        XCTAssertTrue(surface.contains("gate.requestFrame()"), "une case sans image réclame sa trame")
+        XCTAssertTrue(surface.contains("scenes.scene(for:"), "les scènes passent par la cuisson bornée")
+        XCTAssertTrue(surface.contains("reduced(frame, buffer: buffer)"), "la trame se réduit dans le passage du dessin")
+        XCTAssertEqual(surface.components(separatedBy: "makeCommandBuffer").count - 1, 1,
+                       "UN command buffer par dessin")
         let bande = try Self.code("Meeshy/Features/Main/Composer/ComposerLookStrip.swift")
         XCTAssertTrue(bande.contains("ComposerLookStripRule.paintedIndices("), "seules les cases visibles ±1 se peignent")
         XCTAssertTrue(bande.contains("ComposerCaptureGesture.action("), "la miniature choisie obéit à la table des gestes")

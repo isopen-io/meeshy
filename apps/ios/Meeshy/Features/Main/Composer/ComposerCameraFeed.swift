@@ -7,8 +7,8 @@ import QuartzCore
 /// Une sortie de données vidéo vit dans la session à côté de la photo et du
 /// film (iOS 16 les admet ensemble) ; ce guetteur ne GARDE une trame que si
 /// quelqu'un la peint — l'aperçu d'un look, ou la bande et sa miniature choisie
-/// dès le viseur armé (#9351) ; sinon rien n'est retenu. Une seule trame en mémoire, sous verrou : le pool de la caméra n'est
-/// jamais affamé.
+/// dès le viseur armé (#9351) ; sinon rien n'est retenu. Une seule trame en
+/// mémoire, sous verrou : le pool de la caméra n'est jamais affamé.
 nonisolated final class ComposerCameraFeed: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, ComposerFrameSourcing,
     @unchecked Sendable {
     let queue = DispatchQueue(label: "me.meeshy.composer.live-look.feed", qos: .userInteractive)

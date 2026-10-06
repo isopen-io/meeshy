@@ -1,3 +1,4 @@
+import CoreImage
 import XCTest
 @testable import Meeshy
 
@@ -77,6 +78,16 @@ final class ComposerLookStripPaintingTests: XCTestCase {
         XCTAssertFalse(ComposerLookStripPaintRule.needsFrame(cases, painted: Self.painted(cases), slots: Self.places))
     }
 
+    func test_mayRequestFrame_boundsTheRequestsOfACellThatNeverPaints() {
+        XCTAssertTrue(ComposerLookStripPaintRule.mayRequestFrame(needsFrame: true, sent: 0, fps: 0),
+                      "figée, une case sans image obtient tout de même une trame")
+        XCTAssertFalse(ComposerLookStripPaintRule.mayRequestFrame(needsFrame: true, sent: 1, fps: 0))
+        XCTAssertTrue(ComposerLookStripPaintRule.mayRequestFrame(needsFrame: true, sent: 11, fps: 12))
+        XCTAssertFalse(ComposerLookStripPaintRule.mayRequestFrame(needsFrame: true, sent: 12, fps: 12),
+                       "un rendu qui échoue sans cesse ne réclame pas une trame par trame de l'objectif")
+        XCTAssertFalse(ComposerLookStripPaintRule.mayRequestFrame(needsFrame: false, sent: 0, fps: 12))
+    }
+
     func test_frameGate_frozen_letsOneRequestedFrameThrough() {
         let porte = ComposerLookStripFrameGate(fps: 0)
         XCTAssertEqual(porte.admit(presentedAt: 1), .refused, "figée, la bande ne prend aucune trame")
@@ -106,6 +117,57 @@ final class ComposerLookStripPaintingTests: XCTestCase {
         _ = scenes.scene(for: cle) {}
         XCTAssertEqual(cache.prepareCount, 2, "un cache périmé redemande sa cuisson")
     }
+
+    func test_scenes_aSceneEvictedAfterBaking_isBakedAgain() {
+        let cache = MockComposerLookSceneProvider()
+        let scenes = ComposerLookStripScenes(provider: cache)
+        let cle = Self.key()
+        _ = scenes.scene(for: cle) {}
+        cache.scene = Self.bakedScene()
+        cache.readies.forEach { $0() }
+        XCTAssertNotNil(scenes.scene(for: cle) {}, "la scène cuite est servie")
+        cache.scene = nil
+        _ = scenes.scene(for: cle) {}
+        XCTAssertEqual(cache.prepareCount, 2, "une scène évincée du cache partagé se recuit : la case retrouve son cadre")
+    }
+
+    func test_scenes_aFailedBake_isRetriedAfterAGrowingDelay_aBoundedNumberOfTimes() {
+        let cache = MockComposerLookSceneProvider()
+        let horloge = MainActorClock()
+        let scenes = ComposerLookStripScenes(provider: cache, now: { horloge.now })
+        let cle = Self.key()
+        _ = scenes.scene(for: cle) {}
+        cache.readies.forEach { $0() }
+        _ = scenes.scene(for: cle) {}
+        XCTAssertEqual(cache.prepareCount, 1, "un échec ne se recuit pas aussitôt : aucune boucle")
+        (1...10).forEach { _ in
+            horloge.now = horloge.now.addingTimeInterval(60)
+            _ = scenes.scene(for: cle) {}
+            cache.readies.last?()
+        }
+        XCTAssertEqual(cache.prepareCount, 1 + ComposerLookStripScenes.maxRetries,
+                       "un échec se réessaie, un nombre borné de fois")
+    }
+
+    private static func key() -> ComposerLookSceneKey {
+        ComposerLookSceneKey(look: ComposerPhotoLook(), canvas: ComposerLookPainter.thumbnailCanvas,
+                             date: Date(timeIntervalSince1970: 0),
+                             person: ComposerPhotoLookPerson.author(id: nil, displayName: nil, username: nil))
+    }
+
+    private static func bakedScene() -> CallLiveFrameScene {
+        CallLiveFrameScene(inputs: CallLiveFrameLayerInputs(frameId: "t", people: [],
+                                                            texts: ComposerPhotoLookSource.texts(at: Date()),
+                                                            size: CGSize(width: 1, height: 1)),
+                           backdrop: CIImage.empty(), overlay: CIImage.empty(), slots: [])
+    }
+}
+
+/// Une horloge que le témoin avance à la main.
+@MainActor
+final class MainActorClock {
+    var now = Date(timeIntervalSince1970: 1_000)
+    nonisolated deinit {}
 }
 
 /// Un compteur que les fermetures du fil principal peuvent capturer.
@@ -115,14 +177,15 @@ final class MainActorCounter {
     nonisolated deinit {}
 }
 
-/// Un cache de scènes qui ne cuit jamais rien, et compte ses demandes.
+/// Un cache de scènes qui ne cuit que ce que le témoin y pose, et compte ses demandes.
 final class MockComposerLookSceneProvider: ComposerLookSceneProviding, @unchecked Sendable {
+    var scene: CallLiveFrameScene?
     private(set) var prepareCount = 0
     private(set) var readies: [@MainActor @Sendable () -> Void] = []
 
     nonisolated deinit {}
 
-    func cached(_ key: ComposerLookSceneKey) -> CallLiveFrameScene? { nil }
+    func cached(_ key: ComposerLookSceneKey) -> CallLiveFrameScene? { scene }
 
     func prepare(_ key: ComposerLookSceneKey, ready: @escaping @MainActor @Sendable () -> Void) {
         prepareCount += 1

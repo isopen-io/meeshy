@@ -91,11 +91,17 @@ final class ComposerLookStripRenderer: NSObject, MTKViewDelegate {
     private var framing = ComposerFraming.identity
     /// Une trame admise attend d'être peinte dans toutes les cases.
     private var frameDue = false
+    /// La cadence du palier, et les trames demandées sans qu'une case ne se peigne.
+    private var fps = 0
+    private var requestsWithoutImage = 0
     private var atlas: MTLTexture?
     private var slotCount = ComposerLookStripGeometry.minimumSlots
     private var slots: [Int: ComposerLookStripSlot] = [:]
-    /// La trame réduite, texture privée réécrite dans le passage de chaque dessin :
-    /// l'ordre des passages de la file garantit qu'aucune lecture n'en voit la suivante.
+    /// La trame réduite, texture privée réécrite dans le passage de chaque dessin.
+    /// Texture `.private` au suivi de dépendances par défaut (hazard tracking) et
+    /// passages d'une même file : Metal ordonne l'écriture d'un dessin après les
+    /// lectures du précédent. Sur un `MTLHeap` ou en `.untracked`, il faudrait des
+    /// barrières (`MTLFence`) ou une rotation de trois textures.
     private var reducedTexture: MTLTexture?
     private weak var view: MTKView?
 
@@ -126,6 +132,7 @@ final class ComposerLookStripRenderer: NSObject, MTKViewDelegate {
     func update(tiles: [ComposerLookStripTile], source: any ComposerFrameSourcing, person: CallFramePerson,
                 date: Date, framing: ComposerFraming, fps: Int, view: MTKView) {
         gate.setFPS(fps)
+        self.fps = fps
         view.contentScaleFactor = max(1, view.traitCollection.displayScale)
         let autreSource = self.source !== source
         let perime = autreSource || framing != self.framing || date != self.date || person != self.person
@@ -144,6 +151,7 @@ final class ComposerLookStripRenderer: NSObject, MTKViewDelegate {
             scenes.reset()
         }
         let changed = perime || tiles != self.tiles
+        if changed { requestsWithoutImage = 0 }
         self.tiles = tiles
         self.person = person
         self.date = date
@@ -172,19 +180,32 @@ final class ComposerLookStripRenderer: NSObject, MTKViewDelegate {
         let vivante = frameDue
         frameDue = false
         guard let queue = ComposerLookGPU.commandQueue, let drawable = view.currentDrawable,
-              let buffer = queue.makeCommandBuffer() else { return }
+              let buffer = queue.makeCommandBuffer() else {
+            requestFrameIfNeeded()
+            return
+        }
         let echelle = view.contentScaleFactor
         if let cellule = tiles.first?.rect.size, let atlas = atlas(cell: cellule, scale: echelle) {
             paint(ComposerLookStripPaintRule.tilesToPaint(tiles, painted: slots, slots: slotCount, live: vivante,
                                                           scenesReady: scenesReady()),
                   into: atlas, cell: cellule, scale: echelle, buffer: buffer)
             present(atlas, into: drawable.texture, scale: echelle, buffer: buffer)
-            if ComposerLookStripPaintRule.needsFrame(tiles, painted: slots, slots: slotCount) { gate.requestFrame() }
+            requestFrameIfNeeded()
         } else {
             clear(drawable.texture, buffer: buffer)
         }
         buffer.present(drawable)
         buffer.commit()
+    }
+
+    /// Une case sans image réclame sa trame — y compris quand ce dessin n'a pas
+    /// eu de drawable —, dans la borne de `mayRequestFrame`.
+    private func requestFrameIfNeeded() {
+        let manque = ComposerLookStripPaintRule.needsFrame(tiles, painted: slots, slots: slotCount)
+        guard ComposerLookStripPaintRule.mayRequestFrame(needsFrame: manque, sent: requestsWithoutImage,
+                                                         fps: fps) else { return }
+        requestsWithoutImage += 1
+        gate.requestFrame()
     }
 
     /// Les cases peintes sans leur cadre dont la scène vient de cuire.
@@ -206,7 +227,8 @@ final class ComposerLookStripRenderer: NSObject, MTKViewDelegate {
     /// elle se repeint dès que la scène est prête.
     private func paint(_ tiles: [ComposerLookStripTile], into atlas: MTLTexture, cell: CGSize, scale: CGFloat,
                        buffer: MTLCommandBuffer) {
-        guard !tiles.isEmpty, let source, let frame = source.latestImage(), let petit = reduced(frame, buffer: buffer) else { return }
+        guard !tiles.isEmpty, let source, let frame = source.latestImage(),
+              let petit = reduced(frame, buffer: buffer) else { return }
         let destination = CIRenderDestination(mtlTexture: atlas, commandBuffer: buffer)
         destination.isFlipped = true
         destination.colorSpace = ComposerLiveLookRule.colorSpace
@@ -229,6 +251,7 @@ final class ComposerLookStripRenderer: NSObject, MTKViewDelegate {
             guard (try? ComposerLookGPU.context.startTask(toRender: posee, from: cible, to: destination,
                                                           at: cible.origin)) != nil else { return }
             slots[place] = ComposerLookStripSlot(index: tile.index, look: tile.look, complete: look == tile.look)
+            requestsWithoutImage = 0
         }
     }
 

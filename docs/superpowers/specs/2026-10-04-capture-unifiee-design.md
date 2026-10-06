@@ -131,7 +131,7 @@ Retraits : `ComposerPhotoLookReview`, le paramètre `reviewsPhoto`, le déclench
 - Avec effet : la vue Metal SEULE (couche système détachée) — un passage par image, jamais deux.
 - La vue Metal dessine à l'arrivée d'une image (`enableSetNeedsDisplay`), jamais sur une horloge libre ; en pause sur une photo figée tant que rien ne change.
 - Un seul `CIContext` Metal partagé. Aucune copie CPU (`CIImage(cvPixelBuffer:)` sur IOSurface).
-- Miniatures : une source réduite UNE fois (~160×284) partagée par toutes les cases ; un seul atlas Metal pour la bande ; cases visibles ±1 seulement ; pause pendant un défilement ; couches de cadre en cache.
+- Miniatures : une source réduite UNE fois (576 px de grand côté, soit 2 × la hauteur d'une case de 288 px : de quoi recadrer une case sans flou) partagée par toutes les cases ; un seul atlas Metal pour la bande ; cases visibles ±1 seulement ; pause pendant un défilement ; couches de cadre en cache.
 - `ThermalStateMonitor` (existant, `Services/ThermalStateMonitor.swift`) injecté par protocole dans la session :
 
 | état | aperçu | miniatures |
