@@ -139,39 +139,28 @@ struct GameProfileOwnCard: View {
     }
 }
 
-// MARK: - Le jeu d'un autre : ce que SA visibilité autorise
+// MARK: - Le jeu d'un autre : ce que SES réglages autorisent
 
+/// Son niveau et son rang (réglage `rank`), le palier de son trésor (réglage `treasury`), sa vitrine (réglage
+/// `showcase`) — chacun lu SEUL : un réglage fermé ne dessine que ce qui reste ouvert.
 struct GameProfileVisitorCard: View {
     let userId: String
     let name: String
     var loader = GameShowcaseLoader()
+    var standingLoader = GameUserGameLoader()
 
     @ObservedObject private var prefs = GameDevicePrefsStore.current()
     @State private var entries: [GameVisitorShowcase.Entry] = []
+    @State private var standing: GameStandingContent?
 
     private var theme: ThemeManager { ThemeManager.shared }
 
     var body: some View {
         Group {
-            if !entries.isEmpty {
-                GameCard(title: GameText.profileVisitorTitle(name: name)) {
-                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: MeeshySpacing.lg) {
-                        ForEach(entries) { entry in
-                            VStack(spacing: MeeshySpacing.xs) {
-                                GameTrophyArt(view: entry.presentation, height: 72)
-                                Text(entry.presentation.title)
-                                    .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
-                                    .foregroundColor(theme.textPrimary)
-                                    .multilineTextAlignment(.center)
-                                Text(entry.caption)
-                                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                                    .foregroundColor(theme.textMuted)
-                                    .multilineTextAlignment(.center)
-                            }
-                            .frame(maxWidth: .infinity)
-                            .accessibilityElement(children: .combine)
-                        }
-                    }
+            if !entries.isEmpty || standing != nil {
+                GameCard(title: standing != nil ? GameText.visitorGameTitle(name: name) : GameText.profileVisitorTitle(name: name)) {
+                    if let standing { GameStandingView(content: standing) }
+                    if !entries.isEmpty { showcaseGrid }
                 }
                 .accessibilityIdentifier("game.profile.visitor")
             }
@@ -179,44 +168,83 @@ struct GameProfileVisitorCard: View {
         .task(id: userId) {
             guard !prefs.prefs.hidden else { return }
             // Cache-first : ce que le disque a gardé se peint tout de suite, la lecture servie le remplace — ou
-            // l'efface, quand le membre a fermé sa vitrine entre-temps.
+            // l'efface, quand le membre a fermé son réglage entre-temps.
             if entries.isEmpty { entries = GameVisitorShowcase.entries(await loader.cached(userId: userId)) }
-            entries = GameVisitorShowcase.entries(await loader.load(userId: userId))
+            if standing == nil { standing = await standingLoader.cached(userId: userId) }
+            async let freshShowcase = loader.load(userId: userId)
+            async let freshStanding = standingLoader.load(userId: userId)
+            entries = GameVisitorShowcase.entries(await freshShowcase)
+            standing = await freshStanding
+        }
+    }
+
+    private var showcaseGrid: some View {
+        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: MeeshySpacing.lg) {
+            ForEach(entries) { entry in
+                VStack(spacing: MeeshySpacing.xs) {
+                    GameTrophyArt(view: entry.presentation, height: 72)
+                    Text(entry.presentation.title)
+                        .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
+                        .foregroundColor(theme.textPrimary)
+                        .multilineTextAlignment(.center)
+                    Text(entry.caption)
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
+                        .foregroundColor(theme.textMuted)
+                        .multilineTextAlignment(.center)
+                }
+                .frame(maxWidth: .infinity)
+                .accessibilityElement(children: .combine)
+            }
         }
     }
 }
 
-/// LA BANDE DE LA CARTE DE CONTACT (#9481) — trois coupes au plus, en lecture seule, sous le nom d'un compte
-/// Meeshy dans la fiche complète d'une carte de visite. Même règle que la vitrine : fermée, elle ne se dessine pas.
+/// LA BANDE DE LA CARTE DE CONTACT (#9481) — le niveau et le rang (rangée compacte) puis trois coupes au plus, en
+/// lecture seule, sous le nom d'un compte Meeshy dans la fiche complète d'une carte de visite. Même règle que la
+/// vitrine : ce que le serveur ne sert pas ne se dessine pas.
 struct GameContactStrip: View {
     let userId: String
     var loader = GameShowcaseLoader()
+    var standingLoader = GameUserGameLoader()
 
     @ObservedObject private var prefs = GameDevicePrefsStore.current()
     @State private var entries: [GameVisitorShowcase.Entry] = []
+    @State private var standing: GameStandingContent?
 
     var body: some View {
         Group {
-            if !entries.isEmpty {
-                HStack(alignment: .bottom, spacing: MeeshySpacing.sm) {
-                    ForEach(entries.prefix(3)) { entry in
-                        GameTrophyArt(view: entry.presentation, height: 32)
-                            .accessibilityHidden(false)
-                            .accessibilityLabel(entry.presentation.title)
-                    }
-                    Spacer(minLength: 0)
+            if !entries.isEmpty || standing != nil {
+                VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
+                    if let standing { GameStandingView(content: standing, compact: true) }
+                    if !entries.isEmpty { trophies }
                 }
                 .accessibilityElement(children: .contain)
-                .accessibilityLabel(GameText.profileShowcase)
                 .accessibilityIdentifier("game.contact.strip")
             }
         }
         .task(id: userId) {
             guard !prefs.prefs.hidden else { return }
             // Cache-first : ce que le disque a gardé se peint tout de suite, la lecture servie le remplace — ou
-            // l'efface, quand le membre a fermé sa vitrine entre-temps.
+            // l'efface, quand le membre a fermé son réglage entre-temps.
             if entries.isEmpty { entries = GameVisitorShowcase.entries(await loader.cached(userId: userId)) }
-            entries = GameVisitorShowcase.entries(await loader.load(userId: userId))
+            if standing == nil { standing = await standingLoader.cached(userId: userId) }
+            async let freshShowcase = loader.load(userId: userId)
+            async let freshStanding = standingLoader.load(userId: userId)
+            entries = GameVisitorShowcase.entries(await freshShowcase)
+            standing = await freshStanding
         }
+    }
+
+    private var trophies: some View {
+        HStack(alignment: .bottom, spacing: MeeshySpacing.sm) {
+            ForEach(entries.prefix(3)) { entry in
+                GameTrophyArt(view: entry.presentation, height: 32)
+                    .accessibilityHidden(false)
+                    .accessibilityLabel(entry.presentation.title)
+            }
+            Spacer(minLength: 0)
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(GameText.profileShowcase)
     }
 }

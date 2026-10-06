@@ -2890,6 +2890,7 @@
 		FD1FA133AD848DA5A506E37D /* GamePhotoMomentsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68392A53511FCFBD4FC7227C /* GamePhotoMomentsTests.swift */; };
 		0EB898C8AB5F8867ECC95255 /* GamePhotoNotebookTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B4591B57D725C3F884542DB /* GamePhotoNotebookTests.swift */; };
 		6100865A65010B5EE402166C /* GamePhotoSessionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D935B292B8E998E19F73A8 /* GamePhotoSessionTests.swift */; };
+		97AA478F99311D09E3957A2F /* GameNotificationRoutingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 426D12E55E642FCA128DA063 /* GameNotificationRoutingTests.swift */; };
 		533DEB13A6F41F7DBB4EEA20 /* GameTimelineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 326322529164CE412843BA8E /* GameTimelineTests.swift */; };
 		F2FCCBB928A2D400799A873B /* MockGamePhoto.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC38EFDD9CEAA2D0C1E7CB30 /* MockGamePhoto.swift */; };
 		12E64317C47B8B68EBF41474 /* GameSourceGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1B19DE26D5064F7FB74CB98 /* GameSourceGuardTests.swift */; };
@@ -2913,6 +2914,8 @@
 		0DD8E56D042DC56C130F9612 /* GamePage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 946AA2CF029550838F96D894 /* GamePage.swift */; };
 		005FAE8A6F71B755C066EF7B /* GamePrestigeViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 538A574322F4129694AB5CD3 /* GamePrestigeViews.swift */; };
 		761DAF45867ECA105605C27D /* GameProfileViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = B985D2961416982B0AF1F9C9 /* GameProfileViews.swift */; };
+		A2E66FFE14EACE51FF47BCCD /* GameStandingViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F242683A8E0100B7862C98B /* GameStandingViews.swift */; };
+		29F7171A33E58C0328F09612 /* GameIntegration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0998CA9F7B716574CD69070F /* GameIntegration.swift */; };
 		481A775414CF4A2FCD27B95B /* GameRarityViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F01AA3C6C4D5BAA97ACBA72 /* GameRarityViews.swift */; };
 		BFD7C3D1216E088608AC0307 /* GameSeasonViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DB35C41683F77BF0814DE62 /* GameSeasonViews.swift */; };
 		350D583CF75156180A7A887C /* GameSettingsViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEF10CD7AC228279AB184F69 /* GameSettingsViews.swift */; };
@@ -5871,6 +5874,7 @@
 		68392A53511FCFBD4FC7227C /* GamePhotoMomentsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GamePhotoMomentsTests.swift; sourceTree = "<group>"; };
 		2B4591B57D725C3F884542DB /* GamePhotoNotebookTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GamePhotoNotebookTests.swift; sourceTree = "<group>"; };
 		66D935B292B8E998E19F73A8 /* GamePhotoSessionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GamePhotoSessionTests.swift; sourceTree = "<group>"; };
+		426D12E55E642FCA128DA063 /* GameNotificationRoutingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameNotificationRoutingTests.swift; sourceTree = "<group>"; };
 		326322529164CE412843BA8E /* GameTimelineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameTimelineTests.swift; sourceTree = "<group>"; };
 		BC38EFDD9CEAA2D0C1E7CB30 /* MockGamePhoto.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockGamePhoto.swift; sourceTree = "<group>"; };
 		F1B19DE26D5064F7FB74CB98 /* GameSourceGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameSourceGuardTests.swift; sourceTree = "<group>"; };
@@ -5894,6 +5898,8 @@
 		946AA2CF029550838F96D894 /* GamePage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GamePage.swift; sourceTree = "<group>"; };
 		538A574322F4129694AB5CD3 /* GamePrestigeViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GamePrestigeViews.swift; sourceTree = "<group>"; };
 		B985D2961416982B0AF1F9C9 /* GameProfileViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameProfileViews.swift; sourceTree = "<group>"; };
+		7F242683A8E0100B7862C98B /* GameStandingViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameStandingViews.swift; sourceTree = "<group>"; };
+		0998CA9F7B716574CD69070F /* GameIntegration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameIntegration.swift; sourceTree = "<group>"; };
 		7F01AA3C6C4D5BAA97ACBA72 /* GameRarityViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameRarityViews.swift; sourceTree = "<group>"; };
 		1DB35C41683F77BF0814DE62 /* GameSeasonViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameSeasonViews.swift; sourceTree = "<group>"; };
 		DEF10CD7AC228279AB184F69 /* GameSettingsViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameSettingsViews.swift; sourceTree = "<group>"; };
@@ -9711,6 +9717,7 @@
 				2B4591B57D725C3F884542DB /* GamePhotoNotebookTests.swift */,
 				7E8402E55B4DD7188B5FF6DF /* GameReferralCardTests.swift */,
 				66D935B292B8E998E19F73A8 /* GamePhotoSessionTests.swift */,
+				426D12E55E642FCA128DA063 /* GameNotificationRoutingTests.swift */,
 				326322529164CE412843BA8E /* GameTimelineTests.swift */,
 				F1B19DE26D5064F7FB74CB98 /* GameSourceGuardTests.swift */,
 				A2E308E030697B91DB71732B /* GameMintBadgeImpactTests.swift */,
@@ -9744,6 +9751,8 @@
 				946AA2CF029550838F96D894 /* GamePage.swift */,
 				538A574322F4129694AB5CD3 /* GamePrestigeViews.swift */,
 				B985D2961416982B0AF1F9C9 /* GameProfileViews.swift */,
+				7F242683A8E0100B7862C98B /* GameStandingViews.swift */,
+				0998CA9F7B716574CD69070F /* GameIntegration.swift */,
 				7F01AA3C6C4D5BAA97ACBA72 /* GameRarityViews.swift */,
 				1DB35C41683F77BF0814DE62 /* GameSeasonViews.swift */,
 				DEF10CD7AC228279AB184F69 /* GameSettingsViews.swift */,
@@ -10186,6 +10195,8 @@
 				BFD7C3D1216E088608AC0307 /* GameSeasonViews.swift in Sources */,
 				481A775414CF4A2FCD27B95B /* GameRarityViews.swift in Sources */,
 				761DAF45867ECA105605C27D /* GameProfileViews.swift in Sources */,
+				A2E66FFE14EACE51FF47BCCD /* GameStandingViews.swift in Sources */,
+				29F7171A33E58C0328F09612 /* GameIntegration.swift in Sources */,
 				005FAE8A6F71B755C066EF7B /* GamePrestigeViews.swift in Sources */,
 				0DD8E56D042DC56C130F9612 /* GamePage.swift in Sources */,
 				96C4ADF172C4D5CCDFAC6ECD /* GameLeagueViews.swift in Sources */,
@@ -11641,6 +11652,7 @@
 				F2FCCBB928A2D400799A873B /* MockGamePhoto.swift in Sources */,
 				533DEB13A6F41F7DBB4EEA20 /* GameTimelineTests.swift in Sources */,
 				6100865A65010B5EE402166C /* GamePhotoSessionTests.swift in Sources */,
+				97AA478F99311D09E3957A2F /* GameNotificationRoutingTests.swift in Sources */,
 				0EB898C8AB5F8867ECC95255 /* GamePhotoNotebookTests.swift in Sources */,
 				F7F27553923021CCCC89DE2A /* GameReferralCardTests.swift in Sources */,
 				FD1FA133AD848DA5A506E37D /* GamePhotoMomentsTests.swift in Sources */,

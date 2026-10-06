@@ -78,6 +78,8 @@ struct ProgressionView: View {
         // célébration (#9381) : la frappe qui joue sa première onde ne doit pas
         // attendre la compilation. Sans effet avant iOS 18, où ils tournent à vide.
         .task { await GameShaders.precompile() }
+        // Les réglages du jeu sont ceux du SERVEUR (#9481) : « Jeu masqué » posé depuis un autre appareil se lit ici.
+        .task { await GameSettingsSync().refresh() }
         .task {
             await viewModel.load()
             #if DEBUG

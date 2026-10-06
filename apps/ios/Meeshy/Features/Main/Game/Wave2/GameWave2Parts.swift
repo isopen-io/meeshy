@@ -84,6 +84,7 @@ private struct GameWave2Frame<Content: View>: View {
             }
         }
         .task { await progression.load() }
+        .task { await model.loadSettings() }
     }
 }
 
