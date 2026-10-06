@@ -102,6 +102,9 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null }: Props)
   const [files, setFiles] = useState<PhotoFiles | null>(null);
   const [format, setFormat] = useState<PhotoFormat>('story');
   const [notice, setNotice] = useState<{ readonly tone: 'good' | 'error'; readonly text: string } | null>(null);
+  /* Le bandeau que porte l'image COMPOSÉE — pas celui que la carte porterait maintenant : un lien lu
+     après la frappe ne change ni l'image qui part, ni son texte. */
+  const [composedReferral, setComposedReferral] = useState<PhotoReferral | null>(null);
 
   const dateLabel = useMemo(() => dateLabelOf(env.now()), [env]);
 
@@ -240,7 +243,8 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null }: Props)
     let live = true;
     const source = strikingMode === 'card' ? null : photo.current;
     const handle = play('mint');
-    void Promise.all([handle?.finished ?? Promise.resolve(), env.render({ moment, photo: source, frame: stage.current, referral: referralRef.current })])
+    const banner = referralRef.current;
+    void Promise.all([handle?.finished ?? Promise.resolve(), env.render({ moment, photo: source, frame: stage.current, referral: banner })])
       .then(([, rendered]) => {
         if (!live) return;
         if (rendered === null) {
@@ -248,6 +252,7 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null }: Props)
           return;
         }
         setFiles(rendered);
+        setComposedReferral(banner);
         dispatch({ type: 'composed' });
       })
       .catch(() => {
@@ -312,8 +317,8 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null }: Props)
     [env, moment, resultMode],
   );
   const outgoingFiles = useCallback(
-    async (): Promise<PhotoFiles | null> => (referral?.placeholder === true ? recompose(null) : files),
-    [files, recompose, referral],
+    async (): Promise<PhotoFiles | null> => (composedReferral?.placeholder === true ? recompose(null) : files),
+    [composedReferral, files, recompose],
   );
   const sharing = useRef(false);
 
@@ -330,16 +335,17 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null }: Props)
      bandeau si aucun ne vient — AVANT de partir, et l'aperçu la suit. */
   const prepareShare = useCallback(async (): Promise<{ readonly files: PhotoFiles; readonly referral: PhotoReferral | null } | null> => {
     if (files === null) return null;
-    if (referral?.placeholder !== true) return { files, referral };
+    if (composedReferral?.placeholder !== true) return { files, referral: composedReferral };
     const url = await (env.createReferral?.() ?? Promise.resolve(null)).catch(() => null);
-    const next = url === null ? null : referralOf(url, shownFlame);
+    const next = url === null ? null : referralOf(url, composedReferral.flameDays);
     const recomposed = await recompose(next);
     if (!alive.current || recomposed === null) return null;
     if (next === null) setLinkUnavailable(true);
     else setLink(url);
     setFiles(recomposed);
+    setComposedReferral(next);
     return { files: recomposed, referral: next };
-  }, [env, files, recompose, referral, shownFlame]);
+  }, [composedReferral, env, files, recompose]);
 
   const share = useCallback(async () => {
     if (files === null || sharing.current) return;
@@ -548,9 +554,9 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null }: Props)
           </div>
         ) : null}
 
-        {state.step === 'result' && referral?.placeholder === true ? (
+        {state.step === 'result' && composedReferral?.placeholder === true ? (
           <div ref={artFrame} hidden data-photo-art-frame="" className="relative" style={{ aspectRatio: '9 / 16' }}>
-            <GamePhotoFrame moment={moment} dateLabel={dateLabel} format="story" referral={referral} />
+            <GamePhotoFrame moment={moment} dateLabel={dateLabel} format="story" referral={composedReferral} />
           </div>
         ) : null}
 

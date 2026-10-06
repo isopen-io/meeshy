@@ -820,6 +820,29 @@ describe('aucun jeton de parrainage ne se crée sans geste', () => {
     expect(log.texts).toEqual([undefined]);
   });
 
+  test('une lecture du lien qui arrive APRÈS la composition ne change pas ce qui part : la carte sans bandeau part sans bandeau, sans texte, sans jeton', async () => {
+    let creations = 0;
+    let answer: (url: string | null) => void = () => undefined;
+    const made = env({
+      referral: () => new Promise<string | null>((resolve) => (answer = resolve)),
+      createReferral: async () => {
+        creations += 1;
+        return LINK;
+      },
+    });
+    const host = await mount(<GamePhotoFlow moment={rank} env={made.env} flameDays={23} onClose={() => undefined} />);
+    await click(choose(host, 'card'));
+    await settle();
+    expect(made.log.referrals).toEqual([null]);
+    await act(async () => answer(null));
+    await settle();
+    await click(by(host, 'data-photo-share'));
+    await settle();
+    expect(creations).toBe(0);
+    expect(made.log.texts).toEqual([undefined]);
+    expect(made.log.shared[0]?.file).toBe(made.log.outputs[0]?.story);
+  });
+
   test('un lien existant : « Partager » ne crée rien de plus', async () => {
     let creations = 0;
     const made = env({
