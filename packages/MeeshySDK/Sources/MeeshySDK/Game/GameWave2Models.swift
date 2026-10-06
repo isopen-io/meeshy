@@ -330,6 +330,41 @@ public struct GameVisibility: Codable, Sendable, Equatable {
     }
 }
 
+/// La rareté MESURÉE d'un succès (#9390) : `holders` titulaires sur `population` comptes. La clé
+/// du dictionnaire est celle du succès (`achievement.first_content`). Le client est FAIL-CLOSED :
+/// une rareté ne se MONTRE qu'avec assez de titulaires et de comptes (`visibleRarity`).
+public struct GameRarityEntry: Codable, Sendable, Equatable {
+    public let rarity: GameGlory.AchievementRarity?
+    public let holders: Int
+    public let population: Int
+
+    public init(rarity: GameGlory.AchievementRarity?, holders: Int, population: Int) {
+        self.rarity = rarity
+        self.holders = holders
+        self.population = population
+    }
+
+    /// La rareté qu'on a le DROIT de montrer, `nil` sous 20 titulaires ou 1 000 comptes, ou non mesurée.
+    public var visibleRarity: GameGlory.AchievementRarity? {
+        guard let rarity, GameRarity.isShareDisplayable(holders: holders, population: population) else { return nil }
+        return rarity
+    }
+
+    /// La part des comptes, de 0 à 100.
+    public var sharePercent: Double {
+        Double(holders) / Double(max(1, population)) * 100
+    }
+}
+
+/// Une entrée illisible tombe SEULE : le dictionnaire des raretés ne casse pas pour une valeur inconnue.
+private struct LossyRarityEntry: Decodable {
+    let entry: GameRarityEntry?
+
+    init(from decoder: Decoder) throws {
+        entry = try? GameRarityEntry(from: decoder)
+    }
+}
+
 /// Les sept extensions du bloc `game`, groupées : un client sans elles les lit `nil`.
 public struct GameWave2: Sendable, Equatable {
     public let league: GameLeagueBlock?
@@ -339,12 +374,15 @@ public struct GameWave2: Sendable, Equatable {
     public let atlas: GameAtlasBlock?
     public let prestige: GamePrestigeBlock?
     public let visibility: GameVisibility?
+    /// La rareté mesurée de chaque succès — HORS contrat partagé : lue en tolérant, comme le web.
+    public let achievementRarities: [String: GameRarityEntry]?
 
     public static let empty = GameWave2()
 
     public init(league: GameLeagueBlock? = nil, duo: GameDuoBlock? = nil, season: GameSeasonBlock? = nil,
                 trophies: GameTrophiesBlock? = nil, atlas: GameAtlasBlock? = nil,
-                prestige: GamePrestigeBlock? = nil, visibility: GameVisibility? = nil) {
+                prestige: GamePrestigeBlock? = nil, visibility: GameVisibility? = nil,
+                achievementRarities: [String: GameRarityEntry]? = nil) {
         self.league = league
         self.duo = duo
         self.season = season
@@ -352,10 +390,11 @@ public struct GameWave2: Sendable, Equatable {
         self.atlas = atlas
         self.prestige = prestige
         self.visibility = visibility
+        self.achievementRarities = achievementRarities
     }
 
     enum CodingKeys: String, CodingKey {
-        case league, duo, season, trophies, atlas, prestige, visibility
+        case league, duo, season, trophies, atlas, prestige, visibility, achievementRarities
     }
 
     /// Chaque extension se lit seule : l'une illisible tombe, les autres restent.
@@ -371,8 +410,17 @@ public struct GameWave2: Sendable, Equatable {
             trophies: (try? container.decodeIfPresent(GameTrophiesBlock.self, forKey: .trophies)) ?? nil,
             atlas: (try? container.decodeIfPresent(GameAtlasBlock.self, forKey: .atlas)) ?? nil,
             prestige: (try? container.decodeIfPresent(GamePrestigeBlock.self, forKey: .prestige)) ?? nil,
-            visibility: (try? container.decodeIfPresent(GameVisibility.self, forKey: .visibility)) ?? nil
+            visibility: (try? container.decodeIfPresent(GameVisibility.self, forKey: .visibility)) ?? nil,
+            achievementRarities: Self.rarities(in: container)
         )
+    }
+
+    private static func rarities(in container: KeyedDecodingContainer<CodingKeys>) -> [String: GameRarityEntry]? {
+        guard let raw = (try? container.decodeIfPresent([String: LossyRarityEntry].self, forKey: .achievementRarities)) ?? nil else {
+            return nil
+        }
+        let readable = raw.compactMapValues(\.entry)
+        return readable.isEmpty ? nil : readable
     }
 
     func encode(into encoder: Encoder) throws {
@@ -384,6 +432,7 @@ public struct GameWave2: Sendable, Equatable {
         try container.encodeIfPresent(atlas, forKey: .atlas)
         try container.encodeIfPresent(prestige, forKey: .prestige)
         try container.encodeIfPresent(visibility, forKey: .visibility)
+        try container.encodeIfPresent(achievementRarities, forKey: .achievementRarities)
     }
 }
 
@@ -436,7 +485,7 @@ public struct LeaguePseudonymResponse: Decodable, Sendable, Equatable {
 }
 
 /// Un joueur de la ligue PUBLIQUE : aucun identifiant, aucune présence.
-public struct LeagueWeekEntry: Decodable, Sendable, Equatable {
+public struct LeagueWeekEntry: Codable, Sendable, Equatable {
     public let rank: Int
     public let displayName: String
     public let weekPoints: Int
@@ -454,7 +503,7 @@ public struct LeagueWeekEntry: Decodable, Sendable, Equatable {
     }
 }
 
-public struct LeagueWeekResponse: Decodable, Sendable, Equatable {
+public struct LeagueWeekResponse: Codable, Sendable, Equatable {
     public let weekKey: String
     /// Le jour de l'instantané : les AUTRES membres sont servis figés — seule la ligne `isMe` est en direct.
     public let snapshotDay: String
@@ -477,7 +526,7 @@ public struct LeagueWeekResponse: Decodable, Sendable, Equatable {
     }
 }
 
-public struct LeagueFriendsEntry: Decodable, Sendable, Equatable {
+public struct LeagueFriendsEntry: Codable, Sendable, Equatable {
     public let rank: Int
     public let userId: String
     public let weekPoints: Int
@@ -491,7 +540,7 @@ public struct LeagueFriendsEntry: Decodable, Sendable, Equatable {
     }
 }
 
-public struct LeagueFriendsResponse: Decodable, Sendable, Equatable {
+public struct LeagueFriendsResponse: Codable, Sendable, Equatable {
     public let weekKey: String
     public let closes: GameLeagueBlock.Closes
     public let entries: [LeagueFriendsEntry]
@@ -636,7 +685,7 @@ public struct ShowcaseVisibilityResponse: Decodable, Sendable, Equatable {
 
 /// Un trophée vu par un VISITEUR : sa clé projetée (une coupe de ligue y porte le
 /// mois, jamais la semaine) et le mois d'obtention, jamais l'horodatage.
-public struct GameVisitorTrophyItem: Decodable, Sendable, Equatable {
+public struct GameVisitorTrophyItem: Codable, Sendable, Equatable {
     public let key: String
     public let awardedMonth: String
     /// Combien de coupes identiques ce mois réunit ; absent pour un trophée unique.
@@ -649,7 +698,7 @@ public struct GameVisitorTrophyItem: Decodable, Sendable, Equatable {
     }
 }
 
-public struct UserShowcaseResponse: Decodable, Sendable, Equatable {
+public struct UserShowcaseResponse: Codable, Sendable, Equatable {
     /// `false` : le réglage du membre ferme la vitrine à ce lecteur — jamais une
     /// erreur, qui dirait qu'elle existe.
     public let visible: Bool
