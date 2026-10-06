@@ -128,6 +128,8 @@ struct ProgressionView: View {
                         meesh: meesh,
                         isMinting: viewModel.isMinting,
                         mintError: viewModel.mintError,
+                        // La pièce que la feuille frappe (#9537) : elle se grave au numéro que le serveur sert.
+                        next: viewModel.game.map { GameMintNext(number: $0.mint.number, edition: $0.mint.edition) },
                         onMint: { Task { await viewModel.mint() } }
                     )
                 }

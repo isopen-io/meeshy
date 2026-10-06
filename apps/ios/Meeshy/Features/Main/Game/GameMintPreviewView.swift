@@ -2,11 +2,14 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
-/// L'APERÇU DE LA FRAPPE (#9383) — conception, partie VII : « la frappe garde son
-/// aperçu », enrichi. Tout ce que le geste coûte et rapporte est dit AVANT (prix,
-/// niveau avant → après, trésor, Gloire et rang, numéro et édition, Vent arrière) :
-/// la frappe fait redescendre, c'est la règle, et une règle qu'on découvre après
-/// coup est un piège. Miroir de `apps/web/src/components/game-mint-preview.tsx`.
+/// LE HÉRO DE FRAPPE (#9383, #9537) — le SEUL de l'écran : un titre, un chiffre fort, une action. Il remplace
+/// l'aperçu bavard ET le bloc « Comment frapper » du héro de niveau, qui disaient deux fois la même chose.
+///
+/// Conception, partie VII : « la frappe garde son aperçu » — mais court. Le prix est LE chiffre ; les deux
+/// conséquences qu'on ne peut pas ignorer tiennent en pastilles (le niveau avant → après, la Gloire gagnée et le rang
+/// qui change), plus les badges qui redescendent QUAND il y en a. La frappe fait redescendre, c'est la règle, et une règle
+/// qu'on découvre après coup est un piège. Le reste — le trésor, le Vent arrière, les chances — est au carnet des
+/// règles (la porte « ? »). Miroir de `apps/web/src/components/game-mint-preview.tsx`.
 ///
 /// Quand la frappe n'est pas possible : aucun bouton grisé (directive du porteur,
 /// `EngagementMeeshProgress.canMint`), seulement ce qui manque et le prix de la
@@ -26,6 +29,8 @@ struct GameMintPreviewView: View {
     let error: String?
     let celebration: MintCelebration?
     let onMint: () -> Void
+    /// Ouvre la règle de la frappe au carnet (« ? ») ; `nil` : pas de porte.
+    var onOpenRule: (() -> Void)?
     var haptics: GameHapticsProviding = GameHaptics.shared
 
     private var theme: ThemeManager { ThemeManager.shared }
@@ -38,8 +43,6 @@ struct GameMintPreviewView: View {
     private var rankChanges: Bool {
         afterStanding.rank != game.glory.rank || afterStanding.division != game.glory.division
     }
-
-    private var tailwind: Bool { mint.canMint && mint.levelAfter < game.level.record }
 
     var body: some View {
         GameCard(tint: MeeshyColors.warning, anchor: .mint) {
@@ -56,7 +59,7 @@ struct GameMintPreviewView: View {
                 .accessibilityIdentifier("game.mint.celebration")
             }
             if mint.canMint {
-                rows
+                consequences
                 GameActionButton(
                     title: String(localized: "game.mint.action", defaultValue: "Frapper avec Mee et Meo", bundle: .main),
                     busyTitle: String(localized: "game.mint.minting", defaultValue: "Frappe en cours…", bundle: .main),
@@ -72,18 +75,23 @@ struct GameMintPreviewView: View {
                     defaultValue: "Encore \(GameCopy.convertiblePoints(mint.missingPoints)) avant la prochaine Meesh : elle coûte \(GameCopy.points(mint.price)).",
                     bundle: .main
                 ))
+                .accessibilityIdentifier("game.mint.missing")
             }
             if !minting {
                 GameErrorLine(message: error, identifier: "game.mint.error")
             }
         }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("game.mint.hero")
         .adaptiveOnChange(of: celebration?.key) { _, key in
             if key != nil { haptics.play(GameHapticPattern.strike) }
         }
     }
 
+    // MARK: - Le titre, le chiffre fort, la porte du carnet
+
     private var header: some View {
-        HStack(spacing: MeeshySpacing.md) {
+        HStack(alignment: .center, spacing: MeeshySpacing.md) {
             MintStrikeScene(
                 edition: celebration?.edition ?? mint.edition,
                 number: celebration?.number ?? mint.number,
@@ -98,43 +106,61 @@ struct GameMintPreviewView: View {
                     defaultValue: "Prochaine Meesh · n° \(GameCopy.formatCount(mint.number))",
                     bundle: .main
                 ))
-                .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
-                .foregroundColor(theme.textPrimary)
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
+                .foregroundColor(theme.textMuted)
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityAddTraits(.isHeader)
-                GameNote(text: String(
-                    localized: "game.mint.next_subtitle",
-                    defaultValue: "Édition \(GameCopy.editionName(mint.edition)) · \(GameCopy.points(mint.price))",
-                    bundle: .main
-                ))
+                Text(GameCopy.points(mint.price))
+                    .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold, design: .rounded))
+                    .foregroundColor(theme.textPrimary)
+                    .accessibilityIdentifier("game.mint.price")
+            }
+            Spacer(minLength: 0)
+            if let onOpenRule {
+                Button {
+                    HapticFeedback.light()
+                    onOpenRule()
+                } label: {
+                    Image(systemName: "questionmark.circle")
+                        .font(MeeshyFont.relative(MeeshyIconSize.lg, weight: .medium))
+                        .foregroundColor(theme.textMuted)
+                        .frame(minWidth: 44, minHeight: 44)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(String(localized: "game.hero.mint.info", defaultValue: "Lire la règle de la frappe", bundle: .main))
+                .accessibilityIdentifier("game.mint.info")
             }
         }
     }
 
-    private var rows: some View {
-        VStack(spacing: MeeshySpacing.xs) {
-            row(String(localized: "game.mint.row.price", defaultValue: "Prix", bundle: .main), GameCopy.points(mint.price))
-            row(String(localized: "game.mint.row.level", defaultValue: "Niveau", bundle: .main), levelValue)
-            row(String(localized: "game.mint.row.treasury", defaultValue: "Trésor", bundle: .main),
-                "\(GameCopy.formatCount(game.treasury.held)) → \(GameCopy.meeshes(game.treasury.held + 1))")
-            row(String(localized: "game.mint.row.glory", defaultValue: "Gloire", bundle: .main), gloryValue, tone: theme.textPrimary)
-            if let badgesLost {
-                row(String(localized: "game.mint.row.badges", defaultValue: "Badges", bundle: .main), badgesLine(badgesLost))
+    // MARK: - Ce que le geste coûte, en pastilles
+
+    /// Le niveau avant → après, la Gloire gagnée (et le rang qui change), les badges qui redescendent — jamais un tableau.
+    private var consequences: some View {
+        FlowLayout(spacing: MeeshySpacing.xs) {
+            GameChip(
+                text: String(localized: "game.mint.chip.level", defaultValue: "Niveau \(levelValue)", bundle: .main),
+                tint: MeeshyColors.brandPrimary
+            )
+            GameChip(
+                text: String(localized: "game.mint.chip.glory", defaultValue: "+\(GameCopy.formatCount(mint.gloryGained)) Gloire", bundle: .main),
+                tint: MeeshyColors.success
+            )
+            if rankChanges {
+                GameChip(
+                    text: "\(GameCopy.rankLabel(game.glory.rank, division: game.glory.division)) → \(GameCopy.rankLabel(afterStanding.rank, division: afterStanding.division))",
+                    tint: MeeshyColors.success
+                )
             }
-            if tailwind {
-                row(String(localized: "game.mint.row.tailwind", defaultValue: "Vent arrière", bundle: .main),
-                    String(localized: "game.mint.tailwind_value",
-                           defaultValue: "+25 % sur tes points jusqu’au niveau \(GameCopy.formatCount(game.level.record))",
-                           bundle: .main))
+            if let badgesLost, badgesLost > 0 {
+                GameChip(text: badgesLine(badgesLost), tint: MeeshyColors.warning)
             }
         }
         .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("game.mint.consequences")
     }
 
     private func badgesLine(_ lost: Int) -> String {
-        if lost <= 0 {
-            return String(localized: "game.mint.badges.none", defaultValue: "Aucun badge ne s’éteint", bundle: .main)
-        }
         let number = GameCopy.formatCount(lost)
         return GameCopy.isSingular(lost)
             ? String(localized: "game.mint.badges.one", defaultValue: "\(number) badge redescend", bundle: .main)
@@ -144,25 +170,5 @@ struct GameMintPreviewView: View {
     private var levelValue: String {
         let base = "\(GameCopy.formatCount(mint.levelBefore)) → \(GameCopy.formatCount(mint.levelAfter))"
         return mint.levelsLost > 0 ? base + " (−\(GameCopy.formatCount(mint.levelsLost)))" : base
-    }
-
-    private var gloryValue: String {
-        let gain = "+" + GameCopy.formatCount(mint.gloryGained)
-        guard rankChanges else { return gain }
-        return "\(gain) · \(GameCopy.rankLabel(game.glory.rank, division: game.glory.division)) → \(GameCopy.rankLabel(afterStanding.rank, division: afterStanding.division))"
-    }
-
-    private func row(_ label: String, _ value: String, tone: Color? = nil) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: MeeshySpacing.md) {
-            Text(label)
-                .foregroundColor(theme.textMuted)
-            Spacer(minLength: MeeshySpacing.sm)
-            Text(value)
-                .fontWeight(.semibold)
-                .foregroundColor(tone ?? theme.textPrimary)
-                .multilineTextAlignment(.trailing)
-        }
-        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-        .accessibilityElement(children: .combine)
     }
 }
