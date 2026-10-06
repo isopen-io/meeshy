@@ -139,7 +139,7 @@ public extension UserNotificationPreferences {
             return contactRequestEnabled
         case .contactRecentlyActive:
             return contactActivityEnabled
-        case .gameDuoInvited, .gameDuoAccepted, .gameLeagueResult, .gameSeasonStep:
+        case .gameDuoInvited, .gameDuoAccepted, .gameLeagueResult, .gameSeasonStep, .gameMissionWindow:
             return gameEnabled
         case .newConversation, .newConversationDirect, .newConversationGroup,
              .addedToConversation, .removedFromConversation:

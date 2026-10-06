@@ -344,6 +344,11 @@ extension iPadRootView {
             // Une notification du jeu (#9490) ouvre la page qui la restitue — même geste que sur iPhone.
             rightPanelRoute = .gamePage(GamePage.opened(by: notification.notificationType) ?? .league)
 
+        case .gameMissionWindow:
+            // La plage de la mission personnelle s'est ouverte (#9539) — même geste que sur iPhone.
+            router.pendingGameAnchor = .missions
+            rightPanelRoute = .progression
+
         case .legacyAffiliateSignup:
             rightPanelRoute = .affiliate
 
@@ -406,6 +411,11 @@ extension iPadRootView {
         case .gameDuoInvited, .gameDuoAccepted, .gameLeagueResult, .gameSeasonStep:
             // Une notification du jeu (#9490) ouvre la page qui la restitue — même geste que sur iPhone.
             rightPanelRoute = .gamePage(GamePage.opened(by: event.notificationType) ?? .league)
+
+        case .gameMissionWindow:
+            // La plage de la mission personnelle s'est ouverte (#9539) — même geste que sur iPhone.
+            router.pendingGameAnchor = .missions
+            rightPanelRoute = .progression
 
         case .legacyAffiliateSignup:
             rightPanelRoute = .affiliate
@@ -542,6 +552,11 @@ extension iPadRootView {
         case .gameDuoInvited, .gameDuoAccepted, .gameLeagueResult, .gameSeasonStep:
             // Une notification du jeu (#9490) ouvre la page qui la restitue — même geste que sur iPhone.
             rightPanelRoute = .gamePage(GamePage.opened(by: type) ?? .league)
+
+        case .gameMissionWindow:
+            // La plage de la mission personnelle s'est ouverte (#9539) — même geste que sur iPhone.
+            router.pendingGameAnchor = .missions
+            rightPanelRoute = .progression
 
         case .legacyAffiliateSignup:
             rightPanelRoute = .affiliate

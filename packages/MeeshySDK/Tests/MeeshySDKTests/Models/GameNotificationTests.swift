@@ -50,9 +50,39 @@ final class GameNotificationTests: XCTestCase {
         XCTAssertEqual(try decode(seasonJSON).notificationType, .gameSeasonStep)
     }
 
-    func test_isGame_isTrueForTheFourTypesOnly() {
+    func test_isGame_isTrueForTheFiveTypesOnly() {
         let games = MeeshyNotificationType.allCases.filter(\.isGame)
-        XCTAssertEqual(Set(games), [.gameDuoInvited, .gameDuoAccepted, .gameLeagueResult, .gameSeasonStep])
+        XCTAssertEqual(Set(games), [.gameDuoInvited, .gameDuoAccepted, .gameLeagueResult, .gameSeasonStep, .gameMissionWindow])
+    }
+
+    // MARK: - La plage de la mission personnelle (#9539)
+
+    private let missionWindowJSON = #"""
+    {"id":"n4","userId":"me","type":"game_mission_window","priority":"normal",
+     "content":"Ta mission du moment : envoyer un vocal, jusqu'à 16 h.",
+     "state":{"isRead":false,"readAt":null,"createdAt":"2026-10-06T14:00:00.000Z"},
+     "metadata":{"action":"view_details","route":"progression","gameSection":"missions"}}
+    """#
+
+    func test_missionWindow_isAKnownGameType_notASystemFallback() throws {
+        XCTAssertEqual(MeeshyNotificationType(rawValue: "game_mission_window"), .gameMissionWindow)
+        XCTAssertEqual(try decode(missionWindowJSON).notificationType, .gameMissionWindow)
+    }
+
+    func test_missionWindow_theTouchOpensTheMissionsSectionOfProgression_notAGamePage() {
+        XCTAssertEqual(MeeshyNotificationType.gameMissionWindow.gameDestination, .missions)
+    }
+
+    func test_missionWindow_isGovernedByTheGamePreference_andFiledWithEngagement() {
+        XCTAssertEqual(MeeshyNotificationType.gameMissionWindow.accentHex, MeeshyNotificationType.levelUp.accentHex)
+        XCTAssertNotEqual(MeeshyNotificationType.gameMissionWindow.systemIcon, "bell.fill")
+    }
+
+    func test_missionWindow_hasNoActor_theClientNamesTheSurface_andShowsTheServedSentence() throws {
+        let notification = try decode(missionWindowJSON)
+        XCTAssertFalse(notification.formattedTitle.isEmpty)
+        XCTAssertEqual(notification.formattedBody, "Ta mission du moment : envoyer un vocal, jusqu'à 16 h.")
+        XCTAssertEqual(notification.rowPresentation().leading, .signature)
     }
 
     // MARK: - Métadonnées typées

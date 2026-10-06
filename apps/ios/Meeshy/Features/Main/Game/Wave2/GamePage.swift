@@ -28,7 +28,7 @@ enum GamePage: String, Hashable, CaseIterable {
         switch type.gameDestination {
         case .league: .league
         case .season: .season
-        case nil: nil
+        case .missions, nil: nil
         }
     }
 
