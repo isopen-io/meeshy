@@ -25,7 +25,8 @@ extension ComposerCaptureCopy {
 extension ComposerCaptureSession {
 
     /// Les IDENTIFIANTS, jamais les valeurs : deux prises identiques d'affilée
-    /// ne changeraient pas `capturedPhoto`.
+    /// ne changeraient pas `capturedPhoto`. Un enregistrement qui ne rendra aucun
+    /// fichier libère son intention.
     func subscribeToTakes() {
         camera.$capturedPhotoId.compactMap { $0 }
             .sink { [weak self] _ in self?.photoArrived() }
@@ -33,6 +34,17 @@ extension ComposerCaptureSession {
         camera.$capturedVideoId.compactMap { $0 }
             .sink { [weak self] _ in self?.videoArrived() }
             .store(in: &takeSubscriptions)
+        camera.$abandonedRecordingId.compactMap { $0 }
+            .sink { [weak self] id in self?.filmIntents[id] = nil }
+            .store(in: &takeSubscriptions)
+    }
+
+    /// Armer ou fermer le viseur oublie toute intention en attente.
+    func resetIntents() {
+        photoIntent = .edit
+        filmIntent = .edit
+        photoInFlightIntent = .edit
+        filmIntents = [:]
     }
 
     /// **Le geste décidé par la table, exécuté.** Mise au point, zoom, rangement et
@@ -68,11 +80,16 @@ extension ComposerCaptureSession {
         endHold()
     }
 
-    /// Une photo déjà en vol garde son intention : la demande suivante attend.
+    /// La demande pose son intention ; l'obturateur la fige en partant.
     func shootPhoto(intent: ComposerTakeIntent) {
-        guard !camera.isTakingPhoto else { return }
         photographWhenReady()
         photoIntent = intent
+    }
+
+    /// L'obturateur PART : l'intention devient celle de CETTE photo.
+    func freezePhotoIntent() {
+        photoInFlightIntent = photoIntent
+        photoIntent = .edit
     }
 
     /// L'appui long de la miniature : la tenue de la scène, vers la galerie —
@@ -83,16 +100,23 @@ extension ComposerCaptureSession {
         if holdStartedAt != nil { filmIntent = .gallery }
     }
 
-    /// L'enregistrement part : son intention entre dans la file.
-    func noteRecordingStarted() {
-        filmIntents.append(filmIntent)
+    /// L'enregistrement part : son intention est figée.
+    func noteRecordingStarted() -> ComposerTakeIntent {
+        let intent = filmIntent
         filmIntent = .edit
+        return intent
+    }
+
+    /// L'intention suit SON enregistrement — `nil` : il n'a pas démarré.
+    func bindRecording(_ intent: ComposerTakeIntent, to id: String?) {
+        guard let id else { return }
+        filmIntents[id] = intent
     }
 
     func photoArrived() {
         guard stage != .off, let image = camera.capturedPhoto else { return }
-        let intent = photoIntent
-        photoIntent = .edit
+        let intent = photoInFlightIntent
+        photoInFlightIntent = .edit
         switch intent {
         case .gallery:
             saveRenderedPhoto(image, data: camera.capturedPhotoData)
@@ -111,8 +135,7 @@ extension ComposerCaptureSession {
     /// galerie, son fichier temporaire part.
     func videoArrived() {
         guard let url = camera.capturedVideoURL else { return }
-        let intent = filmIntents.first ?? .edit
-        filmIntents = Array(filmIntents.dropFirst())
+        let intent = camera.capturedVideoId.flatMap { filmIntents.removeValue(forKey: $0) } ?? .edit
         guard stage != .off else {
             discardTake(url, context: "prise arrivée après la fermeture du viseur")
             return
@@ -124,29 +147,45 @@ extension ComposerCaptureSession {
     }
 
     /// Le RENDU part en galerie, encodé avec l'EXIF de la prise, à côté du brut.
+    /// Le verdict du brut d'abord : refusé, rien n'est peint (et le refus ne se
+    /// dit qu'une fois). Les rendus passent un par un.
     func saveRenderedPhoto(_ image: UIImage, data: Data?) {
-        guard let debout = ComposerPhotoLookSource.upright(image) else { return }
         let regard = look
         let auteur = lookPerson
         let date = lookDate
         let cache = scenes
         let galerie = gallery
         let brut = camera.librarySave
+        let precedent = galleryChain
         beginGallerySave()
-        Task { @MainActor in
+        galleryChain = Task { @MainActor in
             defer { endGallerySave() }
-            guard let rendu = await ComposerLookPainter.renderPhoto(debout, look: regard, framing: .identity,
-                                                                    person: auteur, date: date, scenes: cache),
-                  let octets = await ComposerPhotoEncoding.encode(rendu, like: data) else { return }
-            let rendueEnregistree = await galerie.saveImage(octets)
-            let bruteEnregistree = await brut?.value ?? true
-            guard rendueEnregistree, bruteEnregistree else { return }
+            await precedent?.value
+            guard await brut?.value ?? true,
+                  let octets = await Self.renderedPhotoBytes(image, data: data, look: regard, person: auteur,
+                                                             date: date, scenes: cache),
+                  await galerie.saveImage(octets) else { return }
             FeedbackToastManager.shared.showSuccess(ComposerCaptureCopy.savedToPhotos)
         }
     }
 
-    /// Le RENDU de la vidéo part en galerie, à côté du brut. Sans effet, l'export
-    /// rend le brut lui-même : aucune copie identique ne part.
+    /// Peindre et encoder dans une portée à part : la toile pleine définition est
+    /// relâchée avant que Photos ne fasse attendre.
+    @concurrent
+    nonisolated static func renderedPhotoBytes(_ image: UIImage, data: Data?, look: ComposerPhotoLook,
+                                               person: CallFramePerson, date: Date,
+                                               scenes: any ComposerLookSceneProviding) async -> Data? {
+        guard let debout = ComposerPhotoLookSource.upright(image),
+              let rendu = await ComposerLookPainter.renderPhoto(debout, look: look, framing: .identity,
+                                                                person: person, date: date, scenes: scenes)
+        else { return nil }
+        return await ComposerPhotoEncoding.encode(rendu, like: data)
+    }
+
+    /// Le RENDU de la vidéo part en galerie, à côté du brut. **Sans effet, UN seul
+    /// fichier** (décision #9351) : la vidéo brute est déjà sur le canevas qu'on
+    /// voyait, et son rendu lui serait identique au pixel près — l'export rend
+    /// alors le brut lui-même, et aucune copie ne part.
     func saveRenderedVideo(_ url: URL) {
         let regard = look
         let auteur = lookPerson
@@ -154,20 +193,24 @@ extension ComposerCaptureSession {
         let galerie = gallery
         let espace = camera.liveFeed.declaredSpace?.name as String?
         let brut = camera.librarySave
+        let precedent = galleryChain
         beginGallerySave()
-        Task { @MainActor in
-            defer { endGallerySave() }
+        galleryChain = Task { @MainActor in
+            defer {
+                FileManager.default.removeItemLogging(at: url, context: "brut déjà en galerie", logger: .media)
+                endGallerySave()
+            }
+            await precedent?.value
+            guard await brut?.value ?? true else { return }
             let rendue = await ComposerLookVideoExporter.export(url, look: regard, person: auteur, date: date,
                                                                  declaredSpaceName: espace)
-            var rendueEnregistree = rendue == url
-            if let rendue, rendue != url {
-                rendueEnregistree = await galerie.saveVideo(at: rendue)
+            guard let rendue else { return }
+            if rendue != url {
+                let enregistree = await galerie.saveVideo(at: rendue)
                 FileManager.default.removeItemLogging(at: rendue, context: "rendu enregistré en galerie",
                                                       logger: .media)
+                guard enregistree else { return }
             }
-            let bruteEnregistree = await brut?.value ?? true
-            FileManager.default.removeItemLogging(at: url, context: "brut déjà en galerie", logger: .media)
-            guard rendueEnregistree, bruteEnregistree else { return }
             FeedbackToastManager.shared.showSuccess(ComposerCaptureCopy.savedToPhotos)
         }
     }

@@ -113,6 +113,10 @@ extension MeeshyComposerHost {
         // `ingestIntoDocument` consomme le drapeau AVANT d'écrire (#4879), et
         // l'observateur qui lit `railPosedMediaURLs` tourne sur l'écriture.
         railPosesNextMedia = true
+        // **La prise se POSE par le chemin de la feuille** (#4080) : la session
+        // remet la photo regardée (#9329) à `poseSceneCapture`, jusqu'à la
+        // pose ou au désarmement, qui la lui retirent.
+        sceneCapture.onDeliver = { poseSceneCapture($0) }
         sceneCapture.arm(mode: mode)
     }
 
@@ -213,12 +217,6 @@ extension MeeshyComposerHost {
 
     /// Le chrome partagé ; le toucher et l'appui long de la nappe passent par
     /// les lois du FORMAT (`handleArmedSceneTap`, `handleArmedSceneHold`).
-    ///
-    /// **La prise se POSE par le chemin de la feuille, jamais par un second**
-    /// (#4080) : la session remet la photo regardée (#9329) — story, post et
-    /// réel — à `poseSceneCapture`, qui emprunte `ingestCameraCapture`. Une
-    /// vidéo, elle, s'ACCUMULE dans la session (#4099, vue `4b`). Le chrome
-    /// parti, plus rien n'est remis : la session ne retient pas l'hôte.
     private func sceneCameraChrome(rect: CGRect) -> some View {
         ComposerCaptureChrome(
             session: sceneCapture,
@@ -230,7 +228,5 @@ extension MeeshyComposerHost {
             onValidateSegments: { validateSceneSegments() })
         .frame(width: rect.width, height: rect.height)
         .position(x: rect.midX, y: rect.midY)
-        .onAppear { sceneCapture.onDeliver = { poseSceneCapture($0) } }
-        .onDisappear { sceneCapture.onDeliver = nil }
     }
 }
