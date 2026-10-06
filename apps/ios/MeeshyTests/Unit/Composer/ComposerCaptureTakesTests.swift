@@ -325,7 +325,11 @@ final class ComposerCaptureTakesTests: XCTestCase {
         let camera = CameraModel(fixture: ComposerCaptureFixtureDriver())
         camera.startRecording()
         XCTAssertFalse(camera.recordingIsPending, "filmer n'est pas finaliser")
-        let session = ComposerCaptureSession(stage: .armed, camera: camera, gallery: MockComposerGallery())
+        let objectif = MockComposerCaptureCamera()
+        objectif.recordingIsPending = camera.recordingIsPending
+        let session = ComposerCaptureSession(stage: .armed, camera: camera, controls: objectif,
+                                             gallery: MockComposerGallery())
+        session.flash = .on
         session.beginHold()
         XCTAssertFalse(session.awaitsPreviousTake)
         await Self.waitUntil(timeout: 1) { session.holdStartedAt == nil }
@@ -333,6 +337,7 @@ final class ComposerCaptureTakesTests: XCTestCase {
         XCTAssertNil(session.holdStartedAt, "le doigt encore posé ne verrouille plus rien")
         XCTAssertNil(session.holdPhase)
         XCTAssertTrue(session.filmIntents.isEmpty)
+        XCTAssertEqual(objectif.torchRequests, [.on, .off], "le refus de l'objectif éteint la torche que la prise avait allumée")
         session.disarm()
         camera.stopRecording()
     }
