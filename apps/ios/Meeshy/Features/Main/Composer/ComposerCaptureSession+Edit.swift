@@ -1,4 +1,5 @@
 import CoreGraphics
+import CoreMedia
 import MeeshySDK
 import UIKit
 
@@ -41,7 +42,8 @@ extension ComposerCaptureSession {
         loopPlayer = lecteur
         editSource = lecteur
         framing = .identity
-        trim = 0...lecteur.duration
+        trim = ComposerTrimRule.initialRange(duration: lecteur.duration)
+        loopedTrim = trim
         openFamily = nil
         phase = .editing(.video(url))
         camera.pauseRunning()
@@ -112,11 +114,12 @@ extension ComposerCaptureSession {
         }
     }
 
-    /// La vidéo part avec le look et le cadrage qu'on voyait en la retouchant,
-    /// lue dans l'espace où la boucle la lisait. Sans effet ni cadrage, le rendu
-    /// EST le brut, déjà en galerie : rien de plus n'y part. Un rendu qui échoue
-    /// remet le brut plutôt que de perdre la prise ; la boucle joue jusqu'à la
-    /// remise, et le brut qu'un rendu remplace quitte le dossier temporaire.
+    /// La vidéo part avec le look, le cadrage et la découpe qu'on voyait en la
+    /// retouchant, lue dans l'espace où la boucle la lisait. Sans effet, sans
+    /// cadrage ni découpe, le rendu EST le brut, déjà en galerie : rien de plus
+    /// n'y part. Un rendu qui échoue remet le brut plutôt que de perdre la prise ;
+    /// la boucle joue jusqu'à la remise, et le brut qu'un rendu remplace quitte
+    /// le dossier temporaire.
     private func finishVideo(_ url: URL) {
         guard let source = editSource else { return }
         let regard = look
@@ -125,11 +128,13 @@ extension ComposerCaptureSession {
         let date = lookDate
         let galerie = gallery
         let espace = loopPlayer?.declaredSpace?.name as String?
+        let plage = ComposerTrimRule.timeRange(trim, duration: loopPlayer?.duration ?? 0)
         isRenderingLook = true
         Task { @MainActor in
             guard isStillEditing(source) else { return }
-            let rendue = await ComposerLookVideoExporter.export(url, look: regard, framing: cadrage, person: auteur,
-                                                                date: date, declaredSpaceName: espace)
+            let rendue = await ComposerLookVideoExporter.export(url, look: regard, framing: cadrage, timeRange: plage,
+                                                                person: auteur, date: date,
+                                                                declaredSpaceName: espace)
             let neuve = rendue.flatMap { $0 == url ? nil : $0 }
             if let neuve, isStillEditing(source) { _ = await galerie.saveVideo(at: neuve) }
             guard isStillEditing(source) else {
@@ -168,11 +173,33 @@ extension ComposerCaptureSession {
         loopPlayer = nil
         lecteur?.stop()
         trim = nil
+        loopedTrim = nil
         phase = .capturing
         editPhoto = nil
         editPhotoData = nil
         editSource = nil
         framing = .identity
+    }
+
+    // MARK: - La découpe (#9353)
+
+    /// **La plage gardée suit le geste ; la boucle ne repart qu'à sa fin.**
+    /// Reconstruire la boucle à chaque image du glissé la ferait bégayer : pendant
+    /// le geste seule la piste bouge, et le geste fini la boucle joue ce qui
+    /// partira. Pendant le rendu de « Terminé », plus rien ne bouge.
+    func setTrim(_ range: ClosedRange<TimeInterval>, committed: Bool) {
+        guard !isRenderingLook, let lecteur = loopPlayer else { return }
+        trim = range
+        guard committed, loopedTrim != range else { return }
+        loopedTrim = range
+        lecteur.setRange(range)
+    }
+
+    /// Toucher la piste y place la tête, dans la plage gardée ; la boucle repart
+    /// de là.
+    func seekPlayhead(to time: TimeInterval) {
+        guard !isRenderingLook, let trim, let lecteur = loopPlayer else { return }
+        lecteur.seek(to: ComposerTrimRule.playhead(time, in: trim))
     }
 
     /// L'étendue de la source éditée ; `nil` hors édition. Une vidéo la connaît

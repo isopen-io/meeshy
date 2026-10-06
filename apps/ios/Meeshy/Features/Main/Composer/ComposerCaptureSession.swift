@@ -76,6 +76,8 @@ final class ComposerCaptureSession: ObservableObject {
     var loopPlayer: (any ComposerLoopPlayerProviding)?
     /// La plage gardée de la vidéo éditée (#9353).
     @Published var trim: ClosedRange<TimeInterval>?
+    /// La plage que la boucle JOUE : celle du dernier geste fini.
+    var loopedTrim: ClosedRange<TimeInterval>?
     /// Ce qui ouvre la boucle d'un fichier — une doublure dans les témoins.
     let loopPlayerFactory: @MainActor (URL) async -> (any ComposerLoopPlayerProviding)?
     /// Les segments s'assemblent, ou la vidéo se rend avec son look : le `✓`

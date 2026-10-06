@@ -12,6 +12,9 @@ nonisolated enum ComposerTrimRule {
     static let minimum: TimeInterval = AudioTrimGeometry.minimumSegment
     /// L'appui long sur une poignée dilate la piste à ce facteur.
     static let preciseZoom: CGFloat = AudioTrimGeometry.zoomRange.upperBound
+    /// Le plancher de l'échelle de précision : un point d'écran n'y vaut jamais
+    /// plus de deux millisecondes, même sur une longue prise.
+    static let minimumPrecisePointsPerSecond: CGFloat = 500
     /// Sous la demi-milliseconde, une borne EST celle du clip.
     private static let epsilon: TimeInterval = 0.0005
 
@@ -65,6 +68,20 @@ nonisolated enum ComposerTrimRule {
     static func preciseTime(anchor: TimeInterval, translationX: CGFloat, pointsPerSecond: CGFloat) -> TimeInterval {
         guard pointsPerSecond > 0 else { return anchor }
         return anchor - TimeInterval(translationX / pointsPerSecond)
+    }
+
+    /// L'échelle de la piste dilatée, depuis celle de la piste entière.
+    static func precisePointsPerSecond(_ pointsPerSecond: CGFloat) -> CGFloat {
+        max(pointsPerSecond * preciseZoom, minimumPrecisePointsPerSecond)
+    }
+
+    /// **Ce que la loupe montre** : la fenêtre de temps qui tient dans la piste
+    /// autour du trait fixe — seule elle se dessine, jamais la piste dilatée entière.
+    static func precisionWindow(anchor: TimeInterval, width: CGFloat,
+                                pointsPerSecond: CGFloat) -> ClosedRange<TimeInterval> {
+        guard pointsPerSecond > 0, width > 0 else { return anchor...anchor }
+        let demi = TimeInterval(width / 2 / pointsPerSecond)
+        return (anchor - demi)...(anchor + demi)
     }
 
     /// La plage exportée, à la milliseconde lue sur la piste ; `nil` quand elle

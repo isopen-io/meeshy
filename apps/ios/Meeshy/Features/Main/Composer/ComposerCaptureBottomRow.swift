@@ -18,6 +18,10 @@ import MeeshyUI
 /// laissent leur place, au-dessus de la bande qu'il ne recouvre donc jamais ;
 /// les miniatures se peignent sur le média retouché ; la phrase du geste, qui
 /// parle de prises, se tait.
+///
+/// **Une vidéo retouchée reçoit sa piste de découpe** (#9353, spec § 3.3),
+/// AU-DESSUS du rail et de la bande : elle se monte dans le couloir du rail, en
+/// tête, sur toute la largeur — le rail ne bouge pas, « Terminé » non plus.
 struct ComposerCaptureBottomRow: View {
     @ObservedObject var session: ComposerCaptureSession
     let context: ComposerCaptureGestureContext
@@ -37,6 +41,12 @@ struct ComposerCaptureBottomRow: View {
 
     private var showsLock: Bool {
         ComposerCaptureHold.showsLock(stage: session.stage, holding: capture.holding, locked: capture.locked)
+    }
+
+    /// La vidéo en retouche et la durée de sa boucle ; `nil` ⇒ pas de piste.
+    private var trimClip: (url: URL, duration: TimeInterval)? {
+        guard case .editing(.video(let url)) = session.phase, let lecteur = session.loopPlayer else { return nil }
+        return (url, lecteur.duration)
     }
 
     /// La table dit si le rail ouvre une famille ; sinon il reste là, éteint.
@@ -75,11 +85,17 @@ struct ComposerCaptureBottomRow: View {
         }
         .padding(.bottom, MeeshySpacing.lg)
         .overlay(alignment: .bottomLeading) {
-            ComposerLookRail(open: session.openFamily) { famille in session.toggleFamily(famille) }
-                .disabled(!railEnabled)
-                .opacity(recording ? 0 : (railEnabled ? 1 : 0.4))
-                .padding(.leading, MeeshySpacing.mdPlus)
-                .padding(.bottom, ComposerLookStripRule.cellSize.height + MeeshySpacing.xxxl * 2)
+            VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
+                if let trimClip {
+                    ComposerTrimTrack(session: session, url: trimClip.url, duration: trimClip.duration)
+                        .transition(.opacity)
+                }
+                ComposerLookRail(open: session.openFamily) { famille in session.toggleFamily(famille) }
+                    .disabled(!railEnabled)
+                    .opacity(recording ? 0 : (railEnabled ? 1 : 0.4))
+                    .padding(.leading, MeeshySpacing.mdPlus)
+            }
+            .padding(.bottom, ComposerLookStripRule.cellSize.height + MeeshySpacing.xxxl * 2)
         }
         .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: showsLock)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: recording)
