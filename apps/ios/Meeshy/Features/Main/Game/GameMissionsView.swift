@@ -178,7 +178,7 @@ private struct GameMissionRow: View {
                         .fixedSize(horizontal: false, vertical: true)
                 } icon: {
                     Image(systemName: "timer")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                 }
                 .accessibilityIdentifier("game.mission.timer")

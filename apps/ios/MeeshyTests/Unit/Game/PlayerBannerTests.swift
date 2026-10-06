@@ -118,7 +118,7 @@ final class PlayerBannerTests: XCTestCase {
 
     /// #9536 : au niveau 1, ni détail de niveau ni jauge — la phrase dit les points gagnés, pas « Niveau 1 ».
     func test_atLevelOne_theSentenceHasNoLevelDetail_butTheEarnedPoints() throws {
-        let banner = try XCTUnwrap(GamePlayerBanner.make(game: GameFixture.game(score: 40, glory: 0, held: 0, flameDays: 0, flameStatus: .none)))
+        let banner = try XCTUnwrap(GamePlayerBanner.make(game: GameFixture.game(score: 25, glory: 0, held: 0, flameDays: 0, flameStatus: .none)))
         XCTAssertFalse(banner.showsLevel)
         let label = PlayerBannerCopy.accessibilityLabel(for: banner)
         XCTAssertFalse(label.contains(GameText.bannerLevel(level: GameCopy.formatCount(1))), "le niveau 1 ne se détaille pas : \(label)")

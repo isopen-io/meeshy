@@ -255,8 +255,8 @@ struct GameRulesAtlasView: View {
                 SignatureMark(style: .flat, color: theme.textMuted, strokeWidth: 100)
                     .padding(14)
                     .frame(width: 56, height: 56)
-                    .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(theme.backgroundPrimary))
-                    .gameRarityRim(GameRulesAtlas.border(of: rarity), cornerRadius: 14)
+                    .background(RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous).fill(theme.backgroundPrimary))
+                    .gameRarityRim(GameRulesAtlas.border(of: rarity), cornerRadius: MeeshyRadius.md)
             }
         }
     }
