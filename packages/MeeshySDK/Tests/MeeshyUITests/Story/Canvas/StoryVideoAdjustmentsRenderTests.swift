@@ -174,7 +174,7 @@ final class StoryVideoAdjustmentsRenderTests: XCTestCase {
     // MARK: - Outils
 
     @MainActor
-    static func attendre(_ condition: @MainActor () -> Bool, timeout: TimeInterval = 5) async throws {
+    static func attendre(_ condition: @escaping @MainActor () -> Bool, timeout: TimeInterval = 5) async throws {
         let limite = Date().addingTimeInterval(timeout)
         while !condition() {
             guard Date() < limite else { return XCTFail("Condition jamais atteinte") }
