@@ -5,6 +5,7 @@ import { GlassBack } from '@/components/glass-surface';
 import { unwrap } from '@/lib/api/client';
 import { apiDeps } from '@/lib/api/deps';
 import { ENGAGEMENT_PROGRESS_QUERY_KEY, loadEngagementProgress } from '@/lib/api/engagement';
+import { useGameSettings } from '@/lib/game/use-game-settings';
 import { useOnline } from '@/lib/net/online';
 import { Link } from '@/routes/route-table';
 import { BRAND, INK, INK_2, ProgressionError, ProgressionSkeleton } from '@/routes/progression-parts';
@@ -38,6 +39,7 @@ export function ProgressionPage({
   children: (progress: EngagementProgress) => React.ReactNode;
 }) {
   const online = useOnline();
+  useGameSettings(true);
   const query = useQuery({
     queryKey: ENGAGEMENT_PROGRESS_QUERY_KEY,
     queryFn: async ({ signal }) =>

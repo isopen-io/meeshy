@@ -76,12 +76,12 @@ describe('« Jeu masqué »', () => {
     expect(calls).toEqual([false]);
   });
 
-  test('hors ligne : on ne PEUT pas masquer (la moitié du geste serait une fausse promesse), on peut toujours réafficher', async () => {
+  test('hors ligne : on ne peut ni masquer ni réafficher — le serveur fait foi, et une bascule qui ne partirait pas serait défaite à la lecture suivante', async () => {
     const off = await mount(<GameSettings {...props({ online: false })} />);
     expect(off.querySelector<HTMLInputElement>('[data-game-setting-hidden]')?.disabled).toBe(true);
     unmountAll();
     const hidden = await mount(<GameSettings {...props({ online: false, prefs: { hidden: true, celebrations: true } })} />);
-    expect(hidden.querySelector<HTMLInputElement>('[data-game-setting-hidden]')?.disabled).toBe(false);
+    expect(hidden.querySelector<HTMLInputElement>('[data-game-setting-hidden]')?.disabled).toBe(true);
   });
 });
 

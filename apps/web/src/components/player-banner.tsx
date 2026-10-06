@@ -11,6 +11,7 @@ import type { EffectEnv } from '@/lib/game/gl/effect-runner';
 import { SHEEN_PASS_MS, SHEEN_SWEEP_START_MS } from '@/lib/game/gl/timeline';
 import { prefersReducedMotion } from '@/lib/game/haptics';
 import { useGamePrefs } from '@/lib/game/preferences';
+import { useGameSettings } from '@/lib/game/use-game-settings';
 import { tierTint } from '@/lib/game/tier-emblem';
 import { loadGameCatalog, suspendForGameCatalog, translateGame } from '@/lib/i18n-game-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
@@ -222,6 +223,7 @@ export default function PlayerBannerHost() {
   suspendForGameCatalog(currentInterfaceLanguage());
   const prefs = useGamePrefs();
   const signedIn = useStore(sessionStore, (state) => state.session.status === 'authenticated') || apiDeps.source === 'fixtures';
+  useGameSettings(signedIn);
   const query = useQuery(
     {
       queryKey: ENGAGEMENT_PROGRESS_QUERY_KEY,

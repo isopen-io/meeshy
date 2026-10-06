@@ -6,6 +6,7 @@ import { ENGAGEMENT_PROGRESS_QUERY_KEY, loadEngagementProgress } from '@/lib/api
 import { loadUserShowcase, userShowcaseQueryKey } from '@/lib/api/game-v2-queries';
 import { appQueryClient } from '@/lib/api/query-client';
 import { useGamePrefs } from '@/lib/game/preferences';
+import { useGameSettings } from '@/lib/game/use-game-settings';
 import { suspendForGameCatalog } from '@/lib/i18n-game-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 
@@ -27,6 +28,7 @@ import { GameProfileOwn } from './game-profile-own';
 export function GameProfileOwnConnected({ enabled }: { readonly enabled: boolean }) {
   suspendForGameCatalog(currentInterfaceLanguage());
   const prefs = useGamePrefs();
+  useGameSettings(enabled);
   const query = useQuery(
     {
       queryKey: ENGAGEMENT_PROGRESS_QUERY_KEY,

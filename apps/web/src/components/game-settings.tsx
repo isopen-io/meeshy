@@ -14,12 +14,13 @@ import { GameVisibilityPicker } from './game-visibility-picker';
  * quoi (rang, trésor, vitrine, Atlas — #5738), la ligue publique (consentement
  * et pseudonyme), et le carnet des règles.
  *
- * **« Jeu masqué » est un geste composé, et il le dit.** Il masque le jeu sur
- * l'appareil (`gamePrefs.hidden`), ferme les quatre visibilités à « moi seul » et
- * retire la personne de la ligue publique — tout ce que le contrat sait faire
- * aujourd'hui (conformité A-7, D-2). Le réafficher ne rouvre RIEN du côté
- * serveur : l'écran le dit, la personne rouvre ce qu'elle veut, un réglage à la
- * fois. Défaut sûr : on ne devine jamais ce qu'elle aurait choisi d'ouvrir.
+ * **« Jeu masqué » est un geste composé, et il le dit.** Il masque le jeu sur le
+ * compte (`PUT /me/game/privacy` ; `gamePrefs.hidden` n'en est que la copie du
+ * dernier état connu), ferme les quatre visibilités à « moi seul » et retire la
+ * personne de la ligue publique (conformité A-7, D-2). Le réafficher ne rouvre
+ * RIEN des visibilités : l'écran le dit, la personne rouvre ce qu'elle veut, un
+ * réglage à la fois. Défaut sûr : on ne devine jamais ce qu'elle aurait choisi
+ * d'ouvrir. Dans les deux sens le geste exige le réseau : le serveur fait foi.
  *
  * Les valeurs par défaut quand le serveur ne les sert pas encore sont les PLUS
  * FERMÉES de la loi : « amis » (rang, trésor, vitrine) et « moi seul » (Atlas).
@@ -88,7 +89,7 @@ export function GameSettings(props: GameSettingsProps) {
         <p className="text-caption" style={{ color: GAME_INK_2 }}>
           {gameText('game.settings.hidden.body')}
         </p>
-        <SwitchRow marker="data-game-setting-hidden" label={gameText('game.settings.hidden.switch')} checked={prefs.hidden} disabled={!online && !prefs.hidden} onChange={props.onHidden} />
+        <SwitchRow marker="data-game-setting-hidden" label={gameText('game.settings.hidden.switch')} checked={prefs.hidden} disabled={!online} onChange={props.onHidden} />
         {prefs.hidden ? (
           <p className="text-caption" style={{ color: GAME_INK_2 }}>
             {gameText('game.settings.hidden.reopen_note')}

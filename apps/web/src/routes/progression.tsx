@@ -13,6 +13,7 @@ import { unwrap } from '@/lib/api/client';
 import { meeshMissing } from '@/lib/view/meesh-copy';
 import { apiDeps } from '@/lib/api/deps';
 import { ENGAGEMENT_PROGRESS_QUERY_KEY, loadEngagementProgress, type EngagementWithGame } from '@/lib/api/engagement';
+import { useGameSettings } from '@/lib/game/use-game-settings';
 import { useOnline } from '@/lib/net/online';
 import { GameSection, type GameHost } from '@/routes/progression-game';
 import { GameLead } from '@/routes/progression-lead';
@@ -622,6 +623,7 @@ export function ProgressionBody({
 export default function ProgressionScreen() {
   suspendForGameCatalog(currentInterfaceLanguage());
   const online = useOnline();
+  useGameSettings(true);
 
   /**
    * LA MASCOTTE CÉLÈBRE CE QUI CHANGE (#8907) — jamais l'état de la première
