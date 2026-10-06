@@ -57,6 +57,21 @@ final class ComposerCaptureFixtureTests: XCTestCase {
         XCTAssertFalse(CameraModel().runsFixture, "les témoins ne sont jamais lancés avec -MeeshyCaptureFixture")
     }
 
+    func test_switchCamera_duringAFixtureTake_settlesAndKeepsFilming() async {
+        let camera = CameraModel(fixture: ComposerCaptureFixtureDriver())
+        camera.startRecording()
+        XCTAssertTrue(camera.isRecordingVideo)
+        let suivie = expectation(description: "la bascule rend l'objectif en place")
+        camera.switchCamera { _ in suivie.fulfill() }
+        XCTAssertTrue(camera.isSwitchingCamera, "la couverture de la bascule se montre")
+        await fulfillment(of: [suivie], timeout: 1)
+        let prete = await camera.waitUntilCaptureReady(timeout: 2)
+        XCTAssertTrue(prete, "la bascule retombe : la caméra de recette reste utilisable")
+        XCTAssertFalse(camera.isSwitchingCamera)
+        XCTAssertTrue(camera.isRecordingVideo, "la prise continue à travers la bascule")
+        camera.stop()
+    }
+
     func test_fixtureCode_neverShipsInRelease() throws {
         let racine = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
