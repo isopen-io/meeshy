@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import type { MeeshEdition } from '@meeshy/shared/utils/game/mint';
 
@@ -20,7 +20,8 @@ import { formatCount, gameText } from '@/lib/view/game-copy';
  *
  * Le numéro montré est celui de la pièce EN TRAIN d'être frappée — l'aperçu
  * d'avant le geste, que le compteur fait avancer ensuite — puis celui que la
- * passerelle confirme. DÉCORATIVE (`aria-hidden`) : l'hôte dit le résultat.
+ * passerelle confirme POUR CE GESTE : la confirmation de la frappe précédente
+ * ne reprend pas la scène d'une seconde frappe. DÉCORATIVE (`aria-hidden`) : l'hôte dit le résultat.
  */
 export type MintStrikeCoin = { readonly number: number; readonly edition: MeeshEdition };
 
@@ -33,24 +34,21 @@ export type MintStrikeProps = {
   readonly confirmed?: MintStrikeCoin | null;
 };
 
+type Struck = { readonly key: number; readonly coin: MintStrikeCoin | null; readonly stale: MintStrikeCoin | null };
+
 export function MintStrike({ size, strikeKey, next, confirmed = null }: MintStrikeProps) {
-  const [face, setFace] = useState<'obverse' | 'reverse'>('obverse');
-  const struck = useRef<MintStrikeCoin | null>(null);
-  const seen = useRef(strikeKey);
+  const [struck, setStruck] = useState<Struck>({ key: strikeKey, coin: null, stale: null });
+  if (struck.key !== strikeKey) setStruck({ key: strikeKey, coin: next, stale: confirmed });
 
   useEffect(() => registerStrikeStage(), []);
-  useEffect(() => {
-    if (strikeKey === seen.current) return;
-    seen.current = strikeKey;
-    struck.current = next;
-    setFace('reverse');
-  }, [strikeKey, next]);
 
-  const shown = confirmed ?? struck.current ?? next;
+  const coin = struck.key === strikeKey ? struck.coin : next;
+  const stale = struck.key === strikeKey ? struck.stale : confirmed;
+  const shown = coin === null ? confirmed ?? next : confirmed !== null && confirmed !== stale ? confirmed : coin;
   return (
     <MintScene
       size={size}
-      face={face}
+      face={coin === null ? 'obverse' : 'reverse'}
       edition={shown.edition}
       number={shown.number}
       numberLabel={gameText('game.mint.number_label', { number: formatCount(shown.number) })}

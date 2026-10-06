@@ -1,4 +1,5 @@
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
+import { act, useState } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import { gameBlockFixture } from '@/lib/api/game-fixture';
@@ -153,5 +154,25 @@ describe('après la frappe', () => {
     const html = renderToStaticMarkup(<GameMintPreview {...props({}, { celebration: { number: 4, edition: 'silver', key: 1 } })} />);
     expect(html).toContain('role="status"');
     expect(text(html)).toContain('Meesh n° 4 frappée');
+  });
+
+  test('une SECONDE frappe montre la pièce en train d’être frappée, pas le numéro de la précédente', async () => {
+    type Stage = { readonly strikeKey: number; readonly next: number; readonly confirmed: number | null };
+    let set: (stage: Stage) => void = () => undefined;
+    function Bench() {
+      const [stage, setStage] = useState<Stage>({ strikeKey: 0, next: 4, confirmed: null });
+      set = setStage;
+      const base = props({}, { strikeKey: stage.strikeKey, celebration: stage.confirmed === null ? null : CONFIRMED[stage.confirmed] ?? null });
+      return <GameMintPreview {...base} mint={{ ...base.mint, number: stage.next }} />;
+    }
+    const CONFIRMED: Readonly<Record<number, { number: number; edition: 'silver'; key: number }>> = { 4: { number: 4, edition: 'silver', key: 1 } };
+    const host = await mount(<Bench />);
+    const scene = (): string => host.querySelector('[data-game-mint-scene]')?.textContent ?? '';
+    await act(async () => set({ strikeKey: 1, next: 4, confirmed: null }));
+    expect(scene()).toContain('N° 4');
+    await act(async () => set({ strikeKey: 1, next: 5, confirmed: 4 }));
+    expect(scene()).toContain('N° 4');
+    await act(async () => set({ strikeKey: 2, next: 5, confirmed: 4 }));
+    expect(scene()).toContain('N° 5');
   });
 });
