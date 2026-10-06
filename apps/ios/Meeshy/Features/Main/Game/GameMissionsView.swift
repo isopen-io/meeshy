@@ -29,6 +29,8 @@ struct GameMissionsView: View {
 
     private var theme: ThemeManager { ThemeManager.shared }
     private var missions: GameBlock.Missions { game.missions }
+    /// Le fuseau où la passerelle découpe le jour de jeu : celui du COMPTE, jamais celui de l'appareil (#9539).
+    private var accountTimezone: String? { AuthManager.shared.currentUser?.timezone }
 
     var body: some View {
         GameCard(anchor: .missions, title: String(localized: "game.missions.title", defaultValue: "Missions du jour", bundle: .main)) {
@@ -56,7 +58,7 @@ struct GameMissionsView: View {
                 ForEach(missions.items) { mission in
                     GameMissionRow(
                         mission: mission,
-                        window: GameMissionWindow(start: nil, end: GameMissionClock.endOfDay(missions.dayKey)),
+                        window: GameMissionWindow(start: nil, end: GameMissionClock.endOfDay(missions.dayKey, timezone: accountTimezone)),
                         personal: false,
                         canReroll: missions.rerollAvailable,
                         pending: pendingRerollId == mission.id,
@@ -94,7 +96,7 @@ struct GameMissionsView: View {
     }
 }
 
-/// La plage d'une carte : celle de la mission personnelle (deux heures), ou la fin du jour local pour les trois du jour.
+/// La plage d'une carte : celle de la mission personnelle (deux heures), ou la fin du jour de jeu pour les trois du jour.
 /// Sans fin lisible, la carte n'a pas de minuteur (#9539).
 struct GameMissionWindow: Equatable {
     let start: Date?
