@@ -13,6 +13,7 @@ import { BanExpirySweepJob } from './ban-expiry-sweep';
 import { sweepExpiredSessions } from './session-expiry-sweep';
 import { GameLeagueJob } from './game-league';
 import { GameNightlyJob } from './game-nightly';
+import { GameMissionWindowJob } from './game-mission-window';
 import { EmailService } from '../services/EmailService';
 import { RedisDeliveryQueue } from '../services/RedisDeliveryQueue';
 import { MagicLinkService } from '../services/MagicLinkService';
@@ -35,6 +36,7 @@ export class BackgroundJobsManager {
   private banExpirySweepJob: BanExpirySweepJob;
   private gameLeagueJob: GameLeagueJob;
   private gameNightlyJob: GameNightlyJob;
+  private gameMissionWindowJob: GameMissionWindowJob;
   /**
    * Le balayage des sessions expirées n'a pas de classe à lui : c'est UNE
    * requête, sans état ni dépendance. Une classe n'ajouterait qu'un emballage
@@ -70,6 +72,7 @@ export class BackgroundJobsManager {
     this.banExpirySweepJob = new BanExpirySweepJob(banService, userAuditService);
     this.gameLeagueJob = new GameLeagueJob(prisma);
     this.gameNightlyJob = new GameNightlyJob(prisma);
+    this.gameMissionWindowJob = new GameMissionWindowJob(prisma);
   }
 
   /**
@@ -91,6 +94,7 @@ export class BackgroundJobsManager {
     this.banExpirySweepJob.start();
     this.gameLeagueJob.start();
     this.gameNightlyJob.start();
+    this.gameMissionWindowJob.start();
 
     // Toutes les six heures : une session dont l'échéance est passée cesse de
     // se déclarer valide. Sans ce balayage, `isValid` ment à tout ce qui le lit
@@ -158,6 +162,7 @@ export class BackgroundJobsManager {
     this.banExpirySweepJob.stop();
     this.gameLeagueJob.stop();
     this.gameNightlyJob.stop();
+    this.gameMissionWindowJob.stop();
 
     if (this.sessionSweepInterval) {
       clearInterval(this.sessionSweepInterval);
