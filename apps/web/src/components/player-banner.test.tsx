@@ -81,6 +81,13 @@ describe('seulement ce qui existe', () => {
 });
 
 describe('le décor', () => {
+  test('la teinte du palier naît derrière l’anneau, du côté où la ligne commence — à droite en arabe', async () => {
+    const html = markup(newcomer());
+    expect(html).toMatch(/data-player-banner=""[^>]*background:linear-gradient\(var\(--player-banner-sweep, 100deg\)/);
+    const css = await Bun.file(new URL('../styles/player-banner.css', import.meta.url)).text();
+    expect(css).toMatch(/\[dir='rtl'\] \.player-banner \{\s*--player-banner-sweep: 260deg;/);
+  });
+
   test('la Signature en filigrane, teintée par la couleur du palier', () => {
     const html = markup(newcomer());
     expect(html).toMatch(/data-player-banner-watermark=""[^>]*style="[^"]*color:var\(--game-tier-etincelle\)/);

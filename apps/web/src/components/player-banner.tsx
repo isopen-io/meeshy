@@ -169,7 +169,7 @@ export function PlayerBanner({ model, motion = {} }: { readonly model: PlayerBan
           minHeight: 56,
           maxWidth: 560,
           color: INK,
-          background: `linear-gradient(100deg, color-mix(in srgb, ${tint} 16%, ${CARD}), ${CARD} 70%)`,
+          background: `linear-gradient(var(--player-banner-sweep, 100deg), color-mix(in srgb, ${tint} 16%, ${CARD}), ${CARD} 70%)`,
           border: `1px solid color-mix(in srgb, ${tint} 28%, transparent)`,
         }}
       >
