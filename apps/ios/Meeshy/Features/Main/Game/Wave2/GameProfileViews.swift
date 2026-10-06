@@ -178,6 +178,9 @@ struct GameProfileVisitorCard: View {
         }
         .task(id: userId) {
             guard !prefs.prefs.hidden else { return }
+            // Cache-first : ce que le disque a gardé se peint tout de suite, la lecture servie le remplace — ou
+            // l'efface, quand le membre a fermé sa vitrine entre-temps.
+            if entries.isEmpty { entries = GameVisitorShowcase.entries(await loader.cached(userId: userId)) }
             entries = GameVisitorShowcase.entries(await loader.load(userId: userId))
         }
     }
@@ -210,6 +213,9 @@ struct GameContactStrip: View {
         }
         .task(id: userId) {
             guard !prefs.prefs.hidden else { return }
+            // Cache-first : ce que le disque a gardé se peint tout de suite, la lecture servie le remplace — ou
+            // l'efface, quand le membre a fermé sa vitrine entre-temps.
+            if entries.isEmpty { entries = GameVisitorShowcase.entries(await loader.cached(userId: userId)) }
             entries = GameVisitorShowcase.entries(await loader.load(userId: userId))
         }
     }

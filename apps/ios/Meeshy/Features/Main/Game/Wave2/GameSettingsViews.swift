@@ -88,7 +88,7 @@ struct GameSettingsScreen: View {
         .accessibilityIdentifier("game.settings.visibility")
     }
 
-    private func picker(_ legend: String, value: ShowcaseVisibility, apply: @escaping (ShowcaseVisibility) async -> Void) -> some View {
+    private func picker(_ legend: String, value: ShowcaseVisibility, apply: @escaping @MainActor (ShowcaseVisibility) async -> Void) -> some View {
         GameVisibilityPickerView(legend: legend, value: value, disabled: !model.isOnline, busy: model.pending.visibility) { level in
             Task { await apply(level) }
         }
@@ -127,7 +127,7 @@ struct GameSettingsScreen: View {
         GameCard(title: GameText.settingsFriendsLeagueTitle) {
             GameNote(text: GameText.settingsFriendsLeagueBody)
             GameSwitchRow(
-                label: GameText.settingsFriendsLeagueSwitch, isOn: model.privacy?.friendsLeagueOptOut ?? false,
+                label: GameText.settingsFriendsLeagueSwitch, isOn: model.friendsLeagueOptedOut,
                 disabled: !model.isOnline || model.pending.friendsOptOut, identifier: "game.settings.friends-league"
             ) { on in
                 Task { await model.setFriendsLeagueOptOut(on) }

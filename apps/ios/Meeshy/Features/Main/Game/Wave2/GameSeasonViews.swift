@@ -197,7 +197,8 @@ private struct GameSeasonSeal: View {
     var body: some View {
         GameCard(title: GameText.seasonSealTitle) {
             GameNote(text: GameText.seasonSealBody(every: GameCopy.formatCount(GameSeason.sealEvery)))
-            HStack(spacing: MeeshySpacing.sm) {
+            // Dix pastilles ne tiennent pas sur une ligne d'iPhone : deux rangées de cinq, comme le parcours.
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: MeeshySpacing.xsPlus), count: 5), spacing: MeeshySpacing.sm) {
                 ForEach(sealSteps, id: \.self) { step in
                     sealMark(step)
                 }
