@@ -77,7 +77,8 @@ struct ComposerSceneCameraBar: View {
         var zoomFactor: CGFloat = 1
         /// Les crans du zoom que l'objectif sert (#9350) — vide sans zoom.
         var zoomPresets: [CGFloat] = []
-        /// Une bascule d'objectif est en cours : le bouton se tait (#9464).
+        /// Une bascule d'objectif est en cours, ou la prise précédente se
+        /// finalise : le bouton se tait (#9464, #9351).
         var flipping = false
         var flashIntensity: Double = ComposerFlashIntensity.defaultLevel
     }

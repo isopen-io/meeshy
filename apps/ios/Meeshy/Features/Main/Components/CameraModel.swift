@@ -126,6 +126,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     /// prise ne libère rien.
     func closeRecordingToken(_ token: String?) {
         guard let token, recordingId == token else { return }
+        objectWillChange.send()
         recordingId = nil
         stopIsRequested = false
     }
@@ -330,7 +331,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     /// `then` reçoit l'objectif en place une fois la bascule finie (#9464) —
     /// la machine de capture y rend le zoom et la lumière.
     func switchCamera(then: @escaping @MainActor @Sendable (AVCaptureDevice.Position) -> Void) {
-        guard ComposerCameraSwitchRule.mayFlip(isSwitching: isSwitchingCamera) else { return }
+        guard ComposerCameraSwitchRule.mayFlip(isSwitching: isSwitchingCamera), !recordingIsPending else { return }
         guard !isSwitchingCameraDuringRecording else { return }
         isSwitchingCamera = true
         #if DEBUG
