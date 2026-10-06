@@ -127,6 +127,21 @@ final class ComposerLookPainterTests: XCTestCase {
         XCTAssertNil(cache.cached(cle), "la fermeture du viseur vide le cache")
     }
 
+    func test_cache_prepare_alwaysCallsReady_evenWhenTheKeyIsBakingOrBaked() {
+        let cache = ComposerLookSceneCache(countLimit: 4) { cle in ComposerLookPainter.scene(for: cle) }
+        let cadre = Self.premierCadreDuCatalogue() ?? .none
+        let cle = ComposerLookSceneKey(look: ComposerPhotoLook(frame: cadre), canvas: CGSize(width: 54, height: 96),
+                                       date: date, person: auteur)
+        let premier = expectation(description: "le premier appelant est prévenu")
+        let second = expectation(description: "l'appelant arrivé pendant la cuisson est prévenu aussi")
+        cache.prepare(cle) { premier.fulfill() }
+        cache.prepare(cle) { second.fulfill() }
+        wait(for: [premier, second], timeout: 10)
+        let deja = expectation(description: "l'appelant d'une scène déjà cuite est prévenu")
+        cache.prepare(cle) { deja.fulfill() }
+        wait(for: [deja], timeout: 10)
+    }
+
     // MARK: - Relecture du lot (#9347)
 
     func test_paint_uniformSourceUpscaled_keepsOpaqueUnchangedCorners() throws {
