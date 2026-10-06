@@ -693,6 +693,9 @@ const de = {
   'game.photo.referral.options': 'Was die Karte trägt',
   'game.photo.image_right': 'Meo: Sind andere Personen auf dem Foto, frage sie um Erlaubnis, bevor du es teilst.',
   'game.photo.kicker.achievement_rarity': 'Erfolg freigeschaltet · {rarity}',
+  'game.standing.title': 'Das Spiel von {name}',
+  'game.standing.treasury': 'Schatz: {tier}',
+  'game.standing.flame': 'Flamme: {form}',
 } as const satisfies GameCatalog;
 
 export default de;

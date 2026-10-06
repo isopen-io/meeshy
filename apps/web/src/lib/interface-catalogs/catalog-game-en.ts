@@ -695,6 +695,9 @@ const en = {
   'game.photo.referral.options': 'What the card carries',
   'game.photo.image_right': 'Meo: if other people are in the photo, ask for their agreement before sharing it.',
   'game.photo.kicker.achievement_rarity': 'Achievement unlocked · {rarity}',
+  'game.standing.title': '{name}’s game',
+  'game.standing.treasury': 'Treasury: {tier}',
+  'game.standing.flame': 'Flame: {form}',
 } as const satisfies GameCatalog;
 
 export default en;

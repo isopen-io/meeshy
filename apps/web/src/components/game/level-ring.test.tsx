@@ -31,6 +31,13 @@ describe('LevelRing — l’anneau', () => {
     expect(arcOf(render({ level: 3, tier: 'etincelle', progress: -1, size: 56 }))).toBe(0);
   });
 
+  test('sans jauge (le niveau d’un AUTRE, dont la progression n’est pas servie) : un anneau plein et statique, jamais une fausse part', () => {
+    const html = render({ level: 34, tier: 'eclat', progress: null, size: 56 });
+    expect(arcOf(html)).toBeCloseTo(CIRCUMFERENCE, 0);
+    expect(html).toContain('data-game-ring-static');
+    expect(render({ level: 34, tier: 'eclat', progress: 0.5, size: 56 })).not.toContain('data-game-ring-static');
+  });
+
   test('une progression illisible donne un anneau vide, jamais NaN', () => {
     const html = render({ level: 3, tier: 'etincelle', progress: Number.NaN, size: 56 });
     expect(html).not.toContain('NaN');

@@ -19,7 +19,8 @@ import { TierEmblemGlyph, tierColor } from './tier-emblem';
  *
  *   · `progress` (0..1) : la part du niveau suivant déjà gagnée — `progress`
  *     de `levelProgress`. Tout ce qui n'est pas un nombre fini donne un anneau
- *     vide, jamais `NaN` ;
+ *     vide, jamais `NaN` ; `null` : pas de jauge (le niveau d'un AUTRE, dont
+ *     la progression n'est jamais servie) — anneau plein, statique ;
  *   · `record` : le niveau RECORD. S'il dépasse `level` (après une frappe), un
  *     losange le marque : l'anneau a baissé, l'histoire non ;
  *   · `showTier` : un point par rang du palier autour de l'anneau (Étincelle 1,
@@ -45,7 +46,8 @@ const NUMERAL_SIZE = 6.4;
 type Props = {
   readonly level: number;
   readonly tier: LevelTierKey;
-  readonly progress: number;
+  /** La part du niveau suivant, ou `null` : pas de jauge à montrer (le niveau d'un autre) — l'anneau est alors plein et statique. */
+  readonly progress: number | null;
   readonly size: number;
   readonly record?: number;
   readonly showTier?: boolean;
@@ -66,7 +68,7 @@ const fraction = (value: number): number => (Number.isFinite(value) ? Math.min(1
 
 export function LevelRing({ level, tier, progress, size, record, showTier = false, prestige = 0, label }: Props) {
   const uid = safeUid(useId());
-  const arc = (CIRCUMFERENCE * fraction(progress)).toFixed(1);
+  const arc = (CIRCUMFERENCE * (progress === null ? 1 : fraction(progress))).toFixed(1);
   const stroke = tierColor(uid, tier);
   const numeral = tierRoman(tier);
   const cartoucheWidth = 6 + numeral.length * 4.4;
@@ -91,6 +93,7 @@ export function LevelRing({ level, tier, progress, size, record, showTier = fals
       <g data-game-ring-sweep="">
         <circle
           data-game-ring-arc=""
+          {...(progress === null ? { 'data-game-ring-static': '' } : {})}
           cx="28"
           cy="28"
           r={RADIUS}

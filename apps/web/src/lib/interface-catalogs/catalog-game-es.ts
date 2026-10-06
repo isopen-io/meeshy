@@ -693,6 +693,9 @@ const es = {
   'game.photo.referral.options': 'Lo que lleva la tarjeta',
   'game.photo.image_right': 'Meo: si hay otras personas en la foto, pide su consentimiento antes de compartirla.',
   'game.photo.kicker.achievement_rarity': 'Logro desbloqueado · {rarity}',
+  'game.standing.title': 'El juego de {name}',
+  'game.standing.treasury': 'Tesoro: {tier}',
+  'game.standing.flame': 'Llama: {form}',
 } as const satisfies GameCatalog;
 
 export default es;

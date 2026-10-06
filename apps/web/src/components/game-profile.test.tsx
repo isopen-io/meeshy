@@ -2,12 +2,12 @@ import { describe, expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import { resolveEngagementProgress } from '@meeshy/shared/utils/engagement-progress';
-import type { UserShowcaseResponse } from '@meeshy/shared/types/game';
+import type { UserGameProfileResponse, UserShowcaseResponse } from '@meeshy/shared/types/game';
 
 import type { EngagementWithGame } from '@/lib/api/engagement';
 import { ENGAGEMENT_PROGRESS_FIXTURE } from '@/lib/api/engagement-fixture';
 import { gameBlockFixture, gameBlockWithExtrasFixture } from '@/lib/api/game-fixture';
-import { userShowcaseFixture } from '@/lib/api/game-v2-queries-fixture';
+import { userGameFixture, userShowcaseFixture } from '@/lib/api/game-v2-queries-fixture';
 
 import { GameProfileOwn } from './game-profile-own';
 import { ContactGameStrip, GameProfileVisitor } from './game-profile-visitor';
@@ -152,5 +152,106 @@ describe('la carte de contact', () => {
   test('fermée : rien', () => {
     expect(renderToStaticMarkup(<ContactGameStrip showcase={{ visible: false, items: [], order: [] }} />)).toBe('');
     expect(renderToStaticMarkup(<ContactGameStrip showcase={undefined} />)).toBe('');
+  });
+});
+
+/**
+ * LE NIVEAU ET LE RANG D'UN AUTRE (#9481) — ce que SES réglages laissent voir : l'anneau à emblème (sans
+ * jauge), son rang et sa division, le PALIER de son trésor, la FORME de sa Flamme, ses étoiles de Prestige.
+ * Jamais la Gloire, les jours de série, les Meeshes ni une date : le serveur ne les sert pas, l'écran n'a
+ * rien à en dire. Rien servi, rien dessiné — et pas même la preuve qu'un jeu existe.
+ */
+describe('le jeu d’un autre : niveau, rang, trésor, Flamme', () => {
+  const served: UserGameProfileResponse = {
+    visible: true,
+    standing: { level: 34, tier: 'eclat', prestige: 2, flame: 'brasier', rank: 'voix', division: 2 },
+    treasury: { tier: 'coffre' },
+  };
+  const html = renderToStaticMarkup(<GameProfileVisitor game={served} showcase={undefined} name="Amina" />);
+  const t = text(html);
+
+  test('la carte porte son nom et l’anneau à emblème, sans jauge, avec ses étoiles de Prestige', () => {
+    expect(t).toContain('Le jeu de Amina');
+    expect(html).toContain('data-game-level="34"');
+    expect(html).toContain('data-game-tier-numeral');
+    expect(html).toContain('data-game-ring-static');
+    expect((html.match(/data-game-prestige-star/g) ?? []).length).toBe(2);
+  });
+
+  test('le niveau et son palier, le rang et sa division, le blason', () => {
+    expect(t).toMatch(/Niveau 34 · /);
+    expect(html).toContain('data-game-shield');
+    expect(html).toContain('data-game-rank="voix"');
+  });
+
+  test('le palier du trésor et la forme de la Flamme, nommés', () => {
+    expect(t).toContain('Trésor : Coffre');
+    expect(t).toContain('Flamme : Brasier');
+  });
+
+  test('jamais un compte exact : ni Gloire, ni jours de série, ni Meeshes', () => {
+    expect(t).not.toContain('de Gloire');
+    expect(t).not.toMatch(/\d+ jours?/);
+    expect(t).not.toMatch(/Meeshes?/);
+  });
+
+  test('un réglage « rang » fermé (standing nul) mais un trésor ouvert : le trésor seul', () => {
+    const only = renderToStaticMarkup(<GameProfileVisitor game={{ visible: true, standing: null, treasury: { tier: 'bourse' } }} showcase={undefined} name="Amina" />);
+    expect(text(only)).toContain('Trésor : Bourse');
+    expect(only).not.toContain('data-game-level');
+  });
+
+  test('Flamme éteinte, trésor vide, Mythe sans division : seul ce qui existe se montre', () => {
+    const mythic = renderToStaticMarkup(
+      <GameProfileVisitor game={{ visible: true, standing: { level: 100, tier: 'galaxie', prestige: 0, flame: null, rank: 'mythe', division: null }, treasury: { tier: null } }} showcase={undefined} name="Amina" />,
+    );
+    expect(mythic).toContain('data-game-rank="mythe"');
+    expect(text(mythic)).not.toContain('Flamme :');
+    expect(text(mythic)).not.toContain('Trésor :');
+  });
+
+  test('fermé, refusé ou pas encore lu : RIEN — pas un mot qui dise qu’un jeu existe', () => {
+    for (const game of [{ visible: false, standing: null, treasury: null }, undefined, { visible: true, standing: null, treasury: null }] as const) {
+      expect(renderToStaticMarkup(<GameProfileVisitor game={game} showcase={undefined} name="Amina" />)).toBe('');
+    }
+  });
+
+  test('« visible: false » l’emporte sur des blocs que le serveur n’aurait pas dû servir', () => {
+    expect(renderToStaticMarkup(<GameProfileVisitor game={{ ...served, visible: false }} showcase={undefined} name="Amina" />)).toBe('');
+  });
+
+  test('avec une vitrine ouverte : le jeu d’abord, la vitrine dessous, sous son propre intitulé', () => {
+    const both = renderToStaticMarkup(<GameProfileVisitor game={userGameFixture()} showcase={userShowcaseFixture()} name="Amina" />);
+    expect(text(both)).toContain('Le jeu de Amina');
+    expect(text(both)).toContain('Vitrine');
+    expect(both.indexOf('data-game-level')).toBeLessThan(both.indexOf('data-game-trophy'));
+  });
+});
+
+describe('la carte de contact : le niveau et le rang en quelques pictogrammes', () => {
+  const served: UserGameProfileResponse = {
+    visible: true,
+    standing: { level: 34, tier: 'eclat', prestige: 0, flame: 'astre', rank: 'voix', division: 3 },
+    treasury: { tier: 'tresor' },
+  };
+
+  test('l’anneau, le blason, le palier du trésor et la Flamme — chacun nommé au lecteur d’écran', () => {
+    const html = renderToStaticMarkup(<ContactGameStrip showcase={undefined} game={served} />);
+    expect(html).toContain('data-game-contact-standing');
+    expect(html).toContain('data-game-level="34"');
+    expect(html).toContain('data-game-shield');
+    expect(text(html)).toContain('Trésor : Trésor');
+    expect(text(html)).toContain('Flamme : Astre');
+  });
+
+  test('avec les coupes : le niveau d’abord, les trois coupes ensuite', () => {
+    const many: UserShowcaseResponse = { visible: true, items: ['trophy.flame.100', 'trophy.flame.365'].map((key) => ({ key, awardedMonth: '2026-11' })), order: [] };
+    const html = renderToStaticMarkup(<ContactGameStrip showcase={many} game={served} />);
+    expect(html.indexOf('data-game-contact-standing')).toBeLessThan(html.indexOf('data-game-contact-strip'));
+  });
+
+  test('rien de servi : rien — ni niveau, ni coupe', () => {
+    expect(renderToStaticMarkup(<ContactGameStrip showcase={undefined} game={{ visible: false, standing: null, treasury: null }} />)).toBe('');
+    expect(renderToStaticMarkup(<ContactGameStrip showcase={undefined} game={undefined} />)).toBe('');
   });
 });

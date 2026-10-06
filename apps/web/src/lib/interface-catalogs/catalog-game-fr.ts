@@ -707,6 +707,9 @@ const fr = {
   'game.photo.referral.options': 'Ce que la carte porte',
   'game.photo.image_right': 'Meo : si d’autres personnes sont sur la photo, demande-leur leur accord avant de la partager.',
   'game.photo.kicker.achievement_rarity': 'Succès débloqué · {rarity}',
+  'game.standing.title': 'Le jeu de {name}',
+  'game.standing.treasury': 'Trésor : {tier}',
+  'game.standing.flame': 'Flamme : {form}',
 } as const;
 
 export default fr;

@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { unwrap } from '@/lib/api/client';
 import { apiDeps } from '@/lib/api/deps';
 import { ENGAGEMENT_PROGRESS_QUERY_KEY, loadEngagementProgress } from '@/lib/api/engagement';
-import { loadUserShowcase, userShowcaseQueryKey } from '@/lib/api/game-v2-queries';
+import { loadUserGame, loadUserShowcase, userGameQueryKey, userShowcaseQueryKey } from '@/lib/api/game-v2-queries';
 import { appQueryClient } from '@/lib/api/query-client';
 import { useGamePrefs } from '@/lib/game/preferences';
 import { useGameSettings } from '@/lib/game/use-game-settings';
@@ -22,7 +22,7 @@ import { GameProfileOwn } from './game-profile-own';
  * l'écran qui l'héberge.
  *
  * Cache-first : la progression se lit sous la MÊME clé que le hub, la vitrine
- * d'un autre sous une clé par membre. Rien n'est dessiné tant qu'il n'y a pas de
+ * et le jeu d'un autre sous une clé par membre. Rien n'est dessiné tant qu'il n'y a pas de
  * donnée — jamais un spinner : le profil est déjà là.
  */
 export function GameProfileOwnConnected({ enabled }: { readonly enabled: boolean }) {
@@ -53,14 +53,33 @@ function useShowcase(userId: string, enabled: boolean) {
   );
 }
 
+/**
+ * Le jeu d'un autre (#9481) : niveau, rang, trésor, Flamme, selon SES réglages. Une clé par membre ; un
+ * refus est une valeur (`visible: false`), jamais une erreur — et une vraie erreur (réseau, ancien
+ * serveur sans la route) ne dessine rien : le profil reste celui d'avant.
+ */
+function useUserGame(userId: string, enabled: boolean) {
+  return useQuery(
+    {
+      queryKey: userGameQueryKey(userId),
+      enabled,
+      retry: false,
+      queryFn: async ({ signal }) => unwrap(await loadUserGame({ ...apiDeps, userId, signal })),
+    },
+    appQueryClient,
+  );
+}
+
 export function GameProfileVisitorConnected({ userId, name, enabled }: { readonly userId: string; readonly name: string; readonly enabled: boolean }) {
   suspendForGameCatalog(currentInterfaceLanguage());
   const showcase = useShowcase(userId, enabled);
-  return <GameProfileVisitor showcase={showcase.data} name={name} />;
+  const game = useUserGame(userId, enabled);
+  return <GameProfileVisitor showcase={showcase.data} game={game.data} name={name} />;
 }
 
 export function ContactGameStripConnected({ userId, enabled }: { readonly userId: string; readonly enabled: boolean }) {
   suspendForGameCatalog(currentInterfaceLanguage());
   const showcase = useShowcase(userId, enabled);
-  return <ContactGameStrip showcase={showcase.data} />;
+  const game = useUserGame(userId, enabled);
+  return <ContactGameStrip showcase={showcase.data} game={game.data} />;
 }
