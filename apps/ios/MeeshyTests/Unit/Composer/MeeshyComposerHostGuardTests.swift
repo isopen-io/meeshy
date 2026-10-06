@@ -1247,7 +1247,7 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
         // est exigée, pas ses deux appels séparément : un `else` qui
         // disparaîtrait, ou une condition qui glisserait sur `.reel`, rougirait.
         XCTAssertTrue(
-            branche.contains("switchComposerPublishMenuRule.route(surface:mountedSurface,choice:choice)"),
+            branche.contains("switchComposerPublishMenuRule.dispatch(surface:mountedSurface,choice:choice)"),
             "… et sous les deux autres surfaces, le routage est une RÈGLE (#4869), plus une liste "
                 + "de formats écrite dans le corps du publieur."
         )
