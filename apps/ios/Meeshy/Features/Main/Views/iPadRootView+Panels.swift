@@ -158,7 +158,7 @@ struct iPadPanelDestination: View {
             UserStatsView()
                                 .navigationBarHidden(true)
         case .progression:
-            ProgressionView()
+            ProgressionView(pendingAnchor: router.pendingGameAnchor, consumeAnchor: { _ = router.consumePendingGameAnchor() })
                                 .navigationBarHidden(true)
         case .progressionSection(let section):
             ProgressionSectionPage(section: section)

@@ -56,8 +56,15 @@ struct ProgressionView: View {
     /// Le décalage du défilement, que seul l'en-tête lit (#6480).
     @State private var scrollRelay = ScrollOffsetRelay()
 
-    init(viewModel: ProgressionViewModel? = nil) {
+    /// L'ancre qu'une notification de mission demande (#9539) et la façon de la ramasser UNE fois. Passées PAR l'hôte
+    /// (qui tient le routeur) plutôt que lues dans le corps : la vue se monte sans routeur dans les témoins de rendu.
+    private let pendingAnchor: GameAnchor?
+    private let consumeAnchor: () -> Void
+
+    init(viewModel: ProgressionViewModel? = nil, pendingAnchor: GameAnchor? = nil, consumeAnchor: @escaping () -> Void = {}) {
         _viewModel = StateObject(wrappedValue: viewModel ?? ProgressionViewModel())
+        self.pendingAnchor = pendingAnchor
+        self.consumeAnchor = consumeAnchor
     }
 
     var body: some View {
@@ -271,8 +278,9 @@ struct ProgressionView: View {
         .trackScrollContentOffset { scrollRelay.offset = -$0 }                               // iOS 18+
         // Le toucher d'une notification de mission (#9539) pose une ANCRE avant l'ouverture : elle se ramasse UNE fois,
         // quand le jeu est à l'écran — `initial: true` couvre le démarrage à froid, où l'ancre précède l'écran.
-        .adaptiveOnChange(of: router.pendingGameAnchor != nil && viewModel.game != nil, initial: true) { _, ready in
-            guard ready, let anchor = router.consumePendingGameAnchor() else { return }
+        .adaptiveOnChange(of: pendingAnchor != nil && viewModel.game != nil, initial: true) { _, ready in
+            guard ready, let anchor = pendingAnchor else { return }
+            consumeAnchor()
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
                 withAnimation(.easeInOut(duration: 0.35)) { proxy.scrollTo(anchor, anchor: .top) }
             }
