@@ -18,6 +18,7 @@ import {
 } from './messaging/purgeViewOnceContent';
 import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import { loadQuoteDescendants } from './messaging/quoteCascade';
+import { guardedInterval } from '../utils/guarded-timer';
 
 const log = enhancedLogger.child({ module: 'ExpiredMessagesCleanupService' });
 
@@ -182,10 +183,10 @@ export class ExpiredMessagesCleanupService {
     // échéance.
     void this.cleanup().catch((err) => log.warn('initial sweep failed', { err }));
     void this.purgeViewOnce().catch((err) => log.warn('initial view-once purge failed', { err }));
-    this.interval = setInterval(() => {
+    this.interval = guardedInterval({ name: 'expired-messages-cleanup', everyMs: intervalMs, logger: log, run: () => {
       void this.cleanup().catch((err) => log.warn('scheduled sweep failed', { err }));
       void this.purgeViewOnce().catch((err) => log.warn('scheduled view-once purge failed', { err }));
-    }, intervalMs);
+    } });
     this.interval.unref?.();
     log.info('expired-messages sweep started', { intervalMs, batchSize: this.batchSize });
   }

@@ -14,6 +14,7 @@ import * as ffmpeg from 'fluent-ffmpeg';
 import { createImageThumbnail, thumbnailPathFor, createResponsiveVariants, variantPathFor } from './thumbnail';
 import type { AttachmentMetadata } from '@meeshy/shared/types/attachment';
 import { enhancedLogger } from '../../utils/logger-enhanced';
+import { guardedTimeout } from '../../utils/guarded-timer';
 
 // Logger dédié pour MetadataManager
 const logger = enhancedLogger.child({ module: 'MetadataManager' });
@@ -262,10 +263,10 @@ export class MetadataManager {
    */
   private async extractAudioWithFfprobe(fullPath: string): Promise<AudioMetadata | null> {
     return new Promise((resolve) => {
-      const timeout = setTimeout(() => {
+      const timeout = guardedTimeout({ name: 'ffprobe-audio-timeout', afterMs: 10000, logger, run: () => {
         logger.warn('[MetadataManager] Timeout ffprobe après 10 secondes');
         resolve(null);
-      }, 10000);
+      } });
 
       ffmpeg.ffprobe(fullPath, (err, metadata) => {
         clearTimeout(timeout);
@@ -601,10 +602,10 @@ export class MetadataManager {
     const fullPath = path.join(this.uploadBasePath, videoPath);
 
     return new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => {
+      const timeout = guardedTimeout({ name: 'ffprobe-video-timeout', afterMs: 30000, logger, run: () => {
         logger.warn(`[MetadataManager] Timeout ffprobe pour: ${videoPath}`);
         reject(new Error('ffprobe timeout after 30 seconds'));
-      }, 30000);
+      } });
 
       ffmpeg.ffprobe(fullPath, (err, metadata) => {
         clearTimeout(timeout);

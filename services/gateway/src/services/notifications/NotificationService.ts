@@ -123,6 +123,7 @@ import {
   createLoginNewDeviceNotification,
 } from './builders/account-security';
 import { sliceCodePoints } from '@meeshy/shared/utils/text-truncate';
+import { guardedInterval } from '../../utils/guarded-timer';
 
 /** Budget APNs — au-delà, la charge est dégradée par étages (cf. `createNotification`). */
 const PUSHED_TRANSLATION_MAX_CHARS = 200;
@@ -214,9 +215,9 @@ export class NotificationService {
     // A2 — allocation des `_seq` per-user pour les events user-scoped.
     this.sequenceService = new SequenceService(prisma);
     // Nettoyer les entrées de rate limit périmées toutes les 2 minutes
-    const mentionsCleanup = setInterval(() => this.cleanupOldMentions(), 120_000);
+    const mentionsCleanup = guardedInterval({ name: 'mention-dedup-cleanup', everyMs: 120_000, logger: notificationLogger, run: () => this.cleanupOldMentions() });
     mentionsCleanup.unref?.();
-    const reactionsCleanup = setInterval(() => this.cleanupOldReactions(), 120_000);
+    const reactionsCleanup = guardedInterval({ name: 'reaction-dedup-cleanup', everyMs: 120_000, logger: notificationLogger, run: () => this.cleanupOldReactions() });
     reactionsCleanup.unref?.();
   }
 

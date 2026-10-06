@@ -8,6 +8,7 @@
 import { Socket } from 'socket.io';
 import { REACTION_SYNC_BUDGET } from '@meeshy/shared/types/socketio-events';
 import { logger } from './logger.js';
+import { guardedInterval } from './guarded-timer.js';
 
 export interface RateLimitConfig {
   maxRequests: number;
@@ -313,9 +314,9 @@ export class SocketRateLimiter {
     // Clean up expired entries every minute. unref: ce timer d'hygiène ne
     // doit jamais maintenir le process en vie (jest/outillage) — même
     // pattern que les intervals de CallEventsHandler/NotificationService.
-    this.cleanupInterval = setInterval(() => {
+    this.cleanupInterval = guardedInterval({ name: 'socket-rate-limiter-cleanup', everyMs: 60000, logger, run: () => {
       this.cleanup();
-    }, 60000);
+    } });
     this.cleanupInterval.unref?.();
   }
 

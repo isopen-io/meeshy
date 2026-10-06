@@ -53,6 +53,7 @@ import { coveredDurationMs } from '../utils/playback-segments';
 // fonction pure que celle déjà éprouvée par `/status` et `threads.ts` : on la
 // RÉUTILISE, on ne réécrit pas la règle une quatrième fois.
 import { applyHistoryFloor } from './historyFloor';
+import { guardedInterval } from '../utils/guarded-timer';
 
 // Logger dédié pour MessageReadStatusService
 const logger = enhancedLogger.child({ module: 'MessageReadStatusService' });
@@ -149,7 +150,7 @@ export class MessageReadStatusService {
 
   private static readonly DEDUP_TTL_MS = 2000;
   static {
-    const handle = setInterval(() => MessageReadStatusService.cleanupDedupCache(), 30_000);
+    const handle = guardedInterval({ name: 'read-status-dedup-cache-cleanup', everyMs: 30_000, logger, run: () => MessageReadStatusService.cleanupDedupCache() });
     handle.unref?.();
   }
 
