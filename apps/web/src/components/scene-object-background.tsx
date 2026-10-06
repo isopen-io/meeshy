@@ -4,6 +4,7 @@ import { effectiveMediaRatio, mediaCropStyle, readMediaCrop, type MediaCropRect 
 
 import { backgroundCss, type BackgroundFraming } from '@/lib/canvas/background';
 import { mediaFilterCss } from '@/lib/canvas/media-filter';
+import { mediaAdjustmentsPaint } from '@/lib/canvas/media-adjustments';
 import { backgroundMediaTimeline } from '@/lib/canvas/media-seek';
 import { objectMediaIdentity, objectMediaSrc, type SceneCarrier } from '@/lib/canvas/carrier';
 import type { CanvasObject } from '@/lib/canvas/document';
@@ -78,13 +79,21 @@ export function BackgroundLayer({
   const src = objectMediaSrc(object, carrier);
   const poster = posterSrcOf(object, carrier);
   const background = typeof payload.background === 'string' ? payload.background : undefined;
-  // LE FILTRE DE SLIDE (lot 7) — porté par le média de fond, il ne peint que
-  // lui : ni la bande d'autour, ni les objets posés.
-  const filter = mediaFilterCss(payload);
-  const mediaStyle = filter !== undefined ? { filter } : undefined;
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const imageRef = useRef<HTMLImageElement | null>(null);
   const isVideo = src !== undefined && mediaType?.startsWith('video') === true;
+  const crop = readMediaCrop(payload);
+  const ratio = typeof payload.aspectRatio === 'number' && payload.aspectRatio > 0 ? payload.aspectRatio : undefined;
+  // LE FILTRE DE SLIDE (lot 7) PUIS LES RÉGLAGES DU FOND (#9496) — portés par
+  // le média de fond, ils ne peignent que lui : ni la bande d'autour, ni les
+  // objets posés. Même peinture que le média posé (`SceneObjectMedia`, D-175),
+  // dans l'ordre d'iOS (`StoryBackgroundLook` : filtre, puis réglages).
+  const adjustments = mediaAdjustmentsPaint(payload, {
+    target: isVideo ? 'video' : 'image',
+    ...backgroundBlurScale(carrierEntryOf(object, carrier), crop, framing),
+  });
+  const filter = [mediaFilterCss(payload), adjustments.filter].filter((step) => step !== undefined).join(' ');
+  const mediaStyle = filter !== '' ? { filter } : undefined;
   /**
    * LE MUET DE L'AUTEUR EST DÉFINITIF (revue-correction #6903) — `payload.muted`
    * dit « cette vidéo n'a pas de son POUR LE LECTEUR » : c'est déjà ce que la
@@ -102,15 +111,34 @@ export function BackgroundLayer({
   const awaitsContent = callbacks.current.onContentReady !== undefined;
   // `aspectFill` par défaut, `aspect` sur « fit » déclaré (`background.ts`).
   const fit = framing === 'fit' ? 'object-contain' : 'object-cover';
-  const crop = readMediaCrop(payload);
-  const ratio = typeof payload.aspectRatio === 'number' && payload.aspectRatio > 0 ? payload.aspectRatio : undefined;
+  // La teinte et la vignette se posent DANS la boîte du média — iOS les cuit
+  // dans son bitmap, puis le pose ajusté ou rempli. Un rapport connu donne
+  // cette boîte même sans recadrage ; sans lui, les calques couvrent la scène.
+  const overlays = adjustments.overlays.map((layer, index) => (
+    <span
+      key={index}
+      data-media-adjustment-layer={index}
+      aria-hidden="true"
+      className="absolute inset-0"
+      style={{ background: layer.background, ...(layer.mixBlendMode !== undefined ? { mixBlendMode: layer.mixBlendMode } : {}) }}
+    />
+  ));
+  const boxCrop = crop ?? (overlays.length > 0 ? FULL_MEDIA : null);
   const cropped = (media: (style: Record<string, string> | undefined, className: string) => ReactNode): ReactNode =>
-    crop !== null && ratio !== undefined ? (
-      <CroppedBox crop={crop} ratio={ratio} fill={framing !== 'fit'}>
-        {(cropStyle) => media(cropStyle, 'block max-w-none object-fill')}
+    boxCrop !== null && ratio !== undefined ? (
+      <CroppedBox crop={boxCrop} ratio={ratio} fill={framing !== 'fit'}>
+        {(cropStyle) => (
+          <>
+            {media(cropStyle, 'block max-w-none object-fill')}
+            {overlays}
+          </>
+        )}
       </CroppedBox>
     ) : (
-      media(undefined, `absolute inset-0 size-full ${fit}`)
+      <>
+        {media(undefined, `absolute inset-0 size-full ${fit}`)}
+        {overlays}
+      </>
     );
 
   const ready = () => callbacks.current.onContentReady?.();
@@ -265,6 +293,24 @@ export function BackgroundLayer({
 }
 
 const CARD_RATIO = 9 / 16;
+const DESIGN_WIDTH = 1080;
+const DESIGN_HEIGHT = DESIGN_WIDTH / CARD_RATIO;
+const FULL_MEDIA: MediaCropRect = { x: 0, y: 0, width: 1, height: 1 };
+
+/** Pixels du repère design par pixel de la SOURCE pour un fond posé ajusté ou
+ * rempli dans la scène 9:16 — le rayon du flou CoreImage se compte en pixels
+ * de l'image (D-175). Rien quand la source n'est pas mesurée. */
+function backgroundBlurScale(
+  entry: { readonly width?: number; readonly height?: number } | undefined,
+  crop: MediaCropRect | null,
+  framing: BackgroundFraming,
+): { readonly designPixelsPerSourcePixel?: number } {
+  const width = (entry?.width ?? 0) * (crop?.width ?? 1);
+  const height = (entry?.height ?? 0) * (crop?.height ?? 1);
+  if (!(width > 0) || !(height > 0)) return {};
+  const pick = framing === 'fit' ? Math.min : Math.max;
+  return { designPixelsPerSourcePixel: pick(DESIGN_WIDTH / width, DESIGN_HEIGHT / height) };
+}
 
 /** **Un fond RECADRÉ** (#9136) — la boîte prend le rapport du recadrage, posée
  * ajustée (ou remplie) dans la carte 9:16 comme le média entier l'aurait été ;

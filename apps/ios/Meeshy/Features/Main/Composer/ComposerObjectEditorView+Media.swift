@@ -49,8 +49,9 @@ extension ComposerObjectEditorView {
     /// image (retour porteur 2026-09-28).
     var objectHasTrimmableSource: Bool { viewModel.sourceTrim(id: objectId) != nil }
     var objectOffersFilter: Bool { mediaObject?.kind != .video }
-    /// Les réglages se peignent sur un média POSÉ — image (#9175) ou vidéo (#9169).
-    var objectOffersAdjust: Bool { mediaObject.map { $0.kind != nil && !$0.isBackground } ?? false }
+    /// Les réglages se peignent sur tout média de la scène — image (#9175),
+    /// vidéo (#9169) et fond, que sa couche peint (#9496).
+    var objectOffersAdjust: Bool { mediaObject?.kind != nil }
 
     var mediaObject: StoryMediaObject? {
         viewModel.currentEffects.mediaObjects?.first { $0.id == objectId }

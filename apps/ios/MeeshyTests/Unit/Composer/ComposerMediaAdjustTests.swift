@@ -41,9 +41,17 @@ final class ComposerMediaAdjustTests: XCTestCase {
         XCTAssertNotEqual(ComposerAdjustCopy.compareHint(for: .video), ComposerAdjustCopy.compareHint(for: .image))
     }
 
-    func test_reglages_nonServisAuFond_niAuxAutresFamilles() {
-        let familles: [ComposerInlineFamily] = [.background(isVideo: false), .background(isVideo: true),
-                                                .text, .audio, .sticker, .place]
+    /// #9496 : la couche de fond peint les réglages de son média — le fond
+    /// image les offre juste après son filtre, le fond vidéo en tête.
+    func test_reglages_servisAuFond_imageEtVideo() {
+        let image = ComposerInlineEditing.sections(for: .background(isVideo: false), hasTrimmableSource: false)
+        XCTAssertEqual(image.firstIndex(of: .media(.adjust)), image.firstIndex(of: .media(.filter)).map { $0 + 1 })
+        XCTAssertEqual(ComposerInlineEditing.sections(for: .background(isVideo: true), hasTrimmableSource: true).first,
+                       .media(.adjust))
+    }
+
+    func test_reglages_nonServisAuxFamillesQuiNeLesPeignentPas() {
+        let familles: [ComposerInlineFamily] = [.text, .audio, .sticker, .place]
         for famille in familles {
             XCTAssertFalse(ComposerInlineEditing.sections(for: famille, hasTrimmableSource: true)
                 .contains(.media(.adjust)), "\(famille) offrirait un curseur que rien ne peint")
@@ -244,5 +252,57 @@ final class ComposerMediaAdjustTests: XCTestCase {
         XCTAssertEqual(media(rendue, "regle")?.x, 0.3, "Le geste fait pendant la comparaison est gardé…")
         XCTAssertEqual(media(rendue, "regle")?.filter, "warm", "…et le rendu comparé revient au modèle.")
         XCTAssertEqual(media(rendue, "regle")?.adjustments, ImageAdjustments(exposure: 0.8))
+    }
+
+    // MARK: - Comparer le FOND (#9496) : son filtre est celui de la slide
+
+    private func slideAFondRegle() -> StorySlide {
+        var fond = StoryMediaObject(id: "fond", kind: .image, aspectRatio: 9.0 / 16.0, isBackground: true)
+        fond.adjustments = ImageAdjustments(exposure: 0.8)
+        var pose = StoryMediaObject(id: "pose", kind: .image, aspectRatio: 1)
+        pose.adjustments = ImageAdjustments(contrast: 1.3)
+        var effets = StoryEffects()
+        effets.mediaObjects = [fond, pose]
+        effets.filter = StoryFilter.warm.rawValue
+        effets.filterIntensity = 0.6
+        var slide = StorySlide()
+        slide.effects = effets
+        return slide
+    }
+
+    func test_comparerLeFond_retireSesReglagesEtLeFiltreDeSlide() {
+        let montree = ComposerLookComparison.shown(slideAFondRegle(), comparing: "fond")
+        XCTAssertNil(media(montree, "fond")?.adjustments)
+        XCTAssertNil(montree.effects.filter, "L'original du fond est sans le filtre de slide, qui est le sien.")
+        XCTAssertEqual(media(montree, "pose")?.adjustments, ImageAdjustments(contrast: 1.3))
+    }
+
+    func test_comparerUnMediaPose_laisseLeFiltreDeSlide() {
+        XCTAssertEqual(ComposerLookComparison.shown(slideAFondRegle(), comparing: "pose").effects.filter, "warm",
+                       "Le filtre de slide est celui du fond, pas de l'image posée.")
+    }
+
+    func test_uneEcriturePendantLaComparaisonDuFond_rendLeFiltreDeSlide() {
+        let modele = slideAFondRegle()
+        var ecrite = ComposerLookComparison.shown(modele, comparing: "fond")
+        ecrite.effects.mediaObjects?[0].scale = 1.4
+        let rendue = ComposerLookComparison.written(ecrite, over: modele, comparing: "fond")
+        XCTAssertEqual(media(rendue, "fond")?.scale, 1.4)
+        XCTAssertEqual(media(rendue, "fond")?.adjustments, ImageAdjustments(exposure: 0.8))
+        XCTAssertEqual(rendue.effects.filter, "warm")
+        XCTAssertEqual(rendue.effects.filterIntensity, 0.6)
+    }
+
+    /// « Comparer » ne se montre que si l'objet porte un rendu — et le rendu du
+    /// fond inclut le filtre de slide.
+    func test_leRenduPorte_compteLeFiltreDeSlidePourLeFondSeulement() {
+        var slide = slideAFondRegle()
+        slide.effects.mediaObjects?[0].adjustments = nil
+        slide.effects.mediaObjects?[1].adjustments = nil
+        XCTAssertTrue(ComposerLookComparison.carriesLook(slide.effects, id: "fond"))
+        XCTAssertFalse(ComposerLookComparison.carriesLook(slide.effects, id: "pose"))
+        slide.effects.filter = nil
+        XCTAssertFalse(ComposerLookComparison.carriesLook(slide.effects, id: "fond"))
+        XCTAssertFalse(ComposerLookComparison.carriesLook(slide.effects, id: "absent"))
     }
 }
