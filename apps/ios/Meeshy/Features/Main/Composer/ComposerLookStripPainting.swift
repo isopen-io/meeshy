@@ -30,6 +30,13 @@ nonisolated enum ComposerLookStripPaintRule {
                            slots: Int) -> Bool {
         !tilesToPaint(tiles, painted: painted, slots: slots, live: false, scenesReady: []).isEmpty
     }
+
+    /// Les demandes de trame d'une case qui ne se peint pas sont bornées — au plus
+    /// la cadence du palier, une au moins quand la bande est figée : un rendu qui
+    /// échoue sans cesse ne réclame pas une trame par trame de l'objectif.
+    static func mayRequestFrame(needsFrame: Bool, sent: Int, fps: Int) -> Bool {
+        needsFrame && sent < max(1, fps)
+    }
 }
 
 /// **Une cuisson à la fois par clé, jamais une boucle** (#9351) : une clé en
