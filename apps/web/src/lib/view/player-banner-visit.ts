@@ -11,7 +11,12 @@ import { createStore, type StoreApi } from 'zustand/vanilla';
  * changement d'onglet ni de route. Quatre phases :
  *
  *   · `armed`   — la visite est ouverte, la bannière n'a pas encore été peinte
- *                 (cache vide, appel en cours, route sans bandeau) ;
+ *                 (cache vide, appel en cours, route sans bandeau). La fenêtre
+ *                 d'ouverture est BORNÉE (`PLAYER_BANNER_HOLD_MS`) : jamais
+ *                 peinte dans ce délai, la visite se ferme (`missed`) — sinon
+ *                 la bannière surgirait en pleine session, au retour d'un fil
+ *                 ou au premier point gagné, ce qui n'est plus « à l'ouverture »
+ *                 (iOS : `GamePlayerBannerOpening`, la même fenêtre) ;
  *   · `shown`   — peinte : l'horloge des 30 s court ;
  *   · `leaving` — l'échéance est passée : elle remonte et s'efface ;
  *   · `gone`    — retirée jusqu'à la prochaine ouverture.
@@ -27,11 +32,12 @@ export const PLAYER_BANNER_EXIT_REDUCED_MS = 400;
 export const PLAYER_BANNER_AWAY_MS = 5 * 60_000;
 
 export type VisitPhase = 'armed' | 'shown' | 'leaving' | 'gone';
-export type VisitEvent = 'shown' | 'expired' | 'exited' | 'reopened';
+export type VisitEvent = 'shown' | 'missed' | 'expired' | 'exited' | 'reopened';
 
 export function nextVisitPhase(phase: VisitPhase, event: VisitEvent): VisitPhase {
   if (event === 'reopened') return 'armed';
   if (event === 'shown') return phase === 'armed' ? 'shown' : phase;
+  if (event === 'missed') return phase === 'armed' ? 'gone' : phase;
   if (event === 'expired') return phase === 'shown' ? 'leaving' : phase;
   return phase === 'leaving' ? 'gone' : phase;
 }

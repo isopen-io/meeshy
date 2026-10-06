@@ -201,22 +201,60 @@ describe('la bannière n’est là qu’à l’ouverture de l’application', ()
     expect(await waitForBanner(host)).not.toBeNull();
   });
 
-  test('l’horloge ne court pas tant que la bannière n’a pas été peinte (un appel tient la place)', async () => {
+  test('un appel tient la place moins longtemps que la fenêtre d’ouverture : la bannière paraît à son départ, ses 30 s entières', async () => {
     callStore.setState({
       waiting: { callId: 'c1', conversationId: 'conv-1', media: 'audio', callerName: 'Amina', callerAvatar: null, isGroup: false, title: 'Amina' },
     });
-    const host = await mount(<TopBand routeKey="list" signedIn timing={TIMING} />);
-    await sleep(160);
+    const host = await mount(<TopBand routeKey="list" signedIn timing={{ holdMs: 2_000, exitMs: 40 }} />);
+    await sleep(60);
     expect(playerBannerVisitStore.getState().phase).toBe('armed');
     await act(async () => callStore.setState({ waiting: null }));
     expect(await waitForBanner(host)).not.toBeNull();
     expect(playerBannerVisitStore.getState().phase).toBe('shown');
   });
 
+  test('jamais peinte pendant la fenêtre d’ouverture (un appel qui dure) : la visite se ferme, la bannière ne surgit pas en pleine session', async () => {
+    callStore.setState({
+      waiting: { callId: 'c1', conversationId: 'conv-1', media: 'audio', callerName: 'Amina', callerAvatar: null, isGroup: false, title: 'Amina' },
+    });
+    const host = await mount(<TopBand routeKey="list" signedIn timing={TIMING} />);
+    await sleep(160);
+    expect(playerBannerVisitStore.getState().phase).toBe('gone');
+    await act(async () => callStore.setState({ waiting: null }));
+    await sleep(60);
+    expect(host.querySelector('[data-player-banner]')).toBeNull();
+  });
+
+  test('ouverte sur un écran sans bandeau (le fil) : revenir à la liste après la fenêtre ne la fait pas surgir', async () => {
+    await mount(<TopBand routeKey="thread" signedIn timing={TIMING} />);
+    await sleep(160);
+    expect(playerBannerVisitStore.getState().phase).toBe('gone');
+    const list = await mount(<TopBand routeKey="list" signedIn timing={TIMING} />);
+    await sleep(60);
+    expect(list.querySelector('[data-player-banner]')).toBeNull();
+  });
+
+  test('sans session, la fenêtre d’ouverture n’est pas entamée : la connexion ouvre la visite', async () => {
+    await mount(<TopBand routeKey="list" signedIn={false} timing={TIMING} />);
+    await sleep(160);
+    expect(playerBannerVisitStore.getState().phase).toBe('armed');
+  });
+
+  test('une réouverture pendant qu’elle est encore là (minuteries gelées à l’arrière-plan) relance ses 30 s, puis elle sort — jamais une bannière qui reste', async () => {
+    const host = await mount(<TopBand routeKey="list" signedIn timing={{ holdMs: 80, exitMs: 40 }} />);
+    expect(await waitForBanner(host)).not.toBeNull();
+    await act(async () => playerBannerVisitStore.getState().send('reopened'));
+    await sleep(20);
+    expect(playerBannerVisitStore.getState().phase).toBe('shown');
+    await sleep(260);
+    expect(host.querySelector('[data-player-slot]')).toBeNull();
+    expect(playerBannerVisitStore.getState().phase).toBe('gone');
+  });
+
   test('sans donnée du jeu : aucune bannière, et la visite reste armée', async () => {
     const cached = appQueryClient.getQueryData<{ game?: unknown }>(ENGAGEMENT_PROGRESS_QUERY_KEY);
     await act(async () => appQueryClient.setQueryData(ENGAGEMENT_PROGRESS_QUERY_KEY, { ...cached, game: undefined }));
-    const host = await mount(<TopBand routeKey="list" signedIn timing={TIMING} />);
+    const host = await mount(<TopBand routeKey="list" signedIn timing={{ holdMs: 2_000, exitMs: 40 }} />);
     await settle();
     expect(host.querySelector('[data-player-banner]')).toBeNull();
     expect(playerBannerVisitStore.getState().phase).toBe('armed');

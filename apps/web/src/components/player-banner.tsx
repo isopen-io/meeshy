@@ -19,7 +19,7 @@ import { loadGameCatalog, suspendForGameCatalog, translateGame } from '@/lib/i18
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { formatCount } from '@/lib/view/game-copy';
 import { isLargeText, leaguePlace, playerBannerLabel, playerBannerModel, type PlayerBannerLevel, type PlayerBannerModel } from '@/lib/view/player-banner';
-import { reportPlayerBannerShown } from '@/lib/view/player-banner-visit';
+import { playerBannerVisitStore, reportPlayerBannerShown } from '@/lib/view/player-banner-visit';
 import { Link } from '@/routes/route-table';
 
 import { Flame } from './game/flame';
@@ -264,9 +264,11 @@ export default function PlayerBannerHost() {
   const game = query.data?.game;
   const model = game === undefined || prefs.hidden || !signedIn ? null : playerBannerModel(game);
   const visible = model !== null;
+  /** Par OUVERTURE, pas par montage : une réouverture qui trouve la bannière encore là relance ses 30 s (#9536). */
+  const visit = useStore(playerBannerVisitStore, (state) => state.visit);
   useEffect(() => {
     if (visible) reportPlayerBannerShown();
-  }, [visible]);
+  }, [visible, visit]);
   if (model === null) return null;
   const banner = profile.data?.banner ?? null;
   return <PlayerBanner model={model} backdrop={banner === null || banner === '' ? null : attachmentSrc(banner)} />;

@@ -43,6 +43,12 @@ describe('les phases', () => {
   test('une nouvelle ouverture réarme, d’où qu’on vienne', () => {
     for (const phase of ['armed', 'shown', 'leaving', 'gone'] as const) expect(nextVisitPhase(phase, 'reopened')).toBe('armed');
   });
+
+  test('jamais peinte pendant la fenêtre d’ouverture : la visite se ferme ; peinte, la fenêtre ne la retire pas', () => {
+    expect(nextVisitPhase('armed', 'missed')).toBe('gone');
+    expect(nextVisitPhase('shown', 'missed')).toBe('shown');
+    expect(nextVisitPhase('leaving', 'missed')).toBe('leaving');
+  });
 });
 
 describe('une vraie absence', () => {

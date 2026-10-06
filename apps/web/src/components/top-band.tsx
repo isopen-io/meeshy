@@ -90,7 +90,7 @@ export function TopBand({
   const prefs = useGamePrefs();
   const reserves = showsPlayerBanner(routeKey);
   const visit = useStore(playerBannerVisitStore, (state) => state.phase);
-  useBannerVisitClock(timing);
+  useBannerVisitClock(timing, signedIn);
   const eligible = signedIn && !prefs.hidden && reserves && visit !== 'gone';
   const slots = topBandSlots({ call: localCall || resumeShown, audio, player: eligible });
   const column = useRef<HTMLDivElement | null>(null);
@@ -138,16 +138,23 @@ export function TopBand({
  * l'application : 30 s après sa première peinture elle remonte et s'efface
  * (`PLAYER_BANNER_EXIT_MS`, un simple fondu plus court sous
  * `prefers-reduced-motion`), puis reste retirée jusqu'à la prochaine ouverture
- * — le retour au premier plan après une vraie absence. Les durées vivent dans
+ * — le retour au premier plan après une vraie absence. Jamais peinte dans la
+ * fenêtre d'ouverture (un appel qui dure, un fil, un cache vide), la visite se
+ * ferme : la bannière ne surgit pas en pleine session. Sans session la fenêtre
+ * n'est pas entamée — la connexion ouvre la visite. Les durées vivent dans
  * `lib/view/player-banner-visit.ts` ; l'horloge, ici, parce qu'elle suit la
  * vie du bandeau.
  */
-function useBannerVisitClock({ holdMs, exitMs }: VisitTiming): void {
+function useBannerVisitClock({ holdMs, exitMs }: VisitTiming, signedIn: boolean): void {
   const phase = useStore(playerBannerVisitStore, (state) => state.phase);
   const visit = useStore(playerBannerVisitStore, (state) => state.visit);
   useEffect(() => watchPlayerBannerAbsence(), []);
   useEffect(() => {
     const { send } = playerBannerVisitStore.getState();
+    if (phase === 'armed' && signedIn) {
+      const id = setTimeout(() => send('missed'), holdMs);
+      return () => clearTimeout(id);
+    }
     if (phase === 'shown') {
       const id = setTimeout(() => send('expired'), holdMs);
       return () => clearTimeout(id);
@@ -157,7 +164,7 @@ function useBannerVisitClock({ holdMs, exitMs }: VisitTiming): void {
       return () => clearTimeout(id);
     }
     return undefined;
-  }, [phase, visit, holdMs, exitMs]);
+  }, [phase, visit, signedIn, holdMs, exitMs]);
 }
 
 /**
