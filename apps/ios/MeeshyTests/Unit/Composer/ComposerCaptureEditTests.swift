@@ -261,6 +261,18 @@ final class ComposerCaptureEditTests: XCTestCase {
                       "les miniatures se peignent sur le média retouché")
     }
 
+    /// Une photo figée ne prévient son peintre qu'UNE fois, parfois avant que la
+    /// vue ait sa taille (montage, carte ↔ plein écran) : sans trame suivante pour
+    /// la rattraper, c'est la toile qui change de taille qui doit redessiner.
+    func test_theSurface_redrawsWhenItsCanvasResizes_becauseAStillSourceWarnsOnlyOnce() throws {
+        let surface = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerLiveLookSurface.swift")
+        guard let debut = surface.range(of: "drawableSizeWillChange size: CGSize) {"),
+              let fin = surface.range(of: "func draw(in view: MTKView)", range: debut.upperBound..<surface.endIndex)
+        else { return XCTFail("le moteur de la surface a changé de forme") }
+        XCTAssertTrue(String(surface[debut.upperBound..<fin.lowerBound]).contains("view.setNeedsDisplay()"),
+                      "une toile redimensionnée se redessine, même sans trame neuve")
+    }
+
     func test_copy_doneAndCancel_readFromTheCatalog() {
         XCTAssertFalse(ComposerCaptureCopy.done.isEmpty)
         XCTAssertFalse(ComposerCaptureCopy.cancelEdit.isEmpty)
