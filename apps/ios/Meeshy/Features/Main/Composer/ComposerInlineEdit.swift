@@ -104,15 +104,15 @@ nonisolated enum ComposerInlineEditing {
     /// qu'il se cuit dans la pièce rendue. Ailleurs, le lecteur ne recadre pas
     /// un fond : l'offrir serait un contrôle sans effet.
     ///
-    /// **Les RÉGLAGES ne vont qu'à l'image POSÉE** (#9175) : le fond ne les
-    /// peint pas encore, une vidéo jamais.
+    /// **Les RÉGLAGES vont au média POSÉ** — l'image (#9175), et la vidéo dont
+    /// le player peint les trames (#9169) ; le fond ne les peint pas encore.
     static func sections(for family: ComposerInlineFamily,
                          hasTrimmableSource: Bool,
                          retouching: Bool = false) -> [ComposerObjectEditorSection] {
         let servies = ComposerObjectEditorRail.entries(for: family.sceneKind,
                                                        hasTrimmableSource: hasTrimmableSource,
                                                        offersFilter: !family.isVideo,
-                                                       offersAdjust: family == .image)
+                                                       offersAdjust: family == .image || family == .video)
             .filter { section in
                 switch section {
                 case .timing, .plan:  return family == .text

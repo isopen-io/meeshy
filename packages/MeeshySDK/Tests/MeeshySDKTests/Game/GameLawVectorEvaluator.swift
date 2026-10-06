@@ -154,19 +154,19 @@ enum GameLawVectorEvaluator {
         case "mission-reroll": return missionReroll(input)
         case "chest": return chest(input)
         case "guide": return try guide(input)
-        default: throw GameLawVectorError.unknownLaw(law)
+        default: return try evaluateWave2(law: law, input: input)
         }
     }
 
-    private static func object(_ fields: [String: GameJSON]) -> GameJSON { .object(fields) }
+    static func object(_ fields: [String: GameJSON]) -> GameJSON { .object(fields) }
 
-    private static func int(_ json: GameJSON, _ key: String) -> Int { json[key].intValue ?? 0 }
+    static func int(_ json: GameJSON, _ key: String) -> Int { json[key].intValue ?? 0 }
 
-    private static func string(_ json: GameJSON, _ key: String) -> String { json[key].stringValue ?? "" }
+    static func string(_ json: GameJSON, _ key: String) -> String { json[key].stringValue ?? "" }
 
-    private static func optionalString(_ json: GameJSON, _ key: String) -> String? { json[key].stringValue }
+    static func optionalString(_ json: GameJSON, _ key: String) -> String? { json[key].stringValue }
 
-    private static func optionalInt(_ json: GameJSON, _ key: String) -> Int? { json[key].intValue }
+    static func optionalInt(_ json: GameJSON, _ key: String) -> Int? { json[key].intValue }
 
     // MARK: Niveaux
 
@@ -368,7 +368,7 @@ enum GameLawVectorEvaluator {
 
     // MARK: Guide
 
-    private static func guideEvent(_ json: GameJSON) throws -> GuideEvent {
+    static func guideEvent(_ json: GameJSON) throws -> GuideEvent {
         func tier(_ key: String) throws -> LevelTierKey {
             guard let value = LevelTierKey(rawValue: string(json, key)) else { throw GameLawVectorError.malformed("palier « \(key) »") }
             return value

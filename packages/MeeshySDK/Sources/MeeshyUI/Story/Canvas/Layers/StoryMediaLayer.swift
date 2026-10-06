@@ -258,6 +258,12 @@ public final class StoryMediaLayer: CALayer {
     /// la surface qui le porte.
     private nonisolated(unsafe) var playsAProvidedPlayer = false
 
+    /// Les réglages que l'item courant PEINT (#9169) — son identité et la
+    /// signature des valeurs —, et la construction en vol de sa composition.
+    /// Voir `StoryMediaLayer+VideoLook.swift`.
+    nonisolated(unsafe) var appliedVideoLook: (item: ObjectIdentifier, signature: String)?
+    nonisolated(unsafe) var videoLookTask: Task<Void, Never>?
+
     public override nonisolated init() { super.init() }
     public override nonisolated init(layer: Any) { super.init(layer: layer) }
 
@@ -732,6 +738,9 @@ public final class StoryMediaLayer: CALayer {
             // le niveau de BASE, la couche porte le niveau COURANT (base +
             // automation + ducking).
             existing.volume = volume
+            // Un réglage changé à URL constante (curseur du composer) se
+            // repeint sans toucher à la lecture (#9169).
+            applyVideoLook(to: existing.currentItem)
             return
         }
         attachedURL = url
@@ -763,6 +772,7 @@ public final class StoryMediaLayer: CALayer {
         }
 
         guard let player = avPlayerLayer?.player else { return }
+        applyVideoLook(to: player.currentItem)
 
         // Stampe l'état mute courant : si l'utilisateur a déjà tapé Mute dans
         // la sidebar AVANT que la layer attache son `AVPlayer` (cas du switch
@@ -1116,6 +1126,7 @@ public final class StoryMediaLayer: CALayer {
             NotificationCenter.default.removeObserver(token)
             loopObserver = nil
         }
+        releaseVideoLook(from: avPlayerLayer?.player?.currentItem)
         if let player = avPlayerLayer?.player {
             player.pause()
             if !playsAProvidedPlayer {

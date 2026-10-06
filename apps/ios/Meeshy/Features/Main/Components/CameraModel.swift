@@ -214,9 +214,12 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     ) -> InstalledCamera? {
         let ancienne = session.inputs.compactMap { $0 as? AVCaptureDeviceInput }.first { $0.device.hasMediaType(.video) }
         let nouvelle = videoInput(position: position)
-        guard ComposerCameraInputSwap.swap(in: session, replacing: ancienne, with: nouvelle) == .swapped,
-              let device = nouvelle?.device else { return nil }
-        orient(outputs, for: position)
+        let issue = ComposerCameraInputSwap.swap(in: session, replacing: ancienne, with: nouvelle)
+        if let objectif = ComposerCameraInputSwap.orientedPosition(after: issue, new: position,
+                                                                   old: ancienne?.device.position) {
+            orient(outputs, for: objectif)
+        }
+        guard issue == .swapped, let device = nouvelle?.device else { return nil }
         let echelle = zoomScale(of: device)
         do {
             try device.lockForConfiguration()
@@ -336,7 +339,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
         // Même exception ObjC que l'enregistrement sans connexion active, donc
         // même prévention devant l'appel — un `do/catch` ne la rattraperait pas.
         let connection = photoOutput.connection(with: .video)
-        guard CameraRecordingReadiness.mayCapturePhoto(
+        guard !isSwitchingCamera, CameraRecordingReadiness.mayCapturePhoto(
             sessionIsRunning: session.isRunning,
             hasVideoConnection: connection != nil,
             connectionIsActive: connection?.isActive ?? false,
@@ -352,10 +355,11 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
 
     /// **La session peut-elle rendre une image ?** Les mêmes quatre faits que
     /// `takePhoto` exige — lus ici pour qu'un geste qui OUVRE la caméra et
-    /// PREND dans le même mouvement (#8653) attende qu'elle le puisse.
+    /// PREND dans le même mouvement (#8653) attende qu'elle le puisse. Jamais
+    /// pendant une bascule : l'entrée en place va être retirée (#9464).
     var isCaptureReady: Bool {
         let connection = photoOutput.connection(with: .video)
-        return CameraRecordingReadiness.mayCapturePhoto(
+        return !isSwitchingCamera && CameraRecordingReadiness.mayCapturePhoto(
             sessionIsRunning: session.isRunning,
             hasVideoConnection: connection != nil,
             connectionIsActive: connection?.isActive ?? false,
@@ -492,7 +496,21 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
 
     private func resumeContinuousFocus() {
         guard let device = activeVideoDevice else { return }
-        Self.apply(ComposerCaptureFocus.continuous(Self.focusCapabilities(of: device)), to: device)
+        Self.apply(ComposerCaptureFocus.continuous(Self.focusCapabilities(of: device), smooth: isRecordingVideo),
+                   to: device)
+    }
+
+    /// **La netteté glisse pendant TOUTE la prise** (#9464) — posée à chaque
+    /// segment (le nouvel objectif d'une bascule compris), retirée à la fin.
+    private func setSmoothFocus(_ lisse: Bool) {
+        guard let device = activeVideoDevice, device.isSmoothAutoFocusSupported else { return }
+        do {
+            try device.lockForConfiguration()
+            device.isSmoothAutoFocusEnabled = lisse
+            device.unlockForConfiguration()
+        } catch {
+            Logger.media.error("Smooth focus failed: \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     nonisolated private static func focusCapabilities(of device: AVCaptureDevice) -> ComposerCaptureFocus.Capabilities {
@@ -606,6 +624,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
             .appendingPathComponent("video_\(UUID().uuidString).mov")
         videoOutput.startRecording(to: tempURL, recordingDelegate: self)
         isRecordingVideo = true
+        setSmoothFocus(true)
         return true
     }
 
@@ -622,6 +641,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
         switchCover = nil
         switchFollower = nil
         isRecordingVideo = false
+        setSmoothFocus(false)
         recordingTimer?.invalidate()
         recordingTimer = nil
         for segment in recordedSegmentURLs {
@@ -701,6 +721,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     /// La prise est close : les segments se rassemblent et partent.
     private func deliverRecording() async {
         isRecordingVideo = false
+        setSmoothFocus(false)
         recordingTimer?.invalidate()
         recordingTimer = nil
 

@@ -2,7 +2,7 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
-// MARK: - ◐ RÉGLER une image posée, dans la scène (#9175)
+// MARK: - ◐ RÉGLER une image ou une vidéo posée, dans la scène (#9175, #9169)
 
 /// **Ce que la scène MONTRE pendant qu'on compare** (appui maintenu sur
 /// « Comparer ») — la slide du modèle, dont l'image comparée a perdu son filtre
@@ -59,13 +59,24 @@ nonisolated enum ComposerAdjustCopy {
                defaultValue: "Maintenir pour comparer", bundle: .main)
     }
 
-    static var compareHint: String {
-        String(localized: "composer.object.editor.adjust.compare.hint",
-               defaultValue: "Affiche l’image d’origine tant que vous maintenez", bundle: .main)
+    /// L'indice VoiceOver de « Comparer », qui nomme le média comparé (#9169).
+    static func compareHint(for kind: StoryMediaKind?) -> String {
+        guard kind == .video else {
+            return String(localized: "composer.object.editor.adjust.compare.hint",
+                          defaultValue: "Affiche l’image d’origine tant que vous maintenez", bundle: .main)
+        }
+        return String(localized: "composer.object.editor.adjust.compare.hint.video",
+                      defaultValue: "Affiche la vidéo d’origine tant que vous maintenez", bundle: .main)
     }
 
-    static var original: String {
-        String(localized: "composer.object.editor.adjust.original", defaultValue: "Image d’origine", bundle: .main)
+    /// Ce que VoiceOver annonce quand la scène montre l'original (#9169).
+    static func original(for kind: StoryMediaKind?) -> String {
+        guard kind == .video else {
+            return String(localized: "composer.object.editor.adjust.original", defaultValue: "Image d’origine",
+                          bundle: .main)
+        }
+        return String(localized: "composer.object.editor.adjust.original.video", defaultValue: "Vidéo d’origine",
+                      bundle: .main)
     }
 
     static func label(_ kind: AdjustmentKind) -> String {
@@ -120,6 +131,17 @@ struct ComposerMediaAdjustPanel: View {
 
     @State private var comparing = false
 
+    /// **Les curseurs qu'un média offre** — ceux qu'il PEINT (#9169) : une
+    /// vidéo n'a ni netteté ni flou (`AdjustmentKind.served(for:)`). Un genre
+    /// inconnu garde la liste de l'image, celle d'avant #9169.
+    nonisolated static func kinds(for mediaKind: StoryMediaKind?) -> [AdjustmentKind] {
+        AdjustmentKind.served(for: mediaKind ?? .image)
+    }
+
+    private var mediaKind: StoryMediaKind? {
+        viewModel.currentEffects.mediaObjects?.first { $0.id == mediaId }?.kind
+    }
+
     var body: some View {
         let reglages = viewModel.mediaObjectAdjustments(id: mediaId)
         let porteUnRendu = reglages.activeCount > 0 || viewModel.mediaObjectFilter(id: mediaId) != nil
@@ -131,7 +153,7 @@ struct ComposerMediaAdjustPanel: View {
                     Spacer(minLength: 0)
                 }
             }
-            ForEach(AdjustmentKind.allCases) { kind in
+            ForEach(Self.kinds(for: mediaKind)) { kind in
                 row(kind, value: reglages[kind])
             }
         }
@@ -177,7 +199,7 @@ struct ComposerMediaAdjustPanel: View {
             })
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(Text(ComposerAdjustCopy.compare))
-            .accessibilityHint(Text(ComposerAdjustCopy.compareHint))
+            .accessibilityHint(Text(ComposerAdjustCopy.compareHint(for: mediaKind)))
             .accessibilityAddTraits(comparing ? [.isButton, .isSelected] : .isButton)
             // VoiceOver ne maintient pas : l'action bascule, et la fermeture du
             // panneau rend toujours l'image réglée.
@@ -218,7 +240,7 @@ struct ComposerMediaAdjustPanel: View {
         comparing = true
         onCompare?(true)
         HapticFeedback.light()
-        UIAccessibility.post(notification: .announcement, argument: ComposerAdjustCopy.original)
+        UIAccessibility.post(notification: .announcement, argument: ComposerAdjustCopy.original(for: mediaKind))
     }
 
     private func release() {

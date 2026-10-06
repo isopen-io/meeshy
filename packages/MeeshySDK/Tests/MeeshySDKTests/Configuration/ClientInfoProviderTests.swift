@@ -52,6 +52,17 @@ final class ClientInfoProviderTests: XCTestCase {
         XCTAssertEqual(headers["X-Canvas-Caps"], "3")
     }
 
+    // MARK: - Version du jeu
+
+    /// Sans cet en-tête, la passerelle ne sert JAMAIS les badges de 1 000 et 5 000
+    /// actions à ce client (rétrocompatibilité) : l'Obsidienne et le Prisme
+    /// resteraient invisibles alors que le binaire sait les peindre.
+    func test_buildHeaders_declareLaVersionDuJeuQueCeBinaireSaitLire() async {
+        let headers = await ClientInfoProvider.shared.buildHeaders()
+        XCTAssertEqual(headers["X-Meeshy-Game-Version"], "2")
+        XCTAssertEqual(GameRoutes.versionHeader, "X-Meeshy-Game-Version")
+    }
+
     // MARK: - Porte de version
 
     /// La porte serveur (`services/gateway/src/utils/appVersion.ts`) ne juge

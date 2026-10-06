@@ -48,8 +48,9 @@ nonisolated final class ComposerCaptureSessionQueue: @unchecked Sendable {
         wantsRunning = running
         lock.unlock()
         let cible = Target(session: session)
-        queue.async { [weak self] in
-            guard let self else { return }
+        // Capture FORTE : un modèle libéré juste après `stop()` ne laisse pas la
+        // session tourner — la file n'est retenue que le temps du bloc.
+        queue.async {
             self.lock.lock()
             let voulu = self.wantsRunning
             self.lock.unlock()

@@ -44,11 +44,16 @@ extension StoryComposerViewModel {
     }
 
     /// Pose l'ensemble des réglages de CET objet — `.neutral` les retire tous.
+    ///
+    /// Une VIDÉO ne retient que les réglages qu'elle peint (#9169) : la
+    /// netteté ou le flou posés sur elle ne s'écrivent pas — un réglage sans
+    /// effet au rendu n'a rien à faire au fil.
     public func applyMediaObjectAdjustments(id: String, _ adjustments: ImageAdjustments) {
         var effects = currentEffects
-        let retenus: ImageAdjustments? = adjustments.activeCount > 0 ? adjustments : nil
-        guard let index = effects.mediaObjects?.firstIndex(where: { $0.id == id }),
-              effects.mediaObjects?[index].adjustments != retenus else { return }
+        guard let index = effects.mediaObjects?.firstIndex(where: { $0.id == id }) else { return }
+        let peints = effects.mediaObjects?[index].kind.map { adjustments.served(for: $0) } ?? adjustments
+        let retenus: ImageAdjustments? = peints.activeCount > 0 ? peints : nil
+        guard effects.mediaObjects?[index].adjustments != retenus else { return }
         effects.mediaObjects?[index].adjustments = retenus
         currentEffects = effects
     }

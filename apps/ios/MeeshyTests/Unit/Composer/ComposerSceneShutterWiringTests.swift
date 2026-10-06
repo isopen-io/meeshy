@@ -80,7 +80,8 @@ final class ComposerSceneShutterWiringTests: XCTestCase {
         else { return XCTFail("la tenue a changé de forme") }
         let corps = String(code[début.upperBound..<fin.lowerBound])
         XCTAssertTrue(corps.contains("holdTask=Task"))
-        XCTAssertTrue(corps.contains("camera.waitUntilCaptureReady("))
+        XCTAssertTrue(corps.contains("controls.waitUntilCaptureReady("),
+                      "la tenue attend un objectif prêt — et la fin d'une bascule (#9464)")
         XCTAssertTrue(corps.contains("startFilming()"))
     }
 

@@ -150,8 +150,11 @@ public enum StorySlideRenderer {
                 // Le filtre et les réglages PROPRES à une IMAGE (#8474, #9175),
                 // cuits par la même fonction que le player — qui ne les peint
                 // pas sur une vidéo.
+                // La VIGNETTE d'une vidéo posée porte ses réglages (#9169), par
+                // la même chaîne que sa lecture.
                 if let img = loadedImages[obj.id] {
-                    let peinte = obj.kind == .image ? StoryMediaLayer.filtered(img, for: obj) ?? img : img
+                    let peinte = obj.kind == .image ? StoryMediaLayer.filtered(img, for: obj) ?? img
+                        : StoryVideoAdjustmentsProcessor.poster(img, for: obj)
                     drawMediaObject(obj, image: peinte, in: size, ctx: cgCtx)
                 }
             }
