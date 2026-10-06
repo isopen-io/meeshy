@@ -44,11 +44,13 @@ final class ComposerCaptureFixtureTests: XCTestCase {
     }
 
     func test_movie_isThreeSecondsUprightNineSixteen() async throws {
-        let url = try XCTUnwrap(await ComposerCaptureFixture.movie())
+        let movieURL = await ComposerCaptureFixture.movie()
+        let url = try XCTUnwrap(movieURL)
         let asset = AVURLAsset(url: url)
         let duree = try await asset.load(.duration).seconds
         XCTAssertEqual(duree, 3, accuracy: 0.2)
-        let piste = try XCTUnwrap(try await asset.loadTracks(withMediaType: .video).first)
+        let pistes = try await asset.loadTracks(withMediaType: .video)
+        let piste = try XCTUnwrap(pistes.first)
         let taille = try await piste.load(.naturalSize)
         XCTAssertEqual(taille, CGSize(width: 1080, height: 1920))
     }
