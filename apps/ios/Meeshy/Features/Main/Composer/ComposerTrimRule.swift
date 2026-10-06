@@ -44,12 +44,12 @@ nonisolated enum ComposerTrimRule {
     }
 
     /// « 0:03.482 » — minutes, secondes, millisecondes.
-    static func millisecondText(_ time: TimeInterval) -> String {
-        let millis = Int((max(0, time) * 1000).rounded())
-        let minutes = millis / 60_000
-        let secondes = (millis % 60_000) / 1000
-        let reste = millis % 1000
-        return String(format: "%d:%02d.%03d", minutes, secondes, reste)
+    /// Le style natif porte le système de chiffres et le séparateur décimal de
+    /// la langue : une horloge composée à la main graverait les chiffres latins.
+    static func millisecondText(_ time: TimeInterval, locale: Locale = .current) -> String {
+        let millis = time.isFinite ? Int((min(max(0, time), 86_400) * 1000).rounded()) : 0
+        return Duration.milliseconds(millis).formatted(
+            .time(pattern: .minuteSecond(padMinuteToLength: 0, fractionalSecondsLength: 3)).locale(locale))
     }
 
     /// La tête de lecture ne sort jamais de la plage gardée.

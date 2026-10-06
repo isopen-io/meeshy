@@ -284,7 +284,12 @@
 // un fichier NEUF sous `.../MeeshyUI/Game/`, même précédent que
 // `GameMaterial.swift` : couleur de DESIGN du jeu, indépendante du thème de
 // conversation. Valeur MESURÉE le 2026-10-06.
-const REFERENCE_LITERAL_COLOR_COUNT = 129;
+//
+// 2026-10-06 (#9540, correctif) — littéraux 129 → 128 : `shadeColor` lit le jeton
+// `MeeshyColors.indigo950` (la même teinte, `#1E1B4B`) — le littéral a disparu, la
+// garde `DesignLiteralRatchetGuardTests` n'en accepte pas un de plus. Valeur
+// MESURÉE le 2026-10-06.
+const REFERENCE_LITERAL_COLOR_COUNT = 128;
 // 2026-10-06 (#9516, vague 2 du jeu, iOS) — variables inconnues 444 → 445 :
 // `GameAtlasViews.swift` calcule `Color(hex: $0.colorHex)` depuis
 // `LanguageData.info(for: code)` — la teinte ASSOCIÉE À UNE LANGUE de l'atlas

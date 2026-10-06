@@ -28,7 +28,7 @@ enum GameEngravedBirds {
     /// L'ombre : le creux retient l'ombre, vers le BAS.
     static let shadeOffset: CGFloat = 2.4
     static let shadeOpacity: Double = 0.6
-    static let shadeColor = Color(hex: "1e1b4b")
+    static let shadeColor = MeeshyColors.indigo950
     /// La lumière : le bord supérieur accroche le reflet, vers le HAUT.
     static let lightOffset: CGFloat = -1.3
     static let lightOpacity: Double = 0.85

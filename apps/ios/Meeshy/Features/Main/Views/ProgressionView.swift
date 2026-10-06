@@ -269,6 +269,14 @@ struct ProgressionView: View {
         .coordinateSpace(name: "scroll")
         .onPreferenceChange(ScrollOffsetPreferenceKey.self) { scrollRelay.offset = $0 }      // iOS 16–17
         .trackScrollContentOffset { scrollRelay.offset = -$0 }                               // iOS 18+
+        // Le toucher d'une notification de mission (#9539) pose une ANCRE avant l'ouverture : elle se ramasse UNE fois,
+        // quand le jeu est à l'écran — `initial: true` couvre le démarrage à froid, où l'ancre précède l'écran.
+        .adaptiveOnChange(of: router.pendingGameAnchor != nil && viewModel.game != nil, initial: true) { _, ready in
+            guard ready, let anchor = router.consumePendingGameAnchor() else { return }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                withAnimation(.easeInOut(duration: 0.35)) { proxy.scrollTo(anchor, anchor: .top) }
+            }
+        }
         }
     }
 }

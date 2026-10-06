@@ -369,6 +369,17 @@ final class Router: ObservableObject {
         return palier
     }
 
+    /// L'endroit de Progression où le toucher d'une notification de mission pose le regard (#9539) : la section Héro
+    /// des missions. Posé AVANT l'ouverture de Progression, ramassé UNE fois quand le jeu est à l'écran.
+    @Published var pendingGameAnchor: GameAnchor?
+
+    /// Ramasse l'ancre demandée, UNE fois — même site unique de remise à plat que le palier à célébrer.
+    func consumePendingGameAnchor() -> GameAnchor? {
+        guard let anchor = pendingGameAnchor else { return nil }
+        pendingGameAnchor = nil
+        return anchor
+    }
+
     /// Ramasse la demande de composeur de flux, UNE fois.
     ///
     /// La remise à plat vit ICI, à son site unique : laissée à chaque hôte, elle

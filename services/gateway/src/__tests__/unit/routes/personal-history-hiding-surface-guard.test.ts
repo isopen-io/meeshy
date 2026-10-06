@@ -440,6 +440,16 @@ const SERVICE_LAYER_SURFACES: Record<string, Classification> = {
       "ligne ouverte et y ajouter un arrivant. Écriture serveur, sans lecteur : " +
       "masquer ici ouvrirait une seconde ligne dès qu'un seul membre a effacé la sienne.",
   },
+  'game/MissionHabits.ts': {
+    kind: 'exempt',
+    reads: 1,
+    why:
+      "Heures habituelles d'écriture du titulaire pour sa mission personnelle (#9539) : " +
+      'ses 150 derniers messages ENVOYÉS, `select: { createdAt: true }`, réduits à un ' +
+      "histogramme qui n'entre que dans le tirage de sa plage. Aucun contenu servi, " +
+      "à personne ; et effacer son historique cache ce qu'on a reçu, sans défaire " +
+      "d'avoir écrit à ces heures-là.",
+  },
   'messaging/messagePostSaveEffects.ts': {
     kind: 'exempt',
     reads: 1,

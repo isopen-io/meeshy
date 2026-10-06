@@ -193,7 +193,7 @@ public extension APINotification {
     /// de la marque tient la place. Un duo, lui, vient d'un ami — son avatar dit QUI.
     private var wearsSignature: Bool {
         switch notificationType {
-        case .gameLeagueResult, .gameSeasonStep: return true
+        case .gameLeagueResult, .gameSeasonStep, .gameMissionWindow: return true
         default: return false
         }
     }

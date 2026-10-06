@@ -339,6 +339,7 @@ final class ComposerInlineEditTests: XCTestCase {
         XCTAssertEqual(ComposerTrailingColumn.options(for: focus), [
             .editorSection(.media(.filter), isOpen: false),
             .editorSection(.media(.adjust), isOpen: false),
+            .editorSection(.media(.effects), isOpen: false),
             .editorSection(.media(.actions), isOpen: true),
             .editorSection(.media(.altText), isOpen: false),
             .exitObject,

@@ -191,6 +191,8 @@ public enum MeeshyNotificationType: String, Codable, CaseIterable, Sendable {
     case gameLeagueResult = "game_league_result"
     /// Une étape de la saison franchie. Sans acteur.
     case gameSeasonStep = "game_season_step"
+    /// La plage de ta mission personnelle du jour vient de s'ouvrir (#9539). Sans acteur — hors du plafond quotidien.
+    case gameMissionWindow = "game_mission_window"
 
     // Legacy uppercase (backward compat)
     case legacyNewMessage = "NEW_MESSAGE"
@@ -240,6 +242,7 @@ public enum MeeshyNotificationType: String, Codable, CaseIterable, Sendable {
         case .gameDuoInvited, .gameDuoAccepted: return "person.2.fill"
         case .gameLeagueResult: return "trophy.fill"
         case .gameSeasonStep: return "star.circle.fill"
+        case .gameMissionWindow: return "timer"
         case .translationCompleted, .translationReady, .legacyTranslationReady, .transcriptionCompleted: return "globe"
         case .securityAlert, .loginNewDevice, .legacySystemAlert, .passwordChanged, .twoFactorEnabled, .twoFactorDisabled: return "exclamationmark.triangle.fill"
         case .system, .maintenance, .updateAvailable: return "bell.fill"
@@ -279,7 +282,7 @@ public enum MeeshyNotificationType: String, Codable, CaseIterable, Sendable {
         // « Progression » (`MeeshyColors.warningHex`), distinct de la famille
         // « communauté » ci-dessus — un badge ne ressemble plus à une invitation.
         case .achievementUnlocked, .legacyAchievementUnlocked, .streakMilestone, .levelUp, .badgeEarned,
-             .gameDuoInvited, .gameDuoAccepted, .gameLeagueResult, .gameSeasonStep:
+             .gameDuoInvited, .gameDuoAccepted, .gameLeagueResult, .gameSeasonStep, .gameMissionWindow:
             return "FBBF24"
         case .missedCall, .callDeclined, .incomingCall, .incomingCallAlert, .callEnded, .legacyCallMissed, .legacyCallIncoming:
             return "E91E63"
@@ -308,6 +311,8 @@ public enum MeeshyNotificationType: String, Codable, CaseIterable, Sendable {
 public enum GameNotificationDestination: String, Equatable, Sendable {
     case league
     case season
+    /// La section Héro des missions de Progression (#9539) : ce n'est pas une page du jeu, c'est un endroit de l'écran.
+    case missions
 }
 
 public extension MeeshyNotificationType {
@@ -322,6 +327,8 @@ public extension MeeshyNotificationType {
             return String(localized: "notification.game.leagueResult.fallbackTitle", defaultValue: "Ta ligue de la semaine", bundle: .main)
         case .gameSeasonStep:
             return String(localized: "notification.game.seasonStep.fallbackTitle", defaultValue: "Ta saison", bundle: .main)
+        case .gameMissionWindow:
+            return String(localized: "notification.game.missionWindow.fallbackTitle", defaultValue: "Ta mission du moment", bundle: .main)
         default:
             return nil
         }
@@ -332,6 +339,7 @@ public extension MeeshyNotificationType {
         switch self {
         case .gameDuoInvited, .gameDuoAccepted, .gameLeagueResult: .league
         case .gameSeasonStep: .season
+        case .gameMissionWindow: .missions
         default: nil
         }
     }
@@ -721,7 +729,7 @@ public struct APINotification: Codable, Identifiable, Sendable, Equatable, Cache
                 format: String(localized: "notification.game.duoAccepted.fallbackTitle", defaultValue: "%@ a accepté ton duo", bundle: .main),
                 actorName
             )
-        case .gameLeagueResult, .gameSeasonStep:
+        case .gameLeagueResult, .gameSeasonStep, .gameMissionWindow:
             return notificationType.gameSurfaceTitle ?? ""
         case .newConversationDirect:
             // Direct DM: the conversation has no real title — surface the
@@ -871,7 +879,7 @@ public struct APINotification: Codable, Identifiable, Sendable, Equatable, Cache
         case .reportResolved:
             return content
         // Le jeu : la phrase est SERVIE, dans la langue du lecteur — il n'y a ni extrait ni aperçu à lui préférer.
-        case .gameDuoInvited, .gameDuoAccepted, .gameLeagueResult, .gameSeasonStep:
+        case .gameDuoInvited, .gameDuoAccepted, .gameLeagueResult, .gameSeasonStep, .gameMissionWindow:
             return Self.firstNonEmpty(content)
         default:
             return nil
