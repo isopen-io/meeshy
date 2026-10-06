@@ -457,6 +457,7 @@ const ar = {
   'game.league.tab.mine': 'دوريّ',
   'game.league.tab.friends': 'الأصدقاء',
   'game.league.closes': 'يُغلق بعد {remaining}',
+  'game.league.week_points': '{points} هذا الأسبوع',
   'game.league.week': 'أسبوع {date}',
   'game.league.locked': 'يفتح الدوري عند المستوى ⁦{level}⁩: كل أسبوع تنافس 29 لاعبًا آخر بنشاط مقارب. أنت في المستوى ⁦{current}⁩.',
   'game.league.minor': 'الدوري العام غير مفتوح لحسابك. أما دوري الأصدقاء فمفتوح دائمًا.',

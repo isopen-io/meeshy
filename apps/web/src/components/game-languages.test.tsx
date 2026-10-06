@@ -65,7 +65,7 @@ function surfaces(): Surfaces {
   const bannerModel = playerBannerModel(bannerGame);
   if (bannerModel === null) throw new Error('un bandeau était attendu');
   return {
-    hero: text(renderToStaticMarkup(<GameHero game={game} online minting={false} onMint={() => undefined} />)),
+    hero: text(renderToStaticMarkup(<GameHero game={game} />)),
     gauges: text(renderToStaticMarkup(<GameGauges game={game} />)),
     missions: text(
       renderToStaticMarkup(
@@ -92,9 +92,6 @@ function surfaces(): Surfaces {
       renderToStaticMarkup(
         <GameMintPreview
           mint={game.mint}
-          glory={game.glory}
-          treasury={game.treasury}
-          levelRecord={game.level.record}
           badgesLost={2}
           online
           minting={false}

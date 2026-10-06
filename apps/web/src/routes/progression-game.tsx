@@ -9,6 +9,7 @@ import { GameDoors } from '@/components/game-doors';
 import { GameFlamePanel } from '@/components/game-flame-panel';
 import { GameGauges } from '@/components/game-gauges';
 import { GameHero } from '@/components/game-hero';
+import { GameLeagueSummary } from '@/components/game-league-summary';
 import { GameMintPreview } from '@/components/game-mint-preview';
 import { GameHiddenCard } from '@/components/game-hidden-card';
 import { GameMissions } from '@/components/game-missions';
@@ -18,9 +19,9 @@ import type { GameActions } from './progression-game-actions';
 
 /**
  * LE JEU SUR « PROGRESSION » (#9383, #5841) — le HÉROS pleine largeur en
- * deuxième position (où j'en suis, comment je gagne, comment je frappe), les
- * deux jauges du trésor et de la Flamme, puis les missions et le coffre,
- * l'aperçu de frappe, la Flamme à protéger. La séquence est celle de la
+ * deuxième position (où j'en suis, comment je gagne), les deux jauges du trésor
+ * et de la Flamme, puis les missions et le coffre, le DÉTAIL DE LIGUE (#9541),
+ * l'unique héros de frappe (#9537), la Flamme à protéger. La séquence est celle de la
  * planche (conception, parties VII et XII) : l'écran existant s'enrichit EN
  * HAUT, ses portes (Badges, Défis, Succès) restent en dessous.
  *
@@ -49,14 +50,7 @@ export function GameSection({ progress, host }: { readonly progress: EngagementW
   return (
     <>
       {guide ?? null}
-      <GameHero
-        game={game}
-        online={online}
-        minting={actions.pending.mint}
-        mintError={actions.errors.mint}
-        onMint={actions.mint}
-        guideLine={guideLine ?? null}
-      />
+      <GameHero game={game} guideLine={guideLine ?? null} />
       <GameGauges game={game} />
       <GameMissions
         missions={game.missions}
@@ -71,16 +65,15 @@ export function GameSection({ progress, host }: { readonly progress: EngagementW
         onClaim={actions.claimChest}
         errors={{ reroll: actions.errors.reroll, chest: actions.errors.chest }}
       />
+      <GameLeagueSummary league={game.league} />
       <GameMintPreview
         mint={game.mint}
-        glory={game.glory}
-        treasury={game.treasury}
-        levelRecord={game.level.record}
         badgesLost={progress.mintBadgeLoss}
         online={online}
         minting={actions.pending.mint}
         error={actions.errors.mint}
         celebration={actions.celebration}
+        strikeKey={actions.strikeKey}
         onMint={actions.mint}
       />
       <GameFlamePanel

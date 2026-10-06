@@ -24,9 +24,6 @@ const props = (patch: Parameters<typeof gameBlockFixture>[0] = {}, extra: Partia
   const game = gameBlockFixture(patch);
   return {
     mint: game.mint,
-    glory: game.glory,
-    treasury: game.treasury,
-    levelRecord: game.level.record,
     badgesLost: 2,
     online: true,
     minting: false,
@@ -39,57 +36,47 @@ const props = (patch: Parameters<typeof gameBlockFixture>[0] = {}, extra: Partia
 const text = (html: string): string => html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
 
 /**
- * L'APERÇU DE FRAPPE (#9383) — tout ce que le geste coûte et rapporte, dit
- * AVANT qu'on le fasse : le prix, le niveau avant → après, le trésor, la
- * Gloire et le rang, le numéro et l'édition, les badges qui redescendent, le
- * Vent arrière. La frappe est irréversible ; son aperçu est donc honnête.
+ * LE HÉROS DE FRAPPE (#9537) — la SEULE section de frappe, et elle est courte :
+ * une ligne de titre, un chiffre fort (le prix), une action ; ce que le geste
+ * coûte tient en une ligne de puces. Aucun paragraphe : l'explication vit dans
+ * le carnet des règles.
  */
 describe('une frappe possible', () => {
-  const page = text(renderToStaticMarkup(<GameMintPreview {...props()} />));
+  const html = renderToStaticMarkup(<GameMintPreview {...props()} />);
+  const page = text(html);
 
-  test('le numéro et l’édition de la pièce', () => {
+  test('une ligne de titre : le numéro de la prochaine pièce', () => {
     expect(page).toContain('Prochaine Meesh · n° 4');
-    expect(page).toContain('argent');
   });
 
-  test('le prix en points', () => {
-    expect(page).toContain('1 221 points');
+  test('un chiffre fort : le prix en points', () => {
+    expect(html).toMatch(/data-game-mint-price=""[^>]*>1\s221\spoints</);
   });
 
-  test('le niveau avant → après, et ce qu’il perd', () => {
-    expect(page).toMatch(/Niveau\s+1[0-9] → 1\b/);
-  });
-
-  test('le trésor avant → après', () => {
-    expect(page).toContain('4 → 5 Meeshes');
-  });
-
-  test('la Gloire gagnée', () => {
-    expect(page).toContain('+100');
-  });
-
-  test('le rang qui ne change pas ne se promet pas', () => {
-    expect(page).not.toContain('Écho III →');
-  });
-
-  test('le rang qui change se dit, division comprise', () => {
-    const crossing = text(renderToStaticMarkup(<GameMintPreview {...props({ glory: 790 })} />));
-    expect(crossing).toContain('Écho III → Écho II');
-  });
-
-  test('les badges qui redescendent', () => {
-    expect(page).toContain('2 badges redescendent');
-  });
-
-  test('le Vent arrière qui s’allume', () => {
-    expect(page).toContain('Vent arrière');
-    expect(page).toContain('+25 %');
-  });
-
-  test('un seul bouton, qui nomme Mee et Meo', () => {
-    const html = renderToStaticMarkup(<GameMintPreview {...props()} />);
+  test('une action, un seul bouton, qui nomme Mee et Meo', () => {
     expect(html.match(/data-game-mint-action/g)).toHaveLength(1);
     expect(page).toContain('Frapper avec Mee et Meo');
+  });
+
+  test('ce que le geste coûte et rapporte tient en puces : niveaux perdus, Gloire, badges', () => {
+    const impact = /data-game-mint-impact=""[^>]*>([\s\S]*?)<\/ul>/.exec(html)?.[1] ?? '';
+    const lines = Array.from(impact.matchAll(/<li[^>]*>([^<]*)<\/li>/g)).map((m) => m[1]);
+    expect(lines.some((line) => /niveaux?/.test(line ?? ''))).toBe(true);
+    expect(lines).toContain('+100 Gloire');
+    expect(lines).toContain('2 badges redescendent');
+  });
+
+  test('aucun paragraphe : ni tableau de lignes, ni phrase d’explication', () => {
+    expect(html).not.toContain('<dl');
+    expect(html).not.toContain('<p class="text-caption"');
+    expect(page).not.toContain('Vent arrière');
+    expect(page).not.toContain('→');
+  });
+
+  test('Mee et Meo sont sur la scène de frappe', () => {
+    expect(html).toContain('data-game-mint-scene');
+    expect(html).toContain('data-game-actor="mee"');
+    expect(html).toContain('data-game-actor="meo"');
   });
 
   test('le toucher frappe', async () => {
@@ -100,26 +87,25 @@ describe('une frappe possible', () => {
   });
 
   test('en cours : le bouton s’occupe et ne se laisse pas retoucher', () => {
-    const html = renderToStaticMarkup(<GameMintPreview {...props({}, { minting: true })} />);
-    expect(html).toMatch(/data-game-mint-action=""[^>]*disabled/);
-    expect(html).toContain('aria-busy="true"');
-    expect(text(html)).toContain('Frappe en cours');
+    const busy = renderToStaticMarkup(<GameMintPreview {...props({}, { minting: true })} />);
+    expect(busy).toMatch(/data-game-mint-action=""[^>]*disabled/);
+    expect(busy).toContain('aria-busy="true"');
+    expect(text(busy)).toContain('Frappe en cours');
   });
 
   test('hors ligne : la frappe attend la connexion, et le dit', () => {
-    const html = renderToStaticMarkup(<GameMintPreview {...props({}, { online: false })} />);
-    expect(html).toMatch(/data-game-mint-action=""[^>]*disabled/);
-    expect(text(html)).toContain('Hors ligne');
+    const offline = renderToStaticMarkup(<GameMintPreview {...props({}, { online: false })} />);
+    expect(offline).toMatch(/data-game-mint-action=""[^>]*disabled/);
+    expect(text(offline)).toContain('Hors ligne');
   });
 
   test('badges inconnus (serveur sans points par axe) : aucune promesse, ni dans un sens ni dans l’autre', () => {
     const { badgesLost: _lost, ...inconnu } = props();
-    const page = text(renderToStaticMarkup(<GameMintPreview {...inconnu} />));
-    expect(page).not.toContain('badge');
+    expect(text(renderToStaticMarkup(<GameMintPreview {...inconnu} />))).not.toContain('badge');
   });
 
-  test('aucun badge ne tombe : on le dit', () => {
-    expect(text(renderToStaticMarkup(<GameMintPreview {...props({}, { badgesLost: 0 })} />))).toContain('Aucun badge ne s’éteint');
+  test('aucun badge ne tombe : rien à dire, rien de dit', () => {
+    expect(text(renderToStaticMarkup(<GameMintPreview {...props({}, { badgesLost: 0 })} />))).not.toContain('badge');
   });
 
   test('un seul badge, au singulier', () => {
@@ -127,40 +113,38 @@ describe('une frappe possible', () => {
   });
 
   test('l’échec se lit sous le bouton', () => {
-    const html = renderToStaticMarkup(<GameMintPreview {...props({}, { error: 'La frappe n’a pas abouti.' })} />);
-    expect(html).toContain('role="alert"');
+    expect(renderToStaticMarkup(<GameMintPreview {...props({}, { error: 'La frappe n’a pas abouti.' })} />)).toContain('role="alert"');
   });
 });
 
 describe('une frappe pas encore possible : pas de bouton grisé', () => {
-  const poor = props({ score: 600, debitablePoints: 600 });
-  const html = renderToStaticMarkup(<GameMintPreview {...poor} />);
+  const html = renderToStaticMarkup(<GameMintPreview {...props({ score: 600, debitablePoints: 600 })} />);
 
   test('aucun bouton', () => {
     expect(html).not.toContain('data-game-mint-action');
   });
 
-  test('ce qu’il manque, et le prix de la prochaine', () => {
+  test('ce qu’il manque, en une ligne, et le prix de la prochaine', () => {
     expect(text(html)).toContain('Encore 621 points convertibles');
-    expect(text(html)).toContain('1 221 points');
+    expect(html).toMatch(/data-game-mint-price=""[^>]*>1\s221\spoints</);
   });
 
-  test('aucun avant → après ne se promet', () => {
-    expect(text(html)).not.toContain('→');
+  test('aucune puce de coût ne se promet', () => {
+    expect(html).not.toContain('data-game-mint-impact');
   });
 });
 
 describe('la dixième Meesh : le prix monte', () => {
-  test('la 11e coûte plus, et l’aperçu le dit', () => {
+  test('la 11e coûte plus, et le héros le dit', () => {
     const page = text(renderToStaticMarkup(<GameMintPreview {...props({ mintedLifetime: 10, score: 3000, debitablePoints: 3000 })} />));
     expect(page).toContain('n° 11');
     expect(page).toContain('1 294 points');
   });
 
   test('la centième est en or', () => {
-    const page = text(renderToStaticMarkup(<GameMintPreview {...props({ mintedLifetime: 99, score: 9000, debitablePoints: 9000 })} />));
-    expect(page).toContain('n° 100');
-    expect(page).toContain('or');
+    const html = renderToStaticMarkup(<GameMintPreview {...props({ mintedLifetime: 99, score: 9000, debitablePoints: 9000 })} />);
+    expect(text(html)).toContain('n° 100');
+    expect(html).toContain('data-game-edition="gold"');
   });
 });
 

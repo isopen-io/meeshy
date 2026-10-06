@@ -3,6 +3,7 @@ import { suspendForGameCatalog } from '@/lib/i18n-game-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { useQuery } from '@tanstack/react-query';
 
+import { MintStrike, type MintStrikeProps } from '@/components/game-mint-strike';
 import { Glyph, GlyphSvg } from '@/components/glyph';
 import { MascotCoach } from '@/components/mascot';
 import { PROGRESSION_GLYPHS } from '@/components/glyphs-progression';
@@ -401,11 +402,14 @@ export function MeeshEntry({
   onMint,
   isMinting,
   mintError,
+  strike,
 }: {
   meesh: EngagementMeeshProgress;
   onMint: () => void;
   isMinting: boolean;
   mintError?: string | undefined;
+  /** Mee et Meo frappent dans la feuille (#9537) ; absent d'un ancien serveur : la feuille reste celle d'avant. */
+  strike?: Omit<MintStrikeProps, 'size'> | undefined;
 }) {
   const [ouvert, setOuvert] = useState(false);
 
@@ -437,7 +441,7 @@ export function MeeshEntry({
 
       {ouvert ? (
         <GlassSurface prominent role="dialog" aria-label="Détail des Meeshes" className="absolute right-0 top-12 z-20 w-64 p-4">
-          <MeeshDetail meesh={meesh} onMint={onMint} isMinting={isMinting} mintError={mintError} />
+          <MeeshDetail meesh={meesh} onMint={onMint} isMinting={isMinting} mintError={mintError} strike={strike} />
         </GlassSurface>
       ) : null}
     </div>
@@ -457,10 +461,13 @@ export function MeeshDetail({
   onMint,
   isMinting,
   mintError,
+  strike,
 }: {
   meesh: EngagementMeeshProgress;
   onMint: () => void;
   isMinting: boolean;
+  /** Mee et Meo frappent une Meesh AVANT que le compteur monte (#9537). */
+  strike?: Omit<MintStrikeProps, 'size'> | undefined;
   /** L'ÉCHEC de la frappe (#6470). Sans lui, le geste échouait en SILENCE et
    * l'on retouchait — la passerelle rejoue les conflits d'écriture (#6467),
    * mais un échec réseau reste possible. */
@@ -468,6 +475,11 @@ export function MeeshDetail({
 }) {
   return (
     <div className="flex flex-col gap-2">
+      {strike === undefined ? null : (
+        <div data-meesh-strike="" className="flex justify-center">
+          <MintStrike size={56} {...strike} />
+        </div>
+      )}
       {/* Les formulations viennent du hero d'origine : « Aucune Meesh » plutôt
           que « 0 Meesh », « Convertir » plutôt que « Frapper ». Une refonte de
           DISPOSITION ne réécrit pas la langue en passant — l'utilisateur
@@ -665,6 +677,11 @@ export default function ProgressionScreen() {
   }, [query.data]);
 
   const meesh = query.data?.meesh;
+  const mintPreview = query.data?.game?.mint;
+  const strike =
+    mintPreview === undefined
+      ? undefined
+      : { strikeKey: actions.strikeKey, next: { number: mintPreview.number, edition: mintPreview.edition }, confirmed: actions.celebration };
 
   return (
     <div className="flex h-dvh flex-col overflow-hidden pt-safe">
@@ -684,6 +701,7 @@ export default function ProgressionScreen() {
               onMint={actions.mint}
               isMinting={actions.pending.mint}
               mintError={actions.errors.mint}
+              strike={strike}
             />
           )}
         </div>

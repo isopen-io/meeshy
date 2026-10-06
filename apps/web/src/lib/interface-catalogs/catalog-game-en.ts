@@ -447,6 +447,7 @@ const en = {
   'game.league.tab.mine': 'My league',
   'game.league.tab.friends': 'Friends',
   'game.league.closes': 'Closes in {remaining}',
+  'game.league.week_points': '{points} this week',
   'game.league.week': 'Week of {date}',
   'game.league.locked': 'The league opens at level {level}: every week you compete against 29 other players with a similar level of activity. You are at level {current}.',
   'game.league.minor': 'The public league is not open for your account. The friends league always is.',

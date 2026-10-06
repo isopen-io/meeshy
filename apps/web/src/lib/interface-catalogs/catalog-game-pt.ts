@@ -445,6 +445,7 @@ const pt = {
   'game.league.tab.mine': 'Minha liga',
   'game.league.tab.friends': 'Amigos',
   'game.league.closes': 'Fecha em {remaining}',
+  'game.league.week_points': '{points} esta semana',
   'game.league.week': 'Semana de {date}',
   'game.league.locked': 'A liga abre no nível {level}: toda semana você se mede com outros 29 jogadores de atividade parecida. Você está no nível {current}.',
   'game.league.minor': 'A liga pública não está aberta para a sua conta. A liga entre amigos está sempre aberta.',
