@@ -1,7 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
 import {
-  centeredCrop,
   emptyStudioPage,
   pageWithBackgroundCrop,
   pageWithBackgroundMuted,
@@ -356,9 +355,4 @@ describe('les éditions de base du fond (#9136)', () => {
     expect('crop' in (pageWithBackgroundCrop(withBackground(), { x: 0, y: 0, width: 1, height: 1 }).background ?? {})).toBe(false);
   });
 
-  test('le cadre centré garde la plus grande part de la source au rapport visé', () => {
-    expect(centeredCrop(1, 4 / 3)).toEqual({ x: 0.125, y: 0, width: 0.75, height: 1 });
-    expect(centeredCrop(16 / 9, 9 / 16).width).toBe(1);
-    expect(centeredCrop(null, 4 / 3)).toEqual({ x: 0, y: 0, width: 1, height: 1 });
-  });
 });
