@@ -56,7 +56,7 @@ nonisolated enum ComposerAdjustCopy {
 
     static var compare: String {
         String(localized: "composer.object.editor.adjust.compare",
-               defaultValue: "Maintenir pour comparer", bundle: .main)
+               defaultValue: "Comparer", bundle: .main)
     }
 
     /// L'indice VoiceOver de « Comparer », qui nomme le média comparé (#9169).
@@ -111,16 +111,29 @@ nonisolated enum ComposerAdjustCopy {
         guard course > 0 else { return 0 }
         return Int((ecart / course * 100).rounded())
     }
+
+    /// La valeur écrite comme on la lit : signée, zéro sans signe.
+    static func signed(_ lue: Int) -> String {
+        lue > 0 ? "+\(lue)" : "\(lue)"
+    }
 }
 
-/// **Le panneau du sous-outil RÉGLER** — un curseur par réglage, la valeur lue
-/// à droite, et deux gestes au-dessus quand l'image porte quelque chose :
-/// comparer (appui maintenu) et tout réinitialiser. Chaque curseur écrit sur
-/// l'OBJET (`setMediaObjectAdjustment`) : la scène, qui peint le même objet,
-/// suit le doigt image par image.
+/// **Le panneau du sous-outil RÉGLER — un réglage à la fois** (#9495).
 ///
-/// Toucher deux fois l'intitulé d'un réglage le remet à zéro — le geste de
-/// l'éditeur Photos, sans bouton de plus par ligne.
+/// Neuf curseurs empilés prenaient 330 × 686 pt à 402 pt de large : le panneau
+/// couvrait la scène, l'image réglée était CACHÉE pendant le geste, et
+/// « Comparer » ne comparait rien qu'on puisse voir. Le panneau suit désormais
+/// la grammaire de l'éditeur Photos : une rangée défilante de réglages — glyphe
+/// et intitulé sous lui, un point quand le réglage s'écarte de l'original —, UN
+/// curseur pour le réglage choisi, et au-dessus, quand l'image porte un rendu,
+/// comparer (appui maintenu) et tout réinitialiser. Sa hauteur ne dépend plus du
+/// nombre de réglages, et le meuble le range du côté qui laisse voir l'objet
+/// (`ComposerInlinePanelLayout.edge`).
+///
+/// Chaque curseur écrit sur l'OBJET (`setMediaObjectAdjustment`) : la scène, qui
+/// peint le même objet, suit le doigt image par image. Toucher deux fois la
+/// valeur remet le réglage choisi à zéro — le geste de l'éditeur Photos, sans
+/// bouton de plus.
 struct ComposerMediaAdjustPanel: View {
     @ObservedObject var viewModel: StoryComposerViewModel
     let mediaId: String
@@ -130,12 +143,20 @@ struct ComposerMediaAdjustPanel: View {
     var onCompare: ((Bool) -> Void)?
 
     @State private var comparing = false
+    @State private var chosen: AdjustmentKind?
 
     /// **Les curseurs qu'un média offre** — ceux qu'il PEINT (#9169) : une
     /// vidéo n'a ni netteté ni flou (`AdjustmentKind.served(for:)`). Un genre
     /// inconnu garde la liste de l'image, celle d'avant #9169.
     nonisolated static func kinds(for mediaKind: StoryMediaKind?) -> [AdjustmentKind] {
         AdjustmentKind.served(for: mediaKind ?? .image)
+    }
+
+    /// **Le réglage que le curseur unique pilote** : celui qu'on a touché, tant
+    /// que le média le peint ; sinon le premier de la rangée.
+    nonisolated static func shown(_ chosen: AdjustmentKind?, among kinds: [AdjustmentKind]) -> AdjustmentKind? {
+        guard let chosen, kinds.contains(chosen) else { return kinds.first }
+        return chosen
     }
 
     private var mediaKind: StoryMediaKind? {
@@ -145,55 +166,40 @@ struct ComposerMediaAdjustPanel: View {
     var body: some View {
         let reglages = viewModel.mediaObjectAdjustments(id: mediaId)
         let porteUnRendu = reglages.activeCount > 0 || viewModel.mediaObjectFilter(id: mediaId) != nil
-        VStack(alignment: .leading, spacing: MeeshySpacing.md) {
+        let offerts = Self.kinds(for: mediaKind)
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             if porteUnRendu {
-                HStack(spacing: MeeshySpacing.sm) {
-                    if onCompare != nil { compareControl }
-                    if reglages.activeCount > 0 { resetControl }
-                    Spacer(minLength: 0)
-                }
+                actions(canReset: reglages.activeCount > 0)
             }
-            ForEach(Self.kinds(for: mediaKind)) { kind in
-                row(kind, value: reglages[kind])
+            if let kind = Self.shown(chosen, among: offerts) {
+                slider(kind, value: reglages[kind])
             }
+            kindStrip(offerts, adjustments: reglages)
         }
         .onDisappear { release() }
     }
 
-    private func row(_ kind: AdjustmentKind, value: Float) -> some View {
-        let lue = ComposerAdjustCopy.displayValue(kind, value)
-        return VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
-            HStack(spacing: MeeshySpacing.xsPlus) {
-                Image(systemName: kind.icon)
-                    .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
-                    .accessibilityHidden(true)
-                Text(ComposerAdjustCopy.label(kind))
-                    .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
-                Spacer(minLength: 0)
-                Text(lue > 0 ? "+\(lue)" : "\(lue)")
-                    .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium).monospacedDigit())
-                    .opacity(lue == 0 ? 0.55 : 1)
-                    .accessibilityHidden(true)
-            }
-            .foregroundStyle(Color.white.opacity(0.92))
-            .contentShape(Rectangle())
-            .onTapGesture(count: 2) {
-                viewModel.setMediaObjectAdjustment(id: mediaId, kind, to: kind.neutralValue)
-                HapticFeedback.light()
-            }
-            Slider(value: Binding(
-                get: { Double(value) },
-                set: { viewModel.setMediaObjectAdjustment(id: mediaId, kind, to: Float($0)) }
-            ), in: Double(kind.range.lowerBound)...Double(kind.range.upperBound))
-            .tint(Color.white)
-            .frame(minHeight: 44)
-            .accessibilityLabel(Text(ComposerAdjustCopy.label(kind)))
-            .accessibilityValue(Text(lue > 0 ? "+\(lue)" : "\(lue)"))
+    // MARK: Comparer · Réinitialiser
+
+    /// Glyphe ET intitulé court quand ils tiennent ; le glyphe seul sinon (grand
+    /// Dynamic Type, écran étroit) — l'intitulé reste lu par VoiceOver.
+    private func actions(canReset: Bool) -> some View {
+        ViewThatFits(in: .horizontal) {
+            actionRow(canReset: canReset, titled: true)
+            actionRow(canReset: canReset, titled: false)
         }
     }
 
-    private var compareControl: some View {
-        capsule(ComposerAdjustCopy.compare, symbol: "square.split.2x1", isOn: comparing)
+    private func actionRow(canReset: Bool, titled: Bool) -> some View {
+        HStack(spacing: MeeshySpacing.sm) {
+            if onCompare != nil { compareControl(titled: titled) }
+            if canReset { resetControl(titled: titled) }
+            Spacer(minLength: 0)
+        }
+    }
+
+    private func compareControl(titled: Bool) -> some View {
+        capsule(ComposerAdjustCopy.compare, symbol: "square.split.2x1", isOn: comparing, titled: titled)
             .onLongPressGesture(minimumDuration: .infinity, maximumDistance: 60, perform: {}, onPressingChanged: { appuye in
                 appuye ? hold() : release()
             })
@@ -206,25 +212,29 @@ struct ComposerMediaAdjustPanel: View {
             .accessibilityAction { comparing ? release() : hold() }
     }
 
-    private var resetControl: some View {
+    private func resetControl(titled: Bool) -> some View {
         Button {
             viewModel.applyMediaObjectAdjustments(id: mediaId, .neutral)
             HapticFeedback.light()
         } label: {
-            capsule(ComposerAdjustCopy.reset, symbol: "arrow.uturn.backward", isOn: false)
+            capsule(ComposerAdjustCopy.reset, symbol: "arrow.uturn.backward", isOn: false, titled: titled)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(Text(ComposerAdjustCopy.reset))
     }
 
-    private func capsule(_ title: String, symbol: String, isOn: Bool) -> some View {
+    private func capsule(_ title: String, symbol: String, isOn: Bool, titled: Bool) -> some View {
         HStack(spacing: MeeshySpacing.xsPlus) {
             Image(systemName: symbol).font(MeeshyFont.relative(13, weight: .semibold))
-            Text(title).font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold)).lineLimit(1)
+            if titled {
+                Text(title).font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
+                    .lineLimit(1)
+                    .fixedSize()
+            }
         }
         .foregroundStyle(isOn ? Color.white : Color.white.opacity(0.85))
-        .padding(.horizontal, MeeshySpacing.mdPlus)
-        .frame(minHeight: 44)
+        .padding(.horizontal, titled ? MeeshySpacing.mdPlus : 0)
+        .frame(minWidth: 44, minHeight: 44)
         .background {
             if isOn {
                 Capsule().fill(MeeshyColors.brandGradient)
@@ -234,6 +244,99 @@ struct ComposerMediaAdjustPanel: View {
         }
         .contentShape(Capsule())
     }
+
+    // MARK: Le curseur du réglage choisi
+
+    private func slider(_ kind: AdjustmentKind, value: Float) -> some View {
+        let ecart = ComposerAdjustCopy.displayValue(kind, value)
+        let lue = ComposerAdjustCopy.signed(ecart)
+        return HStack(spacing: MeeshySpacing.sm) {
+            Slider(value: Binding(
+                get: { Double(value) },
+                set: { viewModel.setMediaObjectAdjustment(id: mediaId, kind, to: Float($0)) }
+            ), in: Double(kind.range.lowerBound)...Double(kind.range.upperBound))
+            .tint(Color.white)
+            .frame(minHeight: 44)
+            .accessibilityLabel(Text(ComposerAdjustCopy.label(kind)))
+            .accessibilityValue(Text(lue))
+            .accessibilityAction(named: Text(ComposerAdjustCopy.reset)) { resetOne(kind) }
+            Text(lue)
+                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold).monospacedDigit())
+                .foregroundStyle(Color.white.opacity(ecart == 0 ? 0.55 : 0.92))
+                .lineLimit(1)
+                .fixedSize()
+                .frame(minWidth: 36, minHeight: 44, alignment: .trailing)
+                .contentShape(Rectangle())
+                .onTapGesture(count: 2) { resetOne(kind) }
+                .accessibilityHidden(true)
+        }
+    }
+
+    private func resetOne(_ kind: AdjustmentKind) {
+        viewModel.setMediaObjectAdjustment(id: mediaId, kind, to: kind.neutralValue)
+        HapticFeedback.light()
+    }
+
+    // MARK: La rangée des réglages
+
+    private func kindStrip(_ kinds: [AdjustmentKind], adjustments: ImageAdjustments) -> some View {
+        let actif = Self.shown(chosen, among: kinds)
+        return ScrollViewReader { defilement in
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: MeeshySpacing.xs) {
+                    ForEach(kinds) { kind in
+                        kindChip(kind, isChosen: kind == actif, isAdjusted: adjustments.isActive(kind),
+                                 value: ComposerAdjustCopy.displayValue(kind, adjustments[kind]))
+                            .id(kind)
+                    }
+                }
+            }
+            .adaptiveOnChange(of: actif) { _, nouveau in
+                guard let nouveau else { return }
+                withAnimation(.easeOut(duration: 0.2)) { defilement.scrollTo(nouveau, anchor: .center) }
+            }
+        }
+    }
+
+    private func kindChip(_ kind: AdjustmentKind, isChosen: Bool, isAdjusted: Bool, value: Int) -> some View {
+        Button {
+            chosen = kind
+            HapticFeedback.light()
+        } label: {
+            VStack(spacing: 3) {
+                Image(systemName: kind.icon)
+                    .font(MeeshyFont.relative(15, weight: .semibold))
+                    .overlay(alignment: .topTrailing) {
+                        if isAdjusted {
+                            Circle().fill(Color.white).frame(width: 5, height: 5).offset(x: 5, y: -2)
+                        }
+                    }
+                Text(ComposerAdjustCopy.label(kind))
+                    .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
+                    .lineLimit(1)
+                    .fixedSize()
+            }
+            .foregroundStyle(isChosen ? Color.white : Color.white.opacity(0.78))
+            .padding(.horizontal, MeeshySpacing.sm)
+            .frame(minWidth: 52, minHeight: 52)
+            .background {
+                if isChosen {
+                    RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous)
+                        .fill(MeeshyColors.brandGradient)
+                } else {
+                    RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous)
+                        .fill(Color.white.opacity(0.08))
+                }
+            }
+            .contentShape(RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(Text(ComposerAdjustCopy.label(kind)))
+        .accessibilityValue(Text(ComposerAdjustCopy.signed(value)))
+        .accessibilityAddTraits(isChosen ? [.isButton, .isSelected] : .isButton)
+    }
+
+    // MARK: Comparaison
 
     private func hold() {
         guard !comparing else { return }

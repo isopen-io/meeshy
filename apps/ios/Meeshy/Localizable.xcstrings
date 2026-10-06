@@ -76994,43 +76994,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "اضغط مطولًا للمقارنة"
+            "value": "مقارنة"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Zum Vergleichen halten"
+            "value": "Vergleichen"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Hold to compare"
+            "value": "Compare"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mantén para comparar"
+            "value": "Comparar"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Maintenir pour comparer"
+            "value": "Comparer"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tieni premuto per confrontare"
+            "value": "Confronta"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Segure para comparar"
+            "value": "Comparar"
           }
         }
       }
