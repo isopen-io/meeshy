@@ -70,6 +70,7 @@ extension StoryBackgroundLayer {
         // the Task launch and the asset load completion.
         let canvasSize = self.bounds.size
         let asset = AVURLAsset(url: url)
+        attachedVideoAsset = asset
         Task { @MainActor [weak self, weak pl] in
             guard self != nil else { return }
             let tracks: [AVAssetTrack]
@@ -124,6 +125,9 @@ extension StoryBackgroundLayer {
             }
         }
 
+        // Les réglages du fond (#9496) : posés sur l'item dès l'attache, comme
+        // à chaque changement de curseur.
+        applyBackgroundVideoLook()
         onPlayerAttached?()
     }
 

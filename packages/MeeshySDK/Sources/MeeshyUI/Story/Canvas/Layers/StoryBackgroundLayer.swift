@@ -178,6 +178,21 @@ public final class StoryBackgroundLayer: CALayer {
     /// standard photo-filter behaviour).
     @MainActor public private(set) var activeFilter: StoryFilter?
     @MainActor public private(set) var activeFilterIntensity: Float = 1.0
+    /// **Les réglages du média de fond** (#9496), déjà projetés sur son genre
+    /// (`StoryBackgroundLook.painted`) : cuits après le filtre dans le bitmap
+    /// d'un fond image, posés en composition sur l'item d'un fond vidéo.
+    @MainActor public private(set) var activeAdjustments: ImageAdjustments?
+    /// Le bitmap BRUT du dernier stamp final et sa clé de filtre — ce qu'un
+    /// changement de rendu seul (filtre, réglages) repeint en place, sans
+    /// repasser par le chargement ni par le ThumbHash.
+    @MainActor var stampedSource: (image: UIImage, imageId: String?)?
+    /// La composition posée sur les items du player de fond : quel player, pour
+    /// quels réglages — rien ne se refait tant que les deux sont les mêmes.
+    nonisolated(unsafe) var appliedBackgroundVideoLook: (player: ObjectIdentifier, signature: String)?
+    nonisolated(unsafe) var backgroundVideoLookTask: Task<Void, Never>?
+    /// L'asset que la dernière attache a ouvert — la source de la composition
+    /// quand aucun item n'est encore en file.
+    nonisolated(unsafe) var attachedVideoAsset: AVAsset?
     /// Monotonic token from the composer (`loadedImagesVersion`); a change forces
     /// a re-fetch + re-stamp even when the media identity is unchanged, so an
     /// in-place bitmap edit under the same id is reflected on the canvas.
@@ -200,16 +215,26 @@ public final class StoryBackgroundLayer: CALayer {
     /// prétend pas avoir déjà projeté quoi que ce soit.
     @MainActor private var configuredRenderSize: CGSize?
 
-    /// Applies the active filter (if any) to `image`, stamps it into `img.contents`
-    /// with the resolved gravity, and marks final content. The single choke point
-    /// for every FINAL image stamp (warm hit / composer cache / URL load) so the
-    /// filter is baked uniformly. Filtering preserves dimensions, so gravity is
-    /// computed from the (filtered) bitmap size.
+    /// Pose le RENDU courant — filtre, intensité, réglages — sans rien peindre.
     @MainActor
-    private func stampFinalImage(_ image: UIImage, imageId: String?, on img: CALayer?) {
-        let display: UIImage = activeFilter.map {
-            StoryFilterProcessor.apply($0, to: image, imageId: imageId, intensity: activeFilterIntensity)
-        } ?? image
+    func setLook(filter: StoryFilter?, filterIntensity: Float, adjustments: ImageAdjustments?) {
+        activeFilter = filter
+        activeFilterIntensity = filterIntensity
+        activeAdjustments = adjustments
+    }
+
+    /// Applies the active look — slide filter, then the background media's
+    /// adjustments (#9496), through `StoryBackgroundLook` — to `image`, stamps it
+    /// into `img.contents` with the resolved gravity, and marks final content.
+    /// The single choke point for every FINAL image stamp (warm hit / composer
+    /// cache / URL load) so the look is baked uniformly; the raw bitmap is kept
+    /// (`stampedSource`) so a look-only change repaints in place. The look
+    /// preserves dimensions, so gravity is computed from the painted bitmap size.
+    @MainActor
+    func stampFinalImage(_ image: UIImage, imageId: String?, on img: CALayer?) {
+        stampedSource = (image, imageId)
+        let display = StoryBackgroundLook.image(image, filter: activeFilter, intensity: activeFilterIntensity,
+                                                adjustments: activeAdjustments, imageId: imageId)
         Self.withDisabledCAActions {
             // **Le FOND porte l'orientation comme les autres couches**
             // (2026-09-05). Ce site était resté sur `.cgImage` nu au premier
@@ -353,6 +378,7 @@ extension StoryBackgroundLayer {
                           letterboxFillHashes: [String] = [],
                           filter: StoryFilter? = nil,
                           filterIntensity: Float = 1.0,
+                          adjustments: ImageAdjustments? = nil,
                           contentVersion: UInt64 = 0) {
         // FAST PATH ANTI-FLASH :
         // `configure(...)` est appelé à CHAQUE `rebuildLayers()` du canvas
@@ -404,12 +430,21 @@ extension StoryBackgroundLayer {
         let filterUnchanged = (self.activeFilter == filter)
             && (self.activeFilterIntensity == filterIntensity)
             && (self.lastContentVersion == contentVersion)
-        let nothingChanged = (previousContentIdentity == nextContentIdentity)
+        let adjustmentsUnchanged = (self.activeAdjustments == adjustments)
+        let sameScene = (previousContentIdentity == nextContentIdentity)
             && (self.transform3D == transform)
             && (self.configuredRenderSize == geometry.renderSize)
             && hasVisibleContent
-            && filterUnchanged
-        if nothingChanged { return }
+            && (self.lastContentVersion == contentVersion)
+        if sameScene && filterUnchanged && adjustmentsUnchanged { return }
+
+        // **Seul le RENDU a changé** (#9496) — un curseur de réglage, un autre
+        // filtre : le fond se repeint EN PLACE, sans détacher son contenu. Une
+        // image repart de son bitmap brut retenu ; une vidéo garde son player
+        // (la lecture ne saute pas) et reçoit la composition de ses réglages.
+        if sameScene, restyleInPlace(filter: filter, filterIntensity: filterIntensity, adjustments: adjustments) {
+            return
+        }
 
         // **Une reconfiguration qui ne sait pas résoudre son NOUVEAU sujet n'a
         // rien à dire sur l'ANCIEN** (directive porteur 2026-09-06 : « quand
@@ -478,11 +513,11 @@ extension StoryBackgroundLayer {
         let canReuseContent = (previousContentIdentity == nextContentIdentity)
             && (contentLayer != nil)
             && filterUnchanged
+            && adjustmentsUnchanged
 
         self.kind = kind
         self.transform3D = transform
-        self.activeFilter = filter
-        self.activeFilterIntensity = filterIntensity
+        setLook(filter: filter, filterIntensity: filterIntensity, adjustments: adjustments)
         self.lastContentVersion = contentVersion
         self.frame = CGRect(origin: .zero, size: geometry.renderSize)
         self.configuredRenderSize = geometry.renderSize
@@ -564,6 +599,11 @@ extension StoryBackgroundLayer {
         avPlayerLayer = nil
         avPlayerLooper = nil
         contentLayer = nil
+        stampedSource = nil
+        backgroundVideoLookTask?.cancel()
+        backgroundVideoLookTask = nil
+        appliedBackgroundVideoLook = nil
+        attachedVideoAsset = nil
         // Reset readiness flag — sera re-armé par les fast-paths (warm hit /
         // HTTP load) en `case .image`. Couleur / gradient n'utilisent pas ce
         // flag (ils ont leur propre chemin `.solidColor` / `.gradient` dans
