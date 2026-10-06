@@ -102,6 +102,15 @@ describe('les autres familles', () => {
     expect(resolveTarget({ type: 'game_season_step', route: 'progression' })).toEqual({ route: 'progressionSaison' });
   });
 
+  /* LA MISSION PERSONNELLE (#9539) — l'annonce du début de plage ouvre la Progression À LA section des
+     missions : le toucher mène à la carte qui décompte, pas au haut de la page. */
+  test('l’annonce d’une mission personnelle ouvre la section des missions de la Progression', () => {
+    const expected = { route: 'progression', search: { section: 'missions' } };
+    expect(notificationTarget(record({ type: 'game_mission_window' }))).toEqual(expected);
+    expect(resolveTarget({ type: 'game_mission_window', route: 'progression' })).toEqual(expected);
+    expect(pushTapTarget({ type: 'game_mission_window', route: 'progression' })).toEqual(expected);
+  });
+
   test('un tap de bannière du jeu atterrit sur la même page', () => {
     expect(pushTapTarget({ type: 'game_league_result', route: 'progression' })).toEqual({ route: 'progressionLigue' });
   });

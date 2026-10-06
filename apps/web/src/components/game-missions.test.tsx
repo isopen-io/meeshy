@@ -160,3 +160,86 @@ describe('avant le niveau 5', () => {
     expect(page).not.toContain('Ouvrir le coffre');
   });
 });
+
+/**
+ * LA MISSION PERSONNELLE (#9539) — une mission de plus, servie à côté des trois du jour, avec sa PLAGE. La
+ * carte porte un minuteur jusqu'à la fin de la plage ; passée la fin, elle dit « Terminée » ou « Manquée » et
+ * l'action disparaît.
+ */
+describe('la mission personnelle du jour', () => {
+  const personal = (patch: Record<string, unknown> = {}) => {
+    const base = props();
+    return {
+      ...base,
+      missions: {
+        ...base.missions,
+        personal: {
+          id: 'm-perso',
+          difficulty: 'easy' as const,
+          templateKey: 'send-texts',
+          signal: 'axis:chat.message',
+          prism: false,
+          target: 5,
+          progress: 2,
+          reward: 40,
+          glory: 0,
+          completedAt: null,
+          startsAt: '2026-10-06T18:00:00.000Z',
+          endsAt: '2026-10-06T20:00:00.000Z',
+          state: 'active' as const,
+          ...patch,
+        },
+      },
+    };
+  };
+  const view = (now: string, patch: Record<string, unknown> = {}): string =>
+    text(renderToStaticMarkup(<GameMissions {...personal(patch)} now={new Date(now)} />));
+
+  test('sans mission personnelle (ancien serveur), aucune carte de plus', () => {
+    expect(renderToStaticMarkup(<GameMissions {...props()} />)).not.toContain('data-game-personal');
+  });
+
+  test('en cours : le minuteur dit combien il reste jusqu’à la fin de la plage', () => {
+    expect(view('2026-10-06T18:30:00.000Z')).toContain('Se termine dans 1 h');
+    expect(view('2026-10-06T19:30:00.000Z')).toContain('Se termine dans 30 min');
+  });
+
+  test('à venir : le minuteur dit dans combien de temps la plage s’ouvre', () => {
+    expect(view('2026-10-06T16:00:00.000Z', { state: 'upcoming' })).toContain('Commence dans 2 h');
+  });
+
+  test('la plage passée sans la faire : « Manquée », plus de minuteur', () => {
+    const html = view('2026-10-06T20:00:00.000Z');
+    expect(html).toContain('Manquée');
+    expect(html).not.toContain('Se termine dans');
+  });
+
+  test('faite : « Terminée », y compris une fois la plage passée', () => {
+    expect(view('2026-10-06T18:45:00.000Z', { completedAt: '2026-10-06T18:40:00.000Z', progress: 5, state: 'completed' })).toContain('Terminée');
+    expect(view('2026-10-06T23:00:00.000Z', { completedAt: '2026-10-06T18:40:00.000Z', progress: 5, state: 'completed' })).toContain('Terminée');
+  });
+
+  test('un titre, un avancement, une récompense : comme les missions du jour', () => {
+    const html = view('2026-10-06T18:30:00.000Z');
+    expect(html).toContain('Envoyer 5 messages');
+    expect(html).toContain('2 / 5');
+    expect(html).toContain('+40 points');
+  });
+
+  test('c’est une carte de plus dans la liste, jamais une mission du jour de moins', () => {
+    const html = renderToStaticMarkup(<GameMissions {...personal()} now={new Date('2026-10-06T18:30:00.000Z')} />);
+    expect(html.match(/data-game-mission="/g)).toHaveLength(3);
+    expect(html.match(/data-game-personal="/g)).toHaveLength(1);
+  });
+
+  test('aucun bouton « Changer » sur la mission personnelle : on ne la tire pas deux fois', () => {
+    const html = renderToStaticMarkup(<GameMissions {...personal()} now={new Date('2026-10-06T18:30:00.000Z')} />);
+    const card = html.slice(html.indexOf('data-game-personal='));
+    expect(card.slice(0, card.indexOf('</li>'))).not.toContain('data-game-reroll');
+  });
+
+  test('sans horloge injectée, la carte lit l’heure : une plage d’hier est manquée', () => {
+    const html = text(renderToStaticMarkup(<GameMissions {...personal({ startsAt: '2020-01-01T18:00:00.000Z', endsAt: '2020-01-01T20:00:00.000Z' })} />));
+    expect(html).toContain('Manquée');
+  });
+});

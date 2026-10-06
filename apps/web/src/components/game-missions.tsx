@@ -1,6 +1,9 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import type { GameBlock, GameChest, GameMission, GameMissions as GameMissionsBlock } from '@meeshy/shared/types/game';
+
+import { personalMissionClock } from '@/lib/game/personal-mission-clock';
+import { durationLabel } from '@/lib/view/game-copy-v2';
 
 import { Chest, useChoreography } from '@/components/game';
 import { ProgressBar } from '@/components/progress-bar';
@@ -42,6 +45,8 @@ export type GameMissionsProps = {
   readonly onReroll: (missionId: string) => void;
   readonly onClaim: () => void;
   readonly errors?: { readonly reroll?: string | undefined; readonly chest?: string | undefined };
+  /** L'horloge du minuteur de la mission personnelle ; absente, la carte lit l'heure et se met à jour d'elle-même. */
+  readonly now?: Date;
 };
 
 /** Le prix d'un changement ; le libellé du bouton le dit dans la phrase du catalogue (« Changer · 1 Meesh »), comme sur iOS. */
@@ -108,6 +113,57 @@ function MissionRow({
           </button>
         ) : null}
       </div>
+    </li>
+  );
+}
+
+/** Le minuteur d'une carte se rafraîchit à la minute près : jamais de secondes qui défilent, une lecture calme. */
+const TICK_MS = 15_000;
+
+function useClockNow(fixed: Date | undefined): Date {
+  const [now, setNow] = useState(() => fixed ?? new Date());
+  useEffect(() => {
+    if (fixed !== undefined) return;
+    const id = setInterval(() => setNow(new Date()), TICK_MS);
+    return () => clearInterval(id);
+  }, [fixed]);
+  return fixed ?? now;
+}
+
+/**
+ * LA MISSION PERSONNELLE (#9539) — une mission de plus, avec sa plage. Le minuteur court jusqu'au début (à
+ * venir) puis jusqu'à la FIN (en cours) ; passée la fin, la carte dit « Terminée » ou « Manquée », sans
+ * décompte. Elle ne se change pas : le tirage est le sien, une fois par jour.
+ */
+function PersonalMissionRow({ mission, now: fixedNow }: { readonly mission: NonNullable<GameMissionsBlock['personal']>; readonly now: Date | undefined }) {
+  const now = useClockNow(fixedNow);
+  const clock = personalMissionClock({ startsAt: mission.startsAt, endsAt: mission.endsAt, completedAt: mission.completedAt, now });
+  const done = clock.phase === 'completed';
+  const title = missionTitle(mission.templateKey, mission.target);
+  const status =
+    clock.phase === 'completed' || clock.phase === 'missed'
+      ? gameText(`game.mission.personal.${clock.phase}`)
+      : gameText(clock.phase === 'upcoming' ? 'game.mission.personal.upcoming' : 'game.mission.personal.active', { remaining: durationLabel(clock.remainingMs ?? 0) });
+  return (
+    <li
+      data-game-personal={mission.id}
+      data-game-personal-phase={clock.phase}
+      className="flex flex-col gap-1.5 rounded-card px-3 py-3"
+      style={{ backgroundColor: 'color-mix(in srgb, var(--color-ios-brand) 10%, transparent)', opacity: clock.phase === 'missed' ? 0.7 : 1 }}
+    >
+      <div className="flex flex-wrap items-center gap-1.5">
+        <GameChip tint={GAME_BRAND}>{gameText('game.mission.personal.chip')}</GameChip>
+        <GameChip tint={done ? GAME_GOOD : clock.phase === 'missed' ? GAME_INK_2 : GAME_WARM}>{status}</GameChip>
+      </div>
+      <p className="text-body font-semibold" style={{ color: GAME_INK }}>
+        {title}
+      </p>
+      <ProgressBar progress={mission.progress / mission.target} tint={done ? GAME_GOOD : GAME_BRAND} label={title} />
+      <p className="text-caption" style={{ color: GAME_INK_2 }}>
+        {gameText('game.fmt.fraction', { done: formatCount(Math.min(mission.progress, mission.target)), total: formatCount(mission.target) })}
+        {' · '}
+        <span style={{ color: GAME_INK, fontWeight: 700 }}>{gameText('game.fmt.signed', { value: pointsLabel(mission.reward) })}</span>
+      </p>
     </li>
   );
 }
@@ -202,7 +258,7 @@ function ChestCard({ chest, opening, online, onClaim, error }: { readonly chest:
 }
 
 export function GameMissions(props: GameMissionsProps) {
-  const { missions, chest, held, level, prismHour, online, pendingRerollId, chestOpening, onReroll, onClaim, errors } = props;
+  const { missions, chest, held, level, prismHour, online, pendingRerollId, chestOpening, onReroll, onClaim, errors, now } = props;
 
   if (!missions.unlocked) {
     return (
@@ -244,6 +300,7 @@ export function GameMissions(props: GameMissionsProps) {
             onReroll={onReroll}
           />
         ))}
+        {missions.personal == null ? null : <PersonalMissionRow mission={missions.personal} now={now} />}
       </ul>
       {errors?.reroll === undefined ? null : (
         <p role="alert" className="text-caption" style={{ color: GAME_ERROR }}>

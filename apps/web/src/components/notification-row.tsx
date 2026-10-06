@@ -101,7 +101,8 @@ export function TargetLink({ target, ...surface }: SurfaceProps & { readonly tar
     case 'userProfile':
       return <Link to="userProfile" params={target.params} {...surface} />;
     case 'progression':
-      return <Link to="progression" {...surface} />;
+      /* La mission personnelle ouvre la section des missions (#9539) : la destination PORTE sa section. */
+      return target.search === undefined ? <Link to="progression" {...surface} /> : <Link to="progression" search={target.search} {...surface} />;
     case 'progressionLigue':
       return <Link to="progressionLigue" {...surface} />;
     case 'progressionSaison':

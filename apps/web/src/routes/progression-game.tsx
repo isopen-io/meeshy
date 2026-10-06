@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 
 import { GAME_BRAND, GAME_CARD } from '@/components/game-surface';
 import { Link } from '@/routes/route-table';
@@ -14,6 +14,9 @@ import { GameMintPreview } from '@/components/game-mint-preview';
 import { GameHiddenCard } from '@/components/game-hidden-card';
 import { GameMissions } from '@/components/game-missions';
 import { useGamePrefs } from '@/lib/game/preferences';
+import { progressionSection } from '@/lib/game/progression-section';
+import { PROGRESSION_SECTION_PARAM } from '@/lib/notifications/target';
+import { useOptionalRoute } from '@/lib/router';
 
 import type { GameActions } from './progression-game-actions';
 
@@ -40,9 +43,24 @@ export type GameHost = {
   readonly guideLine?: string | null;
 };
 
+const reducedMotion = (): boolean => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/**
+ * `?section=missions` (#9539) : le toucher de l'annonce d'une mission personnelle ouvre la Progression À la carte
+ * des missions. Une seule fois par arrivée : le joueur qui défile ensuite n'est pas ramené.
+ */
+function useOpenSection(shown: boolean): void {
+  const section = progressionSection(useOptionalRoute()?.search.get(PROGRESSION_SECTION_PARAM) ?? null);
+  useEffect(() => {
+    if (!shown || section === undefined) return;
+    requestAnimationFrame(() => document.getElementById(section)?.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'start' }));
+  }, [shown, section]);
+}
+
 export function GameSection({ progress, host }: { readonly progress: EngagementWithGame; readonly host: GameHost }) {
   const game = progress.game;
   const prefs = useGamePrefs();
+  useOpenSection(game !== undefined && !prefs.hidden);
   if (game === undefined) return null;
   if (prefs.hidden) return <GameHiddenCard />;
   const { actions, online, guide, guideLine } = host;

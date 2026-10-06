@@ -18,5 +18,6 @@ describe('le tap d’une notification du jeu, dans la coque', () => {
 
   test('un badge ouvre toujours le hub', () => {
     expect(shellPushUrl(pushTapTarget({ type: 'badge_earned' }))).toBe('/me/progression');
+    expect(shellPushUrl(pushTapTarget({ type: 'game_mission_window', route: 'progression' }))).toBe('/me/progression?section=missions');
   });
 });

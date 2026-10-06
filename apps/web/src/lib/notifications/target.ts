@@ -49,7 +49,8 @@ export type NotificationTarget =
   | { readonly route: 'story' | 'post'; readonly params: { readonly post: string } }
   | { readonly route: 'discover'; readonly search: Readonly<Record<string, string>> }
   | { readonly route: 'userProfile'; readonly params: { readonly username: string } }
-  | { readonly route: 'progression' | 'progressionLigue' | 'progressionSaison' | 'settings' };
+  | { readonly route: 'progression'; readonly search?: Readonly<Record<string, string>> }
+  | { readonly route: 'progressionLigue' | 'progressionSaison' | 'settings' };
 
 /**
  * **LA DESTINATION D'UN TAP DE BANNIÈRE — elle n'est JAMAIS nulle** (#7305).
@@ -137,6 +138,14 @@ const PROGRESSION_TYPES: ReadonlySet<string> = new Set([
 const GAME_LEAGUE_TYPES: ReadonlySet<string> = new Set(['game_duo_invited', 'game_duo_accepted', 'game_league_result']);
 const GAME_SEASON_TYPES: ReadonlySet<string> = new Set(['game_season_step']);
 
+/**
+ * La mission personnelle du jour (#9539) : l'annonce du début de plage ouvre la Progression À la section des
+ * missions (`?section=missions`), là où la carte décompte — pas au haut de la page.
+ */
+export const PROGRESSION_SECTION_PARAM = 'section';
+const GAME_MISSION_TYPES: ReadonlySet<string> = new Set(['game_mission_window']);
+const MISSIONS_SECTION: NotificationTarget = { route: 'progression', search: { [PROGRESSION_SECTION_PARAM]: 'missions' } };
+
 const SECURITY_TYPES: ReadonlySet<string> = new Set([
   'security_alert',
   'login_new_device',
@@ -197,6 +206,7 @@ export function resolveTarget(input: NotificationTargetInput): PushTapTarget | n
 
   if (GAME_LEAGUE_TYPES.has(type)) return { route: 'progressionLigue' };
   if (GAME_SEASON_TYPES.has(type)) return { route: 'progressionSaison' };
+  if (GAME_MISSION_TYPES.has(type)) return MISSIONS_SECTION;
 
   const indice = hinted(present(input.route));
   if (indice !== null) return indice;
