@@ -28,7 +28,8 @@ struct GamePhotoFlowView: View {
             content
         }
         .overlay(alignment: .topTrailing) { closeButton }
-        // Le lien de parrainage se lit pendant que l'utilisateur choisit : la carte est prête quand il déclenche.
+        // Le lien d'un jeton EXISTANT se lit pendant que l'utilisateur choisit : la carte est prête quand il
+        // déclenche. Aucun jeton ne se crée ici — seul « Partager » en crée un (`prepareShare`).
         .task { await session.prepareReferral() }
         .adaptiveOnChange(of: pickerItem) { _, item in
             guard let item else { return }
@@ -257,8 +258,19 @@ struct GamePhotoFlowView: View {
                 }
                 .pickerStyle(.segmented)
                 .padding(.horizontal, MeeshySpacing.xl)
-                // La Flamme révèle un rythme d'usage : l'utilisateur voit la carte telle qu'elle partira,
-                // et peut la retirer (conformité H-2). Sans lien, le bandeau n'existe pas : rien à régler.
+                // Le lien d'invitation et la Flamme se retirent chacun d'un geste (conformité H-2) : l'utilisateur
+                // voit la carte telle qu'elle partira. Sans jeton, l'aperçu montre l'emplacement du lien en pointillé :
+                // « Partager » le crée, et la carte part avec le vrai lien. Sans rien de lisible, rien à régler.
+                if session.offersLinkChoice {
+                    Toggle(isOn: Binding(get: { session.linkOnCard }, set: { session.setLinkOnCard($0) })) {
+                        Text(String(localized: "game.referral.link_toggle", defaultValue: "Mon lien d'invitation sur la carte", bundle: .main))
+                            .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
+                            .foregroundColor(.white)
+                    }
+                    .tint(MeeshyColors.brandPrimary)
+                    .padding(.horizontal, MeeshySpacing.xl)
+                    .accessibilityIdentifier("game.photo.link_toggle")
+                }
                 if session.hasFlame, session.referral != nil {
                     Toggle(isOn: Binding(get: { session.flameOnCard }, set: { session.setFlameOnCard($0) })) {
                         Text(String(localized: "game.referral.flame_toggle", defaultValue: "Ma Flamme sur la carte", bundle: .main))
@@ -283,7 +295,11 @@ struct GamePhotoFlowView: View {
                     Task { await session.save(square: squareFormat) }
                 }
                 resultButton(String(localized: "game.photo.share", defaultValue: "Partager", bundle: .main), "square.and.arrow.up", id: "game.photo.share") {
-                    showsShare = true
+                    // Le jeton se crée AU TOUCHER, la carte est recomposée avec le vrai lien, puis la feuille s'ouvre.
+                    Task {
+                        await session.prepareShare()
+                        showsShare = true
+                    }
                 }
                 resultButton(kept == true
                     ? String(localized: "game.photo.kept", defaultValue: "Gardée", bundle: .main)

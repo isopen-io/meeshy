@@ -135,4 +135,35 @@ describe('les extensions du bloc game', () => {
     expect(block!.league).toBeUndefined();
     expect(block!.season).toBeUndefined();
   });
+
+  it('sert la carte des raretés mesurées à côté des sept extensions (#9489)', async () => {
+    const db = fakeGameDb();
+    veteran(db);
+    db.achievementRarityStat.rows.push(
+      { id: 'r1', milestoneKey: 'achievement.editor', holders: 150, population: 2000, rarity: 'rare', measuredAt: new Date() },
+      { id: 'r2', milestoneKey: 'achievement.two', holders: 2, population: 2000, rarity: 'mythic', measuredAt: new Date() },
+    );
+
+    const block = await build(db);
+
+    expect(gameBlockSchema.safeParse(block).success).toBe(true);
+    expect(block!.achievementRarities).toEqual({ 'achievement.editor': { rarity: 'rare', holders: 150, population: 2000 } });
+  });
+
+  it('sans rareté affichable, la clé est ABSENTE : un serveur antérieur et celui-ci disent la même chose', async () => {
+    const db = fakeGameDb();
+    veteran(db);
+    expect(Object.keys((await build(db))!)).not.toContain('achievementRarities');
+  });
+
+  it('une carte de raretés qui ne se lit pas ne retire PAS les sept extensions', async () => {
+    const db = fakeGameDb();
+    veteran(db);
+    (db.achievementRarityStat as unknown as { findMany: () => Promise<never> }).findMany = () => Promise.reject(new Error('down'));
+
+    const block = await build(db);
+
+    expect(block!.league).toBeDefined();
+    expect(block!.achievementRarities).toBeUndefined();
+  });
 });

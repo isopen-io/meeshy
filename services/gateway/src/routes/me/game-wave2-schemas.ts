@@ -106,3 +106,27 @@ export const userShowcaseResponse = envelope(
 );
 
 export const privacyResponse = envelope(strict({ gameHidden: { type: 'boolean' }, friendsLeagueOptOut: { type: 'boolean' } }));
+
+export const gameSettingsResponse = envelope(strict({ gameHidden: { type: 'boolean' }, friendsLeagueOptOut: { type: 'boolean' }, visibility: visibilityShape }));
+
+const nullableTier = strict({ tier: nullableString });
+
+export const userGameProfileResponse = envelope(
+  strict({
+    visible: { type: 'boolean' },
+    standing: {
+      anyOf: [
+        { type: 'null' },
+        strict({
+          level: { type: 'number' },
+          tier: { type: 'string' },
+          prestige: { type: 'number' },
+          flame: nullableString,
+          rank: { type: 'string' },
+          division: { type: ['number', 'null'] },
+        }),
+      ],
+    },
+    treasury: { anyOf: [{ type: 'null' }, nullableTier] },
+  }),
+);

@@ -25,6 +25,8 @@ final class GameWave2ModelTests: XCTestCase {
         let sut: GameWave2Model
         let service: MockGameWave2Service
         let cache: MemoryCache
+        let prefs: GameDevicePrefsStore
+        let userId: String
     }
 
     private func makeSUT(game: GameBlock = GameWave2Fixture.game()) -> Rig {
@@ -42,11 +44,12 @@ final class GameWave2ModelTests: XCTestCase {
         )
         let service = MockGameWave2Service()
         let cache = MemoryCache()
+        let prefs = GameDevicePrefsStore(userId: userId, defaults: UserDefaults(suiteName: userId) ?? .standard)
         let sut = GameWave2Model(
             progression: progression, service: service, cache: cache, friends: NoFriends(),
-            prefs: GameDevicePrefsStore(userId: userId, defaults: UserDefaults(suiteName: userId) ?? .standard), currentUserId: userId
+            prefs: prefs, currentUserId: userId
         )
-        return Rig(sut: sut, service: service, cache: cache)
+        return Rig(sut: sut, service: service, cache: cache, prefs: prefs, userId: userId)
     }
 
     private func week(rank: Int = 3) -> LeagueWeekResponse {
@@ -164,5 +167,100 @@ final class GameWave2ModelTests: XCTestCase {
         }
         XCTAssertFalse(after, "ni sur le disque d'une personne qui n'y joue plus")
         XCTAssertEqual(rig.service.consentCalls.first?.consent, false)
+    }
+
+    // MARK: - La ligue s'ouvre : le classement se lit
+
+    func test_leagueLoadKey_changesWhenTheLeagueOpens_soTheStandingsAreRead() {
+        let before = GameLeagueScreen.loadKey(tab: .mine, access: .consentRequired)
+        let after = GameLeagueScreen.loadKey(tab: .mine, access: .open)
+
+        XCTAssertNotEqual(before, after, "consentir ouvre la ligue : le classement doit se lire sans quitter la page")
+        XCTAssertEqual(
+            GameLeagueScreen.loadKey(tab: .friends, access: .consentRequired),
+            GameLeagueScreen.loadKey(tab: .friends, access: .open),
+            "la ligue Amis ne dépend pas du consentement : elle ne se relit pas pour lui"
+        )
+    }
+
+    // MARK: - L'opposition à la ligue Amis (conformité B-2)
+
+    func test_friendsLeagueOptOut_theConfirmedChoiceOutlivesTheScreen() async {
+        let rig = makeSUT()
+        XCTAssertFalse(rig.sut.friendsLeagueOptedOut)
+        rig.service.privacyResult = .success(GamePrivacyResponse(gameHidden: false, friendsLeagueOptOut: true))
+
+        await rig.sut.setFriendsLeagueOptOut(true)
+
+        XCTAssertTrue(rig.sut.friendsLeagueOptedOut)
+        let reopened = GameWave2Model(
+            progression: rig.sut.progression, service: rig.service, cache: rig.cache, friends: NoFriends(),
+            prefs: rig.prefs, currentUserId: rig.userId
+        )
+        XCTAssertTrue(reopened.friendsLeagueOptedOut, "l'interrupteur dit ce que le serveur a confirmé, même après être sorti de la page")
+    }
+
+    func test_friendsLeagueOptOut_aFailure_leavesTheSwitchWhereItWas() async {
+        let rig = makeSUT()
+
+        await rig.sut.setFriendsLeagueOptOut(true)
+
+        XCTAssertFalse(rig.sut.friendsLeagueOptedOut)
+        XCTAssertNotNil(rig.sut.errors.friendsOptOut)
+    }
+
+    // MARK: - La vitrine d'un autre (#9387, conformité D-1, D-5)
+
+    private func visitorShowcase() -> UserShowcaseResponse {
+        UserShowcaseResponse(visible: true, items: [GameVisitorTrophyItem(key: "season-cup:1", awardedMonth: "2026-12")], order: [])
+    }
+
+    func test_showcaseLoader_aServerRefusal_forgetsTheCachedShowcase_andShowsNothing() async {
+        for answer: Error in [
+            MeeshyError.forbidden(reason: nil, body: nil),
+            MeeshyError.server(statusCode: 404, message: "absent"),
+            refusal(.leagueLocked),
+        ] {
+            let service = MockGameWave2Service()
+            let cache = MemoryCache()
+            let name = GameWave2CacheName.showcase("u1")
+            await cache.save(visitorShowcase(), name: name)
+            service.showcaseResult = .failure(answer)
+
+            let served = await GameShowcaseLoader(service: service, cache: cache, currentUserId: "me").load(userId: "u1")
+
+            XCTAssertNil(served, "le serveur a répondu : une vitrine fermée (blocage, réglage) ne se rouvre pas depuis le disque — \(answer)")
+            let kept = await cache.has(name)
+            XCTAssertFalse(kept, "ni ne reste sur l'appareil — \(answer)")
+        }
+    }
+
+    func test_showcaseLoader_withoutNetwork_servesWhatTheDiskKept() async {
+        let service = MockGameWave2Service()
+        let cache = MemoryCache()
+        await cache.save(visitorShowcase(), name: GameWave2CacheName.showcase("u1"))
+
+        let served = await GameShowcaseLoader(service: service, cache: cache, currentUserId: "me").load(userId: "u1")
+
+        XCTAssertEqual(served, visitorShowcase())
+    }
+
+    func test_showcaseLoader_cached_paintsFromTheDiskWithoutTheNetwork() async {
+        let service = MockGameWave2Service()
+        let cache = MemoryCache()
+        await cache.save(visitorShowcase(), name: GameWave2CacheName.showcase("u1"))
+
+        let cached = await GameShowcaseLoader(service: service, cache: cache, currentUserId: "me").cached(userId: "u1")
+
+        XCTAssertEqual(cached, visitorShowcase())
+        XCTAssertTrue(service.showcaseUserIds.isEmpty, "le cache se peint avant toute requête")
+    }
+
+    // MARK: - Les propositions de photo suivent les réglages de l'appareil
+
+    func test_photoOffers_followTheHiddenGameAndTheCelebrationsSwitch() {
+        XCTAssertTrue(GameDevicePrefs().offersPhotos)
+        XCTAssertFalse(GameDevicePrefs(hidden: true).offersPhotos, "jeu masqué : aucune carte proposée")
+        XCTAssertFalse(GameDevicePrefs(celebrations: false).offersPhotos, "célébrations coupées : aucune carte proposée")
     }
 }

@@ -9,6 +9,7 @@ import {
 } from './messaging/retractMessageNotifications';
 import { getSharedNotificationService } from './notifications/notification-service-registry';
 import { loadQuoteDescendants } from './messaging/quoteCascade';
+import { guardedInterval } from '../utils/guarded-timer';
 
 const log = enhancedLogger.child({ module: 'EphemeralRecipientExpiryService' });
 
@@ -101,9 +102,9 @@ export class EphemeralRecipientExpiryService {
     // Une passe immédiate : les échéances échues pendant l'arrêt sont
     // précisément celles qui ont le plus dépassé leur heure.
     void this.sweep().catch((err) => log.warn('initial ephemeral expiry sweep failed', { err }));
-    this.interval = setInterval(() => {
+    this.interval = guardedInterval({ name: 'ephemeral-recipient-expiry-sweep', everyMs: intervalMs, logger: log, run: () => {
       void this.sweep().catch((err) => log.warn('scheduled ephemeral expiry sweep failed', { err }));
-    }, intervalMs);
+    } });
     this.interval.unref?.();
     log.info('ephemeral recipient expiry sweep started', { intervalMs, batchSize: this.batchSize });
   }

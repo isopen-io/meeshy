@@ -13,6 +13,7 @@
  *   POST /me/game/season/steps/:step/claim   réclamer une étape de la saison
  *   POST /me/game/season/seal                acheter le Sceau (10 Meeshes)
  *   PUT  /me/game/showcase/order             ranger les trophées
+ *   GET  /me/game/privacy                    relire les réglages du jeu (#9481)
  *   PUT  /me/game/visibility                 régler qui voit la vitrine, le rang, le trésor, l'Atlas
  *   POST /me/game/prestige                   passer en Prestige au niveau 100
  *
@@ -46,6 +47,7 @@ import {
   duoAbandonResponse,
   duoAcceptResponse,
   duoInviteResponse,
+  gameSettingsResponse,
   leagueConsentResponse,
   leagueFriendsResponse,
   leaguePseudonymResponse,
@@ -356,6 +358,27 @@ export async function meGameWave2Routes(fastify: FastifyInstance, options: GameW
         return { gameHidden: settings.gameHidden, friendsLeagueOptOut: settings.friendsLeagueOptedOut };
       });
     },
+  );
+
+  fastify.get(
+    '/game/privacy',
+    {
+      onRequest: [fastify.authenticate],
+      config: { rateLimit: gameRateLimitConfig('settings', 60, false) },
+      schema: {
+        description:
+          "Les réglages du jeu de l'authentifié, LUS depuis le serveur (#9481) : « Jeu masqué », l'opposition à la ligue Amis et les quatre " +
+          "visibilités (vitrine, rang, trésor, Atlas). Les clients relisent cet état ; ils ne gardent plus la dernière réponse `PUT`.",
+        tags: ['me', 'game'],
+        summary: 'Get the game settings',
+        response: { 200: gameSettingsResponse, ...reasonedErrors },
+      },
+    },
+    (request: FastifyRequest, reply: FastifyReply) =>
+      read(request, reply, async (userId) => {
+        const settings = await profile.settings(userId);
+        return { gameHidden: settings.gameHidden, friendsLeagueOptOut: settings.friendsLeagueOptedOut, visibility: settings.visibility };
+      }),
   );
 
   // --- Le Prestige ---

@@ -78915,6 +78915,53 @@
         }
       }
     },
+    "composer.publish.as.storyAndReel": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "نشر القصة والريل"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Story und Reel veröffentlichen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Publish story and reel"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Publicar historia y reel"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Publier la story et le réel"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pubblica storia e reel"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Publicar story e reel"
+          }
+        }
+      }
+    },
     "composer.publish.as.story": {
       "extractionState": "manual",
       "localizations": {
@@ -242209,6 +242256,53 @@
         }
       }
     },
+    "game.referral.link_toggle": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "رابط دعوتي على البطاقة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mein Einladungslink auf der Karte"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "My invitation link on the card"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mi enlace de invitación en la tarjeta"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mon lien d'invitation sur la carte"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Il mio link d'invito sulla carta"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meu link de convite no cartão"
+          }
+        }
+      }
+    },
     "game.referral.share_text": {
       "extractionState": "manual",
       "localizations": {
@@ -249819,6 +249913,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Atenção: sua liga (nível 10) e sua dupla (nível 20) se fecham até que seu nível recorde volte a eles."
+          }
+        }
+      }
+    },
+    "game2.prestige.confirm.consent": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تبقى موافقتك على الدوري العام مسجّلة: تستعيد دوريك عند المستوى 10."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deine Zustimmung zur öffentlichen Liga bleibt gespeichert: Du bekommst deine Liga ab Level 10 zurück."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your consent to the public league stays on record: you get your league back at level 10."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tu consentimiento a la liga pública sigue registrado: recuperas tu liga en el nivel 10."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ton consentement à la ligue publique reste enregistré : tu retrouves ta ligue au niveau 10."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Il tuo consenso alla lega pubblica resta registrato: ritrovi la tua lega al livello 10."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seu consentimento à liga pública continua registrado: você reencontra sua liga no nível 10."
           }
         }
       }

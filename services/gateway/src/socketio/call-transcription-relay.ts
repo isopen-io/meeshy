@@ -38,6 +38,7 @@ import type {
   CallTranscriptionSegmentEvent,
   CallTranslatedSegmentEvent,
 } from '@meeshy/shared/types/video-call';
+import { guardedTimeout } from '../utils/guarded-timer';
 
 /**
  * Ce que le relais emprunte à l'instance.
@@ -259,11 +260,11 @@ export async function translateAndEmitSegment(
 
         return new Promise<void>((resolve) => {
           const TIMEOUT_MS = 10_000;
-          const timer = setTimeout(() => {
+          const timer = guardedTimeout({ name: 'call-transcription-segment-timeout', afterMs: TIMEOUT_MS, logger, run: () => {
             zmqClient.off(scopedEvent, onResult);
             emitTranslatedSegmentTo(socket, listeners, buildTranslatedSegment(data, speaker, targetLanguage));
             resolve();
-          }, TIMEOUT_MS);
+          } });
           timer.unref?.();
 
           const onResult = (event: { taskId: string; result: { translatedText: string; targetLanguage: string } }) => {

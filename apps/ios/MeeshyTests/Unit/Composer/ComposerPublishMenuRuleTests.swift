@@ -360,3 +360,195 @@ final class ComposerPublishMenuRuleTests: XCTestCase {
                       "…dans l'habillage partagé, qui porte le gate.")
     }
 }
+
+/// **Une story part AUSSI en réel d'un seul geste, et le format armé est celui
+/// qui part** (#9476).
+///
+/// Le porteur a publié une story (photo, texte, son emprunté de 238 s) qu'il
+/// voulait aussi en réel : le menu n'armait qu'UN format, et un seul
+/// `POST /posts` `type: STORY` est parti. Ces témoins tiennent les trois
+/// moitiés : le menu coche les DEUX formats, la flèche presse ce qui est coché
+/// (menu → `requestPublish` → type publié), et rien n'annonce un réel qui ne
+/// partirait pas.
+@MainActor
+final class ComposerPublishAlsoAsReelTests: XCTestCase {
+
+    private let candidats: [ComposerFormat] = [.story, .post, .reel]
+
+    /// Le menu d'une story qui QUALIFIE pour un réel (`ComposerReelGate` : un
+    /// son de 238 s) — le réel est choisissable.
+    private func menuQualifiant() -> [ComposerPublishMenuRule.Entry] {
+        ComposerPublishMenuRule.entries(candidates: candidats, offered: candidats,
+                                        carriesMoreThanText: true, slideCount: 1, layoutsTravel: true)
+    }
+
+    /// Le menu d'une story qui NE qualifie pas — le réel est grisé, avec sa raison.
+    private func menuNonQualifiant() -> [ComposerPublishMenuRule.Entry] {
+        ComposerPublishMenuRule.entries(candidates: candidats, offered: [.story, .post],
+                                        carriesMoreThanText: true, slideCount: 1, layoutsTravel: true)
+    }
+
+    private let story = ComposerPublishChoice(format: .story, layout: nil)
+    private let reel = ComposerPublishChoice(format: .reel, layout: nil)
+    private let storyEtReel = ComposerPublishChoice(format: .story, layout: nil, alsoAsReel: true)
+
+    // MARK: - Quand l'offre existe
+
+    func test_companionReelOffered_storyQuiQualifie_uneScene_offreLesDeux() {
+        XCTAssertTrue(ComposerPublishMenuRule.companionReelOffered(entries: menuQualifiant(), slideCount: 1))
+    }
+
+    func test_companionReelOffered_reelGrise_nOffreRien() {
+        XCTAssertFalse(ComposerPublishMenuRule.companionReelOffered(entries: menuNonQualifiant(), slideCount: 1),
+                       "Un réel que la composition ne qualifie pas ne peut pas partir avec la story.")
+    }
+
+    func test_companionReelOffered_plusieursScenes_nOffreRien() {
+        XCTAssertFalse(ComposerPublishMenuRule.companionReelOffered(entries: menuQualifiant(), slideCount: 2),
+                       "Une story de deux slides partirait en deux réels.")
+    }
+
+    func test_companionReelOffered_republication_nOffreRien() {
+        XCTAssertFalse(ComposerPublishMenuRule.companionReelOffered(entries: menuQualifiant(), slideCount: 1,
+                                                                    isRepost: true))
+    }
+
+    func test_companionReelOffered_sansMenu_nOffreRien() {
+        XCTAssertFalse(ComposerPublishMenuRule.companionReelOffered(entries: nil, slideCount: 1))
+    }
+
+    // MARK: - Le menu coche les DEUX formats
+
+    func test_toucherReel_surUneStory_ajouteLeReel() {
+        XCTAssertEqual(ComposerPublishMenuRule.toggled(.reel, armed: story, companionReelOffered: true), storyEtReel)
+    }
+
+    func test_retoucherReel_retireLeReel_laStoryReste() {
+        XCTAssertEqual(ComposerPublishMenuRule.toggled(.reel, armed: storyEtReel, companionReelOffered: true), story)
+    }
+
+    func test_toucherStory_quandLesDeuxSontCoches_neGardeQueLeReel() {
+        XCTAssertEqual(ComposerPublishMenuRule.toggled(.story, armed: storyEtReel, companionReelOffered: true), reel,
+                       "Décocher la story ne doit jamais laisser le menu sans rien de coché.")
+    }
+
+    func test_toucherStory_surUnReel_cocheLesDeux() {
+        XCTAssertEqual(ComposerPublishMenuRule.toggled(.story, armed: reel, companionReelOffered: true), storyEtReel)
+    }
+
+    func test_toucherPost_armeLePostSeul() {
+        XCTAssertEqual(ComposerPublishMenuRule.toggled(.post, armed: storyEtReel, companionReelOffered: true),
+                       ComposerPublishChoice(format: .post, layout: nil))
+    }
+
+    func test_sansOffre_toucherReel_armeLeReelSeul_commeAvant() {
+        XCTAssertEqual(ComposerPublishMenuRule.toggled(.reel, armed: story, companionReelOffered: false), reel)
+    }
+
+    func test_storyEtReel_cocheLesDeuxEntrees_etPasLePost() throws {
+        let entrees = menuQualifiant()
+        let storyEntree = try XCTUnwrap(entrees.first { $0.format == .story })
+        let reelEntree = try XCTUnwrap(entrees.first { $0.format == .reel })
+        let postEntree = try XCTUnwrap(entrees.first { $0.format == .post })
+        XCTAssertTrue(ComposerPublishMenuRule.isChecked(storyEntree, armed: storyEtReel))
+        XCTAssertTrue(ComposerPublishMenuRule.isChecked(reelEntree, armed: storyEtReel))
+        XCTAssertFalse(ComposerPublishMenuRule.isChecked(postEntree, armed: storyEtReel))
+    }
+
+    // MARK: - Ce qui est armé est ce qui part (le doute de l'issue)
+
+    /// « Si Réel a été touché, `armed()` a pu revenir au format de la porte » :
+    /// non, tant que le réel est OFFERT — il ne retombe sur la porte que grisé,
+    /// et la capsule dit alors « Publier la story ».
+    func test_armed_reelChoisiEtOffert_resteLeReel() {
+        XCTAssertEqual(ComposerPublishMenuRule.armed(chosen: reel, defaultFormat: .story,
+                                                     entries: menuQualifiant()), reel)
+    }
+
+    func test_armed_reelChoisiPuisGrise_retombeSurLaStory_queLaCapsuleNomme() {
+        let arme = ComposerPublishMenuRule.armed(chosen: reel, defaultFormat: .story, entries: menuNonQualifiant())
+        XCTAssertEqual(arme, story)
+        XCTAssertEqual(ComposerPublishMenuCopy.publishTitle(for: arme), ComposerPublishMenuCopy.publishTitle(.story))
+    }
+
+    func test_armed_storyEtReel_offert_partEnsemble() {
+        XCTAssertEqual(ComposerPublishMenuRule.armed(chosen: storyEtReel, defaultFormat: .story,
+                                                     entries: menuQualifiant(), companionReelOffered: true),
+                       storyEtReel)
+    }
+
+    func test_armed_storyEtReel_plusOffert_laStoryPartSeule() {
+        XCTAssertEqual(ComposerPublishMenuRule.armed(chosen: storyEtReel, defaultFormat: .story,
+                                                     entries: menuQualifiant(), companionReelOffered: false),
+                       story, "Un réel qui ne partira pas n'est jamais annoncé.")
+    }
+
+    func test_laCapsule_nommeLesDeuxFormats() throws {
+        let titre = try XCTUnwrap(ComposerPublishMenuCopy.publishTitle(for: storyEtReel))
+        XCTAssertNotEqual(titre, ComposerPublishMenuCopy.publishTitle(.story))
+        XCTAssertNotEqual(titre, ComposerPublishMenuCopy.publishTitle(.reel))
+    }
+
+    // MARK: - Le chemin menu → requestPublish → type publié
+
+    func test_dispatch_reelArme_sousLAtelier_presseLeReel() {
+        XCTAssertEqual(ComposerPublishMenuRule.dispatch(surface: .scene, choice: reel),
+                       .atelier(.reel, alsoAsReel: false))
+    }
+
+    func test_dispatch_storyEtReel_sousLAtelier_presseLaStory_avecLeReel() {
+        XCTAssertEqual(ComposerPublishMenuRule.dispatch(surface: .scene, choice: storyEtReel),
+                       .atelier(.story, alsoAsReel: true))
+    }
+
+    func test_dispatch_storyEtReel_sousLeDocument_publieLaScene_avecLeReel() {
+        XCTAssertEqual(ComposerPublishMenuRule.dispatch(surface: .document, choice: storyEtReel),
+                       .storyScene(.story, alsoAsReel: true))
+    }
+
+    func test_dispatch_reelArme_sousLeDocument_partParLeDocument() {
+        XCTAssertEqual(ComposerPublishMenuRule.dispatch(surface: .document, choice: reel), .document(reel))
+    }
+
+    func test_laTelecommande_retientLeTypeEtLeReel_duGeste() {
+        let telecommande = ComposerPublishTrigger()
+        telecommande.requestPublish(as: .reel)
+        XCTAssertEqual(telecommande.requestedTargetType, .reel, "Le réel armé part en REEL.")
+        XCTAssertFalse(telecommande.requestedAlsoAsReel)
+
+        telecommande.requestPublish(as: .story, alsoAsReel: true)
+        XCTAssertEqual(telecommande.requestedTargetType, .story)
+        XCTAssertTrue(telecommande.requestedAlsoAsReel)
+
+        telecommande.disarm()
+        XCTAssertFalse(telecommande.requestedAlsoAsReel, "Une télécommande désarmée ne garde rien du geste.")
+    }
+
+    func test_leReel_nAccompagneQuUneStory() {
+        XCTAssertTrue(ComposerPublishTrigger.publishedAlsoAsReel(requested: true, served: .story))
+        XCTAssertFalse(ComposerPublishTrigger.publishedAlsoAsReel(requested: true, served: .post))
+        XCTAssertFalse(ComposerPublishTrigger.publishedAlsoAsReel(requested: false, served: .story))
+    }
+
+    func test_laChargeDeHandOff_porteLeReel_sansPerdreLeReste() {
+        let base = ComposerMediaAccessibility(mediaAlt: ["m": "alt"], mediaCaption: ["m": "légende"],
+                                              allowSoundExtraction: true)
+        let portee = base.carryingAlsoAsReel(true)
+        XCTAssertTrue(portee.alsoAsReel)
+        XCTAssertEqual(portee.mediaAlt, base.mediaAlt)
+        XCTAssertEqual(portee.mediaCaption, base.mediaCaption)
+        XCTAssertEqual(portee.allowSoundExtraction, true)
+        XCTAssertFalse(ComposerMediaAccessibility.empty.alsoAsReel, "Un appelant historique publie la story seule.")
+    }
+
+    // MARK: - Ce qui part sur le fil
+
+    func test_leFil_nePorteLeReel_queSurUneStoryOriginaleDUneScene() {
+        XCTAssertEqual(StoryAlsoAsReelWire.flag(requested: true, type: .story, slideCount: 1, isRepost: false), true)
+        XCTAssertNil(StoryAlsoAsReelWire.flag(requested: true, type: .story, slideCount: 2, isRepost: false))
+        XCTAssertNil(StoryAlsoAsReelWire.flag(requested: true, type: .reel, slideCount: 1, isRepost: false))
+        XCTAssertNil(StoryAlsoAsReelWire.flag(requested: true, type: .story, slideCount: 1, isRepost: true))
+        XCTAssertNil(StoryAlsoAsReelWire.flag(requested: false, type: .story, slideCount: 1, isRepost: false),
+                     "Sans la demande, la clé reste absente — le corps d'un ancien client.")
+    }
+}

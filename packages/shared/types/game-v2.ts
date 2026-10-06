@@ -22,6 +22,10 @@
 import { z } from 'zod';
 
 import { DUO_STATUSES } from '../utils/game/duo.js';
+import { FLAME_FORMS } from '../utils/game/flame.js';
+import { ACHIEVEMENT_RARITIES, GLORY_RANKS } from '../utils/game/glory.js';
+import { LEVEL_TIER_KEYS } from '../utils/game/levels.js';
+import { TREASURY_TIERS } from '../utils/game/treasury.js';
 import { LEAGUE_KEYS, isValidLeaguePseudonym } from '../utils/game/league.js';
 import { SEASON_STEPS } from '../utils/game/season.js';
 import { SHOWCASE_VISIBILITIES } from '../utils/game/trophies.js';
@@ -157,8 +161,23 @@ export const gameVisibilitySchema = z.object({
 });
 
 /**
- * Les sept extensions du bloc `game`. Chacune est optionnelle ET tolérante :
- * `optional().catch(undefined)` — une extension illisible tombe seule.
+ * La rareté MESURÉE de chaque succès (#9489, #9390) : `milestoneKey` → `{ rarity, holders,
+ * population }`. FAIL-CLOSED côté serveur : un succès sous `RARITY_MIN_DISPLAY_HOLDERS`
+ * titulaires (ou sous `RARITY_MIN_POPULATION` comptes) est ABSENT de la carte — jamais servi
+ * avec une rareté nulle. Le client ne compte rien : il lit cette carte, et un succès absent
+ * dit « rareté en cours de mesure ».
+ */
+export const gameAchievementRarityEntrySchema = z.object({
+  rarity: enumOf(ACHIEVEMENT_RARITIES),
+  holders: nonNegativeInt,
+  population: nonNegativeInt,
+});
+export const gameAchievementRaritiesSchema = z.record(z.string().min(1).max(96), gameAchievementRarityEntrySchema);
+
+/**
+ * Les extensions du bloc `game` : les sept de la vague 2 et la carte des raretés.
+ * Chacune est optionnelle ET tolérante : `optional().catch(undefined)` — une
+ * extension illisible tombe seule.
  */
 export const gameBlockExtensionShape = {
   league: gameLeagueBlockSchema.optional().catch(undefined),
@@ -168,6 +187,7 @@ export const gameBlockExtensionShape = {
   atlas: gameAtlasBlockSchema.optional().catch(undefined),
   prestige: gamePrestigeBlockSchema.optional().catch(undefined),
   visibility: gameVisibilitySchema.optional().catch(undefined),
+  achievementRarities: gameAchievementRaritiesSchema.optional().catch(undefined),
 };
 
 // --- La ligue ---
@@ -298,6 +318,46 @@ export const gamePrivacyRequestSchema = writeRequest
   .refine((body) => body.gameHidden !== undefined || body.friendsLeagueOptOut !== undefined, { message: 'at least one switch' });
 export const gamePrivacyResponseSchema = z.object({ gameHidden: z.boolean(), friendsLeagueOptOut: z.boolean() });
 
+/**
+ * `GET /me/game/privacy` (#9481) : l'ÉTAT des réglages du jeu, servi par le serveur. Les clients
+ * ne gardent plus l'état de la dernière réponse `PUT` : ils relisent. Le nom de la route est
+ * celui de l'écriture ; la lecture porte aussi les quatre visibilités.
+ */
+export const gameSettingsResponseSchema = z.object({
+  gameHidden: z.boolean(),
+  friendsLeagueOptOut: z.boolean(),
+  visibility: gameVisibilitySchema,
+});
+
+// --- Le profil de jeu d'un AUTRE membre ---
+
+/**
+ * Ce qu'un lecteur apprend du jeu d'un autre (#9481) — jamais un compte exact : le niveau et son
+ * palier, les étoiles de Prestige, la FORME de la Flamme (jamais ses jours), le rang de Gloire et sa
+ * division (jamais la Gloire), le PALIER du trésor (jamais les Meeshes). Aucune présence, aucune
+ * date. `standing` suit le réglage `rank`, `treasury` le réglage `treasury` : un refus (réglage,
+ * blocage, « Jeu masqué », caché de la recherche, compte inconnu) rend `visible: false` et deux
+ * blocs nuls — la MÊME réponse pour un compte qui n'existe pas.
+ */
+export const gameStandingSchema = z.object({
+  level: z.number().int().min(1).max(100),
+  tier: enumOf(LEVEL_TIER_KEYS),
+  prestige: z.number().int().min(0).max(5),
+  /** `null` : pas de Flamme allumée — ou celle-ci n'est pas à montrer. */
+  flame: enumOf(FLAME_FORMS.map((form) => form.key)).nullable(),
+  rank: enumOf<(typeof GLORY_RANKS)[number]['key'] | 'mythe'>([...GLORY_RANKS.map((r) => r.key), 'mythe']),
+  /** `null` pour Mythe. */
+  division: z.union([z.literal(3), z.literal(2), z.literal(1)]).nullable(),
+});
+
+export const gameShownTreasurySchema = z.object({ tier: enumOf(TREASURY_TIERS.map((tier) => tier.key)).nullable() });
+
+export const userGameProfileResponseSchema = z.object({
+  visible: z.boolean(),
+  standing: gameStandingSchema.nullable(),
+  treasury: gameShownTreasurySchema.nullable(),
+});
+
 // --- Le Prestige ---
 
 export const prestigeRequestSchema = writeRequest;
@@ -341,5 +401,10 @@ export type ShowcaseVisibilityResponse = z.infer<typeof showcaseVisibilityRespon
 export type UserShowcaseResponse = z.infer<typeof userShowcaseResponseSchema>;
 export type GamePrivacyRequest = z.infer<typeof gamePrivacyRequestSchema>;
 export type GamePrivacyResponse = z.infer<typeof gamePrivacyResponseSchema>;
+export type GameAchievementRarityEntry = z.infer<typeof gameAchievementRarityEntrySchema>;
+export type GameAchievementRarities = z.infer<typeof gameAchievementRaritiesSchema>;
+export type GameSettingsResponse = z.infer<typeof gameSettingsResponseSchema>;
+export type GameStanding = z.infer<typeof gameStandingSchema>;
+export type UserGameProfileResponse = z.infer<typeof userGameProfileResponseSchema>;
 export type PrestigeRequest = z.infer<typeof prestigeRequestSchema>;
 export type PrestigeResponse = z.infer<typeof prestigeResponseSchema>;

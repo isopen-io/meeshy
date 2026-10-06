@@ -1,5 +1,4 @@
 import CoreImage
-import CoreVideo
 import Metal
 import MetalKit
 import QuartzCore
@@ -82,15 +81,9 @@ struct ComposerLookStripSurface: UIViewRepresentable {
 /// Le moteur de la bande : la trame réduite UNE fois, chaque case peinte par le
 /// peintre unique dans sa place de l'atlas, l'atlas recopié dans le drawable.
 final class ComposerLookStripRenderer: NSObject, MTKViewDelegate {
-    /// Ce qu'une place de l'atlas montre : la case, et le look qu'on y a peint.
-    private struct Slot: Equatable {
-        let index: Int
-        let look: ComposerPhotoLook
-    }
-
-    private let scenes: any ComposerLookSceneProviding
+    private let scenes: ComposerLookStripScenes
     /// La cadence du palier, jugée sur la file de l'objectif.
-    private let gate = ComposerFrameGate(fps: 0)
+    private let gate = ComposerLookStripFrameGate(fps: 0)
     private var source: (any ComposerFrameSourcing)?
     private var tiles: [ComposerLookStripTile] = []
     private var person = ComposerPhotoLookPerson.author(id: nil, displayName: nil, username: nil)
@@ -98,16 +91,24 @@ final class ComposerLookStripRenderer: NSObject, MTKViewDelegate {
     private var framing = ComposerFraming.identity
     /// Une trame admise attend d'être peinte dans toutes les cases.
     private var frameDue = false
+    /// La cadence du palier, et les trames demandées sans qu'une case ne se peigne.
+    private var fps = 0
+    private var requestsWithoutImage = 0
     private var atlas: MTLTexture?
     private var slotCount = ComposerLookStripGeometry.minimumSlots
-    private var slots: [Int: Slot] = [:]
-    private var reducedBuffer: CVPixelBuffer?
+    private var slots: [Int: ComposerLookStripSlot] = [:]
+    /// La trame réduite, texture privée réécrite dans le passage de chaque dessin.
+    /// Texture `.private` au suivi de dépendances par défaut (hazard tracking) et
+    /// passages d'une même file : Metal ordonne l'écriture d'un dessin après les
+    /// lectures du précédent. Sur un `MTLHeap` ou en `.untracked`, il faudrait des
+    /// barrières (`MTLFence`) ou une rotation de trois textures.
+    private var reducedTexture: MTLTexture?
     private weak var view: MTKView?
 
     nonisolated deinit {}
 
     init(scenes: any ComposerLookSceneProviding) {
-        self.scenes = scenes
+        self.scenes = ComposerLookStripScenes(provider: scenes)
         super.init()
     }
 
@@ -131,6 +132,8 @@ final class ComposerLookStripRenderer: NSObject, MTKViewDelegate {
     func update(tiles: [ComposerLookStripTile], source: any ComposerFrameSourcing, person: CallFramePerson,
                 date: Date, framing: ComposerFraming, fps: Int, view: MTKView) {
         gate.setFPS(fps)
+        self.fps = fps
+        view.contentScaleFactor = max(1, view.traitCollection.displayScale)
         let autreSource = self.source !== source
         let perime = autreSource || framing != self.framing || date != self.date || person != self.person
         if autreSource {
@@ -138,12 +141,17 @@ final class ComposerLookStripRenderer: NSObject, MTKViewDelegate {
             self.source = source
             let gate = self.gate
             source.setFrameHandler({ [weak self] presentedAt in
-                guard gate.admit(presentedAt: presentedAt) else { return }
-                Task { @MainActor [weak self] in self?.frameArrived() }
+                let admission = gate.admit(presentedAt: presentedAt)
+                guard admission != .refused else { return }
+                Task { @MainActor [weak self] in self?.frameArrived(live: admission == .paced) }
             }, for: ObjectIdentifier(self))
         }
-        if perime { slots = [:] }
+        if perime {
+            slots = [:]
+            scenes.reset()
+        }
         let changed = perime || tiles != self.tiles
+        if changed { requestsWithoutImage = 0 }
         self.tiles = tiles
         self.person = person
         self.date = date
@@ -157,12 +165,12 @@ final class ComposerLookStripRenderer: NSObject, MTKViewDelegate {
         view.delegate = nil
         atlas = nil
         slots = [:]
-        reducedBuffer = nil
+        reducedTexture = nil
     }
 
-    private func frameArrived() {
+    private func frameArrived(live: Bool) {
         guard !tiles.isEmpty else { return }
-        frameDue = true
+        frameDue = frameDue || live
         view?.setNeedsDisplay()
     }
 
@@ -172,17 +180,42 @@ final class ComposerLookStripRenderer: NSObject, MTKViewDelegate {
         let vivante = frameDue
         frameDue = false
         guard let queue = ComposerLookGPU.commandQueue, let drawable = view.currentDrawable,
-              let buffer = queue.makeCommandBuffer() else { return }
+              let buffer = queue.makeCommandBuffer() else {
+            requestFrameIfNeeded()
+            return
+        }
         let echelle = view.contentScaleFactor
         if let cellule = tiles.first?.rect.size, let atlas = atlas(cell: cellule, scale: echelle) {
-            paint(tiles.filter { vivante || slots[slot(of: $0)] != Slot(index: $0.index, look: $0.look) },
+            paint(ComposerLookStripPaintRule.tilesToPaint(tiles, painted: slots, slots: slotCount, live: vivante,
+                                                          scenesReady: scenesReady()),
                   into: atlas, cell: cellule, scale: echelle, buffer: buffer)
             present(atlas, into: drawable.texture, scale: echelle, buffer: buffer)
+            requestFrameIfNeeded()
         } else {
             clear(drawable.texture, buffer: buffer)
         }
         buffer.present(drawable)
         buffer.commit()
+    }
+
+    /// Une case sans image réclame sa trame — y compris quand ce dessin n'a pas
+    /// eu de drawable —, dans la borne de `mayRequestFrame`.
+    private func requestFrameIfNeeded() {
+        let manque = ComposerLookStripPaintRule.needsFrame(tiles, painted: slots, slots: slotCount)
+        guard ComposerLookStripPaintRule.mayRequestFrame(needsFrame: manque, sent: requestsWithoutImage,
+                                                         fps: fps) else { return }
+        requestsWithoutImage += 1
+        gate.requestFrame()
+    }
+
+    /// Les cases peintes sans leur cadre dont la scène vient de cuire.
+    private func scenesReady() -> Set<Int> {
+        let toile = ComposerLookPainter.thumbnailCanvas
+        return Set(tiles.filter { tile in
+            guard tile.look.frame != ComposerPhotoFrame.none,
+                  slots[slot(of: tile)].map({ $0.index == tile.index && !$0.complete }) ?? false else { return false }
+            return scenes.isReady(ComposerLookSceneKey(look: tile.look, canvas: toile, date: date, person: person))
+        }.map(\.index))
     }
 
     private func slot(of tile: ComposerLookStripTile) -> Int {
@@ -194,17 +227,16 @@ final class ComposerLookStripRenderer: NSObject, MTKViewDelegate {
     /// elle se repeint dès que la scène est prête.
     private func paint(_ tiles: [ComposerLookStripTile], into atlas: MTLTexture, cell: CGSize, scale: CGFloat,
                        buffer: MTLCommandBuffer) {
-        guard !tiles.isEmpty, let source, let frame = source.latestImage(), let petit = reduced(frame) else { return }
+        guard !tiles.isEmpty, let source, let frame = source.latestImage(),
+              let petit = reduced(frame, buffer: buffer) else { return }
         let destination = CIRenderDestination(mtlTexture: atlas, commandBuffer: buffer)
         destination.isFlipped = true
         destination.colorSpace = ComposerLiveLookRule.colorSpace
         let toile = ComposerLookPainter.thumbnailCanvas
         tiles.forEach { tile in
             let cle = ComposerLookSceneKey(look: tile.look, canvas: toile, date: date, person: person)
-            let scene = scenes.cached(cle)
-            if tile.look.frame != ComposerPhotoFrame.none, scene == nil {
-                scenes.prepare(cle) { [weak self] in self?.view?.setNeedsDisplay() }
-            }
+            let scene = tile.look.frame == ComposerPhotoFrame.none
+                ? nil : scenes.scene(for: cle) { [weak self] in self?.view?.setNeedsDisplay() }
             let look = tile.look.frame != ComposerPhotoFrame.none && scene == nil
                 ? ComposerPhotoLook(filter: tile.look.filter) : tile.look
             let peinte = ComposerLookPainter.paint(petit, look: look, framing: framing, scene: scene, canvas: toile,
@@ -218,7 +250,8 @@ final class ComposerLookStripRenderer: NSObject, MTKViewDelegate {
                 .concatenating(CGAffineTransform(translationX: cible.minX, y: cible.minY)))
             guard (try? ComposerLookGPU.context.startTask(toRender: posee, from: cible, to: destination,
                                                           at: cible.origin)) != nil else { return }
-            slots[place] = Slot(index: tile.index, look: look)
+            slots[place] = ComposerLookStripSlot(index: tile.index, look: tile.look, complete: look == tile.look)
+            requestsWithoutImage = 0
         }
     }
 
@@ -273,25 +306,32 @@ final class ComposerLookStripRenderer: NSObject, MTKViewDelegate {
         return neuf
     }
 
-    /// **La source réduite UNE fois** pour toutes les cases (spec § 5).
-    private func reduced(_ frame: CIImage) -> CIImage? {
+    /// **La source réduite UNE fois** pour toutes les cases (spec § 5), dans le
+    /// passage du dessin : ni second rendu, ni attente sur le fil principal. Le
+    /// grand côté garde 2 × 288 px — deux fois la toile d'une case, de quoi
+    /// recadrer sans flou.
+    private func reduced(_ frame: CIImage, buffer: MTLCommandBuffer) -> CIImage? {
         let plusGrand = max(frame.extent.width, frame.extent.height)
         guard plusGrand > 0, !frame.extent.isInfinite else { return nil }
-        let echelle = min(1, 576 / plusGrand)
+        let echelle = min(1, 2 * ComposerLookPainter.thumbnailCanvas.height / plusGrand)
         let petit = frame.transformed(by: CGAffineTransform(translationX: -frame.extent.minX, y: -frame.extent.minY)
             .concatenating(CGAffineTransform(scaleX: echelle, y: echelle)))
         let largeur = Int(petit.extent.width.rounded()), hauteur = Int(petit.extent.height.rounded())
-        guard largeur > 0, hauteur > 0 else { return nil }
-        if reducedBuffer.map({ CVPixelBufferGetWidth($0) != largeur || CVPixelBufferGetHeight($0) != hauteur }) ?? true {
-            var tampon: CVPixelBuffer?
-            let attributs: [CFString: Any] = [kCVPixelBufferIOSurfacePropertiesKey: [String: Any](),
-                                              kCVPixelBufferMetalCompatibilityKey: true]
-            CVPixelBufferCreate(kCFAllocatorDefault, largeur, hauteur, kCVPixelFormatType_32BGRA,
-                                attributs as CFDictionary, &tampon)
-            reducedBuffer = tampon
-        }
-        guard let reducedBuffer else { return nil }
-        ComposerLookGPU.context.render(petit, to: reducedBuffer)
-        return CIImage(cvPixelBuffer: reducedBuffer)
+        guard largeur > 0, hauteur > 0, let texture = reductionTarget(width: largeur, height: hauteur) else { return nil }
+        let destination = CIRenderDestination(mtlTexture: texture, commandBuffer: buffer)
+        destination.colorSpace = ComposerLiveLookRule.colorSpace
+        guard (try? ComposerLookGPU.context.startTask(toRender: petit, to: destination)) != nil else { return nil }
+        return CIImage(mtlTexture: texture, options: [.colorSpace: ComposerLiveLookRule.colorSpace])
+    }
+
+    private func reductionTarget(width: Int, height: Int) -> MTLTexture? {
+        if let reducedTexture, reducedTexture.width == width, reducedTexture.height == height { return reducedTexture }
+        guard let device = ComposerLookGPU.device else { return nil }
+        let description = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .bgra8Unorm, width: width,
+                                                                   height: height, mipmapped: false)
+        description.usage = [.shaderRead, .shaderWrite, .renderTarget]
+        description.storageMode = .private
+        reducedTexture = device.makeTexture(descriptor: description)
+        return reducedTexture
     }
 }

@@ -11,6 +11,7 @@ import { SoundCaptureService } from './posts/SoundCaptureService';
 import { NOT_DELETED } from './posts/softDelete';
 import { MediaService } from './MediaService';
 import type { MediaStorage } from './storage/MediaStorage';
+import { guardedInterval } from '../utils/guarded-timer';
 
 const log = enhancedLogger.child({ module: 'ExpiredStoriesCleanupService' });
 
@@ -96,9 +97,9 @@ export class ExpiredStoriesCleanupService {
     // Run once immediately on boot to clear any backlog accumulated while the
     // service was offline, then on the regular interval.
     this.cleanup().catch((err) => log.warn('initial cleanup failed', { err }));
-    this.interval = setInterval(() => {
+    this.interval = guardedInterval({ name: 'expired-stories-cleanup', everyMs: intervalMs, logger: log, run: () => {
       this.cleanup().catch((err) => log.warn('scheduled cleanup failed', { err }));
-    }, intervalMs);
+    } });
     this.interval.unref?.();
     log.info('expired-stories cleanup started', {
       intervalHours: intervalMs / (60 * 60 * 1000),

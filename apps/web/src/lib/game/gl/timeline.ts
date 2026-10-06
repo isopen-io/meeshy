@@ -8,6 +8,8 @@
 export const SHEEN_PASSES = 3;
 export const SHEEN_PASS_MS = 3600;
 const SHEEN_REST = 0.55;
+/** Où le trait commence à balayer dans un passage : le reflet « immédiat » (le passage d'un niveau) part d'ici et saute le repos. */
+export const SHEEN_SWEEP_START_MS = SHEEN_PASS_MS * SHEEN_REST;
 
 /** L'onde de frappe : une fois, 0,9 s, comme le repli CSS. */
 export const SHOCKWAVE_MS = 900;

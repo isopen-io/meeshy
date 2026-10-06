@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { useEffect, useRef, useState } from 'react';
 import { useStore } from 'zustand/react';
 
 import { unwrap } from '@/lib/api/client';
@@ -6,20 +7,26 @@ import { apiDeps } from '@/lib/api/deps';
 import { ENGAGEMENT_PROGRESS_QUERY_KEY, loadEngagementProgress } from '@/lib/api/engagement';
 import { appQueryClient } from '@/lib/api/query-client';
 import { sessionStore } from '@/lib/api/session';
+import type { EffectEnv } from '@/lib/game/gl/effect-runner';
+import { SHEEN_PASS_MS, SHEEN_SWEEP_START_MS } from '@/lib/game/gl/timeline';
+import { prefersReducedMotion } from '@/lib/game/haptics';
 import { useGamePrefs } from '@/lib/game/preferences';
 import { tierTint } from '@/lib/game/tier-emblem';
 import { loadGameCatalog, suspendForGameCatalog, translateGame } from '@/lib/i18n-game-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { formatCount } from '@/lib/view/game-copy';
-import { leaguePlace, playerBannerLabel, playerBannerModel, type PlayerBannerModel } from '@/lib/view/player-banner';
+import { isLargeText, leaguePlace, playerBannerLabel, playerBannerModel, type PlayerBannerModel } from '@/lib/view/player-banner';
 import { Link } from '@/routes/route-table';
 
 import { Flame } from './game/flame';
+import { GameEffectLayer } from './game/game-effect-layer';
 import { LeagueGem } from './game/league-gem';
 import { LevelRing } from './game/level-ring';
 import { MeeshCoin } from './game/meesh-coin';
 import { RankBlason } from './game/rank-blason';
 import { Signature } from './game/signature';
+import { useChoreography } from './game/use-choreography';
+import { useRollingNumber, type RollEnv } from './game/use-rolling-number';
 
 import '@/styles/player-banner.css';
 
@@ -34,6 +41,15 @@ import '@/styles/player-banner.css';
  * Décor : la Signature en filigrane, teintée par la couleur du palier ; une
  * carte posée au sommet, jamais une bulle.
  *
+ * Le MOUVEMENT : un gain de points fait ROULER le chiffre (`useRollingNumber`)
+ * et avancer la jauge ; le passage d'un niveau rejoue la chorégraphie de
+ * l'anneau (`levelGain`) et passe un reflet WebGL du moteur du jeu, UNE fois
+ * (`GameEffectLayer`, balayage immédiat, monté le temps du balayage puis
+ * retiré : aucun contexte WebGL ne reste ouvert sur un écran du quotidien).
+ * Rien ne bouge à la première peinture (cache d'abord) ni sous
+ * `prefers-reduced-motion`. Aux très grandes tailles de texte (au-delà de XXL)
+ * la jauge passe sous l'anneau.
+ *
  * UN seul élément lu par le lecteur d'écran : le lien vers Progression, nommé
  * d'une phrase complète (`playerBannerLabel`) ; ses enfants sont des dessins
  * et des chiffres cachés (`aria-hidden`), puisque la phrase dit tout. Cible de
@@ -43,20 +59,65 @@ const INK = 'var(--color-ios-ink)';
 const INK_2 = 'var(--color-ios-ink-2)';
 const CARD = 'var(--color-ios-card)';
 
-function Gauge({ model, tint }: { readonly model: PlayerBannerModel; readonly tint: string }) {
+/**
+ * Tout ce que le navigateur apporte au mouvement, injectable pour les témoins :
+ * la limitation des animations, la taille du texte, la boucle du chiffre, le
+ * moteur WebGL du reflet, la minuterie qui le retire.
+ */
+export type BannerMotion = {
+  readonly reducedMotion: boolean;
+  readonly largeText: boolean;
+  readonly roll: RollEnv;
+  readonly createEnv: (host: HTMLElement, canvas: HTMLCanvasElement) => EffectEnv;
+  readonly schedule: (run: () => void, ms: number) => () => void;
+};
+
+/** Le reflet dure le seul balayage du moteur (le passage sans son repos), plus une marge pour la dernière image. */
+const GLINT_MS = SHEEN_PASS_MS - SHEEN_SWEEP_START_MS + 120;
+
+const defaultSchedule = (run: () => void, ms: number): (() => void) => {
+  const id = setTimeout(run, ms);
+  return () => clearTimeout(id);
+};
+
+const readLargeText = (): boolean => typeof document !== 'undefined' && typeof getComputedStyle === 'function' && isLargeText(Number.parseFloat(getComputedStyle(document.documentElement).fontSize));
+
+/** La taille du texte de la racine : relue au redimensionnement et au retour sur l'application (le réglage se change hors d'elle). */
+function useLargeText(): boolean {
+  const [large, setLarge] = useState(readLargeText);
+  useEffect(() => {
+    const update = (): void => setLarge(readLargeText());
+    window.addEventListener('resize', update);
+    document.addEventListener('visibilitychange', update);
+    return () => {
+      window.removeEventListener('resize', update);
+      document.removeEventListener('visibilitychange', update);
+    };
+  }, []);
+  return large;
+}
+
+function Gauge({ model, tint, roll, large }: { readonly model: PlayerBannerModel; readonly tint: string; readonly roll: RollEnv | undefined; readonly large: boolean }) {
   const language = currentInterfaceLanguage();
   const fill = Math.min(1, Math.max(0, Number.isFinite(model.progress) ? model.progress : 0));
+  const score = useRollingNumber(model.score, roll);
+  const missing = useRollingNumber(model.pointsToNext ?? 0, roll);
   return (
-    <span aria-hidden="true" data-player-banner-gauge={model.nextLevel ?? 'top'} className="flex min-w-16 flex-1 flex-col justify-center gap-1 leading-tight">
+    <span
+      aria-hidden="true"
+      data-player-banner-gauge={model.nextLevel ?? 'top'}
+      className={`flex flex-col justify-center gap-1 leading-tight ${large ? 'w-full basis-full' : 'min-w-16 flex-1'}`}
+      style={large ? { order: 2 } : undefined}
+    >
       <span className="truncate text-check font-bold tabular-nums" style={{ color: INK }}>
-        {translateGame(language, 'game.banner.points', { points: formatCount(model.score, language) })}
+        {translateGame(language, 'game.banner.points', { points: formatCount(score, language) })}
       </span>
       <span className="relative block h-1.5 w-full overflow-hidden rounded-chip" style={{ backgroundColor: `color-mix(in srgb, ${INK} 12%, transparent)` }}>
         <span className="player-banner-fill absolute inset-0 rounded-chip" style={{ transform: `scaleX(${fill.toFixed(3)})`, backgroundColor: tint }} />
       </span>
       {model.pointsToNext === null ? null : (
         <span data-player-banner-missing={model.pointsToNext} className="truncate text-caption tabular-nums" style={{ color: INK_2 }}>
-          {translateGame(language, 'game.banner.missing', { points: formatCount(model.pointsToNext, language) })}
+          {translateGame(language, 'game.banner.missing', { points: formatCount(missing, language) })}
         </span>
       )}
     </span>
@@ -71,16 +132,38 @@ function Piece({ name, value, children }: { readonly name: string; readonly valu
   );
 }
 
-export function PlayerBanner({ model }: { readonly model: PlayerBannerModel }) {
+export function PlayerBanner({ model, motion = {} }: { readonly model: PlayerBannerModel; readonly motion?: Partial<BannerMotion> }) {
   const language = currentInterfaceLanguage();
   const tint = tierTint(model.tier);
+  const measuredLarge = useLargeText();
+  const large = motion.largeText ?? measuredLarge;
+  const reduced = (): boolean => motion.reducedMotion ?? prefersReducedMotion();
+  const schedule = motion.schedule ?? defaultSchedule;
+
+  const ring = useChoreography<HTMLSpanElement>(motion.reducedMotion === undefined ? {} : { reducedMotion: motion.reducedMotion });
+  const previousLevel = useRef(model.level);
+  const [glint, setGlint] = useState(0);
+  const stopGlint = useRef<() => void>(() => undefined);
+  useEffect(() => () => stopGlint.current(), []);
+  useEffect(() => {
+    const before = previousLevel.current;
+    previousLevel.current = model.level;
+    if (model.level <= before) return;
+    ring.play('levelGain');
+    if (reduced()) return;
+    stopGlint.current();
+    setGlint((count) => count + 1);
+    stopGlint.current = schedule(() => setGlint(0), GLINT_MS);
+  }, [model.level]);
+
   return (
     <div className="pointer-events-none flex w-full justify-center">
       <Link
         to="progression"
         data-player-banner=""
         aria-label={playerBannerLabel(model, language)}
-        className="player-banner pointer-events-auto relative flex w-full items-center gap-2.5 overflow-hidden rounded-card py-1 pe-3 ps-1 shadow-lg focus-visible:outline-2 focus-visible:outline-offset-2"
+        {...(large ? { 'data-large-text': '' } : {})}
+        className={`player-banner pointer-events-auto relative flex w-full items-center gap-2.5 overflow-hidden rounded-card py-1 pe-3 ps-1 shadow-lg focus-visible:outline-2 focus-visible:outline-offset-2${large ? ' flex-wrap' : ''}`}
         style={{
           minHeight: 56,
           maxWidth: 560,
@@ -92,10 +175,11 @@ export function PlayerBanner({ model }: { readonly model: PlayerBannerModel }) {
         <span aria-hidden="true" data-player-banner-watermark="" className="pointer-events-none absolute -end-4 -top-6 opacity-[0.12]" style={{ color: tint }}>
           <Signature size={120} color="currentColor" />
         </span>
-        <span aria-hidden="true" data-player-banner-ring={model.level} className="relative shrink-0">
+        <span ref={ring.ref} aria-hidden="true" data-player-banner-ring={model.level} className="relative shrink-0">
           <LevelRing level={model.level} tier={model.tier} progress={model.progress} size={48} prestige={model.prestige} />
+          {glint === 0 ? null : <GameEffectLayer key={glint} effect="sheen" circle passes={1} immediate {...(motion.createEnv === undefined ? {} : { createEnv: motion.createEnv })} />}
         </span>
-        <Gauge model={model} tint={tint} />
+        <Gauge model={model} tint={tint} roll={motion.roll} large={large} />
         {model.meeshes === null ? null : (
           <Piece name="meeshes" value={model.meeshes}>
             <MeeshCoin side="obverse" size={22} />

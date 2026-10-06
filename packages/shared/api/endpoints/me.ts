@@ -88,7 +88,7 @@ export const gameMissionsByMissionIdReroll = (missionId: string): string => `/ap
 /** POST /api/v1/me/game/prestige */
 export const gamePrestige = '/api/v1/me/game/prestige';
 
-/** PUT /api/v1/me/game/privacy */
+/** GET · PUT /api/v1/me/game/privacy */
 export const gamePrivacy = '/api/v1/me/game/privacy';
 
 /** POST /api/v1/me/game/season/seal */

@@ -41,6 +41,7 @@ import { emitPreferenceCategoryUpdated } from './preferences/preferences-broadca
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { calculateAge } from '@meeshy/shared/utils/age';
 import { EngagementService } from './engagement/EngagementService';
+import { guardedTimeout } from '../utils/guarded-timer';
 // Logger dédié pour VoiceProfileService
 const logger = enhancedLogger.child({ module: 'VoiceProfileService' });
 
@@ -186,10 +187,10 @@ export class VoiceProfileService extends EventEmitter {
 
   private async waitForZmqResponse(requestId: string): Promise<VoiceProfileEvent> {
     return new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => {
+      const timeout = guardedTimeout({ name: 'voice-profile-request-timeout', afterMs: ZMQ_RESPONSE_TIMEOUT_MS, logger, run: () => {
         this.pendingRequests.delete(requestId);
         reject(new Error('ZMQ request timeout'));
-      }, ZMQ_RESPONSE_TIMEOUT_MS);
+      } });
 
       this.pendingRequests.set(requestId, { resolve, reject, timeout });
     });

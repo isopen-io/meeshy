@@ -22,6 +22,7 @@ import { BanService } from '../services/admin/ban.service';
 import { UserAuditService } from '../services/admin/user-audit.service';
 import { UserManagementService } from '../services/admin/user-management.service';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
+import { guardedInterval } from '../utils/guarded-timer.js';
 
 const logger = enhancedLogger.child({ module: 'BackgroundJobs' });
 
@@ -100,7 +101,7 @@ export class BackgroundJobsManager {
         .catch((err) => logger.error('Session expiry sweep failed', err));
     };
     balayerLesSessions();
-    this.sessionSweepInterval = setInterval(balayerLesSessions, 6 * 60 * 60 * 1000);
+    this.sessionSweepInterval = guardedInterval({ name: 'session-sweep', everyMs: 6 * 60 * 60 * 1000, logger, run: balayerLesSessions });
     this.sessionSweepInterval.unref();
 
     /* LE CACHE GEOIP SE LIBÈRE (#9239). Ses entrées expirées n'étaient
@@ -131,7 +132,7 @@ export class BackgroundJobsManager {
       }
     };
     purgerLeCacheGeo();
-    this.geoCacheInterval = setInterval(purgerLeCacheGeo, 10 * 60 * 1000);
+    this.geoCacheInterval = guardedInterval({ name: 'geo-cache-purge', everyMs: 10 * 60 * 1000, logger, run: purgerLeCacheGeo });
     this.geoCacheInterval.unref();
 
     this.isRunning = true;

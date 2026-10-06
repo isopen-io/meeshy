@@ -57,7 +57,8 @@ struct GamePhotoCanvasView: View {
                     flameForm: referral.flame?.form,
                     flameLabel: referral.flame.map {
                         String(localized: "game.referral.flame_days", defaultValue: "\(GameCopy.formatCount($0.days)) j", bundle: .main)
-                    }
+                    },
+                    isPlaceholder: referral.isPlaceholder
                 )
                 .frame(width: banner.width, height: banner.height)
                 .offset(x: banner.minX, y: banner.minY)

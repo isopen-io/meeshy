@@ -229,3 +229,57 @@ describe('intégrité référentielle après la purge', () => {
     expect(db.affiliateVisitSession.rows).toEqual([expect.objectContaining({ id: 'v2', referredUserId: null })]);
   });
 });
+
+describe('un compte qui a beaucoup joué n’est pas purgé à moitié (#9481)', () => {
+  const PARTNER = '68a0000000000000000000aa';
+  const COUNT = 1203;
+  const weekOf = (n: number) => `W${String(n).padStart(5, '0')}`;
+
+  it('plus de borne à 500 duos : tous les duos du compte, et leurs emplacements, disparaissent', async () => {
+    const db = fakeGameDb();
+    seedUser(db, {}, USER);
+    seedUser(db, {}, PARTNER);
+    for (let n = 0; n < COUNT; n += 1) {
+      const [inviterId, inviteeId] = n % 2 === 0 ? [USER, PARTNER] : [PARTNER, USER];
+      db.gameDuo.rows.push({ id: `d${n}`, weekKey: weekOf(n), inviterId, inviteeId, status: 'abandoned', inviterProgress: 0, inviteeProgress: 0, createdAt: new Date() });
+      db.gameDuoSlot.rows.push({ id: `s${n}`, userId: USER, weekKey: weekOf(n), duoId: `d${n}` });
+    }
+    db.gameDuo.rows.push({ id: 'other', weekKey: weekOf(0), inviterId: PARTNER, inviteeId: '68a0000000000000000000ff', status: 'active', inviterProgress: 0, inviteeProgress: 0, createdAt: new Date() });
+
+    const summary = await purgeGameData(db.prisma, USER);
+
+    expect(summary.duosDeleted).toBe(COUNT);
+    expect(db.gameDuo.rows.map((d) => d.id)).toEqual(['other']);
+    expect(db.gameDuoSlot.rows).toEqual([]);
+  });
+
+  it('plus de borne à 50 duos ouverts : chacun est terminé proprement avant d’être effacé', async () => {
+    const db = fakeGameDb();
+    seedUser(db, {}, USER);
+    seedUser(db, {}, PARTNER);
+    for (let n = 0; n < 120; n += 1) {
+      db.gameDuo.rows.push({ id: `d${n}`, weekKey: weekOf(n), inviterId: USER, inviteeId: PARTNER, status: 'invited', inviterProgress: 0, inviteeProgress: 0, createdAt: new Date() });
+    }
+
+    const summary = await purgeGameData(db.prisma, USER, { creditPoints: async () => undefined });
+
+    expect(summary.duosSettled).toBe(120);
+    expect(db.gameDuo.rows).toEqual([]);
+  });
+
+  it('plus de borne à 500 groupes de ligue : aucun membre fantôme ne reste', async () => {
+    const db = fakeGameDb();
+    seedUser(db, {}, USER);
+    for (let n = 0; n < COUNT; n += 1) {
+      db.leagueGroupWeek.rows.push({ id: `g${n}`, groupId: `G${n}`, weekKey: weekOf(n), league: 'jade', memberCount: 2, snapshot: { [USER]: 1, [PARTNER]: 2 }, settledAt: null });
+      db.leagueMembership.rows.push({ id: `m${n}`, userId: USER, weekKey: weekOf(n), groupId: `G${n}`, league: 'jade', settledAt: null });
+      db.leagueMembership.rows.push({ id: `p${n}`, userId: PARTNER, weekKey: weekOf(n), groupId: `G${n}`, league: 'jade', settledAt: null });
+    }
+
+    const summary = await purgeGameData(db.prisma, USER);
+
+    expect(summary.leagueGroupsTouched).toBe(COUNT);
+    expect(db.leagueMembership.rows.every((m) => m.userId === PARTNER)).toBe(true);
+    expect(db.leagueGroupWeek.rows.every((g) => g.memberCount === 1)).toBe(true);
+  });
+});

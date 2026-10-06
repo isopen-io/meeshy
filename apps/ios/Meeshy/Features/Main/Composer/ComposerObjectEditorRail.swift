@@ -92,9 +92,9 @@ nonisolated enum MediaEditTool: String, CaseIterable, Hashable, Sendable {
     /// propriété de l'objet (`StoryMediaObject.adjustments`), cuite par le
     /// player après son filtre. La VIDÉO posée les reçoit aussi depuis #9169 :
     /// son player les peint trame par trame (`StoryVideoAdjustmentsProcessor`),
-    /// sans netteté ni flou (`AdjustmentKind.served(for: .video)`). Le fond
-    /// (`StoryBackgroundLayer` ne les peint pas encore) ne les offre pas : un
-    /// curseur sans effet est ce que la loi 4 bannit.
+    /// sans netteté ni flou (`AdjustmentKind.served(for: .video)`). Le FOND,
+    /// image ou vidéo, les reçoit depuis #9496 : sa couche les peint par
+    /// `StoryBackgroundLook`, après le filtre de slide.
     case adjust
     /// **⌾ DÉCRIRE — le texte alternatif du média** (#4756).
     ///
@@ -270,8 +270,8 @@ nonisolated enum ComposerObjectEditorRail {
     /// **`offersFilter`** (même retour) : le filtre d'un objet se cuit dans son
     /// IMAGE ; une vidéo posée n'en rend aucun, et l'outil y serait inerte.
     ///
-    /// **`offersAdjust`** (#9175, #9169) : les réglages se peignent sur un
-    /// média POSÉ, image ou vidéo — le fond ne les peint pas encore.
+    /// **`offersAdjust`** (#9175, #9169, #9496) : les réglages se peignent sur
+    /// tout média de la scène — posé ou fond, image ou vidéo.
     static func entries(for family: MeeshySceneObject.Kind,
                         hasTrimmableSource: Bool = true,
                         offersFilter: Bool = true,

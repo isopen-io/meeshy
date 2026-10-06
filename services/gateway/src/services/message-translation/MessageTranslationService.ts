@@ -34,6 +34,7 @@ import { LIVE_MESSAGE_MARK } from '../messaging/liveMessage';
 import { diffTranslationTargets } from '../../utils/translation-targets';
 import { applyPreset, mergeVoiceCloneParams, type ChatterboxTTSParams, type VoiceCloneParameters } from '../../types/translation.types';
 import { isEmojiOnly } from '../../utils/emoji-only';
+import { guardedInterval, guardedTimeout } from '../../utils/guarded-timer';
 
 const logger = enhancedLogger.child({ module: 'MessageTranslationService' });
 
@@ -119,7 +120,7 @@ export class MessageTranslationService extends EventEmitter {
     // Periodic cleanup of processedTasks dedup cache (every 30 min).
     // Le même timer balaie aussi les entrées de retranslationTask expirées
     // (pas de nouveau timer — cf. idiome des caches bornés du gateway).
-    this.processedTasksCleanupInterval = setInterval(() => {
+    this.processedTasksCleanupInterval = guardedInterval({ name: 'processed-tasks-cleanup', everyMs: 30 * 60 * 1000, logger, run: () => {
       const now = Date.now();
       const expiry = now - this.PROCESSED_TASK_TTL_MS;
       for (const [key, ts] of this.processedTasks) {
@@ -129,7 +130,7 @@ export class MessageTranslationService extends EventEmitter {
       for (const [id, entry] of this.latestRetranslationTask) {
         if (entry.ts < retransExpiry) this.latestRetranslationTask.delete(id);
       }
-    }, 30 * 60 * 1000);
+    } });
     this.processedTasksCleanupInterval.unref?.();
   }
 
@@ -3204,10 +3205,10 @@ export class MessageTranslationService extends EventEmitter {
           this.zmqClient.removeListener('translationError', handleError);
         };
 
-        const timeout = setTimeout(() => {
+        const timeout = guardedTimeout({ name: 'translation-response-timeout', afterMs: 10000, logger, run: () => {
           cleanup();
           reject(new Error('Timeout waiting for translation response'));
-        }, 10000); // 10 secondes de timeout
+        } }); // 10 secondes de timeout
 
         const handleResponse = (data: any) => {
           if (data.taskId === taskId) {

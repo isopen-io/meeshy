@@ -18,6 +18,7 @@ import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { liveSessionFilter, requiresLiveSession } from './live-session-gate';
 import { ACTIVATION_SELECT, isActivationBlocked } from '../../services/auth/account-activation';
 import { scheduleContactRecentlyActiveAnnouncement } from '../../services/notifications/contact-recently-active';
+import { guardedTimeout } from '../../utils/guarded-timer.js';
 
 const logger = enhancedLogger.child({ module: 'AuthHandler' });
 
@@ -121,12 +122,12 @@ export class AuthHandler {
 
       if (!token && !sessionToken) {
         logger.warn('socket sans token — déconnexion dans 10s si non authentifié', { socketId: socket.id });
-        const authTimeout = setTimeout(() => {
+        const authTimeout = guardedTimeout({ name: 'socket-auth-timeout', afterMs: 10_000, logger, run: () => {
           if (!this.socketToUser.has(socket.id)) {
             logger.warn('socket toujours non authentifié après 10s — déconnexion', { socketId: socket.id });
             socket.disconnect(true);
           }
-        }, 10_000);
+        } });
         socket.on('disconnect', () => clearTimeout(authTimeout));
         return;
       }
@@ -588,7 +589,7 @@ export class AuthHandler {
         socket.disconnect(true);
         return;
       }
-      timer = setTimeout(arm, Math.min(msRemaining, AuthHandler.MAX_EXPIRY_TIMER_MS));
+      timer = guardedTimeout({ name: 'socket-token-expiry', afterMs: Math.min(msRemaining, AuthHandler.MAX_EXPIRY_TIMER_MS), logger, run: arm });
     };
 
     arm();

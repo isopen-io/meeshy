@@ -16,8 +16,10 @@
  */
 
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import type { GameAchievementRarities } from '@meeshy/shared/types/game';
 import { buildGameBlockExtras, type GameBlockExtras, type GameBlockExtrasFacts } from '@meeshy/shared/utils/game/game-block-extras';
 import { enhancedLogger } from '../../utils/logger-enhanced';
+import { AchievementRarityService } from './AchievementRarityService';
 import { AtlasService } from './AtlasService';
 import { DuoService } from './DuoService';
 import { GameProfileService } from './GameProfileService';
@@ -47,6 +49,7 @@ export type GameBlockExtrasDeps = {
   readonly trophies?: TrophyService;
   readonly atlas?: AtlasService;
   readonly profile?: GameProfileService;
+  readonly rarity?: Pick<AchievementRarityService, 'served'>;
 };
 
 export class GameBlockExtrasService {
@@ -62,6 +65,8 @@ export class GameBlockExtrasService {
 
   private readonly profile: GameProfileService;
 
+  private readonly rarity: Pick<AchievementRarityService, 'served'>;
+
   constructor(prisma: PrismaClient, deps: GameBlockExtrasDeps = {}) {
     this.profile = deps.profile ?? new GameProfileService(prisma);
     this.league = deps.league ?? new LeagueService(prisma, { profile: this.profile });
@@ -70,6 +75,18 @@ export class GameBlockExtrasService {
     this.duo = deps.duo ?? new DuoService(prisma, { creditPoints: READ_ONLY_CREDIT });
     this.trophies = deps.trophies ?? new TrophyService(prisma, { profile: this.profile });
     this.atlas = deps.atlas ?? new AtlasService(prisma);
+    this.rarity = deps.rarity ?? new AchievementRarityService(prisma);
+  }
+
+  /** La carte des raretés, ou `null` : vide ou illisible, elle s'absente SANS emporter les autres extensions. */
+  private async achievementRarities(now: Date): Promise<GameAchievementRarities | null> {
+    try {
+      const served = await this.rarity.served(now);
+      return Object.keys(served).length === 0 ? null : served;
+    } catch (error) {
+      log.warn('achievement rarities unavailable, block served without them', { error: error instanceof Error ? error.message : String(error) });
+      return null;
+    }
   }
 
   /** Les extensions, ou `null` quand une lecture a échoué : le bloc part sans elles. */
@@ -114,7 +131,9 @@ export class GameBlockExtrasService {
         atlas,
         visibility: settings.visibility,
       };
-      return buildGameBlockExtras(facts);
+      const extras = buildGameBlockExtras(facts);
+      const achievementRarities = await this.achievementRarities(now);
+      return achievementRarities === null ? extras : { ...extras, achievementRarities };
     } catch (error) {
       log.warn('game block extensions unavailable, block served without them', {
         userId: base.userId,

@@ -58,16 +58,15 @@ final class ComposerInlineEditTests: XCTestCase {
                        "le filtre se cuit dans une image : une vidéo n'en rend aucun ; ses réglages, si (#9169)")
     }
 
-    /// Sauf les RÉGLAGES (#9175, #9169) et le RECADRAGE hors retouche (#9499) :
-    /// `StoryBackgroundLayer` ne peint ni l'un ni l'autre, donc le fond ne les
-    /// offre pas — un contrôle sans effet (loi 4).
+    /// RÉGLAGES compris depuis #9496 (`StoryBackgroundLook` les peint) ; le
+    /// RECADRAGE hors retouche (#9499) reste réservé au média posé — le fond ne
+    /// se recadre qu'en retouche (#9136).
     func test_sections_fond_lesMemesQuUnMediaPose() {
         XCTAssertEqual(ComposerInlineEditing.sections(for: .background(isVideo: false), hasTrimmableSource: false),
                        ComposerInlineEditing.sections(for: .image, hasTrimmableSource: false)
-                           .filter { $0 != .media(.adjust) && $0 != .media(.crop) })
+                           .filter { $0 != .media(.crop) })
         XCTAssertEqual(ComposerInlineEditing.sections(for: .background(isVideo: true), hasTrimmableSource: true),
-                       ComposerInlineEditing.sections(for: .video, hasTrimmableSource: true)
-                           .filter { $0 != .media(.adjust) })
+                       ComposerInlineEditing.sections(for: .video, hasTrimmableSource: true))
     }
 
     /// **Aucun contrôle inerte** (loi 4) : la fenêtre de temps et le plan
@@ -336,6 +335,7 @@ final class ComposerInlineEditTests: XCTestCase {
         XCTAssertEqual(focus, .object(sections: sections, open: .media(.actions), actions: []))
         XCTAssertEqual(ComposerTrailingColumn.options(for: focus), [
             .editorSection(.media(.filter), isOpen: false),
+            .editorSection(.media(.adjust), isOpen: false),
             .editorSection(.media(.actions), isOpen: true),
             .editorSection(.media(.altText), isOpen: false),
             .exitObject,

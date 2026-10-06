@@ -348,6 +348,12 @@ export const CreatePostSchema = z.object({
   // dont la majorité n'est pas vérifiée), `EXACT` retombe sur `NEIGHBORHOOD`
   // côté serveur (`PostService.createPost` via `resolveDiscoverabilityPrecision`).
   discoverabilityPrecisionConfirmed: z.boolean().optional(),
+  // « Publier AUSSI en réel » (#9476) — OPTIONNEL : un client qui n'envoie que
+  // `type` publie exactement comme avant. Vrai, il n'est admis que sur une
+  // STORY originale (`ALSO_AS_REEL_REQUIRES_STORY` sinon) ; le réel reçoit ses
+  // PROPRES médias, par copie (`services/posts/storyReelCompanion.ts`), ou rien
+  // ne part (`REEL_NOT_QUALIFIED`).
+  alsoAsReel: z.boolean().optional(),
 }).refine((data) => {
   // Une republication HÉRITE la liste de sa source (`PostService.createPost`,
   // `repostVisibilityInheritsAudienceList`) : ce que le client envoie est

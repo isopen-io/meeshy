@@ -54,11 +54,39 @@ final class ComposerLookStripTests: XCTestCase {
         XCTAssertNil(session.openFamily)
     }
 
-    func test_perform_select_combinesTheItemWithTheCurrentLook() {
+    func test_toggleFamily_whileTheLookIsLocked_keepsTheBandAsItIs() {
+        let session = ComposerCaptureSession(stage: .armed)
+        session.toggleFamily(.filters)
+        session.stage = .recording
+        session.toggleFamily(.filters)
+        XCTAssertEqual(session.openFamily, .filters, "pendant la prise, toucher le rail ne replie pas la bande")
+        session.toggleFamily(.frames)
+        XCTAssertEqual(session.openFamily, .filters, "ni n'en ouvre une autre")
+    }
+
+    func test_perform_selectAFrame_keepsTheFilter() throws {
         let session = ComposerCaptureSession(stage: .armed)
         session.look = ComposerPhotoLook(filter: .warm)
-        session.perform(.select, item: .frame(.none))
+        let cadre = try XCTUnwrap(Self.firstRealFrame())
+        session.perform(.select, item: .frame(cadre))
+        XCTAssertEqual(session.look.frame, cadre, "le cadre choisi est posé")
         XCTAssertEqual(session.look.filter, .warm, "choisir un cadre garde le filtre")
+    }
+
+    func test_perform_selectAFilter_keepsTheFrame() throws {
+        let session = ComposerCaptureSession(stage: .armed)
+        let cadre = try XCTUnwrap(Self.firstRealFrame())
+        session.look = ComposerPhotoLook(filter: .natural, frame: cadre)
+        session.perform(.select, item: .filter(.cool))
+        XCTAssertEqual(session.look.filter, .cool, "le filtre choisi est posé")
+        XCTAssertEqual(session.look.frame, cadre, "choisir un filtre garde le cadre")
+    }
+
+    private static func firstRealFrame() -> ComposerPhotoFrame? {
+        ComposerLookStripRule.items(.frames).lazy.compactMap { item -> ComposerPhotoFrame? in
+            guard case .frame(let cadre) = item, cadre != ComposerPhotoFrame.none else { return nil }
+            return cadre
+        }.first
     }
 
     func test_stripNeedsFeed_armedWithCells_offOrCriticalWithout() {
@@ -83,6 +111,12 @@ final class ComposerLookStripTests: XCTestCase {
         XCTAssertEqual(surface.components(separatedBy: "MTKView(frame:").count - 1, 1, "UNE vue Metal pour toute la bande")
         XCTAssertTrue(surface.contains("ComposerLookPainter.paint("), "les miniatures sortent du peintre unique")
         XCTAssertTrue(surface.contains("makeBlitCommandEncoder"), "l'atlas garde les cases qui ne se repeignent pas")
+        XCTAssertTrue(surface.contains("ComposerLookStripPaintRule.tilesToPaint("), "le dessin applique la règle de repeint")
+        XCTAssertTrue(surface.contains("gate.requestFrame()"), "une case sans image réclame sa trame")
+        XCTAssertTrue(surface.contains("scenes.scene(for:"), "les scènes passent par la cuisson bornée")
+        XCTAssertTrue(surface.contains("reduced(frame, buffer: buffer)"), "la trame se réduit dans le passage du dessin")
+        XCTAssertEqual(surface.components(separatedBy: "makeCommandBuffer").count - 1, 1,
+                       "UN command buffer par dessin")
         let bande = try Self.code("Meeshy/Features/Main/Composer/ComposerLookStrip.swift")
         XCTAssertTrue(bande.contains("ComposerLookStripRule.paintedIndices("), "seules les cases visibles ±1 se peignent")
         XCTAssertTrue(bande.contains("ComposerCaptureGesture.action("), "la miniature choisie obéit à la table des gestes")
@@ -90,6 +124,21 @@ final class ComposerLookStripTests: XCTestCase {
         XCTAssertTrue(bande.contains("ComposerCaptureGesture.accessibilityActions("),
                       "les actions VoiceOver de la miniature sont la projection de la table")
         XCTAssertFalse(bande.contains("TapGesture(count: 2)"), "un double toucher ne retarde jamais le toucher simple")
+    }
+
+    func test_strip_reducesTheFrameInsideItsOwnCommandBuffer() throws {
+        let surface = try Self.code("Meeshy/Features/Main/Composer/ComposerLookStripSurface.swift")
+        XCTAssertFalse(surface.contains("CVPixelBuffer"),
+                       "aucun rendu synchrone vers un tampon réécrit pendant qu'un dessin précédent le lit")
+        XCTAssertTrue(surface.contains("CIImage(mtlTexture:"), "la trame réduite est une texture du même passage")
+    }
+
+    func test_strip_laysItsCellsLeftToRight_whateverTheLanguage() throws {
+        let bande = try Self.code("Meeshy/Features/Main/Composer/ComposerLookStrip.swift")
+        XCTAssertTrue(bande.contains(".environment(\\.layoutDirection, .leftToRight)"),
+                      "en arabe, l'atlas Metal et les cases gardent le même ordre")
+        XCTAssertFalse(bande.contains("@State private var scrollSettle"),
+                       "le minuteur du défilement n'invalide pas la vue à chaque image")
     }
 
     private static func code(_ relative: String) throws -> String {

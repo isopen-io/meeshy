@@ -117,15 +117,15 @@ struct GamePrestigeScreen: View {
             .accessibilityHidden(true)
     }
 
-    /// La CONFIRMATION : ce qui repart, ce qui reste, et la porte de la ligue et du duo qui se referme —
-    /// dit AVANT le geste, jamais découvert après.
+    /// La CONFIRMATION : ce qui repart, ce qui reste, la porte de la ligue et du duo qui se referme, et le
+    /// consentement à la ligue publique qui, lui, reste enregistré — dit AVANT le geste, jamais découvert après.
     private func confirmation(next: Int) -> some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             Text(GameText.prestigeConfirmTitle(number: GameCopy.formatCount(next)))
                 .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
                 .foregroundColor(theme.textPrimary)
                 .accessibilityAddTraits(.isHeader)
-            ForEach([GameText.prestigeConfirmResets, GameText.prestigeConfirmKeeps, GameText.prestigeConfirmAccess], id: \.self) { line in
+            ForEach(GameText.prestigeConfirmationLines, id: \.self) { line in
                 GameNote(text: line)
             }
             GameActionButton(

@@ -134,6 +134,7 @@ const arStudioChrome = {
   'story.studio.edit.save': 'حفظ',
   'story.studio.edit.saving': 'جارٍ الحفظ…',
   'story.studio.edit.cancel': 'تجاهل التعديلات',
+  'story.studio.publish.as.storyAndReel': 'نشر القصة والريل',
 } satisfies StudioChromeCatalogSlice;
 
 export default arStudioChrome;

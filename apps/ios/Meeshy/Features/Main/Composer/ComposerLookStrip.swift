@@ -85,7 +85,8 @@ struct ComposerLookRail: View {
                             .minimumScaleFactor(0.7)
                     }
                     .foregroundStyle(open == famille ? Color.yellow : .white)
-                    .frame(minWidth: 52, minHeight: 52)
+                    .frame(minWidth: MeeshyControlSize.tapTarget, minHeight: MeeshyControlSize.tapTarget)
+                    .padding(MeeshySpacing.xs)
                     .adaptiveLiquidGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous),
                                          interactive: true)
                 }
@@ -117,11 +118,16 @@ struct ComposerLookStrip: View {
     /// jamais à chaque image du défilement.
     @State private var visible: ClosedRange<Int>?
     @State private var scrolling = false
-    @State private var scrollSettle: Task<Void, Never>?
+    /// Le minuteur de fin de défilement : une référence, que réarmer à chaque
+    /// image n'invalide pas la vue.
+    @State private var settle = ComposerLookStripScrollSettle()
     @State private var blink: Double = 1
     /// Retombe d'elle-même quand le système annule l'appui long sans `onEnded`.
     @GestureState private var pressing = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Le sens de lecture de la langue : les LIBELLÉS le suivent, l'ordre des
+    /// cases non — l'atlas Metal ne se met pas en miroir.
+    @Environment(\.layoutDirection) private var readingDirection
 
     private static let scrollSpace = "composer.capture.band"
     private static let labelHeight: CGFloat = 22
@@ -136,6 +142,13 @@ struct ComposerLookStrip: View {
     }
 
     private var recording: Bool { context.stage == .recording }
+
+    /// Le déclencheur porte UN nom, seul ou dans la bande ouverte.
+    private var chosenLabel: String {
+        recording
+            ? ComposerSceneCameraCopy.shutterLabel(mode: .video, stage: .recording)
+            : ComposerCaptureCopy.chosenLookName(session.look)
+    }
 
     private var budget: ComposerThermalBudget {
         recording ? session.thermalBudget.whileRecording() : session.thermalBudget
@@ -175,9 +188,7 @@ struct ComposerLookStrip: View {
         .contentShape(Rectangle())
         .gesture(chosenGestures)
         .accessibilityElement()
-        .accessibilityLabel(recording
-            ? ComposerSceneCameraCopy.shutterLabel(mode: .video, stage: .recording)
-            : ComposerCaptureCopy.chosenLookName(session.look))
+        .accessibilityLabel(chosenLabel)
         .accessibilityAddTraits(.isButton)
         .composerCaptureAccessibilityActions(zone: .chosenThumbnail, context: context) { performAccessible($0) }
     }
@@ -228,6 +239,7 @@ struct ComposerLookStrip: View {
                         })
                 }
                 .coordinateSpace(name: Self.scrollSpace)
+                .environment(\.layoutDirection, .leftToRight)
                 .onAppear {
                     guard let choisie = ComposerLookStripRule.chosenIndex(in: items, look: session.look) else { return }
                     lecteur.scrollTo(choisie, anchor: .center)
@@ -298,15 +310,17 @@ struct ComposerLookStrip: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
                 .frame(width: cellule.width + ComposerLookStripRule.spacing)
+                .environment(\.layoutDirection, readingDirection)
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(ComposerCaptureCopy.itemName(item))
         if chosen {
             corps
+                .accessibilityLabel(chosenLabel)
                 .accessibilityAddTraits([.isButton, .isSelected])
                 .composerCaptureAccessibilityActions(zone: .chosenThumbnail, context: context) { performAccessible($0) }
         } else {
             corps
+                .accessibilityLabel(ComposerCaptureCopy.itemName(item))
                 .accessibilityAddTraits(.isButton)
                 .accessibilityAction { perform(.otherThumbnail, .tap, item: item) }
         }
@@ -381,11 +395,18 @@ struct ComposerLookStrip: View {
         let vues = ComposerLookStripRule.visibleRange(offset: -x - inset, width: width, count: items.count)
         if vues != visible { visible = vues }
         if !scrolling { scrolling = true }
-        scrollSettle?.cancel()
-        scrollSettle = Task { @MainActor in
+        settle.task?.cancel()
+        settle.task = Task { @MainActor in
             try? await Task.sleep(nanoseconds: 150_000_000)
             guard !Task.isCancelled else { return }
             scrolling = false
         }
     }
+}
+
+/// Le minuteur de fin de défilement de la bande, hors de l'état observé.
+final class ComposerLookStripScrollSettle {
+    var task: Task<Void, Never>?
+
+    nonisolated deinit {}
 }

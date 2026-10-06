@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import type { GameDuoBlock } from '@meeshy/shared/types/game';
 
 import { gameBlockWithExtrasFixture } from '@/lib/api/game-fixture';
-import { buttonNamed, createActMounter } from '@/test-support/act-mount';
+import { buttonNamed, createActMounter, typeInto } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import { GameDuo, type GameDuoProps } from './game-duo';
@@ -84,6 +84,34 @@ describe('les autres états', () => {
     const html = renderToStaticMarkup(<GameDuo {...props({ duo: duo(NONE) })} />);
     expect(text(html)).toContain('Inviter Amina');
     expect(text(html)).toContain('Inviter Léa');
+  });
+
+  test('la liste n’est jamais tronquée : tous les amis acceptés se proposent, et la liste défile', async () => {
+    const many = Array.from({ length: 40 }, (_, index) => ({ id: `f-${index}`, displayName: `Ami ${index}` }));
+    const host = await mount(<GameDuo {...props({ duo: duo(NONE), friends: many })} />);
+    expect(host.querySelectorAll('[data-game-duo-invite]').length).toBe(40);
+    expect(host.querySelector('[data-game-duo-friends]')?.className).toContain('overflow-y-auto');
+  });
+
+  test('une courte liste ne porte pas de champ de recherche', async () => {
+    const host = await mount(<GameDuo {...props({ duo: duo(NONE) })} />);
+    expect(host.querySelector('input[type="search"]')).toBeNull();
+  });
+
+  test('la recherche filtre par nom, sans casse ni accent, et dit quand personne ne correspond', async () => {
+    const many = [...Array.from({ length: 12 }, (_, index) => ({ id: `f-${index}`, displayName: `Ami ${index}` })), { id: 'lea', displayName: 'Léa' }];
+    const picked: string[] = [];
+    const host = await mount(<GameDuo {...props({ duo: duo(NONE), friends: many, onInvite: (friend) => picked.push(friend.id) })} />);
+    const field = host.querySelector<HTMLInputElement>('input[type="search"]');
+    typeInto(field, 'LEA');
+    expect(host.querySelectorAll('[data-game-duo-invite]').length).toBe(1);
+    await click(buttonNamed(host, 'Inviter Léa'));
+    expect(picked).toEqual(['lea']);
+    typeInto(field, 'zzz');
+    expect(host.querySelectorAll('[data-game-duo-invite]').length).toBe(0);
+    expect(host.textContent).toContain('Aucun ami ne correspond');
+    typeInto(field, '');
+    expect(host.querySelectorAll('[data-game-duo-invite]').length).toBe(13);
   });
 
   test('sans ami accepté : on le dit', () => {

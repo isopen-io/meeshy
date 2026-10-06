@@ -23,12 +23,20 @@
  */
 
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import type { GameAchievementRarities } from '@meeshy/shared/types/game';
 import type { AchievementRarity } from '@meeshy/shared/utils/game/glory';
-import { GLORY_RANKS } from '@meeshy/shared/utils/game/glory';
+import { ACHIEVEMENT_RARITIES, GLORY_RANKS } from '@meeshy/shared/utils/game/glory';
 import { measureRarity, mythicUserIds, rarityShareDisplayable } from '@meeshy/shared/utils/game/rarity';
 import { unsetOrNull } from '../../utils/prisma-unset';
 
 const PAGE = 500;
+
+/** Combien de temps la carte servie se garde en mémoire : elle ne change qu'au calcul de nuit. */
+export const SERVED_RARITIES_TTL_MS = 5 * 60 * 1000;
+/** Le catalogue de succès est borné : jamais plus de lignes que le contrat n'en sert. */
+const SERVED_RARITIES_MAX = 1000;
+
+const isRarity = (value: unknown): value is AchievementRarity => (ACHIEVEMENT_RARITIES as readonly string[]).includes(value as string);
 
 export type RarityReading = {
   readonly holders: number;
@@ -39,7 +47,36 @@ export type RarityReading = {
 };
 
 export class AchievementRarityService {
+  private served_: { readonly at: number; readonly map: GameAchievementRarities } | null = null;
+
   constructor(private readonly prisma: PrismaClient) {}
+
+  /**
+   * La carte que le bloc `game` sert (#9489) : `milestoneKey → { rarity, holders, population }`.
+   * FAIL-CLOSED : un succès n'y figure que si sa part est AFFICHABLE (20 titulaires et 1 000 comptes,
+   * `rarityShareDisplayable`) ET qu'une rareté a été mesurée — sous le seuil l'entrée est ABSENTE, et
+   * le client dit « rareté en cours de mesure ». « Mythique » sur deux personnes réidentifierait.
+   * Gardée `SERVED_RARITIES_TTL_MS` en mémoire (elle ne bouge qu'au calcul de nuit, qui la renouvelle).
+   */
+  async served(now: Date = new Date()): Promise<GameAchievementRarities> {
+    if (this.served_ !== null && now.getTime() - this.served_.at < SERVED_RARITIES_TTL_MS && now.getTime() >= this.served_.at) {
+      return this.served_.map;
+    }
+    const rows = await this.prisma.achievementRarityStat.findMany({
+      select: { milestoneKey: true, holders: true, population: true, rarity: true },
+      orderBy: { milestoneKey: 'asc' },
+      take: SERVED_RARITIES_MAX,
+    });
+    const map: GameAchievementRarities = Object.fromEntries(
+      rows.flatMap((row) =>
+        isRarity(row.rarity) && rarityShareDisplayable({ holders: row.holders, population: row.population })
+          ? [[row.milestoneKey, { rarity: row.rarity, holders: row.holders, population: row.population }] as const]
+          : [],
+      ),
+    );
+    this.served_ = { at: now.getTime(), map };
+    return map;
+  }
 
   /** Recalcule l'instantané de rareté de chaque succès. */
   async recomputeRarity(now: Date = new Date()): Promise<{ readonly population: number; readonly keys: number }> {
@@ -57,6 +94,7 @@ export class AchievementRarityService {
         select: { id: true },
       });
     }
+    this.served_ = null;
     return { population, keys: all.length };
   }
 

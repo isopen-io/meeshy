@@ -35,6 +35,24 @@ final class GameSourceGuardTests: XCTestCase {
         }
     }
 
+    // MARK: - Aucun jeton de parrainage sans geste (#7742)
+
+    /// L'ouverture du déroulé LIT le jeton qui existe ; seul « Partager » en CRÉE un. Un témoin de COMPORTEMENT
+    /// le tient (`GamePhotoSessionTests`) ; celui-ci tient la SOURCE : ni la vue ni la lecture d'ouverture ne
+    /// nomment la création.
+    func test_openingThePhotoFlowNeverReachesTheTokenCreation() throws {
+        let photo = iosRoot.appendingPathComponent("Meeshy/Features/Main/Game/Photo")
+        let session = try String(contentsOf: photo.appendingPathComponent("GamePhotoSession.swift"), encoding: .utf8)
+        let opening = try XCTUnwrap(session.components(separatedBy: "func prepareReferral()").dropFirst().first?
+            .components(separatedBy: "func prepareShare()").first)
+        XCTAssertFalse(opening.contains("shareableLink"), "prepareReferral s'exécute à l'ouverture : il ne crée aucun jeton")
+        XCTAssertTrue(opening.contains("existingLink"))
+
+        let view = try String(contentsOf: photo.appendingPathComponent("GamePhotoFlowView.swift"), encoding: .utf8)
+        XCTAssertFalse(view.contains("shareableLink"), "la vue ne parle qu'à la session")
+        XCTAssertTrue(view.contains("prepareShare()"), "« Partager » crée le jeton, puis ouvre la feuille")
+    }
+
     // MARK: - Les clés d'usage et la fréquence d'images
 
     private func infoPlist() throws -> [String: Any] {

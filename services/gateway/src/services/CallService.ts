@@ -39,6 +39,7 @@ import { unrespondedParticipantUserIds } from './calls/unrespondedParticipants';
 import { assertDirectCalleeReachable } from './calls/callRingPolicy';
 import { commitCallEnd } from './calls/endCallRetry';
 import { callEngagementCrediter } from './calls/callEngagementCredits';
+import { guardedTimeout } from '../utils/guarded-timer';
 
 /** Floor a finite, non-negative byte counter; anything else → null. */
 const clampNonNegativeInt = (value?: number | null): number | null =>
@@ -529,10 +530,10 @@ export class CallService {
     delayMs: number = this.RINGING_TIMEOUT_MS
   ): void {
     this.clearRingingTimeout(callId);
-    const handle = setTimeout(() => {
+    const handle = guardedTimeout({ name: 'call-ringing-timeout', afterMs: delayMs, logger, run: () => {
       this.ringingTimeouts.delete(callId);
       onTimeout();
-    }, delayMs);
+    } });
     handle.unref?.();
     this.ringingTimeouts.set(callId, handle);
   }
@@ -584,7 +585,7 @@ export class CallService {
 
     const key = `${callId}:${participantId}`;
     if (!this.heartbeatDbWriteTimers.has(key)) {
-      const timer = setTimeout(() => {
+      const timer = guardedTimeout({ name: 'call-heartbeat-db-write', afterMs: this.HEARTBEAT_DB_DEBOUNCE_MS, logger, run: () => {
         this.heartbeatDbWriteTimers.delete(key);
         // Détachée DANS un `setTimeout` : il n'y a aucun `try/catch` englobant à
         // invoquer, et le rappel se déclenche longtemps après le heartbeat qui
@@ -592,7 +593,7 @@ export class CallService {
         // effet observable serait l'arrêt du process (leçon 230).
         void this.persistHeartbeatToDb(callId, participantId)
           .catch(err => logger.warn('Failed to persist heartbeat to DB', { callId, participantId, err }));
-      }, this.HEARTBEAT_DB_DEBOUNCE_MS);
+      } });
       timer.unref?.();
       this.heartbeatDbWriteTimers.set(key, timer);
     }

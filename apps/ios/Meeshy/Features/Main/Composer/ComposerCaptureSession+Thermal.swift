@@ -25,8 +25,11 @@ extension ComposerCaptureSession {
         stage != .off && thermalBudget.thumbnailCells > 0
     }
 
-    /// Toucher une famille ouvre sa bande ; la retoucher la replie.
+    /// Toucher une famille ouvre sa bande ; la retoucher la replie. Le look
+    /// verrouillé (prise en cours, segments en attente) garde la bande telle
+    /// quelle : la replier annulerait l'appui long qui tient la prise.
     func toggleFamily(_ family: ComposerLookFamily) {
+        guard !lookIsLocked else { return }
         openFamily = openFamily == family ? nil : family
         HapticFeedback.light()
     }

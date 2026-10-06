@@ -48,6 +48,12 @@ export const GAME_ROUTES = {
   prestige: '/me/game/prestige',
   /** « Jeu masqué » et l'opposition à la ligue Amis : deux interrupteurs. PUT. */
   privacy: '/me/game/privacy',
+
+  // --- L'intégration : lire ce que les clients gardaient en mémoire. ---
+  /** Les réglages du jeu (interrupteurs et visibilités), en LECTURE : le chemin de l'écriture, la méthode GET. */
+  settings: '/me/game/privacy',
+  /** Le profil de jeu d'un autre membre (niveau, palier, rang, trésor, Flamme), selon son réglage. GET. */
+  userGame: '/users/:userId/game',
 } as const;
 
 export type GameRouteKey = keyof typeof GAME_ROUTES;
@@ -68,6 +74,8 @@ export const GAME_ROUTE_METHODS = {
   userShowcase: 'GET',
   prestige: 'POST',
   privacy: 'PUT',
+  settings: 'GET',
+  userGame: 'GET',
 } as const satisfies Partial<Record<GameRouteKey, 'GET' | 'POST' | 'PUT'>>;
 
 export const gameMissionRerollPath = (missionId: string): string =>
@@ -77,6 +85,7 @@ export const gameDuoAcceptPath = (duoId: string): string => GAME_ROUTES.duoAccep
 export const gameDuoAbandonPath = (duoId: string): string => GAME_ROUTES.duoAbandon.replace(':duoId', duoId);
 export const gameSeasonClaimPath = (step: number): string => GAME_ROUTES.seasonClaim.replace(':step', String(step));
 export const gameUserShowcasePath = (userId: string): string => GAME_ROUTES.userShowcase.replace(':userId', userId);
+export const gameUserGamePath = (userId: string): string => GAME_ROUTES.userGame.replace(':userId', userId);
 
 /**
  * Codes d'erreur des écritures du jeu (champ `code` de `sendError`). Un refus

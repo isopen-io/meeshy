@@ -13,6 +13,7 @@ import type { BanService } from '../services/admin/ban.service';
 import { SYSTEM_ACTOR_ID } from '../services/admin/ban.service';
 import type { UserAuditService } from '../services/admin/user-audit.service';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
+import { guardedInterval } from '../utils/guarded-timer.js';
 
 const logger = enhancedLogger.child({ module: 'BanExpirySweepJob' });
 
@@ -40,9 +41,9 @@ export class BanExpirySweepJob {
     this.sweep();
 
     // Then run on interval
-    this.intervalId = setInterval(() => {
+    this.intervalId = guardedInterval({ name: 'ban-expiry-sweep', everyMs: this.intervalMinutes * 60 * 1000, logger, run: () => {
       this.sweep();
-    }, this.intervalMinutes * 60 * 1000);
+    } });
     this.intervalId.unref?.();
   }
 

@@ -9,6 +9,7 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { AchievementRarityService } from '../services/game/AchievementRarityService.js';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
+import { guardedInterval } from '../utils/guarded-timer.js';
 
 const logger = enhancedLogger.child({ module: 'GameNightlyJob' });
 
@@ -32,9 +33,9 @@ export class GameNightlyJob {
       return;
     }
     logger.info('Starting game nightly job (rarity and Mythe, once a day after 03:00 UTC)');
-    this.intervalId = setInterval(() => {
+    this.intervalId = guardedInterval({ name: 'game-nightly', everyMs: GAME_NIGHTLY_CHECK_MS, logger, run: () => {
       this.runIfDue().catch(/* istanbul ignore next -- runIfDue() never rejects */ (err) => logger.error('Nightly check failed', err));
-    }, GAME_NIGHTLY_CHECK_MS);
+    } });
     this.intervalId.unref?.();
   }
 

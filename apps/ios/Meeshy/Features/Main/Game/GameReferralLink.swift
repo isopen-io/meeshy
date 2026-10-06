@@ -39,9 +39,16 @@ nonisolated enum ReferralLinkRule {
 }
 
 /// Où le déroulé photo lit le lien de parrainage de l'utilisateur.
+///
+/// **Aucun jeton ne se crée sans geste.** L'ouverture du déroulé LIT (`existingLink`) ; seul le toucher de
+/// « Partager » CRÉE, quand l'utilisateur n'a encore aucun jeton utilisable (`shareableLink`).
 @MainActor
 protocol ReferralLinkProviding: AnyObject {
-    /// Le lien à partager, ou `nil` : sans réseau, sans jeton, ou sur un refus. Jamais un lien inventé.
+    /// Le lien d'un jeton qui EXISTE déjà (cache d'abord, puis la liste), ou `nil` : sans réseau, sans jeton
+    /// utilisable, ou sur un refus. Ne crée RIEN, jamais.
+    func existingLink() async -> String?
+    /// Le lien à partager : celui d'un jeton existant, sinon celui du jeton que ce geste crée. `nil` sur un
+    /// refus ou une lecture en panne. Jamais un lien inventé.
     func shareableLink() async -> String?
 }
 
@@ -84,7 +91,8 @@ final class AffiliateTokenGateway: ReferralTokenGateway {
 ///
 ///  1. un jeton utilisable déjà en cache donne le lien SUR-LE-CHAMP (la carte se compose sans attendre) ;
 ///  2. sinon la liste se lit au réseau, et le premier jeton utilisable sert ;
-///  3. sinon le premier partage CRÉE le jeton (« Invitation Meeshy »), l'utilisateur n'a rien à régler.
+///  3. sinon — et SEULEMENT à `shareableLink()`, le toucher de « Partager » — le geste CRÉE le jeton
+///     (« Invitation Meeshy »), l'utilisateur n'a rien à régler.
 ///
 /// **Échouer ne partage rien** : une lecture en panne ne crée pas de jeton à l'aveugle, et chaque
 /// échec rend `nil` — la carte part alors sans bandeau.
@@ -102,13 +110,37 @@ final class ReferralLinkService: ReferralLinkProviding {
         self.now = now
     }
 
-    func shareableLink() async -> String? {
-        if let cached = ReferralLinkRule.link(in: await gateway.cachedTokens(), now: now()) { return cached }
-        guard let tokens = try? await gateway.listTokens() else { return nil }
+    private enum Lookup {
+        case found(String)
+        /// La liste a été LUE et ne porte aucun jeton utilisable : seul cas où créer a un sens.
+        case none(listed: [AffiliateToken])
+        /// La lecture a échoué : on ne sait pas, donc on ne crée pas.
+        case unreadable
+    }
+
+    private func lookup() async -> Lookup {
+        if let cached = ReferralLinkRule.link(in: await gateway.cachedTokens(), now: now()) { return .found(cached) }
+        guard let tokens = try? await gateway.listTokens() else { return .unreadable }
         await gateway.store(tokens)
-        if let listed = ReferralLinkRule.link(in: tokens, now: now()) { return listed }
-        guard let created = try? await gateway.createToken(name: ReferralLinkRule.tokenName) else { return nil }
-        await gateway.store([created] + tokens)
-        return ReferralLinkRule.isUsable(created, now: now()) ? created.affiliateLink : nil
+        guard let listed = ReferralLinkRule.link(in: tokens, now: now()) else { return .none(listed: tokens) }
+        return .found(listed)
+    }
+
+    func existingLink() async -> String? {
+        guard case .found(let link) = await lookup() else { return nil }
+        return link
+    }
+
+    func shareableLink() async -> String? {
+        switch await lookup() {
+        case .found(let link):
+            return link
+        case .unreadable:
+            return nil
+        case .none(let tokens):
+            guard let created = try? await gateway.createToken(name: ReferralLinkRule.tokenName) else { return nil }
+            await gateway.store([created] + tokens)
+            return ReferralLinkRule.isUsable(created, now: now()) ? created.affiliateLink : nil
+        }
     }
 }

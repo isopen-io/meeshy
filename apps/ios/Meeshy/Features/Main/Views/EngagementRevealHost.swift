@@ -105,12 +105,14 @@ struct EngagementRevealHost: ViewModifier {
                         router.push(.progression)
                         lien.wrappedValue = nil
                     },
-                    onPhoto: { moment in
+                    // La carte du succès est une proposition de photo : « Jeu masqué » et « Célébrations » coupées
+                    // la retirent, comme elles retirent celles de Progression.
+                    onPhoto: GameDevicePrefsStore.current().prefs.offersPhotos ? { (moment: PhotoMoment) in
                         photo = GamePhotoSession(
                             moment: moment,
                             notebook: GamePhotoNotebook.standard(userId: AuthManager.shared.currentUser?.id ?? "")
                         )
-                    }
+                    } : nil
                 )
                 .fullScreenCover(item: $photo) { session in
                     GamePhotoFlowView(session: session) {

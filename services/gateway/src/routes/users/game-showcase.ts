@@ -1,5 +1,5 @@
 /**
- * `GET /users/:userId/game/showcase` (#9387) — la vitrine de trophées d'UN AUTRE
+ * `GET /users/:userId/game/showcase` (#9387) et `GET /users/:userId/game` (#9481, le niveau, le rang et le trésor — `GameStandingService`) — la vitrine de trophées d'UN AUTRE
  * membre, selon SON réglage (« tout le monde », « amis » — le défaut —, « moi
  * seul »). Le contrat est dans `@meeshy/shared/types/game-routes` (adresse) et
  * `game-v2` (`userShowcaseResponseSchema`).
@@ -25,11 +25,12 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { createUnifiedAuthMiddleware } from '../../middleware/auth';
+import { GameStandingService } from '../../services/game/GameStandingService';
 import { TrophyService } from '../../services/game/TrophyService';
 import { logError } from '../../utils/logger';
 import { sendInternalError, sendSuccess, sendUnauthorized } from '../../utils/response.js';
 import { gameRateLimitConfig } from '../me/game-shared';
-import { userShowcaseResponse } from '../me/game-wave2-schemas';
+import { userGameProfileResponse, userShowcaseResponse } from '../me/game-wave2-schemas';
 import { viewerFromRequest } from './presence-gate';
 
 export type UserGameShowcaseOptions = {
@@ -39,6 +40,7 @@ export type UserGameShowcaseOptions = {
 
 export async function userGameShowcaseRoutes(fastify: FastifyInstance, options: UserGameShowcaseOptions = {}) {
   const trophies = new TrophyService(fastify.prisma);
+  const standing = new GameStandingService(fastify.prisma);
   const requiredAuth =
     options.authenticate ?? createUnifiedAuthMiddleware(fastify.prisma, { requireAuth: true, allowAnonymous: false });
 
@@ -65,6 +67,34 @@ export async function userGameShowcaseRoutes(fastify: FastifyInstance, options: 
       } catch (error) {
         logError('Error serving a user showcase', error, { source: 'users-game-showcase' });
         return sendInternalError(reply, 'SHOWCASE_FAILED');
+      }
+    },
+  );
+
+  fastify.get(
+    '/:userId/game',
+    {
+      preValidation: [requiredAuth as never],
+      config: { rateLimit: gameRateLimitConfig('user-game', 120, false) },
+      schema: {
+        description:
+          "Le jeu d'un membre selon SES réglages (#9481) : niveau et palier, étoiles de Prestige, forme de la Flamme, rang de Gloire et division, " +
+          "palier du trésor — jamais un compte exact, jamais une date, jamais une présence. Un refus (réglage, blocage, « Jeu masqué », compte inconnu) " +
+          'rend `visible: false` et deux blocs nuls : la même réponse qu\'un compte qui n\'existe pas.',
+        tags: ['users', 'game'],
+        summary: "Get another member's game standing",
+        params: { type: 'object', required: ['userId'], properties: { userId: { type: 'string', minLength: 1, maxLength: 64 } } },
+        response: { 200: userGameProfileResponse, 401: errorResponseSchema, 429: errorResponseSchema, 500: errorResponseSchema },
+      },
+    },
+    async (request: FastifyRequest<{ Params: { userId: string } }>, reply: FastifyReply) => {
+      const viewer = viewerFromRequest(request);
+      if (viewer === null) return sendUnauthorized(reply, 'Authentication required');
+      try {
+        return sendSuccess(reply, await standing.standingFor({ viewer, targetId: request.params.userId }));
+      } catch (error) {
+        logError('Error serving a user game standing', error, { source: 'users-game-standing' });
+        return sendInternalError(reply, 'GAME_STANDING_FAILED');
       }
     },
   );

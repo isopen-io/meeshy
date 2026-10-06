@@ -110,13 +110,20 @@ struct GameVisibilityPickerView: View {
             Text(legend)
                 .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
                 .foregroundColor(theme.textPrimary)
-            HStack(spacing: MeeshySpacing.sm) {
-                ForEach(ShowcaseVisibility.allCases, id: \.self) { level in
-                    pill(level)
-                }
+            // Trois pastilles côte à côte ; aux grandes tailles de texte, elles passent l'une sous l'autre plutôt que
+            // de tronquer leur nom.
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: MeeshySpacing.sm) { pills }
+                VStack(alignment: .leading, spacing: MeeshySpacing.sm) { pills }
             }
         }
         .accessibilityElement(children: .contain)
+    }
+
+    private var pills: some View {
+        ForEach(ShowcaseVisibility.allCases, id: \.self) { level in
+            pill(level)
+        }
     }
 
     private func pill(_ level: ShowcaseVisibility) -> some View {

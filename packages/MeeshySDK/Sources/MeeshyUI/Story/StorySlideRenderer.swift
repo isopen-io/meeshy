@@ -225,10 +225,13 @@ public enum StorySlideRenderer {
     ///
     /// Résultat : la miniature de tray et le placeholder ThumbHash ne
     /// correspondaient pas à la story jouée — un saut de couleur au chargement.
+    ///
+    /// Depuis #9496, le fond porte aussi les RÉGLAGES de son média, cuits après
+    /// le filtre par la même fonction que la couche de fond du lecteur
+    /// (`StoryBackgroundLook`) — une affiche de fond vidéo n'en reçoit ni
+    /// netteté ni flou, comme ses trames.
     static func filterBackground(_ image: UIImage, effects: StoryEffects) -> UIImage {
-        guard let raw = effects.filter, let filter = StoryFilter(rawValue: raw) else { return image }
-        let intensity = Float(max(0.0, min(1.0, effects.filterIntensity ?? 1.0)))
-        return StoryFilterProcessor.apply(filter, to: image, intensity: intensity)
+        StoryBackgroundLook.image(image, effects: effects)
     }
 
     /// Compute thumbHash for a complete slide composite.

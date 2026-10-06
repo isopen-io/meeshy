@@ -172,18 +172,36 @@ export class GameProfileService {
    */
   async facetVisibleTo(params: { readonly viewer: PresenceViewer; readonly targetId: string; readonly facet: GameFacet }): Promise<boolean> {
     const { viewer, targetId, facet } = params;
+    return (await this.facetsVisibleTo({ viewer, targetId, facets: [facet] }))[facet] === true;
+  }
+
+  /**
+   * Plusieurs facettes d'un même membre, décidées d'UNE traversée : le blocage, le lecteur, les réglages
+   * et le plafond de recherche se lisent une fois. Mêmes lois, mêmes refus que `facetVisibleTo` — qui en
+   * est la projection à une facette. Une facette non demandée est absente de la carte.
+   */
+  async facetsVisibleTo(params: {
+    readonly viewer: PresenceViewer;
+    readonly targetId: string;
+    readonly facets: readonly GameFacet[];
+  }): Promise<Readonly<Partial<Record<GameFacet, boolean>>>> {
+    const { viewer, targetId, facets } = params;
+    const verdict = (allowed: boolean): Partial<Record<GameFacet, boolean>> => Object.fromEntries(facets.map((facet) => [facet, allowed]));
     const kind = await this.viewerKind(viewer, targetId);
-    if (kind === 'blocked') return false;
-    if (kind === 'self' || kind === 'admin') return true;
+    if (kind === 'blocked') return verdict(false);
+    if (kind === 'self' || kind === 'admin') return verdict(true);
 
     const settings = await this.settings(targetId);
     const hideProfileFromSearch = await this.hidesFromSearch(targetId);
-    const capped = capShowcaseVisibility({
-      visibility: settings.visibility[facet],
-      hideProfileFromSearch,
-      gameHidden: settings.gameHidden,
-    });
-    return canViewShowcase({ visibility: capped, viewer: kind });
+    return Object.fromEntries(
+      facets.map((facet) => [
+        facet,
+        canViewShowcase({
+          visibility: capShowcaseVisibility({ visibility: settings.visibility[facet], hideProfileFromSearch, gameHidden: settings.gameHidden }),
+          viewer: kind,
+        }),
+      ]),
+    );
   }
 
   /** Se cacher de la recherche : illisible ⇒ « caché » (fail-closed). */

@@ -90,6 +90,65 @@ describe('AchievementRarityService.recomputeRarity', () => {
   });
 });
 
+describe('AchievementRarityService.served — la carte servie dans le bloc game (#9489)', () => {
+  const stat = (db: FakeGameDb, key: string, holders: number, population: number, rarity: string | null) =>
+    db.achievementRarityStat.rows.push({ id: key, milestoneKey: key, holders, population, rarity, measuredAt: new Date() });
+
+  it('sert la rareté, les titulaires et la population de chaque succès AFFICHABLE', async () => {
+    const db = fakeGameDb();
+    stat(db, 'achievement.editor', 150, 1000, 'rare');
+    const served = await new AchievementRarityService(db.prisma).served();
+    expect(served).toEqual({ 'achievement.editor': { rarity: 'rare', holders: 150, population: 1000 } });
+  });
+
+  it('FAIL-CLOSED : un succès sous 20 titulaires est ABSENT, jamais servi à rareté nulle ni « mythique » sur deux personnes', async () => {
+    const db = fakeGameDb();
+    stat(db, 'achievement.two_people', 2, 5000, 'mythic');
+    stat(db, 'achievement.nineteen', 19, 5000, 'legendary');
+    stat(db, 'achievement.twenty', 20, 5000, 'legendary');
+    const served = await new AchievementRarityService(db.prisma).served();
+    expect(Object.keys(served)).toEqual(['achievement.twenty']);
+  });
+
+  it('une rareté non mesurée (sous 1 000 comptes) est absente aussi, même avec 20 titulaires', async () => {
+    const db = fakeGameDb();
+    stat(db, 'achievement.small_base', 30, 999, null);
+    stat(db, 'achievement.small_base_labelled', 30, 999, 'epic');
+    expect(await new AchievementRarityService(db.prisma).served()).toEqual({});
+  });
+
+  it('une rareté illisible en base est ignorée, les autres sont servies', async () => {
+    const db = fakeGameDb();
+    stat(db, 'achievement.bad', 100, 1000, 'divine');
+    stat(db, 'achievement.good', 100, 1000, 'rare');
+    expect(Object.keys(await new AchievementRarityService(db.prisma).served())).toEqual(['achievement.good']);
+  });
+
+  it('lit la base UNE fois pour des lectures rapprochées, et se rafraîchit au calcul de nuit', async () => {
+    const db = fakeGameDb();
+    accounts(db, 1000);
+    hold(db, 'achievement.editor', Array.from({ length: 150 }, (_, i) => i + 1));
+    const service = new AchievementRarityService(db.prisma);
+    const t0 = new Date('2026-10-14T10:00:00Z');
+
+    expect(await service.served(t0)).toEqual({});
+    await service.recomputeRarity(t0);
+    expect(await service.served(new Date(t0.getTime() + 1000))).toEqual({
+      'achievement.editor': { rarity: 'rare', holders: 150, population: 1000 },
+    });
+  });
+
+  it('une lecture plus ancienne que la fenêtre relit la base : une AUTRE instance a pu recalculer', async () => {
+    const db = fakeGameDb();
+    const service = new AchievementRarityService(db.prisma);
+    const t0 = new Date('2026-10-14T10:00:00Z');
+    expect(await service.served(t0)).toEqual({});
+    stat(db, 'achievement.editor', 150, 1000, 'rare');
+    expect(await service.served(new Date(t0.getTime() + 60_000))).toEqual({});
+    expect(Object.keys(await service.served(new Date(t0.getTime() + 6 * 60_000)))).toEqual(['achievement.editor']);
+  });
+});
+
 describe('AchievementRarityService.recomputeMythic', () => {
   const glory = (db: FakeGameDb, n: number, delta: number) =>
     db.gloryLedger.rows.push({ id: `g${n}`, userId: uid(n), delta, reason: 'mint', requestId: `r${n}` });

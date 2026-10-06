@@ -6,7 +6,7 @@ import { gameBlockFixture, gameBlockWithExtrasFixture, gameExtrasFactsFixture } 
 import { loadGameCatalog } from '@/lib/i18n-game-catalog';
 import { SUPPORTED_INTERFACE_LANGUAGES } from '@/lib/inline-interface-language-bootstrap.js';
 
-import { playerBannerLabel, playerBannerModel } from './player-banner';
+import { isLargeText, playerBannerLabel, playerBannerModel } from './player-banner';
 
 /**
  * LA BANNIÈRE DU JOUEUR (#9494) — SEULEMENT CE QUI EXISTE. Le modèle ne pose
@@ -100,3 +100,26 @@ describe('ce que lit le lecteur d’écran — une phrase complète', () => {
 function gameBlockWithExtrasLeague() {
   return gameExtrasFactsFixture().league;
 }
+
+/**
+ * AUX TRÈS GRANDES TAILLES DE TEXTE (#9494) — « au-delà de la taille XXL, la
+ * jauge passe sous l'anneau ». Sur iOS, XXL grossit le texte de 21/17 et
+ * xxxLarge de 23/17 ; le web lit la taille de la racine : 16 px est le texte
+ * ordinaire, et le seuil tombe entre XXL et xxxLarge.
+ */
+describe('isLargeText', () => {
+  test('le texte ordinaire et jusqu’à XXL : la jauge reste à côté de l’anneau', () => {
+    expect(isLargeText(16)).toBe(false);
+    expect(isLargeText(16 * (21 / 17))).toBe(false);
+  });
+
+  test('au-delà de XXL : la jauge passe sous l’anneau', () => {
+    expect(isLargeText(16 * (23 / 17))).toBe(true);
+    expect(isLargeText(32)).toBe(true);
+  });
+
+  test('une taille illisible ne casse rien : disposition ordinaire', () => {
+    expect(isLargeText(Number.NaN)).toBe(false);
+    expect(isLargeText(0)).toBe(false);
+  });
+});

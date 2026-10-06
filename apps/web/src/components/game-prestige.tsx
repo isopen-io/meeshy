@@ -16,6 +16,8 @@ import { GAME_BRAND, GAME_ERROR, GAME_GOOD, GAME_INK, GAME_INK_2, GAME_ON_WARM, 
  * la proposition, l'explication par Mee et Meo, la CONFIRMATION qui dit ce qui
  * repart, ce qui reste, ce qu'on gagne — et la perte d'accès à la ligue (10) et
  * au duo (20) qui suit, parce que le niveau record repart à 1 (conformité G-5) —,
+ * et ce que le Prestige NE retire PAS : le consentement à la ligue publique reste
+ * enregistré, la ligue se rouvre au niveau 10 sans le redemander —,
  * puis le passage en chorégraphie : l'anneau se vide, le trophée tombe, les
  * étoiles s'allument.
  *
@@ -114,6 +116,7 @@ export function GamePrestige({ level, prestige, online, pending, error, onPass, 
                 <li>{gameText('game.prestige.confirm.resets')}</li>
                 <li>{gameText('game.prestige.confirm.keeps')}</li>
                 <li>{gameText('game.prestige.confirm.access')}</li>
+                <li>{gameText('game.prestige.confirm.consent')}</li>
               </ul>
               <button
                 type="button"
