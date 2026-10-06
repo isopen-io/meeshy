@@ -76,6 +76,67 @@ final class GameMintHeroTests: XCTestCase {
         XCTAssertEqual(sequence.shown(live: after).meesh.balance, 10)
     }
 
+    // MARK: - La pièce que la scène montre (#9537)
+
+    private func frame(balance: Int, next: Int, canMint: Bool = true) -> GameMintFrame {
+        GameMintFrame(
+            meesh: EngagementMeeshProgress(payload: GameFixture.meesh(balance: balance, debitable: canMint ? 12_180 : 0)),
+            next: GameMintNext(number: next, edition: .silver)
+        )
+    }
+
+    func test_beforeAnyStrike_theSceneShowsTheNextCoinOnItsObverse() {
+        let scene = GameMintStrike.scene(shown: frame(balance: 9, next: 13), struck: nil, isStriking: false, play: 0, failed: false)
+        XCTAssertEqual(scene, GameMintStrike(number: 13, edition: .silver, play: 0, restsReversed: false))
+    }
+
+    func test_whileStriking_theSceneEngravesTheHeldCoin() {
+        let struck = GameMintNext(number: 13, edition: .silver)
+        let scene = GameMintStrike.scene(shown: frame(balance: 9, next: 13), struck: struck, isStriking: true, play: 1, failed: false)
+        XCTAssertEqual(scene, GameMintStrike(number: 13, edition: .silver, play: 1, restsReversed: false))
+    }
+
+    func test_onceStruck_theCoinRestsOnTheNumberItWasStruckWith_notOnTheNextOne() {
+        let struck = GameMintNext(number: 13, edition: .silver)
+        let scene = GameMintStrike.scene(shown: frame(balance: 10, next: 14), struck: struck, isStriking: false, play: 1, failed: false)
+        XCTAssertEqual(scene?.number, 13, "la pièce posée sur son revers est la n° 13 qu'on vient de frapper — la n° 14 n'existe pas encore")
+        XCTAssertEqual(scene?.restsReversed, true)
+    }
+
+    func test_theLastAffordableStrike_keepsItsStruckCoinOnScreen() {
+        let struck = GameMintNext(number: 13, edition: .silver)
+        let scene = GameMintStrike.scene(shown: frame(balance: 10, next: 14, canMint: false), struck: struck, isStriking: false, play: 1, failed: false)
+        XCTAssertEqual(scene, GameMintStrike(number: 13, edition: .silver, play: 1, restsReversed: true),
+                       "plus assez de points pour la suivante : la pièce frappée ne disparaît pas avec le bouton")
+    }
+
+    func test_aRefusedStrike_putsTheNextCoinBackOnItsObverse() {
+        let struck = GameMintNext(number: 13, edition: .silver)
+        let scene = GameMintStrike.scene(shown: frame(balance: 9, next: 13), struck: struck, isStriking: false, play: 1, failed: true)
+        XCTAssertEqual(scene, GameMintStrike(number: 13, edition: .silver, play: 1, restsReversed: false),
+                       "le serveur a refusé : rien n'a été frappé, la pièce ne montre pas de revers numéroté")
+    }
+
+    func test_withoutPointsNorStrike_thereIsNoScene() {
+        XCTAssertNil(GameMintStrike.scene(shown: frame(balance: 9, next: 13, canMint: false), struck: nil, isStriking: false, play: 0, failed: false))
+        let unknown = GameMintFrame(meesh: EngagementMeeshProgress(payload: GameFixture.meesh()), next: nil)
+        XCTAssertNil(GameMintStrike.scene(shown: unknown, struck: nil, isStriking: false, play: 0, failed: false), "un ancien serveur ne dit pas la prochaine pièce : pas de scène")
+    }
+
+    func test_theCounterSheetRemembersTheCoinItStruck() throws {
+        let text = try source("Meeshy/Features/Main/Views/ProgressionMeeshEntry.swift")
+        XCTAssertTrue(text.contains("GameMintStrike.scene(shown: shown, struck: struck"), "la scène est décidée par la fonction pure")
+        XCTAssertTrue(text.contains("struck = next"), "le toucher retient la pièce qu'il frappe")
+    }
+
+    // MARK: - Le jour de jeu est celui du compte (#9539)
+
+    func test_theDailyMissionsEndWithTheAccountDay_notTheDeviceDay() throws {
+        let text = try source("Meeshy/Features/Main/Game/GameMissionsView.swift")
+        XCTAssertTrue(text.contains("GameMissionClock.endOfDay(missions.dayKey, timezone: accountTimezone)"),
+                      "la fin du jour se lit dans le fuseau du compte, celui où la passerelle découpe le jour de jeu")
+    }
+
     // MARK: - La feuille du compteur joue la frappe
 
     func test_theCounterSheetPlaysMeeAndMeoStriking_andTheCounterReadsTheHeldImage() throws {

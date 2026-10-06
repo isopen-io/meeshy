@@ -483,4 +483,46 @@ final class PlayerBannerTests: XCTestCase {
         XCTAssertEqual(source.fetchCalls, 1, "au retour, le jeu est relu en silence")
         XCTAssertNotNil(sut.banner)
     }
+
+    /// Le sommeil de la minuterie ne compte pas le temps où l'appareil dort : sans cette relecture au retour, un
+    /// bandeau ouvert depuis deux minutes restait encore le reliquat de ses trente secondes (#9536).
+    func test_aShortAbsenceThatOutlivesTheOpening_closesTheBannerOnReturn_withoutWaitingForTheTimer() async {
+        let source = FakeSource()
+        source.fetchedBlock = GameFixture.game()
+        var now = Date(timeIntervalSince1970: 1_790_000_000)
+        let sut = store(source, interval: 1, clock: { now })
+
+        now = now.addingTimeInterval(10)
+        sut.appWentAway()
+        now = now.addingTimeInterval(120)
+        await sut.appCameBack()
+
+        XCTAssertFalse(sut.lingering, "trente secondes sont passées depuis l'ouverture : le bandeau s'en va au retour")
+        XCTAssertEqual(sut.openingGeneration, 0, "deux minutes ne sont pas une vraie absence : rien ne se rouvre")
+        XCTAssertEqual(source.fetchCalls, 0, "et un bandeau qui ne paraîtra plus ne demande rien au réseau")
+    }
+
+    func test_aShortAbsenceInsideTheOpening_leavesTheBannerItsRemainingSeconds() async {
+        let source = FakeSource()
+        var now = Date(timeIntervalSince1970: 1_790_000_000)
+        let sut = store(source, interval: 1, clock: { now })
+
+        now = now.addingTimeInterval(5)
+        sut.appWentAway()
+        now = now.addingTimeInterval(10)
+        await sut.appCameBack()
+
+        XCTAssertTrue(sut.lingering, "quinze secondes après l'ouverture : il reste")
+        XCTAssertEqual(sut.openingRemaining, 15, accuracy: 0.001)
+    }
+
+    // MARK: - Lisible sur la bannière de profil (#9536)
+
+    func test_overTheProfileBanner_theSmallTextTakesTheInk_neverTheMutedTone() {
+        let palette = PlayerBannerStyle.palette(tier: .eclat, isDark: false)
+        XCTAssertEqual(PlayerBannerView.detailColor(palette: palette, overBackdrop: true), palette.ink,
+                       "une image sous le texte lui prend son contraste : le petit texte passe à l'encre")
+        XCTAssertEqual(PlayerBannerView.detailColor(palette: palette, overBackdrop: false), palette.muted,
+                       "sur l'aplat seul, le ton discret reste")
+    }
 }
