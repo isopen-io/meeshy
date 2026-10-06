@@ -263,7 +263,22 @@
 // lieu de recomposer `Color(hex: hex)` depuis `solidHex` — un appel
 // variable de moins. Le littéral `Color(hex: "FB923C")` de la même fonction
 // (dégradé de repli) est inchangé, d'où le cliquet littéral stable à 109.
-const REFERENCE_LITERAL_COLOR_COUNT = 109;
+//
+// 2026-10-05 (#9503, vague 2 du jeu) — littéraux 109 → 116 : `GameMedalView.swift`
+// (5 — couleurs fixes par catégorie de médaille : content, social, conversation,
+// comment, tool) et `GameReferralBannerView.swift` (2 — encre de la carte de
+// parrainage) sont deux fichiers NOUVEAUX sous `.../MeeshyUI/Game/`, même
+// précédent que `GameMaterial.swift` (#9397, #9380) : couleurs de DESIGN du jeu
+// volontairement indépendantes du thème de conversation. Valeur MESURÉE le
+// 2026-10-05.
+//
+// 2026-10-06 (#9511, vague 2 du jeu) — littéraux 116 → 128 : `GameLeagueBricks.swift`
+// (12 — huit teintes de rareté : quartz, ambre, jade, saphir, rubis, amethyste,
+// diamant, prisme ; quatre teintes de badge de ligue : slate, blue, violet, gold)
+// est un fichier NEUF sous `.../MeeshyUI/Game/`, même précédent que
+// `GameMedalView.swift`/`GameMaterial.swift` ci-dessus. Valeur MESURÉE le
+// 2026-10-06.
+const REFERENCE_LITERAL_COLOR_COUNT = 128;
 const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 444;
 
 import { readFileSync, readdirSync, statSync, realpathSync } from 'node:fs';
