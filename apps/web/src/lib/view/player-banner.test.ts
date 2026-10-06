@@ -17,85 +17,140 @@ beforeAll(async () => {
   await Promise.all(SUPPORTED_INTERFACE_LANGUAGES.map((language) => loadGameCatalog(language)));
 });
 
+/** Un joueur qui n'a que ses premiers points : niveau 3 (le niveau 1 tient jusqu'à ~50 points). */
 const NEWCOMER: Partial<GameBlockFacts> = {
-  score: 12,
+  score: 100,
   glory: 0,
   balance: 0,
   mintedLifetime: 0,
   streak: 0,
   freezes: 0,
   lastActiveDay: null,
-  debitablePoints: 12,
+  debitablePoints: 100,
 };
 
-describe('seulement ce qui existe', () => {
-  test('un nouveau joueur : l’anneau et la jauge, rien d’autre', () => {
-    const model = playerBannerModel(gameBlockFixture(NEWCOMER));
-    expect(model.level).toBeGreaterThanOrEqual(1);
-    expect(model.nextLevel).toBe(model.level + 1);
-    expect(model.pointsToNext).toBeGreaterThan(0);
+/** Tout à zéro : niveau 1, aucun point, aucune Meesh, aucune Gloire, aucune Flamme. */
+const ZERO: Partial<GameBlockFacts> = { ...NEWCOMER, score: 0, debitablePoints: 0 };
+
+const shown = (facts: Partial<GameBlockFacts>) => {
+  const model = playerBannerModel(gameBlockFixture(facts));
+  if (model === null) throw new Error('un bandeau était attendu');
+  return model;
+};
+
+describe('seulement ce qui a du sens (#9536)', () => {
+  test('toutes les données du jeu à zéro : AUCUN bandeau', () => {
+    expect(playerBannerModel(gameBlockFixture(ZERO))).toBeNull();
+  });
+
+  test('pas de points : pas de total de points, même avec une Meesh gardée', () => {
+    const model = shown({ ...ZERO, balance: 1 });
+    expect(model.points).toBeNull();
+    expect(model.meeshes).toBe(1);
+  });
+
+  test('des points : le total paraît', () => {
+    expect(shown({ ...ZERO, score: 12, debitablePoints: 12 }).points).toBe(12);
+  });
+
+  test('niveau 1 : aucun détail de niveau (ni anneau, ni jauge), mais les points restent dits', () => {
+    const model = shown({ ...ZERO, score: 12, debitablePoints: 12 });
+    expect(model.level).toBeNull();
+    expect(model.points).toBe(12);
+  });
+
+  test('au-delà du niveau 1 : l’anneau et la jauge vers le niveau suivant', () => {
+    const { level } = shown(NEWCOMER);
+    expect(level?.level).toBeGreaterThan(1);
+    expect(level?.nextLevel).toBe((level?.level ?? 0) + 1);
+    expect(level?.pointsToNext).toBeGreaterThan(0);
+  });
+
+  test('un nouveau joueur : l’anneau, la jauge et ses points — rien d’autre', () => {
+    const model = shown(NEWCOMER);
     expect({ meeshes: model.meeshes, rank: model.rank, league: model.league, flame: model.flame }).toEqual({ meeshes: null, rank: null, league: null, flame: null });
   });
 
-  test('les Meeshes paraissent dès la première gardée', () => {
-    expect(playerBannerModel(gameBlockFixture({ ...NEWCOMER, balance: 1 })).meeshes).toBe(1);
+  test('pas de Meeshes : pas de Meeshes ; elles paraissent dès la première gardée', () => {
+    expect(shown(NEWCOMER).meeshes).toBeNull();
+    expect(shown({ ...NEWCOMER, balance: 1 }).meeshes).toBe(1);
   });
 
-  test('le rang paraît dès la première Gloire', () => {
-    const model = playerBannerModel(gameBlockFixture({ ...NEWCOMER, glory: 1 }));
+  test('pas de Gloire : pas de blason ; il paraît dès la première Gloire', () => {
+    expect(shown(NEWCOMER).rank).toBeNull();
+    const model = shown({ ...NEWCOMER, glory: 1 });
     expect(model.rank).not.toBeNull();
-    expect({ ...model, rank: null }).toEqual({ ...playerBannerModel(gameBlockFixture(NEWCOMER)), rank: null });
+    expect({ ...model, rank: null }).toEqual({ ...shown(NEWCOMER), rank: null });
   });
 
-  test('la Flamme paraît quand elle brûle, et seulement alors', () => {
-    const lit = playerBannerModel(gameBlockFixture({ ...NEWCOMER, streak: 23, lastActiveDay: '2026-10-05' }));
+  test('pas de Flamme : pas de Flamme ; elle paraît quand elle brûle, et seulement alors', () => {
+    expect(shown(NEWCOMER).flame).toBeNull();
+    const lit = shown({ ...NEWCOMER, streak: 23, lastActiveDay: '2026-10-05' });
     expect(lit.flame?.days).toBe(23);
-    const out = playerBannerModel(gameBlockFixture({ ...NEWCOMER, streak: 0, broken: { streak: 6, lastActiveDay: '2026-10-03' } }));
+    const out = shown({ ...NEWCOMER, streak: 0, broken: { streak: 6, lastActiveDay: '2026-10-03' } });
     expect(out.flame).toBeNull();
   });
 
-  test('la ligue paraît avec le consentement et un groupe : sa gemme et la place', () => {
+  test('pas de ligue : pas de ligue ; avec le consentement et un groupe, sa gemme et la place', () => {
+    expect(shown(NEWCOMER).league).toBeNull();
     const model = playerBannerModel(gameBlockWithExtrasFixture());
-    expect(model.league?.league).toBe('jade');
-    expect(model.league?.place).toBeGreaterThanOrEqual(1);
+    expect(model?.league?.league).toBe('jade');
+    expect(model?.league?.place).toBeGreaterThanOrEqual(1);
   });
 
   test('sans consentement, aucune ligue — même avec un groupe', () => {
     const model = playerBannerModel(gameBlockWithExtrasFixture({}, { league: { ...gameBlockWithExtrasLeague(), consented: false } }));
-    expect(model.league).toBeNull();
+    expect(model?.league).toBeNull();
+  });
+
+  test('une seule donnée suffit à porter le bandeau : la Flamme seule', () => {
+    const model = shown({ ...ZERO, streak: 3, lastActiveDay: '2026-10-05' });
+    expect(model.flame?.days).toBe(3);
+    expect({ level: model.level, points: model.points, meeshes: model.meeshes, rank: model.rank }).toEqual({ level: null, points: null, meeshes: null, rank: null });
   });
 
   test('au sommet, plus de niveau suivant ni de points manquants', () => {
-    const top = playerBannerModel(gameBlockFixture({ ...NEWCOMER, score: 50_000_000, debitablePoints: 50_000_000 }));
-    expect(top.level).toBe(100);
-    expect({ nextLevel: top.nextLevel, pointsToNext: top.pointsToNext }).toEqual({ nextLevel: null, pointsToNext: null });
+    const top = shown({ ...NEWCOMER, score: 50_000_000, debitablePoints: 50_000_000 });
+    expect(top.level?.level).toBe(100);
+    expect({ nextLevel: top.level?.nextLevel, pointsToNext: top.level?.pointsToNext }).toEqual({ nextLevel: null, pointsToNext: null });
   });
 });
 
 describe('ce que lit le lecteur d’écran — une phrase complète', () => {
   test('fr : le nouveau joueur, son niveau, son palier et sa marche vers le suivant', () => {
-    const model = playerBannerModel(gameBlockFixture(NEWCOMER));
+    const model = shown(NEWCOMER);
     expect(playerBannerLabel(model, 'fr')).toMatch(/^Niveau \d+, Étincelle, \d+ % vers le \d+$/);
   });
 
+  test('fr : au niveau 1, le total de points est dit — il n’y a pas de niveau à lire', () => {
+    const model = shown({ ...ZERO, score: 12, debitablePoints: 12 });
+    expect(playerBannerLabel(model, 'fr')).toMatch(/^12 points$/);
+  });
+
   test('fr : tout ce qui existe, dans l’ordre de la bannière', () => {
-    const model = playerBannerModel(gameBlockWithExtrasFixture({ balance: 12, streak: 23, glory: 620 }));
+    const model = shownExtras({ balance: 12, streak: 23, glory: 620 });
     expect(playerBannerLabel(model, 'fr')).toMatch(/^Niveau \d+, \p{L}+, \d+ % vers le \d+, 12 Meeshes, [\p{L} ]+, ligue Jade \d+(re|e), Flamme 23 jours$/u);
   });
 
   test('en : l’ordinal anglais de la place', () => {
-    const model = playerBannerModel(gameBlockWithExtrasFixture({ balance: 12, streak: 23 }));
+    const model = shownExtras({ balance: 12, streak: 23 });
     expect(playerBannerLabel(model, 'en')).toMatch(/^Level \d+, .*, Jade league \d+(st|nd|rd|th), Flame 23 days$/);
   });
 
   test('aucune langue ne laisse une clé nue, un paramètre en clair ou un « undefined »', () => {
-    const model = playerBannerModel(gameBlockWithExtrasFixture({ balance: 12, streak: 23 }));
+    const model = shownExtras({ balance: 12, streak: 23 });
     for (const language of SUPPORTED_INTERFACE_LANGUAGES) {
       const label = playerBannerLabel(model, language);
       expect({ language, defect: /game\.|\{\w+\}|undefined|NaN/.test(label) }).toEqual({ language, defect: false });
     }
   });
 });
+
+function shownExtras(facts: Partial<GameBlockFacts>) {
+  const model = playerBannerModel(gameBlockWithExtrasFixture(facts));
+  if (model === null) throw new Error('un bandeau était attendu');
+  return model;
+}
 
 function gameBlockWithExtrasLeague() {
   return gameExtrasFactsFixture().league;

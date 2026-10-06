@@ -35,8 +35,14 @@ afterAll(async () => {
   await releaseHappyDomIfRegistered();
 });
 
-const NEWCOMER: Partial<GameBlockFacts> = { score: 12, glory: 0, balance: 0, mintedLifetime: 0, streak: 0, freezes: 0, lastActiveDay: null, debitablePoints: 12 };
-const newcomer = (): PlayerBannerModel => playerBannerModel(gameBlockFixture(NEWCOMER));
+const NEWCOMER: Partial<GameBlockFacts> = { score: 100, glory: 0, balance: 0, mintedLifetime: 0, streak: 0, freezes: 0, lastActiveDay: null, debitablePoints: 100 };
+const ZERO: Partial<GameBlockFacts> = { ...NEWCOMER, score: 0, debitablePoints: 0 };
+const modelOf = (game: ReturnType<typeof gameBlockFixture>): PlayerBannerModel => {
+  const model = playerBannerModel(game);
+  if (model === null) throw new Error('un bandeau était attendu');
+  return model;
+};
+const newcomer = (): PlayerBannerModel => modelOf(gameBlockFixture(NEWCOMER));
 const markup = (model: PlayerBannerModel): string => renderToStaticMarkup(<PlayerBanner model={model} />);
 
 const PIECES = ['meeshes', 'rank', 'league', 'flame'] as const;
@@ -68,7 +74,7 @@ describe('seulement ce qui existe', () => {
   }
 
   test('l’ordre est fixe : anneau, jauge, Meeshes, rang, ligue, Flamme', () => {
-    const html = markup(playerBannerModel(gameBlockWithExtrasFixture({ balance: 12, streak: 23 })));
+    const html = markup(modelOf(gameBlockWithExtrasFixture({ balance: 12, streak: 23 })));
     const order = ['ring', 'gauge', ...PIECES].map((piece) => html.indexOf(`data-player-banner-${piece}=`));
     expect(order.every((position) => position >= 0)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
@@ -77,7 +83,53 @@ describe('seulement ce qui existe', () => {
   test('la jauge dit les points et ce qu’il manque ; au sommet, plus rien ne manque', () => {
     const model = newcomer();
     expect(markup(model)).toContain('data-player-banner-missing=');
-    expect(markup({ ...model, nextLevel: null, pointsToNext: null, progress: 1 })).not.toContain('data-player-banner-missing=');
+    expect(markup({ ...model, level: model.level === null ? null : { ...model.level, nextLevel: null, pointsToNext: null, progress: 1 } })).not.toContain('data-player-banner-missing=');
+  });
+});
+
+describe('seulement ce qui a du sens (#9536)', () => {
+  const level1 = (): PlayerBannerModel => modelOf(gameBlockFixture({ ...ZERO, score: 12, debitablePoints: 12 }));
+
+  test('niveau 1 : ni anneau ni jauge, seulement le total de points', () => {
+    const html = markup(level1());
+    expect(html).not.toContain('data-player-banner-ring=');
+    expect(html).not.toContain('data-player-banner-gauge=');
+    expect(html).toContain('data-player-banner-points="12"');
+    expect(piecesIn(html)).toEqual([]);
+  });
+
+  test('niveau 2 et plus : l’anneau et la jauge, pas de pièce « points » à part', () => {
+    const html = markup(newcomer());
+    expect(html).toContain('data-player-banner-ring=');
+    expect(html).toContain('data-player-banner-gauge=');
+    expect(html).not.toContain('data-player-banner-points=');
+  });
+
+  test('une Flamme seule : ni anneau, ni jauge, ni points', () => {
+    const html = markup({ ...level1(), points: null, flame: { form: 'braise', days: 3 } });
+    expect(html).not.toContain('data-player-banner-ring=');
+    expect(html).not.toContain('data-player-banner-gauge=');
+    expect(html).not.toContain('data-player-banner-points=');
+    expect(piecesIn(html)).toEqual(['flame']);
+  });
+
+  test('toujours une phrase lue, y compris au niveau 1', async () => {
+    const host = await mount(<PlayerBanner model={level1()} />);
+    expect(host.querySelector('a[data-player-banner]')?.getAttribute('aria-label')).toBe(playerBannerLabel(level1(), 'fr'));
+  });
+});
+
+describe('la bannière de profil en translucide (#9536)', () => {
+  test('sans bannière de profil : aucun fond image', () => {
+    expect(markup(newcomer())).not.toContain('data-player-banner-backdrop');
+  });
+
+  test('avec la bannière de profil : l’image est posée SOUS les informations, translucide, cachée au lecteur d’écran', () => {
+    const html = renderToStaticMarkup(<PlayerBanner model={newcomer()} backdrop="https://cdn.example/banner.jpg" />);
+    expect(html).toMatch(/<img data-player-banner-backdrop="" src="https:\/\/cdn.example\/banner.jpg" alt="" aria-hidden="true"/);
+    expect(html).toMatch(/data-player-banner-backdrop[^>]*-z-10/);
+    expect(html).toMatch(/data-player-banner-backdrop[^>]*opacity:0\.[1-7]/);
+    expect(html.indexOf('data-player-banner-backdrop')).toBeLessThan(html.indexOf('data-player-banner-ring='));
   });
 });
 
@@ -97,7 +149,7 @@ describe('le décor', () => {
 
 describe('accessible', () => {
   test('UN seul élément lu, nommé d’une phrase complète ; tout le reste est caché au lecteur d’écran', async () => {
-    const model = playerBannerModel(gameBlockWithExtrasFixture({ balance: 12, streak: 23 }));
+    const model = modelOf(gameBlockWithExtrasFixture({ balance: 12, streak: 23 }));
     const host = await mount(<PlayerBanner model={model} />);
     const link = host.querySelector('a[data-player-banner]');
     expect(link?.getAttribute('aria-label')).toBe(playerBannerLabel(model, 'fr'));
@@ -175,7 +227,12 @@ const gaugeText = (host: ParentNode): string => host.querySelector('[data-player
 const glint = (host: ParentNode): Element | null => host.querySelector('[data-player-banner-ring] canvas[data-game-effect="sheen"]');
 
 describe('le chiffre qui roule et le reflet d’un niveau', () => {
-  const before = (): PlayerBannerModel => ({ ...newcomer(), level: 4, score: 400, progress: 0.9, nextLevel: 5, pointsToNext: 40 });
+  const at = (level: number, score: number, progress: number, pointsToNext: number): PlayerBannerModel => ({
+    ...newcomer(),
+    points: score,
+    level: { level, progress, prestige: 0, nextLevel: level + 1, pointsToNext },
+  });
+  const before = (): PlayerBannerModel => at(4, 400, 0.9, 40);
 
   test('à la première peinture : le chiffre est à sa valeur, aucun reflet, aucun contexte WebGL', async () => {
     const m = motion();
@@ -188,7 +245,7 @@ describe('le chiffre qui roule et le reflet d’un niveau', () => {
   test('un gain de points sans changer de niveau : le chiffre roule, pas de reflet', async () => {
     const m = motion();
     const host = await mount(<PlayerBanner model={before()} motion={m.value} />);
-    await rerender(host, <PlayerBanner model={{ ...before(), score: 430, pointsToNext: 10, progress: 0.97 }} motion={m.value} />);
+    await rerender(host, <PlayerBanner model={at(4, 430, 0.97, 10)} motion={m.value} />);
     m.frame(0);
     m.frame(ROLL_MS / 2);
     const middle = Number(/(\d+)/.exec(gaugeText(host).replace(/\s/g, ''))?.[1]);
@@ -202,26 +259,26 @@ describe('le chiffre qui roule et le reflet d’un niveau', () => {
   test('un niveau gagné : le reflet paraît une fois, puis le canvas est retiré et le contexte libéré', async () => {
     const m = motion();
     const host = await mount(<PlayerBanner model={before()} motion={m.value} />);
-    await rerender(host, <PlayerBanner model={{ ...before(), level: 5, score: 440, progress: 0.05, nextLevel: 6, pointsToNext: 190 }} motion={m.value} />);
+    await rerender(host, <PlayerBanner model={at(5, 440, 0.05, 190)} motion={m.value} />);
     expect(glint(host)).not.toBeNull();
     expect(m.stats.created).toBe(1);
     m.fire();
-    await rerender(host, <PlayerBanner model={{ ...before(), level: 5, score: 440, progress: 0.05, nextLevel: 6, pointsToNext: 190 }} motion={m.value} />);
+    await rerender(host, <PlayerBanner model={at(5, 440, 0.05, 190)} motion={m.value} />);
     expect(glint(host)).toBeNull();
     expect(m.stats.disposed).toBe(1);
   });
 
   test('un niveau perdu (un Prestige) : pas de reflet', async () => {
     const m = motion();
-    const host = await mount(<PlayerBanner model={{ ...before(), level: 100 }} motion={m.value} />);
-    await rerender(host, <PlayerBanner model={{ ...before(), level: 1, score: 0 }} motion={m.value} />);
+    const host = await mount(<PlayerBanner model={at(100, 440, 0.5, 190)} motion={m.value} />);
+    await rerender(host, <PlayerBanner model={at(1, 0, 0, 40)} motion={m.value} />);
     expect(glint(host)).toBeNull();
   });
 
   test('animations réduites : le chiffre saute et le reflet ne paraît pas', async () => {
     const m = motion({ reducedMotion: true, roll: { reducedMotion: () => true, raf: () => 0, cancelRaf: () => undefined } });
     const host = await mount(<PlayerBanner model={before()} motion={m.value} />);
-    await rerender(host, <PlayerBanner model={{ ...before(), level: 5, score: 440 }} motion={m.value} />);
+    await rerender(host, <PlayerBanner model={at(5, 440, 0.05, 190)} motion={m.value} />);
     expect(gaugeText(host)).toContain('440');
     expect(glint(host)).toBeNull();
     expect(m.stats.created).toBe(0);
@@ -236,7 +293,7 @@ describe('aux très grandes tailles de texte', () => {
 
   test('la jauge passe sous l’anneau : elle prend toute la ligne, après le reste', async () => {
     const m = motion({ largeText: true });
-    const host = await mount(<PlayerBanner model={playerBannerModel(gameBlockWithExtrasFixture({ balance: 12, streak: 23 }))} motion={m.value} />);
+    const host = await mount(<PlayerBanner model={modelOf(gameBlockWithExtrasFixture({ balance: 12, streak: 23 }))} motion={m.value} />);
     const link = host.querySelector('[data-player-banner]');
     expect(link?.getAttribute('data-large-text')).toBe('');
     const gauge = host.querySelector<HTMLElement>('[data-player-banner-gauge]');
