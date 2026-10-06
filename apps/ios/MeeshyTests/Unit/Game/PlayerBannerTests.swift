@@ -191,8 +191,21 @@ final class PlayerBannerTests: XCTestCase {
         }
     }
 
-    private func store(_ source: FakeSource, interval: TimeInterval = 45, clock: @escaping () -> Date = { Date() }) -> PlayerBannerStore {
-        PlayerBannerStore(source: source, minimumInterval: interval, now: clock)
+    /// Ce que le serveur dit de « Jeu masqué » (`GET /me/game/privacy`) ; `nil` hors ligne ou sur un refus.
+    @MainActor
+    private final class FakeSettings: PlayerBannerSettingsReading {
+        var hidden: Bool? = false
+        private(set) var calls = 0
+
+        func servedHidden() async -> Bool? {
+            calls += 1
+            return hidden
+        }
+    }
+
+    private func store(_ source: FakeSource, settings: FakeSettings? = nil, interval: TimeInterval = 45,
+                       clock: @escaping () -> Date = { Date() }) -> PlayerBannerStore {
+        PlayerBannerStore(source: source, settings: settings ?? FakeSettings(), minimumInterval: interval, now: clock)
     }
 
     func test_theCacheIsPaintedFirst_thenTheNetworkCorrectsIt() async {
@@ -259,6 +272,55 @@ final class PlayerBannerTests: XCTestCase {
         sut.setSuspended(false)
         await sut.activate()
         XCTAssertNotNil(sut.banner)
+    }
+
+    /// Le web relit les réglages servis là où la bannière se monte (`useGameSettings`). Sans cette lecture, un jeu
+    /// masqué depuis un AUTRE appareil — ou avant une réinstallation — gardait sa bannière et ses requêtes jusqu'à
+    /// la première ouverture de Progression.
+    func test_aGameHiddenElsewhere_isLearnedFromTheServer_andTheBannerLeavesWithoutAskingForTheGame() async {
+        let source = FakeSource()
+        source.cachedBlock = GameFixture.game()
+        source.fetchedBlock = GameFixture.game()
+        let settings = FakeSettings()
+        settings.hidden = true
+        let sut = store(source, settings: settings)
+
+        await sut.activate()
+        XCTAssertNil(sut.banner, "« Jeu masqué » servi par le compte : rien")
+        XCTAssertEqual(source.fetchCalls, 0, "le jeu n'est pas demandé une fois le serveur entendu")
+
+        await sut.revalidate(force: true)
+        await sut.readCache()
+        XCTAssertEqual(source.fetchCalls, 0)
+        XCTAssertNil(sut.banner)
+    }
+
+    func test_anUnreadableSetting_keepsTheLastKnownState() async {
+        let source = FakeSource()
+        source.fetchedBlock = GameFixture.game(score: 14_000)
+        let settings = FakeSettings()
+        settings.hidden = nil
+        let sut = store(source, settings: settings)
+        await sut.activate()
+        XCTAssertEqual(sut.banner?.score, 14_000, "hors ligne, la copie de l'appareil reste maîtresse")
+    }
+
+    func test_theServedSettingsAreReread_atMostEveryFiveMinutes() async {
+        let source = FakeSource()
+        source.fetchedBlock = GameFixture.game()
+        let settings = FakeSettings()
+        var now = Date(timeIntervalSince1970: 1_790_000_000)
+        let sut = store(source, settings: settings, interval: 60, clock: { now })
+
+        await sut.revalidate()
+        now = now.addingTimeInterval(61)
+        await sut.revalidate()
+        XCTAssertEqual(source.fetchCalls, 2)
+        XCTAssertEqual(settings.calls, 1, "le jeu se revalide, les réglages servis ne se relisent pas à chaque fois")
+
+        now = now.addingTimeInterval(PlayerBannerStore.settingsInterval)
+        await sut.revalidate()
+        XCTAssertEqual(settings.calls, 2)
     }
 
     // MARK: - Où elle est montée

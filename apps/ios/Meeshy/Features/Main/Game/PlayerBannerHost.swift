@@ -15,7 +15,8 @@ import MeeshyUI
 //  - le reflet qui traverse l'anneau quand un niveau est franchi ;
 //  - ce qu'elle remonte à la bande de la barre d'état : sa couleur d'aplat.
 //
-// « Jeu masqué » (réglage de l'appareil) : aucune bannière ET aucune requête.
+// « Jeu masqué » : aucune bannière ET aucune requête. Le réglage vit sur le COMPTE (`GET /me/game/privacy`, relu
+// avant le jeu) ; l'appareil n'en garde qu'une copie, qui sert hors ligne.
 
 extension Notification.Name {
     /// Progression vient d'écrire un instantané dans le cache : la bannière le relit, sans réseau.
@@ -51,6 +52,23 @@ struct EngagementPlayerBannerSource: PlayerBannerSourcing {
     }
 }
 
+// MARK: - Les réglages servis
+
+/// Ce que le COMPTE dit de « Jeu masqué » (`GET /me/game/privacy`) : le serveur est maître, l'appareil n'en garde
+/// qu'une copie. Le web relit les réglages là où la bannière se monte (`useGameSettings`) ; sans cette lecture, un
+/// jeu masqué depuis un autre appareil — ou avant une réinstallation — gardait ici sa bannière et ses requêtes.
+@MainActor
+protocol PlayerBannerSettingsReading {
+    /// Relit les réglages, les pose sur l'appareil, et rend `gameHidden` ; `nil` hors ligne ou sur un refus.
+    func servedHidden() async -> Bool?
+}
+
+struct ServedGameSettingsReader: PlayerBannerSettingsReading {
+    func servedHidden() async -> Bool? {
+        await GameSettingsSync().refresh()?.gameHidden
+    }
+}
+
 // MARK: - Le magasin
 
 /// Ce que la bannière montre : le dernier bloc connu, dérivé en `GamePlayerBanner`. Cache d'abord, revalidation
@@ -63,18 +81,25 @@ final class PlayerBannerStore: ObservableObject {
 
     @Published private(set) var banner: GamePlayerBanner?
 
+    /// Les réglages servis se relisent au plus toutes les cinq minutes — la cadence du web (`staleTime`).
+    static let settingsInterval: TimeInterval = 300
+
     private let source: PlayerBannerSourcing
+    private let settings: PlayerBannerSettingsReading
     private let minimumInterval: TimeInterval
     private let now: () -> Date
     private var lastFetch: Date?
+    private var lastSettingsRead: Date?
     private var fetching = false
     /// « Jeu masqué » : ni lecture du réseau ni nouvelle lecture du cache tant que le jeu est masqué.
     private var suspended = false
     private var subscriptions = Set<AnyCancellable>()
 
-    init(source: PlayerBannerSourcing = EngagementPlayerBannerSource(), minimumInterval: TimeInterval = 45,
+    init(source: PlayerBannerSourcing = EngagementPlayerBannerSource(),
+         settings: PlayerBannerSettingsReading = ServedGameSettingsReader(), minimumInterval: TimeInterval = 45,
          now: @escaping () -> Date = { Date() }) {
         self.source = source
+        self.settings = settings
         self.minimumInterval = minimumInterval
         self.now = now
     }
@@ -98,14 +123,29 @@ final class PlayerBannerStore: ObservableObject {
 
     /// Relit le réseau en silence. Un échec ne retire RIEN (la bannière garde ce qu'elle montre) et n'est pas
     /// retenté avant `minimumInterval` : une coupure ne fait pas marteler la passerelle.
+    ///
+    /// Les réglages servis passent AVANT le jeu : un compte masqué ne demande pas son bloc `game`, et un cache vide
+    /// ne peint rien qu'une réponse viendrait retirer l'instant d'après.
     func revalidate(force: Bool = false) async {
         guard !fetching, !suspended else { return }
         if !force, let lastFetch, now().timeIntervalSince(lastFetch) < minimumInterval { return }
         fetching = true
         defer { fetching = false }
         lastFetch = now()
+        if await accountHidesTheGame() { return }
         guard let game = await source.fetch() else { return }
         adopt(game)
+    }
+
+    /// « Jeu masqué » servi par le compte : la bannière part et le magasin se tait. Une lecture en panne ne
+    /// change rien — la copie de l'appareil reste le dernier état connu.
+    private func accountHidesTheGame() async -> Bool {
+        if let lastSettingsRead, now().timeIntervalSince(lastSettingsRead) < Self.settingsInterval { return false }
+        lastSettingsRead = now()
+        guard await settings.servedHidden() == true else { return false }
+        suspended = true
+        banner = nil
+        return true
     }
 
     private func adopt(_ game: GameBlock) {
