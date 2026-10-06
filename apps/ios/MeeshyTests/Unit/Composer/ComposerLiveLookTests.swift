@@ -159,8 +159,12 @@ final class ComposerLiveLookTests: XCTestCase {
     func test_leRendu_seDit_etSAnnuleALaFermeture() throws {
         let session = try Self.code("Meeshy/Features/Main/Composer/ComposerCaptureSession.swift")
         XCTAssertTrue(session.contains("guard generation == renderGeneration else"),
-                      "un rendu lancé avant la fermeture ne remet rien à un viseur fermé")
-        XCTAssertTrue(session.contains("declaredSpaceName: espace"), "la vidéo se lit dans l'espace de l'aperçu")
+                      "un assemblage lancé avant la fermeture n'ouvre rien dans un viseur fermé")
+        let prises = try Self.code("Meeshy/Features/Main/Composer/ComposerCaptureSession+Takes.swift")
+        XCTAssertTrue(prises.contains("declaredSpaceName: espace"), "la vidéo se lit dans l'espace de l'aperçu")
+        let retouche = try Self.code("Meeshy/Features/Main/Composer/ComposerCaptureSession+Edit.swift")
+        XCTAssertTrue(retouche.contains("declaredSpace: camera.liveFeed.declaredSpace"),
+                      "la boucle de la retouche lit la vidéo dans l'espace de l'aperçu, comme l'export (#9352)")
         let vues = try Self.code("Meeshy/Features/Main/Composer/ComposerCaptureViews.swift")
         XCTAssertTrue(vues.contains("if session.isRenderingLook"), "le ✓ attend, et le dit")
         let export = try Self.code("Meeshy/Features/Main/Composer/ComposerLookVideoExporter.swift")
@@ -204,8 +208,11 @@ final class ComposerLiveLookTests: XCTestCase {
 
     func test_laPrise_partAvecLeLook_photoCommeVideo_dansLesDeuxMontages() throws {
         let session = try Self.code("Meeshy/Features/Main/Composer/ComposerCaptureSession.swift")
-        XCTAssertTrue(session.contains("ComposerLookVideoExporter.export("), "le ✓ des deux montages exporte le look")
+        XCTAssertTrue(session.contains("await beginEditing(video: url)"),
+                      "le ✓ des deux montages assemble et ouvre la retouche : la vidéo n'y part plus sans elle (#9352)")
+        XCTAssertFalse(session.contains("ComposerLookVideoExporter.export("), "le ✓ ne rend plus rien lui-même")
         let prises = try Self.code("Meeshy/Features/Main/Composer/ComposerCaptureSession+Takes.swift")
+        XCTAssertTrue(prises.contains("ComposerLookVideoExporter.export("), "la vidéo de la galerie part avec son look")
         XCTAssertTrue(prises.contains("beginEditing(photo: image, data: camera.capturedPhotoData)"),
                       "toute photo de la scène s'ouvre en édition avec son look, conversation comprise (#9352)")
         XCTAssertFalse(prises.contains("deliversRawPhoto"), "plus de porte qui revoit : le look ne s'applique qu'une fois")

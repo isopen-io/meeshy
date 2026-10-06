@@ -27,10 +27,9 @@ final class ComposerLookPainterWiringTests: XCTestCase {
         XCTAssertFalse(surface.contains("CallLiveFrameRule.paintSize("), "la scène se cuit au canevas canonique")
         let export = try Self.code("Meeshy/Features/Main/Composer/ComposerLookVideoExporter.swift")
         XCTAssertTrue(export.contains("ComposerLookPainter.paint("), "la vidéo peint par le peintre unique")
-        let session = try Self.code("Meeshy/Features/Main/Composer/ComposerCaptureSession.swift")
         let prises = try Self.code("Meeshy/Features/Main/Composer/ComposerCaptureSession+Takes.swift")
         XCTAssertTrue(prises.contains("ComposerLookPainter.renderPhoto("), "la photo peint par le peintre unique")
-        XCTAssertTrue(session.contains("date: lookDate"), "la vidéo grave la date de la session")
+        XCTAssertTrue(prises.contains("let date = lookDate"), "ce qui part en galerie grave la date de la session")
         let bande = try Self.code("Meeshy/Features/Main/Composer/ComposerLookStrip.swift")
         XCTAssertTrue(bande.contains("date: session.lookDate"), "la bande grave la date de la session")
         for fichier in ["ComposerLookPainter.swift", "ComposerLiveLookSurface.swift", "ComposerLookVideoExporter.swift"] {
