@@ -78,6 +78,16 @@ final class ComposerLookStripPaintingTests: XCTestCase {
         XCTAssertFalse(ComposerLookStripPaintRule.needsFrame(cases, painted: Self.painted(cases), slots: Self.places))
     }
 
+    func test_mayRequestFrame_boundsTheRequestsOfACellThatNeverPaints() {
+        XCTAssertTrue(ComposerLookStripPaintRule.mayRequestFrame(needsFrame: true, sent: 0, fps: 0),
+                      "figée, une case sans image obtient tout de même une trame")
+        XCTAssertFalse(ComposerLookStripPaintRule.mayRequestFrame(needsFrame: true, sent: 1, fps: 0))
+        XCTAssertTrue(ComposerLookStripPaintRule.mayRequestFrame(needsFrame: true, sent: 11, fps: 12))
+        XCTAssertFalse(ComposerLookStripPaintRule.mayRequestFrame(needsFrame: true, sent: 12, fps: 12),
+                       "un rendu qui échoue sans cesse ne réclame pas une trame par trame de l'objectif")
+        XCTAssertFalse(ComposerLookStripPaintRule.mayRequestFrame(needsFrame: false, sent: 0, fps: 12))
+    }
+
     func test_frameGate_frozen_letsOneRequestedFrameThrough() {
         let porte = ComposerLookStripFrameGate(fps: 0)
         XCTAssertEqual(porte.admit(presentedAt: 1), .refused, "figée, la bande ne prend aucune trame")
