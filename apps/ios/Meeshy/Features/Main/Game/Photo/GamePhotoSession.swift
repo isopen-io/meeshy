@@ -76,7 +76,8 @@ final class GamePhotoSession: ObservableObject {
     /// Le geste de partage a demandé un jeton et la passerelle n'en a rendu aucun : plus d'emplacement.
     private var linkUnavailable = false
     private var preparingReferral = false
-    private var preparingShare = false
+    /// La création demandée par un toucher de « Partager » ; un second toucher l'attend au lieu de partir sans lien.
+    private var shareInFlight: Task<Void, Never>?
     private var composedSource: UIImage?
     private var composedMode: PhotoMode?
 
@@ -135,11 +136,27 @@ final class GamePhotoSession: ObservableObject {
     /// Au toucher de « Partager » : le seul geste qui crée un jeton, quand l'utilisateur n'en a aucun. La
     /// carte est recomposée avec le vrai lien — ou sans bandeau si la passerelle n'en donne aucun — avant
     /// que la feuille de partage ne s'ouvre. Sans bandeau voulu (« Mon lien » retiré), rien ne se crée.
+    ///
+    /// Un second toucher pendant la création ATTEND la même création — un seul jeton, et aucune feuille ne s'ouvre
+    /// sur une carte privée du lien que le premier toucher est en train d'obtenir.
     func prepareShare() async {
-        guard linkOnCard, referralLink == nil, !linkUnavailable, !preparingShare else { return }
-        preparingShare = true
-        defer { preparingShare = false }
-        if let link = await referralLinks.shareableLink() {
+        if let shareInFlight {
+            await shareInFlight.value
+            return
+        }
+        guard linkOnCard, referralLink == nil, !linkUnavailable else { return }
+        let creation = Task { @MainActor [weak self] in
+            guard let self else { return }
+            let link = await self.referralLinks.shareableLink()
+            self.adoptShareableLink(link)
+        }
+        shareInFlight = creation
+        await creation.value
+        shareInFlight = nil
+    }
+
+    private func adoptShareableLink(_ link: String?) {
+        if let link {
             referralLink = link
         } else {
             linkUnavailable = true
