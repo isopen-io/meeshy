@@ -78,6 +78,16 @@ enum GameEngravedBirds {
         Shape(geometry: .path(d), fill: nil, stroke: Stroke(color: hex, width: width), opacity: opacity)
     }
 
+    /// Un œil ouvert de Meo : la pupille, l'ombre du bas, deux reflets.
+    private static func meoEye(_ x: CGFloat) -> [Shape] {
+        [
+            solid("1c1941", .ellipse(cx: x, cy: 74, rx: 9, ry: 10.5)),
+            solid("4c4a8a", .ellipse(cx: x, cy: 79, rx: 6, ry: 4), opacity: 0.55),
+            solid("ffffff", .circle(cx: x + 3, cy: 70, r: 3.8)),
+            solid("ffffff", .circle(cx: x - 3, cy: 77.8, r: 1.7)),
+        ]
+    }
+
     // Ce que les deux colibris partagent : le corps, le ventre, le cœur, les joues, le bec.
     private static let beak: [Shape] = [
         Shape(geometry: .path("M65.5 85 Q60.5 91 65.5 97.5 L86.5 93 Q90.5 91.3 86.5 89.6 Z"),
@@ -134,14 +144,6 @@ enum GameEngravedBirds {
         func plume(_ d: String) -> Shape {
             Shape(geometry: .path(d), fill: .solid("7c3aed"), stroke: Stroke(color: "6d28d9", width: 2))
         }
-        func eye(_ x: CGFloat) -> [Shape] {
-            [
-                solid("1c1941", .ellipse(cx: x, cy: 74, rx: 9, ry: 10.5)),
-                solid("4c4a8a", .ellipse(cx: x, cy: 79, rx: 6, ry: 4), opacity: 0.55),
-                solid("ffffff", .circle(cx: x + 3, cy: 70, r: 3.8)),
-                solid("ffffff", .circle(cx: x - 3, cy: 77.8, r: 1.7)),
-            ]
-        }
         var shapes = wing.left
         shapes += [
             Shape(geometry: .path("M61 112 C50 116 45 124 47 131 C53 130 57 126 60 122 C62 128 66 132 72 133 C74 125 70 117 66 112 Z"),
@@ -162,8 +164,8 @@ enum GameEngravedBirds {
             solid("ff8fa8", .ellipse(cx: 45, cy: 88, rx: 7.5, ry: 4.8), opacity: 0.85),
             solid("ff8fa8", .ellipse(cx: 98, cy: 86, rx: 7, ry: 4.6), opacity: 0.85),
         ]
-        shapes += eye(57)
-        shapes += eye(83)
+        shapes += meoEye(57)
+        shapes += meoEye(83)
         shapes += beak
         shapes += wing.right
         return shapes
