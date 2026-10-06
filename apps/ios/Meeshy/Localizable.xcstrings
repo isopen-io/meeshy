@@ -70991,53 +70991,6 @@
         }
       }
     },
-    "composer.camera.filmAction": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "تصوير"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Filmen"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Film"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Grabar"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Filmer"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Filma"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Filmar"
-          }
-        }
-      }
-    },
     "composer.camera.flip": {
       "extractionState": "manual",
       "localizations": {
@@ -71185,43 +71138,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "انقر لالتقاط صورة"
+            "value": "انقر مرتين لالتقاط صورة · اضغط مطولًا للتصوير"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "tippen, um ein Foto aufzunehmen"
+            "value": "zweimal tippen für ein Foto · halten zum Filmen"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "tap to take a photo"
+            "value": "double-tap for a photo · hold to film"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "toca para hacer una foto"
+            "value": "toca dos veces para una foto · mantén para grabar"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "toucher pour prendre une photo"
+            "value": "toucher deux fois pour une photo · maintenir pour filmer"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "tocca per scattare una foto"
+            "value": "tocca due volte per una foto · tieni premuto per girare"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "toque para tirar uma foto"
+            "value": "toque duas vezes para uma foto · segure para filmar"
           }
         }
       }
@@ -224913,53 +224866,6 @@
         }
       }
     },
-    "composer.capture.looks": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "المرشّحات والإطارات"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Filter und Rahmen"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Filters and frames"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Filtros y marcos"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Filtres et cadres"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Filtri e cornici"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Filtros e molduras"
-          }
-        }
-      }
-    },
     "composer.capture.looks.rendering": {
       "extractionState": "manual",
       "localizations": {
@@ -258373,6 +258279,194 @@
           "stringUnit": {
             "state": "translated",
             "value": "اللعبة: ثنائي، دوري، موسم"
+          }
+        }
+      }
+    },
+    "composer.camera.exposure": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "السطوع"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Helligkeit"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Brightness"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Brillo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Luminosité"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Luminosità"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Brilho"
+          }
+        }
+      }
+    },
+    "composer.camera.discard.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تجاهل الفيديو؟"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Video verwerfen?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Discard the video?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Descartar el vídeo?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abandonner la vidéo ?"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scartare il video?"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Descartar o vídeo?"
+          }
+        }
+      }
+    },
+    "composer.camera.discard.confirm": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تجاهل"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verwerfen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Discard"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Descartar"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abandonner"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scarta"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Descartar"
+          }
+        }
+      }
+    },
+    "composer.camera.discard.keep": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "متابعة التصوير"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Weiterfilmen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keep filming"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seguir grabando"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Continuer"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Continua a girare"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Continuar filmando"
           }
         }
       }

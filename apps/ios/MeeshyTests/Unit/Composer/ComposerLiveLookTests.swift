@@ -89,12 +89,6 @@ final class ComposerLiveLookTests: XCTestCase {
         XCTAssertEqual(ComposerLiveLookRule.graded(trame, filter: .warm).extent.size, CGSize(width: 100, height: 60))
     }
 
-    func test_leSelecteur_seTientAuDessusDeLObturateur() {
-        XCTAssertGreaterThan(ComposerLiveLookPanelLayout.bottomInset(for: .fullScreen), 0)
-        XCTAssertGreaterThanOrEqual(ComposerLiveLookPanelLayout.bottomInset(for: .fullScreen),
-                                    ComposerLiveLookPanelLayout.bottomInset(for: .card))
-    }
-
     // MARK: - La machine : le guet des trames suit le look
 
     func test_choisirUnLook_armeLeGuetDesTrames_etLeRetirerLeCoupe() {
@@ -215,9 +209,8 @@ final class ComposerLiveLookTests: XCTestCase {
     func test_lAperçuPartage_poseLeLookEnDirect() throws {
         let vues = try Self.code("Meeshy/Features/Main/Composer/ComposerCaptureViews.swift")
         XCTAssertTrue(vues.contains("ComposerLiveLookSurface("), "l'aperçu des DEUX montages montre le look")
-        XCTAssertTrue(vues.contains("ComposerLiveLookPanel("), "le chrome des DEUX montages porte le sélecteur")
-        let barre = try Self.code("Meeshy/Features/Main/Composer/ComposerSceneCameraBar.swift")
-        XCTAssertTrue(barre.contains("ComposerLiveLookCopy.toggle"))
+        let bas = try Self.code("Meeshy/Features/Main/Composer/ComposerCaptureBottomRow.swift")
+        XCTAssertTrue(bas.contains("ComposerLookRail("), "le rail des DEUX montages ouvre les filtres et les cadres")
     }
 
     func test_laSurface_composeAvecLesPiecesDeLAppel() throws {
@@ -250,12 +243,9 @@ final class ComposerLiveLookTests: XCTestCase {
         let session = try Self.code("Meeshy/Features/Main/Composer/ComposerCaptureSession.swift")
         XCTAssertTrue(session.contains("ComposerLookVideoExporter.export("), "le ✓ des deux montages exporte le look")
         let prises = try Self.code("Meeshy/Features/Main/Composer/ComposerCaptureSession+Takes.swift")
-        XCTAssertTrue(prises.contains("lookedPhoto(image, data: camera.capturedPhotoData)"),
-                      "story, post, réel et porte sans prise : la photo de la scène part regardée (#9351)")
-        let viseur = try Self.code("Meeshy/Features/Main/Composer/ComposerViewfinder.swift")
-        XCTAssertTrue(viseur.contains("initialLook: pendingPhoto.look"), "la prise s'ouvre sur le look du viseur")
-        XCTAssertTrue(viseur.contains("capture.deliversRawPhoto = reviewsPhoto"),
-                      "la porte qui revoit reçoit la prise brute : le look ne s'applique pas deux fois")
+        XCTAssertTrue(prises.contains("lookedPhoto(image"),
+                      "toute photo de la scène part regardée, conversation comprise (#9351)")
+        XCTAssertFalse(prises.contains("deliversRawPhoto"), "plus de porte qui revoit : le look ne s'applique qu'une fois")
     }
 
     // MARK: - Outils

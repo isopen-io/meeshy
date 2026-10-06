@@ -69,55 +69,57 @@ final class ComposerSceneQuickCaptureTests: XCTestCase {
         XCTAssertNil(ComposerSceneQuickCapture.tap(format: .status))
     }
 
-    func test_armedTap_viseurArmeDansUnFormatPhoto_prendLaPhoto() {
-        XCTAssertEqual(ComposerSceneQuickCapture.armedTap(stage: .armed, format: .story, pendingSegments: 0),
-                       .takePhoto)
-        XCTAssertEqual(ComposerSceneQuickCapture.armedTap(stage: .armed, format: .post, pendingSegments: 0),
-                       .takePhoto)
+    // MARK: - Viseur armé : la TABLE des gestes décide (#9351)
+
+    /// Les témoins des anciennes lois du viseur armé (#8711, #8846), sur les mêmes cas,
+    /// dits par la table qui les remplace : le double toucher photographie
+    /// (inversion assumée du « un toucher prend » de #8711 — décision (b)).
+    func test_table_viseurArme_doubleToucherPhotographie() {
+        XCTAssertEqual(ComposerCaptureGesture.action(zone: .scene, gesture: .doubleTap,
+                                                     context: ComposerCaptureGestureContext()), .photoToEdit)
     }
 
-    func test_armedTap_refuseHorsDuViseurArme() {
-        XCTAssertEqual(ComposerSceneQuickCapture.armedTap(stage: .off, format: .story, pendingSegments: 0),
-                       .ignore, "viseur éteint : le premier toucher appartient à l'armement")
-        XCTAssertEqual(ComposerSceneQuickCapture.armedTap(stage: .recording, format: .story, pendingSegments: 0),
-                       .ignore, "une prise en cours ne se coupe pas d'une photo")
-        XCTAssertEqual(ComposerSceneQuickCapture.armedTap(stage: .armed, format: .reel, pendingSegments: 0),
-                       .ignore, "un réel n'a pas de photo")
-        XCTAssertEqual(ComposerSceneQuickCapture.armedTap(stage: .armed, format: .story, pendingSegments: 2),
-                       .ignore, "des segments en attente de ✓ ne se perdent pas sous une photo")
+    func test_table_doubleToucher_refuseHorsDuViseurArme() {
+        func double(_ contexte: ComposerCaptureGestureContext) -> ComposerCaptureAction {
+            ComposerCaptureGesture.action(zone: .scene, gesture: .doubleTap, context: contexte)
+        }
+        XCTAssertEqual(double(ComposerCaptureGestureContext(stage: .off)), .none,
+                       "viseur éteint : le premier toucher appartient à l'armement")
+        XCTAssertEqual(double(ComposerCaptureGestureContext(stage: .recording)), .none,
+                       "une prise en cours ne se coupe pas d'une photo")
+        XCTAssertEqual(double(ComposerCaptureGestureContext(allowsPhoto: ComposerSceneCamera.modes(for: .reel)
+            .contains(.photo))), .none, "un réel n'a pas de photo")
+        XCTAssertEqual(double(ComposerCaptureGestureContext(pendingSegments: 2)), .none,
+                       "des segments en attente de ✓ ne se perdent pas sous une photo")
     }
-
-    // MARK: - Viseur armé : l'appui long FILME (#8846)
 
     /// > « le longpress à partir de la scène doit déclencher la capture vidéo
     /// > après avoir armé l'objectif » — directive porteur 2026-09-30.
-    func test_armedHold_viseurArme_demarreLaVideo_danstousLesFormatsQuiFilment() {
-        XCTAssertEqual(ComposerSceneQuickCapture.armedHold(stage: .armed, format: .story), .startFilming)
-        XCTAssertEqual(ComposerSceneQuickCapture.armedHold(stage: .armed, format: .post), .startFilming)
-        XCTAssertEqual(ComposerSceneQuickCapture.armedHold(stage: .armed, format: .reel), .startFilming)
-    }
-
-    func test_armedHold_horsViseurArme_ouSansVideo_nePrendRien() {
-        XCTAssertEqual(ComposerSceneQuickCapture.armedHold(stage: .off, format: .story), .ignore)
-        XCTAssertEqual(ComposerSceneQuickCapture.armedHold(stage: .recording, format: .story), .ignore,
+    func test_table_appuiLong_filmeUnSegment() {
+        func tenue(_ contexte: ComposerCaptureGestureContext) -> ComposerCaptureAction {
+            ComposerCaptureGesture.action(zone: .scene, gesture: .longPress, context: contexte)
+        }
+        XCTAssertEqual(tenue(ComposerCaptureGestureContext()), .filmSegment)
+        XCTAssertEqual(tenue(ComposerCaptureGestureContext(stage: .recording)), .none,
                        "une prise en cours n'en démarre pas une seconde")
-        XCTAssertEqual(ComposerSceneQuickCapture.armedHold(stage: .armed, format: .status), .ignore)
+        XCTAssertEqual(tenue(ComposerCaptureGestureContext(allowsVideo: false)), .none)
+        XCTAssertEqual(tenue(ComposerCaptureGestureContext(pendingSegments: 2)), .filmSegment,
+                       "une nouvelle prise s'AJOUTE aux segments en attente")
     }
 
-    /// Le toucher reste la photo, l'appui long la vidéo : deux gestes, deux
-    /// intentions, sur la MÊME nappe du viseur armé.
+    /// Trois gestes, trois intentions, sur la MÊME nappe du viseur armé.
     func test_viseurArme_toucherEtAppuiLong_nePortentPasLaMemeIntention() {
-        XCTAssertEqual(ComposerSceneQuickCapture.armedTap(stage: .armed, format: .story, pendingSegments: 0),
-                       .takePhoto)
-        XCTAssertEqual(ComposerSceneQuickCapture.armedHold(stage: .armed, format: .story), .startFilming)
+        let contexte = ComposerCaptureGestureContext()
+        XCTAssertEqual(ComposerCaptureGesture.action(zone: .scene, gesture: .tap, context: contexte), .focus)
+        XCTAssertEqual(ComposerCaptureGesture.action(zone: .scene, gesture: .doubleTap, context: contexte), .photoToEdit)
+        XCTAssertEqual(ComposerCaptureGesture.action(zone: .scene, gesture: .longPress, context: contexte), .filmSegment)
     }
 
     /// La nappe du viseur armé câble l'appui long vers la prise vidéo.
     func test_nappeDuViseurArme_cableLAppuiLongVersLaVideo() throws {
-        let hote = try source("Meeshy/Features/Main/Composer/MeeshyComposerHost+Viewfinder.swift")
-        XCTAssertTrue(hote.contains("onHold: { handleArmedSceneHold() }"), "l'appui long de la nappe ne démarre rien")
-        // #9134 — la nappe est celle du chrome PARTAGÉ : sa levée est celle de la machine.
         let chrome = try source("Meeshy/Features/Main/Composer/ComposerCaptureViews.swift")
+        XCTAssertTrue(chrome.contains("scene(.longPress)"), "l'appui long de la nappe filme, décidé par la table")
+        // #9134 — la nappe est celle du chrome PARTAGÉ : sa levée est celle de la machine.
         XCTAssertTrue(chrome.contains(".onEnded { _ in session.endHold() }"), "relâcher n'arrête pas la prise")
     }
 

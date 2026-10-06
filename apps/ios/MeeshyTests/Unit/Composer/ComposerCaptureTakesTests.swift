@@ -65,20 +65,8 @@ final class ComposerCaptureTakesTests: XCTestCase {
                        "elle part regardée, sur le canevas 9:16")
     }
 
-    func test_photoArrived_editIntent_rawDelivery_handsTheTakeUntouched() {
-        let session = ComposerCaptureSession(stage: .armed, gallery: MockComposerGallery())
-        session.look = ComposerPhotoLook(filter: .warm)
-        session.deliversRawPhoto = true
-        var remis: CameraResult?
-        session.onDeliver = { remis = $0 }
-        Self.publishPhoto(on: session)
-        guard case .photo(let image, _)? = remis else { return XCTFail("la porte qui revoit reçoit la prise") }
-        XCTAssertTrue(image === session.camera.capturedPhoto, "la revue applique le look elle-même : jamais deux fois")
-    }
-
     func test_photoArrived_afterDisarm_deliversNothing() {
         let session = ComposerCaptureSession(stage: .armed, gallery: MockComposerGallery())
-        session.deliversRawPhoto = true
         var remis = 0
         session.onDeliver = { _ in remis += 1 }
         session.disarm()
@@ -214,10 +202,9 @@ final class ComposerCaptureTakesTests: XCTestCase {
 
     // MARK: - L'intention suit LA photo (I2)
 
-    func test_takePhoto_refusedGalleryRequest_nextShutterTakesForEdit() {
+    func test_takePhoto_refusedGalleryRequest_nextShutterTakesForEdit() async {
         let objectif = MockComposerCaptureCamera()
         let session = ComposerCaptureSession(stage: .armed, controls: objectif, gallery: MockComposerGallery())
-        session.deliversRawPhoto = true
         var remis = 0
         session.onDeliver = { _ in remis += 1 }
         objectif.isSwitchingCamera = true
@@ -227,7 +214,9 @@ final class ComposerCaptureTakesTests: XCTestCase {
         objectif.isSwitchingCamera = false
         session.takePhoto()
         Self.publishPhoto(on: session)
-        XCTAssertEqual(remis, 1, "l'obturateur suivant prend pour la scène")
+        await Self.waitUntil { remis == 1 }
+        let livrees = remis
+        XCTAssertEqual(livrees, 1, "l'obturateur suivant prend pour la scène, regardée")
     }
 
     func test_takePhoto_duringTheFrontFlashRamp_keepsTheInFlightIntent() async {

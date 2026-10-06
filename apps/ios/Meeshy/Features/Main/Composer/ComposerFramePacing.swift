@@ -108,4 +108,9 @@ enum ComposerCaptureCopy {
         String(localized: "composer.capture.thermal.notice",
                defaultValue: "Aperçu simplifié : l'appareil chauffe. La prise garde tout l'effet.", bundle: .main)
     }
+
+    /// La vidéo se rend avec son look : le `✓` attend, et le dit.
+    static var rendering: String {
+        String(localized: "composer.capture.looks.rendering", defaultValue: "Application du filtre…", bundle: .main)
+    }
 }

@@ -32,7 +32,7 @@ enum ComposerSceneCameraCopy {
         switch ComposerSceneCamera.hintKey(mode: mode, stage: stage) {
         case "composer.camera.hint.photo":
             return String(localized: "composer.camera.hint.photo",
-                          defaultValue: "toucher pour prendre une photo",
+                          defaultValue: "toucher deux fois pour une photo · maintenir pour filmer",
                           bundle: .main)
         case "composer.camera.hint.video":
             return String(localized: "composer.camera.hint.video",
@@ -73,12 +73,27 @@ enum ComposerSceneCameraCopy {
                defaultValue: "Poser dans la scène", bundle: .main)
     }
 
-    /// **L'action VoiceOver du déclencheur.** Un lecteur d'écran ne TIENT pas
-    /// un doigt : sans elle, la vidéo serait offerte à la main et refusée à la
-    /// voix — une capacité que le geste rendrait inatteignable.
-    static var filmActionLabel: String {
-        String(localized: "composer.camera.filmAction",
-               defaultValue: "Filmer", bundle: .main)
+    /// **La luminosité du viseur** (#9351) — le curseur vertical sous le flash.
+    static var exposureLabel: String {
+        String(localized: "composer.camera.exposure",
+               defaultValue: "Luminosité", bundle: .main)
+    }
+
+    /// **Des segments attendent leur `✓`** : fermer le viseur les jetterait.
+    /// La question dit ce qui se perd ; les deux choix, ce qu'ils font.
+    static var discardTitle: String {
+        String(localized: "composer.camera.discard.title",
+               defaultValue: "Abandonner la vidéo ?", bundle: .main)
+    }
+
+    static var discardConfirm: String {
+        String(localized: "composer.camera.discard.confirm",
+               defaultValue: "Abandonner", bundle: .main)
+    }
+
+    static var discardKeep: String {
+        String(localized: "composer.camera.discard.keep",
+               defaultValue: "Continuer", bundle: .main)
     }
 
     /// **Le libellé dit OÙ l'on va**, jamais où l'on est : un lecteur d'écran

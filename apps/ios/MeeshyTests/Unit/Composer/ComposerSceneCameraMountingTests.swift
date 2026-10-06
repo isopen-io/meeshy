@@ -157,16 +157,20 @@ final class ComposerSceneCameraMountingTests: XCTestCase {
     /// ancre — l'une en ignorant les marges, l'autre pas —, et c'est cet écart
     /// qui les distingue. Une seule couche ne peut pas tenir les deux.
     func test_lImageIgnoreLesMarges_quandLeChromeLesRespecte() throws {
-        let code = compact(try source("MeeshyComposerHost+Viewfinder.swift"))
-        guard let début = code.range(of: "funcwithSceneCameraViewfinder"),
-              let fin = code.range(of: "varsceneCameraGrowth", range: début.upperBound..<code.endIndex)
+        // #9351 — le montage a quitté l'hôte pour `ComposerCaptureMount`, que la
+        // barre de conversation monte aussi : ce que le témoin garde n'a pas bougé.
+        let hote = compact(try source("MeeshyComposerHost+Viewfinder.swift"))
+        XCTAssertTrue(hote.contains("ComposerCaptureMount("), "le composer monte le montage unique")
+        let code = compact(try source("ComposerCaptureMount.swift"))
+        guard let début = code.range(of: "varbody:someView{"),
+              let fin = code.range(of: "privatefuncimage(rect:", range: début.upperBound..<code.endIndex)
         else { return XCTFail("le montage a changé de nom") }
         let corps = String(code[début.upperBound..<fin.lowerBound])
         XCTAssertEqual(corps.components(separatedBy: "overlayPreferenceValue(ComposerSceneCameraFrameKey.self)").count - 1, 2,
                        "deux couches, une par repère")
         XCTAssertEqual(corps.components(separatedBy: "ignoresSafeArea()").count - 1, 1,
                        "l'image seule ignore les marges — le chrome y serait sous l'encoche")
-        XCTAssertTrue(corps.range(of: "sceneCameraPreview(")!.lowerBound
+        XCTAssertTrue(corps.range(of: "image(rect:")!.lowerBound
                       < corps.range(of: "ignoresSafeArea()")!.lowerBound,
                       "c'est la couche de l'IMAGE qui ignore, pas celle du chrome")
     }
@@ -176,8 +180,8 @@ final class ComposerSceneCameraMountingTests: XCTestCase {
     /// exactement inverse de celle qu'on corrige, et indiscernable d'un fond
     /// noir légitime.
     func test_leMeuble_nePeintLeViseur_queSiLeStageEstArmé() throws {
-        let code = compact(try source("MeeshyComposerHost+Viewfinder.swift"))
-        XCTAssertEqual(code.components(separatedBy: "sceneCameraStage != .off"
+        let code = compact(try source("ComposerCaptureMount.swift"))
+        XCTAssertEqual(code.components(separatedBy: "session.stage != .off"
             .replacingOccurrences(of: " ", with: "")).count - 1, 2,
                        "les DEUX couches doivent porter le gate — une seule laisserait un chrome orphelin")
     }

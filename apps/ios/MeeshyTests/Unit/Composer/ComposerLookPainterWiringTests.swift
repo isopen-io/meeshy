@@ -30,10 +30,8 @@ final class ComposerLookPainterWiringTests: XCTestCase {
         let session = try Self.code("Meeshy/Features/Main/Composer/ComposerCaptureSession.swift")
         XCTAssertTrue(session.contains("ComposerLookPainter.renderPhoto("), "la photo peint par le peintre unique")
         XCTAssertTrue(session.contains("date: lookDate"), "la vidéo grave la date de la session")
-        let revue = try Self.code("Meeshy/Features/Main/Composer/ComposerPhotoLookReview.swift")
-        XCTAssertFalse(revue.contains("at: Date()"), "la revue grave la date de la session, pas celle de son ouverture")
-        XCTAssertTrue(revue.contains("ComposerLookPainter.renderPreview("),
-                      "l'aperçu de la revue se peint à la toile de l'écran, jamais à la définition native")
+        let bande = try Self.code("Meeshy/Features/Main/Composer/ComposerLookStrip.swift")
+        XCTAssertTrue(bande.contains("date: session.lookDate"), "la bande grave la date de la session")
         for fichier in ["ComposerLookPainter.swift", "ComposerLiveLookSurface.swift", "ComposerLookVideoExporter.swift"] {
             let code = try Self.code("Meeshy/Features/Main/Composer/\(fichier)")
             XCTAssertFalse(code.contains("Date()"), "\(fichier) : aucune date du rendu sur un chemin de rendu")

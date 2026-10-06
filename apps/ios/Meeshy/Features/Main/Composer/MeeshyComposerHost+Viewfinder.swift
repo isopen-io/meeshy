@@ -53,8 +53,8 @@ extension MeeshyComposerHost {
     /// **Un toucher sur une scène VIDE ARME le viseur — il ne prend rien**
     /// (#8711, qui supplante le « ouvre et prend » de #8653). Le viseur paraît
     /// avec ses contrôleurs habituels ; c'est le SECOND toucher qui prend la
-    /// photo (`handleArmedSceneTap`). Rend `true` quand il a pris le geste —
-    /// le tap de sélection du fond n'a alors rien à faire.
+    /// photo (la table des gestes du viseur). Rend `true` quand il a pris le
+    /// geste — le tap de sélection du fond n'a alors rien à faire.
     func handleSceneQuickTap() -> Bool {
         guard ComposerSceneQuickCapture.offers(
             sceneIsBlank: ComposerSceneQuickCapture.sceneIsBlank(viewModel.currentSlide),
@@ -65,25 +65,6 @@ extension MeeshyComposerHost {
         HapticFeedback.light()
         armSceneCamera()
         return true
-    }
-
-    /// **Le second toucher, n'importe où sur la scène, prend la photo** (#8711).
-    /// La nappe du viseur le reçoit hors de ses contrôleurs ; la loi décide.
-    func handleArmedSceneTap() {
-        guard ComposerSceneQuickCapture.armedTap(
-            stage: sceneCameraStage,
-            format: selectedFormat,
-            pendingSegments: sceneCapture.segments.count) == .takePhoto else { return }
-        sceneCapture.photographWhenReady()
-    }
-
-    /// **Viseur ARMÉ : l'appui long, n'importe où sur la scène, FILME** (#8846,
-    /// directive porteur 2026-09-30) — la même tenue, le même cadenas et le
-    /// même zoom que l'appui long d'une scène vide.
-    func handleArmedSceneHold() {
-        guard ComposerSceneQuickCapture.armedHold(stage: sceneCameraStage,
-                                                  format: selectedFormat) == .startFilming else { return }
-        sceneCapture.beginHold()
     }
 
     /// **Le doigt glisse pendant la prise** : à droite le cadenas, à la
@@ -120,11 +101,6 @@ extension MeeshyComposerHost {
         sceneCapture.arm(mode: mode)
     }
 
-    /// **`✓` concatène et pose.**
-    func validateSceneSegments() {
-        sceneCapture.validateSegments { poseSceneCapture(.video($0)) }
-    }
-
     /// **La prise POSE, puis le viseur se RETIRE** (#4080, planche `2b` : « une
     /// entrée, pas un mode »).
     func poseSceneCapture(_ result: CameraResult) {
@@ -153,80 +129,18 @@ extension MeeshyComposerHost {
 
     // MARK: - Le montage unique
 
-    /// **UN aperçu qui grandit, deux couches qui ne se confondent pas.**
-    ///
-    /// La couche BASSE porte l'image et ignore les marges système : en plein
-    /// écran, « entièrement » veut dire jusqu'au bord, encoche comprise.
-    /// La couche HAUTE porte le chrome — flash, `[ ]`, bascule d'objectif,
-    /// obturateur — et les RESPECTE : « les icônes accessibles et non au niveau
-    /// de la barre système ».
-    ///
-    /// Deux `overlayPreferenceValue` sur la même clé, et non un seul avec un
-    /// `safeAreaPadding` : ce dernier n'existe qu'à partir d'iOS 17 et le
-    /// plancher de l'app est iOS 16.
+    /// **Le composer monte LE montage de la capture** (#9351) — celui que la
+    /// barre de conversation monte aussi, en plein écran figé. Ici la taille
+    /// est pilotée (carte ↔ plein écran), et le FORMAT dit si la photo et la
+    /// vidéo sont offertes ; la prise se POSE dans la scène.
     func withSceneCameraViewfinder<Contenu: View>(_ contenu: Contenu) -> some View {
-        contenu
-            .overlayPreferenceValue(ComposerSceneCameraFrameKey.self) { ancre in
-                GeometryReader { proxy in
-                    if let ancre, sceneCameraStage != .off {
-                        // **Le sol en BLANC brillant** (#8653) : objectif
-                        // avant, flash actif — son intensité suit le curseur
-                        // de verre (#8671).
-                        if sceneCapture.floorIsLit { Color(white: sceneCapture.floorWhite) }
-                        sceneCameraPreview(
-                            rect: ComposerFrontFlash.previewRect(
-                                ComposerSceneCameraFrame.rect(
-                                    card: proxy[ancre],
-                                    full: CGRect(origin: .zero, size: proxy.size),
-                                    size: sceneCameraSize),
-                                size: sceneCameraSize,
-                                floorLit: sceneCapture.floorIsLit))
-                    }
-                }
-                .ignoresSafeArea()
-                .animation(sceneCameraGrowth, value: sceneCameraSize)
-            }
-            .overlayPreferenceValue(ComposerSceneCameraFrameKey.self) { ancre in
-                GeometryReader { proxy in
-                    if let ancre, sceneCameraStage != .off {
-                        sceneCameraChrome(
-                            rect: ComposerSceneCameraFrame.rect(
-                                card: proxy[ancre],
-                                full: CGRect(origin: .zero, size: proxy.size),
-                                size: sceneCameraSize))
-                    }
-                }
-                .animation(sceneCameraGrowth, value: sceneCameraSize)
-            }
-    }
-
-    /// La courbe de l'agrandissement. Elle est NOMMÉE parce que les deux
-    /// couches doivent l'employer à l'identique : deux ressorts différents
-    /// feraient glisser le chrome par rapport à l'image qu'il commande.
-    var sceneCameraGrowth: Animation {
-        .interpolatingSpring(stiffness: 260, damping: 28)
-    }
-
-    /// **Une seule `CameraPreviewLayer` pour toute la session** — celle de
-    /// l'aperçu partagé, posé à la taille du moment.
-    private func sceneCameraPreview(rect: CGRect) -> some View {
-        ComposerCapturePreview(session: sceneCapture, size: sceneCameraSize)
-            .frame(width: rect.width, height: rect.height)
-            .position(x: rect.midX, y: rect.midY)
-    }
-
-    /// Le chrome partagé ; le toucher et l'appui long de la nappe passent par
-    /// les lois du FORMAT (`handleArmedSceneTap`, `handleArmedSceneHold`).
-    private func sceneCameraChrome(rect: CGRect) -> some View {
-        ComposerCaptureChrome(
-            session: sceneCapture,
-            size: sceneCameraSize,
-            onToggleSize: { sceneCameraSize = sceneCameraSize.toggled },
-            onTap: { handleArmedSceneTap() },
-            onHold: { handleArmedSceneHold() },
-            onDisarm: { disarmSceneCamera() },
-            onValidateSegments: { validateSceneSegments() })
-        .frame(width: rect.width, height: rect.height)
-        .position(x: rect.midX, y: rect.midY)
+        let modes = ComposerSceneCamera.modes(for: selectedFormat)
+        return ComposerCaptureMount(session: sceneCapture, size: $sceneCameraSize,
+                                    allowsPhoto: modes.contains(.photo),
+                                    allowsVideo: modes.contains(.video),
+                                    onDisarm: { disarmSceneCamera() },
+                                    onDeliver: { poseSceneCapture($0) }) {
+            contenu
+        }
     }
 }

@@ -72,13 +72,15 @@ final class ComposerCaptureSessionTests: XCTestCase {
         XCTAssertEqual(Set(sitesAppelant("CameraPreviewLayer(session:")), ["ComposerCaptureViews.swift", "GamePhotoFlowView.swift"])
     }
 
+    /// #9351 — les deux portes montent LE montage du composer ; seul l'objet de
+    /// la capture pose l'aperçu et le chrome.
     func test_lesDeuxMontages_serventLaMemeMachine() throws {
         for fichier in ["MeeshyComposerHost+Viewfinder.swift", "ComposerViewfinder.swift"] {
-            XCTAssertTrue(sitesAppelant("ComposerCaptureChrome(").contains(fichier),
-                          "\(fichier) doit monter le chrome partagé")
-            XCTAssertTrue(sitesAppelant("ComposerCapturePreview(").contains(fichier),
-                          "\(fichier) doit monter l'aperçu partagé")
+            XCTAssertTrue(sitesAppelant("ComposerCaptureMount(").contains(fichier),
+                          "\(fichier) doit monter le montage partagé")
         }
+        XCTAssertEqual(sitesAppelant("ComposerCaptureChrome("), ["ComposerCaptureStage.swift"])
+        XCTAssertEqual(sitesAppelant("ComposerCapturePreview("), ["ComposerCaptureStage.swift"])
     }
 
     // MARK: - Ce que la machine fait

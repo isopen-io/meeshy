@@ -214,15 +214,16 @@ final class ComposerCaptureLockZoomFlashTests: XCTestCase {
 
     func test_laBarreMontreLeCadenasLeZoomEtLeCurseur() throws {
         let barre = try source("Meeshy/Features/Main/Composer/ComposerSceneCameraBar.swift")
-        XCTAssertTrue(barre.contains("ComposerCaptureHold.showsLock"))
         XCTAssertTrue(barre.contains("ComposerFlashIntensity.showsSlider"))
         XCTAssertTrue(barre.contains("accessibilityAdjustableAction"), "le curseur est ajustable à la voix")
-        XCTAssertTrue(barre.contains("ComposerSceneCameraCopy.lockHint"), "la phrase du bas dit le cadenas")
-        XCTAssertTrue(barre.contains("onShutterTouched()"),
-                      "toucher le déclencheur clôt un appui long dont la levée s'est perdue")
-        // #9134 — le chrome PARTAGÉ câble le déclencheur pour les deux montages.
-        let chrome = try source("Meeshy/Features/Main/Composer/ComposerCaptureViews.swift")
-        XCTAssertTrue(chrome.contains("onShutterTouched: { session.releaseStaleHold() }"))
+        // #9351 — le cadenas, le zoom et la phrase sont passés au bas de la capture.
+        let bas = try source("Meeshy/Features/Main/Composer/ComposerCaptureBottomRow.swift")
+        XCTAssertTrue(bas.contains("ComposerCaptureHold.showsLock"))
+        XCTAssertTrue(bas.contains("ComposerCaptureZoomPresets("))
+        XCTAssertTrue(bas.contains("ComposerSceneCameraCopy.lockHint"), "la phrase du bas dit le cadenas")
+        let bande = try source("Meeshy/Features/Main/Composer/ComposerLookStrip.swift")
+        XCTAssertTrue(bande.contains("session.releaseStaleHold()"),
+                      "un appui long dont la levée s'est perdue se clôt sur la miniature choisie")
     }
 
     func test_lHoteZoomeLaCameraEtRegleLaTorche() throws {
@@ -233,7 +234,8 @@ final class ComposerCaptureLockZoomFlashTests: XCTestCase {
         XCTAssertTrue(machine.contains("ComposerCaptureHold.verticalDrag"))
         XCTAssertTrue(machine.contains("ComposerFlashIntensity.floorWhite"))
         let chrome = try source("Meeshy/Features/Main/Composer/ComposerCaptureViews.swift")
-        XCTAssertTrue(chrome.contains("ComposerCaptureHold.verticalDrag"), "le glissé de la nappe lit la même loi")
+        XCTAssertTrue(chrome.contains("ComposerCaptureGesture.action(zone: .scene, gesture: .drag"),
+                      "le glissé de la nappe lit la table, qui suit la même loi")
         let camera = try source("Meeshy/Features/Main/Components/CameraModel.swift")
         XCTAssertTrue(camera.contains("setTorchModeOn(level:"))
         XCTAssertTrue(camera.contains("videoZoomFactor"))
@@ -328,7 +330,7 @@ final class ComposerCaptureFocusAndPinchTests: XCTestCase {
                        ComposerCaptureFocus.Plan(focus: nil, exposure: nil, watchesSubjectArea: false))
     }
 
-    func test_focusesOnDoubleTap_seulementQuandLImageEstLa() {
+    func test_focusesOnTap_seulementQuandLImageEstLa() {
         XCTAssertFalse(ComposerCaptureFocus.focusesOnTap(stage: .off))
         XCTAssertTrue(ComposerCaptureFocus.focusesOnTap(stage: .armed))
         XCTAssertTrue(ComposerCaptureFocus.focusesOnTap(stage: .recording))
@@ -473,7 +475,7 @@ final class ComposerCaptureFocusAndPinchTests: XCTestCase {
         for montage in ["Meeshy/Features/Main/Composer/MeeshyComposerHost+Viewfinder.swift",
                         "Meeshy/Features/Main/Composer/ComposerViewfinder.swift"] {
             let code = try source(montage)
-            XCTAssertTrue(code.contains("ComposerCaptureChrome("), "\(montage) monte le chrome partagé")
+            XCTAssertTrue(code.contains("ComposerCaptureMount("), "\(montage) monte le montage partagé")
             XCTAssertFalse(code.contains("MagnificationGesture"), "\(montage) recâble le pincement")
             XCTAssertFalse(code.contains("SpatialTapGesture"), "\(montage) recâble la mise au point")
         }

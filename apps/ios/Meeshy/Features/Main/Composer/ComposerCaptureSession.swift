@@ -57,8 +57,8 @@ final class ComposerCaptureSession: ObservableObject {
     @Published var look = ComposerPhotoLook() {
         didSet { refreshFeed() }
     }
-    /// Le sélecteur d'effets est déplié.
-    @Published var looksOpen = false
+    /// La luminosité visée, en EV (#9351) — le curseur vertical sous le flash.
+    @Published var exposureBias = ComposerExposureRule.neutral
     /// La famille dont la bande est ouverte ; `nil` ⇒ la bande se replie sur la
     /// seule miniature choisie, qui sert de déclencheur (#9351).
     @Published var openFamily: ComposerLookFamily?
@@ -93,9 +93,6 @@ final class ComposerCaptureSession: ObservableObject {
     /// Qui reçoit la prise de la scène — posé par l'hôte qui monte la capture,
     /// retiré au désarmement : un viseur fermé ne remet plus rien.
     var onDeliver: (@MainActor (CameraResult) -> Void)?
-    /// La porte qui REVOIT la photo (`ComposerPhotoLookReview`, jusqu'à la
-    /// Tâche 15) la reçoit brute : elle y applique le look elle-même, une fois.
-    var deliversRawPhoto = false
     let gallery: any ComposerGalleryProviding
     let scenes: any ComposerLookSceneProviding
     var takeSubscriptions = Set<AnyCancellable>()

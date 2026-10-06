@@ -14,73 +14,36 @@ nonisolated enum ComposerViewfinderRules {
         case .video: return .video
         }
     }
-
-    /// Le toucher hors des contrôleurs prend la photo (#8711) — viseur armé, et
-    /// aucun segment vidéo en attente : une photo posée au milieu d'une prise
-    /// en plusieurs segments jetterait ceux-ci.
-    static func takesPhotoOnTap(stage: ComposerSceneCameraStage, pendingSegments: Int) -> Bool {
-        stage == .armed && pendingSegments == 0
-    }
-
-    /// L'appui long hors des contrôleurs filme (#8846), viseur armé.
-    static func filmsOnHold(stage: ComposerSceneCameraStage) -> Bool {
-        stage == .armed
-    }
-
-    /// **Les octets d'origine ne suivent que la photo d'origine** (#9295) : un
-    /// filtre ou un cadre change les pixels, et des octets EXIF qui décriraient
-    /// une autre image mentiraient sur ce qui part.
-    static func originalBytes(_ data: Data?, look: ComposerPhotoLook) -> Data? {
-        look.isUntouched ? data : nil
-    }
 }
 
-/// La photo qui attend sa prise (#9295) — son identifiant est celui de la prise.
-struct ComposerPendingPhoto: Identifiable {
-    let id: String
-    let image: UIImage
-    let data: Data?
-    /// Le look choisi en direct au moment de la prise (#9329).
-    var look = ComposerPhotoLook()
-}
-
-/// **Le viseur du composeur, servi SEUL en plein écran** (#9125).
+/// **Le viseur du composeur, servi SEUL en plein écran** (#9125) — une COQUILLE
+/// autour du montage unique (#9351, décision porteur 2026-10-05).
 ///
-/// > Demande porteur 2026-10-02 : il n'existe plus qu'UNE vue de capture.
+/// > « Il faut réutiliser exactement le mode plein écran de la capture existant
+/// > dans le composer de story. »
 ///
-/// La scène du composeur sert le viseur dans sa carte et le fait grandir en
-/// plein écran (`MeeshyComposerHost+Viewfinder`). Les portes qui n'ont PAS de
-/// scène — le statut, la page blanche de l'atelier, la citation du fil — le
-/// reçoivent ici, directement à sa taille plein écran : même barre
-/// (`ComposerSceneCameraBar`), même aperçu (`CameraPreviewLayer`), même panneau
-/// de refus, mêmes lois de geste, de cadenas, de zoom et de flash. L'ancienne
-/// `CameraView`, qui portait un second chrome et une seconde gestuelle, a quitté
-/// le dépôt.
+/// Les portes qui n'ont PAS de scène — la barre de conversation, le statut, la
+/// page blanche de l'atelier, la citation du fil — reçoivent ici le montage du
+/// composer (`ComposerCaptureMount`), sa taille figée en plein écran et sans
+/// bouton de taille. Elle ne garde ni chrome ni mise en page à elle : mêmes
+/// couches, mêmes gestes, même rail, même bande.
 ///
-/// Ce que la prise rend part par `onCapture` — une photo avec ses octets
-/// d'origine, ou la vidéo concaténée de ses segments — puis le viseur se retire.
-///
-/// **Une photo passe d'abord par la prise** (#9295) : les filtres et les cadres
-/// de l'appel vidéo (`ComposerPhotoLookReview`), « Reprendre » ou « Valider ».
-/// Une porte qui verse la photo dans une SCÈNE — où elle s'édite déjà — s'en
-/// passe (`reviewsPhoto: false`).
+/// Ce que la prise rend part par `onCapture` — une photo regardée, peinte par
+/// le peintre unique sur le canevas 9:16 (#9347), ou la vidéo concaténée de ses
+/// segments — puis le viseur se retire.
 struct ComposerViewfinder: View {
     let initialMode: CameraCaptureMode
-    let reviewsPhoto: Bool
     let onCapture: (CameraResult) -> Void
 
     @Environment(\.dismiss) private var dismiss
     @StateObject private var capture: ComposerCaptureSession
     @State private var delivered = false
-    @State private var pendingPhoto: ComposerPendingPhoto?
 
     /// Le viseur naît ARMÉ, au mode que la porte a promis : posé dans un
     /// `.onAppear`, la barre annoncerait la photo une image avant de basculer.
     init(initialMode: CameraCaptureMode = .photo,
-         reviewsPhoto: Bool = true,
          onCapture: @escaping (CameraResult) -> Void) {
         self.initialMode = initialMode
-        self.reviewsPhoto = reviewsPhoto
         self.onCapture = onCapture
         _capture = StateObject(wrappedValue: ComposerCaptureSession(
             stage: .armed, mode: ComposerViewfinderRules.sceneMode(for: initialMode)))
@@ -89,127 +52,27 @@ struct ComposerViewfinder: View {
     private var camera: CameraModel { capture.camera }
 
     var body: some View {
-        ZStack {
-            Group {
-                preview
-                    .ignoresSafeArea()
-                if refused {
-                    refusedChrome
-                } else {
-                    ComposerCaptureChrome(
-                        session: capture,
-                        size: .fullScreen,
-                        offersSizeToggle: false,
-                        onTap: { tapAnywhere() },
-                        onHold: { holdAnywhere() },
-                        onDisarm: { close() },
-                        onValidateSegments: { capture.validateSegments { deliver(.video($0)) } })
-                }
-            }
-            // Sous la prise, VoiceOver n'atteint ni l'obturateur ni la croix :
-            // une prise faite là serait perdue, une fermeture jetterait la photo.
-            .accessibilityHidden(pendingPhoto != nil)
-            if let pendingPhoto {
-                ComposerPhotoLookReview(
-                    photo: pendingPhoto.image,
-                    person: capture.lookPerson,
-                    date: capture.lookDate,
-                    initialLook: pendingPhoto.look,
-                    onRetake: { self.pendingPhoto = nil },
-                    onUse: { image, look in
-                        deliver(.photo(image, data: ComposerViewfinderRules.originalBytes(
-                            pendingPhoto.data, look: look)))
-                    })
-                .id(pendingPhoto.id)
-                .accessibilityAddTraits(.isModal)
-                .transition(.opacity)
-            }
+        ComposerCaptureMount(session: capture, size: .constant(.fullScreen), offersSizeToggle: false,
+                             onDisarm: { close() }, onDeliver: { deliver($0) }) {
+            Color.black
+                .ignoresSafeArea()
+                .anchorPreference(key: ComposerSceneCameraFrameKey.self, value: .bounds) { $0 }
         }
-        .animation(.easeInOut(duration: 0.2), value: pendingPhoto?.id)
-        .background(Color.black.ignoresSafeArea())
         .onAppear {
-            capture.deliversRawPhoto = reviewsPhoto
-            capture.onDeliver = { resultat in receive(resultat) }
             camera.configure()
             capture.watchThermalState()
             // La porte qui promet la vidéo arme le micro À L'OUVERTURE : le
             // prompt n'arrive pas sous le doigt qui veut déjà filmer.
             if initialMode == .video {
-                Task { await camera.enableAudioCaptureIfNeeded() }
+                Task { @MainActor in await camera.enableAudioCaptureIfNeeded() }
             }
         }
         .onDisappear { capture.disarm() }
         .statusBarHidden()
     }
 
-    private var refused: Bool {
-        ComposerSceneCameraSurface.shown(stage: capture.stage, permission: camera.permission) == .permissionRefused
-    }
-
-    // MARK: - L'image
-
-    private var preview: some View {
-        GeometryReader { proxy in
-            let rect = ComposerFrontFlash.previewRect(
-                CGRect(origin: .zero, size: proxy.size), size: .fullScreen, floorLit: capture.floorIsLit)
-            ZStack {
-                if capture.floorIsLit { Color(white: capture.floorWhite) }
-                ComposerCapturePreview(session: capture, size: .fullScreen)
-                    .frame(width: rect.width, height: rect.height)
-                    .position(x: rect.midX, y: rect.midY)
-            }
-        }
-    }
-
-    /// Accès refusé : le panneau explique et ouvre les Réglages ; la croix
-    /// reste, quitter à tout moment (#8653).
-    private var refusedChrome: some View {
-        VStack {
-            HStack {
-                Spacer()
-                Button { close() } label: {
-                    Image(systemName: "xmark")
-                        .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .frame(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)
-                        .adaptiveLiquidGlass(in: Circle(), interactive: true)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(ComposerSceneCameraCopy.disarmLabel)
-            }
-            Spacer()
-        }
-        .padding(.horizontal, MeeshySpacing.mdPlus)
-        .padding(.top, MeeshySpacing.md)
-    }
-
-    // MARK: - Les gestes hors des contrôleurs
-
-    private func tapAnywhere() {
-        guard ComposerViewfinderRules.takesPhotoOnTap(stage: capture.stage,
-                                                      pendingSegments: capture.segments.count) else { return }
-        capture.photographWhenReady()
-    }
-
-    private func holdAnywhere() {
-        guard ComposerViewfinderRules.filmsOnHold(stage: capture.stage) else { return }
-        capture.beginHold()
-    }
-
-    // MARK: - La sortie
-
-    /// **La prise de la scène arrive par la session** (#9351). Une porte sans
-    /// prise la reçoit regardée et la verse ; une porte qui revoit la reçoit
-    /// brute, et la session reste ouverte sous la prise : « Reprendre » rend le
-    /// viseur à l'image suivante, sans rouvrir la caméra.
-    private func receive(_ result: CameraResult) {
-        guard reviewsPhoto, case .photo(let image, let data) = result else { return deliver(result) }
-        guard !delivered, pendingPhoto == nil else { return }
-        pendingPhoto = ComposerPendingPhoto(id: UUID().uuidString, image: image, data: data, look: capture.look)
-    }
-
-    /// **Une prise ne part qu'une fois** : deux touchers rapprochés sur
-    /// « Valider » pendant que le viseur se retire poseraient deux pièces.
+    /// **Une prise ne part qu'une fois** : deux validations rapprochées pendant
+    /// que le viseur se retire poseraient deux pièces.
     private func deliver(_ result: CameraResult) {
         guard !delivered else { return }
         delivered = true

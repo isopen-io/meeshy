@@ -98,43 +98,48 @@ struct ComposerCapturePreview: View {
     }
 }
 
-/// **Le chrome du viseur — la nappe de gestes et la barre, câblées une fois**
-/// (#9134).
+/// **Le chrome du viseur — la nappe de gestes, la rangée haute et le bas de la
+/// capture, câblés une fois** (#9134, #9351).
 ///
-/// La nappe ne prend que le vide (les boutons de la barre gagnent sur leurs
-/// surfaces) : le toucher et l'appui long y passent par l'hôte, qui sait ce
-/// que SON format permet ; le glissé, lui, est celui de la machine — à droite
-/// le cadenas et à la verticale le zoom pendant la tenue, vers le bas le
-/// rangement du viseur hors prise, PROGRESSIF et ANNULABLE (directive
-/// 2026-08-30).
+/// Chaque geste de la nappe est DÉCIDÉ par la table (`ComposerCaptureGesture`) :
+/// un toucher vise, le second d'un double photographie — lu par le seul
+/// décideur du toucher, qui ne retarde jamais le premier (#9464) —, l'appui long
+/// filme un segment, le glissé pilote la prise tenue, zoome une prise en cours
+/// ou range le viseur hors prise, PROGRESSIF et ANNULABLE (directive
+/// 2026-08-30), le pincement zoome. VoiceOver reçoit les mêmes prises en actions
+/// nommées, projetées de la table.
 ///
-/// **Le toucher fait la mise au point là où il tombe, le second d'un double
-/// prend la photo, le pincement zoome** (#9295, #9464) — la nappe est celle
-/// des DEUX montages, la scène des posts et des stories en profite donc sans
-/// câblage de plus.
+/// **Des segments en attente ne partent jamais en silence** : la croix ou le
+/// glissé qui fermerait le viseur demande d'abord « Abandonner la vidéo ? ».
 struct ComposerCaptureChrome: View {
     @ObservedObject var session: ComposerCaptureSession
     let size: ComposerSceneCameraSize
     var offersSizeToggle = true
+    var allowsPhoto = true
+    var allowsVideo = true
     var onToggleSize: () -> Void = {}
-    let onTap: () -> Void
-    let onHold: () -> Void
     let onDisarm: () -> Void
     let onValidateSegments: () -> Void
 
     /// L'anneau de la dernière mise au point — un état de VUE, pas de la machine.
     @State private var focusMark: ComposerCaptureFocusMark?
+    @State private var confirmsDiscard = false
     /// Retombe tout seul quand le pincement finit — y compris annulé par le
     /// système, qui n'appelle pas `onEnded`.
     @GestureState private var pinchActive = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    private var context: ComposerCaptureGestureContext {
+        session.gestureContext(allowsPhoto: allowsPhoto, allowsVideo: allowsVideo)
+    }
+
     var body: some View {
         ZStack {
             GeometryReader { proxy in
+                let origine = proxy.frame(in: .global).origin
                 Color.clear
                     .contentShape(Rectangle())
-                    .gesture(holdGesture.exclusively(before: tapGesture(origin: proxy.frame(in: .global).origin)))
+                    .gesture(holdGesture.exclusively(before: tapGesture(origin: origine)))
                     .simultaneousGesture(dragGesture)
                     .simultaneousGesture(pinchGesture)
                     .adaptiveOnChange(of: pinchActive) { _, actif in
@@ -149,36 +154,46 @@ struct ComposerCaptureChrome: View {
                                 .allowsHitTesting(false)
                         }
                     }
+                    .accessibilityElement()
+                    .accessibilityLabel(ComposerSceneCameraCopy.shutterLabel(mode: session.mode ?? .photo,
+                                                                             stage: session.stage))
+                    .composerCaptureAccessibilityActions(zone: .scene, context: context) { action in
+                        performAccessible(action, origin: origine)
+                    }
+                    .accessibilityAdjustableAction { sens in
+                        guard session.stage == .recording else { return }
+                        switch sens {
+                        case .increment: session.stepZoom(up: true)
+                        case .decrement: session.stepZoom(up: false)
+                        @unknown default: break
+                        }
+                    }
             }
-            ComposerSceneCameraBar(
-                stage: session.stage,
-                mode: session.mode ?? .photo,
-                onPhoto: { session.takePhoto() },
-                onStartFilming: { session.startFilming() },
-                onLock: { session.lockTake() },
-                onCloseTake: { session.closeTake() },
-                flashMode: session.flash,
-                onCycleFlash: { session.cycleFlash() },
-                onFlipCamera: { session.flipCamera() },
-                onDisarm: onDisarm,
-                size: size,
-                onToggleSize: onToggleSize,
-                offersSizeToggle: offersSizeToggle,
-                segments: session.segments,
-                onDropLastSegment: { session.dropLastSegment() },
-                onValidateSegments: onValidateSegments,
-                // L'horloge de la prise EN COURS : sans elle, le chrono ne
-                // compterait que les segments clos.
-                liveDuration: session.camera.recordingDuration,
-                capture: session.barCapture,
-                onZoomDrag: { session.dragZoom(translationY: $0) },
-                onZoomDragEnded: { session.endZoomDrag() },
-                onZoomStep: { session.stepZoom(up: $0) },
-                onZoomPreset: { session.controls.setZoom($0) },
-                onFlashIntensity: { session.setFlashIntensity($0) },
-                onShutterTouched: { session.releaseStaleHold() },
-                onToggleLooks: session.lookIsLocked ? nil : { toggleLooks() },
-                lookActive: !session.look.isUntouched)
+            VStack(spacing: 0) {
+                if session.stage != .recording {
+                    ComposerSceneCameraBar(
+                        stage: session.stage,
+                        flashMode: session.flash,
+                        onCycleFlash: { session.cycleFlash() },
+                        onFlipCamera: { session.flipCamera() },
+                        onDisarm: { requestDisarm() },
+                        size: size,
+                        onToggleSize: onToggleSize,
+                        offersSizeToggle: offersSizeToggle,
+                        segments: session.segments,
+                        onDropLastSegment: { session.dropLastSegment() },
+                        onValidateSegments: onValidateSegments,
+                        liveDuration: session.camera.recordingDuration,
+                        flashIntensity: session.barCapture.flashIntensity,
+                        onFlashIntensity: { session.setFlashIntensity($0) },
+                        flipping: session.barCapture.flipping,
+                        exposureBias: session.exposureBias,
+                        onExposureBias: { session.setExposureBias($0) })
+                    .transition(.opacity)
+                }
+                Spacer(minLength: 0)
+                ComposerCaptureBottomRow(session: session, context: context)
+            }
             if session.isRenderingLook {
                 ProgressView()
                     .progressViewStyle(.circular)
@@ -186,37 +201,54 @@ struct ComposerCaptureChrome: View {
                     .controlSize(.large)
                     .padding(MeeshySpacing.lg)
                     .adaptiveLiquidGlass(in: Circle())
-                    .accessibilityLabel(ComposerLiveLookCopy.rendering)
-            }
-            if session.looksOpen, !session.lookIsLocked {
-                VStack {
-                    Spacer(minLength: 0)
-                    ComposerLiveLookPanel(session: session)
-                        .padding(.horizontal, MeeshySpacing.md)
-                        .padding(.bottom, ComposerLiveLookPanelLayout.bottomInset(for: size))
-                }
-                .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
+                    .accessibilityLabel(ComposerCaptureCopy.rendering)
             }
         }
-        .animation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.85),
-                   value: session.looksOpen && !session.lookIsLocked)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: session.stage == .recording)
         .offset(y: ComposerSceneCameraFrame.dismissOffset(translationY: session.dismissDrag))
         .opacity(ComposerSceneCameraFrame.dismissOpacity(translationY: session.dismissDrag))
+        .alert(ComposerSceneCameraCopy.discardTitle, isPresented: $confirmsDiscard) {
+            Button(ComposerSceneCameraCopy.discardConfirm, role: .destructive) { onDisarm() }
+            Button(ComposerSceneCameraCopy.discardKeep, role: .cancel) {}
+        }
     }
 
-    private func toggleLooks() {
-        session.looksOpen.toggle()
-        HapticFeedback.light()
+    /// La croix et le glissé de rangement passent par ici : des segments en
+    /// attente demandent confirmation, sinon le viseur se range tout de suite.
+    private func requestDisarm() {
+        guard ComposerCaptureSegments.asksBeforeClosing(session.segments) else { return onDisarm() }
+        HapticFeedback.warning()
+        confirmsDiscard = true
     }
 
-    /// L'appui long passe avant le toucher, qui ne prend la photo que si le
-    /// doigt part avant le seuil (#8846).
+    /// Un geste sur la scène, décidé par la table.
+    private func scene(_ geste: ComposerCaptureGestureKind) {
+        session.perform(ComposerCaptureGesture.action(zone: .scene, gesture: geste, context: context), item: nil)
+    }
+
+    /// **VoiceOver ne TIENT pas un doigt** : « Filmer » part verrouillé et
+    /// « Arrêter » le termine ; « Mettre au point » vise le centre de l'image.
+    private func performAccessible(_ action: ComposerCaptureAction, origin: CGPoint) {
+        switch action {
+        case .focus:
+            let cadre = session.focusPoints.previewFrame
+            focus(at: CGPoint(x: cadre.midX, y: cadre.midY), origin: origin)
+        case .filmSegment, .filmToGallery:
+            session.perform(action, item: nil)
+            session.lockPendingTake()
+        default:
+            session.perform(action, item: nil)
+        }
+    }
+
+    /// L'appui long passe avant le toucher, qui ne part que si le doigt se lève
+    /// avant le seuil (#8846).
     private var holdGesture: some Gesture {
         LongPressGesture(minimumDuration: ComposerSceneQuickCapture.armedHoldDuration)
             .sequenced(before: DragGesture(minimumDistance: 0))
             .onChanged { valeur in
-                guard case .second(true, _) = valeur else { return }
-                onHold()
+                guard case .second(true, _) = valeur, session.holdStartedAt == nil else { return }
+                scene(.longPress)
             }
             .onEnded { _ in session.endHold() }
     }
@@ -224,13 +256,15 @@ struct ComposerCaptureChrome: View {
     private var dragGesture: some Gesture {
         DragGesture(minimumDistance: 12)
             .onChanged { valeur in
-                if session.holdStartedAt != nil {
+                switch ComposerCaptureGesture.action(zone: .scene, gesture: .drag, context: context) {
+                case .steerTake:
                     session.holdChanged(CGPoint(x: valeur.translation.width, y: valeur.translation.height))
+                case .zoom:
+                    session.dragZoom(translationY: valeur.translation.height)
+                case .close:
+                    session.followDismissDrag(translationY: valeur.translation.height)
+                default:
                     return
-                }
-                switch ComposerCaptureHold.verticalDrag(stage: session.stage) {
-                case .zoom: session.dragZoom(translationY: valeur.translation.height)
-                case .dismiss: session.followDismissDrag(translationY: valeur.translation.height)
                 }
             }
             .onEnded { valeur in
@@ -238,7 +272,7 @@ struct ComposerCaptureChrome: View {
                 guard session.holdStartedAt == nil else { return }
                 guard session.releaseDismissDrag(translationY: valeur.translation.height) else { return }
                 HapticFeedback.light()
-                onDisarm()
+                requestDisarm()
             }
     }
 
@@ -246,18 +280,24 @@ struct ComposerCaptureChrome: View {
     private var pinchGesture: some Gesture {
         MagnificationGesture()
             .updating($pinchActive) { _, actif, _ in actif = true }
-            .onChanged { echelle in session.pinchZoom(scale: echelle) }
+            .onChanged { echelle in
+                guard ComposerCaptureGesture.action(zone: .scene, gesture: .pinch, context: context) == .zoom else {
+                    return
+                }
+                session.pinchZoom(scale: echelle)
+            }
             .onEnded { _ in session.endPinchZoom() }
     }
 
-    /// **Un toucher vise, le second d'un double photographie** (#9464) : le
-    /// toucher simple n'attend rien. Le point part dans le repère global, celui
-    /// où l'aperçu mesure son cadre ; l'anneau se pose dans celui de la nappe.
+    /// **Un toucher vise, le second d'un double photographie** (#9464) — lu par
+    /// le seul décideur du toucher, qui n'attend rien : le premier vise tout de
+    /// suite. Le point part dans le repère global, celui où l'aperçu mesure son
+    /// cadre ; l'anneau se pose dans celui de la nappe.
     private func tapGesture(origin: CGPoint) -> some Gesture {
         SpatialTapGesture(count: 1, coordinateSpace: .global).onEnded { toucher in
             guard !session.pinchSpoilsGestures else { return }
-            switch session.tapAction() {
-            case .photo: onTap()
+            switch session.tapAction(context: context) {
+            case .photo: session.perform(.photoToEdit, item: nil)
             case .focus: focus(at: toucher.location, origin: origin)
             }
         }

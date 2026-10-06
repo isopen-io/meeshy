@@ -155,10 +155,6 @@ extension ComposerCaptureSession {
         case .gallery:
             saveRenderedPhoto(image, data: camera.capturedPhotoData)
         case .edit:
-            guard !deliversRawPhoto else {
-                onDeliver?(.photo(image, data: camera.capturedPhotoData))
-                return
-            }
             lookedPhoto(image, data: camera.capturedPhotoData) { [weak self] resultat in
                 self?.onDeliver?(resultat)
             }
