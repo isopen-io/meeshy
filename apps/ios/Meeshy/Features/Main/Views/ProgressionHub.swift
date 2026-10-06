@@ -593,7 +593,9 @@ struct ProgressionSectionPage: View {
         .fullScreenCover(item: $reveal) { palier in
             AchievementRevealView(
                 reveal: palier.reveal,
-                occasion: .consultation(unlocked: palier.unlocked, reachedAt: palier.reachedAt)
+                occasion: .consultation(unlocked: palier.unlocked, reachedAt: palier.reachedAt),
+                // Le liseré de la rareté mesurée (#9390), comme sur la ligne du succès — « Jeu masqué » le retire.
+                rarity: RevealRim.entry(of: palier.reveal, in: viewModel.game, hidden: GameDevicePrefsStore.current().prefs.hidden)
             ) { reveal = nil }
         }
     }
