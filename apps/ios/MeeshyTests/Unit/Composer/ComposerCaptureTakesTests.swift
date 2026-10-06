@@ -268,7 +268,7 @@ final class ComposerCaptureTakesTests: XCTestCase {
         camera.stopRecording()
         camera.startRecording()
         XCTAssertEqual(camera.recordingId, a, "B attend que A soit livrée")
-        XCTAssertFalse(camera.isRecordingVideo)
+        XCTAssertTrue(camera.recordingIsPending, "A est arrêtée, pas encore livrée")
         await Self.waitUntil(timeout: 60) { camera.recordingId == nil && session.pendingGallerySaves == 0 }
         XCTAssertTrue(session.segments.isEmpty, "le fichier de A garde l'intention de A : la galerie")
         camera.startRecording()
@@ -319,20 +319,69 @@ final class ComposerCaptureTakesTests: XCTestCase {
         XCTAssertTrue(objectif.torchRequests.isEmpty)
     }
 
+    /// Un objectif qui FILME une autre prise, sans arrêt demandé : ce n'est pas
+    /// une finalisation, la tenue n'attend pas et l'objectif refuse.
     func test_startFilming_refusedByTheCamera_returnsToArmed() async {
-        let objectif = MockComposerCaptureCamera()
         let camera = CameraModel(fixture: ComposerCaptureFixtureDriver())
         camera.startRecording()
-        let session = ComposerCaptureSession(stage: .armed, camera: camera, controls: objectif,
-                                             gallery: MockComposerGallery())
+        XCTAssertFalse(camera.recordingIsPending, "filmer n'est pas finaliser")
+        let session = ComposerCaptureSession(stage: .armed, camera: camera, gallery: MockComposerGallery())
         session.beginHold()
-        await Self.waitUntil(timeout: 3) { !objectif.torchRequests.isEmpty && session.stage == .armed }
+        XCTAssertFalse(session.awaitsPreviousTake)
+        await Self.waitUntil(timeout: 1) { session.holdStartedAt == nil }
         XCTAssertEqual(session.stage, .armed, "une prise que rien n'écrit ne reste pas affichée")
         XCTAssertNil(session.holdStartedAt, "le doigt encore posé ne verrouille plus rien")
         XCTAssertNil(session.holdPhase)
         XCTAssertTrue(session.filmIntents.isEmpty)
         session.disarm()
         camera.stopRecording()
+    }
+
+    /// R1-ter : sur le VRAI modèle, l'arrêt demandé laisse `isRecordingVideo`
+    /// vrai jusqu'à la livraison, comme AVFoundation. « Tenir, lâcher, retenir » :
+    /// la seconde tenue attend la livraison de A, puis filme sa propre prise.
+    func test_beginHold_holdReleaseHoldOnTheFixtureCamera_waitsForTheFirstTakeThenFilms() async throws {
+        _ = await ComposerCaptureFixture.movie()
+        let camera = CameraModel(fixture: ComposerCaptureFixtureDriver())
+        let session = ComposerCaptureSession(stage: .armed, camera: camera, gallery: MockComposerGallery())
+        session.beginHold()
+        await Self.waitUntil(timeout: 3) { session.filmIntents.count == 1 }
+        let a = try XCTUnwrap(camera.recordingId)
+        session.endHold()
+        XCTAssertTrue(camera.isRecordingVideo, "le fichier de A n'est pas encore livré")
+        XCTAssertTrue(camera.recordingIsPending, "A est arrêtée, pas encore livrée : la suivante l'attend")
+        session.beginHold()
+        XCTAssertTrue(session.awaitsPreviousTake)
+        XCTAssertEqual(session.stage, .armed, "aucune barre rouge pendant l'attente")
+        await Self.waitUntil(timeout: 5) { session.stage == .recording && camera.recordingId.map { $0 != a } == true }
+        XCTAssertEqual(session.segments.count, 1, "A livrée devient un segment")
+        XCTAssertNotNil(camera.recordingId)
+        XCTAssertNotEqual(camera.recordingId, a, "la seconde tenue filme sa propre prise")
+        XCTAssertEqual(session.stage, .recording)
+        session.disarm()
+    }
+
+    /// m-e : l'attente est posée dès le toucher — un glissé traité avant le premier
+    /// tour de la tâche ne verrouille rien.
+    func test_beginHold_whilePreviousTakeFinalizes_aSwipeBeforeTheFirstTurnLocksNothing() {
+        let objectif = MockComposerCaptureCamera()
+        objectif.recordingIsPending = true
+        let session = ComposerCaptureSession(stage: .armed, controls: objectif, gallery: MockComposerGallery())
+        session.beginHold()
+        XCTAssertTrue(session.awaitsPreviousTake, "l'attente se pose au toucher")
+        session.holdChanged(CGPoint(x: 400, y: 0))
+        XCTAssertEqual(session.holdPhase, .holding, "aucun cadenas avant le premier tour")
+        XCTAssertEqual(session.lockProgress, 0)
+        session.disarm()
+    }
+
+    /// n-5 : au-delà de la borne, le renoncement se dit — une haptique
+    /// d'avertissement et une annonce VoiceOver.
+    func test_awaitPreviousTake_renouncing_warnsAndAnnounces() throws {
+        let corps = try Self.code("Meeshy/Features/Main/Composer/ComposerCaptureSession+Takes.swift")
+        XCTAssertTrue(corps.contains("HapticFeedback.warning()"))
+        XCTAssertTrue(corps.contains("argument: ComposerSceneCameraCopy.previousTakeStillSaving"))
+        XCTAssertFalse(ComposerSceneCameraCopy.previousTakeStillSaving.isEmpty)
     }
 
     func test_recording_aLateEndOfA_keepsTheIntentOfB() throws {
