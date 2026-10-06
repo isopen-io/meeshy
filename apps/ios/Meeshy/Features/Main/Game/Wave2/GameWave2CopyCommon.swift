@@ -37,8 +37,8 @@ extension GameText {
     static func bannerPlace(count: Int) -> String {
         let number = GameCopy.formatCount(count)
         return GameCopy.isSingular(count)
-            ? String(localized: "game2.banner.place.one", defaultValue: "\(count)re", bundle: .main)
-            : String(localized: "game2.banner.place.other", defaultValue: "\(count)e", bundle: .main)
+            ? String(localized: "game2.banner.place.one", defaultValue: "\(number)re", bundle: .main)
+            : String(localized: "game2.banner.place.other", defaultValue: "\(number)e", bundle: .main)
     }
 
     static func bannerPoints(points: String) -> String {
@@ -96,8 +96,8 @@ extension GameText {
     static func doorShowcaseCount(count: Int) -> String {
         let number = GameCopy.formatCount(count)
         return GameCopy.isSingular(count)
-            ? String(localized: "game2.door.showcase.count.one", defaultValue: "\(count) trophée", bundle: .main)
-            : String(localized: "game2.door.showcase.count.other", defaultValue: "\(count) trophées", bundle: .main)
+            ? String(localized: "game2.door.showcase.count.one", defaultValue: "\(number) trophée", bundle: .main)
+            : String(localized: "game2.door.showcase.count.other", defaultValue: "\(number) trophées", bundle: .main)
     }
 
     static var doorShowcaseEmpty: String { String(localized: "game2.door.showcase.empty", defaultValue: "Pas encore de trophée", bundle: .main) }

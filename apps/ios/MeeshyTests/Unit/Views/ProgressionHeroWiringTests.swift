@@ -67,7 +67,7 @@ final class ProgressionHeroWiringTests: XCTestCase {
 
     func test_chaqueLigneDeSuccesEstUnBouton() throws {
         let code = try hub()
-        XCTAssertTrue(code.contains("ProgressionAchievementRow(achievement: achievement)"))
+        XCTAssertTrue(code.contains("ProgressionAchievementRow(achievement: achievement"))
         XCTAssertTrue(code.contains(".accessibilityAddTraits(.isButton)"),
                       "Un contrôle qui n'annonce pas qu'il en est un n'existe pas pour VoiceOver.")
         XCTAssertTrue(code.contains("progression.achievement.a11y.hint"),

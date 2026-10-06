@@ -49,13 +49,13 @@ final class GameWave2CatalogGuardTests: XCTestCase {
     }
 
     /// Chaque substitution du français revient dans les six autres langues : une phrase qui perd son `%1$@` affiche un
-    /// trou, une qui en gagne un plante le formatage. L'arabe dit « une » sans chiffre (« نجمة واحدة ») : sa forme du singulier est exemptée.
+    /// trou, une qui en gagne un plante le formatage.
     func test_everyLanguageKeepsTheSameNumberOfPlaceholders() throws {
         let pattern = try NSRegularExpression(pattern: "%(?:\\d+\\$)?(?:@|lld|d|ld)")
         func count(_ text: String) -> Int { pattern.numberOfMatches(in: text, range: NSRange(text.startIndex..., in: text)) }
         for (key, perLocale) in try entries() {
             let expected = count(perLocale["fr"] ?? "")
-            for locale in locales where !(locale == "ar" && key.hasSuffix(".one")) {
+            for locale in locales {
                 XCTAssertEqual(count(perLocale[locale] ?? ""), expected, "\(key) : \(locale) n'a pas les mêmes substitutions que le français")
             }
         }

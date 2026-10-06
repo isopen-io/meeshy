@@ -16,8 +16,8 @@ extension GameText {
     static func seasonStars(count: Int) -> String {
         let number = GameCopy.formatCount(count)
         return GameCopy.isSingular(count)
-            ? String(localized: "game2.season.stars.one", defaultValue: "\(count) étoile", bundle: .main)
-            : String(localized: "game2.season.stars.other", defaultValue: "\(count) étoiles", bundle: .main)
+            ? String(localized: "game2.season.stars.one", defaultValue: "\(number) étoile", bundle: .main)
+            : String(localized: "game2.season.stars.other", defaultValue: "\(number) étoiles", bundle: .main)
     }
 
     static func seasonHow(per: String) -> String {
