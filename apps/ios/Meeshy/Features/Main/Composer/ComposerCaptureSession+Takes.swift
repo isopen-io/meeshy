@@ -112,9 +112,35 @@ extension ComposerCaptureSession {
     func recordingDidNotStart() {
         guard stage == .recording else { return }
         stage = .armed
+        holdStartedAt = nil
         holdPhase = nil
         lockProgress = 0
         extinguishFlash()
+    }
+
+    /// Au plus ce délai d'attente de la prise précédente (sa finalisation, une
+    /// fusion de bascule) avant de renoncer.
+    static let previousTakeTimeout: TimeInterval = 1.5
+
+    /// **La tenue attend la livraison de la prise précédente** plutôt que d'être
+    /// refusée : « tenir, lâcher, retenir » accumule ses segments. Au-delà de la
+    /// borne, elle renonce proprement — l'armé, sans cadenas.
+    func awaitPreviousTake() async -> Bool {
+        guard controls.recordingIsPending else { return true }
+        awaitsPreviousTake = true
+        defer { awaitsPreviousTake = false }
+        let limite = Date().addingTimeInterval(Self.previousTakeTimeout)
+        while controls.recordingIsPending {
+            guard !Task.isCancelled else { return false }
+            guard Date() < limite else {
+                holdStartedAt = nil
+                holdPhase = nil
+                lockProgress = 0
+                return false
+            }
+            try? await Task.sleep(nanoseconds: 20_000_000)
+        }
+        return !Task.isCancelled
     }
 
     func photoArrived() {

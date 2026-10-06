@@ -81,6 +81,9 @@ final class ComposerCaptureSession: ObservableObject {
     /// La rampe du flash avant (0,25 s) : l'obturateur est parti, `isTakingPhoto`
     /// pas encore — une seconde demande y est refusée.
     var photoIsRamping = false
+    /// La tenue attend la livraison de la prise précédente : ni haptique, ni
+    /// cadenas, ni lumière tant qu'elle ne filme pas.
+    var awaitsPreviousTake = false
     /// L'intention de chaque enregistrement, par SON jeton (`CameraModel.recordingId`) :
     /// une fin sans fichier ne décale jamais la suivante.
     var filmIntents: [String: ComposerTakeIntent] = [:]
@@ -258,7 +261,7 @@ final class ComposerCaptureSession: ObservableObject {
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: UInt64(ComposerFrontFlash.brightnessRamp * 1_000_000_000))
             photoIsRamping = false
-            guard stage == .armed else { return ComposerScreenFlash.shared.restore() }
+            guard stage == .armed else { return }
             controls.takePhoto(flash: .off)
             try? await Task.sleep(nanoseconds: UInt64(ComposerFrontFlash.photoHold * 1_000_000_000))
             ComposerScreenFlash.shared.restore()
@@ -380,15 +383,18 @@ final class ComposerCaptureSession: ObservableObject {
     func beginHold() {
         guard holdStartedAt == nil, !isPinching, !holdSpoiledByPinch else { return }
         filmIntent = .edit
-        HapticFeedback.medium()
+        let attend = controls.recordingIsPending
+        if !attend { HapticFeedback.medium() }
         holdStartedAt = Date()
         holdPhase = .holding
         lockProgress = 0
         holdTask?.cancel()
         holdTask = Task { @MainActor in
-            guard await controls.waitUntilCaptureReady(timeout: ComposerSceneQuickCapture.readinessTimeout),
+            guard await awaitPreviousTake(),
+                  await controls.waitUntilCaptureReady(timeout: ComposerSceneQuickCapture.readinessTimeout),
                   !Task.isCancelled,
                   holdStartedAt != nil || holdPhase == .locked else { return }
+            if attend { HapticFeedback.medium() }
             startFilming()
         }
     }
@@ -400,7 +406,7 @@ final class ComposerCaptureSession: ObservableObject {
         if stage == .recording { dragZoom(translationY: translation.y) }
         // Deux doigts qui s'écartent à l'horizontale zooment ; ils ne
         // verrouillent pas la prise.
-        guard holdPhase != .locked, !isPinching else { return }
+        guard holdPhase != .locked, !isPinching, !awaitsPreviousTake else { return }
         lockProgress = ComposerShutterGesture.lockProgress(translationX: translation.x)
         guard ComposerCaptureHold.phase(translation: translation, wasLocked: false) == .locked else { return }
         holdPhase = .locked
