@@ -165,6 +165,8 @@ public struct NotificationRowView: View, Equatable {
                 )
             case .milestone(let symbol):
                 milestoneMedallion(symbol)
+            case .signature:
+                signatureMedallion
             }
 
             if !notification.isRead {
@@ -192,6 +194,27 @@ public struct NotificationRowView: View, Equatable {
                 Image(systemName: symbol)
                     .font(.system(size: MeeshyIconSize.lg, weight: .semibold))
                     .foregroundColor(isDark ? .white : accentColor)
+            )
+            .frame(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)
+            .shadow(color: accentColor.opacity(MeeshyOpacity.medium), radius: 6, y: 3)
+            .accessibilityHidden(true)
+    }
+
+    /// Le médaillon d'une notification de jeu sans acteur : la Signature de la marque, à plat, sur le même
+    /// disque teinté que celui d'un palier — la ligne dit « le jeu » avant qu'on la lise.
+    private var signatureMedallion: some View {
+        Circle()
+            .fill(
+                LinearGradient(
+                    colors: [accentColor.opacity(isDark ? 0.55 : 0.30), accentColor.opacity(isDark ? 0.22 : 0.12)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+            .overlay(Circle().strokeBorder(accentColor.opacity(MeeshyOpacity.strong), lineWidth: 1))
+            .overlay(
+                SignatureMark(style: .flat, color: isDark ? .white : accentColor, strokeWidth: 120)
+                    .padding(MeeshySpacing.smPlus)
             )
             .frame(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)
             .shadow(color: accentColor.opacity(MeeshyOpacity.medium), radius: 6, y: 3)

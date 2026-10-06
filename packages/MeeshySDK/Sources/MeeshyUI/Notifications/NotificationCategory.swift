@@ -116,7 +116,8 @@ enum NotificationCategory: String, CaseIterable {
             ]
         case .engagement:
             return [
-                .achievementUnlocked, .legacyAchievementUnlocked, .streakMilestone, .levelUp, .badgeEarned
+                .achievementUnlocked, .legacyAchievementUnlocked, .streakMilestone, .levelUp, .badgeEarned,
+                .gameDuoInvited, .gameDuoAccepted, .gameLeagueResult, .gameSeasonStep
             ]
         case .contacts:
             return [
