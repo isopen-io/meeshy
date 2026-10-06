@@ -126,6 +126,23 @@ final class ComposerLookStripTests: XCTestCase {
         XCTAssertFalse(bande.contains("TapGesture(count: 2)"), "un double toucher ne retarde jamais le toucher simple")
     }
 
+    func test_draw_asksForAFrame_withAndWithoutADrawable_withinTheBound() throws {
+        let surface = try Self.code("Meeshy/Features/Main/Composer/ComposerLookStripSurface.swift")
+        let dessin = try XCTUnwrap(Self.body(of: "func draw(in view: MTKView)", in: surface))
+        XCTAssertEqual(dessin.components(separatedBy: "requestFrameIfNeeded()").count - 1, 2,
+                       "le dessin réclame sa trame après avoir peint ET quand il n'a pas eu de drawable")
+        let aide = try XCTUnwrap(Self.body(of: "private func requestFrameIfNeeded()", in: surface))
+        XCTAssertTrue(aide.contains("ComposerLookStripPaintRule.mayRequestFrame("), "la demande passe par la borne")
+        XCTAssertTrue(aide.contains("gate.requestFrame()"))
+    }
+
+    /// Le corps d'une fonction : de sa signature à l'accolade fermante de même retrait.
+    private static func body(of signature: String, in source: String) -> String? {
+        guard let debut = source.range(of: signature),
+              let fin = source.range(of: "\n    }\n", range: debut.upperBound..<source.endIndex) else { return nil }
+        return String(source[debut.upperBound..<fin.lowerBound])
+    }
+
     func test_strip_reducesTheFrameInsideItsOwnCommandBuffer() throws {
         let surface = try Self.code("Meeshy/Features/Main/Composer/ComposerLookStripSurface.swift")
         XCTAssertFalse(surface.contains("CVPixelBuffer"),
