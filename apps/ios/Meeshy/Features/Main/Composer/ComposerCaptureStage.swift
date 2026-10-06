@@ -62,7 +62,7 @@ struct ComposerCaptureStage: View {
                 allowsVideo: allowsVideo,
                 onToggleSize: onToggleSize,
                 onDisarm: onDisarm,
-                onValidateSegments: { session.validateSegments { onDeliver(.video($0)) } })
+                onValidateSegments: { session.validateSegments() })
         }
     }
 }

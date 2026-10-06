@@ -22,15 +22,44 @@ extension ComposerCaptureSession {
         camera.pauseRunning()
     }
 
+    /// La vidéo assemblée s'ouvre en édition, en boucle : le peintre la lit comme
+    /// il lisait l'objectif, à la cadence du palier et dans l'espace de l'aperçu.
+    /// Une vidéo qui ne se lit pas part telle quelle plutôt que d'être perdue ;
+    /// un viseur fermé pendant le chargement n'ouvre rien.
+    func beginEditing(video url: URL) async {
+        let generation = renderGeneration
+        let charge = await loopPlayerFactory(url)
+        guard generation == renderGeneration else { return }
+        guard let lecteur = charge else {
+            onDeliver?(.video(url))
+            return
+        }
+        loopPlayer = lecteur
+        editSource = lecteur
+        framing = .identity
+        trim = 0...lecteur.duration
+        openFamily = nil
+        phase = .editing(.video(url))
+        camera.pauseRunning()
+        lecteur.configure(fps: ComposerCaptureSurfaceRule.editFPS(thermalBudget),
+                          declaredSpace: camera.liveFeed.declaredSpace)
+        lecteur.play()
+    }
+
     /// « Fermer » en édition : on revient viser ; la prise est abandonnée.
     func cancelEditing() {
         leaveEditing()
         camera.resumeRunning()
     }
 
-    /// La phase revient à la capture et la source éditée est relâchée — sans
-    /// toucher à l'objectif : qui désarme le ferme, qui annule le relance.
+    /// La phase revient à la capture et la source éditée est relâchée — la
+    /// boucle s'arrête, une fois — sans toucher à l'objectif : qui désarme le
+    /// ferme, qui annule le relance.
     func leaveEditing() {
+        let lecteur = loopPlayer
+        loopPlayer = nil
+        lecteur?.stop()
+        trim = nil
         phase = .capturing
         editPhoto = nil
         editPhotoData = nil
@@ -38,9 +67,11 @@ extension ComposerCaptureSession {
         framing = .identity
     }
 
-    /// L'étendue de la source éditée ; `nil` hors édition.
+    /// L'étendue de la source éditée ; `nil` hors édition. Une vidéo la connaît
+    /// avant sa première trame : le cadrage n'attend pas la lecture.
     var editExtent: CGRect? {
-        editSource?.latestImage()?.extent
+        if let lecteur = loopPlayer { return CGRect(origin: .zero, size: lecteur.uprightSize) }
+        return editSource?.latestImage()?.extent
     }
 
     /// Les proportions de la case où le média se pose : la découpe du cadre, le

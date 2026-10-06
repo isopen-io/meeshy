@@ -72,7 +72,14 @@ final class ComposerCaptureSession: ObservableObject {
     var editPhotoData: Data?
     /// Ce que le peintre lit en édition : la photo figée, ou la vidéo en boucle.
     var editSource: (any ComposerFrameSourcing)?
-    /// La vidéo se rend avec son look : le `✓` attend, et le dit.
+    /// La vidéo en boucle de l'édition (#9352).
+    var loopPlayer: (any ComposerLoopPlayerProviding)?
+    /// La plage gardée de la vidéo éditée (#9353).
+    @Published var trim: ClosedRange<TimeInterval>?
+    /// Ce qui ouvre la boucle d'un fichier — une doublure dans les témoins.
+    let loopPlayerFactory: @MainActor (URL) async -> (any ComposerLoopPlayerProviding)?
+    /// Les segments s'assemblent, ou la vidéo se rend avec son look : le `✓`
+    /// attend, et le dit.
     @Published var isRenderingLook = false
     /// La date de la séance de prise : l'aperçu, la photo et la vidéo écrivent
     /// la MÊME dans leur cadre.
@@ -141,7 +148,10 @@ final class ComposerCaptureSession: ObservableObject {
          defaults: UserDefaults = .standard,
          thermal: (any ThermalStateMonitorProviding)? = nil,
          gallery: any ComposerGalleryProviding = ComposerGallery.shared,
-         scenes: any ComposerLookSceneProviding = ComposerLookSceneCache.shared) {
+         scenes: any ComposerLookSceneProviding = ComposerLookSceneCache.shared,
+         loopPlayerFactory: @escaping @MainActor (URL) async -> (any ComposerLoopPlayerProviding)? = {
+             await ComposerLoopPlayer.load(url: $0)
+         }) {
         self.stage = stage
         self.mode = mode
         self.camera = camera
@@ -150,6 +160,7 @@ final class ComposerCaptureSession: ObservableObject {
         self.thermal = thermal ?? ThermalStateMonitor()
         self.gallery = gallery
         self.scenes = scenes
+        self.loopPlayerFactory = loopPlayerFactory
         flashIntensity = defaults.object(forKey: ComposerFlashIntensity.storageKey) as? Double
             ?? ComposerFlashIntensity.defaultLevel
         relais = camera.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }
@@ -233,6 +244,8 @@ final class ComposerCaptureSession: ObservableObject {
     func applyThermal(_ state: ProcessInfo.ThermalState) {
         thermalBudget = ComposerThermalBudget.budget(for: state)
         refreshFeed()
+        loopPlayer?.configure(fps: ComposerCaptureSurfaceRule.editFPS(thermalBudget),
+                              declaredSpace: camera.liveFeed.declaredSpace)
     }
 
     func discardSegments() {
@@ -330,43 +343,23 @@ final class ComposerCaptureSession: ObservableObject {
         HapticFeedback.light()
     }
 
-    /// **`✓` concatène et rend.** Un segment unique EST le fichier final ; une
-    /// concaténation qui échoue retombe sur le dernier segment plutôt que de
-    /// perdre la prise entière.
-    func validateSegments(deliver: @escaping @MainActor (URL) -> Void) {
+    /// **`✓` assemble les segments et ouvre la retouche** (#9352, spec § 3.2) :
+    /// rien ne part avant « Terminé ». Un segment unique EST le fichier ; un
+    /// assemblage qui échoue retombe sur le dernier segment plutôt que de perdre
+    /// la prise entière. Un viseur fermé entre-temps n'ouvre rien.
+    func validateSegments() {
         let pris = segments
         guard ComposerCaptureSegments.canValidate(pris) else { return }
         segments = []
-        let regard = look
-        let auteur = lookPerson
-        let espace = camera.liveFeed.declaredSpace?.name as String?
         let generation = renderGeneration
-        isRenderingLook = ComposerLiveLookRule.rendersLive(regard)
+        let assemble = ComposerCaptureSegments.needsMerge(pris)
+        isRenderingLook = assemble
         Task { @MainActor in
-            let finale = ComposerCaptureSegments.needsMerge(pris)
-                ? await CameraModel.mergeSegments(pris.map(\.url))
-                : pris.first?.url
-            guard let url = finale ?? pris.last?.url else {
-                isRenderingLook = false
-                return
-            }
-            // La vidéo part avec le look qu'on voyait (#9329) ; un rendu qui
-            // échoue rend la prise brute plutôt que de la perdre.
-            let regardee = await ComposerLookVideoExporter.export(url, look: regard, person: auteur, date: lookDate,
-                                                                   declaredSpaceName: espace)
-            guard generation == renderGeneration else {
-                if let regardee, regardee != url {
-                    FileManager.default.removeItemLogging(at: regardee, context: "rendu d'un viseur fermé",
-                                                          logger: .media)
-                }
-                return
-            }
+            let finale = assemble ? await CameraModel.mergeSegments(pris.map(\.url)) : pris.first?.url
+            guard generation == renderGeneration else { return }
             isRenderingLook = false
-            if let regardee, regardee != url {
-                FileManager.default.removeItemLogging(at: url, context: "prise brute remplacée par son look",
-                                                      logger: .media)
-            }
-            deliver(regardee ?? url)
+            guard let url = finale ?? pris.last?.url else { return }
+            await beginEditing(video: url)
         }
     }
 

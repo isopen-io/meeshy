@@ -100,6 +100,12 @@ nonisolated enum ComposerCaptureSurfaceRule {
     static func showsThermalNotice(look: ComposerPhotoLook, budget: ComposerThermalBudget) -> Bool {
         budget.systemLayerOnly && ComposerLiveLookRule.rendersLive(look)
     }
+
+    /// En édition, rien ne vient de l'objectif : la photo figée et la boucle se
+    /// dessinent au rythme du palier, et encore au palier critique (10 i/s).
+    static func editFPS(_ budget: ComposerThermalBudget) -> Int {
+        max(10, budget.previewFPS)
+    }
 }
 
 /// Les mots de la capture unifiée.
