@@ -1,5 +1,4 @@
 import CoreImage
-import CoreVideo
 import Metal
 import MetalKit
 import QuartzCore
@@ -95,7 +94,9 @@ final class ComposerLookStripRenderer: NSObject, MTKViewDelegate {
     private var atlas: MTLTexture?
     private var slotCount = ComposerLookStripGeometry.minimumSlots
     private var slots: [Int: ComposerLookStripSlot] = [:]
-    private var reducedBuffer: CVPixelBuffer?
+    /// La trame réduite, texture privée réécrite dans le passage de chaque dessin :
+    /// l'ordre des passages de la file garantit qu'aucune lecture n'en voit la suivante.
+    private var reducedTexture: MTLTexture?
     private weak var view: MTKView?
 
     nonisolated deinit {}
@@ -155,7 +156,7 @@ final class ComposerLookStripRenderer: NSObject, MTKViewDelegate {
         view.delegate = nil
         atlas = nil
         slots = [:]
-        reducedBuffer = nil
+        reducedTexture = nil
     }
 
     private func frameArrived(live: Bool) {
@@ -204,7 +205,7 @@ final class ComposerLookStripRenderer: NSObject, MTKViewDelegate {
     /// elle se repeint dès que la scène est prête.
     private func paint(_ tiles: [ComposerLookStripTile], into atlas: MTLTexture, cell: CGSize, scale: CGFloat,
                        buffer: MTLCommandBuffer) {
-        guard !tiles.isEmpty, let source, let frame = source.latestImage(), let petit = reduced(frame) else { return }
+        guard !tiles.isEmpty, let source, let frame = source.latestImage(), let petit = reduced(frame, buffer: buffer) else { return }
         let destination = CIRenderDestination(mtlTexture: atlas, commandBuffer: buffer)
         destination.isFlipped = true
         destination.colorSpace = ComposerLiveLookRule.colorSpace
@@ -281,25 +282,32 @@ final class ComposerLookStripRenderer: NSObject, MTKViewDelegate {
         return neuf
     }
 
-    /// **La source réduite UNE fois** pour toutes les cases (spec § 5).
-    private func reduced(_ frame: CIImage) -> CIImage? {
+    /// **La source réduite UNE fois** pour toutes les cases (spec § 5), dans le
+    /// passage du dessin : ni second rendu, ni attente sur le fil principal. Le
+    /// grand côté garde 2 × 288 px — deux fois la toile d'une case, de quoi
+    /// recadrer sans flou.
+    private func reduced(_ frame: CIImage, buffer: MTLCommandBuffer) -> CIImage? {
         let plusGrand = max(frame.extent.width, frame.extent.height)
         guard plusGrand > 0, !frame.extent.isInfinite else { return nil }
-        let echelle = min(1, 576 / plusGrand)
+        let echelle = min(1, 2 * ComposerLookPainter.thumbnailCanvas.height / plusGrand)
         let petit = frame.transformed(by: CGAffineTransform(translationX: -frame.extent.minX, y: -frame.extent.minY)
             .concatenating(CGAffineTransform(scaleX: echelle, y: echelle)))
         let largeur = Int(petit.extent.width.rounded()), hauteur = Int(petit.extent.height.rounded())
-        guard largeur > 0, hauteur > 0 else { return nil }
-        if reducedBuffer.map({ CVPixelBufferGetWidth($0) != largeur || CVPixelBufferGetHeight($0) != hauteur }) ?? true {
-            var tampon: CVPixelBuffer?
-            let attributs: [CFString: Any] = [kCVPixelBufferIOSurfacePropertiesKey: [String: Any](),
-                                              kCVPixelBufferMetalCompatibilityKey: true]
-            CVPixelBufferCreate(kCFAllocatorDefault, largeur, hauteur, kCVPixelFormatType_32BGRA,
-                                attributs as CFDictionary, &tampon)
-            reducedBuffer = tampon
-        }
-        guard let reducedBuffer else { return nil }
-        ComposerLookGPU.context.render(petit, to: reducedBuffer)
-        return CIImage(cvPixelBuffer: reducedBuffer)
+        guard largeur > 0, hauteur > 0, let texture = reductionTarget(width: largeur, height: hauteur) else { return nil }
+        let destination = CIRenderDestination(mtlTexture: texture, commandBuffer: buffer)
+        destination.colorSpace = ComposerLiveLookRule.colorSpace
+        guard (try? ComposerLookGPU.context.startTask(toRender: petit, to: destination)) != nil else { return nil }
+        return CIImage(mtlTexture: texture, options: [.colorSpace: ComposerLiveLookRule.colorSpace])
+    }
+
+    private func reductionTarget(width: Int, height: Int) -> MTLTexture? {
+        if let reducedTexture, reducedTexture.width == width, reducedTexture.height == height { return reducedTexture }
+        guard let device = ComposerLookGPU.device else { return nil }
+        let description = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .bgra8Unorm, width: width,
+                                                                   height: height, mipmapped: false)
+        description.usage = [.shaderRead, .shaderWrite, .renderTarget]
+        description.storageMode = .private
+        reducedTexture = device.makeTexture(descriptor: description)
+        return reducedTexture
     }
 }
