@@ -1,4 +1,4 @@
-import { GAME_BIRD_BOX, birdCutFilter, gameBirdMarkup, gameBirdPlacement, type GameBirdKey } from '@/lib/game/birds';
+import { GAME_BIRD_BOX, birdCutFilter, birdEngraveFilter, gameBirdMarkup, gameBirdPlacement, type GameBirdKey } from '@/lib/game/birds';
 import { paintAxis, paintId, paintStops, type GamePaint } from '@/lib/game/materials';
 
 import '@/styles/game.css';
@@ -48,14 +48,16 @@ type PlacedBirdProps = {
   readonly y: number;
   readonly scale: number;
   readonly flip?: boolean;
+  /** `cut` : le contour blanc d'un sticker (blasons, trophées) ; `engraved` : gravé et coloré dans le métal (revers de la Meesh, #9540). */
+  readonly relief?: 'cut' | 'engraved';
 };
 
 /** Une figure posée dans le SVG d'un objet, avec son contour de sticker. Le groupe EXTÉRIEUR porte la position ; `data-game-pose` est la cible des gestes (« les tenants se posent ») : l'animer ne défait pas la position. Le filtre est `${uid}-cut`, déclaré par l'hôte via `BirdCutDefs`. */
-export function PlacedBird({ uid, bird, x, y, scale, flip = false }: PlacedBirdProps) {
+export function PlacedBird({ uid, bird, x, y, scale, flip = false, relief = 'cut' }: PlacedBirdProps) {
   return (
     <g data-game-bird={bird} transform={gameBirdPlacement({ x, y, scale, flip })}>
       <g data-game-pose="">
-        <g filter={`url(#${uid}-cut)`} dangerouslySetInnerHTML={{ __html: gameBirdMarkup(bird, uid) }} />
+        <g filter={`url(#${uid}-${relief === 'engraved' ? 'engrave' : 'cut'})`} dangerouslySetInnerHTML={{ __html: gameBirdMarkup(bird, uid) }} />
       </g>
     </g>
   );
@@ -67,3 +69,8 @@ export function BirdCutDefs({ uid }: { readonly uid: string }) {
 }
 
 export { GAME_BIRD_BOX };
+
+/** Le relief gravé commun aux figures du revers d'une pièce. */
+export function BirdEngraveDefs({ uid }: { readonly uid: string }) {
+  return <g dangerouslySetInnerHTML={{ __html: birdEngraveFilter(`${uid}-engrave`) }} />;
+}
