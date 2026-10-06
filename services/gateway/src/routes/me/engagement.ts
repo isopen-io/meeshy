@@ -37,6 +37,7 @@ import { meeshTotalsFromLedger } from '../../services/meesh/MeeshService';
 import { GameBlockService, type AxisRow } from '../../services/game/GameBlockService';
 import { knowsGameWave2, milestonesServedTo } from '../../services/game/clientCapabilities';
 import { MissionService, READ_ONLY_CREDIT } from '../../services/game/MissionService';
+import { PersonalMissionService } from '../../services/game/PersonalMissionService';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { sendSuccess, sendUnauthorized, sendNotFound, sendInternalError } from '../../utils/response.js';
@@ -184,8 +185,11 @@ export async function meEngagementRoutes(fastify: FastifyInstance, options: Enga
   const reachService = new AchievementReachService(fastify.prisma);
   // La lecture du jeu ne crédite rien : `READ_ONLY_CREDIT` le garantit, la
   // pose des missions du jour est la seule écriture qu'elle puisse faire.
+  const gameMissions = new MissionService(fastify.prisma, { creditPoints: READ_ONLY_CREDIT });
   const gameBlocks = new GameBlockService(fastify.prisma, {
-    missions: new MissionService(fastify.prisma, { creditPoints: READ_ONLY_CREDIT }),
+    missions: gameMissions,
+    // La mission personnelle du jour (#9539) : la lecture la tire au premier accès du jour, comme les trois autres.
+    personal: new PersonalMissionService(fastify.prisma, { missions: gameMissions }),
   });
   const buildGameBlock = options.gameBlock ?? ((params) => gameBlocks.build(params));
 

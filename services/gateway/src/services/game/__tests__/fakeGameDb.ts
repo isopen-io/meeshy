@@ -274,7 +274,7 @@ export function fakeGameDb(): FakeGameDb {
   const user = flattenCompound(new Model());
   const gloryLedger = flattenCompound(new Model({ uniques: [['userId', 'requestId']] }));
   const meeshLedger = flattenCompound(new Model({ uniques: [['userId', 'requestId']] }));
-  const dailyMission = flattenCompound(new Model({ uniques: [['userId', 'dayKey', 'slot']], defaults: () => ({ progress: 0, seen: [], prism: false, glory: 0 }), optional: ['completedAt', 'paidPoints', 'rerolledAt'] }));
+  const dailyMission = flattenCompound(new Model({ uniques: [['userId', 'dayKey', 'slot']], defaults: () => ({ progress: 0, seen: [], prism: false, glory: 0 }), optional: ['completedAt', 'paidPoints', 'rerolledAt', 'startsAt', 'endsAt', 'notifiedAt'] }));
   const gameDay = flattenCompound(new Model({ uniques: [['userId', 'dayKey']], defaults: () => ({ rerollCount: 0 }), optional: ['chestClaimedAt', 'chestPoints', 'chestFragment', 'chestFreeze'] }));
   const engagementCounter = flattenCompound(new Model({ uniques: [['userId', 'axisKey']] }));
   const engagementQuota = flattenCompound(new Model({ uniques: [['userId', 'operationKey', 'bucket']] }));

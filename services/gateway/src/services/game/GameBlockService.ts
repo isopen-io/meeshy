@@ -24,6 +24,7 @@ import { meeshTotalsFromLedger } from '../meesh/MeeshService';
 import { FLAME_USER_SELECT, brokenFlame, flameFactsOf } from './FlameService';
 import { GameBlockExtrasService } from './GameBlockExtrasService';
 import { GameProfileService } from './GameProfileService';
+import type { PersonalMissionService } from './PersonalMissionService';
 import { gloryTotalFromLedger } from './GloryService';
 import { toGameMission, type MissionService } from './MissionService';
 
@@ -47,6 +48,8 @@ export class GameBlockService {
       /** Les sept extensions de la vague 2 ; remplaçable en test. */
       readonly extras?: Pick<GameBlockExtrasService, 'build'>;
       readonly profile?: Pick<GameProfileService, 'settings'>;
+      /** La mission personnelle du jour (#9539) : absente, le bloc garde la forme d'avant. */
+      readonly personal?: Pick<PersonalMissionService, 'ensure'>;
     },
   ) {
     this.extras = deps.extras ?? new GameBlockExtrasService(prisma);
@@ -70,6 +73,11 @@ export class GameBlockService {
     ]);
     const day = await this.deps.missions.ensureToday(userId, now);
     const gameDay = await this.deps.missions.gameDay(userId, day.dayKey);
+    // Un tirage personnel qui échoue ne retient pas le bloc : la mission personnelle est un APPOINT.
+    const personal = await this.deps.personal?.ensure(userId, now, day).catch((error: unknown) => {
+      log.warn('personal mission unavailable, block served without it', { userId, error: error instanceof Error ? error.message : String(error) });
+      return null;
+    });
 
     const facts = flameFactsOf(user ?? {}, now);
     const settings = await this.profile.settings(userId).catch(() => null);
@@ -100,6 +108,16 @@ export class GameBlockService {
       freezes: facts.freezes,
       lastRelightDay: facts.lastRelightDay,
       missions: day.rows.map(toGameMission),
+      ...(personal && personal.startsAt && personal.endsAt
+        ? {
+            personalMission: {
+              record: toGameMission(personal),
+              startsAt: personal.startsAt.toISOString(),
+              endsAt: personal.endsAt.toISOString(),
+              now: now.toISOString(),
+            },
+          }
+        : {}),
       rerollsUsedToday: gameDay?.rerollCount ?? 0,
       chestClaimed: gameDay?.chestClaimedAt != null,
       chestReward: gameDay?.chestClaimedAt
