@@ -7,7 +7,7 @@ import Foundation
 // ou « Manquée », et l'action (changer la mission) disparaît.
 //
 // Une pure fonction de DATES : aucune horloge, aucun minuteur ici. L'hôte passe `now` et choisit son rythme de
-// rafraîchissement. Miroir de `apps/web/src/lib/game/mission-clock.ts`.
+// rafraîchissement. Le web applique la même règle, mot pour mot (#9539).
 
 public enum GameMissionClock {
 
