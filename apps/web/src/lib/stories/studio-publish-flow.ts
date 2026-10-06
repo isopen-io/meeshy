@@ -83,6 +83,12 @@ export function studioPublicationContent(params: {
   return content === '' ? undefined : content;
 }
 
+/** **LE RÉEL VOYAGE-T-IL ?** (#9476) — miroir de `StoryAlsoAsReelWire.flag`
+ * (iOS) : une STORY demandée « aussi en réel », en UNE publication. */
+export function alsoAsReelTravels(params: { readonly kind: PublicationKind; readonly requested: boolean; readonly publicationCount: number }): boolean {
+  return params.requested && params.kind === 'STORY' && params.publicationCount === 1;
+}
+
 /**
  * **L'ENVOI RÉEL D'UN PLAN** (#7707) — construit la requête `POST
  * posts.root` de CHAQUE publication (`publishStory`, le port UNIQUE, qui
@@ -103,6 +109,10 @@ export function publishStudioPlan(params: {
   readonly postText?: string;
   /** Le réel vient de « C'est un Réel » (#8603) : le texte du post le suit. */
   readonly promotedFromPost?: boolean;
+  /** « Aussi en réel » (#9476) — ne part qu'avec une STORY d'UNE publication
+   * (`alsoAsReelTravels`) : une séquence de plusieurs pages partirait en
+   * autant de réels. */
+  readonly alsoAsReel?: boolean;
   readonly onPublished?: (event: StudioPublishedEvent) => void;
   readonly signal?: AbortSignal;
 }): Promise<StudioPublishOutcome> {
@@ -111,6 +121,7 @@ export function publishStudioPlan(params: {
     postText: params.postText ?? '',
     ...(params.promotedFromPost !== undefined ? { promotedFromPost: params.promotedFromPost } : {}),
   });
+  const alsoAsReel = alsoAsReelTravels({ kind: params.kind, requested: params.alsoAsReel === true, publicationCount: params.plan.publications.length });
   return runStudioPublish({
     plan: params.plan,
     ...(params.onPublished !== undefined ? { onPublished: params.onPublished } : {}),
@@ -129,6 +140,7 @@ export function publishStudioPlan(params: {
         ...(content !== undefined ? { content } : {}),
         ...(publication.mediaCaption !== undefined ? { mediaCaption: publication.mediaCaption } : {}),
         ...(publication.mediaAlt !== undefined ? { mediaAlt: publication.mediaAlt } : {}),
+        ...(alsoAsReel ? { alsoAsReel: true } : {}),
         storyEffects: publication.storyEffects,
         mediaIds: publication.mediaIds,
       }),

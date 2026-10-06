@@ -68,12 +68,26 @@ public nonisolated struct ComposerMediaAccessibility: Equatable, Sendable {
 
     public let allowSoundExtraction: Bool?
 
+    /// « Publier AUSSI en réel » (#9476) — une option de PUBLICATION, comme
+    /// `allowSoundExtraction`, et elle voyage par le même porteur pour la même
+    /// raison : la fermeture de hand-off a déjà treize paramètres positionnels.
+    /// `false` = la story part seule, ce que tout appelant historique publie.
+    public let alsoAsReel: Bool
+
     public init(mediaAlt: [String: String]?,
                 mediaCaption: [String: String]? = nil,
-                allowSoundExtraction: Bool?) {
+                allowSoundExtraction: Bool?,
+                alsoAsReel: Bool = false) {
         self.mediaAlt = mediaAlt
         self.mediaCaption = mediaCaption
         self.allowSoundExtraction = allowSoundExtraction
+        self.alsoAsReel = alsoAsReel
+    }
+
+    /// La même charge, le réel décidé par le GESTE — jamais par la collecte.
+    public func carryingAlsoAsReel(_ alsoAsReel: Bool) -> ComposerMediaAccessibility {
+        ComposerMediaAccessibility(mediaAlt: mediaAlt, mediaCaption: mediaCaption,
+                                   allowSoundExtraction: allowSoundExtraction, alsoAsReel: alsoAsReel)
     }
 
     /// L'auteur n'a rien saisi ni rien basculé. Distinct d'un dictionnaire vide
@@ -132,7 +146,12 @@ public final class ComposerPublishTrigger: ObservableObject {
         requestedTargetType = nil
         requestedVisibility = nil
         requestedVisibilityUserIds = nil
+        requestedAlsoAsReel = false
     }
+
+    /// « Aussi en réel » (#9476), apporté par la DERNIÈRE pression — même
+    /// patron que `requestedTargetType` : lu au moment du geste.
+    public private(set) var requestedAlsoAsReel = false
 
     /// L'audience que la DERNIÈRE pression a apportée (#4135), même patron et
     /// même raison que `requestedTargetType` : lue au moment du GESTE, jamais au
@@ -199,11 +218,20 @@ public final class ComposerPublishTrigger: ObservableObject {
     /// d'utile — il rend la main au seul autre porteur du fait.
     public func requestPublish(as targetType: PostType? = nil,
                                visibility: String? = nil,
-                               visibilityUserIds: [String]? = nil) {
+                               visibilityUserIds: [String]? = nil,
+                               alsoAsReel: Bool = false) {
         requestedTargetType = targetType
         requestedVisibility = visibility
         requestedVisibilityUserIds = visibilityUserIds
+        requestedAlsoAsReel = alsoAsReel
         handler?()
+    }
+
+    /// **Le réel n'accompagne qu'une STORY** (#9476) : demandé sous un autre
+    /// type servi, il ne part pas — le serveur le refuserait, et rien ne doit
+    /// laisser croire qu'il part.
+    public nonisolated static func publishedAlsoAsReel(requested: Bool, served: PostType) -> Bool {
+        requested && served == .story
     }
 
     public func requestPreview() {
@@ -344,7 +372,9 @@ extension StoryComposerView {
             viewModel.loadedVideoURLs, viewModel.loadedAudioURLs,
             viewModel.loadedStickerAnimations,
             storyLanguage, servedVisibility, ids, viewModel.draftId, viewModel.references,
-            Self.accessibilityHandoff(from: accessibilityStore),
+            Self.accessibilityHandoff(from: accessibilityStore).carryingAlsoAsReel(
+                ComposerPublishTrigger.publishedAlsoAsReel(
+                    requested: publishTrigger?.requestedAlsoAsReel ?? false, served: publishedType)),
             publishedType
         )
         // Tout ce qui engage le brouillon attend de savoir si le hand-off a

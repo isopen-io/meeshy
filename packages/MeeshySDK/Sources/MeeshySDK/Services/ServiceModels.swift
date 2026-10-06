@@ -433,8 +433,14 @@ public struct CreateStoryRequest: Encodable {
     /// une clé locale au composer serait acceptée par la requête et jetée par
     /// le serveur, sans erreur. Cf. `StoryMediaAltMapping.serverKeyed`.
     public let mediaAlt: [String: String]?
+    /// « Publier AUSSI en réel » (#9476, miroir de `CreatePostSchema.alsoAsReel`).
+    /// `true` sur une STORY : le serveur publie la story ET un réel aux médias
+    /// COPIÉS, ou rien (`REEL_NOT_QUALIFIED`). `nil` = clé absente du corps —
+    /// ce que tout client antérieur envoie.
+    public let alsoAsReel: Bool?
 
-    public init(type: String = PostType.story.rawValue, content: String? = nil, storyEffects: StoryEffects? = nil, visibility: String = "PUBLIC", visibilityUserIds: [String]? = nil, originalLanguage: String? = nil, mediaIds: [String]? = nil, repostOfId: String? = nil, mentions: [PostMentionInput]? = nil, allowSoundExtraction: Bool? = nil, mediaAlt: [String: String]? = nil, mediaCaption: [String: String]? = nil) {
+    public init(type: String = PostType.story.rawValue, content: String? = nil, storyEffects: StoryEffects? = nil, visibility: String = "PUBLIC", visibilityUserIds: [String]? = nil, originalLanguage: String? = nil, mediaIds: [String]? = nil, repostOfId: String? = nil, mentions: [PostMentionInput]? = nil, allowSoundExtraction: Bool? = nil, mediaAlt: [String: String]? = nil, mediaCaption: [String: String]? = nil, alsoAsReel: Bool? = nil) {
+        self.alsoAsReel = alsoAsReel
         self.type = type
         self.content = content; self.storyEffects = storyEffects; self.visibility = visibility
         self.visibilityUserIds = visibilityUserIds

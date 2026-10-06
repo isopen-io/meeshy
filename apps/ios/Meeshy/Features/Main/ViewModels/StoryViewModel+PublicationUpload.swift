@@ -396,7 +396,10 @@ extension StoryViewModel {
                 mentions: canvasMentions.isEmpty ? nil : canvasMentions,
                 allowSoundExtraction: upload.allowSoundExtraction,
                 mediaAlt: serverMediaAlt.isEmpty ? nil : serverMediaAlt,
-                mediaCaption: serverMediaCaption.isEmpty ? nil : serverMediaCaption
+                mediaCaption: serverMediaCaption.isEmpty ? nil : serverMediaCaption,
+                alsoAsReel: StoryAlsoAsReelWire.flag(requested: upload.alsoAsReel, type: upload.targetType,
+                                                     slideCount: upload.slides.count,
+                                                     isRepost: upload.repostOfId != nil)
             )
 
             newPostIds.append(post.id)
@@ -936,5 +939,16 @@ extension StoryViewModel {
         for (_, url) in upload.loadedAudioURLs {
             try? FileManager.default.removeItem(at: url)
         }
+    }
+}
+
+/// **Ce que le fil dit du réel** (#9476). « Aussi en réel » ne part qu'avec une
+/// STORY ORIGINALE d'UNE scène : un réel est une scène, une story de plusieurs
+/// slides partirait en autant de réels, et une republication désigne les médias
+/// de sa source. `nil` = la clé reste absente du corps — ce que
+/// tout client antérieur envoie, et ce que le serveur lit « story seule ».
+nonisolated enum StoryAlsoAsReelWire {
+    static func flag(requested: Bool, type: PostType, slideCount: Int, isRepost: Bool) -> Bool? {
+        requested && type == .story && slideCount == 1 && !isRepost ? true : nil
     }
 }

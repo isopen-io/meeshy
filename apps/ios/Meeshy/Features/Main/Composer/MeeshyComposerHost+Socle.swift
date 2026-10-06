@@ -404,15 +404,16 @@ extension MeeshyComposerHost {
             choice: choice, documentText: documentText) {
             viewModel.applyContentText(texte)
         }
-        switch ComposerPublishMenuRule.route(surface: mountedSurface, choice: choice) {
-        case .atelier:
+        switch ComposerPublishMenuRule.dispatch(surface: mountedSurface, choice: choice) {
+        case .atelier(let type, let alsoAsReel):
             publishTrigger.requestPublish(
-                as: choice.format.postType,
+                as: type,
                 visibility: composerVisibility.rawValue,
-                visibilityUserIds: composerVisibilityUserIds
+                visibilityUserIds: composerVisibilityUserIds,
+                alsoAsReel: alsoAsReel
             )
-        case .storyScene:  publishStoryScene(as: choice.format)
-        case .document:    publishDocument(choice)
+        case .storyScene(let format, let alsoAsReel): publishStoryScene(as: format, alsoAsReel: alsoAsReel)
+        case .document(let choice): publishDocument(choice)
         case .unsupported: refuseUnsupportedFormat()
         }
     }
@@ -450,7 +451,7 @@ extension MeeshyComposerHost {
     /// greffe : ce qui change ici est la BASE qu'on lui donne — `.empty`, parce
     /// que le meuble n'a pas de magasin d'atelier à relayer sur ce chemin, et
     /// c'est toujours honnête.
-    func publishStoryScene(as format: ComposerFormat) {
+    func publishStoryScene(as format: ComposerFormat, alsoAsReel: Bool = false) {
         guard canPublishDocument(as: format) else { return }
         isPublishingDocument = true
         let accepted = onPublishAllInBackground(
@@ -465,7 +466,9 @@ extension MeeshyComposerHost {
             composerVisibilityUserIds,
             viewModel.draftId,
             composerReferences,
-            accessibilityCarryingComposerCaptions(.empty, slides: viewModel.slides),
+            accessibilityCarryingComposerCaptions(.empty, slides: viewModel.slides)
+                .carryingAlsoAsReel(ComposerPublishTrigger.publishedAlsoAsReel(requested: alsoAsReel,
+                                                                               served: format.postType)),
             format.postType
         )
         isPublishingDocument = false
@@ -506,7 +509,7 @@ extension MeeshyComposerHost {
             if socleShowsLabels {
                 // #7497 — la partie principale NOMME le format qui partira si
                 // l'auteur ne touche pas au chevron ; le mood garde « Publier ».
-                if let titre = ComposerPublishMenuCopy.publishTitle(armedChoice.format) {
+                if let titre = ComposerPublishMenuCopy.publishTitle(for: armedChoice) {
                     Text(titre)
                         .lineLimit(1)
                 } else {
@@ -640,7 +643,7 @@ extension MeeshyComposerHost {
                     publishCapsuleLabel
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(ComposerPublishMenuCopy.publishTitle(armedChoice.format)
+                .accessibilityLabel(ComposerPublishMenuCopy.publishTitle(for: armedChoice)
                                     ?? String(localized: "composer.socle.publish", bundle: .main))
                 if let entries = publishMenuEntries {
                     Rectangle()
@@ -648,6 +651,7 @@ extension MeeshyComposerHost {
                         .frame(width: 1, height: 20)
                         .accessibilityHidden(true)
                     ComposerPublishMenu(entries: entries, armed: armedChoice,
+                                        companionReelOffered: companionReelOffered,
                                         onChoose: { chooseArmedPublish($0) }) {
                         publishChevronLabel
                     }
@@ -664,7 +668,16 @@ extension MeeshyComposerHost {
     var armedChoice: ComposerPublishChoice {
         ComposerPublishMenuRule.armed(chosen: armedPublishChoice,
                                       defaultFormat: selectedFormat,
-                                      entries: publishMenuEntries)
+                                      entries: publishMenuEntries,
+                                      companionReelOffered: companionReelOffered)
+    }
+
+    /// **La story peut-elle partir AUSSI en réel ?** (#9476) — la lecture de
+    /// `ComposerPublishMenuRule.companionReelOffered` sur le menu du moment.
+    var companionReelOffered: Bool {
+        ComposerPublishMenuRule.companionReelOffered(entries: publishMenuEntries,
+                                                     slideCount: viewModel.slides.count,
+                                                     isRepost: intent.origin.repostedPostId != nil)
     }
 
     /// Le chevron — 44 pt de cible, comme la partie principale.
