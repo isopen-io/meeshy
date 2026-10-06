@@ -485,6 +485,8 @@ const de = {
   'game.duo.none': 'Wähle einen Freund: Wenn ihr beide eure Aufgabe in der Woche schafft, wird die Belohnung verdoppelt.',
   'game.duo.invite': '{name} einladen',
   'game.duo.pick': 'Wähle einen Freund',
+  'game.duo.search': 'Freunde suchen',
+  'game.duo.search.none': 'Kein Freund passt.',
   'game.duo.no_friends': 'Du brauchst einen bestätigten Freund, um im Duo zu spielen.',
   'game.duo.invited.inviter': 'Einladung an {name} gesendet. Die Antwort steht noch aus.',
   'game.duo.invited.invitee': '{name} lädt dich zur Duo-Mission der Woche ein.',

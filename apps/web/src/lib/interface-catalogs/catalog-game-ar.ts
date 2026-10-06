@@ -497,6 +497,8 @@ const ar = {
   'game.duo.none': 'اختر صديقًا: إن أنهيتما كلٌّ حصته خلال الأسبوع تتضاعف المكافأة.',
   'game.duo.invite': 'دعوة {name}',
   'game.duo.pick': 'اختر صديقًا',
+  'game.duo.search': 'ابحث عن صديق',
+  'game.duo.search.none': 'لا يوجد صديق مطابق.',
   'game.duo.no_friends': 'تحتاج إلى صديق مقبول للعب كثنائي.',
   'game.duo.invited.inviter': 'أُرسلت الدعوة إلى {name}. بانتظار الرد.',
   'game.duo.invited.invitee': 'يدعوك {name} إلى مهمة الثنائي لهذا الأسبوع.',

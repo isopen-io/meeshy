@@ -485,6 +485,8 @@ const pt = {
   'game.duo.none': 'Escolha um amigo: se cada um terminar sua parte na semana, a recompensa é dobrada.',
   'game.duo.invite': 'Convidar {name}',
   'game.duo.pick': 'Escolha um amigo',
+  'game.duo.search': 'Procurar um amigo',
+  'game.duo.search.none': 'Nenhum amigo corresponde.',
   'game.duo.no_friends': 'Você precisa de um amigo aceito para jogar em dupla.',
   'game.duo.invited.inviter': 'Convite enviado a {name}. Aguardando a resposta.',
   'game.duo.invited.invitee': '{name} convida você para a missão em dupla da semana.',

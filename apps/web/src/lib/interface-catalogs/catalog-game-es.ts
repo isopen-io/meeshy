@@ -485,6 +485,8 @@ const es = {
   'game.duo.none': 'Elige a un amigo: si cada uno termina su parte en la semana, la recompensa se duplica.',
   'game.duo.invite': 'Invitar a {name}',
   'game.duo.pick': 'Elige a un amigo',
+  'game.duo.search': 'Buscar un amigo',
+  'game.duo.search.none': 'Ningún amigo coincide.',
   'game.duo.no_friends': 'Necesitas un amigo aceptado para jugar en dúo.',
   'game.duo.invited.inviter': 'Invitación enviada a {name}. Esperando su respuesta.',
   'game.duo.invited.invitee': '{name} te invita a la misión en dúo de la semana.',

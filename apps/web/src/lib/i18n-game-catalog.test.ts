@@ -172,10 +172,10 @@ const UNDERSCORE_WORD: Readonly<Record<InterfaceLanguage, string>> = {
 };
 
 describe('le refus d’un pseudonyme de ligue cite le tiret bas', () => {
-  test.each(['game.league.pseudonym.invalid', 'game.error.league_pseudonym_invalid'] as const)('%s, dans les sept langues', async (key) => {
-    for (const [language, catalog] of await loadAll()) {
-      expect([language, catalog[key]?.includes(UNDERSCORE_WORD[language])]).toEqual([language, true]);
-    }
+  const KEYS = ['game.league.pseudonym.invalid', 'game.error.league_pseudonym_invalid'] as const;
+  test('dans les sept langues, pour le champ comme pour le refus de la passerelle', async () => {
+    const verdicts = (await loadAll()).flatMap(([language, catalog]) => KEYS.map((key) => [language, key, (catalog[key] ?? '').includes(UNDERSCORE_WORD[language])] as const));
+    expect(verdicts.filter(([, , cites]) => !cites)).toEqual([]);
   });
 });
 
