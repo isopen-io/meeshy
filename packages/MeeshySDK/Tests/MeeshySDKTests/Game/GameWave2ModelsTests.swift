@@ -145,4 +145,31 @@ struct GameWave2ModelsTests {
         #expect(response.alreadyDone)
         #expect(response.reward.kind == .fragment)
     }
+
+    @Test("la rareté mesurée se lit entrée par entrée : une valeur illisible tombe seule, et rien ne se montre sous les seuils")
+    func rarityMapIsReadEntryByEntry() throws {
+        let data = try Self.blockData { block in
+            block["achievementRarities"] = [
+                "achievement.first_content": ["rarity": "epic", "holders": 4000, "population": 100_000],
+                "achievement.editor": ["rarity": "mythic", "holders": 2, "population": 100_000],
+                "achievement.first_voice": ["rarity": "inconnue-de-ce-client", "holders": 9, "population": 100],
+                "achievement.three_conversation_kinds": ["rarity": NSNull(), "holders": 1, "population": 500],
+            ]
+        }
+        let block = try #require(GameBlock.parse(data))
+        let map = try #require(block.wave2.achievementRarities)
+        #expect(map.count == 3)
+        #expect(map["achievement.first_voice"] == nil)
+        #expect(map["achievement.first_content"]?.visibleRarity == .epic)
+        #expect(map["achievement.editor"]?.rarity == .mythic)
+        #expect(map["achievement.editor"]?.visibleRarity == nil, "2 titulaires : fail-closed, jamais « mythique »")
+        #expect(map["achievement.three_conversation_kinds"]?.visibleRarity == nil)
+        #expect(map["achievement.first_content"]?.sharePercent == 4)
+    }
+
+    @Test("sans carte de raretés, le bloc reste lisible et la carte est nil")
+    func rarityMapIsOptional() throws {
+        let block = try #require(GameBlock.parse(try Self.blockData()))
+        #expect(block.wave2.achievementRarities == nil)
+    }
 }
