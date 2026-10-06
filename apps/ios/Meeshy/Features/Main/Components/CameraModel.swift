@@ -194,6 +194,9 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     /// Un refus n'empêche pas de filmer : la capture continue sans piste audio
     /// (`mergeSegments` gère l'absence de piste audio), avec un toast explicatif.
     func enableAudioCaptureIfNeeded() async {
+        #if DEBUG
+        guard fixture == nil else { return }
+        #endif
         guard !hasAudioInput else { return }
         guard await MediaPermissionCoordinator.ensureMicrophone(announcesRefusal: false) else {
             guard !didAnnounceMicrophoneRefusal else { return }
@@ -644,6 +647,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     func startRecording() {
         #if DEBUG
         if fixture != nil {
+            guard !isRecordingVideo, !isSwitchingCamera else { return }
             recordingDuration = 0
             isRecordingVideo = true
             recordingTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in

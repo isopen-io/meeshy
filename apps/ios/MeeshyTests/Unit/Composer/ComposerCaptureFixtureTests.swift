@@ -106,6 +106,17 @@ final class ComposerCaptureFixtureTests: XCTestCase {
         camera.stop()
     }
 
+    func test_fixtureTake_asksNoMicrophone_andStartsOnce() async {
+        let camera = CameraModel(fixture: ComposerCaptureFixtureDriver())
+        await camera.enableAudioCaptureIfNeeded()
+        XCTAssertTrue(camera.session.inputs.isEmpty, "la recette ne demande ni ne branche aucun micro")
+        camera.startRecording()
+        camera.recordingDuration = 4
+        camera.startRecording()
+        XCTAssertEqual(camera.recordingDuration, 4, "un second départ ne relance pas la prise en cours")
+        camera.stop()
+    }
+
     func test_fixtureCode_neverShipsInRelease() throws {
         let fichier = try String(contentsOf: Self.racine.appendingPathComponent(
             "Meeshy/Features/Main/Components/CameraModel+Fixture.swift"), encoding: .utf8)
