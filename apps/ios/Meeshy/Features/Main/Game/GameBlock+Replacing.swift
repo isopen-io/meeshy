@@ -16,6 +16,7 @@ extension GameBlock.Level {
         pointsToNext: Int? = nil,
         progress: Double? = nil,
         record: Int? = nil,
+        prestige: Int? = nil,
         canPrestige: Bool? = nil
     ) -> GameBlock.Level {
         GameBlock.Level(
@@ -27,7 +28,7 @@ extension GameBlock.Level {
             pointsToNext: pointsToNext ?? self.pointsToNext,
             progress: progress ?? self.progress,
             record: record ?? self.record,
-            prestige: prestige,
+            prestige: prestige ?? self.prestige,
             canPrestige: canPrestige ?? self.canPrestige
         )
     }

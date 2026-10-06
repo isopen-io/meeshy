@@ -42,12 +42,15 @@ nonisolated enum ComposerCaptureFixture {
     }
 
     /// La scène COUCHÉE, comme le capteur la sert : `ComposerCameraFeed` la redresse (`.right`).
+    /// Les tampons viennent d'un pool, comme ceux d'un objectif.
     static func sensorBuffer(phase: Double) -> CVPixelBuffer? {
         let couchee = scene(phase: phase).oriented(.left)
         let image = couchee.transformed(by: CGAffineTransform(translationX: -couchee.extent.minX,
                                                               y: -couchee.extent.minY))
-        return buffer(image)
+        return sensorPool.render(image)
     }
+
+    private static let sensorPool = ComposerCaptureFixturePool(width: Int(upright.height), height: Int(upright.width))
 
     static func photo() -> UIImage? {
         ComposerLookGPU.context.createCGImage(scene(phase: 0.15), from: upright).map { UIImage(cgImage: $0) }
@@ -103,14 +106,41 @@ nonisolated enum ComposerCaptureFixture {
         return writer.status == .completed
     }
 
+    static var bufferAttributes: [CFString: Any] {
+        [kCVPixelBufferIOSurfacePropertiesKey: [String: Any](), kCVPixelBufferMetalCompatibilityKey: true]
+    }
+
     private static func buffer(_ image: CIImage) -> CVPixelBuffer? {
         var tampon: CVPixelBuffer?
-        let attributs: [CFString: Any] = [
-            kCVPixelBufferIOSurfacePropertiesKey: [String: Any](),
-            kCVPixelBufferMetalCompatibilityKey: true,
-        ]
+        let attributs = bufferAttributes
         guard CVPixelBufferCreate(kCFAllocatorDefault, Int(image.extent.width), Int(image.extent.height),
                                   kCVPixelFormatType_32BGRA, attributs as CFDictionary, &tampon) == kCVReturnSuccess,
+              let tampon else { return nil }
+        ComposerLookGPU.context.render(image, to: tampon)
+        return tampon
+    }
+}
+
+/// Le pool des trames du capteur de recette : 30 tampons de 6 Mo par seconde
+/// se recyclent au lieu d'être créés puis jetés. `CVPixelBufferPool` est sûr
+/// d'un fil à l'autre.
+nonisolated final class ComposerCaptureFixturePool: @unchecked Sendable {
+    private let pool: CVPixelBufferPool?
+
+    init(width: Int, height: Int) {
+        var attributs = ComposerCaptureFixture.bufferAttributes
+        attributs[kCVPixelBufferWidthKey] = width
+        attributs[kCVPixelBufferHeightKey] = height
+        attributs[kCVPixelBufferPixelFormatTypeKey] = kCVPixelFormatType_32BGRA
+        var cree: CVPixelBufferPool?
+        CVPixelBufferPoolCreate(kCFAllocatorDefault, nil, attributs as CFDictionary, &cree)
+        pool = cree
+    }
+
+    func render(_ image: CIImage) -> CVPixelBuffer? {
+        guard let pool else { return nil }
+        var tampon: CVPixelBuffer?
+        guard CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, pool, &tampon) == kCVReturnSuccess,
               let tampon else { return nil }
         ComposerLookGPU.context.render(image, to: tampon)
         return tampon
@@ -131,17 +161,24 @@ final class ComposerCaptureFixtureDriver {
 
     nonisolated deinit {}
 
+    /// Le minuteur tourne dans les modes COMMUNS de la boucle : le viseur ne se
+    /// fige pas pendant qu'on fait défiler la bande.
     func start(feeding feed: ComposerCameraFeed) {
         timer?.invalidate()
-        timer = Timer.scheduledTimer(withTimeInterval: 1.0 / Double(ComposerCaptureFixture.movieFrameRate),
-                                     repeats: true) { [weak self] minuterie in
+        let minuteur = Timer(timeInterval: 1.0 / Double(ComposerCaptureFixture.movieFrameRate),
+                             repeats: true) { [weak self] minuterie in
             guard self != nil else {
                 minuterie.invalidate()
                 return
             }
             Task { @MainActor [weak self] in self?.tick(feed) }
         }
+        RunLoop.main.add(minuteur, forMode: .common)
+        timer = minuteur
     }
+
+    /// Les trames peintes depuis le lancement — le témoin du guet sans lecteur.
+    private(set) var paintedFrames = 0
 
     func stop() {
         timer?.invalidate()
@@ -162,10 +199,13 @@ final class ComposerCaptureFixtureDriver {
         }
     }
 
+    /// Personne ne lit les trames (aucun look, palier critique, viseur rangé) :
+    /// rien ne se peint.
     private func tick(_ feed: ComposerCameraFeed) {
-        guard timer != nil, !painting else { return }
+        guard timer != nil, !painting, feed.isActive else { return }
         phase = (phase + 1.0 / 240).truncatingRemainder(dividingBy: 1)
         painting = true
+        paintedFrames += 1
         let instant = phase
         painter.async { [weak self] in
             if let tampon = ComposerCaptureFixture.sensorBuffer(phase: instant) { feed.inject(tampon) }

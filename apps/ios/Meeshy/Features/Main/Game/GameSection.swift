@@ -25,29 +25,44 @@ struct GameSection: View {
     /// Le carnet des règles, ouvert à la règle donnée (`nil` ⇒ en haut).
     let onOpenRules: (Int?) -> Void
     let onOpenNotebook: () -> Void
+    /// Une page du jeu (ligue, saison, vitrine, Atlas, Prestige, réglages) — la vague 2 (#9481).
+    let onOpenPage: (GamePage) -> Void
 
     @State private var showsFullGuide = false
+    /// « Jeu masqué » et « Célébrations » : deux commodités PAR APPAREIL (#9481).
+    @ObservedObject private var prefs = GameDevicePrefsStore.current()
 
     private var theme: ThemeManager { ThemeManager.shared }
 
     private var cardPhoto: PhotoMoment? {
         guard let card = guide.card, card.photo else { return nil }
+        if let moment = card.photoMoment { return moment }
         guard let key = GuideMomentKey(rawValue: card.key) else { return nil }
         return GamePhotoMoments.fromCard(key: key, game: game)
     }
 
+    private var celebrates: Bool { prefs.prefs.celebrations }
+
     var body: some View {
+        if prefs.prefs.hidden {
+            GameHiddenCard(onSettings: { onOpenPage(.settings) })
+        } else {
+            shown
+        }
+    }
+
+    private var shown: some View {
         VStack(spacing: MeeshySpacing.xl) {
-            guideCard
-            ForEach(photos.offers.filter { $0.id != cardPhoto?.id }) { offer in
+            if celebrates { guideCard }
+            ForEach(celebrates ? photos.offers.filter { $0.id != cardPhoto?.id } : []) { offer in
                 GamePhotoOfferView(moment: offer, onStart: { photos.start($0) }, onLater: { photos.later($0) })
             }
             // LE HÉRO (#5841) : où j'en suis, comment je gagne, comment je frappe — pleine largeur.
             // Mee se pose dans son coin avec la ligne COURTE du guide ; la version complète s'ouvre au toucher.
             GameHeroView(
                 game: game,
-                cornerFigure: cornerLine == nil ? nil : cornerFigure,
-                cornerLine: cornerLine,
+                cornerFigure: celebrates && cornerLine != nil ? cornerFigure : nil,
+                cornerLine: celebrates ? cornerLine : nil,
                 online: viewModel.isOnline,
                 minting: viewModel.isMinting,
                 settled: viewModel.isSettled,
@@ -74,7 +89,9 @@ struct GameSection: View {
                 onBuyFreeze: { Task { await viewModel.buyFreeze() } },
                 onRelight: { Task { await viewModel.relight() } }
             )
+            GameDoorsView(game: game, onOpen: onOpenPage)
             door(String(localized: "game.door.rules", defaultValue: "Comment ça marche", bundle: .main), symbol: "questionmark.circle", id: "game.door.rules", action: { onOpenRules(nil) })
+            door(GameText.doorSettings, symbol: "gearshape", id: "game.door.settings", action: { onOpenPage(.settings) })
             door(String(localized: "game.door.notebook", defaultValue: "Carnet de progression", bundle: .main), symbol: "book.closed", id: "game.door.notebook", action: onOpenNotebook)
         }
         .fullScreenCover(item: Binding(get: { photos.active }, set: { if $0 == nil { photos.close() } })) { session in
@@ -129,6 +146,11 @@ struct GameSection: View {
     /// Le bouton d'une carte mène où la loi le dit (`GameGuideTarget`) : défiler jusqu'à
     /// la carte visée, ouvrir une autre page, ou ouvrir la photo.
     private func act(on card: GuideCard) {
+        if let page = card.wave2Page {
+            guide.dismiss()
+            onOpenPage(page)
+            return
+        }
         let target = GameGuideTarget.target(for: card.action)
         let moment: PhotoMoment? = card.action == .takeStartPhoto ? GamePhotoMoments.start() : cardPhoto
         guide.dismiss()

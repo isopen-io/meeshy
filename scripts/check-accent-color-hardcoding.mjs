@@ -279,7 +279,12 @@
 // `GameMedalView.swift`/`GameMaterial.swift` ci-dessus. Valeur MESURÉE le
 // 2026-10-06.
 const REFERENCE_LITERAL_COLOR_COUNT = 128;
-const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 444;
+// 2026-10-06 (#9516, vague 2 du jeu, iOS) — variables inconnues 444 → 445 :
+// `GameAtlasViews.swift` calcule `Color(hex: $0.colorHex)` depuis
+// `LanguageData.info(for: code)` — la teinte ASSOCIÉE À UNE LANGUE de l'atlas
+// du jeu, indépendante du thème de conversation, même motif que les
+// variables déjà admises sous un nom différent. Valeur MESURÉE le 2026-10-06.
+const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 445;
 
 import { readFileSync, readdirSync, statSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';
