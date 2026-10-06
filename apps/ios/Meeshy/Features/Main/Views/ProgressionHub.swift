@@ -633,7 +633,10 @@ struct ProgressionSectionPage: View {
                                 unlocked: achievement.unlocked
                             )
                         } label: {
-                            ProgressionAchievementRow(achievement: achievement)
+                            ProgressionAchievementRow(
+                                achievement: achievement,
+                                rarity: viewModel.game?.wave2.achievementRarities?[achievement.key.rawValue]
+                            )
                         }
                         .buttonStyle(.plain)
                         .accessibilityAddTraits(.isButton)

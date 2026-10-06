@@ -72,6 +72,9 @@ final class GameGuideSession: ObservableObject {
     private let visits: GameVisitStoring
     private let today: () -> String
     private let onSeen: ([String]) -> Void
+    /// L'instantané de la dernière lecture, gardé entre deux ouvertures (#9481) : une montée de ligue arrivée pendant
+    /// que l'app était fermée se raconte à l'ouverture suivante. `nil` : aucune mémoire (les témoins).
+    private let memory: GuideSnapshotStoring?
     private var seen = Set<String>()
     private var opened = false
     private var previous: GameBlock?
@@ -81,12 +84,14 @@ final class GameGuideSession: ObservableObject {
         service: GameServiceProviding = GameService.shared,
         visits: GameVisitStoring,
         today: @escaping () -> String = { GameClock.dayKey() },
-        onSeen: @escaping ([String]) -> Void = { _ in }
+        onSeen: @escaping ([String]) -> Void = { _ in },
+        memory: GuideSnapshotStoring? = nil
     ) {
         self.service = service
         self.visits = visits
         self.today = today
         self.onSeen = onSeen
+        self.memory = memory
     }
 
     /// Appelée à chaque lecture du bloc `game` (réseau, cache, geste réglé).
@@ -104,13 +109,16 @@ final class GameGuideSession: ObservableObject {
             let last = visits.lastVisitDay()
             visits.rememberVisit(day: day)
             show(openingCard(game: game, daysAway: last.flatMap { GameDay.diff(from: $0, to: day) }))
+            memory?.save(GuideSnapshotV2(game: game))
             return
         }
+        memory?.save(GuideSnapshotV2(game: game))
         guard let before else { return }
-        let events = GameGuideEvents.transitions(from: before, to: game, badgeImpactBefore: impactBefore)
-        guard !events.isEmpty, let moment = GameGuide.chooseMoment(events: events, seen: seen) else { return }
+        let events = GameGuideEvents.transitions(from: before, to: game, badgeImpactBefore: impactBefore).map(GuideAnyEvent.original)
+            + GameGuideEventsV2.transition(from: before, to: game).map(GuideAnyEvent.wave2)
+        guard !events.isEmpty, let moment = GameGuideV2.chooseMoment(events: events, seen: seen) else { return }
         if card?.step != nil { return }
-        show(GameGuideCard.ofMoment(moment))
+        show(Self.card(of: moment))
     }
 
     /// « Plus tard » / « Passer » : écarte la carte (pendant l'intégration, montre l'étape suivante).
@@ -137,8 +145,19 @@ final class GameGuideSession: ObservableObject {
         if let step = GameGuide.nextOnboardingStep(seen: seen) {
             return GameGuideCard.ofStep(step)
         }
-        let events = GameGuideEvents.standing(game: game, seen: seen, daysAway: daysAway)
-        return GameGuide.chooseMoment(events: events, seen: seen).map(GameGuideCard.ofMoment)
+        var events = GameGuideEvents.standing(game: game, seen: seen, daysAway: daysAway).map(GuideAnyEvent.original)
+        events += GameGuideEventsV2.standing(game: game, seen: seen).map(GuideAnyEvent.wave2)
+        if let stored = memory?.load() {
+            events += GameGuideEventsV2.between(before: stored, after: GuideSnapshotV2(game: game)).map(GuideAnyEvent.wave2)
+        }
+        return GameGuideV2.chooseMoment(events: events, seen: seen).map(Self.card(of:))
+    }
+
+    private static func card(of moment: GuideAnyMoment) -> GuideCard {
+        switch moment {
+        case .original(let original): GameGuideCard.ofMoment(original)
+        case .wave2(let wave2): GameGuideCard.ofMomentV2(wave2)
+        }
     }
 
     private func show(_ next: GuideCard?) {

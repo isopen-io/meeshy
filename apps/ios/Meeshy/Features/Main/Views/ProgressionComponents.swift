@@ -170,6 +170,9 @@ struct ProgressionAxisRow: View {
 
 struct ProgressionAchievementRow: View {
     let achievement: EngagementAchievementProgress
+    /// La rareté MESURÉE de ce succès (#9390), servie par la passerelle ; `nil` — ancien serveur, ou succès jamais
+    /// mesuré — et la ligne reste celle d'avant.
+    var rarity: GameRarityEntry? = nil
 
     private var theme: ThemeManager { ThemeManager.shared }
 
@@ -202,10 +205,12 @@ struct ProgressionAchievementRow: View {
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                 .foregroundColor(theme.textMuted)
                 .fixedSize(horizontal: false, vertical: true)
+                GameRarityLine(entry: rarity)
             }
             Spacer(minLength: 0)
         }
         .padding(.vertical, MeeshySpacing.smPlus)
+        .gameRarityRim(rarity?.visibleRarity.map(GameRarity.border(for:)), cornerRadius: MeeshyRadius.sm)
         .accessibilityElement(children: .combine)
     }
 }

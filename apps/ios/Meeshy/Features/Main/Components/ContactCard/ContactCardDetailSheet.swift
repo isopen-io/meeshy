@@ -168,6 +168,8 @@ struct ContactCardDetailSheet: View {
                         .foregroundColor(.primary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+                // #9481 — trois coupes au plus, ce que SA visibilité autorise ; rien quand elle est fermée.
+                GameContactStrip(userId: account.userId)
                 ContactAccountActionRow(model: model, account: account, accentHex: accentHex, style: .prominent, onWillNavigate: { close() })
                     .padding(.top, MeeshySpacing.xsPlus)
             }

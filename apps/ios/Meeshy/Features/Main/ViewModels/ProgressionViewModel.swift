@@ -94,7 +94,8 @@ final class ProgressionViewModel: ObservableObject {
     private(set) lazy var guide = GameGuideSession(
         service: gameService,
         visits: UserDefaultsGameVisitStore(userId: userId),
-        onSeen: { [weak self] keys in self?.markGuideSeenLocally(keys) }
+        onSeen: { [weak self] keys in self?.markGuideSeenLocally(keys) },
+        memory: UserDefaultsGuideSnapshotStore(userId: userId)
     )
     /// Les propositions de photo (#9382) et le déroulé ouvert.
     private(set) lazy var photos = GamePhotoCoordinator(notebook: notebook) { [notebook, weak self] moment in
