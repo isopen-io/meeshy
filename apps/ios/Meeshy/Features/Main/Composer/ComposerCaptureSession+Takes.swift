@@ -124,7 +124,8 @@ extension ComposerCaptureSession {
 
     /// **La tenue attend la livraison de la prise précédente** plutôt que d'être
     /// refusée : « tenir, lâcher, retenir » accumule ses segments. Au-delà de la
-    /// borne, elle renonce proprement — l'armé, sans cadenas.
+    /// borne, elle renonce proprement — l'armé, sans cadenas — et le dit : une
+    /// haptique d'avertissement, une annonce VoiceOver.
     func awaitPreviousTake() async -> Bool {
         defer { awaitsPreviousTake = false }
         guard controls.recordingIsPending else { return true }
@@ -136,6 +137,9 @@ extension ComposerCaptureSession {
                 holdStartedAt = nil
                 holdPhase = nil
                 lockProgress = 0
+                HapticFeedback.warning()
+                UIAccessibility.post(notification: .announcement,
+                                     argument: ComposerSceneCameraCopy.previousTakeStillSaving)
                 return false
             }
             try? await Task.sleep(nanoseconds: 20_000_000)

@@ -158,6 +158,12 @@ enum ComposerSceneCameraCopy {
                defaultValue: "Enregistrement verrouillé", bundle: .main)
     }
 
+    /// La tenue renonce : la prise précédente n'a pas fini de s'enregistrer (#9351).
+    static var previousTakeStillSaving: String {
+        String(localized: "composer.camera.previousTake.stillSaving",
+               defaultValue: "La prise précédente s'enregistre encore", bundle: .main)
+    }
+
     static var zoomLabel: String {
         String(localized: "composer.camera.zoom",
                defaultValue: "Zoom", bundle: .main)

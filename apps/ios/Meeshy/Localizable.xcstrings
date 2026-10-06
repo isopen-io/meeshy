@@ -258517,6 +258517,53 @@
           }
         }
       }
+    },
+    "composer.camera.previousTake.stillSaving": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا يزال حفظ اللقطة السابقة جاريًا"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die vorherige Aufnahme wird noch gespeichert"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The previous take is still saving"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La toma anterior aún se está guardando"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La prise précédente s'enregistre encore"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La ripresa precedente è ancora in fase di salvataggio"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A gravação anterior ainda está sendo salva"
+          }
+        }
+      }
     }
   },
   "version": "1.1"
