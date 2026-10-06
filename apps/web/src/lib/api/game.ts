@@ -173,9 +173,17 @@ const isGameBlock = (value: unknown): value is GameBlock =>
     guideSeen: (v) => Array.isArray(v) && v.length <= 200 && v.every((key) => isText(key) && key.length <= 64),
   });
 
-/** Le bloc `game`, ou `null` s'il est absent ou partiel — jamais à moitié lu. */
+/**
+ * Le bloc `game`, ou `null` s'il est absent ou partiel — jamais à moitié lu.
+ *
+ * `achievementRarities` vient TOUJOURS de `readGameExtensions` (lecture
+ * tolérante du web, `rarity.ts`, qui admet `rarity: null` — « rien de mesuré »),
+ * jamais du parsing Zod de `GameBlock` : le cast ci-dessous ne masque donc
+ * aucune incompatibilité réelle, seulement la forme plus stricte que porte le
+ * contrat partagé pour ce même champ (#9526).
+ */
 export const readGameBlock = (value: unknown): GameBlockV2 | null =>
-  isGameBlock(value) ? { ...withoutExtensions(value), ...readGameExtensions(value) } : null;
+  isGameBlock(value) ? ({ ...withoutExtensions(value), ...readGameExtensions(value) } as GameBlockV2) : null;
 
 const API_PREFIX = '/api/v1';
 
