@@ -32,29 +32,48 @@ nonisolated enum ComposerLookStripPaintRule {
     }
 }
 
-/// **Une cuisson par clé, jamais une boucle** (#9351) : une scène de cadre qui
-/// ne cuit pas (mémoire, design absent) ne se redemande pas à chaque dessin, et
-/// sa fin ne redemande un dessin que si la scène est vraiment là. Le cache
-/// périmé (`reset`) rouvre les demandes.
+/// **Une cuisson à la fois par clé, jamais une boucle** (#9351) : une clé en
+/// cuisson ne se redemande pas ; une cuisson qui ÉCHOUE (mémoire, design absent)
+/// se réessaie après un délai qui double, `maxRetries` fois au plus ; une scène
+/// cuite puis ÉVINCÉE du cache partagé se recuit — la case retrouve son cadre.
+/// La fin d'une cuisson ne redemande un dessin que si la scène est vraiment là.
 final class ComposerLookStripScenes {
+    /// Les nouveaux essais d'une cuisson qui échoue.
+    static let maxRetries = 3
+    /// Le premier délai avant un nouvel essai ; il double à chaque échec.
+    static let firstRetryDelay: TimeInterval = 0.5
+
+    private struct Failure {
+        let count: Int
+        let retryAt: Date
+    }
+
     private let provider: any ComposerLookSceneProviding
-    private var requested: Set<NSString> = []
+    private let now: () -> Date
+    private var inFlight: Set<NSString> = []
+    private var failures: [NSString: Failure] = [:]
 
     nonisolated deinit {}
 
-    init(provider: any ComposerLookSceneProviding) {
+    init(provider: any ComposerLookSceneProviding, now: @escaping () -> Date = { Date() }) {
         self.provider = provider
+        self.now = now
     }
 
     func scene(for key: ComposerLookSceneKey,
                onReady: @escaping @MainActor @Sendable () -> Void) -> CallLiveFrameScene? {
-        if let scene = provider.cached(key) { return scene }
         let cle = key.cacheKey
-        guard !requested.contains(cle) else { return nil }
-        requested.insert(cle)
+        if let scene = provider.cached(key) {
+            failures[cle] = nil
+            return scene
+        }
+        guard !inFlight.contains(cle), mayRetry(cle) else { return nil }
+        inFlight.insert(cle)
         let provider = self.provider
-        provider.prepare(key) {
-            guard provider.cached(key) != nil else { return }
+        provider.prepare(key) { [weak self] in
+            let cuite = provider.cached(key) != nil
+            self?.settle(key.cacheKey, baked: cuite)
+            guard cuite else { return }
             onReady()
         }
         return nil
@@ -65,7 +84,24 @@ final class ComposerLookStripScenes {
     }
 
     func reset() {
-        requested = []
+        inFlight = []
+        failures = [:]
+    }
+
+    private func mayRetry(_ cle: NSString) -> Bool {
+        guard let echec = failures[cle] else { return true }
+        return echec.count <= Self.maxRetries && now() >= echec.retryAt
+    }
+
+    private func settle(_ cle: NSString, baked: Bool) {
+        inFlight.remove(cle)
+        guard !baked else {
+            failures[cle] = nil
+            return
+        }
+        let compte = (failures[cle]?.count ?? 0) + 1
+        let delai = Self.firstRetryDelay * pow(2, Double(compte - 1))
+        failures[cle] = Failure(count: compte, retryAt: now().addingTimeInterval(delai))
     }
 }
 
