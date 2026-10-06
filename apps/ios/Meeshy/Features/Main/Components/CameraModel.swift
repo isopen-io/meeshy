@@ -65,6 +65,20 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     /// arrêt, dans l'ordre. Ce qu'elle installe est publié ensuite ici.
     nonisolated let sessionQueue = ComposerCaptureSessionQueue()
     nonisolated let liveFeed = ComposerCameraFeed()
+    #if DEBUG
+    /// La caméra de recette (#9351) — `nil` hors simulateur ou sans `-MeeshyCaptureFixture`.
+    let fixture: ComposerCaptureFixtureDriver? = ComposerCaptureFixture.isActive() ? ComposerCaptureFixtureDriver() : nil
+    #endif
+
+    /// La capture tourne-t-elle sur la caméra de recette ? Elle ne touche alors
+    /// ni la session ni sa file : ses trames vont droit au guetteur.
+    var runsFixture: Bool {
+        #if DEBUG
+        return fixture != nil
+        #else
+        return false
+        #endif
+    }
     /// #8695 — le traitement UNIQUE de toute prise photo de l'app : chaque
     /// consommateur (conversation, fil, composer, story) reçoit la photo déjà
     /// redressée, bornée et améliorée, EXIF compris.
@@ -110,6 +124,13 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     ///
     /// Le micro n'est PAS demandé ici — voir `enableAudioCaptureIfNeeded()`.
     func configure() {
+        #if DEBUG
+        if let fixture {
+            permission = .granted
+            fixture.start(feeding: liveFeed)
+            return
+        }
+        #endif
         Task { @MainActor [weak self] in
             let state = await MediaPermissionCoordinator.ensureCamera(announcesRefusal: false)
                 ? MediaPermissionState.granted
@@ -336,6 +357,12 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     }
 
     func takePhoto(flash: AVCaptureDevice.FlashMode) {
+        #if DEBUG
+        if let fixture {
+            if !isSwitchingCamera { deliverFixturePhoto(fixture) }
+            return
+        }
+        #endif
         // Même exception ObjC que l'enregistrement sans connexion active, donc
         // même prévention devant l'appel — un `do/catch` ne la rattraperait pas.
         let connection = photoOutput.connection(with: .video)
@@ -358,6 +385,9 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     /// PREND dans le même mouvement (#8653) attende qu'elle le puisse. Jamais
     /// pendant une bascule : l'entrée en place va être retirée (#9464).
     var isCaptureReady: Bool {
+        #if DEBUG
+        if fixture != nil { return !isSwitchingCamera }
+        #endif
         let connection = photoOutput.connection(with: .video)
         return !isSwitchingCamera && CameraRecordingReadiness.mayCapturePhoto(
             sessionIsRunning: session.isRunning,
@@ -591,6 +621,16 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     }
 
     func startRecording() {
+        #if DEBUG
+        if fixture != nil {
+            recordingDuration = 0
+            isRecordingVideo = true
+            recordingTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+                Task { @MainActor [weak self] in self?.recordingDuration += 0.5 }
+            }
+            return
+        }
+        #endif
         recordedSegmentURLs = []
         isSwitchingCameraDuringRecording = false
         pendingSwitchPosition = nil
@@ -656,6 +696,16 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     /// and honored the instant the new segment opens — otherwise the user's tap
     /// could race the switch and be silently dropped.
     func stopRecording() {
+        #if DEBUG
+        if let fixture {
+            guard isRecordingVideo else { return }
+            isRecordingVideo = false
+            recordingTimer?.invalidate()
+            recordingTimer = nil
+            deliverFixtureMovie(fixture)
+            return
+        }
+        #endif
         guard !isSwitchingCameraDuringRecording else {
             pendingStopRequested = true
             return
@@ -664,6 +714,9 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     }
 
     func stop() {
+        #if DEBUG
+        fixture?.stop()
+        #endif
         if isRecordingVideo { stopRecording() }
         liveFeed.flush()
         switchCover = nil

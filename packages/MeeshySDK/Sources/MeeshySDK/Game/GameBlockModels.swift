@@ -192,9 +192,21 @@ public struct GameBlock: Codable, Sendable, Equatable {
     public let boosts: Boosts
     /// Clés de guide déjà vues (moments et étapes d'intégration).
     public let guideSeen: [String]
+    /// Les sept extensions de la vague 2 (ligue, duo, saison, trophées, Atlas, Prestige,
+    /// visibilité) — chacune lue SEULE, `nil` quand le serveur ne la sert pas (#9384 à #9392).
+    public let wave2: GameWave2
+
+    public var league: GameLeagueBlock? { wave2.league }
+    public var duo: GameDuoBlock? { wave2.duo }
+    public var season: GameSeasonBlock? { wave2.season }
+    public var trophies: GameTrophiesBlock? { wave2.trophies }
+    public var atlas: GameAtlasBlock? { wave2.atlas }
+    public var prestige: GamePrestigeBlock? { wave2.prestige }
+    public var visibility: GameVisibility? { wave2.visibility }
 
     public init(level: Level, glory: Glory, treasury: TreasuryStanding, mint: GameMintPreview,
-                missions: Missions, chest: Chest, flame: Flame, boosts: Boosts, guideSeen: [String]) {
+                missions: Missions, chest: Chest, flame: Flame, boosts: Boosts, guideSeen: [String],
+                wave2: GameWave2 = .empty) {
         self.level = level
         self.glory = glory
         self.treasury = treasury
@@ -204,6 +216,39 @@ public struct GameBlock: Codable, Sendable, Equatable {
         self.flame = flame
         self.boosts = boosts
         self.guideSeen = guideSeen
+        self.wave2 = wave2
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case level, glory, treasury, mint, missions, chest, flame, boosts, guideSeen
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        level = try container.decode(Level.self, forKey: .level)
+        glory = try container.decode(Glory.self, forKey: .glory)
+        treasury = try container.decode(TreasuryStanding.self, forKey: .treasury)
+        mint = try container.decode(GameMintPreview.self, forKey: .mint)
+        missions = try container.decode(Missions.self, forKey: .missions)
+        chest = try container.decode(Chest.self, forKey: .chest)
+        flame = try container.decode(Flame.self, forKey: .flame)
+        boosts = try container.decode(Boosts.self, forKey: .boosts)
+        guideSeen = try container.decode([String].self, forKey: .guideSeen)
+        wave2 = GameWave2(from: decoder)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(level, forKey: .level)
+        try container.encode(glory, forKey: .glory)
+        try container.encode(treasury, forKey: .treasury)
+        try container.encode(mint, forKey: .mint)
+        try container.encode(missions, forKey: .missions)
+        try container.encode(chest, forKey: .chest)
+        try container.encode(flame, forKey: .flame)
+        try container.encode(boosts, forKey: .boosts)
+        try container.encode(guideSeen, forKey: .guideSeen)
+        try wave2.encode(into: encoder)
     }
 
     /// Le bloc, ou `nil` s'il est absent ou partiel — jamais à moitié lu.

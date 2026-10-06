@@ -97,6 +97,11 @@ public actor ClientInfoProvider {
             // une constante du binaire, d'où sa place ici plutôt que dans
             // `buildHeaders()` — rien dans l'environnement ne la fait varier.
             "X-Canvas-Caps": "3",
+            // Ce que ce binaire sait du JEU (#9392, rétrocompatibilité #9223) : la
+            // VAGUE 2 ajoute les badges de 1 000 et 5 000 actions, que la passerelle
+            // ne sert qu'aux clients qui les déclarent — les autres lisent les cinq
+            // paliers d'origine. Un NIVEAU, comme `X-Canvas-Caps`, jamais un booléen.
+            GameRoutes.versionHeader: String(GameRoutes.waveVersion),
             // Porte de version cliente (C4a/C4b, spec §C3). Le gateway lit
             // `x-app-version` pour juger le binaire face à `MIN_APP_VERSION`
             // (`services/gateway/src/utils/appVersion.ts`) et `x-app-platform`
