@@ -54,6 +54,16 @@ final class ComposerLookStripTests: XCTestCase {
         XCTAssertNil(session.openFamily)
     }
 
+    func test_toggleFamily_whileTheLookIsLocked_keepsTheBandAsItIs() {
+        let session = ComposerCaptureSession(stage: .armed)
+        session.toggleFamily(.filters)
+        session.stage = .recording
+        session.toggleFamily(.filters)
+        XCTAssertEqual(session.openFamily, .filters, "pendant la prise, toucher le rail ne replie pas la bande")
+        session.toggleFamily(.frames)
+        XCTAssertEqual(session.openFamily, .filters, "ni n'en ouvre une autre")
+    }
+
     func test_perform_selectAFrame_keepsTheFilter() throws {
         let session = ComposerCaptureSession(stage: .armed)
         session.look = ComposerPhotoLook(filter: .warm)
