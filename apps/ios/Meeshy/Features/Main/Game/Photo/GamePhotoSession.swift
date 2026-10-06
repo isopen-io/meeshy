@@ -25,12 +25,12 @@ struct PhotoNotice: Equatable {
 ///     partager, ou garder au carnet.
 ///  5. « Plus tard » laisse le moment en attente 7 jours dans le carnet.
 ///
-/// La carte porte le lien de parrainage court de l'utilisateur et sa Flamme (#7742, `ReferralCard`) ;
+/// La carte porte le lien de parrainage de l'utilisateur en carré QR (#9554) et sa Flamme (#7742, `ReferralCard`) ;
 /// le partage transmet aussi le lien en texte. Le lien d'un jeton EXISTANT se lit PENDANT la proposition
 /// (cache d'abord) ; arrivé après la composition, il recompose la carte.
 ///
 /// **Aucun jeton ne se crée sans geste.** Tant que l'utilisateur n'en a aucun, l'aperçu montre un EMPLACEMENT
-/// « meeshy.me/r/… » en pointillé ; le jeton se crée au toucher de « Partager » (`prepareShare`), et la carte
+/// vide en pointillé à la place du carré ; le jeton se crée au toucher de « Partager » (`prepareShare`), et la carte
 /// est recomposée avec le vrai lien AVANT de partir. Ce qui sort de l'app (Photos, carnet, partage) porte le
 /// vrai lien ou rien — jamais l'emplacement.
 ///

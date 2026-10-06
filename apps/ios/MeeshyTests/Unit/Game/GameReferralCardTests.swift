@@ -1,9 +1,12 @@
 import XCTest
+import CoreImage
+import UIKit
 @testable import Meeshy
 import MeeshySDK
+import MeeshyUI
 
 /// Le lien de parrainage de la carte partagée (#7742) : la règle de choix du jeton (miroir de
-/// `loadShareableReferralLink` du web), la carte qui l'écrit court, et le service cache-first.
+/// `loadShareableReferralLink` du web), la carte qui le porte en carré QR (#9554), et le service cache-first.
 @MainActor
 final class GameReferralCardTests: XCTestCase {
 
@@ -22,16 +25,17 @@ final class GameReferralCardTests: XCTestCase {
 
     // MARK: - La carte
 
-    func test_displayLink_dropsTheSchemeAndTheTrailingSlash() {
-        XCTAssertEqual(ReferralCard(link: "https://meeshy.me/signup/affiliate/AMANI7/", flame: nil).displayLink,
-                       "meeshy.me/signup/affiliate/AMANI7")
-        XCTAssertEqual(ReferralCard(link: "HTTP://meeshy.me/x", flame: nil).displayLink, "meeshy.me/x")
+    func test_qrLink_isTheWholeLink_schemeIncluded() {
+        XCTAssertEqual(ReferralCard(link: "https://meeshy.me/signup/affiliate/AMANI7", flame: nil).qrLink,
+                       "https://meeshy.me/signup/affiliate/AMANI7")
+        XCTAssertNil(ReferralCard(link: "", flame: nil).qrLink, "pas de lien, pas de carré")
     }
 
-    func test_thePlaceholder_isNamedAsSuch_andIsNeverTheLinkOfAToken() {
+    func test_thePlaceholder_isNamedAsSuch_andEncodesNoLink() {
         let placeholder = ReferralCard.placeholder(flame: nil)
         XCTAssertTrue(placeholder.isPlaceholder)
-        XCTAssertEqual(placeholder.displayLink, "meeshy.me/r/…")
+        XCTAssertNil(placeholder.qrLink, "jamais le QR d'un lien qui n'existe pas")
+        XCTAssertEqual(placeholder.link, "", "rien qui ressemble à un lien ne voyage avec l'emplacement")
         XCTAssertFalse(ReferralCard(link: "https://meeshy.me/signup/affiliate/AMANI7", flame: nil).isPlaceholder)
         XCTAssertTrue(placeholder.withFlame(.init(form: .braise, days: 3)).isPlaceholder, "la Flamme ne change pas la nature du lien")
     }
@@ -45,6 +49,96 @@ final class GameReferralCardTests: XCTestCase {
         XCTAssertNil(ReferralCard.Flame(game: flame(days: 0, status: .lit)))
         XCTAssertNil(ReferralCard.Flame(game: flame(days: 23, status: .out)))
         XCTAssertNil(ReferralCard.Flame(game: flame(days: 23, status: .lit, form: nil)))
+    }
+
+    // MARK: - L'image exportée porte le carré QR (#9554)
+
+    private static let link = "https://meeshy.me/signup/affiliate/AMANI7"
+
+    private func rgba(_ image: UIImage) throws -> (width: Int, height: Int, bytes: [UInt8]) {
+        let cgImage = try XCTUnwrap(image.cgImage)
+        let width = cgImage.width
+        let height = cgImage.height
+        var bytes = [UInt8](repeating: 0, count: width * height * 4)
+        let drawn = bytes.withUnsafeMutableBytes { raw -> Bool in
+            guard let context = CGContext(
+                data: raw.baseAddress, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4,
+                space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+            ) else { return false }
+            context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
+            return true
+        }
+        XCTAssertTrue(drawn)
+        return (width, height, bytes)
+    }
+
+    /// Les modules relus au CENTRE de chacun, dans la place du carré : `true` = sombre.
+    private func paintedModules(_ image: UIImage, slot: CGRect, square: GameReferralQRSquare) throws -> [[Bool]] {
+        let pixels = try rgba(image)
+        return (0..<square.size).map { y in
+            (0..<square.size).map { x in
+                let px = Int(slot.minX) + square.origin + x * square.module + square.module / 2
+                let py = Int(slot.minY) + square.origin + y * square.module + square.module / 2
+                return pixels.bytes[(py * pixels.width + px) * 4] < 128
+            }
+        }
+    }
+
+    private func compose(_ referral: ReferralCard?) throws -> ComposedPhoto {
+        try XCTUnwrap(GamePhotoComposer().compose(
+            moment: GamePhotoMoments.rank(.voix, division: .ii), source: nil, mode: .card, date: now, referral: referral
+        ))
+    }
+
+    func test_compose_withALink_paintsTheMatrixOfTheWholeLink_inBothFormats() throws {
+        let composed = try compose(ReferralCard(link: Self.link, flame: .init(form: .braise, days: 23)))
+        let matrix = try XCTUnwrap(GameQRCode.encode(Self.link))
+        for (format, image) in [(PhotoFormat.story, composed.story), (PhotoFormat.square, composed.square)] {
+            let slot = try XCTUnwrap(GamePhotoLayout.layout(format, referral: true).qr)
+            let square = try XCTUnwrap(GameReferralQRSquare.make(link: Self.link, side: Int(slot.width)))
+            XCTAssertGreaterThanOrEqual(square.module, 2, "\(format)")
+            XCTAssertEqual(try paintedModules(image, slot: slot, square: square), matrix.modules, "\(format) : le carré peint n'est pas celui du lien")
+        }
+    }
+
+    func test_compose_theJPEGThatLeavesTheApp_stillCarriesTheMatrix() throws {
+        let composed = try compose(ReferralCard(link: Self.link, flame: nil))
+        let matrix = try XCTUnwrap(GameQRCode.encode(Self.link))
+        for (format, data) in [(PhotoFormat.story, composed.storyData), (PhotoFormat.square, composed.squareData)] {
+            let image = try XCTUnwrap(UIImage(data: data))
+            let slot = try XCTUnwrap(GamePhotoLayout.layout(format, referral: true).qr)
+            let square = try XCTUnwrap(GameReferralQRSquare.make(link: Self.link, side: Int(slot.width)))
+            XCTAssertEqual(try paintedModules(image, slot: slot, square: square), matrix.modules, "\(format)")
+        }
+    }
+
+    func test_compose_theExportedStory_isReadByAnIndependentDecoder_asTheLink() throws {
+        let composed = try compose(ReferralCard(link: Self.link, flame: .init(form: .braise, days: 23)))
+        let image = try XCTUnwrap(CIImage(data: composed.storyData))
+        let detector = try XCTUnwrap(CIDetector(ofType: CIDetectorTypeQRCode, context: nil, options: [CIDetectorAccuracy: CIDetectorAccuracyHigh]))
+        let messages = detector.features(in: image).compactMap { ($0 as? CIQRCodeFeature)?.messageString }
+        XCTAssertEqual(messages, [Self.link])
+    }
+
+    func test_compose_withThePlaceholder_paintsNoLightSquare_andNoModule() throws {
+        let composed = try compose(.placeholder(flame: nil))
+        let slot = try XCTUnwrap(GamePhotoLayout.layout(.story, referral: true).qr)
+        let pixels = try rgba(composed.story)
+        let inside = slot.insetBy(dx: 12, dy: 12)
+        var light = 0
+        var colors = Set<[UInt8]>()
+        for y in Int(slot.minY)..<Int(slot.maxY) {
+            for x in Int(slot.minX)..<Int(slot.maxX) {
+                let index = (y * pixels.width + x) * 4
+                let pixel = Array(pixels.bytes[index..<(index + 3)])
+                if pixel.allSatisfy({ $0 > 245 }) { light += 1 }
+                if inside.contains(CGPoint(x: x, y: y)) { colors.insert(pixel) }
+            }
+        }
+        XCTAssertEqual(light, 0, "aucun fond clair sans lien")
+        let blues = colors.map { Int($0[2]) }
+        XCTAssertLessThanOrEqual((blues.max() ?? 0) - (blues.min() ?? 0), 24,
+                                 "l'emplacement est VIDE : ni module, ni texte, seulement le fond du bandeau")
     }
 
     // MARK: - La règle

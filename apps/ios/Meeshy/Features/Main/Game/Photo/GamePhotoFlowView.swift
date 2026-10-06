@@ -250,8 +250,9 @@ struct GamePhotoFlowView: View {
                     .resizable()
                     .scaledToFit()
                     .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous))
-                    .padding(.horizontal, MeeshySpacing.lg)
                     .accessibilityLabel(String(localized: "game.photo.preview", defaultValue: "Aperçu : \(session.moment.title)", bundle: .main))
+                    .overlay { referralQRMark(squareFormat ? .square : .story) }
+                    .padding(.horizontal, MeeshySpacing.lg)
                 Picker("", selection: $squareFormat) {
                     Text(String(localized: "game.photo.format.story", defaultValue: "9:16 · story", bundle: .main)).tag(false)
                     Text(String(localized: "game.photo.format.square", defaultValue: "1:1 · profil", bundle: .main)).tag(true)
@@ -358,6 +359,28 @@ struct GamePhotoFlowView: View {
                 .frame(width: size.width, height: size.height)
                 .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous))
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
+    /// Le carré QR de la carte s'annonce À PART (#9554) : l'image n'est qu'un bloc de pixels pour le lecteur
+    /// d'écran, donc un élément est posé SUR le carré, là où le doigt le trouve. Rien sans lien : un
+    /// emplacement en pointillé n'est pas un QR code.
+    @ViewBuilder
+    private func referralQRMark(_ format: PhotoFormat) -> some View {
+        if session.referral?.qrLink != nil,
+           let qr = GamePhotoLayout.layout(format, referral: true, rightToLeft: GamePhotoLayout.readsRightToLeft()).qr {
+            GeometryReader { proxy in
+                let scale = proxy.size.width / format.size.width
+                Color.clear
+                    .frame(width: qr.width * scale, height: qr.height * scale)
+                    .contentShape(Rectangle())
+                    .accessibilityElement()
+                    .accessibilityLabel(String(localized: "game.photo.referral.qr_label", defaultValue: "QR code de ton lien d’invitation", bundle: .main))
+                    .accessibilityAddTraits(.isImage)
+                    .accessibilityIdentifier("game.photo.referral.qr")
+                    .position(x: qr.midX * scale, y: qr.midY * scale)
+            }
+            .environment(\.layoutDirection, .leftToRight)
         }
     }
 
