@@ -12,7 +12,7 @@
 
 import { describe, it, expect, jest } from '@jest/globals';
 import Fastify, { FastifyInstance, FastifyRequest } from 'fastify';
-import { gameSettingsResponseSchema, gameUserGamePath, GAME_ROUTES, userGameProfileResponseSchema } from '@meeshy/shared/types/game';
+import { GAME_INTEGRATION_ROUTES, gameSettingsResponseSchema, gameUserGamePath, GAME_ROUTES, userGameProfileResponseSchema } from '@meeshy/shared/types/game';
 import { fakeGameDb, seedUser, USER, OTHER, type FakeGameDb } from '../../../../services/game/__tests__/fakeGameDb';
 import { meGameRoutes } from '../../../../routes/me/game';
 import { userGameShowcaseRoutes } from '../../../../routes/users/game-showcase';
@@ -68,7 +68,7 @@ describe('GET /me/game/privacy', () => {
   it('sert les défauts d’un compte qui n’a rien réglé : amis par défaut, Atlas privé', async () => {
     const db = fakeGameDb();
     seedUser(db);
-    const res = await get(await settingsApp(db), GAME_ROUTES.settings);
+    const res = await get(await settingsApp(db), GAME_INTEGRATION_ROUTES.settings);
     expect(res.statusCode).toBe(200);
     expect(gameSettingsResponseSchema.parse(res.json().data)).toEqual({
       gameHidden: false,
@@ -84,7 +84,7 @@ describe('GET /me/game/privacy', () => {
     await app.inject({ method: 'PUT', url: `/api/v1${GAME_ROUTES.privacy}`, payload: { requestId: 'priv-00001', gameHidden: true, friendsLeagueOptOut: true } });
     await app.inject({ method: 'PUT', url: `/api/v1${GAME_ROUTES.showcaseVisibility}`, payload: { requestId: 'vis-000001', treasury: 'me', rank: 'everyone' } });
 
-    const data = gameSettingsResponseSchema.parse((await get(app, GAME_ROUTES.settings)).json().data);
+    const data = gameSettingsResponseSchema.parse((await get(app, GAME_INTEGRATION_ROUTES.settings)).json().data);
 
     expect(data).toEqual({
       gameHidden: true,
@@ -98,12 +98,12 @@ describe('GET /me/game/privacy', () => {
     seedUser(db, {}, USER);
     seedUser(db, {}, OTHER);
     db.gameProfile.rows.push({ id: 'gp', userId: OTHER, gameHiddenAt: new Date() });
-    const data = (await get(await settingsApp(db), GAME_ROUTES.settings)).json().data;
+    const data = (await get(await settingsApp(db), GAME_INTEGRATION_ROUTES.settings)).json().data;
     expect(data.gameHidden).toBe(false);
   });
 
   it('sans compte : 401', async () => {
-    expect((await get(await settingsApp(fakeGameDb(), null), GAME_ROUTES.settings)).statusCode).toBe(401);
+    expect((await get(await settingsApp(fakeGameDb(), null), GAME_INTEGRATION_ROUTES.settings)).statusCode).toBe(401);
   });
 });
 

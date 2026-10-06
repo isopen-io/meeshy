@@ -10,7 +10,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { GAME_ROUTES, GAME_ROUTE_METHODS, gameUserGamePath } from '../../types/game-routes.js';
+import { GAME_INTEGRATION_ROUTES, GAME_INTEGRATION_ROUTE_METHODS, GAME_ROUTES, GAME_ROUTE_METHODS, gameUserGamePath } from '../../types/game-routes.js';
 import {
   gameAchievementRaritiesSchema,
   gameBlockSchema,
@@ -83,11 +83,20 @@ describe('les raretés des succès dans le bloc game', () => {
   });
 });
 
+describe('la table d\'intégration', () => {
+  it('est À PART : GAME_ROUTES garde ses 21 entrées, comparées par les miroirs hors TypeScript', () => {
+    expect(Object.keys(GAME_ROUTES)).toHaveLength(21);
+    expect(Object.keys(GAME_INTEGRATION_ROUTES)).toEqual(['settings', 'userGame']);
+    expect(Object.keys(GAME_ROUTES)).not.toContain('settings');
+    expect(Object.keys(GAME_ROUTES)).not.toContain('userGame');
+  });
+});
+
 describe('la lecture des réglages du jeu', () => {
   it('a sa propre clé de route, sur le chemin de l’écriture, en lecture', () => {
-    expect(GAME_ROUTES.settings).toBe('/me/game/privacy');
-    expect(GAME_ROUTES.settings).toBe(GAME_ROUTES.privacy);
-    expect(GAME_ROUTE_METHODS.settings).toBe('GET');
+    expect(GAME_INTEGRATION_ROUTES.settings).toBe('/me/game/privacy');
+    expect(GAME_INTEGRATION_ROUTES.settings).toBe(GAME_ROUTES.privacy);
+    expect(GAME_INTEGRATION_ROUTE_METHODS.settings).toBe('GET');
     expect(GAME_ROUTE_METHODS.privacy).toBe('PUT');
   });
 
@@ -109,8 +118,8 @@ describe('la lecture des réglages du jeu', () => {
 
 describe('le profil de jeu d’un autre membre', () => {
   it('a sa route : GET /users/:userId/game', () => {
-    expect(GAME_ROUTES.userGame).toBe('/users/:userId/game');
-    expect(GAME_ROUTE_METHODS.userGame).toBe('GET');
+    expect(GAME_INTEGRATION_ROUTES.userGame).toBe('/users/:userId/game');
+    expect(GAME_INTEGRATION_ROUTE_METHODS.userGame).toBe('GET');
     expect(gameUserGamePath('u9')).toBe('/users/u9/game');
   });
 

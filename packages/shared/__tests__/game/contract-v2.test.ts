@@ -259,7 +259,7 @@ describe('les routes de la vague 2', () => {
       prestige: '/me/game/prestige',
       privacy: '/me/game/privacy',
     });
-    expect(Object.keys(GAME_ROUTES)).toHaveLength(23);
+    expect(Object.keys(GAME_ROUTES)).toHaveLength(21);
   });
 
   it('dit la méthode de chaque route nouvelle', () => {
@@ -278,8 +278,6 @@ describe('les routes de la vague 2', () => {
       userShowcase: 'GET',
       prestige: 'POST',
       privacy: 'PUT',
-      settings: 'GET',
-      userGame: 'GET',
     });
   });
 
