@@ -88,3 +88,18 @@ export function playerBannerLabel(model: PlayerBannerModel, language: InterfaceL
   ];
   return parts.filter((part): part is string => part !== null).join(translateGame(language, 'game.banner.separator'));
 }
+
+/** Le texte ordinaire du navigateur, en pixels : la taille de la racine qu'on compare. */
+const ORDINARY_TEXT_PX = 16;
+/** Entre XXL (21/17 ≈ 1,24) et xxxLarge (23/17 ≈ 1,35) de Dynamic Type : « au-delà de XXL ». */
+const LARGE_TEXT_SCALE = 1.3;
+
+/**
+ * Le texte est-il très grand ? (#9494) — vrai quand la racine dépasse XXL :
+ * la jauge passe alors sous l'anneau au lieu de s'écraser à côté. Le web lit
+ * la taille de la racine (`getComputedStyle(document.documentElement)`), que
+ * le réglage de texte du navigateur, de l'OS et de la coque Android font
+ * varier ; une valeur illisible est la disposition ordinaire.
+ */
+export const isLargeText = (rootFontPx: number): boolean =>
+  Number.isFinite(rootFontPx) && rootFontPx / ORDINARY_TEXT_PX >= LARGE_TEXT_SCALE;
