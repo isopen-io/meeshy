@@ -12,6 +12,8 @@ import MeeshyUI
 //    jamais un squelette — un cache vide ne peint RIEN jusqu'à la réponse), et quand il se revalide en silence ;
 //  - quand la bannière a la place (`PlayerBannerPlacement`) et comment elle entre et sort (le mouvement des barres
 //    du haut, `TopChromeBarMotion` : elle glisse, sous « Réduire les animations » elle apparaît sans bouger) ;
+//  - quand elle PARAÎT (#9536) : à l'ouverture de l'app seulement (`GamePlayerBannerOpening`) — trente secondes, puis
+//    elle s'en va LENTEMENT en remontant (une seconde ; sous « Réduire les animations », un fondu simple) ;
 //  - le reflet qui traverse l'anneau quand un niveau est franchi ;
 //  - ce qu'elle remonte à la bande de la barre d'état : sa couleur d'aplat.
 //
@@ -80,6 +82,11 @@ final class PlayerBannerStore: ObservableObject {
     nonisolated deinit {}
 
     @Published private(set) var banner: GamePlayerBanner?
+    /// L'ouverture de l'app tient encore le bandeau (#9536) : vrai les trente premières secondes, et à chaque retour
+    /// après une vraie absence. Passé ce délai, la bannière s'efface et ne revient qu'à la prochaine ouverture.
+    @Published private(set) var lingering = true
+    /// Compte les ouvertures : la minuterie de l'hôte repart quand il change.
+    @Published private(set) var openingGeneration = 0
 
     /// Les réglages servis se relisent au plus toutes les cinq minutes — la cadence du web (`staleTime`).
     static let settingsInterval: TimeInterval = 300
@@ -88,6 +95,7 @@ final class PlayerBannerStore: ObservableObject {
     private let settings: PlayerBannerSettingsReading
     private let minimumInterval: TimeInterval
     private let now: () -> Date
+    private var opening: GamePlayerBannerOpening
     private var lastFetch: Date?
     private var lastSettingsRead: Date?
     private var fetching = false
@@ -102,6 +110,32 @@ final class PlayerBannerStore: ObservableObject {
         self.settings = settings
         self.minimumInterval = minimumInterval
         self.now = now
+        self.opening = GamePlayerBannerOpening(openedAt: now())
+    }
+
+    /// Ce qu'il reste à la bannière avant de s'en aller ; l'hôte dort ce temps-là.
+    var openingRemaining: TimeInterval { opening.remaining(at: now()) }
+
+    /// La minuterie a sonné : si l'ouverture est bien terminée, la bannière n'a plus lieu d'être.
+    func closeOpeningIfDue() {
+        guard lingering, !opening.isOpen(at: now()) else { return }
+        lingering = false
+    }
+
+    /// L'app passe à l'arrière-plan : on retient depuis quand.
+    func appWentAway() {
+        opening.appWentAway(at: now())
+    }
+
+    /// L'app revient : après une vraie absence, le bandeau se rouvre et relit le jeu ; sinon rien ne change.
+    func appCameBack() async {
+        if opening.appCameBack(at: now()) {
+            lingering = true
+            openingGeneration += 1
+            await revalidate(force: true)
+        } else {
+            await revalidate()
+        }
     }
 
     func setSuspended(_ suspended: Bool) {
@@ -127,7 +161,7 @@ final class PlayerBannerStore: ObservableObject {
     /// Les réglages servis passent AVANT le jeu : un compte masqué ne demande pas son bloc `game`, et un cache vide
     /// ne peint rien qu'une réponse viendrait retirer l'instant d'après.
     func revalidate(force: Bool = false) async {
-        guard !fetching, !suspended else { return }
+        guard !fetching, !suspended, lingering else { return }
         if !force, let lastFetch, now().timeIntervalSince(lastFetch) < minimumInterval { return }
         fetching = true
         defer { fetching = false }
@@ -148,8 +182,10 @@ final class PlayerBannerStore: ObservableObject {
         return true
     }
 
+    /// `GamePlayerBanner.make` décide : un joueur qui n'a rien fait n'a pas de bandeau (`nil`), et un bandeau qui
+    /// n'a plus rien à dire (jeu remis à zéro) s'efface.
     private func adopt(_ game: GameBlock) {
-        let next = GamePlayerBanner(game: game)
+        let next = GamePlayerBanner.make(game: game)
         if next != banner { banner = next }
     }
 
@@ -158,9 +194,14 @@ final class PlayerBannerStore: ObservableObject {
     private func subscribeOnce() {
         guard !subscribed else { return }
         subscribed = true
+        NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)
+            .sink { [weak self] _ in
+                Task { @MainActor in self?.appWentAway() }
+            }
+            .store(in: &subscriptions)
         NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)
             .sink { [weak self] _ in
-                Task { @MainActor in await self?.revalidate() }
+                Task { @MainActor in await self?.appCameBack() }
             }
             .store(in: &subscriptions)
         NotificationCenter.default.publisher(for: .engagementSnapshotPersisted)
@@ -226,9 +267,11 @@ struct PlayerBannerSlot: View {
         let hosted: Bool
     }
 
-    /// Ce que la bannière DOIT afficher maintenant ; `presented` l'y rejoint sous le ressort.
+    /// Ce que la bannière DOIT afficher maintenant ; `presented` l'y rejoint sous le ressort — ou, à la fin de
+    /// l'ouverture, sous la sortie lente (#9536).
     private var target: GamePlayerBanner? {
-        PlayerBannerPlacement.shows(hosted: isHosted, free: isFree, hidden: prefs.prefs.hidden) ? store.banner : nil
+        PlayerBannerPlacement.shows(hosted: isHosted, free: isFree, hidden: prefs.prefs.hidden, lingering: store.lingering)
+            ? store.banner : nil
     }
 
     var body: some View {
@@ -241,6 +284,14 @@ struct PlayerBannerSlot: View {
         }
         .zIndex(TopChromeBarMotion.layer(isLastBar: true, isCall: false))
         .adaptiveOnChange(of: target) { _, newValue in present(newValue) }
+        // L'ouverture de l'app tient le bandeau trente secondes, puis il s'en va (#9536). La minuterie repart à chaque
+        // nouvelle ouverture (retour après une vraie absence).
+        .task(id: store.openingGeneration) { @MainActor in
+            let remaining = store.openingRemaining
+            if remaining > 0 { try? await Task.sleep(nanoseconds: UInt64(remaining * 1_000_000_000)) }
+            guard !Task.isCancelled else { return }
+            store.closeOpeningIfDue()
+        }
         .adaptiveOnChange(of: colorScheme) { _, _ in onSurfaceChange(presented.map { surface(of: $0) }) }
         // Rien ne se lit tant que l'écran ne porte pas la bannière : un fil, Progression ou une visionneuse n'ont
         // aucune raison de réveiller le cache ni le réseau. Le retour sur un écran principal relit le cache
@@ -265,7 +316,7 @@ struct PlayerBannerSlot: View {
     private func present(_ target: GamePlayerBanner?) {
         guard target != presented else { return }
         let reachedANewLevel = presented.map { previous in (target?.level ?? 0) > previous.level } ?? false
-        withAnimation(TopChromeBarMotion.animation(reduceMotion: reduceMotion)) {
+        withAnimation(PlayerBannerMotion.animation(leaving: target == nil, opening: store.lingering, reduceMotion: reduceMotion)) {
             presented = target
             onSurfaceChange(target.map { surface(of: $0) })
         }
@@ -292,7 +343,7 @@ struct PlayerBannerSlot: View {
             PlayerBannerView(
                 model: banner, texts: PlayerBannerCopy.texts(for: banner),
                 palette: PlayerBannerStyle.palette(tier: banner.tier, isDark: isDark),
-                sheen: sheen, accessibilityLabel: label
+                sheen: sheen, backdrop: AuthManager.shared.currentUser?.banner, accessibilityLabel: label
             )
             .contentShape(Rectangle())
         }

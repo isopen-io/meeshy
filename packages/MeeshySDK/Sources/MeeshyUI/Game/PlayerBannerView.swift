@@ -10,7 +10,11 @@ import MeeshySDK
 // donnée ne se dessine pas.
 //
 // Décor : la Signature en filigrane, teintée par la couleur du palier ; aucune bulle. Le fond est un APLAT
-// (`Palette.surface`) : la bande du haut de l'app le reprend à l'identique, la couture ne peut pas dériver.
+// (`Palette.surface`) : la bande du haut de l'app le reprend à l'identique, la couture ne peut pas dériver. Sur
+// cet aplat, la BANNIÈRE DE PROFIL du joueur, en TRANSLUCIDE (`backdropOpacity`), sous les informations (#9536).
+//
+// Seulement ce qui a du sens (#9536) : sans détail de niveau (niveau 1) ni anneau ni jauge ; sans point, pas de
+// total — le modèle (`GamePlayerBanner.showsLevel`, `showsScore`) décide, la brique obéit.
 //
 // La brique DESSINE. Elle ne parle aucune langue (les phrases courtes arrivent déjà formatées dans `Texts`),
 // n'observe aucun singleton, ne navigue nulle part : l'hôte la pose dans un bouton qui ouvre Progression, lui
@@ -61,10 +65,15 @@ public struct PlayerBannerView: View {
         }
     }
 
+    /// La transparence de la bannière de profil posée sous les informations : assez pour qu'on la reconnaisse,
+    /// jamais pour disputer le texte.
+    public static let backdropOpacity: Double = 0.3
+
     private let model: GamePlayerBanner
     private let texts: Texts
     private let palette: Palette
     private let sheen: Double
+    private let backdrop: String?
     private let accessibilityLabel: String?
 
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -77,12 +86,16 @@ public struct PlayerBannerView: View {
     ///   - palette: l'aplat, l'encre, le texte discret.
     ///   - sheen: le reflet Metal (ou son repli) qui traverse l'anneau au passage d'un niveau — de 0 à 1, l'hôte
     ///     l'anime ; hors de ]0, 1[ il ne pose aucun effet.
+    ///   - backdrop: l'adresse de la bannière de profil du joueur, posée en translucide sous les informations ;
+    ///     `nil` ou vide ⇒ l'aplat seul.
     ///   - accessibilityLabel: `nil` ⇒ décorative ; l'hôte dit la phrase complète.
-    public init(model: GamePlayerBanner, texts: Texts, palette: Palette, sheen: Double = 0, accessibilityLabel: String? = nil) {
+    public init(model: GamePlayerBanner, texts: Texts, palette: Palette, sheen: Double = 0, backdrop: String? = nil,
+                accessibilityLabel: String? = nil) {
         self.model = model
         self.texts = texts
         self.palette = palette
         self.sheen = sheen
+        self.backdrop = backdrop
         self.accessibilityLabel = accessibilityLabel
     }
 
@@ -109,6 +122,7 @@ public struct PlayerBannerView: View {
         .frame(maxWidth: .infinity, minHeight: Self.minimumHeight, alignment: .leading)
         .background(alignment: .topTrailing) {
             palette.surface
+                .overlay { backdropLayer }
                 .overlay(alignment: .topTrailing) {
                     SignatureMark(style: .flat, color: tint)
                         .frame(width: 120, height: 120)
@@ -124,25 +138,53 @@ public struct PlayerBannerView: View {
         .modifier(BannerAccessibility(label: accessibilityLabel))
     }
 
+    // MARK: La bannière de profil, en translucide
+
+    @ViewBuilder
+    private var backdropLayer: some View {
+        if let backdrop, !backdrop.isEmpty {
+            CachedAsyncImage(url: backdrop, targetSize: CGSize(width: 480, height: 160), showsStatusOverlays: false) {
+                Color.clear
+            }
+            .scaledToFill()
+            .opacity(Self.backdropOpacity)
+            .accessibilityHidden(true)
+            .allowsHitTesting(false)
+        }
+    }
+
     // MARK: Les deux dispositions
 
-    /// Sur une ligne : anneau, jauge qui prend la place restante, puis les pièces.
+    /// Sur une ligne : anneau, jauge qui prend la place restante, puis les pièces — chacun seulement s'il a du sens.
     private var singleRow: some View {
         HStack(spacing: 10) {
-            ring
-            gauge
-            pieces
+            if model.showsLevel {
+                ring
+                gauge
+                pieces
+            } else if model.showsScore {
+                scoreOnly
+                Spacer(minLength: 0)
+                pieces
+            } else {
+                pieces
+                Spacer(minLength: 0)
+            }
         }
     }
 
     /// Au-delà de XXL : l'anneau et les pièces en haut, la jauge SOUS l'anneau.
     private var stackedLayout: some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .center, spacing: 10) {
-                ring
-                Spacer(minLength: 0)
+            if model.showsLevel {
+                HStack(alignment: .center, spacing: 10) {
+                    ring
+                    Spacer(minLength: 0)
+                }
+                gauge
+            } else if model.showsScore {
+                scoreOnly
             }
-            gauge
             if hasPieces {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 72), spacing: 10, alignment: .leading)], alignment: .leading, spacing: 6) {
                     pieceViews
@@ -170,15 +212,22 @@ public struct PlayerBannerView: View {
 
     // MARK: La jauge
 
+    /// Le total de points seul — niveau 1 : rien à jauger encore, mais des points gagnés.
+    private var scoreOnly: some View {
+        Text(texts.points)
+            .font(.system(.footnote, design: .rounded).weight(.bold))
+            .monospacedDigit()
+            .foregroundColor(palette.ink)
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
+            .modifier(BannerNumericRoll())
+    }
+
     private var gauge: some View {
         VStack(alignment: .leading, spacing: 3) {
-            Text(texts.points)
-                .font(.system(.footnote, design: .rounded).weight(.bold))
-                .monospacedDigit()
-                .foregroundColor(palette.ink)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-                .modifier(BannerNumericRoll())
+            if model.showsScore {
+                scoreOnly
+            }
             GaugeBar(progress: model.progress, tint: LevelTierPalette.style(for: model.tier), rail: palette.ink.opacity(0.12), animated: !reduceMotion)
                 .frame(height: 6)
             if let missing = texts.missing {
