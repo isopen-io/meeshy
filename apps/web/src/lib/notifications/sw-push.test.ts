@@ -571,6 +571,12 @@ describe('le tap atterrit à l’adresse de la v2, jamais à celle du legacy', (
     expect(worker.opened).toEqual(['/me/progression/ligue', '/me/progression/ligue', '/me/progression/saison']);
   });
 
+  test('l’annonce d’une mission personnelle ouvre la Progression à la section des missions (#9539)', async () => {
+    const worker = mount();
+    await worker.dispatch('notificationclick', clic({ type: 'game_mission_window', route: 'progression' }).event);
+    expect(worker.opened).toEqual(['/me/progression?section=missions']);
+  });
+
   test('sans destination, le tap ouvre la liste des notifications — il atterrit toujours', async () => {
     const worker = mount();
     await worker.dispatch('notificationclick', clic({ type: 'un_type_sans_ecran' }).event);

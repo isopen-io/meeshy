@@ -1,4 +1,5 @@
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
+import { act } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import { gameBlockFixture } from '@/lib/api/game-fixture';
@@ -241,5 +242,58 @@ describe('la mission personnelle du jour', () => {
   test('sans horloge injectée, la carte lit l’heure : une plage d’hier est manquée', () => {
     const html = text(renderToStaticMarkup(<GameMissions {...personal({ startsAt: '2020-01-01T18:00:00.000Z', endsAt: '2020-01-01T20:00:00.000Z' })} />));
     expect(html).toContain('Manquée');
+  });
+
+  describe('le minuteur ne coûte rien hors écran', () => {
+    const live = { open: 0 };
+    const realSet = globalThis.setInterval;
+    const realClear = globalThis.clearInterval;
+    const visibility = (state: 'visible' | 'hidden') => {
+      Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => state });
+      act(() => {
+        document.dispatchEvent(new Event('visibilitychange'));
+      });
+    };
+    const future = () => personal({ startsAt: new Date(Date.now() - 600_000).toISOString(), endsAt: new Date(Date.now() + 3_600_000).toISOString() });
+    const mountLive = (patch: ReturnType<typeof future>) => mount(<GameMissions {...patch} />);
+
+    afterEach(() => {
+      globalThis.setInterval = realSet;
+      globalThis.clearInterval = realClear;
+      unmountAll();
+      visibility('visible');
+      live.open = 0;
+    });
+    const spy = () => {
+      globalThis.setInterval = ((handler: () => void, ms?: number) => {
+        live.open += 1;
+        return realSet(handler, ms);
+      }) as typeof setInterval;
+      globalThis.clearInterval = ((id: Parameters<typeof clearInterval>[0]) => {
+        live.open -= 1;
+        realClear(id);
+      }) as typeof clearInterval;
+    };
+
+    test('un seul intervalle tant que la plage court et que la vue est visible', async () => {
+      spy();
+      await mountLive(future());
+      expect(live.open).toBe(1);
+    });
+
+    test('onglet caché : plus aucun intervalle ; de retour : il repart', async () => {
+      spy();
+      await mountLive(future());
+      visibility('hidden');
+      expect(live.open).toBe(0);
+      visibility('visible');
+      expect(live.open).toBe(1);
+    });
+
+    test('plage finie : aucun intervalle ne s’ouvre', async () => {
+      spy();
+      await mountLive(personal({ startsAt: '2020-01-01T18:00:00.000Z', endsAt: '2020-01-01T20:00:00.000Z' }));
+      expect(live.open).toBe(0);
+    });
   });
 });

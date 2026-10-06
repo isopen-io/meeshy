@@ -98,6 +98,7 @@ const PROGRESSION_TYPES = [
 ];
 const GAME_LEAGUE_TYPES = ['game_duo_invited', 'game_duo_accepted', 'game_league_result'];
 const GAME_SEASON_TYPES = ['game_season_step'];
+const GAME_MISSION_TYPES = ['game_mission_window'];
 const SECURITY_TYPES = [
   'security_alert',
   'login_new_device',
@@ -317,6 +318,7 @@ function resolvePushTarget(data) {
 
   if (GAME_LEAGUE_TYPES.indexOf(type) >= 0) return { route: 'progressionLigue', params: {}, search: {} };
   if (GAME_SEASON_TYPES.indexOf(type) >= 0) return { route: 'progressionSaison', params: {}, search: {} };
+  if (GAME_MISSION_TYPES.indexOf(type) >= 0) return { route: 'progression', params: {}, search: { section: 'missions' } };
 
   const indice = texte(data.route);
   if (HINTED_ROUTES.indexOf(indice) >= 0) {
@@ -923,6 +925,7 @@ self.meeshyPushTarget = {
   PROFILE_TYPES: PROFILE_TYPES,
   GAME_LEAGUE_TYPES: GAME_LEAGUE_TYPES,
   GAME_SEASON_TYPES: GAME_SEASON_TYPES,
+  GAME_MISSION_TYPES: GAME_MISSION_TYPES,
   PROGRESSION_TYPES: PROGRESSION_TYPES,
   SECURITY_TYPES: SECURITY_TYPES,
   HINTED_ROUTES: HINTED_ROUTES,

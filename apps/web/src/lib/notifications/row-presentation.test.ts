@@ -240,8 +240,15 @@ describe('les notifications du jeu', () => {
     }
   });
 
+  test('l’annonce d’une plage de mission est la ligne du jeu : la Signature en tête, le texte servi, aucun nom (#9539)', () => {
+    const row = present(record({ type: 'game_mission_window', title: null, content: 'Ta mission du jour : envoyer 3 messages, entre 18:00 et 20:00.', actor: null, context: {}, metadata: { gameSection: 'missions' } }));
+    expect(row.leading).toEqual({ kind: 'game' });
+    expect(row.title).toBe('Meeshy');
+    expect(row.body).toBe('Ta mission du jour : envoyer 3 messages, entre 18:00 et 20:00.');
+  });
+
   test('aucune rangée du jeu ne porte de geste rapide : pas d’« Écrire », pas de « Se connecter »', () => {
-    for (const type of ['game_duo_invited', 'game_duo_accepted', 'game_league_result', 'game_season_step']) {
+    for (const type of ['game_duo_invited', 'game_duo_accepted', 'game_league_result', 'game_season_step', 'game_mission_window']) {
       const actor = { id: 'u-amina', username: 'amina', displayName: 'Amina', avatar: null };
       expect(notificationQuickActions(record({ type, actor }), { isFriend: false })).toEqual([]);
     }

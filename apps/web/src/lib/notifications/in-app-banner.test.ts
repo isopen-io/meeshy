@@ -129,6 +129,9 @@ describe('la bannière d’une notification du jeu (#9490)', () => {
   });
 
   test('une invitation de duo garde l’avatar de l’ami ; un message ordinaire n’est pas du jeu', () => {
+    const mission = bannerPresentation(record({ type: 'game_mission_window', title: null, content: 'Ta mission du jour : lire 5 messages, entre 18:00 et 20:00.', actor: null, context: {}, metadata: { gameSection: 'missions' } }), { language: 'fr', now: NOW });
+    expect(mission.game).toBe(true);
+    expect(mission.body).toContain('Ta mission du jour');
     const duo = bannerPresentation(record({ type: 'game_duo_invited', title: 'Amina t’invite', content: 'Ouvre la mission.', context: {} }), { language: 'fr', now: NOW });
     expect(duo.game).toBe(false);
     expect(bannerPresentation(record({}), { language: 'fr', now: NOW }).game).toBe(false);

@@ -120,13 +120,43 @@ function MissionRow({
 /** Le minuteur d'une carte se rafraîchit à la minute près : jamais de secondes qui défilent, une lecture calme. */
 const TICK_MS = 15_000;
 
-function useClockNow(fixed: Date | undefined): Date {
+/**
+ * Le minuteur ne coûte rien hors écran : AUCUN intervalle tant que l'onglet est caché, aucun une fois la fin
+ * de la plage passée (rien ne change plus), et une relecture immédiate au retour — la carte ne montre jamais
+ * l'heure d'avant l'absence (#9539).
+ */
+function useClockNow(fixed: Date | undefined, settledAt: string): Date {
   const [now, setNow] = useState(() => fixed ?? new Date());
   useEffect(() => {
     if (fixed !== undefined) return;
-    const id = setInterval(() => setNow(new Date()), TICK_MS);
-    return () => clearInterval(id);
-  }, [fixed]);
+    const end = new Date(settledAt).getTime();
+    let id: ReturnType<typeof setInterval> | undefined;
+    const stop = () => {
+      if (id !== undefined) clearInterval(id);
+      id = undefined;
+    };
+    const tick = () => {
+      const current = new Date();
+      setNow(current);
+      if (current.getTime() >= end) stop();
+    };
+    const start = () => {
+      stop();
+      if (document.visibilityState === 'hidden' || Date.now() >= end) return;
+      id = setInterval(tick, TICK_MS);
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') return stop();
+      tick();
+      start();
+    };
+    start();
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      stop();
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [fixed, settledAt]);
   return fixed ?? now;
 }
 
@@ -136,7 +166,7 @@ function useClockNow(fixed: Date | undefined): Date {
  * décompte. Elle ne se change pas : le tirage est le sien, une fois par jour.
  */
 function PersonalMissionRow({ mission, now: fixedNow }: { readonly mission: NonNullable<GameMissionsBlock['personal']>; readonly now: Date | undefined }) {
-  const now = useClockNow(fixedNow);
+  const now = useClockNow(fixedNow, mission.endsAt);
   const clock = personalMissionClock({ startsAt: mission.startsAt, endsAt: mission.endsAt, completedAt: mission.completedAt, now });
   const done = clock.phase === 'completed';
   const title = missionTitle(mission.templateKey, mission.target);
