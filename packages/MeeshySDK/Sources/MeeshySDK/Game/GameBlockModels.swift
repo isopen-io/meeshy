@@ -100,13 +100,31 @@ public struct GameBlock: Codable, Sendable, Equatable {
         public let unlocked: Bool
         public let items: [Mission]
         public let rerollAvailable: Bool
+        /// La mission personnelle du jour (#9539), servie à côté des trois ; `nil` d'un ancien serveur ou si illisible.
+        public let personal: PersonalMission?
 
-        public init(dayKey: String, prismDay: Bool, unlocked: Bool, items: [Mission], rerollAvailable: Bool) {
+        public init(dayKey: String, prismDay: Bool, unlocked: Bool, items: [Mission], rerollAvailable: Bool,
+                    personal: PersonalMission? = nil) {
             self.dayKey = dayKey
             self.prismDay = prismDay
             self.unlocked = unlocked
             self.items = items
             self.rerollAvailable = rerollAvailable
+            self.personal = personal
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case dayKey, prismDay, unlocked, items, rerollAvailable, personal
+        }
+
+        public init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            dayKey = try container.decode(String.self, forKey: .dayKey)
+            prismDay = try container.decode(Bool.self, forKey: .prismDay)
+            unlocked = try container.decode(Bool.self, forKey: .unlocked)
+            items = try container.decode([Mission].self, forKey: .items)
+            rerollAvailable = try container.decode(Bool.self, forKey: .rerollAvailable)
+            personal = (try? container.decodeIfPresent(PersonalMission.self, forKey: .personal)) ?? nil
         }
     }
 

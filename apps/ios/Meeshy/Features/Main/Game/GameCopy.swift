@@ -332,6 +332,63 @@ enum GameCopy {
         errorMessage(for: GameService.refusal(of: error))
     }
 
+    // MARK: - Le minuteur d'une mission (#9539)
+
+    static var personalMissionName: String {
+        String(localized: "game.mission.personal", defaultValue: "Pour toi", bundle: .main)
+    }
+
+    /// Une durée CALME : des jours et des heures, puis des heures et des minutes, puis des minutes — jamais de secondes.
+    static func calmDuration(_ seconds: TimeInterval) -> String {
+        let minutes = max(1, Int((seconds / 60).rounded(.up)))
+        let days = minutes / (24 * 60)
+        let hours = (minutes % (24 * 60)) / 60
+        let rest = minutes % 60
+        if days >= 1 { return GameText.durationDaysHours(days: formatCount(days), hours: formatCount(hours)) }
+        if hours >= 1 {
+            let head = GameText.durationHours(hours: formatCount(hours))
+            return rest == 0 ? head : head + " " + GameText.durationMinutes(minutes: formatCount(rest))
+        }
+        return GameText.durationMinutes(minutes: formatCount(minutes))
+    }
+
+    /// Ce que dit une carte une fois sa plage passée : « Terminée » (elle était faite) ou « Manquée ». `nil` tant que la
+    /// plage court — alors c'est le minuteur qui parle.
+    static func missionEnding(_ phase: GameMissionClock.Phase?) -> (text: String, isSuccess: Bool)? {
+        switch phase {
+        case .finished: (String(localized: "game.mission.finished", defaultValue: "Terminée", bundle: .main), true)
+        case .missed: (String(localized: "game.mission.missed", defaultValue: "Manquée", bundle: .main), false)
+        default: nil
+        }
+    }
+
+    /// La ligne du minuteur : « Il reste 1 h 23 min » pendant la plage, « Commence dans 12 min » avant, et pour la mission
+    /// personnelle la plage elle-même (« 14:00 – 16:00 ») une fois passée. `nil` quand rien n'est à dire.
+    static func missionTimerLine(_ phase: GameMissionClock.Phase?, window: GameMissionWindow?, locale: Locale = .current,
+                                 calendar: Calendar = .current) -> String? {
+        switch phase {
+        case .running(let remaining):
+            let left = calmDuration(remaining)
+            return String(localized: "game.mission.timer.remaining", defaultValue: "Il reste \(left)", bundle: .main)
+        case .upcoming(let startsIn):
+            let wait = calmDuration(startsIn)
+            return String(localized: "game.mission.timer.starts", defaultValue: "Commence dans \(wait)", bundle: .main)
+        case .finished, .missed:
+            guard let window, let start = window.start, let end = window.end else { return nil }
+            return windowRange(start: start, end: end, locale: locale, calendar: calendar)
+        case .done, nil:
+            return nil
+        }
+    }
+
+    /// « 14:00 – 16:00 », écrit par la locale.
+    static func windowRange(start: Date, end: Date, locale: Locale = .current, calendar: Calendar = .current) -> String {
+        func time(_ date: Date) -> String {
+            date.formatted(Date.FormatStyle(date: .omitted, time: .shortened, locale: locale, calendar: calendar, timeZone: calendar.timeZone))
+        }
+        return time(start) + " – " + time(end)
+    }
+
     // MARK: - Les chiffres lus à voix haute
 
     /// Une heure du jour, écrite par la locale (chiffres et 12 h / 24 h de l'appareil), jamais à la main.
