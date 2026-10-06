@@ -265,6 +265,7 @@ export type FakeGameDb = {
   readonly achievementRarityStat: Model;
   readonly friendRequest: Model;
   readonly userPreferences: Model;
+  readonly notification: Model;
   readonly conversation: Model;
   readonly affiliateVisitSession: Model;
 };
@@ -303,6 +304,7 @@ export function fakeGameDb(): FakeGameDb {
   const achievementRarityStat = flattenCompound(new Model({ uniques: [['milestoneKey']] }));
   const friendRequest = new Model();
   const userPreferences = new Model();
+  const notification = new Model();
   const conversation = new Model();
   const affiliateVisitSession = flattenCompound(new Model({ uniques: [['sessionKey']] }));
   const models = {
@@ -330,6 +332,7 @@ export function fakeGameDb(): FakeGameDb {
     achievementRarityStat,
     friendRequest,
     userPreferences,
+    notification,
     conversation,
     affiliateVisitSession,
   };

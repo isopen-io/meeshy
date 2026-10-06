@@ -283,3 +283,30 @@ describe('un compte qui a beaucoup joué n’est pas purgé à moitié (#9481)',
     expect(db.leagueGroupWeek.rows.every((g) => g.memberCount === 1)).toBe(true);
   });
 });
+
+describe('les notifications de duo qui NOMMENT le compte effacé (revue adversariale #9490)', () => {
+  const PARTNER = '68a0000000000000000000aa';
+  const STRANGER_DUO = '68a0000000000000000000cc';
+  const actor = (id: string) => ({ id, username: id === USER ? 'effacé' : 'autre', displayName: id === USER ? 'Marie Effacée' : 'Autre', avatar: 'a.png' });
+
+  it('l’invitation et l’acceptation d’un duo, chez le partenaire, disparaissent avec le compte qui les a signées — rien d’autre', async () => {
+    const db = fakeGameDb();
+    seedUser(db, {}, USER);
+    seedUser(db, {}, PARTNER);
+    db.gameDuo.rows.push(
+      { id: 'd1', weekKey: '2026-10-12', inviterId: USER, inviteeId: PARTNER, status: 'abandoned' },
+      { id: 'd2', weekKey: '2026-10-05', inviterId: PARTNER, inviteeId: USER, status: 'completed' },
+    );
+    db.notification.rows.push(
+      { id: 'n-invite', userId: PARTNER, type: 'game_duo_invited', actor: actor(USER), metadata: { duoId: 'd1' } },
+      { id: 'n-accept', userId: PARTNER, type: 'game_duo_accepted', actor: actor(USER), metadata: { duoId: 'd2' } },
+      { id: 'n-other-actor', userId: PARTNER, type: 'game_duo_invited', actor: actor(STRANGER_DUO), metadata: { duoId: 'd9' } },
+      { id: 'n-league', userId: PARTNER, type: 'game_league_result', actor: null, metadata: {} },
+      { id: 'n-message', userId: PARTNER, type: 'new_message', actor: actor(USER), metadata: {} },
+    );
+
+    await purgeGameData(db.prisma, USER);
+
+    expect(db.notification.rows.map((n) => n.id).sort()).toEqual(['n-league', 'n-message', 'n-other-actor']);
+  });
+});
