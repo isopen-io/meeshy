@@ -142,7 +142,8 @@ struct GamePlayerBannerMeaningTests {
         var opening = GamePlayerBannerOpening(openedAt: launch)
         opening.appWentAway(at: launch.addingTimeInterval(40))
         let back = launch.addingTimeInterval(40 + GamePlayerBannerOpening.realAbsence)
-        #expect(opening.appCameBack(at: back))
+        let reopened = opening.appCameBack(at: back)
+        #expect(reopened)
         #expect(opening.isOpen(at: back))
         #expect(opening.remaining(at: back) == 30)
     }
@@ -152,13 +153,15 @@ struct GamePlayerBannerMeaningTests {
         var opening = GamePlayerBannerOpening(openedAt: launch)
         opening.appWentAway(at: launch.addingTimeInterval(40))
         opening.appWentAway(at: launch.addingTimeInterval(300))
-        #expect(opening.appCameBack(at: launch.addingTimeInterval(40 + GamePlayerBannerOpening.realAbsence)))
+        let reopened = opening.appCameBack(at: launch.addingTimeInterval(40 + GamePlayerBannerOpening.realAbsence))
+        #expect(reopened)
     }
 
     @Test("un retour sans départ (le démarrage à froid) ne rouvre rien")
     func aReturnWithoutDepartureReopensNothing() {
         var opening = GamePlayerBannerOpening(openedAt: launch)
-        #expect(opening.appCameBack(at: launch.addingTimeInterval(1_000)) == false)
+        let reopened = opening.appCameBack(at: launch.addingTimeInterval(1_000))
+        #expect(reopened == false)
     }
 
     @Test("la sortie dure entre 0,8 et 1,2 seconde")
