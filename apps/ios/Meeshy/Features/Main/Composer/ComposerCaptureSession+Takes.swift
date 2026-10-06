@@ -1,4 +1,5 @@
 import Combine
+import ImageIO
 import MeeshySDK
 import UIKit
 
@@ -18,10 +19,11 @@ extension ComposerCaptureCopy {
 
 /// **Les prises arrivent à la session, une fois** (#9351) — plus aux hôtes.
 ///
-/// Brut ET rendu partent TOUJOURS ensemble en galerie (décision porteur) : le
-/// brut, à la prise, par `CameraModel` ; le rendu — filtre et cadre combinés,
-/// sur le canevas 9:16 qu'on voyait — ici. « Enregistré » ne se dit que quand
-/// les DEUX ont réussi ; un refus se dit, lui, par `reportPhotoLibraryRefusal`.
+/// Brut ET rendu partent ensemble en galerie (décision porteur) : le brut, à la
+/// prise, par `CameraModel` ; le rendu — filtre et cadre combinés, sur le canevas
+/// 9:16 qu'on voyait — ici. Une vidéo sans effet n'en fait qu'UN, son rendu
+/// étant identique au brut. « Enregistré » ne se dit que quand tout a réussi ;
+/// un refus se dit, lui, par `reportPhotoLibraryRefusal`.
 extension ComposerCaptureSession {
 
     /// Les IDENTIFIANTS, jamais les valeurs : deux prises identiques d'affilée
@@ -41,7 +43,6 @@ extension ComposerCaptureSession {
 
     /// Armer ou fermer le viseur oublie toute intention en attente.
     func resetIntents() {
-        photoIntent = .edit
         filmIntent = .edit
         photoInFlightIntent = .edit
         filmIntents = [:]
@@ -80,16 +81,9 @@ extension ComposerCaptureSession {
         endHold()
     }
 
-    /// La demande pose son intention ; l'obturateur la fige en partant.
+    /// L'intention voyage avec la demande ; l'obturateur la fige en partant.
     func shootPhoto(intent: ComposerTakeIntent) {
-        photographWhenReady()
-        photoIntent = intent
-    }
-
-    /// L'obturateur PART : l'intention devient celle de CETTE photo.
-    func freezePhotoIntent() {
-        photoInFlightIntent = photoIntent
-        photoIntent = .edit
+        photographWhenReady(intent: intent)
     }
 
     /// L'appui long de la miniature : la tenue de la scène, vers la galerie —
@@ -107,10 +101,20 @@ extension ComposerCaptureSession {
         return intent
     }
 
-    /// L'intention suit SON enregistrement — `nil` : il n'a pas démarré.
+    /// L'intention suit SON enregistrement — `nil` : il n'a pas démarré (la prise
+    /// précédente n'est pas encore livrée, ou l'objectif refuse), et le viseur
+    /// revient à l'armé plutôt que d'afficher une prise que rien n'écrit.
     func bindRecording(_ intent: ComposerTakeIntent, to id: String?) {
-        guard let id else { return }
+        guard let id else { return recordingDidNotStart() }
         filmIntents[id] = intent
+    }
+
+    func recordingDidNotStart() {
+        guard stage == .recording else { return }
+        stage = .armed
+        holdPhase = nil
+        lockProgress = 0
+        extinguishFlash()
     }
 
     func photoArrived() {
@@ -150,6 +154,7 @@ extension ComposerCaptureSession {
     /// Le verdict du brut d'abord : refusé, rien n'est peint (et le refus ne se
     /// dit qu'une fois). Les rendus passent un par un.
     func saveRenderedPhoto(_ image: UIImage, data: Data?) {
+        let repli = data == nil ? image : nil
         let regard = look
         let auteur = lookPerson
         let date = lookDate
@@ -162,30 +167,45 @@ extension ComposerCaptureSession {
             defer { endGallerySave() }
             await precedent?.value
             guard await brut?.value ?? true,
-                  let octets = await Self.renderedPhotoBytes(image, data: data, look: regard, person: auteur,
+                  let octets = await Self.renderedPhotoBytes(data, fallback: repli, look: regard, person: auteur,
                                                              date: date, scenes: cache),
                   await galerie.saveImage(octets) else { return }
             FeedbackToastManager.shared.showSuccess(ComposerCaptureCopy.savedToPhotos)
         }
     }
 
-    /// Peindre et encoder dans une portée à part : la toile pleine définition est
-    /// relâchée avant que Photos ne fasse attendre.
+    /// Peindre et encoder dans une portée à part : la file ne retient que les
+    /// OCTETS de la prise (quelques Mo), décodés ici, hors du fil principal — la
+    /// source et la toile pleine définition sont relâchées avant que Photos ne
+    /// fasse attendre. L'image ne sert que sans octets.
     @concurrent
-    nonisolated static func renderedPhotoBytes(_ image: UIImage, data: Data?, look: ComposerPhotoLook,
+    nonisolated static func renderedPhotoBytes(_ data: Data?, fallback: UIImage?, look: ComposerPhotoLook,
                                                person: CallFramePerson, date: Date,
                                                scenes: any ComposerLookSceneProviding) async -> Data? {
-        guard let debout = ComposerPhotoLookSource.upright(image),
+        guard let debout = data.flatMap(uprightImage) ?? fallback.flatMap(ComposerPhotoLookSource.upright),
               let rendu = await ComposerLookPainter.renderPhoto(debout, look: look, framing: .identity,
                                                                 person: person, date: date, scenes: scenes)
         else { return nil }
         return await ComposerPhotoEncoding.encode(rendu, like: data)
     }
 
+    /// Les octets décodés DEBOUT, à leur pleine définition.
+    nonisolated static func uprightImage(_ data: Data) -> CGImage? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let proprietes = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+              let largeur = proprietes[kCGImagePropertyPixelWidth] as? Int,
+              let hauteur = proprietes[kCGImagePropertyPixelHeight] as? Int else { return nil }
+        return CGImageSourceCreateThumbnailAtIndex(source, 0, [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: max(largeur, hauteur),
+        ] as CFDictionary)
+    }
+
     /// Le RENDU de la vidéo part en galerie, à côté du brut. **Sans effet, UN seul
-    /// fichier** (décision #9351) : la vidéo brute est déjà sur le canevas qu'on
-    /// voyait, et son rendu lui serait identique au pixel près — l'export rend
-    /// alors le brut lui-même, et aucune copie ne part.
+    /// fichier** (tranché par le coordinateur, à confirmer par le porteur — #9351) :
+    /// la vidéo brute est déjà sur le canevas qu'on voyait, et son rendu lui serait
+    /// identique au pixel près — l'export rend alors le brut lui-même.
     func saveRenderedVideo(_ url: URL) {
         let regard = look
         let auteur = lookPerson

@@ -73,9 +73,8 @@ final class ComposerCaptureSession: ObservableObject {
     let thermal: any ThermalStateMonitorProviding
     /// Ce que l'aperçu et la bande ont le droit de coûter maintenant.
     @Published private(set) var thermalBudget = ComposerThermalBudget.budget(for: .nominal)
-    /// Où part la prochaine photo, la prochaine vidéo DEMANDÉE (#9351) : la
-    /// scène mène à l'édition, la miniature choisie à la galerie.
-    var photoIntent = ComposerTakeIntent.edit
+    /// Où part la prochaine vidéo DEMANDÉE (#9351) : la scène mène à l'édition,
+    /// la miniature choisie à la galerie. Une photo porte la sienne en paramètre.
     var filmIntent = ComposerTakeIntent.edit
     /// L'intention de la photo EN VOL, figée quand l'obturateur part.
     var photoInFlightIntent = ComposerTakeIntent.edit
@@ -244,12 +243,9 @@ final class ComposerCaptureSession: ObservableObject {
     /// **Un appui bref PREND une photo.** Objectif avant, flash actif : l'ÉCRAN
     /// est le flash (#8653) — la luminosité monte, l'image part sous elle,
     /// sans le flash de l'objectif : jamais deux éclairs (#9464).
-    func takePhoto() {
-        guard stage == .armed, !camera.isTakingPhoto, !photoIsRamping, !controls.isSwitchingCamera else {
-            photoIntent = .edit
-            return
-        }
-        freezePhotoIntent()
+    func takePhoto(intent: ComposerTakeIntent = .edit) {
+        guard stage == .armed, !camera.isTakingPhoto, !photoIsRamping, !controls.isSwitchingCamera else { return }
+        photoInFlightIntent = intent
         mode = .photo
         HapticFeedback.medium()
         let flashDeLaPrise = flash
@@ -262,6 +258,7 @@ final class ComposerCaptureSession: ObservableObject {
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: UInt64(ComposerFrontFlash.brightnessRamp * 1_000_000_000))
             photoIsRamping = false
+            guard stage == .armed else { return ComposerScreenFlash.shared.restore() }
             controls.takePhoto(flash: .off)
             try? await Task.sleep(nanoseconds: UInt64(ComposerFrontFlash.photoHold * 1_000_000_000))
             ComposerScreenFlash.shared.restore()
@@ -283,7 +280,7 @@ final class ComposerCaptureSession: ObservableObject {
             await camera.enableAudioCaptureIfNeeded()
             let avant = camera.recordingId
             camera.startRecording()
-            bindRecording(intent, to: camera.recordingId == avant ? nil : camera.recordingId)
+            bindRecording(intent, to: camera.isRecordingVideo && camera.recordingId != avant ? camera.recordingId : nil)
         }
     }
 
@@ -367,18 +364,14 @@ final class ComposerCaptureSession: ObservableObject {
 
     /// **Le toucher prend la photo** dès que la session peut écrire — un
     /// toucher arrivé trop tôt attend plutôt que de se perdre. La demande part
-    /// vers l'édition (#9351), et une attente vaine ne lègue rien.
-    func photographWhenReady() {
-        photoIntent = .edit
+    /// où son intention la mène (#9351) — portée par l'appel : une attente
+    /// annulée ou vaine ne lègue rien.
+    func photographWhenReady(intent: ComposerTakeIntent = .edit) {
         holdTask?.cancel()
         holdTask = Task { @MainActor in
-            let pret = await controls.waitUntilCaptureReady(timeout: ComposerSceneQuickCapture.readinessTimeout)
-            guard !Task.isCancelled else { return }
-            guard pret else {
-                photoIntent = .edit
-                return
-            }
-            takePhoto()
+            guard await controls.waitUntilCaptureReady(timeout: ComposerSceneQuickCapture.readinessTimeout),
+                  !Task.isCancelled else { return }
+            takePhoto(intent: intent)
         }
     }
 
