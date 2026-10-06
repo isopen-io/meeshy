@@ -263,6 +263,27 @@ final class ComposerInlineEditTests: XCTestCase {
                              "une hauteur nulle à la première passe ferait clignoter le panneau")
     }
 
+    /// **Le haut reste la place du panneau** (#9138) ; le bas n'est qu'un repli,
+    /// pris quand le haut cacherait l'objet réglé ET que le bas le cache moins
+    /// (#9495). Les deux places gardent la colonne des sous-outils à droite.
+    func test_panelFrame_enHautParDefaut_leBasNEstQuUnRepli() {
+        let libre = CGSize(width: 402, height: 700)
+        let haut = ComposerInlinePanelLayout.frame(edge: .top, free: libre, panelHeight: 180)
+        XCTAssertEqual(haut.minY, ComposerRailGeometry.gutter)
+        XCTAssertEqual(haut.maxX, 402 - ComposerRailGeometry.outerMargin
+                       - ComposerRailGeometry.railWidth - ComposerRailGeometry.gutter)
+        XCTAssertEqual(haut.width, ComposerInlinePanelLayout.width(freeWidth: 402, roomy: false))
+        let bas = ComposerInlinePanelLayout.frame(edge: .bottom, free: libre, panelHeight: 180)
+        XCTAssertEqual(bas.maxY, 700 - ComposerRailGeometry.gutter)
+        XCTAssertEqual(bas.minX, haut.minX)
+
+        let partout = CGRect(x: 0, y: 0, width: 402, height: 700)
+        XCTAssertEqual(ComposerInlinePanelLayout.edge(object: partout, free: libre, panelHeight: 180), .top,
+                       "un objet que les deux places couvrent autant garde le panneau en haut")
+        let enHaut = CGRect(x: 100, y: 40, width: 200, height: 200)
+        XCTAssertEqual(ComposerInlinePanelLayout.edge(object: enHaut, free: libre, panelHeight: 180), .bottom)
+    }
+
     // MARK: - La politique du chrome : l'édition en place met la scène en focus
 
     func test_toolFocus_editionEnPlace_masqueToutSaufLeRailDroitEtSesControles() {

@@ -56,7 +56,7 @@ nonisolated enum ComposerAdjustCopy {
 
     static var compare: String {
         String(localized: "composer.object.editor.adjust.compare",
-               defaultValue: "Maintenir pour comparer", bundle: .main)
+               defaultValue: "Comparer", bundle: .main)
     }
 
     /// L'indice VoiceOver de « Comparer », qui nomme le média comparé (#9169).
