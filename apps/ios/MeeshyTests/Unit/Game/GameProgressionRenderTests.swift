@@ -59,7 +59,12 @@ final class GameProgressionRenderTests: XCTestCase {
         for attendu in ["game.hero", "game.mint.hero", "game.mint.info"] + EngagementAxisFamily.allCases.map({ "game.hero.earn.\($0.rawValue)" }) {
             XCTAssertTrue(identifiants.contains(attendu), "« \(attendu) » n'est pas dans l'arbre rendu. Vus : \(identifiants)")
         }
-        XCTAssertEqual(identifiants.filter { $0 == "game.mint.action" }.count, 1, "UNE seule section Héro de frappe : un seul bouton de frappe")
+        // UNE seule section Héro de frappe : le compte des identifiants d'un conteneur dépend de la façon dont le
+        // harnais lit l'arbre (le même bouton peut y paraître deux fois) — la garde sûre est la SOURCE.
+        let sections = (try? String(contentsOf: URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Game/GameSection.swift"), encoding: .utf8)) ?? ""
+        XCTAssertEqual(sections.components(separatedBy: "GameMintPreviewView(").count - 1, 1, "UNE seule section Héro de frappe")
         XCTAssertEqual(identifiants.filter { $0 == "game.mint.action" }.count, 1, "UN seul bouton de frappe sur l'écran")
         XCTAssertFalse(identifiants.contains { $0.hasPrefix("game.hero.mint") }, "le doublon du héro de niveau a disparu : \(identifiants)")
     }
