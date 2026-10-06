@@ -143,6 +143,21 @@ export const STAGE = {
 export const DISMISS_THRESHOLD = 150;
 /** `+Pages.swift:72` — le zoom maximal d'une page image. */
 export const MAX_SCALE = 5;
+/**
+ * LE PINCEMENT D'UNE PAGE IMAGE (#9532) — l'échelle suit l'écart des deux
+ * doigts depuis celle du début du geste, bornée à `[1, MAX_SCALE]` comme le
+ * `MagnificationGesture` de `+Pages.swift`. Deux doigts posés au même point
+ * gardent l'échelle de départ.
+ */
+export function scaleAfterViewerPinch(params: {
+  readonly startScale: number;
+  readonly startDistance: number;
+  readonly distance: number;
+}): number {
+  const { startScale, startDistance, distance } = params;
+  if (startDistance <= 0) return startScale;
+  return Math.min(MAX_SCALE, Math.max(1, (startScale * distance) / startDistance));
+}
 /** `+Pages.swift` — la cible du double-tap (`committedScale > 1 ? 1 : 2.5`). */
 export const DOUBLE_TAP_SCALE = 2.5;
 
