@@ -47,6 +47,7 @@ const bannerOf = (referral: PhotoReferral): PhotoBanner => ({
   headline: gameText('game.photo.referral.headline'),
   link: referral.display,
   flameLabel: referral.flameDays === null ? null : gameText('game.photo.referral.flame_days', { days: formatCount(referral.flameDays) }),
+  ...(referral.placeholder === true ? { placeholder: true as const } : {}),
 });
 
 async function renderOne(

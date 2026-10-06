@@ -94,9 +94,10 @@ const SANS_ADVANCE = 0.58;
 const MONO_ADVANCE = 0.62;
 
 /** Une ligne du bandeau, alignée à gauche (`center` : centrée sur `x`), à la taille de la mise en page. */
-function BannerLine({ line, width, height, text, size, weight, tone, center = false, mono = false }: { readonly line: TextLine; readonly width: number; readonly height: number; readonly text: string; readonly size: number; readonly weight: number; readonly tone: string; readonly center?: boolean; readonly mono?: boolean }) {
+function BannerLine({ line, width, height, text, size, weight, tone, center = false, mono = false, dashed = false }: { readonly line: TextLine; readonly width: number; readonly height: number; readonly text: string; readonly size: number; readonly weight: number; readonly tone: string; readonly center?: boolean; readonly mono?: boolean; readonly dashed?: boolean }) {
   return (
     <p
+      {...(dashed ? { 'data-photo-banner-placeholder': '' } : {})}
       className="game-photo-text"
       style={{
         insetInline: 'auto',
@@ -107,6 +108,7 @@ function BannerLine({ line, width, height, text, size, weight, tone, center = fa
         fontSize: `${((size / width) * 100).toFixed(2)}cqw`,
         fontWeight: weight,
         fontFamily: mono ? 'ui-monospace, monospace' : undefined,
+        ...(dashed ? { outline: '1px dashed currentColor', outlineOffset: '0.3em', borderRadius: '0.2em' } : {}),
         color: tone,
       }}
     >
@@ -135,7 +137,7 @@ function ReferralBanner({ banner, referral, width, height }: { readonly banner: 
         }}
       />
       <BannerLine line={banner.headline} width={width} height={height} text={headline.text} size={headline.size} weight={800} tone="var(--ios-on-brand)" />
-      <BannerLine line={banner.link} width={width} height={height} text={link.text} size={link.size} weight={500} tone="var(--ios-indigo-200)" mono />
+      <BannerLine line={banner.link} width={width} height={height} text={link.text} size={link.size} weight={500} tone="var(--ios-indigo-200)" mono dashed={referral.placeholder === true} />
       {form === null || referral.flameDays === null ? null : (
         <>
           <Placed rect={banner.flame} width={width} height={height}>

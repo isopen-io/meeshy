@@ -378,6 +378,29 @@ describe('le bandeau de parrainage', () => {
     expect(calls.filter((c) => c.op === 'fillText').map((t) => t.args[0])).toEqual(['NOUVEAU RANG', 'Voix II', '5 octobre 2026']);
   });
 
+  test('l’EMPLACEMENT du lien (aucun jeton encore) est cerné de pointillés ; un vrai lien ne l’est jamais', () => {
+    const traced = (placeholder: boolean) => {
+      const fake = fakeContext();
+      const ops: { op: string; args: unknown[] }[] = [];
+      const ctx = Object.assign(fake.ctx, {
+        setLineDash: (segments: number[]) => void ops.push({ op: 'setLineDash', args: [segments] }),
+        strokeRect: (...args: number[]) => void ops.push({ op: 'strokeRect', args }),
+        strokeStyle: '',
+        lineWidth: 1,
+      });
+      const layout = photoLayout('story', { banner: true });
+      paintPhoto(ctx, { layout, moment, dateLabel: 'x', photo: null, art: art(), palette, fontFamily: 'system-ui', banner: { ...bannerText, link: 'meeshy.me/r/…', ...(placeholder ? { placeholder: true as const } : {}) } });
+      return { ops, layout };
+    };
+    const { ops, layout } = traced(true);
+    const stroke = ops.find((o) => o.op === 'strokeRect');
+    expect(stroke).toBeDefined();
+    expect(Number(stroke?.args[0])).toBeLessThanOrEqual(layout.banner?.link.x ?? 0);
+    expect((ops.find((o) => o.op === 'setLineDash')?.args[0] as number[]).length).toBeGreaterThan(0);
+    expect(ops.at(-1)).toEqual({ op: 'setLineDash', args: [[]] });
+    expect(traced(false).ops.filter((o) => o.op === 'strokeRect')).toHaveLength(0);
+  });
+
   test('un fond arrondi quand le contexte sait tracer un rectangle arrondi', () => {
     const fake = fakeContext();
     const ops: string[] = [];

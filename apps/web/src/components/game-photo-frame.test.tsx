@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import { photoLayout } from '@/lib/game-photo/layout';
-import { referralOf } from '@/lib/game-photo/referral';
+import { referralOf, referralPlaceholder } from '@/lib/game-photo/referral';
 import { flameMoment, levelHundredMoment, meeshMoment, photoMomentOfEmblemV2, rankMoment, startMoment, tierMoment, treasuryMoment, type PhotoMoment } from '@/lib/game-photo/moments';
 
 import { GamePhotoFrame } from './game-photo-frame';
@@ -147,6 +147,13 @@ describe('le bandeau de parrainage', () => {
 
   test('le carré porte aussi le bandeau', () => {
     expect(text(withBanner('square'))).toContain('Rejoins-moi sur Meeshy');
+  });
+
+  test('aucun jeton encore : l’emplacement « meeshy.me/r/… », cerné de pointillés ; un vrai lien ne l’est pas', () => {
+    const html = withBanner('story', referralPlaceholder(23));
+    expect(text(html)).toContain('meeshy.me/r/…');
+    expect(html).toMatch(/data-photo-banner-placeholder=""[^>]*dashed/);
+    expect(withBanner()).not.toContain('data-photo-banner-placeholder');
   });
 
   test('aucune couleur écrite dans le bandeau', () => {

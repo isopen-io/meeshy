@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import type { ApiResult, HttpRequest, HttpTransport } from './http';
-import { loadShareableReferralLink, REFERRAL_TOKEN_NAME } from './referral-link';
+import { findExistingReferralLink, loadShareableReferralLink, REFERRAL_TOKEN_NAME } from './referral-link';
 
 const ORIGIN = 'https://meeshy.me';
 const NOW = new Date('2026-09-15T10:00:00.000Z');
@@ -175,5 +175,39 @@ describe('loadShareableReferralLink — le lien de parrainage à partager (#6707
     expect(result.ok).toBe(true);
     expect(result.ok ? result.data : '').toMatch(/^https:\/\/meeshy\.me\/signup\/affiliate\/[^/]+$/);
     expect(calls()).toHaveLength(0);
+  });
+});
+
+/**
+ * LE LIEN D'UN JETON EXISTANT, SANS RIEN CRÉER — la carte photo du jeu
+ * (#7742, décision porteur) : l'aperçu montre le lien existant s'il existe,
+ * sinon un emplacement ; le jeton ne se crée qu'au toucher de « Partager ».
+ */
+describe('findExistingReferralLink — le lien existant, jamais un jeton créé', () => {
+  test('un jeton utilisable : son lien, sans création', async () => {
+    const { deps, calls } = gateway({ [LIST]: listed([wireToken({ token: 'aff_inactif', isActive: false }), wireToken()]) });
+
+    const result = await findExistingReferralLink({ origin: ORIGIN, now: NOW, deps });
+
+    expect(result).toEqual({ ok: true, data: 'https://meeshy.me/signup/affiliate/aff_actif' });
+    expect(calls().map((c) => `${c.method} ${c.path}`)).toEqual([LIST]);
+  });
+
+  test('aucun jeton utilisable : « aucun lien », et AUCUNE création', async () => {
+    const { deps, calls } = gateway({ [LIST]: listed([wireToken({ isActive: false })]), [CREATE]: { ok: true, data: wireToken({ token: 'aff_neuf' }) } });
+
+    const result = await findExistingReferralLink({ origin: ORIGIN, now: NOW, deps });
+
+    expect(result).toEqual({ ok: true, data: null });
+    expect(calls().map((c) => `${c.method} ${c.path}`)).toEqual([LIST]);
+  });
+
+  test('une lecture en panne ou illisible est un échec, sans création', async () => {
+    const down = gateway({ [LIST]: { ok: false, status: 500, error: 'panne' } });
+    const garbled = gateway({ [LIST]: { ok: true, data: { tokens: [] } } });
+
+    expect((await findExistingReferralLink({ origin: ORIGIN, now: NOW, deps: down.deps })).ok).toBe(false);
+    expect((await findExistingReferralLink({ origin: ORIGIN, now: NOW, deps: garbled.deps })).ok).toBe(false);
+    expect([...down.calls(), ...garbled.calls()].every((c) => c.method === 'GET')).toBe(true);
   });
 });

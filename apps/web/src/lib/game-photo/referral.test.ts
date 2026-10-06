@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, test } from 'bun:test';
 
 import { loadGameCatalog } from '@/lib/i18n-game-catalog';
 
-import { fitBannerLine, referralDisplay, referralOf, referralShareText } from './referral';
+import { fitBannerLine, REFERRAL_PLACEHOLDER, referralDisplay, referralOf, referralPlaceholder, referralShareText } from './referral';
 
 beforeAll(async () => {
   await loadGameCatalog('en');
@@ -84,5 +84,22 @@ describe('fitBannerLine — une ligne qui doit tenir dans la place du bandeau', 
       expect(Number.isFinite(line.size)).toBe(true);
       expect(line.text.length).toBeGreaterThan(0);
     }
+  });
+});
+
+/**
+ * AUCUN JETON SANS GESTE (#7742, décision porteur) — sans jeton existant,
+ * l'aperçu montre l'EMPLACEMENT « meeshy.me/r/… » ; ce n'est pas un lien, rien
+ * ne le recopie dans un texte de partage.
+ */
+describe('referralPlaceholder — l’emplacement du lien', () => {
+  test('l’emplacement porte la Flamme, s’affiche « meeshy.me/r/… » et se déclare tel', () => {
+    expect(REFERRAL_PLACEHOLDER).toBe('meeshy.me/r/…');
+    expect(referralPlaceholder(23)).toEqual({ url: '', display: 'meeshy.me/r/…', flameDays: 23, placeholder: true });
+    expect(referralPlaceholder(0).flameDays).toBeNull();
+  });
+
+  test('un vrai lien ne se déclare jamais emplacement', () => {
+    expect(referralOf('https://meeshy.me/x', 3)?.placeholder).toBeUndefined();
   });
 });
