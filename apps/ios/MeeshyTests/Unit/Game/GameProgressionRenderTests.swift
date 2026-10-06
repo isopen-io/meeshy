@@ -74,7 +74,7 @@ final class GameProgressionRenderTests: XCTestCase {
         // Le compte des identifiants dépend de la façon dont le harnais lit l'arbre (un même élément peut y paraître
         // deux fois) : l'unicité se garde par la SOURCE.
         XCTAssertEqual(try? sourceCount(of: "GameMintPreviewView("), 1, "UNE seule section Héro de frappe")
-        XCTAssertEqual(try? sourceCount(of: ": \"game.mint.action\""), 1, "UN seul bouton de frappe sur l'écran")
+        XCTAssertEqual(try? sourceCount(of: "\"game.mint.minting\" : \"game.mint.action\""), 1, "UN seul bouton de frappe sur l'écran")
         XCTAssertFalse(identifiants.contains { $0.hasPrefix("game.hero.mint") }, "le doublon du héro de niveau a disparu : \(identifiants)")
     }
 
