@@ -14,18 +14,8 @@ extension CameraModel {
         closeRecordingToken(token)
     }
 
-    /// Seul le jeton de la prise en cours se referme : une fin tardive d'une
-    /// autre prise ne libère rien.
-    func closeRecordingToken(_ token: String?) {
-        guard let token, recordingId == token else { return }
-        recordingId = nil
-    }
-
-    /// Une prise jamais livrée (session coupée pendant une bascule) ne bloque pas
-    /// le viseur suivant.
-    func forgetStaleRecording() {
-        guard !isRecordingVideo, let ancienne = recordingId else { return }
-        segmentTokens = [:]
-        abandonRecording(token: ancienne)
+    /// La prise précédente est arrêtée mais pas encore livrée : la suivante l'attend.
+    var recordingIsPending: Bool {
+        recordingId != nil && !isRecordingVideo
     }
 }
