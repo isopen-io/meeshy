@@ -100,6 +100,24 @@ final class ComposerLookStripTests: XCTestCase {
         XCTAssertFalse(session.stripNeedsFeed)
     }
 
+    /// **Chaque miniature vivante est dans le contour de sa case** (#9557) : le
+    /// libellé, plus large que la case, ne doit pas en élargir le pas — l'atlas
+    /// avance de `pitch`, les contours aussi.
+    func test_cells_advanceByThePitch_whateverTheirLabelWidth() throws {
+        let bande = try Self.code("Meeshy/Features/Main/Composer/ComposerLookStrip.swift")
+        XCTAssertTrue(bande.contains(".frame(width: cellule.width, alignment: .center)"),
+                      "la case garde la largeur de la miniature ; son libellé déborde, centré")
+    }
+
+    /// **Sans filtre ni cadre, rien ne recopie la caméra en bas** (#9557) : la
+    /// bande repliée montre un déclencheur simple, et aucune trame n'est retenue.
+    func test_collapsedStrip_showsAPlainShutter_andHoldsNoFrame_untilALookIsChosen() throws {
+        let bande = try Self.code("Meeshy/Features/Main/Composer/ComposerLookStrip.swift")
+        XCTAssertTrue(bande.contains("ComposerLookStripRule.collapsedTrigger("), "la règle dit ce que la bande repliée montre")
+        let thermique = try Self.code("Meeshy/Features/Main/Composer/ComposerCaptureSession+Thermal.swift")
+        XCTAssertTrue(thermique.contains("ComposerLookStripRule.paintsLive("), "le guet des trames suit la même règle")
+    }
+
     func test_chosenLookName_saysBothHalvesOfTheLook() {
         let nom = ComposerCaptureCopy.chosenLookName(ComposerPhotoLook(filter: .natural))
         XCTAssertTrue(nom.contains(ComposerCaptureCopy.itemName(.filter(.natural))))

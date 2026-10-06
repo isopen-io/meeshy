@@ -36,8 +36,33 @@ final class ComposerLookPainterWiringTests: XCTestCase {
             let code = try Self.code("Meeshy/Features/Main/Composer/\(fichier)")
             XCTAssertFalse(code.contains("Date()"), "\(fichier) : aucune date du rendu sur un chemin de rendu")
         }
+    }
+
+    /// **Le plein écran est le plein écran** (#9557) : l'aperçu occupe tout ce
+    /// qu'on lui donne, et la toile prend SES proportions — plus de 9:16 centré
+    /// entre deux bandes noires.
+    func test_preview_fillsWhatItIsGiven_andTheCanvasTakesItsProportions() throws {
         let apercu = try Self.code("Meeshy/Features/Main/Composer/ComposerCaptureViews.swift")
-        XCTAssertTrue(apercu.contains("ComposerCaptureCanvas.fitted("), "l'aperçu montre le canevas 9:16, pas l'écran entier")
+        XCTAssertFalse(apercu.contains("ComposerCaptureCanvas"), "aucune toile ajustée : l'aperçu remplit son rectangle")
+        XCTAssertTrue(apercu.contains("ComposerLookPainter.previewCanvas(aspect:"),
+                      "la toile de l'aperçu prend les proportions du viseur")
+        XCTAssertTrue(apercu.contains("session.canvasAspect ="), "la session apprend les proportions de ce qu'on voit")
+        let surface = try Self.code("Meeshy/Features/Main/Composer/ComposerLiveLookSurface.swift")
+        XCTAssertFalse(surface.contains("ComposerLookPainter.designCanvas"),
+                       "la vue Metal peint à la toile qu'on lui donne, jamais au 9:16 figé")
+    }
+
+    /// Ce qui part a les proportions de ce qu'on voyait : photo, vidéo, galerie.
+    func test_everyOutput_isRenderedAtTheViewfinderProportions() throws {
+        let prises = try Self.code("Meeshy/Features/Main/Composer/ComposerCaptureSession+Takes.swift")
+        XCTAssertEqual(prises.components(separatedBy: "aspect: proportions").count - 1, 2,
+                       "la photo et la vidéo de la galerie partent aux proportions du viseur")
+        let edition = try Self.code("Meeshy/Features/Main/Composer/ComposerCaptureSession+Edit.swift")
+        XCTAssertEqual(edition.components(separatedBy: "aspect: proportions").count - 1, 2,
+                       "la photo et la vidéo retouchées partent aux proportions du viseur")
+        XCTAssertFalse(edition.contains("ComposerLookPainter.designCanvas"), "le cadrage se règle sur la toile du viseur")
+        let toucher = try Self.code("Meeshy/Features/Main/Composer/ComposerCaptureSession+Tap.swift")
+        XCTAssertFalse(toucher.contains("ComposerLookPainter.designCanvas"), "le point visé se lit sur la toile du viseur")
     }
 
     private static func code(_ relative: String) throws -> String {
