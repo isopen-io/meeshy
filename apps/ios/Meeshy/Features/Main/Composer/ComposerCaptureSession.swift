@@ -64,8 +64,16 @@ final class ComposerCaptureSession: ObservableObject {
     @Published var openFamily: ComposerLookFamily?
     /// Le cadrage de la prise ; la retouche le règle (#9352).
     @Published var framing = ComposerFraming.identity
+    /// On vise, ou on retouche (#9352).
+    @Published var phase = ComposerCapturePhase.capturing
+    /// La photo figée de l'édition, debout.
+    var editPhoto: CGImage?
+    /// Les octets de la prise : leur EXIF suit le rendu final.
+    var editPhotoData: Data?
+    /// Ce que le peintre lit en édition : la photo figée, ou la vidéo en boucle.
+    var editSource: (any ComposerFrameSourcing)?
     /// La vidéo se rend avec son look : le `✓` attend, et le dit.
-    @Published private(set) var isRenderingLook = false
+    @Published var isRenderingLook = false
     /// La date de la séance de prise : l'aperçu, la photo et la vidéo écrivent
     /// la MÊME dans leur cadre.
     let lookDate = Date()
@@ -100,7 +108,7 @@ final class ComposerCaptureSession: ObservableObject {
     @Published private(set) var pendingGallerySaves = 0
     /// Chaque désarmement ouvre une nouvelle génération : un rendu lancé avant
     /// ne remet plus rien à un viseur que l'auteur a fermé.
-    private var renderGeneration = 0
+    private(set) var renderGeneration = 0
 
     /// La durée du segment en cours, saisie À LA CLÔTURE : l'horloge du modèle
     /// repart à zéro au démarrage suivant, et le fichier n'arrive qu'après.
@@ -204,6 +212,7 @@ final class ComposerCaptureSession: ObservableObject {
     func disarm() {
         renderGeneration += 1
         isRenderingLook = false
+        leaveEditing()
         stage = .off
         mode = nil
         resetIntents()
@@ -591,30 +600,5 @@ extension ComposerCaptureSession {
     /// Le look ne change plus une fois la prise commencée.
     var lookIsLocked: Bool {
         ComposerLiveLookRule.isLocked(stage: stage, pendingSegments: segments.count)
-    }
-
-    /// **La photo part avec ce qu'on voyait** : le canevas 9:16 du peintre unique,
-    /// à la date de la session, hors du fil principal, encodée avec l'EXIF de la
-    /// prise rendu vrai pour elle. Le BRUT est déjà en galerie (`CameraModel`) ;
-    /// un rendu qui échoue rend la prise d'origine plutôt que rien.
-    func lookedPhoto(_ image: UIImage, data: Data?, deliver: @escaping @MainActor (CameraResult) -> Void) {
-        guard let debout = ComposerPhotoLookSource.upright(image) else {
-            deliver(.photo(image, data: data))
-            return
-        }
-        let regard = look
-        let auteur = lookPerson
-        let date = lookDate
-        let cache = scenes
-        Task { @MainActor in
-            guard let rendu = await ComposerLookPainter.renderPhoto(debout, look: regard, framing: .identity,
-                                                                    person: auteur, date: date,
-                                                                    scenes: cache) else {
-                deliver(.photo(image, data: data))
-                return
-            }
-            let octets = await ComposerPhotoEncoding.encode(rendu, like: data)
-            deliver(.photo(UIImage(cgImage: rendu), data: octets))
-        }
     }
 }

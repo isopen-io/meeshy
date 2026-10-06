@@ -147,6 +147,8 @@ extension ComposerCaptureSession {
         return !Task.isCancelled
     }
 
+    /// La photo de la scène s'ouvre en ÉDITION (#9352) : rien ne part vers l'hôte
+    /// avant « Terminé ». Celle de la miniature choisie part en galerie.
     func photoArrived() {
         guard stage != .off, let image = camera.capturedPhoto else { return }
         let intent = photoInFlightIntent
@@ -155,9 +157,7 @@ extension ComposerCaptureSession {
         case .gallery:
             saveRenderedPhoto(image, data: camera.capturedPhotoData)
         case .edit:
-            lookedPhoto(image, data: camera.capturedPhotoData) { [weak self] resultat in
-                self?.onDeliver?(resultat)
-            }
+            beginEditing(photo: image, data: camera.capturedPhotoData)
         }
     }
 

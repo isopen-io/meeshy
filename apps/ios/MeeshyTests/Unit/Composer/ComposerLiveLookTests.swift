@@ -1,7 +1,6 @@
 import XCTest
 import AVFoundation
 import CoreImage
-import ImageIO
 @testable import Meeshy
 
 /// **Les filtres et les cadres se choisissent EN DIRECT dans le viseur** (#9329).
@@ -109,42 +108,6 @@ final class ComposerLiveLookTests: XCTestCase {
         XCTAssertTrue(session.lookIsLocked)
     }
 
-    func test_sansLook_laPhotoPartAuCanevas_avecSesPropresMetadonnees() async throws {
-        let session = ComposerCaptureSession()
-        let image = UIImage(cgImage: Self.photo())
-        let attendue = expectation(description: "la photo part")
-        var rendu: CameraResult?
-        session.lookedPhoto(image, data: Data([0xFF, 0xD8])) {
-            rendu = $0
-            attendue.fulfill()
-        }
-        await fulfillment(of: [attendue], timeout: 10)
-        guard case .photo(let rendue, let octets) = try XCTUnwrap(rendu) else { return XCTFail("une photo") }
-        XCTAssertNotNil(octets, "la photo qui part porte ses propres métadonnées")
-        XCTAssertEqual(rendue.size.width / rendue.size.height, 9.0 / 16.0, accuracy: 0.01)
-    }
-
-    func test_avecUnFiltre_laPhotoPartPeinte_avecLEXIFDeLaPrise() async throws {
-        let session = ComposerCaptureSession()
-        session.look = ComposerPhotoLook(filter: .vivid)
-        let image = UIImage(cgImage: Self.photo())
-        let attendue = expectation(description: "la photo regardée part")
-        var rendu: CameraResult?
-        session.lookedPhoto(image, data: ComposerPhotoEncodingTests.takeWithExif()) {
-            rendu = $0
-            attendue.fulfill()
-        }
-        await fulfillment(of: [attendue], timeout: 10)
-        guard case .photo(let partie, let data)? = rendu else { return XCTFail("aucune photo") }
-        XCTAssertFalse(partie === image, "la photo part avec le filtre qu'on voyait")
-        XCTAssertEqual(partie.size.width / partie.size.height, 9.0 / 16.0, accuracy: 0.01)
-        let octets = try XCTUnwrap(data, "la photo qui part porte les métadonnées de la prise")
-        let lu = CGImageSourceCreateWithData(octets as CFData, nil)
-            .flatMap { CGImageSourceCopyPropertiesAtIndex($0, 0, nil) as? [CFString: Any] }
-        XCTAssertEqual(lu?[kCGImagePropertyOrientation] as? Int, 1)
-        XCTAssertNotNil(lu?[kCGImagePropertyExifDictionary])
-    }
-
     func test_sansLook_laVideoPartTelleQuelle_sansRendu() async {
         let url = URL(fileURLWithPath: "/tmp/inexistante.mov")
         let rendue = await ComposerLookVideoExporter.export(
@@ -243,21 +206,12 @@ final class ComposerLiveLookTests: XCTestCase {
         let session = try Self.code("Meeshy/Features/Main/Composer/ComposerCaptureSession.swift")
         XCTAssertTrue(session.contains("ComposerLookVideoExporter.export("), "le ✓ des deux montages exporte le look")
         let prises = try Self.code("Meeshy/Features/Main/Composer/ComposerCaptureSession+Takes.swift")
-        XCTAssertTrue(prises.contains("lookedPhoto(image"),
-                      "toute photo de la scène part regardée, conversation comprise (#9351)")
+        XCTAssertTrue(prises.contains("beginEditing(photo: image, data: camera.capturedPhotoData)"),
+                      "toute photo de la scène s'ouvre en édition avec son look, conversation comprise (#9352)")
         XCTAssertFalse(prises.contains("deliversRawPhoto"), "plus de porte qui revoit : le look ne s'applique qu'une fois")
     }
 
     // MARK: - Outils
-
-    private static func photo() -> CGImage {
-        let contexte = CGContext(data: nil, width: 64, height: 48, bitsPerComponent: 8, bytesPerRow: 0,
-                                 space: CGColorSpace(name: CGColorSpace.displayP3)!,
-                                 bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
-        contexte.setFillColor(CGColor(red: 0.55, green: 0.45, blue: 0.35, alpha: 1))
-        contexte.fill(CGRect(x: 0, y: 0, width: 64, height: 48))
-        return contexte.makeImage()!
-    }
 
     private static func code(_ relative: String) throws -> String {
         let racine = URL(fileURLWithPath: #filePath)

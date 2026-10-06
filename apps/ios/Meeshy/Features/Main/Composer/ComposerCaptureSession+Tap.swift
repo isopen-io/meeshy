@@ -26,6 +26,7 @@ extension ComposerCaptureSession {
     func gestureContext(allowsPhoto: Bool, allowsVideo: Bool) -> ComposerCaptureGestureContext {
         ComposerCaptureGestureContext(
             stage: stage,
+            editing: phase.isEditing,
             holding: holdStartedAt != nil,
             locked: holdPhase == .locked || mode == ComposerShutterGesture.mode(locked: true),
             pendingSegments: segments.count,

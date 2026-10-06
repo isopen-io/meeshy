@@ -265,8 +265,8 @@ final class ComposerSceneCameraMountingTests: XCTestCase {
         let code = compact(try source("ComposerCaptureSession+Takes.swift"))
         XCTAssertTrue(code.contains("collectSegment(url)"),
                       "une vidéo de la scène doit rejoindre les segments, pas la scène")
-        XCTAssertTrue(code.contains("lookedPhoto(image,data:camera.capturedPhotoData)"),
-                      "une photo se pose tout de suite — AVEC ses octets d'origine, qui portent l'EXIF")
+        XCTAssertTrue(code.contains("beginEditing(photo:image,data:camera.capturedPhotoData)"),
+                      "une photo s'ouvre en édition sans attendre de ✓ — AVEC ses octets d'origine, qui portent l'EXIF")
         let hote = compact(try source("MeeshyComposerHost+Viewfinder.swift"))
         XCTAssertTrue(hote.contains("sceneCapture.onDeliver={poseSceneCapture($0)}"),
                       "la prise de la scène se pose par l'hôte")
