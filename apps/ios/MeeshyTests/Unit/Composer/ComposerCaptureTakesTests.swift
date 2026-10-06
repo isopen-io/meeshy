@@ -53,16 +53,26 @@ final class ComposerCaptureTakesTests: XCTestCase {
         XCTAssertNil(FeedbackToastManager.shared.currentToast, "un enregistrement refusé ne se dit jamais « enregistré »")
     }
 
-    func test_photoArrived_editIntent_deliversTheLookedPhoto() async {
+    func test_photoArrived_editIntent_entersEditing_andDeliversNothingYet() {
         let session = ComposerCaptureSession(stage: .armed, gallery: MockComposerGallery())
         session.look = ComposerPhotoLook(filter: .warm)
-        var remis: CameraResult?
-        session.onDeliver = { remis = $0 }
+        var remis = 0
+        session.onDeliver = { _ in remis += 1 }
+        session.camera.capturedPhotoData = Data([0xFF, 0xD8])
         Self.publishPhoto(on: session)
-        await Self.waitUntil { remis != nil }
-        guard case .photo(let image, _)? = remis else { return XCTFail("la photo de la scène part vers l'hôte") }
-        XCTAssertEqual(image.size.width / image.size.height, 9.0 / 16.0, accuracy: 0.01,
-                       "elle part regardée, sur le canevas 9:16")
+        XCTAssertEqual(session.phase, .editing(.photo), "la photo de la scène s'ouvre en édition")
+        XCTAssertEqual(session.editPhotoData, Data([0xFF, 0xD8]), "avec ses octets : leur EXIF suivra le rendu")
+        XCTAssertEqual(session.look, ComposerPhotoLook(filter: .warm), "le look qu'on voyait reste celui qu'on retouche")
+        XCTAssertEqual(remis, 0, "rien ne part avant « Terminé »")
+    }
+
+    func test_photoArrived_galleryIntent_staysCapturing() async {
+        let galerie = MockComposerGallery()
+        let session = ComposerCaptureSession(stage: .armed, gallery: galerie)
+        session.photoInFlightIntent = .gallery
+        Self.publishPhoto(on: session)
+        XCTAssertEqual(session.phase, .capturing, "la miniature choisie enregistre sans ouvrir l'édition")
+        await Self.waitUntil { session.pendingGallerySaves == 0 }
     }
 
     func test_photoArrived_afterDisarm_deliversNothing() {
@@ -202,11 +212,10 @@ final class ComposerCaptureTakesTests: XCTestCase {
 
     // MARK: - L'intention suit LA photo (I2)
 
-    func test_takePhoto_refusedGalleryRequest_nextShutterTakesForEdit() async {
+    func test_takePhoto_refusedGalleryRequest_nextShutterTakesForEdit() {
         let objectif = MockComposerCaptureCamera()
-        let session = ComposerCaptureSession(stage: .armed, controls: objectif, gallery: MockComposerGallery())
-        var remis = 0
-        session.onDeliver = { _ in remis += 1 }
+        let galerie = MockComposerGallery()
+        let session = ComposerCaptureSession(stage: .armed, controls: objectif, gallery: galerie)
         objectif.isSwitchingCamera = true
         session.takePhoto(intent: .gallery)
         XCTAssertTrue(objectif.photoFlashes.isEmpty, "aucune prise pendant une bascule")
@@ -214,9 +223,8 @@ final class ComposerCaptureTakesTests: XCTestCase {
         objectif.isSwitchingCamera = false
         session.takePhoto()
         Self.publishPhoto(on: session)
-        await Self.waitUntil { remis == 1 }
-        let livrees = remis
-        XCTAssertEqual(livrees, 1, "l'obturateur suivant prend pour la scène, regardée")
+        XCTAssertEqual(session.phase, .editing(.photo), "l'obturateur suivant prend pour la scène : l'édition")
+        XCTAssertEqual(session.pendingGallerySaves, 0, "rien ne part en galerie")
     }
 
     func test_takePhoto_duringTheFrontFlashRamp_keepsTheInFlightIntent() async {
