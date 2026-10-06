@@ -257,7 +257,7 @@ function Rarities() {
           <span
             data-game-rarity={rarity}
             className="grid size-14 place-items-center rounded-card"
-            style={{ backgroundColor: 'var(--color-ios-bg)', ...rarityRim(rarity) }}
+            style={{ backgroundColor: 'var(--color-ios-surface)', ...rarityRim(rarity) }}
           >
             <Signature size={28} color={GAME_INK_2} />
           </span>
