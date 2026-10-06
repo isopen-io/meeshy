@@ -264,6 +264,7 @@ final class ComposerCaptureSession: ObservableObject {
             guard stage == .armed else { return }
             controls.takePhoto(flash: .off)
             try? await Task.sleep(nanoseconds: UInt64(ComposerFrontFlash.photoHold * 1_000_000_000))
+            guard stage == .armed else { return }
             ComposerScreenFlash.shared.restore()
         }
     }
