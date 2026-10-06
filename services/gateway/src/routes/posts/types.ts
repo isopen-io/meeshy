@@ -70,6 +70,10 @@ const STORY_ARRAY_CAP = 32;             // medias/texts/stickers/audios par slid
 // ancien voyage, et ce client l'ignore.
 const STORY_ADJUSTMENT_BOUND = 10;
 const adjustmentValue = z.number().finite().min(-STORY_ADJUSTMENT_BOUND).max(STORY_ADJUSTMENT_BOUND).optional();
+// Les EFFETS d'une image (#9498) — bloom et grain, ce que l'outil « Effets » de
+// l'ancien editeur offrait de plus que les reglages — voyagent dans le meme sac.
+// Leur curseur va de 0 a 1 sur iOS comme sur le web : la borne est la sienne.
+const effectValue = z.number().finite().min(0).max(1).optional();
 export const StoryMediaAdjustmentsSchema = z.object({
   exposure: adjustmentValue,
   brightness: adjustmentValue,
@@ -80,6 +84,8 @@ export const StoryMediaAdjustmentsSchema = z.object({
   sharpness: adjustmentValue,
   blur: adjustmentValue,
   vignette: adjustmentValue,
+  bloom: effectValue,
+  grain: effectValue,
 }).passthrough();
 
 // Le RECADRAGE d'une image posee (#9499) — `MediaCropRect` iOS : un rectangle
