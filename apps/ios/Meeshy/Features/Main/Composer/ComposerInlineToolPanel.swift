@@ -114,7 +114,7 @@ struct ComposerInlineToolPanel: View {
                 }
             }
         case .media(.crop):
-            // Servi au seul fond image d'une retouche (#9136).
+            // Servi à l'image posée (#9499) et au fond image d'une retouche (#9136).
             if let media {
                 ComposerMediaCropPads(viewModel: viewModel, media: media)
             }

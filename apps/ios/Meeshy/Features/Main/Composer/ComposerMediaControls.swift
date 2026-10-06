@@ -133,17 +133,24 @@ struct ComposerMediaFilterGrid: View {
     }
 }
 
-/// **Recadrer une image du fil** (#9136, vue `2d` : « 9:16 · 4:5 · 1:1 · LIBRE ») —
-/// le cadre CENTRÉ le plus grand au rapport choisi ; « Original » le défait.
-/// Les pastilles ne calculent que sur un ratio MESURÉ (#5100) ; « Original » ne
-/// calcule rien.
+/// **Recadrer une image** — posée (#9499) ou fond d'une retouche (#9136) — le
+/// cadre CENTRÉ le plus grand au rapport choisi ; « Original » le défait. Les
+/// proportions sont la liste du SDK (`MediaCropRatio.allCases`), cas pour cas
+/// celle du web : la rangée défile quand elle dépasse le panneau. Les pastilles
+/// ne calculent que sur un ratio MESURÉ (#5100) ; « Original » ne calcule rien.
 struct ComposerMediaCropPads: View {
     @ObservedObject var viewModel: StoryComposerViewModel
     let media: StoryMediaObject
 
-    private static let ratios: [MediaCropRatio] = [.free, .square, .portrait45, .portrait916]
+    static let ratios: [MediaCropRatio] = MediaCropRatio.allCases
 
     var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            pads
+        }
+    }
+
+    private var pads: some View {
         HStack(spacing: MeeshySpacing.smPlus) {
             ForEach(Self.ratios, id: \.self) { ratio in
                 let actif = Self.isChosen(ratio, media: media)
@@ -171,7 +178,6 @@ struct ComposerMediaCropPads: View {
                 .disabled(ratio.value != nil && !((media.measuredAspectRatio ?? 0) > 0))
                 .accessibilityAddTraits(actif ? [.isButton, .isSelected] : .isButton)
             }
-            Spacer(minLength: 0)
         }
     }
 
@@ -182,14 +188,10 @@ struct ComposerMediaCropPads: View {
         return abs(cadre.width - vise.width) < 0.001 && abs(cadre.height - vise.height) < 0.001
     }
 
+    /// Une notation se lit telle quelle dans toutes les langues ; seul le cadre
+    /// d'origine se traduit.
     static func label(_ ratio: MediaCropRatio) -> String {
-        switch ratio {
-        case .free:
-            return String(localized: "composer.object.editor.crop.original",
-                          defaultValue: "Original", bundle: .main)
-        case .square:      return "1:1"
-        case .portrait45:  return "4:5"
-        case .portrait916: return "9:16"
-        }
+        ratio.notation ?? String(localized: "composer.object.editor.crop.original",
+                                 defaultValue: "Original", bundle: .main)
     }
 }

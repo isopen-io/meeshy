@@ -170,9 +170,11 @@ final class ComposerMediaAdjustTests: XCTestCase {
         XCTAssertEqual(ComposerInlinePanelLayout.edge(object: .null, free: libre, panelHeight: compactPanel), .top)
     }
 
-    func test_seulsLeFiltreEtLesReglages_rangentLePanneauSelonLObjet() {
+    func test_seulsLeFiltreLesReglagesEtLeRecadrage_rangentLePanneauSelonLObjet() {
         XCTAssertTrue(ComposerInlinePanelLayout.keepsObjectInSight(.media(.adjust)))
         XCTAssertTrue(ComposerInlinePanelLayout.keepsObjectInSight(.media(.filter)))
+        XCTAssertTrue(ComposerInlinePanelLayout.keepsObjectInSight(.media(.crop)),
+                      "Un recadrage se juge à l'œil, comme un filtre (#9499)")
         XCTAssertFalse(ComposerInlinePanelLayout.keepsObjectInSight(.media(.trim)))
         XCTAssertFalse(ComposerInlinePanelLayout.keepsObjectInSight(.timing))
     }

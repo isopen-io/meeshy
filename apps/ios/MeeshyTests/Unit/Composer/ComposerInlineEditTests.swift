@@ -44,9 +44,12 @@ final class ComposerInlineEditTests: XCTestCase {
                        "l'ordre APPRIS des outils du texte, puis la fenêtre de temps et le plan")
     }
 
-    func test_sections_image_filtreReglagesActionsDescription() {
+    /// Une image POSÉE se recadre d'abord (#9499) — la borne est lue par son
+    /// calque (`contentsRect`), son lecteur web et sa vignette : le contrôle a
+    /// un effet partout où l'objet se peint.
+    func test_sections_image_recadrageFiltreReglagesActionsDescription() {
         XCTAssertEqual(ComposerInlineEditing.sections(for: .image, hasTrimmableSource: false),
-                       [.media(.filter), .media(.adjust), .media(.actions), .media(.altText)])
+                       [.media(.crop), .media(.filter), .media(.adjust), .media(.actions), .media(.altText)])
     }
 
     func test_sections_video_reglagesRognageActionsDescription_sansFiltre() {
@@ -55,12 +58,13 @@ final class ComposerInlineEditTests: XCTestCase {
                        "le filtre se cuit dans une image : une vidéo n'en rend aucun ; ses réglages, si (#9169)")
     }
 
-    /// Sauf les RÉGLAGES (#9175, #9169) : `StoryBackgroundLayer` ne les peint
-    /// pas encore, donc le fond ne les offre pas — un curseur sans effet (loi 4).
+    /// Sauf les RÉGLAGES (#9175, #9169) et le RECADRAGE hors retouche (#9499) :
+    /// `StoryBackgroundLayer` ne peint ni l'un ni l'autre, donc le fond ne les
+    /// offre pas — un contrôle sans effet (loi 4).
     func test_sections_fond_lesMemesQuUnMediaPose() {
         XCTAssertEqual(ComposerInlineEditing.sections(for: .background(isVideo: false), hasTrimmableSource: false),
                        ComposerInlineEditing.sections(for: .image, hasTrimmableSource: false)
-                           .filter { $0 != .media(.adjust) })
+                           .filter { $0 != .media(.adjust) && $0 != .media(.crop) })
         XCTAssertEqual(ComposerInlineEditing.sections(for: .background(isVideo: true), hasTrimmableSource: true),
                        ComposerInlineEditing.sections(for: .video, hasTrimmableSource: true)
                            .filter { $0 != .media(.adjust) })
@@ -85,13 +89,29 @@ final class ComposerInlineEditTests: XCTestCase {
         XCTAssertEqual(sections.first, .media(.crop), "Une image du fil se RECADRE d'abord (#9136)")
     }
 
-    func test_sections_cropIsServedOnlyToARetouchedImageBackground() {
+    /// Le recadrage va à une IMAGE : posée (#9499), ou fond d'une retouche
+    /// (#9136). Jamais à un fond hors retouche (le lecteur ne le recadre pas),
+    /// jamais à une vidéo (#9153 : son player ne lit pas encore la borne).
+    func test_sections_cropIsServedToAPlacedImageAndARetouchedImageBackground() {
+        XCTAssertTrue(ComposerInlineEditing.sections(for: .image, hasTrimmableSource: false)
+            .contains(.media(.crop)))
+        XCTAssertTrue(ComposerInlineEditing.sections(for: .image, hasTrimmableSource: false, retouching: true)
+            .contains(.media(.crop)))
         XCTAssertFalse(ComposerInlineEditing.sections(for: .background(isVideo: false), hasTrimmableSource: false)
             .contains(.media(.crop)), "Hors retouche, le lecteur ne recadre pas un fond : rien à offrir")
         XCTAssertFalse(ComposerInlineEditing.sections(for: .background(isVideo: true), hasTrimmableSource: true,
                                                       retouching: true).contains(.media(.crop)))
-        XCTAssertFalse(ComposerInlineEditing.sections(for: .image, hasTrimmableSource: false, retouching: true)
+        XCTAssertFalse(ComposerInlineEditing.sections(for: .video, hasTrimmableSource: true)
             .contains(.media(.crop)))
+    }
+
+    /// **Une seule liste de proportions** (#9499) : celle du SDK, cas pour cas
+    /// celle du web (`MEDIA_CROP_RATIOS`). Le cadre d'origine se traduit, une
+    /// notation se lit telle quelle.
+    func test_lesPastillesDeRecadrage_sontLaListePartagee() {
+        XCTAssertEqual(ComposerMediaCropPads.ratios, MediaCropRatio.allCases)
+        XCTAssertEqual(ComposerMediaCropPads.label(.portrait34), "3:4")
+        XCTAssertEqual(ComposerMediaCropPads.label(.landscape169), "16:9")
     }
 
     func test_sections_retouchedBackgroundVideo_trimsAndMutes() {
@@ -111,14 +131,15 @@ final class ComposerInlineEditTests: XCTestCase {
         XCTAssertEqual(ComposerInlineEditing.sections(for: .audio, hasTrimmableSource: false), [])
     }
 
-    /// Le recadrage et la scission ne sont servis par AUCUNE famille : aucun
-    /// champ du modèle ne les rend (`MediaEditTool.served`).
-    func test_sections_jamaisRecadrageNiScission() {
+    /// La scission n'est servie par AUCUNE famille : aucun champ du modèle ne
+    /// la rend (`MediaEditTool.served`). Le recadrage, hors de la liste servie
+    /// lui aussi, ne va qu'à l'image (témoin ci-dessus).
+    func test_sections_jamaisScission_niRecadrageHorsImage() {
         let familles: [ComposerInlineFamily] = [.text, .image, .video, .audio, .sticker, .place,
                                                 .background(isVideo: false), .background(isVideo: true)]
         for famille in familles {
             let sections = ComposerInlineEditing.sections(for: famille, hasTrimmableSource: true)
-            XCTAssertFalse(sections.contains(.media(.crop)))
+            XCTAssertEqual(sections.contains(.media(.crop)), famille == .image, "\(famille)")
             XCTAssertFalse(sections.contains(.media(.split)))
         }
     }

@@ -3,7 +3,7 @@ import UIKit
 @testable import MeeshyUI
 @testable import MeeshySDK
 
-/// **Recadrer une image l'écrit sur l'objet, et le fond affiché suit** (#9136)
+/// **Recadrer une image l'écrit sur l'objet, et le FOND affiché suit** (#9136)
 /// — la borne voyage sur `StoryMediaObject.crop` ; le bitmap montré se
 /// recoupe depuis le FICHIER, jamais depuis le bitmap déjà recadré.
 @MainActor
@@ -50,8 +50,11 @@ final class StoryComposerMediaCropTests: XCTestCase {
         XCTAssertNil(vm.currentEffects.mediaObjects?.first { $0.id == id }?.crop)
     }
 
+    /// Le FOND d'une retouche se recoupe : `StoryBackgroundLayer` ne lit pas la
+    /// borne. Une image POSÉE garde son bitmap entier (`StoryPlacedImageCropTests`).
     func test_refreshMediaCropPreview_showsTheCroppedFile_andRecropsFromTheSource() throws {
         let (vm, id) = try composerWithImage(width: 400, height: 300)
+        vm.toggleBackground(id: id)
         vm.setMediaCrop(id: id, crop: MediaCropRect(x: 0.125, y: 0, width: 0.75, height: 1))
         vm.refreshMediaCropPreview(id: id)
         vm.setMediaCrop(id: id, crop: MediaCropRect(x: 0, y: 0, width: 1, height: 0.5))
@@ -63,6 +66,7 @@ final class StoryComposerMediaCropTests: XCTestCase {
 
     func test_undo_afterACrop_showsTheWholeImageAgain() throws {
         let (vm, id) = try composerWithImage(width: 400, height: 300)
+        vm.toggleBackground(id: id)
         vm.seedHistory()
         vm.setMediaCrop(id: id, crop: MediaCropRect(x: 0.125, y: 0, width: 0.75, height: 1))
         vm.pushHistorySnapshot()
