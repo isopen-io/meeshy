@@ -64,6 +64,83 @@ final class ComposerSceneBackgroundTapPolicyTests: XCTestCase {
         }
     }
 
+    // MARK: - Sur la SCÈNE, toucher le fond ouvre SES outils (#9521)
+
+    /// **Le fond est un objet du plan `bg`, et il se sélectionne comme les
+    /// autres : au toucher** (vue `1c`, « trois plans, un seul objet à la
+    /// fois » ; #9138, « toucher… mène au MÊME état »). Recette de #9496 : le
+    /// toucher ne posait qu'un `kind` sans identifiant, que seule la surface
+    /// document lisait — sur la scène rien ne bougeait, et « Réglages » du fond
+    /// restait inatteignable.
+    func test_backgroundToEdit_rienDeSelectionne_rendLeFond() {
+        XCTAssertEqual(
+            ComposerSceneBackgroundTapPolicy.backgroundToEdit(
+                currentSelection: nil, effectIsOpen: false, backgroundMediaId: "fond"),
+            "fond"
+        )
+    }
+
+    /// Le geste reste un TOGGLE : un objet (le fond compris) déjà sélectionné ⇒
+    /// le toucher QUITTE (#8714), il ne bascule pas sur le fond.
+    func test_backgroundToEdit_uneSelectionEnCours_neRendRien() {
+        for selection: StoryCanvasUIView.CanvasItemKind in [.text, .sticker, .place, .media] {
+            XCTAssertNil(
+                ComposerSceneBackgroundTapPolicy.backgroundToEdit(
+                    currentSelection: selection, effectIsOpen: false, backgroundMediaId: "fond"),
+                "Une sélection \(selection) se quitte au toucher du fond — elle ne bascule pas sur lui."
+            )
+        }
+    }
+
+    /// Le carrousel d'effets ouvert : le toucher le REFERME (#8712) et rend
+    /// l'audience et Publier — ouvrir le fond par-dessus volerait ce geste.
+    func test_backgroundToEdit_carrouselDEffetsOuvert_neRendRien() {
+        XCTAssertNil(
+            ComposerSceneBackgroundTapPolicy.backgroundToEdit(
+                currentSelection: nil, effectIsOpen: true, backgroundMediaId: "fond")
+        )
+    }
+
+    /// Un fond de couleur ou de dégradé n'est pas un objet : rien à régler.
+    func test_backgroundToEdit_sansFondMedia_neRendRien() {
+        XCTAssertNil(
+            ComposerSceneBackgroundTapPolicy.backgroundToEdit(
+                currentSelection: nil, effectIsOpen: false, backgroundMediaId: nil)
+        )
+        XCTAssertNil(
+            ComposerSceneBackgroundTapPolicy.backgroundToEdit(
+                currentSelection: nil, effectIsOpen: false, backgroundMediaId: "")
+        )
+    }
+
+    /// **Le câblage** : le toucher du fond LIT la règle avant d'effacer la
+    /// sélection — lue après, elle verrait toujours « rien de sélectionné » et
+    /// le second toucher ne refermerait plus — puis ouvre le fond par le site
+    /// UNIQUE de l'édition en place. Sur le document, `beginInlineEdit` refuse
+    /// et la sélection par `kind` (#4035) demeure.
+    func test_leToucherDuFond_ouvreLeFondParLeSiteUnique_apresAvoirLuLaRegle() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Composer/MeeshyComposerHost.swift")
+        let code = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+            .components(separatedBy: .whitespacesAndNewlines).joined()
+        guard let debut = code.range(of: "funchandleSceneBackgroundTap(){"),
+              let fin = code.range(of: "varbody:someView{", range: debut.upperBound..<code.endIndex)
+        else { return XCTFail("le toucher du fond a changé de forme") }
+        let corps = String(code[debut.upperBound..<fin.lowerBound])
+        guard let regle = corps.range(of: "ComposerSceneBackgroundTapPolicy.backgroundToEdit("),
+              let efface = corps.range(of: "selectedSceneItemKind=ComposerSceneBackgroundTapPolicy.selection("),
+              let ouvre = corps.range(of: "beginInlineEdit(")
+        else { return XCTFail("le toucher du fond ne lit pas la règle ou n'ouvre pas le fond : \(corps)") }
+        XCTAssertLessThan(regle.lowerBound, efface.lowerBound,
+                          "La règle se lit AVANT d'effacer la sélection.")
+        XCTAssertLessThan(efface.lowerBound, ouvre.lowerBound,
+                          "Le fond s'ouvre APRÈS l'effacement — sinon l'effacement le refermerait.")
+        XCTAssertTrue(corps.contains("effectIsOpen:openSceneEffect!=nil"))
+        XCTAssertTrue(corps.contains("backgroundMediaId:sceneBackgroundMedia?.id"))
+    }
+
     // MARK: - La garde NÉGATIVE que l'issue exige : la surface neuve ignore la coquille
 
     /// **La preuve MÉCANIQUE que la bêta ne casse pas l'autre chemin.**
