@@ -256,3 +256,43 @@ async function throttleFails(db: FakeGameDb) {
   });
   return notifier.notify(leagueResult(), NOW);
 }
+
+describe('le créneau du jour ne se brûle pas sur une notification qui n’a pas été créée (revue adversariale #9490)', () => {
+  const sequenced = (outcomes: ReadonlyArray<'decline' | 'throw' | 'create'>) => {
+    const db: FakeGameDb = fakeGameDb();
+    seedUser(db, { isActive: true, deletedAt: null, systemLanguage: 'fr', timezone: 'UTC' }, USER);
+    seedUser(db, { isActive: true, deletedAt: null, username: 'marie', displayName: 'Marie' }, OTHER);
+    const queue = [...outcomes];
+    const taken = new Map<string, string>();
+    const throttle = {
+      setnx: async (key: string, value: string) => {
+        if (taken.has(key)) return false;
+        taken.set(key, value);
+        return true;
+      },
+      del: async (key: string) => {
+        taken.delete(key);
+      },
+    };
+    const notifications = {
+      createNotification: async () => {
+        const outcome = queue.shift();
+        if (outcome === 'throw') throw new Error('push down');
+        return outcome === 'decline' ? null : ({ id: 'n' } as never);
+      },
+    };
+    return new GameNotifier(db.prisma, { notifications: () => notifications as never, throttle });
+  };
+
+  it('un refus (Ne pas déranger) rend le créneau : l’invitation de duo qui suit le même jour part', async () => {
+    const notifier = sequenced(['decline', 'create']);
+    expect(await notifier.notify(leagueResult(), NOW)).toBe('skipped:declined');
+    expect(await notifier.notify(invited(), new Date(NOW.getTime() + 3600_000))).toBe('sent');
+  });
+
+  it('une panne du service rend le créneau aussi', async () => {
+    const notifier = sequenced(['throw', 'create']);
+    expect(await notifier.notify(step(), NOW)).toBe('failed');
+    expect(await notifier.notify(invited(), new Date(NOW.getTime() + 3600_000))).toBe('sent');
+  });
+});

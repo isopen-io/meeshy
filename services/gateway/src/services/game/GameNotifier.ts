@@ -70,7 +70,11 @@ export type GameNotifyResult =
   | 'skipped:declined'
   | 'failed';
 
-export type GameNotificationThrottle = { setnx(key: string, value: string, ttlSeconds?: number): Promise<boolean> };
+export type GameNotificationThrottle = {
+  setnx(key: string, value: string, ttlSeconds?: number): Promise<boolean>;
+  /** Rend le créneau du jour quand la notification n'a pas été créée (refus, panne). */
+  del?(key: string): Promise<void>;
+};
 
 type Notifier = Pick<NotificationService, 'createNotification'>;
 
@@ -193,24 +197,36 @@ export class GameNotifier {
     const throttle = this.deps.throttle ?? getCacheStore();
     if (!(await throttle.setnx(`notif:game:once:${event.recipientId}:${plan.onceKey}`, now.toISOString(), ONCE_TTL_SECONDS))) return 'skipped:duplicate';
     // `GAME_NOTIFICATION_DAILY_CAP` vaut 1 : le créneau du jour se PREND, il ne se compte pas.
-    const day = dayKeyOf(now, recipient.timezone);
-    if (!(await throttle.setnx(`notif:game:day:${event.recipientId}:${day}`, plan.type, DAY_TTL_SECONDS))) {
+    const dayKey = `notif:game:day:${event.recipientId}:${dayKeyOf(now, recipient.timezone)}`;
+    if (!(await throttle.setnx(dayKey, plan.type, DAY_TTL_SECONDS))) {
       return 'skipped:daily-cap';
     }
 
+    // Le créneau ne se prend que pour une notification CRÉÉE : un refus (Ne pas déranger) ou une
+    // panne le rend, sinon un résultat de ligue tombé la nuit taisait l'invitation du matin.
+    const release = () => throttle.del?.(dayKey).catch(() => undefined);
     const lang = recipientLanguage(recipient, 'fr');
-    const created = await notifications.createNotification({
-      userId: event.recipientId,
-      type: plan.type,
-      priority: plan.priority,
-      lang,
-      content: plan.content(lang),
-      ...(actor ? { actor } : {}),
-      context: {},
-      metadata: plan.metadata as never,
-      collapseId: plan.collapseId,
-    });
-    return created === null ? 'skipped:declined' : 'sent';
+    const created = await notifications
+      .createNotification({
+        userId: event.recipientId,
+        type: plan.type,
+        priority: plan.priority,
+        lang,
+        content: plan.content(lang),
+        ...(actor ? { actor } : {}),
+        context: {},
+        metadata: plan.metadata as never,
+        collapseId: plan.collapseId,
+      })
+      .catch(async (error: unknown) => {
+        await release();
+        throw error;
+      });
+    if (created === null) {
+      await release();
+      return 'skipped:declined';
+    }
+    return 'sent';
   }
 
   /** L'ami qui invite ou accepte : un compte vivant, nommé comme son profil public le nomme. */
