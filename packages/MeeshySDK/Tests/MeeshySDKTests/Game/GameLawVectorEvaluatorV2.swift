@@ -433,7 +433,7 @@ extension GameLawVectorEvaluator {
             "pending": .array(summary.pending.map {
                 object(["language": .string($0.language), "sent": .bool($0.sent), "received": .bool($0.received)])
             }),
-            "entries": .array(state.sorted { GameOrdering.compare($0.key, $1.key) < 0 }.map { language, entry in
+            "entries": .array(state.sorted { $0.key < $1.key }.map { language, entry in
                 object([
                     "language": .string(language), "sent": .bool(entry.sent), "received": .bool(entry.received),
                     "stampedOn": .optionalString(entry.stampedOn),
