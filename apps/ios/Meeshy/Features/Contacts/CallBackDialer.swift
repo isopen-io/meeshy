@@ -39,7 +39,7 @@ final class CallBackDialer: CallBackDialerProviding {
             )
         },
         cachedPeer: @escaping @MainActor (String) async -> CallPeer? = { conversationId in
-            await ConversationStore.shared.conversation(id: conversationId).flatMap(CallPeer.init(directConversation:))
+            ConversationStore.shared.conversation(id: conversationId).flatMap(CallPeer.init(directConversation:))
         },
         fetchPeer: @escaping @MainActor (String) async -> CallPeer? = { conversationId in
             guard let currentUserId = AuthManager.shared.currentUser?.id,

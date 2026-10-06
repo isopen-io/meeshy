@@ -34,8 +34,8 @@ nonisolated struct ComposerLookSceneKey: Equatable, Sendable {
 /// **Le processeur graphique de la capture, partagé** (spec § 5) : un seul
 /// `CIContext` Metal pour l'aperçu, la bande, la boucle et la photo.
 nonisolated enum ComposerLookGPU {
-    nonisolated(unsafe) static let device: MTLDevice? = MTLCreateSystemDefaultDevice()
-    nonisolated(unsafe) static let commandQueue: MTLCommandQueue? = device?.makeCommandQueue()
+    static let device: MTLDevice? = MTLCreateSystemDefaultDevice()
+    static let commandQueue: MTLCommandQueue? = device?.makeCommandQueue()
     static let context: CIContext = device.map {
         CIContext(mtlDevice: $0, options: [.cacheIntermediates: false, .priorityRequestLow: false])
     } ?? CIContext(options: [.cacheIntermediates: false])
