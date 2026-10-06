@@ -173,7 +173,12 @@ const isGameBlock = (value: unknown): value is GameBlock =>
     guideSeen: (v) => Array.isArray(v) && v.length <= 200 && v.every((key) => isText(key) && key.length <= 64),
   });
 
-/** Le bloc `game`, ou `null` s'il est absent ou partiel — jamais à moitié lu. */
+/**
+ * Le bloc `game`, ou `null` s'il est absent ou partiel — jamais à moitié lu.
+ *
+ * Les huit extensions (dont `achievementRarities`, déclarée par le contrat) sont lues SEULES par
+ * `readGameExtensions` : une extension illisible tombe, le bloc survit (#9526).
+ */
 export const readGameBlock = (value: unknown): GameBlockV2 | null =>
   isGameBlock(value) ? { ...withoutExtensions(value), ...readGameExtensions(value) } : null;
 
