@@ -1,9 +1,6 @@
-import { leagueStandings, leagueWeekClose, leagueSnapshotDay, friendsLeagueRanking } from '@meeshy/shared/utils/game/league';
 import type { LeagueFriendsResponse, LeagueWeekResponse, UserShowcaseResponse } from '@meeshy/shared/types/game';
-import { visitorShowcase } from '@meeshy/shared/utils/game/trophies';
 
 import type { DataSource } from './config';
-import { GAME_EXTRAS_TODAY, gameExtrasFactsFixture } from './game-fixture';
 import { fetchLeagueFriends, fetchLeagueWeek, fetchUserShowcase } from './game-v2';
 import type { ApiResult, HttpTransport } from './http';
 
@@ -14,7 +11,9 @@ import type { ApiResult, HttpTransport } from './http';
  * l'ancien classement à l'écran.
  *
  * Servies par la loi partagée quand la source est `'fixtures'` : le classement du
- * banc est calculé par `leagueStandings`, comme le serveur, jamais écrit à la main.
+ * banc est calculé par `leagueStandings`, comme le serveur, jamais écrit à la
+ * main — dans `game-v2-queries-fixture.ts`, importé dynamiquement (#9510) pour
+ * que `game-fixture.ts` ne voyage jamais dans un dist `VITE_DATA_SOURCE=gateway`.
  */
 export const GAME_V2_QUERY_PREFIX = ['me', 'game'] as const;
 export const LEAGUE_WEEK_QUERY_KEY = [...GAME_V2_QUERY_PREFIX, 'league', 'week'] as const;
@@ -22,55 +21,19 @@ export const LEAGUE_FRIENDS_QUERY_KEY = [...GAME_V2_QUERY_PREFIX, 'league', 'fri
 
 type Deps = { readonly source: DataSource; readonly transport: HttpTransport; readonly signal?: AbortSignal };
 
-const FIXTURE_MINUTE = 14 * 60;
-
-export function leagueWeekFixture(): LeagueWeekResponse {
-  const facts = gameExtrasFactsFixture();
-  const group = facts.league.group;
-  const week = leagueWeekClose(GAME_EXTRAS_TODAY);
-  if (group === null) {
-    return { weekKey: GAME_EXTRAS_TODAY, snapshotDay: GAME_EXTRAS_TODAY, closes: week, placed: false, league: null, groupId: null, entries: [] };
-  }
-  const standings = leagueStandings({ league: group.league, groupId: group.groupId, members: group.members });
-  return {
-    weekKey: GAME_EXTRAS_TODAY,
-    snapshotDay: leagueSnapshotDay({ dayKey: GAME_EXTRAS_TODAY, minuteOfDay: FIXTURE_MINUTE }),
-    closes: week,
-    placed: true,
-    league: group.league,
-    groupId: group.groupId,
-    entries: standings.map((s) => ({
-      rank: s.rank,
-      displayName: s.userId === facts.userId ? (facts.league.pseudonym ?? 'Colibri-4821') : `Colibri-${s.userId.replace(/\D/g, '').padStart(4, '0')}`,
-      weekPoints: s.weekPoints,
-      zone: s.zone,
-      cup: s.cup,
-      isMe: s.userId === facts.userId,
-    })),
-  };
-}
-
-export function leagueFriendsFixture(): LeagueFriendsResponse {
-  const facts = gameExtrasFactsFixture();
-  return {
-    weekKey: GAME_EXTRAS_TODAY,
-    closes: leagueWeekClose(GAME_EXTRAS_TODAY),
-    entries: friendsLeagueRanking({
-      weekKey: GAME_EXTRAS_TODAY,
-      viewerId: facts.userId,
-      friendIds: facts.league.friendIds,
-      weekPoints: facts.league.friendsWeekPoints,
-    }).map((entry) => ({ rank: entry.rank, userId: entry.userId, weekPoints: entry.weekPoints, isMe: entry.isMe })),
-  };
-}
-
 export async function loadLeagueWeek(deps: Deps): Promise<ApiResult<LeagueWeekResponse>> {
-  if (__FIXTURES__ && deps.source === 'fixtures') return { ok: true, data: leagueWeekFixture() };
+  if (__FIXTURES__ && deps.source === 'fixtures') {
+    const { leagueWeekFixture } = await import('./game-v2-queries-fixture');
+    return { ok: true, data: leagueWeekFixture() };
+  }
   return fetchLeagueWeek(deps.transport, deps.signal);
 }
 
 export async function loadLeagueFriends(deps: Deps): Promise<ApiResult<LeagueFriendsResponse>> {
-  if (__FIXTURES__ && deps.source === 'fixtures') return { ok: true, data: leagueFriendsFixture() };
+  if (__FIXTURES__ && deps.source === 'fixtures') {
+    const { leagueFriendsFixture } = await import('./game-v2-queries-fixture');
+    return { ok: true, data: leagueFriendsFixture() };
+  }
   return fetchLeagueFriends(deps.transport, deps.signal);
 }
 
@@ -82,13 +45,10 @@ export async function loadLeagueFriends(deps: Deps): Promise<ApiResult<LeagueFri
  */
 export const userShowcaseQueryKey = (userId: string) => [...GAME_V2_QUERY_PREFIX, 'showcase', userId] as const;
 
-export function userShowcaseFixture(): UserShowcaseResponse {
-  const facts = gameExtrasFactsFixture();
-  const view = visitorShowcase({ owned: facts.trophies, order: facts.showcaseOrder });
-  return { visible: true, items: [...view.items], order: [...view.order] };
-}
-
 export async function loadUserShowcase(deps: Deps & { readonly userId: string }): Promise<ApiResult<UserShowcaseResponse>> {
-  if (__FIXTURES__ && deps.source === 'fixtures') return { ok: true, data: userShowcaseFixture() };
+  if (__FIXTURES__ && deps.source === 'fixtures') {
+    const { userShowcaseFixture } = await import('./game-v2-queries-fixture');
+    return { ok: true, data: userShowcaseFixture() };
+  }
   return fetchUserShowcase(deps.transport, deps.userId, deps.signal);
 }
