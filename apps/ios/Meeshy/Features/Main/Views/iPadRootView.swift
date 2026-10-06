@@ -216,6 +216,7 @@ struct iPadRootView: View {
             showStoryViewerFromConv: $showStoryViewerFromConv,
             selectedStoryUserIdFromConv: selectedStoryUserIdFromConv,
             activeConversationId: activeConversation?.id,
+            rightPanelRoute: rightPanelRoute,
             onStoryReply: handleStoryReply,
             onSyncPillTap: handleSyncPillTap,
             activeConversationIdForBanner: { activeConversation?.id ?? sheetTargets.notificationPreview?.id },

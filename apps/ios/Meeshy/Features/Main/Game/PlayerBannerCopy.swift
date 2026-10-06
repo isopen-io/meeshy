@@ -57,9 +57,14 @@ nonisolated enum PlayerBannerPlacement {
         !routeIsDeep && !reelsAreOpen
     }
 
-    /// iPad : la colonne des conversations reste là, le fil ouvert dans l'autre prend toute sa hauteur.
-    static func hostsOnTablet(conversationIsOpen: Bool, reelsAreOpen: Bool) -> Bool {
-        !conversationIsOpen && !reelsAreOpen
+    /// iPad : la colonne des conversations reste là, le fil ouvert dans l'autre prend toute sa hauteur. Les routes
+    /// s'y ouvrent dans le PANNEAU de droite, jamais dans la pile du routeur (`isDeepRoute` y reste faux) : la loi de
+    /// l'iPhone se lit donc sur la route du panneau — un écran principal (un hub) porte la bannière, un écran
+    /// profond (Progression, une page du jeu, un détail) non.
+    @MainActor
+    static func hostsOnTablet(conversationIsOpen: Bool, panelRoute: Route?, reelsAreOpen: Bool) -> Bool {
+        let panelIsDeep = panelRoute.map { !$0.isHub } ?? false
+        return hosts(routeIsDeep: conversationIsOpen || panelIsDeep, reelsAreOpen: reelsAreOpen)
     }
 
     static func shows(hosted: Bool, free: Bool, hidden: Bool) -> Bool {

@@ -32,9 +32,21 @@ final class PlayerBannerTests: XCTestCase {
     }
 
     func test_onATablet_anOpenConversationTakesTheWholeHeight() {
-        XCTAssertTrue(PlayerBannerPlacement.hostsOnTablet(conversationIsOpen: false, reelsAreOpen: false))
-        XCTAssertFalse(PlayerBannerPlacement.hostsOnTablet(conversationIsOpen: true, reelsAreOpen: false))
-        XCTAssertFalse(PlayerBannerPlacement.hostsOnTablet(conversationIsOpen: false, reelsAreOpen: true))
+        XCTAssertTrue(PlayerBannerPlacement.hostsOnTablet(conversationIsOpen: false, panelRoute: nil, reelsAreOpen: false))
+        XCTAssertFalse(PlayerBannerPlacement.hostsOnTablet(conversationIsOpen: true, panelRoute: nil, reelsAreOpen: false))
+        XCTAssertFalse(PlayerBannerPlacement.hostsOnTablet(conversationIsOpen: false, panelRoute: nil, reelsAreOpen: true))
+    }
+
+    /// L'iPad ouvre ses routes dans le panneau de droite, jamais dans la pile du routeur : `isDeepRoute` y reste
+    /// faux. La loi de l'iPhone — un écran principal porte la bannière, un écran profond non — se lit donc sur la
+    /// route du PANNEAU. Progression ouverte à droite sous la bannière la répétait (son héros dit déjà tout).
+    func test_onATablet_aDeepPanelRouteHidesTheBanner_likeADeepRouteOnThePhone() {
+        XCTAssertFalse(PlayerBannerPlacement.hostsOnTablet(conversationIsOpen: false, panelRoute: .progression, reelsAreOpen: false),
+                       "Progression dans le panneau : son héros dit déjà tout")
+        XCTAssertFalse(PlayerBannerPlacement.hostsOnTablet(conversationIsOpen: false, panelRoute: .gamePage(.league), reelsAreOpen: false))
+        XCTAssertTrue(PlayerBannerPlacement.hostsOnTablet(conversationIsOpen: false, panelRoute: .settings, reelsAreOpen: false),
+                      "un écran principal (un hub) porte la bannière, comme sur iPhone")
+        XCTAssertTrue(PlayerBannerPlacement.hostsOnTablet(conversationIsOpen: false, panelRoute: .notifications, reelsAreOpen: false))
     }
 
     func test_theBannerOnlyShowsWhenNothingElseOccupiesTheTop_andTheGameIsNotHidden() {
