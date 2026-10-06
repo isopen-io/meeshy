@@ -19,7 +19,7 @@ final class GamePhotoSessionTests: XCTestCase {
 
     private let moment = GamePhotoMoments.rank(.voix, division: .ii)
 
-    private func makeRig(cameraFailure: CameraFailure? = nil, link: String? = nil,
+    private func makeRig(cameraFailure: CameraFailure? = nil, link: String? = nil, createdLink: String? = nil,
                          flame: ReferralCard.Flame? = nil) -> Rig {
         let camera = MockGamePhotoCamera()
         camera.startResult = cameraFailure
@@ -27,7 +27,7 @@ final class GamePhotoSessionTests: XCTestCase {
         let notebook = MockGamePhotoNotebook()
         let library = MockGamePhotoLibrary()
         let haptics = MockGameHaptics()
-        let links = MockReferralLink(link: link)
+        let links = MockReferralLink(link: link, createdLink: createdLink)
         let sut = GamePhotoSession(
             moment: moment, camera: camera, composer: composer, notebook: notebook,
             library: library, haptics: haptics, now: { Date(timeIntervalSince1970: 1_790_000_000) }, strikeDuration: 0,
@@ -195,13 +195,90 @@ final class GamePhotoSessionTests: XCTestCase {
     private static let link = "https://meeshy.me/signup/affiliate/AMANI7"
     private static let flame = ReferralCard.Flame(form: .braise, days: 23)
 
-    func test_withoutALink_theCardIsComposedWithoutABanner_andNothingTravelsAsText() async {
+    func test_withoutAToken_thePreviewCarriesThePlaceholder_andNothingTravelsAsText() async {
         let rig = makeRig(link: nil)
         await rig.sut.prepareReferral()
         await rig.sut.chooseCard()
-        XCTAssertNil(rig.composer.composed.first?.referral)
-        XCTAssertNil(rig.sut.shareText)
+        XCTAssertEqual(rig.composer.composed.first?.referral?.isPlaceholder, true)
+        XCTAssertEqual(rig.composer.composed.first?.referral?.displayLink, "meeshy.me/r/…")
+        XCTAssertNil(rig.sut.shareText, "l'emplacement n'est pas un lien : il ne part pas en texte")
         XCTAssertEqual(rig.sut.shareItems(square: false).count, 1)
+    }
+
+    // MARK: - Aucun jeton sans geste (#7742)
+
+    func test_openingTheFlow_readsTheExistingToken_butNeverCreatesOne() async {
+        let rig = makeRig(link: nil, createdLink: Self.link)
+        await rig.sut.prepareReferral()
+        await rig.sut.chooseCard()
+        XCTAssertEqual(rig.links.existingCalls, 1)
+        XCTAssertEqual(rig.links.shareableCalls, 0, "ouvrir le déroulé ne crée aucun jeton")
+        XCTAssertFalse(rig.sut.hasReferralLink)
+        XCTAssertTrue(rig.sut.offersLinkChoice, "l'emplacement peut se retirer d'un geste")
+    }
+
+    func test_sharing_createsTheToken_andRecomposesTheCardWithTheRealLinkBeforeItLeaves() async {
+        let rig = makeRig(link: nil, createdLink: Self.link, flame: Self.flame)
+        await rig.sut.prepareReferral()
+        await rig.sut.chooseCard()
+        XCTAssertEqual(rig.composer.composed.last?.referral?.isPlaceholder, true)
+
+        await rig.sut.prepareShare()
+
+        XCTAssertEqual(rig.links.shareableCalls, 1)
+        XCTAssertEqual(rig.composer.composed.last?.referral, ReferralCard(link: Self.link, flame: Self.flame))
+        XCTAssertEqual(rig.sut.referral?.link, Self.link)
+        let items = rig.sut.shareItems(square: false)
+        XCTAssertEqual(items.count, 2)
+        XCTAssertTrue((items[1] as? String)?.contains(Self.link) == true)
+    }
+
+    func test_sharing_withAnExistingToken_createsNothingMore() async {
+        let rig = makeRig(link: Self.link)
+        await rig.sut.prepareReferral()
+        await rig.sut.chooseCard()
+        await rig.sut.prepareShare()
+        XCTAssertEqual(rig.links.shareableCalls, 0, "le lien existait : rien à créer")
+    }
+
+    func test_sharing_withTheLinkTakenOffTheCard_createsNothing() async {
+        let rig = makeRig(link: nil, createdLink: Self.link)
+        await rig.sut.prepareReferral()
+        await rig.sut.chooseCard()
+        rig.sut.setLinkOnCard(false)
+        await rig.sut.prepareShare()
+        XCTAssertEqual(rig.links.shareableCalls, 0)
+        XCTAssertNil(rig.sut.referral)
+        XCTAssertEqual(rig.sut.shareItems(square: false).count, 1)
+    }
+
+    func test_sharing_whenNoTokenCouldBeObtained_theCardLeavesWithoutABanner() async {
+        let rig = makeRig(link: nil, createdLink: nil)
+        await rig.sut.prepareReferral()
+        await rig.sut.chooseCard()
+        await rig.sut.prepareShare()
+        XCTAssertEqual(rig.links.shareableCalls, 1)
+        XCTAssertNil(rig.sut.referral)
+        XCTAssertNil(rig.composer.composed.last?.referral)
+        XCTAssertFalse(rig.sut.offersLinkChoice)
+        await rig.sut.prepareShare()
+        XCTAssertEqual(rig.links.shareableCalls, 1, "un refus n'est pas redemandé à chaque toucher")
+    }
+
+    func test_savingAndKeeping_neverCarryThePlaceholder() async {
+        let rig = makeRig(link: nil)
+        await rig.sut.prepareReferral()
+        await rig.sut.chooseCard()
+        XCTAssertEqual(rig.sut.referral?.isPlaceholder, true)
+
+        await rig.sut.save(square: false)
+        XCTAssertNil(rig.composer.composed.last?.referral, "l'image enregistrée est recomposée sans l'emplacement")
+        XCTAssertEqual(rig.library.savedImages.count, 1)
+
+        await rig.sut.keep()
+        XCTAssertNil(rig.composer.composed.last?.referral)
+        XCTAssertEqual(rig.notebook.kept.count, 1)
+        XCTAssertEqual(rig.links.shareableCalls, 0, "enregistrer ou garder ne crée aucun jeton")
     }
 
     func test_aLinkReadBeforeTheShot_isOnTheComposedCard() async {
@@ -224,7 +301,7 @@ final class GamePhotoSessionTests: XCTestCase {
         let rig = makeRig(link: Self.link)
         await rig.sut.prepareReferral()
         await rig.sut.prepareReferral()
-        XCTAssertEqual(rig.links.calls, 1)
+        XCTAssertEqual(rig.links.existingCalls, 1)
     }
 
     func test_theShareCarriesTheImage_thenTheLinkAsText() async {
@@ -276,6 +353,6 @@ final class GamePhotoSessionTests: XCTestCase {
 
         XCTAssertEqual(rig.sut.referral, ReferralCard(link: Self.link, flame: Self.flame))
         XCTAssertEqual(rig.composer.composed.last?.referral?.link, Self.link)
-        XCTAssertEqual(rig.links.calls, 1)
+        XCTAssertEqual(rig.links.existingCalls, 1)
     }
 }
