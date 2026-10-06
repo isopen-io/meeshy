@@ -225,19 +225,13 @@ final class ComposerSceneCameraMountingTests: XCTestCase {
     /// **Les deux signaux sont des IDENTIFIANTS, pas les valeurs.** Une seconde
     /// photo identique à la première ne changerait pas `capturedPhoto`, et
     /// l'observateur ne se réveillerait jamais — la scène resterait armée sur
-    /// une prise déjà faite. C'est la même paire que la feuille écoute, pour la
-    /// même raison, et c'est le genre de détail qu'un `onReceive` posé sur la
-    /// valeur rend faux SANS jamais rougir.
+    /// une prise déjà faite. Depuis #9351, c'est la SESSION qui écoute, une fois
+    /// pour ses deux montages ; la raison n'a pas bougé d'un mot.
     func test_lesObservateurs_écoutentLesIdentifiants_pasLesValeurs() throws {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent().deletingLastPathComponent()
-            .deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Composer/MeeshyComposerHost+Surfaces.swift")
-        let code = compact(AppSourceGuard.stripComments(
-            try String(contentsOf: url, encoding: .utf8)))
-        XCTAssertTrue(code.contains("onReceive(sceneCamera.$capturedPhotoId)"))
-        XCTAssertTrue(code.contains("onReceive(sceneCamera.$capturedVideoId)"))
-        XCTAssertFalse(code.contains("onReceive(sceneCamera.$capturedPhoto)"),
+        let code = compact(try source("ComposerCaptureSession+Takes.swift"))
+        XCTAssertTrue(code.contains("camera.$capturedPhotoId"))
+        XCTAssertTrue(code.contains("camera.$capturedVideoId"))
+        XCTAssertFalse(code.contains("camera.$capturedPhoto."),
                        "écouter la VALEUR raterait deux prises identiques d'affilée")
     }
 
@@ -264,16 +258,14 @@ final class ComposerSceneCameraMountingTests: XCTestCase {
     /// n'a rien à concaténer — la faire attendre un `✓` ajouterait un geste à
     /// l'usage le plus courant.
     func test_uneVidéoSAccumule_quandUnePhotoSePose() throws {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent().deletingLastPathComponent()
-            .deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Composer/MeeshyComposerHost+Surfaces.swift")
-        let code = compact(AppSourceGuard.stripComments(
-            try String(contentsOf: url, encoding: .utf8)))
-        XCTAssertTrue(code.contains("collectSceneSegment(url)"),
-                      "une vidéo doit rejoindre les segments, pas la scène")
-        XCTAssertTrue(code.contains("sceneCapture.lookedPhoto(image,data:sceneCamera.capturedPhotoData){poseSceneCapture($0)}"),
+        let code = compact(try source("ComposerCaptureSession+Takes.swift"))
+        XCTAssertTrue(code.contains("collectSegment(url)"),
+                      "une vidéo de la scène doit rejoindre les segments, pas la scène")
+        XCTAssertTrue(code.contains("lookedPhoto(image,data:camera.capturedPhotoData)"),
                       "une photo se pose tout de suite — AVEC ses octets d'origine, qui portent l'EXIF")
+        let hote = compact(try source("MeeshyComposerHost+Viewfinder.swift"))
+        XCTAssertTrue(hote.contains("sceneCapture.onDeliver={poseSceneCapture($0)}"),
+                      "la prise de la scène se pose par l'hôte")
     }
 
     /// **La durée est saisie AU RELÂCHEMENT, pas à l'arrivée du fichier.**

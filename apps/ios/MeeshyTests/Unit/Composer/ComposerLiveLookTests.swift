@@ -249,11 +249,13 @@ final class ComposerLiveLookTests: XCTestCase {
     func test_laPrise_partAvecLeLook_photoCommeVideo_dansLesDeuxMontages() throws {
         let session = try Self.code("Meeshy/Features/Main/Composer/ComposerCaptureSession.swift")
         XCTAssertTrue(session.contains("ComposerLookVideoExporter.export("), "le ✓ des deux montages exporte le look")
-        let scene = try Self.code("Meeshy/Features/Main/Composer/MeeshyComposerHost+Surfaces.swift")
-        XCTAssertTrue(scene.contains("sceneCapture.lookedPhoto("), "story, post et réel : la photo part regardée")
+        let prises = try Self.code("Meeshy/Features/Main/Composer/ComposerCaptureSession+Takes.swift")
+        XCTAssertTrue(prises.contains("lookedPhoto(image, data: camera.capturedPhotoData)"),
+                      "story, post, réel et porte sans prise : la photo de la scène part regardée (#9351)")
         let viseur = try Self.code("Meeshy/Features/Main/Composer/ComposerViewfinder.swift")
         XCTAssertTrue(viseur.contains("initialLook: pendingPhoto.look"), "la prise s'ouvre sur le look du viseur")
-        XCTAssertTrue(viseur.contains("capture.lookedPhoto("), "une porte sans prise verse la photo regardée")
+        XCTAssertTrue(viseur.contains("capture.deliversRawPhoto = reviewsPhoto"),
+                      "la porte qui revoit reçoit la prise brute : le look ne s'applique pas deux fois")
     }
 
     // MARK: - Outils
