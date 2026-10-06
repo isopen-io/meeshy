@@ -209,7 +209,8 @@ describe('NotificationPreferenceSchema', () => {
       commentReplyEnabled: true,
       commentLikeEnabled: false,
       friendContentEnabled: false,
-      contactActivityEnabled: false
+      contactActivityEnabled: false,
+      gameEnabled: false
     };
 
     const result = NotificationPreferenceSchema.parse(valid);

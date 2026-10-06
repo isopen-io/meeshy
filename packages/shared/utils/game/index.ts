@@ -21,3 +21,4 @@ export * from './rarity.js';
 export * from './guide-v2.js';
 export * from './photo-moments.js';
 export * from './game-block-extras.js';
+export * from './notifications.js';

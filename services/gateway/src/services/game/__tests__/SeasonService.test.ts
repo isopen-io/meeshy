@@ -213,3 +213,51 @@ describe('SeasonService.buySeal', () => {
     expect(db.meeshLedger.rows.filter((r) => (r.delta as number) > 0 && r.reason !== 'grant')).toHaveLength(0);
   });
 });
+
+describe('SeasonService.addStars — l’étape atteinte prévient le joueur (#9490)', () => {
+  const withNotifier = (stars = 0) => {
+    const base = setup(stars);
+    const events: Array<Record<string, unknown>> = [];
+    const notifier = { notify: jest.fn(async (event: Record<string, unknown>) => { events.push(event); return 'sent' as const; }) };
+    const service = new SeasonService(base.db.prisma, { creditPoints: base.creditPoints, grantFreeze: base.grantFreeze, notifier: notifier as never });
+    return { ...base, service, events };
+  };
+
+  it('franchir la quatrième étoile atteint l’étape 1 : une notification, avec son numéro', async () => {
+    const { service, events } = withNotifier(3);
+
+    await service.addStars(USER, 'easy', IN_SEASON);
+
+    expect(events).toEqual([{ kind: 'season-step', recipientId: USER, season: 1, step: 1, completed: false }]);
+  });
+
+  it('une étoile qui ne franchit aucune étape ne notifie rien', async () => {
+    const { service, events } = withNotifier(0);
+    await service.addStars(USER, 'easy', IN_SEASON);
+    await service.addStars(USER, 'easy', IN_SEASON);
+    expect(events).toEqual([]);
+  });
+
+  it('plusieurs étapes d’un coup : une seule notification, la plus haute', async () => {
+    const { service, events } = withNotifier(3);
+    await service.addStars(USER, 'duo', IN_SEASON); // 3 + 5 = 8 étoiles : étapes 1 et 2
+    expect(events).toEqual([{ kind: 'season-step', recipientId: USER, season: 1, step: 2, completed: false }]);
+  });
+
+  it('la quarantième étape dit la saison terminée', async () => {
+    const { service, events } = withNotifier(159);
+    await service.addStars(USER, 'easy', IN_SEASON);
+    expect(events).toEqual([{ kind: 'season-step', recipientId: USER, season: 1, step: 40, completed: true }]);
+  });
+
+  it('une notification en panne ne perd JAMAIS l’étoile', async () => {
+    const base = setup(3);
+    const service = new SeasonService(base.db.prisma, {
+      creditPoints: base.creditPoints,
+      grantFreeze: base.grantFreeze,
+      notifier: { notify: async () => { throw new Error('boom'); } } as never,
+    });
+    await service.addStars(USER, 'easy', IN_SEASON);
+    expect((await service.state(USER, IN_SEASON)).stars).toBe(4);
+  });
+});

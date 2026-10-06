@@ -31,6 +31,8 @@ export interface NotificationPreference {
   readonly memberJoinedEnabled: boolean;
   /** « Quand un contact revient sur Meeshy » (#8285) — absent = reçu. */
   readonly contactActivityEnabled?: boolean;
+  /** « Jeu » (#9490) — absent = reçu. */
+  readonly gameEnabled?: boolean;
 
   // === DO NOT DISTURB ===
   readonly dndEnabled: boolean;
@@ -147,6 +149,11 @@ export function isNotificationTypeEnabled(
       return prefs.contactRequestEnabled;
     case 'contact_recently_active':
       return prefs.contactActivityEnabled !== false;
+    case 'game_duo_invited':
+    case 'game_duo_accepted':
+    case 'game_league_result':
+    case 'game_season_step':
+      return prefs.gameEnabled !== false;
     case 'member_joined':
     case 'member_left':
       return prefs.memberJoinedEnabled;

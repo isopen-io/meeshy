@@ -35,6 +35,7 @@ import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import type { EngagementAxisKey } from '@meeshy/shared/types/engagement';
 import { SHOWCASE_VISIBILITIES, orderShowcase, type ShowcaseVisibility } from '@meeshy/shared/utils/game/trophies';
 import { DuoService } from '../../services/game/DuoService';
+import { GameNotifier } from '../../services/game/GameNotifier';
 import { GameProfileService } from '../../services/game/GameProfileService';
 import { LeagueService } from '../../services/game/LeagueService';
 import { PrestigeService } from '../../services/game/PrestigeService';
@@ -73,8 +74,9 @@ export async function meGameWave2Routes(fastify: FastifyInstance, options: GameW
   const prisma = fastify.prisma;
   const profile = new GameProfileService(prisma);
   const trophies = new TrophyService(prisma, { profile });
-  const seasons = new SeasonService(prisma, { creditPoints: options.creditPoints, grantFreeze: options.grantFreeze, trophies });
-  const duo = new DuoService(prisma, { creditPoints: options.creditPoints, seasons });
+  const notifier = new GameNotifier(prisma);
+  const seasons = new SeasonService(prisma, { creditPoints: options.creditPoints, grantFreeze: options.grantFreeze, trophies, notifier });
+  const duo = new DuoService(prisma, { creditPoints: options.creditPoints, seasons, notifier });
   const league = new LeagueService(prisma, { profile });
   const prestige = new PrestigeService(prisma, { trophies });
 

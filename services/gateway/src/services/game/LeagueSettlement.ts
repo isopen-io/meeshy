@@ -49,6 +49,7 @@ import {
 import { seasonAt, seasonCalendar } from '@meeshy/shared/utils/game/season';
 import { leagueCupTrophy } from '@meeshy/shared/utils/game/trophies';
 import { enhancedLogger } from '../../utils/logger-enhanced';
+import { GameNotifier, type GameNotificationEvent } from './GameNotifier';
 import { GloryService } from './GloryService';
 import { GameWeekPointsRecorder, totalOfDays } from './GameWeekPoints';
 import { accessOf, leagueFactsOf, suspendedAmong } from './LeagueAccess';
@@ -106,6 +107,8 @@ export type LeagueSettlementDeps = {
   readonly trophies?: TrophyService;
   readonly pseudonyms?: LeaguePseudonymService;
   readonly points?: GameWeekPointsRecorder;
+  /** Annonce à chaque membre SON résultat (#9490) ; remplaçable en test. */
+  readonly notifier?: Pick<GameNotifier, 'notify'>;
 };
 
 export class LeagueSettlement {
@@ -117,6 +120,8 @@ export class LeagueSettlement {
 
   private readonly points: GameWeekPointsRecorder;
 
+  private readonly notifier: Pick<GameNotifier, 'notify'>;
+
   constructor(
     private readonly prisma: PrismaClient,
     deps: LeagueSettlementDeps = {},
@@ -125,6 +130,7 @@ export class LeagueSettlement {
     this.trophies = deps.trophies ?? new TrophyService(prisma);
     this.pseudonyms = deps.pseudonyms ?? new LeaguePseudonymService(prisma);
     this.points = deps.points ?? new GameWeekPointsRecorder(prisma);
+    this.notifier = deps.notifier ?? new GameNotifier(prisma);
   }
 
   /** Un passage : instantanés, règlements dus, placement de la semaine, purge. */
@@ -199,6 +205,7 @@ export class LeagueSettlement {
     // Un groupe sans adversaire ne paie rien : on grave les rangs, pas les récompenses.
     const rewarded = members.length >= 2;
     const outcomes = settleLeagueGroup({ groupId, league, members });
+    const results: GameNotificationEvent[] = [];
 
     for (const result of outcomes) {
       await this.prisma.leagueMembership.updateMany({
@@ -222,6 +229,7 @@ export class LeagueSettlement {
         });
       }
       if (result.cup !== null) await this.trophies.award(result.userId, leagueCupTrophy({ weekKey, league, cup: result.cup }), now);
+      results.push({ kind: 'league-result', recipientId: result.userId, weekKey, league, nextLeague: result.outcome.nextLeague, zone: result.zone, cup: result.cup });
     }
     // Les membres écartés (suspendus, retirés) gardent leur ligne, sans rang ni récompense.
     await this.prisma.leagueMembership.updateMany({
@@ -229,6 +237,19 @@ export class LeagueSettlement {
       data: { settledAt: now, zone: 'safe', cup: null },
     });
     await this.prisma.leagueGroupWeek.update({ where: { groupId }, data: { settledAt: now } });
+    await this.announce(results);
+  }
+
+  /**
+   * Annonce à chaque membre SON résultat, APRÈS que le groupe est réglé : une panne de notification ne
+   * retient ni ne défait un règlement, et un règlement rejoué n'annonce pas deux fois (clé par semaine).
+   */
+  private async announce(events: readonly GameNotificationEvent[]): Promise<void> {
+    for (const event of events) {
+      await Promise.resolve(this.notifier.notify(event)).catch((error: unknown) =>
+        log.warn('league result notification failed', { error: error instanceof Error ? error.message : String(error) }),
+      );
+    }
   }
 
   // --- Le placement ---

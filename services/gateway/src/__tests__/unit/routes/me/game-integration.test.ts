@@ -16,10 +16,18 @@ import { gameSettingsResponseSchema, gameUserGamePath, GAME_ROUTES, userGameProf
 import { fakeGameDb, seedUser, USER, OTHER, type FakeGameDb } from '../../../../services/game/__tests__/fakeGameDb';
 import { meGameRoutes } from '../../../../routes/me/game';
 import { userGameShowcaseRoutes } from '../../../../routes/users/game-showcase';
+import { setSharedNotificationService } from '../../../../services/notifications/notification-service-registry';
+import { resetCacheStore } from '../../../../services/CacheStore';
 
 jest.mock('../../../../utils/logger', () => ({ logError: jest.fn() }));
 jest.mock('../../../../utils/logger-enhanced', () => ({
-  enhancedLogger: { child: () => ({ info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() }) },
+  enhancedLogger: {
+    info: jest.fn(),
+    warn: jest.fn(),
+    error: jest.fn(),
+    debug: jest.fn(),
+    child: () => ({ info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() }),
+  },
 }));
 const privacy = new Map<string, Record<string, unknown>>();
 jest.mock('../../../../services/preferences/privacy-cache', () => ({
@@ -253,5 +261,38 @@ describe('GET /users/:userId/game', () => {
     await app.register(userGameShowcaseRoutes, { prefix: '/api/v1/users', authenticate: async () => undefined });
     await app.ready();
     expect((await get(app, gameUserGamePath(USER))).statusCode).toBe(401);
+  });
+});
+
+describe('les notifications du duo, de la route au service de notification (#9490)', () => {
+  const duoWorld = () => {
+    const db = fakeGameDb();
+    for (const id of [USER, OTHER]) seedUser(db, { isActive: true, deletedAt: null, engagementScore: 4000, levelRecord: 20, systemLanguage: 'fr' }, id);
+    db.friendRequest.rows.push({ id: 'f', status: 'accepted', senderId: USER, receiverId: OTHER, updatedAt: new Date() });
+    return db;
+  };
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 20));
+
+  it('inviter un ami le prévient dans SA langue ; accepter prévient l’invitant — le service vivant est appelé', async () => {
+    resetCacheStore();
+    const created: Array<{ userId: string; type: string; lang?: string }> = [];
+    setSharedNotificationService({ createNotification: async (params: { userId: string; type: string; lang?: string }) => { created.push(params); return { id: 'n' }; } } as never);
+    try {
+      const db = duoWorld();
+      const invite = await settingsApp(db, USER);
+      const sent = await invite.inject({ method: 'POST', url: `/api/v1${GAME_ROUTES.duoInvite}`, payload: { requestId: 'duo-invite-1', friendId: OTHER } });
+      expect(sent.statusCode).toBe(200);
+      await settle();
+      expect(created).toEqual([expect.objectContaining({ userId: OTHER, type: 'game_duo_invited', lang: 'fr' })]);
+
+      const accept = await settingsApp(db, OTHER);
+      const duoId = sent.json().data.duoId as string;
+      await accept.inject({ method: 'POST', url: `/api/v1/me/game/duo/${duoId}/accept`, payload: { requestId: 'duo-accept-1' } });
+      await settle();
+      expect(created.map((c) => [c.userId, c.type])).toEqual([[OTHER, 'game_duo_invited'], [USER, 'game_duo_accepted']]);
+    } finally {
+      setSharedNotificationService(undefined);
+      resetCacheStore();
+    }
   });
 });

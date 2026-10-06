@@ -221,6 +221,70 @@ describe('LeagueSettlement.settleDue', () => {
   });
 });
 
+describe('LeagueSettlement.settleDue — les notifications du résultat (#9490)', () => {
+  const AFTER_CLOSE = new Date('2026-10-25T20:30:00Z');
+
+  const withNotifier = (db: FakeGameDb) => {
+    const events: Array<Record<string, unknown>> = [];
+    const notifier = { notify: jest.fn(async (event: Record<string, unknown>) => { events.push(event); return 'sent' as const; }) };
+    const service = new LeagueSettlement(db.prisma, { pseudonyms: new LeaguePseudonymService(db.prisma, { draw: () => (draw += 1) }), notifier: notifier as never });
+    return { service, events, notifier };
+  };
+
+  it('chaque membre d’un groupe réglé reçoit SON résultat — sa zone, sa coupe, sa ligue —, jamais celui d’un autre', async () => {
+    const db = fakeGameDb();
+    for (const n of [1, 2, 3, 4]) player(db, n);
+    await settlement(db).placeWeek(WEEK, MONDAY);
+    gain(db, 1, 300);
+    gain(db, 2, 200);
+    gain(db, 3, 100);
+    gain(db, 4, 0, WEEK, '2026-10-21');
+    const { service, events } = withNotifier(db);
+
+    await service.settleDue(AFTER_CLOSE);
+
+    expect(events).toHaveLength(4);
+    expect(events.map((e) => e.recipientId).sort()).toEqual([1, 2, 3, 4].map(id).sort());
+    expect(events.every((e) => e.kind === 'league-result' && e.weekKey === WEEK && e.league === 'quartz')).toBe(true);
+    const first = events.find((e) => e.recipientId === id(1))!;
+    expect(first).toMatchObject({ zone: 'promotion', cup: 'gold', nextLeague: expect.any(String) });
+    expect(Object.keys(first).sort()).toEqual(['cup', 'kind', 'league', 'nextLeague', 'recipientId', 'weekKey', 'zone']);
+  });
+
+  it('un groupe sans adversaire ne paie rien et ne notifie personne', async () => {
+    const db = fakeGameDb();
+    player(db, 1);
+    await settlement(db).placeWeek(WEEK, MONDAY);
+    const { service, events } = withNotifier(db);
+    await service.settleDue(AFTER_CLOSE);
+    expect(events).toEqual([]);
+  });
+
+  it('un membre écarté (suspendu) n’est pas notifié', async () => {
+    const db = fakeGameDb();
+    for (const n of [1, 2, 3]) player(db, n);
+    await settlement(db).placeWeek(WEEK, MONDAY);
+    gain(db, 1, 900);
+    privacy.set(id(1), { showOnlineStatus: false });
+    const { service, events } = withNotifier(db);
+    await service.settleDue(AFTER_CLOSE);
+    expect(events.map((e) => e.recipientId)).not.toContain(id(1));
+    expect(events).toHaveLength(2);
+  });
+
+  it('une notification qui échoue ne retient pas le règlement : le groupe est réglé', async () => {
+    const db = fakeGameDb();
+    for (const n of [1, 2, 3]) player(db, n);
+    await settlement(db).placeWeek(WEEK, MONDAY);
+    const service = new LeagueSettlement(db.prisma, {
+      pseudonyms: new LeaguePseudonymService(db.prisma, { draw: () => (draw += 1) }),
+      notifier: { notify: async () => { throw new Error('push down'); } } as never,
+    });
+    expect(await service.settleDue(AFTER_CLOSE)).toBe(1);
+    expect(db.leagueGroupWeek.rows[0]!.settledAt).toEqual(AFTER_CLOSE);
+  });
+});
+
 describe('LeagueSettlement.refreshSnapshots', () => {
   it('fige une fois par jour de groupe, à 4 h : les totaux ne bougent pas entre deux instantanés', async () => {
     const db = fakeGameDb();

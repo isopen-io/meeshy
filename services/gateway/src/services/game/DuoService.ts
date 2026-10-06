@@ -47,6 +47,7 @@ import { presenceCutAmong } from './LeagueAccess';
 import { GAME_BONUS_AXIS } from './MissionService';
 import { dayKeyOf, minuteOfDayInTimezone } from './gameClock';
 import { enhancedLogger } from '../../utils/logger-enhanced';
+import type { GameNotifier, GameNotificationEvent } from './GameNotifier';
 import type { SeasonService } from './SeasonService';
 
 const log = enhancedLogger.child({ module: 'DuoService' });
@@ -91,6 +92,8 @@ const NOT_PAID = (field: 'inviterPaidAt' | 'inviteePaidAt') => ({ OR: [{ [field]
 export type DuoServiceDeps = {
   readonly creditPoints: (userId: string, points: number, axisKey: EngagementAxisKey) => Promise<void>;
   readonly seasons?: Pick<SeasonService, 'addStars'>;
+  /** Prévient l'invité d'une invitation et l'invitant d'une acceptation (#9490) — jamais bloquant. */
+  readonly notifier?: Pick<GameNotifier, 'notify'>;
 };
 
 export type SignalOptions = { readonly now?: Date; readonly key?: string; readonly amount?: number };
@@ -103,6 +106,12 @@ export class DuoService {
     private readonly prisma: PrismaClient,
     private readonly deps: DuoServiceDeps,
   ) {}
+
+  /** Une notification est une CONSÉQUENCE du geste : détachée, gardée — elle ne le retient ni ne le défait. */
+  private announce(event: GameNotificationEvent): void {
+    const pending = this.deps.notifier?.notify(event);
+    if (pending !== undefined) pending.catch(() => undefined);
+  }
 
   private async account(userId: string) {
     return this.prisma.user.findUnique({ where: { id: userId }, select: ACCOUNT_SELECT });
@@ -217,6 +226,7 @@ export class DuoService {
       if (isP2002(err)) throw new GameRefusal('DUO_ALREADY_ACTIVE');
       throw err;
     }
+    this.announce({ kind: 'duo-invited', recipientId: friendId, actorId: inviterId, duoId: duo.id, weekKey });
     return { status: 'invited', duoId: duo.id, weekKey };
   }
 
@@ -270,6 +280,7 @@ export class DuoService {
       if (fresh?.status === 'active') return { status: 'already-active', duoId };
       throw new GameRefusal('DUO_TRANSITION_REFUSED', { status: fresh?.status ?? null });
     }
+    this.announce({ kind: 'duo-accepted', recipientId: duo.inviterId, actorId: userId, duoId, weekKey: duo.weekKey });
     return { status: 'active', duoId };
   }
 

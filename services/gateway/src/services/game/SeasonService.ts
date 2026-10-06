@@ -21,6 +21,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { SeasonClaimResponse, SeasonSealResponse } from '@meeshy/shared/types/game';
 import {
   SEASON_SEAL_PRICE,
+  SEASON_STEPS,
   claimSeasonStep,
   seasonOfMoment,
   seasonProgress,
@@ -30,6 +31,7 @@ import {
 } from '@meeshy/shared/utils/game/season';
 import { seasonCupTrophy } from '@meeshy/shared/utils/game/trophies';
 import { GameRefusal } from './GameRefusal';
+import type { GameNotifier } from './GameNotifier';
 import { GloryService } from './GloryService';
 import { MeeshSpend } from './MeeshSpend';
 import { GAME_BONUS_AXIS } from './MissionService';
@@ -42,6 +44,8 @@ export type SeasonServiceDeps = {
   readonly grantFreeze: (userId: string) => Promise<void>;
   readonly glory?: GloryService;
   readonly trophies?: TrophyService;
+  /** Prévient le joueur d'une étape atteinte (#9490) — jamais bloquant. */
+  readonly notifier?: Pick<GameNotifier, 'notify'>;
 };
 
 export type SeasonState = {
@@ -87,15 +91,31 @@ export class SeasonService {
         where: { userId_number: { userId, number } },
         create: { userId, number, stars, claimedSteps: [], sealOwnedAt: null, settledAt: null },
         update: { stars: { increment: stars } },
-        select: { id: true },
+        select: { stars: true },
       });
+    let after: { readonly stars: number };
     try {
-      await write();
+      after = await write();
     } catch (err) {
       // L'upsert qui perd la création concurrente lève P2002 sur MongoDB : le rejouer incrémente.
       if (!isP2002(err)) throw err;
-      await write();
+      after = await write();
     }
+    this.announceStep({ userId, number, before: after.stars - stars, after: after.stars });
+  }
+
+  /** Une étape franchie (la plus haute, si plusieurs d'un coup) prévient le joueur — détaché et gardé. */
+  private announceStep(params: { readonly userId: string; readonly number: number; readonly before: number; readonly after: number }): void {
+    const reached = seasonProgress({ stars: params.after }).steps;
+    if (reached <= seasonProgress({ stars: params.before }).steps) return;
+    const pending = this.deps.notifier?.notify({
+      kind: 'season-step',
+      recipientId: params.userId,
+      season: params.number,
+      step: reached,
+      completed: reached >= SEASON_STEPS,
+    });
+    if (pending !== undefined) pending.catch(() => undefined);
   }
 
   async state(userId: string, now: Date = new Date()): Promise<SeasonState> {

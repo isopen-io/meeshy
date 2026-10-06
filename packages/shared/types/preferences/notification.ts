@@ -41,6 +41,9 @@ export const NotificationPreferenceSchema = z.object({
   // « Quand un contact revient sur Meeshy » (#8285) — la RÉCEPTION de
   // `contact_recently_active`. Absent d'un document existant ⇒ reçu.
   contactActivityEnabled: z.boolean().default(true),
+  // « Jeu » (#9490) — la RÉCEPTION des notifications du jeu (invitation et acceptation de duo,
+  // résultat de la semaine de ligue, étape de saison). Absent d'un document existant ⇒ reçu.
+  gameEnabled: z.boolean().default(true),
 
   // Do Not Disturb
   dndEnabled: z.boolean().default(false),
@@ -113,6 +116,7 @@ export const NOTIFICATION_PREFERENCE_DEFAULTS: NotificationPreference = {
   commentLikeEnabled: true,
   friendContentEnabled: true,
   contactActivityEnabled: true,
+  gameEnabled: true,
   dndEnabled: false,
   dndStartTime: '22:00',
   dndEndTime: '08:00',

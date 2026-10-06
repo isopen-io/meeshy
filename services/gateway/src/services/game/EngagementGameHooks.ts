@@ -18,6 +18,7 @@ import { enhancedLogger } from '../../utils/logger-enhanced';
 import { GameAbuseGuard, quarterPoints, type MessageVerdict } from './GameAbuseGuard';
 import { DuoService } from './DuoService';
 import { GloryService } from './GloryService';
+import { GameNotifier } from './GameNotifier';
 import { SeasonService } from './SeasonService';
 import { TrophyService } from './TrophyService';
 import { MessageGameSignals, type MessageSignalInput } from './MessageGameSignals';
@@ -68,8 +69,10 @@ export class EngagementGameHooks {
       glory: this.glory,
       onMissionCompleted: (event) => this.seasons.addStars(event.userId, event.difficulty, event.now),
     });
-    this.seasons = new SeasonService(prisma, { creditPoints, grantFreeze: (userId) => this.missions.grantFreeze(userId), glory: this.glory, trophies: this.trophies });
-    this.duo = new DuoService(prisma, { creditPoints, seasons: this.seasons });
+    // Une notification de jeu par jour au plus (#9490) : UN notifieur pour la saison et le duo.
+    const notifier = new GameNotifier(prisma);
+    this.seasons = new SeasonService(prisma, { creditPoints, grantFreeze: (userId) => this.missions.grantFreeze(userId), glory: this.glory, trophies: this.trophies, notifier });
+    this.duo = new DuoService(prisma, { creditPoints, seasons: this.seasons, notifier });
     this.abuse = new GameAbuseGuard(prisma);
     this.weekPoints = new GameWeekPointsRecorder(prisma);
     // Un fait de jeu avance la mission du jour ET le duo de la semaine, chacun isolé.

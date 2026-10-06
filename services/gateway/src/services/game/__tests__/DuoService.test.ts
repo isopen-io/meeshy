@@ -590,3 +590,51 @@ describe('DuoService — nuisance et déni de service (#9385)', () => {
     expect(calls.filter((c) => c.endsWith('.findMany'))).toEqual([]);
   });
 });
+
+describe('DuoService — les notifications du duo (#9490)', () => {
+  const withNotifier = () => {
+    const events: Array<Record<string, unknown>> = [];
+    const notifier = { notify: jest.fn(async (event: Record<string, unknown>) => { events.push(event); return 'sent' as const; }) };
+    const base = setup();
+    const service = new DuoService(base.db.prisma, { creditPoints: base.creditPoints, seasons: { addStars: base.addStars as never }, notifier: notifier as never });
+    return { ...base, service, events, notifier };
+  };
+
+  it('une invitation prévient l’INVITÉ, en nommant l’invitant (son ami) — une fois', async () => {
+    const { service, events } = withNotifier();
+
+    const { duoId } = await service.invite({ inviterId: USER, friendId: OTHER, now: NOW });
+    await service.invite({ inviterId: USER, friendId: OTHER, now: NOW });
+
+    expect(events).toEqual([{ kind: 'duo-invited', recipientId: OTHER, actorId: USER, duoId, weekKey: WEEK }]);
+  });
+
+  it('une invitation refusée (pas amis, niveau manquant) ne prévient personne', async () => {
+    const { service, events } = withNotifier();
+    await expect(service.invite({ inviterId: USER, friendId: C, now: NOW })).rejects.toBeDefined();
+    expect(events).toEqual([]);
+  });
+
+  it('l’acceptation prévient l’INVITANT ; rejouée, elle ne prévient pas deux fois', async () => {
+    const { service, events } = withNotifier();
+    const { duoId } = await service.invite({ inviterId: USER, friendId: OTHER, now: NOW });
+    events.length = 0;
+
+    await service.accept({ userId: OTHER, duoId, now: NOW });
+    await service.accept({ userId: OTHER, duoId, now: NOW });
+
+    expect(events).toEqual([{ kind: 'duo-accepted', recipientId: USER, actorId: OTHER, duoId, weekKey: WEEK }]);
+  });
+
+  it('un service de notification en panne ne défait JAMAIS le geste', async () => {
+    const base = setup();
+    const service = new DuoService(base.db.prisma, {
+      creditPoints: base.creditPoints,
+      notifier: { notify: async () => { throw new Error('boom'); } } as never,
+    });
+    const result = await service.invite({ inviterId: USER, friendId: OTHER, now: NOW });
+    expect(result.status).toBe('invited');
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(base.db.gameDuo.rows).toHaveLength(1);
+  });
+});
