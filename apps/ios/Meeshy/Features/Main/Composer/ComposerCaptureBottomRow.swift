@@ -12,6 +12,12 @@ import MeeshyUI
 /// vertical, la phrase se tait, le rail s'efface et se désactive. Un look figé
 /// par des segments en attente garde le rail visible mais DÉSACTIVÉ, et
 /// VoiceOver le dit.
+///
+/// **En édition, la même rangée, et un seul ajout : ✓ « Terminé »** (#9352,
+/// spec § 3.3). Les crans du zoom — ceux de l'objectif, qui se repose — lui
+/// laissent leur place, au-dessus de la bande qu'il ne recouvre donc jamais ;
+/// les miniatures se peignent sur le média retouché ; la phrase du geste, qui
+/// parle de prises, se tait.
 struct ComposerCaptureBottomRow: View {
     @ObservedObject var session: ComposerCaptureSession
     let context: ComposerCaptureGestureContext
@@ -21,6 +27,13 @@ struct ComposerCaptureBottomRow: View {
     private var capture: ComposerSceneCameraBar.Capture { session.barCapture }
 
     private var recording: Bool { session.stage == .recording }
+
+    private var editing: Bool { session.phase.isEditing }
+
+    /// Ce que les miniatures peignent : le média retouché, l'objectif sinon.
+    private var source: any ComposerFrameSourcing {
+        session.editSource ?? session.camera.liveFeed
+    }
 
     private var showsLock: Bool {
         ComposerCaptureHold.showsLock(stage: session.stage, holding: capture.holding, locked: capture.locked)
@@ -34,8 +47,9 @@ struct ComposerCaptureBottomRow: View {
     var body: some View {
         VStack(spacing: MeeshySpacing.sm) {
             if !recording { zoom }
+            if editing { done }
             ZStack {
-                ComposerLookStrip(session: session, source: session.camera.liveFeed, context: context,
+                ComposerLookStrip(session: session, source: source, context: context,
                                   recordingTime: session.camera.recordingDuration)
                 HStack {
                     Spacer(minLength: 0)
@@ -46,7 +60,7 @@ struct ComposerCaptureBottomRow: View {
                 }
                 .environment(\.layoutDirection, .leftToRight)
             }
-            if !recording {
+            if !recording, !editing {
                 Text(showsLock ? ComposerSceneCameraCopy.lockHint
                                : ComposerSceneCameraCopy.hint(mode: session.mode ?? .photo, stage: session.stage))
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, design: .monospaced))
@@ -69,16 +83,45 @@ struct ComposerCaptureBottomRow: View {
         }
         .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: showsLock)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: recording)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: editing)
         .animation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.85), value: session.openFamily)
     }
 
+    /// Les crans sont ceux de l'OBJECTIF : en édition, il se repose.
     @ViewBuilder
     private var zoom: some View {
-        if capture.zoomPresets.count > 1 {
-            ComposerCaptureZoomPresets(factor: capture.zoomFactor, presets: capture.zoomPresets,
-                                       onSelect: { session.controls.setZoom($0) })
-        } else if ComposerCaptureZoom.showsBadge(capture.zoomFactor) {
-            ComposerCaptureZoomChip(factor: capture.zoomFactor, onStep: { session.stepZoom(up: $0) })
+        if !editing {
+            if capture.zoomPresets.count > 1 {
+                ComposerCaptureZoomPresets(factor: capture.zoomFactor, presets: capture.zoomPresets,
+                                           onSelect: { session.controls.setZoom($0) })
+            } else if ComposerCaptureZoom.showsBadge(capture.zoomFactor) {
+                ComposerCaptureZoomChip(factor: capture.zoomFactor, onStep: { session.stepZoom(up: $0) })
+            }
         }
+    }
+
+    /// **✓ Terminé**, du côté où la lecture finit. Pendant le rendu il attend, et
+    /// le dit : un second toucher ne remet rien.
+    private var done: some View {
+        HStack {
+            Spacer(minLength: 0)
+            Button {
+                HapticFeedback.light()
+                session.finishEditing()
+            } label: {
+                Label(ComposerCaptureCopy.done, systemImage: "checkmark")
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, MeeshySpacing.lg)
+                    .frame(minHeight: MeeshyControlSize.tapTarget)
+                    .adaptiveGlassProminent(in: Capsule(), tint: MeeshyColors.indigo500)
+                    .opacity(session.isRenderingLook ? 0.5 : 1)
+            }
+            .buttonStyle(.plain)
+            .disabled(session.isRenderingLook)
+            .accessibilityLabel(ComposerCaptureCopy.done)
+        }
+        .padding(.horizontal, MeeshySpacing.mdPlus)
+        .transition(.opacity)
     }
 }

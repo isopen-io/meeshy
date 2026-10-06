@@ -207,8 +207,10 @@ final class ComposerCaptureSession: ObservableObject {
     }
 
     /// **Une entrée, pas un mode** : la prise rendue, le viseur se retire et la
-    /// session se ferme. L'étape d'arrivée vient de la loi.
+    /// session se ferme. L'étape d'arrivée vient de la loi. Une retouche encore
+    /// ouverte se referme avec lui : ni lecteur ni lien d'affichage ne survivent.
     func finishCapture() {
+        leaveEditing()
         stage = ComposerSceneCamera.stageAfterCapture
         mode = nil
         onDeliver = nil
@@ -223,7 +225,7 @@ final class ComposerCaptureSession: ObservableObject {
     func disarm() {
         renderGeneration += 1
         isRenderingLook = false
-        leaveEditing()
+        abandonEditing()
         stage = .off
         mode = nil
         resetIntents()
@@ -532,13 +534,15 @@ final class ComposerCaptureSession: ObservableObject {
         dismissDrag = dismissDragSpoiled ? 0 : translationY
     }
 
-    /// La levée du glissé : `true` ⇒ le viseur se range.
+    /// La levée du glissé : `true` ⇒ le viseur se range. En édition le doigt
+    /// cadre le média : il ne range rien.
     func releaseDismissDrag(translationY: CGFloat) -> Bool {
         let gate = dismissDragSpoiled || isPinching
         dismissDragActive = false
         dismissDragSpoiled = false
         dismissDrag = 0
         return !gate
+            && !phase.isEditing
             && ComposerCaptureHold.verticalDrag(stage: stage) == .dismiss
             && ComposerSceneCameraFrame.dismisses(translationY: translationY)
     }

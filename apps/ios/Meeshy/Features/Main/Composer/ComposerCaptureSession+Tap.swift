@@ -37,10 +37,11 @@ extension ComposerCaptureSession {
     /// **Le toucher vise ce point de l'aperçu** (#9295, #9464), converti selon
     /// l'image AFFICHÉE. `false` ⇒ rien n'a été visé (pas d'image, toucher hors
     /// de l'image ou sur un cadre, objectif qui ne règle rien) : ni anneau ni
-    /// vibration pour une mise au point qui n'a pas eu lieu.
+    /// vibration pour une mise au point qui n'a pas eu lieu. En édition,
+    /// l'objectif se repose : rien ne se vise.
     @discardableResult
     func focus(atPreviewPoint point: CGPoint, previewSize: CGSize) -> Bool {
-        guard ComposerCaptureFocus.focusesOnTap(stage: stage) else { return false }
+        guard !phase.isEditing, ComposerCaptureFocus.focusesOnTap(stage: stage) else { return false }
         let (image, visible) = focusImage(in: previewSize)
         guard visible.contains(point),
               let capteur = ComposerCaptureFocusGeometry.devicePoint(viewPoint: point, imageRect: image,

@@ -50,6 +50,9 @@ struct ComposerSceneCameraBar: View {
     var flipping = false
     var exposureBias: Float = ComposerExposureRule.neutral
     var onExposureBias: (Float) -> Void = { _ in }
+    /// **On retouche** (#9352) : l'objectif se repose, donc ni flash, ni
+    /// retournement, ni luminosité — et la croix abandonne la retouche.
+    var editing = false
 
     /// **Ce que la machine sait du doigt, du zoom et de la lumière** (#8671) —
     /// lu par le bas de la capture (`ComposerCaptureBottomRow`).
@@ -73,8 +76,8 @@ struct ComposerSceneCameraBar: View {
     var body: some View {
         VStack(spacing: 0) {
             topControls
-            if !segments.isEmpty { segmentStrip }
-            if ComposerExposureRule.shows(stage: stage, editing: false) {
+            if !segments.isEmpty, !editing { segmentStrip }
+            if ComposerExposureRule.shows(stage: stage, editing: editing) {
                 HStack {
                     Spacer(minLength: 0)
                     ComposerExposureSlider(bias: exposureBias, onChange: onExposureBias)
@@ -94,7 +97,7 @@ struct ComposerSceneCameraBar: View {
             // **La croix est TOUJOURS là** (#8653 : « permettre de quitter à
             // tout moment »), en haut à gauche (porteur 2026-10-05).
             glassControl(symbol: "xmark",
-                         label: ComposerSceneCameraCopy.disarmLabel,
+                         label: editing ? ComposerCaptureCopy.cancelEdit : ComposerSceneCameraCopy.disarmLabel,
                          tint: .white,
                          action: onDisarm)
             Spacer(minLength: 0)
@@ -104,12 +107,14 @@ struct ComposerSceneCameraBar: View {
                              tint: .white,
                              action: onToggleSize)
             }
-            glassControl(symbol: "arrow.triangle.2.circlepath.camera",
-                         label: ComposerSceneCameraCopy.flipLabel,
-                         tint: .white,
-                         action: onFlipCamera)
-                .disabled(flipping)
-            flashCluster
+            if !editing {
+                glassControl(symbol: "arrow.triangle.2.circlepath.camera",
+                             label: ComposerSceneCameraCopy.flipLabel,
+                             tint: .white,
+                             action: onFlipCamera)
+                    .disabled(flipping)
+                flashCluster
+            }
         }
     }
 

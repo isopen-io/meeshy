@@ -1,4 +1,5 @@
 import CoreGraphics
+import MeeshySDK
 import UIKit
 
 /// **Le mode édition** (#9352, spec § 3.3) : même interface, la source change.
@@ -25,11 +26,14 @@ extension ComposerCaptureSession {
     /// La vidéo assemblée s'ouvre en édition, en boucle : le peintre la lit comme
     /// il lisait l'objectif, à la cadence du palier et dans l'espace de l'aperçu.
     /// Une vidéo qui ne se lit pas part telle quelle plutôt que d'être perdue ;
-    /// un viseur fermé pendant le chargement n'ouvre rien.
+    /// un viseur fermé pendant le chargement n'ouvre rien, et son fichier part.
     func beginEditing(video url: URL) async {
         let generation = renderGeneration
         let charge = await loopPlayerFactory(url)
-        guard generation == renderGeneration else { return }
+        guard generation == renderGeneration else {
+            discardTake(url, context: "vidéo assemblée pour un viseur fermé")
+            return
+        }
         guard let lecteur = charge else {
             onDeliver?(.video(url))
             return
@@ -46,9 +50,113 @@ extension ComposerCaptureSession {
         lecteur.play()
     }
 
-    /// « Fermer » en édition : on revient viser ; la prise est abandonnée.
+    /// « Fermer » en édition : on revient viser ; la prise est abandonnée, et un
+    /// rendu en vol avec elle — la croix reste vivante pendant « Terminé » (#8653).
     func cancelEditing() {
+        isRenderingLook = false
+        abandonEditing()
+        camera.resumeRunning()
+    }
+
+    /// La retouche abandonnée — par la croix ou par le viseur qui se ferme —
+    /// emporte le fichier de sa vidéo assemblée : personne ne le lira plus.
+    func abandonEditing() {
+        let abandonnee = phase
         leaveEditing()
+        guard case .editing(.video(let url)) = abandonnee else { return }
+        discardTake(url, context: "vidéo abandonnée en retouche")
+    }
+
+    // MARK: - ✓ Terminé
+
+    /// **✓ Terminé** (spec § 3.3 / § 3.4) : le rendu final — effet et cadrage —
+    /// part en galerie ET vers l'hôte. Un second toucher pendant le rendu ne
+    /// remet rien.
+    func finishEditing() {
+        guard !isRenderingLook else { return }
+        switch phase {
+        case .capturing: return
+        case .editing(.photo): finishPhoto()
+        case .editing(.video(let url)): finishVideo(url)
+        }
+    }
+
+    /// La photo à sa définition native, encodée avec les métadonnées de la prise.
+    /// Un cadre qui ne se peint pas laisse la retouche ouverte plutôt que de
+    /// remettre une photo sans lui.
+    private func finishPhoto() {
+        guard let photo = editPhoto, let source = editSource else { return }
+        let regard = look
+        let cadrage = framing
+        let auteur = lookPerson
+        let date = lookDate
+        let cache = scenes
+        let galerie = gallery
+        let prise = editPhotoData
+        isRenderingLook = true
+        Task { @MainActor in
+            guard isStillEditing(source) else { return }
+            let peinte = await ComposerLookPainter.renderPhoto(photo, look: regard, framing: cadrage,
+                                                               person: auteur, date: date, scenes: cache)
+            guard isStillEditing(source) else { return }
+            guard let rendu = peinte else {
+                isRenderingLook = false
+                HapticFeedback.error()
+                return
+            }
+            let octets = await ComposerPhotoEncoding.encode(rendu, like: prise)
+            guard isStillEditing(source) else { return }
+            if let octets { _ = await galerie.saveImage(octets) }
+            guard isStillEditing(source) else { return }
+            deliverEdited(.photo(UIImage(cgImage: rendu), data: octets))
+        }
+    }
+
+    /// La vidéo part avec le look et le cadrage qu'on voyait en la retouchant,
+    /// lue dans l'espace où la boucle la lisait. Sans effet ni cadrage, le rendu
+    /// EST le brut, déjà en galerie : rien de plus n'y part. Un rendu qui échoue
+    /// remet le brut plutôt que de perdre la prise ; la boucle joue jusqu'à la
+    /// remise, et le brut qu'un rendu remplace quitte le dossier temporaire.
+    private func finishVideo(_ url: URL) {
+        guard let source = editSource else { return }
+        let regard = look
+        let cadrage = framing
+        let auteur = lookPerson
+        let date = lookDate
+        let galerie = gallery
+        let espace = loopPlayer?.declaredSpace?.name as String?
+        isRenderingLook = true
+        Task { @MainActor in
+            guard isStillEditing(source) else { return }
+            let rendue = await ComposerLookVideoExporter.export(url, look: regard, framing: cadrage, person: auteur,
+                                                                date: date, declaredSpaceName: espace)
+            let neuve = rendue.flatMap { $0 == url ? nil : $0 }
+            if let neuve, isStillEditing(source) { _ = await galerie.saveVideo(at: neuve) }
+            guard isStillEditing(source) else {
+                if let neuve {
+                    FileManager.default.removeItemLogging(at: neuve, context: "rendu d'une retouche abandonnée",
+                                                          logger: .media)
+                }
+                return
+            }
+            if neuve != nil { discardTake(url, context: "brut remplacé par son rendu") }
+            deliverEdited(.video(neuve ?? url))
+        }
+    }
+
+    /// La retouche validée est-elle encore celle de l'écran ? La croix et la
+    /// fermeture du viseur relâchent sa source : un rendu en vol ne remet plus rien.
+    private func isStillEditing(_ source: any ComposerFrameSourcing) -> Bool {
+        editSource === source
+    }
+
+    /// La retouche quitte l'édition PUIS part : l'hôte retire le viseur sans
+    /// boucle à arrêter. Un hôte qui le garde retrouve l'objectif.
+    private func deliverEdited(_ result: CameraResult) {
+        isRenderingLook = false
+        leaveEditing()
+        onDeliver?(result)
+        guard stage == .armed else { return }
         camera.resumeRunning()
     }
 
@@ -89,15 +197,17 @@ extension ComposerCaptureSession {
         return photo.width / photo.height
     }
 
-    /// Le doigt glisse : le média le suit, sans jamais sortir de sa case.
+    /// Le doigt glisse : le média le suit, sans jamais sortir de sa case. Pendant
+    /// le rendu de « Terminé », plus rien ne bouge : ce qui part est ce qu'on
+    /// voyait en validant.
     func reframe(from anchor: ComposerFraming, translation: CGSize, viewSize: CGSize) {
-        guard let source = editExtent else { return }
+        guard !isRenderingLook, let source = editExtent else { return }
         framing = anchor.panned(by: translation, viewSize: viewSize, source: source, aspect: framingAspect)
     }
 
     /// Les doigts s'écartent : le média se rapproche, borné par `ComposerFraming.scaleRange`.
     func rezoom(from anchor: ComposerFraming, scale: CGFloat) {
-        guard let source = editExtent else { return }
+        guard !isRenderingLook, let source = editExtent else { return }
         framing = anchor.zoomed(by: scale, source: source, aspect: framingAspect)
     }
 }

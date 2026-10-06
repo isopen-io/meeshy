@@ -19,6 +19,12 @@ nonisolated enum ComposerCaptureCanvas {
 /// présentations** (#9134). La carte en scène et le plein écran le posent à la
 /// taille qu'ils choisissent ; il n'en prend aucun doigt : l'appui long qui a
 /// armé le viseur est toujours en cours SOUS lui, et c'est sa levée qui décide.
+///
+/// **En édition, la même toile montre la source retouchée** (#9352, spec § 3.3) :
+/// la vue Metal lit la photo figée ou la boucle, avec le cadrage réglé au doigt,
+/// à la cadence du palier. La couche système reste montée dessous — l'objectif
+/// se repose, il n'est pas démonté — et rien de l'objectif (couverture de
+/// bascule, mention thermique) ne se pose sur un média qui ne vient plus de lui.
 struct ComposerCapturePreview: View {
     @ObservedObject var session: ComposerCaptureSession
     let size: ComposerSceneCameraSize
@@ -27,7 +33,13 @@ struct ComposerCapturePreview: View {
     @State private var metalHasFrame = false
 
     private var showsThermalNotice: Bool {
-        ComposerCaptureSurfaceRule.showsThermalNotice(look: session.look, budget: session.thermalBudget)
+        !session.phase.isEditing
+            && ComposerCaptureSurfaceRule.showsThermalNotice(look: session.look, budget: session.thermalBudget)
+    }
+
+    /// Ce que le peintre lit en édition : la photo figée, ou la boucle.
+    private var editedSource: (any ComposerFrameSourcing)? {
+        session.phase.isEditing ? session.editSource : nil
     }
 
     var body: some View {
@@ -48,32 +60,40 @@ struct ComposerCapturePreview: View {
                                     session.focusPoints.previewFrame = cadre
                                 }
                             })
-                        if session.paintsWithMetal {
+                        if let source = editedSource {
                             ComposerLiveLookSurface(look: session.look, person: session.lookPerson,
-                                                    date: session.lookDate, framing: .identity,
-                                                    source: session.camera.liveFeed,
-                                                    fps: session.thermalBudget.previewFPS,
-                                                    surfaceScale: session.thermalBudget.surfaceScale,
-                                                    onFirstFrame: { metalHasFrame = true })
-                        }
-                        if let couverture = session.camera.switchCover {
-                            Image(decorative: couverture, scale: 1)
-                                .resizable()
-                                .scaledToFill()
-                                .frame(width: toile.width, height: toile.height)
-                                .clipped()
-                                .transition(.opacity)
-                        }
-                        if showsThermalNotice {
-                            VStack {
-                                Text(ComposerCaptureCopy.thermalNotice)
-                                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
-                                    .foregroundStyle(.white)
-                                    .padding(.horizontal, MeeshySpacing.md)
-                                    .padding(.vertical, MeeshySpacing.sm)
-                                    .adaptiveLiquidGlass(in: Capsule())
-                                    .padding(.top, MeeshySpacing.xl * 2)
-                                Spacer()
+                                                    date: session.lookDate, framing: session.framing,
+                                                    source: source,
+                                                    fps: ComposerCaptureSurfaceRule.editFPS(session.thermalBudget))
+                                .id(session.phase)
+                        } else {
+                            if session.paintsWithMetal {
+                                ComposerLiveLookSurface(look: session.look, person: session.lookPerson,
+                                                        date: session.lookDate, framing: .identity,
+                                                        source: session.camera.liveFeed,
+                                                        fps: session.thermalBudget.previewFPS,
+                                                        surfaceScale: session.thermalBudget.surfaceScale,
+                                                        onFirstFrame: { metalHasFrame = true })
+                            }
+                            if let couverture = session.camera.switchCover {
+                                Image(decorative: couverture, scale: 1)
+                                    .resizable()
+                                    .scaledToFill()
+                                    .frame(width: toile.width, height: toile.height)
+                                    .clipped()
+                                    .transition(.opacity)
+                            }
+                            if showsThermalNotice {
+                                VStack {
+                                    Text(ComposerCaptureCopy.thermalNotice)
+                                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
+                                        .foregroundStyle(.white)
+                                        .padding(.horizontal, MeeshySpacing.md)
+                                        .padding(.vertical, MeeshySpacing.sm)
+                                        .adaptiveLiquidGlass(in: Capsule())
+                                        .padding(.top, MeeshySpacing.xl * 2)
+                                    Spacer()
+                                }
                             }
                         }
                     }
@@ -87,6 +107,9 @@ struct ComposerCapturePreview: View {
         }
         .adaptiveOnChange(of: session.paintsWithMetal) { _, peint in
             if !peint { metalHasFrame = false }
+        }
+        .adaptiveOnChange(of: session.phase.isEditing) { _, _ in
+            metalHasFrame = false
         }
         .adaptiveOnChange(of: showsThermalNotice) { _, montree in
             if montree { UIAccessibility.post(notification: .announcement, argument: ComposerCaptureCopy.thermalNotice) }
@@ -111,6 +134,12 @@ struct ComposerCapturePreview: View {
 ///
 /// **Des segments en attente ne partent jamais en silence** : la croix ou le
 /// glissé qui fermerait le viseur demande d'abord « Abandonner la vidéo ? ».
+///
+/// **En édition, la même nappe cadre le média** (#9352, spec § 3.3) : un doigt
+/// le déplace, deux le zooment — chaque image avance de l'écart depuis la
+/// précédente, donc les deux gestes se composent sans se disputer une ancre.
+/// La croix abandonne la retouche et revient viser ; elle reste vivante pendant
+/// le rendu de « Terminé », quand le reste se tait.
 struct ComposerCaptureChrome: View {
     @ObservedObject var session: ComposerCaptureSession
     let size: ComposerSceneCameraSize
@@ -127,10 +156,21 @@ struct ComposerCaptureChrome: View {
     /// Retombe tout seul quand le pincement finit — y compris annulé par le
     /// système, qui n'appelle pas `onEnded`.
     @GestureState private var pinchActive = false
+    /// Le dernier pas du glissé et du pincement de cadrage — des états de VUE.
+    @State private var reframeStep: ComposerCaptureReframeStep?
+    @State private var rezoomStep: CGFloat?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// Le pas d'un balayage VoiceOver sur le média : un quart de plus, ou de moins.
+    private static let accessibleZoomStep: CGFloat = 1.25
 
     private var context: ComposerCaptureGestureContext {
         session.gestureContext(allowsPhoto: allowsPhoto, allowsVideo: allowsVideo)
+    }
+
+    /// « Terminé » rend : seule la croix répond encore.
+    private var finishing: Bool {
+        session.phase.isEditing && session.isRenderingLook
     }
 
     var body: some View {
@@ -144,6 +184,7 @@ struct ComposerCaptureChrome: View {
                     .simultaneousGesture(pinchGesture)
                     .adaptiveOnChange(of: pinchActive) { _, actif in
                         guard !actif else { return }
+                        rezoomStep = nil
                         session.endPinchZoom()
                     }
                     .overlay(alignment: .topLeading) {
@@ -155,19 +196,22 @@ struct ComposerCaptureChrome: View {
                         }
                     }
                     .accessibilityElement()
-                    .accessibilityLabel(ComposerSceneCameraCopy.shutterLabel(mode: session.mode ?? .photo,
-                                                                             stage: session.stage))
+                    .accessibilityLabel(session.phase.isEditing
+                        ? ComposerCaptureCopy.reframe
+                        : ComposerSceneCameraCopy.shutterLabel(mode: session.mode ?? .photo, stage: session.stage))
+                    .accessibilityValue(session.phase.isEditing
+                        ? ComposerSceneCameraCopy.zoomValue(session.framing.scale) : "")
                     .composerCaptureAccessibilityActions(zone: .scene, context: context) { action in
                         performAccessible(action, origin: origine)
                     }
                     .accessibilityAdjustableAction { sens in
-                        guard session.stage == .recording else { return }
                         switch sens {
-                        case .increment: session.stepZoom(up: true)
-                        case .decrement: session.stepZoom(up: false)
+                        case .increment: adjustAccessible(up: true)
+                        case .decrement: adjustAccessible(up: false)
                         @unknown default: break
                         }
                     }
+                    .allowsHitTesting(!finishing)
             }
             VStack(spacing: 0) {
                 if session.stage != .recording {
@@ -188,11 +232,13 @@ struct ComposerCaptureChrome: View {
                         onFlashIntensity: { session.setFlashIntensity($0) },
                         flipping: session.barCapture.flipping,
                         exposureBias: session.exposureBias,
-                        onExposureBias: { session.setExposureBias($0) })
+                        onExposureBias: { session.setExposureBias($0) },
+                        editing: session.phase.isEditing)
                     .transition(.opacity)
                 }
                 Spacer(minLength: 0)
                 ComposerCaptureBottomRow(session: session, context: context)
+                    .allowsHitTesting(!finishing)
             }
             if session.isRenderingLook {
                 ProgressView()
@@ -215,7 +261,9 @@ struct ComposerCaptureChrome: View {
 
     /// La croix et le glissé de rangement passent par ici : des segments en
     /// attente demandent confirmation, sinon le viseur se range tout de suite.
+    /// En édition, la croix abandonne la retouche : on revient viser.
     private func requestDisarm() {
+        guard !session.phase.isEditing else { return session.cancelEditing() }
         guard ComposerCaptureSegments.asksBeforeClosing(session.segments) else { return onDisarm() }
         HapticFeedback.warning()
         confirmsDiscard = true
@@ -241,6 +289,17 @@ struct ComposerCaptureChrome: View {
         }
     }
 
+    /// **VoiceOver ne pince pas : il incrémente** — le zoom de l'objectif pendant
+    /// une prise, celui du média en édition.
+    private func adjustAccessible(up: Bool) {
+        guard !session.phase.isEditing else {
+            let pas = up ? Self.accessibleZoomStep : 1 / Self.accessibleZoomStep
+            return session.rezoom(from: session.framing, scale: pas)
+        }
+        guard session.stage == .recording else { return }
+        session.stepZoom(up: up)
+    }
+
     /// L'appui long passe avant le toucher, qui ne part que si le doigt se lève
     /// avant le seuil (#8846).
     private var holdGesture: some Gesture {
@@ -263,11 +322,14 @@ struct ComposerCaptureChrome: View {
                     session.dragZoom(translationY: valeur.translation.height)
                 case .close:
                     session.followDismissDrag(translationY: valeur.translation.height)
+                case .reframe:
+                    reframe(valeur)
                 default:
                     return
                 }
             }
             .onEnded { valeur in
+                reframeStep = nil
                 session.endZoomDrag()
                 guard session.holdStartedAt == nil else { return }
                 guard session.releaseDismissDrag(translationY: valeur.translation.height) else { return }
@@ -276,17 +338,41 @@ struct ComposerCaptureChrome: View {
             }
     }
 
-    /// **Pincer zoome l'objectif** (#9295), dans les deux montages.
+    /// **Le doigt déplace le média** : il avance de l'écart depuis le pas
+    /// précédent de CE glissé — reconnu à son point de départ, un glissé que le
+    /// système annule sans fin ne lègue donc rien au suivant. La case mesurée est
+    /// celle de l'aperçu, pas celle des commandes.
+    private func reframe(_ valeur: DragGesture.Value) {
+        let pas = ComposerCaptureReframeStep(start: valeur.startLocation, translation: valeur.translation)
+        let avant = reframeStep.flatMap { $0.start == pas.start ? $0.translation : nil } ?? pas.translation
+        reframeStep = pas
+        session.reframe(from: session.framing,
+                        translation: CGSize(width: pas.translation.width - avant.width,
+                                            height: pas.translation.height - avant.height),
+                        viewSize: session.focusPoints.previewFrame.size)
+    }
+
+    /// **Pincer zoome l'objectif** (#9295), dans les deux montages — et, en
+    /// édition, le média, de l'écart depuis le pas précédent du pincement.
     private var pinchGesture: some Gesture {
         MagnificationGesture()
             .updating($pinchActive) { _, actif, _ in actif = true }
             .onChanged { echelle in
-                guard ComposerCaptureGesture.action(zone: .scene, gesture: .pinch, context: context) == .zoom else {
+                switch ComposerCaptureGesture.action(zone: .scene, gesture: .pinch, context: context) {
+                case .zoom:
+                    session.pinchZoom(scale: echelle)
+                case .reframe:
+                    guard echelle > 0 else { return }
+                    session.rezoom(from: session.framing, scale: echelle / (rezoomStep ?? 1))
+                    rezoomStep = echelle
+                default:
                     return
                 }
-                session.pinchZoom(scale: echelle)
             }
-            .onEnded { _ in session.endPinchZoom() }
+            .onEnded { _ in
+                rezoomStep = nil
+                session.endPinchZoom()
+            }
     }
 
     /// **Un toucher vise, le second d'un double photographie** (#9464) — lu par
@@ -314,6 +400,12 @@ struct ComposerCaptureChrome: View {
             if focusMark == marque { focusMark = nil }
         }
     }
+}
+
+/// Un pas du glissé de cadrage : le glissé auquel il appartient, et sa course.
+nonisolated private struct ComposerCaptureReframeStep: Equatable, Sendable {
+    let start: CGPoint
+    let translation: CGSize
 }
 
 /// **L'anneau de mise au point** (#9295) : il se pose où le doigt a visé, se

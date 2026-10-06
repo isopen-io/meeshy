@@ -119,4 +119,19 @@ enum ComposerCaptureCopy {
     static var rendering: String {
         String(localized: "composer.capture.looks.rendering", defaultValue: "Application du filtre…", bundle: .main)
     }
+
+    /// ✓ « Terminé » : le seul ajout de l'édition (spec § 3.3).
+    static var done: String {
+        String(localized: "common.done", defaultValue: "Terminé", bundle: .main)
+    }
+
+    /// La croix, en édition : elle abandonne la retouche et revient viser.
+    static var cancelEdit: String {
+        String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main)
+    }
+
+    /// Ce que VoiceOver lit de la scène en édition : le média s'y recadre.
+    static var reframe: String {
+        String(localized: "composer.object.editor.crop", defaultValue: "Recadrer", bundle: .main)
+    }
 }

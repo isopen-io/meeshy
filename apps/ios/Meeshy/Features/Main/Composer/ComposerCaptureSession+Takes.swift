@@ -264,7 +264,7 @@ extension ComposerCaptureSession {
     }
 
     /// Le fichier temporaire part — une fois le brut lu par la galerie.
-    private func discardTake(_ url: URL, context: String) {
+    func discardTake(_ url: URL, context: String) {
         guard let brut = camera.librarySave else {
             FileManager.default.removeItemLogging(at: url, context: context, logger: .media)
             return
