@@ -8,6 +8,10 @@ import MeeshyUI
 /// en entier : chacune peut se passer, le carnet les garde toutes. Miroir de
 /// `apps/web/src/routes/progression-rules.tsx`.
 ///
+/// Entre les règles et les étapes, l'atlas illustré (`GameRulesAtlasView`, #9538) : le détail de la conception — les
+/// dix paliers, la Meesh avers et revers, les paliers du trésor, les onze blasons, les cinq Flammes, les huit ligues,
+/// les médailles, les trophées, les raretés — avec les mêmes dessins que partout dans l'app.
+///
 /// Une page qui EXPLIQUE, sans geste : aucun bouton n'y agit, rien n'y est promis
 /// qui ne soit dit ailleurs. Pas de lecture réseau : elle s'ouvre instantanément,
 /// hors ligne comme en ligne.
@@ -34,6 +38,9 @@ struct GameRulesPage: View {
                         VStack(alignment: .leading, spacing: MeeshySpacing.xl) {
                             intro
                             rules
+                            // Les éléments du jeu, DESSINÉS (#9538) : paliers, pièces, trésor, blasons, Flammes, ligues,
+                            // médailles, trophées, raretés — Mee et Meo y parlent.
+                            GameRulesAtlasView()
                             steps
                         }
                         .padding(.horizontal, MeeshySpacing.lg)
