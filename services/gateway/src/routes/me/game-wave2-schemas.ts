@@ -124,6 +124,9 @@ export const userGameProfileResponse = envelope(
           flame: nullableString,
           rank: { type: 'string' },
           division: { type: ['number', 'null'] },
+          // Servis aux AMIS seulement (#9541) : absents pour tout autre lecteur — optionnels, jamais requis.
+          points: { type: 'number' },
+          trophyCount: { type: 'number' },
         }),
       ],
     },

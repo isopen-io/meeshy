@@ -61,6 +61,22 @@ describe('exportGame', () => {
     expect(text).not.toMatch(/lastActiveAt|isOnline|actorId|inviteeId|inviterId|G1/);
   });
 
+  it('exporte la plage de la mission personnelle du compte (#9539) — sa propre donnée, jamais la date de l’annonce', async () => {
+    const db = fakeGameDb();
+    seed(db);
+    db.dailyMission.rows.push({
+      id: 'dm1', userId: USER, dayKey: '2026-10-06', slot: 3, templateKey: 'send-voice', difficulty: 'easy', signal: 'axis:content.audio_message',
+      target: 2, progress: 1, reward: 40, completedAt: null, paidPoints: null,
+      startsAt: new Date('2026-10-06T16:00:00Z'), endsAt: new Date('2026-10-06T18:00:00Z'), notifiedAt: new Date('2026-10-06T16:01:00Z'),
+    });
+
+    const game = await exportGame(db.prisma, USER, PAGE);
+
+    const row = (game.missions as readonly Record<string, unknown>[]).find((m) => m.slot === 3);
+    expect(row).toMatchObject({ startsAt: new Date('2026-10-06T16:00:00Z'), endsAt: new Date('2026-10-06T18:00:00Z') });
+    expect(row).not.toHaveProperty('notifiedAt');
+  });
+
   it('un compte qui n’a jamais joué rend des listes vides, jamais d’erreur', async () => {
     const db = fakeGameDb();
     seedUser(db, {});

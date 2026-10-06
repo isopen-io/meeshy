@@ -69,7 +69,7 @@ export async function exportGame(prisma: PrismaClient, userId: string, page: Exp
       prisma.atlasStamp.findMany({ where: { userId }, select: { language: true, sentAt: true, receivedAt: true, stampedOn: true }, orderBy: { language: 'asc' }, take, skip }),
       prisma.dailyMission.findMany({
         where: { userId },
-        select: { dayKey: true, slot: true, templateKey: true, difficulty: true, target: true, progress: true, reward: true, completedAt: true, paidPoints: true },
+        select: { dayKey: true, slot: true, templateKey: true, difficulty: true, target: true, progress: true, reward: true, completedAt: true, paidPoints: true, startsAt: true, endsAt: true },
         orderBy: { dayKey: 'desc' },
         take, skip,
       }),
