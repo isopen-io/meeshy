@@ -271,7 +271,14 @@
 // précédent que `GameMaterial.swift` (#9397, #9380) : couleurs de DESIGN du jeu
 // volontairement indépendantes du thème de conversation. Valeur MESURÉE le
 // 2026-10-05.
-const REFERENCE_LITERAL_COLOR_COUNT = 116;
+//
+// 2026-10-06 (#9511, vague 2 du jeu) — littéraux 116 → 128 : `GameLeagueBricks.swift`
+// (12 — huit teintes de rareté : quartz, ambre, jade, saphir, rubis, amethyste,
+// diamant, prisme ; quatre teintes de badge de ligue : slate, blue, violet, gold)
+// est un fichier NEUF sous `.../MeeshyUI/Game/`, même précédent que
+// `GameMedalView.swift`/`GameMaterial.swift` ci-dessus. Valeur MESURÉE le
+// 2026-10-06.
+const REFERENCE_LITERAL_COLOR_COUNT = 128;
 const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 444;
 
 import { readFileSync, readdirSync, statSync, realpathSync } from 'node:fs';
