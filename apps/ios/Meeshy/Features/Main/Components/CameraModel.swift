@@ -67,7 +67,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     nonisolated let liveFeed = ComposerCameraFeed()
     #if DEBUG
     /// La caméra de recette (#9351) — `nil` hors simulateur ou sans `-MeeshyCaptureFixture`.
-    let fixture: ComposerCaptureFixtureDriver? = ComposerCaptureFixture.isActive() ? ComposerCaptureFixtureDriver() : nil
+    let fixture: ComposerCaptureFixtureDriver?
     #endif
 
     /// La capture tourne-t-elle sur la caméra de recette ? Elle ne touche alors
@@ -86,8 +86,22 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
 
     init(photoProcessor: any PhotoCaptureProcessorProviding = PhotoCaptureProcessor.shared) {
         self.photoProcessor = photoProcessor
+        #if DEBUG
+        fixture = ComposerCaptureFixture.isActive() ? ComposerCaptureFixtureDriver() : nil
+        #endif
         super.init()
     }
+
+    #if DEBUG
+    /// La caméra de recette imposée — pour les témoins, qui ne sont pas lancés
+    /// avec `-MeeshyCaptureFixture`.
+    init(photoProcessor: any PhotoCaptureProcessorProviding = PhotoCaptureProcessor.shared,
+         fixture: ComposerCaptureFixtureDriver?) {
+        self.photoProcessor = photoProcessor
+        self.fixture = fixture
+        super.init()
+    }
+    #endif
     /// Publiée : le sol blanc du flash avant (#8653) suit l'objectif actif.
     @Published private(set) var currentPosition: AVCaptureDevice.Position = .back
     /// Une bascule d'objectif est en cours (#9464) : le bouton se tait.
@@ -308,6 +322,13 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
         guard ComposerCameraSwitchRule.mayFlip(isSwitching: isSwitchingCamera) else { return }
         guard !isSwitchingCameraDuringRecording else { return }
         isSwitchingCamera = true
+        #if DEBUG
+        if fixture != nil {
+            endSwitch()
+            then(currentPosition)
+            return
+        }
+        #endif
         if isRecordingVideo {
             isSwitchingCameraDuringRecording = true
             pendingSwitchPosition = currentPosition == .back ? .front : .back
