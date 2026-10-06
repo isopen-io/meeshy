@@ -126,6 +126,7 @@ final class ComposerLookStripRenderer: NSObject, MTKViewDelegate {
     func update(tiles: [ComposerLookStripTile], source: any ComposerFrameSourcing, person: CallFramePerson,
                 date: Date, framing: ComposerFraming, fps: Int, view: MTKView) {
         gate.setFPS(fps)
+        view.contentScaleFactor = max(1, view.traitCollection.displayScale)
         let autreSource = self.source !== source
         let perime = autreSource || framing != self.framing || date != self.date || person != self.person
         if autreSource {

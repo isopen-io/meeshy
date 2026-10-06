@@ -24,20 +24,25 @@ nonisolated enum ComposerLookStripRule {
     static var pitch: CGFloat { cellSize.width + spacing }
 
     /// « Aucun » en tête, puis la famille dans son ordre — chaque cadre une fois.
+    /// Calculée UNE fois : le défilement relit la bande à chaque image.
     static func items(_ family: ComposerLookFamily) -> [ComposerLookStripItem] {
         switch family {
-        case .filters:
-            return ComposerPhotoLookRule.filters.map { ComposerLookStripItem.filter($0) }
-        case .frames:
-            let cadres = ComposerLiveLookRule.chips()
-                .flatMap { ComposerLiveLookRule.frames(for: $0) }
-                .filter { $0 != ComposerPhotoFrame.none }
-            let uniques = cadres.reduce(into: [ComposerPhotoFrame]()) { vus, cadre in
-                if !vus.contains(cadre) { vus.append(cadre) }
-            }
-            return [.frame(.none)] + uniques.map { ComposerLookStripItem.frame($0) }
+        case .filters: return filterItems
+        case .frames: return frameItems
         }
     }
+
+    private static let filterItems = ComposerPhotoLookRule.filters.map { ComposerLookStripItem.filter($0) }
+
+    private static let frameItems: [ComposerLookStripItem] = {
+        let cadres = ComposerLiveLookRule.chips()
+            .flatMap { ComposerLiveLookRule.frames(for: $0) }
+            .filter { $0 != ComposerPhotoFrame.none }
+        let uniques = cadres.reduce(into: (vus: Set<ComposerPhotoFrame>(), ordre: [ComposerPhotoFrame]())) { acc, cadre in
+            if acc.vus.insert(cadre).inserted { acc.ordre.append(cadre) }
+        }.ordre
+        return [.frame(.none)] + uniques.map { ComposerLookStripItem.frame($0) }
+    }()
 
     /// **Filtre et cadre se COMBINENT** : choisir l'un garde l'autre.
     static func look(of item: ComposerLookStripItem, combinedWith current: ComposerPhotoLook) -> ComposerPhotoLook {
