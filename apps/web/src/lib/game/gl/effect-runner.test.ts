@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import type { GameGl, RenderUniforms } from './engine';
 import { startEffect, type EffectEnv } from './effect-runner';
-import { DRIFT_PERIOD_MS, SHEEN_PASS_MS, SHOCKWAVE_MS, type Tilt } from './timeline';
+import { DRIFT_PERIOD_MS, SHEEN_PASS_MS, SHEEN_SWEEP_START_MS, SHOCKWAVE_MS, type Tilt } from './timeline';
 import type { GameEffect } from './shaders';
 
 type Render = { readonly effect: GameEffect; readonly uniforms: RenderUniforms };
@@ -133,6 +133,35 @@ describe('le reflet — trois passages, puis il s’arrête', () => {
     startEffect({ effect: 'sheen', passes: 1 }, h.env);
     h.runUntil(SHEEN_PASS_MS * 2, 100);
     expect(h.events.clears).toBe(1);
+  });
+});
+
+describe('le reflet immédiat — le trait balaie tout de suite (le passage d’un niveau)', () => {
+  test('sans le repos de 55 % : la première image est déjà dans le balayage', () => {
+    const h = harness();
+    startEffect({ effect: 'sheen', passes: 1, immediate: true }, h.env);
+    h.frame(0);
+    expect(h.renders[0]?.uniforms.progress ?? 0).toBeGreaterThanOrEqual(0);
+    h.frame(100);
+    expect(h.renders[1]?.uniforms.progress ?? 0).toBeGreaterThan(0);
+  });
+
+  test('il dure le balayage seul, puis le canvas est effacé et plus rien ne tourne', () => {
+    const h = harness();
+    startEffect({ effect: 'sheen', passes: 1, immediate: true }, h.env);
+    h.runUntil(SHEEN_PASS_MS - SHEEN_SWEEP_START_MS + 200, 100);
+    expect(h.events.clears).toBe(1);
+    expect(h.queued()).toBe(0);
+  });
+
+  test('rejoué : il repart du balayage, pas du repos', () => {
+    const h = harness();
+    const effect = startEffect({ effect: 'sheen', passes: 1, immediate: true, autoStart: false }, h.env);
+    expect(h.queued()).toBe(0);
+    effect.replay();
+    h.frame(0);
+    h.frame(100);
+    expect(h.renders[1]?.uniforms.progress ?? 0).toBeGreaterThan(0);
   });
 });
 
