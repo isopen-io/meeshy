@@ -39,6 +39,7 @@ import {
 } from './season.js';
 import { orderShowcase, type ShowcaseVisibility, type TrophyRecord } from './trophies.js';
 import type {
+  GameAchievementRarities,
   GameAtlasBlock,
   GameDuoBlock,
   GameLeagueBlock,
@@ -107,6 +108,12 @@ export type GameBlockExtras = {
   readonly atlas: GameAtlasBlock;
   readonly prestige: GamePrestigeBlock;
   readonly visibility: GameVisibility;
+  /**
+   * La rareté mesurée des succès AFFICHABLES (#9489) : un instantané GLOBAL, pas un fait du compte —
+   * la passerelle le pose à côté, `buildGameBlockExtras` ne le calcule pas. Absent quand aucun succès
+   * n'atteint le seuil d'affichage.
+   */
+  readonly achievementRarities?: GameAchievementRarities;
 };
 
 const recordOf = (levelRecord: number | null, score: number): number => Math.max(levelRecord ?? 1, levelFromScore(score));

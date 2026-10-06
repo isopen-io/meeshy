@@ -33,9 +33,32 @@ nonisolated struct ReferralCard: Equatable, Sendable {
     /// Le lien de parrainage COMPLET, tel qu'il part dans le texte du partage.
     let link: String
     let flame: Flame?
+    /// L'EMPLACEMENT du lien, quand l'utilisateur n'a encore aucun jeton : « meeshy.me/r/… » en pointillé, dans
+    /// l'APERÇU seulement. Le jeton ne se crée qu'au toucher de « Partager » ; ce qui sort de l'app (partage,
+    /// Photos, carnet) porte le vrai lien ou RIEN — jamais un emplacement qui ressemblerait à un lien (H-8).
+    let isPlaceholder: Bool
+
+    init(link: String, flame: Flame?) {
+        self.link = link
+        self.flame = flame
+        self.isPlaceholder = false
+    }
+
+    private init(placeholderFlame flame: Flame?) {
+        self.link = Self.placeholderText
+        self.flame = flame
+        self.isPlaceholder = true
+    }
+
+    static let placeholderText = "meeshy.me/r/…"
+
+    static func placeholder(flame: Flame?) -> ReferralCard {
+        ReferralCard(placeholderFlame: flame)
+    }
 
     /// Le lien COURT que la carte écrit : sans schéma ni barre finale — « meeshy.me/signup/affiliate/AMANI7 ».
     var displayLink: String {
+        if isPlaceholder { return Self.placeholderText }
         var text = link.trimmingCharacters(in: .whitespacesAndNewlines)
         for scheme in ["https://", "http://"] where text.lowercased().hasPrefix(scheme) {
             text.removeFirst(scheme.count)
@@ -45,6 +68,6 @@ nonisolated struct ReferralCard: Equatable, Sendable {
     }
 
     func withFlame(_ flame: Flame?) -> ReferralCard {
-        ReferralCard(link: link, flame: flame)
+        isPlaceholder ? .placeholder(flame: flame) : ReferralCard(link: link, flame: flame)
     }
 }

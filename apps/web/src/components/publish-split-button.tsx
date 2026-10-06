@@ -52,7 +52,6 @@ const MENU_PADDING = 40;
 
 const KIND_KEY = { STORY: 'story', POST: 'post', REEL: 'reel' } as const;
 
-export const publishTitleKey = (kind: PublicationKind) => `story.studio.publish.as.${KIND_KEY[kind]}` as const;
 
 /** La hauteur du CONTENU du menu, bordures comprises — jamais la hauteur
  * déjà bornée par `maxHeight`, qui ne dirait pas qu'il manque de place. */
@@ -74,6 +73,8 @@ export function PublishSplitButton({
   refusalOf,
   audienceLabelOf,
   layoutsServedFor,
+  checkedKinds,
+  toggleOf,
   onPrimary,
   onChoose,
 }: {
@@ -92,6 +93,12 @@ export function PublishSplitButton({
   /** **CE FORMAT DÉPLIE-T-IL SES AGENCEMENTS ?** (#7684, `layoutIsServed`) —
    * absent ⇒ aucun sous-menu, exactement comme avant #7684. */
   readonly layoutsServedFor?: (kind: PublicationKind) => boolean;
+  /** **LES FORMATS QUI PARTENT** (#9476) — la story ET son réel quand les deux
+   * partent ; absent ⇒ le seul `kind`, exactement comme avant. */
+  readonly checkedKinds?: readonly PublicationKind[];
+  /** **CE QUE TOUCHE UNE LIGNE SANS AGENCEMENT** (#9476,
+   * `toggledPublishChoice`) — absent ⇒ elle arme son format seul. */
+  readonly toggleOf?: (kind: PublicationKind) => PublishChoice;
   /** La partie principale : publier le choix EN COURS, que l'hôte tient. */
   readonly onPrimary: () => void;
   /** Un choix du menu : un format, et sa disposition s'il en a choisi une.
@@ -257,7 +264,7 @@ export function PublishSplitButton({
         onClick={() => {
           if (row.refusal !== null) return;
           if (!row.expandable) {
-            choose({ kind: row.format, layout: null });
+            choose(toggleOf?.(row.format) ?? { kind: row.format, layout: null });
             return;
           }
           if (isExpanded) collapse(row.format);
@@ -269,7 +276,7 @@ export function PublishSplitButton({
         <span className="flex min-w-0 flex-1 flex-col items-start">
           <span className="flex items-center gap-2 text-title font-medium">
             {translate(language, `story.studio.kind.${KIND_KEY[row.format]}`)}
-            {row.format === kind ? <Glyph name="check" size={14} /> : null}
+            {(checkedKinds ?? [kind]).includes(row.format) ? <Glyph name="check" size={14} /> : null}
           </span>
           {audienceLabelOf === undefined ? null : (
             <span data-publish-kind-audience className="text-mini" style={{ color: 'var(--color-ios-ink-3)' }}>

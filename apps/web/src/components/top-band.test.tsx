@@ -42,6 +42,14 @@ afterAll(async () => {
 });
 
 const band = (host: ParentNode): Element | null => host.querySelector('[data-top-bars]');
+/** La sortie dure `BANNER_EXIT_MS` : on attend un peu plus, jamais moins. */
+const leftTheBand = async (host: ParentNode): Promise<void> => {
+  for (let attempt = 0; attempt < 30 && host.querySelector('[data-player-slot]') !== null; attempt += 1) {
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+  }
+};
 const waitForBanner = async (host: ParentNode): Promise<Element | null> => {
   for (let attempt = 0; attempt < 20 && host.querySelector('[data-player-banner]') === null; attempt += 1) await settle();
   return host.querySelector('[data-player-banner]');
@@ -60,6 +68,8 @@ describe('la priorité appel > audio > bannière', () => {
     expect(await waitForBanner(host)).not.toBeNull();
     await act(async () => reportCallResumeShown(true));
     expect(band(host)?.getAttribute('data-top-band')).toBe('call');
+    expect(host.querySelector('[data-player-banner]')).not.toBeNull();
+    await leftTheBand(host);
     expect(host.querySelector('[data-player-banner]')).toBeNull();
     await act(async () => reportCallResumeShown(false));
     expect(band(host)?.getAttribute('data-top-band')).toBe('player');
@@ -72,7 +82,36 @@ describe('la priorité appel > audio > bannière', () => {
     });
     const host = await mount(<TopBand routeKey="list" signedIn />);
     expect(band(host)?.getAttribute('data-top-band')).toBe('call');
+    await leftTheBand(host);
     expect(host.querySelector('[data-player-banner]')).toBeNull();
+  });
+});
+
+describe('la bannière sort en glissant, elle ne disparaît pas sèchement', () => {
+  test('un appel arrive : elle est marquée « en sortie », hors de la pile, puis retirée', async () => {
+    const host = await mount(<TopBand routeKey="list" signedIn />);
+    expect(await waitForBanner(host)).not.toBeNull();
+    expect(host.querySelector('[data-player-slot]')?.getAttribute('data-player-slot')).toBe('shown');
+    await act(async () => reportCallResumeShown(true));
+    expect(host.querySelector('[data-player-slot]')?.getAttribute('data-player-slot')).toBe('leaving');
+    await leftTheBand(host);
+    expect(host.querySelector('[data-player-slot]')).toBeNull();
+  });
+
+  test('elle revient quand l’appel part, à sa place, sans rester marquée en sortie', async () => {
+    const host = await mount(<TopBand routeKey="list" signedIn />);
+    expect(await waitForBanner(host)).not.toBeNull();
+    await act(async () => reportCallResumeShown(true));
+    await leftTheBand(host);
+    await act(async () => reportCallResumeShown(false));
+    expect(host.querySelector('[data-player-slot]')?.getAttribute('data-player-slot')).toBe('shown');
+  });
+
+  test('« Jeu masqué » : aucun remplaçant, aucune sortie — le bandeau est vide tout de suite', async () => {
+    const host = await mount(<TopBand routeKey="list" signedIn />);
+    expect(await waitForBanner(host)).not.toBeNull();
+    await act(async () => gamePrefs.set({ hidden: true }));
+    expect(host.querySelector('[data-player-slot]')).toBeNull();
   });
 });
 

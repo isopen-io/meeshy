@@ -85,21 +85,31 @@ final class MockGamePhotoLibrary: PhotoLibrarySaving, @unchecked Sendable {
 }
 
 
-/// Le lien de parrainage servi à la demande : un lien, ou rien — jamais de réseau.
+/// Le lien de parrainage servi à la demande : un lien, ou rien — jamais de réseau. `link` est le jeton
+/// qui EXISTE ; `createdLink` celui que « Partager » créerait quand il n'y en a aucun. Les deux appels se
+/// comptent séparément : l'ouverture du déroulé ne doit JAMAIS en passer par `shareableLink`.
 @MainActor
 final class MockReferralLink: ReferralLinkProviding {
     nonisolated deinit {}
 
     var link: String?
-    private(set) var calls = 0
+    var createdLink: String?
+    private(set) var existingCalls = 0
+    private(set) var shareableCalls = 0
 
-    init(link: String? = nil) {
+    init(link: String? = nil, createdLink: String? = nil) {
         self.link = link
+        self.createdLink = createdLink
+    }
+
+    func existingLink() async -> String? {
+        existingCalls += 1
+        return link
     }
 
     func shareableLink() async -> String? {
-        calls += 1
-        return link
+        shareableCalls += 1
+        return link ?? createdLink
     }
 }
 

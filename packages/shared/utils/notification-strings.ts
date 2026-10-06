@@ -27,6 +27,10 @@ export const NOTIFICATION_STRING_KEYS = [
   'contact.requestAction', 'contact.acceptedAction',
   'contact.joinedAction', 'contact.joinedBody', 'contact.joinedMany', 'contact.joinedManyBody',
   'contact.recentlyActiveAction', 'contact.recentlyActiveBody',
+  'game.duoInvitedAction', 'game.duoInvitedBody', 'game.duoAcceptedAction', 'game.duoAcceptedBody',
+  'game.leaguePromoted', 'game.leagueStayed', 'game.leagueRelegated',
+  'game.leagueCupGold', 'game.leagueCupSilver', 'game.leagueCupBronze',
+  'game.seasonStep', 'game.seasonDone',
   'repost',
   'invitation.group', 'invitation.direct',
   'group.added', 'group.newContact',
@@ -537,6 +541,13 @@ export function buildNotificationDisplay(
     // ── Un contact est revenu (#8285) : « Marie était sur Meeshy récemment » ──
     case 'contact_recently_active':
       return framed(notificationString(L, 'contact.recentlyActiveAction'), null);
+
+    // ── Le jeu (#9490) : un duo se joue entre amis, on nomme l'ami. La ligue et la saison
+    //    n'ont pas d'acteur : le titre reste au client, la phrase est dans le corps. ──
+    case 'game_duo_invited':
+      return framed(notificationString(L, 'game.duoInvitedAction'), null);
+    case 'game_duo_accepted':
+      return framed(notificationString(L, 'game.duoAcceptedAction'), null);
 
     // ── Partage / repost ──
     case 'post_repost':

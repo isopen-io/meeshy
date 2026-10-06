@@ -87,9 +87,14 @@ struct TopChromeTint: Equatable, Sendable {
     /// L'APPEL PRIME sur l'écoute — c'est l'ordre que le `VStack` tient déjà
     /// visuellement (la pilule au-dessus du mini-lecteur) : la bande prolonge
     /// donc ce qui touche le haut, jamais la barre rangée en dessous.
-    static func resolve(callIsActive: Bool, audio context: ActiveAudioContext?) -> TopChromeTint? {
+    ///
+    /// La BANNIÈRE DU JOUEUR (#9494) passe en TROISIÈME : elle n'a le bandeau que quand ni un appel ni un audio ne
+    /// l'occupe. Sa couleur est celle de son aplat (`PlayerBannerStyle.surface`, un seul producteur pour la
+    /// bannière et pour sa bande) : la couture entre la barre d'état et la bannière est continue par construction.
+    static func resolve(callIsActive: Bool, audio context: ActiveAudioContext?, banner: Color? = nil) -> TopChromeTint? {
         if callIsActive { return .call }
-        return context == nil ? nil : .audio
+        if context != nil { return .audio }
+        return banner.map { TopChromeTint(bandColor: $0) }
     }
 }
 
@@ -135,11 +140,13 @@ struct TopChromeTint: Equatable, Sendable {
 struct TopChromeBand: ViewModifier {
     let callIsActive: Bool
     let audio: ActiveAudioContext?
+    /// L'aplat de la bannière du joueur À L'ÉCRAN, ou `nil` (#9494).
+    var banner: Color?
 
     func body(content: Content) -> some View {
         content
             .overlay(alignment: .top) {
-                if let tint = TopChromeTint.resolve(callIsActive: callIsActive, audio: audio) {
+                if let tint = TopChromeTint.resolve(callIsActive: callIsActive, audio: audio, banner: banner) {
                     tint.bandColor
                         .frame(height: DeviceLayout.safeAreaTop)
                         .offset(y: -DeviceLayout.safeAreaTop)

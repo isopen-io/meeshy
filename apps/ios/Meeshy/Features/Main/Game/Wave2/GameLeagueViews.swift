@@ -36,6 +36,17 @@ struct GameLeagueScreen: View {
         case friends
     }
 
+    /// Ce qui relance la lecture : l'onglet, et — pour « ma ligue » — l'ouverture de la ligue. Consentir ouvre la
+    /// ligue sans changer d'onglet : sans cette clé, le classement ne se lirait qu'en rouvrant la page.
+    struct LoadKey: Hashable {
+        let tab: Tab
+        let leagueOpen: Bool
+    }
+
+    static func loadKey(tab: Tab, access: LeagueAccess?) -> LoadKey {
+        LoadKey(tab: tab, leagueOpen: tab == .mine && access == .open)
+    }
+
     @State private var tab: Tab = .mine
     private var theme: ThemeManager { ThemeManager.shared }
 
@@ -56,7 +67,7 @@ struct GameLeagueScreen: View {
                 GameNote(text: GameText.unavailable)
             }
         }
-        .task(id: tab) {
+        .task(id: Self.loadKey(tab: tab, access: game.league?.access)) {
             switch tab {
             case .mine:
                 if game.league?.access == .open { await model.loadWeek() }

@@ -50,6 +50,21 @@ export const GAME_ROUTES = {
   privacy: '/me/game/privacy',
 } as const;
 
+/**
+ * L'INTÉGRATION du jeu (#9481) : lire ce que les clients gardaient en mémoire. Une table À PART, pas
+ * deux clés de plus dans `GAME_ROUTES` : cette table-là est comparée, clé à clé et en nombre, par les
+ * miroirs hors TypeScript (`GameRoutesTests.swift` compte ses 21 entrées) — y ajouter une route ferait
+ * rougir un client qui n'a rien à voir avec elle. Les clients qui lisent ces routes les nomment ici.
+ */
+export const GAME_INTEGRATION_ROUTES = {
+  /** Les réglages du jeu (interrupteurs et visibilités), en LECTURE : le chemin de l'écriture (`privacy`), la méthode GET. */
+  settings: '/me/game/privacy',
+  /** Le jeu d'un autre membre (niveau, palier, rang, trésor, Flamme), selon son réglage. GET. */
+  userGame: '/users/:userId/game',
+} as const;
+
+export const GAME_INTEGRATION_ROUTE_METHODS = { settings: 'GET', userGame: 'GET' } as const satisfies Record<keyof typeof GAME_INTEGRATION_ROUTES, 'GET'>;
+
 export type GameRouteKey = keyof typeof GAME_ROUTES;
 
 /** La méthode HTTP de chaque route NOUVELLE — les anciennes gardent la leur. */
@@ -77,6 +92,7 @@ export const gameDuoAcceptPath = (duoId: string): string => GAME_ROUTES.duoAccep
 export const gameDuoAbandonPath = (duoId: string): string => GAME_ROUTES.duoAbandon.replace(':duoId', duoId);
 export const gameSeasonClaimPath = (step: number): string => GAME_ROUTES.seasonClaim.replace(':step', String(step));
 export const gameUserShowcasePath = (userId: string): string => GAME_ROUTES.userShowcase.replace(':userId', userId);
+export const gameUserGamePath = (userId: string): string => GAME_INTEGRATION_ROUTES.userGame.replace(':userId', userId);
 
 /**
  * Codes d'erreur des écritures du jeu (champ `code` de `sendError`). Un refus

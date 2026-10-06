@@ -451,7 +451,13 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
             // which reads the media object's local file URL OR fetches via
             // CacheCoordinator. Respect the user's videoFitMode override
             // (auto / "fit" / "fill") so the export matches the canvas.
-            if let bgImage = resolveBackgroundImage(for: slide, images: images) {
+            // Le fond se peint par la fonction du lecteur (#9496) : filtre de
+            // slide, puis réglages de son média — la pièce rendue montre ce que
+            // l'aperçu montrait. Mis en cache par l'instance mémoïsée : une
+            // seule cuisson pour toute la session d'export.
+            if let brut = resolveBackgroundImage(for: slide, images: images) {
+                let bgImage = StoryBackgroundLook.image(brut, effects: slide.effects,
+                                                        imageId: "export-fond-\(ObjectIdentifier(brut).hashValue)")
                 let canvasSize = CGSize(width: width, height: height)
                 let mode = slide.effects.backgroundTransform?.videoFitMode
                 let gravity = StoryBackgroundLayer.resolveImageGravity(
@@ -781,7 +787,10 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
                                         slide: StorySlide,
                                         in cg: CGContext,
                                         size: CGSize) {
-        let ciImage = orientedFrame(CIImage(cvPixelBuffer: pixelBuffer), preferredTransform: transform)
+        // Les réglages du fond vidéo (#9496), par la chaîne de ses trames lues.
+        let ciImage = StoryBackgroundLook.videoFrame(
+            orientedFrame(CIImage(cvPixelBuffer: pixelBuffer), preferredTransform: transform),
+            effects: slide.effects)
         guard let cgImage = StoryRenderingContext.shared.ciContext.createCGImage(
             ciImage, from: ciImage.extent) else { return }
 

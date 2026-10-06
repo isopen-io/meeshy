@@ -319,6 +319,9 @@ final class ProgressionViewModel: ObservableObject {
         Task {
             let store = await CacheCoordinator.shared.engagementProgress
             try? await store.save([snapshot], for: key)
+            // La bannière du joueur (#9494) relit ce cache : elle montre le niveau, les Meeshes et la Flamme que
+            // Progression vient d'écrire, sans attendre une revalidation.
+            NotificationCenter.default.post(name: .engagementSnapshotPersisted, object: nil)
         }
     }
 }

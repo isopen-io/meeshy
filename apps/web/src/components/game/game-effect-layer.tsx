@@ -31,13 +31,15 @@ type Props = {
   readonly replayKey?: number;
   /** `false` : l'effet attend son premier `replayKey` (l'onde de frappe attend le « tchak »). Défaut : vrai. */
   readonly autoStart?: boolean;
+  /** Le reflet balaie tout de suite, sans son repos (le passage d'un niveau). */
+  readonly immediate?: boolean;
   /** Pour les témoins : remplace l'environnement du navigateur. Défaut : `window`. */
   readonly createEnv?: (host: HTMLElement, canvas: HTMLCanvasElement) => EffectEnv;
 };
 
 const browserEnv = (host: HTMLElement, canvas: HTMLCanvasElement): EffectEnv => createBrowserEnv({ win: window, host, canvas });
 
-export function GameEffectLayer({ effect, circle = false, passes, replayKey = 0, autoStart = true, createEnv = browserEnv }: Props) {
+export function GameEffectLayer({ effect, circle = false, passes, replayKey = 0, autoStart = true, immediate = false, createEnv = browserEnv }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const controllerRef = useRef<EffectController | null>(null);
   const firstReplay = useRef(true);
@@ -46,7 +48,7 @@ export function GameEffectLayer({ effect, circle = false, passes, replayKey = 0,
     const canvas = canvasRef.current;
     const host = canvas?.parentElement;
     if (canvas === null || canvas === undefined || host === null || host === undefined) return undefined;
-    const controller = startEffect({ effect, circle, autoStart, ...(passes === undefined ? {} : { passes }) }, createEnv(host, canvas));
+    const controller = startEffect({ effect, circle, autoStart, immediate, ...(passes === undefined ? {} : { passes }) }, createEnv(host, canvas));
     controllerRef.current = controller;
     host.setAttribute('data-game-gl', controller.backend === 'webgl2' ? 'on' : 'off');
     return () => {
@@ -54,7 +56,7 @@ export function GameEffectLayer({ effect, circle = false, passes, replayKey = 0,
       controllerRef.current = null;
       host.removeAttribute('data-game-gl');
     };
-  }, [effect, circle, passes, autoStart, createEnv]);
+  }, [effect, circle, passes, autoStart, immediate, createEnv]);
 
   useEffect(() => {
     if (firstReplay.current) {

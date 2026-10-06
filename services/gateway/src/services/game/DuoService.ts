@@ -47,6 +47,7 @@ import { presenceCutAmong } from './LeagueAccess';
 import { GAME_BONUS_AXIS } from './MissionService';
 import { dayKeyOf, minuteOfDayInTimezone } from './gameClock';
 import { enhancedLogger } from '../../utils/logger-enhanced';
+import type { GameNotifier, GameNotificationEvent } from './GameNotifier';
 import type { SeasonService } from './SeasonService';
 
 const log = enhancedLogger.child({ module: 'DuoService' });
@@ -91,15 +92,26 @@ const NOT_PAID = (field: 'inviterPaidAt' | 'inviteePaidAt') => ({ OR: [{ [field]
 export type DuoServiceDeps = {
   readonly creditPoints: (userId: string, points: number, axisKey: EngagementAxisKey) => Promise<void>;
   readonly seasons?: Pick<SeasonService, 'addStars'>;
+  /** Prévient l'invité d'une invitation et l'invitant d'une acceptation (#9490) — jamais bloquant. */
+  readonly notifier?: Pick<GameNotifier, 'notify'>;
 };
 
 export type SignalOptions = { readonly now?: Date; readonly key?: string; readonly amount?: number };
+
+/** La page de la fin d'un compte : on pagine jusqu'à épuisement, jamais « les 50 premiers ». */
+const SETTLE_PAGE = 50;
 
 export class DuoService {
   constructor(
     private readonly prisma: PrismaClient,
     private readonly deps: DuoServiceDeps,
   ) {}
+
+  /** Une notification est une CONSÉQUENCE du geste : détachée, gardée — elle ne le retient ni ne le défait. */
+  private announce(event: GameNotificationEvent): void {
+    const pending = this.deps.notifier?.notify(event);
+    if (pending !== undefined) pending.catch(() => undefined);
+  }
 
   private async account(userId: string) {
     return this.prisma.user.findUnique({ where: { id: userId }, select: ACCOUNT_SELECT });
@@ -214,6 +226,7 @@ export class DuoService {
       if (isP2002(err)) throw new GameRefusal('DUO_ALREADY_ACTIVE');
       throw err;
     }
+    this.announce({ kind: 'duo-invited', recipientId: friendId, actorId: inviterId, duoId: duo.id, weekKey });
     return { status: 'invited', duoId: duo.id, weekKey };
   }
 
@@ -267,6 +280,7 @@ export class DuoService {
       if (fresh?.status === 'active') return { status: 'already-active', duoId };
       throw new GameRefusal('DUO_TRANSITION_REFUSED', { status: fresh?.status ?? null });
     }
+    this.announce({ kind: 'duo-accepted', recipientId: duo.inviterId, actorId: userId, duoId, weekKey: duo.weekKey });
     return { status: 'active', duoId };
   }
 
@@ -474,24 +488,30 @@ export class DuoService {
    * Rien ne reste qui pointe vers le compte effacé. Idempotent.
    */
   async settleForDeletedAccount(userId: string, now: Date = new Date()): Promise<number> {
-    const open = (await this.prisma.gameDuo.findMany({
-      where: { OR: [{ inviterId: userId }, { inviteeId: userId }], status: { in: ['invited', 'active'] } },
-      take: 50,
-    })) as DuoRow[];
-    for (const duo of open) {
-      if (duo.status === 'active' && duo.partTarget !== null) {
-        const partnerRole = duo.inviterId === userId ? 'invitee' : 'inviter';
-        const partnerProgress = partnerRole === 'inviter' ? duo.inviterProgress : duo.inviteeProgress;
-        // L'effacement d'un compte ne dépend JAMAIS d'un bonus : un crédit qui tombe se journalise.
-        if (partnerProgress >= duo.partTarget) {
-          await this.pay(duo, partnerRole, false, now).catch((error: unknown) =>
-            log.warn('duo partner reward failed during account erasure', { duoId: duo.id, error: error instanceof Error ? error.message : String(error) }),
-          );
+    const seen = new Set<string>();
+    for (;;) {
+      const open = (await this.prisma.gameDuo.findMany({
+        where: { OR: [{ inviterId: userId }, { inviteeId: userId }], status: { in: ['invited', 'active'] } },
+        take: SETTLE_PAGE,
+      })) as DuoRow[];
+      // Chaque duo terminé sort de la requête : on pagine jusqu'à épuisement, et une page sans duo NEUF arrête la boucle.
+      const fresh = open.filter((duo) => !seen.has(duo.id));
+      if (fresh.length === 0) return seen.size;
+      for (const duo of fresh) {
+        seen.add(duo.id);
+        if (duo.status === 'active' && duo.partTarget !== null) {
+          const partnerRole = duo.inviterId === userId ? 'invitee' : 'inviter';
+          const partnerProgress = partnerRole === 'inviter' ? duo.inviterProgress : duo.inviteeProgress;
+          // L'effacement d'un compte ne dépend JAMAIS d'un bonus : un crédit qui tombe se journalise.
+          if (partnerProgress >= duo.partTarget) {
+            await this.pay(duo, partnerRole, false, now).catch((error: unknown) =>
+              log.warn('duo partner reward failed during account erasure', { duoId: duo.id, error: error instanceof Error ? error.message : String(error) }),
+            );
+          }
         }
+        await this.end(duo, 'abandoned', now);
       }
-      await this.end(duo, 'abandoned', now);
     }
-    return open.length;
   }
 }
 

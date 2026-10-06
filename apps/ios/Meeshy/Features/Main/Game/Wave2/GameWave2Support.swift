@@ -86,6 +86,13 @@ actor GameWave2DiskCache: GameWave2Caching {
 struct GameDevicePrefs: Equatable, Sendable {
     var hidden = false
     var celebrations = true
+    /// L'opposition à la ligue Amis telle que le serveur l'a CONFIRMÉE (il ne la sert qu'en réponse à l'écriture) :
+    /// l'interrupteur la redit à la réouverture de la page au lieu de retomber sur « non ».
+    var friendsLeagueOptOut = false
+
+    /// Une proposition de photo (carte d'un succès, d'un moment du jeu) ne s'offre que si le jeu est visible sur cet
+    /// appareil ET que les célébrations sont permises — les deux réglages la couvrent.
+    var offersPhotos: Bool { !hidden && celebrations }
 }
 
 @MainActor
@@ -119,17 +126,22 @@ final class GameDevicePrefsStore: ObservableObject {
         let fallback = GameDevicePrefs()
         return GameDevicePrefs(
             hidden: raw["hidden"] as? Bool ?? fallback.hidden,
-            celebrations: raw["celebrations"] as? Bool ?? fallback.celebrations
+            celebrations: raw["celebrations"] as? Bool ?? fallback.celebrations,
+            friendsLeagueOptOut: raw["friendsLeagueOptOut"] as? Bool ?? fallback.friendsLeagueOptOut
         )
     }
 
-    func set(hidden: Bool? = nil, celebrations: Bool? = nil) {
+    func set(hidden: Bool? = nil, celebrations: Bool? = nil, friendsLeagueOptOut: Bool? = nil) {
         var next = prefs
         if let hidden { next.hidden = hidden }
         if let celebrations { next.celebrations = celebrations }
+        if let friendsLeagueOptOut { next.friendsLeagueOptOut = friendsLeagueOptOut }
         guard next != prefs else { return }
         prefs = next
-        defaults.set(["hidden": next.hidden, "celebrations": next.celebrations], forKey: key)
+        defaults.set(
+            ["hidden": next.hidden, "celebrations": next.celebrations, "friendsLeagueOptOut": next.friendsLeagueOptOut],
+            forKey: key
+        )
     }
 }
 
@@ -174,15 +186,36 @@ struct GameShowcaseLoader: Sendable {
         self.cache = cache ?? GameWave2DiskCache(userId: currentUserId)
     }
 
+    /// Ce que le disque a gardé, sans le réseau : l'écran s'y peint avant que la lecture réponde.
+    func cached(userId: String) async -> UserShowcaseResponse? {
+        await cache.load(UserShowcaseResponse.self, name: GameWave2CacheName.showcase(userId))
+    }
+
+    /// La vitrine servie. Le disque ne la remplace QUE sur une panne de transport : quand le serveur a RÉPONDU
+    /// (refus, absence, blocage — conformité D-5), la copie gardée est oubliée, jamais rouverte depuis le disque.
     func load(userId: String) async -> UserShowcaseResponse? {
         let name = GameWave2CacheName.showcase(userId)
-        let cached = await cache.load(UserShowcaseResponse.self, name: name)
         do {
             let fresh = try await service.fetchUserShowcase(userId: userId)
             await cache.save(fresh, name: name)
             return fresh
         } catch {
-            return cached
+            guard Self.isTransportFailure(error) else {
+                await cache.remove(name: name)
+                return nil
+            }
+            return await cache.load(UserShowcaseResponse.self, name: name)
+        }
+    }
+
+    /// Le serveur n'a PAS répondu : pas de réseau, délai, serveur en panne. Tout le reste est une réponse.
+    static func isTransportFailure(_ error: Error) -> Bool {
+        if error is URLError { return true }
+        guard let meeshy = error as? MeeshyError else { return false }
+        switch meeshy {
+        case .network: return true
+        case .server(let status, _): return status == 0 || status == 408 || status == 429 || status >= 500
+        default: return false
         }
     }
 }

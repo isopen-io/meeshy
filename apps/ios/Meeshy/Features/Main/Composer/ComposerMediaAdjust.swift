@@ -15,6 +15,9 @@ import MeeshyUI
 /// la scène ; ici l'original se lit DANS sa composition.
 nonisolated enum ComposerLookComparison {
 
+    /// Le FOND (#9496) n'a pas de filtre propre : le sien est celui de la slide
+    /// (`StoryEffects.filter`). Son original est donc sans ses réglages ET sans
+    /// le filtre de slide — qu'un média posé, lui, ne retire jamais.
     static func shown(_ slide: StorySlide, comparing id: String?) -> StorySlide {
         guard let id, let index = slide.effects.mediaObjects?.firstIndex(where: { $0.id == id }) else {
             return slide
@@ -22,7 +25,19 @@ nonisolated enum ComposerLookComparison {
         var montree = slide
         montree.effects.mediaObjects?[index].filter = nil
         montree.effects.mediaObjects?[index].adjustments = nil
+        if montree.effects.mediaObjects?[index].isBackground == true {
+            montree.effects.filter = nil
+        }
         return montree
+    }
+
+    /// **L'objet porte-t-il un rendu à comparer ?** Ses réglages, son filtre
+    /// propre — et, pour le fond, le filtre de slide. Sans rendu, « Comparer »
+    /// ne montrerait rien de différent : le contrôle ne se peint pas (loi 4).
+    static func carriesLook(_ effects: StoryEffects, id: String) -> Bool {
+        guard let media = effects.mediaObjects?.first(where: { $0.id == id }) else { return false }
+        if (media.adjustments?.activeCount ?? 0) > 0 || media.filter != nil { return true }
+        return media.isBackground && effects.filter != nil
     }
 
     /// **Ce qu'une écriture de la scène rend au modèle PENDANT la comparaison.**
@@ -38,6 +53,10 @@ nonisolated enum ComposerLookComparison {
         var rendue = slide
         rendue.effects.mediaObjects?[index].filter = source.filter
         rendue.effects.mediaObjects?[index].adjustments = source.adjustments
+        if source.isBackground {
+            rendue.effects.filter = model.effects.filter
+            rendue.effects.filterIntensity = model.effects.filterIntensity
+        }
         return rendue
     }
 }
@@ -165,7 +184,7 @@ struct ComposerMediaAdjustPanel: View {
 
     var body: some View {
         let reglages = viewModel.mediaObjectAdjustments(id: mediaId)
-        let porteUnRendu = reglages.activeCount > 0 || viewModel.mediaObjectFilter(id: mediaId) != nil
+        let porteUnRendu = ComposerLookComparison.carriesLook(viewModel.currentEffects, id: mediaId)
         let offerts = Self.kinds(for: mediaKind)
         VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             if porteUnRendu {

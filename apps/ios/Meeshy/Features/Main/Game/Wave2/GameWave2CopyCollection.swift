@@ -202,6 +202,16 @@ extension GameText {
 
     static var prestigeConfirmAccess: String { String(localized: "game2.prestige.confirm.access", defaultValue: "Attention : ta ligue (niveau 10) et ton duo (niveau 20) se referment tant que ton niveau record n’y est pas revenu.", bundle: .main) }
 
+    /// Ce que le Prestige NE retire PAS : le consentement à la ligue publique reste enregistré — le niveau record repart à 1, la
+    /// ligue (10) et le duo (20) se referment, mais le joueur retrouve sa ligue sans rien reconsentir (décision porteur).
+    static var prestigeConfirmConsent: String { String(localized: "game2.prestige.confirm.consent", defaultValue: "Ton consentement à la ligue publique reste enregistré : tu retrouves ta ligue au niveau 10.", bundle: .main) }
+
+    /// Les lignes de la confirmation, dans l'ordre où elles se lisent : ce qui repart, ce qui reste, la porte qui se referme, et ce
+    /// qui survit à cette porte.
+    static var prestigeConfirmationLines: [String] {
+        [prestigeConfirmResets, prestigeConfirmKeeps, prestigeConfirmAccess, prestigeConfirmConsent]
+    }
+
     static var prestigeGo: String { String(localized: "game2.prestige.go", defaultValue: "Passer en Prestige", bundle: .main) }
 
     static var prestigeStay: String { String(localized: "game2.prestige.stay", defaultValue: "Rester au sommet", bundle: .main) }

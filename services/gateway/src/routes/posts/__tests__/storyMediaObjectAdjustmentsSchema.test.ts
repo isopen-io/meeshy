@@ -31,3 +31,20 @@ describe('réglages d’une image posée', () => {
     expect(r.success).toBe(true);
   });
 });
+
+/** Le FOND d'une scène porte ses réglages sur le même champ (#9496) : même
+ *  schéma, mêmes bornes — le fond n'est pas une porte dérobée vers un rendu
+ *  sans plafond. */
+describe('réglages du fond d’une scène', () => {
+  const fond = { id: 'fond', postMediaId: '507f1f77bcf86cd799439012', isBackground: true };
+
+  it('test_backgroundAdjustments_areKeptThroughValidation', () => {
+    const r = StoryMediaObjectSchema.safeParse({ ...fond, adjustments: { exposure: 0.5, vignette: 0.4 } });
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.adjustments).toEqual({ exposure: 0.5, vignette: 0.4 });
+  });
+
+  it('test_backgroundAdjustments_absurdValue_isRejected', () => {
+    expect(StoryMediaObjectSchema.safeParse({ ...fond, adjustments: { blur: 400 } }).success).toBe(false);
+  });
+});

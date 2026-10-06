@@ -134,6 +134,7 @@ const ptStudioChrome = {
   'story.studio.edit.save': 'Guardar',
   'story.studio.edit.saving': 'A guardar…',
   'story.studio.edit.cancel': 'Descartar as alterações',
+  'story.studio.publish.as.storyAndReel': 'Publicar story e reel',
 } satisfies StudioChromeCatalogSlice;
 
 export default ptStudioChrome;

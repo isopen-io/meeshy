@@ -7,6 +7,7 @@ import type { MobileTranscription } from '../routes/posts/types';
 import { PostAudioService } from './posts/PostAudioService';
 import { NOT_DELETED } from './posts/postIncludes';
 import { claimableMediaWhere, describeClaimShortfall } from './posts/mediaOwnership';
+import { borrowedSoundReelEntries } from './posts/storyReelCompanion';
 import { applyMediaOrder } from './posts/mediaOrder';
 import { triggerMediaCaptionTranslations, writeMediaCaption, type WrittenMediaCaption } from './posts/mediaCaptionWrites';
 import { triggerMediaAltTranslations, writeMediaAlt, type WrittenMediaAlt } from './posts/mediaAltWrites';
@@ -39,7 +40,6 @@ import { retractReactionNotifications } from './notifications/retractReactionNot
 import { reproduceEditedSubjectNotifications } from './posts/reproduceEditedSubjectNotifications';
 import { getSharedNotificationService } from './notifications/notification-service-registry';
 import { reclaimMediaRowBytes } from './posts/reclaimPostMediaBytes';
-import { extractCaptureTracks } from './posts/captureTracks';
 import { collectCaptureTracks } from './posts/collectCaptureTracks';
 import { withCanvasMedia } from './posts/canvasMediaClaims';
 import { videoSoundExtractionAllowed } from './posts/soundEligibility';
@@ -52,6 +52,7 @@ import { translationTargetId } from './zmq-translation/utils/zmq-helpers';
 import { attachmentTranscriptionFromMobile } from './posts/mobile-transcription';
 import { parseAttachmentTranscription } from '@meeshy/shared/utils/attachment-validators';
 import { detectContentLanguage } from '../utils/content-language';
+import { guardedTimeout } from '../utils/guarded-timer';
 
 const log = enhancedLogger.child({ module: 'PostService' });
 
@@ -309,7 +310,7 @@ export class PostService {
       // bibliothèque seul » est légitime — c'est la réutilisation d'audio.
       const borrowedEntries = qualifiesAsReel(claimableMedia)
         ? []
-        : await this.borrowedSoundReelEntries(data.storyEffects, userId);
+        : await borrowedSoundReelEntries(this.prisma, data.storyEffects, userId);
       if (!qualifiesAsReel([...claimableMedia, ...borrowedEntries])) {
         effectiveType = PostType.POST;
         log.info('createPost: REEL non qualifiant dégradé en POST', {
@@ -598,12 +599,12 @@ export class PostService {
       }
 
       // 5. Cleanup du listener après timeout (fallback si certaines langues échouent)
-      timeoutHandle = setTimeout(() => {
+      timeoutHandle = guardedTimeout({ name: 'story-translation-timeout', afterMs: 60_000, logger: log, run: () => {
         if (receivedCount < expectedCount) {
           log.warn('StoryTranslation: timeout, removing listener', { postId, receivedCount, expectedCount });
         }
         removeListener();
-      }, 60_000);
+      } });
 
     } catch (error) {
       log.warn('StoryTranslation failed', { err: error, postId });
@@ -978,29 +979,6 @@ export class PostService {
     triggerMediaCaptionTranslations(await writeMediaCaption(postId, requestedMediaIds, mediaCaption, client));
   }
 
-  /**
-   * Entrées « audio » synthétiques pour `qualifiesAsReel` : les sons EMPRUNTÉS
-   * du blob (pistes `soundId`), avec la même garde d'autorisation que
-   * `recordBorrowed` — un son privé d'autrui ou coupé ne qualifie pas plus un
-   * réel qu'il ne se laisse emprunter.
-   */
-  private async borrowedSoundReelEntries(
-    storyEffects: Record<string, unknown> | undefined,
-    authorId: string,
-  ): Promise<Array<{ mimeType: string; duration: number | null }>> {
-    const soundIds = extractCaptureTracks(storyEffects)
-      .map((t) => t.soundId)
-      .filter((id): id is string => Boolean(id));
-    if (soundIds.length === 0) return [];
-    const sounds = await this.prisma.sound.findMany({
-      where: { id: { in: soundIds } },
-      select: { durationMs: true, isPublic: true, uploaderId: true, mutedAt: true },
-    });
-    return sounds
-      .filter((s) => !s.mutedAt && (s.isPublic || s.uploaderId === authorId))
-      .map((s) => ({ mimeType: 'audio/mp4', duration: s.durationMs ?? null }));
-  }
-
   async updatePost(postId: string, userId: string, data: {
     content?: string;
     visibility?: PostVisibility;
@@ -1137,7 +1115,7 @@ export class PostService {
       // audio dans la composition.
       const effectiveEffects = data.storyEffects
         ?? (post.storyEffects as Record<string, unknown> | null) ?? undefined;
-      const borrowedEntries = await this.borrowedSoundReelEntries(effectiveEffects, userId);
+      const borrowedEntries = await borrowedSoundReelEntries(this.prisma, effectiveEffects, userId);
       if (!qualifiesAsReel([...finalMedia, ...borrowedEntries])) {
         // Assertion locale justifiée : porte le `statusCode` que la route
         // traduit en 422 INVALID_POST_UPDATE — sans élargir le type en `any`.

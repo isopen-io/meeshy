@@ -28,6 +28,14 @@ final class GameReferralCardTests: XCTestCase {
         XCTAssertEqual(ReferralCard(link: "HTTP://meeshy.me/x", flame: nil).displayLink, "meeshy.me/x")
     }
 
+    func test_thePlaceholder_isNamedAsSuch_andIsNeverTheLinkOfAToken() {
+        let placeholder = ReferralCard.placeholder(flame: nil)
+        XCTAssertTrue(placeholder.isPlaceholder)
+        XCTAssertEqual(placeholder.displayLink, "meeshy.me/r/…")
+        XCTAssertFalse(ReferralCard(link: "https://meeshy.me/signup/affiliate/AMANI7", flame: nil).isPlaceholder)
+        XCTAssertTrue(placeholder.withFlame(.init(form: .braise, days: 3)).isPlaceholder, "la Flamme ne change pas la nature du lien")
+    }
+
     func test_aFlameThatIsOutOrWithoutStreak_isNotShown() {
         func flame(days: Int, status: FlameStatus, form: FlameFormKey? = .braise) -> GameBlock.Flame {
             GameBlock.Flame(days: days, form: form, bonusPercent: 0, freezes: 0, maxFreezes: 2,
@@ -94,6 +102,41 @@ final class GameReferralCardTests: XCTestCase {
         let link = await makeService(gateway).shareableLink()
         XCTAssertEqual(link, "https://meeshy.me/signup/affiliate/NEW")
         XCTAssertEqual(gateway.createdNames, [ReferralLinkRule.tokenName])
+    }
+
+    // MARK: - Lire n'est pas créer (#7742)
+
+    func test_existingLink_withNoUsableToken_createsNothing() async {
+        let gateway = MockReferralTokenGateway()
+        gateway.listed = .success([])
+        gateway.created = .success(token("NEW", link: "https://meeshy.me/signup/affiliate/NEW"))
+        let link = await makeService(gateway).existingLink()
+        XCTAssertNil(link)
+        XCTAssertEqual(gateway.listCalls, 1)
+        XCTAssertTrue(gateway.createdNames.isEmpty, "ouvrir le déroulé ne crée aucun jeton")
+    }
+
+    func test_existingLink_answersFromTheCacheOrTheList() async {
+        let cachedGateway = MockReferralTokenGateway()
+        cachedGateway.cached = [token()]
+        let cached = await makeService(cachedGateway).existingLink()
+        XCTAssertEqual(cached, "https://meeshy.me/signup/affiliate/AMANI7")
+        XCTAssertEqual(cachedGateway.listCalls, 0)
+
+        let listedGateway = MockReferralTokenGateway()
+        listedGateway.listed = .success([token("LISTED", link: "https://meeshy.me/signup/affiliate/LISTED")])
+        let listed = await makeService(listedGateway).existingLink()
+        XCTAssertEqual(listed, "https://meeshy.me/signup/affiliate/LISTED")
+        XCTAssertTrue(listedGateway.createdNames.isEmpty)
+    }
+
+    func test_existingLink_afterAFailedRead_givesNoLink_andCreatesNothing() async {
+        let gateway = MockReferralTokenGateway()
+        gateway.listed = .failure(MockReferralError.refused)
+        gateway.created = .success(token("NEW"))
+        let link = await makeService(gateway).existingLink()
+        XCTAssertNil(link)
+        XCTAssertTrue(gateway.createdNames.isEmpty)
     }
 
     func test_aFailedRead_createsNothingAtRandom_andGivesNoLink() async {

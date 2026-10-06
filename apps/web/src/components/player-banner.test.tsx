@@ -1,15 +1,19 @@
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
+import { act } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import type { GameBlockFacts } from '@meeshy/shared/utils/game/game-block';
 
+import type { EffectEnv } from '@/lib/game/gl/effect-runner';
+import type { GameGl } from '@/lib/game/gl/engine';
+import { ROLL_MS } from '@/lib/game/rolling';
 import { gameBlockFixture, gameBlockWithExtrasFixture } from '@/lib/api/game-fixture';
 import { loadGameCatalog } from '@/lib/i18n-game-catalog';
 import { playerBannerLabel, playerBannerModel, type PlayerBannerModel } from '@/lib/view/player-banner';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
-import { PlayerBanner } from './player-banner';
+import { PlayerBanner, type BannerMotion } from './player-banner';
 
 /**
  * LA BANNIÈRE DU JOUEUR (#9494) — dans le bandeau du haut quand rien ne joue.
@@ -17,7 +21,7 @@ import { PlayerBanner } from './player-banner';
  * d'une phrase complète ; un toucher ouvre Progression.
  */
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
-const { mount, unmountAll, click } = createActMounter();
+const { mount, rerender, unmountAll, click } = createActMounter();
 
 beforeAll(async () => {
   ensureHappyDomRegistered({ url: 'http://localhost/' });
@@ -104,5 +108,138 @@ describe('le toucher', () => {
     expect(link?.getAttribute('href')).toBe('/me/progression');
     await click(link);
     expect(window.location.pathname).toBe('/me/progression');
+  });
+});
+
+/**
+ * LE MOUVEMENT DE LA BANNIÈRE (#9494, XIII.1) — « un gain de points fait
+ * rouler le chiffre et avancer la jauge, avec le reflet au passage d'un
+ * niveau ». À la première peinture RIEN ne bouge (cache d'abord) ; le reflet
+ * paraît UNE fois, au gain d'un niveau seulement, et ne paraît jamais quand
+ * l'utilisateur limite les animations.
+ */
+const motion = (patch: Partial<BannerMotion> = {}) => {
+  const frames: { readonly id: number; readonly run: (t: number) => void }[] = [];
+  const timers: { readonly run: () => void; readonly ms: number; cancelled: boolean }[] = [];
+  const stats = { created: 0, disposed: 0 };
+  const gl: GameGl = { programCount: 3, render: () => undefined, clear: () => undefined, resize: () => undefined, dispose: () => void (stats.disposed += 1) };
+  const effectEnv: EffectEnv = {
+    reducedMotion: false,
+    createGl: () => {
+      stats.created += 1;
+      return gl;
+    },
+    raf: () => 0,
+    cancelRaf: () => undefined,
+    observeVisibility: () => () => undefined,
+    observeOrientation: () => null,
+  };
+  let next = 1;
+  const value: BannerMotion = {
+    reducedMotion: false,
+    largeText: false,
+    roll: {
+      reducedMotion: () => false,
+      raf: (run) => {
+        const id = next++;
+        frames.push({ id, run });
+        return id;
+      },
+      cancelRaf: () => undefined,
+    },
+    createEnv: () => effectEnv,
+    schedule: (run, ms) => {
+      const timer = { run, ms, cancelled: false };
+      timers.push(timer);
+      return () => void (timer.cancelled = true);
+    },
+    ...patch,
+  };
+  const frame = (t: number): void => {
+    const batch = frames.splice(0);
+    act(() => batch.forEach((job) => job.run(t)));
+  };
+  const fire = (): void => act(() => timers.filter((timer) => !timer.cancelled).forEach((timer) => timer.run()));
+  return { value, frame, fire, stats };
+};
+
+const gaugeText = (host: ParentNode): string => host.querySelector('[data-player-banner-gauge]')?.textContent ?? '';
+const glint = (host: ParentNode): Element | null => host.querySelector('[data-player-banner-ring] canvas[data-game-effect="sheen"]');
+
+describe('le chiffre qui roule et le reflet d’un niveau', () => {
+  const before = (): PlayerBannerModel => ({ ...newcomer(), level: 4, score: 400, progress: 0.9, nextLevel: 5, pointsToNext: 40 });
+
+  test('à la première peinture : le chiffre est à sa valeur, aucun reflet, aucun contexte WebGL', async () => {
+    const m = motion();
+    const host = await mount(<PlayerBanner model={before()} motion={m.value} />);
+    expect(gaugeText(host)).toContain('400');
+    expect(glint(host)).toBeNull();
+    expect(m.stats.created).toBe(0);
+  });
+
+  test('un gain de points sans changer de niveau : le chiffre roule, pas de reflet', async () => {
+    const m = motion();
+    const host = await mount(<PlayerBanner model={before()} motion={m.value} />);
+    await rerender(host, <PlayerBanner model={{ ...before(), score: 430, pointsToNext: 10, progress: 0.97 }} motion={m.value} />);
+    m.frame(0);
+    m.frame(ROLL_MS / 2);
+    const middle = Number(/(\d+)/.exec(gaugeText(host).replace(/\s/g, ''))?.[1]);
+    expect(middle).toBeGreaterThan(400);
+    expect(middle).toBeLessThan(430);
+    m.frame(ROLL_MS + 5);
+    expect(gaugeText(host)).toContain('430');
+    expect(glint(host)).toBeNull();
+  });
+
+  test('un niveau gagné : le reflet paraît une fois, puis le canvas est retiré et le contexte libéré', async () => {
+    const m = motion();
+    const host = await mount(<PlayerBanner model={before()} motion={m.value} />);
+    await rerender(host, <PlayerBanner model={{ ...before(), level: 5, score: 440, progress: 0.05, nextLevel: 6, pointsToNext: 190 }} motion={m.value} />);
+    expect(glint(host)).not.toBeNull();
+    expect(m.stats.created).toBe(1);
+    m.fire();
+    await rerender(host, <PlayerBanner model={{ ...before(), level: 5, score: 440, progress: 0.05, nextLevel: 6, pointsToNext: 190 }} motion={m.value} />);
+    expect(glint(host)).toBeNull();
+    expect(m.stats.disposed).toBe(1);
+  });
+
+  test('un niveau perdu (un Prestige) : pas de reflet', async () => {
+    const m = motion();
+    const host = await mount(<PlayerBanner model={{ ...before(), level: 100 }} motion={m.value} />);
+    await rerender(host, <PlayerBanner model={{ ...before(), level: 1, score: 0 }} motion={m.value} />);
+    expect(glint(host)).toBeNull();
+  });
+
+  test('animations réduites : le chiffre saute et le reflet ne paraît pas', async () => {
+    const m = motion({ reducedMotion: true, roll: { reducedMotion: () => true, raf: () => 0, cancelRaf: () => undefined } });
+    const host = await mount(<PlayerBanner model={before()} motion={m.value} />);
+    await rerender(host, <PlayerBanner model={{ ...before(), level: 5, score: 440 }} motion={m.value} />);
+    expect(gaugeText(host)).toContain('440');
+    expect(glint(host)).toBeNull();
+    expect(m.stats.created).toBe(0);
+  });
+});
+
+describe('aux très grandes tailles de texte', () => {
+  const ordered = (host: ParentNode): readonly string[] =>
+    Array.from(host.querySelectorAll('[data-player-banner] > *'))
+      .map((child) => (child as HTMLElement).dataset)
+      .flatMap((data) => Object.keys(data).filter((key) => /^playerBanner(Ring|Gauge)$/.test(key)));
+
+  test('la jauge passe sous l’anneau : elle prend toute la ligne, après le reste', async () => {
+    const m = motion({ largeText: true });
+    const host = await mount(<PlayerBanner model={playerBannerModel(gameBlockWithExtrasFixture({ balance: 12, streak: 23 }))} motion={m.value} />);
+    const link = host.querySelector('[data-player-banner]');
+    expect(link?.getAttribute('data-large-text')).toBe('');
+    const gauge = host.querySelector<HTMLElement>('[data-player-banner-gauge]');
+    expect(gauge?.className).toContain('basis-full');
+    expect(gauge?.style.order).toBe('2');
+    expect(ordered(host)).toEqual(['playerBannerRing', 'playerBannerGauge']);
+  });
+
+  test('au texte ordinaire : la jauge reste à côté de l’anneau', async () => {
+    const host = await mount(<PlayerBanner model={newcomer()} motion={motion().value} />);
+    expect(host.querySelector('[data-player-banner]')?.hasAttribute('data-large-text')).toBe(false);
+    expect(host.querySelector<HTMLElement>('[data-player-banner-gauge]')?.className).not.toContain('basis-full');
   });
 });

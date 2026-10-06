@@ -78,6 +78,36 @@ struct StoryMediaObjectAdjustmentsTests {
         #expect(relu.mediaObjects?.first?.adjustments == reglagesChauds())
     }
 
+    // MARK: - Le FOND (#9496) : même champ, même transport
+
+    private func fond(_ kind: StoryMediaKind, _ reglages: ImageAdjustments?) -> StoryMediaObject {
+        var media = StoryMediaObject(id: "fond", postMediaId: "64b0000000000000000000bb",
+                                     kind: kind, aspectRatio: 9.0 / 16.0, isBackground: true)
+        media.adjustments = reglages
+        return media
+    }
+
+    @Test func lesReglagesDuFond_surviventAuBlobV1() throws {
+        var effets = StoryEffects()
+        effets.mediaObjects = [fond(.image, reglagesChauds())]
+        effets.filter = "warm"
+        let relu = try JSONDecoder().decode(StoryEffects.self, from: JSONEncoder().encode(effets))
+        #expect(relu.resolvedBackgroundMedia?.adjustments == reglagesChauds())
+        #expect(relu.filter == "warm", "Le filtre de slide reste celui du fond, à côté de ses réglages.")
+    }
+
+    @Test(arguments: [StoryMediaKind.image, .video])
+    func lePontV3_rendSesReglagesAuFond(kind: StoryMediaKind) {
+        var effets = StoryEffects()
+        effets.mediaObjects = [fond(kind, reglagesChauds()), image(ImageAdjustments(contrast: 1.4))]
+        effets.filter = "warm"
+        let relu = StoryEffects(rendering: CanvasV3(migrating: effets), sceneIndex: 0)
+        #expect(relu.resolvedBackgroundMedia?.adjustments == reglagesChauds())
+        #expect(relu.mediaObjects?.first { $0.id == "posed" }?.adjustments == ImageAdjustments(contrast: 1.4),
+                "Le fond et l'image posée gardent chacun les leurs.")
+        #expect(relu.filter == "warm")
+    }
+
     @Test func lePontV3_nEmetRienPourUneImageNeutre() {
         var effets = StoryEffects()
         effets.mediaObjects = [image(ImageAdjustments())]

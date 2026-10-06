@@ -15,6 +15,31 @@ import Foundation
 // choisit sur l'entier (`GameCopy.isSingular`), jamais sur un `== 1` isolé.
 enum GameText {}
 
+/// LA CATÉGORIE ORDINALE d'un nombre dans une langue — ce que `Intl.PluralRules(type: 'ordinal')` donne au web
+/// (`translateGameOrdinal`). Seuls le français (`one` : « 1re ») et l'anglais (`one`, `two`, `few`, `other`) en
+/// distinguent plusieurs parmi les sept langues du jeu ; les cinq autres n'ont qu'une forme.
+enum GameOrdinal: Equatable {
+    case one, two, few, other
+
+    static func category(of count: Int, languageCode: String?) -> GameOrdinal {
+        switch languageCode {
+        case "fr":
+            return count == 1 ? .one : .other
+        case "en":
+            let teens = count % 100
+            if (11...13).contains(teens) { return .other }
+            switch count % 10 {
+            case 1: return .one
+            case 2: return .two
+            case 3: return .few
+            default: return .other
+            }
+        default:
+            return .other
+        }
+    }
+}
+
 extension GameText {
     static func bannerLevel(level: String) -> String {
         String(localized: "game2.banner.level", defaultValue: "Niveau \(level)", bundle: .main)
@@ -34,12 +59,20 @@ extension GameText {
         String(localized: "game2.banner.flame", defaultValue: "Flamme \(days)", bundle: .main)
     }
 
-    static func bannerPlace(count: Int) -> String {
+    /// « 4e », « 4th », « 4. » — la place dans le groupe de ligue. La forme suit la catégorie ORDINALE de la langue
+    /// (`GameOrdinal`) : l'anglais lit « 1st », « 2nd », « 3rd » puis « 4th » ; le français « 1re » puis « 2e ».
+    static func bannerPlace(count: Int, languageCode: String? = Locale.current.language.languageCode?.identifier) -> String {
         let number = GameCopy.formatCount(count)
-        return GameCopy.isSingular(count)
-            ? String(localized: "game2.banner.place.one", defaultValue: "\(number)re", bundle: .main)
-            : String(localized: "game2.banner.place.other", defaultValue: "\(number)e", bundle: .main)
+        switch GameOrdinal.category(of: count, languageCode: languageCode) {
+        case .one: return String(localized: "game2.banner.place.one", defaultValue: "\(number)re", bundle: .main)
+        case .two: return String(localized: "game2.banner.place.two", defaultValue: "\(number)e", bundle: .main)
+        case .few: return String(localized: "game2.banner.place.few", defaultValue: "\(number)e", bundle: .main)
+        case .other: return String(localized: "game2.banner.place.other", defaultValue: "\(number)e", bundle: .main)
+        }
     }
+
+    /// Ce que VoiceOver ajoute à la bannière du joueur : où mène son toucher.
+    static var bannerHint: String { String(localized: "game2.banner.hint", defaultValue: "Ouvre ta progression", bundle: .main) }
 
     static func bannerPoints(points: String) -> String {
         String(localized: "game2.banner.points", defaultValue: "\(points) pts", bundle: .main)

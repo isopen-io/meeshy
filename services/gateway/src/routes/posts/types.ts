@@ -82,6 +82,19 @@ export const StoryMediaAdjustmentsSchema = z.object({
   vignette: adjustmentValue,
 }).passthrough();
 
+// Le RECADRAGE d'une image posee (#9499) — `MediaCropRect` iOS : un rectangle
+// en FRACTIONS de la source, origine en haut a gauche, absent quand il est
+// plein. Les quatre bornes ensemble, dans la source, d'aire non nulle — meme
+// contrat que les cles `cropX/Y/W/H` du pont v3 (`canvas-v3.ts`).
+const cropFraction = z.number().finite().min(0).max(1);
+const cropSide = z.number().finite().gt(0).max(1);
+export const StoryMediaCropSchema = z.object({
+  x: cropFraction,
+  y: cropFraction,
+  width: cropSide,
+  height: cropSide,
+});
+
 export const StoryMediaObjectSchema = z.object({
   id: z.string().max(STORY_ID_MAX).optional(),
   postMediaId: z.string().max(STORY_ID_MAX).optional(),
@@ -116,6 +129,7 @@ export const StoryMediaObjectSchema = z.object({
   // slide (`StoryEffects.filter`, celui du fond). Borne comme ses freres.
   filter: z.string().max(32).optional(),
   adjustments: StoryMediaAdjustmentsSchema.optional(),
+  crop: StoryMediaCropSchema.optional(),
 }).passthrough();
 
 const StoryTextObjectSchema = z.object({
@@ -334,6 +348,12 @@ export const CreatePostSchema = z.object({
   // dont la majorité n'est pas vérifiée), `EXACT` retombe sur `NEIGHBORHOOD`
   // côté serveur (`PostService.createPost` via `resolveDiscoverabilityPrecision`).
   discoverabilityPrecisionConfirmed: z.boolean().optional(),
+  // « Publier AUSSI en réel » (#9476) — OPTIONNEL : un client qui n'envoie que
+  // `type` publie exactement comme avant. Vrai, il n'est admis que sur une
+  // STORY originale (`ALSO_AS_REEL_REQUIRES_STORY` sinon) ; le réel reçoit ses
+  // PROPRES médias, par copie (`services/posts/storyReelCompanion.ts`), ou rien
+  // ne part (`REEL_NOT_QUALIFIED`).
+  alsoAsReel: z.boolean().optional(),
 }).refine((data) => {
   // Une republication HÉRITE la liste de sa source (`PostService.createPost`,
   // `repostVisibilityInheritsAudienceList`) : ce que le client envoie est

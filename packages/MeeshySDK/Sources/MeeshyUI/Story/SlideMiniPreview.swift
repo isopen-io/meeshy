@@ -220,11 +220,11 @@ public struct SlideMiniPreview: View {
             // enveloppe respectant l'aspect ratio) projetée par `width / 1080`.
             // L'ancien heuristique `0,35 × width` carré + `scaledToFit` rendait le
             // média ~moitié trop petit et au mauvais ratio vs reader/preview.
-            let base = StoryMediaLayer.baseMediaDesignSize(aspectRatio: media.aspectRatio)
+            let base = StoryMediaLayer.baseMediaDesignSize(for: media)
             let factor = size.width / CanvasGeometry.designWidth
             let cadre = CGSize(width: base.width * factor * CGFloat(media.scale),
                                height: base.height * factor * CGFloat(media.scale))
-            Image(uiImage: shown(img, filling: cadre))
+            Image(uiImage: shown(MediaCropPresentation.keptPart(img, of: media), filling: cadre))
                 .resizable()
                 .scaledToFill()
                 .frame(width: cadre.width, height: cadre.height)

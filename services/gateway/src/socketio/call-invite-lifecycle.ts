@@ -7,6 +7,7 @@ import type { PushNotificationService } from '../services/PushNotificationServic
 import type { NotificationService } from '../services/notifications/NotificationService';
 import { buildCallSilentPush } from '../services/call-push-mirroring';
 import { logger } from '../utils/logger';
+import { guardedTimeout } from '../utils/guarded-timer';
 
 /**
  * LA VIE D'UNE INVITATION D'APPEL (#8470, #8467) — une personne invitée dans un
@@ -56,7 +57,7 @@ const keyOf = (callId: string, userId: string): string => `${callId}:${userId}`;
 const answered = (session: InvitationSession, userId: string): boolean =>
   (session.participants ?? []).some((p) => p.participant?.userId === userId);
 
-const defaultSchedule = (fn: () => void, ms: number): unknown => setTimeout(fn, ms).unref();
+const defaultSchedule = (fn: () => void, ms: number): unknown => guardedTimeout({ name: 'call-invite-lifecycle', afterMs: ms, logger, run: fn }).unref();
 const defaultCancel = (handle: unknown): void => clearTimeout(handle as ReturnType<typeof setTimeout>);
 
 export function createCallInvitationLifecycle(deps: CallInvitationLifecycleDeps) {

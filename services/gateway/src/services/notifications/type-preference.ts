@@ -29,6 +29,10 @@ export function isNotificationTypeEnabledByPreference(
     case 'friend_accepted':
     case 'contact_joined':    return prefs.contactRequestEnabled;
     case 'contact_recently_active': return prefs.contactActivityEnabled ?? true;
+    case 'game_duo_invited':
+    case 'game_duo_accepted':
+    case 'game_league_result':
+    case 'game_season_step':   return prefs.gameEnabled ?? true;
     case 'member_joined':     return prefs.memberJoinedEnabled;
     case 'message_reply':
     case 'reply':             return prefs.replyEnabled;

@@ -1,3 +1,5 @@
+import { useState } from 'react';
+
 import type { GameDuoBlock } from '@meeshy/shared/types/game';
 import { DUO_MIN_LEVEL } from '@meeshy/shared/utils/game/duo';
 
@@ -61,6 +63,54 @@ function Quiet({ marker, onClick, disabled, children }: { readonly marker: strin
     <button type="button" {...{ [marker]: '' }} disabled={disabled} onClick={onClick} className="rounded-chip px-4 text-body font-semibold disabled:opacity-60" style={{ minHeight: 44, color: GAME_ERROR }}>
       {children}
     </button>
+  );
+}
+
+const SEARCH_FROM = 6;
+
+const fold = (value: string): string => value.normalize('NFD').replace(/\p{M}/gu, '').toLocaleLowerCase();
+
+/**
+ * LES AMIS INVITABLES — tous, jamais les huit premiers : une personne qui a
+ * cent amis acceptés doit pouvoir inviter le centième. La liste défile dans sa
+ * hauteur ; au-delà de quelques amis, un champ de recherche (sans casse ni
+ * accent) la restreint. Les amis viennent du cache persisté (`useGameFriends`) :
+ * rien ne se charge ici, donc rien à attendre.
+ */
+function FriendPicker({ friends, online, busy, onInvite }: { readonly friends: readonly DuoFriend[]; readonly online: boolean; readonly busy: boolean; readonly onInvite: (friend: DuoFriend) => void }) {
+  const [query, setQuery] = useState('');
+  const needle = fold(query.trim());
+  const shown = needle === '' ? friends : friends.filter((friend) => fold(friend.displayName).includes(needle));
+  return (
+    <>
+      {friends.length < SEARCH_FROM ? null : (
+        <input
+          type="search"
+          value={query}
+          onInput={(event) => setQuery((event.target as HTMLInputElement).value)}
+          onChange={() => undefined}
+          aria-label={gameText('game.duo.search')}
+          placeholder={gameText('game.duo.search')}
+          className="min-h-11 rounded-chip border-0 px-4 text-body"
+          style={{ backgroundColor: 'var(--game-track)', color: GAME_INK }}
+        />
+      )}
+      {shown.length === 0 ? (
+        <p role="status" className="text-caption" style={{ color: GAME_INK_2 }}>
+          {gameText('game.duo.search.none')}
+        </p>
+      ) : (
+        <ul data-game-duo-friends="" className="flex max-h-72 flex-col gap-1 overflow-y-auto" aria-label={gameText('game.duo.pick')}>
+          {shown.map((friend) => (
+            <li key={friend.id}>
+              <Action marker="data-game-duo-invite" tint={GAME_BRAND} busy={busy} disabled={!online} onClick={() => onInvite(friend)}>
+                {gameText('game.duo.invite', { name: friend.displayName })}
+              </Action>
+            </li>
+          ))}
+        </ul>
+      )}
+    </>
   );
 }
 
@@ -151,15 +201,7 @@ export function GameDuo(props: GameDuoProps) {
             {gameText('game.duo.no_friends')}
           </p>
         ) : (
-          <ul className="flex flex-col gap-1" aria-label={gameText('game.duo.pick')}>
-            {friends.slice(0, 8).map((friend) => (
-              <li key={friend.id}>
-                <Action marker="data-game-duo-invite" tint={GAME_BRAND} busy={busy} disabled={!online} onClick={() => onInvite(friend)}>
-                  {gameText('game.duo.invite', { name: friend.displayName })}
-                </Action>
-              </li>
-            ))}
-          </ul>
+          <FriendPicker friends={friends} online={online} busy={busy} onInvite={onInvite} />
         )}
       </>
     );

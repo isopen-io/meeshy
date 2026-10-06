@@ -296,3 +296,56 @@ struct GameBricksRenderTests {
         }
     }
 }
+
+// MARK: - La bannière du joueur (#9494)
+
+@MainActor
+@Suite("Jeu Meeshy — la bannière du joueur (MeeshyUI)")
+struct PlayerBannerRenderTests {
+
+    private let palette = PlayerBannerView.Palette(surface: Color(hex: "f4f6dc"), ink: Color(hex: "1c1941"), muted: Color(hex: "6b7280"))
+
+    private func complete(tier: LevelTierKey = .eclat, progress: Double = 0.78) -> GamePlayerBanner {
+        GamePlayerBanner(
+            level: 34, tier: tier, progress: progress, score: 1240, nextLevel: 35, pointsToNext: 350, meeshes: 12,
+            rank: GamePlayerBanner.Rank(rank: .conteur, division: .iii), league: GamePlayerBanner.League(league: .jade, place: 4),
+            flame: GamePlayerBanner.Flame(form: .flamme, days: 23)
+        )
+    }
+
+    private func bare(tier: LevelTierKey = .eclat, progress: Double = 0.78) -> GamePlayerBanner {
+        GamePlayerBanner(level: 34, tier: tier, progress: progress, score: 1240, nextLevel: 35, pointsToNext: 350)
+    }
+
+    private let texts = PlayerBannerView.Texts(points: "1 240 pts", missing: "encore 350", meeshes: "12", place: "4e", flameDays: "23")
+    private let bareTexts = PlayerBannerView.Texts(points: "1 240 pts", missing: "encore 350")
+
+    private func render(_ model: GamePlayerBanner, texts: PlayerBannerView.Texts, width: CGFloat = 390) throws -> GameRenderProbe {
+        try #require(GameRenderProbe.render(PlayerBannerView(model: model, texts: texts, palette: palette), width: width, height: 64))
+    }
+
+    @Test("la bannière peint son aplat bord à bord, qu'elle soit complète ou nue")
+    func paintsItsSurface() throws {
+        #expect(try render(complete(), texts: texts).coverage > 0.9)
+        #expect(try render(bare(), texts: bareTexts).coverage > 0.9)
+    }
+
+    @Test("seulement ce qui existe : la bannière complète ne ressemble pas à la bannière d'un nouveau joueur")
+    func piecesChangeThePicture() throws {
+        #expect(try render(complete(), texts: texts).distance(to: render(bare(), texts: bareTexts)) > 0.3)
+    }
+
+    @Test("la jauge avance avec la progression")
+    func gaugeFollowsProgress() throws {
+        let low = try render(bare(progress: 0.2), texts: bareTexts)
+        let high = try render(bare(progress: 0.9), texts: bareTexts)
+        #expect(low.distance(to: high) > 0.2)
+    }
+
+    @Test("le palier teinte l'anneau, la jauge et le filigrane")
+    func tierTintsTheBanner() throws {
+        let spark = try render(bare(tier: .etincelle), texts: bareTexts)
+        let radiance = try render(bare(tier: .rayon), texts: bareTexts)
+        #expect(spark.distance(to: radiance) > 0.5)
+    }
+}

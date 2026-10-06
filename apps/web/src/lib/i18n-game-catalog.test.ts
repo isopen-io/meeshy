@@ -156,6 +156,29 @@ describe('le pluriel suit les catégories de la langue de l’interface', () => 
   });
 });
 
+/**
+ * LE PSEUDONYME DE LIGUE — `isValidLeaguePseudonym` accepte le tiret bas : le
+ * message qui refuse un pseudonyme énumère ce que la loi accepte, il ne le
+ * rétrécit pas.
+ */
+const UNDERSCORE_WORD: Readonly<Record<InterfaceLanguage, string>> = {
+  fr: 'tiret bas',
+  en: 'underscore',
+  es: 'guion bajo',
+  pt: 'sublinhado',
+  it: 'trattino basso',
+  de: 'Unterstrich',
+  ar: 'شرطة سفلية',
+};
+
+describe('le refus d’un pseudonyme de ligue cite le tiret bas', () => {
+  const KEYS = ['game.league.pseudonym.invalid', 'game.error.league_pseudonym_invalid'] as const;
+  test('dans les sept langues, pour le champ comme pour le refus de la passerelle', async () => {
+    const verdicts = (await loadAll()).flatMap(([language, catalog]) => KEYS.map((key) => [language, key, (catalog[key] ?? '').includes(UNDERSCORE_WORD[language])] as const));
+    expect(verdicts.filter(([, , cites]) => !cites)).toEqual([]);
+  });
+});
+
 describe('translateGame', () => {
   test('interpole les paramètres', async () => {
     await loadGameCatalog('en');

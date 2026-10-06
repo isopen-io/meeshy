@@ -110,6 +110,8 @@ final class GameWave2Model: ObservableObject {
 
     var game: GameBlock? { progression.game }
     var isOnline: Bool { progression.isOnline }
+    /// L'opposition à la ligue Amis : la dernière réponse du serveur, sinon ce qu'il a confirmé avant (gardé par compte).
+    var friendsLeagueOptedOut: Bool { privacy?.friendsLeagueOptOut ?? prefs.prefs.friendsLeagueOptOut }
 
     // MARK: - Les lectures
 
@@ -367,6 +369,7 @@ final class GameWave2Model: ObservableObject {
             let response = try await service.setPrivacy(gameHidden: hidden, friendsLeagueOptOut: nil, requestId: progression.requestId(for: intention))
             progression.spent(intention)
             privacy = response
+            prefs.set(friendsLeagueOptOut: response.friendsLeagueOptOut)
             if hidden { await closeEverything() }
             await progression.load(forceNetwork: true)
         } catch {
@@ -400,6 +403,7 @@ final class GameWave2Model: ObservableObject {
                                                         requestId: progression.requestId(for: "friends-opt-out:\(optedOut)"))
             progression.spent("friends-opt-out:\(optedOut)")
             privacy = response
+            prefs.set(friendsLeagueOptOut: response.friendsLeagueOptOut)
         } catch {
             progression.releaseRequestIdIfConflict(error, intention: "friends-opt-out:\(optedOut)")
             errors.friendsOptOut = GameCopy.errorMessage(for: error)

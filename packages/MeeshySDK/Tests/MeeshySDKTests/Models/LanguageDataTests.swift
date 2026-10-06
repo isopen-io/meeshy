@@ -103,4 +103,36 @@ final class LanguageDataTests: XCTestCase {
     func test_info_returnsNilForUnknownCode() {
         XCTAssertNil(LanguageData.info(for: "zz"))
     }
+
+    // MARK: - L'Atlas des langues (#9388)
+
+    /// Chaque langue que le passeport peut tamponner a ses métadonnées : sans entrée, son tampon
+    /// retombait sur la couleur de marque et son nom sur le code en capitales.
+    func test_everyAtlasLanguageHasItsMetadata() {
+        for code in GameAtlas.catalog {
+            XCTAssertNotNil(LanguageData.info(for: code), "la langue « \(code) » du passeport n'a aucune entrée dans LanguageData")
+        }
+    }
+
+    func test_theFiveAtlasLanguagesThatWereMissingCarryTheirNativeAndEnglishNames() {
+        let expected: [(code: String, name: String, native: String)] = [
+            ("om", "Oromo", "Afaan Oromoo"),
+            ("ti", "Tigrinya", "\u{1275}\u{130D}\u{122D}\u{129B}"),
+            ("ny", "Chichewa", "Chinyanja"),
+            ("ksf", "Bafia", "Rikpa"),
+            ("nnh", "Ngiemboon", "Ngiemboon"),
+        ]
+        for item in expected {
+            let info = LanguageData.info(for: item.code)
+            XCTAssertEqual(info?.name, item.name, item.code)
+            XCTAssertEqual(info?.nativeName, item.native, item.code)
+            XCTAssertFalse(info?.flag.isEmpty ?? true, item.code)
+        }
+    }
+
+    func test_anAtlasLanguageIsNotOfferedAsAnInterfaceLanguage() {
+        for code in ["om", "ti", "ny", "ksf", "nnh"] {
+            XCTAssertFalse(LanguageData.interfaceLanguageCodes.contains(code), code)
+        }
+    }
 }

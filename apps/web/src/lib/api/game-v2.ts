@@ -158,7 +158,7 @@ const isVisibilityBlock = (value: unknown): value is GameVisibility =>
  * TOLÉRAMMENT, et un serveur qui ne la sert pas laisse l'écran des succès
  * comme avant. Une entrée illisible tombe seule.
  */
-export type GameWebExtras = { readonly achievementRarities?: AchievementRarityMap };
+export type GameWebExtras = { readonly achievementRarities?: AchievementRarityMap | undefined };
 
 /** Les sept extensions que le bloc `game` peut porter. */
 export type GameExtensions = GameWebExtras & {

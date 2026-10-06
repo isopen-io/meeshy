@@ -13,7 +13,9 @@
  *    de l'instantané et sa place dans l'effectif disparaissent, un groupe vide
  *    est supprimé — le classement des autres membres ne bouge pas ;
  *  - une visite de parrainage ne garde plus l'identifiant du compte (parrain ou
- *    visiteur converti).
+ *    visiteur converti) ;
+ *  - une notification de duo qui le NOMME chez un partenaire (« Marie t'invite »)
+ *    disparaît : elle désigne un compte qui n'existe plus.
  *
  * Conservation comptable : les registres de Gloire et de Meeshes sont SUPPRIMÉS
  * (aucune valeur ne se convertit en argent, rien n'impose de les garder). Si la
@@ -62,10 +64,14 @@ export type GamePurgeSummary = {
   readonly deleted: Readonly<Record<string, number>>;
   readonly duosDeleted: number;
   readonly duosSettled: number;
+  readonly duoNotificationsErased: number;
   readonly leagueGroupsTouched: number;
 };
 
-type PurgeDb = Pick<PrismaClient, (typeof GAME_PURGED_MODELS)[number] | 'gameDuo' | 'user' | 'leagueGroupWeek' | 'affiliateVisitSession'>;
+type PurgeDb = Pick<PrismaClient, (typeof GAME_PURGED_MODELS)[number] | 'gameDuo' | 'user' | 'leagueGroupWeek' | 'affiliateVisitSession' | 'notification'>;
+
+/** Les notifications de jeu qui NOMMENT un autre joueur (`actor`) : celles d'un duo. */
+const DUO_NOTIFICATION_TYPES = ['game_duo_invited', 'game_duo_accepted'] as const;
 
 export type GamePurgeDeps = {
   /** Le crédit des points de jeu — payer sa part simple au partenaire d'un duo. Absent : `EngagementService`. */
@@ -83,10 +89,27 @@ async function settleOpenDuos(prisma: PurgeDb, userId: string, deps: GamePurgeDe
   return new DuoService(prisma as unknown as PrismaClient, { creditPoints }).settleForDeletedAccount(userId);
 }
 
-/** Retire le compte de chaque groupe où il figure : appartenance, instantané, effectif ; supprime un groupe vidé. */
+/** La taille d'une page de purge : on PAGINE jusqu'à épuisement, jamais « les 500 premiers ». */
+const PURGE_PAGE = 500;
+
+/**
+ * Retire le compte de chaque groupe où il figure : appartenance, instantané, effectif ; supprime un
+ * groupe vidé. Pagine jusqu'à épuisement — chaque page SUPPRIME ses appartenances, la suivante repart
+ * donc du reste ; une page qui ne fait rien reculer arrête la boucle (jamais de tour sans fin).
+ */
 async function removeFromLeagueGroups(prisma: PurgeDb, userId: string): Promise<number> {
-  const memberships = await prisma.leagueMembership.findMany({ where: { userId }, select: { groupId: true }, take: 500 });
-  const groupIds = [...new Set(memberships.map((m) => m.groupId))];
+  const touched = new Set<string>();
+  for (;;) {
+    const memberships = await prisma.leagueMembership.findMany({ where: { userId }, select: { groupId: true }, take: PURGE_PAGE });
+    const groupIds = [...new Set(memberships.map((m) => m.groupId))];
+    if (groupIds.length === 0 || groupIds.every((id) => touched.has(id))) break;
+    await removeFromGroups(prisma, userId, groupIds);
+    groupIds.forEach((id) => touched.add(id));
+  }
+  return touched.size;
+}
+
+async function removeFromGroups(prisma: PurgeDb, userId: string, groupIds: readonly string[]): Promise<void> {
   for (const groupId of groupIds) {
     const group = await prisma.leagueGroupWeek.findUnique({ where: { groupId }, select: { snapshot: true } });
     const snapshot = (group?.snapshot ?? null) as Record<string, number> | null;
@@ -99,16 +122,56 @@ async function removeFromLeagueGroups(prisma: PurgeDb, userId: string): Promise<
       await prisma.leagueGroupWeek.updateMany({ where: { groupId }, data: { memberCount: remaining, ...(rest ? { snapshot: rest } : {}) } });
     }
   }
-  return groupIds.length;
+}
+
+/**
+ * Les duos du compte, page par page : les ids se relèvent puis se SUPPRIMENT, la page suivante repart du reste.
+ * Rend aussi les PARTENAIRES croisés : ce sont les seules boîtes où une notification de duo nomme ce compte.
+ */
+async function deleteDuos(prisma: PurgeDb, userId: string): Promise<{ readonly deleted: number; readonly partners: ReadonlySet<string> }> {
+  const where = { OR: [{ inviterId: userId }, { inviteeId: userId }] };
+  const partners = new Set<string>();
+  let deleted = 0;
+  for (;;) {
+    const page = await prisma.gameDuo.findMany({ where, select: { id: true, inviterId: true, inviteeId: true }, take: PURGE_PAGE });
+    if (page.length === 0) break;
+    page.forEach((duo) => partners.add(duo.inviterId === userId ? duo.inviteeId : duo.inviterId));
+    const duoIds = page.map((d) => d.id);
+    await prisma.gameDuoSlot.deleteMany({ where: { duoId: { in: duoIds } } });
+    const removed = await prisma.gameDuo.deleteMany({ where: { id: { in: duoIds } } });
+    if (removed.count === 0) break;
+    deleted += removed.count;
+  }
+  partners.delete(userId);
+  return { deleted, partners };
+}
+
+const actorIdOf = (actor: unknown): unknown => (actor !== null && typeof actor === 'object' ? (actor as { readonly id?: unknown }).id : undefined);
+
+/**
+ * « Marie t'invite au duo » reste chez le partenaire après l'effacement de Marie : son nom et son
+ * avatar désignent un compte qui n'existe plus (même règle que les annonces `contact_joined`). Seules
+ * les boîtes des partenaires sont lues, par paquets bornés.
+ */
+async function eraseDuoNotificationsNaming(prisma: PurgeDb, userId: string, partners: ReadonlySet<string>): Promise<number> {
+  const ids = [...partners];
+  let erased = 0;
+  for (let start = 0; start < ids.length; start += PURGE_PAGE) {
+    const rows = await prisma.notification.findMany({
+      where: { userId: { in: ids.slice(start, start + PURGE_PAGE) }, type: { in: [...DUO_NOTIFICATION_TYPES] } },
+      select: { id: true, actor: true },
+    });
+    const naming = rows.filter((row) => actorIdOf(row.actor) === userId).map((row) => row.id);
+    if (naming.length > 0) erased += (await prisma.notification.deleteMany({ where: { id: { in: naming } } })).count;
+  }
+  return erased;
 }
 
 export async function purgeGameData(prisma: PurgeDb, userId: string, deps: GamePurgeDeps = {}): Promise<GamePurgeSummary> {
   // 1. Les duos ouverts se TERMINENT proprement avant d'être effacés.
   const duosSettled = await settleOpenDuos(prisma, userId, deps);
-  const duos = await prisma.gameDuo.findMany({ where: { OR: [{ inviterId: userId }, { inviteeId: userId }] }, select: { id: true }, take: 500 });
-  const duoIds = duos.map((d) => d.id);
-  if (duoIds.length > 0) await prisma.gameDuoSlot.deleteMany({ where: { duoId: { in: duoIds } } });
-  const duosDeleted = await prisma.gameDuo.deleteMany({ where: { OR: [{ inviterId: userId }, { inviteeId: userId }] } });
+  const { deleted: duosDeleted, partners } = await deleteDuos(prisma, userId);
+  const duoNotificationsErased = await eraseDuoNotificationsNaming(prisma, userId, partners);
 
   // 2. Aucun membre fantôme dans un groupe de ligue.
   const leagueGroupsTouched = await removeFromLeagueGroups(prisma, userId);
@@ -155,5 +218,5 @@ export async function purgeGameData(prisma: PurgeDb, userId: string, deps: GameP
       brokenStreakLastDay: null,
     },
   });
-  return { deleted, duosDeleted: duosDeleted.count, duosSettled, leagueGroupsTouched };
+  return { deleted, duosDeleted, duosSettled, duoNotificationsErased, leagueGroupsTouched };
 }

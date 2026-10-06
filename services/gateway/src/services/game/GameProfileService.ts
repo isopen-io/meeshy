@@ -14,12 +14,15 @@
  * jamais, même sur « tout le monde ». L'amitié est celle de la loi de présence
  * (`amitieAcceptee`), rien d'autre ; ADMIN/BIGBOSS voient (`isGlobalAdmin`).
  *
- * Aucune lecture n'échoue « ouvert » : un réglage illisible se lit « moi seul ».
+ * Aucune lecture n'échoue « ouvert » : un réglage illisible se lit « moi seul ». Un identifiant
+ * malformé, un compte supprimé ou désactivé se lisent comme un compte inconnu — ADMIN compris —
+ * et jamais une erreur qui distinguerait les cas.
  */
 
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { GameVisibility } from '@meeshy/shared/types/game';
 import { isGlobalAdmin } from '@meeshy/shared/types/role-types';
+import { isValidObjectId } from '@meeshy/shared/utils/object-id';
 import {
   ATLAS_DEFAULT_VISIBILITY,
   SHOWCASE_DEFAULT_VISIBILITY,
@@ -172,18 +175,45 @@ export class GameProfileService {
    */
   async facetVisibleTo(params: { readonly viewer: PresenceViewer; readonly targetId: string; readonly facet: GameFacet }): Promise<boolean> {
     const { viewer, targetId, facet } = params;
-    const kind = await this.viewerKind(viewer, targetId);
-    if (kind === 'blocked') return false;
-    if (kind === 'self' || kind === 'admin') return true;
+    return (await this.facetsVisibleTo({ viewer, targetId, facets: [facet] }))[facet] === true;
+  }
 
-    const settings = await this.settings(targetId);
-    const hideProfileFromSearch = await this.hidesFromSearch(targetId);
-    const capped = capShowcaseVisibility({
-      visibility: settings.visibility[facet],
-      hideProfileFromSearch,
-      gameHidden: settings.gameHidden,
-    });
-    return canViewShowcase({ visibility: capped, viewer: kind });
+  /**
+   * Plusieurs facettes d'un même membre, décidées d'UNE traversée : le blocage, le lecteur, les réglages
+   * et le plafond de recherche se lisent une fois. Mêmes lois, mêmes refus que `facetVisibleTo` — qui en
+   * est la projection à une facette. Une facette non demandée est absente de la carte.
+   */
+  async facetsVisibleTo(params: {
+    readonly viewer: PresenceViewer;
+    readonly targetId: string;
+    readonly facets: readonly GameFacet[];
+  }): Promise<Readonly<Partial<Record<GameFacet, boolean>>>> {
+    const { viewer, targetId, facets } = params;
+    const verdict = (allowed: boolean): Partial<Record<GameFacet, boolean>> => Object.fromEntries(facets.map((facet) => [facet, allowed]));
+    if (!isValidObjectId(targetId)) return verdict(false);
+    const kind = await this.viewerKind(viewer, targetId);
+    if (kind === 'blocked') return verdict(false);
+    if (kind === 'self') return verdict(true);
+
+    // Un compte supprimé ou désactivé se lit comme un compte inconnu, ADMIN compris ; les trois lectures
+    // partent ensemble pour qu'un compte absent ne réponde pas plus vite qu'un refus.
+    const [living, settings, hideProfileFromSearch] = await Promise.all([this.isLiving(targetId), this.settings(targetId), this.hidesFromSearch(targetId)]);
+    if (!living) return verdict(false);
+    if (kind === 'admin') return verdict(true);
+    return Object.fromEntries(
+      facets.map((facet) => [
+        facet,
+        canViewShowcase({
+          visibility: capShowcaseVisibility({ visibility: settings.visibility[facet], hideProfileFromSearch, gameHidden: settings.gameHidden }),
+          viewer: kind,
+        }),
+      ]),
+    );
+  }
+
+  private async isLiving(userId: string): Promise<boolean> {
+    const row = await this.prisma.user.findFirst({ where: { id: userId }, select: { isActive: true, deletedAt: true } });
+    return row !== null && row.isActive !== false && row.deletedAt == null;
   }
 
   /** Se cacher de la recherche : illisible ⇒ « caché » (fail-closed). */

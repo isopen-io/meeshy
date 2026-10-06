@@ -11,6 +11,10 @@ import MeeshySDK
 // lien tel qu'il part — et ne monte JAMAIS ce bandeau sans lien : « sans lien disponible, la
 // carte part sans lui, et sans placeholder qui ressemblerait à un lien » (conformité H-8).
 //
+// UNE exception, décidée par le porteur : dans l'APERÇU, tant que l'utilisateur n'a aucun jeton (le
+// jeton se crée au toucher de « Partager », jamais avant), le lien est un EMPLACEMENT « meeshy.me/r/… »
+// cerné de pointillés (`isPlaceholder`). L'hôte ne le monte jamais dans une image qui sort de l'app.
+//
 // Tout se dessine à l'échelle de la HAUTEUR offerte (66 unités sur la planche) : le bandeau tient
 // de 3,5:1 (carré) à 3,8:1 (story) sans rien déformer. Les couleurs sont fixes — la carte est une
 // IMAGE partagée hors de l'app, jamais habillée par le thème de celui qui la compose.
@@ -21,6 +25,7 @@ public struct GameReferralBannerView: View {
     private let link: String
     private let flameForm: FlameFormKey?
     private let flameLabel: String?
+    private let isPlaceholder: Bool
 
     /// - Parameters:
     ///   - title: « Rejoins-moi sur Meeshy ».
@@ -28,11 +33,36 @@ public struct GameReferralBannerView: View {
     ///   - flameForm: la forme de la Flamme de l'utilisateur ; `nil` ⇒ pas de Flamme sur la carte
     ///     (il l'a retirée, ou n'en a pas).
     ///   - flameLabel: « 23 j », sous la Flamme.
-    public init(title: String, link: String, flameForm: FlameFormKey? = nil, flameLabel: String? = nil) {
+    ///   - isPlaceholder: `true` ⇒ le lien n'existe pas encore : son texte est un emplacement cerné de pointillés.
+    public init(title: String, link: String, flameForm: FlameFormKey? = nil, flameLabel: String? = nil,
+                isPlaceholder: Bool = false) {
         self.title = title
         self.link = link
         self.flameForm = flameForm
         self.flameLabel = flameLabel
+        self.isPlaceholder = isPlaceholder
+    }
+
+    /// Le lien ; ou, sans jeton, son EMPLACEMENT : même texte, atténué, dans un cadre en pointillé.
+    @ViewBuilder
+    private func linkText(k: CGFloat) -> some View {
+        let text = Text(link)
+            .font(.system(size: 10.5 * k, weight: .medium, design: .monospaced))
+            .foregroundColor(Self.linkInk)
+            .lineLimit(1)
+            .minimumScaleFactor(0.5)
+        if isPlaceholder {
+            text
+                .opacity(0.8)
+                .padding(.horizontal, 5 * k)
+                .padding(.vertical, 1.5 * k)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 4 * k, style: .continuous)
+                        .strokeBorder(Self.linkInk.opacity(0.85), style: StrokeStyle(lineWidth: max(0.75, 0.9 * k), dash: [3 * k, 2.5 * k]))
+                )
+        } else {
+            text
+        }
     }
 
     private static let ink = Color(hex: "1c1941")
@@ -50,11 +80,7 @@ public struct GameReferralBannerView: View {
                         .foregroundColor(.white)
                         .lineLimit(1)
                         .minimumScaleFactor(0.5)
-                    Text(link)
-                        .font(.system(size: 10.5 * k, weight: .medium, design: .monospaced))
-                        .foregroundColor(Self.linkInk)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.5)
+                    linkText(k: k)
                 }
                 Spacer(minLength: 0)
                 if let flameForm {

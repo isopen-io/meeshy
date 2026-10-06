@@ -153,7 +153,8 @@ struct DocumentComposerDoor: View {
                     references: references,
                     composerMediaTexts: ComposerMediaTexts(alt: accessibility.mediaAlt ?? [:],
                                                            caption: accessibility.mediaCaption ?? [:]),
-                    allowSoundExtraction: accessibility.allowSoundExtraction
+                    allowSoundExtraction: accessibility.allowSoundExtraction,
+                    alsoAsReel: accessibility.alsoAsReel
                 )
                 // La publication accepte TOUJOURS : hors-ligne, elle part en
                 // file d'attente plutôt que de rester dans le composer.

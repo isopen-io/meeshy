@@ -229,3 +229,84 @@ describe('intégrité référentielle après la purge', () => {
     expect(db.affiliateVisitSession.rows).toEqual([expect.objectContaining({ id: 'v2', referredUserId: null })]);
   });
 });
+
+describe('un compte qui a beaucoup joué n’est pas purgé à moitié (#9481)', () => {
+  const PARTNER = '68a0000000000000000000aa';
+  const COUNT = 1203;
+  const weekOf = (n: number) => `W${String(n).padStart(5, '0')}`;
+
+  it('plus de borne à 500 duos : tous les duos du compte, et leurs emplacements, disparaissent', async () => {
+    const db = fakeGameDb();
+    seedUser(db, {}, USER);
+    seedUser(db, {}, PARTNER);
+    for (let n = 0; n < COUNT; n += 1) {
+      const [inviterId, inviteeId] = n % 2 === 0 ? [USER, PARTNER] : [PARTNER, USER];
+      db.gameDuo.rows.push({ id: `d${n}`, weekKey: weekOf(n), inviterId, inviteeId, status: 'abandoned', inviterProgress: 0, inviteeProgress: 0, createdAt: new Date() });
+      db.gameDuoSlot.rows.push({ id: `s${n}`, userId: USER, weekKey: weekOf(n), duoId: `d${n}` });
+    }
+    db.gameDuo.rows.push({ id: 'other', weekKey: weekOf(0), inviterId: PARTNER, inviteeId: '68a0000000000000000000ff', status: 'active', inviterProgress: 0, inviteeProgress: 0, createdAt: new Date() });
+
+    const summary = await purgeGameData(db.prisma, USER);
+
+    expect(summary.duosDeleted).toBe(COUNT);
+    expect(db.gameDuo.rows.map((d) => d.id)).toEqual(['other']);
+    expect(db.gameDuoSlot.rows).toEqual([]);
+  });
+
+  it('plus de borne à 50 duos ouverts : chacun est terminé proprement avant d’être effacé', async () => {
+    const db = fakeGameDb();
+    seedUser(db, {}, USER);
+    seedUser(db, {}, PARTNER);
+    for (let n = 0; n < 120; n += 1) {
+      db.gameDuo.rows.push({ id: `d${n}`, weekKey: weekOf(n), inviterId: USER, inviteeId: PARTNER, status: 'invited', inviterProgress: 0, inviteeProgress: 0, createdAt: new Date() });
+    }
+
+    const summary = await purgeGameData(db.prisma, USER, { creditPoints: async () => undefined });
+
+    expect(summary.duosSettled).toBe(120);
+    expect(db.gameDuo.rows).toEqual([]);
+  });
+
+  it('plus de borne à 500 groupes de ligue : aucun membre fantôme ne reste', async () => {
+    const db = fakeGameDb();
+    seedUser(db, {}, USER);
+    for (let n = 0; n < COUNT; n += 1) {
+      db.leagueGroupWeek.rows.push({ id: `g${n}`, groupId: `G${n}`, weekKey: weekOf(n), league: 'jade', memberCount: 2, snapshot: { [USER]: 1, [PARTNER]: 2 }, settledAt: null });
+      db.leagueMembership.rows.push({ id: `m${n}`, userId: USER, weekKey: weekOf(n), groupId: `G${n}`, league: 'jade', settledAt: null });
+      db.leagueMembership.rows.push({ id: `p${n}`, userId: PARTNER, weekKey: weekOf(n), groupId: `G${n}`, league: 'jade', settledAt: null });
+    }
+
+    const summary = await purgeGameData(db.prisma, USER);
+
+    expect(summary.leagueGroupsTouched).toBe(COUNT);
+    expect(db.leagueMembership.rows.every((m) => m.userId === PARTNER)).toBe(true);
+    expect(db.leagueGroupWeek.rows.every((g) => g.memberCount === 1)).toBe(true);
+  });
+});
+
+describe('les notifications de duo qui NOMMENT le compte effacé (revue adversariale #9490)', () => {
+  const PARTNER = '68a0000000000000000000aa';
+  const STRANGER_DUO = '68a0000000000000000000cc';
+  const actor = (id: string) => ({ id, username: id === USER ? 'effacé' : 'autre', displayName: id === USER ? 'Marie Effacée' : 'Autre', avatar: 'a.png' });
+
+  it('l’invitation et l’acceptation d’un duo, chez le partenaire, disparaissent avec le compte qui les a signées — rien d’autre', async () => {
+    const db = fakeGameDb();
+    seedUser(db, {}, USER);
+    seedUser(db, {}, PARTNER);
+    db.gameDuo.rows.push(
+      { id: 'd1', weekKey: '2026-10-12', inviterId: USER, inviteeId: PARTNER, status: 'abandoned' },
+      { id: 'd2', weekKey: '2026-10-05', inviterId: PARTNER, inviteeId: USER, status: 'completed' },
+    );
+    db.notification.rows.push(
+      { id: 'n-invite', userId: PARTNER, type: 'game_duo_invited', actor: actor(USER), metadata: { duoId: 'd1' } },
+      { id: 'n-accept', userId: PARTNER, type: 'game_duo_accepted', actor: actor(USER), metadata: { duoId: 'd2' } },
+      { id: 'n-other-actor', userId: PARTNER, type: 'game_duo_invited', actor: actor(STRANGER_DUO), metadata: { duoId: 'd9' } },
+      { id: 'n-league', userId: PARTNER, type: 'game_league_result', actor: null, metadata: {} },
+      { id: 'n-message', userId: PARTNER, type: 'new_message', actor: actor(USER), metadata: {} },
+    );
+
+    await purgeGameData(db.prisma, USER);
+
+    expect(db.notification.rows.map((n) => n.id).sort()).toEqual(['n-league', 'n-message', 'n-other-actor']);
+  });
+});
