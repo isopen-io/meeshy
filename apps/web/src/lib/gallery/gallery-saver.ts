@@ -1,6 +1,6 @@
 import { isImageMimeType, isVideoMimeType } from '@meeshy/shared/types/attachment';
 
-import { base64De } from '@/lib/media/file-delivery-host';
+import { base64De, NATIVE_BRIDGE_MAX_BYTES } from '@/lib/media/file-delivery-host';
 import { appelNatifMethode, coqueCourante, type CoqueNative } from '@/lib/native-shell';
 
 /**
@@ -33,7 +33,7 @@ import { appelNatifMethode, coqueCourante, type CoqueNative } from '@/lib/native
 export const GALLERY_ALBUM = 'Meeshy';
 
 /** Au-delà, le `data:` base64 (×4/3, puis recopié par le pont) ferait courir un OOM à la WebView. */
-export const GALLERY_BRIDGE_MAX_BYTES = 32 * 1024 * 1024;
+export const GALLERY_BRIDGE_MAX_BYTES = NATIVE_BRIDGE_MAX_BYTES;
 
 export type GallerySaveOutcome = 'saved' | 'unavailable' | 'failed';
 

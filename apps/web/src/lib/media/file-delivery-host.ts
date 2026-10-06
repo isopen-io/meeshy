@@ -58,11 +58,20 @@ export async function base64De(blob: Blob): Promise<string> {
   return btoa(blocs.join(''));
 }
 
+/**
+ * LE PLAFOND DU PONT DE LA COQUE (#8336, #9512) — un fichier y voyage en base64
+ * dans une chaîne, recopiée par le pont puis par Java : au-delà, la copie fait
+ * courir un OOM à l'application. La galerie (`gallery-saver.ts`) et la feuille
+ * de partage lisent ce même plafond, sans quoi la seconde copierait ce que la
+ * première vient de refuser.
+ */
+export const NATIVE_BRIDGE_MAX_BYTES = 32 * 1024 * 1024;
+
 function partageParLePont(shell: CoqueNative | undefined): Pick<FileDeliveryHost, 'canShareFiles' | 'shareFiles'> {
   const pont = appelNatifMethode(shell, 'MeeshyShare', 'shareFile');
   if (pont === null) return {};
   return {
-    canShareFiles: (data) => data.files.length === 1,
+    canShareFiles: (data) => data.files.length === 1 && (data.files[0]?.size ?? 0) <= NATIVE_BRIDGE_MAX_BYTES,
     shareFiles: async ({ files, text }) => {
       const [file] = files;
       if (file === undefined) return;
