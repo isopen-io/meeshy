@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, test } from 'bun:test';
 
 import { loadGameCatalog } from '@/lib/i18n-game-catalog';
 
-import { fitBannerLine, REFERRAL_PLACEHOLDER, referralDisplay, referralOf, referralPlaceholder, referralShareText } from './referral';
+import { fitBannerLine, referralOf, referralPlaceholder, referralShareText } from './referral';
 
 beforeAll(async () => {
   await loadGameCatalog('en');
@@ -10,16 +10,9 @@ beforeAll(async () => {
 
 /**
  * LE LIEN DE PARRAINAGE SUR LA CARTE (#7742) — ce que le bandeau en bas de la
- * carte dit : le lien court de l'utilisateur et sa Flamme. Sans lien, la carte
- * part sans bandeau ; une Flamme éteinte ne s'affiche pas.
+ * carte porte : le lien de l'utilisateur (en carré QR, #9554) et sa Flamme. Sans
+ * lien, la carte part sans bandeau ; une Flamme éteinte ne s'affiche pas.
  */
-describe('referralDisplay — le lien tel qu’il se lit sur la carte', () => {
-  test('sans le protocole ni la barre finale', () => {
-    expect(referralDisplay('https://meeshy.me/signup/affiliate/aff_abc/')).toBe('meeshy.me/signup/affiliate/aff_abc');
-    expect(referralDisplay('http://localhost:3100/signup/affiliate/x')).toBe('localhost:3100/signup/affiliate/x');
-  });
-});
-
 describe('referralOf — il n’y a un bandeau que s’il y a un lien', () => {
   test('pas de lien (ou un lien vide) : aucun bandeau', () => {
     expect(referralOf(null, 6)).toBeNull();
@@ -27,10 +20,9 @@ describe('referralOf — il n’y a un bandeau que s’il y a un lien', () => {
     expect(referralOf('   ', 6)).toBeNull();
   });
 
-  test('le lien complet est gardé pour le texte du partage, l’affichage pour la carte', () => {
-    expect(referralOf('https://meeshy.me/signup/affiliate/aff_abc', 23)).toEqual({
+  test('le lien complet est gardé tel quel — le carré QR l’encode, le texte du partage le dit ; la carte n’en garde aucune forme écrite (#9554)', () => {
+    expect(referralOf('  https://meeshy.me/signup/affiliate/aff_abc ', 23)).toEqual({
       url: 'https://meeshy.me/signup/affiliate/aff_abc',
-      display: 'meeshy.me/signup/affiliate/aff_abc',
       flameDays: 23,
     });
   });
@@ -89,13 +81,12 @@ describe('fitBannerLine — une ligne qui doit tenir dans la place du bandeau', 
 
 /**
  * AUCUN JETON SANS GESTE (#7742, décision porteur) — sans jeton existant,
- * l'aperçu montre l'EMPLACEMENT « meeshy.me/r/… » ; ce n'est pas un lien, rien
- * ne le recopie dans un texte de partage.
+ * l'aperçu montre un EMPLACEMENT vide ; ce n'est pas un lien, il n'a aucune
+ * adresse à encoder ni à recopier dans un texte de partage.
  */
 describe('referralPlaceholder — l’emplacement du lien', () => {
-  test('l’emplacement porte la Flamme, s’affiche « meeshy.me/r/… » et se déclare tel', () => {
-    expect(REFERRAL_PLACEHOLDER).toBe('meeshy.me/r/…');
-    expect(referralPlaceholder(23)).toEqual({ url: '', display: 'meeshy.me/r/…', flameDays: 23, placeholder: true });
+  test('l’emplacement porte la Flamme, n’a AUCUNE adresse et se déclare tel', () => {
+    expect(referralPlaceholder(23)).toEqual({ url: '', flameDays: 23, placeholder: true });
     expect(referralPlaceholder(0).flameDays).toBeNull();
   });
 

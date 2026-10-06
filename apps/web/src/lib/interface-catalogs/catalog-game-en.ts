@@ -455,6 +455,7 @@ const en = {
   'game.photo.referral.headline': 'Join me on Meeshy',
   'game.photo.referral.share_text': 'Join me on Meeshy: {link}',
   'game.photo.referral.flame_days': '{days} d',
+  'game.photo.referral.qr_label': 'QR code of your invitation link',
   'game.duration.days_hours': '{days} d {hours} h',
   'game.duration.hours': '{hours} h',
   'game.duration.minutes': '{minutes} min',

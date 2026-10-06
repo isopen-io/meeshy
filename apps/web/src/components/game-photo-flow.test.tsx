@@ -9,6 +9,7 @@ import type { KeptPhoto, Notebook } from '@/lib/game-photo/notebook';
 import type { PhotoReferral } from '@/lib/game-photo/referral';
 import type { PhotoFiles } from '@/lib/game-photo/render';
 import type { ShareOutcome } from '@/lib/game-photo/share';
+import { loadGameCatalog } from '@/lib/i18n-game-catalog';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
@@ -577,7 +578,7 @@ describe('le lien de parrainage accompagne la carte', () => {
   test('la composition reçoit le lien et la Flamme', async () => {
     const { log } = await toShare({ referral: async () => LINK });
     expect(log.referrals).toHaveLength(1);
-    expect(log.referrals[0]).toEqual({ url: LINK, display: 'meeshy.me/signup/affiliate/aff_abc', flameDays: 23 });
+    expect(log.referrals[0]).toEqual({ url: LINK, flameDays: 23 });
   });
 
   test('le partage transmet aussi le lien en texte', async () => {
@@ -592,7 +593,30 @@ describe('le lien de parrainage accompagne la carte', () => {
     await click(choose(host, 'selfie'));
     await settle();
     expect(host.textContent).toContain('Rejoins-moi sur Meeshy');
-    expect(host.textContent).toContain('meeshy.me/signup/affiliate/aff_abc');
+    expect(host.textContent).not.toContain('meeshy.me');
+    const qr = host.querySelector('[data-photo-banner-qr]');
+    expect(qr?.getAttribute('role')).toBe('img');
+    expect(qr?.getAttribute('aria-label')).toBe('QR code de ton lien d’invitation');
+    expect(qr?.closest('[aria-hidden="true"]')).toBeNull();
+    expect(qr?.querySelector('path')?.getAttribute('d')).toMatch(/^M\d+ \d+h\d+/);
+  });
+
+  test('de droite à gauche, le carré QR de l’aperçu passe en fin de ligne — à gauche — et la phrase s’ancre à droite', async () => {
+    await loadGameCatalog('ar');
+    document.documentElement.lang = 'ar';
+    try {
+      const { host } = await openWith({ referral: async () => LINK });
+      await click(choose(host, 'selfie'));
+      await settle();
+      const qr = host.querySelector<HTMLElement>('[data-photo-banner-qr]');
+      expect(Number.parseFloat(qr?.style.left ?? '100')).toBeLessThan(50);
+      const banner = host.querySelector('[data-photo-banner]');
+      const headline = banner?.nextElementSibling as HTMLElement | null;
+      expect(headline?.style.right).toMatch(/%$/);
+      expect(headline?.style.textAlign).toBe('right');
+    } finally {
+      document.documentElement.lang = 'fr';
+    }
   });
 
   test('sans lien (le service répond « rien »), la carte part sans bandeau et sans texte', async () => {
@@ -667,7 +691,7 @@ describe('le lien et la Flamme se retirent de la carte', () => {
     await toggle(host, 'data-photo-with-flame');
     await click(choose(host, 'card'));
     await settle();
-    expect(log.referrals[0]).toEqual({ url: LINK, display: 'meeshy.me/signup/affiliate/aff_abc', flameDays: null });
+    expect(log.referrals[0]).toEqual({ url: LINK, flameDays: null });
   });
 
   test('retirer le lien : la carte part sans bandeau, sans Flamme et sans texte', async () => {
@@ -723,14 +747,14 @@ describe('le droit à l’image (conformité H-3)', () => {
 /**
  * AUCUN JETON SANS GESTE (#7742, décision porteur) — ouvrir le moment photo ne
  * crée rien : l'aperçu montre le lien EXISTANT s'il y en a un, sinon
- * l'emplacement « meeshy.me/r/… » en pointillé. Le jeton se crée au toucher de
+ * l'emplacement VIDE du carré QR, en pointillé (#9554). Le jeton se crée au toucher de
  * « Partager », et la carte est recomposée avec le vrai lien AVANT de partir.
  * Enregistrer et garder au carnet ne créent rien : l'image qui sort porte le
  * vrai lien ou rien, jamais l'emplacement.
  */
 describe('aucun jeton de parrainage ne se crée sans geste', () => {
   const LINK = 'https://meeshy.me/signup/affiliate/aff_neuf';
-  const PLACEHOLDER = { url: '', display: 'meeshy.me/r/…', flameDays: 23, placeholder: true };
+  const PLACEHOLDER = { url: '', flameDays: 23, placeholder: true };
   const bench = async (created: string | null = LINK) => {
     let creations = 0;
     const made = env({
@@ -762,11 +786,16 @@ describe('aucun jeton de parrainage ne se crée sans geste', () => {
     expect(host.querySelector<HTMLInputElement>('[data-photo-with-link]')?.checked).toBe(true);
   });
 
-  test('l’aperçu de la caméra montre « meeshy.me/r/… » en pointillé', async () => {
+  test('l’aperçu de la caméra montre un carré VIDE en pointillé : aucun QR tant qu’il n’y a pas de jeton', async () => {
     const { host } = await bench();
     await click(choose(host, 'selfie'));
     await settle();
-    expect(host.querySelector('[data-photo-banner-placeholder]')?.textContent).toBe('meeshy.me/r/…');
+    const slot = host.querySelector('[data-photo-banner-placeholder]');
+    expect(slot).not.toBeNull();
+    expect(slot?.textContent).toBe('');
+    expect(slot?.childElementCount).toBe(0);
+    expect(host.querySelector('[data-photo-banner-qr]')).toBeNull();
+    expect(host.textContent).not.toContain('meeshy.me');
   });
 
   test('« Partager » crée le jeton UNE fois, recompose la carte avec le vrai lien, puis la partage avec le lien en texte', async () => {
@@ -774,7 +803,7 @@ describe('aucun jeton de parrainage ne se crée sans geste', () => {
     await click(by(host, 'data-photo-share'));
     await settle();
     expect(creations()).toBe(1);
-    expect(log.referrals).toEqual([PLACEHOLDER, { url: LINK, display: 'meeshy.me/signup/affiliate/aff_neuf', flameDays: 23 }]);
+    expect(log.referrals).toEqual([PLACEHOLDER, { url: LINK, flameDays: 23 }]);
     expect(log.shared[0]?.file).toBe(log.outputs[1]?.story);
     expect(log.texts).toEqual([`Rejoins-moi sur Meeshy : ${LINK}`]);
     await click(by(host, 'data-photo-share'));

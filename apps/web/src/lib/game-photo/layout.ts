@@ -21,18 +21,23 @@ export type TextLine = { readonly x: number; readonly y: number; readonly size: 
 
 /**
  * LE BANDEAU DE PARRAINAGE (#7742) — au pied de la carte : la Signature, la
- * phrase d'invitation, le lien court et la Flamme. Les textes de gauche
- * s'alignent sur `x` (début de ligne) et ne dépassent pas `maxTextWidth` ; les
- * jours de la Flamme sont centrés sous elle.
+ * phrase d'invitation, la Flamme, et le lien en CARRÉ QR (#9554 — il ne s'écrit
+ * plus). La phrase s'ancre sur `x` par son DÉBUT de ligne et ne dépasse pas
+ * `maxTextWidth` ; les jours de la Flamme sont centrés sous elle.
+ *
+ * Le carré est en FIN de ligne : à droite de gauche à droite, à gauche en
+ * arabe — le bandeau se retourne en entier (`direction`), le reste de la carte
+ * non. Il est posé au pixel entier : ses modules le sont aussi.
  */
 export type BannerLayout = {
+  readonly direction: 'ltr' | 'rtl';
   readonly frame: Rect;
   readonly signature: Rect;
   readonly headline: TextLine;
-  readonly link: TextLine;
   readonly maxTextWidth: number;
   readonly flame: Rect;
   readonly flameDays: TextLine;
+  readonly qr: Rect;
 };
 
 export type PhotoLayout = {
@@ -72,31 +77,50 @@ const PROPORTIONS_WITH_BANNER: Readonly<Record<PhotoFormat, Proportions>> = {
 };
 
 const MARGIN = 0.05;
-const BANNER_HEIGHT = 0.13;
+const BANNER_HEIGHT = 0.2;
 const BANNER_GAP = 0.02;
+const QR_SIDE = 0.84;
+
+const flipRect = (rect: Rect, width: number): Rect => ({ ...rect, x: width - rect.x - rect.w });
+const flipLine = (line: TextLine, width: number): TextLine => ({ ...line, x: width - line.x });
 
 function bannerOf(width: number, height: number): BannerLayout {
   const margin = width * MARGIN;
   const h = width * BANNER_HEIGHT;
   const frame: Rect = { x: margin, y: height - margin - h, w: width - margin * 2, h };
-  const pad = h * 0.2;
-  const signatureSize = h * 0.5;
+  const pad = h * 0.14;
+  const signatureSize = h * 0.4;
   const signature: Rect = { x: frame.x + pad, y: frame.y + (h - signatureSize) / 2, w: signatureSize, h: signatureSize };
-  const flameSize = h * 0.4;
-  const flame: Rect = { x: frame.x + frame.w - pad - flameSize, y: frame.y + h * 0.1, w: flameSize, h: flameSize };
-  const textX = signature.x + signature.w + pad * 0.7;
+  const qrSide = Math.round(h * QR_SIDE);
+  const qrInset = Math.round((h - qrSide) / 2);
+  const qr: Rect = { x: Math.round(frame.x + frame.w) - qrInset - qrSide, y: Math.round(frame.y) + qrInset, w: qrSide, h: qrSide };
+  const flameSize = h * 0.36;
+  const flame: Rect = { x: qr.x - pad * 0.7 - flameSize, y: frame.y + h * 0.2, w: flameSize, h: flameSize };
+  const textX = signature.x + signature.w + pad * 0.6;
+  const headlineSize = width * 0.036;
   return {
+    direction: 'ltr',
     frame,
     signature,
-    headline: { x: textX, y: frame.y + h * 0.45, size: width * 0.036 },
-    link: { x: textX, y: frame.y + h * 0.75, size: width * 0.028 },
+    headline: { x: textX, y: frame.y + h / 2 + headlineSize * 0.35, size: headlineSize },
     maxTextWidth: flame.x - width * 0.012 - textX,
     flame,
-    flameDays: { x: flame.x + flame.w / 2, y: frame.y + h * 0.88, size: width * 0.026 },
+    flameDays: { x: flame.x + flame.w / 2, y: frame.y + h * 0.8, size: width * 0.026 },
+    qr,
   };
 }
 
-export function photoLayout(format: PhotoFormat, options: { readonly banner?: boolean } = {}): PhotoLayout {
+const mirrored = (banner: BannerLayout, width: number): BannerLayout => ({
+  ...banner,
+  direction: 'rtl',
+  signature: flipRect(banner.signature, width),
+  headline: flipLine(banner.headline, width),
+  flame: flipRect(banner.flame, width),
+  flameDays: flipLine(banner.flameDays, width),
+  qr: flipRect(banner.qr, width),
+});
+
+export function photoLayout(format: PhotoFormat, options: { readonly banner?: boolean; readonly rtl?: boolean } = {}): PhotoLayout {
   const { width, height } = PHOTO_FORMATS[format];
   const withBanner = options.banner === true;
   const p = (withBanner ? PROPORTIONS_WITH_BANNER : PROPORTIONS)[format];
@@ -104,7 +128,8 @@ export function photoLayout(format: PhotoFormat, options: { readonly banner?: bo
   const bird = width * p.birdSize;
   const signature = width * p.signatureSize;
   const margin = width * MARGIN;
-  const banner = withBanner ? bannerOf(width, height) : undefined;
+  const ltr = withBanner ? bannerOf(width, height) : undefined;
+  const banner = ltr !== undefined && options.rtl === true ? mirrored(ltr, width) : ltr;
   const birdTop = (banner === undefined ? height - margin : banner.frame.y - width * BANNER_GAP) - bird;
   return {
     ...(banner === undefined ? {} : { banner }),

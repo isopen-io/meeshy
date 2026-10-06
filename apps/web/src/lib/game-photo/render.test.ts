@@ -3,7 +3,9 @@ import { describe, expect, test } from 'bun:test';
 import type { PhotoArt, PhotoPalette } from './compose';
 import { dateLabelOf, fileNameOf, renderPhotoFiles } from './render';
 import { rankMoment } from './moments';
-import { referralOf } from './referral';
+import { PHOTO_FORMATS, photoLayout } from './layout';
+import { referralOf, referralPlaceholder } from './referral';
+import { QR_DARK, QR_LIGHT, referralQr } from './referral-qr';
 
 /**
  * LES DEUX IMAGES (#9382) — 9:16 pour la story, 1:1 pour le profil, rendues
@@ -21,19 +23,19 @@ const moment = rankMoment({ rank: 'voix', division: 2 });
 const when = new Date('2026-10-05T10:00:00.000Z');
 
 function fakeCanvasFactory() {
-  const made: { width: number; height: number; texts: string[]; blobType: string | undefined }[] = [];
+  const made: { width: number; height: number; texts: string[]; rects: { style: unknown; rect: number[] }[]; blobType: string | undefined }[] = [];
   return {
     made,
     createCanvas: (width: number, height: number) => {
-      const entry = { width, height, texts: [] as string[], blobType: undefined as string | undefined };
+      const entry = { width, height, texts: [] as string[], rects: [] as { style: unknown; rect: number[] }[], blobType: undefined as string | undefined };
       made.push(entry);
-      const ctx = {
+      const ctx: Record<string, unknown> = {
         save: () => undefined,
         restore: () => undefined,
         translate: () => undefined,
         scale: () => undefined,
         drawImage: () => undefined,
-        fillRect: () => undefined,
+        fillRect: (...rect: number[]) => void entry.rects.push({ style: ctx.fillStyle, rect }),
         fillText: (text: string) => void entry.texts.push(text),
         createLinearGradient: () => ({ addColorStop: () => undefined }),
         fillStyle: '',
@@ -95,13 +97,40 @@ describe('renderPhotoFiles', () => {
 describe('le lien de parrainage sur les deux images (#7742)', () => {
   const referral = referralOf('https://meeshy.me/signup/affiliate/aff_abc', 23);
 
-  test('les deux formats portent le bandeau : la phrase, le lien court et les jours de Flamme', async () => {
+  test('les deux formats portent le bandeau : la phrase et les jours de Flamme — le lien n’y est PLUS écrit (#9554)', async () => {
     const { made, createCanvas } = fakeCanvasFactory();
     await renderPhotoFiles({ moment, photo: null, art: { ...art, flame: {} as CanvasImageSource }, palette, fontFamily: 'system-ui', now: when, timeZone: 'UTC', createCanvas, referral });
+    expect(made).toHaveLength(2);
     for (const entry of made) {
       expect(entry.texts).toContain('Rejoins-moi sur Meeshy');
-      expect(entry.texts).toContain('meeshy.me/signup/affiliate/aff_abc');
       expect(entry.texts).toContain('23 j');
+      expect(entry.texts.filter((text) => /meeshy\.me|https?:|aff_abc/i.test(text))).toEqual([]);
+    }
+  });
+
+  test('les deux formats portent le carré QR de l’adresse COMPLÈTE, à sa place, deux pixels au moins par module', async () => {
+    if (referral === null) throw new Error('lien attendu');
+    const { made, createCanvas } = fakeCanvasFactory();
+    await renderPhotoFiles({ moment, photo: null, art, palette, fontFamily: 'system-ui', now: when, timeZone: 'UTC', createCanvas, referral });
+    for (const entry of made) {
+      const format = entry.height === PHOTO_FORMATS.story.height ? 'story' : 'square';
+      const slot = photoLayout(format, { banner: true }).banner?.qr;
+      if (slot === undefined) throw new Error('bandeau attendu');
+      const square = referralQr({ url: 'https://meeshy.me/signup/affiliate/aff_abc' }, slot.w);
+      if (square === null) throw new Error('carré attendu');
+      expect(entry.rects.filter((r) => r.style === QR_LIGHT).map((r) => r.rect)).toEqual([[slot.x, slot.y, slot.w, slot.h]]);
+      expect(entry.rects.filter((r) => r.style === QR_DARK).map((r) => r.rect)).toEqual(square.runs.map((run) => [slot.x + run.x, slot.y + run.y, run.w, run.h]));
+      expect(square.module).toBeGreaterThanOrEqual(2);
+    }
+  });
+
+  test('sans jeton, l’image ne porte AUCUN QR : ni carré clair ni module (#7742)', async () => {
+    const { made, createCanvas } = fakeCanvasFactory();
+    await renderPhotoFiles({ moment, photo: null, art, palette, fontFamily: 'system-ui', now: when, timeZone: 'UTC', createCanvas, referral: referralPlaceholder(23) });
+    for (const entry of made) {
+      expect(entry.rects.filter((r) => r.style === QR_LIGHT || r.style === QR_DARK)).toEqual([]);
+      expect(entry.texts).toContain('Rejoins-moi sur Meeshy');
+      expect(entry.texts.filter((text) => /meeshy\.me/i.test(text))).toEqual([]);
     }
   });
 
@@ -111,11 +140,11 @@ describe('le lien de parrainage sur les deux images (#7742)', () => {
     for (const entry of made) expect(entry.texts).not.toContain('Rejoins-moi sur Meeshy');
   });
 
-  test('Flamme éteinte : le lien part, sans jours', async () => {
+  test('Flamme éteinte : le carré du lien part, sans jours', async () => {
     const { made, createCanvas } = fakeCanvasFactory();
     const cold = referralOf('https://meeshy.me/signup/affiliate/aff_abc', 0);
     await renderPhotoFiles({ moment, photo: null, art: { ...art, flame: {} as CanvasImageSource }, palette, fontFamily: 'system-ui', now: when, timeZone: 'UTC', createCanvas, referral: cold });
-    expect(made[0]?.texts).toContain('meeshy.me/signup/affiliate/aff_abc');
+    expect(made[0]?.rects.some((r) => r.style === QR_DARK)).toBe(true);
     expect(made[0]?.texts.some((text) => / j$/.test(text))).toBe(false);
   });
 });

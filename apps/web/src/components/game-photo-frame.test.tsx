@@ -3,6 +3,9 @@ import { renderToStaticMarkup } from 'react-dom/server';
 
 import { photoLayout } from '@/lib/game-photo/layout';
 import { referralOf, referralPlaceholder } from '@/lib/game-photo/referral';
+import { QR_DARK, QR_LIGHT, qrPath, referralQr } from '@/lib/game-photo/referral-qr';
+import { loadGameCatalog, translateGame } from '@/lib/i18n-game-catalog';
+import { SUPPORTED_INTERFACE_LANGUAGES } from '@/lib/inline-interface-language-bootstrap.js';
 import { flameMoment, levelHundredMoment, meeshMoment, photoMomentOfEmblemV2, rankMoment, startMoment, tierMoment, treasuryMoment, type PhotoMoment } from '@/lib/game-photo/moments';
 
 import { GamePhotoFrame } from './game-photo-frame';
@@ -83,8 +86,12 @@ describe('un emblème par sorte de moment', () => {
 });
 
 describe('l’accessibilité', () => {
-  test('le cadre est décoratif : le dialogue qui l’héberge porte le texte', () => {
-    expect(render(startMoment())).toMatch(/^<div[^>]*aria-hidden="true"/);
+  test('le cadre est décoratif : tout son dessin est sous UNE couche masquée, le dialogue qui l’héberge porte le texte', () => {
+    const html = render(startMoment());
+    expect(html).toMatch(/^<div[^>]*data-photo-frame="story"[^>]*><div aria-hidden="true"/);
+    expect(html.match(/aria-hidden="true"/g)?.length).toBeGreaterThanOrEqual(1);
+    expect(html).not.toMatch(/role="img"[^>]*data-photo-banner-qr|data-photo-banner-qr/);
+    for (const slot of ['emblem', 'mee', 'meo', 'signature']) expect(html.indexOf(`data-photo-art="${slot}"`)).toBeGreaterThan(html.indexOf('aria-hidden="true"'));
   });
 
   test('le chrome du cadre (texte, voile) se lit dans la charte : aucune couleur écrite (le plumage de Mee et Meo est de l’illustration)', () => {
@@ -96,8 +103,8 @@ describe('l’accessibilité', () => {
 
 /**
  * LE BANDEAU DE PARRAINAGE (#7742) — l'aperçu en direct porte le même bandeau
- * que l'image finale : la Signature, « Rejoins-moi sur Meeshy », le lien court
- * et la Flamme. Sans lien, le cadre est celui d'avant, à l'identique.
+ * que l'image finale : la Signature, « Rejoins-moi sur Meeshy », la Flamme et
+ * le lien en CARRÉ QR (#9554). Sans lien, le cadre est celui d'avant, à l'identique.
  */
 describe('le bandeau de parrainage', () => {
   const moment = rankMoment({ rank: 'voix', division: 2 });
@@ -105,11 +112,55 @@ describe('le bandeau de parrainage', () => {
   const withBanner = (format: 'story' | 'square' = 'story', link = referral): string =>
     renderToStaticMarkup(<GamePhotoFrame moment={moment} dateLabel="5 octobre 2026" format={format} referral={link} />);
 
-  test('la phrase, le lien court et les jours de Flamme se lisent dans le cadre', () => {
+  test('la phrase et les jours de Flamme se lisent dans le cadre', () => {
     const page = text(withBanner());
     expect(page).toContain('Rejoins-moi sur Meeshy');
-    expect(page).toContain('meeshy.me/signup/affiliate/aff_abc');
     expect(page).toContain('23 j');
+  });
+
+  test('le lien n’est PLUS écrit dans l’aperçu : ni en texte, ni dans un attribut, ni en chasse fixe (#9554)', () => {
+    for (const format of ['story', 'square'] as const) {
+      const html = withBanner(format);
+      expect(html).not.toMatch(/meeshy\.me|aff_abc|https?:\/\/meeshy/i);
+      expect(html).not.toContain('monospace');
+    }
+  });
+
+  for (const format of ['story', 'square'] as const) {
+    test(`${format} : le carré QR de l’aperçu est celui de l’image exportée — la même matrice, les mêmes rectangles, à la même place`, () => {
+      const layout = photoLayout(format, { banner: true });
+      const slot = layout.banner?.qr;
+      if (slot === undefined || referral === null) throw new Error('bandeau attendu');
+      const square = referralQr(referral, slot.w);
+      if (square === null) throw new Error('carré attendu');
+      const html = withBanner(format);
+      const percent = (n: number, of: number) => `${((n / of) * 100).toFixed(2)}%`;
+      const tag = /<span[^>]*data-photo-banner-qr=""[^>]*>/.exec(html)?.[0] ?? '';
+      expect(tag).toContain(`left:${percent(slot.x, layout.width)}`);
+      expect(tag).toContain(`top:${percent(slot.y, layout.height)}`);
+      expect(tag).toContain(`width:${percent(slot.w, layout.width)}`);
+      expect(html).toContain(`viewBox="0 0 ${slot.w} ${slot.w}"`);
+      expect(html).toContain(`<rect width="${slot.w}" height="${slot.w}" fill="${QR_LIGHT}"`);
+      expect(html).toContain(`<path d="${qrPath(square)}" fill="${QR_DARK}"`);
+      expect(html.match(/data-photo-banner-qr/g)).toHaveLength(1);
+    });
+  }
+
+  test('le carré s’annonce au lecteur d’écran, HORS de la couche décorative, sans dire le lien', () => {
+    const html = withBanner();
+    const tag = /<span[^>]*data-photo-banner-qr=""[^>]*>/.exec(html)?.[0] ?? '';
+    expect(tag).toContain('role="img"');
+    expect(tag).toContain('aria-label="QR code de ton lien d’invitation"');
+    const hidden = html.indexOf('<div aria-hidden="true"');
+    const depthAt = (index: number): number => (html.slice(hidden, index).match(/<div\b/g)?.length ?? 0) - (html.slice(hidden, index).match(/<\/div>/g)?.length ?? 0);
+    expect(depthAt(html.indexOf('data-photo-banner=""'))).toBeGreaterThan(0);
+    expect(depthAt(html.indexOf('data-photo-banner-qr'))).toBe(0);
+  });
+
+  test('le carré garde son fond clair et ses modules sombres : deux couleurs écrites, les mêmes en clair et en sombre', () => {
+    expect(QR_LIGHT).toBe('#ffffff');
+    expect(QR_DARK).toBe('#000000');
+    expect(withBanner()).toContain('shape-rendering="crispEdges"');
   });
 
   test('le fond du bandeau est posé à la place que la mise en page lui donne', () => {
@@ -138,9 +189,9 @@ describe('le bandeau de parrainage', () => {
     expect(html).toBe(render(moment));
   });
 
-  test('Flamme éteinte : le lien reste, la Flamme et ses jours s’effacent', () => {
+  test('Flamme éteinte : le carré du lien reste, la Flamme et ses jours s’effacent', () => {
     const html = withBanner('story', referralOf('https://meeshy.me/signup/affiliate/aff_abc', 0));
-    expect(text(html)).toContain('meeshy.me/signup/affiliate/aff_abc');
+    expect(html).toContain('data-photo-banner-qr');
     expect(html).not.toContain('data-photo-art="flame"');
     expect(text(html)).not.toMatch(/\d+ j\b/);
   });
@@ -149,14 +200,38 @@ describe('le bandeau de parrainage', () => {
     expect(text(withBanner('square'))).toContain('Rejoins-moi sur Meeshy');
   });
 
-  test('aucun jeton encore : l’emplacement « meeshy.me/r/… », cerné de pointillés ; un vrai lien ne l’est pas', () => {
+  test('aucun jeton encore : le carré est un emplacement VIDE en pointillé — aucun QR, aucun lien factice ; un vrai lien n’a pas de pointillé (#7742)', () => {
+    const layout = photoLayout('story', { banner: true });
+    const slot = layout.banner?.qr;
+    if (slot === undefined) throw new Error('bandeau attendu');
     const html = withBanner('story', referralPlaceholder(23));
-    expect(text(html)).toContain('meeshy.me/r/…');
-    expect(html).toMatch(/data-photo-banner-placeholder=""[^>]*dashed/);
+    expect(html).toMatch(/<span data-photo-banner-placeholder=""[^>]*dashed[^>]*><\/span>/);
+    expect(html).toMatch(new RegExp(`data-photo-banner-placeholder=""[^>]*left:${((slot.x / layout.width) * 100).toFixed(2).replace('.', '\\.')}%`));
+    expect(html).not.toContain('data-photo-banner-qr');
+    expect(html).not.toContain('role="img"');
+    expect(html).not.toContain(`fill="${QR_DARK}"`);
+    expect(html).not.toContain('crispEdges');
+    expect(html).not.toMatch(/meeshy\.me/i);
+    expect(text(html)).toContain('Rejoins-moi sur Meeshy');
     expect(withBanner()).not.toContain('data-photo-banner-placeholder');
   });
 
-  test('aucune couleur écrite dans le bandeau', () => {
+  test('l’annonce du carré existe dans les sept langues du jeu, et nomme le QR', async () => {
+    const labels = await Promise.all(
+      SUPPORTED_INTERFACE_LANGUAGES.map(async (language) => {
+        await loadGameCatalog(language);
+        return translateGame(language, 'game.photo.referral.qr_label');
+      }),
+    );
+    expect(labels).toHaveLength(7);
+    for (const label of labels) {
+      expect(label).toContain('QR');
+      expect(label).not.toBe('game.photo.referral.qr_label');
+    }
+    expect(new Set(labels).size).toBe(7);
+  });
+
+  test('aucune couleur écrite dans le chrome du bandeau (le carré QR a ses deux couleurs, en attributs de dessin)', () => {
     expect(withBanner()).not.toMatch(/(?:color|background)[^;"]*:[^;"]*#[0-9a-f]{3,8}/i);
   });
 });

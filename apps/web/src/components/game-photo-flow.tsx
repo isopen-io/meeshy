@@ -111,7 +111,7 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null }: Props)
   /* Le lien de parrainage (#7742) : le lien EXISTANT, lu UNE fois à l'ouverture,
      SANS rien créer (décision porteur : aucun jeton sans geste). Sans jeton, et
      quand l'environnement sait en créer un, l'aperçu montre l'EMPLACEMENT
-     « meeshy.me/r/… » ; le jeton se crée au toucher de « Partager ». Un échec ou
+     VIDE du carré QR (#9554) ; le jeton se crée au toucher de « Partager ». Un échec ou
      une absence ne retient jamais la carte — elle part simplement sans bandeau. */
   const [link, setLink] = useState<string | null>(null);
   const [lookedUp, setLookedUp] = useState(false);

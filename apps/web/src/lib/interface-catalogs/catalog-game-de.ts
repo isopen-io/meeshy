@@ -453,6 +453,7 @@ const de = {
   'game.photo.referral.headline': 'Komm zu mir auf Meeshy',
   'game.photo.referral.share_text': 'Komm zu mir auf Meeshy: {link}',
   'game.photo.referral.flame_days': '{days} T',
+  'game.photo.referral.qr_label': 'QR-Code deines Einladungslinks',
   'game.duration.days_hours': '{days} T {hours} Std.',
   'game.duration.hours': '{hours} Std.',
   'game.duration.minutes': '{minutes} Min.',
