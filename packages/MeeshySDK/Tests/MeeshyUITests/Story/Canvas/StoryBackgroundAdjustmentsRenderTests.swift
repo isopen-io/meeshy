@@ -13,6 +13,7 @@ import UIKit
 /// vignette composite et l'export ne lisaient que le filtre de slide.
 /// `StoryBackgroundLook` est désormais leur fonction unique : filtre de slide,
 /// puis réglages du média de fond (loi 6 : ce qu'on voit est ce qui part).
+@MainActor
 final class StoryBackgroundAdjustmentsRenderTests: XCTestCase {
 
     // MARK: - Fabriques
