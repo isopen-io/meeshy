@@ -77,6 +77,9 @@ struct GameHeroView: View {
         .padding(MeeshySpacing.lg)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(background)
+        // Un conteneur QUI PORTE un identifiant doit se déclarer conteneur : sans cela, SwiftUI recopie
+        // « game.hero » sur chaque descendant et efface les identifiants des puces, de la frappe et du « ? ».
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("game.hero")
         .adaptiveOnChange(of: level.level) { old, new in
             animateLevel(from: old, to: new)

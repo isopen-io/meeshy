@@ -27,17 +27,17 @@ struct GameLawVectorTests {
         return try GameJSON.parse(data)["vectors"].arrayValue
     }
 
-    @Test("le fichier existe et porte ses vingt lois — jamais de vert silencieux")
+    @Test("le fichier existe et porte ses soixante-quatre lois — jamais de vert silencieux")
     func fileCarriesEveryLaw() throws {
         let vectors = try Self.loadVectors()
-        #expect(vectors.count >= 200)
+        #expect(vectors.count >= 500)
         let laws = Set(vectors.compactMap { $0["input"]["law"].stringValue })
-        let expected: Set<String> = [
+        let wave1: Set<String> = [
             "level", "level-record", "mint-price", "mint-preview", "glory-standing", "glory-gain", "treasury",
             "flame-form", "flame-advance", "flame-status", "flame-relight", "tailwind", "prism-hour",
             "mission-objective", "mission-reward", "rng", "missions-draw", "mission-reroll", "chest", "guide",
         ]
-        #expect(laws == expected)
+        #expect(laws == wave1.union(GameLawVectorEvaluator.wave2Laws))
     }
 
     @Test("chaque vecteur rend, sur la loi Swift, exactement la sortie de la loi TypeScript")

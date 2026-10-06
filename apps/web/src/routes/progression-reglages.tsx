@@ -48,16 +48,24 @@ export function ReglagesBody({ progress, actions, online, hide }: { readonly pro
   );
 }
 
+/**
+ * Le geste composé. Si la passerelle REFUSE l'une de ses moitiés serveur (fermer
+ * les visibilités, quitter la ligue), l'interrupteur se rouvre : « masqué » sur
+ * l'appareil alors que les autres voient encore serait la fausse promesse que
+ * le hors-ligne évite déjà. Le refus se dit sous la section concernée.
+ */
+export function hideGame({ on, progress, actions }: { readonly on: boolean; readonly progress: EngagementWithGame; readonly actions: GameV2Actions }): void {
+  gamePrefs.set({ hidden: on });
+  if (!on) return;
+  const reopen = (): void => gamePrefs.set({ hidden: false });
+  if (progress.game?.visibility !== undefined) actions.visibility.run(CLOSED, { onError: reopen });
+  if (progress.game?.league?.access === 'open') actions.consent.run({ consent: false }, { onError: reopen });
+}
+
 function ReglagesScreenBody({ progress }: { readonly progress: EngagementWithGame }) {
   const online = useOnline();
   const actions = useGameV2Actions();
-  const hide = (on: boolean): void => {
-    gamePrefs.set({ hidden: on });
-    if (!on) return;
-    if (progress.game?.visibility !== undefined) actions.visibility.run(CLOSED);
-    if (progress.game?.league?.access === 'open') actions.consent.run({ consent: false });
-  };
-  return <ReglagesBody progress={progress} actions={actions} online={online} hide={hide} />;
+  return <ReglagesBody progress={progress} actions={actions} online={online} hide={(on) => hideGame({ on, progress, actions })} />;
 }
 
 export default function ProgressionReglagesScreen() {

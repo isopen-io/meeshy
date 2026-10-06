@@ -2,8 +2,10 @@ import { describe, expect, test } from 'bun:test';
 
 import { apiCacheIdentityPlugin } from '@/lib/net/api-cache-identity';
 import { API_RESPONSE_CACHE_PATTERN } from '@/lib/net/api-runtime-cache';
+import { mediaCacheFreshnessPlugin } from '@/lib/net/media-cache-freshness';
 
 import {
+  auditFraicheurDuSeauMedias,
   auditIdentiteDuSeauApi,
   auditRoutage,
   auditSeauApi,
@@ -292,6 +294,50 @@ describe('le seau `api` range chaque réponse sous son identité (#8674)', () =>
 
   test('un greffon non autonome (identifiant importé) est dénoncé', async () => {
     const violations = await auditIdentiteDuSeauApi(AUTOUR(SEAU_MEDIAS(), SEAU_API_AVEC('async({request:s})=>empreinte(s)')));
+    expect(violations.join('\n')).toContain('NON AUTONOME');
+  });
+});
+
+describe('#9478 — le seau `medias` respecte la fraîcheur déclarée par la passerelle', () => {
+  const SEAU_MEDIAS_AVEC = (ecriture: string, lecture: string) =>
+    `s.registerRoute(({request:s})=>"image"===s.destination,new s.CacheFirst({cacheName:"medias",plugins:[` +
+    `new s.ExpirationPlugin({maxEntries:300,maxAgeSeconds:2592e3,purgeOnQuotaError:!0}),` +
+    `new s.CacheableResponsePlugin({statuses:[0,200]}),` +
+    `{cacheWillUpdate:${ecriture},cachedResponseWillBeUsed:${lecture}}]}),"GET")`;
+
+  const PRODUCTION = SEAU_MEDIAS_AVEC(
+    String(mediaCacheFreshnessPlugin.cacheWillUpdate),
+    String(mediaCacheFreshnessPlugin.cachedResponseWillBeUsed),
+  );
+
+  test('le greffon de PRODUCTION, stringifié comme Workbox le fait, est accepté', async () => {
+    expect(await auditFraicheurDuSeauMedias(AUTOUR(PRODUCTION))).toEqual([]);
+  });
+
+  test('sans greffon, une vue unique s’écrit trente jours sur le disque : dénoncé', async () => {
+    const violations = await auditFraicheurDuSeauMedias(AUTOUR(SEAU_MEDIAS()));
+    expect(violations.join('\n')).toContain('cacheWillUpdate');
+    expect(violations.join('\n')).toContain('cachedResponseWillBeUsed');
+  });
+
+  test('un greffon qui écrit tout (Cache-Control ignoré) est dénoncé', async () => {
+    const violations = await auditFraicheurDuSeauMedias(
+      AUTOUR(SEAU_MEDIAS_AVEC('async({response:s})=>s', String(mediaCacheFreshnessPlugin.cachedResponseWillBeUsed))),
+    );
+    expect(violations.join('\n')).toContain('no-store');
+  });
+
+  test('un greffon qui refuse aussi le média ORDINAIRE est dénoncé — le Cache-First nominal compte', async () => {
+    const violations = await auditFraicheurDuSeauMedias(
+      AUTOUR(SEAU_MEDIAS_AVEC('async()=>null', String(mediaCacheFreshnessPlugin.cachedResponseWillBeUsed))),
+    );
+    expect(violations.join('\n')).toContain('ordinaire');
+  });
+
+  test('un greffon non autonome est dénoncé', async () => {
+    const violations = await auditFraicheurDuSeauMedias(
+      AUTOUR(SEAU_MEDIAS_AVEC('async({response:s})=>protege(s)?null:s', String(mediaCacheFreshnessPlugin.cachedResponseWillBeUsed))),
+    );
     expect(violations.join('\n')).toContain('NON AUTONOME');
   });
 });

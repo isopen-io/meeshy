@@ -8,13 +8,19 @@
  * a lu ce qu'il juge — un fait, jamais une durée (`fixed-delay-ratchet`) —
  * ou rien pour laisser passer.
  *
+ * `messages-before` (#9216, #9219) retient une page d'HISTORIQUE (`detail` =
+ * le curseur `before`). Là, la retenue n'attend pas un verdict : elle EST
+ * l'entrée du scénario — la latence d'une page servie par le réseau, qui
+ * arrive après que le défilement s'est calmé. Le verdict, lui, se lit sur
+ * un fait (la rangée lue immobile).
+ *
  * LIMITÉE AUX GATES PAR CONSTRUCTION : seuls les chemins `__FIXTURES__ &&
  * source === 'fixtures'` l'appellent — un build `gateway` (la production) ne
  * la lie pas — et aucune retenue posée ne change rien.
  */
 export const FIXTURE_HOLD_GLOBAL = '__meeshyFixtureHold';
 
-export type FixtureHoldChannel = 'messages-window';
+export type FixtureHoldChannel = 'messages-window' | 'messages-before';
 
 export function fixtureHold(channel: FixtureHoldChannel, detail: string): Promise<void> | null {
   const hold: unknown = Reflect.get(globalThis, FIXTURE_HOLD_GLOBAL);

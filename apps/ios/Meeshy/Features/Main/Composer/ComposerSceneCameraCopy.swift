@@ -117,7 +117,7 @@ enum ComposerSceneCameraCopy {
                           defaultValue: "Toucher : ouvrir le viseur", bundle: .main)
         case .tapAgainPhoto:
             return String(localized: "composer.camera.gesture.tapAgainPhoto",
-                          defaultValue: "Toucher deux fois : photo", bundle: .main)
+                          defaultValue: "Puis toucher deux fois : photo", bundle: .main)
         case .holdFilm:
             return String(localized: "composer.camera.gesture.holdFilm",
                           defaultValue: "Maintenir : filmer", bundle: .main)

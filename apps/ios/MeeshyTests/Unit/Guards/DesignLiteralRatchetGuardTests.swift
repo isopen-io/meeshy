@@ -219,7 +219,12 @@ final class DesignLiteralRatchetGuardTests: XCTestCase {
             globs: [
                 "\(ui)/Game/TrophyView.swift",
                 "\(ui)/Game/ChestView.swift",
+                "\(ui)/Game/GameMedalView.swift",
             ]
+        ),
+        Exemption(
+            reason: "jeu : le bandeau de parrainage est dessiné dans une IMAGE partagée hors de l'app (#7742) — ses couleurs et ses rayons sont fixes, jamais ceux du thème de celui qui compose la carte",
+            globs: ["\(ui)/Game/GameReferralBannerView.swift"]
         ),
         Exemption(
             reason: "code : thèmes de coloration syntaxique",

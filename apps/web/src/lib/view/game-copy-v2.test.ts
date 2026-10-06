@@ -92,6 +92,12 @@ describe('les trophées', () => {
     expect(view).toEqual({ kind: 'league', material: 'silver', title: 'Coupe d’argent — ligue Jade, semaine du 26 octobre', plate: 'JADE · S44' });
   });
 
+  test('une coupe de ligue vue par un visiteur porte le MOIS : titre et plaque sans semaine', () => {
+    const view = trophyView('trophy.league-cup.2026-10.jade.silver', 'fr');
+    expect(view).toEqual({ kind: 'league', material: 'silver', title: 'Coupe d’argent — ligue Jade, octobre 2026', plate: 'JADE · OCT. 2026' });
+    expect(trophyView('trophy.league-cup.2026-10.jade.silver', 'en')?.title).toBe('Silver cup — Jade league, October 2026');
+  });
+
   test('la coupe de saison, de Prestige, de Flamme', () => {
     expect(trophyView('trophy.season-cup.1', 'fr')).toMatchObject({ kind: 'season', title: 'Coupe de la saison 1', plate: 'SAISON 1' });
     expect(trophyView('trophy.prestige.2', 'fr')).toMatchObject({ kind: 'prestige', title: 'Trophée de Prestige 2', plate: 'PRESTIGE 2' });

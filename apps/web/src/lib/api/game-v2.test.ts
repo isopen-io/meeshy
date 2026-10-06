@@ -119,6 +119,14 @@ describe('les lectures', () => {
     expect(result.ok).toBe(true);
     expect(calls[0]?.url).toBe('https://gate.test/api/v1/users/u%201/game/showcase');
   });
+
+  test('la vitrine d’un autre au MOIS : la clé mensuelle et le compte passent, un compte absurde non', async () => {
+    const item = { key: 'trophy.league-cup.2026-10.jade.gold', awardedMonth: '2026-10', count: 2 };
+    const ok = await fetchUserShowcase(transportServing({ visible: true, items: [item, { key: 'trophy.flame.100', awardedMonth: '2026-09' }], order: [item.key] }, []), 'u1');
+    expect(ok.ok).toBe(true);
+    const bad = await fetchUserShowcase(transportServing({ visible: true, items: [{ ...item, count: 1 }], order: [] }, []), 'u1');
+    expect(bad.ok).toBe(false);
+  });
 });
 
 describe('les écritures', () => {

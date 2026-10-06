@@ -14,8 +14,11 @@
  *
  * Un refus rend `visible: false` avec des listes VIDES — jamais un 403 ni un 404,
  * qui diraient que la vitrine existe. Un identifiant inconnu rend la même chose :
- * on ne révèle pas non plus qu'un compte existe. Un visiteur ne reçoit que le
- * MOIS d'obtention (jamais le jour, jamais l'heure), et les compteurs, la Flamme,
+ * on ne révèle pas non plus qu'un compte existe. Un visiteur — ADMIN compris —
+ * ne reçoit que le MOIS d'obtention (jamais le jour, jamais l'heure), y compris
+ * DANS la clé : une coupe de ligue lui arrive au mois (`visitorShowcase`), deux
+ * coupes identiques du même mois sur une ligne comptée. Le membre lui-même lit
+ * ses clés complètes. Les compteurs, la Flamme,
  * le niveau et le trésor suivent le même réglage — aucun n'est servi ici.
  */
 

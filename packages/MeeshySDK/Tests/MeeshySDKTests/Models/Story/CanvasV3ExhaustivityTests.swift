@@ -121,6 +121,9 @@ struct CanvasV3ExhaustivityTests {
         media.crop = MediaCropRect(x: 0.1, y: 0.2, width: 0.5, height: 0.6)
         // #8502 — le filtre PROPRE d'un objet.
         media.filter = "vintage"
+        // #9175 — les réglages d'une image. Voyagent pour TOUT média, fond
+        // compris : leur clé v3 `payload.adjustments` n'est partagée avec rien.
+        media.adjustments = ImageAdjustments(exposure: 0.5, contrast: 1.25, vignette: 0.75)
         return media
     }
 

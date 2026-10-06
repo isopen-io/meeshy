@@ -44,22 +44,26 @@ final class ComposerInlineEditTests: XCTestCase {
                        "l'ordre APPRIS des outils du texte, puis la fenêtre de temps et le plan")
     }
 
-    func test_sections_image_filtreActionsDescription() {
+    func test_sections_image_filtreReglagesActionsDescription() {
         XCTAssertEqual(ComposerInlineEditing.sections(for: .image, hasTrimmableSource: false),
-                       [.media(.filter), .media(.actions), .media(.altText)])
+                       [.media(.filter), .media(.adjust), .media(.actions), .media(.altText)])
     }
 
-    func test_sections_video_rognageActionsDescription_sansFiltre() {
+    func test_sections_video_reglagesRognageActionsDescription_sansFiltre() {
         XCTAssertEqual(ComposerInlineEditing.sections(for: .video, hasTrimmableSource: true),
-                       [.media(.trim), .media(.actions), .media(.altText)],
-                       "le filtre se cuit dans une image : une vidéo n'en rend aucun")
+                       [.media(.adjust), .media(.trim), .media(.actions), .media(.altText)],
+                       "le filtre se cuit dans une image : une vidéo n'en rend aucun ; ses réglages, si (#9169)")
     }
 
+    /// Sauf les RÉGLAGES (#9175, #9169) : `StoryBackgroundLayer` ne les peint
+    /// pas encore, donc le fond ne les offre pas — un curseur sans effet (loi 4).
     func test_sections_fond_lesMemesQuUnMediaPose() {
         XCTAssertEqual(ComposerInlineEditing.sections(for: .background(isVideo: false), hasTrimmableSource: false),
-                       ComposerInlineEditing.sections(for: .image, hasTrimmableSource: false))
+                       ComposerInlineEditing.sections(for: .image, hasTrimmableSource: false)
+                           .filter { $0 != .media(.adjust) })
         XCTAssertEqual(ComposerInlineEditing.sections(for: .background(isVideo: true), hasTrimmableSource: true),
-                       ComposerInlineEditing.sections(for: .video, hasTrimmableSource: true))
+                       ComposerInlineEditing.sections(for: .video, hasTrimmableSource: true)
+                           .filter { $0 != .media(.adjust) })
     }
 
     /// **Aucun contrôle inerte** (loi 4) : la fenêtre de temps et le plan

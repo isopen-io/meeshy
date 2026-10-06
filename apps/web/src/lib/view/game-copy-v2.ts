@@ -96,10 +96,16 @@ export type TrophyView = {
   readonly kind: TrophyKind;
   /** La matière de la coupe de ligue ; absente des trois autres coupes. */
   readonly material?: GameMaterial;
-  /** Ce que lit un lecteur d'écran : « Coupe d'or — ligue Jade, semaine du 26 octobre ». */
+  /** Ce que lit un lecteur d'écran : « Coupe d'or — ligue Jade, semaine du 26 octobre » (« …, octobre 2026 » chez un visiteur). */
   readonly title: string;
   /** Ce que la plaque grave : « JADE · S44 », en capitales. */
   readonly plate: string;
+};
+
+/** « oct. 2026 » — le mois d'une coupe vue par un VISITEUR, sur sa plaque (conformité D-3). */
+const shortMonthOf = (monthKey: string, language: Language): string => {
+  const [year, month] = monthKey.split('-').map(Number);
+  return new Intl.DateTimeFormat(language, { month: 'short', year: 'numeric', timeZone: 'UTC' }).format(new Date(Date.UTC(year ?? 1970, (month ?? 1) - 1, 1)));
 };
 
 /**
@@ -115,10 +121,19 @@ export function trophyView(key: string, language: Language = currentInterfaceLan
   switch (spec.kind) {
     case 'league-cup': {
       const league = leagueName(spec.league, language);
+      const cup = translateGame(language, `game.league.cup.${spec.cup}`);
+      if ('monthKey' in spec) {
+        return {
+          kind: 'league',
+          material: spec.cup,
+          title: translateGame(language, 'game.trophy.league-cup-month', { cup, league, month: awardedMonthLabel(spec.monthKey, language) }),
+          plate: translateGame(language, 'game.trophy.plate.league-month', { league: upper(league), month: upper(shortMonthOf(spec.monthKey, language)) }),
+        };
+      }
       return {
         kind: 'league',
         material: spec.cup,
-        title: translateGame(language, 'game.trophy.league-cup', { cup: translateGame(language, `game.league.cup.${spec.cup}`), league, date: dateOf(spec.weekKey, language) }),
+        title: translateGame(language, 'game.trophy.league-cup', { cup, league, date: dateOf(spec.weekKey, language) }),
         plate: translateGame(language, 'game.trophy.plate.league', { league: upper(league), week: count(isoWeekNumber(spec.weekKey)) }),
       };
     }

@@ -13,6 +13,11 @@
  * semaine, la ligue et le métal : un compte ne joue qu'une ligue par semaine, la
  * clé est donc unique, et un client la dessine sans autre lecture.
  *
+ * Un VISITEUR ne lit jamais cette semaine (conformité D-3) : sa clé porte le
+ * MOIS d'obtention à la place (`visitorTrophyKey`), et deux coupes identiques
+ * du même mois s'y réunissent en une ligne comptée (`visitorShowcase`). Le
+ * parseur lit les deux formes.
+ *
  * Un trophée d'un type que ce client ne connaît pas n'est JAMAIS retiré de la
  * vitrine : il reste, en dernier, le temps d'une mise à jour.
  *
@@ -32,16 +37,31 @@ export type FlameTrophyDays = (typeof FLAME_TROPHY_DAYS)[number];
 
 const LEAGUE_CUPS: readonly LeagueCup[] = ['gold', 'silver', 'bronze'];
 
-export type TrophySpec =
+/**
+ * Une coupe de ligue se date par sa SEMAINE (`weekKey`, le lundi — la clé que la
+ * base grave et que le membre lit) ou par son MOIS d'obtention (`monthKey`,
+ * `YYYY-MM` — la seule qu'un visiteur reçoive).
+ */
+export type LeagueCupTrophySpec =
   | { readonly kind: 'league-cup'; readonly weekKey: string; readonly league: LeagueKey; readonly cup: LeagueCup }
+  | { readonly kind: 'league-cup'; readonly monthKey: string; readonly league: LeagueKey; readonly cup: LeagueCup };
+
+export type TrophySpec =
+  | LeagueCupTrophySpec
   | { readonly kind: 'season-cup'; readonly season: number }
   | { readonly kind: 'prestige'; readonly number: number }
   | { readonly kind: 'flame'; readonly days: FlameTrophyDays };
 
-export const leagueCupTrophy = (params: { weekKey: string; league: LeagueKey; cup: LeagueCup }): TrophySpec => ({
+export const leagueCupTrophy = (
+  params: { weekKey: string; league: LeagueKey; cup: LeagueCup } | { monthKey: string; league: LeagueKey; cup: LeagueCup },
+): TrophySpec => ({
   kind: 'league-cup',
   ...params,
 });
+
+const MONTH_KEY = /^\d{4}-(0[1-9]|1[0-2])$/;
+const isMonthKey = (value: string): boolean => MONTH_KEY.test(value);
+const leagueCupPeriod = (spec: LeagueCupTrophySpec): string => ('weekKey' in spec ? spec.weekKey : spec.monthKey);
 export const seasonCupTrophy = (season: number): TrophySpec => ({ kind: 'season-cup', season });
 export const prestigeTrophy = (number: number): TrophySpec => ({ kind: 'prestige', number });
 export const flameTrophy = (days: FlameTrophyDays): TrophySpec => ({ kind: 'flame', days });
@@ -49,7 +69,7 @@ export const flameTrophy = (days: FlameTrophyDays): TrophySpec => ({ kind: 'flam
 export function trophyKey(spec: TrophySpec): string {
   switch (spec.kind) {
     case 'league-cup':
-      return `trophy.league-cup.${spec.weekKey}.${spec.league}.${spec.cup}`;
+      return `trophy.league-cup.${leagueCupPeriod(spec)}.${spec.league}.${spec.cup}`;
     case 'season-cup':
       return `trophy.season-cup.${spec.season}`;
     case 'prestige':
@@ -69,9 +89,9 @@ export function parseTrophyKey(key: string): TrophySpec | null {
   if (kind === 'league-cup' && parts.length === 5) {
     const league = LEAGUE_KEYS.find((l) => l === b);
     const cup = LEAGUE_CUPS.find((m) => m === c);
-    return a !== undefined && isDayKey(a) && league !== undefined && cup !== undefined
-      ? leagueCupTrophy({ weekKey: a, league, cup })
-      : null;
+    if (a === undefined || league === undefined || cup === undefined) return null;
+    if (isDayKey(a)) return leagueCupTrophy({ weekKey: a, league, cup });
+    return isMonthKey(a) ? leagueCupTrophy({ monthKey: a, league, cup }) : null;
   }
   if (parts.length !== 3 || a === undefined || !POSITIVE_INT.test(a)) return null;
   const n = Number(a);
@@ -168,6 +188,57 @@ export const visitorAwardedMonth = (awardedAt: string): string | null => {
   const match = /^(\d{4})-(\d{2})-\d{2}/.exec(awardedAt);
   return match === null ? null : `${match[1]}-${match[2]}`;
 };
+
+/**
+ * La clé d'un trophée telle qu'un VISITEUR la reçoit : une coupe de ligue y
+ * porte le MOIS d'obtention à la place de sa semaine (conformité D-3). C'est le
+ * mois d'OBTENTION, jamais celui du lundi : une semaine à cheval sur deux mois,
+ * réglée le mois suivant, se trahirait par l'écart entre la clé et `awardedMonth`.
+ * Les autres sortes ne portent aucune date et passent telles quelles. `null` pour
+ * une clé que la loi ne sait pas lire, ou un mois illisible : elle pourrait
+ * porter n'importe quoi, et le serveur — qui produit toutes les clés — ne sert
+ * pas ce qu'il ne sait pas relire.
+ */
+export function visitorTrophyKey(params: { readonly key: string; readonly awardedMonth: string }): string | null {
+  const spec = parseTrophyKey(params.key);
+  if (spec === null || !isMonthKey(params.awardedMonth)) return null;
+  return spec.kind === 'league-cup' ? trophyKey(leagueCupTrophy({ monthKey: params.awardedMonth, league: spec.league, cup: spec.cup })) : trophyKey(spec);
+}
+
+export type VisitorTrophyItem = { readonly key: string; readonly awardedMonth: string; readonly count?: number };
+
+/**
+ * La vitrine telle qu'un VISITEUR la reçoit : des clés projetées
+ * (`visitorTrophyKey`), le mois d'obtention, et rien de plus fin — ni un jour ni
+ * un ORDRE qui en dépende. Deux coupes identiques du même mois se réunissent en
+ * UNE ligne qui porte `count` (absent pour un trophée unique) ; l'ordre choisi
+ * par le membre est projeté de même, et le reste se range par valeur, puis par
+ * mois, puis par clé — jamais par l'horodatage.
+ */
+export function visitorShowcase(params: { readonly owned: readonly TrophyRecord[]; readonly order: readonly string[] }): {
+  readonly items: readonly VisitorTrophyItem[];
+  readonly order: readonly string[];
+} {
+  const projected = params.owned.flatMap((trophy) => {
+    const awardedMonth = visitorAwardedMonth(trophy.awardedAt);
+    const key = awardedMonth === null ? null : visitorTrophyKey({ key: trophy.key, awardedMonth });
+    return key === null || awardedMonth === null ? [] : [{ source: trophy.key, key, awardedMonth }];
+  });
+  const keyOf = new Map(projected.map((p) => [p.source, p.key]));
+  const order = orderShowcase({
+    owned: projected.map((p) => ({ key: p.key, awardedAt: p.awardedMonth })),
+    order: params.order.flatMap((source) => keyOf.get(source) ?? []),
+  });
+  const counts = projected.reduce((acc, p) => acc.set(p.key, (acc.get(p.key) ?? 0) + 1), new Map<string, number>());
+  const monthOf = new Map(projected.map((p) => [p.key, p.awardedMonth]));
+  const items = order.flatMap((key) => {
+    const awardedMonth = monthOf.get(key);
+    const count = counts.get(key) ?? 1;
+    if (awardedMonth === undefined) return [];
+    return [count > 1 ? { key, awardedMonth, count } : { key, awardedMonth }];
+  });
+  return { items, order };
+}
 
 /** Qui voit la vitrine. Une valeur inconnue ne s'ouvre qu'au propriétaire et à l'administration. */
 export function canViewShowcase(params: { readonly visibility: ShowcaseVisibility; readonly viewer: ShowcaseViewer }): boolean {

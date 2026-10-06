@@ -7,9 +7,11 @@
  * règlement relancé, un Prestige rejoué n'ajoutent rien. Elle ne lève jamais
  * pour un doublon — `false` dit « déjà là ».
  *
- * Ce qu'un VISITEUR apprend (conformité D-1 à D-3, leçon 275) : la clé, et le
- * MOIS d'obtention — jamais le jour ni l'heure — et seulement si le réglage du
- * membre (`GameProfileService.facetVisibleTo`) l'y autorise. Un refus rend
+ * Ce qu'un VISITEUR apprend (conformité D-1 à D-3, leçon 275) : la clé PROJETÉE
+ * (`visitorShowcase` — une coupe de ligue y porte le mois, jamais sa semaine) et
+ * le MOIS d'obtention — jamais le jour ni l'heure — et seulement si le réglage
+ * du membre (`GameProfileService.facetVisibleTo`) l'y autorise. ADMIN compris :
+ * seul le membre lui-même lit ses clés complètes. Un refus rend
  * `visible: false`, jamais une erreur qui dirait que la vitrine existe.
  */
 
@@ -21,6 +23,7 @@ import {
   orderShowcase,
   trophyKey,
   visitorAwardedMonth,
+  visitorShowcase,
   type TrophyRecord,
   type TrophySpec,
 } from '@meeshy/shared/utils/game/trophies';
@@ -77,6 +80,10 @@ export class TrophyService {
     if (!allowed) return { visible: false, items: [], order: [] };
 
     const [owned, settings] = await Promise.all([this.list(params.targetId), this.profile.settings(params.targetId)]);
+    if (params.viewer?.userId !== params.targetId) {
+      const view = visitorShowcase({ owned, order: settings.showcaseOrder });
+      return { visible: true, items: [...view.items], order: [...view.order] };
+    }
     const items = owned.flatMap((trophy) => {
       const awardedMonth = visitorAwardedMonth(trophy.awardedAt);
       return awardedMonth === null ? [] : [{ key: trophy.key, awardedMonth }];

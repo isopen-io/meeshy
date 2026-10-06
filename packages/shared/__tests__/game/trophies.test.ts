@@ -22,6 +22,8 @@ import {
   sanitizeShowcaseOrder,
   trophyKey,
   flameTrophy,
+  visitorTrophyKey,
+  visitorShowcase,
 } from '../../utils/game/trophies.js';
 
 describe('les clés de trophée', () => {
@@ -55,6 +57,8 @@ describe('les clés de trophée', () => {
       'trophy.league-cup.2026-10-05.jade',
       'trophy.league-cup.2026-10-05.jade.platinum',
       'trophy.league-cup.not-a-day.jade.gold',
+      'trophy.league-cup.2026-13.jade.gold',
+      'trophy.league-cup.2026-1.jade.gold',
       'badge.content.post:10',
     ]) {
       expect(parseTrophyKey(bad)).toBeNull();
@@ -172,6 +176,75 @@ describe('ce qu\'un trophée révèle à un visiteur', () => {
   it('ne rend rien d\'une date illisible', () => {
     expect(visitorAwardedMonth('hier')).toBeNull();
     expect(visitorAwardedMonth('')).toBeNull();
+  });
+});
+
+const DAY = /\d{4}-\d{2}-\d{2}/;
+
+describe('la clé d\'une coupe de ligue vue par un visiteur (conformité D-3)', () => {
+  it('porte le MOIS d\'obtention, jamais la semaine', () => {
+    expect(visitorTrophyKey({ key: 'trophy.league-cup.2026-10-12.jade.gold', awardedMonth: '2026-10' })).toBe('trophy.league-cup.2026-10.jade.gold');
+  });
+
+  it('prend le mois d\'OBTENTION, pas celui du lundi — sinon une semaine à cheval sur deux mois se trahirait', () => {
+    expect(visitorTrophyKey({ key: 'trophy.league-cup.2026-09-28.quartz.bronze', awardedMonth: '2026-10' })).toBe('trophy.league-cup.2026-10.quartz.bronze');
+  });
+
+  it('laisse intactes les sortes qui ne portent aucune date', () => {
+    for (const key of ['trophy.season-cup.3', 'trophy.prestige.2', 'trophy.flame.365']) {
+      expect(visitorTrophyKey({ key, awardedMonth: '2026-10' })).toBe(key);
+    }
+  });
+
+  it('ne sert rien d\'une clé que la loi ne sait pas lire — elle pourrait porter n\'importe quoi', () => {
+    expect(visitorTrophyKey({ key: 'trophy.cometa.2026-10-12', awardedMonth: '2026-10' })).toBeNull();
+    expect(visitorTrophyKey({ key: 'trophy.league-cup.2026-10-12.jade.gold', awardedMonth: 'octobre' })).toBeNull();
+  });
+
+  it('se relit : le parseur accepte la forme MOIS comme la forme SEMAINE', () => {
+    expect(parseTrophyKey('trophy.league-cup.2026-10.jade.gold')).toEqual(leagueCupTrophy({ monthKey: '2026-10', league: 'jade', cup: 'gold' }));
+    expect(parseTrophyKey('trophy.league-cup.2026-10-12.jade.gold')).toEqual(leagueCupTrophy({ weekKey: '2026-10-12', league: 'jade', cup: 'gold' }));
+    expect(trophyKey(leagueCupTrophy({ monthKey: '2026-10', league: 'jade', cup: 'gold' }))).toBe('trophy.league-cup.2026-10.jade.gold');
+  });
+});
+
+describe('la vitrine vue par un visiteur', () => {
+  const owned = [
+    { key: 'trophy.league-cup.2026-10-05.jade.gold', awardedAt: '2026-10-12T00:05:00.000Z' },
+    { key: 'trophy.league-cup.2026-10-19.jade.gold', awardedAt: '2026-10-26T00:05:00.000Z' },
+    { key: 'trophy.league-cup.2026-10-12.jade.silver', awardedAt: '2026-10-19T00:05:00.000Z' },
+    { key: 'trophy.league-cup.2026-09-28.ambre.bronze', awardedAt: '2026-10-05T00:05:00.000Z' },
+    { key: 'trophy.flame.100', awardedAt: '2026-09-12T08:00:00.000Z' },
+    { key: 'trophy.cometa.2026-10-12', awardedAt: '2026-10-12T08:00:00.000Z' },
+  ];
+
+  it('ne contient aucun jour, quel que soit le trophée', () => {
+    const view = visitorShowcase({ owned, order: ['trophy.league-cup.2026-10-12.jade.silver'] });
+    expect(JSON.stringify(view)).not.toMatch(DAY);
+  });
+
+  it('réunit deux coupes du même mois en UNE ligne, comptée — la réponse reste sans doublon', () => {
+    const view = visitorShowcase({ owned, order: [] });
+    expect(view.items).toContainEqual({ key: 'trophy.league-cup.2026-10.jade.gold', awardedMonth: '2026-10', count: 2 });
+    expect(view.items).toContainEqual({ key: 'trophy.league-cup.2026-10.jade.silver', awardedMonth: '2026-10' });
+    expect(new Set(view.order).size).toBe(view.order.length);
+    expect(new Set(view.items.map((i) => i.key)).size).toBe(view.items.length);
+  });
+
+  it('garde l\'ordre choisi par le membre, projeté', () => {
+    const view = visitorShowcase({ owned, order: ['trophy.league-cup.2026-10-12.jade.silver', 'trophy.flame.100'] });
+    expect(view.order.slice(0, 2)).toEqual(['trophy.league-cup.2026-10.jade.silver', 'trophy.flame.100']);
+  });
+
+  it('ne départage jamais deux trophées du même mois par leur jour — seulement par la clé', () => {
+    const early = { key: 'trophy.league-cup.2026-10-05.prisme.gold', awardedAt: '2026-10-12T00:00:00.000Z' };
+    const late = { key: 'trophy.league-cup.2026-10-19.ambre.gold', awardedAt: '2026-10-26T00:00:00.000Z' };
+    expect(visitorShowcase({ owned: [early, late], order: [] }).order).toEqual(visitorShowcase({ owned: [late, { ...early, awardedAt: '2026-10-30T00:00:00.000Z' }], order: [] }).order);
+  });
+
+  it('tait la clé illisible — le serveur, qui la produit, ne sert pas ce qu\'il ne sait pas relire', () => {
+    const view = visitorShowcase({ owned, order: [] });
+    expect(view.order).not.toContain('trophy.cometa.2026-10-12');
   });
 });
 

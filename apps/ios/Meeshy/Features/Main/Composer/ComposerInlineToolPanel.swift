@@ -14,7 +14,7 @@ import MeeshyUI
 ///
 /// Le CONTENU de chaque sous-outil est celui que l'éditeur d'objet monte déjà —
 /// `TextEditToolOptions` du SDK, `ComposerObjectTimingControls`,
-/// `ComposerObjectPlanControls`, `ComposerMediaFilterGrid`,
+/// `ComposerObjectPlanControls`, `ComposerMediaFilterGrid`, `ComposerMediaAdjustPanel`,
 /// `ComposerMediaTrimBand`, `ComposerMediaActionRow`, `MediaAltTextField` :
 /// aucune copie, donc aucune divergence au premier réglage.
 struct ComposerInlineToolPanel: View {
@@ -27,6 +27,9 @@ struct ComposerInlineToolPanel: View {
     var altText: Binding<String>?
     /// Le plan 2D désigne un autre texte : l'édition en place le reprend.
     var onSelectText: (String) -> Void = { _ in }
+    /// L'appui maintenu sur « Comparer » des réglages (#9175) : le meuble
+    /// montre l'original de l'image dans la scène tant qu'il dure.
+    var onCompareLook: ((Bool) -> Void)?
 
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var contentHeight: CGFloat = 0
@@ -82,6 +85,8 @@ struct ComposerInlineToolPanel: View {
                 ComposerMediaFilterGrid(viewModel: viewModel, media: media,
                                         isBackground: edit.family.isBackground)
             }
+        case .media(.adjust):
+            ComposerMediaAdjustPanel(viewModel: viewModel, mediaId: edit.objectId, onCompare: onCompareLook)
         case .media(.trim):
             if let source = viewModel.sourceTrim(id: edit.objectId) {
                 ComposerMediaTrimBand(viewModel: viewModel, objectId: edit.objectId, source: source,

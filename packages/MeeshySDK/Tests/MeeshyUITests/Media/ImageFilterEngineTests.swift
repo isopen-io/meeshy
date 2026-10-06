@@ -1,6 +1,7 @@
 import XCTest
 import UIKit
 @testable import MeeshyUI
+import MeeshySDK
 
 /// Unit tests for `ImageFilterEngine` — the stateless render pipeline.
 @MainActor

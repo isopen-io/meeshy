@@ -84,6 +84,8 @@ import {
   capShowcaseVisibility,
   flameTrophiesEarned,
   visitorAwardedMonth,
+  visitorShowcase,
+  visitorTrophyKey,
   orderShowcase,
   parseTrophyKey,
   trophyKey,
@@ -157,7 +159,9 @@ export type GameVectorInputV2 =
   | { readonly law: 'badge-served'; readonly knowsExtendedTiers: boolean }
   | { readonly law: 'guide-v2'; readonly event: GuideEventV2; readonly seen: readonly string[] }
   | { readonly law: 'guide-choose'; readonly events: readonly (GuideEvent | GuideEventV2)[]; readonly seen: readonly string[] }
-  | { readonly law: 'photo-moment'; readonly event: GuideEventV2 };
+  | { readonly law: 'photo-moment'; readonly event: GuideEventV2 }
+  | { readonly law: 'trophy-visitor-key'; readonly key: string; readonly awardedMonth: string }
+  | { readonly law: 'showcase-visitor'; readonly owned: readonly TrophyRecord[]; readonly order: readonly string[] };
 
 export const GAME_VECTOR_LAWS_V2 = [
   'league-week',
@@ -202,6 +206,8 @@ export const GAME_VECTOR_LAWS_V2 = [
   'guide-v2',
   'guide-choose',
   'photo-moment',
+  'trophy-visitor-key',
+  'showcase-visitor',
 ] as const;
 
 const lawSet: ReadonlySet<string> = new Set(GAME_VECTOR_LAWS_V2);
@@ -355,6 +361,10 @@ export function evaluateGameVectorV2(input: GameVectorInputV2): unknown {
       const emblem = photoMomentOfGuideEvent(input.event);
       return { emblem, id: emblem === null ? null : photoMomentId(emblem) };
     }
+    case 'trophy-visitor-key':
+      return { key: visitorTrophyKey(input) };
+    case 'showcase-visitor':
+      return visitorShowcase(input);
   }
 }
 
@@ -724,6 +734,33 @@ export function buildGameVectorsV2() {
 
   const photos = eventsV2.map((event) => vector(`moment photo de « ${event.kind} »`, { law: 'photo-moment', event }));
 
+  const visitorKeys = [
+    ['trophy.league-cup.2026-10-12.jade.gold', '2026-10'],
+    ['trophy.league-cup.2026-09-28.quartz.bronze', '2026-10'],
+    ['trophy.league-cup.2026-10.jade.gold', '2026-11'],
+    ['trophy.season-cup.3', '2026-10'],
+    ['trophy.prestige.2', '2026-10'],
+    ['trophy.flame.365', '2026-10'],
+    ['trophy.cometa.2026-10-12', '2026-10'],
+    ['trophy.league-cup.2026-10-12.jade.gold', 'octobre'],
+  ].map(([key, awardedMonth]) => vector(`clé visiteur de « ${key} » au mois ${awardedMonth}`, { law: 'trophy-visitor-key', key: key!, awardedMonth: awardedMonth! }));
+
+  const monthParses = ['trophy.league-cup.2026-10.jade.gold', 'trophy.league-cup.2026-13.jade.gold', 'trophy.league-cup.2026-1.jade.gold'].map((key) =>
+    vector(`lecture de la clé « ${key} »`, { law: 'trophy-parse', key }),
+  );
+
+  const visitorOwned: readonly TrophyRecord[] = [
+    { key: 'trophy.league-cup.2026-10-05.jade.gold', awardedAt: '2026-10-12T00:05:00.000Z' },
+    { key: 'trophy.league-cup.2026-10-19.jade.gold', awardedAt: '2026-10-26T00:05:00.000Z' },
+    { key: 'trophy.league-cup.2026-10-12.jade.silver', awardedAt: '2026-10-19T00:05:00.000Z' },
+    { key: 'trophy.league-cup.2026-09-28.ambre.bronze', awardedAt: '2026-10-05T00:05:00.000Z' },
+    { key: 'trophy.flame.100', awardedAt: '2026-09-12T08:00:00.000Z' },
+    { key: 'trophy.cometa.2026-10-12', awardedAt: '2026-10-12T08:00:00.000Z' },
+  ];
+  const visitorShowcases = [[], ['trophy.league-cup.2026-10-12.jade.silver', 'trophy.flame.100'], ['trophy.league-cup.2026-10-19.jade.gold', 'trophy.prestige.4']].map((order, i) =>
+    vector(`vitrine d'un visiteur, cas ${i + 1}`, { law: 'showcase-visitor', owned: visitorOwned, order }),
+  );
+
   return [
     ...weeks,
     ...weekPoints,
@@ -767,5 +804,8 @@ export function buildGameVectorsV2() {
     ...guides,
     ...chooses,
     ...photos,
+    ...visitorKeys,
+    ...monthParses,
+    ...visitorShowcases,
   ];
 }

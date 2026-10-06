@@ -272,10 +272,16 @@ export const showcaseVisibilityRequestSchema = writeRequest
   );
 export const showcaseVisibilityResponseSchema = z.object({ visibility: gameVisibilitySchema });
 
-/** Un trophée vu par un VISITEUR : le mois d'obtention, jamais l'horodatage (`visitorAwardedMonth`). */
+/**
+ * Un trophée vu par un VISITEUR : sa clé projetée (`visitorTrophyKey` — une coupe
+ * de ligue y porte le mois, jamais la semaine) et le mois d'obtention, jamais
+ * l'horodatage (`visitorAwardedMonth`). `count` (≥ 2, absent pour un trophée
+ * unique) dit combien de coupes identiques ce mois réunit (`visitorShowcase`).
+ */
 export const gameVisitorTrophyItemSchema = z.object({
   key: trophyKeySchema,
   awardedMonth: z.string().regex(/^\d{4}-\d{2}$/),
+  count: z.number().int().min(2).max(500).optional(),
 });
 
 export const userShowcaseResponseSchema = z.object({

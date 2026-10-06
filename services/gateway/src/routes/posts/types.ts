@@ -63,6 +63,25 @@ const STORY_FONT_MAX = 64;
 const STORY_STYLE_MAX = 64;
 const STORY_ARRAY_CAP = 32;             // medias/texts/stickers/audios par slide
 
+// Les REGLAGES d'une image posee (#9175) — `ImageAdjustments` iOS : seules les
+// valeurs actives voyagent. Bornes LARGES (le client borne chaque reglage a sa
+// plage de curseur) mais finies : une charge ne decide pas du cout du rendu.
+// `passthrough` comme le reste du blob — un reglage plus recent qu'un client
+// ancien voyage, et ce client l'ignore.
+const STORY_ADJUSTMENT_BOUND = 10;
+const adjustmentValue = z.number().finite().min(-STORY_ADJUSTMENT_BOUND).max(STORY_ADJUSTMENT_BOUND).optional();
+export const StoryMediaAdjustmentsSchema = z.object({
+  exposure: adjustmentValue,
+  brightness: adjustmentValue,
+  contrast: adjustmentValue,
+  saturation: adjustmentValue,
+  vibrance: adjustmentValue,
+  temperature: adjustmentValue,
+  sharpness: adjustmentValue,
+  blur: adjustmentValue,
+  vignette: adjustmentValue,
+}).passthrough();
+
 export const StoryMediaObjectSchema = z.object({
   id: z.string().max(STORY_ID_MAX).optional(),
   postMediaId: z.string().max(STORY_ID_MAX).optional(),
@@ -96,6 +115,7 @@ export const StoryMediaObjectSchema = z.object({
   // Le filtre PROPRE a l'objet (2026-09-28) : memes valeurs que le filtre de
   // slide (`StoryEffects.filter`, celui du fond). Borne comme ses freres.
   filter: z.string().max(32).optional(),
+  adjustments: StoryMediaAdjustmentsSchema.optional(),
 }).passthrough();
 
 const StoryTextObjectSchema = z.object({

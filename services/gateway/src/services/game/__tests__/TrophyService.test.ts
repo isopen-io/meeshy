@@ -67,7 +67,31 @@ describe('TrophyService.showcaseFor', () => {
 
     const view = await service.showcaseFor({ viewer: { userId: OTHER, role: 'USER' }, targetId: USER });
 
-    expect(view.order).toEqual(['trophy.league-cup.2026-10-12.quartz.bronze', 'trophy.season-cup.1']);
+    expect(view.order).toEqual(['trophy.league-cup.2026-10.quartz.bronze', 'trophy.season-cup.1']);
+  });
+
+  it('un visiteur ne lit jamais la semaine d’une coupe : aucune chaîne de jour dans toute la réponse (D-3)', async () => {
+    const { db, service } = setup();
+    db.friendRequest.rows.push({ id: 'f', status: 'accepted', senderId: OTHER, receiverId: USER });
+    await service.award(USER, leagueCupTrophy({ weekKey: '2026-09-28', league: 'jade', cup: 'gold' }), new Date('2026-10-05T00:05:00Z'));
+    await service.award(USER, leagueCupTrophy({ weekKey: '2026-10-12', league: 'jade', cup: 'gold' }), new Date('2026-10-19T00:05:00Z'));
+    await service.award(USER, seasonCupTrophy(1), new Date('2026-12-06T21:45:00Z'));
+    db.gameProfile.rows.push({ id: 'p', userId: USER, showcaseOrder: ['trophy.league-cup.2026-09-28.jade.gold'] });
+
+    const view = await service.showcaseFor({ viewer: { userId: OTHER, role: 'USER' }, targetId: USER });
+
+    expect(JSON.stringify(view)).not.toMatch(/\d{4}-\d{2}-\d{2}/);
+    expect(view.items).toEqual([
+      { key: 'trophy.league-cup.2026-10.jade.gold', awardedMonth: '2026-10', count: 2 },
+      { key: 'trophy.season-cup.1', awardedMonth: '2026-12' },
+    ]);
+  });
+
+  it('le membre lui-même lit ses clés complètes', async () => {
+    const { service } = setup();
+    await service.award(USER, leagueCupTrophy({ weekKey: '2026-10-12', league: 'jade', cup: 'gold' }), new Date('2026-10-19T00:05:00Z'));
+    const view = await service.showcaseFor({ viewer: { userId: USER, role: 'USER' }, targetId: USER });
+    expect(view.order).toEqual(['trophy.league-cup.2026-10-12.jade.gold']);
   });
 
   it('un blocage rend la vitrine invisible même réglée sur « tout le monde »', async () => {

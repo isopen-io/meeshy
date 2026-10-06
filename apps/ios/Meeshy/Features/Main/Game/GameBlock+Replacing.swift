@@ -118,7 +118,8 @@ extension GameBlock {
         chest: Chest? = nil,
         flame: Flame? = nil,
         boosts: Boosts? = nil,
-        guideSeen: [String]? = nil
+        guideSeen: [String]? = nil,
+        wave2: GameWave2? = nil
     ) -> GameBlock {
         GameBlock(
             level: level ?? self.level,
@@ -129,7 +130,8 @@ extension GameBlock {
             chest: chest ?? self.chest,
             flame: flame ?? self.flame,
             boosts: boosts ?? self.boosts,
-            guideSeen: guideSeen ?? self.guideSeen
+            guideSeen: guideSeen ?? self.guideSeen,
+            wave2: wave2 ?? self.wave2
         )
     }
 }

@@ -3,6 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import { catalogPlaceholders } from './i18n-catalog';
 import {
   formatGameNumber,
+  GAME_ORDINAL_BASES,
   gamePluralCategory,
   loadGameCatalog,
   translateGame,
@@ -32,6 +33,10 @@ const PLURAL_FORM = /^(.+)\.(zero|one|two|few|many|other)$/;
 const extraCategories = (language: InterfaceLanguage): readonly string[] =>
   new Intl.PluralRules(language).resolvedOptions().pluralCategories.filter((category) => category !== 'one' && category !== 'other');
 
+/** Celles d'une famille ORDINALE (« 4th », #9494) : ses catégories ordinales autres que `one` et `other`. */
+const extraOrdinalCategories = (language: InterfaceLanguage): readonly string[] =>
+  new Intl.PluralRules(language, { type: 'ordinal' }).resolvedOptions().pluralCategories.filter((category) => category !== 'one' && category !== 'other');
+
 describe('chaque langue porte toutes les clés game.* du français', () => {
   test('toutes les clés du français, et seules s’y ajoutent les formes de pluriel de la langue', async () => {
     const french = sorted(Object.keys(await loadGameCatalog('fr')));
@@ -43,7 +48,8 @@ describe('chaque langue porte toutes les clés game.* du français', () => {
         const match = PLURAL_FORM.exec(key);
         const base = match?.[1];
         const category = match?.[2];
-        return base !== undefined && category !== undefined && french.includes(`${base}.other`) && extraCategories(language).includes(category);
+        if (base === undefined || category === undefined || !french.includes(`${base}.other`)) return false;
+        return (GAME_ORDINAL_BASES as readonly string[]).includes(base) ? extraOrdinalCategories(language).includes(category) : extraCategories(language).includes(category);
       });
       expect({ language, extra }).toEqual({ language, extra: allowed });
     }

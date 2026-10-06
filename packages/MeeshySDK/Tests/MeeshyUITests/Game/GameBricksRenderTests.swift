@@ -137,11 +137,13 @@ struct GameBricksRenderTests {
         #expect(gold.coverage > silver.coverage, "le ruban de l'Or ajoute de la matière sous la médaille")
     }
 
-    @Test("l'empreinte d'une médaille éteinte est en creux : bien moins de matière que la médaille allumée")
+    @Test("l'empreinte d'une médaille éteinte est en creux : une plaque sans métal, ni ruban, ni arc")
     func medalImprint() throws {
         let lit = try medal()
         let imprint = try medal(state: .imprint, label: "−37")
-        #expect(imprint.coverage < lit.coverage / 2)
+        // La plaque est PLEINE (la couleur de surface, comme la planche) : ce qui la distingue d'une
+        // médaille allumée n'est pas la part de pixels peints mais leur nature — pas de métal, de ruban ni d'arc.
+        #expect(imprint.coverage < lit.coverage)
         #expect(imprint.distance(to: lit) > 5)
     }
 
@@ -244,5 +246,53 @@ struct GameBricksRenderTests {
         let colors = LevelTierKey.allCases.map { LevelTierPalette.color(for: $0) }
         #expect(colors.count == 10)
         #expect(LevelTierPalette.color(for: .etincelle) != LevelTierPalette.color(for: .lueur))
+    }
+
+    @Test("les huit gemmes de ligue se distinguent, chacune peint une gemme et jamais son cadre")
+    func leagueGems() throws {
+        let probes = try LeagueKey.allCases.map { try probe(LeagueGemView(league: $0), width: 72, height: 72) }
+        #expect(probes.allSatisfy { $0.coverage > 0.15 && $0.cornerIsTransparent })
+        for (index, lhs) in probes.enumerated() {
+            for rhs in probes[(index + 1)...] {
+                #expect(lhs.distance(to: rhs) > 0.5)
+            }
+        }
+    }
+
+    @Test("le tampon d'Atlas : tamponné, à moitié échangé et à découvrir ne se confondent pas")
+    func atlasStamp() throws {
+        let stamped = try probe(AtlasStampView(code: "JA", tint: .purple, state: .stamped), width: 72, height: 72)
+        let pending = try probe(AtlasStampView(code: "JA", tint: .purple, state: .pending), width: 72, height: 72)
+        let empty = try probe(AtlasStampView(code: "", tint: .purple, state: .undiscovered), width: 72, height: 72)
+        #expect(stamped.coverage > 0.05)
+        #expect(stamped.cornerIsTransparent)
+        #expect(stamped.distance(to: pending) > 0.3)
+        #expect(stamped.distance(to: empty) > 0.3)
+        #expect(pending.distance(to: empty) > 0.3)
+    }
+
+    @Test("le liseré de rareté : cinq teintes, et aucun trait quand la rareté n'est pas mesurée")
+    func rarityRim() throws {
+        let card = Color.white.frame(width: 90, height: 60)
+        let none = try probe(card.gameRarityRim(nil), width: 90, height: 60)
+        let rims = try [RarityBorder.slate, .blue, .violet, .gold, .prism].map {
+            try probe(card.gameRarityRim($0), width: 90, height: 60)
+        }
+        #expect(rims.allSatisfy { none.distance(to: $0) > 0.2 })
+        for (index, lhs) in rims.enumerated() {
+            for rhs in rims[(index + 1)...] {
+                #expect(lhs.distance(to: rhs) > 0.05)
+            }
+        }
+    }
+
+    @Test("l'anneau de niveau pose une étoile de plus par Prestige")
+    func prestigeStarsOnTheRing() throws {
+        let rings = try (0...GameLevels.maxPrestige).map {
+            try probe(LevelRingView(level: 40, progress: 0.5, tier: .rayon, prestige: $0), width: 88, height: 104)
+        }
+        for (index, lhs) in rings.enumerated().dropLast() {
+            #expect(lhs.distance(to: rings[index + 1]) > 0.05)
+        }
     }
 }

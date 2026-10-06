@@ -103,12 +103,16 @@ nonisolated enum ComposerInlineEditing {
     /// recadrage n'est servi qu'au FOND IMAGE d'une pièce retouchée — c'est là
     /// qu'il se cuit dans la pièce rendue. Ailleurs, le lecteur ne recadre pas
     /// un fond : l'offrir serait un contrôle sans effet.
+    ///
+    /// **Les RÉGLAGES vont au média POSÉ** — l'image (#9175), et la vidéo dont
+    /// le player peint les trames (#9169) ; le fond ne les peint pas encore.
     static func sections(for family: ComposerInlineFamily,
                          hasTrimmableSource: Bool,
                          retouching: Bool = false) -> [ComposerObjectEditorSection] {
         let servies = ComposerObjectEditorRail.entries(for: family.sceneKind,
                                                        hasTrimmableSource: hasTrimmableSource,
-                                                       offersFilter: !family.isVideo)
+                                                       offersFilter: !family.isVideo,
+                                                       offersAdjust: family == .image || family == .video)
             .filter { section in
                 switch section {
                 case .timing, .plan:  return family == .text

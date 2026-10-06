@@ -276,8 +276,9 @@ final class AttachmentDownloadCenter {
                 // Seed under the exact key the renderer resolves to — a
                 // download must never need to re-fetch on the next render.
                 // Persisted before returning so funnel piggybackers observe a
-                // warm cache.
-                await store.store(data, for: resolvedKey)
+                // warm cache — unless the gateway declared the media
+                // `no-store` (view-once) or `no-cache` (ephemeral), #9478.
+                await store.store(data, for: resolvedKey, honoring: http)
                 return data
             }
             // registerInFlightDownload returns false when another call
