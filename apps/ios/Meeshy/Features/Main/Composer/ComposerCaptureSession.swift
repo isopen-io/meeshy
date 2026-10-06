@@ -89,7 +89,7 @@ final class ComposerCaptureSession: ObservableObject {
     /// L'armement, et le dernier toucher du viseur (#9464) : un double ne
     /// s'ouvre jamais sur le toucher qui a armé.
     var armedAt: Date?
-    var lastViewfinderTapAt: Date?
+    var lastViewfinderTap: ComposerCaptureLastTap?
     private let defaults: UserDefaults
     private var relais: AnyCancellable?
 

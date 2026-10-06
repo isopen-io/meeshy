@@ -44,13 +44,29 @@ nonisolated struct ComposerCaptureGestureContext: Equatable, Sendable {
     var allowsVideo = true
 }
 
+/// Le toucher précédent, et la zone où il est tombé : un double ne se fait
+/// jamais d'une zone à l'autre.
+nonisolated struct ComposerCaptureLastTap: Equatable, Sendable {
+    let zone: ComposerCaptureZone
+    let at: Date
+}
+
+/// Ce qu'un toucher produit, et la mémoire à garder pour le suivant : `nil`
+/// quand il a fini un double — un troisième en ouvre un nouveau.
+nonisolated struct ComposerCaptureTapOutcome: Equatable, Sendable {
+    let action: ComposerCaptureAction
+    let consumedDouble: Bool
+    let memory: ComposerCaptureLastTap?
+}
+
 /// **La table des gestes de la capture** (#9351, spec § 3) — zone × geste ×
 /// phase × verrou → action. Pure : la vue ne décide rien.
 ///
 /// Un `doubleTap` n'est jamais reconnu par un `TapGesture(count: 2)`, qui
 /// retarderait le toucher simple : c'est la règle du porteur
 /// (`ComposerCaptureTapRule`, #9464) qui dit si un toucher est le second d'un
-/// double — `tap(zone:context:now:lastTapAt:armedAt:)` la consulte.
+/// double — `tap(zone:context:now:lastTap:armedAt:)` la consulte, et la
+/// session (`tapAction(at:)`) n'en est que la projection.
 nonisolated enum ComposerCaptureGesture {
 
     static func action(zone: ComposerCaptureZone, gesture: ComposerCaptureGestureKind,
@@ -65,17 +81,22 @@ nonisolated enum ComposerCaptureGesture {
         }
     }
 
-    /// **Un toucher, lu par la règle du porteur** (#9464) : le premier vise tout
-    /// de suite ; le second, dans la fenêtre et après l'armement, est un double.
-    /// Un double que la table refuse (segments en attente, format sans photo)
-    /// reste un toucher : il vise encore.
+    /// **Un toucher, lu par la règle du porteur** (#9464) — le SEUL décideur du
+    /// toucher : le premier vise tout de suite ; le second, dans la fenêtre,
+    /// après l'armement et DANS LA MÊME ZONE, est un double. Un double que la
+    /// table refuse (segments en attente, format sans photo) reste un toucher :
+    /// il vise encore. L'issue rend la mémoire à garder pour le toucher suivant.
     static func tap(zone: ComposerCaptureZone, context: ComposerCaptureGestureContext,
-                    now: Date, lastTapAt: Date?, armedAt: Date?) -> ComposerCaptureAction {
-        let regle = ComposerCaptureTapRule.action(stage: context.stage, now: now, lastTapAt: lastTapAt, armedAt: armedAt)
-        let simple = action(zone: zone, gesture: .tap, context: context)
-        guard regle == .photo else { return simple }
-        let double = action(zone: zone, gesture: .doubleTap, context: context)
-        return double == .none ? simple : double
+                    now: Date, lastTap: ComposerCaptureLastTap?, armedAt: Date?) -> ComposerCaptureTapOutcome {
+        let precedent = lastTap.flatMap { $0.zone == zone ? $0.at : nil }
+        let regle = ComposerCaptureTapRule.action(stage: context.stage, now: now, lastTapAt: precedent, armedAt: armedAt)
+        let double = regle == .photo ? action(zone: zone, gesture: .doubleTap, context: context) : .none
+        guard double == .none else {
+            return ComposerCaptureTapOutcome(action: double, consumedDouble: true, memory: nil)
+        }
+        return ComposerCaptureTapOutcome(action: action(zone: zone, gesture: .tap, context: context),
+                                         consumedDouble: false,
+                                         memory: ComposerCaptureLastTap(zone: zone, at: now))
     }
 
     private static func lookIsLocked(_ context: ComposerCaptureGestureContext) -> Bool {
