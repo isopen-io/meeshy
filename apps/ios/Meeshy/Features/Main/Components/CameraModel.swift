@@ -122,12 +122,6 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     /// Ce qui suit une bascule faite PENDANT une prise, prévenu à sa reprise.
     private var switchFollower: (@MainActor @Sendable (AVCaptureDevice.Position) -> Void)?
 
-    /// Demande la caméra puis monte la session. Un refus (au prompt ou déjà
-    /// enregistré dans TCC) publie `permission = .denied` au lieu de sortir en
-    /// silence : la vue rend alors un panneau explicatif plutôt qu'un preview
-    /// noir permanent sans le moindre indice.
-    ///
-    /// Le micro n'est PAS demandé ici — voir `enableAudioCaptureIfNeeded()`.
     /// Seul le jeton de la prise en cours se referme : une fin tardive d'une autre
     /// prise ne libère rien.
     func closeRecordingToken(_ token: String?) {
@@ -144,6 +138,12 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
         abandonRecording(token: ancienne)
     }
 
+    /// Demande la caméra puis monte la session. Un refus (au prompt ou déjà
+    /// enregistré dans TCC) publie `permission = .denied` au lieu de sortir en
+    /// silence : la vue rend alors un panneau explicatif plutôt qu'un preview
+    /// noir permanent sans le moindre indice.
+    ///
+    /// Le micro n'est PAS demandé ici — voir `enableAudioCaptureIfNeeded()`.
     func configure() {
         forgetStaleRecording()
         #if DEBUG
