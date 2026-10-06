@@ -236,8 +236,7 @@ export function ElansHero({ progress }: { progress: EngagementProgress }) {
 
       {familles.length === 0 ? (
         <p className="text-caption" style={{ color: INK_2 }}>
-          Publiez une story, un post, un réel ou lancez une conversation : chaque famille tenue en même temps multiplie
-          vos points.
+          Tenez plusieurs familles en même temps : cela multiplie vos points.
         </p>
       ) : (
         <>
@@ -260,7 +259,7 @@ export function ElansHero({ progress }: { progress: EngagementProgress }) {
             </p>
           ) : (
             <p className="text-caption" style={{ color: INK_2 }}>
-              Tenez une famille de plus en même temps pour déclencher le multiplicateur.
+              Une famille de plus déclenche le multiplicateur.
             </p>
           )}
         </>

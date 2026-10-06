@@ -13,6 +13,7 @@ import { formatCount, gameText } from '@/lib/view/game-copy';
 import { gameRules, stepCopy } from '@/lib/view/game-guide-copy';
 import { useOptionalRoute } from '@/lib/router';
 import { Link } from '@/routes/route-table';
+import { RulesAtlas } from '@/routes/progression-rules-atlas';
 
 /**
  * « COMMENT ÇA MARCHE » (#9379) — le carnet des règles. Le texte que Mee et Meo
@@ -117,6 +118,8 @@ export function RulesBody({ target }: { readonly target?: number }) {
           ))}
         </ol>
       </section>
+
+      <RulesAtlas />
 
       <section aria-labelledby="etapes-titre" className="flex flex-col gap-2">
         <h2 id="etapes-titre" className="text-title font-bold" style={{ color: GAME_INK }}>
