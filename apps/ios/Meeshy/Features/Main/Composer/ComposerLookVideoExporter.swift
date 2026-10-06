@@ -18,8 +18,8 @@ import os
 nonisolated enum ComposerLookVideoExporter {
 
     /// - Returns: la vidéo regardée, `url` telle quelle sans look, sans cadrage
-    ///   et sans découpe, `nil` si le rendu a échoué (l'appelant garde alors la
-    ///   prise brute).
+    ///   et sans découpe, `nil` si le rendu a échoué (l'appelant ne remet alors
+    ///   rien : le brut porte ce que la découpe et le cadrage ont retiré).
     ///
     /// `@concurrent` : peindre les couches du cadre et monter l'export ne se
     /// fait jamais sur le fil principal, d'où le `✓` l'appelle.

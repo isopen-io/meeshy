@@ -117,8 +117,11 @@ extension ComposerCaptureSession {
     /// La vidéo part avec le look, le cadrage et la découpe qu'on voyait en la
     /// retouchant, lue dans l'espace où la boucle la lisait. Sans effet, sans
     /// cadrage ni découpe, le rendu EST le brut, déjà en galerie : rien de plus
-    /// n'y part. Un rendu qui échoue remet le brut plutôt que de perdre la prise ;
-    /// la boucle joue jusqu'à la remise, et le brut qu'un rendu remplace quitte
+    /// n'y part. **Un rendu qui échoue ne remet RIEN** : le brut porte ce que la
+    /// découpe et le cadrage ont retiré, et le remettre à sa place enverrait à
+    /// l'hôte un passage que l'auteur a coupé. La retouche reste ouverte, comme
+    /// pour une photo dont le cadre ne se peint pas — la prise n'est pas perdue.
+    /// La boucle joue jusqu'à la remise, et le brut qu'un rendu remplace quitte
     /// le dossier temporaire.
     private func finishVideo(_ url: URL) {
         guard let source = editSource else { return }
@@ -135,7 +138,13 @@ extension ComposerCaptureSession {
             let rendue = await ComposerLookVideoExporter.export(url, look: regard, framing: cadrage, timeRange: plage,
                                                                 person: auteur, date: date,
                                                                 declaredSpaceName: espace)
-            let neuve = rendue.flatMap { $0 == url ? nil : $0 }
+            guard let rendue else {
+                guard isStillEditing(source) else { return }
+                isRenderingLook = false
+                HapticFeedback.error()
+                return
+            }
+            let neuve = rendue == url ? nil : rendue
             if let neuve, isStillEditing(source) { _ = await galerie.saveVideo(at: neuve) }
             guard isStillEditing(source) else {
                 if let neuve {
@@ -145,7 +154,7 @@ extension ComposerCaptureSession {
                 return
             }
             if neuve != nil { discardTake(url, context: "brut remplacé par son rendu") }
-            deliverEdited(.video(neuve ?? url))
+            deliverEdited(.video(rendue))
         }
     }
 
