@@ -3,6 +3,7 @@ import XCTest
 import MeeshySDK
 
 /// La vitrine : son ordre, son rangement, et ce qu'un visiteur en reçoit (#9387, conformité D-3).
+@MainActor
 final class GameShowcaseRulesTests: XCTestCase {
 
     private func trophies(items: [String], order: [String]) -> GameTrophiesBlock {

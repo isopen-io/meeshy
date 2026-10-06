@@ -3,6 +3,7 @@ import XCTest
 import MeeshySDK
 
 /// Ce que la vague 2 DIT (#9481) : les noms, les dates et les trophées — habillés depuis la loi, dans la locale lue.
+@MainActor
 final class GameWave2NamesTests: XCTestCase {
 
     private let french = Locale(identifier: "fr_FR")

@@ -4,6 +4,7 @@ import MeeshySDK
 
 /// Les événements du guide de la vague 2 (#9481) : ce qui vient d'ARRIVER entre deux instantanés — et rien quand une
 /// extension manque d'un côté.
+@MainActor
 final class GameGuideEventsV2Tests: XCTestCase {
 
     private func snapshot(

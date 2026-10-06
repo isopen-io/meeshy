@@ -4,6 +4,7 @@ import MeeshySDK
 
 /// Les mises à jour optimistes de la vague 2 (#9481) : ce que l'écran montre AVANT la réponse du serveur,
 /// recalculé par la MÊME loi — jamais un nombre inventé, et rien quand le geste n'a pas de sens.
+@MainActor
 final class GameWave2OptimisticTests: XCTestCase {
 
     // MARK: - La ligue
