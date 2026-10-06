@@ -66,8 +66,8 @@ final class GameMintHeroTests: XCTestCase {
     }
 
     func test_theFrameHeldCarriesTheBalanceAndTheNextCoin() {
-        let before = GameMintFrame(meesh: GameFixture.meesh(balance: 9), next: GameMintNext(number: 13, edition: .silver))
-        let after = GameMintFrame(meesh: GameFixture.meesh(balance: 10), next: GameMintNext(number: 14, edition: .silver))
+        let before = GameMintFrame(meesh: EngagementMeeshProgress(payload: GameFixture.meesh(balance: 9)), next: GameMintNext(number: 13, edition: .silver))
+        let after = GameMintFrame(meesh: EngagementMeeshProgress(payload: GameFixture.meesh(balance: 10)), next: GameMintNext(number: 14, edition: .silver))
         var sequence = GameMintSequence<GameMintFrame>()
         sequence.begin(holding: before)
         XCTAssertEqual(sequence.shown(live: after).meesh.balance, 9)
