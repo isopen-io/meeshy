@@ -24,6 +24,7 @@ final class GameWave2ModelTests: XCTestCase {
     private struct Rig {
         let sut: GameWave2Model
         let service: MockGameWave2Service
+        let integration: MockGameIntegrationService
         let cache: MemoryCache
         let prefs: GameDevicePrefsStore
         let userId: String
@@ -43,13 +44,14 @@ final class GameWave2ModelTests: XCTestCase {
             notebook: MockGamePhotoNotebook()
         )
         let service = MockGameWave2Service()
+        let integration = MockGameIntegrationService()
         let cache = MemoryCache()
         let prefs = GameDevicePrefsStore(userId: userId, defaults: UserDefaults(suiteName: userId) ?? .standard)
         let sut = GameWave2Model(
-            progression: progression, service: service, cache: cache, friends: NoFriends(),
+            progression: progression, service: service, integration: integration, cache: cache, friends: NoFriends(),
             prefs: prefs, currentUserId: userId
         )
-        return Rig(sut: sut, service: service, cache: cache, prefs: prefs, userId: userId)
+        return Rig(sut: sut, service: service, integration: integration, cache: cache, prefs: prefs, userId: userId)
     }
 
     private func week(rank: Int = 3) -> LeagueWeekResponse {
@@ -254,6 +256,174 @@ final class GameWave2ModelTests: XCTestCase {
 
         XCTAssertEqual(cached, visitorShowcase())
         XCTAssertTrue(service.showcaseUserIds.isEmpty, "le cache se peint avant toute requête")
+    }
+
+    // MARK: - Les réglages relus au serveur (#9481)
+
+    private func served(hidden: Bool, friendsOptOut: Bool) -> GameSettingsResponse {
+        GameSettingsResponse(
+            gameHidden: hidden, friendsLeagueOptOut: friendsOptOut,
+            visibility: GameVisibility(showcase: .friends, rank: .friends, treasury: .friends, atlas: .me))
+    }
+
+    func test_loadSettings_theServedStateReplacesTheDeviceCopy() async {
+        let rig = makeSUT()
+        rig.integration.settingsResult = .success(served(hidden: true, friendsOptOut: true))
+
+        await rig.sut.loadSettings()
+
+        XCTAssertTrue(rig.prefs.prefs.hidden, "« Jeu masqué » posé depuis un autre appareil se lit ici")
+        XCTAssertTrue(rig.sut.friendsLeagueOptedOut)
+        XCTAssertEqual(rig.sut.privacy, GamePrivacyResponse(gameHidden: true, friendsLeagueOptOut: true))
+    }
+
+    func test_loadSettings_theServerCanReopenWhatTheDeviceHad() async {
+        let rig = makeSUT()
+        rig.prefs.set(hidden: true, friendsLeagueOptOut: true)
+        rig.integration.settingsResult = .success(served(hidden: false, friendsOptOut: false))
+
+        await rig.sut.loadSettings()
+
+        XCTAssertFalse(rig.prefs.prefs.hidden)
+        XCTAssertFalse(rig.sut.friendsLeagueOptedOut)
+    }
+
+    func test_loadSettings_withoutNetwork_theDeviceCopyStaysTheLastKnownState() async {
+        let rig = makeSUT()
+        rig.prefs.set(hidden: true, friendsLeagueOptOut: true)
+
+        await rig.sut.loadSettings()
+
+        XCTAssertEqual(rig.integration.settingsCallCount, 1)
+        XCTAssertTrue(rig.prefs.prefs.hidden)
+        XCTAssertTrue(rig.sut.friendsLeagueOptedOut, "hors ligne : la dernière copie répond")
+        XCTAssertNil(rig.sut.privacy, "rien n'a été confirmé")
+    }
+
+    func test_settingsSync_putsTheServedStateOnTheDevice_andRendersIt() async {
+        let rig = makeSUT()
+        rig.integration.settingsResult = .success(served(hidden: true, friendsOptOut: false))
+
+        let result = await GameSettingsSync(service: rig.integration, prefs: rig.prefs).refresh()
+
+        XCTAssertEqual(result?.gameHidden, true)
+        XCTAssertTrue(rig.prefs.prefs.hidden)
+        XCTAssertFalse(rig.prefs.prefs.friendsLeagueOptOut)
+    }
+
+    func test_settingsSync_withoutNetwork_changesNothing() async {
+        let rig = makeSUT()
+        rig.prefs.set(hidden: true)
+
+        let result = await GameSettingsSync(service: rig.integration, prefs: rig.prefs).refresh()
+
+        XCTAssertNil(result)
+        XCTAssertTrue(rig.prefs.prefs.hidden)
+    }
+
+    // MARK: - Le jeu d'un autre (#9481)
+
+    private func otherGame() -> UserGameProfileResponse {
+        UserGameProfileResponse(
+            visible: true,
+            standing: GameStanding(level: 42, tier: .eclat, prestige: 1, flame: .brasier, rank: .voix, division: .ii),
+            treasury: GameShownTreasury(tier: .coffre))
+    }
+
+    func test_userGameLoader_servedGame_isShownAndKeptOnDisk() async {
+        let integration = MockGameIntegrationService()
+        let cache = MemoryCache()
+        integration.userGameResult = .success(otherGame())
+
+        let content = await GameUserGameLoader(service: integration, cache: cache, currentUserId: "me").load(userId: "u1")
+
+        XCTAssertEqual(content?.standing?.level, 42)
+        XCTAssertEqual(content?.treasuryTier, .coffre)
+        let kept = await cache.has(GameWave2CacheName.userGame("u1"))
+        XCTAssertTrue(kept)
+    }
+
+    func test_userGameLoader_cached_paintsFromTheDiskWithoutTheNetwork() async {
+        let integration = MockGameIntegrationService()
+        let cache = MemoryCache()
+        await cache.save(otherGame(), name: GameWave2CacheName.userGame("u1"))
+
+        let cached = await GameUserGameLoader(service: integration, cache: cache, currentUserId: "me").cached(userId: "u1")
+
+        XCTAssertEqual(cached?.standing?.rank, .voix)
+        XCTAssertTrue(integration.userGameIds.isEmpty, "le cache se peint avant toute requête")
+    }
+
+    func test_userGameLoader_aRefusal_showsNothing_andForgetsTheCachedCopy() async {
+        let integration = MockGameIntegrationService()
+        let cache = MemoryCache()
+        let name = GameWave2CacheName.userGame("u1")
+        await cache.save(otherGame(), name: name)
+        integration.userGameResult = .success(.hidden)
+
+        let content = await GameUserGameLoader(service: integration, cache: cache, currentUserId: "me").load(userId: "u1")
+
+        XCTAssertNil(content, "visible:false : rien à montrer, comme pour un compte inconnu")
+        let cached = await GameUserGameLoader(service: integration, cache: cache, currentUserId: "me").cached(userId: "u1")
+        XCTAssertNil(cached, "la copie gardée est remplacée par le refus : jamais rouverte depuis le disque")
+    }
+
+    func test_userGameLoader_aServerAnswerThatIsNotAGame_forgetsTheCachedCopy() async {
+        for answer: Error in [MeeshyError.forbidden(reason: nil, body: nil), MeeshyError.server(statusCode: 404, message: "absent")] {
+            let integration = MockGameIntegrationService()
+            let cache = MemoryCache()
+            let name = GameWave2CacheName.userGame("u1")
+            await cache.save(otherGame(), name: name)
+            integration.userGameResult = .failure(answer)
+
+            let content = await GameUserGameLoader(service: integration, cache: cache, currentUserId: "me").load(userId: "u1")
+
+            XCTAssertNil(content, "\(answer)")
+            let kept = await cache.has(name)
+            XCTAssertFalse(kept, "\(answer)")
+        }
+    }
+
+    func test_userGameLoader_withoutNetwork_servesWhatTheDiskKept() async {
+        let integration = MockGameIntegrationService()
+        let cache = MemoryCache()
+        await cache.save(otherGame(), name: GameWave2CacheName.userGame("u1"))
+
+        let content = await GameUserGameLoader(service: integration, cache: cache, currentUserId: "me").load(userId: "u1")
+
+        XCTAssertEqual(content?.standing?.level, 42)
+    }
+
+    func test_standingContent_isNilWhenThereIsNothingToShow() {
+        XCTAssertNil(GameStandingContent.of(nil))
+        XCTAssertNil(GameStandingContent.of(.hidden))
+        XCTAssertNil(GameStandingContent.of(UserGameProfileResponse(visible: true, standing: nil, treasury: GameShownTreasury(tier: nil))))
+        XCTAssertNotNil(GameStandingContent.of(UserGameProfileResponse(visible: true, standing: nil, treasury: GameShownTreasury(tier: .bourse))))
+    }
+
+    func test_standingContent_isReadAsOneSentence_levelRankFlameAndTreasury() throws {
+        let content = try XCTUnwrap(GameStandingContent.of(otherGame()))
+
+        let label = content.accessibilityLabel
+        XCTAssertTrue(label.contains(GameCopy.tierName(.eclat)), label)
+        XCTAssertTrue(label.contains(GameCopy.rankLabel(.voix, division: .ii)), label)
+        XCTAssertTrue(label.contains(GameCopy.flameFormName(.brasier)), label)
+        XCTAssertTrue(label.contains(GameCopy.treasuryName(.coffre)), label)
+    }
+
+    /// La carte d'un visiteur est montée par une injection `AnyView` à une place FIXE de la feuille de profil :
+    /// passer d'un membre à un autre garde la vue et son état. Sans l'identifiant de la lecture, le niveau et les
+    /// trophées de A se peignaient sous le nom de B jusqu'à la réponse du réseau — et pour toujours hors ligne.
+    func test_aVisitorRead_isPaintedOnlyForTheMemberItWasReadFor_andNeverUnderAHiddenGame() throws {
+        let standing = try XCTUnwrap(GameStandingContent.of(otherGame()))
+        let read = GameVisitorRead(userId: "a", entries: [], standing: standing)
+
+        XCTAssertEqual(GameVisitorRead.shown(read, for: "a", hidden: false), read)
+        XCTAssertNil(GameVisitorRead.shown(read, for: "b", hidden: false), "le niveau de A ne se peint jamais sous le nom de B")
+        XCTAssertNil(GameVisitorRead.shown(read, for: "a", hidden: true), "« Jeu masqué » : rien, même déjà lu")
+        XCTAssertNil(GameVisitorRead.shown(GameVisitorRead(userId: "a", entries: [], standing: nil), for: "a", hidden: false),
+                     "rien à montrer : aucune carte")
+        XCTAssertNil(GameVisitorRead.shown(nil, for: "a", hidden: false))
     }
 
     // MARK: - Les propositions de photo suivent les réglages de l'appareil

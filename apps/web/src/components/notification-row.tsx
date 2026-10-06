@@ -21,6 +21,7 @@ import { initialsOf } from '@/lib/view/conversation';
 import { Link } from '@/routes/route-table';
 
 import { Avatar } from './avatar';
+import { Signature } from './game/signature';
 import { Glyph, GlyphSvg, type GlyphShape } from './glyph';
 import { GLYPHS } from './glyphs';
 import { CALLS_GLYPHS } from './glyphs-calls';
@@ -100,7 +101,12 @@ export function TargetLink({ target, ...surface }: SurfaceProps & { readonly tar
     case 'userProfile':
       return <Link to="userProfile" params={target.params} {...surface} />;
     case 'progression':
-      return <Link to="progression" {...surface} />;
+      /* La mission personnelle ouvre la section des missions (#9539) : la destination PORTE sa section. */
+      return target.search === undefined ? <Link to="progression" {...surface} /> : <Link to="progression" search={target.search} {...surface} />;
+    case 'progressionLigue':
+      return <Link to="progressionLigue" {...surface} />;
+    case 'progressionSaison':
+      return <Link to="progressionSaison" {...surface} />;
     case 'settings':
       return <Link to="settings" {...surface} />;
   }
@@ -134,11 +140,11 @@ export const CONTENT_GLYPHS: Readonly<Record<Extract<RowFooter, { kind: 'content
   post: PROGRESSION_GLYPHS.article,
 };
 
-/** Le médaillon d'un palier : l'icône du badge sur un disque en relief, teinté du type — la ligne dit QUEL badge avant qu'on la lise. */
-export function MilestoneMedallion({ glyph, accent }: { readonly glyph: GlyphShape; readonly accent: string }) {
+/** Le disque en relief des médaillons : teinté du type, il dit la NATURE de la ligne avant qu'on la lise. */
+function MedallionDisc({ accent, marker, children }: { readonly accent: string; readonly marker: 'data-notification-milestone' | 'data-notification-game'; readonly children: ReactNode }) {
   return (
     <span
-      data-notification-milestone
+      {...{ [marker]: '' }}
       aria-hidden="true"
       className="grid place-items-center rounded-full"
       style={{
@@ -149,8 +155,29 @@ export function MilestoneMedallion({ glyph, accent }: { readonly glyph: GlyphSha
         boxShadow: `inset 0 0 0 1px color-mix(in srgb, ${accent} 45%, transparent), 0 3px 8px color-mix(in srgb, ${accent} 30%, transparent)`,
       }}
     >
-      <GlyphSvg glyph={glyph} size={20} />
+      {children}
     </span>
+  );
+}
+
+/** Le médaillon d'un palier : l'icône du badge sur un disque en relief, teinté du type — la ligne dit QUEL badge avant qu'on la lise. */
+export function MilestoneMedallion({ glyph, accent }: { readonly glyph: GlyphShape; readonly accent: string }) {
+  return (
+    <MedallionDisc accent={accent} marker="data-notification-milestone">
+      <GlyphSvg glyph={glyph} size={20} />
+    </MedallionDisc>
+  );
+}
+
+/**
+ * Le médaillon du JEU (#9490) : la Signature de Meeshy — les trois traits — sur le même disque. Ligue et saison
+ * n'ont personne à nommer ; la marque de la maison tient la place de l'avatar, comme sur les objets du jeu.
+ */
+export function GameMedallion({ accent }: { readonly accent: string }) {
+  return (
+    <MedallionDisc accent={accent} marker="data-notification-game">
+      <Signature size={24} />
+    </MedallionDisc>
   );
 }
 
@@ -294,6 +321,8 @@ function NotificationRowView({
         <span className="relative shrink-0">
           {presentation.leading.kind === 'milestone' ? (
             <MilestoneMedallion glyph={milestoneGlyph(presentation.leading.glyph)} accent={accent} />
+          ) : presentation.leading.kind === 'game' ? (
+            <GameMedallion accent={accent} />
           ) : (
             /* Les initiales d'une PERSONNE viennent de son nom, jamais du titre :
                « Marie est sur Meeshy ! » y lisait « ME » (#8143). Le titre ne

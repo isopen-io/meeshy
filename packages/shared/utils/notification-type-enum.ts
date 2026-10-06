@@ -137,6 +137,7 @@ export const notificationTypeEnum = z.enum([
   'game_duo_accepted',        // Ton ami a accepté la mission en duo
   'game_league_result',       // Résultat de ta semaine de ligue
   'game_season_step',         // Étape de saison atteinte
+  'game_mission_window',      // La mission personnelle du jour commence (plage horaire)
 
   // ===== PAYMENT/SUBSCRIPTION (future) =====
   'subscription_expiring',    // Abonnement expire bientôt

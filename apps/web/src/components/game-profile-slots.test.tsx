@@ -1,6 +1,7 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 import { act } from 'react';
 
+import { GAME_SETTINGS_QUERY_KEY } from '@/lib/api/game-v2-queries';
 import { appQueryClient } from '@/lib/api/query-client';
 import { gamePrefs } from '@/lib/game/preferences';
 import { createActMounter } from '@/test-support/act-mount';
@@ -62,7 +63,8 @@ describe('mon profil', () => {
   });
 
   test('« Jeu masqué » : le jeu ne se dessine pas sur le profil', async () => {
-    gamePrefs.set({ hidden: true });
+    /* Le serveur fait foi (#9481) : le réglage du COMPTE, lu, règle la copie de l'appareil. */
+    appQueryClient.setQueryData(GAME_SETTINGS_QUERY_KEY, { gameHidden: true, friendsLeagueOptOut: false, visibility: { showcase: 'friends', rank: 'friends', treasury: 'friends', atlas: 'me' } });
     const host = await mount(<GameProfileOwnSlot enabled />);
     await settle();
     expect(host.querySelector('#game-profile') === null).toBe(true);
@@ -76,15 +78,18 @@ describe('mon profil', () => {
 });
 
 describe('le profil d’un autre et la carte de contact', () => {
-  test('sa vitrine, si son réglage l’autorise', async () => {
+  test('son jeu et sa vitrine, si ses réglages l’autorisent', async () => {
     const host = await mount(<GameProfileVisitorSlot userId="friend-1" name="Amina" enabled />);
     await settle();
-    expect(host.textContent).toContain('Vitrine de Amina');
+    expect(host.textContent).toContain('Le jeu de Amina');
+    expect(host.querySelector('[data-game-standing]') !== null).toBe(true);
+    expect(host.querySelector('[data-game-visitor-showcase]') !== null).toBe(true);
   });
 
-  test('la bande de la carte de contact : les coupes, en lecture seule', async () => {
+  test('la bande de la carte de contact : le niveau et les coupes, en lecture seule', async () => {
     const host = await mount(<ContactGameStripSlot userId="friend-1" enabled />);
     await settle();
+    expect(host.querySelector('[data-game-contact-standing]') !== null).toBe(true);
     expect(host.querySelector('[data-game-contact-strip]') !== null).toBe(true);
   });
 

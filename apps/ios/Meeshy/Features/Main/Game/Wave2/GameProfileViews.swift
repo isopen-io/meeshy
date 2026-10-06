@@ -139,84 +139,124 @@ struct GameProfileOwnCard: View {
     }
 }
 
-// MARK: - Le jeu d'un autre : ce que SA visibilité autorise
+// MARK: - Le jeu d'un autre : ce que SES réglages autorisent
 
+/// Son niveau et son rang (réglage `rank`), le palier de son trésor (réglage `treasury`), sa vitrine (réglage
+/// `showcase`) — chacun lu SEUL : un réglage fermé ne dessine que ce qui reste ouvert.
 struct GameProfileVisitorCard: View {
     let userId: String
     let name: String
     var loader = GameShowcaseLoader()
+    var standingLoader = GameUserGameLoader()
 
     @ObservedObject private var prefs = GameDevicePrefsStore.current()
-    @State private var entries: [GameVisitorShowcase.Entry] = []
+    @State private var read: GameVisitorRead?
 
     private var theme: ThemeManager { ThemeManager.shared }
 
     var body: some View {
         Group {
-            if !entries.isEmpty {
-                GameCard(title: GameText.profileVisitorTitle(name: name)) {
-                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: MeeshySpacing.lg) {
-                        ForEach(entries) { entry in
-                            VStack(spacing: MeeshySpacing.xs) {
-                                GameTrophyArt(view: entry.presentation, height: 72)
-                                Text(entry.presentation.title)
-                                    .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
-                                    .foregroundColor(theme.textPrimary)
-                                    .multilineTextAlignment(.center)
-                                Text(entry.caption)
-                                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                                    .foregroundColor(theme.textMuted)
-                                    .multilineTextAlignment(.center)
-                            }
-                            .frame(maxWidth: .infinity)
-                            .accessibilityElement(children: .combine)
-                        }
-                    }
+            if let shown = GameVisitorRead.shown(read, for: userId, hidden: prefs.prefs.hidden) {
+                GameCard(title: shown.standing != nil ? GameText.visitorGameTitle(name: name) : GameText.profileVisitorTitle(name: name)) {
+                    if let standing = shown.standing { GameStandingView(content: standing) }
+                    if !shown.entries.isEmpty { showcaseGrid(shown.entries) }
                 }
                 .accessibilityIdentifier("game.profile.visitor")
             }
         }
         .task(id: userId) {
             guard !prefs.prefs.hidden else { return }
-            // Cache-first : ce que le disque a gardé se peint tout de suite, la lecture servie le remplace — ou
-            // l'efface, quand le membre a fermé sa vitrine entre-temps.
-            if entries.isEmpty { entries = GameVisitorShowcase.entries(await loader.cached(userId: userId)) }
-            entries = GameVisitorShowcase.entries(await loader.load(userId: userId))
+            if let fresh = await GameVisitorLoading.read(userId: userId, kept: read, showcase: loader, standing: standingLoader,
+                                                         paintCached: { read = $0 }) {
+                read = fresh
+            }
+        }
+    }
+
+    private func showcaseGrid(_ entries: [GameVisitorShowcase.Entry]) -> some View {
+        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: MeeshySpacing.lg) {
+            ForEach(entries) { entry in
+                VStack(spacing: MeeshySpacing.xs) {
+                    GameTrophyArt(view: entry.presentation, height: 72)
+                    Text(entry.presentation.title)
+                        .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
+                        .foregroundColor(theme.textPrimary)
+                        .multilineTextAlignment(.center)
+                    Text(entry.caption)
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
+                        .foregroundColor(theme.textMuted)
+                        .multilineTextAlignment(.center)
+                }
+                .frame(maxWidth: .infinity)
+                .accessibilityElement(children: .combine)
+            }
         }
     }
 }
 
-/// LA BANDE DE LA CARTE DE CONTACT (#9481) — trois coupes au plus, en lecture seule, sous le nom d'un compte
-/// Meeshy dans la fiche complète d'une carte de visite. Même règle que la vitrine : fermée, elle ne se dessine pas.
+/// La lecture commune à la carte du profil et à la bande de la carte de contact. Cache d'abord : ce que le disque a
+/// gardé se peint tout de suite (sauf si la vue montre déjà CE membre), la lecture servie le remplace — ou l'efface,
+/// quand le membre a fermé son réglage entre-temps. Une lecture ANNULÉE (la vue est passée à un autre membre) ne
+/// rend rien : arrivée après celle du suivant, elle l'écraserait.
+enum GameVisitorLoading {
+    static func read(
+        userId: String, kept: GameVisitorRead?, showcase: GameShowcaseLoader, standing: GameUserGameLoader,
+        paintCached: (GameVisitorRead) -> Void
+    ) async -> GameVisitorRead? {
+        if kept?.userId != userId {
+            let cachedShowcase = await showcase.cached(userId: userId)
+            let cachedStanding = await standing.cached(userId: userId)
+            guard !Task.isCancelled else { return nil }
+            paintCached(GameVisitorRead(userId: userId, entries: GameVisitorShowcase.entries(cachedShowcase), standing: cachedStanding))
+        }
+        async let freshShowcase = showcase.load(userId: userId)
+        async let freshStanding = standing.load(userId: userId)
+        let read = GameVisitorRead(userId: userId, entries: GameVisitorShowcase.entries(await freshShowcase), standing: await freshStanding)
+        return Task.isCancelled ? nil : read
+    }
+}
+
+/// LA BANDE DE LA CARTE DE CONTACT (#9481) — le niveau et le rang (rangée compacte) puis trois coupes au plus, en
+/// lecture seule, sous le nom d'un compte Meeshy dans la fiche complète d'une carte de visite. Même règle que la
+/// vitrine : ce que le serveur ne sert pas ne se dessine pas.
 struct GameContactStrip: View {
     let userId: String
     var loader = GameShowcaseLoader()
+    var standingLoader = GameUserGameLoader()
 
     @ObservedObject private var prefs = GameDevicePrefsStore.current()
-    @State private var entries: [GameVisitorShowcase.Entry] = []
+    @State private var read: GameVisitorRead?
 
     var body: some View {
         Group {
-            if !entries.isEmpty {
-                HStack(alignment: .bottom, spacing: MeeshySpacing.sm) {
-                    ForEach(entries.prefix(3)) { entry in
-                        GameTrophyArt(view: entry.presentation, height: 32)
-                            .accessibilityHidden(false)
-                            .accessibilityLabel(entry.presentation.title)
-                    }
-                    Spacer(minLength: 0)
+            if let shown = GameVisitorRead.shown(read, for: userId, hidden: prefs.prefs.hidden) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
+                    if let standing = shown.standing { GameStandingView(content: standing, compact: true) }
+                    if !shown.entries.isEmpty { trophies(shown.entries) }
                 }
                 .accessibilityElement(children: .contain)
-                .accessibilityLabel(GameText.profileShowcase)
                 .accessibilityIdentifier("game.contact.strip")
             }
         }
         .task(id: userId) {
             guard !prefs.prefs.hidden else { return }
-            // Cache-first : ce que le disque a gardé se peint tout de suite, la lecture servie le remplace — ou
-            // l'efface, quand le membre a fermé sa vitrine entre-temps.
-            if entries.isEmpty { entries = GameVisitorShowcase.entries(await loader.cached(userId: userId)) }
-            entries = GameVisitorShowcase.entries(await loader.load(userId: userId))
+            if let fresh = await GameVisitorLoading.read(userId: userId, kept: read, showcase: loader, standing: standingLoader,
+                                                         paintCached: { read = $0 }) {
+                read = fresh
+            }
         }
+    }
+
+    private func trophies(_ entries: [GameVisitorShowcase.Entry]) -> some View {
+        HStack(alignment: .bottom, spacing: MeeshySpacing.sm) {
+            ForEach(entries.prefix(3)) { entry in
+                GameTrophyArt(view: entry.presentation, height: 32)
+                    .accessibilityHidden(false)
+                    .accessibilityLabel(entry.presentation.title)
+            }
+            Spacer(minLength: 0)
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(GameText.profileShowcase)
     }
 }

@@ -277,16 +277,18 @@ public final class ImageFilterEngine {
             return vignette(input, intensity: 2, radius: 1)
         case .sharpen:
             return ciFilter("CISharpenLuminance", on: input, [kCIInputSharpnessKey: 0.8])
+        // Le bloom et le grain vivent dans `ImageAdjustmentStage` (#9498) : la
+        // scène les peint par la MÊME écriture, à la valeur de son curseur ;
+        // le préréglage de cet éditeur en est la mi-course.
         case .bloom:
-            let bloomed = ciFilter("CIBloom", on: input, [
-                kCIInputRadiusKey: 10.0,
-                kCIInputIntensityKey: 0.5
-            ])
-            return bloomed.cropped(to: extent)
+            return ImageAdjustmentStage.bloom(input, amount: Self.presetAmount, extent: extent)
         case .grain:
-            return grain(input, extent: extent)
+            return ImageAdjustmentStage.grain(input, amount: Self.presetAmount, extent: extent)
         }
     }
+
+    /// La course d'un effet en un toucher : la mi-course du curseur de la scène.
+    nonisolated static let presetAmount: Float = 0.5
 
     // MARK: - Filter helpers
 
@@ -313,22 +315,5 @@ public final class ImageFilterEngine {
 
     private func vignette(_ input: CIImage, intensity: Float, radius: Float) -> CIImage {
         ImageAdjustmentStage.vignette(input, intensity: intensity, radius: radius)
-    }
-
-    private func grain(_ input: CIImage, extent: CGRect) -> CIImage {
-        guard let noise = CIFilter(name: "CIRandomGenerator")?.outputImage else { return input }
-        let cropped = noise.cropped(to: extent)
-
-        let grainLayer = ciFilter("CIColorMatrix", on: cropped, [
-            "inputRVector": CIVector(x: 0, y: 0, z: 0, w: 0),
-            "inputGVector": CIVector(x: 0, y: 0, z: 0, w: 0),
-            "inputBVector": CIVector(x: 0, y: 0, z: 0, w: 0),
-            "inputAVector": CIVector(x: 0, y: 0, z: 0, w: 0.05)
-        ])
-
-        guard let composite = CIFilter(name: "CISourceOverCompositing") else { return input }
-        composite.setValue(grainLayer, forKey: kCIInputImageKey)
-        composite.setValue(input, forKey: kCIInputBackgroundImageKey)
-        return composite.outputImage?.cropped(to: extent) ?? input
     }
 }

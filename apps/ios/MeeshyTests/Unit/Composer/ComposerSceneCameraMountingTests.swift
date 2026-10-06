@@ -157,16 +157,20 @@ final class ComposerSceneCameraMountingTests: XCTestCase {
     /// ancre — l'une en ignorant les marges, l'autre pas —, et c'est cet écart
     /// qui les distingue. Une seule couche ne peut pas tenir les deux.
     func test_lImageIgnoreLesMarges_quandLeChromeLesRespecte() throws {
-        let code = compact(try source("MeeshyComposerHost+Viewfinder.swift"))
-        guard let début = code.range(of: "funcwithSceneCameraViewfinder"),
-              let fin = code.range(of: "varsceneCameraGrowth", range: début.upperBound..<code.endIndex)
+        // #9351 — le montage a quitté l'hôte pour `ComposerCaptureMount`, que la
+        // barre de conversation monte aussi : ce que le témoin garde n'a pas bougé.
+        let hote = compact(try source("MeeshyComposerHost+Viewfinder.swift"))
+        XCTAssertTrue(hote.contains("ComposerCaptureMount("), "le composer monte le montage unique")
+        let code = compact(try source("ComposerCaptureMount.swift"))
+        guard let début = code.range(of: "varbody:someView{"),
+              let fin = code.range(of: "privatefuncimage(rect:", range: début.upperBound..<code.endIndex)
         else { return XCTFail("le montage a changé de nom") }
         let corps = String(code[début.upperBound..<fin.lowerBound])
         XCTAssertEqual(corps.components(separatedBy: "overlayPreferenceValue(ComposerSceneCameraFrameKey.self)").count - 1, 2,
                        "deux couches, une par repère")
         XCTAssertEqual(corps.components(separatedBy: "ignoresSafeArea()").count - 1, 1,
                        "l'image seule ignore les marges — le chrome y serait sous l'encoche")
-        XCTAssertTrue(corps.range(of: "sceneCameraPreview(")!.lowerBound
+        XCTAssertTrue(corps.range(of: "image(rect:")!.lowerBound
                       < corps.range(of: "ignoresSafeArea()")!.lowerBound,
                       "c'est la couche de l'IMAGE qui ignore, pas celle du chrome")
     }
@@ -176,8 +180,8 @@ final class ComposerSceneCameraMountingTests: XCTestCase {
     /// exactement inverse de celle qu'on corrige, et indiscernable d'un fond
     /// noir légitime.
     func test_leMeuble_nePeintLeViseur_queSiLeStageEstArmé() throws {
-        let code = compact(try source("MeeshyComposerHost+Viewfinder.swift"))
-        XCTAssertEqual(code.components(separatedBy: "sceneCameraStage != .off"
+        let code = compact(try source("ComposerCaptureMount.swift"))
+        XCTAssertEqual(code.components(separatedBy: "session.stage != .off"
             .replacingOccurrences(of: " ", with: "")).count - 1, 2,
                        "les DEUX couches doivent porter le gate — une seule laisserait un chrome orphelin")
     }
@@ -225,19 +229,13 @@ final class ComposerSceneCameraMountingTests: XCTestCase {
     /// **Les deux signaux sont des IDENTIFIANTS, pas les valeurs.** Une seconde
     /// photo identique à la première ne changerait pas `capturedPhoto`, et
     /// l'observateur ne se réveillerait jamais — la scène resterait armée sur
-    /// une prise déjà faite. C'est la même paire que la feuille écoute, pour la
-    /// même raison, et c'est le genre de détail qu'un `onReceive` posé sur la
-    /// valeur rend faux SANS jamais rougir.
+    /// une prise déjà faite. Depuis #9351, c'est la SESSION qui écoute, une fois
+    /// pour ses deux montages ; la raison n'a pas bougé d'un mot.
     func test_lesObservateurs_écoutentLesIdentifiants_pasLesValeurs() throws {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent().deletingLastPathComponent()
-            .deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Composer/MeeshyComposerHost+Surfaces.swift")
-        let code = compact(AppSourceGuard.stripComments(
-            try String(contentsOf: url, encoding: .utf8)))
-        XCTAssertTrue(code.contains("onReceive(sceneCamera.$capturedPhotoId)"))
-        XCTAssertTrue(code.contains("onReceive(sceneCamera.$capturedVideoId)"))
-        XCTAssertFalse(code.contains("onReceive(sceneCamera.$capturedPhoto)"),
+        let code = compact(try source("ComposerCaptureSession+Takes.swift"))
+        XCTAssertTrue(code.contains("camera.$capturedPhotoId"))
+        XCTAssertTrue(code.contains("camera.$capturedVideoId"))
+        XCTAssertFalse(code.contains("camera.$capturedPhoto."),
                        "écouter la VALEUR raterait deux prises identiques d'affilée")
     }
 
@@ -264,16 +262,14 @@ final class ComposerSceneCameraMountingTests: XCTestCase {
     /// n'a rien à concaténer — la faire attendre un `✓` ajouterait un geste à
     /// l'usage le plus courant.
     func test_uneVidéoSAccumule_quandUnePhotoSePose() throws {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent().deletingLastPathComponent()
-            .deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Composer/MeeshyComposerHost+Surfaces.swift")
-        let code = compact(AppSourceGuard.stripComments(
-            try String(contentsOf: url, encoding: .utf8)))
-        XCTAssertTrue(code.contains("collectSceneSegment(url)"),
-                      "une vidéo doit rejoindre les segments, pas la scène")
-        XCTAssertTrue(code.contains("sceneCapture.lookedPhoto(image,data:sceneCamera.capturedPhotoData){poseSceneCapture($0)}"),
-                      "une photo se pose tout de suite — AVEC ses octets d'origine, qui portent l'EXIF")
+        let code = compact(try source("ComposerCaptureSession+Takes.swift"))
+        XCTAssertTrue(code.contains("collectSegment(url)"),
+                      "une vidéo de la scène doit rejoindre les segments, pas la scène")
+        XCTAssertTrue(code.contains("beginEditing(photo:image,data:camera.capturedPhotoData)"),
+                      "une photo s'ouvre en édition sans attendre de ✓ — AVEC ses octets d'origine, qui portent l'EXIF")
+        let hote = compact(try source("MeeshyComposerHost+Viewfinder.swift"))
+        XCTAssertTrue(hote.contains("sceneCapture.onDeliver={poseSceneCapture($0)}"),
+                      "la prise de la scène se pose par l'hôte")
     }
 
     /// **La durée est saisie AU RELÂCHEMENT, pas à l'arrivée du fichier.**

@@ -158,12 +158,12 @@ struct GameWave2ModelsTests {
         }
         let block = try #require(GameBlock.parse(data))
         let map = try #require(block.wave2.achievementRarities)
-        #expect(map.count == 3)
+        #expect(map.count == 2, "une rareté inconnue ou nulle tombe seule : le contrat déclare une rareté, toujours")
         #expect(map["achievement.first_voice"] == nil)
         #expect(map["achievement.first_content"]?.visibleRarity == .epic)
         #expect(map["achievement.editor"]?.rarity == .mythic)
         #expect(map["achievement.editor"]?.visibleRarity == nil, "2 titulaires : fail-closed, jamais « mythique »")
-        #expect(map["achievement.three_conversation_kinds"]?.visibleRarity == nil)
+        #expect(map["achievement.three_conversation_kinds"] == nil, "rareté nulle : jamais servie par un serveur à jour, jamais montrée")
         #expect(map["achievement.first_content"]?.sharePercent == 4)
     }
 

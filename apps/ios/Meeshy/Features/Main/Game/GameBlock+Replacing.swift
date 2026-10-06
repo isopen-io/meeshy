@@ -69,7 +69,8 @@ extension GameBlock.Missions {
             prismDay: prismDay,
             unlocked: unlocked,
             items: items ?? self.items,
-            rerollAvailable: rerollAvailable ?? self.rerollAvailable
+            rerollAvailable: rerollAvailable ?? self.rerollAvailable,
+            personal: personal
         )
     }
 }

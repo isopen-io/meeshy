@@ -27,7 +27,7 @@ describe('réglages d’une image posée', () => {
   });
 
   it('test_mediaAdjustments_unknownSetting_travels', () => {
-    const r = StoryMediaObjectSchema.safeParse({ ...base, adjustments: { grain: 0.3 } });
+    const r = StoryMediaObjectSchema.safeParse({ ...base, adjustments: { halo: 0.3 } });
     expect(r.success).toBe(true);
   });
 });
@@ -46,5 +46,28 @@ describe('réglages du fond d’une scène', () => {
 
   it('test_backgroundAdjustments_absurdValue_isRejected', () => {
     expect(StoryMediaObjectSchema.safeParse({ ...fond, adjustments: { blur: 400 } }).success).toBe(false);
+  });
+});
+
+/** Les EFFETS d'une image (#9498) — bloom et grain, ce que l'outil « Effets »
+ *  de l'ancien éditeur offrait de plus que les réglages — voyagent dans le
+ *  même sac, bornés à leur curseur (0…1) : un grain de 400 n'est pas un
+ *  réglage, c'est une charge qui déciderait du coût d'un rendu. */
+describe('effets d’une image posée ou du fond', () => {
+  const base = { id: 'media-1', postMediaId: '507f1f77bcf86cd799439011' };
+
+  it('test_mediaEffects_areKeptThroughValidation', () => {
+    const r = StoryMediaObjectSchema.safeParse({ ...base, adjustments: { bloom: 0.5, grain: 0.25, contrast: 1.2 } });
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.adjustments).toEqual({ bloom: 0.5, grain: 0.25, contrast: 1.2 });
+  });
+
+  it('test_mediaEffects_outOfRange_isRejected', () => {
+    expect(StoryMediaObjectSchema.safeParse({ ...base, adjustments: { bloom: 2 } }).success).toBe(false);
+    expect(StoryMediaObjectSchema.safeParse({ ...base, adjustments: { grain: -0.1 } }).success).toBe(false);
+  });
+
+  it('test_mediaEffects_nonNumeric_isRejected', () => {
+    expect(StoryMediaObjectSchema.safeParse({ ...base, adjustments: { grain: 'fort' } }).success).toBe(false);
   });
 });

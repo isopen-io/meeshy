@@ -74,7 +74,6 @@ final class AchievementRevealMedalTests: XCTestCase {
         XCTAssertEqual(RevealRim.border(for: GameRarityEntry(rarity: .mythic, holders: 20, population: 5_000)), .prism)
         XCTAssertNil(RevealRim.border(for: GameRarityEntry(rarity: .epic, holders: 5, population: 1_000)), "sous 20 titulaires : fail-closed")
         XCTAssertNil(RevealRim.border(for: GameRarityEntry(rarity: .epic, holders: 50, population: 500)), "sous 1 000 comptes : fail-closed")
-        XCTAssertNil(RevealRim.border(for: GameRarityEntry(rarity: nil, holders: 50, population: 1_000)), "non mesurée")
         XCTAssertNil(RevealRim.border(for: nil))
     }
 

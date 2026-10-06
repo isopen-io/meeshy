@@ -23,6 +23,12 @@ extension GameText {
 
     static var settingsHiddenReopenNote: String { String(localized: "game2.settings.hidden.reopen_note", defaultValue: "Tes réglages de visibilité restent fermés : rouvre-les ici quand tu le souhaites.", bundle: .main) }
 
+    static var settingsNotificationsTitle: String { String(localized: "game2.settings.notifications.title", defaultValue: "Notifications du jeu", bundle: .main) }
+
+    static var settingsNotificationsBody: String { String(localized: "game2.settings.notifications.body", defaultValue: "Une invitation à un duo, le résultat de ta ligue, une étape de saison : au plus une notification de jeu par jour.", bundle: .main) }
+
+    static var settingsNotificationsSwitch: String { String(localized: "game2.settings.notifications.switch", defaultValue: "Recevoir les notifications du jeu", bundle: .main) }
+
     static var settingsVisibilityTitle: String { String(localized: "game2.settings.visibility.title", defaultValue: "Qui voit quoi", bundle: .main) }
 
     static var settingsVisibilityBody: String { String(localized: "game2.settings.visibility.body", defaultValue: "Hors amis acceptés, personne ne voit si tu es en ligne ni quand tu joues. Ces réglages disent ce que tes amis, ou tout le monde, voient de ton jeu.", bundle: .main) }

@@ -11,6 +11,7 @@ import { objectMediaTimeline } from '@/lib/canvas/media-seek';
 import { cqw } from '@/lib/canvas/units';
 
 import type { SceneClockHandle } from './scene-clock';
+import { MediaGlowFilter, glowFilterRef, useGlowFilterId } from './scene-media-glow';
 import { useSceneMediaSync } from './scene-media-seek';
 import { SceneObjectFrame } from './scene-object-frame';
 
@@ -38,6 +39,7 @@ export function SceneObjectMedia({
   const src = objectMediaSrc(object, carrier);
   const [errored, setErrored] = useState(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const glowId = useGlowFilterId();
 
   // TOUS LES HOOKS AVANT LE RETOUR ANTICIPÉ (revue-correction #6901, même
   // raison que `scene-object-audio.tsx`) : `src` dépend du PORTEUR, qui
@@ -70,7 +72,10 @@ export function SceneObjectMedia({
     target: isVideo ? 'video' : 'image',
     ...(sourceVisibleWidth !== undefined ? { designPixelsPerSourcePixel: size.width / sourceVisibleWidth } : {}),
   });
-  const filter = [mediaFilterCss(payload), adjustments.filter].filter((step) => step !== undefined).join(' ');
+  // LE BLOOM (#9498) clôt la chaîne, comme sur iOS après les réglages.
+  const filter = [mediaFilterCss(payload), adjustments.filter, glowFilterRef(glowId, adjustments.glow)]
+    .filter((step) => step !== undefined)
+    .join(' ');
   const boxStyle = {
     width: cqw(size.width / DESIGN_WIDTH),
     height: cqw(size.height / DESIGN_WIDTH),
@@ -91,6 +96,7 @@ export function SceneObjectMedia({
   return (
     <SceneObjectFrame object={object} kind="media" clock={clock} className="[&>*]:pointer-events-none">
       <span className="relative block" style={boxStyle}>
+        <MediaGlowFilter id={glowId} glow={adjustments.glow} aspect={size.width / size.height} />
         {isVideo ? (
           <video
             ref={videoRef}

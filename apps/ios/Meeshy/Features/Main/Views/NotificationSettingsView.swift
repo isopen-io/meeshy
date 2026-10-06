@@ -148,6 +148,9 @@ struct NotificationSettingsView: View {
 
             notifToggle(icon: "person.2.fill", title: String(localized: "settings.notifications.friend_content", defaultValue: "Contenus des amis", bundle: .main), color: MeeshyColors.successHex,
                         keyPath: \.friendContentEnabled)
+
+            notifToggle(icon: "trophy.fill", title: String(localized: "settings.notifications.game", defaultValue: "Jeu : duo, ligue, saison", bundle: .main), color: MeeshyColors.warningHex,
+                        keyPath: \.gameEnabled)
         }
     }
 

@@ -233,6 +233,26 @@ final class GamePhotoSessionTests: XCTestCase {
         XCTAssertTrue((items[1] as? String)?.contains(Self.link) == true)
     }
 
+    /// « Partager » n'a aucun retour pendant que le jeton se crée : un second toucher est probable. Il ne doit ni
+    /// recréer de jeton, ni ouvrir la feuille avec une carte SANS le lien que le premier toucher est en train
+    /// d'obtenir — il attend la même création.
+    func test_aSecondTapOnShare_waitsForTheLinkTheFirstTapIsCreating() async {
+        let rig = makeRig(link: nil, createdLink: Self.link)
+        rig.links.shareableDelay = 50_000_000
+        await rig.sut.prepareReferral()
+        await rig.sut.chooseCard()
+        let sut = rig.sut
+
+        let firstTap = Task { await sut.prepareShare() }
+        while rig.links.shareableCalls == 0 { await Task.yield() }
+        await sut.prepareShare()
+
+        XCTAssertEqual(sut.referral?.link, Self.link, "le second toucher ouvre la feuille avec le vrai lien")
+        XCTAssertEqual(sut.shareItems(square: false).count, 2)
+        await firstTap.value
+        XCTAssertEqual(rig.links.shareableCalls, 1, "un seul jeton, quel que soit le nombre de touchers")
+    }
+
     func test_sharing_withAnExistingToken_createsNothingMore() async {
         let rig = makeRig(link: Self.link)
         await rig.sut.prepareReferral()

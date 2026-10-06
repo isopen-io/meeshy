@@ -16,14 +16,46 @@ import MeeshyUI
 ///
 /// Jumelle de `MeeshEntry` / `MeeshDetail` (`apps/web/src/routes/progression.tsx`) :
 /// mêmes mots, même ordre, même règle sur la seconde borne.
+///
+/// **La frappe s'y JOUE (#9537)** : la feuille montre Mee et Meo qui frappent une Meesh, et le compteur ne
+/// s'incrémente qu'APRÈS la fin de l'animation — la mise à jour reste optimiste, c'est ce que l'écran montre qui est
+/// séquencé (`GameMintSequence`). Un refus du serveur restaure l'état, le compteur ne bouge jamais.
 struct ProgressionMeeshEntry: View {
     let meesh: EngagementMeeshProgress
     let isMinting: Bool
     var mintError: String? = nil
+    /// La prochaine pièce (numéro, édition) que la scène frappe ; `nil` devant un ancien serveur : pas de scène.
+    var next: GameMintNext? = nil
     let onMint: () -> Void
+    var haptics: GameHapticsProviding = GameHaptics.shared
 
     @State private var ouvert = false
+    @State private var sequence = GameMintSequence<GameMintFrame>()
+    @State private var strikePlay = 0
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private let tint = MeeshyColors.warning
+
+    /// Ce que le compteur et la feuille montrent : l'image d'AVANT le toucher pendant la scène, le vivant ensuite.
+    private var shown: GameMintFrame {
+        sequence.shown(live: GameMintFrame(meesh: meesh, next: next))
+    }
+
+    /// La scène : seulement quand une frappe est possible (ou en train de se jouer) et que la pièce suivante est connue.
+    private var strike: GameMintStrike? {
+        let frame = shown
+        guard let next = frame.next, frame.meesh.canMint || sequence.isStriking else { return nil }
+        return GameMintStrike(
+            number: next.number, edition: next.edition, play: strikePlay,
+            restsReversed: strikePlay > 0 && mintError == nil && !sequence.isStriking
+        )
+    }
+
+    private func startStrike() {
+        guard sequence.begin(holding: GameMintFrame(meesh: meesh, next: next)) else { return }
+        strikePlay += 1
+        haptics.play(GameHapticPattern.strike)
+        onMint()
+    }
 
     /// La forme de la pièce : plus RECTANGLE qu'une capsule (directive porteur 2026-09-14, #6466).
     private static let forme = RoundedRectangle(cornerRadius: MeeshyRadius.smPlus, style: .continuous)
@@ -47,10 +79,11 @@ struct ProgressionMeeshEntry: View {
             // disait « marque ». Une Meesh est une MONNAIE : la pièce d'argent
             // (#6427) est le premier glyphe qui dit ce qu'est la chose.
             HStack(spacing: MeeshySpacing.xsPlus) {
-                Text("\(meesh.balance)")
+                Text("\(shown.meesh.balance)")
                     .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .bold, design: .rounded))
                     .monospacedDigit()
                     .foregroundColor(tint)
+                    .modifier(MeeshCounterRoll())
                 MeeshCoinGlyph(size: 20)
             }
             .padding(.horizontal, MeeshySpacing.md)
@@ -61,10 +94,21 @@ struct ProgressionMeeshEntry: View {
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("progression.meesh.entry")
-        .accessibilityLabel(ProgressionCopy.meeshEntryA11y(meesh.balance))
+        .accessibilityLabel(ProgressionCopy.meeshEntryA11y(shown.meesh.balance))
         .accessibilityAddTraits(.isButton)
+        // La scène finie, le compteur lâche la valeur vivante : il monte alors, et seulement alors (#9537).
+        .task(id: sequence.generation) { @MainActor in
+            guard sequence.isStriking else { return }
+            let seconds = GameMintSequence<GameMintFrame>.duration(reduceMotion: reduceMotion)
+            try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+            guard !Task.isCancelled else { return }
+            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.35)) { sequence.finish() }
+        }
         .popover(isPresented: $ouvert) {
-            ProgressionMeeshDetail(meesh: meesh, isMinting: isMinting, mintError: mintError, onMint: onMint)
+            ProgressionMeeshDetail(
+                meesh: shown.meesh, isMinting: isMinting || sequence.isStriking, mintError: mintError,
+                strike: strike, onMint: startStrike
+            )
                 .frame(idealWidth: 300)
                 .padding(MeeshySpacing.lg)
                 // **Verre NEUTRE, jamais teinté** (directive porteur
@@ -113,6 +157,27 @@ struct MeeshCoinGlyph: View {
     }
 }
 
+/// Ce que la scène de frappe de la feuille grave : la prochaine pièce, et où en est la scène.
+struct GameMintStrike: Equatable {
+    let number: Int
+    let edition: MeeshEdition
+    /// Incrémenté à chaque frappe commencée : c'est ce qui rejoue la scène.
+    let play: Int
+    /// Frappée avec succès, la pièce reste sur son revers numéroté.
+    let restsReversed: Bool
+}
+
+/// Le chiffre « roule » quand le solde change (iOS 17+) ; sur iOS 16 il change net.
+private struct MeeshCounterRoll: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 17.0, *) {
+            content.contentTransition(.numericText())
+        } else {
+            content
+        }
+    }
+}
+
 /// LE CONTENU du sous-menu, séparé de son bouton.
 ///
 /// Deux raisons, et la seconde compte plus : l'état d'OUVERTURE est une affaire
@@ -123,6 +188,8 @@ struct ProgressionMeeshDetail: View {
     let meesh: EngagementMeeshProgress
     let isMinting: Bool
     var mintError: String? = nil
+    /// La scène de frappe — Mee et Meo qui frappent la pièce — au-dessus du solde ; `nil` : pas de scène.
+    var strike: GameMintStrike? = nil
     let onMint: () -> Void
 
     private var theme: ThemeManager { ThemeManager.shared }
@@ -142,6 +209,16 @@ struct ProgressionMeeshDetail: View {
                 Spacer(minLength: 0)
             }
             .foregroundColor(tint)
+
+            if let strike {
+                MintStrikeScene(
+                    edition: strike.edition, number: strike.number,
+                    year: Calendar.current.component(.year, from: Date()), play: strike.play,
+                    coinSide: 48, restsReversed: strike.restsReversed
+                )
+                .frame(maxWidth: .infinity)
+                .accessibilityIdentifier("progression.meesh.strike")
+            }
 
             // Les formulations viennent du hero d'origine : « Aucune Meesh »
             // plutôt que « 0 Meesh », « Convertir » plutôt que « Frapper ». Une

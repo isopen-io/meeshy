@@ -37,6 +37,11 @@ export type PaintContext = {
   beginPath?(): void;
   roundRect?(x: number, y: number, w: number, h: number, radius: number): void;
   fill?(): void;
+  /** Les pointillés de l'EMPLACEMENT du lien ; absents d'un vieux moteur : l'emplacement n'est pas cerné. */
+  setLineDash?(segments: number[]): void;
+  strokeRect?(x: number, y: number, w: number, h: number): void;
+  strokeStyle?: string | CanvasGradient | CanvasPattern;
+  lineWidth?: number;
   fillStyle: string | CanvasGradient | CanvasPattern;
   font: string;
   textAlign: CanvasTextAlign;
@@ -61,6 +66,8 @@ export type PhotoBanner = {
   readonly link: string;
   /** « 23 j » ; `null` : la Flamme est éteinte, ni dessin ni jours. */
   readonly flameLabel: string | null;
+  /** Le lien n'existe pas encore (aucun jeton) : l'aperçu cerne son emplacement de pointillés. */
+  readonly placeholder?: true;
 };
 
 export type PhotoPalette = {
@@ -195,6 +202,17 @@ function paintBannerFrame(ctx: PaintContext, banner: BannerLayout, palette: Phot
   ctx.fillRect(x, y, w, h);
 }
 
+/** L'EMPLACEMENT du lien (aucun jeton encore) : un cadre en pointillé autour du texte, rendu ensuite au trait plein. */
+function traceLinkPlaceholder(ctx: PaintContext, banner: BannerLayout, link: { readonly text: string; readonly size: number }, palette: PhotoPalette): void {
+  if (ctx.setLineDash === undefined || ctx.strokeRect === undefined) return;
+  const pad = link.size * 0.35;
+  ctx.strokeStyle = palette.inkSoft;
+  ctx.lineWidth = Math.max(1, link.size * 0.06);
+  ctx.setLineDash([link.size * 0.3, link.size * 0.25]);
+  ctx.strokeRect(banner.link.x - pad, banner.link.y - link.size - pad * 0.4, link.text.length * link.size * MONO_ADVANCE + pad * 2, link.size * 1.25 + pad);
+  ctx.setLineDash([]);
+}
+
 /** Le texte du bandeau, après sa Signature : la phrase, le lien court (qui tient dans sa place), la Flamme et ses jours. */
 function paintBannerContent(ctx: PaintContext, banner: BannerLayout, input: PaintInput, text: PhotoBanner): void {
   const { palette, fontFamily, art } = input;
@@ -211,6 +229,7 @@ function paintBannerContent(ctx: PaintContext, banner: BannerLayout, input: Pain
   ctx.fillStyle = palette.inkSoft;
   ctx.font = `500 ${link.size}px ui-monospace, monospace`;
   ctx.fillText(link.text, banner.link.x, banner.link.y);
+  if (text.placeholder === true) traceLinkPlaceholder(ctx, banner, link, palette);
 
   if (text.flameLabel === null || art.flame === undefined) return;
   drawContained(ctx, art.flame, banner.flame);

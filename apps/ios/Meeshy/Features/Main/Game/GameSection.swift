@@ -57,16 +57,13 @@ struct GameSection: View {
             ForEach(celebrates ? photos.offers.filter { $0.id != cardPhoto?.id } : []) { offer in
                 GamePhotoOfferView(moment: offer, onStart: { photos.start($0) }, onLater: { photos.later($0) })
             }
-            // LE HÉRO (#5841) : où j'en suis, comment je gagne, comment je frappe — pleine largeur.
+            // LE HÉRO (#5841) : où j'en suis, comment je gagne — pleine largeur, court (#9537).
             // Mee se pose dans son coin avec la ligne COURTE du guide ; la version complète s'ouvre au toucher.
             GameHeroView(
                 game: game,
                 cornerFigure: celebrates && cornerLine != nil ? cornerFigure : nil,
                 cornerLine: celebrates ? cornerLine : nil,
-                online: viewModel.isOnline,
-                minting: viewModel.isMinting,
                 settled: viewModel.isSettled,
-                onMint: { Task { await viewModel.mint() } },
                 onOpenRule: { onOpenRules($0) },
                 onOpenGuide: { showsFullGuide = true }
             )
@@ -77,10 +74,15 @@ struct GameSection: View {
                 onReroll: { id in Task { await viewModel.reroll(missionId: id) } },
                 onClaim: { Task { await viewModel.claimChest() } }
             )
+            // Le DÉTAIL DE LIGUE se lit AVANT la frappe (#9541) : la ligue est ce qui se joue cette semaine, la
+            // frappe est le geste qui coûte. Sans ligue ouverte ni groupe, rien — la porte plus bas dit pourquoi.
+            if let league = GameLeagueDetailCard.make(league: game.league, onOpen: { onOpenPage(.league) }) { league }
+            // LE héro de frappe — le SEUL de l'écran (#9537).
             GameMintPreviewView(
                 game: game, badgesLost: viewModel.mintBadgeImpact?.lost, online: viewModel.isOnline,
                 minting: viewModel.isMinting, error: viewModel.mintError,
-                celebration: viewModel.celebration, onMint: { Task { await viewModel.mint() } }
+                celebration: viewModel.celebration, onMint: { Task { await viewModel.mint() } },
+                onOpenRule: { onOpenRules(GameHero.mintRule) }
             )
             GameBadgeShelfView(items: viewModel.progress.map(GameBadges.items(for:)) ?? [])
             GameFlamePanelView(

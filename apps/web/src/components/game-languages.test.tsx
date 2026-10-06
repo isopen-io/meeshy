@@ -62,8 +62,10 @@ const bannerGame = gameBlockWithExtrasFixture({ balance: 12, streak: 23 });
 function surfaces(): Surfaces {
   const step = ONBOARDING_STEPS[3];
   if (step === undefined) throw new Error('étape attendue');
+  const bannerModel = playerBannerModel(bannerGame);
+  if (bannerModel === null) throw new Error('un bandeau était attendu');
   return {
-    hero: text(renderToStaticMarkup(<GameHero game={game} online minting={false} onMint={() => undefined} />)),
+    hero: text(renderToStaticMarkup(<GameHero game={game} />)),
     gauges: text(renderToStaticMarkup(<GameGauges game={game} />)),
     missions: text(
       renderToStaticMarkup(
@@ -90,9 +92,6 @@ function surfaces(): Surfaces {
       renderToStaticMarkup(
         <GameMintPreview
           mint={game.mint}
-          glory={game.glory}
-          treasury={game.treasury}
-          levelRecord={game.level.record}
           badgesLost={2}
           online
           minting={false}
@@ -115,7 +114,7 @@ function surfaces(): Surfaces {
     offer: text(renderToStaticMarkup(<GamePhotoOffer moment={rankMoment({ rank: 'voix', division: 2 })} onStart={() => undefined} onLater={() => undefined} />)),
     rules: text(renderToStaticMarkup(<RulesBody />)),
     /* La bannière ne montre que des chiffres et des dessins : sa langue est dans la phrase lue (#9494). */
-    banner: renderToStaticMarkup(<PlayerBanner model={playerBannerModel(bannerGame)} />).match(/aria-label="([^"]*)"/)?.[1] ?? '',
+    banner: renderToStaticMarkup(<PlayerBanner model={bannerModel} />).match(/aria-label="([^"]*)"/)?.[1] ?? '',
   };
 }
 

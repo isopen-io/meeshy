@@ -54,3 +54,14 @@ export const gameBirdPlacement = ({ x, y, scale, flip = false }: { readonly x: n
  */
 export const birdCutFilter = (id: string): string =>
   `<filter id="${id}" filterUnits="userSpaceOnUse" x="-12" y="-12" width="170" height="170" color-interpolation-filters="sRGB"><feMorphology in="SourceAlpha" operator="dilate" radius="3.2" result="grown"/><feGaussianBlur in="grown" stdDeviation="1.6" result="soft"/><feComponentTransfer in="soft" result="c"><feFuncA type="linear" slope="5" intercept="-0.9"/></feComponentTransfer><feFlood style="flood-color:var(--game-glint)"/><feComposite in2="c" operator="in" result="paper"/><feGaussianBlur in="c" stdDeviation="2.4" result="haze"/><feOffset in="haze" dy="2.2" result="drop"/><feFlood style="flood-color:var(--game-edge);flood-opacity:.26"/><feComposite in2="drop" operator="in" result="shadow"/><feMerge><feMergeNode in="shadow"/><feMergeNode in="paper"/><feMergeNode in="SourceGraphic"/></feMerge></filter>`;
+
+/**
+ * LE RELIEF GRAVÉ (#9540) — Mee et Meo du revers de la Meesh sont frappés DANS
+ * le métal, pas collés dessus : aucun contour blanc d'autocollant. Le dessin
+ * garde ses COULEURS (l'émail dans les creux) ; le relief tient en deux traits
+ * — la lumière HAUTE (le bord supérieur accroche le reflet) et l'ombre BASSE
+ * (le creux retient l'ombre, plus large et plus sombre). `id` doit être unique
+ * par instance ; la boîte est celle de `birdCutFilter`.
+ */
+export const birdEngraveFilter = (id: string): string =>
+  `<filter id="${id}" filterUnits="userSpaceOnUse" x="-12" y="-12" width="170" height="170" color-interpolation-filters="sRGB"><feGaussianBlur in="SourceAlpha" stdDeviation="0.7" result="soft"/><feOffset data-relief="shade" in="soft" dx="0" dy="2.4" result="down"/><feFlood style="flood-color:var(--game-edge);flood-opacity:.6"/><feComposite in2="down" operator="in" result="shade"/><feOffset data-relief="light" in="soft" dx="0" dy="-1.3" result="up"/><feFlood style="flood-color:var(--game-glint);flood-opacity:.85"/><feComposite in2="up" operator="in" result="light"/><feMerge><feMergeNode in="shade"/><feMergeNode in="light"/><feMergeNode in="SourceGraphic"/></feMerge></filter>`;

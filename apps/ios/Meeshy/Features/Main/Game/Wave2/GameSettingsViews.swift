@@ -26,6 +26,7 @@ struct GameSettingsPage: View {
 struct GameSettingsScreen: View {
     @ObservedObject var model: GameWave2Model
     @ObservedObject private var prefs = GameDevicePrefsStore.current()
+    @ObservedObject private var notificationPrefs = UserPreferencesManager.shared
     let game: GameBlock
 
     @EnvironmentObject private var router: Router
@@ -35,6 +36,7 @@ struct GameSettingsScreen: View {
     var body: some View {
         celebrations
         hidden
+        notifications
         if let visibility = game.visibility { visibilityCard(visibility) }
         if let league = game.league { leagueCard(league) }
         friendsLeague
@@ -72,6 +74,24 @@ struct GameSettingsScreen: View {
             GameOfflineNote(online: model.isOnline)
         }
         .accessibilityIdentifier("game.settings.hidden.card")
+    }
+
+    // MARK: Les notifications du jeu
+
+    /// L'interrupteur « Jeu » de la préférence de notification — celle que la passerelle lit pour décider d'envoyer
+    /// (`notification.gameEnabled`, activé par défaut). Il suit le geste ordinaire des réglages : appliqué tout de suite,
+    /// envoyé au serveur en arrière-plan par le gestionnaire de préférences.
+    private var notifications: some View {
+        GameCard(title: GameText.settingsNotificationsTitle) {
+            GameNote(text: GameText.settingsNotificationsBody)
+            GameSwitchRow(
+                label: GameText.settingsNotificationsSwitch, isOn: notificationPrefs.notification.gameEnabled,
+                identifier: "game.settings.notifications"
+            ) { on in
+                notificationPrefs.updateNotification { $0.gameEnabled = on }
+            }
+        }
+        .accessibilityIdentifier("game.settings.notifications.card")
     }
 
     // MARK: Qui voit quoi

@@ -30,10 +30,11 @@ enum PlayerBannerCopy {
         let toNext = banner.nextLevel.map {
             GameText.bannerToNext(percent: GameCopy.formatCount(banner.percent), level: GameCopy.formatCount($0))
         } ?? GameText.bannerTop
-        let parts: [String?] = [
-            GameText.bannerLevel(level: GameCopy.formatCount(banner.level)),
-            GameCopy.tierName(banner.tier),
-            toNext,
+        // Le détail du niveau ne se dit qu'au-delà du niveau 1 (#9536) ; au niveau 1, ce sont les points gagnés qui parlent.
+        let levelParts: [String?] = banner.showsLevel
+            ? [GameText.bannerLevel(level: GameCopy.formatCount(banner.level)), GameCopy.tierName(banner.tier), toNext]
+            : [banner.showsScore ? GameText.bannerPoints(points: GameCopy.formatCount(banner.score)) : nil]
+        let parts: [String?] = levelParts + [
             banner.meeshes.map { GameCopy.meeshes($0) },
             banner.rank.map { GameCopy.rankLabel($0.rank, division: $0.division) },
             banner.league.map {
@@ -57,13 +58,38 @@ nonisolated enum PlayerBannerPlacement {
         !routeIsDeep && !reelsAreOpen
     }
 
-    /// iPad : la colonne des conversations reste là, le fil ouvert dans l'autre prend toute sa hauteur.
-    static func hostsOnTablet(conversationIsOpen: Bool, reelsAreOpen: Bool) -> Bool {
-        !conversationIsOpen && !reelsAreOpen
+    /// iPad : la colonne des conversations reste là, le fil ouvert dans l'autre prend toute sa hauteur. Les routes
+    /// s'y ouvrent dans le PANNEAU de droite, jamais dans la pile du routeur (`isDeepRoute` y reste faux) : la loi de
+    /// l'iPhone se lit donc sur la route du panneau — un écran principal (un hub) porte la bannière, un écran
+    /// profond (Progression, une page du jeu, un détail) non.
+    @MainActor
+    static func hostsOnTablet(conversationIsOpen: Bool, panelRoute: Route?, reelsAreOpen: Bool) -> Bool {
+        let panelIsDeep = panelRoute.map { !$0.isHub } ?? false
+        return hosts(routeIsDeep: conversationIsOpen || panelIsDeep, reelsAreOpen: reelsAreOpen)
     }
 
-    static func shows(hosted: Bool, free: Bool, hidden: Bool) -> Bool {
-        hosted && free && !hidden
+    /// `lingering` : l'ouverture de l'app tient encore le bandeau (#9536) — au-delà de trente secondes il ne paraît plus.
+    static func shows(hosted: Bool, free: Bool, hidden: Bool, lingering: Bool = true) -> Bool {
+        hosted && free && !hidden && lingering
+    }
+}
+
+/// Comment le bandeau du jeu s'en va (#9536) : LENTEMENT, en remontant vers le haut, quand son ouverture se termine ;
+/// sous « Réduire les animations », par un fondu simple. Tout autre départ (un appel arrive, l'écran porte un fil) garde le
+/// ressort des barres du haut — il n'y a rien à ralentir, le bandeau s'efface devant un besoin.
+nonisolated enum PlayerBannerMotion {
+
+    /// La durée de la sortie lente.
+    static let exitDuration: TimeInterval = GamePlayerBannerOpening.exitDuration
+    /// Le fondu simple, sous « Réduire les animations ».
+    static let reducedFade: TimeInterval = 0.6
+
+    /// `leaving` : la cible est vide (la bannière s'en va) ; `opening` : l'ouverture tient encore le bandeau — faux
+    /// signifie que c'est la FIN de l'ouverture qui le retire.
+    @MainActor
+    static func animation(leaving: Bool, opening: Bool, reduceMotion: Bool) -> Animation? {
+        guard leaving, !opening else { return TopChromeBarMotion.animation(reduceMotion: reduceMotion) }
+        return .easeInOut(duration: reduceMotion ? reducedFade : exitDuration)
     }
 }
 

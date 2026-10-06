@@ -386,7 +386,24 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // naissance PAR CONSTRUCTION, même motif que les deux entrées ci-dessus : la
 // vague 2 est livrée côté gateway ; aucun écran iOS ne les appelle encore.
 // Valeur MESURÉE le 2026-10-05.
-const BASELINE_DEAD_ENTRIES = 308;
+// 308 -> 309 (#9529, 2026-10-06) : `UsersEndpoint.byUserIdGame`
+// (`GET /users/:userId/game`, le jeu d'un autre membre selon son réglage),
+// GÉNÉRÉE depuis `route-manifest.json` par `e0a8b73588` (#9481), qui a livré
+// la route gateway et régénéré `UsersEndpoint.swift` sans relever cette
+// référence. Trouvée en comparant la liste triée de `fe1c386e6f` (308) à celle
+// de la tête de `dev` (309) : une entrée de plus, aucune n'a regagné
+// d'appelant. iOS APPELLE cette route (`GameService.fetchUserGame`,
+// `ef03716ee9`), mais par `GameEndpoint.userGame` — le catalogue du jeu ÉCRIT
+// À LA MAIN, qui encode l'identifiant avant de le poser dans le chemin
+// (`GameIntegrationRoutes.userGamePath`, témoin `GameRoutesTests`) et déclare
+// les refus typés (`rejectionPolicy == .structured`) ; l'entrée générée
+// interpole l'identifiant brut et n'a pas cette politique, la lui substituer
+// retirerait les deux. Même cas que `byUserIdGameShowcase` et les dix-huit
+// `MeEndpoint.game*` ci-dessus, dont chacune a sa jumelle dans `GameEndpoint`.
+// Elles ne reviendront au compte que le jour où `GameEndpoint` se retire au
+// profit du catalogue généré, comme son en-tête l'annonce. Valeur MESURÉE le
+// 2026-10-06.
+const BASELINE_DEAD_ENTRIES = 309;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;
 // Une déclaration de cas n'a jamais de point après `case` ; une branche de

@@ -18,14 +18,6 @@ import ImageIO
 // par le même peintre (`ComposerLookPainter`, #9347) : ce qu'on voyait est ce
 // qui part.
 
-/// Où le sélecteur d'effets se pose : au-dessus de l'obturateur et de sa
-/// légende, qu'il ne couvre jamais.
-nonisolated enum ComposerLiveLookPanelLayout {
-    static func bottomInset(for size: ComposerSceneCameraSize) -> CGFloat {
-        size == .fullScreen ? 156 : 132
-    }
-}
-
 /// Les lois du look en direct — pures, éprouvables sans caméra.
 nonisolated enum ComposerLiveLookRule {
 

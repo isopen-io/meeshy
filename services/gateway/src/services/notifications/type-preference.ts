@@ -32,7 +32,8 @@ export function isNotificationTypeEnabledByPreference(
     case 'game_duo_invited':
     case 'game_duo_accepted':
     case 'game_league_result':
-    case 'game_season_step':   return prefs.gameEnabled ?? true;
+    case 'game_season_step':
+    case 'game_mission_window': return prefs.gameEnabled ?? true;
     case 'member_joined':     return prefs.memberJoinedEnabled;
     case 'message_reply':
     case 'reply':             return prefs.replyEnabled;

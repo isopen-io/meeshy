@@ -23,6 +23,7 @@ import { EngagementService } from '../../services/engagement/EngagementService';
 import { FlameService } from '../../services/game/FlameService';
 import { GameBlockService } from '../../services/game/GameBlockService';
 import { MissionService } from '../../services/game/MissionService';
+import { PersonalMissionService } from '../../services/game/PersonalMissionService';
 import { gameRateLimitConfig, okResponse, refusalResponse, requestIdSchema, runGameWrite, writeBody } from './game-shared';
 import { meGameWave2Routes } from './game-wave2';
 
@@ -47,7 +48,7 @@ export async function meGameRoutes(fastify: FastifyInstance, options: GameRoutes
     engagement.creditGamePoints(userId, points, axisKey);
   const missions = new MissionService(fastify.prisma, { creditPoints });
   const flame = new FlameService(fastify.prisma);
-  const blocks = new GameBlockService(fastify.prisma, { missions });
+  const blocks = new GameBlockService(fastify.prisma, { missions, personal: new PersonalMissionService(fastify.prisma, { missions }) });
 
   const write = runGameWrite;
 

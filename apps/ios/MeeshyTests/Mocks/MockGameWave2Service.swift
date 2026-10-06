@@ -75,3 +75,24 @@ final class MockGameWave2Service: GameWave2ServiceProviding, @unchecked Sendable
         return try privacyResult.get()
     }
 }
+
+/// Le troisième contrat du jeu (`GameIntegrationServiceProviding`) : les réglages servis et le jeu d'un autre membre.
+final class MockGameIntegrationService: GameIntegrationServiceProviding, @unchecked Sendable {
+    private static var down: Error { URLError(.notConnectedToInternet) }
+
+    var settingsResult: Result<GameSettingsResponse, Error> = .failure(down)
+    var userGameResult: Result<UserGameProfileResponse, Error> = .failure(down)
+
+    private(set) var settingsCallCount = 0
+    private(set) var userGameIds: [String] = []
+
+    func fetchSettings() async throws -> GameSettingsResponse {
+        settingsCallCount += 1
+        return try settingsResult.get()
+    }
+
+    func fetchUserGame(userId: String) async throws -> UserGameProfileResponse {
+        userGameIds.append(userId)
+        return try userGameResult.get()
+    }
+}

@@ -13,11 +13,10 @@ extension View {
     /// Le pont PERD l'EXIF, et c'est le CONTRAT du SDK qui l'impose :
     /// `StoryCameraCapture.photo` ne porte qu'une `UIImage`.
     ///
-    /// La photo part SANS passer par la prise (#9295) : elle tombe dans une
-    /// scène, où ses filtres et son cadrage s'éditent déjà.
+    /// La photo part peinte par le peintre unique, sur le canevas 9:16 (#9347).
     func storyCameraCaptureProvided() -> some View {
         environment(\.storyCameraCapture, StoryCameraCaptureProvider { onCapture in
-            AnyView(ComposerViewfinder(reviewsPhoto: false) { result in
+            AnyView(ComposerViewfinder { result in
                 switch result {
                 case .photo(let image, _): onCapture(.photo(image))
                 case .video(let url):      onCapture(.video(url))

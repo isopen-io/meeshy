@@ -22,7 +22,16 @@ export type PhotoReferral = {
   readonly display: string;
   /** Les jours de la Flamme ; `null` quand elle est éteinte ou inconnue. */
   readonly flameDays: number | null;
+  /**
+   * L'EMPLACEMENT du lien, quand l'utilisateur n'a encore aucun jeton : l'APERÇU
+   * le montre en pointillé, le jeton ne se crée qu'au toucher de « Partager ».
+   * Ce qui sort de l'appareil porte le vrai lien ou rien, jamais l'emplacement.
+   */
+  readonly placeholder?: true;
 };
+
+/** Ce que l'aperçu écrit à la place d'un lien qui n'existe pas encore (même texte que l'iOS). */
+export const REFERRAL_PLACEHOLDER = 'meeshy.me/r/…';
 
 export const referralDisplay = (url: string): string => url.replace(/^[a-z][a-z0-9+.-]*:\/\//i, '').replace(/\/+$/, '');
 
@@ -32,6 +41,13 @@ export function referralOf(url: string | null, flameDays: number | null): PhotoR
   const trimmed = url?.trim() ?? '';
   return trimmed === '' ? null : { url: trimmed, display: referralDisplay(trimmed), flameDays: days(flameDays) };
 }
+
+export const referralPlaceholder = (flameDays: number | null): PhotoReferral => ({
+  url: '',
+  display: REFERRAL_PLACEHOLDER,
+  flameDays: days(flameDays),
+  placeholder: true,
+});
 
 export const referralShareText = (referral: PhotoReferral, language: InterfaceLanguage = currentInterfaceLanguage()): string =>
   translateGame(language, 'game.photo.referral.share_text', { link: referral.url });

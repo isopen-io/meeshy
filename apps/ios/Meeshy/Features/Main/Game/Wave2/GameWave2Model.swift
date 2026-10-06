@@ -78,6 +78,7 @@ final class GameWave2Model: ObservableObject {
 
     let progression: ProgressionViewModel
     private let service: GameWave2ServiceProviding
+    private let integration: GameIntegrationServiceProviding
     private let cache: GameWave2Caching
     private let friendsProvider: GameFriendsProviding
     private let prefs: GameDevicePrefsStore
@@ -87,13 +88,15 @@ final class GameWave2Model: ObservableObject {
     @Published private(set) var week = GameLoad<LeagueWeekResponse>()
     @Published private(set) var friendsLeague = GameLoad<LeagueFriendsResponse>()
     @Published private(set) var friends: [GameFriend] = []
-    /// Le dernier état des interrupteurs de confidentialité que la passerelle a CONFIRMÉ — elle ne les sert
-    /// qu'en réponse à l'écriture, jamais en lecture : l'écran garde ce qu'il a su.
+    /// Le dernier état des interrupteurs de confidentialité que la passerelle a CONFIRMÉ : relu à chaque ouverture
+    /// (`loadSettings`, `GET /me/game/privacy`), puis mis à jour par la réponse de chaque écriture. Hors ligne, la copie
+    /// de l'appareil (`GameDevicePrefsStore`) répond à sa place — le dernier état connu.
     @Published private(set) var privacy: GamePrivacyResponse?
 
     init(
         progression: ProgressionViewModel? = nil,
         service: GameWave2ServiceProviding = GameService.shared,
+        integration: GameIntegrationServiceProviding = GameService.shared,
         cache: GameWave2Caching? = nil,
         friends: GameFriendsProviding = CachedGameFriends(),
         prefs: GameDevicePrefsStore? = nil,
@@ -101,6 +104,7 @@ final class GameWave2Model: ObservableObject {
     ) {
         self.progression = progression ?? ProgressionViewModel()
         self.service = service
+        self.integration = integration
         let disk = GameWave2DiskCache(userId: currentUserId)
         self.cache = cache ?? disk
         self.friendsProvider = friends
@@ -114,6 +118,18 @@ final class GameWave2Model: ObservableObject {
     var friendsLeagueOptedOut: Bool { privacy?.friendsLeagueOptOut ?? prefs.prefs.friendsLeagueOptOut }
 
     // MARK: - Les lectures
+
+    /// L'ÉTAT des réglages du jeu, servi par le serveur : « Jeu masqué » et l'opposition à la ligue Amis. L'écran se
+    /// peint d'abord depuis la copie de l'appareil (cache-first), la lecture la remplace en silence. Un geste en vol
+    /// (avant OU pendant la lecture) fait foi : sa propre réponse dira l'état, la lecture ne le défait pas. Hors
+    /// ligne, ou sur un refus, rien ne change.
+    func loadSettings() async {
+        guard !pending.hide, !pending.friendsOptOut else { return }
+        guard let served = try? await integration.fetchSettings() else { return }
+        guard !pending.hide, !pending.friendsOptOut else { return }
+        privacy = GamePrivacyResponse(gameHidden: served.gameHidden, friendsLeagueOptOut: served.friendsLeagueOptOut)
+        prefs.set(hidden: served.gameHidden, friendsLeagueOptOut: served.friendsLeagueOptOut)
+    }
 
     /// Le classement de MA ligue cette semaine : le cache d'abord, le réseau en silence derrière.
     func loadWeek() async {

@@ -5169,10 +5169,17 @@ model DailyMission {
   /// Points réellement crédités à l'achèvement.
   paidPoints  Int?
   rerolledAt  DateTime?
+  /// La mission PERSONNELLE (#9539, slot 3) seule porte une plage : `startsAt` inclus, `endsAt` exclu. Passé
+  /// `endsAt`, plus aucun geste ne la fait avancer. Absents des trois missions du jour (champs optionnels, aucun backfill).
+  startsAt    DateTime?
+  endsAt      DateTime?
+  /// L'instant où la notification de début de plage a été RÉCLAMÉE : une par mission, jamais rejouée.
+  notifiedAt  DateTime?
   createdAt   DateTime  @default(now())
 
   @@unique([userId, dayKey, slot])
   @@index([userId, dayKey])
+  @@index([startsAt]) // Le balayage de notification des missions personnelles : les plages qui viennent de s'ouvrir (#9539)
 }
 
 /// L'état du jeu d'UN jour pour un compte (#9375, #9376) : changements de

@@ -11,16 +11,25 @@ import { isNotificationTypeEnabled, type NotificationPreference } from '../../ty
 import { NOTIFICATION_PREFERENCE_DEFAULTS, NotificationPreferenceSchema } from '../../types/preferences/notification.js';
 import {
   GAME_NOTIFICATION_DAILY_CAP,
+  GAME_NOTIFICATIONS_OUTSIDE_DAILY_CAP,
   GAME_NOTIFICATION_TYPES,
+  countsAgainstGameDailyCap,
   gameLeagueResultKey,
   isGameNotificationType,
 } from '../../utils/game/notifications.js';
 import { NOTIFICATION_LANGUAGES, buildNotificationDisplay, notificationString } from '../../utils/notification-strings.js';
+import { personalMissionPhrase } from '../../utils/game/personal-mission-copy.js';
 import { notificationTypeEnum } from '../../utils/notification-type-enum.js';
 
 describe('les types de notification du jeu', () => {
-  it('sont quatre, uniques, déclarés par l’énumération ET par le schéma de validation', () => {
-    expect([...GAME_NOTIFICATION_TYPES]).toEqual(['game_duo_invited', 'game_duo_accepted', 'game_league_result', 'game_season_step']);
+  it('sont cinq, uniques, déclarés par l’énumération ET par le schéma de validation', () => {
+    expect([...GAME_NOTIFICATION_TYPES]).toEqual([
+      'game_duo_invited',
+      'game_duo_accepted',
+      'game_league_result',
+      'game_season_step',
+      'game_mission_window',
+    ]);
     for (const type of GAME_NOTIFICATION_TYPES) {
       expect(Object.values(NotificationTypeEnum)).toContain(type);
       expect(notificationTypeEnum.safeParse(type).success).toBe(true);
@@ -34,8 +43,14 @@ describe('les types de notification du jeu', () => {
     expect(isGameNotificationType(undefined)).toBe(false);
   });
 
-  it('au plus UNE par jour et par destinataire', () => {
+  it('au plus UNE par jour et par destinataire — hors les duos et la mission du jour', () => {
     expect(GAME_NOTIFICATION_DAILY_CAP).toBe(1);
+    expect([...GAME_NOTIFICATIONS_OUTSIDE_DAILY_CAP]).toEqual(['game_duo_invited', 'game_duo_accepted', 'game_mission_window']);
+    expect(countsAgainstGameDailyCap('game_league_result')).toBe(true);
+    expect(countsAgainstGameDailyCap('game_season_step')).toBe(true);
+    expect(countsAgainstGameDailyCap('game_duo_invited')).toBe(false);
+    expect(countsAgainstGameDailyCap('game_duo_accepted')).toBe(false);
+    expect(countsAgainstGameDailyCap('game_mission_window')).toBe(false);
   });
 });
 
@@ -46,7 +61,7 @@ describe('la préférence « Jeu » (notification.gameEnabled)', () => {
     expect(NotificationPreferenceSchema.strict().parse({ gameEnabled: false }).gameEnabled).toBe(false);
   });
 
-  it('gouverne les quatre types, et eux seuls', () => {
+  it('gouverne les cinq types, et eux seuls', () => {
     const prefs = { ...NOTIFICATION_PREFERENCE_DEFAULTS, gameEnabled: false } as unknown as NotificationPreference;
     for (const type of GAME_NOTIFICATION_TYPES) expect(isNotificationTypeEnabled(prefs, type)).toBe(false);
     expect(isNotificationTypeEnabled(prefs, 'new_message')).toBe(true);
@@ -82,6 +97,19 @@ describe('les textes', () => {
     }
   });
 
+  it('la mission du jour dit son activité et sa plage, dans chaque langue', () => {
+    for (const lang of NOTIFICATION_LANGUAGES) {
+      const text = notificationString(lang, 'game.missionWindow', { mission: personalMissionPhrase(lang, 'react'), start: '18:00', end: '20:00' });
+      expect(text, lang).toContain('18:00');
+      expect(text, lang).toContain('20:00');
+      expect(text, lang).toContain(personalMissionPhrase(lang, 'react'));
+      expect(text, lang).not.toContain('{');
+    }
+    expect(notificationString('fr', 'game.missionWindow', { mission: 'envoyer des stickers', start: '18:00', end: '20:00' })).toBe(
+      'Ta mission du jour : envoyer des stickers, entre 18:00 et 20:00.',
+    );
+  });
+
   it('l’étape de la saison porte son numéro, dans chaque langue', () => {
     for (const lang of NOTIFICATION_LANGUAGES) expect(notificationString(lang, 'game.seasonStep', { count: 12 })).toContain('12');
   });
@@ -103,6 +131,7 @@ describe('les textes', () => {
   it('une notification de ligue ou de saison n’a pas d’acteur : le titre reste au client, le corps porte la phrase', () => {
     expect(buildNotificationDisplay('fr', { type: 'game_league_result', actorName: null })).toEqual({ title: null, subtitle: null, action: null });
     expect(buildNotificationDisplay('fr', { type: 'game_season_step', actorName: null })).toEqual({ title: null, subtitle: null, action: null });
+    expect(buildNotificationDisplay('fr', { type: 'game_mission_window', actorName: null })).toEqual({ title: null, subtitle: null, action: null });
   });
 });
 

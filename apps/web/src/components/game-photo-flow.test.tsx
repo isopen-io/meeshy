@@ -42,6 +42,8 @@ type Log = {
   /** Le bandeau de parrainage de chaque composition (#7742). */
   referrals: (PhotoReferral | null | undefined)[];
   saved: File[];
+  /** Les fichiers rendus par chaque composition, dans l'ordre. */
+  outputs: PhotoFiles[];
   rendered: { moment: PhotoMoment; mirror: boolean | null }[];
   closed: PhotoFlowResult[];
 };
@@ -52,7 +54,7 @@ const files = (): PhotoFiles => ({
 });
 
 function env(overrides: Partial<PhotoEnv> & { camera?: CameraResult | 'pending'; keepOk?: boolean; shareOutcome?: ShareOutcome; renderOk?: boolean } = {}) {
-  const log: Log = { stops: 0, cameraOpened: 0, kept: [], deferred: [], shared: [], texts: [], referrals: [], saved: [], rendered: [], closed: [] };
+  const log: Log = { stops: 0, cameraOpened: 0, kept: [], deferred: [], shared: [], texts: [], referrals: [], saved: [], outputs: [], rendered: [], closed: [] };
   const notebook: Notebook = {
     defer: async (moment) => (log.deferred.push(moment), true),
     keep: async (moment, photo) => (log.kept.push({ moment, photo }), overrides.keepOk ?? true),
@@ -71,7 +73,10 @@ function env(overrides: Partial<PhotoEnv> & { camera?: CameraResult | 'pending';
     render: async ({ moment, photo, referral }) => {
       log.rendered.push({ moment, mirror: photo === null ? null : photo.mirror });
       log.referrals.push(referral);
-      return overrides.renderOk === false ? null : files();
+      if (overrides.renderOk === false) return null;
+      const output = files();
+      log.outputs.push(output);
+      return output;
     },
     captureVideo: () => ({ image: {} as CanvasImageSource, width: 1080, height: 1920, mirror: true }),
     readGallery: async () => ({ image: {} as CanvasImageSource, width: 800, height: 600, mirror: false }),
@@ -712,5 +717,148 @@ describe('le droit à l’image (conformité H-3)', () => {
     await click(choose(host, 'selfie'));
     await settle();
     expect(host.querySelector('[data-photo-image-right]')?.textContent).toContain('demande-leur leur accord');
+  });
+});
+
+/**
+ * AUCUN JETON SANS GESTE (#7742, décision porteur) — ouvrir le moment photo ne
+ * crée rien : l'aperçu montre le lien EXISTANT s'il y en a un, sinon
+ * l'emplacement « meeshy.me/r/… » en pointillé. Le jeton se crée au toucher de
+ * « Partager », et la carte est recomposée avec le vrai lien AVANT de partir.
+ * Enregistrer et garder au carnet ne créent rien : l'image qui sort porte le
+ * vrai lien ou rien, jamais l'emplacement.
+ */
+describe('aucun jeton de parrainage ne se crée sans geste', () => {
+  const LINK = 'https://meeshy.me/signup/affiliate/aff_neuf';
+  const PLACEHOLDER = { url: '', display: 'meeshy.me/r/…', flameDays: 23, placeholder: true };
+  const bench = async (created: string | null = LINK) => {
+    let creations = 0;
+    const made = env({
+      referral: async () => null,
+      createReferral: async () => {
+        creations += 1;
+        return created;
+      },
+    });
+    const host = await mount(<GamePhotoFlow moment={rank} env={made.env} flameDays={23} onClose={() => undefined} />);
+    await settle();
+    return { ...made, host, creations: () => creations };
+  };
+  const toResult = async (created: string | null = LINK) => {
+    const b = await bench(created);
+    await click(choose(b.host, 'card'));
+    await settle();
+    return b;
+  };
+
+  test('ouvrir puis composer ne crée aucun jeton : la carte porte l’EMPLACEMENT, la Flamme à côté', async () => {
+    const { log, creations } = await toResult();
+    expect(creations()).toBe(0);
+    expect(log.referrals).toEqual([PLACEHOLDER]);
+  });
+
+  test('l’emplacement se retire comme un lien : la case est offerte', async () => {
+    const { host } = await bench();
+    expect(host.querySelector<HTMLInputElement>('[data-photo-with-link]')?.checked).toBe(true);
+  });
+
+  test('l’aperçu de la caméra montre « meeshy.me/r/… » en pointillé', async () => {
+    const { host } = await bench();
+    await click(choose(host, 'selfie'));
+    await settle();
+    expect(host.querySelector('[data-photo-banner-placeholder]')?.textContent).toBe('meeshy.me/r/…');
+  });
+
+  test('« Partager » crée le jeton UNE fois, recompose la carte avec le vrai lien, puis la partage avec le lien en texte', async () => {
+    const { host, log, creations } = await toResult();
+    await click(by(host, 'data-photo-share'));
+    await settle();
+    expect(creations()).toBe(1);
+    expect(log.referrals).toEqual([PLACEHOLDER, { url: LINK, display: 'meeshy.me/signup/affiliate/aff_neuf', flameDays: 23 }]);
+    expect(log.shared[0]?.file).toBe(log.outputs[1]?.story);
+    expect(log.texts).toEqual([`Rejoins-moi sur Meeshy : ${LINK}`]);
+    await click(by(host, 'data-photo-share'));
+    await settle();
+    expect(creations()).toBe(1);
+  });
+
+  test('un jeton refusé : la carte part SANS bandeau, sans texte — jamais avec l’emplacement', async () => {
+    const { host, log } = await toResult(null);
+    await click(by(host, 'data-photo-share'));
+    await settle();
+    expect(log.referrals).toEqual([PLACEHOLDER, null]);
+    expect(log.shared[0]?.file).toBe(log.outputs[1]?.story);
+    expect(log.texts).toEqual([undefined]);
+  });
+
+  test('« Enregistrer » ne crée rien, et l’image enregistrée ne porte pas l’emplacement', async () => {
+    const { host, log, creations } = await toResult();
+    await click(by(host, 'data-photo-save'));
+    await settle();
+    expect(creations()).toBe(0);
+    expect(log.referrals.at(-1)).toBeNull();
+    expect(log.saved[0]).toBe(log.outputs.at(-1)?.story);
+  });
+
+  test('« Garder au carnet » ne crée rien, et la photo gardée ne porte pas l’emplacement', async () => {
+    const { host, log, creations } = await toResult();
+    await click(by(host, 'data-photo-keep'));
+    await settle();
+    expect(creations()).toBe(0);
+    expect(log.kept[0]?.photo.story).toBe(log.outputs.at(-1)?.story);
+    expect(log.referrals.at(-1)).toBeNull();
+  });
+
+  test('lien retiré de la carte : « Partager » ne crée rien', async () => {
+    const { host, creations, log } = await bench();
+    await click(host.querySelector<HTMLElement>('[data-photo-with-link]'));
+    await click(choose(host, 'card'));
+    await settle();
+    await click(by(host, 'data-photo-share'));
+    await settle();
+    expect(creations()).toBe(0);
+    expect(log.texts).toEqual([undefined]);
+  });
+
+  test('une lecture du lien qui arrive APRÈS la composition ne change pas ce qui part : la carte sans bandeau part sans bandeau, sans texte, sans jeton', async () => {
+    let creations = 0;
+    let answer: (url: string | null) => void = () => undefined;
+    const made = env({
+      referral: () => new Promise<string | null>((resolve) => (answer = resolve)),
+      createReferral: async () => {
+        creations += 1;
+        return LINK;
+      },
+    });
+    const host = await mount(<GamePhotoFlow moment={rank} env={made.env} flameDays={23} onClose={() => undefined} />);
+    await click(choose(host, 'card'));
+    await settle();
+    expect(made.log.referrals).toEqual([null]);
+    await act(async () => answer(null));
+    await settle();
+    await click(by(host, 'data-photo-share'));
+    await settle();
+    expect(creations).toBe(0);
+    expect(made.log.texts).toEqual([undefined]);
+    expect(made.log.shared[0]?.file).toBe(made.log.outputs[0]?.story);
+  });
+
+  test('un lien existant : « Partager » ne crée rien de plus', async () => {
+    let creations = 0;
+    const made = env({
+      referral: async () => LINK,
+      createReferral: async () => {
+        creations += 1;
+        return 'https://meeshy.me/signup/affiliate/autre';
+      },
+    });
+    const host = await mount(<GamePhotoFlow moment={rank} env={made.env} flameDays={23} onClose={() => undefined} />);
+    await settle();
+    await click(choose(host, 'card'));
+    await settle();
+    await click(by(host, 'data-photo-share'));
+    await settle();
+    expect(creations).toBe(0);
+    expect(made.log.texts).toEqual([`Rejoins-moi sur Meeshy : ${LINK}`]);
   });
 });

@@ -12,6 +12,8 @@ nonisolated enum ComposerCaptureFixture {
     static let movieCanvas = CGRect(x: 0, y: 0, width: 1080, height: 1920)
     static let movieFrameRate: Int32 = 30
     static let movieFrameCount = 90
+    /// Le temps qu'AVFoundation met à refermer un fichier après l'arrêt.
+    static let finalization: UInt64 = 300_000_000
 
     static func isActive(arguments: [String] = ProcessInfo.processInfo.arguments) -> Bool {
         #if targetEnvironment(simulator)
@@ -223,15 +225,23 @@ extension CameraModel {
         guard let image = driver.photo() else { return }
         capturedPhoto = image
         capturedPhotoData = image.jpegData(compressionQuality: 0.9)
+        librarySave = nil
         capturedPhotoId = UUID().uuidString
     }
 
-    /// Le film de recette, publié comme un vrai segment.
+    /// Le film de recette, publié comme un vrai segment — sous le jeton de SA
+    /// prise, lu avant l'attente de la copie. Comme AVFoundation, la prise reste
+    /// « en cours » le temps de sa finalisation.
     func deliverFixtureMovie(_ driver: ComposerCaptureFixtureDriver) {
+        let jeton = recordingId
         Task { @MainActor in
-            guard let url = await driver.movieCopy() else { return }
+            try? await Task.sleep(nanoseconds: ComposerCaptureFixture.finalization)
+            isRecordingVideo = false
+            guard let url = await driver.movieCopy() else { return abandonRecording(token: jeton) }
             capturedVideoURL = url
-            capturedVideoId = UUID().uuidString
+            librarySave = nil
+            capturedVideoId = jeton ?? UUID().uuidString
+            closeRecordingToken(jeton)
         }
     }
 }

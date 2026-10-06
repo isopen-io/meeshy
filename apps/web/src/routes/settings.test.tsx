@@ -55,6 +55,7 @@ const preferencesOf = (overrides: Partial<AppPreferences> = {}): AppPreferences 
   acceptCallsFromNonContacts: true,
   notifyContactsOnReturn: true,
   contactActivityEnabled: true,
+  gameEnabled: true,
   ...overrides,
 });
 

@@ -46,11 +46,17 @@ export type PhotoEnv = {
     readonly referral?: PhotoReferral | null;
   }) => Promise<PhotoFiles | null>;
   /**
-   * Le lien de parrainage COURT de l'utilisateur (#7742), `null` quand le service
-   * n'en rend pas (hors ligne, refus). Absent : l'environnement n'en sait pas,
-   * la carte part sans bandeau.
+   * Le lien de parrainage EXISTANT de l'utilisateur (#7742), lu SANS rien créer ;
+   * `null` quand il n'a aucun jeton utilisable (ou hors ligne). Absent :
+   * l'environnement n'en sait pas, la carte part sans bandeau.
    */
   readonly referral?: () => Promise<string | null>;
+  /**
+   * Crée le jeton (ou rend l'existant) — appelé au SEUL toucher de « Partager »,
+   * quand la carte montre l'emplacement du lien. `null` : aucun lien obtenu, la
+   * carte part sans bandeau. Absent : aucun emplacement n'est proposé.
+   */
+  readonly createReferral?: () => Promise<string | null>;
   readonly captureVideo: (video: HTMLVideoElement) => PhotoSource | null;
   readonly readGallery: (file: File) => Promise<PhotoSource | null>;
   readonly now: () => Date;
@@ -103,13 +109,21 @@ async function readGallery(file: File): Promise<PhotoSource | null> {
 
 /**
  * **Le lien de parrainage**, depuis le service existant (`loadShareableReferralLink`,
- * #6707) : le même que « Inviter des amis ». Chargé AU GESTE (`import()`, le
+ * #6707) : le même que « Inviter des amis » — qui CRÉE le jeton s'il n'y en a aucun,
+ * et n'est donc appelé qu'au toucher de « Partager » (`createReferral`). Chargé AU GESTE (`import()`, le
  * décodage passe par `zod`), gardé pour le lecteur courant — le déroulé suivant
  * ne refait aucune requête. Un échec rend `null`, jamais un lien à moitié bon.
  */
 const shareableReferralLink = memoriserLienParLecteur(async () => {
   const { loadShareableReferralLink } = await import('@/lib/api/referral-link');
   const result = await loadShareableReferralLink({ origin: webOriginOf(apiConfig.base, window.location.origin), now: new Date(), deps: apiDeps });
+  return result.ok ? result.data : null;
+});
+
+/** Le lien d'un jeton EXISTANT, sans rien créer (décision porteur : aucun jeton sans geste). Un « aucun » n'est pas gardé : le prochain déroulé relit. */
+const existingReferralLink = memoriserLienParLecteur(async () => {
+  const { findExistingReferralLink } = await import('@/lib/api/referral-link');
+  const result = await findExistingReferralLink({ origin: webOriginOf(apiConfig.base, window.location.origin), now: new Date(), deps: apiDeps });
   return result.ok ? result.data : null;
 });
 
@@ -134,7 +148,8 @@ export function browserPhotoEnv(): PhotoEnv {
     openCamera: () => openFrontCamera(typeof navigator === 'undefined' ? undefined : navigator.mediaDevices),
     notebook,
     share: (file, title, text) => sharePhoto(file, title, doors(), text),
-    referral: () => shareableReferralLink(currentReader()),
+    referral: () => existingReferralLink(currentReader()),
+    createReferral: () => shareableReferralLink(currentReader()),
     save: (file) => savePhoto(file, doors()),
     render: async ({ moment, photo, frame, referral }) => {
       if (frame === null) return null;

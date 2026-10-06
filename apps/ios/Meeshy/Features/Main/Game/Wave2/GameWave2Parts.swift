@@ -84,6 +84,7 @@ private struct GameWave2Frame<Content: View>: View {
             }
         }
         .task { await progression.load() }
+        .task { await model.loadSettings() }
     }
 }
 
@@ -104,17 +105,21 @@ struct GameVisibilityPickerView: View {
     let onChange: (ShowcaseVisibility) -> Void
 
     private var theme: ThemeManager { ThemeManager.shared }
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
             Text(legend)
                 .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
                 .foregroundColor(theme.textPrimary)
-            // Trois pastilles côte à côte ; aux grandes tailles de texte, elles passent l'une sous l'autre plutôt que
-            // de tronquer leur nom.
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: MeeshySpacing.sm) { pills }
+            // Trois pastilles côte à côte ; aux grandes tailles de texte (au-delà de XL), elles passent l'une sous
+            // l'autre plutôt que de tronquer leur nom. Le choix se fait sur la TAILLE DU TEXTE, pas par `ViewThatFits` :
+            // sous iOS 26 il mesure ses candidats sur le rendu asynchrone, où la fermeture d'un `ForEach` trappe à
+            // l'isolation du main actor (#9135, #9456).
+            if typeSize > .xLarge {
                 VStack(alignment: .leading, spacing: MeeshySpacing.sm) { pills }
+            } else {
+                HStack(spacing: MeeshySpacing.sm) { pills }
             }
         }
         .accessibilityElement(children: .contain)

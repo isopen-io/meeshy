@@ -8,6 +8,13 @@ import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { audioCarryStore } from '@/lib/view/audio-carry';
 import {
+  PLAYER_BANNER_EXIT_MS,
+  PLAYER_BANNER_EXIT_REDUCED_MS,
+  PLAYER_BANNER_HOLD_MS,
+  playerBannerVisitStore,
+  watchPlayerBannerAbsence,
+} from '@/lib/view/player-banner-visit';
+import {
   BANNER_EXIT_MS,
   callResumeShownStore,
   miniPlayerReadyStore,
@@ -50,20 +57,31 @@ const occupants = (slots: TopBandSlots): string =>
  * prime, puis l'audio ; la bannière du joueur n'a la place que quand ni l'un
  * ni l'autre ne la prend, et revient à la même place quand ils partent.
  *
+ * La bannière du joueur ne paraît qu'à l'OUVERTURE de l'application, 30 s,
+ * puis remonte et s'efface (#9536, `lib/view/player-banner-visit.ts`) : cela
+ * supplante le « toujours visible » de #9494.
+ *
  * Sur les routes qui portent la bannière, le bandeau RÉSERVE sa hauteur
  * (`onInset`) : la coquille la reporte dans `--safe-top` de l'arbre des
  * écrans, et l'en-tête descend sous le bandeau au lieu d'être recouvert —
  * comme iOS, où « seul le viewport bouge ». Ailleurs, la pile se pose
  * par-dessus, comme avant.
  */
+export type VisitTiming = { readonly holdMs: number; readonly exitMs: number };
+
+const DEFAULT_TIMING: VisitTiming = { holdMs: PLAYER_BANNER_HOLD_MS, exitMs: PLAYER_BANNER_EXIT_MS };
+
 export function TopBand({
   routeKey,
   signedIn,
   onInset,
+  timing = DEFAULT_TIMING,
 }: {
   readonly routeKey: string;
   readonly signedIn: boolean;
   readonly onInset?: (pixels: number) => void;
+  /** Les durées de la visite : injectables pour les témoins. */
+  readonly timing?: VisitTiming;
 }) {
   const audio = useStore(audioCarryStore, (state) => state.carried !== null);
   const localCall = useStore(callStore, (state) => state.call !== null || state.waiting !== null);
@@ -71,7 +89,9 @@ export function TopBand({
   const miniPlayerReady = useStore(miniPlayerReadyStore, (state) => state.ready);
   const prefs = useGamePrefs();
   const reserves = showsPlayerBanner(routeKey);
-  const eligible = signedIn && !prefs.hidden && reserves;
+  const visit = useStore(playerBannerVisitStore, (state) => state.phase);
+  useBannerVisitClock(timing, signedIn);
+  const eligible = signedIn && !prefs.hidden && reserves && visit !== 'gone';
   const slots = topBandSlots({ call: localCall || resumeShown, audio, player: eligible });
   const column = useRef<HTMLDivElement | null>(null);
   useBandInset(column, reserves, onInset);
@@ -96,7 +116,14 @@ export function TopBand({
         </Suspense>
       ) : null}
       {banner === 'gone' ? null : (
-        <div data-player-slot={banner === 'leaving' ? 'leaving' : 'shown'} className={banner === 'leaving' ? 'player-banner-slot-leaving' : undefined}>
+        <div
+          data-player-slot={visit === 'leaving' ? 'expiring' : banner === 'leaving' ? 'leaving' : 'shown'}
+          {...(visit === 'leaving'
+            ? { inert: true, 'aria-hidden': 'true' as const, className: 'player-banner-slot-expiring' }
+            : banner === 'leaving'
+              ? { inert: true, 'aria-hidden': 'true' as const, className: 'player-banner-slot-leaving' }
+              : {})}
+        >
           <Suspense fallback={null}>
             <PlayerBannerHost />
           </Suspense>
@@ -107,11 +134,47 @@ export function TopBand({
 }
 
 /**
+ * L'HORLOGE DE LA VISITE (#9536) — la bannière n'apparaît qu'à l'ouverture de
+ * l'application : 30 s après sa première peinture elle remonte et s'efface
+ * (`PLAYER_BANNER_EXIT_MS`, un simple fondu plus court sous
+ * `prefers-reduced-motion`), puis reste retirée jusqu'à la prochaine ouverture
+ * — le retour au premier plan après une vraie absence. Jamais peinte dans la
+ * fenêtre d'ouverture (un appel qui dure, un fil, un cache vide), la visite se
+ * ferme : la bannière ne surgit pas en pleine session. Sans session la fenêtre
+ * n'est pas entamée — la connexion ouvre la visite. Les durées vivent dans
+ * `lib/view/player-banner-visit.ts` ; l'horloge, ici, parce qu'elle suit la
+ * vie du bandeau.
+ */
+function useBannerVisitClock({ holdMs, exitMs }: VisitTiming, signedIn: boolean): void {
+  const phase = useStore(playerBannerVisitStore, (state) => state.phase);
+  const visit = useStore(playerBannerVisitStore, (state) => state.visit);
+  useEffect(() => watchPlayerBannerAbsence(), []);
+  useEffect(() => {
+    const { send } = playerBannerVisitStore.getState();
+    if (phase === 'armed' && signedIn) {
+      const id = setTimeout(() => send('missed'), holdMs);
+      return () => clearTimeout(id);
+    }
+    if (phase === 'shown') {
+      const id = setTimeout(() => send('expired'), holdMs);
+      return () => clearTimeout(id);
+    }
+    if (phase === 'leaving') {
+      const id = setTimeout(() => send('exited'), prefersReducedMotion() ? Math.min(exitMs, PLAYER_BANNER_EXIT_REDUCED_MS) : exitMs);
+      return () => clearTimeout(id);
+    }
+    return undefined;
+  }, [phase, visit, signedIn, holdMs, exitMs]);
+}
+
+/**
  * LA PRÉSENCE DE LA BANNIÈRE (#9494) — la phase que `nextBannerPhase` décide,
  * posée AVANT la peinture (`useLayoutEffect`) : une bannière qui doit sortir ne
  * se peint jamais une image de trop dans la pile. La sortie dure
  * `BANNER_EXIT_MS` (aucune sous `prefers-reduced-motion`), puis la bannière est
- * retirée.
+ * retirée. Pendant qu'elle glisse, elle est INERTE : posée par-dessus
+ * l'occupant qui arrive, elle ne prend ni son clic, ni le focus, ni le lecteur
+ * d'écran.
  */
 function useBannerPresence(input: { readonly wanted: boolean; readonly occupied: boolean; readonly occupantReady: boolean }): BannerPhase {
   const { wanted, occupied, occupantReady } = input;

@@ -1,6 +1,7 @@
 /**
- * LES NOTIFICATIONS DU JEU (#9490) — quatre types, au plus UNE par jour et par destinataire (le
- * jour de son fuseau), jamais pour un compte « Jeu masqué » ni qui a coupé « Jeu », dans la
+ * LES NOTIFICATIONS DU JEU (#9490) — cinq types, au plus UNE par jour et par destinataire (le
+ * jour de son fuseau) — hors les duos et la mission du jour (#9541, #9539) —, jamais pour un compte
+ * « Jeu masqué » ni qui a coupé « Jeu », dans la
  * langue de cadrage du destinataire, sans jamais nommer un joueur de ligue ni dire une heure.
  *
  * @jest-environment node
@@ -149,11 +150,11 @@ describe('une étape de saison atteinte', () => {
 });
 
 describe('au plus UNE notification de jeu par jour et par destinataire', () => {
-  it('la deuxième du même jour est écartée, quel que soit son type', async () => {
+  it('la deuxième du même jour est écartée : un résultat de ligue et une étape de saison se partagent le créneau', async () => {
     const { notifier, sent } = world();
     expect(await notifier.notify(leagueResult(), NOW)).toBe('sent');
-    expect(await notifier.notify(invited(), new Date(NOW.getTime() + 3_600_000))).toBe('skipped:daily-cap');
-    expect(await notifier.notify(step(), new Date(NOW.getTime() + 7_200_000))).toBe('skipped:daily-cap');
+    expect(await notifier.notify(step(), new Date(NOW.getTime() + 3_600_000))).toBe('skipped:daily-cap');
+    expect(await notifier.notify(step({ step: 13 }), new Date(NOW.getTime() + 7_200_000))).toBe('skipped:daily-cap');
     expect(sent).toHaveLength(1);
   });
 
@@ -290,9 +291,140 @@ describe('le créneau du jour ne se brûle pas sur une notification qui n’a pa
     expect(await notifier.notify(invited(), new Date(NOW.getTime() + 3600_000))).toBe('sent');
   });
 
+  it('une panne rend aussi la clé « une seule fois » : le passage suivant réessaie et l’annonce part (revue adversariale #9539)', async () => {
+    const notifier = sequenced(['throw', 'create']);
+    const event: GameNotificationEvent = {
+      kind: 'mission-window',
+      recipientId: USER,
+      missionId: 'mission-1',
+      dayKey: '2026-10-14',
+      templateKey: 'send-voice',
+      startsAt: new Date('2026-10-14T12:00:00Z'),
+      endsAt: new Date('2026-10-14T14:00:00Z'),
+    };
+    expect(await notifier.notify(event, NOW)).toBe('failed');
+    expect(await notifier.notify(event, new Date(NOW.getTime() + 5 * 60_000))).toBe('sent');
+  });
+
   it('une panne du service rend le créneau aussi', async () => {
     const notifier = sequenced(['throw', 'create']);
     expect(await notifier.notify(step(), NOW)).toBe('failed');
     expect(await notifier.notify(invited(), new Date(NOW.getTime() + 3600_000))).toBe('sent');
+  });
+});
+
+
+describe('les duos SORTENT du plafond (décision porteur 2026-10-06, #9541)', () => {
+  it('une invitation et une acceptation de duo partent le même jour qu’un résultat de ligue', async () => {
+    const { notifier, sent } = world();
+    expect(await notifier.notify(leagueResult(), NOW)).toBe('sent');
+    expect(await notifier.notify(invited(), new Date(NOW.getTime() + 3_600_000))).toBe('sent');
+    expect(
+      await notifier.notify({ kind: 'duo-accepted', recipientId: USER, actorId: OTHER, duoId: 'duo-2', weekKey: '2026-10-12' }, new Date(NOW.getTime() + 7_200_000)),
+    ).toBe('sent');
+    expect(sent.map((s) => s.type)).toEqual(['game_league_result', 'game_duo_invited', 'game_duo_accepted']);
+  });
+
+  it('un duo ne prend pas le créneau du jour : le résultat de ligue qui suit part', async () => {
+    const { notifier, taken } = world();
+    await notifier.notify(invited(), NOW);
+    expect([...taken.keys()].filter((key) => key.includes(':day:'))).toEqual([]);
+    expect(await notifier.notify(leagueResult(), new Date(NOW.getTime() + 3_600_000))).toBe('sent');
+  });
+
+  it('reste annoncé UNE fois par duo, et muet pour « Jeu masqué » ou « Jeu » coupé', async () => {
+    const { db, notifier, sent } = world();
+    await notifier.notify(invited(), NOW);
+    expect(await notifier.notify(invited(), new Date(NOW.getTime() + 3_600_000))).toBe('skipped:duplicate');
+    expect(sent).toHaveLength(1);
+
+    db.userPreferences.rows.push({ id: 'p', userId: USER, notification: { gameEnabled: false } });
+    expect(await notifier.notify(invited({ duoId: 'duo-9' }), NOW)).toBe('skipped:opted-out');
+  });
+});
+
+describe('la mission personnelle du jour (#9539)', () => {
+  const windowEvent = (over: Partial<Extract<GameNotificationEvent, { kind: 'mission-window' }>> = {}): GameNotificationEvent => ({
+    kind: 'mission-window',
+    recipientId: USER,
+    missionId: 'mission-1',
+    dayKey: '2026-10-14',
+    templateKey: 'send-voice',
+    startsAt: new Date('2026-10-14T16:00:00Z'),
+    endsAt: new Date('2026-10-14T18:00:00Z'),
+    ...over,
+  });
+
+  it('dit sa plage dans le fuseau du destinataire et sa langue de cadrage : « entre 18:00 et 20:00 » à Paris', async () => {
+    const { notifier, sent } = world({ recipient: { systemLanguage: 'fr', timezone: 'Europe/Paris' } });
+
+    expect(await notifier.notify(windowEvent(), NOW)).toBe('sent');
+
+    expect(sent[0]).toMatchObject({
+      userId: USER,
+      type: 'game_mission_window',
+      lang: 'fr',
+      priority: 'normal',
+      collapseId: 'game-mission-2026-10-14',
+      content: 'Ta mission du jour : envoyer des messages vocaux, entre 18:00 et 20:00.',
+    });
+    expect(sent[0]!.actor).toBeUndefined();
+  });
+
+  it('porte la navigation vers la section Héros des missions, et les instants de la plage', async () => {
+    const { notifier, sent } = world();
+    await notifier.notify(windowEvent(), NOW);
+    expect(sent[0]!.metadata).toEqual({
+      action: 'view_details',
+      route: 'progression',
+      gameSection: 'missions',
+      missionId: 'mission-1',
+      dayKey: '2026-10-14',
+      templateKey: 'send-voice',
+      startsAt: '2026-10-14T16:00:00.000Z',
+      endsAt: '2026-10-14T18:00:00.000Z',
+    });
+  });
+
+  it('ne dit jamais d’où la plage a été tirée : aucune heure habituelle, aucun compte', async () => {
+    const { notifier, sent } = world();
+    await notifier.notify(windowEvent(), NOW);
+    const wire = JSON.stringify(sent[0]);
+    for (const forbidden of ['activeHours', 'habit', 'histogram', 'usage']) expect(wire).not.toContain(forbidden);
+  });
+
+  it('sort du plafond : elle part le même jour qu’un résultat de ligue, et ne prend pas le créneau', async () => {
+    const { notifier, sent, taken } = world();
+    expect(await notifier.notify(leagueResult(), NOW)).toBe('sent');
+    expect(await notifier.notify(windowEvent(), new Date(NOW.getTime() + 3_600_000))).toBe('sent');
+    expect(sent.map((s) => s.type)).toEqual(['game_league_result', 'game_mission_window']);
+
+    const free = world();
+    await free.notifier.notify(windowEvent(), NOW);
+    expect([...free.taken.keys()].filter((key) => key.includes(':day:'))).toEqual([]);
+    expect(taken.size).toBeGreaterThan(0);
+  });
+
+  it('s’annonce UNE fois par mission', async () => {
+    const { notifier, sent } = world();
+    await notifier.notify(windowEvent(), NOW);
+    expect(await notifier.notify(windowEvent(), new Date(NOW.getTime() + 60_000))).toBe('skipped:duplicate');
+    expect(sent).toHaveLength(1);
+  });
+
+  it('respecte « Jeu masqué » et l’interrupteur « Jeu »', async () => {
+    const hidden = world();
+    hidden.db.gameProfile.rows.push({ id: 'gp', userId: USER, gameHiddenAt: new Date() });
+    expect(await hidden.notifier.notify(windowEvent(), NOW)).toBe('skipped:game-hidden');
+
+    const off = world();
+    off.db.userPreferences.rows.push({ id: 'p', userId: USER, notification: { gameEnabled: false } });
+    expect(await off.notifier.notify(windowEvent(), NOW)).toBe('skipped:opted-out');
+    expect(off.sent).toEqual([]);
+  });
+
+  it('un refus du service (Ne pas déranger) est rendu tel quel', async () => {
+    const { notifier } = world({ declines: true });
+    expect(await notifier.notify(windowEvent(), NOW)).toBe('skipped:declined');
   });
 });

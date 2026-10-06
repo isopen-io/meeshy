@@ -340,6 +340,10 @@ extension iPadRootView {
                 type: notification.notificationType, metadata: notification.metadata)
             rightPanelRoute = .progression
 
+        case .gameDuoInvited, .gameDuoAccepted, .gameLeagueResult, .gameSeasonStep:
+            // Une notification du jeu (#9490) ouvre la page qui la restitue — même geste que sur iPhone.
+            rightPanelRoute = .gamePage(GamePage.opened(by: notification.notificationType) ?? .league)
+
         case .legacyAffiliateSignup:
             rightPanelRoute = .affiliate
 
@@ -398,6 +402,10 @@ extension iPadRootView {
             router.pendingEngagementReveal = EngagementReveal.from(
                 type: event.notificationType, metadata: event.metadata)
             rightPanelRoute = .progression
+
+        case .gameDuoInvited, .gameDuoAccepted, .gameLeagueResult, .gameSeasonStep:
+            // Une notification du jeu (#9490) ouvre la page qui la restitue — même geste que sur iPhone.
+            rightPanelRoute = .gamePage(GamePage.opened(by: event.notificationType) ?? .league)
 
         case .legacyAffiliateSignup:
             rightPanelRoute = .affiliate
@@ -530,6 +538,10 @@ extension iPadRootView {
             // `NotificationNavContext.init(from: NotificationPayload)`, qui
             // pose `reveal = nil` pour la même raison.
             rightPanelRoute = .progression
+
+        case .gameDuoInvited, .gameDuoAccepted, .gameLeagueResult, .gameSeasonStep:
+            // Une notification du jeu (#9490) ouvre la page qui la restitue — même geste que sur iPhone.
+            rightPanelRoute = .gamePage(GamePage.opened(by: type) ?? .league)
 
         case .legacyAffiliateSignup:
             rightPanelRoute = .affiliate

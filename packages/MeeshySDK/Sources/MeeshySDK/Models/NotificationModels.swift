@@ -181,6 +181,17 @@ public enum MeeshyNotificationType: String, Codable, CaseIterable, Sendable {
     case levelUp = "level_up"
     case badgeEarned = "badge_earned"
 
+    // Le Jeu Meeshy (#9490) — au plus UNE notification de jeu par jour et par destinataire,
+    // décidé par la passerelle ; réglable par la préférence « Jeu » (`gameEnabled`).
+    /// Un ami t'invite à la mission en duo de la semaine. L'acteur est l'ami.
+    case gameDuoInvited = "game_duo_invited"
+    /// Ton ami a accepté ton invitation au duo. L'acteur est l'ami.
+    case gameDuoAccepted = "game_duo_accepted"
+    /// Le résultat de ta semaine de ligue (coupe, montée, maintien, descente). Sans acteur.
+    case gameLeagueResult = "game_league_result"
+    /// Une étape de la saison franchie. Sans acteur.
+    case gameSeasonStep = "game_season_step"
+
     // Legacy uppercase (backward compat)
     case legacyNewMessage = "NEW_MESSAGE"
     case legacyMention = "MENTION"
@@ -226,6 +237,9 @@ public enum MeeshyNotificationType: String, Codable, CaseIterable, Sendable {
         case .badgeEarned: return "medal.fill"
         case .streakMilestone: return "flame.fill"
         case .levelUp: return "star.fill"
+        case .gameDuoInvited, .gameDuoAccepted: return "person.2.fill"
+        case .gameLeagueResult: return "trophy.fill"
+        case .gameSeasonStep: return "star.circle.fill"
         case .translationCompleted, .translationReady, .legacyTranslationReady, .transcriptionCompleted: return "globe"
         case .securityAlert, .loginNewDevice, .legacySystemAlert, .passwordChanged, .twoFactorEnabled, .twoFactorDisabled: return "exclamationmark.triangle.fill"
         case .system, .maintenance, .updateAvailable: return "bell.fill"
@@ -264,7 +278,8 @@ public enum MeeshyNotificationType: String, Codable, CaseIterable, Sendable {
         // La famille « engagement » porte l'ambre des badges de l'écran
         // « Progression » (`MeeshyColors.warningHex`), distinct de la famille
         // « communauté » ci-dessus — un badge ne ressemble plus à une invitation.
-        case .achievementUnlocked, .legacyAchievementUnlocked, .streakMilestone, .levelUp, .badgeEarned:
+        case .achievementUnlocked, .legacyAchievementUnlocked, .streakMilestone, .levelUp, .badgeEarned,
+             .gameDuoInvited, .gameDuoAccepted, .gameLeagueResult, .gameSeasonStep:
             return "FBBF24"
         case .missedCall, .callDeclined, .incomingCall, .incomingCallAlert, .callEnded, .legacyCallMissed, .legacyCallIncoming:
             return "E91E63"
@@ -284,6 +299,40 @@ public enum MeeshyNotificationType: String, Codable, CaseIterable, Sendable {
             return "4ECDC4"
         case .messageEdited, .messageDeleted, .messagePinned, .messageForwarded:
             return "3498DB"
+        }
+    }
+}
+
+/// La page du jeu qu'une notification de jeu ouvre au toucher. Le duo se joue sur la page de la ligue
+/// (sa carte y est posée) : un duo et un résultat de ligue y mènent ; une étape, à la saison.
+public enum GameNotificationDestination: String, Equatable, Sendable {
+    case league
+    case season
+}
+
+public extension MeeshyNotificationType {
+    /// `true` pour les quatre notifications du jeu — celles que la préférence « Jeu » gouverne.
+    var isGame: Bool { gameDestination != nil }
+
+    /// Le titre d'une notification de jeu SANS acteur (la ligue, la saison) : la passerelle ne sert pas de titre, la
+    /// phrase est dans le corps, et le client nomme la surface. `nil` pour tout le reste — un duo, lui, est « <ami> … ».
+    var gameSurfaceTitle: String? {
+        switch self {
+        case .gameLeagueResult:
+            return String(localized: "notification.game.leagueResult.fallbackTitle", defaultValue: "Ta ligue de la semaine", bundle: .main)
+        case .gameSeasonStep:
+            return String(localized: "notification.game.seasonStep.fallbackTitle", defaultValue: "Ta saison", bundle: .main)
+        default:
+            return nil
+        }
+    }
+
+    /// Où le toucher mène, `nil` pour tout ce qui n'est pas une notification de jeu.
+    var gameDestination: GameNotificationDestination? {
+        switch self {
+        case .gameDuoInvited, .gameDuoAccepted, .gameLeagueResult: .league
+        case .gameSeasonStep: .season
+        default: nil
         }
     }
 }
@@ -471,6 +520,27 @@ public struct NotificationMetadata: Codable, Sendable, Equatable {
     /// Le RANG du niveau, déjà calculé par la passerelle (`levelIndexOf`).
     public let level: Int?
 
+    // MARK: - Le jeu (#9490)
+    //
+    // Rien d'autre ne voyage que ce que le destinataire sait déjà de LUI : jamais l'identité d'un joueur de
+    // ligue (pseudonyme ou compte), jamais une heure d'activité.
+    /// Où le toucher mène (`progression`) — la même valeur pour les quatre types.
+    public let route: String?
+    /// `duo` | `league` | `season`.
+    public let gameSection: String?
+    public let duoId: String?
+    /// La semaine de jeu (`AAAA-MM-JJ` du lundi), pour un duo ou un résultat de ligue.
+    public let weekKey: String?
+    /// La ligue de la semaine (`quartz`, `jade`…) — une chaîne ouverte, jamais une énumération fermée.
+    public let league: String?
+    /// `promoted` | `stayed` | `relegated`.
+    public let outcome: String?
+    /// `gold` | `silver` | `bronze`, ou absent.
+    public let cup: String?
+    public let season: Int?
+    public let step: Int?
+    public let completed: Bool?
+
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         messagePreview = try container.decodeIfPresent(String.self, forKey: .messagePreview)
@@ -510,6 +580,16 @@ public struct NotificationMetadata: Codable, Sendable, Equatable {
         axisKey = try container.decodeIfPresent(String.self, forKey: .axisKey)
         threshold = try container.decodeIfPresent(Int.self, forKey: .threshold)
         level = try container.decodeIfPresent(Int.self, forKey: .level)
+        route = try container.decodeIfPresent(String.self, forKey: .route)
+        gameSection = try container.decodeIfPresent(String.self, forKey: .gameSection)
+        duoId = try container.decodeIfPresent(String.self, forKey: .duoId)
+        weekKey = try container.decodeIfPresent(String.self, forKey: .weekKey)
+        league = try container.decodeIfPresent(String.self, forKey: .league)
+        outcome = try container.decodeIfPresent(String.self, forKey: .outcome)
+        cup = try container.decodeIfPresent(String.self, forKey: .cup)
+        season = try container.decodeIfPresent(Int.self, forKey: .season)
+        step = try container.decodeIfPresent(Int.self, forKey: .step)
+        completed = try container.decodeIfPresent(Bool.self, forKey: .completed)
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -519,6 +599,7 @@ public struct NotificationMetadata: Codable, Sendable, Equatable {
         case deviceName, deviceVendor, deviceOS, deviceOSVersion, deviceType
         case ipAddress, country, countryName, city, location
         case achievementKey, axisKey, threshold, level
+        case route, gameSection, duoId, weekKey, league, outcome, cup, season, step, completed
     }
 }
 
@@ -630,6 +711,18 @@ public struct APINotification: Codable, Identifiable, Sendable, Equatable, Cache
                 ),
                 actorName
             )
+        case .gameDuoInvited:
+            return String(
+                format: String(localized: "notification.game.duoInvited.fallbackTitle", defaultValue: "%@ t’invite à un duo", bundle: .main),
+                actorName
+            )
+        case .gameDuoAccepted:
+            return String(
+                format: String(localized: "notification.game.duoAccepted.fallbackTitle", defaultValue: "%@ a accepté ton duo", bundle: .main),
+                actorName
+            )
+        case .gameLeagueResult, .gameSeasonStep:
+            return notificationType.gameSurfaceTitle ?? ""
         case .newConversationDirect:
             // Direct DM: the conversation has no real title — surface the
             // sender name so the user immediately knows who started it.
@@ -777,6 +870,9 @@ public struct APINotification: Codable, Identifiable, Sendable, Equatable, Cache
             return loginDeviceBody
         case .reportResolved:
             return content
+        // Le jeu : la phrase est SERVIE, dans la langue du lecteur — il n'y a ni extrait ni aperçu à lui préférer.
+        case .gameDuoInvited, .gameDuoAccepted, .gameLeagueResult, .gameSeasonStep:
+            return Self.firstNonEmpty(content)
         default:
             return nil
         }

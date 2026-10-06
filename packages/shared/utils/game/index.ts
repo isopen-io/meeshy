@@ -22,3 +22,5 @@ export * from './guide-v2.js';
 export * from './photo-moments.js';
 export * from './game-block-extras.js';
 export * from './notifications.js';
+export * from './personal-mission.js';
+export * from './personal-mission-copy.js';

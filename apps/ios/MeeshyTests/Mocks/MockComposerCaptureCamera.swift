@@ -10,6 +10,7 @@ final class MockComposerCaptureCamera: ComposerCaptureCameraProviding {
 
     var currentPosition: AVCaptureDevice.Position = .back
     var isSwitchingCamera = false
+    var recordingIsPending = false
     var zoomFactor: CGFloat = 1
     var zoomRange: ClosedRange<CGFloat> = 0.5...10
 

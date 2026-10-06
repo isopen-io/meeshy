@@ -82,7 +82,7 @@ final class CallScreenRecordingService: CallRecordingServiceProviding {
             return
         }
         let rawURL = fileURL.deletingPathExtension().appendingPathExtension("brut.mov")
-        let sampleWriter = try CallScreenSampleWriter(url: rawURL, plan: plan)
+        let sampleWriter = try CallScreenSampleWriter(url: rawURL, plan: plan, screenSize: UIScreen.main.nativeBounds.size)
         writer = sampleWriter
         targetURL = fileURL
         screenRecorder.isMicrophoneEnabled = true
@@ -145,13 +145,15 @@ nonisolated final class CallScreenSampleWriter: @unchecked Sendable {
     private var sessionStarted = false
     private var cancelled = false
 
-    init(url: URL, plan: CallScreenCapturePlan) throws {
+    /// `screenSize` est lu par l'appelant, sur le fil principal : `UIScreen`
+    /// n'est pas lisible depuis ce type `nonisolated`.
+    init(url: URL, plan: CallScreenCapturePlan, screenSize: CGSize) throws {
         try? FileManager.default.removeItem(at: url)
         writer = try AVAssetWriter(outputURL: url, fileType: .mov)
         self.plan = plan
         var made: [CallScreenCaptureTrack: AVAssetWriterInput] = [:]
         if plan.kind == .video {
-            made[.video] = Self.videoInput()
+            made[.video] = Self.videoInput(screenSize: screenSize)
         }
         made[.appAudio] = Self.audioInput()
         made[.micAudio] = Self.audioInput()
@@ -163,6 +165,7 @@ nonisolated final class CallScreenSampleWriter: @unchecked Sendable {
 
     func append(_ buffer: CMSampleBuffer, type: RPSampleBufferType) {
         guard let track = plan.track(for: type), CMSampleBufferDataIsReady(buffer) else { return }
+        nonisolated(unsafe) let buffer = buffer
         queue.async { [self] in
             guard !cancelled, let input = inputs[track] else { return }
             if !sessionStarted {
@@ -194,8 +197,7 @@ nonisolated final class CallScreenSampleWriter: @unchecked Sendable {
         }
     }
 
-    private static func videoInput() -> AVAssetWriterInput {
-        let bounds = UIScreen.main.nativeBounds
+    private static func videoInput(screenSize bounds: CGSize) -> AVAssetWriterInput {
         let input = AVAssetWriterInput(mediaType: .video, outputSettings: [
             AVVideoCodecKey: AVVideoCodecType.h264,
             AVVideoWidthKey: Int(bounds.width),

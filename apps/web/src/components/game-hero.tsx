@@ -2,29 +2,19 @@ import { useEffect, useRef } from 'react';
 
 import type { GameBlock } from '@meeshy/shared/types/game';
 
-import { GameBird, LevelRing, MeeshCoin, RankBlason, Signature, useChoreography } from '@/components/game';
+import { GameBird, LevelRing, RankBlason, Signature, useChoreography } from '@/components/game';
 import { earnRules, type EarnRule } from '@/lib/game/earn-rules';
 import { enamelToken } from '@/lib/game/medal';
 import { tierTint } from '@/lib/game/tier-emblem';
-import {
-  convertiblePointsLabel,
-  familyName,
-  formatCount,
-  gameText,
-  levelTierName,
-  levelsLabel,
-  pointsLabel,
-  rankLabel,
-  rankName,
-} from '@/lib/view/game-copy';
+import { familyName, formatCount, gameText, levelTierName, pointsLabel, rankLabel, rankName } from '@/lib/view/game-copy';
 import { levelRingLabelWithPrestige } from '@/lib/view/game-copy-v2';
 import { Link } from '@/routes/route-table';
 
-import { GAME_CARD, GAME_ERROR, GAME_INK, GAME_INK_2, GAME_ON_WARM, GAME_WARM, GameChip } from './game-surface';
+import { GAME_CARD, GAME_INK, GAME_INK_2, GameChip } from './game-surface';
 
 /**
  * LE HÉROS DE PROGRESSION (#5841) — pleine largeur, en deuxième position sous
- * l'en-tête. Il répond à trois questions, dans cet ordre :
+ * l'en-tête. Il répond à deux questions, dans cet ordre :
  *
  *   1. où j'en suis    — l'anneau de niveau (88 pt, l'emblème du palier en
  *                         filigrane), le palier et le record, le blason et sa
@@ -33,10 +23,11 @@ import { GAME_CARD, GAME_ERROR, GAME_INK, GAME_INK_2, GAME_ON_WARM, GAME_WARM, G
  *                         (`earnRules`, dérivée de `ENGAGEMENT_AXIS_WEIGHTS` :
  *                         régler un poids change le héros sans toucher une
  *                         chaîne) ; un toucher ouvre le carnet des règles à la
- *                         ligne des gains ;
- *   3. comment je frappe — le prix SERVI par le passerelle (`game.mint`), les
- *                         niveaux perdus, la Gloire, puis le bouton — ou
- *                         « Encore N points », qui reste lisible.
+ *                         ligne des gains.
+ *
+ * La frappe n'est PLUS ici (#9537) : il n'y a qu'UNE section de frappe, le
+ * héros de frappe (`game-mint-preview.tsx`). Ce héros-ci est COURT : un titre,
+ * un chiffre, des puces ; l'explication détaillée vit dans le carnet des règles.
  *
  * Fond teinté par la couleur du palier (12 %) et grande Signature en filigrane ;
  * Mee se pose sur le coin et dit la ligne courte du guide du moment (un
@@ -50,21 +41,12 @@ import { GAME_CARD, GAME_ERROR, GAME_INK, GAME_INK_2, GAME_ON_WARM, GAME_WARM, G
 
 export type GameHeroProps = {
   readonly game: GameBlock;
-  readonly online: boolean;
-  readonly minting: boolean;
-  readonly mintError?: string | undefined;
-  readonly onMint: () => void;
   /** La ligne courte du guide du moment ; `null` ou absente : Mee propose les règles. */
   readonly guideLine?: string | null;
   /** Les gains énumérés ; par défaut, dérivés du barème. Injectable pour les témoins. */
   readonly rules?: readonly EarnRule[];
 };
 
-
-const nextRankText = (glory: GameBlock['glory']): string | null =>
-  glory.next === null || glory.gloryMissing === null
-    ? null
-    : gameText('game.rank.next', { missing: formatCount(glory.gloryMissing), rank: rankLabel(glory.next.rank, glory.next.division) });
 
 const reducedMotion = (): boolean => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -117,7 +99,6 @@ function WhereIAm({ game }: { readonly game: GameBlock }) {
   }, [glory.rank, glory.division, blason.play]);
 
   const atTop = level.nextThreshold === null;
-  const next = nextRankText(glory);
   return (
     <div className="flex flex-wrap items-center gap-4">
       <div ref={ring.ref} className="shrink-0">
@@ -133,9 +114,6 @@ function WhereIAm({ game }: { readonly game: GameBlock }) {
         />
       </div>
       <div className="flex min-w-40 flex-1 flex-col gap-0.5">
-        <p className="text-check font-semibold uppercase tracking-wide" style={{ color: GAME_INK_2 }}>
-          {levelTierName(level.tier)}
-        </p>
         <h2 id="game-hero-title" className="text-title font-bold" style={{ color: GAME_INK }}>
           {gameText('game.level.title', { level: formatCount(level.level), tier: levelTierName(level.tier) })}
         </h2>
@@ -160,9 +138,6 @@ function WhereIAm({ game }: { readonly game: GameBlock }) {
         </p>
         <p className="text-check" style={{ color: GAME_INK_2 }}>
           {gameText('game.rank.glory', { glory: formatCount(glory.glory) })}
-        </p>
-        <p className="max-w-36 text-check" style={{ color: GAME_INK_2 }}>
-          {next ?? gameText('game.rank.top')}
         </p>
       </div>
     </div>
@@ -200,70 +175,7 @@ function HowToEarn({ rules }: { readonly rules: readonly EarnRule[] }) {
   );
 }
 
-function HowToMint({ game, online, minting, mintError, onMint }: Pick<GameHeroProps, 'game' | 'online' | 'minting' | 'mintError' | 'onMint'>) {
-  const { mint } = game;
-  const summary = [
-    gameText('game.hero.mint_price', { price: pointsLabel(mint.price) }),
-    mint.levelsLost > 0 ? gameText('game.hero.mint_cost', { levels: levelsLabel(mint.levelsLost) }) : null,
-    gameText('game.hero.mint_glory', { glory: formatCount(mint.gloryGained) }),
-  ]
-    .filter((part): part is string => part !== null)
-    .join(' · ');
-
-  return (
-    <div
-      className="flex flex-col gap-2 rounded-card px-3 py-3"
-      style={{ backgroundColor: GAME_CARD, border: '1px solid color-mix(in srgb, var(--color-ios-ink) 10%, transparent)' }}
-    >
-      <div className="flex items-center gap-3">
-        <MeeshCoin side="obverse" size={40} edition={mint.edition} />
-        <div className="min-w-0 flex-1">
-          <h3 className="text-check font-semibold uppercase tracking-wide" style={{ color: GAME_INK_2 }}>
-            {gameText('game.hero.mint_title')}
-          </h3>
-          <p className="text-caption" style={{ color: GAME_INK }}>
-            {summary}
-          </p>
-        </div>
-      </div>
-      {mint.canMint ? (
-        <button
-          type="button"
-          data-game-hero-mint=""
-          disabled={!online || minting}
-          aria-busy={minting}
-          onClick={onMint}
-          className="rounded-chip px-4 text-body font-bold disabled:opacity-80"
-          style={{ minHeight: 44, backgroundColor: GAME_WARM, color: GAME_ON_WARM }}
-        >
-          {minting ? gameText('game.mint.minting') : gameText('game.mint.action')}
-        </button>
-      ) : (
-        <button
-          type="button"
-          data-game-hero-missing=""
-          aria-disabled="true"
-          className="rounded-chip px-4 text-body font-bold"
-          style={{ minHeight: 44, color: GAME_INK, border: `1.5px solid ${GAME_WARM}`, backgroundColor: 'transparent', cursor: 'default' }}
-        >
-          {gameText('game.hero.mint_missing', { missing: convertiblePointsLabel(mint.missingPoints) })}
-        </button>
-      )}
-      {mint.canMint && !online ? (
-        <p className="text-caption" style={{ color: GAME_INK_2 }}>
-          {gameText('game.mint.offline')}
-        </p>
-      ) : null}
-      {mintError === undefined || minting ? null : (
-        <p role="alert" className="text-caption" style={{ color: GAME_ERROR }}>
-          {mintError}
-        </p>
-      )}
-    </div>
-  );
-}
-
-export function GameHero({ game, online, minting, mintError, onMint, guideLine = null, rules }: GameHeroProps) {
+export function GameHero({ game, guideLine = null, rules }: GameHeroProps) {
   const tint = tierTint(game.level.tier);
   return (
     <section
@@ -282,7 +194,6 @@ export function GameHero({ game, online, minting, mintError, onMint, guideLine =
       <MeeCorner line={guideLine} />
       <WhereIAm game={game} />
       <HowToEarn rules={rules ?? earnRules()} />
-      <HowToMint game={game} online={online} minting={minting} mintError={mintError} onMint={onMint} />
     </section>
   );
 }

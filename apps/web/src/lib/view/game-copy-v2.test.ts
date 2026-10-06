@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import { SUPPORTED_INTERFACE_LANGUAGES } from '../inline-interface-language-bootstrap.js';
 import { loadGameCatalog } from '../i18n-game-catalog';
-import { levelRingLabelWithPrestige, awardedDate, dayLabel, awardedMonthLabel, isoWeekNumber, languageName, leagueName, remainingLabel, seasonThemeName, trophyView, visibilityLabel, weekLabel, zoneLabel } from './game-copy-v2';
+import { levelRingLabelWithPrestige, awardedDate, dayLabel, awardedMonthLabel, isoWeekNumber, languageName, leagueName, remainingLabel, seasonThemeName, timerLabel, trophyView, visibilityLabel, weekLabel, zoneLabel } from './game-copy-v2';
 
 /**
  * CE QUE LA VAGUE 2 DIT (#9481) — les noms des huit ligues, des zones, des
@@ -33,6 +33,34 @@ describe('le compte à rebours de la fermeture', () => {
   test('dans la langue demandée', async () => {
     await loadGameCatalog('de');
     expect(remainingLabel(close, at('2026-11-05T14:00:00'), 'de')).toBe('3 T 6 Std.');
+  });
+});
+
+describe('le décompte d’une carte de mission (#9539)', () => {
+  const MIN = 60_000;
+
+  test('des heures ET des minutes : une plage de deux heures ne dit jamais « 1 h » pendant cinquante-neuf minutes', () => {
+    expect(timerLabel(119 * MIN, 'fr')).toBe('1 h 59 min');
+    expect(timerLabel(90 * MIN, 'fr')).toBe('1 h 30 min');
+    expect(timerLabel(61 * MIN, 'fr')).toBe('1 h 1 min');
+  });
+
+  test('une heure ronde, moins d’une heure, plus d’un jour : la lecture calme d’avant', () => {
+    expect(timerLabel(120 * MIN, 'fr')).toBe('2 h');
+    expect(timerLabel(59 * MIN, 'fr')).toBe('59 min');
+    expect(timerLabel(26 * 60 * MIN, 'fr')).toBe('1 j 2 h');
+  });
+
+  test('jamais de secondes, jamais moins d’une minute, jamais négatif', () => {
+    expect(timerLabel(59_000, 'fr')).toBe('1 min');
+    expect(timerLabel(0, 'fr')).toBe('1 min');
+    expect(timerLabel(-5 * MIN, 'fr')).toBe('1 min');
+    expect(timerLabel(89 * MIN + 1, 'fr')).toBe('1 h 30 min');
+  });
+
+  test('en arabe, chaque nombre reste isolé dans le sens de lecture', async () => {
+    await loadGameCatalog('ar');
+    expect(timerLabel(90 * MIN, 'ar')).toMatch(/^\u2066[^\u2069]+\u2069 س \u2066[^\u2069]+\u2069 د$/);
   });
 });
 

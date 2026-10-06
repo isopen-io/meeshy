@@ -23,6 +23,7 @@ import { GLORY_RANKS, type GloryRankOrMythic } from '../utils/game/glory.js';
 import { TREASURY_TIERS } from '../utils/game/treasury.js';
 import { FLAME_FORMS } from '../utils/game/flame.js';
 import { MISSION_DIFFICULTIES } from '../utils/game/missions.js';
+import { PERSONAL_MISSION_STATES } from '../utils/game/personal-mission.js';
 import type { EngagementProgressPayload } from './engagement.js';
 import { dayKey, enumOf, fraction, isoDate, nonNegativeInt, requestIdSchema, writeRequest } from './game-schema-kit.js';
 import { gameBlockExtensionShape } from './game-v2.js';
@@ -98,6 +99,17 @@ export const gameMissionSchema = z.object({
   completedAt: isoDate.nullable(),
 });
 
+/**
+ * La mission PERSONNELLE du jour (#9539) : une mission de plus, avec sa plage (`startsAt`, `endsAt`) et son
+ * état — à venir, en cours, réussie, manquée. Servie à CÔTÉ des trois missions du jour (`missions.personal`),
+ * jamais dans `items` : un ancien client lit exactement ce qu'il lisait.
+ */
+export const gamePersonalMissionSchema = gameMissionSchema.extend({
+  startsAt: isoDate,
+  endsAt: isoDate,
+  state: z.enum(PERSONAL_MISSION_STATES),
+});
+
 export const gameMissionsSchema = z.object({
   dayKey,
   prismDay: z.boolean(),
@@ -105,6 +117,8 @@ export const gameMissionsSchema = z.object({
   unlocked: z.boolean(),
   items: z.array(gameMissionSchema).max(4),
   rerollAvailable: z.boolean(),
+  /** Tolérante : une mission personnelle illisible tombe seule, sans emporter le bloc. */
+  personal: gamePersonalMissionSchema.nullable().optional().catch(undefined),
 });
 
 const chestRewardSchema = z.object({ points: nonNegativeInt, fragment: z.boolean(), freeze: z.boolean() });
@@ -164,6 +178,7 @@ export type GameGlory = z.infer<typeof gameGlorySchema>;
 export type GameTreasury = z.infer<typeof gameTreasurySchema>;
 export type GameMintPreview = z.infer<typeof mintPreviewSchema>;
 export type GameMission = z.infer<typeof gameMissionSchema>;
+export type GamePersonalMission = z.infer<typeof gamePersonalMissionSchema>;
 export type GameMissions = z.infer<typeof gameMissionsSchema>;
 export type GameChest = z.infer<typeof gameChestSchema>;
 export type GameChestReward = z.infer<typeof chestRewardSchema>;

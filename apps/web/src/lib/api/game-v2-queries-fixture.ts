@@ -1,8 +1,8 @@
 import { leagueStandings, leagueWeekClose, leagueSnapshotDay, friendsLeagueRanking } from '@meeshy/shared/utils/game/league';
-import type { LeagueFriendsResponse, LeagueWeekResponse, UserShowcaseResponse } from '@meeshy/shared/types/game';
+import type { GameSettingsResponse, LeagueFriendsResponse, LeagueWeekResponse, UserGameProfileResponse, UserShowcaseResponse } from '@meeshy/shared/types/game';
 import { visitorShowcase } from '@meeshy/shared/utils/game/trophies';
 
-import { GAME_EXTRAS_TODAY, gameExtrasFactsFixture } from './game-fixture';
+import { GAME_EXTRAS_TODAY, gameBlockFixture, gameExtrasFactsFixture } from './game-fixture';
 
 /**
  * LES FIXTURES DE LA VAGUE 2 (#9384, #9385, #9510) — seul le dynamic `import()`
@@ -56,4 +56,30 @@ export function userShowcaseFixture(): UserShowcaseResponse {
   const facts = gameExtrasFactsFixture();
   const view = visitorShowcase({ owned: facts.trophies, order: facts.showcaseOrder });
   return { visible: true, items: [...view.items], order: [...view.order] };
+}
+
+/** Les réglages du banc : le jeu visible, la ligue Amis ouverte, les visibilités de `gameExtrasFactsFixture`. */
+export function gameSettingsFixture(): GameSettingsResponse {
+  return { gameHidden: false, friendsLeagueOptOut: false, visibility: gameExtrasFactsFixture().visibility };
+}
+
+/**
+ * Le jeu d'un autre, tel que le serveur le sert : lu du bloc `game` de démonstration, que bâtit la loi
+ * partagée — jamais écrit champ par champ. Ni Gloire, ni jours de série, ni Meeshes : le niveau, le palier,
+ * les étoiles, la FORME de la Flamme, le rang et sa division, le PALIER du trésor.
+ */
+export function userGameFixture(): UserGameProfileResponse {
+  const game = gameBlockFixture();
+  return {
+    visible: true,
+    standing: {
+      level: game.level.level,
+      tier: game.level.tier,
+      prestige: game.level.prestige,
+      flame: game.flame.form,
+      rank: game.glory.rank,
+      division: game.glory.division,
+    },
+    treasury: { tier: game.treasury.tier },
+  };
 }

@@ -4,7 +4,7 @@ import type { MeeshEdition } from '@meeshy/shared/utils/game/mint';
 
 import { inkToken, paintUrl, safeUid, tokenVar, type GamePaint } from '@/lib/game/materials';
 
-import { BirdCutDefs, PaintDefs, PlacedBird } from './paint-defs';
+import { BirdEngraveDefs, PaintDefs, PlacedBird } from './paint-defs';
 import { SignatureGlyph } from './signature';
 
 /**
@@ -12,8 +12,9 @@ import { SignatureGlyph } from './signature';
  *
  *   · AVERS  : la Signature FRAPPÉE au centre, « MEESHY · UNE MEESH » en
  *     couronne, tranche cannelée (un cercle en pointillé) ;
- *   · REVERS : Mee et Meo face à face (Meo retourné), le numéro de frappe et
- *     l'année.
+ *   · REVERS : Mee et Meo face à face (Meo retourné), GRAVÉS dans le métal et
+ *     colorés (relief : lumière haute, ombre basse — jamais un autocollant,
+ *     #9540), le numéro de frappe et l'année.
  *
  * Trois éditions, que la loi partagée décide (`meeshEdition`) : argent, or
  * (chaque centième), prisme (chaque millième). Le fond de la pièce reste argent.
@@ -84,7 +85,7 @@ export function MeeshCoin({ side, size, edition = 'silver', number, year, number
         <clipPath id={clip}>
           <circle cx="60" cy="60" r="56" />
         </clipPath>
-        {side === 'reverse' ? <BirdCutDefs uid={uid} /> : null}
+        {side === 'reverse' ? <BirdEngraveDefs uid={uid} /> : null}
       </defs>
       <Rim uid={uid} edition={edition} />
       {side === 'obverse' ? (
@@ -98,8 +99,8 @@ export function MeeshCoin({ side, size, edition = 'silver', number, year, number
       ) : (
         <>
           <circle cx="60" cy="60" r="45" fill={paintUrl(uid, 'coin-silver-in')} stroke={tokenVar('glint')} strokeWidth="1.4" />
-          <PlacedBird uid={uid} bird="meeJoy" x={13} y={30} scale={0.34} />
-          <PlacedBird uid={uid} bird="meoOpen" x={107} y={30} scale={0.34} flip />
+          <PlacedBird uid={uid} bird="meeJoy" x={13} y={30} scale={0.34} relief="engraved" />
+          <PlacedBird uid={uid} bird="meoOpen" x={107} y={30} scale={0.34} flip relief="engraved" />
           {label !== undefined ? (
             <text x="60" y="96" textAnchor="middle" fontFamily="var(--font-native)" fontWeight="800" fontSize="13" fill={ink}>
               {label}

@@ -94,6 +94,8 @@ final class MockReferralLink: ReferralLinkProviding {
 
     var link: String?
     var createdLink: String?
+    /// Le temps que la passerelle met à créer le jeton : un second toucher peut arriver pendant.
+    var shareableDelay: UInt64 = 0
     private(set) var existingCalls = 0
     private(set) var shareableCalls = 0
 
@@ -109,6 +111,7 @@ final class MockReferralLink: ReferralLinkProviding {
 
     func shareableLink() async -> String? {
         shareableCalls += 1
+        if shareableDelay > 0 { try? await Task.sleep(nanoseconds: shareableDelay) }
         return link ?? createdLink
     }
 }

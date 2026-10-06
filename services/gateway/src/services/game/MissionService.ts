@@ -40,6 +40,7 @@ import {
   type MissionDifficulty,
   type MissionSignal,
 } from '@meeshy/shared/utils/game/missions';
+import { PERSONAL_MISSION_SLOT, isPersonalMissionOpen } from '@meeshy/shared/utils/game/personal-mission';
 import { GameRefusal } from './GameRefusal';
 import { FLAME_USER_SELECT, STREAK_WRITE_ATTEMPTS, flameFactsOf, flameFreezesUnchanged } from './FlameService';
 import { GloryService } from './GloryService';
@@ -62,6 +63,12 @@ export const GAME_BONUS_AXIS: EngagementAxisKey = 'content.text_message';
 export const DAILY_MISSION_SLOTS = 3;
 
 const USER_GAME_SELECT = { ...FLAME_USER_SELECT, engagementScore: true, levelRecord: true } as const;
+
+/**
+ * Les trois missions du JOUR, à l'exclusion de la mission personnelle (#9539, emplacement 3) : le coffre,
+ * le changement de mission et la complétion d'un tirage interrompu ne regardent qu'elles.
+ */
+const isDailySlot = (row: Pick<DailyMission, 'slot'>): boolean => row.slot < DAILY_MISSION_SLOTS;
 
 /** Pour une lecture qui ne doit rien créditer : toute tentative de paiement échoue bruyamment. */
 export const READ_ONLY_CREDIT: MissionServiceDeps['creditPoints'] = async () => {
@@ -179,9 +186,12 @@ export class MissionService {
     return this.prisma.user.findUnique({ where: { id: userId }, select: USER_GAME_SELECT });
   }
 
-  /** Les lignes de la dernière journée tirée (au plus un tirage), les plus récentes d'abord. */
+  /**
+   * Les lignes de la dernière journée tirée (au plus un tirage : les trois du jour et la personnelle), les plus
+   * récentes d'abord. Une LECTURE rend à la fois la journée ouverte et la mission personnelle qui s'y trouve.
+   */
   private async recentMissions(userId: string): Promise<DailyMission[]> {
-    return this.prisma.dailyMission.findMany({ where: { userId }, orderBy: { dayKey: 'desc' }, take: DAILY_MISSION_SLOTS });
+    return this.prisma.dailyMission.findMany({ where: { userId }, orderBy: { dayKey: 'desc' }, take: DAILY_MISSION_SLOTS + 1 });
   }
 
   /** La clé de la journée de jeu : celle du fuseau, rendue monotone. */
@@ -198,7 +208,7 @@ export class MissionService {
     const record = Math.max(level, user?.levelRecord ?? 0);
     const unlocked = record >= MISSIONS_MIN_LEVEL;
 
-    const existing = recent.filter((row) => row.dayKey === dayKey).sort((a, b) => a.slot - b.slot);
+    const existing = recent.filter((row) => row.dayKey === dayKey && isDailySlot(row)).sort((a, b) => a.slot - b.slot);
     // Un tirage INTERROMPU (une écriture tombée entre deux emplacements) se
     // COMPLÈTE : les emplacements posés font foi, seuls les manquants s'écrivent.
     if (existing.length >= DAILY_MISSION_SLOTS || !unlocked) return { dayKey, unlocked, rows: existing };
@@ -243,7 +253,11 @@ export class MissionService {
         if (!isP2002(err)) throw err;
       }
     }
-    return { dayKey, unlocked, rows: await this.prisma.dailyMission.findMany({ where: { userId, dayKey }, orderBy: { slot: 'asc' } }) };
+    return {
+      dayKey,
+      unlocked,
+      rows: await this.prisma.dailyMission.findMany({ where: { userId, dayKey, slot: { lt: DAILY_MISSION_SLOTS } }, orderBy: { slot: 'asc' } }),
+    };
   }
 
   /**
@@ -273,7 +287,12 @@ export class MissionService {
       rows = [...today.rows];
     }
 
-    for (const row of rows.filter((r) => r.signal === signal && r.completedAt === null)) {
+    // La mission personnelle n'avance que DANS sa plage — début inclus, fin exclue : passé `endsAt`, le serveur
+    // ne l'accepte plus, quel que soit l'appareil qui rejoue le geste (#9539).
+    const reachable = (row: DailyMission): boolean =>
+      row.slot !== PERSONAL_MISSION_SLOT ||
+      (row.startsAt != null && row.endsAt != null && isPersonalMissionOpen({ startsAt: row.startsAt, endsAt: row.endsAt, now }));
+    for (const row of rows.filter((r) => r.signal === signal && r.completedAt === null && reachable(r))) {
       const progress = options.key !== undefined
         ? await this.advanceDistinct(row, options.key)
         : await this.advanceCounted(row, options.amount ?? 1);
@@ -376,6 +395,8 @@ export class MissionService {
     const assertAllowed = async (db: Pick<PrismaClient, 'dailyMission' | 'gameDay' | 'user'>): Promise<DailyMission> => {
       const row = await db.dailyMission.findUnique({ where: { id: missionId } });
       if (!row || row.userId !== userId || row.dayKey !== dayKey) throw new GameRefusal('MISSION_NOT_FOUND');
+      // La mission personnelle (#9539) est la SIENNE : tirée sur ses usages et sa plage, elle ne se change pas.
+      if (row.slot === PERSONAL_MISSION_SLOT) throw new GameRefusal('MISSION_REROLL_UNAVAILABLE');
       const account = await db.user.findUnique({ where: { id: userId }, select: USER_GAME_SELECT });
       const record = Math.max(levelFromScore(account?.engagementScore ?? 0), account?.levelRecord ?? 0);
       if (record < MISSIONS_MIN_LEVEL) throw new GameRefusal('MISSIONS_LOCKED');
@@ -398,7 +419,7 @@ export class MissionService {
         const facts = flameFactsOf(account ?? {}, now);
         const status = flameStatus({ lastActiveDay: facts.lastActiveDay, today: dayKey, streak: facts.streak, freezes: facts.freezes });
         const day = await tx.gameDay.findUnique({ where: { userId_dayKey: { userId, dayKey } }, select: { rerollCount: true } });
-        const all = await tx.dailyMission.findMany({ where: { userId, dayKey }, orderBy: { slot: 'asc' } });
+        const all = await tx.dailyMission.findMany({ where: { userId, dayKey, slot: { lt: DAILY_MISSION_SLOTS } }, orderBy: { slot: 'asc' } });
         const next = rerollDailyMission({
           userId,
           dayKey,
@@ -455,7 +476,7 @@ export class MissionService {
     const stored = await this.gameDay(userId, dayKey);
     if (stored?.chestClaimedAt) return this.alreadyClaimed(userId, stored);
 
-    const rows = await this.prisma.dailyMission.findMany({ where: { userId, dayKey } });
+    const rows = await this.prisma.dailyMission.findMany({ where: { userId, dayKey, slot: { lt: DAILY_MISSION_SLOTS } } });
     if (rows.length < DAILY_MISSION_SLOTS || rows.some((r) => r.completedAt === null)) throw new GameRefusal('CHEST_NOT_READY');
 
     await this.ensureGameDay(userId, dayKey);

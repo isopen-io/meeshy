@@ -90,7 +90,7 @@ final class ComposerSceneShutterWiringTests: XCTestCase {
     func test_lePremierToucher_armeSansPhotographier_parLaLoi() throws {
         let code = try source("MeeshyComposerHost+Viewfinder.swift")
         guard let début = code.range(of: "funchandleSceneQuickTap()->Bool{"),
-              let fin = code.range(of: "funchandleArmedSceneTap()", range: début.upperBound..<code.endIndex)
+              let fin = code.range(of: "funchandleSceneCaptureLongPressChanged(", range: début.upperBound..<code.endIndex)
         else { return XCTFail("le toucher a changé de forme") }
         let corps = String(code[début.upperBound..<fin.lowerBound])
         XCTAssertTrue(corps.contains("ComposerSceneQuickCapture.offers("))
@@ -101,30 +101,25 @@ final class ComposerSceneShutterWiringTests: XCTestCase {
         XCTAssertTrue(hote.contains("funchandleSceneBackgroundTap(){ifhandleSceneQuickTap(){return}"))
     }
 
-    /// **Le second toucher, n'importe où sur la scène, prend la photo** (#8711)
-    /// — la nappe du viseur le reçoit, et la loi décide.
-    func test_leSecondToucher_prendLaPhoto_parLaLoi() throws {
-        let code = try source("MeeshyComposerHost+Viewfinder.swift")
-        guard let début = code.range(of: "funchandleArmedSceneTap(){"),
-              let fin = code.range(of: "funchandleArmedSceneHold(){", range: début.upperBound..<code.endIndex)
-        else { return XCTFail("le second toucher a disparu") }
-        let corps = String(code[début.upperBound..<fin.lowerBound])
-        XCTAssertTrue(corps.contains("ComposerSceneQuickCapture.armedTap("))
-        XCTAssertTrue(corps.contains("sceneCapture.photographWhenReady()"))
+    /// **Viseur armé : un toucher VISE, deux touchers PHOTOGRAPHIENT** (#9351,
+    /// inversion assumée de #8711 par le porteur — décision (b)). La table le
+    /// dit ; la nappe du chrome partagé le câble, l'appui long passant avant.
+    func test_viseurArme_unToucherVise_deuxTouchersPhotographient() throws {
+        XCTAssertEqual(ComposerCaptureGesture.action(zone: .scene, gesture: .tap,
+                                                     context: ComposerCaptureGestureContext()), .focus)
+        XCTAssertEqual(ComposerCaptureGesture.action(zone: .scene, gesture: .doubleTap,
+                                                     context: ComposerCaptureGestureContext()), .photoToEdit)
+        let chrome = try source("ComposerCaptureViews.swift")
+        XCTAssertTrue(chrome.contains("holdGesture.exclusively(before:tapGesture("))
+        XCTAssertTrue(chrome.contains("session.tapAction(context:context)"),
+                      "le second toucher se lit par le seul décideur du toucher (#9464)")
+        XCTAssertTrue(chrome.contains("case.photo:session.perform(.photoToEdit,item:nil)"),
+                      "un double photographie par la machine, jamais par l'hôte")
         let machine = try source("ComposerCaptureSession.swift")
-        guard let photo = machine.range(of: "funcphotographWhenReady(){"),
+        guard let photo = machine.range(of: "funcphotographWhenReady(intent:ComposerTakeIntent=.edit){"),
               let finPhoto = machine.range(of: "funcbeginHold(){", range: photo.upperBound..<machine.endIndex)
         else { return XCTFail("la photo au toucher a changé de forme") }
-        XCTAssertTrue(String(machine[photo.upperBound..<finPhoto.lowerBound]).contains("takePhoto()"))
-        // Depuis #8846 le toucher passe APRÈS l'appui long (qui filme), sur
-        // la même nappe — celle du chrome PARTAGÉ (#9134).
-        XCTAssertTrue(code.contains("onTap:{handleArmedSceneTap()}"),
-                      "la nappe du viseur ne transmet pas le second toucher")
-        let chrome = try source("ComposerCaptureViews.swift")
-        // #9464 — après l'appui long, le toucher : simple il vise, second il
-        // prend la photo par l'hôte — jamais à la levée d'un pincement.
-        XCTAssertTrue(chrome.contains("holdGesture.exclusively(before:tapGesture("))
-        XCTAssertTrue(chrome.contains("case.photo:onTap()"))
+        XCTAssertTrue(String(machine[photo.upperBound..<finPhoto.lowerBound]).contains("takePhoto(intent:intent)"))
     }
 
     /// **La levée sans début ne fait RIEN.** Le canvas émet sa fin même quand

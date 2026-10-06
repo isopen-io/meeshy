@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 
 import { GAME_BRAND, GAME_CARD } from '@/components/game-surface';
 import { Link } from '@/routes/route-table';
@@ -9,18 +9,22 @@ import { GameDoors } from '@/components/game-doors';
 import { GameFlamePanel } from '@/components/game-flame-panel';
 import { GameGauges } from '@/components/game-gauges';
 import { GameHero } from '@/components/game-hero';
+import { GameLeagueSummary } from '@/components/game-league-summary';
 import { GameMintPreview } from '@/components/game-mint-preview';
 import { GameHiddenCard } from '@/components/game-hidden-card';
 import { GameMissions } from '@/components/game-missions';
 import { useGamePrefs } from '@/lib/game/preferences';
+import { progressionSection } from '@/lib/game/progression-section';
+import { PROGRESSION_SECTION_PARAM } from '@/lib/notifications/target';
+import { useOptionalRoute } from '@/lib/router';
 
 import type { GameActions } from './progression-game-actions';
 
 /**
  * LE JEU SUR « PROGRESSION » (#9383, #5841) — le HÉROS pleine largeur en
- * deuxième position (où j'en suis, comment je gagne, comment je frappe), les
- * deux jauges du trésor et de la Flamme, puis les missions et le coffre,
- * l'aperçu de frappe, la Flamme à protéger. La séquence est celle de la
+ * deuxième position (où j'en suis, comment je gagne), les deux jauges du trésor
+ * et de la Flamme, puis les missions et le coffre, le DÉTAIL DE LIGUE (#9541),
+ * l'unique héros de frappe (#9537), la Flamme à protéger. La séquence est celle de la
  * planche (conception, parties VII et XII) : l'écran existant s'enrichit EN
  * HAUT, ses portes (Badges, Défis, Succès) restent en dessous.
  *
@@ -39,9 +43,24 @@ export type GameHost = {
   readonly guideLine?: string | null;
 };
 
+const reducedMotion = (): boolean => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/**
+ * `?section=missions` (#9539) : le toucher de l'annonce d'une mission personnelle ouvre la Progression À la carte
+ * des missions. Une seule fois par arrivée : le joueur qui défile ensuite n'est pas ramené.
+ */
+function useOpenSection(shown: boolean): void {
+  const section = progressionSection(useOptionalRoute()?.search.get(PROGRESSION_SECTION_PARAM) ?? null);
+  useEffect(() => {
+    if (!shown || section === undefined) return;
+    requestAnimationFrame(() => document.getElementById(section)?.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'start' }));
+  }, [shown, section]);
+}
+
 export function GameSection({ progress, host }: { readonly progress: EngagementWithGame; readonly host: GameHost }) {
   const game = progress.game;
   const prefs = useGamePrefs();
+  useOpenSection(game !== undefined && !prefs.hidden);
   if (game === undefined) return null;
   if (prefs.hidden) return <GameHiddenCard />;
   const { actions, online, guide, guideLine } = host;
@@ -49,14 +68,7 @@ export function GameSection({ progress, host }: { readonly progress: EngagementW
   return (
     <>
       {guide ?? null}
-      <GameHero
-        game={game}
-        online={online}
-        minting={actions.pending.mint}
-        mintError={actions.errors.mint}
-        onMint={actions.mint}
-        guideLine={guideLine ?? null}
-      />
+      <GameHero game={game} guideLine={guideLine ?? null} />
       <GameGauges game={game} />
       <GameMissions
         missions={game.missions}
@@ -71,16 +83,15 @@ export function GameSection({ progress, host }: { readonly progress: EngagementW
         onClaim={actions.claimChest}
         errors={{ reroll: actions.errors.reroll, chest: actions.errors.chest }}
       />
+      <GameLeagueSummary league={game.league} />
       <GameMintPreview
         mint={game.mint}
-        glory={game.glory}
-        treasury={game.treasury}
-        levelRecord={game.level.record}
         badgesLost={progress.mintBadgeLoss}
         online={online}
         minting={actions.pending.mint}
         error={actions.errors.mint}
         celebration={actions.celebration}
+        strikeKey={actions.strikeKey}
         onMint={actions.mint}
       />
       <GameFlamePanel

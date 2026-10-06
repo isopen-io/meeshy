@@ -8,6 +8,8 @@ protocol ComposerCaptureCameraProviding: AnyObject {
     var currentPosition: AVCaptureDevice.Position { get }
     /// Une bascule est en cours : le bouton se tait.
     var isSwitchingCamera: Bool { get }
+    /// La prise précédente est arrêtée mais pas encore livrée (#9351).
+    var recordingIsPending: Bool { get }
     /// Le cadrage, en facteur AFFICHÉ (#9350).
     var zoomFactor: CGFloat { get }
     var zoomRange: ClosedRange<CGFloat> { get }

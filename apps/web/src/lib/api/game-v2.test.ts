@@ -78,10 +78,20 @@ describe('les extensions du bloc game', () => {
     expect(readGameExtensions({ season: bad })).toEqual({});
   });
 
-  test('la rareté des succès (hors contrat) se lit tolérante, entrée par entrée', () => {
-    const read = readGameExtensions({ achievementRarities: { a: { rarity: 'rare', holders: 30, population: 2000 }, b: { rarity: 'nope', holders: 1, population: 1 } } });
-    expect(Object.keys(read.achievementRarities ?? {})).toEqual(['a']);
+  test('la rareté des succès est une extension DÉCLARÉE : la carte du contrat est lue telle quelle', () => {
+    const rarities = { a: { rarity: 'rare', holders: 30, population: 2000 }, b: { rarity: 'mythic', holders: 20, population: 5000 } };
+    expect(readGameExtensions({ achievementRarities: rarities }).achievementRarities).toEqual(rarities);
+    expect(readGameExtensions({ achievementRarities: {} })).toEqual({ achievementRarities: {} });
+  });
+
+  test('une carte de raretés illisible tombe SEULE, comme les autres extensions : le bloc survit', () => {
+    expect(readGameExtensions({ achievementRarities: { a: { rarity: 'nope', holders: 1, population: 1 } } })).toEqual({});
+    expect(readGameExtensions({ achievementRarities: { a: { rarity: 'rare', holders: -1, population: 1 } } })).toEqual({});
+    expect(readGameExtensions({ achievementRarities: { a: null } })).toEqual({});
     expect(readGameExtensions({ achievementRarities: 'x' })).toEqual({});
+    const read = readGameBlock({ ...block, achievementRarities: { a: { rarity: 'nope', holders: 1, population: 1 } } });
+    expect(read?.achievementRarities).toBeUndefined();
+    expect(read?.level).toEqual(block.level);
   });
 
   test('une visibilité inconnue refuse le bloc de visibilité', () => {

@@ -128,7 +128,7 @@ describe('GET /users/:userId/game', () => {
     db.gloryLedger.rows.push({ id: `g-${userId}`, userId, delta: glory, reason: 'mint', requestId: `rq-g-${userId}` });
   };
 
-  it('un AMI lit le niveau, le palier, les étoiles, la forme de la Flamme, le rang et le palier du trésor — jamais un compte exact', async () => {
+  it('un AMI lit le niveau, le palier, les étoiles, la forme de la Flamme, le rang, ses points, le nombre de ses trophées et le palier du trésor — jamais la Gloire, les Meeshes ni les jours de série', async () => {
     const db = fakeGameDb();
     veteran(db, USER);
     veteran(db, OTHER);
@@ -140,13 +140,29 @@ describe('GET /users/:userId/game', () => {
     const data = userGameProfileResponseSchema.parse(res.json().data);
     expect(data).toEqual({
       visible: true,
-      standing: { level: 34, tier: 'eclat', prestige: 2, flame: 'brasier', rank: 'conteur', division: 3 },
+      standing: { level: 34, tier: 'eclat', prestige: 2, flame: 'brasier', rank: 'conteur', division: 3, points: 12_180, trophyCount: 0 },
       treasury: { tier: 'coffret' },
     });
     const raw = JSON.stringify(res.json());
-    for (const forbidden of ['63', '4000', '12180', 'currentStreakDays', 'held', 'glory', 'lastStreakDate', 'lastActive']) {
+    for (const forbidden of ['"63"', '4000', 'currentStreakDays', 'held', 'glory', 'lastStreakDate', 'lastActive']) {
       expect(raw).not.toContain(forbidden);
     }
+  });
+
+  it('la Flamme, les points et les trophées ne traversent le sérialiseur que pour un AMI : un inconnu sur « tout le monde » lit le rang, rien de plus (#9541)', async () => {
+    const db = fakeGameDb();
+    veteran(db, USER);
+    veteran(db, STRANGER);
+    seedWealth(db, USER, 63, 4000);
+    db.gameProfile.rows.push({ id: 'gp', userId: USER, rankVisibility: 'everyone', showcaseVisibility: 'everyone' });
+
+    const res = await get(await profileApp(db, STRANGER), gameUserGamePath(USER));
+
+    const data = userGameProfileResponseSchema.parse(res.json().data);
+    expect(data.visible).toBe(true);
+    expect(data.standing).toEqual({ level: 34, tier: 'eclat', prestige: 2, flame: null, rank: 'conteur', division: 3 });
+    const raw = JSON.stringify(res.json());
+    for (const forbidden of ['points', 'trophyCount', '12180', 'brasier']) expect(raw).not.toContain(forbidden);
   });
 
   it('un inconnu (ni ami, ni admin) ne lit RIEN sur « amis » — la réponse d’un compte inexistant', async () => {

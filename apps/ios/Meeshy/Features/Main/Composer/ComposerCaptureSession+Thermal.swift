@@ -34,24 +34,6 @@ extension ComposerCaptureSession {
         HapticFeedback.light()
     }
 
-    /// Le geste décidé par la table, exécuté — provisoire : seul le choix d'une
-    /// case est câblé ici, la prise rejoint `+Takes` (Task 14).
-    func perform(_ action: ComposerCaptureAction, item: ComposerLookStripItem?) {
-        guard action == .select, let item else { return }
-        look = ComposerLookStripRule.look(of: item, combinedWith: look)
-        HapticFeedback.light()
-    }
-
-    /// **VoiceOver ne TIENT pas un doigt** : la prise demandée part verrouillée
-    /// (`ComposerCaptureHold.release` garde une prise verrouillée), puis la tenue
-    /// se relâche — sans quoi `holdStartedAt` bloquerait toute demande suivante.
-    func lockPendingTake() {
-        guard holdStartedAt != nil else { return }
-        holdPhase = .locked
-        lockProgress = 1
-        endHold()
-    }
-
     /// Le guet des trames ne s'arme que si quelqu'un les peint.
     func refreshFeed() {
         camera.liveFeed.isActive = paintsWithMetal || stripNeedsFeed

@@ -1,13 +1,17 @@
 /**
  * LES NOTIFICATIONS DU JEU (#9490) — invitation de duo reçue, duo accepté, résultat de
- * la semaine de ligue, étape de saison atteinte. La LOI (les quatre types, le plafond, la
- * phrase d'un résultat de ligue) vient de `@meeshy/shared/utils/game/notifications` ; les
- * textes, du catalogue de notifications (huit langues) ; ce service décide SI et À QUI.
+ * la semaine de ligue, étape de saison atteinte, début de plage de la mission personnelle du
+ * jour (#9539). La LOI (les cinq types, le plafond, la phrase d'un résultat de ligue) vient de
+ * `@meeshy/shared/utils/game/notifications` ; les textes, du catalogue de notifications (huit
+ * langues) ; ce service décide SI et À QUI.
  *
  * Règles, toutes gardées par `__tests__/GameNotifier.test.ts` :
  *  - **au plus UNE notification de jeu par jour et par destinataire**, le jour de SON fuseau
  *    (`SET NX EX`, `CacheStore.setnx` — Redis, ou sa `Map` en mémoire). Un verrou qui ne
- *    répond pas FERME : on ne notifie pas quand on ne sait pas compter ;
+ *    répond pas FERME : on ne notifie pas quand on ne sait pas compter. **Les duos et la
+ *    mission du jour en SORTENT** (décision porteur 2026-10-06, #9541 : `countsAgainstGameDailyCap`) :
+ *    ils ne se comptent pas et ne prennent pas le créneau — le message d'un ami n'attend pas
+ *    demain, et la mission du jour EST la notification quotidienne du compte ;
  *  - **un événement ne s'annonce qu'une fois** (une clé par duo, par semaine de ligue, par
  *    étape) : rejouer un règlement interrompu ne notifie pas deux fois ;
  *  - **« Jeu masqué » ne notifie rien** : tout est compté, rien n'est montré. Une préférence
@@ -26,7 +30,9 @@
 
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { NotificationType } from '@meeshy/shared/types/notification';
-import { gameLeagueResultKey } from '@meeshy/shared/utils/game/notifications';
+import { countsAgainstGameDailyCap, gameLeagueResultKey } from '@meeshy/shared/utils/game/notifications';
+import { personalMissionActivity } from '@meeshy/shared/utils/game/personal-mission';
+import { personalMissionPhrase } from '@meeshy/shared/utils/game/personal-mission-copy';
 import type { LeagueKey } from '@meeshy/shared/utils/game/league';
 import { notificationString, type NotificationStringKey } from '@meeshy/shared/utils/notification-strings';
 import { enhancedLogger } from '../../utils/logger-enhanced';
@@ -35,7 +41,7 @@ import { getCacheStore } from '../CacheStore';
 import { getSharedNotificationService } from '../notifications/notification-service-registry';
 import type { NotificationService } from '../notifications/NotificationService';
 import { GameProfileService } from './GameProfileService';
-import { dayKeyOf } from './gameClock';
+import { dayKeyOf, effectiveZone } from './gameClock';
 
 const log = enhancedLogger.child({ module: 'GameNotifier' });
 
@@ -56,7 +62,17 @@ export type GameNotificationEvent =
       readonly zone: 'promotion' | 'safe' | 'relegation';
       readonly cup: 'gold' | 'silver' | 'bronze' | null;
     }
-  | { readonly kind: 'season-step'; readonly recipientId: string; readonly season: number; readonly step: number; readonly completed: boolean };
+  | { readonly kind: 'season-step'; readonly recipientId: string; readonly season: number; readonly step: number; readonly completed: boolean }
+  | {
+      /** La plage de la mission personnelle du jour vient de s'ouvrir (#9539). */
+      readonly kind: 'mission-window';
+      readonly recipientId: string;
+      readonly missionId: string;
+      readonly dayKey: string;
+      readonly templateKey: string;
+      readonly startsAt: Date;
+      readonly endsAt: Date;
+    };
 
 export type GameNotifyResult =
   | 'sent'
@@ -90,7 +106,9 @@ type Plan = {
   readonly priority: 'low' | 'normal';
   readonly onceKey: string;
   readonly collapseId: string;
-  readonly content: (lang: string) => string;
+  /** Compte-t-elle contre le plafond d'une notification de jeu par jour ? (Les duos et la mission du jour : non.) */
+  readonly capped: boolean;
+  readonly content: (lang: string, timezone: string | null) => string;
   readonly metadata: Record<string, unknown>;
   readonly actorId?: string;
 };
@@ -102,6 +120,16 @@ const outcomeOf = (zone: 'promotion' | 'safe' | 'relegation') => (zone === 'prom
 const text = (lang: string, key: NotificationStringKey, count?: number): string =>
   notificationString(lang, key, count === undefined ? {} : { count });
 
+/** L'heure d'une borne de plage, dans la langue ET le fuseau du destinataire (« 18:00 », « 6:00 PM »). */
+function clockLabel(instant: Date, lang: string, timezone: string | null): string {
+  const options: Intl.DateTimeFormatOptions = { hour: 'numeric', minute: '2-digit', timeZone: effectiveZone(timezone) };
+  try {
+    return new Intl.DateTimeFormat(lang, options).format(instant);
+  } catch {
+    return new Intl.DateTimeFormat('en', options).format(instant);
+  }
+}
+
 function planOf(event: GameNotificationEvent): Plan {
   switch (event.kind) {
     case 'duo-invited':
@@ -110,6 +138,7 @@ function planOf(event: GameNotificationEvent): Plan {
         priority: 'normal',
         onceKey: `duo-invited:${event.duoId}`,
         collapseId: `game-duo-${event.duoId}`,
+        capped: countsAgainstGameDailyCap('game_duo_invited'),
         content: (lang) => text(lang, 'game.duoInvitedBody'),
         metadata: { action: 'view_details', route: ROUTE, gameSection: 'duo', duoId: event.duoId, weekKey: event.weekKey },
         actorId: event.actorId,
@@ -120,6 +149,7 @@ function planOf(event: GameNotificationEvent): Plan {
         priority: 'normal',
         onceKey: `duo-accepted:${event.duoId}`,
         collapseId: `game-duo-${event.duoId}`,
+        capped: countsAgainstGameDailyCap('game_duo_accepted'),
         content: (lang) => text(lang, 'game.duoAcceptedBody'),
         metadata: { action: 'view_details', route: ROUTE, gameSection: 'duo', duoId: event.duoId, weekKey: event.weekKey },
         actorId: event.actorId,
@@ -130,6 +160,7 @@ function planOf(event: GameNotificationEvent): Plan {
         priority: 'low',
         onceKey: `league:${event.weekKey}`,
         collapseId: 'game-league-result',
+        capped: countsAgainstGameDailyCap('game_league_result'),
         content: (lang) => text(lang, gameLeagueResultKey({ zone: event.zone, cup: event.cup })),
         metadata: {
           action: 'view_details',
@@ -147,8 +178,34 @@ function planOf(event: GameNotificationEvent): Plan {
         priority: 'low',
         onceKey: `season:${event.season}:${event.step}`,
         collapseId: 'game-season-step',
+        capped: countsAgainstGameDailyCap('game_season_step'),
         content: (lang) => (event.completed ? text(lang, 'game.seasonDone') : text(lang, 'game.seasonStep', event.step)),
         metadata: { action: 'view_details', route: ROUTE, gameSection: 'season', season: event.season, step: event.step, completed: event.completed },
+      };
+    case 'mission-window':
+      return {
+        type: 'game_mission_window',
+        priority: 'normal',
+        onceKey: `mission-window:${event.missionId}`,
+        collapseId: `game-mission-${event.dayKey}`,
+        capped: countsAgainstGameDailyCap('game_mission_window'),
+        content: (lang, timezone) =>
+          notificationString(lang, 'game.missionWindow', {
+            mission: personalMissionPhrase(lang, personalMissionActivity(event.templateKey)),
+            start: clockLabel(event.startsAt, lang, timezone),
+            end: clockLabel(event.endsAt, lang, timezone),
+          }),
+        // La charge ne dit que la plage TIRÉE : jamais d'où elle vient (heures habituelles, usages).
+        metadata: {
+          action: 'view_details',
+          route: ROUTE,
+          gameSection: 'missions',
+          missionId: event.missionId,
+          dayKey: event.dayKey,
+          templateKey: event.templateKey,
+          startsAt: event.startsAt.toISOString(),
+          endsAt: event.endsAt.toISOString(),
+        },
       };
   }
 }
@@ -195,16 +252,20 @@ export class GameNotifier {
     if (await this.optedOut(event.recipientId)) return 'skipped:opted-out';
 
     const throttle = this.deps.throttle ?? getCacheStore();
-    if (!(await throttle.setnx(`notif:game:once:${event.recipientId}:${plan.onceKey}`, now.toISOString(), ONCE_TTL_SECONDS))) return 'skipped:duplicate';
-    // `GAME_NOTIFICATION_DAILY_CAP` vaut 1 : le créneau du jour se PREND, il ne se compte pas.
+    const onceKey = `notif:game:once:${event.recipientId}:${plan.onceKey}`;
+    if (!(await throttle.setnx(onceKey, now.toISOString(), ONCE_TTL_SECONDS))) return 'skipped:duplicate';
+    // `GAME_NOTIFICATION_DAILY_CAP` vaut 1 : le créneau du jour se PREND, il ne se compte pas. Les duos
+    // et la mission du jour en sortent (#9541) : ni comptés, ni pris.
     const dayKey = `notif:game:day:${event.recipientId}:${dayKeyOf(now, recipient.timezone)}`;
-    if (!(await throttle.setnx(dayKey, plan.type, DAY_TTL_SECONDS))) {
+    if (plan.capped && !(await throttle.setnx(dayKey, plan.type, DAY_TTL_SECONDS))) {
       return 'skipped:daily-cap';
     }
 
     // Le créneau ne se prend que pour une notification CRÉÉE : un refus (Ne pas déranger) ou une
-    // panne le rend, sinon un résultat de ligue tombé la nuit taisait l'invitation du matin.
-    const release = () => throttle.del?.(dayKey).catch(() => undefined);
+    // panne le rend, sinon un résultat de ligue tombé la nuit taisait la notification du matin.
+    const release = async () => {
+      if (plan.capped) await throttle.del?.(dayKey).catch(() => undefined);
+    };
     const lang = recipientLanguage(recipient, 'fr');
     const created = await notifications
       .createNotification({
@@ -212,7 +273,7 @@ export class GameNotifier {
         type: plan.type,
         priority: plan.priority,
         lang,
-        content: plan.content(lang),
+        content: plan.content(lang, recipient.timezone ?? null),
         ...(actor ? { actor } : {}),
         context: {},
         metadata: plan.metadata as never,
@@ -220,6 +281,9 @@ export class GameNotifier {
       })
       .catch(async (error: unknown) => {
         await release();
+        // Une PANNE n'a rien annoncé : la clé « une seule fois » se rend aussi, sinon le réessai de l'appelant
+        // (la mission du jour, #9539) se lirait « déjà annoncé » et l'annonce ne partirait jamais.
+        await throttle.del?.(onceKey).catch(() => undefined);
         throw error;
       });
     if (created === null) {

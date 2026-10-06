@@ -32,9 +32,21 @@ final class PlayerBannerTests: XCTestCase {
     }
 
     func test_onATablet_anOpenConversationTakesTheWholeHeight() {
-        XCTAssertTrue(PlayerBannerPlacement.hostsOnTablet(conversationIsOpen: false, reelsAreOpen: false))
-        XCTAssertFalse(PlayerBannerPlacement.hostsOnTablet(conversationIsOpen: true, reelsAreOpen: false))
-        XCTAssertFalse(PlayerBannerPlacement.hostsOnTablet(conversationIsOpen: false, reelsAreOpen: true))
+        XCTAssertTrue(PlayerBannerPlacement.hostsOnTablet(conversationIsOpen: false, panelRoute: nil, reelsAreOpen: false))
+        XCTAssertFalse(PlayerBannerPlacement.hostsOnTablet(conversationIsOpen: true, panelRoute: nil, reelsAreOpen: false))
+        XCTAssertFalse(PlayerBannerPlacement.hostsOnTablet(conversationIsOpen: false, panelRoute: nil, reelsAreOpen: true))
+    }
+
+    /// L'iPad ouvre ses routes dans le panneau de droite, jamais dans la pile du routeur : `isDeepRoute` y reste
+    /// faux. La loi de l'iPhone — un écran principal porte la bannière, un écran profond non — se lit donc sur la
+    /// route du PANNEAU. Progression ouverte à droite sous la bannière la répétait (son héros dit déjà tout).
+    func test_onATablet_aDeepPanelRouteHidesTheBanner_likeADeepRouteOnThePhone() {
+        XCTAssertFalse(PlayerBannerPlacement.hostsOnTablet(conversationIsOpen: false, panelRoute: .progression, reelsAreOpen: false),
+                       "Progression dans le panneau : son héros dit déjà tout")
+        XCTAssertFalse(PlayerBannerPlacement.hostsOnTablet(conversationIsOpen: false, panelRoute: .gamePage(.league), reelsAreOpen: false))
+        XCTAssertTrue(PlayerBannerPlacement.hostsOnTablet(conversationIsOpen: false, panelRoute: .settings, reelsAreOpen: false),
+                      "un écran principal (un hub) porte la bannière, comme sur iPhone")
+        XCTAssertTrue(PlayerBannerPlacement.hostsOnTablet(conversationIsOpen: false, panelRoute: .notifications, reelsAreOpen: false))
     }
 
     func test_theBannerOnlyShowsWhenNothingElseOccupiesTheTop_andTheGameIsNotHidden() {
@@ -42,6 +54,33 @@ final class PlayerBannerTests: XCTestCase {
         XCTAssertFalse(PlayerBannerPlacement.shows(hosted: true, free: false, hidden: false), "un appel ou un audio prime")
         XCTAssertFalse(PlayerBannerPlacement.shows(hosted: false, free: true, hidden: false))
         XCTAssertFalse(PlayerBannerPlacement.shows(hosted: true, free: true, hidden: true), "« Jeu masqué » : rien")
+    }
+
+    /// #9536 : le bandeau ne paraît qu'à l'ouverture de l'app — passé l'ouverture, il n'a plus la place, où qu'on soit.
+    func test_theBannerOnlyShowsWhileTheOpeningHoldsIt() {
+        XCTAssertTrue(PlayerBannerPlacement.shows(hosted: true, free: true, hidden: false, lingering: true))
+        XCTAssertFalse(PlayerBannerPlacement.shows(hosted: true, free: true, hidden: false, lingering: false),
+                       "au-delà de l'ouverture, plus de bandeau : changer d'onglet ne le rouvre pas")
+    }
+
+    // MARK: - Comment elle s'en va (#9536)
+
+    func test_theExitAfterTheOpening_isSlow_andAFadeUnderReduceMotion() {
+        XCTAssertEqual(PlayerBannerMotion.animation(leaving: true, opening: false, reduceMotion: false),
+                       .easeInOut(duration: GamePlayerBannerOpening.exitDuration), "lente : une seconde, courbe douce")
+        XCTAssertEqual(PlayerBannerMotion.animation(leaving: true, opening: false, reduceMotion: true),
+                       .easeInOut(duration: PlayerBannerMotion.reducedFade), "« Réduire les animations » : un fondu simple, jamais un saut")
+        XCTAssertGreaterThanOrEqual(PlayerBannerMotion.exitDuration, 0.8)
+        XCTAssertLessThanOrEqual(PlayerBannerMotion.exitDuration, 1.2)
+    }
+
+    func test_anyOtherDeparture_keepsTheSpringOfTheTopBars() {
+        for reduce in [false, true] {
+            XCTAssertEqual(PlayerBannerMotion.animation(leaving: true, opening: true, reduceMotion: reduce),
+                           TopChromeBarMotion.animation(reduceMotion: reduce), "un appel arrive : le bandeau s'efface devant lui")
+            XCTAssertEqual(PlayerBannerMotion.animation(leaving: false, opening: false, reduceMotion: reduce),
+                           TopChromeBarMotion.animation(reduceMotion: reduce), "l'arrivée garde le ressort")
+        }
     }
 
     // MARK: - Ce qu'elle dit
@@ -75,6 +114,15 @@ final class PlayerBannerTests: XCTestCase {
         let label = PlayerBannerCopy.accessibilityLabel(for: banner)
         XCTAssertFalse(label.contains(GameCopy.meeshes(0)), "jamais « aucune Meesh » : ce qui n'existe pas ne se dit pas")
         XCTAssertEqual(label.components(separatedBy: GameText.bannerSeparator).count, 3, label)
+    }
+
+    /// #9536 : au niveau 1, ni détail de niveau ni jauge — la phrase dit les points gagnés, pas « Niveau 1 ».
+    func test_atLevelOne_theSentenceHasNoLevelDetail_butTheEarnedPoints() throws {
+        let banner = try XCTUnwrap(GamePlayerBanner.make(game: GameFixture.game(score: 40, glory: 0, held: 0, flameDays: 0, flameStatus: .none)))
+        XCTAssertFalse(banner.showsLevel)
+        let label = PlayerBannerCopy.accessibilityLabel(for: banner)
+        XCTAssertFalse(label.contains(GameText.bannerLevel(level: GameCopy.formatCount(1))), "le niveau 1 ne se détaille pas : \(label)")
+        XCTAssertTrue(label.contains(GameCopy.formatCount(banner.score)), "les points gagnés se disent : \(label)")
     }
 
     func test_atTheTop_theSentenceSaysSo_insteadOfAPercentage() {
@@ -179,8 +227,21 @@ final class PlayerBannerTests: XCTestCase {
         }
     }
 
-    private func store(_ source: FakeSource, interval: TimeInterval = 45, clock: @escaping () -> Date = { Date() }) -> PlayerBannerStore {
-        PlayerBannerStore(source: source, minimumInterval: interval, now: clock)
+    /// Ce que le serveur dit de « Jeu masqué » (`GET /me/game/privacy`) ; `nil` hors ligne ou sur un refus.
+    @MainActor
+    private final class FakeSettings: PlayerBannerSettingsReading {
+        var hidden: Bool? = false
+        private(set) var calls = 0
+
+        func servedHidden() async -> Bool? {
+            calls += 1
+            return hidden
+        }
+    }
+
+    private func store(_ source: FakeSource, settings: FakeSettings? = nil, interval: TimeInterval = 45,
+                       clock: @escaping () -> Date = { Date() }) -> PlayerBannerStore {
+        PlayerBannerStore(source: source, settings: settings ?? FakeSettings(), minimumInterval: interval, now: clock)
     }
 
     func test_theCacheIsPaintedFirst_thenTheNetworkCorrectsIt() async {
@@ -249,6 +310,55 @@ final class PlayerBannerTests: XCTestCase {
         XCTAssertNotNil(sut.banner)
     }
 
+    /// Le web relit les réglages servis là où la bannière se monte (`useGameSettings`). Sans cette lecture, un jeu
+    /// masqué depuis un AUTRE appareil — ou avant une réinstallation — gardait sa bannière et ses requêtes jusqu'à
+    /// la première ouverture de Progression.
+    func test_aGameHiddenElsewhere_isLearnedFromTheServer_andTheBannerLeavesWithoutAskingForTheGame() async {
+        let source = FakeSource()
+        source.cachedBlock = GameFixture.game()
+        source.fetchedBlock = GameFixture.game()
+        let settings = FakeSettings()
+        settings.hidden = true
+        let sut = store(source, settings: settings)
+
+        await sut.activate()
+        XCTAssertNil(sut.banner, "« Jeu masqué » servi par le compte : rien")
+        XCTAssertEqual(source.fetchCalls, 0, "le jeu n'est pas demandé une fois le serveur entendu")
+
+        await sut.revalidate(force: true)
+        await sut.readCache()
+        XCTAssertEqual(source.fetchCalls, 0)
+        XCTAssertNil(sut.banner)
+    }
+
+    func test_anUnreadableSetting_keepsTheLastKnownState() async {
+        let source = FakeSource()
+        source.fetchedBlock = GameFixture.game(score: 14_000)
+        let settings = FakeSettings()
+        settings.hidden = nil
+        let sut = store(source, settings: settings)
+        await sut.activate()
+        XCTAssertEqual(sut.banner?.score, 14_000, "hors ligne, la copie de l'appareil reste maîtresse")
+    }
+
+    func test_theServedSettingsAreReread_atMostEveryFiveMinutes() async {
+        let source = FakeSource()
+        source.fetchedBlock = GameFixture.game()
+        let settings = FakeSettings()
+        var now = Date(timeIntervalSince1970: 1_790_000_000)
+        let sut = store(source, settings: settings, interval: 60, clock: { now })
+
+        await sut.revalidate()
+        now = now.addingTimeInterval(61)
+        await sut.revalidate()
+        XCTAssertEqual(source.fetchCalls, 2)
+        XCTAssertEqual(settings.calls, 1, "le jeu se revalide, les réglages servis ne se relisent pas à chaque fois")
+
+        now = now.addingTimeInterval(PlayerBannerStore.settingsInterval)
+        await sut.revalidate()
+        XCTAssertEqual(settings.calls, 2)
+    }
+
     // MARK: - Où elle est montée
 
     private var iosRoot: URL {
@@ -290,7 +400,87 @@ final class PlayerBannerTests: XCTestCase {
     func test_theSlotNeverReadsTheWindowInsetsItself() throws {
         let host = try source("Meeshy/Features/Main/Game/PlayerBannerHost.swift")
         XCTAssertFalse(host.contains("DeviceLayout.safeAreaTop"), "lire l'encart de la fenêtre clé depuis l'intérieur fige la vue (#8772) : il est mesuré par préférence")
-        XCTAssertTrue(host.contains("withAnimation(TopChromeBarMotion.animation"), "la sortie s'anime par l'état AFFICHÉ, pas par une .animation(value:)")
+        XCTAssertTrue(host.contains("withAnimation(PlayerBannerMotion.animation"), "la sortie s'anime par l'état AFFICHÉ, pas par une .animation(value:)")
         XCTAssertFalse(host.contains(".animation(TopChromeBarMotion"), "une .animation(value:) n'anime pas une sortie (#9048)")
+        XCTAssertFalse(host.contains(".animation(PlayerBannerMotion"), "idem pour la sortie lente : un changement d'état fait sous withAnimation")
+    }
+
+    /// #9536 : le fond du bandeau est la bannière de profil du joueur, en translucide.
+    func test_theBarPutsTheProfileBannerUnderTheInformation() throws {
+        let host = try source("Meeshy/Features/Main/Game/PlayerBannerHost.swift")
+        XCTAssertTrue(host.contains("backdrop: AuthManager.shared.currentUser?.banner"), "la bannière de profil de l'utilisateur est le fond")
+    }
+
+    // MARK: - À l'ouverture seulement, et seulement ce qui a du sens (#9536)
+
+    /// Un joueur qui n'a rien fait : niveau 1, aucun point, aucune Meesh, aucune Gloire, aucune Flamme.
+    private func emptyBlock() -> GameBlock {
+        GameFixture.game(score: 0, glory: 0, held: 0, flameDays: 0, flameStatus: .none)
+    }
+
+    func test_aPlayerWhoDidNothingYet_hasNoBannerAtAll() async {
+        let source = FakeSource()
+        source.cachedBlock = emptyBlock()
+        source.fetchedBlock = emptyBlock()
+        let sut = store(source)
+        await sut.activate()
+        XCTAssertNil(sut.banner, "toutes les données à zéro : aucun bandeau")
+    }
+
+    func test_aBannerThatLosesEverything_goesAway() async {
+        let source = FakeSource()
+        source.cachedBlock = GameFixture.game()
+        let sut = store(source)
+        await sut.readCache()
+        XCTAssertNotNil(sut.banner)
+        source.cachedBlock = emptyBlock()
+        await sut.readCache()
+        XCTAssertNil(sut.banner, "un jeu remis à zéro retire le bandeau")
+    }
+
+    func test_theOpeningHoldsTheBannerThirtySeconds_thenItLeavesAndTheNetworkIsLeftAlone() async {
+        let source = FakeSource()
+        source.fetchedBlock = GameFixture.game()
+        var now = Date(timeIntervalSince1970: 1_790_000_000)
+        let sut = store(source, interval: 1, clock: { now })
+        XCTAssertTrue(sut.lingering, "à l'ouverture de l'app : le bandeau est tenu")
+        XCTAssertEqual(sut.openingRemaining, 30, accuracy: 0.001)
+
+        now = now.addingTimeInterval(29)
+        sut.closeOpeningIfDue()
+        XCTAssertTrue(sut.lingering, "29 s : il reste")
+
+        now = now.addingTimeInterval(2)
+        sut.closeOpeningIfDue()
+        XCTAssertFalse(sut.lingering, "au-delà de 30 s : il s'en va")
+
+        await sut.revalidate(force: true)
+        XCTAssertEqual(source.fetchCalls, 0, "un bandeau qui ne paraîtra plus ne demande rien au réseau")
+    }
+
+    func test_aRealAbsenceReopensTheBanner_aShortOneDoesNot() async {
+        let source = FakeSource()
+        source.fetchedBlock = GameFixture.game()
+        var now = Date(timeIntervalSince1970: 1_790_000_000)
+        let sut = store(source, interval: 1, clock: { now })
+
+        now = now.addingTimeInterval(40)
+        sut.closeOpeningIfDue()
+        XCTAssertFalse(sut.lingering)
+
+        sut.appWentAway()
+        now = now.addingTimeInterval(20)
+        await sut.appCameBack()
+        XCTAssertFalse(sut.lingering, "vingt secondes d'absence : pas une vraie absence")
+        XCTAssertEqual(sut.openingGeneration, 0)
+
+        sut.appWentAway()
+        now = now.addingTimeInterval(GamePlayerBannerOpening.realAbsence + 1)
+        await sut.appCameBack()
+        XCTAssertTrue(sut.lingering, "une vraie absence rouvre le bandeau")
+        XCTAssertEqual(sut.openingGeneration, 1, "et relance la minuterie de trente secondes")
+        XCTAssertEqual(sut.openingRemaining, 30, accuracy: 0.001)
+        XCTAssertEqual(source.fetchCalls, 1, "au retour, le jeu est relu en silence")
+        XCTAssertNotNil(sut.banner)
     }
 }

@@ -13,6 +13,7 @@ import { thumbHashImage } from '@/lib/media/thumbhash-image';
 import { LETTERBOX_FILL_OPACITY, type LetterboxFill } from '@/lib/stories/letterbox';
 
 import type { SceneClockHandle } from './scene-clock';
+import { MediaGlowFilter, glowFilterRef, useGlowFilterId } from './scene-media-glow';
 import { useSceneMediaSync } from './scene-media-seek';
 
 export type SceneCallbacks = {
@@ -81,6 +82,7 @@ export function BackgroundLayer({
   const background = typeof payload.background === 'string' ? payload.background : undefined;
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const imageRef = useRef<HTMLImageElement | null>(null);
+  const glowId = useGlowFilterId();
   const isVideo = src !== undefined && mediaType?.startsWith('video') === true;
   const crop = readMediaCrop(payload);
   const ratio = typeof payload.aspectRatio === 'number' && payload.aspectRatio > 0 ? payload.aspectRatio : undefined;
@@ -92,7 +94,10 @@ export function BackgroundLayer({
     target: isVideo ? 'video' : 'image',
     ...backgroundBlurScale(carrierEntryOf(object, carrier), crop, framing),
   });
-  const filter = [mediaFilterCss(payload), adjustments.filter].filter((step) => step !== undefined).join(' ');
+  // LE BLOOM DU FOND (#9498) clôt la chaîne, comme `StoryBackgroundLook`.
+  const filter = [mediaFilterCss(payload), adjustments.filter, glowFilterRef(glowId, adjustments.glow)]
+    .filter((step) => step !== undefined)
+    .join(' ');
   const mediaStyle = filter !== '' ? { filter } : undefined;
   /**
    * LE MUET DE L'AUTEUR EST DÉFINITIF (revue-correction #6903) — `payload.muted`
@@ -124,6 +129,11 @@ export function BackgroundLayer({
     />
   ));
   const boxCrop = crop ?? (overlays.length > 0 ? FULL_MEDIA : null);
+  // Le halo se compte en fraction de la boîte de l'ÉLÉMENT : le média entier
+  // dans sa boîte de recadrage, la scène 9:16 sinon.
+  const glowFilter = (
+    <MediaGlowFilter id={glowId} glow={adjustments.glow} aspect={boxCrop !== null && ratio !== undefined ? ratio : CARD_RATIO} />
+  );
   const cropped = (media: (style: Record<string, string> | undefined, className: string) => ReactNode): ReactNode =>
     boxCrop !== null && ratio !== undefined ? (
       <CroppedBox crop={boxCrop} ratio={ratio} fill={framing !== 'fit'}>
@@ -272,6 +282,7 @@ export function BackgroundLayer({
       <>
         {letterboxFill}
         {placeholder}
+        {glowFilter}
         {cropped((cropStyle, className) => (
           // eslint-disable-next-line jsx-a11y/alt-text
           <img

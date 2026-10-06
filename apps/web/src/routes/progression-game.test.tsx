@@ -20,6 +20,7 @@ const idle: GameActions = {
   pending: { mint: false, rerollId: null, chest: false, freeze: false, relight: false },
   errors: {},
   celebration: null,
+  strikeKey: 0,
 };
 
 const base = resolveEngagementProgress(ENGAGEMENT_PROGRESS_FIXTURE);
@@ -44,7 +45,7 @@ describe('un serveur qui sert le bloc game', () => {
   const page = body(withGame());
   const position = (needle: string): number => page.indexOf(needle);
 
-  test('le héros ouvre l’écran, puis les deux jauges, avant les missions, l’aperçu et la Flamme', () => {
+  test('le héros ouvre l’écran, puis les deux jauges, avant les missions, le héros de frappe et la Flamme', () => {
     const order = ['data-game-hero', 'data-game-gauges', 'id="game-missions"', 'id="game-mint"', 'id="game-flame-panel"'].map(position);
     expect(order.every((i) => i >= 0)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
@@ -98,6 +99,35 @@ describe('un serveur qui sert le bloc game', () => {
   });
 });
 
+describe('UNE seule section de frappe (#9537)', () => {
+  const page = body(withGame());
+
+  test('un seul héros de frappe, un seul bouton ; l’ancienne ligne « Comment frapper » du héros de niveau a disparu', () => {
+    expect(page.match(/id="game-mint"/g)).toHaveLength(1);
+    expect(page.match(/data-game-mint-action/g)).toHaveLength(1);
+    expect(page).not.toContain('data-game-hero-mint');
+    expect(page).not.toContain('Comment frapper');
+  });
+
+  test('l’ancien héros Meesh du serveur d’avant ne s’ajoute pas à la section de frappe', () => {
+    expect(page).not.toContain('progression-meesh');
+  });
+});
+
+describe('le détail de ligue précède le héros de frappe (#9541)', () => {
+  test('placé dans la ligue : le détail se lit AVANT le bouton de frappe', () => {
+    const page = body({ ...base, game: gameBlockWithExtrasFixture() });
+    expect(page).toContain('data-game-league-summary');
+    expect(page.indexOf('data-game-league-summary')).toBeGreaterThan(page.indexOf('id="game-missions"'));
+    expect(page.indexOf('data-game-league-summary')).toBeLessThan(page.indexOf('id="game-mint"'));
+    expect(page.indexOf('data-game-league-summary')).toBeLessThan(page.indexOf('data-game-mint-action'));
+  });
+
+  test('pas de ligue servie : aucun détail', () => {
+    expect(body(withGame())).not.toContain('data-game-league-summary');
+  });
+});
+
 describe('les actions se branchent sur les actions du crochet', () => {
   test('une frappe en cours occupe le bouton de l’aperçu', () => {
     const page = body(withGame(), { actions: { ...idle, pending: { ...idle.pending, mint: true } } });
@@ -109,14 +139,8 @@ describe('les actions se branchent sur les actions du crochet', () => {
     expect(page).toContain('Pas assez de points convertibles');
   });
 
-  test('hors ligne : les gestes d’argent se taisent, au héros comme à l’aperçu', () => {
-    const page = body(withGame(), { online: false });
-    expect(page).toMatch(/data-game-mint-action=""[^>]*disabled/);
-    expect(page).toMatch(/data-game-hero-mint=""[^>]*disabled/);
-  });
-
-  test('la frappe en cours occupe aussi le bouton du héros', () => {
-    expect(body(withGame(), { actions: { ...idle, pending: { ...idle.pending, mint: true } } })).toMatch(/data-game-hero-mint=""[^>]*aria-busy="true"/);
+  test('hors ligne : la frappe se tait', () => {
+    expect(body(withGame(), { online: false })).toMatch(/data-game-mint-action=""[^>]*disabled/);
   });
 
   test('la ligne du guide arrive au héros, dite par Mee', () => {

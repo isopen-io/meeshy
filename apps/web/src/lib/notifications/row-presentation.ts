@@ -1,4 +1,5 @@
 import { ENGAGEMENT_ACHIEVEMENT_KEYS, isEngagementAxisKey, type EngagementAchievementKey, type EngagementAxisKey } from '@meeshy/shared/types/engagement';
+import { isGameNotificationType } from '@meeshy/shared/utils/game/notifications';
 import { engagementAchievementCondition, engagementAchievementTitle, engagementAxisLabel } from '@meeshy/shared/utils/engagement-labels';
 
 import { translateNotificationRow } from '@/lib/i18n-notification-row-catalog';
@@ -31,7 +32,11 @@ export type ContentKind = 'story' | 'reel' | 'mood' | 'status' | 'post';
 
 export type MilestoneGlyph = ProgressionGlyph | 'trophy' | 'star' | 'fire';
 
-export type RowLeading = { readonly kind: 'avatar' } | { readonly kind: 'milestone'; readonly glyph: MilestoneGlyph };
+/**
+ * `game` : la ligne du jeu SANS personne à nommer (résultat de ligue, étape de saison, #9490) — elle porte la
+ * Signature de Meeshy à la place d'un avatar. Un duo, lui, a son ami pour acteur : avatar.
+ */
+export type RowLeading = { readonly kind: 'avatar' } | { readonly kind: 'milestone'; readonly glyph: MilestoneGlyph } | { readonly kind: 'game' };
 
 export type RowFooter =
   | { readonly kind: 'conversation'; readonly text: string }
@@ -237,7 +242,8 @@ export function notificationRowPresentation(notification: NotificationRecord, op
   const [, body = null, quote = null] = distinctTexts([title, parts.body, parts.quote]);
   const shown = [title, body, quote].filter((text): text is string => text !== null);
   const footer = parts.social ? contentFooter(notification, shown, options) : conversationOrPlainFooter(notification, shown);
-  return { leading: { kind: 'avatar' }, title, body, quote, footer };
+  const leading: RowLeading = isGameNotificationType(notification.type) && notification.actor === null ? { kind: 'game' } : { kind: 'avatar' };
+  return { leading, title, body, quote, footer };
 }
 
 /**

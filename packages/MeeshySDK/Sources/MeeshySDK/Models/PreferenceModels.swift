@@ -431,6 +431,9 @@ public struct UserNotificationPreferences: Codable, Equatable, Sendable {
     /// « Quand un contact revient sur Meeshy » (`contact_recently_active`,
     /// #8285). Activé par défaut.
     public var contactActivityEnabled: Bool
+    /// « Notifications du jeu » (`game_duo_invited`, `game_duo_accepted`, `game_league_result`,
+    /// `game_season_step`, #9490) : au plus une par jour. Activé par défaut ; ABSENT = reçu.
+    public var gameEnabled: Bool
     public var dndEnabled: Bool
     public var dndStartTime: String
     public var dndEndTime: String
@@ -453,7 +456,7 @@ public struct UserNotificationPreferences: Codable, Equatable, Sendable {
         contactRequestEnabled: true, groupInviteEnabled: true, memberJoinedEnabled: true, memberLeftEnabled: true,
         postLikeEnabled: true, postCommentEnabled: true, postRepostEnabled: true, storyReactionEnabled: true,
         commentReplyEnabled: true, commentLikeEnabled: true, friendContentEnabled: true,
-        contactActivityEnabled: true,
+        contactActivityEnabled: true, gameEnabled: true,
         dndEnabled: false, dndStartTime: "22:00", dndEndTime: "08:00", dndDays: [], dndUtcOffsetMinutes: 0,
         showPreview: true, showSenderName: true, groupNotifications: true, notificationBadgeEnabled: true,
         extras: [:]
@@ -467,7 +470,7 @@ public struct UserNotificationPreferences: Codable, Equatable, Sendable {
         groupInviteEnabled: Bool = true, memberJoinedEnabled: Bool = true, memberLeftEnabled: Bool = true,
         postLikeEnabled: Bool = true, postCommentEnabled: Bool = true, postRepostEnabled: Bool = true,
         storyReactionEnabled: Bool = true, commentReplyEnabled: Bool = true, commentLikeEnabled: Bool = true,
-        friendContentEnabled: Bool = true, contactActivityEnabled: Bool = true,
+        friendContentEnabled: Bool = true, contactActivityEnabled: Bool = true, gameEnabled: Bool = true,
         dndEnabled: Bool = false, dndStartTime: String = "22:00", dndEndTime: String = "08:00", dndDays: [DndDay] = [],
         dndUtcOffsetMinutes: Int = 0,
         showPreview: Bool = true, showSenderName: Bool = true, groupNotifications: Bool = true,
@@ -487,6 +490,7 @@ public struct UserNotificationPreferences: Codable, Equatable, Sendable {
         self.commentReplyEnabled = commentReplyEnabled; self.commentLikeEnabled = commentLikeEnabled
         self.friendContentEnabled = friendContentEnabled
         self.contactActivityEnabled = contactActivityEnabled
+        self.gameEnabled = gameEnabled
         self.dndEnabled = dndEnabled; self.dndStartTime = dndStartTime; self.dndEndTime = dndEndTime
         self.dndUtcOffsetMinutes = dndUtcOffsetMinutes
         self.dndDays = dndDays; self.showPreview = showPreview; self.showSenderName = showSenderName
@@ -500,7 +504,7 @@ public struct UserNotificationPreferences: Codable, Equatable, Sendable {
         case conversationEnabled, replyEnabled, mentionEnabled, reactionEnabled
         case contactRequestEnabled, groupInviteEnabled, memberJoinedEnabled, memberLeftEnabled
         case postLikeEnabled, postCommentEnabled, postRepostEnabled, storyReactionEnabled
-        case commentReplyEnabled, commentLikeEnabled, friendContentEnabled, contactActivityEnabled
+        case commentReplyEnabled, commentLikeEnabled, friendContentEnabled, contactActivityEnabled, gameEnabled
         case dndEnabled, dndStartTime, dndEndTime, dndDays, dndUtcOffsetMinutes
         case showPreview, showSenderName, groupNotifications, notificationBadgeEnabled
         case extras
@@ -533,6 +537,7 @@ public struct UserNotificationPreferences: Codable, Equatable, Sendable {
         commentLikeEnabled = try c.decodeIfPresent(Bool.self, forKey: .commentLikeEnabled) ?? Self.defaults.commentLikeEnabled
         friendContentEnabled = try c.decodeIfPresent(Bool.self, forKey: .friendContentEnabled) ?? Self.defaults.friendContentEnabled
         contactActivityEnabled = try c.decodeIfPresent(Bool.self, forKey: .contactActivityEnabled) ?? Self.defaults.contactActivityEnabled
+        gameEnabled = try c.decodeIfPresent(Bool.self, forKey: .gameEnabled) ?? Self.defaults.gameEnabled
         dndEnabled = try c.decodeIfPresent(Bool.self, forKey: .dndEnabled) ?? Self.defaults.dndEnabled
         dndStartTime = try c.decodeIfPresent(String.self, forKey: .dndStartTime) ?? Self.defaults.dndStartTime
         dndEndTime = try c.decodeIfPresent(String.self, forKey: .dndEndTime) ?? Self.defaults.dndEndTime

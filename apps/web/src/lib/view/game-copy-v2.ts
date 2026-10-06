@@ -39,13 +39,31 @@ export const visibilityLabel = (level: GameVisibility['showcase'], language: Lan
 export function remainingLabel(closes: { readonly dayKey: string; readonly minuteOfDay: number }, now: Date, language: Language = currentInterfaceLanguage()): string {
   const [year, month, day] = closes.dayKey.split('-').map(Number);
   const target = new Date(year ?? 1970, (month ?? 1) - 1, day ?? 1, Math.floor(closes.minuteOfDay / 60), closes.minuteOfDay % 60);
-  const minutes = Math.max(1, Math.ceil((target.getTime() - now.getTime()) / MINUTE));
+  return durationLabel(target.getTime() - now.getTime(), language);
+}
+
+/** La même lecture calme pour une durée : jamais moins d'une minute, jamais de secondes (#9539, le minuteur d'une mission). */
+export function durationLabel(milliseconds: number, language: Language = currentInterfaceLanguage()): string {
+  const minutes = Math.max(1, Math.ceil(milliseconds / MINUTE));
   const days = Math.floor(minutes / (24 * 60));
   const hours = Math.floor((minutes % (24 * 60)) / 60);
   const count = (value: number): string => formatGameNumber(language, value);
   if (days >= 1) return translateGame(language, 'game.duration.days_hours', { days: count(days), hours: count(hours) });
   if (hours >= 1) return translateGame(language, 'game.duration.hours', { hours: count(Math.floor(minutes / 60)) });
   return translateGame(language, 'game.duration.minutes', { minutes: count(minutes) });
+}
+
+/**
+ * Le décompte d'une carte de mission (#9539) : des heures ET des minutes (« 1 h 59 min »), jamais de secondes.
+ * `durationLabel` seul dirait « 1 h » pendant cinquante-neuf minutes d'une plage de deux heures. Même lecture
+ * que `calmDuration` (iOS).
+ */
+export function timerLabel(milliseconds: number, language: Language = currentInterfaceLanguage()): string {
+  const minutes = Math.max(1, Math.ceil(milliseconds / MINUTE));
+  const rest = minutes % 60;
+  if (minutes < 60 || minutes >= 24 * 60 || rest === 0) return durationLabel(milliseconds, language);
+  const count = (value: number): string => formatGameNumber(language, value);
+  return `${translateGame(language, 'game.duration.hours', { hours: count(Math.floor(minutes / 60)) })} ${translateGame(language, 'game.duration.minutes', { minutes: count(rest) })}`;
 }
 
 /** « Semaine du 2 novembre » : la semaine s'identifie par son lundi local. */

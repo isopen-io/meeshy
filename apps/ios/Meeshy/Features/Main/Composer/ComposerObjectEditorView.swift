@@ -1002,6 +1002,7 @@ nonisolated enum ComposerObjectEditorCopy {
             return String(localized: "composer.object.editor.split",
                           defaultValue: "Couper", bundle: .main)
         case .adjust:  return ComposerAdjustCopy.title
+        case .effects: return ComposerAdjustCopy.effectsTitle
         case .filter:
             // La clé du SDK n'est pas réemployable : elle vit dans `.module`,
             // et cet écran lit `.main`. Le MOT, lui, est le même que celui du

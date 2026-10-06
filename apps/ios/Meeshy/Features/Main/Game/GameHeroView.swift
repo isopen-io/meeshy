@@ -3,12 +3,12 @@ import MeeshySDK
 import MeeshyUI
 
 /// LE HÉRO DE PROGRESSION (#5841) — pleine largeur, en deuxième position (conception, partie
-/// XII.1). Il répond à trois questions, dans l'ordre : OÙ J'EN SUIS (l'anneau de niveau, le
-/// palier, le record, le blason et la division), COMMENT JE GAGNE (une puce par famille, DÉRIVÉE
-/// du barème — `GameHero.earnItems`), COMMENT JE FRAPPE (le prix servi par le serveur, les
-/// niveaux perdus, la Gloire, puis le bouton). Mee se pose en haut et dit la ligne courte du
-/// guide du moment ; un toucher ouvre la version complète. Miroir de
-/// `apps/web/src/routes/progression-hero.tsx`.
+/// XII.1). Il répond à deux questions, dans l'ordre : OÙ J'EN SUIS (l'anneau de niveau, le
+/// niveau en grand, le blason et la division), COMMENT JE GAGNE (une puce par famille, DÉRIVÉE
+/// du barème — `GameHero.earnItems`). Court (#9537) : un titre, un chiffre, une ligne — aucun
+/// paragraphe ; « Comment je frappe » n'est PLUS ici, c'est le héro de frappe, le seul de l'écran
+/// (`GameMintPreviewView`). Mee se pose en haut et dit la ligne courte du guide du moment ; un toucher
+/// ouvre la version complète. Miroir de `apps/web/src/routes/progression-hero.tsx`.
 ///
 /// Le fond est teinté par la couleur du palier (12 %) et porte la Signature en filigrane.
 /// **Cache-first** : la vue ne lit que le bloc `game` que `ProgressionViewModel` sert depuis le
@@ -23,12 +23,9 @@ struct GameHeroView: View {
     /// Le film de Mee dans le coin, et la ligne courte qu'il dit ; `nil` ⇒ pas de coin.
     var cornerFigure: String?
     var cornerLine: String?
-    let online: Bool
-    let minting: Bool
     var haptics: GameHapticsProviding = GameHaptics.shared
     /// Aucun geste du jeu n'est en vol : seule une montée lue ALORS est « gagnée ».
     var settled = true
-    let onMint: () -> Void
     let onOpenRule: (Int) -> Void
     let onOpenGuide: () -> Void
 
@@ -39,17 +36,14 @@ struct GameHeroView: View {
     @State private var seenOrder: Int
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    init(game: GameBlock, cornerFigure: String? = nil, cornerLine: String? = nil, online: Bool, minting: Bool,
+    init(game: GameBlock, cornerFigure: String? = nil, cornerLine: String? = nil,
          haptics: GameHapticsProviding = GameHaptics.shared, settled: Bool = true,
-         onMint: @escaping () -> Void, onOpenRule: @escaping (Int) -> Void, onOpenGuide: @escaping () -> Void) {
+         onOpenRule: @escaping (Int) -> Void, onOpenGuide: @escaping () -> Void) {
         self.game = game
         self.cornerFigure = cornerFigure
         self.cornerLine = cornerLine
-        self.online = online
-        self.minting = minting
         self.haptics = haptics
         self.settled = settled
-        self.onMint = onMint
         self.onOpenRule = onOpenRule
         self.onOpenGuide = onOpenGuide
         _shownLevel = State(initialValue: game.level.level)
@@ -69,10 +63,6 @@ struct GameHeroView: View {
             levelRow
             rankRow
             GameHeroEarn(onOpenRule: onOpenRule)
-            GameHeroMint(
-                mint: game.mint, online: online, minting: minting,
-                onMint: onMint, onOpenRule: { onOpenRule(GameHero.mintRule) }
-            )
         }
         .padding(MeeshySpacing.lg)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -159,11 +149,7 @@ struct GameHeroView: View {
             )
             .frame(width: 88, height: 88)
             VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
-                Text(String(
-                    localized: "game.hero.eyebrow",
-                    defaultValue: "\(GameCopy.tierName(level.tier)) · record \(GameCopy.formatCount(level.record))",
-                    bundle: .main
-                ))
+                Text(GameCopy.tierName(level.tier))
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
                 .textCase(.uppercase)
                 .foregroundColor(theme.textMuted)
@@ -238,23 +224,10 @@ struct GameHeroView: View {
                 Text(String(localized: "game.rank.glory", defaultValue: "Gloire \(GameCopy.formatCount(glory.glory))", bundle: .main))
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                     .foregroundColor(theme.textMuted)
-                Text(nextRankText ?? String(localized: "game.rank.top", defaultValue: "Le rang le plus haut", bundle: .main))
-                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                    .foregroundColor(theme.textMuted)
-                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .id(GameAnchor.rank)
         .accessibilityElement(children: .combine)
-    }
-
-    private var nextRankText: String? {
-        guard let next = glory.next, let missing = glory.gloryMissing else { return nil }
-        return String(
-            localized: "game.rank.next",
-            defaultValue: "Encore \(GameCopy.formatCount(missing)) de Gloire avant \(GameCopy.rankLabel(next.rank, division: next.division))",
-            bundle: .main
-        )
     }
 
     // MARK: - Les animations

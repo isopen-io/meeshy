@@ -43,6 +43,39 @@
   animation: player-banner-out 200ms cubic-bezier(0.4, 0, 1, 1) both;
 }
 
+/*
+ * LA SORTIE DE LA VISITE (#9536) — au bout de 30 s la bannière s'en va
+ * LENTEMENT, en REMONTANT vers le haut de l'écran (de sa propre hauteur, de
+ * l'encoche et d'une marge) : `transform` et `opacity` seulement, une seconde
+ * (`PLAYER_BANNER_EXIT_MS`), une courbe qui part doucement. Elle reste dans la
+ * pile le temps du geste : le bandeau ne saute pas, il se vide à la fin.
+ * Sous `prefers-reduced-motion` : un fondu, sans déplacement.
+ */
+@keyframes player-banner-expire {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: translateY(calc(-100% - env(safe-area-inset-top, 0px) - 24px));
+  }
+}
+
+@keyframes player-banner-fade {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+.player-banner-slot-expiring {
+  pointer-events: none;
+  animation: player-banner-expire 1000ms cubic-bezier(0.45, 0, 0.55, 1) both;
+}
+
 .player-banner {
   animation: player-banner-in 260ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
@@ -50,6 +83,11 @@
 .player-banner-fill {
   transform-origin: left center;
   transition: transform 420ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* La teinte du palier part de l'anneau, donc du DÉBUT de la ligne : à droite en arabe. */
+[dir='rtl'] .player-banner {
+  --player-banner-sweep: 260deg;
 }
 
 [dir='rtl'] .player-banner-fill {
@@ -60,6 +98,9 @@
   .player-banner,
   .player-banner-slot-leaving {
     animation: none;
+  }
+  .player-banner-slot-expiring {
+    animation: player-banner-fade 400ms linear both;
   }
   .player-banner-fill {
     transition: none;

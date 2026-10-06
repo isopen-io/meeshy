@@ -13,7 +13,7 @@ import { isNotificationTypeEnabledByPreference } from '../type-preference';
 const prefs = (over: Partial<NotificationPreference>): NotificationPreference => ({ ...NOTIFICATION_PREFERENCE_DEFAULTS, ...over });
 
 describe('notification.gameEnabled', () => {
-  it('coupée, elle ferme les quatre types du jeu', () => {
+  it('coupée, elle ferme les cinq types du jeu', () => {
     for (const type of GAME_NOTIFICATION_TYPES) expect(isNotificationTypeEnabledByPreference(prefs({ gameEnabled: false }), type)).toBe(false);
   });
 

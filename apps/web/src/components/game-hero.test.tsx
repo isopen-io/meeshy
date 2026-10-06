@@ -12,7 +12,7 @@ import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-su
 import { GameHero } from './game-hero';
 
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
-const { mount, unmountAll, click } = createActMounter();
+const { unmountAll } = createActMounter();
 
 beforeAll(() => {
   ensureHappyDomRegistered({ url: 'http://localhost/me/progression' });
@@ -25,17 +25,17 @@ afterAll(async () => {
 afterEach(unmountAll);
 
 type Props = Parameters<typeof GameHero>[0];
-const base = (game: GameBlock, patch: Partial<Props> = {}): Props => ({ game, online: true, minting: false, onMint: () => undefined, ...patch });
+const base = (game: GameBlock, patch: Partial<Props> = {}): Props => ({ game, ...patch });
 const html = (patch: Parameters<typeof gameBlockFixture>[0] = {}, props: Partial<Props> = {}): string =>
   renderToStaticMarkup(<GameHero {...base(gameBlockFixture(patch), props)} />);
 const squash = (value: string): string => value.replace(/\s+/g, ' ');
 const text = (markup: string): string => squash(markup.replace(/<[^>]+>/g, ' '));
 
 /**
- * LE HÉROS DE PROGRESSION (#5841) — pleine largeur, il répond à trois questions
- * dans l'ordre : où j'en suis, comment je gagne, comment je frappe. Tout ce
- * qu'il énumère vient de la loi (le barème, le prix servi) : il ne calcule
- * ni niveau, ni rang, ni prix.
+ * LE HÉROS DE PROGRESSION (#5841) — pleine largeur, il répond à deux questions
+ * dans l'ordre : où j'en suis, comment je gagne. Tout ce qu'il énumère vient de
+ * la loi (le barème) : il ne calcule ni niveau, ni rang, ni prix. La frappe a
+ * son propre héros (#9537).
  */
 describe('où j’en suis', () => {
   const page = html();
@@ -118,42 +118,20 @@ describe('comment gagner — dérivé du barème', () => {
   });
 });
 
-describe('comment frapper — le prix est celui que le serveur sert', () => {
-  test('prix, niveaux perdus et Gloire, puis le bouton', () => {
-    const game = gameBlockFixture();
-    const body = text(html());
-    expect(body).toContain('Comment frapper');
-    expect(body).toContain(squash(`${game.mint.price.toLocaleString('fr-FR')} points`));
-    expect(body).toContain('une Meesh');
-    expect(body).toContain(`coûte ${game.mint.levelsLost} niveau`);
-    expect(body).toContain(`+${game.mint.gloryGained} Gloire`);
-    expect(html()).toMatch(/data-game-hero-mint=""[^>]*>Frapper avec Mee et Meo</);
+describe('la frappe n’est plus ici : UNE seule section de frappe (#9537)', () => {
+  test('aucun bouton de frappe, aucun prix, aucune pièce — le héros de frappe est ailleurs', () => {
+    const page = html();
+    expect(page).not.toContain('data-game-hero-mint');
+    expect(page).not.toContain('data-game-hero-missing');
+    expect(page).not.toContain('data-game-coin');
+    expect(text(page)).not.toContain('Comment frapper');
+    expect(text(page)).not.toContain('Frapper');
   });
 
-  test('un prix servi autrement s’affiche tel quel : aucune constante locale', () => {
-    const game = gameBlockFixture();
-    const priced: GameBlock = { ...game, mint: { ...game.mint, price: 4321 } };
-    expect(text(renderToStaticMarkup(<GameHero {...base(priced)} />))).toContain('4');
-    expect(text(renderToStaticMarkup(<GameHero {...base(priced)} />))).toMatch(/4\s?321 points/);
-  });
-
-  test('sans assez de points : « Encore N points », lisible, jamais un bouton grisé à l’illisible', () => {
-    const page = html({ score: 100, debitablePoints: 100 });
-    const body = text(page);
-    expect(page).not.toContain('data-game-hero-mint=""');
-    expect(page).toMatch(/data-game-hero-missing=""[^>]*aria-disabled="true"/);
-    expect(body).toMatch(/Encore [\d  ]+ points?/);
-    expect(page).not.toMatch(/data-game-hero-missing=""[^>]*opacity/);
-  });
-
-  test('hors ligne, la frappe attend la connexion et le dit', () => {
-    const page = html({}, { online: false });
-    expect(page).toMatch(/data-game-hero-mint=""[^>]*disabled=""/);
-    expect(text(page)).toContain('Hors ligne');
-  });
-
-  test('un refus se dit en alerte', () => {
-    expect(html({}, { mintError: 'Pas assez de points convertibles pour frapper une Meesh.' })).toMatch(/role="alert"[^>]*>Pas assez/);
+  test('court : aucune phrase d’explication — le palier ne se dit pas deux fois, le rang tient en deux lignes', () => {
+    const page = html();
+    expect((text(page).match(/Lueur/g) ?? []).length).toBeLessThanOrEqual(2);
+    expect(text(page)).not.toMatch(/de Gloire avant/);
   });
 });
 
@@ -169,34 +147,6 @@ describe('Mee sur le coin du héros', () => {
     const page = html({}, { guideLine: null });
     expect(text(page)).toContain('Une question ? Touche-moi');
     expect(page).toMatch(/<a[^>]*href="\/me\/progression\/regles"[^>]*data-game-hero-guide=""|<a[^>]*data-game-hero-guide=""[^>]*href="\/me\/progression\/regles"/);
-  });
-});
-
-describe('les gestes', () => {
-  test('toucher « Frapper » frappe, une fois', async () => {
-    let minted = 0;
-    const host = await mount(<GameHero {...base(gameBlockFixture(), { onMint: () => (minted += 1) })} />);
-    const button = host.querySelector<HTMLButtonElement>('[data-game-hero-mint]');
-    expect(button).not.toBeNull();
-    if (button !== null) await click(button);
-    expect(minted).toBe(1);
-  });
-
-  test('hors ligne, toucher « Frapper » ne frappe pas', async () => {
-    let minted = 0;
-    const host = await mount(<GameHero {...base(gameBlockFixture(), { online: false, onMint: () => (minted += 1) })} />);
-    const button = host.querySelector<HTMLButtonElement>('[data-game-hero-mint]');
-    if (button !== null) await click(button);
-    expect(minted).toBe(0);
-  });
-
-  test('« Encore N points » n’ouvre rien et ne frappe rien', async () => {
-    let minted = 0;
-    const host = await mount(<GameHero {...base(gameBlockFixture({ score: 100, debitablePoints: 100 }), { onMint: () => (minted += 1) })} />);
-    const button = host.querySelector<HTMLButtonElement>('[data-game-hero-missing]');
-    expect(button).not.toBeNull();
-    if (button !== null) await click(button);
-    expect(minted).toBe(0);
   });
 });
 
