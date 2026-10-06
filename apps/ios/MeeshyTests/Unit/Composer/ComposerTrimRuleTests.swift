@@ -34,9 +34,13 @@ final class ComposerTrimRuleTests: XCTestCase {
     }
 
     func test_millisecondText_readsMinutesSecondsMilliseconds() {
-        XCTAssertEqual(ComposerTrimRule.millisecondText(3.482), "0:03.482")
-        XCTAssertEqual(ComposerTrimRule.millisecondText(75.0409), "1:15.041")
-        XCTAssertEqual(ComposerTrimRule.millisecondText(-1), "0:00.000")
+        let anglais = Locale(identifier: "en_US")
+        XCTAssertEqual(ComposerTrimRule.millisecondText(3.482, locale: anglais), "0:03.482")
+        XCTAssertEqual(ComposerTrimRule.millisecondText(75.0409, locale: anglais), "1:15.041")
+        XCTAssertEqual(ComposerTrimRule.millisecondText(-1, locale: anglais), "0:00.000")
+        XCTAssertEqual(ComposerTrimRule.millisecondText(.nan, locale: anglais), "0:00.000")
+        XCTAssertFalse(ComposerTrimRule.millisecondText(3.482, locale: Locale(identifier: "ar_SA")).contains("3"),
+                       "en arabe, la lecture suit les chiffres de la langue")
     }
 
     func test_playhead_isClampedIntoTheRange() {
