@@ -108,7 +108,7 @@ nonisolated enum ImageAdjustmentStage {
 /// qui revient sur une valeur déjà vue ne refait aucun rendu, et un bitmap
 /// remplacé ne resservira jamais les réglages de l'ancien.
 public nonisolated enum StoryMediaAdjustmentsProcessor {
-    nonisolated(unsafe) private static let context = CIContext()
+    private static let context = CIContext()
     nonisolated(unsafe) private static let cache: NSCache<NSString, UIImage> = {
         let cache = NSCache<NSString, UIImage>()
         cache.countLimit = 40

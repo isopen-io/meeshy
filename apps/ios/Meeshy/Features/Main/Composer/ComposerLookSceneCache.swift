@@ -57,10 +57,11 @@ nonisolated final class ComposerLookSceneCache: ComposerLookSceneProviding, @unc
         pending[cle, default: []].append(ready)
         lock.unlock()
         guard !dejaEnCours else { return }
+        nonisolated(unsafe) let cleFigee = cle
         queue.async {
-            if let scene = self.painter(key) { self.scenes.setObject(scene, forKey: cle, cost: Self.cost(of: key)) }
+            if let scene = self.painter(key) { self.scenes.setObject(scene, forKey: cleFigee, cost: Self.cost(of: key)) }
             self.lock.lock()
-            let attente = self.pending.removeValue(forKey: cle) ?? []
+            let attente = self.pending.removeValue(forKey: cleFigee) ?? []
             self.lock.unlock()
             Task { @MainActor in attente.forEach { $0() } }
         }
