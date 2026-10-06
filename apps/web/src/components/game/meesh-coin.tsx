@@ -12,8 +12,9 @@ import { SignatureGlyph } from './signature';
  *
  *   · AVERS  : la Signature FRAPPÉE au centre, « MEESHY · UNE MEESH » en
  *     couronne, tranche cannelée (un cercle en pointillé) ;
- *   · REVERS : Mee et Meo face à face (Meo retourné), le numéro de frappe et
- *     l'année.
+ *   · REVERS : Mee et Meo face à face (Meo retourné), GRAVÉS dans le métal et
+ *     colorés (relief : lumière haute, ombre basse — jamais un autocollant,
+ *     #9540), le numéro de frappe et l'année.
  *
  * Trois éditions, que la loi partagée décide (`meeshEdition`) : argent, or
  * (chaque centième), prisme (chaque millième). Le fond de la pièce reste argent.
