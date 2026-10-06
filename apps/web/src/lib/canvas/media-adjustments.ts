@@ -21,6 +21,8 @@
  * | netteté | `CISharpenLuminance` | rien (aucun équivalent CSS) |
  * | flou | `CIGaussianBlur`, rayon 16 px de la source | `blur()` au même rayon, ramené au repère 1080 |
  * | vignette | `CIVignette` | dégradé radial noir superposé |
+ * | bloom (#9498) | `CIBloom` | `glow` : un halo SVG (flou + `screen`) que le média référence |
+ * | grain (#9498) | bruit noir d'opacité 0,1 × v | calque de bruit `feTurbulence`, même opacité |
  */
 import { readMediaAdjustments, type MediaAdjustmentTarget, type MediaAdjustments } from '@meeshy/shared/utils/media-adjustments';
 
@@ -36,6 +38,10 @@ const VIGNETTE_ALPHA_PER_UNIT = 0.5;
 const VIGNETTE_CLEAR_STOP = '45%';
 const WARM_TINT = '255, 138, 0';
 const COOL_TINT = '0, 122, 255';
+/** Le grain de CoreImage : du noir dont l'alpha suit un bruit uniforme, au
+ * plus 0,1 (`ImageAdjustmentStage.grain`) — 0,05 à mi-course, le préréglage
+ * de l'ancien éditeur. */
+const GRAIN_ALPHA_PER_UNIT = 0.1;
 
 export type MediaAdjustmentOverlay = {
   readonly background: string;
@@ -45,6 +51,10 @@ export type MediaAdjustmentOverlay = {
 export type MediaAdjustmentsPaint = {
   readonly filter: string | undefined;
   readonly overlays: readonly MediaAdjustmentOverlay[];
+  /** L'intensité du BLOOM (#9498), absente sans bloom : le média la peint par
+   * un halo SVG qu'il déclare et référence (`MediaGlowFilter`), après sa
+   * chaîne de filtres — un identifiant par instance, que ce module ne connaît pas. */
+  readonly glow?: number;
 };
 
 export type MediaAdjustmentsPaintOptions = {
@@ -71,7 +81,20 @@ function filterChain(values: MediaAdjustments, designPixelsPerSourcePixel: numbe
   ].filter((step): step is string => step !== null);
 }
 
-function overlaysOf({ temperature, vignette }: MediaAdjustments): readonly MediaAdjustmentOverlay[] {
+/** Un bruit en tuile de 256 px : `feTurbulence` donne la valeur, la matrice la
+ * porte à l'alpha d'un noir pur — la forme du grain de CoreImage. */
+const grainLayer = (grain: number): MediaAdjustmentOverlay => {
+  const svg =
+    '<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256"><filter id="g">' +
+    '<feTurbulence type="fractalNoise" baseFrequency="0.9" stitchTiles="stitch"/>' +
+    `<feColorMatrix values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 ${round4(grain * GRAIN_ALPHA_PER_UNIT)} 0 0 0 0"/>` +
+    '</filter><rect width="100%" height="100%" filter="url(#g)"/></svg>';
+  // Les parenthèses aussi : un `)` nu fermerait le `url(` d'un analyseur CSS strict.
+  const encoded = encodeURIComponent(svg).replace(/\(/g, '%28').replace(/\)/g, '%29');
+  return { background: `url("data:image/svg+xml,${encoded}")` };
+};
+
+function overlaysOf({ temperature, vignette, grain }: MediaAdjustments): readonly MediaAdjustmentOverlay[] {
   const tint: readonly MediaAdjustmentOverlay[] =
     temperature === undefined
       ? []
@@ -80,7 +103,8 @@ function overlaysOf({ temperature, vignette }: MediaAdjustments): readonly Media
     vignette === undefined
       ? []
       : [{ background: `radial-gradient(ellipse at center, rgba(0, 0, 0, 0) ${VIGNETTE_CLEAR_STOP}, rgba(0, 0, 0, ${round4(Math.min(1, vignette * VIGNETTE_ALPHA_PER_UNIT))}) 100%)` }];
-  return [...tint, ...shade];
+  const noise: readonly MediaAdjustmentOverlay[] = grain === undefined ? [] : [grainLayer(grain)];
+  return [...tint, ...shade, ...noise];
 }
 
 /** La peinture de `payload.adjustments` : une chaîne de filtres CSS (ou
@@ -94,5 +118,9 @@ export function mediaAdjustmentsPaint(
   if (values === null) return NOTHING;
   const scale = Number.isFinite(designPixelsPerSourcePixel) && designPixelsPerSourcePixel > 0 ? designPixelsPerSourcePixel : 1;
   const chain = filterChain(values, scale);
-  return { filter: chain.length === 0 ? undefined : chain.join(' '), overlays: overlaysOf(values) };
+  return {
+    filter: chain.length === 0 ? undefined : chain.join(' '),
+    overlays: overlaysOf(values),
+    ...(values.bloom !== undefined ? { glow: values.bloom } : {}),
+  };
 }
