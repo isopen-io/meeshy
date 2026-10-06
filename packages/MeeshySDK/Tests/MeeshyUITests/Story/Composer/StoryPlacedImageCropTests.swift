@@ -52,6 +52,11 @@ final class StoryPlacedImageCropTests: XCTestCase {
         try XCTUnwrap(source.pngData()).write(to: url)
         let posee = try XCTUnwrap(vm.insertForegroundImage(source, fileURL: url,
                                                            intoSlideId: vm.currentSlide.id, objectId: id))
+        // La première image d'une slide vide y entre en FOND (`addMediaObject`) :
+        // la rétrograder la POSE, ce que ce fichier éprouve.
+        XCTAssertTrue(vm.isBackground(id: posee.id))
+        vm.toggleBackground(id: posee.id)
+        XCTAssertFalse(vm.isBackground(id: posee.id), "L'image est posée, plus le fond.")
         return (vm, posee.id)
     }
 

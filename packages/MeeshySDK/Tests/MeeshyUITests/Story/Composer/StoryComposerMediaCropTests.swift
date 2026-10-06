@@ -51,10 +51,12 @@ final class StoryComposerMediaCropTests: XCTestCase {
     }
 
     /// Le FOND d'une retouche se recoupe : `StoryBackgroundLayer` ne lit pas la
-    /// borne. Une image POSÉE garde son bitmap entier (`StoryPlacedImageCropTests`).
+    /// borne. La première image d'une slide vide y entre en fond
+    /// (`addMediaObject`) ; une image POSÉE garde son bitmap entier
+    /// (`StoryPlacedImageCropTests`).
     func test_refreshMediaCropPreview_showsTheCroppedFile_andRecropsFromTheSource() throws {
         let (vm, id) = try composerWithImage(width: 400, height: 300)
-        vm.toggleBackground(id: id)
+        XCTAssertTrue(vm.isBackground(id: id), "La première image d'une slide vide en est le fond.")
         vm.setMediaCrop(id: id, crop: MediaCropRect(x: 0.125, y: 0, width: 0.75, height: 1))
         vm.refreshMediaCropPreview(id: id)
         vm.setMediaCrop(id: id, crop: MediaCropRect(x: 0, y: 0, width: 1, height: 0.5))
@@ -66,7 +68,7 @@ final class StoryComposerMediaCropTests: XCTestCase {
 
     func test_undo_afterACrop_showsTheWholeImageAgain() throws {
         let (vm, id) = try composerWithImage(width: 400, height: 300)
-        vm.toggleBackground(id: id)
+        XCTAssertTrue(vm.isBackground(id: id), "La première image d'une slide vide en est le fond.")
         vm.seedHistory()
         vm.setMediaCrop(id: id, crop: MediaCropRect(x: 0.125, y: 0, width: 0.75, height: 1))
         vm.pushHistorySnapshot()
