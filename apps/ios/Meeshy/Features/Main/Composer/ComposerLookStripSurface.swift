@@ -82,12 +82,6 @@ struct ComposerLookStripSurface: UIViewRepresentable {
 /// Le moteur de la bande : la trame réduite UNE fois, chaque case peinte par le
 /// peintre unique dans sa place de l'atlas, l'atlas recopié dans le drawable.
 final class ComposerLookStripRenderer: NSObject, MTKViewDelegate {
-    /// Ce qu'une place de l'atlas montre : la case, et le look qu'on y a peint.
-    private struct Slot: Equatable {
-        let index: Int
-        let look: ComposerPhotoLook
-    }
-
     private let scenes: any ComposerLookSceneProviding
     /// La cadence du palier, jugée sur la file de l'objectif.
     private let gate = ComposerFrameGate(fps: 0)
@@ -100,7 +94,7 @@ final class ComposerLookStripRenderer: NSObject, MTKViewDelegate {
     private var frameDue = false
     private var atlas: MTLTexture?
     private var slotCount = ComposerLookStripGeometry.minimumSlots
-    private var slots: [Int: Slot] = [:]
+    private var slots: [Int: ComposerLookStripSlot] = [:]
     private var reducedBuffer: CVPixelBuffer?
     private weak var view: MTKView?
 
@@ -175,7 +169,8 @@ final class ComposerLookStripRenderer: NSObject, MTKViewDelegate {
               let buffer = queue.makeCommandBuffer() else { return }
         let echelle = view.contentScaleFactor
         if let cellule = tiles.first?.rect.size, let atlas = atlas(cell: cellule, scale: echelle) {
-            paint(tiles.filter { vivante || slots[slot(of: $0)] != Slot(index: $0.index, look: $0.look) },
+            paint(ComposerLookStripPaintRule.tilesToPaint(tiles, painted: slots, slots: slotCount, live: vivante,
+                                                          scenesReady: scenesReady()),
                   into: atlas, cell: cellule, scale: echelle, buffer: buffer)
             present(atlas, into: drawable.texture, scale: echelle, buffer: buffer)
         } else {
@@ -183,6 +178,16 @@ final class ComposerLookStripRenderer: NSObject, MTKViewDelegate {
         }
         buffer.present(drawable)
         buffer.commit()
+    }
+
+    /// Les cases peintes sans leur cadre dont la scène vient de cuire.
+    private func scenesReady() -> Set<Int> {
+        let toile = ComposerLookPainter.thumbnailCanvas
+        return Set(tiles.filter { tile in
+            guard tile.look.frame != ComposerPhotoFrame.none,
+                  slots[slot(of: tile)].map({ $0.index == tile.index && !$0.complete }) ?? false else { return false }
+            return scenes.cached(ComposerLookSceneKey(look: tile.look, canvas: toile, date: date, person: person)) != nil
+        }.map(\.index))
     }
 
     private func slot(of tile: ComposerLookStripTile) -> Int {
@@ -218,7 +223,7 @@ final class ComposerLookStripRenderer: NSObject, MTKViewDelegate {
                 .concatenating(CGAffineTransform(translationX: cible.minX, y: cible.minY)))
             guard (try? ComposerLookGPU.context.startTask(toRender: posee, from: cible, to: destination,
                                                           at: cible.origin)) != nil else { return }
-            slots[place] = Slot(index: tile.index, look: look)
+            slots[place] = ComposerLookStripSlot(index: tile.index, look: tile.look, complete: look == tile.look)
         }
     }
 
