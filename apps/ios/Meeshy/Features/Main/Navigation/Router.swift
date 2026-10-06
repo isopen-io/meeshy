@@ -82,6 +82,9 @@ enum Route: Hashable {
     /// Le carnet de progression (#9382) — les photos des grands moments, sur
     /// l'appareil.
     case progressionNotebook
+    /// Une page de la vague 2 du jeu (#9481) — Ligue, Saison, Vitrine, Atlas, Prestige, Réglages. Poussée dans la
+    /// pile comme les autres pages du jeu, jamais présentée en feuille.
+    case gamePage(GamePage)
     case links
     case affiliate
     case trackingLinks
@@ -179,6 +182,8 @@ extension Route {
             return String(localized: "game.rules.page_title", defaultValue: "Comment ça marche", bundle: .main)
         case .progressionNotebook:
             return String(localized: "game.notebook.page_title", defaultValue: "Carnet de progression", bundle: .main)
+        case .gamePage(let page):
+            return page.title
         case .links:
             return String(localized: "route.title.links", defaultValue: "Liens", bundle: .main)
         case .affiliate:

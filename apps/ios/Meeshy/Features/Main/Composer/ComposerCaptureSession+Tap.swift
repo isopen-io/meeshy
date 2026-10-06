@@ -5,13 +5,23 @@ import Foundation
 
 extension ComposerCaptureSession {
 
-    /// Ce que fait ce toucher — viser, ou prendre la photo s'il finit un double.
-    /// Un double fini oublie son premier toucher : un troisième en ouvre un nouveau.
+    /// Ce que fait ce toucher du viseur — viser, ou prendre la photo s'il finit
+    /// un double. Projection de `ComposerCaptureGesture.tap`, le seul décideur :
+    /// la mémoire se remet à zéro là où il le dit.
     func tapAction(at now: Date = Date()) -> ComposerCaptureTapRule.Action {
-        let action = ComposerCaptureTapRule.action(stage: stage, now: now,
-                                                   lastTapAt: lastViewfinderTapAt, armedAt: armedAt)
-        lastViewfinderTapAt = action == .photo ? nil : now
-        return action
+        let issue = ComposerCaptureGesture.tap(zone: .scene, context: gestureContext, now: now,
+                                               lastTap: lastViewfinderTap, armedAt: armedAt)
+        lastViewfinderTap = issue.memory
+        return issue.action == .photoToEdit ? .photo : .focus
+    }
+
+    /// Ce que la table des gestes lit de la machine.
+    var gestureContext: ComposerCaptureGestureContext {
+        ComposerCaptureGestureContext(
+            stage: stage,
+            holding: holdStartedAt != nil,
+            locked: holdPhase == .locked || mode == ComposerShutterGesture.mode(locked: true),
+            pendingSegments: segments.count)
     }
 
     /// **Le toucher vise ce point de l'aperçu** (#9295, #9464), converti selon

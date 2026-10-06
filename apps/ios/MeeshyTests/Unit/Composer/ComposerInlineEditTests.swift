@@ -55,15 +55,13 @@ final class ComposerInlineEditTests: XCTestCase {
                        "le filtre se cuit dans une image : une vidéo n'en rend aucun ; ses réglages, si (#9169)")
     }
 
-    /// Sauf les RÉGLAGES (#9175, #9169) : `StoryBackgroundLayer` ne les peint
-    /// pas encore, donc le fond ne les offre pas — un curseur sans effet (loi 4).
+    /// RÉGLAGES compris depuis #9496 : `StoryBackgroundLayer` les peint
+    /// (`StoryBackgroundLook`), le fond les offre donc comme un média posé.
     func test_sections_fond_lesMemesQuUnMediaPose() {
         XCTAssertEqual(ComposerInlineEditing.sections(for: .background(isVideo: false), hasTrimmableSource: false),
-                       ComposerInlineEditing.sections(for: .image, hasTrimmableSource: false)
-                           .filter { $0 != .media(.adjust) })
+                       ComposerInlineEditing.sections(for: .image, hasTrimmableSource: false))
         XCTAssertEqual(ComposerInlineEditing.sections(for: .background(isVideo: true), hasTrimmableSource: true),
-                       ComposerInlineEditing.sections(for: .video, hasTrimmableSource: true)
-                           .filter { $0 != .media(.adjust) })
+                       ComposerInlineEditing.sections(for: .video, hasTrimmableSource: true))
     }
 
     /// **Aucun contrôle inerte** (loi 4) : la fenêtre de temps et le plan
@@ -263,6 +261,27 @@ final class ComposerInlineEditTests: XCTestCase {
                              "une hauteur nulle à la première passe ferait clignoter le panneau")
     }
 
+    /// **Le haut reste la place du panneau** (#9138) ; le bas n'est qu'un repli,
+    /// pris quand le haut cacherait l'objet réglé ET que le bas le cache moins
+    /// (#9495). Les deux places gardent la colonne des sous-outils à droite.
+    func test_panelFrame_enHautParDefaut_leBasNEstQuUnRepli() {
+        let libre = CGSize(width: 402, height: 700)
+        let haut = ComposerInlinePanelLayout.frame(edge: .top, free: libre, panelHeight: 180)
+        XCTAssertEqual(haut.minY, ComposerRailGeometry.gutter)
+        XCTAssertEqual(haut.maxX, 402 - ComposerRailGeometry.outerMargin
+                       - ComposerRailGeometry.railWidth - ComposerRailGeometry.gutter)
+        XCTAssertEqual(haut.width, ComposerInlinePanelLayout.width(freeWidth: 402, roomy: false))
+        let bas = ComposerInlinePanelLayout.frame(edge: .bottom, free: libre, panelHeight: 180)
+        XCTAssertEqual(bas.maxY, 700 - ComposerRailGeometry.gutter)
+        XCTAssertEqual(bas.minX, haut.minX)
+
+        let partout = CGRect(x: 0, y: 0, width: 402, height: 700)
+        XCTAssertEqual(ComposerInlinePanelLayout.edge(object: partout, free: libre, panelHeight: 180), .top,
+                       "un objet que les deux places couvrent autant garde le panneau en haut")
+        let enHaut = CGRect(x: 100, y: 40, width: 200, height: 200)
+        XCTAssertEqual(ComposerInlinePanelLayout.edge(object: enHaut, free: libre, panelHeight: 180), .bottom)
+    }
+
     // MARK: - La politique du chrome : l'édition en place met la scène en focus
 
     func test_toolFocus_editionEnPlace_masqueToutSaufLeRailDroitEtSesControles() {
@@ -294,6 +313,7 @@ final class ComposerInlineEditTests: XCTestCase {
         XCTAssertEqual(focus, .object(sections: sections, open: .media(.actions), actions: []))
         XCTAssertEqual(ComposerTrailingColumn.options(for: focus), [
             .editorSection(.media(.filter), isOpen: false),
+            .editorSection(.media(.adjust), isOpen: false),
             .editorSection(.media(.actions), isOpen: true),
             .editorSection(.media(.altText), isOpen: false),
             .exitObject,

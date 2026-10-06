@@ -19,8 +19,38 @@ extension ComposerCaptureSession {
         ComposerCaptureSurfaceRule.paintsWithMetal(look: look, budget: thermalBudget, fixture: camera.runsFixture)
     }
 
-    /// La bande ouverte peint des miniatures VIVANTES : elle aussi veut les trames (#9351).
-    var stripNeedsFeed: Bool { false }
+    /// **La miniature choisie est vivante dès le viseur armé** ; la bande ouverte
+    /// l'est aussi — tant que le palier garde au moins une case (#9351).
+    var stripNeedsFeed: Bool {
+        stage != .off && thermalBudget.thumbnailCells > 0
+    }
+
+    /// Toucher une famille ouvre sa bande ; la retoucher la replie. Le look
+    /// verrouillé (prise en cours, segments en attente) garde la bande telle
+    /// quelle : la replier annulerait l'appui long qui tient la prise.
+    func toggleFamily(_ family: ComposerLookFamily) {
+        guard !lookIsLocked else { return }
+        openFamily = openFamily == family ? nil : family
+        HapticFeedback.light()
+    }
+
+    /// Le geste décidé par la table, exécuté — provisoire : seul le choix d'une
+    /// case est câblé ici, la prise rejoint `+Takes` (Task 14).
+    func perform(_ action: ComposerCaptureAction, item: ComposerLookStripItem?) {
+        guard action == .select, let item else { return }
+        look = ComposerLookStripRule.look(of: item, combinedWith: look)
+        HapticFeedback.light()
+    }
+
+    /// **VoiceOver ne TIENT pas un doigt** : la prise demandée part verrouillée
+    /// (`ComposerCaptureHold.release` garde une prise verrouillée), puis la tenue
+    /// se relâche — sans quoi `holdStartedAt` bloquerait toute demande suivante.
+    func lockPendingTake() {
+        guard holdStartedAt != nil else { return }
+        holdPhase = .locked
+        lockProgress = 1
+        endHold()
+    }
 
     /// Le guet des trames ne s'arme que si quelqu'un les peint.
     func refreshFeed() {

@@ -24,7 +24,7 @@ import { checkViewerVideoTransport } from './lib/check-media-transport.mjs';
 import { checkAudioFullscreen, checkMiniPlayerParity } from './lib/check-audio-fullscreen.mjs';
 import { checkMessageStates } from './lib/check-message-states.mjs';
 import { checkMoreSheet } from './lib/check-more-sheet.mjs';
-import { checkRealtimeEvents } from './lib/check-realtime-events.mjs';
+import { checkRealtimeEvents, SLOW_CODE_LATENCY_MS } from './lib/check-realtime-events.mjs';
 import { checkTypingVisibility } from './lib/check-typing-visibility.mjs';
 import {
   BLURRED_CONTENT,
@@ -892,11 +892,15 @@ await checkTypingVisibility({ browser, BASE, expect });
 
 /**
  * 11 — LE FIL TEMPS RÉEL (#6171) — `conversation:updated`, `message:translation`
- * et le roster multi-frappeurs, DEUX runs (clair/sombre), `lib/check-
+ * et le roster multi-frappeurs, TROIS runs (clair, sombre, clair au code lent — #9267), `lib/check-
  * realtime-events.mjs`.
  */
 await checkRealtimeEvents({ browser, BASE, expect, setScheme, AA_THRESHOLD, scheme: 'light' });
 await checkRealtimeEvents({ browser, BASE, expect, setScheme, AA_THRESHOLD, scheme: 'dark' });
+/* Le même fil quand le CODE arrive lentement (#9267) : l'horloge du gate ne
+   doit franchir aucun pas pendant qu'un chunk est en vol, et la chronologie se
+   compte depuis la connexion LUE, jamais depuis le montage du fil. */
+await checkRealtimeEvents({ browser, BASE, expect, setScheme, AA_THRESHOLD, scheme: 'light', codeLatencyMs: SLOW_CODE_LATENCY_MS });
 
 await browser.close();
 served.close();

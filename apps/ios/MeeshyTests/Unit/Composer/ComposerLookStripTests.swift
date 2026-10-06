@@ -1,0 +1,145 @@
+import XCTest
+@testable import Meeshy
+
+/// **La bande : un atlas, des cases vivantes, un rail** (#9351, spec § 3.1 / § 5).
+@MainActor
+final class ComposerLookStripTests: XCTestCase {
+
+    func test_pixelRect_flipsIntoCoreImageSpace_atTheContentScale() {
+        let rect = ComposerLookStripGeometry.pixelRect(CGRect(x: 64, y: 0, width: 56, height: 100),
+                                                       contentHeight: 100, scale: 3)
+        XCTAssertEqual(rect, CGRect(x: 192, y: 0, width: 168, height: 300))
+    }
+
+    func test_paintedWindow_spansOnlyThePaintedCells_andFitsAMetalTexture() throws {
+        XCTAssertEqual(ComposerLookStripGeometry.paintedWindow([4, 2, 7]), 2...7)
+        XCTAssertNil(ComposerLookStripGeometry.paintedWindow([]))
+        let cases = ComposerLookStripRule.paintedIndices(visible: 60...66, count: 170, cells: 8, chosen: 3, recording: false)
+        let fenetre = try XCTUnwrap(ComposerLookStripGeometry.paintedWindow(cases))
+        XCTAssertLessThanOrEqual(CGFloat(fenetre.count) * ComposerLookStripRule.pitch * 3,
+                                 ComposerLookStripGeometry.maxTexturePixels,
+                                 "la vue Metal de la bande tient dans une texture, quelle que soit la longueur du catalogue")
+    }
+
+    func test_atlasSlot_keepsEveryPaintedCellOfTheWindowApart() {
+        let fenetre = ComposerLookStripRule.paintedIndices(visible: 60...66, count: 170, cells: 8, chosen: 63,
+                                                           recording: false)
+        let places = ComposerLookStripGeometry.slotCount(for: fenetre)
+        let cases = Set(fenetre.map { ComposerLookStripGeometry.slot(of: $0, slots: places) })
+        XCTAssertEqual(cases.count, fenetre.count, "deux cases peintes ne partagent jamais une place de l'atlas")
+        XCTAssertGreaterThanOrEqual(places, ComposerLookStripGeometry.minimumSlots)
+    }
+
+    func test_lockPendingTake_filmsLocked_andFreesTheHold() {
+        let session = ComposerCaptureSession(stage: .armed)
+        session.beginHold()
+        session.lockPendingTake()
+        XCTAssertEqual(session.holdPhase, .locked, "la prise part verrouillée : rien ne la retient au doigt")
+        XCTAssertNil(session.holdStartedAt, "une seconde demande VoiceOver n'est pas bloquée par une tenue fantôme")
+    }
+
+    func test_lockPendingTake_withoutAHold_changesNothing() {
+        let session = ComposerCaptureSession(stage: .armed)
+        session.lockPendingTake()
+        XCTAssertNil(session.holdPhase, "aucune prise demandée : rien ne se verrouille")
+    }
+
+    func test_toggleFamily_opensThenCloses_andSwitches() {
+        let session = ComposerCaptureSession(stage: .armed)
+        session.toggleFamily(.filters)
+        XCTAssertEqual(session.openFamily, .filters)
+        session.toggleFamily(.frames)
+        XCTAssertEqual(session.openFamily, .frames)
+        session.toggleFamily(.frames)
+        XCTAssertNil(session.openFamily)
+    }
+
+    func test_toggleFamily_whileTheLookIsLocked_keepsTheBandAsItIs() {
+        let session = ComposerCaptureSession(stage: .armed)
+        session.toggleFamily(.filters)
+        session.stage = .recording
+        session.toggleFamily(.filters)
+        XCTAssertEqual(session.openFamily, .filters, "pendant la prise, toucher le rail ne replie pas la bande")
+        session.toggleFamily(.frames)
+        XCTAssertEqual(session.openFamily, .filters, "ni n'en ouvre une autre")
+    }
+
+    func test_perform_selectAFrame_keepsTheFilter() throws {
+        let session = ComposerCaptureSession(stage: .armed)
+        session.look = ComposerPhotoLook(filter: .warm)
+        let cadre = try XCTUnwrap(Self.firstRealFrame())
+        session.perform(.select, item: .frame(cadre))
+        XCTAssertEqual(session.look.frame, cadre, "le cadre choisi est posé")
+        XCTAssertEqual(session.look.filter, .warm, "choisir un cadre garde le filtre")
+    }
+
+    func test_perform_selectAFilter_keepsTheFrame() throws {
+        let session = ComposerCaptureSession(stage: .armed)
+        let cadre = try XCTUnwrap(Self.firstRealFrame())
+        session.look = ComposerPhotoLook(filter: .natural, frame: cadre)
+        session.perform(.select, item: .filter(.cool))
+        XCTAssertEqual(session.look.filter, .cool, "le filtre choisi est posé")
+        XCTAssertEqual(session.look.frame, cadre, "choisir un filtre garde le cadre")
+    }
+
+    private static func firstRealFrame() -> ComposerPhotoFrame? {
+        ComposerLookStripRule.items(.frames).lazy.compactMap { item -> ComposerPhotoFrame? in
+            guard case .frame(let cadre) = item, cadre != ComposerPhotoFrame.none else { return nil }
+            return cadre
+        }.first
+    }
+
+    func test_stripNeedsFeed_armedWithCells_offOrCriticalWithout() {
+        let thermique = MockThermalStateMonitor(state: .nominal)
+        let session = ComposerCaptureSession(stage: .armed, thermal: thermique)
+        session.watchThermalState()
+        XCTAssertTrue(session.stripNeedsFeed, "la miniature choisie est vivante dès le viseur armé")
+        thermique.emit(.critical)
+        XCTAssertFalse(session.stripNeedsFeed, "au palier critique, les miniatures sont coupées")
+        session.disarm()
+        XCTAssertFalse(session.stripNeedsFeed)
+    }
+
+    func test_chosenLookName_saysBothHalvesOfTheLook() {
+        let nom = ComposerCaptureCopy.chosenLookName(ComposerPhotoLook(filter: .natural))
+        XCTAssertTrue(nom.contains(ComposerCaptureCopy.itemName(.filter(.natural))))
+        XCTAssertTrue(nom.contains(ComposerCaptureCopy.itemName(.frame(.none))))
+    }
+
+    func test_strip_isOneMetalAtlas_paintedOnlyWhereVisible() throws {
+        let surface = try Self.code("Meeshy/Features/Main/Composer/ComposerLookStripSurface.swift")
+        XCTAssertEqual(surface.components(separatedBy: "MTKView(frame:").count - 1, 1, "UNE vue Metal pour toute la bande")
+        XCTAssertTrue(surface.contains("ComposerLookPainter.paint("), "les miniatures sortent du peintre unique")
+        XCTAssertTrue(surface.contains("makeBlitCommandEncoder"), "l'atlas garde les cases qui ne se repeignent pas")
+        let bande = try Self.code("Meeshy/Features/Main/Composer/ComposerLookStrip.swift")
+        XCTAssertTrue(bande.contains("ComposerLookStripRule.paintedIndices("), "seules les cases visibles ±1 se peignent")
+        XCTAssertTrue(bande.contains("ComposerCaptureGesture.action("), "la miniature choisie obéit à la table des gestes")
+        XCTAssertTrue(bande.contains("ComposerCaptureGesture.tap("), "le toucher de la miniature passe par le seul décideur")
+        XCTAssertTrue(bande.contains("ComposerCaptureGesture.accessibilityActions("),
+                      "les actions VoiceOver de la miniature sont la projection de la table")
+        XCTAssertFalse(bande.contains("TapGesture(count: 2)"), "un double toucher ne retarde jamais le toucher simple")
+    }
+
+    func test_strip_reducesTheFrameInsideItsOwnCommandBuffer() throws {
+        let surface = try Self.code("Meeshy/Features/Main/Composer/ComposerLookStripSurface.swift")
+        XCTAssertFalse(surface.contains("CVPixelBuffer"),
+                       "aucun rendu synchrone vers un tampon réécrit pendant qu'un dessin précédent le lit")
+        XCTAssertTrue(surface.contains("CIImage(mtlTexture:"), "la trame réduite est une texture du même passage")
+    }
+
+    func test_strip_laysItsCellsLeftToRight_whateverTheLanguage() throws {
+        let bande = try Self.code("Meeshy/Features/Main/Composer/ComposerLookStrip.swift")
+        XCTAssertTrue(bande.contains(".environment(\\.layoutDirection, .leftToRight)"),
+                      "en arabe, l'atlas Metal et les cases gardent le même ordre")
+        XCTAssertFalse(bande.contains("@State private var scrollSettle"),
+                       "le minuteur du défilement n'invalide pas la vue à chaque image")
+    }
+
+    private static func code(_ relative: String) throws -> String {
+        let racine = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        return AppSourceGuard.stripComments(try String(
+            contentsOf: racine.appendingPathComponent(relative), encoding: .utf8))
+    }
+}

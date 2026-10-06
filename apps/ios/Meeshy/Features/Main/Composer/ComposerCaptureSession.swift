@@ -32,8 +32,11 @@ final class ComposerCaptureSession: ObservableObject {
     /// accroche, le toucher du chrome le lit.
     let focusPoints = CameraPreviewFocusPoints()
 
-    /// L'étape du viseur — la loi est dans `ComposerSceneCamera`.
-    @Published var stage: ComposerSceneCameraStage
+    /// L'étape du viseur — la loi est dans `ComposerSceneCamera`. Le guet des
+    /// trames la suit : la bande peint dès le viseur armé (#9351).
+    @Published var stage: ComposerSceneCameraStage {
+        didSet { refreshFeed() }
+    }
     /// La pastille annoncée ; `nil` tant que rien n'est armé.
     @Published var mode: ComposerSceneCameraMode?
     @Published var flash: AVCaptureDevice.FlashMode = .off
@@ -56,6 +59,11 @@ final class ComposerCaptureSession: ObservableObject {
     }
     /// Le sélecteur d'effets est déplié.
     @Published var looksOpen = false
+    /// La famille dont la bande est ouverte ; `nil` ⇒ la bande se replie sur la
+    /// seule miniature choisie, qui sert de déclencheur (#9351).
+    @Published var openFamily: ComposerLookFamily?
+    /// Le cadrage de la prise ; la retouche le règle (#9352).
+    @Published var framing = ComposerFraming.identity
     /// La vidéo se rend avec son look : le `✓` attend, et le dit.
     @Published private(set) var isRenderingLook = false
     /// La date de la séance de prise : l'aperçu, la photo et la vidéo écrivent
@@ -89,7 +97,7 @@ final class ComposerCaptureSession: ObservableObject {
     /// L'armement, et le dernier toucher du viseur (#9464) : un double ne
     /// s'ouvre jamais sur le toucher qui a armé.
     var armedAt: Date?
-    var lastViewfinderTapAt: Date?
+    var lastViewfinderTap: ComposerCaptureLastTap?
     private let defaults: UserDefaults
     private var relais: AnyCancellable?
 

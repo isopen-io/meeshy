@@ -55,11 +55,11 @@ final class GameMintBadgeImpactTests: XCTestCase {
 
     func test_nothingIsDebitedOnceThePriceIsPaid() {
         let counters = [
-            counter("content.text_message", count: 1_000, points: 25_000),
+            counter("content.text_message", count: 1_100, points: 27_500),
             counter("content.post", count: 3, points: 150),
         ]
         let impact = GameMintBadgeImpact.impact(counters: counters, price: 1_221)
-        XCTAssertEqual(impact?.lost, 0, "49 messages repris sur 1 000 : aucun palier ne tombe")
+        XCTAssertEqual(impact?.lost, 0, "49 messages repris sur 1 100 : le palier 1 000 tient encore")
     }
 
     func test_theRoundingIsTheHalfUpOfTheLaw() {

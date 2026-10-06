@@ -158,9 +158,79 @@ const MONOTONE_FACT_BUDGET_MS = 5_000;
  */
 const MODE_SWITCH_FACT_BUDGET_MS = 250;
 
-export async function checkRealtimeEvents({ browser, BASE, expect, setScheme, AA_THRESHOLD, scheme }) {
+/**
+ * LE PREMIER FAIT DE LA CHRONOLOGIE, en millisecondes SIMULÉES depuis
+ * `connect()` — l'entrée `message:attachment-updated` de `atMs: 1500`
+ * (`fixtures-realtime.ts` § `LIVE_SCHEDULE`, la première à un coup). Un
+ * écran doit être monté AVANT elle : sinon l'état « au chargement » lu
+ * ensuite serait déjà celui d'après l'évènement.
+ */
+const FIRST_LIVE_EVENT_MS = 1_500;
+
+/**
+ * LE ZÉRO DE LA CHRONOLOGIE D'UNE PAGE, LU — jamais supposé (#9267).
+ * `LIVE_SCHEDULE` se compte depuis `connect()` du bouchon, qui l'annonce sous
+ * `__meeshyFixturesConnectedAt` (`fixtures-realtime.ts`,
+ * `FIXTURES_CONNECTED_AT_GLOBAL`) en temps de l'horloge truquée ; retranché
+ * d'`INSTANT`, il se lit dans le repère de `chrono`. `null` tant que la page
+ * n'est pas connectée.
+ *
+ * L'origine était auparavant l'instant où le premier nœud MONTAIT, tenu pour
+ * « une CONSTANTE du build » (§ 2.2 de `paused-chronology.mjs`). Mesuré sur
+ * le dist de `dev` (2026-10-06) : elle ne l'est pas — le fil et la connexion
+ * sortent de chunks DIFFÉRENTS, chargés à la demande, et la connexion tombe
+ * avant OU après `live-1` selon leur ordre d'arrivée. Chaque `origin + atMs`
+ * visait alors un instant décalé d'autant de la chronologie qu'il lisait.
+ */
+const scheduleZeroOn = async (targetPage) => {
+  const connectedAt = await targetPage.evaluate(() => window.__meeshyFixturesConnectedAt ?? null);
+  return connectedAt === null ? null : connectedAt - INSTANT.getTime();
+};
+
+/**
+ * UNE PAGE DE `c-live` EST PRÊTE quand sa chronologie a commencé ET que son
+ * premier nœud est monté AVANT le premier fait. Deux attentes, deux bornes :
+ * la connexion est un fait MONOTONE qu'aucun évènement ne précède (la
+ * chronologie n'existe pas encore), d'où `MONOTONE_FACT_BUDGET_MS` ; le
+ * montage, lui, est borné par le premier fait RÉEL de cette chronologie,
+ * compté depuis son zéro lu. Rend l'origine, ou `null` si l'une manque.
+ */
+const bootLiveChronology = async ({ chrono, targetPage, selector, expect, what }) => {
+  const connected = await chrono.factBefore(chrono.now() + MONOTONE_FACT_BUDGET_MS, async () => (await scheduleZeroOn(targetPage)) !== null);
+  expect(connected, `${what} : le bouchon temps réel est connecté — la chronologie a commencé`);
+  if (!connected) return null;
+  const origin = await scheduleZeroOn(targetPage);
+  const mounted = await chrono.factBefore(origin + FIRST_LIVE_EVENT_MS, attachedOn(targetPage, selector));
+  expect(
+    mounted,
+    `${what} : son premier nœud est monté avant le premier fait de la chronologie (connexion à ${origin} ms simulées, horloge à ${chrono.now()} ms)`,
+  );
+  if (!mounted) return null;
+  await chrono.advanceTo(Math.max(chrono.now(), origin + 300));
+  return origin;
+};
+
+/**
+ * LE RÉGIME DU CODE LENT (#9267) — une latence MURALE posée sur chaque chunk
+ * JavaScript servi par le dist : une ENTRÉE du scénario (la latence d'un
+ * réseau ou d'un serveur chargé), jamais une attente avant verdict — même
+ * statut que la page d'historique retenue de D-173. C'est le régime dans
+ * lequel un agent chargé tombait une fois sur trois : sans lui, le gate ne
+ * jouait que le régime où les chunks arrivent avant que l'horloge ait franchi
+ * trente pas, et un retour du défaut serait resté invisible au calme.
+ */
+export const SLOW_CODE_LATENCY_MS = 400;
+
+const holdCode = (context, latencyMs) =>
+  context.route(
+    (url) => url.pathname.startsWith('/assets/') && url.pathname.endsWith('.js'),
+    (route) => new Promise((resolve) => setTimeout(resolve, latencyMs)).then(() => route.continue()),
+  );
+
+export async function checkRealtimeEvents({ browser, BASE, expect, setScheme, AA_THRESHOLD, scheme, codeLatencyMs = 0 }) {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 }, locale: 'en-US' });
   await setScheme(context, scheme);
+  if (codeLatencyMs > 0) await holdCode(context, codeLatencyMs);
   const page = await context.newPage();
   const chrono = await pausedChronology(page, { time: INSTANT });
 
@@ -181,14 +251,15 @@ export async function checkRealtimeEvents({ browser, BASE, expect, setScheme, AA
     if (pathname.startsWith('/api/') && pathname.includes('/messages')) messageFetches += 1;
   });
 
-  const label = `[${scheme}]`;
+  const label = codeLatencyMs > 0 ? `[${scheme}, code servi en ${codeLatencyMs} ms]` : `[${scheme}]`;
 
   // ===== 1. LE FIL — message:translation, le RANG du lecteur =====
   await page.goto(`${BASE}/c/c-live`, { waitUntil: 'load' });
-  const booted = await chrono.factBefore(1500, attachedOn(page, '[data-message="live-1"]'));
-  expect(booted, `${label} le fil c-live est monté avant le premier fait de la chronologie`);
-  const origin = chrono.mark();
-  await chrono.advanceTo(origin + 300);
+  const origin = await bootLiveChronology({ chrono, targetPage: page, selector: '[data-message="live-1"]', expect, what: `${label} le fil c-live` });
+  if (origin === null) {
+    await context.close();
+    return;
+  }
 
   expect((await textOf(page, 'live-1')).includes('Hola'), `${label} live-1 : l'ORIGINAL espagnol au chargement`);
   expect((await langOf(page, 'live-1')) === 'es', `${label} live-1 : lang="es" au chargement`);
@@ -434,10 +505,11 @@ export async function checkRealtimeEvents({ browser, BASE, expect, setScheme, AA
      silence (§1.1 de `paused-chronology.mjs`) sans qu'aucun `expect` n'en
      dépende : c'était un doublon d'infrastructure, pas un témoin. */
   await listPage.goto(`${BASE}/`, { waitUntil: 'load' });
-  const listBooted = await chrono.factBefore(chrono.now() + 1500, attachedOn(listPage, '[data-row="c-live"]'));
-  expect(listBooted, `${label} la liste est montée avant le premier fait de sa chronologie`);
-  const listOrigin = chrono.mark();
-  await chrono.advanceTo(listOrigin + 300);
+  const listOrigin = await bootLiveChronology({ chrono, targetPage: listPage, selector: '[data-row="c-live"]', expect, what: `${label} la liste` });
+  if (listOrigin === null) {
+    await context.close();
+    return;
+  }
   expect(
     (await rowLine2Text(listPage, 'c-live')).includes('Oui, jeudi 14h.'),
     `${label} liste, T+0,3 s : la ligne 2 décrit le dernier message CONNU avant l'événement`,

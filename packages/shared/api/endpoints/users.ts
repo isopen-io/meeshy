@@ -21,6 +21,9 @@ export const byUserIdAffiliateToken = (userId: string): string => `/api/v1/users
 /** POST · DELETE /api/v1/users/:userId/block */
 export const byUserIdBlock = (userId: string): string => `/api/v1/users/${encodeURIComponent(userId)}/block`;
 
+/** GET /api/v1/users/:userId/game/showcase */
+export const byUserIdGameShowcase = (userId: string): string => `/api/v1/users/${encodeURIComponent(userId)}/game/showcase`;
+
 /** GET /api/v1/users/:userId/stats */
 export const byUserIdStats = (userId: string): string => `/api/v1/users/${encodeURIComponent(userId)}/stats`;
 

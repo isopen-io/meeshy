@@ -128,6 +128,18 @@ struct GamePhotoCanvasView: View {
             FlameView(form: form, flickers: false)
         case .achievement:
             TrophyView(material: .gold, label: moment.kicker.uppercased())
+        case .trophy(let key):
+            if let view = GameTrophyPresentation.of(key: key) {
+                TrophyView(material: view.material, label: view.plate, figures: view.kind == .prestige ? GameFigures.standard : nil)
+            } else {
+                TrophyView(material: .gold, label: moment.kicker.uppercased())
+            }
+        case .leagueUp(let league):
+            LeagueGemView(league: league)
+        case .season(let season):
+            TrophyView(material: .platinum, label: GameText.trophyPlateSeason(number: GameCopy.formatCount(season)))
+        case .prestige(let number):
+            TrophyView(material: .prism, label: GameText.trophyPlatePrestige(number: GameCopy.formatCount(number)), figures: GameFigures.standard)
         }
     }
 

@@ -5,7 +5,16 @@
 
 export declare const CHRONOLOGY_STEP_MS: 50;
 
+type TrackedRequest = {
+  url(): string;
+  resourceType(): string;
+  frame(): { url(): string };
+};
+
 type PausableClockPage = {
+  context(): {
+    on(event: 'request' | 'requestfinished' | 'requestfailed', listener: (request: TrackedRequest) => void): unknown;
+  };
   clock: {
     install(options: { time: number | Date }): Promise<void>;
     pauseAt(time: number | Date): Promise<void>;
@@ -23,5 +32,5 @@ export type Chronology = {
 
 export declare function pausedChronology(
   page: PausableClockPage,
-  options: { time: number | Date; stepMs?: number },
+  options: { time: number | Date; stepMs?: number; codeCeilingMs?: number },
 ): Promise<Chronology>;

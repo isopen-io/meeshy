@@ -79,11 +79,13 @@ final class StoryVideoAdjustmentsRenderTests: XCTestCase {
                        ImageAdjustments(contrast: 1.2))
     }
 
-    func test_unFondVideo_nEstPasPeint() {
+    /// Le fond peint ses réglages par SA couche (`StoryBackgroundLook`, #9496) ;
+    /// le chemin des médias POSÉS ne le repeint pas une seconde fois.
+    func test_unFondVideo_nEstPasPeintParLeCheminDesMediasPoses() {
         var fond = video(ImageAdjustments(exposure: 1))
         fond.isBackground = true
         XCTAssertNil(StoryVideoAdjustmentsProcessor.paintedAdjustments(for: fond),
-                     "Le fond ne peint pas encore les réglages (#9496) — ni image, ni vidéo.")
+                     "Le fond se peint par StoryBackgroundLook — jamais deux fois.")
     }
 
     // MARK: - Une trame
@@ -172,7 +174,7 @@ final class StoryVideoAdjustmentsRenderTests: XCTestCase {
     // MARK: - Outils
 
     @MainActor
-    private static func attendre(_ condition: @MainActor () -> Bool, timeout: TimeInterval = 5) async throws {
+    static func attendre(_ condition: @escaping @MainActor () -> Bool, timeout: TimeInterval = 5) async throws {
         let limite = Date().addingTimeInterval(timeout)
         while !condition() {
             guard Date() < limite else { return XCTFail("Condition jamais atteinte") }
@@ -181,7 +183,7 @@ final class StoryVideoAdjustmentsRenderTests: XCTestCase {
     }
 
     /// Un clip gris de 64×64, 10 trames à 30 i/s.
-    private static func writeGrayClip() async throws -> URL {
+    static func writeGrayClip() async throws -> URL {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("gris-\(UUID().uuidString).mp4")
         let side = 64
         let writer = try AVAssetWriter(url: url, fileType: .mp4)

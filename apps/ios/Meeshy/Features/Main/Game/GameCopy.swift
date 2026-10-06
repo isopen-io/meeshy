@@ -202,15 +202,15 @@ enum GameCopy {
         let n = formatCount(target)
         let one = isSingular(target)
         switch templateKey {
-        case "react-messages":
+        case "react-messages", "duo-reactions":
             return one
                 ? String(localized: "game.mission.react_messages.one", defaultValue: "Réagir à \(n) message", bundle: .main)
                 : String(localized: "game.mission.react_messages.other", defaultValue: "Réagir à \(n) messages", bundle: .main)
-        case "send-voice":
+        case "send-voice", "duo-voice":
             return one
                 ? String(localized: "game.mission.send_voice.one", defaultValue: "Envoyer un message vocal", bundle: .main)
                 : String(localized: "game.mission.send_voice.other", defaultValue: "Envoyer \(n) messages vocaux", bundle: .main)
-        case "send-texts":
+        case "send-texts", "duo-messages":
             return one
                 ? String(localized: "game.mission.send_texts.one", defaultValue: "Envoyer \(n) message", bundle: .main)
                 : String(localized: "game.mission.send_texts.other", defaultValue: "Envoyer \(n) messages", bundle: .main)
@@ -222,13 +222,13 @@ enum GameCopy {
             return one
                 ? String(localized: "game.mission.send_attachments.one", defaultValue: "Envoyer une pièce jointe", bundle: .main)
                 : String(localized: "game.mission.send_attachments.other", defaultValue: "Envoyer \(n) pièces jointes", bundle: .main)
-        case "reply-conversations", "reply-conversations-wide", "gold-reply-conversations":
+        case "reply-conversations", "reply-conversations-wide", "gold-reply-conversations", "duo-replies":
             return String(localized: "game.mission.reply_conversations", defaultValue: "Répondre dans \(n) conversations différentes", bundle: .main)
         case "comment-text":
             return one
                 ? String(localized: "game.mission.comment_text.one", defaultValue: "Écrire un commentaire", bundle: .main)
                 : String(localized: "game.mission.comment_text.other", defaultValue: "Écrire \(n) commentaires", bundle: .main)
-        case "publish-story":
+        case "publish-story", "duo-stories":
             return one
                 ? String(localized: "game.mission.publish_story.one", defaultValue: "Publier une story", bundle: .main)
                 : String(localized: "game.mission.publish_story.other", defaultValue: "Publier \(n) stories", bundle: .main)
@@ -240,7 +240,7 @@ enum GameCopy {
             return one
                 ? String(localized: "game.mission.share_link.one", defaultValue: "Partager un lien", bundle: .main)
                 : String(localized: "game.mission.share_link.other", defaultValue: "Partager \(n) liens", bundle: .main)
-        case "prism-foreign-messages":
+        case "prism-foreign-messages", "duo-prism":
             return one
                 ? String(localized: "game.mission.prism_foreign_messages.one", defaultValue: "Écrire un message dans une autre langue que la tienne", bundle: .main)
                 : String(localized: "game.mission.prism_foreign_messages.other", defaultValue: "Écrire \(n) messages dans une autre langue que la tienne", bundle: .main)

@@ -374,7 +374,19 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // CONSTRUCTION, même motif que `StickerPacksEndpoint` ci-dessus : le jeu
 // (chests, flamme, missions) est livré côté gateway et web ; aucun écran iOS
 // ne les appelle encore. Valeur MESURÉE le 2026-10-05.
-const BASELINE_DEAD_ENTRIES = 294;
+// 294 -> 308 (#9506, 2026-10-05) : quatorze entrées GÉNÉRÉES depuis
+// `route-manifest.json` en régénérant `MeEndpoint.swift` et
+// `UsersEndpoint.swift` (restés périmés après la vague 2 du jeu — ligues,
+// duos, saisons, prestige, parrainage — #9225/#9230, #9504) :
+// `MeEndpoint.gameDuoByDuoIdAbandon`, `.gameDuoByDuoIdAccept`,
+// `.gameDuoInvite`, `.gameLeagueConsent`, `.gameLeagueFriends`,
+// `.gameLeaguePseudonym`, `.gameLeagueWeek`, `.gamePrestige`, `.gamePrivacy`,
+// `.gameSeasonSeal`, `.gameSeasonStepsByStepClaim`, `.gameShowcaseOrder`,
+// `.gameVisibility`, et `UsersEndpoint.byUserIdGameShowcase`. Mortes à la
+// naissance PAR CONSTRUCTION, même motif que les deux entrées ci-dessus : la
+// vague 2 est livrée côté gateway ; aucun écran iOS ne les appelle encore.
+// Valeur MESURÉE le 2026-10-05.
+const BASELINE_DEAD_ENTRIES = 308;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;
 // Une déclaration de cas n'a jamais de point après `case` ; une branche de

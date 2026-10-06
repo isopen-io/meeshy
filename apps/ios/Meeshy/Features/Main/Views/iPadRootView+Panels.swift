@@ -169,6 +169,9 @@ struct iPadPanelDestination: View {
         case .progressionNotebook:
             GameNotebookPage()
                 .navigationBarHidden(true)
+        case .gamePage(let page):
+            GamePageView(page: page)
+                .navigationBarHidden(true)
         case .links:
             LinksHubView()
                         case .affiliate:

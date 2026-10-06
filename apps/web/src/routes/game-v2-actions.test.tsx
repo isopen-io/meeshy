@@ -8,7 +8,8 @@ import { resolveEngagementProgress } from '@meeshy/shared/utils/engagement-progr
 import { ENGAGEMENT_PROGRESS_QUERY_KEY, type EngagementWithGame } from '@/lib/api/engagement';
 import { ENGAGEMENT_PROGRESS_FIXTURE } from '@/lib/api/engagement-fixture';
 import { gameBlockWithExtrasFixture } from '@/lib/api/game-fixture';
-import { LEAGUE_WEEK_QUERY_KEY, leagueWeekFixture } from '@/lib/api/game-v2-queries';
+import { LEAGUE_WEEK_QUERY_KEY } from '@/lib/api/game-v2-queries';
+import { leagueWeekFixture } from '@/lib/api/game-v2-queries-fixture';
 import type { ApiResult, HttpRequest } from '@/lib/api/http';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
