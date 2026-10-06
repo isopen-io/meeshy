@@ -164,6 +164,37 @@ final class ComposerTrimTrackTests: XCTestCase {
     }
     #endif
 
+    // MARK: - Un rendu qui échoue ne remet jamais ce que l'auteur a coupé
+
+    /// Le brut porte ce que la découpe ou le cadrage ont RETIRÉ : le remettre à
+    /// la place d'un rendu raté enverrait à l'hôte un passage coupé. La retouche
+    /// reste ouverte, comme pour une photo dont le cadre ne se peint pas.
+    func test_finishEditingVideo_whenTheRenderFails_deliversNothing_andKeepsTheEdit() async throws {
+        let url = Self.clip()
+        try Data("pas un film".utf8).write(to: url)
+        addTeardownBlock { try? FileManager.default.removeItem(at: url) }
+        let galerie = MockComposerGallery()
+        let lecteur = MockComposerLoopPlayer(duration: 3)
+        let session = ComposerCaptureSession(stage: .armed, gallery: galerie, loopPlayerFactory: { _ in lecteur })
+        await session.beginEditing(video: url)
+        session.setTrim(1...2, committed: true)
+        var remis: CameraResult?
+        session.onDeliver = { remis = $0 }
+        session.finishEditing()
+        await ComposerCaptureTakesTests.waitUntil(timeout: 30) { !session.isRenderingLook }
+        XCTAssertNil(remis, "le brut entier ne part pas à la place de la plage gardée")
+        XCTAssertTrue(session.phase.isEditing, "la retouche reste ouverte : on réessaie ou on ferme")
+        XCTAssertEqual(session.trim, 1...2, "la plage choisie n'est pas perdue")
+        XCTAssertEqual(galerie.saveVideoCount, 0)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: url.path), "la prise n'est pas détruite")
+    }
+
+    func test_finishEditingVideo_aFailedRender_neverFallsBackToTheRawClip() throws {
+        let edition = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerCaptureSession+Edit.swift")
+        XCTAssertFalse(edition.contains("neuve ?? url"), "le brut ne remplace jamais un rendu raté")
+        XCTAssertTrue(edition.contains("guard let rendue else {"), "un rendu raté s'arrête avant toute remise")
+    }
+
     private static func clip() -> URL {
         FileManager.default.temporaryDirectory.appendingPathComponent("trim_\(UUID().uuidString).mov")
     }
