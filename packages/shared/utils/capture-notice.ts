@@ -35,10 +35,21 @@ export const CAPTURE_NOTICE_LANGUAGES = CONVERSATION_PREVIEW_LANGUAGES;
 export type CapturedNature = Exclude<ContentExitNature, 'ordinary'>;
 export type CaptureNoticeOutcome = Exclude<ContentCaptureVerdict, 'free'>;
 
+/**
+ * Celui qui a capturé. Un nom affiché n'est pas une identité : un invité peut
+ * s'appeler « Bob ». L'avis dit donc si l'acteur a un compte, et son pseudo
+ * quand il en a un (audit #9617, A8) — comme l'avis d'arrivée.
+ */
+export type CaptureNoticeActor = NoticeActor & {
+  readonly isAnonymous: boolean;
+  /** Pseudo d'un inscrit ; jamais posé pour un invité. */
+  readonly username?: string;
+};
+
 export type CaptureNoticeMetadata = {
   readonly kind: typeof CAPTURE_NOTICE_KIND;
   /** Celui qui a capturé — l'auteur de l'avis. */
-  readonly actor: NoticeActor;
+  readonly actor: CaptureNoticeActor;
   readonly capturedMessageId: string;
   readonly nature: CapturedNature;
   /** `blocked` : vue unique, l'image était noire — une TENTATIVE. `announced` : la capture a eu lieu. */
@@ -50,11 +61,39 @@ export type CaptureNoticeMetadata = {
 
 const CAPTURED_NATURES: ReadonlySet<string> = new Set<CapturedNature>(['timed-flame', 'after-read-flame', 'view-once']);
 
-const outcomeOf = (nature: CapturedNature): CaptureNoticeOutcome => (nature === 'view-once' ? 'blocked' : 'announced');
+/** L'issue que la loi de sortie DOIT rendre pour cette nature — vue unique noire, flammes annoncées. */
+export const captureNoticeOutcomeOf = (nature: CapturedNature): CaptureNoticeOutcome =>
+  nature === 'view-once' ? 'blocked' : 'announced';
+const outcomeOf = captureNoticeOutcomeOf;
+
+const NAME_MAX_LENGTH = 64;
+// Contrôles C0/C1, marques et isolats de direction, séparateurs de ligne.
+const UNSAFE_NAME_CHARACTERS = /[\u0000-\u001F\u007F-\u009F\u061C\u200B-\u200F\u2028-\u202E\u2060-\u2069\uFEFF]/g;
+
+/**
+ * Un nom tel qu'il peut s'écrire dans un avis : sans contrôle de direction ni
+ * caractère de contrôle (un `U+202E` retournerait la phrase), espaces resserrés,
+ * borné. Vide ⇒ « ? ».
+ */
+export function sanitizeNoticeName(raw: string): string {
+  const cleaned = raw.replace(UNSAFE_NAME_CHARACTERS, '').replace(/\s+/g, ' ').trim();
+  const bounded = Array.from(cleaned).slice(0, NAME_MAX_LENGTH).join('').trim();
+  return bounded === '' ? '?' : bounded;
+}
+
+function sanitizedActor(actor: CaptureNoticeActor): CaptureNoticeActor {
+  const username = !actor.isAnonymous && actor.username ? sanitizeNoticeName(actor.username) : undefined;
+  return {
+    participantId: actor.participantId,
+    displayName: sanitizeNoticeName(actor.displayName),
+    isAnonymous: actor.isAnonymous,
+    ...(username && username !== '?' ? { username } : {}),
+  };
+}
 
 /** La SEULE fabrique de la métadonnée : l'issue se dérive de la nature, jamais de l'appelant. */
 export function captureNoticeMetadata(input: {
-  readonly actor: NoticeActor;
+  readonly actor: CaptureNoticeActor;
   readonly capturedMessageId: string;
   readonly nature: CapturedNature;
   readonly captureKind: ContentCaptureKind;
@@ -62,7 +101,7 @@ export function captureNoticeMetadata(input: {
 }): CaptureNoticeMetadata {
   return {
     kind: CAPTURE_NOTICE_KIND,
-    actor: { participantId: input.actor.participantId, displayName: input.actor.displayName },
+    actor: sanitizedActor(input.actor),
     capturedMessageId: input.capturedMessageId,
     nature: input.nature,
     outcome: outcomeOf(input.nature),
@@ -94,8 +133,15 @@ const isInstant = (value: unknown): value is string =>
 export function parseCaptureNotice(metadata: unknown): CaptureNoticeMetadata | null {
   const raw = asRecord(metadata);
   if (!raw || raw.kind !== CAPTURE_NOTICE_KIND) return null;
-  const actor = parseNoticeActor(raw.actor);
-  if (!actor) return null;
+  const base = parseNoticeActor(raw.actor);
+  const rawActor = asRecord(raw.actor);
+  if (!base || !rawActor || typeof rawActor.isAnonymous !== 'boolean') return null;
+  if (rawActor.username !== undefined && typeof rawActor.username !== 'string') return null;
+  const actor: CaptureNoticeActor = {
+    ...base,
+    isAnonymous: rawActor.isAnonymous,
+    ...(typeof rawActor.username === 'string' && rawActor.username && !rawActor.isAnonymous ? { username: rawActor.username } : {}),
+  };
   if (typeof raw.capturedMessageId !== 'string' || !raw.capturedMessageId) return null;
   if (!isCapturedNature(raw.nature)) return null;
   const outcome = outcomeOf(raw.nature);
@@ -110,6 +156,23 @@ export function parseCaptureNotice(metadata: unknown): CaptureNoticeMetadata | n
     captureKind: raw.captureKind,
     sentAt: raw.sentAt,
   };
+}
+
+const GUEST: Readonly<Record<ConversationPreviewLanguage, string>> = {
+  fr: 'invité',
+  en: 'guest',
+  es: 'invitado',
+  pt: 'convidado',
+  de: 'Gast',
+  it: 'ospite',
+  ar: 'ضيف',
+};
+
+/** « Bob (@bob) » pour un inscrit, « Bob (invité) » pour un invité. */
+function actorLabel(actor: CaptureNoticeActor, language: ConversationPreviewLanguage): string {
+  const name = sanitizeNoticeName(actor.displayName);
+  if (actor.isAnonymous) return `${name} (${GUEST[language]})`;
+  return actor.username ? `${name} (@${sanitizeNoticeName(actor.username)})` : name;
 }
 
 type Templates = {
@@ -200,7 +263,7 @@ export type CaptureNoticeReader = {
 export function captureNoticeText(notice: CaptureNoticeMetadata, reader: CaptureNoticeReader): string {
   const language = normalizeConversationPreviewLanguage(reader.language);
   const { date, time } = formatSentAt(notice.sentAt, language, validTimeZone(reader.timeZone));
-  const params: Readonly<Record<string, string>> = { actor: notice.actor.displayName, date, time };
+  const params: Readonly<Record<string, string>> = { actor: actorLabel(notice.actor, language), date, time };
   return templateOf(notice, language).replace(/\{(\w+)\}/g, (_match, token: string) => params[token] ?? '');
 }
 

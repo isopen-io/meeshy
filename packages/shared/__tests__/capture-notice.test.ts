@@ -10,6 +10,7 @@ import {
   captureNoticeMetadata,
   captureNoticeText,
   parseCaptureNotice,
+  sanitizeNoticeName,
   type CaptureNoticeMetadata,
 } from '../utils/capture-notice.js';
 import { CLIENT_EVENTS } from '../types/socketio-events.js';
@@ -27,7 +28,7 @@ const report = (overrides: Record<string, unknown> = {}) => ({
 
 const notice = (overrides: Partial<CaptureNoticeMetadata> = {}): CaptureNoticeMetadata => ({
   kind: CAPTURE_NOTICE_KIND,
-  actor: { participantId: 'p-actor', displayName: 'Alice' },
+  actor: { participantId: 'p-actor', displayName: 'Alice', isAnonymous: false },
   capturedMessageId: OTHER_ID,
   nature: 'timed-flame',
   outcome: 'announced',
@@ -57,8 +58,8 @@ describe('le contrat client → serveur de la capture (#9617)', () => {
     expect(contentCaptureReportSchema.safeParse(report({ messageIds: ['not-an-id'] })).success).toBe(false);
   });
 
-  it('exige un identifiant de capture borné, sans caractère de clé', () => {
-    expect(contentCaptureReportSchema.safeParse(report({ captureId: undefined })).success).toBe(false);
+  it('accepte une déclaration sans identifiant de capture, mais en refuse un mal formé', () => {
+    expect(contentCaptureReportSchema.safeParse(report({ captureId: undefined })).success).toBe(true);
     expect(contentCaptureReportSchema.safeParse(report({ captureId: 'short' })).success).toBe(false);
     expect(contentCaptureReportSchema.safeParse(report({ captureId: 'x'.repeat(65) })).success).toBe(false);
     expect(contentCaptureReportSchema.safeParse(report({ captureId: 'cap:0123456789' })).success).toBe(false);
@@ -78,6 +79,7 @@ describe('parseCaptureNotice — la métadonnée VALIDÉE, jamais castée', () =
   it('rend null pour une autre famille, une forme partielle ou une heure illisible', () => {
     expect(parseCaptureNotice({ kind: 'member-left', actor: { participantId: 'p', displayName: 'A' } })).toBeNull();
     expect(parseCaptureNotice({ ...notice(), actor: undefined })).toBeNull();
+    expect(parseCaptureNotice({ ...notice(), actor: { participantId: 'p-actor', displayName: 'Alice' } })).toBeNull();
     expect(parseCaptureNotice({ ...notice(), sentAt: 'hier' })).toBeNull();
     expect(parseCaptureNotice({ ...notice(), captureKind: 'photo' })).toBeNull();
     expect(parseCaptureNotice(null)).toBeNull();
@@ -92,7 +94,7 @@ describe('parseCaptureNotice — la métadonnée VALIDÉE, jamais castée', () =
 describe('captureNoticeMetadata — la seule fabrique de la métadonnée', () => {
   it('dérive l’issue de la nature et rend l’heure d’envoi en ISO', () => {
     const built = captureNoticeMetadata({
-      actor: { participantId: 'p-actor', displayName: 'Alice' },
+      actor: { participantId: 'p-actor', displayName: 'Alice', isAnonymous: false },
       capturedMessageId: OTHER_ID,
       nature: 'view-once',
       captureKind: 'recording',
@@ -106,7 +108,7 @@ describe('captureNoticeMetadata — la seule fabrique de la métadonnée', () =>
 
   it('ne porte aucun contenu du message capturé', () => {
     const built = captureNoticeMetadata({
-      actor: { participantId: 'p-actor', displayName: 'Alice' },
+      actor: { participantId: 'p-actor', displayName: 'Alice', isAnonymous: false },
       capturedMessageId: OTHER_ID,
       nature: 'timed-flame',
       captureKind: 'screenshot',
@@ -180,6 +182,47 @@ describe('captureNoticeText — la phrase dans la langue et le fuseau du LECTEUR
     expect(captureNoticeText(notice(), { language: 'ja', timeZone: 'UTC' })).toBe('Alice a capturé l’éphémère du 07/10/2026 à 12:05');
     expect(captureNoticeText(notice(), { language: 'fr', timeZone: 'Pas/UnFuseau' })).toBe('Alice a capturé l’éphémère du 07/10/2026 à 12:05');
     expect(captureNoticeText(notice(), { language: null, timeZone: null })).toBe('Alice a capturé l’éphémère du 07/10/2026 à 12:05');
+  });
+});
+
+describe('l’acteur se distingue d’un homonyme, et son nom ne se déguise pas (audit #9617, A8)', () => {
+  it('nomme un inscrit avec son pseudo, un invité comme invité — dans la phrase ET le repli', () => {
+    const member = notice({ actor: { participantId: 'p-1', displayName: 'Bob', isAnonymous: false, username: 'bob' } });
+    const guest = notice({ actor: { participantId: 'p-2', displayName: 'Bob', isAnonymous: true } });
+    expect(captureNoticeText(member, { language: 'fr', timeZone: 'UTC' })).toBe('Bob (@bob) a capturé l’éphémère du 07/10/2026 à 12:05');
+    expect(captureNoticeText(guest, { language: 'fr', timeZone: 'UTC' })).toBe('Bob (invité) a capturé l’éphémère du 07/10/2026 à 12:05');
+    expect(captureNoticeText(guest, { language: 'en', timeZone: 'UTC' })).toContain('Bob (guest) took a screenshot');
+    expect(captureNoticeFallbackText(guest)).toBe('Bob (invité) a capturé l’éphémère du 07/10/2026 à 12:05 (UTC)');
+  });
+
+  it('porte isAnonymous et le pseudo dans la métadonnée, relus par le parseur', () => {
+    const built = captureNoticeMetadata({
+      actor: { participantId: 'p-1', displayName: 'Bob', isAnonymous: false, username: 'bob' },
+      capturedMessageId: OTHER_ID,
+      nature: 'timed-flame',
+      captureKind: 'screenshot',
+      sentAt: new Date('2026-10-07T12:05:00Z'),
+    });
+    expect(built.actor).toEqual({ participantId: 'p-1', displayName: 'Bob', isAnonymous: false, username: 'bob' });
+    expect(parseCaptureNotice(built)).toEqual(built);
+  });
+
+  it('retire à l’écriture les contrôles de direction et les caractères de contrôle, et borne la longueur', () => {
+    expect(sanitizeNoticeName('\u202EboB\u202C')).toBe('boB');
+    expect(sanitizeNoticeName('Al\u0000ice\u2066 \u200F  Martin\n')).toBe('Alice Martin');
+    expect(sanitizeNoticeName('x'.repeat(200))).toHaveLength(64);
+    const built = captureNoticeMetadata({
+      actor: { participantId: 'p-1', displayName: '\u202Eniamda', isAnonymous: true, username: 'ano_\u202Ex' },
+      capturedMessageId: OTHER_ID,
+      nature: 'timed-flame',
+      captureKind: 'screenshot',
+      sentAt: new Date('2026-10-07T12:05:00Z'),
+    });
+    expect(built.actor).toEqual({ participantId: 'p-1', displayName: 'niamda', isAnonymous: true });
+  });
+
+  it('retombe sur un nom neutre quand il ne reste rien', () => {
+    expect(sanitizeNoticeName('\u202E\u200F ')).toBe('?');
   });
 });
 

@@ -15,11 +15,12 @@
  * `POST /conversations/:id/messages/capture` (corps sans `conversationId`, pris
  * dans l'adresse).
  *
- * `captureId` est l'identité de LA capture, tirée par le client : une capture
- * d'écran en a une à elle ; un enregistrement en garde une seule du début à la
- * fin, si bien qu'un éphémère n'est annoncé qu'une fois par enregistrement même
- * si le client le redéclare. Un réessai porte le même identifiant et ne crée
- * rien de plus.
+ * La passerelle annonce UNE fois chaque (acteur, message, `kind`) sur toute la
+ * vie annonçable du message (audit #9617, A1) : redéclarer, réessayer ou
+ * enregistrer deux fois ne crée rien de plus. `captureId` (facultatif) n'est
+ * qu'un identifiant de corrélation tiré par le client — une capture d'écran en
+ * a un, un enregistrement en garde un du début à la fin — journalisé, jamais
+ * clé de déduplication.
  */
 
 import { z } from 'zod';
@@ -41,7 +42,7 @@ const captureFields = {
     .max(CONTENT_CAPTURE_MAX_MESSAGES)
     .transform((ids) => [...new Set(ids)]),
   kind: z.enum(CONTENT_CAPTURE_KINDS),
-  captureId: z.string().regex(CAPTURE_ID),
+  captureId: z.string().regex(CAPTURE_ID).optional(),
 };
 
 /** La charge du corps REST — la conversation est dans l'adresse. */
@@ -75,7 +76,7 @@ export type ContentCaptureAck =
 /** Le schéma JSON du corps REST (Fastify) — même bornes que {@link contentCaptureBodySchema}. */
 export const contentCaptureRequestJsonSchema = {
   type: 'object',
-  required: ['messageIds', 'kind', 'captureId'],
+  required: ['messageIds', 'kind'],
   additionalProperties: false,
   properties: {
     messageIds: {
