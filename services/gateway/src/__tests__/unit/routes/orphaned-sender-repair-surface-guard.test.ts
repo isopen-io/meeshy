@@ -250,6 +250,10 @@ const SERVICE_SURFACES: Record<string, Classification> = {
   'messaging/conversationWriteAdmission.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'messaging/attachmentSendAdmission.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'messaging/copyExitProtection.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #9617 — la capture déclarée relit les messages désignés par
+  // `CAPTURED_MESSAGE_SELECT` : identité, horloge, auteur par son seul
+  // `senderId` et colonnes de la loi de sortie — jamais la relation `sender`.
+  'messaging/contentCaptureNotices.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'messaging/forwardAdmission.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'messaging/messageMentions.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'messaging/messageReadAccess.ts': { kind: 'exempt', reads: 2, why: DOES_NOT_SELECT_SENDER },

@@ -30,6 +30,7 @@ import { AuthHandler } from './handlers/AuthHandler';
 import { MessageHandler } from './handlers/MessageHandler';
 import { StatusHandler } from './handlers/StatusHandler';
 import { ConversationViewingHandler } from './handlers/ConversationViewingHandler';
+import { listenContentCapture } from './handlers/ContentCaptureHandler';
 import { ReactionHandler } from './handlers/ReactionHandler';
 import { AttachmentReactionHandler } from './handlers/AttachmentReactionHandler';
 import { AttachmentReactionService } from '../services/AttachmentReactionService';
@@ -1816,14 +1817,10 @@ export class MeeshySocketIOManager {
         try { await this.conversationViewingHandler.handleStop(socket, data); } catch (error) { logger.error('[CONVERSATION_LEAVE] viewing Error:', error); }
       });
 
-      // « Est dans la conversation » (#8892) — l'écran ouvert au premier plan.
+      // « Est dans la conversation » (#8892) — l'écran ouvert au premier plan, et l'arrière-plan.
       this.conversationViewingHandler.listen(socket);
-
-      // Une app passée en arrière-plan n'est plus dans aucune conversation.
-      // `CallEventsHandler` écoute le même événement pour la sonnerie.
-      socket.on(CLIENT_EVENTS.PRESENCE_APP_STATE, async (data) => {
-        try { await this.conversationViewingHandler.handleAppState(socket, data); } catch (error) { logger.error('[PRESENCE_APP_STATE] viewing Error:', error); }
-      });
+      // #9617 — une capture d'écran d'un contenu qui disparaît, annoncée au fil.
+      listenContentCapture(socket, { prisma: this.prisma, socketToUser: this.socketToUser, connectedUsers: this.connectedUsers, broadcast: (message, conversationId) => this.broadcastMessage(message as Message, conversationId) });
 
       this.callEventsHandler.setupCallEvents(
         socket,

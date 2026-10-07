@@ -5,7 +5,7 @@
 import { describe, it, expect, jest } from '@jest/globals';
 
 import { ConversationViewingHandler, MAX_PENDING_OPENINGS } from '../ConversationViewingHandler';
-import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
+import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 
 const CONV = '507f1f77bcf86cd799439011';
 const OTHER_CONV = '507f1f77bcf86cd799439099';
@@ -261,6 +261,20 @@ describe('ConversationViewingHandler — quitter la conversation', () => {
     await handler.handleAppState(alice.socket, { foreground: false });
 
     expect(stopsFor(emissions).map(e => (e.data as any).conversationId).sort()).toEqual([CONV, OTHER_CONV].sort());
+  });
+
+  it('écoute lui-même presence:app-state : un passage en arrière-plan reçu par le socket retire l’utilisateur', async () => {
+    const { handler, emissions, connect } = makeWorld();
+    const alice = connect(ALICE, 's-alice');
+    const listeners = new Map<string, (data: unknown) => void>();
+    alice.socket.on = (event: string, listener: (data: unknown) => void) => listeners.set(event, listener);
+    handler.listen(alice.socket);
+    await handler.handleStart(alice.socket, { conversationId: CONV });
+
+    listeners.get(CLIENT_EVENTS.PRESENCE_APP_STATE)?.({ foreground: false });
+    await handler.handleStop(alice.socket, { conversationId: OTHER_CONV });
+
+    expect(stopsFor(emissions).map(e => (e.data as any).conversationId)).toEqual([CONV]);
   });
 
   it('revenir au premier plan ne retire rien', async () => {

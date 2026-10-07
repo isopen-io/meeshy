@@ -96,7 +96,12 @@ export class ConversationViewingHandler {
     this.userSockets = deps.userSockets;
   }
 
-  /** Les trois gestes du client : ouvrir, quitter, être actif (#9061). */
+  /**
+   * Les gestes du client : ouvrir, quitter, être actif (#9061), et passer en
+   * arrière-plan — une app qui n'est plus au premier plan n'est plus dans
+   * aucune conversation. `CallEventsHandler` écoute le même `presence:app-state`
+   * pour la sonnerie.
+   */
   listen(socket: Socket): void {
     const logged = (event: string) => (error: unknown) =>
       logger.error('viewing listener failed', { error, event, socketId: socket.id });
@@ -108,6 +113,9 @@ export class ConversationViewingHandler {
     });
     socket.on(CLIENT_EVENTS.VIEWING_ACTIVITY, data => {
       this.handleActivity(socket, data).catch(logged(CLIENT_EVENTS.VIEWING_ACTIVITY));
+    });
+    socket.on(CLIENT_EVENTS.PRESENCE_APP_STATE, data => {
+      this.handleAppState(socket, data).catch(logged(CLIENT_EVENTS.PRESENCE_APP_STATE));
     });
   }
 
