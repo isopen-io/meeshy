@@ -97,6 +97,8 @@ type ElanInputs = {
   readonly timezone: string | null;
   /** Un e-mail ou un téléphone vérifié — ce qui ouvre les gros poids en entier. */
   readonly verified: boolean;
+  /** Le crédité est un COMPTE — la clé de participant d'un invité de lien n'en est pas un (#9569). */
+  readonly isAccount: boolean;
   readonly expiresAt: number;
 };
 
@@ -257,6 +259,7 @@ export class EngagementService {
       levelRecord: typeof compte?.levelRecord === 'number' ? compte.levelRecord : null,
       timezone: typeof compte?.timezone === 'string' ? compte.timezone : null,
       verified: Boolean(compte?.emailVerifiedAt ?? compte?.phoneVerifiedAt),
+      isAccount: Boolean(compte),
       expiresAt: maintenant + ELAN_CACHE_TTL_MS,
     };
 
@@ -364,7 +367,7 @@ export class EngagementService {
     if (rememberedTargetId !== undefined) {
       await this.quotas.remember(userId, operationKey, rememberedTargetId, points);
     }
-    if (options.postId !== undefined) {
+    if (options.postId !== undefined && inputs.isAccount) {
       await this.postRecorder.record({ userId, postId: options.postId, operationKey, points, rememberedTargetId });
     }
 

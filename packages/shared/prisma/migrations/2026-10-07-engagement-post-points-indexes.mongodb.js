@@ -13,10 +13,14 @@
  * ne se passe s'il existe ; un unique bloqué par des doublons est SIGNALÉ, jamais forcé. Idempotente — la
  * rejouer ne change rien.
  *
- * À JOUER AVANT le premier crédit du nouveau code, ou aussitôt après son déploiement : sans l'unique, deux
- * premiers gestes simultanés du même lecteur sur le même post peuvent poser deux lignes. La lecture les
- * additionne (aucun point n'est perdu), mais l'unique reste alors « bloqué » ici jusqu'à leur fusion à la main
- * (réécrire `totalPoints` en `Long`, jamais par une addition mongosh qui concatène).
+ * L'ordre avec le déploiement est libre : le code n'attend pas l'unique pour être juste. Chaque ligne naît avec
+ * un `_id` DÉRIVÉ de (lecteur, post) — deux premiers gestes simultanés créent la même clé primaire, et l'index
+ * `_id`, qui existe toujours, refuse la seconde. L'unique d'ici est la ceinture de ces bretelles, et l'index que
+ * la lecture groupée d'une page emprunte.
+ *
+ * Un « bloqué » ne peut donc venir que d'une ligne écrite à la main ou par un code antérieur à l'identifiant
+ * dérivé : fusionner à la main (réécrire `totalPoints` en `Long`, jamais par une addition mongosh, qui
+ * concatène), puis rejouer.
  *
  * À JOUER SUR LE STAGING D'ABORD ; en production, avec le feu vert du porteur (#9223), sauvegarde vérifiée
  * d'abord.

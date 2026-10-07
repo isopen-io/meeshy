@@ -23,12 +23,14 @@
  * ni relation ni cascade vers `Post`, donc rien d'autre ne le ferait.
  */
 
+import { createHash } from 'node:crypto';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { EngagementOperationKey } from '@meeshy/shared/types/engagement-operations';
 import type { PostEngagementSnapshot } from '@meeshy/shared/types/engagement-scale';
 import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import type { ServerEmitIO } from '../../socketio/serverEmit';
 import { enhancedLogger } from '../../utils/logger-enhanced';
+import { withRetry } from '../MessageMediaConsumptionService';
 import { creditLivesInPublicationMemory, loadViewerPostPoints } from './viewerPostPoints';
 
 const log = enhancedLogger.child({ module: 'PostPointsRecorder' });
@@ -47,6 +49,18 @@ function isP2002(err: unknown): boolean {
 }
 
 const messageOf = (error: unknown): string => (error instanceof Error ? error.message : String(error));
+
+/**
+ * L'identifiant de LA ligne d'un (lecteur, post) — dérivé des deux, donc le même
+ * pour tout écrivain. Deux premiers gestes simultanés créent ainsi la MÊME clé
+ * primaire : la seconde création est refusée par l'index `_id`, le seul qui
+ * existe toujours, que l'index unique de la migration soit déjà posé ou non.
+ * Aucun doublon ne peut naître — et c'est ce qui compte, parce qu'un doublon ne
+ * se contente pas d'exister : une mise à jour par (lecteur, post) incrémente
+ * alors les DEUX lignes, et chaque geste suivant se compte deux fois.
+ */
+export const postPointsRowId = (userId: string, postId: string): string =>
+  createHash('sha256').update(`${userId}:${postId}`).digest('hex').slice(0, 24);
 
 export class PostPointsRecorder {
   constructor(
@@ -77,17 +91,25 @@ export class PostPointsRecorder {
     }
   }
 
+  /**
+   * Incrément atomique. Un conflit d'écriture (P2034) n'a rien écrit : la
+   * tentative se rejoue en entier, sans quoi le crédit resterait au score et
+   * manquerait au cumul.
+   */
   private async add(userId: string, postId: string, points: number): Promise<void> {
     const where = { userId_postId: { userId, postId } };
     const data = { totalPoints: { increment: points } };
-    try {
-      await this.prisma.engagementPostPoints.upsert({ where, create: { userId, postId, totalPoints: points }, update: data });
-    } catch (err) {
-      // Deux premiers gestes concurrents : le perdant de la création retombe
-      // sur un incrément de la ligne que le gagnant vient de poser.
-      if (!isP2002(err)) throw err;
-      await this.prisma.engagementPostPoints.update({ where, data });
-    }
+    const create = { id: postPointsRowId(userId, postId), userId, postId, totalPoints: points };
+    await withRetry(async () => {
+      try {
+        await this.prisma.engagementPostPoints.upsert({ where, create, update: data });
+      } catch (err) {
+        // Deux premiers gestes concurrents : le perdant de la création retombe
+        // sur un incrément de la ligne que le gagnant vient de poser.
+        if (!isP2002(err)) throw err;
+        await this.prisma.engagementPostPoints.update({ where, data });
+      }
+    });
   }
 
   private async announce(userId: string, postId: string): Promise<void> {

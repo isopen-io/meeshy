@@ -17,8 +17,8 @@ import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import type { EngagementOperationKey } from '@meeshy/shared/types/engagement-operations';
 import { EngagementService } from '../../../../services/engagement/EngagementService';
 import { loadViewerPostPoints } from '../../../../services/engagement/viewerPostPoints';
-import { purgePostPoints } from '../../../../services/engagement/PostPointsRecorder';
-import { fakeGameDb, seedUser, type FakeGameDb } from '../../../../services/game/__tests__/fakeGameDb';
+import { postPointsRowId, purgePostPoints } from '../../../../services/engagement/PostPointsRecorder';
+import { fakeGameDb, seedUser, uniqueViolation, writeConflict, type FakeGameDb } from '../../../../services/game/__tests__/fakeGameDb';
 
 jest.mock('../../../../utils/logger-enhanced', () => ({
   enhancedLogger: { child: () => ({ info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() }) },
@@ -359,5 +359,116 @@ describe('un post qui disparaît', () => {
     };
 
     expect(await purgePostPoints(db.prisma, [])).toBe(0);
+  });
+});
+
+/**
+ * Deux PREMIERS gestes du même lecteur sur le même post, au même instant.
+ *
+ * L'upsert de Prisma sur MongoDB lit puis écrit : les deux lisent « aucune
+ * ligne » et créent. La ligne porte un identifiant DÉRIVÉ de (lecteur, post) :
+ * la clé primaire — le seul index qui existe toujours — refuse la seconde
+ * création, que l'index unique de la migration soit déjà posé ou non, et le
+ * perdant retombe sur un incrément. Aucun doublon ne peut naître, donc aucun
+ * geste ultérieur ne peut être compté deux fois.
+ */
+describe('deux premiers gestes simultanés sur le même post', () => {
+  const losingCreate = (db: FakeGameDb) => {
+    const upsert = db.engagementPostPoints.upsert.bind(db.engagementPostPoints);
+    let raced = false;
+    db.engagementPostPoints.upsert = async (args: Parameters<typeof upsert>[0]) => {
+      if (raced) return upsert(args);
+      raced = true;
+      await db.engagementPostPoints.create({ data: { ...args.create, totalPoints: 7 } });
+      return db.engagementPostPoints.create({ data: args.create });
+    };
+  };
+
+  it('la ligne d’un (lecteur, post) a toujours le même identifiant, et un autre couple en a un autre', () => {
+    expect(postPointsRowId(READER, POST)).toBe(postPointsRowId(READER, POST));
+    expect(postPointsRowId(READER, POST)).toMatch(/^[0-9a-f]{24}$/);
+    expect(postPointsRowId(READER, POST)).not.toBe(postPointsRowId(OTHER_READER, POST));
+    expect(postPointsRowId(READER, POST)).not.toBe(postPointsRowId(READER, postId(1)));
+  });
+
+  it('le perdant de la création s’ajoute à la ligne du gagnant — une seule ligne, aucun point perdu', async () => {
+    const { db, service } = setup();
+    losingCreate(db);
+
+    await service.recordActivity(READER, 'tool.post_reaction', onPost());
+
+    expect(db.engagementPostPoints.rows).toHaveLength(1);
+    expect(db.engagementPostPoints.rows[0]).toMatchObject({ id: postPointsRowId(READER, POST), userId: READER, postId: POST });
+    expect(await pointsOf(db, READER, POST)).toBe(7 + credited(db, READER));
+  });
+
+  it('la course se tranche SANS l’index unique de la migration : la clé primaire suffit', async () => {
+    const { db, service } = setup();
+    const create = db.engagementPostPoints.create.bind(db.engagementPostPoints);
+    db.engagementPostPoints.create = async (args: Parameters<typeof create>[0]) => {
+      if (db.engagementPostPoints.rows.some((row) => row.id === args.data.id)) throw uniqueViolation();
+      db.engagementPostPoints.rows.push({ id: args.data.id as string, ...args.data });
+      return { ...args.data };
+    };
+    losingCreate(db);
+
+    await service.recordActivity(READER, 'tool.post_reaction', onPost());
+
+    expect(db.engagementPostPoints.rows).toHaveLength(1);
+    expect(await pointsOf(db, READER, POST)).toBe(7 + credited(db, READER));
+  });
+
+  it('un conflit d’écriture se rejoue : le crédit n’est pas perdu pour le cumul', async () => {
+    const { db, service, emissions } = setup();
+    const upsert = db.engagementPostPoints.upsert.bind(db.engagementPostPoints);
+    let conflicts = 1;
+    db.engagementPostPoints.upsert = async (args: Parameters<typeof upsert>[0]) => {
+      if (conflicts > 0) {
+        conflicts -= 1;
+        throw writeConflict();
+      }
+      return upsert(args);
+    };
+
+    await service.recordActivity(READER, 'tool.post_reaction', onPost());
+
+    expect(await pointsOf(db, READER, POST)).toBe(credited(db, READER));
+    expect(postUpdates(emissions).map((emission) => emission.payload)).toEqual([
+      { postId: POST, viewerPoints: credited(db, READER) },
+    ]);
+  });
+});
+
+/**
+ * L'INVITÉ d'un lien partagé n'a pas de compte : son `authContext.userId` est
+ * un `Participant.id` (`services/gateway/CLAUDE.md` § Authentication), qui ne
+ * doit jamais servir d'identité de compte. Chaque porte d'un geste de post le
+ * refuse déjà (REST : `registeredUser` requis ; socket : « Only registered
+ * users can react »). Ce témoin tient la propriété au seul point où elle
+ * s'écrit : même si une porte laissait passer sa clé, AUCUNE ligne de ce qu'un
+ * post a rapporté ne s'inscrit pour un identifiant qui n'est pas un compte, et
+ * rien n'est annoncé dans sa room.
+ */
+describe('un identifiant qui n’est pas un compte', () => {
+  const GUEST_PARTICIPANT = '68e000000000000000000001';
+
+  it('ne reçoit aucune ligne de ce qu’un post a rapporté, et aucune annonce', async () => {
+    const { db, service, emissions } = setup();
+
+    await service.recordActivity(GUEST_PARTICIPANT, 'tool.post_reaction', onPost());
+    await service.recordActivity(GUEST_PARTICIPANT, 'comment.text', { postId: POST });
+
+    expect(db.user.rows.map((row) => row.id)).not.toContain(GUEST_PARTICIPANT);
+    expect(db.engagementPostPoints.rows).toEqual([]);
+    expect(postUpdates(emissions)).toEqual([]);
+  });
+
+  it('n’empêche pas un compte de recevoir la sienne sur le même post', async () => {
+    const { db, service } = setup();
+
+    await service.recordActivity(GUEST_PARTICIPANT, 'tool.post_reaction', onPost());
+    await service.recordActivity(READER, 'tool.post_reaction', onPost());
+
+    expect(db.engagementPostPoints.rows.map((row) => row.userId)).toEqual([READER]);
   });
 });

@@ -16,9 +16,13 @@
  *
  * `creditLivesInPublicationMemory` est le SEUL prédicat qui dit où un crédit
  * s'écrit ; cette lecture additionne les deux. Un post publié avant ce lot n'a
- * pas de ligne de cumul et n'en a pas besoin : sa publication est déjà dans sa
- * mémoire, et un geste ultérieur de son auteur ouvre une ligne de cumul qui ne
- * la contient pas — elle ne peut donc jamais compter deux fois.
+ * pas de ligne de cumul : la publication d'un contenu LOURD s'y lit dans sa
+ * mémoire, exactement comme pour un post neuf, et un geste ultérieur de son
+ * auteur ouvre une ligne de cumul qui ne la contient pas — elle ne peut donc
+ * jamais compter deux fois. Ce qui n'a JAMAIS été gardé n'est pas retrouvable,
+ * et rien ne le fabrique : la publication d'un contenu non lourd (visibilité
+ * amis), l'axe outil qui l'accompagnait, et tout post d'avant la mémoire par
+ * contenu (#8959). Ces posts-là montrent leurs seuls gestes d'après ce lot.
  *
  * ## Coût : une lecture du cumul par PAGE
  *
