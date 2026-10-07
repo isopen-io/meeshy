@@ -559,8 +559,12 @@ export function formatConversationPoints(snapshot: Pick<ConversationEngagementSn
  * Toujours PAR LECTEUR : la somme des points que CE post a réellement crédités
  * à celui qui le regarde (sa publication s'il en est l'auteur, ses réactions,
  * commentaires, republications, signets, vues de story) — jamais ceux d'un
- * autre. La valeur est ABSOLUE : un client la pose telle quelle, il n'additionne
- * rien et ne devine rien.
+ * autre. La valeur est ABSOLUE : un client n'additionne rien et ne devine rien.
+ *
+ * Elle est aussi MONOTONE : tant que le post existe, ce qu'il a rapporté ne
+ * décroît jamais (une reprise n'a lieu qu'au retrait du post). Deux valeurs
+ * peuvent arriver dans le désordre — deux gestes rapprochés, une lecture de fil
+ * rendue après l'annonce d'un geste : `keptViewerPoints` garde la plus grande.
  */
 export type PostEngagementSnapshot = {
   readonly postId: string;
@@ -575,4 +579,21 @@ export function isPostEngagementSnapshot(value: unknown): value is PostEngagemen
     value.postId.length > 0 &&
     isIntIn(value.viewerPoints, 0, Number.MAX_SAFE_INTEGER)
   );
+}
+
+/**
+ * Ce qu'un client GARDE de `viewerPoints` quand une valeur lui arrive — par une
+ * lecture, ou par `engagement:post-updated`.
+ *
+ * - `received` absent : la réponse ne porte pas le champ (réponse d'écriture,
+ *   ancien serveur, projection sans état de lecteur) ⇒ il garde ce qu'il sait ;
+ * - sinon la plus grande des deux : la valeur est monotone, donc une valeur plus
+ *   petite est une valeur plus ANCIENNE arrivée en retard.
+ *
+ * Ce qu'il sait est propre au COMPTE connecté : un changement de compte repart
+ * de rien.
+ */
+export function keptViewerPoints(known: number | undefined, received: number | undefined): number | undefined {
+  if (received === undefined) return known;
+  return known === undefined ? received : Math.max(known, received);
 }

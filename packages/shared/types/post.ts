@@ -219,7 +219,8 @@ export interface Post {
    * pour un lecteur sans compte, d'un ancien serveur et des réponses d'écriture
    * — absent veut dire « garde ce que tu sais », jamais zéro. Après un geste,
    * la nouvelle valeur arrive par `engagement:post-updated`
-   * (`PostEngagementSnapshot`), adressé au lecteur seul.
+   * (`PostEngagementSnapshot`), adressé au lecteur seul. Monotone tant que le
+   * post existe : entre deux valeurs, `keptViewerPoints` garde la plus grande.
    */
   readonly viewerPoints?: number;
   readonly bookmarkedAt?: string | Date | null;
