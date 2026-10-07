@@ -132,6 +132,34 @@ même chose :
   bouton visible met en pause ; en pause, il reste affiché. Effacé, il reste nommé et
   focalisable ; sous mouvement réduit, il n'y a pas de fondu.
 
+**Amendement du 2026-10-07 (#9577, directive porteur) — la barre prend la largeur de
+l'écran.** Ce qui suit REMPLACE, pour iOS, la ligne « la progression + la durée, couloir
+bas » du tableau et le premier point de la liste ci-dessus :
+
+| sur le CADRE (part avec lui) | dans la COLONNE de droite | dans les COULOIRS |
+|---|---|---|
+| la légende, l'auteur + la date | réagir · répondre · composer | ✕ et ⋯, couloir haut |
+| la ligne `largeur × hauteur · poids · durée` | puis **le son** et **(...)** (vitesse, PiP) | **la progression, seule, sur toute la largeur de l'ÉCRAN** |
+| le play / pause, au CENTRE du média | | le rail des autres médias |
+
+- la **progression** n'est plus bornée à la largeur du cadre et ne partage plus sa ligne :
+  sur une vidéo 9:16, elle perdait plus d'un tiers de sa course. `TransportLayout`
+  le porte par le PLACEMENT — `.corridor` ne rend ni son ni menu
+  (`showsBarItems`), `.rail` ne rend qu'eux.
+- la **durée** quitte la bande pour la ligne d'informations, et elle **décompte** : temps
+  restant pendant la lecture, durée totale à l'arrêt (`MediaInfoLine.displayedDuration`).
+  Avant que le moteur connaisse ses pistes, c'est toujours la durée de l'**attachement**
+  qui répond (`MediaInfoLine.totalDuration`) — la raison écrite plus haut tient.
+- le **play / pause** s'efface **une seconde** après le début de la lecture
+  (`FullscreenChromeMetrics.playPauseFadeDelay`, distinct de `autoHideDelay = 3`). Un
+  toucher sur le média le ramène et réarme la seconde ; **ce toucher-là ne bascule pas
+  le plein cadre** (`MediaStagePlayPause.tapRevealsOnly`) — sinon le même doigt ramènerait
+  le bouton et retirerait le plateau qui le porte. Bouton visible, le toucher sur le
+  média garde sa porte (#6142) ; en pause, le bouton reste. L'état est une valeur pure,
+  `FullscreenPlayPauseFade`.
+- la bande d'une **scène** garde sa durée discrète à droite : une scène n'a pas de ligne
+  d'informations.
+
 ### 2.3 Les gestes
 
 | geste | effet |
