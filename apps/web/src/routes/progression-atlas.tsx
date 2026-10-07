@@ -44,7 +44,7 @@ function AtlasScreenBody({ progress }: { readonly progress: EngagementWithGame }
 }
 
 export default function ProgressionAtlasScreen() {
-  suspendForGameCatalog(currentInterfaceLanguage());
+  suspendForGameCatalog(currentInterfaceLanguage(), 'progression');
   return (
     <ProgressionPage
       concept="atlas"

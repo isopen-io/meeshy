@@ -53,7 +53,7 @@ export function TableauBody({ progress, now }: { readonly progress: EngagementWi
 }
 
 export default function ProgressionTableauScreen() {
-  suspendForGameCatalog(currentInterfaceLanguage());
+  suspendForGameCatalog(currentInterfaceLanguage(), 'progression');
   return (
     <ProgressionPage titre={gameText('game.dashboard.title')} teinte={GAME_BRAND} compte={() => null}>
       {(progress) => <TableauBody progress={progress} />}

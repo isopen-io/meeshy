@@ -241,7 +241,7 @@ function FicheScreenBody({ concept, progress }: { readonly concept: ProgressionC
 }
 
 export default function ProgressionConceptScreen() {
-  suspendForGameCatalog(currentInterfaceLanguage());
+  suspendForGameCatalog(currentInterfaceLanguage(), 'progression');
   const { concept: asked } = useParams<'/me/progression/concept/$concept'>();
   const concept = isProgressionConcept(asked) ? asked : null;
   return (

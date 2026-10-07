@@ -49,7 +49,7 @@ export function SuccesBody({
 }
 
 export default function ProgressionSuccesScreen() {
-  suspendForGameCatalog(currentInterfaceLanguage());
+  suspendForGameCatalog(currentInterfaceLanguage(), 'progression');
   /* Les jours de la Flamme du bandeau : lus dans le cache de Progression, jamais redemandés. */
   const cached = useQueryClient().getQueryData<EngagementWithGame>(ENGAGEMENT_PROGRESS_QUERY_KEY);
   const flameDays = cached?.game?.flame.days ?? null;

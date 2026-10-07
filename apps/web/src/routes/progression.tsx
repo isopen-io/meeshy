@@ -165,7 +165,7 @@ function useSectionRedirect(): void {
 }
 
 export default function ProgressionScreen() {
-  suspendForGameCatalog(currentInterfaceLanguage());
+  suspendForGameCatalog(currentInterfaceLanguage(), 'progression');
   const online = useOnline();
   useGameSettings(true);
   useSectionRedirect();

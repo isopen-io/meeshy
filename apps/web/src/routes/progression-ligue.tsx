@@ -199,7 +199,7 @@ function LigueScreenBody({ progress }: { readonly progress: EngagementWithGame }
 }
 
 export default function ProgressionLigueScreen() {
-  suspendForGameCatalog(currentInterfaceLanguage());
+  suspendForGameCatalog(currentInterfaceLanguage(), 'progression');
   return (
     <ProgressionPage
       concept="league"

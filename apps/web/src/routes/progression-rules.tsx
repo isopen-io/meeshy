@@ -136,7 +136,7 @@ export function RulesBody({ target }: { readonly target?: number }) {
 }
 
 export default function ProgressionRulesScreen() {
-  suspendForGameCatalog(currentInterfaceLanguage());
+  suspendForGameCatalog(currentInterfaceLanguage(), 'rules');
   const target = ruleTarget(useOptionalRoute()?.search.get('regle') ?? null);
   return (
     <div className="flex h-dvh flex-col overflow-hidden pt-safe">

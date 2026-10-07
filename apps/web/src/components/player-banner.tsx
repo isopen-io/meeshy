@@ -15,7 +15,7 @@ import { prefersReducedMotion } from '@/lib/game/haptics';
 import { useGamePrefs } from '@/lib/game/preferences';
 import { useGameSettings } from '@/lib/game/use-game-settings';
 import { tierTint } from '@/lib/game/tier-emblem';
-import { loadGameCatalog, suspendForGameCatalog, translateGame } from '@/lib/i18n-game-catalog';
+import { loadGameScreenCatalog, suspendForGameCatalog, translateGame } from '@/lib/i18n-game-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { formatCount } from '@/lib/view/game-copy';
 import { isLargeText, leaguePlace, playerBannerLabel, playerBannerModel, type PlayerBannerLevel, type PlayerBannerModel } from '@/lib/view/player-banner';
@@ -238,7 +238,7 @@ export function PlayerBanner({ model, motion = {}, backdrop = null }: { readonly
 }
 
 /** Le catalogue du jeu dans la langue de l'interface — attendu avec le chunk par le bandeau du haut. */
-export const loadPlayerBannerCatalog = () => loadGameCatalog(currentInterfaceLanguage());
+export const loadPlayerBannerCatalog = () => loadGameScreenCatalog(currentInterfaceLanguage(), 'banner');
 
 /**
  * L'HÔTE, monté par le bandeau du haut quand la bannière y a sa place. Cache
@@ -248,7 +248,7 @@ export const loadPlayerBannerCatalog = () => loadGameCatalog(currentInterfaceLan
  * réponse. « Jeu masqué » : aucune bannière, aucune requête.
  */
 export default function PlayerBannerHost() {
-  suspendForGameCatalog(currentInterfaceLanguage());
+  suspendForGameCatalog(currentInterfaceLanguage(), 'banner');
   const prefs = useGamePrefs();
   const signedIn = useStore(sessionStore, (state) => state.session.status === 'authenticated') || apiDeps.source === 'fixtures';
   useGameSettings(signedIn);

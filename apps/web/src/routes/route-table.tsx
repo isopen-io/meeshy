@@ -4,7 +4,7 @@ import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { loadInviteCatalog } from '@/lib/i18n-invite-catalog';
 import { loadLinkFamiliesCatalog } from '@/lib/i18n-link-families-catalog';
 import { loadNotificationRowCatalog } from '@/lib/i18n-notification-row-catalog';
-import { loadGameCatalog } from '@/lib/i18n-game-catalog';
+import { loadGameScreenCatalog } from '@/lib/i18n-game-catalog';
 import { loadOnboardingCatalog } from '@/lib/i18n-onboarding-catalog';
 import { createRouter } from '@/lib/router';
 
@@ -127,31 +127,31 @@ const onboardingScreen = () =>
    `translateGame` lève sur un catalogue non chargé, et aucun autre écran n'en
    paie les octets. */
 const progressionScreen = () =>
-  Promise.all([import('@/routes/progression'), loadGameCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+  Promise.all([import('@/routes/progression'), loadGameScreenCatalog(currentInterfaceLanguage(), 'progression')]).then(([screen]) => screen);
 const progressionLigueScreen = () =>
-  Promise.all([import('@/routes/progression-ligue'), loadGameCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+  Promise.all([import('@/routes/progression-ligue'), loadGameScreenCatalog(currentInterfaceLanguage(), 'progression')]).then(([screen]) => screen);
 const progressionSaisonScreen = () =>
-  Promise.all([import('@/routes/progression-saison'), loadGameCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+  Promise.all([import('@/routes/progression-saison'), loadGameScreenCatalog(currentInterfaceLanguage(), 'progression')]).then(([screen]) => screen);
 const progressionVitrineScreen = () =>
-  Promise.all([import('@/routes/progression-vitrine'), loadGameCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+  Promise.all([import('@/routes/progression-vitrine'), loadGameScreenCatalog(currentInterfaceLanguage(), 'progression')]).then(([screen]) => screen);
 const progressionAtlasScreen = () =>
-  Promise.all([import('@/routes/progression-atlas'), loadGameCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+  Promise.all([import('@/routes/progression-atlas'), loadGameScreenCatalog(currentInterfaceLanguage(), 'progression')]).then(([screen]) => screen);
 const progressionPrestigeScreen = () =>
-  Promise.all([import('@/routes/progression-prestige'), loadGameCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+  Promise.all([import('@/routes/progression-prestige'), loadGameScreenCatalog(currentInterfaceLanguage(), 'progression')]).then(([screen]) => screen);
 /* LA FICHE D'UN CONCEPT ET LE TABLEAU DE BORD (#9563) — un seul écran de fiche
    pour les quinze concepts : le gabarit est le même, seule la clé change. */
 const progressionConceptScreen = () =>
-  Promise.all([import('@/routes/progression-concept'), loadGameCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+  Promise.all([import('@/routes/progression-concept'), loadGameScreenCatalog(currentInterfaceLanguage(), 'progression')]).then(([screen]) => screen);
 const progressionTableauScreen = () =>
-  Promise.all([import('@/routes/progression-tableau'), loadGameCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+  Promise.all([import('@/routes/progression-tableau'), loadGameScreenCatalog(currentInterfaceLanguage(), 'progression')]).then(([screen]) => screen);
 const progressionReglagesScreen = () =>
-  Promise.all([import('@/routes/progression-reglages'), loadGameCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+  Promise.all([import('@/routes/progression-reglages'), loadGameScreenCatalog(currentInterfaceLanguage(), 'progression')]).then(([screen]) => screen);
 const progressionBadgesScreen = () =>
-  Promise.all([import('@/routes/progression-badges'), loadGameCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+  Promise.all([import('@/routes/progression-badges'), loadGameScreenCatalog(currentInterfaceLanguage(), 'progression')]).then(([screen]) => screen);
 const progressionRulesScreen = () =>
-  Promise.all([import('@/routes/progression-rules'), loadGameCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+  Promise.all([import('@/routes/progression-rules'), loadGameScreenCatalog(currentInterfaceLanguage(), 'rules')]).then(([screen]) => screen);
 const progressionCarnetScreen = () =>
-  Promise.all([import('@/routes/progression-carnet'), loadGameCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+  Promise.all([import('@/routes/progression-carnet'), loadGameScreenCatalog(currentInterfaceLanguage(), 'progression')]).then(([screen]) => screen);
 
 /* LES INVITATIONS (#7796, #7797) — la page d'accueil d'un lien et la page de
    son créateur attendent leur chunk ET le catalogue `invite.*`/`linkDetail.*`

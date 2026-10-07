@@ -47,7 +47,7 @@ function VitrineScreenBody({ progress }: { readonly progress: EngagementWithGame
 }
 
 export default function ProgressionVitrineScreen() {
-  suspendForGameCatalog(currentInterfaceLanguage());
+  suspendForGameCatalog(currentInterfaceLanguage(), 'progression');
   return (
     <ProgressionPage
       concept="showcase"
