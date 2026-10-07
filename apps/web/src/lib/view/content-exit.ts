@@ -3,6 +3,7 @@ import { contentExitLaw, type ContentExitAttachment, type ContentExitNature } fr
 import { protectionOf } from '@/lib/reading-mode/protection';
 
 import { quotedIsProtected } from './quoted-protection';
+import { SEALED_ROW_ATTRIBUTE } from './sealed-exit-guard';
 
 /**
  * LA LOI DE SORTIE, PROJETÉE POUR LE WEB (#9573) — « un contenu qui disparaît
@@ -124,3 +125,20 @@ export function mediaLeaves(params: {
 
 /** Un média qu'aucun message ne porte (image de commentaire, média de publication) — la loi lue sur la pièce seule. */
 export const loosePieceLeaves = (piece: ExitPiece): boolean => contentExitLaw({ attachments: [piece] }).exportable && pieceIsOpen(piece);
+
+/**
+ * LE SCEAU D'UNE SURFACE QUI REND UN MESSAGE — le MÊME verdict que les
+ * boutons : scellée dès que le contenu ne peut pas sortir (`leaves`), qu'un
+ * bit ou le chiffrement le voile, ou que le message CITE un contenu qui ne
+ * sort pas (la rangée affiche l'aperçu cité ; une citation dont la nature
+ * n'est pas déclarée ferme). `sealed-exit-guard.ts` annule alors les sorties
+ * natives du navigateur sur la surface qui porte l'attribut.
+ */
+export type SealedSubject = ExitMessage & { readonly replyTo?: ExitMessage | null };
+
+export function sealedProps(message: SealedSubject, now: number): { readonly [SEALED_ROW_ATTRIBUTE]?: '' } {
+  const quoted = message.replyTo;
+  const open =
+    contentExitOf(message, now).leaves && !masked(message) && (quoted == null || (quotedExitOf(quoted, now).leaves && !masked(quoted)));
+  return open ? {} : { [SEALED_ROW_ATTRIBUTE]: '' };
+}

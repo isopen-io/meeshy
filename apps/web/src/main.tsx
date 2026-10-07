@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client';
 import { useStore } from 'zustand/react';
 
 import './styles/app.css';
+import './styles/sealed-exit.css';
 
 import Shell from '@/components/shell';
 import { apiDeps } from '@/lib/api/deps';
@@ -155,6 +156,9 @@ createRoot(root).render(
  * `scripts/measure-weight.mjs`).
  */
 void import('@/lib/api/realtime');
+
+/* Les sorties natives du navigateur sont annulées sur toute surface scellée (#9573) — une garde, sur le document. */
+void import('@/lib/view/sealed-exit-guard').then(({ installSealedExitGuard }) => installSealedExitGuard(document));
 
 /**
  * UN LIEN MEESHY OUVERT PAR LE SYSTÈME MÈNE À SON ÉCRAN (#5819) — la coque

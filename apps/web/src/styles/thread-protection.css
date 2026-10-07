@@ -273,19 +273,3 @@ button.view-once-chip {
     }
   }
 }
-
-/*
- * UNE RANGÉE SCELLÉE (#9573) — le contenu qui disparaît ne se sélectionne pas
- * et son média ne se glisse pas hors de la page (`lib/view/sealed-exit-guard.ts`
- * annule de plus copie, glisser et menu natif). Les gestes de Meeshy restent :
- * le menu du message s'ouvre toujours.
- */
-[data-exit-sealed] {
-  -webkit-user-select: none;
-  user-select: none;
-}
-[data-exit-sealed] img,
-[data-exit-sealed] video {
-  -webkit-user-drag: none;
-  -webkit-touch-callout: none;
-}

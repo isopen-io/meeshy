@@ -39,7 +39,7 @@ import { resolveEphemeralDeadline } from '@/lib/view/ephemeral-reception';
 import type { ThreadScene } from '@/lib/reading-mode/scene';
 import type { SwipeOutcome } from '@/lib/view/swipe';
 import type { StoryRingOf } from '@/lib/view/use-author-story-rings';
-import { installSealedExitGuard, sealedRowProps } from '@/lib/view/sealed-exit-guard';
+import { sealedProps } from '@/lib/view/content-exit';
 
 /**
  * LE RÉSUMÉ VIVANT (#5695) — module À LA DEMANDE, déplacé ICI avec le
@@ -368,8 +368,6 @@ export function ThreadModes({
   /* Quitter le fil replie le message long déplié (#8147) : rouvrir une
      conversation ne ressuscite pas un dépliage d'une autre visite. */
   useEffect(() => collapseUnfolded, []);
-  /* Les sorties natives du navigateur (copie d'une sélection, glisser d'une image, menu natif d'un média) sont annulées sur les rangées scellées (#9573). */
-  useEffect(() => installSealedExitGuard(document), []);
   const publishRevealPhase = useCallback((messageId: string, phase: RevealPhase) => {
     setRevealPhases((current) => {
       const held = current.get(messageId);
@@ -713,7 +711,7 @@ export function ThreadModes({
                 {...(rowPhase === 'destroying' ? { 'data-destroying': '', className: 'ephemeral-destroying' } : {})}
                 {...(rowAfterRead ? { style: { position: 'relative', isolation: 'isolate' } } : {})}
                 {...(isSystemMessage(p.message) ? {} : { 'data-row': p.message.id })}
-                {...sealedRowProps(p.message)}
+                {...sealedProps(p.message, Date.now())}
                 {...(isSystemMessage(p.message) || longPress === undefined ? {} : { tabIndex: 0, ...longPress })}
                 role="article"
                 aria-label={rowLabel}

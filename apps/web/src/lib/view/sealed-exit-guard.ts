@@ -1,14 +1,16 @@
-import { contentExitLaw } from '@meeshy/shared/utils/content-exit-law';
-
-import type { ExitMessage } from './content-exit';
-
 /**
  * LES SORTIES NATIVES DU NAVIGATEUR (#9573) — ce que les boutons de Meeshy
  * n'offrent plus, le navigateur l'offre encore de lui-même : sélectionner le
  * texte d'une flamme et le copier, glisser sa photo vers le bureau, ouvrir
- * « Enregistrer l'image sous… » par le menu contextuel natif. La rangée d'un
- * contenu qui disparaît est SCELLÉE (`data-exit-sealed`, la nature lue par la
- * loi partagée), et ces gestes y sont annulés.
+ * « Enregistrer l'image sous… » ou « Enregistrer la cible du lien sous… » par
+ * le menu contextuel natif, ouvrir le fichier dans un onglet au clic milieu.
+ * Une surface qui rend un contenu qui ne sort pas est SCELLÉE
+ * (`data-exit-sealed`, posé par `sealedProps` de `content-exit.ts` — le même
+ * verdict que les boutons), et ces gestes y sont annulés, quel que soit ce
+ * qu'elle rend : texte, image, vidéo, lien de fichier, svg, fond. L'appui
+ * long, la sélection et l'impression sont fermés en CSS
+ * (`styles/sealed-exit.css`). La garde s'installe UNE fois, sur le document
+ * (`main.tsx`) : elle vaut pour toute surface qui porte l'attribut.
  *
  * CE N'EST PAS UNE CLÔTURE. Le fichier est servi au navigateur : les outils de
  * développement, l'onglet réseau et la capture d'écran restent hors de portée
@@ -18,11 +20,6 @@ import type { ExitMessage } from './content-exit';
 export const SEALED_ROW_ATTRIBUTE = 'data-exit-sealed';
 
 const SEALED_SELECTOR = `[${SEALED_ROW_ATTRIBUTE}]`;
-
-/** L'attribut d'une rangée dont le contenu disparaît — rien pour un message ordinaire. */
-export function sealedRowProps(message: ExitMessage): { readonly [SEALED_ROW_ATTRIBUTE]?: '' } {
-  return contentExitLaw(message).nature === 'ordinary' ? {} : { [SEALED_ROW_ATTRIBUTE]: '' };
-}
 
 const elementOf = (node: EventTarget | Node | null): Element | null => {
   if (node === null || !('nodeType' in node)) return null;
@@ -43,21 +40,16 @@ export function installSealedExitGuard(doc: Document, selected: () => readonly N
   const onClipboard = (event: Event): void => {
     if (inSealedRow(event.target) || selected().some(inSealedRow)) event.preventDefault();
   };
-  const onDrag = (event: Event): void => {
+  const onSealedGesture = (event: Event): void => {
     if (inSealedRow(event.target)) event.preventDefault();
   };
-  const onContextMenu = (event: Event): void => {
-    const media = elementOf(event.target)?.closest('img, video, audio, canvas');
-    if (media != null && inSealedRow(media)) event.preventDefault();
-  };
+  const GESTURES = ['dragstart', 'contextmenu', 'auxclick'] as const;
   doc.addEventListener('copy', onClipboard, true);
   doc.addEventListener('cut', onClipboard, true);
-  doc.addEventListener('dragstart', onDrag, true);
-  doc.addEventListener('contextmenu', onContextMenu, true);
+  GESTURES.forEach((type) => doc.addEventListener(type, onSealedGesture, true));
   return () => {
     doc.removeEventListener('copy', onClipboard, true);
     doc.removeEventListener('cut', onClipboard, true);
-    doc.removeEventListener('dragstart', onDrag, true);
-    doc.removeEventListener('contextmenu', onContextMenu, true);
+    GESTURES.forEach((type) => doc.removeEventListener(type, onSealedGesture, true));
   };
 }

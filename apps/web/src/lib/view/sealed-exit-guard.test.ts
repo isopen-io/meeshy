@@ -4,7 +4,8 @@ import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags'
 
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
-import { SEALED_ROW_ATTRIBUTE, installSealedExitGuard, sealedRowProps } from './sealed-exit-guard';
+import { contentExitOf, quotedExitOf, sealedProps } from './content-exit';
+import { SEALED_ROW_ATTRIBUTE, installSealedExitGuard } from './sealed-exit-guard';
 
 /**
  * LES SORTIES NATIVES DU NAVIGATEUR (#9573) — copier une sélection (Ctrl+C,
@@ -22,7 +23,7 @@ let picked: Node | null = null;
 
 beforeAll(() => {
   ensureHappyDomRegistered();
-  document.body.innerHTML = `<div id="s" ${SEALED_ROW_ATTRIBUTE}=""><p>secret</p><img src="/a.jpg" /></div><div id="o"><p>ordinaire</p><img src="/b.jpg" /></div>`;
+  document.body.innerHTML = `<div id="s" ${SEALED_ROW_ATTRIBUTE}=""><p>secret</p><img src="/a.jpg" /><a href="/doc.pdf"><span>doc.pdf</span></a><svg><image href="/a.jpg" /></svg><div class="fond" style="background-image:url(/a.jpg)"></div></div><div id="o"><p>ordinaire</p><img src="/b.jpg" /><a href="/b.pdf">b.pdf</a></div>`;
   sealed = document.getElementById('s') as HTMLElement;
   ordinary = document.getElementById('o') as HTMLElement;
   uninstall = installSealedExitGuard(document, () => (picked === null ? [] : [picked]));
@@ -39,14 +40,48 @@ const fire = (target: Element, type: string): boolean => {
   return event.defaultPrevented;
 };
 
-describe('sealedRowProps — quelles rangées sont scellées', () => {
-  test('toute nature qui disparaît, jamais un message ordinaire', () => {
-    expect(sealedRowProps(base)).toEqual({});
-    expect(sealedRowProps({ ...base, isBlurred: true })).toEqual({});
-    expect(sealedRowProps({ ...base, effectFlags: EPHEMERAL, ephemeralDuration: 60 })).toEqual({ [SEALED_ROW_ATTRIBUTE]: '' });
-    expect(sealedRowProps({ ...base, effectFlags: EPHEMERAL | EPHEMERAL_AFTER_READ })).toEqual({ [SEALED_ROW_ATTRIBUTE]: '' });
-    expect(sealedRowProps({ ...base, isViewOnce: true })).toEqual({ [SEALED_ROW_ATTRIBUTE]: '' });
-    expect(sealedRowProps({ ...base, attachments: [{ isViewOnce: true }] })).toEqual({ [SEALED_ROW_ATTRIBUTE]: '' });
+const NOW = 1_700_000_000_000;
+const SEALED = { [SEALED_ROW_ATTRIBUTE]: '' };
+
+describe('sealedProps — le sceau vient du MÊME verdict que les boutons', () => {
+  test('un message ordinaire n’est pas scellé', () => {
+    expect(sealedProps(base, NOW)).toEqual({});
+    expect(sealedProps({ ...base, effectFlags: 0, replyTo: { ...base, effectFlags: 0 } }, NOW)).toEqual({});
+  });
+
+  test('toute nature qui disparaît est scellée — message ou pièce, colonne ou bit', () => {
+    expect(sealedProps({ ...base, effectFlags: EPHEMERAL, ephemeralDuration: 60 }, NOW)).toEqual(SEALED);
+    expect(sealedProps({ ...base, effectFlags: EPHEMERAL | EPHEMERAL_AFTER_READ }, NOW)).toEqual(SEALED);
+    expect(sealedProps({ ...base, expiresAt: new Date(NOW + 60_000) }, NOW)).toEqual(SEALED);
+    expect(sealedProps({ ...base, isViewOnce: true }, NOW)).toEqual(SEALED);
+    expect(sealedProps({ ...base, attachments: [{ isViewOnce: true }] }, NOW)).toEqual(SEALED);
+  });
+
+  test('ce que les boutons refusent déjà est scellé aussi : flou, bit de flou, chiffré', () => {
+    expect(sealedProps({ ...base, isBlurred: true }, NOW)).toEqual(SEALED);
+    expect(sealedProps({ ...base, effectFlags: MESSAGE_EFFECT_FLAGS.BLURRED }, NOW)).toEqual(SEALED);
+    expect(sealedProps({ ...base, isEncrypted: true }, NOW)).toEqual(SEALED);
+  });
+
+  test('un message ordinaire qui CITE un contenu qui disparaît est scellé : sa rangée affiche l’aperçu cité', () => {
+    expect(sealedProps({ ...base, replyTo: { ...base, effectFlags: EPHEMERAL, ephemeralDuration: 60 } }, NOW)).toEqual(SEALED);
+    expect(sealedProps({ ...base, replyTo: { ...base, effectFlags: 0, attachments: [{ isViewOnce: true }] } }, NOW)).toEqual(SEALED);
+  });
+
+  test('une citation dont la nature n’est pas déclarée scelle la rangée', () => {
+    expect(sealedProps({ ...base, replyTo: base }, NOW)).toEqual(SEALED);
+  });
+
+  test('propriété : une rangée non scellée est une rangée dont TOUT peut sortir', () => {
+    const shapes = [base, { ...base, effectFlags: EPHEMERAL, ephemeralDuration: 60 }, { ...base, isViewOnce: true }, { ...base, isBlurred: true }, { ...base, effectFlags: 0 }];
+    shapes.forEach((message) =>
+      [undefined, ...shapes].forEach((replyTo) => {
+        const subject = replyTo === undefined ? message : { ...message, replyTo };
+        const open = SEALED_ROW_ATTRIBUTE in sealedProps(subject, NOW) === false;
+        const leaves = contentExitOf(subject, NOW).leaves && (replyTo === undefined || quotedExitOf(replyTo, NOW).leaves);
+        expect(open && !leaves).toBe(false);
+      }),
+    );
   });
 });
 
@@ -59,6 +94,23 @@ describe('installSealedExitGuard', () => {
   test('le menu contextuel natif d’un média scellé est annulé', () => {
     expect(fire(sealed.querySelector('img') as Element, 'contextmenu')).toBe(true);
     expect(fire(ordinary.querySelector('img') as Element, 'contextmenu')).toBe(false);
+  });
+
+  test('le menu natif est annulé sur TOUT ce qu’une rangée scellée rend : lien de fichier, texte, svg, fond', () => {
+    ['a', 'a span', 'p', 'svg image', '.fond'].forEach((selector) => {
+      expect(fire(sealed.querySelector(selector) as Element, 'contextmenu')).toBe(true);
+    });
+    expect(fire(ordinary.querySelector('a') as Element, 'contextmenu')).toBe(false);
+  });
+
+  test('le clic milieu sur le lien d’un fichier scellé (ouvrir dans un onglet) est annulé', () => {
+    expect(fire(sealed.querySelector('a span') as Element, 'auxclick')).toBe(true);
+    expect(fire(ordinary.querySelector('a') as Element, 'auxclick')).toBe(false);
+  });
+
+  test('glisser un lien ou un fond d’une rangée scellée est annulé', () => {
+    expect(fire(sealed.querySelector('a') as Element, 'dragstart')).toBe(true);
+    expect(fire(sealed.querySelector('.fond') as Element, 'dragstart')).toBe(true);
   });
 
   test('copier ou couper depuis une rangée scellée est annulé', () => {
