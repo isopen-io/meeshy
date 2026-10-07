@@ -1077,13 +1077,12 @@ internal struct _FullscreenRenderer: View {
             hasDuration: declaredDuration > 0)
     }
 
-    /// Un toucher sur l'image : s'il RAMÈNE le bouton central, il ne fait rien
-    /// d'autre ; sinon il garde son effet (basculer le chrome) et la seconde
-    /// repart.
+    /// Un toucher sur l'image ramène le bouton central (la seconde repart) ET
+    /// bascule le chrome, en un seul geste — y compris quand le bouton était
+    /// effacé (#9577, décision porteur 2026-10-08, alignée sur le web).
     private func handleSurfaceTap() {
-        let effect = playPauseFade.mediaTapEffect
         withAnimation(fadeAnimation) { playPauseFade = playPauseFade.tappingMedia() }
-        if effect == .passesThrough { toggleControls() }
+        toggleControls()
     }
 
     private var fadeAnimation: Animation? {

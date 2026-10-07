@@ -10,18 +10,15 @@ import Foundation
 /// bouton VISIBLE met en pause. En pause il reste : c'est la seule façon de
 /// reprendre.
 ///
+/// **Le toucher qui ramène le bouton garde aussi l'effet que l'hôte lui donne**
+/// (décision porteur 2026-10-08, alignée sur le web) : basculer le plein cadre
+/// ou le chrome. La valeur ne rend donc aucun verdict « ce toucher s'arrête
+/// au bouton » — elle n'a plus à arbitrer le doigt.
+///
 /// Valeur immuable : chaque événement rend l'état suivant, jouable sans vue.
 /// `arming` change à chaque réarmement — une tâche clée sur l'état repart donc
 /// d'elle-même, sans minuteur à invalider.
 public nonisolated struct FullscreenPlayPauseFade: Equatable, Sendable {
-
-    /// Ce que fait un toucher sur le média, du point de vue du bouton.
-    public enum MediaTapEffect: Equatable, Sendable {
-        /// Le bouton était effacé : le toucher le ramène, et ne fait rien d'autre.
-        case reveals
-        /// Le bouton est à l'écran : le toucher garde l'effet que l'hôte lui donne.
-        case passesThrough
-    }
 
     public let isPlaying: Bool
     public let isRevealed: Bool
@@ -43,10 +40,6 @@ public nonisolated struct FullscreenPlayPauseFade: Equatable, Sendable {
     /// Le délai avant effacement, ou `nil` s'il n'y a rien à effacer.
     public var fadeDelay: Double? {
         isPlaying && isRevealed ? FullscreenChromeMetrics.playPauseFadeDelay : nil
-    }
-
-    public var mediaTapEffect: MediaTapEffect {
-        isVisible ? .passesThrough : .reveals
     }
 
     /// Le moteur change d'état de lecture. Démarrer montre le bouton et arme la

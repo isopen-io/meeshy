@@ -61,6 +61,7 @@ De haut en bas : barre haute, scène, barre de progression sur toute la largeur 
 - Mute et (...) quittent la ligne de la barre et rejoignent la colonne d'actions de droite, sous « Composer ».
 - Ligne d'informations : `largeur × hauteur · poids · durée`, séparés par un point médian. Pendant la lecture, la durée affiche le temps restant et décompte ; à l'arrêt, la durée totale.
 - Bouton pause : effacé 1 seconde après le début de la lecture. Un toucher le ramène (et réarme la seconde) ; un toucher sur le bouton visible met en pause. En pause, il reste affiché.
+- Le toucher qui ramène le bouton garde AUSSI son effet : il bascule le plein cadre (galerie iOS, visionneuse web) ou le chrome (`_FullscreenRenderer`) dans le même geste. Il ne s'arrête jamais au bouton (décision porteur du 2026-10-08, #9577 : iOS s'aligne sur le web).
 - Mêmes règles pour la galerie de conversation iOS, `_FullscreenRenderer` du SDK et `media-viewer.tsx`.
 - Amende `2026-09-12-lecture-media-plateau-design.md` § 2 et `docs/product/visionneuse-plein-ecran.md` § 2.3.
 

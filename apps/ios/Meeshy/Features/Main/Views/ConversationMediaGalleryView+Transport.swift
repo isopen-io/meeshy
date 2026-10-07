@@ -204,22 +204,3 @@ extension ConversationMediaGalleryView {
                                                               activeMedia: videoManagerActiveURL)
     }
 }
-
-// MARK: - Le toucher qui ramène le bouton central (#9577)
-
-/// **Quand un toucher sur le média ne fait QUE ramener le bouton pause.**
-///
-/// Dans la galerie, un toucher sur le média bascule le plein cadre (#6142). Le
-/// bouton central, lui, s'efface une seconde après le début de la lecture et
-/// revient au toucher. Sans arbitrage, le même doigt ferait les deux : ramener
-/// le bouton ET retirer tout le plateau — bouton compris.
-///
-/// La règle : sur une piste attachée, plateau à l'écran, bouton effacé ⇒ le
-/// toucher le ramène et s'arrête là. Dans tous les autres cas il garde sa porte.
-nonisolated enum MediaStagePlayPause {
-    static func tapRevealsOnly(fade: FullscreenPlayPauseFade,
-                               holdsTrack: Bool,
-                               chromeVisible: Bool) -> Bool {
-        holdsTrack && chromeVisible && fade.mediaTapEffect == .reveals
-    }
-}
