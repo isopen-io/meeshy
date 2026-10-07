@@ -220,6 +220,15 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.VIBRATE" />
 
+    <!-- #9617 — la capture d'écran (API 34, Activity.registerScreenCaptureCallback)
+         et l'enregistrement ou la recopie (API 35, WindowManager.addScreenRecordingCallback)
+         d'un contenu qui disparaît s'annoncent à la conversation
+         (MeeshyScreenGuardPlugin). Deux permissions « normal », accordées à
+         l’installation ; sans effet avant Android 14 et 15. La vue unique, elle,
+         est noircie par FLAG_SECURE, qui n'en demande aucune. -->
+    <uses-permission android:name="android.permission.DETECT_SCREEN_CAPTURE" />
+    <uses-permission android:name="android.permission.DETECT_SCREEN_RECORDING" />
+
     <!-- #8336 — la galerie (@capacitor-community/media, hors androidGalleryMode)
          écrit dans Android/media/<appId>/Meeshy : dossier propre à l'app,
          indexé par MediaStore, sans AUCUNE permission de stockage à aucun

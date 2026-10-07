@@ -42,6 +42,9 @@ const MANIFEST_PATH = join(APP, 'android', 'app', 'src', 'main', 'AndroidManifes
  * `FOREGROUND_SERVICE` (+ `_MICROPHONE`, `_CAMERA`), `USE_FULL_SCREEN_INTENT`,
  * `BLUETOOTH_CONNECT`, `WAKE_LOCK`, `VIBRATE` (#8049) : l'appel natif de la
  * coque (`src/lib/calls/shell-call.ts`, `MeeshyCallPlugin.java`).
+ * `DETECT_SCREEN_CAPTURE` (API 34) et `DETECT_SCREEN_RECORDING` (API 35)
+ * (#9617) : la capture et l'enregistrement d'un éphémère s'annoncent
+ * (`src/lib/capture/screen-capture-reports.ts`, `MeeshyScreenGuardPlugin.java`).
  */
 export const REQUIRED_PERMISSIONS = [
   'android.permission.INTERNET',
@@ -59,6 +62,8 @@ export const REQUIRED_PERMISSIONS = [
   'android.permission.BLUETOOTH_CONNECT',
   'android.permission.WAKE_LOCK',
   'android.permission.VIBRATE',
+  'android.permission.DETECT_SCREEN_CAPTURE',
+  'android.permission.DETECT_SCREEN_RECORDING',
 ];
 
 const XML_COMMENT = /<!--[\s\S]*?-->/g;

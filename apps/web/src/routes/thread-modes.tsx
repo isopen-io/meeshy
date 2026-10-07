@@ -13,6 +13,7 @@ import { UnfoldStage } from '@/components/unfold-stage';
 import { SummarySkeleton } from '@/components/summary/summary-skeleton';
 import { TypingRosterCell } from '@/components/typing-roster-cell';
 import { UnreadSeparator } from '@/components/unread-separator';
+import { CaptureShieldHold } from '@/lib/capture/use-capture-shield-hold';
 import type { RevealPhase } from '@/lib/reading-mode/protection';
 import { RevealPhaseChannel } from '@/lib/reading-mode/reveal-phase-channel';
 import type { ListPaginationState } from '@/lib/lens/pagination';
@@ -39,7 +40,8 @@ import { resolveEphemeralDeadline } from '@/lib/view/ephemeral-reception';
 import type { ThreadScene } from '@/lib/reading-mode/scene';
 import type { SwipeOutcome } from '@/lib/view/swipe';
 import type { StoryRingOf } from '@/lib/view/use-author-story-rings';
-import { sealedProps } from '@/lib/view/content-exit';
+import { useScreenCaptureReports } from '@/lib/capture/use-screen-capture-reports';
+import { captureProps, sealedProps } from '@/lib/view/content-exit';
 
 /**
  * LE RÉSUMÉ VIVANT (#5695) — module À LA DEMANDE, déplacé ICI avec le
@@ -368,6 +370,8 @@ export function ThreadModes({
   /* Quitter le fil replie le message long déplié (#8147) : rouvrir une
      conversation ne ressuscite pas un dépliage d'une autre visite. */
   useEffect(() => collapseUnfolded, []);
+  /* La coque Android signale les captures ; le fil déclare ce qu'il montre (#9617). */
+  useScreenCaptureReports(summary?.conversation.id ?? '');
   const publishRevealPhase = useCallback((messageId: string, phase: RevealPhase) => {
     setRevealPhases((current) => {
       const held = current.get(messageId);
@@ -565,6 +569,8 @@ export function ThreadModes({
            */
           const rowIsMine = isMineOf(p.message, viewerId);
           const rowDeadline = resolveEphemeralDeadline({ message: p.message, isMine: rowIsMine, now: renderNow });
+          /* CE QUE LA RANGÉE MONTRE À UNE CAPTURE (#9617, #9574) — `captureOf`. */
+          const rowCapture = isSystemMessage(p.message) ? {} : captureProps(p.message, renderNow, { isMine: rowIsMine });
           /**
            * TROIS PHASES, UNE LOI (#7468) — `destructionPhaseOf` tranche entre
            * « visible », « en destruction » et « partie », et elle le fait sans
@@ -712,6 +718,7 @@ export function ThreadModes({
                 {...(rowAfterRead ? { style: { position: 'relative', isolation: 'isolate' } } : {})}
                 {...(isSystemMessage(p.message) ? {} : { 'data-row': p.message.id })}
                 {...sealedProps(p.message, Date.now())}
+                {...rowCapture}
                 {...(isSystemMessage(p.message) || longPress === undefined ? {} : { tabIndex: 0, ...longPress })}
                 role="article"
                 aria-label={rowLabel}
@@ -730,6 +737,9 @@ export function ThreadModes({
                     DEUX peaux, comme la destruction : tous les modes le
                     reçoivent, et il remplace la pastille de décompte. */}
                 {rowAfterRead && !rowIsMine ? <AfterReadSeenProbe messageId={p.message.id} /> : null}
+                {rowCapture['data-capture'] === undefined ? null : (
+                  <CaptureShieldHold messageId={p.message.id} verdict={rowCapture['data-capture']} declared />
+                )}
                 {rowAfterRead ? (
                   <AfterReadWatermark
                     reach={afterReadReachOf({

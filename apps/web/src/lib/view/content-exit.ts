@@ -142,3 +142,40 @@ export function sealedProps(message: SealedSubject, now: number): { readonly [SE
   const open = contentExitOf(message, now).leaves && (quoted == null || quotedExitOf(quoted, now).leaves);
   return open ? {} : { [SEALED_ROW_ATTRIBUTE]: '' };
 }
+
+/**
+ * CE QU'UNE RANGÉE DU FIL MONTRE À UNE CAPTURE (#9617, #9574) — la colonne
+ * `capture` de la loi, lue sur ce que la rangée PEINT :
+ * - `announced` : un éphémère d'autrui lisible à l'écran (les deux flammes) ;
+ *   une capture le déclare, la passerelle l'annonce à la conversation ;
+ * - `blocked` : la nature ne se lit pas — champ de protection absent sur le
+ *   message d'autrui, ou citation non déclarée (`quotedExitOf`) — et compte
+ *   comme une vue unique : la coque Android noircit (`FLAG_SECURE`). Fermé
+ *   sur l'inconnu, jamais l'inverse, comme `contentExitLawOfSource` côté serveur ;
+ * - `free` : tout le reste. Une vue unique au repos ne montre qu'une puce ;
+ *   c'est son OUVERTURE qui tient le bouclier (`ProtectedContent`). Un
+ *   message supprimé ou échu ne montre plus rien. Mon propre message
+ *   n'annonce rien (la passerelle écarte ses propres messages).
+ */
+export type RowCapture = 'free' | 'announced' | 'blocked';
+
+export const CAPTURE_ROW_ATTRIBUTE = 'data-capture';
+
+export function captureOf(message: SealedSubject, now: number, viewer: { readonly isMine: boolean }): RowCapture {
+  const quoted = message.replyTo;
+  if (quoted != null && typeof quoted.effectFlags !== 'number') return 'blocked';
+  if (viewer.isMine) return 'free';
+  if (typeof message.effectFlags !== 'number') return 'blocked';
+  const kind = protectionOf({ ...message, viewOnceCount: message.viewOnceCount ?? 0 }, now);
+  if (kind === 'deleted' || kind === 'expired') return 'free';
+  return contentExitLaw(message).capture === 'announced' ? 'announced' : 'free';
+}
+
+export function captureProps(
+  message: SealedSubject,
+  now: number,
+  viewer: { readonly isMine: boolean },
+): { readonly [CAPTURE_ROW_ATTRIBUTE]?: 'announced' | 'blocked' } {
+  const capture = captureOf(message, now, viewer);
+  return capture === 'free' ? {} : { [CAPTURE_ROW_ATTRIBUTE]: capture };
+}

@@ -1,3 +1,7 @@
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import { describe, expect, test } from 'bun:test';
 
 import type { Message } from '@/lib/api/types';
@@ -34,7 +38,7 @@ const message = (partial: Partial<Message> = {}): Message =>
 
 const captureMetadata = (overrides: Record<string, unknown> = {}): Record<string, unknown> => ({
   kind: 'content-capture',
-  actor: { participantId: 'p-alice', displayName: 'Alice' },
+  actor: { participantId: 'p-alice', displayName: 'Alice', isAnonymous: false },
   capturedMessageId: '0123456789abcdef01234567',
   nature: 'timed-flame',
   outcome: 'announced',
@@ -77,6 +81,13 @@ describe('la rangée d’un avis de capture (#9617)', () => {
     expect(systemRowText(row, 'fr', 'UTC')).toBe('Alice a enregistré l’écran pendant l’éphémère du 07/10/2026 à 12:05');
   });
 
+  test('un inscrit est nommé avec son pseudo, un invité est dit invité', () => {
+    const member = rowOf(captureMetadata({ actor: { participantId: 'p-alice', displayName: 'Alice', isAnonymous: false, username: 'alice' } }));
+    expect(systemRowText(member, 'fr', 'UTC')).toBe('Alice (@alice) a capturé l’éphémère du 07/10/2026 à 12:05');
+    const guest = rowOf(captureMetadata({ actor: { participantId: 'p-anon', displayName: 'Alice', isAnonymous: true } }));
+    expect(systemRowText(guest, 'en', 'UTC')).toMatch(/^Alice \(guest\) took a screenshot/);
+  });
+
   test('une métadonnée illisible retombe sur le repli stocké, jamais sur une rangée vide', () => {
     const row = rowOf(captureMetadata({ nature: 'view-once', outcome: 'announced' }));
     expect(row.kind).toBe('notice');
@@ -99,5 +110,15 @@ describe('la rangée d’un avis de capture (#9617)', () => {
       language: 'fr',
     });
     expect(label).toContain('Alice a capturé l’éphémère du 07/10/2026');
+  });
+});
+
+describe('le rendu de l’avis de capture ne tire pas zod', () => {
+  test('aucun module relatif importé par capture-notice n’importe zod', () => {
+    const shared = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..', '..', 'packages', 'shared', 'utils');
+    const source = readFileSync(join(shared, 'capture-notice.ts'), 'utf8');
+    const relatives = [...source.matchAll(/from '(\.[^']+)\.js'/g)].map((match) => join(shared, `${match[1]}.ts`));
+    expect(relatives.length).toBeGreaterThan(0);
+    relatives.forEach((file) => expect(readFileSync(file, 'utf8')).not.toMatch(/from 'zod/));
   });
 });

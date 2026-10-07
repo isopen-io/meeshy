@@ -1,5 +1,6 @@
 import { lazy, Suspense, useMemo } from 'react';
 
+import { CaptureShieldOver } from '@/lib/capture/use-capture-shield-hold';
 import type { ConversationsDeps } from '@/lib/api/conversations';
 import type { Message } from '@/lib/api/types';
 import { browserFileDeliveryHost, hasFileDeliveryDoor } from '@/lib/media/file-delivery-host';
@@ -81,6 +82,8 @@ export function MediaHubViewerHost({
 
   return (
     <Suspense fallback={null}>
+      {/* « Annoncé ou noir » (#9617) : la visionneuse n'est pas déclarée à une capture. */}
+      <CaptureShieldOver messages={messages} viewerId={viewerId} />
       <MediaViewer
         items={shown}
         startIndex={viewer.startIndex}
