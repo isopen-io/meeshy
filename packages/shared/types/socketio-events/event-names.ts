@@ -128,6 +128,12 @@ export const SERVER_EVENTS = {
    * `user:<id>` du seul crédité, jamais dans la room de la conversation.
    */
   ENGAGEMENT_CONVERSATION_UPDATED: 'engagement:conversation-updated',
+  /**
+   * Les points qu'un POST a rapportés à son LECTEUR ont changé (#9569) —
+   * `PostEngagementSnapshot`, émis dans la room `user:<id>` du seul crédité,
+   * jamais dans la room du post ni à son audience.
+   */
+  ENGAGEMENT_POST_UPDATED: 'engagement:post-updated',
   USER_STATUS: 'user:status',
   /**
    * Snapshot émis à l'authentification socket : liste des userIds actuellement

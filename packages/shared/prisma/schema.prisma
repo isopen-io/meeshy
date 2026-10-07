@@ -5089,6 +5089,36 @@ model ConversationEngagement {
   @@index([userId, updatedAt])
 }
 
+/// Ce qu'un POST a rapporté à UN utilisateur par ses GESTES (#9569) — la marque
+/// « +99 » d'une carte. Un document par (utilisateur, post), écrit UNIQUEMENT
+/// par `PostPointsRecorder` au crédit d'un geste fait sur ce post : réaction,
+/// commentaire, republication, signet, partage, vue de story, réponse à un
+/// sondage. Calque de `ConversationEngagement`, sans jour ni série ; son nom
+/// suit la famille `Engagement*` du barème parce que `PostEngagement` désigne
+/// déjà les sessions de visionnage.
+///
+/// Le crédit de PUBLICATION d'un contenu lourd n'y entre jamais : il vit déjà
+/// dans sa mémoire par contenu (`EngagementQuota`, seau `content:<postId>`,
+/// champ `points`), que la reprise à la suppression remet à zéro. Ce qu'un post
+/// a rapporté à son lecteur est la SOMME des deux, lue par
+/// `loadViewerPostPoints` — un crédit vit à un seul endroit, jamais aux deux.
+///
+/// AUCUNE relation vers `Post` ni `User`, à dessein : sans relation, aucun
+/// `include` ne peut ramener les lignes des autres lecteurs avec un post. La
+/// ligne ne survit pas pour autant à son post — `purgePostPoints` la retire au
+/// retrait comme au balayage du contenu éphémère.
+model EngagementPostPoints {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId      String   @db.ObjectId
+  postId      String   @db.ObjectId
+  /// Points crédités à cet utilisateur par ses gestes sur ce post, depuis toujours.
+  totalPoints Int      @default(0)
+  updatedAt   DateTime @updatedAt
+
+  @@unique([userId, postId])
+  @@index([postId])
+}
+
 /// LE REGISTRE DES MEESHES — journal en AJOUT SEUL (#5743).
 ///
 /// Une valeur qu'on peut ENVOYER, PERDRE par sanction et DÉPENSER n'est pas un

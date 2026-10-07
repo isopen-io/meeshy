@@ -551,3 +551,28 @@ export function conversationEngagementForDay(
 export function formatConversationPoints(snapshot: Pick<ConversationEngagementSnapshot, 'totalPoints' | 'todayPoints'>): string {
   return `${snapshot.totalPoints} (${snapshot.todayPoints})`;
 }
+
+/**
+ * CE QU'UN POST A RAPPORTÉ À SON LECTEUR (#9569) — la charge de
+ * `engagement:post-updated`, et la valeur que `Post.viewerPoints` sert.
+ *
+ * Toujours PAR LECTEUR : la somme des points que CE post a réellement crédités
+ * à celui qui le regarde (sa publication s'il en est l'auteur, ses réactions,
+ * commentaires, republications, signets, vues de story) — jamais ceux d'un
+ * autre. La valeur est ABSOLUE : un client la pose telle quelle, il n'additionne
+ * rien et ne devine rien.
+ */
+export type PostEngagementSnapshot = {
+  readonly postId: string;
+  /** Points que ce post a rapportés au lecteur, depuis toujours. */
+  readonly viewerPoints: number;
+};
+
+export function isPostEngagementSnapshot(value: unknown): value is PostEngagementSnapshot {
+  return (
+    isRecord(value) &&
+    typeof value.postId === 'string' &&
+    value.postId.length > 0 &&
+    isIntIn(value.viewerPoints, 0, Number.MAX_SAFE_INTEGER)
+  );
+}
