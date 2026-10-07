@@ -3,14 +3,14 @@
  * formes de la Flamme, paliers du trésor, missions, coffre, guide de Mee et
  * Meo et ses sept étapes, carnet des règles, frappe, dépenses, moments photo,
  * dans les sept langues du produit. Même mécanique que le catalogue de
- * l'accueil (`i18n-onboarding-catalog.ts`) : un `import()` par langue, chargé
- * avec les écrans de la progression (`routes/route-table.tsx`), jamais au
- * démarrage — le catalogue d'interface a atteint son plafond
- * (`budgets.json` › `interface_catalogs`).
+ * l'accueil (`i18n-onboarding-catalog.ts`) : un `import()` par langue et par
+ * PARTIE (#9542, plus bas), chargé avec les écrans qui la lisent
+ * (`routes/route-table.tsx`), jamais au démarrage — le catalogue d'interface a
+ * atteint son plafond (`budgets.json` › `interface_catalogs`).
  *
  * Aucun repli : une clé absente d'une langue est une erreur de compilation
- * (`satisfies GameCatalog`) et un témoin rouge (`i18n-game-catalog.test.ts`) ;
- * un catalogue lu avant d'être chargé lève.
+ * (`satisfies Game…Catalog`) et un témoin rouge (`i18n-game-catalog.test.ts`) ;
+ * une clé lue avant que sa partie soit chargée lève.
  *
  * LE PLURIEL est une famille de clés `<base>.one`, `<base>.other` — et, pour
  * les langues qui ont plus de catégories (l'arabe : `zero`, `two`, `few`,

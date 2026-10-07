@@ -12,7 +12,8 @@ import {
 import { loadGameCatalog } from '@/lib/i18n-game-catalog';
 import { SUPPORTED_INTERFACE_LANGUAGES } from '@/lib/inline-interface-language-bootstrap.js';
 
-import { actionLabel, gameRules, momentCopy, stepCopy } from './game-guide-copy';
+import { actionLabel, momentCopy, stepCopy } from './game-guide-copy';
+import { gameRules } from './game-rules-copy';
 
 beforeAll(async () => {
   await Promise.all(SUPPORTED_INTERFACE_LANGUAGES.map((language) => loadGameCatalog(language)));
