@@ -9,9 +9,10 @@ import MeeshyUI
 /// **Pendant l'enregistrement, seule la miniature choisie reste** (décision
 /// porteur 2026-10-05), avec le direct, son point rouge et son chrono, et le
 /// cadenas tant que la prise n'est pas verrouillée : le zoom passe au glissé
-/// vertical, la phrase se tait, le rail s'efface et se désactive. Un look figé
-/// par des segments en attente garde le rail visible mais DÉSACTIVÉ, et
-/// VoiceOver le dit.
+/// vertical, la phrase se tait, le rail disparaît. Un look figé par des
+/// segments en attente le retire aussi (porteur 2026-10-07, #9576) : un rail
+/// qu'on ne peut pas ouvrir n'est montré ni à l'œil ni à VoiceOver, et il
+/// revient dès que les segments sont supprimés.
 ///
 /// **En édition, les outils seuls, sous la scène posée sur le sol** (#9352,
 /// porteur 2026-10-07, #9567) : « Filtres », « Cadres », « Recadrer », en
@@ -53,11 +54,6 @@ struct ComposerCaptureBottomRow: View {
         !recording && !editing && session.look.frame == ComposerPhotoFrame.none && session.openFamily == nil
     }
 
-    /// La table dit si le rail ouvre une famille ; sinon il reste là, éteint.
-    private var railEnabled: Bool {
-        ComposerCaptureGesture.action(zone: .rail, gesture: .tap, context: context) == .openFamily
-    }
-
     var body: some View {
         Group {
             if editing { editTools } else { captureRow }
@@ -65,6 +61,7 @@ struct ComposerCaptureBottomRow: View {
         .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: showsLock)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: recording)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: editing)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: ComposerCaptureGesture.offersRail(context))
         .animation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.85), value: session.openFamily)
         .animation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.85), value: session.editPanel)
     }
@@ -99,11 +96,12 @@ struct ComposerCaptureBottomRow: View {
         }
         .padding(.bottom, MeeshySpacing.lg)
         .overlay(alignment: .bottomLeading) {
-            ComposerLookRail(open: session.openFamily) { famille in session.toggleFamily(famille) }
-                .disabled(!railEnabled)
-                .opacity(recording ? 0 : (railEnabled ? 1 : 0.4))
-                .padding(.leading, MeeshySpacing.mdPlus)
-                .padding(.bottom, ComposerLookStripRule.cellSize.height + MeeshySpacing.xxxl * 2)
+            if ComposerCaptureGesture.offersRail(context) {
+                ComposerLookRail(open: session.openFamily) { famille in session.toggleFamily(famille) }
+                    .padding(.leading, MeeshySpacing.mdPlus)
+                    .padding(.bottom, ComposerLookStripRule.cellSize.height + MeeshySpacing.xxxl * 2)
+                    .transition(.opacity)
+            }
         }
     }
 
