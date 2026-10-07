@@ -52,7 +52,6 @@ import { ViewerBottomBar, ViewerTopBar, type ViewerIdentityModel } from './viewe
 import { useViewerSwipe } from './viewer-chrome-gestures';
 import type { NoticeKey } from './viewer-media-actions';
 import { ViewerScenePage } from './viewer-scene-page';
-import { ViewerVideoPage } from './viewer-video-page';
 
 /**
  * LES ACTIONS DE LA PAGE (#6303) — Enregistrer, Réagir, Répondre, Créer avec
@@ -64,6 +63,9 @@ const ViewerMediaActions = lazy(() => import('./viewer-media-actions'));
 
 /** LA PAGE AUDIO (#8333) — chunk à la demande : une visionneuse de photos ne la télécharge jamais (`budgets.json › viewer_audio_page`). */
 const ViewerAudioPage = lazy(() => import('./viewer-audio-page'));
+
+/** LA PAGE VIDÉO (#9577) — chunk à la demande, même raison : la pause qui s'efface, le décompte et les portails du transport ne servent qu'une vidéo (`budgets.json › viewer_video_page`). */
+const ViewerVideoPage = lazy(() => import('./viewer-video-page'));
 
 /**
  * `MediaViewer` (#6221, § 5 étape 5) — LA VISIONNEUSE PLEIN ÉCRAN, chunk À LA
@@ -766,17 +768,19 @@ export default function MediaViewer({
                   />
                 </Suspense>
               ) : kindOf(attachment) === 'video' ? (
-                <ViewerVideoPage
-                  attachment={attachment}
-                  isActive={i === index}
-                  presentation={presentation}
-                  onToggleRef={(fn) => {
-                    if (i === index) activePlayToggleRef.current = fn;
-                  }}
-                  slots={{ transport: transportSlot, rail: railSlot, info: infoSlot }}
-                  showsFacts={(carrierAt?.(i) ?? carrier) !== undefined}
-                  language={language}
-                />
+                <Suspense fallback={<ViewerBackdropPage attachment={attachment} />}>
+                  <ViewerVideoPage
+                    attachment={attachment}
+                    isActive={i === index}
+                    presentation={presentation}
+                    onToggleRef={(fn) => {
+                      if (i === index) activePlayToggleRef.current = fn;
+                    }}
+                    slots={{ transport: transportSlot, rail: railSlot, info: infoSlot }}
+                    showsFacts={(carrierAt?.(i) ?? carrier) !== undefined}
+                    language={language}
+                  />
+                </Suspense>
               ) : (
                 <ViewerImagePage
                   attachment={attachment}

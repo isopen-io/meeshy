@@ -26,8 +26,14 @@ import { ViewerInfoLine } from './viewer-info-line';
  * active monte ses portails ; il porte la piste ET les deux contrôles du rail
  * (#9577), un seul téléchargement pour les deux.
  */
-const MediaTransport = lazy(() => import('./media-transport').then((module) => ({ default: module.MediaTransport })));
-const VideoRailControls = lazy(() => import('./media-transport').then((module) => ({ default: module.VideoRailControls })));
+const loadTransport = () => import('./media-transport');
+const MediaTransport = lazy(() => loadTransport().then((module) => ({ default: module.MediaTransport })));
+const VideoRailControls = lazy(() => loadTransport().then((module) => ({ default: module.VideoRailControls })));
+
+/* LA PAGE EST ELLE-MÊME UN CHUNK À LA DEMANDE (#9577) : sa barre part au
+   téléchargement dès que ce module s'évalue, sans attendre le premier rendu
+   — deux allers-retours en cascade deviendraient sinon le prix d'une vidéo. */
+void loadTransport().catch(() => undefined);
 
 /** Où la page vidéo ACTIVE pose ce qui lui appartient hors de la scène — trois places que la visionneuse lui remet. */
 export type ViewerVideoSlots = {
@@ -86,7 +92,7 @@ function OffStage({ children }: { readonly children: ReactNode }) {
  * (aucune collision possible avec le double tap de ZOOM d'une image, qui n'a
  * pas de durée) : rien d'autre à coordonner entre les deux gestes.
  */
-export function ViewerVideoPage({
+export default function ViewerVideoPage({
   attachment,
   isActive,
   presentation,

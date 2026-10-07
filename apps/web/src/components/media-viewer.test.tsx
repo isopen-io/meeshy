@@ -332,6 +332,7 @@ describe('MediaViewer — la barre de lecture d’une vidéo (#6359)', () => {
     const { items, videoIndex } = tripleVideoIndex();
     const body = mount({ items, startIndex: videoIndex, onClose: () => {} });
     await act(async () => {
+      await import('./viewer-video-page');
       await import('./media-transport');
     });
     return { body, videoIndex };
@@ -570,6 +571,10 @@ describe('MediaViewer — le double tap latéral, ±10 s comme iOS (#6369)', () 
     const items = attachmentsOf(MEDIA_GRID_TRIPLE_WITNESS_ID);
     const videoIndex = items.findIndex((a) => a.mimeType.startsWith('video/'));
     const body = mount({ items, startIndex: videoIndex, onClose: () => {} });
+    // La page vidéo est un chunk À LA DEMANDE (#9577) : on attend son module comme la visionneuse l'attend.
+    await act(async () => {
+      await import('./viewer-video-page');
+    });
     const video = currentPage(body).querySelector('video')!;
     await act(async () => {
       Object.defineProperty(video, 'duration', { value: duration, configurable: true });
