@@ -248,8 +248,11 @@ const SERVICE_SURFACES: Record<string, Classification> = {
   // les écritures du message-résumé de `CallService` (initiateur de l'appel).
   'calls/callRecordingLink.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'messaging/conversationWriteAdmission.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  'messaging/attachmentSendAdmission.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  'messaging/copyExitProtection.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'messaging/forwardAdmission.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'messaging/messageMentions.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  'messaging/messageReadAccess.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'messaging/messageNotificationFanOut.ts': { kind: 'exempt', reads: 2, why: DOES_NOT_SELECT_SENDER },
   'messaging/messageRemovalEffects.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   // #7377 — la pose d'une étoile : `STAR_ADMISSION_MESSAGE_SELECT`, les seules
