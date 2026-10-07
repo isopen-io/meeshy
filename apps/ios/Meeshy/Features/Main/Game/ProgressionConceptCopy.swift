@@ -40,7 +40,7 @@ enum ConceptText {
         case .points: String(localized: "game.concept.points.why", defaultValue: "Les points font monter ton niveau et servent à frapper des Meeshes.", bundle: .main)
         case .meesh: String(localized: "game.concept.meesh.why", defaultValue: "La Meesh est la pièce rare de Meeshy : elle se garde ou se dépense.", bundle: .main)
         case .glory: String(localized: "game.concept.glory.why", defaultValue: "La Gloire donne ton rang, et ton rang ne baisse jamais.", bundle: .main)
-        case .flame: String(localized: "game.concept.flame.why", defaultValue: "Ta Flamme compte tes jours d’affilée et augmente tes récompenses de mission.", bundle: .main)
+        case .flame: String(localized: "game.concept.flame.why", defaultValue: "Ta Flamme compte tes jours d’affilée et augmente tes gains de mission.", bundle: .main)
         case .missions: String(localized: "game.concept.missions.why", defaultValue: "Les missions te donnent un but chaque jour, et des points en plus.", bundle: .main)
         case .league: String(localized: "game.concept.league.why", defaultValue: "La ligue te mesure chaque semaine à 29 autres joueurs.", bundle: .main)
         case .season: String(localized: "game.concept.season.why", defaultValue: "La saison est un parcours de huit semaines, avec une coupe au bout.", bundle: .main)
@@ -57,14 +57,14 @@ enum ConceptText {
     /// Comment ça marche — UNE phrase. La carte la dit, la fiche la reprend à la suite du pourquoi.
     static func how(_ concept: ProgressionConcept) -> String {
         switch concept {
-        case .level: String(localized: "game.concept.level.how", defaultValue: "Tes points remplissent l’anneau : quand il est plein, tu montes d’un niveau.", bundle: .main)
-        case .points: String(localized: "game.concept.points.how", defaultValue: "Chaque geste utile en rapporte : écrire, parler, publier, réagir, inviter.", bundle: .main)
-        case .meesh: String(localized: "game.concept.meesh.how", defaultValue: "Tu la frappes avec tes points. Plus on en frappe, plus la suivante coûte.", bundle: .main)
+        case .level: String(localized: "game.concept.level.how", defaultValue: "Tes points remplissent l’anneau : plein, il te fait monter d’un niveau.", bundle: .main)
+        case .points: String(localized: "game.concept.points.how", defaultValue: "Chaque geste utile en rapporte : écrire, parler, publier, réagir.", bundle: .main)
+        case .meesh: String(localized: "game.concept.meesh.how", defaultValue: "Tu la frappes avec tes points. Chaque frappe renchérit la suivante.", bundle: .main)
         case .glory: String(localized: "game.concept.glory.how", defaultValue: "Chaque frappe, chaque record et chaque succès en ajoute.", bundle: .main)
         case .flame: String(localized: "game.concept.flame.how", defaultValue: "Un geste par jour la fait grandir. Un gel couvre un jour manqué.", bundle: .main)
         case .missions: String(localized: "game.concept.missions.how", defaultValue: "Trois missions par jour. Quand elles sont faites, tu ouvres le coffre.", bundle: .main)
         case .league: String(localized: "game.concept.league.how", defaultValue: "Tes points de la semaine font ton rang. Les premiers montent de ligue.", bundle: .main)
-        case .season: String(localized: "game.concept.season.how", defaultValue: "Les missions et le duo donnent des étoiles. Les étoiles ouvrent les étapes.", bundle: .main)
+        case .season: String(localized: "game.concept.season.how", defaultValue: "Les missions et le duo donnent des étoiles, qui ouvrent les étapes.", bundle: .main)
         case .prestige: String(localized: "game.concept.prestige.how", defaultValue: "Ton niveau repart à 1. Tu gagnes une étoile, un trophée et de la Gloire.", bundle: .main)
         case .elans: String(localized: "game.concept.elans.how", defaultValue: "Fais des gestes de plusieurs familles ces jours-ci pour le déclencher.", bundle: .main)
         case .badges: String(localized: "game.concept.badges.how", defaultValue: "Répète un geste : son badge change de matière, du cuivre au prisme.", bundle: .main)

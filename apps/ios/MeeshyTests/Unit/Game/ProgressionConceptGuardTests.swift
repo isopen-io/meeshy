@@ -134,7 +134,8 @@ final class ProgressionConceptGuardTests: XCTestCase {
         }
     }
 
-    /// Une phrase de carte tient en deux lignes : au-delà de 96 caractères, elle déborde à 320 pt de large.
+    /// Une phrase de carte tient en deux lignes à 320 pt de large : 72 caractères au plus, la borne que le lot web a
+    /// MESURÉE dans un navigateur (#9563) — les phrases sont les siennes, la borne aussi.
     func test_theWhyAndTheHow_stayShortEnoughForTwoLines() throws {
         let table = try catalog()
         for concept in concepts {
@@ -142,7 +143,7 @@ final class ProgressionConceptGuardTests: XCTestCase {
                 let key = "game.concept.\(concept).\(field)"
                 for locale in locales {
                     let text = table[key]?[locale] ?? ""
-                    XCTAssertLessThanOrEqual(text.count, 96, "\(key) [\(locale)] : \(text.count) caractères — « \(text) »")
+                    XCTAssertLessThanOrEqual(text.count, 72, "\(key) [\(locale)] : \(text.count) caractères — « \(text) »")
                 }
             }
         }

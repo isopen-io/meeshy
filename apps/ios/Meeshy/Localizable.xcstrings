@@ -264987,7 +264987,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tes points remplissent l’anneau : quand il est plein, tu montes d’un niveau."
+            "value": "Tes points remplissent l’anneau : plein, il te fait monter d’un niveau."
           }
         },
         "it": {
@@ -265204,31 +265204,31 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Jede nützliche Aktion bringt welche: schreiben, sprechen, posten, reagieren, einladen."
+            "value": "Jede nützliche Aktion bringt welche: schreiben, posten, reagieren."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Every useful action earns some: writing, talking, posting, reacting, inviting."
+            "value": "Every useful action earns some: writing, talking, posting, reacting."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cada gesto útil da puntos: escribir, hablar, publicar, reaccionar, invitar."
+            "value": "Cada gesto útil da puntos: escribir, hablar, publicar, reaccionar."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Chaque geste utile en rapporte : écrire, parler, publier, réagir, inviter."
+            "value": "Chaque geste utile en rapporte : écrire, parler, publier, réagir."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ogni gesto utile ne dà: scrivere, parlare, pubblicare, reagire, invitare."
+            "value": "Ogni gesto utile ne dà: scrivere, parlare, pubblicare, reagire."
           }
         },
         "pt-BR": {
@@ -265392,7 +265392,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Die Meesh ist die seltene Münze von Meeshy: Du behältst sie oder gibst sie aus."
+            "value": "Die Meesh ist die seltene Münze von Meeshy: behalten oder ausgeben."
           }
         },
         "en": {
@@ -265439,25 +265439,25 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Du prägst sie mit deinen Punkten. Je mehr geprägt sind, desto teurer wird die nächste."
+            "value": "Du prägst sie mit Punkten. Jede Prägung macht die nächste teurer."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "You mint it with your points. The more are minted, the more the next one costs."
+            "value": "You mint it with your points. Each mint makes the next one cost more."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "La acuñas con tus puntos. Cuantas más se acuñan, más cuesta la siguiente."
+            "value": "La acuñas con tus puntos. Cada acuñación encarece la siguiente."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu la frappes avec tes points. Plus on en frappe, plus la suivante coûte."
+            "value": "Tu la frappes avec tes points. Chaque frappe renchérit la suivante."
           }
         },
         "it": {
@@ -265469,7 +265469,7 @@
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Você a cunha com seus pontos. Quanto mais se cunha, mais a próxima custa."
+            "value": "Você a cunha com seus pontos. Cada cunhagem encarece a próxima."
           }
         }
       }
@@ -265862,7 +265862,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Deine Flamme zählt deine Tage in Folge und erhöht deine Missionsbelohnungen."
+            "value": "Deine Flamme zählt deine Tage in Folge und erhöht Missionsbelohnungen."
           }
         },
         "en": {
@@ -265880,13 +265880,13 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ta Flamme compte tes jours d’affilée et augmente tes récompenses de mission."
+            "value": "Ta Flamme compte tes jours d’affilée et augmente tes gains de mission."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "La tua Fiamma conta i tuoi giorni di fila e aumenta le ricompense delle missioni."
+            "value": "La tua Fiamma conta i giorni di fila e aumenta i premi delle missioni."
           }
         },
         "pt-BR": {
@@ -265909,7 +265909,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Eine Aktion pro Tag lässt sie wachsen. Ein Eis deckt einen verpassten Tag ab."
+            "value": "Eine Aktion pro Tag lässt sie wachsen. Ein Eis deckt einen Tag ab."
           }
         },
         "en": {
@@ -265933,7 +265933,7 @@
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Un gesto al giorno la fa crescere. Un congelamento copre un giorno saltato."
+            "value": "Un gesto al giorno la fa crescere. Un congelamento copre un giorno."
           }
         },
         "pt-BR": {
@@ -266379,7 +266379,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Deine Wochenpunkte bestimmen deinen Platz. Die Ersten steigen in die nächste Liga auf."
+            "value": "Deine Wochenpunkte bestimmen deinen Platz. Die Ersten steigen auf."
           }
         },
         "en": {
@@ -266403,7 +266403,7 @@
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "I tuoi punti della settimana fanno la tua posizione. I primi salgono di lega."
+            "value": "I punti della settimana fanno la tua posizione. I primi salgono di lega."
           }
         },
         "pt-BR": {
@@ -266632,7 +266632,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Les missions et le duo donnent des étoiles. Les étoiles ouvrent les étapes."
+            "value": "Les missions et le duo donnent des étoiles, qui ouvrent les étapes."
           }
         },
         "it": {
@@ -266849,7 +266849,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Dein Level beginnt wieder bei 1. Du bekommst einen Stern, eine Trophäe und Ruhm."
+            "value": "Dein Level beginnt wieder bei 1. Du bekommst Stern, Trophäe und Ruhm."
           }
         },
         "en": {
@@ -267319,7 +267319,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Wiederhole eine Aktion: Ihr Abzeichen wechselt das Material, von Kupfer bis Prisma."
+            "value": "Wiederhole eine Aktion: Ihr Abzeichen wechselt das Material."
           }
         },
         "en": {
@@ -268024,7 +268024,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Jeder Pokal landet von selbst dort. Du bestimmst die Reihenfolge und wer sie sieht."
+            "value": "Jeder Pokal landet von selbst dort. Du bestimmst, wer sie sieht."
           }
         },
         "en": {
@@ -268212,7 +268212,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Der Atlas bewahrt einen Stempel für jede Sprache, in der du dich ausgetauscht hast."
+            "value": "Der Atlas bewahrt einen Stempel für jede Sprache deiner Gespräche."
           }
         },
         "en": {
@@ -268259,7 +268259,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sende eine Nachricht und erhalte eine in einer Sprache: Der Stempel sitzt."
+            "value": "Sende und erhalte eine Nachricht in einer Sprache: Der Stempel sitzt."
           }
         },
         "en": {
