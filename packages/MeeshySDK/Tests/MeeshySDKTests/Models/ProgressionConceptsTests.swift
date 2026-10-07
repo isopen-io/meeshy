@@ -14,7 +14,7 @@ struct ProgressionConceptsTests {
             counters: [], milestones: [],
             streak: .init(currentStreakDays: 0, longestStreakDays: 0),
             level: .init(engagementScore: 0),
-            meesh: meesh ? .init(balance: 1, mintedLifetime: 1, debitablePoints: 0, floorPoints: 0, missingPoints: 0, mintCost: 1200) : nil,
+            meesh: meesh ? APIEngagementProgress.Meesh(balance: 1, mintedLifetime: 1, debitablePoints: 0, floorPoints: 0, missingPoints: 0, mintCost: 1200) : nil,
             elan: nil, achievementReach: reach
         ))
     }
