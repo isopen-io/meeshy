@@ -15,13 +15,13 @@ const timed = (seconds: number) => ({
   nature: 'timed-flame',
   forward: { allowed: true, maxDurationSeconds: seconds },
   exportable: false,
-  capture: 'blocked',
+  capture: 'announced',
 });
 const AFTER_READ = {
   nature: 'after-read-flame',
   forward: { allowed: false, reason: 'after-read' },
   exportable: false,
-  capture: 'blocked',
+  capture: 'announced',
 };
 const ONCE = { nature: 'view-once', forward: { allowed: false, reason: 'view-once' }, exportable: false, capture: 'blocked' };
 
@@ -86,6 +86,14 @@ describe('contentExitLaw — la table de la spec, ligne par ligne', () => {
 
   it('ne lit pas le flou d’une pièce comme une nature de disparition', () => {
     expect(contentExitLaw({ attachments: [{ isBlurred: true, effectFlags: BLURRED }] })).toEqual(ORDINARY);
+  });
+
+  it('la capture : noire pour la vue unique, annoncée pour les deux flammes, libre sinon (porteur 2026-10-07, #9617)', () => {
+    expect(contentExitLaw({ isViewOnce: true }).capture).toBe('blocked');
+    expect(contentExitLaw({ effectFlags: EPHEMERAL, ephemeralDuration: 30 }).capture).toBe('announced');
+    expect(contentExitLaw({ effectFlags: EPHEMERAL | EPHEMERAL_AFTER_READ }).capture).toBe('announced');
+    expect(contentExitLaw({ effectFlags: EPHEMERAL | EPHEMERAL_AFTER_READ, ephemeralDuration: 30 }).capture).toBe('announced');
+    expect(contentExitLaw({}).capture).toBe('free');
   });
 });
 

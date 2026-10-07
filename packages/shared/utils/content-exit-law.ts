@@ -9,9 +9,17 @@
  * | nature | transférer | enregistrer, imager, partager, publier | capture |
  * |---|---|---|---|
  * | `ordinary` | oui | oui | libre |
- * | `timed-flame` | oui, durée ≤ source | non | bloquée |
- * | `after-read-flame` | non | non | bloquée |
+ * | `timed-flame` | oui, durée ≤ source | non | annoncée |
+ * | `after-read-flame` | non | non | annoncée |
  * | `view-once` | non | non | bloquée |
+ *
+ * LA CAPTURE (décision porteur 2026-10-07, #9617). `blocked` : la capture et
+ * l'enregistrement d'écran rendent du NOIR, et toute tentative s'annonce à la
+ * conversation. `announced` : l'image n'est pas noircie, mais la capture
+ * s'annonce à toute la conversation (« X a capturé l'éphémère du … »). Les
+ * deux flammes, copie transférée comprise, sont annoncées ; seule la vue
+ * unique est noire. Le message système qui en résulte est composé par
+ * `utils/capture-notice.ts`.
  *
  * La copie transférée d'une flamme à durée porte durée ET après lecture
  * ({@link forwardedCopyProtection}) : elle est donc « après lecture » pour le
@@ -88,7 +96,8 @@ export type ContentForwardVerdict =
   | { readonly allowed: true; readonly maxDurationSeconds: number | null }
   | { readonly allowed: false; readonly reason: ContentForwardRefusal };
 
-export type ContentCaptureVerdict = 'free' | 'blocked';
+/** `free` : rien. `announced` : capture permise, annoncée. `blocked` : noire, et la tentative annoncée. */
+export type ContentCaptureVerdict = 'free' | 'announced' | 'blocked';
 
 export type ContentExitLaw = {
   readonly nature: ContentExitNature;
@@ -116,7 +125,7 @@ const AFTER_READ_FLAME: ContentExitLaw = {
   nature: 'after-read-flame',
   forward: { allowed: false, reason: 'after-read' },
   exportable: false,
-  capture: 'blocked',
+  capture: 'announced',
 };
 
 const VIEW_ONCE_CONTENT: ContentExitLaw = {
@@ -164,7 +173,7 @@ export function contentExitLaw(subject: ContentExitSubject | null | undefined): 
     nature: 'timed-flame',
     forward: { allowed: true, maxDurationSeconds: duration },
     exportable: false,
-    capture: 'blocked',
+    capture: 'announced',
   };
 }
 
