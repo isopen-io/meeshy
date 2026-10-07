@@ -21,6 +21,7 @@ export * from './prestige.js';
 export * from './rarity.js';
 export * from './mythe.js';
 export * from './mythic-signature.js';
+export * from './rank-crest.js';
 export * from './guide-v2.js';
 export * from './photo-moments.js';
 export * from './game-block-extras.js';
