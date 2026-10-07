@@ -112,6 +112,7 @@ import { MessagingService } from '../../../services/MessagingService';
 import type { PrismaClient, Message } from '@meeshy/shared/prisma/client';
 import { resetParticipantLookupCache } from '../../../utils/participant-lookup-cache';
 import { MAX_ATTACHMENTS_PER_MESSAGE } from '@meeshy/shared/types/attachment';
+import { armForwardSourceReader, readableForwardSource } from './forwardSourceReaderDouble';
 
 describe('MessagingService', () => {
   let service: MessagingService;
@@ -293,31 +294,12 @@ describe('MessagingService', () => {
       // La projection ENTIÈRE que la garde exige (#9572) : une ligne à qui il
       // manque une colonne de protection est refusée, pas tenue pour ordinaire.
       const LOADED_SOURCE = {
-        // #9579 — ce que le droit de LIRE la source demande à la même ligne.
-        id: forwardedFromId,
-        conversationId: '507f1f77bcf86cd799439098',
-        createdAt: new Date('2026-08-12T11:00:00.000Z'),
-        deletedAt: null,
-        senderId: '507f1f77bcf86cd799439097',
-        viewOnceBurnedAt: null,
+        ...readableForwardSource(forwardedFromId), // #9579 — l'expéditeur LIT la source (`forwardSourceReaderDouble.ts`)
         isBlurred: false,
         ephemeralDuration: null,
         attachments: [] as Array<Record<string, unknown>>,
       };
-
-      // #9579 — dans tout ce bloc l'expéditeur LIT la source : participant actif
-      // de sa conversation. Le droit de lire lui-même a ses témoins, sur une
-      // base qui évalue les requêtes : `MessagingService.forwardSourceAccess.test.ts`.
-      beforeEach(() => {
-        mockPrisma.participant.findFirst.mockResolvedValue({
-          id: '507f1f77bcf86cd799439096', role: 'member', joinedAt: new Date('2026-01-01T00:00:00.000Z'), shareLinkId: null,
-          historyVisibleFrom: null, permissions: null, anonymousSession: null, user: { role: 'USER' }
-        });
-        mockPrisma.userConversationPreferences = { findFirst: jest.fn().mockResolvedValue(null) };
-        mockPrisma.userMessageDeletion = { findMany: jest.fn().mockResolvedValue([]) };
-        // Aucun décompte lancé, aucune vue unique ouverte : le contenu est là pour lui.
-        mockPrisma.messageStatusEntry = { findFirst: jest.fn().mockResolvedValue(null) };
-      });
+      beforeEach(() => armForwardSourceReader(mockPrisma));
 
       it('refuse le transfert d’un message à vue unique, sans rien écrire', async () => {
         mockPrisma.message.findUnique.mockResolvedValue({
