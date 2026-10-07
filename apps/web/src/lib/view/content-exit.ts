@@ -41,12 +41,12 @@ export type ContentExit = {
   readonly leaves: boolean;
 };
 
+export type ExitPiece = ContentExitAttachment & { readonly isEncrypted?: boolean | null };
+
 export type ExitMessage = Parameters<typeof protectionOf>[0] & {
   readonly isEncrypted?: boolean;
-  readonly attachments?: ReadonlyArray<ContentExitAttachment | null | undefined> | null;
+  readonly attachments?: ReadonlyArray<ExitPiece | null | undefined> | null;
 };
-
-type ExitPiece = ContentExitAttachment & { readonly isEncrypted?: boolean | null };
 
 const UNAVAILABLE: ExitForward = { allowed: false, reason: 'unavailable' };
 
@@ -59,6 +59,23 @@ export function contentExitOf(message: ExitMessage, now: number): ContentExit {
     forward: law.forward.allowed && gone ? UNAVAILABLE : law.forward,
     leaves: law.exportable && kind === 'standard',
   };
+}
+
+const SEALED: ContentExit = { nature: 'after-read-flame', forward: { allowed: false, reason: 'after-read' }, leaves: false };
+
+/**
+ * LE VERDICT D'UNE CITATION — FERMÉ quand sa nature n'est pas déclarée.
+ *
+ * Un message du fil, de l'index des médias ou du temps réel porte toujours
+ * `effectFlags` (`mapMessageProtectionFields`, `messageNewPayload`). Une
+ * citation, non : reconstruite pour `message:new`, elle ne porte ses champs de
+ * protection que si elle est voilée (`servedQuotedMessage`), si bien qu'une
+ * flamme citée arrive en clair et sans drapeau. La loi partagée, ouverte sur
+ * un champ absent, la jugerait ordinaire ; ici l'absence ferme, comme
+ * `contentExitLawOfSource` ferme côté serveur.
+ */
+export function quotedExitOf(quoted: ExitMessage, now: number): ContentExit {
+  return typeof quoted.effectFlags === 'number' ? contentExitOf(quoted, now) : SEALED;
 }
 
 export const exitOffers = (exit: ContentExit, action: ExitAction): boolean => (action === 'forward' ? exit.forward.allowed : exit.leaves);
@@ -81,8 +98,15 @@ export const pieceIsOpen = (piece: ExitPiece): boolean => !masked(piece);
  * juger seule, et un bit que la loi lit sur une pièce (éphémère, après
  * lecture) n'est pas réduit au masque du flou.
  */
-export function mediaLeaves(params: { readonly message: ExitMessage; readonly piece: ExitPiece; readonly now: number }): boolean {
+export function mediaLeaves(params: {
+  readonly message: ExitMessage;
+  readonly piece: ExitPiece;
+  readonly now: number;
+  /** `quote` : le porteur est une citation, dont la nature doit être déclarée (`quotedExitOf`). */
+  readonly source?: 'message' | 'quote';
+}): boolean {
   const { message, piece, now } = params;
   const whole = { ...message, attachments: [...(message.attachments ?? []), piece] };
-  return contentExitOf(whole, now).leaves && !masked(message) && pieceIsOpen(piece);
+  const exit = params.source === 'quote' ? quotedExitOf(whole, now) : contentExitOf(whole, now);
+  return exit.leaves && !masked(message) && pieceIsOpen(piece);
 }

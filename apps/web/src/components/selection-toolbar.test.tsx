@@ -37,6 +37,30 @@ describe('SelectionToolbar — rendu (T13)', () => {
   });
 });
 
+/**
+ * UN BOUTON INTERDIT N'EST PAS RENDU (#9573) — une sélection qui contient un
+ * message non transférable n'a pas de « Transférer » ; rien de copiable, pas
+ * de « Copier ». Ni grisé, ni inerte : absent.
+ */
+describe('SelectionToolbar — ce que la loi de sortie retire n’existe pas', () => {
+  test('sans transfert permis, « Transférer » est absent et « Copier » reste', () => {
+    const html = renderToStaticMarkup(<SelectionToolbar count={2} onEnd={() => {}} onCopy={() => {}} onForward={null} />);
+    expect(html).not.toContain('data-selection-forward');
+    expect(html).toContain('data-selection-copy');
+  });
+
+  test('sans rien à copier, « Copier » est absent et « Transférer » reste', () => {
+    const html = renderToStaticMarkup(<SelectionToolbar count={1} onEnd={() => {}} onCopy={null} onForward={() => {}} />);
+    expect(html).not.toContain('data-selection-copy');
+    expect(html).toContain('data-selection-forward');
+  });
+
+  test('« Annuler » reste toujours', () => {
+    const html = renderToStaticMarkup(<SelectionToolbar count={1} onEnd={() => {}} onCopy={null} onForward={null} />);
+    expect(html).toContain('data-selection-cancel');
+  });
+});
+
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
 
 /**

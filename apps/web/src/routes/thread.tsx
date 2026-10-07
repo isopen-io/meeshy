@@ -906,10 +906,10 @@ export default function ThreadScreen({ preview }: { readonly preview?: { readonl
         <SelectionToolbar
           count={messageMenu.selection.ids.length}
           onEnd={messageMenu.onEndSelection}
-          onCopy={() => messageMenu.onCopySelection(placed)}
+          onCopy={messageMenu.selectionOffers.copy ? () => messageMenu.onCopySelection(placed) : null}
           /* `placed` porte l'ordre du FIL — c'est lui qui ordonne les N
              transferts, jamais l'ordre des coches (#5866). */
-          onForward={() => messageMenu.onForwardSelection(placed)}
+          onForward={messageMenu.selectionOffers.forward ? () => messageMenu.onForwardSelection(placed) : null}
         />
       ) : (
         /*

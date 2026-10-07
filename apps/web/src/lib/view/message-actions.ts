@@ -1,9 +1,9 @@
 import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
 
+import { contentExitOf, exitOffers, pieceIsOpen, type ExitMessage } from '@/lib/view/content-exit';
 import type { Message, MessageTranslation } from '@/lib/api/types';
 import type { InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import { kindOf, translationsOf } from '@/lib/view/message';
-import { forwardRefusalOf } from '@/lib/view/forward';
 import { protectionOf } from '@/lib/reading-mode/protection';
 
 /**
@@ -80,12 +80,20 @@ export type MessageMenuContext = {
    * sous-menu à une seule entrée ne changerait rien (loi 4). */
   readonly languageCount: number;
   /**
-   * #5866 — `forwardRefusalOf(message) === null` (`view/forward.ts`), la
-   * règle du serveur rejouée AVANT l'aller-retour. Indépendante d'`isProtected` :
-   * un ÉPHÉMÈRE et un FLOU se transfèrent (le serveur les admet, l'éphémère
-   * héritant même de sa durée) alors qu'ils ne se copient ni ne se traduisent.
+   * #5866, #9573 — la loi de sortie autorise le transfert (`content-exit.ts`),
+   * dit AVANT l'aller-retour. Indépendante d'`isProtected` : un FLOU et une
+   * FLAMME À DURÉE se transfèrent (la copie garde le flou, et ne dure pas
+   * plus que sa source) alors qu'ils ne se copient pas ; une flamme après
+   * lecture et une vue unique ne se transfèrent pas.
    */
   readonly canForward: boolean;
+  /**
+   * LE CONTENU PEUT QUITTER MEESHY (#9573) — `false` pour tout contenu qui
+   * disparaît (flamme, vue unique, message ou pièce) : ni Copier, ni Imager,
+   * ni Imager la discussion, ni Composer. Traduire et Répondre restent : ils
+   * ne sortent rien. Absent ⇒ rien ne le retient.
+   */
+  readonly leaves?: boolean;
   /**
    * UNE VUE UNIQUE N'OFFRE RIEN QUI TOUCHE À SON CONTENU (#7580) — ouverte ou
    * non : ni aperçu, ni copie, ni transfert, ni traduction, ni réponse qui la
@@ -106,11 +114,7 @@ export type MessageMenuContext = {
   readonly composableIndex?: number | null;
 };
 
-type MenuPiece = { readonly mimeType: string; readonly isBlurred?: boolean; readonly isViewOnce?: boolean; readonly effectFlags?: number | null };
-
-const MASKING_EFFECTS = MESSAGE_EFFECT_FLAGS.VIEW_ONCE | MESSAGE_EFFECT_FLAGS.BLURRED;
-
-const pieceOpen = (piece: MenuPiece): boolean => piece.isBlurred !== true && piece.isViewOnce !== true && ((piece.effectFlags ?? 0) & MASKING_EFFECTS) === 0;
+type MenuPiece = { readonly mimeType: string; readonly isBlurred?: boolean; readonly isViewOnce?: boolean; readonly isEncrypted?: boolean; readonly effectFlags?: number | null };
 
 /**
  * Dérive le contexte d'UN message, à l'instant `now` — même discipline que
@@ -123,23 +127,23 @@ const pieceOpen = (piece: MenuPiece): boolean => piece.isBlurred !== true && pie
  * `translationsOf` qui déclare l'optionalité, une fois.
  */
 export function messageMenuContextOf(
-  message: Pick<
-    Message,
-    'deletedAt' | 'isViewOnce' | 'viewOnceCount' | 'isBlurred' | 'expiresAt' | 'content' | 'effectFlags'
-  > & {
-    readonly translations?: readonly MessageTranslation[];
-    readonly attachments?: readonly MenuPiece[];
-  },
+  message: Omit<ExitMessage, 'attachments'> &
+    Pick<Message, 'content'> & {
+      readonly translations?: readonly MessageTranslation[];
+      readonly attachments?: readonly MenuPiece[];
+    },
   input: { readonly now: number },
 ): MessageMenuContext {
-  const kind = protectionOf(message, input.now);
-  const open = kind === 'standard' ? (message.attachments ?? []).map((piece) => (pieceOpen(piece) ? kindOf(piece) : 'file')) : [];
-  const composable = open.findIndex((form) => form === 'image' || form === 'video');
+  const exit = contentExitOf(message, input.now);
+  const leaves = exitOffers(exit, 'image');
+  const open = leaves ? (message.attachments ?? []).map((piece) => (pieceIsOpen(piece) ? kindOf(piece) : 'file')) : [];
+  const composable = exitOffers(exit, 'compose') ? open.findIndex((form) => form === 'image' || form === 'video') : -1;
   return {
     hasText: message.content.trim().length > 0,
-    isProtected: kind !== 'standard',
+    isProtected: protectionOf(message, input.now) !== 'standard',
     languageCount: 1 + translationsOf(message).length,
-    canForward: forwardRefusalOf(message, input.now) === null,
+    canForward: exitOffers(exit, 'forward'),
+    leaves: exitOffers(exit, 'copy'),
     isViewOnce: message.isViewOnce === true,
     hasImageableMedia: open.some((form) => form !== 'file'),
     composableIndex: composable === -1 ? null : composable,
@@ -165,8 +169,9 @@ export function messageDetailExposureOf(
 /**
  * `MessageActionResolver.primaryActions` réduit : `select` et `more`
  * inconditionnels, `translate`/`copy` gardés par `hasText` ET `!isProtected`
- * (`translate` de plus par `languageCount > 1`), `forward` gardé par
- * `canForward` (#5866 — la règle du serveur, dite AVANT l'aller-retour),
+ * (`translate` de plus par `languageCount > 1`, `copy` par `leaves` — un
+ * contenu qui disparaît ne se copie pas, #9573), `forward` gardé par
+ * `canForward` (la loi de sortie, dite AVANT l'aller-retour),
  * `reply` inconditionnel —
  * répondre reste toujours possible, aucune capacité manquante ne le retire.
  */
@@ -176,7 +181,7 @@ export function messageMenuItems(ctx: MessageMenuContext): readonly MessageMenuI
   if (ctx.hasText && !ctx.isProtected && ctx.languageCount > 1) {
     items.push({ id: 'translate', labelKey: MENU_LABEL_KEYS.translate, glyph: 'globe' });
   }
-  if (ctx.hasText && !ctx.isProtected) {
+  if (ctx.hasText && !ctx.isProtected && ctx.leaves !== false) {
     items.push({ id: 'copy', labelKey: MENU_LABEL_KEYS.copy, glyph: 'copy' });
   }
   if (ctx.canForward) {
@@ -199,7 +204,9 @@ export function messageMenuItems(ctx: MessageMenuContext): readonly MessageMenuI
   return items;
 }
 
-const imageableOf = (ctx: MessageMenuContext): boolean => (ctx.hasText || ctx.hasImageableMedia === true) && !ctx.isProtected;
+/** « Imager » a quelque chose à peindre ET le contenu peut sortir — la garde du menu, de son sous-menu et de « Plus… ». */
+export const imageableOf = (ctx: MessageMenuContext): boolean =>
+  (ctx.hasText || ctx.hasImageableMedia === true) && !ctx.isProtected && ctx.leaves !== false;
 
 /**
  * **LE SOUS-MENU DE « TRANSFÉRER »** (#9039) — « Transférer » y garde son

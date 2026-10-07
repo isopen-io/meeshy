@@ -19,6 +19,8 @@ const arEphemeral = {
   'message.ephemeral.label.a11y': 'رسالة مؤقتة',
   'message.blurred.a11y': 'مموّه',
   'message.viewOnce.a11y': 'عرض لمرة واحدة',
+  /* #9573 — le refus de transfert d'une flamme après lecture. */
+  'forward.refusal.afterRead': 'لا يمكن إعادة توجيه رسالة تختفي بعد القراءة',
 } satisfies EphemeralCatalogSlice;
 
 export default arEphemeral;

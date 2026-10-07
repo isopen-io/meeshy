@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
 
-import { EXIT_ACTIONS, contentExitOf, exitOffers, mediaLeaves, type ExitAction, type ExitMessage } from './content-exit';
+import { EXIT_ACTIONS, contentExitOf, exitOffers, mediaLeaves, quotedExitOf, type ExitAction, type ExitMessage } from './content-exit';
 
 const NOW = 1_700_000_000_000;
 const { EPHEMERAL, EPHEMERAL_AFTER_READ, VIEW_ONCE, BLURRED } = MESSAGE_EFFECT_FLAGS;
@@ -103,5 +103,32 @@ describe('les restrictions existantes se composent avec la loi', () => {
 
   test('le média d’une flamme à durée ne sort pas, même en clair', () => {
     expect(mediaLeaves({ message: NATURES['timed-flame'], piece: { isViewOnce: false, isBlurred: false }, now: NOW })).toBe(false);
+  });
+});
+
+/**
+ * UNE CITATION N'EST PAS UN MESSAGE SERVI EN ENTIER (#9573). La passerelle
+ * sert toujours `effectFlags` sur un message du fil ; sur une citation
+ * reconstruite pour `message:new`, elle ne déclare la nature que d'un contenu
+ * voilé — une flamme citée y arrive en clair, sans rien qui la dise. Sans la
+ * déclaration, le verdict se FERME.
+ */
+describe('une citation dont la nature n’est pas déclarée ne sort pas', () => {
+  const piece = { isViewOnce: false, isBlurred: false };
+
+  test('sans `effectFlags`, la citation est fermée : ni transfert, ni sortie', () => {
+    const exit = quotedExitOf(message(), NOW);
+    expect(EXIT_ACTIONS.filter((action) => exitOffers(exit, action))).toEqual([]);
+  });
+
+  test('avec `effectFlags` servi, la loi juge la citation comme un message', () => {
+    expect(quotedExitOf(message({ effectFlags: 0 }), NOW)).toEqual(contentExitOf(message({ effectFlags: 0 }), NOW));
+    expect(quotedExitOf(message({ effectFlags: EPHEMERAL, ephemeralDuration: 60 }), NOW).leaves).toBe(false);
+  });
+
+  test('la pièce d’une citation non déclarée ne sort pas ; déclarée ordinaire, elle sort', () => {
+    expect(mediaLeaves({ message: message(), piece, now: NOW, source: 'quote' })).toBe(false);
+    expect(mediaLeaves({ message: message({ effectFlags: 0 }), piece, now: NOW, source: 'quote' })).toBe(true);
+    expect(mediaLeaves({ message: message(), piece, now: NOW })).toBe(true);
   });
 });

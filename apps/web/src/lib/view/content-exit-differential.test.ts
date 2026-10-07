@@ -15,10 +15,10 @@ import { EXIT_ACTIONS, contentExitOf, exitOffers, mediaLeaves, type ExitAction, 
 const NOW = 1_700_000_000_000;
 const { EPHEMERAL, EPHEMERAL_AFTER_READ, VIEW_ONCE, BLURRED } = MESSAGE_EFFECT_FLAGS;
 
-type MessageShape = Pick<ExitMessage, 'isViewOnce' | 'isBlurred' | 'effectFlags' | 'ephemeralDuration' | 'expiresAt' | 'isEncrypted'>;
+type MessageShape = Pick<ExitMessage, 'isViewOnce' | 'viewOnceCount' | 'isBlurred' | 'effectFlags' | 'ephemeralDuration' | 'expiresAt' | 'isEncrypted'>;
 type PieceShape = { readonly isViewOnce?: boolean; readonly isBlurred?: boolean; readonly isEncrypted?: boolean; readonly effectFlags?: number };
 
-const base: MessageShape = { isViewOnce: false, isBlurred: false };
+const base: MessageShape = { isViewOnce: false, viewOnceCount: 0, isBlurred: false };
 const later = new Date(NOW + 60_000);
 
 const MESSAGES: Readonly<Record<string, MessageShape>> = {
