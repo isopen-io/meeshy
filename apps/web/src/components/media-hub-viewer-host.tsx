@@ -1,6 +1,6 @@
 import { lazy, Suspense, useMemo } from 'react';
 
-import { CaptureShieldOver } from '@/lib/capture/use-capture-shield-hold';
+import { CaptureShieldOver } from '@/lib/capture/use-capture-shield';
 import type { ConversationsDeps } from '@/lib/api/conversations';
 import type { Message } from '@/lib/api/types';
 import { browserFileDeliveryHost, hasFileDeliveryDoor } from '@/lib/media/file-delivery-host';

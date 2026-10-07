@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 
 import { maskedAttachment } from '@meeshy/shared/utils/attachment-protection';
 
-import { CaptureShieldOver } from '@/lib/capture/use-capture-shield-hold';
+import { CaptureShieldOver } from '@/lib/capture/use-capture-shield';
 import type { ConversationsDeps } from '@/lib/api/conversations';
 import { apiDeps } from '@/lib/api/deps';
 import type { Attachment, Message } from '@/lib/api/types';

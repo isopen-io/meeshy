@@ -8,7 +8,7 @@ import type { CoqueNative } from '@/lib/native-shell';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
-import { CaptureShieldHold, CaptureShieldOver, viewerPageIsSensitive } from './use-capture-shield-hold';
+import { CaptureShieldHold, CaptureShieldOver, viewerPageIsSensitive } from './use-capture-shield';
 
 /* « ANNONCÉ OU NOIR » DANS LA COQUE (#9617) — une rangée d'éphémère ne
    s'épargne FLAG_SECURE que sur un Android qui détecte capture ET

@@ -13,7 +13,7 @@ import { UnfoldStage } from '@/components/unfold-stage';
 import { SummarySkeleton } from '@/components/summary/summary-skeleton';
 import { TypingRosterCell } from '@/components/typing-roster-cell';
 import { UnreadSeparator } from '@/components/unread-separator';
-import { CaptureShieldHold } from '@/lib/capture/use-capture-shield-hold';
+import { CaptureShieldHold } from '@/lib/capture/use-capture-shield';
 import type { RevealPhase } from '@/lib/reading-mode/protection';
 import { RevealPhaseChannel } from '@/lib/reading-mode/reveal-phase-channel';
 import type { ListPaginationState } from '@/lib/lens/pagination';
