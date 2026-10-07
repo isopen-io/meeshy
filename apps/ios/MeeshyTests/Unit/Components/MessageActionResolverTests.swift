@@ -358,16 +358,16 @@ final class MessageActionResolverTests: XCTestCase {
     /// Une flamme après lecture ne perd QUE ses sorties : répondre, discussion,
     /// épingler, favori, supprimer restent.
     func test_moreSections_afterReadFlame_losesOnlyItsExits() {
-        let normal = actionItems(MessageActionResolver.moreSections(ctx(hasText: true, hasMedia: true, canDelete: true)))
-        let flame = actionItems(MessageActionResolver.moreSections(ctx(hasText: true, hasMedia: true, canDelete: true, exits: afterRead)))
-        XCTAssertEqual(flame, normal.filter { ![.forward, .copy, .share, .imager].contains($0) })
+        let normal = actionItems(MessageActionResolver.moreSections(ctx(canDelete: true, hasText: true, hasMedia: true)))
+        let flame = actionItems(MessageActionResolver.moreSections(ctx(canDelete: true, hasText: true, hasMedia: true, exits: afterRead)))
+        XCTAssertEqual(flame, normal.filter { ![MoreItem.forward, .copy, .share, .imager].contains($0) })
     }
 
     /// Une flamme à durée garde le transfert, et lui seul.
     func test_moreSections_timedFlame_keepsForwardOnly() {
-        let normal = actionItems(MessageActionResolver.moreSections(ctx(hasText: true, hasMedia: true, canDelete: true)))
-        let flame = actionItems(MessageActionResolver.moreSections(ctx(hasText: true, hasMedia: true, canDelete: true, exits: timedFlame)))
-        XCTAssertEqual(flame, normal.filter { ![.copy, .share, .imager].contains($0) })
+        let normal = actionItems(MessageActionResolver.moreSections(ctx(canDelete: true, hasText: true, hasMedia: true)))
+        let flame = actionItems(MessageActionResolver.moreSections(ctx(canDelete: true, hasText: true, hasMedia: true, exits: timedFlame)))
+        XCTAssertEqual(flame, normal.filter { ![MoreItem.copy, .share, .imager].contains($0) })
         XCTAssertTrue(flame.contains(.forward))
     }
 
