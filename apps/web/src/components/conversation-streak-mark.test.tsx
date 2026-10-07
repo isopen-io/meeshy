@@ -15,6 +15,9 @@ import { LensRow } from './lens-row';
  * LA SÉRIE DANS LA LISTE — « 🔥4 · 120 » en rouge, à côté de l'heure du
  * dernier message, sans chip (directive porteur 2026-10-01). Masquée sur la
  * rangée en focus, pour le moment, où la pastille ne se pose plus non plus.
+ *
+ * Sans série en cours, le cumul SEUL (« 120 »), sans flamme, à l'encre
+ * tertiaire ; cumul nul ⇒ rien (#9570, directive porteur 2026-10-07).
  */
 
 beforeAll(async () => {
@@ -50,20 +53,26 @@ const row = (magnified: boolean, engagement: ConversationEngagementSnapshot | un
   );
 
 const markOf = (html: string): string | undefined => html.match(/<span[^>]*data-streak-mark[^>]*>[\s\S]*?<\/span><\/span>/)?.[0];
+const totalMarkOf = (html: string): string | undefined => html.match(/<span[^>]*data-points-mark[^>]*>[\s\S]*?<\/span><\/span>/)?.[0];
 
 describe('le modèle de la série', () => {
   test('la série et le total des points, avec la phrase entière', () => {
     expect(streakMarkModel(snapshot(), '2026-09-30', 'fr')).toEqual({
+      kind: 'streak',
       streakDays: 4,
       totalText: '120',
       label: 'Série de 4 jours, 120 points dont 12 aujourd’hui',
     });
   });
 
-  test('pas de série en cours ⇒ rien', () => {
-    expect(streakMarkModel(snapshot({ streakDays: 0 }), '2026-09-30', 'fr')).toBeNull();
-    expect(streakMarkModel(snapshot(), '2026-10-02', 'fr')).toBeNull();
+  test('pas de série en cours ⇒ le cumul seul (#9570)', () => {
+    expect(streakMarkModel(snapshot({ streakDays: 0 }), '2026-09-30', 'fr')).toMatchObject({ kind: 'total', totalText: '120' });
+    expect(streakMarkModel(snapshot(), '2026-10-02', 'fr')).toMatchObject({ kind: 'total', totalText: '120' });
+  });
+
+  test('cumul nul ou aucun instantané ⇒ rien', () => {
     expect(streakMarkModel(undefined, '2026-09-30', 'fr')).toBeNull();
+    expect(streakMarkModel(snapshot({ totalPoints: 0, todayPoints: 0, streakDays: 0, day: null }), '2026-09-30', 'fr')).toBeNull();
   });
 });
 
@@ -81,15 +90,32 @@ describe('la rangée de liste', () => {
     expect(html).toContain('<span class="sr-only">Série de 4 jours, 120 points dont 12 aujourd’hui</span>');
   });
 
-  test('série tombée ou absente : rien à côté de l’heure', () => {
-    expect(row(false, snapshot(), NOON_OCT_2)).not.toContain('data-streak-mark');
-    expect(row(false, undefined)).not.toContain('data-streak-mark');
+  test('série tombée : le cumul seul, sans flamme, à l’encre tertiaire, juste avant l’heure (#9570)', () => {
+    const html = row(false, snapshot(), NOON_OCT_2);
+    expect(html).not.toContain('data-streak-mark');
+    const mark = totalMarkOf(html);
+    expect(mark).toBeDefined();
+    expect(mark).toContain('>120<');
+    expect(mark).toContain('var(--color-ios-ink-3)');
+    expect(mark).not.toContain('var(--streak-ink)');
+    expect(mark).not.toContain(`d="M173.79`);
+    expect(mark).not.toContain('·');
+    expect(html.indexOf('data-points-mark')).toBeLessThan(html.indexOf('data-time'));
+    expect(html).toContain('<span class="sr-only">120 points gagnés dans cette conversation</span>');
   });
 
-  test('en focus : ni la série, ni la pastille', () => {
+  test('aucun point : rien à côté de l’heure', () => {
+    expect(row(false, undefined)).not.toContain('data-streak-mark');
+    expect(row(false, undefined)).not.toContain('data-points-mark');
+    const nothing = snapshot({ totalPoints: 0, todayPoints: 0, streakDays: 0, day: null });
+    expect(row(false, nothing)).not.toContain('data-points-mark');
+  });
+
+  test('en focus : ni la série, ni le cumul, ni la pastille', () => {
     const html = row(true, snapshot());
     expect(html).not.toContain('data-streak-mark');
     expect(html).not.toContain('data-engagement-pill');
+    expect(row(true, snapshot(), NOON_OCT_2)).not.toContain('data-points-mark');
   });
 });
 
