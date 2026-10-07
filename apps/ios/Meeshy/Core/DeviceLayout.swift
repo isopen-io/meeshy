@@ -49,6 +49,15 @@ enum DeviceLayout {
         windowScenes.flatMap(\.windows).filter { !$0.isHidden }
     }
 
+    /// Whether any screen showing the app is being recorded or mirrored.
+    ///
+    /// Also a question about ALL scenes: a capture of the external display or of
+    /// a Stage Manager window counts as much as one of the scene on screen
+    /// (#9617, capture of a disappearing content is announced or black).
+    static var anyScreenIsCaptured: Bool {
+        windowScenes.contains { $0.screen.isCaptured }
+    }
+
     /// The window to measure against.
     ///
     /// The key window is preferred, but any window of the active scene is a

@@ -166,7 +166,7 @@ final class ContentCaptureReporter: ContentCaptureReporterProviding {
         declarer: ContentCaptureDeclaring = OutboxContentCaptureDeclarer(),
         isConversationCovered: @escaping @MainActor () -> Bool = { ConversationViewingReporter.shared.isCovered },
         isScreenCaptured: @escaping @MainActor () -> Bool = {
-            UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.contains { $0.screen.isCaptured }
+            DeviceLayout.anyScreenIsCaptured
         },
         now: @escaping @MainActor () -> Date = { Date() },
         newCaptureId: @escaping @MainActor () -> String = { ContentCaptureReport.newCaptureId() }
