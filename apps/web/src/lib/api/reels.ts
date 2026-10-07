@@ -1,5 +1,7 @@
 import * as socialEndpoints from '@meeshy/shared/api/endpoints/social';
 
+import { holdViewerPoints } from '@/lib/feed/viewer-points';
+
 import { unwrap } from './client';
 import type { DataSource } from './config';
 import { CANVAS_CAPS_HEADERS, flattenFeedPages, nextFeedCursor, type FeedPage, type FeedPageParam, type FeedPost } from './feed-pages';
@@ -98,6 +100,7 @@ export async function loadReelsPage(
 export function reelsInfiniteOptions(deps: ReelsDeps, seed?: string) {
   return {
     queryKey: reelsQueryKey(seed),
+    structuralSharing: holdViewerPoints,
     queryFn: async ({ pageParam, signal }: { readonly pageParam?: FeedPageParam; readonly signal?: AbortSignal }) =>
       unwrap(
         await loadReelsPage({

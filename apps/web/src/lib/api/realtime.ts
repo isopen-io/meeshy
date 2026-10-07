@@ -10,6 +10,7 @@ import { bindAppStatePresence, documentVisibility } from './app-state-presence';
 import { apiConfig } from './config';
 import { bindConversationViewing, viewingStore } from './conversation-viewing';
 import { bindConversationEngagement, engagementStore } from './conversation-engagement';
+import { bindPostEngagement } from './publication-engagement';
 import { apiDeps } from './deps';
 import { appQueryClient } from './query-client';
 import { setAttachmentReactionEmitter } from './attachment-reaction-emit';
@@ -69,6 +70,8 @@ function bridgeCalls(next: RealtimeConnection | null): void {
   const unview = typeof document === 'undefined' ? () => undefined : bindConversationViewing({ socket: next.socket, visibility: documentVisibility(document), store: viewingStore, viewerId: currentViewerId });
   /* « N (M) 🔥 » (#8906) : la passerelle pousse l'état d'engagement au seul lecteur crédité. */
   const unengage = bindConversationEngagement({ socket: next.socket, store: engagementStore });
+  /* « · +99 » (#9570) : ce qu'un post a rapporté au lecteur crédité, posé sur chaque caisse qui montre sa carte. */
+  const unengagePosts = bindPostEngagement({ socket: next.socket, queryClient: appQueryClient });
   /* `notification:deleted` ferme aussi la bannière du service worker (#8752), comme la coque et iOS. */
   const unrevoke = bridgeBannerRevocations(next.socket);
   unbridgeCalls = () => {
@@ -76,6 +79,7 @@ function bridgeCalls(next: RealtimeConnection | null): void {
     unwatch();
     unview();
     unengage();
+    unengagePosts();
     unrevoke();
   };
 }

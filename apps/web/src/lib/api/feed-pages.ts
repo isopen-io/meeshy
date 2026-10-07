@@ -179,6 +179,13 @@ export type FeedPost = {
   readonly isBookmarkedByMe?: boolean | null;
   readonly isRepostedByMe?: boolean | null;
   /**
+   * CE QUE CE POST A RAPPORTÉ AU LECTEUR (#9570, contrat #9569) — entier ≥ 0,
+   * servi sur les LECTURES à un lecteur connecté, jamais sur `repostOf` ni sur
+   * une réponse d'écriture. Absent ⇒ « garde ce que tu sais », jamais zéro :
+   * la loi est `lib/feed/viewer-points.ts`.
+   */
+  readonly viewerPoints?: number | null;
+  /**
    * L'AUDIENCE DE LA CARTE (#6484) — `postScalarSelect` la sert TOUJOURS
    * (`postIncludes.ts:341`) ; absente seulement quand un `select` plus
    * étroit ne la demande pas (une fixture, un port qui ne l'a jamais lue).

@@ -1,6 +1,7 @@
 import type { QueryClient, QueryKey } from '@tanstack/react-query';
 
 import { dropCardPost, mapCardPosts, type CardPages } from '@/lib/feed/interactions';
+import { servedViewerPoints, withKeptViewerPoints } from '@/lib/feed/viewer-points';
 
 import { BOOKMARKS_QUERY_KEY } from './bookmarked-posts';
 import { FEED_QUERY_KEY } from './feed';
@@ -229,13 +230,20 @@ export function removeCardPost(queryClient: QueryClient, postId: string): void {
  * d'absence ; un `false` TENU est une réponse du lecteur (« je n'aime pas »),
  * pas une absence, et il survit. Les COMPTEURS ne sont pas préservés —
  * `likeCount` est un agrégat que le serveur tient mieux que nous.
+ *
+ * `viewerPoints` (#9570) appartient au lecteur lui aussi : une réponse
+ * d'écriture et une diffusion ne le portent jamais (contrat #9569), et la
+ * valeur ne décroît pas — la carte garde la plus grande (`withKeptViewerPoints`).
  */
 export function mergeServedPost(incoming: FeedPost, held: FeedPost): FeedPost {
-  return {
-    ...incoming,
-    ...(held.isLikedByMe == null ? {} : { isLikedByMe: held.isLikedByMe }),
-    ...(held.isBookmarkedByMe == null ? {} : { isBookmarkedByMe: held.isBookmarkedByMe }),
-  };
+  return withKeptViewerPoints(
+    {
+      ...incoming,
+      ...(held.isLikedByMe == null ? {} : { isLikedByMe: held.isLikedByMe }),
+      ...(held.isBookmarkedByMe == null ? {} : { isBookmarkedByMe: held.isBookmarkedByMe }),
+    },
+    servedViewerPoints(held.viewerPoints),
+  );
 }
 
 /**
