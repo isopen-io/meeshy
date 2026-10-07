@@ -14,7 +14,8 @@ import '@/styles/header-flame.css';
  *
  * La flamme, la série en jours, un point central, puis les points que cette
  * conversation a rapportés au LECTEUR depuis toujours, abrégés. Sans série en
- * cours, rien. Posée sous le titre de
+ * cours, le cumul SEUL, sans flamme, à l'encre tertiaire — le rouge reste la
+ * couleur de la série ; cumul nul, rien (#9570). Posée sous le titre de
  * l'en-tête DÉPLIÉ, où elle mène à la Progression ; replié, c'est la flamme du
  * jour sous l'avatar (`HeaderFlame`) qui parle. La liste porte la série en
  * rouge à côté de l'heure (`ConversationStreakMark`, 2026-10-01).
@@ -47,27 +48,35 @@ export function EngagementPill({
   const model = engagementPillModel(snapshot, today, language ?? currentInterfaceLanguage());
   if (model === null) return null;
 
-  const body = (
-    <>
-      <span aria-hidden="true" className="flex items-center gap-0.5 whitespace-nowrap">
-        <Glyph name="flameFill" size={13} style={{ color: 'var(--ios-warning)' }} />
-        <span className="header-flame-count-digits">
-          <span data-engagement-streak={model.streakDays}>{model.streakDays}</span>
-          <span> · </span>
-          <span data-engagement-points>{model.totalText}</span>
+  const body =
+    model.kind === 'streak' ? (
+      <>
+        <span aria-hidden="true" className="flex items-center gap-0.5 whitespace-nowrap">
+          <Glyph name="flameFill" size={13} style={{ color: 'var(--ios-warning)' }} />
+          <span className="header-flame-count-digits">
+            <span data-engagement-streak={model.streakDays}>{model.streakDays}</span>
+            <span> · </span>
+            <span data-engagement-points>{model.totalText}</span>
+          </span>
         </span>
-      </span>
-      <span className="sr-only">{model.label}</span>
-    </>
-  );
+        <span className="sr-only">{model.label}</span>
+      </>
+    ) : (
+      <>
+        <span aria-hidden="true" data-engagement-points className="whitespace-nowrap font-bold" style={{ color: 'var(--color-ios-ink-3)' }}>
+          {model.totalText}
+        </span>
+        <span className="sr-only">{model.label}</span>
+      </>
+    );
   const className = 'inline-flex shrink-0 items-center text-check tabular-nums';
 
   return opensProgression ? (
-    <Link to="progression" data-engagement-pill className="inline-flex min-h-11 shrink-0 items-center">
+    <Link to="progression" data-engagement-pill={model.kind} className="inline-flex min-h-11 shrink-0 items-center">
       <span className={className}>{body}</span>
     </Link>
   ) : (
-    <span data-engagement-pill className={className}>
+    <span data-engagement-pill={model.kind} className={className}>
       {body}
     </span>
   );

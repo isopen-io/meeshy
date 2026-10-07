@@ -71,7 +71,7 @@ export function HeaderFlame({
     return () => clearTimeout(timer);
   }, [replay, releaseAfterMs]);
 
-  if (model === null) return null;
+  if (model?.kind !== 'streak') return null;
   const shown = held ?? today;
   const streakDays = model.streakDays;
   const label = model.label;
