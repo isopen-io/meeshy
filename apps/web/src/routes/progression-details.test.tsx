@@ -51,6 +51,7 @@ import { GameShowcase } from '@/components/game-showcase';
 import { ConceptFiche } from './progression-concept';
 import type { GameActions } from './progression-game-actions';
 import { ProgressionHeaderGroup } from './progression-header-group';
+import { ProgressionShell } from './progression-shell';
 import { AchievementsSection, AxisRow, GeneratedAchievements } from './progression-parts';
 import { TableauBody } from './progression-tableau';
 import { ProgressionBody } from './progression';
@@ -440,6 +441,47 @@ describe('aucune page de Progression ne monte d’en-tête statique', () => {
     expect(shell).toContain('<CollapsingHeader');
     expect(shell.indexOf('<main')).toBeLessThan(shell.indexOf('<CollapsingHeader'));
     expect(shell.indexOf('<CollapsingHeader')).toBeLessThan(shell.indexOf('</main>'));
+  });
+
+  test('au défilement, la barre devient compacte par UN attribut posé hors de React — aucun rendu à la cadence du défilement', async () => {
+    let renders = 0;
+    const Counted = () => {
+      renders += 1;
+      return <p>contenu</p>;
+    };
+    const host = await mounter.mount(
+      <ProgressionShell title="Progression" back={{ to: 'list', label: 'Retour' }}>
+        <Counted />
+      </ProgressionShell>,
+    );
+    const main = must(host.querySelector<HTMLElement>('main#contenu'), 'conteneur');
+    const bar = must(host.querySelector<HTMLElement>('[data-collapsing-bar]'), 'barre');
+    expect(bar.parentElement).toBe(main);
+    expect(host.querySelector('h1')?.textContent).toBe('Progression');
+    expect(bar.querySelector('.collapsing-bar-title')?.getAttribute('aria-hidden')).toBe('true');
+    expect(bar.hasAttribute('data-scrolled')).toBe(false);
+    const before = renders;
+
+    main.scrollTop = 120;
+    main.dispatchEvent(new Event('scroll'));
+    expect(bar.hasAttribute('data-scrolled')).toBe(true);
+    main.scrollTop = 0;
+    main.dispatchEvent(new Event('scroll'));
+    expect(bar.hasAttribute('data-scrolled')).toBe(false);
+    expect(renders).toBe(before);
+  });
+
+  test('le retour est un disque de verre de 44 points, qui rebondit', async () => {
+    const host = await mounter.mount(
+      <ProgressionShell title="Ligue" back={{ to: 'progressionConcept', concept: 'league', label: 'Retour à la progression' }}>
+        <p>contenu</p>
+      </ProgressionShell>,
+    );
+    const back = must(host.querySelector<HTMLAnchorElement>('a[data-page-back]'), 'retour');
+    expect(back.getAttribute('href')).toBe('/me/progression/concept/league');
+    expect(back.className).toContain('game-press');
+    expect(back.className).toContain('size-11');
+    expect(back.querySelector('.glass')).not.toBeNull();
   });
 
   test('chaque écran de Progression rend la coquille', () => {
