@@ -31,6 +31,13 @@ import type { ForwardImposition } from './forwardAdmission';
  * diffusion d'abord, imposition du transfert ensuite, toujours : ajouter
  * `copyAttachmentsFromMessageId` à un transfert n'en retire rien.
  *
+ * La tolérance de la diffusion ne vaut que pour un message d'ORIGINE. Une
+ * source elle-même issue d'un transfert (`forwardedFromId` non nul) et
+ * protégée est REFUSÉE : son expéditeur est celui qui a transféré, et la
+ * « diffuser » reviendrait à la retransférer, sans marque de provenance. Le
+ * refus tombe dès le premier cran — la diffusion n'écrit aucune marque, donc
+ * la provenance ne survivrait pas au suivant.
+ *
  * FERMÉ : un `forwardedFromId` sans verdict d'admission (`forwardImposes`
  * absent) et une source de diffusion introuvable LÈVENT avant toute écriture.
  */
@@ -60,6 +67,11 @@ export interface CopyRequest extends CopyDeclaredProtection {
   readonly copyAttachmentsFromMessageId?: string;
 }
 
+export interface DiffusionSourceRow extends ContentExitProjection {
+  /** Non nul ⇒ la source est elle-même une copie transférée. */
+  readonly forwardedFromId: string | null;
+}
+
 export interface CopySourceReader {
   message: {
     findUnique(args: {
@@ -70,9 +82,10 @@ export interface CopySourceReader {
         effectFlags: true;
         ephemeralDuration: true;
         expiresAt: true;
+        forwardedFromId: true;
         attachments: { select: { isViewOnce: true; isBlurred: true; effectFlags: true } };
       };
-    }): Promise<ContentExitProjection | null>;
+    }): Promise<DiffusionSourceRow | null>;
   };
 }
 
@@ -118,19 +131,16 @@ export function diffusedCopyFields<T extends CopyDeclaredProtection>(
   if (nature === 'view-once') {
     return { ...declared, ...blurred, isViewOnce: true, effectFlags: blurred.effectFlags | VIEW_ONCE };
   }
-  if (forward.allowed === false) {
-    return { ...declared, ...blurred, effectFlags: blurred.effectFlags | EPHEMERAL | EPHEMERAL_AFTER_READ };
-  }
-  if (forward.maxDurationSeconds === null) return { ...declared, ...blurred };
+  if (forward.allowed === true && forward.maxDurationSeconds === null) return { ...declared, ...blurred };
+
+  const afterRead = forward.allowed === false ? EPHEMERAL_AFTER_READ : 0;
+  const bound = forward.allowed === true ? forward.maxDurationSeconds : validSeconds(source.ephemeralDuration);
+  const flamed = { ...declared, ...blurred, effectFlags: blurred.effectFlags | EPHEMERAL | afterRead };
+  if (bound === null) return flamed;
 
   return {
-    ...declared,
-    ...blurred,
-    effectFlags: blurred.effectFlags | EPHEMERAL,
-    ephemeralDuration: Math.min(
-      validSeconds(declared.ephemeralDuration) ?? forward.maxDurationSeconds,
-      forward.maxDurationSeconds,
-    ),
+    ...flamed,
+    ephemeralDuration: Math.min(validSeconds(declared.ephemeralDuration) ?? bound, bound),
     expiresAt: undefined,
     durationBoundsAfterRead: true,
   };
@@ -155,7 +165,7 @@ export async function exitProtectedCopy<T extends CopyRequest>(
   return forwardedCopyFields(diffused, declared.forwardImposes);
 }
 
-async function diffusionSource(prisma: CopySourceReader, id: string): Promise<ContentExitProjection> {
+async function diffusionSource(prisma: CopySourceReader, id: string): Promise<DiffusionSourceRow> {
   const source = await prisma.message.findUnique({
     where: { id },
     select: {
@@ -164,9 +174,13 @@ async function diffusionSource(prisma: CopySourceReader, id: string): Promise<Co
       effectFlags: true,
       ephemeralDuration: true,
       expiresAt: true,
+      forwardedFromId: true,
       attachments: { select: { isViewOnce: true, isBlurred: true, effectFlags: true } },
     },
   });
   if (!source) throw new Error('copy-attachments:source-unavailable');
+  if (source.forwardedFromId !== null && contentExitLawOfSource(source).nature !== 'ordinary') {
+    throw new Error('copy-attachments:forwarded-protected-source');
+  }
   return source;
 }

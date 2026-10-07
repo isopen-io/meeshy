@@ -448,7 +448,7 @@ describe('MessageProcessor.getEncryptionContext', () => {
 // ── saveMessage ────────────────────────────────────────────────────────────
 
 // La projection ENTIÈRE qu'exige la lecture de protection d'une source de copie (#9572).
-const ORDINARY_SOURCE = { isViewOnce: false, isBlurred: false, effectFlags: 0, ephemeralDuration: null, expiresAt: null, attachments: [] };
+const ORDINARY_SOURCE = { isViewOnce: false, isBlurred: false, effectFlags: 0, ephemeralDuration: null, expiresAt: null, forwardedFromId: null, attachments: [] };
 
 describe('MessageProcessor.saveMessage', () => {
   let processor: MessageProcessor;

@@ -34,6 +34,8 @@ La copie d'une flamme porte **durée ET après lecture** : elle est « après le
 
 La spec § 2 dit que `copyAttachmentsFromMessageId` « applique le verdict exporter ». Appliqué à la lettre, il refuserait toute diffusion depuis une source protégée — or iOS rejoue sur les cibles 2..N d'un partage multi-destinataires la protection armée à l'envoi (#8303, `OutboxDispatcher+Messages.swift`) : la diffusion d'une vue unique ou d'une flamme par son propre auteur casserait pour les clients déjà distribués (#9223, rétrocompatibilité). La diffusion n'est pas une sortie : c'est le même envoi, par son auteur (contrôle de propriété), ailleurs. Elle **hérite donc au moins de la nature de sa source** (`diffusedCopyFields`) — vue unique, après lecture, durée bornée, flou — sans gagner le bit après lecture. Une source introuvable est refusée avant toute écriture.
 
+**La tolérance ne vaut que pour un message d'origine.** L'expéditeur d'une copie transférée est celui qui a transféré : « diffuser » sa copie reviendrait à la retransférer, sans marque de provenance. Une source de diffusion qui porte `forwardedFromId` et dont la nature n'est pas ordinaire est donc refusée (`copy-attachments:forwarded-protected-source`), dès le premier cran — la diffusion n'écrit aucune marque, la provenance ne survivrait pas au suivant. Une source qui porte durée ET après lecture transmet sa borne (`min(durée demandée, durée source)`), comme la branche à durée.
+
 **Les deux gestes se composent** : une requête qui porte `forwardedFromId` ET `copyAttachmentsFromMessageId` reçoit la diffusion puis l'imposition du transfert, toujours. Ajouter l'un ne retire rien à l'autre.
 
 ### Alternatives rejetées

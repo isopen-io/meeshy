@@ -615,6 +615,31 @@ describe('MessagingService', () => {
         });
       });
 
+      // #9572 — la protection de la source est lue AVANT l'écriture, le
+      // contrôle de propriété APRÈS (`copyAttachmentsFromMessage`). Un
+      // non-auteur n'obtient ni succès (donc aucune diffusion `message:new`,
+      // que l'appelant n'émet que sur succès), ni ligne laissée derrière.
+      it('refuse la diffusion d’un non-auteur : envoi en échec, ligne créée puis SUPPRIMÉE, aucune pièce copiée', async () => {
+        mockPrisma.message.findUnique.mockResolvedValue({
+          sender: { id: '507f1f77bcf86cd7994390ff', userId: '507f1f77bcf86cd7994390fe' },
+          isViewOnce: false, isBlurred: false, effectFlags: 0, ephemeralDuration: null, expiresAt: null,
+          forwardedFromId: null, attachments: []
+        });
+        mockPrisma.message.delete = jest.fn().mockResolvedValue({});
+        mockPrisma.messageAttachment.create = jest.fn();
+
+        const response = await service.handleMessage(
+          { ...validRequest, content: '', copyAttachmentsFromMessageId: '507f1f77bcf86cd799439099' },
+          testParticipantId
+        );
+
+        expect(response.success).toBe(false);
+        expect(mockPrisma.messageAttachment.create).not.toHaveBeenCalled();
+        const created = mockPrisma.message.create.mock.results[0]?.value;
+        const createdId = (await created)?.id;
+        expect(mockPrisma.message.delete).toHaveBeenCalledWith({ where: { id: createdId } });
+      });
+
       // Diffuser à plusieurs destinataires n'est PAS transférer : la copie
       // serveur des pièces jointes ne doit jamais poser `forwardedFromId` —
       // sans quoi le destinataire verrait un badge « Transféré depuis … » qui

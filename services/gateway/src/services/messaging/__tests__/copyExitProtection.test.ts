@@ -24,6 +24,7 @@ const projection = (over: Record<string, unknown> = {}) => ({
   effectFlags: 0,
   ephemeralDuration: null,
   expiresAt: null,
+  forwardedFromId: null as string | null,
   attachments: [] as Array<{ isViewOnce: boolean; isBlurred: boolean; effectFlags: number }>,
   ...over,
 });
@@ -123,6 +124,24 @@ describe('diffusedCopyFields — la diffusion hérite au moins de la protection 
     expect(diffusedCopyFields({}, partial as ReturnType<typeof projection>)).toMatchObject({ effectFlags: FLAME_BITS });
   });
 
+  it('garde la BORNE de durée d’une source qui porte durée ET après lecture', () => {
+    const source = projection({ effectFlags: FLAME_BITS, ephemeralDuration: 15 });
+    expect(diffusedCopyFields({}, source)).toMatchObject({
+      effectFlags: FLAME_BITS,
+      ephemeralDuration: 15,
+      durationBoundsAfterRead: true,
+    });
+    expect(diffusedCopyFields({ ephemeralDuration: 86_400 }, source).ephemeralDuration).toBe(15);
+    expect(diffusedCopyFields({ ephemeralDuration: 5 }, source).ephemeralDuration).toBe(5);
+    expect(diffusedCopyFields({ expiresAt: new Date('2027-01-01T00:00:00.000Z') }, source).expiresAt).toBeUndefined();
+  });
+
+  it('laisse sans durée la copie d’une flamme-œil qui n’en a pas', () => {
+    const copy = diffusedCopyFields({ ephemeralDuration: 86_400 }, projection({ effectFlags: FLAME_BITS }));
+    expect(copy.effectFlags).toBe(FLAME_BITS);
+    expect(copy.durationBoundsAfterRead).toBeUndefined();
+  });
+
   it('borne la durée par celle de la source, sans ajouter le bit après lecture', () => {
     const source = projection({ effectFlags: EPHEMERAL, ephemeralDuration: 300 });
     expect(diffusedCopyFields({}, source)).toMatchObject({ effectFlags: EPHEMERAL, ephemeralDuration: 300 });
@@ -208,8 +227,53 @@ describe('exitProtectedCopy — le point d’entrée de saveMessage', () => {
         effectFlags: true,
         ephemeralDuration: true,
         expiresAt: true,
+        forwardedFromId: true,
         attachments: { select: { isViewOnce: true, isBlurred: true, effectFlags: true } },
       },
+    });
+  });
+
+  describe('la source d’une diffusion est elle-même une COPIE TRANSFÉRÉE', () => {
+    // A envoie une flamme ; B la transfère (copie dont B est l'expéditeur) ; B
+    // « diffuse » ensuite SA copie. La tolérance « l'auteur diffuse son envoi
+    // protégé » ne vaut que pour un message d'ORIGINE : sinon la règle « une
+    // copie ne se retransfère pas » tombe, sans marque de transfert en prime.
+    const refused = async (over: Record<string, unknown>) => {
+      reading(projection({ forwardedFromId: '507f1f77bcf86cd799439aaa', ...over }));
+      await expect(exitProtectedCopy(prisma, { copyAttachmentsFromMessageId: 'copy' })).rejects.toThrow(
+        'copy-attachments:forwarded-protected-source',
+      );
+    };
+
+    it('refuse la copie d’une flamme — durée ET après lecture', async () => {
+      await refused({ effectFlags: FLAME_BITS, ephemeralDuration: 15 });
+    });
+
+    it('refuse aussi une copie d’avant ce lot — flamme à durée sans le bit après lecture', async () => {
+      // La provenance se perd à la première diffusion (aucune marque de
+      // transfert n'y est écrite) : laisser passer ce cran ouvrirait le suivant.
+      await refused({ effectFlags: EPHEMERAL, ephemeralDuration: 15 });
+    });
+
+    it('refuse une copie transférée à vue unique ou dont une pièce l’est', async () => {
+      await refused({ isViewOnce: true, effectFlags: VIEW_ONCE });
+      await refused({ attachments: [piece({ isViewOnce: true })] });
+    });
+
+    it('refuse quand la provenance n’a pas été chargée — fermé', async () => {
+      const { forwardedFromId: _forgotten, ...partial } = projection({ effectFlags: FLAME_BITS });
+      reading(partial);
+      await expect(exitProtectedCopy(prisma, { copyAttachmentsFromMessageId: 'copy' })).rejects.toThrow(
+        'copy-attachments:forwarded-protected-source',
+      );
+    });
+
+    it('laisse diffuser une copie transférée ORDINAIRE, en gardant son flou', async () => {
+      reading(projection({ forwardedFromId: '507f1f77bcf86cd799439aaa', isBlurred: true }));
+      expect(await exitProtectedCopy(prisma, { copyAttachmentsFromMessageId: 'copy' })).toMatchObject({
+        isBlurred: true,
+        effectFlags: BLURRED,
+      });
     });
   });
 
