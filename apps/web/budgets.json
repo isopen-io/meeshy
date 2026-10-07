@@ -894,8 +894,8 @@
       "dynamic_only": true,
       "kb": {
         "value": 79,
-        "status": "CIBLE -- ESTIMEE APRES LA SEPARATION DU CATALOGUE (#9542), A RESSERRER SUR LA MESURE DE LA CI",
-        "source": "Estimation du 2026-10-07 par script (gzip -9 de la forme construite de chaque fichier, objet minifie sans commentaires ; la meme methode donnait 111 Ko au catalogue entier que la CI a mesure a 103,13 Ko, run 37591040000 : elle majore d'environ 8 %) : 77,63 Ko pour les SEPT fichiers du coeur du jeu (`catalog-game-<l>.ts`, 638 cles : missions, coffre, frappe, Flamme, ligue, duo, saison, vitrine, Atlas, Prestige, guide de Mee et Meo, photos, reglages, profil), de 10,33 Ko (en) a 11,90 Ko (ar). Charges avec les routes de Progression, le carnet des regles et « Mon jeu » du profil (`GAME_SCREEN_PARTS`, `lib/i18n-game-catalog.ts`) ; un lecteur n'en telecharge qu'UN. Arrondi au Ko SUPERIEUR (78) + 1 Ko de marge. LA SEPARATION (#9542, 2026-10-07) : le catalogue unique mesurait 103,13 Ko pour un plafond de 90 (run 37591040000, apres les 139 cles de concept de #9563). Il est coupe en QUATRE parties, une entree de budget chacune : ce coeur, `interface_catalogs_game_banner` (le bandeau du joueur, sur tous les hubs), `interface_catalogs_game_concept` (premiere page, fiches, tableau de bord) et `interface_catalogs_game_rules` (carnet des regles et atlas). Le plafond REDESCEND de 90 a 79. HISTORIQUE : six releves par estimation de 48 a 90 entre le 2026-10-05 et le 2026-10-06 (#9379, #5841, #9466, #9481, #7742, #9538, #9539), sans `bun run build` ; le dernier ecrivait que la separation devait preceder tout nouveau releve."
+        "status": "MESUREE PAR BUILD APRES LA SEPARATION DU CATALOGUE (#9542), NON ARBITREE",
+        "source": "Mesure du 2026-10-07 par la CI (`bun run build` puis `node scripts/measure-weight.mjs`, job Quality (bun), run 37593972086, tete b1b60b9b5a ; gzip -9 par fichier) : 77,64 Ko pour les SEPT fichiers du coeur du jeu (`catalog-game-<l>.ts`, 638 cles : missions, coffre, frappe, Flamme, ligue, duo, saison, vitrine, Atlas, Prestige, guide de Mee et Meo, photos, reglages, profil), de 10,33 Ko (en) a 11,90 Ko (ar). Charges avec les routes de Progression, le carnet des regles et « Mon jeu » du profil (`GAME_SCREEN_PARTS`, `lib/i18n-game-catalog.ts`) ; un lecteur n'en telecharge qu'UN. Arrondi au Ko SUPERIEUR (78) + 1 Ko de marge. LA SEPARATION (#9542, 2026-10-07) : le catalogue unique mesurait 103,13 Ko pour un plafond de 90 (run 37591040000, apres les 139 cles de concept de #9563). Il est coupe en QUATRE parties, une entree de budget chacune : ce coeur, `interface_catalogs_game_banner` (le bandeau du joueur, sur tous les hubs), `interface_catalogs_game_concept` (premiere page, fiches, tableau de bord) et `interface_catalogs_game_rules` (carnet des regles et atlas). Le plafond REDESCEND de 90 a 79 = ceil(77,64) + 1 : c'est la PREMIERE valeur de cette entree mesuree par un build. HISTORIQUE : six releves par estimation de 48 a 90 entre le 2026-10-05 et le 2026-10-06 (#9379, #5841, #9466, #9481, #7742, #9538, #9539), sans `bun run build` ; le dernier ecrivait que la separation devait preceder tout nouveau releve."
       }
     },
     "interface_catalogs_game_banner": {
@@ -903,8 +903,8 @@
       "dynamic_only": true,
       "kb": {
         "value": 6,
-        "status": "CIBLE -- ESTIMEE (#9542), A RESSERRER SUR LA MESURE DE LA CI",
-        "source": "Estimation du 2026-10-07 par script (gzip -9 de la forme construite de chaque fichier, objet minifie sans commentaires ; la meme methode donnait 111 Ko au catalogue entier que la CI a mesure a 103,13 Ko, run 37591040000 : elle majore d'environ 8 %) : 4,19 Ko pour les SEPT fichiers du bandeau du joueur (`catalog-game-banner-<l>.ts`, 46 cles et les formes de pluriel propres a l'anglais et a l'arabe : `game.banner.*`, les noms de palier, de rang et de ligue, les accords de points, de jours et de Meeshes), de 0,55 Ko (fr) a 0,71 Ko (ar). C'est la SEULE partie que le bandeau des hubs telecharge (`components/player-banner.tsx`, `loadGameScreenCatalog(..., 'banner')`) : il chargeait jusque-la le catalogue entier (~14 Ko par lecteur) pour une cinquantaine de cles. Chargee aussi avec chaque ecran du jeu. Arrondi au Ko SUPERIEUR (5) + 1 Ko de marge."
+        "status": "CIBLE -- MESUREE PAR #9542, NON ARBITREE",
+        "source": "Mesure du 2026-10-07 par la CI (`bun run build` puis `node scripts/measure-weight.mjs`, job Quality (bun), run 37593972086, tete b1b60b9b5a ; gzip -9 par fichier) : 4,18 Ko pour les SEPT fichiers du bandeau du joueur (`catalog-game-banner-<l>.ts`, 46 cles et les formes de pluriel propres a l'anglais et a l'arabe : `game.banner.*`, les noms de palier, de rang et de ligue, les accords de points, de jours et de Meeshes), de 0,55 Ko (fr) a 0,71 Ko (ar). C'est la SEULE partie que le bandeau des hubs telecharge (`components/player-banner.tsx`, `loadGameScreenCatalog(..., 'banner')`) : il chargeait jusque-la le catalogue entier (~14 Ko par lecteur) pour une cinquantaine de cles. Chargee aussi avec chaque ecran du jeu. Arrondi au Ko SUPERIEUR (5) + 1 Ko de marge."
       }
     },
     "interface_catalogs_game_concept": {
@@ -912,8 +912,8 @@
       "dynamic_only": true,
       "kb": {
         "value": 21,
-        "status": "CIBLE -- ESTIMEE (#9542, #9563), A RESSERRER SUR LA MESURE DE LA CI",
-        "source": "Estimation du 2026-10-07 par script (gzip -9 de la forme construite de chaque fichier, objet minifie sans commentaires ; la meme methode donnait 111 Ko au catalogue entier que la CI a mesure a 103,13 Ko, run 37591040000 : elle majore d'environ 8 %) : 19,12 Ko pour les SEPT fichiers des concepts de Progression (`catalog-game-concept-<l>.ts`, 139 cles : `game.concept.*` -- nom, a quoi ca sert, comment ca marche, conseils, chips --, `game.fiche.*`, `game.fact.*`, `game.dashboard.*`), de 2,51 Ko (en) a 3,00 Ko (ar). Charges avec les routes de Progression seulement (premiere page, fiches, tableau de bord et leurs sous-pages), jamais avec le bandeau, le profil ni le carnet des regles ; un lecteur n'en telecharge qu'UN. Arrondi au Ko SUPERIEUR (20) + 1 Ko de marge."
+        "status": "CIBLE -- MESUREE PAR #9542 ET #9563, NON ARBITREE",
+        "source": "Mesure du 2026-10-07 par la CI (`bun run build` puis `node scripts/measure-weight.mjs`, job Quality (bun), run 37593972086, tete b1b60b9b5a ; gzip -9 par fichier) : 19,11 Ko pour les SEPT fichiers des concepts de Progression (`catalog-game-concept-<l>.ts`, 139 cles : `game.concept.*` -- nom, a quoi ca sert, comment ca marche, conseils, chips --, `game.fiche.*`, `game.fact.*`, `game.dashboard.*`), de 2,51 Ko (en) a 3,00 Ko (ar). Charges avec les routes de Progression seulement (premiere page, fiches, tableau de bord et leurs sous-pages), jamais avec le bandeau, le profil ni le carnet des regles ; un lecteur n'en telecharge qu'UN. Arrondi au Ko SUPERIEUR (20) + 1 Ko de marge."
       }
     },
     "interface_catalogs_game_rules": {
@@ -921,8 +921,8 @@
       "dynamic_only": true,
       "kb": {
         "value": 12,
-        "status": "CIBLE -- ESTIMEE (#9542), A RESSERRER SUR LA MESURE DE LA CI",
-        "source": "Estimation du 2026-10-07 par script (gzip -9 de la forme construite de chaque fichier, objet minifie sans commentaires ; la meme methode donnait 111 Ko au catalogue entier que la CI a mesure a 103,13 Ko, run 37591040000 : elle majore d'environ 8 %) : 10,19 Ko pour les SEPT fichiers du carnet des regles et de son atlas (`catalog-game-rules-<l>.ts`, 58 cles `game.rules.*`), de 1,34 Ko (en) a 1,66 Ko (ar). Charges avec la seule page « Comment ca marche » (`/me/progression/regles`) ; un lecteur n'en telecharge qu'UN, et seulement s'il ouvre le carnet. Arrondi au Ko SUPERIEUR (11) + 1 Ko de marge."
+        "status": "CIBLE -- MESUREE PAR #9542, NON ARBITREE",
+        "source": "Mesure du 2026-10-07 par la CI (`bun run build` puis `node scripts/measure-weight.mjs`, job Quality (bun), run 37593972086, tete b1b60b9b5a ; gzip -9 par fichier) : 10,18 Ko pour les SEPT fichiers du carnet des regles et de son atlas (`catalog-game-rules-<l>.ts`, 58 cles `game.rules.*`), de 1,34 Ko (en) a 1,66 Ko (ar). Charges avec la seule page « Comment ca marche » (`/me/progression/regles`) ; un lecteur n'en telecharge qu'UN, et seulement s'il ouvre le carnet. Arrondi au Ko SUPERIEUR (11) + 1 Ko de marge."
       }
     }
   },
