@@ -244,7 +244,13 @@ struct FocalQuotedReplyView: View, Equatable {
         }
     }
 
+    /// #9574 — la citation d'un contenu qui disparaît se rend dans la couche
+    /// sécurisée, même dans un message ordinaire.
     var body: some View {
+        quotedBody.captureShield(reference.quotedCapture(quotedMessage: nil) == .blocked)
+    }
+
+    private var quotedBody: some View {
         HStack(spacing: FocalQuoteRail.spacing) {
             FocalQuoteRail(colorHex: authorHex)
 

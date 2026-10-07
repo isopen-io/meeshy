@@ -549,7 +549,14 @@ struct BubbleQuotedReply: View, Equatable {
         }
     }
 
+    /// #9574 — la citation d'un contenu qui disparaît se rend dans la couche
+    /// sécurisée, même dans un message ordinaire.
     var body: some View {
+        quotedBody.captureShield(reply.quotedCapture(quotedMessage: nil) == .blocked)
+    }
+
+    @ViewBuilder
+    private var quotedBody: some View {
         let accentBarColor = Color(hex: reply.isMe ? accentHex : reply.authorColor)
         let nameColor: Color = parentIsMe
             ? .white.opacity(MeeshyOpacity.intense)

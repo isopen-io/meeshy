@@ -300,6 +300,7 @@ extension BubbleContent {
         self.isBurning = message.isBurning
         self.isViewOnceRevealed = message.isViewOnceRevealed && message.holdsViewOnce
         self.exitGate = message.exitGate
+        self.capturesBlocked = message.exitOffer.capture == .blocked
 
         // --- Other flags ---
         self.isBlurred = message.isBlurred

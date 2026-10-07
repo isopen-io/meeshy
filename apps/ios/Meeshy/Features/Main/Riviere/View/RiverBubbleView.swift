@@ -102,6 +102,9 @@ struct RiverBubbleContent: Equatable {
     /// Les cartes de visite du message, rendues par `BubbleAttachmentView`
     /// comme partout ailleurs (#8139).
     let contactCards: RiverContactCards
+    /// La capture d'écran de ce message est bloquée (#9574) — projection de
+    /// `Message.exitOffer.capture` : la bulle se rend dans la couche sécurisée.
+    let capturesBlocked: Bool
 
     init(
         bubble: RiverLaneResolver.RiverBubble,
@@ -132,6 +135,7 @@ struct RiverBubbleContent: Equatable {
         tapAfterReveal: ProtectedContentTap = .none,
         linkEmbed: BubbleContent.Text? = nil,
         contactCards: RiverContactCards = RiverContactCards(items: []),
+        capturesBlocked: Bool = false,
         identity: RiverBubbleIdentity? = nil
     ) {
         self.bubble = bubble
@@ -155,6 +159,7 @@ struct RiverBubbleContent: Equatable {
         self.tapAfterReveal = tapAfterReveal
         self.linkEmbed = linkEmbed
         self.contactCards = contactCards
+        self.capturesBlocked = capturesBlocked
     }
 }
 
@@ -273,11 +278,15 @@ struct RiverReplyPreview: Equatable {
     /// #8283 — l'aperçu du média cité (vignette, poster, vocal), sous la
     /// ligne. `nil` ⇒ la citation reste la seule ligne de texte.
     let media: RiverQuotedMedia?
+    /// #9574 — la citation d'un contenu qui disparaît se rend dans la couche
+    /// sécurisée (`ReplyReference.quotedCapture`).
+    let capturesBlocked: Bool
 
-    init(authorDisplayName: String, text: String, media: RiverQuotedMedia? = nil) {
+    init(authorDisplayName: String, text: String, media: RiverQuotedMedia? = nil, capturesBlocked: Bool = false) {
         self.authorDisplayName = authorDisplayName
         self.text = text
         self.media = media
+        self.capturesBlocked = capturesBlocked
     }
 }
 
@@ -469,7 +478,9 @@ struct RiverBubbleView: View, Equatable {
                 identityHeader
             }
             // #8303 — la flamme-œil en filigrane, au bord d'attaque de la bulle.
-            messageBox.afterReadWatermark(content.protection.isAfterRead, gutter: 36, tint: ComposerProtection.ephemeral.tint, overhang: 22)
+            // #9574 — le contenu protégé, dans la couche sécurisée.
+            messageBox.captureShield(content.capturesBlocked)
+                .afterReadWatermark(content.protection.isAfterRead, gutter: 36, tint: ComposerProtection.ephemeral.tint, overhang: 22)
         }
         .background(
             GeometryReader { proxy in
@@ -868,6 +879,7 @@ struct RiverBubbleView: View, Equatable {
                 quotedMediaRow(media)
             }
         }
+        .captureShield(reply.capturesBlocked)
     }
 
     private func quotedMediaRow(_ media: RiverQuotedMedia) -> some View {

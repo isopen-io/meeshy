@@ -351,6 +351,11 @@ struct ThemedMessageBubble: View {
                         standardLayout(content: content)
                     }
                 }
+                // #9574 — un contenu qui disparaît se rend dans la couche
+                // sécurisée : noir dans une capture, un enregistrement ou une
+                // recopie d'écran. Posé AVANT le cycle de vie : la brûlure et
+                // le filigrane enveloppent la bulle protégée.
+                .captureShield(content.capturesBlocked)
                 // #4020 — le double tap ouvre la barre de réaction rapide.
                 // Posé ICI, sur la seule branche que la règle accepte : le
                 // `switch` au-dessus a déjà écarté système, supprimé et

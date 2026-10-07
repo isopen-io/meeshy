@@ -318,6 +318,8 @@ struct FocalRow: View {
                     contentSections.viewOnceRetouch(isActive: content.viewOnceRetouchIsActive) { actions.onConsumeViewOnce?(content.messageId) { _ in } }
                 }
             }
+            // #9574 — le contenu protégé, dans la couche sécurisée (Focal et Script).
+            .captureShield(content.capturesBlocked)
             .focalElectedLoupe(isFocused: input.isFocused, rowWidth: input.availableWidth)
 
             failedRetrySection
