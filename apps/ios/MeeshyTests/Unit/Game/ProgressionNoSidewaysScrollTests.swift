@@ -94,7 +94,7 @@ final class ProgressionNoSidewaysScrollTests: XCTestCase {
             guard let progress = vm.progress else { return XCTFail("pas de progression chargée") }
             let list = ProgressionFrontList(
                 viewModel: vm, guide: vm.guide, photos: vm.photos, progress: progress,
-                onOpenConcept: { _ in }, onOpenDashboard: {}, onOpenConversations: {}, onOpenRules: { _ in },
+                onOpenConcept: { _ in }, onOpenConversations: {}, onOpenRules: { _ in },
                 onOpenNotebook: {}, onOpenPage: { _ in }
             )
             XCTAssertLessThanOrEqual(claimedWidth(list), Self.content + 0.5, "la première page (\(label)) dépasse l'écran à 320 pt")
@@ -112,23 +112,6 @@ final class ProgressionNoSidewaysScrollTests: XCTestCase {
                 )
                 XCTAssertLessThanOrEqual(claimedWidth(sheet), Self.content + 0.5,
                                          "la fiche « \(concept.rawValue) » (\(label)) dépasse l'écran à 320 pt")
-            }
-        }
-    }
-
-    func test_everyDashboardBlock_claimsNoMoreThanTheScreen() async {
-        for (label, game) in [("au sommet", Self.summit()), ("redescendu", Self.redescended())] {
-            let vm = await loadedViewModel(game)
-            guard let progress = vm.progress else { return XCTFail("pas de progression chargée") }
-            for concept in ProgressionConcepts.served(for: progress, game: game) {
-                let block = ProgressionDashboardBlock(
-                    concept: concept,
-                    value: ProgressionConceptModel.value(concept, progress: progress, game: game),
-                    facts: ProgressionConceptModel.facts(concept, progress: progress, game: game),
-                    game: game, onOpen: {}
-                )
-                XCTAssertLessThanOrEqual(claimedWidth(block), Self.content + 0.5,
-                                         "le bloc « \(concept.rawValue) » (\(label)) dépasse l'écran à 320 pt")
             }
         }
     }
@@ -189,7 +172,7 @@ final class ProgressionNoSidewaysScrollTests: XCTestCase {
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
     }
 
-    /// Les fichiers des pages de Progression : la première page et ses pièces, les fiches, le tableau de bord, les
+    /// Les fichiers des pages de Progression : la première page et ses pièces, les fiches, les
     /// sous-pages de la vague 2, les règles, le carnet. La capture photo du carnet (`Game/Photo`) n'est pas une page.
     private func pageSources() throws -> [(name: String, code: String)] {
         let main = iosRoot.appendingPathComponent("Meeshy/Features/Main")

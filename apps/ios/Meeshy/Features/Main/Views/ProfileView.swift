@@ -515,7 +515,7 @@ struct ProfileView: View {
             // #9481 — le jeu sur SON profil : l'anneau, le rang, la vitrine, les médailles.
             GameProfileOwnCard(
                 onOpenProgression: { router.push(.progression) },
-                onOpenShowcase: { router.push(.gamePage(.showcase)) }
+                onOpenShowcase: { router.openGame(at: .gamePage(.showcase)) }
             )
             ProfileProgressionEntry { router.push(.progression) }
         }

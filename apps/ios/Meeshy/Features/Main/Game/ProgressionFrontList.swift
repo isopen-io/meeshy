@@ -2,21 +2,20 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
-/// LA LISTE DE LA PREMIÈRE PAGE (#9564) — la ligne courte de Mee, l'entrée « Tableau de bord », UNE CARTE PAR
-/// CONCEPT servi, puis Carnet, Comment ça marche et Réglages. Elle remplace l'empilement d'avant (guide, héros,
+/// LA LISTE DE LA PREMIÈRE PAGE (#9564) — la ligne courte de Mee, UNE CARTE PAR CONCEPT servi, puis Carnet, Comment ça marche et Réglages. Elle remplace l'empilement d'avant (guide, héros,
 /// jauges, missions, ligue, frappe, étagère, Flamme, portes) : chaque vue du jeu est rangée dans la fiche de son
 /// concept, et cette liste ne porte AUCUN geste du jeu — seulement des touchers qui ouvrent une page.
 ///
 /// Le bloc `game` reste la seule source : la liste ne calcule rien, elle lit `ProgressionConceptModel`. Devant un
 /// ancien serveur (pas de bloc), les cartes d'avant restent — niveau, Meeshes, Flamme, Élans, badges, défis, succès.
-/// Sous « Jeu masqué », la carte masquée prend la place du jeu, et la liste se lit comme devant un ancien serveur.
+/// Sous « Jeu masqué », la carte masquée REMPLACE la liste. Les cartes rebondissent au toucher et entrent en scène
+/// une fois, l'une après l'autre.
 struct ProgressionFrontList: View {
     @ObservedObject var viewModel: ProgressionViewModel
     @ObservedObject var guide: GameGuideSession
     @ObservedObject var photos: GamePhotoCoordinator
     let progress: EngagementProgress
     let onOpenConcept: (ProgressionConcept) -> Void
-    let onOpenDashboard: () -> Void
     let onOpenConversations: () -> Void
     /// Le carnet des règles, ouvert à la règle donnée (`nil` ⇒ en haut).
     let onOpenRules: (Int?) -> Void
@@ -25,15 +24,15 @@ struct ProgressionFrontList: View {
     let onOpenPage: (GamePage) -> Void
 
     @State private var showsFullGuide = false
+    /// Les cartes sont entrées en scène. Gardé tant que la page vit : rien ne rejoue au retour d'une fiche.
+    @State private var entered = false
     /// « Jeu masqué » et « Célébrations » : deux commodités PAR APPAREIL (#9481).
     @ObservedObject private var prefs = GameDevicePrefsStore.current()
 
     private var theme: ThemeManager { ThemeManager.shared }
 
-    private var hidden: Bool { prefs.prefs.hidden }
     private var celebrates: Bool { prefs.prefs.celebrations }
-    /// Le jeu que la liste LIT : aucun sous « Jeu masqué ».
-    private var game: GameBlock? { hidden ? nil : viewModel.game }
+    private var game: GameBlock? { viewModel.game }
 
     private var cardPhoto: PhotoMoment? {
         guard let game, let card = guide.card, card.photo else { return nil }
@@ -49,10 +48,17 @@ struct ProgressionFrontList: View {
     }
 
     var body: some View {
-        VStack(spacing: MeeshySpacing.md) {
-            if hidden, viewModel.game != nil {
-                GameHiddenCard(onSettings: { onOpenPage(.settings) })
-            }
+        // « Jeu masqué » : la carte masquée REMPLACE la liste (#9481, #9564) — rien du jeu ne paraît autour.
+        if prefs.prefs.hidden, viewModel.game != nil {
+            GameHiddenCard(onSettings: { onOpenPage(.settings) })
+        } else {
+            list
+        }
+    }
+
+    private var list: some View {
+        let cards = ProgressionConceptModel.cards(progress: progress, game: game)
+        return VStack(spacing: MeeshySpacing.md) {
             if game != nil, celebrates, let card = guide.card {
                 ProgressionGuideLine(card: card, onOpen: { showsFullGuide = true })
             }
@@ -62,12 +68,9 @@ struct ProgressionFrontList: View {
                     identifier: "game.photo.offer.\(offer.id)", action: { photos.start(offer) }
                 )
             }
-            ProgressionConceptRow(
-                title: ConceptText.dashboardTitle, subtitle: ConceptText.dashboardHint, symbol: "square.grid.2x2",
-                identifier: "progression.dashboard", action: onOpenDashboard
-            )
-            ForEach(ProgressionConceptModel.cards(progress: progress, game: game)) { card in
-                ProgressionConceptCardView(card: card, game: game, onOpen: { onOpenConcept(card.concept) })
+            ForEach(Array(cards.enumerated()), id: \.element.id) { index, card in
+                ProgressionConceptCardView(card: card, game: game, entered: entered, onOpen: { onOpenConcept(card.concept) })
+                    .modifier(GameStaggeredEntrance(index: index, entered: entered))
             }
             if game != nil {
                 ProgressionConceptRow(
@@ -84,6 +87,8 @@ struct ProgressionFrontList: View {
                 )
             }
         }
+        // L'entrée en scène se joue UNE fois, à la première apparition de la liste.
+        .onAppear { entered = true }
         .fullScreenCover(item: Binding(get: { photos.active }, set: { if $0 == nil { photos.close() } })) { session in
             GamePhotoFlowView(session: session) { photos.close() }
         }
@@ -110,12 +115,13 @@ struct ProgressionFrontList: View {
         }
     }
 
-    /// Le bouton d'une carte mène où la loi le dit (`GameGuideTarget`) : ouvrir la FICHE du concept visé (plus rien
-    /// ne défile sur la première page), une autre page, ou la photo.
+    /// Le bouton d'une carte mène où la loi le dit (`GameGuideTarget`) : ouvrir la FICHE du concept visé — au
+    /// deuxième niveau, jamais une sous-page sautée par-dessus sa fiche (carte de navigation, #9564) —, la liste des
+    /// conversations, ou la photo.
     private func act(on card: GuideCard) {
         if let page = card.wave2Page {
             guide.dismiss()
-            onOpenPage(page)
+            onOpenConcept(GameNavigationMap.guideConcept(for: page))
             return
         }
         let target = GameGuideTarget.target(for: card.action)

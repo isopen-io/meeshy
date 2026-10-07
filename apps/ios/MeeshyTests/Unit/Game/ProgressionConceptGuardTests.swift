@@ -68,13 +68,19 @@ final class ProgressionConceptGuardTests: XCTestCase {
     // MARK: - La première page ne porte que des cartes
 
     func test_theFrontPage_mountsNoGestureView() throws {
-        let front = try source("Meeshy/Features/Main/Game/ProgressionFrontList.swift")
-            + (try source("Meeshy/Features/Main/Views/ProgressionView.swift"))
+        // La LISTE ne porte aucun geste. L'en-tête, lui, retrouve le compteur de Meeshes et sa feuille (amendement n° 2).
+        let list = try source("Meeshy/Features/Main/Game/ProgressionFrontList.swift")
         for gesture in ["GameMintPreviewView(", "GameMissionsView(", "GameFlamePanelView(", "GameHeroView(", "GameGaugesView(",
                         "GameBadgeShelfView(", "ProgressionMeeshEntry(", "ProgressionMeeshDetail(", "GameLeagueDetailCard",
                         "viewModel.mint()", "claimChest()", "buyFreeze()", "relight()", "reroll("] {
-            XCTAssertFalse(front.contains(gesture), "« \(gesture) » est sur la première page : les gestes vivent dans les fiches")
+            XCTAssertFalse(list.contains(gesture), "« \(gesture) » est dans la liste de la première page : les gestes vivent dans les fiches")
         }
+        let page = try source("Meeshy/Features/Main/Views/ProgressionView.swift")
+        for gesture in ["GameMintPreviewView(", "GameMissionsView(", "GameFlamePanelView(", "GameHeroView(", "GameGaugesView(",
+                        "GameBadgeShelfView(", "claimChest()", "buyFreeze()", "relight()", "reroll("] {
+            XCTAssertFalse(page.contains(gesture), "« \(gesture) » est sur la première page : les gestes vivent dans les fiches")
+        }
+        let front = list
         XCTAssertTrue(front.contains("ProgressionConceptModel.cards(progress: progress, game: game)"),
                       "la première page PARCOURT la liste des concepts, elle ne la compose pas")
     }
@@ -82,27 +88,26 @@ final class ProgressionConceptGuardTests: XCTestCase {
     func test_theSheet_hostsTheGesturesTheFrontPageLost() throws {
         let fiche = try source("Meeshy/Features/Main/Game/ProgressionConceptPage.swift")
         for gesture in ["GameMintPreviewView(", "GameMissionsView(", "GameFlamePanelView(", "GameHeroView(", "GameBadgeShelfView(",
-                        "ProgressionMeeshEntry(", "ProgressionLastAchievementHero(", "ProgressionElansHero(", "GameLeagueDetailCard.make("] {
+                        "ProgressionLastAchievementHero(", "ProgressionElansHero(", "GameLeagueDetailCard.make("] {
             XCTAssertTrue(fiche.contains(gesture), "« \(gesture) » n'est rangé dans aucune fiche : une vue écrite et montée par personne")
-        }
-        let dashboard = try source("Meeshy/Features/Main/Game/ProgressionDashboardPage.swift")
-        XCTAssertTrue(dashboard.contains("ProgressionConcepts.served(for: progress, game: game)"), "le tableau de bord parcourt la même liste")
-        for gesture in ["viewModel.mint()", "claimChest()", "buyFreeze()", "relight()", "reroll("] {
-            XCTAssertFalse(dashboard.contains(gesture), "le tableau de bord est en lecture seule : « \(gesture) »")
         }
     }
 
     // MARK: - L'annonce d'une mission ouvre la FICHE des missions
 
-    func test_thePendingAnchor_opensTheSheetOfItsConcept_noLongerAScroll() throws {
+    /// La pile porte le chemin complet (#9564) : Progression n'attend plus d'ancre pour pousser une fiche après coup —
+    /// une seule transition, aucune image perdue.
+    func test_theFirstPage_waitsForNoAnchor_theStackCarriesTheChain() throws {
         let progression = try source("Meeshy/Features/Main/Views/ProgressionView.swift")
-        XCTAssertTrue(progression.contains("ProgressionConceptModel.concept(for: anchor)"))
-        XCTAssertTrue(progression.contains("router.push(.progressionConcept(concept))"), "l'ancre ouvre la fiche de son concept")
+        XCTAssertFalse(progression.contains("Anchor"), "plus d'ancre ramassée : l'entrée pose son chemin complet")
+        XCTAssertFalse(progression.contains("Task.sleep"), "plus de seconde poussée retardée")
         XCTAssertFalse(progression.contains("proxy.scrollTo("), "plus rien ne défile jusqu'à une section : la première page n'en a plus")
+        let fiche = try source("Meeshy/Features/Main/Game/ProgressionConceptPage.swift")
+        XCTAssertTrue(fiche.contains("proxy.scrollTo(section"), "la fiche se pose à la section que l'entrée demande")
         for host in ["Meeshy/Features/Main/Views/RootLayers/RootRouteDestination.swift", "Meeshy/Features/Main/Views/iPadRootView+Panels.swift"] {
             let code = try source(host)
-            XCTAssertTrue(code.contains("ProgressionConceptPage(concept: concept)"), "\(host) rend la fiche")
-            XCTAssertTrue(code.contains("ProgressionDashboardPage()"), "\(host) rend le tableau de bord")
+            XCTAssertTrue(code.contains("ProgressionConceptPage(concept: concept, section: section)"), "\(host) rend la fiche, à sa section")
+            XCTAssertFalse(code.contains("ProgressionDashboardPage"), "\(host) : le tableau de bord a disparu (amendement n° 4)")
         }
     }
 

@@ -335,7 +335,7 @@ struct iPadCoversAndChromeLayer: ViewModifier {
                 playerBannerHosted: PlayerBannerPlacement.hostsOnTablet(
                     conversationIsOpen: activeConversationId != nil, panelRoute: rightPanelRoute,
                     reelsAreOpen: reelsPresenter.launch != nil),
-                onPlayerBannerTap: { router.push(.progression) }
+                onPlayerBannerTap: { router.openGame(at: .progressionConcept(.level)) }
             ))
             // L'onboarding post-inscription (#7729) — le même hôte que sur
             // iPhone, au même rang : APRÈS la pastille et la présentation

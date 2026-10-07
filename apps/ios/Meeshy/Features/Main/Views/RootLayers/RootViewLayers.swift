@@ -281,7 +281,7 @@ struct RootChromeLayer: ViewModifier {
                 // calculée ICI, où le routeur et le lecteur de réels sont observés.
                 playerBannerHosted: PlayerBannerPlacement.hosts(
                     routeIsDeep: router.isDeepRoute, reelsAreOpen: reelsPresenter.launch != nil),
-                onPlayerBannerTap: { router.push(.progression) }
+                onPlayerBannerTap: { router.openGame(at: .progressionConcept(.level)) }
             ))
             .animation(.spring(response: 0.4, dampingFraction: 0.85), value: showFeed)
             .animation(.spring(), value: showMenu)
