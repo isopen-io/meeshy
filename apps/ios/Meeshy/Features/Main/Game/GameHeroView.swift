@@ -148,6 +148,8 @@ struct GameHeroView: View {
                 accessibilityLabel: GameCopy.levelRingAccessibility(level: shownLevel, tier: level.tier)
             )
             .frame(width: 88, height: 88)
+            // L'anneau SE TOUCHE (#9564) : il rebondit et ouvre les précisions du niveau.
+            .gameElement(GameElementDetails.levelRing(level), identifier: "game.hero.level")
             VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                 Text(GameCopy.tierName(level.tier))
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
@@ -236,6 +238,8 @@ struct GameHeroView: View {
         }
         .id(GameAnchor.rank)
         .accessibilityElement(children: .combine)
+        // Le blason SE TOUCHE : il rebondit et ouvre les précisions du rang.
+        .gameElement(GameElementDetails.rank(glory), identifier: "game.hero.rank")
     }
 
     // MARK: - Les animations

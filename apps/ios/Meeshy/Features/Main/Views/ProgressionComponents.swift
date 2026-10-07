@@ -352,7 +352,9 @@ struct ProgressionGeneratedAchievements: View {
                         // depuis le bord, et cache des paliers hors de l'écran.
                         LazyVGrid(columns: Self.columns, alignment: .leading, spacing: MeeshySpacing.sm) {
                             ForEach(vue.entries) { entry in
+                                // Un palier de défi SE TOUCHE (#9564) : il rebondit et ouvre ses précisions.
                                 ProgressionAchievementChip(entry: entry)
+                                    .gameElement(GameElementDetails.challenge(entry))
                             }
                         }
                     }

@@ -7,25 +7,19 @@ import MeeshyUI
 /// l'appareil ; aucune image n'est envoyée au serveur.
 struct GameNotebookPage: View {
     @StateObject private var viewModel = GameNotebookViewModel()
-    @Environment(\.dismiss) private var dismiss
     @State private var taking: GamePhotoSession?
     @State private var sharing: UIImage?
     private var theme: ThemeManager { ThemeManager.shared }
 
     var body: some View {
-        ZStack {
-            theme.backgroundGradient.ignoresSafeArea()
-            VStack(spacing: 0) {
-                GamePageHeader(title: String(localized: "game.notebook.page_title", defaultValue: "Carnet de progression", bundle: .main), onBack: { dismiss() })
-                ScrollView(showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: MeeshySpacing.xl) {
-                        if viewModel.isLoaded && viewModel.isEmpty { emptyState }
-                        if !viewModel.pending.isEmpty { pendingSection }
-                        if !viewModel.kept.isEmpty { keptSection }
-                    }
-                    .padding(.horizontal, MeeshySpacing.lg)
-                    .padding(.vertical, MeeshySpacing.md)
-                }
+        GamePageScaffold(
+            title: String(localized: "game.notebook.page_title", defaultValue: "Carnet de progression", bundle: .main),
+            identifier: "game.notebook.page"
+        ) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xl) {
+                if viewModel.isLoaded && viewModel.isEmpty { emptyState }
+                if !viewModel.pending.isEmpty { pendingSection }
+                if !viewModel.kept.isEmpty { keptSection }
             }
         }
         .task { await viewModel.load() }
@@ -38,7 +32,6 @@ struct GameNotebookPage: View {
         .sheet(item: Binding(get: { sharing.map(SharedImage.init) }, set: { sharing = $0?.image })) { item in
             ShareSheet(activityItems: [item.image])
         }
-        .accessibilityIdentifier("game.notebook.page")
     }
 
     private struct SharedImage: Identifiable {

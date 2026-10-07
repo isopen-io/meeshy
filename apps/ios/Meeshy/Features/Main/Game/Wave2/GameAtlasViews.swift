@@ -83,6 +83,8 @@ struct GameAtlasScreen: View {
                             .multilineTextAlignment(.center)
                     }
                     .accessibilityElement(children: .combine)
+                    // Un tampon SE TOUCHE (#9564) : il rebondit et ouvre ses précisions.
+                    .gameElement(GameElementDetails.stamp(stamp))
                 }
                 ForEach(0..<min(Self.placeholders, remaining), id: \.self) { _ in
                     AtlasStampView(code: "", tint: theme.textMuted, state: .undiscovered, muted: theme.textMuted)
@@ -119,6 +121,7 @@ struct GameAtlasScreen: View {
                     }
                     .frame(minHeight: MeeshyControlSize.tapTarget)
                     .accessibilityElement(children: .combine)
+                    .gameElement(GameElementDetails.pendingStamp(entry))
                 }
             }
         }

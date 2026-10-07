@@ -4,14 +4,14 @@ import MeeshyUI
 
 /// LE TABLEAU DE BORD (#9564) — une page dédiée où CHAQUE concept a son bloc compact : l'emblème et le nom en
 /// titre, puis toutes ses données, dans le MÊME ordre que la première page (`ProgressionConcepts.served`). Le titre
-/// d'un bloc ouvre la fiche du concept. LECTURE SEULE : aucun geste du jeu ne vit ici.
+/// d'un bloc ouvre la fiche du concept ; chaque ligne rebondit et ouvre SES précisions. LECTURE SEULE : aucun geste
+/// du jeu ne vit ici, et rien ne s'y pose hors des blocs de concept.
 ///
 /// Autonome dans la pile, comme les fiches : elle lit sa progression cache d'abord.
 struct ProgressionDashboardPage: View {
 
     @StateObject private var viewModel: ProgressionViewModel
     @EnvironmentObject private var router: Router
-    @Environment(\.dismiss) private var dismiss
     /// « Jeu masqué » (#9481) : le tableau se lit alors comme devant un serveur sans jeu.
     @ObservedObject private var prefs = GameDevicePrefsStore.current()
 
@@ -23,42 +23,33 @@ struct ProgressionDashboardPage: View {
     }
 
     var body: some View {
-        ZStack {
-            theme.backgroundGradient.ignoresSafeArea()
-            VStack(spacing: 0) {
-                GamePageHeader(title: ConceptText.dashboardTitle, onBack: { dismiss() })
-                ScrollView(showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: MeeshySpacing.lg) {
-                        if viewModel.isOffline {
-                            ProgressionNotice(kind: .offline(hasSnapshot: viewModel.progress != nil))
-                        }
-                        if let message = viewModel.errorMessage {
-                            ProgressionNotice(kind: .error(message)) {
-                                Task { await viewModel.load(forceNetwork: true) }
-                            }
-                        }
-                        if let progress = viewModel.progress {
-                            blocks(progress)
-                        } else if viewModel.showsSkeleton {
-                            ProgressionSkeleton()
-                        }
-                        Spacer().frame(height: MeeshySpacing.xl)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, MeeshySpacing.lg)
-                    .padding(.vertical, MeeshySpacing.md)
+        GamePageScaffold(
+            title: ConceptText.dashboardTitle,
+            onRefresh: { await viewModel.load(forceNetwork: true) },
+            // D'ici, les précisions d'une ligne offrent « Voir la fiche ».
+            onOpenConcept: { router.push(.progressionConcept($0)) }
+        ) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.lg) {
+                if viewModel.isOffline {
+                    ProgressionNotice(kind: .offline(hasSnapshot: viewModel.progress != nil))
                 }
-                .refreshable { await viewModel.load(forceNetwork: true) }
+                if let message = viewModel.errorMessage {
+                    ProgressionNotice(kind: .error(message)) {
+                        Task { await viewModel.load(forceNetwork: true) }
+                    }
+                }
+                if let progress = viewModel.progress {
+                    blocks(progress)
+                } else if viewModel.showsSkeleton {
+                    ProgressionSkeleton()
+                }
             }
         }
-        .background(InteractivePopEnabler())
         .task { await viewModel.load() }
     }
 
     @ViewBuilder
     private func blocks(_ progress: EngagementProgress) -> some View {
-        // Le trésor et la Flamme, côte à côte (#9383) : ce qu'aucun geste ne fait monter ensemble se lit ensemble.
-        if let game { GameGaugesView(game: game) }
         ForEach(ProgressionConcepts.served(for: progress, game: game)) { concept in
             ProgressionDashboardBlock(
                 concept: concept,
@@ -82,22 +73,18 @@ struct ProgressionDashboardBlock: View {
     var body: some View {
         ProgressionCard(tint: concept.tint) {
             VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
-                Button {
-                    HapticFeedback.light()
-                    onOpen()
-                } label: {
+                GameBounceButton(action: onOpen) {
                     ProgressionConceptHead(concept: concept, name: ConceptText.name(concept), value: value, game: game)
                         .frame(minHeight: MeeshyControlSize.tapTarget)
                         .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(ConceptText.name(concept) + ", " + value)
                 .accessibilityHint(ConceptText.cardHint)
                 .accessibilityAddTraits([.isButton, .isHeader])
                 .accessibilityIdentifier("progression.dashboard.\(concept.rawValue)")
                 if !facts.isEmpty {
-                    ProgressionConceptFacts(facts: facts)
+                    ProgressionConceptFacts(facts: facts, concept: concept)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)

@@ -89,7 +89,7 @@ struct GameMissionsView: View {
                 }
                 GameChestCard(
                     chest: game.chest, opening: chestOpening, online: online, error: errors.chest,
-                    haptics: haptics, onClaim: onClaim
+                    haptics: haptics, onClaim: onClaim, missions: missions
                 )
             }
         }
@@ -138,30 +138,39 @@ private struct GameMissionRow: View {
 
     private func card(phase: GameMissionClock.Phase?) -> some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
-            FlowLayout(spacing: MeeshySpacing.xs) {
-                if personal {
-                    GameChip(text: GameCopy.personalMissionName, tint: MeeshyColors.indigo500)
+            // La mission SE TOUCHE (#9564) : elle rebondit et ouvre ses précisions. Son bouton « Changer » reste à part,
+            // en dessous — un bouton dans un bouton ne répond à personne.
+            Group {
+                VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
+                    FlowLayout(spacing: MeeshySpacing.xs) {
+                        if personal {
+                            GameChip(text: GameCopy.personalMissionName, tint: MeeshyColors.indigo500)
+                        }
+                        GameChip(text: GameCopy.difficultyName(mission.difficulty),
+                                 tint: mission.difficulty == .gold ? MeeshyColors.warning : MeeshyColors.brandPrimary)
+                        if mission.prism {
+                            GameChip(text: String(localized: "game.mission.prism", defaultValue: "Prisme", bundle: .main))
+                        }
+                        if let ending = GameCopy.missionEnding(phase) {
+                            GameChip(text: ending.text, tint: ending.isSuccess ? MeeshyColors.success : MeeshyColors.warning)
+                        } else if done {
+                            GameChip(text: String(localized: "game.mission.done", defaultValue: "Faite", bundle: .main), tint: MeeshyColors.success)
+                        }
+                    }
+                    Text(title)
+                        .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
+                        .foregroundColor(theme.textPrimary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    ProgressionBar(
+                        progress: mission.target > 0 ? Double(mission.progress) / Double(mission.target) : 0,
+                        tint: done ? MeeshyColors.success : MeeshyColors.brandPrimary,
+                        label: title
+                    )
                 }
-                GameChip(text: GameCopy.difficultyName(mission.difficulty),
-                         tint: mission.difficulty == .gold ? MeeshyColors.warning : MeeshyColors.brandPrimary)
-                if mission.prism {
-                    GameChip(text: String(localized: "game.mission.prism", defaultValue: "Prisme", bundle: .main))
-                }
-                if let ending = GameCopy.missionEnding(phase) {
-                    GameChip(text: ending.text, tint: ending.isSuccess ? MeeshyColors.success : MeeshyColors.warning)
-                } else if done {
-                    GameChip(text: String(localized: "game.mission.done", defaultValue: "Faite", bundle: .main), tint: MeeshyColors.success)
-                }
+                .multilineTextAlignment(.leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            Text(title)
-                .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-                .foregroundColor(theme.textPrimary)
-                .fixedSize(horizontal: false, vertical: true)
-            ProgressionBar(
-                progress: mission.target > 0 ? Double(mission.progress) / Double(mission.target) : 0,
-                tint: done ? MeeshyColors.success : MeeshyColors.brandPrimary,
-                label: title
-            )
+            .gameElement(GameElementDetails.mission(mission))
             HStack(alignment: .center, spacing: MeeshySpacing.sm) {
                 Text(progressLine)
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
@@ -240,11 +249,15 @@ private struct GameChestCard: View {
     let error: String?
     let haptics: GameHapticsProviding
     let onClaim: () -> Void
+    /// Les missions du jour : ce que le coffre attend, dit dans ses précisions.
+    let missions: GameBlock.Missions
 
     @State private var play = 0
     @State private var rewarded: Bool
 
-    init(chest: GameBlock.Chest, opening: Bool, online: Bool, error: String?, haptics: GameHapticsProviding, onClaim: @escaping () -> Void) {
+    init(chest: GameBlock.Chest, opening: Bool, online: Bool, error: String?, haptics: GameHapticsProviding,
+         onClaim: @escaping () -> Void, missions: GameBlock.Missions) {
+        self.missions = missions
         self.chest = chest
         self.opening = opening
         self.online = online
@@ -266,10 +279,17 @@ private struct GameChestCard: View {
     var body: some View {
         let phase = self.phase
         VStack(spacing: MeeshySpacing.sm) {
-            ChestStage(reward: chest.reward, isOpen: phase == .opening || phase == .claimed, play: play)
-            Text(String(localized: "game.chest.title", defaultValue: "Coffre du jour", bundle: .main))
-                .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
-                .foregroundColor(theme.textPrimary)
+            // Le coffre SE TOUCHE (#9564) : il rebondit et ouvre ses précisions ; « Ouvrir le coffre » reste son geste.
+            Group {
+                VStack(spacing: MeeshySpacing.sm) {
+                    ChestStage(reward: chest.reward, isOpen: phase == .opening || phase == .claimed, play: play)
+                    Text(String(localized: "game.chest.title", defaultValue: "Coffre du jour", bundle: .main))
+                        .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
+                        .foregroundColor(theme.textPrimary)
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .gameElement(GameElementDetails.chest(chest, missions: missions))
             switch phase {
             case .locked:
                 GameNote(text: String(localized: "game.chest.locked", defaultValue: "Termine les missions du jour pour l’ouvrir.", bundle: .main))
