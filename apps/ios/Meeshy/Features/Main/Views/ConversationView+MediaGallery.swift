@@ -97,6 +97,10 @@ struct ConversationMediaGalleryLayer: ViewModifier {
             onSendReplyToMedia: sendReplyToMedia,
             replyCitation: { viewModel.fullscreenReplyCitation(for: $0.id, carrier: carrier(of: $0)) },
             onReactToMedia: reactToMedia,
+            // « Composer » n'existe que si l'armer produit une cible (loi 4) :
+            // la règle d'offre lit la loi de sortie (#9573), donc la pièce d'une
+            // flamme ou d'une vue unique n'a pas ce bouton.
+            composableMedia: { carrier(of: $0).map(ComposableAttachment.offers(message:)) ?? false },
             reactableMedia: { catalog.snapshot.isLoaded($0.id) }
         )
         .onAppear(perform: openCatalog)
