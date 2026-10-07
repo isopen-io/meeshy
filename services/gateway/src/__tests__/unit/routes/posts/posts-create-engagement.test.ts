@@ -634,27 +634,27 @@ describe('POST /posts — cible et variante du barème (#8959)', () => {
     const res = await publish({ ...PUBLISHED_ROW, visibility }, { content: 'Bonjour' });
 
     expect(res.statusCode).toBe(201);
-    expect(creditOptions('content.post')).toEqual({ targetId: PUBLISHED_ROW.id, variant });
+    expect(creditOptions('content.post')).toEqual({ postId: PUBLISHED_ROW.id, targetId: PUBLISHED_ROW.id, variant });
   });
 
   it('une STORY crédite content.story avec la variante de sa visibilité et sa cible', async () => {
     const row = storyRow();
     await publish(row, { type: 'STORY', content: 'Bonjour' });
 
-    expect(creditOptions('content.story')).toEqual({ targetId: row.id, variant: 'friends' });
+    expect(creditOptions('content.story')).toEqual({ postId: row.id, targetId: row.id, variant: 'friends' });
   });
 
   it('un REEL crédite content.reel avec sa cible, sans variante', async () => {
     const row = reelRow();
     await publish(row, { type: 'REEL', content: 'Bonjour' });
 
-    expect(creditOptions('content.reel')).toEqual({ targetId: row.id });
+    expect(creditOptions('content.reel')).toEqual({ postId: row.id, targetId: row.id });
   });
 
   it('les axes outil portent la cible de la publication', async () => {
     await publish(PUBLISHED_ROW, { content: 'Bonjour', editedInApp: true });
 
-    expect(creditOptions('tool.in_app_edit')).toEqual({ targetId: PUBLISHED_ROW.id });
+    expect(creditOptions('tool.in_app_edit')).toEqual({ postId: PUBLISHED_ROW.id, targetId: PUBLISHED_ROW.id });
   });
 
   it('un STATUS crédite content.status avec sa cible, et aucun axe outil', async () => {
@@ -662,7 +662,7 @@ describe('POST /posts — cible et variante du barème (#8959)', () => {
     await publish(row, { type: 'STATUS', content: 'Bonjour', moodEmoji: '😀' });
 
     expect(creditedKeys()).toEqual(['content.status']);
-    expect(creditOptions('content.status')).toEqual({ targetId: row.id });
+    expect(creditOptions('content.status')).toEqual({ postId: row.id, targetId: row.id });
   });
 
   it('un STATUS brouillon (PRIVATE) ne crédite rien', async () => {

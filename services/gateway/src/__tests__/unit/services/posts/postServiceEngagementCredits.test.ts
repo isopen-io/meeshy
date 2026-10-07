@@ -104,6 +104,7 @@ describe('tool.post_bookmark — PostService.bookmarkPost', () => {
     await settle();
 
     expect(mockRecordActivity).toHaveBeenCalledWith(READER_ID, 'tool.post_bookmark', {
+      postId: POST_ID,
       targetId: POST_ID,
       targetOwnerId: AUTHOR_ID,
     });
@@ -129,6 +130,7 @@ describe('social.share — PostService.shareWithTrackingLink', () => {
 
     expect(prisma.post.findFirst.mock.calls[0][0].select).toMatchObject({ authorId: true });
     expect(mockRecordActivity).toHaveBeenCalledWith(READER_ID, 'social.share', {
+      postId: POST_ID,
       targetId: POST_ID,
       targetOwnerId: AUTHOR_ID,
     });
@@ -154,6 +156,7 @@ describe('social.repost — PostService.repostPost', () => {
 
     expect(repost).not.toBeNull();
     expect(mockRecordActivity).toHaveBeenCalledWith(READER_ID, 'social.repost', {
+      postId: POST_ID,
       targetId: POST_ID,
       targetOwnerId: AUTHOR_ID,
     });
@@ -178,6 +181,7 @@ describe('tool.story_viewed — PostService.recordView', () => {
     await settle();
 
     expect(mockRecordActivity).toHaveBeenCalledWith(READER_ID, 'tool.story_viewed', {
+      postId: POST_ID,
       targetId: POST_ID,
       targetOwnerId: AUTHOR_ID,
     });

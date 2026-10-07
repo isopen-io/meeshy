@@ -138,7 +138,7 @@ describe('POST /posts/:postId/comments — axe d\'engagement « comment.text » 
       payload: { content: 'Nice post!' },
     });
     expect(res.statusCode).toBe(201);
-    expect(mockRecordActivity).toHaveBeenCalledWith(USER_ID, 'comment.text');
+    expect(mockRecordActivity).toHaveBeenCalledWith(USER_ID, 'comment.text', { postId: POST_ID });
     await app.close();
   });
 
@@ -155,7 +155,7 @@ describe('POST /posts/:postId/comments — axe d\'engagement « comment.text » 
       payload: { attachmentIds: ['media-audio-002'] },
     });
     expect(res.statusCode).toBe(201);
-    expect(mockRecordActivity).not.toHaveBeenCalledWith(USER_ID, 'comment.text');
+    expect(mockRecordActivity).not.toHaveBeenCalledWith(USER_ID, 'comment.text', expect.anything());
     await app.close();
   });
 });
@@ -174,7 +174,7 @@ describe('POST /posts/:postId/comments — axe d\'engagement « comment.audio »
       payload: { attachmentIds: ['media-audio-003'] },
     });
     expect(res.statusCode).toBe(201);
-    expect(mockRecordActivity).toHaveBeenCalledWith(USER_ID, 'comment.audio');
+    expect(mockRecordActivity).toHaveBeenCalledWith(USER_ID, 'comment.audio', { postId: POST_ID });
     await app.close();
   });
 
@@ -190,7 +190,7 @@ describe('POST /posts/:postId/comments — axe d\'engagement « comment.audio »
       payload: { content: 'Just text, no media' },
     });
     expect(res.statusCode).toBe(201);
-    expect(mockRecordActivity).not.toHaveBeenCalledWith(USER_ID, 'comment.audio');
+    expect(mockRecordActivity).not.toHaveBeenCalledWith(USER_ID, 'comment.audio', expect.anything());
     await app.close();
   });
 
@@ -207,7 +207,7 @@ describe('POST /posts/:postId/comments — axe d\'engagement « comment.audio »
       payload: { attachmentIds: ['media-image-001'] },
     });
     expect(res.statusCode).toBe(201);
-    expect(mockRecordActivity).not.toHaveBeenCalledWith(USER_ID, 'comment.audio');
+    expect(mockRecordActivity).not.toHaveBeenCalledWith(USER_ID, 'comment.audio', expect.anything());
     await app.close();
   });
 });
