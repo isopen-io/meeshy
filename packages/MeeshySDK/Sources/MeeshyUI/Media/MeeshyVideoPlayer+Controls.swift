@@ -1,4 +1,5 @@
 import SwiftUI
+import MeeshySDK
 import AVFoundation
 import AVKit
 import Combine
@@ -364,6 +365,8 @@ internal struct _FullscreenOverlayControls: View {
     let onSave: (() -> Void)?
     let onShare: (() -> Void)?
     let saveState: _FullscreenRenderer.SaveState
+    /// Le portillon de sortie posé par l'hôte (#9573) : fermé, ni partage ni enregistrement.
+    @Environment(\.contentExitGate) private var exitGate
     /// La ligne `largeur × hauteur · poids · durée` (#9577) — `nil` ⇒ aucune.
     var infoSegments: [MediaInfoLine.Segment] = []
     var declaredDuration: Double = 0
@@ -447,7 +450,7 @@ internal struct _FullscreenOverlayControls: View {
                     .truncationMode(.middle)
             }
             Spacer()
-            if controls.contains(.share), onShare != nil {
+            if controls.contains(.share), onShare != nil, exitGate.mayLeave() {
                 FullscreenChromeButton(
                     systemImage: FullscreenChromeSymbol.share,
                     label: String(localized: "story.timeline.export.preview.share",
@@ -456,7 +459,7 @@ internal struct _FullscreenOverlayControls: View {
                     onShare?()
                 }
             }
-            if controls.contains(.save) {
+            if controls.contains(.save), exitGate.mayLeave() {
                 saveButton
             }
         }

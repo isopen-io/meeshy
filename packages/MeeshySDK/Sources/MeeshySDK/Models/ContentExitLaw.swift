@@ -269,6 +269,14 @@ public extension ContentExitLaw.ForwardVerdict {
         return (head + tiers).map(ForwardDurationChoice.init)
     }
 
+    /// Le verdict d'un LOT transféré ensemble : refusé dès qu'un message l'est ;
+    /// sinon borné par la PLUS LONGUE des flammes du lot — chaque message reste
+    /// ramené à sa propre durée par `requestedDuration(chosen:)`.
+    static func batch(_ verdicts: [ContentExitLaw.ForwardVerdict]) -> ContentExitLaw.ForwardVerdict {
+        if let refused = verdicts.first(where: { !$0.isAllowed }) { return refused }
+        return .allowed(maxDurationSeconds: verdicts.compactMap(\.maxDurationSeconds).max())
+    }
+
     /// La durée présélectionnée : celle de la source.
     var defaultDurationSeconds: Int? { maxDurationSeconds }
 
@@ -279,6 +287,50 @@ public extension ContentExitLaw.ForwardVerdict {
         guard case .allowed(let maxDurationSeconds?) = self else { return nil }
         guard let chosen, chosen > 0 else { return maxDurationSeconds }
         return min(chosen, maxDurationSeconds)
+    }
+}
+
+// MARK: - Ce qu'une visionneuse peut laisser sortir
+
+/// **Le portillon de sortie d'une visionneuse** (#9573) — une valeur opaque que
+/// l'hôte pose et que les visionneuses lisent pour décider si elles rendent
+/// leurs boutons d'enregistrement, de partage et de copie.
+///
+/// Le SDK ne sait rien de la raison : l'hôte la tire de la loi de sortie. Sans
+/// portillon posé, tout sort (`open`) — un post, un commentaire. `only` est
+/// FERMÉ PAR DÉFAUT : un contenu absent de la liste, ou sans identifiant, ne
+/// sort pas.
+public struct ContentExitGate: Equatable, Sendable {
+
+    private enum Rule: Equatable, Sendable {
+        case open
+        case sealed
+        case only(Set<String>)
+    }
+
+    private let rule: Rule
+
+    private init(rule: Rule) {
+        self.rule = rule
+    }
+
+    /// Tout contenu peut sortir.
+    public static let open = ContentExitGate(rule: .open)
+
+    /// Aucun contenu ne sort.
+    public static let sealed = ContentExitGate(rule: .sealed)
+
+    /// Seuls les contenus de ces identifiants sortent.
+    public static func only(_ contentIds: Set<String>) -> ContentExitGate {
+        ContentExitGate(rule: .only(contentIds))
+    }
+
+    public func mayLeave(_ contentId: String? = nil) -> Bool {
+        switch rule {
+        case .open: return true
+        case .sealed: return false
+        case .only(let contentIds): return contentId.map(contentIds.contains) ?? false
+        }
     }
 }
 

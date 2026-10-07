@@ -131,7 +131,18 @@ struct MessageCardFormatTests {
         #expect(Self.subject(Self.message { $0.expiresAt = Self.now.addingTimeInterval(-1) }) == nil)
         #expect(Self.subject(Self.message { $0.messageSource = .system }) == nil)
         #expect(Self.subject(Self.message(content: "   ")) == nil)
-        #expect(Self.subject(Self.message { $0.expiresAt = Self.now.addingTimeInterval(60) }) != nil)
+    }
+
+    /// La loi de sortie (#9573) : un contenu qui disparaît ne s'image pas, même
+    /// VIVANT — flamme à durée, flamme après lecture, échéance sans durée lisible.
+    @Test func subject_aMessageThatDisappearsNeverLeavesAsAnImage_evenAlive() {
+        #expect(Self.subject(Self.message { $0.effects = MessageEffects(flags: .ephemeral, ephemeralDuration: 300) }) == nil)
+        #expect(Self.subject(Self.message { $0.effects = MessageEffects(flags: [.ephemeral, .ephemeralAfterRead]) }) == nil)
+        #expect(Self.subject(Self.message { $0.expiresAt = Self.now.addingTimeInterval(60) }) == nil)
+        #expect(!MessageCardSubject.isExportable(
+            Self.message { $0.effects = MessageEffects(flags: .ephemeral, ephemeralDuration: 300) }, now: Self.now
+        ))
+        #expect(MessageCardSubject.isExportable(Self.message(), now: Self.now))
     }
 
     @Test func subject_aDeletedOrExpiredQuoteShowsNothing() {

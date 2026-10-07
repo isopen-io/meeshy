@@ -23,6 +23,8 @@ public struct ImageViewerView: View {
     // in the scroll list). Dark/light comes reactively from the environment
     // instead (cf. ChatBubble.swift precedent).
     @Environment(\.colorScheme) private var colorScheme
+    /// Le portillon de sortie posé par l'hôte (#9573), reposé sur ce que cette vue présente.
+    @Environment(\.contentExitGate) private var exitGate
     @State private var showFullscreen = false
 
     private var isDark: Bool { colorScheme == .dark || context.isImmersive }
@@ -85,6 +87,7 @@ public struct ImageViewerView: View {
                 attachmentId: isOwnMessage ? nil : attachment.id,
                 onSaveRequested: onSaveRequested
             )
+            .contentExitGate(exitGate)
         }
     }
 
@@ -278,7 +281,7 @@ public struct ImageFullscreen: View {
             if showControls {
                 VStack {
                     FullscreenTopBar(onClose: { dismiss() }) {
-                        saveButton
+                        ContentExitGated { saveButton }
                     }
                     Spacer()
 

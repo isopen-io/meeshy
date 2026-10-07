@@ -24,6 +24,8 @@ public struct DocumentViewerView: View {
     // singleton (cf. ChatBubble.swift precedent). Dark/light comes reactively
     // from the environment instead.
     @Environment(\.colorScheme) private var colorScheme
+    /// Le portillon de sortie posé par l'hôte (#9573), reposé sur ce que cette vue présente.
+    @Environment(\.contentExitGate) private var exitGate
     @State private var showFullViewer = false
 
     private var isDark: Bool { colorScheme == .dark || context.isImmersive }
@@ -56,6 +58,7 @@ public struct DocumentViewerView: View {
                 onSaveRequested: onSaveRequested,
                 isMe: isMe
             )
+            .contentExitGate(exitGate)
         }
     }
 
@@ -192,6 +195,8 @@ public struct DocumentFullSheet: View {
     // Do not @ObservedObject the ThemeManager singleton (cf. ChatBubble.swift
     // precedent); colorScheme drives the two derived colors below directly.
     @Environment(\.colorScheme) private var colorScheme
+    /// Le portillon de sortie posé par l'hôte (#9573) : fermé, ni enregistrement, ni partage, ni copie.
+    @Environment(\.contentExitGate) private var exitGate
     @State private var saveState: SaveState = .idle
 
     private enum SaveState { case idle, saving, saved, failed }
@@ -228,7 +233,7 @@ public struct DocumentFullSheet: View {
                 }
 
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    if !attachment.fileUrl.isEmpty {
+                    if !attachment.fileUrl.isEmpty, exitGate.mayLeave(attachment.id) {
                         Button {
                             if let onSaveRequested {
                                 onSaveRequested()
@@ -252,7 +257,8 @@ public struct DocumentFullSheet: View {
                 }
 
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    if let urlStr = attachment.fileUrl.isEmpty ? nil : attachment.fileUrl,
+                    if exitGate.mayLeave(attachment.id),
+                       let urlStr = attachment.fileUrl.isEmpty ? nil : attachment.fileUrl,
                        let url = MeeshyConfig.resolveMediaURL(urlStr) {
                         ShareLink(item: url) {
                             Image(systemName: "square.and.arrow.up")

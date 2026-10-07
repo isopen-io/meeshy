@@ -100,7 +100,10 @@ public struct MessageCardSubject: Equatable, Sendable {
     }
 
     /// Le message peut-il partir en image ? La même famille de gardes que « Copier ».
+    /// La loi de sortie décide d'abord (#9573) : un contenu qui disparaît — vue
+    /// unique, flamme à durée ou après lecture — ne s'image pas, même vivant.
     public static func isExportable(_ message: MeeshyMessage, now: Date) -> Bool {
+        guard message.contentExitLaw.exportable else { return false }
         if message.holdsViewOnce || message.isBlurred || message.attachments.contains(where: { $0.isBlurred || $0.isViewOnce }) { return false }
         if message.isDeleted || message.messageSource == .system { return false }
         if let expiresAt = message.expiresAt, expiresAt <= now { return false }

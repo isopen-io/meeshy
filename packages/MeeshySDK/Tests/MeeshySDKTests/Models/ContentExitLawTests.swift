@@ -279,6 +279,49 @@ struct ContentExitLawTests {
         #expect(ContentExitLaw.viewOnce.forward.requestedDuration(chosen: 30) == nil)
     }
 
+    @Test("un lot est refusé dès qu'un message l'est, sinon borné par sa plus longue flamme")
+    func test_batch() {
+        typealias Verdict = ContentExitLaw.ForwardVerdict
+        #expect(Verdict.batch([]) == .allowed(maxDurationSeconds: nil))
+        #expect(Verdict.batch([.allowed(maxDurationSeconds: nil), .allowed(maxDurationSeconds: nil)]) == .allowed(maxDurationSeconds: nil))
+        #expect(Verdict.batch([.allowed(maxDurationSeconds: 30), .allowed(maxDurationSeconds: nil), .allowed(maxDurationSeconds: 300)])
+            == .allowed(maxDurationSeconds: 300))
+        #expect(Verdict.batch([.allowed(maxDurationSeconds: 30), .refused(.viewOnce)]) == .refused(.viewOnce))
+        #expect(Verdict.batch([.refused(.afterRead), .allowed(maxDurationSeconds: nil)]) == .refused(.afterRead))
+    }
+
+    @Test("dans un lot, chaque flamme reste ramenée à sa propre durée")
+    func test_batch_chaqueMessageGardeSaBorne() {
+        let short = ContentExitLaw.timedFlame(seconds: 30).forward
+        let long = ContentExitLaw.timedFlame(seconds: 300).forward
+        let batch = ContentExitLaw.ForwardVerdict.batch([short, long, ContentExitLaw.ordinary.forward])
+        #expect(batch.durationChoices.map(\.seconds) == [15, 30, 60, 300])
+        #expect(short.requestedDuration(chosen: nil) == 30)
+        #expect(long.requestedDuration(chosen: nil) == 300)
+        #expect(short.requestedDuration(chosen: 60) == 30)
+        #expect(long.requestedDuration(chosen: 60) == 60)
+        #expect(ContentExitLaw.ordinary.forward.requestedDuration(chosen: 60) == nil)
+    }
+
+    // MARK: - Le portillon des visionneuses
+
+    @Test("ouvert, tout sort ; scellé, rien ne sort")
+    func test_gate_ouvertEtScellé() {
+        #expect(ContentExitGate.open.mayLeave())
+        #expect(ContentExitGate.open.mayLeave("a1"))
+        #expect(!ContentExitGate.sealed.mayLeave())
+        #expect(!ContentExitGate.sealed.mayLeave("a1"))
+    }
+
+    @Test("une liste est fermée par défaut : un contenu absent ou sans identifiant ne sort pas")
+    func test_gate_listeFerméeParDéfaut() {
+        let gate = ContentExitGate.only(["a1"])
+        #expect(gate.mayLeave("a1"))
+        #expect(!gate.mayLeave("a2"))
+        #expect(!gate.mayLeave())
+        #expect(!ContentExitGate.only([]).mayLeave("a1"))
+    }
+
     @Test("un palier porte son libellé de palier, une durée libre se compose")
     func test_choiceLabel() {
         #expect(ForwardDurationChoice(seconds: 15).label == "15s")
