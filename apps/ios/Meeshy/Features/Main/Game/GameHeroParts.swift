@@ -65,6 +65,8 @@ struct GameHeroEarn: View {
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold, design: .rounded))
                     .foregroundColor(theme.textPrimary)
             }
+            .lineLimit(1)
+            .fixedSize()
             .padding(.horizontal, MeeshySpacing.sm)
             .padding(.vertical, MeeshySpacing.xs)
             .background(Capsule().fill(item.family.heroTint.opacity(0.16)))

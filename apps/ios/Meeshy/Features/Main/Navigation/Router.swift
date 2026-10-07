@@ -85,6 +85,11 @@ enum Route: Hashable {
     /// Une page de la vague 2 du jeu (#9481) — Ligue, Saison, Vitrine, Atlas, Prestige, Réglages. Poussée dans la
     /// pile comme les autres pages du jeu, jamais présentée en feuille.
     case gamePage(GamePage)
+    /// La FICHE d'un concept de Progression (#9564) — niveau, points, Meeshes, gloire… : le sous-menu de la première
+    /// page, poussé dans la pile. C'est aussi ce que le toucher d'une annonce de mission ouvre (`.missions`).
+    case progressionConcept(ProgressionConcept)
+    /// Le tableau de bord de Progression (#9564) : un bloc par concept, toutes ses données, lecture seule.
+    case progressionDashboard
     case links
     case affiliate
     case trackingLinks
@@ -184,6 +189,10 @@ extension Route {
             return String(localized: "game.notebook.page_title", defaultValue: "Carnet de progression", bundle: .main)
         case .gamePage(let page):
             return page.title
+        case .progressionConcept(let concept):
+            return ConceptText.name(concept)
+        case .progressionDashboard:
+            return ConceptText.dashboardTitle
         case .links:
             return String(localized: "route.title.links", defaultValue: "Liens", bundle: .main)
         case .affiliate:

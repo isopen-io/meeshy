@@ -298,90 +298,6 @@ struct ProgressionElansHero: View {
     }
 }
 
-/// Une PORTE du hub : son titre, son compte, et le geste qui l'ouvre.
-///
-/// Le compte est ce qui donne envie d'ouvrir — un lien sans chiffre ne dit pas
-/// s'il vaut le geste.
-struct ProgressionSectionLink: View {
-
-    private var theme: ThemeManager { ThemeManager.shared }
-
-    let section: ProgressionSection
-    let progress: EngagementProgress
-    let isDark: Bool
-    let onOpen: () -> Void
-
-    private var titre: String {
-        switch section {
-        case .badges: return ProgressionCopy.badgesTitle
-        case .defis: return AchievementCopy.sectionsHeader
-        case .succes: return ProgressionCopy.achievementsTitle
-        }
-    }
-
-    private var symbole: String {
-        switch section {
-        case .badges: return "rosette"
-        case .defis: return "star.fill"
-        case .succes: return "trophy.fill"
-        }
-    }
-
-    private var teinte: Color {
-        switch section {
-        case .badges: return MeeshyColors.brandPrimary
-        case .defis: return MeeshyColors.warning
-        case .succes: return MeeshyColors.success
-        }
-    }
-
-    private var compte: String {
-        switch section {
-        case .badges:
-            return "\(progress.badgesEarned) / \(progress.badgesTotal)"
-        case .succes:
-            return "\(progress.achievements.filter(\.unlocked).count) / \(progress.achievements.count)"
-        case .defis:
-            let fait = progress.achievementSections.reduce(0) { $0 + $1.unlockedCount }
-            let total = progress.achievementSections.reduce(0) { $0 + $1.attainableCount }
-            return "\(fait) / \(total)"
-        }
-    }
-
-    var body: some View {
-        Button(action: onOpen) {
-            HStack(spacing: MeeshySpacing.md) {
-                RoundedRectangle(cornerRadius: MeeshyRadius.sm, style: .continuous)
-                    .fill(teinte.opacity(0.16))
-                    .frame(width: 36, height: 36)
-                    .overlay(Image(systemName: symbole).font(.subheadline).foregroundStyle(teinte))
-                    .accessibilityHidden(true)
-
-                Text(titre).font(.body.weight(.semibold)).foregroundStyle(theme.textPrimary)
-                Spacer(minLength: MeeshySpacing.sm)
-                Text(compte).font(.body.weight(.bold)).foregroundStyle(teinte)
-                // `forward`, pas `right` : ce chevron dit « ouvre cette section »,
-                // pas « va vers la droite de l'écran ». En arabe la lecture court
-                // de droite à gauche, et un chevron nommé par un côté PHYSIQUE y
-                // pointe à rebours du geste qu'il annonce. La variante sémantique
-                // se retourne avec la langue ; garde : `RightToLeftLayoutGuardTests`.
-                Image(systemName: "chevron.forward").font(.footnote).foregroundStyle(theme.textMuted)
-            }
-            .padding(.horizontal, MeeshySpacing.lg)
-            .frame(minHeight: 56)
-            .background(
-                RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                    .fill(theme.surfaceGradient(tint: teinte))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                            .stroke(theme.border(tint: teinte), lineWidth: 1)
-                    )
-            )
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("\(titre), \(compte)")
-    }
-}
 
 /// LE HERO DE LA FLAMME — la série de jours, seule (directive porteur).
 ///
@@ -455,6 +371,8 @@ struct ProgressionWrap: View {
             ForEach(items, id: \.self) { item in
                 Text(item)
                     .font(.caption)
+                    .lineLimit(1)
+                    .fixedSize()
                     .padding(.horizontal, MeeshySpacing.smPlus)
                     .padding(.vertical, MeeshySpacing.xs)
                     .background(Capsule().fill(MeeshyColors.brandPrimary.opacity(0.16)))

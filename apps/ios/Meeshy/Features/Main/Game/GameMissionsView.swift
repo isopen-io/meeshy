@@ -138,7 +138,7 @@ private struct GameMissionRow: View {
 
     private func card(phase: GameMissionClock.Phase?) -> some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
-            HStack(spacing: MeeshySpacing.xs) {
+            FlowLayout(spacing: MeeshySpacing.xs) {
                 if personal {
                     GameChip(text: GameCopy.personalMissionName, tint: MeeshyColors.indigo500)
                 }

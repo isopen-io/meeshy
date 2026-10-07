@@ -44,6 +44,9 @@ private struct GameAnchorModifier: ViewModifier {
     }
 }
 
+/// UNE PASTILLE NE SE COUPE JAMAIS (#9564) : son texte tient sur UNE ligne et garde sa largeur. Une rangée trop
+/// longue passe à la ligne ENTRE les pastilles (`FlowLayout`), jamais dans une pastille ; un libellé trop long se
+/// raccourcit dans le catalogue, il ne se tronque pas.
 struct GameChip: View {
     let text: String
     var tint: Color = MeeshyColors.brandPrimary
@@ -52,6 +55,8 @@ struct GameChip: View {
         Text(text)
             .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
             .foregroundColor(ThemeManager.shared.textPrimary)
+            .lineLimit(1)
+            .fixedSize()
             .padding(.horizontal, MeeshySpacing.sm)
             .padding(.vertical, MeeshySpacing.xxs)
             .background(Capsule().fill(tint.opacity(0.2)))

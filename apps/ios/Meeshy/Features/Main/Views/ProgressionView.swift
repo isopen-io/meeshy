@@ -3,20 +3,22 @@ import Combine
 import MeeshySDK
 import MeeshyUI
 
-/// L'ÉCRAN « PROGRESSION » (#5698) — le tableau de bord des streaks & badges
-/// (`docs/product/streaks-badges-modele.md` § 9) : le niveau que porte le
-/// score, la série qui court et son record, les badges par famille d'axe avec
-/// le palier suivant, les succès débloqués et ceux qu'il reste à débloquer.
+/// L'ÉCRAN « PROGRESSION » (#5698, refondu par #9564) — la PREMIÈRE PAGE du jeu.
 ///
-/// Même anatomie que la v3.1 web (`apps/web/src/routes/progression.tsx`,
-/// #5547), dessinés ensemble : en-tête flottant sans barre de navigation
-/// système, deux cartes de résumé, des sections en cartes teintées — la
-/// hiérarchie de `UserStatsView` / `SettingsView`. Ce que l'écran REFUSE :
+/// Elle empilait tout (carte du guide, héros, jauges, missions, coffre, ligue, frappe, Flamme, portes) : on n'y
+/// lisait plus rien d'un coup d'œil. Elle ne porte désormais que des CARTES, une par concept, dans l'ordre que
+/// `ProgressionConcepts` déclare pour le web et pour iOS :
+///
+///  - au-dessus : la ligne courte de Mee (le guide du moment) et l'entrée « Tableau de bord » ;
+///  - la liste : une carte par concept servi — tête (emblème, nom, valeur, chevron), deux ou trois données
+///    importantes, le pourquoi et le comment. La carte entière ouvre la FICHE du concept ;
+///  - en dessous : Carnet, Comment ça marche, Réglages, en lignes de la même forme.
+///
+/// **Aucun geste du jeu ne vit ici** : frapper, ouvrir le coffre, changer une mission, protéger ou rallumer la
+/// Flamme se font dans la fiche du concept (`ProgressionConceptPage`). Ce que l'écran REFUSE toujours :
 ///  - lire l'historique des notifications — il restitue l'ÉTAT courant ;
-///  - cacher un axe à zéro — l'état vide est le catalogue ENTIER, verrouillé,
-///    avec la première action qui débloque ;
-///  - peindre un spinner — squelette à froid, instantané sinon, et hors ligne
-///    l'instantané reste affiché avec son avis, jamais un voile.
+///  - peindre un spinner — squelette à froid, instantané sinon, et hors ligne l'instantané reste affiché avec
+///    son avis, jamais un voile.
 struct ProgressionView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.isPresented) private var isPresented
@@ -31,27 +33,10 @@ struct ProgressionView: View {
 
     private let accentColor = MeeshyColors.brandPrimary
 
-    @Environment(\.colorScheme) private var colorScheme
-    private var isDark: Bool { colorScheme == .dark }
-
-    /// **La PORTE est POUSSÉE, plus présentée** (#5843, directive porteur
-    /// 2026-09-09).
-    ///
-    /// Les trois sections s'ouvraient en `.sheet` : une feuille INTERROMPT —
-    /// elle se ferme vers le bas, n'entre pas dans l'historique, et le
-    /// glissement depuis le bord gauche n'y fait rien. Poussée dans la pile,
-    /// la page reçoit les trois gratuitement, et c'est le modèle que servent
-    /// déjà l'Android et le web. L'état local disparaît avec la feuille : la
-    /// pile EST l'état, et deux pages ne peuvent pas s'y ouvrir en même temps.
+    /// **Une fiche est POUSSÉE, jamais présentée** (#5843, directive porteur 2026-09-09) : poussée dans la pile,
+    /// la page reçoit le retour, l'historique et le glissement depuis le bord. Le routeur n'est lu qu'AU TOUCHER
+    /// (ou au ramassage d'une ancre), jamais dans le corps : la vue se monte sans lui dans les témoins de rendu.
     @EnvironmentObject private var router: Router
-
-    /// LE PALIER À CÉLÉBRER quand on touche le hero du dernier succès.
-    ///
-    /// `AchievementRevealView` existait déjà (#5809) mais n'était atteignable
-    /// que depuis une NOTIFICATION : le succès qu'on avait sous les yeux ne se
-    /// rejouait pas. Le porteur veut qu'il se retouche — animation et étoiles
-    /// comprises.
-    @State private var reveal: ProgressionRevealRequest?
 
     /// Le décalage du défilement, que seul l'en-tête lit (#6480).
     @State private var scrollRelay = ScrollOffsetRelay()
@@ -87,24 +72,12 @@ struct ProgressionView: View {
         .task { await GameShaders.precompile() }
         // Les réglages du jeu sont ceux du SERVEUR (#9481) : « Jeu masqué » posé depuis un autre appareil se lit ici.
         .task { await GameSettingsSync().refresh() }
+        // `.task` rejoue au retour d'une fiche : un geste fait là-bas (frappe, coffre, gel) se relit ici, cache d'abord.
         .task {
             await viewModel.load()
             #if DEBUG
             if viewModel.progress != nil { VitrineRendu.shared.signaler(.progression) }
             #endif
-        }
-        .fullScreenCover(item: $reveal) { palier in
-            // `.consultation` et NON `.celebration` (#5831) : on arrive ici
-            // DEPUIS le tableau de bord, où la célébration voudrait « mener »
-            // — elle y renverrait à l'écran qu'on n'a pas quitté. Le hero ne
-            // montre que de l'OBTENU, d'où `unlocked: true`.
-            AchievementRevealView(
-                reveal: palier.reveal,
-                occasion: .consultation(unlocked: palier.unlocked, reachedAt: palier.reachedAt),
-                onContinue: { reveal = nil },
-                // Le liseré de la rareté mesurée (#9390), comme sur la ligne du succès — « Jeu masqué » le retire.
-                rarity: RevealRim.entry(of: palier.reveal, in: viewModel.game, hidden: GameDevicePrefsStore.current().prefs.hidden)
-            )
         }
     }
 
@@ -120,27 +93,7 @@ struct ProgressionView: View {
                 onBack: { back() },
                 titleColor: theme.textPrimary,
                 backArrowColor: accentColor,
-                backgroundColor: theme.backgroundPrimary,
-                trailing: {
-                /*
-                 * L'ENTRÉE MEESH remplace le trophée (#5839), et devient
-                 * l'ACTION de l'en-tête partagé (#6480).
-                 *
-                 * `nil` quand la passerelle ne sert pas le bloc — l'écran
-                 * n'affiche alors RIEN : un solde de zéro montré à quelqu'un qui
-                 * en a deux serait pire qu'une absence.
-                 */
-                if let meesh = viewModel.progress?.meesh {
-                    ProgressionMeeshEntry(
-                        meesh: meesh,
-                        isMinting: viewModel.isMinting,
-                        mintError: viewModel.mintError,
-                        // La pièce que la feuille frappe (#9537) : elle se grave au numéro que le serveur sert.
-                        next: viewModel.game.map { GameMintNext(number: $0.mint.number, edition: $0.mint.edition) },
-                        onMint: { Task { await viewModel.mint() } }
-                    )
-                }
-                }
+                backgroundColor: theme.backgroundPrimary
             )
         }
     }
@@ -148,7 +101,6 @@ struct ProgressionView: View {
     // MARK: - Content
 
     private var content: some View {
-        ScrollViewReader { proxy in
         ScrollView(showsIndicators: false) {
             GeometryReader { geo in
                 Color.clear.preference(
@@ -160,7 +112,7 @@ struct ProgressionView: View {
 
             Color.clear.frame(height: CollapsibleHeaderMetrics.expandedHeight)
 
-            VStack(spacing: MeeshySpacing.xl) {
+            VStack(spacing: MeeshySpacing.md) {
                 if viewModel.isOffline {
                     ProgressionNotice(kind: .offline(hasSnapshot: viewModel.progress != nil))
                 }
@@ -173,98 +125,26 @@ struct ProgressionView: View {
                 if viewModel.showsSkeleton {
                     ProgressionSkeleton()
                 } else if let progress = viewModel.progress {
-                    // L'ÉTAT VIDE, repris de #5831 : sans lui, quelqu'un qui
-                    // n'a encore rien fait lit une séquence de heros muets et
-                    // trois portes qui n'ouvrent sur rien.
+                    // L'ÉTAT VIDE, repris de #5831 : sans lui, quelqu'un qui n'a encore rien fait lit une liste muette.
                     if progress.isEmpty {
                         ProgressionNotice(kind: .empty)
                     }
                     /*
-                     * LE JEU (#9383, #9379, #9382) — la carte de Mee et Meo, les
-                     * quatre jauges, les missions et le coffre, l'aperçu de frappe,
-                     * la Flamme. Montée QUE si la passerelle sert le bloc `game` :
-                     * devant un ancien serveur, l'écran d'avant reste INTACT. Quand
-                     * elle l'est, les jauges remplacent le hero du niveau (à six
-                     * paliers, il contredirait les cent niveaux), le hero Meesh et
-                     * la série d'avant.
+                     * LA VUE PARCOURT la liste des concepts, elle ne la compose pas : `ProgressionConcepts`
+                     * (miroir de `progressionConcepts()`) décide de l'ordre et de la présence pour les deux clients.
                      */
-                    if let game = viewModel.game {
-                        GameSection(
-                            viewModel: viewModel,
-                            guide: viewModel.guide,
-                            photos: viewModel.photos,
-                            game: game,
-                            onScrollTo: { anchor in
-                                withAnimation(.easeInOut(duration: 0.35)) { proxy.scrollTo(anchor, anchor: .top) }
-                            },
-                            onOpenConversations: { router.popToRoot() },
-                            onOpenBadges: { router.push(.progressionSection(.badges)) },
-                            onOpenRules: { router.push(.progressionRules(rule: $0)) },
-                            onOpenNotebook: { router.push(.progressionNotebook) },
-                            onOpenPage: { router.push(.gamePage($0)) }
-                        )
-                    }
-                    /*
-                     * LA VUE PARCOURT la séquence, elle ne la compose plus.
-                     *
-                     * Avant : Meesh → badges → succès → défis, écrit ici ; et
-                     * web-v2 écrivait le sien, différent. `ProgressionLayout`
-                     * (miroir de `progression-layout.ts`, gardé par
-                     * `progression-layout-mirror-parity`) décide pour les deux.
-                     *
-                     * Le `switch` est exhaustif sur une énumération à valeur
-                     * associée : ajouter un bloc au partagé fait ROUGIR la
-                     * compilation ici tant que la vue ne le rend pas. C'est ce
-                     * qui rend l'oubli impossible, là où une liste de chaînes
-                     * l'aurait laissé passer.
-                     */
-                    ForEach(Array(ProgressionLayout.blocks(for: progress).enumerated()), id: \.offset) { _, bloc in
-                        switch bloc {
-                        case .lastAchievement:
-                            ProgressionLastAchievementHero(
-                                progress: progress,
-                                isDark: isDark,
-                                onReveal: { reveal = $0 }
-                            )
-                        case .level:
-                            if viewModel.game == nil {
-                                ProgressionLevelHero(progress: progress, isDark: isDark)
-                            }
-                        case .meesh:
-                            // LE SOLDE, SOUS LE NIVEAU (#6497). Le même bloc que
-                            // la feuille de l'entrée d'en-tête — pas une jumelle :
-                            // deux rendus du solde auraient divergé au premier
-                            // changement. L'action passe par le MÊME `viewModel.mint()`,
-                            // donc la même clé d'idempotence : deux portes, une
-                            // seule frappe.
-                            if viewModel.game == nil, let meesh = progress.meesh {
-                                ProgressionMeeshDetail(
-                                    meesh: meesh,
-                                    isMinting: viewModel.isMinting,
-                                    mintError: viewModel.mintError,
-                                    onMint: { Task { await viewModel.mint() } }
-                                )
-                                .padding(MeeshySpacing.lg)
-                                .background(
-                                    RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous)
-                                        .fill(ThemeManager.shared.backgroundSecondary)
-                                )
-                            }
-                        case .elans:
-                            ProgressionElansHero(progress: progress, isDark: isDark)
-                        case .flamme:
-                            if viewModel.game == nil {
-                                ProgressionFlammeHero(progress: progress, isDark: isDark)
-                            }
-                        case .sectionLink(let section):
-                            ProgressionSectionLink(
-                                section: section,
-                                progress: progress,
-                                isDark: isDark,
-                                onOpen: { router.push(.progressionSection(section)) }
-                            )
-                        }
-                    }
+                    ProgressionFrontList(
+                        viewModel: viewModel,
+                        guide: viewModel.guide,
+                        photos: viewModel.photos,
+                        progress: progress,
+                        onOpenConcept: { router.push(.progressionConcept($0)) },
+                        onOpenDashboard: { router.push(.progressionDashboard) },
+                        onOpenConversations: { router.popToRoot() },
+                        onOpenRules: { router.push(.progressionRules(rule: $0)) },
+                        onOpenNotebook: { router.push(.progressionNotebook) },
+                        onOpenPage: { router.push(.gamePage($0)) }
+                    )
                 }
 
                 Spacer().frame(height: 40)
@@ -277,14 +157,18 @@ struct ProgressionView: View {
         .onPreferenceChange(ScrollOffsetPreferenceKey.self) { scrollRelay.offset = $0 }      // iOS 16–17
         .trackScrollContentOffset { scrollRelay.offset = -$0 }                               // iOS 18+
         // Le toucher d'une notification de mission (#9539) pose une ANCRE avant l'ouverture : elle se ramasse UNE fois,
-        // quand le jeu est à l'écran — `initial: true` couvre le démarrage à froid, où l'ancre précède l'écran.
+        // quand le jeu est à l'écran, et ouvre la FICHE de son concept (#9564) — `initial: true` couvre le démarrage
+        // à froid, où l'ancre précède l'écran. Sous « Jeu masqué », elle est ramassée sans rien ouvrir.
         .adaptiveOnChange(of: pendingAnchor != nil && viewModel.game != nil, initial: true) { _, ready in
             guard ready, let anchor = pendingAnchor else { return }
             consumeAnchor()
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                withAnimation(.easeInOut(duration: 0.35)) { proxy.scrollTo(anchor, anchor: .top) }
+            guard !GameDevicePrefsStore.current().prefs.hidden else { return }
+            let concept = ProgressionConceptModel.concept(for: anchor)
+            // La fiche se pousse une fois la première page posée : deux poussées dans la même image se marchent dessus.
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 350_000_000)
+                router.push(.progressionConcept(concept))
             }
-        }
         }
     }
 }
