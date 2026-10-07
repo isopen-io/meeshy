@@ -386,7 +386,7 @@ final class PlayerBannerTests: XCTestCase {
                      "Meeshy/Features/Main/Views/RootLayers/iPadRootViewLayers.swift"] {
             let text = try source(root)
             XCTAssertTrue(text.contains("playerBannerHosted:"), "\(root) doit dire à la couche si l'écran porte la bannière")
-            XCTAssertTrue(text.contains("router.push(.progression)"), "\(root) : un toucher ouvre Progression")
+            XCTAssertTrue(text.contains("router.openGame(at: .level)"), "\(root) : un toucher ouvre la fiche du niveau, au-dessus de Progression (#9564)")
         }
     }
 

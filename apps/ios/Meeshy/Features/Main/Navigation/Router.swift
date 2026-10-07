@@ -85,10 +85,12 @@ enum Route: Hashable {
     /// Une page de la vague 2 du jeu (#9481) — Ligue, Saison, Vitrine, Atlas, Prestige, Réglages. Poussée dans la
     /// pile comme les autres pages du jeu, jamais présentée en feuille.
     case gamePage(GamePage)
-    /// La FICHE d'un concept de Progression (#9564) — niveau, points, Meeshes, gloire… : le sous-menu de la première
-    /// page, poussé dans la pile. C'est aussi ce que le toucher d'une annonce de mission ouvre (`.missions`).
-    case progressionConcept(ProgressionConcept)
-    /// Le tableau de bord de Progression (#9564) : un bloc par concept, toutes ses données, lecture seule.
+    /// La FICHE d'un concept de Progression (#9564) — niveau, points, Meeshes, gloire… : le deuxième niveau, poussé
+    /// au-dessus de la première page. `section` : la section où une entrée extérieure (notification, bandeau du
+    /// joueur) pose le regard ; `nil` : la fiche s'ouvre en haut.
+    case progressionConcept(ProgressionConcept, section: ProgressionConceptSection? = nil)
+    /// L'ANCIEN tableau de bord de Progression, retiré (#9564, amendement n° 4). La route reste une version pour les
+    /// liens déjà posés et ouvre la première page de Progression ; elle se retire à zéro usage mesuré.
     case progressionDashboard
     case links
     case affiliate
@@ -189,10 +191,10 @@ extension Route {
             return String(localized: "game.notebook.page_title", defaultValue: "Carnet de progression", bundle: .main)
         case .gamePage(let page):
             return page.title
-        case .progressionConcept(let concept):
+        case .progressionConcept(let concept, _):
             return ConceptText.name(concept)
         case .progressionDashboard:
-            return ConceptText.dashboardTitle
+            return String(localized: "route.title.progression", defaultValue: "Progression", bundle: .main)
         case .links:
             return String(localized: "route.title.links", defaultValue: "Liens", bundle: .main)
         case .affiliate:
@@ -378,15 +380,19 @@ final class Router: ObservableObject {
         return palier
     }
 
-    /// L'endroit de Progression où le toucher d'une notification de mission pose le regard (#9539) : la section Héro
-    /// des missions. Posé AVANT l'ouverture de Progression, ramassé UNE fois quand le jeu est à l'écran.
-    @Published var pendingGameAnchor: GameAnchor?
-
-    /// Ramasse l'ancre demandée, UNE fois — même site unique de remise à plat que le palier à célébrer.
-    func consumePendingGameAnchor() -> GameAnchor? {
-        guard let anchor = pendingGameAnchor else { return nil }
-        pendingGameAnchor = nil
-        return anchor
+    /// UNE ENTRÉE EXTÉRIEURE du jeu (notification, bandeau du joueur, vitrine du profil — #9564, carte de
+    /// navigation) : la pile reçoit le CHEMIN COMPLET jusqu'à l'écran visé — Progression, puis la fiche, puis la
+    /// sous-page — en UNE mutation, donc une seule transition : « retour » remonte la chaîne, jamais ailleurs. Déjà
+    /// dans le jeu, on repart de SA première page au lieu d'en empiler une seconde. Sur iPad, chaque étape passe par le
+    /// panneau, qui empile les pages du jeu au-dessus de Progression.
+    func openGame(at target: Route) {
+        let chain = GameNavigationMap.chain(to: target)
+        if onRouteRequested != nil {
+            chain.forEach { push($0) }
+            return
+        }
+        let base = path.lastIndex(of: .progression).map { Array(path[...$0]) } ?? (path + [.progression])
+        path = base + chain.drop { $0 == .progression }
     }
 
     /// Ramasse la demande de composeur de flux, UNE fois.

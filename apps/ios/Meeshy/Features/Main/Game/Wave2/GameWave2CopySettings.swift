@@ -43,10 +43,6 @@ extension GameText {
 
     static var settingsLeagueOff: String { String(localized: "game2.settings.league.off", defaultValue: "Tu n’es pas dans la ligue publique. Ta ligue entre amis reste ouverte.", bundle: .main) }
 
-    static var settingsLeagueManage: String { String(localized: "game2.settings.league.manage", defaultValue: "Gérer ma ligue", bundle: .main) }
-
-    static var settingsHelp: String { String(localized: "game2.settings.help", defaultValue: "Comment ça marche", bundle: .main) }
-
     static var profileTitle: String { String(localized: "game2.profile.title", defaultValue: "Mon jeu", bundle: .main) }
 
     static func profileLevel(level: String, tier: String) -> String {

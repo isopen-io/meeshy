@@ -26,7 +26,8 @@ struct GameHeroView: View {
     var haptics: GameHapticsProviding = GameHaptics.shared
     /// Aucun geste du jeu n'est en vol : seule une montée lue ALORS est « gagnée ».
     var settled = true
-    let onOpenRule: (Int) -> Void
+    /// L'élan servi : les puces « Comment gagner » disent quelles familles sont actives ; `nil` devant un ancien serveur.
+    var elan: EngagementElanProgress?
     let onOpenGuide: () -> Void
 
     @State private var shownLevel: Int
@@ -38,13 +39,13 @@ struct GameHeroView: View {
 
     init(game: GameBlock, cornerFigure: String? = nil, cornerLine: String? = nil,
          haptics: GameHapticsProviding = GameHaptics.shared, settled: Bool = true,
-         onOpenRule: @escaping (Int) -> Void, onOpenGuide: @escaping () -> Void) {
+         elan: EngagementElanProgress? = nil, onOpenGuide: @escaping () -> Void) {
         self.game = game
         self.cornerFigure = cornerFigure
         self.cornerLine = cornerLine
         self.haptics = haptics
         self.settled = settled
-        self.onOpenRule = onOpenRule
+        self.elan = elan
         self.onOpenGuide = onOpenGuide
         _shownLevel = State(initialValue: game.level.level)
         _shownProgress = State(initialValue: game.level.progress)
@@ -62,7 +63,7 @@ struct GameHeroView: View {
             if let cornerLine { corner(cornerLine) }
             levelRow
             rankRow
-            GameHeroEarn(onOpenRule: onOpenRule)
+            GameHeroEarn(elan: elan)
         }
         .padding(MeeshySpacing.lg)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -148,6 +149,8 @@ struct GameHeroView: View {
                 accessibilityLabel: GameCopy.levelRingAccessibility(level: shownLevel, tier: level.tier)
             )
             .frame(width: 88, height: 88)
+            // L'anneau SE TOUCHE (#9564) : il rebondit et ouvre les précisions du niveau.
+            .gameElement(GameElementDetails.levelRing(level), identifier: "game.hero.level")
             VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                 Text(GameCopy.tierName(level.tier))
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
@@ -236,6 +239,8 @@ struct GameHeroView: View {
         }
         .id(GameAnchor.rank)
         .accessibilityElement(children: .combine)
+        // Le blason SE TOUCHE : il rebondit et ouvre les précisions du rang.
+        .gameElement(GameElementDetails.rank(glory), identifier: "game.hero.rank")
     }
 
     // MARK: - Les animations

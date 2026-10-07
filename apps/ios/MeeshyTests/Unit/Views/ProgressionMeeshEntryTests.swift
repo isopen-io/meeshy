@@ -124,7 +124,7 @@ final class ProgressionMeeshEntryTests: XCTestCase {
     /// avant les autres, et tombe si la descente ne voit plus rien.
     func test_theHarnessActuallyReadsTheRenderedTree() async {
         let vm = await loadedViewModel(payload())
-        let ecran = monter(ProgressionConceptPage(concept: .meesh, viewModel: vm))
+        let ecran = monter(ProgressionView(viewModel: vm))
 
         XCTAssertFalse(
             ecran.labels.isEmpty,
@@ -140,7 +140,7 @@ final class ProgressionMeeshEntryTests: XCTestCase {
         // Deux causes rendraient l'entrée absente — un modèle sans bloc Meesh,
         // ou un en-tête qui ne le monte pas. On les sépare AVANT d'accuser.
         XCTAssertNotNil(vm.progress?.meesh, "Le modèle n'a pas de bloc Meesh : ce n'est pas la vue qui est en cause.")
-        let ecran = monter(ProgressionConceptPage(concept: .meesh, viewModel: vm))
+        let ecran = monter(ProgressionView(viewModel: vm))
 
         let identifiants = ecran.identifiers
         XCTAssertNotNil(
@@ -153,7 +153,7 @@ final class ProgressionMeeshEntryTests: XCTestCase {
     /// nombre est une icône, pas ce que le porteur a demandé.
     func test_theEntryAnnouncesTheBalance() async {
         let vm = await loadedViewModel(payload(balance: 3))
-        let ecran = monter(ProgressionConceptPage(concept: .meesh, viewModel: vm))
+        let ecran = monter(ProgressionView(viewModel: vm))
 
         // Interroger TOUT l'arbre laisserait « 3 » venir du niveau ou d'un
         // compteur : la première version de ce témoin passait ainsi au vert
@@ -173,7 +173,7 @@ final class ProgressionMeeshEntryTests: XCTestCase {
             level: .init(engagementScore: 10)
         )
         let vm = await loadedViewModel(sans)
-        let ecran = monter(ProgressionConceptPage(concept: .meesh, viewModel: vm))
+        let ecran = monter(ProgressionView(viewModel: vm))
 
         XCTAssertNil(
             ecran.node("progression.meesh.entry"),
@@ -334,7 +334,7 @@ final class ProgressionMeeshEntryTests: XCTestCase {
             encoding: .utf8
         )
         let apresEntree = source.components(separatedBy: "struct ProgressionMeeshEntry").dropFirst().first ?? ""
-        let etiquette = apresEntree.components(separatedBy: ".popover(").first ?? ""
+        let etiquette = apresEntree.components(separatedBy: "struct MeeshCoinGlyph").first ?? ""
         XCTAssertEqual(etiquette.components(separatedBy: ".adaptiveGlass(").count - 1, 1,
                        "L'entrée doit porter UNE seule pièce de verre, pour le nombre et la pièce ensemble.")
         XCTAssertFalse(etiquette.contains("AdaptiveGlassContainer("), "L'entrée est encore un groupe de bulles séparées.")
@@ -348,20 +348,25 @@ final class ProgressionMeeshEntryTests: XCTestCase {
     /// main : chevron nu, titre fixe. Le composant partagé porte les deux —
     /// l'écran n'a qu'à le MONTER, et c'est ce que ce témoin garde.
     func test_progression_mountsTheCollapsibleHeader_notAHandmadeBar() throws {
-        let source = try String(
-            contentsOf: URL(fileURLWithPath: #filePath)
-                .deletingLastPathComponent()   // Views
-                .deletingLastPathComponent()   // Unit
-                .deletingLastPathComponent()   // MeeshyTests
-                .deletingLastPathComponent()   // ios
-                .appendingPathComponent("Meeshy/Features/Main/Views/ProgressionView.swift"),
-            encoding: .utf8
-        )
-        XCTAssertTrue(source.contains("CollapsibleHeader("), "Progression ne monte pas l'en-tête partagé.")
-        XCTAssertTrue(source.contains("ScrollOffsetReader(relay: scrollRelay)"),
-                      "L'en-tête de Progression ne lit pas le défilement : il ne se réduira pas.")
-        XCTAssertFalse(source.contains("Image(systemName: \"chevron.backward\")"),
-                       "Progression garde un chevron fait main à côté de l'en-tête partagé.")
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // Views
+            .deletingLastPathComponent()   // Unit
+            .deletingLastPathComponent()   // MeeshyTests
+            .deletingLastPathComponent()   // ios
+        func read(_ path: String) throws -> String {
+            try String(contentsOf: root.appendingPathComponent(path), encoding: .utf8)
+        }
+        // Depuis #9564 la première page monte l'en-tête partagé PAR le gabarit de toutes les pages de Progression.
+        let source = try read("Meeshy/Features/Main/Views/ProgressionView.swift")
+        XCTAssertTrue(source.contains("GamePageScaffold("), "Progression ne passe pas par le gabarit à en-tête partagé.")
+        let scaffold = try read("Meeshy/Features/Main/Game/GamePageScaffold.swift")
+        XCTAssertTrue(scaffold.contains("CollapsibleHeader("), "Le gabarit ne monte pas l'en-tête partagé.")
+        XCTAssertTrue(scaffold.contains("ScrollOffsetReader(relay: relay)"),
+                      "L'en-tête du gabarit ne lit pas le défilement : il ne se réduira pas.")
+        for code in [source, scaffold] {
+            XCTAssertFalse(code.contains("Image(systemName: \"chevron.backward\")"),
+                           "Progression garde un chevron fait main à côté de l'en-tête partagé.")
+        }
     }
 
     // MARK: - La pièce d'argent (#6427)

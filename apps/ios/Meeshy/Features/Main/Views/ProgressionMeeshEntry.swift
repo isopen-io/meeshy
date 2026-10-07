@@ -9,51 +9,16 @@ import MeeshyUI
 /// `accessibilityHidden(true)`, ne réagissait à rien et n'annonçait rien. Un
 /// ornement à l'endroit où l'œil cherche un contrôle coûte plus qu'un vide.
 ///
-/// **Le sous-menu ne propose la frappe QUE si les points la permettent.** La
-/// directive du porteur est une NÉGATION — et une négation se prouve par un
-/// témoin qui cherche l'ABSENCE, jamais par une capture qui montre le cas
-/// heureux (`ProgressionMeeshEntryTests`).
-///
-/// Jumelle de `MeeshEntry` / `MeeshDetail` (`apps/web/src/routes/progression.tsx`) :
-/// mêmes mots, même ordre, même règle sur la seconde borne.
-///
-/// **La frappe s'y JOUE (#9537)** : la feuille montre Mee et Meo qui frappent une Meesh, et le compteur ne
-/// s'incrémente qu'APRÈS la fin de l'animation — la mise à jour reste optimiste, c'est ce que l'écran montre qui est
-/// séquencé (`GameMintSequence`). Un refus du serveur restaure l'état, le compteur ne bouge jamais.
+/// **Le toucher ouvre la FICHE des Meeshes** (#9564, amendement n° 4). Le
+/// compteur ouvrait sa propre feuille de frappe : deux chemins vers un même
+/// geste, dont un hors de la fiche. La frappe — et la scène où Mee et Meo la
+/// jouent (#9537) — n'a plus qu'un site : la fiche des Meeshes. Le compteur,
+/// lui, roule quand le solde change, au retour de cette fiche.
 struct ProgressionMeeshEntry: View {
     let meesh: EngagementMeeshProgress
-    let isMinting: Bool
-    var mintError: String? = nil
-    /// La prochaine pièce (numéro, édition) que la scène frappe ; `nil` devant un ancien serveur : pas de scène.
-    var next: GameMintNext? = nil
-    let onMint: () -> Void
-    var haptics: GameHapticsProviding = GameHaptics.shared
+    let onOpen: () -> Void
 
-    @State private var ouvert = false
-    @State private var sequence = GameMintSequence<GameMintFrame>()
-    @State private var strikePlay = 0
-    /// La pièce que la dernière frappe a gravée : frappée, c'est elle qui repose sur son revers, pas la suivante.
-    @State private var struck: GameMintNext?
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private let tint = MeeshyColors.warning
-
-    /// Ce que le compteur et la feuille montrent : l'image d'AVANT le toucher pendant la scène, le vivant ensuite.
-    private var shown: GameMintFrame {
-        sequence.shown(live: GameMintFrame(meesh: meesh, next: next))
-    }
-
-    /// La scène : la prochaine pièce tant qu'une frappe est possible ou se joue, puis la pièce FRAPPÉE sur son revers.
-    private var strike: GameMintStrike? {
-        GameMintStrike.scene(shown: shown, struck: struck, isStriking: sequence.isStriking, play: strikePlay, failed: mintError != nil)
-    }
-
-    private func startStrike() {
-        guard sequence.begin(holding: GameMintFrame(meesh: meesh, next: next)) else { return }
-        struck = next
-        strikePlay += 1
-        haptics.play(GameHapticPattern.strike)
-        onMint()
-    }
 
     /// La forme de la pièce : plus RECTANGLE qu'une capsule (directive porteur 2026-09-14, #6466).
     private static let forme = RoundedRectangle(cornerRadius: MeeshyRadius.smPlus, style: .continuous)
@@ -61,7 +26,7 @@ struct ProgressionMeeshEntry: View {
     var body: some View {
         Button {
             HapticFeedback.light()
-            ouvert.toggle()
+            onOpen()
         } label: {
             // `N` puis la PIÈCE — UNE seule pièce de verre (#6466).
             //
@@ -77,11 +42,12 @@ struct ProgressionMeeshEntry: View {
             // disait « marque ». Une Meesh est une MONNAIE : la pièce d'argent
             // (#6427) est le premier glyphe qui dit ce qu'est la chose.
             HStack(spacing: MeeshySpacing.xsPlus) {
-                Text("\(shown.meesh.balance)")
+                Text("\(meesh.balance)")
                     .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .bold, design: .rounded))
                     .monospacedDigit()
                     .foregroundColor(tint)
                     .modifier(MeeshCounterRoll())
+                    .animation(.easeOut(duration: 0.35), value: meesh.balance)
                 MeeshCoinGlyph(size: 20)
             }
             .padding(.horizontal, MeeshySpacing.md)
@@ -90,43 +56,12 @@ struct ProgressionMeeshEntry: View {
             .frame(minHeight: 44)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        // Le compteur REBONDIT comme tout ce qui se touche dans le jeu (#9564).
+        .buttonStyle(GameBounceButtonStyle())
         .accessibilityIdentifier("progression.meesh.entry")
-        .accessibilityLabel(ProgressionCopy.meeshEntryA11y(shown.meesh.balance))
+        .accessibilityLabel(ProgressionCopy.meeshEntryA11y(meesh.balance))
+        .accessibilityHint(ConceptText.cardHint)
         .accessibilityAddTraits(.isButton)
-        // La scène finie, le compteur lâche la valeur vivante : il monte alors, et seulement alors (#9537).
-        .task(id: sequence.generation) { @MainActor in
-            guard sequence.isStriking else { return }
-            let seconds = GameMintSequence<GameMintFrame>.duration(reduceMotion: reduceMotion)
-            try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
-            guard !Task.isCancelled else { return }
-            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.35)) { sequence.finish() }
-        }
-        .popover(isPresented: $ouvert) {
-            ProgressionMeeshDetail(
-                meesh: shown.meesh, isMinting: isMinting || sequence.isStriking, mintError: mintError,
-                strike: strike, onMint: startStrike
-            )
-                .frame(idealWidth: 300)
-                .padding(MeeshySpacing.lg)
-                // **Verre NEUTRE, jamais teinté** (directive porteur
-                // 2026-09-09 : « le menu affiché au touché doit être bien
-                // travaillé »). Le `tint: tint` peignait le panneau en aplat
-                // ORANGE plein : le titre teinté devenait jaune sur jaune —
-                // illisible — et le solde perdait le contraste que le thème lui
-                // donne. Une teinte sert à SIGNALER, elle ne peut pas servir de
-                // fond à ce qu'elle signale.
-                .adaptiveGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous))
-                .background(
-                    RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous)
-                        .fill(ThemeManager.shared.backgroundSecondary)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous)
-                        .stroke(tint.opacity(MeeshyOpacity.medium), lineWidth: 1)
-                )
-                .presentationCompactAdaptationPopoverIfAvailable()
-        }
     }
 }
 

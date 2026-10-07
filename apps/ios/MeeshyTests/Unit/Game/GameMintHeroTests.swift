@@ -123,12 +123,6 @@ final class GameMintHeroTests: XCTestCase {
         XCTAssertNil(GameMintStrike.scene(shown: unknown, struck: nil, isStriking: false, play: 0, failed: false), "un ancien serveur ne dit pas la prochaine pièce : pas de scène")
     }
 
-    func test_theCounterSheetRemembersTheCoinItStruck() throws {
-        let text = try source("Meeshy/Features/Main/Views/ProgressionMeeshEntry.swift")
-        XCTAssertTrue(text.contains("GameMintStrike.scene(shown: shown, struck: struck"), "la scène est décidée par la fonction pure")
-        XCTAssertTrue(text.contains("struck = next"), "le toucher retient la pièce qu'il frappe")
-    }
-
     // MARK: - Le jour de jeu est celui du compte (#9539)
 
     func test_theDailyMissionsEndWithTheAccountDay_notTheDeviceDay() throws {
@@ -137,24 +131,17 @@ final class GameMintHeroTests: XCTestCase {
                       "la fin du jour se lit dans le fuseau du compte, celui où la passerelle découpe le jour de jeu")
     }
 
-    // MARK: - La feuille du compteur joue la frappe
+    // MARK: - La frappe n'a qu'un site (#9564, amendement n° 4)
 
-    func test_theCounterSheetPlaysMeeAndMeoStriking_andTheCounterReadsTheHeldImage() throws {
-        let text = try source("Meeshy/Features/Main/Views/ProgressionMeeshEntry.swift")
-        XCTAssertTrue(text.contains("MintStrikeScene("), "Mee et Meo frappent dans la feuille du compteur")
-        XCTAssertTrue(text.contains("GameMintSequence<GameMintFrame>"), "le compteur est séquencé")
-        XCTAssertTrue(text.contains("Text(\"\\(shown.meesh.balance)\")"), "le compteur lit l'image retenue, jamais le solde vivant")
-        XCTAssertTrue(text.contains("sequence.finish()"), "le compteur lâche le vivant à la fin de la scène")
-        XCTAssertTrue(text.contains("sequence.begin(holding:"), "le toucher retient l'image d'avant")
-    }
-
-    func test_theCounterIsOnlyIncrementedByTheFinishOfTheScene_neverByTheTouch() throws {
-        let text = try source("Meeshy/Features/Main/Views/ProgressionMeeshEntry.swift")
-        let touch = try XCTUnwrap(text.range(of: "private func startStrike()"))
-        let finish = try XCTUnwrap(text.range(of: "sequence.finish()"))
-        XCTAssertLessThan(touch.lowerBound, finish.lowerBound)
-        let startBody = String(text[touch.lowerBound..<(text.range(of: "var body: some View", range: touch.upperBound..<text.endIndex)?.lowerBound ?? text.endIndex)])
-        XCTAssertFalse(startBody.contains("finish()"), "le toucher ne lâche rien : seule la fin de la scène le fait")
+    /// Le compteur de l'en-tête ne joue plus la frappe : il ouvre la fiche des Meeshes, où Mee et Meo la jouent.
+    func test_theCounterNoLongerStrikes_theMeeshSheetPlaysTheScene() throws {
+        let entry = try source("Meeshy/Features/Main/Views/ProgressionMeeshEntry.swift")
+        let compteur = entry.components(separatedBy: "struct ProgressionMeeshEntry").dropFirst().first?
+            .components(separatedBy: "struct MeeshCoinGlyph").first ?? ""
+        XCTAssertFalse(compteur.contains("MintStrikeScene("), "le compteur ne joue plus de scène de frappe")
+        XCTAssertFalse(compteur.contains("startStrike"), "le compteur ne frappe plus")
+        XCTAssertTrue(try source("Meeshy/Features/Main/Game/GameMintPreviewView.swift").contains("MintStrikeScene("),
+                      "Mee et Meo frappent dans la fiche des Meeshes")
     }
 
     // MARK: - Une seule section Héro de frappe (#9537)

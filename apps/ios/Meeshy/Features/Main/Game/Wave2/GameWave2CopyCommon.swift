@@ -108,10 +108,6 @@ extension GameText {
         String(localized: "game2.door.league.locked", defaultValue: "Dès le niveau \(level)", bundle: .main)
     }
 
-    static func doorLeagueRank(league: String, rank: String, size: String) -> String {
-        String(localized: "game2.door.league.rank", defaultValue: "\(league) · rang \(rank) sur \(size)", bundle: .main)
-    }
-
     static var doorLeagueOpen: String { String(localized: "game2.door.league.open", defaultValue: "Classement de la semaine", bundle: .main) }
 
     static func doorSeason(number: String) -> String {
@@ -144,10 +140,6 @@ extension GameText {
     static var doorPrestige: String { String(localized: "game2.door.prestige", defaultValue: "Prestige", bundle: .main) }
 
     static var doorPrestigeReady: String { String(localized: "game2.door.prestige.ready", defaultValue: "Tu peux passer en Prestige", bundle: .main) }
-
-    static func doorPrestigeStars(stars: String, max: String) -> String {
-        String(localized: "game2.door.prestige.stars", defaultValue: "Étoiles : \(stars) sur \(max)", bundle: .main)
-    }
 
     static var doorPrestigeLocked: String { String(localized: "game2.door.prestige.locked", defaultValue: "Au niveau 100", bundle: .main) }
 

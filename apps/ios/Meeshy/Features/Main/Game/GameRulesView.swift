@@ -20,7 +20,6 @@ import MeeshyUI
 /// « Chaque geste rapporte », « Comment frapper » à « On frappe des Meeshes ». La règle visée
 /// défile en haut et se teinte un instant ; sans règle visée, la page s'ouvre en haut.
 struct GameRulesPage: View {
-    @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private var theme: ThemeManager { ThemeManager.shared }
 
@@ -29,28 +28,23 @@ struct GameRulesPage: View {
     @State private var highlighted: Int?
 
     var body: some View {
-        ZStack {
-            theme.backgroundGradient.ignoresSafeArea()
-            VStack(spacing: 0) {
-                GamePageHeader(title: String(localized: "game.rules.page_title", defaultValue: "Comment ça marche", bundle: .main), onBack: { dismiss() })
-                ScrollViewReader { proxy in
-                    ScrollView(showsIndicators: false) {
-                        VStack(alignment: .leading, spacing: MeeshySpacing.xl) {
-                            intro
-                            rules
-                            // Les éléments du jeu, DESSINÉS (#9538) : paliers, pièces, trésor, blasons, Flammes, ligues,
-                            // médailles, trophées, raretés — Mee et Meo y parlent.
-                            GameRulesAtlasView()
-                            steps
-                        }
-                        .padding(.horizontal, MeeshySpacing.lg)
-                        .padding(.vertical, MeeshySpacing.md)
-                    }
-                    .task { await focus(on: proxy) }
+        // Le lecteur de défilement ENVELOPPE le gabarit : la règle visée se trouve dans SON défilement.
+        ScrollViewReader { proxy in
+            GamePageScaffold(
+                title: String(localized: "game.rules.page_title", defaultValue: "Comment ça marche", bundle: .main),
+                identifier: "game.rules.page"
+            ) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.xl) {
+                    intro
+                    rules
+                    // Les éléments du jeu, DESSINÉS (#9538) : paliers, pièces, trésor, blasons, Flammes, ligues,
+                    // médailles, trophées, raretés — Mee et Meo y parlent.
+                    GameRulesAtlasView()
+                    steps
                 }
             }
+            .task { await focus(on: proxy) }
         }
-        .accessibilityIdentifier("game.rules.page")
     }
 
     /// Fait défiler la règle visée en haut, la teinte un instant, puis la relâche. Un tick d'attente :
@@ -59,7 +53,7 @@ struct GameRulesPage: View {
         guard let focusedRule else { return }
         try? await Task.sleep(nanoseconds: 250_000_000)
         withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.35)) {
-            proxy.scrollTo(Self.rowID(focusedRule), anchor: .top)
+            proxy.scrollTo(Self.rowID(focusedRule), anchor: Self.focusAnchor)
             highlighted = focusedRule
         }
         try? await Task.sleep(nanoseconds: 1_600_000_000)
@@ -67,6 +61,9 @@ struct GameRulesPage: View {
     }
 
     static func rowID(_ index: Int) -> String { "game-rule-\(index)" }
+
+    /// Où la règle visée se pose : SOUS la barre compacte de l'en-tête, qui recouvre le haut du défilement.
+    static let focusAnchor = UnitPoint(x: 0.5, y: 0.18)
 
     private var intro: some View {
         HStack(alignment: .bottom, spacing: MeeshySpacing.sm) {
@@ -168,36 +165,5 @@ struct GameRulesPage: View {
             }
         }
         .accessibilityHidden(true)
-    }
-}
-
-/// L'en-tête des pages du jeu : un retour par la PILE (le glissement depuis le
-/// bord gauche fait le même geste) et un titre.
-struct GamePageHeader: View {
-    let title: String
-    let onBack: () -> Void
-    private var theme: ThemeManager { ThemeManager.shared }
-
-    var body: some View {
-        HStack(spacing: MeeshySpacing.sm) {
-            Button {
-                HapticFeedback.light()
-                onBack()
-            } label: {
-                Image(systemName: "chevron.backward")
-                    .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .semibold))
-                    .foregroundColor(MeeshyColors.brandPrimary)
-                    .frame(width: 44, height: 44)
-            }
-            .accessibilityLabel(String(localized: "game.page.back", defaultValue: "Retour à la progression", bundle: .main))
-            Text(title)
-                .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold))
-                .foregroundColor(theme.textPrimary)
-                .lineLimit(1)
-                .accessibilityAddTraits(.isHeader)
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, MeeshySpacing.md)
-        .padding(.vertical, MeeshySpacing.xs)
     }
 }

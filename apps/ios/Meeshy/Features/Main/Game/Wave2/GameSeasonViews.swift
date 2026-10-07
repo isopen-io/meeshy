@@ -98,7 +98,7 @@ private struct GameSeasonPath: View {
                 ForEach(1...GameSeason.steps, id: \.self) { step in
                     GameSeasonStepButton(
                         step: step, state: GameSeasonStepState.of(step: step, in: season), online: model.isOnline,
-                        busy: model.pending.claimingStep == step
+                        busy: model.pending.claimingStep == step, detail: GameElementDetails.seasonStep(step, in: season)
                     ) {
                         Task { await model.claim(step: step) }
                     }
@@ -117,9 +117,18 @@ private struct GameSeasonStepButton: View {
     let state: GameSeasonStepState
     let online: Bool
     let busy: Bool
+    /// Les précisions de l'étape : une étape qui ne se réclame pas (déjà réclamée, ou à venir) les ouvre au toucher.
+    let detail: GameElementDetail
     let onClaim: () -> Void
 
+    @Environment(\.gameOpenDetail) private var openDetail
     private var theme: ThemeManager { ThemeManager.shared }
+
+    /// L'étape répond-elle au toucher ? Prête : elle se réclame (en ligne, hors geste en vol). Sinon : elle
+    /// ouvre ses précisions, quand la page en présente.
+    private var responds: Bool {
+        state == .ready ? online && !busy : openDetail != nil
+    }
 
     private var tint: Color {
         switch state {
@@ -148,9 +157,9 @@ private struct GameSeasonStepButton: View {
 
     var body: some View {
         Button {
-            guard state == .ready, online, !busy else { return }
+            guard responds else { return }
             HapticFeedback.light()
-            onClaim()
+            if state == .ready { onClaim() } else { openDetail?(detail) }
         } label: {
             VStack(spacing: 0) {
                 Text(GameCopy.formatCount(step))
@@ -169,12 +178,12 @@ private struct GameSeasonStepButton: View {
                     .stroke(tint.opacity(state == .locked ? MeeshyOpacity.medium : MeeshyOpacity.strong), lineWidth: MeeshyBorder.regular)
             )
         }
-        .buttonStyle(.plain)
-        .disabled(state != .ready || !online || busy)
+        .buttonStyle(GameBounceButtonStyle())
+        .disabled(!responds)
         .opacity(busy ? 0.6 : 1)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(spoken)
-        .accessibilityAddTraits(state == .ready ? .isButton : [])
+        .accessibilityAddTraits(responds ? .isButton : [])
         .accessibilityIdentifier("game.season.step.\(step)")
     }
 }
@@ -205,6 +214,8 @@ private struct GameSeasonSeal: View {
             }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(GameText.seasonSealCosmetic)
+            // Le Sceau SE TOUCHE (#9564) : la rangée rebondit et ouvre ses précisions.
+            .gameElement(GameElementDetails.seal(season))
             if season.sealOwned {
                 GameNote(text: GameText.seasonSealOwned, tone: MeeshyColors.success)
             } else {

@@ -73,7 +73,14 @@ final class ProgressionViewModel: ObservableObject {
 
     /// La charge servie, telle que le cache la garde : c'est sur elle que les
     /// mises à jour optimistes travaillent, `progress` et `game` en sont dérivés.
-    private(set) var snapshot: APIEngagementProgress?
+    private(set) var snapshot: APIEngagementProgress? {
+        didSet { if let snapshot { Self.lastKnown[cacheKey] = snapshot } }
+    }
+    /// La DERNIÈRE charge connue de ce processus, par clé de cache (#9564, amendement n° 4) : une page de
+    /// Progression POUSSÉE (fiche, sous-page) a son propre modèle, et se peint dès sa première image avec ce que la
+    /// page d'en dessous montrait déjà — jamais un squelette entre deux pages qui lisent la même charge. Le cache
+    /// disque reste la source au démarrage à froid ; la revalidation corrige ensuite, en silence.
+    private static var lastKnown: [String: APIEngagementProgress] = [:]
     /// Les gestes du jeu en vol : tant qu'il y en a un, la lecture montrée est
     /// l'optimiste — le guide et les propositions de photo attendent qu'il soit
     /// réglé pour célébrer (un geste refusé ne se célèbre pas).
@@ -123,6 +130,7 @@ final class ProgressionViewModel: ObservableObject {
         self.connectivity = networkMonitor.isOfflinePublisher
             .receive(on: DispatchQueue.main)
             .sink { [weak self] offline in self?.isOnline = !offline }
+        if let known = Self.lastKnown[cacheKey] { _ = adopt(known) }
     }
 
     /// Squelette : cache FROID et rien encore peint — jamais un spinner sur un instantané.

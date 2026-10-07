@@ -4,8 +4,9 @@ import SwiftUI
 import MeeshySDK
 
 /// **Ce que l'utilisateur VOIT, pas ce que le code déclare** (#9383, #9564) — la première page de Progression ne
-/// porte que des CARTES de concept ; les gestes du jeu sont RENDUS dans la fiche de leur concept ; le tableau de
-/// bord a un bloc par concept. Une vue écrite et montée par personne ne fait rougir aucun compilateur.
+/// porte que des CARTES de concept ; les gestes du jeu sont RENDUS dans la fiche de leur concept, chaque fiche a UN
+/// héros (sa pièce de jeu, ou le héros générique). Une vue écrite et montée par personne ne fait rougir aucun
+/// compilateur.
 @MainActor
 final class GameProgressionRenderTests: XCTestCase {
 
@@ -51,10 +52,11 @@ final class GameProgressionRenderTests: XCTestCase {
         return e
     }
 
-    /// Les identifiants des GESTES du jeu : aucun ne doit paraître hors de la fiche de son concept.
+    /// Les identifiants des GESTES du jeu : aucun ne doit paraître hors de la fiche de son concept. (Le compteur
+    /// de Meeshes, lui, a retrouvé l'en-tête de la première page — `ProgressionChromeGuardTests`.)
     private static let gestures = [
         "game.mission.m1", "game.chest.ready", "game.mint.action", "game.mint.hero", "game.flame.freeze.buy",
-        "game.flame.relight", "game.hero", "progression.meesh.entry",
+        "game.flame.relight", "game.hero",
     ]
 
     private func fullGame(chest: GameBlock.Chest.Status = .ready) -> GameBlock {
@@ -74,9 +76,10 @@ final class GameProgressionRenderTests: XCTestCase {
         XCTAssertEqual(Set(identifiants.filter { $0.hasPrefix("progression.concept.") }),
                        Set(ProgressionConcept.allCases.map { "progression.concept.\($0.rawValue)" }),
                        "une carte par concept servi, ni plus ni moins. Vus : \(identifiants)")
-        for attendu in ["progression.dashboard", "game.guide.line", "game.door.notebook", "game.door.rules", "game.door.settings"] {
+        for attendu in ["game.guide.line", "game.door.notebook", "game.door.rules", "game.door.settings"] {
             XCTAssertTrue(identifiants.contains(attendu), "« \(attendu) » n'est pas dans l'arbre rendu. Vus : \(identifiants)")
         }
+        XCTAssertFalse(identifiants.contains("progression.dashboard"), "le tableau de bord a quitté la première page (amendement n° 4)")
     }
 
     func test_theFrontPage_carriesNoGestureNorGauge_onlyCards() async {
@@ -123,6 +126,7 @@ final class GameProgressionRenderTests: XCTestCase {
         let identifiants = monter(ProgressionView(viewModel: vm)).identifiers
 
         XCTAssertFalse(identifiants.contains { $0.hasPrefix("game.") }, "du jeu est monté sans que la passerelle serve le bloc : \(identifiants)")
+        XCTAssertTrue(identifiants.contains("progression.meesh.entry"), "le compteur de Meeshes d'avant reste dans l'en-tête : \(identifiants)")
         for concept in [ProgressionConcept.level, .meesh, .flame, .elans, .badges, .defis, .succes] {
             XCTAssertTrue(identifiants.contains("progression.concept.\(concept.rawValue)"), "la carte « \(concept.rawValue) » doit rester : \(identifiants)")
         }
@@ -143,15 +147,16 @@ final class GameProgressionRenderTests: XCTestCase {
         }
     }
 
-    /// Le héro de frappe — le SEUL du jeu (#9537) — vit dans la fiche des Meeshes, avec le compteur et sa feuille.
-    func test_theMeeshSheet_carriesTheOnlyMintHero_andTheCounter() async {
+    /// Le héro de frappe — le SEUL du jeu (#9537) — vit dans la fiche des Meeshes.
+    func test_theMeeshSheet_carriesTheOnlyMintHero() async {
         let vm = await loadedViewModel(GameFixture.snapshot(fullGame()))
 
         let identifiants = monter(ProgressionConceptPage(concept: .meesh, viewModel: vm)).identifiers
 
-        for attendu in ["game.mint.hero", "game.mint.info", "game.mint.action", "progression.meesh.entry"] {
+        for attendu in ["game.mint.hero", "game.mint.action"] {
             XCTAssertTrue(identifiants.contains(attendu), "« \(attendu) » n'est pas dans la fiche des Meeshes. Vus : \(identifiants)")
         }
+        XCTAssertFalse(identifiants.contains("game.mint.info"), "plus de lien transverse de la fiche vers les règles (amendement n° 4)")
         // Le compte des identifiants dépend de la façon dont le harnais lit l'arbre : l'unicité se garde par la SOURCE.
         XCTAssertEqual(try? sourceCount(of: "GameMintPreviewView("), 1, "UNE seule section Héro de frappe")
         XCTAssertEqual(try? sourceCount(of: "\"game.mint.minting\" : \"game.mint.action\""), 1, "UN seul bouton de frappe")
@@ -201,18 +206,29 @@ final class GameProgressionRenderTests: XCTestCase {
         }
     }
 
-    /// Chaque concept servi a SA fiche : le héros (ou le héro de niveau) y est monté, quel que soit le concept.
-    func test_everyServedConcept_hasItsSheet() async {
+    /// Chaque concept servi a SA fiche, et UN héros (règle n° 3) : sa pièce de jeu quand il en a une — l'anneau du
+    /// niveau, la frappe, le détail de ligue, les Élans —, le héros générique sinon. Jamais les deux.
+    func test_everyServedConcept_hasItsSheet_withOneHero() async {
         let game = fullGame()
         let vm = await loadedViewModel(GameFixture.snapshot(game))
         let progress = EngagementProgressResolver.resolve(GameFixture.snapshot(game))
+        let pieces: [ProgressionConcept: String] = [.level: "game.hero", .meesh: "game.mint.hero", .league: "game.league.detail"]
 
         for concept in ProgressionConcepts.served(for: progress, game: game) {
             let identifiants = monter(ProgressionConceptPage(concept: concept, viewModel: vm)).identifiers
-            let heros = concept == .level ? "game.hero" : "progression.concept.hero"
-            XCTAssertTrue(identifiants.contains(heros), "\(concept.rawValue) : sa fiche n'a pas de héros. Vus : \(identifiants)")
+            let piece = ProgressionConceptGestures.isHero(for: concept, progress: progress, game: game)
+            XCTAssertEqual(identifiants.contains("progression.concept.piece"), piece,
+                           "\(concept.rawValue) : la pièce de jeu tient lieu de héros ou n'est pas là. Vus : \(identifiants)")
+            XCTAssertEqual(identifiants.contains("progression.concept.hero"), !piece,
+                           "\(concept.rawValue) : un héros générique À CÔTÉ de la pièce, ou aucun héros. Vus : \(identifiants)")
+            if let attendu = pieces[concept] {
+                XCTAssertTrue(identifiants.contains(attendu), "\(concept.rawValue) : sa pièce « \(attendu) » n'est pas montée")
+            }
             ecran?.dismount()
         }
+        XCTAssertEqual(Set(pieces.keys).union([.elans]),
+                       Set(ProgressionConcept.allCases.filter { ProgressionConceptGestures.isHero(for: $0, progress: progress, game: game) }),
+                       "niveau, Meeshes, Ligue et Élans ont leur pièce pour héros")
     }
 
     func test_anOldServer_keepsTheMintInTheMeeshSheet() async {
@@ -225,22 +241,23 @@ final class GameProgressionRenderTests: XCTestCase {
 
         let identifiants = monter(ProgressionConceptPage(concept: .meesh, viewModel: vm)).identifiers
 
-        XCTAssertTrue(identifiants.contains("progression.meesh.entry"), "le compteur de Meeshes d'avant reste, dans sa fiche : \(identifiants)")
-        XCTAssertFalse(identifiants.contains { $0.hasPrefix("game.") }, "du jeu est monté sans le bloc : \(identifiants)")
+        XCTAssertTrue(identifiants.contains("progression.meesh.detail"), "la fiche des Meeshes garde sa frappe d'avant : \(identifiants)")
+        XCTAssertFalse(identifiants.contains("progression.concept.hero"), "la frappe d'avant est le héros : pas de second")
+        XCTAssertFalse(identifiants.contains { $0.hasPrefix("game.") && !$0.hasPrefix("game.element.") },
+                       "du jeu est monté sans le bloc : \(identifiants)")
     }
 
-    // MARK: - Le tableau de bord : un bloc par concept, lecture seule
+    // MARK: - Le tableau de bord a disparu (amendement n° 4)
 
-    func test_theDashboard_carriesOneBlockPerServedConcept_andNoGesture() async {
-        let vm = await loadedViewModel(GameFixture.snapshot(fullGame()))
-
-        let identifiants = monter(ProgressionDashboardPage(viewModel: vm)).identifiers
-
-        XCTAssertEqual(Set(identifiants.filter { $0.hasPrefix("progression.dashboard.") }),
-                       Set(ProgressionConcept.allCases.map { "progression.dashboard.\($0.rawValue)" }),
-                       "un bloc par concept servi, ni plus ni moins. Vus : \(identifiants)")
-        for geste in Self.gestures {
-            XCTAssertFalse(identifiants.contains(geste), "« \(geste) » est au tableau de bord : il est en lecture seule")
+    /// L'ancienne route ouvre la première page une version durant (liens déjà posés) ; plus rien ne la pousse.
+    func test_theOldDashboardRoute_opensTheFirstPage_andNothingPushesItAnymore() throws {
+        let ios = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        for host in ["Meeshy/Features/Main/Views/RootLayers/RootRouteDestination.swift", "Meeshy/Features/Main/Views/iPadRootView+Panels.swift"] {
+            let code = try String(contentsOf: ios.appendingPathComponent(host), encoding: .utf8)
+            XCTAssertTrue(code.contains("case .progression, .progressionDashboard:"), "\(host) : l'ancienne route n'ouvre pas la première page")
         }
+        XCTAssertEqual(try sourceCount(of: ".progressionDashboard"), 0, "une page du jeu pousse encore le tableau de bord")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: ios.appendingPathComponent("Meeshy/Features/Main/Game/ProgressionDashboardPage.swift").path))
     }
 }
