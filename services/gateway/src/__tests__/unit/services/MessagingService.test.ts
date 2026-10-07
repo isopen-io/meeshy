@@ -290,9 +290,17 @@ describe('MessagingService', () => {
       // cas prouvent le CÂBLAGE — la règle elle-même est prouvée dans
       // `forwardAdmission.test.ts`.
       const forwardedFromId = '507f1f77bcf86cd799439099';
+      // La projection ENTIÈRE que la garde exige (#9572) : une ligne à qui il
+      // manque une colonne de protection est refusée, pas tenue pour ordinaire.
+      const LOADED_SOURCE = {
+        isBlurred: false,
+        ephemeralDuration: null,
+        attachments: [] as Array<Record<string, unknown>>,
+      };
 
       it('refuse le transfert d’un message à vue unique, sans rien écrire', async () => {
         mockPrisma.message.findUnique.mockResolvedValue({
+          ...LOADED_SOURCE,
           isViewOnce: true,
           effectFlags: 0,
           expiresAt: null,
@@ -310,8 +318,9 @@ describe('MessagingService', () => {
 
       it('fait hériter la copie de la DURÉE éphémère de la source (#7451)', async () => {
         mockPrisma.message.findUnique.mockResolvedValue({
-          isViewOnce: false, effectFlags: 0, ephemeralDuration: 30,
-          createdAt: new Date('2026-08-12T11:00:00.000Z'),
+          ...LOADED_SOURCE,
+          ...LOADED_SOURCE,
+          isViewOnce: false, effectFlags: 1, ephemeralDuration: 30,
           expiresAt: new Date('2026-08-19T11:00:00.000Z')
         });
 
@@ -334,6 +343,7 @@ describe('MessagingService', () => {
 
       it('n’impose aucune échéance quand la source est un message ordinaire', async () => {
         mockPrisma.message.findUnique.mockResolvedValue({
+          ...LOADED_SOURCE,
           isViewOnce: false,
           effectFlags: 0,
           expiresAt: null,
@@ -355,6 +365,7 @@ describe('MessagingService', () => {
       // CÔTÉ SERVEUR, le corps n'a donc ni content ni attachmentIds.
       it('transfère un média SANS texte : forwardedFromId seul rend le corps non-vide', async () => {
         mockPrisma.message.findUnique.mockResolvedValue({
+          ...LOADED_SOURCE,
           isViewOnce: false,
           effectFlags: 0,
           expiresAt: null,
@@ -394,6 +405,7 @@ describe('MessagingService', () => {
 
       it('refuse un transfert sans texte dont la source ne porte aucune pièce jointe', async () => {
         mockPrisma.message.findUnique.mockResolvedValue({
+          ...LOADED_SOURCE,
           isViewOnce: false,
           effectFlags: 0,
           expiresAt: null,
@@ -414,6 +426,7 @@ describe('MessagingService', () => {
         // Le client envoie le texte transféré : le corps ne dépend pas de la
         // copie serveur, et une source sans pièce jointe y est la normale.
         mockPrisma.message.findUnique.mockResolvedValue({
+          ...LOADED_SOURCE,
           isViewOnce: false,
           effectFlags: 0,
           expiresAt: null,
@@ -437,6 +450,7 @@ describe('MessagingService', () => {
       // facultative — une référence illisible s'abandonne, l'envoi survit.
       it('abandonne un forwardedFromConversationId malformé au lieu de casser l’écriture', async () => {
         mockPrisma.message.findUnique.mockResolvedValue({
+          ...LOADED_SOURCE,
           isViewOnce: false,
           effectFlags: 0,
           expiresAt: null,
@@ -470,6 +484,137 @@ describe('MessagingService', () => {
         expect(mockPrisma.message.findUnique).not.toHaveBeenCalled();
       });
 
+      describe('le serveur impose la protection de la copie (#9572)', () => {
+        const SEPT_JOURS_MS = 7 * 24 * 60 * 60 * 1000;
+        const FLAME = 1 | 8;
+        const flameSource = (over: Record<string, unknown> = {}) => ({
+          ...LOADED_SOURCE,
+          isViewOnce: false,
+          effectFlags: 1,
+          ephemeralDuration: 15,
+          expiresAt: new Date('2026-08-19T11:00:00.000Z'),
+          _count: { attachments: 0 },
+          ...over,
+        });
+        const written = () => mockPrisma.message.create.mock.calls[0][0].data;
+
+        it('borne la durée par celle de la source et pose durée ET après lecture, quoi que dise la requête', async () => {
+          mockPrisma.message.findUnique.mockResolvedValue(flameSource());
+
+          const before = Date.now();
+          const response = await service.handleMessage(
+            {
+              ...validRequest,
+              forwardedFromId,
+              ephemeralDuration: 86_400,
+              effectFlags: 0,
+              isBlurred: false,
+              expiresAt: new Date('2030-01-01T00:00:00.000Z'),
+            } as any,
+            testParticipantId
+          );
+
+          expect(response.success).toBe(true);
+          // La durée BORNÉE survit jusqu'à la colonne : c'est elle que
+          // `startEphemeralCountdowns` lit pour poser l'échéance de chaque
+          // destinataire. Sans elle la copie n'aurait que le plafond de sept jours.
+          expect(written().ephemeralDuration).toBe(15);
+          expect(written().effectFlags & FLAME).toBe(FLAME);
+          expect(written().expiresAt.getTime()).toBeGreaterThanOrEqual(before + SEPT_JOURS_MS);
+          expect(written().expiresAt.getTime()).toBeLessThan(new Date('2030-01-01T00:00:00.000Z').getTime());
+          expect(written().forwardedFromId).toBe(forwardedFromId);
+        });
+
+        it('garde une durée demandée plus courte que celle de la source', async () => {
+          mockPrisma.message.findUnique.mockResolvedValue(flameSource());
+
+          await service.handleMessage({ ...validRequest, forwardedFromId, ephemeralDuration: 5 } as any, testParticipantId);
+
+          expect(written().ephemeralDuration).toBe(5);
+          expect(written().effectFlags & FLAME).toBe(FLAME);
+        });
+
+        it('donne la durée de la source à un ancien client qui n’en envoie aucune', async () => {
+          mockPrisma.message.findUnique.mockResolvedValue(flameSource());
+
+          await service.handleMessage({ ...validRequest, forwardedFromId }, testParticipantId);
+
+          expect(written().ephemeralDuration).toBe(15);
+        });
+
+        it('impose le flou de la source, message ou pièce', async () => {
+          mockPrisma.message.findUnique.mockResolvedValue(flameSource({ isBlurred: true }));
+          await service.handleMessage({ ...validRequest, forwardedFromId, isBlurred: false } as any, testParticipantId);
+          expect(written().isBlurred).toBe(true);
+          expect(written().effectFlags & 2).toBe(2);
+
+          mockPrisma.message.create.mockClear();
+          mockPrisma.message.findUnique.mockResolvedValue({
+            ...LOADED_SOURCE,
+            isViewOnce: false,
+            effectFlags: 0,
+            expiresAt: null,
+            attachments: [{ isViewOnce: false, isBlurred: true, effectFlags: 0 }],
+          });
+          await service.handleMessage({ ...validRequest, forwardedFromId, isBlurred: false } as any, testParticipantId);
+          expect(written().isBlurred).toBe(true);
+        });
+
+        it('écrase un `forwardImposes` glissé dans la requête par le client', async () => {
+          mockPrisma.message.findUnique.mockResolvedValue(flameSource());
+
+          await service.handleMessage(
+            { ...validRequest, forwardedFromId, ephemeralDuration: 86_400, forwardImposes: null } as any,
+            testParticipantId
+          );
+          expect(written().ephemeralDuration).toBe(15);
+          expect(written().effectFlags & FLAME).toBe(FLAME);
+
+          mockPrisma.message.create.mockClear();
+          await service.handleMessage(
+            {
+              ...validRequest,
+              forwardedFromId,
+              forwardImposes: { ephemeralDuration: 999_999, isBlurred: false },
+            } as any,
+            testParticipantId
+          );
+          expect(written().ephemeralDuration).toBe(15);
+        });
+
+        it.each([
+          ['une flamme après lecture', { effectFlags: 1 | 8, ephemeralDuration: null }],
+          ['une copie déjà transférée — durée ET après lecture', { effectFlags: 1 | 8, ephemeralDuration: 15 }],
+          ['une pièce en vue unique', { effectFlags: 0, ephemeralDuration: null, expiresAt: null, attachments: [{ isViewOnce: true, isBlurred: false, effectFlags: 0 }] }],
+          ['une échéance sans durée', { effectFlags: 1, ephemeralDuration: null }],
+        ])('refuse %s, sans rien écrire', async (_label, over) => {
+          mockPrisma.message.findUnique.mockResolvedValue(flameSource(over));
+
+          const response = await service.handleMessage({ ...validRequest, forwardedFromId }, testParticipantId);
+
+          expect(response.success).toBe(false);
+          expect(mockPrisma.message.create).not.toHaveBeenCalled();
+        });
+
+        it.each([
+          ['introuvable', () => mockPrisma.message.findUnique.mockResolvedValue(null)],
+          ['illisible', () => mockPrisma.message.findUnique.mockRejectedValue(new Error('mongo down'))],
+        ])('source %s et corps fourni par le client : message ORDINAIRE, rien de la source n’est recopié', async (_label, arrange) => {
+          arrange();
+          mockPrisma.messageAttachment.findMany.mockClear();
+          mockPrisma.messageAttachment.create = jest.fn();
+
+          const response = await service.handleMessage({ ...validRequest, forwardedFromId }, testParticipantId);
+
+          expect(response.success).toBe(true);
+          expect(written().forwardedFromId ?? null).toBeNull();
+          expect(written().forwardedFromConversationId ?? null).toBeNull();
+          expect(written().content).toBe(validRequest.content);
+          expect(mockPrisma.messageAttachment.findMany).not.toHaveBeenCalledWith({ where: { messageId: forwardedFromId } });
+          expect(mockPrisma.messageAttachment.create).not.toHaveBeenCalled();
+        });
+      });
+
       // Diffuser à plusieurs destinataires n'est PAS transférer : la copie
       // serveur des pièces jointes ne doit jamais poser `forwardedFromId` —
       // sans quoi le destinataire verrait un badge « Transféré depuis … » qui
@@ -482,7 +627,9 @@ describe('MessagingService', () => {
         // refuser la copie ; ce test prouve le câblage côté ENVOI, la règle
         // de propriété étant déjà prouvée par `copyAttachments.test.ts`.
         mockPrisma.message.findUnique.mockResolvedValue({
-          sender: { id: testParticipantId, userId: testUserId }
+          sender: { id: testParticipantId, userId: testUserId },
+          // La même ligne sert la lecture de protection de la source (#9572).
+          isViewOnce: false, isBlurred: false, effectFlags: 0, ephemeralDuration: null, expiresAt: null, attachments: []
         });
         // `copyAttachmentsFromMessage` refuse désormais une source SANS
         // pièce jointe (round de correction 1, garde `empty-source`) : ce

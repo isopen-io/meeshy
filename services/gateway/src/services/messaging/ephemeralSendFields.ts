@@ -47,6 +47,13 @@ export function ephemeralSendFields(input: {
   readonly isViewOnce?: boolean | null;
   /** Le bitfield RECOMPOSÉ — porte la flamme-œil (#8302). */
   readonly effectFlags?: number | null;
+  /**
+   * #9572 — la COPIE d'une flamme à durée porte durée ET après lecture : la
+   * durée borne (échéance par destinataire, dès la réception), la consommation
+   * après lecture retire plus tôt. Posé par `exitProtectedCopy`, jamais par un
+   * envoi ordinaire, dont la flamme-œil reste sans durée.
+   */
+  readonly durationBoundsAfterRead?: boolean;
   readonly now: Date;
 }): EphemeralSendFields {
   const retentionCap = new Date(input.now.getTime() + EPHEMERAL_UNRECEIVED_RETENTION_MS);
@@ -56,7 +63,10 @@ export function ephemeralSendFields(input: {
   // consommation pose l'échéance de chaque lecteur. La colonne porte le
   // plafond de rétention, le filet d'un message que personne ne lit jamais.
   if (isAfterReadEphemeral(input.effectFlags)) {
-    return { ephemeralDuration: null, expiresAt: retentionCap, ...viewOnce };
+    const bound = input.durationBoundsAfterRead
+      ? normalizeEphemeralDuration({ ephemeralDuration: input.ephemeralDuration, now: input.now })
+      : null;
+    return { ephemeralDuration: bound, expiresAt: retentionCap, ...viewOnce };
   }
 
   const duration = normalizeEphemeralDuration({

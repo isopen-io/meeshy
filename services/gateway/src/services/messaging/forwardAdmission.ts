@@ -1,4 +1,8 @@
-import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
+import {
+  contentExitLawOfSource,
+  forwardedCopyProtection,
+  type ContentExitProjection,
+} from '@meeshy/shared/utils/content-exit-law';
 import { isValidMongoId } from '@meeshy/shared/utils/conversation-helpers';
 
 /**
@@ -74,6 +78,26 @@ import { isValidMongoId } from '@meeshy/shared/utils/conversation-helpers';
  * Le refus est alors le seul comportement qui ne détruit rien, et le sachant
  * ne coûte AUCUNE lecture de plus — la même requête compte les pièces jointes
  * de la source au passage.
+ *
+ * ─── LA LOI DE SORTIE DÉCIDE, CE MODULE LUI REMET LA SOURCE (#9572) ─────────
+ *
+ * Trois sorties restaient ouvertes après ce qui précède : une flamme APRÈS
+ * LECTURE se transférait en copie de sept jours sans son bit (elle n'a pas de
+ * durée, et `expiresAt − createdAt` y lit le plafond de rétention) ; une PIÈCE
+ * en vue unique sous un message qui ne l'est pas passait la garde ; le flou de
+ * la copie venait de la requête. Le verdict vient désormais de
+ * `contentExitLaw` (`@meeshy/shared`), lue sur le message ET sur ses pièces,
+ * et ce module rend ce que la source IMPOSE à la copie — `saveMessage`
+ * l'applique après la contagion des réponses, pour qu'aucune des deux règles
+ * ne desserre l'autre. Une source déclarée éphémère dont la durée ne se lit
+ * pas est REFUSÉE : elle dégénérait en copie ordinaire, donc immortelle. Le
+ * repli `expiresAt − createdAt` décrit plus haut est RETIRÉ pour la même
+ * raison : il lisait sept jours sur toute ligne sans colonne de durée.
+ *
+ * La dégradation en message ordinaire (source introuvable ou illisible, corps
+ * fourni par le client) se DIT : `sourceUnavailable`. L'appelant retire alors
+ * `forwardedFromId`, sans quoi `saveMessage` recopierait les pièces d'une
+ * source dont on n'a pas pu lire la protection.
  */
 
 /**
@@ -90,22 +114,20 @@ export interface ForwardSourceReader {
       where: { id: string };
       select: {
         isViewOnce: true;
+        isBlurred: true;
         effectFlags: true;
         ephemeralDuration: true;
         expiresAt: true;
-        createdAt: true;
+        attachments: { select: { isViewOnce: true; isBlurred: true; effectFlags: true } };
         _count: { select: { attachments: true } };
       };
     }): Promise<ForwardSourceRow | null>;
   };
 }
 
-export interface ForwardSourceRow {
-  readonly isViewOnce?: boolean | null;
-  readonly effectFlags?: number | null;
-  readonly ephemeralDuration?: number | null;
-  readonly expiresAt?: Date | null;
-  readonly createdAt?: Date | null;
+/** La projection ENTIÈRE qu'exige la loi de sortie côté serveur, et le compte des pièces. */
+export interface ForwardSourceRow extends ContentExitProjection {
+  readonly expiresAt: Date | null;
   /** Ce que la copie serveur des pièces jointes pourra donner au transfert. */
   readonly _count?: { readonly attachments: number } | null;
 }
@@ -124,17 +146,36 @@ export interface ForwardAdmissionParams {
   readonly bodyOnlyFromSource?: boolean;
 }
 
-export type ForwardRefusal = 'view-once-not-forwardable' | 'forward-source-unavailable';
+export type ForwardRefusal =
+  | 'view-once-not-forwardable'
+  | 'ephemeral-not-forwardable'
+  | 'forward-source-unavailable';
+
+/**
+ * Ce que la source IMPOSE à sa copie, en sujet de la loi de sortie : sa durée
+ * (nulle quand elle n'est pas une flamme) et son flou. `forwardedCopyFields`
+ * le compose avec ce que l'envoi déclare.
+ */
+export interface ForwardImposition {
+  readonly ephemeralDuration: number | null;
+  readonly isBlurred: boolean;
+}
 
 export type ForwardAdmission =
   | {
       readonly admitted: true;
       /**
-       * La DURÉE héritée de la source, en secondes. Absente si elle n'était pas
-       * éphémère. Ce n'est plus une échéance : le serveur la dérive à la
-       * réception de chaque destinataire (#7451).
+       * `null` : la source a été LUE et n'impose rien. Absent : aucune source
+       * n'a été lue (pas un transfert, ou `sourceUnavailable`). La durée n'est
+       * jamais une échéance : le serveur la dérive à la réception (#7451).
        */
-      readonly ephemeralDuration?: number;
+      readonly imposes?: ForwardImposition | null;
+      /**
+       * La source est introuvable ou illisible et le message porte son propre
+       * corps : l'envoi dégénère en message ORDINAIRE. L'appelant DOIT alors
+       * retirer `forwardedFromId` — rien de la source n'est recopié.
+       */
+      readonly sourceUnavailable?: true;
     }
   | { readonly admitted: false; readonly reason: ForwardRefusal };
 
@@ -149,14 +190,13 @@ export type ForwardRefused = Extract<ForwardAdmission, { admitted: false }>;
 export const isForwardRefused = (admission: ForwardAdmission): admission is ForwardRefused =>
   admission.admitted === false;
 
-const ADMITTED_WITHOUT_INHERITANCE: ForwardAdmission = { admitted: true };
+const NOT_A_FORWARD: ForwardAdmission = { admitted: true };
+const NOTHING_IMPOSED: ForwardAdmission = { admitted: true, imposes: null };
+const DEGRADED_TO_ORDINARY: ForwardAdmission = { admitted: true, sourceUnavailable: true };
 const SOURCE_UNAVAILABLE: ForwardAdmission = {
   admitted: false,
   reason: 'forward-source-unavailable'
 };
-
-const hasFlag = (effectFlags: number | null, bit: number): boolean =>
-  ((effectFlags ?? 0) & bit) !== 0;
 
 /**
  * Ce que l'appelant dit au sender quand la règle refuse. Même forme que
@@ -167,6 +207,8 @@ export const describeForwardRefusal = (refusal: ForwardRefused): string => {
   switch (refusal.reason) {
     case 'forward-source-unavailable':
       return 'Le message d’origine n’est plus disponible : rien à transférer';
+    case 'ephemeral-not-forwardable':
+      return 'Un message qui disparaît après lecture ne peut pas être transféré';
     case 'view-once-not-forwardable':
     default:
       return 'Un message à vue unique ne peut pas être transféré';
@@ -185,7 +227,7 @@ export async function admitMessageForward(
   prisma: ForwardSourceReader,
   params: ForwardAdmissionParams,
 ): Promise<ForwardAdmission> {
-  if (!params.forwardedFromId) return ADMITTED_WITHOUT_INHERITANCE;
+  if (!params.forwardedFromId) return NOT_A_FORWARD;
 
   let source: ForwardSourceRow | null;
   try {
@@ -193,63 +235,50 @@ export async function admitMessageForward(
       where: { id: params.forwardedFromId },
       select: {
         isViewOnce: true,
+        isBlurred: true,
         effectFlags: true,
-        // La colonne d'abord (#7451) ; les deux suivantes ne servent plus qu'au
-        // repli legacy, pour les lignes écrites avant qu'elle n'ait un écrivain.
+        // La colonne fait foi (#7451). `expiresAt` ne donne plus jamais la
+        // durée : sa seule présence déclare un éphémère (#9572).
         ephemeralDuration: true,
         expiresAt: true,
-        createdAt: true,
+        attachments: { select: { isViewOnce: true, isBlurred: true, effectFlags: true } },
         // Compté par CETTE lecture, pas par une seconde : le chemin nominal
         // (envoi ordinaire) n'y passe même pas, `forwardedFromId` étant absent.
         _count: { select: { attachments: true } },
       },
     });
   } catch {
-    return params.bodyOnlyFromSource ? SOURCE_UNAVAILABLE : ADMITTED_WITHOUT_INHERITANCE;
+    return params.bodyOnlyFromSource ? SOURCE_UNAVAILABLE : DEGRADED_TO_ORDINARY;
   }
 
   if (!source) {
-    return params.bodyOnlyFromSource ? SOURCE_UNAVAILABLE : ADMITTED_WITHOUT_INHERITANCE;
+    return params.bodyOnlyFromSource ? SOURCE_UNAVAILABLE : DEGRADED_TO_ORDINARY;
   }
 
-  // La colonne ET le bit : `saveMessage` renseigne les deux, mais un client qui
-  // n'aurait envoyé que `effectFlags` doit être tenu par la même règle — sinon
-  // le contournement ne coûte qu'un champ.
-  if (source.isViewOnce === true || hasFlag(source.effectFlags, MESSAGE_EFFECT_FLAGS.VIEW_ONCE)) {
-    return { admitted: false, reason: 'view-once-not-forwardable' };
+  // La loi lit la colonne ET le bit, sur le message ET sur chaque pièce : un
+  // contournement ne doit pas coûter qu'un champ, ni qu'un niveau.
+  const { forward } = contentExitLawOfSource(source);
+  if (forward.allowed === false) {
+    return {
+      admitted: false,
+      reason: forward.reason === 'view-once' ? 'view-once-not-forwardable' : 'ephemeral-not-forwardable',
+    };
   }
 
-  // Dit APRÈS la vue unique : des deux motifs, celui-là est le moins
+  // Dit APRÈS les refus de nature : des motifs, celui-là est le moins
   // informatif pour l'expéditeur.
   if (params.bodyOnlyFromSource && (source._count?.attachments ?? 0) === 0) {
     return SOURCE_UNAVAILABLE;
   }
 
-  const inherited = inheritedDuration(source);
-  if (inherited === null) return ADMITTED_WITHOUT_INHERITANCE;
+  const unrequested = forwardedCopyProtection({ source, requested: null });
+  if (!unrequested) return { admitted: false, reason: 'ephemeral-not-forwardable' };
+  if (forward.maxDurationSeconds === null && !unrequested.isBlurred) return NOTHING_IMPOSED;
 
-  return { admitted: true, ephemeralDuration: inherited };
-}
-
-/**
- * La durée de la source, en secondes — la colonne, ou le repli legacy.
- *
- * Le repli borne à zéro : une distance négative (décalage d'horloge, ou client
- * qui avait envoyé une échéance déjà passée) ne doit en aucun cas faire vivre la
- * copie PLUS que l'original. Une durée nulle n'étant pas une durée, la copie
- * dégénère alors en message ordinaire plutôt qu'en message immortel — le même
- * arbitrage que `normalizeEphemeralDuration`, qui refuse zéro.
- */
-function inheritedDuration(source: ForwardSourceRow): number | null {
-  const { ephemeralDuration, expiresAt, createdAt } = source;
-  if (typeof ephemeralDuration === 'number' && Number.isFinite(ephemeralDuration) && ephemeralDuration > 0) {
-    return Math.floor(ephemeralDuration);
-  }
-
-  if (!(expiresAt instanceof Date) || !(createdAt instanceof Date)) return null;
-
-  const seconds = Math.floor(Math.max(0, expiresAt.getTime() - createdAt.getTime()) / 1000);
-  return seconds > 0 ? seconds : null;
+  return {
+    admitted: true,
+    imposes: { ephemeralDuration: forward.maxDurationSeconds, isBlurred: unrequested.isBlurred },
+  };
 }
 
 /**
@@ -281,4 +310,25 @@ export function sanitizeForwardReferences<
     return request;
   }
   return { ...request, forwardedFromId, forwardedFromConversationId };
+}
+
+/**
+ * Ce que `handleMessage` pose sur l'envoi une fois le transfert ADMIS, à
+ * répandre APRÈS la requête : le verdict remplace tout `forwardImposes` venu
+ * d'un client, et une source indisponible retire les références de transfert —
+ * l'envoi devient un message ordinaire, et `saveMessage` ne recopie rien.
+ */
+export function forwardedCopyRequest(
+  request: { readonly forwardedFromId?: string },
+  admission: Extract<ForwardAdmission, { admitted: true }>,
+): {
+  readonly forwardImposes: ForwardImposition | null | undefined;
+  readonly forwardedFromId?: undefined;
+  readonly forwardedFromConversationId?: undefined;
+} {
+  if (!request.forwardedFromId) return { forwardImposes: undefined };
+  if (admission.sourceUnavailable || admission.imposes === undefined) {
+    return { forwardImposes: undefined, forwardedFromId: undefined, forwardedFromConversationId: undefined };
+  }
+  return { forwardImposes: admission.imposes };
 }

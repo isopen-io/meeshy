@@ -114,3 +114,29 @@ describe('flamme-œil à l\'envoi (#8302)', () => {
     });
   });
 });
+
+describe('ephemeralSendFields — durée ET après lecture sur une copie (#9572)', () => {
+  const FLAME = MESSAGE_EFFECT_FLAGS.EPHEMERAL | MESSAGE_EFFECT_FLAGS.EPHEMERAL_AFTER_READ;
+  const retentionCap = new Date(NOW.getTime() + EPHEMERAL_UNRECEIVED_RETENTION_MS);
+
+  it('garde la durée d’une copie qui porte aussi le bit après lecture', () => {
+    // La durée BORNE (échéance par destinataire, dès la réception), la
+    // consommation après lecture retire plus tôt : le premier des deux gagne.
+    expect(
+      ephemeralSendFields({ ephemeralDuration: 30, effectFlags: FLAME, durationBoundsAfterRead: true, now: NOW }),
+    ).toEqual({ ephemeralDuration: 30, expiresAt: retentionCap });
+  });
+
+  it('laisse la flamme-œil d’un envoi ordinaire SANS durée, même si le client en déclare une', () => {
+    expect(ephemeralSendFields({ ephemeralDuration: 30, effectFlags: FLAME, now: NOW })).toEqual({
+      ephemeralDuration: null,
+      expiresAt: retentionCap,
+    });
+  });
+
+  it('retombe sur la flamme-œil sans durée quand la copie n’en déclare aucune de valide', () => {
+    expect(
+      ephemeralSendFields({ ephemeralDuration: 0, effectFlags: FLAME, durationBoundsAfterRead: true, now: NOW }),
+    ).toEqual({ ephemeralDuration: null, expiresAt: retentionCap });
+  });
+});

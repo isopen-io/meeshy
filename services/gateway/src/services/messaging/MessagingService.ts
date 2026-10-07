@@ -21,6 +21,7 @@ import { stickerFromMetadata } from '../stickers/messageSticker';
 import {
   admitMessageForward,
   describeForwardRefusal,
+  forwardedCopyRequest,
   isForwardRefused,
   sanitizeForwardReferences
 } from './forwardAdmission';
@@ -433,18 +434,16 @@ export class MessagingService {
       //    déclenche un duplicate-key, MessageProcessor relit l'existant
       //    et flague `(message as any).isDuplicate = true`.
       //
-      //    `ephemeralDuration` : la DURÉE héritée de la source prime sur celle
-      //    que le client a (ou n'a pas) envoyée — c'est tout l'objet du garde
-      //    ci-dessus. Depuis #7451 c'est bien une durée et non une échéance :
-      //    le décompte de la copie repart de la réception de chaque nouveau
-      //    destinataire. Le bit `EPHEMERAL` s'en déduit dans `saveMessage`.
+      //    `forwardedCopyRequest` (#9572) pose le VERDICT du garde ci-dessus,
+      //    APRÈS le spread de la requête : ce qu'un client aurait glissé sous
+      //    `forwardImposes` est écrasé. `saveMessage` en tire durée bornée,
+      //    bits et flou de la copie ; une source indisponible retire
+      //    `forwardedFromId`, donc rien de la source n'est recopié.
       const message = await performanceLogger.withTiming(
         'messaging.saveMessage',
         () => this.processor.saveMessage({
           ...request,
-          ...(forwardAdmission.ephemeralDuration
-            ? { ephemeralDuration: forwardAdmission.ephemeralDuration }
-            : {}),
+          ...forwardedCopyRequest(request, forwardAdmission),
           originalLanguage,
           conversationId,
           senderId: participant!.id,
