@@ -17,7 +17,7 @@
  * | borne | loi | refus |
  * |---|---|---|
  * | l'acteur est un participant actif, non banni, de la conversation | `participant` | `not-a-participant` |
- * | la conversation n'est pas close | `isConversationClosed` | `conversation-closed` |
+ * | la conversation existe et n'est pas close | `isConversationClosed` | `conversation-closed` |
  * | budget de déclarations par acteur et conversation | `SOCKET_RATE_LIMITS.MESSAGE_CAPTURE` | `rate-limited` |
  * | le message est de CETTE conversation | `where` | ignoré |
  * | ce n'est pas le sien — capturer son propre contenu n'annonce rien | `senderId` | ignoré |
@@ -207,12 +207,17 @@ async function loadActor(prisma: PrismaClient, input: ContentCaptureInput): Prom
   };
 }
 
+/**
+ * Close OU introuvable : `isConversationClosed(null)` vaut `false` pour ses
+ * autres appelants ; ici une conversation absente (participant orphelin après
+ * un nettoyage) ne reçoit pas d'avis.
+ */
 async function conversationIsClosed(prisma: PrismaClient, conversationId: string): Promise<boolean> {
   const conversation = await prisma.conversation.findUnique({
     where: { id: conversationId },
     select: { isActive: true, closedAt: true },
   });
-  return isConversationClosed(conversation);
+  return conversation == null || isConversationClosed(conversation);
 }
 
 /** Ce qu'une nature prouvée permet d'annoncer — `null` pour l'ordinaire et la source non prouvée. */

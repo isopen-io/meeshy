@@ -162,7 +162,7 @@ type World = {
   messages?: MessageRow[];
   entries?: EntryRow[];
   actor?: ActorRow | null;
-  closed?: { isActive: boolean; closedAt: Date | null };
+  closed?: { isActive: boolean; closedAt: Date | null } | null;
   /** Injecté : sinon le VRAI `readerMayReadMessage` juge sur la base double. */
   mayRead?: ((messageId: string) => boolean | Promise<boolean>) | 'real';
   hiddenForActor?: readonly string[];
@@ -203,7 +203,7 @@ function harness(world: World = {}) {
       findFirst: async ({ where }: { where: Record<string, unknown> }) => (actor && actorMatches(actor, where) ? actor : null),
     },
     conversation: {
-      findUnique: async () => world.closed ?? { isActive: true, closedAt: null },
+      findUnique: async () => (world.closed === undefined ? { isActive: true, closedAt: null } : world.closed),
       update: async () => ({}),
     },
     conversationShareLink: { findUnique: async () => null },
@@ -478,6 +478,12 @@ describe('recordContentCapture — qui peut déclarer', () => {
     expect(await closed.capture([TIMED])).toEqual({ kind: 'conversation-closed' });
     expect(closed.created).toHaveLength(0);
     expect(await harness({ closed: { isActive: false, closedAt: null } }).capture([TIMED])).toEqual({ kind: 'conversation-closed' });
+  });
+
+  it('refuse quand la conversation est INTROUVABLE, même pour un participant actif orphelin', async () => {
+    const h = harness({ closed: null });
+    expect(await h.capture([TIMED])).toEqual({ kind: 'conversation-closed' });
+    expect(h.created).toHaveLength(0);
   });
 
   it('refuse quand le budget de déclarations est épuisé', async () => {
