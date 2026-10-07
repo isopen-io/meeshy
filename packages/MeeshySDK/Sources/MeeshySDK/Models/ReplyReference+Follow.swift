@@ -71,6 +71,7 @@ public extension ReplyReference {
         )
         copy.quotedMessageDeletedAt = quotedMessageDeletedAt
         copy.quotedExpiresAt = quotedExpiresAt
+        copy.quotedExitNature = quotedExitNature
         copy.quotedAudioTracks = quotedAudioTracks
         return copy
     }
@@ -88,5 +89,32 @@ public extension ReplyReference {
     /// citation déjà scellée.
     var followsParentEdits: Bool {
         !isStoryReply && moodEmoji == nil && !isQuotedMessageDeleted && attachmentIsProtected != true
+    }
+}
+
+// MARK: - Ce que la citation laisse sortir
+
+public extension ReplyReference {
+
+    /// **Le contenu cité peut-il SORTIR avec le message qui le cite ?** (#9573)
+    ///
+    /// Une carte « Imager » peint la citation — son texte et ses pièces. Le
+    /// message cité garde son propre verdict : une flamme, une flamme après
+    /// lecture, une vue unique ou un message flouté ne sortent pas davantage
+    /// dans la citation d'un message ordinaire que par eux-mêmes.
+    ///
+    /// - Le message cité RÉEL, quand l'appelant l'a en mémoire, est jugé par la
+    ///   loi de sortie elle-même.
+    /// - Sinon la citation répond de ce que le fil a déclaré
+    ///   (`quotedExitNature`). FERMÉ PAR DÉFAUT : une nature non déclarée ne
+    ///   prouve pas « ordinaire ».
+    func quotedContentMayLeave(quotedMessage: MeeshyMessage?) -> Bool {
+        guard !quotedMediaIsProtected, !isQuotedMessageDeleted else { return false }
+        if let quotedMessage, quotedMessage.id == messageId {
+            return quotedMessage.contentExitLaw.exportable
+                && !quotedMessage.isBlurred
+                && !quotedMessage.attachments.contains { $0.isBlurred }
+        }
+        return quotedExitNature == .ordinary
     }
 }

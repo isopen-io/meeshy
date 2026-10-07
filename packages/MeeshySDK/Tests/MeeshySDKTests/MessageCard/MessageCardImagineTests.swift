@@ -328,7 +328,8 @@ struct MessageCardImagineTests {
 
     // MARK: - Le média du message CITÉ (#8901)
 
-    private static func quotedPhoto(protected: Bool? = nil, deletedAt: Date? = nil, expiresAt: Date? = nil) -> ReplyReference {
+    private static func quotedPhoto(protected: Bool? = nil, deletedAt: Date? = nil, expiresAt: Date? = nil,
+                                    nature: ContentExitLaw.Nature? = .ordinary) -> ReplyReference {
         var reference = ReplyReference(
             messageId: "q", authorName: "Bob", previewText: "Regarde ça",
             attachmentType: "image", attachmentId: "q-img", attachmentThumbnailUrl: "https://x/q-thumb.jpg",
@@ -337,6 +338,7 @@ struct MessageCardImagineTests {
         )
         reference.quotedMessageDeletedAt = deletedAt
         reference.quotedExpiresAt = expiresAt
+        reference.quotedExitNature = nature
         return reference
     }
 
@@ -361,6 +363,10 @@ struct MessageCardImagineTests {
 
     @Test func subject_aProtectedDeletedOrExpiredQuoteBringsNoMedia() {
         let references = [
+            Self.quotedPhoto(nature: .timedFlame),
+            Self.quotedPhoto(nature: .afterReadFlame),
+            Self.quotedPhoto(nature: .viewOnce),
+            Self.quotedPhoto(nature: nil),
             Self.quotedPhoto(protected: true),
             Self.quotedPhoto(deletedAt: Self.now.addingTimeInterval(-60)),
             Self.quotedPhoto(expiresAt: Self.now.addingTimeInterval(-1)),

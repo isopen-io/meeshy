@@ -6,9 +6,14 @@ import MeeshySDK
 /// `ContentExitGate` voyage par l'environnement (#9573) : l'hôte qui présente
 /// une visionneuse le pose une fois, et chaque visionneuse — image, vidéo,
 /// document, code, galerie — y lit si elle rend ses boutons d'enregistrement,
-/// de partage et de copie. Un bouton que le portillon refuse n'est pas rendu.
+/// de partage et de copie. Un bouton que le portillon refuse n'est pas rendu,
+/// et son gestionnaire ne fait rien (`ContentExitGate.perform`).
+///
+/// **Le défaut est FERMÉ.** Un hôte qui présente une visionneuse sans poser de
+/// portillon n'ouvre aucune sortie : l'oubli se voit (un bouton manque) au lieu
+/// de fuir. Un hôte hors conversation — post, commentaire, réel — pose `.open`.
 private struct ContentExitGateKey: EnvironmentKey {
-    static let defaultValue = ContentExitGate.open
+    static let defaultValue = ContentExitGate.sealed
 }
 
 public extension EnvironmentValues {

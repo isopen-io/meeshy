@@ -30,7 +30,7 @@ import Foundation
 /// une colonne non chargée — n'a pas de miroir : un client n'autorise rien.
 public struct ContentExitLaw: Equatable, Sendable {
 
-    public enum Nature: String, Equatable, Sendable, CaseIterable {
+    public enum Nature: String, Equatable, Sendable, CaseIterable, Codable {
         case ordinary
         case timedFlame = "timed-flame"
         case afterReadFlame = "after-read-flame"
@@ -296,10 +296,11 @@ public extension ContentExitLaw.ForwardVerdict {
 /// l'hôte pose et que les visionneuses lisent pour décider si elles rendent
 /// leurs boutons d'enregistrement, de partage et de copie.
 ///
-/// Le SDK ne sait rien de la raison : l'hôte la tire de la loi de sortie. Sans
-/// portillon posé, tout sort (`open`) — un post, un commentaire. `only` est
-/// FERMÉ PAR DÉFAUT : un contenu absent de la liste, ou sans identifiant, ne
-/// sort pas.
+/// Le SDK ne sait rien de la raison : l'hôte la tire de la loi de sortie. FERMÉ
+/// PAR DÉFAUT, à deux étages : sans portillon posé par l'hôte, rien ne sort
+/// (`sealed` est la valeur de l'environnement) ; et sous `only`, un contenu
+/// absent de la liste, ou sans identifiant, ne sort pas. Un hôte qui oublie
+/// n'ouvre rien.
 public struct ContentExitGate: Equatable, Sendable {
 
     private enum Rule: Equatable, Sendable {
@@ -331,6 +332,16 @@ public struct ContentExitGate: Equatable, Sendable {
         case .sealed: return false
         case .only(let contentIds): return contentId.map(contentIds.contains) ?? false
         }
+    }
+
+    /// Exécute une SORTIE seulement si le portillon la laisse partir. Tout
+    /// gestionnaire d'enregistrement, de partage ou de copie passe par ici : un
+    /// bouton masqué ne suffit pas, le geste lui-même ne doit rien faire.
+    @discardableResult
+    public func perform(_ contentId: String? = nil, _ exit: () -> Void) -> Bool {
+        guard mayLeave(contentId) else { return false }
+        exit()
+        return true
     }
 }
 

@@ -163,6 +163,12 @@ public struct ReplyReference: Codable, Equatable, Sendable {
     /// après l'init, comme `quotedMessageDeletedAt` : optionnelle, un blob
     /// gravé avant elle se relit sans emporter le message.
     public var quotedExpiresAt: Date?
+    /// **La nature de disparition du message CITÉ** (#9573), telle que la loi de
+    /// sortie la lit sur ce que le fil a servi de lui. `nil` = le fil ne l'a pas
+    /// déclarée (citation reconstruite pour le temps réel, ligne de cache écrite
+    /// avant ce champ) : la citation est alors ILLISIBLE, et son contenu ne sort
+    /// pas avec le message qui la porte (`quotedContentMayLeave`).
+    public var quotedExitNature: ContentExitLaw.Nature?
     /// #8320 — les pistes TRADUITES d'un audio cité et la langue d'origine
     /// qui les départage, pour que la citation joue, hors de la fenêtre
     /// chargée, la MÊME piste que le vocal d'origine (Prisme audio). Jamais

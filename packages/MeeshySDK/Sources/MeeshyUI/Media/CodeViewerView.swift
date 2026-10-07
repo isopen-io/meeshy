@@ -284,8 +284,10 @@ public struct CodeFullSheet: View {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     if let code = codeContent, exitGate.mayLeave(attachment.id) {
                         Button {
-                            UIPasteboard.general.string = code
-                            HapticFeedback.success()
+                            exitGate.perform(attachment.id) {
+                                UIPasteboard.general.string = code
+                                HapticFeedback.success()
+                            }
                         } label: {
                             Image(systemName: "doc.on.doc")
                                 .foregroundColor(Color(hex: accentColor))

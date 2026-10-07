@@ -456,7 +456,7 @@ internal struct _FullscreenOverlayControls: View {
                     label: String(localized: "story.timeline.export.preview.share",
                                   defaultValue: "Partager la vidéo", bundle: .module)
                 ) {
-                    onShare?()
+                    exitGate.perform { onShare?() }
                 }
             }
             if controls.contains(.save), exitGate.mayLeave() {
@@ -477,7 +477,7 @@ internal struct _FullscreenOverlayControls: View {
                 systemImage: saveGlyph,
                 label: String(localized: "common.save", defaultValue: "Enregistrer", bundle: .module)
             ) {
-                onSave?()
+                exitGate.perform { onSave?() }
             }
             .disabled(saveState == .saved)
         }

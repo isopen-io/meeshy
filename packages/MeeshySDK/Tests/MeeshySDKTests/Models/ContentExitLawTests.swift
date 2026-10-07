@@ -322,6 +322,18 @@ struct ContentExitLawTests {
         #expect(!ContentExitGate.only([]).mayLeave("a1"))
     }
 
+    @Test("un gestionnaire de sortie ne fait RIEN sous un portillon fermé — le geste, pas seulement le bouton")
+    func test_gate_perform_nExécuteQueCeQuiPeutSortir() {
+        var ran: [String] = []
+        #expect(ContentExitGate.open.perform { ran.append("open") })
+        #expect(!ContentExitGate.sealed.perform { ran.append("sealed") })
+        #expect(!ContentExitGate.sealed.perform("a1") { ran.append("sealed-id") })
+        #expect(ContentExitGate.only(["a1"]).perform("a1") { ran.append("listed") })
+        #expect(!ContentExitGate.only(["a1"]).perform("a2") { ran.append("unlisted") })
+        #expect(!ContentExitGate.only(["a1"]).perform { ran.append("no-id") })
+        #expect(ran == ["open", "listed"])
+    }
+
     @Test("un palier porte son libellé de palier, une durée libre se compose")
     func test_choiceLabel() {
         #expect(ForwardDurationChoice(seconds: 15).label == "15s")

@@ -197,7 +197,7 @@ public struct MessageCardSubject: Equatable, Sendable {
         let replyAuthor = MessageCardMediaAuthor(reply, isQuoted: false)
         let quotedAuthor = quotedMediaAuthor(message.replyTo, quotedMessage: quotedMessage, viewer: viewer)
         return MessageCardSubject(
-            quoted: quote(message.replyTo, viewer: viewer, now: now),
+            quoted: quote(message.replyTo, quotedMessage: quotedMessage, viewer: viewer, now: now),
             reply: reply,
             sentAt: message.createdAt,
             quotedAt: message.replyTo == nil ? nil : quotedAt,
@@ -225,7 +225,7 @@ public struct MessageCardSubject: Equatable, Sendable {
         if let quotedMessage, quotedMessage.id == reference.messageId {
             return isExportable(quotedMessage, now: now) ? paintableMedia(of: quotedMessage, audioLanguages: audioLanguages) : []
         }
-        guard var attachment = reference.quotedAttachment else { return [] }
+        guard reference.quotedContentMayLeave(quotedMessage: nil), var attachment = reference.quotedAttachment else { return [] }
         if attachment.type == .audio, let tracks = reference.quotedAudioTracks {
             attachment.audioTranslations = tracks.urlsByLanguage.mapValues { MeeshyMessageAttachment.EmbeddedAudioTranslation(url: $0) }
         }
@@ -325,8 +325,12 @@ public struct MessageCardSubject: Equatable, Sendable {
         translations.first { $0.key.lowercased() == language.lowercased() }.flatMap { MessageCardText.nonBlank($0.value) }
     }
 
-    private static func quote(_ reference: ReplyReference?, viewer: Viewer, now: Date) -> MessageCardPart? {
+    /// La citation peinte. Le contenu cité garde SON verdict de sortie (#9573) :
+    /// une flamme, une vue unique ou une citation dont la nature n'est pas
+    /// déclarée ne se peint pas — `ReplyReference.quotedContentMayLeave`.
+    private static func quote(_ reference: ReplyReference?, quotedMessage: MeeshyMessage?, viewer: Viewer, now: Date) -> MessageCardPart? {
         guard let reference, !reference.isStoryReply, !reference.isQuotedMessageDeleted else { return nil }
+        guard reference.quotedContentMayLeave(quotedMessage: quotedMessage) else { return nil }
         if let expiresAt = reference.quotedExpiresAt, expiresAt <= now { return nil }
         guard let text = MessageCardText.nonBlank(reference.previewText) else { return nil }
         return MessageCardPart(
