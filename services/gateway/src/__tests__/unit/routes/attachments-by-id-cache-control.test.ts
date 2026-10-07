@@ -89,6 +89,8 @@ function makePrisma(rows: Row[], carriers: Carrier[]) {
       ),
     },
     participant: { findFirst: jest.fn<any>().mockResolvedValue({ id: 'part-1' }) },
+    // #9589 — ce lecteur n'a ni décompte ni ouverture : sa ligne de statut n'existe pas.
+    messageStatusEntry: { findFirst: jest.fn<any>().mockResolvedValue(null) },
   };
 }
 

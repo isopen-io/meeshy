@@ -919,3 +919,55 @@ describe('GET /conversations/:id/attachments — la protection de la pièce join
     expect(typeof served.thumbnailUrl).toBe('string');
   });
 });
+
+// ─── #9589 — l'échéance du LECTEUR ferme aussi le détail ─────────────────────
+describe('GET /attachments/:id/metadata — le contenu a disparu pour CE lecteur (#9589)', () => {
+  const CARRIER_ID = '507f1f77bcf86cd7994390c1';
+  const HOUR = 3_600_000;
+  const flame = {
+    id: CARRIER_ID,
+    conversationId: 'conv-flamme',
+    deletedAt: null,
+    viewOnceBurnAt: null,
+    expiresAt: new Date(Date.now() + 24 * HOUR),
+    senderId: 'participant-auteur',
+    createdAt: new Date(Date.now() - HOUR),
+    isViewOnce: false,
+    effectFlags: 1,
+    ephemeralDuration: 30,
+  };
+  const detailFor = async (ephemeralExpiresAt: Date) => {
+    mockGetAttachmentWithMetadata.mockResolvedValue({ ...MOCK_ATTACHMENT, messageId: CARRIER_ID });
+    const statusFindFirst = jest.fn<any>().mockResolvedValue({ ephemeralExpiresAt, viewedOnceAt: null });
+    const app = await buildApp({
+      prismaOverrides: {
+        message: {
+          findUnique: jest.fn<any>().mockResolvedValue(flame),
+          findFirst: jest.fn<any>().mockResolvedValue({ id: CARRIER_ID }),
+        },
+        participant: {
+          findFirst: jest.fn<any>().mockResolvedValue({ id: PARTICIPANT_ID, conversationId: flame.conversationId }),
+        },
+        messageStatusEntry: { findFirst: statusFindFirst },
+      },
+    });
+    const res = await app.inject({ method: 'GET', url: `/attachments/${ATTACHMENT_ID}/metadata` });
+    await app.close();
+    return { res, statusFindFirst };
+  };
+
+  it('rend 404 au destinataire dont le décompte est fini, alors que le message vit encore pour d’autres', async () => {
+    const { res, statusFindFirst } = await detailFor(new Date(Date.now() - 60_000));
+
+    expect(res.statusCode).toBe(404);
+    expect(statusFindFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { messageId: CARRIER_ID, participantId: PARTICIPANT_ID } }),
+    );
+  });
+
+  it('sert le détail tant que son décompte court', async () => {
+    const { res } = await detailFor(new Date(Date.now() + 60_000));
+
+    expect(res.statusCode).toBe(200);
+  });
+});

@@ -11,7 +11,9 @@
  *  - `allow`     — sert le contenu ;
  *  - `forbidden` — 403, l'appelant est étranger à la conversation ;
  *  - `gone`      — 404, le message porteur a été rappelé, a expiré, ou sa
- *                  brûlure de vue unique est consommée.
+ *                  brûlure de vue unique est consommée ; ou bien le contenu a
+ *                  disparu pour CE lecteur (#9589) — décompte fini, flamme
+ *                  après lecture consommée, vue unique ouverte.
  *
  * Le rattachement passe par le message : `messageId` → conversation →
  * participation. Une pièce jointe pas encore rattachée à un message (envoi en
@@ -26,13 +28,14 @@ import type { FastifyRequest, FastifyReply } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { sendForbidden, sendNotFound } from '../../utils/response.js';
 import { carrierMessageStillServesBytes } from './carrierMessageLifecycle';
+import { READER_LIFECYCLE_MESSAGE_SELECT, readerStillReadsBytes } from './readerAttachmentLifecycle';
 
 export type AttachmentReadVerdict = 'allow' | 'forbidden' | 'gone';
 
 export async function resolveAttachmentReadVerdict(
   request: FastifyRequest,
-  attachment: { messageId?: string | null; uploadedBy?: string | null },
-  prisma: Pick<PrismaClient, 'message' | 'participant'>
+  attachment: { messageId?: string | null; uploadedBy?: string | null; isViewOnce?: boolean | null },
+  prisma: Pick<PrismaClient, 'message' | 'participant' | 'messageStatusEntry'>
 ): Promise<AttachmentReadVerdict> {
   const authContext = (request as unknown as { authContext?: {
     isAuthenticated?: boolean; isAnonymous?: boolean; userId?: string; participantId?: string;
@@ -51,7 +54,7 @@ export async function resolveAttachmentReadVerdict(
     where: { id: attachment.messageId },
     // `deletedAt`/`expiresAt` voyagent avec `conversationId` : la garde de
     // cycle de vie ne coûte aucun aller-retour de plus.
-    select: { conversationId: true, deletedAt: true, expiresAt: true, viewOnceBurnAt: true }
+    select: { conversationId: true, deletedAt: true, viewOnceBurnAt: true, ...READER_LIFECYCLE_MESSAGE_SELECT }
   });
   if (!message) return 'forbidden';
 
@@ -66,7 +69,19 @@ export async function resolveAttachmentReadVerdict(
 
   // Le dernier maillon de la chaîne de destruction des cycles 92 à 94 : les
   // octets suivent la vie du message porteur. Cf. `carrierMessageLifecycle`.
-  return carrierMessageStillServesBytes(message, new Date()) ? 'allow' : 'gone';
+  const now = new Date();
+  if (!carrierMessageStillServesBytes(message, now)) return 'gone';
+
+  // #9589 — puis l'échéance de CE lecteur : son décompte, sa consommation
+  // après lecture, sa vue unique ouverte. Cf. `readerAttachmentLifecycle`.
+  const readerReads = await readerStillReadsBytes(prisma, {
+    messageId: attachment.messageId,
+    message,
+    attachmentIsViewOnce: attachment.isViewOnce,
+    readerParticipantId: participant.id,
+    now,
+  });
+  return readerReads ? 'allow' : 'gone';
 }
 
 /**
