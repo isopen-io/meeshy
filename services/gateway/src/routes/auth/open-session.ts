@@ -10,6 +10,7 @@
 
 import type { SocketIOUser } from '@meeshy/shared/types';
 import type { RequestContext } from '../../services/GeoIPService';
+import type { SessionLoginMethod } from '@meeshy/shared/utils/client-session';
 import { createSession, generateSessionToken, type SessionData } from '../../services/SessionService';
 
 export type OpenedSession = {
@@ -21,10 +22,11 @@ export type OpenedSession = {
 export async function openSession(
   authService: { generateToken(user: SocketIOUser, sessionId?: string | null): string },
   user: SocketIOUser,
-  requestContext: RequestContext
+  requestContext: RequestContext,
+  loginMethod: SessionLoginMethod
 ): Promise<OpenedSession> {
   const sessionToken = generateSessionToken();
-  const session = await createSession({ userId: user.id, token: sessionToken, requestContext });
+  const session = await createSession({ userId: user.id, token: sessionToken, requestContext, loginMethod });
   const token = authService.generateToken(user, session.id);
   return { token, sessionToken, session };
 }

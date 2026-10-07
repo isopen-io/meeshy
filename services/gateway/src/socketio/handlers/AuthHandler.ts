@@ -16,6 +16,8 @@ import { getSocketRateLimiter, SOCKET_RATE_LIMITS } from '../../utils/socket-rat
 import { resolveUserLanguagesOrdered } from '@meeshy/shared/utils/conversation-helpers';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { liveSessionFilter, requiresLiveSession } from './live-session-gate';
+import { readClientSessionAuth } from '@meeshy/shared/utils/client-session';
+import { recordSessionClientInfo } from '../../services/auth/session-client-info';
 import { ACTIVATION_SELECT, isActivationBlocked } from '../../services/auth/account-activation';
 import { scheduleContactRecentlyActiveAnnouncement } from '../../services/notifications/contact-recently-active';
 import { guardedTimeout } from '../../utils/guarded-timer.js';
@@ -302,6 +304,14 @@ export class AuthHandler {
         socket.disconnect(true);
         return;
       }
+
+      // #9610 — la socket remet sous `auth.client` ce qu'une requête porte en
+      // en-têtes ; la session nommée le retient. Détaché, ne lève jamais.
+      void recordSessionClientInfo(this.prisma, {
+        sessionId: namedSession.id,
+        userId: user.id,
+        declared: readClientSessionAuth(socket.handshake.auth),
+      }).catch(() => undefined);
     }
 
     const resolvedLanguages = resolveUserLanguagesOrdered(user, {

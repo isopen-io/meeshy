@@ -627,7 +627,8 @@ describe('MagicLinkService', () => {
         expect(mockCreateSession).toHaveBeenCalledWith({
           userId: mockUser.id,
           token: 'mock-session-token',
-          requestContext: mockRequestContext
+          requestContext: mockRequestContext,
+          loginMethod: 'magic_link'
         });
       });
 
@@ -638,6 +639,7 @@ describe('MagicLinkService', () => {
           where: { id: mockUser.id },
           data: {
             lastActiveAt: expect.any(Date),
+            lastLoginAt: expect.any(Date),
             lastLoginIp: mockRequestContext.ip,
             lastLoginLocation: mockRequestContext.geoData?.location,
             lastLoginDevice: mockRequestContext.deviceInfo?.type

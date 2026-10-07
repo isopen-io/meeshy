@@ -290,6 +290,7 @@ export class AuthService {
           isOnline: true,
           lastActiveAt: new Date(),
           // Login tracking (updated on each login)
+          lastLoginAt: new Date(),
           lastLoginIp: requestContext?.ip || user.lastLoginIp,
           lastLoginLocation: requestContext?.geoData?.location || user.lastLoginLocation,
           lastLoginDevice: requestContext?.userAgent || user.lastLoginDevice,
@@ -317,7 +318,8 @@ export class AuthService {
       const session = await createSession({
         userId: user.id,
         token: sessionToken,
-        requestContext: requestContext || defaultContext
+        requestContext: requestContext || defaultContext,
+        loginMethod: 'password'
       });
 
       logger.info(`[AUTH_SERVICE] ✅ Session créée pour: ${user.username} - ID session.id=${session.id}`);
@@ -476,6 +478,7 @@ export class AuthService {
           ...clearPendingTwoFactor(),
           isOnline: true,
           lastActiveAt: new Date(),
+          lastLoginAt: new Date(),
           lastLoginIp: requestContext?.ip || user.lastLoginIp,
           lastLoginLocation: requestContext?.geoData?.location || user.lastLoginLocation,
           lastLoginDevice: requestContext?.userAgent || user.lastLoginDevice,
@@ -496,7 +499,8 @@ export class AuthService {
       const session = await createSession({
         userId: user.id,
         token: sessionToken,
-        requestContext: requestContext || defaultContext
+        requestContext: requestContext || defaultContext,
+        loginMethod: 'two_factor'
       });
 
       logger.info(`[AUTH_SERVICE] ✅ Session 2FA créée pour: ${user.username} - ID: ${session.id}`);

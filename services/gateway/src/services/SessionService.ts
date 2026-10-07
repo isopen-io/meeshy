@@ -10,6 +10,7 @@
 
 import { createHash, randomBytes } from 'crypto';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
+import type { SessionLoginMethod } from '@meeshy/shared/utils/client-session';
 import { RequestContext } from './GeoIPService';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 
@@ -66,10 +67,19 @@ export interface SessionData {
   browserName: string | null;
   browserVersion: string | null;
   isMobile: boolean;
+  /** Ce que le client a déclaré (#9610) — `null` pour un client qui n'en dit rien. */
+  appVersion: string | null;
+  appBuild: string | null;
+  platform: string | null;
+  deviceName: string | null;
+  /** Posé par le serveur à l'ouverture (#9610). */
+  loginMethod: string | null;
   ipAddress: string | null;
   country: string | null;
+  /** Approximative : tirée de l'adresse IP par la base locale (#9609). */
   city: string | null;
   location: string | null;
+  timezone: string | null;
   createdAt: Date;
   lastActivityAt: Date;
   isCurrentSession: boolean;
@@ -80,6 +90,8 @@ export interface CreateSessionInput {
   userId: string;
   token: string;
   requestContext: RequestContext;
+  /** Le moyen par lequel la session s'ouvre (#9610) ; absent, il reste inconnu. */
+  loginMethod?: SessionLoginMethod;
 }
 
 /**
@@ -131,7 +143,7 @@ function getSessionExpiryDays(deviceInfo: RequestContext['deviceInfo']): number 
 export async function createSession(input: CreateSessionInput): Promise<SessionData> {
   const db = getPrisma();
   const { userId, token, requestContext } = input;
-  const { ip, geoData, deviceInfo } = requestContext;
+  const { ip, geoData, deviceInfo, client } = requestContext;
 
   // Hash the token for storage
   const sessionToken = hashToken(token);
@@ -157,6 +169,12 @@ export async function createSession(input: CreateSessionInput): Promise<SessionD
       browserVersion: deviceInfo?.browserVersion || null,
       isMobile: deviceInfo?.isMobile || false,
       userAgent: deviceInfo?.rawUserAgent || null,
+      // Ce que le client déclare, et le moyen de connexion (#9610)
+      appVersion: client?.appVersion ?? null,
+      appBuild: client?.appBuild ?? null,
+      platform: client?.platform ?? null,
+      deviceName: client?.deviceName ?? null,
+      loginMethod: input.loginMethod ?? null,
       // Geo info
       ipAddress: ip,
       country: geoData?.country || null,
@@ -625,10 +643,16 @@ function mapSessionToData(session: any, isCurrentSession: boolean): SessionData 
     browserName: session.browserName,
     browserVersion: session.browserVersion,
     isMobile: session.isMobile,
+    appVersion: session.appVersion ?? null,
+    appBuild: session.appBuild ?? null,
+    platform: session.platform ?? null,
+    deviceName: session.deviceName ?? null,
+    loginMethod: session.loginMethod ?? null,
     ipAddress: session.ipAddress,
     country: session.country,
     city: session.city,
     location: session.location,
+    timezone: session.timezone ?? null,
     createdAt: session.createdAt,
     lastActivityAt: session.lastActivityAt,
     isCurrentSession,

@@ -32,6 +32,8 @@ import { mintPendingTwoFactorChallenge } from '../../services/auth/pending-two-f
 import { validatePasswordStrength } from '../../utils/password-strength';
 import { createVerifyEmailIpRateLimiter, createVerifyEmailAddressRateLimiter } from '../../utils/rate-limiter.js';
 import { openSession } from './open-session';
+import { GEOLOCATION_ATTRIBUTION, readClientSessionHeaders } from '@meeshy/shared/utils/client-session';
+import { recordSessionClientInfo } from '../../services/auth/session-client-info';
 import { currentSessionOf } from '../../services/auth/current-session';
 
 // Logger dédié pour magic-link
@@ -283,6 +285,18 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
       // fermeture de fenêtre ne dépendant pas du jeton.
       const newToken = authService.generateToken(user, sid ?? activeSession?.id);
 
+      // #9610 — la version, le build et la plateforme se relèvent à chaque
+      // rafraîchissement, sur la session que le jeton NOMME. Détaché : la
+      // réponse n'attend jamais ce relevé, et il ne lève pas.
+      const sessionNommeeId = sid ?? activeSession?.id;
+      if (sessionNommeeId) {
+        void recordSessionClientInfo(context.prisma, {
+          sessionId: sessionNommeeId,
+          userId: decoded.userId,
+          declared: readClientSessionHeaders(request.headers),
+        }).catch(() => undefined);
+      }
+
       // Sliding window: extend the trusted session another full cycle on every
       // successful refresh and bump lastActiveAt. As long as the user opens the
       // app at least once per session lifetime (365d for mobile), the session
@@ -416,7 +430,7 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
       }
 
       const requestContext = await getRequestContext(request);
-      const opened = await openSession(authService, user, requestContext);
+      const opened = await openSession(authService, user, requestContext, 'email_verification');
 
       logger.info('[AUTH] ✅ Adresse prouvée — session ouverte');
 
@@ -611,16 +625,24 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
           browserName: session.browserName,
           browserVersion: session.browserVersion,
           isMobile: session.isMobile,
+          appVersion: session.appVersion,
+          appBuild: session.appBuild,
+          platform: session.platform,
+          deviceName: session.deviceName,
+          loginMethod: session.loginMethod,
           ipAddress: session.ipAddress,
           country: session.country,
           city: session.city,
           location: session.location,
+          timezone: session.timezone,
           createdAt: session.createdAt,
           lastActivityAt: session.lastActivityAt,
           isCurrentSession: session.isCurrentSession,
           isTrusted: session.isTrusted
         })),
-        totalCount: sessions.length
+        totalCount: sessions.length,
+        // La licence CC-BY 4.0 de DB-IP Lite (#9609) : le lieu affiché porte son attribution.
+        geolocation: GEOLOCATION_ATTRIBUTION
       });
 
     } catch (error) {

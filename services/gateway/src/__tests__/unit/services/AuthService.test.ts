@@ -405,7 +405,8 @@ describe('AuthService', () => {
         where: { id: mockUser.id },
         data: {
           isOnline: true,
-          lastActiveAt: expect.any(Date)
+          lastActiveAt: expect.any(Date),
+          lastLoginAt: expect.any(Date)
         }
       });
     });
