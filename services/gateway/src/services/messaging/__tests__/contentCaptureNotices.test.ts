@@ -26,8 +26,10 @@ import {
   captureRateLimitKey,
   recordContentCapture,
   wasOnActorScreen,
+  type CaptureNoticeDelivery,
   type ContentCaptureDeps,
 } from '../contentCaptureNotices';
+import { CAPTURE_NOTICE_RETENTION_MS } from '../captureNoticeVisibility';
 import { SOCKET_RATE_LIMITS, SocketRateLimiter } from '../../../utils/socket-rate-limiter';
 
 const { EPHEMERAL, EPHEMERAL_AFTER_READ } = MESSAGE_EFFECT_FLAGS;
@@ -37,6 +39,7 @@ const OTHER_CONV = '507f1f77bcf86cd799439012';
 const ACTOR = '507f1f77bcf86cd7994390a1';
 const SENDER = '507f1f77bcf86cd7994390af';
 const USER = '507f1f77bcf86cd7994390c1';
+const WITNESS = '507f1f77bcf86cd7994390b1';
 
 const TIMED = '507f1f77bcf86cd799439031';
 const AFTER_READ = '507f1f77bcf86cd799439032';
@@ -168,6 +171,10 @@ type World = {
   hiddenForActor?: readonly string[];
   allowDeclarations?: boolean;
   failWrites?: boolean;
+  /** La police d'écriture de la conversation — que l'avis, fait de service, ne lit pas (#9628). */
+  conversation?: Record<string, unknown>;
+  failDeliver?: boolean;
+  members?: { id: string; userId: string | null; role: string; joinedAt: Date; historyVisibleFrom?: Date | null }[];
 };
 
 const limiters: SocketRateLimiter[] = [];
@@ -190,7 +197,8 @@ function harness(world: World = {}) {
   const entries = world.entries ?? DEFAULT_ENTRIES;
   const actor = world.actor === undefined ? actorRow() : world.actor;
   const created: Record<string, unknown>[] = [];
-  const broadcasts: unknown[] = [];
+  const deliveries: CaptureNoticeDelivery[] = [];
+  const clockAdvances: unknown[] = [];
   const readCalls: Record<string, unknown>[] = [];
   const clock = { now: NOW };
   const control = { failWrites: world.failWrites ?? false };
@@ -201,15 +209,25 @@ function harness(world: World = {}) {
   const prisma = {
     participant: {
       findFirst: async ({ where }: { where: Record<string, unknown> }) => (actor && actorMatches(actor, where) ? actor : null),
+      findMany: async () =>
+        (world.members ?? [
+          { id: ACTOR, userId: USER, role: 'member', joinedAt: new Date('2026-01-01T00:00:00Z') },
+          { id: SENDER, userId: 'u-sender', role: 'member', joinedAt: new Date('2026-01-01T00:00:00Z') },
+          { id: WITNESS, userId: 'u-witness', role: 'member', joinedAt: new Date('2026-01-01T00:00:00Z') },
+        ]).map((m) => ({ shareLinkId: null, historyVisibleFrom: null, permissions: null, anonymousSession: null, user: { role: 'USER' }, ...m })),
     },
     conversation: {
-      findUnique: async () => (world.closed === undefined ? { isActive: true, closedAt: null } : world.closed),
-      update: async () => ({}),
+      findUnique: async () =>
+        world.closed === undefined ? { isActive: true, closedAt: null, isAnnouncementChannel: false, ...world.conversation } : world.closed,
+      update: async (args: unknown) => {
+        clockAdvances.push(args);
+        return {};
+      },
     },
-    conversationShareLink: { findUnique: async () => null },
-    userConversationPreferences: { findFirst: async () => null },
+    conversationShareLink: { findUnique: async () => null, findMany: async () => [] },
+    userConversationPreferences: { findFirst: async () => null, findMany: async () => [] },
     userMessageDeletion: {
-      findMany: async () => (world.hiddenForActor ?? []).map((messageId) => ({ messageId })),
+      findMany: async () => (world.hiddenForActor ?? []).map((messageId) => ({ messageId, userId: USER })),
     },
     message: {
       findMany: async ({ where }: { where: { id: { in: string[] }; conversationId: string } }) =>
@@ -254,8 +272,9 @@ function harness(world: World = {}) {
       checkLimit: async (key, config) =>
         config === SOCKET_RATE_LIMITS.MESSAGE_CAPTURE && world.allowDeclarations === false ? false : limiter.checkLimit(key, config),
     },
-    broadcast: async (msg) => {
-      broadcasts.push(msg);
+    deliver: async (delivery) => {
+      if (world.failDeliver) throw new Error('socket down');
+      deliveries.push(delivery);
     },
     ...injected,
     now: () => clock.now,
@@ -268,13 +287,13 @@ function harness(world: World = {}) {
       report: { messageIds, kind: overrides.kind ?? 'screenshot', captureId: overrides.captureId ?? 'capture-0001' },
     });
 
-  return { capture, created, broadcasts, readCalls, clock, control, limiter };
+  return { capture, created, deliveries, clockAdvances, readCalls, clock, control, limiter };
 }
 
 const noticesOf = (created: Record<string, unknown>[]) => created.map((row) => parseCaptureNotice(row.metadata));
 
 describe('recordContentCapture — ce qui s’annonce (#9617)', () => {
-  it('annonce la capture d’une flamme à durée, par le chemin des avis système, diffusé au fil', async () => {
+  it('annonce la capture d’une flamme à durée, par le chemin des avis système, remis à son audience', async () => {
     const h = harness();
     const outcome = await h.capture([TIMED]);
 
@@ -296,7 +315,7 @@ describe('recordContentCapture — ce qui s’annonce (#9617)', () => {
       captureKind: 'screenshot',
       sentAt: SENT_AT.toISOString(),
     });
-    expect(h.broadcasts).toHaveLength(1);
+    expect(h.deliveries).toHaveLength(1);
   });
 
   it('annonce une flamme après lecture déjà consommée à la fermeture — la capture a eu lieu PENDANT l’affichage', async () => {
@@ -523,7 +542,7 @@ describe('recordContentCapture — une annonce par (acteur, message, sorte), et 
     const h = harness({ messages: ids.map(flame), entries: ids.map((id) => entry(id)) });
     const outcome = await h.capture(ids);
     expect(h.created).toHaveLength(MAX_NOTICES_PER_REPORT);
-    expect(h.broadcasts).toHaveLength(MAX_NOTICES_PER_REPORT);
+    expect(h.deliveries).toHaveLength(MAX_NOTICES_PER_REPORT);
     expect(outcome).toEqual({ kind: 'recorded', noticedMessageIds: ids.slice(0, MAX_NOTICES_PER_REPORT) });
   });
 
@@ -557,6 +576,92 @@ describe('recordContentCapture — une annonce par (acteur, message, sorte), et 
     const h = harness({ failWrites: true });
     expect(await h.capture([TIMED])).toEqual({ kind: 'recorded', noticedMessageIds: [] });
     h.control.failWrites = false;
+    expect(await h.capture([TIMED])).toEqual({ kind: 'recorded', noticedMessageIds: [TIMED] });
+    expect(h.created).toHaveLength(1);
+  });
+});
+
+describe('recordContentCapture — un fait de service, pas un message de l’acteur (#9628)', () => {
+  const policies: ReadonlyArray<[string, Record<string, unknown>, Partial<ActorRow>]> = [
+    ['canal d’annonces, membre ordinaire', { isAnnouncementChannel: true }, {}],
+    ['membre sans droit d’écriture', { defaultWriteRole: 'admin' }, { permissions: { canSendMessages: false } as never }],
+    ['mode lent', { slowModeSeconds: 300 }, {}],
+    ['fenêtre des nouveaux venus', {}, { joinedAt: ago(minutes(1)) }],
+  ];
+
+  it.each(policies)('écrit l’avis malgré la police d’écriture : %s', async (_label, conversation, actor) => {
+    const h = harness({ conversation, actor: actorRow(actor) });
+    expect(await h.capture([TIMED])).toEqual({ kind: 'recorded', noticedMessageIds: [TIMED] });
+    expect(h.created).toHaveLength(1);
+  });
+
+  it('ne compte pas dans la cadence de l’acteur : l’avis est `messageSource: system`, que le mode lent ignore', async () => {
+    const h = harness({ conversation: { slowModeSeconds: 300 } });
+    await h.capture([TIMED]);
+    expect(h.created[0]).toMatchObject({ messageSource: 'system' });
+  });
+});
+
+describe('recordContentCapture — une ligne silencieuse qui meurt (#9629 a, #9630)', () => {
+  it('porte une échéance : 24 h après l’échéance globale du message capturé', async () => {
+    const h = harness();
+    await h.capture([TIMED]);
+    const capturedExpiresAt = DEFAULT_MESSAGES[0].expiresAt as Date;
+    expect(h.created[0]?.expiresAt).toEqual(new Date(capturedExpiresAt.getTime() + CAPTURE_NOTICE_RETENTION_MS));
+  });
+
+  it('porte une échéance : 24 h après l’avis quand le message capturé n’en a pas (vue unique)', async () => {
+    const h = harness();
+    await h.capture([ONCE]);
+    expect(h.created[0]?.expiresAt).toEqual(new Date(NOW.getTime() + CAPTURE_NOTICE_RETENTION_MS));
+  });
+
+  it('n’avance pas l’horloge du fil', async () => {
+    const h = harness();
+    await h.capture([TIMED]);
+    expect(h.created).toHaveLength(1);
+    expect(h.clockAdvances).toEqual([]);
+  });
+});
+
+describe('recordContentCapture — à qui l’avis est remis (#9629 b, #9630)', () => {
+  it('le remet aux lecteurs du message capturé, et ne fait monter le non-lu que chez son auteur', async () => {
+    const h = harness();
+    await h.capture([TIMED]);
+    const [delivery] = h.deliveries;
+    expect(delivery.conversationId).toBe(CONV);
+    expect(delivery.message).toBe(h.created[0]);
+    expect(delivery.recipients.map((r) => r.id).sort()).toEqual([ACTOR, SENDER, WITNESS].sort());
+    expect(delivery.unreadRecipients.map((r) => r.id)).toEqual([SENDER]);
+  });
+
+  it('ne le remet pas à un membre dont le plancher cache le message capturé', async () => {
+    const h = harness({
+      members: [
+        { id: ACTOR, userId: USER, role: 'member', joinedAt: new Date('2026-01-01T00:00:00Z') },
+        { id: SENDER, userId: 'u-sender', role: 'member', joinedAt: new Date('2026-01-01T00:00:00Z') },
+        { id: WITNESS, userId: 'u-witness', role: 'member', joinedAt: new Date('2026-01-01T00:00:00Z'), historyVisibleFrom: new Date(SENT_AT.getTime() + 1) },
+      ],
+    });
+    await h.capture([TIMED]);
+    expect(h.deliveries[0]?.recipients.map((r) => r.id).sort()).toEqual([ACTOR, SENDER].sort());
+  });
+
+  it('dans un canal d’annonces, ne le remet qu’à l’auteur, aux modérateurs et à celui qui capture', async () => {
+    const h = harness({
+      conversation: { isAnnouncementChannel: true },
+      members: [
+        { id: ACTOR, userId: USER, role: 'member', joinedAt: new Date('2026-01-01T00:00:00Z') },
+        { id: SENDER, userId: 'u-sender', role: 'admin', joinedAt: new Date('2026-01-01T00:00:00Z') },
+        { id: WITNESS, userId: 'u-witness', role: 'member', joinedAt: new Date('2026-01-01T00:00:00Z') },
+      ],
+    });
+    await h.capture([TIMED]);
+    expect(h.deliveries[0]?.recipients.map((r) => r.id).sort()).toEqual([ACTOR, SENDER].sort());
+  });
+
+  it('une remise qui échoue n’annule pas l’avis écrit', async () => {
+    const h = harness({ failDeliver: true });
     expect(await h.capture([TIMED])).toEqual({ kind: 'recorded', noticedMessageIds: [TIMED] });
     expect(h.created).toHaveLength(1);
   });

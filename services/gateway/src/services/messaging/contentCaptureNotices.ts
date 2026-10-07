@@ -47,11 +47,24 @@
  * pour un acteur est donc bornée, et la clé « déjà annoncé » n'a pas à lui
  * survivre ({@link CAPTURE_ONCE_TTL_SECONDS}).
  *
- * ─── CE QUI PART ────────────────────────────────────────────────────────────
+ * ─── UN FAIT DE SERVICE (#9628) ─────────────────────────────────────────────
  *
- * Un message système par le chemin de TOUS les avis (`postSystemNotice` :
- * écriture, horloge du fil, `message:new`) — aucune notification push, comme
- * les autres avis. Sa métadonnée (`captureNoticeMetadata`) ne porte AUCUN
+ * L'avis n'est pas un message de l'acteur : la police d'écriture de la
+ * conversation (`conversationWriteAdmission` — canal d'annonces,
+ * `canSendMessages`, mode lent, fenêtre des nouveaux venus) ne le juge pas, et
+ * il ne compte pas dans la cadence de l'acteur (le mode lent ne lit que
+ * `messageSource: 'user'`). Restent les bornes ci-dessus : conversation close,
+ * participant actif et non banni, plafonds.
+ *
+ * ─── CE QUI PART (#9629, #9630) ─────────────────────────────────────────────
+ *
+ * Un message système (`postSystemNotice`) qui MEURT — `captureNoticeExpiresAt`,
+ * détruit par le balayage des éphémères — et qui est SILENCIEUX : il n'avance
+ * pas l'horloge du fil. Il est remis à son AUDIENCE seulement
+ * (`captureNoticeAudience` : les lecteurs du message capturé, celui qui capture
+ * et l'auteur ; en canal d'annonces, les modérateurs à la place des lecteurs),
+ * et ne fait monter le non-lu que chez l'auteur du message capturé. Aucune
+ * notification push. Sa métadonnée (`captureNoticeMetadata`) ne porte AUCUN
  * contenu du message capturé.
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
@@ -68,8 +81,9 @@ import { contentExitLawOfSource, type ContentExitProjection } from '@meeshy/shar
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { unsetOrNull } from '../../utils/prisma-unset';
 import { SOCKET_RATE_LIMITS, type RateLimitConfig } from '../../utils/socket-rate-limiter';
-import { postSystemNotice, type SystemNoticeDeps } from '../conversations/conversationNotice';
+import { postSystemNotice } from '../conversations/conversationNotice';
 import type { HistoryReader } from '../historyFloor';
+import { captureNoticeAudience, captureNoticeExpiresAt, type CaptureNoticeRecipient } from './captureNoticeVisibility';
 import { isConversationClosed } from './conversationWriteAdmission';
 import { readerMayReadMessage, type ReadableMessageRow } from './messageReadAccess';
 
@@ -95,11 +109,22 @@ export type CaptureRateLimiter = {
   checkLimit(key: string, config: RateLimitConfig): Promise<boolean>;
 };
 
+/** Un avis écrit, et à qui le porter : `message:new` aux destinataires, le non-lu aux seuls `unreadRecipients`. */
+export type CaptureNoticeDelivery = {
+  readonly message: unknown;
+  readonly conversationId: string;
+  readonly recipients: readonly CaptureNoticeRecipient[];
+  readonly unreadRecipients: readonly CaptureNoticeRecipient[];
+};
+
+export type CaptureNoticeDeliver = (delivery: CaptureNoticeDelivery) => Promise<void>;
+
 export type ContentCaptureDeps = {
   readonly prisma: PrismaClient;
   readonly dedup: CaptureDedupStore;
   readonly limiter: CaptureRateLimiter;
-  readonly broadcast?: SystemNoticeDeps['broadcast'];
+  /** Absent : l'avis reste persisté, servi filtré par les pages et `/sync`. */
+  readonly deliver?: CaptureNoticeDeliver;
   readonly mayRead?: typeof readerMayReadMessage;
   readonly now?: () => Date;
 };
@@ -279,11 +304,48 @@ async function judge(
 
 type NoticeAttempt = 'written' | 'already-noticed' | 'budget-spent' | 'not-written';
 
+/**
+ * Porte l'avis à son audience. Ne rejette jamais : l'avis est écrit, et une
+ * remise manquée se rattrape par la page et `/sync`, filtrées pareil.
+ */
+async function deliverNotice(
+  deps: ContentCaptureDeps,
+  params: { readonly written: unknown; readonly actor: Actor; readonly message: CapturedMessage; readonly now: Date },
+): Promise<void> {
+  const { written, actor, message, now } = params;
+  if (!deps.deliver) return;
+  try {
+    const recipients = await captureNoticeAudience(deps.prisma, {
+      conversationId: message.conversationId,
+      noticeSenderId: actor.notice.participantId,
+      captured: { id: message.id, createdAt: new Date(message.createdAt), deletedAt: message.deletedAt, senderId: message.senderId },
+      now,
+    });
+    await deps.deliver({
+      message: written,
+      conversationId: message.conversationId,
+      recipients,
+      unreadRecipients: recipients.filter((r) => r.id === message.senderId && r.id !== actor.notice.participantId),
+    });
+  } catch (error) {
+    logger.warn('capture notice written but not delivered', {
+      messageId: message.id,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
 async function noticeOne(
   deps: ContentCaptureDeps,
-  params: { readonly actor: Actor; readonly message: CapturedMessage; readonly nature: CapturedNature; readonly input: ContentCaptureInput },
+  params: {
+    readonly actor: Actor;
+    readonly message: CapturedMessage;
+    readonly nature: CapturedNature;
+    readonly input: ContentCaptureInput;
+    readonly now: Date;
+  },
 ): Promise<NoticeAttempt> {
-  const { actor, message, nature, input } = params;
+  const { actor, message, nature, input, now } = params;
   const onceKey = captureOnceKey({ actorParticipantId: actor.notice.participantId, messageId: message.id, kind: input.report.kind });
   if (!(await deps.dedup.setnx(onceKey, '1', CAPTURE_ONCE_TTL_SECONDS))) return 'already-noticed';
 
@@ -304,15 +366,23 @@ async function noticeOne(
     sentAt: new Date(message.createdAt),
   });
   const written = await postSystemNotice(
-    { prisma: deps.prisma, broadcast: deps.broadcast },
+    { prisma: deps.prisma },
     {
       conversationId: input.conversationId,
       senderParticipantId: actor.notice.participantId,
       content: captureNoticeFallbackText(metadata),
       metadata,
+      expiresAt: captureNoticeExpiresAt({
+        capturedExpiresAt: message.expiresAt ? new Date(message.expiresAt) : null,
+        noticeAt: now,
+      }),
+      advanceConversationClock: false,
     },
   );
-  if (written !== null) return 'written';
+  if (written !== null) {
+    await deliverNotice(deps, { written, actor, message, now });
+    return 'written';
+  }
   await deps.dedup.del(onceKey);
   return 'not-written';
 }
@@ -348,7 +418,7 @@ export async function recordContentCapture(
     if (written >= MAX_NOTICES_PER_REPORT) break;
     const nature = await judge(deps, { actor, message, now });
     if (!nature) continue;
-    const attempt = await noticeOne(deps, { actor, message, nature, input });
+    const attempt = await noticeOne(deps, { actor, message, nature, input, now });
     if (attempt === 'budget-spent') break;
     if (attempt === 'written') written += 1;
     if (attempt === 'written' || attempt === 'already-noticed') noticed.push(message.id);

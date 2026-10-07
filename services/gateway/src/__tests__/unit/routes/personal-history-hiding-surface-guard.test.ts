@@ -334,8 +334,13 @@ const SERVICE_LAYER_SURFACES: Record<string, Classification> = {
   /**
    * #9315 — le verdict de la route par CHEMIN (`GET /attachments/file/*`). Une
    * lecture, qui ne projette que l'ÉTAT des messages porteurs d'un fichier
-   * (`deletedAt`, `expiresAt`, `viewOnceBurnAt`, `isViewOnce`) pour décider si
-   * ses octets peuvent encore partir. Aucun contenu, aucun aperçu, aucun
+   * (`deletedAt`, `expiresAt`, `viewOnceBurnAt`, et le bloc de protection —
+   * `isViewOnce`, `isBlurred`, `effectFlags`, `ephemeralDuration` — dont #9600
+   * lit la nature pour dire si le fichier se lit par lecteur) pour décider si
+   * ses octets peuvent encore partir. L'adresse SIGNÉE (#9600) connaît son
+   * lecteur, mais elle sert le fichier d'un message que la liste lui a déjà
+   * servi : son lecteur est jugé comme celui des routes par identifiant
+   * (`attachmentReadVerdict.ts`, une `findUnique` hors du périmètre de ce garde). Aucun contenu, aucun aperçu, aucun
    * auteur n'est servi par elle : le masquage personnel protège ce qu'un
    * lecteur VOIT dans son historique, et une adresse de fichier n'en est pas
    * une surface (la route ne connaît pas le lecteur, #9315 « aucune
@@ -495,6 +500,17 @@ const SERVICE_LAYER_SURFACES: Record<string, Classification> = {
       "pièces déclarées, pour reconnaître le réessai idempotent du MÊME envoi. " +
       "Elle ne rend aucun contenu ; masquer ici refuserait le réessai d'un " +
       "envoi de l'auteur sous prétexte qu'il a effacé son propre historique.",
+  },
+  'messaging/captureNoticeVisibility.ts': {
+    kind: 'exempt',
+    reads: 2,
+    why:
+      "Audience des avis de capture (#9629, #9630) : ses deux lectures rendent " +
+      "l'identité, l'auteur et la métadonnée des avis vivants, puis l'horloge et " +
+      "l'auteur des messages qu'ils nomment — aucun contenu. Le masquage du " +
+      "lecteur n'y est pas APPLIQUÉ en `where`, il y est JUGÉ : un avis se sert " +
+      "si le lecteur lit le message capturé (`readableByReader` sur SON plancher " +
+      "et SON masquage), et les ids refusés rejoignent le masquage de la surface.",
   },
   'messaging/contentCaptureNotices.ts': {
     kind: 'exempt',

@@ -86,7 +86,7 @@ function harness(overrides: { authenticated?: boolean; member?: boolean; allowed
     prisma,
     socketToUser: new Map(overrides.authenticated === false ? [] : [['socket-1', USER]]),
     connectedUsers: new Map([[USER, socketUser]]),
-    broadcast: async (message) => {
+    deliver: async ({ message }) => {
       broadcasts.push(message);
     },
     dedup: {

@@ -30,7 +30,7 @@ import { AuthHandler } from './handlers/AuthHandler';
 import { MessageHandler } from './handlers/MessageHandler';
 import { StatusHandler } from './handlers/StatusHandler';
 import { ConversationViewingHandler } from './handlers/ConversationViewingHandler';
-import { listenContentCapture } from './handlers/ContentCaptureHandler';
+import { captureNoticeDelivery, listenContentCapture } from './handlers/ContentCaptureHandler';
 import { ReactionHandler } from './handlers/ReactionHandler';
 import { AttachmentReactionHandler } from './handlers/AttachmentReactionHandler';
 import { AttachmentReactionService } from '../services/AttachmentReactionService';
@@ -1820,7 +1820,7 @@ export class MeeshySocketIOManager {
       // « Est dans la conversation » (#8892) — l'écran ouvert au premier plan, et l'arrière-plan.
       this.conversationViewingHandler.listen(socket);
       // #9617 — une capture d'écran d'un contenu qui disparaît, annoncée au fil.
-      listenContentCapture(socket, { prisma: this.prisma, socketToUser: this.socketToUser, connectedUsers: this.connectedUsers, broadcast: (message, conversationId) => this.broadcastMessage(message as Message, conversationId) });
+      listenContentCapture(socket, { prisma: this.prisma, socketToUser: this.socketToUser, connectedUsers: this.connectedUsers, deliver: captureNoticeDelivery({ io: this.io, prisma: this.prisma, readStatusService: this.readStatusService, bridgeService: this.bridgeService }) });
 
       this.callEventsHandler.setupCallEvents(
         socket,

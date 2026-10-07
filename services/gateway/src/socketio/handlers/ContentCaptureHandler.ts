@@ -14,10 +14,10 @@ import { CLIENT_EVENTS, RATE_LIMIT_REFUSAL_MESSAGE } from '@meeshy/shared/types/
 
 import { isValidationFailure, validateSocketEvent } from '../../middleware/validation.js';
 import { getCacheStore } from '../../services/CacheStore.js';
-import type { SystemNoticeDeps } from '../../services/conversations/conversationNotice';
 import {
   recordContentCapture,
   type CaptureDedupStore,
+  type CaptureNoticeDeliver,
   type CaptureRateLimiter,
   type ContentCaptureDeps,
 } from '../../services/messaging/contentCaptureNotices';
@@ -28,13 +28,16 @@ import type { MeeshySocket } from '../typed-socket';
 import { resolveParticipant } from '../utils/participant-resolver';
 import { normalizeConversationId, type SocketUser } from '../utils/socket-helpers';
 
+export { captureNoticeDelivery } from '../captureNoticeDelivery';
+
 const logger = enhancedLogger.child({ module: 'ContentCaptureHandler' });
 
 export type ContentCaptureHandlerDeps = {
   readonly prisma: PrismaClient;
   readonly socketToUser: Map<string, string>;
   readonly connectedUsers: Map<string, SocketUser>;
-  readonly broadcast: SystemNoticeDeps['broadcast'];
+  /** La remise à l'audience de l'avis (`captureNoticeDelivery`) — jamais la diffusion à la room (#9629). */
+  readonly deliver: CaptureNoticeDeliver;
   readonly dedup?: CaptureDedupStore;
   readonly limiter?: CaptureRateLimiter;
   readonly mayRead?: ContentCaptureDeps['mayRead'];
@@ -75,7 +78,7 @@ export async function handleContentCapture(
       prisma: deps.prisma,
       dedup: deps.dedup ?? getCacheStore(),
       limiter: deps.limiter ?? getSocketRateLimiter(),
-      broadcast: deps.broadcast,
+      deliver: deps.deliver,
       mayRead: deps.mayRead,
       now: deps.now,
     },

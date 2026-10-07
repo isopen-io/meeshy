@@ -214,6 +214,53 @@ export interface LoadPersonalHistoryHidingByUserParams {
 }
 
 /**
+ * The same batched lookup WITHOUT the courtesy posture: it propagates, like
+ * `readPersonalHistoryHiding`. A caller that ANNOUNCES something to the readers
+ * of a message (a capture notice, #9629) cannot conclude "nothing is hidden"
+ * from a lookup that did not answer.
+ */
+export async function readPersonalHistoryHidingByUser(
+  prisma: PrismaClient,
+  { userIds, conversationId }: LoadPersonalHistoryHidingByUserParams
+): Promise<Map<string, PersonalHistoryHiding>> {
+  const result = new Map<string, PersonalHistoryHiding>();
+  const ids = [...new Set(userIds.filter((id): id is string => typeof id === 'string' && id.length > 0))];
+  if (ids.length === 0) return result;
+
+  const [prefs, deletions] = await Promise.all([
+    prisma.userConversationPreferences.findMany({
+      where: { conversationId, userId: { in: ids }, clearHistoryBefore: { not: null } },
+      select: { userId: true, clearHistoryBefore: true },
+    }),
+    prisma.userMessageDeletion.findMany({
+      where: { userId: { in: ids }, message: { conversationId } },
+      select: { userId: true, messageId: true },
+    }),
+  ]);
+
+  const cutoffs = new Map<string, Date>();
+  for (const row of prefs) {
+    if (row.clearHistoryBefore) cutoffs.set(row.userId, row.clearHistoryBefore);
+  }
+
+  const hidden = new Map<string, string[]>();
+  for (const row of deletions) {
+    const bucket = hidden.get(row.userId);
+    if (bucket) bucket.push(row.messageId);
+    else hidden.set(row.userId, [row.messageId]);
+  }
+
+  for (const userId of new Set([...cutoffs.keys(), ...hidden.keys()])) {
+    result.set(userId, {
+      clearHistoryBefore: cutoffs.get(userId) ?? null,
+      hiddenMessageIds: hidden.get(userId) ?? [],
+    });
+  }
+
+  return result;
+}
+
+/**
  * Batched sibling for the surfaces that read ONE conversation on behalf of MANY
  * users at once — the unread fan-out, which recomputes every recipient's badge
  * on every committed message.
@@ -228,44 +275,11 @@ export interface LoadPersonalHistoryHidingByUserParams {
  */
 export async function loadPersonalHistoryHidingByUser(
   prisma: PrismaClient,
-  { userIds, conversationId }: LoadPersonalHistoryHidingByUserParams
+  params: LoadPersonalHistoryHidingByUserParams
 ): Promise<Map<string, PersonalHistoryHiding>> {
-  const result = new Map<string, PersonalHistoryHiding>();
-  const ids = [...new Set(userIds.filter((id): id is string => typeof id === 'string' && id.length > 0))];
-  if (ids.length === 0) return result;
-
+  const { conversationId } = params;
   try {
-    const [prefs, deletions] = await Promise.all([
-      prisma.userConversationPreferences.findMany({
-        where: { conversationId, userId: { in: ids }, clearHistoryBefore: { not: null } },
-        select: { userId: true, clearHistoryBefore: true },
-      }),
-      prisma.userMessageDeletion.findMany({
-        where: { userId: { in: ids }, message: { conversationId } },
-        select: { userId: true, messageId: true },
-      }),
-    ]);
-
-    const cutoffs = new Map<string, Date>();
-    for (const row of prefs) {
-      if (row.clearHistoryBefore) cutoffs.set(row.userId, row.clearHistoryBefore);
-    }
-
-    const hidden = new Map<string, string[]>();
-    for (const row of deletions) {
-      const bucket = hidden.get(row.userId);
-      if (bucket) bucket.push(row.messageId);
-      else hidden.set(row.userId, [row.messageId]);
-    }
-
-    for (const userId of new Set([...cutoffs.keys(), ...hidden.keys()])) {
-      result.set(userId, {
-        clearHistoryBefore: cutoffs.get(userId) ?? null,
-        hiddenMessageIds: hidden.get(userId) ?? [],
-      });
-    }
-
-    return result;
+    return await readPersonalHistoryHidingByUser(prisma, params);
   } catch (error) {
     logger.warn('[personalHistoryFilter] per-user hiding lookup failed, serving unfiltered', {
       conversationId,

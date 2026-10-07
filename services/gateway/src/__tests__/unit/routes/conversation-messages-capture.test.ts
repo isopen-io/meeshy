@@ -29,6 +29,7 @@ const USER = '507f1f77bcf86cd799439022';
 const ACTOR = '507f1f77bcf86cd7994390a1';
 const SENDER = '507f1f77bcf86cd7994390af';
 const FLAME = '507f1f77bcf86cd799439031';
+const OUTSIDER = '507f1f77bcf86cd7994390b2';
 const NOW = new Date('2026-10-07T12:00:00.000Z');
 
 type Row = Record<string, unknown>;
@@ -44,7 +45,22 @@ function buildPrisma(member = true, closed = false) {
         }
         return null;
       },
+      findMany: async () =>
+        [ACTOR, SENDER, OUTSIDER].map((id) => ({
+          id,
+          userId: `u-${id}`,
+          role: 'member',
+          joinedAt: new Date('2026-01-01T00:00:00Z'),
+          shareLinkId: null,
+          historyVisibleFrom: id === OUTSIDER ? new Date('2026-10-07T11:59:00Z') : null,
+          permissions: null,
+          anonymousSession: null,
+          user: { role: 'USER' },
+        })),
     },
+    conversationShareLink: { findMany: async () => [] },
+    userConversationPreferences: { findMany: async () => [] },
+    userMessageDeletion: { findMany: async () => [] },
     message: {
       findMany: async () => [
         {
@@ -77,15 +93,17 @@ function buildPrisma(member = true, closed = false) {
 
 async function buildApp(params: { member?: boolean; allowed?: boolean; closed?: boolean } = {}) {
   const { prisma, created } = buildPrisma(params.member ?? true, params.closed ?? false);
-  const broadcasts: Array<{ message: unknown; conversationId: string }> = [];
+  const broadcasts: Array<{ room: string; event: string; id: unknown }> = [];
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
-  (app as unknown as { socketIOHandler: unknown }).socketIOHandler = {
-    getManager: () => ({
-      broadcastMessage: async (message: unknown, conversationId: string) => {
-        broadcasts.push({ message, conversationId });
+  const io = {
+    to: (room: string) => ({
+      emit: (event: string, payload: { id?: unknown }) => {
+        broadcasts.push({ room, event, id: payload.id });
+        return true;
       },
     }),
   };
+  (app as unknown as { socketIOHandler: unknown }).socketIOHandler = { getManager: () => ({ getIO: () => io }) };
   const auth = async (req: { authContext?: unknown }) => {
     req.authContext = { type: 'registered', isAuthenticated: true, isAnonymous: false, userId: USER };
   };
@@ -112,7 +130,7 @@ const post = (app: Awaited<ReturnType<typeof buildApp>>['app'], body: unknown, i
 const report = { messageIds: [FLAME], kind: 'screenshot', captureId: 'capture-0001' };
 
 describe('POST /conversations/:id/messages/capture', () => {
-  it('écrit l’avis, le diffuse au fil et sert les messages annoncés', async () => {
+  it('écrit l’avis, le remet à son audience et sert les messages annoncés', async () => {
     mockResolveConversationId.mockResolvedValue(CONV);
     const h = await buildApp();
     const res = await post(h.app, report);
@@ -121,7 +139,10 @@ describe('POST /conversations/:id/messages/capture', () => {
     expect(res.json()).toEqual({ success: true, data: { noticedMessageIds: [FLAME] } });
     expect(h.created).toHaveLength(1);
     expect(parseCaptureNotice(h.created[0]?.metadata)).toMatchObject({ capturedMessageId: FLAME, outcome: 'announced' });
-    expect(h.broadcasts).toEqual([{ message: h.created[0], conversationId: CONV }]);
+    const newRooms = h.broadcasts.filter((b) => b.event === 'message:new');
+    expect(newRooms.map((b) => b.room).sort()).toEqual([`user:u-${ACTOR}`, `user:u-${SENDER}`].sort());
+    expect(newRooms.every((b) => b.id === h.created[0]?.id)).toBe(true);
+    expect(h.broadcasts.some((b) => b.room === `conversation:${CONV}` || b.room === `user:u-${OUTSIDER}`)).toBe(false);
   });
 
   it('refuse un corps mal formé sans rien écrire', async () => {
