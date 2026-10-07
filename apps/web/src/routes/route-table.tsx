@@ -148,6 +148,11 @@ const progressionReglagesScreen = () =>
   Promise.all([import('@/routes/progression-reglages'), loadGameScreenCatalog(currentInterfaceLanguage(), 'progression')]).then(([screen]) => screen);
 const progressionBadgesScreen = () =>
   Promise.all([import('@/routes/progression-badges'), loadGameScreenCatalog(currentInterfaceLanguage(), 'progression')]).then(([screen]) => screen);
+/* Défis et Succès lisent le catalogue du jeu depuis que chaque élément y dit ses précisions (#9563). */
+const progressionDefisScreen = () =>
+  Promise.all([import('@/routes/progression-defis'), loadGameScreenCatalog(currentInterfaceLanguage(), 'progression')]).then(([screen]) => screen);
+const progressionSuccesScreen = () =>
+  Promise.all([import('@/routes/progression-succes'), loadGameScreenCatalog(currentInterfaceLanguage(), 'progression')]).then(([screen]) => screen);
 const progressionRulesScreen = () =>
   Promise.all([import('@/routes/progression-rules'), loadGameScreenCatalog(currentInterfaceLanguage(), 'rules')]).then(([screen]) => screen);
 const progressionCarnetScreen = () =>
@@ -217,8 +222,8 @@ export const ROUTES = {
   progressionPrestige: { pattern: '/me/progression/prestige', screen: progressionPrestigeScreen },
   /* LES RÉGLAGES DU JEU (#9481) — célébrations, « Jeu masqué », qui voit quoi, ligue publique. PRIVÉE. */
   progressionReglages: { pattern: '/me/progression/reglages', screen: progressionReglagesScreen },
-  progressionDefis: { pattern: '/me/progression/defis', screen: () => import('@/routes/progression-defis') },
-  progressionSucces: { pattern: '/me/progression/succes', screen: () => import('@/routes/progression-succes') },
+  progressionDefis: { pattern: '/me/progression/defis', screen: progressionDefisScreen },
+  progressionSucces: { pattern: '/me/progression/succes', screen: progressionSuccesScreen },
   /* LE CARNET DES RÈGLES (#9379) — « Comment ça marche », depuis Progression :
      les huit règles du jeu et les sept cartes de l'intégration, en entier. Une
      page qui n'explique que ; aucune lecture réseau. */

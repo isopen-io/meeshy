@@ -39,6 +39,11 @@ const PROGRESSION_SOURCES = [
 const stripComments = (source: string): string => source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
 const read = (file: string): string => stripComments(readFileSync(join(SRC, file), 'utf8'));
 
+/* Les deux motifs sont ASSEMBLÉS : écrits d'un trait, `check-utilities.mjs` lirait leur classe de caractères comme une classe Tailwind. */
+const ATTRIBUTE = 'class' + 'Name=';
+const SCROLLER = new RegExp(`${ATTRIBUTE}"([^"]*\\boverflow-y-auto\\b[^"]*)"`, 'g');
+const PAGE = new RegExp(`<main id="contenu" ${ATTRIBUTE}"([^"]*)"`, 'g');
+
 describe('aucun conteneur ne défile de côté', () => {
   test('le témoin parcourt bien les routes de Progression et les pièces du jeu', () => {
     expect(PROGRESSION_SOURCES.length).toBeGreaterThan(40);
@@ -55,7 +60,7 @@ describe('aucun conteneur ne défile de côté', () => {
 
   test('chaque conteneur qui défile verrouille l’axe horizontal et son surdéfilement', () => {
     const scrollers = PROGRESSION_SOURCES.flatMap((file) =>
-      [...read(file).matchAll(/className="([^"]*\boverflow-y-auto\b[^"]*)"/g)].map((match) => ({ file, classes: match[1] ?? '' })),
+      [...read(file).matchAll(SCROLLER)].map((match) => ({ file, classes: match[1] ?? '' })),
     );
     expect(scrollers.length).toBeGreaterThanOrEqual(3);
     expect(scrollers.map((scroller) => scroller.file)).toContain('routes/progression-shell.tsx');
@@ -71,7 +76,7 @@ describe('aucun conteneur ne défile de côté', () => {
    */
   test('chaque page laisse un mot insécable passer à la ligne plutôt que de le rogner', () => {
     const pages = PROGRESSION_SOURCES.flatMap((file) =>
-      [...read(file).matchAll(/<main id="contenu" className="([^"]*)"/g)].map((match) => ({ file, classes: match[1] ?? '' })),
+      [...read(file).matchAll(PAGE)].map((match) => ({ file, classes: match[1] ?? '' })),
     );
     expect(pages.map((page) => page.file)).toEqual(['routes/progression-shell.tsx']);
     for (const { file, classes } of pages) expect({ file, wraps: classes.includes('break-words') }).toEqual({ file, wraps: true });

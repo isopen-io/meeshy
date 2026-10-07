@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { renderToStaticMarkup } from 'react-dom/server';
 
@@ -113,6 +113,7 @@ const ENTRIES: Readonly<Record<Exclude<GameScreen, 'banner'>, readonly string[]>
     'routes/progression-prestige.tsx',
     'routes/progression-reglages.tsx',
     'routes/progression-badges.tsx',
+    'routes/progression-defis.tsx',
     'routes/progression-succes.tsx',
     'routes/progression-carnet.tsx',
   ],
@@ -162,6 +163,21 @@ describe('chaque clé lue par un écran est servie par une partie que sa route c
     }
   }
 
+  /**
+   * La page des défis n'était dans AUCUNE liste : elle ne lisait pas le catalogue, donc sa route ne le
+   * chargeait pas. Le jour où ses paliers ont dit leurs précisions (#9563), elle s'est ouverte sur une
+   * page blanche. Un écran de Progression qui n'est pas listé ici échappe à la garde : il doit y être.
+   */
+  test('chaque écran de Progression est dans la liste', () => {
+    const screens = readdirSync(join(SRC, 'routes'))
+      .filter((name) => name.startsWith('progression') && name.endsWith('.tsx') && !name.includes('.test.'))
+      .filter((name) => /export default function/.test(sourceOf(join(SRC, 'routes', name))))
+      .map((name) => `routes/${name}`);
+    const listed = [...ENTRIES.progression, ...ENTRIES.rules];
+    expect(screens.filter((screen) => !listed.includes(screen))).toEqual([]);
+    expect(screens.length).toBeGreaterThanOrEqual(14);
+  });
+
   test('le témoin lit bien des clés : un parcours vide passerait au vert sur n’importe quelle coupe', () => {
     expect(reachable(join(SRC, 'routes/progression.tsx')).flatMap(gameKeysIn).length).toBeGreaterThan(100);
     expect(reachable(join(SRC, 'routes/progression-rules.tsx')).flatMap(gameKeysIn).some((key) => key.startsWith('game.rules.'))).toBe(true);
@@ -176,8 +192,7 @@ describe('chaque clé lue par un écran est servie par une partie que sa route c
         const loaded = new RegExp(`import\\('@/${module}'\\), loadGameScreenCatalog\\(currentInterfaceLanguage\\(\\), '(\\w+)'\\)`).exec(table)?.[1];
         const asked = /suspendForGameCatalog\(currentInterfaceLanguage\(\), '(\w+)'\)/.exec(sourceOf(join(SRC, entry)))?.[1];
         expect({ entry, asked }).toEqual({ entry, asked: screen });
-        /* `progression-succes` n'a pas de chargement dans la table : l'écran le réclame en Suspense. */
-        if (loaded !== undefined) expect({ entry, loaded }).toEqual({ entry, loaded: screen });
+        expect({ entry, loaded }).toEqual({ entry, loaded: screen });
       }
     }
   });
