@@ -31,7 +31,7 @@ afterEach(() => {
   delete globals.Capacitor;
 });
 
-function androidShell(sdk: number): { readonly secure: boolean[] } {
+function androidShell(sdk: number): { readonly secure: readonly boolean[] } {
   const secure: boolean[] = [];
   globals.Capacitor = {
     getPlatform: () => 'android',
@@ -42,7 +42,14 @@ function androidShell(sdk: number): { readonly secure: boolean[] } {
       return {};
     },
   };
-  return { secure };
+  /* Le bouclier est unique pour l'application : une coque neuve (un témoin
+     précédent en avait une autre) se voit d'abord rappeler l'état absent. */
+  return {
+    get secure(): readonly boolean[] {
+      const first = secure.indexOf(true);
+      return first === -1 ? [] : secure.slice(first);
+    },
+  };
 }
 
 const settle = async () => {
@@ -56,6 +63,7 @@ describe('une rangée d’éphémère dans la coque', () => {
     await settle();
     expect(shell.secure).toEqual([true]);
     mounter.unmountAll();
+    await settle();
     expect(shell.secure).toEqual([true, false]);
   });
 

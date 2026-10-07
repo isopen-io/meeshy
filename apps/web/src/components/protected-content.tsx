@@ -299,16 +299,12 @@ export function ProtectedContent({
    * LA VUE UNIQUE AFFICHÉE TIENT LE BOUCLIER DE CAPTURE (#9574) — texte
    * ouvert, plein écran ou visionneuse : dans la coque Android, rien ne se
    * peint avant `FLAG_SECURE` ; une coque sans pont ne l'ouvre pas du tout
-   * (fermé par défaut), et un pont qui refuse referme ce qui s'ouvrait.
+   * (fermé par défaut) ; un pont qui refuse garde la puce à la place du
+   * contenu pendant que le bouclier réessaie.
    */
   const viewOnceShown = isViewOnceKind(kind) && (viewing !== null || (rendersContent(kind, phase) && frozen !== null));
   const shieldState = useCaptureShield(messageId, viewOnceShown);
   const shieldUnavailable = isViewOnceKind(kind) && captureShield.mode() === 'unguarded';
-  useEffect(() => {
-    if (!viewOnceShown || shieldState !== 'closed') return;
-    if (viewing !== null) closeMedia();
-    else closeOpened(true);
-  }, [viewOnceShown, shieldState, viewing, closeMedia, closeOpened]);
 
   const viewer =
     viewing !== null && media !== undefined && shieldState === 'open' ? (

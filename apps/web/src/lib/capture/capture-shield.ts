@@ -22,10 +22,15 @@ import { detectionOf, windowMustBeBlack, type CaptureDetection, type CaptureHost
  *   son annonce ne peut pas partir : hors ligne, enregistrement en cours,
  *   budget de la passerelle épuisé (`capture-ledger.ts`).
  *
- * FERMÉ PAR DÉFAUT : dans une coque dont le pont manque (construite avant lui)
- * ou refuse, `ready` rend `false` et la vue unique ne s'affiche pas en clair.
- * Hors coque (navigateur), aucun pont n'est attendu : `ready` rend `true` —
- * un navigateur ne sait ni noircir ni détecter une capture (D-179).
+ * FERMÉ PAR DÉFAUT : l'état appliqué ne change qu'après le SUCCÈS de l'appel
+ * natif ; tant qu'il n'est pas confirmé, un bail est `pending` (rien ne se
+ * peint) ; un échec à poser le drapeau le rend `closed` et se réessaie après
+ * {@link SECURE_RETRY_MS} ; la dernière demande gagne, jamais deux appels en
+ * vol. Une coque dont le pont manque (construite avant lui) rend `closed`.
+ * Une autre coque que celle qui a confirmé (activité recréée) remet l'état à
+ * « inconnu » et le réapplique. Hors coque (navigateur), aucun pont n'est
+ * attendu : `open` — un navigateur ne sait ni noircir ni détecter une capture
+ * (D-179).
  *
  * Le registre sert aussi la DÉTECTION : `shown()` liste les vues uniques à
  * l'écran, celles qu'une capture déclare comme tentatives
@@ -36,9 +41,15 @@ export const CAPTURE_SHIELD_PLUGIN = 'MeeshyScreenGuard';
 
 export type CaptureShieldMode = 'browser' | 'guarded' | 'unguarded';
 
+/** `open` : l'affichage en clair est permis (`FLAG_SECURE` confirmé, ou navigateur). */
+export type CaptureShieldState = 'open' | 'pending' | 'closed';
+
+export const SECURE_RETRY_MS = 1_000;
+
 export type CaptureShieldLease = {
-  /** `true` quand l'affichage en clair est permis — `FLAG_SECURE` posé, ou navigateur. */
-  readonly ready: Promise<boolean>;
+  readonly state: () => CaptureShieldState;
+  /** Prévient à chaque changement de l'état confirmé ; rend l'arrêt. */
+  readonly watch: (listener: () => void) => () => void;
   /** Idempotent : un démontage rejoué ne retire pas l'affichage d'une autre surface. */
   readonly release: () => void;
 };
@@ -83,6 +94,7 @@ export type CaptureShieldEnv = {
   readonly online: () => boolean;
   /** Écoute les passages en ligne / hors ligne ; rend l'arrêt. */
   readonly watchOnline: (listener: (online: boolean) => void) => () => void;
+  readonly schedule: (run: () => void, ms: number) => void;
 };
 
 const browserEnv: CaptureShieldEnv = {
@@ -99,6 +111,7 @@ const browserEnv: CaptureShieldEnv = {
       window.removeEventListener('offline', down);
     };
   },
+  schedule: (run, ms) => void setTimeout(run, ms),
 };
 
 export function createCaptureShield(coqueOf: () => CoqueNative | undefined, env: CaptureShieldEnv = browserEnv): CaptureShield {
@@ -108,8 +121,17 @@ export function createCaptureShield(coqueOf: () => CoqueNative | undefined, env:
   let recording = false;
   let online = env.online();
   let onlineWatched = false;
-  let applied = false;
-  let securing: Promise<boolean> = Promise.resolve(true);
+  /**
+   * L'état CONFIRMÉ par la coque — `null` : inconnu (un appel a échoué).
+   * `initial` : le document vient de démarrer, et la coque retire le drapeau à
+   * chaque démarrage de page (`onPageStarted`) : il est connu absent.
+   */
+  let confirmed: { readonly coque: CoqueNative | undefined; readonly secure: boolean } | 'initial' | null = 'initial';
+  /** La coque dont un appel est en vol — un appel resté sans réponse sur une coque remplacée ne bloque pas la nouvelle. */
+  let inFlight: { readonly coque: CoqueNative | undefined } | null = null;
+  let failedToSecure = false;
+  let retryArmed = false;
+  let secureWatchers: readonly (() => void)[] = [];
   /** La réponse de LA coque interrogée — une autre coque (rechargement, témoin) repart fermée. */
   let detection: { readonly coque: CoqueNative | undefined; readonly value: CaptureDetection | null } | null = null;
   let askedOf: CoqueNative | undefined | null = null;
@@ -152,7 +174,14 @@ export function createCaptureShield(coqueOf: () => CoqueNative | undefined, env:
     });
   };
 
-  const sync = () => {
+  const confirmedNow = (): { readonly secure: boolean } | null => {
+    if (confirmed === 'initial') return { secure: false };
+    return confirmed !== null && confirmed.coque === coqueOf() ? confirmed : null;
+  };
+
+  const tellSecure = () => secureWatchers.forEach((watcher) => watcher());
+
+  const sync = (): void => {
     if (mode() !== 'guarded') return;
     if (!onlineWatched) {
       onlineWatched = true;
@@ -161,11 +190,40 @@ export function createCaptureShield(coqueOf: () => CoqueNative | undefined, env:
         sync();
       });
     }
+    const coque = coqueOf();
+    if (inFlight !== null && inFlight.coque === coque) return;
     const want = desired();
-    if (want === applied) return;
-    applied = want;
-    const call = apply(want);
-    if (want) securing = call;
+    if (confirmedNow()?.secure === want) return;
+    const call = { coque };
+    inFlight = call;
+    void apply(want).then((ok) => {
+      if (inFlight !== call) return;
+      inFlight = null;
+      confirmed = ok ? { coque, secure: want } : null;
+      failedToSecure = want && !ok;
+      tellSecure();
+      if (!ok && !retryArmed) {
+        retryArmed = true;
+        env.schedule(() => {
+          retryArmed = false;
+          sync();
+        }, SECURE_RETRY_MS);
+        return;
+      }
+      sync();
+    });
+  };
+
+  const shieldState = (): CaptureShieldState => {
+    if (confirmedNow()?.secure === true) return 'open';
+    return failedToSecure ? 'closed' : 'pending';
+  };
+
+  const watchSecure = (listener: () => void): (() => void) => {
+    secureWatchers = [...secureWatchers, listener];
+    return () => {
+      secureWatchers = secureWatchers.filter((watcher) => watcher !== listener);
+    };
   };
 
   const tellShown = () => shownWatchers.forEach((watcher) => watcher());
@@ -176,14 +234,14 @@ export function createCaptureShield(coqueOf: () => CoqueNative | undefined, env:
     holders = [...holders, { token, messageId, origin }];
     sync();
     if (origin === 'display') tellShown();
-    const ready = current === 'browser' ? Promise.resolve(true) : current === 'unguarded' ? Promise.resolve(false) : securing;
+    const state = (): CaptureShieldState => (current === 'browser' ? 'open' : current === 'unguarded' ? 'closed' : shieldState());
     const release = () => {
       if (!holders.some((holder) => holder.token === token)) return;
       holders = holders.filter((holder) => holder.token !== token);
       sync();
       if (origin === 'display') tellShown();
     };
-    return { ready, release };
+    return { state, watch: watchSecure, release };
   };
 
   const candidate = (messageId: string, conversationId: string): (() => void) => {
@@ -201,7 +259,7 @@ export function createCaptureShield(coqueOf: () => CoqueNative | undefined, env:
     ...new Set(holders.filter((holder) => holder.origin === 'display').map((holder) => holder.messageId)),
   ];
 
-  const secured = (): boolean => mode() === 'guarded' && applied;
+  const secured = (): boolean => mode() === 'guarded' && confirmedNow()?.secure === true;
 
   const host = (): CaptureHost => {
     if (mode() === 'browser') return { kind: 'browser' };

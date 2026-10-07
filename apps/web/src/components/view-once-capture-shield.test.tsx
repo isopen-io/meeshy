@@ -112,6 +112,29 @@ describe('la vue unique dans la coque Android', () => {
     expect(bridge.calls).toEqual([{ secure: true }, { secure: false }]);
   });
 
+  test('un pont qui refuse de poser FLAG_SECURE : rien ne se peint, le bouclier réessaie et montre au succès', async () => {
+    const calls: { secure: boolean }[] = [];
+    globals.Capacitor = {
+      getPlatform: () => 'android',
+      PluginHeaders: [{ name: CAPTURE_SHIELD_PLUGIN, methods: [{ name: 'setSecure' }, { name: 'getState' }] }],
+      nativePromise: (_plugin, method, options) => {
+        if (method !== 'setSecure') return Promise.resolve({});
+        calls.push(options as { secure: boolean });
+        return calls.filter((call) => call.secure).length === 1 && (options as { secure: boolean }).secure
+          ? Promise.reject(new Error('activité indisponible'))
+          : Promise.resolve({});
+      },
+    };
+    const host = await mountViewOnce();
+    await mounter.click(host.querySelector('[data-view-once-chip="sealed"]'));
+    await mounter.settle();
+    expect(document.body.innerHTML).not.toContain('SECRET-VU');
+    await new Promise((resolve) => setTimeout(resolve, 1_100));
+    await mounter.settle();
+    expect(document.body.innerHTML).toContain('SECRET-VU');
+    expect(calls.filter((call) => call.secure)).toHaveLength(2);
+  });
+
   test('une coque sans pont n’offre pas d’ouvrir la vue unique et n’en consomme rien', async () => {
     consumed.length = 0;
     installShell([]);

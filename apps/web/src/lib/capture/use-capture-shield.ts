@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 
-import { captureShield, type CaptureShield } from './capture-shield';
+import { captureShield, type CaptureShield, type CaptureShieldState } from './capture-shield';
+
+export type { CaptureShieldState } from './capture-shield';
 
 /**
  * L'AFFICHAGE D'UNE VUE UNIQUE, SOUS BOUCLIER (#9574).
@@ -9,13 +11,12 @@ import { captureShield, type CaptureShield } from './capture-shield';
  *   l'hôte est un navigateur ;
  * - `pending` : la coque n'a pas encore confirmé `FLAG_SECURE` — rien ne se
  *   peint avant, pas même une image ;
- * - `closed` : coque sans pont, ou pont qui refuse — rien ne se peint.
+ * - `closed` : coque sans pont, ou pont qui a refusé (le bouclier réessaie,
+ *   et le contenu se peint dès qu'il a confirmé) — rien ne se peint.
  *
  * `active` : la vue unique est AFFICHÉE (texte ouvert, plein écran, visionneuse).
  * Une puce scellée n'affiche rien et ne tient pas le bouclier.
  */
-export type CaptureShieldState = 'open' | 'pending' | 'closed';
-
 export const VIEW_ONCE_AWAY_ATTRIBUTE = 'data-view-once-away';
 
 /**
@@ -51,12 +52,11 @@ export function useCaptureShield(messageId: string, active: boolean, shield: Cap
   useEffect(() => {
     if (!active) return undefined;
     const lease = shield.hold(messageId);
-    let live = true;
-    void lease.ready.then((ok) => {
-      if (live) setSecured(ok ? 'open' : 'closed');
-    });
+    const read = () => setSecured(lease.state());
+    read();
+    const stop = lease.watch(read);
     return () => {
-      live = false;
+      stop();
       lease.release();
       setSecured('pending');
     };
