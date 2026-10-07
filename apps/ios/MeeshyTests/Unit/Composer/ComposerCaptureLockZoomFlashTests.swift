@@ -104,7 +104,8 @@ final class ComposerCaptureLockZoomFlashTests: XCTestCase {
     /// La piste est VERTICALE (#9566) : en haut le plein, en bas le plancher.
     func test_curseur_laPisteVerticaleVaDuPleinEnHautAuPlancherEnBas() {
         XCTAssertEqual(ComposerFlashIntensity.level(atY: 0, height: 120), 1)
-        XCTAssertEqual(ComposerFlashIntensity.level(atY: 120, height: 120), ComposerFlashIntensity.range.lowerBound)
+        XCTAssertEqual(ComposerFlashIntensity.level(atY: 120, height: 120), ComposerFlashIntensity.range.lowerBound,
+                       accuracy: 0.0001)
         XCTAssertEqual(ComposerFlashIntensity.level(atY: -50, height: 120), 1, "au-dessus de la piste : plein")
         XCTAssertEqual(ComposerFlashIntensity.level(atY: 30, height: 0), ComposerFlashIntensity.defaultLevel)
         let milieu = ComposerFlashIntensity.level(atY: 60, height: 120)

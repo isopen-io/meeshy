@@ -108,10 +108,13 @@ final class ComposerLookStripTests: XCTestCase {
     /// **Chaque miniature vivante est dans le contour de sa case** (#9557) : le
     /// libellé, plus large que la case, ne doit pas en élargir le pas — l'atlas
     /// avance de `pitch`, les contours aussi.
-    func test_cells_advanceByThePitch_whateverTheirLabelWidth() throws {
+    /// Une case n'écrit plus rien (#9566) : elle a exactement la taille de sa
+    /// miniature, donc la bande avance du pas de l'atlas.
+    func test_cells_advanceByThePitch_eachTheSizeOfItsThumbnail() throws {
         let bande = try Self.code("Meeshy/Features/Main/Composer/ComposerLookStrip.swift")
-        XCTAssertTrue(bande.contains(".frame(width: cellule.width, alignment: .center)"),
-                      "la case garde la largeur de la miniature ; son libellé déborde, centré")
+        let debut = try XCTUnwrap(bande.range(of: "private func cell(item: ComposerLookStripItem, chosen: Bool)"))
+        let fin = try XCTUnwrap(bande.range(of: "private func glyph(", range: debut.upperBound..<bande.endIndex))
+        XCTAssertTrue(bande[debut.upperBound..<fin.lowerBound].contains(".frame(width: cellule.width, height: cellule.height)"))
     }
 
     /// **Sans filtre ni cadre, rien ne recopie la caméra en bas** (#9557) : la

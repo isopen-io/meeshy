@@ -120,7 +120,10 @@ final class ComposerSceneQuickCaptureTests: XCTestCase {
         let chrome = try source("Meeshy/Features/Main/Composer/ComposerCaptureViews.swift")
         XCTAssertTrue(chrome.contains("scene(.longPress)"), "l'appui long de la nappe filme, décidé par la table")
         // #9134 — la nappe est celle du chrome PARTAGÉ : sa levée est celle de la machine.
-        XCTAssertTrue(chrome.contains(".onEnded { _ in session.endHold() }"), "relâcher n'arrête pas la prise")
+        let tenue = try XCTUnwrap(chrome.range(of: "private var holdGesture: some Gesture {"))
+        let glisse = try XCTUnwrap(chrome.range(of: "private var dragGesture", range: tenue.upperBound..<chrome.endIndex))
+        XCTAssertTrue(chrome[tenue.upperBound..<glisse.lowerBound].contains("session.endHold()"),
+                      "relâcher n'arrête pas la prise")
     }
 
     /// La levée d'un appui long se lit désormais sur le cadenas (#8671) —
