@@ -46,10 +46,7 @@ final class ProtectedContentSnapshotVeil {
     func raise() {
         guard veils.isEmpty,
               Self.shouldVeil(visibleProtectedCount: SecureCaptureRegistry.visibleCount) else { return }
-        veils = UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .flatMap(\.windows)
-            .filter { !$0.isHidden }
+        veils = DeviceLayout.allVisibleWindows
             .map { window in
                 let veil = Self.makeVeil(frame: window.bounds)
                 window.addSubview(veil)

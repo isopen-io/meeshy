@@ -15,19 +15,38 @@ enum DeviceLayout {
     /// scene-targeted request below goes through this one resolution so the
     /// answer cannot drift between call sites.
     ///
-    /// Written as a plain loop with early exit rather than
-    /// `compactMap { … }.first { … }`, which would allocate an intermediate
-    /// array on every call. `windowSize` runs inside the `body` of a
-    /// message-list cell — the hottest list in the app — so this must stay
+    /// Written as a plain loop with early exit over the LAZY `windowScenes`
+    /// rather than `compactMap { … }.first { … }`, which would allocate an
+    /// intermediate array on every call. `windowSize` runs inside the `body` of
+    /// a message-list cell — the hottest list in the app — so this must stay
     /// allocation-free on the nominal path, per the repo's "keep body pure and
     /// fast" rule.
     static var activeWindowScene: UIWindowScene? {
-        for scene in UIApplication.shared.connectedScenes {
-            guard let windowScene = scene as? UIWindowScene,
-                  windowScene.activationState == .foregroundActive else { continue }
+        for windowScene in windowScenes where windowScene.activationState == .foregroundActive {
             return windowScene
         }
         return nil
+    }
+
+    /// The app's window scenes — the ONE place `connectedScenes` is read, so
+    /// the active-scene resolution and the all-scenes question below cannot
+    /// drift into two walks. Lazy: iterating it allocates nothing.
+    private static var windowScenes: some Sequence<UIWindowScene> {
+        UIApplication.shared.connectedScenes.lazy.compactMap { $0 as? UIWindowScene }
+    }
+
+    /// Every visible window of every connected scene.
+    ///
+    /// The one question that is genuinely about ALL scenes rather than about
+    /// the one on screen: the app-switcher veil (#9574) must cover each scene
+    /// the system is about to snapshot, and on iPad every scene of the app is
+    /// snapshotted. It is asked from `willResignActive`, while the scene that
+    /// was on screen is leaving `.foregroundActive` — `activeWindowScene` may
+    /// already answer `nil` there and leave the protected content uncovered.
+    /// Order does not matter to a question that visits every window, which is
+    /// what makes walking the unordered `Set` correct here and only here.
+    static var allVisibleWindows: [UIWindow] {
+        windowScenes.flatMap(\.windows).filter { !$0.isHidden }
     }
 
     /// The window to measure against.
