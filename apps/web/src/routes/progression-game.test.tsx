@@ -167,7 +167,7 @@ describe('« Jeu masqué » (#9481)', () => {
     gamePrefs.set({ hidden: true });
     const page = hub(withGame());
     expect(page).toContain('id="game-hidden"');
-    expect(page).not.toContain('data-concept-card="missions"');
+    expect(page).not.toContain('data-concept-card=');
     expect(page).toContain('href="/me/progression/reglages"');
     expect(fiche('missions', withGame())).not.toContain('id="game-missions"');
   });

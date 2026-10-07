@@ -30,10 +30,13 @@ export function TableauBody({ progress, now }: { readonly progress: EngagementWi
   const view = shownProgress(progress, hidden);
   return (
     <>
-      {hidden ? <GameHiddenCard /> : null}
-      <p className="px-1 text-caption" style={{ color: GAME_INK_2 }}>
-        {gameText('game.dashboard.hint')}
-      </p>
+      {hidden ? (
+        <GameHiddenCard />
+      ) : (
+        <p className="px-1 text-caption" style={{ color: GAME_INK_2 }}>
+          {gameText('game.dashboard.hint')}
+        </p>
+      )}
       {shownConcepts(progress, hidden).map((key) => {
         const concept = conceptView(key, view, clock);
         return (

@@ -159,7 +159,7 @@ function HowToEarn({ rules, elan }: { readonly rules: readonly EarnRule[]; reado
       <h3 className="text-check font-semibold uppercase tracking-wide" style={{ color: GAME_INK_2 }}>
         {gameText('game.hero.earn_title')}
       </h3>
-      <ul className="flex flex-wrap gap-1.5" data-game-earn="">
+      <ul className="flex flex-wrap gap-x-1.5" data-game-earn="">
         {rules.map(({ family, points }) => (
           <li key={family} className="max-w-full">
             {/* La famille se touche : ce que rapporte un geste, et si elle est active ces jours-ci (#9563). */}

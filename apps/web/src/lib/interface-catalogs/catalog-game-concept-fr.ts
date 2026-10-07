@@ -139,6 +139,7 @@ const fr = {
   'game.fact.stamps': 'Tampons',
   'game.fact.pending': 'En cours',
   'game.fact.group': 'Groupe',
+  'game.fact.material': 'Matière',
   'game.detail.obtain_label': 'Comment l’obtenir',
   'game.detail.gives_label': 'Ce que ça donne',
   'game.detail.earned': 'Obtenu',

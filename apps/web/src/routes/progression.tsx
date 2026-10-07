@@ -91,12 +91,9 @@ export function ProgressionBody({
   return (
     <div className="flex flex-col gap-4 px-4 py-3">
       {hidden ? <GameHiddenCard /> : playing ? (guide ?? null) : <MascotCoach moment={mascotMoment(progress, mascotEvent)} />}
-      <ProgressionRow
-        target={{ to: 'progressionTableau' }}
-        marker="tableau"
-        emblem={<DashboardEmblem />}
-        name={gameText('game.dashboard.title')}
-      />
+      {hidden ? null : (
+        <ProgressionRow target={{ to: 'progressionTableau' }} marker="tableau" emblem={<DashboardEmblem />} name={gameText('game.dashboard.title')} />
+      )}
       <ul data-progression-concepts="" className={ROW_GAP}>
         {shownConcepts(progress, hidden).map((concept, index) => (
           <li key={concept} {...(entering ? { 'data-game-enter': '', style: { '--game-enter-index': Math.min(index, 8) } as CSSProperties } : {})}>

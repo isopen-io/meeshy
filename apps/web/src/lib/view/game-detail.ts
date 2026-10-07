@@ -153,7 +153,7 @@ export function badgeDetail(axis: EngagementAxisProgress): ElementDetail {
     name,
     state: medal.material === null ? locked(medal.missing === null ? null : formatCount(medal.missing), axis.progress) : earned(isoDate(lastReached?.reachedAt ?? null)),
     facts: present([
-      medal.material === null ? null : row(gameText('game.fact.form'), materialName(medal.material)),
+      medal.material === null ? null : row(gameText('game.fact.material'), materialName(medal.material)),
       next === null ? null : row(gameText('game.fact.next_tier'), fraction(medal.value, next)),
     ]),
   });

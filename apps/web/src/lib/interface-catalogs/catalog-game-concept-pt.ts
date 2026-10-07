@@ -141,6 +141,7 @@ const pt = {
   'game.fact.stamps': 'Carimbos',
   'game.fact.pending': 'Em andamento',
   'game.fact.group': 'Grupo',
+  'game.fact.material': 'Material',
   'game.detail.obtain_label': 'Como conseguir',
   'game.detail.gives_label': 'O que isso dá',
   'game.detail.earned': 'Obtido',

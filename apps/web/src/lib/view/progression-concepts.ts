@@ -581,13 +581,14 @@ export function conceptView(concept: ProgressionConcept, view: EngagementWithGam
 }
 
 /**
- * « Jeu masqué » (#9481) : sur cet appareil, la progression se lit comme devant
- * un serveur qui ne sert pas le jeu, et le niveau, les Meeshes et la Flamme — que
- * le jeu redéfinit — se taisent aussi. Les fiches et le tableau de bord lisent la
- * MÊME vue que la première page.
+ * « Jeu masqué » (#9481, #9563) : sur cet appareil, la carte masquée REMPLACE la
+ * liste — aucune carte de concept, aucune fiche, aucun bloc au tableau de bord.
+ * Elle porte seule de quoi réafficher le jeu et ouvrir ses réglages. Les trois
+ * écrans lisent la MÊME règle, et l'app iOS s'y aligne.
+ *
+ * `shownProgress` retire le bloc `game` de ce que les écrans lisent : rien du jeu
+ * ne peut se peindre par un chemin oublié.
  */
-const HIDDEN_WITH_GAME: readonly ProgressionConcept[] = ['level', 'meesh', 'flame'];
-
 export function shownProgress(view: EngagementWithGame, hidden: boolean): EngagementWithGame {
   if (!hidden || view.game === undefined) return view;
   const { game: _game, mintBadgeLoss: _loss, mintBadgeRegain: _regain, ...before } = view;
@@ -595,8 +596,7 @@ export function shownProgress(view: EngagementWithGame, hidden: boolean): Engage
 }
 
 export function shownConcepts(view: EngagementWithGame, hidden: boolean): readonly ProgressionConcept[] {
-  const concepts = progressionConcepts(shownProgress(view, hidden));
-  return hidden && view.game !== undefined ? concepts.filter((concept) => !HIDDEN_WITH_GAME.includes(concept)) : concepts;
+  return hidden && view.game !== undefined ? [] : progressionConcepts(view);
 }
 
 const CONCEPT_KEYS: ReadonlySet<string> = new Set<string>(Object.keys(BODIES));

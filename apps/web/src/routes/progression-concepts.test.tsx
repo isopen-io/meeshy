@@ -156,6 +156,12 @@ describe('la première page : une carte par concept, et rien d’autre', () => {
     }
   });
 
+  test('une jauge de carte se remplit depuis sa valeur précédente : elle porte le repère que le style anime', () => {
+    const fills = [...page().querySelectorAll('[data-concept-card] [role="progressbar"] [data-game-gauge-fill]')];
+    expect(fills.length).toBe(page().querySelectorAll('[data-concept-card] [role="progressbar"]').length);
+    expect(fills.length).toBeGreaterThan(5);
+  });
+
   test('la ligne de Mee se pose au-dessus de tout quand l’hôte la fournit', () => {
     const withGuide = dom(renderToStaticMarkup(<ProgressionBody progress={playing} now={NOW} guide={<p data-guide-slot="">Mee</p>} />));
     const first = withGuide.querySelector('[data-guide-slot], [data-progression-row], [data-concept-card]');
@@ -290,20 +296,31 @@ describe('le tableau de bord : un bloc par concept, lecture seule', () => {
 });
 
 describe('« Jeu masqué »', () => {
-  test('la carte masquée remplace les cartes du jeu ; ce que la progression d’avant sert reste', () => {
+  /* La carte masquée REMPLACE la liste (#9563, amendement n° 2) : ni carte de concept, ni tableau de bord, ni portes du jeu. Elle porte seule de quoi réafficher le jeu et ouvrir ses réglages. */
+  test('la carte masquée remplace la liste : aucune carte de concept, aucune autre entrée', () => {
     gamePrefs.set({ hidden: true });
     const page = hub(playing);
     expect(page.querySelector('#game-hidden')).not.toBeNull();
-    for (const concept of ['level', 'points', 'meesh', 'glory', 'flame', 'missions', 'league', 'season', 'prestige', 'showcase', 'atlas']) {
-      expect(cards(page)).not.toContain(concept);
-    }
-    expect(cards(page)).toContain('badges');
+    expect(cards(page)).toEqual([]);
+    expect(page.querySelectorAll('[data-progression-row]')).toHaveLength(0);
+    expect(page.querySelector('#game-hidden a[href="/me/progression/reglages"]')).not.toBeNull();
+    expect(page.querySelector('#game-hidden [data-game-show]')).not.toBeNull();
   });
 
-  test('la fiche d’un concept du jeu et le tableau de bord ne montrent rien du jeu', () => {
+  test('la fiche d’un concept et le tableau de bord ne montrent que la carte masquée', () => {
     gamePrefs.set({ hidden: true });
-    expect(fiche('missions', playing).querySelector('#game-missions')).toBeNull();
-    expect(tableau(playing).querySelector('[data-dashboard-block="glory"]')).toBeNull();
+    for (const concept of ['missions', 'badges', 'level'] as const) {
+      const page = fiche(concept, playing);
+      expect({ concept, fiche: page.querySelector('[data-concept-fiche]') !== null, card: page.querySelector('#game-hidden') !== null }).toEqual({ concept, fiche: false, card: true });
+    }
+    const board = tableau(playing);
+    expect(board.querySelectorAll('[data-dashboard-block]')).toHaveLength(0);
+    expect(board.querySelector('#game-hidden')).not.toBeNull();
+  });
+
+  test('devant un ancien serveur, « masqué » ne masque rien : il n’y a pas de jeu à masquer', () => {
+    gamePrefs.set({ hidden: true });
+    expect(cards(hub(before))).toEqual([...progressionConcepts(before)]);
   });
 });
 

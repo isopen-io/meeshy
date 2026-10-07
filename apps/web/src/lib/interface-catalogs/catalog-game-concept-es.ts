@@ -141,6 +141,7 @@ const es = {
   'game.fact.stamps': 'Sellos',
   'game.fact.pending': 'En curso',
   'game.fact.group': 'Grupo',
+  'game.fact.material': 'Material',
   'game.detail.obtain_label': 'Cómo conseguirlo',
   'game.detail.gives_label': 'Qué te da',
   'game.detail.earned': 'Conseguido',

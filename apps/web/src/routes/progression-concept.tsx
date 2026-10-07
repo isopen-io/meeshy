@@ -10,8 +10,7 @@ import { GameMintPreview } from '@/components/game-mint-preview';
 import { GameMissions } from '@/components/game-missions';
 import { GAME_BRAND, GAME_CARD, GAME_INK, GAME_INK_2 } from '@/components/game-surface';
 import { GameTouch } from '@/components/game-touch';
-import { ConceptChips, ConceptEmblem, ConceptFacts, ProgressionRow, RowEmblem } from '@/components/progression-concept';
-import { ProgressBar } from '@/components/progress-bar';
+import { ConceptChips, ConceptEmblem, ConceptFacts, ConceptGauge, ProgressionRow, RowEmblem } from '@/components/progression-concept';
 import type { EngagementWithGame } from '@/lib/api/engagement';
 import { useGamePrefs } from '@/lib/game/preferences';
 import { suspendForGameCatalog } from '@/lib/i18n-game-catalog';
@@ -85,7 +84,7 @@ function Hero({ concept, view }: { readonly concept: ConceptView; readonly view:
         {concept.value}
       </p>
       <ConceptChips chips={concept.chips} open={(chip) => detailOfRef(chip.ref, concept.key, chip.text, concept.value, view)} />
-      {concept.gauge === null ? null : <ProgressBar progress={concept.gauge} tint={GAME_BRAND} label={`${concept.name} — ${concept.value}`} />}
+      {concept.gauge === null ? null : <ConceptGauge gaugeKey={`fiche:${concept.key}`} progress={concept.gauge} label={`${concept.name} — ${concept.value}`} />}
     </section>
   );
 }

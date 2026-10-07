@@ -141,6 +141,7 @@ const ar = {
   'game.fact.stamps': 'الأختام',
   'game.fact.pending': 'قيد الإنجاز',
   'game.fact.group': 'المجموعة',
+  'game.fact.material': 'المعدن',
   'game.detail.obtain_label': 'كيف تحصل عليه',
   'game.detail.gives_label': 'ماذا يمنحك',
   'game.detail.earned': 'تم الحصول عليه',

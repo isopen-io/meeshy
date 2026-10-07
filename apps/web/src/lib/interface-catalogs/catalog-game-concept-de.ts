@@ -141,6 +141,7 @@ const de = {
   'game.fact.stamps': 'Stempel',
   'game.fact.pending': 'Läuft',
   'game.fact.group': 'Gruppe',
+  'game.fact.material': 'Material',
   'game.detail.obtain_label': 'So bekommst du es',
   'game.detail.gives_label': 'Was es bringt',
   'game.detail.earned': 'Erhalten',

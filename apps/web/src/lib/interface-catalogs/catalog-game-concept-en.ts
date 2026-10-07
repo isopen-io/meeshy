@@ -141,6 +141,7 @@ const en = {
   'game.fact.stamps': 'Stamps',
   'game.fact.pending': 'In progress',
   'game.fact.group': 'Group',
+  'game.fact.material': 'Material',
   'game.detail.obtain_label': 'How to get it',
   'game.detail.gives_label': 'What it gives',
   'game.detail.earned': 'Earned',

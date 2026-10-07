@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 
 import type { ProgressionConcept } from '@meeshy/shared/utils/progression-layout';
 
@@ -18,9 +18,9 @@ import {
 import { SealMark } from '@/components/game/seal-mark';
 import { GlyphSvg } from '@/components/glyph';
 import { PROGRESSION_GLYPHS } from '@/components/glyphs-progression';
-import { ProgressBar } from '@/components/progress-bar';
 import type { EngagementWithGame } from '@/lib/api/engagement';
 import { gameText } from '@/lib/view/game-copy';
+import { progressPercent } from '@/lib/view/progression';
 import type { ElementDetail } from '@/lib/view/game-detail';
 import type { ConceptChipView, ConceptView } from '@/lib/view/progression-concepts';
 import { Link } from '@/routes/route-table';
@@ -137,6 +137,42 @@ export function ConceptChips({ chips, open }: { readonly chips: readonly Concept
   );
 }
 
+/**
+ * LA JAUGE D'UN CONCEPT — elle se remplit DEPUIS SA VALEUR PRÉCÉDENTE (#9563,
+ * amendement n° 2) : à la première ouverture elle monte de zéro, après un geste
+ * elle avance de l'ancienne valeur à la nouvelle, et au retour arrière — même
+ * valeur — elle ne rejoue rien. La valeur précédente est gardée par `gaugeKey`
+ * le temps de la visite ; `prefers-reduced-motion` la pose sans transition
+ * (`[data-game-gauge-fill]`, `styles/game.css`).
+ *
+ * `role="progressbar"` avec ses trois valeurs, comme `ProgressBar` : la jauge
+ * EST une information, et `aria-valuenow` dit la valeur vraie dès le premier
+ * rendu, pas celle que l'œil voit monter.
+ */
+const previousGauge = new Map<string, number>();
+
+export function ConceptGauge({ gaugeKey, progress, label, tint = GAME_BRAND }: { readonly gaugeKey: string; readonly progress: number; readonly label: string; readonly tint?: string }) {
+  const percent = progressPercent(progress);
+  const [shown, setShown] = useState(() => previousGauge.get(gaugeKey) ?? 0);
+  useEffect(() => {
+    previousGauge.set(gaugeKey, percent);
+    setShown(percent);
+  }, [gaugeKey, percent]);
+  return (
+    <span
+      role="progressbar"
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={percent}
+      aria-label={label}
+      className="block h-1.5 w-full overflow-hidden rounded-chip"
+      style={{ backgroundColor: 'color-mix(in srgb, var(--color-ios-ink-3) 28%, transparent)' }}
+    >
+      <span data-game-gauge-fill="" className="block h-full rounded-chip" style={{ width: `${shown}%`, backgroundColor: tint }} />
+    </span>
+  );
+}
+
 function Chevron() {
   return (
     <span className="shrink-0" style={{ color: GAME_INK_2 }} aria-hidden="true">
@@ -195,7 +231,7 @@ export function ConceptCard({ concept, view }: { readonly concept: ConceptView; 
     >
       <Head emblem={<ConceptEmblem concept={concept.key} view={view} size={36} />} name={concept.name} value={concept.value} />
       <ConceptChips chips={concept.chips} />
-      {concept.gauge === null ? null : <ProgressBar progress={concept.gauge} tint={GAME_BRAND} label={`${concept.name} — ${concept.value}`} />}
+      {concept.gauge === null ? null : <ConceptGauge gaugeKey={`card:${concept.key}`} progress={concept.gauge} label={`${concept.name} — ${concept.value}`} />}
       <span className="sr-only">{gameText('game.concept.why_label')} :</span>
       <span data-concept-why="" className="line-clamp-2 text-caption" style={{ color: GAME_INK }}>
         {concept.why}

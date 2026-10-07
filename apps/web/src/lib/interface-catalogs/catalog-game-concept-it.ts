@@ -141,6 +141,7 @@ const it = {
   'game.fact.stamps': 'Timbri',
   'game.fact.pending': 'In corso',
   'game.fact.group': 'Gruppo',
+  'game.fact.material': 'Materiale',
   'game.detail.obtain_label': 'Come ottenerlo',
   'game.detail.gives_label': 'Che cosa dà',
   'game.detail.earned': 'Ottenuto',
