@@ -124,7 +124,10 @@ final class ComposerCaptureStageWiringTests: XCTestCase {
         let chrome = try Self.code("Meeshy/Features/Main/Composer/ComposerCaptureViews.swift")
         XCTAssertTrue(chrome.contains("if session.stage != .recording {"), "la rangée haute se cache pendant la prise")
         let bas = try Self.code("Meeshy/Features/Main/Composer/ComposerCaptureBottomRow.swift")
-        XCTAssertTrue(bas.contains(".disabled(!railEnabled)"), "le rail se désactive, et VoiceOver le dit")
+        XCTAssertTrue(bas.contains("if ComposerCaptureGesture.offersRail(context) {"),
+                      "le rail n'existe que si la table l'offre (#9576)")
+        XCTAssertFalse(bas.contains(".disabled(!rail"), "un rail éteint n'est plus montré : ni à l'œil, ni à VoiceOver")
+        XCTAssertFalse(bas.contains("0.4"), "plus de rail à demi effacé")
         XCTAssertTrue(bas.contains("if !recording { zoom }"), "le zoom passe au glissé vertical")
         XCTAssertTrue(bas.contains(".environment(\\.layoutDirection, .leftToRight)"),
                       "le cadenas reste à DROITE, là où le glissé verrouille")

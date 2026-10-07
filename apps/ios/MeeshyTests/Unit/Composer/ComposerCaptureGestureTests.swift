@@ -191,6 +191,21 @@ final class ComposerCaptureGestureTests: XCTestCase {
         XCTAssertNil(ComposerCaptureGesture.accessibilityName(of: .zoom))
     }
 
+    // MARK: - Un rail qu'on ne peut pas ouvrir n'est pas montré (#9576)
+
+    func test_offersRail_followsTheTable_goneWhileSegmentsFreezeTheLook() {
+        XCTAssertTrue(ComposerCaptureGesture.offersRail(ComposerCaptureGestureContext()))
+        XCTAssertFalse(ComposerCaptureGesture.offersRail(ComposerCaptureGestureContext(pendingSegments: 1)),
+                       "un segment en attente fige le look : ni Filtres ni Cadres")
+        XCTAssertFalse(ComposerCaptureGesture.offersRail(ComposerCaptureGestureContext(pendingSegments: 3)))
+        XCTAssertFalse(ComposerCaptureGesture.offersRail(ComposerCaptureGestureContext(stage: .recording)))
+        XCTAssertFalse(ComposerCaptureGesture.offersRail(ComposerCaptureGestureContext(stage: .off)))
+        XCTAssertTrue(ComposerCaptureGesture.offersRail(ComposerCaptureGestureContext(pendingSegments: 0)),
+                      "les segments supprimés, le rail revient")
+        XCTAssertTrue(ComposerCaptureGesture.offersRail(ComposerCaptureGestureContext(editing: true, pendingSegments: 2)),
+                      "la retouche garde ses outils")
+    }
+
     // MARK: - Cas de bord de la table
 
     func test_action_edgeCases_railWithSegments_offAndDragWithoutHold() {
