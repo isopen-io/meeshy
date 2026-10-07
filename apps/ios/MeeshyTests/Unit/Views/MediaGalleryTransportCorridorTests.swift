@@ -249,23 +249,86 @@ final class MediaGalleryTransportCorridorTests: XCTestCase {
                                                  controls: .fullscreenDefault))
     }
 
-    /// **La durée vient de l'ATTACHEMENT, jamais du player.** Elle doit être
-    /// lisible avant que la première image ne soit décodée — un `manager.duration`
-    /// vaut zéro tant que l'`AVPlayerItem` n'a pas chargé ses pistes, donc la
-    /// bande annoncerait « 0:00 » sur exactement la page qu'on vient d'ouvrir.
-    func test_theDuration_comesFromTheAttachment_neverFromThePlayer() throws {
+    /// **La bande prend la largeur de l'ÉCRAN, plus celle du média** (#9577,
+    /// directive porteur 2026-10-07). Bornée au cadre, la progression d'une
+    /// vidéo 9:16 perdait un tiers de sa course — et c'est la seule ligne du
+    /// plateau qu'on saisit au doigt.
+    func test_theBand_spansTheScreen_notTheFrameOfTheMedia() throws {
         let code = try unit()
-        guard let bande = corps("var transportCorridor: some View {", dans: code),
-              let libelle = corps("var currentDurationLabel: String? {", dans: code) else {
-            return XCTFail("`transportCorridor` ou `currentDurationLabel` introuvable")
+        guard let bande = corps("var transportCorridor: some View {", dans: code) else {
+            return XCTFail("`transportCorridor` introuvable")
         }
+        let plat = compact(bande)
 
-        XCTAssertTrue(compact(libelle).contains("durationFormatted"),
-                      "la durée se lit sur la pièce jointe")
-        XCTAssertFalse(compact(bande).contains(".duration]"),
-                       "`.duration` n'entre pas dans le jeu de contrôles : ce serait la "
-                           + "durée du PLAYER, nulle tant que les pistes ne sont pas chargées")
-        XCTAssertFalse(compact(bande).contains("manager.duration"))
+        XCTAssertFalse(plat.contains("currentStage.frame.width"),
+                       "la bande ne se cale plus sur la largeur du CADRE")
+        XCTAssertTrue(plat.contains(".frame(maxWidth:.infinity)"),
+                      "elle prend toute la largeur de l'écran, sous la scène")
+        XCTAssertTrue(plat.contains("placement:.corridor"),
+                      "et elle se rend en gabarit de couloir — sans capsule de verre")
+    }
+
+    /// **Elle ne porte plus QUE la progression.** Le son et (...) ont rejoint la
+    /// colonne d'actions, la durée a rejoint la ligne d'informations : chaque
+    /// point rendu à la barre est un point de course en plus.
+    func test_theBand_carriesTheProgressAlone() throws {
+        let code = try unit()
+        guard let bande = corps("var transportCorridor: some View {", dans: code) else {
+            return XCTFail("`transportCorridor` introuvable")
+        }
+        let plat = compact(bande)
+
+        XCTAssertTrue(plat.contains("controls:[.scrubber]"),
+                      "la progression, seule")
+        for parti in [".mute", ".speed", ".pip", ".duration", "durationFormatted", "manager.duration"] {
+            XCTAssertFalse(plat.contains(parti),
+                           "« \(parti) » a quitté la ligne de la barre (#9577)")
+        }
+        XCTAssertFalse(TransportLayout.showsBarItems(placement: .corridor),
+                       "et la loi du SDK le refuse aussi : un hôte ne peut pas les y remettre par une option")
+    }
+
+    /// **Le son et (...) vivent dans la colonne de droite, SOUS « Composer »** —
+    /// et le muet reste donc atteignable : c'est la seule place qui le porte.
+    func test_theMuteAndTheMenu_liveInTheActionColumn_underCompose() throws {
+        let code = try unit()
+        guard let colonne = corps("var cadreActionColumn: some View {", dans: code),
+              let rail = corps("var cadreTransportRail: some View {", dans: code) else {
+            return XCTFail("`cadreActionColumn` ou `cadreTransportRail` introuvable")
+        }
+        guard let actions = compact(colonne).range(of: "mediaActions("),
+              let transport = compact(colonne).range(of: "cadreTransportRail") else {
+            return XCTFail("la colonne ne monte pas le rail de transport")
+        }
+        XCTAssertLessThan(actions.lowerBound, transport.lowerBound,
+                          "réagir · répondre · composer d'abord, le son et (...) dessous")
+
+        let plat = compact(rail)
+        XCTAssertTrue(plat.contains("placement:.rail"), "le gabarit de colonne du SDK")
+        XCTAssertTrue(plat.contains(".mute"), "sans `.mute` ici, plus aucun muet dans toute la galerie")
+        XCTAssertTrue(plat.contains("currentAttachmentIsActiveTrack"),
+                      "et seulement quand une piste est attachée : un muet sans son est un contrôle sans effet")
+        XCTAssertTrue(TransportLayout.showsRail(placement: .rail, controls: [.mute, .speed, .pip]))
+    }
+
+    /// **La durée a rejoint la ligne d'informations, et elle DÉCOMPTE.** Elle se
+    /// lit `largeur × hauteur · poids · durée` : temps restant pendant la
+    /// lecture, durée totale à l'arrêt — la règle est `MediaInfoLine`, au SDK.
+    func test_theInfoLine_carriesTheDuration_andItCountsDown() throws {
+        let code = try unit()
+        guard let ligne = corps("private func bottomMetadataOverlay(", dans: code) else {
+            return XCTFail("`bottomMetadataOverlay` introuvable")
+        }
+        let plat = compact(ligne)
+
+        XCTAssertTrue(plat.contains("MediaInfoLine.segments("),
+                      "les segments et leur point médian viennent de la règle partagée")
+        XCTAssertTrue(plat.contains("MediaPlaybackDurationText("),
+                      "la durée est la feuille qui observe le moteur — la racine ne paie pas ses 5 Hz")
+        XCTAssertTrue(plat.contains("MediaGalleryStage.carriesDuration([att])"),
+                      "une durée NULLE n'est pas une durée : même prédicat que la réserve de la bande")
+        XCTAssertEqual(MediaInfoLine.displayedDuration(total: 12, elapsed: 5, isPlaying: true), 7)
+        XCTAssertEqual(MediaInfoLine.displayedDuration(total: 12, elapsed: 5, isPlaying: false), 12)
     }
 
     /// **Et une durée NULLE n'affiche rien.** Le libellé applique le MÊME
@@ -274,23 +337,6 @@ final class MediaGalleryTransportCorridorTests: XCTestCase {
     func test_aZeroDuration_showsNoLabel() {
         XCTAssertFalse(MediaGalleryStage.carriesDuration([video("a", durationMs: 0)]))
         XCTAssertTrue(MediaGalleryStage.carriesDuration([video("a")]))
-    }
-
-    /// **Le muet reste ATTEIGNABLE.** La bande est le seul endroit du plateau
-    /// qui porte encore la barre du SDK : si elle perdait `.mute`, la galerie
-    /// n'aurait plus aucun muet — et les deux gardes qui l'affirment
-    /// (`FullscreenGallerySoundScopeGuardTests`) resteraient VERTES, car elles
-    /// mesurent la présence du composant, pas celle de l'option.
-    func test_theBand_keepsTheMuteReachable() throws {
-        let code = try unit()
-        guard let bande = corps("var transportCorridor: some View {", dans: code) else {
-            return XCTFail("`transportCorridor` introuvable")
-        }
-
-        XCTAssertTrue(compact(bande).contains(".mute"),
-                      "sans `.mute` ici, plus aucun muet dans toute la galerie")
-        XCTAssertTrue(compact(bande).contains("placement:.corridor"),
-                      "et elle se rend en gabarit de couloir — sans capsule de verre")
     }
 
     // MARK: - 6. Le play/pause reste au centre du média, plus transparent
@@ -309,6 +355,9 @@ final class MediaGalleryTransportCorridorTests: XCTestCase {
                       "« plus transparent au centre » est une directive, pas un goût")
         XCTAssertTrue(plat.contains("controls:[.playPause]"),
                       "rien d'autre ne se pose sur le média : tout le reste est descendu")
+        XCTAssertTrue(plat.contains("centerVisible:playPauseFade.isVisible"),
+                      "et il s'EFFACE une seconde après le début de la lecture (#9577) — "
+                          + "la règle est `FullscreenPlayPauseFade`, la galerie ne fait que la peindre")
 
         guard let region = corps("var cadreRegion: some View {", dans: code),
               let couche = compact(region).range(of: "cadreCenterPlayPause"),
