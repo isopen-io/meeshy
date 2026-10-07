@@ -247,6 +247,22 @@ const knownDuration = (element: HTMLMediaElement): number =>
 
 type Listeners = Readonly<Record<string, () => void>>;
 
+/**
+ * UN LECTEUR, UNE CLÉ (#9575). La clé d'exclusivité désigne le LECTEUR, jamais
+ * la pièce : la tuile du fil, la visionneuse et un réel lisent la MÊME pièce
+ * sur des éléments différents. Sous la clé de la pièce, le second `claim`
+ * était un no-op (les deux jouaient ensemble) et la pause du premier relâchait
+ * l'exclusivité du second (un troisième média ne l'arrêtait plus).
+ */
+const playerKeys = { next: 0 };
+
+const nextPlayerKey = (attachmentId: string): string => {
+  playerKeys.next += 1;
+  return `${attachmentId}#${playerKeys.next}`;
+};
+
+const floatingElement = (): Element | null => (document as PictureInPictureDocument).pictureInPictureElement ?? null;
+
 export function useMediaPlayback(params: {
   readonly attachmentId: string;
   readonly coordinator?: MediaCoordinator;
@@ -258,15 +274,15 @@ export function useMediaPlayback(params: {
   readonly tracksTime?: boolean;
   readonly report?: MediaPlaybackReport;
   /**
-   * LA CLÉ D'EXCLUSIVITÉ auprès du coordinateur (#9256) — l'id de la pièce par
-   * défaut. Le mini-lecteur qui reprend un vocal au sortir du plein écran
-   * joue la MÊME pièce que sa bulle : sous la même clé, toucher la bulle
-   * serait un `claim` redondant (idempotent) et les deux joueraient ensemble.
+   * LA CLÉ D'EXCLUSIVITÉ auprès du coordinateur (#9256) — propre à CE lecteur
+   * par défaut (#9575, `nextPlayerKey`) : deux surfaces de la même pièce sont
+   * deux lecteurs, et le coordinateur arbitre entre elles.
    */
   readonly claimKey?: string;
 }): MediaPlayback {
   const { attachmentId, tracksTime = false } = params;
-  const claimId = params.claimKey ?? attachmentId;
+  const [playerKey] = useState(() => nextPlayerKey(attachmentId));
+  const claimId = params.claimKey ?? playerKey;
   const coordinator = params.coordinator ?? mediaCoordinator;
 
   const [status, setStatus] = useState<MediaPlaybackStatus>('idle');
@@ -392,6 +408,11 @@ export function useMediaPlayback(params: {
         // prochain démontage de la rangée (mesuré au navigateur).
         coordinator.release(claimId);
         if (previous !== null) previous.pause();
+        // UNE VIDÉO QUI FLOTTE NE SURVIT PAS À SA SURFACE (#9575) : la fenêtre
+        // resterait ouverte sur un élément que plus rien ne commande.
+        if (previous !== null && floatingElement() === previous) {
+          void (document as PictureInPictureDocument).exitPictureInPicture?.().catch(() => {});
+        }
         // LE DÉMONTAGE EST UN SIGNAL TERMINAL (#7225) — au même titre que
         // `ended` : l'écran quitté ne rejouera plus cet élément, donc
         // c'est ICI ou jamais que le dernier segment ouvert (le cas
@@ -499,8 +520,16 @@ export function useMediaPlayback(params: {
       };
       const onVolumeChange = (): void => setMutedState(element.muted);
       const onRateChange = (): void => setRateState(element.playbackRate);
-      const onEnterPictureInPicture = (): void => setPictureInPicture('active');
-      const onLeavePictureInPicture = (): void => setPictureInPicture(pictureInPictureSupport(element) === 'unsupported' ? 'unsupported' : 'inactive');
+      // FLOTTER, C'EST PRENDRE LA LECTURE (#9575) : la surface qui jouait la
+      // même pièce dans la page se met en pause, comme devant tout autre média.
+      const onEnterPictureInPicture = (): void => {
+        coordinator.claim(claimId, () => element.pause());
+        setPictureInPicture('active');
+      };
+      const onLeavePictureInPicture = (): void => {
+        if (element.paused) coordinator.release(claimId);
+        setPictureInPicture(pictureInPictureSupport(element) === 'unsupported' ? 'unsupported' : 'inactive');
+      };
 
       const listeners: Listeners = {
         play: onPlay,

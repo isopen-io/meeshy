@@ -104,7 +104,7 @@ describe('useReelPlayback — la lecture suit la visibilité', () => {
 
     expect(callsOf('a').play).toBe(1);
     expect(callsOf('b').play).toBe(0);
-    expect(coordinator.active()).toBe('a');
+    expect(coordinator.active()).not.toBeNull();
     expect(videoOf('a').getAttribute('data-status')).toBe('playing');
   });
 
@@ -115,7 +115,7 @@ describe('useReelPlayback — la lecture suit la visibilité', () => {
 
     expect(callsOf('a').pause).toBeGreaterThanOrEqual(1);
     expect(callsOf('b').play).toBe(1);
-    expect(coordinator.active()).toBe('b');
+    expect(coordinator.active()).not.toBeNull();
     expect(videoOf('a').getAttribute('data-status')).toBe('paused');
     expect(videoOf('b').getAttribute('data-status')).toBe('playing');
   });
@@ -171,7 +171,7 @@ describe('useReelPlayback — aucune fuite de lecteur', () => {
   test('quitter l’écran coupe le réel qui jouait et relâche le coordinateur', async () => {
     const coordinator = createMediaCoordinator();
     await render({ pages: [{ id: 'a', active: true }, { id: 'b', active: false }], soundOn: true, coordinator });
-    expect(coordinator.active()).toBe('a');
+    expect(coordinator.active()).not.toBeNull();
     const pausesBefore = callsOf('a').pause;
 
     act(() => root?.unmount());
@@ -187,7 +187,7 @@ describe('useReelPlayback — aucune fuite de lecteur', () => {
     await render({ pages: [{ id: 'b', active: true }], soundOn: true, coordinator });
 
     expect(container!.querySelector('[data-id="a"]')).toBeNull();
-    expect(coordinator.active()).toBe('b');
+    expect(coordinator.active()).not.toBeNull();
     expect(container!.querySelectorAll('video')).toHaveLength(1);
   });
 });

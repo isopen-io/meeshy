@@ -493,6 +493,7 @@ function ViewerVideoPage({
         <button
           type="button"
           aria-label={translate(language, status === 'playing' ? 'media.video.pause' : 'media.video.play')}
+          data-viewer-center-toggle=""
           className="media-viewer-center-toggle"
           onClick={(event) => {
             event.stopPropagation();

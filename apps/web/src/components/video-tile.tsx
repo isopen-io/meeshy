@@ -72,7 +72,8 @@ const HEAD_CONTROL_PX = 28;
  *    qui reprend à la même image. La surface est un `<button>` : Entrée et
  *    Espace l'activent nativement ;
  *  - le bouton ▶︎ lit DANS LE FIL. Une fois la lecture partie, EXACTEMENT trois
- *    contrôles : pause/lecture au centre, son et plein écran en tête. Ni
+ *    contrôles : pause/lecture au centre, plein écran au bord de DÉBUT et son
+ *    au bord de FIN (#9575, miroir `_InlineOverlayControls.topBar`). Ni
  *    barre, ni temps, ni vitesse, ni image dans l'image : c'est la visionneuse
  *    qui les porte. Les contrôles ne se masquent pas — toucher la surface
  *    ouvre le plein écran, il ne pourrait plus les faire revenir.
@@ -235,13 +236,14 @@ export function VideoTile({
       </button>
 
       {started ? (
-        <div data-video-head className="absolute inset-x-0 top-1.5 flex justify-center gap-2.5">
+        <>
           <button
             type="button"
             data-video-control="expand"
+            data-video-edge="start"
             onClick={expand}
             aria-label={translate(language, 'media.viewer.open_fullscreen')}
-            className="tap-target-34 grid place-items-center rounded-full text-on-media"
+            className="tap-target-34 absolute start-1.5 top-1.5 grid place-items-center rounded-full text-on-media"
             style={headControlStyle}
           >
             <GlyphSvg glyph={MEDIA_GLYPHS.arrowsOutSimple} size={13} />
@@ -249,14 +251,15 @@ export function VideoTile({
           <button
             type="button"
             data-video-control="mute"
+            data-video-edge="end"
             onClick={() => setMuted(!muted)}
             aria-label={translate(language, muted ? 'media.video.unmute' : 'media.video.mute')}
-            className="tap-target-34 grid place-items-center rounded-full text-on-media"
+            className="tap-target-34 absolute end-1.5 top-1.5 grid place-items-center rounded-full text-on-media"
             style={headControlStyle}
           >
             <GlyphSvg glyph={muted ? MEDIA_TRANSPORT_GLYPHS.speakerSlash : MEDIA_TRANSPORT_GLYPHS.speakerHigh} size={13} />
           </button>
-        </div>
+        </>
       ) : durationLabel !== undefined ? (
         <span
           aria-hidden
