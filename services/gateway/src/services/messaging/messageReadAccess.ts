@@ -54,7 +54,10 @@
  *
  * L'AUTEUR suit la même loi, avec SON échéance servie : la plus tardive de
  * celles de ses destinataires. Tant que personne n'a reçu, rien ne décompte
- * pour lui ; quand le dernier décompte est fini, sa bulle part aussi.
+ * pour lui ; quand le dernier décompte est fini, sa bulle part aussi. Et
+ * l'expéditeur d'une COPIE transférée (durée ET après lecture, #9588) la perd
+ * à « envoi + durée » : c'est `servedEphemeralExpiresAt` qui le dit, ici on ne
+ * fait que lui remettre l'heure d'envoi.
  *
  * Le favori ne passe pas par ce second cran : il sert un éphémère vivant en
  * placeholder et refuse la vue unique par sa propre loi
@@ -175,7 +178,7 @@ export async function readerMayReadMessage(
  * (voir l'en-tête). Un décompte qui n'a pas démarré ne ferme rien.
  */
 export function ephemeralStillOnReaderScreen(
-  message: Pick<ReaderVisibleMessageRow, 'ephemeralDuration' | 'effectFlags' | 'expiresAt'>,
+  message: Pick<ReaderVisibleMessageRow, 'ephemeralDuration' | 'effectFlags' | 'expiresAt' | 'createdAt'>,
   resolution: EphemeralReaderResolution,
   now: Date,
 ): boolean {
@@ -183,6 +186,7 @@ export function ephemeralStillOnReaderScreen(
     ephemeralDuration: message.ephemeralDuration,
     effectFlags: message.effectFlags,
     rawExpiresAt: message.expiresAt,
+    sentAt: message.createdAt,
     isSender: resolution.isSender,
     readerDeadline: resolution.readerDeadline,
     latestRecipientDeadline: resolution.latestRecipientDeadline,

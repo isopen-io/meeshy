@@ -348,6 +348,26 @@ describe('le contenu a-t-il disparu POUR CE LECTEUR ? — la borne de la bulle, 
     });
   });
 
+  describe('la copie transférée d’une flamme — durée ET après lecture (#9588)', () => {
+    it('est partie de l’écran de son EXPÉDITEUR à « envoi + durée », quoi que dise l’heure de destruction', async () => {
+      const copyOf = (sentSecondsAgo: number): Store =>
+        readableStore({
+          messages: [
+            flame({
+              senderId: READER_IN_SOURCE,
+              effectFlags: EPHEMERAL_BIT | AFTER_READ_BIT,
+              createdAt: secondsFrom(AT, -sentSecondsAgo),
+            }),
+          ],
+        });
+
+      // Envoyée il y a 60 s pour une durée de 30 s : elle a quitté son écran.
+      expect(await admit(copyOf(60), [])).toEqual(UNAVAILABLE);
+      // Envoyée il y a 10 s : il la lit encore, et c'est la loi de sortie qui la refuse.
+      expect(await admit(copyOf(10), [])).toEqual({ admitted: false, reason: 'ephemeral-not-forwardable' });
+    });
+  });
+
   describe('flamme après lecture', () => {
     it('consommée par ce lecteur : indisponible — jamais le motif de sa nature', async () => {
       const store = readableStore({ messages: [afterReadFlame()] });
