@@ -9,7 +9,7 @@
  * @module @meeshy/shared/types/api-schemas/auth
  */
 
-import { sessionMinimalSchema, sessionSchema } from './session.js';
+import { geolocationAttributionSchema, sessionMinimalSchema, sessionSchema } from './session.js';
 import { userSchema } from './user.js';
 
 // =============================================================================
@@ -68,7 +68,8 @@ export const sessionsListResponseSchema = {
           type: 'array',
           items: sessionSchema
         },
-        totalCount: { type: 'number', description: 'Total number of active sessions' }
+        totalCount: { type: 'number', description: 'Total number of active sessions' },
+        geolocation: geolocationAttributionSchema
       }
     }
   }

@@ -247,6 +247,9 @@ model User {
   lastPasswordResetAttempt DateTime?
 
   // Device & Location Tracking (Login)
+  /// Date de la dernière connexion (#9642) : l'adresse et le lieu de connexion
+  /// ci-dessous s'effacent 12 mois après elle.
+  lastLoginAt       DateTime?
   lastLoginIp       String?
   lastLoginLocation String? // "City, Country"
   lastLoginDevice   String? // Device fingerprint/user agent
@@ -2962,11 +2965,27 @@ model UserSession {
   isMobile       Boolean @default(false)
   userAgent      String? // Raw user agent string
 
-  /// Network & Location
+  /// Ce que le client DÉCLARE de lui-même (#9610) — contrat unique :
+  /// `packages/shared/utils/client-session.ts`. Relevé à l'ouverture et à chaque
+  /// rafraîchissement ; un client qui ne déclare rien garde ce que le serveur déduit.
+  appVersion String? // "1.4.2" — X-Meeshy-Version
+  appBuild   String? // "1874" — X-Meeshy-Build
+  platform   String? // ios | web | pwa | android-shell — X-Meeshy-Platform
+  deviceName String? // "iPhone 15 Pro", dérivé du modèle par le client — X-Meeshy-Device-Name
+
+  /// Le moyen par lequel la session s'est ouverte, posé par le SERVEUR (#9610) :
+  /// password | two_factor | magic_link | registration | email_verification | oauth | anonymous
+  loginMethod String?
+
+  /// Network & Location — le lieu se déduit de l'adresse attestée par le proxy,
+  /// par une base LOCALE (DB-IP Lite, #9609) : aucune adresse n'est envoyée à un tiers.
   ipAddress String?
   country   String? // ISO 3166-1 alpha-2 (FR, US)
-  city      String?
+  city      String? // approximative : tirée de l'adresse IP
   location  String? // "Paris, France"
+  /// Plus écrites ni servies depuis #9609. L'existant s'efface par
+  /// `prisma/migrations/2026-10-08-session-coordinates-erase.mongodb.js`
+  /// (production : feu vert du porteur, sauvegarde vérifiée d'abord).
   latitude  Float?
   longitude Float?
   timezone  String? // IANA timezone
@@ -2991,6 +3010,8 @@ model UserSession {
   @@index([userId])
   @@index([expiresAt])
   @@index([isValid])
+  /// La conservation d'une session close se compte depuis sa clôture (#9614).
+  @@index([invalidatedAt])
 }
 
 /// =====================================================
