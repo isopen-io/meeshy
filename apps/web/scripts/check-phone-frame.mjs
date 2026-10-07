@@ -78,6 +78,7 @@ const EXEMPLES = {
   broadcast: 'diffusion-inconnue',
   invitation: 'demande-inconnue',
   report: 'signalement-inconnu',
+  concept: 'level',
 };
 
 const concretise = (pattern) =>
