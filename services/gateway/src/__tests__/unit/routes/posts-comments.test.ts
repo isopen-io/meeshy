@@ -76,6 +76,7 @@ jest.mock('../../../utils/withMutationLog', () => ({
   // qui se déguise en 500 sur des chemins d'erreur sans rapport.
   ...(jest.requireActual('../../../utils/withMutationLog') as object),
   withMutationLog: jest.fn<any>().mockImplementation(({ op }) => op()),
+  withMutationVerdict: jest.fn<any>().mockImplementation(async ({ op }: any) => ({ result: await op(), replayed: false })),
 }));
 
 jest.mock('../../../utils/sanitize.js', () => ({

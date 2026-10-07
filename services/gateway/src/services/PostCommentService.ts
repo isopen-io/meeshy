@@ -22,6 +22,27 @@ import { creditPostEngagement, type PostEngagementRecorder } from './posts/postE
 
 const log = enhancedLogger.child({ module: 'PostCommentService' });
 
+/**
+ * La forme d'un commentaire tel que sa CRÉATION le rend — et tel qu'un rejeu
+ * d'idempotence doit le resservir (#9603), à l'identique. `postId` est REQUIS
+ * par le service de la citation (#6578) : la relecture du média cité revérifie
+ * son appartenance au post commenté sur la LIGNE relue.
+ */
+const CREATED_COMMENT_SELECT = {
+  id: true,
+  content: true,
+  originalLanguage: true,
+  translations: true,
+  likeCount: true,
+  replyCount: true,
+  effectFlags: true,
+  parentId: true,
+  createdAt: true,
+  metadata: true,
+  postId: true,
+  author: { select: authorSelect },
+} as const;
+
 export class PostCommentService {
   private readonly trackingLinkService: TrackingLinkService;
 
@@ -157,24 +178,7 @@ export class PostCommentService {
             }
           : {}),
       },
-      select: {
-        id: true,
-        content: true,
-        originalLanguage: true,
-        translations: true,
-        likeCount: true,
-        replyCount: true,
-        effectFlags: true,
-        parentId: true,
-        createdAt: true,
-        metadata: true,
-        // `postId` est REQUIS par le service de la citation (#6578) : la
-        // re-lecture du média cité revérifie son appartenance au post commenté
-        // sur la LIGNE relue — une garde d'écriture ne dit rien des lignes
-        // écrites avant elle.
-        postId: true,
-        author: { select: authorSelect },
-      },
+      select: CREATED_COMMENT_SELECT,
     });
 
     // Lier le média pending au commentaire + persister la transcription mobile éventuelle.
@@ -376,6 +380,24 @@ export class PostCommentService {
   /// Relecture d'un commentaire au FORMAT de `updateComment` — pour le rejeu
   /// idempotent du PATCH (MutationLog) : une ligne Prisma brute n'a ni
   /// `author` ni `media`, et casserait le décodage côté client.
+  /**
+   * Le commentaire au format de sa création (`addComment` : même sélection,
+   * médias compris) — ce qu'un rejeu d'idempotence resert (#9603). `null` s'il
+   * a été supprimé depuis : le rejeu d'une création ne le ressuscite pas.
+   */
+  async getCommentAsCreated(commentId: string) {
+    const comment = await this.prisma.postComment.findFirst({
+      where: { id: commentId, deletedAt: NOT_DELETED },
+      select: CREATED_COMMENT_SELECT,
+    });
+    if (!comment) return null;
+    const media = await this.prisma.postMedia.findMany({
+      where: { commentId },
+      ...commentMediaInclude,
+    });
+    return { ...comment, media };
+  }
+
   async getCommentAsUpdateResult(commentId: string) {
     const comment = await this.prisma.postComment.findFirst({
       where: { id: commentId, deletedAt: NOT_DELETED },

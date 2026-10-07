@@ -51,6 +51,20 @@ export const postsCreditedBy = (
   through: RepostPassage | null | undefined,
 ): readonly RepostPassage[] => [landed, ...(through && through.id !== landed.id ? [through] : [])];
 
+/**
+ * Le SEUL post qu'un commentaire crédite (#9584, décision porteur 2026-10-07 :
+ * « le commentaire appartient au reposte et n'est pas partagé ; seules les
+ * réactions sont propagées en duplication »). C'est le post où le commentaire
+ * est RANGÉ — aujourd'hui l'original, un commentaire écrit depuis une
+ * republication simple étant redirigé vers lui.
+ *
+ * Le rangement lui-même est une question ouverte au porteur : s'il décide
+ * qu'un tel commentaire est rangé sur la republication, c'est cette ligne, et
+ * elle seule, qui devient `route.redirectedFrom?.id ?? route.id`.
+ */
+export const postCreditedByComment = (route: { readonly id: string; readonly redirectedFrom?: RepostPassage }): string =>
+  route.id;
+
 /** Un crédit par post crédité : la cible et son auteur portent les plafonds et le refus de soi. */
 export function creditPostGesture(
   prisma: PrismaClient,

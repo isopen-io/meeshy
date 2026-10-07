@@ -257,10 +257,10 @@ describe('POST /posts/:postId/comments — l’invité d’un lien', () => {
 });
 
 /**
- * #9584 — un commentaire écrit depuis la carte d'une REPUBLICATION SIMPLE
- * atterrit sur le fil de l'original, et crédite les DEUX posts pour de vrai :
- * un crédit sur l'original, un autre sur la republication traversée, chacun
- * passant son barème. La résolution rend la republication traversée.
+ * #9584 — un commentaire écrit depuis la carte d'une REPUBLICATION SIMPLE est
+ * rangé sur l'original, et ne crédite qu'UN post : celui où il est rangé
+ * (décision porteur 2026-10-07 : « le commentaire n'est pas partagé ; seules
+ * les réactions sont propagées en duplication »).
  */
 describe('POST /posts/:postId/comments — par où le commentaire est passé (#9584)', () => {
   const REPOST_ID = '507f1f77bcf86cd799439055';
@@ -269,7 +269,7 @@ describe('POST /posts/:postId/comments — par où le commentaire est passé (#9
     [POST_ID]: { id: POST_ID, ...PUBLIC_ACL, type: 'POST', isQuote: false, repostOfId: null, originalRepostOfId: null, deletedAt: null },
   };
 
-  it('écrit le commentaire sur l’original, et crédite l’original ET la republication — deux crédits', async () => {
+  it('écrit le commentaire sur l’original et ne crédite qu’UN post, celui où il est rangé', async () => {
     mockAddComment.mockResolvedValue({ id: 'comment-through-repost', content: 'Bravo', authorId: USER_ID, media: [] });
     const app = await buildApp(requiredAuth, rows);
 
@@ -278,10 +278,7 @@ describe('POST /posts/:postId/comments — par où le commentaire est passé (#9
 
     expect(res.statusCode).toBe(201);
     expect(mockAddComment.mock.calls[0]?.[0]).toBe(POST_ID);
-    expect(mockRecordActivity.mock.calls).toEqual([
-      [USER_ID, 'comment.text', { postId: POST_ID }],
-      [USER_ID, 'comment.text', { postId: REPOST_ID }],
-    ]);
+    expect(mockRecordActivity.mock.calls).toEqual([[USER_ID, 'comment.text', { postId: POST_ID }]]);
   });
 
   it('sur l’original lui-même, un seul crédit', async () => {

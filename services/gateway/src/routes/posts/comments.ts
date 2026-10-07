@@ -6,6 +6,7 @@ import { retractReactionNotifications } from '../../services/notifications/retra
 import { PostTranslationService } from '../../services/posts/PostTranslationService';
 import { PostAudioService } from '../../services/posts/PostAudioService';
 import { EngagementService } from '../../services/engagement/EngagementService';
+import { postCreditedByComment } from '../../services/posts/postEngagementCredits';
 import { CreateCommentSchema, UpdateCommentSchema, FeedQuerySchema, LikeSchema, PostParams, CommentParams, UnlikeSchema, TranslatePostSchema } from './types';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { safeBroadcast } from '../../socketio/serverEmit';
@@ -14,7 +15,8 @@ import { ConflictError } from '../../errors/custom-errors';
 import { resolveMentionedUsers, MentionService } from '../../services/MentionService';
 import { createPostRouteRateLimitConfig } from '../../middleware/rate-limiter';
 import { createSocialTranslateRateLimitConfig } from './socialRateLimit';
-import { withMutationLog, MutationResultGone } from '../../utils/withMutationLog';
+import { withMutationLog, withMutationVerdict, MutationResultGone } from '../../utils/withMutationLog';
+import { MutationInFlight } from '../../services/MutationLogService';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
 import { hoistLocationOnto } from '../../services/location/sharedPlace';
 import { hoistStickerOnto } from '../../services/stickers/messageSticker';
@@ -239,8 +241,12 @@ export function registerCommentRoutes(
       }
 
       // Idempotent via clientMutationId — replays return the same comment.
+      //
+      // #9603 — et ils ne REFONT rien : ni crédit, ni diffusion, ni
+      // notification, ni traduction. Le verdict vient du journal
+      // (`withMutationVerdict`), jamais de la forme du résultat.
       type CommentResult = NonNullable<Awaited<ReturnType<typeof commentService.addComment>>>;
-      const comment = await withMutationLog<CommentResult>({
+      const { result: comment, replayed } = await withMutationVerdict<CommentResult>({
         request,
         fastify,
         userId: authContext.registeredUser.id,
@@ -270,12 +276,15 @@ export function registerCommentRoutes(
           if (!c) throw new Error('POST_NOT_FOUND');
           return c as CommentResult & { id: string };
         },
+        // Relu au format de la CRÉATION — la ligne brute (`authorId`, sans
+        // auteur ni médias) servait au rejeu un corps que le client ne décodait
+        // pas comme celui du premier envoi.
         onDuplicate: async (resultId) => {
-          const existing = await prisma.postComment.findUnique({ where: { id: resultId } });
+          const existing = await commentService.getCommentAsCreated(resultId);
           return existing ? (existing as unknown as CommentResult & { id: string }) : null;
         },
       }).catch((err) => {
-        if (err instanceof Error && err.message === 'POST_NOT_FOUND') return null;
+        if (err instanceof Error && err.message === 'POST_NOT_FOUND') return { result: null, replayed: false };
         throw err;
       });
 
@@ -291,6 +300,16 @@ export function registerCommentRoutes(
       const [commentCite] = await serveCitedPostMedia(prisma, [
         hoistCommentCarriers(comment as unknown as Record<string, unknown>),
       ]);
+
+      // Rejeu : la même réponse, et rien d'autre. Tout ce qui suit a eu lieu à
+      // la première exécution — le refaire créditerait deux fois (deux fois deux
+      // depuis une republication), diffuserait et notifierait deux fois.
+      if (replayed) {
+        return sendSuccess(reply, commentCite, {
+          statusCode: 201,
+          meta: { mentionedUsers: parsed.data.content ? await resolveMentionedUsers(prisma, [parsed.data.content]) : [] },
+        });
+      }
 
       // Broadcast comment added via Socket.IO — porte l'id de la CIBLE réelle
       // (`targetPostId`, la racine pour un repost simple) : les clients
@@ -459,14 +478,12 @@ export function registerCommentRoutes(
       // pipeline audio ci-dessus : un commentaire SANS pièce jointe audio
       // crédite `comment.text`, un commentaire AVEC crédite `comment.audio`.
       //
-      // #9584 — écrit depuis une republication simple, le commentaire la
-      // crédite AUSSI, pour de vrai : un crédit par post, chacun son barème.
+      // #9584 — un commentaire ne crédite qu'UN post, celui où il est rangé
+      // (`postCreditedByComment`) : seules les réactions se dupliquent.
       const commentAxis = linkedMedia?.mimeType?.startsWith('audio/') ? 'comment.audio' : 'comment.text';
-      [targetPostId, ...(target.redirectedFrom ? [target.redirectedFrom.id] : [])].forEach((creditedPostId) => {
-        engagementService
-          .recordActivity(authContext.registeredUser.id, commentAxis, { postId: creditedPostId })
-          .catch((err) => enhancedLogger.warn(`[POST /posts/:postId/comments]: engagement ${commentAxis} failed`, { err }));
-      });
+      engagementService
+        .recordActivity(authContext.registeredUser.id, commentAxis, { postId: postCreditedByComment(target) })
+        .catch((err) => enhancedLogger.warn(`[POST /posts/:postId/comments]: engagement ${commentAxis} failed`, { err }));
 
       const newCommentMentionedUsers = parsed.data.content
         ? await resolveMentionedUsers(prisma, [parsed.data.content])
@@ -481,6 +498,11 @@ export function registerCommentRoutes(
       // rien à refaire.
       if (error instanceof MutationResultGone) {
         return sendGone(reply, 'Comment already applied, its result is gone', { code: 'MUTATION_RESULT_GONE' });
+      }
+      // Une requête jumelle (même cmid) applique ce commentaire en ce moment :
+      // ni resservir ni rejouer. 409, que la file durable iOS retente.
+      if (error instanceof MutationInFlight) {
+        return sendConflict(reply, 'Comment already in flight', { code: 'MUTATION_IN_FLIGHT' });
       }
       if (error instanceof Error && error.message === 'PARENT_NOT_FOUND') {
         return sendNotFound(reply, 'Parent comment not found', { code: 'COMMENT_NOT_FOUND' });
