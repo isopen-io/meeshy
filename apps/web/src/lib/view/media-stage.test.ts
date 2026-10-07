@@ -14,6 +14,7 @@ import {
   rendersFullPixels,
   resolveStageDrag,
   scaleAfterViewerPinch,
+  viewerZoomTransform,
   showsPausedBadge,
   stageAfter,
 } from './media-stage';
@@ -203,3 +204,14 @@ describe('scaleAfterViewerPinch — le pincement de la visionneuse (#9532)', () 
     expect(scaleAfterViewerPinch({ startScale: 2.5, startDistance: 0, distance: 120 })).toBe(2.5);
   });
 });
+
+describe('viewerZoomTransform — le cadrage d’une page image (#9562)', () => {
+  test('sans déplacement, l’échelle seule', () => {
+    expect(viewerZoomTransform({ scale: 2.5, offset: { x: 0, y: 0 } })).toBe('scale(2.5)');
+  });
+
+  test('le déplacement s’écrit avant l’échelle : il se compte en pixels d’écran, comme `.offset` après `.scaleEffect`', () => {
+    expect(viewerZoomTransform({ scale: 2, offset: { x: -40, y: 12 } })).toBe('translate(-40px, 12px) scale(2)');
+  });
+});
+

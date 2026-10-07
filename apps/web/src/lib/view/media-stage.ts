@@ -158,6 +158,25 @@ export function scaleAfterViewerPinch(params: {
   if (startDistance <= 0) return startScale;
   return Math.min(MAX_SCALE, Math.max(1, (startScale * distance) / startDistance));
 }
+/**
+ * LE CADRAGE D'UNE PAGE IMAGE (#9532, #9562) — l'échelle, le point fixe du
+ * pincement et le déplacement au doigt, miroir de `scale` / `offset` de
+ * `+Pages.swift`. Le déplacement s'applique APRÈS l'échelle (`.scaleEffect`
+ * puis `.offset`) : il se compte en pixels d'écran.
+ */
+export type ViewerZoom = {
+  readonly scale: number;
+  readonly origin: string;
+  readonly offset: { readonly x: number; readonly y: number };
+};
+
+export const UNZOOMED: ViewerZoom = { scale: 1, origin: '50% 50%', offset: { x: 0, y: 0 } };
+
+export function viewerZoomTransform(zoom: Pick<ViewerZoom, 'scale' | 'offset'>): string {
+  const { scale, offset } = zoom;
+  return offset.x === 0 && offset.y === 0 ? `scale(${scale})` : `translate(${offset.x}px, ${offset.y}px) scale(${scale})`;
+}
+
 /** `+Pages.swift` — la cible du double-tap (`committedScale > 1 ? 1 : 2.5`). */
 export const DOUBLE_TAP_SCALE = 2.5;
 

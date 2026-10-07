@@ -20,10 +20,13 @@ import {
   CARDED_STAGE,
   DOUBLE_TAP_SCALE,
   STAGE,
+  UNZOOMED,
   rendersFullPixels,
   showsPausedBadge,
   stageAfter,
+  viewerZoomTransform,
   type StagePresentation,
+  type ViewerZoom,
 } from '@/lib/view/media-stage';
 import { PROTECTED_ATTACHMENT_KEY, kindOf } from '@/lib/view/message';
 import { safeAreaInsets } from '@/lib/view/safe-area';
@@ -98,9 +101,9 @@ const ViewerAudioPage = lazy(() => import('./viewer-audio-page'));
  * `carded`), appui long 500 ms (plein cadre + pause), double-tap (zoom
  * 1 ↔ 2,5 sur une page IMAGE), pincement à deux doigts (#9532, borné par
  * `MAX_SCALE`, centré où les doigts se posent — `useViewerPinch` ; un second
- * doigt n'est jamais un glissé ni un appui long), flèches/pellicule pour la
- * pagination. CE QUI NE L'EST PAS (D-54, écart ASSUMÉ) : le déplacement d'une
- * image agrandie au doigt.
+ * doigt n'est jamais un glissé ni un appui long), déplacement d'une image
+ * agrandie au doigt (#9562, la pagination cède tant qu'elle est agrandie),
+ * flèches/pellicule pour la pagination.
  */
 export type MediaViewerProps = {
   readonly items: readonly Attachment[];
@@ -320,14 +323,14 @@ function ViewerImagePage({
   useAttachmentOpenReport({ attachmentId: attachment.id, isActive, isMine, ...(deps !== undefined ? { deps } : {}) });
   const described = electDescription({ attachment, readerLanguages: languages, displayLanguage, fallbackLanguage });
   const lang = described.language !== READER_LOCALE ? described.language : undefined;
-  const [zoom, setZoom] = useState({ scale: 1, origin: '50% 50%' });
+  const [zoom, setZoom] = useState<ViewerZoom>(UNZOOMED);
   const imageRef = useRef<HTMLImageElement>(null);
   const pinch = useViewerPinch({
-    scale: zoom.scale,
+    zoom,
     image: imageRef,
-    onCommit: (scale, origin) => {
-      setZoom({ scale, origin });
-      onZoomChange?.(scale > 1);
+    onCommit: (next) => {
+      setZoom(next);
+      onZoomChange?.(next.scale > 1);
     },
   });
   const placeholder = thumbHashPlaceholder(attachment.thumbHash);
@@ -354,7 +357,7 @@ function ViewerImagePage({
       onDoubleClick={(event) => {
         event.stopPropagation();
         const next = zoom.scale > 1 ? 1 : DOUBLE_TAP_SCALE;
-        setZoom({ scale: next, origin: '50% 50%' });
+        setZoom({ ...UNZOOMED, scale: next });
         onZoomChange?.(next > 1);
       }}
     >
@@ -366,7 +369,7 @@ function ViewerImagePage({
         alt={described.text}
         {...(lang !== undefined ? { lang } : {})}
         className="media-viewer-media transition-transform"
-        style={{ transform: `scale(${zoom.scale})`, transformOrigin: zoom.origin }}
+        style={{ transform: viewerZoomTransform(zoom), transformOrigin: zoom.origin }}
         draggable={false}
       />
     </div>

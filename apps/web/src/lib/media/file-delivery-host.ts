@@ -1,5 +1,7 @@
 import { annulationDuPont, appelNatifMethode, coqueCourante, type CoqueNative } from '@/lib/native-shell';
 
+import { base64De, fileSinkOf, SINK_CHUNK_BYTES, throughSink } from './file-sink';
+
 /**
  * **CE QUE L'HÔTE SAIT LIVRER** (#7116, revue) — les portes par lesquelles un
  * fichier déjà téléchargé peut ATTEINDRE l'utilisateur, décidées AVANT
@@ -48,16 +50,6 @@ function currentEnvironment(): FileDeliveryEnvironment {
   };
 }
 
-const BLOC_BASE64 = 0x8000;
-
-export async function base64De(blob: Blob): Promise<string> {
-  const octets = new Uint8Array(await blob.arrayBuffer());
-  const blocs = Array.from({ length: Math.ceil(octets.length / BLOC_BASE64) }, (_, i) =>
-    String.fromCharCode(...octets.subarray(i * BLOC_BASE64, (i + 1) * BLOC_BASE64)),
-  );
-  return btoa(blocs.join(''));
-}
-
 /**
  * LE PLAFOND DU PONT DE LA COQUE (#8336, #9512) — un fichier y voyage en base64
  * dans une chaîne, recopiée par le pont puis par Java : au-delà, la copie fait
@@ -67,18 +59,46 @@ export async function base64De(blob: Blob): Promise<string> {
  */
 export const NATIVE_BRIDGE_MAX_BYTES = 32 * 1024 * 1024;
 
-function partageParLePont(shell: CoqueNative | undefined): Pick<FileDeliveryHost, 'canShareFiles' | 'shareFiles'> {
+export type NativeBridgeLimits = { readonly bridgeMaxBytes?: number; readonly chunkBytes?: number };
+
+/**
+ * Au-delà du plafond, le fichier passe par tranches dans le récepteur de la
+ * coque (#9553), puis `shareFileAt` partage le fichier écrit, comme
+ * `shellGallerySaver` l'enregistre (#9514). Le récepteur nomme son fichier
+ * d'après le TYPE : un fichier sans type reste refusé.
+ */
+function partageParLePont(shell: CoqueNative | undefined, limits: NativeBridgeLimits): Pick<FileDeliveryHost, 'canShareFiles' | 'shareFiles'> {
   const pont = appelNatifMethode(shell, 'MeeshyShare', 'shareFile');
   if (pont === null) return {};
+  const { bridgeMaxBytes = NATIVE_BRIDGE_MAX_BYTES, chunkBytes = SINK_CHUNK_BYTES } = limits;
+  const pontEcrit = appelNatifMethode(shell, 'MeeshyShare', 'shareFileAt');
+  const sink = pontEcrit === null ? null : fileSinkOf(shell);
+  const parTranches = (file: File): boolean => file.size > bridgeMaxBytes;
+  const annule = (erreur: unknown): never => {
+    throw annulationDuPont(erreur);
+  };
   return {
-    canShareFiles: (data) => data.files.length === 1 && (data.files[0]?.size ?? 0) <= NATIVE_BRIDGE_MAX_BYTES,
+    canShareFiles: (data) => {
+      const [file] = data.files;
+      if (data.files.length !== 1 || file === undefined) return false;
+      return !parTranches(file) || (sink !== null && file.type !== '');
+    },
     shareFiles: async ({ files, text }) => {
       const [file] = files;
       if (file === undefined) return;
+      const offert = text === undefined ? {} : { text };
+      if (parTranches(file) && sink !== null && pontEcrit !== null) {
+        await throughSink({
+          sink,
+          blob: file,
+          mimeType: file.type,
+          chunkBytes,
+          use: (path) => pontEcrit({ fileName: file.name, mimeType: file.type, path, ...offert }).catch(annule),
+        });
+        return;
+      }
       const data = await base64De(file);
-      await pont({ fileName: file.name, mimeType: file.type, data, ...(text === undefined ? {} : { text }) }).catch((erreur: unknown) => {
-        throw annulationDuPont(erreur);
-      });
+      await pont({ fileName: file.name, mimeType: file.type, data, ...offert }).catch(annule);
     },
   };
 }
@@ -88,12 +108,16 @@ function partageParLePont(shell: CoqueNative | undefined): Pick<FileDeliveryHost
  * `MeeshyShare.shareFile` y remet le fichier, même si sa WebView expose
  * `navigator.share` : une WebView peut n'en offrir que la moitié texte
  * (`canShare({ files })` faux), et le geste « Partager » d'une carte imagée
- * restait alors sans porte. Le pont porte les OCTETS, jamais un chemin.
+ * restait alors sans porte. Le pont porte les OCTETS, et au-delà du plafond
+ * le seul chemin qu'il accepte est celui d'un fichier de son récepteur.
  */
-export function browserFileDeliveryHost(environment: FileDeliveryEnvironment = currentEnvironment()): FileDeliveryHost {
+export function browserFileDeliveryHost(
+  environment: FileDeliveryEnvironment = currentEnvironment(),
+  limits: NativeBridgeLimits = {},
+): FileDeliveryHost {
   if (environment.document === undefined) return {};
   const nav = environment.navigator;
-  const pont = partageParLePont(environment.shell);
+  const pont = partageParLePont(environment.shell, limits);
   const fileShare =
     pont.shareFiles === undefined && nav !== undefined && typeof nav.canShare === 'function' && typeof nav.share === 'function'
       ? {

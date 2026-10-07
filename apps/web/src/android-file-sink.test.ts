@@ -32,3 +32,11 @@ describe('le récepteur de fichiers de la coque Android (#9514)', () => {
     expect(enregistrement).toBeLessThan(activite.indexOf('super.onCreate(savedInstanceState);'));
   });
 });
+
+describe('le partage d’un fichier écrit par le récepteur (#9553)', () => {
+  test('`MeeshyShare.shareFileAt` ne partage qu’un fichier du récepteur, jamais un chemin quelconque', () => {
+    const plugin = lire('MeeshySharePlugin.java');
+    expect(plugin).toMatch(/@PluginMethod\s+public void shareFileAt\(/);
+    expect(plugin).toContain('FileSinkRules.insideSink(');
+  });
+});
