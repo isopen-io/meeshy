@@ -253,6 +253,7 @@ private struct AudioFullscreenPage: View {
 
     @StateObject private var saveCoordinator = MediaSaveCoordinator()
     @Environment(\.contentExitGate) private var exitGate
+    @Environment(\.isCaptureShielded) private var isCaptureShielded // #9574 : un son protégé ne part pas sur AirPlay
 
     init(item: AudioFullscreenSource,
          contactColor: String,
@@ -769,10 +770,12 @@ private struct AudioFullscreenPage: View {
             }
             .accessibilityLabel(String(localized: "media.skipForward10s", defaultValue: "Avancer de 10 secondes", bundle: .main))
 
-            AirPlayRoutePicker(tintColor: .white, prioritizesVideoDevices: false)
-                .frame(width: 44, height: 44)
-                .accessibilityLabel(String(localized: "audio.fullscreen.airplay",
-                    defaultValue: "Diffuser sur un appareil", bundle: .main))
+            if !isCaptureShielded {
+                AirPlayRoutePicker(tintColor: .white, prioritizesVideoDevices: false)
+                    .frame(width: 44, height: 44)
+                    .accessibilityLabel(String(localized: "audio.fullscreen.airplay",
+                        defaultValue: "Diffuser sur un appareil", bundle: .main))
+            }
         }
     }
 

@@ -48,6 +48,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         //   in the same MainActor hop.
         Task { @MainActor in
             CrashDiagnosticsManager.shared.install(crashReporter: crashReporter)
+            ProtectedContentSnapshotVeil.shared.install()
             MeeshyMetricsSubscriber.shared.register()
             AnalyticsManager.shared.syncCollectionState()
             // P1.5 — surface DependencyContainer boot diagnostics now that

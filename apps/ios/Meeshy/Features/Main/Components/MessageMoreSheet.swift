@@ -428,7 +428,11 @@ struct MessageMoreSheet: View {
             }
             .padding(.horizontal, MeeshySpacing.xs)
 
+            // #9574 — les fiches détaillées montrent le texte, ses traductions,
+            // sa transcription et ses versions : celles d'un contenu qui
+            // disparaît se rendent dans la couche sécurisée.
             destination(for: item)
+                .captureShield(message.exitOffer.capture == .blocked)
         }
         .padding(.horizontal, MeeshySpacing.lg)
     }

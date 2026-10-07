@@ -25,6 +25,7 @@ import MeeshyUI
 /// toutes les autres pages réalisées — à la fréquence d'affichage.
 struct GalleryImagePage: View, Equatable {
     let attachment: MessageAttachment
+    @Environment(\.captureShieldScope) private var captureScope
     /// **Le cadre de CETTE page**, résolu par `MediaStageFraming` (#6141). La
     /// page ne calcule aucune cote : elle reçoit celles du plateau, les mêmes
     /// que l'overlay pose une couche plus haut — c'est ce qui garantit que le
@@ -120,7 +121,14 @@ struct GalleryImagePage: View, Equatable {
             .accessibilityHidden(true)
     }
 
+    /// #9574 — la page d'une pièce protégée se rend dans la couche sécurisée ;
+    /// la portée est posée par l'hôte de la galerie.
     var body: some View {
+        pageBody.captureShield(captureScope.shields(attachment.id))
+    }
+
+    @ViewBuilder
+    private var pageBody: some View {
         // **Le cadre arrondi** (#6141), et son hors-champ HABILLÉ (#6143) : le
         // fond est celui du CADRE, pas de l'écran — au-delà de lui c'est le
         // plateau qui se voit. Il porte le ThumbHash flouté du média quand
@@ -398,6 +406,8 @@ struct GalleryImagePage: View, Equatable {
 /// traverser une conversation de vingt vidéos en lançait vingt.
 struct GalleryVideoPage: View, Equatable {
     let attachment: MessageAttachment
+    @Environment(\.captureShieldScope) private var captureScope
+    @Environment(\.isCaptureShielded) private var isCaptureShielded
     /// Le cadre de cette page — voir `GalleryImagePage.stage` (#6141).
     let stage: MediaStageFraming.Result
     /// Voir `GalleryImagePage.presentation` (#6142).
@@ -510,7 +520,13 @@ struct GalleryVideoPage: View, Equatable {
         resolvedAvailability = await VideoAvailability.resting(for: attachment)
     }
 
+    /// #9574 — voir `GalleryImagePage.body`.
     var body: some View {
+        pageBody.captureShield(captureScope.shields(attachment.id))
+    }
+
+    @ViewBuilder
+    private var pageBody: some View {
         // **Le cadre arrondi** (#6141) et son hors-champ habillé (#6143) — voir
         // `GalleryImagePage.body`. La couche `AVPlayerLayer` cesse d'ignorer la
         // zone sûre : elle vit maintenant DANS le cadre, et c'est lui qui la
@@ -713,6 +729,7 @@ struct GalleryVideoPage: View, Equatable {
                     // sans que personne l'ait demandé.
                     if videoManager.mayMountPlayer(role: .fullscreen, urlString: attachment.fileUrl) {
                         let handedOff = videoManager.isPlaying
+                            && !isCaptureShielded
                             && videoManager.startPip(haltsOnFailure: true)
                         if SharedAVPlayerManager.fullscreenCloseDisposition(
                             pipHandedOff: handedOff || videoManager.isPipActive) == .stops {

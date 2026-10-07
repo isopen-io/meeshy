@@ -107,7 +107,7 @@ struct MediaReplyComposerBar: View {
             onLanguageChange: { composerLanguage = $0 },
             onSendMessage: { text, _, language in onSend(text, language) },
             textBinding: $draft,
-            replyBanner: AnyView(citationBanner),
+            replyBanner: AnyView(citationBanner.captureShield(citation.quotedCapture(quotedMessage: nil) == .blocked)), // #9574
             onTextChange: { text in
                 draft = text
                 mentionController.handleQuery(in: text)

@@ -59,7 +59,12 @@ extension ConversationInfoSheet {
         }
     }
 
+    /// #9574 — l'aperçu d'un épinglé qui disparaît, dans la couche sécurisée.
     func pinnedPreviewRow(_ msg: Message) -> some View {
+        pinnedPreviewRowBody(msg).captureShield(msg.exitOffer.capture == .blocked)
+    }
+
+    private func pinnedPreviewRowBody(_ msg: Message) -> some View {
         HStack(spacing: MeeshySpacing.smPlus) {
             Image(systemName: "pin.fill")
                 .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .semibold))
@@ -129,6 +134,10 @@ extension ConversationInfoSheet {
     }
 
     func fullPinnedRow(_ msg: Message) -> some View {
+        fullPinnedRowBody(msg).captureShield(msg.exitOffer.capture == .blocked) // #9574
+    }
+
+    private func fullPinnedRowBody(_ msg: Message) -> some View {
         HStack(spacing: MeeshySpacing.md) {
             ZStack {
                 Circle()

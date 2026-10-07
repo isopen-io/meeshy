@@ -62,6 +62,7 @@ struct ConversationMediaGalleryLayer: ViewModifier {
             Group {
                 if startAttachment.type == .audio {
                     audioFullscreen(start: startAttachment)
+                        .captureShield(captureScope.shields(startAttachment.id))
                 } else {
                     gallery(start: startAttachment)
                 }
@@ -69,6 +70,9 @@ struct ConversationMediaGalleryLayer: ViewModifier {
             // Posé sur le CONTENU présenté : c'est lui qui rend les boutons
             // d'enregistrement et de partage (#9573).
             .contentExitGate(mediaExitGate)
+            // Et chaque page d'une pièce protégée se rend dans la couche
+            // sécurisée (#9574).
+            .captureShieldScope(captureScope)
         }
     }
 
@@ -83,6 +87,16 @@ struct ConversationMediaGalleryLayer: ViewModifier {
             .filter { !windowed.contains($0.id) }
             .compactMap { catalog.snapshot.carrier(ofAttachment: $0.id) }
         return MessageExitOffer.mediaExitGate(for: viewModel.messages + indexed)
+    }
+
+    /// Les pièces que le plein écran rend dans la couche sécurisée (#9574) —
+    /// mêmes porteurs que `mediaExitGate`, verdict de capture.
+    private var captureScope: CaptureShieldScope {
+        let windowed = Set(viewModel.messages.flatMap { $0.attachments.map(\.id) })
+        let indexed = catalog.snapshot.attachments
+            .filter { !windowed.contains($0.id) }
+            .compactMap { catalog.snapshot.carrier(ofAttachment: $0.id) }
+        return MessageExitOffer.captureShieldScope(for: viewModel.messages + indexed)
     }
 
     private func gallery(start startAttachment: MessageAttachment) -> some View {

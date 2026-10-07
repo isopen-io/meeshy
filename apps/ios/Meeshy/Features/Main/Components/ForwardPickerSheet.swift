@@ -209,7 +209,7 @@ struct ForwardPickerSheet: View {
                 .frame(width: 3, height: 28)
 
             if additionalMessages.isEmpty, let firstAttachment = message.attachments.first {
-                attachmentThumbnail(firstAttachment)
+                attachmentThumbnail(firstAttachment).captureShield(previewCaptureBlocked) // #9574
             }
 
             VStack(alignment: .leading, spacing: 1) {
@@ -223,6 +223,7 @@ struct ForwardPickerSheet: View {
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
                         .foregroundColor(theme.textMuted)
                         .lineLimit(1)
+                        .captureShield(previewCaptureBlocked) // #9574
                 } else {
                     Text(
                         String(
@@ -257,6 +258,9 @@ struct ForwardPickerSheet: View {
     }
 
     /// Aperçu digne d'un média : type localisé + compteur, plus jamais « [Media] ».
+    /// Une flamme à durée se transfère : son aperçu se rend dans la couche sécurisée (#9574).
+    private var previewCaptureBlocked: Bool { message.exitOffer.capture == .blocked }
+
     private var previewText: String {
         if !message.content.isEmpty { return message.content }
         guard let first = message.attachments.first else {

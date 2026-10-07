@@ -238,7 +238,11 @@ struct ConversationMediaHubView: View {
     /// document ou un vocal qui disparaît ne s'enregistre ni ne se partage
     /// depuis le hub. Porteur inconnu ⇒ fermé.
     private func rowBody(_ item: ConversationMediaHubItem) -> some View {
-        gatedRowBody(item).contentExitGate(model.carrier(item.messageId)?.exitGate ?? .sealed)
+        gatedRowBody(item)
+            .contentExitGate(model.carrier(item.messageId)?.exitGate ?? .sealed)
+            // #9574 — la vignette, la transcription ou le nom d'une pièce qui
+            // disparaît, dans la couche sécurisée. Porteur inconnu ⇒ protégée.
+            .captureShield(model.carrier(item.messageId).map { $0.exitOffer.capture == .blocked } ?? true)
     }
 
     @ViewBuilder
@@ -348,6 +352,10 @@ private struct MediaHubGalleryCover: View {
         // Seules les pièces d'un porteur que la loi de sortie laisse
         // enregistrer ont leur menu ⋯ (#9573).
         .contentExitGate(MessageExitOffer.mediaExitGate(
+            for: pieces.compactMap { catalog.snapshot.carrier(ofAttachment: $0.id) }
+        ))
+        // Et chaque page d'une pièce protégée, dans la couche sécurisée (#9574).
+        .captureShieldScope(MessageExitOffer.captureShieldScope(
             for: pieces.compactMap { catalog.snapshot.carrier(ofAttachment: $0.id) }
         ))
         .onAppear { catalog.open(preferredLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser)) }

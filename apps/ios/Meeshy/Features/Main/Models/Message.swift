@@ -91,6 +91,13 @@ nonisolated struct MessageExitOffer: Equatable, Sendable {
     static func mediaExitGate(for messages: [Message]) -> ContentExitGate {
         .only(Set(messages.filter { $0.exitOffer.offers(.save) }.flatMap { $0.attachments.map(\.id) }))
     }
+
+    /// Les pièces qu'une visionneuse rend dans la couche sécurisée (#9574) :
+    /// toutes, SAUF celles d'un message dont la capture est libre. Une pièce
+    /// dont le porteur est inconnu est protégée.
+    static func captureShieldScope(for messages: [Message]) -> CaptureShieldScope {
+        .allExcept(Set(messages.filter { $0.exitOffer.capture == .free }.flatMap { $0.attachments.map(\.id) }))
+    }
 }
 
 /// **Ce que la feuille de transfert offre pour ce lot** (#9573) — lue une fois
