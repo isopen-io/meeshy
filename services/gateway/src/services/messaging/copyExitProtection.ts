@@ -134,7 +134,8 @@ export function diffusedCopyFields<T extends CopyDeclaredProtection>(
   if (forward.allowed === true && forward.maxDurationSeconds === null) return { ...declared, ...blurred };
 
   const afterRead = forward.allowed === false ? EPHEMERAL_AFTER_READ : 0;
-  const bound = forward.allowed === true ? forward.maxDurationSeconds : validSeconds(source.ephemeralDuration);
+  const sourceBound = forward.allowed === true ? forward.maxDurationSeconds : validSeconds(source.ephemeralDuration);
+  const bound = sourceBound ?? carriedDuration(declared);
   const flamed = { ...declared, ...blurred, effectFlags: blurred.effectFlags | EPHEMERAL | afterRead };
   if (bound === null) return flamed;
 
@@ -145,6 +146,20 @@ export function diffusedCopyFields<T extends CopyDeclaredProtection>(
     durationBoundsAfterRead: true,
   };
 }
+
+/**
+ * La durée que la copie portait AVANT la diffusion (#9588) : une réponse
+ * contaminée par une flamme à durée, ou une flamme à durée déclarée. Une
+ * source flamme-œil lui ajoute le bit après lecture ; sans cette borne
+ * reportée, `ephemeralSendFields` laisserait tomber la durée et la copie
+ * vivrait sept jours.
+ *
+ * `null` quand la requête porte DÉJÀ le bit après lecture : c'est la
+ * flamme-œil qu'un client rejoue sur chaque cible (#8303), dont la durée
+ * résiduelle ne doit pas se mettre à décompter.
+ */
+const carriedDuration = (declared: CopyDeclaredProtection): number | null =>
+  ((declared.effectFlags ?? 0) & EPHEMERAL_AFTER_READ) !== 0 ? null : validSeconds(declared.ephemeralDuration);
 
 /**
  * Le point d'entrée de `saveMessage`. Un envoi ordinaire ne paie aucune

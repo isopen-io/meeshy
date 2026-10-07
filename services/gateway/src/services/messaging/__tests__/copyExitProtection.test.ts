@@ -13,7 +13,10 @@
 import { describe, it, expect, jest } from '@jest/globals';
 import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
 
+import { EPHEMERAL_UNAVAILABILITY_GRACE_MS } from '@meeshy/shared/utils/ephemeral-countdown';
+
 import { diffusedCopyFields, exitProtectedCopy, forwardedCopyFields } from '../copyExitProtection';
+import { ephemeralSendFields } from '../ephemeralSendFields';
 
 const { EPHEMERAL, BLURRED, VIEW_ONCE, EPHEMERAL_AFTER_READ, SHAKE } = MESSAGE_EFFECT_FLAGS;
 const FLAME_BITS = EPHEMERAL | EPHEMERAL_AFTER_READ;
@@ -136,10 +139,49 @@ describe('diffusedCopyFields — la diffusion hérite au moins de la protection 
     expect(diffusedCopyFields({ expiresAt: new Date('2027-01-01T00:00:00.000Z') }, source).expiresAt).toBeUndefined();
   });
 
-  it('laisse sans durée la copie d’une flamme-œil qui n’en a pas', () => {
-    const copy = diffusedCopyFields({ ephemeralDuration: 86_400 }, projection({ effectFlags: FLAME_BITS }));
+  it('laisse sans durée la flamme-œil qu’un client rejoue sur chaque cible, durée résiduelle comprise', () => {
+    const copy = diffusedCopyFields(
+      { effectFlags: FLAME_BITS, ephemeralDuration: 86_400 },
+      projection({ effectFlags: FLAME_BITS }),
+    );
     expect(copy.effectFlags).toBe(FLAME_BITS);
     expect(copy.durationBoundsAfterRead).toBeUndefined();
+  });
+
+  describe('#9588 — la durée que la copie portait AVANT la diffusion survit à une source flamme-œil', () => {
+    const eyeFlame = projection({ effectFlags: FLAME_BITS });
+    const contaminatedReply = { replyToId: 'cité', effectFlags: EPHEMERAL, ephemeralDuration: 30 };
+
+    it('garde la borne d’une réponse contaminée par une flamme de trente secondes, et gagne le bit après lecture', () => {
+      expect(diffusedCopyFields(contaminatedReply, eyeFlame)).toMatchObject({
+        effectFlags: FLAME_BITS,
+        ephemeralDuration: 30,
+        durationBoundsAfterRead: true,
+      });
+    });
+
+    it('garde aussi la borne quand la source ferme faute de projection entière', () => {
+      const { effectFlags: _forgotten, ...partial } = projection();
+      expect(diffusedCopyFields(contaminatedReply, partial as ReturnType<typeof projection>)).toMatchObject({
+        effectFlags: FLAME_BITS,
+        ephemeralDuration: 30,
+        durationBoundsAfterRead: true,
+      });
+    });
+
+    it('écarte l’échéance d’un ancien client : la durée borne, pas une heure calculée chez lui', () => {
+      const copy = diffusedCopyFields({ ...contaminatedReply, expiresAt: new Date('2027-01-01T00:00:00.000Z') }, eyeFlame);
+      expect(copy.expiresAt).toBeUndefined();
+    });
+
+    it('la colonne écrite garde les trente secondes — la diffusion ne rend pas à la réponse sept jours', () => {
+      const copy = diffusedCopyFields(contaminatedReply, eyeFlame);
+      const NOW = new Date('2026-10-07T10:00:00.000Z');
+      expect(ephemeralSendFields({ ...copy, now: NOW })).toEqual({
+        ephemeralDuration: 30,
+        expiresAt: new Date(NOW.getTime() + 30_000 + EPHEMERAL_UNAVAILABILITY_GRACE_MS),
+      });
+    });
   });
 
   it('borne la durée par celle de la source, sans ajouter le bit après lecture', () => {
