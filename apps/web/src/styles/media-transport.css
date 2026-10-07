@@ -60,8 +60,11 @@
 }
 
 /* Le menu s'ouvre du côté de la SCÈNE, aligné sur le bas de « ⋯ » : il ne
-   recouvre ni les actions voisines de la colonne, ni la piste sous elle. */
+   recouvre ni les actions voisines de la colonne, ni la piste sous elle. Il
+   prend le doigt lui-même : la colonne qui le porte flotte sur la scène en
+   laissant passer les gestes du plateau (#9578). */
 .media-transport-menu {
+  pointer-events: auto;
   position: absolute;
   inset-inline-end: calc(100% + 0.5rem);
   bottom: 0;

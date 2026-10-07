@@ -30,6 +30,7 @@ import {
 import { PROTECTED_ATTACHMENT_KEY, kindOf } from '@/lib/view/message';
 import { safeAreaInsets } from '@/lib/view/safe-area';
 import { prefersReducedMotion } from '@/lib/view/reduced-motion';
+import { yieldingChrome } from '@/lib/view/chrome-yields';
 import { SCENE_OPENING_EASING, SCENE_OPENING_MS, takeSceneOpening } from '@/lib/view/scene-opening';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 import { useConversationViewingFocus } from '@/lib/view/use-conversation-viewing';
@@ -48,7 +49,7 @@ import { MediaUnavailable } from './media-unavailable';
 import { GLYPH_SIZE } from './ui-chrome';
 import { ViewerCaption } from './viewer-caption';
 import { ViewerInfoLine } from './viewer-info-line';
-import { ViewerBottomBar, ViewerTopBar, type ViewerIdentityModel } from './viewer-chrome';
+import { ViewerBottomBar, ViewerReplyCapsule, ViewerTopBar, type ViewerIdentityModel } from './viewer-chrome';
 import { useViewerSwipe } from './viewer-chrome-gestures';
 import type { NoticeKey } from './viewer-media-actions';
 import { ViewerScenePage } from './viewer-scene-page';
@@ -624,6 +625,26 @@ export default function MediaViewer({
      scène n'a ni cotes ni poids ; une pièce masquée ne se lit pas. */
   const playsVideo = currentSceneEntry === undefined && kindOf(current) === 'video' && !maskedAttachment(current);
   const showsFacts = currentCarrier !== undefined && currentSceneEntry === undefined;
+  const rail =
+    railOffered || playsVideo ? (
+      <div className="flex flex-col items-center gap-2">
+        {page !== null && railOffered ? (
+          <Suspense fallback={null}>
+            <ViewerMediaActions key={`rail:${current.id}`} slot="rail" page={page} language={language} onClose={onClose} announce={announce} hidden={chromeHidden} />
+          </Suspense>
+        ) : null}
+        {playsVideo ? <div ref={setRailSlot} data-viewer-video-controls="" className="flex flex-col items-center gap-2" /> : null}
+      </div>
+    ) : undefined;
+  /* LA COLONNE FLOTTE SUR LA SCÈNE (#9578), miroir `cadreActionColumn` : posée
+     au bord de fin du plateau, elle ne prend aucune hauteur à la scène, et la
+     barre de progression colle sous elle. Une page SCÈNE garde son pied posé
+     sur elle (placement `overlay`), où la colonne partage la rangée de la
+     légende sans rien retrancher ; une page AUDIO aussi, dans le couloir : sa
+     colonne de commandes et sa transcription occupent toute la scène, une
+     colonne posée dessus les couvrirait. */
+  const floatsRail = currentSceneEntry === undefined && !audioPage;
+  const floatingRail = floatsRail && rail !== undefined ? yieldingChrome({ hidden: chromeHidden, reducedMotion: prefersReducedMotion() }) : null;
 
   return createPortal(
     <div
@@ -678,167 +699,184 @@ export default function MediaViewer({
         {notice === null ? '' : translate(language, notice)}
       </p>
 
-      {/* Le cadre — pages */}
-      <div
-        ref={trackRef}
-        className="media-viewer-track-frame relative flex-1"
-        onClick={onStageClick}
-        onContextMenu={(e) => e.preventDefault()}
-        onPointerDown={(e: ReactPointerEvent<HTMLDivElement>) => {
-          if (!e.isPrimary) {
+      {/* Le cadre — pages, et la colonne d'actions qui flotte sur lui (#9578). */}
+      <div data-viewer-stage="" className="media-viewer-stage">
+        <div
+          ref={trackRef}
+          className="media-viewer-track-frame relative flex-1"
+          onClick={onStageClick}
+          onContextMenu={(e) => e.preventDefault()}
+          onPointerDown={(e: ReactPointerEvent<HTMLDivElement>) => {
+            if (!e.isPrimary) {
+              swipe.handlers.onPointerCancel(e);
+              longPress.onPointerCancel();
+              return;
+            }
+            swipe.handlers.onPointerDown(e);
+            longPress.onPointerDown(e);
+          }}
+          onPointerMove={(e: ReactPointerEvent<HTMLDivElement>) => {
+            swipe.handlers.onPointerMove(e);
+            longPress.onPointerMove(e);
+          }}
+          onPointerUp={(e: ReactPointerEvent<HTMLDivElement>) => {
+            swipe.handlers.onPointerUp(e);
+            longPress.onPointerUp();
+          }}
+          onPointerCancel={(e: ReactPointerEvent<HTMLDivElement>) => {
             swipe.handlers.onPointerCancel(e);
             longPress.onPointerCancel();
-            return;
-          }
-          swipe.handlers.onPointerDown(e);
-          longPress.onPointerDown(e);
-        }}
-        onPointerMove={(e: ReactPointerEvent<HTMLDivElement>) => {
-          swipe.handlers.onPointerMove(e);
-          longPress.onPointerMove(e);
-        }}
-        onPointerUp={(e: ReactPointerEvent<HTMLDivElement>) => {
-          swipe.handlers.onPointerUp(e);
-          longPress.onPointerUp();
-        }}
-        onPointerCancel={(e: ReactPointerEvent<HTMLDivElement>) => {
-          swipe.handlers.onPointerCancel(e);
-          longPress.onPointerCancel();
-        }}
-      >
-        {items.map((attachment, i) => {
-          const distance = i - index;
-          if (Math.abs(distance) > 1 && i !== index) return null; // hors fenêtre ET hors page courante : pas monté du tout
-          const fullPixels = rendersFullPixels(distance);
-          const isMasked = maskedAttachment(attachment);
-          const sceneEntry = scenes?.get(attachment.id);
-          return (
-            <div
-              key={attachment.id === '' ? String(i) : attachment.id}
-              data-viewer-page
-              data-full-pixels={fullPixels}
-              className="media-viewer-page absolute inset-0"
-              style={{ transform: `translateX(${distance * 100}%)`, display: Math.abs(distance) > 1 ? 'none' : 'block' }}
-            >
-              {!fullPixels ? (
-                <ViewerBackdropPage attachment={attachment} />
-              ) : sceneEntry !== undefined ? (
-                /* UNE PAGE SCÈNE PREND LE VIEWPORT ENTIER, SANS QUITTER LE FLUX
-                   (revue-correction #6902) — c'est `fullStageBox`
-                   (`lib/view/media-stage.ts`) qui décale sa boîte de `topInset`
-                   pour que son centre retombe au centre du VIEWPORT, jamais un
-                   `position: fixed` sur la page : le plateau reçoit un
-                   `transform` pendant un glissement de fermeture, et un ancêtre
-                   transformé aurait alors RÉANCRÉ la page (mesuré : 390 × 693 →
-                   371 × 660 au premier pixel de doigt). Les couloirs
-                   (`zIndex: 10`) restent AU-DESSUS de cette boîte. */
-                <ViewerScenePage
-                  entry={sceneEntry}
-                  isActive={i === index}
-                  preferredLanguages={languages}
-                  topInset={topCorridorHeight}
-                  label={scenePageLabel(sceneEntry, carrierAt?.(i) ?? carrier, language)}
-                  pausedOnEntry={presentation.kind === 'full' && presentation.pausedOnEntry}
-                  onToggleRef={(fn) => {
-                    if (i === index) activePlayToggleRef.current = fn;
-                  }}
-                  corridorSlot={transportSlot}
-                  opening={opening !== null && opening.itemId === attachment.id ? opening.opening : null}
-                />
-              ) : isMasked ? (
-                <ViewerMaskedPage attachment={attachment} />
-              ) : kindOf(attachment) === 'audio' ? (
-                <Suspense fallback={<ViewerBackdropPage attachment={attachment} />}>
-                  <ViewerAudioPage
-                    attachment={attachment}
+          }}
+        >
+          {items.map((attachment, i) => {
+            const distance = i - index;
+            if (Math.abs(distance) > 1 && i !== index) return null; // hors fenêtre ET hors page courante : pas monté du tout
+            const fullPixels = rendersFullPixels(distance);
+            const isMasked = maskedAttachment(attachment);
+            const sceneEntry = scenes?.get(attachment.id);
+            return (
+              <div
+                key={attachment.id === '' ? String(i) : attachment.id}
+                data-viewer-page
+                data-full-pixels={fullPixels}
+                className="media-viewer-page absolute inset-0"
+                style={{ transform: `translateX(${distance * 100}%)`, display: Math.abs(distance) > 1 ? 'none' : 'block' }}
+              >
+                {!fullPixels ? (
+                  <ViewerBackdropPage attachment={attachment} />
+                ) : sceneEntry !== undefined ? (
+                  /* UNE PAGE SCÈNE PREND LE VIEWPORT ENTIER, SANS QUITTER LE FLUX
+                     (revue-correction #6902) — c'est `fullStageBox`
+                     (`lib/view/media-stage.ts`) qui décale sa boîte de `topInset`
+                     pour que son centre retombe au centre du VIEWPORT, jamais un
+                     `position: fixed` sur la page : le plateau reçoit un
+                     `transform` pendant un glissement de fermeture, et un ancêtre
+                     transformé aurait alors RÉANCRÉ la page (mesuré : 390 × 693 →
+                     371 × 660 au premier pixel de doigt). Les couloirs
+                     (`zIndex: 10`) restent AU-DESSUS de cette boîte. */
+                  <ViewerScenePage
+                    entry={sceneEntry}
                     isActive={i === index}
-                    languages={languages}
-                    fallbackLanguage={fallbackLanguageAt?.(i) ?? fallbackLanguage}
-                    language={language}
-                    pageIndex={i}
-                    pageCount={items.length}
+                    preferredLanguages={languages}
+                    topInset={topCorridorHeight}
+                    label={scenePageLabel(sceneEntry, carrierAt?.(i) ?? carrier, language)}
+                    pausedOnEntry={presentation.kind === 'full' && presentation.pausedOnEntry}
                     onToggleRef={(fn) => {
                       if (i === index) activePlayToggleRef.current = fn;
                     }}
-                    onCarryRef={(carry) => {
-                      if (i === index) registerCarry(attachment.id, carry);
-                    }}
+                    corridorSlot={transportSlot}
+                    opening={opening !== null && opening.itemId === attachment.id ? opening.opening : null}
+                  />
+                ) : isMasked ? (
+                  <ViewerMaskedPage attachment={attachment} />
+                ) : kindOf(attachment) === 'audio' ? (
+                  <Suspense fallback={<ViewerBackdropPage attachment={attachment} />}>
+                    <ViewerAudioPage
+                      attachment={attachment}
+                      isActive={i === index}
+                      languages={languages}
+                      fallbackLanguage={fallbackLanguageAt?.(i) ?? fallbackLanguage}
+                      language={language}
+                      pageIndex={i}
+                      pageCount={items.length}
+                      onToggleRef={(fn) => {
+                        if (i === index) activePlayToggleRef.current = fn;
+                      }}
+                      onCarryRef={(carry) => {
+                        if (i === index) registerCarry(attachment.id, carry);
+                      }}
+                      {...(displayLanguage !== undefined ? { displayLanguage } : {})}
+                      {...(deps !== undefined ? { deps } : {})}
+                    />
+                  </Suspense>
+                ) : kindOf(attachment) === 'video' ? (
+                  <Suspense fallback={<ViewerBackdropPage attachment={attachment} />}>
+                    <ViewerVideoPage
+                      attachment={attachment}
+                      isActive={i === index}
+                      presentation={presentation}
+                      onToggleRef={(fn) => {
+                        if (i === index) activePlayToggleRef.current = fn;
+                      }}
+                      slots={{ transport: transportSlot, rail: railSlot, info: infoSlot }}
+                      showsFacts={(carrierAt?.(i) ?? carrier) !== undefined}
+                      language={language}
+                    />
+                  </Suspense>
+                ) : (
+                  <ViewerImagePage
+                    attachment={attachment}
+                    languages={languages}
+                    fallbackLanguage={fallbackLanguageAt?.(i) ?? fallbackLanguage}
+                    isActive={i === index}
+                    isMine={isMineAt?.(i) ?? isMine}
+                    language={language}
+                    onZoomChange={(zoomed) => setZoomedId(zoomed ? attachment.id : null)}
                     {...(displayLanguage !== undefined ? { displayLanguage } : {})}
                     {...(deps !== undefined ? { deps } : {})}
                   />
-                </Suspense>
-              ) : kindOf(attachment) === 'video' ? (
-                <Suspense fallback={<ViewerBackdropPage attachment={attachment} />}>
-                  <ViewerVideoPage
-                    attachment={attachment}
-                    isActive={i === index}
-                    presentation={presentation}
-                    onToggleRef={(fn) => {
-                      if (i === index) activePlayToggleRef.current = fn;
-                    }}
-                    slots={{ transport: transportSlot, rail: railSlot, info: infoSlot }}
-                    showsFacts={(carrierAt?.(i) ?? carrier) !== undefined}
-                    language={language}
-                  />
-                </Suspense>
-              ) : (
-                <ViewerImagePage
-                  attachment={attachment}
-                  languages={languages}
-                  fallbackLanguage={fallbackLanguageAt?.(i) ?? fallbackLanguage}
-                  isActive={i === index}
-                  isMine={isMineAt?.(i) ?? isMine}
-                  language={language}
-                  onZoomChange={(zoomed) => setZoomedId(zoomed ? attachment.id : null)}
-                  {...(displayLanguage !== undefined ? { displayLanguage } : {})}
-                  {...(deps !== undefined ? { deps } : {})}
-                />
-              )}
-            </div>
-          );
-        })}
+                )}
+              </div>
+            );
+          })}
+        </div>
+        {floatingRail !== null ? (
+          <div
+            data-viewer-stage-rail=""
+            data-viewer-rail-slot=""
+            data-chrome-yields={floatingRail['data-chrome-yields']}
+            inert={floatingRail.inert}
+            className="media-viewer-stage-rail viewer-chrome pointer-events-none"
+            style={floatingRail.style}
+          >
+            {rail}
+          </div>
+        ) : null}
       </div>
 
-      {/* Barre basse — légende, rail d'actions (Réagir, Partager, Créer, puis
-          le muet et « ⋯ » d'une vidéo, #9577) sur SA rangée, capsule
-          « Répondre… » (l'hôte seul décide qu'il sait répondre : loi 4), puis,
-          de haut en bas : la barre de progression sur toute la largeur (#6359,
-          la page vidéo ACTIVE y rend `MediaTransport` par un portail), la
-          ligne d'informations « cotes · poids · durée » et la pellicule. Posée SUR une
-          page scène en plein viewport avec le voile commun (#6902 : l'encre
-          tombe sur la couleur de la scène, jamais sur le noir du plateau) ;
-          dans le couloir sous une image ou une vidéo. */}
-      <ViewerBottomBar
-        placement={currentSceneEntry !== undefined ? 'overlay' : 'corridor'}
-        hidden={chromeHidden}
-        probe={{ 'data-viewer-footer': '' }}
-        {...(footer !== undefined ? { caption: footer } : {})}
-        {...(railOffered || playsVideo
-          ? {
-              rail: (
-                <div className="flex flex-col items-center gap-2">
-                  {page !== null && railOffered ? (
-                    <Suspense fallback={null}>
-                      <ViewerMediaActions key={`rail:${current.id}`} slot="rail" page={page} language={language} onClose={onClose} announce={announce} hidden={chromeHidden} />
-                    </Suspense>
-                  ) : null}
-                  {playsVideo ? <div ref={setRailSlot} data-viewer-video-controls="" className="flex flex-col items-center gap-2" /> : null}
-                </div>
-              ),
-            }
-          : {})}
-        reply={{ label: translate(language, 'media.viewer.reply'), onReply: replyOffered }}
-      >
-        <div ref={setTransportSlot} data-viewer-transport-slot />
-
-        {playsVideo ? (
-          <div ref={setInfoSlot} data-viewer-info-slot="" />
-        ) : (
-          <ViewerInfoLine attachment={current} facts={showsFacts} duration={null} language={language} />
-        )}
-
-        {items.length > 1 && !audioPage ? <MediaFilmstrip items={items} currentIndex={index} onSelect={goTo} language={language} /> : null}
-      </ViewerBottomBar>
+      {/* Barre basse. Sous une image ou une vidéo (#9578), de haut en bas : la
+          barre de progression d'un bord à l'autre, COLLÉE sous la scène (#6359,
+          la page vidéo ACTIVE y rend `MediaTransport` par un portail), la ligne
+          d'informations « cotes · poids · durée », la légende, la capsule
+          « Répondre… » (l'hôte seul décide qu'il sait répondre : loi 4), puis la
+          pellicule. Sur une page scène en plein viewport, le pied se pose SUR
+          elle avec le voile commun (#6902 : l'encre tombe sur la couleur de la
+          scène, jamais sur le noir du plateau), légende et colonne sur une même
+          rangée, comme sous un vocal. */}
+      {floatsRail ? (
+        <ViewerBottomBar placement="corridor" hidden={chromeHidden} probe={{ 'data-viewer-footer': '' }}>
+          <div ref={setTransportSlot} data-viewer-transport-slot />
+          {playsVideo ? (
+            <div ref={setInfoSlot} data-viewer-info-slot="" />
+          ) : (
+            <ViewerInfoLine attachment={current} facts={showsFacts} duration={null} language={language} />
+          )}
+          {footer !== undefined ? (
+            <div data-viewer-caption="" className="viewer-ink-shadow flex min-w-0 flex-col gap-1 px-4">
+              {footer}
+            </div>
+          ) : null}
+          {replyOffered !== undefined ? (
+            <div className="px-3">
+              <ViewerReplyCapsule label={translate(language, 'media.viewer.reply')} onReply={replyOffered} />
+            </div>
+          ) : null}
+          {items.length > 1 && !audioPage ? <MediaFilmstrip items={items} currentIndex={index} onSelect={goTo} language={language} /> : null}
+        </ViewerBottomBar>
+      ) : (
+        <ViewerBottomBar
+          placement={currentSceneEntry !== undefined ? 'overlay' : 'corridor'}
+          hidden={chromeHidden}
+          probe={{ 'data-viewer-footer': '' }}
+          {...(footer !== undefined ? { caption: footer } : {})}
+          {...(rail !== undefined ? { rail } : {})}
+          reply={{ label: translate(language, 'media.viewer.reply'), onReply: replyOffered }}
+        >
+          <div ref={setTransportSlot} data-viewer-transport-slot />
+          {audioPage ? <ViewerInfoLine attachment={current} facts={showsFacts} duration={null} language={language} /> : null}
+          {items.length > 1 && !audioPage ? <MediaFilmstrip items={items} currentIndex={index} onSelect={goTo} language={language} /> : null}
+        </ViewerBottomBar>
+      )}
     </div>,
     container ?? document.body,
   );

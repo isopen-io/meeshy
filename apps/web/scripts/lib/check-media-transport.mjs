@@ -1,5 +1,7 @@
 /**
- * T1-T6 — LA BARRE DE LECTURE DE LA VISIONNEUSE (#6359, #9577), AU NAVIGATEUR.
+ * T1-T6 — LA BARRE DE LECTURE DE LA VISIONNEUSE (#6359, #9577, #9578), AU NAVIGATEUR.
+ * Depuis #9578, la barre COLLE sous la scène et la colonne d'actions flotte
+ * SUR la scène, à son bord de fin, sans lui prendre de hauteur (T1 ter).
  * Depuis #9577, la barre ne porte que la piste, d'un bord à l'autre de
  * l'écran ; le muet et « ⋯ » vivent dans la colonne d'actions
  * (`[data-viewer-video-controls]`) et la durée sur la ligne d'informations. Les
@@ -84,6 +86,16 @@ export async function checkViewerVideoTransport({ browser, BASE, expect, setSche
       info: rectOf('[data-media-viewer] [data-viewer-meta]'),
       strip: rectOf('[data-media-viewer] [data-filmstrip-item]'),
       stage: rectOf('[data-media-viewer] .media-viewer-track-frame'),
+      slot: rectOf('[data-viewer-transport-slot]'),
+      layer: rectOf('[data-media-viewer]'),
+      top: rectOf('[data-viewer-top-bar]'),
+      bottom: rectOf('[data-viewer-bottom-bar]'),
+      column: rectOf('[data-viewer-stage-rail]'),
+      columnButtons: Array.from(document.querySelectorAll('[data-viewer-stage-rail] button')).map((b) => {
+        const rect = b.getBoundingClientRect();
+        return { width: rect.width, height: rect.height, bottom: rect.bottom };
+      }),
+      actionsInCorridor: document.querySelectorAll('[data-viewer-bottom-bar] [data-viewer-action]').length,
     };
   });
   expect(
@@ -94,6 +106,28 @@ export async function checkViewerVideoTransport({ browser, BASE, expect, setSche
     geometry.slider !== null && geometry.stage !== null && geometry.info !== null && geometry.strip !== null &&
       geometry.stage.bottom <= geometry.slider.top + 0.5 && geometry.slider.bottom <= geometry.info.top + 0.5 && geometry.info.bottom <= geometry.strip.top + 0.5,
     `${label} de haut en bas : scène, piste, ligne d'informations, pellicule (${JSON.stringify(geometry)})`,
+  );
+  // ===== T1 ter (#9578) — la barre COLLE sous la scène ; la colonne d'actions flotte SUR la scène, sans lui prendre de hauteur =====
+  expect(
+    geometry.slot !== null && geometry.stage !== null && Math.abs(geometry.slot.top - geometry.stage.bottom) <= 1,
+    `${label} la barre de progression commence au pixel où la scène finit (scène ${geometry.stage?.bottom}, barre ${geometry.slot?.top})`,
+  );
+  expect(
+    geometry.column !== null && geometry.stage !== null &&
+      geometry.column.top >= geometry.stage.top - 0.5 && geometry.column.bottom <= geometry.stage.bottom + 0.5 &&
+      geometry.column.right <= geometry.viewport + 0.5,
+    `${label} la colonne d'actions est posée SUR la scène, à son bord de fin (${JSON.stringify(geometry.column)} dans ${JSON.stringify(geometry.stage)})`,
+  );
+  expect(geometry.actionsInCorridor === 0, `${label} aucune action ne vit dans le couloir bas (${geometry.actionsInCorridor})`);
+  expect(
+    geometry.layer !== null && geometry.top !== null && geometry.bottom !== null && geometry.stage !== null &&
+      Math.abs(geometry.stage.bottom - geometry.stage.top - (geometry.bottom.top - geometry.top.bottom)) <= 1,
+    `${label} la scène prend toute la hauteur entre les deux couloirs : la colonne ne lui retranche rien (${JSON.stringify({ stage: geometry.stage, top: geometry.top, bottom: geometry.bottom })})`,
+  );
+  expect(
+    geometry.columnButtons.length >= 2 && geometry.columnButtons.every((b) => b.width >= 44 && b.height >= 44) &&
+      geometry.slider !== null && geometry.columnButtons.every((b) => b.bottom <= geometry.slider.top + 0.5),
+    `${label} les boutons de la colonne gardent leur cible de 44 px et ne recouvrent pas la piste (${JSON.stringify(geometry.columnButtons)})`,
   );
   const initial = await viewerVideoState(page);
   expect(
