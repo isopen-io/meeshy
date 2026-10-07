@@ -21,6 +21,7 @@ import {
   type CaptureRateLimiter,
   type ContentCaptureDeps,
 } from '../../services/messaging/contentCaptureNotices';
+import { CONVERSATION_CLOSED_EDIT_MESSAGE } from '../../services/messaging/messageEditAdmission.js';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { getSocketRateLimiter } from '../../utils/socket-rate-limiter.js';
 import type { MeeshySocket } from '../typed-socket';
@@ -88,6 +89,8 @@ export async function handleContentCapture(
       return refused(RATE_LIMIT_REFUSAL_MESSAGE, 'RATE_LIMITED');
     case 'not-a-participant':
       return refused('Not a participant', 'NOT_A_PARTICIPANT');
+    case 'conversation-closed':
+      return refused(CONVERSATION_CLOSED_EDIT_MESSAGE, 'CONVERSATION_CLOSED');
   }
 }
 

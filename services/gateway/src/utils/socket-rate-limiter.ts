@@ -270,6 +270,14 @@ export const SOCKET_RATE_LIMITS = {
     windowMs: 60000,
     keyPrefix: 'socket:message:capture'
   },
+  // #9617 (audit A1) — les AVIS écrits, par acteur et conversation : au plus
+  // trente par heure, quel que soit le nombre de déclarations. Chaque avis
+  // compte comme non lu pour tous et fait remonter la conversation.
+  MESSAGE_CAPTURE_NOTICES_HOURLY: {
+    maxRequests: 30,
+    windowMs: 3600000,
+    keyPrefix: 'capture:notices:hourly'
+  },
   // #8892 — `viewing:start` : une ouverture de conversation. Le geste est
   // rare (naviguer d'un fil à l'autre) ; le budget n'arrête que le script.
   CONVERSATION_VIEWING: {

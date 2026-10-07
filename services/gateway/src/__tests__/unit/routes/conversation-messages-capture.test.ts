@@ -33,14 +33,14 @@ const NOW = new Date('2026-10-07T12:00:00.000Z');
 
 type Row = Record<string, unknown>;
 
-function buildPrisma(member = true) {
+function buildPrisma(member = true, closed = false) {
   const created: Row[] = [];
   const prisma = {
     participant: {
       findFirst: async ({ where }: { where: Row }) => {
         if (!member || where.conversationId !== CONV) return null;
         if (where.userId === USER || where.id === ACTOR) {
-          return { id: ACTOR, userId: USER, role: 'member', joinedAt: null, displayName: 'Alice', nickname: null };
+          return { id: ACTOR, userId: USER, role: 'member', joinedAt: null, displayName: 'Alice', nickname: null, user: { username: 'alice' } };
         }
         return null;
       },
@@ -68,15 +68,15 @@ function buildPrisma(member = true) {
       },
     },
     messageStatusEntry: {
-      findFirst: async () => ({ deliveredAt: NOW, receivedAt: NOW, readAt: null, viewedOnceAt: null, ephemeralExpiresAt: null }),
+      findFirst: async () => ({ readAt: NOW, viewedOnceAt: null, ephemeralExpiresAt: null }),
     },
-    conversation: { update: async () => ({}) },
+    conversation: { update: async () => ({}), findUnique: async () => ({ isActive: true, closedAt: closed ? NOW : null }) },
   };
   return { prisma, created };
 }
 
-async function buildApp(params: { member?: boolean; allowed?: boolean } = {}) {
-  const { prisma, created } = buildPrisma(params.member ?? true);
+async function buildApp(params: { member?: boolean; allowed?: boolean; closed?: boolean } = {}) {
+  const { prisma, created } = buildPrisma(params.member ?? true, params.closed ?? false);
   const broadcasts: Array<{ message: unknown; conversationId: string }> = [];
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
   (app as unknown as { socketIOHandler: unknown }).socketIOHandler = {
@@ -143,6 +143,15 @@ describe('POST /conversations/:id/messages/capture', () => {
     const h = await buildApp({ member: false });
     const res = await post(h.app, report);
     expect(res.statusCode).toBe(403);
+    expect(h.created).toHaveLength(0);
+  });
+
+  it('rend 410 dans une conversation close, sans rien écrire', async () => {
+    mockResolveConversationId.mockResolvedValue(CONV);
+    const h = await buildApp({ closed: true });
+    const res = await post(h.app, report);
+    expect(res.statusCode).toBe(410);
+    expect(res.json()).toMatchObject({ success: false, code: 'CONVERSATION_CLOSED' });
     expect(h.created).toHaveLength(0);
   });
 

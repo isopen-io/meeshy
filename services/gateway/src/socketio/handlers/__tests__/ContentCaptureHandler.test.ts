@@ -32,12 +32,12 @@ const socketUser: SocketUser = {
   userId: USER,
 };
 
-function harness(overrides: { authenticated?: boolean; member?: boolean; allowed?: boolean } = {}) {
+function harness(overrides: { authenticated?: boolean; member?: boolean; allowed?: boolean; closed?: boolean } = {}) {
   const created: Record<string, unknown>[] = [];
   const broadcasts: unknown[] = [];
   const prisma = {
     conversation: {
-      findUnique: async () => ({ id: CONV, identifier: 'mon-groupe' }),
+      findUnique: async () => ({ id: CONV, identifier: 'mon-groupe', isActive: true, closedAt: overrides.closed ? NOW : null }),
       update: async () => ({}),
     },
     participant: {
@@ -45,7 +45,7 @@ function harness(overrides: { authenticated?: boolean; member?: boolean; allowed
         if (overrides.member === false) return null;
         if (where.userId === USER && where.conversationId === CONV) return { id: PARTICIPANT, displayName: 'Alice', nickname: null };
         if (where.id === PARTICIPANT && where.conversationId === CONV) {
-          return { id: PARTICIPANT, userId: USER, displayName: 'Alice', nickname: null };
+          return { id: PARTICIPANT, userId: USER, displayName: 'Alice', nickname: null, user: { username: 'alice' } };
         }
         return null;
       },
@@ -74,9 +74,7 @@ function harness(overrides: { authenticated?: boolean; member?: boolean; allowed
     },
     messageStatusEntry: {
       findFirst: async () => ({
-        deliveredAt: NOW,
-        receivedAt: NOW,
-        readAt: null,
+        readAt: NOW,
         viewedOnceAt: null,
         ephemeralExpiresAt: null,
       }),
@@ -141,6 +139,12 @@ describe('handleContentCapture', () => {
   it('refuse un appelant qui n’est pas participant', async () => {
     const h = harness({ member: false });
     expect(await handleContentCapture('socket-1', payload(), h.deps)).toMatchObject({ success: false, code: 'NOT_A_PARTICIPANT' });
+    expect(h.created).toHaveLength(0);
+  });
+
+  it('refuse dans une conversation close', async () => {
+    const h = harness({ closed: true });
+    expect(await handleContentCapture('socket-1', payload(), h.deps)).toMatchObject({ success: false, code: 'CONVERSATION_CLOSED' });
     expect(h.created).toHaveLength(0);
   });
 

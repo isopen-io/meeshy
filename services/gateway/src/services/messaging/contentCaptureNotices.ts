@@ -8,57 +8,59 @@
  *  - éphémère (flamme à durée, flamme après lecture, copie transférée) : la
  *    capture n'est pas noircie, elle s'annonce (« X a capturé l'éphémère du
  *    dd/mm/YYYY à HH:MM », heure d'ENVOI, rendue chez chaque lecteur) ;
- *  - enregistrement et recopie d'écran : même traitement, une fois par
- *    éphémère et par enregistrement.
+ *  - enregistrement et recopie d'écran : même traitement.
  *
  * Le client DÉCLARE les messages visibles au moment de la capture ; la
  * passerelle JUGE chacun, et n'écrit un avis que pour celui qui passe TOUTES
- * les bornes ci-dessous. Les autres sont ignorés sans que la réponse dise
- * pourquoi.
+ * les bornes ci-dessous. Les autres sont absents de l'accusé, sans motif.
  *
  * | borne | loi | refus |
  * |---|---|---|
  * | l'acteur est un participant actif, non banni, de la conversation | `participant` | `not-a-participant` |
+ * | la conversation n'est pas close | `isConversationClosed` | `conversation-closed` |
  * | budget de déclarations par acteur et conversation | `SOCKET_RATE_LIMITS.MESSAGE_CAPTURE` | `rate-limited` |
  * | le message est de CETTE conversation | `where` | ignoré |
  * | ce n'est pas le sien — capturer son propre contenu n'annonce rien | `senderId` | ignoré |
- * | la loi de sortie dit `announced` ou `blocked` | `contentExitLawOfSource` (projection complète) | ignoré |
+ * | la loi de sortie dit `announced` (flamme) ou `blocked` (vue unique), source prouvée | `contentExitLawOfSource` + `captureNoticeOutcomeOf` | ignoré |
  * | l'acteur a le droit de le lire | `readerMayReadMessage`, masquage illisible ⇒ refus | ignoré |
- * | il l'a EU à l'écran, récemment | {@link wasOnActorScreen} | ignoré |
- * | pas déjà annoncé pour cette capture, ni dans la rafale | {@link CAPTURE_DEDUP_TTL_SECONDS}, {@link CAPTURE_BURST_SECONDS} | compté, rien d'écrit |
+ * | il l'a VU, récemment | {@link wasOnActorScreen} | ignoré |
+ * | jamais annoncé pour (acteur, message, sorte de capture) | {@link captureOnceKey} | compté, rien d'écrit |
+ * | au plus {@link MAX_NOTICES_PER_REPORT} avis par déclaration | boucle | le reste ignoré |
+ * | au plus `MESSAGE_CAPTURE_NOTICES_HOURLY` avis par heure, acteur et conversation | limiteur | le reste ignoré |
  *
- * ─── « IL L'A EU À L'ÉCRAN » — et non « l'a-t-il ENCORE » ────────────────────
+ * ─── « IL L'A VU », PAS « IL L'A ENCORE » ────────────────────────────────────
  *
  * `contentStillVisibleToReader` répond « disparu » pour une vue unique déjà
- * ouverte ou une flamme après lecture consommée. Or une capture se fait PENDANT
- * l'affichage et l'événement arrive juste après — souvent après la
- * consommation que la fermeture a déclenchée. La question juste est donc :
- * le message a-t-il été SERVI à l'acteur, et l'affichage a-t-il pris fin il y
- * a moins de {@link CAPTURE_REPORT_GRACE_MS} ? Sans cette borne, on fabriquerait
- * une annonce des jours plus tard.
+ * ouverte ou une flamme après lecture consommée — exactement les captures à
+ * annoncer, puisque l'événement arrive juste après l'affichage. La question
+ * juste se lit sur SA ligne `MessageStatusEntry`, et seul un affichage ATTESTÉ
+ * compte (une remise n'est pas un affichage, audit A5) :
  *
- *  - éphémère : servi = sa ligne `MessageStatusEntry` porte une remise, une
- *    réception ou une lecture ; fin d'affichage = son échéance par lecteur
- *    (`ephemeralExpiresAt` : réception + durée, ou l'instant de consommation
- *    d'une flamme après lecture), sinon l'échéance du message ; sans échéance,
- *    l'affichage n'est pas fini.
- *  - vue unique : ouverte PAR lui (`viewedOnceAt`) depuis moins de
- *    {@link VIEW_ONCE_CAPTURE_WINDOW_MS} — l'ouverture est la seule heure que le
- *    serveur connaisse, la fin de l'affichage ne lui est pas dite.
+ *  - éphémère : LU (`readAt`, gelé à la première lecture) depuis au plus
+ *    {@link CAPTURE_AFTER_DISPLAY_MAX_MS}, et, s'il a une fin d'affichage
+ *    (`ephemeralExpiresAt`, sinon `Message.expiresAt`), celle-ci passée depuis
+ *    au plus {@link CAPTURE_REPORT_GRACE_MS} ;
+ *  - vue unique : ouverte PAR lui (`viewedOnceAt`) depuis au plus
+ *    {@link VIEW_ONCE_CAPTURE_WINDOW_MS}.
+ *
+ * Les deux heures sont écrites UNE fois : la fenêtre annonçable d'un message
+ * pour un acteur est donc bornée, et la clé « déjà annoncé » n'a pas à lui
+ * survivre ({@link CAPTURE_ONCE_TTL_SECONDS}).
  *
  * ─── CE QUI PART ────────────────────────────────────────────────────────────
  *
  * Un message système par le chemin de TOUS les avis (`postSystemNotice` :
  * écriture, horloge du fil, `message:new`) — aucune notification push, comme
  * les autres avis. Sa métadonnée (`captureNoticeMetadata`) ne porte AUCUN
- * contenu du message capturé : dans une conversation chiffrée, il ne dit rien
- * de plus que ce que chaque membre sait déjà (qui, quel message, quand envoyé).
+ * contenu du message capturé.
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import type { ContentCaptureBody } from '@meeshy/shared/types/content-capture';
+import type { ContentCaptureBody, ContentCaptureKind } from '@meeshy/shared/types/content-capture';
 import {
   captureNoticeFallbackText,
   captureNoticeMetadata,
+  captureNoticeOutcomeOf,
+  type CaptureNoticeActor,
   type CapturedNature,
 } from '@meeshy/shared/utils/capture-notice';
 import { contentExitLawOfSource, type ContentExitProjection } from '@meeshy/shared/utils/content-exit-law';
@@ -68,18 +70,21 @@ import { unsetOrNull } from '../../utils/prisma-unset';
 import { SOCKET_RATE_LIMITS, type RateLimitConfig } from '../../utils/socket-rate-limiter';
 import { postSystemNotice, type SystemNoticeDeps } from '../conversations/conversationNotice';
 import type { HistoryReader } from '../historyFloor';
+import { isConversationClosed } from './conversationWriteAdmission';
 import { readerMayReadMessage, type ReadableMessageRow } from './messageReadAccess';
 
 const logger = enhancedLogger.child({ module: 'ContentCaptureNotices' });
 
 /** Après la fin de l'affichage d'un éphémère, l'annonce est encore reçue pendant ce délai. */
 export const CAPTURE_REPORT_GRACE_MS = 5 * 60_000;
+/** Borne absolue depuis la lecture d'un éphémère, qu'il ait une échéance ou non. */
+export const CAPTURE_AFTER_DISPLAY_MAX_MS = 24 * 60 * 60_000;
 /** Une vue unique ouverte s'annonce encore pendant ce délai après son ouverture. */
 export const VIEW_ONCE_CAPTURE_WINDOW_MS = 15 * 60_000;
-/** Une même capture (même `captureId`) n'annonce un message qu'une fois. */
-export const CAPTURE_DEDUP_TTL_SECONDS = 24 * 60 * 60;
-/** Une rafale de captures du même message par le même acteur n'en annonce qu'une. */
-export const CAPTURE_BURST_SECONDS = 30;
+/** Au-delà de la fenêtre annonçable la plus longue, avec une journée de marge. */
+export const CAPTURE_ONCE_TTL_SECONDS = (CAPTURE_AFTER_DISPLAY_MAX_MS + CAPTURE_REPORT_GRACE_MS) / 1000 + 24 * 60 * 60;
+/** Avis écrits au plus par déclaration. */
+export const MAX_NOTICES_PER_REPORT = 10;
 
 export type CaptureDedupStore = {
   setnx(key: string, value: string, ttlSeconds?: number): Promise<boolean>;
@@ -109,11 +114,11 @@ export type ContentCaptureInput = {
 export type ContentCaptureOutcome =
   | { readonly kind: 'recorded'; readonly noticedMessageIds: readonly string[] }
   | { readonly kind: 'not-a-participant' }
+  | { readonly kind: 'conversation-closed' }
   | { readonly kind: 'rate-limited' };
 
 type Actor = {
-  readonly participantId: string;
-  readonly displayName: string;
+  readonly notice: CaptureNoticeActor;
   readonly reader: HistoryReader;
 };
 
@@ -133,42 +138,38 @@ const CAPTURED_MESSAGE_SELECT = {
 
 type CapturedMessage = ReadableMessageRow & ContentExitProjection & { readonly senderId: string };
 
-type ScreenEntry = {
-  readonly deliveredAt: Date | null;
-  readonly receivedAt: Date | null;
+export type ScreenEntry = {
   readonly readAt: Date | null;
   readonly viewedOnceAt: Date | null;
   readonly ephemeralExpiresAt: Date | null;
 };
 
 const SCREEN_ENTRY_SELECT = {
-  deliveredAt: true,
-  receivedAt: true,
   readAt: true,
   viewedOnceAt: true,
   ephemeralExpiresAt: true,
 } as const;
 
-export function captureDedupKey(params: {
+export function captureOnceKey(params: {
   readonly actorParticipantId: string;
   readonly messageId: string;
-  readonly kind: string;
-  readonly captureId: string;
+  readonly kind: ContentCaptureKind;
 }): string {
-  return `capture-notice:${params.actorParticipantId}:${params.messageId}:${params.kind}:${params.captureId}`;
-}
-
-export function captureBurstKey(params: { readonly actorParticipantId: string; readonly messageId: string }): string {
-  return `capture-notice-burst:${params.actorParticipantId}:${params.messageId}`;
+  return `capture-notice:${params.actorParticipantId}:${params.messageId}:${params.kind}`;
 }
 
 export function captureRateLimitKey(params: { readonly actorParticipantId: string; readonly conversationId: string }): string {
   return `${params.actorParticipantId}:${params.conversationId}`;
 }
 
+const within = (from: Date, now: Date, maxMs: number): boolean => {
+  const elapsed = now.getTime() - from.getTime();
+  return elapsed >= 0 && elapsed <= maxMs;
+};
+
 /**
- * L'acteur a-t-il EU ce contenu à l'écran, assez récemment pour que l'annonce
- * soit crédible ? Pur : les heures viennent de SA ligne d'accusés.
+ * L'acteur a-t-il VU ce contenu, assez récemment pour que l'annonce soit
+ * crédible ? Pur : les heures viennent de SA ligne d'accusés.
  */
 export function wasOnActorScreen(params: {
   readonly nature: CapturedNature;
@@ -180,114 +181,135 @@ export function wasOnActorScreen(params: {
   if (!entry) return false;
 
   if (nature === 'view-once') {
-    if (!entry.viewedOnceAt) return false;
-    return now.getTime() - entry.viewedOnceAt.getTime() <= VIEW_ONCE_CAPTURE_WINDOW_MS;
+    return entry.viewedOnceAt !== null && within(entry.viewedOnceAt, now, VIEW_ONCE_CAPTURE_WINDOW_MS);
   }
 
-  const served = entry.receivedAt ?? entry.deliveredAt ?? entry.readAt;
-  if (!served) return false;
+  if (entry.readAt === null || !within(entry.readAt, now, CAPTURE_AFTER_DISPLAY_MAX_MS)) return false;
   const displayEnd = entry.ephemeralExpiresAt ?? messageExpiresAt;
-  if (!displayEnd) return true;
-  return now.getTime() - displayEnd.getTime() <= CAPTURE_REPORT_GRACE_MS;
+  return displayEnd === null || now.getTime() - displayEnd.getTime() <= CAPTURE_REPORT_GRACE_MS;
 }
 
 async function loadActor(prisma: PrismaClient, input: ContentCaptureInput): Promise<Actor | null> {
   const row = await prisma.participant.findFirst({
     where: { id: input.actorParticipantId, conversationId: input.conversationId, isActive: true, ...unsetOrNull('bannedAt') },
-    select: { id: true, userId: true, displayName: true, nickname: true },
+    select: { id: true, userId: true, displayName: true, nickname: true, user: { select: { username: true } } },
   });
   if (!row) return null;
+  const isAnonymous = !row.userId;
   return {
-    participantId: row.id,
-    displayName: row.nickname || row.displayName,
+    notice: {
+      participantId: row.id,
+      displayName: row.nickname || row.displayName,
+      isAnonymous,
+      ...(!isAnonymous && row.user?.username ? { username: row.user.username } : {}),
+    },
     reader: row.userId ? { kind: 'user', userId: row.userId } : { kind: 'anonymous', participantId: row.id },
   };
 }
 
-type Judged = { readonly message: CapturedMessage; readonly nature: CapturedNature };
+async function conversationIsClosed(prisma: PrismaClient, conversationId: string): Promise<boolean> {
+  const conversation = await prisma.conversation.findUnique({
+    where: { id: conversationId },
+    select: { isActive: true, closedAt: true },
+  });
+  return isConversationClosed(conversation);
+}
+
+/** Ce qu'une nature prouvée permet d'annoncer — `null` pour l'ordinaire et la source non prouvée. */
+function announceableNature(message: CapturedMessage): CapturedNature | null {
+  const law = contentExitLawOfSource(message);
+  if (law.nature === 'ordinary') return null;
+  return law.capture === captureNoticeOutcomeOf(law.nature) ? law.nature : null;
+}
+
+type ReaderEvidence = { readonly readable: boolean; readonly entry: ScreenEntry | null };
+
+/**
+ * Les deux LECTURES du jugement. Une lecture qui échoue n'autorise rien : elle
+ * est journalisée et le message refusé. Rien d'autre n'est rattrapé ici — une
+ * erreur de programmation remonte (audit A6).
+ */
+async function readEvidence(
+  deps: ContentCaptureDeps,
+  params: { readonly actor: Actor; readonly message: CapturedMessage; readonly now: Date },
+): Promise<ReaderEvidence | null> {
+  const { actor, message, now } = params;
+  const mayRead = deps.mayRead ?? readerMayReadMessage;
+  try {
+    const readable = await mayRead(deps.prisma, { reader: actor.reader, message, now, whenHidingUnreadable: 'refuse' });
+    if (!readable) return { readable: false, entry: null };
+    const entry = (await deps.prisma.messageStatusEntry.findFirst({
+      where: { messageId: message.id, participantId: actor.notice.participantId },
+      select: SCREEN_ENTRY_SELECT,
+    })) as ScreenEntry | null;
+    return { readable: true, entry };
+  } catch (error) {
+    logger.warn('capture evidence unreadable — message refused', {
+      messageId: message.id,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return null;
+  }
+}
 
 async function judge(
   deps: ContentCaptureDeps,
   params: { readonly actor: Actor; readonly message: CapturedMessage; readonly now: Date },
-): Promise<Judged | null> {
+): Promise<CapturedNature | null> {
   const { actor, message, now } = params;
-  if (message.senderId === actor.participantId) return null;
+  if (message.senderId === actor.notice.participantId) return null;
+  const nature = announceableNature(message);
+  if (!nature) return null;
 
-  const law = contentExitLawOfSource(message);
-  if (law.capture === 'free' || law.nature === 'ordinary') return null;
-
-  const mayRead = deps.mayRead ?? readerMayReadMessage;
-  const readable = await mayRead(deps.prisma, {
-    reader: actor.reader,
-    message,
-    now,
-    whenHidingUnreadable: 'refuse',
-  });
-  if (!readable) return null;
-
-  const entry = (await deps.prisma.messageStatusEntry.findFirst({
-    where: { messageId: message.id, participantId: actor.participantId },
-    select: SCREEN_ENTRY_SELECT,
-  })) as ScreenEntry | null;
-  const onScreen = wasOnActorScreen({
-    nature: law.nature,
-    entry,
+  const evidence = await readEvidence(deps, params);
+  if (!evidence?.readable) return null;
+  const seen = wasOnActorScreen({
+    nature,
+    entry: evidence.entry,
     messageExpiresAt: message.expiresAt ? new Date(message.expiresAt) : null,
     now,
   });
-  return onScreen ? { message, nature: law.nature } : null;
+  return seen ? nature : null;
 }
 
-type Claim = 'new' | 'already-noticed';
-
-async function claim(
-  dedup: CaptureDedupStore,
-  params: { readonly actorParticipantId: string; readonly messageId: string; readonly report: ContentCaptureBody },
-): Promise<Claim> {
-  const first = await dedup.setnx(
-    captureDedupKey({ ...params, kind: params.report.kind, captureId: params.report.captureId }),
-    '1',
-    CAPTURE_DEDUP_TTL_SECONDS,
-  );
-  if (!first) return 'already-noticed';
-  const outsideBurst = await dedup.setnx(captureBurstKey(params), '1', CAPTURE_BURST_SECONDS);
-  return outsideBurst ? 'new' : 'already-noticed';
-}
+type NoticeAttempt = 'written' | 'already-noticed' | 'budget-spent' | 'not-written';
 
 async function noticeOne(
   deps: ContentCaptureDeps,
-  params: { readonly actor: Actor; readonly judged: Judged; readonly input: ContentCaptureInput },
-): Promise<boolean> {
-  const { actor, judged, input } = params;
-  const claimed = await claim(deps.dedup, {
-    actorParticipantId: actor.participantId,
-    messageId: judged.message.id,
-    report: input.report,
-  });
-  if (claimed === 'already-noticed') return true;
+  params: { readonly actor: Actor; readonly message: CapturedMessage; readonly nature: CapturedNature; readonly input: ContentCaptureInput },
+): Promise<NoticeAttempt> {
+  const { actor, message, nature, input } = params;
+  const onceKey = captureOnceKey({ actorParticipantId: actor.notice.participantId, messageId: message.id, kind: input.report.kind });
+  if (!(await deps.dedup.setnx(onceKey, '1', CAPTURE_ONCE_TTL_SECONDS))) return 'already-noticed';
+
+  const withinHourlyBudget = await deps.limiter.checkLimit(
+    captureRateLimitKey({ actorParticipantId: actor.notice.participantId, conversationId: input.conversationId }),
+    SOCKET_RATE_LIMITS.MESSAGE_CAPTURE_NOTICES_HOURLY,
+  );
+  if (!withinHourlyBudget) {
+    await deps.dedup.del(onceKey);
+    return 'budget-spent';
+  }
 
   const metadata = captureNoticeMetadata({
-    actor: { participantId: actor.participantId, displayName: actor.displayName },
-    capturedMessageId: judged.message.id,
-    nature: judged.nature,
+    actor: actor.notice,
+    capturedMessageId: message.id,
+    nature,
     captureKind: input.report.kind,
-    sentAt: new Date(judged.message.createdAt),
+    sentAt: new Date(message.createdAt),
   });
   const written = await postSystemNotice(
     { prisma: deps.prisma, broadcast: deps.broadcast },
     {
       conversationId: input.conversationId,
-      senderParticipantId: actor.participantId,
+      senderParticipantId: actor.notice.participantId,
       content: captureNoticeFallbackText(metadata),
       metadata,
     },
   );
-  if (written !== null) return true;
-  await Promise.all([
-    deps.dedup.del(captureDedupKey({ actorParticipantId: actor.participantId, messageId: judged.message.id, kind: input.report.kind, captureId: input.report.captureId })),
-    deps.dedup.del(captureBurstKey({ actorParticipantId: actor.participantId, messageId: judged.message.id })),
-  ]);
-  return false;
+  if (written !== null) return 'written';
+  await deps.dedup.del(onceKey);
+  return 'not-written';
 }
 
 export async function recordContentCapture(
@@ -298,9 +320,10 @@ export async function recordContentCapture(
 
   const actor = await loadActor(deps.prisma, input);
   if (!actor) return { kind: 'not-a-participant' };
+  if (await conversationIsClosed(deps.prisma, input.conversationId)) return { kind: 'conversation-closed' };
 
   const allowed = await deps.limiter.checkLimit(
-    captureRateLimitKey({ actorParticipantId: actor.participantId, conversationId: input.conversationId }),
+    captureRateLimitKey({ actorParticipantId: actor.notice.participantId, conversationId: input.conversationId }),
     SOCKET_RATE_LIMITS.MESSAGE_CAPTURE,
   );
   if (!allowed) return { kind: 'rate-limited' };
@@ -315,17 +338,15 @@ export async function recordContentCapture(
     .filter((row): row is CapturedMessage => row !== undefined);
 
   const noticed: string[] = [];
+  let written = 0;
   for (const message of declared) {
-    try {
-      const judged = await judge(deps, { actor, message, now });
-      if (judged && (await noticeOne(deps, { actor, judged, input }))) noticed.push(message.id);
-    } catch (error) {
-      logger.warn('capture not judged', {
-        conversationId: input.conversationId,
-        messageId: message.id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
+    if (written >= MAX_NOTICES_PER_REPORT) break;
+    const nature = await judge(deps, { actor, message, now });
+    if (!nature) continue;
+    const attempt = await noticeOne(deps, { actor, message, nature, input });
+    if (attempt === 'budget-spent') break;
+    if (attempt === 'written') written += 1;
+    if (attempt === 'written' || attempt === 'already-noticed') noticed.push(message.id);
   }
   return { kind: 'recorded', noticedMessageIds: noticed };
 }

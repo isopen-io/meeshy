@@ -24,6 +24,7 @@ import type { UnifiedAuthRequest } from '../../middleware/auth';
 import { getCacheStore } from '../../services/CacheStore';
 import { noticeBroadcast } from '../../services/conversations/conversationNotice';
 import { recordContentCapture, type ContentCaptureDeps } from '../../services/messaging/contentCaptureNotices';
+import { CONVERSATION_CLOSED_EDIT_MESSAGE } from '../../services/messaging/messageEditAdmission';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
 import { sendBadRequest, sendError, sendForbidden, sendInternalError, sendNotFound, sendSuccess } from '../../utils/response.js';
 import { getSocketRateLimiter } from '../../utils/socket-rate-limiter';
@@ -61,6 +62,7 @@ export function registerMessageCaptureRoutes(
         401: errorResponseSchema,
         403: errorResponseSchema,
         404: errorResponseSchema,
+        410: errorResponseSchema,
         429: errorResponseSchema,
         500: errorResponseSchema,
       },
@@ -103,6 +105,8 @@ export function registerMessageCaptureRoutes(
           return sendError(reply, 429, RATE_LIMIT_REFUSAL_MESSAGE, { code: 'RATE_LIMITED' });
         case 'not-a-participant':
           return sendForbidden(reply, 'Not a participant');
+        case 'conversation-closed':
+          return sendError(reply, 410, CONVERSATION_CLOSED_EDIT_MESSAGE, { code: 'CONVERSATION_CLOSED' });
       }
     } catch (error) {
       logger.error('Error recording a content capture', error);
