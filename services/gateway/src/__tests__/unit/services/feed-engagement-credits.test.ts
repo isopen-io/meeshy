@@ -49,6 +49,8 @@ const reactionRow = (overrides: Record<string, unknown> = {}) => ({
 describe('tool.post_reaction — PostReactionService.addReaction', () => {
   function makePrisma(existing: unknown) {
     return {
+      user: { findFirst: jest.fn<any>().mockResolvedValue(null), findUnique: jest.fn<any>().mockResolvedValue({ timezone: 'UTC' }) },
+      engagementQuota: { updateMany: jest.fn<any>().mockResolvedValue({ count: 1 }), findUnique: jest.fn<any>().mockResolvedValue(null) },
       post: { findUnique: jest.fn<any>().mockResolvedValue({ id: POST_ID, deletedAt: null, authorId: AUTHOR_ID }) },
       postReaction: {
         findFirst: jest.fn<any>().mockResolvedValue(existing),

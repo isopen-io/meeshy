@@ -20,10 +20,14 @@
  * Les places vivent dans `EngagementQuota` (`gesture:<famille>`,
  * `<chemin>:day:<AAAA-MM-JJ>`), jamais lues par le crédit.
  *
+ * Il n'existe pas de « sans limite » : `dailyGestureLimit` rend toujours un
+ * entier borné, le défaut du code quand le barème est absent, illisible ou
+ * partiel.
+ *
  * Une lecture ou une écriture qui ÉCHOUE (le compteur, le fuseau) laisse passer
- * le geste sans place : la limite est un garde-fou contre le spam, pas une
- * condition du geste, et ce qu'elle protège — les points — tombe avec la même
- * base. Seule une limite ATTEINTE refuse.
+ * le geste — on ne bloque pas quelqu'un pour une panne — mais SANS place et
+ * SANS points : `admit` rend alors `null`, et l'appelant ne crédite rien
+ * (`mayCredit`). Seule une limite ATTEINTE refuse le geste.
  */
 
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
@@ -47,8 +51,14 @@ const LIMIT_CODE: Readonly<Record<EngagementPathFamily, ErrorCode>> = {
   reaction: ErrorCode.DAILY_REACTION_LIMIT,
 };
 
-/** La place prise par un geste admis — `null` quand aucune limite ne s'appliquait. */
+/**
+ * La place prise par un geste admis — `null` quand le compteur n'a pas répondu :
+ * le geste passe, mais ne rapporte rien.
+ */
 export type GestureTicket = { readonly userId: string; readonly operationKey: string; readonly bucket: string } | null;
+
+/** Un geste admis rapporte ses points seulement s'il a été COMPTÉ. */
+export const mayCredit = (ticket: GestureTicket): boolean => ticket !== null;
 
 /** Minuit qui ouvre le jour civil suivant `dayKey`, dans le fuseau du compte. */
 export function nextMidnight(dayKey: string, timezone: string | null | undefined): Date {
@@ -98,7 +108,7 @@ export class DailyGestureGate {
    */
   async admit(userId: string, family: EngagementPathFamily, path: EngagementPostPath, now: Date = new Date()): Promise<GestureTicket> {
     const verdict = await this.decide(userId, family, path, now).catch((error: unknown) => {
-      log.warn('daily gesture limit unreadable — the gesture passes uncounted', {
+      log.warn('daily gesture limit unreadable — the gesture passes uncounted and earns nothing', {
         family,
         path,
         error: error instanceof Error ? error.message : String(error),
@@ -116,7 +126,6 @@ export class DailyGestureGate {
     now: Date,
   ): Promise<{ readonly ticket: GestureTicket } | { readonly refusal: DailyGestureLimitReached }> {
     const limit = dailyGestureLimit(await this.scale.current(), family, path);
-    if (limit === null) return { ticket: null };
     const owner = await this.prisma.user.findUnique({ where: { id: userId }, select: { timezone: true } });
     const dayKey = dayKeyOf(now, owner?.timezone);
     const ticket = { userId, operationKey: `gesture:${family}`, bucket: `${path}:day:${dayKey}` };

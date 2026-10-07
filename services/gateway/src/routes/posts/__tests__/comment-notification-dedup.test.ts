@@ -85,6 +85,7 @@ const PUBLIC_ACL = { authorId: 'user-bob', visibility: 'PUBLIC', visibilityUserI
 const POST_ID = '507f191e810c19729de860ea';
 
 const prisma = {
+  user: { findFirst: jest.fn<() => Promise<unknown>>().mockResolvedValue(null) },
   post: {
     findUnique: prismaPostFindUnique,
     findFirst: jest.fn<() => Promise<unknown>>().mockResolvedValue(PUBLIC_ACL),

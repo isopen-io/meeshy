@@ -51,7 +51,7 @@ const SMALL_LIMITS: EngagementScale = {
   pathCaps: { comment: { original: 50, repost: 10 }, reaction: { original: 3, repost: 2 } },
 };
 
-function setup(scale: EngagementScale = DEFAULT_ENGAGEMENT_SCALE) {
+function setup(scale: EngagementScale = DEFAULT_ENGAGEMENT_SCALE, options: { readonly counterDown?: boolean } = {}) {
   const db = fakeGameDb();
   for (const id of [READER, AUTHOR, REPOSTER]) {
     seedUser(db, { emailVerifiedAt: new Date('2026-01-01T00:00:00Z'), engagementScore: 0 }, id);
@@ -105,9 +105,13 @@ function setup(scale: EngagementScale = DEFAULT_ENGAGEMENT_SCALE) {
       },
     },
     engagementQuota: db.prisma.engagementQuota,
+    user: db.prisma.user,
     $transaction: async () => undefined,
   };
-  const gate = new DailyGestureGate(db.prisma, { current: async () => scale });
+  const gatePrisma = options.counterDown
+    ? { ...db.prisma, engagementQuota: { updateMany: async () => { throw new Error('mongo down'); } } }
+    : db.prisma;
+  const gate = new DailyGestureGate(gatePrisma as never, { current: async () => scale });
   const service = new PostReactionService(posts as never, recorder, gate);
   const react = async (input: { readonly userId: string; readonly postId: string; readonly emoji?: string; readonly through?: RepostPassage }) => {
     await service.addReaction({ emoji: '❤️', ...input });
@@ -297,6 +301,33 @@ describe('la limite quotidienne de réactions', () => {
  * sur l'auteur de CHAQUE post. On ne se crédite donc jamais deux fois pour un
  * geste dont l'un des deux posts est le sien.
  */
+describe('le compteur du jour muet, le blocage', () => {
+  it('compteur illisible : la réaction est posée, mais ne rapporte RIEN, sur aucun des deux posts', async () => {
+    const { db, react, reactions } = setup(DEFAULT_ENGAGEMENT_SCALE, { counterDown: true });
+
+    await react({ userId: READER, postId: ORIGINAL, through: viaRepost });
+
+    expect(reactions.filter((r) => r.postId === ORIGINAL)).toHaveLength(1);
+    expect(scoreOf(db, READER)).toBe(0);
+    expect(await marks(db, READER)).toBe(0);
+  });
+
+  it.each([
+    ['l’auteur de l’original vous a bloqué', AUTHOR, READER],
+    ['vous avez bloqué l’auteur de l’original', READER, AUTHOR],
+    ['l’auteur de la republication traversée vous a bloqué', REPOSTER, READER],
+  ])('%s : la réaction est refusée comme un post introuvable, sans écriture, sans place, sans point', async (_label, blocker, blocked) => {
+    const { db, react, reactions } = setup();
+    (db.user.rows.find((row) => row.id === blocker)!.blockedUserIds as string[]).push(blocked);
+
+    await expect(react({ userId: READER, postId: ORIGINAL, through: viaRepost })).rejects.toThrow('Post not found');
+
+    expect(reactions).toHaveLength(0);
+    expect(scoreOf(db, READER)).toBe(0);
+    expect(placesTaken(db, READER, 'repost')).toBe(0);
+  });
+});
+
 describe('quand l’un des deux posts est le sien', () => {
   it('le republieur qui réagit par SA republication : l’original le crédite, sa republication non', async () => {
     const { db, react } = setup();

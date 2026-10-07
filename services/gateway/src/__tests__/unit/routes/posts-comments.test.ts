@@ -175,7 +175,7 @@ async function buildApp({ authenticated = true, withCmidDecoration = false } = {
   // droit de voir (cf. `posts/comments-audience.test.ts`).
   const publicAcl = { authorId: 'author-1', visibility: 'PUBLIC', visibilityUserIds: [] };
   const prisma = {
-    post: {
+    user: { findFirst: jest.fn<any>().mockResolvedValue(null) }, post: {
       findUnique: jest.fn<any>().mockResolvedValue(null),
       findFirst: jest.fn<any>().mockResolvedValue(publicAcl),
     },

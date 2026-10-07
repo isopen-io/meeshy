@@ -18,7 +18,7 @@ import { reproduceEditedSubjectNotifications } from './posts/reproduceEditedSubj
 import { attachmentTranscriptionFromMobile } from './posts/mobile-transcription';
 import { assertReactionAllowed } from '../utils/reaction-limit-guard.js';
 import { EngagementService } from './engagement/EngagementService';
-import { creditPostEngagement, creditSource, reclaimContentCredits, type PostEngagementRecorder } from './posts/postEngagementCredits';
+import { creditPostEngagement, creditSource, reclaimContentCredits, removalReclaimsAuthorCredits, type PostEngagementRecorder } from './posts/postEngagementCredits';
 
 const log = enhancedLogger.child({ module: 'PostCommentService' });
 
@@ -640,11 +640,13 @@ export class PostCommentService {
       data: { deletedAt },
     });
 
-    // Chaque commentaire retiré — la cible et ses réponses — reprend ce qu'il a
-    // rapporté à SON auteur (#9584). Une suppression rejouée ne reprend rien.
-    [{ id: commentId, authorId: comment.authorId }, ...descendantAuthors].forEach(({ id, authorId }) =>
-      reclaimContentCredits(this.prisma, authorId, creditSource.comment(id), {}, this.engagement),
-    );
+    // Ce que chaque commentaire retiré a rapporté à SON auteur se reprend
+    // selon `removalReclaimsAuthorCredits` (#9584) : la cible, retirée par son
+    // auteur, oui ; les réponses des AUTRES qu'elle emporte, non. Une
+    // suppression rejouée ne reprend rien.
+    [{ id: commentId, authorId: comment.authorId }, ...descendantAuthors]
+      .filter(({ authorId }) => removalReclaimsAuthorCredits({ removedBy: userId, authorId, byModeration: false }))
+      .forEach(({ id, authorId }) => reclaimContentCredits(this.prisma, authorId, creditSource.comment(id), {}, this.engagement));
 
     await this.prisma.post.update({
       where: { id: comment.postId },

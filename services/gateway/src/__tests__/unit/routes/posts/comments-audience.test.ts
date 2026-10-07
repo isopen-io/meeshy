@@ -124,10 +124,13 @@ function makePrisma(opts: {
   isDirectContact?: boolean;
   /** La ligne `PostMention` du lecteur, `null` quand le post ne le nomme pas. */
   reference?: { expiredViewAt: Date | null } | null;
+  /** Un blocage, dans un sens ou l'autre, entre le lecteur et l'auteur du post. */
+  blockedWith?: string;
 } = {}) {
   const post = opts.post === undefined ? acl('PUBLIC') : opts.post;
   const commentPost = opts.commentPost === undefined ? post : opts.commentPost;
   return {
+    user: { findFirst: jest.fn<any>().mockResolvedValue(opts.blockedWith ? { id: opts.blockedWith } : null) },
     post: {
       findFirst: jest.fn<any>().mockResolvedValue(post),
       findUnique: jest.fn<any>().mockResolvedValue(
@@ -460,6 +463,34 @@ describe('POST/DELETE .../like — liker un commentaire suit l’audience d’IN
 
     expect(res.statusCode).toBe(200);
     expect(mockLikeComment).toHaveBeenCalled();
+    await app.close();
+  });
+});
+
+// ─── Blocage : commenter un post dont l'auteur est séparé de vous par un
+// blocage est refusé PARTOUT, comme un post introuvable (#9584).
+
+describe('POST /posts/:postId/comments — un blocage avec l’auteur du post refuse, sur un post ordinaire aussi', () => {
+  it('blocage dans un sens ou l’autre ⇒ 404 POST_NOT_FOUND, rien n’est écrit', async () => {
+    const app = await buildApp(makePrisma({ post: acl('PUBLIC'), blockedWith: AUTHOR_ID }));
+
+    const res = await app.inject({ method: 'POST', url: `/posts/${POST_ID}/comments`, payload: { content: 'x' } });
+
+    expect(res.statusCode).toBe(404);
+    expect(res.json().code).toBe('POST_NOT_FOUND');
+    expect(mockAddComment).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('une lecture du blocage qui échoue refuse aussi — fermé sur la panne', async () => {
+    const prisma = makePrisma({ post: acl('PUBLIC') });
+    prisma.user.findFirst.mockRejectedValue(new Error('mongo down'));
+    const app = await buildApp(prisma);
+
+    const res = await app.inject({ method: 'POST', url: `/posts/${POST_ID}/comments`, payload: { content: 'x' } });
+
+    expect(res.statusCode).toBe(404);
+    expect(mockAddComment).not.toHaveBeenCalled();
     await app.close();
   });
 });

@@ -133,7 +133,11 @@ async function buildApp(
       findFirst: jest.fn<any>().mockResolvedValue({ postId: POST_ID, post: PUBLIC_ACL }),
       findUnique: jest.fn<any>().mockResolvedValue(null),
     },
-    user: { findFirst: jest.fn<any>().mockResolvedValue(null) },
+    user: {
+      findFirst: jest.fn<any>().mockResolvedValue(null),
+      findUnique: jest.fn<any>().mockResolvedValue({ timezone: 'UTC' }),
+    },
+    engagementQuota: { updateMany: jest.fn<any>().mockResolvedValue({ count: 1 }) },
   } as any;
   app.decorate('prisma', prisma);
   registerCommentRoutes(app, prisma, auth);

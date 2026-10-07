@@ -91,6 +91,21 @@ export function reclaimContentCredits(
   });
 }
 
+/**
+ * QUI PERD SES POINTS quand un contenu est retiré (#9584) — choix isolé ici,
+ * soumis au porteur. Codé : l'auteur perd ce que son contenu lui a rapporté
+ * quand il le retire LUI-MÊME, ou quand la MODÉRATION le retire ; jamais quand
+ * un tiers l'emporte — l'auteur d'un commentaire parent dont la suppression
+ * emporte les réponses des autres, un hôte —, sans quoi on punirait ceux qui
+ * vous répondent. La reprise ne vise que le compte crédité POUR ce contenu :
+ * jamais celui qui retire, s'il n'en est pas l'auteur.
+ */
+export const removalReclaimsAuthorCredits = (removal: {
+  readonly removedBy: string;
+  readonly authorId: string;
+  readonly byModeration: boolean;
+}): boolean => removal.byModeration || removal.removedBy === removal.authorId;
+
 /** Les sources de crédit des contenus de post — une ligne, un préfixe. */
 export const creditSource = {
   postReaction: (reactionId: string) => `post-reaction:${reactionId}`,

@@ -134,7 +134,7 @@ const PUBLIC_ACL = { authorId: 'author-1', visibility: 'PUBLIC', visibilityUserI
  */
 function withPublicAcl<T extends Record<string, any>>(prisma: T): T {
   return {
-    ...prisma,
+    user: { findFirst: jest.fn<any>().mockResolvedValue(null), findUnique: jest.fn<any>().mockResolvedValue({ timezone: 'UTC' }) }, ...prisma,
     post: { ...prisma['post'], findFirst: jest.fn<any>().mockResolvedValue(PUBLIC_ACL) },
     postComment: {
       ...prisma['postComment'],

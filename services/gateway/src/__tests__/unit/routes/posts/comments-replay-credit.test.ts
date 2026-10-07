@@ -290,6 +290,21 @@ describe('POST /posts/:postId/comments — la limite quotidienne de commentaires
     expect(places(db)).toBe(1);
   });
 
+  it('un compteur illisible : le commentaire s’écrit, mais ne rapporte rien', async () => {
+    const { app, db } = await build();
+    db.engagementQuota.updateMany = async () => {
+      throw new Error('mongo down');
+    };
+
+    const res = await comment(app, CMID);
+    await settled();
+    await app.close();
+
+    expect(res.statusCode).toBe(201);
+    expect(mockAddComment).toHaveBeenCalledTimes(1);
+    expect(commentCredits(db)).toBe(0);
+  });
+
   it('un commentaire qui ne s’écrit pas rend sa place', async () => {
     const { app, db } = await build();
     mockAddComment.mockRejectedValueOnce(new Error('MEDIA_NOT_AVAILABLE'));

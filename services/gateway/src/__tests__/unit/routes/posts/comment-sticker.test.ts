@@ -84,6 +84,7 @@ async function requiredAuth(req: FastifyRequest): Promise<void> {
 
 function buildPrisma() {
   return {
+    user: { findFirst: jest.fn<any>().mockResolvedValue(null) },
     post: {
       findFirst: jest.fn<any>().mockResolvedValue(PUBLIC_ACL),
       findUnique: jest.fn<any>().mockResolvedValue({

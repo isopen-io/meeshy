@@ -7,9 +7,9 @@ import { PostTranslationService } from '../../services/posts/PostTranslationServ
 import { PostAudioService } from '../../services/posts/PostAudioService';
 import { EngagementService } from '../../services/engagement/EngagementService';
 import { creditSource } from '../../services/posts/postEngagementCredits';
-import { admitCommentHome, commentThreadOf } from '../../services/posts/commentHome';
+import { admitCommentHome, commentEventAudience, commentThreadOf, threadAudience } from '../../services/posts/commentHome';
 import { notifyCommentAdded } from './commentAddedNotifications';
-import { DailyGestureGate, DailyGestureLimitReached } from '../../services/engagement/DailyGestureGate';
+import { DailyGestureGate, DailyGestureLimitReached, mayCredit } from '../../services/engagement/DailyGestureGate';
 import { refuseDailyGesture } from '../../utils/daily-gesture-refusal';
 import { CreateCommentSchema, UpdateCommentSchema, FeedQuerySchema, LikeSchema, PostParams, CommentParams, UnlikeSchema, TranslatePostSchema } from './types';
 import { enhancedLogger } from '../../utils/logger-enhanced';
@@ -251,6 +251,7 @@ export function registerCommentRoutes(
       // notification, ni traduction. Le verdict vient du journal
       // (`withMutationVerdict`), jamais de la forme du résultat.
       type CommentResult = NonNullable<Awaited<ReturnType<typeof commentService.addComment>>>;
+      let counted = false;
       const { result: comment, replayed } = await withMutationVerdict<CommentResult>({
         request,
         fastify,
@@ -265,6 +266,7 @@ export function registerCommentRoutes(
           // dans l'op : un rejeu ne prend pas de place, un refus n'en consomme
           // pas, un commentaire qui n'a pas pu s'écrire rend la sienne.
           const ticket = await gestureGate.admit(authContext.registeredUser.id, 'comment', home.path);
+          counted = mayCredit(ticket);
           const c = await commentService.addComment(
             targetPostId,
             authContext.registeredUser.id,
@@ -332,9 +334,10 @@ export function registerCommentRoutes(
       const socialEvents = fastify.socialEvents;
       const post = await fastify.prisma?.post?.findUnique({
         where: { id: targetPostId },
-        select: { authorId: true, commentCount: true, type: true, createdAt: true, expiresAt: true, visibility: true, visibilityUserIds: true },
+        select: { authorId: true, commentCount: true, type: true, createdAt: true, expiresAt: true, visibility: true, visibilityUserIds: true, isQuote: true, repostOfId: true },
       });
       if (socialEvents && post) {
+        const audience = commentEventAudience(post);
         socialEvents.broadcastCommentAdded({
           postId: targetPostId,
           comment: hoistCommentTrackingLinks(commentCite) as unknown as typeof comment,
@@ -342,7 +345,7 @@ export function registerCommentRoutes(
           // L'écho porte le cmid du créateur : l'émetteur remplace sa ligne
           // optimiste (id local = cmid) au lieu d'en insérer un doublon.
           clientMutationId: request.clientMutationId,
-        }, post.authorId, post.visibility, post.visibilityUserIds ?? []).catch((err) => enhancedLogger.warn('[POST /posts/:postId/comments]: broadcast comment added failed', { err }));
+        }, post.authorId, audience.visibility, audience.visibilityUserIds).catch((err) => enhancedLogger.warn('[POST /posts/:postId/comments]: broadcast comment added failed', { err }));
       }
 
       await notifyCommentAdded({
@@ -354,6 +357,7 @@ export function registerCommentRoutes(
         post,
         content: parsed.data.content,
         parentId: parsed.data.parentId,
+        audience: threadAudience(prisma, target, home, authContext.registeredUser.id),
       });
 
       // Trigger async translation for comment content (fire-and-forget)
@@ -397,9 +401,10 @@ export function registerCommentRoutes(
       //
       // #9584 — un commentaire ne crédite qu'UN post, celui où il est rangé :
       // seules les réactions se dupliquent. Il est la SOURCE de son crédit :
-      // le supprimer le reprend.
+      // le supprimer le reprend. Un geste que la limite du jour n'a pas pu
+      // compter (compteur muet) passe, mais ne rapporte rien.
       const commentAxis = linkedMedia?.mimeType?.startsWith('audio/') ? 'comment.audio' : 'comment.text';
-      engagementService
+      if (counted) engagementService
         .recordActivity(authContext.registeredUser.id, commentAxis, {
           postId: targetPostId,
           receipt: creditSource.comment(comment.id),
@@ -533,13 +538,14 @@ export function registerCommentRoutes(
       const socialEvents = fastify.socialEvents;
       const post = await fastify.prisma?.post?.findUnique({
         where: { id: comment.postId },
-        select: { authorId: true, visibility: true, visibilityUserIds: true },
+        select: { authorId: true, visibility: true, visibilityUserIds: true, isQuote: true, repostOfId: true },
       });
       if (socialEvents && post) {
+        const audience = commentEventAudience(post);
         socialEvents.broadcastCommentUpdated({
           postId: comment.postId,
           comment: hoistCommentTrackingLinks(commentEditeCite) as unknown as typeof comment,
-        }, post.authorId, post.visibility, post.visibilityUserIds ?? []).catch((err) => enhancedLogger.warn('[PATCH /posts/:postId/comments/:commentId]: broadcast comment updated failed', { err }));
+        }, post.authorId, audience.visibility, audience.visibilityUserIds).catch((err) => enhancedLogger.warn('[PATCH /posts/:postId/comments/:commentId]: broadcast comment updated failed', { err }));
       }
 
       // Contenu modifié → les traductions stockées ont été purgées par le
@@ -869,7 +875,7 @@ export function registerCommentRoutes(
       if (socialEvents && commentPostId) {
         const post = await fastify.prisma?.post?.findUnique({
           where: { id: commentPostId },
-          select: { authorId: true, commentCount: true, visibility: true, visibilityUserIds: true },
+          select: { authorId: true, commentCount: true, visibility: true, visibilityUserIds: true, isQuote: true, repostOfId: true },
         });
         if (post) {
           // Le fil retiré, pas la seule cible : `deleteComment` soft-delete la
@@ -900,7 +906,7 @@ export function registerCommentRoutes(
             deletedCommentIds,
             ...(result.parentId !== undefined ? { parentId: result.parentId } : {}),
             commentCount: post.commentCount,
-          }, post.authorId, post.visibility, post.visibilityUserIds ?? []).catch((err) => enhancedLogger.warn('[DELETE /posts/:postId/comments/:commentId]: broadcast comment deleted failed', { err }));
+          }, post.authorId, commentEventAudience(post).visibility, commentEventAudience(post).visibilityUserIds).catch((err) => enhancedLogger.warn('[DELETE /posts/:postId/comments/:commentId]: broadcast comment deleted failed', { err }));
         }
       }
 

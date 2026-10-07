@@ -94,8 +94,8 @@ describe('PostReactionService', () => {
       return validEmojis.includes(emoji?.trim());
     });
 
-    // Create mock Prisma client
     mockPrisma = {
+      user: { findFirst: jest.fn().mockResolvedValue(null) },
       post: {
         findUnique: jest.fn(),
         update: jest.fn()

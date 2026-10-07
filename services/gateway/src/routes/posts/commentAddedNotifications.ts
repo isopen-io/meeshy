@@ -3,11 +3,18 @@
  * taille, #9584), à l'identique : mentions d'abord (elles priment), puis
  * l'auteur du commentaire parent ou du post, puis l'éventail des stories.
  * `postId` / `post` sont le post où le commentaire est RANGÉ.
+ *
+ * Sous une republication simple (#9584), `audience` dit qui peut LIRE le fil —
+ * la republication ET l'original, blocages compris : tout destinataire (mention,
+ * auteur du parent, auteur du post) passe par lui avant que rien ne parte, une
+ * mention refusée n'est pas même persistée, et l'éventail des stories — dont
+ * les destinataires ne sont pas énumérables ici — ne part pas.
  */
 
 import type { FastifyInstance } from 'fastify';
 import type { Post } from '@meeshy/shared/prisma/client';
 import type { MentionService } from '../../services/MentionService';
+import type { ThreadAudience } from '../../services/posts/commentHome';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { sliceCodePointsOrUndefined } from '@meeshy/shared/utils/text-truncate';
 
@@ -22,8 +29,11 @@ export async function notifyCommentAdded(params: {
   readonly post: CommentedPost | null | undefined;
   readonly content: string | undefined;
   readonly parentId: string | undefined;
+  readonly audience?: ThreadAudience;
 }): Promise<void> {
   const { fastify, mentionService, commenterId, commentId, postId, post, content, parentId } = params;
+  const audience = params.audience ?? null;
+  const mayReceive = async (recipientId: string): Promise<boolean> => audience === null || audience(recipientId);
   const notifService = fastify.notificationService;
 
   // Mention persistence + notifications (Phase 2B) — resolved FIRST so the
@@ -40,7 +50,9 @@ export async function notifyCommentAdded(params: {
     const mentionedUsernames = mentionService.extractMentions(content);
     if (mentionedUsernames.length > 0) {
       const resolvedUsers = await mentionService.resolveUsernames(mentionedUsernames);
-      mentionedUserIds = Array.from(resolvedUsers.values()).map(u => u.id);
+      const named = Array.from(resolvedUsers.values()).map(u => u.id);
+      const admitted = await Promise.all(named.map((id) => mayReceive(id)));
+      mentionedUserIds = named.filter((_id, index) => admitted[index]);
 
       if (mentionedUserIds.length > 0) {
         mentionService.createCommentMentions(commentId, mentionedUserIds)
@@ -78,7 +90,7 @@ export async function notifyCommentAdded(params: {
         where: { id: parentId },
         select: { authorId: true, content: true },
       });
-      if (parentComment?.authorId && !mentionedUserIds.includes(parentComment.authorId)) {
+      if (parentComment?.authorId && !mentionedUserIds.includes(parentComment.authorId) && (await mayReceive(parentComment.authorId))) {
         notifService.createCommentReplyNotification({
           actorId: commenterId,
           postId,
@@ -93,7 +105,7 @@ export async function notifyCommentAdded(params: {
           postExpiresAt: post?.expiresAt ?? undefined,
         }).catch((err) => enhancedLogger.warn('[POST /posts/:postId/comments]: notify comment reply failed', { err }));
       }
-    } else if (post?.authorId && post.type !== 'STORY' && !mentionedUserIds.includes(post.authorId)) {
+    } else if (post?.authorId && post.type !== 'STORY' && !mentionedUserIds.includes(post.authorId) && (await mayReceive(post.authorId))) {
       // Top-level comment on a regular post/mood/status — notify the
       // author with the typed subtitle. Pour une STORY, l'auteur est
       // notifié par le bucket story_new_comment du fan-out ci-dessous
@@ -114,7 +126,7 @@ export async function notifyCommentAdded(params: {
 
   // Story comment fan-out notifications (Phase 1D)
   // excludeUserIds: skip users who already received user_mentioned (higher priority)
-  if (notifService && post?.authorId && !parentId) {
+  if (notifService && post?.authorId && !parentId && audience === null) {
     notifService.createStoryCommentNotificationsBatch({
       postId,
       commentId,

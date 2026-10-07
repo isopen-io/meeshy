@@ -21,10 +21,10 @@ jest.mock('../../../../utils/logger-enhanced', () => ({
 
 const USER = '68a000000000000000000071';
 
-const limits = (repostComments: number | null): EngagementScale => ({
+const limits = (repostComments: unknown): EngagementScale => ({
   ...DEFAULT_ENGAGEMENT_SCALE,
   pathCaps: { comment: { original: 50, repost: repostComments }, reaction: { original: 100, repost: 50 } },
-});
+} as unknown as EngagementScale);
 
 function setup(options: { readonly timezone?: string; readonly scale?: EngagementScale } = {}) {
   const db = fakeGameDb();
@@ -126,13 +126,20 @@ describe('la porte des gestes du jour', () => {
     expect(placesOn(db, '2026-10-07')).toBe(2);
   });
 
-  it('une limite absente (null) n’ouvre aucune place et ne refuse jamais', async () => {
-    const { db, gate } = setup({ scale: limits(null) });
+  it.each([
+    ['null', null],
+    ['négative', -1],
+    ['absente', undefined],
+    ['au-delà du plafond dur', 5_000],
+  ])('un barème dont la limite est %s ne donne JAMAIS « sans limite » : la limite par défaut (10) s’applique', async (_label, value) => {
+    const { db, gate } = setup({ scale: limits(value) });
+    const now = new Date('2026-10-07T10:00:00Z');
 
-    const ticket = await gate.admit(USER, 'comment', 'repost', new Date('2026-10-07T10:00:00Z'));
+    for (let n = 0; n < 10; n += 1) await gate.admit(USER, 'comment', 'repost', now);
+    const refusal = await refusalOf(gate.admit(USER, 'comment', 'repost', now));
 
-    expect(ticket).toBeNull();
-    expect(db.engagementQuota.rows).toHaveLength(0);
+    expect(refusal.limit).toBe(10);
+    expect(placesOn(db, '2026-10-07')).toBe(10);
   });
 
   it('une limite à zéro refuse tout', async () => {
@@ -141,7 +148,7 @@ describe('la porte des gestes du jour', () => {
     await refusalOf(gate.admit(USER, 'comment', 'repost', new Date('2026-10-07T10:00:00Z')));
   });
 
-  it('un compteur illisible laisse passer le geste sans place — seule une limite ATTEINTE refuse', async () => {
+  it('un compteur illisible laisse passer le geste SANS place, donc sans points (null ⇒ mayCredit faux) — seule une limite ATTEINTE refuse', async () => {
     const { db, gate } = setup();
     db.engagementQuota.updateMany = async () => {
       throw new Error('mongo down');

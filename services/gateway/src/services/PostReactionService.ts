@@ -13,7 +13,8 @@ import { sanitizeEmoji, isValidEmoji } from '@meeshy/shared/types/reaction';
 import { assertReactionAllowed } from '../utils/reaction-limit-guard.js';
 import { assertValidObjectId } from '../utils/object-id.js';
 import { EngagementService } from './engagement/EngagementService';
-import { DailyGestureGate } from './engagement/DailyGestureGate';
+import { DailyGestureGate, mayCredit } from './engagement/DailyGestureGate';
+import { isBlockedWithAny } from '../utils/blocking';
 import { receiptBucket } from './engagement/EngagementReceipts';
 import {
   creditPostGesture,
@@ -133,6 +134,13 @@ export class PostReactionService {
       throw new Error('Post has been deleted');
     }
 
+    // Un blocage, dans un sens ou l'autre, avec l'auteur du post — ou de la
+    // republication traversée — refuse la réaction comme un post introuvable,
+    // avant toute écriture et sans rien révéler du blocage (fermé sur l'échec).
+    if (await isBlockedWithAny(this.prisma, userId, [post.authorId, through?.authorId])) {
+      throw new Error('Post not found');
+    }
+
     // Multi-réactions (2026-08-18) : la clé unique DB (postId, userId, emoji)
     // accepte tout emoji distinct par utilisateur, à parité avec les messages
     // et les pièces jointes — mais le CODE plafonne ce nombre à cinq (bloc
@@ -178,7 +186,8 @@ export class PostReactionService {
       });
 
       await this.updatePostReactionSummary(postId);
-      creditPostGesture(
+      // Un geste que la limite du jour n'a pas pu compter passe, sans rien rapporter.
+      if (mayCredit(ticket)) creditPostGesture(
         this.prisma,
         userId,
         'tool.post_reaction',
@@ -251,7 +260,7 @@ export class PostReactionService {
   private async reconfirmThrough(userId: string, reactionId: string, through: RepostPassage | undefined): Promise<void> {
     if (!through || through.authorId === userId) return;
     if (await this.creditedThrough(userId, reactionId, through.id)) return;
-    await this.gestures.admit(userId, 'reaction', 'repost');
+    if (!mayCredit(await this.gestures.admit(userId, 'reaction', 'repost'))) return;
     creditPostGesture(
       this.prisma,
       userId,

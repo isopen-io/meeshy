@@ -98,6 +98,7 @@ async function requiredAuth(req: FastifyRequest): Promise<void> {
 function buildPrisma() {
   const lignes = [...QUATRE, { id: ETRANGER, postId: AUTRE_POST_ID, mimeType: 'image/png' }];
   return {
+    user: { findFirst: jest.fn<any>().mockResolvedValue(null) },
     post: {
       findFirst: jest.fn<any>().mockResolvedValue(PUBLIC_ACL),
       findUnique: jest.fn<any>().mockResolvedValue({

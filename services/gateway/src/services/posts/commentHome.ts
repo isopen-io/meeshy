@@ -14,15 +14,21 @@
  *   n'étant migrée — la range sur l'original, avec lui ;
  * - écrire sous une republication exige le droit d'interagir sur ELLE et sur
  *   l'ORIGINAL (la résolution vérifie les deux), qu'aucun des deux n'ait fermé
- *   ses commentaires, et qu'aucun blocage ne sépare l'auteur du commentaire de
- *   l'auteur de l'un ou de l'autre — refusé comme un post introuvable, pour ne
- *   rien révéler du blocage.
+ *   ses commentaires ;
+ * - un blocage, dans un sens ou l'autre, entre l'auteur du commentaire et
+ *   l'auteur du post — de l'original comme de la republication traversée —
+ *   refuse le commentaire PARTOUT, comme un post introuvable, pour ne rien
+ *   révéler du blocage ;
+ * - tout ce qu'un commentaire rangé sous une republication fait partir vers des
+ *   tiers — notifications, mentions, diffusions — a pour audience
+ *   l'INTERSECTION des deux : qui lit le fil (`threadAudience`,
+ *   `commentEventAudience`), fail-closed.
  */
 
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { EngagementPostPath } from '@meeshy/shared/types/engagement-scale';
-import { isBlockedBetween } from '../../utils/blocking';
-import type { PostRedirectRecord } from './postVisibility';
+import { isBlockedWithAny } from '../../utils/blocking';
+import { resolveConsumptionTarget, type PostRedirectRecord } from './postVisibility';
 import { NOT_DELETED } from './softDelete';
 
 /** Le post où le commentaire est rangé, et le chemin du geste pour sa limite quotidienne. */
@@ -42,12 +48,6 @@ export function commentHomeOf(target: PostRedirectRecord, parentPostId?: string 
 /** Le fil qu'un lecteur ouvre depuis ce post : celui de la republication simple traversée, sinon le sien. */
 export const commentThreadOf = (target: PostRedirectRecord): string => target.redirectedFrom?.id ?? target.id;
 
-async function blockedWithAny(prisma: PrismaClient, commenterId: string, authorIds: readonly string[]): Promise<boolean> {
-  const others = [...new Set(authorIds)].filter((authorId) => authorId !== commenterId);
-  const verdicts = await Promise.all(others.map((authorId) => isBlockedBetween(prisma, commenterId, authorId)));
-  return verdicts.some(Boolean);
-}
-
 async function postOfComment(prisma: PrismaClient, commentId: string): Promise<string | null> {
   const parent = await prisma.postComment.findFirst({
     where: { id: commentId, deletedAt: NOT_DELETED },
@@ -66,9 +66,60 @@ export async function admitCommentHome(
   request: { readonly commenterId: string; readonly parentId?: string | null },
 ): Promise<CommentHomeAdmission> {
   const through = target.redirectedFrom;
+  if (await isBlockedWithAny(prisma, request.commenterId, [target.authorId, through?.authorId])) return { refusal: 'NOT_FOUND' };
   if (target.commentsDisabled || through?.commentsDisabled) return { refusal: 'COMMENTS_DISABLED' };
   if (!through) return { home: commentHomeOf(target) };
-  if (await blockedWithAny(prisma, request.commenterId, [target.authorId, through.authorId])) return { refusal: 'NOT_FOUND' };
   const parentPostId = request.parentId ? await postOfComment(prisma, request.parentId) : null;
   return { home: commentHomeOf(target, parentPostId) };
+}
+
+/** Un destinataire d'un commentaire peut-il lire son fil ? `null` : le verdict du post rangé suffit. */
+export type ThreadAudience = ((recipientId: string) => Promise<boolean>) | null;
+
+/**
+ * L'audience d'une notification d'un commentaire rangé sous une republication :
+ * qui peut LIRE son fil — la republication ET l'original (le verdict de
+ * `resolveConsumptionTarget`, celui de la lecture du fil) — sans blocage avec
+ * l'un ou l'autre auteur ni avec le commentateur. Fermée sur l'échec.
+ * `null` pour un commentaire rangé ailleurs : l'audience du post s'applique.
+ */
+export function threadAudience(
+  prisma: PrismaClient,
+  target: PostRedirectRecord,
+  home: CommentHome,
+  commenterId: string,
+): ThreadAudience {
+  if (home.path !== 'repost' || !target.redirectedFrom) return null;
+  const authors = [target.authorId, target.redirectedFrom.authorId, commenterId];
+  return async (recipientId) => {
+    try {
+      if ((await resolveConsumptionTarget(prisma, home.id, recipientId)) === null) return false;
+      return !(await isBlockedWithAny(prisma, recipientId, authors));
+    } catch {
+      return false;
+    }
+  };
+}
+
+type CommentEventPost = {
+  readonly authorId: string;
+  readonly visibility: string;
+  readonly visibilityUserIds?: readonly string[] | null;
+  readonly isQuote?: boolean | null;
+  readonly repostOfId?: string | null;
+};
+
+/**
+ * L'audience d'un événement temps réel de commentaire (ajout, édition,
+ * suppression). Sous une republication simple, l'audience de la republication
+ * seule pourrait voir passer le fil d'un original qu'elle ne lit pas : seule
+ * la room du post — rejointe par `post:join` après la vérification des deux —
+ * et son auteur le reçoivent (`PRIVATE` au filtre de diffusion). Une
+ * republication d'éphémère, qui a son propre fil, y perd la diffusion au fil
+ * d'actualité : fermé plutôt qu'ouvert.
+ */
+export function commentEventAudience(post: CommentEventPost): { readonly visibility: string; readonly visibilityUserIds: string[] } {
+  const simpleRepost = post.isQuote !== true && Boolean(post.repostOfId);
+  if (simpleRepost) return { visibility: 'PRIVATE', visibilityUserIds: [] };
+  return { visibility: post.visibility, visibilityUserIds: [...(post.visibilityUserIds ?? [])] };
 }
