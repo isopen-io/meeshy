@@ -51,10 +51,11 @@ final class GameProgressionRenderTests: XCTestCase {
         return e
     }
 
-    /// Les identifiants des GESTES du jeu : aucun ne doit paraître hors de la fiche de son concept.
+    /// Les identifiants des GESTES du jeu : aucun ne doit paraître hors de la fiche de son concept. (Le compteur
+    /// de Meeshes, lui, a retrouvé l'en-tête de la première page — `ProgressionChromeGuardTests`.)
     private static let gestures = [
         "game.mission.m1", "game.chest.ready", "game.mint.action", "game.mint.hero", "game.flame.freeze.buy",
-        "game.flame.relight", "game.hero", "progression.meesh.entry",
+        "game.flame.relight", "game.hero",
     ]
 
     private func fullGame(chest: GameBlock.Chest.Status = .ready) -> GameBlock {
@@ -123,6 +124,7 @@ final class GameProgressionRenderTests: XCTestCase {
         let identifiants = monter(ProgressionView(viewModel: vm)).identifiers
 
         XCTAssertFalse(identifiants.contains { $0.hasPrefix("game.") }, "du jeu est monté sans que la passerelle serve le bloc : \(identifiants)")
+        XCTAssertTrue(identifiants.contains("progression.meesh.entry"), "le compteur de Meeshes d'avant reste dans l'en-tête : \(identifiants)")
         for concept in [ProgressionConcept.level, .meesh, .flame, .elans, .badges, .defis, .succes] {
             XCTAssertTrue(identifiants.contains("progression.concept.\(concept.rawValue)"), "la carte « \(concept.rawValue) » doit rester : \(identifiants)")
         }
@@ -143,13 +145,13 @@ final class GameProgressionRenderTests: XCTestCase {
         }
     }
 
-    /// Le héro de frappe — le SEUL du jeu (#9537) — vit dans la fiche des Meeshes, avec le compteur et sa feuille.
-    func test_theMeeshSheet_carriesTheOnlyMintHero_andTheCounter() async {
+    /// Le héro de frappe — le SEUL du jeu (#9537) — vit dans la fiche des Meeshes.
+    func test_theMeeshSheet_carriesTheOnlyMintHero() async {
         let vm = await loadedViewModel(GameFixture.snapshot(fullGame()))
 
         let identifiants = monter(ProgressionConceptPage(concept: .meesh, viewModel: vm)).identifiers
 
-        for attendu in ["game.mint.hero", "game.mint.info", "game.mint.action", "progression.meesh.entry"] {
+        for attendu in ["game.mint.hero", "game.mint.info", "game.mint.action"] {
             XCTAssertTrue(identifiants.contains(attendu), "« \(attendu) » n'est pas dans la fiche des Meeshes. Vus : \(identifiants)")
         }
         // Le compte des identifiants dépend de la façon dont le harnais lit l'arbre : l'unicité se garde par la SOURCE.
@@ -225,8 +227,9 @@ final class GameProgressionRenderTests: XCTestCase {
 
         let identifiants = monter(ProgressionConceptPage(concept: .meesh, viewModel: vm)).identifiers
 
-        XCTAssertTrue(identifiants.contains("progression.meesh.entry"), "le compteur de Meeshes d'avant reste, dans sa fiche : \(identifiants)")
-        XCTAssertFalse(identifiants.contains { $0.hasPrefix("game.") }, "du jeu est monté sans le bloc : \(identifiants)")
+        XCTAssertTrue(identifiants.contains("progression.concept.hero"), "la fiche des Meeshes garde son héros : \(identifiants)")
+        XCTAssertFalse(identifiants.contains { $0.hasPrefix("game.") && !$0.hasPrefix("game.element.") },
+                       "du jeu est monté sans le bloc : \(identifiants)")
     }
 
     // MARK: - Le tableau de bord : un bloc par concept, lecture seule

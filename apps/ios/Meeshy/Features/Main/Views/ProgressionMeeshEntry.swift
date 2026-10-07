@@ -90,9 +90,11 @@ struct ProgressionMeeshEntry: View {
             .frame(minHeight: 44)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        // Le compteur REBONDIT comme tout ce qui se touche dans le jeu (#9564).
+        .buttonStyle(GameBounceButtonStyle())
         .accessibilityIdentifier("progression.meesh.entry")
         .accessibilityLabel(ProgressionCopy.meeshEntryA11y(shown.meesh.balance))
+        .accessibilityHint(GameDetailText.meeshSheet)
         .accessibilityAddTraits(.isButton)
         // La scène finie, le compteur lâche la valeur vivante : il monte alors, et seulement alors (#9537).
         .task(id: sequence.generation) { @MainActor in

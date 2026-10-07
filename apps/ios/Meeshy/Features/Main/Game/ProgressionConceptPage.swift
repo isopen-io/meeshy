@@ -22,7 +22,6 @@ struct ProgressionConceptPage: View {
 
     @StateObject private var viewModel: ProgressionViewModel
     @EnvironmentObject private var router: Router
-    @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
     @State private var reveal: ProgressionRevealRequest?
 
@@ -34,43 +33,36 @@ struct ProgressionConceptPage: View {
     }
 
     var body: some View {
-        ZStack {
-            theme.backgroundGradient.ignoresSafeArea()
-            VStack(spacing: 0) {
-                header
-                ScrollView(showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: MeeshySpacing.xl) {
-                        if viewModel.isOffline {
-                            ProgressionNotice(kind: .offline(hasSnapshot: viewModel.progress != nil))
-                        }
-                        if let message = viewModel.errorMessage {
-                            ProgressionNotice(kind: .error(message)) {
-                                Task { await viewModel.load(forceNetwork: true) }
-                            }
-                        }
-                        if let progress = viewModel.progress {
-                            ProgressionConceptContent(
-                                concept: concept,
-                                viewModel: viewModel,
-                                photos: viewModel.photos,
-                                progress: progress,
-                                isDark: colorScheme == .dark,
-                                onOpenLink: { open($0) },
-                                onReveal: { reveal = $0 }
-                            )
-                        } else if viewModel.showsSkeleton {
-                            ProgressionSkeleton()
-                        }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, MeeshySpacing.lg)
-                    .padding(.vertical, MeeshySpacing.md)
+        // L'en-tête dynamique des pages de Progression (#9564) : grand titre au repos, barre compacte et translucide
+        // quand la fiche défile dessous, retour en disque de verre.
+        GamePageScaffold(
+            title: ConceptText.name(concept),
+            onRefresh: { await viewModel.load(forceNetwork: true) }
+        ) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xl) {
+                if viewModel.isOffline {
+                    ProgressionNotice(kind: .offline(hasSnapshot: viewModel.progress != nil))
                 }
-                .refreshable { await viewModel.load(forceNetwork: true) }
+                if let message = viewModel.errorMessage {
+                    ProgressionNotice(kind: .error(message)) {
+                        Task { await viewModel.load(forceNetwork: true) }
+                    }
+                }
+                if let progress = viewModel.progress {
+                    ProgressionConceptContent(
+                        concept: concept,
+                        viewModel: viewModel,
+                        photos: viewModel.photos,
+                        progress: progress,
+                        isDark: colorScheme == .dark,
+                        onOpenLink: { open($0) },
+                        onReveal: { reveal = $0 }
+                    )
+                } else if viewModel.showsSkeleton {
+                    ProgressionSkeleton()
+                }
             }
         }
-        // Le geste de bord, que `navigationBarHidden(true)` retire en silence.
-        .background(InteractivePopEnabler())
         .task { await viewModel.load() }
         .fullScreenCover(item: $reveal) { palier in
             // `.consultation` : on arrive ici DEPUIS la fiche, la célébration n'a pas à y « mener ».
@@ -82,25 +74,6 @@ struct ProgressionConceptPage: View {
                 rarity: RevealRim.entry(of: palier.reveal, in: viewModel.game, hidden: GameDevicePrefsStore.current().prefs.hidden)
             )
         }
-    }
-
-    private var header: some View {
-        GamePageHeader(title: ConceptText.name(concept), onBack: { dismiss() })
-            .overlay(alignment: .trailing) {
-                // Le compteur de Meeshes et sa feuille de frappe vivent dans la fiche des Meeshes (#9564) : la
-                // première page ne porte plus aucun geste.
-                if concept == .meesh, let meesh = viewModel.progress?.meesh {
-                    ProgressionMeeshEntry(
-                        meesh: meesh,
-                        isMinting: viewModel.isMinting,
-                        mintError: viewModel.mintError,
-                        // La pièce que la feuille frappe (#9537) : elle se grave au numéro que le serveur sert.
-                        next: viewModel.game.map { GameMintNext(number: $0.mint.number, edition: $0.mint.edition) },
-                        onMint: { Task { await viewModel.mint() } }
-                    )
-                    .padding(.trailing, MeeshySpacing.lg)
-                }
-            }
     }
 
     /// Une sous-page s'ouvre par la PILE : le routeur n'est lu qu'au toucher, jamais dans le corps.
@@ -147,7 +120,7 @@ struct ProgressionConceptContent: View {
             let facts = ProgressionConceptModel.facts(concept, progress: progress, game: game)
             if !facts.isEmpty {
                 section(ConceptText.ficheWhere) {
-                    ProgressionConceptFacts(facts: facts)
+                    ProgressionConceptFacts(facts: facts, concept: concept)
                 }
             }
             section(ConceptText.ficheEarn) {
@@ -186,6 +159,7 @@ struct ProgressionConceptContent: View {
     private var hero: some View {
         if concept == .level, let game {
             // Le héro de niveau (#5841) EST le héros de cette fiche : anneau, rang, et « Comment gagner ».
+            // UN seul héros pour le niveau : l'anneau n'est dessiné qu'ici. L'anneau et le blason s'y touchent.
             GameHeroView(
                 game: game, settled: viewModel.isSettled,
                 onOpenRule: { onOpenLink(.rules($0)) }, onOpenGuide: {}
@@ -197,6 +171,7 @@ struct ProgressionConceptContent: View {
                 gauge: ProgressionConceptModel.gauge(concept, progress: progress, game: game),
                 game: game
             )
+            .gameElement(GameElementDetails.hero(of: concept, progress: progress, game: game), identifier: "progression.concept.hero")
         }
     }
 
@@ -259,6 +234,10 @@ struct ProgressionConceptHero: View {
     private var theme: ThemeManager { ThemeManager.shared }
 
     var body: some View {
+        card.accessibilityElement(children: .combine)
+    }
+
+    private var card: some View {
         ProgressionCard(tint: concept.tint) {
             HStack(alignment: .center, spacing: MeeshySpacing.lg) {
                 ProgressionConceptEmblem(concept: concept, game: game, size: 80)
@@ -270,7 +249,9 @@ struct ProgressionConceptHero: View {
                     Text(value)
                         .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold, design: .rounded))
                         .foregroundColor(theme.textPrimary)
+                        .multilineTextAlignment(.leading)
                         .fixedSize(horizontal: false, vertical: true)
+                        .modifier(GameValueRoll(value: value))
                     if let gauge {
                         ProgressionBar(progress: gauge, tint: concept.tint, label: ConceptText.name(concept))
                     }
@@ -278,8 +259,7 @@ struct ProgressionConceptHero: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
-        .accessibilityElement(children: .combine)
-        .accessibilityIdentifier("progression.concept.hero")
+        .contentShape(Rectangle())
     }
 }
 
@@ -326,6 +306,8 @@ struct ProgressionConceptGestures: View {
                     celebration: viewModel.celebration, onMint: { Task { await viewModel.mint() } },
                     onOpenRule: { onOpenLink(.rules(GameHero.mintRule)) }
                 )
+                // Le palier du trésor : ce que les Meeshes gardées remplissent.
+                GameElementTile(detail: GameElementDetails.treasuryTier(game.treasury))
             } else if let meesh = progress.meesh {
                 ProgressionMeeshDetail(
                     meesh: meesh,
@@ -338,6 +320,11 @@ struct ProgressionConceptGestures: View {
             }
         case .flame:
             if let game {
+                // La forme de la Flamme et les gels : deux éléments qui se touchent, au-dessus de leurs gestes.
+                HStack(alignment: .top, spacing: MeeshySpacing.md) {
+                    GameElementTile(detail: GameElementDetails.flameForm(game.flame))
+                    GameElementTile(detail: GameElementDetails.freeze(game.flame))
+                }
                 GameFlamePanelView(
                     game: game, online: viewModel.isOnline, buyingFreeze: viewModel.pending.freeze,
                     relighting: viewModel.pending.relight, errors: viewModel.gameErrors,
@@ -362,11 +349,46 @@ struct ProgressionConceptGestures: View {
         case .elans:
             ProgressionElansHero(progress: progress, isDark: isDark)
         case .badges:
-            GameBadgeShelfView(items: GameBadges.items(for: progress))
+            GameBadgeShelfView(items: GameBadges.items(for: progress), progress: progress)
         case .succes:
             ProgressionLastAchievementHero(progress: progress, isDark: isDark, onReveal: onReveal)
         case .glory, .season, .prestige, .defis, .showcase, .atlas:
             EmptyView()
         }
+    }
+}
+
+// MARK: - Une tuile d'élément
+
+/// UN ÉLÉMENT QUI SE TOUCHE, en tuile : son emblème, son nom, son état. Elle rebondit et ouvre SES précisions.
+/// Sert les éléments qu'aucune vue du jeu ne dessinait à part (la forme de la Flamme, les gels, le palier du trésor).
+struct GameElementTile: View {
+    let detail: GameElementDetail
+
+    private var theme: ThemeManager { ThemeManager.shared }
+
+    var body: some View {
+        ProgressionCard(tint: detail.concept.tint) {
+            HStack(alignment: .center, spacing: MeeshySpacing.md) {
+                GameElementEmblemView(emblem: detail.emblem, size: 44)
+                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
+                    Text(detail.name)
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
+                        .foregroundColor(theme.textPrimary)
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(detail.statusLine)
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
+                        .foregroundColor(theme.textMuted)
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .modifier(GameValueRoll(value: detail.statusLine))
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .frame(minHeight: MeeshyControlSize.tapTarget)
+        }
+        .accessibilityElement(children: .combine)
+        .gameElement(detail)
     }
 }
