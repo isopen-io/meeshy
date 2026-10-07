@@ -91,7 +91,23 @@ async function requiredAuth(req: FastifyRequest): Promise<void> {
   };
 }
 
-async function buildApp(): Promise<FastifyInstance> {
+/**
+ * L'INVITÉ d'un lien partagé : authentifié par jeton de session, sans compte —
+ * `authContext.userId` est son `Participant.id`, et il n'a pas de `registeredUser`.
+ */
+const GUEST_PARTICIPANT_ID = '507f1f77bcf86cd799439099';
+async function guestAuth(req: FastifyRequest): Promise<void> {
+  (req as any).authContext = {
+    isAuthenticated: true,
+    isAnonymous: true,
+    type: 'anonymous',
+    userId: GUEST_PARTICIPANT_ID,
+    participantId: GUEST_PARTICIPANT_ID,
+    hasFullAccess: false,
+  };
+}
+
+async function buildApp(auth: (req: FastifyRequest) => Promise<void> = requiredAuth): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
   const prisma = {
     post: {
@@ -114,7 +130,7 @@ async function buildApp(): Promise<FastifyInstance> {
     },
   } as any;
   app.decorate('prisma', prisma);
-  registerCommentRoutes(app, prisma, requiredAuth);
+  registerCommentRoutes(app, prisma, auth);
   await app.ready();
   return app;
 }
@@ -209,5 +225,28 @@ describe('POST /posts/:postId/comments — axe d\'engagement « comment.audio »
     expect(res.statusCode).toBe(201);
     expect(mockRecordActivity).not.toHaveBeenCalledWith(USER_ID, 'comment.audio', expect.anything());
     await app.close();
+  });
+});
+
+/**
+ * #9569 — aucun crédit de post ne s'inscrit pour un invité. Le commentaire est
+ * le seul geste du fil dont le crédit part de la ROUTE : c'est donc elle qui
+ * doit le refuser avant d'écrire quoi que ce soit, et sa clé de participant ne
+ * doit jamais atteindre le barème.
+ */
+describe('POST /posts/:postId/comments — l’invité d’un lien', () => {
+  it('est refusé : aucun commentaire écrit, aucun crédit inscrit sous sa clé de participant', async () => {
+    mockAddComment.mockResolvedValue({ id: 'comment-guest', content: 'Bonjour', authorId: GUEST_PARTICIPANT_ID, media: [] });
+    const app = await buildApp(guestAuth);
+
+    const res = await app.inject({
+      method: 'POST', url: `/posts/${POST_ID}/comments`,
+      payload: { content: 'Bonjour' },
+    });
+    await app.close();
+
+    expect(res.statusCode).toBe(401);
+    expect(mockAddComment).not.toHaveBeenCalled();
+    expect(mockRecordActivity).not.toHaveBeenCalled();
   });
 });

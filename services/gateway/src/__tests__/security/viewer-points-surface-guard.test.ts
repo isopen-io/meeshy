@@ -14,9 +14,16 @@
  *   - une lecture ou une écriture de `EngagementPostPoints` hors de sa loi de
  *     lecture et de son seul écrivain — un site qui lirait les lignes d'une
  *     page sans les borner au lecteur, ou qui les agrégerait pour un tiers ;
- *   - le champ `viewerPoints` posé ou transporté par un autre producteur : un
- *     service de fil qui le recalculerait, une diffusion à la room d'un post,
- *     une réponse d'écriture qui le servirait périmé ;
+ *   - un NOUVEL appelant de la loi de lecture ou de ses projections : le champ
+ *     ne se pose pas en écrivant `viewerPoints`, il se pose en APPELANT
+ *     `withViewerPoints` / `servedViewerPoints` — c'est donc la liste des
+ *     appelants qui est figée, pas seulement le jeton. `PostService.getPostById`
+ *     en est le contre-exemple à ne jamais écrire : il nourrit les réponses
+ *     d'écriture ET la charge diffusée à l'audience d'une publication
+ *     (`broadcastPayload`), qui porterait alors les points de l'auteur à ses
+ *     abonnés ;
+ *   - le lecteur passé à ces appels : chaque site de route le tire de
+ *     l'identité authentifiée, jamais d'un champ du post ;
  *   - une relation ajoutée au modèle, qui ouvrirait la porte d'un `include`.
  *
  * Les commentaires sont retirés avant la recherche : la prose qui EXPLIQUE la
@@ -50,6 +57,15 @@ const filesNaming = (pattern: RegExp): readonly string[] =>
     .map((file) => file.path)
     .sort();
 
+const DETAIL_ROUTE = 'routes/posts/core.ts';
+const STORIES_ROUTE = 'routes/posts/feed.ts';
+
+/** Les appels d'une fonction dans un fichier, tels qu'écrits — nom, puis ses premiers arguments. */
+const callsIn = (path: string, fn: string): readonly string[] => {
+  const code = productionSources().find((file) => file.path === path)?.code ?? '';
+  return [...code.matchAll(new RegExp(`\\b${fn}\\(([^)]*)\\)`, 'g'))].map((match) => match[1]!.replace(/\s+/g, ' ').trim());
+};
+
 describe('viewerPoints — qui lit la table, qui pose le champ (#9569)', () => {
   it('voit bien les sources du gateway — sinon un balayage vide passerait au vert', () => {
     expect(productionSources().length).toBeGreaterThan(400);
@@ -71,8 +87,39 @@ describe('viewerPoints — qui lit la table, qui pose le champ (#9569)', () => {
     expect(filesNaming(/\bengagementPostPoints\s*\.\s*(delete|deleteMany)\b/)).toEqual([ACCOUNT_PURGE, ONLY_WRITER].sort());
   });
 
-  it('le champ `viewerPoints` n’a qu’un producteur servi et qu’un producteur d’événement', () => {
+  it('le jeton `viewerPoints` n’est écrit que par la loi de lecture, l’écrivain et l’état de liste', () => {
     expect(filesNaming(/\bviewerPoints\b/)).toEqual([ONLY_WRITER, READ_LAW, LIST_STATE].sort());
+  });
+
+  it('la loi de lecture n’a que ses appelants déclarés — un nouveau site rougit ici', () => {
+    expect(filesNaming(/\bloadViewerPostPoints\b/)).toEqual([ONLY_WRITER, READ_LAW].sort());
+    expect(filesNaming(/\b(loadViewerPostPointsOrNone|servedViewerPoints)\b/)).toEqual([READ_LAW, LIST_STATE].sort());
+    expect(filesNaming(/\bwithViewerPoints\b/)).toEqual([DETAIL_ROUTE, STORIES_ROUTE, READ_LAW].sort());
+  });
+
+  it('aucune écriture ni diffusion ne pose le champ : ni `PostService`, ni la publication, ni Socket.IO', () => {
+    const posers = filesNaming(/\b(withViewerPoints|servedViewerPoints|loadViewerPostPoints|loadViewerPostPointsOrNone)\b/);
+
+    expect(posers).not.toContain('services/PostService.ts');
+    expect(posers).not.toContain('routes/posts/publication.ts');
+    expect(posers.filter((path) => path.startsWith('socketio/'))).toEqual([]);
+  });
+
+  it('chaque route passe le lecteur AUTHENTIFIÉ, jamais un champ du post', () => {
+    expect(callsIn(DETAIL_ROUTE, 'withViewerPoints')).toEqual(['prisma, viewerUserId, [post]']);
+    expect(callsIn(STORIES_ROUTE, 'withViewerPoints')).toEqual([
+      'prisma, userId, resultat.items',
+      'prisma, userId, resultat.items',
+    ]);
+    expect(callsIn(LIST_STATE, 'loadViewerPostPointsOrNone')).toEqual(['prisma, viewerUserId, posts']);
+    expect(callsIn(ONLY_WRITER, 'loadViewerPostPoints')).toEqual(['this.prisma, userId, [{ id: postId }]']);
+  });
+
+  it('le lecteur de la fiche est le compte inscrit de la requête — pas `authContext.userId`, qui nomme aussi un invité de lien', () => {
+    const detail = productionSources().find((file) => file.path === DETAIL_ROUTE)?.code ?? '';
+    const handler = detail.slice(detail.indexOf("fastify.get('/posts/:postId'"), detail.indexOf('withViewerPoints(prisma, viewerUserId'));
+
+    expect(handler).toContain('const viewerUserId = authContext?.registeredUser?.id;');
   });
 
   it('aucune diffusion Socket.IO ne le transporte — l’annonce part de l’écrivain, vers le lecteur seul', () => {

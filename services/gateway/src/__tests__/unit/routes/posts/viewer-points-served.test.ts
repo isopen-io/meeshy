@@ -18,11 +18,15 @@ import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import Fastify, { FastifyInstance, FastifyRequest } from 'fastify';
 
 const mockGetStories = jest.fn<any>();
+const mockGetUserPosts = jest.fn<any>();
+const mockGetCommunityFeed = jest.fn<any>();
 const mockGetPostById = jest.fn<any>();
 
 jest.mock('../../../../services/PostFeedService', () => ({
   PostFeedService: jest.fn().mockImplementation(() => ({
     getStories: (...args: any[]) => mockGetStories(...args),
+    getUserPosts: (...args: any[]) => mockGetUserPosts(...args),
+    getCommunityFeed: (...args: any[]) => mockGetCommunityFeed(...args),
   })),
 }));
 jest.mock('../../../../services/PostService', () => ({
@@ -107,12 +111,22 @@ function doublePrisma(etat: {
 
 type Double = ReturnType<typeof doublePrisma>;
 
-/** Le lecteur est nommé par `x-test-user-id` ; sans lui, la requête est sans compte. */
+/**
+ * Le lecteur est nommé par `x-test-user-id`. `x-test-guest-id` nomme l'INVITÉ
+ * d'un lien : authentifié par jeton de session, sans compte — son
+ * `authContext.userId` est un `Participant.id`, et il n'a pas de
+ * `registeredUser`. Sans aucun des deux, la requête est sans contexte.
+ */
 async function monter(prisma: Double): Promise<FastifyInstance> {
   const auth = async (req: FastifyRequest) => {
     const userId = req.headers['x-test-user-id'] as string | undefined;
-    (req as any).authContext = userId
-      ? { type: 'user', isAuthenticated: true, userId, registeredUser: { id: userId, role: 'USER' } }
+    const guestId = req.headers['x-test-guest-id'] as string | undefined;
+    if (userId) {
+      (req as any).authContext = { type: 'user', isAuthenticated: true, userId, registeredUser: { id: userId, role: 'USER' } };
+      return;
+    }
+    (req as any).authContext = guestId
+      ? { type: 'anonymous', isAuthenticated: true, isAnonymous: true, userId: guestId, participantId: guestId, hasFullAccess: false }
       : null;
   };
   const app = Fastify({ logger: false });
@@ -122,9 +136,9 @@ async function monter(prisma: Double): Promise<FastifyInstance> {
   return app;
 }
 
-const lire = async (prisma: Double, url: string, lecteur?: string) => {
+const lire = async (prisma: Double, url: string, lecteur?: string, enTetes: Record<string, string> = {}) => {
   const app = await monter(prisma);
-  const res = await app.inject({ method: 'GET', url, headers: lecteur ? { 'x-test-user-id': lecteur } : {} });
+  const res = await app.inject({ method: 'GET', url, headers: lecteur ? { 'x-test-user-id': lecteur } : enTetes });
   await app.close();
   return res;
 };
@@ -156,6 +170,8 @@ const etatDesStories = () =>
 
 beforeEach(() => {
   mockGetStories.mockReset().mockImplementation(async () => storiesServies());
+  mockGetUserPosts.mockReset().mockResolvedValue({ items: [], hasMore: false, nextCursor: null });
+  mockGetCommunityFeed.mockReset().mockResolvedValue({ items: [], hasMore: false, nextCursor: null });
   mockGetPostById.mockReset();
 });
 
@@ -281,5 +297,71 @@ describe('GET /posts/:postId — ce que le post a rapporté au LECTEUR', () => {
     expect(res.json().data).not.toHaveProperty('viewerPoints');
     expect(prisma.engagementPostPoints.findMany).not.toHaveBeenCalled();
     expect(prisma.engagementQuota.findMany).not.toHaveBeenCalled();
+  });
+
+  it('l’INVITÉ d’un lien — authentifié sans compte, dont `userId` est un identifiant de participant — ne le reçoit pas non plus', async () => {
+    const INVITE = '507f1f77bcf86cd799439099';
+    mockGetPostById.mockResolvedValue(fiche());
+    const prisma = doublePrisma({
+      servableSansCompte: true,
+      points: [{ userId: INVITE, postId: POST, totalPoints: 12 }],
+    });
+
+    const res = await lire(prisma, `/posts/${POST}`, undefined, { 'x-test-guest-id': INVITE });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data).not.toHaveProperty('viewerPoints');
+    expect(prisma.engagementPostPoints.findMany).not.toHaveBeenCalled();
+    expect(mockGetPostById).toHaveBeenCalledWith(POST, undefined);
+  });
+});
+
+/**
+ * L'INVITÉ d'un lien partagé : authentifié par jeton de session, sans compte.
+ * Son `authContext.userId` est un `Participant.id` — il nomme sa room, jamais
+ * une identité de compte (`services/gateway/CLAUDE.md` § Authentication). Sur
+ * TOUTE lecture de post il est un lecteur sans compte : le champ est absent
+ * (pas zéro), et sa clé de participant n'interroge jamais le cumul.
+ */
+describe('l’invité d’un lien — sa clé de participant n’est jamais un lecteur', () => {
+  const INVITE = '507f1f77bcf86cd799439099';
+  const enInvite = { 'x-test-guest-id': INVITE };
+  const aucuneLecture = (prisma: Double) => {
+    expect(prisma.engagementPostPoints.findMany).not.toHaveBeenCalled();
+    expect(prisma.engagementQuota.findMany).not.toHaveBeenCalled();
+  };
+  const cumulDeLInvite = () =>
+    doublePrisma({ points: [{ userId: INVITE, postId: STORY_VUE, totalPoints: 12 }, { userId: INVITE, postId: MA_STORY, totalPoints: 5 }] });
+
+  it.each([
+    ['GET /social/posts?scope=stories', '/social/posts?scope=stories'],
+    ['GET /posts/feed/stories', '/posts/feed/stories'],
+    ['GET /social/posts?scope=stories.mine', '/social/posts?scope=stories.mine'],
+    ['GET /posts/stories/mine', '/posts/stories/mine'],
+  ])('%s lui est refusé — aucune story, aucune lecture du cumul', async (_label, url) => {
+    const prisma = cumulDeLInvite();
+
+    const res = await lire(prisma, url, undefined, enInvite);
+
+    expect(res.statusCode).toBe(401);
+    expect(mockGetStories).not.toHaveBeenCalled();
+    aucuneLecture(prisma);
+  });
+
+  it.each([
+    ['GET /social/posts?scope=author', `/social/posts?scope=author&authorId=${AUTEUR}`, mockGetUserPosts],
+    ['GET /posts/user/:userId', `/posts/user/${AUTEUR}`, mockGetUserPosts],
+    ['GET /social/posts?scope=community', `/social/posts?scope=community&communityId=${AUTEUR}`, mockGetCommunityFeed],
+    ['GET /posts/community/:communityId', `/posts/community/${AUTEUR}`, mockGetCommunityFeed],
+  ])('%s le lit comme un lecteur SANS compte — sa clé de participant n’atteint pas le service', async (_label, url, lecture) => {
+    const prisma = cumulDeLInvite();
+
+    const res = await lire(prisma, url, undefined, enInvite);
+
+    expect(res.statusCode).toBe(200);
+    expect(lecture).toHaveBeenCalledTimes(1);
+    expect(lecture.mock.calls[0][1]).toBeUndefined();
+    expect(JSON.stringify(lecture.mock.calls[0])).not.toContain(INVITE);
+    aucuneLecture(prisma);
   });
 });
