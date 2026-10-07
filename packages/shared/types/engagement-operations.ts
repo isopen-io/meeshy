@@ -204,7 +204,10 @@ export const ENGAGEMENT_OPERATION_CATALOG: Readonly<Record<EngagementOperationKe
   'comment.text': repeat('publishing', 'comment', 3, 'none', null),
   'comment.audio': repeat('publishing', 'comment', 3, 'none', null),
 
-  'tool.post_reaction': repeat('feed', 'tool', 1, 'day', 30),
+  // Ni plafond ni portée propres (#9584) : la limite quotidienne de gestes
+  // (`DEFAULT_PATH_CAPS`) borne la réaction ET ses points — un second plafond
+  // ferait diverger ce qu'on peut faire de ce que ça rapporte.
+  'tool.post_reaction': repeat('feed', 'tool', 1, 'none', null),
   'tool.comment_like': repeat('feed', 'tool', 1, 'day', 30),
   'social.repost': repeat('feed', 'social', 3, 'day', 10),
   'social.share': perTarget('feed', 'social', 7),

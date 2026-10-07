@@ -1,53 +1,68 @@
 /**
- * Les plafonds par CHEMIN (#9584, mécanisme demandé par le porteur le
- * 2026-10-07) : par personne et par jour civil, combien de commentaires et de
- * réactions rapportent encore, selon qu'ils sont faits SUR un original ou VIA
- * une republication. Les valeurs sont réglables par l'administration ; les
- * défauts sont les plafonds actuels — aucun plafond propre au chemin, celui de
- * l'opération s'appliquant seul.
+ * Les limites quotidiennes de GESTES (#9584, décision porteur 2026-10-07) : par
+ * personne et par jour civil du compte, combien de commentaires et de réactions
+ * de post elle peut faire, sur un original ou sous une republication. Une limite
+ * borne le geste ET ses points : les opérations qu'elle gouverne n'ont pas d'autre
+ * plafond, sans quoi on pourrait faire un geste qui ne rapporte rien.
  */
 import { describe, it, expect } from 'vitest';
 import {
   DEFAULT_ENGAGEMENT_SCALE,
   DEFAULT_PATH_CAPS,
+  dailyGestureLimit,
+  gestureFamilyOf,
   parseEngagementScale,
-  pathCapOf,
   type EngagementScale,
 } from '../types/engagement-scale.js';
+import { ENGAGEMENT_OPERATIONS, ENGAGEMENT_OPERATION_CATALOG } from '../types/engagement-operations.js';
 
 const withPathCaps = (pathCaps: unknown): unknown => ({ ...DEFAULT_ENGAGEMENT_SCALE, pathCaps });
 
-describe('les plafonds par chemin', () => {
-  it('ne plafonnent rien par défaut — le comportement d’avant est inchangé', () => {
+describe('les limites quotidiennes de gestes', () => {
+  it('valent par défaut ce que le porteur a fixé : 50 et 10 commentaires, 100 et 50 réactions', () => {
     expect(DEFAULT_PATH_CAPS).toEqual({
-      comment: { original: null, repost: null },
-      reaction: { original: null, repost: null },
+      comment: { original: 50, repost: 10 },
+      reaction: { original: 100, repost: 50 },
     });
-    expect(pathCapOf(DEFAULT_ENGAGEMENT_SCALE, 'comment.text', 'repost')).toEqual({ family: 'comment', path: 'repost', limit: null });
+    expect(DEFAULT_ENGAGEMENT_SCALE.pathCaps).toEqual(DEFAULT_PATH_CAPS);
   });
 
-  it('s’appliquent aux commentaires (texte et vocal) et aux réactions de post, par chemin', () => {
-    const scale = parseEngagementScale(withPathCaps({ comment: { original: 5000, repost: 1000 }, reaction: { original: 10000, repost: 5000 } })) as EngagementScale;
+  it('se lisent par famille et par chemin, réglées par l’administration', () => {
+    const scale = parseEngagementScale(withPathCaps({ comment: { original: 7, repost: 2 }, reaction: { original: null, repost: 3 } })) as EngagementScale;
 
-    expect(pathCapOf(scale, 'comment.text', 'original')).toEqual({ family: 'comment', path: 'original', limit: 5000 });
-    expect(pathCapOf(scale, 'comment.audio', 'repost')).toEqual({ family: 'comment', path: 'repost', limit: 1000 });
-    expect(pathCapOf(scale, 'tool.post_reaction', 'repost')).toEqual({ family: 'reaction', path: 'repost', limit: 5000 });
-    expect(pathCapOf(scale, 'tool.post_reaction', 'original')).toEqual({ family: 'reaction', path: 'original', limit: 10000 });
+    expect(dailyGestureLimit(scale, 'comment', 'original')).toBe(7);
+    expect(dailyGestureLimit(scale, 'comment', 'repost')).toBe(2);
+    expect(dailyGestureLimit(scale, 'reaction', 'original')).toBeNull();
+    expect(dailyGestureLimit(scale, 'reaction', 'repost')).toBe(3);
   });
 
-  it('ne concernent aucune autre opération', () => {
-    expect(pathCapOf(DEFAULT_ENGAGEMENT_SCALE, 'tool.post_bookmark', 'repost')).toBeNull();
-    expect(pathCapOf(DEFAULT_ENGAGEMENT_SCALE, 'tool.comment_like', 'original')).toBeNull();
+  it('gouvernent les commentaires (texte et vocal) et les réactions de post, aucune autre opération', () => {
+    expect(gestureFamilyOf('comment.text')).toBe('comment');
+    expect(gestureFamilyOf('comment.audio')).toBe('comment');
+    expect(gestureFamilyOf('tool.post_reaction')).toBe('reaction');
+    expect(gestureFamilyOf('tool.post_bookmark')).toBeNull();
+    expect(gestureFamilyOf('tool.comment_like')).toBeNull();
+    expect(gestureFamilyOf('tool.reaction')).toBeNull();
   });
 
-  it('un barème réglé avant eux se relit avec les défauts', () => {
+  it('les opérations qu’elles gouvernent n’ont aucun autre plafond quotidien — gestes et points ne divergent pas', () => {
+    const governed = ENGAGEMENT_OPERATIONS.filter((key) => gestureFamilyOf(key) !== null);
+
+    expect(governed).toEqual(expect.arrayContaining(['comment.text', 'comment.audio', 'tool.post_reaction']));
+    governed.forEach((key) => {
+      expect(ENGAGEMENT_OPERATION_CATALOG[key].capScope).toBe('none');
+      expect(ENGAGEMENT_OPERATION_CATALOG[key].defaults.cap).toBeNull();
+    });
+  });
+
+  it('un barème réglé avant elles se relit avec les défauts', () => {
     const { pathCaps: _absent, ...legacy } = { ...DEFAULT_ENGAGEMENT_SCALE, pathCaps: undefined };
     expect(parseEngagementScale(legacy)?.pathCaps).toEqual(DEFAULT_PATH_CAPS);
   });
 
   it.each([
-    ['un plafond négatif', { comment: { original: -1, repost: null }, reaction: { original: null, repost: null } }],
-    ['un plafond fractionnaire', { comment: { original: 1.5, repost: null }, reaction: { original: null, repost: null } }],
+    ['une limite négative', { comment: { original: -1, repost: null }, reaction: { original: null, repost: null } }],
+    ['une limite fractionnaire', { comment: { original: 1.5, repost: null }, reaction: { original: null, repost: null } }],
     ['une famille manquante', { comment: { original: null, repost: null } }],
     ['un chemin manquant', { comment: { original: null }, reaction: { original: null, repost: null } }],
   ])('refusent %s', (_label, pathCaps) => {

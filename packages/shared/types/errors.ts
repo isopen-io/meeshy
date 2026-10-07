@@ -38,6 +38,10 @@ export enum ErrorCode {
   MESSAGE_TOO_OLD = 'MESSAGE_TOO_OLD',
   /** Meeshy Global (#7740) : un compte de moins de 24 h écrit un message toutes les 30 s. Temporaire — la réponse porte `retryAfter` (secondes). */
   NEWCOMER_SLOW_MODE = 'NEWCOMER_SLOW_MODE',
+  /** #9584 : limite quotidienne de commentaires atteinte (sur des originaux ou sous des republications). Jusqu'à `resetAt`, minuit du jour civil du compte. */
+  DAILY_COMMENT_LIMIT = 'DAILY_COMMENT_LIMIT',
+  /** #9584 : limite quotidienne de réactions de post atteinte. Jusqu'à `resetAt`, minuit du jour civil du compte. */
+  DAILY_REACTION_LIMIT = 'DAILY_REACTION_LIMIT',
   
   // System (9xxx)
   INTERNAL_ERROR = 'INTERNAL_ERROR',
@@ -143,6 +147,14 @@ export const ErrorMessages: Record<ErrorCode, { fr: string; en: string }> = {
     fr: 'Bienvenue ! Les nouveaux comptes écrivent un message toutes les 30 s ici',
     en: 'Welcome! New accounts can post one message every 30 s here',
   },
+  [ErrorCode.DAILY_COMMENT_LIMIT]: {
+    fr: 'Vous avez atteint votre limite de commentaires pour aujourd’hui. Elle se renouvelle à minuit.',
+    en: 'You have reached today’s comment limit. It renews at midnight.',
+  },
+  [ErrorCode.DAILY_REACTION_LIMIT]: {
+    fr: 'Vous avez atteint votre limite de réactions pour aujourd’hui. Elle se renouvelle à minuit.',
+    en: 'You have reached today’s reaction limit. It renews at midnight.',
+  },
   
   // System
   [ErrorCode.INTERNAL_ERROR]: {
@@ -208,6 +220,8 @@ export const ErrorStatusMap: Record<ErrorCode, number> = {
   [ErrorCode.INVALID_OPERATION]: 422,
   [ErrorCode.MESSAGE_TOO_OLD]: 422,
   [ErrorCode.NEWCOMER_SLOW_MODE]: 429,
+  [ErrorCode.DAILY_COMMENT_LIMIT]: 429,
+  [ErrorCode.DAILY_REACTION_LIMIT]: 429,
   
   // System (500)
   [ErrorCode.INTERNAL_ERROR]: 500,

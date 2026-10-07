@@ -129,12 +129,38 @@ export type EngagementAbuseRules = {
   readonly unverifiedMaxPoints: number;
 };
 
+/**
+ * Le chemin d'un geste de post (#9584) : fait SUR un original, ou SOUS une
+ * republication simple — une réaction qui la traverse, un commentaire rangé
+ * dans son fil.
+ */
+export type EngagementPostPath = 'original' | 'repost';
+
+/** Les familles de gestes que les limites quotidiennes connaissent. */
+export type EngagementPathFamily = 'comment' | 'reaction';
+
+/**
+ * LES LIMITES QUOTIDIENNES DE GESTES (#9584, décision porteur 2026-10-07) — par
+ * personne et par jour civil du compte (son fuseau, comme le jour du jeu),
+ * combien de commentaires et de réactions de post elle peut faire, selon
+ * qu'ils sont faits sur un original ou sous une republication.
+ *
+ * Une limite borne le GESTE et ses POINTS à la fois : au-delà, le geste est
+ * REFUSÉ jusqu'au lendemain (et ne rapporte donc rien) ; en deçà, il rapporte
+ * ce que le barème lui accorde, sans autre plafond quotidien — les opérations
+ * qu'elles gouvernent n'en ont pas (`capScope: 'none'`), si bien que gestes et
+ * points ne peuvent pas diverger. `null` = aucune limite.
+ */
+export type EngagementPathCaps = Readonly<Record<EngagementPathFamily, Readonly<Record<EngagementPostPath, number | null>>>>;
+
 export type EngagementScale = {
   readonly operations: Readonly<Record<EngagementOperationKey, EngagementOperationRule>>;
   readonly multiplier: EngagementMultiplierRules;
   readonly linkVisits: EngagementLinkVisitRules;
   readonly streakBonuses: readonly EngagementStreakBonus[];
   readonly abuse: EngagementAbuseRules;
+  /** Absent dans un barème réglé avant eux : ce sont alors les défauts. */
+  readonly pathCaps?: EngagementPathCaps;
 };
 
 /**
@@ -178,6 +204,33 @@ function defaultRule(key: EngagementOperationKey): EngagementOperationRule {
   };
 }
 
+/**
+ * Les défauts fixés par le porteur (2026-10-07) : 50 commentaires par jour sur
+ * des originaux, 10 sous des republications ; 100 réactions sur des originaux,
+ * 50 sous des republications.
+ */
+export const DEFAULT_PATH_CAPS: EngagementPathCaps = {
+  comment: { original: 50, repost: 10 },
+  reaction: { original: 100, repost: 50 },
+};
+
+/** Les opérations dont les limites quotidiennes de gestes bornent les points, et leur famille. */
+const GESTURE_FAMILY_OF_OPERATION: Readonly<Partial<Record<EngagementOperationKey, EngagementPathFamily>>> = {
+  'comment.text': 'comment',
+  'comment.audio': 'comment',
+  'tool.post_reaction': 'reaction',
+};
+
+/** La famille de gestes dont la limite borne les points de cette opération, ou `null`. */
+export function gestureFamilyOf(operationKey: EngagementOperationKey): EngagementPathFamily | null {
+  return GESTURE_FAMILY_OF_OPERATION[operationKey] ?? null;
+}
+
+/** La limite quotidienne d'une famille de gestes sur un chemin — `null` : aucune. */
+export function dailyGestureLimit(scale: EngagementScale, family: EngagementPathFamily, path: EngagementPostPath): number | null {
+  return (scale.pathCaps ?? DEFAULT_PATH_CAPS)[family][path];
+}
+
 /** Les défauts fixés par le porteur (2026-09-30) — ce que crédite un barème jamais réglé. */
 export const DEFAULT_ENGAGEMENT_SCALE: EngagementScale = {
   operations: Object.fromEntries(ENGAGEMENT_OPERATIONS.map((key) => [key, defaultRule(key)])) as Record<
@@ -197,6 +250,7 @@ export const DEFAULT_ENGAGEMENT_SCALE: EngagementScale = {
   linkVisits: DEFAULT_LINK_VISIT_RULES,
   streakBonuses: DEFAULT_STREAK_BONUSES,
   abuse: DEFAULT_ABUSE_RULES,
+  pathCaps: DEFAULT_PATH_CAPS,
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -322,6 +376,17 @@ function parseAbuse(value: unknown): EngagementAbuseRules | null {
   return { heavyPoints, clawbackHours, unverifiedMaxPoints };
 }
 
+function parsePathCaps(value: unknown): EngagementPathCaps | null {
+  if (value === undefined) return DEFAULT_PATH_CAPS;
+  if (!isRecord(value) || !isRecord(value.comment) || !isRecord(value.reaction)) return null;
+  const { comment, reaction } = value;
+  if (![comment.original, comment.repost, reaction.original, reaction.repost].every(isCap)) return null;
+  return {
+    comment: { original: comment.original as number | null, repost: comment.repost as number | null },
+    reaction: { original: reaction.original as number | null, repost: reaction.repost as number | null },
+  };
+}
+
 /**
  * Lit un barème — celui qu'envoie l'administration, ou celui stocké en base.
  *
@@ -338,7 +403,8 @@ export function parseEngagementScale(value: unknown): EngagementScale | null {
   const linkVisits = parseLinkVisits(value.linkVisits);
   const streakBonuses = parseStreakBonuses(value.streakBonuses);
   const abuse = parseAbuse(value.abuse);
-  if (multiplier === null || linkVisits === null || streakBonuses === null || abuse === null) return null;
+  const pathCaps = parsePathCaps(value.pathCaps);
+  if (multiplier === null || linkVisits === null || streakBonuses === null || abuse === null || pathCaps === null) return null;
 
   const operations: Partial<Record<EngagementOperationKey, EngagementOperationRule>> = {};
   for (const [key, raw] of Object.entries(value.operations)) {
@@ -356,6 +422,7 @@ export function parseEngagementScale(value: unknown): EngagementScale | null {
     linkVisits,
     streakBonuses,
     abuse,
+    pathCaps,
   };
 }
 
@@ -561,15 +628,17 @@ export function formatConversationPoints(snapshot: Pick<ConversationEngagementSn
  * commentaires, republications, signets, vues de story) — jamais ceux d'un
  * autre. La valeur est ABSOLUE : un client n'additionne rien et ne devine rien.
  *
- * Elle est aussi MONOTONE : tant que le post existe, ce qu'il a rapporté ne
- * décroît jamais (une reprise n'a lieu qu'au retrait du post). Deux valeurs
- * peuvent arriver dans le désordre — deux gestes rapprochés, une lecture de fil
- * rendue après l'annonce d'un geste : `keptViewerPoints` garde la plus grande.
+ * Elle n'est PAS monotone : retirer une réaction, un commentaire ou une
+ * publication reprend ses points (décision porteur 2026-10-07). `at` est
+ * l'instant serveur (ms) où elle a été lue : entre deux annonces, la plus
+ * RÉCENTE gagne — `keptViewerPoints`.
  */
 export type PostEngagementSnapshot = {
   readonly postId: string;
-  /** Points que ce post a rapportés au lecteur, depuis toujours. */
+  /** Points que ce post a rapportés au lecteur, à l'instant `at`. */
   readonly viewerPoints: number;
+  /** Instant serveur, en millisecondes depuis l'époque Unix, où la valeur a été lue. */
+  readonly at: number;
 };
 
 export function isPostEngagementSnapshot(value: unknown): value is PostEngagementSnapshot {
@@ -577,23 +646,34 @@ export function isPostEngagementSnapshot(value: unknown): value is PostEngagemen
     isRecord(value) &&
     typeof value.postId === 'string' &&
     value.postId.length > 0 &&
-    isIntIn(value.viewerPoints, 0, Number.MAX_SAFE_INTEGER)
+    isIntIn(value.viewerPoints, 0, Number.MAX_SAFE_INTEGER) &&
+    isIntIn(value.at, 0, Number.MAX_SAFE_INTEGER)
   );
 }
 
+/** Ce qu'un client sait de `viewerPoints` pour un post : la valeur, et l'instant de la dernière ANNONCE appliquée. */
+export type KnownViewerPoints = { readonly viewerPoints: number; readonly at: number | null };
+
 /**
- * Ce qu'un client GARDE de `viewerPoints` quand une valeur lui arrive — par une
- * lecture, ou par `engagement:post-updated`.
+ * Ce qu'un client GARDE de `viewerPoints` quand une valeur lui arrive.
  *
- * - `received` absent : la réponse ne porte pas le champ (réponse d'écriture,
- *   ancien serveur, projection sans état de lecteur) ⇒ il garde ce qu'il sait ;
- * - sinon la plus grande des deux : la valeur est monotone, donc une valeur plus
- *   petite est une valeur plus ANCIENNE arrivée en retard.
+ * - par une ANNONCE (`engagement:post-updated`, porte `at`) : elle s'applique si
+ *   elle est plus récente que la dernière annonce appliquée, qu'elle monte ou
+ *   qu'elle baisse ; plus ancienne, elle arrive en retard et s'ignore ;
+ * - par une LECTURE (fil, fiche — pas de `at`) : elle s'applique, et garde
+ *   l'instant de la dernière annonce, pour qu'une annonce plus ancienne arrivée
+ *   ensuite ne la défasse pas ;
+ * - champ absent (réponse d'écriture, ancien serveur) : rien ne change.
  *
  * Ce qu'il sait est propre au COMPTE connecté : un changement de compte repart
  * de rien.
  */
-export function keptViewerPoints(known: number | undefined, received: number | undefined): number | undefined {
-  if (received === undefined) return known;
-  return known === undefined ? received : Math.max(known, received);
+export function keptViewerPoints(
+  known: KnownViewerPoints | undefined,
+  received: { readonly viewerPoints?: number; readonly at?: number },
+): KnownViewerPoints | undefined {
+  if (received.viewerPoints === undefined) return known;
+  if (received.at === undefined) return { viewerPoints: received.viewerPoints, at: known?.at ?? null };
+  if (known?.at !== null && known?.at !== undefined && received.at < known.at) return known;
+  return { viewerPoints: received.viewerPoints, at: received.at };
 }
