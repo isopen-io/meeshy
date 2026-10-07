@@ -223,7 +223,7 @@ describe('chaque gestionnaire de sortie, appelé en direct, consulte la loi', ()
   });
 
   const flush = () => act(async () => void (await new Promise((r) => setTimeout(r, 0))));
-  const pieceOnce = (id: string): Message => of(id, { attachments: [{ isViewOnce: true, isBlurred: false, mimeType: 'image/jpeg' }] as unknown as Message['attachments'] });
+  const pieceOnce = (id: string): Message => of(id, { attachments: [{ isViewOnce: true, isBlurred: false, mimeType: 'image/jpeg' }] as unknown as NonNullable<Message['attachments']> });
   const undeclared = (id: string): Message => of(id, { expiresAt: new Date(Date.now() + 60_000) });
 
   const SEALED: readonly (readonly [string, (id: string) => Message, boolean])[] = [

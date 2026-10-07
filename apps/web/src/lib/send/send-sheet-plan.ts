@@ -101,7 +101,8 @@ export const targetKeyOf = (target: SendTarget): string => {
 /** Une étape, dans l'ordre où la cible la joue. */
 export type SendStep =
   | { readonly kind: 'open-direct'; readonly userId: string }
-  | { readonly kind: 'forward'; readonly sourceConversationId: string; readonly messages: readonly ForwardSource[] }
+  /** `ephemeralDuration` : la durée choisie pour les flammes à durée du lot (#9573) — le transport la borne par source. */
+  | { readonly kind: 'forward'; readonly sourceConversationId: string; readonly messages: readonly ForwardSource[]; readonly ephemeralDuration?: number }
   | { readonly kind: 'forward-attachment'; readonly messageId: string; readonly sourceConversationId: string }
   | { readonly kind: 'copy-attachment'; readonly messageId: string; readonly content?: string }
   | { readonly kind: 'text'; readonly text: string }
@@ -150,9 +151,10 @@ const fileCountOf = (payload: SendPayload): number => {
 };
 
 /**
- * LES PASTILLES À OFFRIR — JAMAIS rien pour un contenu protégé (vue unique,
- * flouté, éphémère, chiffré : la passerelle refuse en `PROTECTED_MEDIA`, autant
- * ne pas proposer un geste qui échoue).
+ * LES PASTILLES À OFFRIR — JAMAIS rien pour un contenu qui n'a pas le droit de
+ * sortir (`protected`, posé depuis la loi de sortie par l'entrée qui ouvre la
+ * feuille — vue unique, flamme, flouté, chiffré : la passerelle refuse en
+ * `PROTECTED_MEDIA`, autant ne pas proposer un geste qui échoue).
  */
 export function publishOffered(payload: SendPayload): readonly PublishFormat[] {
   switch (payload.kind) {
@@ -191,13 +193,22 @@ const openDirectOf = (target: SendTarget): readonly SendStep[] =>
 const captionStep = (caption: string | undefined): readonly SendStep[] =>
   caption === undefined ? [] : [{ kind: 'text', text: caption }];
 
-function stepsForConversation(payload: SendPayload, caption: string | undefined): readonly SendStep[] {
+function stepsForConversation(payload: SendPayload, caption: string | undefined, forwardDuration: number | undefined): readonly SendStep[] {
   switch (payload.kind) {
     case 'messages':
-      return [{ kind: 'forward', sourceConversationId: payload.conversationId, messages: payload.messages }, ...captionStep(caption)];
+      return [
+        {
+          kind: 'forward',
+          sourceConversationId: payload.conversationId,
+          messages: payload.messages,
+          ...(forwardDuration === undefined ? {} : { ephemeralDuration: forwardDuration }),
+        },
+        ...captionStep(caption),
+      ];
     case 'attachment':
-      /* La copie serveur crée un message NEUF, sans la durée de la source : une
-         pièce protégée (éphémère) se TRANSFÈRE, la copie héritant de sa durée. */
+      /* La copie serveur est réservée à l'auteur d'une pièce qui a le droit de
+         sortir ; toute autre pièce part par un transfert, que la passerelle
+         admet ou refuse selon la loi de sortie. */
       return payload.mine && !payload.protected
         ? [{ kind: 'copy-attachment', messageId: payload.messageId, ...contentProp(caption) }]
         : [{ kind: 'forward-attachment', messageId: payload.messageId, sourceConversationId: payload.conversationId }, ...captionStep(caption)];
@@ -250,6 +261,8 @@ export function planSend(params: {
   readonly targets: readonly SendTarget[];
   readonly caption: string;
   readonly viewerId: string;
+  /** La durée choisie pour la copie des flammes à durée (#9573). */
+  readonly forwardDuration?: number;
 }): SendPlanResult {
   const { payload, viewerId } = params;
   const caption = captionOf(params.caption);
@@ -279,7 +292,7 @@ export function planSend(params: {
     const steps =
       target.kind === 'publish'
         ? stepsForPublish(payload, target.as, caption)
-        : [...openDirectOf(target), ...stepsForConversation(payload, caption)];
+        : [...openDirectOf(target), ...stepsForConversation(payload, caption, params.forwardDuration)];
     if (steps === null) return refuse({ kind: 'unsupported', targetKey: key });
     entries.push({ key, target, steps });
   }

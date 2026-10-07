@@ -1,6 +1,8 @@
 import { newClientMessageId } from './client-message-id';
 import type { ConversationsDeps } from './conversations';
 import { sendMessage, type SendMessageBody } from './messages';
+import { forwardedDurationFor } from '@/lib/send/forward-duration';
+
 import type { Message } from './types';
 
 /**
@@ -42,7 +44,8 @@ export type ForwardSource = Pick<Message, 'id' | 'content' | 'originalLanguage'>
 
 export type ForwardResult =
   | { readonly ok: true; readonly count: number }
-  | { readonly ok: false; readonly error: string };
+  /** `status` et `code` : ce que la passerelle a rendu, pour que la feuille dise POURQUOI (`send/forward-refusal.ts`). */
+  | { readonly ok: false; readonly error: string; readonly status?: number; readonly code?: string };
 
 /**
  * LE CORPS — `content` OMIS quand le texte est vide (un média seul, un vocal :
@@ -63,8 +66,10 @@ export function forwardBodyOf(params: {
   readonly message: ForwardSource;
   readonly sourceConversationId?: string;
   readonly clientMessageId: string;
+  /** La durée de la copie d'une flamme à durée (#9573) — déjà bornée par celle de la source. */
+  readonly ephemeralDuration?: number;
 }): SendMessageBody {
-  const { message, sourceConversationId, clientMessageId } = params;
+  const { message, sourceConversationId, clientMessageId, ephemeralDuration } = params;
   return {
     ...(message.content.trim().length > 0 ? { content: message.content } : {}),
     originalLanguage: message.originalLanguage,
@@ -73,6 +78,7 @@ export function forwardBodyOf(params: {
     ...(sourceConversationId === undefined || sourceConversationId === ''
       ? {}
       : { forwardedFromConversationId: sourceConversationId }),
+    ...(ephemeralDuration === undefined ? {} : { ephemeralDuration }),
   };
 }
 
@@ -89,6 +95,12 @@ export async function forwardMessages(
     readonly messages: readonly ForwardSource[];
     readonly sourceConversationId?: string;
     readonly targetConversationId: string;
+    /**
+     * La durée choisie dans la feuille pour les flammes à durée du lot (#9573).
+     * Chaque flamme part avec `min(choisie, sa durée)` — sans choix, la sienne ;
+     * un message ordinaire n'en reçoit jamais.
+     */
+    readonly ephemeralDuration?: number;
     /** Injectable pour les témoins — jamais un second générateur d'identité. */
     readonly nextClientMessageId?: () => string;
   },
@@ -98,6 +110,7 @@ export async function forwardMessages(
 
   let sent = 0;
   for (const message of messages) {
+    const duration = forwardedDurationFor(message, params.ephemeralDuration);
     const result = await sendMessage({
       source,
       transport,
@@ -106,9 +119,10 @@ export async function forwardMessages(
         message,
         ...(sourceConversationId === undefined ? {} : { sourceConversationId }),
         clientMessageId: nextId(),
+        ...(duration === undefined ? {} : { ephemeralDuration: duration }),
       }),
     });
-    if (!result.ok) return { ok: false, error: result.error };
+    if (!result.ok) return { ok: false, error: result.error, status: result.status, ...(result.code === undefined ? {} : { code: result.code }) };
     sent += 1;
   }
   return { ok: true, count: sent };

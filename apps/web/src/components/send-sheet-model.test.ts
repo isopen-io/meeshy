@@ -190,3 +190,23 @@ describe('protectedFromPublishing — l’explication n’apparaît que pour une
     ).toBe(true);
   });
 });
+
+/** #9573 — un refus du serveur dont on connaît le motif s'EXPLIQUE, et ne propose pas de réessayer ce qui sera refusé encore. */
+describe('statusViewOf — le refus du serveur est une explication', () => {
+  const refused = (message: string, code?: string) =>
+    statusViewOf({ state: 'failed', failure: { kind: 'refused', status: 400, message, ...(code === undefined ? {} : { code }) } }, true);
+
+  test('chaque motif du transfert a sa phrase, sans « Réessayer »', () => {
+    expect(refused('Un message à vue unique ne peut pas être transféré')).toEqual({ tone: 'failed', label: 'sendSheet.failure.forward.viewOnce', retry: false });
+    expect(refused('Un message qui disparaît après lecture ne peut pas être transféré')).toEqual({ tone: 'failed', label: 'sendSheet.failure.forward.afterRead', retry: false });
+    expect(refused('Le message d’origine n’est plus disponible : rien à transférer')).toEqual({ tone: 'failed', label: 'sendSheet.failure.forward.unavailable', retry: false });
+  });
+
+  test('un média protégé refusé à la publication dit « contenu protégé »', () => {
+    expect(refused('This media is protected and cannot be published', 'PROTECTED_MEDIA')).toEqual({ tone: 'failed', label: 'sendSheet.protected', retry: false });
+  });
+
+  test('un refus sans motif connu reste « refusé », rejouable', () => {
+    expect(refused('autre chose')).toEqual({ tone: 'failed', label: 'sendSheet.failure.refused', retry: true });
+  });
+});

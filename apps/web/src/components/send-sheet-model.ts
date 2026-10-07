@@ -6,6 +6,7 @@ import type { Conversation } from '@/lib/api/types';
 import { candidatesFor } from '@/lib/conversation-new/candidates';
 import type { SendSheetCatalogKey } from '@/lib/i18n-send-sheet-catalog';
 import { publishOffered, targetKeyOf, type SendPayload, type SendPlanError, type SendPreview, type SendTarget } from '@/lib/send/send-sheet-plan';
+import { sendRefusalOf, type SendRefusal } from '@/lib/send/forward-refusal';
 import type { TargetStatus } from '@/lib/send/send-sheet-run';
 import { avatarOf, initialsOf, participantAvatarOf, peerOf, titleOf } from '@/lib/view/conversation';
 
@@ -98,6 +99,14 @@ const FAILURE_LABEL = {
   refused: 'sendSheet.failure.refused',
 } as const satisfies Readonly<Record<string, SendSheetCatalogKey>>;
 
+/** Un refus dont le serveur a dit le motif (#9573) : la ligne l'EXPLIQUE, et ne propose pas de rejouer ce qui sera refusé encore. */
+const REFUSAL_LABEL = {
+  'view-once': 'sendSheet.failure.forward.viewOnce',
+  'after-read': 'sendSheet.failure.forward.afterRead',
+  unavailable: 'sendSheet.failure.forward.unavailable',
+  'protected-media': 'sendSheet.protected',
+} as const satisfies Readonly<Record<SendRefusal, SendSheetCatalogKey>>;
+
 /** Le mot d'une ligne. `started` : l'envoi est lancé — une cible pas encore
  * jouée se dit DÉJÀ « Envoi… » (optimiste), jamais « rien ». */
 export function statusViewOf(status: TargetStatus | undefined, started: boolean): StatusView | null {
@@ -108,8 +117,12 @@ export function statusViewOf(status: TargetStatus | undefined, started: boolean)
       return { tone: 'sending', label: 'sendSheet.state.sending', retry: false };
     case 'sent':
       return { tone: 'sent', label: 'sendSheet.state.sent', retry: false };
-    case 'failed':
-      return { tone: 'failed', label: FAILURE_LABEL[status.failure.kind], retry: true };
+    case 'failed': {
+      const refusal = status.failure.kind === 'refused' ? sendRefusalOf(status.failure) : null;
+      return refusal === null
+        ? { tone: 'failed', label: FAILURE_LABEL[status.failure.kind], retry: true }
+        : { tone: 'failed', label: REFUSAL_LABEL[refusal], retry: false };
+    }
   }
 }
 
@@ -193,8 +206,8 @@ export function previewOf(payload: SendPayload): PreviewView {
   }
 }
 
-/** Rien n'est publiable PARCE QUE le contenu est protégé (vue unique, flouté,
- * éphémère, chiffré) — seul cas où la feuille explique l'absence des pastilles. */
+/** Rien n'est publiable PARCE QUE le contenu n'a pas le droit de sortir (vue
+ * unique, flamme, flouté, chiffré) — seul cas où la feuille explique l'absence des pastilles. */
 export function protectedFromPublishing(payload: SendPayload): boolean {
   if (publishOffered(payload).length > 0) return false;
   if (payload.kind === 'attachment') return payload.protected;

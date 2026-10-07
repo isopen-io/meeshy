@@ -136,6 +136,62 @@ export function PublishChip({
   );
 }
 
+export type DurationChoice = { readonly seconds: number; readonly label: string };
+
+/**
+ * LA DURÉE DE LA COPIE D'UNE FLAMME (#9573) — un groupe de boutons radio
+ * NATIFS : les flèches du clavier parcourent les choix, le lecteur d'écran
+ * annonce le groupe par sa légende, « n sur m » et le choix coché. La légende
+ * et la consigne sont dans le `<fieldset>`, donc lues avec lui.
+ */
+export function ForwardDurationRow({
+  name,
+  title,
+  hint,
+  choices,
+  value,
+  disabled,
+  onChange,
+}: {
+  readonly name: string;
+  readonly title: string;
+  readonly hint: string;
+  readonly choices: readonly DurationChoice[];
+  readonly value: number;
+  readonly disabled: boolean;
+  readonly onChange: (seconds: number) => void;
+}) {
+  return (
+    <fieldset data-send-duration="" disabled={disabled} className="m-0 min-w-0 border-0 p-0">
+      <legend className={SECTION_CLASS} style={{ color: 'var(--color-ios-ink-2)' }}>
+        {title}
+      </legend>
+      <div className="flex flex-wrap gap-2 px-4">
+        {choices.map((choice) => {
+          const on = choice.seconds === value;
+          return (
+            <label
+              key={choice.seconds}
+              className="inline-flex min-h-11 cursor-pointer items-center rounded-chip px-4 text-chip font-semibold focus-within:outline focus-within:outline-2 focus-within:outline-offset-2"
+              style={
+                on
+                  ? { backgroundColor: 'var(--color-ios-brand)', color: 'var(--color-ios-on-brand)', outlineColor: 'var(--color-ios-brand)' }
+                  : { backgroundColor: 'var(--color-ios-fill)', color: 'var(--color-ios-ink)', outlineColor: 'var(--color-ios-brand)' }
+              }
+            >
+              <input type="radio" className="sr-only" name={name} value={choice.seconds} checked={on} onChange={() => onChange(choice.seconds)} />
+              {choice.label}
+            </label>
+          );
+        })}
+      </div>
+      <p className="px-4 pt-2 text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
+        {hint}
+      </p>
+    </fieldset>
+  );
+}
+
 function RowAvatar({ row, size }: { readonly row: RecipientRow; readonly size: number }) {
   return <Avatar initials={row.initials} color={row.color} size={size} {...(row.avatarUrl === undefined ? {} : { src: row.avatarUrl })} />;
 }

@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore, type RefObject } from 'react';
 
+import { translate } from '@/lib/i18n-catalog';
 import { translateSendSheet, type SendSheetCatalogKey } from '@/lib/i18n-send-sheet-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
+import { forwardDurationBound, forwardDurationOptions } from '@/lib/send/forward-duration';
 import {
   MAX_CONVERSATION_TARGETS,
   MAX_PUBLISH_CAPTION,
@@ -31,6 +33,7 @@ import {
   type RecipientRow,
 } from './send-sheet-model';
 import {
+  ForwardDurationRow,
   PreviewCard,
   PUBLISH_ORDER,
   PublishChip,
@@ -133,6 +136,22 @@ export function SendSheet({
   const searchRef = useRef<HTMLInputElement>(null);
   const captionRef = useRef<HTMLTextAreaElement>(null);
   const publishTitleId = useId();
+  const durationName = useId();
+  /* LA DURÉE DE LA COPIE (#9573) — une sélection qui porte une flamme à durée
+     a une borne : la durée de la source (la plus courte s'il y en a plusieurs),
+     présélectionnée ; seuls les paliers inférieurs ou égaux se proposent. */
+  const durationBound = payload.kind === 'messages' ? forwardDurationBound(payload.messages) : null;
+  const durationChoices = useMemo(
+    () =>
+      durationBound === null
+        ? []
+        : forwardDurationOptions(durationBound).map((option) => ({
+            seconds: option.seconds,
+            label: option.displayKey === undefined ? option.label : translate(language, option.displayKey),
+          })),
+    [durationBound, language],
+  );
+  const [duration, setDuration] = useState(durationBound);
   const [query, setQuery] = useState('');
   const [caption, setCaption] = useState('');
   const [selected, setSelected] = useState<readonly RecipientRow[]>([]);
@@ -188,7 +207,7 @@ export function SendSheet({
   const send = (): void => {
     if (launched.current) return;
     const targets: readonly SendTarget[] = [...selected.map((row) => row.target), ...publish.map((as): SendTarget => ({ kind: 'publish', as }))];
-    const plan = planSend({ payload, targets, caption, viewerId });
+    const plan = planSend({ payload, targets, caption, viewerId, ...(duration === null ? {} : { forwardDuration: duration }) });
     if (!plan.ok) {
       setPlanError(planErrorMessageOf(plan.error));
       return;
@@ -270,6 +289,8 @@ export function SendSheet({
   }, [runState, selected, say]);
 
   const failed = runState === null ? 0 : failedKeysOf(runState).length;
+  /* Un refus EXPLIQUÉ ne se rejoue pas (#9573) : la passerelle le refuserait encore. */
+  const retryable = runState === null ? 0 : failedKeysOf(runState).filter((key) => statusViewOf(runState.statuses[key], true)?.retry === true).length;
   const running = runState !== null && (runState.phase !== 'done' || runState.order.some((key) => runState.statuses[key]?.state === 'sending'));
 
   const primary = ((): { readonly label: string; readonly disabled: boolean; readonly onPress: () => void } => {
@@ -277,7 +298,8 @@ export function SendSheet({
       return { label: count === 0 ? say('sendSheet.send') : say('sendSheet.sendCount', { count: String(count) }), disabled: count === 0, onPress: send };
     }
     if (running || runState === null) return { label: say('sendSheet.state.sending'), disabled: true, onPress: () => undefined };
-    if (failed > 0) return { label: say('sendSheet.state.retry'), disabled: false, onPress: () => void run.retryFailed() };
+    if (retryable > 0) return { label: say('sendSheet.state.retry'), disabled: false, onPress: () => void run.retryFailed() };
+    if (failed > 0) return { label: say('sendSheet.state.failed'), disabled: true, onPress: () => undefined };
     return { label: say('sendSheet.state.sent'), disabled: true, onPress: () => undefined };
   })();
 
@@ -349,6 +371,18 @@ export function SendSheet({
           />
         </label>
       </div>
+
+      {durationBound === null || duration === null ? null : (
+        <ForwardDurationRow
+          name={durationName}
+          title={say('sendSheet.duration.title')}
+          hint={say('sendSheet.duration.hint')}
+          choices={durationChoices}
+          value={duration}
+          disabled={started}
+          onChange={setDuration}
+        />
+      )}
 
       {offered.length > 0 ? (
         <section aria-labelledby={publishTitleId}>
