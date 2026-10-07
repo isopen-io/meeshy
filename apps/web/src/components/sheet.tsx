@@ -175,7 +175,6 @@ export function Sheet({
       ref={ref}
       onClose={onClose}
       aria-labelledby={titleId}
-      aria-modal="true"
       data-sheet-presentation={presentation}
       {...dialogData}
       {...(onBackdrop === undefined ? {} : { onClick: onBackdrop })}

@@ -341,11 +341,14 @@ describe('le tableau de bord : chaque ligne de donnée s’ouvre', () => {
 });
 
 describe('la modale', () => {
-  test('c’est un dialogue modal nommé par son titre ; elle dit l’état, ce que c’est, comment l’obtenir', async () => {
+  /* Un VRAI `<dialog>` ouvert par `showModal()` (focus piégé, Échap, fond inerte) — jamais un `<div role="dialog" aria-modal>`, qui annonce une modale sans en être une (`auth-screens.test.tsx`). */
+  test('c’est un `<dialog>` modal nommé par son titre ; elle dit l’état, ce que c’est, comment l’obtenir', async () => {
     const host = await mounter.mount(tree(playing, <ConceptFiche concept="glory" progress={playing} host={{ actions: idle, online: true }} now={NOW} />, 'glory'));
     await mounter.click(host.querySelector<HTMLButtonElement>('[data-fiche-section="hero"] button[data-detail]'));
     const dialog = must(dialogOf(), 'modale');
-    expect(dialog.getAttribute('aria-modal')).toBe('true');
+    expect(dialog.tagName).toBe('DIALOG');
+    expect(dialog.open).toBe(true);
+    expect(dialog.hasAttribute('role')).toBe(false);
     expect(dialog.getAttribute('aria-labelledby')).toBe(dialog.querySelector('h2')?.id);
     expect(dialog.dataset.sheetPresentation).toBe('bottom');
     expect(dialog.querySelector('[data-detail-emblem]')?.className).toContain('game-pop');
