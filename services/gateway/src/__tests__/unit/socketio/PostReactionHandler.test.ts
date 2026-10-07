@@ -1393,7 +1393,7 @@ describe('PostReactionHandler', () => {
       expect(mockReactionService.addReaction).toHaveBeenCalledWith({
         postId: ROOT_ID,
         userId: USER_ID,
-        emoji: EMOJI,
+        emoji: EMOJI, through: { id: POST_ID, authorId: ANOTHER_USER_ID }, // #9584 — la republication traversée, son propre crédit
       });
     });
 
@@ -1413,8 +1413,8 @@ describe('PostReactionHandler', () => {
       await handler.handleAddReaction(socket as any, { postId: POST_ID, emoji: EMOJI }, callback);
       await handler.handleAddReaction(socket as any, { postId: OTHER_REPOST_ID, emoji: EMOJI }, callback);
 
-      expect(mockReactionService.addReaction).toHaveBeenNthCalledWith(1, { postId: ROOT_ID, userId: USER_ID, emoji: EMOJI });
-      expect(mockReactionService.addReaction).toHaveBeenNthCalledWith(2, { postId: ROOT_ID, userId: USER_ID, emoji: EMOJI });
+      expect(mockReactionService.addReaction).toHaveBeenNthCalledWith(1, { postId: ROOT_ID, userId: USER_ID, emoji: EMOJI, through: { id: POST_ID, authorId: ANOTHER_USER_ID } });
+      expect(mockReactionService.addReaction).toHaveBeenNthCalledWith(2, { postId: ROOT_ID, userId: USER_ID, emoji: EMOJI, through: { id: OTHER_REPOST_ID, authorId: ANOTHER_USER_ID } });
     });
 
     it('handleRemoveReaction retire la réaction posée sur la RACINE via un AUTRE repost du même original', async () => {

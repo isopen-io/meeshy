@@ -258,9 +258,9 @@ describe('POST /posts/:postId/comments — l’invité d’un lien', () => {
 
 /**
  * #9584 — un commentaire écrit depuis la carte d'une REPUBLICATION SIMPLE
- * atterrit sur le fil de l'original ; son crédit est AUSSI attribué à la
- * republication par laquelle il est passé. La route connaît les deux
- * identifiants : celui du chemin et la cible résolue.
+ * atterrit sur le fil de l'original, et crédite les DEUX posts pour de vrai :
+ * un crédit sur l'original, un autre sur la republication traversée, chacun
+ * passant son barème. La résolution rend la republication traversée.
  */
 describe('POST /posts/:postId/comments — par où le commentaire est passé (#9584)', () => {
   const REPOST_ID = '507f1f77bcf86cd799439055';
@@ -269,7 +269,7 @@ describe('POST /posts/:postId/comments — par où le commentaire est passé (#9
     [POST_ID]: { id: POST_ID, ...PUBLIC_ACL, type: 'POST', isQuote: false, repostOfId: null, originalRepostOfId: null, deletedAt: null },
   };
 
-  it('écrit le commentaire sur l’original et nomme la republication pour l’attribution', async () => {
+  it('écrit le commentaire sur l’original, et crédite l’original ET la republication — deux crédits', async () => {
     mockAddComment.mockResolvedValue({ id: 'comment-through-repost', content: 'Bravo', authorId: USER_ID, media: [] });
     const app = await buildApp(requiredAuth, rows);
 
@@ -278,16 +278,19 @@ describe('POST /posts/:postId/comments — par où le commentaire est passé (#9
 
     expect(res.statusCode).toBe(201);
     expect(mockAddComment.mock.calls[0]?.[0]).toBe(POST_ID);
-    expect(mockRecordActivity).toHaveBeenCalledWith(USER_ID, 'comment.text', { postId: POST_ID, repostId: REPOST_ID });
+    expect(mockRecordActivity.mock.calls).toEqual([
+      [USER_ID, 'comment.text', { postId: POST_ID }],
+      [USER_ID, 'comment.text', { postId: REPOST_ID }],
+    ]);
   });
 
-  it('sur l’original lui-même, ne nomme aucune republication', async () => {
+  it('sur l’original lui-même, un seul crédit', async () => {
     mockAddComment.mockResolvedValue({ id: 'comment-direct', content: 'Bravo', authorId: USER_ID, media: [] });
     const app = await buildApp(requiredAuth, rows);
 
     await app.inject({ method: 'POST', url: `/posts/${POST_ID}/comments`, payload: { content: 'Bravo' } });
     await app.close();
 
-    expect(mockRecordActivity).toHaveBeenCalledWith(USER_ID, 'comment.text', { postId: POST_ID });
+    expect(mockRecordActivity.mock.calls).toEqual([[USER_ID, 'comment.text', { postId: POST_ID }]]);
   });
 });

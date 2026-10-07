@@ -1,9 +1,9 @@
 /**
  * #9584 — une réaction posée par socket depuis la carte d'une REPUBLICATION
  * SIMPLE atterrit sur l'original (`resolveInteractionTarget`, vrai module) et
- * nomme la republication par laquelle elle est passée, pour que le crédit lui
- * soit AUSSI attribué. La route connaît les deux identifiants : aucune seconde
- * résolution.
+ * fait descendre la republication traversée — son identifiant et son auteur —
+ * pour qu'elle reçoive son PROPRE crédit. La résolution l'a déjà lue : aucune
+ * seconde lecture.
  *
  * @jest-environment node
  */
@@ -35,6 +35,7 @@ import { validateSocketEvent } from '../../../middleware/validation';
 
 const READER = '507f1f77bcf86cd799439033';
 const AUTHOR = '507f1f77bcf86cd799439044';
+const REPOSTER = '507f1f77bcf86cd799439066';
 const REPOST = '507f1f77bcf86cd799439022';
 const ORIGINAL = '507f1f77bcf86cd799439077';
 const SOCKET_ID = 'socket-through-repost';
@@ -82,15 +83,15 @@ beforeEach(() => {
 });
 
 describe('post:reaction-add depuis la carte d’une republication simple', () => {
-  it('pose la réaction sur l’original et nomme la republication par laquelle elle est passée', async () => {
+  it('pose la réaction sur l’original et fait descendre la republication traversée, avec son auteur', async () => {
     const { handler, addReaction, socket } = build({
-      [REPOST]: row(REPOST, { repostOfId: ORIGINAL, originalRepostOfId: ORIGINAL }),
+      [REPOST]: row(REPOST, { authorId: REPOSTER, repostOfId: ORIGINAL, originalRepostOfId: ORIGINAL }),
       [ORIGINAL]: row(ORIGINAL),
     });
 
     await handler.handleAddReaction(socket as never, { postId: REPOST, emoji: '👍' }, jest.fn());
 
-    expect(addReaction).toHaveBeenCalledWith({ postId: ORIGINAL, userId: READER, emoji: '👍', repostId: REPOST });
+    expect(addReaction).toHaveBeenCalledWith({ postId: ORIGINAL, userId: READER, emoji: '👍', through: { id: REPOST, authorId: REPOSTER } });
   });
 
   it('sur un post ordinaire, ne nomme aucune republication', async () => {

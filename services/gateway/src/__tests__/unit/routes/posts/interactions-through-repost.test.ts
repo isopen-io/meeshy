@@ -1,9 +1,9 @@
 /**
  * #9584 — `POST /posts/:postId/like` depuis la carte d'une REPUBLICATION
  * SIMPLE : le like atterrit sur l'original (`resolveInteractionTarget`, vrai
- * module) et la route fait descendre la republication par laquelle il est
- * passé jusqu'au crédit — l'identifiant de l'URL, déjà validé par la
- * résolution, sans seconde lecture.
+ * module) et la route fait descendre la republication traversée — identifiant
+ * et auteur, déjà lus et vérifiés par la résolution — pour qu'elle reçoive son
+ * PROPRE crédit.
  *
  * @jest-environment node
  */
@@ -34,6 +34,7 @@ import { registerInteractionRoutes } from '../../../../routes/posts/interactions
 
 const READER = '507f1f77bcf86cd799439011';
 const AUTHOR = '507f1f77bcf86cd799439044';
+const REPOSTER = '507f1f77bcf86cd799439066';
 const REPOST = '507f1f77bcf86cd799439022';
 const ORIGINAL = '507f1f77bcf86cd799439077';
 
@@ -81,20 +82,20 @@ beforeEach(() => {
 });
 
 describe('POST /posts/:postId/like — par où le like est passé (#9584)', () => {
-  it('depuis une republication simple : like posé sur l’original, la republication est nommée pour l’attribution', async () => {
+  it('depuis une republication simple : like posé sur l’original, la republication traversée descend avec son auteur', async () => {
     const res = await like(
-      { [REPOST]: row(REPOST, { repostOfId: ORIGINAL, originalRepostOfId: ORIGINAL }), [ORIGINAL]: row(ORIGINAL) },
+      { [REPOST]: row(REPOST, { authorId: REPOSTER, repostOfId: ORIGINAL, originalRepostOfId: ORIGINAL }), [ORIGINAL]: row(ORIGINAL) },
       `/posts/${REPOST}/like`,
     );
 
     expect(res.statusCode).toBe(200);
-    expect(mockLikePost).toHaveBeenCalledWith(ORIGINAL, READER, '👍', { repostId: REPOST });
+    expect(mockLikePost).toHaveBeenCalledWith(ORIGINAL, READER, '👍', { through: { id: REPOST, authorId: REPOSTER } });
   });
 
-  it('sur un post ordinaire : aucune republication nommée', async () => {
+  it('sur un post ordinaire : aucune republication traversée', async () => {
     await like({ [ORIGINAL]: row(ORIGINAL) }, `/posts/${ORIGINAL}/like`);
 
-    expect(mockLikePost).toHaveBeenCalledWith(ORIGINAL, READER, '👍', {});
+    expect(mockLikePost.mock.calls[0]?.[3]).toEqual({ through: undefined });
   });
 
   it('sur une citation : le like reste sur la citation, aucune republication nommée', async () => {
@@ -103,6 +104,7 @@ describe('POST /posts/:postId/like — par où le like est passé (#9584)', () =
       `/posts/${REPOST}/like`,
     );
 
-    expect(mockLikePost).toHaveBeenCalledWith(REPOST, READER, '👍', {});
+    expect(mockLikePost.mock.calls[0]?.[0]).toBe(REPOST);
+    expect(mockLikePost.mock.calls[0]?.[3]).toEqual({ through: undefined });
   });
 });

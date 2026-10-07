@@ -23,6 +23,7 @@ const READER_ID = '64a000000000000000000001';
 const AUTHOR_ID = '64a000000000000000000002';
 const MODERATOR_ID = '64a000000000000000000003';
 const REPOST_ID = '507f1f77bcf86cd799439033';
+const REPOSTER_ID = '64a000000000000000000004';
 
 const settle = () => new Promise((resolve) => setImmediate(resolve));
 
@@ -72,20 +73,17 @@ describe('tool.post_reaction — PostReactionService.addReaction', () => {
     });
   });
 
-  it('venue d’une republication simple, nomme aussi la republication — un seul crédit (#9584)', async () => {
+  it('venue d’une republication simple, crédite l’original ET la republication — deux crédits, chacun sa cible et son auteur (#9584)', async () => {
     const recorder = makeRecorder();
     const service = new PostReactionService(makePrisma(null) as any, recorder);
 
-    await service.addReaction({ postId: POST_ID, userId: READER_ID, emoji: '❤️', repostId: REPOST_ID });
+    await service.addReaction({ postId: POST_ID, userId: READER_ID, emoji: '❤️', through: { id: REPOST_ID, authorId: REPOSTER_ID } });
     await settle();
 
-    expect(recorder.recordActivity).toHaveBeenCalledTimes(1);
-    expect(recorder.recordActivity).toHaveBeenCalledWith(READER_ID, 'tool.post_reaction', {
-      postId: POST_ID,
-      repostId: REPOST_ID,
-      targetId: POST_ID,
-      targetOwnerId: AUTHOR_ID,
-    });
+    expect(recorder.recordActivity.mock.calls).toEqual([
+      [READER_ID, 'tool.post_reaction', { postId: POST_ID, targetId: POST_ID, targetOwnerId: AUTHOR_ID }],
+      [READER_ID, 'tool.post_reaction', { postId: REPOST_ID, targetId: REPOST_ID, targetOwnerId: REPOSTER_ID }],
+    ]);
   });
 
   it('ne crédite rien quand la réaction existait déjà (unchanged)', async () => {
