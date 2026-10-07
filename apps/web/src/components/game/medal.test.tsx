@@ -87,11 +87,13 @@ describe('GameMedal — les sept matières', () => {
   });
 });
 
-describe('GameMedal — les neuf pictogrammes d’axe', () => {
+describe('GameMedal — un pictogramme par axe (#9639)', () => {
   test('chacun se dessine, et aucun n’est une bulle', () => {
     const drawings = MEDAL_PICTOGRAMS.map((pictogram) => render({ pictogram }));
     for (const [index, html] of drawings.entries()) expect(html).toContain(`data-game-pictogram="${MEDAL_PICTOGRAMS[index]}"`);
-    expect(new Set(drawings).size).toBe(9);
+    expect(new Set(drawings).size).toBe(20);
+    const glyphs = drawings.map((html) => html.replace(/^[\s\S]*?data-game-pictogram="[^"]+">/, '').replace(/<\/g>[\s\S]*$/, ''));
+    expect(new Set(glyphs).size).toBe(20);
     for (const html of drawings) expect(html.toLowerCase()).not.toMatch(/bubble|bulle|speech/);
   });
 });
