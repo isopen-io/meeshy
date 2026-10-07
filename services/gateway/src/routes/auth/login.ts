@@ -38,7 +38,6 @@ import {
 } from '../../utils/response.js';
 import { AUTH_ERROR_CODES } from '../../utils/auth-error-codes.js';
 import { disconnectSession } from '../../socketio/disconnectSession';
-import { hashSessionToken } from '../../utils/session-token';
 import { notifyIfLoginFromNewDevice } from './notify-new-device';
 import { currentSessionOf } from '../../services/auth/current-session';
 import { pendingSessionTokenFor } from '../../services/auth/email-verification-watch';
@@ -481,41 +480,28 @@ export function registerLoginRoutes(context: AuthRouteContext) {
       // Elle n'était lue que sur `x-session-token`, qu'aucun client inscrit
       // n'envoie en REST : se déconnecter laissait la session valide. L'en-tête
       // reste honoré, pour un client qui l'enverrait encore.
-      const { sessionId: sid, sessionToken } = currentSessionOf(request);
+      const courante = currentSessionOf(request);
+      const aCouper = new Set<string>();
 
       await authService.updateOnlineStatus(userId, false);
 
-      const aCouper = new Set<string>(sid ? [sid] : []);
-
-      if (sid) {
-        const closed = await authService.logoutCurrent(userId, { sessionId: sid });
-        if (closed === 0) {
-          logger.info('Session du jeton déjà close');
-        }
-      }
-
-      if (sessionToken) {
-        // L'identifiant est relevé AVANT l'invalidation : après, la ligne
-        // n'est plus valide et la recherche qui la sert non plus.
-        //
-        // Toute cette moitié est BEST-EFFORT et ne peut pas faire échouer la
-        // déconnexion : elle est déjà écrite quand on arrive ici, et une
-        // déconnexion qui rend 500 parce que la comptabilité des sockets a
-        // trébuché est pire qu'un socket laissé ouvert — l'utilisateur
-        // réessaie, et se déconnecte deux fois.
+      if (courante.sessionId || courante.sessionToken) {
+        // Les identifiants sont relevés AVANT l'invalidation : après, la ligne
+        // n'est plus active et la liste ne la rend plus. BEST-EFFORT : une
+        // déconnexion ne rend pas 500 parce que la comptabilité des sockets a
+        // trébuché.
         try {
-          const session = await fastify.prisma?.userSession?.findFirst({
-            where: { userId, sessionToken: hashSessionToken(sessionToken) },
-            select: { id: true },
-          });
-          if (session?.id) aCouper.add(session.id);
+          const nommees = await authService.getUserActiveSessions(userId, courante);
+          nommees.filter((session) => session.isCurrentSession).forEach((session) => aCouper.add(session.id));
         } catch (error) {
           logWarn(fastify.log, '[AUTH] session lookup failed on logout', error);
         }
 
-        const loggedOut = await authService.logout(sessionToken);
-        if (loggedOut) {
-          logger.info('Session invalidée');
+        // UN appel, borné au compte (audit P2) : `logout(jeton)` fermait la
+        // session de l'en-tête quel qu'en soit le propriétaire.
+        const closed = await authService.logoutCurrent(userId, courante);
+        if (closed === 0) {
+          logger.info('Aucune session courante à fermer');
         }
       }
 

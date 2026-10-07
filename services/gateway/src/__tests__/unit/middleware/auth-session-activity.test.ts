@@ -226,6 +226,32 @@ describe('#9607 — la dernière activité avance sur le `sid`, échantillonnée
     expect(sessions.byId(SID_B).lastActivityAt.getTime()).toBe(createdAt.getTime());
   });
 
+  it("l'écriture est bornée au compte : un `sid` présenté pour un autre utilisateur ne touche rien (audit A3, M10)", async () => {
+    const createdAt = new Date(T0.getTime() - 60 * MINUTE);
+    const sessions = storeAt(createdAt);
+    const sampler = new SessionActivitySampler({ now: clock(T0).now });
+
+    sampler.touch(sessions, { userId: '507f1f77bcf86cd7994390ff', sessionId: SID_A });
+    await flush();
+
+    expect(sessions.byId(SID_A).lastActivityAt.getTime()).toBe(createdAt.getTime());
+  });
+
+  it("une session RE-TOUCHÉE reprend la queue de l'éviction : c'est la plus anciennement touchée qui part (audit A3, M8)", () => {
+    const horloge = clock(T0);
+    const sampler = new SessionActivitySampler({ now: horloge.now, maxTrackedSessions: 4 });
+    const muet = { updateMany: jest.fn(async () => ({ count: 0 })) };
+
+    ['s1', 's2', 's3'].forEach((sessionId) => sampler.touch(muet, { userId: USER_ID, sessionId }));
+    horloge.advance(SESSION_ACTIVITY_INTERVAL_MS);
+    expect(sampler.touch(muet, { userId: USER_ID, sessionId: 's1' })).toBe(true);
+    sampler.touch(muet, { userId: USER_ID, sessionId: 's4' });
+    sampler.touch(muet, { userId: USER_ID, sessionId: 's5' });
+
+    expect(sampler.touch(muet, { userId: USER_ID, sessionId: 's1' })).toBe(false);
+    expect(sampler.touch(muet, { userId: USER_ID, sessionId: 's2' })).toBe(true);
+  });
+
   it('la mémoire de l’échantillonneur est BORNÉE : au-delà du plafond, la plus ancienne entrée part', () => {
     const sampler = new SessionActivitySampler({ now: clock(T0).now, maxTrackedSessions: 3 });
     const muet = { updateMany: jest.fn(async () => ({ count: 0 })) };

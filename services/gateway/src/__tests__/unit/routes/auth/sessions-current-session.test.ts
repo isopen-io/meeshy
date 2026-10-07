@@ -24,7 +24,7 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import { createUnifiedAuthMiddleware } from '../../../../middleware/auth';
 import { AuthService } from '../../../../services/AuthService';
 import { registerMagicLinkRoutes } from '../../../../routes/auth/magic-link';
-import { getUserSessions, invalidateAllSessions, logout } from '../../../../services/SessionService';
+import { endCurrentSession, getUserSessions, invalidateAllSessions, logout } from '../../../../services/SessionService';
 import { SessionActivitySampler } from '../../../../services/auth/session-activity';
 import { hashSessionToken } from '../../../../utils/session-token';
 import { createUserSessionStore, makeSession, type UserSessionStore } from './user-session-store';
@@ -224,6 +224,34 @@ describe('#9606 — la session courante se reconnaît par le `sid` du JWT', () =
     expect(sessions.byId(SID_TELEPHONE).isValid).toBe(true);
     expect(sessions.byId(SID_TABLETTE).isValid).toBe(true);
     await app.close();
+  });
+
+  it("POST /logout ne ferme jamais la session d'un AUTRE compte, même nommée par l'en-tête (audit P2)", async () => {
+    const sessions = threeSessions();
+    const AUTRE_COMPTE = '507f1f77bcf86cd7994390ff';
+    sessions.rows.push(makeSession({ id: '507f1f77bcf86cd799439099', userId: AUTRE_COMPTE, sessionToken: hashSessionToken('jeton-d-autrui') }));
+    const app = await buildApp(sessions);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/logout',
+      headers: bearer(SID_TELEPHONE, { 'x-session-token': 'jeton-d-autrui' }),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(sessions.byId('507f1f77bcf86cd799439099').isValid).toBe(true);
+    expect(sessions.byId(SID_TELEPHONE).isValid).toBe(false);
+    await app.close();
+  });
+
+  it("endCurrentSession est borné au compte : un `sid` d'un autre compte ne ferme rien (audit A3, M3)", async () => {
+    const sessions = threeSessions();
+    new AuthService({ userSession: sessions } as never, JWT_SECRET);
+
+    const fermees = await endCurrentSession('507f1f77bcf86cd7994390ff', { sessionId: SID_TABLETTE });
+
+    expect(fermees).toBe(0);
+    expect(sessions.byId(SID_TABLETTE).isValid).toBe(true);
   });
 
   it('logout() par jeton brut reste disponible (compatibilité de l’en-tête)', async () => {
