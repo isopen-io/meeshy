@@ -15,7 +15,6 @@ export const PROGRESSION_CONCEPTS = ['level', 'points', 'meesh', 'glory', 'flame
 
 export const PROGRESSION_PAGES = [
   '/me/progression',
-  '/me/progression/tableau-de-bord',
   ...PROGRESSION_CONCEPTS.map((concept) => `/me/progression/concept/${concept}`),
   '/me/progression/ligue',
   '/me/progression/saison',

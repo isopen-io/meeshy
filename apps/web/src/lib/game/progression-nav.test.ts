@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { readFileSync, readdirSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { GUIDE_ACTIONS } from '@meeshy/shared/utils/game/guide';
 import { GUIDE_ACTIONS_V2 } from '@meeshy/shared/utils/game/guide-v2';
@@ -92,15 +93,15 @@ describe('« retour » remonte au parent, jamais ailleurs', () => {
   const at = (paths: readonly string[]) => paths.map((path, index) => ({ path, key: `k${index}` }));
 
   test('le parent est sous nous dans le jeu : on y recule (même entrée, position retrouvée)', () => {
-    expect(upMove({ parentPath: '/me/progression', entries: at(['/', '/me/progression', '/me/progression/concept/flame']), index: 2 })).toEqual({ kind: 'traverse', key: 'k1' });
+    expect(upMove({ parentPath: '/me/progression', entries: at(['/', '/me/progression', '/me/progression/concept/flame']), index: 2 })).toEqual({ kind: 'traverse', delta: -1 });
     expect(
       upMove({ parentPath: '/me/progression/concept/league', entries: at(['/me/progression', '/me/progression/concept/league?x=1', '/me/progression/ligue']), index: 2 }),
-    ).toEqual({ kind: 'traverse', key: 'k1' });
+    ).toEqual({ kind: 'traverse', delta: -1 });
   });
 
   test('une montée vers une autre fiche (« Voir la fiche ») recule jusqu’à Progression, par-dessus les écrans du jeu', () => {
     const entries = at(['/me/progression', '/me/progression/concept/league', '/me/progression/ligue', '/me/progression/concept/glory']);
-    expect(upMove({ parentPath: '/me/progression', entries, index: 3 })).toEqual({ kind: 'traverse', key: 'k0' });
+    expect(upMove({ parentPath: '/me/progression', entries, index: 3 })).toEqual({ kind: 'traverse', delta: -3 });
   });
 
   test('jamais par-dessus un écran étranger au jeu : arrivé par lien profond, l’écran est remplacé par son parent', () => {
@@ -197,7 +198,7 @@ describe('chaque entrée extérieure ouvre l’écran que la carte nomme', () =>
     }
   });
 
-  const APP = resolve(import.meta.dir, '../..');
+  const APP = fileURLToPath(new URL('../..', import.meta.url));
   const read = (path: string) => readFileSync(join(APP, path), 'utf8');
 
   test('le bandeau du joueur ouvre la fiche du Niveau', () => {

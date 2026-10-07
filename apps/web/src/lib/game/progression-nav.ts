@@ -132,8 +132,8 @@ const pathnameOf = (path: string): string => path.split(/[?#]/, 1)[0] ?? '';
 export type HistoryEntry = { readonly path: string; readonly key: string };
 
 export type UpMove =
-  /** Le parent est sous nous, dans la suite d'écrans du jeu : on y RECULE (position retrouvée). */
-  | { readonly kind: 'traverse'; readonly key: string }
+  /** Le parent est sous nous, dans la suite d'écrans du jeu : on y RECULE de `delta` entrées (position retrouvée). */
+  | { readonly kind: 'traverse'; readonly delta: number }
   /** Le parent n'est pas dans l'historique du jeu (lien profond) : l'écran est REMPLACÉ par lui. */
   | { readonly kind: 'replace' }
   /** L'historique est illisible (navigateur sans API Navigation) : on avance vers le parent. */
@@ -151,8 +151,8 @@ export function upMove(params: { readonly parentPath: string; readonly entries: 
   const before = entries.slice(0, Math.max(0, index)).reverse();
   const run = before.findIndex((entry) => !isGamePath(entry.path));
   const inGame = run === -1 ? before : before.slice(0, run);
-  const parent = inGame.find((entry) => pathnameOf(entry.path) === pathnameOf(parentPath));
-  return parent === undefined ? { kind: 'replace' } : { kind: 'traverse', key: parent.key };
+  const steps = inGame.findIndex((entry) => pathnameOf(entry.path) === pathnameOf(parentPath));
+  return steps === -1 ? { kind: 'replace' } : { kind: 'traverse', delta: -(steps + 1) };
 }
 
 /**

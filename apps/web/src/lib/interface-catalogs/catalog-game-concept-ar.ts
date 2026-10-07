@@ -1,10 +1,8 @@
 import type { GameConceptCatalog } from '@/lib/i18n-game-catalog';
 
-/** LES CONCEPTS DE « PROGRESSION » (#9542, #9563) — ce que disent la première page, les fiches et le tableau de bord (`game.concept.*`, `game.fiche.*`, `game.fact.*`, `game.dashboard.*`). Chargé avec les routes de Progression, jamais avec le bandeau ni le carnet des règles. Mêmes clés et mêmes paramètres que le français. */
+/** LES CONCEPTS DE « PROGRESSION » (#9542, #9563) — ce que disent la première page et les fiches (`game.concept.*`, `game.fiche.*`, `game.fact.*`). Chargé avec les routes de Progression, jamais avec le bandeau ni le carnet des règles. Mêmes clés et mêmes paramètres que le français. */
 const ar = {
   'game.progression.title': 'التقدّم',
-  'game.dashboard.title': 'لوحة المتابعة',
-  'game.dashboard.hint': 'كل بياناتك، مفهومًا بعد مفهوم.',
   'game.concept.why_label': 'ما فائدته',
   'game.concept.how_label': 'كيف يعمل',
   'game.fiche.what': 'ما هو؟',
@@ -48,7 +46,6 @@ const ar = {
   'game.concept.league.tip.1': 'العب قليلًا كل يوم: نقاط الأسبوع تتراكم.',
   'game.concept.league.tip.2': 'استهدف المراكز الأولى قبل مساء الأحد.',
   'game.concept.league.more': 'عرض الترتيب',
-  'game.concept.league.value': '{league} · المركز ⁦{rank}⁩',
   'game.concept.league.unplaced': 'لم تُوضع في مجموعة بعد',
   'game.concept.season.name': 'الموسم',
   'game.concept.season.why': 'الموسم مسار من ثمانية أسابيع، وفي نهايته كأس.',
@@ -108,6 +105,7 @@ const ar = {
   'game.concept.chip.chest.ready': 'الصندوق جاهز',
   'game.concept.chip.chest.claimed': 'الصندوق مفتوح',
   'game.concept.chip.can_mint': 'السكّ ممكن',
+  'game.concept.chip.mint_covered': 'يكفي لسكّ Meesh',
   'game.concept.chip.left': 'الباقي: ⁦{count}⁩',
   'game.concept.chip.week': 'الأسبوع {week}',
   'game.concept.chip.no_elan': 'لا اندفاع الآن',
@@ -152,7 +150,6 @@ const ar = {
   'game.detail.open': '{name}: عرض التفاصيل',
   'game.detail.rarity': 'الندرة',
   'game.detail.header_group': 'رتبتي وعملات Meesh',
-  'game.detail.meesh_sheet': 'عملات Meesh',
   'game.detail.badge.what': 'الوسام يُظهر كم مرة قمت بإجراء ما.',
   'game.detail.badge.how': 'كرّر هذا الإجراء: عند كل درجة يتغيّر معدن الوسام.',
   'game.detail.succes.what': 'الإنجاز يسجّل لحظة نادرة من قصتك على Meeshy.',

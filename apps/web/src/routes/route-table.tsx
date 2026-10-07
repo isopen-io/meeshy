@@ -142,8 +142,6 @@ const progressionPrestigeScreen = () =>
    pour les quinze concepts : le gabarit est le même, seule la clé change. */
 const progressionConceptScreen = () =>
   Promise.all([import('@/routes/progression-concept'), loadGameScreenCatalog(currentInterfaceLanguage(), 'progression')]).then(([screen]) => screen);
-const progressionTableauScreen = () =>
-  Promise.all([import('@/routes/progression-tableau'), loadGameScreenCatalog(currentInterfaceLanguage(), 'progression')]).then(([screen]) => screen);
 const progressionReglagesScreen = () =>
   Promise.all([import('@/routes/progression-reglages'), loadGameScreenCatalog(currentInterfaceLanguage(), 'progression')]).then(([screen]) => screen);
 const progressionBadgesScreen = () =>
@@ -206,10 +204,12 @@ export const ROUTES = {
      « retour » refermerait l'écran entier au lieu du panneau. */
   /* « PROGRESSION » EN SOUS-MENUS (#9563) — la première page ne porte que des
      cartes de concept ; chaque concept a sa FICHE (`$concept` est une clé de
-     `progressionConcepts`, `packages/shared`), et le TABLEAU DE BORD regroupe
-     toutes les données, concept par concept. PRIVÉES (`session-guard.ts`). */
+     `progressionConcepts`, `packages/shared`). Le TABLEAU DE BORD n'existe plus
+     (amendement n° 4) : son adresse sert Progression, qui la REMPLACE par
+     `/me/progression` (`redirectOf`, `lib/game/progression-nav.ts` — la carte
+     de navigation des trois niveaux). PRIVÉES (`session-guard.ts`). */
   progressionConcept: { pattern: '/me/progression/concept/$concept', screen: progressionConceptScreen },
-  progressionTableau: { pattern: '/me/progression/tableau-de-bord', screen: progressionTableauScreen },
+  progressionTableau: { pattern: '/me/progression/tableau-de-bord', screen: progressionScreen },
   progressionBadges: { pattern: '/me/progression/badges', screen: progressionBadgesScreen },
   /* LA LIGUE (#9384, #9385) — la ligue publique, la ligue entre amis et la
      mission en duo. PRIVÉE : `session-guard.ts`. */

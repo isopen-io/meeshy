@@ -30,9 +30,9 @@ import { GameTouch, PRESS } from './game-touch';
 
 /**
  * LES PIÈCES D'UN CONCEPT DE « PROGRESSION » (#9563) — l'emblème, la chip, la
- * carte de la première page et la table de données. La première page, la fiche
- * et le tableau de bord les partagent : un concept se reconnaît au même dessin
- * et se lit dans les mêmes mots aux trois endroits.
+ * carte de la première page et la table de données. La première page et la
+ * fiche les partagent : un concept se reconnaît au même dessin et se lit dans
+ * les mêmes mots aux deux endroits.
  *
  * L'emblème est un dessin du jeu (anneau, blason, pièce, gemme…) ou, pour les
  * concepts sans dessin propre, la Signature Meeshy dans sa teinte — jamais une
@@ -102,10 +102,11 @@ export function ConceptEmblem({ concept, view, size }: { readonly concept: Progr
  * sa rangée, `truncate` la coupe d'une ellipse en DERNIER recours — un texte
  * agrandi par le système, une valeur que personne n'avait prévue.
  */
-export function ConceptChip({ children, tint = 'var(--color-ios-ink-3)' }: { readonly children: ReactNode; readonly tint?: string }) {
+export function ConceptChip({ children, tint = 'var(--color-ios-ink-3)', urgent = false }: { readonly children: ReactNode; readonly tint?: string; readonly urgent?: boolean }) {
   return (
     <span
       data-chip=""
+      {...(urgent ? { 'data-chip-urgent': '' } : {})}
       className="max-w-full truncate whitespace-nowrap rounded-chip px-2.5 py-1 text-check font-semibold"
       style={{ backgroundColor: `color-mix(in srgb, ${tint} 14%, transparent)`, color: GAME_INK }}
     >
@@ -120,13 +121,28 @@ export function ConceptChip({ children, tint = 'var(--color-ios-ink-3)' }: { rea
  * chacune ouvre les précisions de SA donnée. Le bouton porte la cible de 44 pt,
  * la pastille garde sa taille.
  */
-export function ConceptChips({ chips, open }: { readonly chips: readonly ConceptChipView[]; readonly open?: (chip: ConceptChipView) => ElementDetail | null }) {
+export function ConceptChips({
+  chips,
+  open,
+  urgent = false,
+}: {
+  readonly chips: readonly ConceptChipView[];
+  readonly open?: (chip: ConceptChipView) => ElementDetail | null;
+  /** La première pastille demande une action : elle prend la teinte d'attention (#9563, amendement n° 4). */
+  readonly urgent?: boolean;
+}) {
   if (chips.length === 0) return null;
   return (
     <span data-chips="" className={`flex min-w-0 max-w-full flex-wrap ${open === undefined ? 'gap-1.5' : 'justify-center gap-x-1.5'}`}>
-      {chips.map((chip) =>
+      {chips.map((chip, index) =>
         open === undefined ? (
-          <ConceptChip key={chip.text}>{chip.text}</ConceptChip>
+          urgent && index === 0 ? (
+            <ConceptChip key={chip.text} tint="var(--color-warn)" urgent>
+              {chip.text}
+            </ConceptChip>
+          ) : (
+            <ConceptChip key={chip.text}>{chip.text}</ConceptChip>
+          )
         ) : (
           <GameTouch key={chip.text} detail={open(chip)} className="inline-flex min-w-0 max-w-full items-center" style={{ minHeight: 44 }}>
             <ConceptChip>{chip.text}</ConceptChip>
@@ -218,7 +234,8 @@ function Head({ emblem, name, value }: { readonly emblem: ReactNode; readonly na
  * marche, deux lignes au plus chacune — sans libellé visible, la place manque à
  * 320 px : la première phrase est à l'encre, la seconde en retrait, et un
  * lecteur d'écran entend « à quoi ça sert » puis « comment ça marche ». Aucun
- * geste ici : ils vivent dans la fiche.
+ * geste ici : ils vivent dans la fiche. Ce qui demande une action (coffre prêt,
+ * Flamme en danger, frappe possible…) est la PREMIÈRE pastille, teintée.
  */
 export function ConceptCard({ concept, view }: { readonly concept: ConceptView; readonly view: EngagementWithGame }) {
   return (
@@ -226,11 +243,12 @@ export function ConceptCard({ concept, view }: { readonly concept: ConceptView; 
       to="progressionConcept"
       params={{ concept: concept.key }}
       data-concept-card={concept.key}
+      {...(concept.urgent ? { 'data-concept-urgent': '' } : {})}
       className={`${PRESS} flex flex-col gap-2 rounded-card px-4 py-3`}
       style={{ minHeight: 44, backgroundColor: GAME_CARD }}
     >
       <Head emblem={<ConceptEmblem concept={concept.key} view={view} size={36} />} name={concept.name} value={concept.value} />
-      <ConceptChips chips={concept.chips} />
+      <ConceptChips chips={concept.chips} urgent={concept.urgent} />
       {concept.gauge === null ? null : <ConceptGauge gaugeKey={`card:${concept.key}`} progress={concept.gauge} label={`${concept.name} — ${concept.value}`} />}
       <span className="sr-only">{gameText('game.concept.why_label')} :</span>
       <span data-concept-why="" className="line-clamp-2 text-caption" style={{ color: GAME_INK }}>
@@ -245,11 +263,11 @@ export function ConceptCard({ concept, view }: { readonly concept: ConceptView; 
 }
 
 type RowTarget =
-  | { readonly to: 'progressionTableau' | 'progressionCarnet' | 'progressionRegles' | 'progressionReglages' }
+  | { readonly to: 'progressionCarnet' | 'progressionRegles' | 'progressionReglages' }
   | { readonly to: ConceptView['more'][number]['to'] }
   | { readonly to: 'progressionConcept'; readonly concept: ProgressionConcept };
 
-/** Une ligne de la même forme que la tête d'une carte : le tableau de bord, le carnet, les règles, les réglages, les sous-pages. */
+/** Une ligne de la même forme que la tête d'une carte : le carnet, les règles, les réglages, les sous-pages. */
 export function ProgressionRow({
   target,
   emblem,
@@ -281,16 +299,11 @@ export function RowEmblem({ tint = GAME_BRAND }: { readonly tint?: string }) {
   return <SignatureEmblem size={36} tint={tint} />;
 }
 
-/** L'emblème de l'entrée « Tableau de bord » : un panneau d'argent, la Signature et trois barres. */
-export function DashboardEmblem({ size = 36 }: { readonly size?: number }) {
-  return <ConceptMark kind="dashboard" size={size} />;
-}
-
 type FactRow = { readonly label: string; readonly value: string };
 
 /**
- * Les données d'un concept, libellé → valeur : la fiche (« Où j'en suis »), le
- * tableau de bord et la modale. Avec `open`, chaque ligne est un bouton qui
+ * Les données d'un concept, libellé → valeur : la fiche (« Où j'en suis ») et
+ * la modale. Avec `open`, chaque ligne est un bouton qui
  * ouvre les précisions de SA donnée (cible de 44 pt, la ligne entière) ; sans
  * lui (dans la modale elle-même), elle se lit.
  */

@@ -53,7 +53,6 @@ import type { GameActions } from './progression-game-actions';
 import { ProgressionHeaderGroup } from './progression-header-group';
 import { ProgressionShell } from './progression-shell';
 import { AchievementsSection, AxisRow, GeneratedAchievements } from './progression-parts';
-import { TableauBody } from './progression-tableau';
 import { ProgressionBody } from './progression';
 
 /**
@@ -204,7 +203,8 @@ describe('chaque élément d’une fiche est un bouton qui ouvre la modale de SO
       const host = await mounter.mount(tree(playing, <ConceptFiche concept={concept} progress={playing} host={{ actions: idle, online: true }} now={NOW} />, concept));
       const view = conceptView(concept, playing, NOW);
       const touches = [...host.querySelectorAll<HTMLButtonElement>('[data-concept-fiche] button[data-detail]')];
-      expect(host.querySelector('[data-fiche-section="hero"] button[data-detail]')).not.toBeNull();
+      /* Le héros générique : son emblème s'ouvre. Une pièce de jeu qui tient lieu de héros (amendement n° 4) garde ses propres touchers. */
+      if (host.querySelector('[data-fiche-hero="generic"]') !== null) expect(host.querySelector('[data-fiche-section="hero"] button[data-detail]')).not.toBeNull();
       expect(touches.length).toBeGreaterThanOrEqual(view.facts.length);
       for (const button of touches) {
         expect(button.className).toContain('game-press');
@@ -227,9 +227,9 @@ describe('chaque élément d’une fiche est un bouton qui ouvre la modale de SO
     await mounter.click(dialogOf()?.querySelector<HTMLButtonElement>('button[data-sheet-close]') ?? null);
     mounter.unmountAll();
 
-    const board = await mounter.mount(tree(playing, <TableauBody progress={playing} now={NOW} />));
-    await mounter.click(board.querySelector<HTMLButtonElement>('[data-dashboard-block="flame"] button[data-detail]'));
-    expect(dialogOf()?.querySelector('a[data-detail-fiche]')?.getAttribute('href')).toBe('/me/progression/concept/flame');
+    const header = await mounter.mount(tree(playing, <ProgressionHeaderGroup progress={playing} />));
+    await mounter.click(header.querySelector<HTMLButtonElement>('[data-header-item="rank"]'));
+    expect(dialogOf()?.querySelector('a[data-detail-fiche]')?.getAttribute('href')).toBe('/me/progression/concept/glory');
   });
 });
 
@@ -321,25 +321,6 @@ describe('les sous-pages : chaque élément se touche et ouvre SES précisions',
   });
 });
 
-describe('le tableau de bord : chaque ligne de donnée s’ouvre', () => {
-  test('autant de boutons que de données, chacun ouvre la modale à son nom', async () => {
-    const host = await mounter.mount(tree(playing, <TableauBody progress={playing} now={NOW} />));
-    for (const concept of PROGRESSION_CONCEPTS) {
-      const view = conceptView(concept, playing, NOW);
-      const touches = [...host.querySelectorAll<HTMLButtonElement>(`[data-dashboard-block="${concept}"] button[data-detail]`)];
-      expect({ concept, touches: touches.length }).toEqual({ concept, touches: view.facts.length });
-    }
-    const first = must(host.querySelector<HTMLButtonElement>('[data-dashboard-block="glory"] button[data-detail]'), 'ligne de Gloire');
-    await mounter.click(first);
-    expect(dialogOf()?.querySelector('h2')?.textContent).toBe(first.dataset.detailName);
-  });
-
-  test('le titre d’un bloc reste un lien vers la fiche', () => {
-    const page = renderToStaticMarkup(<TableauBody progress={playing} now={NOW} />);
-    expect(page).toContain('href="/me/progression/concept/glory"');
-  });
-});
-
 describe('la modale', () => {
   /* Un VRAI `<dialog>` ouvert par `showModal()` (focus piégé, Échap, fond inerte) — jamais un `<div role="dialog" aria-modal>`, qui annonce une modale sans en être une (`auth-screens.test.tsx`). */
   test('c’est un `<dialog>` modal nommé par son titre ; elle dit l’état, ce que c’est, comment l’obtenir', async () => {
@@ -391,39 +372,37 @@ describe('la première page : une carte reste UN lien, ses pastilles ne s’ouvr
 });
 
 describe('l’en-tête de la première page', () => {
-  test('servis : UN groupe, le blason du rang puis le nombre de Meeshes avec sa pièce, chacun un bouton qui rebondit', () => {
+  test('servis : UN groupe, le blason du rang puis le nombre de Meeshes avec sa pièce, chacun rebondit', () => {
     const group = document.createElement('div');
-    group.innerHTML = renderToStaticMarkup(<ProgressionHeaderGroup progress={playing} actions={idle} />);
+    group.innerHTML = renderToStaticMarkup(<ProgressionHeaderGroup progress={playing} />);
     const surface = must(group.querySelector('[data-progression-header-group]'), 'groupe');
     expect(group.querySelectorAll('[data-progression-header-group]')).toHaveLength(1);
-    const buttons = [...surface.querySelectorAll('button')];
-    expect(buttons.map((button) => button.dataset.headerItem)).toEqual(['rank', 'meesh']);
-    for (const button of buttons) expect(button.className).toContain('game-press');
+    const items = [...surface.querySelectorAll<HTMLElement>('[data-header-item]')];
+    expect(items.map((item) => item.dataset.headerItem)).toEqual(['rank', 'meesh']);
+    for (const item of items) expect(item.className).toContain('game-press');
     expect(surface.querySelector('[data-header-item="meesh"]')?.textContent).toContain(String(playing.meesh?.balance));
     expect(surface.querySelector('[data-header-item="rank"]')?.getAttribute('aria-label')).toContain('Écho');
   });
 
   test('rien si la donnée n’est pas servie : ni blason sans le jeu, ni compteur sans solde, ni groupe vide', () => {
     const { meesh: _meesh, ...sansSolde } = before;
-    expect(renderToStaticMarkup(<ProgressionHeaderGroup progress={sansSolde} actions={idle} />)).toBe('');
-    const avecSolde = renderToStaticMarkup(<ProgressionHeaderGroup progress={before} actions={idle} />);
+    expect(renderToStaticMarkup(<ProgressionHeaderGroup progress={sansSolde} />)).toBe('');
+    const avecSolde = renderToStaticMarkup(<ProgressionHeaderGroup progress={before} />);
     expect(avecSolde).toContain('data-header-item="meesh"');
     expect(avecSolde).not.toContain('data-header-item="rank"');
   });
 
-  test('le blason ouvre la modale du rang ; le compteur rouvre la feuille des Meeshes, avec la frappe quand les points le permettent', async () => {
-    const mints: number[] = [];
-    const actions: GameActions = { ...idle, mint: () => void mints.push(1) };
-    const canMint: EngagementWithGame = { ...playing, meesh: { ...must(playing.meesh, 'solde'), canMint: true, missingPoints: 0 } };
-    const host = await mounter.mount(tree(canMint, <ProgressionHeaderGroup progress={canMint} actions={actions} />));
+  /* Carte de navigation (#9563, amendement n° 4) : la frappe a UN site, la fiche des Meeshes ; la feuille de frappe de l'en-tête la redoublait. */
+  test('le blason ouvre la modale du rang ; le compteur ouvre la fiche des Meeshes, seul site de la frappe', async () => {
+    const host = await mounter.mount(tree(playing, <ProgressionHeaderGroup progress={playing} />));
     await mounter.click(host.querySelector<HTMLButtonElement>('[data-header-item="rank"]'));
     expect(dialogOf()?.dataset.gameDetail).toMatch(/^rank:/);
     await mounter.click(dialogOf()?.querySelector<HTMLButtonElement>('button[data-sheet-close]') ?? null);
 
-    await mounter.click(host.querySelector<HTMLButtonElement>('[data-header-item="meesh"]'));
-    const sheet = must(document.querySelector('dialog[data-meesh-sheet]'), 'feuille des Meeshes');
-    await mounter.click(sheet.querySelector<HTMLButtonElement>('[data-meesh-mint]'));
-    expect(mints).toHaveLength(1);
+    const counter = must(host.querySelector<HTMLAnchorElement>('[data-header-item="meesh"]'), 'compteur');
+    expect(counter.tagName).toBe('A');
+    expect(counter.getAttribute('href')).toBe('/me/progression/concept/meesh');
+    expect(host.querySelector('[data-meesh-mint]')).toBeNull();
   });
 });
 
@@ -453,7 +432,7 @@ describe('aucune page de Progression ne monte d’en-tête statique', () => {
       return <p>contenu</p>;
     };
     const host = await mounter.mount(
-      <ProgressionShell title="Progression" back={{ to: 'list', label: 'Retour' }}>
+      <ProgressionShell title="Progression" screen={{ kind: 'root' }}>
         <Counted />
       </ProgressionShell>,
     );
@@ -476,7 +455,7 @@ describe('aucune page de Progression ne monte d’en-tête statique', () => {
 
   test('le retour est un disque de verre de 44 points, qui rebondit', async () => {
     const host = await mounter.mount(
-      <ProgressionShell title="Ligue" back={{ to: 'progressionConcept', concept: 'league', label: 'Retour à la progression' }}>
+      <ProgressionShell title="Ligue" screen={{ kind: 'subpage', route: 'progressionLigue', concept: 'league' }}>
         <p>contenu</p>
       </ProgressionShell>,
     );

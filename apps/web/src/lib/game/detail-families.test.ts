@@ -32,7 +32,6 @@ const LABELS = [
   'game.detail.open',
   'game.detail.rarity',
   'game.detail.header_group',
-  'game.detail.meesh_sheet',
   'game.detail.elan.active',
   'game.detail.elan.idle',
   'game.detail.elan.points',

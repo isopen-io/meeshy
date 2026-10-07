@@ -147,10 +147,11 @@ describe('Mee sur le coin du héros', () => {
     expect(page).toMatch(/data-game-hero-guide=""[^>]*data-game-guide-target="game-guide"|data-game-guide-target="game-guide"[^>]*data-game-hero-guide=""/);
   });
 
-  test('sans carte du guide, Mee propose les règles', () => {
+  /* La carte de navigation (#9563, amendement n° 4) retire les chemins transverses : le héros vit dans la fiche du Niveau, et son lien vers les règles en était un. */
+  test('sans ligne du guide, Mee ne se montre pas : aucun lien vers les règles depuis la fiche du Niveau', () => {
     const page = html({}, { guideLine: null });
-    expect(text(page)).toContain('Une question ? Touche-moi');
-    expect(page).toMatch(/<a[^>]*href="\/me\/progression\/regles"[^>]*data-game-hero-guide=""|<a[^>]*data-game-hero-guide=""[^>]*href="\/me\/progression\/regles"/);
+    expect(page).not.toContain('data-game-hero-guide');
+    expect(page).not.toContain('href="/me/progression/regles"');
   });
 });
 

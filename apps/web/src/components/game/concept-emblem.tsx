@@ -7,29 +7,24 @@ import { PaintDefs } from './paint-defs';
 import { SignatureGlyph } from './signature';
 
 /**
- * L'EMBLÈME D'UN CONCEPT SANS OBJET (#9563, amendement n° 2) — Points, Élans et
- * Tableau de bord. Le niveau a son anneau, la Gloire son blason, la Meesh sa
- * pièce ; ces trois-là portaient une Signature dans une pastille teintée, trois
- * fois la même. Leur dessin vient de la table `lib/game/concept-emblems.ts`.
+ * L'EMBLÈME D'UN CONCEPT SANS OBJET (#9563, amendement n° 2) — Points et Élans.
+ * Le niveau a son anneau, la Gloire son blason, la Meesh sa pièce ; ces deux-là
+ * portaient une Signature dans une pastille teintée, deux fois la même. Leur dessin vient de la table `lib/game/concept-emblems.ts`.
  *
  * DÉCORATIF (`aria-hidden`) : l'hôte dit le nom du concept.
  */
 
-const BRAND = 'var(--ios-indigo-600)';
 const GOLD: GamePaint = 'gold';
 
 const toneFill = (tone: EmblemTone, uid: string, paint: GamePaint): string =>
-  tone === 'gold' ? paintUrl(uid, GOLD) : tone === 'brand' ? BRAND : inkToken(paint);
+  tone === 'gold' ? paintUrl(uid, GOLD) : inkToken(paint);
 
 function Accent({ accent, uid, paint }: { readonly accent: EmblemAccent; readonly uid: string; readonly paint: GamePaint }) {
   const color = toneFill(accent.tone, uid, paint);
   if (accent.kind === 'spark') {
     return <path data-game-emblem-accent="spark" d={accent.d} fill={color} stroke={tokenVar('glint')} strokeWidth="1.5" strokeLinejoin="round" />;
   }
-  if (accent.kind === 'chevron') {
-    return <path data-game-emblem-accent="chevron" d={accent.d} fill="none" stroke={color} strokeWidth={accent.strokeWidth} strokeLinecap="round" strokeLinejoin="round" />;
-  }
-  return <rect data-game-emblem-accent="bar" x={accent.x} y={accent.y} width={accent.width} height={accent.height} rx={accent.rx} fill={color} />;
+  return <path data-game-emblem-accent="chevron" d={accent.d} fill="none" stroke={color} strokeWidth={accent.strokeWidth} strokeLinecap="round" strokeLinejoin="round" />;
 }
 
 export function ConceptMark({ kind, size }: { readonly kind: ConceptEmblemKind; readonly size: number }) {

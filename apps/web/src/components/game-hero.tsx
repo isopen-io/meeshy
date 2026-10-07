@@ -10,7 +10,6 @@ import { tierTint } from '@/lib/game/tier-emblem';
 import { familyName, formatCount, gameText, levelTierName, pointsLabel, rankLabel, rankName } from '@/lib/view/game-copy';
 import { levelRingLabelWithPrestige } from '@/lib/view/game-copy-v2';
 import { elanDetail, rankDetail, ringDetail } from '@/lib/view/game-detail';
-import { Link } from '@/routes/route-table';
 
 import { GAME_CARD, GAME_INK, GAME_INK_2, GameChip } from './game-surface';
 import { GameTouch } from './game-touch';
@@ -44,7 +43,12 @@ import { GameTouch } from './game-touch';
 
 export type GameHeroProps = {
   readonly game: GameBlock;
-  /** La ligne courte du guide du moment ; `null` ou absente : Mee propose les règles. */
+  /**
+   * La ligne courte du guide du moment ; `null` ou absente : Mee ne se montre
+   * pas — le héros vit dans la fiche du Niveau (niveau 2), et son ancien lien
+   * vers les règles (autre niveau 2) était un chemin transverse que la carte de
+   * navigation retire (#9563, amendement n° 4).
+   */
   readonly guideLine?: string | null;
   /** Les gains énumérés ; par défaut, dérivés du barème. Injectable pour les témoins. */
   readonly rules?: readonly EarnRule[];
@@ -61,25 +65,15 @@ const scrollToGuide = (): void => {
 
 const BIRD_BUTTON = 'flex min-w-0 flex-1 items-center gap-2 text-start';
 
-function MeeCorner({ line }: { readonly line: string | null }) {
-  const body = (
-    <>
+function MeeCorner({ line }: { readonly line: string }) {
+  return (
+    <button type="button" data-game-hero-guide="" data-game-guide-target="game-guide" onClick={scrollToGuide} className={BIRD_BUTTON} style={{ minHeight: 44 }}>
       <span className="min-w-0 flex-1 text-caption font-semibold" style={{ color: GAME_INK }}>
-        {line ?? gameText('game.hero.mee_idle')}
+        {line}
       </span>
       <span aria-hidden="true" className="shrink-0">
         <GameBird bird="meeGuide" size={56} flip />
       </span>
-    </>
-  );
-  const style = { minHeight: 44 } as const;
-  return line === null ? (
-    <Link to="progressionRegles" data-game-hero-guide="" className={BIRD_BUTTON} style={style}>
-      {body}
-    </Link>
-  ) : (
-    <button type="button" data-game-hero-guide="" data-game-guide-target="game-guide" onClick={scrollToGuide} className={BIRD_BUTTON} style={style}>
-      {body}
     </button>
   );
 }
@@ -201,7 +195,7 @@ export function GameHero({ game, guideLine = null, rules, elan }: GameHeroProps)
       <span aria-hidden="true" data-game-hero-watermark="" className="pointer-events-none absolute -end-10 -top-8 opacity-[0.07]">
         <Signature size={260} color="var(--color-ios-ink)" />
       </span>
-      <MeeCorner line={guideLine} />
+      {guideLine === null ? null : <MeeCorner line={guideLine} />}
       <WhereIAm game={game} />
       <HowToEarn rules={rules ?? earnRules()} elan={elan} />
     </section>

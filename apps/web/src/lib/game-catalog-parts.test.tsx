@@ -28,7 +28,6 @@ import { ProgressionBody } from '@/routes/progression';
 import { ConceptFiche } from '@/routes/progression-concept';
 import type { GameActions } from '@/routes/progression-game-actions';
 import { RulesBody } from '@/routes/progression-rules';
-import { TableauBody } from '@/routes/progression-tableau';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 /**
@@ -105,7 +104,6 @@ const ENTRIES: Readonly<Record<Exclude<GameScreen, 'banner'>, readonly string[]>
   progression: [
     'routes/progression.tsx',
     'routes/progression-concept.tsx',
-    'routes/progression-tableau.tsx',
     'routes/progression-ligue.tsx',
     'routes/progression-saison.tsx',
     'routes/progression-vitrine.tsx',
@@ -250,10 +248,9 @@ describe('chaque écran se rend avec ses SEULES parties, dans les sept langues',
       expect(rendered(renderToStaticMarkup(<PlayerBanner model={model} />))).toContain('data-player-banner');
     });
 
-    test(`${language} : la première page, les quinze fiches et le tableau de bord, sans le carnet des règles`, async () => {
+    test(`${language} : la première page et les quinze fiches, sans le carnet des règles`, async () => {
       await only(language, 'progression');
       rendered(renderToStaticMarkup(<ProgressionBody progress={playing} now={NOW} />));
-      rendered(renderToStaticMarkup(<TableauBody progress={playing} now={NOW} />));
       for (const concept of PROGRESSION_CONCEPTS) {
         rendered(renderToStaticMarkup(<ConceptFiche concept={concept} progress={playing} host={{ actions: idle, online: true }} now={NOW} />));
       }

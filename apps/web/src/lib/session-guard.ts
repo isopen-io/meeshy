@@ -53,7 +53,12 @@ export type RouteKey =
   | 'progressionAtlas'
   | 'progressionPrestige'
   | 'progressionReglages'
-  /** LA FICHE D'UN CONCEPT ET LE TABLEAU DE BORD (#9563) — PRIVÉES, même raison. */
+  /**
+   * LA FICHE D'UN CONCEPT (#9563) — PRIVÉE, même raison. Et l'ancienne adresse
+   * du Tableau de bord, qui redirige vers Progression (amendement n° 4) : privée
+   * elle aussi, sans quoi un favori ouvert sans session peindrait Progression en
+   * squelette au lieu de mener à la connexion.
+   */
   | 'progressionConcept'
   | 'progressionTableau'
   /**

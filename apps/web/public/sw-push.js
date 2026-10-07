@@ -96,6 +96,14 @@ const PROGRESSION_TYPES = [
   'streak_milestone',
   'level_up',
 ];
+/** JUMEAU de `PROGRESSION_TYPE_SECTIONS` (#9563) : la fiche que chaque type ouvre, jamais la racine. */
+const PROGRESSION_TYPE_SECTIONS = {
+  achievement_unlocked: 'succes',
+  ACHIEVEMENT_UNLOCKED: 'succes',
+  badge_earned: 'badges',
+  streak_milestone: 'flame',
+  level_up: 'level',
+};
 const GAME_LEAGUE_TYPES = ['game_duo_invited', 'game_duo_accepted', 'game_league_result'];
 const GAME_SEASON_TYPES = ['game_season_step'];
 const GAME_MISSION_TYPES = ['game_mission_window'];
@@ -319,6 +327,9 @@ function resolvePushTarget(data) {
   if (GAME_LEAGUE_TYPES.indexOf(type) >= 0) return { route: 'progressionLigue', params: {}, search: {} };
   if (GAME_SEASON_TYPES.indexOf(type) >= 0) return { route: 'progressionSaison', params: {}, search: {} };
   if (GAME_MISSION_TYPES.indexOf(type) >= 0) return { route: 'progression', params: {}, search: { section: 'missions' } };
+  if (PROGRESSION_TYPES.indexOf(type) >= 0 && Object.prototype.hasOwnProperty.call(PROGRESSION_TYPE_SECTIONS, type)) {
+    return { route: 'progression', params: {}, search: { section: PROGRESSION_TYPE_SECTIONS[type] } };
+  }
 
   const indice = texte(data.route);
   if (HINTED_ROUTES.indexOf(indice) >= 0) {
@@ -927,6 +938,7 @@ self.meeshyPushTarget = {
   GAME_SEASON_TYPES: GAME_SEASON_TYPES,
   GAME_MISSION_TYPES: GAME_MISSION_TYPES,
   PROGRESSION_TYPES: PROGRESSION_TYPES,
+  PROGRESSION_TYPE_SECTIONS: PROGRESSION_TYPE_SECTIONS,
   SECURITY_TYPES: SECURITY_TYPES,
   HINTED_ROUTES: HINTED_ROUTES,
   NOTIFICATION_CLICKED_MESSAGE: NOTIFICATION_CLICKED_MESSAGE,

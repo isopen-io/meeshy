@@ -224,7 +224,7 @@ export default function ProgressionCarnetScreen() {
   /* Les jours de la Flamme du bandeau : lus dans le cache de Progression, jamais redemandés. */
   const flameDays = useQueryClient().getQueryData<EngagementWithGame>(ENGAGEMENT_PROGRESS_QUERY_KEY)?.game?.flame.days ?? null;
   return (
-    <ProgressionShell title={gameText('game.notebook.page_title')} back={{ to: 'progression', label: gameText('game.page.back') }}>
+    <ProgressionShell title={gameText('game.notebook.page_title')}>
       <CarnetBody env={appPhotoEnv()} flameDays={flameDays} />
     </ProgressionShell>
   );

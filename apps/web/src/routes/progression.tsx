@@ -7,27 +7,25 @@ import { GameDetailHost } from '@/components/game-detail-sheet';
 import { GAME_CARD, GAME_INK, GAME_INK_2, GAME_WARM } from '@/components/game-surface';
 import { PRESS } from '@/components/game-touch';
 import { MascotCoach } from '@/components/mascot';
-import { ConceptCard, DashboardEmblem, ProgressionRow, RowEmblem } from '@/components/progression-concept';
+import { ConceptCard, ProgressionRow, RowEmblem } from '@/components/progression-concept';
 import { unwrap } from '@/lib/api/client';
 import { apiDeps } from '@/lib/api/deps';
 import { ENGAGEMENT_PROGRESS_QUERY_KEY, loadEngagementProgress, type EngagementWithGame } from '@/lib/api/engagement';
 import { useGamePrefs } from '@/lib/game/preferences';
-import { progressionSection } from '@/lib/game/progression-section';
+import { redirectOf } from '@/lib/game/progression-nav';
 import { useGameSettings } from '@/lib/game/use-game-settings';
 import { suspendForGameCatalog } from '@/lib/i18n-game-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
-import { PROGRESSION_SECTION_PARAM } from '@/lib/notifications/target';
 import { useOptionalRoute } from '@/lib/router';
 import { gameText } from '@/lib/view/game-copy';
 import { conceptView, shownConcepts, shownProgress } from '@/lib/view/progression-concepts';
 import { useMinute } from '@/lib/view/use-minute';
-import { useGameActions } from '@/routes/progression-game-actions';
 import { ProgressionHeaderGroup } from '@/routes/progression-header-group';
 import { GameLead } from '@/routes/progression-lead';
 import { ProgressionError, ProgressionSkeleton } from '@/routes/progression-parts';
-import { OfflineNotice, ProgressionShell } from '@/routes/progression-shell';
-import { Link, href, navigate } from '@/routes/route-table';
+import { OfflineNotice, ProgressionShell, pathOfTarget } from '@/routes/progression-shell';
+import { Link, navigate } from '@/routes/route-table';
 
 import type { EngagementProgress } from '@meeshy/shared/utils/engagement-progress';
 import { mascotEvent as detectMascotEvent, mascotMoment, type MascotEvent } from '@meeshy/shared/utils/mascot';
@@ -43,19 +41,21 @@ export { ElansHero, LastAchievementHero, LevelHero, MeeshDetail } from '@/routes
  * d'un coup d'œil. Il devient un SOMMAIRE : une carte par concept (tête, données
  * importantes, à quoi ça sert, comment ça marche), qui ouvre sa fiche
  * (`progression-concept.tsx`) — c'est là que vivent toutes ses données et ses
- * gestes. Le tableau de bord (`progression-tableau.tsx`) regroupe tout, en
- * lecture seule.
+ * gestes. Le Tableau de bord, qui redisait cette page et les fiches, n'existe
+ * plus (amendement n° 4) : son adresse ouvre cette page.
  *
  * Ce fichier ne décide ni de l'ordre ni de ce qui existe : il PARCOURT
- * `progressionConcepts` (`packages/shared`), que la fiche, le tableau de bord et
- * l'app iOS parcourent aussi. Ce qu'une carte dit vient de `conceptView`
- * (`lib/view/progression-concepts.ts`), écrit une fois pour les trois écrans.
+ * `progressionConcepts` (`packages/shared`), que la fiche et l'app iOS
+ * parcourent aussi. Ce qu'une carte dit vient de `conceptView`
+ * (`lib/view/progression-concepts.ts`), écrit une fois pour les deux écrans ; où
+ * mène chaque toucher, de la carte de navigation (`lib/game/progression-nav.ts`).
  *
  * AUCUN GESTE DANS LA PAGE : ni frappe, ni coffre, ni gel. Une première page qui
  * agit redevient l'écran qu'on vient de quitter. L'en-tête, lui, garde ce que le
  * porteur y avait posé (#5839, #6480) : le blason du rang et le compteur de
- * Meeshes (`progression-header-group.tsx`), sur la coquille partagée dont
- * l'en-tête se réduit quand la page défile dessous (`progression-shell.tsx`).
+ * Meeshes (`progression-header-group.tsx`) — le compteur ouvre la fiche des
+ * Meeshes, seul site de la frappe —, sur la coquille partagée dont l'en-tête se
+ * réduit quand la page défile dessous (`progression-shell.tsx`).
  */
 
 const ROW_GAP = 'flex flex-col gap-2';
@@ -91,9 +91,6 @@ export function ProgressionBody({
   return (
     <div className="flex flex-col gap-4 px-4 py-3">
       {hidden ? <GameHiddenCard /> : playing ? (guide ?? null) : <MascotCoach moment={mascotMoment(progress, mascotEvent)} />}
-      {hidden ? null : (
-        <ProgressionRow target={{ to: 'progressionTableau' }} marker="tableau" emblem={<DashboardEmblem />} name={gameText('game.dashboard.title')} />
-      )}
       <ul data-progression-concepts="" className={ROW_GAP}>
         {shownConcepts(progress, hidden).map((concept, index) => (
           <li key={concept} {...(entering ? { 'data-game-enter': '', style: { '--game-enter-index': Math.min(index, 8) } as CSSProperties } : {})}>
@@ -158,16 +155,40 @@ function ProgressionGuide({ view }: { readonly view: EngagementWithGame }) {
 }
 
 /**
- * `?section=missions` (#9539) : le toucher de l'annonce d'une mission
- * personnelle ouvre désormais la FICHE des missions. L'entrée de l'historique est
- * REMPLACÉE : « retour » depuis la fiche ramène à la première page, pas à
- * l'adresse qui renverrait aussitôt vers la fiche.
+ * LES REDIRECTIONS DE PROGRESSION (carte de navigation, `redirectOf`) :
+ * `?section=<concept>` ouvre la FICHE de ce concept — le toucher d'une
+ * notification du jeu (#9539) —, et l'ancienne adresse du Tableau de bord ouvre
+ * cette page. L'entrée de l'historique est REMPLACÉE : « retour » ne repasse
+ * jamais par l'adresse qui renverrait aussitôt ailleurs, et la fiche reçoit
+ * Progression sous elle (`progression-shell.tsx`).
  */
-function useSectionRedirect(): void {
-  const concept = progressionSection(useOptionalRoute()?.search.get(PROGRESSION_SECTION_PARAM) ?? null);
+function useProgressionRedirect(): void {
+  /* Le contexte de route ne sert qu'à re-rendre à chaque changement d'adresse ; l'adresse se lit telle quelle. */
+  const route = useOptionalRoute();
+  const target = route === null ? null : redirectOf(`${window.location.pathname}${window.location.search}`, pathOfTarget);
   useEffect(() => {
-    if (concept !== undefined) navigate(href('progressionConcept', { concept }), true);
-  }, [concept]);
+    if (target !== null) navigate(target, true);
+  }, [target]);
+}
+
+/**
+ * LE PREMIER TOUCHER SUR UNE CARTE N'ATTEND RIEN — l'écran des fiches est
+ * préchargé quand le navigateur est au repos, une fois la page peinte. Sans lui,
+ * un doigt (qui ne survole rien, donc ne déclenche aucun préchargement à
+ * l'intention) voyait le squelette de route s'intercaler entre la carte et sa
+ * fiche. Le catalogue du jeu est déjà là : c'est le seul octet qui manquait.
+ */
+function usePreloadFiches(): void {
+  useEffect(() => {
+    const idle = (window as Window & { readonly requestIdleCallback?: (run: () => void) => number }).requestIdleCallback;
+    const load = (): void => void import('@/routes/progression-concept');
+    if (idle === undefined) {
+      const timer = setTimeout(load, 600);
+      return () => clearTimeout(timer);
+    }
+    const handle = idle(load);
+    return () => (window as Window & { readonly cancelIdleCallback?: (id: number) => void }).cancelIdleCallback?.(handle);
+  }, []);
 }
 
 /**
@@ -190,7 +211,8 @@ export default function ProgressionScreen() {
   suspendForGameCatalog(currentInterfaceLanguage(), 'progression');
   const online = useOnline();
   useGameSettings(true);
-  useSectionRedirect();
+  useProgressionRedirect();
+  usePreloadFiches();
   const entering = useFirstEntrance();
 
   /**
@@ -200,18 +222,6 @@ export default function ProgressionScreen() {
    */
   const [mascotEvent, setMascotEvent] = useState<MascotEvent | null>(null);
   const seenProgressRef = useRef<EngagementProgress | null>(null);
-
-  /**
-   * LA FRAPPE DE L'EN-TÊTE (#5839, #9563) — le compteur de Meeshes rouvre la
-   * feuille d'avant la refonte, avec sa frappe. L'identifiant d'idempotence est
-   * généré UNE fois par intention de frappe (`progression-game-actions.ts`) :
-   * un retry n'est jamais une seconde frappe.
-   */
-  const actions = useGameActions({
-    onMinted: (result) => {
-      if (result.status === 'minted' && result.balance !== undefined) setMascotEvent({ kind: 'meesh-minted', balance: result.balance });
-    },
-  });
 
   const query = useQuery({
     queryKey: ENGAGEMENT_PROGRESS_QUERY_KEY,
@@ -228,8 +238,7 @@ export default function ProgressionScreen() {
   return (
     <ProgressionShell
       title={gameText('game.progression.title')}
-      back={{ to: 'list', label: 'Retour' }}
-      trailing={query.data === undefined ? null : <ProgressionHeaderGroup progress={query.data} actions={actions} />}
+      trailing={query.data === undefined ? null : <ProgressionHeaderGroup progress={query.data} />}
       notice={online ? null : <OfflineNotice>Hors ligne — progression telle qu’à la dernière ouverture</OfflineNotice>}
     >
       {query.data !== undefined ? (

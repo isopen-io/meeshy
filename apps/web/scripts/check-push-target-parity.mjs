@@ -96,6 +96,11 @@ export function litterauxDuResolveur(
     if (ligne === null) throw new Error(`paramètre introuvable dans discover/view.ts : ${nom}`);
     lu[nom] = ligne[1];
   }
+  /* La fiche que chaque notification d'un concept ouvre (#9563) : une table
+     clé → valeur, lue paire par paire dans l'ordre d'écriture. */
+  const sections = source.match(/const PROGRESSION_TYPE_SECTIONS\b[^=]*=\s*\{([^}]*)\}/);
+  if (sections === null) throw new Error('table introuvable dans target.ts : PROGRESSION_TYPE_SECTIONS');
+  lu.PROGRESSION_TYPE_SECTIONS = Object.fromEntries([...sections[1].matchAll(/'?(\w+)'?\s*:\s*'([^']*)'/g)].map((m) => [m[1], m[2]]));
   /* Les clés de route que le résolveur peut RENDRE — un `route: 'x'` littéral.
      Une clé ajoutée là et absente du jumeau ouvrirait une destination que le
      worker ne sait pas composer. */
@@ -132,7 +137,8 @@ const ADRESSES = [
   [{ type: 'contact_joined', senderUsername: 'awa' }, '/u/awa'],
   [{ type: 'contact_recently_active', senderUsername: 'marie' }, '/u/marie'],
   [{ type: 'login_new_device' }, '/settings'],
-  [{ type: 'badge_earned' }, '/me/progression'],
+  [{ type: 'badge_earned' }, '/me/progression?section=badges'],
+  [{ type: 'level_up', route: 'progression' }, '/me/progression?section=level'],
   [{ type: 'game_duo_invited', route: 'progression' }, '/me/progression/ligue'],
   [{ type: 'game_league_result', route: 'progression' }, '/me/progression/ligue'],
   [{ type: 'game_season_step', route: 'progression' }, '/me/progression/saison'],
@@ -178,6 +184,12 @@ export function auditParite({ table, resolveur, jumeau }) {
         .join(' ; ');
       violations.push(`${nom} a divergé entre target.ts et sw-push.js — ${detail}.`);
     }
+  }
+
+  if (JSON.stringify(resolveur.PROGRESSION_TYPE_SECTIONS) !== JSON.stringify(jumeau.PROGRESSION_TYPE_SECTIONS)) {
+    violations.push(
+      `PROGRESSION_TYPE_SECTIONS a divergé : sw-push.js ${JSON.stringify(jumeau.PROGRESSION_TYPE_SECTIONS)}, target.ts ${JSON.stringify(resolveur.PROGRESSION_TYPE_SECTIONS)}.`,
+    );
   }
 
   for (const nom of [...PARAMS, 'NOTIFICATION_CLICKED_MESSAGE']) {

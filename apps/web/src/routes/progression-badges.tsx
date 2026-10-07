@@ -22,7 +22,6 @@ export default function ProgressionBadgesScreen() {
   suspendForGameCatalog(currentInterfaceLanguage(), 'progression');
   return (
     <ProgressionPage
-      concept="badges"
       titre="Badges"
       teinte={BRAND}
       compte={(p) => `${p.badgesEarned} / ${p.badgesTotal}`}

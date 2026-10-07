@@ -423,7 +423,9 @@ describe('règle 1 — une donnée appartient à un seul concept', () => {
   });
 
   test('devant un ancien serveur, sans Points, le score reste au Niveau et le manque à Meeshes', () => {
-    const short: EngagementWithGame = { ...before, meesh: before.meesh === undefined ? undefined : { ...before.meesh, canMint: false, missingPoints: 120 } };
+    const wallet = before.meesh;
+    if (wallet === undefined) throw new Error('fixture sans Meeshes');
+    const short: EngagementWithGame = { ...before, meesh: { ...wallet, canMint: false, missingPoints: 120 } };
     expect(owners(short, 'score')).toEqual(['level']);
     expect(owners(short, 'mint_missing')).toEqual(['meesh']);
   });
@@ -520,7 +522,7 @@ describe('la carte montre d’abord ce qui demande une action', () => {
     if (item === undefined) throw new Error('fixture sans mission');
     const personal = { ...item, completedAt: null, startsAt: new Date(NOW.getTime() - 3_600_000).toISOString(), endsAt: new Date(NOW.getTime() + 1_800_000).toISOString(), state: 'active' as const };
     const expiring = withGame((game) => ({ ...game, missions: { ...game.missions, personal } }));
-    expect(firstChip(expiring, 'missions')).toStartWith('Se termine dans');
+    expect(firstChip(expiring, 'missions')).toMatch(/^Se termine dans/);
   });
 
   test('Flamme en danger : en tête de la carte de la Flamme', () => {

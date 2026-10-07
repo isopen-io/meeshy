@@ -7,7 +7,7 @@ import { ENGAGEMENT_PROGRESS_QUERY_KEY, loadEngagementProgress } from '@/lib/api
 import { useGameSettings } from '@/lib/game/use-game-settings';
 import { useOnline } from '@/lib/net/online';
 import { ProgressionError, ProgressionSkeleton } from '@/routes/progression-parts';
-import { OfflineNotice, ProgressionShell, type ShellBack } from '@/routes/progression-shell';
+import { OfflineNotice, ProgressionShell } from '@/routes/progression-shell';
 
 import type { EngagementProgress } from '@meeshy/shared/utils/engagement-progress';
 import type { ProgressionConcept } from '@meeshy/shared/utils/progression-layout';
@@ -15,9 +15,10 @@ import type { ProgressionConcept } from '@meeshy/shared/utils/progression-layout
 
 /**
  * LE CADRE D'UNE PAGE DÉDIÉE — Badges, Défis, Succès (#5843), puis toutes les
- * pages de données de Progression. Son en-tête et son défilement sont ceux de la
- * coquille partagée (`progression-shell.tsx`, #9563) ; il monte aussi l'hôte de
- * la modale de précisions.
+ * pages de données de Progression. Son en-tête, son défilement et son RETOUR
+ * sont ceux de la coquille partagée (`progression-shell.tsx`, #9563), qui lit le
+ * parent de la page dans la carte de navigation ; il monte aussi l'hôte de la
+ * modale de précisions.
  *
  * Les trois partagent tout sauf leur contenu : le retour en verre à gauche, le
  * titre, et le COMPTE en haut à droite (« 21 / 85 ») que le porteur a demandé.
@@ -34,19 +35,11 @@ export function ProgressionPage({
   titre,
   teinte,
   compte,
-  concept,
   fiche,
   children,
 }: {
   /** La fiche que cette page EST (#9563) : la modale de précisions n'y propose pas « Voir la fiche » de ce concept. */
   fiche?: ProgressionConcept;
-  /**
-   * Le concept dont cette page est la SOUS-PAGE (#9563) : « retour » ramène alors
-   * à sa fiche — le sous-menu d'où l'on vient — et non à la première page.
-   * Absent : la page est une fiche ou le tableau de bord, « retour » ramène à
-   * Progression.
-   */
-  concept?: ProgressionConcept;
   titre: string;
   teinte: string;
   /** Ce qui s'affiche en haut à droite — `null` quand la page n'a rien à compter. */
@@ -62,13 +55,10 @@ export function ProgressionPage({
   });
 
   const total = query.data === undefined ? null : compte(query.data);
-  const back: ShellBack =
-    concept === undefined ? { to: 'progression', label: 'Retour à la progression' } : { to: 'progressionConcept', concept, label: 'Retour à la progression' };
 
   return (
     <ProgressionShell
       title={titre}
-      back={back}
       trailing={
         total === null ? null : (
           <span className="shrink-0 text-body font-bold" style={{ color: teinte }}>

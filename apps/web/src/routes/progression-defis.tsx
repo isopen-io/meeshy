@@ -19,7 +19,6 @@ export default function ProgressionDefisScreen() {
   suspendForGameCatalog(currentInterfaceLanguage(), 'progression');
   return (
     <ProgressionPage
-      concept="defis"
       titre="Défis"
       teinte={STREAK_TINT}
       compte={(p) => {

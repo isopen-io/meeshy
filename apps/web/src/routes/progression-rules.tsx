@@ -138,7 +138,7 @@ export default function ProgressionRulesScreen() {
   suspendForGameCatalog(currentInterfaceLanguage(), 'rules');
   const target = ruleTarget(useOptionalRoute()?.search.get('regle') ?? null);
   return (
-    <ProgressionShell title={gameText('game.rules.page_title')} back={{ to: 'progression', label: gameText('game.page.back') }}>
+    <ProgressionShell title={gameText('game.rules.page_title')}>
       <RulesBody {...(target === undefined ? {} : { target })} />
     </ProgressionShell>
   );

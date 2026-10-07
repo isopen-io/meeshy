@@ -1,10 +1,8 @@
 import type { GameConceptCatalog } from '@/lib/i18n-game-catalog';
 
-/** LES CONCEPTS DE « PROGRESSION » (#9542, #9563) — ce que disent la première page, les fiches et le tableau de bord (`game.concept.*`, `game.fiche.*`, `game.fact.*`, `game.dashboard.*`). Chargé avec les routes de Progression, jamais avec le bandeau ni le carnet des règles. Mêmes clés et mêmes paramètres que le français. */
+/** LES CONCEPTS DE « PROGRESSION » (#9542, #9563) — ce que disent la première page et les fiches (`game.concept.*`, `game.fiche.*`, `game.fact.*`). Chargé avec les routes de Progression, jamais avec le bandeau ni le carnet des règles. Mêmes clés et mêmes paramètres que le français. */
 const de = {
   'game.progression.title': 'Fortschritt',
-  'game.dashboard.title': 'Übersicht',
-  'game.dashboard.hint': 'Alle deine Daten, Konzept für Konzept.',
   'game.concept.why_label': 'Wozu es dient',
   'game.concept.how_label': 'Wie es funktioniert',
   'game.fiche.what': 'Was ist das?',
@@ -48,7 +46,6 @@ const de = {
   'game.concept.league.tip.1': 'Spiel jeden Tag ein wenig: Die Wochenpunkte summieren sich.',
   'game.concept.league.tip.2': 'Ziele vor Sonntagabend auf die ersten Plätze.',
   'game.concept.league.more': 'Rangliste ansehen',
-  'game.concept.league.value': '{league} · Platz {rank}',
   'game.concept.league.unplaced': 'Noch keine Gruppe',
   'game.concept.season.name': 'Saison',
   'game.concept.season.why': 'Die Saison ist ein Weg über acht Wochen, mit einem Pokal am Ende.',
@@ -108,6 +105,7 @@ const de = {
   'game.concept.chip.chest.ready': 'Truhe bereit',
   'game.concept.chip.chest.claimed': 'Truhe geöffnet',
   'game.concept.chip.can_mint': 'Prägen möglich',
+  'game.concept.chip.mint_covered': 'Genug für eine Meesh',
   'game.concept.chip.left': 'Übrig: {count}',
   'game.concept.chip.week': 'Woche {week}',
   'game.concept.chip.no_elan': 'Kein Schwung aktiv',
@@ -152,7 +150,6 @@ const de = {
   'game.detail.open': '{name}: Details ansehen',
   'game.detail.rarity': 'Seltenheit',
   'game.detail.header_group': 'Mein Rang und meine Meeshes',
-  'game.detail.meesh_sheet': 'Meine Meeshes',
   'game.detail.badge.what': 'Ein Abzeichen zeigt, wie oft du eine Aktion gemacht hast.',
   'game.detail.badge.how': 'Mach sie wieder: Bei jeder Stufe wechselt das Abzeichen das Material.',
   'game.detail.succes.what': 'Ein Erfolg hält einen seltenen Moment deiner Meeshy-Geschichte fest.',

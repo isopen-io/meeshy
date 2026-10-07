@@ -13,7 +13,6 @@ import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-su
 
 import { ProgressionBody } from './progression';
 import { GeneratedAchievements } from './progression-parts';
-import { TableauBody } from './progression-tableau';
 
 /**
  * AUCUNE PAGE DE « PROGRESSION » NE GLISSE DE CÔTÉ (#9563, amendement n° 3).
@@ -134,12 +133,9 @@ describe('les valeurs longues', () => {
   });
 
   test('une pastille plus longue que sa rangée rétrécit et se tronque : elle porte `max-w-full` et `truncate`', () => {
-    const pages = [
-      renderToStaticMarkup(<ProgressionBody progress={long()} now={NOW} />),
-      renderToStaticMarkup(<TableauBody progress={long()} now={NOW} />),
-    ].map(dom);
+    const pages = [renderToStaticMarkup(<ProgressionBody progress={long()} now={NOW} />)].map(dom);
     const chips = pages.flatMap((page) => [...page.querySelectorAll('[data-chip]')]);
-    expect(chips.length).toBeGreaterThan(20);
+    expect(chips.length).toBeGreaterThan(15);
     for (const chip of chips) {
       const text = chip.textContent ?? '';
       expect({ text, bounded: chip.className.includes('max-w-full'), cut: chip.className.includes('truncate') || chip.querySelector('.truncate') !== null }).toEqual({ text, bounded: true, cut: true });
