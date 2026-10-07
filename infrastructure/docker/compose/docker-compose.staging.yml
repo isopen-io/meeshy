@@ -287,6 +287,13 @@ services:
       # Chiffrement au repos des secrets de configuration (clé d'API LLM de
       # l'agent) — 32 octets base64. Absente : l'écriture d'une clé est refusée.
       - SECRETS_AT_REST_KEY=${SECRETS_AT_REST_KEY}
+      # #9600 — adresses de fichier signées par lecteur. Clé HMAC de 32 octets
+      # base64, PROPRE à cet environnement ; absente : rien n'est signé (l'adresse
+      # d'avant reste servie). La précédente ne sert qu'à vérifier pendant une
+      # rotation. La bascule de refus ne se pose qu'à zéro usage mesuré.
+      - ATTACHMENT_URL_SIGNING_KEY=${ATTACHMENT_URL_SIGNING_KEY:-}
+      - ATTACHMENT_URL_SIGNING_KEY_PREVIOUS=${ATTACHMENT_URL_SIGNING_KEY_PREVIOUS:-}
+      - ATTACHMENT_URL_SIGNATURE_ENFORCE=${ATTACHMENT_URL_SIGNATURE_ENFORCE:-false}
       # E-mails de staging (#8036) — de VRAIS envois, marqués « [STAGING] » au
       # sujet et d'un bandeau dans le corps (`services/email/staging-marker.ts`).
       # Sans BREVO_API_KEY sur l'hôte, rien ne part (la passerelle le journalise).
