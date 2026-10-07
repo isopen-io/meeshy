@@ -458,15 +458,15 @@ export function registerCommentRoutes(
       // (#5536) — mutuellement exclusifs, sur la même distinction que le
       // pipeline audio ci-dessus : un commentaire SANS pièce jointe audio
       // crédite `comment.text`, un commentaire AVEC crédite `comment.audio`.
-      if (!linkedMedia?.mimeType?.startsWith('audio/')) {
+      //
+      // #9584 — écrit depuis une republication simple, le commentaire la
+      // crédite AUSSI, pour de vrai : un crédit par post, chacun son barème.
+      const commentAxis = linkedMedia?.mimeType?.startsWith('audio/') ? 'comment.audio' : 'comment.text';
+      [targetPostId, ...(target.redirectedFrom ? [target.redirectedFrom.id] : [])].forEach((creditedPostId) => {
         engagementService
-          .recordActivity(authContext.registeredUser.id, 'comment.text', { postId: targetPostId })
-          .catch((err) => enhancedLogger.warn('[POST /posts/:postId/comments]: engagement comment.text failed', { err }));
-      } else {
-        engagementService
-          .recordActivity(authContext.registeredUser.id, 'comment.audio', { postId: targetPostId })
-          .catch((err) => enhancedLogger.error('comment.audio engagement recording failed', err));
-      }
+          .recordActivity(authContext.registeredUser.id, commentAxis, { postId: creditedPostId })
+          .catch((err) => enhancedLogger.warn(`[POST /posts/:postId/comments]: engagement ${commentAxis} failed`, { err }));
+      });
 
       const newCommentMentionedUsers = parsed.data.content
         ? await resolveMentionedUsers(prisma, [parsed.data.content])

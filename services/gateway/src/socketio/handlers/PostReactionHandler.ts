@@ -194,10 +194,13 @@ export class PostReactionHandler {
       }
       const targetPostId = target.id;
 
+      // #9584 — venue d'une republication simple, la réaction la crédite
+      // AUSSI, pour de vrai : la résolution ci-dessus l'a traversée et la rend.
       const reaction = await this.postReactionService.addReaction({
         postId: targetPostId,
         userId,
         emoji: validated.emoji,
+        ...(target.redirectedFrom ? { through: target.redirectedFrom } : {}),
       });
 
       if (!reaction) {

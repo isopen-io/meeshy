@@ -14,7 +14,7 @@ import { triggerMediaAltTranslations, writeMediaAlt, type WrittenMediaAlt } from
 import { engagementAggregateIncrements } from './posts/engagementIncrements';
 import { qualifiesAsReel } from '@meeshy/shared/utils/reel-composition';
 import { ephemeralExpiresAt } from './posts/ephemeralPosts';
-import { isEphemeralPostType } from './posts/postVisibility';
+import { isEphemeralPostType, type RepostPassage } from './posts/postVisibility';
 import {
   isRepostVisibilityAllowed,
   repostVisibilityInheritsAudienceList,
@@ -1436,9 +1436,9 @@ export class PostService {
     return updated;
   }
 
-  async likePost(postId: string, userId: string, emoji: string = '❤️') {
+  async likePost(postId: string, userId: string, emoji: string = '❤️', passage: { readonly through?: RepostPassage } = {}) {
     try {
-      await this.postReactionService.addReaction({ postId, userId, emoji });
+      await this.postReactionService.addReaction({ postId, userId, emoji, ...passage });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : '';
       if (message.includes('not found') || message.includes('deleted')) {

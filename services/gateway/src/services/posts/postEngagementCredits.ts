@@ -2,6 +2,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { EngagementOperationKey } from '@meeshy/shared/types/engagement-operations';
 import { EngagementService, type EngagementActivityOptions } from '../engagement/EngagementService';
 import { PUBLICATION_OPERATION_BY_TYPE } from '../engagement/viewerPostPoints';
+import type { RepostPassage } from './postVisibility';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 
 const log = enhancedLogger.child({ module: 'postEngagementCredits' });
@@ -34,6 +35,33 @@ export function creditPostEngagement(
   recorder.recordActivity(userId, operationKey, options).catch((error: unknown) => {
     log.warn(`engagement ${operationKey} failed`, { error });
   });
+}
+
+/**
+ * Les posts qu'un geste CRÉDITE (#9584, décision porteur 2026-10-07) : celui où
+ * il atterrit et, s'il est passé par une REPUBLICATION SIMPLE redirigée vers
+ * son original, cette republication aussi — chacun pour un crédit RÉEL, avec
+ * son barème, ses plafonds, ses quotas par cible et son auteur (« jamais sur
+ * son propre post » s'y lit séparément). La somme des marques affichées est
+ * donc toujours ce que le score a réellement reçu : chaque carte porte ce que
+ * SON crédit a rapporté, et un crédit refusé ne marque que la sienne.
+ */
+export const postsCreditedBy = (
+  landed: RepostPassage,
+  through: RepostPassage | null | undefined,
+): readonly RepostPassage[] => [landed, ...(through && through.id !== landed.id ? [through] : [])];
+
+/** Un crédit par post crédité : la cible et son auteur portent les plafonds et le refus de soi. */
+export function creditPostGesture(
+  prisma: PrismaClient,
+  userId: string,
+  operationKey: EngagementOperationKey,
+  posts: readonly RepostPassage[],
+  recorder?: PostEngagementRecorder,
+): void {
+  posts.forEach((post) =>
+    creditPostEngagement(prisma, userId, operationKey, { postId: post.id, targetId: post.id, targetOwnerId: post.authorId }, recorder),
+  );
 }
 
 /**

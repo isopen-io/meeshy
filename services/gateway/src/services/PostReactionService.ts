@@ -13,7 +13,8 @@ import { sanitizeEmoji, isValidEmoji } from '@meeshy/shared/types/reaction';
 import { assertReactionAllowed } from '../utils/reaction-limit-guard.js';
 import { assertValidObjectId } from '../utils/object-id.js';
 import { EngagementService } from './engagement/EngagementService';
-import { creditPostEngagement, type PostEngagementRecorder } from './posts/postEngagementCredits';
+import { creditPostGesture, postsCreditedBy, type PostEngagementRecorder } from './posts/postEngagementCredits';
+import type { RepostPassage } from './posts/postVisibility';
 
 export interface PostReactionAggregation {
   readonly emoji: string;
@@ -63,6 +64,11 @@ export interface AddPostReactionOptions {
   postId: string;
   userId: string;
   emoji: string;
+  /**
+   * La republication simple par laquelle la réaction est passée avant d'être
+   * redirigée vers `postId` (#9584) — elle reçoit son PROPRE crédit, réel.
+   */
+  through?: RepostPassage;
 }
 
 export interface RemovePostReactionOptions {
@@ -92,7 +98,7 @@ export class PostReactionService {
   ) {}
 
   async addReaction(options: AddPostReactionOptions): Promise<AddPostReactionResult | null> {
-    const { postId, userId, emoji } = options;
+    const { postId, userId, emoji, through } = options;
 
     this.validatePostId(postId);
 
@@ -157,7 +163,13 @@ export class PostReactionService {
       });
 
       await this.updatePostReactionSummary(postId);
-      creditPostEngagement(this.prisma, userId, 'tool.post_reaction', { postId, targetId: postId, targetOwnerId: post.authorId }, this.engagement);
+      creditPostGesture(
+        this.prisma,
+        userId,
+        'tool.post_reaction',
+        postsCreditedBy({ id: postId, authorId: post.authorId }, through),
+        this.engagement,
+      );
 
       return { ...this.mapReactionToData(reaction), unchanged: false };
     } catch (err: unknown) {

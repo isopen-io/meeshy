@@ -385,7 +385,17 @@ export type PostRedirectRecord = PostVisibilityRecord & {
   repostOfId: string | null;
   originalRepostOfId: string | null;
   commentsDisabled: boolean;
+  /**
+   * La REPUBLICATION SIMPLE que la redirection a traversée pour arriver ici
+   * (#9584) — absente quand le post nommé est la cible elle-même. La résolution
+   * vient d'en vérifier l'audience : un geste qui l'emprunte la crédite AUSSI,
+   * sans seconde lecture.
+   */
+  redirectedFrom?: RepostPassage;
 };
+
+/** Le post traversé par une redirection — ce qu'un crédit doit savoir de lui. */
+export type RepostPassage = { readonly id: string; readonly authorId: string };
 
 const POST_REDIRECT_SELECT = {
   id: true,
@@ -504,7 +514,7 @@ async function resolveRedirectTarget(
   if (isEphemeralPostType(root.type)) return post;
 
   if (root.deletedAt != null || !(await verdict(prisma, root, userId))) return null;
-  return root;
+  return { ...root, redirectedFrom: { id: post.id, authorId: post.authorId } };
 }
 
 /** Redirection pour ÉCRIRE/RÉAGIR (like, réaction, commentaire) — amis stricts. */
