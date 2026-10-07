@@ -68,7 +68,7 @@ import type { Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
 import { hasPerReaderEphemeralDeadline, servedEphemeralExpiresAt } from '@meeshy/shared/utils/ephemeral-countdown';
 
 import {
-  readEphemeralReaderDeadlines,
+  readEphemeralReaderResolution,
   type EphemeralReaderResolution,
 } from '../../routes/conversations/ephemeralReaderDeadlines';
 import { unsetOrNull } from '../../utils/prisma-unset';
@@ -76,7 +76,7 @@ import { HISTORY_FLOOR_PARTICIPANT_SELECT, loadHistoryFloor, type HistoryReader 
 import { loadPersonalHistoryHiding, readPersonalHistoryHiding } from '../personalHistoryFilter';
 import { shareLinkHasExpired } from '../shareLinkReadGate';
 import { readableByReader } from './messageStars/starredMessageVerdict';
-import { computeViewOnceStates } from './viewOnceAudience';
+import { readViewOnceOpenedByReader } from './viewOnceAudience';
 
 /** Les colonnes dont dépend le droit du LECTEUR — aucun contenu. */
 export type ReadableMessageRow = {
@@ -193,6 +193,10 @@ export function ephemeralStillOnReaderScreen(
 /**
  * `readerParticipantId` est la ligne du lecteur DANS la conversation du
  * message : c'est la clé de ses accusés (`MessageStatusEntry`).
+ *
+ * Chaque état se lit de façon CIBLÉE — SA ligne, jamais le balayage plafonné
+ * d'une page : une ligne absente d'une tranche tronquée se lirait « décompte
+ * pas démarré », « pas encore ouverte », et ouvrirait la sortie.
  */
 export async function contentStillVisibleToReader(
   prisma: PrismaClient,
@@ -201,15 +205,13 @@ export async function contentStillVisibleToReader(
   const { readerParticipantId, message, now } = params;
 
   if (hasPerReaderEphemeralDeadline(message)) {
-    const deadlines = await readEphemeralReaderDeadlines(prisma, [message], readerParticipantId);
-    const resolution = deadlines.get(message.id);
-    if (!resolution || !ephemeralStillOnReaderScreen(message, resolution, now)) return false;
+    const resolution = await readEphemeralReaderResolution(prisma, message, readerParticipantId);
+    if (!ephemeralStillOnReaderScreen(message, resolution, now)) return false;
   }
 
   if (message.isViewOnce === true) {
     if (message.viewOnceBurnedAt) return false;
-    const states = await computeViewOnceStates(prisma, [message], readerParticipantId);
-    if (states.get(message.id)?.consumedByMe !== false) return false;
+    if (await readViewOnceOpenedByReader(prisma, { messageId: message.id, readerParticipantId })) return false;
   }
 
   return true;

@@ -86,8 +86,6 @@ const prisma = {
   message: { findUnique: messageFindUnique },
   participant: {
     findUnique: async () => ({ id: SENDER_ID, userId: SENDER_USER_ID }),
-    findMany: async () => [],
-    count: async () => 2,
     findFirst: async () => ({
       id: SENDER_IN_SOURCE_ID,
       role: 'member',
@@ -102,7 +100,7 @@ const prisma = {
   userConversationPreferences: { findFirst: async () => null },
   userMessageDeletion: { findMany: async () => [] },
   // Aucun décompte lancé, aucune vue unique ouverte : le contenu est là pour lui.
-  messageStatusEntry: { findMany: async () => [] },
+  messageStatusEntry: { findFirst: async () => null },
 } as any;
 
 const admitMessageForward = (db: any, params: Record<string, unknown>) =>

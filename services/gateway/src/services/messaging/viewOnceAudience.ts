@@ -159,6 +159,35 @@ export async function computeViewOnceStates(
 }
 
 /**
+ * CE lecteur a-t-il déjà ouvert CETTE vue unique ? — lu de façon CIBLÉE et
+ * exacte (#9579), pour qui DÉCIDE sur la réponse.
+ *
+ * `computeViewOnceStates` ci-dessus balaie les ouvertures d'une page sous
+ * plafond et sans ordre : au-delà, l'ouverture du lecteur peut manquer à la
+ * tranche lue, et `consumedByMe` se lirait `false`. Sans conséquence pour un
+ * compteur affiché ; pour une sortie (transfert, téléchargement), une porte
+ * ouverte. Ici : sa propre ligne, par le couple unique
+ * `(messageId, participantId)`.
+ *
+ * PROPAGE ses erreurs : une ouverture illisible n'est pas une ouverture
+ * absente, et c'est à l'appelant de fermer.
+ */
+export async function readViewOnceOpenedByReader(
+  prisma: Pick<PrismaClient, 'messageStatusEntry'>,
+  params: { readonly messageId: string; readonly readerParticipantId: string },
+): Promise<boolean> {
+  const opening = await prisma.messageStatusEntry.findFirst({
+    where: {
+      messageId: params.messageId,
+      participantId: params.readerParticipantId,
+      AND: [{ viewedOnceAt: { isSet: true } }, { viewedOnceAt: { not: null } }],
+    },
+    select: { id: true },
+  });
+  return opening !== null;
+}
+
+/**
  * La variante des LECTURES : une panne rend l'état fermé plutôt que d'emporter
  * la page, qui porte aussi tous les messages ordinaires.
  */

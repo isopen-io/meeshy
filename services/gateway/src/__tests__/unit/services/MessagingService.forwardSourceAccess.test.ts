@@ -200,11 +200,11 @@ describe('MessagingService.handleMessage — on ne transfère que ce qu’on a l
 
   const mount = (store: Scenario) => {
     const db = makePrisma(store);
+    // La lecture CIBLÉE de l'état de ce lecteur sur ce message : sa ligne.
     mockPrisma.messageStatusEntry = {
-      findMany: async (args: { where?: Row }) => (store.statusEntries ?? []).filter((entry) => matchesWhere(entry, args.where)),
+      findFirst: async (args: { where?: Row }) =>
+        (store.statusEntries ?? []).find((entry) => matchesWhere(entry, args.where)) ?? null,
     };
-    mockPrisma.participant.count = async (args: { where?: Row }) =>
-      store.participants.filter((p) => matchesWhere(p, args.where)).length;
     mockPrisma.message.findUnique.mockImplementation(db.message.findUnique);
     mockPrisma.message.findMany.mockImplementation(db.message.findMany);
     mockPrisma.participant.findFirst.mockImplementation(db.participant.findFirst);

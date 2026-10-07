@@ -316,8 +316,7 @@ describe('MessagingService', () => {
         mockPrisma.userConversationPreferences = { findFirst: jest.fn().mockResolvedValue(null) };
         mockPrisma.userMessageDeletion = { findMany: jest.fn().mockResolvedValue([]) };
         // Aucun décompte lancé, aucune vue unique ouverte : le contenu est là pour lui.
-        mockPrisma.messageStatusEntry = { findMany: jest.fn().mockResolvedValue([]) };
-        mockPrisma.participant.count = jest.fn().mockResolvedValue(2);
+        mockPrisma.messageStatusEntry = { findFirst: jest.fn().mockResolvedValue(null) };
       });
 
       it('refuse le transfert d’un message à vue unique, sans rien écrire', async () => {

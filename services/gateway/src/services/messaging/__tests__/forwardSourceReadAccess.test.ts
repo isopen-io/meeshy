@@ -90,8 +90,22 @@ function database(store: Store, statusEntries: Row[] = []) {
   const messageReads: Array<{ where: { id: string }; select?: Row }> = [];
   const prisma = {
     ...base,
+    // Le double répond à la REQUÊTE qu'on lui pose : un balayage rend ses
+    // lignes dans l'ordre de la collection et s'arrête à son `take`, une
+    // lecture ordonnée rend la première de SON ordre. Une tranche complaisante
+    // rendrait vert un garde qui décide sur une lecture tronquée.
     messageStatusEntry: {
-      findMany: async (args: { where?: Row }) => statusEntries.filter((entry) => matchesWhere(entry, args.where)),
+      findMany: async (args: { where?: Row; take?: number }) => {
+        const rows = statusEntries.filter((entry) => matchesWhere(entry, args.where));
+        return typeof args.take === 'number' ? rows.slice(0, args.take) : rows;
+      },
+      findFirst: async (args: { where?: Row; orderBy?: Record<string, 'asc' | 'desc'> }) => {
+        const rows = statusEntries.filter((entry) => matchesWhere(entry, args.where));
+        const [field, direction] = Object.entries(args.orderBy ?? {})[0] ?? [];
+        if (!field) return rows[0] ?? null;
+        const sign = direction === 'desc' ? -1 : 1;
+        return [...rows].sort((a, b) => sign * ((a[field] as Date).getTime() - (b[field] as Date).getTime()))[0] ?? null;
+      },
     },
     message: {
       ...base.message,
@@ -104,7 +118,6 @@ function database(store: Store, statusEntries: Row[] = []) {
       ...base.participant,
       findUnique: async (args: { where: { id: string } }) =>
         store.participants.find((p) => p.id === args.where.id) ?? null,
-      count: async (args: { where?: Row }) => store.participants.filter((p) => matchesWhere(p, args.where)).length,
     },
   };
   // La lecture de la LOI DE SORTIE est celle qui demande le flou et les pièces —
@@ -373,14 +386,54 @@ describe('le contenu a-t-il disparu POUR CE LECTEUR ? — la borne de la bulle, 
     });
   });
 
+  describe('au-delà du PLAFOND des balayages de page — la décision lit SA ligne, jamais une tranche', () => {
+    // Les balayages de page (`loadEphemeralReaderDeadlines`, `computeViewOnceStates`)
+    // sont plafonnés et sans ordre : dans une conversation où plus de
+    // destinataires que le plafond ont une ligne, celle du lecteur peut manquer
+    // à la tranche lue — ce qui se lirait « décompte pas démarré », « pas
+    // encore ouverte ». Un écran en retard pour une page ; pour une sortie, une
+    // porte ouverte.
+    const others = (count: number, entryOf: (participantId: string, index: number) => Row): Row[] =>
+      Array.from({ length: count }, (_unused, index) => entryOf(`68c${index.toString(16).padStart(21, '0')}`, index));
+
+    it('refuse le lecteur dont le décompte est fini, même quand sa ligne tombe après 2 500 autres', async () => {
+      const store = readableStore({ messages: [flame()] });
+      const entries = [
+        ...others(2500, (participantId) => countdown(participantId, secondsFrom(AT, 3600))),
+        countdown(READER_IN_SOURCE, secondsFrom(AT, -1)),
+      ];
+
+      expect(await admit(store, entries)).toEqual(UNAVAILABLE);
+      expect(await admit(store, entries, { bodyOnlyFromSource: true })).toEqual(REFUSED_AS_UNAVAILABLE);
+    });
+
+    it('l’auteur suit la plus tardive échéance RÉELLE de ses destinataires, où qu’elle soit dans la collection', async () => {
+      const authored = readableStore({ messages: [flame({ senderId: READER_IN_SOURCE })] });
+      const allOver = others(2500, (participantId) => countdown(participantId, secondsFrom(AT, -60)));
+
+      expect(await readable(authored, [...allOver, countdown(PEER_IN_SOURCE, secondsFrom(AT, 30))])).toMatchObject({ id: SOURCE });
+      expect(await readable(authored, allOver)).toBeNull();
+    });
+
+    it('tient pour ouverte la vue unique que ce lecteur a ouverte, même quand sa ligne tombe après 5 200 autres', async () => {
+      const store = readableStore({ messages: [viewOnce()] });
+      const entries = [...others(5200, (participantId) => opening(participantId)), opening(READER_IN_SOURCE)];
+
+      expect(await admit(store, entries)).toEqual(UNAVAILABLE);
+      expect(await admit(store, entries, { bodyOnlyFromSource: true })).toEqual(REFUSED_AS_UNAVAILABLE);
+    });
+  });
+
   it.each([
     ['d’une flamme', () => flame()],
     ['d’une vue unique', () => viewOnce()],
   ])('ferme quand l’échéance ou l’ouverture %s ne se lit pas', async (_label, messageOf) => {
     const { prisma, raw, exitLawReads } = database(readableStore({ messages: [messageOf()] }));
-    raw.messageStatusEntry.findMany = async () => {
+    const down = async () => {
       throw new Error('mongo down');
     };
+    raw.messageStatusEntry.findMany = down;
+    raw.messageStatusEntry.findFirst = down;
     const admitBroken = (params: Row = {}) =>
       admitMessageForward(prisma, { forwardedFromId: SOURCE, senderParticipantId: SENDER, at: AT, ...params } as never);
 

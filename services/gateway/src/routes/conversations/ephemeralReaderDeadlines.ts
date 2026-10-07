@@ -79,54 +79,38 @@ export async function loadEphemeralReaderDeadlines(
   messages: readonly EphemeralRow[],
   readerParticipantId: string | undefined,
 ): Promise<Map<string, EphemeralReaderResolution>> {
+  const resolutions = new Map<string, EphemeralReaderResolution>();
+
+  const ephemeralIds = messages
+    .filter((message) => hasPerReaderEphemeralDeadline(message))
+    .map((message) => message.id);
+  if (ephemeralIds.length === 0) return resolutions;
+
+  let entries: Array<{ messageId: string; participantId: string; ephemeralExpiresAt: Date | null }>;
   try {
-    return await readEphemeralReaderDeadlines(prisma, messages, readerParticipantId);
+    entries = (await prisma.messageStatusEntry.findMany({
+      where: {
+        messageId: { in: ephemeralIds },
+        AND: [
+          { ephemeralExpiresAt: { isSet: true } },
+          { ephemeralExpiresAt: { not: null } },
+        ],
+      },
+      select: { messageId: true, participantId: true, ephemeralExpiresAt: true },
+      // Borné : une page sert au plus une centaine de messages, et seuls les
+      // destinataires dont le décompte a DÉMARRÉ ont une ligne appariée. Le
+      // plafond couvre donc largement le cas nominal tout en refusant qu'une
+      // conversation à des milliers de membres fasse payer la page entière.
+      take: EPHEMERAL_DEADLINE_SCAN_CAP,
+    })) as Array<{ messageId: string; participantId: string; ephemeralExpiresAt: Date | null }>;
   } catch (err) {
     // Fermé par défaut : sans échéances, chaque éphémère est servi SANS
     // décompte. Les clients l'affichent alors comme « en attente de
     // réception » — un écran en retard, jamais l'échéance de quelqu'un d'autre.
     logger.warn('ephemeral reader deadlines query failed', { err });
-    return new Map(perReaderEphemeralIds(messages).map((id) => [id, NO_DEADLINE] as const));
+    for (const id of ephemeralIds) resolutions.set(id, NO_DEADLINE);
+    return resolutions;
   }
-}
-
-const perReaderEphemeralIds = (messages: readonly EphemeralRow[]): string[] =>
-  messages.filter((message) => hasPerReaderEphemeralDeadline(message)).map((message) => message.id);
-
-/**
- * La MÊME résolution, sans la posture de service : elle PROPAGE (#9579).
- *
- * Pour une PAGE, une lecture d'échéances qui échoue sert l'éphémère sans
- * décompte — un écran en retard. Pour un appelant qui décide, sur cette
- * échéance, si un contenu peut encore SORTIR (un transfert), « sans décompte »
- * voudrait dire « encore vivant » : il doit pouvoir distinguer une échéance
- * absente d'une échéance illisible.
- */
-export async function readEphemeralReaderDeadlines(
-  prisma: EphemeralDeadlinesPrisma,
-  messages: readonly EphemeralRow[],
-  readerParticipantId: string | undefined,
-): Promise<Map<string, EphemeralReaderResolution>> {
-  const resolutions = new Map<string, EphemeralReaderResolution>();
-
-  const ephemeralIds = perReaderEphemeralIds(messages);
-  if (ephemeralIds.length === 0) return resolutions;
-
-  const entries = (await prisma.messageStatusEntry.findMany({
-    where: {
-      messageId: { in: ephemeralIds },
-      AND: [
-        { ephemeralExpiresAt: { isSet: true } },
-        { ephemeralExpiresAt: { not: null } },
-      ],
-    },
-    select: { messageId: true, participantId: true, ephemeralExpiresAt: true },
-    // Borné : une page sert au plus une centaine de messages, et seuls les
-    // destinataires dont le décompte a DÉMARRÉ ont une ligne appariée. Le
-    // plafond couvre donc largement le cas nominal tout en refusant qu'une
-    // conversation à des milliers de membres fasse payer la page entière.
-    take: EPHEMERAL_DEADLINE_SCAN_CAP,
-  })) as Array<{ messageId: string; participantId: string; ephemeralExpiresAt: Date | null }>;
 
   const senderOf = new Map(messages.map((message) => [message.id, message.senderId ?? null]));
   const byMessage = new Map<string, { reader: Date | null; latest: Date | null }>();
@@ -152,6 +136,58 @@ export async function readEphemeralReaderDeadlines(
   }
 
   return resolutions;
+}
+
+/**
+ * L'échéance de CE lecteur pour CE message, lue de façon CIBLÉE et exacte
+ * (#9579) — pour qui DÉCIDE sur elle, et pas seulement l'affiche.
+ *
+ * Le balayage de page ci-dessus ne convient pas à une décision de sortie : il
+ * est plafonné et sans ordre, donc dans une conversation où plus de
+ * destinataires que le plafond ont démarré leur décompte, la ligne du lecteur
+ * peut manquer à la tranche lue — et « absente » s'y lit « décompte pas encore
+ * démarré ». Un écran en retard pour une page ; une porte ouverte pour un
+ * transfert, un téléchargement, une publication.
+ *
+ * Deux lectures, jamais un balayage :
+ *  - un DESTINATAIRE : sa propre ligne, par le couple unique
+ *    `(messageId, participantId)` ;
+ *  - l'AUTEUR : la plus tardive des échéances de ses destinataires, par une
+ *    lecture ORDONNÉE d'une ligne — le maximum réel, où qu'il soit.
+ *
+ * Elle rend la MÊME forme que le balayage (`EphemeralReaderResolution`) : les
+ * lois qui la consomment (`servedEphemeralExpiresAt`,
+ * `isEphemeralServableToReader`) ne voient pas la différence. Seul le champ
+ * que la loi lit pour ce lecteur est renseigné.
+ *
+ * Un message sans échéance par lecteur ne coûte aucune requête. Elle PROPAGE
+ * ses erreurs : une échéance illisible n'est pas une échéance absente, et
+ * c'est à l'appelant de fermer.
+ */
+export async function readEphemeralReaderResolution(
+  prisma: EphemeralDeadlinesPrisma,
+  message: EphemeralRow,
+  readerParticipantId: string,
+): Promise<EphemeralReaderResolution> {
+  const isSender = message.senderId === readerParticipantId;
+  if (!hasPerReaderEphemeralDeadline(message)) return { ...NO_DEADLINE, isSender };
+
+  const started = [{ ephemeralExpiresAt: { isSet: true } }, { ephemeralExpiresAt: { not: null } }];
+  const entry = isSender
+    ? await prisma.messageStatusEntry.findFirst({
+        where: { messageId: message.id, AND: started },
+        orderBy: { ephemeralExpiresAt: 'desc' },
+        select: { ephemeralExpiresAt: true },
+      })
+    : await prisma.messageStatusEntry.findFirst({
+        where: { messageId: message.id, participantId: readerParticipantId, AND: started },
+        select: { ephemeralExpiresAt: true },
+      });
+
+  const deadline = entry?.ephemeralExpiresAt instanceof Date ? entry.ephemeralExpiresAt : null;
+  return isSender
+    ? { isSender, readerDeadline: null, latestRecipientDeadline: deadline }
+    : { isSender, readerDeadline: deadline, latestRecipientDeadline: null };
 }
 
 /**
