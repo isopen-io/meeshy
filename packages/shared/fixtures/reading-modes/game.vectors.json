@@ -2412,7 +2412,7 @@
             "prism": false,
             "target": 1,
             "reward": 1209,
-            "glory": 60
+            "glory": 40
           }
         ]
       }
@@ -2718,7 +2718,7 @@
             "prism": false,
             "target": 2,
             "reward": 172,
-            "glory": 10
+            "glory": 40
           },
           {
             "difficulty": "hard",
@@ -2763,7 +2763,7 @@
             "prism": false,
             "target": 2,
             "reward": 201,
-            "glory": 10
+            "glory": 40
           },
           {
             "difficulty": "gold",
@@ -2898,7 +2898,7 @@
             "prism": false,
             "target": 2,
             "reward": 172,
-            "glory": 10
+            "glory": 40
           },
           {
             "difficulty": "hard",
@@ -2943,7 +2943,7 @@
             "prism": false,
             "target": 2,
             "reward": 201,
-            "glory": 10
+            "glory": 40
           },
           {
             "difficulty": "gold",

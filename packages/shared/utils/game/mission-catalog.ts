@@ -6,7 +6,8 @@
  * au point unique du geste), et déclare :
  *  - son objectif : `baseTarget` sans profil connu, sinon tiré des habitudes du compte (`habit`), toujours
  *    borné par `minTarget` / `maxTarget` ;
- *  - ce qu'il paie : `unitPoints` par unité d'objectif en plus de la base de sa difficulté, et sa Gloire ;
+ *  - ce qu'il paie : `unitPoints` par unité d'objectif en plus de la base de sa difficulté (la Gloire ne se fixe
+ *    pas ici : elle se lit dans `GLORY_POINTS`, voir `missionGlory`) ;
  *  - ce qu'il exige du profil (`requires`) : un défi impossible pour un compte n'est pas tiré pour lui ;
  *  - son poids de tirage (`weight`, 4 par défaut ; un défi rare pèse 1).
  *
@@ -57,8 +58,6 @@ export type MissionTemplate = {
   readonly habit?: { readonly operation: EngagementOperationKey; readonly ratio?: number };
   /** Points par unité d'objectif, en plus de la base de la difficulté. */
   readonly unitPoints: number;
-  /** Gloire à l'achèvement ; l'Or en porte au moins `GLORY_POINTS.goldMission`. */
-  readonly glory?: number;
   /** Défi de langue : le jour du Prisme en garantit un. */
   readonly prism?: boolean;
   readonly weight?: number;
@@ -102,8 +101,8 @@ export const MISSION_TEMPLATES: readonly MissionTemplate[] = [
   { key: 'reply-their-language', difficulty: 'hard', goal: 'languages', signal: 'reply-in-their-language', baseTarget: 1, minTarget: 1, maxTarget: 5, unitPoints: 25, prism: true, requires: ['multilingual', 'contacts'] },
 
   // Faire connaître Meeshy
-  { key: 'create-invite-link', difficulty: 'easy', goal: 'reach', signal: 'axis:social.affiliate_link_created', baseTarget: 1, minTarget: 1, maxTarget: 1, unitPoints: 10, glory: 5 },
-  { key: 'share-link', difficulty: 'medium', goal: 'reach', signal: 'axis:social.share', baseTarget: 1, minTarget: 1, maxTarget: 3, unitPoints: 30, glory: 10, habit: { operation: 'social.share' } },
-  { key: 'invite-contact', difficulty: 'medium', goal: 'reach', signal: 'axis:social.email_invite', baseTarget: 1, minTarget: 1, maxTarget: 3, unitPoints: 20, glory: 10 },
-  { key: 'invite-joined', difficulty: 'gold', goal: 'reach', signal: 'axis:social.invite_joined', baseTarget: 1, minTarget: 1, maxTarget: 1, unitPoints: 400, glory: 60, weight: 1 },
+  { key: 'create-invite-link', difficulty: 'easy', goal: 'reach', signal: 'axis:social.affiliate_link_created', baseTarget: 1, minTarget: 1, maxTarget: 1, unitPoints: 10 },
+  { key: 'share-link', difficulty: 'medium', goal: 'reach', signal: 'axis:social.share', baseTarget: 1, minTarget: 1, maxTarget: 3, unitPoints: 30, habit: { operation: 'social.share' } },
+  { key: 'invite-contact', difficulty: 'medium', goal: 'reach', signal: 'axis:social.email_invite', baseTarget: 1, minTarget: 1, maxTarget: 3, unitPoints: 20 },
+  { key: 'invite-joined', difficulty: 'gold', goal: 'reach', signal: 'axis:social.invite_joined', baseTarget: 1, minTarget: 1, maxTarget: 1, unitPoints: 400, weight: 1 },
 ];

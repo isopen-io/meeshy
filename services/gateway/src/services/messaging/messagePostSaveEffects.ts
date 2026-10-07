@@ -170,8 +170,8 @@ export interface PostSaveEngagementService {
     readonly content?: string;
     readonly storyReplyToId?: string | null;
   }): Promise<void>;
-  /** Un fait de jeu posé au geste (#9635) — ici, la conversation que ce message démarre. */
-  recordGameSignal?(userId: string, signal: 'conversation-started', options?: { readonly key?: string }): Promise<void>;
+  /** La conversation que ce message démarre (#9635) — le jeu y applique la garde d'abus d'un message. */
+  recordConversationStarted?(input: { readonly senderUserId: string; readonly conversationId: string }): Promise<void>;
 }
 
 /**
@@ -344,8 +344,8 @@ export function runMessagePostSaveEffects(params: {
         where: { id: message.conversationId, firstMessageSentAt: null },
         data: { firstMessageSentAt: new Date() },
       });
-      if (flipped.count === 1 && message.senderUserId && engagementService?.recordGameSignal) {
-        await engagementService.recordGameSignal(message.senderUserId, 'conversation-started', { key: message.conversationId });
+      if (flipped.count === 1 && message.senderUserId && engagementService?.recordConversationStarted) {
+        await engagementService.recordConversationStarted({ senderUserId: message.senderUserId, conversationId: message.conversationId });
       }
     })
     .catch(report('firstMessageSentAt'));

@@ -148,6 +148,11 @@ export class EngagementGameHooks {
     return this.signals.record(input);
   }
 
+  /** Une conversation créée vide vient d'être démarrée (#9635) : sous la garde d'un message. */
+  recordConversationStarted(input: { readonly senderUserId: string; readonly conversationId: string }): Promise<void> {
+    return this.signals.recordConversationStarted(input);
+  }
+
   private async isolated(label: string, work: () => Promise<void>): Promise<void> {
     try {
       await work();

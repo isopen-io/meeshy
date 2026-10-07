@@ -120,6 +120,37 @@ export class MessageGameSignals {
     }
   }
 
+  /**
+   * Une conversation créée vide vient d'être DÉMARRÉE par ce message (#9635). La MÊME garde que le message :
+   * rien seul, face à un compte de moins de 24 h ou bloqué. La clé est l'ENSEMBLE des personnes, pas la
+   * conversation : rouvrir dix conversations jetables avec la même personne ne démarre qu'une conversation.
+   */
+  async recordConversationStarted(input: { readonly senderUserId: string; readonly conversationId: string; readonly now?: Date }): Promise<void> {
+    const now = input.now ?? new Date();
+    const sender = await this.prisma.user.findUnique({ where: { id: input.senderUserId }, select: { timezone: true } }).catch(() => null);
+    const verdict = await this.messageVerdict(
+      { senderUserId: input.senderUserId, conversationId: input.conversationId, messageId: '', replyToId: null, quotedAuthorUserId: null, originalLanguage: '' },
+      sender?.timezone ?? null,
+      now,
+    );
+    if (verdict === 'none') return;
+    const members = await this.prisma.participant.findMany({
+      where: { conversationId: input.conversationId, isActive: true },
+      select: { userId: true },
+      take: 50,
+    });
+    const peers = [...new Set(members.map((m) => m.userId).filter((id): id is string => typeof id === 'string' && id !== input.senderUserId))].sort();
+    if (peers.length === 0) return;
+    await this.isolated('conversation started', () =>
+      this.deps.missions.onSignal(input.senderUserId, 'conversation-started', {
+        now,
+        dayKey: dayKeyOf(now, sender?.timezone),
+        timezone: sender?.timezone ?? null,
+        key: peers.join('&'),
+      }),
+    );
+  }
+
   /** Les messages déjà crédités aujourd'hui dans la conversation, puis la garde d'entre-soi. */
   private async messageVerdict(input: MessageSignalInput, timezone: string | null, now: Date): Promise<MessageVerdict> {
     const row = await this.prisma.conversationEngagement

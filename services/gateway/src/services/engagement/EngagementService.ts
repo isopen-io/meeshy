@@ -451,6 +451,11 @@ export class EngagementService {
     return this.game.recordMessage(input);
   }
 
+  /** Une conversation créée vide vient d'être démarrée par ce message (#9635) — sous la garde d'abus d'un message. */
+  recordConversationStarted(input: { readonly senderUserId: string; readonly conversationId: string }): Promise<void> {
+    return this.game.recordConversationStarted(input);
+  }
+
   /** Un fait que la passerelle pose au point unique de son geste (#9635) : la mission et le duo qui l'attendent. */
   recordGameSignal(userId: string, signal: MissionFactSignal, options: { readonly key?: string } = {}): Promise<void> {
     return this.game.onSignal(userId, signal, options);

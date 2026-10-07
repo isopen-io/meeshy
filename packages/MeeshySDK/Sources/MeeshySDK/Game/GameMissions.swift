@@ -113,15 +113,13 @@ public struct MissionTemplate: Sendable, Equatable {
     public let maxTarget: Int
     /// Points par unité d'objectif, en plus de la base de la difficulté.
     public let unitPoints: Int
-    /// Gloire à l'achèvement ; l'Or en porte au moins 40.
-    public let glory: Int
     /// Défi de langue : le jour du Prisme en garantit un.
     public let prism: Bool
     public let weight: Int
     public let requires: [MissionCapability]
 
     public init(key: String, difficulty: MissionDifficulty, goal: MissionGoal, signal: MissionSignal, baseTarget: Int,
-                minTarget: Int, maxTarget: Int, unitPoints: Int, glory: Int = 0, prism: Bool = false, weight: Int = 4,
+                minTarget: Int, maxTarget: Int, unitPoints: Int, prism: Bool = false, weight: Int = 4,
                 requires: [MissionCapability] = []) {
         self.key = key
         self.difficulty = difficulty
@@ -131,7 +129,6 @@ public struct MissionTemplate: Sendable, Equatable {
         self.minTarget = minTarget
         self.maxTarget = maxTarget
         self.unitPoints = unitPoints
-        self.glory = glory
         self.prism = prism
         self.weight = weight
         self.requires = requires
@@ -142,7 +139,7 @@ public struct MissionTemplate: Sendable, Equatable {
 
     func promoted(to difficulty: MissionDifficulty) -> MissionTemplate {
         MissionTemplate(key: key, difficulty: difficulty, goal: goal, signal: signal, baseTarget: baseTarget,
-                        minTarget: minTarget, maxTarget: maxTarget, unitPoints: unitPoints, glory: glory,
+                        minTarget: minTarget, maxTarget: maxTarget, unitPoints: unitPoints,
                         prism: prism, weight: weight, requires: requires)
     }
 }
@@ -156,7 +153,7 @@ public struct DrawnMission: Sendable, Equatable {
     public let target: Int
     /// Points crédités à la validation, bonus de Flamme compris.
     public let reward: Int
-    /// Gloire de la mission : celle du gabarit, au moins 40 pour l'Or.
+    /// Gloire de la mission : `GameMissions.glory(of:)`, lue dans `GameGlory.points`.
     public let glory: Int
 
     public init(difficulty: MissionDifficulty, templateKey: String, signal: MissionSignal, prism: Bool,
@@ -227,10 +224,10 @@ public enum GameMissions {
     }
 
     private static func t(_ key: String, _ difficulty: MissionDifficulty, _ goal: MissionGoal, _ signal: MissionSignal,
-                          base: Int, min: Int, max: Int, unit: Int, glory: Int = 0, prism: Bool = false,
+                          base: Int, min: Int, max: Int, unit: Int, prism: Bool = false,
                           weight: Int = 4, requires: [MissionCapability] = []) -> MissionTemplate {
         MissionTemplate(key: key, difficulty: difficulty, goal: goal, signal: signal, baseTarget: base,
-                        minTarget: min, maxTarget: max, unitPoints: unit, glory: glory, prism: prism,
+                        minTarget: min, maxTarget: max, unitPoints: unit, prism: prism,
                         weight: weight, requires: requires)
     }
 
@@ -276,11 +273,10 @@ public enum GameMissions {
           prism: true, requires: [.multilingual, .contacts]),
 
         t("create-invite-link", .easy, .reach, .operation("social.affiliate_link_created"), base: 1, min: 1, max: 1,
-          unit: 10, glory: 5),
-        t("share-link", .medium, .reach, .axis(.share), base: 1, min: 1, max: 3, unit: 30, glory: 10),
-        t("invite-contact", .medium, .reach, .operation("social.email_invite"), base: 1, min: 1, max: 3, unit: 20,
-          glory: 10),
-        t("invite-joined", .gold, .reach, .axis(.inviteJoined), base: 1, min: 1, max: 1, unit: 400, glory: 60, weight: 1),
+          unit: 10),
+        t("share-link", .medium, .reach, .axis(.share), base: 1, min: 1, max: 3, unit: 30),
+        t("invite-contact", .medium, .reach, .operation("social.email_invite"), base: 1, min: 1, max: 3, unit: 20),
+        t("invite-joined", .gold, .reach, .axis(.inviteJoined), base: 1, min: 1, max: 1, unit: 400, weight: 1),
     ]
 
     /// Les gabarits d'une difficulté ; l'Or tire parmi les siens ET les difficiles portés à l'Or.
@@ -321,8 +317,13 @@ public enum GameMissions {
             prism: template.prism,
             target: target,
             reward: reward(basePoints: template.basePoints + template.unitPoints * target, level: level, flameDays: flameDays),
-            glory: max(template.glory, template.difficulty == .gold ? GameGlory.points.goldMission : 0)
+            glory: glory(of: template)
         )
+    }
+
+    /// La Gloire d'un défi : l'Or et « faire connaître » en portent ; le montant se lit dans `GameGlory.points`.
+    public static func glory(of template: MissionTemplate) -> Int {
+        template.difficulty == .gold || template.goal == .reach ? GameGlory.points.goldMission : 0
     }
 
     /// Un tirage pondéré : une valeur du générateur ; à poids égaux, le même indice que `pickIndex`.

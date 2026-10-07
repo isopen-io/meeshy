@@ -342,3 +342,57 @@ describe('MessageGameSignals — l’Atlas et le chiffrement de bout en bout (#9
     expect(onSignal).toHaveBeenCalledWith(USER, 'reply-distinct-conversations', expect.objectContaining({ key: CONV }));
   });
 });
+
+describe('MessageGameSignals — les défis ne se farment pas (#9635, revue de sécurité)', () => {
+  it('« conversation démarrée » : clé = l’ensemble des personnes, pas la conversation jetable', async () => {
+    const { db, signals, onSignal } = setup();
+    db.participant.rows.push(
+      { id: 'p-3', conversationId: 'conv-bis', userId: USER, isActive: true },
+      { id: 'p-4', conversationId: 'conv-bis', userId: OTHER, isActive: true },
+    );
+
+    await signals.recordConversationStarted({ senderUserId: USER, conversationId: CONV, now: NOW });
+    await signals.recordConversationStarted({ senderUserId: USER, conversationId: 'conv-bis', now: NOW });
+
+    expect(signalsOf(onSignal, 'conversation-started').map((c) => c[2].key)).toEqual([OTHER, OTHER]);
+  });
+
+  it('« conversation démarrée » : rien seul, rien face à un compte de moins de 24 h, rien face à un compte bloqué', async () => {
+    const solo = setup();
+    solo.db.participant.rows = solo.db.participant.rows.filter((p) => p.userId === USER);
+    await solo.signals.recordConversationStarted({ senderUserId: USER, conversationId: CONV, now: NOW });
+    expect(signalsOf(solo.onSignal, 'conversation-started')).toHaveLength(0);
+
+    const ghost = setup();
+    ghost.db.user.rows[1]!.createdAt = new Date('2026-10-05T10:00:00Z');
+    await ghost.signals.recordConversationStarted({ senderUserId: USER, conversationId: CONV, now: NOW });
+    expect(signalsOf(ghost.onSignal, 'conversation-started')).toHaveLength(0);
+
+    const blocked = setup();
+    blocked.db.user.rows[1]!.blockedUserIds = [USER];
+    await blocked.signals.recordConversationStarted({ senderUserId: USER, conversationId: CONV, now: NOW });
+    expect(signalsOf(blocked.onSignal, 'conversation-started')).toHaveLength(0);
+  });
+
+  it('face à un compte fantôme (moins de 24 h), aucun fait de l’expéditeur ne part — ni langue, ni pair, ni story', async () => {
+    const { db, signals, onSignal, detect } = setup();
+    for (const signal of ['foreign-language-message', 'cross-language-exchange', 'story-reply', 'reply-in-their-language']) pendingMission(db, signal);
+    db.user.rows[1]!.createdAt = new Date('2026-10-05T10:00:00Z');
+
+    await signals.record(reply({ storyReplyToId: 'story-1' }));
+
+    expect(onSignal.mock.calls.filter((c) => c[0] === USER)).toHaveLength(0);
+    expect(detect).not.toHaveBeenCalled();
+  });
+
+  it('se citer soi-même ne fait jamais « répondre dans la langue de l’autre »', async () => {
+    const { db, signals, onSignal, detect } = setup();
+    pendingMission(db, 'reply-in-their-language');
+    detect.mockResolvedValue('fr');
+
+    await signals.record(reply({ quotedAuthorUserId: USER }));
+
+    expect(signalsOf(onSignal, 'reply-in-their-language')).toHaveLength(0);
+  });
+});
+

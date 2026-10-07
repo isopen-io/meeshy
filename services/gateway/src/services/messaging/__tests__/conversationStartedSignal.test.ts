@@ -12,7 +12,7 @@ import { runMessagePostSaveEffects } from '../messagePostSaveEffects';
 const settle = () => new Promise((resolve) => setImmediate(resolve));
 
 const run = (flippedCount: number) => {
-  const recordGameSignal = jest.fn<(...args: unknown[]) => Promise<void>>().mockResolvedValue(undefined);
+  const recordConversationStarted = jest.fn<(...args: unknown[]) => Promise<void>>().mockResolvedValue(undefined);
   const prisma = {
     conversation: {
       update: jest.fn<() => Promise<unknown>>().mockResolvedValue({}),
@@ -27,7 +27,7 @@ const run = (flippedCount: number) => {
     engagementService: {
       recordActivity: jest.fn<() => Promise<void>>().mockResolvedValue(undefined),
       recordConversationActivity: jest.fn<() => Promise<void>>().mockResolvedValue(undefined),
-      recordGameSignal,
+      recordConversationStarted,
     },
     message: {
       id: 'm1',
@@ -41,19 +41,19 @@ const run = (flippedCount: number) => {
     },
     originalLanguage: 'fr',
   });
-  return recordGameSignal;
+  return recordConversationStarted;
 };
 
 describe('le premier message d’une conversation créée vide la démarre (#9635)', () => {
-  it('la bascule gagnée pose le fait « conversation démarrée » pour l’auteur, clé = la conversation', async () => {
-    const recordGameSignal = run(1);
+  it('la bascule gagnée remet la conversation démarrée au jeu, qui y applique la garde d’un message', async () => {
+    const recordConversationStarted = run(1);
     await settle();
-    expect(recordGameSignal).toHaveBeenCalledWith('u1', 'conversation-started', { key: 'c1' });
+    expect(recordConversationStarted).toHaveBeenCalledWith({ senderUserId: 'u1', conversationId: 'c1' });
   });
 
   it('une bascule perdue ne pose rien', async () => {
-    const recordGameSignal = run(0);
+    const recordConversationStarted = run(0);
     await settle();
-    expect(recordGameSignal).not.toHaveBeenCalled();
+    expect(recordConversationStarted).not.toHaveBeenCalled();
   });
 });

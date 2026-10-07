@@ -22,6 +22,7 @@ import {
   missionArtifacts,
   missionAvailableFor,
   missionBand,
+  missionGlory,
   missionObjective,
   missionReward,
   missionTarget,
@@ -36,6 +37,7 @@ import {
 } from '../../utils/game/missions.js';
 import { DEFAULT_ENGAGEMENT_SCALE } from '../../types/engagement-scale.js';
 import { seasonStarsForMission } from '../../utils/game/season.js';
+import { GLORY_POINTS } from '../../utils/game/glory.js';
 import { addDays } from '../../utils/game/day-prng.js';
 
 const draw = (over: Partial<Parameters<typeof drawDailyMissions>[0]> = {}) =>
@@ -81,8 +83,11 @@ describe('le catalogue (#9635) : varié, rangé par les quatre buts, chaque déf
     }
   });
 
-  it('les défis « faire connaître » portent de la Gloire, et l’invité inscrit est rare', () => {
-    for (const t of MISSION_TEMPLATES.filter((x) => x.goal === 'reach')) expect({ key: t.key, glory: (t.glory ?? 0) > 0 }).toEqual({ key: t.key, glory: true });
+  it('les défis « faire connaître » et l’Or portent de la Gloire, lue dans GLORY_POINTS ; l’invité inscrit est rare', () => {
+    for (const t of MISSION_TEMPLATES) {
+      const expected = t.goal === 'reach' || t.difficulty === 'gold' ? GLORY_POINTS.goldMission : 0;
+      expect({ key: t.key, glory: missionGlory(t, t.difficulty) }).toEqual({ key: t.key, glory: expected });
+    }
     expect(MISSION_TEMPLATES.find((t) => t.key === 'invite-joined')?.weight).toBe(1);
   });
 
@@ -175,11 +180,13 @@ describe('hautement récompensé (#9635)', () => {
 
   it('déclare ce que l’achèvement paie : points, Gloire, étoiles de saison, coffre', () => {
     const joined = drawnMissionOf({ template: MISSION_TEMPLATES.find((t) => t.key === 'invite-joined')!, difficulty: 'gold', level: 60, flameDays: 0 });
-    expect(missionArtifacts(joined, 2)).toEqual({ points: joined.reward, glory: 60, seasonStars: seasonStarsForMission('gold'), chest: true });
+    expect(missionArtifacts(joined, 2)).toEqual({ points: joined.reward, glory: GLORY_POINTS.goldMission, seasonStars: seasonStarsForMission('gold'), chest: true });
     const share = drawnMissionOf({ template: MISSION_TEMPLATES.find((t) => t.key === 'share-link')!, difficulty: 'medium', level: 1, flameDays: 0 });
-    expect(missionArtifacts(share, 3)).toEqual({ points: share.reward, glory: 10, seasonStars: 1, chest: false });
+    expect(missionArtifacts(share, 3)).toEqual({ points: share.reward, glory: GLORY_POINTS.goldMission, seasonStars: 1, chest: false });
+    const texts = drawnMissionOf({ template: MISSION_TEMPLATES.find((t) => t.key === 'send-texts')!, difficulty: 'easy', level: 1, flameDays: 0 });
+    expect(missionArtifacts(texts, 0).glory).toBe(0);
     const promoted = drawnMissionOf({ template: MISSION_TEMPLATES.find((t) => t.key === 'long-chat')!, difficulty: 'gold', level: 60, flameDays: 0 });
-    expect(promoted.glory).toBe(40);
+    expect(promoted.glory).toBe(GLORY_POINTS.goldMission);
     expect(promoted.reward).toBe(missionReward({ basePoints: MISSION_BASE_POINTS.gold + 12 * promoted.target, level: 60, flameDays: 0 }));
   });
 });

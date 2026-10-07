@@ -316,7 +316,7 @@ struct GameLawTests {
         let gold = GameMissions.catalog(for: .gold)
         #expect(gold.allSatisfy { $0.difficulty == .gold && $0.basePoints == 320 })
         #expect(GameMissions.catalog(for: .hard).allSatisfy { hard in gold.contains { $0.key == hard.key } })
-        #expect(GameMissions.templates.filter { $0.goal == .reach }.allSatisfy { $0.glory > 0 })
+        #expect(GameMissions.templates.filter { $0.goal == .reach }.allSatisfy { GameMissions.glory(of: $0) == GameGlory.points.goldMission })
     }
 
     @Test("un signal impossible pour ce compte n'est jamais tiré")

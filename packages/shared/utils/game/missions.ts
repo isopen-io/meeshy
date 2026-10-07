@@ -19,9 +19,9 @@
  *
  * ## Ce qui est payé
  *
- * `(base de la difficulté + unitPoints × objectif) × bande × Flamme` points, la Gloire du gabarit (l'Or en
- * porte au moins 40), les étoiles de saison de la difficulté, et le tiers du coffre pour une mission du jour
- * (`missionArtifacts`).
+ * `(base de la difficulté + unitPoints × objectif) × bande × Flamme` points, de la Gloire pour l'Or et les défis
+ * « faire connaître » (montant lu dans `GLORY_POINTS`), les étoiles de saison de la difficulté, et le tiers du
+ * coffre pour une mission du jour (`missionArtifacts`).
  *
  * ## Le tirage
  *
@@ -178,9 +178,12 @@ export function missionTarget(params: {
   return clampTarget(template, Math.ceil(scaled / 10 - 1e-9));
 }
 
-/** La Gloire d'un gabarit tiré à cette difficulté : la sienne, et au moins celle de l'Or pour une mission d'Or. */
+/**
+ * La Gloire d'un défi : l'Or et les défis « faire connaître » en portent, les autres non. Le MONTANT n'est pas
+ * fixé ici : il se lit dans `GLORY_POINTS` (`glory.ts`), seule table des valeurs de Gloire.
+ */
 export const missionGlory = (template: MissionTemplate, difficulty: MissionDifficulty): number =>
-  Math.max(template.glory ?? 0, difficulty === 'gold' ? GLORY_POINTS.goldMission : 0);
+  difficulty === 'gold' || template.goal === 'reach' ? GLORY_POINTS.goldMission : 0;
 
 export type MissionSlot = 'easy' | 'medium' | 'hard' | 'gold';
 
@@ -192,7 +195,7 @@ export type DrawnMission = {
   readonly target: number;
   /** Points crédités à la validation, bonus de Flamme compris. */
   readonly reward: number;
-  /** Gloire de la mission : celle du gabarit, au moins 40 pour l'Or. */
+  /** Gloire de la mission : `missionGlory`, lue dans `GLORY_POINTS`. */
   readonly glory: number;
 };
 

@@ -95,7 +95,7 @@ const NOMINAL: Readonly<Record<string, { readonly by?: string; readonly gesture:
   'prism-foreign-exchange': { gesture: (ctx) => message(ctx) },
   'reply-their-language': { gesture: (ctx) => message(ctx, { replyToId: 'msg-1', quotedAuthorUserId: OTHER }) },
   'gold-replies-received': { by: OTHER, gesture: (ctx) => message(ctx, { replyToId: 'msg-1', quotedAuthorUserId: OTHER }) },
-  'start-conversation': { gesture: (ctx) => ctx.engagement.recordGameSignal(USER, 'conversation-started', { key: CONV }) },
+  'start-conversation': { gesture: (ctx) => ctx.engagement.recordConversationStarted({ senderUserId: USER, conversationId: CONV }) },
   'publish-reel': { gesture: (ctx) => ctx.engagement.recordGameSignal(USER, 'reel-published', { key: 'post-9' }) },
 };
 
