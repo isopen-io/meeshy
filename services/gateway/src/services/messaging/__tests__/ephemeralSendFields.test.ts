@@ -11,7 +11,10 @@
  */
 
 import { describe, it, expect } from '@jest/globals';
-import { EPHEMERAL_UNRECEIVED_RETENTION_MS } from '@meeshy/shared/utils/ephemeral-countdown';
+import {
+  EPHEMERAL_UNAVAILABILITY_GRACE_MS,
+  EPHEMERAL_UNRECEIVED_RETENTION_MS,
+} from '@meeshy/shared/utils/ephemeral-countdown';
 import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
 
 import { composeMessageEffectFlags, ephemeralSendFields } from '../ephemeralSendFields';
@@ -123,8 +126,19 @@ describe('ephemeralSendFields — durée ET après lecture sur une copie (#9572)
     // La durée BORNE (échéance par destinataire, dès la réception), la
     // consommation après lecture retire plus tôt : le premier des deux gagne.
     expect(
+      ephemeralSendFields({ ephemeralDuration: 30, effectFlags: FLAME, durationBoundsAfterRead: true, now: NOW }).ephemeralDuration,
+    ).toBe(30);
+  });
+
+  it('#9588 — borne la destruction d’une copie que personne n’a reçue à « envoi + durée + une heure », pas à sept jours', () => {
+    // Transférée là où personne ne lit, une flamme de trente secondes restait
+    // relisible sept jours par celui qui l'avait transférée.
+    expect(
       ephemeralSendFields({ ephemeralDuration: 30, effectFlags: FLAME, durationBoundsAfterRead: true, now: NOW }),
-    ).toEqual({ ephemeralDuration: 30, expiresAt: retentionCap });
+    ).toEqual({
+      ephemeralDuration: 30,
+      expiresAt: new Date(NOW.getTime() + 30_000 + EPHEMERAL_UNAVAILABILITY_GRACE_MS),
+    });
   });
 
   it('laisse la flamme-œil d’un envoi ordinaire SANS durée, même si le client en déclare une', () => {

@@ -229,4 +229,48 @@ describe('startEphemeralCountdowns — flamme-œil (#8302)', () => {
     expect(messageUpdateMany).not.toHaveBeenCalled();
     expect(emitted).toEqual([]);
   });
+
+  describe('la copie transférée d’une flamme — durée ET après lecture (#9588)', () => {
+    const COPY_FLAGS = 1 | 8;
+    const SENDER_DEADLINE = new Date(SENT_AT.getTime() + DURATION * 1000);
+
+    it('lit le bitfield du message : c’est lui qui dit qu’une copie est bornée', async () => {
+      await start();
+
+      const [{ select }] = messageFindMany.mock.calls[0] as [{ select: Record<string, unknown> }];
+      expect(select.effectFlags).toBe(true);
+    });
+
+    it('n’annonce PAS à l’expéditeur le décompte tardif d’un destinataire : son échéance reste « envoi + durée »', async () => {
+      messageFindMany.mockResolvedValue([ephemeralMessage({ effectFlags: COPY_FLAGS })]);
+
+      const [started] = await start();
+
+      expect(started.recipientExpiresAt).toEqual(D_RECIPIENT);
+      expect(started.latestExpiresAt).toEqual(SENDER_DEADLINE);
+      expect(emitted.find((entry) => entry.room === `user:${SENDER_USER}`)?.data.expiresAt).toBe(
+        SENDER_DEADLINE.toISOString(),
+      );
+    });
+
+    it('repousse quand même la DESTRUCTION : le destinataire tardif garde sa durée entière', async () => {
+      messageFindMany.mockResolvedValue([ephemeralMessage({ effectFlags: COPY_FLAGS })]);
+
+      await start();
+
+      expect(messageUpdateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: { expiresAt: new Date(D_RECIPIENT.getTime() + EPHEMERAL_UNAVAILABILITY_GRACE_MS) },
+        }),
+      );
+    });
+
+    it('laisse à l’expéditeur d’une flamme à durée ORDINAIRE la plus tardive des échéances', async () => {
+      messageFindMany.mockResolvedValue([ephemeralMessage({ effectFlags: 1 })]);
+
+      const [started] = await start();
+
+      expect(started.latestExpiresAt).toEqual(D_RECIPIENT);
+    });
+  });
 });

@@ -33,6 +33,21 @@ describe('ephemeralPushFields', () => {
   });
 });
 
+describe('ephemeralPushFields — flamme-œil et copie bornée (#8302, #9588)', () => {
+  const AFTER_READ = 1 | 8;
+
+  it('ne porte que le bitfield pour une flamme-œil : elle n’a aucune durée', () => {
+    expect(ephemeralPushFields({ effectFlags: AFTER_READ })).toEqual({ effectFlags: String(AFTER_READ) });
+  });
+
+  it('porte la DURÉE d’une copie transférée, qui décompte dès la réception malgré son bit après lecture', () => {
+    expect(ephemeralPushFields({ ephemeralDuration: 30, effectFlags: AFTER_READ })).toEqual({
+      ephemeralDuration: '30',
+      effectFlags: String(AFTER_READ),
+    });
+  });
+});
+
 describe('boundApnsPayload', () => {
   const socle = { body: 'x', data: { notificationId: 'n1', ephemeralDuration: '30' } };
 

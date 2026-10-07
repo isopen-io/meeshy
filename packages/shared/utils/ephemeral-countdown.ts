@@ -134,6 +134,52 @@ export function hasPerReaderEphemeralDeadline(input: {
 }
 
 /**
+ * #9588 — la COPIE transférée d'une flamme à durée porte durée ET après
+ * lecture (`forwardedCopyProtection`), et c'est la seule ligne à porter les
+ * deux : « le premier des deux l'emporte », pour TOUT LE MONDE.
+ *
+ * Une flamme-œil ordinaire est gardée par son expéditeur jusqu'à la
+ * destruction, et une flamme à durée que personne n'a reçue vit sept jours.
+ * Composées, les deux règles laissaient l'expéditeur d'une copie relire sept
+ * jours une flamme de trente secondes transférée là où personne ne lit. Une
+ * copie n'est pas un envoi d'auteur : elle est bornée par la durée de sa
+ * source, dès sa création.
+ */
+export function isDurationBoundedCopy(input: {
+  readonly ephemeralDuration?: number | null;
+  readonly effectFlags?: number | null;
+}): boolean {
+  return hasDeclaredDuration(input.ephemeralDuration) && isAfterReadEphemeral(input.effectFlags);
+}
+
+/**
+ * L'échéance de l'EXPÉDITEUR d'une copie bornée : « envoi + durée », ou plus
+ * tôt quand tous les destinataires ont consommé — la destruction, rapprochée
+ * par `consumeAfterReadMessages`, moins la grâce. Jamais plus tard : un
+ * destinataire qui reçoit tard repousse la destruction, pas cette échéance.
+ *
+ * Sans l'heure d'envoi, la destruction moins la grâce borne seule : c'est le
+ * plus tardif des décomptes connus, et « envoi + durée » tant que personne n'a
+ * reçu ({@link ephemeralDestructionAt}).
+ */
+export function boundedCopySenderDeadline(input: {
+  readonly ephemeralDuration?: number | null;
+  readonly sentAt?: Date | string | null;
+  readonly rawExpiresAt?: Date | string | null;
+}): Date | null {
+  const duration = input.ephemeralDuration;
+  if (!hasDeclaredDuration(duration)) return null;
+
+  const sentAt = asDate(input.sentAt);
+  const destruction = asDate(input.rawExpiresAt);
+  const bounds = [
+    ...(sentAt ? [sentAt.getTime() + Math.floor(duration) * 1000] : []),
+    ...(destruction ? [destruction.getTime() - EPHEMERAL_UNAVAILABILITY_GRACE_MS] : []),
+  ];
+  return bounds.length === 0 ? null : new Date(Math.min(...bounds));
+}
+
+/**
  * `D(u)` — l'échéance d'UN destinataire, dérivée de SA première réception.
  *
  * Tant que `receivedAt` est nul, rien ne décompte pour lui : c'est toute la
@@ -162,6 +208,8 @@ export function recipientEphemeralDeadline(input: {
 export function ephemeralDestructionAt(input: {
   readonly sentAt: Date;
   readonly ephemeralDuration?: number | null;
+  /** Porte le bit après lecture : avec une durée, c'est une copie bornée ({@link isDurationBoundedCopy}). */
+  readonly effectFlags?: number | null;
   readonly recipientDeadlines: readonly (Date | null | undefined)[];
 }): Date | null {
   const duration = input.ephemeralDuration;
@@ -172,7 +220,10 @@ export function ephemeralDestructionAt(input: {
     .filter((deadline): deadline is Date => deadline !== null);
 
   if (known.length === 0) {
-    return new Date(input.sentAt.getTime() + EPHEMERAL_UNRECEIVED_RETENTION_MS);
+    const unreceived = isDurationBoundedCopy(input)
+      ? Math.floor(duration) * 1000 + EPHEMERAL_UNAVAILABILITY_GRACE_MS
+      : EPHEMERAL_UNRECEIVED_RETENTION_MS;
+    return new Date(input.sentAt.getTime() + unreceived);
   }
 
   const latest = Math.max(...known.map((deadline) => deadline.getTime()));
@@ -187,7 +238,7 @@ export function ephemeralDestructionAt(input: {
  */
 export function servedEphemeralExpiresAt(input: {
   readonly ephemeralDuration?: number | null;
-  /** Porte le bit flamme-œil (#8302) : l'expéditeur n'y reçoit aucune échéance. */
+  /** Porte le bit flamme-œil (#8302) : sans durée, l'expéditeur n'y reçoit aucune échéance. */
   readonly effectFlags?: number | null;
   readonly rawExpiresAt?: Date | null;
   readonly isSender: boolean;
@@ -195,9 +246,12 @@ export function servedEphemeralExpiresAt(input: {
   readonly readerDeadline?: Date | null;
   /** `max D(u)`, pour l'expéditeur. */
   readonly latestRecipientDeadline?: Date | null;
+  /** `Message.createdAt` — l'origine de l'échéance de l'expéditeur d'une copie bornée (#9588). */
+  readonly sentAt?: Date | string | null;
 }): Date | null {
   if (isAfterReadEphemeral(input.effectFlags)) {
-    return input.isSender ? null : input.readerDeadline ?? null;
+    if (!input.isSender) return input.readerDeadline ?? null;
+    return isDurationBoundedCopy(input) ? boundedCopySenderDeadline(input) : null;
   }
   if (!hasDeclaredDuration(input.ephemeralDuration)) {
     return input.rawExpiresAt ?? null;

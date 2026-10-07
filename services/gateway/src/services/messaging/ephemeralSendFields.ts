@@ -1,6 +1,7 @@
 import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
 import {
   EPHEMERAL_UNRECEIVED_RETENTION_MS,
+  ephemeralDestructionAt,
   isAfterReadEphemeral,
   normalizeEphemeralDuration,
 } from '@meeshy/shared/utils/ephemeral-countdown';
@@ -49,9 +50,10 @@ export function ephemeralSendFields(input: {
   readonly effectFlags?: number | null;
   /**
    * #9572 — la COPIE d'une flamme à durée porte durée ET après lecture : la
-   * durée borne (échéance par destinataire, dès la réception), la consommation
-   * après lecture retire plus tôt. Posé par `exitProtectedCopy`, jamais par un
-   * envoi ordinaire, dont la flamme-œil reste sans durée.
+   * durée borne (échéance par destinataire, dès la réception ; « envoi +
+   * durée » pour l'expéditeur, #9588), la consommation après lecture retire
+   * plus tôt. Posé par `exitProtectedCopy`, jamais par un envoi ordinaire,
+   * dont la flamme-œil reste sans durée.
    */
   readonly durationBoundsAfterRead?: boolean;
   readonly now: Date;
@@ -66,7 +68,16 @@ export function ephemeralSendFields(input: {
     const bound = input.durationBoundsAfterRead
       ? normalizeEphemeralDuration({ ephemeralDuration: input.ephemeralDuration, now: input.now })
       : null;
-    return { ephemeralDuration: bound, expiresAt: retentionCap, ...viewOnce };
+    // #9588 — une copie bornée que personne n'a reçue meurt à « envoi + durée
+    // + grâce » : le plafond de sept jours en faisait une flamme d'une semaine
+    // pour celui qui l'avait transférée.
+    const destruction = ephemeralDestructionAt({
+      sentAt: input.now,
+      ephemeralDuration: bound,
+      effectFlags: input.effectFlags,
+      recipientDeadlines: [],
+    });
+    return { ephemeralDuration: bound, expiresAt: destruction ?? retentionCap, ...viewOnce };
   }
 
   const duration = normalizeEphemeralDuration({
