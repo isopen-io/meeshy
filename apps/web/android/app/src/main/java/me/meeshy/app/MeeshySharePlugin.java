@@ -42,6 +42,12 @@ import java.io.IOException;
  * annulation que `share`. Un `text` offert (le lien de parrainage d'une
  * carte photo, #9492) part a cote en `EXTRA_TEXT`, comme le fait Chrome
  * pour `navigator.share({ files, text })`.
+ *
+ * `shareFileAt` (#9553) partage un fichier plus lourd que le pont, que la page
+ * a deja ecrit par tranches dans le recepteur (`MeeshyFileSinkPlugin`). Seul
+ * un fichier de ce dossier est accepte (`FileSinkRules.insideSink`) ; il est
+ * DEPLACE dans `partages/` sous son nom, pour que l'application choisie puisse
+ * le lire apres que la page a efface le recepteur.
  */
 @CapacitorPlugin(name = "MeeshyShare")
 public class MeeshySharePlugin extends Plugin {
@@ -77,21 +83,54 @@ public class MeeshySharePlugin extends Plugin {
     @PluginMethod
     public void shareFile(PluginCall call) {
         String data = call.getString("data", "");
-        String mimeType = call.getString("mimeType", "");
         if (data.isEmpty()) {
             call.reject("Rien a partager");
             return;
         }
 
-        Uri uri;
+        File file;
         try {
-            File file = writeShared(nomSur(call.getString("fileName", "")), Base64.decode(data, Base64.DEFAULT));
-            uri = FileProvider.getUriForFile(getContext(), getContext().getPackageName() + ".fileprovider", file);
+            file = writeShared(nomSur(call.getString("fileName", "")), Base64.decode(data, Base64.DEFAULT));
         } catch (IOException | IllegalArgumentException e) {
             call.reject("Fichier illisible", e);
             return;
         }
+        shareStream(call, file);
+    }
 
+    @PluginMethod
+    public void shareFileAt(PluginCall call) {
+        String path = call.getString("path", "");
+        File sink = new File(getContext().getCacheDir(), MeeshyFileSinkPlugin.DIRECTORY);
+        File written = path.isEmpty() ? null : new File(path);
+        if (!FileSinkRules.insideSink(sink, written)) {
+            call.reject("Fichier illisible");
+            return;
+        }
+
+        File file;
+        try {
+            file = new File(freshSharedDirectory(), nomSur(call.getString("fileName", "")));
+            if (!written.renameTo(file)) {
+                throw new IOException("Deplacement impossible");
+            }
+        } catch (IOException e) {
+            call.reject("Fichier illisible", e);
+            return;
+        }
+        shareStream(call, file);
+    }
+
+    private void shareStream(PluginCall call, File file) {
+        Uri uri;
+        try {
+            uri = FileProvider.getUriForFile(getContext(), getContext().getPackageName() + ".fileprovider", file);
+        } catch (IllegalArgumentException e) {
+            call.reject("Fichier illisible", e);
+            return;
+        }
+
+        String mimeType = call.getString("mimeType", "");
         Intent send = new Intent(Intent.ACTION_SEND);
         send.setType(mimeType.isEmpty() ? "application/octet-stream" : mimeType);
         send.putExtra(Intent.EXTRA_STREAM, uri);
@@ -111,6 +150,14 @@ public class MeeshySharePlugin extends Plugin {
     }
 
     private File writeShared(String fileName, byte[] bytes) throws IOException {
+        File file = new File(freshSharedDirectory(), fileName);
+        try (FileOutputStream out = new FileOutputStream(file)) {
+            out.write(bytes);
+        }
+        return file;
+    }
+
+    private File freshSharedDirectory() throws IOException {
         File dir = new File(getContext().getCacheDir(), "partages");
         File[] previous = dir.listFiles();
         if (previous != null) {
@@ -121,11 +168,7 @@ public class MeeshySharePlugin extends Plugin {
         if (!dir.isDirectory() && !dir.mkdirs()) {
             throw new IOException("Cache indisponible");
         }
-        File file = new File(dir, fileName);
-        try (FileOutputStream out = new FileOutputStream(file)) {
-            out.write(bytes);
-        }
-        return file;
+        return dir;
     }
 
     private static String nomSur(String fileName) {

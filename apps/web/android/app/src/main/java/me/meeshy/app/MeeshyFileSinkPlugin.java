@@ -29,7 +29,7 @@ import java.util.concurrent.ConcurrentHashMap;
 @CapacitorPlugin(name = "MeeshyFileSink")
 public class MeeshyFileSinkPlugin extends Plugin {
 
-    private static final String DIRECTORY = "file-sink";
+    static final String DIRECTORY = "file-sink";
 
     private final Map<String, File> files = new ConcurrentHashMap<>();
 
