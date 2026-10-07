@@ -236,6 +236,12 @@ services:
       - ZMQ_TRANSLATOR_SUB_PORT=5558
       - NODE_ENV=production
       - DOMAIN=${DOMAIN:-meeshy.me}
+      # #9614, #9642 — la purge de conservation (sessions closes 90 j, journaux
+      # 12 mois, adresses d'inscription et de connexion 12 mois). ARMÉE par la
+      # seule valeur exacte true ; sinon elle compte et journalise sans écrire.
+      # PRODUCTION : la première passe efface l'arriéré — feu vert du porteur et
+      # sauvegarde vérifiée AVANT de poser RETENTION_PURGE_ENABLED=true sur l'hôte.
+      - RETENTION_PURGE_ENABLED=${RETENTION_PURGE_ENABLED:-false}
       - CORS_ORIGINS=${CORS_ORIGINS:?CORS_ORIGINS absente sur l hote. Poser la liste d origines separees par des virgules. Vide, la passerelle refuse TOUTE origine de navigateur}
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:?ALLOWED_ORIGINS absente sur l hote. C est le repli de CORS_ORIGINS. Vide, il ne rattrape rien}
       - FRONTEND_URL=${FRONTEND_URL:?FRONTEND_URL absente sur l hote. Sans elle les liens de reinitialisation et de confirmation partent brises}

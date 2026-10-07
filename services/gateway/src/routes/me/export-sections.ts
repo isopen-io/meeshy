@@ -230,29 +230,4 @@ export async function exportVoiceProfile(prisma: PrismaClient, userId: string) {
     : profile;
 }
 
-/**
- * Jamais `sessionToken`/`refreshToken`/`deviceFingerprint` : ce sont des
- * secrets d'authentification, pas des données à exporter — le hachage
- * n'annule pas la règle de ne jamais faire voyager un identifiant
- * d'authentification hors de son usage.
- */
-export async function exportSessions(prisma: PrismaClient, userId: string, page: ExportPage) {
-  const where = { userId };
-  const [items, total] = await Promise.all([
-    prisma.userSession.findMany({
-      where,
-      select: {
-        id: true, deviceType: true, deviceVendor: true, deviceModel: true, osName: true,
-        osVersion: true, browserName: true, browserVersion: true, isMobile: true,
-        country: true, city: true, isTrusted: true, isCurrentSession: true,
-        expiresAt: true, isValid: true, invalidatedAt: true, invalidatedReason: true,
-        createdAt: true, lastActivityAt: true,
-      },
-      orderBy: { lastActivityAt: 'desc' },
-      take: page.limit,
-      skip: page.offset,
-    }),
-    prisma.userSession.count({ where }),
-  ]);
-  return toSection(items, total, page);
-}
+// Les sessions et les événements de sécurité : `export-security.ts` (#9614).

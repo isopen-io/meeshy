@@ -298,6 +298,10 @@ services:
       # sujet et d'un bandeau dans le corps (`services/email/staging-marker.ts`).
       # Sans BREVO_API_KEY sur l'hôte, rien ne part (la passerelle le journalise).
       - MEESHY_ENV=staging
+      # #9614, #9642 — la purge de conservation (sessions closes 90 j, journaux
+      # 12 mois, adresses d'inscription et de connexion 12 mois). ARMÉE par la
+      # seule valeur exacte true ; sinon elle compte et journalise sans écrire.
+      - RETENTION_PURGE_ENABLED=${RETENTION_PURGE_ENABLED:-true}
       - EMAIL_FROM=${EMAIL_FROM:-noreply@meeshy.me}
       - EMAIL_FROM_NAME=${EMAIL_FROM_NAME:-Meeshy Staging}
       - BREVO_API_KEY=${BREVO_API_KEY:-}

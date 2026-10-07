@@ -18,8 +18,8 @@ import {
   exportReactions,
   exportMedia,
   exportVoiceProfile,
-  exportSessions,
 } from '../../../../routes/me/export-sections';
+import { exportSessions } from '../../../../routes/me/export-security';
 
 const USER_ID = '507f1f77bcf86cd799439011';
 
@@ -324,7 +324,7 @@ describe("adresses de média servies par l'export", () => {
 describe('exportSessions', () => {
   it('never selects sessionToken, refreshToken, or deviceFingerprint', async () => {
     const prisma = fakePrisma();
-    await exportSessions(prisma, USER_ID, { limit: 500, offset: 0 });
+    await exportSessions(prisma, USER_ID, { limit: 500, offset: 0 }, 'fr');
     const call = prisma.userSession.findMany.mock.calls[0][0];
     expect(call.select).not.toHaveProperty('sessionToken');
     expect(call.select).not.toHaveProperty('refreshToken');
@@ -333,7 +333,7 @@ describe('exportSessions', () => {
 
   it('is bounded and filtered by userId', async () => {
     const prisma = fakePrisma();
-    await exportSessions(prisma, USER_ID, { limit: 50, offset: 10 });
+    await exportSessions(prisma, USER_ID, { limit: 50, offset: 10 }, 'fr');
     expect(prisma.userSession.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { userId: USER_ID }, take: 50, skip: 10 })
     );

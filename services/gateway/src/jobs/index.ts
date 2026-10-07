@@ -11,6 +11,7 @@ import { DeliveryQueueCleanupJob } from './delivery-queue-cleanup';
 import { MutationLogCleanupJob } from './mutation-log-cleanup';
 import { BanExpirySweepJob } from './ban-expiry-sweep';
 import { sweepExpiredSessions } from './session-expiry-sweep';
+import { retentionPurgeArmed, sweepRetention } from './retention-sweep';
 import { GameLeagueJob } from './game-league';
 import { GameNightlyJob } from './game-nightly';
 import { GameMissionWindowJob } from './game-mission-window';
@@ -50,6 +51,8 @@ export class BackgroundJobsManager {
    * raisonnement que le balayage des sessions ci-dessus (#5712).
    */
   private geoCacheInterval: NodeJS.Timeout | null = null;
+  /** La conservation (#9614, #9642) : une passe par jour, sans état propre. */
+  private retentionInterval: NodeJS.Timeout | null = null;
   private isRunning: boolean = false;
 
   private prismaClient: PrismaClient;
@@ -152,6 +155,20 @@ export class BackgroundJobsManager {
     this.geoCacheInterval = guardedInterval({ name: 'geo-cache-purge', everyMs: 10 * 60 * 1000, logger, run: purgerLeCacheGeo });
     this.geoCacheInterval.unref();
 
+    /* LA CONSERVATION (#9614, #9642) — une passe par jour. ARMÉE seulement par
+       `RETENTION_PURGE_ENABLED=true` (staging) ; désarmée (production, en
+       attendant le feu vert du porteur), elle compte et journalise ce qu'elle
+       effacerait, sans rien écrire. */
+    const passerLaConservation = () => {
+      const apply = retentionPurgeArmed();
+      sweepRetention(this.prismaClient, { apply })
+        .then((report) => logger.info(apply ? 'Retention sweep applied' : 'Retention sweep (dry run — RETENTION_PURGE_ENABLED is not true): would purge', report))
+        .catch((err) => logger.error('Retention sweep failed', err));
+    };
+    passerLaConservation();
+    this.retentionInterval = guardedInterval({ name: 'retention-sweep', everyMs: 24 * 60 * 60 * 1000, logger, run: passerLaConservation });
+    this.retentionInterval.unref();
+
     this.isRunning = true;
     logger.info('All background jobs started successfully');
   }
@@ -185,6 +202,11 @@ export class BackgroundJobsManager {
     if (this.geoCacheInterval) {
       clearInterval(this.geoCacheInterval);
       this.geoCacheInterval = null;
+    }
+
+    if (this.retentionInterval) {
+      clearInterval(this.retentionInterval);
+      this.retentionInterval = null;
     }
 
     this.isRunning = false;
