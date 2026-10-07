@@ -136,3 +136,33 @@ describe('installSealedExitGuard', () => {
     uninstall = installSealedExitGuard(document, () => (picked === null ? [] : [picked]));
   });
 });
+
+describe('la sélection réelle du document (#9573)', () => {
+  test('une sélection qui commence AVANT une rangée scellée et finit APRÈS ne se copie pas', () => {
+    document.body.innerHTML = `<p id="avant">avant</p><div id="sc" ${SEALED_ROW_ATTRIBUTE}=""><p>secret</p></div><p id="apres">après</p>`;
+    const off = installSealedExitGuard(document);
+    const range = document.createRange();
+    range.setStart(document.getElementById('avant')?.firstChild as Node, 0);
+    range.setEnd(document.getElementById('apres')?.firstChild as Node, 3);
+    const selection = document.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    const event = new Event('copy', { bubbles: true, cancelable: true });
+    document.getElementById('avant')?.dispatchEvent(event);
+    selection?.removeAllRanges();
+    off();
+    expect(event.defaultPrevented).toBe(true);
+  });
+
+  test('un geste venu d’un shadow DOM ouvert est rattaché à son hôte scellé', () => {
+    document.body.innerHTML = `<div id="sh" ${SEALED_ROW_ATTRIBUTE}=""></div>`;
+    const host = document.getElementById('sh') as HTMLElement;
+    const inner = host.attachShadow({ mode: 'open' });
+    inner.innerHTML = '<img src="/x.jpg" />';
+    const off = installSealedExitGuard(document, () => []);
+    const event = new Event('dragstart', { bubbles: true, cancelable: true, composed: true });
+    inner.querySelector('img')?.dispatchEvent(event);
+    off();
+    expect(event.defaultPrevented).toBe(true);
+  });
+});

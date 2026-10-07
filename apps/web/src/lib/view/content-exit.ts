@@ -45,7 +45,7 @@ export type ContentExit = {
    */
   readonly readable: boolean;
   readonly forward: ExitForward;
-  /** Le contenu peut quitter Meeshy autrement que par un transfert. */
+  /** Le contenu peut quitter Meeshy autrement que par un transfert — ni qui disparaît, ni voilé (colonne ou bit), ni chiffré, ni supprimé, ni échu. */
   readonly leaves: boolean;
 };
 
@@ -59,6 +59,15 @@ export type ExitMessage = Omit<ProtectionSubject, 'viewOnceCount'> & {
   readonly attachments?: ReadonlyArray<ExitPiece | null | undefined> | null;
 };
 
+function masked(carrier: { readonly isViewOnce?: boolean | null; readonly isBlurred?: boolean | null; readonly isEncrypted?: boolean | null; readonly effectFlags?: number | null }): boolean {
+  return quotedIsProtected({
+    isViewOnce: carrier.isViewOnce === true,
+    isBlurred: carrier.isBlurred === true,
+    isEncrypted: carrier.isEncrypted === true,
+    effectFlags: carrier.effectFlags ?? 0,
+  });
+}
+
 const UNAVAILABLE: ExitForward = { allowed: false, reason: 'unavailable' };
 
 export function contentExitOf(message: ExitMessage, now: number): ContentExit {
@@ -69,7 +78,7 @@ export function contentExitOf(message: ExitMessage, now: number): ContentExit {
     nature: law.nature,
     readable: kind === 'standard',
     forward: law.forward.allowed && gone ? UNAVAILABLE : law.forward,
-    leaves: law.exportable && kind === 'standard',
+    leaves: law.exportable && kind === 'standard' && !masked(message),
   };
 }
 
@@ -92,14 +101,6 @@ export function quotedExitOf(quoted: ExitMessage, now: number): ContentExit {
 
 export const exitOffers = (exit: ContentExit, action: ExitAction): boolean => (action === 'forward' ? exit.forward.allowed : exit.leaves);
 
-const masked = (carrier: { readonly isViewOnce?: boolean | null; readonly isBlurred?: boolean | null; readonly isEncrypted?: boolean | null; readonly effectFlags?: number | null }): boolean =>
-  quotedIsProtected({
-    isViewOnce: carrier.isViewOnce === true,
-    isBlurred: carrier.isBlurred === true,
-    isEncrypted: carrier.isEncrypted === true,
-    effectFlags: carrier.effectFlags ?? 0,
-  });
-
 /** Une pièce qu'aucun bit ne voile et qui n'est pas chiffrée — le flou et le chiffrement, à composer avec la loi, jamais à sa place. */
 export const pieceIsOpen = (piece: ExitPiece): boolean => !masked(piece);
 
@@ -120,7 +121,7 @@ export function mediaLeaves(params: {
   const { message, piece, now } = params;
   const whole = { ...message, attachments: [...(message.attachments ?? []), piece] };
   const exit = params.source === 'quote' ? quotedExitOf(whole, now) : contentExitOf(whole, now);
-  return exit.leaves && !masked(message) && pieceIsOpen(piece);
+  return exit.leaves && pieceIsOpen(piece);
 }
 
 /** Un média qu'aucun message ne porte (image de commentaire, média de publication) — la loi lue sur la pièce seule. */
@@ -138,7 +139,6 @@ export type SealedSubject = ExitMessage & { readonly replyTo?: ExitMessage | nul
 
 export function sealedProps(message: SealedSubject, now: number): { readonly [SEALED_ROW_ATTRIBUTE]?: '' } {
   const quoted = message.replyTo;
-  const open =
-    contentExitOf(message, now).leaves && !masked(message) && (quoted == null || (quotedExitOf(quoted, now).leaves && !masked(quoted)));
+  const open = contentExitOf(message, now).leaves && (quoted == null || quotedExitOf(quoted, now).leaves);
   return open ? {} : { [SEALED_ROW_ATTRIBUTE]: '' };
 }

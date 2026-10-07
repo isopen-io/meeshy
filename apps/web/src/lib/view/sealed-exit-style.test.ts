@@ -31,10 +31,15 @@ describe('styles/sealed-exit.css', () => {
     expect(print).toContain('visibility: hidden');
   });
 
-  test('la feuille est chargée par l’entrée de l’application, et la garde y est installée une fois', () => {
+  test('la feuille est chargée par l’entrée, et la garde y est installée SYNCHRONEMENT, avant le premier rendu — aucune fenêtre ouverte, aucun chunk dont l’échec l’omettrait', () => {
     const main = readFileSync(join(here, '../../main.tsx'), 'utf8');
     expect(main).toContain("styles/sealed-exit.css'");
     expect(main).toContain('installSealedExitGuard(document)');
+    expect(main).toContain("import { installSealedExitGuard } from '@/lib/view/sealed-exit-guard';");
+    expect(main).not.toContain("import('@/lib/view/sealed-exit-guard')");
+    const install = main.indexOf('installSealedExitGuard(document)');
+    expect(install).toBeGreaterThan(-1);
+    expect(install).toBeLessThan(main.indexOf('createRoot(root).render('));
     const threadModes = readFileSync(join(here, '../../routes/thread-modes.tsx'), 'utf8');
     expect(threadModes).not.toContain('installSealedExitGuard');
   });

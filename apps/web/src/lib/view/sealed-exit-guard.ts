@@ -36,12 +36,16 @@ function selectedNodes(doc: Document): readonly Node[] {
   return [selection.anchorNode, selection.focusNode, ...crossed].filter((node): node is Node => node !== null);
 }
 
+/** Le geste traverse-t-il une surface scellée ? Lu sur le CHEMIN de l'évènement : un shadow DOM ne cache pas son hôte. */
+const crossesSealed = (event: Event): boolean =>
+  inSealedRow(event.target) || event.composedPath().some((node) => node instanceof Element && node.matches(SEALED_SELECTOR));
+
 export function installSealedExitGuard(doc: Document, selected: () => readonly Node[] = () => selectedNodes(doc)): () => void {
   const onClipboard = (event: Event): void => {
-    if (inSealedRow(event.target) || selected().some(inSealedRow)) event.preventDefault();
+    if (crossesSealed(event) || selected().some(inSealedRow)) event.preventDefault();
   };
   const onSealedGesture = (event: Event): void => {
-    if (inSealedRow(event.target)) event.preventDefault();
+    if (crossesSealed(event)) event.preventDefault();
   };
   const GESTURES = ['dragstart', 'contextmenu', 'auxclick'] as const;
   doc.addEventListener('copy', onClipboard, true);
