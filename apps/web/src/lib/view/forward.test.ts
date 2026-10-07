@@ -41,12 +41,26 @@ describe('forwardRefusalOf — la règle serveur, rejouée avant l’aller-retou
     expect(forwardRefusalOf(candidate({ effectFlags: MESSAGE_EFFECT_FLAGS.VIEW_ONCE }), NOW)).toBe('view-once');
   });
 
-  test('un ÉPHÉMÈRE encore vivant se transfère — le serveur lui fait HÉRITER sa durée', () => {
-    expect(forwardRefusalOf(candidate({ expiresAt: new Date(NOW + 60_000) }), NOW)).toBeNull();
+  test('une FLAMME À DURÉE encore vivante se transfère — la copie sera bornée par sa durée', () => {
+    const flame = candidate({ effectFlags: MESSAGE_EFFECT_FLAGS.EPHEMERAL, ephemeralDuration: 60, expiresAt: new Date(NOW + 60_000) });
+    expect(forwardRefusalOf(flame, NOW)).toBeNull();
+  });
+
+  test('une FLAMME APRÈS LECTURE ne se transfère pas', () => {
+    const flame = candidate({ effectFlags: MESSAGE_EFFECT_FLAGS.EPHEMERAL | MESSAGE_EFFECT_FLAGS.EPHEMERAL_AFTER_READ });
+    expect(forwardRefusalOf(flame, NOW)).toBe('after-read');
+  });
+
+  test('un éphémère dont la durée ne se lit pas est refusé : `expiresAt` n’est pas une durée', () => {
+    expect(forwardRefusalOf(candidate({ expiresAt: new Date(NOW + 60_000) }), NOW)).toBe('after-read');
+  });
+
+  test('une PIÈCE à vue unique refuse le message qui la porte', () => {
+    expect(forwardRefusalOf(candidate({ attachments: [{ isViewOnce: true }] }), NOW)).toBe('view-once');
   });
 
   test('un éphémère ÉCHU n’a plus de source à copier', () => {
-    expect(forwardRefusalOf(candidate({ expiresAt: new Date(NOW - 1) }), NOW)).toBe('unavailable');
+    expect(forwardRefusalOf(candidate({ effectFlags: MESSAGE_EFFECT_FLAGS.EPHEMERAL, ephemeralDuration: 30, expiresAt: new Date(NOW - 1) }), NOW)).toBe('unavailable');
   });
 
   test('un message SUPPRIMÉ n’a plus de source à copier', () => {
@@ -67,6 +81,11 @@ describe('admitForward — la SÉLECTION entière, jamais un transfert à moiti�
   test('UNE vue unique dans la sélection refuse TOUT le lot — jamais un envoi partiel silencieux', () => {
     const admission = admitForward([candidate({ id: 'a' }), candidate({ id: 'b', isViewOnce: true })], NOW);
     expect(admission).toEqual({ admitted: false, reason: 'view-once' });
+  });
+
+  test('UNE flamme après lecture dans la sélection refuse TOUT le lot', () => {
+    const flame = candidate({ id: 'b', effectFlags: MESSAGE_EFFECT_FLAGS.EPHEMERAL | MESSAGE_EFFECT_FLAGS.EPHEMERAL_AFTER_READ });
+    expect(admitForward([candidate({ id: 'a' }), flame], NOW)).toEqual({ admitted: false, reason: 'after-read' });
   });
 
   test('une sélection vide est un refus, jamais un envoi de zéro message', () => {
@@ -126,6 +145,22 @@ describe('forwardRequestOf — la sélection admise devient une demande d’envo
     ]);
   });
 
+  test('une flamme à durée part avec SA borne ; un message ordinaire n’en porte aucune', () => {
+    const flame = sourceOf({ id: 'm2', effectFlags: MESSAGE_EFFECT_FLAGS.EPHEMERAL, ephemeralDuration: 300 });
+    const request = forwardRequestOf({ conversationId: 'c-src', messages: [sourceOf(), flame], now: NOW });
+    expect(messagesPayload(request).messages).toEqual([
+      { id: 'm1', content: 'Regarde ça', originalLanguage: 'fr' },
+      { id: 'm2', content: 'Regarde ça', originalLanguage: 'fr', maxDurationSeconds: 300 },
+    ]);
+  });
+
+  test('une flamme à durée ne montre PAS son texte dans l’aperçu, et son média ne se publie pas', () => {
+    const flame = sourceOf({ effectFlags: MESSAGE_EFFECT_FLAGS.EPHEMERAL, ephemeralDuration: 300, attachments: [fileOf()] });
+    const request = forwardRequestOf({ conversationId: 'c-src', messages: [flame], now: NOW });
+    expect(messagesPayload(request).preview).toEqual({ kind: 'messages', count: 1 });
+    expect(messagesPayload(request).soleMedia?.protected).toBe(true);
+  });
+
   test('un seul message texte s’aperçoit par son texte', () => {
     const request = forwardRequestOf({ conversationId: 'c-src', messages: [sourceOf()], now: NOW });
     expect(messagesPayload(request).preview).toEqual({ kind: 'text', text: 'Regarde ça' });
@@ -180,6 +215,7 @@ describe('forwardRequestOf — la sélection admise devient une demande d’envo
     ['une pièce chiffrée', sourceOf({ attachments: [fileOf({ isEncrypted: true })] })],
     ['un message flouté', sourceOf({ isBlurred: true, attachments: [fileOf()] })],
     ['un message éphémère', sourceOf({ expiresAt: new Date(NOW + 60_000), attachments: [fileOf()] })],
+    ['une flamme à durée', sourceOf({ effectFlags: MESSAGE_EFFECT_FLAGS.EPHEMERAL, ephemeralDuration: 60, attachments: [fileOf()] })],
     ['un message chiffré', sourceOf({ isEncrypted: true, attachments: [fileOf()] })],
     ['un message flouté par son SEUL bit d’effet', sourceOf({ effectFlags: MESSAGE_EFFECT_FLAGS.BLURRED, attachments: [fileOf()] })],
   ];

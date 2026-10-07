@@ -71,10 +71,18 @@ const masked = (carrier: { readonly isViewOnce?: boolean | null; readonly isBlur
     effectFlags: carrier.effectFlags ?? 0,
   });
 
-/** Une pièce ne sort pas quand son message ne sort pas, ni quand l'un des deux niveaux est voilé par un bit ou chiffré. */
+/** Une pièce qu'aucun bit ne voile et qui n'est pas chiffrée — le flou et le chiffrement, à composer avec la loi, jamais à sa place. */
 export const pieceIsOpen = (piece: ExitPiece): boolean => !masked(piece);
 
+/**
+ * UNE PIÈCE OBÉIT AU VERDICT DU MESSAGE ENTIER. La loi est relue sur le
+ * message AVEC cette pièce : un hôte qui tient la pièce à côté d'un message
+ * servi sans ses pièces (index des médias, citation) ne peut pas la faire
+ * juger seule, et un bit que la loi lit sur une pièce (éphémère, après
+ * lecture) n'est pas réduit au masque du flou.
+ */
 export function mediaLeaves(params: { readonly message: ExitMessage; readonly piece: ExitPiece; readonly now: number }): boolean {
   const { message, piece, now } = params;
-  return contentExitOf(message, now).leaves && !masked(message) && pieceIsOpen(piece);
+  const whole = { ...message, attachments: [...(message.attachments ?? []), piece] };
+  return contentExitOf(whole, now).leaves && !masked(message) && pieceIsOpen(piece);
 }

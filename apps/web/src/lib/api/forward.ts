@@ -33,8 +33,12 @@ import type { Message } from './types';
  * succès sans rien créer.
  */
 
-/** Ce qu'un transfert lit du message source — et rien de plus. */
-export type ForwardSource = Pick<Message, 'id' | 'content' | 'originalLanguage'>;
+/**
+ * Ce qu'un transfert lit du message source — et rien de plus.
+ * `maxDurationSeconds` : la source est une flamme à durée, sa copie dure au
+ * plus autant (#9573) ; absent pour toute autre source.
+ */
+export type ForwardSource = Pick<Message, 'id' | 'content' | 'originalLanguage'> & { readonly maxDurationSeconds?: number };
 
 export type ForwardResult =
   | { readonly ok: true; readonly count: number }
