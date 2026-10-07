@@ -18,9 +18,18 @@
  * transfert suivant, et ne se retransfère pas.
  *
  * FERMÉ PAR DÉFAUT : un contenu DÉCLARÉ éphémère dont la durée ne se lit pas
- * (bit `EPHEMERAL` nu, échéance sans date de création) reçoit les verdicts de
- * la flamme après lecture. On ne peut pas borner une copie par une durée
- * qu'on ne connaît pas.
+ * (bit `EPHEMERAL` nu, `expiresAt` sans `ephemeralDuration`) reçoit les
+ * verdicts de la flamme après lecture. On ne peut pas borner une copie par une
+ * durée qu'on ne connaît pas — et `expiresAt` n'en est pas une : depuis #7451
+ * c'est l'heure INTERNE de destruction (sept jours tant que personne n'a
+ * reçu), dont la distance à la création ferait d'une flamme de trente secondes
+ * une copie d'une semaine.
+ *
+ * DEUX ENTRÉES. {@link contentExitLaw} sert l'AFFICHAGE des clients : un champ
+ * absent n'y déclare rien. {@link contentExitLawOfSource} sert l'AUTORISATION
+ * du serveur : elle exige la projection ENTIÈRE et ferme sur tout champ non
+ * chargé — une colonne sélectionnée n'est jamais `undefined`, donc l'absence
+ * prouve que la requête ne l'a pas lue, jamais que le contenu est ordinaire.
  *
  * Le FLOU et le CHIFFREMENT ne sont pas des natures : ils gardent leurs
  * propres restrictions (`messageProtection`, `maskedAttachment`), que
@@ -40,6 +49,7 @@ export type ContentExitNature = 'ordinary' | 'timed-flame' | 'after-read-flame' 
 /** Ce que la loi lit d'une pièce jointe — ses propres drapeaux, indépendants du message. */
 export type ContentExitAttachment = {
   readonly isViewOnce?: boolean | null;
+  readonly isBlurred?: boolean | null;
   readonly effectFlags?: number | null;
 };
 
@@ -49,10 +59,26 @@ export type ContentExitSubject = {
   readonly isBlurred?: boolean | null;
   readonly effectFlags?: number | null;
   readonly ephemeralDuration?: number | null;
-  /** Repli des lignes d'avant `ephemeralDuration` (#7451) : la durée est `expiresAt − createdAt`. */
+  /** Sa seule PRÉSENCE déclare un éphémère ; elle ne donne jamais la durée. */
   readonly expiresAt?: Date | string | null;
-  readonly createdAt?: Date | string | null;
   readonly attachments?: ReadonlyArray<ContentExitAttachment | null | undefined> | null;
+};
+
+/**
+ * La projection ENTIÈRE qu'un chemin d'autorisation doit avoir chargée : tout
+ * champ est requis, `null` se dit explicitement.
+ */
+export type ContentExitProjection = {
+  readonly isViewOnce: boolean | null;
+  readonly isBlurred: boolean | null;
+  readonly effectFlags: number | null;
+  readonly ephemeralDuration: number | null;
+  readonly expiresAt: Date | string | null;
+  readonly attachments: ReadonlyArray<{
+    readonly isViewOnce: boolean | null;
+    readonly isBlurred: boolean | null;
+    readonly effectFlags: number | null;
+  }>;
 };
 
 export type ContentForwardRefusal = 'view-once' | 'after-read';
@@ -112,18 +138,16 @@ const instantOf = (value: Date | string | null | undefined): number | null => {
   return Number.isNaN(time) ? null : time;
 };
 
-const knownDuration = (subject: ContentExitSubject): number | null => {
-  const declared = wholeSeconds(subject.ephemeralDuration);
-  if (declared !== null) return declared;
-  const expiresAt = instantOf(subject.expiresAt);
-  const createdAt = instantOf(subject.createdAt);
-  return expiresAt === null || createdAt === null ? null : wholeSeconds((expiresAt - createdAt) / 1000);
-};
+const blurredBy = (carrier: { readonly isBlurred?: boolean | null; readonly effectFlags?: number | null }): boolean =>
+  carrier.isBlurred === true || ((carrier.effectFlags ?? 0) & BLURRED) !== 0;
+
+const piecesOf = (subject: ContentExitSubject | null | undefined): readonly ContentExitAttachment[] =>
+  (subject?.attachments ?? []).filter((piece): piece is ContentExitAttachment => piece != null);
 
 export function contentExitLaw(subject: ContentExitSubject | null | undefined): ContentExitLaw {
   if (!subject) return ORDINARY;
 
-  const pieces = (subject.attachments ?? []).filter((piece): piece is ContentExitAttachment => piece != null);
+  const pieces = piecesOf(subject);
   const flags = pieces.reduce((acc, piece) => acc | (piece.effectFlags ?? 0), subject.effectFlags ?? 0);
 
   const viewOnce =
@@ -132,7 +156,7 @@ export function contentExitLaw(subject: ContentExitSubject | null | undefined): 
 
   if ((flags & EPHEMERAL_AFTER_READ) !== 0) return AFTER_READ_FLAME;
 
-  const duration = knownDuration(subject);
+  const duration = wholeSeconds(subject.ephemeralDuration);
   const declaredEphemeral = (flags & EPHEMERAL) !== 0 || instantOf(subject.expiresAt) !== null;
   if (duration === null) return declaredEphemeral ? AFTER_READ_FLAME : ORDINARY;
 
@@ -144,6 +168,25 @@ export function contentExitLaw(subject: ContentExitSubject | null | undefined): 
   };
 }
 
+const MESSAGE_PROJECTION = ['isViewOnce', 'isBlurred', 'effectFlags', 'ephemeralDuration', 'expiresAt', 'attachments'] as const;
+const PIECE_PROJECTION = ['isViewOnce', 'isBlurred', 'effectFlags'] as const;
+
+const fullyLoaded = (row: object | null | undefined, fields: readonly string[]): boolean =>
+  row != null && fields.every((field) => (row as Record<string, unknown>)[field] !== undefined);
+
+/**
+ * La loi pour un chemin d'AUTORISATION. Une source absente, une colonne ou une
+ * pièce non chargée rendent les verdicts de la flamme après lecture : ni
+ * transfert, ni export.
+ */
+export function contentExitLawOfSource(source: ContentExitProjection | null | undefined): ContentExitLaw {
+  const complete =
+    fullyLoaded(source, MESSAGE_PROJECTION) &&
+    Array.isArray(source?.attachments) &&
+    source.attachments.every((piece) => fullyLoaded(piece, PIECE_PROJECTION));
+  return complete ? contentExitLaw(source) : AFTER_READ_FLAME;
+}
+
 /**
  * Les colonnes de protection de la COPIE qu'un transfert crée — `null` quand la
  * source ne se transfère pas.
@@ -151,8 +194,8 @@ export function contentExitLaw(subject: ContentExitSubject | null | undefined): 
  * - Source flamme à durée ⇒ `min(durée demandée, durée source)` (demandée
  *   absente ou invalide ⇒ celle de la source), bits `EPHEMERAL |
  *   EPHEMERAL_AFTER_READ` : la requête ne peut ni allonger, ni retirer.
- * - Le FLOU de la source est imposé sur toute nature ; la requête peut
- *   l'ajouter, jamais le retirer.
+ * - Le FLOU de la source — message OU l'une de ses pièces — est imposé sur
+ *   toute nature ; la requête peut l'ajouter, jamais le retirer.
  * - Source ordinaire ⇒ la requête passe telle quelle, flou mis à part.
  */
 export function forwardedCopyProtection(input: {
@@ -164,10 +207,9 @@ export function forwardedCopyProtection(input: {
 
   const requestedFlags = input.requested?.effectFlags ?? 0;
   const isBlurred =
-    input.source?.isBlurred === true ||
-    ((input.source?.effectFlags ?? 0) & BLURRED) !== 0 ||
-    input.requested?.isBlurred === true ||
-    (requestedFlags & BLURRED) !== 0;
+    (input.source != null && blurredBy(input.source)) ||
+    piecesOf(input.source).some(blurredBy) ||
+    (input.requested != null && blurredBy(input.requested));
   const blurBit = isBlurred ? BLURRED : 0;
   const requestedDuration = wholeSeconds(input.requested?.ephemeralDuration);
 
