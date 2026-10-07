@@ -104,7 +104,7 @@ struct ForwardPickerSheet: View {
                 ForwardDurationRow(
                     choices: sheetOffer.durationChoices,
                     selectedSeconds: sheetOffer.selectedDuration(chosen: chosenDurationSeconds),
-                    accentHex: accentColor,
+                    accentColor: accentColor,
                     isDark: isDark,
                     onSelect: { seconds in
                         HapticFeedback.light()

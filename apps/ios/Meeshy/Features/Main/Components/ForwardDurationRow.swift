@@ -15,7 +15,7 @@ import MeeshyUI
 struct ForwardDurationRow: View, Equatable {
     let choices: [ForwardDurationChoice]
     let selectedSeconds: Int?
-    let accentHex: String
+    let accentColor: String
     let isDark: Bool
     let onSelect: (Int) -> Void
 
@@ -24,7 +24,7 @@ struct ForwardDurationRow: View, Equatable {
     static func == (lhs: ForwardDurationRow, rhs: ForwardDurationRow) -> Bool {
         lhs.choices == rhs.choices
             && lhs.selectedSeconds == rhs.selectedSeconds
-            && lhs.accentHex == rhs.accentHex
+            && lhs.accentColor == rhs.accentColor
             && lhs.isDark == rhs.isDark
     }
 
@@ -83,11 +83,11 @@ struct ForwardDurationRow: View, Equatable {
         } label: {
             Text(choice.label)
                 .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: isSelected ? .semibold : .medium))
-                .foregroundColor(isSelected ? .white : Color(hex: accentHex))
+                .foregroundColor(isSelected ? .white : Color(hex: accentColor))
                 .padding(.horizontal, MeeshySpacing.mdPlus)
                 .frame(minWidth: MeeshyControlSize.tapTarget, minHeight: MeeshyControlSize.tapTarget)
                 .background(
-                    Capsule().fill(isSelected ? Color(hex: accentHex) : Color(hex: accentHex).opacity(MeeshyOpacity.light))
+                    Capsule().fill(isSelected ? Color(hex: accentColor) : Color(hex: accentColor).opacity(MeeshyOpacity.light))
                 )
                 .contentShape(Capsule())
         }
