@@ -27,10 +27,12 @@ function corpsDe(code: string, signature: string): string {
 }
 
 describe('le fichier partagé depuis la coque Android emporte son texte (#9492)', () => {
-  test('`shareFile` lit le texte offert et le pose en EXTRA_TEXT', () => {
+  test('`shareFile` et `shareFileAt` (#9553) remettent le fichier à la feuille qui pose le texte offert en EXTRA_TEXT', () => {
     const source = readFileSync(PLUGIN, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
-    const partage = corpsDe(source, 'public void shareFile(');
-    expect(partage).toContain('call.getString("text"');
-    expect(partage).toContain('Intent.EXTRA_TEXT');
+    expect(corpsDe(source, 'public void shareFile(')).toContain('shareStream(call, file)');
+    expect(corpsDe(source, 'public void shareFileAt(')).toContain('shareStream(call, file)');
+    const feuille = corpsDe(source, 'private void shareStream(');
+    expect(feuille).toContain('call.getString("text"');
+    expect(feuille).toContain('Intent.EXTRA_TEXT');
   });
 });
