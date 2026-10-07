@@ -90,7 +90,7 @@ final class CaptureShieldTests: XCTestCase {
 
     func test_environment_defaults() {
         XCTAssertFalse(EnvironmentValues().isCaptureShielded)
-        XCTAssertEqual(EnvironmentValues().captureShieldScope, .none)
+        XCTAssertEqual(EnvironmentValues().captureShieldScope, CaptureShieldScope.none)
     }
 
     // MARK: - La toile : le contenu vit SOUS la couche sécurisée
