@@ -364,7 +364,15 @@ internal struct _FullscreenOverlayControls: View {
     let onSave: (() -> Void)?
     let onShare: (() -> Void)?
     let saveState: _FullscreenRenderer.SaveState
+    /// La ligne `largeur × hauteur · poids · durée` (#9577) — `nil` ⇒ aucune.
+    var infoSegments: [MediaInfoLine.Segment] = []
+    var declaredDuration: Double = 0
 
+    /// **De haut en bas : barre haute, scène, progression sur toute la largeur
+    /// de l'écran, ligne d'informations** (#9577, directive porteur
+    /// 2026-10-07). Le son, AirPlay et (...) ont quitté la ligne de la barre
+    /// pour une colonne à droite ; le bouton central n'est plus ici — il vit
+    /// dans le renderer, sous sa propre règle d'effacement.
     var body: some View {
         ZStack {
             FullscreenScrims(topInset: WindowMetrics.safeAreaInsets.top, chromeVisible: true)
@@ -372,15 +380,58 @@ internal struct _FullscreenOverlayControls: View {
                 topBar
                     .padding(.top, FullscreenChromeMetrics.topInset)
                     .padding(.horizontal, FullscreenTopBarLayout.horizontalPadding)
-                // Transport délégué au composant partagé `VideoTransportControls`
-                // (source unique, idem galerie média) — dédup des ~240 lignes qui
-                // dupliquaient center/seek/speed/mini-toolbar. La top bar fichier
-                // (close/save/share) reste propre au fullscreen.
-                VideoTransportControls(manager: manager, accentColor: accentColor, controls: controls)
+                Spacer(minLength: 0)
+                VideoTransportControls(manager: manager,
+                                       accentColor: accentColor,
+                                       controls: controls,
+                                       placement: .rail,
+                                       railTone: .onMedia)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                    .padding(.trailing, FullscreenTopBarLayout.horizontalPadding)
+                    .padding(.bottom, MeeshySpacing.sm)
+                VideoTransportControls(manager: manager,
+                                       accentColor: accentColor,
+                                       controls: Self.progressControls(controls),
+                                       placement: .corridor)
+                    .frame(maxWidth: .infinity)
+                infoLine
                     .padding(.bottom, MeeshySpacing.lg)
             }
         }
         .buttonStyle(BouncyControlButtonStyle())
+    }
+
+    /// La bande ne porte que la progression : ce que le jeu demande d'autre
+    /// (temps écoulé, durée) est dit par la ligne d'informations.
+    nonisolated static func progressControls(_ controls: MeeshyVideoPlayer.ControlSet) -> MeeshyVideoPlayer.ControlSet {
+        controls.intersection([.scrubber])
+    }
+
+    @ViewBuilder
+    private var infoLine: some View {
+        if !infoSegments.isEmpty {
+            HStack(spacing: MeeshySpacing.xs) {
+                ForEach(Array(infoSegments.enumerated()), id: \.offset) { index, segment in
+                    if index > 0 {
+                        Text(MediaInfoLine.separatorGlyph).accessibilityHidden(true)
+                    }
+                    switch segment {
+                    case .dimensions(let text), .fileSize(let text):
+                        Text(text)
+                    case .duration:
+                        MediaPlaybackDurationText(manager: manager,
+                                                  declaredSeconds: declaredDuration,
+                                                  followsEngine: true)
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+            .font(.system(size: MeeshyFont.footnoteSize, weight: .medium, design: .monospaced))
+            .foregroundColor(MeeshyColors.mediaChromeTertiary)
+            .lineLimit(1)
+            .padding(.horizontal, MeeshySpacing.lg)
+            .accessibilityElement(children: .combine)
+        }
     }
 
     private var topBar: some View {

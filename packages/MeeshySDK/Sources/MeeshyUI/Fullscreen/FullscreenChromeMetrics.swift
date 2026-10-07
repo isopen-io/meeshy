@@ -43,6 +43,11 @@ public nonisolated enum FullscreenChromeMetrics {
     /// Le délai au bout duquel le chrome d'une vidéo EN LECTURE s'efface de lui-même.
     public static let autoHideDelay: Double = 3
 
+    /// Le délai au bout duquel le bouton pause CENTRAL s'efface, une fois la lecture
+    /// partie (#9577). Plus court que `autoHideDelay`, et distinct de lui : le bouton
+    /// est posé sur l'image, le reste du chrome autour.
+    public static let playPauseFadeDelay: Double = 1
+
     /// Le décalage qui fait jaillir la rangée d'émojis à GAUCHE du bouton qui l'ouvre
     /// (rail de la story, rail du réel).
     public static let reactionStripLeadingOffset: CGFloat = -floatingCellWidth

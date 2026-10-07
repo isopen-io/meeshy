@@ -311,6 +311,30 @@ final class MediaGalleryTransportCorridorTests: XCTestCase {
         XCTAssertTrue(TransportLayout.showsRail(placement: .rail, controls: [.mute, .speed, .pip]))
     }
 
+    /// **Cinq actions tiennent encore sur le plateau.** Réagir · répondre ·
+    /// composer, puis le son et (...) : la colonne se pose sur le PLATEAU (#6760),
+    /// pas sur le cadre — c'est donc la région libre qui doit la contenir avec
+    /// le bloc d'informations, y compris sur le plus petit écran servi.
+    func test_theColumn_withTheMuteAndTheMenu_stillFitsThePlateau() {
+        let ecrans: [(taille: CGSize, haut: CGFloat, bas: CGFloat)] = [
+            (CGSize(width: 390, height: 844), 59, 34),
+            (CGSize(width: 375, height: 667), 20, 0),
+        ]
+        for ecran in ecrans {
+            let reserves = MediaGalleryStage.corridors(safeTop: ecran.haut, safeBottom: ecran.bas,
+                                                       attachments: [video("a"), image("b")])
+            let region = ecran.taille.height
+                - MediaGalleryStage.topInset(presentation: .carded, corridors: reserves)
+                - MediaGalleryStage.bottomInset(presentation: .carded, corridors: reserves)
+
+            XCTAssertLessThanOrEqual(
+                MediaStageActionColumn.height(actions: 5) + MediaGalleryStage.overlayHeight,
+                region,
+                "\(ecran.taille) : la colonne à cinq actions et le bloc d'informations cohabitent"
+            )
+        }
+    }
+
     /// **La durée a rejoint la ligne d'informations, et elle DÉCOMPTE.** Elle se
     /// lit `largeur × hauteur · poids · durée` : temps restant pendant la
     /// lecture, durée totale à l'arrêt — la règle est `MediaInfoLine`, au SDK.

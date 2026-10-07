@@ -23,6 +23,8 @@ public struct VideoTransportControls: View {
     private let controls: MeeshyVideoPlayer.ControlSet
     private let placement: TransportLayout.Placement
     private let centerOpacity: Double
+    private let centerVisible: Bool
+    private let railTone: FullscreenChromeTone
 
     @State private var isSeeking = false
     @State private var seekValue: Double = 0
@@ -38,18 +40,29 @@ public struct VideoTransportControls: View {
     /// 2026-09-12 — *« le bouton pause/play plus transparent au centre »*. Il
     /// s'applique à la couche CENTRALE seule : la bande du couloir n'a rien à
     /// laisser voir derrière elle.
+    ///
+    /// `centerVisible` (#9577) : l'hôte efface le bouton central une seconde
+    /// après le début de la lecture (`FullscreenPlayPauseFade`). Effacé, il ne
+    /// se voit ni ne se touche — mais VoiceOver le garde.
+    ///
+    /// `railTone` : la teinte des disques du gabarit `.rail` — `.adaptive` sur
+    /// le plateau, `.onMedia` posés sur l'image.
     public init(
         manager: SharedAVPlayerManager,
         accentColor: String,
         controls: MeeshyVideoPlayer.ControlSet,
         placement: TransportLayout.Placement = .stacked,
-        centerOpacity: Double = 1
+        centerOpacity: Double = 1,
+        centerVisible: Bool = true,
+        railTone: FullscreenChromeTone = .adaptive
     ) {
         self.manager = manager
         self.accentColor = accentColor
         self.controls = controls
         self.placement = placement
         self.centerOpacity = centerOpacity
+        self.centerVisible = centerVisible
+        self.railTone = railTone
     }
 
     private var accent: Color { Color(hex: accentColor) }
@@ -79,6 +92,8 @@ public struct VideoTransportControls: View {
                 centerLayer
             case .corridor:
                 if hasBottomBar { bottomBar }
+            case .rail:
+                if TransportLayout.showsRail(placement: placement, controls: controls) { railControls }
             }
         }
         .buttonStyle(BouncyTransportButtonStyle())
@@ -91,8 +106,37 @@ public struct VideoTransportControls: View {
     @ViewBuilder
     private var centerLayer: some View {
         if TransportLayout.showsCenter(placement: placement) {
-            centerControls.opacity(centerOpacity)
+            centerControls
+                .opacity(centerVisible ? centerOpacity : 0)
+                .allowsHitTesting(centerVisible)
+                .accessibilityHidden(!centerVisible)
+                .background { accessiblePlayPauseStandIn }
         }
+    }
+
+    /// **Le bouton effacé reste atteignable** (#9577, dimension 5). Une vue à
+    /// opacité nulle sort de l'arbre d'accessibilité : sans ce relais, une
+    /// personne qui navigue à VoiceOver perdrait la pause une seconde après
+    /// avoir lancé la lecture, et n'aurait aucun toucher « sur le média » pour
+    /// la ramener. Posé HORS de l'opacité, il porte le même libellé et la même
+    /// action ; il n'existe pas quand le bouton est visible.
+    @ViewBuilder
+    private var accessiblePlayPauseStandIn: some View {
+        if TransportLayout.keepsAccessiblePlayPause(centerVisible: centerVisible, controls: controls) {
+            Color.clear
+                .frame(width: 64, height: 64)
+                .allowsHitTesting(false)
+                .accessibilityElement()
+                .accessibilityLabel(playPauseLabel)
+                .accessibilityAddTraits(.isButton)
+                .accessibilityAction { manager.togglePlayPause() }
+        }
+    }
+
+    private var playPauseLabel: String {
+        manager.isPlaying
+            ? String(localized: "media.video.pause", defaultValue: "Pause", bundle: .module)
+            : String(localized: "media.video.play", defaultValue: "Lire la vidéo", bundle: .module)
     }
 
     // MARK: - Centre (⏪10 · ▶︎/⏸ · ⏩10) — Liquid Glass
@@ -142,9 +186,7 @@ public struct VideoTransportControls: View {
                 .frame(width: 64, height: 64)
                 .adaptiveGlassProminent(in: Circle(), tint: accent.opacity(MeeshyOpacity.intense))
         }
-        .accessibilityLabel(manager.isPlaying
-            ? String(localized: "media.video.pause", defaultValue: "Pause", bundle: .module)
-            : String(localized: "media.video.play", defaultValue: "Lire la vidéo", bundle: .module))
+        .accessibilityLabel(playPauseLabel)
     }
 
     // MARK: - Barre unique bas : temps · scrubber · durée · mute · airplay · ⋯
@@ -158,13 +200,15 @@ public struct VideoTransportControls: View {
             if TransportLayout.showsTotalDuration(placement: placement, controls: controls) {
                 timeLabel(manager.duration)
             }
-            ForEach(TransportLayout.barItems(for: controls), id: \.self) { item in
-                switch item {
-                case .mute: muteButton
-                case .airplay: airplayButton
+            if TransportLayout.showsBarItems(placement: placement) {
+                ForEach(TransportLayout.barItems(for: controls), id: \.self) { item in
+                    switch item {
+                    case .mute: muteButton
+                    case .airplay: airplayButton
+                    }
                 }
+                if TransportLayout.showsMenuButton(for: controls) { moreMenu }
             }
-            if TransportLayout.showsMenuButton(for: controls) { moreMenu }
         }
         .padding(.horizontal, MeeshySpacing.mdPlus)
         .frame(height: TransportLayout.barHeight)
@@ -208,6 +252,62 @@ public struct VideoTransportControls: View {
 
     private var moreMenu: some View {
         Menu {
+            moreMenuContent
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: MeeshyIconSize.sm, weight: .semibold))
+                .foregroundColor(.white)
+                .frame(width: MeeshyControlSize.compact, height: MeeshyControlSize.compact)
+                .contentShape(Circle())
+        }
+        .accessibilityLabel(String(localized: "media.video.more_options", defaultValue: "Plus d'options", bundle: .module))
+    }
+
+    // MARK: - Rail : son · AirPlay · (...) en disques empilés (#9577)
+    //
+    // Les MÊMES contrôles que la barre, au gabarit du chrome plein écran
+    // (`FullscreenChromeDisc`) : ils se rangent sous les actions de la colonne
+    // de droite, et la progression récupère toute la largeur.
+
+    private var railControls: some View {
+        VStack(spacing: FullscreenChromeMetrics.railSpacing) {
+            ForEach(TransportLayout.barItems(for: controls), id: \.self) { item in
+                switch item {
+                case .mute: railMuteButton
+                case .airplay: railAirplayButton
+                }
+            }
+            if TransportLayout.showsMenuButton(for: controls) {
+                FullscreenMoreMenu(tone: railTone) { moreMenuContent }
+            }
+        }
+    }
+
+    private var railMuteButton: some View {
+        Button {
+            manager.isMuted.toggle()
+            HapticFeedback.light()
+        } label: {
+            FullscreenChromeDisc(
+                systemImage: manager.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill",
+                tone: railTone,
+                activeTint: manager.isMuted ? accent : nil)
+        }
+        .accessibilityLabel(manager.isMuted
+            ? String(localized: "media.video.unmute", defaultValue: "Réactiver le son", bundle: .module)
+            : String(localized: "media.video.mute", defaultValue: "Couper le son", bundle: .module))
+    }
+
+    private var railAirplayButton: some View {
+        AirPlayRoutePicker(tintColor: .white)
+            .frame(width: FullscreenChromeMetrics.discDiameter, height: FullscreenChromeMetrics.discDiameter)
+            .adaptiveGlass(in: Circle(), tint: railTone == .onMedia ? MeeshyColors.mediaChromeFill : nil)
+            .frame(width: FullscreenChromeMetrics.tapTarget, height: FullscreenChromeMetrics.tapTarget)
+            .accessibilityLabel(String(localized: "media.video.airplay", defaultValue: "AirPlay", bundle: .module))
+    }
+
+    @ViewBuilder
+    private var moreMenuContent: some View {
             if TransportLayout.menuItems(for: controls).contains(.speed) {
                 Picker(String(localized: "media.video.speed", defaultValue: "Vitesse", bundle: .module), selection: Binding(
                     get: { manager.playbackSpeed },
@@ -236,14 +336,6 @@ public struct VideoTransportControls: View {
                 }
                 .disabled(!AVPictureInPictureController.isPictureInPictureSupported())
             }
-        } label: {
-            Image(systemName: "ellipsis")
-                .font(.system(size: MeeshyIconSize.sm, weight: .semibold))
-                .foregroundColor(.white)
-                .frame(width: MeeshyControlSize.compact, height: MeeshyControlSize.compact)
-                .contentShape(Circle())
-        }
-        .accessibilityLabel(String(localized: "media.video.more_options", defaultValue: "Plus d'options", bundle: .module))
     }
 
     // MARK: - Seek bar (highPriorityGesture conservé — fix pager historique)

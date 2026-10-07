@@ -53,9 +53,12 @@ public nonisolated enum TransportLayout {
         case stacked
         /// Le play/pause SEUL, au centre du média (plateau de lecture).
         case center
-        /// La bande du couloir bas : progression pleine largeur, durée discrète
-        /// à droite, sans capsule de verre.
+        /// La bande du couloir bas : la progression SEULE, sur toute la largeur
+        /// que l'hôte lui donne, sans capsule de verre (#9577).
         case corridor
+        /// La colonne d'actions : le son, AirPlay et le menu (...), en disques
+        /// empilés — ils ont quitté la ligne de la barre (#9577).
+        case rail
     }
 
     /// **La hauteur RÉELLE de la barre, publiée pour que l'hôte la réserve.**
@@ -72,16 +75,43 @@ public nonisolated enum TransportLayout {
     public static let barHeight: CGFloat = 48
 
     public static func showsCenter(placement: Placement) -> Bool {
-        placement != .corridor
+        placement == .stacked || placement == .center
     }
 
     public static func showsBar(placement: Placement,
                                 controls: MeeshyVideoPlayer.ControlSet) -> Bool {
-        guard placement != .center else { return false }
-        return controls.contains(.scrubber)
-            || controls.contains(.duration)
-            || !barItems(for: controls).isEmpty
-            || showsMenuButton(for: controls)
+        let carriesProgress = controls.contains(.scrubber) || controls.contains(.duration)
+        switch placement {
+        case .center, .rail:
+            return false
+        case .corridor:
+            return carriesProgress
+        case .stacked:
+            return carriesProgress
+                || !barItems(for: controls).isEmpty
+                || showsMenuButton(for: controls)
+        }
+    }
+
+    /// **Le son, AirPlay et (...) ne voyagent avec la barre que dans le gabarit
+    /// empilé** (#9577). Au couloir, la barre prend toute la largeur pour la
+    /// progression ; ces contrôles vont au rail.
+    public static func showsBarItems(placement: Placement) -> Bool {
+        placement == .stacked
+    }
+
+    /// Le rail n'existe que s'il a quelque chose à porter (loi 4).
+    public static func showsRail(placement: Placement,
+                                 controls: MeeshyVideoPlayer.ControlSet) -> Bool {
+        placement == .rail
+            && (!barItems(for: controls).isEmpty || showsMenuButton(for: controls))
+    }
+
+    /// **Effacé à l'œil, le bouton central reste atteignable par VoiceOver**
+    /// (#9577). Visible, il est son propre élément : aucun doublon.
+    public static func keepsAccessiblePlayPause(centerVisible: Bool,
+                                                controls: MeeshyVideoPlayer.ControlSet) -> Bool {
+        !centerVisible && controls.contains(.playPause)
     }
 
     /// **Les ±10 s appartiennent au gabarit empilé, et à lui seul.**
@@ -90,9 +120,18 @@ public nonisolated enum TransportLayout {
     /// cette option aurait laissé le prochain hôte les ressusciter sans le
     /// savoir — et #6163 les remplace par un GESTE, pas par un autre bouton.
     /// La disparition est donc une loi du placement.
+    ///
+    /// La couche centrale seule ne les porte que si l'hôte les DEMANDE
+    /// (`.skip`, #9577) : le lecteur plein écran du SDK garde ainsi ses ±10 s
+    /// autour du bouton central, sans que la galerie — qui a le geste — les
+    /// reçoive par ricochet.
     public static func showsSkip(placement: Placement,
                                  controls: MeeshyVideoPlayer.ControlSet) -> Bool {
-        placement == .stacked && controls.contains(.scrubber)
+        switch placement {
+        case .stacked: return controls.contains(.scrubber)
+        case .center: return controls.contains(.skip)
+        case .corridor, .rail: return false
+        }
     }
 
     /// Le temps écoulé double ce que la ligne de progression MONTRE déjà : dans

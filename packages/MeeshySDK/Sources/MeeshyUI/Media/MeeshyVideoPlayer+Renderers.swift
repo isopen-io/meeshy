@@ -517,6 +517,11 @@ internal struct _FullscreenRenderer: View {
     @State private var enginePlayer: AVPlayer? = SharedAVPlayerManager.shared.player
     @State private var engineIsMuted: Bool = SharedAVPlayerManager.shared.isMuted
     @State private var engineActiveURL: String = SharedAVPlayerManager.shared.activeURL
+    /// Le bouton central s'efface une seconde après le début de la lecture
+    /// (#9577) — sa règle est `FullscreenPlayPauseFade`, distincte de
+    /// l'effacement du reste du chrome (`showControls`, trois secondes).
+    @State private var playPauseFade = FullscreenPlayPauseFade()
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Poster NET (opaque, résolu par l'app) : lu au montage, résolu sinon.
     @State private var poster: UIImage?
     /// Fond décoratif pendant la résolution — le thumbHash, flou assumé. La
@@ -600,6 +605,8 @@ internal struct _FullscreenRenderer: View {
         .onReceive(manager.$player) { enginePlayer = $0 }
         .onReceive(manager.$isMuted) { engineIsMuted = $0 }
         .onReceive(manager.$activeURL) { engineActiveURL = $0 }
+        .onReceive(manager.$isPlaying) { playPauseFade = playPauseFade.playback(isPlaying: $0) }
+        .task(id: playPauseFade) { await fadePlayPauseAfterDelay() }
         // **Le plein écran REPREND sa vidéo** (#9575) : au retour au premier
         // plan, la fenêtre PiP ouverte en quittant l'application se referme et
         // la lecture continue ici — jamais aux deux endroits.
@@ -646,7 +653,7 @@ internal struct _FullscreenRenderer: View {
                     onReadyForDisplay: { surfaceReady = true }
                 )
                     .ignoresSafeArea()
-                    .onTapGesture { toggleControls() }
+                    .onTapGesture { handleSurfaceTap() }
                     .gesture(swipeDownGesture)
                     .gesture(pinchGesture)
             } else {
@@ -694,10 +701,21 @@ internal struct _FullscreenRenderer: View {
                         }
                     },
                     onShare: player.onShare,
-                    saveState: saveState
+                    saveState: saveState,
+                    infoSegments: infoSegments,
+                    declaredDuration: declaredDuration
                 )
                 .transition(.opacity)
                 authorAndCaptionOverlay
+            }
+            // Le bouton central vit HORS du chrome : il suit sa propre seconde,
+            // et reste à l'écran en pause même quand le chrome s'est effacé.
+            if mountedPlayer != nil {
+                VideoTransportControls(manager: manager,
+                                       accentColor: player.accentColor,
+                                       controls: Self.centerControls(player.controls),
+                                       placement: .center,
+                                       centerVisible: playPauseFade.isVisible)
             }
         }
         .animation(.easeInOut(duration: 0.2), value: showControls)
@@ -768,6 +786,8 @@ internal struct _FullscreenRenderer: View {
                     .background(.ultraThinMaterial)
                     .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
                     .padding(.horizontal, MeeshySpacing.lg)
+                    // La colonne son · (...) tient le bord droit (#9577).
+                    .padding(.trailing, FullscreenChromeMetrics.tapTarget)
                     .padding(.bottom, 140)
                     .lineLimit(4)
             }
@@ -1033,6 +1053,48 @@ internal struct _FullscreenRenderer: View {
                 withAnimation { showControls = false }
             }
         }
+    }
+
+    // MARK: Bouton central (#9577)
+
+    /// Le jeu de la couche centrale : play/pause, et les ±10 s que ce lecteur a
+    /// toujours portés dès qu'il offre une progression.
+    nonisolated static func centerControls(_ controls: MeeshyVideoPlayer.ControlSet) -> MeeshyVideoPlayer.ControlSet {
+        var center = controls.intersection([.playPause])
+        if controls.contains(.playPause), controls.contains(.scrubber) { center.insert(.skip) }
+        return center
+    }
+
+    private var declaredDuration: Double {
+        Double(player.attachment.duration ?? 0) / 1000
+    }
+
+    private var infoSegments: [MediaInfoLine.Segment] {
+        MediaInfoLine.segments(
+            width: player.attachment.width,
+            height: player.attachment.height,
+            fileSizeLabel: player.attachment.fileSize > 0 ? player.attachment.fileSizeFormatted : nil,
+            hasDuration: declaredDuration > 0)
+    }
+
+    /// Un toucher sur l'image : s'il RAMÈNE le bouton central, il ne fait rien
+    /// d'autre ; sinon il garde son effet (basculer le chrome) et la seconde
+    /// repart.
+    private func handleSurfaceTap() {
+        let effect = playPauseFade.mediaTapEffect
+        withAnimation(fadeAnimation) { playPauseFade = playPauseFade.tappingMedia() }
+        if effect == .passesThrough { toggleControls() }
+    }
+
+    private var fadeAnimation: Animation? {
+        reduceMotion ? nil : .easeOut(duration: 0.25)
+    }
+
+    private func fadePlayPauseAfterDelay() async {
+        guard let delay = playPauseFade.fadeDelay else { return }
+        try? await Task.sleep(for: .seconds(delay))
+        guard !Task.isCancelled else { return }
+        withAnimation(fadeAnimation) { playPauseFade = playPauseFade.fading() }
     }
 
     private func reportWatch(complete: Bool) {
