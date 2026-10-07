@@ -193,6 +193,14 @@ describe('forwardedCopyProtection — ce que la copie transférée porte, quoi q
   });
 });
 
+// Une source INCOMPLÈTE n'a pas de nature prouvée : tout est fermé, capture comprise (audit #9617, A3).
+const UNPROVEN = {
+  nature: 'after-read-flame',
+  forward: { allowed: false, reason: 'after-read' },
+  exportable: false,
+  capture: 'blocked',
+};
+
 describe('contentExitLawOfSource — le chemin d’autorisation du serveur, fermé par construction', () => {
   const complete: ContentExitProjection = {
     isViewOnce: false,
@@ -210,28 +218,33 @@ describe('contentExitLawOfSource — le chemin d’autorisation du serveur, ferm
   });
 
   it('ferme quand la source manque', () => {
-    expect(contentExitLawOfSource(null)).toEqual(AFTER_READ);
-    expect(contentExitLawOfSource(undefined)).toEqual(AFTER_READ);
+    expect(contentExitLawOfSource(null)).toEqual(UNPROVEN);
+    expect(contentExitLawOfSource(undefined)).toEqual(UNPROVEN);
   });
 
   it.each(['isViewOnce', 'isBlurred', 'effectFlags', 'ephemeralDuration', 'expiresAt', 'attachments'] as const)(
     'ferme quand le select a oublié `%s` — l’absence ne prouve pas « ordinaire »',
     (field) => {
       const { [field]: _forgotten, ...partial } = complete;
-      expect(contentExitLawOfSource(partial as ContentExitProjection)).toEqual(AFTER_READ);
+      expect(contentExitLawOfSource(partial as ContentExitProjection)).toEqual(UNPROVEN);
     },
   );
 
   it.each(['isViewOnce', 'isBlurred', 'effectFlags'] as const)('ferme quand une pièce est chargée sans `%s`', (field) => {
     const { [field]: _forgotten, ...piece } = complete.attachments[0];
     expect(contentExitLawOfSource({ ...complete, attachments: [piece as ContentExitProjection['attachments'][number]] })).toEqual(
-      AFTER_READ,
+      UNPROVEN,
     );
+  });
+
+  it('ne confond pas la source non prouvée avec une flamme après lecture DÉCLARÉE, qui reste annoncée', () => {
+    expect(contentExitLawOfSource({ ...complete, effectFlags: EPHEMERAL | EPHEMERAL_AFTER_READ }).capture).toBe('announced');
+    expect(contentExitLaw({ effectFlags: EPHEMERAL })).toEqual(AFTER_READ);
   });
 
   it('ferme sur une pièce nulle', () => {
     expect(
       contentExitLawOfSource({ ...complete, attachments: [null as unknown as ContentExitProjection['attachments'][number]] }),
-    ).toEqual(AFTER_READ);
+    ).toEqual(UNPROVEN);
   });
 });

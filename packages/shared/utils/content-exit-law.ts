@@ -135,6 +135,20 @@ const VIEW_ONCE_CONTENT: ContentExitLaw = {
   capture: 'blocked',
 };
 
+/**
+ * Une source dont la projection n'est pas COMPLÈTE n'a pas de nature prouvée :
+ * tout y est fermé — ni transfert, ni export, et la capture NOIRE, jamais
+ * seulement annoncée (audit #9617, A3). La nature reste celle de la flamme
+ * après lecture pour ne pas élargir l'union ; seul `capture` la distingue de
+ * {@link AFTER_READ_FLAME}, qui vaut pour une flamme DÉCLARÉE.
+ */
+const UNPROVEN_SOURCE: ContentExitLaw = {
+  nature: 'after-read-flame',
+  forward: { allowed: false, reason: 'after-read' },
+  exportable: false,
+  capture: 'blocked',
+};
+
 const wholeSeconds = (value: number | null | undefined): number | null => {
   if (typeof value !== 'number' || !Number.isFinite(value)) return null;
   const seconds = Math.floor(value);
@@ -185,15 +199,15 @@ const fullyLoaded = (row: object | null | undefined, fields: readonly string[]):
 
 /**
  * La loi pour un chemin d'AUTORISATION. Une source absente, une colonne ou une
- * pièce non chargée rendent les verdicts de la flamme après lecture : ni
- * transfert, ni export.
+ * pièce non chargée rendent {@link UNPROVEN_SOURCE} : ni transfert, ni export,
+ * capture noire.
  */
 export function contentExitLawOfSource(source: ContentExitProjection | null | undefined): ContentExitLaw {
   const complete =
     fullyLoaded(source, MESSAGE_PROJECTION) &&
     Array.isArray(source?.attachments) &&
     source.attachments.every((piece) => fullyLoaded(piece, PIECE_PROJECTION));
-  return complete ? contentExitLaw(source) : AFTER_READ_FLAME;
+  return complete ? contentExitLaw(source) : UNPROVEN_SOURCE;
 }
 
 /**
