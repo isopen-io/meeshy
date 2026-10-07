@@ -43,6 +43,7 @@ import { CORS_METHODS, CORS_EXPOSED_HEADERS } from './config/cors-methods';
 import { fastifyCorsOrigin, isCorsRejection, CORS_REJECTION_MESSAGE } from './config/cors-origins';
 import { conditionalGetOnSend } from './utils/etag';
 import { resolveTrustProxy } from './config/trust-proxy';
+import { clientLogContext } from './utils/client-log-context';
 import { MutationLogService } from './services/MutationLogService';
 // L'enregistrement des routes REST (~50 fichiers) vit dans `./route-registration`,
 // un module SANS effet de bord au chargement (voir le commentaire en tête de
@@ -676,27 +677,10 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
     this.server.decorate('mutationLogService', mutationLogService);
     logger.info('✅ MutationLogService registered');
 
-    // Client identification logging — enrichit le logger Pino avec version/device/geo client
+    // Client identification logging — version, plateforme, modèle, système,
+    // langue, fuseau. Jamais le lieu DÉCLARÉ par le client (audit #9608, P5).
     this.server.addHook('onRequest', (request, _reply, done) => {
-      const get = (key: string): string | undefined => {
-        const val = request.headers[key];
-        return typeof val === 'string' ? val : undefined;
-      };
-      const clientContext = {
-        appVersion : get('x-meeshy-version'),
-        appBuild   : get('x-meeshy-build'),
-        platform   : get('x-meeshy-platform'),
-        device     : get('x-meeshy-device'),
-        osVersion  : get('x-meeshy-os'),
-        locale     : get('x-meeshy-locale'),
-        timezone   : get('x-meeshy-timezone'),
-        country    : get('x-meeshy-country'),
-        city       : get('x-meeshy-city'),
-        region     : get('x-meeshy-region'),
-      };
-      const client = Object.fromEntries(
-        Object.entries(clientContext).filter(([, v]) => v !== undefined)
-      );
+      const client = clientLogContext(request.headers);
       if (Object.keys(client).length > 0) {
         // FastifyRequest.log is readonly in TS types but mutable at runtime
         (request as unknown as { log: FastifyRequest['log'] }).log = request.log.child({ client });

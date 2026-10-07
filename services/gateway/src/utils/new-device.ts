@@ -145,9 +145,14 @@ export function isLoginFromNewDevice(
  *    (géolocalisation en échec, adresse privée) ne compare pas ce point —
  *    sinon chaque panne du tiers de géolocalisation ferait crier toutes les
  *    connexions, le défaut #7035 rejoué.
- * 3. **Le modèle DÉCLARÉ** (`X-Meeshy-Device`) — qui ne peut qu'AJOUTER une
- *    alerte : deux modèles connus et différents ne sont pas le même appareil ;
- *    un modèle absent d'un côté ne prouve rien.
+ * 3. **Le modèle** — quand la session antérieure en porte un, la connexion doit
+ *    déclarer LE MÊME. Ne rien déclarer ne vaut pas concordance : le SDK iOS
+ *    envoie l'agent par défaut de CFNetwork, que le serveur réduit à
+ *    `desktop|||ios|` pour TOUS les iPhone, si bien que le modèle est le seul
+ *    discriminant d'un appareil iOS — un voleur muni d'un agent CFNetwork
+ *    quelconque et d'aucun en-tête passait pour l'iPhone de sa victime (audit
+ *    du 2026-10-08, A1). Une session antérieure sans modèle (un navigateur)
+ *    n'en exige aucun.
  *
  * Le pays n'est pas l'adresse : passer du Wi-Fi à la 4G, changer de café ne
  * le change pas (la raison pour laquelle l'IP n'entre pas dans l'empreinte
@@ -178,7 +183,7 @@ export function isLoginFromUnrecognisedDevice(
     if (isLoginFromNewDevice([lu(session.userAgent)], appareilCourant)) return false;
     if (paysCourant !== '' && normalise(session.country) !== paysCourant) return false;
     const modele = normalise(session.deviceModel);
-    return modeleCourant === '' || modele === '' || modele === modeleCourant;
+    return modele === '' || modele === modeleCourant;
   };
 
   return !previous.some(concorde);
