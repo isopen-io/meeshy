@@ -20,7 +20,12 @@ import AVKit
 public struct VideoTransportControls: View {
     @ObservedObject private var manager: SharedAVPlayerManager
     private let accentColor: String
-    private let controls: MeeshyVideoPlayer.ControlSet
+    private let requestedControls: MeeshyVideoPlayer.ControlSet
+    /// Sous un bouclier de capture (#9574), ni PiP ni AirPlay.
+    @Environment(\.isCaptureShielded) private var isCaptureShielded
+    private var controls: MeeshyVideoPlayer.ControlSet {
+        ProtectedPlaybackPolicy.of(isCaptureShielded: isCaptureShielded).permitted(requestedControls)
+    }
     private let placement: TransportLayout.Placement
     private let centerOpacity: Double
     private let centerVisible: Bool
@@ -58,7 +63,7 @@ public struct VideoTransportControls: View {
     ) {
         self.manager = manager
         self.accentColor = accentColor
-        self.controls = controls
+        self.requestedControls = controls
         self.placement = placement
         self.centerOpacity = centerOpacity
         self.centerVisible = centerVisible
