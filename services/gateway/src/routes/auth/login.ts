@@ -40,6 +40,7 @@ import { AUTH_ERROR_CODES } from '../../utils/auth-error-codes.js';
 import { disconnectSession } from '../../socketio/disconnectSession';
 import { hashSessionToken } from '../../utils/session-token';
 import { notifyIfLoginFromNewDevice } from './notify-new-device';
+import { currentSessionOf } from '../../services/auth/current-session';
 import { pendingSessionTokenFor } from '../../services/auth/email-verification-watch';
 import {
   rememberPendingDeviceTrust,
@@ -476,9 +477,22 @@ export function registerLoginRoutes(context: AuthRouteContext) {
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const userId = request.user!.userId;
-      const sessionToken = request.headers['x-session-token'] as string | undefined;
+      // #9606 — la session à fermer est d'abord celle que NOMME le JWT (`sid`).
+      // Elle n'était lue que sur `x-session-token`, qu'aucun client inscrit
+      // n'envoie en REST : se déconnecter laissait la session valide. L'en-tête
+      // reste honoré, pour un client qui l'enverrait encore.
+      const { sessionId: sid, sessionToken } = currentSessionOf(request);
 
       await authService.updateOnlineStatus(userId, false);
+
+      const aCouper = new Set<string>(sid ? [sid] : []);
+
+      if (sid) {
+        const closed = await authService.logoutCurrent(userId, { sessionId: sid });
+        if (closed === 0) {
+          logger.info('Session du jeton déjà close');
+        }
+      }
 
       if (sessionToken) {
         // L'identifiant est relevé AVANT l'invalidation : après, la ligne
@@ -489,13 +503,12 @@ export function registerLoginRoutes(context: AuthRouteContext) {
         // déconnexion qui rend 500 parce que la comptabilité des sockets a
         // trébuché est pire qu'un socket laissé ouvert — l'utilisateur
         // réessaie, et se déconnecte deux fois.
-        let sessionId: string | undefined;
         try {
           const session = await fastify.prisma?.userSession?.findFirst({
             where: { userId, sessionToken: hashSessionToken(sessionToken) },
             select: { id: true },
           });
-          sessionId = session?.id;
+          if (session?.id) aCouper.add(session.id);
         } catch (error) {
           logWarn(fastify.log, '[AUTH] session lookup failed on logout', error);
         }
@@ -504,21 +517,21 @@ export function registerLoginRoutes(context: AuthRouteContext) {
         if (loggedOut) {
           logger.info('Session invalidée');
         }
+      }
 
-        // Le socket de CET appareil, et lui seul (#4213). Se déconnecter
-        // laissait jusqu'ici le socket ouvert : l'appareil continuait de
-        // recevoir tout le temps réel d'un compte dont il venait de sortir.
-        // `disconnectRevokedSessions` couperait les AUTRES appareils, qui
-        // n'ont rien demandé.
-        if (sessionId) {
-          await disconnectSession({
-            io: fastify.socketIOHandler?.getManager?.()?.getIO(),
-            userId,
-            sessionId,
-            message: 'Signed out.',
-            onError: (error) => logWarn(fastify.log, '[AUTH] socket cut failed on logout', error),
-          });
-        }
+      // Le socket de CET appareil, et lui seul (#4213). Se déconnecter
+      // laissait jusqu'ici le socket ouvert : l'appareil continuait de
+      // recevoir tout le temps réel d'un compte dont il venait de sortir.
+      // `disconnectRevokedSessions` couperait les AUTRES appareils, qui
+      // n'ont rien demandé.
+      for (const sessionId of aCouper) {
+        await disconnectSession({
+          io: fastify.socketIOHandler?.getManager?.()?.getIO(),
+          userId,
+          sessionId,
+          message: 'Signed out.',
+          onError: (error) => logWarn(fastify.log, '[AUTH] socket cut failed on logout', error),
+        });
       }
 
       return sendSuccess(reply, { message: 'Déconnexion réussie' });

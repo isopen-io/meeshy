@@ -13,8 +13,10 @@ import {
   invalidateSession,
   invalidateAllSessions,
   logout as logoutSession,
+  endCurrentSession,
   initSessionService,
-  SessionData
+  SessionData,
+  type CurrentSessionRef
 } from './SessionService';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../utils/recipient-language';
@@ -895,10 +897,10 @@ export class AuthService {
   /**
    * Get all active sessions for a user
    * @param userId - User ID
-   * @param currentToken - Current session token (to mark as current)
+   * @param current - The current session, by JWT `sid` or by raw session token (#9606)
    */
-  async getUserActiveSessions(userId: string, currentToken?: string): Promise<SessionData[]> {
-    return getUserSessions(userId, currentToken);
+  async getUserActiveSessions(userId: string, current?: string | CurrentSessionRef): Promise<SessionData[]> {
+    return getUserSessions(userId, current);
   }
 
   /**
@@ -913,10 +915,10 @@ export class AuthService {
   /**
    * Revoke all sessions for a user except the current one
    * @param userId - User ID
-   * @param currentToken - Current session token to keep active
+   * @param current - The current session to keep active, by JWT `sid` or raw token (#9606)
    */
-  async revokeAllSessionsExceptCurrent(userId: string, currentToken?: string): Promise<number> {
-    return invalidateAllSessions(userId, currentToken, 'user_revoked_all');
+  async revokeAllSessionsExceptCurrent(userId: string, current?: string | CurrentSessionRef): Promise<number> {
+    return invalidateAllSessions(userId, current, 'user_revoked_all');
   }
 
   /**
@@ -929,5 +931,17 @@ export class AuthService {
       logger.info('[AUTH_SERVICE] ✅ Session invalidée (logout)');
     }
     return result;
+  }
+
+  /**
+   * Logout - close the session(s) named by the request: JWT `sid` and/or the
+   * `x-session-token` header (#9606). Returns how many were closed.
+   */
+  async logoutCurrent(userId: string, current: CurrentSessionRef): Promise<number> {
+    const closed = await endCurrentSession(userId, current, 'logout');
+    if (closed > 0) {
+      logger.info('[AUTH_SERVICE] ✅ Session invalidée (logout)');
+    }
+    return closed;
   }
 }

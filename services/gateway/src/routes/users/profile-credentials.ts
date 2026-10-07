@@ -24,6 +24,7 @@ import type { AuthenticatedRequest } from './types';
 import { authUserCacheKey } from '../../middleware/auth';
 import { getCacheStore } from '../../services/CacheStore';
 import { getUserSessions, invalidateAllSessions } from '../../services/SessionService';
+import { currentSessionOf } from '../../services/auth/current-session';
 import { disconnectSession } from '../../socketio/disconnectSession';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { sendSuccess, sendError, sendInternalError, sendNotFound, sendUnauthorized, sendBadRequest } from '../../utils/response';
@@ -39,7 +40,7 @@ export async function updateUserPassword(fastify: FastifyInstance) {
   fastify.patch('/users/me/password', {
     onRequest: [fastify.authenticate],
     schema: {
-      description: 'Change the authenticated user password. Requires current password for verification. New password must meet security requirements. Every OTHER session is revoked and disconnected (#6435) — pass `x-session-token` to keep the calling device signed in.',
+      description: 'Change the authenticated user password. Requires current password for verification. New password must meet security requirements. Every OTHER session is revoked and disconnected (#6435) — the calling device (named by the JWT `sid`, or by the legacy `x-session-token`) stays signed in.',
       tags: ['users'],
       summary: 'Change user password',
       headers: {
@@ -146,18 +147,21 @@ export async function updateUserPassword(fastify: FastifyInstance) {
       // chassait pas l'intrus qui y était déjà connecté. Même patron que
       // `DELETE /sessions` (routes/auth/magic-link.ts) : les sessions à
       // couper se relèvent AVANT la révocation (une ligne révoquée quitte la
-      // liste "active"), la session courante — identifiée par
-      // `x-session-token`, comme sur les autres routes de gestion de
-      // sessions — survit, et chaque AUTRE session voit son socket coupé
+      // liste "active"), la session courante — identifiée comme sur les
+      // autres routes de gestion de sessions (`currentSessionOf`) — survit, et chaque AUTRE session voit son socket coupé
       // individuellement (jamais `disconnectRevokedSessions`, qui couperait
       // aussi l'appareil courant).
-      const currentSessionToken = request.headers['x-session-token'] as string | undefined;
-      const sessionsBeforeRevocation = await getUserSessions(userId, currentSessionToken);
+      //
+      // #9606 — « courante » se lit d'abord sur le `sid` du JWT : l'en-tête
+      // seul, qu'aucun client inscrit n'envoie en REST, faisait déconnecter
+      // l'appareil qui venait de changer le mot de passe.
+      const currentSession = currentSessionOf(request);
+      const sessionsBeforeRevocation = await getUserSessions(userId, currentSession);
       const sessionsToDisconnect = sessionsBeforeRevocation
         .filter((session) => !session.isCurrentSession)
         .map((session) => session.id);
 
-      await invalidateAllSessions(userId, currentSessionToken, 'password_changed');
+      await invalidateAllSessions(userId, currentSession, 'password_changed');
 
       const io = fastify.socketIOHandler?.getManager?.()?.getIO();
       for (const sessionId of sessionsToDisconnect) {

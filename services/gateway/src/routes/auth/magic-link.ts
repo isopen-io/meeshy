@@ -19,7 +19,6 @@ import { sendSuccess, sendBadRequest, sendUnauthorized, sendNotFound, sendIntern
 import { scheduleContactJoinedAnnouncement } from '../../services/notifications/contact-joined';
 import { AUTH_ERROR_CODES } from '../../utils/auth-error-codes';
 import { disconnectSession } from '../../socketio/disconnectSession';
-import { hashSessionToken } from '../../utils/session-token';
 import {
   legacyTokenRefusal,
   type SessionBoundTokenPayload,
@@ -33,6 +32,7 @@ import { mintPendingTwoFactorChallenge } from '../../services/auth/pending-two-f
 import { validatePasswordStrength } from '../../utils/password-strength';
 import { createVerifyEmailIpRateLimiter, createVerifyEmailAddressRateLimiter } from '../../utils/rate-limiter.js';
 import { openSession } from './open-session';
+import { currentSessionOf } from '../../services/auth/current-session';
 
 // Logger dédié pour magic-link
 const logger = enhancedLogger.child({ module: 'magic-link' });
@@ -582,7 +582,7 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
       headers: {
         type: 'object',
         properties: {
-          'x-session-token': { type: 'string', description: 'Current session token (optional, to mark current session)' }
+          'x-session-token': { type: 'string', description: 'Current session token (optional, legacy). The current session is read from the JWT `sid` claim.' }
         }
       },
       response: {
@@ -594,11 +594,11 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const userId = request.user!.userId;
-      const currentToken = request.headers['x-session-token'] as string | undefined;
 
       logger.info(`[AUTH] Récupération des sessions pour: ${userId}`);
 
-      const sessions = await authService.getUserActiveSessions(userId, currentToken);
+      // #9606 — la courante se lit sur le `sid` du JWT (l'en-tête reste lu).
+      const sessions = await authService.getUserActiveSessions(userId, currentSessionOf(request));
 
       return sendSuccess(reply, {
         sessions: sessions.map(session => ({
@@ -720,7 +720,7 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
       headers: {
         type: 'object',
         properties: {
-          'x-session-token': { type: 'string', description: 'Current session token to keep active' }
+          'x-session-token': { type: 'string', description: 'Current session token to keep active (optional, legacy). The current session is read from the JWT `sid` claim.' }
         }
       },
       response: {
@@ -744,7 +744,10 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const userId = request.user!.userId;
-      const currentToken = request.headers['x-session-token'] as string | undefined;
+      // #9606 — « cet appareil-ci » se lit sur le `sid` du JWT. Il se lisait sur
+      // `x-session-token`, qu'aucun client inscrit n'envoie en REST : la
+      // révocation des AUTRES révoquait aussi l'appareil qui la demandait.
+      const courante = currentSessionOf(request);
 
       logger.info(`Révocation de toutes les sessions pour userId=${userId} (sauf courante)`);
 
@@ -752,18 +755,11 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
       // ligne n'est plus « active » et la liste ne la rend plus. Sans eux, on
       // saurait combien de sessions ont été coupées et aucune ne saurait
       // laquelle — donc aucun socket ne pourrait être fermé.
-      const courante = currentToken
-        ? await fastify.prisma.userSession.findFirst({
-            where: { userId, sessionToken: hashSessionToken(currentToken) },
-            select: { id: true },
-          })
-        : null;
+      const aCouper = (await authService.getUserActiveSessions(userId, courante))
+        .filter((session) => !session.isCurrentSession)
+        .map((session) => session.id);
 
-      const aCouper = (await authService.getUserActiveSessions(userId))
-        .map((session) => session.id)
-        .filter((id) => id !== courante?.id);
-
-      const revokedCount = await authService.revokeAllSessionsExceptCurrent(userId, currentToken);
+      const revokedCount = await authService.revokeAllSessionsExceptCurrent(userId, courante);
 
         logger.info(`Sessions révoquées count=${revokedCount}`);
 

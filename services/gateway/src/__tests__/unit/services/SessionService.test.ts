@@ -720,7 +720,7 @@ describe('SessionService', () => {
           where: {
             userId: mockUserId,
             isValid: true,
-            sessionToken: { not: expect.any(String) }
+            NOT: [{ sessionToken: mockTokenHash }]
           },
           data: {
             isValid: false,
