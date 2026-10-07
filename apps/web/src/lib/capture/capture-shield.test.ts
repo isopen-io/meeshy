@@ -148,3 +148,69 @@ describe('ce que la coque détecte', () => {
     expect(createCaptureShield(() => undefined).host()).toEqual({ kind: 'browser' });
   });
 });
+
+describe('« annoncé ou noir » pour les éphémères à l’écran', () => {
+  const envAt = (state: { online: boolean; now: number }) => {
+    let listener: ((online: boolean) => void) | null = null;
+    return {
+      env: {
+        now: () => state.now,
+        online: () => state.online,
+        watchOnline: (next: (online: boolean) => void) => {
+          listener = next;
+          return () => {
+            listener = null;
+          };
+        },
+      },
+      goOnline: (online: boolean) => listener?.(online),
+    };
+  };
+
+  test('un éphémère annonçable, en ligne, laisse la fenêtre en clair', () => {
+    const { coque, calls } = guarded();
+    const shield = createCaptureShield(() => coque, envAt({ online: true, now: 0 }).env);
+    shield.candidate('m1', 'c1');
+    expect(calls).toEqual([]);
+  });
+
+  test('hors ligne, la fenêtre est noire ; le réseau revenu, elle repart en clair', () => {
+    const { coque, calls } = guarded();
+    const { env, goOnline } = envAt({ online: false, now: 0 });
+    const shield = createCaptureShield(() => coque, env);
+    shield.candidate('m1', 'c1');
+    expect(calls.map((call) => call.options)).toEqual([{ secure: true }]);
+    goOnline(true);
+    expect(calls.map((call) => call.options)).toEqual([{ secure: true }, { secure: false }]);
+  });
+
+  test('pendant un enregistrement, la fenêtre est noire', () => {
+    const { coque, calls } = guarded();
+    const shield = createCaptureShield(() => coque, envAt({ online: true, now: 0 }).env);
+    shield.candidate('m1', 'c1');
+    shield.noteRecording(true);
+    expect(calls.map((call) => call.options)).toEqual([{ secure: true }]);
+    shield.noteRecording(false);
+    expect(calls.map((call) => call.options)).toEqual([{ secure: true }, { secure: false }]);
+  });
+
+  test('plus d’éphémères non annoncés que la passerelle n’en peut annoncer : noire', () => {
+    const { coque, calls } = guarded();
+    const shield = createCaptureShield(() => coque, envAt({ online: true, now: 1_000 }).env);
+    shield.noteNotices('c1', 'screenshot', Array.from({ length: 25 }, (_, i) => `old${i}`));
+    Array.from({ length: 5 }, (_, i) => shield.candidate(`m${i}`, 'c1'));
+    expect(calls).toEqual([]);
+    const sixth = shield.candidate('m5', 'c1');
+    expect(calls.map((call) => call.options)).toEqual([{ secure: true }]);
+    sixth();
+    expect(calls.map((call) => call.options)).toEqual([{ secure: true }, { secure: false }]);
+  });
+
+  test('un éphémère déjà annoncé ne consomme plus rien', () => {
+    const { coque, calls } = guarded();
+    const shield = createCaptureShield(() => coque, envAt({ online: true, now: 1_000 }).env);
+    shield.noteNotices('c1', 'screenshot', Array.from({ length: 30 }, (_, i) => `m${i}`));
+    shield.candidate('m3', 'c1');
+    expect(calls).toEqual([]);
+  });
+});

@@ -41,3 +41,28 @@ export function detectionOf(state: unknown): CaptureDetection | null {
   if (typeof screenshotDetection !== 'boolean' || typeof recordingDetection !== 'boolean') return null;
   return { screenshot: screenshotDetection, recording: recordingDetection };
 }
+
+/**
+ * LA FENÊTRE ENTIÈRE (#9617, audit A1/A2/A3) — une rangée d'éphémère que
+ * `surfaceCapture` dit annoncée n'est épargnée que si sa capture PEUT
+ * effectivement s'annoncer. La fenêtre est noire :
+ * - dès qu'une surface tient le noir (`blocking`) ;
+ * - ou, s'il y a des éphémères à l'écran : la passerelle est hors d'atteinte
+ *   (une déclaration différée peut se perdre avec la coque) ; un enregistrement
+ *   ou une recopie est en cours (on ne déclare pas en continu ce qui défile :
+ *   l'écran visible au démarrage est annoncé, le reste est noir) ; ou une
+ *   conversation montre plus d'éphémères non encore annoncés que la passerelle
+ *   ne peut en annoncer maintenant (`capture-ledger.ts`).
+ */
+export function windowMustBeBlack(params: {
+  readonly blocking: boolean;
+  readonly online: boolean;
+  readonly recording: boolean;
+  /** Par conversation qui montre des éphémères : combien restent à annoncer, combien peuvent l'être. */
+  readonly ephemerals: readonly { readonly pending: number; readonly capacity: number }[];
+}): boolean {
+  const { blocking, online, recording, ephemerals } = params;
+  if (blocking) return true;
+  if (ephemerals.length === 0) return false;
+  return !online || recording || ephemerals.some(({ pending, capacity }) => pending > capacity);
+}

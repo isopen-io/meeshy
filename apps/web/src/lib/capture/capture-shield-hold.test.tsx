@@ -52,7 +52,7 @@ const settle = async () => {
 describe('une rangée d’éphémère dans la coque', () => {
   test('Android 14 (enregistrement indétectable) : noire tant qu’elle est montée', async () => {
     const shell = androidShell(34);
-    await mounter.mount(<CaptureShieldHold messageId="m-flame" verdict="announced" declared />);
+    await mounter.mount(<CaptureShieldHold messageId="m-flame" conversationId="c-1" verdict="announced" declared />);
     await settle();
     expect(shell.secure).toEqual([true]);
     mounter.unmountAll();
@@ -61,14 +61,14 @@ describe('une rangée d’éphémère dans la coque', () => {
 
   test('Android 15 : noire le temps que la coque réponde, puis annoncée', async () => {
     const shell = androidShell(35);
-    await mounter.mount(<CaptureShieldHold messageId="m-flame" verdict="announced" declared />);
+    await mounter.mount(<CaptureShieldHold messageId="m-flame" conversationId="c-1" verdict="announced" declared />);
     await settle();
     expect(shell.secure).toEqual([true, false]);
   });
 
   test('une nature illisible reste noire même sur Android 15', async () => {
     const shell = androidShell(36);
-    await mounter.mount(<CaptureShieldHold messageId="m-x" verdict="blocked" declared />);
+    await mounter.mount(<CaptureShieldHold messageId="m-x" conversationId="c-1" verdict="blocked" declared />);
     await settle();
     expect(shell.secure).toEqual([true]);
   });
@@ -104,7 +104,7 @@ describe('une visionneuse dans la coque', () => {
 
 describe('dans un navigateur', () => {
   test('rien n’est tenu ni appelé', async () => {
-    await mounter.mount(<CaptureShieldHold messageId="m-flame" verdict="announced" declared />);
+    await mounter.mount(<CaptureShieldHold messageId="m-flame" conversationId="c-1" verdict="announced" declared />);
     await settle();
     expect(globals.Capacitor).toBeUndefined();
   });

@@ -24,21 +24,32 @@ function useCaptureHost(): CaptureHost {
  */
 export function CaptureShieldHold({
   messageId,
+  conversationId,
   verdict,
   declared,
 }: {
   readonly messageId: string;
+  /** La conversation dont la passerelle annoncerait la capture — son budget décide (`capture-ledger.ts`). */
+  readonly conversationId: string;
   readonly verdict: 'announced' | 'blocked';
   readonly declared: boolean;
 }) {
-  useSurfaceShield(messageId, verdict, declared);
+  useSurfaceShield(messageId, conversationId, verdict, declared);
   return null;
 }
 
-function useSurfaceShield(messageId: string | null, verdict: 'announced' | 'blocked', declared: boolean): void {
+/**
+ * Noire ⇒ la surface tient le bouclier. Annoncée ⇒ elle se déclare CANDIDATE :
+ * le bouclier la noircit encore si son annonce ne peut pas partir (hors
+ * ligne, enregistrement, budget de la passerelle épuisé).
+ */
+function useSurfaceShield(messageId: string | null, conversationId: string, verdict: 'announced' | 'blocked', declared: boolean): void {
   const host = useCaptureHost();
-  const black = messageId !== null && host.kind === 'shell' && surfaceCapture({ verdict, host, declared }) === 'blocked';
-  useEffect(() => (black && messageId !== null ? captureShield.hold(messageId, 'row').release : undefined), [black, messageId]);
+  const capture = messageId === null || host.kind !== 'shell' ? 'free' : surfaceCapture({ verdict, host, declared });
+  useEffect(() => {
+    if (messageId === null || capture === 'free') return undefined;
+    return capture === 'blocked' ? captureShield.hold(messageId, 'row').release : captureShield.candidate(messageId, conversationId);
+  }, [capture, messageId, conversationId]);
 }
 
 /**
@@ -68,6 +79,6 @@ export function CaptureShieldOver({
     () => messages.find((message) => viewerPageIsSensitive(message, !quoted && isMineOf(message, viewerId), quoted)),
     [messages, viewerId, quoted],
   );
-  useSurfaceShield(sensitive?.id ?? null, 'blocked', false);
+  useSurfaceShield(sensitive?.id ?? null, sensitive?.conversationId ?? '', 'blocked', false);
   return null;
 }

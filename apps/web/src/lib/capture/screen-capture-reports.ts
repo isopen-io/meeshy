@@ -1,45 +1,32 @@
 import * as conversationsEndpoints from '@meeshy/shared/api/endpoints/conversations';
-import { CONTENT_CAPTURE_MAX_MESSAGES, type ContentCaptureKind } from '@meeshy/shared/types/content-capture-kinds';
+import type { ContentCaptureKind } from '@meeshy/shared/types/content-capture-kinds';
 
+import { outcomeOf, type Outcome } from '@/lib/api/outcome';
 import type { CoqueNative } from '@/lib/native-shell';
-import { pushReadReceipt } from '@/lib/api/receipts';
 import type { Transport } from '@/lib/net/transport';
 import { CAPTURE_ROW_ATTRIBUTE } from '@/lib/view/content-exit';
 
-import { CAPTURE_SHIELD_PLUGIN } from './capture-shield';
+import { captureLots } from './capture-ledger';
+import type { CaptureJob, CaptureJobInput, CaptureOutbox } from './capture-outbox';
+import { CAPTURE_SHIELD_PLUGIN, type CaptureShield } from './capture-shield';
 
 /**
  * LA CAPTURE DÉTECTÉE PAR LA COQUE ANDROID S'ANNONCE AU FIL (#9617) — chargé à
  * la demande, dans la coque seulement (`use-screen-capture-reports.ts`).
  *
- * - `screenCaptured` (Android 14+) : une capture, un `captureId` neuf.
- * - `recordingChanged` (Android 15+) : un enregistrement ou une recopie garde
- *   UN `captureId` du début à la fin ; ce qui entre à l'écran pendant qu'il
- *   dure se déclare au plus toutes les {@link RECORDING_SWEEP_MS} (la
- *   passerelle accepte six déclarations par minute et par conversation), et un
- *   message déjà déclaré pour cet enregistrement ne repart pas.
+ * - `screenCaptured` (Android 14+) : ce que l'écran montre est déclaré sous un
+ *   `captureId` neuf, en lots de dix (`captureLots` : la passerelle n'annonce
+ *   que dix avis par déclaration).
+ * - `recordingChanged` (Android 15+) : ce que l'écran montre AU DÉMARRAGE est
+ *   déclaré sous l'unique `captureId` de l'enregistrement, puis la fenêtre est
+ *   noire pour les éphémères jusqu'à la fin (`captureShield.noteRecording`) :
+ *   rien de ce qui défile ensuite n'est capturé en silence. Une vue unique
+ *   ouverte pendant l'enregistrement est noire ; sa tentative est déclarée à
+ *   son ouverture.
  *
- * Ce qui part : les rangées du fil qui portent `data-capture` (`captureOf`,
- * éphémère lisible ou nature illisible) ET qu'on voit vraiment à l'instant de
- * la capture, plus les vues uniques affichées (`captureShield.shown()`). La
- * passerelle juge chaque message (droit de lecture, nature, affichage récent)
- * et n'annonce que ce qui doit l'être.
+ * Chaque déclaration passe par la file durable (`capture-outbox.ts`) : un
+ * échec se rejoue jusqu'au verdict de la passerelle.
  */
-
-export const RECORDING_SWEEP_MS = 10_000;
-
-export type CaptureDeclaration = {
-  readonly conversationId: string;
-  readonly messageIds: readonly string[];
-  readonly kind: ContentCaptureKind;
-  readonly captureId: string;
-  /**
-   * Le plus récent des messages du fil déclarés : la passerelle n'annonce que
-   * ce que l'acteur a LU, et ce qui est à l'écran est lu — l'accusé de lecture
-   * part jusqu'à lui AVANT la déclaration. Absent : seules des vues uniques.
-   */
-  readonly readUpTo?: string;
-};
 
 /** Ce que l'écran montre à l'instant de la capture. */
 export type CaptureSubjects = {
@@ -52,50 +39,78 @@ export type CaptureSubjects = {
 export type CaptureReporterDeps = {
   readonly coque: CoqueNative;
   readonly conversationId: string;
-  /** Les messages visibles à cet instant. */
   readonly collect: () => CaptureSubjects;
-  readonly send: (declaration: CaptureDeclaration) => Promise<unknown>;
+  readonly outbox: Pick<CaptureOutbox, 'enqueue' | 'flush'>;
+  readonly shield: Pick<CaptureShield, 'noteRecording' | 'watchShown' | 'shown'>;
   readonly newCaptureId: () => string;
-  readonly every: (run: () => void, ms: number) => () => void;
 };
 
 type NativeState = { readonly recording?: unknown };
 
+/** Les déclarations d'une capture : lots de dix, même `captureId`, l'accusé de lecture jusqu'à la rangée la plus récente. */
+export function captureJobs(params: {
+  readonly conversationId: string;
+  readonly kind: ContentCaptureKind;
+  readonly captureId: string;
+  /** Le rang de la déclaration dans la capture (un enregistrement en fait plusieurs sous le même `captureId`). */
+  readonly batch?: number;
+  readonly subjects: CaptureSubjects;
+}): readonly CaptureJobInput[] {
+  const { conversationId, kind, captureId, batch = 0, subjects } = params;
+  const readUpTo = subjects.rows.at(-1);
+  return captureLots([...subjects.viewOnce, ...subjects.rows]).map((messageIds, index) => ({
+    id: `${captureId}:${kind}:${batch}:${index}`,
+    conversationId,
+    messageIds,
+    kind,
+    captureId,
+    ...(readUpTo === undefined ? {} : { readUpTo }),
+  }));
+}
+
 /** Démarre l'écoute ; rend l'arrêt. Sans `addListener` (coque trop ancienne), ne fait rien. */
 export function startCaptureReports(deps: CaptureReporterDeps): () => void {
-  const { coque, conversationId, collect, send, newCaptureId, every } = deps;
+  const { coque, conversationId, collect, outbox, shield, newCaptureId } = deps;
   const addListener = coque.addListener;
   if (typeof addListener !== 'function') return () => {};
 
-  const report = (kind: ContentCaptureKind, captureId: string, subjects: CaptureSubjects) => {
-    const messageIds = [...new Set([...subjects.viewOnce, ...subjects.rows])].slice(0, CONTENT_CAPTURE_MAX_MESSAGES);
-    if (messageIds.length === 0) return;
-    const readUpTo = subjects.rows.at(-1);
-    void send({ conversationId, messageIds, kind, captureId, ...(readUpTo === undefined ? {} : { readUpTo }) }).catch(() => undefined);
+  const report = (kind: ContentCaptureKind, captureId: string, subjects: CaptureSubjects, batch = 0) => {
+    const jobs = captureJobs({ conversationId, kind, captureId, batch, subjects });
+    if (jobs.length === 0) return;
+    outbox.enqueue(jobs);
+    void outbox.flush();
   };
 
-  type Recording = { readonly captureId: string; readonly declared: ReadonlySet<string>; readonly stop: () => void };
+  type Recording = { readonly captureId: string; readonly declared: ReadonlySet<string>; readonly batches: number; readonly stop: () => void };
   let recording: Recording | null = null;
 
-  const sweep = () => {
+  const declareNewAttempts = () => {
     const session = recording;
     if (session === null) return;
-    const seen = collect();
-    const fresh = { viewOnce: seen.viewOnce.filter((id) => !session.declared.has(id)), rows: seen.rows.filter((id) => !session.declared.has(id)) };
-    if (fresh.viewOnce.length + fresh.rows.length === 0) return;
-    recording = { ...session, declared: new Set([...session.declared, ...fresh.viewOnce, ...fresh.rows]) };
-    report('recording', session.captureId, fresh);
+    const fresh = shield.shown().filter((id) => !session.declared.has(id));
+    if (fresh.length === 0) return;
+    recording = { ...session, declared: new Set([...session.declared, ...fresh]), batches: session.batches + 1 };
+    report('recording', session.captureId, { viewOnce: fresh, rows: [] }, session.batches);
   };
 
   const recordingChanged = (now: boolean) => {
     if (now && recording === null) {
-      recording = { captureId: newCaptureId(), declared: new Set(), stop: every(sweep, RECORDING_SWEEP_MS) };
-      sweep();
+      const captureId = newCaptureId();
+      const subjects = collect();
+      shield.noteRecording(true);
+      recording = {
+        captureId,
+        declared: new Set([...subjects.viewOnce, ...subjects.rows]),
+        batches: 1,
+        stop: shield.watchShown(declareNewAttempts),
+      };
+      report('recording', captureId, subjects);
       return;
     }
     if (!now && recording !== null) {
       recording.stop();
       recording = null;
+      shield.noteRecording(false);
     }
   };
 
@@ -113,29 +128,50 @@ export function startCaptureReports(deps: CaptureReporterDeps): () => void {
       })
       .catch(() => undefined);
   }
+  void outbox.flush();
 
   return () => {
     live = false;
-    recordingChanged(false);
+    recording?.stop();
+    recording = null;
     handles.forEach((handle) => void handle.remove());
   };
 }
 
 /**
- * Le jumeau REST de `message:capture-detected` — la conversation est dans
- * l'adresse. L'accusé de lecture jusqu'au plus récent message déclaré part
- * d'abord ; un refus de l'un ou de l'autre ne se réessaie pas (la passerelle
- * plafonne, et une capture passée ne se rejoue pas).
+ * UNE DÉCLARATION, PAR REST — l'accusé de lecture jusqu'au plus récent
+ * message déclaré part d'abord (la passerelle n'annonce que ce que l'acteur a
+ * LU), puis `POST …/messages/capture`. Le registre du bouclier compte la
+ * déclaration et les avis confirmés (`noticedMessageIds`). L'issue décide de
+ * la file : succès ou refus permanent la retirent, le reste se rejoue.
  */
-export async function sendCaptureDeclaration(transport: Transport, declaration: CaptureDeclaration): Promise<unknown> {
-  if (declaration.readUpTo !== undefined) {
-    await pushReadReceipt(transport, declaration.conversationId, declaration.readUpTo).catch(() => undefined);
+export async function sendCaptureJob(
+  transport: Transport,
+  shield: Pick<CaptureShield, 'noteDeclaration' | 'noteNotices'>,
+  job: CaptureJob,
+): Promise<Outcome> {
+  if (job.readUpTo !== undefined) {
+    const receipt = await transport({
+      method: 'POST',
+      path: conversationsEndpoints.byConversationIdReceipts(job.conversationId),
+      body: { type: 'read', caughtUpToMessageId: job.readUpTo },
+    }).catch(() => undefined);
+    if (outcomeOf(receipt) === 'transient') return 'transient';
   }
-  return transport({
+  shield.noteDeclaration(job.conversationId);
+  const result = await transport({
     method: 'POST',
-    path: conversationsEndpoints.byIdMessagesCapture(declaration.conversationId),
-    body: { messageIds: [...declaration.messageIds], kind: declaration.kind, captureId: declaration.captureId },
-  });
+    path: conversationsEndpoints.byIdMessagesCapture(job.conversationId),
+    body: { messageIds: [...job.messageIds], kind: job.kind, captureId: job.captureId },
+  }).catch(() => undefined);
+  const outcome = outcomeOf(result);
+  if (outcome === 'success') shield.noteNotices(job.conversationId, job.kind, noticedOf(result));
+  return outcome;
+}
+
+function noticedOf(result: unknown): readonly string[] {
+  const ids = (result as { readonly data?: { readonly noticedMessageIds?: unknown } } | null)?.data?.noticedMessageIds;
+  return Array.isArray(ids) ? ids.filter((id): id is string => typeof id === 'string') : [];
 }
 
 type Rect = { readonly top: number; readonly left: number; readonly bottom: number; readonly right: number };
@@ -174,7 +210,7 @@ export function rowIsSeen(row: Element, viewport: { readonly width: number; read
  * `FLAG_SECURE` ne montre aucune flamme : la déclarer annoncerait une capture
  * qui n'a rien pris.
  */
-export function visibleCaptureSubjects(doc: Document, shield: { readonly shown: () => readonly string[]; readonly secured: () => boolean }): CaptureSubjects {
+export function visibleCaptureSubjects(doc: Document, shield: Pick<CaptureShield, 'shown' | 'secured'>): CaptureSubjects {
   const viewOnce = shield.shown();
   if (shield.secured()) return { viewOnce, rows: [] };
   const view = doc.defaultView;

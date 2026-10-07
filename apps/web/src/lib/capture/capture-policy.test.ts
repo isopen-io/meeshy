@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { detectionOf, surfaceCapture, type CaptureHost } from './capture-policy';
+import { detectionOf, surfaceCapture, windowMustBeBlack, type CaptureHost } from './capture-policy';
 
 /* UN CONTENU QUI DISPARAÎT EST SOIT ANNONCÉ, SOIT NOIR — JAMAIS CAPTURÉ EN
    SILENCE (règle de la revue de sécurité de #9617, valable pour la coque).
@@ -50,5 +50,27 @@ describe('la politique de capture d’une surface', () => {
 
   test('le navigateur ne détecte rien : l’éphémère y reste capturable en silence (limite acceptée)', () => {
     expect(surfaceCapture({ verdict: 'announced', host: { kind: 'browser' }, declared: true })).toBe('announced');
+  });
+});
+
+describe('la fenêtre entière', () => {
+  const calm = { blocking: false, online: true, recording: false } as const;
+
+  test('rien à l’écran : libre ; une surface noire : noire', () => {
+    expect(windowMustBeBlack({ ...calm, ephemerals: [] })).toBe(false);
+    expect(windowMustBeBlack({ ...calm, blocking: true, ephemerals: [] })).toBe(true);
+  });
+
+  test('des éphémères annonçables, en ligne, hors enregistrement : libre', () => {
+    expect(windowMustBeBlack({ ...calm, ephemerals: [{ pending: 3, capacity: 30 }] })).toBe(false);
+  });
+
+  test('plus d’éphémères à annoncer que la passerelle n’en peut annoncer : noire', () => {
+    expect(windowMustBeBlack({ ...calm, ephemerals: [{ pending: 11, capacity: 10 }] })).toBe(true);
+  });
+
+  test('hors ligne, ou pendant un enregistrement : noire', () => {
+    expect(windowMustBeBlack({ ...calm, online: false, ephemerals: [{ pending: 1, capacity: 30 }] })).toBe(true);
+    expect(windowMustBeBlack({ ...calm, recording: true, ephemerals: [{ pending: 0, capacity: 30 }] })).toBe(true);
   });
 });

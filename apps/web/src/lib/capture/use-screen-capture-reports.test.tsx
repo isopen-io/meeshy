@@ -27,8 +27,8 @@ afterEach(() => {
   delete globals.Capacitor;
 });
 
-function Probe({ conversationId }: { readonly conversationId: string }) {
-  useScreenCaptureReports(conversationId);
+function Probe({ conversationId, viewerId }: { readonly conversationId: string; readonly viewerId: string }) {
+  useScreenCaptureReports(conversationId, viewerId);
   return null;
 }
 
@@ -47,7 +47,7 @@ describe('l’écoute des captures par le fil', () => {
       },
       nativePromise: async (_plugin, method) => void touched.push(method),
     };
-    await mounter.mount(<Probe conversationId="c-1" />);
+    await mounter.mount(<Probe conversationId="c-1" viewerId="u-1" />);
     await new Promise((resolve) => setTimeout(resolve, 30));
     expect(touched).toEqual([]);
   });
@@ -63,7 +63,7 @@ describe('l’écoute des captures par le fil', () => {
         return { remove: async () => void listening.delete(event) };
       },
     };
-    await mounter.mount(<Probe conversationId="c-1" />);
+    await mounter.mount(<Probe conversationId="c-1" viewerId="u-1" />);
     await until(() => listening.size === 2);
     expect([...listening].sort()).toEqual(['recordingChanged', 'screenCaptured']);
     mounter.unmountAll();

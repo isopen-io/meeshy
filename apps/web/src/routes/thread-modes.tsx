@@ -371,7 +371,7 @@ export function ThreadModes({
      conversation ne ressuscite pas un dépliage d'une autre visite. */
   useEffect(() => collapseUnfolded, []);
   /* La coque Android signale les captures ; le fil déclare ce qu'il montre (#9617). */
-  useScreenCaptureReports(summary?.conversation.id ?? '');
+  useScreenCaptureReports(summary?.conversation.id ?? '', viewerId);
   const publishRevealPhase = useCallback((messageId: string, phase: RevealPhase) => {
     setRevealPhases((current) => {
       const held = current.get(messageId);
@@ -738,7 +738,12 @@ export function ThreadModes({
                     reçoivent, et il remplace la pastille de décompte. */}
                 {rowAfterRead && !rowIsMine ? <AfterReadSeenProbe messageId={p.message.id} /> : null}
                 {rowCapture['data-capture'] === undefined ? null : (
-                  <CaptureShieldHold messageId={p.message.id} verdict={rowCapture['data-capture']} declared />
+                  <CaptureShieldHold
+                    messageId={p.message.id}
+                    conversationId={p.message.conversationId}
+                    verdict={rowCapture['data-capture']}
+                    declared
+                  />
                 )}
                 {rowAfterRead ? (
                   <AfterReadWatermark
