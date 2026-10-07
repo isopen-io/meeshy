@@ -159,7 +159,7 @@ export class CommentReactionService {
       });
 
       await this.updateCommentReactionSummary(commentId);
-      creditPostEngagement(this.prisma, userId, 'tool.comment_like', { targetId: commentId, targetOwnerId: comment.authorId }, this.engagement);
+      creditPostEngagement(this.prisma, userId, 'tool.comment_like', { postId: comment.postId, targetId: commentId, targetOwnerId: comment.authorId }, this.engagement);
 
       return { ...this.mapReactionToData(reaction), unchanged: false };
     } catch (err: unknown) {

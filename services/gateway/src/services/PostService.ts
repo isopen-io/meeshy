@@ -1565,7 +1565,7 @@ export class PostService {
       data: { bookmarkCount: { increment: 1 } },
       select: { bookmarkCount: true },
     });
-    creditPostEngagement(this.prisma, userId, 'tool.post_bookmark', { targetId: postId, targetOwnerId: post.authorId });
+    creditPostEngagement(this.prisma, userId, 'tool.post_bookmark', { postId, targetId: postId, targetOwnerId: post.authorId });
 
     return { success: true, bookmarkCount: updated.bookmarkCount };
   }
@@ -1670,7 +1670,7 @@ export class PostService {
       // `reused: true` : elles réutilisent un lien déjà émis, et les créditer
       // ferait gagner des points en pressant « Partager » en boucle. Un axe
       // d'engagement qui se farme ne mesure plus rien.
-      creditPostEngagement(this.prisma, userId, 'social.share', { targetId: postId, targetOwnerId: post.authorId });
+      creditPostEngagement(this.prisma, userId, 'social.share', { postId, targetId: postId, targetOwnerId: post.authorId });
       return { shared: true, shareCount: created.shareCount, token: created.link.token, shortUrl: `${baseUrl}${created.link.shortUrl}`, reused: false };
     } catch (err) {
       if (err && typeof err === 'object' && 'code' in err && (err as { code?: string }).code === 'P2002') {
@@ -2500,7 +2500,7 @@ export class PostService {
           await this.orphanCleanup.untrackBatch(orphanRowIds);
         }
 
-        creditPostEngagement(this.prisma, userId, 'social.repost', { targetId: postId, targetOwnerId: original.authorId });
+        creditPostEngagement(this.prisma, userId, 'social.repost', { postId, targetId: postId, targetOwnerId: original.authorId });
         return finalRepost;
       } catch (err) {
         // Inline (best-effort) compensation. Same as before — fast-path
@@ -2543,7 +2543,7 @@ export class PostService {
       where: { id: postId },
       data: { repostCount: { increment: 1 } },
     });
-    creditPostEngagement(this.prisma, userId, 'social.repost', { targetId: postId, targetOwnerId: original.authorId });
+    creditPostEngagement(this.prisma, userId, 'social.repost', { postId, targetId: postId, targetOwnerId: original.authorId });
 
     return repost;
   }

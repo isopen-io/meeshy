@@ -211,6 +211,15 @@ describe('un lecteur connecté', () => {
     ]);
   });
 
+  it('laisse tel quel un élément de page sans identifiant, sans le demander à la base', async () => {
+    const prisma = doublePrisma({ points: [{ userId: VIEWER, postId: postId(1), totalPoints: 7 }] });
+
+    const served = await withViewerPoints(prisma as never, VIEWER, [{ kind: 'separator' }, { id: postId(1), authorId: SOMEONE }]);
+
+    expect(served).toEqual([{ kind: 'separator' }, { id: postId(1), authorId: SOMEONE, viewerPoints: 7 }]);
+    expect(prisma.engagementPostPoints.findMany.mock.calls[0]?.[0].where.postId).toEqual({ in: [postId(1)] });
+  });
+
   it('reçoit sa page sans le champ quand le cumul ne se lit pas — la page ne tombe pas', async () => {
     const prisma = doublePrisma();
     prisma.engagementPostPoints.findMany.mockRejectedValueOnce(new Error('mongo down') as never);

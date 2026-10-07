@@ -48,6 +48,7 @@ import { enhancedLogger } from '../../utils/logger-enhanced';
 import type { ServerEmitIO } from '../../socketio/serverEmit';
 import { ONE_DAY_MS, civilDayInTimezone, civilDayKey } from './civilDay';
 import { ConversationEngagementRecorder, dayCountsFor, isDailyCapReached } from './ConversationEngagementRecorder';
+import { PostPointsRecorder } from './PostPointsRecorder';
 import { engagementScaleServiceFor, type EngagementScaleSource } from './EngagementScaleService';
 import { getEngagementEmitIO } from './engagement-emit-registry';
 import { memberSignature } from './memberSignature';
@@ -133,6 +134,11 @@ export type EngagementActivityOptions = {
    */
   readonly conversationId?: string;
   /**
+   * Le POST où le geste a eu lieu (#9569). Présent ⇒ les points crédités
+   * s'ajoutent à ce que ce post a rapporté au crédité, qui en est prévenu.
+   */
+  readonly postId?: string;
+  /**
    * La CIBLE du geste (post, appel, communauté, personne) — elle porte les
    * plafonds par cible et l'unicité d'un contenu lourd.
    */
@@ -173,6 +179,8 @@ export class EngagementService {
 
   private readonly conversationRecorder: ConversationEngagementRecorder;
 
+  private readonly postRecorder: PostPointsRecorder;
+
   private readonly quotas: EngagementQuotas;
 
   /** Le jeu (#9374…#9377) : Vent arrière, frein de l'entre-soi, missions, Gloire. */
@@ -184,6 +192,7 @@ export class EngagementService {
   ) {
     this.scale = deps.scale ?? engagementScaleServiceFor(prisma);
     this.conversationRecorder = new ConversationEngagementRecorder(prisma, deps.emitIO ?? getEngagementEmitIO);
+    this.postRecorder = new PostPointsRecorder(prisma, deps.emitIO ?? getEngagementEmitIO);
     this.quotas = new EngagementQuotas(prisma);
     this.game = deps.game ?? new EngagementGameHooks(prisma, (userId, points, axisKey) => this.creditGamePoints(userId, points, axisKey));
   }
@@ -351,8 +360,12 @@ export class EngagementService {
     if (!admitted) return;
 
     await this.credit(scale, userId, operationKey, points, options.actorId);
-    if (heavy && options.targetId !== undefined) {
-      await this.quotas.remember(userId, operationKey, options.targetId, points);
+    const rememberedTargetId = heavy ? options.targetId : undefined;
+    if (rememberedTargetId !== undefined) {
+      await this.quotas.remember(userId, operationKey, rememberedTargetId, points);
+    }
+    if (options.postId !== undefined) {
+      await this.postRecorder.record({ userId, postId: options.postId, operationKey, points, rememberedTargetId });
     }
 
     if (conversationId) {

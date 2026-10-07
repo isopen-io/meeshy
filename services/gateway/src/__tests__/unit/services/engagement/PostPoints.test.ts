@@ -17,6 +17,7 @@ import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import type { EngagementOperationKey } from '@meeshy/shared/types/engagement-operations';
 import { EngagementService } from '../../../../services/engagement/EngagementService';
 import { loadViewerPostPoints } from '../../../../services/engagement/viewerPostPoints';
+import { purgePostPoints } from '../../../../services/engagement/PostPointsRecorder';
 import { fakeGameDb, seedUser, type FakeGameDb } from '../../../../services/game/__tests__/fakeGameDb';
 
 jest.mock('../../../../utils/logger-enhanced', () => ({
@@ -308,5 +309,30 @@ describe('un cumul qui ne s’écrit pas', () => {
     await expect(service.recordActivity(READER, 'tool.post_reaction', onPost())).resolves.toBeUndefined();
 
     expect(credited(db, READER)).toBeGreaterThan(0);
+  });
+});
+
+describe('un post qui disparaît', () => {
+  it('emporte ce qu’il a rapporté à chacun de ses lecteurs, et rien d’autre', async () => {
+    const { db, service } = setup();
+    await service.recordActivity(READER, 'tool.post_reaction', onPost(postId(1)));
+    await service.recordActivity(OTHER_READER, 'tool.post_bookmark', onPost(postId(1)));
+    await service.recordActivity(READER, 'comment.text', { postId: postId(2) });
+    const kept = await pointsOf(db, READER, postId(2));
+
+    expect(await purgePostPoints(db.prisma, [postId(1)])).toBe(2);
+
+    expect(db.engagementPostPoints.rows.map((row) => row.postId)).toEqual([postId(2)]);
+    expect(await pointsOf(db, READER, postId(1))).toBe(0);
+    expect(await pointsOf(db, READER, postId(2))).toBe(kept);
+  });
+
+  it('ne pose aucune question pour une liste vide', async () => {
+    const { db } = setup();
+    db.engagementPostPoints.deleteMany = async () => {
+      throw new Error('aucune requête ne devait partir');
+    };
+
+    expect(await purgePostPoints(db.prisma, [])).toBe(0);
   });
 });

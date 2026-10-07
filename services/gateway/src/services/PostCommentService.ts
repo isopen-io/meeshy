@@ -672,7 +672,7 @@ export class PostCommentService {
   async likeComment(commentId: string, userId: string, emoji: string = '❤️') {
     const comment = await this.prisma.postComment.findFirst({
       where: { id: commentId, deletedAt: NOT_DELETED },
-      select: { id: true, authorId: true },
+      select: { id: true, postId: true, authorId: true },
     });
     if (!comment) return null;
 
@@ -731,7 +731,7 @@ export class PostCommentService {
     // posé : reconfirmer (ou passer en repli derrière le socket, qui l'a déjà
     // écrit et crédité) ne recrédite pas.
     if (!alreadyHasThisEmoji) {
-      creditPostEngagement(this.prisma, userId, 'tool.comment_like', { targetId: commentId, targetOwnerId: comment.authorId }, this.engagement);
+      creditPostEngagement(this.prisma, userId, 'tool.comment_like', { postId: comment.postId, targetId: commentId, targetOwnerId: comment.authorId }, this.engagement);
     }
     return this.syncCommentLikeCounters(commentId);
   }

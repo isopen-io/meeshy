@@ -460,11 +460,11 @@ export function registerCommentRoutes(
       // crédite `comment.text`, un commentaire AVEC crédite `comment.audio`.
       if (!linkedMedia?.mimeType?.startsWith('audio/')) {
         engagementService
-          .recordActivity(authContext.registeredUser.id, 'comment.text')
+          .recordActivity(authContext.registeredUser.id, 'comment.text', { postId: targetPostId })
           .catch((err) => enhancedLogger.warn('[POST /posts/:postId/comments]: engagement comment.text failed', { err }));
       } else {
         engagementService
-          .recordActivity(authContext.registeredUser.id, 'comment.audio')
+          .recordActivity(authContext.registeredUser.id, 'comment.audio', { postId: targetPostId })
           .catch((err) => enhancedLogger.error('comment.audio engagement recording failed', err));
       }
 

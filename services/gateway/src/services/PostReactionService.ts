@@ -157,7 +157,7 @@ export class PostReactionService {
       });
 
       await this.updatePostReactionSummary(postId);
-      creditPostEngagement(this.prisma, userId, 'tool.post_reaction', { targetId: postId, targetOwnerId: post.authorId }, this.engagement);
+      creditPostEngagement(this.prisma, userId, 'tool.post_reaction', { postId, targetId: postId, targetOwnerId: post.authorId }, this.engagement);
 
       return { ...this.mapReactionToData(reaction), unchanged: false };
     } catch (err: unknown) {

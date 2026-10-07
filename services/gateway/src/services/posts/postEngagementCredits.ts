@@ -1,6 +1,7 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { EngagementOperationKey } from '@meeshy/shared/types/engagement-operations';
 import { EngagementService, type EngagementActivityOptions } from '../engagement/EngagementService';
+import { PUBLICATION_OPERATION_BY_TYPE } from '../engagement/viewerPostPoints';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 
 const log = enhancedLogger.child({ module: 'postEngagementCredits' });
@@ -13,12 +14,21 @@ const log = enhancedLogger.child({ module: 'postEngagementCredits' });
  */
 export type PostEngagementRecorder = Pick<EngagementService, 'recordActivity' | 'reclaimContent'>;
 
+/**
+ * Ce qu'un geste du fil déclare à son crédit : le POST où il a eu lieu est
+ * REQUIS (#9569) — c'est lui qui reçoit les points dans ce que ce post a
+ * rapporté au crédité. Il se nomme à part de `targetId`, qui porte les
+ * plafonds : aimer un commentaire a pour cible le commentaire et pour post
+ * celui qui le porte.
+ */
+export type PostEngagementActivity = EngagementActivityOptions & { readonly postId: string };
+
 /** Crédit fire-and-forget : il ne fait jamais échouer le geste qui l'a déclenché. */
 export function creditPostEngagement(
   prisma: PrismaClient,
   userId: string,
   operationKey: EngagementOperationKey,
-  options: EngagementActivityOptions,
+  options: PostEngagementActivity,
   recorder: PostEngagementRecorder = new EngagementService(prisma),
 ): void {
   recorder.recordActivity(userId, operationKey, options).catch((error: unknown) => {
@@ -58,23 +68,14 @@ export function creditStoryViewed(
     prisma,
     viewerId,
     'tool.story_viewed',
-    { targetId: story.id, targetOwnerId: story.authorId },
+    { postId: story.id, targetId: story.id, targetOwnerId: story.authorId },
     recorder,
   );
 }
 
 /** L'opération de contenu lourd qu'un type de publication a créditée, si elle en a une. */
 export function reclaimableContentOperation(type: string | null | undefined): EngagementOperationKey | null {
-  switch (type) {
-    case 'POST':
-      return 'content.post';
-    case 'STORY':
-      return 'content.story';
-    case 'REEL':
-      return 'content.reel';
-    default:
-      return null;
-  }
+  return (type && PUBLICATION_OPERATION_BY_TYPE.get(type)) || null;
 }
 
 /**

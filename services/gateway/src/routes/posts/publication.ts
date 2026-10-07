@@ -354,10 +354,10 @@ function recordPublicationEngagement(params: {
   };
 
   const byVisibility = operation === 'content.post' || operation === 'content.story';
-  credit(operation, byVisibility ? { targetId: postId, variant: visibilityVariant(visibility) } : { targetId: postId });
+  credit(operation, byVisibility ? { postId, targetId: postId, variant: visibilityVariant(visibility) } : { postId, targetId: postId });
 
   if (operation === 'content.status') return;
-  credit(editedInApp === true ? 'tool.in_app_edit' : 'tool.direct_publish', { targetId: postId });
+  credit(editedInApp === true ? 'tool.in_app_edit' : 'tool.direct_publish', { postId, targetId: postId });
 }
 
 /**

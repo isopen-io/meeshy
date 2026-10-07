@@ -95,7 +95,7 @@ async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
   const prisma = {
     post: {
-      findFirst: jest.fn<any>().mockResolvedValue(PUBLIC_ACL),
+      findFirst: jest.fn<any>().mockResolvedValue({ id: POST_ID, ...PUBLIC_ACL }),
       findUnique: jest.fn<any>().mockResolvedValue({
         authorId: 'author-1',
         commentCount: 1,
