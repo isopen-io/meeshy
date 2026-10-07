@@ -150,6 +150,27 @@ describe('applyPostRemovalEffects — ce que le post a rapporté à ses lecteurs
     expect(postPointsDeleteMany).toHaveBeenCalledWith({ where: { postId: { in: [POST_ID] } } });
   });
 
+  it('ne retarde pas ce qui se VOIT : les notifications et les liens partent avant', async () => {
+    const order: string[] = [];
+    runCommandRaw.mockImplementation(async () => {
+      order.push('notifications');
+      return rawFind([]);
+    });
+    trackingLinkUpdateMany.mockImplementation(async () => {
+      order.push('links');
+      return { count: 0 };
+    });
+    postPointsDeleteMany.mockImplementation(async () => {
+      order.push('points');
+      return { count: 0 };
+    });
+
+    await applyPostRemovalEffects(prisma, removedPost, { id: AUTHOR_ID }, soundCapture, announcer);
+
+    expect(order.indexOf('points')).toBeGreaterThan(order.indexOf('notifications'));
+    expect(order.indexOf('points')).toBeGreaterThan(order.indexOf('links'));
+  });
+
   it('n\'emporte ni la suppression ni les autres effets quand le retrait du cumul échoue', async () => {
     postPointsDeleteMany.mockRejectedValue(new Error('mongo down'));
 

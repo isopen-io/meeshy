@@ -15,8 +15,10 @@ import { ExpiredStoriesCleanupService } from '../ExpiredStoriesCleanupService';
  * @jest-environment node
  */
 
-const STATUS = 'status-1';
-const REPOST = 'repost-1';
+// De la forme de la production : `postId` est une colonne ObjectId, que le
+// vrai client refuserait pour toute autre chaîne.
+const STATUS = '68d000000000000000000001';
+const REPOST = '68d000000000000000000002';
 
 function buildPrisma() {
   return {

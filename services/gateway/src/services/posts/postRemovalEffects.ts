@@ -103,17 +103,6 @@ export async function applyPostRemovalEffects(
   // chemins de retrait l'appliquent. Hors du chemin, ne rejette jamais.
   reclaimRemovedContent(prisma, post, engagement);
 
-  // Ce que ce post a rapporté à chacun de ses lecteurs (#9569). La ligne de
-  // cumul n'a ni relation ni cascade vers `Post` : sans ce retrait elle
-  // resterait orpheline pour toujours, plus aucune lecture ne la demandant.
-  // Les points eux-mêmes restent acquis au score — seul ce qui les rattachait
-  // à un post disparu s'en va.
-  try {
-    await purgePostPoints(prisma, [post.id]);
-  } catch (err) {
-    log.warn('post removal: post points purge failed', { postId: post.id, err });
-  }
-
   // Les notifications que le post a produites. Placées juste après l'audit —
   // qui doit rester le premier effet écrit, c'est la trace de modération — et
   // avant les deux autres, parce que c'est le SEUL des quatre dont le retard se
@@ -140,6 +129,18 @@ export async function applyPostRemovalEffects(
     await deactivatePostTrackingLinks(prisma, [post.id]);
   } catch (err) {
     log.warn('post removal: tracking link deactivation failed', { postId: post.id, err });
+  }
+
+  // Ce que ce post a rapporté à chacun de ses lecteurs (#9569). La ligne de
+  // cumul n'a ni relation ni cascade vers `Post` : sans ce retrait elle
+  // resterait orpheline pour toujours, plus aucune lecture ne la demandant.
+  // Les points eux-mêmes restent acquis au score — seul ce qui les rattachait
+  // à un post disparu s'en va. Placé APRÈS les notifications et les liens :
+  // rien ne lit cette ligne en temps réel, son retard ne se voit nulle part.
+  try {
+    await purgePostPoints(prisma, [post.id]);
+  } catch (err) {
+    log.warn('post removal: post points purge failed', { postId: post.id, err });
   }
 
   // Les usages meurent avec le post ; le `Sound`, lui, SURVIT. Sans ceci, une
