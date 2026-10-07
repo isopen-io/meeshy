@@ -95,7 +95,7 @@ final class iPadRightPanelNavigationGuardTests: XCTestCase {
         )
         let panel = try source(of: "iPadRootView+Panels.swift")
         XCTAssertTrue(
-            panel.contains("NavigationStack {"),
+            panel.contains("NavigationStack {") || panel.contains("NavigationStack(path:"),
             "Le panneau droit iPad doit héberger un NavigationStack, sinon les NavigationLink de ses écrans sont inertes."
         )
         XCTAssertTrue(

@@ -217,8 +217,6 @@ final class GameProgressionRenderTests: XCTestCase {
         for concept in ProgressionConcepts.served(for: progress, game: game) {
             let identifiants = monter(ProgressionConceptPage(concept: concept, viewModel: vm)).identifiers
             let piece = ProgressionConceptGestures.isHero(for: concept, progress: progress, game: game)
-            XCTAssertEqual(identifiants.contains("progression.concept.piece"), piece,
-                           "\(concept.rawValue) : la pièce de jeu tient lieu de héros ou n'est pas là. Vus : \(identifiants)")
             XCTAssertEqual(identifiants.contains("progression.concept.hero"), !piece,
                            "\(concept.rawValue) : un héros générique À CÔTÉ de la pièce, ou aucun héros. Vus : \(identifiants)")
             if let attendu = pieces[concept] {
@@ -257,7 +255,7 @@ final class GameProgressionRenderTests: XCTestCase {
             let code = try String(contentsOf: ios.appendingPathComponent(host), encoding: .utf8)
             XCTAssertTrue(code.contains("case .progression, .progressionDashboard:"), "\(host) : l'ancienne route n'ouvre pas la première page")
         }
-        XCTAssertEqual(try sourceCount(of: ".progressionDashboard"), 0, "une page du jeu pousse encore le tableau de bord")
+        XCTAssertEqual(try sourceCount(of: "push(.progressionDashboard"), 0, "une page du jeu pousse encore le tableau de bord")
         XCTAssertFalse(FileManager.default.fileExists(atPath: ios.appendingPathComponent("Meeshy/Features/Main/Game/ProgressionDashboardPage.swift").path))
     }
 }

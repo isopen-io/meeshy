@@ -122,10 +122,10 @@ final class GameElementDetailTests: XCTestCase {
     /// Une ligne de donnée porte SA phrase quand le catalogue en a une ; sinon celle de son concept.
     func test_aDataLine_saysItsOwnSentence_orTheOneOfItsConcept() {
         let served = progress()
-        let facts = ProgressionConceptModel.facts(.level, progress: served, game: game)
-        let tier = facts.first { $0.detail == .tier }
-        XCTAssertNotNil(tier, "la ligne du palier porte sa clé")
-        XCTAssertEqual(tier.map { GameElementDetails.fact($0, of: .level).what }, GameDetailText.fact(.tier))
+        let facts = ProgressionConceptModel.facts(.glory, progress: served, game: game)
+        let glory = facts.first { $0.detail == .glory }
+        XCTAssertNotNil(glory, "la ligne de la Gloire porte sa clé")
+        XCTAssertEqual(glory.map { GameElementDetails.fact($0, of: .glory).what }, GameDetailText.fact(.glory))
 
         let plain = GameElementDetails.fact(ProgressionConceptFact(label: "x", value: "1"), of: .flame)
         XCTAssertEqual(plain.what, ConceptText.why(.flame))
