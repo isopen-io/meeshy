@@ -91,14 +91,14 @@ export class GameStandingService {
     now: Date,
     reader: { readonly intimate: boolean; readonly trophies: boolean },
   ): Promise<GameStanding> {
-    const [glory, mythicNumber, trophyCount] = await Promise.all([
+    const [glory, mythicSeat, trophyCount] = await Promise.all([
       gloryTotalFromLedger(this.prisma, userId),
       new MythicSeatService(this.prisma).seatOf(userId),
       reader.intimate && reader.trophies ? this.prisma.gameTrophy.count({ where: { userId } }) : Promise.resolve(null),
     ]);
     const score = Math.max(0, Math.trunc(user.engagementScore ?? 0));
     const level = levelFromScore(score);
-    const rank = gloryStanding({ glory, mythicNumber });
+    const rank = gloryStanding({ glory, mythicSeat });
     return {
       level,
       tier: levelTierKey(level),

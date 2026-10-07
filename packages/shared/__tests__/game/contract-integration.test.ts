@@ -169,9 +169,11 @@ describe('le profil de jeu d’un autre membre', () => {
   it('porte la division à cinq crans et la place du Mythe à côté de la division héritée (#9636)', () => {
     const legende = { visible: true, standing: { level: 90, tier: 'galaxie', prestige: 2, flame: null, rank: 'legende', division: 3, division5: 4, mythic: null }, treasury: null };
     expect(userGameProfileResponseSchema.parse(legende).standing).toMatchObject({ division: 3, division5: 4, mythic: null });
-    const mythe = { visible: true, standing: { level: 100, tier: 'galaxie', prestige: 5, flame: null, rank: 'mythe', division: null, division5: null, mythic: { number: 100 } }, treasury: null };
-    expect(userGameProfileResponseSchema.parse(mythe).standing?.mythic).toEqual({ number: 100 });
-    const beyond = { ...mythe, standing: { ...mythe.standing, mythic: { number: 101 } } };
+    const mythe = { visible: true, standing: { level: 100, tier: 'galaxie', prestige: 5, flame: null, rank: 'mythe', division: null, division5: null, mythic: { number: 100, edition: 104 } }, treasury: null };
+    expect(userGameProfileResponseSchema.parse(mythe).standing?.mythic).toEqual({ number: 100, edition: 104 });
+    const beyond = { ...mythe, standing: { ...mythe.standing, mythic: { number: 101, edition: 104 } } };
     expect(userGameProfileResponseSchema.safeParse(beyond).success).toBe(false);
+    const noEdition = { ...mythe, standing: { ...mythe.standing, mythic: { number: 100 } } };
+    expect(userGameProfileResponseSchema.safeParse(noEdition).success).toBe(false);
   });
 });

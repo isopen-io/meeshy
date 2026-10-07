@@ -75,7 +75,7 @@ export async function exportGame(prisma: PrismaClient, userId: string, page: Exp
       }),
       prisma.gloryLedger.findMany({ where: { userId }, select: { delta: true, reason: true, createdAt: true }, orderBy: { createdAt: 'desc' }, take, skip }),
       prisma.meeshLedger.findMany({ where: { userId }, select: { delta: true, reason: true, createdAt: true }, orderBy: { createdAt: 'desc' }, take, skip }),
-      prisma.mythicSeat.findUnique({ where: { userId }, select: { number: true, grantedAt: true } }),
+      prisma.mythicSeat.findUnique({ where: { userId }, select: { number: true, edition: true, grantedAt: true } }),
     ]);
 
   const duos = [
@@ -109,7 +109,7 @@ export async function exportGame(prisma: PrismaClient, userId: string, page: Exp
           mythicAt: asIso(settings.mythicAt),
         }
       : null,
-    mythicSeat: mythicSeat ? { number: mythicSeat.number, grantedAt: asIso(mythicSeat.grantedAt) } : null,
+    mythicSeat: mythicSeat ? { number: mythicSeat.number, edition: mythicSeat.edition, grantedAt: asIso(mythicSeat.grantedAt) } : null,
     pseudonym,
     leagueHistory: lists.leagueHistory.items,
     weekPoints: lists.weekPoints.items,

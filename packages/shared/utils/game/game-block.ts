@@ -22,7 +22,7 @@ import {
   flameForm,
   flameStatus,
 } from './flame.js';
-import { gloryStanding } from './glory.js';
+import { gloryStanding, type MythicSeatRef } from './glory.js';
 import { canPrestige, levelProgress, recordLevel } from './levels.js';
 import { previewMint } from './mint.js';
 import { MISSIONS_MIN_LEVEL, MISSION_REROLL_PER_DAY, MISSION_REROLL_PRICE, isPrismDay } from './missions.js';
@@ -53,11 +53,11 @@ export type GameBlockFacts = {
   readonly prestige: number;
   readonly glory: number;
   /**
-   * Le Mythe, fourni par le serveur (#9636) : `mythicNumber` est la place (1 à 100), définitive. `mythic`
-   * reste pour l'appelant qui ne connaît que le rang servi.
+   * Le Mythe, fourni par le serveur (#9636) : `mythicSeat` porte la place (1 à 100) et l'émission (sa
+   * Signature). `mythic` reste pour l'appelant qui ne connaît que le rang servi.
    */
   readonly mythic: boolean;
-  readonly mythicNumber?: number | null;
+  readonly mythicSeat?: MythicSeatRef | null;
   readonly mintedLifetime: number;
   readonly debitablePoints: number;
   /** Meeshes gardées (le trésor). */
@@ -102,7 +102,7 @@ export type GameBlockFacts = {
 export function buildGameBlock(facts: GameBlockFacts): GameBlock {
   const progress = levelProgress(facts.score);
   const record = recordLevel({ level: progress.level, previousRecord: facts.levelRecord });
-  const standing = gloryStanding({ glory: facts.glory, mythic: facts.mythic, mythicNumber: facts.mythicNumber ?? null });
+  const standing = gloryStanding({ glory: facts.glory, mythic: facts.mythic, mythicSeat: facts.mythicSeat ?? null });
   const treasury = treasuryTier(facts.balance);
 
   const flameToday = facts.flameToday ?? facts.today;

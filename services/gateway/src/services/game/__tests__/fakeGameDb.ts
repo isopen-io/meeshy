@@ -271,6 +271,7 @@ export type FakeGameDb = {
   readonly affiliateVisitSession: Model;
   readonly communityMember: Model;
   readonly mythicSeat: Model;
+  readonly mythicEdition: Model;
 };
 
 export function fakeGameDb(): FakeGameDb {
@@ -312,8 +313,9 @@ export function fakeGameDb(): FakeGameDb {
   const conversation = new Model();
   const affiliateVisitSession = flattenCompound(new Model({ uniques: [['sessionKey']] }));
   const communityMember = new Model();
-  // `_id` dérivé du numéro (`mythicSeatId`) : l'index `_id` existe toujours, d'où l'unique sur `id`.
-  const mythicSeat = flattenCompound(new Model({ uniques: [['id'], ['number'], ['userId']], optional: ['vacatedAt'] }));
+  // `_id` dérivé du numéro (`mythicSeatId`, `mythicEditionId`) : l'index `_id` existe toujours, d'où l'unique sur `id`.
+  const mythicSeat = flattenCompound(new Model({ uniques: [['id'], ['number'], ['userId'], ['edition']] }));
+  const mythicEdition = flattenCompound(new Model({ uniques: [['id'], ['edition']] }));
   const models = {
     user,
     gloryLedger,
@@ -345,6 +347,7 @@ export function fakeGameDb(): FakeGameDb {
     affiliateVisitSession,
     communityMember,
     mythicSeat,
+    mythicEdition,
   };
 
   /**

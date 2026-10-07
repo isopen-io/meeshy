@@ -82,10 +82,10 @@ describe('le bloc game', () => {
     expect(parsed?.glory).toMatchObject({ division: 3, division5: 4, next: { division: 2, division5: 3 } });
   });
 
-  it('sert la place du Mythe et son numéro, sans division (#9636)', () => {
-    const b = block({ glory: 1_000_000, mythic: true, mythicNumber: 42 });
-    expect(b.glory).toMatchObject({ rank: 'mythe', division: null, division5: null, mythic: { number: 42 } });
-    expect(parseGameBlock(b)?.glory.mythic).toEqual({ number: 42 });
+  it('sert la place du Mythe et son émission, sans division (#9636)', () => {
+    const b = block({ glory: 1_000_000, mythic: true, mythicSeat: { number: 42, edition: 117 } });
+    expect(b.glory).toMatchObject({ rank: 'mythe', division: null, division5: null, mythic: { number: 42, edition: 117 } });
+    expect(parseGameBlock(b)?.glory.mythic).toEqual({ number: 42, edition: 117 });
   });
 
   it('un bloc d’avant #9636 (sans division5 ni mythic) reste valide', () => {

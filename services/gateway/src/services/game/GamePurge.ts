@@ -63,7 +63,7 @@ export const GAME_PURGE_EXCEPTIONS: Readonly<Record<string, string>> = {
   gameDuo: "partagé entre deux comptes : terminé proprement (partenaire payé de sa part simple), puis supprimé par ses deux bouts",
   affiliateVisitSession: "le parrain voit ses visites supprimées, le visiteur converti est dépersonnalisé (`referredUserId` à null)",
   mythicSeat:
-    "la place du Mythe est définitive (#9636) : elle reste PRISE, jamais réattribuée, mais `userId` reçoit un identifiant neuf tiré au hasard — elle ne nomme plus personne",
+    "la place du Mythe (#9636) est effacée puis rendue au compte en attente le plus ancien (décision porteur 2026-10-08) — `MythicSeatService.release`, qui relance l'attribution ; l'émission reste au registre `MythicEdition`, sans aucun lien de compte",
 };
 
 export type GamePurgeSummary = {
@@ -72,11 +72,11 @@ export type GamePurgeSummary = {
   readonly duosSettled: number;
   readonly duoNotificationsErased: number;
   readonly leagueGroupsTouched: number;
-  /** La place du Mythe dépersonnalisée (0 ou 1) — jamais libérée. */
-  readonly mythicSeatsVacated: number;
+  /** La place du Mythe libérée (0 ou 1) et rendue au suivant. */
+  readonly mythicSeatsReleased: number;
 };
 
-type PurgeDb = Pick<PrismaClient, (typeof GAME_PURGED_MODELS)[number] | 'gameDuo' | 'user' | 'leagueGroupWeek' | 'affiliateVisitSession' | 'notification' | 'mythicSeat'>;
+type PurgeDb = Pick<PrismaClient, (typeof GAME_PURGED_MODELS)[number] | 'gameDuo' | 'user' | 'leagueGroupWeek' | 'affiliateVisitSession' | 'notification' | 'mythicSeat' | 'mythicEdition'>;
 
 /** Les notifications de jeu qui NOMMENT un autre joueur (`actor`) : celles d'un duo. */
 const DUO_NOTIFICATION_TYPES = ['game_duo_invited', 'game_duo_accepted'] as const;
@@ -204,8 +204,8 @@ export async function purgeGameData(prisma: PurgeDb, userId: string, deps: GameP
   ]);
   const deleted = Object.fromEntries(GAME_PURGED_MODELS.map((model, index) => [model, counts[index]!.count]));
 
-  // 4. La place du Mythe reste prise, mais ne nomme plus le compte effacé.
-  const mythicSeatsVacated = await new MythicSeatService(prisma).vacate(userId);
+  // 4. La place du Mythe se libère et revient au plus ancien en attente : rien du compte effacé ne reste au registre.
+  const mythicSeatsReleased = await new MythicSeatService(prisma).release(userId);
 
   // 5. Les visites de parrainage : celles du parrain disparaissent, le visiteur converti est dépersonnalisé.
   await prisma.affiliateVisitSession.deleteMany({ where: { affiliateUserId: userId } });
@@ -230,5 +230,5 @@ export async function purgeGameData(prisma: PurgeDb, userId: string, deps: GameP
       brokenStreakLastDay: null,
     },
   });
-  return { deleted, duosDeleted, duosSettled, duoNotificationsErased, leagueGroupsTouched, mythicSeatsVacated };
+  return { deleted, duosDeleted, duosSettled, duoNotificationsErased, leagueGroupsTouched, mythicSeatsReleased };
 }

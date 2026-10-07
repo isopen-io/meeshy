@@ -5256,23 +5256,36 @@ model GameProfile {
 }
 
 /// UNE DES CENT PLACES DU MYTHE (#9636) : prise par le compte qui atteint
-/// 1 000 000 de Gloire tant qu'il en reste une, dans l'ordre d'arrivée, et
-/// DÉFINITIVE — jamais perdue, retirée ni réattribuée. `_id` est DÉRIVÉ du numéro
-/// (`mythicSeatId`) : deux attributions simultanées du même numéro se heurtent à
-/// l'index `_id`, qui existe toujours ; les uniques (numéro, compte) sont posés par
-/// `migrations/2026-10-07-mythic-seat-indexes.mongodb.js`. Aucune liste globale
-/// n'est servie (conformité A-13) : chaque compte ne lit que SA place. À la
-/// suppression du compte, la place reste prise et `userId` est remplacé par un
-/// identifiant neuf, non réversible (`vacatedAt` posé).
+/// 1 000 000 de Gloire tant qu'il en reste une, dans l'ordre d'arrivée. Tant que
+/// le compte existe, elle ne se perd jamais. Quand il est supprimé (décision
+/// porteur 2026-10-08), la ligne est EFFACÉE — aucune donnée du compte ne reste —
+/// et la place revient au compte en attente qui a franchi le million le plus tôt,
+/// avec une émission NEUVE (`MythicEdition`). `_id` est DÉRIVÉ du numéro de place
+/// (`mythicSeatId`) : deux attributions simultanées de la même place se heurtent
+/// à l'index `_id`, qui existe toujours ; les uniques (place, compte, émission)
+/// sont posés par `migrations/2026-10-07-mythic-seat-indexes.mongodb.js`. Aucune
+/// liste globale n'est servie (conformité A-13) : chaque compte ne lit que SA place.
 model MythicSeat {
-  id        String    @id @map("_id") @db.ObjectId
-  /// 1 à 100.
-  number    Int       @unique
-  userId    String    @unique @db.ObjectId
+  id        String   @id @map("_id") @db.ObjectId
+  /// La place, 1 à 100.
+  number    Int      @unique
+  userId    String   @unique @db.ObjectId
+  /// Le numéro d'émission (`MythicEdition.edition`) dont dérive la Signature unique.
+  edition   Int      @unique
   /// La Gloire lue au moment de l'attribution.
   glory     Int
-  grantedAt DateTime  @default(now())
-  vacatedAt DateTime?
+  grantedAt DateTime @default(now())
+}
+
+/// LE REGISTRE DES ÉMISSIONS DU MYTHE (#9636) — en ajout seul, jamais effacé,
+/// sans aucune donnée de compte : chaque attribution d'une place tire le numéro
+/// suivant (1, 2, 3…), qui ne revient JAMAIS — c'est lui qui garantit qu'un
+/// remplaçant reçoit une Signature jamais vue. `_id` dérivé du numéro
+/// (`mythicEditionId`) : deux tirages simultanés du même numéro se heurtent.
+model MythicEdition {
+  id        String   @id @map("_id") @db.ObjectId
+  edition   Int      @unique
+  grantedAt DateTime @default(now())
 }
 
 /// Le PSEUDONYME de ligue (#9384, conformité A-4/A-5) : tiré au CSPRNG, STOCKÉ,

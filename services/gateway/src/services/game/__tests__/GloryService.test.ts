@@ -145,14 +145,14 @@ describe('GloryService.creditAchievement — la Gloire d’un succès, figée à
 describe('GloryService.credit — la place du Mythe au franchissement (#9636)', () => {
   it('le crédit qui fait passer de 999 999 à 1 000 000 prend la première place', async () => {
     const db = fakeGameDb();
-    seedUser(db);
+    seedUser(db, { isActive: true });
     const service = new GloryService(db.prisma);
 
     await service.credit({ userId: USER, delta: 999_999, reason: 'season', requestId: 'season:1' });
     expect(db.mythicSeat.rows).toHaveLength(0);
 
     await service.credit({ userId: USER, delta: 1, reason: 'level', requestId: 'level:2' });
-    expect(db.mythicSeat.rows).toEqual([expect.objectContaining({ userId: USER, number: 1, glory: 1_000_000 })]);
+    expect(db.mythicSeat.rows).toEqual([expect.objectContaining({ userId: USER, number: 1, edition: 1, glory: 1_000_000 })]);
   });
 
   it('une place qui ne se prend pas ne fait jamais échouer le crédit déjà gravé', async () => {
@@ -169,5 +169,14 @@ describe('GloryService.credit — la place du Mythe au franchissement (#9636)', 
     const seats = { claimIfEligible: async () => { asked += 1; return null; } };
     await new GloryService(db.prisma, { seats }).credit({ userId: USER, delta: -5, reason: 'correction', requestId: 'fix:1' });
     expect(asked).toBe(0);
+  });
+
+  it('un compte désactivé ou d’agent franchit le million sans prendre de place', async () => {
+    for (const fields of [{ isActive: false }, { isActive: true, deletedAt: new Date() }, { isActive: true, role: 'AGENT' }]) {
+      const db = fakeGameDb();
+      seedUser(db, fields);
+      await new GloryService(db.prisma).credit({ userId: USER, delta: 1_000_000, reason: 'season', requestId: 'season:1' });
+      expect(db.mythicSeat.rows).toHaveLength(0);
+    }
   });
 });

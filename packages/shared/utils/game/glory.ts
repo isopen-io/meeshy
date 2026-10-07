@@ -8,10 +8,13 @@
  * ⌊étendue × k ÷ 5⌋, en entiers). Légende a désormais une borne haute, le seuil
  * du Mythe (1 000 000) : au-delà, faute de place, on reste Légende I.
  *
- * Mythe n'est pas un seuil mais une PLACE : les 100 premiers comptes qui
- * atteignent 1 000 000 de Gloire, dans l'ordre d'arrivée, chacun avec son numéro
- * (1 à 100). La place est définitive — la passerelle l'attribue et la sert, le
- * client ne la calcule jamais (`mythe.ts`, `MythicSeat`).
+ * Mythe n'est pas un seuil mais une PLACE : cent places, prises dans l'ordre
+ * d'arrivée à 1 000 000 de Gloire. Chaque attribution porte le NUMÉRO de sa place
+ * (1 à 100) et un NUMÉRO D'ÉMISSION (1, 2, 3… jamais réattribué) dont dérive sa
+ * Signature unique. Tant que le compte existe, la place ne se perd jamais ; la
+ * suppression du compte la libère pour le suivant, qui reçoit une émission neuve.
+ * La passerelle l'attribue et la sert, le client ne la calcule jamais
+ * (`mythe.ts`, `MythicSeat`).
  *
  * ## Rétrocompatibilité du fil (#9223)
  *
@@ -136,6 +139,16 @@ export const gloryLadder = (): readonly GloryStep[] =>
 export const isMythicNumber = (value: unknown): value is number =>
   typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= MYTHE_SIZE;
 
+/** Un numéro d'émission : un entier à partir de 1, sans borne haute — il ne revient jamais. */
+export const isMythicEdition = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isSafeInteger(value) && value >= 1;
+
+/** Une place du Mythe telle que le serveur la sert : la place (1 à 100) et l'émission (sa Signature). */
+export type MythicSeatRef = { readonly number: number; readonly edition: number };
+
+const validSeat = (seat: MythicSeatRef | null | undefined): MythicSeatRef | null =>
+  seat != null && isMythicNumber(seat.number) && isMythicEdition(seat.edition) ? { number: seat.number, edition: seat.edition } : null;
+
 export type GloryStanding = {
   readonly glory: number;
   readonly rank: GloryRankOrMythic;
@@ -150,22 +163,22 @@ export type GloryStanding = {
   readonly gloryMissing: number | null;
   /** Fraction parcourue dans la division, de 0 à 1 ; `1` quand il n'y a pas de suite. */
   readonly progress: number;
-  /** La place du Mythe, quand le serveur l'a servie avec son numéro. */
-  readonly mythic: { readonly number: number } | null;
+  /** La place du Mythe et son émission, quand le serveur les a servies. */
+  readonly mythic: MythicSeatRef | null;
 };
 
 /**
- * Le rang lu sur la Gloire. Mythe vient du SERVEUR, jamais du seuil : `mythicNumber`
- * (la place, 1 à 100) ou, pour un appelant qui ne connaît que le rang servi,
- * `mythic: true`. La place est définitive : Mythe ne dépend plus de la Gloire.
+ * Le rang lu sur la Gloire. Mythe vient du SERVEUR, jamais du seuil : `mythicSeat`
+ * (la place et son émission) ou, pour un appelant qui ne connaît que le rang servi,
+ * `mythic: true`. La place ne se perd pas : Mythe ne dépend plus de la Gloire.
  */
 export function gloryStanding(params: {
   readonly glory: number;
   readonly mythic?: boolean;
-  readonly mythicNumber?: number | null;
+  readonly mythicSeat?: MythicSeatRef | null;
 }): GloryStanding {
   const glory = Number.isFinite(params.glory) ? Math.max(0, Math.trunc(params.glory)) : 0;
-  const seat = isMythicNumber(params.mythicNumber) ? { number: params.mythicNumber } : null;
+  const seat = validSeat(params.mythicSeat);
 
   if (seat !== null || params.mythic === true) {
     return {

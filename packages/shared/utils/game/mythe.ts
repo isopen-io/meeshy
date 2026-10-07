@@ -1,34 +1,37 @@
 /**
- * LE MYTHE (#9636) — cent places, définitives, dans l'ordre d'arrivée.
+ * LE MYTHE (#9636) — cent places, dans l'ordre d'arrivée, et une émission par attribution.
  *
- * Un compte qui atteint `MYTHE_GLORY` (1 000 000) de Gloire prend la première
- * place libre, tant qu'il en reste une des `MYTHE_SIZE` (100). La place porte
- * un NUMÉRO (1 à 100) et une Signature unique dérivée de lui
- * (`mythic-signature.ts`). Elle ne se perd jamais, ne se retire pas, ne se
- * recalcule pas : la règle « les 100 Légendes les plus glorieuses du moment »
- * est abandonnée.
+ * Un compte qui atteint `MYTHE_GLORY` (1 000 000) de Gloire prend une place
+ * libre, tant qu'il en reste une des `MYTHE_SIZE` (100). L'attribution porte :
+ *  - le NUMÉRO de la place (1 à 100) — la plus petite place libre ;
+ *  - un NUMÉRO D'ÉMISSION (1, 2, 3… sans fin), qui ne revient JAMAIS et dont
+ *    dérive la Signature unique (`mythic-signature.ts`).
  *
- * La passerelle tient le registre (`MythicSeat`) et l'attribution ATOMIQUE ;
- * cette loi dit, sans base, ce que l'attribution doit produire : la place
- * suivante, l'instant où une suite de gains franchit le seuil, et l'ordre
- * d'arrivée d'un rattrapage. Aucune liste globale n'est publiée (conformité
- * A-13) : chaque compte ne reçoit que SA place.
+ * Tant que le compte existe, la place ne se perd pas : la règle « les 100
+ * Légendes les plus glorieuses du moment » est abandonnée. Quand le compte est
+ * supprimé (décision porteur 2026-10-08), la place se LIBÈRE et revient au
+ * compte en attente qui a franchi le million le plus tôt — avec une émission
+ * neuve, donc une Signature jamais vue.
+ *
+ * La passerelle tient le registre (`MythicSeat`, `MythicEdition`) et
+ * l'attribution ATOMIQUE ; cette loi dit, sans base, ce qu'elle doit produire.
+ * Aucune liste globale n'est publiée (conformité A-13) : chaque compte ne reçoit
+ * que SA place.
  */
 
-import { MYTHE_GLORY, MYTHE_SIZE } from './glory.js';
+import { MYTHE_GLORY, MYTHE_SIZE, isMythicNumber } from './glory.js';
 
-/** `true` quand cette Gloire ouvre droit à une place (s'il en reste). */
+/** `true` quand cette Gloire ouvre droit à une place (s'il en reste une). */
 export const reachesMythe = (glory: number): boolean => Number.isFinite(glory) && glory >= MYTHE_GLORY;
 
-/**
- * La place que prend le prochain arrivant quand `taken` places sont déjà prises —
- * `null` quand les cent le sont. Les places se prennent dans l'ordre, sans trou :
- * la suivante est toujours `taken + 1`.
- */
-export const nextMythicNumber = (taken: number): number | null => {
-  const count = Number.isFinite(taken) ? Math.max(0, Math.trunc(taken)) : 0;
-  return count < MYTHE_SIZE ? count + 1 : null;
+/** Les places libres, de la plus petite à la plus grande, quand `taken` sont prises. */
+export const freeMythicNumbers = (taken: readonly number[]): readonly number[] => {
+  const held = new Set(taken.filter(isMythicNumber));
+  return Array.from({ length: MYTHE_SIZE }, (_, i) => i + 1).filter((n) => !held.has(n));
 };
+
+/** La place que prend le prochain arrivant : la plus petite libre, `null` quand les cent sont prises. */
+export const nextMythicNumber = (taken: readonly number[]): number | null => freeMythicNumbers(taken)[0] ?? null;
 
 export type GloryGain = { readonly delta: number; readonly createdAt: string };
 
@@ -54,25 +57,28 @@ export type MythicArrival = { readonly userId: string; readonly glory: number; r
 
 export type MythicSeatGrant = { readonly userId: string; readonly number: number };
 
+/** L'ordre d'arrivée : instant de franchissement, puis identifiant. */
+export const mythicArrivalOrder = (arrivals: readonly MythicArrival[]): readonly MythicArrival[] =>
+  [...new Map(arrivals.map((a) => [a.userId, a])).values()]
+    .filter((a) => reachesMythe(a.glory))
+    .sort((a, b) =>
+      a.crossedAt !== b.crossedAt ? (a.crossedAt < b.crossedAt ? -1 : 1) : a.userId < b.userId ? -1 : a.userId > b.userId ? 1 : 0,
+    );
+
 /**
- * Les places qu'un rattrapage attribue : les arrivants qui ont la Gloire et pas
- * encore de place, dans l'ordre d'arrivée (instant de franchissement, puis
- * identifiant), à partir de la place `taken + 1` et jamais au-delà de la 100e.
+ * Les places qu'une attribution donne : aux arrivants qui ont la Gloire et pas
+ * encore de place, dans l'ordre d'arrivée, chacun sur la plus petite place libre
+ * restante — jamais au-delà de la 100e.
  */
 export function assignMythicSeats(params: {
-  readonly taken: number;
+  readonly taken: readonly number[];
   readonly seated: readonly string[];
   readonly arrivals: readonly MythicArrival[];
 }): readonly MythicSeatGrant[] {
   const seated = new Set(params.seated);
-  const first = nextMythicNumber(params.taken);
-  if (first === null) return [];
-  const unique = [...new Map(params.arrivals.map((a) => [a.userId, a])).values()];
-  return unique
-    .filter((a) => reachesMythe(a.glory) && !seated.has(a.userId))
-    .sort((a, b) =>
-      a.crossedAt !== b.crossedAt ? (a.crossedAt < b.crossedAt ? -1 : 1) : a.userId < b.userId ? -1 : a.userId > b.userId ? 1 : 0,
-    )
-    .slice(0, MYTHE_SIZE - (first - 1))
-    .map((a, index) => ({ userId: a.userId, number: first + index }));
+  const free = freeMythicNumbers(params.taken);
+  return mythicArrivalOrder(params.arrivals)
+    .filter((a) => !seated.has(a.userId))
+    .slice(0, free.length)
+    .map((a, index) => ({ userId: a.userId, number: free[index]! }));
 }

@@ -112,10 +112,10 @@ describe('ce que les amis voient de plus : points et trophées (#9541)', () => {
   it('Mythe se lit au rang, avec le numéro de sa place, pour un ami (#9636)', async () => {
     const { db, service } = setup();
     db.gloryLedger.rows.push({ id: 'g2', userId: MEMBER, delta: 1_000_000, reason: 'level', requestId: 'level:99' });
-    db.mythicSeat.rows.push({ id: '6d7974686500000000000064', number: 100, userId: MEMBER, glory: 1_000_000, grantedAt: new Date() });
+    db.mythicSeat.rows.push({ id: '6d7974686500000000000064', number: 100, edition: 205, userId: MEMBER, glory: 1_000_000, grantedAt: new Date() });
     befriend(db);
 
-    expect((await standing(service, stranger)).standing).toMatchObject({ rank: 'mythe', division: null, division5: null, mythic: { number: 100 } });
+    expect((await standing(service, stranger)).standing).toMatchObject({ rank: 'mythe', division: null, division5: null, mythic: { number: 100, edition: 205 } });
   });
 
   it('Légende I sans place : 1 000 000 de Gloire ne suffit pas sans une des cent places (#9636)', async () => {

@@ -163,7 +163,7 @@ describe('la division héritée du fil (#9223)', () => {
 
 describe('le Mythe vient du serveur', () => {
   it('rend Mythe, sans division, avec son numéro, quand le serveur sert la place', () => {
-    expect(gloryStanding({ glory: 1_000_000, mythicNumber: 7 })).toEqual({
+    expect(gloryStanding({ glory: 1_000_000, mythicSeat: { number: 7, edition: 7 } })).toEqual({
       glory: 1_000_000,
       rank: 'mythe',
       division: null,
@@ -172,21 +172,22 @@ describe('le Mythe vient du serveur', () => {
       next: null,
       gloryMissing: null,
       progress: 1,
-      mythic: { number: 7 },
+      mythic: { number: 7, edition: 7 },
     });
   });
 
-  it('la place est définitive : une Gloire corrigée sous le seuil ne la retire pas', () => {
-    expect(gloryStanding({ glory: 3000, mythicNumber: 100 })).toMatchObject({ rank: 'mythe', mythic: { number: 100 } });
+  it('la place ne se perd pas : une Gloire corrigée sous le seuil ne la retire pas', () => {
+    expect(gloryStanding({ glory: 3000, mythicSeat: { number: 100, edition: 131 } })).toMatchObject({ rank: 'mythe', mythic: { number: 100, edition: 131 } });
   });
 
   it('accepte le drapeau seul d’un appelant qui ne connaît que le rang servi', () => {
     expect(gloryStanding({ glory: 1_200_000, mythic: true })).toMatchObject({ rank: 'mythe', mythic: null });
   });
 
-  it('ignore un numéro hors des cent places', () => {
+  it('ignore une place hors des cent, ou une émission illisible', () => {
     for (const bogus of [0, 101, 1.5, -3, Number.NaN]) {
-      expect(gloryStanding({ glory: 1_000_000, mythicNumber: bogus }).rank).toBe('legende');
+      expect(gloryStanding({ glory: 1_000_000, mythicSeat: { number: bogus, edition: 1 } }).rank).toBe('legende');
+      expect(gloryStanding({ glory: 1_000_000, mythicSeat: { number: 1, edition: bogus === 101 ? 0 : bogus } }).rank).toBe('legende');
     }
     expect(isMythicNumber(1)).toBe(true);
     expect(isMythicNumber(100)).toBe(true);

@@ -47,7 +47,7 @@ export type GameVectorInputV1 =
   | { readonly law: 'level-record'; readonly level: number; readonly previousRecord: number | null; readonly prestige: number }
   | { readonly law: 'mint-price'; readonly n: number }
   | { readonly law: 'mint-preview'; readonly score: number; readonly mintedLifetime: number; readonly debitablePoints: number }
-  | { readonly law: 'glory-standing'; readonly glory: number; readonly mythic: boolean; readonly mythicNumber?: number | null }
+  | { readonly law: 'glory-standing'; readonly glory: number; readonly mythic: boolean; readonly mythicSeat?: { readonly number: number; readonly edition: number } | null }
   | {
       readonly law: 'glory-gain';
       readonly rarity: AchievementRarity;
@@ -147,6 +147,7 @@ function evaluateGameVectorV1(input: GameVectorInputV1): unknown {
         gloryMissing: s.gloryMissing,
         progress: round6(s.progress),
         mythicNumber: s.mythic?.number ?? null,
+        mythicEdition: s.mythic?.edition ?? null,
       };
     }
     case 'glory-gain':
@@ -239,10 +240,10 @@ export function buildGameVectors() {
   ].map(
     (glory) => vector(`rang pour ${glory} de Gloire`, { law: 'glory-standing', glory, mythic: false }),
   ).concat([
-    vector('Mythe n° 1 servi par le serveur', { law: 'glory-standing', glory: 1_000_000, mythic: true, mythicNumber: 1 }),
-    vector('Mythe n° 100, place définitive même sous le seuil', { law: 'glory-standing', glory: 3000, mythic: true, mythicNumber: 100 }),
+    vector('Mythe place 1, émission 1, servi par le serveur', { law: 'glory-standing', glory: 1_000_000, mythic: true, mythicSeat: { number: 1, edition: 1 } }),
+    vector('Mythe place 100, émission 137, gardé même sous le seuil', { law: 'glory-standing', glory: 3000, mythic: true, mythicSeat: { number: 100, edition: 137 } }),
     vector('Mythe sur le seul drapeau, sans numéro', { law: 'glory-standing', glory: 1_200_000, mythic: true }),
-    vector('numéro 101 ignoré : Légende I', { law: 'glory-standing', glory: 1_000_000, mythic: false, mythicNumber: 101 }),
+    vector('place 101 ignorée : Légende I', { law: 'glory-standing', glory: 1_000_000, mythic: false, mythicSeat: { number: 101, edition: 1 } }),
   ]);
 
   const gains = [
@@ -425,7 +426,7 @@ export const GAME_VECTORS_FORMAT = {
   input:
     "{ law, ...paramètres } — `law` nomme la loi du Jeu Meeshy (level, level-record, mint-price, mint-preview, glory-standing, glory-gain, treasury, flame-form, flame-advance, flame-status, flame-relight, tailwind, prism-hour, mission-objective, mission-reward, rng, missions-draw, mission-reroll, chest, guide, puis — vague 2, #9384 à #9392 — league-week, league-week-points, league-access, league-pseudonym, league-pseudonym-draw, league-pseudonym-check, league-snapshot, league-groups, league-settle, league-friends, league-visibility, duo-draw, duo-progress, duo-reward, duo-invite, duo-transition, season-calendar, season-at, season-progress, season-reward, season-claim, season-settlement, season-stars, season-seal, trophy-key, trophy-parse, trophy-flame, showcase-order, showcase-view, showcase-cap, trophy-month, atlas, atlas-language, prestige, rarity, rarity-display, mythic-seats, mythic-crossing, mythic-signature, badge-tier, badge-served, guide-v2, guide-choose, photo-moment). Les jours sont des clés AAAA-MM-JJ ; le jour, le fuseau et la graine sont des paramètres.",
   expected:
-    'La sortie de la loi TS (packages/shared/utils/game/*) : level → {level, tier, floorScore, nextThreshold, pointsToNext, progress, isMax} ; mint-price → {price, edition} ; glory-standing → {rank, division (héritée 1–3), division5 (V=5 à I=1), …, mythicNumber} ; flame-* → la transition ou la décision ; rng → {seed FNV-1a 32 bits de « userId|jour|sel », 5 tirages mulberry32} ; missions-draw → {dayKey, prismDay, missions[]} ; guide → le moment ; league-groups → {groups:[{groupId, memberIds}]} ; league-settle → {settled:[{userId, weekPoints, rank, zone, cup, outcome}], pointsToPromotion} ; season-calendar → le calendrier ; atlas → le résumé et les entrées ; rarity → {rarity, measured, border, glory} ; guide-v2 / guide-choose / photo-moment → le moment, la carte choisie, l\'emblème. Les fractions sont arrondies à 1e-6 et comparées à 1e-4.',
+    'La sortie de la loi TS (packages/shared/utils/game/*) : level → {level, tier, floorScore, nextThreshold, pointsToNext, progress, isMax} ; mint-price → {price, edition} ; glory-standing → {rank, division (héritée 1–3), division5 (V=5 à I=1), …, mythicNumber, mythicEdition} ; flame-* → la transition ou la décision ; rng → {seed FNV-1a 32 bits de « userId|jour|sel », 5 tirages mulberry32} ; missions-draw → {dayKey, prismDay, missions[]} ; guide → le moment ; league-groups → {groups:[{groupId, memberIds}]} ; league-settle → {settled:[{userId, weekPoints, rank, zone, cup, outcome}], pointsToPromotion} ; season-calendar → le calendrier ; atlas → le résumé et les entrées ; rarity → {rarity, measured, border, glory} ; guide-v2 / guide-choose / photo-moment → le moment, la carte choisie, l\'emblème. Les fractions sont arrondies à 1e-6 et comparées à 1e-4.',
   provenance:
     "Contrat cross-plateforme de la loi du Jeu Meeshy (#9373, vague 2 #9384 à #9392 : les cas de la vague 2 viennent APRÈS ceux de la vague 1, jamais mêlés). TS le produit (__tests__/game/game-vectors-law.ts) et le rejoue (__tests__/vectors/game.vectors.test.ts) ; iOS le rejoue (GameLawVectorTests). Sur divergence, c'est le TS qui a raison — le miroir bouge, jamais le vecteur sans lui. Régénérer : UPDATE_GAME_VECTORS=1 npx vitest run __tests__/vectors/game.vectors.test.ts.",
 } as const;

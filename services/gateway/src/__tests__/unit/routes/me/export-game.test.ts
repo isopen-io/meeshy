@@ -34,13 +34,13 @@ const seed = (db: FakeGameDb) => {
 };
 
 describe('exportGame', () => {
-  it('rend la place du Mythe du compte, son numéro et sa date (#9636) — personne d’autre', async () => {
+  it('rend la place du Mythe du compte, son émission et sa date (#9636) — personne d’autre', async () => {
     const db = fakeGameDb();
     seed(db);
-    db.mythicSeat.rows.push({ id: '6d7974686500000000000003', number: 3, userId: USER, glory: 1_000_000, grantedAt: new Date('2027-01-02T00:00:00Z') });
-    db.mythicSeat.rows.push({ id: '6d7974686500000000000004', number: 4, userId: '68a0000000000000000000ff', glory: 1_000_000, grantedAt: new Date('2027-01-03T00:00:00Z') });
+    db.mythicSeat.rows.push({ id: '6d7974686500000000000003', number: 3, edition: 12, userId: USER, glory: 1_000_000, grantedAt: new Date('2027-01-02T00:00:00Z') });
+    db.mythicSeat.rows.push({ id: '6d7974686500000000000004', number: 4, edition: 13, userId: '68a0000000000000000000ff', glory: 1_000_000, grantedAt: new Date('2027-01-03T00:00:00Z') });
     const game = await exportGame(db.prisma, USER, PAGE);
-    expect(game.mythicSeat).toEqual({ number: 3, grantedAt: '2027-01-02T00:00:00.000Z' });
+    expect(game.mythicSeat).toEqual({ number: 3, edition: 12, grantedAt: '2027-01-02T00:00:00.000Z' });
     expect((await exportGame(db.prisma, '68a0000000000000000000ee', PAGE)).mythicSeat).toBeNull();
   });
 

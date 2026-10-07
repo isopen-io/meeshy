@@ -83,7 +83,7 @@ export class GameBlockService {
     const facts = flameFactsOf(user ?? {}, now);
     // La place du Mythe (#9636) : celle du compte, ou celle qu'une Gloire gravée hors d'un crédit (la frappe)
     // vient d'ouvrir. Une lecture qui tombe rend le rang sur la Gloire, jamais le bloc entier.
-    const mythicNumber = await this.seats.claimIfEligible(userId, glory, now).catch((error: unknown) => {
+    const mythicSeat = await this.seats.claimIfEligible(userId, glory, now).catch((error: unknown) => {
       log.warn('mythic seat unavailable, rank served from glory', { userId, error: error instanceof Error ? error.message : String(error) });
       return null;
     });
@@ -103,8 +103,8 @@ export class GameBlockService {
       prestige: user?.prestige ?? 0,
       glory,
       // La place du Mythe, définitive : celle de CE compte, jamais une liste globale (conformité A-13).
-      mythic: mythicNumber !== null,
-      mythicNumber,
+      mythic: mythicSeat !== null,
+      mythicSeat,
       mintedLifetime: totals.mintedLifetime,
       debitablePoints: plan.debitablePoints,
       balance: totals.balance,

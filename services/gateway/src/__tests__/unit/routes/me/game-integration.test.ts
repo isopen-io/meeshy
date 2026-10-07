@@ -246,9 +246,9 @@ describe('GET /users/:userId/game', () => {
     veteran(db, OTHER);
     befriend(db);
     seedWealth(db, USER, 0, 1_000_000);
-    db.mythicSeat.rows.push({ id: '6d7974686500000000000007', number: 7, userId: USER, glory: 1_000_000, grantedAt: new Date() });
+    db.mythicSeat.rows.push({ id: '6d7974686500000000000007', number: 7, edition: 131, userId: USER, glory: 1_000_000, grantedAt: new Date() });
     const data = userGameProfileResponseSchema.parse((await get(await profileApp(db, OTHER), gameUserGamePath(USER))).json().data);
-    expect(data.standing).toMatchObject({ rank: 'mythe', division: null, division5: null, mythic: { number: 7 } });
+    expect(data.standing).toMatchObject({ rank: 'mythe', division: null, division5: null, mythic: { number: 7, edition: 131 } });
   });
 
   it('l’ancien drapeau « top 100 du moment » (mythicAt) ne fait plus un Mythe (#9636)', async () => {

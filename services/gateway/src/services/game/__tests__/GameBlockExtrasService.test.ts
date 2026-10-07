@@ -119,8 +119,8 @@ describe('les extensions du bloc game', () => {
     const db = fakeGameDb();
     veteran(db);
     db.gloryLedger.rows.push({ id: 'g1', userId: USER, delta: 1_000_000, reason: 'mint', requestId: 'r1' });
-    db.mythicSeat.rows.push({ id: '6d7974686500000000000009', number: 9, userId: USER, glory: 1_000_000, grantedAt: new Date() });
-    expect((await build(db))!.glory).toMatchObject({ rank: 'mythe', division: null, division5: null, mythic: { number: 9 } });
+    db.mythicSeat.rows.push({ id: '6d7974686500000000000009', number: 9, edition: 9, userId: USER, glory: 1_000_000, grantedAt: new Date() });
+    expect((await build(db))!.glory).toMatchObject({ rank: 'mythe', division: null, division5: null, mythic: { number: 9, edition: 9 } });
   });
 
   it('l’ancien drapeau « top 100 du moment » ne fait plus un Mythe (#9636)', async () => {

@@ -28,5 +28,8 @@ export const legacyDivisionSchema = z.union([z.literal(3), z.literal(2), z.liter
 /** V (5) à I (1). Optionnelle sur le fil : un serveur d'avant #9636 ne la sert pas. */
 export const division5Schema = z.union([z.literal(5), z.literal(4), z.literal(3), z.literal(2), z.literal(1)]);
 
-/** La place du Mythe (1 à 100), définitive. Optionnelle sur le fil : un serveur d'avant #9636 ne la sert pas. */
-export const mythicSeatSchema = z.object({ number: z.number().int().min(1).max(100) });
+/**
+ * La place du Mythe (#9636) : `number`, la place (1 à 100) ; `edition`, le numéro d'émission (1, 2, 3… jamais
+ * réattribué) dont dérive la Signature unique. Optionnelle sur le fil : un serveur d'avant #9636 ne la sert pas.
+ */
+export const mythicSeatSchema = z.object({ number: z.number().int().min(1).max(100), edition: z.number().int().min(1) });
